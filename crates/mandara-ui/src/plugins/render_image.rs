@@ -31,6 +31,24 @@ impl PreparedImage {
     }
 }
 
+/// The largest side a downloaded picture may have before it is decoded.
+const DECODE_MAX_DIM: u32 = 12_000;
+/// The most a single decode may allocate.
+const DECODE_MAX_ALLOC: u64 = 256 * 1024 * 1024;
+
+/// Decode a downloaded picture with size and allocation limits set before
+/// the decoder runs, so a small, highly compressed file can't expand into
+/// hundreds of MiB.
+pub(super) fn decode_limited(bytes: &[u8]) -> Option<image::DynamicImage> {
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok()?;
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(DECODE_MAX_DIM);
+    limits.max_image_height = Some(DECODE_MAX_DIM);
+    limits.max_alloc = Some(DECODE_MAX_ALLOC);
+    reader.limits(limits);
+    reader.decode().ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

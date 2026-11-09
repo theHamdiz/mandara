@@ -33,9 +33,13 @@ assets/brand/mandara-login-512.png
 assets/brand/mandara-login.svg
 assets/brand/mandara-symbolic.svg
 assets/catalog.json
-assets/css/landing.css
 assets/css/pages.css
+assets/css/site.css
+assets/fonts/OFL.txt
+assets/fonts/alexandria.woff2
+assets/fonts/jetbrains-mono.woff2
 assets/js/copy-code.js
+assets/js/site.js
 assets/launcher-icons/amethyst-medallion.svg
 assets/launcher-icons/blue-whorl.svg
 assets/launcher-icons/coral-knot.svg
@@ -49,6 +53,9 @@ assets/launcher-icons/teal-hourglass.svg
 assets/launcher-icons/turquoise-weave.svg
 assets/launcher-icons/violet-clover.svg
 assets/launcher-icons/violet-woven-diamond.svg
+assets/plugins/2048/cover.png
+assets/plugins/2048/icon.png
+assets/plugins/2048/icon.svg
 assets/plugins/active-window/cover.png
 assets/plugins/active-window/icon.png
 assets/plugins/active-window/icon.svg
@@ -223,6 +230,12 @@ assets/plugins/quick-settings/icon.svg
 assets/plugins/quran/cover.png
 assets/plugins/quran/icon.png
 assets/plugins/quran/icon.svg
+assets/plugins/radio/cover.png
+assets/plugins/radio/icon.png
+assets/plugins/radio/icon.svg
+assets/plugins/reddit/cover.png
+assets/plugins/reddit/icon.png
+assets/plugins/reddit/icon.svg
 assets/plugins/resources/cover.png
 assets/plugins/resources/icon.png
 assets/plugins/resources/icon.svg
@@ -244,6 +257,9 @@ assets/plugins/share/icon.svg
 assets/plugins/soundscapes/cover.png
 assets/plugins/soundscapes/icon.png
 assets/plugins/soundscapes/icon.svg
+assets/plugins/sudoku/cover.png
+assets/plugins/sudoku/icon.png
+assets/plugins/sudoku/icon.svg
 assets/plugins/tailscale/cover.png
 assets/plugins/tailscale/icon.png
 assets/plugins/tailscale/icon.svg

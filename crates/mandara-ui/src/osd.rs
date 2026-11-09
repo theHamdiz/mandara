@@ -971,7 +971,14 @@ fn vertical_pill(event: &OsdEvent, level: f32, presence: f32, palette: &MandaraP
 fn level_bar(v: f32, from: Color, to: Color, palette: &MandaraPalette, s: f32, vertical: bool) -> impl IntoElement {
     let h = LEVEL_BAR_H_PX * s;
     let v = v.clamp(0.0, 1.0);
-    let track = palette.on_surface.with_alpha(if palette.is_dark { TRACK_ALPHA_DARK } else { TRACK_ALPHA_LIGHT }).hsla();
+    let track_ink = palette.on_surface.with_alpha(if palette.is_dark { TRACK_ALPHA_DARK } else { TRACK_ALPHA_LIGHT });
+    // A level across the OSD follows the progress design picked under
+    // Themes → Components; the upright bar keeps its own look.
+    let design = crate::style::progress_design();
+    if !vertical && design != crate::components::ProgressDesign::Classic {
+        return crate::components::progress::bar(v, h, from, to, track_ink, design).into_any_element();
+    }
+    let track = track_ink.hsla();
     let fill = div()
         .rounded_full()
         .min_w(px(if v > 0.0 { h } else { 0.0 }))
@@ -986,8 +993,9 @@ fn level_bar(v: f32, from: Color, to: Color, palette: &MandaraPalette, s: f32, v
             .flex_col()
             .justify_end()
             .child(fill.w_full().h(gpui::relative(v)).min_h(px(if v > 0.0 { h } else { 0.0 })).bg(oklab_gradient(BOTTOM_TO_TOP_DEG, from, to)))
+            .into_any_element()
     } else {
-        div().w_full().h(px(h)).rounded_full().bg(track).child(fill.h_full().w(gpui::relative(v)).bg(oklab_gradient(LEFT_TO_RIGHT_DEG, from, to)))
+        div().w_full().h(px(h)).rounded_full().bg(track).child(fill.h_full().w(gpui::relative(v)).bg(oklab_gradient(LEFT_TO_RIGHT_DEG, from, to))).into_any_element()
     }
 }
 

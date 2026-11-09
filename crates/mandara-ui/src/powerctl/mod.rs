@@ -10,6 +10,7 @@ pub mod battery;
 pub mod dim;
 pub mod hooks;
 pub mod idle;
+pub mod session_cards;
 pub mod session_menu;
 
 use gpui::App;

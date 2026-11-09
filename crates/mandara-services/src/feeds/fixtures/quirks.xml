@@ -1,0 +1,21 @@
+
+
+Notice: Undefined index in feed.php on line 12
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Quirks &amp;amp; Co</title>
+    <link>https://quirks.example/</link>
+    <description>Entities &nbsp; HTML defines but XML does not</description>
+    <item>
+      <title>Tom &amp; Jerry&nbsp;&mdash; AT&T &hellip;</title>
+      <link>https://quirks.example/tom</link>
+      <pubDate>Sun, 1 Nov 2026 7:05:00 EST</pubDate>
+      <description>&lt;p&gt;Escaped &lt;b&gt;markup&lt;/b&gt;&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>No date at all</title>
+      <link>https://quirks.example/nodate</link>
+    </item>
+  </channel>
+</rss>

@@ -12,18 +12,47 @@ system programs it starts are MangoWM, `dbus-daemon`, `bwrap`, PipeWire
 ## Website
 
 GitHub Pages serves `index.html` as the homepage and the Markdown guides as
-documentation. The homepage uses `assets/css/landing.css`; the shared
-`_includes/head-custom.html` supplies its phoenix favicon and light/dark
-colours. On the homepage, keep root-relative asset and guide links behind
-Jekyll's `relative_url` filter so they work under the repository's `/mandara/`
-path. Markdown guides use file-relative links, which preserve that base path
-and also work when reading the files on GitHub.
+documentation. The guides share `_includes/head-custom.html` (phoenix favicon,
+light/dark colours, `assets/css/pages.css`). The homepage is plain static
+HTML with no front matter or Liquid: Pages copies it as is, its links are
+file-relative (so they work under the repository's `/mandara/` path and when
+opened from disk), and it loads only `assets/css/site.css`,
+`assets/js/site.js` and `assets/js/copy-code.js`. Open `index.html` in a
+browser to preview it; no build step or server is needed.
 
-The Look selector uses native radio controls and the FAQ uses `details`,
-so both work without JavaScript. Preview both colour schemes and narrow
-screens, including keyboard selection and reduced motion. Run
-`cargo test -p xtask pages_tests` to check the linked files, preview controls,
-contrast, installation command and plugin count against the guides.
+The page follows the shell's own Material You language: tonal surfaces,
+expressive shapes (the cookie, flower, clover and burst outlines in the page's
+SVG sprite) and Alexandria, the shell's bilingual typeface, set from hairline
+to black. Alexandria and JetBrains Mono are self-hosted WOFF2 subsets in
+`assets/fonts/` under the SIL Open Font License (`assets/fonts/OFL.txt`), so
+the page makes no third-party requests. Its default palette is Mandara
+Corniche; picking a Look swaps the colour tokens for that Look's palette, and
+the Auto / Light / Dark control in the top bar repaints the page in either
+scheme. Both come from the theme engine: after changing a theme or a Look, run
+`MANDARA_PAGES_DUMP=1 cargo test -p xtask pages` to rewrite the palette block
+in `site.css` and the JSON in `index.html`. The shortcut browser lists
+`default_keybinds()`, the plugin shelf follows `docs/plugins.md` (without the
+opt-in faith plugins, which stay in their own guide section) and the language
+chips follow the locale catalogs; the tests fail when any of them drift.
+
+Every screenshot on the homepage is a pair, `name.webp` (dark) and
+`name-light.webp` (light) of the same scene at the same size, inside a
+`<picture>` whose light source follows the visitor's scheme; site.js switches
+the sources when the visitor forces light or dark. The tests fail on a
+screenshot without its light partner.
+
+Everything works without JavaScript: the Looks and bar styles are native radio
+controls, the questions are a plain list, and every shortcut is listed. The
+script adds the palette and scheme switches, the breathing letters, the slider
+designs, shortcut search, the footer's Alexandria time and the hero film. The
+film slot loads `assets/video/mandara-promo.webm` (then `.mp4`) only after the
+page has loaded, never autoplays with reduced motion, and shows its Play and
+Sound buttons only once a frame has arrived, so the poster stands in until the
+video file is added. Preview both colour schemes, phone width, keyboard
+selection and reduced motion. `cargo test -p xtask pages` checks the links,
+image sizes and pairs, palettes and their contrast, Looks, bar styles,
+shortcuts, plugins, compositors, languages and the installation command
+against their sources.
 
 The shared `assets/js/copy-code.js` adds Copy buttons to the homepage's
 installation command and fenced examples in the guides. It copies the code's
@@ -51,6 +80,48 @@ truly right, put it on that one item with its reason:
 ```rust
 #[expect(clippy::large_enum_variant, reason = "one per frame; boxing would allocate per frame")]
 ```
+
+## Pure Wayland: no X11
+
+Mandara talks only Wayland. GPUI and its platform crates are built with
+`default-features = false` and without their `x11` features, so the shipped
+binary links no X11 library. A test in `xtask` (`x11_guard_tests`, part of
+`cargo test --workspace` and so of CI) keeps it that way: it reads every
+lockfile (the workspace, `tools/mandara-delta` and the example plugins) and
+fails when an X11 crate is resolved: `x11rb`, `xcb`, `x11` / `x11-dl`,
+`x11-clipboard`, X11 input methods, or xkbcommon's `x11` feature (which
+shows up as `as-raw-xcb-connection`). A lockfile is the graph for every
+target and every enabled feature, so this also catches a crate only some
+platform would link. When it fails, `cargo tree -i <crate>` shows what
+pulled the crate in; build that dependency without its X11 feature.
+
+Run it alone with `cargo test -p xtask x11`.
+
+## Other platforms: the FreeBSD type-check
+
+CI's `freebsd-check` job type-checks the whole workspace for
+`x86_64-unknown-freebsd`. It only reports: it is allowed to fail and never
+blocks a merge or a release. Its errors show code that assumes Linux at
+compile time, such as Linux-only system calls (`prctl`, `inotify`, CPU
+affinity) and GPUI's layer shell, which the pinned GPUI builds only for
+Linux. It needs only Rust's FreeBSD standard library, no FreeBSD system
+root. To run it locally:
+
+```bash
+rustup target add x86_64-unknown-freebsd
+PKG_CONFIG_ALLOW_CROSS=1 cargo check --workspace --keep-going --target x86_64-unknown-freebsd
+```
+
+`PKG_CONFIG_ALLOW_CROSS=1` lets the fontconfig and freetype build scripts
+read the host's pkg-config files (install their `-dev` packages), which is
+harmless because a check never links. Without it they stop early and hide
+GPUI's Linux platform and every crate above it. `--keep-going` checks
+every crate whose dependencies build, so one Linux-only crate doesn't
+hide the rest.
+
+A clean check doesn't mean Mandara runs there: readers of `/proc` and
+`/sys`, logind, NetworkManager, BlueZ and greetd compile everywhere and
+only find out at run time.
 
 ## Local checks and cold builds
 
@@ -154,6 +225,10 @@ eval "$(cargo xtask sandbox env)"                 # the sandbox env for manual c
   yourself and serve locally can be installed. `sandbox up` passes that
   variable and `MANDARA_UPDATE_API` through, so a slow local server shows
   the language cards and Studio → About filling with real progress.
+- **Reddit against a local server:** `sandbox up` also passes
+  `MANDARA_REDDIT_API` through, so the Reddit plugin can read a loopback
+  stand-in for Reddit's API (token, listings, threads, `morechildren`
+  and pictures under `/media/<host>/…`) instead of the real service.
 - **Matte:** `matte` cuts out the open surfaces as a transparent PNG. It
   shoots once over a black wallpaper and once over a white one, then
   difference-mattes the pair. Give it a region (physical pixels) that leaves

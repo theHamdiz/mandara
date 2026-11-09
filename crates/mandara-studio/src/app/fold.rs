@@ -12,7 +12,7 @@ use mandara_i18n::t;
 use mandara_theme::MandaraPalette;
 use mandara_ui::bidi::Bidi as _;
 use mandara_ui::icons::icon;
-use mandara_ui::style::ClipRounded as _;
+use mandara_ui::components::surfaces::{CardSurface as _, Fill, Surface as _};
 
 use super::StudioView;
 use crate::tokens::*;
@@ -82,7 +82,7 @@ impl StudioView {
             .items_center()
             .gap(px(SPACE_14_PX))
             .cursor_pointer()
-            .rounded(px(RADIUS_20_PX))
+            .surface_corners(RADIUS_20_PX)
             .hover(|el| el.bg(p.on_surface.with_alpha(ALPHA_3_5).hsla()))
             .child(div().flex_none().size(px(DIM_28_PX)).rounded_full().bg(if open { p.primary.with_alpha(ALPHA_15).hsla() } else { p.surface_container_high.hsla() }).row().items_center().justify_center().child(icon(
                 if open { "arrow-down" } else { mandara_ui::bidi::dir_icon("chevron-right") },
@@ -124,10 +124,9 @@ impl StudioView {
                 cx.notify();
             }));
         let content = open.then(|| body(self, cx));
+        // Shaped and lifted in the card designs of Themes → Components.
         div()
-            .clip_rounded()
-            .rounded(px(RADIUS_20_PX))
-            .bg(p.surface_container.hsla())
+            .clipped_card_surface(RADIUS_20_PX, Fill(p.surface_container, None), Vec::new(), p)
             .row()
             .flex_col()
             .child(header)

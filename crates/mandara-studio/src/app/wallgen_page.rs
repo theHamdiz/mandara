@@ -258,19 +258,18 @@ fn pill(id: impl Into<SharedString>, icon_name: &'static str, label: impl Into<S
 
 /// A round icon button with a tooltip.
 fn icon_button(id: impl Into<SharedString>, icon_name: &'static str, hint: &'static str, on: bool, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
+    use mandara_ui::components::buttons::{Ink, designed};
     let (bg, fg) = if on { (p.primary, p.on_primary) } else { (p.surface_container_high, p.on_surface_variant) };
-    div()
-        .id(id.into())
-        .size(px(DIM_32_PX))
-        .flex_none()
-        .rounded_full()
+    let id = gpui::ElementId::from(id.into());
+    let el = div().id(id.clone()).size(px(DIM_32_PX)).flex_none();
+    // The classic button fades on hover and press; the designs deepen its fill.
+    designed(el, id, DIM_32_PX, true, Ink { bg: Some(bg), hover: bg.mix(fg, ALPHA_8), outline: None }, Some(p), |el| {
+        el.rounded_full().bg(bg.hsla()).hover(|s| s.opacity(ALPHA_85)).active(|s| s.opacity(ALPHA_70))
+    })
         .row()
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .bg(bg.hsla())
-        .hover(|s| s.opacity(ALPHA_85))
-        .active(|s| s.opacity(ALPHA_70))
         .tooltip(super::compositor_page::tip(t(hint), p))
         .child(icon(icon_name, ICON_15_PX, fg))
 }

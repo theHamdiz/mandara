@@ -437,6 +437,11 @@ fn s(section: Section, group: &'static str, path: &'static str, label: &'static 
     Setting { section, group, path, label, help, control, default: None }
 }
 
+/// The Sudoku levels.
+const SUDOKU_LEVELS: &[(&str, &str)] = &[("easy", tk("Easy")), ("medium", tk("Medium")), ("hard", tk("Hard")), ("expert", tk("Expert"))];
+/// Which theme colour a game leans on.
+const GAME_ACCENTS: &[(&str, &str)] = &[("primary", tk("Primary")), ("secondary", tk("Secondary")), ("tertiary", tk("Tertiary"))];
+
 fn sd(section: Section, group: &'static str, path: &'static str, label: &'static str, help: &'static str, control: Control, default: Value) -> Setting {
     Setting { section, group, path, label, help, control, default: Some(Box::new(default)) }
 }
@@ -499,7 +504,9 @@ const SLEEP_MODES: &[(&str, &str)] = &[("suspend", tk("Suspend")), ("hibernate",
 const ALERT_STYLES: &[(&str, &str)] = &[("both", tk("Notification + OSD")), ("notification", tk("Notification")), ("osd", tk("OSD")), ("off", tk("Off"))];
 const CRITICAL_ACTIONS: &[(&str, &str)] = &[("nothing", tk("Nothing")), ("suspend", tk("Sleep")), ("hibernate", tk("Hibernate")), ("shutdown", tk("Shut down"))];
 const PROFILES: &[(&str, &str)] = &[("null", tk("Leave it")), ("power-saver", tk("Power saver")), ("balanced", tk("Balanced")), ("performance", tk("Performance"))];
-const MENU_STYLES: &[(&str, &str)] = &[("dock", tk("Edge dock")), ("grid", tk("Grid"))];
+const MENU_STYLES: &[(&str, &str)] = &[("dock", tk("Edge dock")), ("grid", tk("Grid")), ("cards", tk("Cards"))];
+/// How the session menu's cards line up (`SessionCardsLayout` ids).
+pub(crate) const MENU_CARD_LAYOUTS: &[(&str, &str)] = &[("row", tk("Row")), ("column", tk("Column"))];
 /// Where the session menu's dock opens (`SessionMenuPosition` ids).
 pub(crate) const MENU_POSITIONS: &[(&str, &str)] = &[("side", tk("Opposite the sidebar")), ("left", tk("Left")), ("right", tk("Right")), ("top", tk("Top center")), ("bottom", tk("Bottom center"))];
 const POWER_PANEL_STYLES: &[(&str, &str)] = &[("classic", tk("Classic")), ("modern", tk("Modern"))];
@@ -589,6 +596,8 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),
         "/session_menu/position" if cfg.session_menu.style == mandara_config::power::SessionMenuStyle::Grid => Some(tk("The grid always opens in the middle")),
+        "/session_menu/position" if cfg.session_menu.style == mandara_config::power::SessionMenuStyle::Cards => Some(tk("The cards always open in the middle of the screen")),
+        "/session_menu/cards_layout" if cfg.session_menu.style != mandara_config::power::SessionMenuStyle::Cards => Some(tk("For the Cards style")),
         "/compositor/autostart" if running_compositor() == Some(mandara_config::compositor::Target::River) => Some(tk("River's init controls startup; add or remove Mandara there")),
         path if path.starts_with("/compositor/input/cursor/") => system_settings::cursor_locked(path, running_compositor()),
         path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Mandara can't set this on Sway")),
@@ -609,6 +618,7 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
 pub fn note(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     match setting.path {
         "/style/slider_handle" if !cfg.style.slider_design.uses_handle() => Some(tk("Only the thin sliders use it now: the Pill and Segmented designs mark the value without a handle")),
+        "/style/card_style" if !cfg.style.shadows && cfg.style.card_style == mandara_config::desktop::CardStyle::Raised => Some(tk("Raised cards cast no shadow while Shadows is off under Fine-tune")),
         _ => None,
     }
 }
@@ -826,8 +836,9 @@ fn build() -> Vec<Setting> {
         s(Power, tk("Power profiles"), "/power/profile_ac", tk("On mains power"), tk("Switch to this profile when the charger is plugged in"), Choice(PROFILES)),
         s(Power, tk("Power profiles"), "/power/profile_battery", tk("On battery"), tk("Switch to this profile when running on battery"), Choice(PROFILES)),
         s(Power, tk("Power profiles"), "/power/saver_at_low", tk("Power saver at low battery"), tk("Switch to power-saver at the low threshold and back when charging"), Toggle),
-        s(Power, tk("Session menu"), "/session_menu/style", tk("Style"), tk("A dock on the screen edge or a centered grid"), Choice(MENU_STYLES)),
+        s(Power, tk("Session menu"), "/session_menu/style", tk("Style"), tk("A dock on the screen edge, a centered grid, or separate cards floating in the middle of the screen"), Choice(MENU_STYLES)),
         s(Power, tk("Session menu"), "/session_menu/position", tk("Position"), tk("Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't"), Choice(MENU_POSITIONS)),
+        s(Power, tk("Session menu"), "/session_menu/cards_layout", tk("Card layout"), tk("Cards side by side, wrapping onto more rows when they don't fit, or one above the other, wrapping into more columns"), Choice(MENU_CARD_LAYOUTS)),
         s(Power, tk("Session menu"), "/session_menu/grid_columns", tk("Grid columns"), tk("Tiles per row in the grid style"), slider(2.0, 6.0, 1.0, "")),
         s(Power, tk("Session menu"), "/session_menu/hold_to_confirm", tk("Hold to confirm"), tk("Log out, restart and shut down need a press-and-hold (mouse, Enter or a number key)"), Toggle),
         s(Power, tk("Session menu"), "/session_menu/hold_ms", tk("Hold time"), tk("How long to hold"), slider(300.0, 3000.0, 100.0, " ms")),
@@ -909,6 +920,21 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Pomodoro"), "/plugins/settings/pomodoro/long_break_minutes", tk("Long break"), tk("After several sessions"), slider(5.0, 60.0, 5.0, " min"), Value::from(15)),
         sd(Plugins, tk("Pomodoro"), "/plugins/settings/pomodoro/long_break_every", tk("Long break every"), tk("Sessions before a long break"), slider(2.0, 8.0, 1.0, ""), Value::from(4)),
         sd(Plugins, tk("Pomodoro"), "/plugins/settings/pomodoro/auto_continue", tk("Auto-continue"), tk("Start the next phase automatically"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/difficulty", tk("Level"), tk("What a new game deals; the game's New button can pick another"), Choice(SUDOKU_LEVELS), Value::from("medium")),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/highlight_peers", tk("Highlight row, column and box"), tk("Shade the cells the selected cell sees"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/highlight_same", tk("Highlight the same digits"), tk("Shade every cell holding the selected cell's digit"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/conflicts", tk("Show conflicts"), tk("Digits that clash with their row, column or box turn red"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/mistakes", tk("Count mistakes"), tk("Count the digits that aren't the solution's"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/timer", tk("Timer"), tk("Show the time played; it runs only while the game is open or its desktop widget has the keyboard"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/hints", tk("Hints"), tk("A Hint button that fills in one cell (hints are counted)"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/clear_notes", tk("Clear notes automatically"), tk("A digit removes its pencil marks from the cells it sees"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/accent", tk("Accent colour"), tk("The theme colour your digits and highlights use"), Choice(GAME_ACCENTS), Value::from("primary")),
+        sd(Plugins, tk("Sudoku"), "/plugins/settings/sudoku/bar_time", tk("Time in the bar"), tk("The bar item shows the clock while you play"), Toggle, Value::from(false)),
+        sd(Plugins, "2048", "/plugins/settings/2048/size", tk("Board size"), tk("Tiles per side for a new game (a game in play keeps its size)"), slider(3.0, 6.0, 1.0, ""), Value::from(4)),
+        sd(Plugins, "2048", "/plugins/settings/2048/animations", tk("Animations"), tk("Tiles slide and pop (they jump with reduced motion)"), Toggle, Value::from(true)),
+        sd(Plugins, "2048", "/plugins/settings/2048/undo", tk("Undo"), tk("Take back your last move"), Toggle, Value::from(true)),
+        sd(Plugins, "2048", "/plugins/settings/2048/accent", tk("Accent colour"), tk("The theme colour the tiles ripen toward"), Choice(GAME_ACCENTS), Value::from("primary")),
+        sd(Plugins, "2048", "/plugins/settings/2048/bar_score", tk("Score in the bar"), tk("The bar item shows your score while you play"), Toggle, Value::from(false)),
         sd(Plugins, tk("Drives"), "/plugins/settings/drives/notify_on_plug", tk("Announce new drives"), tk("A notification and a pulse on the chip when a drive is plugged in"), Toggle, Value::from(true)),
         sd(Plugins, tk("Drives"), "/plugins/settings/drives/show_system", tk("Show system partitions"), tk("Also list boot, EFI and other internal system partitions"), Toggle, Value::from(false)),
         sd(Plugins, tk("Containers"), "/plugins/settings/containers/engine", tk("Engine"), tk("Which container engine the panel talks to"), Choice(const { &[("auto", tk("Automatic")), ("docker", "Docker"), ("podman", "Podman")] }), Value::from("auto")),
@@ -927,7 +953,17 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Updates"), "/plugins/settings/updates/arch_news", tk("Arch news"), tk("Latest archlinux.org news headline (fetched only while the panel is open)"), Toggle, Value::from(true)),
         sd(Plugins, tk("Updates"), "/plugins/settings/updates/news_count", tk("News headlines"), tk("How many of the latest Arch news posts the panel lists"), slider(1.0, 5.0, 1.0, ""), Value::from(1)),
         sd(Plugins, tk("Updates"), "/plugins/settings/updates/first_check_delay_s", tk("First check after"), tk("Seconds after login before the first update check"), slider(0.0, 600.0, 5.0, " s"), Value::from(20)),
-        sd(Plugins, tk("Updates"), "/plugins/settings/updates/terminal", tk("Terminal"), tk("Runs “Update now”; empty detects ghostty, kitty, foot, alacritty or wezterm"), Text { placeholder: "ghostty" }, Value::from("")),
+        sd(
+            Plugins,
+            tk("Updates"),
+            "/plugins/settings/updates/run_in",
+            tk("Run updates"),
+            tk("In Mandara: progress in the panel and Mandara's password dialog. In a terminal: the update command opens there"),
+            Choice(const { &[("mandara", tk("In Mandara")), ("terminal", tk("In a terminal"))] }),
+            Value::from("mandara"),
+        ),
+        sd(Plugins, tk("Updates"), "/plugins/settings/updates/terminal", tk("Terminal"), tk("Opens AUR updates, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm"), Text { placeholder: "ghostty" }, Value::from("")),
+        sd(Plugins, tk("Updates"), "/plugins/settings/updates/nixos_keep", tk("Generations to keep"), tk("NixOS: how many of the newest generations a clean-up keeps (the running and booted ones always stay)"), slider(1.0, 30.0, 1.0, ""), Value::from(5)),
         sd(Plugins, tk("World clock"), "/plugins/settings/world-clock/cities", tk("Cities"), tk("Comma-separated city names (English or Arabic) or time zones like Europe/Lisbon"), Text { placeholder: "Alexandria, London, New York, Tokyo" }, Value::from("Alexandria, London, New York, Tokyo")),
         sd(Plugins, tk("World clock"), "/plugins/settings/world-clock/clock", tk("Time format"), tk("12- or 24-hour times; Follow the shell uses General → 24-hour clock"), Choice(const { &[("shell", tk("Follow the shell")), ("24", tk("24-hour")), ("12", tk("12-hour"))] }), Value::from("shell")),
         sd(Plugins, tk("World clock"), "/plugins/settings/world-clock/work_start", tk("Working day starts"), tk("Highlighted in each city's local time on the meeting planner"), slider(0.0, 23.0, 1.0, ":00"), Value::from(9)),
@@ -963,8 +999,8 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Color picker"), "/plugins/settings/color-picker/copy_on_pick", tk("Copy picked colors"), tk("Put the picked color on the clipboard right away"), Toggle, Value::from(true)),
         sd(Plugins, tk("Color picker"), "/plugins/settings/color-picker/copy_format", tk("Copy as"), tk("Format copied when a color is picked"), Choice(const { &[("hex", "HEX"), ("rgb", "RGB"), ("hsl", "HSL"), ("oklch", "OKLCH")] }), Value::from("hex")),
         sd(Plugins, tk("Color picker"), "/plugins/settings/color-picker/open_after_pick", tk("Open the panel after picking"), tk("Show formats, ramp and contrast for the new color"), Toggle, Value::from(true)),
-        sd(Plugins, tk("Jannah"), "/plugins/settings/jannah/rotate", tk("New reminder"), tk("How often today's verse or hadith changes, the same everywhere"), Choice(const { &[("daily", tk("Every day")), ("hourly", tk("Every hour"))] }), Value::from("daily")),
-        sd(Plugins, tk("Jannah"), "/plugins/settings/jannah/sources", tk("Reminders from"), tk("Both take turns: a verse, then a hadith"), Choice(const { &[("both", tk("Qur'an and hadith")), ("quran", tk("Qur'an")), ("hadith", tk("Hadith"))] }), Value::from("both")),
+        sd(Plugins, tk("Jannah"), "/plugins/settings/jannah/rotate", tk("New reminder"), tk("How often the desktop widgets show a new verse or hadith; the panel and sidebar show a fresh one each time they open"), Choice(const { &[("daily", tk("Every day")), ("hourly", tk("Every hour"))] }), Value::from("daily")),
+        sd(Plugins, tk("Jannah"), "/plugins/settings/jannah/sources", tk("Reminders from"), tk("Both: picked at random from the verses and hadith together"), Choice(const { &[("both", tk("Qur'an and hadith")), ("quran", tk("Qur'an")), ("hadith", tk("Hadith"))] }), Value::from("both")),
         sd(Plugins, tk("Jannah"), "/plugins/settings/jannah/show_translation", tk("Show the meaning"), tk("The meaning in your language under the Arabic; the Qur'an's is downloaded once from Tanzil (api.alquran.cloud). Off: Arabic only"), Toggle, Value::from(true)),
         sd(Plugins, tk("Jannah"), "/plugins/settings/jannah/arabic_size", tk("Arabic size"), tk("How large the verses and hadith are set"), Choice(const { &[("small", tk("Small")), ("medium", tk("Medium")), ("large", tk("Large"))] }), Value::from("medium")),
         sd(Plugins, tk("Jannah"), "/plugins/settings/jannah/bar_label", tk("In the bar"), tk("Just the arch, or the arch with today's step"), Choice(const { &[("glyph", tk("Arch only")), ("step", tk("Arch and today's step"))] }), Value::from("glyph")),
@@ -1004,6 +1040,25 @@ fn build() -> Vec<Setting> {
         // table valid TOML).
         sd(Plugins, tk("Qur'an"), "/plugins/settings/quran/remove", tk("Downloaded Qur'an"), tk("Remove the text, the meanings and the cached recitations; the panel offers to download them again"), Command { button: tk("Remove"), args: &["quran", "remove"] }, Value::from(false)),
         sd(Plugins, tk("Soundscapes"), "/plugins/settings/soundscapes/bar_timer", tk("Sleep timer in the bar"), tk("Show the minutes left next to the playing indicator"), Toggle, Value::from(true)),
+        // Radio: playback, looks, stations and the directory.
+        sd(Plugins, tk("Radio playback"), "/plugins/settings/radio/usual", tk("Usual station"), tk("What the play button starts when no station is chosen yet"), Choice(const { &[("last", tk("The last one played")), ("favourite", tk("Your first favourite"))] }), Value::from("last")),
+        sd(Plugins, tk("Radio playback"), "/plugins/settings/radio/resume_on_login", tk("Resume on login"), tk("Start the usual station when Mandara starts"), Toggle, Value::from(false)),
+        sd(Plugins, tk("Radio playback"), "/plugins/settings/radio/per_station_volume", tk("Volume per station"), tk("Each station remembers its own volume"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Radio playback"), "/plugins/settings/radio/auto_reconnect", tk("Reconnect when a stream drops"), tk("Try again, waiting a little longer each time"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Radio playback"), "/plugins/settings/radio/reconnect_attempts", tk("Reconnection attempts"), tk("Tries before giving up on a station that dropped"), slider(1.0, 30.0, 1.0, ""), Value::from(8)),
+        sd(Plugins, tk("Radio playback"), "/plugins/settings/radio/buffer_seconds", tk("Buffer"), tk("Audio held ahead of what you hear: longer rides out a shaky connection, shorter starts sooner"), slider(2.0, 10.0, 1.0, " s"), Value::from(4)),
+        sd(Plugins, tk("Radio playback"), "/plugins/settings/radio/sleep_minutes", tk("Sleep timer"), tk("How long the panel's sleep timer runs before the radio fades out"), Choice(const { &[("15", tk("15 minutes")), ("30", tk("30 minutes")), ("45", tk("45 minutes")), ("60", tk("1 hour")), ("90", tk("1½ hours"))] }), Value::from(30)),
+        sd(Plugins, tk("Radio playback"), "/plugins/settings/radio/media_controls", tk("Media keys and controls"), tk("Show the radio to media keys, the media panel and other apps' controls"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Radio playback"), "/plugins/settings/radio/notify_now_playing", tk("Now-playing notifications"), tk("A quiet notification when the song changes"), Toggle, Value::from(false)),
+        sd(Plugins, tk("Radio look"), "/plugins/settings/radio/bar_style", tk("In the bar"), tk("What the bar item shows while a station plays"), Choice(const { &[("full", tk("Art, live dot and title")), ("compact", tk("Art and live dot")), ("icon", tk("Radio icon"))] }), Value::from("full")),
+        sd(Plugins, tk("Radio look"), "/plugins/settings/radio/marquee_speed", tk("Scrolling title"), tk("How fast a long title scrolls in the bar (it stays still with reduced motion)"), Choice(const { &[("off", tk("Off")), ("slow", tk("Slow")), ("normal", tk("Normal")), ("fast", tk("Fast"))] }), Value::from("normal")),
+        sd(Plugins, tk("Radio look"), "/plugins/settings/radio/bar_width", tk("Title width"), tk("Room for the title in the bar"), slider(80.0, 320.0, 10.0, " px"), Value::from(180)),
+        sd(Plugins, tk("Radio look"), "/plugins/settings/radio/art_style", tk("Station art"), tk("Colours of the art drawn for each station"), Choice(const { &[("vivid", tk("Vivid")), ("soft", tk("Soft")), ("theme", tk("Theme accent"))] }), Value::from("vivid")),
+        sd(Plugins, tk("Radio look"), "/plugins/settings/radio/show_meter", tk("Level meter"), tk("Bars that move with the sound in the now-playing card"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Radio look"), "/plugins/settings/radio/show_details", tk("Stream details"), tk("Format, bitrate and buffer health in the now-playing card"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Radio stations"), "/plugins/settings/radio/categories", tk("Shelves"), tk("Shelves shown: news, talk, pop, rock, jazz, classical, electronic, chill, ambient, world, arabic, quran, kids"), List { placeholder: "jazz, classical, chill" }, Value::from(vec!["news", "talk", "pop", "rock", "jazz", "classical", "electronic", "chill", "ambient", "world", "arabic", "quran", "kids"])),
+        sd(Plugins, tk("Radio stations"), "/plugins/settings/radio/directory", tk("Station directory"), tk("Search radio-browser.info from the panel; nothing is sent until you search"), Toggle, Value::from(false)),
+        sd(Plugins, tk("Radio stations"), "/plugins/settings/radio/directory_limit", tk("Directory results"), tk("Stations shown per directory search"), slider(10.0, 50.0, 5.0, ""), Value::from(25)),
         sd(Plugins, tk("Uptime monitor"), "/plugins/settings/uptime/checks", tk("Checks"), tk("Comma-separated https:// or http:// addresses, or host:port for a TCP check; name one with Name=target"), Text { placeholder: "Home NAS=nas.local:22, Blog=https://example.com" }, Value::from("")),
         sd(Plugins, tk("Uptime monitor"), "/plugins/settings/uptime/interval_s", tk("Check every"), tk("How often every check runs in the background"), slider(10.0, 3600.0, 10.0, " s"), Value::from(60)),
         sd(Plugins, tk("Uptime monitor"), "/plugins/settings/uptime/notify", tk("Notify on changes"), tk("Send a notification when a check goes down or comes back up"), Toggle, Value::from(true)),

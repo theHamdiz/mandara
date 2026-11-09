@@ -9,6 +9,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+pub use crate::components::{ButtonDesign, CardStyle, ChipDesign, InputDesign, ProgressDesign, SurfaceCorners, ToggleDesign};
+
 /// Default values of this module, in one place.
 pub mod defaults {
     /// Calendar subscriptions are re-fetched this often, minutes.
@@ -353,6 +355,19 @@ pub enum LockBackground {
     Color,
 }
 
+/// The lock screen's design.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LockDesign {
+    /// The big clock, the avatar with its accent rim and the glass field.
+    #[default]
+    Mandara,
+    /// Material You: colours from the wallpaper, a big stacked clock in a
+    /// variable weight, and a tonal card with the scalloped avatar, a
+    /// filled field and Material chips.
+    MaterialYou,
+}
+
 /// How typed password characters are hidden on the lock screen.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -375,6 +390,7 @@ pub struct LockConfig {
     /// [`crate::upgrade`]); missing in older files.
     #[serde(default)]
     pub look_version: u32,
+    pub design: LockDesign,
     pub clock_style: LockClockStyle,
     pub background: LockBackground,
     pub image: Option<PathBuf>,
@@ -412,6 +428,7 @@ impl Default for LockConfig {
         Self {
             widgets: crate::preauth::Widgets::default(),
             look_version: crate::upgrade::LOCK_LOOK_VERSION,
+            design: LockDesign::Mandara,
             clock_style: LockClockStyle::Classic,
             background: LockBackground::Wallpaper,
             image: None,
@@ -613,11 +630,34 @@ pub struct StyleConfig {
     pub slider_handle: SliderHandle,
     /// How the thick volume, brightness and mixer sliders are drawn.
     pub slider_design: SliderDesign,
+    /// Component designs (Themes → Components, [`crate::components`]); the
+    /// classic look of each is the default.
+    pub button_design: ButtonDesign,
+    pub toggle_design: ToggleDesign,
+    pub input_design: InputDesign,
+    pub chip_design: ChipDesign,
+    pub progress_design: ProgressDesign,
+    pub surface_corners: SurfaceCorners,
+    pub card_style: CardStyle,
 }
 
 impl Default for StyleConfig {
     fn default() -> Self {
-        Self { radius_scale: 1.0, shadows: true, borders: true, backdrop_dim: 0.0, slider_handle: SliderHandle::Line, slider_design: SliderDesign::Classic }
+        Self {
+            radius_scale: 1.0,
+            shadows: true,
+            borders: true,
+            backdrop_dim: 0.0,
+            slider_handle: SliderHandle::Line,
+            slider_design: SliderDesign::Classic,
+            button_design: ButtonDesign::Classic,
+            toggle_design: ToggleDesign::Classic,
+            input_design: InputDesign::Classic,
+            chip_design: ChipDesign::Classic,
+            progress_design: ProgressDesign::Classic,
+            surface_corners: SurfaceCorners::Rounded,
+            card_style: CardStyle::Tonal,
+        }
     }
 }
 

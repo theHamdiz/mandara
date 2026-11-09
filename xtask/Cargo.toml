@@ -53,6 +53,10 @@ tempfile.workspace = true
 libc.workspace = true
 # Workflow contract tests inspect effective YAML inputs and environment scopes.
 serde_yaml_ng = "0.10"
+# The website's Look palettes and keybind browser are checked against (and
+# regenerated from) the shell's own Looks, theme engine and default keybinds.
+mandara-config.workspace = true
+mandara-theme.workspace = true
 
 [lints]
 workspace = true

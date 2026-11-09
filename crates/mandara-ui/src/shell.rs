@@ -28,7 +28,7 @@ use mandara_core::{
 use mandara_plugins::{ClickHandler, PanelCx, PanelSpec, PluginRegistry};
 use mandara_theme::{Color, MandaraPalette};
 
-use crate::bar::layout::{self, BarGeometry, Metrics, PILL_INSET};
+use crate::bar::layout::{self, BarGeometry, Metrics};
 use crate::fonts::fonts;
 use crate::kit::{reveal, tokens};
 use crate::state::{ShellState, config, shell};
@@ -188,6 +188,12 @@ const SLOT_ID_STRIDE: usize = 100;
 const ANCHOR_CHIP_W_PX: f32 = 40.0;
 /// Base UI text size before the typography scale, in px.
 const BASE_TEXT_PX: f32 = 12.5;
+
+/// The bar's text size (typography scale × the bar's own text scale), for
+/// bar items that measure their text (marquees).
+pub(crate) fn bar_text_px(cfg: &mandara_config::ShellConfig) -> f32 {
+    BASE_TEXT_PX * cfg.typography.scale * cfg.bar.text_scale()
+}
 /// Bar opacity at or above which fills count as opaque (overlap seams).
 const OPAQUE_ALPHA: f32 = 0.999;
 /// Specular rim highlight / shade alphas of the floating glass pills.
@@ -215,6 +221,8 @@ const CAPSULE_ALPHA: f32 = 0.07;
 const CAPSULE_CONTAINER_ALPHA: f32 = 0.85;
 const CAPSULE_ACCENT_ALPHA: f32 = 0.16;
 const CAPSULE_OUTLINE_ALPHA: f32 = 0.35;
+/// Outline of a squircle item tile (`bar.capsule_outline`).
+const CAPSULE_EDGE_PX: f32 = 1.0;
 /// Alpha and thickness of the hairline bar's accent line.
 const ACCENT_LINE_ALPHA: f32 = 0.7;
 const ACCENT_LINE_PX: f32 = 1.0;
@@ -689,7 +697,7 @@ impl ShellView {
                     if w < 1.0 {
                         return None;
                     }
-                    let chip_w = w + m.chip_padding * 2.0;
+                    let chip_w = m.chip_length(w);
                     let r = Bounds { origin: point(px(x), px(y)), size: size(px(chip_w), px(h)) };
                     x += chip_w + m.chip_gap;
                     Some(layout::orient(m.position, r, self.surface))
@@ -697,9 +705,9 @@ impl ShellView {
                 .collect();
         }
         let floating = !m.attached();
-        let inset = if floating { PILL_INSET } else { 0.0 };
+        let inset = if floating { m.pill_inset() } else { 0.0 };
         let (y, h) = if floating {
-            (f32::from(g.origin.y) + PILL_INSET + self.bar_shift, f32::from(g.size.height) - PILL_INSET * 2.0)
+            (f32::from(g.origin.y) + m.pill_inset() + self.bar_shift, f32::from(g.size.height) - m.pill_inset() * 2.0)
         } else {
             // The frame's bar-side edge: the band's start (top bar) or its
             // end less the frame (bottom bar).
@@ -715,7 +723,7 @@ impl ShellView {
                 if w < 1.0 {
                     return None;
                 }
-                let chip_w = w + m.chip_padding * 2.0;
+                let chip_w = m.chip_length(w);
                 let r = Bounds { origin: point(px(x), px(y)), size: size(px(chip_w), px(h)) };
                 x += chip_w + m.chip_gap;
                 Some(r)
@@ -1029,10 +1037,13 @@ impl ShellView {
                 self.panel_committed = false;
                 self.panel_shadow.clear();
                 self.leave_task = None;
+                // It folds back into the bar in one motion: an exit target
+                // lands on the bar and stays there, where the open spring
+                // would swing past it and grow back out for a moment.
                 if let Some(slot) = self.panel_slot
                     && let Some((collapsed, _)) = self.panel_rects(cfg, slot)
                 {
-                    self.panel.set_target(collapsed);
+                    self.panel.set_exit_target(collapsed);
                 }
             }
             None => {}
@@ -1078,6 +1089,9 @@ impl ShellView {
         if self.panel_visible {
             let moving = step_spring(&mut self.panel, self.panel_custom, dt);
             animating |= moving;
+            // Measurement only (`RUST_LOG=mandara::panel_morph=trace`): the
+            // animated panel rect per frame, to check the morph's path.
+            tracing::trace!(target: "mandara::panel_morph", open = panel_open, moving, bounds = ?self.panel.value(), "panel frame");
             if !moving && !panel_open {
                 self.panel_visible = false;
                 self.panel_slot = None;
@@ -1253,6 +1267,28 @@ fn capsule_colors(bar: &mandara_config::BarConfig, palette: &MandaraPalette) -> 
     (fill, palette.outline.with_alpha((CAPSULE_OUTLINE_ALPHA * k).min(1.0)))
 }
 
+/// One item's tile: a rounded rectangle, a squircle, or a Material 3
+/// Expressive shape painted from SDF circles ([`crate::components::shapes`]),
+/// in `color` over the bar's own `under` colour, with an optional outline.
+fn item_tile(placed: &crate::bar::items::Placed, color: Color, under: Color, edge: Option<Color>) -> AnyElement {
+    use crate::bar::items::Tile;
+    use crate::components::cut::{Corner, Ink};
+    use crate::components::surfaces::Surface as _;
+    match placed.tile {
+        Tile::Rounded(c) => place(placed.bounds).with_corners(c).bg(color.hsla()).when_some(edge, |el, edge| el.border_1().border_color(edge.hsla())).into_any_element(),
+        Tile::Squircle(reach) => {
+            let ink = Ink::solid(Some(color), edge.map(|e| (e, CAPSULE_EDGE_PX)));
+            place(placed.bounds).child(canvas(|_, _, _| {}, move |b, _, window, _| crate::components::cut::paint_shape(window, b, Corner::Squircle(reach), ink)).size_full()).into_any_element()
+        }
+        Tile::Shape(shape) => match crate::bar::items::opaque(color, under) {
+            Some(solid) => place(placed.bounds).child(canvas(|_, _, _| {}, move |b, _, window, _| crate::components::shapes::paint(window, b, shape, solid)).size_full()).into_any_element(),
+            // Over a see-through bar the overlapping discs would show:
+            // a plain circle instead.
+            None => place(placed.bounds).rounded_full().bg(color.hsla()).into_any_element(),
+        },
+    }
+}
+
 fn bounds_of(r: crate::dismiss::Rect) -> Bounds<Pixels> {
     Bounds { origin: point(px(r.x), px(r.y)), size: size(px(r.w), px(r.h)) }
 }
@@ -1303,7 +1339,13 @@ impl Render for ShellView {
         // (Before the panel: an open sidebar moves the panel.)
         // A side bar on the sidebar's edge replaces it.
         let sidebar_up = cfg.sidebar_active() && (cfg.sidebar.pinned() || self.shell.read(cx).sidebar_visible_on(&self.monitor));
-        self.sidebar.set_target(if sidebar_up { 1.0 } else { 0.0 });
+        // Hiding, it slides off in one motion: it never swings back into
+        // view once it reached the edge.
+        if sidebar_up {
+            self.sidebar.set_target(1.0);
+        } else {
+            self.sidebar.set_exit_target(0.0);
+        }
         self.update_panel(&cfg, cx);
         // An attached launcher can grow out of its bar button: say where
         // that rests on this output (only while the launcher is open).
@@ -1625,10 +1667,25 @@ impl Render for ShellView {
                 (side_col.is_none() || sidebar_right) && !self.side_takes_corner(&cfg, 0),
                 (side_col.is_none() || !sidebar_right) && !self.side_takes_corner(&cfg, 1),
             );
+            // `bar.screen_frame`: thin strips on the other three edges (a
+            // joined side bar draws its own side), fillets in the far
+            // corners, and the bar's fillets move in to the strips.
+            let bar_edge = if bottom { strip_y } else { strip_y + bar_h };
+            let frame = layout::edge_frame(&m, self.surface, bar_edge, r, [self.side_takes_corner(&cfg, 0), self.side_takes_corner(&cfg, 1)]);
+            let inset = frame.map_or(0.0, |f| px_snap(f.inset));
+            if let Some(f) = frame {
+                for (x, y, sw_, sh_) in f.strips.into_iter().flatten() {
+                    let (x0, y0) = (px_snap(x), px_snap(y));
+                    root = root.child(div().absolute().left(px(x0)).top(px(y0)).w(px(px_snap(x + sw_) - x0)).h(px(px_snap(y + sh_) - y0)).bg(bar_fill_h));
+                }
+                for (fx, fy, fr, c) in f.flares.into_iter().flatten() {
+                    root = root.child(concave_flare(px_snap(fx), px_snap(fy), fr, c, bar_fill_h));
+                }
+            }
             root = root
                 .child(div().absolute().top(px(strip_y)).left_0().w(px(w)).h(px(bar_h)).bg(bar_fill_h))
-                .when(left_free, |el| el.child(concave_flare(0.0, flare_y, r, left_c, bar_fill_h)))
-                .when(right_free, |el| el.child(concave_flare(w - r, flare_y, r, right_c, bar_fill_h)))
+                .when(left_free, |el| el.child(concave_flare(inset, flare_y, r, left_c, bar_fill_h)))
+                .when(right_free, |el| el.child(concave_flare(w - inset - r, flare_y, r, right_c, bar_fill_h)))
                 .child(
                     place(shifted(self.backdrop.value()))
                         .id("bar-backdrop")
@@ -1683,7 +1740,9 @@ impl Render for ShellView {
         if self.sides.iter().any(|b| b.on) {
             // A joined column runs from the bar's inner edge (following its
             // auto-hide) to the far screen edge.
-            let joined_span = if bottom { (0.0, px_snap(band_y + band_h - bar_h) + shift) } else { (bar_h + shift, self.surface.1) };
+            // (Inside a screen frame it ends at the frame's far strip.)
+            let far = px_snap(m.frame_strips.max(0.0));
+            let joined_span = if bottom { (far, px_snap(band_y + band_h - bar_h) + shift) } else { (bar_h + shift, self.surface.1 - far) };
             let out = crate::plugins::dock::output_size(&self.monitor, cx);
             root = root.children(self.side_frames(&cfg, &palette, bar_fill_h, joined_span, seam, scale, side_frost.as_ref(), out));
         }
@@ -1899,7 +1958,7 @@ impl Render for ShellView {
         let active_slot = if panel_open { self.panel_slot } else { None };
         // A floating panel's chip stays lit like an open one.
         let floating_ids = crate::floating::live_ids(cx);
-        let bar_text_px = BASE_TEXT_PX * cfg.typography.scale * cfg.bar.text_scale();
+        let bar_text_px = bar_text_px(&cfg);
         let bar_weight = gpui::FontWeight(f32::from(cfg.bar.font_weight(cfg.typography.weight)));
         let (capsule_fill, capsule_edge) = capsule_colors(&cfg.bar, &palette);
         let hover_k = if cfg.bar.hover_highlight { HOVER_CHIP_TINT_ALPHA } else { 0.0 };
@@ -1914,6 +1973,9 @@ impl Render for ShellView {
             accent: palette.primary,
             hover: palette.on_surface.with_alpha(hover_k),
             separator: cfg.bar.separator,
+            items: crate::bar::items::ItemLook { item: cfg.bar.item_shape, icon: cfg.bar.icon_shape, radius: m.radius, vertical: m.vertical },
+            icon_fill: crate::bar::items::icon_color(cfg.bar.icon_fill, capsule_fill, &palette),
+            under: bar_fill.with_alpha(fill.alpha() * ranges::OPACITY.clamp(cfg.bar.opacity, 1.0)),
         };
         let side_looks = [self.side_look(&cfg, 0, &palette), self.side_look(&cfg, 1, &palette)];
         for z in 0..ZONES {
@@ -1933,7 +1995,7 @@ impl Render for ShellView {
                 .next()
                 .map(|r| {
                     let half = f32::from(r.size.height.min(r.size.width)) / 2.0;
-                    if zm.attached() { zm.radius.min(half) } else { crate::style::concentric(look.pill_radius, PILL_INSET).min(half) }
+                    if zm.attached() { zm.radius.min(half) } else { crate::style::concentric(look.pill_radius, zm.pill_inset()).min(half) }
                 })
                 .unwrap_or(FALLBACK_CHIP_RADIUS_PX);
             // `bar.capsules` / an island side bar: the zone's chips sit on
@@ -1958,10 +2020,27 @@ impl Render for ShellView {
             }
             // `bar.item_capsules` / a pills side bar: every item on a
             // capsule of its own.
-            if look.item_capsules {
-                for r in rects.iter().flatten() {
-                    root = root.child(place(*r).rounded(px(chip_radius)).bg(look.fill.hsla()).when_some(look.edge, |el, edge| el.border_1().border_color(edge.hsla())));
-                }
+            // Their shapes (`bar.item_shape` / `bar.icon_shape`), one per
+            // visible item in screen order.
+            let tiles: smallvec::SmallVec<[Option<crate::bar::items::Placed>; 16]> = if look.item_capsules {
+                let item_look = crate::bar::items::ItemLook { radius: chip_radius, ..look.items };
+                let count = rects.iter().flatten().count();
+                let mut k = 0;
+                rects
+                    .iter()
+                    .map(|r| {
+                        r.map(|r| {
+                            k += 1;
+                            crate::bar::items::tile(&item_look, r, k - 1, count)
+                        })
+                    })
+                    .collect()
+            } else {
+                smallvec::SmallVec::new()
+            };
+            for placed in tiles.iter().flatten() {
+                let color = if placed.icon { look.icon_fill } else { look.fill };
+                root = root.child(item_tile(placed, color, look.under, look.edge));
             }
             // Separator marks centred in the gaps between visible chips.
             if look.separator != BarSeparator::None {
@@ -2015,6 +2094,11 @@ impl Render for ShellView {
                             // chip toggles its own panel.
                             .occlude()
                             .rounded(px(chip_radius))
+                            // On a shaped tile the wash follows the tile.
+                            .when_some(tiles.get(i).copied().flatten(), |el, placed| {
+                                use crate::components::surfaces::Surface as _;
+                                el.with_corners(crate::bar::items::wash_corners(&placed))
+                            })
                             // Click-through bars: only the chips take input.
                             .when(click_through, |el| el.child(self.mask.region()))
                             .bg(tint.hsla())
@@ -2071,16 +2155,19 @@ impl Render for ShellView {
                 // content is at most that long; see [`ChipHost`]), and clips
                 // content that can't shrink to it.
                 let limit = slot.limit.get().unwrap_or(f32::INFINITY);
-                let clamped = rects[i].is_some() && content_length(slot, zone_vertical, look.room) >= limit - SQUEEZED_EPSILON_PX;
+                let natural = content_length(slot, zone_vertical, look.room);
+                let clamped = rects[i].is_some() && natural >= limit - SQUEEZED_EPSILON_PX;
+                // Padded along the bar, or centred in a squared-up item.
+                let lead = zm.content_inset(natural.min(limit));
                 let (x, y, w, h) = match rects[i] {
                     // A side bar's chip: content centred across, padded along.
                     Some(r) if zone_vertical => (
                         f32::from(r.origin.x) + (f32::from(r.size.width) - slot.measured_cross.get()) / 2.0,
-                        f32::from(r.origin.y) + zm.chip_padding,
+                        f32::from(r.origin.y) + lead,
                         self.surface.0,
                         limit.min(self.surface.1),
                     ),
-                    Some(r) => (f32::from(r.origin.x) + zm.chip_padding, f32::from(r.origin.y), limit.min(self.surface.0), f32::from(r.size.height)),
+                    Some(r) => (f32::from(r.origin.x) + lead, f32::from(r.origin.y), limit.min(self.surface.0), f32::from(r.size.height)),
                     // Hidden/unmeasured (or left out of a full zone): render
                     // offscreen-left at its own size so it can be measured.
                     None => (OFFSCREEN_X_PX, 0.0, self.surface.0, if split(z).is_some() { zm.height } else { bar_h }),

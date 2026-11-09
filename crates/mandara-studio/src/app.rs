@@ -33,6 +33,7 @@ mod plugin_updates;
 mod updates_card;
 mod about_links;
 mod plugin_credentials;
+mod feeds_editor;
 mod whats_new;
 mod designer;
 mod bars_page;
@@ -73,7 +74,7 @@ mod dock_page;
 mod switcher_page;
 mod desktop_widgets_page;
 mod auth_widgets;
-mod looks_page;
+pub mod looks_page;
 mod app_themes_page;
 mod themes_page;
 mod cursor_page;
@@ -164,6 +165,8 @@ pub struct StudioView {
     updates: updates_card::Updates,
     about_links: about_links::Links,
     credentials: plugin_credentials::Editor,
+    /// Plugins → Feeds → settings: the subscription manager.
+    feeds: feeds_editor::Editor,
     /// Each language card's download fill (Studio → General → Language).
     lang_fills: mandara_ui::progress_fill::LanguageFills,
     /// Plugins page: the plugin detail / settings modal.
@@ -187,6 +190,10 @@ pub struct StudioView {
     /// Themes → Components: the value the design previews show (drag one
     /// and every preview follows; it is never saved).
     component_preview: f32,
+    /// The other component previews (Themes → Components; never saved).
+    components: component_designs::Previews,
+    /// The Themes page's tab.
+    themes_tab: looks_page::ThemesTab,
 }
 
 impl StudioView {
@@ -248,7 +255,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE }
+        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -257,6 +264,7 @@ impl StudioView {
     /// one's offset, which left short pages "stuck" at their bottom).
     pub fn show(&mut self, section: Section, cx: &mut Context<Self>) {
         if section == Section::Bars { self.bars_tab = Default::default(); }
+        if section == Section::Themes && self.section != Section::Themes { self.themes_tab = Default::default(); }
         if section == Section::Plugins { self.market_reopen(); }
         if section != self.section {
             self.launcher_data.release();
@@ -266,6 +274,8 @@ impl StudioView {
             self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
             self.themes = None;
             self.icon_matches = None;
+            // The Components previews' text fields go with the page.
+            self.components = Default::default();
             if self.section == Section::About {
                 self.about_links = Default::default();
             }
@@ -817,7 +827,8 @@ impl StudioView {
                             .child(div().flex_1().px(px(SPACE_10_PX)).text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(mandara_ui::bidi::paragraph(tr(title))))
                             .children(reset),
                     )
-                    .child(card.p(px(SPACE_6_PX)).rounded(px(RADIUS_20_PX)).bg(p.surface_container.hsla())),
+                    // The surface first (a squircle or cut one is drawn behind), then the rows.
+                    .child(mandara_ui::components::surfaces::CardSurface::card_surface(div(), RADIUS_20_PX, mandara_ui::components::surfaces::Fill(p.surface_container, None), Vec::new(), p).p(px(SPACE_6_PX)).child(card)),
             );
         }
         col.into_any_element()
@@ -1778,7 +1789,7 @@ impl Render for StudioView {
                 Section::AiShellAgent => self.agent_page(&cfg, &p, cx),
                 Section::Motion => self.motion_page(&cfg, &p, cx),
                 Section::Home => self.home_page(&cfg, &p, window, cx),
-                Section::Themes => self.themes_page(&cfg, &p, cx),
+                Section::Themes => self.themes_page(&cfg, &p, window, cx),
                 Section::Plugins => self.store_page(&cfg, &p, window, cx),
                 Section::About => self.about(&cfg, &p, window, cx),
                 Section::Performance => {

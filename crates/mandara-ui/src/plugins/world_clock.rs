@@ -917,7 +917,7 @@ impl View {
             .flex()
             .flex_col()
             .gap(px(BLOCK_GAP_PX))
-            .child(div().flex().child(search_box("wc-clear", &self.field, &query, palette)))
+            .child(div().flex().child(search_box("wc-clear", &self.field, &query, palette, cx)))
             .when(!query_trimmed.is_empty(), |el| {
                 if hits.is_empty() {
                     el.child(

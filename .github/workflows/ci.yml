@@ -100,6 +100,41 @@ jobs:
               ./target/debug/mandara --version
             '
 
+  # Informational only: a type-check for FreeBSD lists the code that assumes
+  # Linux (Linux-only system calls, GPUI's Linux-only layer shell). It needs
+  # only Rust's FreeBSD standard library; no FreeBSD system root. Build
+  # scripts that ask pkg-config for C libraries (fontconfig, freetype) read
+  # the Ubuntu ones, which is fine for a check that never links. It is
+  # allowed to fail and never blocks a merge or a release.
+  freebsd-check:
+    name: FreeBSD type-check (informational)
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: System libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends pkg-config libfontconfig-dev libfreetype-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-freebsd
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: freebsd
+
+      # --keep-going checks every crate whose dependencies build, so one
+      # Linux-only crate doesn't hide the rest.
+      - name: cargo check (x86_64-unknown-freebsd)
+        env:
+          PKG_CONFIG_ALLOW_CROSS: "1"
+        run: cargo check --workspace --locked --keep-going --target x86_64-unknown-freebsd
+
   # NixOS (flake.nix, nix/): the package builds from source as Nix builds it
   # for users, and the NixOS and Home Manager modules evaluate (the NixOS
   # check builds a minimal system with the module and Mandara Login on).

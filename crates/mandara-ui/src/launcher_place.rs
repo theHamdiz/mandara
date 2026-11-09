@@ -27,7 +27,7 @@ mod anchors;
 mod seam;
 pub use anchors::{BarAnchor, anchor_on, publish_anchor};
 
-use crate::bar::layout::{CHIP_INSET, Metrics, PANEL_SLIDE_PX, PILL_INSET, exclusive_zone};
+use crate::bar::layout::{Metrics, PANEL_SLIDE_PX, exclusive_zone};
 
 /// Gap kept to screen sides (and above / below a floating card), px.
 pub const SCREEN_MARGIN: f32 = 24.0;
@@ -285,9 +285,9 @@ fn attached(i: &Inputs, edge: LauncherEdge) -> Placement {
         PanelAnimation::Morph => match button {
             // Out of the floating pill itself (as panels morph).
             Some((bx, bw)) if join == Join::Card => {
-                let chip_h = m.height - PILL_INSET * 2.0;
+                let chip_h = m.height - m.pill_inset() * 2.0;
                 start_radius = Some(m.radius.min(chip_h / 2.0));
-                Rect::new(bx, m.edge_gap + PILL_INSET, bw, chip_h)
+                Rect::new(bx, m.edge_gap + m.pill_inset(), bw, chip_h)
             }
             // A sliver under the button: it pours out of the frame there.
             Some((bx, bw)) => Rect::new(bx, line, bw, 0.0),
@@ -407,7 +407,7 @@ pub fn beacon_with(m: &Metrics, bar_here: bool, dock: Option<f32>, (sw, sh): (f3
 
 /// Top-oriented y of the bar's chips (for a chip rect from its x / width).
 pub fn chip_y(m: &Metrics) -> (f32, f32) {
-    if m.attached() { (f32::from(m.frame(0.0).origin.y) + CHIP_INSET, m.height - CHIP_INSET * 2.0) } else { (m.edge_gap + PILL_INSET, m.height - PILL_INSET * 2.0) }
+    if m.attached() { (f32::from(m.frame(0.0).origin.y) + m.chip_inset(), m.height - m.chip_inset() * 2.0) } else { (m.edge_gap + m.pill_inset(), m.height - m.pill_inset() * 2.0) }
 }
 
 #[cfg(test)]

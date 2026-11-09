@@ -26,7 +26,7 @@ use gpui::{
 };
 use image::imageops::FilterType;
 use mandara_core::{ToGpui, oklab_gradient};
-use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
+use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, Output, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
 use mandara_i18n::{t, tf, tk};
 use mandara_services::{MediaCommand, MediaState, PlaybackStatus};
 use mandara_theme::{Color, MandaraPalette, MiniPalette, SeedColor};
@@ -73,6 +73,8 @@ const EMPTY_H: f32 = 216.0;
 const LYRICS_GAP: f32 = 12.0;
 /// Panel size changes smaller than this are ignored (no relayout jitter).
 const SIZE_EPSILON_PX: f32 = 0.5;
+/// A media player's full own volume (MPRIS `1.0`) in percent, for `media volume set`.
+const PLAYER_PERCENT: f64 = 100.0;
 
 /// Head: player pill padding / gap, its icon, and the level glyph.
 const HEAD_ROW_GAP_PX: f32 = 8.0;
@@ -133,6 +135,8 @@ const KNOB_GLOW: (f32, f32) = (0.5, 8.0);
 const KNOB_SHADOW: (f32, f32, f32) = (0.2, 3.0, 1.0);
 /// Shown instead of the remaining time when the length is unknown.
 const UNKNOWN_TIME: &str = "--:--";
+/// The live dot's size, and its gap to "Live", as a share of the text size.
+const LIVE_DOT_EM: f32 = 0.5;
 
 /// Transport: side button size, icon share and disabled alpha; gaps and
 /// play button glow as shares of the play button size; contrast inks.
@@ -799,7 +803,12 @@ fn scrubber(
     drag: Rc<ScrubState>,
     labels: &RefCell<ScrubLabels>,
     compact: bool,
-) -> impl IntoElement {
+) -> AnyElement {
+    if state.is_live() {
+        // No progress, no times: a live stream only says it's live.
+        let row = if compact { KNOB_PX.0 } else { KNOB_PX.1 } + KNOB_HEADROOM_PX;
+        return div().w_full().h_full().min_h(px(row)).flex().items_center().justify_center().child(live_label(text::LABEL, palette)).into_any_element();
+    }
     let now = Instant::now();
     let length = state.length;
     let seekable = state.can_seek && length.is_some();
@@ -902,20 +911,37 @@ fn scrubber(
                 .child(elapsed)
                 .child(remaining),
         )
+        .into_any_element()
+}
+
+/// "Live" with a coral dot, in place of a live stream's progress and times
+/// (the media panel, the sidebar and the now-playing card).
+pub(crate) fn live_label(size: f32, palette: &MandaraPalette) -> AnyElement {
+    let dot = size * LIVE_DOT_EM;
+    div()
+        .flex()
+        .items_center()
+        .gap(px(dot))
+        .text_size(px(size))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(palette.on_surface_variant.hsla())
+        .child(div().flex_none().size(px(dot)).rounded_full().bg(readable(palette.urgent_coral, palette).hsla()))
+        .child(t("Live"))
+        .into_any_element()
 }
 
 fn transport_button(id: &'static str, icon_name: &'static str, side: f32, enabled: bool, palette: &MandaraPalette, command: MediaCommand) -> impl IntoElement {
     let fg = if enabled { palette.on_surface } else { palette.on_surface.with_alpha(DISABLED_ALPHA) };
+    use crate::components::buttons::{Ink, designed};
     let hover = palette.on_surface.with_alpha(BUTTON_HOVER_ALPHA);
-    div()
-        .id(id)
-        .size(px(side))
-        .flex_none()
-        .rounded_full()
+    // Disabled it shows no hover (a clear one in the designed shapes).
+    let ink = Ink { bg: None, hover: if enabled { hover } else { hover.with_alpha(0.0) }, outline: None };
+    let el = div().id(id).size(px(side)).flex_none();
+    designed(el, id, side, true, ink, Some(palette), |el| el.rounded_full().when(enabled, |el| el.hover(move |s| s.bg(hover.hsla()))))
         .flex()
         .items_center()
         .justify_center()
-        .when(enabled, |el| el.cursor_pointer().hover(move |s| s.bg(hover.hsla())))
+        .when(enabled, |el| el.cursor_pointer())
         .child(icon(icon_name, side * BUTTON_ICON_SCALE, fg))
         .on_click(move |_, _, cx| {
             if enabled {
@@ -1229,8 +1255,9 @@ pub fn register(r: &mut PluginRegistry) {
                         *labels.borrow_mut() = ScrubLabels::default();
                     });
                 }
-                // Only the scrubber and times move: tick while playing.
-                if snap.playing() {
+                // Only the scrubber and times move: tick while playing
+                // (a live stream shows neither).
+                if snap.playing() && !state.is_live() {
                     redraw_in(SIDEBAR_TICK, window, cx);
                 }
                 let m = ArtTheme::of(state, palette);
@@ -1305,9 +1332,25 @@ pub fn register(r: &mut PluginRegistry) {
                 "position": m.position_now(Instant::now()).as_secs_f64(),
                 "length": m.length.map(|l| l.as_secs_f64()),
                 "art": m.art_path,
+                // The player's own volume (0–1) when it lets you change it.
+                "volume": m.volume,
             }),
         })
     }));
+    r.command(
+        ID,
+        CommandSpec::new_output("media volume set", tk("Set the media player's own volume in percent (0-100)"), |a, cx| {
+            let percent = a.number(0)?.clamp(0.0, PLAYER_PERCENT);
+            let h = hub(cx).read(cx);
+            if h.media.as_ref().and_then(|m| m.volume).is_none() {
+                return Err(t("This player doesn't let you change its volume").into());
+            }
+            let service = h.media_service.clone().ok_or_else(|| t("Nothing playing").to_string())?;
+            Ok(Output::Pending(service.request(MediaCommand::SetVolume(percent / PLAYER_PERCENT))))
+        })
+        .arg(ArgSpec::required("percent", ArgKind::Number, "0-100").range(0.0, PLAYER_PERCENT))
+        .example("media volume set 40"),
+    );
 }
 
 #[cfg(test)]

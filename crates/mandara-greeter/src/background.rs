@@ -28,6 +28,9 @@ const WARMUP: Duration = Duration::from_millis(1500);
 /// Stall share over the window that triggers a downgrade.
 const STALL_LIMIT: f32 = 0.22;
 const STALL_WINDOW: Duration = Duration::from_secs(4);
+/// The share of a still (from the top) whose lightness is measured for the
+/// dynamic-colour design's scrim.
+const LUMA_SHARE: f32 = 0.5;
 /// Softening at or above which clips decode in lite mode (the blur hides
 /// the lost detail).
 const LITE_BLUR: f32 = 0.35;
@@ -55,6 +58,8 @@ pub struct BackgroundOptions {
     pub solid: Option<Color>,
     /// Freeze the aurora / Ken Burns drift (reduced motion).
     pub still_motion: bool,
+    /// Pick each still's leading colour while decoding it ([`Background::seed`]).
+    pub seed_colors: bool,
 }
 
 /// Output size assumed before the real one is known, physical px.
@@ -95,6 +100,7 @@ impl Default for BackgroundOptions {
             blur: 0.0,
             solid: None,
             still_motion: false,
+            seed_colors: false,
         }
     }
 }
@@ -125,6 +131,9 @@ struct StillLayer {
     size: (f32, f32),
     zoom: (f32, f32),
     pan: ((f32, f32), (f32, f32)),
+    /// The picture's leading colour and how light its top half is (when
+    /// asked for).
+    seed: Option<(Color, f32)>,
 }
 
 enum Content {
@@ -161,6 +170,9 @@ pub enum Showing {
     Video { clip: usize, lite: bool },
 }
 
+/// A decoded still: its index, pixels, size and leading colour.
+type LoadedStill = (usize, Arc<RenderImage>, (u32, u32), Option<(Color, f32)>);
+
 pub struct Background {
     opts: BackgroundOptions,
     layers: Vec<Layer>,
@@ -169,7 +181,7 @@ pub struct Background {
     next_clip: usize,
     next_still: usize,
     failed_stills: usize,
-    loading_still: Option<Receiver<Option<(usize, Arc<RenderImage>, (u32, u32))>>>,
+    loading_still: Option<Receiver<Option<LoadedStill>>>,
     trash: Vec<Arc<RenderImage>>,
     started: Instant,
     seed: u64,
@@ -287,6 +299,25 @@ impl Background {
         self.layers.iter().any(|l| matches!(l.content, Content::Video(_)))
     }
 
+    /// The leading colour of the picture on top (`None` for a clip, the
+    /// aurora, or when [`BackgroundOptions::seed_colors`] is off).
+    pub fn seed(&self) -> Option<Color> {
+        self.top_seed().map(|(c, _)| c)
+    }
+
+    /// How light the top half of that picture is (0–1), with
+    /// [`BackgroundOptions::seed_colors`].
+    pub fn luma(&self) -> Option<f32> {
+        self.top_seed().map(|(_, l)| l)
+    }
+
+    fn top_seed(&self) -> Option<(Color, f32)> {
+        match self.layers.iter().rev().find(|l| l.shown_at.is_some()).map(|l| &l.content) {
+            Some(Content::Still(s)) => s.seed,
+            _ => None,
+        }
+    }
+
     pub fn showing(&self) -> Showing {
         match self.layers.iter().rev().find(|l| l.shown_at.is_some()).map(|l| &l.content) {
             Some(Content::Video(v)) => Showing::Video { clip: v.clip, lite: v.lite },
@@ -346,14 +377,15 @@ impl Background {
         tracing::info!("background: still {}", path.display());
         let target = self.opts.target;
         let blur = self.opts.blur;
+        let seed = self.opts.seed_colors;
         let (tx, rx) = std::sync::mpsc::channel();
         let _ = std::thread::Builder::new().name("mandara-greeter-still".into()).spawn(move || {
-            let _ = tx.send(load_still(&path, target, blur).map(|(img, size)| (ix, img, size)));
+            let _ = tx.send(load_still(&path, target, blur, seed).map(|(img, size, seed)| (ix, img, size, seed)));
         });
         self.loading_still = Some(rx);
     }
 
-    fn push_still(&mut self, image: Arc<RenderImage>, size: (u32, u32)) {
+    fn push_still(&mut self, image: Arc<RenderImage>, size: (u32, u32), seed: Option<(Color, f32)>) {
         // Alternate zoom direction and pick a pan diagonal per slide.
         self.seed = self.seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
         let r = |shift: u32| ((self.seed >> shift) & 0xFFFF) as f32 / 65535.0 * 2.0 - 1.0;
@@ -363,7 +395,7 @@ impl Background {
         let a = (r(3) * 0.8, r(19) * 0.8);
         let pan = (a, (-a.0 * 0.9 + r(35) * 0.2, -a.1 * 0.9 + r(51) * 0.2));
         self.layers.push(Layer {
-            content: Content::Still(StillLayer { cycle: self.opts.stills.len() == 1, image, size: (size.0 as f32, size.1 as f32), zoom, pan }),
+            content: Content::Still(StillLayer { cycle: self.opts.stills.len() == 1, image, size: (size.0 as f32, size.1 as f32), zoom, pan, seed }),
             shown_at: Some(Instant::now()),
             fade: self.opts.still_fade,
         });
@@ -444,9 +476,9 @@ impl Background {
         if !self.video_active() {
             if let Some(rx) = &self.loading_still {
                 match rx.try_recv() {
-                    Ok(Some((_, image, size))) => {
+                    Ok(Some((_, image, size, seed))) => {
                         self.loading_still = None;
-                        self.push_still(image, size);
+                        self.push_still(image, size, seed);
                     }
                     Ok(None) | Err(TryRecvError::Disconnected) => {
                         self.loading_still = None;
@@ -760,8 +792,10 @@ pub fn take_grain() -> Option<Arc<RenderImage>> {
 }
 
 /// Decodes and downsizes a still to at most ~1.25× the output (Ken Burns
-/// zooms in up to 16 %), as BGRA.
-fn load_still(path: &std::path::Path, target: (u32, u32), blur: f32) -> Option<(Arc<RenderImage>, (u32, u32))> {
+/// zooms in up to 16 %), as BGRA, with its leading colour when `seed`
+/// (Material's ranking, taken from a small copy of the already-shrunk
+/// picture before it is softened).
+fn load_still(path: &std::path::Path, target: (u32, u32), blur: f32, seed: bool) -> Option<(Arc<RenderImage>, (u32, u32), Option<(Color, f32)>)> {
     let img = image::ImageReader::open(path)
         .and_then(|r| r.with_guessed_format())
         .map_err(image::ImageError::IoError)
@@ -778,6 +812,12 @@ fn load_still(path: &std::path::Path, target: (u32, u32), blur: f32) -> Option<(
     } else {
         img
     };
+    let seed = seed
+        .then(|| {
+            let lead = mandara_theme::material::extract_seeds_from_image(&img, 1).ok()?.first()?.color;
+            Some((lead, mandara_theme::material::mean_luma(&img, LUMA_SHARE)))
+        })
+        .flatten();
     // Soften: blur a quarter-size copy (the GPU's upscale adds the rest).
     let img = if blur > 0.01 {
         let small = mandara_ui::wallpaper::fit_within(&img, (img.width() / 4).max(16), (img.height() / 4).max(9));
@@ -791,7 +831,7 @@ fn load_still(path: &std::path::Path, target: (u32, u32), blur: f32) -> Option<(
         px.swap(0, 2);
     }
     let size = (rgba.width(), rgba.height());
-    Some((Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(rgba)])), size))
+    Some((Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(rgba)])), size, seed))
 }
 
 fn shuffle_paths(v: &mut [PathBuf], mut seed: u64) {
@@ -868,14 +908,40 @@ mod tests {
         let still = dir.path().join("s.png");
         image::RgbaImage::from_pixel(1920, 1080, image::Rgba([10, 20, 200, 255])).save(&still).unwrap();
         let near = |(w, h): (u32, u32), (ew, eh): (u32, u32)| w.abs_diff(ew) <= 1 && h.abs_diff(eh) <= 1;
-        let (image, size) = load_still(&still, (800, 450), 0.0).unwrap();
+        let (image, size, seed) = load_still(&still, (800, 450), 0.0, false).unwrap();
         assert!(near(size, (1000, 562)), "{size:?}: 1.25× the output");
         assert_eq!(image.size(0).width.0 as u32, size.0);
         assert_eq!(&image.as_bytes(0).unwrap()[..4], &[200, 20, 10, 255], "BGRA");
-        let (_, soft) = load_still(&still, (800, 450), 0.5).unwrap();
+        assert_eq!(seed, None, "colours only when asked");
+        let (_, soft, _) = load_still(&still, (800, 450), 0.5, false).unwrap();
         assert!(near(soft, (250, 140)), "{soft:?}: a quarter of that");
-        let (_, kept) = load_still(&still, (3840, 2160), 0.0).unwrap();
+        let (_, kept, _) = load_still(&still, (3840, 2160), 0.0, false).unwrap();
         assert_eq!(kept, (1920, 1080));
+    }
+
+    /// Dynamic colour: a still's leading colour comes with it, and follows
+    /// the picture on top.
+    #[test]
+    fn stills_bring_their_leading_colour_when_asked() {
+        let dir = tempfile::tempdir().unwrap();
+        let still = dir.path().join("blue.png");
+        image::RgbaImage::from_pixel(640, 360, image::Rgba([20, 60, 210, 255])).save(&still).unwrap();
+        let (_, _, seed) = load_still(&still, (640, 360), 0.3, true).unwrap();
+        let (seed, luma) = seed.expect("a leading colour");
+        assert!((220.0..300.0).contains(&seed.hue()), "blue: hue {}", seed.hue());
+        assert!(luma < 0.4, "a deep blue is dark: {luma}");
+        let mut bg = Background::new(BackgroundOptions { stills: vec![still], seed_colors: true, still_motion: true, ..Default::default() }, false);
+        assert_eq!(bg.seed(), None, "nothing shown yet");
+        for _ in 0..400 {
+            bg.tick(Instant::now());
+            if bg.seed().is_some() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!((bg.seed(), bg.luma()), (Some(seed), Some(luma)));
+        bg.take_images();
+        assert_eq!(bg.seed(), None, "the aurora has no picture colour");
     }
 
     /// A closing preview hands over its still for the atlas; the backdrop

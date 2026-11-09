@@ -401,7 +401,7 @@ impl View {
                 .w_full()
                 .into_any_element()
         };
-        div().flex().flex_col().gap(px(GAP)).child(div().flex().child(search_box("quran-surah-clear", &self.surah_field, &query, palette))).child(chips).child(body).into_any_element()
+        div().flex().flex_col().gap(px(GAP)).child(div().flex().child(search_box("quran-surah-clear", &self.surah_field, &query, palette, cx))).child(chips).child(body).into_any_element()
     }
 
     /// Search over the whole Qur'an.
@@ -439,7 +439,7 @@ impl View {
                 .into_any_element()
             }
         };
-        div().flex().flex_col().gap(px(GAP)).child(div().flex().child(search_box("quran-search-clear", &self.search_field, &query, palette))).child(div().h(px(CHIPS_H)).row().items_center().child(count)).child(body).into_any_element()
+        div().flex().flex_col().gap(px(GAP)).child(div().flex().child(search_box("quran-search-clear", &self.search_field, &query, palette, cx))).child(div().h(px(CHIPS_H)).row().items_center().child(count)).child(body).into_any_element()
     }
 
     /// The results of `query` (`None`: no query, or still searching),

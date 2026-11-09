@@ -1,0 +1,95 @@
+Fedora 40 - x86_64                              240 kB/s |  20 MB     01:24    
+Fedora 40 openh264 (From Cisco) - x86_64        526  B/s | 1.4 kB     00:02    
+Fedora 40 - x86_64 - Updates                    323 kB/s |  13 MB     00:40    
+Dependencies resolved.
+================================================================================
+ Package                        Arch      Version              Repository  Size
+================================================================================
+Upgrading:
+ audit-libs                     x86_64    4.0.3-1.fc40         updates    129 k
+ dnf                            noarch    4.23.0-1.fc40.1      updates    471 k
+ dnf-data                       noarch    4.23.0-1.fc40.1      updates     39 k
+ elfutils-default-yama-scope    noarch    0.192-9.fc40         updates     12 k
+ elfutils-libelf                x86_64    0.192-9.fc40         updates    208 k
+ elfutils-libs                  x86_64    0.192-9.fc40         updates    264 k
+ expat                          x86_64    2.7.1-1.fc40         updates    116 k
+ glib2                          x86_64    2.80.5-1.fc40        updates    3.0 M
+ glibc                          x86_64    2.39-38.fc40         updates    2.2 M
+ glibc-common                   x86_64    2.39-38.fc40         updates    357 k
+ glibc-minimal-langpack         x86_64    2.39-38.fc40         updates     72 k
+ gnutls                         x86_64    3.8.9-1.fc40         updates    1.1 M
+ krb5-libs                      x86_64    1.21.3-3.fc40        updates    758 k
+ libdnf                         x86_64    0.74.0-1.fc40        updates    702 k
+ libidn2                        x86_64    2.3.8-1.fc40         updates    175 k
+ libsolv                        x86_64    0.7.32-4.fc40        updates    444 k
+ libtasn1                       x86_64    4.20.0-1.fc40        updates     74 k
+ libxcrypt                      x86_64    4.4.38-7.fc40        updates    128 k
+ libxml2                        x86_64    2.12.10-1.fc40       updates    687 k
+ libzstd                        x86_64    1.5.7-1.fc40         updates    315 k
+ openldap                       x86_64    2.6.9-1.fc40         updates    255 k
+ openssl-libs                   x86_64    1:3.2.4-1.fc40       updates    2.3 M
+ publicsuffix-list-dafsa        noarch    20250116-1.fc40      updates     59 k
+ python3                        x86_64    3.12.10-2.fc40       updates     28 k
+ python3-dnf                    noarch    4.23.0-1.fc40.1      updates    625 k
+ python3-hawkey                 x86_64    0.74.0-1.fc40        updates    104 k
+ python3-libdnf                 x86_64    0.74.0-1.fc40        updates    847 k
+ python3-libs                   x86_64    3.12.10-2.fc40       updates    9.1 M
+ rpm-sequoia                    x86_64    1.7.0-5.fc40         updates    912 k
+ sqlite-libs                    x86_64    3.45.1-3.fc40        updates    735 k
+ systemd-libs                   x86_64    255.18-1.fc40        updates    704 k
+ tzdata                         noarch    2025b-1.fc40         updates    714 k
+ vim-data                       noarch    2:9.1.1275-1.fc40    updates     18 k
+ vim-minimal                    x86_64    2:9.1.1275-1.fc40    updates    831 k
+ xz                             x86_64    1:5.8.1-2.fc40       updates    572 k
+ xz-libs                        x86_64    1:5.8.1-2.fc40       updates    113 k
+ yum                            noarch    4.23.0-1.fc40.1      updates     37 k
+ zstd                           x86_64    1.5.7-1.fc40         updates    489 k
+Transaction Summary
+================================================================================
+Upgrade  38 Packages
+Total download size: 29 M
+DNF will only download packages for the transaction.
+Downloading Packages:
+(1/38): dnf-data-4.23.0-1.fc40.1.noarch.rpm      41 kB/s |  39 kB     00:00    
+(2/38): audit-libs-4.0.3-1.fc40.x86_64.rpm      111 kB/s | 129 kB     00:01    
+(3/38): elfutils-default-yama-scope-0.192-9.fc4  37 kB/s |  12 kB     00:00    
+(4/38): elfutils-libelf-0.192-9.fc40.x86_64.rpm 295 kB/s | 208 kB     00:00    
+(5/38): dnf-4.23.0-1.fc40.1.noarch.rpm          220 kB/s | 471 kB     00:02    
+(6/38): elfutils-libs-0.192-9.fc40.x86_64.rpm   207 kB/s | 264 kB     00:01    
+(7/38): expat-2.7.1-1.fc40.x86_64.rpm           125 kB/s | 116 kB     00:00    
+(8/38): glib2-2.80.5-1.fc40.x86_64.rpm          370 kB/s | 3.0 MB     00:08    
+(9/38): glibc-2.39-38.fc40.x86_64.rpm           142 kB/s | 2.2 MB     00:15    
+(10/38): glibc-common-2.39-38.fc40.x86_64.rpm    21 kB/s | 357 kB     00:16    
+(11/38): glibc-minimal-langpack-2.39-38.fc40.x8 7.5 kB/s |  72 kB     00:09    
+(12/38): gnutls-3.8.9-1.fc40.x86_64.rpm         166 kB/s | 1.1 MB     00:06    
+(13/38): krb5-libs-1.21.3-3.fc40.x86_64.rpm      94 kB/s | 758 kB     00:08    
+(14/38): libdnf-0.74.0-1.fc40.x86_64.rpm         75 kB/s | 702 kB     00:09    
+(15/38): libsolv-0.7.32-4.fc40.x86_64.rpm       157 kB/s | 444 kB     00:02    
+(16/38): libidn2-2.3.8-1.fc40.x86_64.rpm         29 kB/s | 175 kB     00:05    
+(17/38): libtasn1-4.20.0-1.fc40.x86_64.rpm       40 kB/s |  74 kB     00:01    
+(18/38): libxcrypt-4.4.38-7.fc40.x86_64.rpm     119 kB/s | 128 kB     00:01    
+(19/38): libxml2-2.12.10-1.fc40.x86_64.rpm      271 kB/s | 687 kB     00:02    
+(20/38): libzstd-1.5.7-1.fc40.x86_64.rpm         97 kB/s | 315 kB     00:03    
+(21/38): openldap-2.6.9-1.fc40.x86_64.rpm        72 kB/s | 255 kB     00:03    
+(22/38): openssl-libs-3.2.4-1.fc40.x86_64.rpm   365 kB/s | 2.3 MB     00:06    
+(23/38): publicsuffix-list-dafsa-20250116-1.fc4  10 kB/s |  59 kB     00:05    
+(24/38): python3-3.12.10-2.fc40.x86_64.rpm      5.6 kB/s |  28 kB     00:05    
+(25/38): python3-dnf-4.23.0-1.fc40.1.noarch.rpm 824 kB/s | 625 kB     00:00    
+(26/38): python3-hawkey-0.74.0-1.fc40.x86_64.rp 133 kB/s | 104 kB     00:00    
+(27/38): python3-libdnf-0.74.0-1.fc40.x86_64.rp 564 kB/s | 847 kB     00:01    
+(28/38): rpm-sequoia-1.7.0-5.fc40.x86_64.rpm    613 kB/s | 912 kB     00:01    
+(29/38): python3-libs-3.12.10-2.fc40.x86_64.rpm 1.1 MB/s | 9.1 MB     00:08    
+(30/38): sqlite-libs-3.45.1-3.fc40.x86_64.rpm    91 kB/s | 735 kB     00:08    
+(31/38): systemd-libs-255.18-1.fc40.x86_64.rpm   90 kB/s | 704 kB     00:07    
+(32/38): tzdata-2025b-1.fc40.noarch.rpm         405 kB/s | 714 kB     00:01    
+(33/38): vim-data-9.1.1275-1.fc40.noarch.rpm     15 kB/s |  18 kB     00:01    
+(34/38): vim-minimal-9.1.1275-1.fc40.x86_64.rpm 654 kB/s | 831 kB     00:01    
+(35/38): xz-5.8.1-2.fc40.x86_64.rpm             494 kB/s | 572 kB     00:01    
+(36/38): xz-libs-5.8.1-2.fc40.x86_64.rpm         95 kB/s | 113 kB     00:01    
+(37/38): yum-4.23.0-1.fc40.1.noarch.rpm          52 kB/s |  37 kB     00:00    
+(38/38): zstd-1.5.7-1.fc40.x86_64.rpm           862 kB/s | 489 kB     00:00    
+--------------------------------------------------------------------------------
+Total                                           439 kB/s |  29 MB     01:08     
+Complete!
+The downloaded packages were saved in cache until the next successful transaction.
+You can remove cached packages by executing 'dnf clean packages'.

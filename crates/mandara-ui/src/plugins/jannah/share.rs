@@ -289,17 +289,7 @@ mod tests {
     use super::*;
 
     fn model(fetch: super::super::Fetch) -> super::super::Model {
-        super::super::Model {
-            state: Default::default(),
-            generation: 0,
-            progress: Default::default(),
-            edition: Some("en.sahih"),
-            fetch,
-            views: Default::default(),
-            timer: None,
-            index: None,
-            open_request: None,
-        }
+        super::super::Model { edition: Some("en.sahih"), fetch, ..super::super::Model::new(Default::default()) }
     }
 
     #[test]

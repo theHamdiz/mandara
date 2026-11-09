@@ -170,6 +170,14 @@ impl MediaState {
         }
     }
 
+    /// A live stream (internet radio, a live broadcast): a player that
+    /// reports no length and can't seek, so there is no progress to show
+    /// and its position only counts time since it tuned in. Views show
+    /// "Live" instead of a progress line and times.
+    pub fn is_live(&self) -> bool {
+        !self.bus_name.is_empty() && self.length.is_none() && !self.can_seek
+    }
+
     /// Progress `0..=1` (0 when the length is unknown).
     pub fn progress(&self, now: Instant) -> f32 {
         match self.length {
@@ -790,5 +798,18 @@ mod tests {
         assert!((state.progress(t0 + Duration::from_secs(40)) - 0.5).abs() < 1e-4);
         let paused = MediaState { status: PlaybackStatus::Paused, ..state };
         assert_eq!(paused.position_now(t0 + Duration::from_secs(5)), Duration::from_secs(10));
+    }
+
+    /// A stream with no length that can't seek is live; a track with a
+    /// length, a seekable player still loading its length, and no player
+    /// at all are not.
+    #[test]
+    fn live_streams_have_no_length_and_no_seeking() {
+        let radio = MediaState { bus_name: "org.mpris.MediaPlayer2.mandara.radio".into(), status: PlaybackStatus::Playing, ..MediaState::default() };
+        assert!(radio.is_live());
+        assert_eq!(radio.progress(Instant::now() + Duration::from_secs(30)), 0.0);
+        assert!(!MediaState { length: Some(Duration::from_secs(200)), ..radio.clone() }.is_live());
+        assert!(!MediaState { can_seek: true, ..radio.clone() }.is_live());
+        assert!(!MediaState::default().is_live(), "nothing playing is not live");
     }
 }

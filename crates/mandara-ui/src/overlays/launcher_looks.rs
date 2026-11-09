@@ -547,12 +547,20 @@ impl LauncherView {
         let accent = readable(palette.primary, palette);
         let on_accent = accent.best_on(Color::hex("#ffffff"), Color::hex("#101010"));
         let focus = modes.map(|modes| super::beacon_keyboard::categories(self.categories.len() + 1, modes, window, cx));
+        // Shaped like the chips of the design picked under Themes →
+        // Components: classic filled pills, Material's outlined chips with a
+        // tinted pick, Connected's outlined pills.
+        let design = crate::style::chip_design();
+        let classic = design == crate::components::ChipDesign::Classic;
+        let material = design == crate::components::ChipDesign::Material;
+        let outline = crate::components::chips::outline(palette);
+        let chosen = crate::components::chips::chosen(palette);
         let chip = |id: SharedString, label: SharedString, on: bool, index: usize| {
             div()
                 .id(id)
                 .h(px(CHIPS_H))
                 .px(px(CHIP_PAD))
-                .rounded_full()
+                .rounded(px(crate::components::chips::chip_radius(design, CHIPS_H)))
                 .flex()
                 .items_center()
                 .flex_none()
@@ -566,8 +574,11 @@ impl LauncherView {
                     .border_1()
                     .border_color(gpui::transparent_black())
                     .focus_visible(move |style| style.border_color(if on { on_accent } else { accent }.hsla())))
-                .when(on, |el| el.bg(accent.hsla()).text_color(on_accent.hsla()).font_weight(FontWeight::SEMIBOLD))
-                .when(!on, |el| el.bg(crate::plugins::panel_fx::wash(crate::plugins::panel_fx::WASH_SOFT, palette).hsla()).hover(|s| s.bg(palette.on_surface.with_alpha(HOVER_ALPHA).hsla())))
+                .when(on && !material, |el| el.bg(accent.hsla()).text_color(on_accent.hsla()).font_weight(FontWeight::SEMIBOLD))
+                .when(on && material, |el| el.bg(chosen.hsla()).text_color(accent.hsla()).font_weight(FontWeight::SEMIBOLD))
+                .when(!on && classic, |el| el.bg(crate::plugins::panel_fx::wash(crate::plugins::panel_fx::WASH_SOFT, palette).hsla()))
+                .when(!on && !classic, |el| el.border_1().border_color(outline.hsla()))
+                .when(!on, |el| el.hover(|s| s.bg(palette.on_surface.with_alpha(HOVER_ALPHA).hsla())))
                 .child(label)
         };
         let mut row = div().id("launcher-chips").h(px(CHIPS_H)).flex_none().row().gap(px(CHIP_GAP)).overflow_x_scroll()

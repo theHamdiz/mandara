@@ -1064,16 +1064,15 @@ fn segmented(h: &Shared, palette: &MandaraPalette) -> AnyElement {
         .into_any_element()
 }
 
-fn search_box(field: &Entity<TextField>, query: &str, views: &ViewSet, palette: &MandaraPalette) -> AnyElement {
+fn search_box(field: &Entity<TextField>, query: &str, views: &ViewSet, palette: &MandaraPalette, cx: &mut App) -> AnyElement {
     let (f, views) = (field.clone(), views.clone());
-    div()
+    let focused = crate::components::inputs::embed(field, cx);
+    crate::components::inputs::search_frame(div(), CONTROL_RADIUS_PX, focused, palette)
         .flex_1()
         .min_w(px(0.0))
         .h(px(SEARCH_H))
         .pl(px(SEARCH_PAD_L_PX))
         .pr(px(SEARCH_PAD_R_PX))
-        .rounded(px(crate::style::radius(CONTROL_RADIUS_PX)))
-        .bg(palette.surface_container_high.hsla())
         .flex()
         .items_center()
         .gap(px(SEG_TRACK_GAP_PX))
@@ -1286,7 +1285,7 @@ impl View {
         }
 
         // ── Search + sort ────────────────────────────────────────────────
-        let controls = div().flex().items_center().gap(px(tokens::SM)).child(search_box(&self.field, &query, &views, palette)).child(segmented(h, palette));
+        let controls = div().flex().items_center().gap(px(tokens::SM)).child(search_box(&self.field, &query, &views, palette, cx)).child(segmented(h, palette));
 
         let label = |s: &'static str| div().text_size(px(text::LABEL)).font_weight(FontWeight::SEMIBOLD).text_color(palette.on_surface_variant.with_alpha(COLUMN_LABEL_ALPHA).hsla()).child(s);
         let columns = div()

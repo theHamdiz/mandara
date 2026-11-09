@@ -128,6 +128,8 @@ pub fn label(w: &DesktopWidget) -> (&'static str, &'static str) {
             dc::WAVE => (tk("Wave"), "waves"),
             dc::FRAMED_BARS => (tk("Framed bars"), "waves"),
             dc::MIRRORED_BARS => (tk("Mirrored bars"), "waves"),
+            dc::SUDOKU => (tk("Sudoku"), "sudoku"),
+            dc::TILES => ("2048", "game-2048"),
             _ => (tk("Plugin widget"), "package"),
         },
     }

@@ -115,7 +115,7 @@ fn sync(cx: &mut App) {
         return;
     }
     for (id, stop) in [
-        (super::feeds::ID, super::feeds::stop as fn()),
+        (super::reddit::ID, super::reddit::stop as fn()),
         (super::prayer::ID, super::prayer::clear_settings as fn()),
         (super::jannah::ID, super::jannah::clear_settings as fn()),
         (super::hadith::ID, super::hadith::clear_settings as fn()),
@@ -125,11 +125,24 @@ fn sync(cx: &mut App) {
     ] {
         if !is_on(id, cx) { stop(); }
     }
+    if !is_on(super::feeds::ID, cx) {
+        super::feeds::stop(cx);
+    }
     if !is_on(super::tray::ID, cx) {
         super::tray::stop(cx);
     }
     if !is_on(super::soundscapes::ID, cx) {
         super::soundscapes::stop();
+    }
+    if !is_on(super::radio::ID, cx) {
+        super::radio::stop(cx);
+    }
+    // The games save and let their model go.
+    if !is_on(super::sudoku::ID, cx) {
+        crate::games::stop_sudoku(cx);
+    }
+    if !is_on(super::tiles::ID, cx) {
+        crate::games::stop_tiles(cx);
     }
     if !is_on(crate::productivity::POMODORO_ID, cx)
         && let Some(p) = cx.try_global::<crate::productivity::GlobalProductivity>().map(|g| g.0.clone())
@@ -156,6 +169,7 @@ mod tests {
 
     /// The built-ins that ship switched off (README: "ship switched off").
     const OPT_IN: &[&str] = &[
+        "2048",
         "app-installer",
         "authenticator",
         "breaks",
@@ -185,10 +199,13 @@ mod tests {
         "processes",
         "progress",
         "quran",
+        "radio",
+        "reddit",
         "screen-time",
         "services",
         "share",
         "soundscapes",
+        "sudoku",
         "tailscale",
         "todo",
         "translator",

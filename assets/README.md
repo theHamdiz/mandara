@@ -15,8 +15,12 @@ Mandara's logo is a **phoenix rising from a Mediterranean wave**, in violet, cya
 The Pages site uses the existing [128 px phoenix](brand/mandara-128.png) as
 its favicon. Its [page colours](css/pages.css) follow the same light or dark
 preference as the transparent banner, including the image background.
-The [homepage styles](css/landing.css) add the product tour and its native
-Look controls; its pictures come from the demo screenshots in `docs/screenshots/`.
+The [homepage styles](css/site.css) and [script](js/site.js) draw the
+homepage in the shell's Material You language and palettes, set in
+[Alexandria and JetBrains Mono](fonts/OFL.txt), self-hosted WOFF2 subsets under
+the SIL Open Font License. Its pictures are light and dark pairs of the demo
+screenshots in `docs/screenshots/`, and its footer draws the sea at El-Mandara
+in the page's own palette. The site uses no outside images or fonts.
 The [banner source](artwork/banner.html) renders at 1280×400 CSS pixels
 with a scale factor of two and a transparent background. Export it in each
 colour scheme after the fonts and logo have loaded; keep the output lossless
@@ -24,7 +28,7 @@ so small lettering stays clean.
 
 ## Plugins
 
-The 78 plugins below include 77 built-ins and the Moon phase example. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
+The 82 plugins below include 81 built-ins and the Moon phase example. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
 
 | Preview | Files | Notes |
 | --- | --- | --- |
@@ -55,6 +59,7 @@ The 78 plugins below include 77 built-ins and the Moon phase example. Each SVG h
 | <img src="plugins/moon-phase/icon.png" width="40" alt="Moon phase icon"> <img src="plugins/moon-phase/cover.png" width="128" alt="Moon phase cover"> | **Moon phase** · [SVG](plugins/moon-phase/icon.svg) · [256 PNG](plugins/moon-phase/icon.png) · [Cover](plugins/moon-phase/cover.png) | Twilight · illustration |
 | <img src="plugins/color-picker/icon.png" width="40" alt="Color picker icon"> <img src="plugins/color-picker/cover.png" width="128" alt="Color picker cover"> | **Color picker** · [SVG](plugins/color-picker/icon.svg) · [256 PNG](plugins/color-picker/icon.png) · [Cover](plugins/color-picker/cover.png) | Twilight · real panel |
 | <img src="plugins/soundscapes/icon.png" width="40" alt="Soundscapes icon"> <img src="plugins/soundscapes/cover.png" width="128" alt="Soundscapes cover"> | **Soundscapes** · [SVG](plugins/soundscapes/icon.svg) · [256 PNG](plugins/soundscapes/icon.png) · [Cover](plugins/soundscapes/cover.png) | Twilight · real panel (paused) |
+| <img src="plugins/radio/icon.png" width="40" alt="Radio icon"> <img src="plugins/radio/cover.png" width="128" alt="Radio cover"> | **Radio** · [SVG](plugins/radio/icon.svg) · [256 PNG](plugins/radio/icon.png) · [Cover](plugins/radio/cover.png) | Twilight · illustration |
 | <img src="plugins/world-clock/icon.png" width="40" alt="World clock icon"> <img src="plugins/world-clock/cover.png" width="128" alt="World clock cover"> | **World clock** · [SVG](plugins/world-clock/icon.svg) · [256 PNG](plugins/world-clock/icon.png) · [Cover](plugins/world-clock/cover.png) | Twilight · real panel |
 | <img src="plugins/net-speed/icon.png" width="40" alt="Network speed icon"> <img src="plugins/net-speed/cover.png" width="128" alt="Network speed cover"> | **Network speed** · [SVG](plugins/net-speed/icon.svg) · [256 PNG](plugins/net-speed/icon.png) · [Cover](plugins/net-speed/cover.png) | Corniche · real panel (IP addresses blurred) |
 | <img src="plugins/authenticator/icon.png" width="40" alt="Authenticator icon"> <img src="plugins/authenticator/cover.png" width="128" alt="Authenticator cover"> | **Authenticator** · [SVG](plugins/authenticator/icon.svg) · [256 PNG](plugins/authenticator/icon.png) · [Cover](plugins/authenticator/cover.png) | Obsidian · real panel (demo accounts) |
@@ -105,7 +110,10 @@ The 78 plugins below include 77 built-ins and the Moon phase example. Each SVG h
 | <img src="plugins/translator/icon.png" width="40" alt="Translator icon"> <img src="plugins/translator/cover.png" width="128" alt="Translator cover"> | **Translator** · [SVG](plugins/translator/icon.svg) · [256 PNG](plugins/translator/icon.png) · [Cover](plugins/translator/cover.png) | Twilight · illustration |
 | <img src="plugins/phone-connect/icon.png" width="40" alt="Phone Connect icon"> <img src="plugins/phone-connect/cover.png" width="128" alt="Phone Connect cover"> | **Phone Connect** · [SVG](plugins/phone-connect/icon.svg) · [256 PNG](plugins/phone-connect/icon.png) · [Cover](plugins/phone-connect/cover.png) | Corniche · illustration |
 | <img src="plugins/feeds/icon.png" width="40" alt="Feeds icon"> <img src="plugins/feeds/cover.png" width="128" alt="Feeds cover"> | **Feeds** · [SVG](plugins/feeds/icon.svg) · [256 PNG](plugins/feeds/icon.png) · [Cover](plugins/feeds/cover.png) | Obsidian · illustration |
+| <img src="plugins/reddit/icon.png" width="40" alt="Reddit icon"> <img src="plugins/reddit/cover.png" width="128" alt="Reddit cover"> | **Reddit** · [SVG](plugins/reddit/icon.svg) · [256 PNG](plugins/reddit/icon.png) · [Cover](plugins/reddit/cover.png) | Corniche · threaded conversation with a gold upvote arrow · illustration |
 | <img src="plugins/home-assistant/icon.png" width="40" alt="Home Assistant icon"> <img src="plugins/home-assistant/cover.png" width="128" alt="Home Assistant cover"> | **Home Assistant** · [SVG](plugins/home-assistant/icon.svg) · [256 PNG](plugins/home-assistant/icon.png) · [Cover](plugins/home-assistant/cover.png) | Corniche · illustration |
+| <img src="plugins/sudoku/icon.png" width="40" alt="Sudoku icon"> <img src="plugins/sudoku/cover.png" width="128" alt="Sudoku cover"> | **Sudoku** · [SVG](plugins/sudoku/icon.svg) · [256 PNG](plugins/sudoku/icon.png) · [Cover](plugins/sudoku/cover.png) | Obsidian · cream puzzle lattice and gold selected cell · illustration |
+| <img src="plugins/2048/icon.png" width="40" alt="2048 icon"> <img src="plugins/2048/cover.png" width="128" alt="2048 cover"> | **2048** · [SVG](plugins/2048/icon.svg) · [256 PNG](plugins/2048/icon.png) · [Cover](plugins/2048/cover.png) | Twilight · sliding tiles and a gold merged tile · illustration |
 
 ## Launcher alternatives
 
@@ -144,20 +152,22 @@ SVGs store sRGB values for desktop renderer compatibility. Use the OKLCH anchors
 | Navigation | `#103C63` → `#286B91` | Session, Launcher, Workspaces, Active window, Keyboard layout, Language, Main menu, System tray, Dock, CI status, Shortcuts cheatsheet |
 | System | `#124D4B` → `#268878` | Resources, Process hunter, Quick settings, Drives, Power, Privacy, Mini stats, Task progress |
 | Connections | `#125477` → `#329DA7` | Network, Bluetooth, Network speed, Tailscale, Uptime monitor |
-| Media | `#40316F` → `#8666AA` | Media, Audio, Screenshot, Color picker, Local AI, Share to phone |
+| Media | `#40316F` → `#8666AA` | Media, Audio, Radio, Screenshot, Color picker, Local AI, Share to phone |
 | Productivity | `#843D58` → `#C47268` | Clipboard, Notifications, To-do, Notes, Pomodoro, Authenticator, Screen time |
 | Time | `#765323` → `#B78D47` | Clock, World clock |
 | Sky | `#30265E` → `#7063B5` | Prayer times, Weather, Wallpaper, Moon phase, Soundscapes, Eye breaks, Presentation mode, Jannah |
 | Reading | Qur'an: `#30265E` → `#7063B5`; Hadith: `#103C63` → `#286B91` | Qur'an, Hadith |
 | Creation | `#185D54` → `#40C8BD` | Wallpaper generator |
+| Games | Sudoku: `#19483E` → `#101C23`; 2048: `#543675` → `#25244A` | Sudoku, 2048 |
 | Maintenance | `#14303A` → `#2F6C70` | Updates, Services, Containers, App installer, Listening ports, Git repositories, Crash reports |
 
 - App tiles: 1024-unit square; tile inset 32, radius 216, primary shoreline stroke 88, rim 8. The main mark was checked at 16 px. Symbolic artwork fills its own 704-unit viewBox.
 - Plugin tiles: 512-unit square; tile inset 16, radius 108, primary stroke 28. Use rounded caps and joins, a centered glyph around 112–400, cream `#FFF2D5`, and sand `#FFD58A`.
-- Glass: one quiet diagonal gradient, a top-left highlight, a thin inner rim, and a translucent lower shoreline. Keep the glyph dominant. Language cards use simple letter-shaped paths; other icons contain no lettering or borrowed project marks; Bluetooth uses two wireless peers.
+- Glass: one quiet diagonal gradient, a top-left highlight, a thin inner rim, and a translucent lower shoreline. Keep the glyph dominant. Language cards use simple letter-shaped paths; puzzle tiles use path-drawn numerals. Icons contain no text elements or borrowed project marks; Bluetooth uses two wireless peers.
 - Covers: name at the upper left in Inter; a large icon; restrained thematic linework; a floating real panel where supplied. Preserve panel proportions and use a soft shadow. UI appears only in the 21 real captures linked through the catalog; captures never show private data (demo accounts, blurred addresses, or a crop to non-identifying parts). The dock retains its full transparent capture and source corner shape, with no desktop background. The other new covers use illustrations because no suitable isolated capture is available. The desktop widget plugins and Wallpaper depth have painted scenes of their own (`assets/artwork/scenes/`, the catalog's `scene`) behind the name and icon; screenshots of the widgets themselves are in [docs/desktop.md](../docs/desktop.md#desktop-widgets).
-- The added cover motifs are `watch` (eye contours), `shelf` (dock rails), `package` (open carton), `hourglass` and `aurora` (flowing contours). System tray and Mini stats reuse `peers` and `bars` respectively. Mini stats is visible in Studio's uncategorized store group; the internal Compositor commands are hidden and have no marketplace art.
+- The added cover motifs are `watch` (eye contours), `shelf` (dock rails), `package` (open carton), `hourglass`, `aurora` (flowing contours), `lattice` (a tilted puzzle box) and `slide` (spaced tiles and a merge arrow). System tray and Mini stats reuse `peers` and `bars` respectively. Mini stats is visible in Studio's uncategorized store group; the internal Compositor commands are hidden and have no marketplace art.
 - Listening ports, Git repositories, CI status, Crash reports, Tailscale, Uptime monitor, Local AI, Share to phone, Shortcuts cheatsheet, Task progress, Eye breaks and Presentation mode reuse the existing motifs and palette backgrounds. Their covers are illustrations with no panel capture. Their glyph and motif notes are in `artwork/prompts.json`.
+- Sudoku pairs the Obsidian background with the `lattice` motif and a deep emerald-to-onyx tile. Its cream puzzle box holds a path-drawn 9 and a gold selected cell. 2048 pairs the Twilight background with the `slide` motif and a dusk violet-to-indigo tile: three cream tiles lead into a larger gold tile with an indigo 8. Both covers are illustrations with no panel capture; glyph notes are in `artwork/prompts.json`.
 - Jannah uses the Twilight background and existing `dawn` motif. Its cream pointed doorway frames a gold eight-pointed star and a soft glow, suggesting a gate opening onto light. The cover is an illustration with no panel capture; the glyph note is in `artwork/prompts.json`.
 - Qur'an uses the Twilight background and existing `paper` motif: a cream open book rests on a gold X-shaped rahle beneath a small eight-pointed star. Hadith uses the Corniche background and existing `tiles` motif: a closed manuscript has a gold cover medallion and page edge. Both use broad contours that remain readable at 32 px, with no text, calligraphy or figures. Their covers are illustrations with no panel capture; glyph notes are in `artwork/prompts.json`.
 
@@ -182,7 +192,7 @@ The whole pipeline is Rust (`xtask/src/art.rs`): SVGs render with [resvg](https:
 
 `cargo xtask art` turns every built-in plugin's art into the compact set the shell and Studio embed, in [`crates/mandara-ui/assets/plugin-art/<id>/`](../crates/mandara-ui/assets/plugin-art): `icon.webp` (128 px, rendered from the SVG), `icon@2x.webp` (256 px) and `cover.jpg` (960×540, JPEG quality 82; lossless `cover.webp` when the cover has transparency), plus the generated `index.rs` table. The generated files are committed — they are build inputs. Example plugins in `plugins/examples/` ship their own `icon.png` / `cover.png` inside their package instead.
 
-The embedded-art ceiling is **8,050,000 bytes (7.68 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 77-plugin set uses **7,687,250 bytes (7.33 MiB)**, leaving **362,750 bytes (354 KiB)** of headroom for artwork revisions and small additions.
+The embedded-art ceiling is **8,050,000 bytes (7.68 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 81-plugin set uses **8,046,210 bytes (7.67 MiB)**, leaving **3,790 bytes (3.7 KiB)** of headroom: the next new plugin's art needs a smaller set or a raised ceiling.
 
 ```sh
 cargo xtask art --compose            # render source icons and compose covers (--only ID)

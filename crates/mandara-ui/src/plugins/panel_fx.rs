@@ -406,7 +406,9 @@ pub fn glass_card(palette: &MandaraPalette) -> Div {
     let base = palette.surface_container;
     let (top, bottom) = if palette.is_dark { SHEEN_DARK } else { SHEEN_LIGHT };
     // Children (art, hover fills, bands) are clipped to the rounded corners.
-    crate::style::ClipRounded::clip_rounded(div().rounded(px(crate::style::radius(CARD_RADIUS_PX))).bg(oklab_gradient(ANGLE_DOWN_DEG, base.lighten(top), base.lighten(bottom))).shadow(rim(palette)))
+    // Shaped and lifted in the card designs of Themes → Components.
+    use crate::components::surfaces::{CardSurface as _, Fill};
+    div().clipped_card_surface(crate::style::radius(CARD_RADIUS_PX), Fill(base.lighten(top), Some(base.lighten(bottom))), rim(palette), palette)
 }
 
 /// A soft coloured glow behind an element (SDF shadow, no hard edge).
@@ -425,13 +427,17 @@ pub fn section(label: &'static str, palette: &MandaraPalette, trailing: Option<A
         .when_some(trailing, |el, t| el.child(t))
 }
 
-/// A tiny pill with an icon and a tabular value (`up 4d 2h`, `Qibla 136°`).
+/// A tiny pill with an icon and a tabular value (`up 4d 2h`, `Qibla 136°`):
+/// an assist chip in the chip design picked under Themes → Components
+/// (`style.chip_design`).
 pub fn chip(icon_name: &'static str, value: impl Into<SharedString>, tint: Color, palette: &MandaraPalette) -> Div {
+    let design = crate::style::chip_design();
+    let classic = design == crate::components::ChipDesign::Classic;
     div()
         .h(px(CHIP_H_PX))
         .px(px(CHIP_PAD_X_PX))
-        .rounded_full()
-        .bg(wash(WASH_SOFT, palette).hsla())
+        .when(classic, |el| el.rounded_full().bg(wash(WASH_SOFT, palette).hsla()))
+        .when(!classic, |el| el.rounded(px(crate::components::chips::chip_radius(design, CHIP_H_PX))).border_1().border_color(crate::components::chips::outline(palette).hsla()))
         .row()
         .items_center()
         .gap(px(CHIP_GAP_PX))
@@ -539,8 +545,18 @@ pub fn sparkline(history: &History, height: f32, from: Color, to: Color, palette
         .children(columns)
 }
 
-/// A horizontal meter: rounded track plus an OKLab gradient fill.
+/// A horizontal meter: rounded track plus an OKLab gradient fill, in the
+/// progress design picked under Themes → Components
+/// (`style.progress_design`).
 pub fn meter(value: f32, height: f32, from: Color, to: Color, palette: &MandaraPalette) -> Div {
+    meter_as(crate::style::progress_design(), value, height, from, to, palette)
+}
+
+/// [`meter`] in `design`.
+pub fn meter_as(design: crate::components::ProgressDesign, value: f32, height: f32, from: Color, to: Color, palette: &MandaraPalette) -> Div {
+    if design != crate::components::ProgressDesign::Classic {
+        return crate::components::progress::bar(value, height, from, to, wash(WASH_TRACK, palette), design);
+    }
     let v = value.clamp(0.0, 1.0);
     div()
         .w_full()
@@ -561,6 +577,17 @@ const RING_HEAD_GLOW: (f32, f32) = (0.55, 8.0);
 #[allow(clippy::too_many_arguments)]
 pub fn dot_ring(frac: f32, diameter: f32, count: usize, dot: f32, from: Color, to: Color, track: Color, inner: AnyElement) -> Div {
     let frac = frac.clamp(0.0, 1.0);
+    // Themes → Components → Progress: the dots are the classic ring; the
+    // other designs draw the shared ring as thick as a dot.
+    let design = crate::style::progress_design();
+    if design != crate::components::ProgressDesign::Classic {
+        return div()
+            .relative()
+            .size(px(diameter))
+            .flex_none()
+            .child(crate::icons::ring_as(design, frac, diameter, dot, from, track))
+            .child(div().absolute().top_0().left_0().size_full().flex().flex_col().items_center().justify_center().child(inner));
+    }
     let half = diameter / 2.0;
     let r = half - dot;
     let lit = (frac * count as f32).round() as usize;
@@ -643,8 +670,17 @@ const SWITCH_KNOB_PX: f32 = SWITCH_H_PX - SWITCH_PAD_PX * 2.0;
 const SWITCH_KNOB_OFF_ALPHA: f32 = 0.8;
 const SWITCH_GLOW: (f32, f32) = (0.35, 6.0);
 
-/// A pill switch with a gradient track when on.
+/// A pill switch with a gradient track when on, in the toggle design picked
+/// under Themes → Components (`style.toggle_design`).
 pub fn switch(on: bool, palette: &MandaraPalette) -> Div {
+    switch_as(crate::style::toggle_design(), on, palette)
+}
+
+/// [`switch`] in `design`.
+pub fn switch_as(design: crate::components::ToggleDesign, on: bool, palette: &MandaraPalette) -> Div {
+    if design != crate::components::ToggleDesign::Classic {
+        return crate::components::toggles::switch(on, design, palette);
+    }
     let accent = readable(palette.primary, palette);
     let knob = if on { palette.on_primary } else { palette.on_surface_variant.with_alpha(SWITCH_KNOB_OFF_ALPHA) };
     div()
@@ -691,8 +727,22 @@ pub fn signal_bars(strength: u8, color: Color, palette: &MandaraPalette) -> Div 
     }))
 }
 
-/// A soft tonal pill button (icon + label).
+/// A soft tonal pill button (icon + label), in the button design picked
+/// under Themes → Components (`style.button_design`).
 pub fn pill_button(
+    id: impl Into<gpui::ElementId>,
+    icon_name: Option<&'static str>,
+    label: impl Into<SharedString>,
+    tint: Color,
+    palette: &MandaraPalette,
+    on_click: impl Fn(&mut Window, &mut App) + 'static,
+) -> gpui::Stateful<Div> {
+    pill_button_as(crate::style::button_design(), id, icon_name, label, tint, palette, on_click)
+}
+
+/// [`pill_button`] in `design` (Studio's previews draw every design).
+pub fn pill_button_as(
+    design: crate::components::ButtonDesign,
     id: impl Into<gpui::ElementId>,
     icon_name: Option<&'static str>,
     label: impl Into<SharedString>,
@@ -703,18 +753,19 @@ pub fn pill_button(
     use gpui::{InteractiveElement as _, StatefulInteractiveElement as _};
     let bg = tint.with_alpha(alpha(TINT_FILL, palette));
     let hover = tint.with_alpha(alpha(TINT_HOVER, palette));
-    div()
-        .id(id)
-        .h(px(PILL_H_PX))
-        .px(px(PILL_PAD_X_PX))
-        .flex_none()
-        .rounded_full()
-        .row()
+    let id: gpui::ElementId = id.into();
+    let el = div().id(id.clone()).h(px(PILL_H_PX)).px(px(PILL_PAD_X_PX)).flex_none();
+    // Themes → Components → Buttons: a designed shape is drawn before the
+    // label (it may sit behind it); the classic pill is this one.
+    let el = if design == crate::components::ButtonDesign::Classic {
+        el.rounded_full().bg(bg.hsla()).hover(move |s| s.bg(hover.hsla()))
+    } else {
+        crate::components::buttons::dress(el, id, PILL_H_PX, false, crate::components::buttons::Ink { bg: Some(bg), hover, outline: None }, design, Some(palette))
+    };
+    el.row()
         .items_center()
         .gap(px(CHIP_GAP_PX))
         .cursor_pointer()
-        .bg(bg.hsla())
-        .hover(move |s| s.bg(hover.hsla()))
         .text_size(px(PILL_TEXT_PX))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(tint.hsla())

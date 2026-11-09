@@ -1,0 +1,20 @@
+[*] Updating repository `https://repo-default.voidlinux.org/current/x86_64-repodata' ...
+x86_64-repodata: [2169KB 0%] 135MB/s ETA: 00m00s
+x86_64-repodata: [2169KB 11%] 210KB/s ETA: 00m07s
+x86_64-repodata: [2169KB 25%] 264KB/s ETA: 00m05s
+x86_64-repodata: [2169KB 34%] 252KB/s ETA: 00m05s
+x86_64-repodata: [2169KB 45%] 242KB/s ETA: 00m04s
+x86_64-repodata: [2169KB 50%] 222KB/s ETA: 00m04s
+x86_64-repodata: [2169KB 56%] 206KB/s ETA: 00m04s
+x86_64-repodata: [2169KB 66%] 207KB/s ETA: 00m03s
+x86_64-repodata: [2169KB 71%] 194KB/s ETA: 00m03s
+x86_64-repodata: [2169KB 77%] 186KB/s ETA: 00m02s
+x86_64-repodata: [2169KB 82%] 174KB/s ETA: 00m02s
+x86_64-repodata: [2169KB 87%] 172KB/s ETA: 00m01s
+x86_64-repodata: [2169KB 90%] 162KB/s ETA: 00m01s
+x86_64-repodata: [2169KB 92%] 155KB/s ETA: 00m00s
+x86_64-repodata: [2169KB 95%] 146KB/s ETA: 00m00s
+x86_64-repodata: [2169KB 96%] 140KB/s ETA: 00m00s
+x86_64-repodata: [2169KB 98%] 132KB/s ETA: 00m00s
+x86_64-repodata: [2169KB 99%] 126KB/s ETA: 00m00s
+x86_64-repodata: 2169KB [avg rate: 126KB/s]

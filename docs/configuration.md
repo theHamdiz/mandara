@@ -94,7 +94,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 
 | Page | Settings |
 |---|---|
-| Themes | **looks** — six one-click looks and *Restore my look* (`looks.*`, see [Looks](#looks)); light / dark / automatic and its schedule (`theme.*`), palette tuning (`theme.adjustments`), theme crossfade (`theme.transition_ms`), icons (`appearance.*`), corner roundness, shadows, borders, backdrop dim; under **Components**, the **slider design** of the thick volume, brightness and mixer sliders (`style.slider_design` = `classic`, the default: the fill, a small gap, an upright handle, another gap and the rest of the track ending in a stop dot; `continuous`: one track with a short grip inside the fill's end; `pill`: a round knob on the fill's end that stretches into a pill while held; `wavy`: the classic layout with a gentle wave along the fill that flows only while you drag; `segmented`: ten rounded steps that fill in turn; thin sliders always keep the classic look) and the **slider handle** (`style.slider_handle` = `line`: the upright handle between a slider's fill and its track, with a small gap on each side and a stop dot at the track's end, or the grip of the continuous design; `none`: the fill's rounded end alone; the pill and segmented designs ignore it) (`style.*`); the theme; **other apps** — the app theming switches, all off by default (`integrations.*`, see [App theming](#app-theming-integrations)); **cursor** (the opt-in `cursors` plugin) — theme, size, hide while typing / when idle, Hyprland's software cursor and hide on touch (`compositor.input.cursor.theme`, `.size`, `.hide_when_typing`, `.hide_after_secs`, `.no_hardware_cursors`, `.hide_on_touch`; themes Mandara downloaded are listed in `~/.local/share/mandara/cursor-themes.json`) |
+| Themes | **looks** — six one-click looks and *Restore my look* (`looks.*`, see [Looks](#looks)); light / dark / automatic and its schedule (`theme.*`), palette tuning (`theme.adjustments`), theme crossfade (`theme.transition_ms`), icons (`appearance.*`), corner roundness, shadows, borders, backdrop dim; under **Components**, the **slider design** of the thick volume, brightness and mixer sliders (`style.slider_design` = `classic`, the default: the fill, a small gap, an upright handle, another gap and the rest of the track ending in a stop dot; `continuous`: one track with a short grip inside the fill's end; `pill`: a round knob on the fill's end that stretches into a pill while held; `wavy`: the classic layout with a gentle wave along the fill that flows only while you drag; `segmented`: ten rounded steps that fill in turn; thin sliders always keep the classic look); the other **component designs**, each `classic` by default: `style.button_design` (`classic`, `square`, `expressive`, `cut`, `elevated`), `style.toggle_design` (`classic`, `material`, `expressive`, `round`), `style.input_design` (`classic`, `filled`, `outlined`, `pill`), `style.chip_design` (`classic`, `material`, `connected`), `style.progress_design` (`classic`, `material`, `wavy`, `segmented`; bars, meters and progress rings, always at their classic size), `style.surface_corners` (`rounded`, `asymmetric`, `square`, `squircle`, `cut`; `style.radius_scale` still sets the size; squircle and cut cards clip their contents to the rounded rectangle inside their shape) and `style.card_style` (`tonal`, `raised` — no shadow while `style.shadows` is off —, `outlined`); the Components **presets** write these and `style.slider_design` together (`looks.keep_components`: picking a look keeps your designs instead of applying the look's); and the **slider handle** (`style.slider_handle` = `line`: the upright handle between a slider's fill and its track, with a small gap on each side and a stop dot at the track's end, or the grip of the continuous design; `none`: the fill's rounded end alone; the pill and segmented designs ignore it) (`style.*`); the theme; **other apps** — the app theming switches, all off by default (`integrations.*`, see [App theming](#app-theming-integrations)); **cursor** (the opt-in `cursors` plugin) — theme, size, hide while typing / when idle, Hyprland's software cursor and hide on touch (`compositor.input.cursor.theme`, `.size`, `.hide_when_typing`, `.hide_after_secs`, `.no_hardware_cursors`, `.hide_on_touch`; themes Mandara downloaded are listed in `~/.local/share/mandara/cursor-themes.json`) |
 | Wallpaper | folder, picker style / size / focus / names, fill and colour, transitions, crossfade (`wallpaper.crossfade_ms`), light / dark and per-display variants, depth effect (`wallpaper.depth_effect`) and how its subject is found: `wallpaper.depth.mode` (`hand-tuned` or `model`), `auto_split`, `split` (0.05–0.95, model mode) (`wallpaper.*`); video wallpapers: pause behind windows / on battery, frame-rate limit, first frame only (`wallpaper.video.*`, see [Video wallpapers](#video-wallpapers)); the slideshow (`wallpaper.slideshow.*`, see [Wallpaper slideshow](#wallpaper-slideshow)) |
 | Desktop widgets | clocks (24 faces, including depth, analog, word, split-flap, glass-tube and binary), system monitor, gauges, meters and thermals, weather, world clock, countdown, progress, to-do, sticky note, focus timer, quote, notebook tabs, calendars, sun / moon / globe, profile, shortcuts, toggles, sliders, palette, desk cat, bubbles, photo frame, sticker, six media layouts, machine card, screen time, prayer times, search, at a glance, GitHub, exchange rates, AI usage, games, decorations, plane visualizer, per-widget plate shape, outline, shadow, header, frame, rotation and mirror, alignment, font, numerals, calendar and language, show / hide them all (`desktop.widgets.*`, see [Desktop widgets](#desktop-widgets)); desktop cards and visualizers (`cards.*`, `visualizers.*`) |
 | Typography | interface / display / Arabic / monospace fonts, text scale, weight (`typography.*`) |
@@ -118,7 +118,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 | Displays | per-display shell surfaces, night light (`displays.*`, `night_light.*`) |
 | Audio & media | volume step, over-amplification, devices, routes (`audio.*`), players (`media.*`), sounds (`sounds.*`); visualizer and lyrics (Media plugin). Sound and sidebar device pickers share the labels and hidden-device choices configured here: click the current output or microphone name to choose a device |
 | Network & Bluetooth | `network.*`, `bluetooth.*` |
-| Power & idle | idle stages per power source, lock grace, battery alert levels (`power.low_percent`, `power.critical_percent`, `power.peripheral_low_percent` — also the coral mark of the battery OSD and the Bluetooth device rings), power profiles, session menu (its entries, the edge dock or grid style, and where the dock opens: `session_menu.position` = `side`, the default, opposite the sidebar; `left`; `right`; `top`; `bottom`. At the bar, the menu joins an edge-frame bar or opens as a card beside a floating bar; away from the bar, it opens from the screen edge. Around the Notch bar, the background dim follows its rounded ends and shoulders, keeping the bar bright without leaving bright wallpaper at the screen corners. A bottom dock keeps it in a card above the dock), hooks (`idle.*`, `power.*`, `session_menu.*`, `hooks.*`) |
+| Power & idle | idle stages per power source, lock grace, battery alert levels (`power.low_percent`, `power.critical_percent`, `power.peripheral_low_percent` — also the coral mark of the battery OSD and the Bluetooth device rings), power profiles, session menu (its entries, the edge dock, grid or cards style — `session_menu.style` = `dock`, `grid` or `cards`, the cards lined up by `session_menu.cards_layout` = `row`, the default, or `column`, both centred and wrapping when they don't fit —, and where the dock opens: `session_menu.position` = `side`, the default, opposite the sidebar; `left`; `right`; `top`; `bottom`. At the bar, the menu joins an edge-frame bar or opens as a card beside a floating bar; away from the bar, it opens from the screen edge. Around the Notch bar, the background dim follows its rounded ends and shoulders, keeping the bar bright without leaving bright wallpaper at the screen corners. A bottom dock keeps it in a card above the dock), hooks (`idle.*`, `power.*`, `session_menu.*`, `hooks.*`) |
 | Date, time & location | formats, the clock panel's calendar (week numbers, `weekend` days, `hijri_dates`, `eastern_numerals`), calendars (refresh, reminders, agenda days), location, weather refresh (`datetime.*`, `calendar.*`, `location.*`, `weather.*`) |
 | Applications | default and preferred apps, autostart (`apps.*`) |
 | Compositor | the generated drop-in (`compositor.manage`), window look, effects, rules, tags and layouts (`compositor.*`), border colours (`integrations.compositor_borders`); the Config doctor's start-up notification about new problems in your compositor config (`compositor.doctor_notify`, on by default) |
@@ -128,7 +128,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 | Page | Settings |
 |---|---|
 | Login screen | the greeter's own designer (look, timings, backgrounds) |
-| Lock appearance | clock, background, blur, dim, what it shows, OLED care, **low-battery mark** (`lock.low_battery_percent`), **password symbols** (`lock.password_symbols`: shapes or dots) |
+| Lock appearance | **design** (`lock.design`: `mandara` or `material-you`), clock, background, blur, dim, what it shows, OLED care, **low-battery mark** (`lock.low_battery_percent`), **password symbols** (`lock.password_symbols`: shapes or dots) |
 | Privacy | indicators, ignored apps, camera poll (`privacy.*`) |
 | General → Security | polkit agent, keyring prompter, **password dialog width** (`general.auth_dialog_width`, 360–640 px, both the polkit and keyring-unlock dialogs) |
 
@@ -143,7 +143,7 @@ fixed:
 | Resources (`resources`) | `refresh_ms` (also the bar rings), `disks_every_s`, `top_apps`, `temps_shown`, `disk_warn_percent`, `disk_full_percent` | 1500 ms, 15 s, 5, 8, 80 %, 90 % |
 | Process hunter (`processes`) | `refresh_ms`, `hot_cpu_percent` | 1500 ms, 50 % |
 | Containers (`containers`) | `hot_cpu_percent`, `refresh_s` (list refresh while the panel is closed, 5–600 s) (plus engine, stopped containers, log lines) | 80 %, 30 s |
-| Updates (`updates`) | `first_check_delay_s` (0–600 s after login), `news_count` (Arch news headlines, 1–5) | 20 s, 1 |
+| Updates (`updates`) | `first_check_delay_s` (0–600 s after login), `news_count` (Arch news headlines, 1–5), `run_in` (`mandara`: in the panel with progress, or `terminal`), `nixos_keep` (generations a NixOS clean-up keeps, 1–30) | 20 s, 1, `mandara`, 5 |
 | Media (`media`) | `lyrics_rows` (odd, 3–9), `bar_title` (the track beside the icon in the bar), `hide_when_paused` (the bar item only while something plays) | 5, on, off |
 | Workspaces (`workspaces`) | `labels` (`auto`: the number or a name of up to two characters, `number`, `dots`), `app_icons` (the apps' icons on each pill), `hide_empty` (only tags / workspaces with windows, plus the active and urgent ones) | auto, on, off |
 | Active window (`active-window`) | `show` (`app-and-title`, `app`, `title`), `max_width` (120–720 px) | app and title, 420 px |
@@ -173,7 +173,7 @@ fixed:
 | Git repositories (`git-repos`, opt-in) | `roots` (folders to look in, comma-separated), `depth` (1–6) | `~/projects, ~/Projects, ~/code, ~/src, ~/dev, ~/git`, 3 |
 | CI status (`ci`, opt-in) | `repos` (`owner/name`, comma-separated), `use_gh_token` (the `gh` CLI's login for private repos and higher limits; else `GITHUB_TOKEN`), `notify` | empty, on, on |
 | Crash reports (`crashes`, opt-in) | `notify` (a notification for a new crash) | on |
-| Jannah (`jannah`, opt-in) | `rotate` (`daily`, `hourly`), `sources` (`both`, `quran`, `hadith`), `show_translation`, `arabic_size` (`small`, `medium`, `large`), `bar_label` (`glyph`, `step`), `morning_reminder`, `language` | daily, both, on, medium, glyph, off, follow |
+| Jannah (`jannah`, opt-in) | `rotate` (`daily`, `hourly`: how often the desktop widgets change their reminder; the panel and sidebar pick a fresh one each time they open), `sources` (`both`, `quran`, `hadith`), `show_translation`, `arabic_size` (`small`, `medium`, `large`), `bar_label` (`glyph`, `step`), `morning_reminder`, `language` | daily, both, on, medium, glyph, off, follow |
 | Qur'an (`quran`, opt-in) | `reciter` (`ar.yasseraldossari`, `mp3quran.258`, `ar.abdulsamad`, `ar.husary`, …), `translation` (an edition id; empty: the plugin language's default), `arabic_size`, `language` | Yasser Al-Dossary, default, medium, follow |
 | Hadith (`hadith`, opt-in) | `collections` (downloaded ones), `show_translation`, `arabic_size`, `hide_chain` (fold the chain of narrators), `rotate` (`daily`, `hourly`), `daily_collections`, `bar_label` (`glyph`, `reference`), `language` | bukhari, muslim; on; medium; on; daily; bukhari, muslim; glyph; follow |
 | Prayer times (`prayer-times`, opt-in) | `language`, `adhan` (the call to prayer at each prayer; the recording downloads once when you turn it on) | follow, off |
@@ -628,7 +628,10 @@ and the main menu grow sideways out of the bar (the same morph, turned
 `bar.screen_frame` draws a thin border (`bar.frame_thickness`, 2–16,
 default 6) round the rest of the display, joined to the bar with concave
 corners. It reserves no space of its own (keep the compositor's outer
-gaps at least that wide) and never takes clicks.
+gaps at least that wide) and never takes clicks. A flush top or bottom
+edge frame or hairline can have it too: strips on the three edges the bar
+doesn't cover, with the bar's corner curves moved in to them, and a side
+bar joined to the bar replaces the strip on its edge.
 
 Interplay: auto-hide doesn't apply to a side bar; the dock can't share its
 edge (it moves to the bottom there); the sidebar slides out beside the
@@ -659,6 +662,38 @@ Glass pills, the island, the micro pill and a floating frame leave nothing
 to join, so the sidebar floats there, `sidebar.look.margin` clear of the
 screen edges and the bar.
 
+### Item shapes and bar styles
+
+With `bar.item_capsules` on, every bar item sits on a shape of its own:
+
+```toml
+[bar]
+item_capsules = true
+item_shape = "tile"      # capsule | tile (Material corners) | squircle | connected (a group whose items touch)
+icon_shape = "circle"    # match (the item shape) | circle | cookie | clover | flower | burst | squircle
+icon_fill = "accent"     # match (capsule_fill) | accent | tertiary: solid tones icon items are drawn in
+item_inset = 6           # 0–14: space between the items and the bar's long edges (default 3)
+```
+
+An icon-sized item (about as long as it is thick) takes `icon_shape`; any
+shape but `match` also makes it square, so it reads as a round button. The
+round Material 3 Expressive shapes are painted from overlapping circles,
+so over a see-through bar (`bar.opacity` below 1) they draw as plain
+circles. `side_bars.icon_shape` does the same for a side bar's pill items
+(`match` follows the bar). `bar.height` goes up to 60 for the taller
+styles.
+
+**Bar styles** set all of this at once: Studio → Bars → Presets
+(*Expressive*, *Tile dock*, *Rail*, *Segmented*) or
+`mandara msg bar style expressive|tile-dock|rail|segmented|none`. A style
+sets the layout, edge and height, the item and icon shapes and colours,
+insets and spacing, the screen frame, and for *Expressive* a rail of
+scalloped buttons joined to the bar (`[side_bars]`, left side on, right
+side off). The bar remembers it as `bar.style`; picking any other preset
+or a Look, or `bar style none`, first puts every field the style changed
+back to its default. Studio's presets can replace your items too; `bar
+style` never does.
+
 ### Bar commands
 
 `mandara msg bar hide` puts the bar away and frees its space until
@@ -688,6 +723,7 @@ chip_size = 34           # 16–72: an item's extent across the bar (at most the
 chip_padding = 7         # 0–20: space above and below an item's content
 chip_spacing = 4         # 0–24: gap between items
 chips = "icons"          # icons | pills (a pill per item) | island (one per group)
+icon_shape = "match"     # pill items about as long as they're thick: match (the bar's icon_shape) | circle | cookie | clover | flower | burst | squircle
 chip_fill = 1.0          # 0–3: strength of the pill / island wash
 align = "screen"         # middle group: screen (middle of the edge) | between | start | end
 corner_radius = 16       # 0–36: pills, island, slab and items (times Style → roundness)
@@ -717,6 +753,28 @@ top = ["clock"]
 middle = ["power"]
 bottom = ["notifications"]
 ```
+
+Each side bar can also have a look of its own, over the shared one. Any
+key left out follows the shared `[side_bars]` setting (`chips`,
+`icon_shape`) or the bar's (`item_shape`, `icon_fill`):
+
+```toml
+[side_bars.right]
+chips = "pills"          # icons | pills | island
+item_shape = "squircle"  # capsule | tile | squircle | connected
+icon_shape = "squircle"  # match (like the other items) | circle | cookie | clover | flower | burst | squircle
+icon_fill = "accent"     # match (the wash) | accent | tertiary
+item_inset = 3           # 0–20: space between the items and the bar's long edges (sets the item size)
+style = "tile-dock"      # the bar style that set these (see below)
+```
+
+A **bar style for one side bar** sets those keys at once:
+Studio → Bars → Side bars (the *Style* chips above each bar's groups) or
+`mandara msg side-bar style left|right expressive|tile-dock|rail|segmented|none`.
+It shapes that bar alone: the main bar, the other side bar and the shared
+settings stay as they are. Another style, or `none` (*Shared*), clears
+exactly what the last one set; a side bar you shaped by hand is never
+cleared.
 
 - **Joined (the default).** The top (or bottom) bar and the side bars
   become one frame, like a puzzle piece: each side bar is a column of the
@@ -758,22 +816,27 @@ wallpaper with the look's scheme instead of the look's own seed). A look
 (`crates/mandara-config/src/looks.rs`) sets the bar style, position and
 items, the desktop widget list (clocks, monitor, decorations, cards,
 visualizers), the theme (`theme.source` = an HCT palette from an OKLCH
-seed), fonts, `style.radius_scale` and the bar opacity; it never changes
-the wallpaper image. Applying one from your own setup first saves the
+seed), fonts, `style.radius_scale`, the bar opacity and its **component
+designs** (one of the Components presets below, written to `style.*`;
+`looks.keep_components = true` keeps yours instead; a design you change
+after picking a look stays until you pick a look or preset again); it never
+changes the wallpaper image. Designed themes (palette presets such as
+Catppuccin) only set colours and carry no component designs: they combine
+with any components. Applying one from your own setup first saves the
 paths it touches as the look profile **Before looks** in
 `~/.config/mandara/profiles/`; switching between looks keeps that
 snapshot, and *Restore my look* / `mandara msg look restore` applies it
 back. `mandara msg look list`, `mandara msg look apply <id>
 [wallpaper-colors]`.
 
-| id | Look |
-|---|---|
-| `corniche-dusk` | rose glass pills, headline clock, system monitor, now-playing card |
-| `pharos-ink` | monochrome hairline bar with mini stats, greeting clock, calendar card |
-| `montaza-crimson` | red island bar, framed spectrum box, Arabic clock, vertical calligraphy |
-| `qaitbay-forest` | green edge frame, giant stacked clock behind the subject, dock now-playing chip |
-| `anfushi-wave` | ocean micro pill, full-width glowing wave, katakana accent |
-| `night-frame` | violet side bar with screen frame, greeting, calendar card, mirrored bars |
+| id | Look | Components |
+|---|---|---|
+| `corniche-dusk` | rose glass pills, headline clock, system monitor, now-playing card | Classic |
+| `pharos-ink` | monochrome hairline bar with mini stats, greeting clock, calendar card | Minimal |
+| `montaza-crimson` | red island bar, framed spectrum box, Arabic clock, vertical calligraphy | Expressive |
+| `qaitbay-forest` | green edge frame, giant stacked clock behind the subject, dock now-playing chip | Material You |
+| `anfushi-wave` | ocean micro pill, full-width glowing wave, katakana accent | Expressive |
+| `night-frame` | violet side bar with screen frame, greeting, calendar card, mirrored bars | Brutalist soft |
 
 ## Launcher placement
 
@@ -918,8 +981,19 @@ field and must not be placed in TOML.
 | `translator` | `server` | Empty; LibreTranslate only, including any proxy path |
 | `translator` | `use_api_key` | `false` for LibreTranslate; DeepL always needs a key |
 | `translator` | `target` | `EN`, resolved against the provider’s language list |
-| `feeds` | `subscriptions` | Empty; up to 16 space-separated web addresses |
-| `feeds` | `refresh_seconds` | 300; 60–3,600 |
+| `feeds` | `feeds` | Empty; up to 64 `[[plugins.settings.feeds.feeds]]` tables with `url` and optional `title`, `folder` and `color` (`#rrggbb`) |
+| `feeds` | `subscriptions` | Older space-separated addresses; read while `feeds` is absent |
+| `feeds` | `refresh_seconds` | 300; 60–3,600; feeds older than this refresh when the panel opens |
+| `feeds` | `background_refresh` | `false`; refresh while the panel is closed |
+| `feeds` | `background_minutes` | 60; 15–360 |
+| `feeds` | `notify` | `false`; one new-articles notification at most every 30 minutes |
+| `feeds` | `items_per_feed` | 50; 10–200, saved articles on top |
+| `feeds` | `retention_days` | 14; 1–90 days after an article left its feed |
+| `feeds` | `images` | `thumbnails`; also `off` and `all` (pictures inside articles) |
+| `feeds` | `open_in` | `reader`; or `browser` |
+| `feeds` | `mark_read_on_open` | `true` |
+| `feeds` | `bar_style` | `badge`; also `count` and `icon` (a dot) |
+| `feeds` | `card_folder` | Empty (every feed); the sidebar card's folder |
 | `home-assistant` | `server` | Empty; your instance address |
 | `home-assistant` | `entities` | Empty; up to 24 space-separated entity ids |
 | `home-assistant` | `refresh_seconds` | 30; 5–300 |

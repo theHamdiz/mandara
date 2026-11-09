@@ -1,28 +1,33 @@
 //! Jannah: a constant, gentle reminder of Paradise as the final home: what
-//! it is, how to get there, what to do and what to avoid. One reminder a
-//! day (or an hour) from the Qur'an and the hadith, the same on every
-//! surface: a slim arch glyph in the bar (optionally with today's step),
-//! a panel (today's reminder under an arch with its meaning and
-//! reference, today's step and this week's dots, and Paths, Qur'an, Hadith
-//! and Saved), a sidebar card and desktop widgets (`verse`, `quote`,
-//! `step`). Opt-in.
+//! it is, how to get there, what to do and what to avoid. A reminder from
+//! the Qur'an and the hadith, a fresh one at random each time the panel or
+//! the sidebar opens (never the one just shown or one shown lately, and
+//! the same on every surface open at once): a slim arch glyph in the bar
+//! (optionally with today's step), a panel (the reminder under an arch
+//! with its meaning and reference, today's step and this week's dots, and
+//! Paths, Qur'an, Hadith and Saved), a sidebar card and desktop widgets
+//! (`verse`, `quote`, `step`), which keep theirs for a day (or an hour).
+//! Opt-in.
 //!
 //! Content comes from `mandara_services::jannah` (bundled verbatim; Qur'an
 //! meanings are fetched once per language from api.alquran.cloud and
-//! cached, never while offline). "Today" is a pure function of the date
-//! and the user's next / previous nudges. Nothing ticks while idle: one
-//! timer waits for the next rotation (or the morning reminder), and the
-//! bar's glint animates only for the moment the item changes. Saved items,
-//! done days and nudges live in `~/.local/state/mandara/jannah.json`,
-//! written off the UI thread.
+//! cached, never while offline). The picking rules live in
+//! [`mandara_services::jannah::recent`]; the shell only tells them when a
+//! surface opens. Nothing ticks while idle: one timer waits for the
+//! widgets' next period (or the morning reminder), and the bar's glint
+//! animates only for the moment the item changes. Saved items and done
+//! days live in `~/.local/state/mandara/jannah.json`, what was shown
+//! lately in `jannah-recent.json` beside it; both are read and written off
+//! the UI thread (the latter coalesced).
 //!
 //! Settings (`[plugins.settings.jannah]`): `rotate` (`daily` / `hourly`),
 //! `sources` (`both` / `quran` / `hadith`), `show_translation`,
 //! `arabic_size` (`small` / `medium` / `large`), `bar_label` (`glyph` /
 //! `step`), `morning_reminder`.
 //!
-//! Commands: `jannah today|next|prev|show <ref>|search <query>|paths|path
-//! <key>|step|step done|saved|save <ref>|unsave <ref>`.
+//! Commands: `jannah today|next|prev|peek [n]|show <ref>|search
+//! <query>|paths|path <key>|step|step done|step peek [days]|saved|save
+//! <ref>|unsave <ref>`.
 
 pub mod art;
 pub(crate) mod panel;
@@ -44,6 +49,7 @@ use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, DesktopWidgetType, PluginIn
 use mandara_services::jannah::catalog::{self, Item, ItemId, catalog};
 use mandara_services::jannah::meanings::{self, Meaning, Meanings};
 use mandara_services::jannah::paths::Path;
+use mandara_services::jannah::recent::{self, Memory, Pool, Reminders};
 use mandara_services::jannah::rotation::{self, Rotate, Sources};
 use mandara_services::jannah::search::{self, Entry};
 use mandara_services::jannah::state::{self, State};
@@ -66,8 +72,8 @@ pub const ID: &str = "jannah";
 
 // ── Sizes & timing ───────────────────────────────────────────────────────
 
-/// Longest Arabic (characters) a desktop widget shows: it walks its own
-/// sequence of the items that fit (the sidebar folds today's instead).
+/// Longest Arabic (characters) a desktop widget shows: it makes its own
+/// pick from the items that fit (the sidebar folds the panel's instead).
 const WIDGET_LIMIT: usize = 320;
 /// Bar chip: glyph size, gap, and the step title's widest run.
 const BAR_ICON_PX: f32 = 14.0;
@@ -87,6 +93,9 @@ const SIDEBAR_CHECK_PX: f32 = 26.0;
 pub(crate) const ARABIC_LINE_EM: f32 = 1.95;
 /// Ticks land this far past the boundary they wait for.
 const TICK_MARGIN: Duration = Duration::from_millis(250);
+/// What was shown is written this long after the last pick (a burst of
+/// opens writes once).
+const MEMORY_SAVE_DELAY: Duration = Duration::from_millis(1500);
 /// The morning reminder goes out from this hour until noon.
 const MORNING_HOUR: u32 = 7;
 const NOON: u32 = 12;
@@ -206,9 +215,40 @@ pub(crate) struct Model {
     pub index: Option<((Lang, bool), Arc<Vec<Entry>>)>,
     /// An item a command asked the panel to open in the reader.
     pub open_request: Option<ItemId>,
+    /// What the panel and sidebar show, what was shown lately and the
+    /// desktop widgets' pick.
+    reminders: Reminders,
+    /// The remembered picks were read from disk (until then nothing is
+    /// written, and the widgets wait).
+    memory_loaded: bool,
+    /// A pick happened before they were read: write once they are.
+    memory_dirty: bool,
+    /// The pending coalesced write of what was shown.
+    memory_save: Option<Task<()>>,
+    /// Bumped per pick; the newest write wins.
+    memory_generation: u64,
 }
 
 impl Model {
+    fn new(state: State) -> Self {
+        Model {
+            state,
+            generation: 0,
+            progress: RefCell::default(),
+            edition: None,
+            fetch: Fetch::Idle,
+            views: ViewSet::default(),
+            timer: None,
+            index: None,
+            open_request: None,
+            reminders: Reminders::default(),
+            memory_loaded: false,
+            memory_dirty: false,
+            memory_save: None,
+            memory_generation: 0,
+        }
+    }
+
     fn day_progress(&self, date: NaiveDate) -> DayProgress {
         self.progress.borrow_mut().day(&self.state, self.generation, date)
     }
@@ -229,20 +269,99 @@ pub(crate) fn model(cx: &mut App) -> Shared {
     if let Some(g) = cx.try_global::<GlobalJannah>() {
         return g.0.clone();
     }
-    let shared: Shared = Rc::new(RefCell::new(Model {
-        state: State::load(&state::path()),
-        generation: 0,
-        progress: RefCell::default(),
-        edition: None,
-        fetch: Fetch::Idle,
-        views: ViewSet::default(),
-        timer: None,
-        index: None,
-        open_request: None,
-    }));
+    let shared: Shared = Rc::new(RefCell::new(Model::new(State::load(&state::path()))));
     cx.set_global(GlobalJannah(shared.clone()));
+    load_memory(&shared, cx);
+    follow_surfaces(&shared, cx);
     ensure_timer(&shared, cx);
     shared
+}
+
+/// Reads what was shown lately off the UI thread (building the catalog
+/// there too), then lets the widgets pick and the writes go out.
+fn load_memory(shared: &Shared, cx: &mut App) {
+    let task = cx.background_spawn(async move { Memory::load(&recent::path(), catalog()) });
+    let weak = Rc::downgrade(shared);
+    cx.spawn(async move |cx| {
+        let loaded = task.await;
+        cx.update(|cx| {
+            let Some(shared) = weak.upgrade() else { return };
+            let dirty = {
+                let mut m = shared.borrow_mut();
+                m.reminders.merge(loaded);
+                m.memory_loaded = true;
+                std::mem::take(&mut m.memory_dirty)
+            };
+            if dirty {
+                remember(&shared, cx);
+            }
+            changed(&shared, cx);
+        });
+    })
+    .detach();
+}
+
+/// Tells the picking rules when the panel or the sidebar opens, so the
+/// next look draws a fresh reminder (the sidebar's card follows the
+/// panel's while both are open). The shell's state is installed before
+/// any plugin runs (`init_state`, in the shell and in Studio), and the
+/// model is built only once, so there is no later chance to register.
+fn follow_surfaces(shared: &Shared, cx: &mut App) {
+    let state = crate::state::shell(cx);
+    let weak = Rc::downgrade(shared);
+    cx.observe(&state, move |state, cx| {
+        let Some(shared) = weak.upgrade() else { return };
+        let (panel, sidebar) = {
+            let s = state.read(cx);
+            (s.panel.as_deref() == Some(ID), s.sidebar_visible())
+        };
+        let opened = shared.borrow_mut().reminders.surfaces(panel, sidebar, Instant::now());
+        if opened {
+            let views = shared.borrow().views.clone();
+            views.notify(cx);
+        }
+    })
+    .detach();
+}
+
+/// Writes what was shown lately, once a burst of picks settles, off the UI
+/// thread (the newest write wins).
+fn remember(shared: &Shared, cx: &mut App) {
+    {
+        let mut m = shared.borrow_mut();
+        m.memory_generation += 1;
+        if !m.memory_loaded {
+            m.memory_dirty = true;
+            return;
+        }
+        if m.memory_save.is_some() {
+            return;
+        }
+    }
+    static WRITTEN: std::sync::Mutex<u64> = std::sync::Mutex::new(0);
+    let weak = Rc::downgrade(shared);
+    let task = cx.spawn(async move |cx| {
+        cx.background_executor().timer(MEMORY_SAVE_DELAY).await;
+        cx.update(|cx| {
+            let Some(shared) = weak.upgrade() else { return };
+            let (memory, generation) = {
+                let mut m = shared.borrow_mut();
+                m.memory_save = None;
+                (m.reminders.memory.clone(), m.memory_generation)
+            };
+            cx.background_spawn(async move {
+                let mut last = WRITTEN.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                if generation > *last {
+                    if let Err(e) = memory.save(&recent::path(), catalog()) {
+                        tracing::warn!("jannah: saving what was shown: {e}");
+                    }
+                    *last = generation;
+                }
+            })
+            .detach();
+        });
+    });
+    shared.borrow_mut().memory_save = Some(task);
 }
 
 /// Writes the state off the UI thread (the newest change wins).
@@ -274,52 +393,81 @@ fn changed(shared: &Shared, cx: &mut App) {
 
 // ── Today ────────────────────────────────────────────────────────────────
 
-thread_local! {
-    /// Recent picks: `(slot, sources, limit)` → item and its place in its
-    /// round.
-    static PICKS: RefCell<Vec<((i64, Sources, Option<usize>), Option<(ItemId, (usize, usize))>)>> = const { RefCell::new(Vec::new()) };
+/// The items a surface showing at most `limit` characters picks from.
+fn pool(s: &Settings, limit: Option<usize>) -> Pool<'static> {
+    Pool::new(catalog(), s.sources, limit)
 }
-/// Picks remembered (a few surfaces × a few slots).
-const PICK_CACHE: usize = 12;
 
-/// The item for `slot` on a surface showing at most `limit` characters,
-/// and where it stands in its kind's round (`(12, 230)`).
-pub(crate) fn pick_placed(slot: i64, sources: Sources, limit: Option<usize>) -> Option<(ItemId, (usize, usize))> {
-    let key = (slot, sources, limit);
-    if let Some(hit) = PICKS.with(|p| p.borrow().iter().find(|(k, _)| *k == key).map(|(_, v)| *v)) {
-        return hit;
+/// After a pick: write it down and redraw every surface (after this
+/// render: the one drawing may be one of them).
+fn picked(shared: &Shared, cx: &mut App) {
+    remember(shared, cx);
+    let views = shared.borrow().views.clone();
+    cx.defer(move |cx| views.notify(cx));
+}
+
+/// The reminder the panel and sidebar show: the current one, or a fresh
+/// one at random when a surface just opened (or none was shown yet).
+pub(crate) fn current(shared: &Shared, s: &Settings, cx: &mut App) -> Option<ItemId> {
+    let (id, new) = shared.borrow_mut().reminders.current(&pool(s, None), &mut recent::os_draw);
+    if new {
+        picked(shared, cx);
     }
-    let placed = rotation::pick_placed(catalog(), sources, slot, limit);
-    PICKS.with(|p| {
-        let mut p = p.borrow_mut();
-        if p.len() >= PICK_CACHE {
-            p.remove(0);
-        }
-        p.push((key, placed));
-    });
-    placed
+    id
 }
 
-/// The current slot: the period plus the user's nudges.
-pub(crate) fn slot(m: &Model, s: &Settings, now: NaiveDateTime) -> i64 {
-    rotation::period(now, s.rotate) + m.state.shift
+/// `item`'s fixed number in the pool the reminders are drawn from and the
+/// pool's size (`(104, 230)`).
+pub(crate) fn number(s: &Settings, item: ItemId) -> Option<(usize, usize)> {
+    pool(s, None).number(item)
 }
 
-/// Today's item on a surface showing at most `limit` characters.
-pub(crate) fn today(shared: &Shared, s: &Settings, limit: Option<usize>) -> Option<ItemId> {
-    peek(shared, s, limit, 0)
+/// The reminder on screen, without drawing one (the bar's glint).
+fn shown(shared: &Shared) -> Option<ItemId> {
+    shared.borrow().reminders.shown()
 }
 
-/// The item `by` places after today's (before it when negative): a look
-/// only, "today" stays where it is.
-pub(crate) fn peek(shared: &Shared, s: &Settings, limit: Option<usize>, by: i64) -> Option<ItemId> {
-    peek_placed(shared, s, limit, by).map(|(id, _)| id)
+/// Whether Previous has a reminder to go back to.
+pub(crate) fn has_prev(shared: &Shared) -> bool {
+    shared.borrow().reminders.has_prev()
 }
 
-/// [`peek`] with where the item stands in its round.
-pub(crate) fn peek_placed(shared: &Shared, s: &Settings, limit: Option<usize>, by: i64) -> Option<(ItemId, (usize, usize))> {
-    let now = Local::now().naive_local();
-    pick_placed(slot(&shared.borrow(), s, now) + by, s.sources, limit)
+/// Next on every surface: forward again over what Previous stepped back
+/// through, then a fresh reminder.
+pub(crate) fn next(shared: &Shared, cx: &mut App) {
+    let s = settings(cx);
+    shared.borrow_mut().reminders.next(&pool(&s, None), &mut recent::os_draw);
+    remember(shared, cx);
+    changed(shared, cx);
+}
+
+/// Previous on every surface: the reminder shown before; whether there was
+/// one.
+pub(crate) fn prev(shared: &Shared, cx: &mut App) -> bool {
+    let moved = shared.borrow_mut().reminders.prev().is_some();
+    if moved {
+        changed(shared, cx);
+    }
+    moved
+}
+
+/// A look only: the reminder shown `-by` before this one, or (`by > 0`)
+/// another the next pick could bring.
+fn look(shared: &Shared, s: &Settings, by: i64) -> Option<ItemId> {
+    shared.borrow().reminders.look(&pool(s, None), by, &mut recent::os_draw)
+}
+
+/// The desktop widgets' reminder for this period (`None` until what was
+/// shown lately is read).
+fn widget_item(shared: &Shared, s: &Settings, now: NaiveDateTime, cx: &mut App) -> Option<ItemId> {
+    if !shared.borrow().memory_loaded {
+        return None;
+    }
+    let (id, new) = shared.borrow_mut().reminders.widget(&pool(s, Some(WIDGET_LIMIT)), rotation::period(now, s.rotate), &mut recent::os_draw);
+    if new {
+        remember(shared, cx);
+    }
+    id
 }
 
 /// Today's step.
@@ -330,13 +478,6 @@ pub(crate) fn today_step() -> Option<&'static Path> {
 /// The step of the day `days` after today (before it when negative).
 pub(crate) fn step_in(days: i64) -> Option<&'static Path> {
     rotation::step(Local::now().date_naive() + chrono::Duration::days(days))
-}
-
-/// Moves "today" by `by` items on every surface.
-pub(crate) fn nudge(shared: &Shared, by: i64, cx: &mut App) {
-    shared.borrow_mut().state.shift += by;
-    save(shared, cx);
-    changed(shared, cx);
 }
 
 /// Marks today's step done (a no-op when it already is); whether it was
@@ -560,7 +701,11 @@ fn remind(shared: &Shared, cx: &mut App) {
     if !s.morning || !(MORNING_HOUR..NOON).contains(&now.hour()) || shared.borrow().day_progress(now.date()).reminded {
         return;
     }
-    let Some(item) = today(shared, &s, None).and_then(|id| catalog().get(id)) else { return };
+    // A fresh reminder, which the panel and sidebar then show (and won't
+    // bring back soon).
+    let id = shared.borrow_mut().reminders.next(&pool(&s, None), &mut recent::os_draw);
+    remember(shared, cx);
+    let Some(item) = id.and_then(|id| catalog().get(id)) else { return };
     let arabic = arabic_ui();
     let body = match meaning_of(&shared.borrow(), item).filter(|_| wants_meaning(&s)) {
         Some(m) => format!("{}\n— {}", meanings::excerpt(&m.text), catalog::reference(item, arabic)),
@@ -576,7 +721,7 @@ fn remind(shared: &Shared, cx: &mut App) {
 
 // ── Desktop widgets ──────────────────────────────────────────────────────
 
-/// What the desktop widgets show today.
+/// What the desktop widgets show this period.
 pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::JannahInfo> {
     let shared = model(cx);
     ensure_timer(&shared, cx);
@@ -586,7 +731,7 @@ pub fn widget_info(cx: &mut App) -> Option<crate::backdrop::widgets::JannahInfo>
     if wants_meaning(&s) {
         ensure_meanings(&shared, cx);
     }
-    let item = catalog().get(today(&shared, &s, Some(WIDGET_LIMIT))?)?;
+    let item = catalog().get(widget_item(&shared, &s, Local::now().naive_local(), cx)?)?;
     let m = shared.borrow();
     let meaning = meaning_of(&m, item).filter(|_| wants_meaning(&s));
     let date = Local::now().date_naive();
@@ -630,7 +775,7 @@ fn bar_view(glint: Rc<RefCell<Glint>>) -> impl Fn(&MandaraPalette, &mut Window, 
         shared.borrow().views.track(window);
         ensure_timer(&shared, cx);
         let s = settings(cx);
-        let current = today(&shared, &s, None);
+        let current = shown(&shared);
         let size = crate::style::bar_icon(BAR_ICON_PX);
         let mut g = glint.borrow_mut();
         if g.last.is_some() && g.last != current && !mandara_core::spring::motion_profile().reduce {
@@ -692,7 +837,12 @@ fn open_panel(cx: &mut App) {
 pub(crate) fn open_item(id: ItemId, cx: &mut App) {
     let shared = model(cx);
     ensure_meanings(&shared, cx);
-    shared.borrow_mut().open_request = Some(id);
+    {
+        let mut m = shared.borrow_mut();
+        m.open_request = Some(id);
+        // The panel opens for this item: what the sidebar shows stays.
+        m.reminders.hold(Instant::now());
+    }
     open_panel(cx);
     changed(&shared, cx);
 }
@@ -715,9 +865,9 @@ fn sidebar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> 
     let f = fonts(cx);
     let accent = gold(palette);
     let arabic = arabic_ui();
-    // Today's own reminder, the panel's: folded here, never swapped for a
-    // shorter one.
-    let item = today(&shared, &s, None).and_then(|id| catalog().get(id));
+    // The panel's own reminder (a fresh one when the sidebar opens): folded
+    // here, never swapped for a shorter one.
+    let item = current(&shared, &s, cx).and_then(|id| catalog().get(id));
     let date = Local::now().date_naive();
     let (meaning, done) = {
         let m = shared.borrow();
@@ -809,9 +959,10 @@ fn today_json(cx: &mut App) -> Result<Value, String> {
     let shared = model(cx);
     ensure_meanings(&shared, cx);
     let s = settings(cx);
-    let item = today(&shared, &s, None).and_then(|id| catalog().get(id)).ok_or_else(|| t("Nothing to show").to_string())?;
-    let shift = shared.borrow().state.shift;
-    Ok(json!({ "item": item_json(&shared, item), "step": today_step().map(path_json), "rotate": if s.rotate == Rotate::Hourly { "hourly" } else { "daily" }, "shift": shift }))
+    let item = current(&shared, &s, cx).and_then(|id| catalog().get(id)).ok_or_else(|| t("Nothing to show").to_string())?;
+    let can_go_back = has_prev(&shared);
+    let (n, of) = number(&s, item.id).unzip();
+    Ok(json!({ "item": item_json(&shared, item), "number": n, "of": of, "step": today_step().map(path_json), "rotate": if s.rotate == Rotate::Hourly { "hourly" } else { "daily" }, "has_previous": can_go_back }))
 }
 
 fn step_json(cx: &mut App) -> Value {
@@ -839,15 +990,15 @@ fn register_commands(r: &mut PluginRegistry) {
         .arg(ArgSpec::required("ref", ArgKind::String, tk("a verse or hadith reference")))
         .example("jannah copy-image 89:30"));
     add(
-        CommandSpec::new("jannah peek", tk("Look at the reminder a few items after today's (before it when negative) without moving today's"), |a, cx| {
+        CommandSpec::new("jannah peek", tk("Look at another reminder without changing the one shown (negative: the ones shown before)"), |a, cx| {
             let by = if a.get(0).is_some() { a.int(0)? } else { 1 };
             let shared = model(cx);
             ensure_meanings(&shared, cx);
             let s = settings(cx);
-            let item = peek(&shared, &s, None, by).and_then(|id| catalog().get(id)).ok_or_else(|| t("Nothing to show").to_string())?;
-            Ok(json!({ "peek": by, "item": item_json(&shared, item), "today_moved": false }))
+            let item = look(&shared, &s, by).and_then(|id| catalog().get(id)).ok_or_else(|| t("Nothing to show").to_string())?;
+            Ok(json!({ "peek": by, "item": item_json(&shared, item), "shown_moved": false }))
         })
-        .arg(ArgSpec::optional("n", ArgKind::Integer, tk("how many items ahead (1 when left out; negative looks back)")))
+        .arg(ArgSpec::optional("n", ArgKind::Integer, tk("1 when left out: another at random; negative: that many back through what was shown")))
         .example("jannah peek")
         .example("jannah peek -1"),
     );
@@ -861,19 +1012,21 @@ fn register_commands(r: &mut PluginRegistry) {
         .example("jannah step peek")
         .example("jannah step peek 2"),
     );
-    add(CommandSpec::new("jannah today", tk("Today's verse or hadith and today's step"), |_, cx| today_json(cx)));
+    add(CommandSpec::new("jannah today", tk("The verse or hadith on screen now and today's step"), |_, cx| today_json(cx)));
     add(
-        CommandSpec::new("jannah next", tk("Move today's reminder forward one item (every surface follows)"), |_, cx| {
+        CommandSpec::new("jannah next", tk("Show a fresh reminder at random (every surface follows)"), |_, cx| {
             let shared = model(cx);
-            nudge(&shared, 1, cx);
+            next(&shared, cx);
             today_json(cx)
         }),
     );
     add(
-        CommandSpec::new("jannah prev", tk("Move today's reminder back one item"), |_, cx| {
+        CommandSpec::new("jannah prev", tk("Go back to the reminder shown before"), |_, cx| {
             let shared = model(cx);
-            nudge(&shared, -1, cx);
-            today_json(cx)
+            let moved = prev(&shared, cx);
+            let mut v = today_json(cx)?;
+            v["moved"] = json!(moved);
+            Ok(v)
         }),
     );
     add(
@@ -1077,7 +1230,7 @@ mod tests {
     }
 
     fn m() -> Model {
-        Model { state: State::default(), generation: 0, progress: RefCell::default(), edition: None, fetch: Fetch::Idle, views: ViewSet::default(), timer: None, index: None, open_request: None }
+        Model::new(State::default())
     }
 
     #[test]
@@ -1098,14 +1251,13 @@ mod tests {
     }
 
     #[test]
-    fn picks_are_cached_and_stable() {
-        let pick = |slot, sources, limit| pick_placed(slot, sources, limit).map(|(id, _)| id);
-        let a = pick(739_000, Sources::Both, None);
-        assert!(a.is_some());
-        assert_eq!(a, pick(739_000, Sources::Both, None));
-        assert_eq!(a, rotation::pick(catalog(), Sources::Both, 739_000, None));
-        let small = pick(739_000, Sources::Both, Some(WIDGET_LIMIT));
-        assert!(small.is_none_or(|id| catalog().get(id).is_some_and(|i| i.len <= WIDGET_LIMIT)));
+    fn the_widget_pool_holds_only_what_fits() {
+        let small = pool(&s(), Some(WIDGET_LIMIT));
+        assert!(!small.is_empty());
+        assert!(small.iter().all(|id| catalog().get(id).is_some_and(|i| i.len <= WIDGET_LIMIT)));
+        assert_eq!(pool(&s(), None).len(), catalog().items.len());
+        let quran = pool(&Settings { sources: Sources::Quran, ..s() }, None);
+        assert!(quran.iter().all(|id| catalog().get(id).is_some_and(|i| i.is_verse())));
     }
 
     #[test]

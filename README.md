@@ -37,7 +37,7 @@
   <a href="docs/desktop.md"><img src="https://img.shields.io/badge/Wayland-native-22D3EE?logo=wayland&logoColor=E9E5FF&labelColor=0B1026" alt="Wayland native"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-8B5CF6?labelColor=0B1026" alt="GPU rendered"/></a>
   <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic%20%C2%B7%20KWin-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin"/></a>
-  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-77%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="77 plugins plus WebAssembly"/></a>
+  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-81%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="81 plugins plus WebAssembly"/></a>
   <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-20%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="20 languages"/></a>
   <br/>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/resources-measured-2DD4BF?labelColor=0B1026" alt="Resource measurements and current limits"/></a>
@@ -111,7 +111,7 @@ Write notes and edit tasks directly in their widgets, too.
 | **Resources** | [Resource measurements and current limits](docs/performance.md); the 100 MiB startup and operation target remains open |
 | **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`), with [thirteen colour launcher icons](docs/configuration.md#launcher-button-artwork) |
 | **Automation** | `mandara msg <command>` with JSON replies; `mandara commands --json` lists them all |
-| **Plugins** | 77 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
+| **Plugins** | 81 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
 | **Widgets** | Mechanical, word and binary clocks, calendar cards and weather dials; passive widgets can also decorate Mandara Login and the native lock screen |
 | **Languages** | 20, including right-to-left Arabic, Persian and Urdu |
 | **License** | GPL-3.0-or-later |
@@ -164,7 +164,7 @@ around, each one measured or shipped today:
    join the top bar into one frame, one-click Looks, dozens of desktop
    widgets placed per monitor, and three launcher looks. Attached launchers follow
    compact bars, with a placement map in Studio.
-9. **Safe, rich extensions.** 77 plugins built in. Third-party plugins are
+9. **Safe, rich extensions.** 81 plugins built in. Third-party plugins are
    Rust compiled to sandboxed WebAssembly: a crashing plugin is switched
    off and the shell keeps running. Qur’an, Hadith and Jannah can also
    [copy complete reading cards as images](docs/plugins.md#jannah-quran-hadith-and-prayer-times).
@@ -176,7 +176,9 @@ around, each one measured or shipped today:
     takes over an existing setup without losing it, and updates arrive as
     small, signed binary patches from Studio → About → Update now. NixOS
     gets a flake with NixOS and Home Manager modules, updated through the
-    flake.
+    flake. The Updates panel updates your whole system too, with live
+    progress and Mandara's own password dialog, and manages NixOS
+    generations. [How](docs/apps-and-updates.md#system-updates)
 12. **Made for everyone.** 20 interface languages, right-to-left Arabic,
     Persian and Urdu included, and fonts chosen for every script it shows.
 
@@ -184,9 +186,10 @@ around, each one measured or shipped today:
 
 - **It's light.** Plugins load data when needed, and hidden panels stop
   their refresh work. [Measurements and setup](docs/performance.md)
-- **It looks the way you want.** Six bar styles (now including a notch that
-  hangs from the top edge), side bars of icons and pills that join the top
-  bar into one frame, one-click Looks, desktop widgets, a hundred dials for
+- **It looks the way you want.** Six bar styles, four presets that reshape
+  the bar completely (a framed bar with a rail of scalloped buttons, a dock
+  of squircle tiles, a flower rail, rows of connected tiles), side bars of
+  icons and pills that join the top bar into one frame, one-click Looks, desktop widgets, a hundred dials for
   corners, glass and motion, and themes made from your wallpaper.
   [Your desktop](docs/desktop.md)
 - **Everything is a click away in Studio.** 30 pages of settings, all
@@ -196,7 +199,7 @@ around, each one measured or shipped today:
   mixer per app, screenshots and screen recording, copying text from the
   screen, a launcher with three looks (a list, an icon grid or a centred
   Spotlight-style search bar), a clipboard that sorts what you copy, a
-  drag-and-drop app installer, night light, and 77 built-in plugins.
+  drag-and-drop app installer, night light, and 81 built-in plugins.
   [Everything else](docs/more-features.md)
 - **It welcomes you in.** A matching lock screen and login screen with
   your own wallpaper, and ready-made looks for both.
@@ -217,6 +220,26 @@ around, each one measured or shipped today:
 <tr>
 <td width="50%" valign="top"><img src="docs/screenshots/weather.png" alt="Weather" width="100%"/><br/><sub><b>Weather</b>: an animated sky, hourly and five-day forecasts.</sub></td>
 <td width="50%" valign="top"><img src="docs/screenshots/notifications.png" alt="The notification center: notifications grouped by app (Mail with Reply and Archive actions, Corniche Radio, Calendar), do not disturb and clear" width="100%"/><br/><sub><b>Notifications</b>: grouped by app, with do not disturb.</sub></td>
+</tr>
+</table>
+
+### Bar styles
+
+Four presets reshape the whole bar in one click: pick one in **Studio →
+Bars → Presets**, or run `mandara msg bar style <name>`. Each side bar can
+take one of its own (`mandara msg side-bar style right <name>`).
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-expressive.webp" alt="The Expressive bar style: a tall bottom bar inside a thin frame round the screen, joined to a rail on the left, with round accent buttons, tonal tiles and scalloped badges" width="100%"/><br/><sub><b>Expressive</b> (<code>expressive</code>): round buttons and tonal tiles in a framed bar, with a scalloped rail.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-tile-dock.webp" alt="The Tile dock bar style: one floating island of large squircle tiles at the bottom of the screen" width="100%"/><br/><sub><b>Tile dock</b> (<code>tile-dock</code>): one floating island of large squircle tiles.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-rail.webp" alt="The Rail bar style: a wide rail on the left edge with flower-shaped buttons and tiles, inside a thin screen frame" width="100%"/><br/><sub><b>Rail</b> (<code>rail</code>): a wide left rail of flower buttons in a screen frame.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-segmented.webp" alt="The Segmented bar style: no bar, just rows of connected tiles under the top edge" width="100%"/><br/><sub><b>Segmented</b> (<code>segmented</code>): no bar, just rows of connected tiles.</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="docs/screenshots/bar-style-side-bars.webp" alt="A Segmented top bar of connected tiles beside a right side bar styled as a Tile dock, with squircle tiles" width="50%"/><br/><sub><b>Side bars</b> take a style of their own: here a Tile dock rail beside a Segmented bar.</sub></td>
 </tr>
 </table>
 

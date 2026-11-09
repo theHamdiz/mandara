@@ -63,6 +63,8 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "next" => r#"<path d="M4.5 6v12a1 1 0 0 0 1.55.83l8.6-6a1 1 0 0 0 0-1.66l-8.6-6A1 1 0 0 0 4.5 6z" fill="black"/><path d="M19 5v14"/>"#.into(),
         "previous" => r#"<path d="M19.5 6v12a1 1 0 0 1-1.55.83l-8.6-6a1 1 0 0 1 0-1.66l8.6-6A1 1 0 0 1 19.5 6z" fill="black"/><path d="M5 5v14"/>"#.into(),
         "music" => r#"<path d="M9 18V5.5l11-2v12.5"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>"#.into(),
+        // A radio set: antenna, body, speaker and dial.
+        "radio" => r#"<path d="M6 8.5L17.5 3"/><rect x="3" y="8.5" width="18" height="12" rx="3"/><circle cx="15.5" cy="14.5" r="2.8"/><path d="M6.5 12.5h3.5M6.5 16.5h3.5"/>"#.into(),
         "cpu" => r#"<rect x="5" y="5" width="14" height="14" rx="3"/><rect x="9.25" y="9.25" width="5.5" height="5.5" rx="1.2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>"#.into(),
         "memory" => r#"<rect x="2.5" y="6.5" width="19" height="11" rx="2.5"/><path d="M7 10.5v3M11 10.5v3M15 10.5v3M7 17.5v2M12 17.5v2M17 17.5v2"/>"#.into(),
         "disk" => r#"<ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.66 3.6 3 8 3s8-1.34 8-3v-13"/><path d="M4 12c0 1.66 3.6 3 8 3s8-1.34 8-3"/>"#.into(),
@@ -142,6 +144,10 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "external" => r#"<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>"#.into(),
         "github" => r#"<path d="M8 20.5v-3c-3 .8-3-1.5-4.3-2M16 21v-4.2c0-1-.3-1.6-.7-2 2.7-.3 5.5-1.3 5.5-6a4.8 4.8 0 0 0-1.3-3.3c.1-.5.6-2-.2-3.5 0 0-1.1-.3-3.6 1.3a12.3 12.3 0 0 0-6.5 0C6.7 1.7 5.6 2 5.6 2c-.8 1.5-.3 3-.2 3.5a4.8 4.8 0 0 0-1.3 3.3c0 4.7 2.8 5.7 5.5 6-.4.4-.7 1.2-.7 2V21"/>"#.into(),
         "rss" => r#"<path d="M5 4a15 15 0 0 1 15 15M5 10a9 9 0 0 1 9 9"/><circle cx="6" cy="18" r="2" fill="black" stroke="none"/>"#.into(),
+        // A speech bubble: comments and replies.
+        "message" => r#"<path d="M5.5 4.5h13a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H11l-4.5 3.5v-3.5h-1a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/>"#.into(),
+        // Two bubbles in conversation: discussion communities.
+        "messages" => r#"<path d="M4.5 3.5h9a2 2 0 0 1 2 2v5.5a2 2 0 0 1-2 2H9l-3.5 3v-3h-1a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2z"/><path d="M18 8.5h1.5a2 2 0 0 1 2 2V16a2 2 0 0 1-2 2h-1v3L15 18h-3.5a2 2 0 0 1-1.6-.8"/>"#.into(),
         "discord" => r#"<path d="M8 5.4a15 15 0 0 0-3.4 1.2C2.8 9.4 2.2 12.2 2.5 15.1a14 14 0 0 0 4.2 2.4l1.2-1.8M16 5.4a15 15 0 0 1 3.4 1.2c1.8 2.8 2.4 5.6 2.1 8.5a14 14 0 0 1-4.2 2.4l-1.2-1.8M6.8 14.7c3.5 1.8 6.9 1.8 10.4 0M8 5.4l.6-1.6M16 5.4l-.6-1.6M8 5.4a21 21 0 0 1 8 0"/><ellipse cx="8.6" cy="11.5" rx="1" ry="1.4" fill="black" stroke="none"/><ellipse cx="15.4" cy="11.5" rx="1" ry="1.4" fill="black" stroke="none"/>"#.into(),
         "folder" => r#"<path d="M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>"#.into(),
         "stop" => r#"<rect x="6" y="6" width="12" height="12" rx="2.5"/>"#.into(),
@@ -159,6 +165,12 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "eye" => r#"<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>"#.into(),
         "eye-off" => r#"<path d="M9.9 5.8A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.6 3.4M6.6 6.6C4 8.3 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 5.4-1.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3.5 3.5l17 17"/>"#.into(),
         "pencil" => r#"<path d="M15.5 4.5l4 4L8.5 19.5l-5 1 1-5z"/><path d="M13.5 6.5l4 4"/>"#.into(),
+        // The games: one Sudoku box with a filled cell; four tiles, one merged.
+        "sudoku" => r#"<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17"/><rect x="15.6" y="4.4" width="4" height="4" rx="1" fill="black" stroke="none"/>"#.into(),
+        "game-2048" => r#"<rect x="3.5" y="3.5" width="7.5" height="7.5" rx="2"/><rect x="13" y="3.5" width="7.5" height="7.5" rx="2"/><rect x="3.5" y="13" width="7.5" height="7.5" rx="2"/><rect x="13" y="13" width="7.5" height="7.5" rx="2" fill="black"/>"#.into(),
+        "redo" => r#"<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>"#.into(),
+        "eraser" => r#"<path d="M9 19.5h11"/><path d="M5.2 15.3l9.6-9.6a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L12 18.5H8.4z"/><path d="M9.6 10.9l4.6 4.6"/>"#.into(),
+        "lightbulb" => r#"<path d="M9.5 18h5M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1.1 2V16h5v-.2c.1-.8.5-1.5 1.1-2A6 6 0 0 0 12 3z"/>"#.into(),
         // A paint brush: making art (the wallpaper generator).
         "brush" => r#"<path d="M20 4l-8.2 8.2"/><path d="M15.6 7.1l1.3 1.3"/><path d="M11.8 12.2c-2.1-1.3-4.9-.1-5.3 2.6-.3 1.9-1.2 3-2.7 3.6 2.8 1.6 6.5 1.1 8.1-1.2 1-1.4 1-3.4-.1-5z"/>"#.into(),
         // A house: the main menu's home page.
@@ -206,6 +218,10 @@ impl AssetSource for MandaraAssets {
         if path.starts_with("password-symbols/") {
             return Ok(mandara_core::password_symbols::Symbol::from_asset_path(path).map(|s| Cow::Borrowed(s.svg().as_bytes())));
         }
+        // The Material You login avatar's shape and its morph steps.
+        if path.starts_with("login-shapes/") {
+            return Ok(mandara_core::avatar_shape::Step::from_asset_path(path).map(|s| Cow::Borrowed(s.svg().as_bytes())));
+        }
         let Some(name) = path.strip_prefix("icons/").and_then(|p| p.strip_suffix(".svg")) else {
             return Ok(None);
         };
@@ -236,7 +252,8 @@ pub const ICON_NAMES: &[&str] = &[
     "user", "user-plus", "key", "tiles", "eye", "eye-off", "pencil", "sparkles", "brush", "dice", "release-notes", "home", "phone", "palette",
     "git-branch", "workflow", "bug",
     "arch", "book", "info",
-    "hadith", "bookmark",
+    "hadith", "bookmark", "message", "messages", "radio",
+    "sudoku", "game-2048", "redo", "eraser", "lightbulb",
 ];
 
 /// An icon element tinted with `color`.
@@ -270,21 +287,70 @@ pub(crate) fn stroke_arc(window: &mut Window, bounds: Bounds<Pixels>, width: f32
     }
 }
 
-/// A circular progress ring: faint track plus a value arc from 12 o'clock.
+/// A circular progress ring: faint track plus a value arc from 12 o'clock,
+/// in the progress design picked under Themes → Components
+/// (`style.progress_design`).
 pub fn ring(value: f32, diameter: f32, stroke: f32, color: Color, track: Color) -> impl IntoElement {
+    ring_as(crate::style::progress_design(), value, diameter, stroke, color, track)
+}
+
+/// [`ring`] in `design`: Classic's track with the arc over it, Material's
+/// arc and track with a gap between them, Wavy's arc as a wave, or
+/// Segmented's twelve steps ([`crate::components::progress::ring_arcs`]).
+pub fn ring_as(design: crate::components::ProgressDesign, value: f32, diameter: f32, stroke: f32, color: Color, track: Color) -> impl IntoElement {
+    use crate::components::progress::{ArcKind, ring_arcs};
     let value = value.clamp(0.0, 1.0);
     canvas(
         |_, _, _| {},
         move |bounds, _, window, _| {
-            stroke_arc(window, bounds, stroke, 0.0, TAU, track);
-            if value > 0.005 {
-                stroke_arc(window, bounds, stroke, -FRAC_PI_2, TAU * value, color);
+            if design == crate::components::ProgressDesign::Classic {
+                stroke_arc(window, bounds, stroke, 0.0, TAU, track);
+                if value > 0.005 {
+                    stroke_arc(window, bounds, stroke, -FRAC_PI_2, TAU * value, color);
+                }
+                return;
+            }
+            // The wave swings inside the stroke band: a thinner line.
+            let thin = stroke * WAVE_STROKE_SHARE;
+            for arc in ring_arcs(design, value) {
+                match arc.kind {
+                    ArcKind::Track => stroke_arc(window, bounds, stroke, arc.from, arc.sweep, track),
+                    ArcKind::Fill => stroke_arc(window, bounds, stroke, arc.from, arc.sweep, color),
+                    ArcKind::Wave => stroke_wave(window, bounds, stroke, thin, arc.from, arc.sweep, color),
+                }
             }
         },
     )
     .size(px(diameter))
     .flex_none()
 }
+
+/// The wavy ring's line as a share of the ring's stroke.
+const WAVE_STROKE_SHARE: f32 = 0.6;
+
+/// A wavy arc: the ring's mid line swinging inside a band `band` wide,
+/// drawn `width` thick.
+fn stroke_wave(window: &mut Window, bounds: Bounds<Pixels>, band: f32, width: f32, from: f32, sweep: f32, color: Color) {
+    let size = f32::from(bounds.size.width).min(f32::from(bounds.size.height));
+    let r = (size - band) / 2.0;
+    let c = (f32::from(bounds.origin.x) + size / 2.0, f32::from(bounds.origin.y) + size / 2.0);
+    let swing = ((band - width) / 2.0).max(0.0);
+    // Finer steps than a plain arc: the wave needs them to stay smooth.
+    let steps = ((sweep.abs() / TAU) * WAVE_POINTS_PER_TURN).ceil().max(2.0) as usize;
+    let mut builder = PathBuilder::stroke(px(width));
+    for i in 0..=steps {
+        let a = from + sweep * i as f32 / steps as f32;
+        let rr = crate::components::progress::ring_wave_radius(a, r, swing);
+        let p = point(px(c.0 + rr * a.cos()), px(c.1 + rr * a.sin()));
+        if i == 0 { builder.move_to(p) } else { builder.line_to(p) }
+    }
+    if let Ok(path) = builder.build() {
+        window.paint_path(path, color.hsla());
+    }
+}
+
+/// Points per turn of a wavy ring.
+const WAVE_POINTS_PER_TURN: f32 = 240.0;
 
 /// Horizontal battery with a fill proportional to `value`.
 pub fn battery(value: f32, charging: bool, color: Color, outline: Color) -> impl IntoElement {

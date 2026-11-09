@@ -46,6 +46,9 @@ alloc-system = []
 alloc-system-tuned = []
 # Sandbox tests only (see mandara-services): trusts MANDARA_MOCK_RELEASE_KEYS.
 mock-release = ["mandara-services/mock-release"]
+# Sandbox screenshots only (see mandara-services; also needs a debug build):
+# MANDARA_FAKE_SYSTEM_UPDATE replays recorded package-manager output.
+fake-system-update = ["mandara-services/fake-system-update"]
 
 # ── Distribution packages (built by the release workflow) ──────────────
 [package.metadata.deb]

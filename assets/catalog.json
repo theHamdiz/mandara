@@ -696,5 +696,37 @@
     "motif": "circuit",
     "angle": 4,
     "panel": null
+  },
+  {
+    "id": "reddit",
+    "name": "Reddit",
+    "palette": "corniche",
+    "motif": "peers",
+    "angle": -4,
+    "panel": null
+  },
+  {
+    "id": "radio",
+    "name": "Radio",
+    "palette": "twilight",
+    "motif": "signal",
+    "angle": -4,
+    "panel": null
+  },
+  {
+    "id": "sudoku",
+    "name": "Sudoku",
+    "palette": "obsidian",
+    "motif": "lattice",
+    "angle": -4,
+    "panel": null
+  },
+  {
+    "id": "2048",
+    "name": "2048",
+    "palette": "twilight",
+    "motif": "slide",
+    "angle": 5,
+    "panel": null
   }
 ]

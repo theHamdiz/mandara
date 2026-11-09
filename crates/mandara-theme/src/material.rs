@@ -112,6 +112,29 @@ pub fn extract_seeds_from_image(img: &image::DynamicImage, count: usize) -> Resu
     seeds_from_thumbnail(&img.thumbnail(SAMPLE_EDGE, SAMPLE_EDGE).into_rgba8(), count)
 }
 
+/// Samples per side of [`mean_luma`]'s grid.
+const LUMA_GRID: u32 = 24;
+
+/// Mean luma (Rec. 709 weights on sRGB values, 0–1) of the top `share` of
+/// `img`, from a sparse grid of samples (no copy): how light the part of a
+/// wallpaper behind a lock or login clock is.
+pub fn mean_luma(img: &image::DynamicImage, share: f32) -> f32 {
+    use image::GenericImageView as _;
+    let (w, h) = img.dimensions();
+    let rows = ((h as f32 * share.clamp(0.0, 1.0)) as u32).max(1).min(h.max(1));
+    if w == 0 || h == 0 {
+        return 0.0;
+    }
+    let mut sum = 0.0;
+    for gy in 0..LUMA_GRID {
+        for gx in 0..LUMA_GRID {
+            let p = img.get_pixel((gx * 2 + 1) * w / (LUMA_GRID * 2), (gy * 2 + 1) * rows / (LUMA_GRID * 2));
+            sum += (0.2126 * f32::from(p[0]) + 0.7152 * f32::from(p[1]) + 0.0722 * f32::from(p[2])) / 255.0;
+        }
+    }
+    sum / (LUMA_GRID * LUMA_GRID) as f32
+}
+
 /// Quantizes an already downscaled image.
 fn seeds_from_thumbnail(thumb: &image::RgbaImage, count: usize) -> Result<Vec<SeedColor>, ExtractError> {
     let pixels: Vec<Rgb> = thumb
@@ -368,6 +391,20 @@ impl MiniPalette {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mean_luma_reads_the_top_of_a_picture() {
+        let mut img = image::RgbaImage::from_pixel(64, 40, image::Rgba([240, 240, 240, 255]));
+        for y in 20..40 {
+            for x in 0..64 {
+                img.put_pixel(x, y, image::Rgba([0, 0, 0, 255]));
+            }
+        }
+        let img = image::DynamicImage::ImageRgba8(img);
+        assert!(mean_luma(&img, 0.5) > 0.9, "a light top");
+        assert!((mean_luma(&img, 1.0) - 0.47).abs() < 0.05, "half light, half dark");
+        assert_eq!(mean_luma(&image::DynamicImage::new_rgba8(0, 0), 0.5), 0.0);
+    }
 
     /// Issue #16: album art cached without an extension still decodes.
     /// A wallpaper switch reads one picture from several threads at once:

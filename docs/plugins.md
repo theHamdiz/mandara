@@ -14,7 +14,10 @@ may access, its settings and where it fits. **Installed**, **Updates**,
 **Community** (the GitHub marketplace) and **Develop** (the authoring
 handbook) sit beside it.
 
-Feeds, Home Assistant and Phone Connect keep their data cached while enabled.
+Home Assistant and Phone Connect keep their data cached while enabled; Feeds
+keeps only unread counts and loads its history while its panel is open.
+Reddit keeps posts and comments only while its panel is open and for a
+minute and a half after it closes; its pictures go as soon as it closes.
 Switching one off clears its snapshots, and a late refresh cannot restore them.
 Article read history stays on disk. An explicit home or device action already
 running can finish; disabling the plugin prevents a follow-up refresh.
@@ -26,7 +29,7 @@ running can finish; disabling the plugin prevents a follow-up refresh.
 </tr>
 </table>
 
-The 77 first-party plugins (41 of them ship switched off, marked *opt-in*):
+The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -62,6 +65,8 @@ The 77 first-party plugins (41 of them ship switched off, marked *opt-in*):
 | **To-do** | Tasks grouped into lists, for the sidebar and bar | *(opt-in)*
 | **Notes** | Markdown notes in topics, saved as .md files | *(opt-in)*
 | **Pomodoro** | Focus timer with breaks and session tracking | *(opt-in)*
+| **Sudoku** | The number puzzle at four levels, with notes, highlights, hints, undo and a timer, in the bar and on the desktop *(opt-in)* |
+| **2048** | Slide and merge tiles to 2048 on a 3 × 3 to 6 × 6 board, with smooth tiles, best scores and undo, in the bar and on the desktop *(opt-in)* |
 | **Weather** | Animated current conditions, hourly and 5-day forecast |
 | **Wallpaper** | Wallpaper picker and desktop background |
 | **Wallpaper depth** | Draws the wallpaper's subject over the desktop clock and widgets: hand-tuned, or with a small depth model downloaded on demand *(core)* |
@@ -73,6 +78,7 @@ The 77 first-party plugins (41 of them ship switched off, marked *opt-in*):
 | **Color picker** | Pick colors from the screen, with formats, tonal ramps and contrast | *(opt-in)*
 | **Authenticator** | Two-factor codes (TOTP / HOTP) stored in your keyring | *(opt-in)*
 | **Soundscapes** | Ambient sea, rain, wind, café, fire and noise — synthesized live | *(opt-in)*
+| **Radio** | Internet radio: curated stations by genre, your own stations and favourites, with live now-playing *(opt-in)* |
 | **Dock** | A macOS-style dock: pinned, running and recent apps, stacks and the Trash, with magnification and auto-hide *(opt-in)* |
 | **App installer** | Install apps by dropping AppImages, Flatpaks, archives or packages on the dock or Studio | *(opt-in)*
 | **Screen time** | How long you spend in each app, per day, with limits *(opt-in)* |
@@ -83,7 +89,8 @@ The 77 first-party plugins (41 of them ship switched off, marked *opt-in*):
 | **Presentation mode** | One switch for talks and screen sharing: do not disturb, keep awake and hidden desktop widgets, all put back afterwards *(opt-in)* |
 | **Translator** | Translate text with DeepL or your own LibreTranslate server; text is sent only when you ask *(opt-in)* |
 | **Phone Connect** | Paired KDE Connect devices: battery, ring, ping and explicitly send clipboard text *(opt-in)* |
-| **Feeds** | Read RSS, Atom and JSON feeds with cached headlines and local read history *(opt-in)* |
+| **Feeds** | A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search, a clean reader view, starter feeds and OPML *(opt-in)* |
+| **Reddit** | Browse your communities, posts and comment threads in a panel (cards, compact or grid) and a sidebar card: limited mode on Reddit's public feeds out of the box, full mode with your own installed-app client id; NSFW hidden and spoilers covered by default *(opt-in)* |
 | **Home Assistant** | Your real home states and favourites, with controls for lights, switches, fans, scenes, scripts and buttons *(opt-in)* |
 | **Share to phone** | Clipboard text, a screenshot or a file, served once on your network behind a QR code *(opt-in)* |
 | **Tailscale** | Your tailnet: this device, peers, direct or relayed paths, exit nodes, connect and disconnect *(opt-in)* |
@@ -131,16 +138,60 @@ quick settings, media, weather, wallpaper, screenshot and clipboard, plus
 the core launcher, session and main menus) and everything else ships
 switched off: the dock, mini stats, screen time, prayer times, the wallpaper
 generator, Wallhaven, cursor themes, containers, services, drives, updates,
-the process hunter, the authenticator, soundscapes, world clock, network
+the process hunter, the authenticator, soundscapes, the radio, world clock, network
 speed, the color picker, Pomodoro, notes, to-do, privacy, the app
 installer, the shortcuts cheatsheet, task progress, eye breaks,
 presentation mode, share to phone, Tailscale, the uptime monitor, local
-AI, listening ports, Git repositories, CI status, crash reports, Jannah, the Qur'an and Hadith.
+AI, listening ports, Git repositories, CI status, crash reports, Reddit, Sudoku, 2048, Jannah, the Qur'an and Hadith.
 Turn any of them on in Studio → Plugins or with
 `mandara msg plugins enable <id>`. **Upgrading from 0.1 changes nothing you
 had:** a config written before these defaults keeps every plugin it had on
 (the upgrade writes them into `[plugins] enabled`), Wallhaven stays on if it
 was, and cursor themes stay on if you had picked a cursor.
+
+## Games: Sudoku and 2048
+
+Two opt-in games (Studio → Plugins, `mandara msg plugins enable sudoku` /
+`2048`, or type *sudoku*, *2048*, *games* or *puzzle* in the launcher and
+pick **Turn on**). Each has a bar item with a drop-down panel (put it
+in a bar group from its page in Studio → Plugins), a playable sidebar card
+(Studio → Bars → Sidebar, or `mandara msg sidebar tab widget add Overview
+sudoku`) and a desktop widget (Studio → Desktop widgets → Add, or
+right-click the desktop → Add widget) that you play right on the desktop:
+click the board to give it the keyboard, click a window or the desktop to
+give it back, and Escape lets go too. One game is shared by the panel, the
+sidebar card and the widget, on every display.
+
+- **Sudoku** deals a puzzle with exactly one solution at Easy, Medium,
+  Hard or Expert. Levels follow the techniques a puzzle needs: Easy needs
+  only singles, Medium also pointing and claiming, Hard pairs and triples,
+  Expert more than that. The same seed always deals the same puzzle
+  (`mandara msg sudoku new hard 42`). Arrows move, 1–9 write, Shift+digit
+  or **N** switches to pencil marks, Backspace erases, **H** gives a hint,
+  Ctrl+Z / Ctrl+Y undo and redo; the mouse and touch work with the number
+  pad and tools under the board. The timer counts only while the panel is
+  open, or while you play on the widget or the sidebar card (it stops after
+  a minute and a half without a key or click there, or when the widget lets
+  go of the keyboard). Settings: level, highlights (row,
+  column and box; the same digit), conflicts, the mistake counter, timer,
+  hints, clearing notes automatically, the accent colour and the time in
+  the bar.
+- **2048** slides with the arrows or WASD, a mouse drag or a finger swipe;
+  U or Ctrl+Z takes back one move. Tiles glide and pop on the shell's
+  springs only while they move (they jump with reduced motion or
+  Animations off). Reach 2048 to win, then keep going or start again.
+  Settings: board size (3–6, used for the next game), animations, undo,
+  the accent colour and the score in the bar.
+
+Both keep the game in progress (with Sudoku's notes and undo history),
+your best times, scores and statistics in
+`~/.local/state/mandara/games/`, written a moment after you play, never on
+every move. A file that can't be read is moved aside as `*.corrupt` and
+the game starts fresh. Nothing runs while neither game is on screen; the
+widgets use the cards' small surfaces and draw only when something
+changes. `mandara msg sudoku status|new|select|digit|note|erase|hint|undo|redo`
+and `mandara msg 2048 status|new|move|undo|continue` play them from a
+script.
 
 ## Jannah, Qur'an, Hadith and Prayer times
 
@@ -156,21 +207,35 @@ These four opt-in plugins share these things (the last two are for Jannah, the Q
   translation, a hadith collection's meaning); what was downloaded for
   another language stays.
 - **A peek.** *Previous* / *Next* under today's item shows another one
-  without marking anything: Jannah's reminder and the coming days' steps
-  (only today's step can be marked done), the Qur'an's ayah of the day and
-  the ayahs after your place (your place and khatm don't move), Hadith's
-  coming hadith (nothing is marked read), and Prayer times' other days.
-  *Back to today* returns; a peek is forgotten when the shell restarts.
-  From the command line: `jannah peek`, `jannah step peek`, `quran peek`,
-  `hadith peek`, `prayer peek`.
+  without marking anything: the coming days' Jannah steps (only today's
+  step can be marked done), the Qur'an's ayah of the day and the ayahs
+  after your place (your place and khatm don't move), Hadith's coming
+  hadith (nothing is marked read), and Prayer times' other days. *Back to
+  today* returns; a peek is forgotten when the shell restarts. From the
+  command line: `jannah step peek`, `quran peek`, `hadith peek`,
+  `prayer peek`.
+- **A fresh Jannah reminder every time you open it.** Each time the
+  Jannah panel or the sidebar opens, it shows a verse or hadith picked at
+  random from the ones you chose (Studio → Plugins → Jannah → *Reminders
+  from*); a panel and a sidebar card open together show the same one.
+  *Next* on the reminder shows another fresh one, and *Previous* goes back
+  through the ones you saw (`jannah next`, `jannah prev`; `jannah peek`
+  looks at another without changing it, `jannah peek -1` at the one
+  before). The reminder shows its own number among the ones it is drawn
+  from, such as *#104 of 230*: the same verse or hadith always has the
+  same number (`jannah today` reports it as `number` and `of`). The
+  desktop widgets keep theirs for the day (or the hour, with *New
+  reminder*). Today's step stays one step a day.
 - **Nothing you just read comes straight back.** *Next* never shows the
-  item you were on. Jannah's and Hadith's rotation walks every item once
-  per round in a shuffled order, and a new round never starts with any of
-  the previous round's last eight (a third of the items for a very small
-  list; two items simply alternate). Jannah's reminder shows its place in
-  the round (12 / 230). A Jannah desktop widget, which skips items too
-  long for it, walks its own list of the ones that fit. The Jannah and
-  Hadith readers stop at either end of a list instead of wrapping round.
+  item you were on. A fresh Jannah reminder is never one of the last 16
+  you saw (a third of the items for a very small choice; two items simply
+  alternate, one stays), and Jannah remembers them in
+  `~/.local/state/mandara/jannah-recent.json`, so a restart doesn't bring
+  them back either. Its desktop widgets, which skip items too long for
+  them, avoid those too. Hadith's rotation walks every hadith once per
+  round in a shuffled order, and a new round never starts with any of the
+  previous round's last eight. The Jannah and Hadith readers stop at
+  either end of a list instead of wrapping round.
 - **Every word, one click away.** The sidebar cards, the Hadith panel's
   hadith of the day and Jannah's step evidence fold long text to a few
   lines, ending after a whole word (never inside one, never between a
@@ -228,6 +293,58 @@ panel or `mandara msg prayer adhan stop`. The recording is
 by Adam-synagda, released into the public domain (CC0 1.0) on Wikimedia
 Commons, fetched as Commons' MP3 rendering; the same recording plays at
 Fajr.
+
+## Radio
+
+The **Radio** plugin (opt-in) plays internet radio in pure Rust: MP3, AAC
+and Ogg Vorbis streams, `.pls` and `.m3u` playlists and redirects, with the
+song title the station sends (ICY metadata). It plays to your sound server
+as "Mandara Radio" and offers itself to media keys, the media panel and
+other apps' controls (MPRIS), so the media island and the lock screen show
+what plays.
+
+- **Stations.** It ships about seventy stations on thirteen shelves (News,
+  Talk, Pop, Rock, Jazz, Classical, Electronic, Lo-fi & chill, Ambient,
+  World, Arabic, Qur'an recitation and Kids). Every one is a public, free
+  stream, and each was checked to connect and play on the date in the
+  source (`mandara-services/src/radio/station.rs`). Search them by name,
+  shelf, country or language, tap the heart to keep favourites (reorder
+  them with *Reorder*), and add your own by address in the *Add* tab:
+  Mandara listens for a moment first, so a station that wouldn't play is
+  never saved.
+- **The panel.** A large now-playing card (the station's art, a live
+  badge, the title, format, bitrate and buffer health, and a level meter),
+  previous / play / next, a favourite button, a sleep timer that fades the
+  sound out, and the volume slider in your chosen slider design.
+- **The bar** shows the station's art, a live dot and the title, which
+  scrolls only when it doesn't fit and stays still with reduced motion.
+  Right-click it to play or pause.
+- **The sidebar card** is a compact player: the station's art, what plays
+  with a live dot, a favourite heart, previous / play / next through your
+  favourites and the volume in your slider design. Put it on any sidebar tab
+  in Studio → Bars → Sidebar → **Tabs** (or
+  `mandara msg sidebar tab …`).
+- **The directory** (off until you switch it on) searches
+  [radio-browser.info](https://www.radio-browser.info) from the *Stations*
+  tab. Nothing is sent until you press its search button; results are kept
+  for ten minutes, then forgotten.
+- **When it drops.** A stream that drops reconnects on its own, waiting a
+  little longer each time, up to the number of tries you set; a wrong
+  address or an unsupported stream says why instead of retrying.
+- **Resources.** Nothing runs until you press play. While a station plays,
+  two threads stream and decode it through a buffer of a few seconds
+  (sized from the station's bitrate, so it never grows); pausing or
+  stopping ends them and frees the buffer. HLS (`.m3u8`) and Opus streams
+  aren't supported yet.
+
+Its settings (Studio → Plugins → Radio) cover the usual station and
+resuming at login, volume per station, reconnecting and the buffer, the
+sleep timer's length, notifications when the song changes, media keys, the
+bar item's style, the scrolling title's speed and width, the station art's
+colours, the level meter and stream details, which shelves appear, and the
+directory. Your favourites and stations live in
+`~/.local/state/mandara/radio.toml`. Commands: `mandara msg radio …`
+([commands](commands.md)).
 
 ## Wallpaper depth
 

@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 
 use gpui::{App, FontWeight};
 use mandara_config::ShellConfig;
-use mandara_config::desktop::SliderDesign;
+use mandara_config::desktop::{ButtonDesign, CardStyle, ChipDesign, InputDesign, ProgressDesign, SliderDesign, SurfaceCorners, ToggleDesign};
 use mandara_config::surfaces;
 
 /// Corner-radius multiplier bounds.
@@ -32,6 +32,15 @@ static BORDERS: AtomicBool = AtomicBool::new(true);
 static SLIDER_HANDLE: AtomicBool = AtomicBool::new(true);
 /// `style.slider_design`, as its index in [`SliderDesign::ALL`].
 static SLIDER_DESIGN: AtomicU8 = AtomicU8::new(0);
+/// The component designs (Themes → Components), each as its index in
+/// its design's `ALL`.
+static BUTTON_DESIGN: AtomicU8 = AtomicU8::new(0);
+static TOGGLE_DESIGN: AtomicU8 = AtomicU8::new(0);
+static INPUT_DESIGN: AtomicU8 = AtomicU8::new(0);
+static CHIP_DESIGN: AtomicU8 = AtomicU8::new(0);
+static PROGRESS_DESIGN: AtomicU8 = AtomicU8::new(0);
+static SURFACE_CORNERS: AtomicU8 = AtomicU8::new(0);
+static CARD_STYLE: AtomicU8 = AtomicU8::new(0);
 /// Body text weight, CSS scale.
 static WEIGHT: AtomicU32 = AtomicU32::new(mandara_config::defaults::FONT_WEIGHT_REGULAR as u32);
 
@@ -128,6 +137,53 @@ pub fn slider_design() -> SliderDesign {
     SliderDesign::ALL.get(usize::from(SLIDER_DESIGN.load(Ordering::Relaxed))).copied().unwrap_or_default()
 }
 
+/// `all[i]` for the index stored in `slot` (the first, classic one if
+/// out of range).
+fn design<T: Copy + Default>(slot: &AtomicU8, all: &[T]) -> T {
+    all.get(usize::from(slot.load(Ordering::Relaxed))).copied().unwrap_or_default()
+}
+
+/// Stores `value`'s index in `all` into `slot`.
+fn store_design<T: PartialEq>(slot: &AtomicU8, all: &[T], value: &T) {
+    let i = all.iter().position(|d| d == value).unwrap_or(0);
+    slot.store(u8::try_from(i).unwrap_or(0), Ordering::Relaxed);
+}
+
+/// The design of buttons (`style.button_design`).
+pub fn button_design() -> ButtonDesign {
+    design(&BUTTON_DESIGN, &ButtonDesign::ALL)
+}
+
+/// The design of switches, check boxes and radio buttons (`style.toggle_design`).
+pub fn toggle_design() -> ToggleDesign {
+    design(&TOGGLE_DESIGN, &ToggleDesign::ALL)
+}
+
+/// The design of text and search fields (`style.input_design`).
+pub fn input_design() -> InputDesign {
+    design(&INPUT_DESIGN, &InputDesign::ALL)
+}
+
+/// The design of chips and segmented choices (`style.chip_design`).
+pub fn chip_design() -> ChipDesign {
+    design(&CHIP_DESIGN, &ChipDesign::ALL)
+}
+
+/// The design of progress bars and meters (`style.progress_design`).
+pub fn progress_design() -> ProgressDesign {
+    design(&PROGRESS_DESIGN, &ProgressDesign::ALL)
+}
+
+/// The corner family of cards (`style.surface_corners`).
+pub fn surface_corners() -> SurfaceCorners {
+    design(&SURFACE_CORNERS, &SurfaceCorners::ALL)
+}
+
+/// How cards stand off their panel (`style.card_style`).
+pub fn card_style() -> CardStyle {
+    design(&CARD_STYLE, &CardStyle::ALL)
+}
+
 /// Body text weight.
 pub fn body_weight() -> FontWeight {
     FontWeight(WEIGHT.load(Ordering::Relaxed) as f32)
@@ -146,6 +202,14 @@ pub fn apply(cfg: &ShellConfig) {
     SLIDER_HANDLE.store(cfg.style.slider_handle == mandara_config::desktop::SliderHandle::Line, Ordering::Relaxed);
     let design = SliderDesign::ALL.iter().position(|d| *d == cfg.style.slider_design).unwrap_or(0);
     SLIDER_DESIGN.store(design as u8, Ordering::Relaxed);
+    let st = &cfg.style;
+    store_design(&BUTTON_DESIGN, &ButtonDesign::ALL, &st.button_design);
+    store_design(&TOGGLE_DESIGN, &ToggleDesign::ALL, &st.toggle_design);
+    store_design(&INPUT_DESIGN, &InputDesign::ALL, &st.input_design);
+    store_design(&CHIP_DESIGN, &ChipDesign::ALL, &st.chip_design);
+    store_design(&PROGRESS_DESIGN, &ProgressDesign::ALL, &st.progress_design);
+    store_design(&SURFACE_CORNERS, &SurfaceCorners::ALL, &st.surface_corners);
+    store_design(&CARD_STYLE, &CardStyle::ALL, &st.card_style);
     WEIGHT.store(u32::from(cfg.typography.weight.clamp(MIN_WEIGHT, MAX_WEIGHT)), Ordering::Relaxed);
     mandara_core::spring::set_time_scale(cfg.motion.speed);
     mandara_core::spring::set_motion_profile(motion_profile(cfg));
@@ -266,6 +330,15 @@ mod tests {
             cfg.style.slider_design = design;
             apply(&cfg);
             assert_eq!(slider_design(), design);
+        }
+        apply(&ShellConfig::default());
+        let classic = (button_design(), toggle_design(), input_design(), chip_design(), progress_design(), surface_corners(), card_style());
+        assert_eq!(classic, (ButtonDesign::Classic, ToggleDesign::Classic, InputDesign::Classic, ChipDesign::Classic, ProgressDesign::Classic, SurfaceCorners::Rounded, CardStyle::Tonal), "every component starts classic");
+        for preset in mandara_config::components::ComponentPreset::ALL {
+            preset.apply(&mut cfg.style);
+            apply(&cfg);
+            let d = preset.designs();
+            assert_eq!((button_design(), toggle_design(), input_design(), chip_design(), progress_design(), surface_corners(), card_style()), (d.button, d.toggle, d.input, d.chip, d.progress, d.corners, d.card), "{preset:?}");
         }
         apply(&ShellConfig::default());
     }

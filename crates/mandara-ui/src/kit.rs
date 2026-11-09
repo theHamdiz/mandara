@@ -75,7 +75,9 @@ pub mod text {
 /// A tonal card (no border).
 pub fn card(palette: &MandaraPalette) -> Div {
     // Children are clipped to the rounded corners.
-    crate::style::ClipRounded::clip_rounded(div().rounded(px(crate::style::card_radius())).bg(palette.surface_container.hsla()).p(px(crate::style::card_padding())))
+    // Shaped and lifted in the card designs of Themes → Components.
+    use crate::components::surfaces::{CardSurface as _, Fill};
+    div().clipped_card_surface(crate::style::card_radius(), Fill(palette.surface_container, None), Vec::new(), palette).p(px(crate::style::card_padding()))
 }
 
 /// Section title inside a panel or card.
@@ -136,7 +138,8 @@ pub fn toggle_tile(
         .on_click(move |_, window, cx| on_click(window, cx))
 }
 
-/// A soft round icon button.
+/// A soft round icon button, shaped in the button design picked under
+/// Themes → Components (`style.button_design`).
 pub fn icon_button(
     id: impl Into<ElementId>,
     icon_name: &'static str,
@@ -149,17 +152,18 @@ pub fn icon_button(
         .unwrap_or(fg.with_alpha(0.0))
         .mix(fg, alpha::PRESSED)
         .with_alpha(bg.map(|b| b.alpha()).unwrap_or(alpha::ICON_BUTTON_HOVER_MIN).max(alpha::ICON_BUTTON_HOVER_MIN));
-    div()
-        .id(id)
-        .size(px(size))
-        .flex_none()
-        .rounded_full()
-        .flex()
+    let id: ElementId = id.into();
+    let design = crate::style::button_design();
+    let el = div().id(id.clone()).size(px(size)).flex_none();
+    let el = if design == crate::components::ButtonDesign::Classic {
+        el.rounded_full().when_some(bg, |el, bg| el.bg(bg.hsla())).hover(move |s| s.bg(hover_bg.hsla()))
+    } else {
+        crate::components::buttons::dress(el, id, size, true, crate::components::buttons::Ink { bg, hover: hover_bg, outline: None }, design, None)
+    };
+    el.flex()
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .when_some(bg, |el, bg| el.bg(bg.hsla()))
-        .hover(move |s| s.bg(hover_bg.hsla()))
         .child(icon(icon_name, size * metrics::ICON_BUTTON_GLYPH, fg))
         // A right press on a button stays there: a row's or overlay's own
         // right-click action (restore, dismiss) must not fire through it.

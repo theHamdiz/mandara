@@ -62,6 +62,13 @@ fn apps_tab_target(target: &str) -> Option<app::apps_page::AppsTab> {
 /// A Wallpaper tab to show: `wallpaper/<wallpaper|slideshow|effects|generator|online>`,
 /// as passed by `mandara studio wallpaper --tab slideshow`. Without one the
 /// page opens on the Wallpaper tab.
+/// A Themes tab to open: `themes/components` (or `themes/colors`).
+fn themes_tab_target(target: &str) -> Option<app::looks_page::ThemesTab> {
+    let (section, tab) = target.split_once('/')?;
+    (resolve_section(section) == Some(registry::Section::Themes)).then_some(())?;
+    app::looks_page::ThemesTab::parse(tab.split('/').next()?)
+}
+
 fn wallpaper_tab_target(target: &str) -> Option<app::wallpaper_page::WallpaperTab> {
     let (section, tab) = target.split_once('/')?;
     (resolve_section(section) == Some(registry::Section::Wallpaper)).then_some(())?;
@@ -137,6 +144,7 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
     let tab = section.and_then(tab_target);
     let apps_tab = section.and_then(apps_tab_target);
     let wallpaper_tab = section.and_then(wallpaper_tab_target);
+    let themes_tab = section.and_then(themes_tab_target);
     let bars_tab = section.and_then(bars_tab_target);
     let desktop_widget = section.and_then(desktop_widget_target);
     // `power/<part>` scrolls the Power & idle page to that part.
@@ -161,6 +169,9 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
         }
         if let Some(tab) = wallpaper_tab {
             view.show_wallpaper_tab(tab, cx);
+        }
+        if let Some(tab) = themes_tab {
+            view.show_themes_tab(tab, cx);
         }
         if let Some(tab) = bars_tab {
             view.show_bars_tab(tab, cx);
@@ -283,6 +294,24 @@ pub fn run(section: Option<&str>, cx: &mut App) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn themes_deep_links_open_their_tab() {
+        use super::app::looks_page::ThemesTab;
+        use super::themes_tab_target;
+        assert_eq!(themes_tab_target("themes/components"), Some(ThemesTab::Components));
+        assert_eq!(themes_tab_target("Themes/presets"), Some(ThemesTab::Components));
+        assert_eq!(themes_tab_target("appearance/components"), Some(ThemesTab::Components), "a former page name still leads there");
+        assert_eq!(themes_tab_target("themes/colors"), Some(ThemesTab::Colors));
+        assert_eq!(themes_tab_target("themes"), None, "the page alone keeps its first tab");
+        assert_eq!(themes_tab_target("wallpaper/components"), None);
+        for tab in ThemesTab::ALL {
+            assert_eq!(ThemesTab::parse(tab.slug()), Some(tab));
+        }
+        // The cursor deep link still lands on the tab holding the cursor.
+        assert!(super::cursor_target("themes/cursor"));
+        assert_eq!(ThemesTab::parse("cursor"), Some(ThemesTab::Colors));
+    }
+
     use super::*;
     use registry::Section;
 

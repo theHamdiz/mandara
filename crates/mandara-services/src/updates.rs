@@ -8,13 +8,17 @@
 //! | apt     | `apt list --upgradable` (never `apt update`)      | `sudo apt update && sudo apt upgrade` |
 //! | dnf     | `dnf check-update` (exit 100 = updates)           | `sudo dnf upgrade`        |
 //! | zypper  | `zypper -q list-updates`                          | `sudo zypper update`      |
+//! | xbps    | `xbps-install -Mun` (in-memory repository sync)   | `sudo xbps-install -Su`   |
+//! | apk     | `apk list -u` (the cached index)                  | `sudo apk upgrade -U`     |
 //! | flatpak | `flatpak remote-ls --updates` + `flatpak list`    | `flatpak update`          |
 //!
 //! Without `checkupdates` the pacman source reports a hint instead of
-//! touching the system sync database. The shell never runs an update
-//! itself: [`open_terminal`] launches the user's terminal with the command
-//! so they authenticate and watch it there. The parsers are pure functions
-//! (fixture-tested); checks run with `LANG=C` and a timeout.
+//! touching the system sync database. Installing the updates is
+//! [`crate::sysupdate`]'s job (in the panel, with progress); the commands
+//! here are for the terminal fallback ([`open_terminal`]): AUR helpers,
+//! image-based systems, or when the user prefers a terminal. The parsers
+//! are pure functions (fixture-tested); checks run with `LANG=C` and a
+//! timeout.
 
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
@@ -37,6 +41,9 @@ pub const ARCH_NEWS_URL: &str = "https://archlinux.org/feeds/news/";
 pub const NEWS_ITEMS: usize = 5;
 /// `checkupdates` exit status meaning "no updates".
 const CHECKUPDATES_NONE: i32 = 2;
+/// Present on Alpine (apk's list of wanted packages); an `apk` binary
+/// alone may be another tool.
+const APK_WORLD: &str = "/etc/apk/world";
 /// `dnf check-update` exit status meaning "updates available".
 const DNF_UPDATES: i32 = 100;
 /// Terminals tried, in order, when none is configured.
@@ -50,11 +57,13 @@ pub enum SourceKind {
     Apt,
     Dnf,
     Zypper,
+    Xbps,
+    Apk,
     Flatpak,
 }
 
 impl SourceKind {
-    pub const ALL: [SourceKind; 6] = [SourceKind::Pacman, SourceKind::Aur, SourceKind::Apt, SourceKind::Dnf, SourceKind::Zypper, SourceKind::Flatpak];
+    pub const ALL: [SourceKind; 8] = [SourceKind::Pacman, SourceKind::Aur, SourceKind::Apt, SourceKind::Dnf, SourceKind::Zypper, SourceKind::Xbps, SourceKind::Apk, SourceKind::Flatpak];
 
     /// Command-line name (`updates run pacman`).
     pub fn id(self) -> &'static str {
@@ -64,6 +73,8 @@ impl SourceKind {
             SourceKind::Apt => "apt",
             SourceKind::Dnf => "dnf",
             SourceKind::Zypper => "zypper",
+            SourceKind::Xbps => "xbps",
+            SourceKind::Apk => "apk",
             SourceKind::Flatpak => "flatpak",
         }
     }
@@ -80,6 +91,8 @@ impl SourceKind {
             SourceKind::Apt => "APT",
             SourceKind::Dnf => "DNF",
             SourceKind::Zypper => "Zypper",
+            SourceKind::Xbps => "XBPS",
+            SourceKind::Apk => "apk",
             SourceKind::Flatpak => "Flatpak",
         }
     }
@@ -179,6 +192,8 @@ pub fn update_command(kind: SourceKind, helper: Option<&str>) -> String {
         SourceKind::Apt => "sudo apt update && sudo apt upgrade".into(),
         SourceKind::Dnf => "sudo dnf upgrade".into(),
         SourceKind::Zypper => "sudo zypper update".into(),
+        SourceKind::Xbps => "sudo xbps-install -Su".into(),
+        SourceKind::Apk => "sudo apk upgrade -U".into(),
         SourceKind::Flatpak => "flatpak update".into(),
     }
 }
@@ -221,6 +236,12 @@ pub fn detect(opts: CheckOptions) -> Vec<Source> {
     }
     if has("zypper") {
         out.push(Source { kind: SourceKind::Zypper, tool: Some("zypper".into()), command: update_command(SourceKind::Zypper, None) });
+    }
+    if has("xbps-install") {
+        out.push(Source { kind: SourceKind::Xbps, tool: Some("xbps-install".into()), command: update_command(SourceKind::Xbps, None) });
+    }
+    if has("apk") && Path::new(APK_WORLD).exists() {
+        out.push(Source { kind: SourceKind::Apk, tool: Some("apk".into()), command: update_command(SourceKind::Apk, None) });
     }
     if opts.flatpak && has("flatpak") {
         out.push(Source { kind: SourceKind::Flatpak, tool: Some("flatpak".into()), command: update_command(SourceKind::Flatpak, None) });
@@ -314,6 +335,14 @@ fn check_source(source: &Source) -> SourceReport {
         }),
         SourceKind::Zypper => run(tool, &["-q", "--non-interactive", "list-updates"], CHECK_TIMEOUT).and_then(|(code, out, err)| match code {
             Some(0) => Ok(parse_zypper(&out)),
+            _ => Err(failed(tool, code, &err)),
+        }),
+        SourceKind::Xbps => run(tool, &["-Mun"], CHECK_TIMEOUT).and_then(|(code, out, err)| match code {
+            Some(0) => Ok(parse_xbps(&out)),
+            _ => Err(failed(tool, code, &err)),
+        }),
+        SourceKind::Apk => run(tool, &["list", "-u"], CHECK_TIMEOUT).and_then(|(code, out, err)| match code {
+            Some(0) => Ok(parse_apk(&out)),
             _ => Err(failed(tool, code, &err)),
         }),
         SourceKind::Flatpak => {
@@ -434,6 +463,43 @@ pub fn parse_zypper(text: &str) -> Vec<Package> {
         out.push(Package::new(name, get(cols.2), get(cols.3), Some(get(cols.0))));
     }
     out
+}
+
+/// `xbps-install -Mun` (a dry run): `pkgver action arch repo size size`
+/// rows; installs and updates are listed (the old version isn't shown).
+pub fn parse_xbps(text: &str) -> Vec<Package> {
+    text.lines()
+        .filter_map(|line| {
+            let mut w = line.split_whitespace();
+            let (pkgver, action) = (w.next()?, w.next()?);
+            if !matches!(action, "update" | "install" | "downgrade") {
+                return None;
+            }
+            let (name, version) = pkgver.rsplit_once('-')?;
+            let repo = w.nth(1).and_then(|r| r.rsplit('/').next());
+            Some(Package::new(name, "", version, repo))
+        })
+        .collect()
+}
+
+/// `name-1.2.3-r4` → (`name`, `1.2.3-r4`): apk versions end in `-r<n>`.
+fn apk_split(pkgver: &str) -> Option<(&str, &str)> {
+    let (rest, _) = pkgver.rsplit_once('-')?;
+    let (name, _) = rest.rsplit_once('-')?;
+    Some((name, &pkgver[name.len() + 1..]))
+}
+
+/// `apk list -u`: `busybox-1.36.1-r21 x86_64 {busybox} (GPL-2.0-only)
+/// [upgradable from: busybox-1.36.1-r15]`.
+pub fn parse_apk(text: &str) -> Vec<Package> {
+    text.lines()
+        .filter_map(|line| {
+            let (head, from) = line.split_once("[upgradable from: ")?;
+            let (name, new) = apk_split(head.split_whitespace().next()?)?;
+            let old = apk_split(from.trim().trim_end_matches(']')).map_or("", |(_, v)| v);
+            Some(Package::new(name, old, new, None))
+        })
+        .collect()
 }
 
 /// `flatpak remote-ls --updates` and `flatpak list`, both with
@@ -662,6 +728,16 @@ mod tests {
     fn parses_zypper_table() {
         let p = parse_zypper(ZYPPER);
         assert_eq!(p, vec![Package::new("bash", "5.2.15-1.1", "5.2.21-1.1", Some("repo-oss")), Package::new("vim", "9.0.1-1", "9.0.2-1", Some("repo-update"))]);
+    }
+
+    /// Recorded in clean Void (xbps 0.59) and Alpine 3.19 containers.
+    #[test]
+    fn parses_xbps_and_apk() {
+        let x = parse_xbps("libxcrypt-compat-4.4.38_1 install x86_64 https://repo-default.voidlinux.org/current 206920 89590\nglibc-2.41_1 update x86_64 https://repo-default.voidlinux.org/current 33363382 9170635\n");
+        assert_eq!(x, vec![Package::new("libxcrypt-compat", "", "4.4.38_1", Some("current")), Package::new("glibc", "", "2.41_1", Some("current"))]);
+        let a = parse_apk("busybox-binsh-1.36.1-r21 x86_64 {busybox} (GPL-2.0-only) [upgradable from: busybox-binsh-1.36.1-r15]\nmusl-1.2.4_git20230717-r6 x86_64 {musl} (MIT) [upgradable from: musl-1.2.4_git20230717-r4]\nnoise\n");
+        assert_eq!(a, vec![Package::new("busybox-binsh", "1.36.1-r15", "1.36.1-r21", None), Package::new("musl", "1.2.4_git20230717-r4", "1.2.4_git20230717-r6", None)]);
+        assert_eq!(SourceKind::from_id("xbps"), Some(SourceKind::Xbps));
     }
 
     #[test]

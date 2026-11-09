@@ -29,6 +29,7 @@ const JOINED_IS_FRAME: &str = tk("Joined side bars hang from the bar as one fram
 const FLARES_ONLY: &str = tk("Joined side bars and the slab only");
 const RIM_FIRST: &str = tk("Turn on Rim light first");
 const WASH_FIRST: &str = tk("Pick pills or islands for the items first");
+const PILLS_FIRST: &str = tk("Pick pill items first");
 const UNPIN_FIRST: &str = tk("Unpin a side bar first");
 const SIDE_OFF: &str = tk("Turn on this side bar first");
 const JOINED_EDGE_FRAME: &str = tk("Joined side bars draw the bar as the edge frame; your style comes back when they're separate");
@@ -45,9 +46,19 @@ pub fn entries() -> Vec<Setting> {
         s(Bars, SIDE_BARS, "/side_bars/left/enabled", tk("Left side bar"), tk("Show the bar on the left edge"), Toggle),
         s(Bars, SIDE_BARS, "/side_bars/left/pinned", tk("Pin the left side bar"), tk("Pinned, it stays and windows tile beside it; unpinned, it slides away and comes back when the pointer touches the edge"), Toggle),
         s(Bars, SIDE_BARS, "/side_bars/left/accent", tk("Left accent"), tk("The colour its items light up and wash with"), Choice(ACCENTS)),
+        s(Bars, SIDE_BARS, "/side_bars/left/chips", tk("Left item style"), tk("The left bar's own items: bare icons, pills or islands, or the shared item style"), Choice(OWN_CHIPS)),
+        s(Bars, SIDE_BARS, "/side_bars/left/item_shape", tk("Left item shape"), tk("The left bar's own item shape, or the bar's"), Choice(OWN_ITEM_SHAPES)),
+        s(Bars, SIDE_BARS, "/side_bars/left/icon_shape", tk("Left icon shape"), tk("The left bar's own icon shape, or the shared one"), Choice(OWN_ICON_SHAPES)),
+        s(Bars, SIDE_BARS, "/side_bars/left/icon_fill", tk("Left icon colour"), tk("The left bar's own icon colour, or the bar's"), Choice(OWN_ICON_FILLS)),
+        s(Bars, SIDE_BARS, "/side_bars/left/item_inset", tk("Left item inset"), tk("Space between the left bar's items and its long edges (unset: Item size)"), own_inset()),
         s(Bars, SIDE_BARS, "/side_bars/right/enabled", tk("Right side bar"), tk("Show the bar on the right edge"), Toggle),
         s(Bars, SIDE_BARS, "/side_bars/right/pinned", tk("Pin the right side bar"), tk("Pinned, it stays and windows tile beside it; unpinned, it slides away and comes back when the pointer touches the edge"), Toggle),
         s(Bars, SIDE_BARS, "/side_bars/right/accent", tk("Right accent"), tk("The colour its items light up and wash with"), Choice(ACCENTS)),
+        s(Bars, SIDE_BARS, "/side_bars/right/chips", tk("Right item style"), tk("The right bar's own items: bare icons, pills or islands, or the shared item style"), Choice(OWN_CHIPS)),
+        s(Bars, SIDE_BARS, "/side_bars/right/item_shape", tk("Right item shape"), tk("The right bar's own item shape, or the bar's"), Choice(OWN_ITEM_SHAPES)),
+        s(Bars, SIDE_BARS, "/side_bars/right/icon_shape", tk("Right icon shape"), tk("The right bar's own icon shape, or the shared one"), Choice(OWN_ICON_SHAPES)),
+        s(Bars, SIDE_BARS, "/side_bars/right/icon_fill", tk("Right icon colour"), tk("The right bar's own icon colour, or the bar's"), Choice(OWN_ICON_FILLS)),
+        s(Bars, SIDE_BARS, "/side_bars/right/item_inset", tk("Right item inset"), tk("Space between the right bar's items and its long edges (unset: Item size)"), own_inset()),
         s(Bars, SIDE_BARS, "/side_bars/reveal_delay_ms", tk("Reveal delay"), tk("How long the pointer rests on the edge before an unpinned side bar slides out"), ms(ranges::REVEAL_DELAY_MS)),
         s(Bars, SIDE_BARS, "/side_bars/hide_delay_ms", tk("Hide delay"), tk("How long an unpinned side bar waits after the pointer leaves before it slides away"), ms(ranges::HIDE_DELAY_MS)),
         // Bar → Side bar shape
@@ -59,6 +70,7 @@ pub fn entries() -> Vec<Setting> {
         s(Bars, SIDE_BAR_SHAPE, "/side_bars/align", tk("Middle group"), tk("Where the middle group sits along the edge"), Choice(ALIGN)),
         // Bar → Side bar items
         s(Bars, SIDE_BAR_ITEMS, "/side_bars/chips", tk("Item style"), tk("Bare icons, every item on its own pill, or each group on one island"), Choice(CHIPS)),
+        s(Bars, SIDE_BAR_ITEMS, "/side_bars/icon_shape", tk("Icon shape"), tk("The shape of icon-sized pill items; the bar's own shape, or a round Material 3 Expressive shape"), Choice(super::surface_settings::SIDE_ICON_SHAPES)),
         s(Bars, SIDE_BAR_ITEMS, "/side_bars/chip_size", tk("Item size"), tk("How wide each item is across the side bar"), span(ranges::CHIP_SIZE, " px")),
         s(Bars, SIDE_BAR_ITEMS, "/side_bars/chip_padding", tk("Item padding"), tk("Space above and below each item's content"), span(ranges::CHIP_PADDING, " px")),
         s(Bars, SIDE_BAR_ITEMS, "/side_bars/chip_spacing", tk("Item spacing"), tk("Gap between neighbouring items"), span(ranges::CHIP_SPACING, " px")),
@@ -75,6 +87,19 @@ pub fn entries() -> Vec<Setting> {
 
 /// Why the side bar setting at `path` (or a bar / sidebar setting the side
 /// bars override) has no effect under `cfg`.
+/// One bar's own look (`null`: follow the shared one).
+const OWN_CHIPS: &[(&str, &str)] = &[("null", tk("Shared")), ("icons", tk("Icons")), ("pills", tk("Pills")), ("island", tk("Island"))];
+const OWN_ITEM_SHAPES: &[(&str, &str)] = &[("null", tk("Same as the bar")), ("capsule", tk("Capsule")), ("tile", tk("Rounded tile")), ("squircle", tk("Squircle")), ("connected", tk("Connected group"))];
+const OWN_ICON_SHAPES: &[(&str, &str)] = &[("null", tk("Shared")), ("match", tk("Same as items")), ("circle", tk("Circle")), ("cookie", tk("Cookie")), ("clover", tk("Clover")), ("flower", tk("Flower")), ("burst", tk("Burst")), ("squircle", tk("Squircle"))];
+const OWN_ICON_FILLS: &[(&str, &str)] = &[("null", tk("Same as the bar")), ("match", tk("Capsule colour")), ("accent", tk("Accent")), ("tertiary", tk("Tertiary"))];
+
+fn own_inset() -> Control {
+    Control::OptionalSlider { min: f64::from(ranges::ITEM_INSET.min), max: f64::from(ranges::ITEM_INSET.max), step: f64::from(ranges::ITEM_INSET.step), unit: " px", default: f64::from(OWN_INSET_DEFAULT_PX) }
+}
+
+/// Where a bar's own item inset slider starts.
+const OWN_INSET_DEFAULT_PX: f32 = 3.0;
+
 pub fn locked(path: &str, cfg: &ShellConfig) -> Option<&'static str> {
     let sb = &cfg.side_bars;
     let joined = cfg.side_bars_join();
@@ -96,9 +121,13 @@ pub fn locked(path: &str, cfg: &ShellConfig) -> Option<&'static str> {
         "flare_radius" if !joined && sb.shape != SideBarShape::Slab => Some(FLARES_ONLY),
         "rim_intensity" if !sb.rim => Some(RIM_FIRST),
         "chip_fill" if sb.chips == SideBarChips::Icons => Some(WASH_FIRST),
+        // A side bar with pill items of its own still follows the shared shape.
+        "icon_shape" if [false, true].into_iter().all(|right| sb.items(right, &cfg.bar).chips != SideBarChips::Pills) => Some(PILLS_FIRST),
         "reveal_delay_ms" | "hide_delay_ms" if sb.left.pinned && sb.right.pinned => Some(UNPIN_FIRST),
-        "left/pinned" | "left/accent" if !sb.left.enabled => Some(SIDE_OFF),
-        "right/pinned" | "right/accent" if !sb.right.enabled => Some(SIDE_OFF),
+        "left/pinned" | "left/accent" | "left/chips" | "left/item_shape" | "left/icon_shape" | "left/icon_fill" | "left/item_inset" if !sb.left.enabled => Some(SIDE_OFF),
+        "right/pinned" | "right/accent" | "right/chips" | "right/item_shape" | "right/icon_shape" | "right/icon_fill" | "right/item_inset" if !sb.right.enabled => Some(SIDE_OFF),
+        "left/item_shape" | "left/icon_shape" | "left/icon_fill" if sb.items(false, &cfg.bar).chips != SideBarChips::Pills => Some(PILLS_FIRST),
+        "right/item_shape" | "right/icon_shape" | "right/icon_fill" if sb.items(true, &cfg.bar).chips != SideBarChips::Pills => Some(PILLS_FIRST),
         _ => None,
     }
 }
@@ -132,5 +161,29 @@ mod tests {
         assert_eq!(locked("/side_bars/chip_fill", &cfg), Some(WASH_FIRST));
         cfg.side_bars.left.enabled = false;
         assert_eq!(locked("/side_bars/left/accent", &cfg), Some(SIDE_OFF));
+        assert_eq!(locked("/side_bars/left/item_shape", &cfg), Some(SIDE_OFF));
+        // One bar's own shapes need pill items (its own or the shared).
+        assert_eq!(locked("/side_bars/right/item_shape", &cfg), Some(PILLS_FIRST));
+        mandara_config::bar_styles::BarStyle::Rail.apply_to_side(&mut cfg, true);
+        assert_eq!(locked("/side_bars/right/item_shape", &cfg), None, "a style gives it pills");
+        assert_eq!(locked("/side_bars/right/item_inset", &cfg), None);
+    }
+
+    /// The shared icon shape is open while any side bar draws pill items,
+    /// its own or the shared ones, and locked only when none does.
+    #[test]
+    fn the_shared_icon_shape_follows_each_side_bars_items() {
+        let mut cfg = ShellConfig::default();
+        cfg.side_bars.enabled = true;
+        cfg.side_bars.chips = SideBarChips::Icons;
+        assert_eq!(locked("/side_bars/icon_shape", &cfg), Some(PILLS_FIRST));
+        cfg.side_bars.right.chips = Some(SideBarChips::Pills);
+        assert_eq!(locked("/side_bars/icon_shape", &cfg), None, "the right bar's own pills follow the shared shape");
+        cfg.side_bars.right.chips = None;
+        cfg.side_bars.chips = SideBarChips::Pills;
+        assert_eq!(locked("/side_bars/icon_shape", &cfg), None);
+        cfg.side_bars.left.chips = Some(SideBarChips::Icons);
+        cfg.side_bars.right.chips = Some(SideBarChips::Icons);
+        assert_eq!(locked("/side_bars/icon_shape", &cfg), Some(PILLS_FIRST), "both bars chose plain icons");
     }
 }

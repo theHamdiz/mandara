@@ -65,11 +65,13 @@ mandara msg theme mode toggle
 mandara msg look apply corniche-dusk        # look list; look restore brings back your own setup
 mandara msg bar position left               # top|bottom|left|right (left/right = the side bar)
 mandara msg bar layout hairline             # edge-frame|glass-pills|island|hairline|micro|notch|next
+mandara msg bar style expressive            # expressive|tile-dock|rail|segmented: a style preset's look (your items stay); none puts back the plain bar
 mandara msg bar hide                        # put the bar away and free its space until bar show (bar toggle flips it; not saved)
 mandara msg side-bars on                    # the left and right side bars of plugin chips: on|off|toggle; side-bars status
 mandara msg side-bars join off              # one frame with the top bar, or floating apart: on|off|toggle
 mandara msg side-bar pin right off          # pinned (reserves space) or sliding away until the pointer touches the edge
 mandara msg side-bar show left off          # show or hide one side: on|off|toggle
+mandara msg side-bar style right tile-dock  # one side bar's own item look: expressive|tile-dock|rail|segmented|none
 mandara msg desktop edit                    # move, resize, add and remove desktop widgets on the desktop (off|toggle)
 mandara msg desktop widgets hide            # show|hide|toggle every desktop widget at once
 mandara msg desktop widgets press todo-1 todo:3   # what a click on a widget does: todo:<id>, toggle:<wifi|dnd|…>, pomodoro, media:<play-pause|next|previous>, level:volume:0.4, step:brightness:1, copy:<text>, open:<path|url>, launch:<app>, next, refresh, panel:<id>, search, studio:<page>, read:<jannah|quran|hadith>:<ref>
@@ -211,6 +213,8 @@ mandara msg audio mute-all toggle     # on|off|toggle|status: every output and a
 mandara msg privacy status            # who uses the microphone, camera or screen
 mandara msg tray menu "Input Method"  # tray status|activate|secondary|scroll
 mandara msg soundscapes preset corniche-night   # play|pause|toggle|status, volume <layer|master> <0-100>, sleep <min|off>
+mandara msg radio play fip-jazz                 # play [station], pause|toggle|stop|next|previous|status, volume <0-100>, mute, sleep <min|off>
+mandara msg radio stations jazz                 # list (a shelf); favourite <station>, add <url> [name], remove <station>
 ```
 
 ## Displays and night light
@@ -329,7 +333,7 @@ mandara msg keybinds toggle          # show, hide, list (every shortcut as JSON)
 mandara msg breaks status            # now [short|long], skip, snooze [minutes], pause [minutes], resume
 mandara msg presentation toggle      # on, off, status
 mandara msg share clipboard          # text <text>, file <path>, screenshot, stop, status
-mandara msg jannah today             # next, prev, peek [n], show <ref>, search <query>, paths, step [done|peek [days]], saved, language [code|follow]
+mandara msg jannah today             # the reminder on screen; next (a fresh one), prev (the one before), peek [n], show <ref>, search <query>, paths, step [done|peek [days]], saved, language [code|follow]
 mandara msg quran open                 # open the panel without a verse reference
 mandara msg jannah open                # open the panel without a hadith reference
 mandara msg quran read 2:255           # surahs, today, peek [days], search <q>, play <ref|surah>, pause, resume, stop, bookmark add|remove <ref>, download, status, remove, language [code|follow]
@@ -479,7 +483,22 @@ The UI stays responsive while the request runs.
 ```bash
 mandara msg translate languages
 mandara msg translate text ar Good morning
+mandara msg feeds list
+mandara msg feeds subscribe blog.rust-lang.org News
+mandara msg feeds discover example.org
+mandara msg feeds refresh
 mandara msg feeds refresh https://example.org/feed.xml
+mandara msg feeds items https://example.org/feed.xml
+mandara msg feeds read https://example.org/feed.xml https://example.org/post
+mandara msg feeds save https://example.org/feed.xml https://example.org/post
+mandara msg feeds read-all
+mandara msg feeds import ~/Downloads/subscriptions.opml
+mandara msg feeds export ~/feeds.opml
+mandara msg reddit open r/linux
+mandara msg reddit posts linux top week
+mandara msg reddit thread https://www.reddit.com/r/linux/comments/abc123/
+mandara msg reddit subscribe r/rust
+mandara msg reddit status
 mandara msg phone devices
 mandara msg phone action DEVICE_ID ring
 mandara msg phone send DEVICE_ID Hello from my desktop

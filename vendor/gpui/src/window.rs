@@ -2359,6 +2359,16 @@ impl ContentMask<Pixels> {
         }
     }
 
+    /// Mandara patch: the mask an element's own painted outline is drawn under when
+    /// its container (whose overflow mask is `self`) clips its other children: the
+    /// container's rectangle within `outer`, the mask that was current before the
+    /// container pushed `self`. The container's own corner radii are dropped (so an
+    /// outline that reaches past them, such as a cut or squircle corner, stays whole);
+    /// the ancestors' clip and their rounded corners are kept.
+    pub fn outline_within(&self, outer: &Self) -> Self {
+        outer.intersect(&ContentMask::rect(self.bounds))
+    }
+
     /// Intersect the content mask with the given content mask (Mandara patch: keeping
     /// rounded corners; see [`intersect_content_masks`]).
     pub fn intersect(&self, other: &Self) -> Self {
@@ -4323,6 +4333,24 @@ impl Window {
         } else {
             f(self)
         }
+    }
+
+    /// Mandara patch: runs `f` under [`ContentMask::outline_within`] of the innermost
+    /// content mask: the clip that applied before it was pushed, within its rectangle.
+    /// A child painting its clipping container's own outline (a shape the container's
+    /// rounded mask would round off) calls this; only that container may be the
+    /// innermost mask, so the container must clip (and the painter must not).
+    pub fn with_outer_content_mask<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.invalidator.debug_assert_paint_or_prepaint();
+        let Some(inner) = self.content_mask_stack.pop() else {
+            return f(self);
+        };
+        let outline = inner.outline_within(&self.content_mask());
+        self.content_mask_stack.push(outline);
+        let result = f(self);
+        self.content_mask_stack.pop();
+        self.content_mask_stack.push(inner);
+        result
     }
 
     /// Updates the global element offset relative to the current offset. This is used to implement

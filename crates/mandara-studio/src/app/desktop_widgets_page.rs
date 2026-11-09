@@ -1523,6 +1523,14 @@ impl StudioView {
                 let locale = TextOptions { numerals: opts.numerals, calendar: opts.calendar, language: opts.language.clone(), ..TextOptions::default() };
                 rows.extend(plugin_text_rows(&id, &locale, p, cx));
             }
+            WidgetKind::Card(c) if dc::GAMES.contains(&c.card.as_str()) => {
+                let opts: dc::GameCardOptions = dc::options(c);
+                let card = c.card.clone();
+                let width = opts.width(&card);
+                rows.push(row(p, t("Width"), slider(&id, "gw", width, (dc::ranges::GAME_WIDTH.min, dc::ranges::GAME_WIDTH.max), dc::ranges::GAME_WIDTH.step, " px", Rc::new(|w, v| game_card_edit(w, |o| o.width = v)), p)));
+                rows.push(choice_row(t("Style"), &id, "gstyle", opts.style, &GAME_STYLES, Rc::new(|w, v| game_card_edit(w, |o| o.style = v)), p, cx));
+                rows.push(hint(t("Click the game on the desktop to play it with the keyboard; click anywhere else to give the keyboard back. Its rules are in Studio → Plugins."), p));
+            }
             WidgetKind::Card(_) => rows.push(hint(t("An interactive card — its own settings are with the cards."), p)),
         }
         rows
@@ -1705,6 +1713,18 @@ fn locale_set<T: 'static>(f: fn(&mut TextOptions, T)) -> Set<T> {
             f(l, v)
         }
     })
+}
+
+/// How a game widget is drawn.
+const GAME_STYLES: [(dc::GameStyle, &str); 3] = [(dc::GameStyle::Glass, tk("Glass")), (dc::GameStyle::Solid, tk("Solid")), (dc::GameStyle::Minimal, tk("Minimal"))];
+
+/// Edits a game card's options.
+fn game_card_edit(w: &mut DesktopWidget, f: impl FnOnce(&mut dc::GameCardOptions)) {
+    if let WidgetKind::Card(c) = &mut w.kind {
+        let mut o: dc::GameCardOptions = dc::options(c);
+        f(&mut o);
+        dc::set_options(c, &o);
+    }
 }
 
 /// Edits a plugin card's options.

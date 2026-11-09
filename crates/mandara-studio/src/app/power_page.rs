@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 
 use gpui::{AnyElement, Bounds, ClickEvent, Pixels, canvas, point, Context, FontWeight, Global, InteractiveElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _, px};
 use mandara_config::ShellConfig;
-use mandara_config::power::{HookEvent, HookRule, IdleBehavior, IdleTimeouts, PowerSource, SessionEntry, SessionEntryKind, SessionMenuPosition, SessionMenuStyle};
+use mandara_config::power::{HookEvent, HookRule, IdleBehavior, IdleTimeouts, PowerSource, SessionCardsLayout, SessionEntry, SessionEntryKind, SessionMenuPosition, SessionMenuStyle};
 use mandara_core::ToGpui;
 use mandara_i18n::{t, tf, tk, tr};
 use mandara_theme::MandaraPalette;
@@ -58,6 +58,8 @@ const TIMELINE_H_PX: f32 = 54.0;
 /// Session-menu miniature tiles.
 const MINI_TILE_PX: f32 = 34.0;
 const MINI_ICON_PX: f32 = 15.0;
+/// The preview's cards wrap after this many to a line.
+const MINI_CARDS_PER_LINE: usize = 5;
 /// List row app glyph.
 const ROW_ICON_PX: f32 = 16.0;
 /// Hook runs listed.
@@ -702,11 +704,16 @@ impl StudioView {
                 .when(menu.show_shortcuts && i < 9, |el| el.child(div().absolute().top(px(1.0)).inset_end(px(SPACE_3_PX)).text_size(px(TEXT_9_5_PX)).text_color(fg.with_alpha(ALPHA_70).hsla()).child((i + 1).to_string())))
         });
         let grid = menu.style == SessionMenuStyle::Grid;
+        let cards = menu.style == SessionMenuStyle::Cards;
         let cols = usize::from(menu.grid_columns).clamp(1, visible.len().max(1));
-        let body = if grid {
-            div().w(px(cols as f32 * (MINI_TILE_PX + SPACE_6_PX))).row().flex_wrap().gap(px(SPACE_6_PX)).children(tiles)
-        } else {
-            div().row().flex_col().gap(px(SPACE_6_PX)).children(tiles)
+        // Cards: separate tiles with wider gaps, up to five to a line.
+        let per_line = visible.len().clamp(1, MINI_CARDS_PER_LINE);
+        let line_px = |count: usize| count as f32 * (MINI_TILE_PX + SPACE_10_PX) - SPACE_10_PX;
+        let body = match menu.style {
+            SessionMenuStyle::Grid => div().w(px(cols as f32 * (MINI_TILE_PX + SPACE_6_PX))).row().flex_wrap().gap(px(SPACE_6_PX)).children(tiles),
+            SessionMenuStyle::Cards if menu.cards_layout == SessionCardsLayout::Row => div().w(px(line_px(per_line))).row().flex_wrap().justify_center().gap(px(SPACE_10_PX)).children(tiles),
+            SessionMenuStyle::Cards => div().h(px(line_px(per_line))).row().flex_col().flex_wrap().justify_center().gap(px(SPACE_10_PX)).children(tiles),
+            SessionMenuStyle::Dock => div().row().flex_col().gap(px(SPACE_6_PX)).children(tiles),
         };
         let hint = match visible.iter().find(|e| e.kind.id() == menu.default_action) {
             Some(e) => tf("Opens on “{entry}”", &[("entry", &entry_label(e))]),
@@ -714,11 +721,14 @@ impl StudioView {
         };
         let title = if grid {
             t("Grid").to_string()
+        } else if cards {
+            let layout = registry::MENU_CARD_LAYOUTS.iter().find(|(id, _)| *id == menu.cards_layout.id()).map_or("", |(_, label)| t(label));
+            format!("{} · {layout}", t("Cards"))
         } else {
             let position = registry::MENU_POSITIONS.iter().find(|(id, _)| *id == menu.position.id()).map_or("", |(_, label)| t(label));
             format!("{} · {position}", t("Edge dock"))
         };
-        let place = (!grid).then(|| position_note(cfg, menu.position)).flatten();
+        let place = (menu.style == SessionMenuStyle::Dock).then(|| position_note(cfg, menu.position)).flatten();
         div()
             .row()
             .items_center()
@@ -895,30 +905,28 @@ fn row_card(p: &MandaraPalette) -> gpui::Div {
 }
 
 fn delete_button(id: SharedString, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .size(px(DIM_32_PX))
-        .flex_none()
-        .rounded_full()
+    use mandara_ui::components::buttons::{Ink, designed};
+    let hover = p.urgent_coral.with_alpha(ALPHA_14);
+    let id = gpui::ElementId::from(id);
+    let el = div().id(id.clone()).size(px(DIM_32_PX)).flex_none();
+    designed(el, id, DIM_32_PX, true, Ink { bg: None, hover, outline: None }, Some(p), |el| el.rounded_full().hover(move |s| s.bg(hover.hsla())))
         .row()
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .hover(|s| s.bg(p.urgent_coral.with_alpha(ALPHA_14).hsla()))
         .child(icon("trash", ICON_15_PX, p.on_surface_variant))
 }
 
 fn add_button(id: &'static str, label: &str, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .h(px(DIM_34_PX))
-        .px(px(SPACE_14_PX))
-        .rounded_full()
+    use mandara_ui::components::buttons::{Ink, designed};
+    let fill = p.primary.with_alpha(ALPHA_14);
+    // The classic button has no hover; the designs deepen its tint.
+    let el = div().id(id).h(px(DIM_34_PX)).px(px(SPACE_14_PX));
+    designed(el, id, DIM_34_PX, false, Ink { bg: Some(fill), hover: fill.mix(p.primary, ALPHA_8), outline: None }, Some(p), |el| el.rounded_full().bg(fill.hsla()))
         .row()
         .items_center()
         .gap(px(SPACE_6_PX))
         .cursor_pointer()
-        .bg(p.primary.with_alpha(ALPHA_14).hsla())
         .text_color(p.primary.hsla())
         .font_weight(FontWeight::MEDIUM)
         .child(icon("plus", ICON_14_PX, p.primary))
@@ -1012,6 +1020,24 @@ mod position_tests {
         // Every position has a label in the Studio choice.
         for p in SessionMenuPosition::ALL {
             assert!(registry::MENU_POSITIONS.iter().any(|(id, _)| *id == p.id()), "{p:?}");
+        }
+    }
+
+    #[test]
+    fn the_cards_style_locks_the_position_and_unlocks_its_layout() {
+        use mandara_config::power::SessionCardsLayout;
+        let setting = |path: &str| registry::settings().iter().find(|s| s.path == path).unwrap_or_else(|| panic!("{path}"));
+        let (position, layout) = (setting("/session_menu/position"), setting("/session_menu/cards_layout"));
+        let mut cfg = ShellConfig::default();
+        assert_eq!(registry::locked(position, &cfg), None, "the dock picks its position");
+        assert_eq!(registry::locked(layout, &cfg), Some("For the Cards style"));
+        cfg.session_menu.style = SessionMenuStyle::Cards;
+        assert_eq!(registry::locked(position, &cfg), Some("The cards always open in the middle of the screen"));
+        assert_eq!(registry::locked(layout, &cfg), None);
+        cfg.session_menu.style = SessionMenuStyle::Grid;
+        assert_eq!(registry::locked(position, &cfg), Some("The grid always opens in the middle"));
+        for l in SessionCardsLayout::ALL {
+            assert!(registry::MENU_CARD_LAYOUTS.iter().any(|(id, _)| *id == l.id()), "{l:?}");
         }
     }
 }

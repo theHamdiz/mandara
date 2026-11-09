@@ -61,6 +61,8 @@ const CHIP_PAD_X_PX: f32 = 8.0;
 const BUTTON_H_PX: f32 = 30.0;
 const BUTTON_PAD_X_PX: f32 = 12.0;
 const BUTTON_ICON_PX: f32 = 13.0;
+/// The code blocks' Copy button.
+const COPY_H_PX: f32 = 26.0;
 const SMALL_ICON_PX: f32 = 14.0;
 const TINT_ALPHA: f32 = 0.14;
 const SOFT_ALPHA: f32 = 0.08;
@@ -1247,20 +1249,19 @@ impl StudioView {
             })
             .collect();
         let copy_text = text.clone();
-        let copy = div()
-            .id(SharedString::from(format!("{copy_key}-btn")))
-            .h(px(26.0))
-            .px(px(10.0))
-            .rounded_full()
+        let (copy_bg, copy_fg) = if copied { (p.success_emerald.with_alpha(TINT_ALPHA), p.success_emerald) } else { (p.surface_container_high, p.on_surface) };
+        let copy_id = gpui::ElementId::from(SharedString::from(format!("{copy_key}-btn")));
+        let el = div().id(copy_id.clone()).h(px(COPY_H_PX)).px(px(10.0));
+        // The classic button fades on hover; the designs deepen its fill.
+        let ink = mandara_ui::components::buttons::Ink { bg: Some(copy_bg), hover: copy_bg.mix(copy_fg, SOFT_ALPHA), outline: None };
+        let copy = mandara_ui::components::buttons::designed(el, copy_id, COPY_H_PX, false, ink, Some(p), |el| el.rounded_full().bg(copy_bg.hsla()).hover(|s| s.opacity(HOVER_OPACITY)))
             .row()
             .items_center()
             .gap(px(6.0))
             .cursor_pointer()
-            .bg(if copied { p.success_emerald.with_alpha(TINT_ALPHA).hsla() } else { p.surface_container_high.hsla() })
-            .text_color(if copied { p.success_emerald.hsla() } else { p.on_surface.hsla() })
+            .text_color(copy_fg.hsla())
             .text_size(px(SMALL_TEXT_PX))
             .font_weight(FontWeight::MEDIUM)
-            .hover(|s| s.opacity(HOVER_OPACITY))
             .child(icon(if copied { "check" } else { "copy" }, 12.0, if copied { p.success_emerald } else { p.on_surface_variant }))
             .child(if copied { t("Copied") } else { t("Copy") })
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.local_copy(copy_key.clone(), copy_text.clone(), cx)));
@@ -1503,21 +1504,22 @@ fn chip_with_icon(glyph: &'static str, text: impl Into<SharedString>, color: Col
 }
 
 fn button(id: String, glyph: &'static str, label: &'static str, primary: bool, p: &MandaraPalette) -> Stateful<Div> {
+    use mandara_ui::components::buttons::{Ink, designed};
     let fg = if primary { p.on_primary } else { p.on_surface };
-    div()
-        .id(SharedString::from(id))
-        .h(px(BUTTON_H_PX))
-        .px(px(BUTTON_PAD_X_PX))
-        .rounded_full()
+    let bg = if primary { p.primary } else { p.surface_container_high };
+    let id = gpui::ElementId::from(SharedString::from(id));
+    let el = div().id(id.clone()).h(px(BUTTON_H_PX)).px(px(BUTTON_PAD_X_PX));
+    // The classic button fades on hover; the designs deepen its fill.
+    designed(el, id, BUTTON_H_PX, false, Ink { bg: Some(bg), hover: bg.mix(fg, SOFT_ALPHA), outline: None }, Some(p), |el| {
+        el.rounded_full().bg(bg.hsla()).hover(|s| s.opacity(HOVER_OPACITY))
+    })
         .row()
         .items_center()
         .gap(px(7.0))
         .cursor_pointer()
-        .bg(if primary { p.primary.hsla() } else { p.surface_container_high.hsla() })
         .text_color(fg.hsla())
         .text_size(px(BODY_TEXT_PX))
         .font_weight(FontWeight::MEDIUM)
-        .hover(|s| s.opacity(HOVER_OPACITY))
         .child(icon(glyph, BUTTON_ICON_PX, if primary { p.on_primary } else { p.on_surface_variant }))
         .child(label)
 }

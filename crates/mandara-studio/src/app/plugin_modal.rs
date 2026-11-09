@@ -257,6 +257,25 @@ const BUILTIN_ACCESS: &[(&str, &[(Access, &str)])] = &[
         ],
     ),
     ("audio", &[(Access::Audio, tk("Changes volumes and devices (PipeWire / PulseAudio)"))]),
+    (
+        "radio",
+        &[
+            (Access::Network, tk("Streams the stations you play; searches radio-browser.info only when you ask")),
+            (Access::Audio, tk("Plays the stream (PipeWire / PulseAudio)")),
+            (Access::DBus, tk("Offers itself to media keys and controls over MPRIS")),
+            (Access::Files, tk("Keeps your stations and favourites in Mandara's state folder")),
+        ],
+    ),
+    (
+        "feeds",
+        &[
+            (Access::Network, tk("Downloads the feeds you follow and their pictures")),
+            (Access::Files, tk("Keeps your feeds and saved articles in Mandara's state folder")),
+        ],
+    ),
+    ("reddit", &[(Access::Network, tk("Reads communities, threads and their pictures from reddit.com"))]),
+    ("sudoku", &[(Access::Files, tk("Saves your game and best scores in Mandara's state folder"))]),
+    ("2048", &[(Access::Files, tk("Saves your game and best scores in Mandara's state folder"))]),
     ("network", &[(Access::DBus, tk("Lists and joins networks through NetworkManager"))]),
     ("bluetooth", &[(Access::DBus, tk("Pairs and connects devices through BlueZ"))]),
     ("notifications", &[(Access::DBus, tk("Receives notifications as the desktop notification server"))]),
@@ -464,22 +483,20 @@ fn zone_lane(zone: Option<Zone>) -> Lane {
 
 /// A rounded action button.
 fn action(id: impl Into<SharedString>, icon_name: &'static str, label: String, primary: bool, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
+    use mandara_ui::components::buttons::{Ink, designed};
     let (bg, fg) = if primary { (p.primary, p.on_primary) } else { (p.surface_container_high, p.on_surface) };
-    div()
-        .id(id.into())
-        .h(px(DIM_36_PX))
-        .px(px(SPACE_16_PX))
-        .rounded_full()
+    let hover = if primary { bg.lighten(BUTTON_HOVER_LIGHTEN) } else { p.primary.with_alpha(ALPHA_14) };
+    let id = gpui::ElementId::from(id.into());
+    let el = div().id(id.clone()).h(px(DIM_36_PX)).px(px(SPACE_16_PX));
+    designed(el, id, DIM_36_PX, false, Ink { bg: Some(bg), hover, outline: None }, Some(p), |el| el.rounded_full().bg(bg.hsla()).hover(move |s| s.bg(hover.hsla())))
         .row()
         .flex_none()
         .items_center()
         .gap(px(SPACE_8_PX))
         .cursor_pointer()
-        .bg(bg.hsla())
         .text_color(fg.hsla())
         .text_size(px(TEXT_12_5_PX))
         .font_weight(FontWeight::MEDIUM)
-        .hover(move |s| s.bg(if primary { bg.lighten(BUTTON_HOVER_LIGHTEN).hsla() } else { p.primary.with_alpha(ALPHA_14).hsla() }))
         .child(icon(icon_name, ICON_14_PX, if primary { p.on_primary } else { p.on_surface_variant }))
         .child(label)
 }
@@ -506,21 +523,20 @@ fn section(title: &'static str, p: &MandaraPalette) -> gpui::Div {
 
 /// A destructive action (remove, uninstall), filled once it asks to confirm.
 fn danger(id: &'static str, label: &'static str, confirming: bool, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .h(px(DIM_36_PX))
-        .px(px(SPACE_16_PX))
-        .rounded_full()
+    use mandara_ui::components::buttons::{Ink, designed};
+    let bg = p.urgent_coral.with_alpha(if confirming { ALPHA_90 } else { ALPHA_12 });
+    let fg = if confirming { p.on_primary } else { p.urgent_coral };
+    let el = div().id(id).h(px(DIM_36_PX)).px(px(SPACE_16_PX));
+    // The classic button fades on hover; the designs deepen its fill.
+    designed(el, id, DIM_36_PX, false, Ink { bg: Some(bg), hover: bg.mix(fg, ALPHA_8), outline: None }, Some(p), |el| el.rounded_full().bg(bg.hsla()).hover(|s| s.opacity(ALPHA_88)))
         .row()
         .flex_none()
         .items_center()
         .gap(px(SPACE_8_PX))
         .cursor_pointer()
-        .bg(p.urgent_coral.with_alpha(if confirming { ALPHA_90 } else { ALPHA_12 }).hsla())
-        .text_color(if confirming { p.on_primary.hsla() } else { p.urgent_coral.hsla() })
+        .text_color(fg.hsla())
         .text_size(px(TEXT_12_5_PX))
         .font_weight(FontWeight::MEDIUM)
-        .hover(|s| s.opacity(ALPHA_88))
         .child(icon("trash", ICON_14_PX, if confirming { p.on_primary } else { p.urgent_coral }))
         .child(label)
 }
@@ -606,6 +622,7 @@ impl StudioView {
     pub fn close_plugin(&mut self, cx: &mut Context<Self>) {
         super::plugin_credentials::clear_input(cx);
         self.credentials.close();
+        self.feeds.close();
         self.modal.open = false;
         self.modal.confirm_uninstall = false;
         self.modal.confirm_remove = false;
@@ -1182,6 +1199,10 @@ impl StudioView {
         if let Ok(Some(key)) = key && let Some(editor) = self.plugin_key_editor(key, self.modal.open, p, cx) {
             body = div().row().flex_col().gap(px(SPACE_22_PX)).child(body).child(editor).into_any_element();
         }
+        // Feeds: the subscriptions come first, then how they are read.
+        if m.id == mandara_ui::plugins::feeds::ID {
+            body = div().row().flex_col().gap(px(SPACE_22_PX)).child(self.feeds_editor(cfg, p, cx)).child(body).into_any_element();
+        }
         div()
             .p(px(BODY_PAD))
             .row()
@@ -1308,6 +1329,24 @@ mod tests {
         assert_eq!(next.plugins.setting("moon-test", "hemisphere", String::new()), "south");
         // Cached: the same leaked settings come back.
         assert_eq!(plugin_settings(&m)[0].path.as_ptr(), list[0].path.as_ptr());
+    }
+
+    /// The games say where their saves go.
+    #[test]
+    fn the_games_declare_their_save_files() {
+        for id in ["sudoku", "2048"] {
+            let access = BUILTIN_ACCESS.iter().find(|(entry, _)| *entry == id).map(|(_, access)| *access).unwrap_or_default();
+            assert!(access.iter().any(|(kind, _)| *kind == Access::Files), "{id}");
+        }
+    }
+
+    /// The plugin detail tells you which built-ins go online.
+    #[test]
+    fn online_builtins_declare_network_access() {
+        for id in ["radio", "feeds", "reddit"] {
+            let access = BUILTIN_ACCESS.iter().find(|(entry, _)| *entry == id).map(|(_, access)| *access).unwrap_or_default();
+            assert!(access.iter().any(|(kind, _)| *kind == Access::Network), "{id}");
+        }
     }
 
     #[test]

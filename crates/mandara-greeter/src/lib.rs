@@ -53,6 +53,9 @@ pub struct GreeterOptions {
     pub theme: Option<String>,
     /// Override the backdrop (`auto`, `video`, `stills`, `aurora`).
     pub background: Option<String>,
+    /// Apply a ready-made look first (`mandara`, `midnight-card`,
+    /// `material-you`); the other overrides go on top.
+    pub look: Option<String>,
     /// Demo only: play a scripted wrong-then-right login (for screenshots).
     pub autoplay: bool,
 }
@@ -67,6 +70,12 @@ pub fn run(opts: GreeterOptions) -> Result<()> {
         bail!("GREETD_SOCK is not set: `mandara greeter` must be started by greetd. Try `mandara greeter --demo` to preview it on this session.");
     }
     let mut config = GreeterConfig::load(opts.demo);
+    if let Some(look) = &opts.look
+        && !config.apply_look(look)
+    {
+        let ids: Vec<&str> = config::LOOKS.iter().map(|(id, _, _)| *id).collect();
+        bail!("unknown look {look:?} ({})", ids.join(", "));
+    }
     if let Some(lang) = &opts.language {
         config.language = lang.clone();
     }

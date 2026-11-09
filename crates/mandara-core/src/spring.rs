@@ -375,6 +375,9 @@ pub struct SpringValue<T: Springable> {
     rest_epsilon: f32,
     /// When set, targets are applied instantly (reduced motion).
     instant: bool,
+    /// Heading for an exit target ([`SpringValue::set_exit_target`]): each
+    /// channel lands on it and stays, never swinging past and back.
+    exit: bool,
     _marker: std::marker::PhantomData<T>,
 }
 
@@ -385,7 +388,7 @@ pub const REST_VELOCITY_FACTOR: f32 = 10.0;
 impl<T: Springable> SpringValue<T> {
     pub fn new(value: T, config: SpringConfig) -> Self {
         let c = value.to_channels();
-        Self { position: c, velocity: [0.0; 4], target: c, config, rest_epsilon: T::REST_EPSILON, instant: false, _marker: Default::default() }
+        Self { position: c, velocity: [0.0; 4], target: c, config, rest_epsilon: T::REST_EPSILON, instant: false, exit: false, _marker: Default::default() }
     }
 
     /// Settles once every channel is within `epsilon` of its target (and
@@ -440,9 +443,23 @@ impl<T: Springable> SpringValue<T> {
         }
         let changed = (0..T::CHANNELS).any(|i| (t[i] - self.target[i]).abs() > f32::EPSILON);
         self.target = t;
+        self.exit = false;
         if self.instant || motion_profile().reduce {
             self.snap_to_target();
         }
+        changed
+    }
+
+    /// [`SpringValue::set_target`] for an exit: a surface closing back
+    /// into where it came from. It moves with the spring's own feel (its
+    /// tuning, speed and reduced motion all apply) but each channel stops
+    /// the moment it reaches the target instead of overshooting and swinging
+    /// back, so a closing panel never re-grows out of the bar after it
+    /// looked closed. The next [`SpringValue::set_target`] restores the
+    /// normal, bouncy behaviour.
+    pub fn set_exit_target(&mut self, target: T) -> bool {
+        let changed = self.set_target(target);
+        self.exit = true;
         changed
     }
 
@@ -452,6 +469,7 @@ impl<T: Springable> SpringValue<T> {
         self.position = c;
         self.target = c;
         self.velocity = [0.0; 4];
+        self.exit = false;
     }
 
     pub fn snap_to_target(&mut self) {
@@ -500,7 +518,12 @@ impl<T: Springable> SpringValue<T> {
         let config = profile.tune(self.config);
         for i in 0..T::CHANNELS {
             let x0 = self.position[i] - self.target[i];
-            let (x, v) = config.solve(x0, self.velocity[i], dt);
+            let (mut x, mut v) = config.solve(x0, self.velocity[i], dt);
+            // An exit lands: reaching (or crossing) the target ends the
+            // channel's motion there.
+            if self.exit && x * x0 <= 0.0 {
+                (x, v) = (0.0, 0.0);
+            }
             self.position[i] = self.target[i] + x;
             self.velocity[i] = v;
         }
@@ -595,6 +618,120 @@ mod tests {
         run(&mut s, 144.0, 3.0);
         assert_eq!(s.value(), target);
         assert!(!s.is_animating());
+    }
+
+    /// A bouncy profile (low damping), where an overshoot is largest.
+    fn bouncy() -> MotionProfile {
+        MotionProfile::new(DEFAULT_STIFFNESS, 16.0, DEFAULT_MASS, false)
+    }
+
+    /// Every height `s` passes through while it runs to rest.
+    fn heights(s: &mut SpringValue<Bounds<Pixels>>, hz: f32, profile: &MotionProfile) -> Vec<f32> {
+        let mut out = Vec::new();
+        while s.step_in(1.0 / hz, profile) {
+            out.push(f32::from(s.value().size.height));
+            assert!(out.len() < 10 * hz as usize, "spring did not settle");
+        }
+        out.push(f32::from(s.value().size.height));
+        out
+    }
+
+    fn panel_rects() -> (Bounds<Pixels>, Bounds<Pixels>) {
+        let closed = Bounds { origin: point(px(784.5), px(30.0)), size: size(px(138.0), px(0.0)) };
+        let open = Bounds { origin: point(px(672.0), px(30.0)), size: size(px(363.0), px(447.0)) };
+        (closed, open)
+    }
+
+    #[test]
+    fn an_exit_lands_without_growing_back() {
+        let (closed, open) = panel_rects();
+        let spring = SpringConfig::new(300.0, 23.0, 1.0);
+        // The plain target swings past "closed" and grows back out of it:
+        // the two-stage close this guards against.
+        let mut plain = SpringValue::new(open, spring);
+        plain.set_target(closed);
+        let h = heights(&mut plain, 60.0, &bouncy());
+        let first_zero = h.iter().position(|&h| h == 0.0).unwrap();
+        assert!(h[first_zero..].iter().any(|&h| h > 5.0), "a plain retarget rebounds: {h:?}");
+        for hz in [60.0, 144.0] {
+            for profile in [MotionProfile::default(), bouncy()] {
+                let mut exit = SpringValue::new(open, spring);
+                exit.set_exit_target(closed);
+                let h = heights(&mut exit, hz, &profile);
+                assert!(h.windows(2).all(|w| w[1] <= w[0]), "the height never goes back up at {hz} Hz: {h:?}");
+                assert_eq!(exit.value(), closed, "it ends exactly closed");
+                assert!(!exit.is_animating());
+            }
+        }
+    }
+
+    #[test]
+    fn an_exit_keeps_the_springs_pace_until_it_lands() {
+        // Up to the moment it lands, an exit moves exactly like the spring.
+        let (closed, open) = panel_rects();
+        let mut plain = SpringValue::new(open, SpringConfig::new(300.0, 23.0, 1.0));
+        let mut exit = plain.clone();
+        plain.set_target(closed);
+        exit.set_exit_target(closed);
+        let p = bouncy();
+        loop {
+            plain.step_in(1.0 / 144.0, &p);
+            exit.step_in(1.0 / 144.0, &p);
+            if plain.position[3] <= 0.0 {
+                break;
+            }
+            assert_eq!(plain.value(), exit.value());
+        }
+        assert_eq!(f32::from(exit.value().size.height), 0.0);
+    }
+
+    #[test]
+    fn an_exit_interrupting_an_open_still_lands_once() {
+        let (closed, open) = panel_rects();
+        let mut s = SpringValue::new(closed, SpringConfig::new(300.0, 23.0, 1.0));
+        s.set_target(open);
+        let p = bouncy();
+        for _ in 0..6 {
+            s.step_in(1.0 / 144.0, &p);
+        }
+        assert!(s.velocity()[3] > 0.0, "still opening");
+        s.set_exit_target(closed);
+        let h = heights(&mut s, 144.0, &p);
+        // It may keep growing a little on its momentum, then only shrinks.
+        let peak = h.iter().copied().enumerate().fold((0, 0.0), |a, (i, h)| if h > a.1 { (i, h) } else { a }).0;
+        assert!(h[peak..].windows(2).all(|w| w[1] <= w[0]), "{h:?}");
+        assert_eq!(s.value(), closed);
+    }
+
+    #[test]
+    fn an_exit_under_reduced_motion_is_instant() {
+        let (closed, open) = panel_rects();
+        let mut s = SpringValue::new(open, SpringConfig::new(300.0, 23.0, 1.0));
+        s.set_exit_target(closed);
+        let reduce = MotionProfile::new(DEFAULT_STIFFNESS, DEFAULT_DAMPING, DEFAULT_MASS, true);
+        assert!(!s.step_in(1.0 / 60.0, &reduce), "one frame, no animation");
+        assert_eq!(s.value(), closed);
+        // A surface playing at speed 0 is instant too.
+        let mut s = SpringValue::new(open, SpringConfig::new(300.0, 23.0, 1.0));
+        s.set_exit_target(closed);
+        let _instant = MotionScope::new(0.0);
+        assert!(!s.step_in(1.0 / 60.0, &MotionProfile::default()));
+        assert_eq!(s.value(), closed);
+    }
+
+    #[test]
+    fn opening_again_keeps_the_bounce() {
+        let (closed, open) = panel_rects();
+        let spring = SpringConfig::new(300.0, 23.0, 1.0);
+        let mut reopened = SpringValue::new(open, spring);
+        reopened.set_exit_target(closed);
+        heights(&mut reopened, 144.0, &bouncy());
+        let mut fresh = SpringValue::new(closed, spring);
+        reopened.set_target(open);
+        fresh.set_target(open);
+        let (a, b) = (heights(&mut reopened, 144.0, &bouncy()), heights(&mut fresh, 144.0, &bouncy()));
+        assert_eq!(a, b, "the open after an exit is the normal open");
+        assert!(a.iter().any(|&h| h > 447.0), "which still overshoots");
     }
 
     #[test]

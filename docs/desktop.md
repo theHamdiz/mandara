@@ -26,6 +26,23 @@ How Mandara looks and feels, and how much of it you can shape.
   bar space do (main menu or desktop menu; any hot-corner action;
   workspaces or volume). `mandara msg bar hide` / `show` / `toggle` puts
   the bar away until you want it back.
+- **Bars that look nothing alike.** Four style presets in Studio → Bars
+  reshape the whole bar: **Expressive** (a tall bottom bar inside a frame
+  round the screen, joined to a rail on the left: round accent buttons,
+  tonal tiles for the widgets and scalloped badges down the rail),
+  **Tile dock** (one floating island of large squircle tiles at the
+  bottom), **Rail** (a wide left rail of flower-shaped buttons in a screen
+  frame) and **Segmented** (no bar at all, just rows of connected tiles
+  under the top edge). They're built from settings you can keep tuning:
+  items as capsules, tiles, squircles or connected groups; icon items as
+  circles or Material 3 Expressive cookies, clovers, flowers and bursts in
+  the accent or tertiary tone; the items' inset from the bar's edges; and
+  a screen frame round a top or bottom bar too. Panels still pour out of
+  the bar and morph back into the item they came from.
+  `mandara msg bar style expressive` scripts it. Each side bar can take a
+  style of its own too (Studio → Bars → Side bars, or
+  `mandara msg side-bar style right tile-dock`), so a rail of squircle
+  tiles can sit beside a bar of connected groups.
 - **Bar items show what you want:** workspace pills with numbers, short
   names or dots, with or without app icons, and empty ones hidden; the
   active window as its app, its title or both, up to a width you pick; the
@@ -262,6 +279,11 @@ existing widgets. Eligible kinds can also be added to
 - **Desktop cards:** a now-playing card (art, wavy progress, synced lyrics)
   and a calendar card, each on its own tiny surface that exists only while
   shown.
+- **Games on the desktop:** with the opt-in Sudoku and 2048 plugins on,
+  their boards are widgets you play right on the desktop. Click one to give
+  it the keyboard and click anywhere else to give it back. Studio →
+  Desktop widgets sets each one's width and style (Glass, Solid or
+  Minimal). See [Games](plugins.md#games-sudoku-and-2048).
 - **Visualizers:** a glowing wave along a screen edge, framed bars or a
   mirrored strip. They listen only while music plays and drop to zero CPU
   after a few seconds of silence.
@@ -321,6 +343,8 @@ anything that must stay fixed is a named, documented constant.
   row of the player the media panel controls sets that player's own volume
   (0–100 %, like its own slider) when the player allows it, because such a
   player puts its level back on its sound whenever you play or pause.
+  Studio's mixer does the same, and `media volume set 40` sets it from a
+  terminal (`media status` reports it as `volume`, 0–1, or `null`).
 - **Shell sounds** from your freedesktop sound theme, decoded in pure Rust,
   quiet while media plays.
 

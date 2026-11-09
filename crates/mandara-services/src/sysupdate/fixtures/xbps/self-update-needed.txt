@@ -1,0 +1,3 @@
+x86_64-repodata: [2169KB 60%] 1775KB/s ETA: 00m00s
+x86_64-repodata: 2169KB [avg rate: 2934KB/s]
+The 'xbps' package must be updated, please run `xbps-install -u xbps`

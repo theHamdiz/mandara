@@ -222,7 +222,9 @@ The rest of what's built in.
 - **Power menu editor**: pick and order the entries (lock, log out, sleep,
   hibernate, restart, shut down, soft restart, firmware setup, any
   boot-loader entry, restart Mandara, your own commands), rename them, show
-  them as the edge dock or a grid, number-key shortcuts and hold-to-confirm
+  them as the edge dock, a grid or separate cards floating in the middle of
+  the screen (in a row or a column that wraps when there are many,
+  `session_menu.cards_layout`), number-key shortcuts and hold-to-confirm
   for everything that ends the session. The dock opens on either screen side
   (by default the one opposite the sidebar) or at the top or bottom center,
   where it joins an edge-frame bar, opens as a card beside a floating bar,
@@ -249,10 +251,11 @@ The rest of what's built in.
   requests of its own (weather, lyrics, album art, Wallhaven, marketplace,
   public IP, update news, downloads).
 - **Updates**: pacman (`checkupdates`), the AUR (paru / yay), APT, DNF,
-  Zypper and Flatpak checked read-only every few hours (3 h by default) with a
-  count badge, old → new versions by source and the latest Arch news.
-  *Update now* opens your terminal with the right command; Mandara never runs
-  privileged updates itself.
+  Zypper, XBPS, apk and Flatpak checked read-only every few hours (3 h by
+  default) with a count badge, old → new versions by source and the latest
+  Arch news. *Update* installs them right in the panel, with live progress and
+  Mandara's own password dialog; on NixOS the panel manages generations
+  ([System updates](apps-and-updates.md#system-updates)).
 - **Resources**: CPU, memory and every GPU (load, VRAM, temperature, clock),
   plus component temperatures in °C or °F, set by the global *Units* setting
   that the weather follows too.

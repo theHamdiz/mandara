@@ -551,7 +551,7 @@ impl View {
             col = col.child(div().h(px(GAP))).child(reveal(p, 1, add_card(&uri, &self.flash, palette, radius)));
         }
         if show_search {
-            col = col.child(div().h(px(GAP))).child(reveal(p, 2, div().flex().child(search_box("auth-search-clear", &search, &query, palette))));
+            col = col.child(div().h(px(GAP))).child(reveal(p, 2, div().flex().child(search_box("auth-search-clear", &search, &query, palette, cx))));
         }
         let body: AnyElement = if let Some(s) = status_view(&state.status, &self.flash, palette) {
             s

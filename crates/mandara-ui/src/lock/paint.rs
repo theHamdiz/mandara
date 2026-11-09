@@ -492,7 +492,9 @@ fn composite_glyph(data: &mut [u8], (pw, ph): (i32, i32), (x, y, w, h): (i32, i3
             d[0] = (sr + d[0] as f32 * inv).min(255.0) as u8;
             d[1] = (sg + d[1] as f32 * inv).min(255.0) as u8;
             d[2] = (sb + d[2] as f32 * inv).min(255.0) as u8;
-            d[3] = (alpha * 255.0 + d[3] as f32 * inv).min(255.0) as u8;
+            // Rounded: truncating left text drawn at a partial opacity
+            // over an opaque backdrop one step short of opaque.
+            d[3] = (alpha * 255.0 + d[3] as f32 * inv).round().min(255.0) as u8;
         }
     }
 }

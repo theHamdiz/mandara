@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::desktop_cards::{self as cards, CALENDAR, FRAMED_BARS, MIRRORED_BARS, NOW_PLAYING, WAVE};
 use crate::desktop_widgets::{Anchor, ClockFace, ClockWidget, DecorShape, Decoration, Depth, DesktopWidget, MonitorWidget, Placement, WidgetKind};
+use crate::components::ComponentPreset;
 use crate::{BarLayout, BarPosition, ShellConfig, ThemeMode};
 use mandara_theme::{Color, SchemeVariant, ThemeSource};
 
@@ -27,6 +28,16 @@ pub const BEFORE_PROFILE: &str = "Before looks";
 pub const SNAPSHOT_PATHS: &[&str] = &[
     "theme",
     "bar",
+    // The rail an Expressive bar style set up: a look clears the style and
+    // these with it (exactly what `bar_styles::clear` resets).
+    "side_bars.enabled",
+    "side_bars.chips",
+    "side_bars.icon_shape",
+    "side_bars.width",
+    "side_bars.chip_size",
+    "side_bars.chip_spacing",
+    "side_bars.chip_fill",
+    "side_bars.right.enabled",
     "typography",
     "style",
     "desktop",
@@ -60,6 +71,9 @@ pub struct LooksState {
     pub plugins_enabled: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub plugins_undisabled: Vec<String>,
+    /// Picking a look keeps your component designs instead of applying the
+    /// look's own (Studio → Themes → Components). Off: a look changes them.
+    pub keep_components: bool,
 }
 
 /// Options picked next to the gallery.
@@ -110,6 +124,9 @@ pub struct LookDef {
     /// A vertical text decoration (Arabic / katakana) on the end edge.
     pub decoration: Option<&'static str>,
     pub dock_media_chip: bool,
+    /// The component designs the look brings (buttons, toggles, fields,
+    /// chips, progress and cards), unless `looks.keep_components`.
+    pub components: ComponentPreset,
 }
 
 const ZONES_FULL: [&[&str]; 3] = [
@@ -145,6 +162,7 @@ pub const LOOKS: [LookDef; 6] = [
         monitor: Some(Anchor::Left),
         decoration: None,
         dock_media_chip: false,
+        components: ComponentPreset::Classic,
     },
     LookDef {
         id: "pharos-ink",
@@ -169,6 +187,7 @@ pub const LOOKS: [LookDef; 6] = [
         monitor: None,
         decoration: None,
         dock_media_chip: false,
+        components: ComponentPreset::Minimal,
     },
     LookDef {
         id: "montaza-crimson",
@@ -193,6 +212,7 @@ pub const LOOKS: [LookDef; 6] = [
         monitor: None,
         decoration: Some("المندرة"),
         dock_media_chip: false,
+        components: ComponentPreset::Expressive,
     },
     LookDef {
         id: "qaitbay-forest",
@@ -217,6 +237,7 @@ pub const LOOKS: [LookDef; 6] = [
         monitor: None,
         decoration: None,
         dock_media_chip: true,
+        components: ComponentPreset::MaterialYou,
     },
     LookDef {
         id: "anfushi-wave",
@@ -241,6 +262,7 @@ pub const LOOKS: [LookDef; 6] = [
         monitor: None,
         decoration: Some("マンダラ"),
         dock_media_chip: false,
+        components: ComponentPreset::Expressive,
     },
     LookDef {
         id: "night-frame",
@@ -265,6 +287,7 @@ pub const LOOKS: [LookDef; 6] = [
         monitor: None,
         decoration: None,
         dock_media_chip: false,
+        components: ComponentPreset::BrutalistSoft,
     },
 ];
 
@@ -294,6 +317,8 @@ impl LookDef {
     /// `cfg` with this look applied (the wallpaper image is never changed).
     pub fn apply(&self, cfg: &ShellConfig, opts: LookOptions) -> ShellConfig {
         let mut c = cfg.clone();
+        // A bar style preset gives way to the look's own bar.
+        crate::bar_styles::clear(&mut c);
         c.theme.source = self.theme_source(cfg, opts);
         c.theme.mode = if self.dark { ThemeMode::Dark } else { ThemeMode::Light };
         let bar = &mut c.bar;
@@ -308,6 +333,11 @@ impl LookDef {
         c.typography.ui_font = self.ui_font.into();
         c.typography.display_font = self.display_font.into();
         c.style.radius_scale = self.radius_scale;
+        // The look's component designs, unless you keep your own. A design
+        // you pick afterwards stays until you pick a look or preset again.
+        if !cfg.looks.keep_components {
+            self.components.apply(&mut c.style);
+        }
         c.desktop.widgets.items = self.widgets();
         c.desktop.widgets.migrated = true;
         crate::desktop_widgets::sync_depth_clock(&mut c);
@@ -317,7 +347,7 @@ impl LookDef {
         // back off; what both need stays on (and stays the looks' doing).
         let prev = std::mem::take(&mut c.looks);
         undo_plugins(&mut c, &prev, &wants);
-        let mut state = LooksState { active: self.id.to_string(), wallpaper_colors: matches!(c.theme.source, ThemeSource::Wallpaper { .. }), ..LooksState::default() };
+        let mut state = LooksState { active: self.id.to_string(), wallpaper_colors: matches!(c.theme.source, ThemeSource::Wallpaper { .. }), keep_components: prev.keep_components, ..LooksState::default() };
         for id in wants {
             let was_disabled = c.plugins.disabled.iter().any(|d| d == id);
             c.plugins.disabled.retain(|d| d != id);
@@ -443,7 +473,8 @@ pub fn restore(cfg: &ShellConfig, before: &crate::profiles::Profile) -> anyhow::
             c.plugins.enabled.push(id.clone());
         }
     }
-    c.looks = LooksState::default();
+    // Keeping your component designs is your choice, not the look's.
+    c.looks = LooksState { keep_components: cfg.looks.keep_components, ..LooksState::default() };
     Ok(c)
 }
 
@@ -503,6 +534,83 @@ mod tests {
         let back = restore(&wave, &before).unwrap();
         assert_eq!(back, mine, "restoring brings the exact setup back");
         assert!(back.looks.active.is_empty());
+    }
+
+    /// A look clears the Expressive bar style and the rail it set up;
+    /// restoring brings both back, and a side bar setting changed while the
+    /// look was on (one the style doesn't own) stays as you changed it.
+    #[test]
+    fn restoring_from_the_expressive_style_brings_its_rail_back() {
+        let mut mine = ShellConfig::default();
+        crate::bar_styles::BarStyle::Expressive.apply(&mut mine);
+        assert!(mine.side_bars.enabled);
+        let before = before_snapshot(&mine, "2026-11-09 12:00").expect("own setup is snapshotted");
+        let mut look = find("night-frame").unwrap().apply(&mine, LookOptions::default());
+        assert_eq!(look.bar.style, None);
+        assert_eq!(look.side_bars.enabled, crate::side_bars::SideBarsConfig::default().enabled);
+        look.side_bars.opacity = 0.5;
+        let back = restore(&look, &before).unwrap();
+        assert_eq!(back.bar.style, Some(crate::bar_styles::BarStyle::Expressive));
+        assert!(crate::bar_styles::BarStyle::Expressive.matches(&back));
+        assert_eq!(back.side_bars.opacity, 0.5, "a side bar setting the style doesn't own is kept");
+        let mut expect = mine.side_bars.clone();
+        expect.opacity = 0.5;
+        assert_eq!(back.side_bars, expect, "the rail comes back exactly");
+    }
+
+    /// Restoring your setup keeps the switch for keeping your component
+    /// designs as it is now, whatever the snapshot held.
+    #[test]
+    fn restoring_keeps_the_keep_components_choice() {
+        let mine = ShellConfig::default();
+        let before = before_snapshot(&mine, "2026-11-09 12:00").expect("own setup is snapshotted");
+        let mut look = find("night-frame").unwrap().apply(&mine, LookOptions::default());
+        look.looks.keep_components = true;
+        let back = restore(&look, &before).unwrap();
+        assert!(back.looks.keep_components, "switched on during the look, kept after restoring");
+        assert!(back.looks.active.is_empty());
+        look.looks.keep_components = false;
+        let mut mine_kept = mine.clone();
+        mine_kept.looks.keep_components = true;
+        let before = before_snapshot(&mine_kept, "later").unwrap();
+        assert!(!restore(&look, &before).unwrap().looks.keep_components, "switched off since: the snapshot doesn't switch it back on");
+    }
+
+    /// Picking a look brings its component designs; a design picked
+    /// afterwards stays; keeping your own designs leaves them alone; and the
+    /// switch survives looks and a save.
+    #[test]
+    fn looks_bring_their_component_designs_unless_you_keep_yours() {
+        use crate::components::{ButtonDesign, ComponentDesigns};
+        let mine = ShellConfig::default();
+        for look in &LOOKS {
+            let c = look.apply(&mine, LookOptions::default());
+            assert_eq!(ComponentDesigns::of(&c.style), look.components.designs(), "{}", look.id);
+            assert_eq!(ComponentPreset::current(&c.style), Some(look.components));
+        }
+        // A design you pick after the look is yours until the next look.
+        let mut night = find("night-frame").unwrap().apply(&mine, LookOptions::default());
+        night.style.button_design = ButtonDesign::Elevated;
+        let saved: ShellConfig = toml::from_str(&toml::to_string(&night).unwrap()).unwrap();
+        assert_eq!(saved.style.button_design, ButtonDesign::Elevated, "nothing resets it behind your back");
+        let ink = find("pharos-ink").unwrap().apply(&saved, LookOptions::default());
+        assert_eq!(ComponentPreset::current(&ink.style), Some(ComponentPreset::Minimal), "picking a look again applies its designs");
+        // Keeping your designs: no look touches them, and the choice stays.
+        let mut keep = ShellConfig::default();
+        keep.looks.keep_components = true;
+        keep.style.toggle_design = crate::components::ToggleDesign::Round;
+        let before = ComponentDesigns::of(&keep.style);
+        let a = find("anfushi-wave").unwrap().apply(&keep, LookOptions::default());
+        let b = find("night-frame").unwrap().apply(&a, LookOptions::default());
+        assert_eq!(ComponentDesigns::of(&b.style), before);
+        assert!(b.looks.keep_components, "the switch survives switching looks");
+        let back: ShellConfig = toml::from_str(&toml::to_string(&b).unwrap()).unwrap();
+        assert!(back.looks.keep_components);
+        // An older config has the switch off: looks bring their designs.
+        let old: ShellConfig = toml::from_str("[looks]\nactive = \"pharos-ink\"").unwrap();
+        assert!(!old.looks.keep_components);
+        // Every built-in look has a preset, and they aren't all the same.
+        assert!(LOOKS.iter().any(|l| l.components != LOOKS[0].components));
     }
 
     #[test]

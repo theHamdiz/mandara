@@ -1,0 +1,46 @@
+Loading repository data...
+Reading installed packages...
+Warning: You are about to do a distribution upgrade with all enabled repositories. Make sure these repositories are compatible before you continue. See 'man zypper' for more information about this command.
+Computing distribution upgrade...
+The following package is going to be upgraded:
+  openSUSE-build-key
+The following 11 NEW packages are going to be installed:
+  krb5 libbrotlicommon1 libbrotlidec1 libcom_err2 libcurl4 libkeyutils1 libldap2 libsasl2-3 libssh-config libssh4 libverto1
+The following package is going to be REMOVED:
+  libcurl-mini4
+1 package to upgrade, 11 new, 1 to remove.
+Package download size:
+            |       2.0 MiB  overall package size
+       0 B  |  -    2.0 MiB  already in cache
+Package install size change:
+              |       5.0 MiB  required by packages that will be installed
+     4.1 MiB  |  -  960.8 KiB  released by packages that will be removed
+Backend:  classic_rpmtrans
+Continue? [y/n/v/...? shows all options] (y): y
+In cache libbrotlicommon1-1.2.1-1.1.x86_64.rpm (1/12),  66.2 KiB    
+In cache libcom_err2-1.47.4-2.1.x86_64.rpm (2/12),  29.1 KiB    
+In cache libkeyutils1-1.6.3-7.9.x86_64.rpm (3/12),  26.4 KiB    
+In cache libsasl2-3-2.1.28-13.1.x86_64.rpm (4/12),  63.4 KiB    
+In cache libssh-config-0.11.5-3.1.noarch.rpm (5/12),  16.3 KiB    
+In cache libverto1-0.3.2-3.9.x86_64.rpm (6/12),  19.8 KiB    
+In cache libbrotlidec1-1.2.1-1.1.x86_64.rpm (7/12),  32.1 KiB    
+In cache libldap2-2.6.13-1.6.x86_64.rpm (8/12), 200.0 KiB    
+In cache krb5-1.22.2-6.1.x86_64.rpm (9/12), 747.8 KiB    
+In cache libssh4-0.11.5-3.1.x86_64.rpm (10/12), 243.4 KiB    
+In cache libcurl4-8.23.0-3.1.x86_64.rpm (11/12), 586.6 KiB    
+In cache openSUSE-build-key-1.0-69.1.x86_64.rpm (12/12),  43.7 KiB    
+Checking for file conflicts: [..done]
+( 1/12) Installing: libbrotlicommon1-1.2.1-1.1.x86_64 [..done]
+( 2/12) Installing: libcom_err2-1.47.4-2.1.x86_64 [..done]
+( 3/12) Installing: libkeyutils1-1.6.3-7.9.x86_64 [..done]
+( 4/12) Installing: libsasl2-3-2.1.28-13.1.x86_64 [..done]
+( 5/12) Installing: libssh-config-0.11.5-3.1.noarch [..done]
+( 6/12) Installing: libverto1-0.3.2-3.9.x86_64 [..done]
+( 7/12) Installing: libbrotlidec1-1.2.1-1.1.x86_64 [..done]
+( 8/12) Installing: libldap2-2.6.13-1.6.x86_64 [..done]
+( 9/12) Installing: krb5-1.22.2-6.1.x86_64 [..done]
+(10/12) Installing: libssh4-0.11.5-3.1.x86_64 [..done]
+(11/12) Installing: libcurl4-8.23.0-3.1.x86_64 [..done]
+(12/12) Installing: openSUSE-build-key-1.0-69.1.x86_64 [..done]
+Running post-transaction scripts [...done]
+ 

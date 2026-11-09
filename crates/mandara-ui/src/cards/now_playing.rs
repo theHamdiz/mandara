@@ -213,8 +213,10 @@ impl Render for NowPlayingView {
             animating |= moving;
             el
         });
-        if playing {
-            // The progress line moves on whole seconds.
+        let live = state.is_live();
+        if playing && !live {
+            // The progress line moves on whole seconds (a live stream has
+            // none, so nothing ticks).
             let frac = state.position_now(now).as_secs_f32().fract();
             crate::plugins::panel_fx::redraw_in(Duration::from_secs_f32((ONE_SECOND - frac).max(0.0)).min(PROGRESS_TICK), window, cx);
         }
@@ -231,7 +233,8 @@ impl Render for NowPlayingView {
             .flex_col()
             .child(div().h(px(s(TITLE_ROW_PX))).text_size(px(s(TITLE_PX))).font_weight(FontWeight::SEMIBOLD).truncate().child(SharedString::from(state.title.clone())))
             .child(div().h(px(s(ARTIST_ROW_PX))).text_size(px(s(ARTIST_PX))).text_color(m.a.hsla()).truncate().child(SharedString::from(state.artist.clone())))
-            .child(squiggle(progress, opts.squiggle, k, rtl, m, &palette))
+            // A live stream has no progress: the row keeps its height.
+            .child(if live { div().w_full().h(px(s(SQUIGGLE_ROW_PX))).into_any_element() } else { squiggle(progress, opts.squiggle, k, rtl, m, &palette).into_any_element() })
             .child(
                 div()
                     .h(px(s(CONTROLS_ROW_PX)))
@@ -242,9 +245,16 @@ impl Render for NowPlayingView {
                     .text_size(px(s(TIME_PX)))
                     .font_features(tabular_nums())
                     .text_color(palette.on_surface_variant.hsla())
-                    .child(time(state.position_now(now)))
-                    .child(transport(Transport::Card, &state, &m, &palette, s(PLAY_PX)))
-                    .child(time(length)),
+                    .map(|el| if live {
+                        // "Live" in place of the times; the transport stays centred.
+                        el.child(div().flex_1().flex().when(rtl, |el| el.justify_end()).child(crate::plugins::media::live_label(s(TIME_PX), &palette)))
+                            .child(transport(Transport::Card, &state, &m, &palette, s(PLAY_PX)))
+                            .child(div().flex_1())
+                    } else {
+                        el.child(time(state.position_now(now)))
+                            .child(transport(Transport::Card, &state, &m, &palette, s(PLAY_PX)))
+                            .child(time(length))
+                    }),
             );
         let body = div()
             .flex()

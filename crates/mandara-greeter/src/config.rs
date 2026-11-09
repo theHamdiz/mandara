@@ -163,11 +163,18 @@ pub struct ClockConfig {
     pub opacity: f32,
     /// Digits roll when they change.
     pub roll_digits: bool,
+    /// Hours over minutes in two big lines.
+    pub stacked: bool,
+    /// The hours in a light tone of the accent.
+    pub tint: bool,
+    /// Weight of the big idle clock (0 = the same as `weight`): waking
+    /// the screen moves the font's weight between the two.
+    pub idle_weight: u16,
 }
 
 impl Default for ClockConfig {
     fn default() -> Self {
-        Self { format_24h: true, seconds: false, font: String::new(), size: L::CLOCK_SIZE, weight: L::CLOCK_WEIGHT, opacity: 0.95, roll_digits: true }
+        Self { format_24h: true, seconds: false, font: String::new(), size: L::CLOCK_SIZE, weight: L::CLOCK_WEIGHT, opacity: 0.95, roll_digits: true, stacked: false, tint: false, idle_weight: 0 }
     }
 }
 
@@ -212,6 +219,20 @@ pub enum AvatarShape {
     /// No plate or frame: a picture stays round, a monogram or icon is
     /// drawn on its own.
     Bare,
+    /// Material's scalloped twelve-sided shape, morphing into a circle
+    /// while signing in.
+    Cookie,
+}
+
+/// How the other users are offered.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum UserSwitcher {
+    /// Their faces in a row.
+    #[default]
+    Faces,
+    /// Material chips: a small face and the first name.
+    Chips,
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -237,6 +258,8 @@ pub struct UserConfig {
     pub name_size: f32,
     /// Login names never listed.
     pub hidden: Vec<String>,
+    /// How the user switcher shows the other people.
+    pub switcher: UserSwitcher,
 }
 
 impl Default for UserConfig {
@@ -250,6 +273,7 @@ impl Default for UserConfig {
             show_name: true,
             name_size: L::NAME_SIZE,
             hidden: Vec::new(),
+            switcher: UserSwitcher::Faces,
         }
     }
 }
@@ -268,6 +292,10 @@ pub enum FieldStyle {
     Underline,
     /// A dark recessed field with a hairline border.
     Inset,
+    /// Material's filled field: a tonal container with rounded top
+    /// corners, an indicator line that thickens in the accent while
+    /// focused, and the hint floating up as a label once you type.
+    Filled,
 }
 
 /// Where the sign-in button sits.
@@ -360,6 +388,8 @@ pub enum SessionStyle {
     /// A full-width field (a drop-down as wide as the password field, or
     /// the card).
     Field,
+    /// A Material chip with a menu.
+    Chip,
 }
 
 impl Default for SessionConfig {
@@ -389,6 +419,8 @@ pub enum PowerStyle {
     Soft,
     /// Dark circles with a hairline outline.
     Outlined,
+    /// Material tonal icon buttons that square off while pressed.
+    Tonal,
 }
 
 impl Default for PowerConfig {
@@ -434,11 +466,13 @@ pub struct LogoConfig {
     pub path: String,
     pub size: f32,
     pub opacity: f32,
+    /// Mandara's emblem in a light tone of the accent instead of white.
+    pub accent: bool,
 }
 
 impl Default for LogoConfig {
     fn default() -> Self {
-        Self { path: String::new(), size: 56.0, opacity: 0.9 }
+        Self { path: String::new(), size: 56.0, opacity: 0.9, accent: false }
     }
 }
 
@@ -481,11 +515,14 @@ pub struct ThemeConfig {
     /// Themes the colour scheme switcher offers (catalog ids; empty = a
     /// handful of Mandara's own). The pick is remembered.
     pub switcher: Vec<String>,
+    /// Colours made from the picture behind the login screen (Material's
+    /// dynamic colour); the preset when it shows no picture.
+    pub from_wallpaper: bool,
 }
 
 impl Default for ThemeConfig {
     fn default() -> Self {
-        Self { preset: "montaza-twilight".into(), accent: String::new(), glass: 0.18, rim: 0.6, roundness: 1.0, switcher: Vec::new() }
+        Self { preset: "montaza-twilight".into(), accent: String::new(), glass: 0.18, rim: 0.6, roundness: 1.0, switcher: Vec::new(), from_wallpaper: false }
     }
 }
 
@@ -676,6 +713,13 @@ fn place(element: Element, anchor: Anchor, x: f32, y: f32, visible: bool, z: i32
 const OLD_CARD_CENTERS: [(Element, f32); 3] = [(Element::User, 118.0), (Element::Password, 254.0), (Element::Users, 350.0)];
 const OLD_FIELD: (f32, f32) = (290.0, 44.0);
 
+/// The layout defaults a config was written for (`layout_version`).
+/// 1: Mandara's emblem shows in the default layout.
+pub const LAYOUT_VERSION: u32 = 1;
+/// The logo's placement in layouts before version 1: hidden above the
+/// keyboard pill.
+const OLD_LOGO: (Anchor, f32, f32, f32, i32) = (Anchor::Bottom, 0.0, -96.0, 1.0, 2);
+
 impl GreeterConfig {
     /// A config still at the old card defaults (written in full by the
     /// installer, never edited) gets the new ones: the card closer to the
@@ -693,6 +737,19 @@ impl GreeterConfig {
         if (self.password.width, self.password.height) == OLD_FIELD {
             (self.password.width, self.password.height) = (L::FIELD_W, L::FIELD_H);
         }
+        // Before version 1 the default layout hid the logo, so Mandara's
+        // emblem never showed in the Mandara look. A logo still where that
+        // layout put it was never turned on: show it. One that was moved,
+        // resized or (since version 1) turned off stays as it is.
+        if self.layout_version < 1 {
+            if let Some(p) = self.layout.iter_mut().find(|p| p.element == Element::Logo)
+                && !p.visible
+                && (p.anchor, p.x, p.y, p.scale, p.z) == OLD_LOGO
+            {
+                p.visible = true;
+            }
+            self.layout_version = LAYOUT_VERSION;
+        }
     }
 }
 
@@ -700,9 +757,10 @@ impl GreeterConfig {
 /// Applying one ([`GreeterConfig::apply_look`]) changes how the screen
 /// looks and where things sit; who is listed, sessions, folders, language
 /// and accessibility stay as they are.
-pub const LOOKS: [(&str, &str, &str); 2] = [
+pub const LOOKS: [(&str, &str, &str); 3] = [
     ("mandara", "Mandara", "A big clock, your picture over a glass field, everything floating on the backdrop"),
     ("midnight-card", "Midnight card", "A quiet clock over one outlined card with the user, password and session, in midnight navy and citrine"),
+    ("material-you", "Material You", "Colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar, chips and tonal buttons"),
 ];
 
 impl GreeterConfig {
@@ -722,6 +780,7 @@ impl GreeterConfig {
         self.card = base.card.clone();
         self.logo = LogoConfig { path: self.logo.path.clone(), ..base.logo.clone() };
         self.layout = default_layout();
+        self.layout_version = LAYOUT_VERSION;
         match id {
             "mandara" => {}
             "midnight-card" => {
@@ -774,6 +833,64 @@ impl GreeterConfig {
                     }
                 }
             }
+            "material-you" => {
+                // Material 3 Expressive: dynamic colour, tonal surfaces,
+                // large type and shapes that morph (corner sizes are
+                // Material's: 32 px cards, 16 px fields).
+                self.theme.preset = "mandara-corniche".into();
+                self.theme.from_wallpaper = true;
+                self.theme.glass = 0.0;
+                self.theme.rim = 0.0;
+                self.background.dim = 0.2;
+                self.background.vignette = 0.25;
+                self.background.orbs = false;
+                self.background.grain = 0.5;
+                self.background.ken_burns = 0.06;
+                self.background.parallax = 8.0;
+                self.clock.size = 132.0;
+                self.clock.weight = 500;
+                self.clock.idle_weight = 250;
+                self.clock.stacked = true;
+                self.clock.tint = true;
+                self.clock.opacity = 1.0;
+                self.date.size = 20.0;
+                self.date.weight = 500;
+                self.date.opacity = 0.92;
+                self.user.avatar_shape = AvatarShape::Cookie;
+                self.user.avatar_size = 112.0;
+                self.user.glow_ring = false;
+                self.user.name_size = 22.0;
+                self.user.switcher = UserSwitcher::Chips;
+                self.password.style = FieldStyle::Filled;
+                self.password.submit = SubmitButton::Beside;
+                self.password.mask = PasswordMask::Shapes;
+                self.password.height = 56.0;
+                self.password.text_size = 16.0;
+                self.password.glow = false;
+                self.session.style = SessionStyle::Chip;
+                self.power.style = PowerStyle::Tonal;
+                self.power.labels = false;
+                self.power.size = 48.0;
+                self.card = CardConfig { enabled: true, width: 420.0, padding: 28.0, radius: 32.0, border: 0.0, opacity: 0.92, ..CardConfig::default() };
+                self.logo.size = 40.0;
+                self.logo.opacity = 1.0;
+                self.logo.accent = true;
+                for pl in &mut self.layout {
+                    match pl.element {
+                        Element::Date => pl.y = 64.0,
+                        Element::Clock => pl.y = 96.0,
+                        Element::User => pl.y = 150.0,
+                        Element::Users => pl.y = 420.0,
+                        Element::Keyboard => pl.y = -32.0,
+                        // The bottom corner the session picker leaves free
+                        // (it sits in the card), across from the power buttons.
+                        Element::Logo => (pl.anchor, pl.x, pl.y) = (Anchor::BottomLeft, 36.0, -36.0),
+                        Element::Power => (pl.x, pl.y) = (-32.0, -32.0),
+                        Element::Session => (pl.x, pl.y) = (32.0, -32.0),
+                        _ => {}
+                    }
+                }
+            }
             _ => return false,
         }
         self.normalize();
@@ -803,8 +920,8 @@ pub fn default_layout() -> Vec<Placement> {
         place(Element::Power, Anchor::BottomRight, -34.0, -34.0, true, 2),
         place(Element::Keyboard, Anchor::Bottom, 0.0, -38.0, true, 2),
         place(Element::Banner, Anchor::Top, 0.0, 34.0, false, 2),
-        // Above the keyboard pill, so turning it on doesn't cover it.
-        place(Element::Logo, Anchor::Bottom, 0.0, -96.0, false, 2),
+        // Mandara's emblem, above the keyboard pill.
+        place(Element::Logo, Anchor::Bottom, 0.0, -96.0, true, 2),
         place(Element::Themes, Anchor::TopRight, -28.0, 28.0, false, 2),
     ]
 }
@@ -836,6 +953,11 @@ pub struct GreeterConfig {
     pub motion: MotionConfig,
     pub accessibility: AccessibilityConfig,
     pub layout: Vec<Placement>,
+    /// The layout defaults this file was written for ([`LAYOUT_VERSION`]);
+    /// missing (0) in older files, which [`GreeterConfig::normalize`]
+    /// brings up to date.
+    #[serde(default)]
+    pub layout_version: u32,
 }
 
 impl Default for GreeterConfig {
@@ -859,6 +981,7 @@ impl Default for GreeterConfig {
             motion: MotionConfig::default(),
             accessibility: AccessibilityConfig::default(),
             layout: default_layout(),
+            layout_version: LAYOUT_VERSION,
         }
     }
 }
@@ -889,6 +1012,8 @@ impl GreeterConfig {
         b.still_seconds = b.still_seconds.clamp(3, 3600);
         self.clock.size = self.clock.size.clamp(24.0, 420.0);
         self.clock.weight = self.clock.weight.clamp(100, 900);
+        // Below 100 the idle clock keeps the awake weight.
+        self.clock.idle_weight = self.clock.idle_weight.min(900);
         self.date.weight = self.date.weight.clamp(100, 900);
         self.date.size = self.date.size.clamp(8.0, 120.0);
         self.user.avatar_size = self.user.avatar_size.clamp(32.0, 320.0);
@@ -1105,6 +1230,90 @@ mod tests {
         assert_eq!(cfg.current_look(), None, "edited after applying");
         assert!(cfg.apply_look("mandara") && cfg.current_look() == Some("mandara") && !cfg.card.enabled);
         assert!(!cfg.apply_look("nope"));
+    }
+
+    /// Every look survives the draft file and is recognised again, from any
+    /// other look, and each shows the logo.
+    #[test]
+    fn every_look_round_trips_and_shows_the_logo() {
+        for (from, _, _) in LOOKS {
+            for (id, _, _) in LOOKS {
+                let mut cfg = GreeterConfig::default();
+                assert!(cfg.apply_look(from));
+                assert!(cfg.apply_look(id));
+                assert_eq!(cfg.current_look(), Some(id), "{from} → {id}");
+                let back = GreeterConfig::parse(&cfg.to_toml()).unwrap();
+                assert_eq!(back, cfg, "{id} through TOML");
+                assert_eq!(back.current_look(), Some(id));
+                let logo = back.placement(Element::Logo);
+                assert!(logo.visible && logo.scale > 0.0 && back.logo.size >= 16.0 && back.logo.opacity > 0.5, "{id}: the logo shows");
+                assert!(back.logo.path.is_empty(), "{id}: Mandara's emblem");
+            }
+        }
+        let mut you = GreeterConfig::default();
+        you.apply_look("material-you");
+        assert!(you.theme.from_wallpaper && you.card.enabled && you.clock.stacked);
+        assert_eq!((you.user.avatar_shape, you.password.style, you.session.style, you.power.style), (AvatarShape::Cookie, FieldStyle::Filled, SessionStyle::Chip, PowerStyle::Tonal));
+        assert!(mandara_theme::catalog::find(&you.theme.preset).is_some(), "the fallback theme exists");
+        // Back to Mandara: nothing of the Material look is left.
+        you.apply_look("mandara");
+        assert_eq!(you, GreeterConfig::default());
+    }
+
+    /// The Material You look's stacked clock, tonal card and chips fit on
+    /// screens from 600 to 2160 logical pixels tall (sizes scale with the
+    /// height, clamped like the view's).
+    #[test]
+    fn the_material_layout_fits_every_screen() {
+        let mut cfg = GreeterConfig::default();
+        cfg.apply_look("material-you");
+        let clock = cfg.placement(Element::Clock);
+        let card = cfg.placement(Element::User);
+        let users = cfg.placement(Element::Users);
+        // Two lines of digits (the view's line is 0.98 of the size).
+        let clock_bottom = clock.y + 2.0 * cfg.clock.size * 0.98;
+        // Avatar, name, field, status and session chip with the card's gaps.
+        let inner = cfg.user.avatar_size + 14.0 + cfg.user.name_size * 1.3 + cfg.password.height + 6.0 + 20.0 + 32.0;
+        let card_h = inner + 2.0 * cfg.card.padding + 3.0 * 14.0;
+        for height in [600.0, 768.0, 900.0, 1080.0, 1440.0, 2160.0] {
+            let u = (height / 1080.0f32).clamp(0.6, 2.0);
+            let top = height / 2.0 + (card.y - card_h / 2.0) * u;
+            let bottom = height / 2.0 + (card.y + card_h / 2.0) * u;
+            assert!(top > clock_bottom * u, "{height}: the card ({top}) clears the clock ({})", clock_bottom * u);
+            assert!(height / 2.0 + users.y * u > bottom, "{height}: the user chips sit under the card");
+            assert!(height / 2.0 + users.y * u + 36.0 * u < height, "{height}: the chips stay on screen");
+        }
+    }
+
+    /// The emblem was hidden by the old default layout; installed configs
+    /// written in full keep their other choices and now show it, once.
+    #[test]
+    fn old_layouts_show_the_emblem_once() {
+        let mut old = toml::Value::try_from(GreeterConfig::default()).unwrap();
+        let table = old.as_table_mut().unwrap();
+        table.remove("layout_version");
+        for p in table.get_mut("layout").unwrap().as_array_mut().unwrap() {
+            if p.get("element").and_then(|e| e.as_str()) == Some("logo") {
+                p.as_table_mut().unwrap().insert("visible".into(), false.into());
+            }
+        }
+        let text = toml::to_string(&old).unwrap();
+        let cfg = GreeterConfig::parse(&text).unwrap();
+        assert!(cfg.placement(Element::Logo).visible, "the default layout shows the emblem now");
+        assert_eq!(cfg.layout_version, LAYOUT_VERSION);
+        assert_eq!(cfg.current_look(), Some("mandara"));
+        // Turned off on purpose since: it stays off.
+        let mut off = cfg;
+        off.placement_mut(Element::Logo).visible = false;
+        assert!(!GreeterConfig::parse(&off.to_toml()).unwrap().placement(Element::Logo).visible);
+        // A moved logo was a choice too.
+        let moved = text.replacen("y = -96.0", "y = -140.0", 1);
+        assert_ne!(moved, text);
+        let cfg = GreeterConfig::parse(&moved).unwrap();
+        assert_eq!(cfg.placement(Element::Logo).y, -140.0);
+        assert!(!cfg.placement(Element::Logo).visible);
+        // A partial config gets the whole default layout, emblem included.
+        assert!(GreeterConfig::parse("language = \"ar\"\n").unwrap().placement(Element::Logo).visible);
     }
 
     /// An installed config at the old card defaults moves to the shared

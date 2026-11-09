@@ -24,6 +24,9 @@ const BULLET: char = '•';
 /// Caret bar width and selection tint.
 const CARET_W_PX: f32 = 1.5;
 const SELECTION_ALPHA: f32 = 0.3;
+/// Side padding of a field drawn in a non-classic input design (the
+/// classic field's own).
+const DESIGNED_PAD_X_PX: f32 = 12.0;
 
 pub type OnCommit = Rc<dyn Fn(String, &mut Window, &mut App)>;
 
@@ -55,6 +58,15 @@ pub struct TextField {
     dirty: bool,
     /// Some editors own outside-click save/cancel at the parent surface.
     commit_on_click_out: bool,
+    /// Sits inside a search box that draws the field's design around it
+    /// ([`crate::components::inputs`]).
+    embedded: bool,
+    /// Draws every design whatever `style.input_design` says (Studio's
+    /// previews).
+    design: Option<crate::components::InputDesign>,
+    /// Whether the field was focused when it last drew (its search box's
+    /// frame follows it).
+    shown_focus: bool,
 }
 
 impl TextField {
@@ -79,7 +91,31 @@ impl TextField {
             font_px: None,
             dirty: false,
             commit_on_click_out: true,
+            embedded: false,
+            design: None,
+            shown_focus: false,
         }
+    }
+
+    /// Marks the field as sitting in a search box (see [`Self::embedded`])
+    /// and returns whether it was focused when it last drew.
+    pub fn embed_in_box(&mut self) -> bool {
+        self.embedded = true;
+        self.shown_focus
+    }
+
+    /// The field sits inside a search box ([`crate::plugins::extras::search_box`]):
+    /// in the non-classic input designs the box draws the field's shape and
+    /// the field itself draws only its text.
+    pub fn embedded(mut self) -> Self {
+        self.embedded = true;
+        self
+    }
+
+    /// Draws the field in `design` instead of `style.input_design`.
+    pub fn design(mut self, design: crate::components::InputDesign) -> Self {
+        self.design = Some(design);
+        self
     }
 
     /// Markdown editing keys (see [`crate::markdown`]'s helpers).
@@ -594,6 +630,13 @@ impl Render for TextField {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = mandara_core::frame_palette(window, cx);
         let focused = self.focus.is_focused(window);
+        if focused != self.shown_focus {
+            self.shown_focus = focused;
+            // A search box drew its frame from the old state: once more.
+            if self.embedded {
+                window.refresh();
+            }
+        }
         let empty = self.value.is_empty();
         let multiline = self.multiline;
         let ed = self.edit();
@@ -632,23 +675,39 @@ impl Render for TextField {
         };
         // Arabic hugs the right edge, Latin (paths, commands) the left.
         let rtl = crate::bidi::text_is_rtl(if empty && !focused { &self.placeholder } else { &self.value });
-        div()
+        // Themes → Components → Text fields: the classic box is this one;
+        // the other designs draw theirs, or none inside a search box.
+        let design = self.design.unwrap_or_else(crate::style::input_design);
+        let classic = design == crate::components::InputDesign::Classic;
+        let bare = !classic && self.embedded;
+        // The outlined design's hint floats into its edge once the field is
+        // focused or holds text (single-line fields with a hint).
+        let label = (design == crate::components::InputDesign::Outlined && !bare && !multiline && !self.placeholder.is_empty() && (focused || !empty))
+            .then(|| gpui::SharedString::from(mandara_i18n::tr(&self.placeholder)));
+        let el = div()
             .id("text-field")
             .track_focus(&self.focus)
             .min_w(px(160.0))
             .when(!multiline, |el| el.h(px(32.0)).flex().items_center())
-            .when(multiline, |el| el.min_h(px(96.0)).py(px(8.0)).line_height(px(19.0)))
-            .px(px(12.0))
-            .rounded(px(crate::style::radius(10.0)))
-            .bg(palette.surface_container_high.hsla())
-            .border_1()
-            .border_color(if focused { palette.primary.hsla() } else { palette.surface_container_high.hsla() })
-            .cursor_text()
+            .when(multiline, |el| el.min_h(px(96.0)).py(px(8.0)).line_height(px(19.0)));
+        let el = if classic {
+            el.px(px(12.0))
+                .rounded(px(crate::style::radius(10.0)))
+                .bg(palette.surface_container_high.hsla())
+                .border_1()
+                .border_color(if focused { palette.primary.hsla() } else { palette.surface_container_high.hsla() })
+        } else if bare {
+            el
+        } else {
+            crate::components::inputs::dress_labelled(el.relative().px(px(DESIGNED_PAD_X_PX)), design, focused, multiline, label.clone(), &palette)
+        };
+        el.cursor_text()
             .when_some(self.font.clone(), |el, f| el.font_family(f))
             .when_some(self.font_px, |el, s| el.text_size(px(s)))
             .text_color(if empty { palette.on_surface_variant.with_alpha(0.6).hsla() } else { palette.on_surface.hsla() })
-            .when(!multiline, |el| el.whitespace_nowrap().overflow_hidden())
-            .child(div().flex_1().min_w(px(0.0)).when(rtl, |el| el.text_right()).when(!rtl, |el| el.text_left()).child(text_el))
+            // The floating label stands out of the field: only the text is clipped then.
+            .when(!multiline && label.is_none(), |el| el.whitespace_nowrap().overflow_hidden())
+            .child(div().flex_1().min_w(px(0.0)).when(label.is_some(), |el| el.whitespace_nowrap().overflow_hidden()).when(rtl, |el| el.text_right()).when(!rtl, |el| el.text_left()).child(text_el))
             .on_mouse_down(MouseButton::Left, cx.listener(|this, e: &MouseDownEvent, window, cx| this.press(e, window, cx)))
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| this.drag(e, cx)))
             .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, _| this.dragging = false))

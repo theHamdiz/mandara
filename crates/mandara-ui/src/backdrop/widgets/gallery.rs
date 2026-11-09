@@ -52,7 +52,7 @@ fn sample_scene(widget: &DesktopWidget, palette: &MandaraPalette, cover_px: u32)
         }
         scene.data.media = Some(MediaInfo {
             title: mandara_i18n::t("Example track").into(), artist: mandara_i18n::t("Example artist").into(), playing: false,
-            position_ms: POSITION_MS, at_ms: now.timestamp_millis(), rate: 1.0, length_ms: TRACK_MS,
+            position_ms: POSITION_MS, at_ms: now.timestamp_millis(), rate: 1.0, length_ms: TRACK_MS, live: false,
             art: Some(super::layout::Picture { key: super::key((palette.primary.to_rgba8(), palette.on_primary.to_rgba8(), cover_px)), pixmap: std::sync::Arc::new(cover) }),
             lyrics: vec![(0, mandara_i18n::t("Example track").into()), (POSITION_MS, mandara_i18n::t("Preview").into())], lyrics_loading: false,
         });

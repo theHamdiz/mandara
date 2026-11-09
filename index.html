@@ -1,173 +1,733 @@
----
-layout: null
----
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Mandara — your Wayland desktop</title>
-  <meta name="description" content="A responsive Wayland desktop in Rust, with spring motion, live settings and optional offline AI control in natural language." />
+  <title>Mandara — a design-first Wayland desktop</title>
+  <meta name="description" content="A design-first Wayland desktop shell in Rust for seven compositors, with Looks, a live design studio, 81 plugins and optional offline AI control in natural language." />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a1520" />
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f8f8" />
   <meta property="og:title" content="Mandara — your desktop, your rhythm" />
-  <meta property="og:description" content="Your desktop, in your own words. Optional local AI control, responsive native Rust and seven compositor drivers." />
-  <meta property="og:image" content="{{ '/docs/screenshots/hero.webp' | absolute_url }}" />
+  <meta property="og:description" content="A design-first Wayland desktop in Rust: Looks, a live design studio, seven compositors and optional local AI control in natural language." />
+  <meta property="og:image" content="https://thehamdiz.github.io/mandara/docs/screenshots/hero.webp" />
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary_large_image" />
-  <link rel="canonical" href="{{ '/' | absolute_url }}" />
-  {% include head-custom.html %}
-  <link rel="stylesheet" href="{{ '/assets/css/landing.css' | relative_url }}" />
+  <link rel="canonical" href="https://thehamdiz.github.io/mandara/" />
+  <link rel="icon" type="image/png" sizes="128x128" href="assets/brand/mandara-128.png" />
+  <link rel="preload" as="font" type="font/woff2" href="assets/fonts/alexandria.woff2" crossorigin="anonymous" />
+  <link rel="preload" as="image" href="docs/screenshots/hero.webp" media="(prefers-color-scheme: dark)" fetchpriority="high" />
+  <link rel="preload" as="image" href="docs/screenshots/hero-light.webp" media="(prefers-color-scheme: light)" fetchpriority="high" />
+  <link rel="stylesheet" href="assets/css/site.css" />
+  <script src="assets/js/site.js" defer="defer"></script>
+  <script src="assets/js/copy-code.js" defer="defer"></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
-  <header class="site-header page-width">
-    <a class="wordmark" href="{{ '/' | relative_url }}" aria-label="Mandara home">
-      <img src="{{ '/assets/brand/mandara-128.png' | relative_url }}" width="52" height="52" alt="" />
-      <span>Mandara</span>
-    </a>
-    <nav aria-label="Main navigation">
-      <a href="#looks">Looks</a>
-      <a href="{{ '/docs/' | relative_url }}">Docs</a>
-      <a href="https://github.com/theHamdiz/mandara">GitHub</a>
-      <a class="nav-install" href="#install">Install <span aria-hidden="true">↗</span></a>
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="shape-cookie" viewBox="0 0 100 100"><path d="M100.0 50.0 99.3 52.6 97.5 55.0 95.2 57.2 93.1 59.2 92.0 61.2 91.9 63.6 92.7 66.4 93.6 69.4 94.0 72.4 93.3 75.0 91.4 76.9 88.6 78.1 85.5 78.8 82.8 79.5 80.7 80.7 79.5 82.8 78.8 85.5 78.1 88.6 76.9 91.4 75.0 93.3 72.4 94.0 69.4 93.6 66.4 92.7 63.6 91.9 61.2 92.0 59.2 93.1 57.2 95.2 55.0 97.5 52.6 99.3 50.0 100.0 47.4 99.3 45.0 97.5 42.8 95.2 40.8 93.1 38.8 92.0 36.4 91.9 33.6 92.7 30.6 93.6 27.6 94.0 25.0 93.3 23.1 91.4 21.9 88.6 21.2 85.5 20.5 82.8 19.3 80.7 17.2 79.5 14.5 78.8 11.4 78.1 8.6 76.9 6.7 75.0 6.0 72.4 6.4 69.4 7.3 66.4 8.1 63.6 8.0 61.2 6.9 59.2 4.8 57.2 2.5 55.0 0.7 52.6 0.0 50.0 0.7 47.4 2.5 45.0 4.8 42.8 6.9 40.8 8.0 38.8 8.1 36.4 7.3 33.6 6.4 30.6 6.0 27.6 6.7 25.0 8.6 23.1 11.4 21.9 14.5 21.2 17.2 20.5 19.3 19.3 20.5 17.2 21.2 14.5 21.9 11.4 23.1 8.6 25.0 6.7 27.6 6.0 30.6 6.4 33.6 7.3 36.4 8.1 38.8 8.0 40.8 6.9 42.8 4.8 45.0 2.5 47.4 0.7 50.0 0.0 52.6 0.7 55.0 2.5 57.2 4.8 59.2 6.9 61.2 8.0 63.6 8.1 66.4 7.3 69.4 6.4 72.4 6.0 75.0 6.7 76.9 8.6 78.1 11.4 78.8 14.5 79.5 17.2 80.7 19.3 82.8 20.5 85.5 21.2 88.6 21.9 91.4 23.1 93.3 25.0 94.0 27.6 93.6 30.6 92.7 33.6 91.9 36.4 92.0 38.8 93.1 40.8 95.2 42.8 97.5 45.0 99.3 47.4Z" /></symbol>
+    <symbol id="shape-flower" viewBox="0 0 100 100"><path d="M100.0 50.0 99.3 52.6 97.5 55.0 94.7 57.1 91.5 58.8 88.3 60.3 85.7 61.6 83.9 63.0 83.2 64.8 83.4 67.0 84.3 69.8 85.5 73.1 86.6 76.6 87.1 80.0 86.7 83.1 85.4 85.4 83.1 86.7 80.0 87.1 76.6 86.6 73.1 85.5 69.8 84.3 67.0 83.4 64.8 83.2 63.0 83.9 61.6 85.7 60.3 88.3 58.8 91.5 57.1 94.7 55.0 97.5 52.6 99.3 50.0 100.0 47.4 99.3 45.0 97.5 42.9 94.7 41.2 91.5 39.7 88.3 38.4 85.7 37.0 83.9 35.2 83.2 33.0 83.4 30.2 84.3 26.9 85.5 23.4 86.6 20.0 87.1 16.9 86.7 14.6 85.4 13.3 83.1 12.9 80.0 13.4 76.6 14.5 73.1 15.7 69.8 16.6 67.0 16.8 64.8 16.1 63.0 14.3 61.6 11.7 60.3 8.5 58.8 5.3 57.1 2.5 55.0 0.7 52.6 0.0 50.0 0.7 47.4 2.5 45.0 5.3 42.9 8.5 41.2 11.7 39.7 14.3 38.4 16.1 37.0 16.8 35.2 16.6 33.0 15.7 30.2 14.5 26.9 13.4 23.4 12.9 20.0 13.3 16.9 14.6 14.6 16.9 13.3 20.0 12.9 23.4 13.4 26.9 14.5 30.2 15.7 33.0 16.6 35.2 16.8 37.0 16.1 38.4 14.3 39.7 11.7 41.2 8.5 42.9 5.3 45.0 2.5 47.4 0.7 50.0 0.0 52.6 0.7 55.0 2.5 57.1 5.3 58.8 8.5 60.3 11.7 61.6 14.3 63.0 16.1 64.8 16.8 67.0 16.6 69.8 15.7 73.1 14.5 76.6 13.4 80.0 12.9 83.1 13.3 85.4 14.6 86.7 16.9 87.1 20.0 86.6 23.4 85.5 26.9 84.3 30.2 83.4 33.0 83.2 35.2 83.9 37.0 85.7 38.4 88.3 39.7 91.5 41.2 94.7 42.9 97.5 45.0 99.3 47.4Z" /></symbol>
+    <symbol id="shape-clover" viewBox="0 0 100 100"><path d="M100.0 50.0 99.7 52.6 99.0 55.1 97.7 57.6 96.0 59.8 93.9 61.8 91.6 63.5 89.1 65.0 86.6 66.3 84.0 67.3 81.6 68.2 79.3 69.0 77.3 69.8 75.4 70.6 73.9 71.5 72.6 72.6 71.5 73.9 70.6 75.4 69.8 77.3 69.0 79.3 68.2 81.6 67.3 84.0 66.3 86.6 65.0 89.1 63.5 91.6 61.8 93.9 59.8 96.0 57.6 97.7 55.1 99.0 52.6 99.7 50.0 100.0 47.4 99.7 44.9 99.0 42.4 97.7 40.2 96.0 38.2 93.9 36.5 91.6 35.0 89.1 33.7 86.6 32.7 84.0 31.8 81.6 31.0 79.3 30.2 77.3 29.4 75.4 28.5 73.9 27.4 72.6 26.1 71.5 24.6 70.6 22.7 69.8 20.7 69.0 18.4 68.2 16.0 67.3 13.4 66.3 10.9 65.0 8.4 63.5 6.1 61.8 4.0 59.8 2.3 57.6 1.0 55.1 0.3 52.6 0.0 50.0 0.3 47.4 1.0 44.9 2.3 42.4 4.0 40.2 6.1 38.2 8.4 36.5 10.9 35.0 13.4 33.7 16.0 32.7 18.4 31.8 20.7 31.0 22.7 30.2 24.6 29.4 26.1 28.5 27.4 27.4 28.5 26.1 29.4 24.6 30.2 22.7 31.0 20.7 31.8 18.4 32.7 16.0 33.7 13.4 35.0 10.9 36.5 8.4 38.2 6.1 40.2 4.0 42.4 2.3 44.9 1.0 47.4 0.3 50.0 0.0 52.6 0.3 55.1 1.0 57.6 2.3 59.8 4.0 61.8 6.1 63.5 8.4 65.0 10.9 66.3 13.4 67.3 16.0 68.2 18.4 69.0 20.7 69.8 22.7 70.6 24.6 71.5 26.1 72.6 27.4 73.9 28.5 75.4 29.4 77.3 30.2 79.3 31.0 81.6 31.8 84.0 32.7 86.6 33.7 89.1 35.0 91.6 36.5 93.9 38.2 96.0 40.2 97.7 42.4 99.0 44.9 99.7 47.4Z" /></symbol>
+    <symbol id="shape-burst" viewBox="0 0 100 100"><path d="M100.0 50.0 99.0 52.6 96.6 54.9 94.3 57.0 93.4 59.2 94.2 61.8 95.7 64.8 96.5 67.8 95.5 70.2 92.8 71.8 89.6 72.9 87.2 74.2 86.3 76.4 86.4 79.5 86.5 82.8 85.4 85.4 82.8 86.5 79.5 86.4 76.4 86.3 74.2 87.2 72.9 89.6 71.8 92.8 70.2 95.5 67.8 96.5 64.8 95.7 61.8 94.2 59.2 93.4 57.0 94.3 54.9 96.6 52.6 99.0 50.0 100.0 47.4 99.0 45.1 96.6 43.0 94.3 40.8 93.4 38.2 94.2 35.2 95.7 32.2 96.5 29.8 95.5 28.2 92.8 27.1 89.6 25.8 87.2 23.6 86.3 20.5 86.4 17.2 86.5 14.6 85.4 13.5 82.8 13.6 79.5 13.7 76.4 12.8 74.2 10.4 72.9 7.2 71.8 4.5 70.2 3.5 67.8 4.3 64.8 5.8 61.8 6.6 59.2 5.7 57.0 3.4 54.9 1.0 52.6 0.0 50.0 1.0 47.4 3.4 45.1 5.7 43.0 6.6 40.8 5.8 38.2 4.3 35.2 3.5 32.2 4.5 29.8 7.2 28.2 10.4 27.1 12.8 25.8 13.7 23.6 13.6 20.5 13.5 17.2 14.6 14.6 17.2 13.5 20.5 13.6 23.6 13.7 25.8 12.8 27.1 10.4 28.2 7.2 29.8 4.5 32.2 3.5 35.2 4.3 38.2 5.8 40.8 6.6 43.0 5.7 45.1 3.4 47.4 1.0 50.0 0.0 52.6 1.0 54.9 3.4 57.0 5.7 59.2 6.6 61.8 5.8 64.8 4.3 67.8 3.5 70.2 4.5 71.8 7.2 72.9 10.4 74.2 12.8 76.4 13.7 79.5 13.6 82.8 13.5 85.4 14.6 86.5 17.2 86.4 20.5 86.3 23.6 87.2 25.8 89.6 27.1 92.8 28.2 95.5 29.8 96.5 32.2 95.7 35.2 94.2 38.2 93.4 40.8 94.3 43.0 96.6 45.1 99.0 47.4Z" /></symbol>
+  </svg>
+
+  <!-- The floating bar: the page's own island, as on the desktop. -->
+  <header class="topbar">
+    <nav class="island" aria-label="Main">
+      <a class="brand" href="#main"><img src="assets/brand/mandara-128.png" width="128" height="128" alt="" /><span>Mandara</span></a>
+      <ul class="island-links">
+        <li><a href="#looks">Looks</a></li>
+        <li><a href="#bars">Bars</a></li>
+        <li><a href="#studio">Studio</a></li>
+        <li><a href="#plugins">Plugins</a></li>
+        <li><a href="#install">Install</a></li>
+        <li><a href="docs/">Docs</a></li>
+      </ul>
+      <div class="island-tools">
+        <div class="scheme" role="group" aria-label="Colour scheme" hidden="hidden">
+          <button type="button" data-scheme="auto" aria-pressed="true">Auto</button>
+          <button type="button" data-scheme="light" aria-pressed="false">Light</button>
+          <button type="button" data-scheme="dark" aria-pressed="false">Dark</button>
+        </div>
+        <a class="island-cta" href="https://github.com/theHamdiz/mandara">GitHub</a>
+      </div>
     </nav>
   </header>
 
   <main id="main">
-    <section class="hero page-width" aria-labelledby="hero-title">
+
+    <!-- The first screen: the promise, the film and the install line. -->
+    <section class="hero" aria-labelledby="hero-title">
+      <p class="hero-arabic" lang="ar" dir="rtl" aria-hidden="true">المندرة</p>
       <div class="hero-copy">
-        <h1 id="hero-title"><span class="line"><span>Your desktop.</span></span><span class="line"><span>Your rhythm.</span></span></h1>
-        <div class="hero-intro">
-          <p>A fast, complete Wayland desktop, written in Rust. Shape the bar, the widgets and the little moments in between. Optional local AI lets you control your shell in natural language, too.</p>
-          <a class="button" href="#install">Get Mandara <span aria-hidden="true">↗</span></a>
-          <a class="quiet-link" href="{{ '/docs/install.html#compositors' | relative_url }}">Find your compositor</a>
+        <p class="eyebrow"><span class="dot" aria-hidden="true"></span> A Wayland desktop, written in Rust</p>
+        <h1 id="hero-title" class="display">
+          <span class="d-heavy">Your desktop,</span>
+          <span class="d-thin">your</span>
+          <span class="d-accent wave">rhythm.</span>
+        </h1>
+        <p class="lede">Mandara draws the bar, dock, launcher, notifications, widgets, lock and login in one program, in your wallpaper’s colours, with spring motion and live settings.</p>
+        <div class="hero-actions">
+          <a class="button button-filled" href="#install">Install Mandara</a>
+          <a class="button button-tonal" href="docs/">Read the guides</a>
+        </div>
+        <div class="install-command hero-command">
+          <code>sh -c 'f=$(mktemp) &amp;&amp; trap "rm -f -- \"\$f\"" 0 &amp;&amp; curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" &amp;&amp; sh "$f" "$@"' sh</code>
         </div>
       </div>
+      <div class="hero-visual">
+        <svg class="blob blob-cookie" viewBox="0 0 100 100" aria-hidden="true"><use href="#shape-cookie" /></svg>
+        <svg class="blob blob-flower" viewBox="0 0 100 100" aria-hidden="true"><use href="#shape-flower" /></svg>
+        <svg class="blob blob-clover" viewBox="0 0 100 100" aria-hidden="true"><use href="#shape-clover" /></svg>
+        <figure class="film">
+          <picture class="film-poster">
+            <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/hero-light.webp" />
+            <img src="docs/screenshots/hero.webp" width="2880" height="1620" fetchpriority="high" alt="A Mandara desktop: an edge-frame bar with the song playing, a headline clock, a to-do list on torn paper, two sticky notes, a month calendar, the week’s agenda and the dock." />
+          </picture>
+          <video class="film-video" autoplay="autoplay" muted="muted" loop="loop" playsinline="playsinline" preload="metadata" aria-label="Mandara in motion: panels, Looks and widgets" data-poster-dark="docs/screenshots/hero.webp" data-poster-light="docs/screenshots/hero-light.webp">
+            <source data-src="assets/video/mandara-promo.webm" type="video/webm" />
+            <source data-src="assets/video/mandara-promo.mp4" type="video/mp4" />
+          </video>
+          <div class="film-controls" hidden="hidden">
+            <button class="film-button" type="button" data-film="play" aria-pressed="true">Pause</button>
+            <button class="film-button" type="button" data-film="sound" aria-pressed="false">Sound on</button>
+          </div>
+        </figure>
+        <p class="hero-chip"><span class="chip-shape" aria-hidden="true"><svg viewBox="0 0 100 100"><use href="#shape-burst" /></svg></span> Coloured by your wallpaper</p>
+      </div>
+    </section>
 
-      <fieldset class="look-preview" id="looks">
-        <legend>Find your Look</legend>
-        <input class="look-input" type="radio" name="look" id="look-corniche" checked="checked" />
-        <input class="look-input" type="radio" name="look" id="look-qaitbay" />
-        <input class="look-input" type="radio" name="look" id="look-night" />
-        <div class="look-controls">
-          <label for="look-corniche">Corniche dusk</label>
-          <label for="look-qaitbay">Qaitbay forest</label>
-          <label for="look-night">Night frame</label>
-          <span>Real desktops, in your light or dark theme.</span>
+    <!-- The numbers, set large. -->
+    <section class="facts" aria-label="Mandara in numbers">
+      <ul class="fact-row">
+        <li class="fact rail-1"><span class="fact-figure">0.1<small>ms</small></span> <span class="fact-label">typical frame build</span></li>
+        <li class="fact rail-2"><span class="fact-figure">7</span> <span class="fact-label">compositors, each in its own language</span></li>
+        <li class="fact rail-3"><span class="fact-figure">81</span> <span class="fact-label">plugins, switched on as you need them</span></li>
+        <li class="fact rail-4"><span class="fact-figure">20</span> <span class="fact-label">languages, right to left included</span></li>
+      </ul>
+      <p class="facts-note">The frame time is a historical figure from release builds: 95% of sampled frames finished inside the 1 ms a 1000 Hz display allows. Your display, driver and widgets change it, and Studio → Performance shows yours live. <a href="docs/performance.html">How it is measured</a></p>
+    </section>
+
+    <!-- Built-in surfaces: the things other desktops open separate apps for. -->
+    <section class="section surfaces" id="features" aria-labelledby="surfaces-title">
+      <header class="section-head">
+        <h2 id="surfaces-title" class="display-2"><span class="d-heavy">Fewer apps to open.</span> <em>More shell.</em></h2>
+        <p>Each of these is part of the one program that draws your desktop, in the same colours, type and motion as the bar you look at all day.</p>
+      </header>
+      <div class="gallery">
+        <figure class="surface g-wide">
+          <picture>
+            <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/launcher-light.webp" />
+            <img src="docs/screenshots/launcher.webp" width="1147" height="923" loading="lazy" decoding="async" alt="The launcher: apps listed with descriptions above a search field." />
+          </picture>
+          <figcaption><b>Launcher</b> Apps, maths, unit conversions, clipboard and commands, filtered as you type.</figcaption>
+        </figure>
+        <figure class="surface g-tall">
+          <picture>
+            <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/clipboard-light.webp" />
+            <img src="docs/screenshots/clipboard.webp" width="779" height="1341" loading="lazy" decoding="async" alt="The clipboard panel: a search field, kind filters and recent text, links, code, a colour and an image." />
+          </picture>
+          <figcaption><b>Clipboard</b> Text, links, code, colours and images, pinned or searched, pasted back for you.</figcaption>
+        </figure>
+        <figure class="surface ">
+          <picture>
+            <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/media-panel-light.webp" />
+            <img src="docs/screenshots/media-panel.webp" width="873" height="939" loading="lazy" decoding="async" alt="The media panel playing a track, with album art, a spectrum and transport controls." />
+          </picture>
+          <figcaption><b>Media</b> Album colours, a spectrum that follows the music and synced lyrics.</figcaption>
+        </figure>
+        <figure class="surface ">
+          <picture>
+            <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/notification-toasts-light.webp" />
+            <img src="docs/screenshots/notification-toasts.webp" width="735" height="702" loading="lazy" decoding="async" alt="Notification toasts with reply and archive actions." />
+          </picture>
+          <figcaption><b>Notifications</b> Actions, replies, history and do not disturb.</figcaption>
+        </figure>
+        <figure class="surface ">
+          <picture>
+            <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/quick-settings-light.webp" />
+            <img src="docs/screenshots/quick-settings.webp" width="760" height="900" loading="lazy" decoding="async" alt="The quick settings panel with toggles and sliders." />
+          </picture>
+          <figcaption><b>Quick settings</b> Network, Bluetooth, sound, brightness and power at a touch.</figcaption>
+        </figure>
+        <figure class="surface g-tall">
+          <picture>
+            <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/sidebar-light.webp" />
+            <img src="docs/screenshots/sidebar.webp" width="760" height="1620" loading="lazy" decoding="async" alt="The widget sidebar open with several cards." />
+          </picture>
+          <figcaption><b>Sidebar</b> Cards for the weather, calendar, feeds, notes and anything a plugin adds.</figcaption>
+        </figure>
+        <figure class="surface g-wide">
+          <picture>
+            <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/widgets-desk-light.webp" />
+            <img src="docs/screenshots/widgets-desk.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Desktop widgets on a calm wallpaper: a clock, a calendar, notes and the weather." />
+          </picture>
+          <figcaption><b>Desktop widgets</b> Clocks, calendars, notes and to-dos that live on your wallpaper.</figcaption>
+        </figure>
+        <figure class="surface ">
+          <picture>
+            <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/dock-applications-light.webp" />
+            <img src="docs/screenshots/dock-applications.webp" width="1715" height="1088" loading="lazy" decoding="async" alt="The dock with its applications open." />
+          </picture>
+          <figcaption><b>Dock</b> Pinned apps, running windows and folders that fan out.</figcaption>
+        </figure>
+        <figure class="surface ">
+          <picture>
+            <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/main-menu-light.webp" />
+            <img src="docs/screenshots/main-menu.webp" width="1200" height="902" loading="lazy" decoding="async" alt="The main menu open over the desktop." />
+          </picture>
+          <figcaption><b>Main menu</b> Your apps, power and the places you visit most.</figcaption>
+        </figure>
+        <figure class="surface g-wide">
+          <picture>
+            <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/lock-screen-light.webp" />
+            <img src="docs/screenshots/lock-screen.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="The lock screen with a clock and a password field." />
+          </picture>
+          <figcaption><b>Lock screen</b> A steady field and a soft shape for every key you press.</figcaption>
+        </figure>
+        <figure class="surface ">
+          <picture>
+            <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/wallpaper-picker-carousel-light.webp" />
+            <img src="docs/screenshots/wallpaper-picker-carousel.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="The wallpaper picker showing a carousel of wallpapers." />
+          </picture>
+          <figcaption><b>Wallpapers</b> Browse, preview and set, with colours taken from each picture.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- The live thing: pick a Look, see its desktop, and the page takes its palette. -->
+    <section class="section looks" id="looks" aria-labelledby="looks-title">
+      <header class="section-head">
+        <h2 id="looks-title" class="display-2"><span class="d-heavy">Pick a</span> <em class="wave">Look.</em></h2>
+        <p>Six desktops named for Alexandria’s coast. Each sets the bar, widgets, type and colours in one click. Choose one and this page wears its palette too.</p>
+      </header>
+      <fieldset class="looks-picker">
+        <legend class="visually-hidden">Looks</legend>
+        <input class="look-input" type="radio" name="look" id="look-corniche-dusk" value="corniche-dusk" checked="checked" />
+        <input class="look-input" type="radio" name="look" id="look-pharos-ink" value="pharos-ink" />
+        <input class="look-input" type="radio" name="look" id="look-montaza-crimson" value="montaza-crimson" />
+        <input class="look-input" type="radio" name="look" id="look-qaitbay-forest" value="qaitbay-forest" />
+        <input class="look-input" type="radio" name="look" id="look-anfushi-wave" value="anfushi-wave" />
+        <input class="look-input" type="radio" name="look" id="look-night-frame" value="night-frame" />
+        <div class="looks-list">
+          <label class="look-choice" for="look-corniche-dusk" data-look="corniche-dusk"><span class="swatches" aria-hidden="true"><i style="background: #ffb2bf"></i><i style="background: #f5b8af"></i><i style="background: #900039"></i></span><span class="look-name">Corniche Dusk</span></label>
+          <label class="look-choice" for="look-pharos-ink" data-look="pharos-ink"><span class="swatches" aria-hidden="true"><i style="background: #ffffff"></i><i style="background: #c6c6c6"></i><i style="background: #d4d4d4"></i></span><span class="look-name">Pharos Ink</span></label>
+          <label class="look-choice" for="look-montaza-crimson" data-look="montaza-crimson"><span class="swatches" aria-hidden="true"><i style="background: #ffb3ae"></i><i style="background: #f5b9a2"></i><i style="background: #930015"></i></span><span class="look-name">Montaza Crimson</span></label>
+          <label class="look-choice" for="look-qaitbay-forest" data-look="qaitbay-forest"><span class="swatches" aria-hidden="true"><i style="background: #9ad4a2"></i><i style="background: #b7ccb7"></i><i style="background: #19512a"></i></span><span class="look-name">Qaitbay Forest</span></label>
+          <label class="look-choice" for="look-anfushi-wave" data-look="anfushi-wave"><span class="swatches" aria-hidden="true"><i style="background: #00d9fc"></i><i style="background: #a8cbe2"></i><i style="background: #004e5c"></i></span><span class="look-name">Anfushi Wave</span></label>
+          <label class="look-choice" for="look-night-frame" data-look="night-frame"><span class="swatches" aria-hidden="true"><i style="background: #c3c0ff"></i><i style="background: #c7c4dd"></i><i style="background: #424078"></i></span><span class="look-name">Night Frame</span></label>
+          <div class="looks-note">
+            <p>Your own setup is saved before the first Look, so <strong>Restore my look</strong> in Studio brings it back.</p>
+            <button class="button button-text" type="button" data-look-reset="true" hidden="hidden">Back to Mandara Corniche</button>
+            <p class="looks-status" role="status" aria-live="polite"></p>
+          </div>
         </div>
-        <div class="look-stage" data-ui="true">
-          <figure class="look look-corniche">
+        <div class="look-stage">
+          <figure class="look look-corniche-dusk">
             <picture>
-              <source media="(prefers-color-scheme: light)" srcset="{{ '/docs/screenshots/look-corniche-dusk-light.webp' | relative_url }}" />
-              <img src="{{ '/docs/screenshots/look-corniche-dusk.webp' | relative_url }}" width="1920" height="1080" alt="Corniche dusk: a sunset desktop with floating bar islands, live system readings and a music card." fetchpriority="high" />
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-corniche-dusk-light.webp" />
+              <img src="docs/screenshots/look-corniche-dusk.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Corniche Dusk: a sunset desktop with floating glass pills, a headline clock, a system monitor column and a music card." />
             </picture>
-            <figcaption><span>Warm light. Floating islands. A little room by the sea.</span><span class="preview-links"><a class="preview-dark" href="{{ '/docs/screenshots/look-corniche-dusk.webp' | relative_url }}">Open full preview <span aria-hidden="true">↗</span></a><a class="preview-light" href="{{ '/docs/screenshots/look-corniche-dusk-light.webp' | relative_url }}">Open full preview <span aria-hidden="true">↗</span></a></span></figcaption>
+            <figcaption class="look-caption"><span class="look-blurb">Rose evening glass: headline clock, system monitor, media card and glass pills.</span> <code>mandara msg look apply corniche-dusk</code></figcaption>
           </figure>
-          <figure class="look look-qaitbay">
+          <figure class="look look-pharos-ink">
             <picture>
-              <source media="(prefers-color-scheme: light)" srcset="{{ '/docs/screenshots/look-qaitbay-forest-light.webp' | relative_url }}" />
-              <img src="{{ '/docs/screenshots/look-qaitbay-forest.webp' | relative_url }}" width="1920" height="1080" alt="Qaitbay forest: a green desktop with an oversized stacked clock and a dock joined to the music player." loading="lazy" />
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-pharos-ink-light.webp" />
+              <img src="docs/screenshots/look-pharos-ink.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Pharos Ink: a monochrome contour-line desktop with a hairline bar of stats, a greeting and a calendar." />
             </picture>
-            <figcaption><span>A quieter palette and a clock that owns the room.</span><span class="preview-links"><a class="preview-dark" href="{{ '/docs/screenshots/look-qaitbay-forest.webp' | relative_url }}">Open full preview <span aria-hidden="true">↗</span></a><a class="preview-light" href="{{ '/docs/screenshots/look-qaitbay-forest-light.webp' | relative_url }}">Open full preview <span aria-hidden="true">↗</span></a></span></figcaption>
+            <figcaption class="look-caption"><span class="look-blurb">Monochrome ink: a hairline bar dense with stats, a greeting and a calendar.</span> <code>mandara msg look apply pharos-ink</code></figcaption>
           </figure>
-          <figure class="look look-night">
+          <figure class="look look-montaza-crimson">
             <picture>
-              <source media="(prefers-color-scheme: light)" srcset="{{ '/docs/screenshots/look-night-frame-light.webp' | relative_url }}" />
-              <img src="{{ '/docs/screenshots/look-night-frame.webp' | relative_url }}" width="1920" height="1080" alt="Night frame: a desktop with an attached edge bar, soft blue tones and a neatly arranged dock." loading="lazy" />
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-montaza-crimson-light.webp" />
+              <img src="docs/screenshots/look-montaza-crimson.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Montaza Crimson: a red desktop with a framed spectrum box, a clock in Arabic numerals and vertical calligraphy." />
             </picture>
-            <figcaption><span>Everything tucked into the edge. The rest is yours.</span><span class="preview-links"><a class="preview-dark" href="{{ '/docs/screenshots/look-night-frame.webp' | relative_url }}">Open full preview <span aria-hidden="true">↗</span></a><a class="preview-light" href="{{ '/docs/screenshots/look-night-frame-light.webp' | relative_url }}">Open full preview <span aria-hidden="true">↗</span></a></span></figcaption>
+            <figcaption class="look-caption"><span class="look-blurb">Bold palace red: a framed spectrum box, an Arabic clock and calligraphy.</span> <code>mandara msg look apply montaza-crimson</code></figcaption>
           </figure>
+          <figure class="look look-qaitbay-forest">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-qaitbay-forest-light.webp" />
+              <img src="docs/screenshots/look-qaitbay-forest.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Qaitbay Forest: a green hillside desktop with a giant stacked clock and the music player joined to the dock." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">Deep green: a giant stacked clock behind the subject and a dock media chip.</span> <code>mandara msg look apply qaitbay-forest</code></figcaption>
+          </figure>
+          <figure class="look look-anfushi-wave">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-anfushi-wave-light.webp" />
+              <img src="docs/screenshots/look-anfushi-wave.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Anfushi Wave: layered sea waves, a stacked clock, a glowing wave visualizer and a katakana accent." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">Open sea: a full-width glowing wave, a katakana accent and one tiny pill.</span> <code>mandara msg look apply anfushi-wave</code></figcaption>
+          </figure>
+          <figure class="look look-night-frame">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-night-frame-light.webp" />
+              <img src="docs/screenshots/look-night-frame.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Night Frame: northern lights framed by a side bar, a greeting, a calendar and mirrored audio bars." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">Midnight violet: a side bar framing the screen, a greeting, calendar and bars.</span> <code>mandara msg look apply night-frame</code></figcaption>
+          </figure>
+        </div>
+      </fieldset>
+      <script type="application/json" id="look-palettes">{"default":"mandara-corniche","palettes":{
+"mandara-corniche":{"name":"Mandara Corniche","dark":{"ground":"#0a1520","tile":"#12243a","tile-2":"#1a2d43","soft":"#22485b","on-soft":"#e4f0f4","ink":"#e4f0f4","muted":"#9aa7ae","accent":"#5fe0d4","on-accent":"#001311","second":"#e9c98b","on-second":"#0a1520","third":"#86b6ff","on-third":"#0a1520"},"light":{"ground":"#f3f8f8","tile":"#e1eded","tile-2":"#d6e1e1","soft":"#cde0e0","on-soft":"#0c2130","ink":"#0c2130","muted":"#475b65","accent":"#00757a","on-accent":"#f4fefe","second":"#94650c","on-second":"#f3f8f8","third":"#2b60b4","on-third":"#f3f8f8"}},
+"corniche-dusk":{"name":"Corniche Dusk","dark":{"ground":"#1d1012","tile":"#2a1c1e","tile-2":"#362628","soft":"#900039","on-soft":"#f7dcdf","ink":"#f7dcdf","muted":"#ddbfc3","accent":"#ffb2bf","on-accent":"#660027","second":"#f5b8af","on-second":"#1d1012","third":"#ffb595","on-third":"#1d1012"},"light":{"ground":"#fff8f7","tile":"#ffe9eb","tile-2":"#fde2e5","soft":"#ffd9de","on-soft":"#26181a","ink":"#26181a","muted":"#574144","accent":"#bc004d","on-accent":"#ffffff","second":"#82524c","on-second":"#fff8f7","third":"#8a4f34","on-third":"#fff8f7"}},
+"pharos-ink":{"name":"Pharos Ink","dark":{"ground":"#131313","tile":"#1f1f1f","tile-2":"#2a2a2a","soft":"#d4d4d4","on-soft":"#131313","ink":"#e2e2e2","muted":"#c6c6c6","accent":"#ffffff","on-accent":"#1b1b1b","second":"#c6c6c6","on-second":"#131313","third":"#e2e2e2","on-third":"#131313"},"light":{"ground":"#f9f9f9","tile":"#eeeeee","tile-2":"#e8e8e8","soft":"#3b3b3b","on-soft":"#f9f9f9","ink":"#1b1b1b","muted":"#474747","accent":"#000000","on-accent":"#e2e2e2","second":"#5e5e5e","on-second":"#f9f9f9","third":"#3b3b3b","on-third":"#f9f9f9"}},
+"montaza-crimson":{"name":"Montaza Crimson","dark":{"ground":"#1e100f","tile":"#2b1c1b","tile-2":"#362625","soft":"#930015","on-soft":"#f8dcda","ink":"#f8dcda","muted":"#dfbfbd","accent":"#ffb3ae","on-accent":"#68000c","second":"#f5b9a2","on-second":"#1e100f","third":"#fcb884","on-third":"#1e100f"},"light":{"ground":"#fff8f7","tile":"#ffe9e7","tile-2":"#fee2df","soft":"#ffdad7","on-soft":"#271817","ink":"#271817","muted":"#58413f","accent":"#c0001f","on-accent":"#ffffff","second":"#815341","on-second":"#fff8f7","third":"#855227","on-third":"#fff8f7"}},
+"qaitbay-forest":{"name":"Qaitbay Forest","dark":{"ground":"#101510","tile":"#1c211c","tile-2":"#262b26","soft":"#19512a","on-soft":"#dfe4dc","ink":"#dfe4dc","muted":"#c1c9be","accent":"#9ad4a2","on-accent":"#003917","second":"#b7ccb7","on-second":"#101510","third":"#a1ced8","on-third":"#101510"},"light":{"ground":"#f6fbf2","tile":"#ebefe7","tile-2":"#e5eae1","soft":"#b5f1bc","on-soft":"#181d18","ink":"#181d18","muted":"#414941","accent":"#336940","on-accent":"#ffffff","second":"#506352","on-second":"#f6fbf2","third":"#39656d","on-third":"#f6fbf2"}},
+"anfushi-wave":{"name":"Anfushi Wave","dark":{"ground":"#091518","tile":"#162125","tile-2":"#202c2f","soft":"#004e5c","on-soft":"#d8e5e9","ink":"#d8e5e9","muted":"#b9c9cf","accent":"#00d9fc","on-accent":"#003640","second":"#a8cbe2","on-second":"#091518","third":"#a4caf5","on-third":"#091518"},"light":{"ground":"#f0fbff","tile":"#e3f0f4","tile-2":"#deeaef","soft":"#abedff","on-soft":"#121d21","ink":"#121d21","muted":"#3a494e","accent":"#006879","on-accent":"#ffffff","second":"#406376","on-second":"#f0fbff","third":"#3b6187","on-third":"#f0fbff"}},
+"night-frame":{"name":"Night Frame","dark":{"ground":"#131318","tile":"#201f25","tile-2":"#2a292f","soft":"#424078","on-soft":"#e5e1e9","ink":"#e5e1e9","muted":"#c8c5d0","accent":"#c3c0ff","on-accent":"#2c2a60","second":"#c7c4dd","on-second":"#131318","third":"#eab9d1","on-third":"#131318"},"light":{"ground":"#fcf8ff","tile":"#f0ecf4","tile-2":"#eae7ef","soft":"#e3dfff","on-soft":"#1c1b21","ink":"#1c1b21","muted":"#47464f","accent":"#5a5891","on-accent":"#ffffff","second":"#5e5c71","on-second":"#fcf8ff","third":"#7a5368","on-third":"#fcf8ff"}}
+}}</script>
+    </section>
+
+    <!-- Bar styles: one large stage, the styles beside it. -->
+    <section class="section bars" id="bars" aria-labelledby="bars-title">
+      <header class="section-head">
+        <h2 id="bars-title" class="display-2"><span class="d-heavy">Four new</span> <em>bars.</em></h2>
+        <p>Pick one in Studio → Bars → Presets or with its command. Panels still grow out of each one, and the left and right side bars can each wear a style of their own.</p>
+      </header>
+      <fieldset class="bars-picker">
+        <legend class="visually-hidden">Bar styles</legend>
+        <input class="bar-input" type="radio" name="bar-style" id="bar-expressive" value="expressive" checked="checked" />
+        <input class="bar-input" type="radio" name="bar-style" id="bar-tile-dock" value="tile-dock" />
+        <input class="bar-input" type="radio" name="bar-style" id="bar-rail" value="rail" />
+        <input class="bar-input" type="radio" name="bar-style" id="bar-segmented" value="segmented" />
+        <input class="bar-input" type="radio" name="bar-style" id="bar-side-bars" value="side-bars" />
+        <div class="bar-stage">
+          <figure class="bar-shot bar-expressive">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/bar-style-expressive-light.webp" />
+              <img src="docs/screenshots/bar-style-expressive.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="The Expressive bar: a tall bar along the bottom inside a frame around the screen, joined to a rail on the left." />
+            </picture>
+          </figure>
+          <figure class="bar-shot bar-tile-dock">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/bar-style-tile-dock-light.webp" />
+              <img src="docs/screenshots/bar-style-tile-dock.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="The Tile dock bar: one floating island of rounded square tiles at the bottom of the screen." />
+            </picture>
+          </figure>
+          <figure class="bar-shot bar-rail">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/bar-style-rail-light.webp" />
+              <img src="docs/screenshots/bar-style-rail.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="The Rail bar: a wide rail of flower-shaped buttons down the left side, inside a frame around the screen." />
+            </picture>
+          </figure>
+          <figure class="bar-shot bar-segmented">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/bar-style-segmented-light.webp" />
+              <img src="docs/screenshots/bar-style-segmented.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="The Segmented style: no bar, only rows of connected tiles under the top edge of the screen." />
+            </picture>
+          </figure>
+          <figure class="bar-shot bar-side-bars">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/bar-style-side-bars-light.webp" />
+              <img src="docs/screenshots/bar-style-side-bars.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="A side bar drawn in one of the new styles beside a differently styled main bar." />
+            </picture>
+          </figure>
+        </div>
+        <div class="bar-tabs">
+          <label class="bar-tab" for="bar-expressive"><b>Expressive</b><span>A tall bottom bar framing the screen, joined to a left rail: round accent buttons, tonal tiles and scalloped badges.</span><code>mandara msg bar style expressive</code></label>
+          <label class="bar-tab" for="bar-tile-dock"><b>Tile dock</b><span>One floating island of squircle tiles at the bottom.</span><code>mandara msg bar style tile-dock</code></label>
+          <label class="bar-tab" for="bar-rail"><b>Rail</b><span>A wide left rail of flower-shaped buttons inside a screen frame.</span><code>mandara msg bar style rail</code></label>
+          <label class="bar-tab" for="bar-segmented"><b>Segmented</b><span>No bar at all: rows of connected tiles under the top edge.</span><code>mandara msg bar style segmented</code></label>
+          <label class="bar-tab" for="bar-side-bars"><b>Side bars too</b><span>The left and right side bars can each take a style of their own, apart from the main bar.</span><code>mandara msg side-bar style right tile-dock</code></label>
         </div>
       </fieldset>
     </section>
 
-    <section class="studio-section section-space" aria-labelledby="studio-title">
-      <div class="page-width studio-grid">
-        <div class="section-copy">
-          <h2 id="studio-title">Make a change.<br />See it happen.</h2>
-          <p>Mandara Studio is your desktop’s design desk. Colours, typography, spacing, motion and plugins all preview live.</p>
-          <p>Start with a Look named for Alexandria’s coast, then make it your own. Enable the AI Shell Agent in Studio, download its required models, then try <code>!switch to dark mode</code> in the launcher. Preview each action before it runs; your words stay on your computer.</p>
-          <a class="text-link" href="{{ '/docs/studio.html' | relative_url }}">Meet Studio <span aria-hidden="true">↗</span></a>
-        </div>
-        <figure class="studio-image" data-ui="true">
-          <a href="{{ '/docs/screenshots/studio-themes.webp' | relative_url }}" aria-label="Open the Studio screenshot at full size"><img src="{{ '/docs/screenshots/studio-themes.webp' | relative_url }}" width="2517" height="1245" alt="Mandara Studio’s Themes page, showing its wallpaper colours and collection of designed themes." loading="lazy" /></a>
-          <figcaption>Your settings, applied to the running shell.</figcaption>
-        </figure>
-      </div>
-    </section>
-
-    <section class="everyday page-width section-space" aria-labelledby="everyday-title">
-      <div class="section-heading">
-        <h2 id="everyday-title">Small things.<br />Part of your day.</h2>
-        <p>Keep the useful things close: the next song, the next task, the next clear patch of sky.</p>
-      </div>
-      <div class="feature-composition">
-        <figure class="widget-image" data-ui="true">
-          <a href="{{ '/docs/screenshots/widgets-desk.webp' | relative_url }}" aria-label="Open the desktop widgets screenshot at full size"><img src="{{ '/docs/screenshots/widgets-desk.webp' | relative_url }}" width="1920" height="1080" alt="A desktop arranged with a paper to-do list, sticky note, calendar, clock and focus timer." loading="lazy" /></a>
-          <figcaption>Paper notes, clocks, calendars and a focus timer, placed your way.</figcaption>
-        </figure>
-        <div class="media-feature">
-          <figure data-ui="true">
-            <img src="{{ '/docs/screenshots/media.png' | relative_url }}" width="648" height="792" alt="The native media panel with album art, playback controls, progress and synced lyrics." loading="lazy" />
-            <figcaption>The music you are already playing, with synced lyrics.</figcaption>
-          </figure>
-          <div class="feature-copy">
-            <h3>A whole desktop, composed.</h3>
-            <p>77 built-in plugins cover the bar, panels and desktop. Switch on what you use, add a sandboxed Rust plugin, and leave room for everything else.</p>
-            <a class="text-link" href="{{ '/docs/plugins.html' | relative_url }}">Explore the plugins <span aria-hidden="true">↗</span></a>
+    <!-- Close-ups of the interface: each tile is a real piece, enlarged. -->
+    <section class="section pieces" aria-labelledby="pieces-title">
+      <header class="section-head">
+        <h2 id="pieces-title" class="display-2"><span class="d-heavy">Every piece,</span> <em>your shape.</em></h2>
+        <p>Real parts of the shell, enlarged. Studio → Themes → Components restyles buttons, fields, sliders, cards and the bar itself.</p>
+      </header>
+      <div class="bento">
+        <div class="piece piece-slider">
+        <div class="slider-preview" data-design="classic" style="--v: .64">
+          <label class="slider-label" for="slider-demo">Volume</label>
+          <div class="slider-track">
+            <input id="slider-demo" class="slider-input" type="range" min="0" max="100" value="64" />
+            <div class="slider-visual" aria-hidden="true"><span class="slider-fill"></span><span class="slider-handle"></span><span class="slider-rest"></span><span class="slider-dot"></span><span class="slider-segs"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
           </div>
+          <output class="slider-value" for="slider-demo">64%</output>
+        </div>
+        <fieldset class="slider-designs">
+          <legend>Slider design</legend>
+          <label><input type="radio" name="slider-design" value="classic" checked="checked" /> Classic</label>
+          <label><input type="radio" name="slider-design" value="continuous" /> Continuous</label>
+          <label><input type="radio" name="slider-design" value="pill" /> Pill</label>
+          <label><input type="radio" name="slider-design" value="wavy" /> Wavy</label>
+          <label><input type="radio" name="slider-design" value="segmented" /> Segmented</label>
+        </fieldset>
+          <p class="piece-caption"><b>Sliders in five designs.</b> Drag it, then try each design Studio offers.</p>
+        </div>
+        <div class="piece piece-shapes">
+        <div class="ui-shapes" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" /></svg><svg viewBox="0 0 64 64"><rect x="8" y="8" width="48" height="48" rx="14" /></svg><svg viewBox="0 0 64 64"><path d="M32 7c3 0 5 2 7 5l18 32c3 6-1 12-7 12H14c-6 0-10-6-7-12l18-32c2-3 4-5 7-5z" /></svg><svg viewBox="0 0 64 64"><path d="M32 4c2 0 4 1 6 3l19 19c3 3 3 9 0 12L38 57c-3 3-9 3-12 0L7 38c-3-3-3-9 0-12L26 7c2-2 4-3 6-3z" /></svg><svg viewBox="0 0 64 64"><path d="M32 6a13 13 0 0 1 12.5 16.5A13 13 0 1 1 41.5 44.5 13 13 0 1 1 22.5 41.5 13 13 0 1 1 19.5 22.5 13 13 0 0 1 32 6z" /></svg><svg viewBox="0 0 64 64"><path d="M32 6c5 0 8 4 9 8 4-1 9 0 11 4s0 9-3 11c3 3 4 8 1 11s-8 3-11 1c-1 4-4 8-9 8s-8-4-9-8c-3 2-8 2-11-1s-2-8 1-11c-3-2-5-7-3-11s7-5 11-4c1-4 4-8 9-8z" /></svg></div>
+          <p class="piece-caption"><b>A shape for every character.</b> Lock and login hide each typed character as a soft shape.</p>
+        </div>
+        <div class="piece piece-tags">
+          <div class="ui-tags" aria-hidden="true"><span class="tag on">1</span><span class="tag on">2</span><span class="tag">3</span><span class="tag busy">4</span><span class="tag">5</span><span class="tag-layout">Scroller</span></div>
+          <p class="piece-caption"><b>Tags that join.</b> On MangoWM, two shown tags merge into one pill.</p>
+        </div>
+        <div class="piece piece-clock">
+          <p class="ui-clock" aria-hidden="true"><span>16</span><span>40</span></p>
+          <p class="piece-caption"><b>Tabular figures.</b> Clocks and counters never jitter.</p>
+        </div>
+        <div class="piece piece-toggle">
+          <div class="ui-toggle" aria-hidden="true"><span class="ui-toggle-icon"></span><span class="ui-toggle-text"><b>Dark</b><small>Appearance</small></span></div>
+          <p class="piece-caption"><b>Quick settings.</b> Toggles that answer at a touch.</p>
+        </div>
+        <div class="piece piece-toast">
+          <div class="ui-toast" aria-hidden="true"><b>Mail</b><span>Can we use the third photo for the cover?</span><span class="ui-toast-actions"><i>Reply</i><i>Archive</i></span></div>
+          <p class="piece-caption"><b>Notifications.</b> Actions, history and do not disturb.</p>
         </div>
       </div>
     </section>
 
-    <section class="native-section section-space" aria-labelledby="native-title">
-      <div class="page-width native-grid">
-        <h2 id="native-title">At home on<br />your compositor.</h2>
-        <div>
-          <p>MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic and KWin each have a native driver. Tags stay tags. Virtual desktops stay virtual desktops.</p>
-          <p>Setup keeps your compositor configuration and writes Mandara’s settings separately. Plasma keeps its own compositor settings and secure lock screen.</p>
-          <a class="text-link" href="{{ '/docs/install.html#compositors' | relative_url }}">Check the setup for yours <span aria-hidden="true">↗</span></a>
+    <!-- Studio and the local agent. -->
+    <section class="section studio" id="studio" aria-labelledby="studio-title">
+      <header class="section-head">
+        <h2 id="studio-title" class="display-2"><span class="d-heavy">Change it.</span> <em>Watch it change.</em></h2>
+        <p>Mandara Studio is the desktop’s design desk. Colours, type, spacing, motion, widgets and plugins apply to the running shell as you drag. <a class="text-link" href="docs/studio.html">Meet Studio</a></p>
+      </header>
+      <div class="studio-grid">
+        <figure class="studio-shot">
+          <picture>
+            <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/studio-themes-light.webp" />
+            <img src="docs/screenshots/studio-themes.webp" width="2004" height="1402" loading="lazy" decoding="async" alt="Mandara Studio’s Themes page: a live desktop preview, the current theme with its colour bar, and the list of themes and Looks." />
+          </picture>
+        </figure>
+        <div class="agent agent-copy">
+          <svg class="agent-shape" viewBox="0 0 100 100" aria-hidden="true"><use href="#shape-cookie" /></svg>
+          <h3 class="display-3">Ask in <em>your words.</em></h3>
+          <p>Turn on the optional AI Shell Agent in Studio, download its required models once, then type <code>!switch to dark mode</code> in the launcher. Control your shell in natural language: you see the exact action before it runs, and it works offline, so your words stay on your computer.</p>
+          <p class="agent-line" aria-hidden="true"><span class="agent-bang">!</span><span class="agent-typed">switch to dark mode</span></p>
+          <a class="text-link" href="docs/command-agent.html">Meet the AI Shell Agent</a>
         </div>
       </div>
     </section>
 
-    <section class="install-section page-width section-space" id="install" aria-labelledby="install-title">
-      <div class="section-heading">
-        <h2 id="install-title">Ready when<br />you are.</h2>
-        <p>The short command downloads a release, shows its progress and verifies its signature before opening the Rust installer.</p>
-      </div>
-      <div class="install-command">
-        <code>sh -c 'f=$(mktemp) &amp;&amp; trap "rm -f -- \"\$f\"" 0 &amp;&amp; curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" &amp;&amp; sh "$f" "$@"' sh</code>
-      </div>
-      <div class="install-details">
-        <p>Choose your compositor and login setup in the installer. To pass options directly, see the guide for compositor, login and unattended options.</p>
-        <p>On NixOS, add Mandara through your flake. Arch users can also build the supplied package recipes.</p>
-        <a class="button" href="{{ '/docs/install.html' | relative_url }}">Installation guide <span aria-hidden="true">↗</span></a>
+    <!-- The compositors. -->
+    <section class="section compositors" id="compositors" aria-labelledby="compositors-title">
+      <header class="section-head">
+        <h2 id="compositors-title" class="display-2"><span class="d-heavy">Seven</span> <em>compositors.</em></h2>
+        <p>Each driver speaks its compositor’s own language. Your config gets one include line at most, checked by the compositor’s own validator and rolled back if it objects.</p>
+      </header>
+      <ul class="departures">
+        <li class="departure"><span class="dep-name">MangoWM</span><span class="dep-fact">Tags</span><span class="dep-status ok">Checked with <code>mango -p</code></span><p>Tag bitmasks with view, toggle-view and tag moves, a layout pill and keymode badge.</p></li>
+        <li class="departure"><span class="dep-name">Niri</span><span class="dep-fact">Scrolling columns</span><span class="dep-status ok">Checked with <code>niri validate</code></span><p>Follows scrolling columns and workspaces, writes lossless KDL and keeps the wallpaper behind the Overview.</p></li>
+        <li class="departure"><span class="dep-name">Hyprland</span><span class="dep-fact">Workspaces</span><span class="dep-status ok">Checked with <code>Hyprland --verify-config</code></span><p>Speaks Hyprland 0.57’s Lua config and the older format before it.</p></li>
+        <li class="departure"><span class="dep-name">Umbriel</span><span class="dep-fact">Workspaces</span><span class="dep-status ok">Checked with <code>umbriel config validate</code></span><p>Shows each output’s workspaces, the layout (click to cycle) and the active submap.</p></li>
+        <li class="departure"><span class="dep-name">Sway</span><span class="dep-fact">Workspaces</span><span class="dep-status ok">Checked with <code>sway --validate</code></span><p>Workspaces, the container layout and the binding mode; binds you already have stay yours.</p></li>
+        <li class="departure"><span class="dep-name">River Classic</span><span class="dep-fact">Tags</span><span class="dep-status live">Live protocol</span><p>River 0.3’s tags, layout and mode, with settings sent over its own protocol. Your <code>init</code> is never edited; you add one autostart line.</p></li>
+        <li class="departure"><span class="dep-name">KWin</span><span class="dep-fact">Virtual desktops</span><span class="dep-status plasma">Plasma keeps it</span><p>Runs inside a Plasma Wayland session through Plasma’s own protocols. Displays, rules and shortcuts stay in Plasma System Settings.</p></li>
+      </ul>
+    </section>
+
+    <!-- Languages. -->
+    <section class="section languages" aria-labelledby="languages-title">
+      <header class="section-head">
+        <h2 id="languages-title" class="display-2"><span class="d-heavy">Twenty</span> <em>languages.</em></h2>
+        <p>The shell, Studio and the login screen, with right-to-left layouts for Arabic, Persian and Urdu. <a class="text-link" href="docs/languages.html">The language guide</a></p>
+      </header>
+      <div class="languages-grid">
+        <ul class="language-cloud">
+          <li class="lang"><span lang="en">English</span></li>
+          <li class="lang rtl"><span lang="ar" dir="rtl">العربية</span><small>right to left</small></li>
+          <li class="lang rtl"><span lang="fa" dir="rtl">فارسی</span><small>right to left</small></li>
+          <li class="lang rtl"><span lang="ur" dir="rtl">اردو</span><small>right to left</small></li>
+          <li class="lang"><span lang="es">Español</span></li>
+          <li class="lang"><span lang="pt">Português</span></li>
+          <li class="lang"><span lang="fr">Français</span></li>
+          <li class="lang"><span lang="de">Deutsch</span></li>
+          <li class="lang"><span lang="tr">Türkçe</span></li>
+          <li class="lang"><span lang="ru">Русский</span></li>
+          <li class="lang"><span lang="hi">हिन्दी</span></li>
+          <li class="lang"><span lang="mr">मराठी</span></li>
+          <li class="lang"><span lang="bn">বাংলা</span></li>
+          <li class="lang"><span lang="te">తెలుగు</span></li>
+          <li class="lang"><span lang="id">Bahasa Indonesia</span></li>
+          <li class="lang"><span lang="sw">Kiswahili</span></li>
+          <li class="lang"><span lang="vi">Tiếng Việt</span></li>
+          <li class="lang"><span lang="zh">简体中文</span></li>
+          <li class="lang"><span lang="ja">日本語</span></li>
+          <li class="lang"><span lang="ko">한국어</span></li>
+        </ul>
+        <figure class="arabic-shot">
+          <picture>
+            <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/studio-home-ar-light.webp" />
+            <img src="docs/screenshots/studio-home-ar.webp" width="2004" height="1402" loading="lazy" decoding="async" alt="Mandara Studio’s Home page in Arabic, laid out right to left, with a desktop preview." />
+          </picture>
+          <figcaption>Studio’s Home, in Arabic.</figcaption>
+        </figure>
       </div>
     </section>
 
-    <section class="faq-section page-width section-space" aria-labelledby="faq-title">
-      <h2 id="faq-title">A few good<br />questions.</h2>
-      <div class="questions">
-        <details name="questions"><summary>What does Mandara replace?</summary><p>The parts around your application windows: bar, dock, launcher, notifications, wallpaper, desktop widgets, lock screen and settings. Your Wayland compositor still manages windows.</p></details>
-        <details name="questions"><summary>Can I keep my own setup?</summary><p>Yes. A first install offers configuration, startup and login choices. Existing settings stay as you left them when you update. <a href="{{ '/docs/configuration.html' | relative_url }}">Read about configuration.</a></p></details>
-        <details name="questions"><summary>How fast is it?</summary><p>Spring motion and native GPU rendering keep everyday interactions responsive. Historical release samples built frames in about 0.1 ms. Studio runs separately, plugins load data when needed, and local AI inference stays off the UI thread. Its model worker exits when finished or closed. See the <a href="{{ '/docs/performance.html' | relative_url }}">measurements, test setup and current limits</a>; AI response time depends on your CPU and storage.</p></details>
-        <details name="questions"><summary>Can I use my own words?</summary><p>Yes. Enable the optional AI Shell Agent, download its models once, then type <code>!switch to dark mode</code> in any launcher look. It works offline on your CPU and shows the exact shell actions before Enter runs them. Qwen adds multilingual and compound requests. <a href="{{ '/docs/command-agent.html' | relative_url }}">Meet the AI Shell Agent.</a></p></details>
-        <details name="questions"><summary>Does it support my language?</summary><p>Mandara has twenty interface languages, including Arabic, Persian and Urdu with right-to-left layouts. Clocks can use your preferred calendar and numerals. <a href="{{ '/docs/languages.html' | relative_url }}">See the language guide.</a></p></details>
-        <details name="questions"><summary>How do updates work?</summary><p>Open Studio → About → Update now. Supported installs download small binary patches when available. NixOS and package-managed installs update through their own configuration or package manager.</p></details>
-        <details name="questions"><summary>Can I build something for it?</summary><p>Yes. Write a plugin in Rust, compile it to sandboxed WebAssembly and preview it as you work. <a href="https://github.com/theHamdiz/mandara/blob/main/PLUGINS.md">Start with the plugin guide.</a></p></details>
+    <!-- The plugins, grouped. -->
+    <section class="section shelf-section" id="plugins" aria-labelledby="plugins-title">
+      <header class="section-head">
+        <h2 id="plugins-title" class="display-2"><span class="d-heavy">81 plugins,</span> <em>one shelf.</em></h2>
+        <p>Switch on what you use. Write your own in Rust, compiled to sandboxed WebAssembly. <a class="text-link" href="docs/plugins.html">See every plugin</a></p>
+      </header>
+      <ul class="shelf">
+        <li class="shelf-group"><h3 class="shelf-name">Bar<small>10</small></h3><ul class="chips">
+          <li><a class="spine chip" href="docs/plugins.html"><span>Workspaces</span><small>Bar</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Launcher</span><small>Bar</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Active window</span><small>Bar</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Clock</span><small>Bar</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Language</span><small>Bar</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Keyboard layout</span><small>Bar</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Main menu</span><small>Bar</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Session</span><small>Bar</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Quick settings</span><small>Bar</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Dock</span><small>Bar</small></a></li>
+        </ul></li>
+        <li class="shelf-group"><h3 class="shelf-name">Desktop<small>14</small></h3><ul class="chips">
+          <li><a class="spine chip" href="docs/plugins.html"><span>Desktop clocks</span><small>Desktop</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>System monitor</span><small>Desktop</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Desktop decorations</span><small>Desktop</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Desktop visualizers</span><small>Desktop</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Now playing card</span><small>Desktop</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Calendar card</span><small>Desktop</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Desktop weather</span><small>Desktop</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Desktop world clock</span><small>Desktop</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Countdown</span><small>Desktop</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Desktop productivity</span><small>Desktop</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Desktop sky</span><small>Desktop</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Desktop shortcuts and you</span><small>Desktop</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Desktop fun</span><small>Desktop</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Desktop info</span><small>Desktop</small></a></li>
+        </ul></li>
+        <li class="shelf-group"><h3 class="shelf-name">Productivity<small>9</small></h3><ul class="chips">
+          <li><a class="spine chip" href="docs/plugins.html"><span>To-do</span><small>Productivity</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Notes</span><small>Productivity</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Translator</span><small>Productivity</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Pomodoro</span><small>Productivity</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Authenticator</span><small>Productivity</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Screen time</span><small>Productivity</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Shortcuts cheatsheet</span><small>Productivity</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Eye breaks</span><small>Productivity</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Presentation mode</span><small>Productivity</small></a></li>
+        </ul></li>
+        <li class="shelf-group"><h3 class="shelf-name">Everyday<small>5</small></h3><ul class="chips">
+          <li><a class="spine chip" href="docs/plugins.html"><span>Weather</span><small>Everyday</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Feeds</span><small>Everyday</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>World clock</span><small>Everyday</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Network speed</span><small>Everyday</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Reddit</span><small>Everyday</small></a></li>
+        </ul></li>
+        <li class="shelf-group"><h3 class="shelf-name">Media<small>6</small></h3><ul class="chips">
+          <li><a class="spine chip" href="docs/plugins.html"><span>Media</span><small>Media</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Screenshot</span><small>Media</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Color picker</span><small>Media</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Soundscapes</span><small>Media</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Share to phone</span><small>Media</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Radio</span><small>Media</small></a></li>
+        </ul></li>
+        <li class="shelf-group"><h3 class="shelf-name">Look<small>5</small></h3><ul class="chips">
+          <li><a class="spine chip" href="docs/plugins.html"><span>Wallpaper</span><small>Look</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Wallpaper depth</span><small>Look</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Wallpaper generator</span><small>Look</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Wallhaven</span><small>Look</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Cursor themes</span><small>Look</small></a></li>
+        </ul></li>
+        <li class="shelf-group"><h3 class="shelf-name">System<small>15</small></h3><ul class="chips">
+          <li><a class="spine chip" href="docs/plugins.html"><span>Network</span><small>System</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Bluetooth</span><small>System</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Tailscale</span><small>System</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Phone Connect</span><small>System</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Home Assistant</span><small>System</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Audio</span><small>System</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>System tray</span><small>System</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Resources</span><small>System</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Mini stats</span><small>System</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Process hunter</span><small>System</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Notifications</span><small>System</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Clipboard</span><small>System</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Drives</span><small>System</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Power</span><small>System</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Privacy</span><small>System</small></a></li>
+        </ul></li>
+        <li class="shelf-group"><h3 class="shelf-name">Upkeep<small>6</small></h3><ul class="chips">
+          <li><a class="spine chip" href="docs/plugins.html"><span>Updates</span><small>Upkeep</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Services</span><small>Upkeep</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Containers</span><small>Upkeep</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>App installer</span><small>Upkeep</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Uptime monitor</span><small>Upkeep</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Crash reports</span><small>Upkeep</small></a></li>
+        </ul></li>
+        <li class="shelf-group"><h3 class="shelf-name">Developer<small>5</small></h3><ul class="chips">
+          <li><a class="spine chip" href="docs/plugins.html"><span>Task progress</span><small>Developer</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Listening ports</span><small>Developer</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Git repositories</span><small>Developer</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>CI status</span><small>Developer</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Local AI</span><small>Developer</small></a></li>
+        </ul></li>
+        <li class="shelf-group"><h3 class="shelf-name">Games<small>2</small></h3><ul class="chips">
+          <li><a class="spine chip" href="docs/plugins.html"><span>Sudoku</span><small>Games</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>2048</span><small>Games</small></a></li>
+        </ul></li>
+        <li class="shelf-group shelf-more"><a class="spine spine-more" href="docs/plugins.html"><span>All 81, in the guide</span><small>More</small></a></li>
+      </ul>
+    </section>
+
+    <!-- Keyboard shortcuts: Mandara's real defaults, searchable. -->
+    <section class="section keys" id="keys" aria-labelledby="keys-title">
+      <header class="section-head">
+        <h2 id="keys-title" class="display-2"><span class="d-heavy">Your hands stay</span> <em>on the keys.</em></h2>
+        <p>Mandara writes these to its own drop-in and skips any chord your config already uses. Each runs as <code>mandara msg</code> plus the command shown. <a class="text-link" href="docs/commands.html">Every command</a></p>
+      </header>
+      <div class="keys-panel">
+        <div class="keys-tools">
+          <label class="keys-search-label" for="keys-search">Search shortcuts</label>
+          <input id="keys-search" class="keys-search" type="search" placeholder="Try “screenshot” or “Super”" autocomplete="off" />
+          <div class="keys-groups" role="group" aria-label="Filter by group" hidden="hidden">
+            <button type="button" class="group-button" data-group="all" aria-pressed="true">All</button>
+            <button type="button" class="group-button" data-group="panels" aria-pressed="false">Launcher and panels</button>
+            <button type="button" class="group-button" data-group="capture" aria-pressed="false">Capture</button>
+            <button type="button" class="group-button" data-group="windows" aria-pressed="false">Windows and look</button>
+            <button type="button" class="group-button" data-group="hardware" aria-pressed="false">Hardware keys</button>
+          </div>
+          <p class="keys-count" role="status" aria-live="polite">25 shortcuts</p>
+        </div>
+        <ul class="keybinds">
+        <li class="bind" data-group="panels" data-mods="super" data-key="space" data-command="launcher toggle"><span class="chord"><kbd>Super</kbd><kbd>Space</kbd></span><span class="bind-what"><b>Open or close the launcher</b><code>launcher toggle</code></span></li>
+        <li class="bind" data-group="panels" data-mods="super alt" data-key="space" data-command="launcher toggle"><span class="chord"><kbd>Super</kbd><kbd>Alt</kbd><kbd>Space</kbd></span><span class="bind-what"><b>Open or close the launcher</b><code>launcher toggle</code></span></li>
+        <li class="bind" data-group="panels" data-mods="super" data-key="b" data-command="sidebar toggle"><span class="chord"><kbd>Super</kbd><kbd>B</kbd></span><span class="bind-what"><b>Show or hide the sidebar</b><code>sidebar toggle</code></span></li>
+        <li class="bind" data-group="panels" data-mods="super shift" data-key="e" data-command="session menu toggle"><span class="chord"><kbd>Super</kbd><kbd>Shift</kbd><kbd>E</kbd></span><span class="bind-what"><b>Power and session menu</b><code>session menu toggle</code></span></li>
+        <li class="bind" data-group="panels" data-mods="ctrl alt" data-key="Delete" data-command="session menu toggle"><span class="chord"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Delete</kbd></span><span class="bind-what"><b>Power and session menu</b><code>session menu toggle</code></span></li>
+        <li class="bind" data-group="capture" data-mods="super shift" data-key="s" data-command="screenshot region"><span class="chord"><kbd>Super</kbd><kbd>Shift</kbd><kbd>S</kbd></span><span class="bind-what"><b>Screenshot a region</b><code>screenshot region</code></span></li>
+        <li class="bind" data-group="panels" data-mods="super shift" data-key="v" data-command="panel toggle clipboard"><span class="chord"><kbd>Super</kbd><kbd>Shift</kbd><kbd>V</kbd></span><span class="bind-what"><b>Clipboard history</b><code>panel toggle clipboard</code></span></li>
+        <li class="bind" data-group="panels" data-mods="alt" data-key="v" data-command="panel toggle clipboard"><span class="chord"><kbd>Alt</kbd><kbd>V</kbd></span><span class="bind-what"><b>Clipboard history</b><code>panel toggle clipboard</code></span></li>
+        <li class="bind" data-group="capture" data-mods="" data-key="Print" data-command="screenshot screen"><span class="chord"><kbd>Print</kbd></span><span class="bind-what"><b>Screenshot the whole screen</b><code>screenshot screen</code></span></li>
+        <li class="bind" data-group="capture" data-mods="ctrl" data-key="Print" data-command="screenshot region"><span class="chord"><kbd>Ctrl</kbd><kbd>Print</kbd></span><span class="bind-what"><b>Screenshot a region</b><code>screenshot region</code></span></li>
+        <li class="bind" data-group="capture" data-mods="alt" data-key="Print" data-command="screenshot window"><span class="chord"><kbd>Alt</kbd><kbd>Print</kbd></span><span class="bind-what"><b>Screenshot a window</b><code>screenshot window</code></span></li>
+        <li class="bind" data-group="windows" data-mods="super shift" data-key="t" data-command="theme mode toggle"><span class="chord"><kbd>Super</kbd><kbd>Shift</kbd><kbd>T</kbd></span><span class="bind-what"><b>Switch between light and dark</b><code>theme mode toggle</code></span></li>
+        <li class="bind" data-group="windows" data-mods="ctrl shift" data-key="w" data-command="wallpaper picker toggle"><span class="chord"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>W</kbd></span><span class="bind-what"><b>Pick a wallpaper</b><code>wallpaper picker toggle</code></span></li>
+        <li class="bind" data-group="windows" data-mods="alt" data-key="Tab" data-command="switcher next"><span class="chord"><kbd>Alt</kbd><kbd>Tab</kbd></span><span class="bind-what"><b>Next window; let go of Alt to switch</b><code>switcher next</code></span></li>
+        <li class="bind" data-group="windows" data-mods="alt shift" data-key="Tab" data-command="switcher prev"><span class="chord"><kbd>Alt</kbd><kbd>Shift</kbd><kbd>Tab</kbd></span><span class="bind-what"><b>Previous window</b><code>switcher prev</code></span></li>
+        <li class="bind" data-group="hardware" data-mods="" data-key="XF86AudioMute" data-command="audio mute-all toggle"><span class="chord"><kbd>Mute key</kbd></span><span class="bind-what"><b>Mute everything</b><code>audio mute-all toggle</code></span></li>
+        <li class="bind" data-group="hardware" data-mods="" data-key="XF86AudioRaiseVolume" data-command="audio volume up"><span class="chord"><kbd>Volume up key</kbd></span><span class="bind-what"><b>Turn the volume up</b><code>audio volume up</code></span></li>
+        <li class="bind" data-group="hardware" data-mods="" data-key="XF86AudioLowerVolume" data-command="audio volume down"><span class="chord"><kbd>Volume down key</kbd></span><span class="bind-what"><b>Turn the volume down</b><code>audio volume down</code></span></li>
+        <li class="bind" data-group="hardware" data-mods="" data-key="XF86MonBrightnessUp" data-command="brightness up"><span class="chord"><kbd>Brightness up key</kbd></span><span class="bind-what"><b>Brighter screen</b><code>brightness up</code></span></li>
+        <li class="bind" data-group="hardware" data-mods="" data-key="XF86MonBrightnessDown" data-command="brightness down"><span class="chord"><kbd>Brightness down key</kbd></span><span class="bind-what"><b>Dimmer screen</b><code>brightness down</code></span></li>
+        <li class="bind" data-group="hardware" data-mods="" data-key="XF86AudioPlay" data-command="media play-pause"><span class="chord"><kbd>Play key</kbd></span><span class="bind-what"><b>Play or pause the music</b><code>media play-pause</code></span></li>
+        <li class="bind" data-group="hardware" data-mods="" data-key="XF86AudioPause" data-command="media play-pause"><span class="chord"><kbd>Pause key</kbd></span><span class="bind-what"><b>Play or pause the music</b><code>media play-pause</code></span></li>
+        <li class="bind" data-group="hardware" data-mods="" data-key="XF86AudioNext" data-command="media next"><span class="chord"><kbd>Next key</kbd></span><span class="bind-what"><b>Next track</b><code>media next</code></span></li>
+        <li class="bind" data-group="hardware" data-mods="" data-key="XF86AudioPrev" data-command="media previous"><span class="chord"><kbd>Previous key</kbd></span><span class="bind-what"><b>Previous track</b><code>media previous</code></span></li>
+        <li class="bind" data-group="hardware" data-mods="" data-key="XF86AudioMicMute" data-command="audio mic mute"><span class="chord"><kbd>Mic mute key</kbd></span><span class="bind-what"><b>Mute the microphone</b><code>audio mic mute</code></span></li>
+        </ul>
+        <p class="keys-note">On KWin, keep shortcuts in Plasma System Settings.</p>
       </div>
     </section>
 
-    <section class="closing page-width section-space">
-      <p>Make a desktop you enjoy coming back to.</p>
-      <a class="button" href="#install">Make it yours <span aria-hidden="true">↗</span></a>
+    <!-- Install. -->
+    <section class="section install" id="install" aria-labelledby="install-title">
+      <header class="section-head">
+        <h2 id="install-title" class="display-2"><span class="d-heavy">One line</span> <em>to install.</em></h2>
+        <p>Works from bash, zsh or fish. Nothing is installed if the signature check fails. <a class="text-link" href="docs/install.html">The installation guide</a> covers compositor, login and unattended options.</p>
+      </header>
+      <div class="install-grid">
+        <div class="install-main">
+          <div class="install-command">
+            <code>sh -c 'f=$(mktemp) &amp;&amp; trap "rm -f -- \"\$f\"" 0 &amp;&amp; curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" &amp;&amp; sh "$f" "$@"' sh</code>
+          </div>
+          <ol class="stages">
+            <li><b>Download</b><span>The script fetches the release for your CPU and shows its progress.</span></li>
+            <li><b>Verify</b><span>It checks the release signature and checksum before running anything.</span></li>
+            <li><b>Choose</b><span>The Rust installer asks about your compositor and login screen.</span></li>
+            <li><b>Log in</b><span>Mandara starts with your compositor.</span></li>
+          </ol>
+        </div>
+        <div class="nix">
+          <svg class="nix-shape" viewBox="0 0 100 100" aria-hidden="true"><use href="#shape-flower" /></svg>
+          <h3 class="display-3">NixOS</h3>
+          <p>Mandara is a flake with a NixOS module. Try it without installing:</p>
+          <pre><code>nix run github:theHamdiz/mandara</code></pre>
+          <a class="text-link" href="docs/install.html#nixos">Add it to your system</a>
+        </div>
+        <div class="cli">
+          <h3 class="display-3">The commands you’ll use</h3>
+          <dl>
+            <div><dt><code>mandara studio</code></dt><dd>Open the settings and design studio.</dd></div>
+            <div><dt><code>mandara msg &lt;command&gt;</code></dt><dd>Control the running shell, with <code>--json</code> replies.</dd></div>
+            <div><dt><code>mandara commands</code></dt><dd>Every command, with its arguments and examples.</dd></div>
+            <div><dt><code>mandara setup --check</code></dt><dd>Check your compositor integration.</dd></div>
+            <div><dt><code>mandara update</code></dt><dd>See what’s new; Studio → About → Update now installs it.</dd></div>
+          </dl>
+        </div>
+        <div class="first">
+          <h3 class="display-3">Your first ten minutes</h3>
+          <ol>
+            <li><span class="chord"><kbd>Super</kbd><kbd>Space</kbd></span> Open the launcher and type to search.</li>
+            <li><span class="chord"><kbd>Super</kbd><kbd>B</kbd></span> Pull out the sidebar.</li>
+            <li><span class="chord"><kbd>Super</kbd><kbd>Shift</kbd><kbd>T</kbd></span> Try light and dark.</li>
+            <li>Open Studio from the launcher and pick a Look under Themes.</li>
+            <li>Right-click the desktop, choose Add widget, and place a clock.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- Questions, all open, side by side. -->
+    <section class="section faq" aria-labelledby="faq-title">
+      <header class="section-head">
+        <h2 id="faq-title" class="display-2"><span class="d-heavy">Good</span> <em>questions.</em></h2>
+      </header>
+      <dl class="questions">
+        <div class="question"><dt>What does Mandara replace?</dt><dd>The parts around your windows: bar, dock, launcher, notifications, wallpaper, desktop widgets, lock screen, login screen and settings. Your Wayland compositor still manages the windows.</dd></div>
+        <div class="question"><dt>Will it touch my compositor config?</dt><dd>At most one include line. Everything else goes to Mandara’s own drop-in files, checked by your compositor’s validator and rolled back if it objects. River and KWin need no include line. <a href="docs/install.html#compositors">Read the compositor notes.</a></dd></div>
+        <div class="question"><dt>How fast is it?</dt><dd>Spring motion and native GPU rendering keep everyday interactions responsive. Historical release samples built frames in about 0.1 ms. Studio runs separately, plugins load data when needed, and local AI inference stays off the UI thread. See the <a href="docs/performance.html">measurements, test setup and current limits</a>.</dd></div>
+        <div class="question"><dt>Can I keep my own setup?</dt><dd>Yes. A first install offers configuration, startup and login choices, and updates keep your settings as you left them. <a href="docs/configuration.html">Read about configuration.</a></dd></div>
+        <div class="question"><dt>Can I control it in my own words?</dt><dd>Yes, with the optional AI Shell Agent. Type <code>!switch to dark mode</code> in the launcher, check the previewed action, and press Enter. It runs offline on your CPU. <a href="docs/command-agent.html">Meet the AI Shell Agent.</a></dd></div>
+        <div class="question"><dt>How do updates work?</dt><dd>Open Studio → About → Update now. Supported installs download small binary patches when available. NixOS and package-managed installs update through their own tools.</dd></div>
+        <div class="question"><dt>Can I build a plugin?</dt><dd>Yes. Write it in Rust, compile it to sandboxed WebAssembly and preview it as you work. <a href="https://github.com/theHamdiz/mandara/blob/main/PLUGINS.md">Start with the plugin guide.</a></dd></div>
+      </dl>
     </section>
   </main>
 
-  <footer class="site-footer page-width">
-    <span>Mandara, from Alexandria.</span>
-    <nav aria-label="Community"><a href="https://github.com/theHamdiz/mandara">GitHub</a><a href="https://discord.gg/kPBaS2reQ3">Discord</a><a href="https://ko-fi.com/thehamdiz">Support</a></nav>
-    <a href="https://github.com/theHamdiz/mandara/blob/main/LICENSE.md">Free software, GPL-3.0-or-later</a>
+  <footer class="footer">
+    <div class="foot-cta">
+      <p class="display-2"><span class="d-heavy">Make it</span> <em class="wave">yours.</em></p>
+      <a class="button button-filled" href="#install">Install Mandara</a>
+    </div>
+    <div class="foot-grid">
+      <div class="foot-statement">
+        <a class="brand" href="#main"><img src="assets/brand/mandara-128.png" width="128" height="128" alt="" /><span>Mandara</span></a>
+        <p>Named after El-Mandara, a neighbourhood on Alexandria’s coast. Its themes and Looks borrow the Corniche, Qaitbay, Montaza and Anfushi.</p>
+        <p class="foot-legal"><a href="https://github.com/theHamdiz/mandara/blob/main/LICENSE.md">Free software, GPL-3.0-or-later</a></p>
+      </div>
+      <nav class="foot-nav" aria-label="Guides">
+        <h3>Guides</h3>
+        <ul>
+          <li><a href="docs/install.html">Install</a></li>
+          <li><a href="docs/studio.html">Studio</a></li>
+          <li><a href="docs/plugins.html">Plugins</a></li>
+          <li><a href="docs/commands.html">Commands</a></li>
+          <li><a href="docs/configuration.html">Configuration</a></li>
+          <li><a href="docs/faq.html">Questions</a></li>
+          <li><a href="https://github.com/theHamdiz/mandara/blob/main/CHANGELOG.md">What’s new</a></li>
+        </ul>
+      </nav>
+      <nav class="foot-nav" aria-label="Community">
+        <h3>Community</h3>
+        <ul>
+          <li><a href="https://github.com/theHamdiz/mandara">GitHub</a></li>
+          <li><a href="https://github.com/theHamdiz/mandara/issues">Report an issue</a></li>
+          <li><a href="https://discord.gg/kPBaS2reQ3">Discord</a></li>
+          <li><a href="https://ko-fi.com/thehamdiz">Support on Ko-fi</a></li>
+        </ul>
+      </nav>
+      <figure class="foot-place">
+        <svg class="foot-sea" viewBox="0 0 480 300" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+          <circle class="sea-sun" cx="352" cy="96" r="34" />
+          <path class="sea-point" d="M228 182h22v-14h16v14h40v-10h12v-22l10-10 10 10v22h8v10h40v-6h30v6h70v12H228z" />
+          <path class="sea-far" d="M0 190c40-8 80-8 120 0s80 8 120 0 80-8 120 0 80 8 120 0v110H0z" />
+          <path class="sea-mid" d="M0 222c40-12 80-12 120 0s80 12 120 0 80-12 120 0 80 12 120 0v78H0z" />
+          <path class="sea-near" d="M0 258c40-14 80-14 120 0s80 14 120 0 80-14 120 0 80 14 120 0v42H0z" />
+        </svg>
+        <figcaption><span>El-Mandara, Alexandria</span><time class="alexandria-time">Egypt time</time></figcaption>
+      </figure>
+    </div>
+    <p class="foot-word" lang="ar" dir="rtl" aria-hidden="true">المندرة</p>
   </footer>
 </body>
 </html>

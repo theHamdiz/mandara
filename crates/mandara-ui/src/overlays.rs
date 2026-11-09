@@ -383,21 +383,92 @@ const SNIP_WORDS: &str = "screen capture snip snipping tool snippet sniptool pri
 
 /// Extra search words for built-in plugins, by id: what people call them
 /// when they don't know Mandara's name.
-const PLUGIN_SYNONYMS: &[(&str, &str)] = &[(crate::plugins::screenshot::ID, SNIP_WORDS)];
+const PLUGIN_SYNONYMS: &[(&str, &str)] = &[(crate::plugins::screenshot::ID, SNIP_WORDS), (crate::plugins::feeds::ID, FEEDS_WORDS), (crate::plugins::reddit::ID, REDDIT_WORDS), (crate::plugins::radio::ID, RADIO_WORDS), (crate::plugins::sudoku::ID, GAME_WORDS), (crate::plugins::tiles::ID, GAME_WORDS)];
+
+/// Words people type for a feed reader.
+const FEEDS_WORDS: &str = "rss feeds feed news atom reader subscriptions subscribe headlines articles blogs opml";
+
+/// A typed web address that may be a feed or a site with one: `https://…`,
+/// or a host with a path (`example.org/feed`). A bare word with a dot
+/// (`notes.md`) is not offered.
+fn subscribe_address(q: &str) -> Option<String> {
+    if q.contains(char::is_whitespace) { return None; }
+    let lower = q.to_ascii_lowercase();
+    if lower.starts_with("http://") || lower.starts_with("https://") {
+        return mandara_services::feeds::web_url(q).then(|| q.to_string());
+    }
+    let (host, _) = q.split_once('/').filter(|(_, path)| !path.is_empty()).or_else(|| lower.starts_with("www.").then_some((q, "")))?;
+    let tld = host.rsplit('.').next()?;
+    let plausible = host.contains('.') && tld.len() >= 2 && tld.chars().all(|c| c.is_ascii_alphabetic()) && host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
+    plausible.then(|| format!("https://{q}"))
+}
+
+/// What people type looking for the Reddit reader.
+const REDDIT_WORDS: &str = "subreddit subreddits communities community threads forum posts comments";
+
+/// `r/name` opens that community in the Reddit plugin, while it is on (its
+/// `reddit open` command is in the index only then).
+fn reddit_entry(q: &str, index: &[Item]) -> Option<Item> {
+    let sub = mandara_services::reddit::Subreddit::parse(q.strip_prefix("r/")?)?;
+    let on = index.iter().any(|i| matches!(i, Item::Entry(Entry { run: Run::Command { words, .. }, .. }) if words.len() >= 2 && words[0] == "reddit" && words[1] == "open"));
+    on.then(|| entry(tf("Open {community} in Reddit", &[("community", &sub.to_string())]), t("Communities, posts and comments"), "messages", tk("Plugin"), REDDIT_WORDS, line(&format!("reddit open {sub}"))))
+}
+
+/// Words people type for the radio.
+const RADIO_WORDS: &str = "fm am internet radio stations station stream streaming live broadcast tune music news";
+
+/// Words people type for a game.
+const GAME_WORDS: &str = "game games puzzle puzzles play number numbers tiles";
+/// Opt-in plugins the launcher offers to switch on when they're off and
+/// searched for (the games: nobody guesses they ship).
+const OFFER_WHEN_OFF: &[&str] = &[crate::plugins::sudoku::ID, crate::plugins::tiles::ID];
 
 fn build_index(cx: &App) -> Vec<Item> {
     let cfg = config(cx).read(cx).snapshot();
-    build_index_with(cx.global::<mandara_plugins::PluginRegistry>(), &cfg)
+    let registry = cx.global::<mandara_plugins::PluginRegistry>();
+    let mut out = build_index_with(registry, &cfg);
+    // The radio's stations, while the radio is on (built with the index,
+    // dropped with it).
+    if registry.is_enabled(crate::plugins::radio::ID, &cfg.plugins) {
+        for (id, name, shelf, keywords) in crate::plugins::radio::launcher_stations(cx) {
+            out.push(entry(name, tf("Radio · {shelf}", &[("shelf", &tr(shelf))]), "radio", tk("Station"), &keywords, line(&format!("radio play {id}"))));
+        }
+    }
+    out
 }
 
 fn build_index_with(registry: &mandara_plugins::PluginRegistry, cfg: &mandara_config::ShellConfig) -> Vec<Item> {
     let mut out = actions();
     // Actions of opt-in plugins, while they are on.
+    // Feeds: its actions while on; turning it on (and its settings) while off.
+    let feeds = crate::plugins::feeds::ID;
+    if registry.is_enabled(feeds, &cfg.plugins) {
+        out.push(entry(t("Add a feed"), t("Subscribe to a site or pick from tested starter feeds"), "plus", tk("Action"), FEEDS_WORDS, line(&format!("studio plugins/{feeds}/settings"))));
+        out.push(entry(t("Refresh feeds"), t("Fetch the latest articles of every feed"), "refresh", tk("Action"), FEEDS_WORDS, line("feeds refresh")));
+        out.push(entry(t("Mark all feeds read"), t("Mark every article of every feed read"), "list-check", tk("Action"), FEEDS_WORDS, line("feeds read-all")));
+    } else if registry.get(feeds).is_some() && !cfg.plugins.is_removed(feeds) {
+        out.push(entry(t("Turn on Feeds"), t("A reader for RSS, Atom and JSON feeds"), "rss", tk("Plugin"), &format!("plugin {feeds} {FEEDS_WORDS}"), line(&format!("plugins enable {feeds}"))));
+        out.push(entry(tf("Plugin settings: {name}", &[("name", &t("Feeds"))]), t("Open in Mandara Studio"), "sliders", tk("Studio"), &format!("settings preferences studio plugin {feeds} {FEEDS_WORDS}"), line(&format!("studio plugins/{feeds}/settings"))));
+    }
     if registry.is_enabled(crate::plugins::wallpaper_generator::ID, &cfg.plugins) {
         out.push(entry(t("Generate wallpaper"), t("A new procedural wallpaper from the generator"), "brush", tk("Action"), "wallpaper generate generator procedural new art background random", line("wallgen generate random")));
     }
     for m in registry.manifests() {
-        if m.id == crate::plugins::session::LAUNCHER_ID || !registry.is_enabled(&m.id, &cfg.plugins) {
+        if m.id == crate::plugins::session::LAUNCHER_ID {
+            continue;
+        }
+        if !registry.is_enabled(&m.id, &cfg.plugins) {
+            if OFFER_WHEN_OFF.contains(&m.id.as_str()) && !cfg.plugins.is_removed(&m.id) {
+                let synonyms = PLUGIN_SYNONYMS.iter().find(|(id, _)| *id == m.id).map_or("", |(_, words)| words);
+                out.push(entry(
+                    tf("Turn on {name}", &[("name", &m.display_name())]),
+                    m.display_description(),
+                    "zap",
+                    tk("Plugin"),
+                    &format!("plugin enable {} {synonyms}", m.id),
+                    line(&format!("plugins enable {}", m.id)),
+                ));
+            }
             continue;
         }
         let synonyms = PLUGIN_SYNONYMS.iter().find(|(id, _)| *id == m.id).map_or("", |(_, words)| words);
@@ -914,6 +985,14 @@ fn search_with(query: &str, apps: &[DesktopApp], index: &[Item], ctx: &SearchCtx
         let names: Vec<String> = lines.iter().map(|i| item_names(i).0).collect();
         let fuzzy = rank_with(fuzzy(pool, q, haystack), q, &ctx.usage).into_iter().filter(|i| !names.contains(&item_names(i).0));
         let mut found: Vec<Item> = lines.into_iter().chain(fuzzy).collect();
+        if let Some(open) = reddit_entry(q, index) {
+            found.insert(0, open);
+        }
+        // A web address can be subscribed to (the feed is found on its page).
+        if let Some(url) = subscribe_address(q) {
+            let label = tf("Subscribe in Feeds: {site}", &[("site", &crate::plugins::feeds::host(&url))]);
+            found.insert(0, Item::Entry(Entry { label, detail: url.clone(), icon: "rss", badge: tk("Action"), keywords: FEEDS_WORDS.into(), run: Run::Command { words: vec!["feeds".into(), "subscribe".into(), url], args: Vec::new() } }));
+        }
         // A bare arithmetic expression also offers its result.
         if let Some(value) = apps::calculate(q).filter(|_| q.chars().any(|c| "+-*/^%(".contains(c))) {
             found.insert(0, Item::Calc { expr: q.to_string(), value });
@@ -2124,18 +2203,21 @@ impl Render for LauncherView {
         let hints_el = look.hints.then(|| self.classic_hints(grid, chips, &palette));
         self.field_px = text::BODY + 1.0;
         let hint = self.prefix_help(text::BODY + 1.0);
-        let search = div()
-            .h(px(SEARCH_H))
-            .px(px(16.0))
-            .rounded(px(crate::style::radius(SEARCH_H / 2.0)))
-            .bg(palette.surface_container_high.hsla())
+        // The search field in the input design picked under Themes →
+        // Components (always focused while the launcher is open).
+        let input = crate::style::input_design();
+        let search = div().h(px(SEARCH_H)).px(px(16.0));
+        let search = if input == crate::components::InputDesign::Classic {
+            search.rounded(px(crate::style::radius(SEARCH_H / 2.0))).bg(palette.surface_container_high.hsla()).border_2().border_color(palette.primary.with_alpha(0.55).hsla())
+        } else {
+            crate::components::inputs::dress(search.relative(), input, true, false, &palette)
+        };
+        let search = search
             .flex()
             .items_center()
             .gap(px(10.0))
             .id("launcher-search")
             .cursor_text()
-            .border_2()
-            .border_color(palette.primary.with_alpha(0.55).hsla())
             .child(icon("search", 18.0, palette.on_surface_variant))
             .child(self.query_field(text::BODY + 1.0, hint, &palette, true))
             // Clicking the field focuses it and puts the caret where you clicked.
@@ -2418,6 +2500,54 @@ mod tests {
         }
     }
 
+    /// `reddit` and `subreddit` find the plugin; `r/name` opens that
+    /// community, only while the plugin is on.
+    #[test]
+    fn reddit_names_and_communities_reach_the_plugin() {
+        let (registry, mut cfg, index) = fixture();
+        let results = search("r/linux", &[], &index);
+        let Some(Item::Entry(first)) = results.first() else { panic!("an entry for r/linux") };
+        assert_eq!(first.label, "Open r/linux in Reddit");
+        let Run::Command { words, .. } = &first.run else { panic!() };
+        assert_line(&registry, words, true, &first.label);
+        for query in ["reddit", "subreddit"] {
+            assert!(search(query, &[], &index).iter().take(5).any(|item| matches!(item, Item::Entry(e) if e.label == "Reddit")), "{query}");
+        }
+        assert!(search("r/not a name", &[], &index).iter().all(|item| !matches!(item, Item::Entry(e) if e.label.starts_with("Open r/"))));
+        cfg.plugins.enabled.retain(|id| id != crate::plugins::reddit::ID);
+        cfg.plugins.disabled.push(crate::plugins::reddit::ID.into());
+        let off = build_index_with(&registry, &cfg);
+        assert!(search("r/linux", &[], &off).iter().all(|item| !matches!(item, Item::Entry(e) if e.label.starts_with("Open r/"))));
+    }
+
+    #[test]
+    fn the_games_are_found_by_name_and_offered_when_off() {
+        let (registry, mut cfg, _) = fixture();
+        let label_of = |index: &[Item], q: &str| match search(q, &[], index).first() {
+            Some(Item::Entry(e)) => (e.label.to_string(), describe(&plan(&Item::Entry(e.clone()), q))),
+            _ => panic!("nothing for {q:?}"),
+        };
+        // On: the plugin itself.
+        let index = build_index_with(&registry, &cfg);
+        for q in ["sudoku", "2048"] {
+            let (label, _) = label_of(&index, q);
+            assert!(label.to_lowercase().contains(q), "{q}: {label}");
+        }
+        assert!(search("games", &[], &index).iter().filter(|i| matches!(i, Item::Entry(e) if e.label.contains("Sudoku") || e.label.contains("2048"))).count() >= 2);
+        // Off (as shipped): an offer to switch it on, for the names and the words.
+        cfg.plugins.enabled.retain(|p| p != crate::plugins::sudoku::ID && p != crate::plugins::tiles::ID);
+        cfg.plugins.disabled.extend([crate::plugins::sudoku::ID.to_string(), crate::plugins::tiles::ID.to_string()]);
+        let index = build_index_with(&registry, &cfg);
+        for (q, id) in [("sudoku", "sudoku"), ("2048", "2048"), ("puzzle", ""), ("game", "")] {
+            let offers: Vec<String> = search(q, &[], &index).iter().filter_map(|i| match i {
+                Item::Entry(e) => Some(describe(&plan(&Item::Entry(e.clone()), q))),
+                _ => None,
+            }).filter(|d| d.contains("plugins enable")).collect();
+            assert!(!offers.is_empty(), "{q}: no offer to turn it on");
+            assert!(offers.iter().any(|d| d.contains(id)), "{q}: {offers:?}");
+        }
+    }
+
     #[test]
     fn off_plugins_leave_the_launcher() {
         let (registry, mut cfg, _) = fixture();
@@ -2519,6 +2649,50 @@ mod tests {
         // A web search is always offered last.
         let results = search("zzqx unlikely words", &[], &index);
         assert!(effect(&results[results.len() - 1..], "").starts_with("url: https://duckduckgo.com/?q=zzqx%20unlikely%20words"));
+    }
+
+    #[test]
+    fn feed_words_find_the_feeds_plugin_its_settings_and_actions() {
+        let (_, _, index) = fixture();
+        for q in ["rss", "feeds", "news", "atom", "reader", "subscriptions", "RSS"] {
+            let lines: Vec<String> = search(q, &[], &index).iter().take(12).map(|i| item_names(i).1).collect();
+            assert!(lines.iter().any(|l| l == "panel open feeds"), "{q}: {lines:?}");
+            // "feeds" itself lists the plugin first, then its commands (their names start with it).
+            if q != "feeds" { assert!(lines.iter().any(|l| l == "studio plugins/feeds/settings"), "{q}: {lines:?}"); }
+        }
+        let lines: Vec<String> = search("refresh feeds", &[], &index).iter().take(3).map(|i| item_names(i).1).collect();
+        assert!(lines.iter().any(|l| l == "feeds refresh"), "{lines:?}");
+        let lines: Vec<String> = search("add feed", &[], &index).iter().take(3).map(|i| item_names(i).1).collect();
+        assert!(lines.iter().any(|l| l == "studio plugins/feeds/settings"), "{lines:?}");
+    }
+
+    #[test]
+    fn with_feeds_off_the_launcher_offers_turning_it_on() {
+        let (registry, mut cfg, _) = fixture();
+        cfg.plugins.enabled.retain(|id| id != crate::plugins::feeds::ID);
+        let index = build_index_with(&registry, &cfg);
+        let lines: Vec<String> = search("rss", &[], &index).iter().take(5).map(|i| item_names(i).1).collect();
+        assert!(lines.iter().any(|l| l == "plugins enable feeds"), "{lines:?}");
+        assert!(lines.iter().any(|l| l == "studio plugins/feeds/settings"), "{lines:?}");
+        assert!(!lines.iter().any(|l| l == "panel open feeds"), "{lines:?}");
+        // A removed Feeds is not offered at all (like any removed plugin).
+        mandara_plugins::lifecycle::remove(&mut cfg, crate::plugins::feeds::ID, "Feeds").unwrap();
+        let index = build_index_with(&registry, &cfg);
+        let offered: Vec<String> = index.iter().map(|i| item_names(i).1).filter(|l| l == "plugins enable feeds" || l == "studio plugins/feeds/settings").collect();
+        assert!(offered.is_empty(), "{offered:?}");
+    }
+
+    #[test]
+    fn typed_web_addresses_offer_subscribing_in_feeds() {
+        let (_, _, index) = fixture();
+        for (q, url) in [("https://blog.rust-lang.org", "https://blog.rust-lang.org"), ("example.org/feed.xml", "https://example.org/feed.xml"), ("www.example.org", "https://www.example.org")] {
+            let results = search(q, &[], &index);
+            assert_eq!(item_names(&results[0]).1, format!("feeds subscribe {url}"), "{q}");
+            assert_eq!(effect(&results, q), format!("command: feeds subscribe {url}"), "{q}");
+        }
+        for q in ["notes.md", "3.14", "hello world", "file:///etc/passwd", "a/b", "https://user:pw@example.org"] {
+            assert!(subscribe_address(q).is_none(), "{q}");
+        }
     }
 
     #[test]

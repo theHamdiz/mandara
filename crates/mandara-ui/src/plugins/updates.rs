@@ -3,10 +3,19 @@
 //! configurable interval while the chip is in the bar, and on demand. The
 //! chip carries a count badge; the panel lists packages grouped by source
 //! with old → new versions (the changed part lit with the accent), per-source
-//! errors and hints, the latest Arch news headline (fetched only while the
-//! panel is open), and "Update now" buttons that open the user's terminal
-//! with the right command — the shell never runs a privileged update itself.
-//! Commands: `updates list|check|sources|run|news`.
+//! errors and hints and the latest Arch news headline (fetched only while the
+//! panel is open).
+//!
+//! "Update" runs the system update itself ([`system`]): the distribution's
+//! own package manager through Mandara's password dialog (polkit and the
+//! root-owned admin helper), with live phases, progress and log, then
+//! Flatpak as you. On NixOS the panel manages generations instead. AUR
+//! helpers, image-based systems and the "Terminal" setting open your
+//! terminal with the command, as before.
+//! Commands: `updates list|check|sources|run|apply|job|cancel|news` and
+//! `updates nixos …`.
+
+mod system;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
@@ -20,6 +29,9 @@ use gpui::{
 use mandara_core::{ToGpui, oklab_gradient};
 use mandara_i18n::{t, tf, tk};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, Output, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry};
+use mandara_services::sysupdate::job::Request;
+use mandara_services::sysupdate::nixos::{self as nix, NixAction};
+use mandara_services::sysupdate::{self, System};
 use mandara_services::updates::{self, CheckOptions, CheckResult, NewsItem, Package, SourceKind, SourceReport};
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
@@ -62,6 +74,11 @@ const SEARCH_MIN: usize = 12;
 const TILES_PER_ROW: usize = 3;
 /// Package rows rendered at most (per group).
 const ROWS_PER_GROUP: usize = 150;
+/// Log lines `updates job` returns.
+const JOB_LOG_LINES: usize = 20;
+/// `run_in` values: Mandara runs the update (default), or a terminal.
+const RUN_IN_MANDARA: &str = "mandara";
+const RUN_IN_TERMINAL: &str = "terminal";
 /// Cached last result (survives shell restarts so it isn't re-announced).
 const CACHE_FILE: &str = "updates.json";
 
@@ -103,6 +120,8 @@ const CHECK_GAP_PX: f32 = 5.0;
 /// Glow under the gradient Update button: alpha, blur, y offset.
 const BUTTON_GLOW: (f32, f32, f32) = (0.3, 8.0, 1.0);
 const BUTTON_HOVER_OPACITY: f32 = 0.92;
+/// Update buttons dim while a system update runs.
+const BUSY_OPACITY: f32 = 0.5;
 /// The check button dims while a check runs.
 const CHECKING_OPACITY: f32 = 0.85;
 /// Old version text alpha and the arrow glyph between versions.
@@ -213,6 +232,14 @@ struct Model {
     status: Option<(bool, String, Instant)>,
     /// The chip and panel views; async results notify only these.
     views: ViewSet,
+    /// How this system updates (detected off the UI thread).
+    system: Option<System>,
+    /// The job card's log is open, and its visible lines (copied only when
+    /// the job's revision changes).
+    log_open: bool,
+    log_cache: (u64, Vec<SharedString>),
+    /// NixOS generations view.
+    nix: system::NixState,
 }
 
 impl Model {
@@ -229,6 +256,8 @@ impl Model {
     fn free_panel_data(&mut self) {
         self.result = None;
         self.status = None;
+        self.nix.free();
+        self.log_cache = (u64::MAX, Vec::new());
         if let Some(Ok(items)) = &mut self.news {
             items.truncate(MAX_NEWS_COUNT);
             items.shrink_to_fit();
@@ -312,6 +341,10 @@ struct Settings {
     /// Wait after login before the first check (`first_check_delay_s`).
     first_check_delay: Duration,
     terminal: String,
+    /// Run updates in Mandara (with progress) rather than a terminal.
+    in_mandara: bool,
+    /// NixOS: generations a clean-up keeps by default (`nixos_keep`).
+    nixos_keep: u32,
 }
 
 fn settings(cx: &App) -> Settings {
@@ -326,6 +359,8 @@ fn settings(cx: &App) -> Settings {
         first_check_delay: Duration::from_secs((s.setting(ID, "first_check_delay_s", DEFAULT_FIRST_CHECK_DELAY_S as f64).round().max(0.0) as u64).min(MAX_FIRST_CHECK_DELAY_S)),
         // The plugin's own terminal, else Studio → Applications' choice.
         terminal: Some(s.setting(ID, "terminal", String::new())).filter(|t| !t.trim().is_empty()).unwrap_or_else(|| cfg.apps.terminal_command().unwrap_or_default()),
+        in_mandara: s.setting(ID, "run_in", String::from(RUN_IN_MANDARA)) != RUN_IN_TERMINAL,
+        nixos_keep: (s.setting(ID, "nixos_keep", f64::from(system::DEFAULT_KEEP)).round().max(1.0) as u32).min(*nix::KEEP_RANGE.end()),
     }
 }
 
@@ -342,14 +377,15 @@ fn shared(cx: &mut App) -> Shared {
     SHARED.with(|s| *s.borrow_mut() = Rc::downgrade(&m));
     // The cached result (file read + JSON parse) and the AUR helper lookup
     // stay off the UI thread.
-    let load = cx.background_executor().spawn(async { (load_cache(), updates::aur_helper()) });
+    let load = cx.background_executor().spawn(async { (load_cache(), updates::aur_helper(), sysupdate::current_system()) });
     let weak = Rc::downgrade(&m);
     cx.spawn(async move |cx| {
-        let (cached, helper) = load.await;
+        let (cached, helper, system) = load.await;
         if let Some(m) = weak.upgrade() {
             {
                 let mut mb = m.borrow_mut();
                 mb.helper = helper;
+                mb.system = Some(system);
                 if mb.checked_at.is_none()
                     && let Some(r) = cached
                 {
@@ -531,34 +567,102 @@ fn badge(label: impl Into<SharedString>, tint: Color, palette: &MandaraPalette) 
         .into_any_element()
 }
 
-/// The accent gradient "Update" button that opens the terminal.
-fn update_button(id: ElementId, label: &'static str, command: String, m: &Shared, palette: &MandaraPalette) -> AnyElement {
+/// What an Update button does.
+#[derive(Clone, Debug, PartialEq)]
+enum UpdateAction {
+    /// Mandara runs it, with progress and its own password dialog.
+    Job(Request),
+    /// Opens the terminal with this command (AUR helpers, image-based
+    /// systems, or the "Terminal" setting).
+    Terminal(String),
+}
+
+/// Whether Mandara's own update job updates `kind` on `system`: Flatpak
+/// always, a package manager only when it is the system's own (so `dnf` on
+/// a Debian system goes to the terminal), the AUR never.
+fn job_covers(kind: SourceKind, system: Option<System>) -> bool {
+    use mandara_services::sysupdate::plan::BackendId as B;
+    match (kind, system) {
+        (SourceKind::Flatpak, _) => true,
+        (_, Some(System::Managed(backend))) => matches!(
+            (kind, backend),
+            (SourceKind::Pacman, B::Pacman) | (SourceKind::Apt, B::Apt) | (SourceKind::Dnf, B::Dnf) | (SourceKind::Zypper, B::ZypperDup | B::ZypperUpdate) | (SourceKind::Xbps, B::Xbps) | (SourceKind::Apk, B::Apk)
+        ),
+        _ => false,
+    }
+}
+
+/// The action of one source's Update button.
+fn source_action(kind: SourceKind, command: &str, system: Option<System>, in_mandara: bool) -> UpdateAction {
+    match kind {
+        SourceKind::Flatpak if in_mandara => UpdateAction::Job(Request::Flatpak),
+        _ if in_mandara && job_covers(kind, system) => UpdateAction::Job(Request::System { flatpak: false }),
+        _ => UpdateAction::Terminal(command.to_string()),
+    }
+}
+
+/// The action of "Update all": the system and Flatpak in Mandara when that
+/// job covers every pending source, else the combined terminal command (so
+/// AUR packages, or an image-based system's own update, aren't skipped).
+fn all_action(kinds: &[SourceKind], helper: Option<&str>, system: Option<System>, in_mandara: bool) -> UpdateAction {
+    let flatpak = kinds.contains(&SourceKind::Flatpak);
+    let covered = kinds.iter().all(|&k| job_covers(k, system));
+    match system.filter(|_| in_mandara && covered).and_then(|s| system::system_request(s, flatpak)) {
+        Some(r) => UpdateAction::Job(r),
+        None => UpdateAction::Terminal(updates::combined_command(kinds, helper)),
+    }
+}
+
+/// Starts `action`; records a toast on `m` when it can't start.
+fn run_action(m: &Shared, action: &UpdateAction, cx: &mut App) {
+    match action {
+        UpdateAction::Job(r) => {
+            if let Err(e) = system::start(r.clone(), cx) {
+                m.borrow_mut().status = Some((false, e, Instant::now()));
+            }
+        }
+        UpdateAction::Terminal(command) => {
+            let _ = run_in_terminal(Some(m), command, cx);
+        }
+    }
+    notify(m, cx);
+}
+
+/// The accent gradient "Update" button (runs the update, or opens the
+/// terminal).
+fn update_button(id: ElementId, label: &'static str, action: UpdateAction, m: &Shared, palette: &MandaraPalette) -> AnyElement {
+    use crate::components::buttons::{Ink, designed};
     let from = palette.primary;
     let to = partner(palette.primary).with_lightness(palette.primary.lightness());
     let ink = palette.on_primary;
     let m = m.clone();
-    div()
-        .id(id)
-        .h(px(BUTTON_H))
-        .px(px(BUTTON_PAD_X_PX))
-        .flex_none()
-        .rounded_full()
+    let busy = matches!(action, UpdateAction::Job(_)) && system::running();
+    let glyph = if matches!(action, UpdateAction::Job(_)) { "download" } else { "terminal" };
+    // Designed shapes are filled with the gradient's start; the classic
+    // pill keeps the gradient and its glow.
+    let hover = from.mix(ink, crate::kit::alpha::HOVER_FILLED);
+    let el = div().id(id.clone()).h(px(BUTTON_H)).px(px(BUTTON_PAD_X_PX)).flex_none();
+    designed(el, id, BUTTON_H, false, Ink { bg: Some(from), hover, outline: None }, Some(palette), |el| {
+        el.rounded_full()
+            .bg(oklab_gradient(ANGLE_RIGHT_DEG, from, to))
+            .shadow(vec![glow(readable(from, palette).with_alpha(BUTTON_GLOW.0), BUTTON_GLOW.1, 0.0, BUTTON_GLOW.2)])
+            .hover(|s| s.opacity(BUTTON_HOVER_OPACITY))
+    })
         .flex()
         .items_center()
         .gap(px(BUTTON_GAP_PX))
         .cursor_pointer()
-        .bg(oklab_gradient(ANGLE_RIGHT_DEG, from, to))
-        .shadow(vec![glow(readable(from, palette).with_alpha(BUTTON_GLOW.0), BUTTON_GLOW.1, 0.0, BUTTON_GLOW.2)])
-        .hover(|s| s.opacity(BUTTON_HOVER_OPACITY))
         .text_size(px(BUTTON_TEXT_PX))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(ink.hsla())
-        .child(icon("terminal", SMALL_ICON_PX, ink))
+        .child(icon(glyph, SMALL_ICON_PX, ink))
         .child(label)
+        .when(busy, |el| el.opacity(BUSY_OPACITY))
         .on_click(move |_, _, cx| {
             cx.stop_propagation();
-            let _ = run_in_terminal(Some(&m), &command, cx);
-            notify(&m, cx);
+            if !busy {
+                run_action(&m, &action, cx);
+            }
         })
         .into_any_element()
 }
@@ -634,7 +738,7 @@ fn chevron(expanded: bool, palette: &MandaraPalette) -> AnyElement {
         .into_any_element()
 }
 
-fn group_row(report: &SourceReport, shown: usize, expanded: bool, m: &Shared, radius: f32, palette: &MandaraPalette) -> AnyElement {
+fn group_row(report: &SourceReport, shown: usize, expanded: bool, action: UpdateAction, m: &Shared, radius: f32, palette: &MandaraPalette) -> AnyElement {
     let kind = report.kind;
     let n = report.packages.len();
     let accent = readable(palette.primary, palette);
@@ -694,7 +798,7 @@ fn group_row(report: &SourceReport, shown: usize, expanded: bool, m: &Shared, ra
                 )
                 .child(div().text_size(px(text::LABEL)).text_color(tint.hsla()).truncate().child(detail)),
         )
-        .when(n > 0, |el| el.child(update_button("upd-run".into(), t("Update"), report.command.clone(), m, palette)))
+        .when(n > 0, |el| el.child(update_button("upd-run".into(), t("Update"), action, m, palette)))
         .on_click(move |_, window, _| {
             if n == 0 {
                 return;
@@ -834,6 +938,7 @@ fn news_card(m: &Shared, i: usize, radius: f32, palette: &MandaraPalette) -> Any
 }
 
 fn check_button(m: &Shared, checking: bool, palette: &MandaraPalette) -> AnyElement {
+    use crate::components::buttons::{Ink, designed};
     let accent = readable(palette.primary, palette);
     let hover = accent.with_alpha(alpha(TINT_HOVER, palette));
     let spinner = gpui::svg()
@@ -843,37 +948,34 @@ fn check_button(m: &Shared, checking: bool, palette: &MandaraPalette) -> AnyElem
         .text_color(accent.hsla())
         .with_animation("upd-spin", Animation::new(SPIN).repeat(), |svg, delta| svg.with_transformation(gpui::Transformation::rotate(gpui::radians(delta * std::f32::consts::TAU))));
     let m = m.clone();
-    div()
-        .id("upd-check")
-        .h(px(BUTTON_H))
-        .px(px(CHECK_PAD_X_PX))
-        .flex_none()
-        .rounded_full()
+    let fill = accent.with_alpha(alpha(TINT_FILL, palette));
+    // While checking it is inert: no hover.
+    let ink_of = Ink { bg: Some(fill), hover: if checking { fill } else { hover }, outline: None };
+    let el = div().id("upd-check").h(px(BUTTON_H)).px(px(CHECK_PAD_X_PX)).flex_none();
+    designed(el, "upd-check", BUTTON_H, false, ink_of, Some(palette), |el| el.rounded_full().bg(fill.hsla()).when(!checking, |el| el.hover(move |s| s.bg(hover.hsla()))))
         .flex()
         .items_center()
         .gap(px(CHECK_GAP_PX))
-        .bg(accent.with_alpha(alpha(TINT_FILL, palette)).hsla())
         .text_size(px(BUTTON_TEXT_PX))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(accent.hsla())
         .when(checking, |el| el.opacity(CHECKING_OPACITY).child(spinner).child(t("Checking…")))
         .when(!checking, |el| {
             // start_check notifies the plugin's views itself.
-            el.cursor_pointer().hover(move |s| s.bg(hover.hsla())).child(icon("refresh", SMALL_ICON_PX, accent)).child(t("Check now")).on_click(move |_, _, cx| start_check(&m, None, cx))
+            el.cursor_pointer().child(icon("refresh", SMALL_ICON_PX, accent)).child(t("Check now")).on_click(move |_, _, cx| start_check(&m, None, cx))
         })
         .into_any_element()
 }
 
-fn search_box(field: &Entity<TextField>, query: &str, palette: &MandaraPalette) -> AnyElement {
+fn search_box(field: &Entity<TextField>, query: &str, palette: &MandaraPalette, cx: &mut App) -> AnyElement {
     let f = field.clone();
-    div()
+    let focused = crate::components::inputs::embed(field, cx);
+    crate::components::inputs::search_frame(div(), SEARCH_RADIUS_PX, focused, palette)
         .flex_1()
         .min_w(px(0.0))
         .h(px(CONTROLS_H))
         .pl(px(SEARCH_PAD_L_PX))
         .pr(px(SEARCH_PAD_R_PX))
-        .rounded(px(crate::style::radius(SEARCH_RADIUS_PX)))
-        .bg(palette.surface_container_high.hsla())
         .flex()
         .items_center()
         .gap(px(SEARCH_GAP_PX))
@@ -1039,14 +1141,25 @@ impl View {
             redraw_in(crate::state::config(cx).read(cx).snapshot().panels.toast().saturating_sub(at.elapsed()) + EXPIRY_MARGIN, window, cx);
         }
 
-        let (result, checking, expanded, helper) = {
+        let (result, checking, expanded, helper, system) = {
             let mb = m.borrow();
-            (mb.result.clone(), mb.checking, mb.expanded.clone(), mb.helper)
+            (mb.result.clone(), mb.checking, mb.expanded.clone(), mb.helper, mb.system)
         };
         let reports: &[SourceReport] = result.as_ref().map_or(&[], |r| &r.sources);
         let total: usize = reports.iter().map(|r| r.packages.len()).sum();
         let has_pacman = reports.iter().any(|r| r.kind == SourceKind::Pacman);
-        let show_news = s.news && has_pacman;
+        let nixos = system == Some(System::NixOs);
+        let show_news = s.news && has_pacman && !nixos;
+
+        // ── The system update job, and NixOS generations ─────────────────
+        let job = system::job_card(m, card_r, palette, cx);
+        let nix_view = nixos.then(|| {
+            if visible {
+                system::load_nix(m, cx);
+            }
+            m.borrow_mut().nix.keep.get_or_insert(s.nixos_keep);
+            system::nix_view(m, card_r, row_r, palette)
+        });
         if visible && show_news {
             fetch_news(m, cx);
         }
@@ -1082,7 +1195,7 @@ impl View {
                 continue;
             }
             let is_open = !r.packages.is_empty() && (searching || open.contains(&r.kind));
-            rows.push(group_row(r, hits.len(), is_open, m, row_r, palette));
+            rows.push(group_row(r, hits.len(), is_open, source_action(r.kind, &r.command, system, s.in_mandara), m, row_r, palette));
             list_h += GROUP_H + ROW_GAP;
             if is_open {
                 for p in hits.iter().take(ROWS_PER_GROUP) {
@@ -1100,7 +1213,7 @@ impl View {
                 ("package", t("Not checked yet").to_string(), t("Press Check now to look for updates").to_string())
             })
         } else if reports.is_empty() {
-            Some(("package", t("No package manager found").to_string(), t("Supports pacman, AUR helpers, APT, DNF, Zypper and Flatpak").to_string()))
+            Some(("package", t("No package manager found").to_string(), t("Supports pacman, AUR helpers, APT, DNF, Zypper, XBPS, apk and Flatpak").to_string()))
         } else if searching && matches == 0 {
             Some(("search", tf("No package matches \u{201c}{query}\u{201d}", &[("query", &q)]), t("Try another name or repository").to_string()))
         } else if total == 0 && !errors {
@@ -1114,17 +1227,20 @@ impl View {
             Some(_) => EMPTY_H,
             None => list_h.min(LIST_MAX_H),
         };
+        // On NixOS the generations view replaces the package list; only
+        // pending Flatpak updates are listed below it.
+        let show_list = !nixos || total > 0;
 
         // ── Controls: search + update all ────────────────────────────────
         let show_controls = total > 0;
         let kinds: Vec<SourceKind> = reports.iter().filter(|r| !r.packages.is_empty()).map(|r| r.kind).collect();
-        let all_cmd = updates::combined_command(&kinds, helper);
+        let all = all_action(&kinds, helper, system, s.in_mandara);
         let controls = div()
             .h(px(CONTROLS_H))
             .flex()
             .items_center()
             .gap(px(tokens::SM))
-            .when(total > SEARCH_MIN, |el| el.child(search_box(&self.field, &query, palette)))
+            .when(total > SEARCH_MIN, |el| el.child(search_box(&self.field, &query, palette, cx)))
             .when(total <= SEARCH_MIN, |el| {
                 el.child(
                     div()
@@ -1136,10 +1252,17 @@ impl View {
                         .child(tf("{count} packages from {sources} sources", &[("count", &total), ("sources", &kinds.len())])),
                 )
             })
-            .child(update_button("upd-run-all".into(), t("Update all"), all_cmd, m, palette));
+            .child(update_button("upd-run-all".into(), t("Update all"), all, m, palette));
 
         // ── Size ─────────────────────────────────────────────────────────
         let mut height = PAD * 2.0 + HEADER_H;
+        let tiles_h = if nixos { 0.0 } else { tiles_h };
+        if let Some((_, h)) = &job {
+            height += GAP + h;
+        }
+        if let Some((_, h)) = &nix_view {
+            height += GAP + h;
+        }
         if tiles_h > 0.0 {
             height += GAP + tiles_h;
         }
@@ -1150,7 +1273,9 @@ impl View {
         if show_controls {
             height += GAP + CONTROLS_H;
         }
-        height += GAP + list_h;
+        if show_list {
+            height += GAP + list_h;
+        }
         if (f32::from(self.size_cell.get().height) - height).abs() > SIZE_EPSILON_PX {
             self.size_cell.set(size(px(PANEL_W), px(height)));
         }
@@ -1182,11 +1307,12 @@ impl View {
             .flex()
             .flex_col()
             .child(reveal(p, 0, head))
+            .when_some(job, |el, (card, _)| el.child(div().h(px(GAP))).child(reveal(p, next(), card)))
+            .when_some(nix_view, |el, (parts, _)| el.child(div().h(px(GAP))).child(reveal(p, next(), div().flex().flex_col().gap(px(GAP)).children(parts))))
             .when(tiles_h > 0.0, |el| el.child(div().h(px(GAP))).child(reveal(p, next(), div().flex().flex_col().gap(px(TILE_GAP)).children(tile_rows))))
             .when(news_n > 0, |el| el.child(div().h(px(GAP))).child(reveal(p, next(), div().flex().flex_col().gap(px(TILE_GAP)).children((0..news_n).map(|i| news_card(m, i, card_r, palette))))))
             .when(show_controls, |el| el.child(div().h(px(GAP))).child(reveal(p, next(), controls)))
-            .child(div().h(px(GAP)))
-            .child(reveal(p, next(), list))
+            .when(show_list, |el| el.child(div().h(px(GAP))).child(reveal(p, next(), list)))
             .when_some(status, |el, (ok, msg, _)| el.child(toast(ok, msg, palette)))
             .into_any_element()
     }
@@ -1255,7 +1381,7 @@ fn check_now(cx: &mut App) -> Output {
 }
 
 pub fn register(r: &mut PluginRegistry) {
-    r.register(PluginManifest::builtin(ID, tk("Updates"), tk("Pending package updates from pacman, the AUR, APT, DNF, Zypper and Flatpak"), None).opt_in(), |window, cx, panel_cx| {
+    r.register(PluginManifest::builtin(ID, tk("Updates"), tk("Pending package updates from pacman, the AUR, APT, DNF, Zypper, XBPS, apk and Flatpak, installed with live progress; NixOS generations"), None).opt_in(), |window, cx, panel_cx| {
         let m = shared(cx);
         // Typing re-renders this plugin's views only.
         let views = m.borrow().views.clone();
@@ -1291,7 +1417,8 @@ pub fn register(r: &mut PluginRegistry) {
         ID,
         CommandSpec::new("updates sources", tk("Detected package sources, their checkers and update commands"), |_, cx| {
             let s = settings(cx);
-            Ok(json!({ "sources": updates::detect(s.opts), "terminal": updates::resolve_terminal(&s.terminal) }))
+            // `recorded`: the sandbox's recorded-output fake runs updates (never in a release).
+            Ok(json!({ "sources": updates::detect(s.opts), "terminal": updates::resolve_terminal(&s.terminal), "system": sysupdate::current_system(), "recorded": sysupdate::fake_active(), "run_in_mandara": s.in_mandara }))
         }),
     );
     r.command(
@@ -1326,8 +1453,95 @@ pub fn register(r: &mut PluginRegistry) {
             }
             Ok(json!({ "terminal": terminal, "command": command }))
         })
-        .arg(ArgSpec::optional("source", ArgKind::String, tk("one source only")).choices(&["pacman", "aur", "apt", "dnf", "zypper", "flatpak"]))
+        .arg(ArgSpec::optional("source", ArgKind::String, tk("one source only")).choices(&["pacman", "aur", "apt", "dnf", "zypper", "xbps", "apk", "flatpak"]))
         .example("updates run flatpak"),
+    );
+    r.command(
+        ID,
+        CommandSpec::new("updates apply", tk("Update the system in Mandara, with progress and Mandara's password dialog (system and Flatpak, or one)"), |a, cx| {
+            let s = settings(cx);
+            let flatpak = s.opts.flatpak && updates::find_program("flatpak").is_some();
+            let request = apply_request(a.get(0).unwrap_or("all"), sysupdate::current_system(), flatpak)?;
+            system::start(request.clone(), cx)?;
+            if let Some(m) = alive() {
+                notify(&m, cx);
+            }
+            Ok(json!({ "started": request, "log": mandara_services::sysupdate::job::log_path() }))
+        })
+        .arg(ArgSpec::optional("what", ArgKind::String, tk("all (default), system or flatpak")).choices(&["all", "system", "flatpak"]))
+        .example("updates apply"),
+    );
+    r.command(
+        ID,
+        CommandSpec::new("updates job", tk("The running or last system update: phase, progress, recent log lines and summary"), |_, _| {
+            let Some(job) = system::active() else { return Ok(json!({ "job": null })) };
+            Ok(job.with(|s| {
+                json!({
+                    "request": s.request,
+                    "backend": s.backend,
+                    "phase": s.phase(),
+                    "step": s.step,
+                    "steps": s.steps,
+                    "counts": s.tracker.counts(),
+                    "progress": s.overall(),
+                    "current": s.tracker.current,
+                    "cancellable": s.cancellable(),
+                    "elapsed_secs": s.started.elapsed().as_secs(),
+                    "log": s.log.iter().skip(s.log.len().saturating_sub(JOB_LOG_LINES)).collect::<Vec<_>>(),
+                    "finished": s.finished,
+                })
+            }))
+        }),
+    );
+    r.command(
+        ID,
+        CommandSpec::new("updates cancel", tk("Stop the running system update (only while it is refreshing, downloading or building)"), |_, _| {
+            let job = system::active().ok_or_else(|| t("No system update is running").to_string())?;
+            if job.cancel() { Ok(json!({ "cancelling": true })) } else { Err(t("It can't be stopped now: packages are being installed").into()) }
+        }),
+    );
+    r.command(
+        ID,
+        CommandSpec::new_output("updates nixos generations", tk("NixOS system generations (and home-manager's), newest first"), |_, _| {
+            Ok(pending(|| {
+                let paths = sysupdate::nix_paths();
+                let value = json!({ "setup": nix::setup(&paths), "system": nix::generations(&paths), "home_manager": nix::home_generations(&sysupdate::home_profile_dirs()) });
+                Ok(serde_json::to_string_pretty(&value).unwrap_or_default())
+            }))
+        }),
+    );
+    r.command(
+        ID,
+        CommandSpec::new_output("updates nixos diff", tk("What changed between two NixOS generations (packages and closure size)"), |a, _| {
+            let num = |i: usize| a.get(i).and_then(|n| n.parse::<u32>().ok()).ok_or_else(|| t("Expected a number").to_string());
+            let (from, to) = (num(0)?, num(1)?);
+            Ok(pending(move || {
+                let paths = sysupdate::nix_paths();
+                nix::closure_diff(&paths.generation_link(from), &paths.generation_link(to)).map(|d| serde_json::to_string_pretty(&d).unwrap_or_default())
+            }))
+        })
+        .arg(ArgSpec::required("from", ArgKind::Integer, tk("older generation")))
+        .arg(ArgSpec::required("to", ArgKind::Integer, tk("newer generation")))
+        .example("updates nixos diff 41 44"),
+    );
+    r.command(
+        ID,
+        CommandSpec::new("updates nixos run", tk("A NixOS action through Mandara's password dialog: update|rebuild <switch|boot|test|build>, rollback, switch-to <n>, clean keep <n>, clean older-than <days>"), |a, cx| {
+            if sysupdate::current_system() != System::NixOs {
+                return Err(t("This isn't NixOS").into());
+            }
+            let words: Vec<&str> = (0..).map_while(|i| a.get(i)).collect();
+            let action = NixAction::parse(&words)?;
+            system::start(Request::Nix { action }, cx)?;
+            if let Some(m) = alive() {
+                notify(&m, cx);
+            }
+            Ok(json!({ "started": action }))
+        })
+        .arg(ArgSpec::required("action", ArgKind::String, tk("update, rebuild, rollback, switch-to or clean")))
+        .arg(ArgSpec::optional("value", ArgKind::String, tk("mode, generation, keep or older-than")))
+        .arg(ArgSpec::optional("count", ArgKind::String, tk("the count for clean")))
+        .example("updates nixos run update switch"),
     );
     r.command(
         ID,
@@ -1337,9 +1551,68 @@ pub fn register(r: &mut PluginRegistry) {
     );
 }
 
+/// What `updates apply <what>` starts on `system`. Systems Mandara doesn't
+/// update are explained here, before the helper is prepared or a password
+/// is asked for.
+fn apply_request(what: &str, system: System, flatpak: bool) -> Result<Request, String> {
+    match (what, system) {
+        ("flatpak", _) => Ok(Request::Flatpak),
+        ("system" | "all", System::NixOs) => Err(t("On NixOS, use `updates nixos update`").into()),
+        (_, System::Managed(_)) => Ok(Request::System { flatpak: flatpak && what != "system" }),
+        (_, other) => Err(other.explanation().unwrap_or_default()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_all_runs_in_mandara_only_when_the_job_covers_every_source() {
+        use SourceKind::*;
+        use mandara_services::sysupdate::ImageTool;
+        let pacman = Some(System::Managed(mandara_services::sysupdate::plan::BackendId::Pacman));
+        assert_eq!(all_action(&[Pacman, Flatpak], Some("paru"), pacman, true), UpdateAction::Job(Request::System { flatpak: true }));
+        // The job never runs the AUR helper: the terminal's command does both.
+        let both = [Pacman, Aur];
+        assert_eq!(all_action(&both, Some("paru"), pacman, true), UpdateAction::Terminal(updates::combined_command(&both, Some("paru"))));
+        assert_eq!(all_action(&[Aur], Some("paru"), pacman, true), UpdateAction::Terminal(updates::combined_command(&[Aur], Some("paru"))));
+        // An image-based system's own update isn't a Flatpak-only job.
+        let ostree = Some(System::ImageBased(ImageTool::RpmOstree));
+        let pending = [Dnf, Flatpak];
+        assert_eq!(all_action(&pending, None, ostree, true), UpdateAction::Terminal(updates::combined_command(&pending, None)));
+        assert_eq!(all_action(&[Flatpak], None, ostree, true), UpdateAction::Job(Request::Flatpak));
+        assert!(matches!(all_action(&[Pacman], None, pacman, false), UpdateAction::Terminal(_)), "the Terminal setting");
+    }
+
+    #[test]
+    fn only_the_systems_own_package_manager_runs_in_mandara() {
+        use mandara_services::sysupdate::plan::BackendId;
+        let debian = Some(System::Managed(BackendId::Apt));
+        assert_eq!(source_action(SourceKind::Apt, "sudo apt upgrade", debian, true), UpdateAction::Job(Request::System { flatpak: false }));
+        assert_eq!(source_action(SourceKind::Dnf, "sudo dnf upgrade", debian, true), UpdateAction::Terminal("sudo dnf upgrade".into()), "dnf on Debian isn't the system's manager");
+        assert_eq!(source_action(SourceKind::Flatpak, "flatpak update", debian, true), UpdateAction::Job(Request::Flatpak));
+        let pending = [SourceKind::Apt, SourceKind::Dnf];
+        assert_eq!(all_action(&pending, None, debian, true), UpdateAction::Terminal(updates::combined_command(&pending, None)));
+        let suse = Some(System::Managed(BackendId::ZypperDup));
+        assert_eq!(source_action(SourceKind::Zypper, "sudo zypper dup", suse, true), UpdateAction::Job(Request::System { flatpak: false }));
+    }
+
+    #[test]
+    fn apply_asks_for_no_password_on_systems_mandara_doesnt_update() {
+        use mandara_services::sysupdate::ImageTool;
+        let pacman = System::Managed(mandara_services::sysupdate::plan::BackendId::Pacman);
+        assert_eq!(apply_request("system", pacman, true), Ok(Request::System { flatpak: false }));
+        assert_eq!(apply_request("all", pacman, true), Ok(Request::System { flatpak: true }));
+        assert_eq!(apply_request("all", pacman, false), Ok(Request::System { flatpak: false }));
+        for other in [System::ImageBased(ImageTool::RpmOstree), System::Unsupported] {
+            for what in ["system", "all"] {
+                assert_eq!(apply_request(what, other, true), Err(other.explanation().unwrap()), "{what} on {other:?}");
+            }
+            assert_eq!(apply_request("flatpak", other, true), Ok(Request::Flatpak), "Flatpak needs no root");
+        }
+        assert!(apply_request("system", System::NixOs, true).is_err());
+    }
 
     fn report(kind: SourceKind, names: &[&str]) -> SourceReport {
         SourceReport {
