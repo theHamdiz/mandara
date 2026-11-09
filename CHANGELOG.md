@@ -6,6 +6,12 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Sudoku and 2048, in the bar and right on your desktop.** Two new games, off until you switch them on in Studio → Plugins (or type "sudoku", "2048" or "games" in the launcher and pick *Turn on*). Play them in the bar's drop-down panel, as a card in the sidebar, or add them as a desktop widget and play right there: click the board to give it the keyboard, click anywhere else to give it back. One game is shared between the panel, the sidebar and the desktop and kept when you close it, restart the shell or log out, along with your best times and scores.
+- **Sudoku** deals puzzles with exactly one solution at four levels (Easy, Medium, Hard and Expert), with pencil marks, highlights for the selected cell's row, column, box and digit, red conflicts, undo and redo, counted hints and mistakes, and a timer that only runs while the game is in sight. Play with the arrows and number keys (N for notes, H for a hint), the mouse or touch; a solved board gets a little wave of light (none with reduced motion).
+- **2048** slides its tiles on the shell's springs and pops them as they merge, with a 4 × 4 board or a 3 × 3, 5 × 5 or 6 × 6 one, your score and best score, one step of undo, and the choice to keep going past 2048. Use the arrows or WASD, drag with the mouse or swipe with a finger. Studio → Plugins has each game's settings (level, highlights, timer, animations, undo, board size and accent colour), and Studio → Desktop widgets its width and style (Glass, Solid or Minimal). `mandara msg sudoku` and `mandara msg 2048` play them from a script.
+
 ## 0.23.0 — 2026-11-09
 
 A different shape for every character. Mandara Studio uses less memory.
