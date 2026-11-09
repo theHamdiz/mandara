@@ -50,7 +50,8 @@ pub struct Headline {
 /// they were made for.
 #[derive(Default)]
 pub(super) struct CardData {
-    key: Option<(u64, Rc<str>)>,
+    /// `(history revision, subscriptions fingerprint, folder)` of the rows.
+    key: Option<(u64, u64, Rc<str>)>,
     pub items: Rc<[Headline]>,
     pub unread: usize,
     loading: bool,
@@ -100,16 +101,21 @@ pub(super) fn from_disk(cache: &Cache, subs: &[Subscription], folder: &str) -> (
     (rows, unread)
 }
 
-/// Refresh the card's rows when the data or folder changed: straight from
-/// the panel's history when it is loaded, else from disk off the UI thread.
-fn sync(folder: &str, cx: &mut App) {
+/// Refresh the card's rows when the data, the subscriptions or the folder
+/// changed: straight from the panel's history when it is loaded, else from
+/// disk off the UI thread.
+fn sync(settings: &super::Settings, cx: &mut App) {
     let hub = hub();
+    let folder = &settings.card_folder;
     let load = {
         let mut h = hub.borrow_mut();
-        let key = (h.rev, Rc::<str>::from(folder));
-        if h.card.key.as_ref() == Some(&key) { return; }
+        if h.card.key.as_ref().is_some_and(|(rev, subs, f)| *rev == h.rev && *subs == settings.subs_key && f == folder) { return; }
+        let key = (h.rev, settings.subs_key, folder.clone());
         if let Some(lib) = h.lib.as_mut() {
+            // The history follows the subscriptions first (as when the panel opens).
+            let changed = lib.sync(&settings.subs);
             let (rows, unread) = from_library(lib, folder);
+            if changed { h.due_checked = None; }
             h.card.items = rows.into();
             h.card.unread = unread;
             h.card.key = Some(key);
@@ -119,8 +125,8 @@ fn sync(folder: &str, cx: &mut App) {
         h.card.loading = true;
         (key, h.card.generation)
     };
-    let ((rev, folder), generation) = load;
-    let subs = cached_settings(cx).subs.clone().to_vec();
+    let ((rev, subs_key, folder), generation) = load;
+    let subs = settings.subs.to_vec();
     let wanted = folder.to_string();
     cx.spawn(async move |cx| {
         let (rows, unread) = mandara_services::runtime::unblock(move || from_disk(&Cache::default(), &subs, &wanted)).await;
@@ -130,7 +136,7 @@ fn sync(folder: &str, cx: &mut App) {
             h.card.loading = false;
             h.card.items = rows.into();
             h.card.unread = unread;
-            h.card.key = Some((rev, folder));
+            h.card.key = Some((rev, subs_key, folder));
             h.views.clone()
         };
         views.notify_async(cx);
@@ -154,7 +160,7 @@ pub(super) fn render(palette: &MandaraPalette, window: &mut Window, cx: &mut App
     hub.borrow().views.track(window);
     let settings = cached_settings(cx);
     let folder = settings.card_folder.clone();
-    if !settings.subs.is_empty() { sync(&folder, cx); }
+    if !settings.subs.is_empty() { sync(&settings, cx); }
     let (items, unread) = { let h = hub.borrow(); (h.card.items.clone(), h.card.unread) };
     let accent = readable(palette.primary, palette);
     let now = chrono::Utc::now().timestamp();
