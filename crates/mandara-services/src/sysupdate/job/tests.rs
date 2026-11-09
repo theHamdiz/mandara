@@ -309,6 +309,20 @@ fn nixos_update_reports_changed_inputs() {
 }
 
 #[test]
+fn a_cancel_during_the_build_after_your_flakes_update_reaches_the_helper() {
+    // Your flake's update runs as you, then the build as root: the cancel
+    // belongs to the root build again, not to the step before it.
+    let dir = tempfile::tempdir().unwrap();
+    let paths = nixos_tree(dir.path()).unwrap();
+    let replay = Replay::new(BackendId::Nix).scenario(Scenario::Success).flake_dir(paths.etc_nixos.clone()).hold(StepKind::Build, 20);
+    let job = start(Request::Nix { action: NixAction::Update(RebuildMode::Switch) }, Arc::new(FakeLauncher::new(System::NixOs, replay, paths)), quiet());
+    wait_for(&job, |s| s.step_kind == Some(StepKind::Build));
+    assert!(job.cancel());
+    let f = wait(&job);
+    assert_eq!(f.outcome, JobOutcome::Cancelled, "the helper heard it and stopped the build");
+}
+
+#[test]
 fn nixos_build_failure_and_clean_up() {
     let (_dir, _, f) = nix_job(NixAction::Rebuild(RebuildMode::Switch), Scenario::Fails);
     assert!(matches!(f.outcome, JobOutcome::Failed(_)), "{f:?}");

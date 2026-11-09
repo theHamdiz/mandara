@@ -537,6 +537,7 @@ impl Worker<'_> {
         let err_thread = std::thread::spawn(move || helper::read_lines(stderr, &mut |l| err_tx.send(l.to_string()).is_ok()));
         let base_steps = self.job.with(|s| s.steps);
         let mut done: Option<Outcome> = None;
+        let user_cancel = self.job.user_cancel.clone();
         helper::read_lines(stdout, &mut |raw| {
             while let Ok(e) = err_rx.try_recv() {
                 self.stderr_line(&e);
@@ -550,6 +551,14 @@ impl Worker<'_> {
                     }),
                     Mark::Step { kind, .. } => {
                         self.update(|s| {
+                            // A root step owns cancels again, even after a
+                            // rootless one (your NixOS flake's update): a
+                            // request left for that step doesn't carry over.
+                            if s.in_user_step {
+                                s.in_user_step = false;
+                                s.cancel_requested = false;
+                                user_cancel.clear();
+                            }
                             s.step += 1;
                             // A step inserted by the plan (a retry) grows it.
                             s.steps = s.steps.max(s.step);

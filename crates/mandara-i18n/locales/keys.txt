@@ -5702,6 +5702,7 @@ Saved — reconnect to apply
 Saves captures to ~/Pictures/Screenshots
 Saves the history in Mandara's data folder
 Saves the wallpapers you pick in Mandara's data folder
+Saves your game and best scores in Mandara's state folder
 Saves your notes in Mandara's data folder
 Saves your tasks in Mandara's data folder
 Saving…
