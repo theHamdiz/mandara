@@ -90,3 +90,35 @@ fn every_component_design_draws_its_frames_without_allocating() {
     assert!(control.0 >= 2, "the counter sees allocations ({control:?})");
     eprintln!("component designs: 0 allocations over {FRAMES} frames each; collecting control {control:?}");
 }
+
+/// The session menu's cards: their layout, every card's place, the touch
+/// hit test and the arrow keys are plain arithmetic, every frame.
+#[test]
+fn the_session_cards_lay_out_without_allocating() {
+    use mandara_config::power::SessionCardsLayout;
+    use mandara_ui::powerctl::session_cards::{CardsGrid, Nav, entrance_delay};
+    let screens = [(2560.0, 1440.0), (1536.0, 864.0), (800.0, 600.0)];
+    for layout in [SessionCardsLayout::Row, SessionCardsLayout::Column] {
+        for rtl in [false, true] {
+            let counted = allocations(|| {
+                for frame in 0..FRAMES {
+                    for screen in screens {
+                        for n in [5, 9] {
+                            let g = CardsGrid::new(layout, n, screen);
+                            let mut sum = g.hint.y + entrance_delay(frame % n, 0.045, 0.3, false);
+                            for i in 0..n {
+                                let r = g.rect(i, rtl);
+                                sum += r.x + r.y + g.hit(r.x + 1.0, r.y + 1.0, rtl).unwrap_or(0) as f32;
+                                for nav in [Nav::Left, Nav::Right, Nav::Up, Nav::Down] {
+                                    sum += g.step(i, nav, rtl) as f32;
+                                }
+                            }
+                            black_box(sum);
+                        }
+                    }
+                }
+            });
+            assert_eq!(counted, (0, 0), "{layout:?}, rtl {rtl}: no allocation per frame");
+        }
+    }
+}

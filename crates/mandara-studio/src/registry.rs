@@ -499,7 +499,9 @@ const SLEEP_MODES: &[(&str, &str)] = &[("suspend", tk("Suspend")), ("hibernate",
 const ALERT_STYLES: &[(&str, &str)] = &[("both", tk("Notification + OSD")), ("notification", tk("Notification")), ("osd", tk("OSD")), ("off", tk("Off"))];
 const CRITICAL_ACTIONS: &[(&str, &str)] = &[("nothing", tk("Nothing")), ("suspend", tk("Sleep")), ("hibernate", tk("Hibernate")), ("shutdown", tk("Shut down"))];
 const PROFILES: &[(&str, &str)] = &[("null", tk("Leave it")), ("power-saver", tk("Power saver")), ("balanced", tk("Balanced")), ("performance", tk("Performance"))];
-const MENU_STYLES: &[(&str, &str)] = &[("dock", tk("Edge dock")), ("grid", tk("Grid"))];
+const MENU_STYLES: &[(&str, &str)] = &[("dock", tk("Edge dock")), ("grid", tk("Grid")), ("cards", tk("Cards"))];
+/// How the session menu's cards line up (`SessionCardsLayout` ids).
+pub(crate) const MENU_CARD_LAYOUTS: &[(&str, &str)] = &[("row", tk("Row")), ("column", tk("Column"))];
 /// Where the session menu's dock opens (`SessionMenuPosition` ids).
 pub(crate) const MENU_POSITIONS: &[(&str, &str)] = &[("side", tk("Opposite the sidebar")), ("left", tk("Left")), ("right", tk("Right")), ("top", tk("Top center")), ("bottom", tk("Bottom center"))];
 const POWER_PANEL_STYLES: &[(&str, &str)] = &[("classic", tk("Classic")), ("modern", tk("Modern"))];
@@ -589,6 +591,8 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),
         "/session_menu/position" if cfg.session_menu.style == mandara_config::power::SessionMenuStyle::Grid => Some(tk("The grid always opens in the middle")),
+        "/session_menu/position" if cfg.session_menu.style == mandara_config::power::SessionMenuStyle::Cards => Some(tk("The cards always open in the middle of the screen")),
+        "/session_menu/cards_layout" if cfg.session_menu.style != mandara_config::power::SessionMenuStyle::Cards => Some(tk("For the Cards style")),
         "/compositor/autostart" if running_compositor() == Some(mandara_config::compositor::Target::River) => Some(tk("River's init controls startup; add or remove Mandara there")),
         path if path.starts_with("/compositor/input/cursor/") => system_settings::cursor_locked(path, running_compositor()),
         path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Mandara can't set this on Sway")),
@@ -827,8 +831,9 @@ fn build() -> Vec<Setting> {
         s(Power, tk("Power profiles"), "/power/profile_ac", tk("On mains power"), tk("Switch to this profile when the charger is plugged in"), Choice(PROFILES)),
         s(Power, tk("Power profiles"), "/power/profile_battery", tk("On battery"), tk("Switch to this profile when running on battery"), Choice(PROFILES)),
         s(Power, tk("Power profiles"), "/power/saver_at_low", tk("Power saver at low battery"), tk("Switch to power-saver at the low threshold and back when charging"), Toggle),
-        s(Power, tk("Session menu"), "/session_menu/style", tk("Style"), tk("A dock on the screen edge or a centered grid"), Choice(MENU_STYLES)),
+        s(Power, tk("Session menu"), "/session_menu/style", tk("Style"), tk("A dock on the screen edge, a centered grid, or separate cards floating in the middle of the screen"), Choice(MENU_STYLES)),
         s(Power, tk("Session menu"), "/session_menu/position", tk("Position"), tk("Where the dock opens: on a screen side, or at the top or bottom center hanging from the bar there (one piece with it in the edge-frame styles), or from the screen edge where the bar isn't"), Choice(MENU_POSITIONS)),
+        s(Power, tk("Session menu"), "/session_menu/cards_layout", tk("Card layout"), tk("Cards side by side, wrapping onto more rows when they don't fit, or one above the other, wrapping into more columns"), Choice(MENU_CARD_LAYOUTS)),
         s(Power, tk("Session menu"), "/session_menu/grid_columns", tk("Grid columns"), tk("Tiles per row in the grid style"), slider(2.0, 6.0, 1.0, "")),
         s(Power, tk("Session menu"), "/session_menu/hold_to_confirm", tk("Hold to confirm"), tk("Log out, restart and shut down need a press-and-hold (mouse, Enter or a number key)"), Toggle),
         s(Power, tk("Session menu"), "/session_menu/hold_ms", tk("Hold time"), tk("How long to hold"), slider(300.0, 3000.0, 100.0, " ms")),
