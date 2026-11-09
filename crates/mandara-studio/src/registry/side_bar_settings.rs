@@ -121,7 +121,8 @@ pub fn locked(path: &str, cfg: &ShellConfig) -> Option<&'static str> {
         "flare_radius" if !joined && sb.shape != SideBarShape::Slab => Some(FLARES_ONLY),
         "rim_intensity" if !sb.rim => Some(RIM_FIRST),
         "chip_fill" if sb.chips == SideBarChips::Icons => Some(WASH_FIRST),
-        "icon_shape" if sb.chips != SideBarChips::Pills => Some(PILLS_FIRST),
+        // A side bar with pill items of its own still follows the shared shape.
+        "icon_shape" if [false, true].into_iter().all(|right| sb.items(right, &cfg.bar).chips != SideBarChips::Pills) => Some(PILLS_FIRST),
         "reveal_delay_ms" | "hide_delay_ms" if sb.left.pinned && sb.right.pinned => Some(UNPIN_FIRST),
         "left/pinned" | "left/accent" | "left/chips" | "left/item_shape" | "left/icon_shape" | "left/icon_fill" | "left/item_inset" if !sb.left.enabled => Some(SIDE_OFF),
         "right/pinned" | "right/accent" | "right/chips" | "right/item_shape" | "right/icon_shape" | "right/icon_fill" | "right/item_inset" if !sb.right.enabled => Some(SIDE_OFF),
@@ -166,5 +167,23 @@ mod tests {
         mandara_config::bar_styles::BarStyle::Rail.apply_to_side(&mut cfg, true);
         assert_eq!(locked("/side_bars/right/item_shape", &cfg), None, "a style gives it pills");
         assert_eq!(locked("/side_bars/right/item_inset", &cfg), None);
+    }
+
+    /// The shared icon shape is open while any side bar draws pill items,
+    /// its own or the shared ones, and locked only when none does.
+    #[test]
+    fn the_shared_icon_shape_follows_each_side_bars_items() {
+        let mut cfg = ShellConfig::default();
+        cfg.side_bars.enabled = true;
+        cfg.side_bars.chips = SideBarChips::Icons;
+        assert_eq!(locked("/side_bars/icon_shape", &cfg), Some(PILLS_FIRST));
+        cfg.side_bars.right.chips = Some(SideBarChips::Pills);
+        assert_eq!(locked("/side_bars/icon_shape", &cfg), None, "the right bar's own pills follow the shared shape");
+        cfg.side_bars.right.chips = None;
+        cfg.side_bars.chips = SideBarChips::Pills;
+        assert_eq!(locked("/side_bars/icon_shape", &cfg), None);
+        cfg.side_bars.left.chips = Some(SideBarChips::Icons);
+        cfg.side_bars.right.chips = Some(SideBarChips::Icons);
+        assert_eq!(locked("/side_bars/icon_shape", &cfg), Some(PILLS_FIRST), "both bars chose plain icons");
     }
 }
