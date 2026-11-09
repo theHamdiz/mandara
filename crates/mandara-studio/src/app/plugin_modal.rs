@@ -31,7 +31,7 @@ use mandara_plugins::{ManifestSetting, PluginManifest, PluginOrigin, PluginRegis
 use mandara_theme::{Color, MandaraPalette};
 use mandara_ui::icons::icon;
 use mandara_ui::state::update_config;
-use super::designer::{Lane, SIDEBAR_CAPABLE, bar_capable, place};
+use super::designer::{Lane, bar_capable, place};
 use mandara_ui::plugins::lifecycle::Action;
 use super::market_page::reload_plugins;
 use super::store_page as store;
@@ -837,7 +837,7 @@ impl StudioView {
 
         // ── Info strip ──────────────────────────────────────────────────
         let bar_capable = bar_capable(&m.id);
-        let sidebar_capable = SIDEBAR_CAPABLE.contains(&m.id.as_str()) || matches!(m.origin, PluginOrigin::ThirdParty { .. });
+        let sidebar_capable = mandara_ui::sidebar_tabs::offers_card(m);
         let access: Vec<(Access, &'static str)> = match &m.origin {
             PluginOrigin::Builtin => BUILTIN_ACCESS.iter().find(|(id, _)| *id == m.id).map(|(_, a)| a.to_vec()).unwrap_or_default(),
             PluginOrigin::ThirdParty { .. } => {

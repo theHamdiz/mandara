@@ -173,8 +173,6 @@ pub(crate) fn place_in(c: &mut ShellConfig, id: &str, from: Lane, to: Lane, inde
     }
 }
 
-/// Sidebar-capable built-ins (third-party plugins all can).
-pub(super) const SIDEBAR_CAPABLE: &[&str] = mandara_ui::sidebar_tabs::SIDEBAR_WIDGETS;
 /// Built-ins without a bar item.
 const NO_BAR: &[&str] = &["main-menu", "compositor", "quick-settings", "wallhaven", "cursors", "dock", "app-installer"];
 

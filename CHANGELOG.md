@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **The Feeds and Reddit sidebar cards show up.** Both plugins came with a sidebar card, but Studio's *Add a widget* list, the *Add to sidebar* button on their plugin pages and `mandara msg sidebar tab widget add` didn't offer them, so you couldn't put them on a tab. They're there now, next to the Radio, Sudoku and 2048 cards, and a check keeps every future card on that list. The Reddit card also shows a *Find communities* button when you follow no community, instead of nothing at all.
+
 ## 0.24.0 — 2026-11-09
 
 Update your whole system right from the Updates panel. Pick how every
