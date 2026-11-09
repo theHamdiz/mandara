@@ -143,7 +143,7 @@ fixed:
 | Resources (`resources`) | `refresh_ms` (also the bar rings), `disks_every_s`, `top_apps`, `temps_shown`, `disk_warn_percent`, `disk_full_percent` | 1500 ms, 15 s, 5, 8, 80 %, 90 % |
 | Process hunter (`processes`) | `refresh_ms`, `hot_cpu_percent` | 1500 ms, 50 % |
 | Containers (`containers`) | `hot_cpu_percent`, `refresh_s` (list refresh while the panel is closed, 5–600 s) (plus engine, stopped containers, log lines) | 80 %, 30 s |
-| Updates (`updates`) | `first_check_delay_s` (0–600 s after login), `news_count` (Arch news headlines, 1–5) | 20 s, 1 |
+| Updates (`updates`) | `first_check_delay_s` (0–600 s after login), `news_count` (Arch news headlines, 1–5), `run_in` (`mandara`: in the panel with progress, or `terminal`), `nixos_keep` (generations a NixOS clean-up keeps, 1–30) | 20 s, 1, `mandara`, 5 |
 | Media (`media`) | `lyrics_rows` (odd, 3–9), `bar_title` (the track beside the icon in the bar), `hide_when_paused` (the bar item only while something plays) | 5, on, off |
 | Workspaces (`workspaces`) | `labels` (`auto`: the number or a name of up to two characters, `number`, `dots`), `app_icons` (the apps' icons on each pill), `hide_empty` (only tags / workspaces with windows, plus the active and urgent ones) | auto, on, off |
 | Active window (`active-window`) | `show` (`app-and-title`, `app`, `title`), `max_width` (120–720 px) | app and title, 420 px |

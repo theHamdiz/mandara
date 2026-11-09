@@ -176,7 +176,9 @@ around, each one measured or shipped today:
     takes over an existing setup without losing it, and updates arrive as
     small, signed binary patches from Studio → About → Update now. NixOS
     gets a flake with NixOS and Home Manager modules, updated through the
-    flake.
+    flake. The Updates panel updates your whole system too, with live
+    progress and Mandara's own password dialog, and manages NixOS
+    generations. [How](docs/apps-and-updates.md#system-updates)
 12. **Made for everyone.** 20 interface languages, right-to-left Arabic,
     Persian and Urdu included, and fonts chosen for every script it shows.
 

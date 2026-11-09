@@ -1,0 +1,6 @@
+Fedora 40 - x86_64                              3.6 kB/s | 3.3 kB     00:00    
+Fedora 40 openh264 (From Cisco) - x86_64        820  B/s | 989  B     00:01    
+Fedora 40 - x86_64 - Updates                    5.2 kB/s | 3.2 kB     00:00    
+Dependencies resolved.
+Nothing to do.
+Complete!

@@ -6,6 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Update your whole system from the Updates panel.** *Update all* now installs your updates right in the panel instead of opening a terminal: Mandara runs your distribution's own package manager (pacman, APT, DNF, Zypper, XBPS or apk) and asks for your password with its own dialog, then updates your Flatpak apps. You see each phase as it happens (refreshing, downloading 3/46, installing 12/46, running hooks) with a progress bar and the latest log lines, you can cancel while it's still downloading, and the update keeps going if you close the panel. When it's done you get a clear summary, a gentle "restart to finish" when the kernel or another core package changed, and plain explanations when something needs you (another program using the package manager, no network, a conflict, a full disk). Nothing is ever forced, and the AUR, image-based systems and the new *Run updates → In a terminal* setting still use your terminal.
+- **NixOS generations in the Updates panel.** On NixOS the panel now lists your system generations (date, NixOS version, kernel, which one is running and which one booted) and your home-manager generations. Update your flake inputs or channels and rebuild with *Switch*, *Next boot*, *Test* or *Build only* while the build's own progress fills the bar, see which inputs changed, roll back or switch to any generation after a confirmation, compare a generation with the running one (changed packages and closure size), and clean up old generations, keeping the running and booted ones.
+
 ### Fixed
 
 - **Panels close in one smooth motion.** A drop-down panel folding back into the bar no longer pops a sliver of itself back out a moment after it looked closed, which made it seem to close in two steps (most noticeable with a low damping in Studio's motion settings). It now slides home and stays there, and a hidden sidebar no longer peeks back in after sliding away. Opening keeps its springy feel, and your motion speed, spring settings and reduced motion still apply.

@@ -1,0 +1,583 @@
+@nix {"action":"msg","level":4,"msg":"evaluating file '«nix-internal»/derivation-internal.nix'"}
+@nix {"action":"start","id":2336462209024,"level":4,"parent":0,"text":"evaluating derivation 'flake:nixpkgs#hello'","type":0}
+@nix {"action":"stop","id":2336462209025}
+@nix {"action":"start","id":2336462209026,"level":3,"parent":0,"text":"unpacking 'https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst' into the Git cache","type":0}
+@nix {"action":"result","fields":[375129,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[915828,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[1522027,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[2046315,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[2947408,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[4110681,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[4979024,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[5732706,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[6502763,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[7272820,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[8010091,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[9009506,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[9763188,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[10533209,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[11270516,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[12040537,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[12810594,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[13597026,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[14367083,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[15153515,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[15923572,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[16710004,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[17480025,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[18217332,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[18970978,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[19741035,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[20478306,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[21231988,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[21985634,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[22739280,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[23427426,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[24181072,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[24934754,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[25688400,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[26474832,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[27195764,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[27949410,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[28785003,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[29505899,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[30472564,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[31111513,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[31717748,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[32438608,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[33143129,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[33831275,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[34503010,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[35174745,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[35862891,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[36534626,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[37173611,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[38107490,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[38762850,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"result","fields":[39434585,39821883,0,0],"id":2336462209027,"type":105}
+@nix {"action":"stop","id":2336462209027}
+@nix {"action":"stop","id":2336462209026}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/flake.nix'"}
+@nix {"action":"stop","id":2336462209028}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/flake.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«flakes-internal»/call-flake.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/fixed-points.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/flake-version-info.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/attrsets.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/systems/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/systems/flake-systems.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/minfeatures.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/top-level/impure.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/top-level/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/trivial.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/lists.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/top-level/impure-overlays.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/systems/architectures.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/systems/inspect.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/systems/parse.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/strings.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/meta-types.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/modules.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/top-level/config.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/options.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/types.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/debug.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/stdenv/generic/problems.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/stdenv/booter.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/stdenv/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/systems/platforms.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/stdenv/linux/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/stdenv/linux/stage0.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/customisation.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/bash/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/bash/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/bash/2.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/stage0-posix/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/stage0-posix/kaem/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/utils.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/top-level/stage.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/top-level/variants.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/top-level/aliases.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/asserts.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/top-level/all-packages.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/top-level/by-name-overlay.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/top-level/splice.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/build-support/trivial-builders/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/stdenv/adapters.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/stdenv/generic/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/build-support/bintools-wrapper/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/binutils/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/coreutils/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnugrep/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/stdenv/generic/make-derivation.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/stdenv/generic/check-meta.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/binutils/common.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gcc/wrapper.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/tools/misc/binutils/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/build-support/cc-wrapper/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gcc/ng.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gcc/common.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/tools/misc/patchelf/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/compilers/gcc/all.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/compilers/gcc/versions.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/meta.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/compilers/gcc/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/compilers/gcc/common/libgcc.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/compilers/gcc/common/builder.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/compilers/gcc/common/checksum.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/compilers/gcc/common/meta.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/libraries/glibc/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/libraries/glibc/common.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/kernel-headers/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/gm/gmp6/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/libraries/isl/0.20.0.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/libraries/isl/generic.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/li/libmpc/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/mp/mpfr/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/co/coreutils/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/libraries/acl/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/libraries/attr/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/systems/doubles.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/gn/gnugrep/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/glibc/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/musl/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/mu/musl/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/shells/bash/5.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/shells/bash/bash-5.3-patches.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/bzip2/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/bz/bzip2/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/diffutils/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/di/diffutils/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/findutils/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/fi/findutils/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gawk/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/tools/text/gawk/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnumake/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/gn/gnumake/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnupatch/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/gn/gnupatch/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnused/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/gn/gnused/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnutar/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/gn/gnutar/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gzip/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/gz/gzip/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/patchelf/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/xz/static.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/xz/xz/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/he/hello/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/licenses/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/licenses/helpers.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/licenses/operators.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/licenses/licenses.nix'"}
+@nix {"action":"stop","id":2336462209029}
+@nix {"action":"stop","id":2336462209030}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/bash/common.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/binutils/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnumake/musl.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnused/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnugrep/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gawk/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/diffutils/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/findutils/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnutar/latest.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gzip/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/coreutils/musl.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnused/common.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/coreutils/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnumake/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/tinycc/musl.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnused/mes.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnutar/mes.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/stage0-posix/mescc-tools-extra/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/coreutils/common.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/tinycc/mes.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/tinycc/common.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnupatch/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/stage0-posix/mescc-tools/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/stage0-posix/platforms.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/stage0-posix/bootstrap-sources.nix'"}
+@nix {"action":"stop","id":2336462209031}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/stage0-posix/mescc-tools-boot.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/stage0-posix/hex0.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '<nix/fetchurl.nix>'"}
+@nix {"action":"stop","id":2336462209032}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/tinycc/bootstrappable.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/mes/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/build-support/fetchurl/boot.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/build-support/fetchurl/mirrors.nix'"}
+@nix {"action":"stop","id":2336462209033}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/mes/nyacc.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/mes/libc.nix'"}
+@nix {"action":"stop","id":2336462209034}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/ln-boot/default.nix'"}
+@nix {"action":"stop","id":2336462209035}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnumake/common.nix'"}
+@nix {"action":"stop","id":2336462209036}
+@nix {"action":"stop","id":2336462209037}
+@nix {"action":"stop","id":2336462209038}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnutar/common.nix'"}
+@nix {"action":"stop","id":2336462209039}
+@nix {"action":"stop","id":2336462209040}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/musl/tcc.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/musl/common.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnutar/musl.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gawk/mes.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gawk/common.nix'"}
+@nix {"action":"stop","id":2336462209041}
+@nix {"action":"stop","id":2336462209042}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/xz/default.nix'"}
+@nix {"action":"stop","id":2336462209043}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/musl/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gcc/4.6.nix'"}
+@nix {"action":"stop","id":2336462209044}
+@nix {"action":"stop","id":2336462209045}
+@nix {"action":"stop","id":2336462209046}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/bzip2/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gcc/10.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gcc/4.6.cxx.nix'"}
+@nix {"action":"stop","id":2336462209047}
+@nix {"action":"stop","id":2336462209048}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gcc/libbacktrace.nix'"}
+@nix {"action":"stop","id":2336462209049}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gcc/libiberty.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gcc/mpc.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gcc/gmp.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gcc/mpfr.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gcc/libgcc.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gcc/libstdcxx.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/build-support/lib/cmake.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/libraries/zlib/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/libraries/gettext/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/build-support/lib/meson.nix'"}
+@nix {"action":"stop","id":2336462209050}
+@nix {"action":"stop","id":2336462209051}
+@nix {"action":"stop","id":2336462209052}
+@nix {"action":"stop","id":2336462209053}
+@nix {"action":"stop","id":2336462209054}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/gn/gnu-config/package.nix'"}
+@nix {"action":"stop","id":2336462209055}
+@nix {"action":"stop","id":2336462209056}
+@nix {"action":"stop","id":2336462209057}
+@nix {"action":"stop","id":2336462209058}
+@nix {"action":"stop","id":2336462209059}
+@nix {"action":"stop","id":2336462209060}
+@nix {"action":"stop","id":2336462209061}
+@nix {"action":"stop","id":2336462209062}
+@nix {"action":"stop","id":2336462209063}
+@nix {"action":"stop","id":2336462209064}
+@nix {"action":"stop","id":2336462209065}
+@nix {"action":"stop","id":2336462209066}
+@nix {"action":"stop","id":2336462209067}
+@nix {"action":"stop","id":2336462209068}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/python/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/bison/default.nix'"}
+@nix {"action":"stop","id":2336462209069}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/zlib/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/versions.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/gnum4/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/linux-headers/default.nix'"}
+@nix {"action":"stop","id":2336462209070}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/maintainers/computed-team-list.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/maintainers/team-list.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/maintainers/maintainer-list.nix'"}
+@nix {"action":"stop","id":2336462209071}
+@nix {"action":"stop","id":2336462209072}
+@nix {"action":"stop","id":2336462209073}
+@nix {"action":"stop","id":2336462209074}
+@nix {"action":"stop","id":2336462209075}
+@nix {"action":"stop","id":2336462209076}
+@nix {"action":"stop","id":2336462209077}
+@nix {"action":"stop","id":2336462209078}
+@nix {"action":"stop","id":2336462209079}
+@nix {"action":"stop","id":2336462209080}
+@nix {"action":"stop","id":2336462209081}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/bi/bison/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/filesystem.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/gn/gnum4/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/interpreters/perl/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/interpreters/perl/interpreter.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/libraries/libxcrypt/default.nix'"}
+@nix {"action":"stop","id":2336462209082}
+@nix {"action":"stop","id":2336462209083}
+@nix {"action":"stop","id":2336462209084}
+@nix {"action":"stop","id":2336462209085}
+@nix {"action":"stop","id":2336462209086}
+@nix {"action":"stop","id":2336462209087}
+@nix {"action":"stop","id":2336462209088}
+@nix {"action":"stop","id":2336462209089}
+@nix {"action":"stop","id":2336462209090}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/ex/expand-response-params/package.nix'"}
+@nix {"action":"stop","id":2336462209091}
+@nix {"action":"stop","id":2336462209092}
+@nix {"action":"stop","id":2336462209093}
+@nix {"action":"stop","id":2336462209094}
+@nix {"action":"stop","id":2336462209095}
+@nix {"action":"stop","id":2336462209096}
+@nix {"action":"stop","id":2336462209097}
+@nix {"action":"stop","id":2336462209098}
+@nix {"action":"stop","id":2336462209099}
+@nix {"action":"stop","id":2336462209100}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/compilers/gcc/common/extra-target-flags.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/compilers/gcc/common/dependencies.nix'"}
+@nix {"action":"stop","id":2336462209101}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/compilers/gcc/common/configure-flags.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/compilers/gcc/common/platform-flags.nix'"}
+@nix {"action":"stop","id":2336462209102}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/tools/misc/texinfo/packages.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/tools/misc/texinfo/common.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/wh/which/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/au/autoconf269/package.nix'"}
+@nix {"action":"stop","id":2336462209103}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/compilers/gcc/patches/default.nix'"}
+@nix {"action":"stop","id":2336462209104}
+@nix {"action":"stop","id":2336462209105}
+@nix {"action":"stop","id":2336462209106}
+@nix {"action":"stop","id":2336462209107}
+@nix {"action":"stop","id":2336462209108}
+@nix {"action":"stop","id":2336462209109}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/build-support/nuke-references/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/build-support/replace-vars/replace-vars-with.nix'"}
+@nix {"action":"stop","id":2336462209110}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/compilers/gcc/common/pre-configure.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/compilers/gcc/common/strip-attributes.nix'"}
+@nix {"action":"stop","id":2336462209111}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/interpreters/python/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/interpreters/python/cpython/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/interpreters/python/passthrufun.nix'"}
+@nix {"action":"stop","id":2336462209112}
+@nix {"action":"stop","id":2336462209113}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/interpreters/python/setup-hook.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/build-support/replace-vars/replace-vars.nix'"}
+@nix {"action":"stop","id":2336462209114}
+@nix {"action":"stop","id":2336462209115}
+@nix {"action":"stop","id":2336462209116}
+@nix {"action":"stop","id":2336462209117}
+@nix {"action":"stop","id":2336462209118}
+@nix {"action":"stop","id":2336462209119}
+@nix {"action":"stop","id":2336462209120}
+@nix {"action":"stop","id":2336462209121}
+@nix {"action":"stop","id":2336462209122}
+@nix {"action":"stop","id":2336462209123}
+@nix {"action":"stop","id":2336462209124}
+@nix {"action":"stop","id":2336462209125}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/libraries/libidn2/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/libraries/libunistring/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/ve/versionCheckHook/package.nix'"}
+@nix {"action":"stop","id":2336462209126}
+@nix {"action":"stop","id":2336462209127}
+@nix {"action":"stop","id":2336462209128}
+@nix {"action":"stop","id":2336462209129}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/au/autoreconfHook/package.nix'"}
+@nix {"action":"stop","id":2336462209130}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/au/autoconf/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/tools/misc/automake/automake-1.18.x.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/li/libtool_2/package.nix'"}
+@nix {"action":"stop","id":2336462209131}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/fi/file/package.nix'"}
+@nix {"action":"stop","id":2336462209132}
+@nix {"action":"stop","id":2336462209133}
+@nix {"action":"stop","id":2336462209134}
+@nix {"action":"stop","id":2336462209135}
+@nix {"action":"stop","id":2336462209136}
+@nix {"action":"stop","id":2336462209137}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/build-support/pkg-config-wrapper/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/pk/pkg-config-unwrapped/package.nix'"}
+@nix {"action":"stop","id":2336462209138}
+@nix {"action":"stop","id":2336462209139}
+@nix {"action":"stop","id":2336462209140}
+@nix {"action":"stop","id":2336462209141}
+@nix {"action":"stop","id":2336462209142}
+@nix {"action":"stop","id":2336462209143}
+@nix {"action":"stop","id":2336462209144}
+@nix {"action":"stop","id":2336462209145}
+@nix {"action":"stop","id":2336462209146}
+@nix {"action":"stop","id":2336462209147}
+@nix {"action":"stop","id":2336462209148}
+@nix {"action":"stop","id":2336462209149}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/pc/pcre2/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/libraries/glibc/locales.nix'"}
+@nix {"action":"stop","id":2336462209150}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/ed/ed/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/lz/lzip/package.nix'"}
+@nix {"action":"stop","id":2336462209151}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/glibc/headers.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/heirloom/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/heirloom-devtools/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/os-specific/linux/minimal-bootstrap/musl/headers.nix'"}
+@nix {"action":"stop","id":2336462209152}
+@nix {"action":"stop","id":2336462209153}
+@nix {"action":"stop","id":2336462209154}
+@nix {"action":"stop","id":2336462209155}
+@nix {"action":"stop","id":2336462209156}
+@nix {"action":"stop","id":2336462209157}
+@nix {"action":"stop","id":2336462209158}
+@nix {"action":"stop","id":2336462209159}
+@nix {"action":"stop","id":2336462209160}
+@nix {"action":"stop","id":2336462209161}
+@nix {"action":"stop","id":2336462209162}
+@nix {"action":"stop","id":2336462209163}
+@nix {"action":"stop","id":2336462209164}
+@nix {"action":"stop","id":2336462209165}
+@nix {"action":"stop","id":2336462209166}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/stdenv/generic/common-path.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/build-support/fetchurl/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/deprecated/misc.nix'"}
+@nix {"action":"stop","id":2336462209167}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/lib/fetchers.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/cu/curlMinimal/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/development/libraries/openssl/default.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/ma/makeBinaryWrapper/package.nix'"}
+@nix {"action":"stop","id":2336462209168}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/di/dieHook/package.nix'"}
+@nix {"action":"stop","id":2336462209169}
+@nix {"action":"stop","id":2336462209170}
+@nix {"action":"stop","id":2336462209171}
+@nix {"action":"stop","id":2336462209172}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/li/libssh2/package.nix'"}
+@nix {"action":"stop","id":2336462209173}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/kr/krb5/package.nix'"}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/ke/keyutils/package.nix'"}
+@nix {"action":"stop","id":2336462209174}
+@nix {"action":"stop","id":2336462209175}
+@nix {"action":"stop","id":2336462209176}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/by/byacc/package.nix'"}
+@nix {"action":"stop","id":2336462209177}
+@nix {"action":"stop","id":2336462209178}
+@nix {"action":"msg","level":4,"msg":"evaluating file '«https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst»/pkgs/by-name/ng/nghttp2/package.nix'"}
+@nix {"action":"stop","id":2336462209024}
+@nix {"action":"start","fields":["/nix/store/pa6rydwgjxxmmvdxap7qk9c85h8jbimy-hello-2.12.3","https://cache.nixos.org"],"id":2336462209180,"level":4,"parent":0,"text":"querying info about '/nix/store/pa6rydwgjxxmmvdxap7qk9c85h8jbimy-hello-2.12.3' on 'https://cache.nixos.org'","type":109}
+@nix {"action":"stop","id":2336462209180}
+@nix {"action":"stop","id":2336462209181}
+@nix {"action":"start","fields":["/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57","https://cache.nixos.org"],"id":2336462209182,"level":4,"parent":0,"text":"querying info about '/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57' on 'https://cache.nixos.org'","type":109}
+@nix {"action":"stop","id":2336462209182}
+@nix {"action":"stop","id":2336462209183}
+@nix {"action":"start","fields":["/nix/store/00fs4zz9c0jjcvs62wg39b91dydz7zqb-libidn2-2.3.8","https://cache.nixos.org"],"id":2336462209184,"level":4,"parent":0,"text":"querying info about '/nix/store/00fs4zz9c0jjcvs62wg39b91dydz7zqb-libidn2-2.3.8' on 'https://cache.nixos.org'","type":109}
+@nix {"action":"start","fields":["/nix/store/pkkjnyk4z46n18fkyqwlg24p272apb69-xgcc-16.2.0-libgcc","https://cache.nixos.org"],"id":2336462209185,"level":4,"parent":0,"text":"querying info about '/nix/store/pkkjnyk4z46n18fkyqwlg24p272apb69-xgcc-16.2.0-libgcc' on 'https://cache.nixos.org'","type":109}
+@nix {"action":"stop","id":2336462209184}
+@nix {"action":"stop","id":2336462209186}
+@nix {"action":"start","fields":["/nix/store/bx7jdvkba26sy20ryr4l617qqmzj9hff-libunistring-1.4.2","https://cache.nixos.org"],"id":2336462209188,"level":4,"parent":0,"text":"querying info about '/nix/store/bx7jdvkba26sy20ryr4l617qqmzj9hff-libunistring-1.4.2' on 'https://cache.nixos.org'","type":109}
+@nix {"action":"stop","id":2336462209185}
+@nix {"action":"stop","id":2336462209187}
+@nix {"action":"stop","id":2336462209188}
+@nix {"action":"stop","id":2336462209189}
+@nix {"action":"stop","id":2336462209179}
+@nix {"action":"msg","level":3,"msg":"these 5 paths will be fetched (11.0 MiB download, 36.7 MiB unpacked):"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/pa6rydwgjxxmmvdxap7qk9c85h8jbimy-hello-2.12.3"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/00fs4zz9c0jjcvs62wg39b91dydz7zqb-libidn2-2.3.8"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/bx7jdvkba26sy20ryr4l617qqmzj9hff-libunistring-1.4.2"}
+@nix {"action":"msg","level":3,"msg":"  /nix/store/pkkjnyk4z46n18fkyqwlg24p272apb69-xgcc-16.2.0-libgcc"}
+@nix {"action":"start","id":2336462209190,"level":0,"parent":0,"text":"","type":102}
+@nix {"action":"start","id":2336462209191,"level":0,"parent":0,"text":"","type":104}
+@nix {"action":"start","id":2336462209192,"level":0,"parent":0,"text":"","type":103}
+@nix {"action":"result","fields":[0,0,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2336462209192,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2336462209192,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209192,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[0,2,0,0],"id":2336462209192,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[0,4,0,0],"id":2336462209192,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[0,5,0,0],"id":2336462209192,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[0,5,1,0],"id":2336462209192,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[0,5,1,0],"id":2336462209192,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[0,5,2,0],"id":2336462209192,"type":105}
+@nix {"action":"start","fields":["/nix/store/pkkjnyk4z46n18fkyqwlg24p272apb69-xgcc-16.2.0-libgcc","https://cache.nixos.org"],"id":2336462209193,"level":0,"parent":0,"text":"","type":108}
+@nix {"action":"start","fields":["/nix/store/pkkjnyk4z46n18fkyqwlg24p272apb69-xgcc-16.2.0-libgcc","https://cache.nixos.org","local"],"id":2336462209195,"level":3,"parent":2336462209193,"text":"copying path '/nix/store/pkkjnyk4z46n18fkyqwlg24p272apb69-xgcc-16.2.0-libgcc' from 'https://cache.nixos.org'","type":100}
+@nix {"action":"start","fields":["/nix/store/bx7jdvkba26sy20ryr4l617qqmzj9hff-libunistring-1.4.2","https://cache.nixos.org"],"id":2336462209194,"level":0,"parent":0,"text":"","type":108}
+@nix {"action":"start","fields":["/nix/store/bx7jdvkba26sy20ryr4l617qqmzj9hff-libunistring-1.4.2","https://cache.nixos.org","local"],"id":2336462209196,"level":3,"parent":2336462209194,"text":"copying path '/nix/store/bx7jdvkba26sy20ryr4l617qqmzj9hff-libunistring-1.4.2' from 'https://cache.nixos.org'","type":100}
+@nix {"action":"stop","id":2336462209198}
+@nix {"action":"stop","id":2336462209195}
+@nix {"action":"stop","id":2336462209193}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[1,5,1,0],"id":2336462209192,"type":105}
+@nix {"action":"result","fields":[376832,2083096,0,0],"id":2336462209196,"type":105}
+@nix {"action":"result","fields":[1277952,2083096,0,0],"id":2336462209196,"type":105}
+@nix {"action":"stop","id":2336462209197}
+@nix {"action":"stop","id":2336462209196}
+@nix {"action":"stop","id":2336462209194}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[2,5,0,0],"id":2336462209192,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[2,5,1,0],"id":2336462209192,"type":105}
+@nix {"action":"start","fields":["/nix/store/00fs4zz9c0jjcvs62wg39b91dydz7zqb-libidn2-2.3.8","https://cache.nixos.org"],"id":2336462209199,"level":0,"parent":0,"text":"","type":108}
+@nix {"action":"start","fields":["/nix/store/00fs4zz9c0jjcvs62wg39b91dydz7zqb-libidn2-2.3.8","https://cache.nixos.org","local"],"id":2336462209200,"level":3,"parent":2336462209199,"text":"copying path '/nix/store/00fs4zz9c0jjcvs62wg39b91dydz7zqb-libidn2-2.3.8' from 'https://cache.nixos.org'","type":100}
+@nix {"action":"result","fields":[48624,144341,0,0],"id":2336462209201,"type":105}
+@nix {"action":"stop","id":2336462209201}
+@nix {"action":"stop","id":2336462209200}
+@nix {"action":"stop","id":2336462209199}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[3,5,0,0],"id":2336462209192,"type":105}
+@nix {"action":"result","fields":[100,38515520],"id":2336462209190,"type":106}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[3,5,1,0],"id":2336462209192,"type":105}
+@nix {"action":"start","fields":["/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57","https://cache.nixos.org"],"id":2336462209202,"level":0,"parent":0,"text":"","type":108}
+@nix {"action":"start","fields":["/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57","https://cache.nixos.org","local"],"id":2336462209203,"level":3,"parent":2336462209202,"text":"copying path '/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57' from 'https://cache.nixos.org'","type":100}
+@nix {"action":"result","fields":[417792,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[376805,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[524252,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[3842048,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[856887,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[1212398,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[1343470,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[1716462,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[8953856,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[2660471,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[3048567,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[3364992,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[12492800,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[13475840,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[14426112,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[4630309,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[15589376,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[5492352,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[16539648,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[16998400,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[6854775,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[18227200,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[19324928,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[20455424,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[21585920,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[8029303,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[8225911,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[25042944,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[8553591,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[27353088,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[28319744,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[29466624,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[9387932,10433559,0,0],"id":2336462209204,"type":105}
+@nix {"action":"result","fields":[31694848,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[32694272,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[33710080,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"result","fields":[34824192,35578240,0,0],"id":2336462209203,"type":105}
+@nix {"action":"stop","id":2336462209204}
+@nix {"action":"stop","id":2336462209203}
+@nix {"action":"stop","id":2336462209202}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[4,5,0,0],"id":2336462209192,"type":105}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[4,5,1,0],"id":2336462209192,"type":105}
+@nix {"action":"start","fields":["/nix/store/pa6rydwgjxxmmvdxap7qk9c85h8jbimy-hello-2.12.3","https://cache.nixos.org"],"id":2336462209205,"level":0,"parent":0,"text":"","type":108}
+@nix {"action":"start","fields":["/nix/store/pa6rydwgjxxmmvdxap7qk9c85h8jbimy-hello-2.12.3","https://cache.nixos.org","local"],"id":2336462209206,"level":3,"parent":2336462209205,"text":"copying path '/nix/store/pa6rydwgjxxmmvdxap7qk9c85h8jbimy-hello-2.12.3' from 'https://cache.nixos.org'","type":100}
+@nix {"action":"stop","id":2336462209207}
+@nix {"action":"result","fields":[163840,279592,0,0],"id":2336462209206,"type":105}
+@nix {"action":"stop","id":2336462209206}
+@nix {"action":"stop","id":2336462209205}
+@nix {"action":"result","fields":[0,1,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[5,5,0,0],"id":2336462209192,"type":105}
+@nix {"action":"result","fields":[0,0,0,0],"id":2336462209191,"type":105}
+@nix {"action":"result","fields":[5,5,0,0],"id":2336462209192,"type":105}
+@nix {"action":"stop","id":2336462209192}
+@nix {"action":"stop","id":2336462209191}
+@nix {"action":"stop","id":2336462209190}
+/nix/store/pa6rydwgjxxmmvdxap7qk9c85h8jbimy-hello-2.12.3

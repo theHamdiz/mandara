@@ -1,0 +1,163 @@
+68 packages will be downloaded:
+  libcrypto3-3.6.5_1 
+  libssl3-3.6.5_1 
+  base-container-0.3_3 
+  libxcrypt-compat-4.4.38_1 
+  libpcre2-10.49_1 
+  libxcrypt-4.4.38_1 
+  libedit-20260512.3.1_1 
+  libgcc-14.2.1+20250405_4 
+  libstdc++-14.2.1+20250405_4 
+  libicu78-78.3_1 
+  sqlite-3.53.4_1 
+  liblastlog2-2.41.4_1 
+56 packages will be installed:
+  xbps-0.60.7_1 
+  acl-2.4.0_1 
+  attr-2.6.0_1 
+  base-files-0.146_1 
+  base-minimal-0.3_3 
+  bzip2-1.0.8_2 
+  ca-certificates-20250419+3.132_1 
+  coreutils-9.4_3 
+  dash-0.5.12_3 
+  diffutils-3.12_1 
+  eudev-libudev-3.2.14_2 
+  findutils-4.10.0_1 
+  gawk-5.4.1_2 
+  glibc-2.41_1 
+  glibc-locales-2.41_1 
+  gmp-6.3.0_1 
+  grep-3.12_1 
+  gzip-1.15_1 
+  iana-etc-20260409_1 
+  libarchive-3.8.11_1 
+  libblkid-2.41.4_1 
+  libcap-2.78_1 
+  libcap-ng-0.9.3_1 
+  libcrypto1.1-1.1.1w_1 
+  libdb-5.3.28_8 
+  libfdisk-2.41.4_1 
+  liblz4-1.10.0_1 
+  liblzma-5.8.4_1 
+  libmount-2.41.4_1 
+  libpcre-8.45_3 
+  libreadline8-8.2.010_1 
+  libsmartcols-2.41.4_1 
+  libssl1.1-1.1.1w_1 
+  libuuid-2.41.4_1 
+  libxbps-0.60.7_1 
+  libzstd-1.5.7_1 
+  ncurses-libs-6.6_1 
+  nvi-1.81.6_19 
+  openssl-3.6.5_1 
+  pam-1.5.3_4 
+  pam-base-0.4_3 
+  pam-libs-1.5.3_4 
+  procps-ng-4.0.6_1 
+  removed-packages-0.1.20260823_1 
+  run-parts-5.23.2_1 
+  runit-2.3.1_2 
+  runit-void-20250212_4 
+  sed-4.10_1 
+  shadow-4.8.1_3 
+  tar-1.35_1 
+  tzdata-2026f_1 
+  util-linux-2.41.4_1 
+  util-linux-common-2.41.4_1 
+  which-2.23_1 
+  xbps-triggers-0.131_1 
+  zlib-1.3.2_1 
+Size to download:               51MB
+Space available on disk:       787GB
+[*] Downloading packages
+libcrypto3-3.6.5_1.x86_64.xbps.sig: [512B 100%] 24MB/s ETA: 00m00s
+libcrypto3-3.6.5_1.x86_64.xbps.sig: 512B [avg rate: 24MB/s]
+libcrypto3-3.6.5_1.x86_64.xbps: [2142KB 0%] 150MB/s ETA: 00m00s
+libcrypto3-3.6.5_1.x86_64.xbps: 2142KB [avg rate: 81KB/s]
+libcrypto3-3.6.5_1: verifying RSA signature...
+libssl3-3.6.5_1.x86_64.xbps.sig: [512B 100%] 31MB/s ETA: 00m00s
+libssl3-3.6.5_1.x86_64.xbps.sig: 512B [avg rate: 31MB/s]
+libssl3-3.6.5_1.x86_64.xbps: [434KB 0%] 150MB/s ETA: 00m00s
+libssl3-3.6.5_1.x86_64.xbps: 434KB [avg rate: 68KB/s]
+libssl3-3.6.5_1: verifying RSA signature...
+xbps-0.60.7_1.x86_64.xbps.sig: [512B 100%] 11MB/s ETA: 00m00s
+xbps-0.60.7_1.x86_64.xbps.sig: 512B [avg rate: 11MB/s]
+xbps-0.60.7_1.x86_64.xbps: [118KB 3%] 64MB/s ETA: 00m00s
+xbps-0.60.7_1.x86_64.xbps: 118KB [avg rate: 83KB/s]
+xbps-0.60.7_1: verifying RSA signature...
+acl-2.4.0_1.x86_64.xbps.sig: [512B 100%] 38MB/s ETA: 00m00s
+acl-2.4.0_1.x86_64.xbps.sig: 512B [avg rate: 38MB/s]
+acl-2.4.0_1.x86_64.xbps: [20KB 19%] 206MB/s ETA: 00m00s
+acl-2.4.0_1.x86_64.xbps: 20KB [avg rate: 1037MB/s]
+acl-2.4.0_1: verifying RSA signature...
+attr-2.6.0_1.x86_64.xbps.sig: [512B 100%] 14MB/s ETA: 00m00s
+attr-2.6.0_1.x86_64.xbps.sig: 512B [avg rate: 14MB/s]
+attr-2.6.0_1.x86_64.xbps: [9495B 43%] 150MB/s ETA: 00m00s
+attr-2.6.0_1.x86_64.xbps: 9495B [avg rate: 348MB/s]
+attr-2.6.0_1: verifying RSA signature...
+base-files-0.146_1.x86_64.xbps.sig: [512B 100%] 22MB/s ETA: 00m00s
+base-files-0.146_1.x86_64.xbps.sig: 512B [avg rate: 22MB/s]
+base-files-0.146_1.x86_64.xbps: [61KB 6%] 163MB/s ETA: 00m00s
+base-files-0.146_1.x86_64.xbps: 61KB [avg rate: 22KB/s]
+base-files-0.146_1: verifying RSA signature...
+base-container-0.3_3.x86_64.xbps.sig: [512B 100%] 54MB/s ETA: 00m00s
+base-container-0.3_3.x86_64.xbps.sig: 512B [avg rate: 54MB/s]
+base-container-0.3_3.x86_64.xbps: [683B 100%] 43MB/s ETA: 00m00s
+base-container-0.3_3.x86_64.xbps: 683B [avg rate: 43MB/s]
+base-container-0.3_3: verifying RSA signature...
+base-minimal-0.3_3.x86_64.xbps.sig: [512B 100%] 24MB/s ETA: 00m00s
+base-minimal-0.3_3.x86_64.xbps.sig: 512B [avg rate: 24MB/s]
+base-minimal-0.3_3.x86_64.xbps: [575B 100%] 30MB/s ETA: 00m00s
+base-minimal-0.3_3.x86_64.xbps: 575B [avg rate: 30MB/s]
+base-minimal-0.3_3: verifying RSA signature...
+bzip2-1.0.8_2.x86_64.xbps.sig: [512B 100%] 44MB/s ETA: 00m00s
+bzip2-1.0.8_2.x86_64.xbps.sig: 512B [avg rate: 44MB/s]
+bzip2-1.0.8_2.x86_64.xbps: [60KB 6%] 230MB/s ETA: 00m00s
+bzip2-1.0.8_2.x86_64.xbps: 60KB [avg rate: 53KB/s]
+bzip2-1.0.8_2: verifying RSA signature...
+ca-certificates-20250419+3.132_1.x86_64.xbps.sig: [512B 100%] 54MB/s ETA: 00m00s
+ca-certificates-20250419+3.132_1.x86_64.xbps.sig: 512B [avg rate: 54MB/s]
+ca-certificates-20250419+3.132_1.x86_64.xbps: [116KB 3%] 230MB/s ETA: 00m00s
+ca-certificates-20250419+3.132_1.x86_64.xbps: 116KB [avg rate: 81KB/s]
+ca-certificates-20250419+3.132_1: verifying RSA signature...
+coreutils-9.4_3.x86_64.xbps.sig: [512B 100%] 33MB/s ETA: 00m00s
+coreutils-9.4_3.x86_64.xbps.sig: 512B [avg rate: 33MB/s]
+coreutils-9.4_3.x86_64.xbps: [3185KB 0%] 206MB/s ETA: 00m00s
+coreutils-9.4_3.x86_64.xbps: 3185KB [avg rate: 70KB/s]
+coreutils-9.4_3: verifying RSA signature...
+dash-0.5.12_3.x86_64.xbps.sig: [512B 100%] 14MB/s ETA: 00m00s
+dash-0.5.12_3.x86_64.xbps.sig: 512B [avg rate: 14MB/s]
+dash-0.5.12_3.x86_64.xbps: [87KB 4%] 87MB/s ETA: 00m00s
+dash-0.5.12_3.x86_64.xbps: 87KB [avg rate: 47KB/s]
+dash-0.5.12_3: verifying RSA signature...
+diffutils-3.12_1.x86_64.xbps.sig: [512B 100%] 54MB/s ETA: 00m00s
+diffutils-3.12_1.x86_64.xbps.sig: 512B [avg rate: 54MB/s]
+diffutils-3.12_1.x86_64.xbps: [373KB 1%] 217MB/s ETA: 00m00s
+diffutils-3.12_1.x86_64.xbps: 373KB [avg rate: 58KB/s]
+diffutils-3.12_1: verifying RSA signature...
+eudev-libudev-3.2.14_2.x86_64.xbps.sig: [512B 100%] 49MB/s ETA: 00m00s
+eudev-libudev-3.2.14_2.x86_64.xbps.sig: 512B [avg rate: 49MB/s]
+eudev-libudev-3.2.14_2.x86_64.xbps: [75KB 5%] 206MB/s ETA: 00m00s
+eudev-libudev-3.2.14_2.x86_64.xbps: 75KB [avg rate: 75KB/s]
+eudev-libudev-3.2.14_2: verifying RSA signature...
+findutils-4.10.0_1.x86_64.xbps.sig: [512B 100%] 70MB/s ETA: 00m00s
+findutils-4.10.0_1.x86_64.xbps.sig: 512B [avg rate: 70MB/s]
+findutils-4.10.0_1.x86_64.xbps: [521KB 0%] 279MB/s ETA: 00m00s
+findutils-4.10.0_1.x86_64.xbps: 521KB [avg rate: 94KB/s]
+findutils-4.10.0_1: verifying RSA signature...
+gawk-5.4.1_2.x86_64.xbps.sig: [512B 100%] 44MB/s ETA: 00m00s
+gawk-5.4.1_2.x86_64.xbps.sig: 512B [avg rate: 44MB/s]
+gawk-5.4.1_2.x86_64.xbps: [1470KB 0%] 170MB/s ETA: 00m00s
+gawk-5.4.1_2.x86_64.xbps: 1470KB [avg rate: 246KB/s]
+gawk-5.4.1_2: verifying RSA signature...
+libxcrypt-compat-4.4.38_1.x86_64.xbps.sig: [512B 100%] 14MB/s ETA: 00m00s
+libxcrypt-compat-4.4.38_1.x86_64.xbps.sig: 512B [avg rate: 14MB/s]
+libxcrypt-compat-4.4.38_1.x86_64.xbps: [87KB 4%] 87MB/s ETA: 00m00s
+libxcrypt-compat-4.4.38_1.x86_64.xbps: 87KB [avg rate: 3208B/s]
+libxcrypt-compat-4.4.38_1: verifying RSA signature...
+glibc-2.41_1.x86_64.xbps.sig: [512B 100%] 31MB/s ETA: 00m00s
+glibc-2.41_1.x86_64.xbps.sig: 512B [avg rate: 31MB/s]
+glibc-2.41_1.x86_64.xbps: [8956KB 0%] 195MB/s ETA: 00m00s
+ERROR: [trans] failed to download `glibc-2.41_1' package from `https://repo-default.voidlinux.org/current': Input/output error
+Transaction failed! see above for errors.

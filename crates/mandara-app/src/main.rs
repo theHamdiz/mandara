@@ -52,6 +52,14 @@ enum Cmd {
     /// Private panel capture worker; never creates a UI or connects to shell IPC.
     #[command(hide = true)]
     PanelCaptureWorker,
+    /// Private: the root side of a system update, started by the shell
+    /// through pkexec with the root-owned admin helper. Accepts only
+    /// fixed actions (`apply`, `nixos …`, `--protocol`).
+    #[command(hide = true)]
+    SystemUpdate {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Start the shell directly, without the restart supervisor.
     Run,
     /// Run a shell command, e.g. `mandara msg audio volume set 40`.
@@ -194,6 +202,7 @@ fn main() -> Result<()> {
     match cli.command {
         Some(Cmd::AgentWorker) => mandara_services::command_agent::worker_main(mandara_studio::agent_settings_catalog),
         Some(Cmd::PanelCaptureWorker) => mandara_services::screencopy::panel::worker_main(),
+        Some(Cmd::SystemUpdate { args }) => std::process::exit(mandara_services::sysupdate::helper::main(&args)),
         Some(Cmd::Setup { autostart, compositor, check, fix_conflicts, restore, fix }) => setup_cli::setup(setup_cli::Options { autostart, compositor, check, fix_conflicts, restore, fix }),
         Some(Cmd::Msg { json, args }) => {
             use std::io::Write as _;
@@ -726,6 +735,18 @@ mod tests {
 
     /// The root-owned copies Studio may run as root are the ones the
     /// installer and the login screen put in place (issue #10).
+    /// The root side of a system update gets its words untouched (the
+    /// helper validates them itself), including `--protocol`.
+    #[test]
+    fn system_update_passes_its_words_through() {
+        for words in [vec!["--protocol"], vec!["apply"], vec!["nixos", "switch-to", "41"], vec!["apply", "--overwrite", "*"]] {
+            let argv = ["mandara", "system-update"].into_iter().chain(words.iter().copied());
+            let cli = Cli::try_parse_from(argv).unwrap();
+            let Some(Cmd::SystemUpdate { args }) = cli.command else { panic!("not system-update") };
+            assert_eq!(args, words);
+        }
+    }
+
     #[test]
     fn admin_binaries_agree_across_crates() {
         assert_eq!(mandara_install::installer::ADMIN_EXE, mandara_config::admin::ADMIN_EXE);

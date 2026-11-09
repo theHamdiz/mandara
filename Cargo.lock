@@ -4292,6 +4292,7 @@ dependencies = [
  "mandara-config",
  "mandara-delta",
  "mandara-i18n",
+ "mandara-install",
  "mandara-theme",
  "mandara-version",
  "num-bigint-dig",
