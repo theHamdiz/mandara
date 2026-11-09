@@ -1,19 +1,16 @@
-//! "Today": one reminder per period, the same on every surface. The period
-//! is the local day (or hour); periods alternate Qur'an and hadith, and
-//! each kind walks a shuffled order of all its items, so nothing repeats
-//! until every item was shown once (the next round has a new order, whose
-//! start never brings back what the last round ended with: see
-//! [`round_order`]). A surface with little room walks its own sequence of
-//! the items that fit. The order is a pure function of the date, so every
-//! surface, the CLI and tomorrow's shell agree without storing anything
-//! but the user's own nudges (`shift`). Also "today's step": one path a day.
+//! Periods and orders. The panel and sidebar draw a fresh reminder each
+//! time they open ([`super::recent`]); the desktop widgets change theirs
+//! once a period (the local day, or hour: [`period`]). "Today's step" is
+//! one path a day, a pure function of the date, every path once before
+//! any repeats. The shuffled rounds ([`round_order`], [`nth_index`]) also
+//! drive Hadith's hadith of the day.
 
 use chrono::{Datelike as _, Duration, NaiveDate, NaiveDateTime, NaiveTime, Timelike as _};
 
-use super::catalog::{Catalog, ItemId, is_avoid};
+use super::catalog::is_avoid;
 use super::paths::{PATHS, Path};
 
-/// How often today's reminder changes.
+/// How often the desktop widgets' reminder changes.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Rotate {
     #[default]
@@ -27,7 +24,7 @@ impl Rotate {
     }
 }
 
-/// Which items take turns.
+/// Which items Jannah picks from.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Sources {
     #[default]
@@ -65,8 +62,10 @@ pub fn next_boundary(now: NaiveDateTime, rotate: Rotate) -> NaiveDateTime {
     }
 }
 
-/// Seeds of the two kinds' orders and the step order.
+/// The step order's seed (the tests reuse the others' old seeds).
+#[cfg(test)]
 const SEED_QURAN: u64 = 0x6A61_6E6E_6168_0001;
+#[cfg(test)]
 const SEED_HADITH: u64 = 0x6A61_6E6E_6168_0002;
 const SEED_STEP: u64 = 0x6A61_6E6E_6168_0003;
 /// SplitMix64 constants.
@@ -183,52 +182,6 @@ pub fn round_place(n: usize, k: i64) -> Option<(usize, usize)> {
     (n > 0).then(|| (k.rem_euclid(n as i64) as usize + 1, n))
 }
 
-/// The `k`-th item of a kind's endless sequence.
-fn nth(pool: &[ItemId], seed: u64, k: i64) -> Option<ItemId> {
-    nth_index(pool.len(), seed, k).map(|i| pool[i])
-}
-
-/// The kind whose turn `slot` is: its pool (only items of at most `limit`
-/// characters), its seed and the place in its own sequence. With both
-/// sources, even slots are verses and odd slots hadith; a kind with no
-/// items gives its turns to the other.
-fn turn(cat: &Catalog, sources: Sources, slot: i64, limit: Option<usize>) -> (Vec<ItemId>, u64, i64) {
-    let fits = |id: &ItemId| limit.is_none_or(|l| cat.get(*id).is_some_and(|i| i.len <= l));
-    let quran: Vec<ItemId> = cat.verse_ids().filter(fits).collect();
-    let hadith: Vec<ItemId> = cat.hadith_ids().filter(fits).collect();
-    match sources {
-        Sources::Quran if !quran.is_empty() => (quran, SEED_QURAN, slot),
-        Sources::Hadith if !hadith.is_empty() => (hadith, SEED_HADITH, slot),
-        _ if quran.is_empty() => (hadith, SEED_HADITH, slot),
-        _ if hadith.is_empty() => (quran, SEED_QURAN, slot),
-        Sources::Quran => (quran, SEED_QURAN, slot),
-        Sources::Hadith => (hadith, SEED_HADITH, slot),
-        Sources::Both if slot.rem_euclid(2) == 0 => (quran, SEED_QURAN, slot.div_euclid(2)),
-        Sources::Both => (hadith, SEED_HADITH, slot.div_euclid(2)),
-    }
-}
-
-/// The item for `slot` (a period plus the user's nudges). With `limit`, a
-/// surface with little room walks its own sequence of the items that fit
-/// (`None` when none does), so it never shows one item two slots running.
-pub fn pick(cat: &Catalog, sources: Sources, slot: i64, limit: Option<usize>) -> Option<ItemId> {
-    let (pool, seed, k) = turn(cat, sources, slot, limit);
-    nth(&pool, seed, k)
-}
-
-/// [`pick`] with its [`position`], from one look at the pools.
-pub fn pick_placed(cat: &Catalog, sources: Sources, slot: i64, limit: Option<usize>) -> Option<(ItemId, (usize, usize))> {
-    let (pool, seed, k) = turn(cat, sources, slot, limit);
-    Some((nth(&pool, seed, k)?, round_place(pool.len(), k)?))
-}
-
-/// Where `slot`'s item stands in its kind's current round: `(place,
-/// items)`, e.g. `(12, 230)`.
-pub fn position(cat: &Catalog, sources: Sources, slot: i64, limit: Option<usize>) -> Option<(usize, usize)> {
-    let (pool, _, k) = turn(cat, sources, slot, limit);
-    round_place(pool.len(), k)
-}
-
 /// The paths a day's step is chosen from (all but "keep away from").
 pub fn step_paths() -> Vec<&'static Path> {
     PATHS.iter().filter(|p| !is_avoid(&p.group)).collect()
@@ -248,7 +201,6 @@ pub fn step(date: NaiveDate) -> Option<&'static Path> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::catalog::catalog;
     use super::*;
     use std::collections::HashSet;
 
@@ -269,10 +221,9 @@ mod tests {
     }
 
     #[test]
-    fn the_same_slot_always_gives_the_same_item() {
-        let c = catalog();
-        for slot in [-5, 0, 1, 739_000, 739_001] {
-            assert_eq!(pick(c, Sources::Both, slot, None), pick(c, Sources::Both, slot, None));
+    fn the_same_place_always_gives_the_same_item() {
+        for k in [-5, 0, 1, 739_000, 739_001] {
+            assert_eq!(nth_index(40, SEED_QURAN, k), nth_index(40, SEED_QURAN, k));
         }
         assert_eq!(order(40, SEED_QURAN, 7), order(40, SEED_QURAN, 7));
         assert_ne!(order(40, SEED_QURAN, 7), order(40, SEED_QURAN, 8), "each round has its own order");
@@ -280,51 +231,12 @@ mod tests {
 
     #[test]
     fn a_round_shows_every_item_once() {
-        let c = catalog();
-        let n = c.verses as i64;
-        let start = 739_000 * n;
-        let seen: HashSet<ItemId> = (start..start + n).filter_map(|s| pick(c, Sources::Quran, s, None)).collect();
-        assert_eq!(seen.len() as i64, n);
-        let hadith = (c.items.len() - c.verses) as i64;
-        let seen: HashSet<ItemId> = (0..hadith).filter_map(|s| pick(c, Sources::Hadith, s, None)).collect();
-        assert_eq!(seen.len() as i64, hadith);
-        // Both: the verses' round spans twice as many slots.
-        let seen: HashSet<ItemId> = (0..2 * n).filter_map(|s| pick(c, Sources::Both, s, None)).filter(|id| c.get(*id).is_some_and(|i| i.is_verse())).collect();
-        assert_eq!(seen.len() as i64, n);
-    }
-
-    #[test]
-    fn both_sources_alternate() {
-        let c = catalog();
-        for slot in 100..120 {
-            let item = c.get(pick(c, Sources::Both, slot, None).unwrap()).unwrap();
-            assert_eq!(item.is_verse(), slot % 2 == 0, "slot {slot}");
+        for n in [1usize, 2, 37, 230] {
+            let len = n as i64;
+            let start = 739_000 * len;
+            let seen: HashSet<usize> = (start..start + len).filter_map(|k| nth_index(n, SEED_HADITH, k)).collect();
+            assert_eq!(seen.len(), n);
         }
-        assert!(c.get(pick(c, Sources::Hadith, 100, None).unwrap()).is_some_and(|i| !i.is_verse()));
-        assert!(c.get(pick(c, Sources::Quran, 101, None).unwrap()).is_some_and(|i| i.is_verse()));
-    }
-
-    #[test]
-    fn small_surfaces_walk_only_what_fits_and_never_repeat() {
-        let c = catalog();
-        let mut lens: Vec<usize> = c.items[..c.verses].iter().map(|i| i.len).collect();
-        lens.sort_unstable();
-        let limit = lens[lens.len() / 2];
-        let fitting = lens.iter().filter(|l| **l <= limit).count();
-        let mut last = None;
-        let mut seen = HashSet::new();
-        for slot in 0..fitting as i64 {
-            let id = pick(c, Sources::Quran, slot, Some(limit)).unwrap();
-            assert!(c.get(id).unwrap().len <= limit);
-            assert_ne!(Some(id), last, "slot {slot} repeats the one before");
-            last = Some(id);
-            seen.insert(id);
-        }
-        // A round of the small surface's own sequence shows every fitting item.
-        assert_eq!(seen.len(), fitting);
-        assert_eq!(position(c, Sources::Quran, 0, Some(limit)).map(|(_, n)| n), Some(fitting));
-        assert_eq!(pick(c, Sources::Quran, 0, Some(0)), None, "nothing fits");
-        assert_eq!(position(c, Sources::Quran, 0, Some(0)), None);
     }
 
     /// Every `window` consecutive places of the sequence over `n` hold
@@ -387,12 +299,11 @@ mod tests {
     }
 
     #[test]
-    fn positions_count_through_the_round() {
-        let c = catalog();
-        let n = c.verses;
-        assert_eq!(position(c, Sources::Quran, 0, None), Some((1, n)));
-        assert_eq!(position(c, Sources::Quran, n as i64 + 11, None), Some((12, n)));
-        assert_eq!(position(c, Sources::Quran, -1, None), Some((n, n)));
+    fn places_count_through_the_round() {
+        let n = 230;
+        assert_eq!(round_place(n, 0), Some((1, n)));
+        assert_eq!(round_place(n, n as i64 + 11), Some((12, n)));
+        assert_eq!(round_place(n, -1), Some((n, n)));
         assert_eq!(round_place(0, 4), None);
         assert_eq!(round_place(3, 7), Some((2, 3)));
     }
