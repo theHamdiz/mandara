@@ -345,8 +345,7 @@ h1, h2, h3 { text-wrap: balance; }
 .piece-clock { grid-column: span 3; background: var(--second); color: var(--on-second); }
 .piece-clock .piece-caption, .piece-clock .piece-caption b { color: var(--on-second); }
 .piece-toggle { grid-column: span 4; background: var(--tile-2); }
-.piece-toast { grid-column: span 12; flex-direction: row; align-items: center; background: var(--third); color: var(--on-third); }
-.piece-toast .piece-caption, .piece-toast .piece-caption b { color: var(--on-third); }
+.piece-toast { grid-column: span 12; flex-direction: row; align-items: center; background: color-mix(in oklab, var(--third) 28%, var(--tile)); }
 
 .ui-shapes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; max-width: 360px; }
 .ui-shapes svg { width: 100%; height: auto; fill: currentColor; }
