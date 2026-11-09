@@ -13,7 +13,6 @@ use mandara_theme::MandaraPalette;
 use mandara_ui::bidi::Bidi as _;
 use mandara_ui::icons::icon;
 use mandara_ui::components::surfaces::{CardSurface as _, Fill, Surface as _};
-use mandara_ui::style::ClipRounded as _;
 
 use super::StudioView;
 use crate::tokens::*;
@@ -127,8 +126,7 @@ impl StudioView {
         let content = open.then(|| body(self, cx));
         // Shaped and lifted in the card designs of Themes → Components.
         div()
-            .clip_rounded()
-            .card_surface(RADIUS_20_PX, Fill(p.surface_container, None), Vec::new(), p)
+            .clipped_card_surface(RADIUS_20_PX, Fill(p.surface_container, None), Vec::new(), p)
             .row()
             .flex_col()
             .child(header)

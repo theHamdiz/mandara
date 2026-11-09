@@ -77,7 +77,7 @@ pub fn card(palette: &MandaraPalette) -> Div {
     // Children are clipped to the rounded corners.
     // Shaped and lifted in the card designs of Themes → Components.
     use crate::components::surfaces::{CardSurface as _, Fill};
-    crate::style::ClipRounded::clip_rounded(div().card_surface(crate::style::card_radius(), Fill(palette.surface_container, None), Vec::new(), palette).p(px(crate::style::card_padding())))
+    div().clipped_card_surface(crate::style::card_radius(), Fill(palette.surface_container, None), Vec::new(), palette).p(px(crate::style::card_padding()))
 }
 
 /// Section title inside a panel or card.

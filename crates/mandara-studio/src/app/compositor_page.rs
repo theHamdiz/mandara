@@ -16,7 +16,6 @@
 //! compositor files are never edited here.
 
 use mandara_ui::bidi::Bidi as _;
-use mandara_ui::style::ClipRounded as _;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -65,7 +64,7 @@ pub(super) fn tip(text: impl Into<SharedString>, p: &MandaraPalette) -> impl Fn(
 pub(super) fn card(p: &MandaraPalette) -> Div {
     // Shaped and lifted in the card designs of Themes → Components.
     use mandara_ui::components::surfaces::{CardSurface as _, Fill};
-    div().clip_rounded().card_surface(RADIUS_20_PX, Fill(p.surface_container, None), Vec::new(), p).p(px(SPACE_18_PX)).row().flex_col().gap(px(SPACE_12_PX))
+    div().clipped_card_surface(RADIUS_20_PX, Fill(p.surface_container, None), Vec::new(), p).p(px(SPACE_18_PX)).row().flex_col().gap(px(SPACE_12_PX))
 }
 
 pub(super) fn group_title(text: impl Into<SharedString>, p: &MandaraPalette) -> Div {

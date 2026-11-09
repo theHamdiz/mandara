@@ -146,6 +146,27 @@ pub trait CardSurface: Surface + ParentElement {
 
     /// [`Self::card_surface`] in `family` and `style`.
     fn card_surface_as(self, family: SurfaceCorners, style: CardStyle, r: f32, fill: Fill, rim: Vec<BoxShadow>, palette: &MandaraPalette) -> Self {
+        self.card_surface_with(family, style, r, fill, rim, palette, false)
+    }
+
+    /// [`Self::card_surface`] for a card that clips its children to its
+    /// corners (art, hover fills and bands that reach its edge). A cut or
+    /// squircle card clips them to the rounded rectangle inside its shape,
+    /// while its own drawn shape paints outside that clip, so the corners
+    /// stay cut or squircle instead of being rounded off by it.
+    fn clipped_card_surface(self, r: f32, fill: Fill, rim: Vec<BoxShadow>, palette: &MandaraPalette) -> Self {
+        self.clipped_card_surface_as(crate::style::surface_corners(), crate::style::card_style(), r, fill, rim, palette)
+    }
+
+    /// [`Self::clipped_card_surface`] in `family` and `style`.
+    fn clipped_card_surface_as(self, family: SurfaceCorners, style: CardStyle, r: f32, fill: Fill, rim: Vec<BoxShadow>, palette: &MandaraPalette) -> Self {
+        crate::style::ClipRounded::clip_rounded(self.card_surface_with(family, style, r, fill, rim, palette, true))
+    }
+
+    /// The card surface; `clipped`: the card clips its children, and its
+    /// drawn shape escapes that clip ([`gpui::Window::with_outer_content_mask`]).
+    #[doc(hidden)]
+    fn card_surface_with(self, family: SurfaceCorners, style: CardStyle, r: f32, fill: Fill, rim: Vec<BoxShadow>, palette: &MandaraPalette, clipped: bool) -> Self {
         let Some(corner) = shaped(family, r) else {
             let el = self.surface_corners_as(family, r);
             let el = match fill {
@@ -161,7 +182,19 @@ pub trait CardSurface: Surface + ParentElement {
             CardStyle::Raised if crate::style::shadows() => el.shadow(crate::plugins::panel_fx::elevation_scaled(palette, 1.0, RAISED_ELEVATION)),
             _ => el,
         };
-        el.relative().child(canvas(|_, _, _| {}, move |bounds, _, window, _| super::cut::paint_shape(window, bounds, corner, ink)).absolute().inset_0())
+        el.relative().child(
+            canvas(|_, _, _| {}, move |bounds, _, window, _| {
+                // A clipping card's own mask is the innermost one here: the
+                // shape paints under the clip its ancestors set instead.
+                if clipped {
+                    window.with_outer_content_mask(|window| super::cut::paint_shape(window, bounds, corner, ink));
+                } else {
+                    super::cut::paint_shape(window, bounds, corner, ink);
+                }
+            })
+            .absolute()
+            .inset_0(),
+        )
     }
 }
 
@@ -189,5 +222,34 @@ mod tests {
             assert_eq!(corners(family, 18.0, false), Corners::all(px(corner.inscribed_radius())));
         }
         assert!(shaped(SurfaceCorners::Rounded, 18.0).is_none() && shaped(SurfaceCorners::Asymmetric, 18.0).is_none());
+    }
+
+    /// A clipping card (kit's `card`, `glass_card`) clips its children to
+    /// the rounded rectangle inside a cut or squircle shape, but the shape
+    /// itself paints under its ancestors' clip within the card's rectangle:
+    /// none of the card's own rounding, so cut corners stay cut and
+    /// squircles stay squircles, while a rounded ancestor's corner it shares
+    /// still rounds it.
+    #[test]
+    fn clipping_cards_keep_their_drawn_corners() {
+        use gpui::{Bounds, ContentMask, point, size};
+        let palette = mandara_theme::engine::default_palette(true);
+        for family in [SurfaceCorners::Squircle, SurfaceCorners::Cut] {
+            let corner = shaped(family, 18.0).unwrap();
+            let mut card = gpui::div().clipped_card_surface_as(family, CardStyle::Tonal, 18.0, Fill(palette.surface_container, None), Vec::new(), &palette);
+            let style = card.style();
+            assert_eq!((style.overflow.x, style.overflow.y), (Some(gpui::Overflow::Clip), Some(gpui::Overflow::Clip)), "{family:?}: children are clipped");
+            assert_eq!(style.corner_radii.top_left, Some(px(corner.inscribed_radius()).into()), "{family:?}: to the rounded rectangle inside the shape");
+            // A panel rounded at 24 px, the card flush with its top-left corner.
+            let panel = ContentMask { bounds: Bounds::new(point(px(0.0), px(0.0)), size(px(400.0), px(300.0))), corner_radii: Corners::all(px(24.0)) };
+            let own = ContentMask { bounds: Bounds::new(point(px(0.0), px(0.0)), size(px(200.0), px(120.0))), corner_radii: corners(family, 18.0, false) };
+            let card_mask = own.intersect(&panel);
+            let outline = card_mask.outline_within(&panel);
+            assert_eq!(outline.bounds, card_mask.bounds, "{family:?}: still inside the card");
+            assert_eq!(outline.corner_radii.top_left, px(24.0), "{family:?}: the panel's corner still rounds it");
+            for r in [outline.corner_radii.top_right, outline.corner_radii.bottom_left, outline.corner_radii.bottom_right] {
+                assert_eq!(r, px(0.0), "{family:?}: the card's own rounding no longer clips its shape");
+            }
+        }
     }
 }

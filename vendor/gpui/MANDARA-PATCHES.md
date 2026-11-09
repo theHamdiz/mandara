@@ -198,6 +198,23 @@ window update, so their own atlas kept every texture.
 `elements::img` tests cover eviction of loaded and uncached images and the
 single moved frame.
 
+## 9. Painting a clipping container's own outline (`window.rs`)
+
+A card that clips its children to rounded corners (patch 1) and draws its
+own cut or squircle outline as a child canvas had that outline clipped by its
+own rounded mask too, so the cut corners and squircles came out rounded.
+
+* `ContentMask::<Pixels>::outline_within(outer)` is `outer` intersected with
+  the rectangle of `self`: the clip of the ancestors within the container,
+  without the container's own corner radii.
+* `Window::with_outer_content_mask(f)` runs `f` under `outline_within` of the
+  innermost content mask and the one before it, then restores the stack. Only
+  a child painting its clipping container's own outline calls it, so the
+  innermost mask is that container's.
+
+Mandara's `components::surfaces` tests cover the mask (a card flush with a
+rounded panel's corner keeps that corner and loses only its own rounding).
+
 ## Packaging changes
 
 `Cargo.toml` spells out the workspace-inherited fields and dependencies with
