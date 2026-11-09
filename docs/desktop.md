@@ -201,7 +201,9 @@ existing widgets. Eligible kinds can also be added to
 - **Desktop widgets:** hero clocks (superscript, headline, day block, ring,
   greeting, giant day numeral, minimal, and an analog dial with an optional
   seconds hand), a system monitor as a column with live graphs or as ring
-  gauges, the weather with the days ahead, a world clock, a countdown to a
+  gauges (CPU, memory, swap, every GPU's load, video memory, temperature and
+  power, disk, network and battery, each one yours to switch on or off,
+  also from its right-click menu in *Edit desktop*), the weather with the days ahead, a world clock, a countdown to a
   date, text and shape decorations (discs, stripes, waves, frames, and
   vertical text: kana and CJK stand upright, Arabic and Latin keep their
   joined line turned toward the screen's middle) and an audio visualizer

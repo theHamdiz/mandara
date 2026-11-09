@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **The System monitor desktop widget shows your NVIDIA GPU, and every reading is yours to pick.** The widget now reads its GPUs from the same place as the Resources panel, so NVIDIA cards (through `nvidia-smi`) show up next to AMD and Intel ones, with load, video memory, temperature and power draw, one line per GPU when you have several. Two new readings join the rest, **VRAM** and **Swap**, off until you switch them on. Pick what the widget shows in Studio → Desktop widgets → *Readings*, or right-click the widget in *Edit desktop* and choose *Readings* to tick them right there. A GPU reading your machine can't show is locked with the reason (no graphics card, `nvidia-smi` missing, or a card that doesn't report it), and the widget leaves it out instead of showing an empty row. Existing widgets look exactly as before.
+
 ## 0.24.0 — 2026-11-09
 
 Update your whole system right from the Updates panel. Pick how every
