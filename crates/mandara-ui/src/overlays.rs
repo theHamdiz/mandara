@@ -446,7 +446,7 @@ fn build_index_with(registry: &mandara_plugins::PluginRegistry, cfg: &mandara_co
         out.push(entry(t("Add a feed"), t("Subscribe to a site or pick from tested starter feeds"), "plus", tk("Action"), FEEDS_WORDS, line(&format!("studio plugins/{feeds}/settings"))));
         out.push(entry(t("Refresh feeds"), t("Fetch the latest articles of every feed"), "refresh", tk("Action"), FEEDS_WORDS, line("feeds refresh")));
         out.push(entry(t("Mark all feeds read"), t("Mark every article of every feed read"), "list-check", tk("Action"), FEEDS_WORDS, line("feeds read-all")));
-    } else if registry.get(feeds).is_some() {
+    } else if registry.get(feeds).is_some() && !cfg.plugins.is_removed(feeds) {
         out.push(entry(t("Turn on Feeds"), t("A reader for RSS, Atom and JSON feeds"), "rss", tk("Plugin"), &format!("plugin {feeds} {FEEDS_WORDS}"), line(&format!("plugins enable {feeds}"))));
         out.push(entry(tf("Plugin settings: {name}", &[("name", &t("Feeds"))]), t("Open in Mandara Studio"), "sliders", tk("Studio"), &format!("settings preferences studio plugin {feeds} {FEEDS_WORDS}"), line(&format!("studio plugins/{feeds}/settings"))));
     }
@@ -2675,6 +2675,11 @@ mod tests {
         assert!(lines.iter().any(|l| l == "plugins enable feeds"), "{lines:?}");
         assert!(lines.iter().any(|l| l == "studio plugins/feeds/settings"), "{lines:?}");
         assert!(!lines.iter().any(|l| l == "panel open feeds"), "{lines:?}");
+        // A removed Feeds is not offered at all (like any removed plugin).
+        mandara_plugins::lifecycle::remove(&mut cfg, crate::plugins::feeds::ID, "Feeds").unwrap();
+        let index = build_index_with(&registry, &cfg);
+        let offered: Vec<String> = index.iter().map(|i| item_names(i).1).filter(|l| l == "plugins enable feeds" || l == "studio plugins/feeds/settings").collect();
+        assert!(offered.is_empty(), "{offered:?}");
     }
 
     #[test]
