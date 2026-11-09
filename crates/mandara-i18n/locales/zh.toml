@@ -8320,7 +8320,6 @@
 
 "Add your Home Assistant token in Studio" = "在 Studio 中添加 Home Assistant 令牌"
 
-"Add your favourite feeds in Studio" = "在 Studio 中添加喜爱的订阅源"
 
 "Add your translation API key in Studio" = "在 Studio 中添加翻译 API 密钥"
 
@@ -8350,7 +8349,6 @@
 
 "Could not read this feed: {error}" = "无法读取此订阅源：{error}"
 
-"Could not refresh this feed: {error}" = "无法刷新此订阅源：{error}"
 
 "Could not save or read feed history: {error}" = "无法保存或读取订阅源历史：{error}"
 
@@ -8372,11 +8370,9 @@
 
 "Favourite entities" = "收藏的实体"
 
-"Feed addresses" = "订阅源地址"
 
 "Feeds" = "订阅源"
 
-"Fetching headlines…" = "正在获取标题…"
 
 "Forget device" = "忘记设备"
 
@@ -8404,7 +8400,6 @@
 
 "Keep a translation under 5,000 characters" = "翻译文本须少于 5,000 个字符"
 
-"Keep up to 16 feed subscriptions" = "最多保留 16 个订阅源"
 
 "LibreTranslate" = "LibreTranslate"
 
@@ -8418,9 +8413,7 @@
 
 "No entities to show" = "没有可显示的实体"
 
-"No headlines yet" = "暂无标题"
 
-"Only the selected feed refreshes while its panel is open" = "仅在面板打开时刷新选中的订阅源"
 
 "Opening the keyring…" = "正在打开密钥环…"
 
@@ -8442,7 +8435,6 @@
 
 "Provider" = "服务商"
 
-"RSS, Atom and JSON subscriptions with local read history" = "RSS、Atom 和 JSON 订阅，附带本地阅读记录"
 
 "RSS, Atom or JSON feed address" = "RSS、Atom 或 JSON 订阅源地址"
 
@@ -8452,13 +8444,11 @@
 
 "Reading your home…" = "正在读取家庭状态…"
 
-"Refresh a feed and return its headlines and read history" = "刷新订阅源并返回标题和阅读记录"
 
 "Refresh interval" = "刷新间隔"
 
 "Refresh this feed before marking it read" = "标为已读前请先刷新此订阅源"
 
-"Refreshing…" = "正在刷新…"
 
 "Reject" = "拒绝"
 
@@ -8482,7 +8472,6 @@
 
 "Send text to a paired, connected device" = "向已配对且已连接的设备发送文本"
 
-"Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions" = "用空格分隔 RSS、Atom 或 JSON 地址；最多 16 个订阅源"
 
 "Separate up to 24 entity ids with spaces; empty shows the first available entities" = "用空格分隔最多 24 个实体 ID；留空则显示前几个可用实体"
 
@@ -8588,7 +8577,6 @@
 
 "Your home favourites, sensors and scenes" = "家庭收藏、传感器和场景"
 
-"Your subscriptions, together" = "订阅集中在一起"
 
 "Your translation appears here" = "译文将在此显示"
 
@@ -9088,3 +9076,133 @@
 "{preset} components" = "{preset} 组件"
 "Design" = "设计"
 "Mandara's glass, or Material You: colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar" = "Mandara 玻璃，或 Material You：取自壁纸的颜色、两行大时钟，以及带有波浪边头像的色调卡片"
+
+# ── Feeds reader ─────────────────────────────────────────────
+"A reader for RSS, Atom and JSON feeds" = "RSS、Atom 和 JSON 订阅源阅读器"
+"A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view" = "RSS、Atom 和 JSON 订阅源阅读器：统一时间线、文件夹、已保存文章、搜索和简洁的阅读视图"
+"A website or feed address" = "网站或订阅源地址"
+"Add a feed" = "添加订阅源"
+"Add a site and its feed is found for you. Order, folders and colours here are how the panel shows them." = "添加网站，系统会自动为你找到它的订阅源。这里的顺序、文件夹和颜色就是面板中的显示方式。"
+"Add feeds" = "添加订阅源"
+"Add the subscriptions of an OPML file (from another feed reader)" = "添加 OPML 文件中的订阅（来自其他订阅源阅读器）"
+"All articles" = "全部文章"
+"All caught up" = "已全部读完"
+"Also inside articles" = "同时在文章内"
+"Arabic news" = "阿拉伯语新闻"
+"Articles per feed" = "每个订阅源的文章数"
+"Articles you already have show at once; new ones follow." = "已有的文章会立即显示，新文章随后加载。"
+"Background interval" = "后台间隔"
+"Badge" = "角标"
+"Check its address in Studio, or try again in a moment." = "请在 Studio 中检查其地址，或稍后再试。"
+"Could not download it: {error}" = "无法下载：{error}"
+"Could not reach the server: {error}" = "无法连接服务器：{error}"
+"Days an article stays after it has left its feed; saved articles stay until you remove them" = "文章从订阅源中消失后保留的天数；已保存的文章会一直保留，直到你移除"
+"Design & fun" = "设计与趣味"
+"Feed icons and thumbnails come with the feed. Pictures inside articles load from their websites only when you allow them" = "订阅源的图标和缩略图随订阅源提供。文章内的图片仅在你允许时才会从其网站加载"
+"Feeds older than this refresh when you open the panel; the Refresh button fetches all of them at once" = "超过此时间未更新的订阅源会在打开面板时刷新；“刷新”按钮会一次性获取全部订阅源"
+"Feeds · Bar" = "订阅源 · 栏"
+"Feeds · History" = "订阅源 · 历史"
+"Feeds · Reading" = "订阅源 · 阅读"
+"Feeds · Refreshing" = "订阅源 · 刷新"
+"Fetch the latest articles of every feed" = "获取每个订阅源的最新文章"
+"Find the feeds a website offers" = "查找网站提供的订阅源"
+"Folder (empty for none)" = "文件夹（留空表示无）"
+"Folder to put it in" = "放入的文件夹"
+"Follow sites you like: add their addresses or pick from tested starter feeds in Studio." = "关注你喜欢的网站：添加它们的地址，或在 Studio 中从已测试的入门订阅源中选择。"
+"How often the background refresh runs; feeds that failed wait longer before trying again" = "后台刷新的运行频率；失败的订阅源会等待更久再重试"
+"How the bar item shows unread articles" = "栏项目如何显示未读文章"
+"Icons and thumbnails" = "图标和缩略图"
+"Import and export" = "导入和导出"
+"Imported {added} of {total} feeds" = "已导入 {added}/{total} 个订阅源"
+"Keep old articles for" = "旧文章保留时长"
+"Keep the unread count current while the panel is closed, at a low interval; off, nothing downloads until you open Feeds" = "面板关闭时以较低频率保持未读数最新；关闭后，在你打开订阅源之前不会下载任何内容"
+"Linux & open source" = "Linux 与开源"
+"Mark all feeds read" = "将所有订阅源标为已读"
+"Mark an article read" = "将文章标为已读"
+"Mark an article unread" = "将文章标为未读"
+"Mark every article of a feed read, or of every feed when no address is given" = "将某个订阅源的所有文章标为已读；未指定地址时，标记所有订阅源"
+"Mark every article of every feed read" = "将所有订阅源的所有文章标为已读"
+"Mark read when opened" = "打开时标为已读"
+"Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders." = "以 OPML 文件在不同订阅源阅读器之间迁移你的订阅。导入时会添加你尚未关注的订阅源及其文件夹。"
+"Name (empty uses the feed's own)" = "名称（留空则使用订阅源自带名称）"
+"No articles yet" = "还没有文章"
+"No feed found at this address" = "此地址未找到订阅源"
+"No feeds yet" = "还没有订阅源"
+"No feeds yet. Add one above or pick from the starter feeds below." = "还没有订阅源。在上方添加一个，或从下方的入门订阅源中选择。"
+"No unread articles here." = "这里没有未读文章。"
+"Nothing here matches “{query}”" = "没有与“{query}”匹配的内容"
+"Notify about new articles" = "有新文章时通知"
+"One notification for what is new, at most every 30 minutes, and never while the panel is open" = "有新内容时发送一条通知，最多每 30 分钟一次，且面板打开时绝不发送"
+"Open articles in" = "文章打开方式"
+"Opening an article marks it read; you can always mark it unread again" = "打开文章会将其标为已读；你随时可以再标为未读"
+"Opening the article…" = "正在打开文章…"
+"Opening your feeds…" = "正在打开订阅源…"
+"Or type a site's address in the launcher and choose Subscribe in Feeds." = "或在启动器中输入网站地址，然后选择“在订阅源中订阅”。"
+"Picture: {alt}" = "图片：{alt}"
+"Pictures" = "图片"
+"Popular feeds by topic, each checked to download and read correctly on {date}." = "按主题分类的热门订阅源，均已于 {date} 检查，可正常下载和阅读。"
+"Programming" = "编程"
+"Read on the website" = "在网站上阅读"
+"Refresh a feed now and return its articles, or every feed when no address is given" = "立即刷新某个订阅源并返回其文章；未指定地址时刷新所有订阅源"
+"Refresh feeds" = "刷新订阅源"
+"Refresh in the background" = "后台刷新"
+"Refresh to fetch the latest articles." = "刷新以获取最新文章。"
+"Refresh while open" = "打开时刷新"
+"Refreshing {done} of {total}…" = "正在刷新 {done}/{total}…"
+"Remove a subscription (its saved history stays until you subscribe again)" = "移除订阅（已保存的历史会保留，直到你再次订阅）"
+"Remove an article from your saved ones" = "从已保存中移除文章"
+"Save an article to read it later" = "保存文章以便稍后阅读"
+"Save articles to read them later; they stay even after they leave their feed." = "保存文章以便稍后阅读；即使它们从订阅源中消失也会保留。"
+"Save your subscriptions as an OPML file" = "将你的订阅保存为 OPML 文件"
+"Saved articles" = "已保存的文章"
+"Saved articles of one feed or every feed, newest first, with their read and saved flags" = "某个或所有订阅源中已保存的文章，最新的在前，附带已读和已保存标记"
+"Saved {count} feeds to {path}" = "已将 {count} 个订阅源保存到 {path}"
+"Science" = "科学"
+"Search articles…" = "搜索文章…"
+"Starter feeds" = "入门订阅源"
+"Subscribe in Feeds: {site}" = "在订阅源中订阅：{site}"
+"Subscribe to a feed, or to the feed a website offers (turns Feeds on)" = "订阅一个订阅源，或网站提供的订阅源（会开启订阅源）"
+"Subscribe to a site or pick from tested starter feeds" = "订阅网站，或从已测试的入门订阅源中选择"
+"Subscribed to {feed}" = "已订阅 {feed}"
+"Technology" = "科技"
+"The OPML file" = "OPML 文件"
+"The article's link" = "文章链接"
+"The feed address" = "订阅源地址"
+"The full article is on its website." = "完整文章在其网站上。"
+"The newest articles kept for each feed; saved articles are kept on top of these" = "每个订阅源保留的最新文章数；已保存的文章另外保留"
+"The reader" = "阅读器"
+"The reader shows a clean copy of the article, without scripts, frames or trackers" = "阅读器显示文章的干净副本，不含脚本、框架或跟踪器"
+"The server answered HTTP {status}" = "服务器返回 HTTP {status}"
+"The server is busy (HTTP {status}); trying again later" = "服务器繁忙（HTTP {status}）；稍后重试"
+"The server redirected from a secure address to an insecure one" = "服务器将安全地址重定向到了不安全的地址"
+"The server redirected to an address that is not valid" = "服务器重定向到了无效地址"
+"The server redirected too many times" = "服务器重定向次数过多"
+"The server redirected without saying where" = "服务器重定向时未指明目标地址"
+"This OPML file is too large" = "此 OPML 文件过大"
+"This OPML file lists no feeds" = "此 OPML 文件中没有订阅源"
+"This address is a web page without a feed; find its RSS or Atom link" = "此地址是没有订阅源的网页；请找到它的 RSS 或 Atom 链接"
+"This download is too large" = "此下载内容过大"
+"This feed already has 200 saved articles" = "此订阅源已有 200 篇已保存文章"
+"This feed could not be read" = "无法读取此订阅源"
+"This is not an OPML file" = "这不是 OPML 文件"
+"This site offers several feeds:" = "此网站提供多个订阅源："
+"Trying again at {time}" = "将于 {time} 重试"
+"Turn on Feeds" = "开启订阅源"
+"Turn on Refresh in the background first" = "请先开启后台刷新"
+"Unread" = "未读"
+"Unread count" = "未读数"
+"World news" = "国际新闻"
+"You already follow this feed" = "你已关注此订阅源"
+"Your feeds" = "你的订阅源"
+"Your news, together" = "你的新闻，汇于一处"
+"Your subscriptions with their folders and unread counts" = "你的订阅及其文件夹和未读数"
+"Your web browser" = "你的网页浏览器"
+"the feed's structure is broken" = "订阅源结构已损坏"
+"{count} new articles" = "{count} 篇新文章"
+"{count} of {max} feeds" = "{count}/{max} 个订阅源"
+"{feed} and {more} more feeds" = "{feed} 及另外 {more} 个订阅源"
+"{n}d" = "{n} 天前"
+"Could not refresh {feeds}; trying again later" = "无法刷新 {feeds}；稍后会重试"
+"Feeds · Sidebar card" = "订阅源 · 侧边栏卡片"
+"Card folder" = "卡片文件夹"
+"The sidebar card lists the newest unread articles of this folder; empty lists every feed" = "侧边栏卡片显示此文件夹最新的未读文章；留空则显示所有订阅源"

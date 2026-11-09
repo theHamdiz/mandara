@@ -923,8 +923,19 @@ field and must not be placed in TOML.
 | `translator` | `server` | Empty; LibreTranslate only, including any proxy path |
 | `translator` | `use_api_key` | `false` for LibreTranslate; DeepL always needs a key |
 | `translator` | `target` | `EN`, resolved against the provider’s language list |
-| `feeds` | `subscriptions` | Empty; up to 16 space-separated web addresses |
-| `feeds` | `refresh_seconds` | 300; 60–3,600 |
+| `feeds` | `feeds` | Empty; up to 64 `[[plugins.settings.feeds.feeds]]` tables with `url` and optional `title`, `folder` and `color` (`#rrggbb`) |
+| `feeds` | `subscriptions` | Older space-separated addresses; read while `feeds` is absent |
+| `feeds` | `refresh_seconds` | 300; 60–3,600; feeds older than this refresh when the panel opens |
+| `feeds` | `background_refresh` | `false`; refresh while the panel is closed |
+| `feeds` | `background_minutes` | 60; 15–360 |
+| `feeds` | `notify` | `false`; one new-articles notification at most every 30 minutes |
+| `feeds` | `items_per_feed` | 50; 10–200, saved articles on top |
+| `feeds` | `retention_days` | 14; 1–90 days after an article left its feed |
+| `feeds` | `images` | `thumbnails`; also `off` and `all` (pictures inside articles) |
+| `feeds` | `open_in` | `reader`; or `browser` |
+| `feeds` | `mark_read_on_open` | `true` |
+| `feeds` | `bar_style` | `badge`; also `count` and `icon` (a dot) |
+| `feeds` | `card_folder` | Empty (every feed); the sidebar card's folder |
 | `home-assistant` | `server` | Empty; your instance address |
 | `home-assistant` | `entities` | Empty; up to 24 space-separated entity ids |
 | `home-assistant` | `refresh_seconds` | 30; 5–300 |

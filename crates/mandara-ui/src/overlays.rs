@@ -383,7 +383,25 @@ const SNIP_WORDS: &str = "screen capture snip snipping tool snippet sniptool pri
 
 /// Extra search words for built-in plugins, by id: what people call them
 /// when they don't know Mandara's name.
-const PLUGIN_SYNONYMS: &[(&str, &str)] = &[(crate::plugins::screenshot::ID, SNIP_WORDS)];
+const PLUGIN_SYNONYMS: &[(&str, &str)] = &[(crate::plugins::screenshot::ID, SNIP_WORDS), (crate::plugins::feeds::ID, FEEDS_WORDS)];
+
+/// Words people type for a feed reader.
+const FEEDS_WORDS: &str = "rss feeds feed news atom reader subscriptions subscribe headlines articles blogs opml";
+
+/// A typed web address that may be a feed or a site with one: `https://…`,
+/// or a host with a path (`example.org/feed`). A bare word with a dot
+/// (`notes.md`) is not offered.
+fn subscribe_address(q: &str) -> Option<String> {
+    if q.contains(char::is_whitespace) { return None; }
+    let lower = q.to_ascii_lowercase();
+    if lower.starts_with("http://") || lower.starts_with("https://") {
+        return mandara_services::feeds::web_url(q).then(|| q.to_string());
+    }
+    let (host, _) = q.split_once('/').filter(|(_, path)| !path.is_empty()).or_else(|| lower.starts_with("www.").then_some((q, "")))?;
+    let tld = host.rsplit('.').next()?;
+    let plausible = host.contains('.') && tld.len() >= 2 && tld.chars().all(|c| c.is_ascii_alphabetic()) && host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
+    plausible.then(|| format!("https://{q}"))
+}
 
 fn build_index(cx: &App) -> Vec<Item> {
     let cfg = config(cx).read(cx).snapshot();
@@ -393,6 +411,16 @@ fn build_index(cx: &App) -> Vec<Item> {
 fn build_index_with(registry: &mandara_plugins::PluginRegistry, cfg: &mandara_config::ShellConfig) -> Vec<Item> {
     let mut out = actions();
     // Actions of opt-in plugins, while they are on.
+    // Feeds: its actions while on; turning it on (and its settings) while off.
+    let feeds = crate::plugins::feeds::ID;
+    if registry.is_enabled(feeds, &cfg.plugins) {
+        out.push(entry(t("Add a feed"), t("Subscribe to a site or pick from tested starter feeds"), "plus", tk("Action"), FEEDS_WORDS, line(&format!("studio plugins/{feeds}/settings"))));
+        out.push(entry(t("Refresh feeds"), t("Fetch the latest articles of every feed"), "refresh", tk("Action"), FEEDS_WORDS, line("feeds refresh")));
+        out.push(entry(t("Mark all feeds read"), t("Mark every article of every feed read"), "list-check", tk("Action"), FEEDS_WORDS, line("feeds read-all")));
+    } else if registry.get(feeds).is_some() {
+        out.push(entry(t("Turn on Feeds"), t("A reader for RSS, Atom and JSON feeds"), "rss", tk("Plugin"), &format!("plugin {feeds} {FEEDS_WORDS}"), line(&format!("plugins enable {feeds}"))));
+        out.push(entry(tf("Plugin settings: {name}", &[("name", &t("Feeds"))]), t("Open in Mandara Studio"), "sliders", tk("Studio"), &format!("settings preferences studio plugin {feeds} {FEEDS_WORDS}"), line(&format!("studio plugins/{feeds}/settings"))));
+    }
     if registry.is_enabled(crate::plugins::wallpaper_generator::ID, &cfg.plugins) {
         out.push(entry(t("Generate wallpaper"), t("A new procedural wallpaper from the generator"), "brush", tk("Action"), "wallpaper generate generator procedural new art background random", line("wallgen generate random")));
     }
@@ -914,6 +942,11 @@ fn search_with(query: &str, apps: &[DesktopApp], index: &[Item], ctx: &SearchCtx
         let names: Vec<String> = lines.iter().map(|i| item_names(i).0).collect();
         let fuzzy = rank_with(fuzzy(pool, q, haystack), q, &ctx.usage).into_iter().filter(|i| !names.contains(&item_names(i).0));
         let mut found: Vec<Item> = lines.into_iter().chain(fuzzy).collect();
+        // A web address can be subscribed to (the feed is found on its page).
+        if let Some(url) = subscribe_address(q) {
+            let label = tf("Subscribe in Feeds: {site}", &[("site", &crate::plugins::feeds::host(&url))]);
+            found.insert(0, Item::Entry(Entry { label, detail: url.clone(), icon: "rss", badge: tk("Action"), keywords: FEEDS_WORDS.into(), run: Run::Command { words: vec!["feeds".into(), "subscribe".into(), url], args: Vec::new() } }));
+        }
         // A bare arithmetic expression also offers its result.
         if let Some(value) = apps::calculate(q).filter(|_| q.chars().any(|c| "+-*/^%(".contains(c))) {
             found.insert(0, Item::Calc { expr: q.to_string(), value });
@@ -2522,6 +2555,45 @@ mod tests {
         // A web search is always offered last.
         let results = search("zzqx unlikely words", &[], &index);
         assert!(effect(&results[results.len() - 1..], "").starts_with("url: https://duckduckgo.com/?q=zzqx%20unlikely%20words"));
+    }
+
+    #[test]
+    fn feed_words_find_the_feeds_plugin_its_settings_and_actions() {
+        let (_, _, index) = fixture();
+        for q in ["rss", "feeds", "news", "atom", "reader", "subscriptions", "RSS"] {
+            let lines: Vec<String> = search(q, &[], &index).iter().take(12).map(|i| item_names(i).1).collect();
+            assert!(lines.iter().any(|l| l == "panel open feeds"), "{q}: {lines:?}");
+            // "feeds" itself lists the plugin first, then its commands (their names start with it).
+            if q != "feeds" { assert!(lines.iter().any(|l| l == "studio plugins/feeds/settings"), "{q}: {lines:?}"); }
+        }
+        let lines: Vec<String> = search("refresh feeds", &[], &index).iter().take(3).map(|i| item_names(i).1).collect();
+        assert!(lines.iter().any(|l| l == "feeds refresh"), "{lines:?}");
+        let lines: Vec<String> = search("add feed", &[], &index).iter().take(3).map(|i| item_names(i).1).collect();
+        assert!(lines.iter().any(|l| l == "studio plugins/feeds/settings"), "{lines:?}");
+    }
+
+    #[test]
+    fn with_feeds_off_the_launcher_offers_turning_it_on() {
+        let (registry, mut cfg, _) = fixture();
+        cfg.plugins.enabled.retain(|id| id != crate::plugins::feeds::ID);
+        let index = build_index_with(&registry, &cfg);
+        let lines: Vec<String> = search("rss", &[], &index).iter().take(5).map(|i| item_names(i).1).collect();
+        assert!(lines.iter().any(|l| l == "plugins enable feeds"), "{lines:?}");
+        assert!(lines.iter().any(|l| l == "studio plugins/feeds/settings"), "{lines:?}");
+        assert!(!lines.iter().any(|l| l == "panel open feeds"), "{lines:?}");
+    }
+
+    #[test]
+    fn typed_web_addresses_offer_subscribing_in_feeds() {
+        let (_, _, index) = fixture();
+        for (q, url) in [("https://blog.rust-lang.org", "https://blog.rust-lang.org"), ("example.org/feed.xml", "https://example.org/feed.xml"), ("www.example.org", "https://www.example.org")] {
+            let results = search(q, &[], &index);
+            assert_eq!(item_names(&results[0]).1, format!("feeds subscribe {url}"), "{q}");
+            assert_eq!(effect(&results, q), format!("command: feeds subscribe {url}"), "{q}");
+        }
+        for q in ["notes.md", "3.14", "hello world", "file:///etc/passwd", "a/b", "https://user:pw@example.org"] {
+            assert!(subscribe_address(q).is_none(), "{q}");
+        }
     }
 
     #[test]

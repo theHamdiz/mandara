@@ -479,7 +479,17 @@ The UI stays responsive while the request runs.
 ```bash
 mandara msg translate languages
 mandara msg translate text ar Good morning
+mandara msg feeds list
+mandara msg feeds subscribe blog.rust-lang.org News
+mandara msg feeds discover example.org
+mandara msg feeds refresh
 mandara msg feeds refresh https://example.org/feed.xml
+mandara msg feeds items https://example.org/feed.xml
+mandara msg feeds read https://example.org/feed.xml https://example.org/post
+mandara msg feeds save https://example.org/feed.xml https://example.org/post
+mandara msg feeds read-all
+mandara msg feeds import ~/Downloads/subscriptions.opml
+mandara msg feeds export ~/feeds.opml
 mandara msg phone devices
 mandara msg phone action DEVICE_ID ring
 mandara msg phone send DEVICE_ID Hello from my desktop

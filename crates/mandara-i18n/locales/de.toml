@@ -8324,7 +8324,6 @@
 
 "Add your Home Assistant token in Studio" = "Füge deinen Home-Assistant-Token in Studio hinzu"
 
-"Add your favourite feeds in Studio" = "Füge deine Lieblingsfeeds in Studio hinzu"
 
 "Add your translation API key in Studio" = "Füge deinen Übersetzungs-API-Schlüssel in Studio hinzu"
 
@@ -8354,7 +8353,6 @@
 
 "Could not read this feed: {error}" = "Dieser Feed konnte nicht gelesen werden: {error}"
 
-"Could not refresh this feed: {error}" = "Dieser Feed konnte nicht aktualisiert werden: {error}"
 
 "Could not save or read feed history: {error}" = "Feedverlauf konnte nicht gespeichert oder gelesen werden: {error}"
 
@@ -8376,11 +8374,9 @@
 
 "Favourite entities" = "Bevorzugte Entitäten"
 
-"Feed addresses" = "Feedadressen"
 
 "Feeds" = "Feeds"
 
-"Fetching headlines…" = "Schlagzeilen werden geladen…"
 
 "Forget device" = "Gerät vergessen"
 
@@ -8408,7 +8404,6 @@
 
 "Keep a translation under 5,000 characters" = "Halte eine Übersetzung unter 5.000 Zeichen"
 
-"Keep up to 16 feed subscriptions" = "Verwende höchstens 16 Feedabonnements"
 
 "LibreTranslate" = "LibreTranslate"
 
@@ -8422,9 +8417,7 @@
 
 "No entities to show" = "Keine Entitäten anzuzeigen"
 
-"No headlines yet" = "Noch keine Schlagzeilen"
 
-"Only the selected feed refreshes while its panel is open" = "Nur der ausgewählte Feed wird bei geöffnetem Panel aktualisiert"
 
 "Opening the keyring…" = "Schlüsselbund wird geöffnet…"
 
@@ -8446,7 +8439,6 @@
 
 "Provider" = "Anbieter"
 
-"RSS, Atom and JSON subscriptions with local read history" = "RSS-, Atom- und JSON-Abonnements mit lokalem Leseverlauf"
 
 "RSS, Atom or JSON feed address" = "RSS-, Atom- oder JSON-Feedadresse"
 
@@ -8456,13 +8448,11 @@
 
 "Reading your home…" = "Dein Zuhause wird abgefragt…"
 
-"Refresh a feed and return its headlines and read history" = "Feed aktualisieren und Schlagzeilen sowie Leseverlauf zurückgeben"
 
 "Refresh interval" = "Aktualisierungsintervall"
 
 "Refresh this feed before marking it read" = "Aktualisiere diesen Feed, bevor du ihn als gelesen markierst"
 
-"Refreshing…" = "Wird aktualisiert…"
 
 "Reject" = "Ablehnen"
 
@@ -8486,7 +8476,6 @@
 
 "Send text to a paired, connected device" = "Text an ein gekoppeltes, verbundenes Gerät senden"
 
-"Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions" = "Trenne RSS-, Atom- oder JSON-Feedadressen durch Leerzeichen; bis zu 16 Abonnements"
 
 "Separate up to 24 entity ids with spaces; empty shows the first available entities" = "Trenne bis zu 24 Entitätskennungen durch Leerzeichen; leer zeigt die ersten verfügbaren Entitäten"
 
@@ -8592,7 +8581,6 @@
 
 "Your home favourites, sensors and scenes" = "Deine Hausfavoriten, Sensoren und Szenen"
 
-"Your subscriptions, together" = "Deine Abonnements beisammen"
 
 "Your translation appears here" = "Deine Übersetzung erscheint hier"
 
@@ -9091,3 +9079,132 @@
 "{preset} components" = "Elemente: {preset}"
 "Design" = "Design"
 "Mandara's glass, or Material You: colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar" = "Mandaras Glas oder Material You: Farben aus deinem Hintergrundbild, eine große zweizeilige Uhr und eine tonale Karte mit gewelltem Profilbild"
+# ── Feeds reader ─────────────────────────────────────────────
+"A reader for RSS, Atom and JSON feeds" = "Ein Reader für RSS-, Atom- und JSON-Feeds"
+"A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view" = "Ein Reader für RSS-, Atom- und JSON-Feeds: eine Timeline, Ordner, gespeicherte Artikel, Suche und eine aufgeräumte Leseansicht"
+"A website or feed address" = "Eine Website- oder Feed-Adresse"
+"Add a feed" = "Feed hinzufügen"
+"Add a site and its feed is found for you. Order, folders and colours here are how the panel shows them." = "Füge eine Website hinzu, und ihr Feed wird für dich gefunden. Reihenfolge, Ordner und Farben legen hier fest, wie das Panel sie zeigt."
+"Add feeds" = "Feeds hinzufügen"
+"Add the subscriptions of an OPML file (from another feed reader)" = "Die Abos einer OPML-Datei hinzufügen (aus einem anderen Feed-Reader)"
+"All articles" = "Alle Artikel"
+"All caught up" = "Alles gelesen"
+"Also inside articles" = "Auch in Artikeln"
+"Arabic news" = "Arabische Nachrichten"
+"Articles per feed" = "Artikel pro Feed"
+"Articles you already have show at once; new ones follow." = "Vorhandene Artikel erscheinen sofort, neue folgen."
+"Background interval" = "Intervall im Hintergrund"
+"Badge" = "Badge"
+"Check its address in Studio, or try again in a moment." = "Prüfe die Adresse in Studio oder versuche es gleich noch einmal."
+"Could not download it: {error}" = "Der Download ist fehlgeschlagen: {error}"
+"Could not reach the server: {error}" = "Der Server ist nicht erreichbar: {error}"
+"Days an article stays after it has left its feed; saved articles stay until you remove them" = "Tage, die ein Artikel bleibt, nachdem er aus seinem Feed verschwunden ist; gespeicherte Artikel bleiben, bis du sie entfernst"
+"Design & fun" = "Design & Spaß"
+"Feed icons and thumbnails come with the feed. Pictures inside articles load from their websites only when you allow them" = "Feed-Symbole und Vorschaubilder kommen mit dem Feed. Bilder in Artikeln werden nur von ihren Websites geladen, wenn du es erlaubst"
+"Feeds older than this refresh when you open the panel; the Refresh button fetches all of them at once" = "Ältere Feeds werden beim Öffnen des Panels aktualisiert; die Schaltfläche „Aktualisieren“ holt alle auf einmal"
+"Feeds · Bar" = "Feeds · Leiste"
+"Feeds · History" = "Feeds · Verlauf"
+"Feeds · Reading" = "Feeds · Lesen"
+"Feeds · Refreshing" = "Feeds · Aktualisieren"
+"Fetch the latest articles of every feed" = "Die neuesten Artikel aller Feeds abrufen"
+"Find the feeds a website offers" = "Die Feeds finden, die eine Website anbietet"
+"Folder (empty for none)" = "Ordner (leer für keinen)"
+"Folder to put it in" = "Ordner, in den er kommt"
+"Follow sites you like: add their addresses or pick from tested starter feeds in Studio." = "Folge Websites, die dir gefallen: füge ihre Adressen hinzu oder wähle in Studio geprüfte Starter-Feeds."
+"How often the background refresh runs; feeds that failed wait longer before trying again" = "Wie oft die Hintergrundaktualisierung läuft; fehlgeschlagene Feeds warten länger bis zum nächsten Versuch"
+"How the bar item shows unread articles" = "Wie das Element in der Leiste ungelesene Artikel zeigt"
+"Icons and thumbnails" = "Symbole und Vorschaubilder"
+"Import and export" = "Import und Export"
+"Imported {added} of {total} feeds" = "{added} von {total} Feeds importiert"
+"Keep old articles for" = "Alte Artikel behalten für"
+"Keep the unread count current while the panel is closed, at a low interval; off, nothing downloads until you open Feeds" = "Den Ungelesen-Zähler bei geschlossenem Panel in großen Abständen aktuell halten; ausgeschaltet wird nichts geladen, bis du Feeds öffnest"
+"Linux & open source" = "Linux & Open Source"
+"Mark all feeds read" = "Alle Feeds als gelesen markieren"
+"Mark an article read" = "Einen Artikel als gelesen markieren"
+"Mark an article unread" = "Einen Artikel als ungelesen markieren"
+"Mark every article of a feed read, or of every feed when no address is given" = "Alle Artikel eines Feeds als gelesen markieren, oder aller Feeds, wenn keine Adresse angegeben ist"
+"Mark every article of every feed read" = "Alle Artikel aller Feeds als gelesen markieren"
+"Mark read when opened" = "Beim Öffnen als gelesen markieren"
+"Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders." = "Deine Abos als OPML-Datei zwischen Feed-Readern verschieben. Beim Import kommen Feeds hinzu, denen du noch nicht folgst, samt Ordnern."
+"Name (empty uses the feed's own)" = "Name (leer nutzt den eigenen des Feeds)"
+"No articles yet" = "Noch keine Artikel"
+"No feed found at this address" = "Unter dieser Adresse wurde kein Feed gefunden"
+"No feeds yet" = "Noch keine Feeds"
+"No feeds yet. Add one above or pick from the starter feeds below." = "Noch keine Feeds. Füge oben einen hinzu oder wähle unten aus den Starter-Feeds."
+"No unread articles here." = "Hier gibt es keine ungelesenen Artikel."
+"Nothing here matches “{query}”" = "Nichts passt zu „{query}“"
+"Notify about new articles" = "Über neue Artikel benachrichtigen"
+"One notification for what is new, at most every 30 minutes, and never while the panel is open" = "Eine Benachrichtigung für Neues, höchstens alle 30 Minuten und nie bei geöffnetem Panel"
+"Open articles in" = "Artikel öffnen in"
+"Opening an article marks it read; you can always mark it unread again" = "Beim Öffnen wird ein Artikel als gelesen markiert; du kannst ihn jederzeit wieder als ungelesen markieren"
+"Opening the article…" = "Artikel wird geöffnet…"
+"Opening your feeds…" = "Deine Feeds werden geöffnet…"
+"Or type a site's address in the launcher and choose Subscribe in Feeds." = "Oder gib die Adresse einer Website im Starter ein und wähle „In Feeds abonnieren“."
+"Picture: {alt}" = "Bild: {alt}"
+"Pictures" = "Bilder"
+"Popular feeds by topic, each checked to download and read correctly on {date}." = "Beliebte Feeds nach Thema, jeweils am {date} auf korrekten Download und Lesbarkeit geprüft."
+"Programming" = "Programmierung"
+"Read on the website" = "Auf der Website lesen"
+"Refresh a feed now and return its articles, or every feed when no address is given" = "Einen Feed jetzt aktualisieren und seine Artikel ausgeben, oder alle Feeds, wenn keine Adresse angegeben ist"
+"Refresh feeds" = "Feeds aktualisieren"
+"Refresh in the background" = "Im Hintergrund aktualisieren"
+"Refresh to fetch the latest articles." = "Aktualisiere, um die neuesten Artikel zu holen."
+"Refresh while open" = "Bei geöffnetem Panel aktualisieren"
+"Refreshing {done} of {total}…" = "{done} von {total} werden aktualisiert…"
+"Remove a subscription (its saved history stays until you subscribe again)" = "Ein Abo entfernen (sein gespeicherter Verlauf bleibt, bis du es erneut abonnierst)"
+"Remove an article from your saved ones" = "Einen Artikel aus deinen gespeicherten entfernen"
+"Save an article to read it later" = "Einen Artikel speichern, um ihn später zu lesen"
+"Save articles to read them later; they stay even after they leave their feed." = "Speichere Artikel, um sie später zu lesen; sie bleiben auch, wenn sie aus ihrem Feed verschwinden."
+"Save your subscriptions as an OPML file" = "Deine Abos als OPML-Datei speichern"
+"Saved articles" = "Gespeicherte Artikel"
+"Saved articles of one feed or every feed, newest first, with their read and saved flags" = "Gespeicherte Artikel eines Feeds oder aller Feeds, neueste zuerst, mit ihren Gelesen- und Gespeichert-Markierungen"
+"Saved {count} feeds to {path}" = "{count} Feeds in {path} gespeichert"
+"Science" = "Wissenschaft"
+"Search articles…" = "Artikel suchen…"
+"Starter feeds" = "Starter-Feeds"
+"Subscribe in Feeds: {site}" = "In Feeds abonnieren: {site}"
+"Subscribe to a feed, or to the feed a website offers (turns Feeds on)" = "Einen Feed abonnieren oder den Feed, den eine Website anbietet (schaltet Feeds ein)"
+"Subscribe to a site or pick from tested starter feeds" = "Eine Website abonnieren oder aus geprüften Starter-Feeds wählen"
+"Subscribed to {feed}" = "{feed} abonniert"
+"Technology" = "Technologie"
+"The OPML file" = "Die OPML-Datei"
+"The article's link" = "Der Link des Artikels"
+"The feed address" = "Die Feed-Adresse"
+"The full article is on its website." = "Der vollständige Artikel steht auf seiner Website."
+"The newest articles kept for each feed; saved articles are kept on top of these" = "Die neuesten Artikel, die pro Feed behalten werden; gespeicherte Artikel kommen zusätzlich dazu"
+"The reader" = "Der Reader"
+"The reader shows a clean copy of the article, without scripts, frames or trackers" = "Der Reader zeigt eine aufgeräumte Kopie des Artikels, ohne Skripte, Frames oder Tracker"
+"The server answered HTTP {status}" = "Der Server antwortete mit HTTP {status}"
+"The server is busy (HTTP {status}); trying again later" = "Der Server ist ausgelastet (HTTP {status}); später wird es erneut versucht"
+"The server redirected from a secure address to an insecure one" = "Der Server hat von einer sicheren auf eine unsichere Adresse umgeleitet"
+"The server redirected to an address that is not valid" = "Der Server hat auf eine ungültige Adresse umgeleitet"
+"The server redirected too many times" = "Der Server hat zu oft umgeleitet"
+"The server redirected without saying where" = "Der Server hat umgeleitet, ohne das Ziel zu nennen"
+"This OPML file is too large" = "Diese OPML-Datei ist zu groß"
+"This OPML file lists no feeds" = "Diese OPML-Datei enthält keine Feeds"
+"This address is a web page without a feed; find its RSS or Atom link" = "Diese Adresse ist eine Webseite ohne Feed; such nach ihrem RSS- oder Atom-Link"
+"This download is too large" = "Dieser Download ist zu groß"
+"This feed already has 200 saved articles" = "Dieser Feed hat bereits 200 gespeicherte Artikel"
+"This feed could not be read" = "Dieser Feed konnte nicht gelesen werden"
+"This is not an OPML file" = "Das ist keine OPML-Datei"
+"This site offers several feeds:" = "Diese Website bietet mehrere Feeds an:"
+"Trying again at {time}" = "Neuer Versuch um {time}"
+"Turn on Feeds" = "Feeds einschalten"
+"Turn on Refresh in the background first" = "Schalte zuerst „Im Hintergrund aktualisieren“ ein"
+"Unread" = "Ungelesen"
+"Unread count" = "Ungelesen-Zähler"
+"World news" = "Weltnachrichten"
+"You already follow this feed" = "Du folgst diesem Feed bereits"
+"Your feeds" = "Deine Feeds"
+"Your news, together" = "Deine Nachrichten, gebündelt"
+"Your subscriptions with their folders and unread counts" = "Deine Abos mit ihren Ordnern und Ungelesen-Zählern"
+"Your web browser" = "Dein Webbrowser"
+"the feed's structure is broken" = "der Aufbau des Feeds ist fehlerhaft"
+"{count} new articles" = "{count} neue Artikel"
+"{count} of {max} feeds" = "{count} von {max} Feeds"
+"{feed} and {more} more feeds" = "{feed} und {more} weitere Feeds"
+"{n}d" = "{n} T"
+"Could not refresh {feeds}; trying again later" = "{feeds} konnte nicht aktualisiert werden; neuer Versuch später"
+"Feeds · Sidebar card" = "Feeds · Seitenleisten-Karte"
+"Card folder" = "Ordner der Karte"
+"The sidebar card lists the newest unread articles of this folder; empty lists every feed" = "Die Karte in der Seitenleiste zeigt die neuesten ungelesenen Artikel dieses Ordners; leer zeigt alle Feeds"

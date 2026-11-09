@@ -8325,7 +8325,6 @@
 
 "Add your Home Assistant token in Studio" = "Home Assistant erişim anahtarınızı Studio’ya ekleyin"
 
-"Add your favourite feeds in Studio" = "Sevdiğiniz akışları Studio’ya ekleyin"
 
 "Add your translation API key in Studio" = "Çeviri API anahtarınızı Studio’ya ekleyin"
 
@@ -8355,7 +8354,6 @@
 
 "Could not read this feed: {error}" = "Bu akış okunamadı: {error}"
 
-"Could not refresh this feed: {error}" = "Bu akış yenilenemedi: {error}"
 
 "Could not save or read feed history: {error}" = "Akış geçmişi kaydedilemedi veya okunamadı: {error}"
 
@@ -8377,11 +8375,9 @@
 
 "Favourite entities" = "Favori varlıklar"
 
-"Feed addresses" = "Akış adresleri"
 
 "Feeds" = "Akışlar"
 
-"Fetching headlines…" = "Başlıklar getiriliyor…"
 
 "Forget device" = "Aygıtı unut"
 
@@ -8409,7 +8405,6 @@
 
 "Keep a translation under 5,000 characters" = "Çeviriyi 5.000 karakterin altında tutun"
 
-"Keep up to 16 feed subscriptions" = "En fazla 16 akış aboneliği tutun"
 
 "LibreTranslate" = "LibreTranslate"
 
@@ -8423,9 +8418,7 @@
 
 "No entities to show" = "Gösterilecek varlık yok"
 
-"No headlines yet" = "Henüz başlık yok"
 
-"Only the selected feed refreshes while its panel is open" = "Yalnızca seçili akış paneli açıkken yenilenir"
 
 "Opening the keyring…" = "Anahtarlık açılıyor…"
 
@@ -8447,7 +8440,6 @@
 
 "Provider" = "Sağlayıcı"
 
-"RSS, Atom and JSON subscriptions with local read history" = "Yerel okuma geçmişiyle RSS, Atom ve JSON abonelikleri"
 
 "RSS, Atom or JSON feed address" = "RSS, Atom veya JSON akış adresi"
 
@@ -8457,13 +8449,11 @@
 
 "Reading your home…" = "Eviniz okunuyor…"
 
-"Refresh a feed and return its headlines and read history" = "Akışı yenile, başlıklarını ve okuma geçmişini döndür"
 
 "Refresh interval" = "Yenileme aralığı"
 
 "Refresh this feed before marking it read" = "Okundu olarak işaretlemeden önce bu akışı yenileyin"
 
-"Refreshing…" = "Yenileniyor…"
 
 "Reject" = "Reddet"
 
@@ -8487,7 +8477,6 @@
 
 "Send text to a paired, connected device" = "Eşleştirilmiş, bağlı bir aygıta metin gönder"
 
-"Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions" = "RSS, Atom veya JSON akış adreslerini boşlukla ayırın; en fazla 16 abonelik"
 
 "Separate up to 24 entity ids with spaces; empty shows the first available entities" = "En fazla 24 varlık kimliğini boşlukla ayırın; boş bırakılırsa ilk kullanılabilir varlıklar gösterilir"
 
@@ -8593,7 +8582,6 @@
 
 "Your home favourites, sensors and scenes" = "Ev favorileriniz, sensörler ve sahneler"
 
-"Your subscriptions, together" = "Abonelikleriniz bir arada"
 
 "Your translation appears here" = "Çeviriniz burada görünür"
 
@@ -9092,3 +9080,133 @@
 "{preset} components" = "{preset} bileşenleri"
 "Design" = "Tasarım"
 "Mandara's glass, or Material You: colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar" = "Mandara'nın camı ya da Material You: duvar kağıdınızdan renkler, iki satırlık büyük bir saat ve dalgalı kenarlı avatarlı tonlu bir kart"
+
+# ── Feeds reader ─────────────────────────────────────────────
+"A reader for RSS, Atom and JSON feeds" = "RSS, Atom ve JSON akışları için okuyucu"
+"A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view" = "RSS, Atom ve JSON akışları için okuyucu: tek bir zaman çizelgesi, klasörler, kaydedilen makaleler, arama ve temiz bir okuma görünümü"
+"A website or feed address" = "Bir web sitesi veya akış adresi"
+"Add a feed" = "Akış ekle"
+"Add a site and its feed is found for you. Order, folders and colours here are how the panel shows them." = "Bir site ekleyin, akışı sizin için bulunsun. Buradaki sıralama, klasörler ve renkler panelde göründüğü gibidir."
+"Add feeds" = "Akış ekle"
+"Add the subscriptions of an OPML file (from another feed reader)" = "Bir OPML dosyasındaki abonelikleri ekleyin (başka bir akış okuyucudan)"
+"All articles" = "Tüm makaleler"
+"All caught up" = "Hepsi okundu"
+"Also inside articles" = "Makalelerin içinde de"
+"Arabic news" = "Arapça haberler"
+"Articles per feed" = "Akış başına makale"
+"Articles you already have show at once; new ones follow." = "Zaten sahip olduğunuz makaleler hemen görünür; yenileri ardından gelir."
+"Background interval" = "Arka plan aralığı"
+"Badge" = "Rozet"
+"Check its address in Studio, or try again in a moment." = "Adresini Studio'da kontrol edin veya biraz sonra yeniden deneyin."
+"Could not download it: {error}" = "İndirilemedi: {error}"
+"Could not reach the server: {error}" = "Sunucuya ulaşılamadı: {error}"
+"Days an article stays after it has left its feed; saved articles stay until you remove them" = "Bir makalenin akışından çıktıktan sonra kaç gün kalacağı; kaydedilen makaleler siz kaldırana kadar kalır"
+"Design & fun" = "Tasarım ve eğlence"
+"Feed icons and thumbnails come with the feed. Pictures inside articles load from their websites only when you allow them" = "Akış simgeleri ve küçük resimleri akışla birlikte gelir. Makalelerin içindeki resimler yalnızca izin verdiğinizde web sitelerinden yüklenir"
+"Feeds older than this refresh when you open the panel; the Refresh button fetches all of them at once" = "Bundan eski akışlar paneli açtığınızda yenilenir; Yenile düğmesi hepsini bir kerede getirir"
+"Feeds · Bar" = "Akışlar · Çubuk"
+"Feeds · History" = "Akışlar · Geçmiş"
+"Feeds · Reading" = "Akışlar · Okuma"
+"Feeds · Refreshing" = "Akışlar · Yenileme"
+"Fetch the latest articles of every feed" = "Her akışın en son makalelerini getir"
+"Find the feeds a website offers" = "Bir web sitesinin sunduğu akışları bul"
+"Folder (empty for none)" = "Klasör (yoksa boş bırakın)"
+"Folder to put it in" = "Konulacağı klasör"
+"Follow sites you like: add their addresses or pick from tested starter feeds in Studio." = "Sevdiğiniz siteleri takip edin: adreslerini ekleyin veya Studio'daki denenmiş başlangıç akışlarından seçin."
+"How often the background refresh runs; feeds that failed wait longer before trying again" = "Arka planda yenilemenin ne sıklıkla çalışacağı; başarısız olan akışlar yeniden denemeden önce daha uzun bekler"
+"How the bar item shows unread articles" = "Çubuk öğesinin okunmamış makaleleri nasıl göstereceği"
+"Icons and thumbnails" = "Simgeler ve küçük resimler"
+"Import and export" = "İçe ve dışa aktarma"
+"Imported {added} of {total} feeds" = "{total} akıştan {added} tanesi içe aktarıldı"
+"Keep old articles for" = "Eski makaleleri şu kadar sakla"
+"Keep the unread count current while the panel is closed, at a low interval; off, nothing downloads until you open Feeds" = "Panel kapalıyken okunmamış sayısını düşük aralıkla güncel tut; kapalıysa Akışlar'ı açana kadar hiçbir şey indirilmez"
+"Linux & open source" = "Linux ve açık kaynak"
+"Mark all feeds read" = "Tüm akışları okundu işaretle"
+"Mark an article read" = "Bir makaleyi okundu işaretle"
+"Mark an article unread" = "Bir makaleyi okunmadı işaretle"
+"Mark every article of a feed read, or of every feed when no address is given" = "Bir akışın tüm makalelerini, adres verilmezse tüm akışların makalelerini okundu işaretle"
+"Mark every article of every feed read" = "Tüm akışların tüm makalelerini okundu işaretle"
+"Mark read when opened" = "Açıldığında okundu işaretle"
+"Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders." = "Aboneliklerinizi akış okuyucular arasında OPML dosyası olarak taşıyın. İçe aktarma, henüz takip etmediğiniz akışları klasörleriyle birlikte ekler."
+"Name (empty uses the feed's own)" = "Ad (boşsa akışın kendi adı kullanılır)"
+"No articles yet" = "Henüz makale yok"
+"No feed found at this address" = "Bu adreste akış bulunamadı"
+"No feeds yet" = "Henüz akış yok"
+"No feeds yet. Add one above or pick from the starter feeds below." = "Henüz akış yok. Yukarıdan bir tane ekleyin veya aşağıdaki başlangıç akışlarından seçin."
+"No unread articles here." = "Burada okunmamış makale yok."
+"Nothing here matches “{query}”" = "Burada “{query}” ile eşleşen bir şey yok"
+"Notify about new articles" = "Yeni makaleler için bildirim gönder"
+"One notification for what is new, at most every 30 minutes, and never while the panel is open" = "Yeni olanlar için tek bir bildirim, en fazla 30 dakikada bir ve panel açıkken asla"
+"Open articles in" = "Makaleleri şurada aç"
+"Opening an article marks it read; you can always mark it unread again" = "Makaleyi açmak onu okundu işaretler; istediğiniz zaman yeniden okunmadı yapabilirsiniz"
+"Opening the article…" = "Makale açılıyor…"
+"Opening your feeds…" = "Akışlarınız açılıyor…"
+"Or type a site's address in the launcher and choose Subscribe in Feeds." = "Veya başlatıcıya bir sitenin adresini yazıp Akışlar'a abone ol'u seçin."
+"Picture: {alt}" = "Resim: {alt}"
+"Pictures" = "Resimler"
+"Popular feeds by topic, each checked to download and read correctly on {date}." = "Konuya göre popüler akışlar; her biri {date} tarihinde doğru indirilip okunduğu için denenmiştir."
+"Programming" = "Programlama"
+"Read on the website" = "Web sitesinde oku"
+"Refresh a feed now and return its articles, or every feed when no address is given" = "Bir akışı şimdi yenile ve makalelerini döndür, adres verilmezse tüm akışları"
+"Refresh feeds" = "Akışları yenile"
+"Refresh in the background" = "Arka planda yenile"
+"Refresh to fetch the latest articles." = "En son makaleleri getirmek için yenileyin."
+"Refresh while open" = "Açıkken yenile"
+"Refreshing {done} of {total}…" = "{total} akıştan {done} tanesi yenileniyor…"
+"Remove a subscription (its saved history stays until you subscribe again)" = "Bir aboneliği kaldır (kaydedilen geçmişi yeniden abone olana kadar kalır)"
+"Remove an article from your saved ones" = "Bir makaleyi kaydedilenlerinizden kaldır"
+"Save an article to read it later" = "Bir makaleyi sonra okumak için kaydet"
+"Save articles to read them later; they stay even after they leave their feed." = "Makaleleri sonra okumak için kaydedin; akışlarından çıksalar bile kalırlar."
+"Save your subscriptions as an OPML file" = "Aboneliklerinizi OPML dosyası olarak kaydet"
+"Saved articles" = "Kaydedilen makaleler"
+"Saved articles of one feed or every feed, newest first, with their read and saved flags" = "Bir akışın veya tüm akışların kaydedilen makaleleri, en yeniler önce, okundu ve kaydedildi işaretleriyle"
+"Saved {count} feeds to {path}" = "{count} akış {path} konumuna kaydedildi"
+"Science" = "Bilim"
+"Search articles…" = "Makalelerde ara…"
+"Starter feeds" = "Başlangıç akışları"
+"Subscribe in Feeds: {site}" = "Akışlar'a abone ol: {site}"
+"Subscribe to a feed, or to the feed a website offers (turns Feeds on)" = "Bir akışa veya bir web sitesinin sunduğu akışa abone ol (Akışlar'ı açar)"
+"Subscribe to a site or pick from tested starter feeds" = "Bir siteye abone ol veya denenmiş başlangıç akışlarından seç"
+"Subscribed to {feed}" = "{feed} akışına abone olundu"
+"Technology" = "Teknoloji"
+"The OPML file" = "OPML dosyası"
+"The article's link" = "Makalenin bağlantısı"
+"The feed address" = "Akış adresi"
+"The full article is on its website." = "Makalenin tamamı web sitesinde."
+"The newest articles kept for each feed; saved articles are kept on top of these" = "Her akış için tutulan en yeni makaleler; kaydedilen makaleler bunlara ek olarak tutulur"
+"The reader" = "Okuyucu"
+"The reader shows a clean copy of the article, without scripts, frames or trackers" = "Okuyucu makalenin temiz bir kopyasını betik, çerçeve veya izleyici olmadan gösterir"
+"The server answered HTTP {status}" = "Sunucu HTTP {status} yanıtı verdi"
+"The server is busy (HTTP {status}); trying again later" = "Sunucu meşgul (HTTP {status}); daha sonra yeniden denenecek"
+"The server redirected from a secure address to an insecure one" = "Sunucu güvenli bir adresten güvensiz bir adrese yönlendirdi"
+"The server redirected to an address that is not valid" = "Sunucu geçerli olmayan bir adrese yönlendirdi"
+"The server redirected too many times" = "Sunucu çok fazla kez yönlendirdi"
+"The server redirected without saying where" = "Sunucu nereye olduğunu söylemeden yönlendirdi"
+"This OPML file is too large" = "Bu OPML dosyası çok büyük"
+"This OPML file lists no feeds" = "Bu OPML dosyasında akış yok"
+"This address is a web page without a feed; find its RSS or Atom link" = "Bu adres akışı olmayan bir web sayfası; RSS veya Atom bağlantısını bulun"
+"This download is too large" = "Bu indirme çok büyük"
+"This feed already has 200 saved articles" = "Bu akışın zaten 200 kaydedilmiş makalesi var"
+"This feed could not be read" = "Bu akış okunamadı"
+"This is not an OPML file" = "Bu bir OPML dosyası değil"
+"This site offers several feeds:" = "Bu site birkaç akış sunuyor:"
+"Trying again at {time}" = "{time} saatinde yeniden denenecek"
+"Turn on Feeds" = "Akışlar'ı aç"
+"Turn on Refresh in the background first" = "Önce Arka planda yenile'yi açın"
+"Unread" = "Okunmamış"
+"Unread count" = "Okunmamış sayısı"
+"World news" = "Dünya haberleri"
+"You already follow this feed" = "Bu akışı zaten takip ediyorsunuz"
+"Your feeds" = "Akışlarınız"
+"Your news, together" = "Haberleriniz, bir arada"
+"Your subscriptions with their folders and unread counts" = "Klasörleri ve okunmamış sayılarıyla aboneliklerini"
+"Your web browser" = "Web tarayıcınız"
+"the feed's structure is broken" = "akışın yapısı bozuk"
+"{count} new articles" = "{count} yeni makale"
+"{count} of {max} feeds" = "{max} akıştan {count} tanesi"
+"{feed} and {more} more feeds" = "{feed} ve {more} akış daha"
+"{n}d" = "{n} g"
+"Could not refresh {feeds}; trying again later" = "{feeds} yenilenemedi; daha sonra yeniden denenecek"
+"Feeds · Sidebar card" = "Akışlar · Kenar çubuğu kartı"
+"Card folder" = "Kart klasörü"
+"The sidebar card lists the newest unread articles of this folder; empty lists every feed" = "Kenar çubuğu kartı bu klasördeki en yeni okunmamış makaleleri gösterir; boş bırakılırsa tüm akışlar"

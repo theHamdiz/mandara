@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Coastal &amp; Harbour News</title>
+    <link>https://example.org/</link>
+    <description>Daily notes from the Corniche</description>
+    <image><url>https://example.org/icon.png</url><title>Coastal</title><link>https://example.org/</link></image>
+    <item>
+      <title><![CDATA[Fishing boats return <em>early</em>]]></title>
+      <link>https://example.org/boats</link>
+      <guid isPermaLink="false">boats-2026</guid>
+      <pubDate>Wed, 04 Nov 2026 10:00:00 +0200</pubDate>
+      <dc:creator>Nour Hassan</dc:creator>
+      <description><![CDATA[<p>The fleet came back <b>before noon</b>.</p><img src="https://example.org/pixel.gif" width="1" height="1">]]></description>
+      <content:encoded><![CDATA[<p>The fleet came back <b>before noon</b> as the wind rose.</p><p><img src="/img/boats.jpg" alt="Boats"></p><script>track()</script>]]></content:encoded>
+      <media:thumbnail url="https://example.org/thumbs/boats.jpg" width="150" height="100"/>
+    </item>
+    <item>
+      <title>Lighthouse &#8211; restored</title>
+      <link>/lighthouse</link>
+      <pubDate>Tue, 03 Nov 2026 08:30:00 GMT</pubDate>
+      <enclosure url="https://example.org/photos/lighthouse.jpg" type="image/jpeg" length="1234"/>
+      <description>Plain text summary without markup.</description>
+    </item>
+    <item>
+      <title>Duplicate link</title>
+      <link>https://example.org/boats</link>
+    </item>
+    <item>
+      <title>Unsafe link</title>
+      <link>file:///etc/passwd</link>
+    </item>
+    <item>
+      <guid isPermaLink="true">https://example.org/guid-only</guid>
+      <description>An item with only a permalink guid and no title at all</description>
+    </item>
+  </channel>
+</rss>

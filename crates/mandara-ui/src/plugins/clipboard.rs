@@ -18,7 +18,7 @@ mod actions;
 use actions::Actions;
 mod keys;
 mod tint;
-mod decode;
+use super::decode_queue as decode;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;

@@ -1,4 +1,5 @@
-//! One decoder per view, including page changes and close/reopen races.
+//! One decoder per view, including page changes and close/reopen races
+//! (clipboard previews and feed pictures).
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};

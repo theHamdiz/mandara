@@ -8325,7 +8325,6 @@
 
 "Add your Home Assistant token in Studio" = "Добавьте токен Home Assistant в Studio"
 
-"Add your favourite feeds in Studio" = "Добавьте любимые ленты в Studio"
 
 "Add your translation API key in Studio" = "Добавьте ключ API перевода в Studio"
 
@@ -8355,7 +8354,6 @@
 
 "Could not read this feed: {error}" = "Не удалось прочитать ленту: {error}"
 
-"Could not refresh this feed: {error}" = "Не удалось обновить ленту: {error}"
 
 "Could not save or read feed history: {error}" = "Не удалось сохранить или прочитать историю ленты: {error}"
 
@@ -8377,11 +8375,9 @@
 
 "Favourite entities" = "Избранные сущности"
 
-"Feed addresses" = "Адреса лент"
 
 "Feeds" = "Ленты"
 
-"Fetching headlines…" = "Загрузка заголовков…"
 
 "Forget device" = "Забыть устройство"
 
@@ -8409,7 +8405,6 @@
 
 "Keep a translation under 5,000 characters" = "Текст перевода должен быть короче 5 000 символов"
 
-"Keep up to 16 feed subscriptions" = "Используйте не более 16 подписок на ленты"
 
 "LibreTranslate" = "LibreTranslate"
 
@@ -8423,9 +8418,7 @@
 
 "No entities to show" = "Нет сущностей для отображения"
 
-"No headlines yet" = "Заголовков пока нет"
 
-"Only the selected feed refreshes while its panel is open" = "Пока панель открыта, обновляется только выбранная лента"
 
 "Opening the keyring…" = "Открытие связки ключей…"
 
@@ -8447,7 +8440,6 @@
 
 "Provider" = "Провайдер"
 
-"RSS, Atom and JSON subscriptions with local read history" = "Подписки RSS, Atom и JSON с локальной историей чтения"
 
 "RSS, Atom or JSON feed address" = "Адрес ленты RSS, Atom или JSON"
 
@@ -8457,13 +8449,11 @@
 
 "Reading your home…" = "Получение состояния дома…"
 
-"Refresh a feed and return its headlines and read history" = "Обновить ленту и вернуть заголовки с историей чтения"
 
 "Refresh interval" = "Интервал обновления"
 
 "Refresh this feed before marking it read" = "Обновите ленту, прежде чем отмечать прочитанной"
 
-"Refreshing…" = "Обновление…"
 
 "Reject" = "Отклонить"
 
@@ -8487,7 +8477,6 @@
 
 "Send text to a paired, connected device" = "Отправить текст сопряжённому подключённому устройству"
 
-"Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions" = "Разделяйте адреса RSS, Atom или JSON пробелами; до 16 подписок"
 
 "Separate up to 24 entity ids with spaces; empty shows the first available entities" = "Разделяйте до 24 идентификаторов сущностей пробелами; пустое поле показывает первые доступные сущности"
 
@@ -8593,7 +8582,6 @@
 
 "Your home favourites, sensors and scenes" = "Избранное, датчики и сцены вашего дома"
 
-"Your subscriptions, together" = "Ваши подписки вместе"
 
 "Your translation appears here" = "Здесь появится перевод"
 
@@ -9093,3 +9081,132 @@
 "{preset} components" = "Элементы: {preset}"
 "Design" = "Оформление"
 "Mandara's glass, or Material You: colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar" = "Стекло Mandara или Material You: цвета из ваших обоев, большие часы в две строки и тональная карточка с волнистым аватаром"
+# ── Feeds reader ─────────────────────────────────────────────
+"A reader for RSS, Atom and JSON feeds" = "Читалка лент RSS, Atom и JSON"
+"A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view" = "Читалка лент RSS, Atom и JSON: единая хроника, папки, сохранённые статьи, поиск и чистый режим чтения"
+"A website or feed address" = "Адрес сайта или ленты"
+"Add a feed" = "Добавить ленту"
+"Add a site and its feed is found for you. Order, folders and colours here are how the panel shows them." = "Добавьте сайт, и его лента будет найдена за вас. Порядок, папки и цвета здесь определяют, как их показывает панель."
+"Add feeds" = "Добавить ленты"
+"Add the subscriptions of an OPML file (from another feed reader)" = "Добавить подписки из файла OPML (из другой читалки лент)"
+"All articles" = "Все статьи"
+"All caught up" = "Всё прочитано"
+"Also inside articles" = "Также внутри статей"
+"Arabic news" = "Новости на арабском"
+"Articles per feed" = "Статей на ленту"
+"Articles you already have show at once; new ones follow." = "Уже загруженные статьи появляются сразу, новые подтягиваются следом."
+"Background interval" = "Интервал в фоне"
+"Badge" = "Значок"
+"Check its address in Studio, or try again in a moment." = "Проверьте адрес в Studio или попробуйте ещё раз чуть позже."
+"Could not download it: {error}" = "Не удалось скачать: {error}"
+"Could not reach the server: {error}" = "Не удалось подключиться к серверу: {error}"
+"Days an article stays after it has left its feed; saved articles stay until you remove them" = "Сколько дней статья остаётся после исчезновения из ленты; сохранённые статьи остаются, пока вы их не удалите"
+"Design & fun" = "Дизайн и развлечения"
+"Feed icons and thumbnails come with the feed. Pictures inside articles load from their websites only when you allow them" = "Значки и миниатюры лент приходят вместе с лентой. Картинки внутри статей загружаются с их сайтов, только если вы разрешите"
+"Feeds older than this refresh when you open the panel; the Refresh button fetches all of them at once" = "Ленты старше этого срока обновляются при открытии панели; кнопка «Обновить» загружает их все сразу"
+"Feeds · Bar" = "Ленты · Панель"
+"Feeds · History" = "Ленты · История"
+"Feeds · Reading" = "Ленты · Чтение"
+"Feeds · Refreshing" = "Ленты · Обновление"
+"Fetch the latest articles of every feed" = "Загрузить свежие статьи из каждой ленты"
+"Find the feeds a website offers" = "Найти ленты, которые предлагает сайт"
+"Folder (empty for none)" = "Папка (пусто, если без папки)"
+"Folder to put it in" = "Папка для неё"
+"Follow sites you like: add their addresses or pick from tested starter feeds in Studio." = "Подписывайтесь на любимые сайты: добавьте их адреса или выберите проверенные стартовые ленты в Studio."
+"How often the background refresh runs; feeds that failed wait longer before trying again" = "Как часто выполняется фоновое обновление; ленты с ошибкой ждут дольше перед новой попыткой"
+"How the bar item shows unread articles" = "Как элемент панели показывает непрочитанные статьи"
+"Icons and thumbnails" = "Значки и миниатюры"
+"Import and export" = "Импорт и экспорт"
+"Imported {added} of {total} feeds" = "Импортировано лент: {added} из {total}"
+"Keep old articles for" = "Хранить старые статьи"
+"Keep the unread count current while the panel is closed, at a low interval; off, nothing downloads until you open Feeds" = "Поддерживает актуальный счётчик непрочитанных при закрытой панели, с большим интервалом; если выключено, ничего не загружается, пока вы не откроете «Ленты»"
+"Linux & open source" = "Linux и открытое ПО"
+"Mark all feeds read" = "Отметить все ленты прочитанными"
+"Mark an article read" = "Отметить статью прочитанной"
+"Mark an article unread" = "Отметить статью непрочитанной"
+"Mark every article of a feed read, or of every feed when no address is given" = "Отметить прочитанными все статьи ленты или всех лент, если адрес не указан"
+"Mark every article of every feed read" = "Отметить прочитанными все статьи всех лент"
+"Mark read when opened" = "Отмечать прочитанным при открытии"
+"Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders." = "Переносите подписки между читалками лент файлом OPML. При импорте добавляются ещё не отслеживаемые ленты вместе с папками."
+"Name (empty uses the feed's own)" = "Название (если пусто, берётся название самой ленты)"
+"No articles yet" = "Статей пока нет"
+"No feed found at this address" = "По этому адресу лента не найдена"
+"No feeds yet" = "Лент пока нет"
+"No feeds yet. Add one above or pick from the starter feeds below." = "Лент пока нет. Добавьте ленту выше или выберите из стартовых лент ниже."
+"No unread articles here." = "Непрочитанных статей здесь нет."
+"Nothing here matches “{query}”" = "Ничего не найдено по запросу «{query}»"
+"Notify about new articles" = "Уведомлять о новых статьях"
+"One notification for what is new, at most every 30 minutes, and never while the panel is open" = "Одно уведомление о новом, не чаще раза в 30 минут и никогда при открытой панели"
+"Open articles in" = "Открывать статьи в"
+"Opening an article marks it read; you can always mark it unread again" = "Открытая статья отмечается прочитанной; её всегда можно снова отметить непрочитанной"
+"Opening the article…" = "Открываем статью…"
+"Opening your feeds…" = "Открываем ваши ленты…"
+"Or type a site's address in the launcher and choose Subscribe in Feeds." = "Или введите адрес сайта в лаунчере и выберите «Подписаться в «Лентах»»."
+"Picture: {alt}" = "Картинка: {alt}"
+"Pictures" = "Картинки"
+"Popular feeds by topic, each checked to download and read correctly on {date}." = "Популярные ленты по темам; каждая проверена {date}: загружается и читается без ошибок."
+"Programming" = "Программирование"
+"Read on the website" = "Читать на сайте"
+"Refresh a feed now and return its articles, or every feed when no address is given" = "Обновить ленту сейчас и вернуть её статьи, или все ленты, если адрес не указан"
+"Refresh feeds" = "Обновить ленты"
+"Refresh in the background" = "Обновлять в фоне"
+"Refresh to fetch the latest articles." = "Обновите, чтобы получить свежие статьи."
+"Refresh while open" = "Обновлять при открытии"
+"Refreshing {done} of {total}…" = "Обновление {done} из {total}…"
+"Remove a subscription (its saved history stays until you subscribe again)" = "Удалить подписку (её сохранённая история останется, пока вы не подпишетесь снова)"
+"Remove an article from your saved ones" = "Убрать статью из сохранённых"
+"Save an article to read it later" = "Сохранить статью, чтобы прочитать позже"
+"Save articles to read them later; they stay even after they leave their feed." = "Сохраняйте статьи, чтобы прочитать позже; они остаются, даже когда исчезнут из ленты."
+"Save your subscriptions as an OPML file" = "Сохранить подписки в файл OPML"
+"Saved articles" = "Сохранённые статьи"
+"Saved articles of one feed or every feed, newest first, with their read and saved flags" = "Сохранённые статьи одной ленты или всех лент, сначала новые, с отметками «прочитано» и «сохранено»"
+"Saved {count} feeds to {path}" = "Лент сохранено: {count} ({path})"
+"Science" = "Наука"
+"Search articles…" = "Поиск статей…"
+"Starter feeds" = "Стартовые ленты"
+"Subscribe in Feeds: {site}" = "Подписаться в «Лентах»: {site}"
+"Subscribe to a feed, or to the feed a website offers (turns Feeds on)" = "Подписаться на ленту или на ленту, которую предлагает сайт (включает «Ленты»)"
+"Subscribe to a site or pick from tested starter feeds" = "Подписаться на сайт или выбрать из проверенных стартовых лент"
+"Subscribed to {feed}" = "Вы подписались: {feed}"
+"Technology" = "Технологии"
+"The OPML file" = "Файл OPML"
+"The article's link" = "Ссылка на статью"
+"The feed address" = "Адрес ленты"
+"The full article is on its website." = "Полная статья находится на её сайте."
+"The newest articles kept for each feed; saved articles are kept on top of these" = "Сколько новейших статей хранится для каждой ленты; сохранённые статьи хранятся сверх этого"
+"The reader" = "Читалка"
+"The reader shows a clean copy of the article, without scripts, frames or trackers" = "В читалке показывается чистая копия статьи без скриптов, фреймов и трекеров"
+"The server answered HTTP {status}" = "Сервер ответил HTTP {status}"
+"The server is busy (HTTP {status}); trying again later" = "Сервер занят (HTTP {status}); попробуем позже"
+"The server redirected from a secure address to an insecure one" = "Сервер перенаправил с защищённого адреса на незащищённый"
+"The server redirected to an address that is not valid" = "Сервер перенаправил на недопустимый адрес"
+"The server redirected too many times" = "Сервер перенаправлял слишком много раз"
+"The server redirected without saying where" = "Сервер перенаправил, не указав куда"
+"This OPML file is too large" = "Этот файл OPML слишком большой"
+"This OPML file lists no feeds" = "В этом файле OPML нет лент"
+"This address is a web page without a feed; find its RSS or Atom link" = "Этот адрес — веб-страница без ленты; найдите ссылку на её RSS или Atom"
+"This download is too large" = "Эта загрузка слишком большая"
+"This feed already has 200 saved articles" = "В этой ленте уже 200 сохранённых статей"
+"This feed could not be read" = "Не удалось прочитать эту ленту"
+"This is not an OPML file" = "Это не файл OPML"
+"This site offers several feeds:" = "Этот сайт предлагает несколько лент:"
+"Trying again at {time}" = "Следующая попытка в {time}"
+"Turn on Feeds" = "Включить «Ленты»"
+"Turn on Refresh in the background first" = "Сначала включите «Обновлять в фоне»"
+"Unread" = "Непрочитанные"
+"Unread count" = "Счётчик непрочитанных"
+"World news" = "Мировые новости"
+"You already follow this feed" = "Вы уже подписаны на эту ленту"
+"Your feeds" = "Ваши ленты"
+"Your news, together" = "Ваши новости в одном месте"
+"Your subscriptions with their folders and unread counts" = "Ваши подписки с папками и счётчиками непрочитанных"
+"Your web browser" = "Ваш веб-браузер"
+"the feed's structure is broken" = "структура ленты нарушена"
+"{count} new articles" = "Новых статей: {count}"
+"{count} of {max} feeds" = "Лент: {count} из {max}"
+"{feed} and {more} more feeds" = "{feed} и ещё лент: {more}"
+"{n}d" = "{n} д"
+"Could not refresh {feeds}; trying again later" = "Не удалось обновить: {feeds}; повторим позже"
+"Feeds · Sidebar card" = "Ленты · Карточка боковой панели"
+"Card folder" = "Папка карточки"
+"The sidebar card lists the newest unread articles of this folder; empty lists every feed" = "Карточка боковой панели показывает новые непрочитанные статьи этой папки; пусто — все ленты"

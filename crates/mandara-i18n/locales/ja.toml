@@ -8326,7 +8326,6 @@
 
 "Add your Home Assistant token in Studio" = "Studio で Home Assistant のトークンを追加してください"
 
-"Add your favourite feeds in Studio" = "Studio でお気に入りのフィードを追加してください"
 
 "Add your translation API key in Studio" = "Studio で翻訳 API キーを追加してください"
 
@@ -8356,7 +8355,6 @@
 
 "Could not read this feed: {error}" = "このフィードを読み込めませんでした: {error}"
 
-"Could not refresh this feed: {error}" = "このフィードを更新できませんでした: {error}"
 
 "Could not save or read feed history: {error}" = "フィード履歴を保存または読み込めませんでした: {error}"
 
@@ -8378,11 +8376,9 @@
 
 "Favourite entities" = "お気に入りのエンティティ"
 
-"Feed addresses" = "フィードのアドレス"
 
 "Feeds" = "フィード"
 
-"Fetching headlines…" = "見出しを取得中…"
 
 "Forget device" = "デバイスを削除"
 
@@ -8410,7 +8406,6 @@
 
 "Keep a translation under 5,000 characters" = "翻訳は 5,000 文字未満にしてください"
 
-"Keep up to 16 feed subscriptions" = "フィードの購読は最大 16 件にしてください"
 
 "LibreTranslate" = "LibreTranslate"
 
@@ -8424,9 +8419,7 @@
 
 "No entities to show" = "表示するエンティティがありません"
 
-"No headlines yet" = "見出しはまだありません"
 
-"Only the selected feed refreshes while its panel is open" = "パネルが開いている間、選択したフィードだけを更新します"
 
 "Opening the keyring…" = "キーリングを開いています…"
 
@@ -8448,7 +8441,6 @@
 
 "Provider" = "プロバイダー"
 
-"RSS, Atom and JSON subscriptions with local read history" = "ローカルの既読履歴を備えた RSS、Atom、JSON の購読"
 
 "RSS, Atom or JSON feed address" = "RSS、Atom、JSON フィードのアドレス"
 
@@ -8458,13 +8450,11 @@
 
 "Reading your home…" = "自宅の状態を読み込み中…"
 
-"Refresh a feed and return its headlines and read history" = "フィードを更新し、見出しと既読履歴を返す"
 
 "Refresh interval" = "更新間隔"
 
 "Refresh this feed before marking it read" = "既読にする前にこのフィードを更新してください"
 
-"Refreshing…" = "更新中…"
 
 "Reject" = "拒否"
 
@@ -8488,7 +8478,6 @@
 
 "Send text to a paired, connected device" = "ペアリング済みで接続中のデバイスにテキストを送信"
 
-"Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions" = "RSS、Atom、JSON のアドレスを空白で区切ってください。最大 16 件です"
 
 "Separate up to 24 entity ids with spaces; empty shows the first available entities" = "エンティティ ID を空白で区切って最大 24 個指定します。空欄なら先頭の利用可能なものを表示します"
 
@@ -8594,7 +8583,6 @@
 
 "Your home favourites, sensors and scenes" = "自宅のお気に入り、センサー、シーン"
 
-"Your subscriptions, together" = "購読をひとまとめに"
 
 "Your translation appears here" = "翻訳結果がここに表示されます"
 
@@ -9094,3 +9082,133 @@
 "{preset} components" = "{preset} のコンポーネント"
 "Design" = "デザイン"
 "Mandara's glass, or Material You: colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar" = "Mandara のガラス、または Material You: 壁紙から作る色、2 行の大きな時計、波形の縁のアバターを載せたトーナルカード"
+
+# ── Feeds reader ─────────────────────────────────────────────
+"A reader for RSS, Atom and JSON feeds" = "RSS、Atom、JSON フィードのリーダー"
+"A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view" = "RSS、Atom、JSON フィードのリーダー：ひとつのタイムライン、フォルダー、保存した記事、検索、すっきりしたリーダー表示"
+"A website or feed address" = "サイトまたはフィードのアドレス"
+"Add a feed" = "フィードを追加"
+"Add a site and its feed is found for you. Order, folders and colours here are how the panel shows them." = "サイトを追加すると、そのフィードが自動で見つかります。ここでの順序、フォルダー、色がパネルでの表示になります。"
+"Add feeds" = "フィードを追加"
+"Add the subscriptions of an OPML file (from another feed reader)" = "OPML ファイルの購読を追加（他のフィードリーダーから）"
+"All articles" = "すべての記事"
+"All caught up" = "すべて読みました"
+"Also inside articles" = "記事内にも表示"
+"Arabic news" = "アラビア語ニュース"
+"Articles per feed" = "フィードごとの記事数"
+"Articles you already have show at once; new ones follow." = "すでにある記事はすぐに表示され、新しい記事が続きます。"
+"Background interval" = "バックグラウンドの間隔"
+"Badge" = "バッジ"
+"Check its address in Studio, or try again in a moment." = "Studio でアドレスを確認するか、しばらくしてからもう一度お試しください。"
+"Could not download it: {error}" = "ダウンロードできませんでした：{error}"
+"Could not reach the server: {error}" = "サーバーに接続できませんでした：{error}"
+"Days an article stays after it has left its feed; saved articles stay until you remove them" = "記事がフィードから消えたあとも残す日数。保存した記事は削除するまで残ります"
+"Design & fun" = "デザインと遊び"
+"Feed icons and thumbnails come with the feed. Pictures inside articles load from their websites only when you allow them" = "フィードのアイコンとサムネイルはフィードに含まれています。記事内の画像は、許可した場合のみ各サイトから読み込まれます"
+"Feeds older than this refresh when you open the panel; the Refresh button fetches all of them at once" = "この期間より古いフィードは、パネルを開いたときに更新されます。「更新」ボタンはすべてを一度に取得します"
+"Feeds · Bar" = "フィード · バー"
+"Feeds · History" = "フィード · 履歴"
+"Feeds · Reading" = "フィード · 閲読"
+"Feeds · Refreshing" = "フィード · 更新"
+"Fetch the latest articles of every feed" = "すべてのフィードの最新記事を取得"
+"Find the feeds a website offers" = "サイトが提供するフィードを探す"
+"Folder (empty for none)" = "フォルダー（空欄でなし）"
+"Folder to put it in" = "入れるフォルダー"
+"Follow sites you like: add their addresses or pick from tested starter feeds in Studio." = "お気に入りのサイトをフォローしましょう。アドレスを追加するか、Studio で動作確認済みのスターターフィードから選べます。"
+"How often the background refresh runs; feeds that failed wait longer before trying again" = "バックグラウンド更新を実行する頻度。失敗したフィードは、次の試行まで長めに待ちます"
+"How the bar item shows unread articles" = "バーの項目が未読記事を表示する方法"
+"Icons and thumbnails" = "アイコンとサムネイル"
+"Import and export" = "インポートとエクスポート"
+"Imported {added} of {total} feeds" = "{total} 件中 {added} 件のフィードをインポートしました"
+"Keep old articles for" = "古い記事を残す期間"
+"Keep the unread count current while the panel is closed, at a low interval; off, nothing downloads until you open Feeds" = "パネルを閉じている間も、低い頻度で未読数を最新に保ちます。オフの場合、フィードを開くまで何もダウンロードしません"
+"Linux & open source" = "Linux とオープンソース"
+"Mark all feeds read" = "すべてのフィードを既読にする"
+"Mark an article read" = "記事を既読にする"
+"Mark an article unread" = "記事を未読にする"
+"Mark every article of a feed read, or of every feed when no address is given" = "フィードのすべての記事を既読にします。アドレスを指定しない場合はすべてのフィードが対象です"
+"Mark every article of every feed read" = "すべてのフィードのすべての記事を既読にする"
+"Mark read when opened" = "開いたら既読にする"
+"Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders." = "OPML ファイルでフィードリーダー間の購読を移行します。インポートでは、まだフォローしていないフィードがフォルダーごと追加されます。"
+"Name (empty uses the feed's own)" = "名前（空欄ならフィード自身の名前）"
+"No articles yet" = "記事はまだありません"
+"No feed found at this address" = "このアドレスにフィードが見つかりません"
+"No feeds yet" = "フィードはまだありません"
+"No feeds yet. Add one above or pick from the starter feeds below." = "フィードはまだありません。上で追加するか、下のスターターフィードから選んでください。"
+"No unread articles here." = "ここに未読の記事はありません。"
+"Nothing here matches “{query}”" = "「{query}」に一致するものはありません"
+"Notify about new articles" = "新しい記事を通知"
+"One notification for what is new, at most every 30 minutes, and never while the panel is open" = "新着をまとめて 1 件の通知で、最大 30 分に 1 回、パネルを開いている間は通知しません"
+"Open articles in" = "記事を開く場所"
+"Opening an article marks it read; you can always mark it unread again" = "記事を開くと既読になります。いつでも未読に戻せます"
+"Opening the article…" = "記事を開いています…"
+"Opening your feeds…" = "フィードを開いています…"
+"Or type a site's address in the launcher and choose Subscribe in Feeds." = "または、ランチャーにサイトのアドレスを入力して「フィードで購読」を選びます。"
+"Picture: {alt}" = "画像：{alt}"
+"Pictures" = "画像"
+"Popular feeds by topic, each checked to download and read correctly on {date}." = "トピック別の人気フィード。いずれも {date} にダウンロードと閲読が正常にできることを確認済みです。"
+"Programming" = "プログラミング"
+"Read on the website" = "ウェブサイトで読む"
+"Refresh a feed now and return its articles, or every feed when no address is given" = "フィードを今すぐ更新して記事を返します。アドレスを指定しない場合はすべてのフィードが対象です"
+"Refresh feeds" = "フィードを更新"
+"Refresh in the background" = "バックグラウンドで更新"
+"Refresh to fetch the latest articles." = "更新して最新の記事を取得します。"
+"Refresh while open" = "開いている間に更新"
+"Refreshing {done} of {total}…" = "{total} 件中 {done} 件を更新中…"
+"Remove a subscription (its saved history stays until you subscribe again)" = "購読を解除（保存した履歴は、再び購読するまで残ります）"
+"Remove an article from your saved ones" = "保存した記事から記事を削除"
+"Save an article to read it later" = "記事を保存して後で読む"
+"Save articles to read them later; they stay even after they leave their feed." = "記事を保存して後で読みます。フィードから消えても残ります。"
+"Save your subscriptions as an OPML file" = "購読を OPML ファイルとして保存"
+"Saved articles" = "保存した記事"
+"Saved articles of one feed or every feed, newest first, with their read and saved flags" = "1 つまたはすべてのフィードの保存した記事を新しい順に、既読・保存のフラグ付きで表示"
+"Saved {count} feeds to {path}" = "{count} 件のフィードを {path} に保存しました"
+"Science" = "科学"
+"Search articles…" = "記事を検索…"
+"Starter feeds" = "スターターフィード"
+"Subscribe in Feeds: {site}" = "フィードで購読：{site}"
+"Subscribe to a feed, or to the feed a website offers (turns Feeds on)" = "フィード、またはサイトが提供するフィードを購読します（フィードをオンにします）"
+"Subscribe to a site or pick from tested starter feeds" = "サイトを購読するか、動作確認済みのスターターフィードから選ぶ"
+"Subscribed to {feed}" = "{feed} を購読しました"
+"Technology" = "テクノロジー"
+"The OPML file" = "OPML ファイル"
+"The article's link" = "記事のリンク"
+"The feed address" = "フィードのアドレス"
+"The full article is on its website." = "記事の全文はウェブサイトにあります。"
+"The newest articles kept for each feed; saved articles are kept on top of these" = "各フィードで保持する最新記事の数。保存した記事はこれとは別に保持されます"
+"The reader" = "リーダー"
+"The reader shows a clean copy of the article, without scripts, frames or trackers" = "リーダーでは、スクリプト、フレーム、トラッカーのないすっきりした記事のコピーを表示します"
+"The server answered HTTP {status}" = "サーバーが HTTP {status} を返しました"
+"The server is busy (HTTP {status}); trying again later" = "サーバーが混み合っています（HTTP {status}）。後でもう一度試します"
+"The server redirected from a secure address to an insecure one" = "サーバーが安全なアドレスから安全でないアドレスへリダイレクトしました"
+"The server redirected to an address that is not valid" = "サーバーが無効なアドレスへリダイレクトしました"
+"The server redirected too many times" = "サーバーのリダイレクトが多すぎます"
+"The server redirected without saying where" = "サーバーが転送先を示さずにリダイレクトしました"
+"This OPML file is too large" = "この OPML ファイルは大きすぎます"
+"This OPML file lists no feeds" = "この OPML ファイルにフィードがありません"
+"This address is a web page without a feed; find its RSS or Atom link" = "このアドレスはフィードのないウェブページです。RSS または Atom のリンクを探してください"
+"This download is too large" = "このダウンロードは大きすぎます"
+"This feed already has 200 saved articles" = "このフィードにはすでに 200 件の保存済み記事があります"
+"This feed could not be read" = "このフィードを読み取れませんでした"
+"This is not an OPML file" = "これは OPML ファイルではありません"
+"This site offers several feeds:" = "このサイトは複数のフィードを提供しています："
+"Trying again at {time}" = "{time} に再試行します"
+"Turn on Feeds" = "フィードをオンにする"
+"Turn on Refresh in the background first" = "先にバックグラウンド更新をオンにしてください"
+"Unread" = "未読"
+"Unread count" = "未読数"
+"World news" = "世界のニュース"
+"You already follow this feed" = "すでにこのフィードをフォローしています"
+"Your feeds" = "あなたのフィード"
+"Your news, together" = "ニュースをひとつに"
+"Your subscriptions with their folders and unread counts" = "フォルダーと未読数付きの購読"
+"Your web browser" = "あなたのウェブブラウザー"
+"the feed's structure is broken" = "フィードの構造が壊れています"
+"{count} new articles" = "新着記事 {count} 件"
+"{count} of {max} feeds" = "{max} 件中 {count} 件のフィード"
+"{feed} and {more} more feeds" = "{feed} ほか {more} 件のフィード"
+"{n}d" = "{n}日前"
+"Could not refresh {feeds}; trying again later" = "{feeds} を更新できませんでした。後でもう一度試します"
+"Feeds · Sidebar card" = "フィード · サイドバーカード"
+"Card folder" = "カードのフォルダー"
+"The sidebar card lists the newest unread articles of this folder; empty lists every feed" = "サイドバーカードにこのフォルダーの未読の最新記事を表示します。空にするとすべてのフィード"

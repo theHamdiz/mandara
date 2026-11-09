@@ -115,7 +115,6 @@ fn sync(cx: &mut App) {
         return;
     }
     for (id, stop) in [
-        (super::feeds::ID, super::feeds::stop as fn()),
         (super::prayer::ID, super::prayer::clear_settings as fn()),
         (super::jannah::ID, super::jannah::clear_settings as fn()),
         (super::hadith::ID, super::hadith::clear_settings as fn()),
@@ -124,6 +123,9 @@ fn sync(cx: &mut App) {
         (super::phone_connect::ID, super::phone_connect::stop as fn()),
     ] {
         if !is_on(id, cx) { stop(); }
+    }
+    if !is_on(super::feeds::ID, cx) {
+        super::feeds::stop(cx);
     }
     if !is_on(super::tray::ID, cx) {
         super::tray::stop(cx);

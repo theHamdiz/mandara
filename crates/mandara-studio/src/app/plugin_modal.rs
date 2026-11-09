@@ -603,6 +603,7 @@ impl StudioView {
     pub fn close_plugin(&mut self, cx: &mut Context<Self>) {
         super::plugin_credentials::clear_input(cx);
         self.credentials.close();
+        self.feeds.close();
         self.modal.open = false;
         self.modal.confirm_uninstall = false;
         self.modal.confirm_remove = false;
@@ -1178,6 +1179,10 @@ impl StudioView {
         } else { Ok(None) };
         if let Ok(Some(key)) = key && let Some(editor) = self.plugin_key_editor(key, self.modal.open, p, cx) {
             body = div().row().flex_col().gap(px(SPACE_22_PX)).child(body).child(editor).into_any_element();
+        }
+        // Feeds: the subscriptions come first, then how they are read.
+        if m.id == mandara_ui::plugins::feeds::ID {
+            body = div().row().flex_col().gap(px(SPACE_22_PX)).child(self.feeds_editor(cfg, p, cx)).child(body).into_any_element();
         }
         div()
             .p(px(BODY_PAD))
