@@ -118,16 +118,27 @@ pub struct Step {
     pub args: Vec<String>,
     /// Extra environment (on top of the fixed `PATH`, `LANG=C`…).
     pub env: &'static [(&'static str, &'static str)],
+    /// NixOS flakes: the Git work tree root may read for this one command
+    /// although another user owns it (a `safe.directory` entry in a Git
+    /// configuration given to this program only; see
+    /// [`super::helper::GitTrust`]).
+    pub git_safe_dir: Option<std::path::PathBuf>,
 }
 
 impl Step {
     pub fn new(kind: StepKind, program: &'static str, args: &[&str]) -> Step {
-        Step { kind, program, exe: None, args: args.iter().map(|a| a.to_string()).collect(), env: &[] }
+        Step { kind, program, exe: None, args: args.iter().map(|a| a.to_string()).collect(), env: &[], git_safe_dir: None }
     }
 
     /// With owned arguments (paths the root side found itself).
     pub fn owned(kind: StepKind, program: &'static str, args: Vec<String>) -> Step {
-        Step { kind, program, exe: None, args, env: &[] }
+        Step { kind, program, exe: None, args, env: &[], git_safe_dir: None }
+    }
+
+    /// Lets root's Git read the work tree `dir` for this step only.
+    pub fn trust_git(mut self, dir: Option<std::path::PathBuf>) -> Step {
+        self.git_safe_dir = dir;
+        self
     }
 
     pub fn env(mut self, env: &'static [(&'static str, &'static str)]) -> Step {

@@ -143,6 +143,29 @@ fn update_plans_a_user_flake_build_and_switch() {
 }
 
 #[test]
+fn root_trusts_only_the_flakes_own_git_work_tree() {
+    let (dir, paths) = tree();
+    let steps = plan(&NixAction::Rebuild(RebuildMode::Switch), &paths).unwrap();
+    assert!(steps.iter().all(|s| s.git_safe_dir.is_none()), "not a Git repository: nothing to trust");
+    // The flake lives in a subfolder of a repository you own (`/etc/nixos`
+    // linking into it, or the repository itself): Nix opens the
+    // repository's top, so that is what root's Git must accept.
+    std::fs::create_dir(dir.path().join("etc/.git")).unwrap();
+    let work_tree = std::fs::canonicalize(dir.path().join("etc")).unwrap();
+    let steps = plan(&NixAction::Update(RebuildMode::Switch), &paths).unwrap();
+    assert_eq!(steps.iter().map(|s| (s.kind, s.git_safe_dir.clone())).collect::<Vec<_>>(), [(StepKind::Build, Some(work_tree.clone())), (StepKind::Activate, Some(work_tree.clone()))]);
+    // A `.git` file (a worktree or submodule) counts as Nix counts it.
+    std::fs::remove_dir(dir.path().join("etc/.git")).unwrap();
+    std::fs::write(paths.etc_nixos.join(".git"), "gitdir: /elsewhere\n").unwrap();
+    let steps = plan(&NixAction::Rebuild(RebuildMode::Build), &paths).unwrap();
+    assert_eq!(steps[0].git_safe_dir, Some(std::fs::canonicalize(&paths.etc_nixos).unwrap()));
+    // Nothing else root runs gets it.
+    for action in [NixAction::Rollback, NixAction::Clean(Cleanup::KeepLatest(2)), NixAction::SwitchTo(42)] {
+        assert!(plan(&action, &paths).unwrap().iter().all(|s| s.git_safe_dir.is_none()), "{action:?}");
+    }
+}
+
+#[test]
 fn a_bad_host_name_is_refused() {
     let (_dir, paths) = tree();
     std::fs::write(&paths.hostname, "evil\"; rm -rf /\n").unwrap();
