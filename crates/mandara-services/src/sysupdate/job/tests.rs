@@ -183,6 +183,53 @@ fn a_refused_cancel_doesnt_stop_flatpak_afterwards() {
 }
 
 #[test]
+fn a_cancel_the_root_step_never_answers_doesnt_reach_flatpak() {
+    // The helper finishes its root part just as the cancel arrives, so it
+    // never reads or answers it. The request was for that step; Flatpak
+    // must still run.
+    static ASKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    struct GoneBeforeAnswering;
+    impl Launcher for GoneBeforeAnswering {
+        fn prepare(&self) -> Result<PathBuf, Failure> {
+            Ok(PathBuf::from("/usr/local/lib/mandara/mandara-admin"))
+        }
+        fn root(&self, _: &Path, _: &[String]) -> std::io::Result<RootProc> {
+            let (out_r, mut out_w) = std::io::pipe()?;
+            let (_in_r, in_w) = std::io::pipe()?;
+            let (err_r, err_w) = std::io::pipe()?;
+            let handle = std::thread::spawn(move || {
+                let mut say = |m: Mark| writeln!(out_w, "{}", m.line()).is_ok();
+                say(Mark::Begin { backend: "pacman".into(), steps: 1 });
+                say(Mark::Step { index: 1, kind: StepKind::Download });
+                while !ASKED.load(std::sync::atomic::Ordering::SeqCst) {
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+                say(Mark::Exit { index: 1, code: Some(0) });
+                say(Mark::Done(Outcome::Ok));
+                drop(err_w);
+                Some(0)
+            });
+            Ok(RootProc { stdout: Box::new(out_r), stderr: Box::new(err_r), stdin: Box::new(in_w), wait: Box::new(move || Ok(handle.join().ok().flatten())) })
+        }
+        fn has_flatpak(&self) -> bool {
+            true
+        }
+        fn user(&self) -> &dyn Runner {
+            static R: std::sync::OnceLock<Replay> = std::sync::OnceLock::new();
+            R.get_or_init(|| Replay::new(BackendId::Pacman))
+        }
+    }
+    let job = start(Request::System { flatpak: true }, Arc::new(GoneBeforeAnswering), quiet());
+    wait_for(&job, |s| s.step_kind == Some(StepKind::Download));
+    assert!(job.cancel());
+    ASKED.store(true, std::sync::atomic::Ordering::SeqCst);
+    let f = wait(&job);
+    assert_eq!(f.outcome, JobOutcome::Done { nothing_to_do: false }, "Flatpak ran: the cancel was the root step's");
+    assert_eq!(f.changed, 3, "the recorded Flatpak update");
+    job.with(|s| assert!(!s.cancel_requested, "not left stopping"));
+}
+
+#[test]
 fn flatpak_only_needs_no_helper() {
     struct NoRoot;
     impl Launcher for NoRoot {

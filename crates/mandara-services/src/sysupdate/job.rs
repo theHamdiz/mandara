@@ -102,6 +102,10 @@ pub struct JobState {
     pub steps: u32,
     pub step_kind: Option<StepKind>,
     pub cancel_requested: bool,
+    /// A rootless step (Flatpak) runs now: a cancel goes to it, not to
+    /// the root helper. Set and read under this lock, so a cancel and a
+    /// step change never cross.
+    in_user_step: bool,
     /// The helper answered a cancel request with "not now".
     pub cancel_refused: bool,
     pub log: VecDeque<String>,
@@ -123,6 +127,7 @@ impl JobState {
             steps: 0,
             step_kind: None,
             cancel_requested: false,
+            in_user_step: false,
             cancel_refused: false,
             log: VecDeque::with_capacity(LOG_LINES),
             dropped: 0,
@@ -189,21 +194,18 @@ impl Job {
     /// Asks to stop. Honoured only while a cancellable step runs (the
     /// helper decides for the root part).
     pub fn cancel(&self) -> bool {
-        let ok = {
-            let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
-            let ok = s.cancellable();
-            if ok {
-                s.cancel_requested = true;
-                s.cancel_refused = false;
-                s.revision += 1;
-            }
-            ok
-        };
+        // The request goes to whichever part owns the running step, decided
+        // under the state lock that step changes also take: a root step
+        // finishing at this moment can't hand it on to Flatpak.
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let ok = s.cancellable();
         if ok {
-            // Before the helper hears it, so its refusal (which clears
-            // this) always comes after.
-            self.user_cancel.request();
-            if let Some(tx) = self.cancel.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            s.cancel_requested = true;
+            s.cancel_refused = false;
+            s.revision += 1;
+            if s.in_user_step {
+                self.user_cancel.request();
+            } else if let Some(tx) = self.cancel.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
                 let _ = tx.send(());
             }
         }
@@ -463,14 +465,21 @@ impl Worker<'_> {
     /// Runs a rootless step through the launcher's user runner.
     fn user_step(&mut self, launcher: &dyn Launcher, step: &Step) -> Result<(), JobOutcome> {
         let kind = step.kind;
+        let cancel = self.job.user_cancel.clone();
         self.update(|s| {
             s.step += 1;
             s.steps = s.steps.max(s.step);
             s.step_kind = Some(kind);
             s.tracker.begin_step(kind);
             s.cancel_refused = false;
+            // A request the root helper never answered was for its step,
+            // not this one.
+            if !s.in_user_step {
+                s.in_user_step = true;
+                s.cancel_requested = false;
+                cancel.clear();
+            }
         });
-        let cancel = self.job.user_cancel.clone();
         let mut tail: VecDeque<String> = VecDeque::with_capacity(16);
         let job = self.job;
         let changed = self.changed;
