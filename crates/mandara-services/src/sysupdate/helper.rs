@@ -85,6 +85,11 @@ impl CancelSignal {
         self.requested.store(true, Ordering::SeqCst);
     }
 
+    /// Drops a request (one the helper refused).
+    pub fn clear(&self) {
+        self.requested.store(false, Ordering::SeqCst);
+    }
+
     /// Accepts a request only while a cancellable step runs.
     pub fn try_request(&self) -> bool {
         let ok = self.cancellable.load(Ordering::SeqCst);
@@ -143,7 +148,7 @@ impl Runner for SystemRunner {
             .env("PATH", super::SAFE_PATH)
             .env("LANG", "C")
             .env("LC_ALL", "C")
-            .env("HOME", "/root")
+            .env("HOME", ROOT_HOME)
             .env("TERM", "dumb")
             .envs(step.env.iter().copied())
             .stdin(Stdio::null())
@@ -152,9 +157,59 @@ impl Runner for SystemRunner {
             .current_dir("/")
             // Its own process group, so a cancel reaches its children too.
             .process_group(0);
+        // Kept until the program exits.
+        let trust = step.git_safe_dir.as_deref().map(|dir| GitTrust::new(dir, Path::new(ROOT_HOME))).transpose()?;
+        if let Some(trust) = &trust {
+            cmd.env("XDG_CONFIG_HOME", trust.config_home());
+        }
         let mut child = cmd.spawn()?;
         pump(&mut child, line, cancel, step.kind.cancellable())
     }
+}
+
+/// Root's home, the steps' `HOME`.
+const ROOT_HOME: &str = "/root";
+
+/// A private Git configuration for one command: root's own XDG one plus a
+/// `safe.directory` entry for one work tree, given through
+/// `XDG_CONFIG_HOME`. Git and libgit2 (which Nix 2.20 and later open
+/// repositories with) both read it; `GIT_CONFIG_COUNT` would reach only
+/// the `git` command. Root's `~/.gitconfig` is still read and nothing on
+/// the system changes; Nix's own configuration (`nix/`) stays root's. The
+/// folder (root's, mode 0700) is removed when this is dropped.
+pub struct GitTrust {
+    dir: tempfile::TempDir,
+}
+
+impl GitTrust {
+    pub fn new(work_tree: &Path, home: &Path) -> std::io::Result<GitTrust> {
+        let config = git_trust_config(work_tree, &home.join(".config/git/config"))?;
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = tempfile::Builder::new().prefix("mandara-git-").permissions(std::fs::Permissions::from_mode(0o700)).tempdir()?;
+        std::fs::create_dir(dir.path().join("git"))?;
+        std::fs::write(dir.path().join("git/config"), config)?;
+        std::os::unix::fs::symlink(home.join(".config/nix"), dir.path().join("nix"))?;
+        Ok(GitTrust { dir })
+    }
+
+    /// The `XDG_CONFIG_HOME` to run with.
+    pub fn config_home(&self) -> &Path {
+        self.dir.path()
+    }
+}
+
+/// The configuration [`GitTrust`] writes: `root_git` (root's usual XDG Git
+/// configuration, skipped when missing) first, so an empty
+/// `safe.directory` there can't reset the entry for `work_tree` after it.
+pub fn git_trust_config(work_tree: &Path, root_git: &Path) -> std::io::Result<String> {
+    fn quoted(p: &Path) -> std::io::Result<String> {
+        let s = p
+            .to_str()
+            .filter(|s| !s.chars().any(char::is_control))
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("{} can't be named in a Git configuration", p.display())))?;
+        Ok(format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")))
+    }
+    Ok(format!("[include]\n\tpath = {}\n[safe]\n\tdirectory = {}\n", quoted(root_git)?, quoted(work_tree)?))
 }
 
 /// Reads `child`'s stdout and stderr line by line (one bounded line buffer
@@ -238,22 +293,36 @@ pub fn read_lines(pipe: impl std::io::Read, each: &mut dyn FnMut(&str) -> bool) 
 
 /// Writes lines to the caller, ignoring a closed pipe (the shell went
 /// away: the update carries on).
+///
+/// Each line goes out with its newline in one `write_all`, so the stdin
+/// watcher's cancel answer (written through the same lock) lands between
+/// lines, never inside one.
 pub struct Out<'a> {
     w: &'a mut (dyn Write + Send),
+    /// The line being written (reused).
+    buf: Vec<u8>,
 }
 
 impl<'a> Out<'a> {
     pub fn new(w: &'a mut (dyn Write + Send)) -> Self {
-        Out { w }
+        Out { w, buf: Vec::new() }
     }
 
     pub fn line(&mut self, s: &str) {
-        let _ = writeln!(self.w, "{}", protocol::clean_line(s));
-        let _ = self.w.flush();
+        self.buf.clear();
+        self.buf.extend_from_slice(protocol::clean_line(s).as_bytes());
+        self.write_buf();
     }
 
     pub fn mark(&mut self, m: &Mark) {
-        let _ = writeln!(self.w, "{}", m.line());
+        self.buf.clear();
+        self.buf.extend_from_slice(m.line().as_bytes());
+        self.write_buf();
+    }
+
+    fn write_buf(&mut self) {
+        self.buf.push(b'\n');
+        let _ = self.w.write_all(&self.buf);
         let _ = self.w.flush();
     }
 }
@@ -501,5 +570,56 @@ mod tests {
         assert_eq!(code, EXIT_UNSUPPORTED);
         let text = String::from_utf8(buf).unwrap();
         assert!(text.ends_with(&format!("{}\n", Mark::Done(Outcome::Failed(FailureKind::Other)).line())));
+    }
+    /// Records each `write` the helper's output makes.
+    struct Writes(Vec<Vec<u8>>);
+
+    impl Write for Writes {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.push(buf.to_vec());
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn each_line_is_one_write_with_its_newline() {
+        // The stdin watcher answers through the same lock between writes:
+        // a line written in two parts could take `␞mandara cancel …` in
+        // the middle and lose the answer.
+        let mut w = Writes(Vec::new());
+        let mut out = Out::new(&mut w);
+        out.line("(1/2) upgrading linux\x1b[0m");
+        out.mark(&Mark::Step { index: 2, kind: plan::StepKind::Install });
+        out.line("done");
+        assert_eq!(w.0, [b"(1/2) upgrading linux\n".to_vec(), format!("{}\n", Mark::Step { index: 2, kind: plan::StepKind::Install }.line()).into_bytes(), b"done\n".to_vec()]);
+    }
+
+    #[test]
+    fn git_trust_names_one_work_tree_and_keeps_roots_own_settings() {
+        let home = tempfile::tempdir().unwrap();
+        let tree = Path::new("/home/me/my \"nix\" config");
+        let trust = GitTrust::new(tree, home.path()).unwrap();
+        let config_home = trust.config_home().to_path_buf();
+        let config = std::fs::read_to_string(config_home.join("git/config")).unwrap();
+        assert_eq!(
+            config,
+            format!("[include]\n\tpath = \"{}/.config/git/config\"\n[safe]\n\tdirectory = \"/home/me/my \\\"nix\\\" config\"\n", home.path().display()),
+            "root's own XDG Git settings first, then the one trusted folder"
+        );
+        assert_eq!(std::fs::read_link(config_home.join("nix")).unwrap(), home.path().join(".config/nix"), "Nix still reads root's own configuration");
+        use std::os::unix::fs::PermissionsExt as _;
+        assert_eq!(std::fs::metadata(&config_home).unwrap().permissions().mode() & 0o777, 0o700);
+        // Git itself reads it back as exactly that one folder.
+        if let Ok(o) = Command::new("git").args(["config", "--file"]).arg(config_home.join("git/config")).args(["--includes", "--get-all", "safe.directory"]).output() {
+            assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+            assert_eq!(String::from_utf8_lossy(&o.stdout), format!("{}\n", tree.display()));
+        }
+        drop(trust);
+        assert!(!config_home.exists(), "removed after the command");
+        assert!(git_trust_config(Path::new("/home/me/a\nb"), Path::new("/root/.config/git/config")).is_err(), "a line break can't add settings");
     }
 }

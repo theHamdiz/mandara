@@ -200,10 +200,12 @@ impl Job {
             ok
         };
         if ok {
+            // Before the helper hears it, so its refusal (which clears
+            // this) always comes after.
+            self.user_cancel.request();
             if let Some(tx) = self.cancel.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
                 let _ = tx.send(());
             }
-            self.user_cancel.request();
         }
         ok
     }
@@ -547,12 +549,19 @@ impl Worker<'_> {
                         });
                     }
                     Mark::Exit { .. } => self.update(|s| s.step_kind = None),
-                    Mark::Cancel { accepted } => self.update(|s| {
+                    Mark::Cancel { accepted } => {
                         if !accepted {
-                            s.cancel_requested = false;
-                            s.cancel_refused = true;
+                            // Refused for the root part: it mustn't stop
+                            // the user steps after it (Flatpak) either.
+                            self.job.user_cancel.clear();
                         }
-                    }),
+                        self.update(|s| {
+                            if !accepted {
+                                s.cancel_requested = false;
+                                s.cancel_refused = true;
+                            }
+                        })
+                    }
                     Mark::Reboot => self.update(|s| s.tracker.reboot = true),
                     Mark::Done(o) => done = Some(o),
                 }

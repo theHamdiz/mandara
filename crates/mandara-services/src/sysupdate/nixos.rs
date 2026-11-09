@@ -388,6 +388,12 @@ pub fn to_delete(gens: &[Generation], cleanup: Cleanup, now: i64) -> Vec<u32> {
 
 // ── The root side's plan ─────────────────────────────────────────────────
 
+/// The Git work tree a flake in `dir` belongs to, found as Nix finds it:
+/// the nearest folder from `dir` up (not `/`) that has a `.git`.
+pub fn git_work_tree(dir: &Path) -> Option<PathBuf> {
+    dir.ancestors().take_while(|p| p.parent().is_some()).find(|p| p.join(".git").symlink_metadata().is_ok()).map(Path::to_path_buf)
+}
+
 fn nix_args(rest: &[&str]) -> Vec<String> {
     NIX_FEATURES.iter().chain(rest).map(|s| s.to_string()).collect()
 }
@@ -429,10 +435,16 @@ pub fn plan(action: &NixAction, paths: &NixPaths) -> Result<Vec<Step>, String> {
                     if update && root_owned {
                         steps.push(Step::owned(StepKind::FlakeUpdate, "nix", nix_args(&["flake", "update", "--flake", &dir_s])));
                     }
+                    // Root's Git refuses a work tree another user owns
+                    // ("not owned by current user"), and pkexec sets no
+                    // `SUDO_UID` to excuse it: both evaluations trust that
+                    // one repository. Its owner already decides what root
+                    // builds and activates, so this grants nothing new.
+                    let work_tree = git_work_tree(&dir);
                     let attr = format!("{dir_s}#nixosConfigurations.\"{host}\".config.system.build.toplevel");
-                    steps.push(Step::owned(StepKind::Build, "nix", nix_args(&["build", "--log-format", "internal-json", "-v", "--no-link", "--print-out-paths", &attr])));
+                    steps.push(Step::owned(StepKind::Build, "nix", nix_args(&["build", "--log-format", "internal-json", "-v", "--no-link", "--print-out-paths", &attr])).trust_git(work_tree.clone()));
                     if mode != RebuildMode::Build {
-                        steps.push(Step::owned(StepKind::Activate, "nixos-rebuild", vec![mode.id().into(), "--flake".into(), format!("{dir_s}#{host}")]));
+                        steps.push(Step::owned(StepKind::Activate, "nixos-rebuild", vec![mode.id().into(), "--flake".into(), format!("{dir_s}#{host}")]).trust_git(work_tree));
                     }
                 }
                 Setup::Channels { .. } => {

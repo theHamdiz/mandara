@@ -733,8 +733,6 @@ fn absolute_install_paths(mut args: Vec<String>) -> Vec<String> {
 mod tests {
     use clap::Parser as _;
 
-    /// The root-owned copies Studio may run as root are the ones the
-    /// installer and the login screen put in place (issue #10).
     /// The root side of a system update gets its words untouched (the
     /// helper validates them itself), including `--protocol`.
     #[test]
@@ -747,6 +745,8 @@ mod tests {
         }
     }
 
+    /// The root-owned copies Studio may run as root are the ones the
+    /// installer and the login screen put in place (issue #10).
     #[test]
     fn admin_binaries_agree_across_crates() {
         assert_eq!(mandara_install::installer::ADMIN_EXE, mandara_config::admin::ADMIN_EXE);
