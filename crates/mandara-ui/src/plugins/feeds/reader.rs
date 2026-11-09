@@ -194,7 +194,7 @@ mod tests {
         let mark = |start, end| html::Mark { start, end, style: html::BOLD, link: None };
         let rich = Rich { text: "hello".into(), marks: vec![mark(4, 1), mark(0, 9), mark(1, 3)] };
         let inline = inline(&rich);
-        assert_eq!(inline.spans.iter().map(|s| s.range.clone()).collect::<Vec<_>>(), [1..3]);
+        assert_eq!(inline.spans.iter().map(|s| s.range.clone()).collect::<Vec<_>>(), vec![1..3]);
     }
 
     #[test]
