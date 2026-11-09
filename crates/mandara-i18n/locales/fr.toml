@@ -8895,3 +8895,5 @@
 "A gentle wave along the fill that flows while you drag" = "Une douce vague le long du remplissage qui ondule pendant que vous faites glisser"
 "Ten rounded steps that fill one after another" = "Dix pas arrondis qui se remplissent l'un après l'autre"
 "How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it" = "L'apparence des commandes du shell. Chaque aperçu est la vraie commande : faites-la glisser pour essayer un style, cliquez sur un style pour l'utiliser"
+"Set the media player's own volume in percent (0-100)" = "Régler le volume propre du lecteur multimédia en pourcentage (0-100)"
+"This player doesn't let you change its volume" = "Ce lecteur ne te laisse pas changer son volume"

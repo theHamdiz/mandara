@@ -52,6 +52,48 @@ truly right, put it on that one item with its reason:
 #[expect(clippy::large_enum_variant, reason = "one per frame; boxing would allocate per frame")]
 ```
 
+## Pure Wayland: no X11
+
+Mandara talks only Wayland. GPUI and its platform crates are built with
+`default-features = false` and without their `x11` features, so the shipped
+binary links no X11 library. A test in `xtask` (`x11_guard_tests`, part of
+`cargo test --workspace` and so of CI) keeps it that way: it reads every
+lockfile (the workspace, `tools/mandara-delta` and the example plugins) and
+fails when an X11 crate is resolved: `x11rb`, `xcb`, `x11` / `x11-dl`,
+`x11-clipboard`, X11 input methods, or xkbcommon's `x11` feature (which
+shows up as `as-raw-xcb-connection`). A lockfile is the graph for every
+target and every enabled feature, so this also catches a crate only some
+platform would link. When it fails, `cargo tree -i <crate>` shows what
+pulled the crate in; build that dependency without its X11 feature.
+
+Run it alone with `cargo test -p xtask x11`.
+
+## Other platforms: the FreeBSD type-check
+
+CI's `freebsd-check` job type-checks the whole workspace for
+`x86_64-unknown-freebsd`. It only reports: it is allowed to fail and never
+blocks a merge or a release. Its errors show code that assumes Linux at
+compile time, such as Linux-only system calls (`prctl`, `inotify`, CPU
+affinity) and GPUI's layer shell, which the pinned GPUI builds only for
+Linux. It needs only Rust's FreeBSD standard library, no FreeBSD system
+root. To run it locally:
+
+```bash
+rustup target add x86_64-unknown-freebsd
+PKG_CONFIG_ALLOW_CROSS=1 cargo check --workspace --keep-going --target x86_64-unknown-freebsd
+```
+
+`PKG_CONFIG_ALLOW_CROSS=1` lets the fontconfig and freetype build scripts
+read the host's pkg-config files (install their `-dev` packages), which is
+harmless because a check never links. Without it they stop early and hide
+GPUI's Linux platform and every crate above it. `--keep-going` checks
+every crate whose dependencies build, so one Linux-only crate doesn't
+hide the rest.
+
+A clean check doesn't mean Mandara runs there: readers of `/proc` and
+`/sys`, logind, NetworkManager, BlueZ and greetd compile everywhere and
+only find out at run time.
+
 ## Local checks and cold builds
 
 For a focused edit, start with the affected crate and its callers, for

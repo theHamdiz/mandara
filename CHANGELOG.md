@@ -9,6 +9,11 @@ About → What's new shows it too.
 ### Fixed
 
 - **Panels close in one smooth motion.** A drop-down panel folding back into the bar no longer pops a sliver of itself back out a moment after it looked closed, which made it seem to close in two steps (most noticeable with a low damping in Studio's motion settings). It now slides home and stays there, and a hidden sidebar no longer peeks back in after sliding away. Opening keeps its springy feel, and your motion speed, spring settings and reduced motion still apply.
+- **Studio's mixer sets your music player's own volume.** Some players, such as Rufin, keep their own volume and put it back every time you play or pause, so a level set in Studio → Audio & media used to jump back. The row of the player the media panel follows now shows and sets that player's own volume, just like the shell's sound panel, whenever the player lets you change it. Other apps keep their usual sliders. You can also set it from a terminal with `mandara msg media volume set 40`.
+
+### Under the hood
+
+- **Pure Wayland, guarded.** Mandara has never needed X11, and now a test keeps it that way: the build fails if any X11 library ever slips into its dependencies. A new informational check also type-checks Mandara for FreeBSD, to show how far a port would be.
 
 ## 0.23.0 — 2026-11-09
 

@@ -367,10 +367,11 @@ and verifies models, and provides a dry-run test bench. See
   to the bar) and timeouts per urgency, a rules editor with one-click rules
   for recent apps, quiet modes, history limits; every OSD kind; indicator
   ignore lists.
-- **Audio & media**: per-app mixer, default devices you can rename and
-  hide, per-app outputs (calls to the headset, music to speakers), volume
-  step and 100 % / 150 % ceiling, ignored media players, shell sounds with
-  previews.
+- **Audio & media**: per-app mixer (the row of the player the media panel
+  follows sets that player's own volume when it allows it, as in the shell),
+  default devices you can rename and hide, per-app outputs (calls to the
+  headset, music to speakers), volume step and 100 % / 150 % ceiling,
+  ignored media players, shell sounds with previews.
 - **Displays**: drag monitors on an arrangement canvas (edges snap), pick
   resolution, refresh rate, scale, rotation, adaptive sync and on / off over
   `wlr-output-management` (MangoWM, Niri, Hyprland). Every change applies

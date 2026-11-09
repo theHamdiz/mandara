@@ -375,14 +375,40 @@ fn spectrum_host<'a>(groups: &'a [apps::AppGroup], player: Option<&str>) -> Opti
 
 /// An effects processor such as EasyEffects (it carries everyone's sound).
 fn is_effect(g: &apps::AppGroup) -> bool {
-    let (key, name) = (g.key.to_lowercase(), g.name.to_lowercase().replace(' ', ""));
-    EFFECT_APPS.iter().any(|e| key.contains(e) || name.contains(e))
+    is_effect_app(&g.key, &g.name)
 }
 
 /// Whether `g` is the app of the media player named `player` (lowercase).
 fn plays_for(g: &apps::AppGroup, player: &str) -> bool {
-    let name = g.name.to_lowercase();
-    g.key.contains(player) || name.contains(player) || player.contains(&name)
+    plays_for_app(&g.key, &g.name, player)
+}
+
+/// Whether the app with mixer `key` (its app id, else its name) and
+/// display `name` is an effects processor such as EasyEffects, whose
+/// stream carries everyone's sound.
+pub fn is_effect_app(key: &str, name: &str) -> bool {
+    let (key, name) = (key.to_lowercase(), name.to_lowercase().replace(' ', ""));
+    EFFECT_APPS.iter().any(|e| key.contains(e) || name.contains(e))
+}
+
+/// Whether the app with lowercase mixer `key` and display `name` is the
+/// app of the media player whose identity is `player` (lowercase).
+fn plays_for_app(key: &str, name: &str, player: &str) -> bool {
+    let name = name.to_lowercase();
+    key.contains(player) || name.contains(player) || (!name.is_empty() && player.contains(&name))
+}
+
+/// Whether the mixer stream `s` belongs to the media player whose identity
+/// is `player` (lowercase), never to an effects processor. Such a player
+/// keeps its own volume and puts it back on its stream whenever it plays
+/// or pauses, so the slider for its stream sets the player's own level
+/// instead: in the shell's sound panel and in Studio's mixer alike.
+pub fn stream_is_players(s: &mandara_services::audio::Stream, player: &str) -> bool {
+    if player.is_empty() {
+        return false;
+    }
+    let key = apps::group_key(s);
+    !is_effect_app(&key, &s.app) && plays_for_app(&key, &s.app, player)
 }
 
 /// The app row whose level is the media player's own volume, with that
