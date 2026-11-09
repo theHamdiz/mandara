@@ -356,6 +356,21 @@ impl NoteStore {
         Ok(id)
     }
 
+    /// Re-creates note `id` from a kept draft after its file was removed
+    /// elsewhere, under the same id so later saves of that draft land in it.
+    pub fn restore(&mut self, id: u64, topic: u64, text: &str) -> Result<()> {
+        anyhow::ensure!(self.note(id).is_none(), "note {id} still exists");
+        let topic = if self.topic(topic).is_some() { topic } else { DEFAULT_TOPIC };
+        self.view.notes.insert(0, Arc::new(Note { id, topic, path: None, text: String::new(), updated: unix(SystemTime::now()) }));
+        self.next_id = self.next_id.max(id + 1);
+        if let Err(error) = self.write(id, text) {
+            self.view.notes.retain(|note| note.id != id);
+            return Err(error);
+        }
+        self.save_index();
+        Ok(())
+    }
+
     /// Writes a note's text to its file (named after its title the first
     /// time).
     pub fn write(&mut self, id: u64, text: &str) -> Result<()> {

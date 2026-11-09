@@ -73,7 +73,11 @@ impl PendingNote {
             if !self.base_holds(store)? {
                 return Err(BodyConflicts(vec![self.note.id]).into());
             }
-            if store.note(self.note.id).is_none_or(|current| current.text != self.note.text || current.path.is_none()) {
+            if store.note(self.note.id).is_none() {
+                // Its file was removed elsewhere and you edited the kept
+                // draft again: the draft recreates the note.
+                store.restore(self.note.id, self.note.topic, &self.note.text)?;
+            } else if store.note(self.note.id).is_some_and(|current| current.text != self.note.text || current.path.is_none()) {
                 store.write(self.note.id, &self.note.text)?;
             }
         }

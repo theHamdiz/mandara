@@ -698,6 +698,30 @@ mod tests {
         assert!(model.notes_base.is_empty(), "acknowledged drafts forget their base");
     }
 
+    /// A note whose file was removed elsewhere is first a conflict; the kept
+    /// draft, edited again, recreates it under the same id instead of
+    /// conflicting forever.
+    #[test]
+    fn an_edited_draft_recreates_a_note_removed_elsewhere() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = NoteStore::open(root.path());
+        let id = store.create(DEFAULT_TOPIC, "# Trip\nPack").unwrap();
+        let path = root.path().join(store.note(id).unwrap().path.as_ref().unwrap());
+        let mut model = model(root.path().into());
+        model.notes = store.snapshot();
+        let note = (*model.notes.notes[0]).clone();
+        std::fs::remove_file(&path).unwrap();
+        store.rescan(&[]);
+        let first = PendingNote { note: Arc::new(Note { text: "# Trip\nPack socks".into(), ..note.clone() }), generation: 1, tasks: None, base: Some(body_hash("# Trip\nPack")) };
+        assert!(write_pending(&mut store, &[first]).unwrap_err().is::<BodyConflicts>(), "the removal is a conflict first");
+        let again = PendingNote { note: Arc::new(Note { text: "# Trip\nPack socks and a hat".into(), ..note }), generation: 2, tasks: None, base: None };
+        write_pending(&mut store, &[again]).expect("the edited draft recreates the note");
+        let restored = store.note(id).expect("same id");
+        assert_eq!(restored.text, "# Trip\nPack socks and a hat");
+        let file = root.path().join(restored.path.as_ref().unwrap());
+        assert_eq!(std::fs::read_to_string(file).unwrap(), "# Trip\nPack socks and a hat");
+    }
+
     /// A conflict from an older save attempt never takes over the newer draft
     /// typed since: it stays dirty, with its own base, for its own save.
     #[test]

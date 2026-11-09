@@ -377,7 +377,8 @@ showed when you started typing, or with Mandara's own last save of that note,
 so quick edits still save in order. If another program changed or removed the
 file in the meantime, that note isn't saved: the panel keeps your text and says
 it changed elsewhere, other notes still save, and your next edit replaces the
-outside version on purpose. Recovery scans check retained baselines separately.
+outside version on purpose, or recreates the note if its file was removed.
+Recovery scans check retained baselines separately.
 None of these operations locks out another editor. A save can still replace an
 edit made in the instant between its comparison and its write.
 
