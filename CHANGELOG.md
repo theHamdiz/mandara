@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **Fresh login and lock screen pictures.** The README and the lock and login guides now show Mandara Login in all three of its designs (Mandara with its emblem, Midnight card and Material You), the lock screen in its Mandara and Material You designs, and Studio's Login screen page with its three looks.
+
 ## 0.24.0 — 2026-11-09
 
 Update your whole system right from the Updates panel. Pick how every

@@ -268,8 +268,9 @@ glass, and Motion & accessibility.
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons" width="100%"/><br/><sub><b>Mandara</b>: everything floats on the backdrop</sub></td>
-<td width="50%" valign="top"><img src="screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" width="100%"/><br/><sub><b>Midnight card</b>: one outlined card in navy and citrine</sub></td>
+<td width="33%" valign="top"><img src="screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons, with the Mandara emblem above the keyboard pill" width="100%"/><br/><sub><b>Mandara</b>: everything floats on the backdrop</sub></td>
+<td width="33%" valign="top"><img src="screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" width="100%"/><br/><sub><b>Midnight card</b>: one outlined card in navy and citrine</sub></td>
+<td width="33%" valign="top"><img src="screenshots/greeter-material-you.webp" alt="Mandara Login in its Material You design: a big stacked clock and a tonal card with the scalloped avatar, a filled password field, a round sign-in button and a session chip, in colours from the wallpaper" width="100%"/><br/><sub><b>Material You</b>: colours from the wallpaper, one tonal card</sub></td>
 </tr>
 </table>
 
