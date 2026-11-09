@@ -37,8 +37,12 @@ use crate::auth::{AuthCommand, AuthEvent, AuthWorker};
 use crate::background::{Background, BackgroundOptions};
 use crate::config::{
     Anchor, AvatarShape, AvatarSource, BackgroundMode, Element, FieldStyle, GreeterConfig, PasswordMask, PowerStyle, SessionStyle, SubmitButton, UserList,
-    VideoMode, apply_playlist, list_images,
+    UserSwitcher, VideoMode, apply_playlist, list_images,
 };
+use mandara_core::avatar_shape;
+use mandara_ui::components::motion::Feel;
+use mandara_ui::components::tonal::Tonal;
+use mandara_ui::components::{ButtonDesign, InputDesign, buttons, inputs};
 use crate::greetd::{Notes, Step, wipe};
 use crate::i18n::{tl, tlf};
 use crate::power::PowerAction;
@@ -133,6 +137,50 @@ const PREVIEW_SCALE_GUESS: f32 = 1.5;
 /// Size of the status line under the password field (px per unit scale).
 const STATUS_TEXT_PX: f32 = 13.0;
 
+// ── Material You (the scalloped avatar, filled field, chips) ────────────
+/// Material's loading indicator: turn (radians per second), breathing
+/// rate and its smallest size (share of the largest).
+const LOADER_TURN: f32 = 4.0;
+const LOADER_BREATH: f32 = 3.0;
+const LOADER_REST: f32 = 0.8;
+/// A dynamic-colour change cross-fades the palette over this long (OKLCH).
+const PALETTE_FADE: Duration = Duration::from_millis(450);
+/// The idle scalloped avatar turns this far per second (none while still).
+const SPIN_DEG_PER_S: f32 = 6.0;
+/// Each keystroke turns it a little further (a spring, radians).
+const SPIN_PER_KEY: f32 = std::f32::consts::PI / 12.0;
+/// How far toward a circle it morphs while checking, and on success.
+const MORPH_BUSY: f32 = 0.6;
+const MORPH_DONE: f32 = 1.0;
+/// A picture or monogram inside the scalloped shape, share of its size.
+const COOKIE_INNER: f32 = 0.84;
+/// The variable clock weight moves in steps of this many units (each
+/// weight is rasterized once).
+const WEIGHT_STEP: f32 = 50.0;
+/// Stacked clock lines, as a share of the digits' size.
+const STACKED_LINE: f32 = 0.98;
+/// The tinted hours' lightness floor (a light tone of the accent).
+const TINT_LIGHTNESS: f32 = 0.84;
+/// Material's corner sizes (px at the reference scale): chips and menu
+/// items, fields' top corners, menus.
+const M3_CHIP_RADIUS: f32 = 8.0;
+const M3_FIELD_RADIUS: f32 = 16.0;
+const M3_MENU_RADIUS: f32 = 16.0;
+const M3_ITEM_RADIUS: f32 = 12.0;
+/// Chip heights, menu item height (px at the reference scale).
+const M3_CHIP_H: f32 = 32.0;
+const M3_USER_CHIP_H: f32 = 36.0;
+const M3_ITEM_H: f32 = 44.0;
+/// A filled field's floating label size.
+const M3_LABEL_PX: f32 = 11.5;
+/// State layer over a container while hovered.
+const M3_HOVER_LAYER: f32 = 0.08;
+/// A filled field's container alpha over the card.
+const M3_FIELD_ALPHA: f32 = 0.96;
+/// The tonal fill of other controls in the filled style (keyboard pill,
+/// soft buttons), alpha.
+const M3_TONAL_ALPHA: f32 = 0.9;
+
 /// The friendly wrong-password messages.
 fn playful_lines() -> [String; 3] {
     [tl("Not quite — try again"), tl("Hmm, that wasn't it"), tl("Close, but not quite")]
@@ -153,6 +201,13 @@ fn glyph_str(ch: char) -> SharedString {
         ' ' => SharedString::new_static(" "),
         _ => SharedString::from(ch.to_string()),
     }
+}
+
+/// A Material button that morphs while held.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Press {
+    Submit,
+    Power(PowerAction),
 }
 
 /// Which control has the keyboard.
@@ -248,7 +303,14 @@ impl Roll {
 pub struct GreeterView {
     mode: Mode,
     config: GreeterConfig,
+    /// The palette drawn this frame (on its way to `palette_goal` while a
+    /// dynamic-colour change cross-fades).
     palette: MandaraPalette,
+    palette_goal: MandaraPalette,
+    /// The palette a cross-fade started from, and when.
+    palette_from: Option<(MandaraPalette, Instant)>,
+    /// The leading colour of the picture behind (dynamic colour).
+    seed: Option<Color>,
     users: Vec<UserEntry>,
     user_ix: usize,
     manual: Option<String>,
@@ -303,6 +365,13 @@ pub struct GreeterView {
     flash_at: Option<Instant>,
     success: SpringValue<f32>,
     glow: SpringValue<f32>,
+    /// The scalloped avatar: toward a circle (0 = scalloped), and its turn
+    /// (radians) from keystrokes.
+    morph: SpringValue<f32>,
+    spin: SpringValue<f32>,
+    /// The Material button being held (it squares off) and its press.
+    pressed: Option<Press>,
+    press: SpringValue<f32>,
     dots: Vec<Instant>,
     ripple_at: Option<Instant>,
     pointer: (SpringValue<f32>, SpringValue<f32>),
@@ -347,6 +416,8 @@ struct BackgroundSources {
     /// The solid floor's color as resolved (it follows the theme when unset).
     solid: Option<Color>,
     reduced: bool,
+    /// Stills bring their leading colour (dynamic colour).
+    seed_colors: bool,
 }
 
 impl BackgroundSources {
@@ -362,6 +433,7 @@ impl BackgroundSources {
             blur: b.blur,
             solid: (b.mode == BackgroundMode::Solid).then(|| Color::from_hex(b.solid.trim()).unwrap_or_else(|_| palette_for(cfg).surface_dim)),
             reduced: cfg.accessibility.reduced_motion,
+            seed_colors: cfg.theme.from_wallpaper,
         }
     }
 }
@@ -382,7 +454,7 @@ enum BackgroundChange {
 fn background_change(old: &BackgroundSources, new: &BackgroundSources) -> BackgroundChange {
     if old == new {
         BackgroundChange::Same
-    } else if old.mode != new.mode || old.video != new.video || old.solid != new.solid || old.reduced != new.reduced {
+    } else if old.mode != new.mode || old.video != new.video || old.solid != new.solid || old.reduced != new.reduced || old.seed_colors != new.seed_colors {
         BackgroundChange::Rebuild
     } else {
         BackgroundChange::RebuildSettled
@@ -406,10 +478,25 @@ fn background_timing(cfg: &GreeterConfig) -> BackgroundOptions {
 /// The theme for a config: the preset's dark palette with the accent
 /// override applied.
 pub fn palette_for(cfg: &GreeterConfig) -> MandaraPalette {
-    let mut p = mandara_theme::catalog::find(&cfg.theme.preset)
+    let p = mandara_theme::catalog::find(&cfg.theme.preset)
         .or_else(|| mandara_theme::catalog::find(mandara_theme::DEFAULT_THEME))
         .map(|t| t.palette(true))
         .unwrap_or_else(|| mandara_theme::engine::default_palette(true));
+    with_accent(cfg, p)
+}
+
+/// The theme for a config showing a picture whose leading colour is
+/// `seed`: with `theme.from_wallpaper`, Material's dark tonal scheme made
+/// from it; otherwise (or with no picture) [`palette_for`].
+pub fn palette_for_seed(cfg: &GreeterConfig, seed: Option<Color>) -> MandaraPalette {
+    match seed.filter(|_| cfg.theme.from_wallpaper) {
+        Some(seed) => with_accent(cfg, mandara_theme::material::palette_from_seed(seed, mandara_theme::SchemeVariant::TonalSpot, true)),
+        None => palette_for(cfg),
+    }
+}
+
+/// `p` with the config's accent override, if any.
+fn with_accent(cfg: &GreeterConfig, mut p: MandaraPalette) -> MandaraPalette {
     if let Ok(accent) = Color::from_hex(cfg.theme.accent.trim()) {
         p.primary = accent;
         p.primary_glow = accent.with_alpha(0.5);
@@ -417,6 +504,13 @@ pub fn palette_for(cfg: &GreeterConfig) -> MandaraPalette {
         p.accent_gradient_end = accent.rotate_hue(25.0).scale_chroma(1.15);
     }
     p
+}
+
+/// A Material motion token as a greeter spring (snapping with reduced
+/// motion).
+fn feel(f: Feel, reduced: bool) -> SpringConfig {
+    let (ratio, stiffness) = f.tokens();
+    spring(crate::config::Spring::new(stiffness, 2.0 * ratio * stiffness.sqrt()), reduced)
 }
 
 fn spring(s: crate::config::Spring, reduced: bool) -> SpringConfig {
@@ -549,6 +643,9 @@ impl GreeterView {
         let fast = SpringConfig::new(170.0, 20.0, 1.0);
         let mut this = Self {
             mode,
+            palette_goal: p.clone(),
+            palette_from: None,
+            seed: None,
             palette: p,
             users,
             user_ix,
@@ -590,6 +687,10 @@ impl GreeterView {
             flash_at: None,
             success: SpringValue::new(0.0, spring(m.success_spring, reduced)),
             glow: SpringValue::new(0.0, fast),
+            morph: SpringValue::new(0.0, feel(Feel::DefaultSpatial, reduced)),
+            spin: SpringValue::new(0.0, feel(Feel::FastSpatial, reduced)),
+            pressed: None,
+            press: SpringValue::new(0.0, feel(Feel::FastSpatial, reduced)),
             dots: Vec::new(),
             ripple_at: None,
             pointer: (SpringValue::new(0.0, SpringConfig::new(40.0, 12.0, 1.0)), SpringValue::new(0.0, SpringConfig::new(40.0, 12.0, 1.0))),
@@ -654,6 +755,7 @@ impl GreeterView {
                 blur: b.blur,
                 solid,
                 still_motion: config.accessibility.reduced_motion || preview,
+                seed_colors: config.theme.from_wallpaper,
                 ..background_timing(config)
             },
             b.shuffle && b.playlist.is_empty(),
@@ -697,6 +799,56 @@ impl GreeterView {
         }
     }
 
+    /// Moves to palette `p`: at once, or (`fade`) cross-fading from the
+    /// one on screen in OKLCH over [`PALETTE_FADE`].
+    fn set_palette(&mut self, p: MandaraPalette, fade: bool) {
+        self.palette_from = (fade && p != self.palette_goal).then(|| (self.palette.clone(), Instant::now()));
+        if self.palette_from.is_none() {
+            self.palette = p.clone();
+        }
+        self.palette_goal = p;
+    }
+
+    /// Dynamic colour: follows the picture behind (its leading colour) and
+    /// advances a palette cross-fade.
+    fn follow_seed(&mut self, now: Instant) {
+        let seed = if self.config.theme.from_wallpaper { self.background.seed() } else { None };
+        if seed != self.seed {
+            self.seed = seed;
+            // The first picture's colours are there from the entrance on;
+            // later ones (another person's wallpaper) cross-fade.
+            let fade = self.entrance_at.is_some() && !self.config.accessibility.reduced_motion;
+            self.set_palette(palette_for_seed(&self.config, seed), fade);
+        }
+        if let Some((from, at)) = &self.palette_from {
+            let t = now.saturating_duration_since(*at).as_secs_f32() / PALETTE_FADE.as_secs_f32();
+            if t >= 1.0 {
+                self.palette = self.palette_goal.clone();
+                self.palette_from = None;
+            } else {
+                self.palette = from.lerp(&self.palette_goal, t * t * (3.0 - 2.0 * t));
+            }
+        }
+    }
+
+    /// Holds a Material button (it squares off) until [`Self::release`].
+    fn hold(&mut self, which: Press) {
+        if self.pressed != Some(which) {
+            self.press.snap_to(0.0);
+        }
+        self.pressed = Some(which);
+        self.press.set_target(1.0);
+    }
+
+    fn release(&mut self) {
+        self.press.set_target(0.0);
+    }
+
+    /// How far `which` is pressed (0 at rest; past 1 while springing).
+    fn pressed(&self, which: Press) -> f32 {
+        if self.pressed == Some(which) { self.press.value() } else { 0.0 }
+    }
+
     // ── Studio API ───────────────────────────────────────────────────────
 
     pub fn config(&self) -> &GreeterConfig {
@@ -719,8 +871,12 @@ impl GreeterView {
         self.shake.set_config(spring(m.shake_spring, reduced));
         self.success.set_config(spring(m.success_spring, reduced));
         self.wake.set_config(spring(m.idle_spring, reduced));
-        self.palette = palette_for(&config);
+        for (s, f) in [(&mut self.morph, Feel::DefaultSpatial), (&mut self.spin, Feel::FastSpatial), (&mut self.press, Feel::FastSpatial)] {
+            s.set_config(feel(f, reduced));
+        }
+        let seed = if config.theme.from_wallpaper { self.seed } else { None };
         self.config = config;
+        self.set_palette(palette_for_seed(&self.config, seed), false);
         if reduced || !self.config.clock.roll_digits { self.roll.at = None; }
         match change {
             BackgroundChange::Same => self.bg_rebuild_at = None,
@@ -1007,6 +1163,10 @@ impl GreeterView {
                 self.fades.typed(self.dots.len());
                 self.dots.push(Instant::now());
                 self.ripple_at = Some(Instant::now());
+                if self.config.user.avatar_shape == AvatarShape::Cookie {
+                    let turn = self.spin.target() + SPIN_PER_KEY;
+                    self.spin.set_target(turn);
+                }
             }
         }
         if matches!(self.status, Status::Error(_)) {
@@ -1277,6 +1437,13 @@ fn shadowed(text: impl Into<SharedString>, dy: f32, alpha: f32) -> AnyElement {
         .into_any_element()
 }
 
+/// The clock's weight `idle` of the way from awake (`awake`) to the idle
+/// weight (unsnapped).
+fn clock_weight(awake: u16, idle_weight: u16, idle: f32) -> f32 {
+    let (a, b) = (f32::from(awake), f32::from(idle_weight));
+    a + (b - a) * idle.clamp(0.0, 1.0)
+}
+
 /// 0 → 1 with the spring's overshoot, `t` seconds after a start.
 fn pop_at(cfg: SpringConfig, t: f32) -> f32 {
     if t <= 0.0 {
@@ -1308,6 +1475,8 @@ struct Frame {
     still: bool,
     high_contrast: bool,
     t: f32,
+    /// Material's tonal roles of this frame's palette.
+    tonal: Tonal,
 }
 
 impl Frame {
@@ -1319,6 +1488,7 @@ impl Frame {
         match cfg.password.style {
             FieldStyle::Solid => p.surface_container.with_alpha(if focused { 0.96 } else { 0.9 }).hsla(),
             FieldStyle::Inset => p.surface_dim.with_alpha(if focused { 0.98 } else { 0.92 }).hsla(),
+            FieldStyle::Filled => self.tonal.surface_highest.with_alpha(if focused { M3_FIELD_ALPHA } else { M3_TONAL_ALPHA }).hsla(),
             _ => self.white.opacity((cfg.theme.glass + if focused { 0.08 } else { 0.0 }).clamp(0.0, 1.0)),
         }
     }
@@ -1430,11 +1600,12 @@ impl GreeterView {
 
     /// Preview only: whether anything on it is still moving.
     fn preview_moving(&self, now: Instant) -> bool {
-        let springs = self.enter.iter().chain([&self.pop, &self.wake, &self.shake, &self.success, &self.glow, &self.pointer.0, &self.pointer.1]).any(|s| s.is_animating());
+        let springs = self.enter.iter().chain([&self.pop, &self.wake, &self.shake, &self.success, &self.glow, &self.morph, &self.spin, &self.press, &self.pointer.0, &self.pointer.1]).any(|s| s.is_animating());
         let m = &self.config.motion;
         let entrance_s = ENTRANCE_LEAD_S + Element::ALL.len() as f32 * m.stagger_ms as f32 / MS_PER_S;
         let entering = self.entrance_at.is_some_and(|at| now.saturating_duration_since(at).as_secs_f32() < entrance_s);
         springs
+            || self.palette_from.is_some()
             || self.roll.moving(now)
             || entering
             || self.sim_reset.is_some()
@@ -1490,6 +1661,14 @@ impl GreeterView {
         let typing = !self.password.is_empty() && self.config.password.glow;
         self.glow.set_target(if typing || self.phase == Phase::Busy { 1.0 } else { 0.0 });
         self.glow.step(dt);
+        self.morph.set_target(match self.phase {
+            Phase::Idle => 0.0,
+            Phase::Busy => MORPH_BUSY,
+            Phase::Success(_) => MORPH_DONE,
+        });
+        self.morph.step(dt);
+        self.spin.step(dt);
+        self.press.step(dt);
         self.pointer.0.step(dt);
         self.pointer.1.step(dt);
         // Rolling digits (formatted only when the second changes).
@@ -1619,21 +1798,34 @@ impl GreeterView {
         let c = &self.config.clock;
         let idle = 1.0 - self.wake.value().clamp(0.0, 1.0);
         let size = snap_size(c.size * k * (1.0 + CLOCK_IDLE_GROWTH * idle) * (1.0 + CLOCK_SUCCESS_GROWTH * f.success));
-        let line = size * 1.08;
+        let line = size * if c.stacked { STACKED_LINE } else { 1.08 };
         let font = if c.font.trim().is_empty() { f.display_font.clone() } else { SharedString::from(c.font.clone()) };
         let progress = self.roll.progress(f.now);
         let rolling = self.roll.moving(f.now);
-        let mut row = div()
-            .flex()
-            .font_family(font)
-            .font_features(tabular_nums())
-            .text_size(px(size))
-            .line_height(px(line))
-            .font_weight(weight(c.weight))
-            .text_color(f.white.opacity(c.opacity));
+        // The variable weight follows the idle state in steps (each weight
+        // is rasterized once).
+        let w = if c.idle_weight >= 100 { (clock_weight(c.weight, c.idle_weight, idle) / WEIGHT_STEP).round() * WEIGHT_STEP } else { c.weight as f32 };
+        let tint = c.tint.then(|| {
+            let accent = self.palette.primary;
+            accent.with_lightness(accent.lightness().max(TINT_LIGHTNESS)).with_alpha(c.opacity).hsla()
+        });
+        let new_row = || {
+            div().flex().font_family(font.clone()).font_features(tabular_nums()).text_size(px(size)).line_height(px(line)).font_weight(FontWeight(w)).text_color(f.white.opacity(c.opacity))
+        };
+        let mut lines: smallvec::SmallVec<[gpui::Div; 3]> = smallvec::SmallVec::new();
+        let mut row = new_row();
+        // Hours, minutes, seconds: the colons split them.
+        let mut segment = 0;
         let mut prev = self.roll.prev.chars();
         for ch in self.roll.text.chars() {
             let old = prev.next().filter(|o| rolling && *o != ch);
+            if ch == ':' {
+                segment += 1;
+                if c.stacked {
+                    lines.push(std::mem::replace(&mut row, new_row()));
+                    continue;
+                }
+            }
             let cell = div().relative().h(px(line)).overflow_hidden();
             let cell = match old {
                 Some(o) => cell
@@ -1641,9 +1833,16 @@ impl GreeterView {
                     .child(div().absolute().left_0().top(px(-line * progress)).opacity((1.0 - progress).clamp(0.0, 1.0)).child(shadowed(glyph_str(o), CLOCK_SHADOW_DY * k, CLOCK_SHADOW_ALPHA))),
                 None => cell.child(shadowed(glyph_str(ch), CLOCK_SHADOW_DY * k, CLOCK_SHADOW_ALPHA)),
             };
-            row = row.child(cell);
+            row = row.child(match tint {
+                Some(t) if segment == 0 => cell.text_color(t),
+                _ => cell,
+            });
         }
-        row.into_any_element()
+        if !c.stacked {
+            return row.into_any_element();
+        }
+        lines.push(row);
+        div().flex().flex_col().items_center().children(lines).into_any_element()
     }
 
     fn date_el(&self, f: &Frame, k: f32) -> AnyElement {
@@ -1666,10 +1865,51 @@ impl GreeterView {
             AvatarShape::Squircle => d * 0.32,
             AvatarShape::Rounded => d * 0.18,
             AvatarShape::Bare => d / 2.0,
+            // A picture inside the scalloped shape is round.
+            AvatarShape::Cookie => d / 2.0,
         }
     }
 
+    /// The scalloped avatar (Material's twelve-sided cookie): a tonal shape
+    /// that turns slowly and with each keystroke, and morphs into a circle
+    /// while signing in; the picture sits round inside it, a monogram or
+    /// the person icon straight on it.
+    fn cookie_avatar(&self, entry: Option<&UserEntry>, d: f32, f: &Frame) -> AnyElement {
+        let (lower, upper, blend) = avatar_shape::between(self.morph.value());
+        let drift = if f.still { 0.0 } else { (f.t * SPIN_DEG_PER_S).to_radians() };
+        let turn = Transformation::rotate(gpui::radians(drift + self.spin.value()));
+        let ink = f.tonal.primary_container.hsla();
+        let shape = |step: avatar_shape::Step, opacity: f32| svg().path(step.asset_path()).absolute().top_0().left_0().size(px(d)).text_color(ink.opacity(opacity)).with_transformation(turn);
+        let inner = d * COOKIE_INNER;
+        let content: AnyElement = match entry {
+            Some(UserEntry { avatar: Some(image), .. }) if self.config.user.avatar_source == AvatarSource::Auto => {
+                img(ImageSource::Render(image.clone())).size(px(inner)).rounded_full().object_fit(ObjectFit::Cover).into_any_element()
+            }
+            Some(UserEntry { user, .. }) if self.config.user.avatar_source != AvatarSource::Icon => div()
+                .font_family(f.display_font.clone())
+                .text_size(px(snap_size(d * INITIALS_SCALE)))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(f.tonal.on_primary_container.hsla())
+                .child(user.initials())
+                .into_any_element(),
+            _ => icon("user", snap_size(d * USER_ICON_SCALE), f.tonal.on_primary_container.hsla()).into_any_element(),
+        };
+        div()
+            .relative()
+            .size(px(d))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(shape(lower, 1.0))
+            .when(blend > 0.0, |el| el.child(shape(upper, blend)))
+            .child(div().relative().flex().items_center().justify_center().child(content))
+            .into_any_element()
+    }
+
     fn avatar_el(&self, entry: Option<&UserEntry>, d: f32, f: &Frame) -> AnyElement {
+        if self.config.user.avatar_shape == AvatarShape::Cookie {
+            return self.cookie_avatar(entry, d, f);
+        }
         let p = &self.palette;
         let r = self.avatar_radius(d);
         let rimmed = rim(self.config.theme.rim.max(0.5));
@@ -1714,7 +1954,9 @@ impl GreeterView {
         let accent = self.palette.primary;
         let ring_r = self.avatar_radius(d) + ring_w * 2.0;
         let mut ring = div().p(px(ring_w * 1.6)).rounded(px(ring_r));
-        if u.glow_ring && u.avatar_shape != AvatarShape::Bare {
+        // The scalloped shape is its own frame: no ring or plate shadow.
+        let framed = !matches!(u.avatar_shape, AvatarShape::Bare | AvatarShape::Cookie);
+        if u.glow_ring && framed {
             ring = ring.border_color(accent.with_lightness(0.8).with_alpha(0.35 + 0.35 * b).hsla()).shadow(vec![
                 glow(accent.with_alpha(0.22 + 0.25 * b).hsla(), 26.0 * k, (2.0 + 5.0 * b) * k),
                 soft_shadow(30.0 * k, 0.3, 10.0 * k),
@@ -1725,7 +1967,7 @@ impl GreeterView {
             widths.right = Some(w);
             widths.bottom = Some(w);
             widths.left = Some(w);
-        } else if u.avatar_shape != AvatarShape::Bare {
+        } else if framed {
             ring = ring.shadow(vec![soft_shadow(30.0 * k, 0.35, 10.0 * k)]);
         }
         let name = match (&self.manual, entry) {
@@ -1796,6 +2038,10 @@ impl GreeterView {
                 el.child(if before { c.mr(px(4.0 * k)) } else { c.ml(px(4.0 * k)) })
             })
         };
+        let filled = pc.style == FieldStyle::Filled;
+        // Material's filled field: once it holds text, the hint floats up
+        // as a small label over it.
+        let label = (filled && !empty).then(|| placeholder.clone());
         let inner = if secret && !empty && !(self.reveal && is_pw) {
             self.symbol_row(f, k, h, room, &text, is_pw, caret_on)
         } else {
@@ -1803,7 +2049,21 @@ impl GreeterView {
             let inner = div().flex_1().flex().items_center().overflow_hidden().font_family(f.ui_font.clone()).text_size(px(pc.text_size * k)).when(f.rtl, |el| el.flex_row_reverse());
             if empty { caret(inner, true).child(content) } else { caret(inner.child(content), false) }.into_any_element()
         };
-        let trailing: Option<AnyElement> = if busy {
+        let inner = match label {
+            Some(label) => div()
+                .flex_1()
+                .flex()
+                .flex_col()
+                .justify_center()
+                .when(f.rtl, |el| el.items_end())
+                .child(div().font_family(f.ui_font.clone()).text_size(px(M3_LABEL_PX * k)).line_height(px(M3_LABEL_PX * k * 1.3)).text_color(if focused { p.primary.hsla() } else { p.on_surface_variant.hsla() }).child(label))
+                .child(inner)
+                .into_any_element(),
+            None => inner,
+        };
+        let trailing: Option<AnyElement> = if busy && filled {
+            Some(loading_indicator(h * SPINNER_SHARE, self.started.elapsed().as_secs_f32(), p.primary.hsla(), f.still))
+        } else if busy {
             Some(spinner(h * SPINNER_SHARE, k, self.started.elapsed().as_secs_f32()))
         } else if is_pw && !empty {
             let inside = pc.submit == SubmitButton::Inside;
@@ -1849,23 +2109,32 @@ impl GreeterView {
             None
         };
         // Shadows: rim, depth, typing glow, keystroke ripple.
+        // (The filled field is flat: Material shows state with its
+        // indicator line, not glows.)
         let mut shadows = if pc.style == FieldStyle::Glass { rim(cfg.theme.rim) } else { Vec::new() };
-        shadows.push(soft_shadow(22.0 * k, 0.24, 6.0 * k));
-        let g = self.glow.value().clamp(0.0, 1.0);
-        if g > 0.01 && is_pw {
-            shadows.push(glow(p.primary.with_alpha(0.5 * g).hsla(), 28.0 * k, 1.0 * k));
-        }
-        if let Some(at) = self.ripple_at.filter(|_| pc.keystroke_ripple && !f.reduced && is_pw) {
-            let t = f.now.saturating_duration_since(at).as_secs_f32() / 0.45;
-            if (0.0..1.0).contains(&t) {
-                shadows.push(glow(p.primary.with_lightness(0.82).with_alpha(0.55 * (1.0 - t)).hsla(), 4.0 * k, 12.0 * k * t));
+        if !filled {
+            shadows.push(soft_shadow(22.0 * k, 0.24, 6.0 * k));
+            let g = self.glow.value().clamp(0.0, 1.0);
+            if g > 0.01 && is_pw {
+                shadows.push(glow(p.primary.with_alpha(0.5 * g).hsla(), 28.0 * k, 1.0 * k));
+            }
+            if let Some(at) = self.ripple_at.filter(|_| pc.keystroke_ripple && !f.reduced && is_pw) {
+                let t = f.now.saturating_duration_since(at).as_secs_f32() / 0.45;
+                if (0.0..1.0).contains(&t) {
+                    shadows.push(glow(p.primary.with_lightness(0.82).with_alpha(0.55 * (1.0 - t)).hsla(), 4.0 * k, 12.0 * k * t));
+                }
             }
         }
-        let mut fill = f.fill(cfg, p, focused);
+        // The component designs' filled field: its container and indicator.
+        let m3 = inputs::look(InputDesign::Filled, focused, p);
+        // Over the card's tonal surface, Material's highest container.
+        let mut fill = if filled && !f.high_contrast { f.tonal.surface_highest.with_alpha(M3_FIELD_ALPHA).hsla() } else { f.fill(cfg, p, focused) };
+        let mut flash = 0.0;
         if let Some(at) = self.flash_at.filter(|_| is_pw) {
             let t = f.now.saturating_duration_since(at).as_secs_f32() / 0.9;
             if t < 1.0 {
                 fill = blend(fill, p.urgent_coral.with_alpha(0.6 * (1.0 - t)).hsla());
+                flash = 1.0 - t;
             }
         }
         let shake = if is_pw { self.shake.value() * f.u } else { 0.0 };
@@ -1896,6 +2165,13 @@ impl GreeterView {
             }
             FieldStyle::Outline => pill.rounded(px(radius)).border_1().border_color(edge(white.opacity(if focused { 0.85 } else { 0.5 }))),
             FieldStyle::Inset => pill.rounded(px(radius)).bg(fill).border_1().border_color(edge(p.outline.with_alpha(0.9).hsla())),
+            FieldStyle::Filled => {
+                let r = M3_FIELD_RADIUS * k * cfg.theme.roundness;
+                let (ink, t) = m3.edge.unwrap_or((p.on_surface_variant, inputs::EDGE_PX.0));
+                let ink = if flash > 0.0 { blend(ink.hsla(), p.urgent_coral.with_alpha(flash).hsla()) } else { ink.hsla() };
+                let t = if flash > 0.0 { inputs::EDGE_PX.1 } else { t };
+                pill.relative().rounded_tl(px(r)).rounded_tr(px(r)).bg(fill).child(div().absolute().left_0().right_0().bottom_0().h(px(t)).bg(ink))
+            }
             _ => pill.rounded(px(radius)).bg(fill).border_1().border_color(edge(if focused { white.opacity(0.3) } else { gpui::transparent_black() })),
         };
         let trailing = trailing.map(|t| div().flex_none().w(px(trail_w)).flex().items_center().justify_end().child(t));
@@ -1969,13 +2245,18 @@ impl GreeterView {
         col = if cfg.password.submit == SubmitButton::Beside && unfold > 0.6 {
             let h = cfg.password.height * k;
             let p = &self.palette;
-            let button = div()
-                .id("submit-beside")
-                .size(px(h))
-                .flex_none()
-                .rounded(px(h * BESIDE_RADIUS * cfg.theme.roundness.max(0.4) * 2.0))
-                .bg(p.primary.hsla())
-                .hover(|s| s.opacity(0.9))
+            let button = div().id("submit-beside").size(px(h)).flex_none();
+            let button = if cfg.password.style == FieldStyle::Filled {
+                // Material 3 Expressive's filled icon button: round at
+                // rest, squaring off while held (the component designs'
+                // expressive shape morph).
+                let r = buttons::icon_radius(ButtonDesign::Expressive, h, self.pressed(Press::Submit));
+                let hover = p.primary.mix(p.on_primary, M3_HOVER_LAYER).hsla();
+                button.rounded(px(r)).bg(p.primary.hsla()).hover(move |s| s.bg(hover)).on_mouse_down(MouseButton::Left, cx.listener(|this, _: &MouseDownEvent, _, _| this.hold(Press::Submit)))
+            } else {
+                button.rounded(px(h * BESIDE_RADIUS * cfg.theme.roundness.max(0.4) * 2.0)).bg(p.primary.hsla()).hover(|s| s.opacity(0.9))
+            };
+            let button = button
                 .cursor_pointer()
                 .flex()
                 .items_center()
@@ -1994,6 +2275,31 @@ impl GreeterView {
             Status::None if self.demo() => Some((None, tl("Demo: any password works — try “wrong” to see a failure"), white.opacity(0.78))),
             Status::None => None,
         };
+        if cfg.password.style == FieldStyle::Filled {
+            // Material's supporting text: under the field, from its start
+            // edge, in the error colour or the variant text colour.
+            let p = &self.palette;
+            let status = status.map(|(ic, text, _)| {
+                let ink = if matches!(self.status, Status::Error(_)) { p.urgent_coral.with_lightness(p.urgent_coral.lightness().max(TINT_LIGHTNESS)).hsla() } else { p.on_surface_variant.hsla() };
+                (ic, text, ink)
+            });
+            return col
+                .child(
+                    div()
+                        .mt(px(6.0 * k))
+                        .h(px(20.0 * k))
+                        .w(px(self.field_width(k)))
+                        .px(px(PILL_PAD_START * k))
+                        .flex()
+                        .items_center()
+                        .gap(px(6.0 * k))
+                        .when(f.rtl, |el| el.flex_row_reverse())
+                        .font_family(f.ui_font.clone())
+                        .text_size(px(12.5 * k))
+                        .when_some(status, |el, (ic, text, color)| el.when_some(ic, |el, ic| el.child(icon(ic, 14.0 * k, color))).child(div().text_color(color).child(text))),
+                )
+                .into_any_element();
+        }
         col.child(
             div()
                 .mt(px(12.0 * k))
@@ -2017,6 +2323,9 @@ impl GreeterView {
             return div().into_any_element();
         }
         let focus_users = self.field == Field::User;
+        if self.config.user.switcher == UserSwitcher::Chips {
+            return self.user_chips(f, k, count, focus_users, cx);
+        }
         let mut row = div().flex().gap(px(14.0 * k)).items_start();
         for i in 0..count {
             let selected = (self.manual.is_none() && i == self.user_ix) || (self.manual.is_some() && i == self.users.len());
@@ -2060,11 +2369,150 @@ impl GreeterView {
         row.into_any_element()
     }
 
+    /// Material input chips for the people on this computer: a small face
+    /// and the first name; the chosen one tonal with a check.
+    fn user_chips(&self, f: &Frame, k: f32, count: usize, focus_users: bool, cx: &mut Context<Self>) -> AnyElement {
+        let p = &self.palette;
+        let h = M3_USER_CHIP_H * k;
+        let face = h - 8.0 * k;
+        let mut row = div().flex().flex_wrap().justify_center().gap(px(8.0 * k)).when(f.rtl, |el| el.flex_row_reverse());
+        for i in 0..count {
+            let selected = (self.manual.is_none() && i == self.user_ix) || (self.manual.is_some() && i == self.users.len());
+            let (avatar, label) = match self.users.get(i) {
+                Some(e) => (
+                    match &e.avatar {
+                        Some(image) if self.config.user.avatar_source == AvatarSource::Auto => img(ImageSource::Render(image.clone())).size(px(face)).rounded_full().object_fit(ObjectFit::Cover).into_any_element(),
+                        _ => div()
+                            .size(px(face))
+                            .rounded_full()
+                            .bg(f.tonal.primary_container.hsla())
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_size(px(snap_size(face * INITIALS_SCALE)))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(f.tonal.on_primary_container.hsla())
+                            .child(e.user.initials())
+                            .into_any_element(),
+                    },
+                    e.user.display.split_whitespace().next().unwrap_or(&e.user.name).to_string(),
+                ),
+                None => (icon("user", snap_size(face * 0.7), f.white.opacity(0.9)).into_any_element(), tl("Other")),
+            };
+            let (bg, ink) = if selected { (f.tonal.secondary_container.hsla(), f.tonal.on_secondary_container.hsla()) } else { (gpui::transparent_black(), f.white.opacity(0.92)) };
+            row = row.child(
+                div()
+                    .id(("user", i))
+                    .h(px(h))
+                    .pl(px(4.0 * k))
+                    .pr(px(12.0 * k))
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0 * k))
+                    .when(f.rtl, |el| el.flex_row_reverse().pl(px(12.0 * k)).pr(px(4.0 * k)))
+                    .rounded(px(M3_CHIP_RADIUS * k))
+                    .bg(bg)
+                    .when(!selected, |el| el.border_1().border_color(p.outline.with_alpha(0.9).hsla()).hover(|s| s.bg(gpui::white().opacity(M3_HOVER_LAYER))))
+                    .when(selected && focus_users, |el| el.border_1().border_color(p.primary.hsla()))
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.select_user(i, cx)))
+                    .child(avatar)
+                    .child(div().font_family(f.ui_font.clone()).text_size(px(13.0 * k)).font_weight(FontWeight::MEDIUM).text_color(ink).child(label))
+                    .when(selected, |el| el.child(icon("check", 14.0 * k, ink))),
+            );
+        }
+        row.into_any_element()
+    }
+
+    /// The session as a Material chip that opens a menu.
+    fn session_chip(&self, f: &Frame, k: f32, name: String, focused: bool, cx: &mut Context<Self>) -> AnyElement {
+        let p = &self.palette;
+        let cfg = &self.config;
+        let h = M3_CHIP_H * k;
+        let open = self.session_menu;
+        let (bg, ink) = if focused || open { (f.tonal.secondary_container.hsla(), f.tonal.on_secondary_container.hsla()) } else { (gpui::transparent_black(), f.white.opacity(0.92)) };
+        let chip = div()
+            .id("session")
+            .h(px(h))
+            .px(px(12.0 * k))
+            .flex()
+            .items_center()
+            .gap(px(8.0 * k))
+            .when(f.rtl, |el| el.flex_row_reverse())
+            .rounded(px(M3_CHIP_RADIUS * k))
+            .bg(bg)
+            .when(!(focused || open), |el| el.border_1().border_color(p.outline.with_alpha(0.9).hsla()))
+            .hover(|s| s.bg(gpui::white().opacity(M3_HOVER_LAYER)))
+            .cursor_pointer()
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                if this.is_preview() {
+                    return;
+                }
+                this.session_menu = !this.session_menu;
+                this.field = Field::Session;
+                this.activity();
+                cx.notify();
+            }))
+            .child(icon("monitor", 16.0 * k, ink))
+            .child(div().font_family(f.ui_font.clone()).text_size(px(13.0 * k)).font_weight(FontWeight::MEDIUM).text_color(ink).child(name))
+            .when(self.sessions.len() > 1, |el| el.child(icon(if open { "chevron-up" } else { "chevron-down" }, 14.0 * k, ink)));
+        let mut root = div().relative().child(chip);
+        if open && !self.sessions.is_empty() {
+            let below = (cfg.card.enabled && cfg.card.session_inside) || cfg.placement(Element::Session).anchor.fraction().1 < 0.5;
+            let mut menu = div()
+                .absolute()
+                .when(below, |el| el.top(px(h + 6.0 * k)))
+                .when(!below, |el| el.bottom(px(h + 6.0 * k)))
+                .when(!f.rtl, |el| el.left_0())
+                .when(f.rtl, |el| el.right_0())
+                .min_w(px(220.0 * k))
+                .p(px(4.0 * k))
+                .rounded(px(M3_MENU_RADIUS * k))
+                .bg(p.surface_container.hsla())
+                .shadow(vec![soft_shadow(24.0 * k, 0.3, 8.0 * k)])
+                .flex()
+                .flex_col()
+                .gap(px(2.0 * k));
+            for (i, s) in self.sessions.iter().enumerate() {
+                let selected = i == self.session_ix;
+                let label = if s.kind == SessionKind::X11 { format!("{} (X11)", s.name) } else { s.name.clone() };
+                let (bg, ink) = if selected { (f.tonal.secondary_container.hsla(), f.tonal.on_secondary_container.hsla()) } else { (gpui::transparent_black(), p.on_surface.hsla()) };
+                menu = menu.child(
+                    div()
+                        .id(("session-item", i))
+                        .h(px(M3_ITEM_H * k))
+                        .px(px(12.0 * k))
+                        .rounded(px(M3_ITEM_RADIUS * k))
+                        .flex()
+                        .items_center()
+                        .gap(px(12.0 * k))
+                        .when(f.rtl, |el| el.flex_row_reverse())
+                        .bg(bg)
+                        .hover(|st| st.bg(gpui::white().opacity(M3_HOVER_LAYER)))
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            this.session_ix = i;
+                            this.session_menu = false;
+                            this.field = Field::Password;
+                            cx.notify();
+                        }))
+                        .child(div().w(px(18.0 * k)).when(selected, |el| el.child(icon("check", 16.0 * k, ink))))
+                        .child(div().font_family(f.ui_font.clone()).text_size(px(14.0 * k)).text_color(ink).child(label)),
+                );
+            }
+            root = root.child(menu);
+        }
+        root.into_any_element()
+    }
+
     fn session_el(&self, f: &Frame, k: f32, cx: &mut Context<Self>) -> AnyElement {
         let p = &self.palette;
         let cfg = &self.config;
         let name = self.sessions.get(self.session_ix).map(|s| if s.kind == SessionKind::X11 { format!("{} (X11)", s.name) } else { s.name.clone() }).unwrap_or_else(|| tl("Login shell"));
         let focused = self.field == Field::Session;
+        if cfg.session.style == SessionStyle::Chip {
+            return self.session_chip(f, k, name, focused, cx);
+        }
         let wide = cfg.session.style == SessionStyle::Field;
         let h = if wide { cfg.password.height * k * 0.9 } else { 36.0 * k };
         let pill = div()
@@ -2149,7 +2597,8 @@ impl GreeterView {
                 PowerAction::PowerOff => pc.poweroff,
             })
             .collect();
-        let mut row = div().flex().gap(px(18.0 * k)).opacity(if self.demo() { 0.55 } else { 1.0 });
+        let tonal = pc.style == PowerStyle::Tonal;
+        let mut row = div().flex().gap(px(if tonal { 8.0 } else { 18.0 } * k)).opacity(if self.demo() { 0.55 } else { 1.0 });
         for action in actions {
             row = row.child(
                 div()
@@ -2159,11 +2608,19 @@ impl GreeterView {
                     .items_center()
                     .gap(px(6.0 * k))
                     .cursor_pointer()
+                    .when(tonal, |el| el.on_mouse_down(MouseButton::Left, cx.listener(move |this, _: &MouseDownEvent, _, _| this.hold(Press::Power(action)))))
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.power(action, cx)))
                     .child({
                         let d = pc.size * k;
-                        let button = div().size(px(d)).flex().items_center().justify_center().child(icon(action.icon(), d * 0.43, f.white.opacity(0.95)));
+                        let ink = if tonal { f.tonal.on_secondary_container.hsla() } else { f.white.opacity(0.95) };
+                        let button = div().size(px(d)).flex().items_center().justify_center().child(icon(action.icon(), d * 0.43, ink));
                         match pc.style {
+                            // Material 3 Expressive: tonal, round at rest,
+                            // squaring off while held.
+                            PowerStyle::Tonal => {
+                                let hover = f.tonal.secondary_container.mix(f.tonal.on_secondary_container, M3_HOVER_LAYER).hsla();
+                                button.rounded(px(buttons::icon_radius(ButtonDesign::Expressive, d, self.pressed(Press::Power(action))))).bg(f.tonal.secondary_container.hsla()).hover(move |s| s.bg(hover))
+                            }
                             PowerStyle::Soft => button
                                 .rounded(px(d / 2.0 * self.config.theme.roundness.max(0.3)))
                                 .bg(f.fill(&self.config, &self.palette, false))
@@ -2261,7 +2718,13 @@ impl GreeterView {
         let d = l.size * k;
         let path = l.path.trim();
         if path.is_empty() {
-            return div().child(icon("emblem", d, f.white.opacity(l.opacity))).into_any_element();
+            let ink = if l.accent {
+                let a = self.palette.primary;
+                a.with_lightness(a.lightness().max(TINT_LIGHTNESS)).with_alpha(l.opacity).hsla()
+            } else {
+                f.white.opacity(l.opacity)
+            };
+            return div().child(icon("emblem", d, ink)).into_any_element();
         }
         img(std::path::PathBuf::from(path)).size(px(d)).object_fit(ObjectFit::Contain).opacity(l.opacity).into_any_element()
     }
@@ -2297,7 +2760,7 @@ impl GreeterView {
         let next = list.iter().position(|t| *t == self.config.theme.preset).map_or(0, |i| (i + 1) % list.len().max(1));
         let Some(theme) = list.get(next).cloned() else { return };
         self.config.theme.preset = theme.clone();
-        self.palette = palette_for(&self.config);
+        self.set_palette(palette_for_seed(&self.config, self.seed), false);
         self.state.theme = Some(theme);
         if let Err(e) = self.state.save(&state_path(self.demo())) {
             tracing::warn!("greeter state: {e}");
@@ -2333,6 +2796,21 @@ fn blend(base: Hsla, top: Hsla) -> Hsla {
     }
     let mix = |x: f32, y: f32| (y * t.a + x * b.a * (1.0 - t.a)) / a;
     gpui::Rgba { r: mix(b.r, t.r), g: mix(b.g, t.g), b: mix(b.b, t.b), a }.into()
+}
+
+/// Material's loading indicator: a soft cookie turning as it breathes
+/// (held still with reduced motion), the same as the lock screen's.
+fn loading_indicator(size: f32, t: f32, color: Hsla, still: bool) -> AnyElement {
+    let t = if still { 0.0 } else { t };
+    let breath = LOADER_REST + (1.0 - LOADER_REST) * ((t * LOADER_BREATH).sin() * 0.5 + 0.5);
+    let turn = Transformation::rotate(gpui::radians(t * LOADER_TURN)).with_scaling(gpui::size(breath, breath));
+    div()
+        .size(px(size))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(svg().path(Symbol::Cookie6.asset_path()).size(px(size * 0.8)).text_color(color).with_transformation(turn))
+        .into_any_element()
 }
 
 /// Three dots pulsing in sequence.
@@ -2394,6 +2872,7 @@ impl Render for GreeterView {
             let _ = window.drop_image(image.clone());
             self.background.dispose(image);
         }
+        self.follow_seed(now);
         self.warm_up(now);
         self.tick(now, dt);
         self.run_autoplay(cx);
@@ -2475,6 +2954,7 @@ impl Render for GreeterView {
             still: a11y.reduced_motion || preview,
             high_contrast: a11y.high_contrast,
             t: now.saturating_duration_since(self.started).as_secs_f32(),
+            tonal: Tonal::of(p),
         };
         let caps = !preview && window.capslock().on && self.field != Field::Session;
 
@@ -2509,8 +2989,14 @@ impl Render for GreeterView {
                 this.pointer.0.set_target((f32::from(e.position.x) / w * 2.0 - 1.0).clamp(-1.0, 1.0));
                 this.pointer.1.set_target((f32::from(e.position.y) / h * 2.0 - 1.0).clamp(-1.0, 1.0));
             }))
-            .on_mouse_up(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, cx| this.end_drag(cx)))
-            .on_mouse_up_out(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, cx| this.end_drag(cx)))
+            .on_mouse_up(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                this.release();
+                this.end_drag(cx)
+            }))
+            .on_mouse_up_out(MouseButton::Left, cx.listener(|this, _: &MouseUpEvent, _, cx| {
+                this.release();
+                this.end_drag(cx)
+            }))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _: &MouseDownEvent, window, cx| {
@@ -2542,7 +3028,10 @@ impl Render for GreeterView {
         }
         let typing_dim = 0.12 * self.glow.value().clamp(0.0, 1.0);
         let hc = if f.high_contrast { 0.25 } else { 0.0 };
-        root = root.child(div().absolute().top_0().left_0().size_full().bg(gpui::black().opacity((bgc.dim + typing_dim + hc).clamp(0.0, 0.95))));
+        // Dynamic colour: a light wallpaper gets a deeper scrim, so the
+        // clock and the controls over it stay readable.
+        let light = if cfg.theme.from_wallpaper { self.background.luma().map_or(0.0, mandara_ui::components::tonal::scrim_for_luma) } else { 0.0 };
+        root = root.child(div().absolute().top_0().left_0().size_full().bg(gpui::black().opacity((bgc.dim + typing_dim + hc + light).clamp(0.0, 0.95))));
         let v = bgc.vignette;
         if v > 0.0 {
             root = root

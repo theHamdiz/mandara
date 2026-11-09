@@ -94,4 +94,22 @@ mod tests {
         }
         assert!(GreeterAssets.load("icons/nope.svg").unwrap().is_none());
     }
+
+    /// Every look shows Mandara's emblem when no logo file is set: it is
+    /// a real, non-empty drawing, served to the greeter and to Studio's
+    /// preview (as a file), and the Material You look's scalloped avatar
+    /// shapes are served too.
+    #[test]
+    fn the_emblem_and_the_avatar_shapes_are_served() {
+        assert!(EMBLEM.len() > 1000 && EMBLEM.contains("<path") && EMBLEM.contains("viewBox"), "the phoenix emblem");
+        let served = GreeterAssets.load("icons/emblem.svg").unwrap().expect("served");
+        assert_eq!(&served[..], EMBLEM.as_bytes());
+        let file = extra_icon_file("emblem").expect("a file for Studio's preview");
+        assert_eq!(std::fs::read_to_string(file).unwrap(), EMBLEM);
+        for i in 0..mandara_core::avatar_shape::STEPS {
+            let step = mandara_core::avatar_shape::Step::new(i);
+            let svg = GreeterAssets.load(step.asset_path()).unwrap().unwrap_or_else(|| panic!("{}", step.asset_path()));
+            assert!(svg.starts_with(b"<svg"));
+        }
+    }
 }

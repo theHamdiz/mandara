@@ -1607,6 +1607,7 @@ Depth · classic
 Depth · stacked
 Describe the active theme
 Desert
+Design
 Design a wallpaper, then generate it at full size. Every file remembers its recipe, so you can remix it later.
 Design capacity
 Designed theme
@@ -3461,6 +3462,7 @@ Mandara {version} is the latest version
 Mandara {version} isn't signed by Mandara's release key ({reason}), so it won't be installed
 Mandara's KeePassXC dialog is off (Studio → General → Keyrings & passwords)
 Mandara's drop-in
+Mandara's glass, or Material You: colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar
 Mandara's own look, as it has always been
 Mandara's shortcuts and your compositor's appear here
 MangoWM

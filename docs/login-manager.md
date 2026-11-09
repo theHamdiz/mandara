@@ -33,7 +33,8 @@ The demo opens as an overlay on your current session. Nothing is real:
   plays the zoom-and-dissolve transition and closes it.
 
 Options: `--lang ar`, `--theme mandara-obsidian`, `--background
-aurora|stills|video|solid`. The demo reads your Studio draft
+aurora|stills|video|solid`, `--look mandara|midnight-card|material-you`
+(starts from that look, as Studio's Looks tab would). The demo reads your Studio draft
 (`~/.config/mandara/greeter.toml`), your own clips in
 `~/.local/share/mandara/login/videos/` and your wallpapers in
 `~/Pictures/Wallpapers`.
@@ -246,11 +247,20 @@ instead (see [commands.md](commands.md#keyrings-and-passwords)).
 setting with a **live preview** — the real greeter view, rendering your draft.
 
 The first tab, **Looks**, applies a whole design in one click: **Mandara**
-(the default) or **Midnight card** (a regular-weight clock with the date under
+(the default: everything floats on the backdrop, with Mandara's emblem above
+the keyboard pill), **Midnight card** (a regular-weight clock with the date under
 it, and one outlined card holding a frameless user icon, an inset field with
 an accent border and a sign-in button beside it, and a full-width session
 field; outlined power buttons, a logo and a colour scheme switcher; the
-Night Citrine theme). Who is listed, sessions, folders, language and
+Night Citrine theme) or **Material You** (Material 3 Expressive: colours
+made from the picture behind the screen, a big stacked clock whose hours take
+a tone of the accent and whose weight grows from thin as the screen wakes,
+and one tonal card with your picture in Material's scalloped twelve-sided
+shape, a filled password field with a round button beside it that squares
+off while held, and the session as a chip with a menu; other people as
+chips, tonal power buttons and the emblem in the accent colour). The
+scalloped avatar turns a little with each key and morphs into a circle while
+the password is checked; reduced motion holds it still. Who is listed, sessions, folders, language and
 accessibility stay as they are, and every part stays editable in the other
 tabs: Layout, Background, Clock & date, Sign-in (card, user, password
 field), Session, power & extras (logo, scheme switcher, language), Theme &
@@ -262,6 +272,13 @@ glass, and Motion & accessibility.
 <td width="50%" valign="top"><img src="screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" width="100%"/><br/><sub><b>Midnight card</b>: one outlined card in navy and citrine</sub></td>
 </tr>
 </table>
+
+**Dynamic colour** (`theme.from_wallpaper`, *Colours from the wallpaper* in
+Theme & glass) builds Material's dark tonal scheme from the leading colour of
+the still behind the login screen: the picked person's shared wallpaper or
+your slideshow. It is picked from a small copy while the still is decoded,
+off the screen's thread. Clips and the aurora have no picture to take it
+from, so the theme preset is used with them.
 
 The last tab, **Login manager**, shows the active login screen (name, icon,
 kind) and every choice, with Mandara Login marked **Recommended · default**.
@@ -368,8 +385,11 @@ seconds = false
 font = ""                        # empty = display font (Alexandria)
 size = 150.0
 weight = 700
+idle_weight = 0                  # weight of the big idle clock (0 = the same)
 opacity = 0.95
 roll_digits = true
+stacked = false                  # hours over minutes
+tint = false                     # hours in a tone of the accent
 
 [date]
 format = ""                      # strftime; empty = the language's default
@@ -380,16 +400,17 @@ opacity = 0.9
 
 [user]
 list = "all"                     # all | last-user | manual
-avatar_shape = "circle"          # circle | squircle | rounded | bare (no frame)
+avatar_shape = "circle"          # circle | squircle | rounded | bare (no frame) | cookie (scalloped)
 avatar_source = "auto"           # auto (AccountsService / ~/.face) | monogram | icon
 avatar_size = 108.0
 glow_ring = true                 # breathing accent ring
 show_name = true
 name_size = 20.0
 hidden = []                      # login names never listed
+switcher = "faces"               # faces | chips (the other people)
 
 [password]
-style = "glass"                  # glass | solid | inset | outline | underline
+style = "glass"                  # glass | solid | inset | outline | underline | filled
 submit = "inside"                # inside | beside | hidden (Enter signs in)
 mask = "dots"                    # dots | shapes (a varied shape per character)
 accent_border = false            # accent border while focused
@@ -405,14 +426,14 @@ glow = true
 [session]
 default = ""                     # e.g. "niri"; a user's last choice wins
 x11 = true
-style = "pill"                   # pill | field (full width)
+style = "pill"                   # pill | field (full width) | chip (with a menu)
 
 [power]
 suspend = true
 reboot = true
 poweroff = true
 labels = true
-style = "soft"                   # soft | outlined
+style = "soft"                   # soft | outlined | tonal
 size = 44.0
 
 [card]                           # user, password and session on one card
@@ -431,6 +452,7 @@ session_inside = true
 path = ""                        # PNG / SVG, empty = Mandara's emblem
 size = 56.0
 opacity = 0.9
+accent = false                   # the emblem in a tone of the accent
 
 [keyboard]
 layout = ""                      # empty = detected
@@ -446,6 +468,7 @@ glass = 0.18
 rim = 0.6
 roundness = 1.0
 switcher = []                    # schemes the "themes" element offers (ids)
+from_wallpaper = false           # colours from the picture behind (dynamic colour)
 
 [motion]
 entrance = true

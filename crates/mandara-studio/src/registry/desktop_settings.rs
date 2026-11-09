@@ -59,6 +59,7 @@ const WIND: &[(&str, &str)] = &[("auto", tk("Follow units")), ("meters-per-secon
 const LOCK_CLOCK: &[(&str, &str)] = &[("classic", tk("Classic")), ("stacked", tk("Stacked")), ("compact", tk("Compact"))];
 const LOCK_BG: &[(&str, &str)] = &[("wallpaper", tk("Wallpaper")), ("image", tk("Image")), ("color", tk("Solid color"))];
 const LOCK_SYMBOLS: &[(&str, &str)] = &[("shapes", tk("Shapes")), ("dots", tk("Dots"))];
+const LOCK_DESIGN: &[(&str, &str)] = &[("mandara", tk("Mandara")), ("material-you", tk("Material You"))];
 const CORNER: &[(&str, &str)] = &[
     ("none", tk("Nothing")),
     ("launcher", tk("Launcher")),
@@ -192,6 +193,7 @@ pub(super) fn entries() -> Vec<Setting> {
         s(DateTime, tk("Weather"), "/weather/show_high_low_in_bar", tk("High / low in the bar"), tk("Today's range next to the temperature"), Toggle),
         s(DateTime, tk("Weather"), "/weather/show_location_in_bar", tk("Place in the bar"), tk("The place name next to the temperature"), Toggle),
         // Lock screen
+        s(LockScreen, tk("Design"), "/lock/design", tk("Design"), tk("Mandara's glass, or Material You: colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar"), Choice(LOCK_DESIGN)),
         s(LockScreen, tk("Clock"), "/lock/clock_style", tk("Clock style"), tk("One light line, stacked hours over minutes, or a small clock"), Choice(LOCK_CLOCK)),
         s(LockScreen, tk("Clock"), "/lock/show_date", tk("Date"), tk("The date under the clock"), Toggle),
         s(LockScreen, tk("Background"), "/lock/background", tk("Background"), tk("Your wallpaper, an image of your choice or a solid color"), Choice(LOCK_BG)),

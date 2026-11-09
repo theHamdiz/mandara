@@ -355,6 +355,19 @@ pub enum LockBackground {
     Color,
 }
 
+/// The lock screen's design.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LockDesign {
+    /// The big clock, the avatar with its accent rim and the glass field.
+    #[default]
+    Mandara,
+    /// Material You: colours from the wallpaper, a big stacked clock in a
+    /// variable weight, and a tonal card with the scalloped avatar, a
+    /// filled field and Material chips.
+    MaterialYou,
+}
+
 /// How typed password characters are hidden on the lock screen.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -377,6 +390,7 @@ pub struct LockConfig {
     /// [`crate::upgrade`]); missing in older files.
     #[serde(default)]
     pub look_version: u32,
+    pub design: LockDesign,
     pub clock_style: LockClockStyle,
     pub background: LockBackground,
     pub image: Option<PathBuf>,
@@ -414,6 +428,7 @@ impl Default for LockConfig {
         Self {
             widgets: crate::preauth::Widgets::default(),
             look_version: crate::upgrade::LOCK_LOOK_VERSION,
+            design: LockDesign::Mandara,
             clock_style: LockClockStyle::Classic,
             background: LockBackground::Wallpaper,
             image: None,
