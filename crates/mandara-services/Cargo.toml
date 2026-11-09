@@ -59,8 +59,14 @@ ab_glyph = "0.2"
 fontdb = "0.23"
 rav1e.workspace = true
 pulseaudio.workspace = true
-# Qur'an recitation: the per-ayah MP3s, decoded in pure Rust.
+# Qur'an recitation (MP3) and internet radio (MP3, AAC/ADTS, Ogg Vorbis),
+# decoded in pure Rust.
 symphonia.workspace = true
+# Internet radio streams: the TLS stack, roots and response parser `ureq`
+# already links, used directly for long-lived, interruptible ICY streams.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1"
+httparse = "1"
 rustfft.workspace = true
 flate2.workspace = true
 tar.workspace = true

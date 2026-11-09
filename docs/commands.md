@@ -211,6 +211,8 @@ mandara msg audio mute-all toggle     # on|off|toggle|status: every output and a
 mandara msg privacy status            # who uses the microphone, camera or screen
 mandara msg tray menu "Input Method"  # tray status|activate|secondary|scroll
 mandara msg soundscapes preset corniche-night   # play|pause|toggle|status, volume <layer|master> <0-100>, sleep <min|off>
+mandara msg radio play fip-jazz                 # play [station], pause|toggle|stop|next|previous|status, volume <0-100>, mute, sleep <min|off>
+mandara msg radio stations jazz                 # list (a shelf); favourite <station>, add <url> [name], remove <station>
 ```
 
 ## Displays and night light

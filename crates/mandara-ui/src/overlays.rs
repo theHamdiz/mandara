@@ -383,11 +383,22 @@ const SNIP_WORDS: &str = "screen capture snip snipping tool snippet sniptool pri
 
 /// Extra search words for built-in plugins, by id: what people call them
 /// when they don't know Mandara's name.
-const PLUGIN_SYNONYMS: &[(&str, &str)] = &[(crate::plugins::screenshot::ID, SNIP_WORDS)];
+const PLUGIN_SYNONYMS: &[(&str, &str)] = &[(crate::plugins::screenshot::ID, SNIP_WORDS), (crate::plugins::radio::ID, RADIO_WORDS)];
+/// Words people type for the radio.
+const RADIO_WORDS: &str = "fm am internet radio stations station stream streaming live broadcast tune music news";
 
 fn build_index(cx: &App) -> Vec<Item> {
     let cfg = config(cx).read(cx).snapshot();
-    build_index_with(cx.global::<mandara_plugins::PluginRegistry>(), &cfg)
+    let registry = cx.global::<mandara_plugins::PluginRegistry>();
+    let mut out = build_index_with(registry, &cfg);
+    // The radio's stations, while the radio is on (built with the index,
+    // dropped with it).
+    if registry.is_enabled(crate::plugins::radio::ID, &cfg.plugins) {
+        for (id, name, shelf, keywords) in crate::plugins::radio::launcher_stations(cx) {
+            out.push(entry(name, tf("Radio · {shelf}", &[("shelf", &tr(shelf))]), "radio", tk("Station"), &keywords, line(&format!("radio play {id}"))));
+        }
+    }
+    out
 }
 
 fn build_index_with(registry: &mandara_plugins::PluginRegistry, cfg: &mandara_config::ShellConfig) -> Vec<Item> {

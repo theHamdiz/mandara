@@ -128,7 +128,7 @@ nucleo-matcher = "0.3"
 pulldown-cmark = { version = "0.13.6", default-features = false }
 pulseaudio = "0.3"
 # Pure-Rust MP3 decoding only: the Qur'an plugin's per-ayah recitation.
-symphonia = { version = "0.5.5", default-features = false, features = ["mp3"] }
+symphonia = { version = "0.5.5", default-features = false, features = ["mp3", "aac", "ogg", "vorbis"] }
 rustfft = "6.4"
 flate2 = "1.1"
 # No `xattr`: Mandara never restores extended attributes when unpacking.

@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Radio.** A new opt-in plugin plays internet radio: about seventy hand-checked stations on shelves for news, talk, pop, rock, jazz, classical, electronic, lo-fi, ambient, world music, Arabic, Qur'an recitation and kids, plus any station you add by its address (Mandara listens for a moment first to make sure it plays). The panel has a large now-playing card with the song title, live badge, format and buffer health, favourites you can reorder, search, a sleep timer that fades out and volume per station; the bar shows the station's art and a scrolling title, and a compact sidebar card (now playing, favourite, previous / play / next and volume) goes on any sidebar tab. Media keys, the media panel and the lock screen follow it, a dropped stream reconnects by itself, and you can search the radio-browser.info directory once you switch it on. Nothing runs until you press play. Turn it on in Studio → Plugins → Radio.
+
 ## 0.23.0 — 2026-11-09
 
 A different shape for every character. Mandara Studio uses less memory.

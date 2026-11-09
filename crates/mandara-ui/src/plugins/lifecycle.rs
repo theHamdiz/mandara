@@ -131,6 +131,9 @@ fn sync(cx: &mut App) {
     if !is_on(super::soundscapes::ID, cx) {
         super::soundscapes::stop();
     }
+    if !is_on(super::radio::ID, cx) {
+        super::radio::stop(cx);
+    }
     if !is_on(crate::productivity::POMODORO_ID, cx)
         && let Some(p) = cx.try_global::<crate::productivity::GlobalProductivity>().map(|g| g.0.clone())
     {
@@ -185,6 +188,7 @@ mod tests {
         "processes",
         "progress",
         "quran",
+        "radio",
         "screen-time",
         "services",
         "share",
