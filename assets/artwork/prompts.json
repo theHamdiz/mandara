@@ -161,6 +161,12 @@
       "palette": "corniche",
       "motif": "circuit",
       "panel": null
+    },
+    "radio": {
+      "glyph": "Cream tabletop radio with a round speaker, slanted aerial and sand tuning marks; a violet-to-indigo tile from #7867B0 to #382B67 with the shared light, rim and shoreline. Four broad shapes keep the receiver readable at small sizes.",
+      "palette": "twilight",
+      "motif": "signal",
+      "panel": null
     }
   },
   "corniche": "Use case: stylized-concept. Asset type: reusable art background for Mandara Shell plugin marketplace covers, horizontal 16:9. Create one original premium abstract Mediterranean chromatic-glass artwork: wide ribbons of translucent turquoise sea glass flow in a slow S-curve through deep midnight Mediterranean blue, a sliver of warm limestone gold refracted light near the lower-right edge. Evoke water at Alexandria's Corniche without buildings. Perspective almost flat, sculptural frosted glass, soft specular edges, gentle luminous caustics, exquisitely restrained, broad simple shapes and generous dark negative space on the left half for future typesetting. Most visual movement in the right half and bottom edge. Palette deep navy #103C63, sea-glass #40C8BD, limestone #FFE4AB. No text, no logos, no icons, no UI, no devices, no objects other than abstract flowing glass. Avoid generic neon cyberpunk, tiny details, grain and noise. Output single landscape background.",

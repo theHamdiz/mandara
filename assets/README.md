@@ -24,7 +24,7 @@ so small lettering stays clean.
 
 ## Plugins
 
-The 78 plugins below include 77 built-ins and the Moon phase example. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
+The 79 plugins below include 78 built-ins and the Moon phase example. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
 
 | Preview | Files | Notes |
 | --- | --- | --- |
@@ -55,6 +55,7 @@ The 78 plugins below include 77 built-ins and the Moon phase example. Each SVG h
 | <img src="plugins/moon-phase/icon.png" width="40" alt="Moon phase icon"> <img src="plugins/moon-phase/cover.png" width="128" alt="Moon phase cover"> | **Moon phase** · [SVG](plugins/moon-phase/icon.svg) · [256 PNG](plugins/moon-phase/icon.png) · [Cover](plugins/moon-phase/cover.png) | Twilight · illustration |
 | <img src="plugins/color-picker/icon.png" width="40" alt="Color picker icon"> <img src="plugins/color-picker/cover.png" width="128" alt="Color picker cover"> | **Color picker** · [SVG](plugins/color-picker/icon.svg) · [256 PNG](plugins/color-picker/icon.png) · [Cover](plugins/color-picker/cover.png) | Twilight · real panel |
 | <img src="plugins/soundscapes/icon.png" width="40" alt="Soundscapes icon"> <img src="plugins/soundscapes/cover.png" width="128" alt="Soundscapes cover"> | **Soundscapes** · [SVG](plugins/soundscapes/icon.svg) · [256 PNG](plugins/soundscapes/icon.png) · [Cover](plugins/soundscapes/cover.png) | Twilight · real panel (paused) |
+| <img src="plugins/radio/icon.png" width="40" alt="Radio icon"> <img src="plugins/radio/cover.png" width="128" alt="Radio cover"> | **Radio** · [SVG](plugins/radio/icon.svg) · [256 PNG](plugins/radio/icon.png) · [Cover](plugins/radio/cover.png) | Twilight · illustration |
 | <img src="plugins/world-clock/icon.png" width="40" alt="World clock icon"> <img src="plugins/world-clock/cover.png" width="128" alt="World clock cover"> | **World clock** · [SVG](plugins/world-clock/icon.svg) · [256 PNG](plugins/world-clock/icon.png) · [Cover](plugins/world-clock/cover.png) | Twilight · real panel |
 | <img src="plugins/net-speed/icon.png" width="40" alt="Network speed icon"> <img src="plugins/net-speed/cover.png" width="128" alt="Network speed cover"> | **Network speed** · [SVG](plugins/net-speed/icon.svg) · [256 PNG](plugins/net-speed/icon.png) · [Cover](plugins/net-speed/cover.png) | Corniche · real panel (IP addresses blurred) |
 | <img src="plugins/authenticator/icon.png" width="40" alt="Authenticator icon"> <img src="plugins/authenticator/cover.png" width="128" alt="Authenticator cover"> | **Authenticator** · [SVG](plugins/authenticator/icon.svg) · [256 PNG](plugins/authenticator/icon.png) · [Cover](plugins/authenticator/cover.png) | Obsidian · real panel (demo accounts) |
@@ -144,7 +145,7 @@ SVGs store sRGB values for desktop renderer compatibility. Use the OKLCH anchors
 | Navigation | `#103C63` → `#286B91` | Session, Launcher, Workspaces, Active window, Keyboard layout, Language, Main menu, System tray, Dock, CI status, Shortcuts cheatsheet |
 | System | `#124D4B` → `#268878` | Resources, Process hunter, Quick settings, Drives, Power, Privacy, Mini stats, Task progress |
 | Connections | `#125477` → `#329DA7` | Network, Bluetooth, Network speed, Tailscale, Uptime monitor |
-| Media | `#40316F` → `#8666AA` | Media, Audio, Screenshot, Color picker, Local AI, Share to phone |
+| Media | `#40316F` → `#8666AA` | Media, Audio, Radio, Screenshot, Color picker, Local AI, Share to phone |
 | Productivity | `#843D58` → `#C47268` | Clipboard, Notifications, To-do, Notes, Pomodoro, Authenticator, Screen time |
 | Time | `#765323` → `#B78D47` | Clock, World clock |
 | Sky | `#30265E` → `#7063B5` | Prayer times, Weather, Wallpaper, Moon phase, Soundscapes, Eye breaks, Presentation mode, Jannah |
@@ -182,7 +183,7 @@ The whole pipeline is Rust (`xtask/src/art.rs`): SVGs render with [resvg](https:
 
 `cargo xtask art` turns every built-in plugin's art into the compact set the shell and Studio embed, in [`crates/mandara-ui/assets/plugin-art/<id>/`](../crates/mandara-ui/assets/plugin-art): `icon.webp` (128 px, rendered from the SVG), `icon@2x.webp` (256 px) and `cover.jpg` (960×540, JPEG quality 82; lossless `cover.webp` when the cover has transparency), plus the generated `index.rs` table. The generated files are committed — they are build inputs. Example plugins in `plugins/examples/` ship their own `icon.png` / `cover.png` inside their package instead.
 
-The embedded-art ceiling is **8,050,000 bytes (7.68 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 77-plugin set uses **7,687,250 bytes (7.33 MiB)**, leaving **362,750 bytes (354 KiB)** of headroom for artwork revisions and small additions.
+The embedded-art ceiling is **8,050,000 bytes (7.68 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 78-plugin set uses **7,775,465 bytes (7.42 MiB)**, leaving **274,535 bytes (268 KiB)** of headroom for artwork revisions and small additions.
 
 ```sh
 cargo xtask art --compose            # render source icons and compose covers (--only ID)

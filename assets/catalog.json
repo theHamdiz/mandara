@@ -696,5 +696,13 @@
     "motif": "circuit",
     "angle": 4,
     "panel": null
+  },
+  {
+    "id": "radio",
+    "name": "Radio",
+    "palette": "twilight",
+    "motif": "signal",
+    "angle": -4,
+    "panel": null
   }
 ]
