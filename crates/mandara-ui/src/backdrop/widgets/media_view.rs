@@ -91,6 +91,9 @@ fn titles(m: &MediaInfo, w: &MediaWidget, x: f32, y: f32, width: f32, k: f32, ma
 
 /// A thin progress line, live (it moves each second while playing).
 fn progress(m: &MediaInfo, now: &DateTime<Local>, x: f32, y: f32, width: f32, k: f32, ink: InkRole, marks: &mut Vec<Mark>) {
+    if m.live {
+        return;
+    }
     let h = PROGRESS_H * k;
     marks.push(Mark::new(MarkKind::Rect { x, y, w: width, h, radius: h / 2.0, width: 0.0 }, InkRole::Fg).dim(TRACK_ALPHA).live());
     let f = if m.length_ms > 0 { position_ms(m, now) as f32 / m.length_ms as f32 } else { 0.0 };
@@ -163,7 +166,7 @@ pub fn media(w: &MediaWidget, m: Option<&MediaInfo>, now: &DateTime<Local>, l: &
             let artist = caps(&fit(&m.artist, &lcd, lw - pad, meas));
             let (aw, ah) = meas.measure(&artist, &lcd);
             marks.push(Mark::new(MarkKind::Text { text: artist, style: lcd.clone(), x: lx + (lw - aw) / 2.0, y: ly + pad / 2.0 + th, w: aw, h: ah }, InkRole::OnAccent).dim(face::DIM));
-            let time = mmss(position_ms(m, now), l);
+            let time = if m.live { caps(mandara_i18n::t("Live")) } else { mmss(position_ms(m, now), l) };
             let big = style(mandara_config::desktop_widgets::FontRole::Mono, TITLE * k * 1.6, face::BOLD);
             let (gw, gh) = meas.measure(&time, &big);
             marks.push(Mark::new(MarkKind::Text { text: time, style: big, x: lx + (lw - gw) / 2.0, y: ly + lh - gh - pad / 3.0, w: gw, h: gh }, InkRole::OnAccent).live());
@@ -308,7 +311,7 @@ mod tests {
         let l = Lingo::of(&Default::default(), false, None);
         assert!(media(&MediaWidget::default(), None, &now, &l, 1.0, &mut Fixed).marks.is_empty());
         let pic = Picture { key: 3, pixmap: std::sync::Arc::new(tiny_skia::Pixmap::new(16, 16).unwrap()) };
-        let m = MediaInfo { title: "Corniche".into(), artist: "Demo".into(), playing: true, position_ms: 10_000, at_ms: now.timestamp_millis() - 2_000, rate: 1.0, length_ms: 60_000, art: Some(pic), lyrics: vec![(0, "one".into()), (11_000, "two".into()), (20_000, "three".into())], lyrics_loading: false };
+        let m = MediaInfo { title: "Corniche".into(), artist: "Demo".into(), playing: true, position_ms: 10_000, at_ms: now.timestamp_millis() - 2_000, rate: 1.0, length_ms: 60_000, live: false, art: Some(pic), lyrics: vec![(0, "one".into()), (11_000, "two".into()), (20_000, "three".into())], lyrics_loading: false };
         assert_eq!(position_ms(&m, &now), 12_000);
         for layout in [MediaLayout::Vinyl, MediaLayout::Device, MediaLayout::Shaped, MediaLayout::SidePill, MediaLayout::Halftone, MediaLayout::Lyrics] {
             for dither in [false, true] {
@@ -318,5 +321,22 @@ mod tests {
         }
         let c = media(&MediaWidget { layout: MediaLayout::Lyrics, ..Default::default() }, Some(&m), &now, &l, 1.0, &mut Fixed);
         assert!(c.marks.iter().any(|mk| mk.ink == InkRole::Accent && matches!(&mk.kind, MarkKind::Text { text, .. } if text == "two")));
+    }
+
+    /// A live stream shows "Live" on the device and no progress line; a
+    /// track shows its time.
+    #[test]
+    fn a_live_stream_shows_live_and_no_progress() {
+        let now = Local.with_ymd_and_hms(2026, 3, 1, 14, 0, 0).unwrap();
+        let l = Lingo::of(&Default::default(), false, None);
+        let track = MediaInfo { title: "Corniche FM".into(), artist: "Live".into(), playing: true, position_ms: 65_000, at_ms: now.timestamp_millis(), rate: 1.0, length_ms: 0, live: false, art: None, lyrics: Vec::new(), lyrics_loading: false };
+        let live = MediaInfo { live: true, ..track.clone() };
+        let texts = |c: &Composition| c.marks.iter().filter_map(|mk| match &mk.kind { MarkKind::Text { text, .. } => Some(text.clone()), _ => None }).collect::<Vec<_>>();
+        let device = |m: &MediaInfo| media(&MediaWidget { layout: MediaLayout::Device, ..Default::default() }, Some(m), &now, &l, 1.0, &mut Fixed);
+        assert!(texts(&device(&track)).iter().any(|t| t == "1:05"));
+        let shown = texts(&device(&live));
+        assert!(shown.iter().any(|t| t == "LIVE") && !shown.iter().any(|t| t == "1:05"), "{shown:?}");
+        let rects = |m: &MediaInfo| media(&MediaWidget { layout: MediaLayout::Vinyl, ..Default::default() }, Some(m), &now, &l, 1.0, &mut Fixed).marks.iter().filter(|mk| matches!(mk.kind, MarkKind::Rect { .. })).count();
+        assert!(rects(&live) < rects(&track), "no progress track when live");
     }
 }

@@ -744,6 +744,7 @@ fn media_data(d: &mut widgets::WidgetData, items: &[mandara_config::desktop_widg
         at_ms: now_ms - ms(state.position_at.elapsed()),
         rate: state.rate,
         length_ms: state.length.map(ms).unwrap_or(0),
+        live: state.is_live(),
         art,
         lyrics,
         lyrics_loading: loading,

@@ -374,6 +374,8 @@ pub struct MediaInfo {
     pub at_ms: i64,
     pub rate: f64,
     pub length_ms: i64,
+    /// A live stream: no progress line, and "Live" for the time.
+    pub live: bool,
     pub art: Option<layout::Picture>,
     /// Synced lyric lines (ms, text), when a lyrics widget asked.
     pub lyrics: Vec<(i64, String)>,
@@ -637,7 +639,7 @@ fn data_key(w: &DesktopWidget, scene: &WidgetScene) -> u64 {
         WidgetKind::AiUsage(_) => key(format!("{:?}", scene.data.ai_usage.get(&w.id))),
         WidgetKind::Games(_) => key(format!("{:?}", scene.data.games)),
         // The track, the art and the lyrics; not the moving position.
-        WidgetKind::Media(_) => key(format!("{:?}", scene.data.media.as_ref().map(|m| (&m.title, &m.artist, m.playing, &m.art, &m.lyrics, m.lyrics_loading, m.length_ms)))),
+        WidgetKind::Media(_) => key(format!("{:?}", scene.data.media.as_ref().map(|m| (&m.title, &m.artist, m.playing, &m.art, &m.lyrics, m.lyrics_loading, m.length_ms, m.live)))),
         _ => 0,
     }
 }
