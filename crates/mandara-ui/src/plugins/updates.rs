@@ -586,12 +586,18 @@ fn source_action(kind: SourceKind, command: &str, system: Option<System>, in_man
     }
 }
 
-/// The action of "Update all": the system and Flatpak in Mandara, else
-/// the combined terminal command.
+/// The action of "Update all": the system and Flatpak in Mandara when that
+/// job covers every pending source, else the combined terminal command (so
+/// AUR packages, or an image-based system's own update, aren't skipped).
 fn all_action(kinds: &[SourceKind], helper: Option<&str>, system: Option<System>, in_mandara: bool) -> UpdateAction {
     let flatpak = kinds.contains(&SourceKind::Flatpak);
-    let only_aur = kinds.iter().all(|k| *k == SourceKind::Aur);
-    match system.filter(|_| in_mandara && !only_aur).and_then(|s| system::system_request(s, flatpak)) {
+    let managed = matches!(system, Some(System::Managed(_)));
+    let covered = kinds.iter().all(|k| match k {
+        SourceKind::Flatpak => true,
+        SourceKind::Aur => false,
+        _ => managed,
+    });
+    match system.filter(|_| in_mandara && covered).and_then(|s| system::system_request(s, flatpak)) {
         Some(r) => UpdateAction::Job(r),
         None => UpdateAction::Terminal(updates::combined_command(kinds, helper)),
     }
@@ -1550,6 +1556,24 @@ fn apply_request(what: &str, system: System, flatpak: bool) -> Result<Request, S
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_all_runs_in_mandara_only_when_the_job_covers_every_source() {
+        use SourceKind::*;
+        use mandara_services::sysupdate::ImageTool;
+        let pacman = Some(System::Managed(mandara_services::sysupdate::plan::BackendId::Pacman));
+        assert_eq!(all_action(&[Pacman, Flatpak], Some("paru"), pacman, true), UpdateAction::Job(Request::System { flatpak: true }));
+        // The job never runs the AUR helper: the terminal's command does both.
+        let both = [Pacman, Aur];
+        assert_eq!(all_action(&both, Some("paru"), pacman, true), UpdateAction::Terminal(updates::combined_command(&both, Some("paru"))));
+        assert_eq!(all_action(&[Aur], Some("paru"), pacman, true), UpdateAction::Terminal(updates::combined_command(&[Aur], Some("paru"))));
+        // An image-based system's own update isn't a Flatpak-only job.
+        let ostree = Some(System::ImageBased(ImageTool::RpmOstree));
+        let pending = [Dnf, Flatpak];
+        assert_eq!(all_action(&pending, None, ostree, true), UpdateAction::Terminal(updates::combined_command(&pending, None)));
+        assert_eq!(all_action(&[Flatpak], None, ostree, true), UpdateAction::Job(Request::Flatpak));
+        assert!(matches!(all_action(&[Pacman], None, pacman, false), UpdateAction::Terminal(_)), "the Terminal setting");
+    }
 
     #[test]
     fn apply_asks_for_no_password_on_systems_mandara_doesnt_update() {
