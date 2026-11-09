@@ -15,8 +15,12 @@ Mandara's logo is a **phoenix rising from a Mediterranean wave**, in violet, cya
 The Pages site uses the existing [128 px phoenix](brand/mandara-128.png) as
 its favicon. Its [page colours](css/pages.css) follow the same light or dark
 preference as the transparent banner, including the image background.
-The [homepage styles](css/landing.css) add the product tour and its native
-Look controls; its pictures come from the demo screenshots in `docs/screenshots/`.
+The [homepage styles](css/site.css) and [script](js/site.js) draw the
+homepage in the shell's Material You language and palettes, set in
+[Alexandria and JetBrains Mono](fonts/OFL.txt), self-hosted WOFF2 subsets under
+the SIL Open Font License. Its pictures are light and dark pairs of the demo
+screenshots in `docs/screenshots/`, and its footer draws the sea at El-Mandara
+in the page's own palette. The site uses no outside images or fonts.
 The [banner source](artwork/banner.html) renders at 1280×400 CSS pixels
 with a scale factor of two and a transparent background. Export it in each
 colour scheme after the fonts and logo have loaded; keep the output lossless

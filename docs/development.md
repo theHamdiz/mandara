@@ -12,18 +12,47 @@ system programs it starts are MangoWM, `dbus-daemon`, `bwrap`, PipeWire
 ## Website
 
 GitHub Pages serves `index.html` as the homepage and the Markdown guides as
-documentation. The homepage uses `assets/css/landing.css`; the shared
-`_includes/head-custom.html` supplies its phoenix favicon and light/dark
-colours. On the homepage, keep root-relative asset and guide links behind
-Jekyll's `relative_url` filter so they work under the repository's `/mandara/`
-path. Markdown guides use file-relative links, which preserve that base path
-and also work when reading the files on GitHub.
+documentation. The guides share `_includes/head-custom.html` (phoenix favicon,
+light/dark colours, `assets/css/pages.css`). The homepage is plain static
+HTML with no front matter or Liquid: Pages copies it as is, its links are
+file-relative (so they work under the repository's `/mandara/` path and when
+opened from disk), and it loads only `assets/css/site.css`,
+`assets/js/site.js` and `assets/js/copy-code.js`. Open `index.html` in a
+browser to preview it; no build step or server is needed.
 
-The Look selector uses native radio controls and the FAQ uses `details`,
-so both work without JavaScript. Preview both colour schemes and narrow
-screens, including keyboard selection and reduced motion. Run
-`cargo test -p xtask pages_tests` to check the linked files, preview controls,
-contrast, installation command and plugin count against the guides.
+The page follows the shell's own Material You language: tonal surfaces,
+expressive shapes (the cookie, flower, clover and burst outlines in the page's
+SVG sprite) and Alexandria, the shell's bilingual typeface, set from hairline
+to black. Alexandria and JetBrains Mono are self-hosted WOFF2 subsets in
+`assets/fonts/` under the SIL Open Font License (`assets/fonts/OFL.txt`), so
+the page makes no third-party requests. Its default palette is Mandara
+Corniche; picking a Look swaps the colour tokens for that Look's palette, and
+the Auto / Light / Dark control in the top bar repaints the page in either
+scheme. Both come from the theme engine: after changing a theme or a Look, run
+`MANDARA_PAGES_DUMP=1 cargo test -p xtask pages` to rewrite the palette block
+in `site.css` and the JSON in `index.html`. The shortcut browser lists
+`default_keybinds()`, the plugin shelf follows `docs/plugins.md` (without the
+opt-in faith plugins, which stay in their own guide section) and the language
+chips follow the locale catalogs; the tests fail when any of them drift.
+
+Every screenshot on the homepage is a pair, `name.webp` (dark) and
+`name-light.webp` (light) of the same scene at the same size, inside a
+`<picture>` whose light source follows the visitor's scheme; site.js switches
+the sources when the visitor forces light or dark. The tests fail on a
+screenshot without its light partner.
+
+Everything works without JavaScript: the Looks and bar styles are native radio
+controls, the questions are a plain list, and every shortcut is listed. The
+script adds the palette and scheme switches, the breathing letters, the slider
+designs, shortcut search, the footer's Alexandria time and the hero film. The
+film slot loads `assets/video/mandara-promo.webm` (then `.mp4`) only after the
+page has loaded, never autoplays with reduced motion, and shows its Play and
+Sound buttons only once a frame has arrived, so the poster stands in until the
+video file is added. Preview both colour schemes, phone width, keyboard
+selection and reduced motion. `cargo test -p xtask pages` checks the links,
+image sizes and pairs, palettes and their contrast, Looks, bar styles,
+shortcuts, plugins, compositors, languages and the installation command
+against their sources.
 
 The shared `assets/js/copy-code.js` adds Copy buttons to the homepage's
 installation command and fenced examples in the guides. It copies the code's
