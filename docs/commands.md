@@ -490,6 +490,11 @@ mandara msg feeds save https://example.org/feed.xml https://example.org/post
 mandara msg feeds read-all
 mandara msg feeds import ~/Downloads/subscriptions.opml
 mandara msg feeds export ~/feeds.opml
+mandara msg reddit open r/linux
+mandara msg reddit posts linux top week
+mandara msg reddit thread https://www.reddit.com/r/linux/comments/abc123/
+mandara msg reddit subscribe r/rust
+mandara msg reddit status
 mandara msg phone devices
 mandara msg phone action DEVICE_ID ring
 mandara msg phone send DEVICE_ID Hello from my desktop

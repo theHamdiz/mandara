@@ -696,5 +696,13 @@
     "motif": "circuit",
     "angle": 4,
     "panel": null
+  },
+  {
+    "id": "reddit",
+    "name": "Reddit",
+    "palette": "corniche",
+    "motif": "peers",
+    "angle": -4,
+    "panel": null
   }
 ]

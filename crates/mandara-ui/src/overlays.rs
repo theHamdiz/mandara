@@ -383,7 +383,7 @@ const SNIP_WORDS: &str = "screen capture snip snipping tool snippet sniptool pri
 
 /// Extra search words for built-in plugins, by id: what people call them
 /// when they don't know Mandara's name.
-const PLUGIN_SYNONYMS: &[(&str, &str)] = &[(crate::plugins::screenshot::ID, SNIP_WORDS), (crate::plugins::feeds::ID, FEEDS_WORDS)];
+const PLUGIN_SYNONYMS: &[(&str, &str)] = &[(crate::plugins::screenshot::ID, SNIP_WORDS), (crate::plugins::feeds::ID, FEEDS_WORDS), (crate::plugins::reddit::ID, REDDIT_WORDS)];
 
 /// Words people type for a feed reader.
 const FEEDS_WORDS: &str = "rss feeds feed news atom reader subscriptions subscribe headlines articles blogs opml";
@@ -401,6 +401,17 @@ fn subscribe_address(q: &str) -> Option<String> {
     let tld = host.rsplit('.').next()?;
     let plausible = host.contains('.') && tld.len() >= 2 && tld.chars().all(|c| c.is_ascii_alphabetic()) && host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
     plausible.then(|| format!("https://{q}"))
+}
+
+/// What people type looking for the Reddit reader.
+const REDDIT_WORDS: &str = "subreddit subreddits communities community threads forum posts comments";
+
+/// `r/name` opens that community in the Reddit plugin, while it is on (its
+/// `reddit open` command is in the index only then).
+fn reddit_entry(q: &str, index: &[Item]) -> Option<Item> {
+    let sub = mandara_services::reddit::Subreddit::parse(q.strip_prefix("r/")?)?;
+    let on = index.iter().any(|i| matches!(i, Item::Entry(Entry { run: Run::Command { words, .. }, .. }) if words.len() >= 2 && words[0] == "reddit" && words[1] == "open"));
+    on.then(|| entry(tf("Open {community} in Reddit", &[("community", &sub.to_string())]), t("Communities, posts and comments"), "messages", tk("Plugin"), REDDIT_WORDS, line(&format!("reddit open {sub}"))))
 }
 
 fn build_index(cx: &App) -> Vec<Item> {
@@ -942,6 +953,9 @@ fn search_with(query: &str, apps: &[DesktopApp], index: &[Item], ctx: &SearchCtx
         let names: Vec<String> = lines.iter().map(|i| item_names(i).0).collect();
         let fuzzy = rank_with(fuzzy(pool, q, haystack), q, &ctx.usage).into_iter().filter(|i| !names.contains(&item_names(i).0));
         let mut found: Vec<Item> = lines.into_iter().chain(fuzzy).collect();
+        if let Some(open) = reddit_entry(q, index) {
+            found.insert(0, open);
+        }
         // A web address can be subscribed to (the feed is found on its page).
         if let Some(url) = subscribe_address(q) {
             let label = tf("Subscribe in Feeds: {site}", &[("site", &crate::plugins::feeds::host(&url))]);
@@ -2452,6 +2466,26 @@ mod tests {
             ["panel", "open", id] => assert!(ids.contains(id), "`{label}` opens the panel of unknown plugin {id}"),
             _ => {}
         }
+    }
+
+    /// `reddit` and `subreddit` find the plugin; `r/name` opens that
+    /// community, only while the plugin is on.
+    #[test]
+    fn reddit_names_and_communities_reach_the_plugin() {
+        let (registry, mut cfg, index) = fixture();
+        let results = search("r/linux", &[], &index);
+        let Some(Item::Entry(first)) = results.first() else { panic!("an entry for r/linux") };
+        assert_eq!(first.label, "Open r/linux in Reddit");
+        let Run::Command { words, .. } = &first.run else { panic!() };
+        assert_line(&registry, words, true, &first.label);
+        for query in ["reddit", "subreddit"] {
+            assert!(search(query, &[], &index).iter().take(5).any(|item| matches!(item, Item::Entry(e) if e.label == "Reddit")), "{query}");
+        }
+        assert!(search("r/not a name", &[], &index).iter().all(|item| !matches!(item, Item::Entry(e) if e.label.starts_with("Open r/"))));
+        cfg.plugins.enabled.retain(|id| id != crate::plugins::reddit::ID);
+        cfg.plugins.disabled.push(crate::plugins::reddit::ID.into());
+        let off = build_index_with(&registry, &cfg);
+        assert!(search("r/linux", &[], &off).iter().all(|item| !matches!(item, Item::Entry(e) if e.label.starts_with("Open r/"))));
     }
 
     #[test]

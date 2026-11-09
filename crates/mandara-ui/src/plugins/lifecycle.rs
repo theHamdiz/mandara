@@ -115,6 +115,7 @@ fn sync(cx: &mut App) {
         return;
     }
     for (id, stop) in [
+        (super::reddit::ID, super::reddit::stop as fn()),
         (super::prayer::ID, super::prayer::clear_settings as fn()),
         (super::jannah::ID, super::jannah::clear_settings as fn()),
         (super::hadith::ID, super::hadith::clear_settings as fn()),
@@ -187,6 +188,7 @@ mod tests {
         "processes",
         "progress",
         "quran",
+        "reddit",
         "screen-time",
         "services",
         "share",

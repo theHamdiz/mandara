@@ -24,7 +24,7 @@ so small lettering stays clean.
 
 ## Plugins
 
-The 78 plugins below include 77 built-ins and the Moon phase example. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
+The 79 plugins below include 78 built-ins and the Moon phase example. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
 
 | Preview | Files | Notes |
 | --- | --- | --- |
@@ -105,6 +105,7 @@ The 78 plugins below include 77 built-ins and the Moon phase example. Each SVG h
 | <img src="plugins/translator/icon.png" width="40" alt="Translator icon"> <img src="plugins/translator/cover.png" width="128" alt="Translator cover"> | **Translator** · [SVG](plugins/translator/icon.svg) · [256 PNG](plugins/translator/icon.png) · [Cover](plugins/translator/cover.png) | Twilight · illustration |
 | <img src="plugins/phone-connect/icon.png" width="40" alt="Phone Connect icon"> <img src="plugins/phone-connect/cover.png" width="128" alt="Phone Connect cover"> | **Phone Connect** · [SVG](plugins/phone-connect/icon.svg) · [256 PNG](plugins/phone-connect/icon.png) · [Cover](plugins/phone-connect/cover.png) | Corniche · illustration |
 | <img src="plugins/feeds/icon.png" width="40" alt="Feeds icon"> <img src="plugins/feeds/cover.png" width="128" alt="Feeds cover"> | **Feeds** · [SVG](plugins/feeds/icon.svg) · [256 PNG](plugins/feeds/icon.png) · [Cover](plugins/feeds/cover.png) | Obsidian · illustration |
+| <img src="plugins/reddit/icon.png" width="40" alt="Reddit icon"> <img src="plugins/reddit/cover.png" width="128" alt="Reddit cover"> | **Reddit** · [SVG](plugins/reddit/icon.svg) · [256 PNG](plugins/reddit/icon.png) · [Cover](plugins/reddit/cover.png) | Corniche · threaded conversation with a gold upvote arrow · illustration |
 | <img src="plugins/home-assistant/icon.png" width="40" alt="Home Assistant icon"> <img src="plugins/home-assistant/cover.png" width="128" alt="Home Assistant cover"> | **Home Assistant** · [SVG](plugins/home-assistant/icon.svg) · [256 PNG](plugins/home-assistant/icon.png) · [Cover](plugins/home-assistant/cover.png) | Corniche · illustration |
 
 ## Launcher alternatives
@@ -182,7 +183,7 @@ The whole pipeline is Rust (`xtask/src/art.rs`): SVGs render with [resvg](https:
 
 `cargo xtask art` turns every built-in plugin's art into the compact set the shell and Studio embed, in [`crates/mandara-ui/assets/plugin-art/<id>/`](../crates/mandara-ui/assets/plugin-art): `icon.webp` (128 px, rendered from the SVG), `icon@2x.webp` (256 px) and `cover.jpg` (960×540, JPEG quality 82; lossless `cover.webp` when the cover has transparency), plus the generated `index.rs` table. The generated files are committed — they are build inputs. Example plugins in `plugins/examples/` ship their own `icon.png` / `cover.png` inside their package instead.
 
-The embedded-art ceiling is **8,050,000 bytes (7.68 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 77-plugin set uses **7,687,250 bytes (7.33 MiB)**, leaving **362,750 bytes (354 KiB)** of headroom for artwork revisions and small additions.
+The embedded-art ceiling is **8,050,000 bytes (7.68 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 78-plugin set uses **7,806,759 bytes (7.45 MiB)**, leaving **243,241 bytes (238 KiB)** of headroom for artwork revisions and small additions.
 
 ```sh
 cargo xtask art --compose            # render source icons and compose covers (--only ID)

@@ -16,6 +16,8 @@ handbook) sit beside it.
 
 Home Assistant and Phone Connect keep their data cached while enabled; Feeds
 keeps only unread counts and loads its history while its panel is open.
+Reddit keeps posts and comments only while its panel is open and for a
+minute and a half after it closes; its pictures go as soon as it closes.
 Switching one off clears its snapshots, and a late refresh cannot restore them.
 Article read history stays on disk. An explicit home or device action already
 running can finish; disabling the plugin prevents a follow-up refresh.
@@ -27,7 +29,7 @@ running can finish; disabling the plugin prevents a follow-up refresh.
 </tr>
 </table>
 
-The 77 first-party plugins (41 of them ship switched off, marked *opt-in*):
+The 78 first-party plugins (42 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -85,6 +87,7 @@ The 77 first-party plugins (41 of them ship switched off, marked *opt-in*):
 | **Translator** | Translate text with DeepL or your own LibreTranslate server; text is sent only when you ask *(opt-in)* |
 | **Phone Connect** | Paired KDE Connect devices: battery, ring, ping and explicitly send clipboard text *(opt-in)* |
 | **Feeds** | A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search, a clean reader view, starter feeds and OPML *(opt-in)* |
+| **Reddit** | Browse your communities, posts and comment threads in a panel (cards, compact or grid) and a sidebar card: limited mode on Reddit's public feeds out of the box, full mode with your own installed-app client id; NSFW hidden and spoilers covered by default *(opt-in)* |
 | **Home Assistant** | Your real home states and favourites, with controls for lights, switches, fans, scenes, scripts and buttons *(opt-in)* |
 | **Share to phone** | Clipboard text, a screenshot or a file, served once on your network behind a QR code *(opt-in)* |
 | **Tailscale** | Your tailnet: this device, peers, direct or relayed paths, exit nodes, connect and disconnect *(opt-in)* |
@@ -136,7 +139,7 @@ the process hunter, the authenticator, soundscapes, world clock, network
 speed, the color picker, Pomodoro, notes, to-do, privacy, the app
 installer, the shortcuts cheatsheet, task progress, eye breaks,
 presentation mode, share to phone, Tailscale, the uptime monitor, local
-AI, listening ports, Git repositories, CI status, crash reports, Jannah, the Qur'an and Hadith.
+AI, listening ports, Git repositories, CI status, crash reports, Reddit, Jannah, the Qur'an and Hadith.
 Turn any of them on in Studio → Plugins or with
 `mandara msg plugins enable <id>`. **Upgrading from 0.1 changes nothing you
 had:** a config written before these defaults keeps every plugin it had on

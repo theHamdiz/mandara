@@ -58,6 +58,7 @@ pub mod notifications;
 pub mod notify_policy;
 pub mod privacy;
 pub mod reaper;
+pub mod reddit;
 pub mod sounds;
 pub mod leds;
 pub mod system_events;
