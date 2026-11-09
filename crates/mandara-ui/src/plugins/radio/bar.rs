@@ -40,6 +40,20 @@ struct Marquee {
     width: f32,
     /// When this title started (the scroll's clock).
     since: Option<Instant>,
+    /// When the dot started breathing: its own clock, because the title's
+    /// runs only where the marquee measures (the Full style).
+    waiting_since: Option<Instant>,
+}
+
+impl Marquee {
+    /// Seconds the dot has been breathing (`0` and reset when it isn't).
+    fn breath_age(&mut self, breathing: bool, now: Instant) -> f32 {
+        if !breathing {
+            self.waiting_since = None;
+            return 0.0;
+        }
+        now.saturating_duration_since(*self.waiting_since.get_or_insert(now)).as_secs_f32()
+    }
 }
 
 thread_local! {
@@ -103,8 +117,9 @@ pub(super) fn render(palette: &MandaraPalette, window: &mut Window, cx: &mut App
     // The dot breathes only while it waits (connecting, buffering,
     // reconnecting): playing costs no frames unless the marquee scrolls.
     let breathing = status.active() && !live && !reduced;
+    let breath = MARQUEE.with(|m| m.borrow_mut().breath_age(breathing, Instant::now()));
     let dot_alpha = if breathing {
-        let t = title_age() / DOT_PERIOD_S * std::f32::consts::TAU;
+        let t = breath / DOT_PERIOD_S * std::f32::consts::TAU;
         DOT_ALPHA.0 + (DOT_ALPHA.1 - DOT_ALPHA.0) * (0.5 + 0.5 * t.cos())
     } else {
         DOT_ALPHA.1
@@ -151,3 +166,23 @@ pub(super) fn render(palette: &MandaraPalette, window: &mut Window, cx: &mut App
 
 /// Line height of the marquee strip as a share of the text size.
 const TEXT_LINE: f32 = 1.4;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The dot's clock runs in every style (Compact never measures a
+    /// title, so the title's clock stays at zero there) and restarts each
+    /// time the stream starts waiting again.
+    #[test]
+    fn the_dot_breathes_on_its_own_clock() {
+        let mut m = Marquee::default();
+        let start = Instant::now();
+        assert_eq!(m.breath_age(true, start), 0.0);
+        let later = m.breath_age(true, start + Duration::from_millis(400));
+        assert!((later - 0.4).abs() < 1e-3, "{later}");
+        assert!(m.since.is_none(), "independent of the title's clock");
+        assert_eq!(m.breath_age(false, start + Duration::from_secs(1)), 0.0);
+        assert_eq!(m.breath_age(true, start + Duration::from_secs(2)), 0.0, "a new wait starts from the bright end");
+    }
+}
