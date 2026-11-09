@@ -1029,10 +1029,13 @@ impl ShellView {
                 self.panel_committed = false;
                 self.panel_shadow.clear();
                 self.leave_task = None;
+                // It folds back into the bar in one motion: an exit target
+                // lands on the bar and stays there, where the open spring
+                // would swing past it and grow back out for a moment.
                 if let Some(slot) = self.panel_slot
                     && let Some((collapsed, _)) = self.panel_rects(cfg, slot)
                 {
-                    self.panel.set_target(collapsed);
+                    self.panel.set_exit_target(collapsed);
                 }
             }
             None => {}
@@ -1078,6 +1081,9 @@ impl ShellView {
         if self.panel_visible {
             let moving = step_spring(&mut self.panel, self.panel_custom, dt);
             animating |= moving;
+            // Measurement only (`RUST_LOG=mandara::panel_morph=trace`): the
+            // animated panel rect per frame, to check the morph's path.
+            tracing::trace!(target: "mandara::panel_morph", open = panel_open, moving, bounds = ?self.panel.value(), "panel frame");
             if !moving && !panel_open {
                 self.panel_visible = false;
                 self.panel_slot = None;
@@ -1303,7 +1309,13 @@ impl Render for ShellView {
         // (Before the panel: an open sidebar moves the panel.)
         // A side bar on the sidebar's edge replaces it.
         let sidebar_up = cfg.sidebar_active() && (cfg.sidebar.pinned() || self.shell.read(cx).sidebar_visible_on(&self.monitor));
-        self.sidebar.set_target(if sidebar_up { 1.0 } else { 0.0 });
+        // Hiding, it slides off in one motion: it never swings back into
+        // view once it reached the edge.
+        if sidebar_up {
+            self.sidebar.set_target(1.0);
+        } else {
+            self.sidebar.set_exit_target(0.0);
+        }
         self.update_panel(&cfg, cx);
         // An attached launcher can grow out of its bar button: say where
         // that rests on this output (only while the launcher is open).

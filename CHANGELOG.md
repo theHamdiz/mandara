@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **Panels close in one smooth motion.** A drop-down panel folding back into the bar no longer pops a sliver of itself back out a moment after it looked closed, which made it seem to close in two steps (most noticeable with a low damping in Studio's motion settings). It now slides home and stays there, and a hidden sidebar no longer peeks back in after sliding away. Opening keeps its springy feel, and your motion speed, spring settings and reduced motion still apply.
+
 ## 0.23.0 — 2026-11-09
 
 A different shape for every character. Mandara Studio uses less memory.
