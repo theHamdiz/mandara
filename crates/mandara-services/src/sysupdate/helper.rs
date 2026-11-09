@@ -85,6 +85,11 @@ impl CancelSignal {
         self.requested.store(true, Ordering::SeqCst);
     }
 
+    /// Drops a request (one the helper refused).
+    pub fn clear(&self) {
+        self.requested.store(false, Ordering::SeqCst);
+    }
+
     /// Accepts a request only while a cancellable step runs.
     pub fn try_request(&self) -> bool {
         let ok = self.cancellable.load(Ordering::SeqCst);

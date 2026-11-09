@@ -134,6 +134,55 @@ fn cancel_is_refused_while_installing() {
 }
 
 #[test]
+fn a_refused_cancel_doesnt_stop_flatpak_afterwards() {
+    // A helper that answers a cancel as the download ends (the step the
+    // card still shows) by refusing it, then installs.
+    struct LateRefusal;
+    impl Launcher for LateRefusal {
+        fn prepare(&self) -> Result<PathBuf, Failure> {
+            Ok(PathBuf::from("/usr/local/lib/mandara/mandara-admin"))
+        }
+        fn root(&self, _: &Path, _: &[String]) -> std::io::Result<RootProc> {
+            let (out_r, mut out_w) = std::io::pipe()?;
+            let (in_r, in_w) = std::io::pipe()?;
+            let (err_r, err_w) = std::io::pipe()?;
+            let handle = std::thread::spawn(move || {
+                use std::io::BufRead as _;
+                let mut say = |m: Mark| writeln!(out_w, "{}", m.line()).is_ok();
+                say(Mark::Begin { backend: "pacman".into(), steps: 2 });
+                say(Mark::Step { index: 1, kind: StepKind::Download });
+                let asked = std::io::BufReader::new(in_r).lines().map_while(Result::ok).any(|l| l.trim() == protocol::CANCEL);
+                say(Mark::Cancel { accepted: !asked });
+                say(Mark::Exit { index: 1, code: Some(0) });
+                say(Mark::Step { index: 2, kind: StepKind::Install });
+                say(Mark::Exit { index: 2, code: Some(0) });
+                say(Mark::Done(Outcome::Ok));
+                drop(err_w);
+                Some(0)
+            });
+            Ok(RootProc { stdout: Box::new(out_r), stderr: Box::new(err_r), stdin: Box::new(in_w), wait: Box::new(move || Ok(handle.join().ok().flatten())) })
+        }
+        fn has_flatpak(&self) -> bool {
+            true
+        }
+        fn user(&self) -> &dyn Runner {
+            static R: std::sync::OnceLock<Replay> = std::sync::OnceLock::new();
+            R.get_or_init(|| Replay::new(BackendId::Pacman))
+        }
+    }
+    let job = start(Request::System { flatpak: true }, Arc::new(LateRefusal), quiet());
+    wait_for(&job, |s| s.step_kind == Some(StepKind::Download));
+    assert!(job.cancel());
+    let f = wait(&job);
+    assert_eq!(f.outcome, JobOutcome::Done { nothing_to_do: false }, "Flatpak ran after the refused cancel");
+    assert_eq!(f.changed, 3, "the recorded Flatpak update");
+    job.with(|s| {
+        assert!(!s.cancel_requested, "not left stopping");
+        assert_eq!(s.step, s.steps, "every step ran");
+    });
+}
+
+#[test]
 fn flatpak_only_needs_no_helper() {
     struct NoRoot;
     impl Launcher for NoRoot {
