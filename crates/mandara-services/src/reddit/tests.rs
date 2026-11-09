@@ -124,6 +124,17 @@ fn image_hosts_other_than_reddits_are_never_fetched() {
     assert!(post.media.is_empty());
 }
 
+/// The image fetch itself refuses any host but Reddit's, whatever the caller passes.
+#[test]
+fn the_image_fetch_refuses_other_hosts() {
+    let script = Script::default();
+    let session = session(&script);
+    for url in ["https://tracker.example/pixel.png", "https://i.redd.it.evil.example/x.png", "http://i.redd.it/x.png", "file:///etc/passwd"] {
+        assert!(session.image(url).is_err(), "{url}");
+    }
+    assert!(script.calls.lock().unwrap().is_empty(), "nothing was requested");
+}
+
 /// A generated 600-comment thread: every row parsed, depth first, bounded.
 #[test]
 fn a_large_thread_parses_completely_and_a_huge_one_is_cut_at_the_limit() {

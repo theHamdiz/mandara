@@ -465,7 +465,11 @@ impl<T: Transport> Session<T> {
 
     /// A preview image from one of Reddit's image hosts (not rate limited).
     pub fn image(&self, url: &str) -> Result<Vec<u8>, String> {
-        let Some(rest) = url.strip_prefix("https://") else { return Err(t("Only Reddit's own images are loaded").into()) };
+        // Callers pass addresses the parser already filtered; check again so
+        // no future caller can make this fetch an arbitrary host.
+        let (Some(rest), Some(_)) = (url.strip_prefix("https://"), super::parse::image_url(url)) else {
+            return Err(t("Only Reddit's own images are loaded").into());
+        };
         // A loopback test server serves the pictures too, under `/media/<host>/…`.
         let url = if self.endpoints.api == OFFICIAL_API { url.to_owned() } else { format!("{}/media/{rest}", self.endpoints.api) };
         crate::offline::check()?;

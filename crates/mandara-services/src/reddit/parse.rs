@@ -175,7 +175,7 @@ fn line(text: &str, max: usize) -> Box<str> {
 }
 
 /// An https address on one of Reddit's image hosts.
-fn image_url(url: &str) -> Option<Box<str>> {
+pub(super) fn image_url(url: &str) -> Option<Box<str>> {
     if url.len() > MAX_URL { return None; }
     let rest = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://"))?;
     let host = rest.split(['/', '?', '#']).next()?;
