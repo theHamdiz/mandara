@@ -288,10 +288,7 @@ impl Productivity {
         let mut acknowledged: Vec<_> = pending.iter().map(PendingNote::token).collect();
         let local_draft = self.notes_dirty.get(&id).copied().or_else(|| self.notes_conflicts.iter().find(|((root, note), _)| root == &self.notes.root && *note == id).map(|(_, draft)| draft.generation));
         if let Some(generation) = local_draft { acknowledged.push((id, generation)); }
-        self.queue_notes(cx, acknowledged, move |store| {
-            write_pending(store, &pending)?;
-            store.delete(id).map(|removed| removed || local_draft.is_some())
-        })
+        self.queue_notes(cx, acknowledged, move |store| pending_then(store, &pending, |store| store.delete(id).map(|removed| removed || local_draft.is_some())))
     }
 
     /// Detached UI actions still observe and report their eventual filesystem result.
