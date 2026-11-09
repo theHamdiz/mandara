@@ -747,24 +747,25 @@ fn action_button(m: &Shared, key: &UnitKey, action: UnitAction, palette: &Mandar
     let armed = m.borrow().armed(key, action);
     let soft = readable(tint, palette);
     let ink = ink_on(tint);
+    use crate::components::buttons::{Ink, designed};
     let (m, key) = (m.clone(), key.clone());
-    div()
-        .id(ElementId::Name(SharedString::from(format!("svc-act-{}", action.as_str()))))
-        .h(px(ACTIONS_H))
-        .px(px(ACTION_PAD_X_PX))
-        .flex_none()
-        .rounded_full()
+    let id = ElementId::Name(SharedString::from(format!("svc-act-{}", action.as_str())));
+    let (fill, hover) = (tint.with_alpha(alpha(ACTION_FILL, palette)), tint.with_alpha(alpha(ACTION_HOVER, palette)));
+    // Armed it is filled with its tint (the classic one glows too).
+    let ink_of = if armed { Ink { bg: Some(tint), hover: tint, outline: None } } else { Ink { bg: Some(fill), hover, outline: None } };
+    let el = div().id(id.clone()).h(px(ACTIONS_H)).px(px(ACTION_PAD_X_PX)).flex_none();
+    designed(el, id, ACTIONS_H, false, ink_of, Some(palette), |el| {
+        el.rounded_full()
+            .when(armed, |el| el.bg(tint.hsla()).shadow(vec![glow(tint.with_alpha(ARMED_GLOW.0), ARMED_GLOW.1, 0.0, ARMED_GLOW.2)]))
+            .when(!armed, |el| el.bg(fill.hsla()).hover(move |s| s.bg(hover.hsla())))
+    })
         .flex()
         .items_center()
         .gap(px(ACTION_GAP_PX))
         .cursor_pointer()
         .text_size(px(BUTTON_TEXT_PX))
         .font_weight(FontWeight::SEMIBOLD)
-        .when(armed, |el| el.bg(tint.hsla()).text_color(ink.hsla()).shadow(vec![glow(tint.with_alpha(ARMED_GLOW.0), ARMED_GLOW.1, 0.0, ARMED_GLOW.2)]))
-        .when(!armed, |el| {
-            let hover = tint.with_alpha(alpha(ACTION_HOVER, palette));
-            el.bg(tint.with_alpha(alpha(ACTION_FILL, palette)).hsla()).text_color(soft.hsla()).hover(move |s| s.bg(hover.hsla()))
-        })
+        .text_color(if armed { ink.hsla() } else { soft.hsla() })
         .child(icon(if armed { "check" } else { glyph }, SMALL_ICON_PX, if armed { ink } else { soft }))
         .child(if armed { t("Confirm").to_string() } else { tr(label) })
         .on_click(move |_, _, cx| {
@@ -1122,16 +1123,15 @@ fn filter_segments(m: &Shared, palette: &MandaraPalette) -> AnyElement {
         .into_any_element()
 }
 
-fn search_box(field: &Entity<TextField>, query: &str, palette: &MandaraPalette) -> AnyElement {
+fn search_box(field: &Entity<TextField>, query: &str, palette: &MandaraPalette, cx: &mut App) -> AnyElement {
     let f = field.clone();
-    div()
+    let focused = crate::components::inputs::embed(field, cx);
+    crate::components::inputs::search_frame(div(), SEARCH_RADIUS_PX, focused, palette)
         .flex_1()
         .min_w(px(0.0))
         .h(px(SEARCH_H))
         .pl(px(SEARCH_PAD_L_PX))
         .pr(px(SEARCH_PAD_R_PX))
-        .rounded(px(crate::style::radius(SEARCH_RADIUS_PX)))
-        .bg(palette.surface_container_high.hsla())
         .flex()
         .items_center()
         .gap(px(SEGMENTS_GAP_PX))
@@ -1371,7 +1371,7 @@ impl View {
         };
         let head = header("server", accent, t("Services"), subtitle, palette, Some(scope_toggle(m, scope, palette)));
 
-        let controls = div().flex().items_center().gap(px(tokens::SM)).child(search_box(&self.field, &query, palette)).child(filter_segments(m, palette));
+        let controls = div().flex().items_center().gap(px(tokens::SM)).child(search_box(&self.field, &query, palette, cx)).child(filter_segments(m, palette));
 
         let list: AnyElement = if empty {
             let (glyph, title, hint) = match &listing {

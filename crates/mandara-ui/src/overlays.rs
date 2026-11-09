@@ -2124,18 +2124,21 @@ impl Render for LauncherView {
         let hints_el = look.hints.then(|| self.classic_hints(grid, chips, &palette));
         self.field_px = text::BODY + 1.0;
         let hint = self.prefix_help(text::BODY + 1.0);
-        let search = div()
-            .h(px(SEARCH_H))
-            .px(px(16.0))
-            .rounded(px(crate::style::radius(SEARCH_H / 2.0)))
-            .bg(palette.surface_container_high.hsla())
+        // The search field in the input design picked under Themes →
+        // Components (always focused while the launcher is open).
+        let input = crate::style::input_design();
+        let search = div().h(px(SEARCH_H)).px(px(16.0));
+        let search = if input == crate::components::InputDesign::Classic {
+            search.rounded(px(crate::style::radius(SEARCH_H / 2.0))).bg(palette.surface_container_high.hsla()).border_2().border_color(palette.primary.with_alpha(0.55).hsla())
+        } else {
+            crate::components::inputs::dress(search.relative(), input, true, false, &palette)
+        };
+        let search = search
             .flex()
             .items_center()
             .gap(px(10.0))
             .id("launcher-search")
             .cursor_text()
-            .border_2()
-            .border_color(palette.primary.with_alpha(0.55).hsla())
             .child(icon("search", 18.0, palette.on_surface_variant))
             .child(self.query_field(text::BODY + 1.0, hint, &palette, true))
             // Clicking the field focuses it and puts the caret where you clicked.

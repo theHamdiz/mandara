@@ -42,6 +42,7 @@ pub mod installer_overlay;
 pub mod keepassxc_prompt;
 pub mod keyring_prompt;
 pub mod kit;
+pub mod components;
 pub mod launcher_icons;
 pub mod launcher_ext;
 pub mod launcher_place;

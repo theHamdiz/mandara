@@ -861,20 +861,21 @@ pub fn register(r: &mut PluginRegistry) {
                     l.1.value().clamp(0.0, POP_MAX)
                 };
                 let secondary = palette.secondary;
-                let layout_pill = div()
-                    .id("mango-layout")
-                    .h(px(PILL_H))
-                    .px(px(LAYOUT_PAD_X_PX))
-                    .rounded_full()
+                // The layout pill is a button: it follows the button design
+                // picked under Themes → Components.
+                let ink = crate::components::buttons::Ink { bg: Some(secondary.with_alpha(TINT_FILL.0)), hover: secondary.with_alpha(TINT_HOVER.0), outline: None };
+                let layout_pill = div().id("mango-layout").h(px(PILL_H)).px(px(LAYOUT_PAD_X_PX));
+                let layout_pill = crate::components::buttons::designed(layout_pill, "mango-layout", PILL_H, false, ink, Some(palette), |el| {
+                    el.rounded_full().bg(secondary.with_alpha(TINT_FILL.0).hsla()).hover(move |s| s.bg(secondary.with_alpha(TINT_HOVER.0).hsla()))
+                });
+                let layout_pill = layout_pill
                     .flex()
                     .items_center()
                     .gap(px(LAYOUT_GAP_PX))
                     .cursor_pointer()
-                    .bg(secondary.with_alpha(TINT_FILL.0).hsla())
                     .text_color(secondary.hsla())
                     .text_size(px(LAYOUT_TEXT_PX))
                     .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .hover(move |s| s.bg(secondary.with_alpha(TINT_HOVER.0).hsla()))
                     .opacity(LAYOUT_MIN_OPACITY + (1.0 - LAYOUT_MIN_OPACITY) * pop.min(1.0))
                     .child(icon(glyph, SMALL_ICON_PX * (LAYOUT_GLYPH_MIN + (1.0 - LAYOUT_GLYPH_MIN) * pop), secondary))
                     .child(mandara_i18n::tr(name))
@@ -882,10 +883,12 @@ pub fn register(r: &mut PluginRegistry) {
                         let _ = dispatch(cx, |b| b.cycle_layout(""));
                     });
                 let mode = (!keymode.is_empty() && keymode != "default").then(|| {
+                    // A badge: shaped like the chips of the current design.
+                    let chip = crate::style::chip_design();
                     div()
                         .h(px(PILL_H))
                         .px(px(KEYMODE_PAD_X_PX))
-                        .rounded_full()
+                        .rounded(px(crate::components::chips::chip_radius(chip, PILL_H)))
                         .flex()
                         .items_center()
                         .bg(palette.tertiary.hsla())

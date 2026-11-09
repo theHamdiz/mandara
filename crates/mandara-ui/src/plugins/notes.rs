@@ -412,19 +412,16 @@ fn chip(topic: Option<&Topic>, count: usize, active: bool, palette: &MandaraPale
 }
 
 fn menu_button(id: (&'static str, u64), label: &'static str, color: Color, palette: &MandaraPalette, on: impl Fn(&mut App) + 'static) -> AnyElement {
-    div()
-        .id(id)
-        .h(px(MENU_BUTTON_H_PX))
-        .px(px(MENU_BUTTON_PAD_X_PX))
-        .rounded_full()
+    use crate::components::buttons::{Ink, designed};
+    let (fill, hover) = (palette.on_surface.with_alpha(CHIP_IDLE_ALPHA), color.with_alpha(CHIP_ACTIVE_ALPHA));
+    let el = div().id(id).h(px(MENU_BUTTON_H_PX)).px(px(MENU_BUTTON_PAD_X_PX));
+    designed(el, id, MENU_BUTTON_H_PX, false, Ink { bg: Some(fill), hover, outline: None }, Some(palette), |el| el.rounded_full().bg(fill.hsla()).hover(move |s| s.bg(hover.hsla())))
         .row()
         .items_center()
         .cursor_pointer()
         .text_size(px(text::BODY_S))
         .font_weight(FontWeight::MEDIUM)
         .text_color(color.hsla())
-        .bg(palette.on_surface.with_alpha(CHIP_IDLE_ALPHA).hsla())
-        .hover(|s| s.bg(color.with_alpha(CHIP_ACTIVE_ALPHA).hsla()))
         .child(mandara_i18n::t(label))
         .on_click(move |_, _, cx| on(cx))
         .into_any_element()

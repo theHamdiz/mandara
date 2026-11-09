@@ -533,23 +533,25 @@ fn badge(label: impl Into<SharedString>, tint: Color, palette: &MandaraPalette) 
 
 /// The accent gradient "Update" button that opens the terminal.
 fn update_button(id: ElementId, label: &'static str, command: String, m: &Shared, palette: &MandaraPalette) -> AnyElement {
+    use crate::components::buttons::{Ink, designed};
     let from = palette.primary;
     let to = partner(palette.primary).with_lightness(palette.primary.lightness());
     let ink = palette.on_primary;
     let m = m.clone();
-    div()
-        .id(id)
-        .h(px(BUTTON_H))
-        .px(px(BUTTON_PAD_X_PX))
-        .flex_none()
-        .rounded_full()
+    // Designed shapes are filled with the gradient's start; the classic
+    // pill keeps the gradient and its glow.
+    let hover = from.mix(ink, crate::kit::alpha::HOVER_FILLED);
+    let el = div().id(id.clone()).h(px(BUTTON_H)).px(px(BUTTON_PAD_X_PX)).flex_none();
+    designed(el, id, BUTTON_H, false, Ink { bg: Some(from), hover, outline: None }, Some(palette), |el| {
+        el.rounded_full()
+            .bg(oklab_gradient(ANGLE_RIGHT_DEG, from, to))
+            .shadow(vec![glow(readable(from, palette).with_alpha(BUTTON_GLOW.0), BUTTON_GLOW.1, 0.0, BUTTON_GLOW.2)])
+            .hover(|s| s.opacity(BUTTON_HOVER_OPACITY))
+    })
         .flex()
         .items_center()
         .gap(px(BUTTON_GAP_PX))
         .cursor_pointer()
-        .bg(oklab_gradient(ANGLE_RIGHT_DEG, from, to))
-        .shadow(vec![glow(readable(from, palette).with_alpha(BUTTON_GLOW.0), BUTTON_GLOW.1, 0.0, BUTTON_GLOW.2)])
-        .hover(|s| s.opacity(BUTTON_HOVER_OPACITY))
         .text_size(px(BUTTON_TEXT_PX))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(ink.hsla())
@@ -834,6 +836,7 @@ fn news_card(m: &Shared, i: usize, radius: f32, palette: &MandaraPalette) -> Any
 }
 
 fn check_button(m: &Shared, checking: bool, palette: &MandaraPalette) -> AnyElement {
+    use crate::components::buttons::{Ink, designed};
     let accent = readable(palette.primary, palette);
     let hover = accent.with_alpha(alpha(TINT_HOVER, palette));
     let spinner = gpui::svg()
@@ -843,37 +846,34 @@ fn check_button(m: &Shared, checking: bool, palette: &MandaraPalette) -> AnyElem
         .text_color(accent.hsla())
         .with_animation("upd-spin", Animation::new(SPIN).repeat(), |svg, delta| svg.with_transformation(gpui::Transformation::rotate(gpui::radians(delta * std::f32::consts::TAU))));
     let m = m.clone();
-    div()
-        .id("upd-check")
-        .h(px(BUTTON_H))
-        .px(px(CHECK_PAD_X_PX))
-        .flex_none()
-        .rounded_full()
+    let fill = accent.with_alpha(alpha(TINT_FILL, palette));
+    // While checking it is inert: no hover.
+    let ink_of = Ink { bg: Some(fill), hover: if checking { fill } else { hover }, outline: None };
+    let el = div().id("upd-check").h(px(BUTTON_H)).px(px(CHECK_PAD_X_PX)).flex_none();
+    designed(el, "upd-check", BUTTON_H, false, ink_of, Some(palette), |el| el.rounded_full().bg(fill.hsla()).when(!checking, |el| el.hover(move |s| s.bg(hover.hsla()))))
         .flex()
         .items_center()
         .gap(px(CHECK_GAP_PX))
-        .bg(accent.with_alpha(alpha(TINT_FILL, palette)).hsla())
         .text_size(px(BUTTON_TEXT_PX))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(accent.hsla())
         .when(checking, |el| el.opacity(CHECKING_OPACITY).child(spinner).child(t("Checking…")))
         .when(!checking, |el| {
             // start_check notifies the plugin's views itself.
-            el.cursor_pointer().hover(move |s| s.bg(hover.hsla())).child(icon("refresh", SMALL_ICON_PX, accent)).child(t("Check now")).on_click(move |_, _, cx| start_check(&m, None, cx))
+            el.cursor_pointer().child(icon("refresh", SMALL_ICON_PX, accent)).child(t("Check now")).on_click(move |_, _, cx| start_check(&m, None, cx))
         })
         .into_any_element()
 }
 
-fn search_box(field: &Entity<TextField>, query: &str, palette: &MandaraPalette) -> AnyElement {
+fn search_box(field: &Entity<TextField>, query: &str, palette: &MandaraPalette, cx: &mut App) -> AnyElement {
     let f = field.clone();
-    div()
+    let focused = crate::components::inputs::embed(field, cx);
+    crate::components::inputs::search_frame(div(), SEARCH_RADIUS_PX, focused, palette)
         .flex_1()
         .min_w(px(0.0))
         .h(px(CONTROLS_H))
         .pl(px(SEARCH_PAD_L_PX))
         .pr(px(SEARCH_PAD_R_PX))
-        .rounded(px(crate::style::radius(SEARCH_RADIUS_PX)))
-        .bg(palette.surface_container_high.hsla())
         .flex()
         .items_center()
         .gap(px(SEARCH_GAP_PX))
@@ -1124,7 +1124,7 @@ impl View {
             .flex()
             .items_center()
             .gap(px(tokens::SM))
-            .when(total > SEARCH_MIN, |el| el.child(search_box(&self.field, &query, palette)))
+            .when(total > SEARCH_MIN, |el| el.child(search_box(&self.field, &query, palette, cx)))
             .when(total <= SEARCH_MIN, |el| {
                 el.child(
                     div()

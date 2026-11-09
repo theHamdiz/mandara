@@ -9,6 +9,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+pub use crate::components::{ButtonDesign, CardStyle, ChipDesign, InputDesign, ProgressDesign, SurfaceCorners, ToggleDesign};
+
 /// Default values of this module, in one place.
 pub mod defaults {
     /// Calendar subscriptions are re-fetched this often, minutes.
@@ -613,11 +615,34 @@ pub struct StyleConfig {
     pub slider_handle: SliderHandle,
     /// How the thick volume, brightness and mixer sliders are drawn.
     pub slider_design: SliderDesign,
+    /// Component designs (Themes → Components, [`crate::components`]); the
+    /// classic look of each is the default.
+    pub button_design: ButtonDesign,
+    pub toggle_design: ToggleDesign,
+    pub input_design: InputDesign,
+    pub chip_design: ChipDesign,
+    pub progress_design: ProgressDesign,
+    pub surface_corners: SurfaceCorners,
+    pub card_style: CardStyle,
 }
 
 impl Default for StyleConfig {
     fn default() -> Self {
-        Self { radius_scale: 1.0, shadows: true, borders: true, backdrop_dim: 0.0, slider_handle: SliderHandle::Line, slider_design: SliderDesign::Classic }
+        Self {
+            radius_scale: 1.0,
+            shadows: true,
+            borders: true,
+            backdrop_dim: 0.0,
+            slider_handle: SliderHandle::Line,
+            slider_design: SliderDesign::Classic,
+            button_design: ButtonDesign::Classic,
+            toggle_design: ToggleDesign::Classic,
+            input_design: InputDesign::Classic,
+            chip_design: ChipDesign::Classic,
+            progress_design: ProgressDesign::Classic,
+            surface_corners: SurfaceCorners::Rounded,
+            card_style: CardStyle::Tonal,
+        }
     }
 }
 

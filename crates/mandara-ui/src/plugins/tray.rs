@@ -72,9 +72,9 @@ const ROW_HOVER_ALPHA: (f32, f32) = (0.07, 0.06);
 const ROW_DISABLED_OPACITY: f32 = 0.42;
 const LEAD_PX: f32 = 16.0;
 const CHEVRON_PX: f32 = 14.0;
-/// Toggle marks: ring alpha, radio dot, check box radius, indeterminate fill.
+/// Toggle marks: ring alpha, check box radius, indeterminate fill (the
+/// radio is [`crate::components::toggles::classic_radio`]).
 const MARK_RING_ALPHA: f32 = 0.55;
-const RADIO_DOT_PX: f32 = 7.0;
 const CHECK_RADIUS_PX: f32 = 5.0;
 const MIXED_ALPHA: f32 = 0.35;
 /// Separator hairline alpha `(dark, light)`.
@@ -615,13 +615,20 @@ fn bar_view(palette: &MandaraPalette, window: &mut gpui::Window, cx: &mut App) -
 
 /// Check box / radio indicator for toggle entries.
 fn toggle_mark(kind: ToggleKind, on: Option<bool>, palette: &MandaraPalette) -> AnyElement {
+    // Themes → Components → Toggles: the classic marks are these.
+    let design = crate::style::toggle_design();
+    if design != crate::components::ToggleDesign::Classic {
+        return match kind {
+            ToggleKind::Radio => crate::components::toggles::radio(on == Some(true), LEAD_PX, design, palette),
+            _ => crate::components::toggles::checkbox(on, LEAD_PX, design, palette),
+        };
+    }
     let accent = readable(palette.primary, palette);
     let ring = palette.on_surface_variant.with_alpha(MARK_RING_ALPHA);
     let fill = oklab_gradient(ANGLE_DIAGONAL_DEG, palette.primary, partner(palette.primary).with_lightness(palette.primary.lightness()));
     let base = div().size(px(LEAD_PX)).flex_none().flex().items_center().justify_center();
     match (kind, on) {
-        (ToggleKind::Radio, Some(true)) => base.rounded_full().border_2().border_color(accent.hsla()).child(div().size(px(RADIO_DOT_PX)).rounded_full().bg(accent.hsla())).into_any_element(),
-        (ToggleKind::Radio, _) => base.rounded_full().border_1().border_color(ring.hsla()).into_any_element(),
+        (ToggleKind::Radio, on) => crate::components::toggles::classic_radio(on == Some(true), LEAD_PX, palette),
         (_, Some(true)) => base.rounded(px(crate::style::radius(CHECK_RADIUS_PX))).bg(fill).child(icon("check", SMALL_ICON_PX, palette.on_primary)).into_any_element(),
         (_, None) => base.rounded(px(crate::style::radius(CHECK_RADIUS_PX))).bg(accent.with_alpha(MIXED_ALPHA).hsla()).child(icon("minus", SMALL_ICON_PX, palette.on_primary)).into_any_element(),
         (_, Some(false)) => base.rounded(px(crate::style::radius(CHECK_RADIUS_PX))).border_1().border_color(ring.hsla()).into_any_element(),

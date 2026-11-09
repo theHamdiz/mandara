@@ -506,19 +506,16 @@ fn output_button(g: &AppGroup, rc: &RowCx<'_>) -> Option<AnyElement> {
     let (indices, target) = (g.indices.clone(), next.name.clone());
     let p = rc.palette;
     let tint = p.on_surface_variant;
-    let hover = tint.with_alpha(alpha(TINT_HOVER, p));
+    use crate::components::buttons::{Ink, designed};
+    let (fill, hover) = (tint.with_alpha(alpha(TINT_FILL, p)), tint.with_alpha(alpha(TINT_HOVER, p)));
+    let id = SharedString::from(format!("{}-out-{}", rc.id_prefix, g.key));
+    let el = div().id(id.clone()).size(px(PILL_H_PX)).flex_none();
     Some(
-        div()
-            .id(SharedString::from(format!("{}-out-{}", rc.id_prefix, g.key)))
-            .size(px(PILL_H_PX))
-            .flex_none()
-            .rounded_full()
+        designed(el, id, PILL_H_PX, true, Ink { bg: Some(fill), hover, outline: None }, Some(p), |el| el.rounded_full().bg(fill.hsla()).hover(move |st| st.bg(hover.hsla())))
             .flex()
             .items_center()
             .justify_center()
             .cursor_pointer()
-            .bg(tint.with_alpha(alpha(TINT_FILL, p)).hsla())
-            .hover(move |st| st.bg(hover.hsla()))
             .child(crate::icons::icon("headphones", OUTPUT_ICON_PX, tint))
             .on_click(move |_, _, cx| send(cx, AudioCommand::MoveStreams(indices.clone(), target.clone())))
             .into_any_element(),

@@ -83,8 +83,65 @@ pub struct Segment {
     pub on_click: Rc<dyn Fn(&mut Window, &mut App)>,
 }
 
-/// A pill-shaped segmented control (equal-width segments).
+/// A pill-shaped segmented control (equal-width segments), in the chip
+/// design picked under Themes → Components (`style.chip_design`).
 pub fn segmented(id: &'static str, segments: Vec<Segment>, palette: &MandaraPalette) -> AnyElement {
+    segmented_as(crate::style::chip_design(), id, segments, palette)
+}
+
+/// [`segmented`] in `design`.
+pub fn segmented_as(design: crate::components::ChipDesign, id: &'static str, segments: Vec<Segment>, palette: &MandaraPalette) -> AnyElement {
+    use crate::components::{ChipDesign, chips, surfaces::Surface as _};
+    if design != ChipDesign::Classic {
+        let accent = readable(palette.primary, palette);
+        let hover = wash(WASH_SOFT, palette);
+        let n = segments.len();
+        let material = design == ChipDesign::Material;
+        let edge = chips::outline(palette);
+        let group_r = crate::style::radius(CONTROL_RADIUS_PX).max(CONTROL_H / 2.0);
+        return div()
+            .h(px(CONTROL_H))
+            .flex_none()
+            .flex()
+            .items_center()
+            // Material: one outlined group; Connected: buttons a hair apart.
+            .when(material, |el| crate::style::ClipRounded::clip_rounded(el.rounded(px(group_r)).border_1().border_color(edge.hsla())))
+            .when(!material, |el| el.gap(px(SEG_GAP_PX)))
+            .children(segments.into_iter().enumerate().map(move |(i, s)| {
+                let on_click = s.on_click.clone();
+                let place = chips::Place::visual(i, n);
+                let corners = if material { chips::group_corners(place, group_r, CONTROL_H) } else { chips::connected_corners(place, s.active, CONTROL_H) };
+                let (fg, bg) = match (material, s.active) {
+                    (true, true) => (accent, Some(chips::chosen(palette))),
+                    (true, false) => (palette.on_surface_variant, None),
+                    (false, true) => (palette.on_primary, Some(palette.primary)),
+                    (false, false) => (palette.on_surface_variant, Some(wash(SEG_TRACK, palette))),
+                };
+                // Material marks the chosen option with a check when it has no icon.
+                let glyph = s.icon.or((material && s.active).then_some("check"));
+                div()
+                    .id((id, i))
+                    .flex_1()
+                    .h_full()
+                    .px(px(SEG_PAD_X_PX))
+                    .with_corners(corners)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(SEG_ICON_GAP_PX))
+                    .cursor_pointer()
+                    .text_size(px(SEG_TEXT_PX))
+                    .font_weight(if s.active { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
+                    .text_color(fg.hsla())
+                    .when_some(bg, |el, bg| el.bg(bg.hsla()))
+                    .when(material && i + 1 < n, |el| el.border_r_1().border_color(edge.hsla()))
+                    .when(!s.active, |el| el.hover(move |st| st.bg(hover.hsla())))
+                    .when_some(glyph, |el, name| el.child(icon(name, SMALL_ICON_PX, fg)))
+                    .child(s.label)
+                    .on_click(move |_, window, cx| on_click(window, cx))
+            }))
+            .into_any_element();
+    }
     let accent = readable(palette.primary, palette);
     let hover = wash(WASH_SOFT, palette);
     div()
@@ -120,17 +177,17 @@ pub fn segmented(id: &'static str, segments: Vec<Segment>, palette: &MandaraPale
         .into_any_element()
 }
 
-/// A search field with a leading glass icon and a clear button.
-pub fn search_box(id: &'static str, field: &Entity<TextField>, query: &str, palette: &MandaraPalette) -> AnyElement {
+/// A search field with a leading glass icon and a clear button, framed in
+/// the input design picked under Themes → Components.
+pub fn search_box(id: &'static str, field: &Entity<TextField>, query: &str, palette: &MandaraPalette, cx: &mut App) -> AnyElement {
     let f = field.clone();
-    div()
+    let focused = crate::components::inputs::embed(field, cx);
+    crate::components::inputs::search_frame(div(), CONTROL_RADIUS_PX, focused, palette)
         .flex_1()
         .min_w(px(0.0))
         .h(px(CONTROL_H))
         .pl(px(SEARCH_PAD_L_PX))
         .pr(px(SEARCH_PAD_R_PX))
-        .rounded(px(crate::style::radius(CONTROL_RADIUS_PX)))
-        .bg(palette.surface_container_high.hsla())
         .flex()
         .items_center()
         .gap(px(SEARCH_GAP_PX))
