@@ -371,7 +371,7 @@ impl View {
             .flex()
             .flex_col()
             .gap(px(GAP))
-            .child(div().flex().child(search_box("jannah-clear", &self.field, &query, palette)))
+            .child(div().flex().child(search_box("jannah-clear", &self.field, &query, palette, cx)))
             .child(chips)
             .child(div().relative().child(body).when(pending, |el| el.child(div().absolute().top_0().left_0().right_0().flex().justify_center().child(caption(t("Searching…"), palette)))))
             .into_any_element()
@@ -725,6 +725,11 @@ fn reference_row(c: &Ctx, item: &Item, meaning: Option<meanings::Meaning>, saved
 
 /// A round check: filled gold with a tick when `done`, a soft ring else.
 pub(super) fn check(done: bool, side: f32, palette: &MandaraPalette) -> AnyElement {
+    // Themes → Components → Toggles: the gold check is the classic one.
+    let design = crate::style::toggle_design();
+    if design != crate::components::ToggleDesign::Classic {
+        return crate::components::toggles::checkbox(Some(done), side, design, palette);
+    }
     let g = gold(palette);
     div()
         .size(px(side))

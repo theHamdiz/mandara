@@ -425,7 +425,7 @@ impl Render for SheetView {
             // Presses on the card stay on it (outside closes the sheet).
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(header("keyboard", accent, t("Shortcuts"), subtitle, &palette, trailing))
-            .child(div().flex().child(search_box("keybinds-clear", &self.field, &query, &palette)))
+            .child(div().flex().child(search_box("keybinds-clear", &self.field, &query, &palette, cx)))
             .child(body);
         let scrim = palette.surface_dim.mix(Color::hex(SCRIM_BASE_HEX), SCRIM_ALPHA).with_alpha(SCRIM_ALPHA * eased);
         div()

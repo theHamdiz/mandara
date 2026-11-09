@@ -104,16 +104,15 @@ fn next_event(cx: &App) -> Option<(SharedString, SharedString, Option<mandara_th
 }
 
 fn nav_button(id: &'static str, glyph: &'static str, k: f32, palette: &MandaraPalette, on: impl Fn(&mut CalendarView, &mut Context<CalendarView>) + 'static, cx: &mut Context<CalendarView>) -> impl IntoElement {
-    let hover = palette.on_surface.with_alpha(HOVER_ALPHA).hsla();
-    div()
-        .id(id)
-        .size(px(BUTTON_PX * k))
-        .rounded_full()
+    use crate::components::buttons::{Ink, designed};
+    let hover = palette.on_surface.with_alpha(HOVER_ALPHA);
+    let side = BUTTON_PX * k;
+    let el = div().id(id).size(px(side));
+    designed(el, id, side, true, Ink { bg: None, hover, outline: None }, Some(palette), |el| el.rounded_full().hover(move |s| s.bg(hover.hsla())))
         .flex()
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .hover(move |s| s.bg(hover))
         .child(icon(glyph, BUTTON_ICON_PX * k, palette.on_surface_variant))
         .on_click(cx.listener(move |this, _, _, cx| {
             on(this, cx);

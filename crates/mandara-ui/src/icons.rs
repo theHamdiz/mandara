@@ -206,6 +206,10 @@ impl AssetSource for MandaraAssets {
         if path.starts_with("password-symbols/") {
             return Ok(mandara_core::password_symbols::Symbol::from_asset_path(path).map(|s| Cow::Borrowed(s.svg().as_bytes())));
         }
+        // The Material You login avatar's shape and its morph steps.
+        if path.starts_with("login-shapes/") {
+            return Ok(mandara_core::avatar_shape::Step::from_asset_path(path).map(|s| Cow::Borrowed(s.svg().as_bytes())));
+        }
         let Some(name) = path.strip_prefix("icons/").and_then(|p| p.strip_suffix(".svg")) else {
             return Ok(None);
         };
@@ -270,21 +274,70 @@ pub(crate) fn stroke_arc(window: &mut Window, bounds: Bounds<Pixels>, width: f32
     }
 }
 
-/// A circular progress ring: faint track plus a value arc from 12 o'clock.
+/// A circular progress ring: faint track plus a value arc from 12 o'clock,
+/// in the progress design picked under Themes → Components
+/// (`style.progress_design`).
 pub fn ring(value: f32, diameter: f32, stroke: f32, color: Color, track: Color) -> impl IntoElement {
+    ring_as(crate::style::progress_design(), value, diameter, stroke, color, track)
+}
+
+/// [`ring`] in `design`: Classic's track with the arc over it, Material's
+/// arc and track with a gap between them, Wavy's arc as a wave, or
+/// Segmented's twelve steps ([`crate::components::progress::ring_arcs`]).
+pub fn ring_as(design: crate::components::ProgressDesign, value: f32, diameter: f32, stroke: f32, color: Color, track: Color) -> impl IntoElement {
+    use crate::components::progress::{ArcKind, ring_arcs};
     let value = value.clamp(0.0, 1.0);
     canvas(
         |_, _, _| {},
         move |bounds, _, window, _| {
-            stroke_arc(window, bounds, stroke, 0.0, TAU, track);
-            if value > 0.005 {
-                stroke_arc(window, bounds, stroke, -FRAC_PI_2, TAU * value, color);
+            if design == crate::components::ProgressDesign::Classic {
+                stroke_arc(window, bounds, stroke, 0.0, TAU, track);
+                if value > 0.005 {
+                    stroke_arc(window, bounds, stroke, -FRAC_PI_2, TAU * value, color);
+                }
+                return;
+            }
+            // The wave swings inside the stroke band: a thinner line.
+            let thin = stroke * WAVE_STROKE_SHARE;
+            for arc in ring_arcs(design, value) {
+                match arc.kind {
+                    ArcKind::Track => stroke_arc(window, bounds, stroke, arc.from, arc.sweep, track),
+                    ArcKind::Fill => stroke_arc(window, bounds, stroke, arc.from, arc.sweep, color),
+                    ArcKind::Wave => stroke_wave(window, bounds, stroke, thin, arc.from, arc.sweep, color),
+                }
             }
         },
     )
     .size(px(diameter))
     .flex_none()
 }
+
+/// The wavy ring's line as a share of the ring's stroke.
+const WAVE_STROKE_SHARE: f32 = 0.6;
+
+/// A wavy arc: the ring's mid line swinging inside a band `band` wide,
+/// drawn `width` thick.
+fn stroke_wave(window: &mut Window, bounds: Bounds<Pixels>, band: f32, width: f32, from: f32, sweep: f32, color: Color) {
+    let size = f32::from(bounds.size.width).min(f32::from(bounds.size.height));
+    let r = (size - band) / 2.0;
+    let c = (f32::from(bounds.origin.x) + size / 2.0, f32::from(bounds.origin.y) + size / 2.0);
+    let swing = ((band - width) / 2.0).max(0.0);
+    // Finer steps than a plain arc: the wave needs them to stay smooth.
+    let steps = ((sweep.abs() / TAU) * WAVE_POINTS_PER_TURN).ceil().max(2.0) as usize;
+    let mut builder = PathBuilder::stroke(px(width));
+    for i in 0..=steps {
+        let a = from + sweep * i as f32 / steps as f32;
+        let rr = crate::components::progress::ring_wave_radius(a, r, swing);
+        let p = point(px(c.0 + rr * a.cos()), px(c.1 + rr * a.sin()));
+        if i == 0 { builder.move_to(p) } else { builder.line_to(p) }
+    }
+    if let Ok(path) = builder.build() {
+        window.paint_path(path, color.hsla());
+    }
+}
+
+/// Points per turn of a wavy ring.
+const WAVE_POINTS_PER_TURN: f32 = 240.0;
 
 /// Horizontal battery with a fill proportional to `value`.
 pub fn battery(value: f32, charging: bool, color: Color, outline: Color) -> impl IntoElement {

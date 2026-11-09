@@ -258,22 +258,25 @@ fn bar_view(palette: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyE
 
 fn play_button(playing: bool, level: f32, flash: &Flash, palette: &MandaraPalette) -> AnyElement {
     let accent = readable(palette.primary, palette);
+    use crate::components::buttons::{Ink, designed};
     let flash = flash.clone();
-    div()
-        .id("ss-play")
-        .size(px(PLAY_D))
-        .flex_none()
-        .rounded_full()
+    // Designed shapes are filled with the gradient's start; the classic
+    // button keeps the gradient and its glow that follows the sound.
+    let ink = Ink { bg: Some(palette.primary), hover: palette.primary.mix(palette.on_primary, crate::kit::alpha::HOVER_FILLED), outline: None };
+    let el = div().id("ss-play").size(px(PLAY_D)).flex_none();
+    designed(el, "ss-play", PLAY_D, true, ink, Some(palette), |el| {
+        el.rounded_full()
+            .bg(oklab_gradient(ANGLE_DIAGONAL_DEG, palette.primary, partner(palette.primary).with_lightness(palette.primary.lightness())))
+            .when(playing, |el| {
+                el.shadow(vec![glow(
+                    accent.with_alpha(PLAY_GLOW_ALPHA + level.min(PLAY_GLOW_LEVEL_CAP) * PLAY_GLOW_ALPHA_GAIN),
+                    PLAY_GLOW_BLUR_PX + level * PLAY_GLOW_BLUR_GAIN_PX,
+                    0.0,
+                    1.0,
+                )])
+            })
+    })
         .cursor_pointer()
-        .bg(oklab_gradient(ANGLE_DIAGONAL_DEG, palette.primary, partner(palette.primary).with_lightness(palette.primary.lightness())))
-        .when(playing, |el| {
-            el.shadow(vec![glow(
-                accent.with_alpha(PLAY_GLOW_ALPHA + level.min(PLAY_GLOW_LEVEL_CAP) * PLAY_GLOW_ALPHA_GAIN),
-                PLAY_GLOW_BLUR_PX + level * PLAY_GLOW_BLUR_GAIN_PX,
-                0.0,
-                1.0,
-            )])
-        })
         .flex()
         .items_center()
         .justify_center()

@@ -369,7 +369,7 @@ impl View {
             .flex()
             .flex_col()
             .gap(px(GAP))
-            .child(div().flex().child(search_box("hadith-clear", &self.field, &query, palette)))
+            .child(div().flex().child(search_box("hadith-clear", &self.field, &query, palette, cx)))
             .child(chips)
             .child(div().relative().child(body).when_some(note, |el, n| el.child(div().absolute().bottom_0().left_0().right_0().flex().justify_center().child(caption(n, palette).font_features(tabular_nums())))))
             .into_any_element()

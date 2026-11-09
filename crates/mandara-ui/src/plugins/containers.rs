@@ -33,6 +33,7 @@ use super::panel_fx::{
     ANGLE_DIAGONAL_DEG, ANGLE_DOWN_DEG, EXPIRY_MARGIN, HEADER_H, History, PILL_H_PX, PanelShape, SMALL_ICON_PX, ViewSet, alpha, empty_state, glass_card,
     glow, header, meter, partner, readable, redraw_in, sparkline,
 };
+use crate::components::buttons::{Ink, designed};
 use crate::fonts::tabular_nums;
 use crate::icons::icon;
 use crate::kit::{icon_button, reveal, text, tokens};
@@ -898,17 +899,12 @@ fn row_shell(id: ElementId, height: f32, radius: f32, highlighted: bool, armed: 
 fn mini_button(id: &'static str, icon_name: &'static str, tint: Color, pinned: bool, palette: &MandaraPalette, on_click: impl Fn(&mut Window, &mut App) + 'static) -> AnyElement {
     let bg = tint.with_alpha(alpha(MINI_FILL, palette));
     let hover = tint.with_alpha(alpha(MINI_HOVER, palette));
-    div()
-        .id(id)
-        .size(px(BUTTON_PX))
-        .flex_none()
-        .rounded_full()
+    let el = div().id(id).size(px(BUTTON_PX)).flex_none();
+    designed(el, id, BUTTON_PX, true, Ink { bg: Some(bg), hover, outline: None }, Some(palette), |el| el.rounded_full().bg(bg.hsla()).hover(move |s| s.bg(hover.hsla())))
         .flex()
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .bg(bg.hsla())
-        .hover(move |s| s.bg(hover.hsla()))
         .when(!pinned, |el| el.invisible().group_hover("ctr-row", |s| s.visible()))
         .child(icon(icon_name, MINI_ICON_PX, tint))
         .on_click(move |_, window, cx| {
@@ -934,21 +930,27 @@ fn stop_button(key: Key, targets: Targets, ui: &UiRc, sh: &Rc<Shared>, palette: 
     let compact = label.is_empty();
     let (ui, sh) = (ui.clone(), sh.clone());
     let (stop_hover, stop_fill) = (coral.with_alpha(alpha(MINI_HOVER, palette)), coral.with_alpha(alpha(STOP_FILL, palette)));
-    div()
-        // Unique within its row (the row's id namespaces it).
+    // Unique within its row (the row's id namespaces it).
+    let el = div()
         .id("stop")
         .h(px(BUTTON_PX))
         .when(compact, |el| el.w(px(BUTTON_PX)).justify_center())
         .when(!compact, |el| el.px(px(BUTTON_PAD_X_PX)).gap(px(BUTTON_GAP_PX)))
-        .flex_none()
-        .rounded_full()
+        .flex_none();
+    // Armed it is filled coral (the classic one glows too).
+    let ink_of = if armed { Ink { bg: Some(coral), hover: coral, outline: None } } else { Ink { bg: Some(stop_fill), hover: stop_hover, outline: None } };
+    designed(el, "stop", BUTTON_PX, compact, ink_of, Some(palette), |el| {
+        el.rounded_full()
+            .when(armed, |el| el.bg(coral.hsla()).shadow(vec![glow(coral.with_alpha(ARMED_GLOW.0), ARMED_GLOW.1, 0.0, ARMED_GLOW.2)]))
+            .when(!armed, |el| el.bg(stop_fill.hsla()).hover(move |s| s.bg(stop_hover.hsla())))
+    })
         .flex()
         .items_center()
         .cursor_pointer()
         .text_size(px(BUTTON_TEXT_PX))
         .font_weight(FontWeight::SEMIBOLD)
-        .when(armed, |el| el.bg(coral.hsla()).text_color(ink.hsla()).shadow(vec![glow(coral.with_alpha(ARMED_GLOW.0), ARMED_GLOW.1, 0.0, ARMED_GLOW.2)]))
-        .when(!armed, |el| el.bg(stop_fill.hsla()).text_color(soft.hsla()).hover(move |s| s.bg(stop_hover.hsla())).invisible().group_hover("ctr-row", |s| s.visible()))
+        .when(armed, |el| el.text_color(ink.hsla()))
+        .when(!armed, |el| el.text_color(soft.hsla()).invisible().group_hover("ctr-row", |s| s.visible()))
         .child(icon(if armed { "check" } else { "stop" }, SMALL_ICON_PX, if armed { ink } else { soft }))
         .when(!compact, |el| el.child(label))
         .on_click(move |_, _, cx| {
@@ -1261,16 +1263,15 @@ fn segmented<T: Copy + PartialEq + 'static>(id: &'static str, items: &[(T, &'sta
         .into_any_element()
 }
 
-fn search_box(field: &Entity<TextField>, query: &str, palette: &MandaraPalette) -> AnyElement {
+fn search_box(field: &Entity<TextField>, query: &str, palette: &MandaraPalette, cx: &mut App) -> AnyElement {
     let f = field.clone();
-    div()
+    let focused = crate::components::inputs::embed(field, cx);
+    crate::components::inputs::search_frame(div(), SEARCH_RADIUS_PX, focused, palette)
         .flex_1()
         .min_w(px(0.0))
         .h(px(SEARCH_H))
         .pl(px(SEARCH_PAD_L_PX))
         .pr(px(SEARCH_PAD_R_PX))
-        .rounded(px(crate::style::radius(SEARCH_RADIUS_PX)))
-        .bg(palette.surface_container_high.hsla())
         .flex()
         .items_center()
         .gap(px(SEGMENTS_GAP_PX))
@@ -1756,7 +1757,7 @@ impl View {
         let list_h = if empty { EMPTY_H } else { list_h.min(LIST_MAX_H) };
         self.set_height(base_h + SEARCH_H + CONTROLS_GAP_PX + COLS_H + COLUMNS_GAP_PX + list_h + if more > 0 { FOOTER_H } else { 0.0 });
 
-        let mut controls = div().flex().items_center().gap(px(tokens::SM)).child(search_box(&self.field, &query, palette));
+        let mut controls = div().flex().items_center().gap(px(tokens::SM)).child(search_box(&self.field, &query, palette, cx));
         if stopped_too {
             let (ui2, sh2) = (ui.clone(), sh.clone());
             controls = controls.child(segmented("ctr-filter", &[(Filter::Running, tk("Running"), "play"), (Filter::All, tk("All"), "list-check")], filter, palette, move |f, _, cx| {

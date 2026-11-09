@@ -494,21 +494,24 @@ fn end_button(key: RowKey, name: SharedString, pid: u32, m: &Shared, palette: &M
     let ink = ink_on(coral);
     let (soft_fill, hover_fill) = (alpha(END_SOFT, palette), alpha(END_HOVER, palette));
     let (glow_alpha, glow_blur, glow_dy) = ARMED_GLOW;
+    use crate::components::buttons::{Ink, designed};
     let m = m.clone();
-    div()
-        .id(key.element("ports-end"))
-        .h(px(PILL_H_PX))
-        .px(px(END_PAD_X_PX))
-        .flex_none()
-        .rounded_full()
+    let id = key.element("ports-end");
+    // Armed it is filled coral (the classic one glows too).
+    let ink_of = if armed { Ink { bg: Some(coral), hover: coral, outline: None } } else { Ink { bg: Some(coral.with_alpha(soft_fill)), hover: coral.with_alpha(hover_fill), outline: None } };
+    let el = div().id(id.clone()).h(px(PILL_H_PX)).px(px(END_PAD_X_PX)).flex_none();
+    designed(el, id, PILL_H_PX, false, ink_of, Some(palette), |el| {
+        el.rounded_full()
+            .when(armed, |el| el.bg(coral.hsla()).shadow(vec![glow(coral.with_alpha(glow_alpha), glow_blur, 0.0, glow_dy)]))
+            .when(!armed, |el| el.bg(coral.with_alpha(soft_fill).hsla()).hover(move |s| s.bg(coral.with_alpha(hover_fill).hsla())))
+    })
         .flex()
         .items_center()
         .gap(px(ACTIONS_GAP_PX))
         .cursor_pointer()
         .text_size(px(END_TEXT_PX))
         .font_weight(FontWeight::SEMIBOLD)
-        .when(armed, |el| el.bg(coral.hsla()).text_color(ink.hsla()).shadow(vec![glow(coral.with_alpha(glow_alpha), glow_blur, 0.0, glow_dy)]))
-        .when(!armed, |el| el.bg(coral.with_alpha(soft_fill).hsla()).text_color(soft.hsla()).hover(move |s| s.bg(coral.with_alpha(hover_fill).hsla())))
+        .text_color(if armed { ink.hsla() } else { soft.hsla() })
         .child(icon(if armed { "check" } else { "close" }, SMALL_ICON_PX, if armed { ink } else { soft }))
         .child(if armed { t("Confirm") } else { t("End") })
         .on_click(move |_, _, cx| {
@@ -734,7 +737,7 @@ impl View {
             .flex()
             .items_center()
             .gap(px(tokens::SM))
-            .child(search_box("ports-clear", &self.field, &query, palette))
+            .child(search_box("ports-clear", &self.field, &query, palette, cx))
             .child(segmented("ports-filter", vec![seg(tk("All"), Filter::All), seg(tk("TCP"), Filter::Tcp), seg(tk("UDP"), Filter::Udp)], palette));
 
         let rows: Vec<AnyElement> = shown.iter().map(|&i| row(i, m, palette, row_r)).collect();

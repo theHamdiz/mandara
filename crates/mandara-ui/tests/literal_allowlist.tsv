@@ -7,7 +7,7 @@ mandara-studio/src/app/diagnostics_page.rs	px	2	Studio window layout (Studio's o
 mandara-studio/src/app/greeter_page.rs	px	1	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
 mandara-studio/src/app/maint_page.rs	px	2	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
 mandara-studio/src/app/plugin_modal.rs	px	1	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
-mandara-studio/src/app/plugins_local.rs	px	113	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
+mandara-studio/src/app/plugins_local.rs	px	112	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
 mandara-studio/src/app/users_page.rs	px	4	Studio window layout (Studio's own chrome, not the shell's look): fixed design spacing and control sizes
 mandara-ui/src/desktop.rs	px	1	desktop widget metric (fixed design; wallpaper clock position/scale are settings)
 mandara-ui/src/icons.rs	px	5	icon glyph metrics (bar icons follow bar.icon_scale)

@@ -33,7 +33,7 @@ use gpui::{
 };
 use mandara_core::ToGpui;
 use mandara_greeter::config::{
-    Anchor, AvatarShape, AvatarSource, BackgroundMode, Element, FieldStyle, GreeterConfig, LOOKS, PasswordMask, PowerStyle, SessionStyle, SubmitButton, UserList,
+    Anchor, AvatarShape, AvatarSource, BackgroundMode, Element, FieldStyle, GreeterConfig, LOOKS, PasswordMask, PowerStyle, SessionStyle, SubmitButton, UserList, UserSwitcher,
     VideoMode,
 };
 use mandara_greeter::i18n::{tl, tlf};
@@ -507,19 +507,23 @@ impl GreeterPage {
     }
 
     fn button(p: &MandaraPalette, id: &'static str, label: String, ic: &'static str, primary: bool) -> gpui::Stateful<gpui::Div> {
-        div()
-            .id(id)
-            .h(px(DIM_32_PX))
-            .px(px(SPACE_12_PX))
+        use mandara_ui::components::buttons::{Ink, designed};
+        // The classic primary fades on hover; the designs deepen its fill.
+        let ink = if primary { Ink { bg: Some(p.primary), hover: p.primary.mix(p.on_primary, ALPHA_8), outline: None } } else { Ink { bg: Some(p.surface_container_high), hover: p.surface_container, outline: None } };
+        let id = gpui::ElementId::from(id);
+        let el = div().id(id.clone()).h(px(DIM_32_PX)).px(px(SPACE_12_PX));
+        designed(el, id, DIM_32_PX, false, ink, Some(p), |el| {
+            el.rounded(px(RADIUS_11_PX))
+                .when(primary, |el| el.bg(p.primary.hsla()).hover(|s| s.opacity(ALPHA_90)))
+                .when(!primary, |el| el.bg(p.surface_container_high.hsla()).hover(|s| s.bg(p.surface_container.hsla())))
+        })
             .row()
             .items_center()
             .gap(px(SPACE_7_PX))
-            .rounded(px(RADIUS_11_PX))
             .cursor_pointer()
             .text_size(px(TEXT_12_5_PX))
             .font_weight(FontWeight::MEDIUM)
-            .when(primary, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()).hover(|s| s.opacity(ALPHA_90)))
-            .when(!primary, |el| el.bg(p.surface_container_high.hsla()).hover(|s| s.bg(p.surface_container.hsla())))
+            .when(primary, |el| el.text_color(p.on_primary.hsla()))
             .child(icon(ic, ICON_15_PX, if primary { p.on_primary } else { p.on_surface }))
             .child(label)
     }
@@ -750,7 +754,10 @@ impl GreeterPage {
             self.font(p, "clk-font", tl("Font"), c.font.clone(), shell_fonts.display.to_string(), |c, v| c.clock.font = v, cx),
             self.slider(p, "clk-size", tl("Size"), c.size, 40.0, 320.0, 1.0, " px", |c, v| c.clock.size = v, cx),
             self.slider(p, "clk-weight", tl("Weight"), c.weight as f32, 100.0, 900.0, 100.0, "", |c, v| c.clock.weight = v as u16, cx),
+            self.slider(p, "clk-idle-weight", tl("Weight while idle (0 = the same)"), c.idle_weight as f32, 0.0, 900.0, 50.0, "", |c, v| c.clock.idle_weight = v as u16, cx),
             self.slider(p, "clk-opacity", tl("Opacity"), c.opacity, 0.2, 1.0, 0.01, "", |c, v| c.clock.opacity = v, cx),
+            self.toggle(p, "clk-stack", tl("Hours over minutes"), c.stacked, |c, v| c.clock.stacked = v, cx),
+            self.toggle(p, "clk-tint", tl("Hours in the accent colour"), c.tint, |c, v| c.clock.tint = v, cx),
         ];
         let date = vec![
             self.text(p, "date-fmt", tl("Format"), d.format.clone(), tl("strftime, e.g. %A %-d %B (empty = language default)"), |c, v| c.date.format = v, cx),
@@ -767,11 +774,12 @@ impl GreeterPage {
         let pw = self.draft.password.clone();
         let mut user = vec![
             self.choice(p, "usr-list", tl("Users"), u.list, vec![(tl("Everyone"), UserList::All), (tl("Last user"), UserList::LastUser), (tl("Type a name"), UserList::Manual)], |c, v| c.user.list = v, cx),
-            self.choice(p, "usr-shape", tl("Avatar shape"), u.avatar_shape, vec![(tl("Circle"), AvatarShape::Circle), (tl("Squircle"), AvatarShape::Squircle), (tl("Rounded"), AvatarShape::Rounded), (tl("No frame"), AvatarShape::Bare)], |c, v| c.user.avatar_shape = v, cx),
+            self.choice(p, "usr-shape", tl("Avatar shape"), u.avatar_shape, vec![(tl("Circle"), AvatarShape::Circle), (tl("Squircle"), AvatarShape::Squircle), (tl("Rounded"), AvatarShape::Rounded), (tl("No frame"), AvatarShape::Bare), (tl("Scalloped"), AvatarShape::Cookie)], |c, v| c.user.avatar_shape = v, cx),
             self.choice(p, "usr-src", tl("Avatar"), u.avatar_source, vec![(tl("Picture"), AvatarSource::Auto), (tl("Initials"), AvatarSource::Monogram), (tl("Icon"), AvatarSource::Icon)], |c, v| c.user.avatar_source = v, cx),
             self.slider(p, "usr-size", tl("Avatar size"), u.avatar_size, 48.0, 240.0, 1.0, " px", |c, v| c.user.avatar_size = v, cx),
             self.toggle(p, "usr-ring", tl("Breathing glow ring"), u.glow_ring, |c, v| c.user.glow_ring = v, cx),
             self.toggle(p, "usr-name", tl("Show name"), u.show_name, |c, v| c.user.show_name = v, cx),
+            self.choice(p, "usr-switcher", tl("Other users as"), u.switcher, vec![(tl("Faces"), UserSwitcher::Faces), (tl("Chips"), UserSwitcher::Chips)], |c, v| c.user.switcher = v, cx),
         ];
         if u.show_name {
             user.push(self.slider(p, "usr-name-size", tl("Name size"), u.name_size, 10.0, 48.0, 1.0, " px", |c, v| c.user.name_size = v, cx));
@@ -795,7 +803,7 @@ impl GreeterPage {
             ]);
         }
         let password = vec![
-            self.choice(p, "pw-style", tl("Style"), pw.style, vec![(tl("Glass"), FieldStyle::Glass), (tl("Solid"), FieldStyle::Solid), (tl("Inset"), FieldStyle::Inset), (tl("Outline"), FieldStyle::Outline), (tl("Underline"), FieldStyle::Underline)], |c, v| c.password.style = v, cx),
+            self.choice(p, "pw-style", tl("Style"), pw.style, vec![(tl("Glass"), FieldStyle::Glass), (tl("Solid"), FieldStyle::Solid), (tl("Inset"), FieldStyle::Inset), (tl("Outline"), FieldStyle::Outline), (tl("Underline"), FieldStyle::Underline), (tl("Filled"), FieldStyle::Filled)], |c, v| c.password.style = v, cx),
             self.choice(p, "pw-submit", tl("Sign-in button"), pw.submit, vec![(tl("In the field"), SubmitButton::Inside), (tl("Beside it"), SubmitButton::Beside), (tl("None (Enter)"), SubmitButton::Hidden)], |c, v| c.password.submit = v, cx),
             self.choice(p, "pw-mask", tl("Hide typing as"), pw.mask, vec![(tl("Shapes"), PasswordMask::Shapes), (tl("Dots"), PasswordMask::Dots)], |c, v| c.password.mask = v, cx),
             self.toggle(p, "pw-accent", tl("Accent border while focused"), pw.accent_border, |c, v| c.password.accent_border = v, cx),
@@ -836,14 +844,14 @@ impl GreeterPage {
         let session = vec![
             self.choice_row(p, tl("Default session"), items),
             self.toggle(p, "sess-x11", tl("List X11 sessions"), s.x11, |c, v| c.session.x11 = v, cx),
-            self.choice(p, "sess-style", tl("Picker style"), s.style, vec![(tl("Pill"), SessionStyle::Pill), (tl("Full-width field"), SessionStyle::Field)], |c, v| c.session.style = v, cx),
+            self.choice(p, "sess-style", tl("Picker style"), s.style, vec![(tl("Pill"), SessionStyle::Pill), (tl("Full-width field"), SessionStyle::Field), (tl("Chip"), SessionStyle::Chip)], |c, v| c.session.style = v, cx),
         ];
         let power = vec![
             self.toggle(p, "pow-sleep", tl("Sleep"), pw.suspend, |c, v| c.power.suspend = v, cx),
             self.toggle(p, "pow-reboot", tl("Restart"), pw.reboot, |c, v| c.power.reboot = v, cx),
             self.toggle(p, "pow-off", tl("Shut Down"), pw.poweroff, |c, v| c.power.poweroff = v, cx),
             self.toggle(p, "pow-labels", tl("Labels under buttons"), pw.labels, |c, v| c.power.labels = v, cx),
-            self.choice(p, "pow-style", tl("Button style"), pw.style, vec![(tl("Soft"), PowerStyle::Soft), (tl("Outlined"), PowerStyle::Outlined)], |c, v| c.power.style = v, cx),
+            self.choice(p, "pow-style", tl("Button style"), pw.style, vec![(tl("Soft"), PowerStyle::Soft), (tl("Outlined"), PowerStyle::Outlined), (tl("Tonal"), PowerStyle::Tonal)], |c, v| c.power.style = v, cx),
             self.slider(p, "pow-size", tl("Button size"), pw.size, 28.0, 72.0, 1.0, " px", |c, v| c.power.size = v, cx),
         ];
         let logo = self.draft.logo.clone();
@@ -854,6 +862,7 @@ impl GreeterPage {
                 self.text(p, "logo-path", tl("Image"), logo.path.clone(), tl("Path to a PNG / SVG (Mandara's emblem when empty)"), |c, v| c.logo.path = v, cx),
                 self.slider(p, "logo-size", tl("Size"), logo.size, 16.0, 200.0, 1.0, " px", |c, v| c.logo.size = v, cx),
                 self.slider(p, "logo-op", tl("Opacity"), logo.opacity, 0.1, 1.0, 0.01, "", |c, v| c.logo.opacity = v, cx),
+                self.toggle(p, "logo-accent", tl("Emblem in the accent colour"), logo.accent, |c, v| c.logo.accent = v, cx),
             ]);
         }
         let switcher = self.draft.theme.switcher.join(", ");
@@ -890,6 +899,7 @@ impl GreeterPage {
             let pal = mandara_greeter::view::palette_for(&probe);
             let on = current == Some(id);
             let carded = probe.card.enabled;
+            let scalloped = probe.user.avatar_shape == AvatarShape::Cookie;
             let thumb = div()
                 .h(px(DIM_96_PX))
                 .rounded(px(RADIUS_10_PX))
@@ -911,7 +921,12 @@ impl GreeterPage {
                         .items_center()
                         .justify_center()
                         .gap(px(SPACE_3_PX))
-                        .child(div().size(px(DIM_10_PX)).rounded_full().bg(pal.primary.hsla()))
+                        .child(if scalloped {
+                            // The scalloped avatar of the Material You look.
+                            gpui::svg().path(mandara_core::avatar_shape::Step::new(0).asset_path()).size(px(DIM_10_PX)).text_color(pal.primary.hsla()).into_any_element()
+                        } else {
+                            div().size(px(DIM_10_PX)).rounded_full().bg(pal.primary.hsla()).into_any_element()
+                        })
                         .child(div().w(px(DIM_40_PX)).h(px(SPACE_5_PX)).rounded_full().bg(pal.on_surface.with_alpha(ALPHA_50).hsla())),
                 );
             cards.push(
@@ -989,6 +1004,7 @@ impl GreeterPage {
         let shell_ui = mandara_ui::fonts::fonts(cx).ui.to_string();
         let glass = vec![
             self.font(p, "th-font", tl("Text font"), ui_font, shell_ui, |c, v| c.font = v, cx),
+            self.toggle(p, "th-dynamic", tl("Colours from the wallpaper"), t.from_wallpaper, |c, v| c.theme.from_wallpaper = v, cx),
             self.text(p, "th-accent", tl("Accent color"), t.accent.clone(), tl("#rrggbb (theme primary when empty)"), |c, v| c.theme.accent = v, cx),
             self.slider(p, "th-glass", tl("Glass opacity"), t.glass, 0.0, 0.8, 0.01, "", |c, v| c.theme.glass = v, cx),
             self.slider(p, "th-rim", tl("Specular rim"), t.rim, 0.0, 1.0, 0.01, "", |c, v| c.theme.rim = v, cx),

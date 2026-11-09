@@ -686,29 +686,42 @@ fn tip(text: impl Into<SharedString>, p: &MandaraPalette) -> impl Fn(&mut Window
 }
 
 fn button(id: &'static str, label: impl Into<SharedString>, primary: bool, focused: bool, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
-    let el = div()
-        .id(id)
-        .h(px(BUTTON_H_PX))
-        .px(px(BUTTON_PAD_PX))
-        .flex_none()
-        .rounded_full()
-        .flex()
-        .items_center()
-        .gap(px(ROW_GAP_PX))
-        .text_size(px(BODY_PX))
-        .font_weight(FontWeight::SEMIBOLD)
-        .cursor_pointer()
-        .when(focused, |el| el.border(px(FOCUS_RING_PX)).border_color(p.primary.hsla()))
-        .child(label.into());
-    if primary {
-        el.text_color(p.on_primary.hsla()).bg(oklab_gradient(GRADIENT_DEG, p.accent_gradient_start, p.accent_gradient_end)).shadow(vec![shadow(p.primary_glow.with_alpha(GLOW_ALPHA).hsla(), GLOW_BLUR_PX, GLOW_Y_PX)])
-    } else {
-        let hover = p.on_surface.with_alpha(HOVER_ALPHA);
-        el.bg(p.surface_container_high.hsla()).hover(move |s| s.bg(hover.hsla()))
-    }
+    sized_button(id, label, primary, focused, (BUTTON_H_PX, BUTTON_PAD_PX, BODY_PX), p)
 }
 
+/// A text button `(height, side padding, text size)`, in the button design
+/// picked under Themes → Components (the classic one keeps its gradient and
+/// glow). A keyboard-focused button wears a focus ring in every design.
+fn sized_button(id: &'static str, label: impl Into<SharedString>, primary: bool, focused: bool, (h, pad, text): (f32, f32, f32), p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
+    use crate::components::buttons::{Ink, designed};
+    let hover = p.on_surface.with_alpha(HOVER_ALPHA);
+    let ink = if primary { Ink { bg: Some(p.accent_gradient_start), hover: p.accent_gradient_start.mix(p.on_primary, HOVER_ALPHA), outline: None } } else { Ink { bg: Some(p.surface_container_high), hover, outline: None } };
+    let el = div().id(id).h(px(h)).px(px(pad)).flex_none();
+    let el = designed(el, id, h, false, ink, Some(p), |el| {
+        if primary {
+            el.rounded_full().bg(oklab_gradient(GRADIENT_DEG, p.accent_gradient_start, p.accent_gradient_end)).shadow(vec![shadow(p.primary_glow.with_alpha(GLOW_ALPHA).hsla(), GLOW_BLUR_PX, GLOW_Y_PX)])
+        } else {
+            el.rounded_full().bg(p.surface_container_high.hsla()).hover(move |s| s.bg(hover.hsla()))
+        }
+    });
+    el.flex()
+        .items_center()
+        .gap(px(ROW_GAP_PX))
+        .text_size(px(text))
+        .font_weight(FontWeight::SEMIBOLD)
+        .cursor_pointer()
+        .when(primary, |el| el.text_color(p.on_primary.hsla()))
+        .when(focused, |el| el.border(px(FOCUS_RING_PX)).border_color(p.primary.hsla()))
+        .child(label.into())
+}
+
+/// The installer's switch: the shared switch in every design but the
+/// classic one, which keeps the installer's own flat look.
 fn switch(on: bool, p: &MandaraPalette) -> AnyElement {
+    let design = crate::style::toggle_design();
+    if design != crate::components::ToggleDesign::Classic {
+        return crate::plugins::panel_fx::switch_as(design, on, p).into_any_element();
+    }
     div()
         .w(px(SWITCH_W_PX))
         .h(px(SWITCH_H_PX))
@@ -769,6 +782,17 @@ fn ring(fraction: Option<f32>, spin: f32, color: Color, track: Color, inner: Any
             canvas(
                 |_, _, _| {},
                 move |bounds, _, window, _| {
+                    // A known fraction follows the progress design; the
+                    // spinner (no fraction yet) keeps its own arc.
+                    let design = crate::style::progress_design();
+                    if let (Some(v), false) = (fraction, design == crate::components::ProgressDesign::Classic) {
+                        use crate::components::progress::{ArcKind, ring_arcs};
+                        for arc in ring_arcs(design, v) {
+                            let ink = if arc.kind == ArcKind::Track { track } else { color };
+                            crate::icons::stroke_arc(window, bounds, RING_STROKE_PX, arc.from, arc.sweep, ink);
+                        }
+                        return;
+                    }
                     crate::icons::stroke_arc(window, bounds, RING_STROKE_PX, 0.0, TAU, track);
                     match fraction {
                         Some(v) if v > 0.0 => crate::icons::stroke_arc(window, bounds, RING_STROKE_PX, -FRAC_PI_2, TAU * v.min(1.0), color),
@@ -850,12 +874,19 @@ fn steps(plan: &Plan, p: &MandaraPalette) -> AnyElement {
 }
 
 fn pill_button(id: &'static str, label: impl Into<SharedString>, primary: bool, focused: bool, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
-    button(id, label, primary, focused, p).h(px(PILL_BUTTON_H_PX)).px(px(PILL_BUTTON_PAD_PX)).text_size(px(SMALL_PX))
+    sized_button(id, label, primary, focused, (PILL_BUTTON_H_PX, PILL_BUTTON_PAD_PX, SMALL_PX), p)
 }
 
 fn icon_button(id: &'static str, glyph: &'static str, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
+    use crate::components::buttons::{Ink, designed};
     let hover = p.on_surface.with_alpha(HOVER_ALPHA);
-    div().id(id).size(px(ICON_BUTTON_PX)).flex_none().rounded_full().flex().items_center().justify_center().cursor_pointer().hover(move |s| s.bg(hover.hsla())).child(icon(glyph, GLYPH_PX, p.on_surface_variant))
+    let el = div().id(id).size(px(ICON_BUTTON_PX)).flex_none();
+    designed(el, id, ICON_BUTTON_PX, true, Ink { bg: None, hover, outline: None }, Some(p), |el| el.rounded_full().hover(move |s| s.bg(hover.hsla())))
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .child(icon(glyph, GLYPH_PX, p.on_surface_variant))
 }
 
 /// Opens a file's folder.

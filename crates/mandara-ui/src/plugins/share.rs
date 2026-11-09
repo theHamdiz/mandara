@@ -464,14 +464,18 @@ fn url_row(url: &str, palette: &MandaraPalette, cx: &App) -> AnyElement {
 
 fn big_button(id: &'static str, glyph: &'static str, title: &'static str, hint: &'static str, palette: &MandaraPalette, on_click: impl Fn(&mut App) + 'static) -> AnyElement {
     let accent = readable(palette.primary, palette);
+    use crate::components::buttons::{Ink, designed};
     let (fill, hover) = (accent.with_alpha(alpha(BIG_FILL, palette)), accent.with_alpha(alpha(BIG_HOVER, palette)));
-    div()
-        .id(id)
-        .flex_1()
-        .h(px(BIG_H))
-        .rounded(px(crate::style::radius(super::panel_fx::CARD_RADIUS_PX)))
-        .bg(oklab_gradient(ANGLE_DIAGONAL_DEG, fill, partner(accent).with_alpha(alpha(BIG_FILL, palette) * PARTNER_FADE)))
-        .hover(move |s| s.bg(hover.hsla()))
+    let corner = crate::style::radius(super::panel_fx::CARD_RADIUS_PX);
+    let el = div().id(id).flex_1().h(px(BIG_H));
+    // A tile: its designed shape is sized from its card corner, not its
+    // height (a round tile this tall would be a stadium). Designed shapes are
+    // filled with the gradient's start.
+    designed(el, id, corner * 2.0, false, Ink { bg: Some(fill), hover, outline: None }, Some(palette), |el| {
+        el.rounded(px(corner))
+            .bg(oklab_gradient(ANGLE_DIAGONAL_DEG, fill, partner(accent).with_alpha(alpha(BIG_FILL, palette) * PARTNER_FADE)))
+            .hover(move |s| s.bg(hover.hsla()))
+    })
         .cursor_pointer()
         .flex()
         .flex_col()

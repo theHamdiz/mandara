@@ -26,7 +26,7 @@ use mandara_config::desktop_widgets::{Anchor, ClockFace, Placement, WidgetKind, 
 use mandara_config::looks::{self, LOOKS, LookDef, LookOptions, LookVisualizer};
 use mandara_config::{BarLayout, BarPosition, ShellConfig};
 use mandara_core::ToGpui;
-use mandara_i18n::{t, tk, tr};
+use mandara_i18n::{t, tf, tk, tr};
 use mandara_theme::MandaraPalette;
 use mandara_ui::backdrop::paint::FontNames;
 use mandara_ui::bidi::Bidi as _;
@@ -100,6 +100,11 @@ const STRIP_ANCHORS: [(Anchor, &str); 2] = [(Anchor::Top, tk("Top edge")), (Anch
 
 /// A look's blurb in the interface language (the English text lives in
 /// `mandara_config::looks`; these mark it for translation).
+/// "Expressive components": the component designs a look brings.
+fn components_line(look: &LookDef) -> String {
+    tf("{preset} components", &[("preset", &tr(super::component_designs::preset_name(look.components)))])
+}
+
 fn blurb(look: &LookDef) -> String {
     let key = match look.id {
         "corniche-dusk" => tk("Rose evening glass: headline clock, system monitor, media card and glass pills."),
@@ -274,13 +279,86 @@ fn restore_look(cx: &mut gpui::App) {
     }
 }
 
+/// The Themes page's tabs: its colours and style, and the components'
+/// designs (one page, two tabs; Studio keeps its pages).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub enum ThemesTab {
+    #[default]
+    Colors,
+    Components,
+}
+
+impl ThemesTab {
+    pub const ALL: [ThemesTab; 2] = [ThemesTab::Colors, ThemesTab::Components];
+
+    /// Deep-link name (`mandara studio themes/components`).
+    pub fn slug(self) -> &'static str {
+        match self {
+            ThemesTab::Colors => "colors",
+            ThemesTab::Components => "components",
+        }
+    }
+
+    /// The tab a deep link names (its slug, or a name it is known by).
+    pub fn parse(s: &str) -> Option<Self> {
+        let s = s.trim().to_ascii_lowercase();
+        Self::ALL.into_iter().find(|t| t.slug() == s).or(match s.as_str() {
+            "colours" | "looks" | "style" | "themes" | "cursor" | "cursors" => Some(ThemesTab::Colors),
+            "component" | "designs" | "presets" | "controls" | "sliders" | "buttons" => Some(ThemesTab::Components),
+            _ => None,
+        })
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            ThemesTab::Colors => tk("Colors & style"),
+            ThemesTab::Components => tk("Components"),
+        }
+    }
+}
+
+impl super::page_tabs::PageTab for ThemesTab {
+    fn slug(self) -> &'static str { ThemesTab::slug(self) }
+    fn label(self) -> String { tr(self.title()) }
+    fn icon(self) -> &'static str {
+        match self {
+            ThemesTab::Colors => "palette",
+            ThemesTab::Components => "grid",
+        }
+    }
+}
+
 impl StudioView {
-    /// The Themes page: the live preview (with light / dark), looks, the
-    /// designed themes, the wallpaper's colors and schemes, the cursor
-    /// gallery and settings (`cursor_page.rs`), then tuning,
-    /// style, icons and app themes. Rows the galleries already show (light /
-    /// dark, the wallpaper scheme) stay out of the list but remain searchable.
-    pub(super) fn themes_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    /// Opens Themes on `tab`, its content at the top.
+    pub fn show_themes_tab(&mut self, tab: ThemesTab, cx: &mut Context<Self>) {
+        self.show(Section::Themes, cx);
+        if self.themes_tab != tab {
+            self.themes_tab = tab;
+            // The other tab's previews go: nothing of them stays alive.
+            self.components = Default::default();
+            self.content_scroll.set_offset(gpui::point(gpui::px(0.0), gpui::px(0.0)));
+        }
+        cx.notify();
+    }
+
+    /// The Themes page: its tabs, then the selected one ([`Self::themes_colors`]
+    /// or the Components designs).
+    pub(super) fn themes_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut gpui::Window, cx: &mut Context<Self>) -> AnyElement {
+        let tab = self.themes_tab;
+        let tabs = super::page_tabs::bar("themes-tabs", &ThemesTab::ALL, tab, p, |view, tab, _, cx| view.show_themes_tab(tab, cx), window, cx);
+        let body = match tab {
+            ThemesTab::Colors => self.themes_colors(cfg, p, cx),
+            ThemesTab::Components => self.components_section(cfg, p, cx),
+        };
+        div().row().flex_col().gap(px(SPACE_22_PX)).child(tabs).child(body).into_any_element()
+    }
+
+    /// Themes → Colors & style: the live preview (with light / dark), looks,
+    /// the designed themes, the wallpaper's colors and schemes, the cursor
+    /// gallery and settings (`cursor_page.rs`), then tuning, style, icons and
+    /// app themes. Rows the galleries already show (light / dark, the
+    /// wallpaper scheme) stay out of the list but remain searchable.
+    fn themes_colors(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let display = mandara_ui::fonts::fonts(cx).display.clone();
         let preview = self.theme_preview(cfg, p, cx);
         let looks = self.looks_gallery(cfg, p, display.clone(), cx);
@@ -289,13 +367,12 @@ impl StudioView {
         let wallpaper = self.wallpaper_schemes(cfg, p, cx);
         let apps = self.app_themes_section(cfg, p, cx);
         let cursor = self.cursor_section(cfg, p, cx);
-        let components = self.components_section(cfg, p, cx);
         let tune_head = section_head(t("Fine-tune"), t("Schedule, tuning, style and icons"), Vec::new(), display, p);
         // Cursor rows sit in the Cursor section, component designs in
         // theirs, app themes in their grid.
         let rows = self.rows(registry::in_section(Section::Themes).filter(|s| !SHOWN_ABOVE.contains(&s.path) && s.group != CURSOR && s.group != APP_THEMES_GROUP && s.group != COMPONENTS), cfg, p, cx);
         let tune = div().row().flex_col().gap(px(SPACE_14_PX)).child(tune_head).child(rows);
-        div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(preview).child(looks).child(themes).child(wallpaper).child(apps).child(cursor).child(components).child(tune).into_any_element()
+        div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(preview).child(looks).child(themes).child(wallpaper).child(apps).child(cursor).child(tune).into_any_element()
     }
 
     /// Looks as a compact list (swatch, name in the look's face, its line,
@@ -303,12 +380,15 @@ impl StudioView {
     /// cards.
     fn looks_list(&self, cfg: &ShellConfig, p: &MandaraPalette) -> AnyElement {
         let active = cfg.looks.active.as_str();
+        let keep = cfg.looks.keep_components;
         let snapshot = std::sync::Arc::new(cfg.clone());
         let rows = LOOKS.iter().enumerate().map(|(i, look)| {
             let lp = look_palette(i);
             let cfg = snapshot.clone();
             let tip_palette = lp.clone();
-            swatch_list::row(("look-row", i), &lp, look.name.into(), Some(look.display_font.into()), blurb(look), look.id == active, p)
+            // Its line says which component designs it brings along.
+            let line = if keep { blurb(look) } else { format!("{} · {}", components_line(look), blurb(look)) };
+            swatch_list::row(("look-row", i), &lp, look.name.into(), Some(look.display_font.into()), line, look.id == active, p)
                 .tooltip(swatch_list::preview_tip(p, move || div().w(px(swatch_list::TIP_MOCK_W_PX)).child(thumbnail(look, &tip_palette, &cfg)).into_any_element()))
                 .on_click(move |_: &ClickEvent, _, cx| apply_look(look, cx))
                 .into_any_element()
@@ -368,7 +448,11 @@ impl StudioView {
                             .flex_col()
                             .gap(px(SPACE_4_PX))
                             .child(title)
-                            .child(div().text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(blurb(look)))),
+                            .child(div().text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(blurb(look))))
+                            // The component designs it brings (not while you keep yours).
+                            .when(!cfg.looks.keep_components, |el| {
+                                el.child(div().row().child(badge(components_line(look), p.secondary).gap(px(SPACE_4_PX)).child(icon("grid", ICON_11_PX, p.secondary))))
+                            }),
                     )
                     .on_click(move |_: &ClickEvent, _, cx| apply_look(look, cx))
                     .into_any_element(),

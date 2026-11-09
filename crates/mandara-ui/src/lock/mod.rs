@@ -24,6 +24,7 @@
 //! do too while `general.lock_screen` is on.
 
 pub mod look;
+mod material;
 pub mod paint;
 pub mod pam;
 
@@ -198,16 +199,30 @@ fn load_avatar(user: &User, size: u32) -> Option<Pixmap> {
     })
 }
 
-/// Decodes, shrinks and blurs the wallpaper (off the UI thread).
-fn load_wallpaper(path: PathBuf, sigma: f32) -> std::sync::mpsc::Receiver<Pixmap> {
+/// A decoded backdrop and, when asked for, the picture's leading colour
+/// and how light its top half is (0–1).
+type LoadedWallpaper = (Pixmap, Option<(Color, f32)>);
+
+/// Decodes, shrinks and blurs the wallpaper (off the UI thread); with
+/// `seed`, also picks its leading colour from the small copy (Material's
+/// ranking, before the blur).
+fn load_wallpaper(path: PathBuf, sigma: f32, seed: bool) -> std::sync::mpsc::Receiver<LoadedWallpaper> {
     let (tx, rx) = std::sync::mpsc::channel();
     let _ = std::thread::Builder::new().name("mandara-lock-wallpaper".into()).spawn(move || {
         // A video wallpaper: its poster (first frame).
         let Ok(img) = crate::wallpaper::still(&path).and_then(|p| image::open(&p).map_err(|e| e.to_string())) else { return };
-        let small = img.thumbnail(480, 480).to_rgba8();
+        let thumb = img.thumbnail(480, 480);
+        drop(img);
+        let lead = seed
+            .then(|| {
+                let lead = mandara_theme::material::extract_seeds_from_image(&thumb, 1).ok()?.first()?.color;
+                Some((lead, mandara_theme::material::mean_luma(&thumb, material::LUMA_SHARE)))
+            })
+            .flatten();
+        let small = thumb.into_rgba8();
         let blurred = if sigma > 0.0 { image::imageops::blur(&small, sigma) } else { small };
         if let Some(pm) = paint::pixmap_from_rgba(blurred.width(), blurred.height(), blurred.as_raw()) {
-            let _ = tx.send(pm);
+            let _ = tx.send((pm, lead));
         }
     });
     rx
@@ -245,7 +260,7 @@ pub struct LockScreen {
     user: User,
     avatar: Option<Pixmap>,
     wallpaper: Option<Pixmap>,
-    wallpaper_rx: Option<std::sync::mpsc::Receiver<Pixmap>>,
+    wallpaper_rx: Option<std::sync::mpsc::Receiver<LoadedWallpaper>>,
     backgrounds: HashMap<(u32, u32), Pixmap>,
     text: TextPainter,
     auth: AuthWorker,
@@ -283,6 +298,13 @@ pub struct LockScreen {
     /// Configurable look (`[lock]`).
     look: look::LockLook,
     widgets: crate::backdrop::widgets::passive::Canvas,
+    /// The Material You design's scalloped avatar: toward a circle (0 =
+    /// scalloped) and its turn from keystrokes (radians).
+    morph: SpringValue<f32>,
+    spin: SpringValue<f32>,
+    /// How light the wallpaper's top half is (Material You only): a light
+    /// one gets a deeper scrim so the clock stays readable.
+    wallpaper_luma: Option<f32>,
 }
 
 impl LockScreen {
@@ -309,7 +331,7 @@ impl LockScreen {
             clock_24h,
             avatar,
             wallpaper: None,
-            wallpaper_rx: wallpaper.filter(|p| p.is_file()).map(|p| load_wallpaper(p, look::LockLook::default().blur_sigma())),
+            wallpaper_rx: wallpaper.filter(|p| p.is_file()).map(|p| load_wallpaper(p, look::LockLook::default().blur_sigma(), false)),
             look: look::LockLook::default(),
             widgets: Default::default(),
             backgrounds: HashMap::new(),
@@ -339,12 +361,16 @@ impl LockScreen {
             grace: None,
             grace_until: None,
             user,
+            morph: SpringValue::new(0.0, material::spring(crate::components::motion::Feel::DefaultSpatial)),
+            spin: SpringValue::new(0.0, material::spring(crate::components::motion::Feel::FastSpatial)),
+            wallpaper_luma: None,
         }
     }
 
     /// Applies the configured look and starts loading its background.
     pub fn set_look(&mut self, look: look::LockLook, background: Option<PathBuf>) {
-        self.wallpaper_rx = background.filter(|p| p.is_file()).map(|p| load_wallpaper(p, look.blur_sigma()));
+        let seed = look.cfg.design == mandara_config::desktop::LockDesign::MaterialYou;
+        self.wallpaper_rx = background.filter(|p| p.is_file()).map(|p| load_wallpaper(p, look.blur_sigma(), seed));
         self.wallpaper = None;
         self.clock_24h = look.clock_24h;
         self.look = look;
@@ -429,6 +455,7 @@ impl LockScreen {
         let wallpaper = &self.wallpaper;
         let solid = self.look.cfg.background == mandara_config::desktop::LockBackground::Color;
         let dim = self.look.cfg.dim.clamp(0.0, 1.0);
+        let extra = material::extra_scrim(self.wallpaper_luma.filter(|_| self.look.cfg.design == mandara_config::desktop::LockDesign::MaterialYou));
         self.backgrounds.entry((w, h)).or_insert_with(|| {
             // Sizes are clamped to ≥ 1 px, for which `Pixmap::new` cannot fail.
             let mut pm = Pixmap::new(w.max(1), h.max(1)).expect("non-empty surface");
@@ -451,6 +478,9 @@ impl LockScreen {
                 let scrim = paint::linear((0.0, 0.0), (0.0, fh), paint::skia(palette.surface_dim, dim * SCRIM_TOP), paint::skia(palette.surface_dim, (dim * SCRIM_BOTTOM).min(1.0)));
                 if let Some(rect) = tiny_skia::Rect::from_xywh(0.0, 0.0, fw, fh) {
                     m.fill_rect(rect, &scrim, tiny_skia::Transform::identity(), None);
+                    if extra > 0.0 {
+                        m.fill_rect(rect, &paint::solid(palette.surface_dim, extra), tiny_skia::Transform::identity(), None);
+                    }
                 }
                 // A faint primary bloom behind the clock.
                 paint::glow(&mut m, fw * 0.5, fh * 0.26, fw.min(fh) * 0.55, paint::skia(palette.primary_glow, 0.10));
@@ -519,6 +549,10 @@ impl LockApp for LockScreen {
                     }
                     self.fades.typed(self.typed.len());
                     self.typed.push(Instant::now());
+                    if self.look.cfg.design == mandara_config::desktop::LockDesign::MaterialYou {
+                        let turn = self.spin.target() + material::SPIN_PER_KEY;
+                        self.spin.set_target(turn);
+                    }
                     if matches!(self.note, Some(Note::Info(_))) {
                         self.note = None;
                     }
@@ -552,8 +586,13 @@ impl LockApp for LockScreen {
     fn update(&mut self, now: Instant) -> AppControl {
         self.dirty |= self.widgets.poll();
         if let Some(rx) = &self.wallpaper_rx
-            && let Ok(img) = rx.try_recv()
+            && let Ok((img, seed)) = rx.try_recv()
         {
+            // Material You: the colours come from the wallpaper.
+            if let Some((seed, luma)) = seed {
+                self.palette = mandara_theme::material::palette_from_seed(seed, mandara_theme::SchemeVariant::TonalSpot, self.palette.is_dark);
+                self.wallpaper_luma = Some(luma);
+            }
             self.wallpaper = Some(img);
             self.wallpaper_rx = None;
             self.backgrounds.clear();
@@ -572,7 +611,16 @@ impl LockApp for LockScreen {
         }
         let dt = self.clock.tick(now);
         let mut moving = false;
-        for s in [&mut self.reveal, &mut self.shake, &mut self.exit, &mut self.flash] {
+        self.morph.set_target(match self.phase {
+            Phase::Idle => 0.0,
+            Phase::Checking => material::MORPH_CHECKING,
+            Phase::Unlocking => 1.0,
+        });
+        if self.look.reduced_motion {
+            self.morph.snap_to_target();
+            self.spin.snap_to_target();
+        }
+        for s in [&mut self.reveal, &mut self.shake, &mut self.exit, &mut self.flash, &mut self.morph, &mut self.spin] {
             moving |= s.step(dt);
         }
         let animate = self.animate_symbols();
@@ -637,6 +685,10 @@ impl LockApp for LockScreen {
         }
         self.widgets.update(&self.look.cfg.widgets, (w, h), &self.look.widget_fonts, &p, self.clock_24h, true);
         self.widgets.draw(pm, alpha);
+        if self.look.cfg.design == mandara_config::desktop::LockDesign::MaterialYou {
+            self.draw_material(info, pm, now);
+            return;
+        }
         // One unit = a logical px on a 1080 px tall screen, in physical px.
         let unit = L::scale(logical_h) * s;
         let clock_size = L::CLOCK_SIZE * unit * if self.look.compact() { COMPACT_CLOCK } else { 1.0 };
@@ -1383,6 +1435,62 @@ mod tests {
         assert_ne!(s.symbol_seed, seed);
     }
 
+    /// The Material You design draws on every screen size and scale, in
+    /// both reading directions, typed into and checking, and differs from
+    /// the Mandara design; its avatar turns with keystrokes.
+    #[test]
+    fn the_material_design_draws_everywhere() {
+        let sizes = [(1280u32, 800u32, 1.0f32), (1920, 1080, 1.0), (2560, 1440, 1.5), (1366, 768, 1.25), (1440, 900, 2.0)];
+        for rtl in [false, true] {
+            for (w, h, scale) in sizes {
+                let draw = |s: &mut LockScreen| {
+                    let mut pm = Pixmap::new((w as f32 * scale) as u32, (h as f32 * scale) as u32).unwrap();
+                    let info = SurfaceInfo { output: "TEST-1".into(), width: w, height: h, scale, focused: true };
+                    s.draw(&info, &mut pm.as_mut(), Instant::now() + Duration::from_secs(1));
+                    pm
+                };
+                let mut mandara = screen(false);
+                mandara.reveal.snap_to(1.0);
+                mandara.rtl = rtl;
+                let mut you = screen(false);
+                you.reveal.snap_to(1.0);
+                you.rtl = rtl;
+                you.look.cfg.design = mandara_config::desktop::LockDesign::MaterialYou;
+                type_text(&mut you, "abc");
+                assert!(you.spin.target() > 0.0, "keystrokes turn the avatar");
+                let a = draw(&mut mandara);
+                let b = draw(&mut you);
+                assert!(b.data().as_chunks::<4>().0.iter().all(|p| p[3] == 255), "{w}x{h}@{scale}: opaque");
+                assert!(diff_box(&a, &b).is_some(), "{w}x{h}@{scale}: the design is drawn");
+                press(&mut you, keys::RETURN);
+                assert_eq!(you.phase, Phase::Checking);
+                let _ = draw(&mut you);
+            }
+        }
+        // The Mandara design never turns anything.
+        let mut s = screen(false);
+        type_text(&mut s, "abc");
+        assert_eq!(s.spin.target(), 0.0);
+    }
+
+    /// Dynamic colour: the wallpaper's leading colour comes with the
+    /// decoded backdrop when the Material design asks for it.
+    #[test]
+    fn the_wallpaper_brings_its_colour_for_the_material_design() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("w.png");
+        image::RgbaImage::from_pixel(640, 360, image::Rgba([200, 40, 60, 255])).save(&path).unwrap();
+        let (_, seed) = load_wallpaper(path.clone(), 2.0, true).recv_timeout(Duration::from_secs(20)).unwrap();
+        let (seed, luma) = seed.expect("a leading colour");
+        assert!(seed.hue() < 40.0 || seed.hue() > 330.0, "red: hue {}", seed.hue());
+        assert!((0.0..0.5).contains(&luma), "a deep red is dark: {luma}");
+        let (_, none) = load_wallpaper(path, 2.0, false).recv_timeout(Duration::from_secs(20)).unwrap();
+        assert_eq!(none, None);
+    }
+
+    /// The scalloped avatar's morph shown in the checking snapshot.
+    const MORPH_PREVIEW: f32 = material::MORPH_CHECKING;
+
     /// Renders typing / error / Caps Lock states to PNGs for a visual check:
     /// `MANDARA_LOCK_SNAPSHOTS=/tmp/x cargo test -p mandara-ui lock_snapshots -- --ignored`.
     #[test]
@@ -1433,5 +1541,28 @@ mod tests {
         s.flash.snap_to(1.0);
         s.shake.snap_to(-14.0);
         save(&mut s, "error");
+        // The Material You design: empty, typing (both directions), a
+        // wrong password and checking.
+        for (rtl, tag) in [(false, ""), (true, "-rtl")] {
+            let mut s = screen(false);
+            s.reveal.snap_to(1.0);
+            s.rtl = rtl;
+            s.look.cfg.design = mandara_config::desktop::LockDesign::MaterialYou;
+            s.look.snapshot = look::Snapshot { media: Some("Corniche Radio — Mandara".into()), notifications: 2, weather: Some("24°C".into()) };
+            save(&mut s, &format!("you-empty{tag}"));
+            type_text(&mut s, "secret");
+            s.keyboard(&KeyboardState { caps_lock: false, layout: "English (US)".into() });
+            save(&mut s, &format!("you-typing{tag}"));
+            if tag.is_empty() {
+                press(&mut s, keys::RETURN);
+                let at = Instant::now() + Duration::from_millis(300);
+                s.morph.snap_to(MORPH_PREVIEW);
+                save_at(&mut s, "you-checking", at);
+                settle(&mut s);
+                s.flash.snap_to(1.0);
+                s.morph.snap_to(0.0);
+                save(&mut s, "you-error");
+            }
+        }
     }
 }

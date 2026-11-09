@@ -209,20 +209,23 @@ impl KeyringsCard {
     }
 
     fn button(p: &MandaraPalette, id: &'static str, label: String, ic: &'static str, primary: bool) -> gpui::Stateful<gpui::Div> {
-        div()
-            .id(id)
-            .h(px(DIM_32_PX))
-            .px(px(SPACE_12_PX))
-            .flex_none()
+        use mandara_ui::components::buttons::{Ink, designed};
+        // The classic primary fades on hover; the designs deepen its fill.
+        let ink = if primary { Ink { bg: Some(p.primary), hover: p.primary.mix(p.on_primary, ALPHA_8), outline: None } } else { Ink { bg: Some(p.surface_container_high), hover: p.surface_container, outline: None } };
+        let id = gpui::ElementId::from(id);
+        let el = div().id(id.clone()).h(px(DIM_32_PX)).px(px(SPACE_12_PX)).flex_none();
+        designed(el, id, DIM_32_PX, false, ink, Some(p), |el| {
+            el.rounded(px(RADIUS_11_PX))
+                .when(primary, |el| el.bg(p.primary.hsla()).hover(|s| s.opacity(ALPHA_90)))
+                .when(!primary, |el| el.bg(p.surface_container_high.hsla()).hover(|s| s.bg(p.surface_container.hsla())))
+        })
             .row()
             .items_center()
             .gap(px(SPACE_7_PX))
-            .rounded(px(RADIUS_11_PX))
             .cursor_pointer()
             .text_size(px(TEXT_12_5_PX))
             .font_weight(FontWeight::MEDIUM)
-            .when(primary, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()).hover(|s| s.opacity(ALPHA_90)))
-            .when(!primary, |el| el.bg(p.surface_container_high.hsla()).hover(|s| s.bg(p.surface_container.hsla())))
+            .when(primary, |el| el.text_color(p.on_primary.hsla()))
             .child(icon(ic, ICON_15_PX, if primary { p.on_primary } else { p.on_surface }))
             .child(label)
     }

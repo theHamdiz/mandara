@@ -807,18 +807,14 @@ fn hero(h: &HeroText, palette: &MandaraPalette, radius: f32, nf: Option<SharedSt
 
 /// A round navigation button.
 fn nav_button(id: &'static str, glyph: &'static str, palette: &MandaraPalette, on_click: impl Fn(&mut App) + 'static) -> AnyElement {
-    let hover = wash(WASH_SOFT, palette);
-    div()
-        .id(id)
-        .size(px(NAV_BTN_PX))
-        .flex_none()
-        .rounded_full()
+    use crate::components::buttons::{Ink, designed};
+    let (fill, hover) = (wash(WASH_FAINT, palette), wash(WASH_SOFT, palette));
+    let el = div().id(id).size(px(NAV_BTN_PX)).flex_none();
+    designed(el, id, NAV_BTN_PX, true, Ink { bg: Some(fill), hover, outline: None }, Some(palette), |el| el.rounded_full().bg(fill.hsla()).hover(move |s| s.bg(hover.hsla())))
         .flex()
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .bg(wash(WASH_FAINT, palette).hsla())
-        .hover(move |s| s.bg(hover.hsla()))
         .child(icon(crate::bidi::dir_icon(glyph), NAV_ICON_PX, palette.on_surface))
         .on_click(move |_, _, cx| on_click(cx))
         .into_any_element()

@@ -437,20 +437,21 @@ pub fn notification_card_styled(n: &Notification, palette: &MandaraPalette, styl
     let reply = n.can_reply();
     for (i, (key, label)) in n.actions.iter().filter(|(k, _)| k != "default" && k != mandara_services::notifications::INLINE_REPLY).take(MAX_ACTIONS).enumerate() {
         let key = key.clone();
+        // An action button in the button design picked under Themes →
+        // Components (tonal in the accent, as always).
+        let action_id = ElementId::NamedChild(Arc::new(ElementId::from(("act", id))), SharedString::from(i.to_string()));
+        let ink = crate::components::buttons::Ink { bg: Some(accent.with_alpha(ACTION_FILL_ALPHA)), hover: accent.with_alpha(ACTION_HOVER_ALPHA), outline: None };
+        let el = div().id(action_id.clone()).px(z(ACTION_PAD_X_PX)).h(z(PILL_H_PX));
+        let el = crate::components::buttons::designed(el, action_id, f32::from(z(PILL_H_PX)), false, ink, Some(palette), |el| {
+            el.rounded_full().bg(accent.with_alpha(ACTION_FILL_ALPHA).hsla()).hover(move |s| s.bg(accent.with_alpha(ACTION_HOVER_ALPHA).hsla()))
+        });
         actions = actions.child(
-            div()
-                .id(ElementId::NamedChild(Arc::new(ElementId::from(("act", id))), SharedString::from(i.to_string())))
-                .px(z(ACTION_PAD_X_PX))
-                .h(z(PILL_H_PX))
-                .rounded_full()
-                .flex()
+            el.flex()
                 .items_center()
                 .cursor_pointer()
-                .bg(accent.with_alpha(ACTION_FILL_ALPHA).hsla())
                 .text_color(accent.hsla())
                 .text_size(z(ACTION_TEXT_PX))
                 .font_weight(FontWeight::SEMIBOLD)
-                .hover(move |s| s.bg(accent.with_alpha(ACTION_HOVER_ALPHA).hsla()))
                 .child(label.clone())
                 .on_click(move |_, _, cx| {
                     cx.stop_propagation();
@@ -461,22 +462,21 @@ pub fn notification_card_styled(n: &Notification, palette: &MandaraPalette, styl
     }
     if reply {
         // Inline replies are typed in the notification center.
+        // An outlined button in the current button design.
+        let reply_id = ElementId::from(("reply", id));
+        let ink = crate::components::buttons::Ink { bg: None, hover: accent.with_alpha(ACTION_FILL_ALPHA), outline: Some(accent.with_alpha(ACTION_HOVER_ALPHA)) };
+        let el = div().id(reply_id.clone()).px(z(ACTION_PAD_X_PX)).h(z(PILL_H_PX));
+        let el = crate::components::buttons::designed(el, reply_id, f32::from(z(PILL_H_PX)), false, ink, Some(palette), |el| {
+            el.rounded_full().border_1().border_color(accent.with_alpha(ACTION_HOVER_ALPHA).hsla()).hover(move |s| s.bg(accent.with_alpha(ACTION_FILL_ALPHA).hsla()))
+        });
         actions = actions.child(
-            div()
-                .id(("reply", id))
-                .px(z(ACTION_PAD_X_PX))
-                .h(z(PILL_H_PX))
-                .rounded_full()
-                .flex()
+            el.flex()
                 .items_center()
                 .gap(z(TITLE_GAP_PX / 2.0))
                 .cursor_pointer()
-                .border_1()
-                .border_color(accent.with_alpha(ACTION_HOVER_ALPHA).hsla())
                 .text_color(accent.hsla())
                 .text_size(z(ACTION_TEXT_PX))
                 .font_weight(FontWeight::SEMIBOLD)
-                .hover(move |s| s.bg(accent.with_alpha(ACTION_FILL_ALPHA).hsla()))
                 .child(t("Reply"))
                 .on_click(move |_, _, cx| {
                     cx.stop_propagation();
@@ -532,6 +532,11 @@ pub fn notification_card_styled(n: &Notification, palette: &MandaraPalette, styl
                 })
                 .when_some(n.progress, |el, pct| {
                     let v = f32::from(pct) / PERCENT;
+                    // The progress design picked under Themes → Components.
+                    let design = crate::style::progress_design();
+                    if design != crate::components::ProgressDesign::Classic {
+                        return el.child(div().mt(z(TEXT_GAP_PX)).w_full().child(crate::components::progress::bar(v, f32::from(z(PROGRESS_H_PX)), accent, panel_fx::partner(accent), palette.on_surface.with_alpha(COUNT_FILL_ALPHA), design)));
+                    }
                     el.child(
                         div()
                             .mt(z(TEXT_GAP_PX))

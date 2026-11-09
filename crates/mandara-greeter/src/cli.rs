@@ -25,6 +25,9 @@ pub struct GreeterArgs {
     /// Backdrop override: auto, video, stills or aurora.
     #[arg(long)]
     pub background: Option<String>,
+    /// Start from a ready-made look: mandara, midnight-card or material-you.
+    #[arg(long)]
+    pub look: Option<String>,
     /// With --demo: play a scripted wrong-then-right login (screenshots).
     #[arg(long, hide = true)]
     pub demo_autoplay: bool,
@@ -214,6 +217,7 @@ pub fn main(args: GreeterArgs) -> Result<()> {
             language: args.lang,
             theme: args.theme,
             background: args.background,
+            look: args.look,
             autoplay: args.demo_autoplay,
         }),
     }

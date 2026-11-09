@@ -908,16 +908,16 @@ fn scrubber(
 
 fn transport_button(id: &'static str, icon_name: &'static str, side: f32, enabled: bool, palette: &MandaraPalette, command: MediaCommand) -> impl IntoElement {
     let fg = if enabled { palette.on_surface } else { palette.on_surface.with_alpha(DISABLED_ALPHA) };
+    use crate::components::buttons::{Ink, designed};
     let hover = palette.on_surface.with_alpha(BUTTON_HOVER_ALPHA);
-    div()
-        .id(id)
-        .size(px(side))
-        .flex_none()
-        .rounded_full()
+    // Disabled it shows no hover (a clear one in the designed shapes).
+    let ink = Ink { bg: None, hover: if enabled { hover } else { hover.with_alpha(0.0) }, outline: None };
+    let el = div().id(id).size(px(side)).flex_none();
+    designed(el, id, side, true, ink, Some(palette), |el| el.rounded_full().when(enabled, |el| el.hover(move |s| s.bg(hover.hsla()))))
         .flex()
         .items_center()
         .justify_center()
-        .when(enabled, |el| el.cursor_pointer().hover(move |s| s.bg(hover.hsla())))
+        .when(enabled, |el| el.cursor_pointer())
         .child(icon(icon_name, side * BUTTON_ICON_SCALE, fg))
         .on_click(move |_, _, cx| {
             if enabled {

@@ -6,6 +6,7 @@ pub mod alerts;
 pub mod apps;
 pub mod kwin;
 pub mod compositor;
+pub mod components;
 pub mod connectivity;
 pub mod conflicts;
 pub mod desktop;

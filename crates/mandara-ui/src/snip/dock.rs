@@ -29,6 +29,7 @@ use super::SnipMode;
 use crate::bidi::Bidi as _;
 use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
+use crate::components::buttons::{Ink, designed};
 use crate::kit::{alpha, text};
 
 /// Compact-surface geometry at `toolbar_scale` 1.
@@ -145,16 +146,15 @@ pub(super) fn mode_chip(id: &'static str, mode: SnipMode, active: bool, palette:
 
 /// A square icon button with a tooltip.
 pub(super) fn icon_button(id: &'static str, glyph: &'static str, hint: impl Into<SharedString>, palette: &MandaraPalette, ts: f32) -> Stateful<Div> {
-    div()
-        .id(id)
-        .size(px(bar::BUTTON * ts))
-        .flex_none()
-        .rounded(px(crate::style::radius(bar::BUTTON_RADIUS) * ts))
+    let (side, hover) = (bar::BUTTON * ts, palette.on_surface.with_alpha(alpha::HOVER_FILLED));
+    let el = div().id(id).size(px(side)).flex_none();
+    designed(el, id, side, true, Ink { bg: None, hover, outline: None }, Some(palette), |el| {
+        el.rounded(px(crate::style::radius(bar::BUTTON_RADIUS) * ts)).hover(move |s| s.bg(hover.hsla()))
+    })
         .flex()
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .hover(|s| s.bg(palette.on_surface.with_alpha(alpha::HOVER_FILLED).hsla()))
         .child(icon(glyph, bar::ICON * ts, palette.on_surface))
         .tooltip(tip(hint, palette))
 }
@@ -162,20 +162,19 @@ pub(super) fn icon_button(id: &'static str, glyph: &'static str, hint: impl Into
 /// An icon + label button; `primary` is filled with the accent.
 fn text_button(id: &'static str, glyph: &'static str, label: impl Into<SharedString>, hint: impl Into<SharedString>, primary: bool, palette: &MandaraPalette, ts: f32) -> Stateful<Div> {
     let (bg, fg) = if primary { (palette.primary, palette.on_primary) } else { (palette.on_surface.with_alpha(alpha::HOVER), palette.on_surface) };
-    div()
-        .id(id)
-        .h(px(bar::BUTTON * ts))
-        .px(px(bar::ACTION_PAD * ts))
-        .rounded(px(crate::style::radius(bar::BUTTON_RADIUS) * ts))
+    let h = bar::BUTTON * ts;
+    // The classic button fades on hover and press; the designs deepen its fill.
+    let ink = Ink { bg: Some(bg), hover: bg.mix(fg, alpha::HOVER_FILLED), outline: None };
+    let el = div().id(id).h(px(h)).px(px(bar::ACTION_PAD * ts));
+    designed(el, id, h, false, ink, Some(palette), |el| {
+        el.rounded(px(crate::style::radius(bar::BUTTON_RADIUS) * ts)).bg(bg.hsla()).hover(|s| s.opacity(0.88)).active(|s| s.opacity(0.7))
+    })
         .row()
         .items_center()
         .gap(px(bar::ACTION_GAP * ts))
         .font_weight(FontWeight::MEDIUM)
-        .bg(bg.hsla())
         .text_color(fg.hsla())
         .cursor_pointer()
-        .hover(|s| s.opacity(0.88))
-        .active(|s| s.opacity(0.7))
         .child(icon(glyph, bar::ICON * ts, fg))
         .child(label.into())
         .tooltip(tip(hint, palette))

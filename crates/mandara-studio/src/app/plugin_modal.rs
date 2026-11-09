@@ -464,22 +464,20 @@ fn zone_lane(zone: Option<Zone>) -> Lane {
 
 /// A rounded action button.
 fn action(id: impl Into<SharedString>, icon_name: &'static str, label: String, primary: bool, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
+    use mandara_ui::components::buttons::{Ink, designed};
     let (bg, fg) = if primary { (p.primary, p.on_primary) } else { (p.surface_container_high, p.on_surface) };
-    div()
-        .id(id.into())
-        .h(px(DIM_36_PX))
-        .px(px(SPACE_16_PX))
-        .rounded_full()
+    let hover = if primary { bg.lighten(BUTTON_HOVER_LIGHTEN) } else { p.primary.with_alpha(ALPHA_14) };
+    let id = gpui::ElementId::from(id.into());
+    let el = div().id(id.clone()).h(px(DIM_36_PX)).px(px(SPACE_16_PX));
+    designed(el, id, DIM_36_PX, false, Ink { bg: Some(bg), hover, outline: None }, Some(p), |el| el.rounded_full().bg(bg.hsla()).hover(move |s| s.bg(hover.hsla())))
         .row()
         .flex_none()
         .items_center()
         .gap(px(SPACE_8_PX))
         .cursor_pointer()
-        .bg(bg.hsla())
         .text_color(fg.hsla())
         .text_size(px(TEXT_12_5_PX))
         .font_weight(FontWeight::MEDIUM)
-        .hover(move |s| s.bg(if primary { bg.lighten(BUTTON_HOVER_LIGHTEN).hsla() } else { p.primary.with_alpha(ALPHA_14).hsla() }))
         .child(icon(icon_name, ICON_14_PX, if primary { p.on_primary } else { p.on_surface_variant }))
         .child(label)
 }
@@ -506,21 +504,20 @@ fn section(title: &'static str, p: &MandaraPalette) -> gpui::Div {
 
 /// A destructive action (remove, uninstall), filled once it asks to confirm.
 fn danger(id: &'static str, label: &'static str, confirming: bool, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .h(px(DIM_36_PX))
-        .px(px(SPACE_16_PX))
-        .rounded_full()
+    use mandara_ui::components::buttons::{Ink, designed};
+    let bg = p.urgent_coral.with_alpha(if confirming { ALPHA_90 } else { ALPHA_12 });
+    let fg = if confirming { p.on_primary } else { p.urgent_coral };
+    let el = div().id(id).h(px(DIM_36_PX)).px(px(SPACE_16_PX));
+    // The classic button fades on hover; the designs deepen its fill.
+    designed(el, id, DIM_36_PX, false, Ink { bg: Some(bg), hover: bg.mix(fg, ALPHA_8), outline: None }, Some(p), |el| el.rounded_full().bg(bg.hsla()).hover(|s| s.opacity(ALPHA_88)))
         .row()
         .flex_none()
         .items_center()
         .gap(px(SPACE_8_PX))
         .cursor_pointer()
-        .bg(p.urgent_coral.with_alpha(if confirming { ALPHA_90 } else { ALPHA_12 }).hsla())
-        .text_color(if confirming { p.on_primary.hsla() } else { p.urgent_coral.hsla() })
+        .text_color(fg.hsla())
         .text_size(px(TEXT_12_5_PX))
         .font_weight(FontWeight::MEDIUM)
-        .hover(|s| s.opacity(ALPHA_88))
         .child(icon("trash", ICON_14_PX, if confirming { p.on_primary } else { p.urgent_coral }))
         .child(label)
 }

@@ -609,6 +609,7 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
 pub fn note(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     match setting.path {
         "/style/slider_handle" if !cfg.style.slider_design.uses_handle() => Some(tk("Only the thin sliders use it now: the Pill and Segmented designs mark the value without a handle")),
+        "/style/card_style" if !cfg.style.shadows && cfg.style.card_style == mandara_config::desktop::CardStyle::Raised => Some(tk("Raised cards cast no shadow while Shadows is off under Fine-tune")),
         _ => None,
     }
 }

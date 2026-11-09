@@ -34,8 +34,16 @@ use mandara_core::ToGpui as _;
 use mandara_theme::MandaraPalette;
 use mandara_ui::bidi::Bidi as _;
 
+use mandara_ui::components::ChipDesign;
+use mandara_ui::components::chips::Place;
+use mandara_ui::components::surfaces::Surface as _;
+use mandara_ui::style::ClipRounded as _;
+
 use super::grid::{self, GridFit};
 use crate::tokens::*;
+
+/// The outline of Material's segmented group.
+const MATERIAL_EDGE_PX: f32 = 1.0;
 
 /// Space between neighbouring pills on a settings or greeter track.
 pub const CHOICE_GAP_PX: f32 = 2.0;
@@ -201,31 +209,59 @@ pub fn placed(items: Vec<ChoiceItem>, beside: f32, under: f32, style: &ChoiceSty
 /// The control: options on a track, one line or a balanced grid that fits
 /// `room` (see the module docs).
 pub fn segmented(room: Room, style: &ChoiceStyle, items: Vec<ChoiceItem>, p: &MandaraPalette) -> AnyElement {
+    segmented_as(mandara_ui::style::chip_design(), room, style, items, p)
+}
+
+/// [`segmented`] in `design` (Themes → Components → Chips): Classic's
+/// pills on a tonal track, Material's outlined group with dividers, or
+/// Connected's separate buttons with small inner corners.
+pub fn segmented_as(design: ChipDesign, room: Room, style: &ChoiceStyle, items: Vec<ChoiceItem>, p: &MandaraPalette) -> AnyElement {
     let avail = room.width;
     let widths: Option<Vec<f32>> = items.iter().map(|i| label_width(&i.label, style.text_px)).collect();
     let shape = widths.map_or(Shape::Line, |w| shape(&w, avail, style));
     let notes = lock_notes(&items);
-    let track = div().p(px(style.inset)).rounded(px(RADIUS_12_PX)).bg(p.surface_container_high.hsla());
+    let rtl = mandara_ui::bidi::rtl();
+    let (inset, gap) = match design {
+        ChipDesign::Classic => (style.inset, style.gap),
+        ChipDesign::Material => (0.0, 0.0),
+        ChipDesign::Connected => (0.0, style.gap),
+    };
+    // Material's group is outlined: its edge takes this much on each side.
+    let edge = if design == ChipDesign::Material { MATERIAL_EDGE_PX } else { 0.0 };
+    let track_radius = if matches!(shape, Shape::Line) && design == ChipDesign::Material { style.pill_h / 2.0 + edge } else { RADIUS_12_PX };
+    let track = match design {
+        ChipDesign::Classic => div().p(px(style.inset)).rounded(px(RADIUS_12_PX)).bg(p.surface_container_high.hsla()),
+        ChipDesign::Material => div().clip_rounded().rounded(px(track_radius)).border_1().border_color(mandara_ui::components::chips::outline(p).hsla()),
+        ChipDesign::Connected => div(),
+    };
+    let look = Look { design, style, p };
     let control = match shape {
         // A row that wraps only if a font changed under a cached width.
-        Shape::Line => track.row().flex_wrap().gap(px(style.gap)).children(items.into_iter().map(|i| pill(i, None, style, p))).into_any_element(),
+        Shape::Line => {
+            let n = items.len();
+            track.row().flex_wrap().gap(px(gap)).children(items.into_iter().enumerate().map(|(i, item)| pill(item, None, Place::in_reading_order(i, n, rtl), &look))).into_any_element()
+        }
         Shape::Grid(fit) => {
             let n = items.len();
             let mut items: Vec<Option<ChoiceItem>> = items.into_iter().map(Some).collect();
-            let rows = visual_rows(n, fit.cols, mandara_ui::bidi::rtl());
+            let rows = visual_rows(n, fit.cols, rtl);
+            let row_count = rows.len();
             track
                 .flex_none()
-                .w(px(fit.width + 2.0 * style.inset))
+                .w(px(fit.width + 2.0 * inset + 2.0 * edge))
                 .flex()
                 .flex_col()
-                .gap(px(style.gap))
-                .children(rows.into_iter().map(|row| {
+                .gap(px(gap))
+                .children(rows.into_iter().enumerate().map(|(r, row)| {
                     let offset = row_offset(row.len(), &fit);
+                    let len = row.len();
                     div()
                         .ltr_row()
-                        .gap(px(style.gap))
+                        .gap(px(gap))
                         .when(offset > 0.0, |el| el.ml(px(offset)))
-                        .children(row.into_iter().filter_map(|i| items[i].take()).map(|i| pill(i, Some(fit.card_w), style, p)))
+                        // Material: a divider between rows.
+                        .when(design == ChipDesign::Material && r + 1 < row_count, |el| el.border_b_1().border_color(mandara_ui::components::chips::outline(p).hsla()))
+                        .children(row.into_iter().filter_map(|i| items[i].take()).enumerate().map(|(j, i)| pill(i, Some(fit.card_w), Place::visual(j, len), &look)))
                 }))
                 .into_any_element()
         }
@@ -246,21 +282,41 @@ pub fn segmented(room: Room, style: &ChoiceStyle, items: Vec<ChoiceItem>, p: &Ma
         .into_any_element()
 }
 
+/// How a choice's options are drawn.
+struct Look<'a> {
+    design: ChipDesign,
+    style: &'a ChoiceStyle,
+    p: &'a MandaraPalette,
+}
+
 /// One pill: its natural width on a line, `cell` wide (label centred) in a
-/// grid. A disabled one is dimmed and ignores the pointer.
-fn pill(item: ChoiceItem, cell: Option<f32>, style: &ChoiceStyle, p: &MandaraPalette) -> AnyElement {
+/// grid, at `place` in its row. A disabled one is dimmed and ignores the
+/// pointer.
+fn pill(item: ChoiceItem, cell: Option<f32>, place: Place, look: &Look) -> AnyElement {
+    let Look { design, style, p } = *look;
     let ChoiceItem { id, label, active, locked, on_click } = item;
-    let pill = div()
-        .id(id)
-        .px(px(style.pad_x))
-        .h(px(style.pill_h))
-        .rounded(px(RADIUS_9_PX))
+    let pill = div().id(id).px(px(style.pad_x)).h(px(style.pill_h));
+    let pill = match design {
+        ChipDesign::Classic => pill
+            .rounded(px(RADIUS_9_PX))
+            .when(active, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()).font_weight(FontWeight::MEDIUM))
+            .when(!active, |el| el.text_color(p.on_surface_variant.hsla())),
+        // Square options in the outlined group (it clips their corners), a
+        // divider before the next one on screen.
+        ChipDesign::Material => pill
+            .when(!place.right_end, |el| el.border_r_1().border_color(mandara_ui::components::chips::outline(p).hsla()))
+            .when(active, |el| el.bg(mandara_ui::components::chips::chosen(p).hsla()).text_color(p.primary.hsla()).font_weight(FontWeight::MEDIUM))
+            .when(!active, |el| el.text_color(p.on_surface_variant.hsla())),
+        ChipDesign::Connected => pill
+            .with_corners(mandara_ui::components::chips::connected_corners(place, active, style.pill_h))
+            .when(active, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()).font_weight(FontWeight::MEDIUM))
+            .when(!active, |el| el.bg(p.surface_container_high.hsla()).text_color(p.on_surface_variant.hsla())),
+    };
+    let pill = pill
         .row()
         .items_center()
         .when_some(cell, |el, w| el.flex_none().w(px(w)).justify_center())
         .text_size(px(style.text_px))
-        .when(active, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()).font_weight(FontWeight::MEDIUM))
-        .when(!active, |el| el.text_color(p.on_surface_variant.hsla()))
         .child(mandara_ui::bidi::paragraph(label));
     match locked {
         Some(_) => pill.opacity(super::LOCKED_OPACITY).into_any_element(),

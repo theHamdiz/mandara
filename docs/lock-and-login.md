@@ -52,7 +52,8 @@ changes; an empty collection starts no painter or weather service.
   rolling clock, springy entrances, a breathing avatar ring, typing ripples,
   a shake on a wrong password and a cinematic zoom into your session.
 - **Design it in Studio**: drag every element on a live, smooth preview in
-  Studio → Login screen (below).
+  Studio → Login screen (below), or start from one of three looks: Mandara,
+  Midnight card or Material You.
 - **Try it safely**: `mandara greeter --demo` runs it on your session
   without logging you out. `sudo mandara greeter install` prints its plan,
   keeps backups and switches display managers only when you add `--apply`.
@@ -94,7 +95,13 @@ changes; an empty collection starts no painter or weather service.
 - **Lock screen**: `ext-session-lock-v1` on every display, your password
   checked through PAM, a big clock, avatar, now playing, weather,
   notification count and battery, with classic, stacked or compact layouts
-  and black secondary displays for OLED care. Anything that runs
+  and black secondary displays for OLED care. Studio → Lock appearance →
+  **Design** (`lock.design`) switches it between **Mandara** and **Material
+  You**: colours from your wallpaper, a big stacked clock whose weight grows
+  as the screen appears, weather, music and notifications as tonal chips, and
+  a tonal card with your picture in a scalloped shape, a filled password field
+  and a round button beside it that squares off and shows Material's loading
+  shape while the password is checked. Anything that runs
   `loginctl lock-session` locks it; preview it with `mandara lock --demo`.
 - **Password symbols**: on both screens each typed character appears as
   one of ten small soft shapes after Material 3's expressive shape set
