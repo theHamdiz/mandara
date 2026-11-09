@@ -9616,3 +9616,6 @@
 "Pills" = "Pillen"
 "Shared" = "Gemeinsam"
 "Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look" = "Gibt einer Seitenleiste den Elementlook eines Leistenstils (Formen, Farbe und Abstand), oder none für den gemeinsamen Seitenleisten-Look"
+"Downloads the feeds you follow and their pictures" = "Lädt die Feeds, denen du folgst, und ihre Bilder herunter"
+"Keeps your feeds and saved articles in Mandara's state folder" = "Speichert deine Feeds und gespeicherten Artikel im Statusordner von Mandara"
+"Reads communities, threads and their pictures from reddit.com" = "Liest Communities, Threads und ihre Bilder von reddit.com"

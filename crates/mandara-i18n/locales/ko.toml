@@ -9372,3 +9372,6 @@
 "Pills" = "필"
 "Shared" = "공통"
 "Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look" = "사이드 바 하나에 바 스타일의 항목 모양(모양, 색, 여백)을 적용합니다. none은 공통 모양으로 돌아갑니다"
+"Downloads the feeds you follow and their pictures" = "구독 중인 피드와 그 이미지를 내려받습니다"
+"Keeps your feeds and saved articles in Mandara's state folder" = "피드와 저장한 글을 Mandara의 상태 폴더에 보관합니다"
+"Reads communities, threads and their pictures from reddit.com" = "reddit.com에서 커뮤니티, 스레드와 그 이미지를 읽어 옵니다"

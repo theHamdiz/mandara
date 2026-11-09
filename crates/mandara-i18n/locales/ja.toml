@@ -9619,3 +9619,6 @@
 "Pills" = "ピル"
 "Shared" = "共通"
 "Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look" = "1 本のサイドバーにバースタイルの項目の見た目(形、色、余白)を適用します。none で共通の見た目に戻します"
+"Downloads the feeds you follow and their pictures" = "フォロー中のフィードとその画像をダウンロードします"
+"Keeps your feeds and saved articles in Mandara's state folder" = "フィードと保存した記事を Mandara の状態フォルダに保存します"
+"Reads communities, threads and their pictures from reddit.com" = "reddit.com からコミュニティ、スレッドとその画像を読み込みます"

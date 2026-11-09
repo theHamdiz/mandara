@@ -203,7 +203,6 @@ pub(crate) struct Model {
     pending: Vec<Box<dyn FnOnce(&mut Library, &Player, &mut App)>>,
     pub views: ViewSet,
     save_timer: Option<Task<()>>,
-    save_generation: u64,
     pub tab: Tab,
     pub category: Option<Category>,
     pub manage: bool,
@@ -251,7 +250,6 @@ pub(crate) fn model(cx: &mut App) -> Shared {
         pending: Vec::new(),
         views: ViewSet::default(),
         save_timer: None,
-        save_generation: 0,
         tab: Tab::default(),
         category: None,
         manage: false,
@@ -344,6 +342,27 @@ pub(crate) fn changed(shared: &Shared, cx: &mut App) {
     views.notify(cx);
 }
 
+/// Save generations, process-wide like [`WRITTEN`]: a model made after
+/// Radio is switched off and on again keeps counting up, so its saves win.
+static SAVE_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// The newest generation written to disk.
+static WRITTEN: std::sync::Mutex<u64> = std::sync::Mutex::new(0);
+
+fn next_save_generation() -> u64 {
+    SAVE_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
+}
+
+/// Writes `lib` to `path` unless a newer save already landed (off the UI thread).
+fn write_library(lib: &Library, generation: u64, path: &std::path::Path) {
+    let mut last = WRITTEN.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if generation > *last {
+        if let Err(e) = lib.save(path) {
+            tracing::warn!("radio: saving stations: {e}");
+        }
+        *last = generation;
+    }
+}
+
 /// Writes the library off the UI thread [`SAVE_DELAY`] after the last
 /// change (the newest change wins).
 fn schedule_save(shared: &Shared, cx: &mut App) {
@@ -351,24 +370,14 @@ fn schedule_save(shared: &Shared, cx: &mut App) {
     let timer = cx.spawn(async move |cx| {
         cx.background_executor().timer(SAVE_DELAY).await;
         let Some(shared) = weak.upgrade() else { return };
-        let (lib, generation) = {
+        let lib = {
             let mut m = shared.borrow_mut();
             m.save_timer = None;
-            m.save_generation += 1;
-            (m.lib.clone(), m.save_generation)
+            m.lib.clone()
         };
         let Some(lib) = lib else { return };
-        cx.background_spawn(async move {
-            static WRITTEN: std::sync::Mutex<u64> = std::sync::Mutex::new(0);
-            let mut last = WRITTEN.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            if generation > *last {
-                if let Err(e) = lib.save(&Library::path()) {
-                    tracing::warn!("radio: saving stations: {e}");
-                }
-                *last = generation;
-            }
-        })
-        .detach();
+        let generation = next_save_generation();
+        cx.background_spawn(async move { write_library(&lib, generation, &Library::path()) }).detach();
     });
     shared.borrow_mut().save_timer = Some(timer);
 }
@@ -757,8 +766,15 @@ pub fn stop(cx: &mut App) {
     bar::clear();
     if cx.has_global::<GlobalRadio>() {
         let GlobalRadio(shared) = cx.remove_global::<GlobalRadio>();
-        let m = shared.borrow();
+        let mut m = shared.borrow_mut();
         m.player.stop();
+        // A change still waiting for its delayed save is written now.
+        if m.save_timer.take().is_some()
+            && let Some(lib) = m.lib.clone()
+        {
+            let generation = next_save_generation();
+            cx.background_spawn(async move { write_library(&lib, generation, &Library::path()) }).detach();
+        }
     }
 }
 
@@ -1051,5 +1067,25 @@ mod tests {
         assert_eq!(find_station(&lib, "fip-jazz").as_deref(), Some("fip-jazz"));
         assert_eq!(find_station(&lib, "groove salad").as_deref(), Some("soma-groove-salad"));
         assert_eq!(find_station(&lib, "zzzz-nothing"), None);
+    }
+
+    /// Save generations are process-wide: after Radio is switched off and
+    /// on again (a new model), the next save is still newer than every
+    /// write so far, and a stale write never replaces a newer one.
+    #[test]
+    fn saves_after_a_restart_still_land() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("radio.toml");
+        let mut lib = Library::default();
+        for _ in 0..3 {
+            write_library(&lib, next_save_generation(), &path);
+        }
+        let stale = next_save_generation();
+        lib.toggle_favourite("fip-jazz").unwrap();
+        let fresh = next_save_generation();
+        assert!(fresh > *WRITTEN.lock().unwrap(), "a later model's first save is newer than every write");
+        write_library(&lib, fresh, &path);
+        write_library(&Library::default(), stale, &path);
+        assert_eq!(Library::load(&path), lib, "the newest change stays on disk");
     }
 }

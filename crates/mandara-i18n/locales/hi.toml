@@ -9620,3 +9620,6 @@
 "Pills" = "पिल"
 "Shared" = "साझा"
 "Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look" = "किसी एक साइड बार को बार स्टाइल का आइटम रूप दें (आकार, रंग और दूरी), या साझा रूप के लिए none"
+"Downloads the feeds you follow and their pictures" = "आप जिन फ़ीड को फ़ॉलो करते हैं, उन्हें और उनके चित्र डाउनलोड करता है"
+"Keeps your feeds and saved articles in Mandara's state folder" = "आपकी फ़ीड और सहेजे गए लेख Mandara के state फ़ोल्डर में रखता है"
+"Reads communities, threads and their pictures from reddit.com" = "reddit.com से कम्युनिटी, थ्रेड और उनके चित्र पढ़ता है"

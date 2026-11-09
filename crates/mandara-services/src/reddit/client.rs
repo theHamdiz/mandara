@@ -373,7 +373,7 @@ impl<T: Transport> Session<T> {
         }
         let parsed: TokenReply = serde_json::from_slice(&reply.body).map_err(|_| Error::Rejected)?;
         let value = Zeroizing::new(parsed.access_token.filter(|token| !token.is_empty() && token.len() < MAX_TOKEN_BYTES).ok_or(Error::Rejected)?);
-        let life = parsed.expires_in.filter(|secs| secs.is_finite() && *secs > 0.0).map_or(MAX_TOKEN_LIFE, |secs| Duration::from_secs_f64(secs).min(MAX_TOKEN_LIFE));
+        let life = parsed.expires_in.filter(|secs| secs.is_finite() && *secs > 0.0).map_or(MAX_TOKEN_LIFE, |secs| Duration::from_secs_f64(secs.min(MAX_TOKEN_LIFE.as_secs_f64())));
         self.token = Some(Token { value: value.clone(), expires: now + life });
         Ok(value)
     }

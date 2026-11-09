@@ -32,7 +32,8 @@ impl Limits {
     }
 
     fn seconds(value: Option<f32>) -> Option<Duration> {
-        value.map(|secs| Duration::from_secs_f32(secs).min(MAX_WINDOW))
+        // Clamped before the conversion, which panics past `Duration::MAX`.
+        value.map(|secs| Duration::from_secs_f32(secs.min(MAX_WINDOW.as_secs_f32())))
     }
 }
 

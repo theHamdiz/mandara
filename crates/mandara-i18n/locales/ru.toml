@@ -9617,3 +9617,6 @@
 "Pills" = "Капсулы"
 "Shared" = "Общий"
 "Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look" = "Придать одной боковой панели вид элементов стиля панели (формы, цвет и отступ) или none для общего вида"
+"Downloads the feeds you follow and their pictures" = "Загружает ленты, на которые вы подписаны, и их изображения"
+"Keeps your feeds and saved articles in Mandara's state folder" = "Хранит ваши ленты и сохранённые статьи в папке состояния Mandara"
+"Reads communities, threads and their pictures from reddit.com" = "Читает сообщества, обсуждения и их изображения с reddit.com"

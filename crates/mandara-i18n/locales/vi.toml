@@ -9276,3 +9276,6 @@
 "Pills" = "Viên thuốc"
 "Shared" = "Dùng chung"
 "Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look" = "Cho một thanh bên giao diện mục của một kiểu thanh (hình dạng, màu và khoảng lùi), hoặc none cho giao diện dùng chung"
+"Downloads the feeds you follow and their pictures" = "Tải các nguồn tin bạn theo dõi và ảnh của chúng"
+"Keeps your feeds and saved articles in Mandara's state folder" = "Lưu nguồn tin và bài viết đã lưu của bạn trong thư mục trạng thái của Mandara"
+"Reads communities, threads and their pictures from reddit.com" = "Đọc cộng đồng, chủ đề thảo luận và ảnh của chúng từ reddit.com"

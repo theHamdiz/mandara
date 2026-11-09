@@ -45,7 +45,8 @@ pub fn parse(body: &str, base: &str) -> Playlist {
         let entry = if pls {
             // FileN=<url>
             match line.split_once('=').map(|(k, v)| (k.trim(), v)) {
-                Some((key, value)) if key.len() > 4 && key[..4].eq_ignore_ascii_case("file") && key[4..].bytes().all(|b| b.is_ascii_digit()) => value.trim(),
+                // Bytes, not `str` slices: a non-ASCII key must not split a character.
+                Some((key, value)) if key.len() > 4 && key.as_bytes()[..4].eq_ignore_ascii_case(b"file") && key.as_bytes()[4..].iter().all(u8::is_ascii_digit) => value.trim(),
                 _ => continue,
             }
         } else {
@@ -102,6 +103,8 @@ mod tests {
         assert_eq!(parse(crlf, "https://x.example/"), Playlist::Streams(vec!["https://a.example/s".into()]));
         // Keys that only start with "File" are not entries.
         assert_eq!(parse("[playlist]\nFileName=https://no.example\n", "https://x.example/"), Playlist::Streams(vec![]));
+        // A non-ASCII key (the server writes the body) is skipped, not a panic.
+        assert_eq!(parse("[playlist]\nFil\u{e9}1=https://a.example/\nFile\u{e9}=https://b.example/\n", "https://x.example/"), Playlist::Streams(vec![]));
     }
 
     #[test]

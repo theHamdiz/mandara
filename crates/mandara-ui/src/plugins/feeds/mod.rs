@@ -85,6 +85,9 @@ pub enum BarStyle { Badge, Count, Icon }
 /// Feeds' settings, resolved once per configuration.
 pub struct Settings {
     pub subs: Rc<[Subscription]>,
+    /// A fingerprint of `subs` (addresses, names, folders, colours): what
+    /// the sidebar card's cached rows depend on.
+    pub subs_key: u64,
     pub refresh: Duration,
     pub background: Option<Duration>,
     pub limits: Limits,
@@ -131,8 +134,10 @@ fn choice<'a>(cfg: &'a ShellConfig, key: &str) -> &'a str { cfg.plugins.setting_
 pub fn settings(cfg: &ShellConfig) -> Settings {
     let p = &cfg.plugins;
     let int = |key: &str, default: i64, min: i64, max: i64| p.setting(ID, key, default).clamp(min, max);
+    let subs: Rc<[Subscription]> = subscriptions(cfg).into();
     Settings {
-        subs: subscriptions(cfg).into(),
+        subs_key: fingerprint(&subs),
+        subs,
         refresh: Duration::from_secs(int("refresh_seconds", DEFAULT_REFRESH_SECS, MIN_REFRESH_SECS, MAX_REFRESH_SECS) as u64),
         background: p.setting(ID, "background_refresh", false).then(|| Duration::from_secs(int("background_minutes", DEFAULT_BACKGROUND_MIN, MIN_BACKGROUND_MIN, MAX_BACKGROUND_MIN) as u64 * SECS_PER_MIN)),
         limits: Limits { items: int("items_per_feed", DEFAULT_ITEMS, MIN_ITEMS, MAX_ITEMS) as usize, retention_days: int("retention_days", DEFAULT_RETENTION_DAYS, MIN_RETENTION_DAYS, MAX_RETENTION_DAYS) as u32 },
@@ -143,6 +148,14 @@ pub fn settings(cfg: &ShellConfig) -> Settings {
         bar: match choice(cfg, "bar_style") { "count" => BarStyle::Count, "icon" => BarStyle::Icon, _ => BarStyle::Badge },
         card_folder: choice(cfg, "card_folder").trim().into(),
     }
+}
+
+/// A cheap fingerprint of the subscriptions, taken once per configuration.
+fn fingerprint(subs: &[Subscription]) -> u64 {
+    use std::hash::{Hash as _, Hasher as _};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for sub in subs { (&sub.url, &sub.title, &sub.folder, &sub.color).hash(&mut hasher); }
+    hasher.finish()
 }
 
 impl ConfigSettings for Settings {
@@ -471,6 +484,11 @@ fn follow_background(cx: &mut App) {
     hub.borrow_mut().background = Some((every, task));
 }
 
+/// Whether the Feeds panel shows: as the shell's panel or floating.
+fn panel_open(shell_panel: Option<&str>, floating: bool) -> bool {
+    floating || shell_panel == Some(ID)
+}
+
 /// The panel closed: release its history, article and pictures after the
 /// close animation. Counts stay for the bar.
 fn closed(cx: &mut App) {
@@ -645,7 +663,8 @@ pub fn register(registry: &mut PluginRegistry) {
         let view = panel::View::new(context.clone(), cx);
         let panel = super::model_view(None, move |palette, window, cx| view.render(palette, window, cx), window, cx);
         cx.observe(&crate::state::shell(cx), |shell, cx| {
-            if shell.read(cx).panel.as_deref() != Some(ID) { closed(cx); }
+            // A floating Feeds panel is open too, though it isn't the shell's panel.
+            if !panel_open(shell.read(cx).panel.as_deref(), crate::floating::is_floating(ID, cx)) { closed(cx); }
             // The card's rows go when the sidebar hides (never building a hub for it).
             if !shell.read(cx).sidebar_visible() && let Some(hub) = HUB.with(|slot| slot.borrow().clone()) { hub.borrow_mut().card.release(); }
         }).detach();
@@ -804,6 +823,32 @@ mod tests {
         let many: Vec<Subscription> = (0..MAX_SUBSCRIPTIONS + 5).map(|n| Subscription { url: format!("https://{n}.example/feed"), ..Subscription::default() }).collect();
         set_subscriptions(&mut cfg, &many);
         assert_eq!(subscriptions(&cfg).len(), MAX_SUBSCRIPTIONS);
+    }
+
+    /// The card's rows follow subscribing, unsubscribing and moving or
+    /// renaming a feed even when no snapshot changed.
+    #[test]
+    fn the_subscriptions_fingerprint_follows_every_change_the_card_shows() {
+        let sub = |url: &str, folder: &str| Subscription { url: url.into(), folder: folder.into(), ..Subscription::default() };
+        let base = [sub("https://a.example/feed", ""), sub("https://b.example/feed", "News")];
+        let key = fingerprint(&base);
+        assert_eq!(key, fingerprint(&base.clone()), "stable");
+        assert_ne!(key, fingerprint(&base[..1]), "unsubscribed");
+        assert_ne!(key, fingerprint(&[base[0].clone(), base[1].clone(), sub("https://c.example/feed", "")]), "subscribed");
+        assert_ne!(key, fingerprint(&[base[0].clone(), sub("https://b.example/feed", "Tech")]), "moved to another folder");
+        assert_ne!(key, fingerprint(&[base[0].clone(), Subscription { title: "Bee".into(), ..base[1].clone() }]), "renamed");
+        let mut cfg = ShellConfig::default();
+        set_subscriptions(&mut cfg, &base);
+        assert_eq!(settings(&cfg).subs_key, key, "resolved with the settings");
+    }
+
+    #[test]
+    fn a_floating_panel_counts_as_open() {
+        assert!(panel_open(Some(ID), false));
+        assert!(panel_open(None, true), "floating, not the shell's panel");
+        assert!(panel_open(Some("weather"), true));
+        assert!(!panel_open(Some("weather"), false));
+        assert!(!panel_open(None, false));
     }
 
     #[test]

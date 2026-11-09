@@ -9374,3 +9374,6 @@
 "Pills" = "পিল"
 "Shared" = "যৌথ"
 "Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look" = "একটি সাইড বারকে কোনো বার স্টাইলের আইটেম রূপ দিন (আকার, রং ও দূরত্ব), অথবা যৌথ রূপের জন্য none"
+"Downloads the feeds you follow and their pictures" = "আপনি যে ফিডগুলো অনুসরণ করেন সেগুলো ও তাদের ছবি ডাউনলোড করে"
+"Keeps your feeds and saved articles in Mandara's state folder" = "আপনার ফিড ও সংরক্ষিত নিবন্ধ Mandara-র state ফোল্ডারে রাখে"
+"Reads communities, threads and their pictures from reddit.com" = "reddit.com থেকে কমিউনিটি, থ্রেড ও তাদের ছবি পড়ে"

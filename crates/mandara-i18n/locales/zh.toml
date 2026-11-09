@@ -9613,3 +9613,6 @@
 "Pills" = "胶囊"
 "Shared" = "共用"
 "Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look" = "为单个侧栏应用某种栏样式的项目外观(形状、颜色和内距),或用 none 恢复共用外观"
+"Downloads the feeds you follow and their pictures" = "下载你关注的订阅源及其图片"
+"Keeps your feeds and saved articles in Mandara's state folder" = "把你的订阅源和已保存的文章保存在 Mandara 的状态文件夹中"
+"Reads communities, threads and their pictures from reddit.com" = "从 reddit.com 读取社区、讨论串及其图片"
