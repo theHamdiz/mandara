@@ -175,6 +175,26 @@ fn redirects_are_followed_checked_and_remembered_when_permanent() {
     assert!(requests[1].starts_with("get /new-feed "));
 }
 
+/// Relative links resolve against the address that served the feed (after
+/// a redirect, or the feed a page announces), not the subscription key.
+#[test]
+fn relative_links_resolve_against_the_served_address() {
+    let relative = b"<?xml version=\"1.0\"?><rss version=\"2.0\"><channel><title>Relative</title><item><title>One</title><link>post-1</link><guid>one</guid></item></channel></rss>";
+    let (base, worker) = serve(vec![b"HTTP/1.1 301 Moved Permanently\r\nLocation: /new/feed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec(), ok("", relative)]);
+    let url = format!("{base}/old/feed");
+    let feed = local().fetch_online(&url, None).unwrap().unwrap();
+    assert_eq!(feed.url, url, "the subscription keeps its own key");
+    assert_eq!(feed.entries.iter().map(|entry| entry.link.as_str()).collect::<Vec<_>>(), [format!("{base}/new/post-1")]);
+    worker.join().unwrap();
+    let page = b"<!doctype html><html><head><link rel=\"alternate\" type=\"application/rss+xml\" href=\"/feeds/main.xml\"></head><body>Blog</body></html>";
+    let (base, worker) = serve(vec![ok("Content-Type: text/html\r\n", page), ok("", relative)]);
+    let url = format!("{base}/blog/");
+    let feed = local().fetch_online(&url, None).unwrap().unwrap();
+    assert_eq!(feed.url, url);
+    assert_eq!(feed.entries.iter().map(|entry| entry.link.as_str()).collect::<Vec<_>>(), [format!("{base}/feeds/post-1")]);
+    worker.join().unwrap();
+}
+
 #[test]
 fn redirects_to_unsafe_addresses_or_in_loops_fail() {
     let (base, worker) = serve(vec![b"HTTP/1.1 302 Found\r\nLocation: file:///etc/passwd\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec()]);

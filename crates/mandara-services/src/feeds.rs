@@ -135,8 +135,11 @@ impl HttpSource {
             http::Fetched::Body(body) => body,
         };
         let resolved = (body.moved || address != url).then(|| if body.moved { body.final_url.clone() } else { address.to_owned() });
-        match parse_full(url, &body.bytes, body.charset.as_deref()) {
+        // Relative links resolve against the address that served the feed;
+        // the subscription keeps its own key.
+        match parse_full(&body.final_url, &body.bytes, body.charset.as_deref()) {
             Ok(mut parsed) => {
+                parsed.feed.url = url.to_owned();
                 parsed.feed.etag = body.etag;
                 parsed.feed.modified = body.modified;
                 parsed.feed.resolved = resolved;
@@ -152,7 +155,8 @@ impl HttpSource {
                 let http::Fetched::Body(feed_body) = http::get(&self.agent, &found.url, ACCEPT_FEEDS, (None, None), MAX_FEED_BYTES)? else {
                     return Err(t("The feed server returned no content").into());
                 };
-                let mut parsed = parse_full(url, &feed_body.bytes, feed_body.charset.as_deref()).map_err(|_| Failure::from(error))?;
+                let mut parsed = parse_full(&feed_body.final_url, &feed_body.bytes, feed_body.charset.as_deref()).map_err(|_| Failure::from(error))?;
+                parsed.feed.url = url.to_owned();
                 parsed.feed.etag = feed_body.etag;
                 parsed.feed.modified = feed_body.modified;
                 parsed.feed.resolved = Some(found.url);
