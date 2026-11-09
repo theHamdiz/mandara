@@ -206,6 +206,10 @@ impl AssetSource for MandaraAssets {
         if path.starts_with("password-symbols/") {
             return Ok(mandara_core::password_symbols::Symbol::from_asset_path(path).map(|s| Cow::Borrowed(s.svg().as_bytes())));
         }
+        // The Material You login avatar's shape and its morph steps.
+        if path.starts_with("login-shapes/") {
+            return Ok(mandara_core::avatar_shape::Step::from_asset_path(path).map(|s| Cow::Borrowed(s.svg().as_bytes())));
+        }
         let Some(name) = path.strip_prefix("icons/").and_then(|p| p.strip_suffix(".svg")) else {
             return Ok(None);
         };

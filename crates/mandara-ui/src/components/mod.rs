@@ -25,6 +25,7 @@ pub mod inputs;
 pub mod motion;
 pub mod progress;
 pub mod surfaces;
+pub mod tonal;
 pub mod toggles;
 
 pub use mandara_config::components::{ButtonDesign, CardStyle, ChipDesign, ComponentPreset, InputDesign, ProgressDesign, SurfaceCorners, ToggleDesign};
