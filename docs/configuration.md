@@ -94,7 +94,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 
 | Page | Settings |
 |---|---|
-| Themes | **looks** — six one-click looks and *Restore my look* (`looks.*`, see [Looks](#looks)); light / dark / automatic and its schedule (`theme.*`), palette tuning (`theme.adjustments`), theme crossfade (`theme.transition_ms`), icons (`appearance.*`), corner roundness, shadows, borders, backdrop dim; under **Components**, the **slider design** of the thick volume, brightness and mixer sliders (`style.slider_design` = `classic`, the default: the fill, a small gap, an upright handle, another gap and the rest of the track ending in a stop dot; `continuous`: one track with a short grip inside the fill's end; `pill`: a round knob on the fill's end that stretches into a pill while held; `wavy`: the classic layout with a gentle wave along the fill that flows only while you drag; `segmented`: ten rounded steps that fill in turn; thin sliders always keep the classic look) and the **slider handle** (`style.slider_handle` = `line`: the upright handle between a slider's fill and its track, with a small gap on each side and a stop dot at the track's end, or the grip of the continuous design; `none`: the fill's rounded end alone; the pill and segmented designs ignore it) (`style.*`); the theme; **other apps** — the app theming switches, all off by default (`integrations.*`, see [App theming](#app-theming-integrations)); **cursor** (the opt-in `cursors` plugin) — theme, size, hide while typing / when idle, Hyprland's software cursor and hide on touch (`compositor.input.cursor.theme`, `.size`, `.hide_when_typing`, `.hide_after_secs`, `.no_hardware_cursors`, `.hide_on_touch`; themes Mandara downloaded are listed in `~/.local/share/mandara/cursor-themes.json`) |
+| Themes | **looks** — six one-click looks and *Restore my look* (`looks.*`, see [Looks](#looks)); light / dark / automatic and its schedule (`theme.*`), palette tuning (`theme.adjustments`), theme crossfade (`theme.transition_ms`), icons (`appearance.*`), corner roundness, shadows, borders, backdrop dim; under **Components**, the **slider design** of the thick volume, brightness and mixer sliders (`style.slider_design` = `classic`, the default: the fill, a small gap, an upright handle, another gap and the rest of the track ending in a stop dot; `continuous`: one track with a short grip inside the fill's end; `pill`: a round knob on the fill's end that stretches into a pill while held; `wavy`: the classic layout with a gentle wave along the fill that flows only while you drag; `segmented`: ten rounded steps that fill in turn; thin sliders always keep the classic look); the other **component designs**, each `classic` by default: `style.button_design` (`classic`, `square`, `expressive`, `cut`, `elevated`), `style.toggle_design` (`classic`, `material`, `expressive`, `round`), `style.input_design` (`classic`, `filled`, `outlined`, `pill`), `style.chip_design` (`classic`, `material`, `connected`), `style.progress_design` (`classic`, `material`, `wavy`, `segmented`; bars, meters and progress rings, always at their classic size), `style.surface_corners` (`rounded`, `asymmetric`, `square`, `squircle`, `cut`; `style.radius_scale` still sets the size; squircle and cut cards clip their contents to the rounded rectangle inside their shape) and `style.card_style` (`tonal`, `raised` — no shadow while `style.shadows` is off —, `outlined`); the Components **presets** write these and `style.slider_design` together (`looks.keep_components`: picking a look keeps your designs instead of applying the look's); and the **slider handle** (`style.slider_handle` = `line`: the upright handle between a slider's fill and its track, with a small gap on each side and a stop dot at the track's end, or the grip of the continuous design; `none`: the fill's rounded end alone; the pill and segmented designs ignore it) (`style.*`); the theme; **other apps** — the app theming switches, all off by default (`integrations.*`, see [App theming](#app-theming-integrations)); **cursor** (the opt-in `cursors` plugin) — theme, size, hide while typing / when idle, Hyprland's software cursor and hide on touch (`compositor.input.cursor.theme`, `.size`, `.hide_when_typing`, `.hide_after_secs`, `.no_hardware_cursors`, `.hide_on_touch`; themes Mandara downloaded are listed in `~/.local/share/mandara/cursor-themes.json`) |
 | Wallpaper | folder, picker style / size / focus / names, fill and colour, transitions, crossfade (`wallpaper.crossfade_ms`), light / dark and per-display variants, depth effect (`wallpaper.depth_effect`) and how its subject is found: `wallpaper.depth.mode` (`hand-tuned` or `model`), `auto_split`, `split` (0.05–0.95, model mode) (`wallpaper.*`); video wallpapers: pause behind windows / on battery, frame-rate limit, first frame only (`wallpaper.video.*`, see [Video wallpapers](#video-wallpapers)); the slideshow (`wallpaper.slideshow.*`, see [Wallpaper slideshow](#wallpaper-slideshow)) |
 | Desktop widgets | clocks (24 faces, including depth, analog, word, split-flap, glass-tube and binary), system monitor, gauges, meters and thermals, weather, world clock, countdown, progress, to-do, sticky note, focus timer, quote, notebook tabs, calendars, sun / moon / globe, profile, shortcuts, toggles, sliders, palette, desk cat, bubbles, photo frame, sticker, six media layouts, machine card, screen time, prayer times, search, at a glance, GitHub, exchange rates, AI usage, games, decorations, plane visualizer, per-widget plate shape, outline, shadow, header, frame, rotation and mirror, alignment, font, numerals, calendar and language, show / hide them all (`desktop.widgets.*`, see [Desktop widgets](#desktop-widgets)); desktop cards and visualizers (`cards.*`, `visualizers.*`) |
 | Typography | interface / display / Arabic / monospace fonts, text scale, weight (`typography.*`) |
@@ -758,22 +758,27 @@ wallpaper with the look's scheme instead of the look's own seed). A look
 (`crates/mandara-config/src/looks.rs`) sets the bar style, position and
 items, the desktop widget list (clocks, monitor, decorations, cards,
 visualizers), the theme (`theme.source` = an HCT palette from an OKLCH
-seed), fonts, `style.radius_scale` and the bar opacity; it never changes
-the wallpaper image. Applying one from your own setup first saves the
+seed), fonts, `style.radius_scale`, the bar opacity and its **component
+designs** (one of the Components presets below, written to `style.*`;
+`looks.keep_components = true` keeps yours instead; a design you change
+after picking a look stays until you pick a look or preset again); it never
+changes the wallpaper image. Designed themes (palette presets such as
+Catppuccin) only set colours and carry no component designs: they combine
+with any components. Applying one from your own setup first saves the
 paths it touches as the look profile **Before looks** in
 `~/.config/mandara/profiles/`; switching between looks keeps that
 snapshot, and *Restore my look* / `mandara msg look restore` applies it
 back. `mandara msg look list`, `mandara msg look apply <id>
 [wallpaper-colors]`.
 
-| id | Look |
-|---|---|
-| `corniche-dusk` | rose glass pills, headline clock, system monitor, now-playing card |
-| `pharos-ink` | monochrome hairline bar with mini stats, greeting clock, calendar card |
-| `montaza-crimson` | red island bar, framed spectrum box, Arabic clock, vertical calligraphy |
-| `qaitbay-forest` | green edge frame, giant stacked clock behind the subject, dock now-playing chip |
-| `anfushi-wave` | ocean micro pill, full-width glowing wave, katakana accent |
-| `night-frame` | violet side bar with screen frame, greeting, calendar card, mirrored bars |
+| id | Look | Components |
+|---|---|---|
+| `corniche-dusk` | rose glass pills, headline clock, system monitor, now-playing card | Classic |
+| `pharos-ink` | monochrome hairline bar with mini stats, greeting clock, calendar card | Minimal |
+| `montaza-crimson` | red island bar, framed spectrum box, Arabic clock, vertical calligraphy | Expressive |
+| `qaitbay-forest` | green edge frame, giant stacked clock behind the subject, dock now-playing chip | Material You |
+| `anfushi-wave` | ocean micro pill, full-width glowing wave, katakana accent | Expressive |
+| `night-frame` | violet side bar with screen frame, greeting, calendar card, mirrored bars | Brutalist soft |
 
 ## Launcher placement
 

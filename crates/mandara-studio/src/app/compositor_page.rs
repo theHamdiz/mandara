@@ -63,7 +63,9 @@ pub(super) fn tip(text: impl Into<SharedString>, p: &MandaraPalette) -> impl Fn(
 /// A settings card. Children (hover fills, bands, previews) are clipped to
 /// its rounded corners.
 pub(super) fn card(p: &MandaraPalette) -> Div {
-    div().clip_rounded().rounded(px(RADIUS_20_PX)).bg(p.surface_container.hsla()).p(px(SPACE_18_PX)).row().flex_col().gap(px(SPACE_12_PX))
+    // Shaped and lifted in the card designs of Themes → Components.
+    use mandara_ui::components::surfaces::{CardSurface as _, Fill};
+    div().clip_rounded().card_surface(RADIUS_20_PX, Fill(p.surface_container, None), Vec::new(), p).p(px(SPACE_18_PX)).row().flex_col().gap(px(SPACE_12_PX))
 }
 
 pub(super) fn group_title(text: impl Into<SharedString>, p: &MandaraPalette) -> Div {
@@ -83,41 +85,57 @@ pub(super) fn badge(text: impl Into<SharedString>, color: Color) -> Div {
     div().px(px(SPACE_9_PX)).h(px(DIM_22_PX)).rounded_full().row().items_center().flex_none().bg(color.with_alpha(ALPHA_16).hsla()).text_color(color.hsla()).text_size(px(TEXT_11_PX)).child(text.into())
 }
 
+/// A Studio button (filled for the main action, tonal otherwise) in the
+/// button design picked under Themes → Components.
 pub(super) fn button(id: impl Into<SharedString>, icon_name: &'static str, label: impl Into<SharedString>, filled: bool, p: &MandaraPalette) -> Stateful<Div> {
+    button_as(mandara_ui::style::button_design(), id, icon_name, label, filled, p)
+}
+
+/// [`button`] in `design` (the Components previews draw every design).
+pub(super) fn button_as(design: mandara_ui::components::ButtonDesign, id: impl Into<SharedString>, icon_name: &'static str, label: impl Into<SharedString>, filled: bool, p: &MandaraPalette) -> Stateful<Div> {
     let (bg, fg) = if filled { (p.primary, p.on_primary) } else { (p.surface_container_high, p.on_surface) };
-    div()
-        .id(id.into())
-        .h(px(DIM_34_PX))
-        .px(px(SPACE_14_PX))
-        .rounded_full()
-        .row()
+    let id: gpui::ElementId = id.into().into();
+    let el = div().id(id.clone()).h(px(DIM_34_PX)).px(px(SPACE_14_PX));
+    let el = if design == mandara_ui::components::ButtonDesign::Classic {
+        el.rounded_full().bg(bg.hsla()).hover(|s| s.opacity(ALPHA_88))
+    } else {
+        let ink = mandara_ui::components::buttons::Ink { bg: Some(bg), hover: bg.mix(fg, ALPHA_8), outline: None };
+        mandara_ui::components::buttons::dress(el, id, DIM_34_PX, false, ink, design, Some(p))
+    };
+    el.row()
         .flex_none()
         .items_center()
         .gap(px(SPACE_7_PX))
         .cursor_pointer()
-        .bg(bg.hsla())
         .text_color(fg.hsla())
         .text_size(px(TEXT_12_5_PX))
         .font_weight(FontWeight::MEDIUM)
-        .hover(|s| s.opacity(ALPHA_88))
         .child(icon(icon_name, ICON_14_PX, if filled { p.on_primary } else { p.primary }))
         .child(label.into())
 }
 
+/// A Studio filter chip in the chip design picked under Themes → Components.
 pub(super) fn chip(id: impl Into<SharedString>, label: impl Into<SharedString>, active: bool, p: &MandaraPalette) -> Stateful<Div> {
-    div()
-        .id(id.into())
-        .h(px(DIM_30_PX))
-        .px(px(SPACE_12_PX))
-        .rounded(px(RADIUS_10_PX))
-        .row()
-        .flex_none()
-        .items_center()
-        .gap(px(SPACE_6_PX))
-        .cursor_pointer()
-        .text_size(px(TEXT_12_5_PX))
-        .when(active, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()).font_weight(FontWeight::MEDIUM))
-        .when(!active, |el| el.bg(p.surface_container_high.hsla()).text_color(p.on_surface_variant.hsla()).hover(|s| s.bg(p.primary.with_alpha(ALPHA_12).hsla())))
+    chip_as(mandara_ui::style::chip_design(), id, label, active, p)
+}
+
+/// [`chip`] in `design`: Material's outlined filter chip (a check and a
+/// tint when chosen), or an outlined pill (Connected).
+pub(super) fn chip_as(design: mandara_ui::components::ChipDesign, id: impl Into<SharedString>, label: impl Into<SharedString>, active: bool, p: &MandaraPalette) -> Stateful<Div> {
+    use mandara_ui::components::{ChipDesign, chips};
+    let el = div().id(id.into()).h(px(DIM_30_PX)).px(px(SPACE_12_PX)).row().flex_none().items_center().gap(px(SPACE_6_PX)).cursor_pointer().text_size(px(TEXT_12_5_PX));
+    if design == ChipDesign::Classic {
+        return el
+            .rounded(px(RADIUS_10_PX))
+            .when(active, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()).font_weight(FontWeight::MEDIUM))
+            .when(!active, |el| el.bg(p.surface_container_high.hsla()).text_color(p.on_surface_variant.hsla()).hover(|s| s.bg(p.primary.with_alpha(ALPHA_12).hsla())))
+            .child(label.into());
+    }
+    let material = design == ChipDesign::Material;
+    el.rounded(px(chips::chip_radius(design, DIM_30_PX)))
+        .when(active && material, |el| el.bg(chips::chosen(p).hsla()).text_color(p.primary.hsla()).font_weight(FontWeight::MEDIUM).child(icon("check", ICON_14_PX, p.primary)))
+        .when(active && !material, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()).font_weight(FontWeight::MEDIUM))
+        .when(!active, |el| el.border_1().border_color(chips::outline(p).hsla()).text_color(p.on_surface_variant.hsla()).hover(|s| s.bg(p.primary.with_alpha(ALPHA_8).hsla())))
         .child(label.into())
 }
 

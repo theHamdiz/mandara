@@ -21,6 +21,15 @@ const SLIDER_HANDLE: &[(&str, &str)] = &[("line", tk("Line")), ("none", tk("None
 /// `style.slider_design`, in `SliderDesign::ALL`'s order (Themes →
 /// Components draws each as a live preview).
 pub(crate) const SLIDER_DESIGN: &[(&str, &str)] = &[("classic", tk("Classic")), ("continuous", tk("Continuous")), ("pill", tk("Pill")), ("wavy", tk("Wavy")), ("segmented", tk("Segmented"))];
+/// The other component designs, each in its design's `ALL` order
+/// (`mandara_config::components`).
+pub(crate) const BUTTON_DESIGN: &[(&str, &str)] = &[("classic", tk("Classic")), ("square", tk("Square")), ("expressive", tk("Expressive")), ("cut", tk("Cut")), ("elevated", tk("Elevated"))];
+pub(crate) const TOGGLE_DESIGN: &[(&str, &str)] = &[("classic", tk("Classic")), ("material", tk("Material")), ("expressive", tk("Expressive")), ("round", tk("Round"))];
+pub(crate) const INPUT_DESIGN: &[(&str, &str)] = &[("classic", tk("Classic")), ("filled", tk("Filled")), ("outlined", tk("Outlined")), ("pill", tk("Pill"))];
+pub(crate) const CHIP_DESIGN: &[(&str, &str)] = &[("classic", tk("Classic")), ("material", tk("Material")), ("connected", tk("Connected"))];
+pub(crate) const PROGRESS_DESIGN: &[(&str, &str)] = &[("classic", tk("Classic")), ("material", tk("Material")), ("wavy", tk("Wavy")), ("segmented", tk("Segmented"))];
+pub(crate) const SURFACE_CORNERS: &[(&str, &str)] = &[("rounded", tk("Rounded")), ("asymmetric", tk("Asymmetric")), ("square", tk("Square")), ("squircle", tk("Squircle")), ("cut", tk("Cut"))];
+pub(crate) const CARD_STYLE: &[(&str, &str)] = &[("tonal", tk("Tonal")), ("raised", tk("Raised")), ("outlined", tk("Outlined"))];
 /// Themes' group of component designs (its own section on the page).
 pub(crate) const COMPONENTS: &str = tk("Components");
 const FILL: &[(&str, &str)] = &[("cover", tk("Fill")), ("contain", tk("Fit")), ("stretch", tk("Stretch")), ("center", tk("Center")), ("tile", tk("Tile"))];
@@ -134,6 +143,14 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Themes, tk("Style"), "/style/backdrop_dim", tk("Dim behind panels"), tk("Darkens the desktop while a panel or the sidebar is open"), slider(0.0, 0.6, 0.02, "")),
         s(Themes, COMPONENTS, "/style/slider_design", tk("Slider design"), tk("How the volume, brightness and mixer sliders look; thin sliders keep the classic look"), Choice(SLIDER_DESIGN)),
         s(Themes, COMPONENTS, "/style/slider_handle", tk("Slider handle"), tk("The upright line between a slider's fill and its track; None shows the fill alone"), Choice(SLIDER_HANDLE)),
+        s(Themes, COMPONENTS, "/style/button_design", tk("Button design"), tk("The shape and motion of buttons in panels, the sidebar, the main menu and Studio"), Choice(BUTTON_DESIGN)),
+        s(Themes, COMPONENTS, "/style/toggle_design", tk("Toggle design"), tk("How switches, check boxes and radio buttons look and move"), Choice(TOGGLE_DESIGN)),
+        s(Themes, COMPONENTS, "/style/input_design", tk("Text field design"), tk("How text fields and search boxes are drawn"), Choice(INPUT_DESIGN)),
+        s(Themes, COMPONENTS, "/style/chip_design", tk("Chip design"), tk("How chips and choices between options look"), Choice(CHIP_DESIGN)),
+        s(Themes, COMPONENTS, "/style/progress_design", tk("Progress design"), tk("How meters and progress bars are drawn"), Choice(PROGRESS_DESIGN)),
+        s(Themes, COMPONENTS, "/style/surface_corners", tk("Card corners"), tk("The corner family of cards; Corner roundness still sets their size"), Choice(SURFACE_CORNERS)),
+        s(Themes, COMPONENTS, "/style/card_style", tk("Card style"), tk("How cards stand off their panel: tonal, raised on a shadow or outlined"), Choice(CARD_STYLE)),
+        s(Themes, COMPONENTS, "/looks/keep_components", tk("Keep my component designs when changing looks"), tk("Off: picking a look also brings its component designs, which you can change afterwards"), Toggle),
         s(Themes, tk("Accessibility"), "/theme/adjustments/high_contrast", tk("High contrast"), tk("Pushes text and surfaces apart to WCAG AAA (7:1)"), Toggle),
         s(Typography, tk("Size"), "/typography/weight", tk("Text weight"), tk("Weight of body text across the shell"), Choice(WEIGHTS)),
         s(Motion, tk("Springs"), "/motion/speed", tk("Animation speed"), tk("Plays every animation faster or slower with the same feel"), slider(0.25, 3.0, 0.05, "×")),

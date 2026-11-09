@@ -136,9 +136,11 @@ A folder, or the wallpapers you picked into the playlist
 A folding Completed group under each list
 A full-length slab
 A full-width strip of bars mirrored round its middle
+A fully rounded field with an accent ring while you type
 A gentle daily reminder of Paradise: a verse or hadith, its meaning and one good step for today (opt-in)
 A gentle notification once an app has had this much of your day.
 A gentle wave along the fill that flows while you drag
+A glowing gradient switch and each place's own check boxes
 A good head and a good heart are always a formidable combination.
 A grain of poetry suffices to season a century.
 A hairline around floating panels
@@ -198,7 +200,9 @@ A public GitHub repository tagged mandara-plugin with a release is all it takes.
 A public repository with this topic (About → Topics).
 A random style
 A round knob on the end of the fill that stretches into a pill while you hold it
+A rounded field with an accent edge while you type
 A rounded surface around its children
+A rounded track with the fill over it
 A saying that changes every day, or your own
 A second, stronger warning
 A sense of humour is a sense of proportion.
@@ -228,6 +232,8 @@ A thin specular highlight around the glass
 A thin strip dense with live stats
 A title is needed
 A to Z
+A tonal field with an underline that thickens in the accent colour
+A tonal surface with a soft rim of light
 A top hit, then results under headings by kind: Applications, Actions & settings, Files…
 A topographic map with tinted terrain
 A trap or a timeout stops only that plugin, until it is reloaded
@@ -481,6 +487,8 @@ An app wants to create a new keyring called “Mandara”. Choose the password y
 An image is already being prepared
 An interactive card — its own settings are with the cards.
 An island per group
+An outline that thickens while focused, with the hint floating into it
+An outlined track whose small thumb grows and shows a check when on
 An-Nawawi's Forty
 Analects 1.1
 Analects 13.17
@@ -630,6 +638,7 @@ Asks github.com for your public contribution calendar every few hours, only whil
 Asks open.er-api.com (ExchangeRate-API) twice a day, only while the desktop shows. A click fetches again.
 Asr
 Asr school
+Asymmetric
 At a glance
 At least one administrator must remain
 At least one display must stay on
@@ -841,6 +850,7 @@ Browse settings
 Browse the coming days' times
 Browse the marketplace
 Browser
+Brutalist soft
 Bubble
 Bubbles
 Build
@@ -862,9 +872,11 @@ Busiest apps
 Busy
 Button
 Button areas
+Button design
 Button icon
 Buttons
 Buttons apps attach, like Reply or Open
+Buttons in panels, the sidebar, the main menu and Studio, and the round icon buttons. Filled buttons stay the main action in every design
 Buy me a coffee on Ko-fi
 By choosing an empty password, your stored passwords will not be safely encrypted. They will be accessible by anyone with access to your files (preview)
 By name
@@ -937,9 +949,11 @@ Capture on release
 Capture: region/pick-window open the snipping tool; window/screen capture immediately; --delay [N] counts down first (Esc cancels)
 Captures screens, windows and regions
 Capturing…
+Card corners
 Card padding
 Card radius
 Card spacing
+Card style
 Cards keep clear of the bar's edge automatically.
 Care for an orphan
 Cargo Cult Science
@@ -1043,7 +1057,10 @@ Cherish your children
 Children side by side, gap apart
 Children stacked, gap apart
 Chinua Achebe
+Chip design
+Chips and choices
 Chips for text, links, Markdown, code, CSS, colors, images and files above the list
+Choices between a few options in Studio and in panels, and filter chips
 Choose Qur'an, hadith or both in Studio
 Choose a .conf or .ovpn file first
 Choose a boot entry for this item in Studio → Power & idle
@@ -1161,6 +1178,7 @@ Color points
 Color spread
 Color variation
 Colors
+Colors & style
 Colors from your wallpaper
 Colors, wallpaper, type and motion
 Colour
@@ -1313,6 +1331,8 @@ Corner radius
 Corner radius of cards in the sidebar and panels
 Corner radius of dropdown panels
 Corner roundness
+Corners cut at an angle
+Corners cut at an angle for a sharper, technical look
 Corners: top-left, top-right, bottom-left, bottom-right
 Corniche
 Corniche night
@@ -1449,6 +1469,8 @@ Custom tape
 Custom: {time}
 Customized: your own mix of the settings below. Pick a look to start over from it.
 Custom…
+Cut
+Cut corners, steps and outlines with a gentle touch
 Cycle through the wallpaper folder, another folder or the playlist
 Cycle to the next preset
 Cycles
@@ -1858,6 +1880,7 @@ Egyptian
 Eight
 Eject
 Eldritch
+Elevated
 Elevation tint
 Eleven
 Emerald
@@ -1955,6 +1978,7 @@ Every check with its state, latency, uptime and last result (JSON)
 Every city on the world clock with its time, offsets and daylight
 Every city's time when it is HH:MM here today (meeting planner)
 Every collection: download state, size, progress and whether it is chosen
+Every corner rounded alike
 Every day
 Every day is a journey, and the journey itself is home.
 Every day is a new beginning
@@ -2101,6 +2125,7 @@ Fill color
 Fill mode
 Fill quiet moments with His remembrance; it is a treasure kept for you.
 Fill under the curve
+Filled
 Filled dial
 Film grain
 Filter by kind
@@ -2161,6 +2186,7 @@ Flat
 Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass
 Flat moves the pointer exactly as far as the mouse
 Flat, softly shadowed cursors from the Qogir icon theme
+Flat, with a fine outline
 Flatpak applies the app's sandbox from its remote
 Flatpak downloads the app and any runtime it needs from its remote
 Flatpak installs
@@ -2314,6 +2340,7 @@ Full speed, more heat
 Full update: {size} (no patch from your version)
 Fullscreen only
 Fully charged
+Fully rounded pills and round icon buttons
 Fully sandboxed
 FunctionGemma for a single action; Qwen for multilingual and compound requests
 Fuzzy search over every note's title and text
@@ -2596,6 +2623,9 @@ How a plugin goes from source code to the bar, and what it may do there.
 How a slideshow change replaces the wallpaper
 How app icons are drawn
 How big the hot spot in each corner is
+How cards stand off their panel: tonal, raised on a shadow or outlined
+How cards stand off their panel; panels and popups keep Shadows and Panel edges
+How chips and choices between options look
 How dark the bar's shadow is
 How far a history card travels before it is dismissed
 How far back the clock sits in the picture: low lets everything but the far background pass in front, high only the nearest things
@@ -2631,6 +2661,7 @@ How many of the newest files a stack shows
 How many recent apps
 How many recent log lines the logs view loads
 How many windows are listed
+How meters and progress bars are drawn
 How much of it has passed
 How much of the screen edge the notch spans
 How often CPU, memory, temperatures and the busiest apps are sampled (the bar rings too)
@@ -2653,9 +2684,11 @@ How slideshow changes look: the desktop's transition or their own, with a length
 How strong the shadow under Home cards and action tiles is (0 for none)
 How strongly the capsules stand out from the bar
 How strongly the pills and islands behind items stand out
+How switches, check boxes and radio buttons look and move
+How text fields and search boxes are drawn
 How the critical warning appears
 How the media panel draws the live audio spectrum
-How the shell's controls look. Each preview is the real control: drag it to try a design, click a design to use it
+How the shell's controls look. Pick a preset to set them all at once, or a design per component: each preview is the real control, so try it, then click a design to use it
 How the volume, brightness and mixer sliders look; thin sliders keep the classic look
 How the warning appears
 How to publish a plugin
@@ -2974,6 +3007,7 @@ Keep in Dock
 Keep in Dock on / off for an app
 Keep it visible
 Keep low-urgency ones
+Keep my component designs when changing looks
 Keep passive (idle) tray icons in the bar; they're always listed in the tray panel
 Keep split direction
 Keep the computer awake for N minutes (0 stops; no number = until turned off)
@@ -3046,6 +3080,7 @@ Laptops with a lit keyboard
 Large
 Large clocks and headings
 Large icons, or rows with each app's description
+Large leading top and trailing bottom corners, small ones between
 Larger screens are scaled down to fit; smaller ones keep their size
 Largest
 Largest image
@@ -3426,6 +3461,7 @@ Mandara {version} is the latest version
 Mandara {version} isn't signed by Mandara's release key ({reason}), so it won't be installed
 Mandara's KeePassXC dialog is off (Studio → General → Keyrings & passwords)
 Mandara's drop-in
+Mandara's own look, as it has always been
 Mandara's shortcuts and your compositor's appear here
 MangoWM
 MangoWM and Niri only
@@ -3472,6 +3508,9 @@ Match windows to apps
 Matches every notification
 Matches nothing yet — set an app id or a title
 Matching icons
+Material
+Material 3: outlined toggles, filled fields, tinted choices
+Material You
 Material You seed colors extracted from an image (default: the wallpaper)
 Material You variant used for wallpaper themes
 Material You: a full tonal palette generated from the wallpaper, re-derived whenever it changes
@@ -3515,6 +3554,7 @@ Mesh gradient
 Messages
 Metaphysics, Book I
 Meters
+Meters for disks, temperatures, batteries and processes, and Studio's progress bars
 Method
 Metric
 Metric (°C, km/h)
@@ -4175,6 +4215,7 @@ Off. Nothing runs in the background until you turn it on.
 Off: each minimized window gets its own icon on the right side
 Off: low-urgency notifications vanish when their popup closes
 Off: only windows on the focused display
+Off: picking a look also brings its component designs, which you can change afterwards
 Off: plain searches list apps (and the providers above) only
 Off: stay with the current player until it closes
 Off: the clock keeps its own time
@@ -4247,6 +4288,7 @@ One never notices what has been done; one can only see what remains to be done.
 One note's full Markdown text
 One of choices: plain strings or { value, label } tables
 One of your settings as JSON: the user's value, or the declared default.
+One outlined group with fine dividers; the chosen option is tinted
 One path with its evidence
 One quiet notification each morning with today's reminder
 One switch for talks and screen sharing: quiet, awake and tidy
@@ -4361,6 +4403,7 @@ Optional
 Optional, e.g. SYS.CLOCK // الساعة
 Optional: clean up leftovers
 Options
+Options as pills on one soft track
 Or right-click the desktop and choose Edit desktop
 Orbit
 Order
@@ -4379,6 +4422,7 @@ Outer corners of the sidebar and the power dock
 Outline
 Outline colour
 Outline width
+Outlined
 Output
 Output / input volume and mute
 Output and input devices with your names; the default is marked, hidden ones too
@@ -4756,6 +4800,7 @@ Program file
 Program, e.g. ghostty
 Progress
 Progress bars
+Progress design
 Progress reported by an app's notifications, on its icon
 Projects
 Prostration
@@ -4837,7 +4882,11 @@ Rain today. Don't forget an umbrella.
 Rainy study
 Raise the screen brightness (percent step, default 5)
 Raise volume
+Raised
 Raised card
+Raised cards cast no shadow while Shadows is off under Fine-tune
+Raised on a soft shadow
+Raised on a soft shadow that lifts on hover and settles as you press
 Rajab
 Ralph Waldo Emerson
 Ramadan
@@ -5172,7 +5221,11 @@ Rose evening glass: headline clock, system monitor, media card and glass pills.
 Rosé Pine
 Rotates every hue of the palette
 Rotation
+Round
+Round at rest; the corners square off while you press and spring back
+Rounded
 Rounded screen corners
+Rounded squares with soft corners
 Rounded window corners
 Rounded, material-inspired cursors: the most installed theme in ricing setups
 Roundness
@@ -5462,6 +5515,7 @@ Sentence
 Sentences, 358
 Sentences, 439
 Separate RSS, Atom or JSON feed addresses with spaces; up to 16 subscriptions
+Separate buttons close together; the chosen one fills and rounds fully
 Separate side bars: a glass pill per group, one island, or a slab along the whole edge
 Separate up to 24 entity ids with spaces; empty shows the first available entities
 Separators
@@ -5500,6 +5554,7 @@ Set time automatically
 Set up
 Set up in Studio
 Set volume to 40
+Sets every component below at once; corner size, shadows, panel edges and the slider handle stay yours
 Sets the cursor in Mandara's compositor drop-in and live
 Setting types
 Setting up Mandara's admin helper first (one more approval, only this once)…
@@ -5537,6 +5592,7 @@ Shape when off
 Shape when on
 Shaped cover
 Shapes
+Shapes that morph as you press, waves and mixed corners
 Share a piece of text as a page with a copy button
 Share any file from a terminal:
 Share one file (never a folder)
@@ -5734,11 +5790,13 @@ Slow and steady wins the race.
 Slowest build
 Small
 Small good deeds, done sincerely and kept up, are the most beloved.
+Small, crisp corners
 Smallest
 Smallest exact file
 Smart update unavailable ({reason}); using the full download
 Smart update: {patch} instead of {full}
 Smooth
+Smooth continuous corners that ease into the edges
 Smoothing
 Snap packages install from the Snap Store with snap, not from files.
 Snappy
@@ -5748,6 +5806,7 @@ Snow is falling. Wrap up warm.
 Snug
 Soap bubbles drifting up while the desktop shows
 Soft
+Soft and round: a big thumb, circular check boxes, filled radio buttons
 Soft color fields blending into one another
 Soft elevation under panels and popups
 Soft elevation under the dock
@@ -5799,6 +5858,8 @@ Split vertically
 Split-flap clock
 Spread salam
 Springs
+Square
+Square buttons, round toggles and fine outlines
 Square dots
 Squircle
 Stack
@@ -5997,6 +6058,7 @@ Switch to this profile when the charger is plugged in
 Switch workspace
 Switched to {name} — Undo is under Recent changes
 Switched to {name}.
+Switches, check boxes and radio buttons everywhere, including tray menus
 Switching input languages
 Switching speakers / headphones
 Switching…
@@ -6099,6 +6161,7 @@ Temperatures and wind speed in weather and system panels
 Temperatures shown
 Ten
 Ten past {hour}
+Ten rounded steps
 Ten rounded steps that fill one after another
 Ten to {hour}
 Terminal
@@ -6120,6 +6183,9 @@ Text contrast {ratio}:1
 Text copied
 Text detection
 Text field
+Text field design
+Text fields
+Text fields in Studio and the shell, and the search boxes in panels
 Text is sent only when you press Translate
 Text is sent only when you press Translate.
 Text lines
@@ -6250,6 +6316,8 @@ The compositor did not answer
 The compositor did not respond in time
 The compositor rejected this display configuration
 The contract (WIT)
+The corner family of cards in panels, the sidebar and Studio; Corner roundness still sets their size
+The corner family of cards; Corner roundness still sets their size
 The cover as a screen of dots
 The cover cut to a new shape for every track
 The cover on a turning record
@@ -6289,7 +6357,9 @@ The feed belongs to another address
 The feed server returned no content
 The file chooser failed: {error}
 The file is larger than this location allows.
+The fill drawn as a gentle wave, flat when nearly empty or full
 The fill, a small gap, an upright handle, then the rest of the track ending in a dot
+The fill, a small gap, then the track ending in a dot
 The first matching rule decides. Patterns are case-insensitive regular expressions; plain words match anywhere. Also from the command line: `mandara msg notifications rules add silent Spotify`.
 The first principle is that you must not fool yourself, and you are the easiest person to fool.
 The floating panels with their output, position and size, and every remembered position
@@ -6417,6 +6487,7 @@ The server's response was too large
 The service did not reply
 The service is not running
 The session menu's entries in order, with labels and icons (JSON)
+The shape and motion of buttons in panels, the sidebar, the main menu and Studio
 The share expired
 The shared location used by weather and prayer times
 The shell did not start the job
@@ -6443,6 +6514,7 @@ The system bus is not available
 The terminal, file manager and browser Mandara launches
 The text and the meaning in your language, about {size} MB, kept on this computer
 The text: Tanzil's Uthmani script
+The thumb stretches as it slides, boxes round into circles as they fill
 The time in other cities on the desktop, with how far ahead or behind they are
 The top bar and the side bars become one frame with curved corners. The bar is drawn as the edge frame while they're joined; its own style comes back when they're separate
 The track that is playing
@@ -6656,6 +6728,7 @@ Today's verse or hadith and today's step
 Today's verse or hadith in calligraphy under an arch, with its meaning
 Today's verse or hadith in the quote card's style
 Toggle a home control or run a scene, script or button
+Toggle design
 Toggle floating
 Toggle fullscreen
 Toggle light / dark
@@ -6670,6 +6743,7 @@ Toggles Wi-Fi, Bluetooth, power profiles and do-not-disturb
 Toggles for the sidebar
 Tokyo Night
 Tomorrow
+Tonal
 Tonal spot
 Tone
 Tones map to the live theme
@@ -7424,6 +7498,7 @@ Your name for this device (empty: its own name)
 Your names & icons
 Your own
 Your own config also sets {outputs}; your line may win over the drop-in
+Your own mix of designs. A preset sets every component below at once; corner size, shadows, panel edges and the slider handle stay yours
 Your own plugins while you build them: enabled automatically and reloaded on every change.
 Your package manager couldn't fit this package with what is already installed.
 Your picture is ~/.face or your account picture.
@@ -8230,6 +8305,7 @@ your default
 {prayer} in {minutes} min
 {prayer} in {span}
 {prayer} in {time}
+{preset} components
 {program} exited with status {code}
 {program} is no longer running
 {program} timed out

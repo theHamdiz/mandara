@@ -6,6 +6,13 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Pick how every control looks, or set them all at once with a preset.
+
+### New
+
+- **Pick how your buttons, toggles, fields, chips, meters and cards look.** Studio → Themes has a new **Components** tab, next to *Colors & style*, for every control the shell and Studio draw. **Buttons** can be *Square*, *Expressive* (round at rest, the corners square off while you press and spring back), *Cut* (corners cut at an angle) or *Elevated* (a soft shadow that lifts on hover); **toggles** can be *Material* (an outlined switch whose thumb grows and shows a check), *Expressive* (the thumb stretches as it slides, check boxes round into circles as they fill, radio dots spring in) or *Round*; **text fields and search boxes** can be *Filled*, *Outlined* (the hint floats up into a gap in the outline as you type) or *Pill*; **chips and choices** can be *Material* (an outlined group with fine dividers) or *Connected* (separate buttons that round fully when chosen); **meters, progress bars and rings** can be *Material* (a gap and a stop dot), *Wavy* or *Segmented*, always in the same space as before; and **cards** get *Asymmetric*, *Square*, smooth *Squircle* or *Cut* corners and a *Raised* or *Outlined* style. The designs apply everywhere at once: panels, the sidebar, the main menu, the bar's resource rings and layout pill, notification actions, the volume and brightness OSD, the launcher's search field and chips, tray menus, the installer and Studio itself, which follows a change the moment you make it. Every design is drawn as a real preview of the control on cards of one size, and five **presets** at the top (Classic, Material You, Expressive, Minimal and Brutalist soft) set every component in one click, leaving your corner size, shadows, panel edges and slider handle alone. Nothing changes until you pick something: every component keeps its classic look by default, right-to-left languages are mirrored, and reduced motion turns the springs off.
+- **Looks bring their own components.** Each of the six Looks now comes with fitting component designs (Pharos Ink with *Minimal*, Night Frame with *Brutalist soft*, Anfushi Wave and Montaza Crimson with *Expressive*, Qaitbay Forest with *Material You*, Corniche Dusk with the classic ones), shown on the Look as a small badge. Picking a Look applies them along with the rest of the Look; a design you choose afterwards stays yours until you pick a Look or preset again, and *Keep my component designs when changing looks* under Themes → Components keeps your own designs whatever Look you pick. Restore my look brings your designs back too.
+
 ## 0.23.0 — 2026-11-09
 
 A different shape for every character. Mandara Studio uses less memory.

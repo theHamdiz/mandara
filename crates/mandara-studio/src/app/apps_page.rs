@@ -262,23 +262,30 @@ pub(super) fn tilde(path: &std::path::Path) -> String {
 
 /// A round icon button with a tooltip (coral on hover when `danger`).
 fn icon_button(id: SharedString, glyph: &'static str, tooltip: &'static str, danger: bool, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
+    use mandara_ui::components::buttons::{Ink, designed};
     let hover = if danger { p.urgent_coral.with_alpha(ALPHA_14) } else { p.on_surface.with_alpha(ALPHA_8) };
-    div()
-        .id(id)
-        .size(px(DIM_30_PX))
-        .flex_none()
-        .rounded_full()
+    let id = gpui::ElementId::from(id);
+    let el = div().id(id.clone()).size(px(DIM_30_PX)).flex_none();
+    designed(el, id, DIM_30_PX, true, Ink { bg: None, hover, outline: None }, Some(p), |el| el.rounded_full().hover(move |s| s.bg(hover.hsla())))
         .row()
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .hover(move |s| s.bg(hover.hsla()))
         .child(icon(glyph, ICON_14_PX, if danger { p.urgent_coral } else { p.on_surface_variant }))
         .tooltip(tip(tooltip, p))
 }
 
 /// A checkbox square.
 fn checkbox(on: bool, p: &MandaraPalette) -> AnyElement {
+    checkbox_as(mandara_ui::style::toggle_design(), on, p)
+}
+
+/// [`checkbox`] in `design` (Themes → Components → Toggles: the classic box
+/// is this one).
+pub(super) fn checkbox_as(design: mandara_ui::components::ToggleDesign, on: bool, p: &MandaraPalette) -> AnyElement {
+    if design != mandara_ui::components::ToggleDesign::Classic {
+        return mandara_ui::components::toggles::checkbox(Some(on), CHECKBOX_PX, design, p);
+    }
     div()
         .size(px(CHECKBOX_PX))
         .flex_none()

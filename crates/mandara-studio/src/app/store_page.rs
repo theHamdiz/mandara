@@ -601,24 +601,25 @@ pub(super) fn pill(id: impl Into<SharedString>, glyph: Option<&'static str>, lab
         ButtonSize::Small => (BUTTON_SMALL_H_PX, BUTTON_SMALL_MIN_W_PX, TEXT_12_PX, ICON_13_PX, SPACE_12_PX),
         ButtonSize::Large => (BUTTON_LARGE_H_PX, BUTTON_LARGE_MIN_W_PX, TEXT_13_5_PX, ICON_15_PX, SPACE_18_PX),
     };
-    div()
-        .id(id.into())
-        .flex_none()
-        .h(px(h))
-        .min_w(px(min_w))
-        .px(px(pad))
-        .rounded_full()
+    use mandara_ui::components::buttons::{Ink, designed};
+    let hover = bg.lighten(BUTTON_HOVER_LIGHTEN);
+    let id = gpui::ElementId::from(id.into());
+    let el = div().id(id.clone()).flex_none().h(px(h)).min_w(px(min_w)).px(px(pad));
+    // The classic pill carries the glass rim; designed shapes bring their own edge.
+    designed(el, id, h, false, Ink { bg: Some(bg), hover, outline: None }, Some(p), |el| {
+        el.rounded_full()
+            .bg(bg.hsla())
+            .when(tone != Tone::Tonal, |el| el.shadow(mandara_core::glass_rim(p.specular_rim_light, p.specular_rim_shadow)))
+            .hover(move |s| s.bg(hover.hsla()))
+    })
         .row()
         .items_center()
         .justify_center()
         .gap(px(SPACE_6_PX))
         .cursor_pointer()
-        .bg(bg.hsla())
         .text_color(fg.hsla())
         .text_size(px(text))
         .font_weight(FontWeight::SEMIBOLD)
-        .when(tone != Tone::Tonal, |el| el.shadow(mandara_core::glass_rim(p.specular_rim_light, p.specular_rim_shadow)))
-        .hover(move |s| s.bg(bg.lighten(BUTTON_HOVER_LIGHTEN).hsla()))
         .when_some(glyph, |el, g| el.child(icon(g, glyph_px, fg)))
         .child(label.into())
 }
@@ -682,12 +683,11 @@ fn see_all(id: impl Into<SharedString>, count: Option<usize>, p: &MandaraPalette
         Some(n) => tf("See all {count}", &[("count", &n)]),
         None => t("See all").to_string(),
     };
-    div()
-        .id(id.into())
-        .flex_none()
-        .h(px(DIM_28_PX))
-        .px(px(SPACE_10_PX))
-        .rounded_full()
+    use mandara_ui::components::buttons::{Ink, designed};
+    let hover = p.primary.with_alpha(ALPHA_10);
+    let id = gpui::ElementId::from(id.into());
+    let el = div().id(id.clone()).flex_none().h(px(DIM_28_PX)).px(px(SPACE_10_PX));
+    designed(el, id, DIM_28_PX, false, Ink { bg: None, hover, outline: None }, Some(p), |el| el.rounded_full().hover(move |s| s.bg(hover.hsla())))
         .row()
         .items_center()
         .gap(px(SPACE_4_PX))
@@ -696,7 +696,6 @@ fn see_all(id: impl Into<SharedString>, count: Option<usize>, p: &MandaraPalette
         .font_weight(FontWeight::MEDIUM)
         .text_color(p.primary.hsla())
         .font_features(mandara_ui::fonts::tabular_nums())
-        .hover(|s| s.bg(p.primary.with_alpha(ALPHA_10).hsla()))
         .child(label)
         .child(icon(mandara_ui::bidi::dir_icon("chevron-right"), ICON_12_PX, p.primary))
 }

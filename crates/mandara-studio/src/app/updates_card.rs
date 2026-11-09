@@ -91,9 +91,14 @@ pub(super) fn describe(r: &ApplyReport) -> String {
     s
 }
 
-/// A thin progress bar.
+/// A thin progress bar, in the progress design picked under Themes →
+/// Components.
 pub(super) fn progress_bar(done: u64, total: u64, p: &MandaraPalette) -> AnyElement {
     let fraction = if total > 0 { (done as f32 / total as f32).clamp(0.0, 1.0) } else { 0.0 };
+    let design = mandara_ui::style::progress_design();
+    if design != mandara_ui::components::ProgressDesign::Classic {
+        return mandara_ui::components::progress::bar(fraction, DIM_6_PX, p.primary, p.primary, p.surface_container_high, design).into_any_element();
+    }
     div()
         .h(px(DIM_6_PX))
         .w_full()

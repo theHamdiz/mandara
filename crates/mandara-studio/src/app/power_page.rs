@@ -895,30 +895,28 @@ fn row_card(p: &MandaraPalette) -> gpui::Div {
 }
 
 fn delete_button(id: SharedString, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .size(px(DIM_32_PX))
-        .flex_none()
-        .rounded_full()
+    use mandara_ui::components::buttons::{Ink, designed};
+    let hover = p.urgent_coral.with_alpha(ALPHA_14);
+    let id = gpui::ElementId::from(id);
+    let el = div().id(id.clone()).size(px(DIM_32_PX)).flex_none();
+    designed(el, id, DIM_32_PX, true, Ink { bg: None, hover, outline: None }, Some(p), |el| el.rounded_full().hover(move |s| s.bg(hover.hsla())))
         .row()
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .hover(|s| s.bg(p.urgent_coral.with_alpha(ALPHA_14).hsla()))
         .child(icon("trash", ICON_15_PX, p.on_surface_variant))
 }
 
 fn add_button(id: &'static str, label: &str, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id(id)
-        .h(px(DIM_34_PX))
-        .px(px(SPACE_14_PX))
-        .rounded_full()
+    use mandara_ui::components::buttons::{Ink, designed};
+    let fill = p.primary.with_alpha(ALPHA_14);
+    // The classic button has no hover; the designs deepen its tint.
+    let el = div().id(id).h(px(DIM_34_PX)).px(px(SPACE_14_PX));
+    designed(el, id, DIM_34_PX, false, Ink { bg: Some(fill), hover: fill.mix(p.primary, ALPHA_8), outline: None }, Some(p), |el| el.rounded_full().bg(fill.hsla()))
         .row()
         .items_center()
         .gap(px(SPACE_6_PX))
         .cursor_pointer()
-        .bg(p.primary.with_alpha(ALPHA_14).hsla())
         .text_color(p.primary.hsla())
         .font_weight(FontWeight::MEDIUM)
         .child(icon("plus", ICON_14_PX, p.primary))
