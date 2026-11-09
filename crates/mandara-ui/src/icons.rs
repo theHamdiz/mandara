@@ -159,6 +159,12 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "eye" => r#"<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>"#.into(),
         "eye-off" => r#"<path d="M9.9 5.8A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.6 3.4M6.6 6.6C4 8.3 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 5.4-1.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3.5 3.5l17 17"/>"#.into(),
         "pencil" => r#"<path d="M15.5 4.5l4 4L8.5 19.5l-5 1 1-5z"/><path d="M13.5 6.5l4 4"/>"#.into(),
+        // The games: one Sudoku box with a filled cell; four tiles, one merged.
+        "sudoku" => r#"<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17"/><rect x="15.6" y="4.4" width="4" height="4" rx="1" fill="black" stroke="none"/>"#.into(),
+        "game-2048" => r#"<rect x="3.5" y="3.5" width="7.5" height="7.5" rx="2"/><rect x="13" y="3.5" width="7.5" height="7.5" rx="2"/><rect x="3.5" y="13" width="7.5" height="7.5" rx="2"/><rect x="13" y="13" width="7.5" height="7.5" rx="2" fill="black"/>"#.into(),
+        "redo" => r#"<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>"#.into(),
+        "eraser" => r#"<path d="M9 19.5h11"/><path d="M5.2 15.3l9.6-9.6a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L12 18.5H8.4z"/><path d="M9.6 10.9l4.6 4.6"/>"#.into(),
+        "lightbulb" => r#"<path d="M9.5 18h5M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1.1 2V16h5v-.2c.1-.8.5-1.5 1.1-2A6 6 0 0 0 12 3z"/>"#.into(),
         // A paint brush: making art (the wallpaper generator).
         "brush" => r#"<path d="M20 4l-8.2 8.2"/><path d="M15.6 7.1l1.3 1.3"/><path d="M11.8 12.2c-2.1-1.3-4.9-.1-5.3 2.6-.3 1.9-1.2 3-2.7 3.6 2.8 1.6 6.5 1.1 8.1-1.2 1-1.4 1-3.4-.1-5z"/>"#.into(),
         // A house: the main menu's home page.
@@ -237,6 +243,7 @@ pub const ICON_NAMES: &[&str] = &[
     "git-branch", "workflow", "bug",
     "arch", "book", "info",
     "hadith", "bookmark",
+    "sudoku", "game-2048", "redo", "eraser", "lightbulb",
 ];
 
 /// An icon element tinted with `color`.

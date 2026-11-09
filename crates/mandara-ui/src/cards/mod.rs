@@ -136,6 +136,8 @@ pub fn card_size(card: &str, widget: &DesktopWidget, output: (f32, f32)) -> (f32
             let (w, h) = card_opts::<dc::PluginCardOptions>(widget).size();
             (w * k, h * k)
         }
+        dc::SUDOKU => crate::games::sudoku::view::size(card_opts::<dc::GameCardOptions>(widget).width(card) / crate::games::sudoku::view::REF_W * k),
+        dc::TILES => crate::games::tiles::view::size(card_opts::<dc::GameCardOptions>(widget).width(card) / crate::games::tiles::view::REF_W * k),
         _ => (0.0, 0.0),
     }
 }
@@ -186,8 +188,10 @@ pub fn surface_rect(card: &str, place: &Placement, area: Bounds<Pixels>, card_si
     Bounds { origin: point(px(ax + x - pad), px(ay + y - pad)), size: size(px(card_size.0 + pad * 2.0), px(card_size.1 + pad * 2.0)) }
 }
 
-/// Layer-surface options of a card surface at `rect` on its output.
-fn options(rect: Bounds<Pixels>, display: Option<gpui::DisplayId>) -> WindowOptions {
+/// Layer-surface options of a card surface at `rect` on its output. Games
+/// take the keyboard when clicked (`OnDemand`: the compositor gives it on a
+/// click and takes it back when you click a window); the other cards never.
+fn options(rect: Bounds<Pixels>, display: Option<gpui::DisplayId>, keyboard: KeyboardInteractivity) -> WindowOptions {
     WindowOptions {
         titlebar: None,
         window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(0.0), px(0.0)), size: rect.size })),
@@ -202,7 +206,7 @@ fn options(rect: Bounds<Pixels>, display: Option<gpui::DisplayId>) -> WindowOpti
             exclusive_zone: Some(px(IGNORE_ZONES)),
             exclusive_edge: None,
             margin: Some((rect.origin.y, px(0.0), px(0.0), rect.origin.x)),
-            keyboard_interactivity: KeyboardInteractivity::None,
+            keyboard_interactivity: keyboard,
         }),
         is_movable: false,
         is_resizable: false,
@@ -363,7 +367,8 @@ fn reconcile(cx: &mut App) {
         }
         let rect = Bounds { origin: point(px(key.rect.0 as f32), px(key.rect.1 as f32)), size: size(px(key.rect.2 as f32), px(key.rect.3 as f32)) };
         let display = crate::outputs::display_for(&key.output, cx);
-        let opts = options(rect, display);
+        let keyboard = if dc::GAMES.contains(&key.card.as_str()) { KeyboardInteractivity::OnDemand } else { KeyboardInteractivity::None };
+        let opts = options(rect, display, keyboard);
         let widget = key.widget.clone();
         let opened = match key.card.as_str() {
             NOW_PLAYING => {
@@ -378,6 +383,18 @@ fn reconcile(cx: &mut App) {
             }
             CALENDAR => cx.open_window(opts, move |window, cx| {
                 let view = cx.new(|cx| calendar_card::CalendarView::new(widget, window, cx));
+                cx.new(|_| Root(view.into()))
+            })
+            .map(Handle::Other),
+            dc::SUDOKU => cx.open_window(opts, move |window, cx| {
+                let model = crate::games::sudoku(cx);
+                let view = cx.new(|cx| crate::games::sudoku::view::SudokuView::new(model, crate::games::sudoku::view::Surface::Desktop { widget }, window, cx));
+                cx.new(|_| Root(view.into()))
+            })
+            .map(Handle::Other),
+            dc::TILES => cx.open_window(opts, move |window, cx| {
+                let model = crate::games::tiles(cx);
+                let view = cx.new(|cx| crate::games::tiles::view::TilesView::new(model, crate::games::sudoku::view::Surface::Desktop { widget }, window, cx));
                 cx.new(|_| Root(view.into()))
             })
             .map(Handle::Other),

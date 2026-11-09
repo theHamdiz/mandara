@@ -89,6 +89,7 @@ A + at the end of the tab strip makes a tab in place
 A .tar.gz of your plugin folder, named after its id.
 A 1 px accent line along the hairline's inner edge
 A Breath of Life
+A Hint button that fills in one cell (hints are counted)
 A Question of Power
 A Room of One's Own
 A Vindication of the Rights of Woman
@@ -115,6 +116,7 @@ A daily reminder of the final home
 A day's events, ISO week and Hijri date as JSON
 A design-first Wayland desktop shell, written entirely in Rust.
 A device battery this low turns amber; Power → peripheral alerts sets when it turns coral
+A digit removes its pencil marks from the cells it sees
 A distinct alert sound
 A dock on the screen edge or a centered grid
 A dot per window
@@ -756,6 +758,8 @@ Behind the subject
 Below this, notifications go straight to the history
 Benjamin Franklin
 Bessie Head
+Best
+Best {time}
 Between focus sessions
 Between the others
 Between the sides
@@ -789,6 +793,7 @@ Blur
 Blur passes
 Blur radius
 Blur size
+Board size
 Bokeh
 Bold
 Bold palace red: a framed spectrum box, an Arabic clock and calligraphy.
@@ -1091,6 +1096,7 @@ Clear at startup
 Clear copied codes after
 Clear done
 Clear finished
+Clear notes automatically
 Clear rule
 Clear them
 Clear when locking
@@ -1110,6 +1116,7 @@ Click only while the dock is on
 Click opens the app
 Click or scroll to set them
 Click the bin again to remove this account
+Click the game on the desktop to play it with the keyboard; click anywhere else to give the keyboard back. Its rules are in Studio → Plugins.
 Click through empty space
 Click to end and put everything back
 Click to pick · arrows nudge a pixel · scroll zooms · Esc cancels
@@ -1383,7 +1390,9 @@ Couldn't uninstall: {error}
 Couldn't unmute the microphone: {error}
 Couldn't verify the community store policy. Try again later.
 Couldn't write {path}: {error}
+Count mistakes
 Count the days since
+Count the digits that aren't the solution's
 Countdown
 Countdown line
 Counted on this computer only (~/.local/state/mandara)
@@ -1505,6 +1514,7 @@ Days until
 Days until (or since) a date
 Days until a date that matters, large on the desktop, in the calendar you choose
 Dead
+Dealing a {level} puzzle…
 Debug in terminal
 Decide per wallpaper what stands in front of the clock
 Decimals
@@ -1633,6 +1643,7 @@ Diary, 1953
 Different wallpaper on each display
 Digit boxes
 Digital
+Digits that clash with their row, column or box turn red
 Diligence is the mother of good fortune.
 Dim
 Dim behind panels
@@ -1827,6 +1838,7 @@ Each walk to the mosque, morning or evening, is a welcome being prepared.
 Ease someone's hardship
 Eastern Arabic (١٢٣)
 Eastern Arabic numerals
+Easy
 Edge
 Edge dock
 Edge frame
@@ -1928,6 +1940,7 @@ Entries matching every word: text, kind, language, host, app or collection
 Entries of one kind, optionally matching a search
 Epictetus
 Epistles I.2
+Erase
 Esc
 Esc cancels and releases the agent
 Essays I.39
@@ -2015,6 +2028,7 @@ Expected on, off or toggle
 Expected on, off or toggle, not {value}
 Expected on, off, toggle or a number of minutes
 Expected {want} surahs, got {got}
+Expert
 Explicit sync
 Export
 Export, import & support
@@ -2528,12 +2542,17 @@ Higher is snappier
 Higher settles with less bounce
 Higher values fall back more slowly for a calmer motion
 Highest frame rate a video wallpaper plays at; lower uses less power
+Highlight row, column and box
+Highlight the same digits
 Highlighted in each city's local time on the meeting planner
 Hijri
 Hijri date adjustment
 Hijri date in Arabic
 Hijri dates
 Hillshade
+Hint
+Hint ({count})
+Hints
 His mercy is wider than any sin; never lose hope, and keep trying.
 History
 History is empty
@@ -2968,6 +2987,7 @@ Keep awake for an hour
 Keep away from
 Keep both
 Keep copies from closed apps
+Keep going
 Keep history
 Keep holding to confirm
 Keep in Dock
@@ -2975,6 +2995,7 @@ Keep in Dock on / off for an app
 Keep it visible
 Keep low-urgency ones
 Keep passive (idle) tray icons in the bar; they're always listed in the tray panel
+Keep playing
 Keep split direction
 Keep the computer awake for N minutes (0 stops; no number = until turned off)
 Keep the current frame while running on battery
@@ -3124,6 +3145,7 @@ Letters to Lucilius, 13
 Letters, digits, - and _; used for the home folder
 Letting go of Alt switches; off, Enter or a click does
 Letting go of a new selection captures it (resizing or moving one never does)
+Level
 Levels
 Lewis Carroll
 Libraries & fonts (shared files)
@@ -3558,6 +3580,7 @@ Missing
 Missing argument #{position}
 Missing file
 Missing {fonts} — fallbacks in use
+Mistakes: {count}
 Mix matching copies into every search
 Mix matching emoji into every search
 Mix matching files into every search
@@ -3760,6 +3783,7 @@ New Year
 New collection
 New columns' share of the screen width
 New command
+New game
 New hadith
 New keyring
 New layout (shuffle the seed)
@@ -3917,6 +3941,7 @@ No menu entry {id}
 No model in memory: Load one below to warm it up
 No model named {model}
 No models installed
+No moves left
 No need to hurry. No need to sparkle. No need to be anybody but oneself.
 No network access
 No network devices
@@ -4535,6 +4560,7 @@ Pick
 Pick Command as the action first
 Pick Microphone or Both under Sound first
 Pick System sound or Both under Sound first
+Pick a level
 Pick a network below
 Pick a picture for the sticker
 Pick a pixel anywhere on screen — it lands here
@@ -4603,6 +4629,10 @@ Platform driver
 Plato
 Play
 Play / pause
+Play 2048 right on the desktop: click it, then use the arrows or drag
+Play 2048: a new game, moves, undo and the board
+Play Sudoku right on the desktop: click it, then type or tap
+Play Sudoku: a new game, the board, digits, notes, hints and undo
 Play a shell sound even while sounds are off
 Play a shell sound if sounds and that event are on (or any theme sound name)
 Play a sound for
@@ -4787,6 +4817,7 @@ Put the bar away or bring it back
 Put the bar on a screen edge
 Put the dock on the overlay layer
 Put the picked color on the clipboard right away
+Puzzles to play in the bar or right on the desktop
 Pywal-style colors.json and userChrome.css in ~/.cache/mandara/themes/firefox (see the README)
 Qaitbay Citadel
 Qibla
@@ -4956,6 +4987,7 @@ Recording video
 Rectangle
 Red
 Redact personal values
+Redo
 Redraw interval p50
 Reduce motion
 References and links follow sunnah.com. Muwatta Malik is numbered as in the dataset and links to its book.
@@ -5304,6 +5336,9 @@ Schedule, tuning, style and icons
 Scheduled
 Scheduled: switch to dark at this time
 Scheduled: switch to light at this time
+Score
+Score in the bar
+Score {score}
 Screen
 Screen backlight
 Screen capture
@@ -5511,6 +5546,8 @@ Settings: {title}
 Setup
 Seven
 Sha'ban
+Shade every cell holding the selected cell's digit
+Shade the cells the selected cell sees
 Shaded
 Shadow
 Shadow across
@@ -5586,6 +5623,7 @@ Show available devices
 Show clearly-labelled demo accounts instead of the keyring (on/off)
 Show code
 Show completed
+Show conflicts
 Show desktop widgets
 Show events
 Show file
@@ -5637,6 +5675,7 @@ Show the next wallpaper each time Mandara starts
 Show the power profile, or switch to one (polkit may ask)
 Show the rendered Markdown first; the pencil switches to the editor
 Show the shortcuts overlay
+Show the time played; it runs only while the game is open or its desktop widget has the keyboard
 Show the upload rate next to download in the bar chip
 Show the value
 Show the volume display
@@ -5722,6 +5761,7 @@ Sleep means
 Sleep timer in the bar
 Slices
 Slices: slanted strips around a big preview (Omarchy-style). Carousel: floating cards
+Slide and merge the tiles to reach 2048, in the bar and on the desktop
 Slide the bar away; touch its edge to bring it back
 Slider design
 Slider handle
@@ -5759,6 +5799,8 @@ Software cursor
 Solid
 Solid color
 Solid-state drive
+Solved in {time}
+Solved!
 Some clouds, some sun. Easy weather.
 Some folders
 Something went wrong while installing. The details say what.
@@ -5935,6 +5977,7 @@ Styles
 Subscribe to an ICS calendar (https / webcal URL, .ics file or folder)
 Subtle
 Success
+Sudoku
 Sun
 Sun Tzu
 Sun arc
@@ -6059,6 +6102,7 @@ Take a screenshot
 Take a short break — {minutes} minutes.
 Take an entry out of a collection
 Take an orphan under your wing and you will be close to the Prophet ﷺ.
+Take back your last move
 Take screenshot
 Takes effect the next time you log in or restart. Your current session isn't touched.
 Tallest it grows; fewer rows show when this is low
@@ -6213,6 +6257,8 @@ The bar is on the other edge: the launcher opens from the bare screen edge inste
 The bar isn't at the bottom, so the dock rises from the screen edge
 The bar isn't at the top, so the dock hangs from the screen edge
 The bar item goes away while nothing is playing
+The bar item shows the clock while you play
+The bar item shows your score while you play
 The bar item, or none for no bar item.
 The bar item, panel and sidebar card re-render: no restart
 The bar's battery chip breathes coral while the charge is critical
@@ -6353,6 +6399,7 @@ The new version is {size} smaller
 The newest one saved
 The next prayer and the time to it (needs the Prayer times plugin)
 The next prayer and time remaining
+The number puzzle with notes, hints and undo, in the bar and on the desktop
 The old pond: a frog jumps in — the sound of the water.
 The oldest go first
 The panel is not visible
@@ -6443,6 +6490,8 @@ The system bus is not available
 The terminal, file manager and browser Mandara launches
 The text and the meaning in your language, about {size} MB, kept on this computer
 The text: Tanzil's Uthmani script
+The theme colour the tiles ripen toward
+The theme colour your digits and highlights use
 The time in other cities on the desktop, with how far ahead or behind they are
 The top bar and the side bars become one frame with curved corners. The bar is drawn as the edge frame while they're joined; its own style comes back when they're separate
 The track that is playing
@@ -6600,6 +6649,8 @@ Tile shape
 Tile size
 Tile surface
 Tiles per row in the grid style
+Tiles per side for a new game (a game in play keeps its size)
+Tiles slide and pop (they jump with reduced motion)
 Tiling layout
 Tilt
 Time between forecast updates
@@ -6609,6 +6660,7 @@ Time for a longer break
 Time for an eye break
 Time format
 Time in a shape
+Time in the bar
 Time is like a sword; if you don't cut it, it'll cut you.
 Time span of the battery charge sparkline
 Time spent in each app shows up here
@@ -6761,6 +6813,7 @@ Turn on group or item capsules first
 Turn on the depth effect first
 Turn on this side bar first
 Turn on while an app shares your screen, and off again when sharing stops
+Turn on {name}
 Turn on “Control external monitors” below.
 Turn on “Manage compositor drop-in” (Compositor page) first: Mandara writes no drop-in while it's off
 Turn presentation mode off and put everything back as it was
@@ -7194,6 +7247,7 @@ Well done is better than well said.
 Were the diver to think on the jaws of the shark, he would never lay hands on the precious pearl.
 Western (123)
 What a middle click between and around the bar's items does
+What a new game deals; the game's New button can pick another
 What changed in each release, in plain words. Run mandara changelog to see it in a terminal.
 What clicking an entry does
 What do we live for, if it is not to make life less difficult to each other?
@@ -7374,6 +7428,7 @@ You could not step twice into the same river.
 You declare [[settings]] in plugin.toml
 You give but little when you give of your possessions. It is when you give of yourself that you truly give.
 You have {version}
+You made 2048!
 You'll be asked once, by the system, before anything changes
 You're all caught up
 You're logged out
@@ -7460,12 +7515,14 @@ Zoom
 `{key}` still works, but {compositor} has deprecated it and a future version may drop it.
 `{key}` worked with your previous version, but {compositor} {version} no longer accepts it: it was probably renamed or removed in this update.
 a Mandara or icon-theme icon name
+a board size 3–6 for new, a direction for move
 a collection id (bukhari, muslim, abudawud, tirmidhi, nasai, ibnmajah, malik, nawawi, qudsi, dehlawi) or all
 a collection id or all
 a folder (with folder)
 a folder, or clear
 a fullscreen window is focused
 a generated wallpaper
+a level for new, a cell (row,column) for select, a digit for digit and note
 a path key from `jannah paths`
 a reference: bukhari 1, muslim 2699a
 a reference: bukhari 1, muslim 2699a, abudawud 4031
@@ -7549,6 +7606,7 @@ cursor size in px, e.g. 24, 32, 48
 d
 database name or path (unlock)
 deactivating
+deal this puzzle again (new only)
 defaults to the running one
 desktop id
 desktop id or app name

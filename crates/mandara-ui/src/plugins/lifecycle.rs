@@ -131,6 +131,13 @@ fn sync(cx: &mut App) {
     if !is_on(super::soundscapes::ID, cx) {
         super::soundscapes::stop();
     }
+    // The games save and let their model go.
+    if !is_on(super::sudoku::ID, cx) {
+        crate::games::stop_sudoku(cx);
+    }
+    if !is_on(super::tiles::ID, cx) {
+        crate::games::stop_tiles(cx);
+    }
     if !is_on(crate::productivity::POMODORO_ID, cx)
         && let Some(p) = cx.try_global::<crate::productivity::GlobalProductivity>().map(|g| g.0.clone())
     {
@@ -156,6 +163,7 @@ mod tests {
 
     /// The built-ins that ship switched off (README: "ship switched off").
     const OPT_IN: &[&str] = &[
+        "2048",
         "app-installer",
         "authenticator",
         "breaks",
@@ -189,6 +197,7 @@ mod tests {
         "services",
         "share",
         "soundscapes",
+        "sudoku",
         "tailscale",
         "todo",
         "translator",

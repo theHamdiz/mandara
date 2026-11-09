@@ -29,6 +29,8 @@ pub mod notes;
 pub mod notifications;
 pub mod panel_fx;
 pub mod pomodoro;
+pub mod sudoku;
+pub mod tiles;
 pub mod privacy;
 pub mod prayer;
 pub mod processes;
@@ -147,6 +149,8 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     todo::register(registry);
     notes::register(registry);
     pomodoro::register(registry);
+    sudoku::register(registry);
+    tiles::register(registry);
     weather::register(registry);
     wallpaper::register(registry);
     wallpaper_generator::register(registry);

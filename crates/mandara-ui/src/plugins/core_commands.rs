@@ -159,6 +159,7 @@ pub fn register(r: &mut PluginRegistry) {
         core,
         CommandSpec::new("restart", mandara_i18n::tk("Restart the shell process (config and plugins reload from scratch)"), |_, cx| {
             flush_config(cx)?;
+            crate::games::flush_all(cx);
             // Let the reply flush, then hand over: under the supervisor exit
             // with its restart code; standalone, re-exec in place.
             cx.spawn(async move |cx| {
