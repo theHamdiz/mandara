@@ -225,6 +225,19 @@ impl Game {
 
     /// Checks a loaded game for consistency: the givens and entries fit the
     /// solution, the solution is a valid grid and the only one.
+    /// A move this board could have made: on an open cell, with digits and
+    /// pencil marks in range, clearing marks only from open cells (undo and
+    /// redo would otherwise write over a given).
+    fn move_fits(&self, m: &Move) -> bool {
+        let i = m.cell as usize;
+        i < CELLS
+            && !self.is_given(i)
+            && m.after.0 <= 9
+            && m.before.0 <= 9
+            && (m.before.1 | m.after.1) & !grid::ALL == 0
+            && m.cleared & self.givens == 0
+    }
+
     pub fn valid(&self) -> bool {
         let puzzle = self.puzzle();
         self.solution.iter().all(|&d| (1..=9).contains(&d))
@@ -234,7 +247,7 @@ impl Game {
             && grid::unique_solution(&puzzle) == Some(self.solution)
             && self.undo.len() <= MAX_UNDO
             && self.redo.len() <= MAX_UNDO
-            && self.undo.iter().chain(&self.redo).all(|m| (m.cell as usize) < CELLS && m.after.0 <= 9 && m.before.0 <= 9)
+            && self.undo.iter().chain(&self.redo).all(|m| self.move_fits(m))
     }
 }
 

@@ -223,6 +223,33 @@ mod tests {
         }
     }
 
+    /// A saved move on a given cell, with pencil marks outside the grid or
+    /// clearing a given's marks would let undo write over the puzzle.
+    #[test]
+    fn saved_moves_that_touch_a_given_are_rejected() {
+        let g = played();
+        let given = (0..CELLS).find(|&i| g.is_given(i)).unwrap();
+        let open = (0..CELLS).find(|&i| !g.is_given(i)).unwrap();
+        let moves = |m: Move| moves_hex(std::iter::once(&m));
+        let tampers = [
+            Move { cell: given as u8, before: (g.values[given], 0), after: (0, 0), cleared: 0 },
+            Move { cell: open as u8, before: (0, 0), after: (0, 0x200), cleared: 0 },
+            Move { cell: open as u8, before: (0, 0x400), after: (0, 0), cleared: 0 },
+            Move { cell: open as u8, before: (0, 0), after: (g.solution[open], 0), cleared: 1u128 << given },
+        ];
+        for m in tampers {
+            for redo in [false, true] {
+                let mut f = GameFile::of(&g, 1);
+                if redo { f.redo = moves(m) } else { f.undo = moves(m) }
+                assert!(f.game().is_none(), "{m:?} (redo: {redo})");
+            }
+        }
+        // The same moves on an open cell are fine.
+        let mut f = GameFile::of(&g, 1);
+        f.redo = moves(Move { cell: open as u8, before: (0, 0), after: (0, grid::ALL), cleared: 0 });
+        assert!(f.game().is_some());
+    }
+
     #[test]
     fn a_file_without_a_game_still_has_its_statistics() {
         let stats = [Stats { won: 2, best_ms: 5, total_ms: 9, played: 4, perfect: 1 }; 4];
