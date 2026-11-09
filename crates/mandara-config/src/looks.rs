@@ -28,6 +28,16 @@ pub const BEFORE_PROFILE: &str = "Before looks";
 pub const SNAPSHOT_PATHS: &[&str] = &[
     "theme",
     "bar",
+    // The rail an Expressive bar style set up: a look clears the style and
+    // these with it (exactly what `bar_styles::clear` resets).
+    "side_bars.enabled",
+    "side_bars.chips",
+    "side_bars.icon_shape",
+    "side_bars.width",
+    "side_bars.chip_size",
+    "side_bars.chip_spacing",
+    "side_bars.chip_fill",
+    "side_bars.right.enabled",
     "typography",
     "style",
     "desktop",
@@ -523,6 +533,28 @@ mod tests {
         let back = restore(&wave, &before).unwrap();
         assert_eq!(back, mine, "restoring brings the exact setup back");
         assert!(back.looks.active.is_empty());
+    }
+
+    /// A look clears the Expressive bar style and the rail it set up;
+    /// restoring brings both back, and a side bar setting changed while the
+    /// look was on (one the style doesn't own) stays as you changed it.
+    #[test]
+    fn restoring_from_the_expressive_style_brings_its_rail_back() {
+        let mut mine = ShellConfig::default();
+        crate::bar_styles::BarStyle::Expressive.apply(&mut mine);
+        assert!(mine.side_bars.enabled);
+        let before = before_snapshot(&mine, "2026-11-09 12:00").expect("own setup is snapshotted");
+        let mut look = find("night-frame").unwrap().apply(&mine, LookOptions::default());
+        assert_eq!(look.bar.style, None);
+        assert_eq!(look.side_bars.enabled, crate::side_bars::SideBarsConfig::default().enabled);
+        look.side_bars.opacity = 0.5;
+        let back = restore(&look, &before).unwrap();
+        assert_eq!(back.bar.style, Some(crate::bar_styles::BarStyle::Expressive));
+        assert!(crate::bar_styles::BarStyle::Expressive.matches(&back));
+        assert_eq!(back.side_bars.opacity, 0.5, "a side bar setting the style doesn't own is kept");
+        let mut expect = mine.side_bars.clone();
+        expect.opacity = 0.5;
+        assert_eq!(back.side_bars, expect, "the rail comes back exactly");
     }
 
     /// Picking a look brings its component designs; a design picked
