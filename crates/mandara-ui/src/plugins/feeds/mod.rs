@@ -471,6 +471,11 @@ fn follow_background(cx: &mut App) {
     hub.borrow_mut().background = Some((every, task));
 }
 
+/// Whether the Feeds panel shows: as the shell's panel or floating.
+fn panel_open(shell_panel: Option<&str>, floating: bool) -> bool {
+    floating || shell_panel == Some(ID)
+}
+
 /// The panel closed: release its history, article and pictures after the
 /// close animation. Counts stay for the bar.
 fn closed(cx: &mut App) {
@@ -645,7 +650,8 @@ pub fn register(registry: &mut PluginRegistry) {
         let view = panel::View::new(context.clone(), cx);
         let panel = super::model_view(None, move |palette, window, cx| view.render(palette, window, cx), window, cx);
         cx.observe(&crate::state::shell(cx), |shell, cx| {
-            if shell.read(cx).panel.as_deref() != Some(ID) { closed(cx); }
+            // A floating Feeds panel is open too, though it isn't the shell's panel.
+            if !panel_open(shell.read(cx).panel.as_deref(), crate::floating::is_floating(ID, cx)) { closed(cx); }
             // The card's rows go when the sidebar hides (never building a hub for it).
             if !shell.read(cx).sidebar_visible() && let Some(hub) = HUB.with(|slot| slot.borrow().clone()) { hub.borrow_mut().card.release(); }
         }).detach();
@@ -804,6 +810,15 @@ mod tests {
         let many: Vec<Subscription> = (0..MAX_SUBSCRIPTIONS + 5).map(|n| Subscription { url: format!("https://{n}.example/feed"), ..Subscription::default() }).collect();
         set_subscriptions(&mut cfg, &many);
         assert_eq!(subscriptions(&cfg).len(), MAX_SUBSCRIPTIONS);
+    }
+
+    #[test]
+    fn a_floating_panel_counts_as_open() {
+        assert!(panel_open(Some(ID), false));
+        assert!(panel_open(None, true), "floating, not the shell's panel");
+        assert!(panel_open(Some("weather"), true));
+        assert!(!panel_open(Some("weather"), false));
+        assert!(!panel_open(None, false));
     }
 
     #[test]
