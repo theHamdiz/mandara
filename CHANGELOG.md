@@ -6,12 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
-Pick how every control looks, or set them all at once with a preset.
-A Material You design for Mandara Login and the lock screen. The Mandara
-emblem shows on the login screen again.
 Pick how every control looks, or set them all at once with a preset. The
-power menu can float as separate cards in the middle of the screen.
-Four bar styles that look nothing like the usual strip.
+power menu can float as separate cards in the middle of the screen. Mandara
+Login and the lock screen get a Material You design, and the Mandara emblem
+shows on the login screen again. Four bar styles look nothing like the usual
+strip.
 
 ### New
 

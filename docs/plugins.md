@@ -78,7 +78,7 @@ The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
 | **Color picker** | Pick colors from the screen, with formats, tonal ramps and contrast | *(opt-in)*
 | **Authenticator** | Two-factor codes (TOTP / HOTP) stored in your keyring | *(opt-in)*
 | **Soundscapes** | Ambient sea, rain, wind, café, fire and noise — synthesized live | *(opt-in)*
-| **Radio** | Internet radio: curated stations by genre, your own stations and favourites, with live now-playing | *(opt-in)*
+| **Radio** | Internet radio: curated stations by genre, your own stations and favourites, with live now-playing *(opt-in)* |
 | **Dock** | A macOS-style dock: pinned, running and recent apps, stacks and the Trash, with magnification and auto-hide *(opt-in)* |
 | **App installer** | Install apps by dropping AppImages, Flatpaks, archives or packages on the dock or Studio | *(opt-in)*
 | **Screen time** | How long you spend in each app, per day, with limits *(opt-in)* |
