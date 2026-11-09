@@ -387,6 +387,34 @@ fn apply_preset_in(c: &mut ShellConfig, p: &Preset, replace_items: bool, known: 
     }
 }
 
+/// One side bar's own style: a chip per bar style (its item look, for this
+/// bar alone) and *Shared* (the side bars' shared look). Another style or
+/// Shared clears what the last one set; a bar shaped by hand shows none.
+fn side_style_row(cfg: &ShellConfig, right: bool, p: &MandaraPalette) -> AnyElement {
+    let current = cfg.side_bars.side(right).style;
+    let side = if right { "right" } else { "left" };
+    let chip = |style: Option<BarStyle>, label: &'static str| {
+        super::compositor_page::chip(SharedString::from(format!("side-style-{side}-{}", style.map_or("shared", BarStyle::id))), tr(label), current == style, p).on_click(move |_, _, cx| {
+            update_config(cx, |c| match style {
+                Some(style) => style.apply_to_side(c, right),
+                None => mandara_config::bar_styles::clear_side(c, right),
+            });
+        })
+    };
+    div()
+        .row()
+        .flex_wrap()
+        .items_center()
+        .gap(px(SPACE_6_PX))
+        .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("Style")))
+        .child(chip(None, tk("Shared")))
+        .children(BarStyle::ALL.into_iter().zip(SIDE_STYLE_NAMES).map(|(style, name)| chip(Some(style), name)))
+        .into_any_element()
+}
+
+/// The style chips' names, in [`BarStyle::ALL`] order.
+const SIDE_STYLE_NAMES: [&str; 4] = [tk("Expressive"), tk("Tile dock"), tk("Rail"), tk("Segmented")];
+
 impl StudioView {
     /// One item of a zone: grip, artwork, name, "off" while the plugin is
     /// off, and × to take it off. Drag to reorder or move it (dropping on
@@ -530,6 +558,7 @@ impl StudioView {
             div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_6_PX))
                 .when(!settings.enabled, |el| el.opacity(ALPHA_60))
                 .child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(tr(title)))
+                .child(side_style_row(cfg, right, p))
                 .child(self.lane(Lane::Side(right, SideZone::Top), tk("Top"), &settings.top, false, scale, p, cx))
                 .child(self.lane(Lane::Side(right, SideZone::Middle), tk("Middle"), &settings.middle, false, scale, p, cx))
                 .child(self.lane(Lane::Side(right, SideZone::Bottom), tk("Bottom"), &settings.bottom, false, scale, p, cx))

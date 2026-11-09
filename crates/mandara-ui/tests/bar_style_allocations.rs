@@ -94,6 +94,16 @@ fn every_bar_style_lays_out_and_shapes_its_frames_without_allocating() {
             setups.push(("expressive rail", side, ItemLook { item: cfg.bar.item_shape, icon: rail, radius: side.radius, vertical: true }));
         }
     }
+    // A side bar styled on its own, beside a differently styled main bar.
+    for style in BarStyle::ALL {
+        let mut cfg = ShellConfig::default();
+        BarStyle::Segmented.apply(&mut cfg);
+        cfg.side_bars.enabled = true;
+        style.apply_to_side(&mut cfg, true);
+        let side = mandara_ui::bar::side::metrics(&cfg, true, 1.0);
+        let items = cfg.side_bars.items(true, &cfg.bar);
+        setups.push((["side bar expressive", "side bar tile-dock", "side bar rail", "side bar segmented"][style as usize], side, ItemLook { item: items.item_shape, icon: items.icon_shape, radius: side.radius, vertical: true }));
+    }
     let plain = ShellConfig::default();
     let m = Metrics::of(&plain, 1.0);
     setups.push(("shipped", m, ItemLook { item: plain.bar.item_shape, icon: plain.bar.icon_shape, radius: m.radius, vertical: false }));

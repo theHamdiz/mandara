@@ -39,7 +39,10 @@ How Mandara looks and feels, and how much of it you can shape.
   the accent or tertiary tone; the items' inset from the bar's edges; and
   a screen frame round a top or bottom bar too. Panels still pour out of
   the bar and morph back into the item they came from.
-  `mandara msg bar style expressive` scripts it.
+  `mandara msg bar style expressive` scripts it. Each side bar can take a
+  style of its own too (Studio → Bars → Side bars, or
+  `mandara msg side-bar style right tile-dock`), so a rail of squircle
+  tiles can sit beside a bar of connected groups.
 - **Bar items show what you want:** workspace pills with numbers, short
   names or dots, with or without app icons, and empty ones hidden; the
   active window as its app, its title or both, up to a width you pick; the

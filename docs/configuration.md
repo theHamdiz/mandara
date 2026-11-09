@@ -754,6 +754,28 @@ middle = ["power"]
 bottom = ["notifications"]
 ```
 
+Each side bar can also have a look of its own, over the shared one. Any
+key left out follows the shared `[side_bars]` setting (`chips`,
+`icon_shape`) or the bar's (`item_shape`, `icon_fill`):
+
+```toml
+[side_bars.right]
+chips = "pills"          # icons | pills | island
+item_shape = "squircle"  # capsule | tile | squircle | connected
+icon_shape = "squircle"  # match (like the other items) | circle | cookie | clover | flower | burst | squircle
+icon_fill = "accent"     # match (the wash) | accent | tertiary
+item_inset = 3           # 0–20: space between the items and the bar's long edges (sets the item size)
+style = "tile-dock"      # the bar style that set these (see below)
+```
+
+A **bar style for one side bar** sets those keys at once:
+Studio → Bars → Side bars (the *Style* chips above each bar's groups) or
+`mandara msg side-bar style left|right expressive|tile-dock|rail|segmented|none`.
+It shapes that bar alone: the main bar, the other side bar and the shared
+settings stay as they are. Another style, or `none` (*Shared*), clears
+exactly what the last one set; a side bar you shaped by hand is never
+cleared.
+
 - **Joined (the default).** The top (or bottom) bar and the side bars
   become one frame, like a puzzle piece: each side bar is a column of the
   bar's own fill hanging from it, with concave curves where it meets the

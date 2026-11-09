@@ -46,9 +46,19 @@ pub fn entries() -> Vec<Setting> {
         s(Bars, SIDE_BARS, "/side_bars/left/enabled", tk("Left side bar"), tk("Show the bar on the left edge"), Toggle),
         s(Bars, SIDE_BARS, "/side_bars/left/pinned", tk("Pin the left side bar"), tk("Pinned, it stays and windows tile beside it; unpinned, it slides away and comes back when the pointer touches the edge"), Toggle),
         s(Bars, SIDE_BARS, "/side_bars/left/accent", tk("Left accent"), tk("The colour its items light up and wash with"), Choice(ACCENTS)),
+        s(Bars, SIDE_BARS, "/side_bars/left/chips", tk("Left item style"), tk("The left bar's own items: bare icons, pills or islands, or the shared item style"), Choice(OWN_CHIPS)),
+        s(Bars, SIDE_BARS, "/side_bars/left/item_shape", tk("Left item shape"), tk("The left bar's own item shape, or the bar's"), Choice(OWN_ITEM_SHAPES)),
+        s(Bars, SIDE_BARS, "/side_bars/left/icon_shape", tk("Left icon shape"), tk("The left bar's own icon shape, or the shared one"), Choice(OWN_ICON_SHAPES)),
+        s(Bars, SIDE_BARS, "/side_bars/left/icon_fill", tk("Left icon colour"), tk("The left bar's own icon colour, or the bar's"), Choice(OWN_ICON_FILLS)),
+        s(Bars, SIDE_BARS, "/side_bars/left/item_inset", tk("Left item inset"), tk("Space between the left bar's items and its long edges (unset: Item size)"), own_inset()),
         s(Bars, SIDE_BARS, "/side_bars/right/enabled", tk("Right side bar"), tk("Show the bar on the right edge"), Toggle),
         s(Bars, SIDE_BARS, "/side_bars/right/pinned", tk("Pin the right side bar"), tk("Pinned, it stays and windows tile beside it; unpinned, it slides away and comes back when the pointer touches the edge"), Toggle),
         s(Bars, SIDE_BARS, "/side_bars/right/accent", tk("Right accent"), tk("The colour its items light up and wash with"), Choice(ACCENTS)),
+        s(Bars, SIDE_BARS, "/side_bars/right/chips", tk("Right item style"), tk("The right bar's own items: bare icons, pills or islands, or the shared item style"), Choice(OWN_CHIPS)),
+        s(Bars, SIDE_BARS, "/side_bars/right/item_shape", tk("Right item shape"), tk("The right bar's own item shape, or the bar's"), Choice(OWN_ITEM_SHAPES)),
+        s(Bars, SIDE_BARS, "/side_bars/right/icon_shape", tk("Right icon shape"), tk("The right bar's own icon shape, or the shared one"), Choice(OWN_ICON_SHAPES)),
+        s(Bars, SIDE_BARS, "/side_bars/right/icon_fill", tk("Right icon colour"), tk("The right bar's own icon colour, or the bar's"), Choice(OWN_ICON_FILLS)),
+        s(Bars, SIDE_BARS, "/side_bars/right/item_inset", tk("Right item inset"), tk("Space between the right bar's items and its long edges (unset: Item size)"), own_inset()),
         s(Bars, SIDE_BARS, "/side_bars/reveal_delay_ms", tk("Reveal delay"), tk("How long the pointer rests on the edge before an unpinned side bar slides out"), ms(ranges::REVEAL_DELAY_MS)),
         s(Bars, SIDE_BARS, "/side_bars/hide_delay_ms", tk("Hide delay"), tk("How long an unpinned side bar waits after the pointer leaves before it slides away"), ms(ranges::HIDE_DELAY_MS)),
         // Bar → Side bar shape
@@ -77,6 +87,19 @@ pub fn entries() -> Vec<Setting> {
 
 /// Why the side bar setting at `path` (or a bar / sidebar setting the side
 /// bars override) has no effect under `cfg`.
+/// One bar's own look (`null`: follow the shared one).
+const OWN_CHIPS: &[(&str, &str)] = &[("null", tk("Shared")), ("icons", tk("Icons")), ("pills", tk("Pills")), ("island", tk("Island"))];
+const OWN_ITEM_SHAPES: &[(&str, &str)] = &[("null", tk("Same as the bar")), ("capsule", tk("Capsule")), ("tile", tk("Rounded tile")), ("squircle", tk("Squircle")), ("connected", tk("Connected group"))];
+const OWN_ICON_SHAPES: &[(&str, &str)] = &[("null", tk("Shared")), ("match", tk("Same as items")), ("circle", tk("Circle")), ("cookie", tk("Cookie")), ("clover", tk("Clover")), ("flower", tk("Flower")), ("burst", tk("Burst")), ("squircle", tk("Squircle"))];
+const OWN_ICON_FILLS: &[(&str, &str)] = &[("null", tk("Same as the bar")), ("match", tk("Capsule colour")), ("accent", tk("Accent")), ("tertiary", tk("Tertiary"))];
+
+fn own_inset() -> Control {
+    Control::OptionalSlider { min: f64::from(ranges::ITEM_INSET.min), max: f64::from(ranges::ITEM_INSET.max), step: f64::from(ranges::ITEM_INSET.step), unit: " px", default: f64::from(OWN_INSET_DEFAULT_PX) }
+}
+
+/// Where a bar's own item inset slider starts.
+const OWN_INSET_DEFAULT_PX: f32 = 3.0;
+
 pub fn locked(path: &str, cfg: &ShellConfig) -> Option<&'static str> {
     let sb = &cfg.side_bars;
     let joined = cfg.side_bars_join();
@@ -100,8 +123,10 @@ pub fn locked(path: &str, cfg: &ShellConfig) -> Option<&'static str> {
         "chip_fill" if sb.chips == SideBarChips::Icons => Some(WASH_FIRST),
         "icon_shape" if sb.chips != SideBarChips::Pills => Some(PILLS_FIRST),
         "reveal_delay_ms" | "hide_delay_ms" if sb.left.pinned && sb.right.pinned => Some(UNPIN_FIRST),
-        "left/pinned" | "left/accent" if !sb.left.enabled => Some(SIDE_OFF),
-        "right/pinned" | "right/accent" if !sb.right.enabled => Some(SIDE_OFF),
+        "left/pinned" | "left/accent" | "left/chips" | "left/item_shape" | "left/icon_shape" | "left/icon_fill" | "left/item_inset" if !sb.left.enabled => Some(SIDE_OFF),
+        "right/pinned" | "right/accent" | "right/chips" | "right/item_shape" | "right/icon_shape" | "right/icon_fill" | "right/item_inset" if !sb.right.enabled => Some(SIDE_OFF),
+        "left/item_shape" | "left/icon_shape" | "left/icon_fill" if sb.items(false, &cfg.bar).chips != SideBarChips::Pills => Some(PILLS_FIRST),
+        "right/item_shape" | "right/icon_shape" | "right/icon_fill" if sb.items(true, &cfg.bar).chips != SideBarChips::Pills => Some(PILLS_FIRST),
         _ => None,
     }
 }
@@ -135,5 +160,11 @@ mod tests {
         assert_eq!(locked("/side_bars/chip_fill", &cfg), Some(WASH_FIRST));
         cfg.side_bars.left.enabled = false;
         assert_eq!(locked("/side_bars/left/accent", &cfg), Some(SIDE_OFF));
+        assert_eq!(locked("/side_bars/left/item_shape", &cfg), Some(SIDE_OFF));
+        // One bar's own shapes need pill items (its own or the shared).
+        assert_eq!(locked("/side_bars/right/item_shape", &cfg), Some(PILLS_FIRST));
+        mandara_config::bar_styles::BarStyle::Rail.apply_to_side(&mut cfg, true);
+        assert_eq!(locked("/side_bars/right/item_shape", &cfg), None, "a style gives it pills");
+        assert_eq!(locked("/side_bars/right/item_inset", &cfg), None);
     }
 }

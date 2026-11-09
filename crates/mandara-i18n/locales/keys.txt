@@ -2415,6 +2415,7 @@ GitHub's rate limit was reached; checking again in {minutes} min
 Give an app your own icon (theme icon name or image path; empty restores it)
 Give generously
 Give one display its own wallpaper (clear = follow the main one)
+Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look
 Give the bar a style preset's look (your items stay), or none for the plain bar
 Give the file's full path
 Give the profile a name
@@ -3140,6 +3141,11 @@ Left (vertical)
 Left / top
 Left accent
 Left click
+Left icon colour
+Left icon shape
+Left item inset
+Left item shape
+Left item style
 Left or right bar only
 Left side bar
 Left-handed
@@ -4623,6 +4629,7 @@ Picture-in-picture floats on every workspace
 Pictures from a folder, a new one every so often
 Pill
 Pill labels
+Pills
 Pin a plugin's panel open in the bar: outside clicks, focus changes and the launcher leave it open (its chip, Esc or panel close still close it). A floating panel docks back pinned
 Pin a side bar (it stays and windows tile beside it) or let it slide away until the pointer touches its edge
 Pin an app to the top of the launcher
@@ -5211,6 +5218,11 @@ Right (vertical)
 Right / bottom
 Right accent
 Right click
+Right icon colour
+Right icon shape
+Right item inset
+Right item shape
+Right item style
 Right side bar
 Right tile
 Right-click empty bar space
@@ -5621,6 +5633,7 @@ Share this computer's connection over Wi-Fi
 Share to phone
 Share what the clipboard holds: text, an image or a copied file (JSON with the link)
 Share your food with the needy and sit a while with the sick.
+Shared
 Shared from Mandara
 Shared memory
 Sharing as {name}
@@ -5861,6 +5874,8 @@ Space between a floating bar and its panels
 Space between a panel's edge and its content (unset: none for the edge frame, a little for floating styles)
 Space between a separate side bar and the screen edge, and around the groups at its ends
 Space between the items and the bar's long edges; larger turns items into tiles on the bar
+Space between the left bar's items and its long edges (unset: Item size)
+Space between the right bar's items and its long edges (unset: Item size)
 Space inside cards
 Space inside each bar item, around its content
 Spacing
@@ -6418,6 +6433,10 @@ The keyring is locked
 The knowledge of anything, since all things have causes, is not acquired or complete unless it is known by its causes.
 The laptop panel and external monitors move together
 The last log lines of a container
+The left bar's own icon colour, or the bar's
+The left bar's own icon shape, or the shared one
+The left bar's own item shape, or the bar's
+The left bar's own items: bare icons, pills or islands, or the shared item style
 The less reason someone has, the more he fancies himself the most rational and most discerning of all.
 The link has no account name
 The link has no secret
@@ -6485,6 +6504,10 @@ The release has no plugin archive
 The release has no {suffix} file
 The release mirror must use HTTPS.
 The release signature could not be verified. Nothing was installed.
+The right bar's own icon colour, or the bar's
+The right bar's own icon shape, or the shared one
+The right bar's own item shape, or the bar's
+The right bar's own items: bare icons, pills or islands, or the shared item style
 The roots below the earth claim no rewards for making the branches fruitful.
 The roots of education are bitter, but the fruit is sweet.
 The running job (progress, time), the last result and the schedule

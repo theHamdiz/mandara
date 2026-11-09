@@ -275,6 +275,63 @@ impl BarStyle {
     }
 }
 
+/// One side bar's look in a style: item shapes, colour and inset.
+struct SideLook {
+    item_shape: BarItemShape,
+    icon_shape: BarIconShape,
+    icon_fill: BarIconFill,
+    item_inset: f32,
+}
+
+impl BarStyle {
+    fn side_look(self) -> SideLook {
+        match self {
+            BarStyle::Expressive => SideLook { item_shape: BarItemShape::Tile, icon_shape: BarIconShape::Cookie, icon_fill: BarIconFill::Accent, item_inset: 4.0 },
+            BarStyle::TileDock => SideLook { item_shape: BarItemShape::Squircle, icon_shape: BarIconShape::Squircle, icon_fill: BarIconFill::Accent, item_inset: 3.0 },
+            BarStyle::Rail => SideLook { item_shape: BarItemShape::Tile, icon_shape: BarIconShape::Flower, icon_fill: BarIconFill::Tertiary, item_inset: 4.0 },
+            // Connected groups: icons stay in the group's shape.
+            BarStyle::Segmented => SideLook { item_shape: BarItemShape::Connected, icon_shape: BarIconShape::Match, icon_fill: BarIconFill::Match, item_inset: 5.0 },
+        }
+    }
+
+    /// Gives the left (`false`) or right side bar alone this style's item
+    /// look: pill items in the style's shapes, colour and inset. A style
+    /// it had before is cleared first; the other bars are untouched.
+    pub fn apply_to_side(self, cfg: &mut ShellConfig, right: bool) {
+        clear_side(cfg, right);
+        let l = self.side_look();
+        let side = cfg.side_bars.side_mut(right);
+        side.chips = Some(SideBarChips::Pills);
+        side.item_shape = Some(l.item_shape);
+        side.icon_shape = Some(l.icon_shape);
+        side.icon_fill = Some(l.icon_fill);
+        side.item_inset = Some(l.item_inset);
+        side.style = Some(self);
+    }
+
+    /// Whether that side bar still has this style's item look.
+    pub fn side_matches(self, cfg: &ShellConfig, right: bool) -> bool {
+        let l = self.side_look();
+        let side = cfg.side_bars.side(right);
+        side.chips == Some(SideBarChips::Pills) && side.item_shape == Some(l.item_shape) && side.icon_shape == Some(l.icon_shape) && side.icon_fill == Some(l.icon_fill)
+    }
+}
+
+/// Clears what the style recorded on the left (`false`) or right side bar
+/// set: the bar follows the shared side bar look again. Nothing happens
+/// without a recorded style, so a side bar shaped by hand is kept.
+pub fn clear_side(cfg: &mut ShellConfig, right: bool) {
+    let side = cfg.side_bars.side_mut(right);
+    if side.style.take().is_none() {
+        return;
+    }
+    side.chips = None;
+    side.item_shape = None;
+    side.icon_shape = None;
+    side.icon_fill = None;
+    side.item_inset = None;
+}
+
 /// The rail Expressive joins to its bar: width, item size and spacing,
 /// and the strength of its items' wash.
 const RAIL_WIDTH_PX: f32 = 42.0;
@@ -394,6 +451,52 @@ mod tests {
         let kept = hand.clone();
         clear(&mut hand);
         assert_eq!(hand, kept);
+    }
+
+    #[test]
+    fn a_side_bar_takes_a_style_of_its_own_and_gives_it_back() {
+        for style in BarStyle::ALL {
+            let mut cfg = ShellConfig::default();
+            BarStyle::TileDock.apply(&mut cfg);
+            let main = cfg.bar.clone();
+            let before = cfg.side_bars.clone();
+            style.apply_to_side(&mut cfg, true);
+            assert!(style.side_matches(&cfg, true) && !style.side_matches(&cfg, false), "{style:?}: the right bar alone");
+            assert_eq!(cfg.side_bars.left, before.left, "the other bar is untouched");
+            assert_eq!(cfg.bar, main, "so is the main bar and its own style");
+            let items = cfg.side_bars.items(true, &cfg.bar);
+            assert_eq!(items.chips, SideBarChips::Pills);
+            assert!(items.chip_size <= cfg.side_bars.width() && items.chip_size >= crate::side_bars::ranges::CHIP_SIZE.min);
+            // It survives a save and reload.
+            let back: ShellConfig = toml::from_str(&toml::to_string(&cfg).expect("serializes")).expect("parses");
+            assert_eq!(back.side_bars, cfg.side_bars, "{style:?}");
+            // Another style replaces it whole; none puts the shared look back.
+            let other = BarStyle::ALL.into_iter().find(|o| *o != style).unwrap();
+            other.apply_to_side(&mut cfg, true);
+            assert!(other.side_matches(&cfg, true) && !style.side_matches(&cfg, true));
+            clear_side(&mut cfg, true);
+            assert_eq!(cfg.side_bars, before, "{style:?}: back to the shared look");
+            // Clearing the main bar's style leaves a side bar's own alone.
+            style.apply_to_side(&mut cfg, false);
+            clear(&mut cfg);
+            assert!(style.side_matches(&cfg, false));
+        }
+        // A side bar shaped by hand (no style recorded) is never cleared.
+        let mut hand = ShellConfig::default();
+        hand.side_bars.left.item_shape = Some(BarItemShape::Tile);
+        let kept = hand.clone();
+        clear_side(&mut hand, false);
+        assert_eq!(hand, kept);
+        // Unset, a side bar follows the shared look and the bar's shapes.
+        let mut cfg = ShellConfig::default();
+        cfg.bar.item_shape = BarItemShape::Squircle;
+        cfg.side_bars.icon_shape = BarIconShape::Burst;
+        let items = cfg.side_bars.items(false, &cfg.bar);
+        assert_eq!((items.item_shape, items.icon_shape, items.chips, items.chip_size), (BarItemShape::Squircle, BarIconShape::Burst, cfg.side_bars.chips, cfg.side_bars.chip_size()));
+        // An old config without the new keys reads unchanged.
+        let old: ShellConfig = toml::from_str("[side_bars.left]\nenabled = true\n").expect("parses");
+        assert_eq!(old.side_bars.left.style, None);
+        assert_eq!(old.side_bars.left.item_shape, None);
     }
 
     #[test]
