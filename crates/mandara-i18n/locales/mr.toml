@@ -9339,3 +9339,15 @@
 "wpa_supplicant didn't add the network" = "wpa_supplicant ने नेटवर्क जोडले नाही"
 "wpa_supplicant isn't running, or its control socket isn't open to you (ctrl_interface_group in wpa_supplicant.conf)" = "wpa_supplicant चालू नाही, किंवा त्याचे नियंत्रण सॉकेट तुमच्यासाठी उघडे नाही (wpa_supplicant.conf मधील ctrl_interface_group)"
 "wpa_supplicant refused {ssid}" = "wpa_supplicant ने {ssid} नाकारले"
+
+# ── Main menu: the bar's gaps and the rail's height ──────────
+"As tall as its buttons, or as tall as the panel beside it with the buttons kept together at the top" = "तिच्या बटणांइतकी उंच, किंवा शेजारच्या पॅनेलइतकी उंच, बटणे वर एकत्र ठेवून"
+"Desktop menu" = "डेस्कटॉप मेनू"
+"Fit the buttons" = "बटणांच्या मापाची"
+"Main menu in the bar's gaps" = "पट्टीच्या फटींमध्ये मुख्य मेनू"
+"Only split bars have gaps: glass pills, island, micro pill and notch" = "फक्त विभागलेल्या पट्ट्यांना फटी असतात: काचेच्या पिल, बेट, मायक्रो पिल आणि नॉच"
+"Panel height" = "पॅनेलची उंची"
+"Rail height" = "उभ्या पट्टीची उंची"
+"Right-clicking between a split bar's pieces opens the main menu; the rest of the desktop, and Main menu → Apps & tools → Desktop menu, still open the desktop's menu" = "विभागलेल्या पट्टीच्या भागांमध्ये उजवे-क्लिक केल्यास मुख्य मेनू उघडतो; उरलेला डेस्कटॉप आणि मुख्य मेनू → अॅप्स आणि साधने → डेस्कटॉप मेनू येथून अजूनही डेस्कटॉपचे मेनू उघडते"
+"Right-clicking empty bar space opens the desktop's menu" = "रिकाम्या पट्टी जागेवर उजवे-क्लिक केल्यास डेस्कटॉपचे मेनू उघडते"
+"wallpaper & widgets" = "वॉलपेपर आणि विजेट्स"

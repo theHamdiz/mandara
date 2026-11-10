@@ -9338,3 +9338,15 @@
 "wpa_supplicant didn't add the network" = "wpa_supplicant không thêm mạng"
 "wpa_supplicant isn't running, or its control socket isn't open to you (ctrl_interface_group in wpa_supplicant.conf)" = "wpa_supplicant không chạy, hoặc socket điều khiển của nó không mở cho bạn (ctrl_interface_group trong wpa_supplicant.conf)"
 "wpa_supplicant refused {ssid}" = "wpa_supplicant đã từ chối {ssid}"
+
+# ── Main menu: the bar's gaps and the rail's height ──────────
+"As tall as its buttons, or as tall as the panel beside it with the buttons kept together at the top" = "Cao bằng các nút của nó, hoặc cao bằng bảng bên cạnh với các nút gom lại ở trên cùng"
+"Desktop menu" = "Trình đơn màn hình nền"
+"Fit the buttons" = "Vừa các nút"
+"Main menu in the bar's gaps" = "Trình đơn chính ở các khoảng trống của thanh"
+"Only split bars have gaps: glass pills, island, micro pill and notch" = "Chỉ thanh chia mảnh mới có khoảng trống: viên kính, đảo, viên tí hon và khuyết"
+"Panel height" = "Chiều cao bảng"
+"Rail height" = "Chiều cao dải điều hướng"
+"Right-clicking between a split bar's pieces opens the main menu; the rest of the desktop, and Main menu → Apps & tools → Desktop menu, still open the desktop's menu" = "Nhấp phải giữa các mảnh của thanh chia mảnh sẽ mở trình đơn chính; phần còn lại của màn hình nền và Trình đơn chính → Ứng dụng và công cụ → Trình đơn màn hình nền vẫn mở trình đơn của màn hình nền"
+"Right-clicking empty bar space opens the desktop's menu" = "Nhấp phải vào chỗ trống trên thanh sẽ mở trình đơn của màn hình nền"
+"wallpaper & widgets" = "hình nền và widget"

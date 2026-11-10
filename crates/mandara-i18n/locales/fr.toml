@@ -9680,3 +9680,15 @@
 "wpa_supplicant didn't add the network" = "wpa_supplicant n'a pas ajouté le réseau"
 "wpa_supplicant isn't running, or its control socket isn't open to you (ctrl_interface_group in wpa_supplicant.conf)" = "wpa_supplicant ne tourne pas, ou son socket de contrôle ne vous est pas ouvert (ctrl_interface_group dans wpa_supplicant.conf)"
 "wpa_supplicant refused {ssid}" = "wpa_supplicant a refusé {ssid}"
+
+# ── Main menu: the bar's gaps and the rail's height ──────────
+"As tall as its buttons, or as tall as the panel beside it with the buttons kept together at the top" = "Aussi haut que ses boutons, ou aussi haut que le panneau voisin, les boutons groupés en haut"
+"Desktop menu" = "Menu du bureau"
+"Fit the buttons" = "Ajusté aux boutons"
+"Main menu in the bar's gaps" = "Menu principal dans les espaces de la barre"
+"Only split bars have gaps: glass pills, island, micro pill and notch" = "Seules les barres en morceaux ont des espaces : pastilles de verre, îlot, micro-pilule et encoche"
+"Panel height" = "Hauteur du panneau"
+"Rail height" = "Hauteur du rail"
+"Right-clicking between a split bar's pieces opens the main menu; the rest of the desktop, and Main menu → Apps & tools → Desktop menu, still open the desktop's menu" = "Un clic droit entre les morceaux d'une barre en morceaux ouvre le menu principal ; le reste du bureau et Menu principal → Applis et outils → Menu du bureau ouvrent toujours le menu du bureau"
+"Right-clicking empty bar space opens the desktop's menu" = "Un clic droit sur un espace vide de la barre ouvre le menu du bureau"
+"wallpaper & widgets" = "fond d'écran et widgets"

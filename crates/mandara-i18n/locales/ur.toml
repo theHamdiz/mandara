@@ -9435,3 +9435,15 @@
 "wpa_supplicant didn't add the network" = "wpa_supplicant نے نیٹ ورک شامل نہیں کیا"
 "wpa_supplicant isn't running, or its control socket isn't open to you (ctrl_interface_group in wpa_supplicant.conf)" = "wpa_supplicant نہیں چل رہا، یا اس کا کنٹرول ساکٹ آپ کے لیے کھلا نہیں (wpa_supplicant.conf میں ctrl_interface_group)"
 "wpa_supplicant refused {ssid}" = "wpa_supplicant نے {ssid} رد کر دیا"
+
+# ── Main menu: the bar's gaps and the rail's height ──────────
+"As tall as its buttons, or as tall as the panel beside it with the buttons kept together at the top" = "اپنے بٹنوں جتنی اونچی، یا ساتھ والے پینل جتنی اونچی، بٹن اوپر اکٹھے رہتے ہیں"
+"Desktop menu" = "ڈیسک ٹاپ مینو"
+"Fit the buttons" = "بٹنوں کے ناپ کی"
+"Main menu in the bar's gaps" = "بار کے خلا میں مین مینو"
+"Only split bars have gaps: glass pills, island, micro pill and notch" = "صرف بٹی ہوئی بارز میں خلا ہوتے ہیں: شیشے کی پِلز، آئی لینڈ، مائیکرو پِل اور نوچ"
+"Panel height" = "پینل کی اونچائی"
+"Rail height" = "ریل کی اونچائی"
+"Right-clicking between a split bar's pieces opens the main menu; the rest of the desktop, and Main menu → Apps & tools → Desktop menu, still open the desktop's menu" = "بٹی ہوئی بار کے ٹکڑوں کے درمیان رائٹ کلک کرنے سے مین مینو کھلتا ہے؛ باقی ڈیسک ٹاپ اور مین مینو ← ایپس اور ٹولز ← ڈیسک ٹاپ مینو سے اب بھی ڈیسک ٹاپ کا مینو کھلتا ہے"
+"Right-clicking empty bar space opens the desktop's menu" = "بار کی خالی جگہ پر رائٹ کلک کرنے سے ڈیسک ٹاپ کا مینو کھلتا ہے"
+"wallpaper & widgets" = "وال پیپر اور ویجیٹس"

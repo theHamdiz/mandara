@@ -97,7 +97,18 @@ come shortcuts that open Sound, Network, Bluetooth, the system monitor,
 weather, the calendar or notifications in the menu's place. Studio and the
 power menu are the buttons at the top, so the rail doesn't repeat them;
 **Reload config** is on Apps & tools. **Rail** (Studio → Bars → Drop-down
-panels, under Main menu) shows each entry's name or icons only.
+panels, under Main menu) shows each entry's name or icons only, and
+**Rail height** keeps the rail as tall as its buttons or stretches it to
+the panel's height: the buttons stay together at the top and the rest of
+the rail wears the tiles' wash and a mashrabiya ornament.
+
+On a split bar (glass pills, island, micro pill, notch, *Segmented*, *Tile
+dock*) the gaps between the pieces are the desktop, so right-clicking them
+opens the desktop's menu. Turn on **Main menu in the bar's gaps** (Studio →
+Bars → Bar → Behaviour) and a right-click anywhere in the bar's strip opens
+the main menu instead. The desktop's menu is still a right-click anywhere
+else on the desktop, or **Desktop menu** on the main menu's Apps & tools
+page, which opens it where you clicked.
 
 Open **Look** in the main menu to pick a theme. The cards fill the
 available height; longer catalogs use compact scrolling rows. Built-in

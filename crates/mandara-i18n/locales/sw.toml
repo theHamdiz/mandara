@@ -9338,3 +9338,15 @@
 "wpa_supplicant didn't add the network" = "wpa_supplicant haikuongeza mtandao"
 "wpa_supplicant isn't running, or its control socket isn't open to you (ctrl_interface_group in wpa_supplicant.conf)" = "wpa_supplicant haifanyi kazi, au soketi yake ya udhibiti haiko wazi kwako (ctrl_interface_group katika wpa_supplicant.conf)"
 "wpa_supplicant refused {ssid}" = "wpa_supplicant imekataa {ssid}"
+
+# ── Main menu: the bar's gaps and the rail's height ──────────
+"As tall as its buttons, or as tall as the panel beside it with the buttons kept together at the top" = "Urefu sawa na vitufe vyake, au sawa na paneli iliyo kando yake huku vitufe vikikaa pamoja juu"
+"Desktop menu" = "Menyu ya dawati"
+"Fit the buttons" = "Kulingana na vitufe"
+"Main menu in the bar's gaps" = "Menyu kuu kwenye mapengo ya upau"
+"Only split bars have gaps: glass pills, island, micro pill and notch" = "Ni pau zilizogawanywa tu zenye mapengo: vidonge vya kioo, kisiwa, kidonge kidogo na notch"
+"Panel height" = "Urefu wa paneli"
+"Rail height" = "Urefu wa reli"
+"Right-clicking between a split bar's pieces opens the main menu; the rest of the desktop, and Main menu → Apps & tools → Desktop menu, still open the desktop's menu" = "Kubofya kulia kati ya vipande vya upau uliogawanywa hufungua menyu kuu; sehemu nyingine za dawati, na Menyu kuu → Programu na zana → Menyu ya dawati, bado hufungua menyu ya dawati"
+"Right-clicking empty bar space opens the desktop's menu" = "Kubofya kulia kwenye nafasi tupu ya upau hufungua menyu ya dawati"
+"wallpaper & widgets" = "mandhari na wijeti"

@@ -9436,3 +9436,15 @@
 "wpa_supplicant didn't add the network" = "wpa_supplicant নেটওয়ার্কটি যোগ করেনি"
 "wpa_supplicant isn't running, or its control socket isn't open to you (ctrl_interface_group in wpa_supplicant.conf)" = "wpa_supplicant চলছে না, বা এর নিয়ন্ত্রণ সকেট আপনার জন্য খোলা নেই (wpa_supplicant.conf-এ ctrl_interface_group)"
 "wpa_supplicant refused {ssid}" = "wpa_supplicant {ssid} প্রত্যাখ্যান করেছে"
+
+# ── Main menu: the bar's gaps and the rail's height ──────────
+"As tall as its buttons, or as tall as the panel beside it with the buttons kept together at the top" = "এর বোতামগুলোর সমান উঁচু, অথবা পাশের প্যানেলের সমান উঁচু, বোতামগুলো উপরে একসাথে রেখে"
+"Desktop menu" = "ডেস্কটপ মেনু"
+"Fit the buttons" = "বোতামের মাপে"
+"Main menu in the bar's gaps" = "বারের ফাঁকে প্রধান মেনু"
+"Only split bars have gaps: glass pills, island, micro pill and notch" = "শুধু ভাগ করা বারেই ফাঁক থাকে: কাচের পিল, আইল্যান্ড, মাইক্রো পিল ও নচ"
+"Panel height" = "প্যানেলের উচ্চতা"
+"Rail height" = "রেলের উচ্চতা"
+"Right-clicking between a split bar's pieces opens the main menu; the rest of the desktop, and Main menu → Apps & tools → Desktop menu, still open the desktop's menu" = "ভাগ করা বারের অংশগুলোর মাঝে ডান-ক্লিক করলে প্রধান মেনু খোলে; ডেস্কটপের বাকি অংশ এবং প্রধান মেনু → অ্যাপ ও টুল → ডেস্কটপ মেনু থেকে এখনও ডেস্কটপের মেনু খোলে"
+"Right-clicking empty bar space opens the desktop's menu" = "বারের খালি জায়গায় ডান-ক্লিক করলে ডেস্কটপের মেনু খোলে"
+"wallpaper & widgets" = "ওয়ালপেপার ও উইজেট"

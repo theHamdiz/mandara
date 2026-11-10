@@ -9339,3 +9339,15 @@
 "wpa_supplicant didn't add the network" = "wpa_supplicant నెట్‌వర్క్‌ను జోడించలేదు"
 "wpa_supplicant isn't running, or its control socket isn't open to you (ctrl_interface_group in wpa_supplicant.conf)" = "wpa_supplicant నడవడం లేదు, లేదా దాని నియంత్రణ సాకెట్ మీకు తెరిచి లేదు (wpa_supplicant.confలో ctrl_interface_group)"
 "wpa_supplicant refused {ssid}" = "wpa_supplicant {ssid}ను తిరస్కరించింది"
+
+# ── Main menu: the bar's gaps and the rail's height ──────────
+"As tall as its buttons, or as tall as the panel beside it with the buttons kept together at the top" = "దాని బటన్‌లంత ఎత్తు, లేదా పక్కనున్న ప్యానెల్ అంత ఎత్తు, బటన్‌లు పైన కలిసే ఉంటాయి"
+"Desktop menu" = "డెస్క్‌టాప్ మెనూ"
+"Fit the buttons" = "బటన్‌లకు సరిపడా"
+"Main menu in the bar's gaps" = "పట్టీ ఖాళీలలో ప్రధాన మెనూ"
+"Only split bars have gaps: glass pills, island, micro pill and notch" = "విభజించిన పట్టీలకే ఖాళీలు ఉంటాయి: గాజు పిల్‌లు, ద్వీపం, సూక్ష్మ పిల్ మరియు నాచ్"
+"Panel height" = "ప్యానెల్ ఎత్తు"
+"Rail height" = "నావిగేషన్ పట్టీ ఎత్తు"
+"Right-clicking between a split bar's pieces opens the main menu; the rest of the desktop, and Main menu → Apps & tools → Desktop menu, still open the desktop's menu" = "విభజించిన పట్టీ భాగాల మధ్య కుడి-నొక్కితే ప్రధాన మెనూ తెరుచుకుంటుంది; మిగతా డెస్క్‌టాప్ మరియు ప్రధాన మెనూ → యాప్‌లు & సాధనాలు → డెస్క్‌టాప్ మెనూ ఇంకా డెస్క్‌టాప్ మెనూను తెరుస్తాయి"
+"Right-clicking empty bar space opens the desktop's menu" = "ఖాళీ పట్టీ స్థలంపై కుడి-నొక్కితే డెస్క్‌టాప్ మెనూ తెరుచుకుంటుంది"
+"wallpaper & widgets" = "వాల్‌పేపర్ & విడ్జెట్‌లు"

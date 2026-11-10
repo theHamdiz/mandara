@@ -9435,3 +9435,15 @@
 "wpa_supplicant didn't add the network" = "wpa_supplicant tidak menambahkan jaringan"
 "wpa_supplicant isn't running, or its control socket isn't open to you (ctrl_interface_group in wpa_supplicant.conf)" = "wpa_supplicant tidak berjalan, atau soket kendalinya tidak terbuka untukmu (ctrl_interface_group di wpa_supplicant.conf)"
 "wpa_supplicant refused {ssid}" = "wpa_supplicant menolak {ssid}"
+
+# ── Main menu: the bar's gaps and the rail's height ──────────
+"As tall as its buttons, or as tall as the panel beside it with the buttons kept together at the top" = "Setinggi tombolnya, atau setinggi panel di sebelahnya dengan tombol tetap berkumpul di atas"
+"Desktop menu" = "Menu desktop"
+"Fit the buttons" = "Pas dengan tombol"
+"Main menu in the bar's gaps" = "Menu utama di celah bilah"
+"Only split bars have gaps: glass pills, island, micro pill and notch" = "Hanya bilah terpisah yang punya celah: pil kaca, island, pil mikro, dan notch"
+"Panel height" = "Tinggi panel"
+"Rail height" = "Tinggi rel"
+"Right-clicking between a split bar's pieces opens the main menu; the rest of the desktop, and Main menu → Apps & tools → Desktop menu, still open the desktop's menu" = "Klik kanan di antara bagian bilah terpisah membuka menu utama; bagian desktop lainnya, dan Menu utama → Aplikasi & alat → Menu desktop, tetap membuka menu desktop"
+"Right-clicking empty bar space opens the desktop's menu" = "Klik kanan pada area kosong bilah membuka menu desktop"
+"wallpaper & widgets" = "wallpaper & widget"

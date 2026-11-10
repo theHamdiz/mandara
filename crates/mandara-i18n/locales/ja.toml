@@ -9681,3 +9681,15 @@
 "wpa_supplicant didn't add the network" = "wpa_supplicant がネットワークを追加しませんでした"
 "wpa_supplicant isn't running, or its control socket isn't open to you (ctrl_interface_group in wpa_supplicant.conf)" = "wpa_supplicant が動いていないか、その制御ソケットにアクセスできません（wpa_supplicant.conf の ctrl_interface_group）"
 "wpa_supplicant refused {ssid}" = "wpa_supplicant が {ssid} を拒否しました"
+
+# ── Main menu: the bar's gaps and the rail's height ──────────
+"As tall as its buttons, or as tall as the panel beside it with the buttons kept together at the top" = "ボタンの高さに合わせるか、隣のパネルと同じ高さにしてボタンを上にまとめる"
+"Desktop menu" = "デスクトップメニュー"
+"Fit the buttons" = "ボタンに合わせる"
+"Main menu in the bar's gaps" = "バーのすき間でメインメニュー"
+"Only split bars have gaps: glass pills, island, micro pill and notch" = "すき間があるのは分割されたバーだけです: ガラスピル、アイランド、マイクロピル、ノッチ"
+"Panel height" = "パネルの高さ"
+"Rail height" = "レールの高さ"
+"Right-clicking between a split bar's pieces opens the main menu; the rest of the desktop, and Main menu → Apps & tools → Desktop menu, still open the desktop's menu" = "分割されたバーのパーツの間を右クリックするとメインメニューが開きます。デスクトップのほかの場所と、メインメニュー → アプリとツール → デスクトップメニューからは今までどおりデスクトップのメニューが開きます"
+"Right-clicking empty bar space opens the desktop's menu" = "バーの空き部分を右クリックするとデスクトップのメニューが開きます"
+"wallpaper & widgets" = "壁紙とウィジェット"
