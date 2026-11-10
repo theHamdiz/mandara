@@ -255,16 +255,21 @@ take one of its own (`mandara msg side-bar style right <name>`).
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="docs/screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons" width="100%"/><br/><sub><b>Mandara Login</b>, the login screen: the <b>Mandara</b> design</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine over dusk waves" width="100%"/><br/><sub>…and its <b>Midnight card</b> design</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons, with the Mandara emblem above the keyboard pill" width="100%"/><br/><sub><b>Mandara Login</b>, the login screen: the <b>Mandara</b> design</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine over violet and coral dusk waves" width="100%"/><br/><sub>…its <b>Midnight card</b> design</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/greeter-material-you.webp" alt="Mandara Login in its Material You design: a big stacked clock with the hours in pink, and a tonal card with the scalloped avatar, a filled password field, a round sign-in button and a session chip, in colours taken from coral, gold and magenta ribbons" width="100%"/><br/><sub>…and its <b>Material You</b> design</sub></td>
 </tr>
+</table>
+
+<table>
 <tr>
-<td colspan="2" align="center"><img src="docs/screenshots/lock-screen.webp" alt="The lock screen over soft violet and coral waves: the date, a big clock, the avatar and the password field" width="50%"/><br/><sub><b>The lock screen</b>, made to match</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/lock-screen.webp" alt="The lock screen in its Mandara design over blurred coral, violet and gold ribbons: the date, a big clock, the avatar and the glass password field" width="100%"/><br/><sub><b>The lock screen</b>, made to match: the <b>Mandara</b> design</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/lock-screen-material-you.webp" alt="The lock screen in its Material You design over blurred blue and teal ribbons: the date, a big stacked clock, and a tonal card with the scalloped avatar, a filled password field and a round button" width="100%"/><br/><sub>…and its <b>Material You</b> design</sub></td>
 </tr>
 </table>
 
 <p align="center">
-  <img src="docs/screenshots/studio-login.webp" alt="Studio: the login screen designer with a live preview" width="100%"/>
+  <img src="docs/screenshots/studio-login.webp" alt="Studio: the login screen designer with a live preview, the Try it buttons and the three Looks: Mandara, Midnight card and Material You" width="100%"/>
   <br/>
   <sub><b>Mandara Studio</b>: every setting, live, with previews like this login screen designer.</sub>
 </p>

@@ -6,10 +6,15 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **Fresh login and lock screen pictures.** The README and the lock and login guides now show Mandara Login in all three of its designs (Mandara with its emblem, Midnight card and Material You), the lock screen in its Mandara and Material You designs, and Studio's Login screen page with its three looks.
+
 ### Fixed
 
 - **Files in the dock's Downloads open again.** Clicking a file in a stack's fan did nothing: pressing on any file but the one next to the dock closed the fan before the click finished, and the files that did get through went to the desktop portal, which shows its own app chooser for files instead of using your default app and never said when that failed. Every file in the fan now takes the click, and files open straight in the app you picked for their type in Studio → Applications → Defaults, then your system's defaults (a type without an app of its own uses its parent's, so a `.log` opens in your text editor). Folders open in your file manager. If no app opens a file, or the app can't start, a notification says so and where to pick one.
 - **The Trash opens in your file manager.** Opening the Trash from the dock handed `trash:///` to whatever claims that address. It now opens in your own file manager (the one in Studio → Applications, or your default for folders): Nautilus, Nemo, Caja, Thunar, PCManFM and PCManFM-Qt get `trash:///`, Dolphin gets `trash:/`, and COSMIC Files and any other manager get the Trash folder itself (`~/.local/share/Trash/files`, created if it's missing). A desktop widget that opens `trash:///` does the same.
+- **The login screen preview keeps its buttons apart.** In `mandara greeter --demo`, the Midnight card's colour scheme switcher no longer sits on top of *Exit demo*: anything in a top corner moves just below the preview's buttons, in right-to-left languages too. The real login screen keeps the switcher where it was.
 
 ## 0.24.0 — 2026-11-09
 
