@@ -81,10 +81,6 @@ pub fn running_version() -> &'static str {
 /// `x86_64-linux-musl` / `aarch64-linux-musl`. Updates stay on the libc and
 /// variant `mandara install` picked.
 pub fn running_target() -> String {
-    // FreeBSD: one build per architecture (`x86_64-freebsd`).
-    if cfg!(target_os = "freebsd") {
-        return format!("{}-freebsd", std::env::consts::ARCH);
-    }
     let libc = if cfg!(target_env = "musl") { "musl" } else { "gnu" };
     // The x86-64-v3 tuning is only released for glibc.
     let v3 = libc == "gnu" && cfg!(all(target_arch = "x86_64", target_feature = "avx2", target_feature = "bmi2", target_feature = "fma", target_feature = "movbe"));
@@ -562,13 +558,7 @@ mod tests {
     #[test]
     fn target_names_match_the_release_tarballs() {
         let t = running_target();
-        let libc = if cfg!(target_os = "freebsd") {
-            "-freebsd"
-        } else if cfg!(target_env = "musl") {
-            "-linux-musl"
-        } else {
-            "-linux-gnu"
-        };
+        let libc = if cfg!(target_env = "musl") { "-linux-musl" } else { "-linux-gnu" };
         assert!(t.ends_with(libc) || t.ends_with("-linux-gnu-x86-64-v3"), "{t}");
         assert!(t.starts_with(std::env::consts::ARCH));
     }
