@@ -6,11 +6,11 @@ use super::{
     catalog::{self, Action, Command},
     models,
 };
+use super::qwen as quantized_qwen3;
 use anyhow::{Result, ensure};
 use candle_core::{Device, Tensor, quantized::gguf_file};
-use candle_transformers::models::quantized_qwen3;
 use llguidance::{ParserFactory, api::TopLevelGrammar, toktrie::TokEnv};
-use std::{fs::File, time::Instant};
+use std::time::Instant;
 use toktrie_hf_tokenizers::ByteTokenizer;
 
 /// Generation is bounded independently of the supervisor's wall-clock limit.
@@ -106,13 +106,12 @@ impl Compiler {
         let adapter = ByteTokenizer::from_file(files.file("tokenizer.json"))?;
         let tokenizer = adapter.hf_tokenizer.clone();
         let env = adapter.into_tok_env(None)?;
-        let mut reader = File::open(files.file("model.gguf"))?;
-        let mut content = gguf_file::Content::read(&mut reader)?;
+        let mut gguf = super::mapped::Gguf::open(&files.file("model.gguf"))?;
         let model = match engine {
-            Engine::FunctionGemma => Model::Gemma(quantized_gemma3::ModelWeights::from_gguf(content, &mut reader, &Device::Cpu)?),
+            Engine::FunctionGemma => Model::Gemma(quantized_gemma3::ModelWeights::from_gguf(&gguf, &Device::Cpu)?),
             Engine::Qwen => {
-                content.metadata.insert("qwen3.context_length".into(), gguf_file::Value::U32(MAX_CONTEXT_TOKENS as u32));
-                Model::Qwen(quantized_qwen3::ModelWeights::from_gguf(content, &mut reader, &Device::Cpu)?)
+                gguf.content.metadata.insert("qwen3.context_length".into(), gguf_file::Value::U32(MAX_CONTEXT_TOKENS as u32));
+                Model::Qwen(quantized_qwen3::ModelWeights::from_gguf(&gguf, &Device::Cpu)?)
             }
         };
         Ok(Self { model, tokenizer, env, engine })
