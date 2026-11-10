@@ -10,13 +10,13 @@
 #      its CHANGELOG.md notes, checksums and build provenance.
 #
 # Mandara is a Wayland shell: it runs on Linux (glibc ≥ 2.35) on x86_64 and
-# aarch64, and on FreeBSD 14 (14.4 or newer) on amd64. Artifacts:
+# aarch64, and on FreeBSD 14+ (14.4 or newer, 15 included) on amd64. Artifacts:
 #   mandara-<v>-x86_64-linux-gnu.tar.gz           portable x86_64
 #   mandara-<v>-x86_64-linux-gnu-x86-64-v3.tar.gz  tuned for AVX2-era CPUs
 #   mandara-<v>-aarch64-linux-gnu.tar.gz           ARM64
 #   mandara-<v>-{x86_64,aarch64}-linux-musl.tar.gz musl (Alpine, Void musl,
 #                                                  Chimera), built in Alpine
-#   mandara-<v>-x86_64-freebsd.tar.gz             FreeBSD 14 amd64, cross-built
+#   mandara-<v>-x86_64-freebsd.tar.gz             FreeBSD 14+ amd64, cross-built
 #                                                  against FreeBSD's own libc
 #   mandara_<v>-1_{amd64,arm64}.deb                Debian / Ubuntu
 #   mandara-<v>-1.{x86_64,aarch64}.rpm             Fedora / openSUSE
@@ -342,7 +342,8 @@ jobs:
   # FreeBSD amd64, cross-built on Linux: Rust's FreeBSD target, clang and
   # lld, against the system root of a pinned FreeBSD release (base.txz,
   # checked against its SHA-256 before use). Built against the oldest
-  # supported 14.x, so it runs on that release and every newer 14.x.
+  # supported 14.x, so it runs on that release, every newer 14.x and
+  # FreeBSD 15 (its libc keeps the older symbol versions; checked on 15.1).
   # Wayland, xkbcommon, Vulkan and fontconfig are loaded at run time, so the
   # binary links only FreeBSD's libc, libthr, libm and libgcc_s; the bundled
   # FreeType is compiled from source for the target. The tarball, its build

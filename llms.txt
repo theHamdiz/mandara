@@ -15,14 +15,14 @@ Strengths:
 - Mandara Studio: 32 pages of settings, all applied live while you drag.
 - Extensions: 81 built-in plugins; third-party plugins are Rust compiled to sandboxed WebAssembly, so a crashing plugin is switched off while the shell keeps running.
 - Automation: almost every action is a `mandara msg` command with JSON replies, so scripts and AI agents can drive the desktop.
-- Install and updates: one command on Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo, Solus and FreeBSD 14 (amd64); it takes over an existing setup safely; updates are small signed binary patches applied from inside the app.
+- Install and updates: one command on Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo, Solus and FreeBSD 14+ (14 and 15, amd64); it takes over an existing setup safely; updates are small signed binary patches applied from inside the app.
 - 20 interface languages, including right-to-left Arabic, Persian and Urdu.
 
 Key facts:
 
 - Repository: https://github.com/theHamdiz/mandara (author: Ahmad Hamdi, `theHamdiz`).
 - Compositors: MangoWM (tags), Niri (scrollable tiling), Hyprland, Umbriel, Sway, River (0.3, tags) and KWin (virtual desktops), all first-class. Mandara never edits the user's own compositor config. It writes drop-in files to `~/.config/mandara/generated/` and adds one include line; on River, whose config is an init program, it sends its settings over River's control protocol instead.
-- Install: one command that downloads the signed release and runs `mandara install` (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo, Solus, FreeBSD 14.4+ on amd64). Update from Studio → About → Update now.
+- Install: one command that downloads the signed release and runs `mandara install` (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo, Solus, FreeBSD 14+ (14.4 and newer, 15 included) on amd64). Update from Studio → About → Update now.
 - Configuration: `~/.config/mandara/config.toml`, watched live. Mandara Studio (`mandara studio`) edits the same file, with 32 pages of settings.
 - Command line: almost everything the interface does is a documented command with JSON replies (`mandara msg <command>`, catalog via `mandara commands --json`), so scripts and AI agents can drive and inspect the desktop.
 - Plugins: 81 first-party plugins are built in. Third-party plugins are written in Rust, compiled to a sandboxed WebAssembly component (`wasm32-wasip2`, WIT interface), hot-reloaded, and shared through a GitHub marketplace.

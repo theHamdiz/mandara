@@ -322,7 +322,7 @@ files (no compositor yet? it offers to install one). It works on Arch,
 Debian and Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus. Updates arrive by small binary patch: Studio → About →
 **Update now**.
 
-On **FreeBSD** 14.4 or newer (amd64), the same command installs the
+On **FreeBSD 14+** (14.4 and newer, 15 included; amd64), the same command installs the
 FreeBSD build; without curl, use the base system's `fetch`
 ([FreeBSD install](docs/install.md#freebsd)).
 

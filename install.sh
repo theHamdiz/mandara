@@ -540,7 +540,7 @@ fetch_base() {
     say "  ✓ $(message download_ok) $name ($received B)"
 }
 
-# SHA-256 of a file: GNU coreutils and FreeBSD 14 both have sha256sum;
+# SHA-256 of a file: GNU coreutils and FreeBSD 14 and 15 have sha256sum;
 # older FreeBSD has only sha256(1).
 file_sha256() {
     if command -v sha256sum >/dev/null 2>&1; then

@@ -275,8 +275,8 @@ The recipes live in [`packaging/aur/`](../packaging/aur) and follow the
 
 ## FreeBSD
 
-Mandara runs on **FreeBSD 14.4 and newer 14.x releases, on amd64**, under
-a Wayland compositor. Every release has a FreeBSD build,
+Mandara runs on **FreeBSD 14+ (14.4 and newer, FreeBSD 15 included), on
+amd64**, under a Wayland compositor. Every release has a FreeBSD build,
 `mandara-<version>-x86_64-freebsd.tar.gz`, signed and checked like the
 Linux ones. Install it with the same kind of one-line command, using
 FreeBSD's own `fetch` (no curl needed):
@@ -292,9 +292,13 @@ Linux.
 The tarball holds the `mandara` binary, Studio's desktop entry and icon,
 the lock screen's PAM file and every language pack. The binary needs only
 FreeBSD's base libraries; Wayland, xkbcommon, Vulkan and fontconfig are
-opened at run time from packages.
+opened at run time from packages. One build serves every supported
+release: it is built against FreeBSD 14.4's base system, and FreeBSD keeps
+running programs built for an earlier release, so the same binary runs
+unchanged on 14.4, newer 14.x releases and 15. The packages come from
+your own release's repository (`FreeBSD:14:amd64` or `FreeBSD:15:amd64`).
 
-`mandara install` knows FreeBSD 14 and newer (and GhostBSD) by
+`mandara install` knows FreeBSD 14 and 15 (and GhostBSD) by
 `/etc/os-release`. It installs everything with `pkg install -y` (a fresh
 system's pkg bootstraps itself without asking), from FreeBSD's own
 package names: Wayland, xkbcommon, Mesa and the Vulkan loader, fonts for
@@ -778,7 +782,7 @@ attestations:
 | Debian, Ubuntu, Mint, Pop!_OS (`.deb`) | ✓ | | ✓ |
 | Fedora, openSUSE, RHEL family (`.rpm`) | ✓ | | ✓ |
 | Arch, Manjaro, EndeavourOS, CachyOS (`PKGBUILD`) | ✓ | | ✓ |
-| FreeBSD 14.4 and newer (tarball) | ✓ (amd64) | | |
+| FreeBSD 14.4 and newer, 15 included (tarball) | ✓ (amd64) | | |
 
 Plus the bundled plugins, a build manifest per binary (source fingerprint,
 toolchain, SHA-256, lines of code), binary patches from the last five

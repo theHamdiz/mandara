@@ -7,7 +7,7 @@
 //! there, and the installer never adds a repository. Names were checked
 //! against each family's repositories (Arch extra, Debian sid and Ubuntu
 //! 26.04, Fedora 44, openSUSE Tumbleweed, Void, Alpine 3.24, FreeBSD 14's
-//! package catalogue); where a
+//! and 15's package catalogues); where a
 //! release may lack a package (Debian stable has no Hyprland), the
 //! installer also asks the package manager before offering it
 //! ([`crate::index::available_query`]).

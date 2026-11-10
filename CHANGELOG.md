@@ -20,7 +20,7 @@ the Trash opens in your file manager.
 - **Your system at a glance on FreeBSD.** The process hunter, Resources, mini stats, the desktop system monitor and Studio's Performance page read FreeBSD's own counters, so CPU, memory, swap, load, uptime, temperatures (with coretemp or amdtemp loaded), drives and network traffic all show real numbers. Batteries come from UPower or straight from ACPI, brightness from FreeBSD's backlight devices, and the volume keys and sound panel drive FreeBSD's own sound system when neither PulseAudio nor PipeWire runs.
 - **Network and power on FreeBSD.** The network panel shows your wired and Wi-Fi links from ifconfig and wpa_supplicant, updates the moment a link changes, and joins Wi-Fi networks without your passphrase ever showing up in a process list. Lock, sleep, restart and shut down go through ConsoleKit2, or through FreeBSD's own `shutdown` and `acpiconf` behind Mandara's password dialog. What FreeBSD can't do (Bluetooth, power profiles, hibernation, hotspots, and the plugins that manage systemd, coredumps, Linux sockets and Linux apps) is locked in Studio with a sentence saying why.
 - **Mandara Login on FreeBSD.** Once greetd is built (it isn't packaged for FreeBSD yet; the guide shows how), `mandara greeter use mandara` switches login screens through rc.conf, reads greetd's config from `/usr/local/etc/greetd`, and *Unlock keyrings at login* writes PAM lines FreeBSD understands. Mandara's password dialog works with FreeBSD's polkit and ConsoleKit2 sessions too.
-- **Mandara runs on FreeBSD.** Every release now comes with a FreeBSD build for FreeBSD 14.4 and newer on amd64, signed and checked like the Linux ones. The one-line install recognises FreeBSD, downloads that build (with FreeBSD's own `fetch` when curl isn't installed) and hands over to `mandara install`, and Studio → About → *Update now* keeps it current with small patches, just as on Linux. See the FreeBSD section of the install guide for the packages it uses and the compositors that run it.
+- **Mandara runs on FreeBSD.** Every release now comes with a FreeBSD build for FreeBSD 14+ on amd64 (14.4 and newer, FreeBSD 15 included), signed and checked like the Linux ones. The one-line install recognises FreeBSD, downloads that build (with FreeBSD's own `fetch` when curl isn't installed) and hands over to `mandara install`, and Studio → About → *Update now* keeps it current with small patches, just as on Linux. See the FreeBSD section of the install guide for the packages it uses and the compositors that run it.
 
 ### Improved
 
@@ -39,7 +39,7 @@ the Trash opens in your file manager.
 
 ### Under the hood
 
-- **Mandara compiles for FreeBSD.** The whole workspace, its tests included, now builds for FreeBSD 14 (amd64) without a single warning, and the FreeBSD check in CI is a required one: a change that breaks the FreeBSD build can't land. The bar, panels and Studio use the same Wayland layer surfaces there as on Linux.
+- **Mandara compiles for FreeBSD.** The whole workspace, its tests included, now builds for FreeBSD 14 and 15 (amd64) without a single warning, and the FreeBSD check in CI is a required one: a change that breaks the FreeBSD build can't land. The bar, panels and Studio use the same Wayland layer surfaces there as on Linux.
 
 ## 0.24.0 — 2026-11-09
 

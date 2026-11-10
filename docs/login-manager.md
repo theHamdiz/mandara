@@ -244,8 +244,9 @@ only the plumbing differs:
   `/usr/local/etc/pam.d` into `/etc/pam.d` and adds its lines there
   (modules from `/usr/lib` and `/usr/local/lib`: `gnome-keyring`,
   `plasma6-kwallet-pam`). FreeBSD 14's
-  PAM rejects the whole file over Linux's `-auth` prefix, so the lines are
-  written without it, and only for modules that are installed. Without
+  PAM rejects the whole file over Linux's `-auth` prefix (15's accepts
+  it), so on both the lines are written without it, and only for modules
+  that are installed. Without
   the prefix a module that goes missing fails every greetd login, so run
   `sudo mandara greeter keyring-unlock --remove` before uninstalling
   `gnome-keyring` or `plasma6-kwallet-pam` (the plan warns about it). greetd's
