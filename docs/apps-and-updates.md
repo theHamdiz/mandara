@@ -160,9 +160,12 @@ none is installed).
 
 ### Other systems
 
-Image-based systems (Fedora Atomic's `rpm-ostree`, openSUSE MicroOS /
-Aeon's `transactional-update`) update with their own tool, and the panel
-says so. Prefer a terminal anyway? Set **Run updates → In a terminal** in
+Image-based systems (Fedora Atomic's `rpm-ostree`, Bazzite, Bluefin and
+Aurora included, openSUSE MicroOS / Aeon / Kalpa's `transactional-update`,
+Vanilla OS's `abroot`, SteamOS's `steamos-update`) update with their own
+tool, and the panel says so. It checks only Flatpak there, since the
+package manager such a system carries (dnf, zypper, apt, pacman) can't
+update its image ([Immutable systems](install.md#immutable-systems)). Prefer a terminal anyway? Set **Run updates → In a terminal** in
 the plugin's settings (the AUR included). Scriptable: `mandara msg updates
 apply [all|system|aur|flatpak]`, `updates job` (phase, progress, recent
 log lines, summary) and `updates cancel`.

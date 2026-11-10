@@ -18,6 +18,19 @@ use serde::{Deserialize, Serialize};
 pub const SYSTEM_CONFIG: &str = "/etc/mandara/greeter.toml";
 pub const SYSTEM_VIDEOS: &str = "/usr/share/mandara/login/videos";
 pub const SYSTEM_IMAGES: &str = "/usr/share/mandara/login/backgrounds";
+/// The media folders on image-based systems, whose `/usr/share` is
+/// read-only: searched too when they exist.
+pub const LOCAL_VIDEOS: &str = "/usr/local/share/mandara/login/videos";
+pub const LOCAL_IMAGES: &str = "/usr/local/share/mandara/login/backgrounds";
+
+/// `dirs` plus `local` when that folder exists and isn't listed yet.
+fn with_local(mut dirs: Vec<PathBuf>, local: &str) -> Vec<PathBuf> {
+    let local = Path::new(local);
+    if local.is_dir() && !dirs.iter().any(|d| d == local) {
+        dirs.push(local.to_path_buf());
+    }
+    dirs
+}
 
 /// `~/.config/mandara/greeter.toml`: Studio's draft, used by the demo.
 pub fn user_draft_path() -> PathBuf {
@@ -1095,7 +1108,7 @@ impl GreeterConfig {
 
     /// Video folders: the configured ones, plus the user's own in demo mode.
     pub fn video_dirs(&self, demo: bool) -> Vec<PathBuf> {
-        let mut dirs = self.background.video_dirs.clone();
+        let mut dirs = with_local(self.background.video_dirs.clone(), LOCAL_VIDEOS);
         if demo && let Some(data) = dirs::data_dir() {
             dirs.push(data.join("mandara/login/videos"));
         }
@@ -1104,7 +1117,7 @@ impl GreeterConfig {
 
     /// Still-image folders (+ the user's wallpapers in demo mode).
     pub fn image_dirs(&self, demo: bool) -> Vec<PathBuf> {
-        let mut dirs = self.background.image_dirs.clone();
+        let mut dirs = with_local(self.background.image_dirs.clone(), LOCAL_IMAGES);
         if demo {
             if let Some(data) = dirs::data_dir() {
                 dirs.push(data.join("mandara/login/backgrounds"));
@@ -1199,6 +1212,17 @@ pub fn apply_config(from: &Path) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn local_media_folders_are_searched_once_when_they_exist() {
+        let dir = tempfile::tempdir().unwrap();
+        let local = dir.path().join("videos");
+        let base = vec![PathBuf::from(SYSTEM_VIDEOS)];
+        assert_eq!(with_local(base.clone(), &local.to_string_lossy()), base, "missing: not added");
+        std::fs::create_dir(&local).unwrap();
+        assert_eq!(with_local(base.clone(), &local.to_string_lossy()), [PathBuf::from(SYSTEM_VIDEOS), local.clone()]);
+        assert_eq!(with_local(vec![local.clone()], &local.to_string_lossy()), std::slice::from_ref(&local), "listed once");
+    }
+
     use super::*;
 
     #[test]

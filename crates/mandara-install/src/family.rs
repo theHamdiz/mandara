@@ -45,6 +45,10 @@ pub struct OsRelease {
     pub id: String,
     pub id_like: Vec<String>,
     pub pretty_name: String,
+    /// `NAME` (Vanilla OS says only here what it is).
+    pub name: String,
+    /// `VARIANT_ID` (`silverblue`, `kinoite`, `bazzite`, `steamdeck`…).
+    pub variant_id: String,
 }
 
 impl OsRelease {
@@ -58,6 +62,8 @@ impl OsRelease {
                 "ID" => out.id = value.to_ascii_lowercase(),
                 "ID_LIKE" => out.id_like = value.split_whitespace().map(str::to_ascii_lowercase).collect(),
                 "PRETTY_NAME" => out.pretty_name = value.to_string(),
+                "NAME" => out.name = value.to_string(),
+                "VARIANT_ID" => out.variant_id = value.to_ascii_lowercase(),
                 _ => {}
             }
         }

@@ -59,10 +59,8 @@ pub const SAFE_PATH: &str = "/run/current-system/sw/bin:/nix/var/nix/profiles/de
 pub const SAFE_PATH: &str = "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin";
 /// Where `os-release` is read from (the first that exists).
 const OS_RELEASE: [&str; 2] = ["/etc/os-release", "/usr/lib/os-release"];
-/// Present on rpm-ostree (Fedora Atomic) systems.
-const OSTREE_BOOTED: &str = "/run/ostree-booted";
-/// Ids of image-based openSUSE systems (transactional-update).
-const TRANSACTIONAL_IDS: [&str; 4] = ["microos", "aeon", "kalpa", "sle-micro"];
+pub use mandara_install::image::OSTREE_BOOTED;
+use mandara_install::ImageSystem;
 /// openSUSE ids that update with `zypper dup` (rolling releases).
 const SUSE_ROLLING_IDS: [&str; 2] = ["opensuse-tumbleweed", "opensuse-slowroll"];
 
@@ -86,14 +84,35 @@ pub enum System {
 pub enum ImageTool {
     RpmOstree,
     TransactionalUpdate,
+    /// Vanilla OS 2.
+    Abroot,
+    /// SteamOS 3.
+    SteamOs,
 }
 
 impl ImageTool {
-    pub fn command(self) -> &'static str {
+    /// The installer's view of the same system (`mandara install` adds
+    /// packages to these images with the same tool).
+    pub fn system(self) -> ImageSystem {
         match self {
-            ImageTool::RpmOstree => "rpm-ostree upgrade",
-            ImageTool::TransactionalUpdate => "transactional-update dup",
+            ImageTool::RpmOstree => ImageSystem::RpmOstree,
+            ImageTool::TransactionalUpdate => ImageSystem::Transactional,
+            ImageTool::Abroot => ImageSystem::Abroot,
+            ImageTool::SteamOs => ImageSystem::SteamOs,
         }
+    }
+
+    fn of(system: ImageSystem) -> ImageTool {
+        match system {
+            ImageSystem::RpmOstree => ImageTool::RpmOstree,
+            ImageSystem::Transactional => ImageTool::TransactionalUpdate,
+            ImageSystem::Abroot => ImageTool::Abroot,
+            ImageSystem::SteamOs => ImageTool::SteamOs,
+        }
+    }
+
+    pub fn command(self) -> &'static str {
+        self.system().update_command()
     }
 }
 
@@ -107,12 +126,9 @@ pub struct Probe<'a> {
 impl System {
     /// From `os-release`, the installed package manager and image markers.
     pub fn detect_with(p: &Probe<'_>) -> System {
-        if p.ostree_booted {
-            return System::ImageBased(ImageTool::RpmOstree);
-        }
-        let ids = || std::iter::once(p.os.id.as_str()).chain(p.os.id_like.iter().map(String::as_str));
-        if ids().any(|id| TRANSACTIONAL_IDS.iter().any(|t| id.contains(t))) {
-            return System::ImageBased(ImageTool::TransactionalUpdate);
+        // The installer's own detection, so both agree on the system.
+        if let Some(image) = ImageSystem::detect(&mandara_install::image::Probe { os: p.os, ostree_booted: p.ostree_booted, has_program: p.has_program }) {
+            return System::ImageBased(ImageTool::of(image));
         }
         let family = Family::detect(p.os, |b| (p.has_program)(b));
         let id = match family {
@@ -144,6 +160,8 @@ impl System {
             System::NixOs => "NixOS",
             System::ImageBased(ImageTool::RpmOstree) => "rpm-ostree",
             System::ImageBased(ImageTool::TransactionalUpdate) => "transactional-update",
+            System::ImageBased(ImageTool::Abroot) => "abroot",
+            System::ImageBased(ImageTool::SteamOs) => "SteamOS",
             System::Unsupported => "",
         }
     }
@@ -440,6 +458,17 @@ mod tests {
         assert_eq!(detect("ID=fedora\nVARIANT_ID=silverblue", &[], true), System::ImageBased(ImageTool::RpmOstree));
         assert_eq!(detect("ID=\"opensuse-microos\"\nID_LIKE=\"suse opensuse opensuse-tumbleweed\"", &[], false), System::ImageBased(ImageTool::TransactionalUpdate));
         assert!(System::ImageBased(ImageTool::RpmOstree).explanation().unwrap().contains("rpm-ostree upgrade"));
+        // Vanilla OS (its ID is its base's) and SteamOS (ID_LIKE=arch) never
+        // reach apt or pacman, which can't write their images.
+        let vanilla = "NAME=\"Vanilla OS\"\nPRETTY_NAME=\"Vanilla OS 2 stable\"\nID=ubuntu\nID_LIKE=debian";
+        assert_eq!(detect(vanilla, &["apt-get"], false), System::ImageBased(ImageTool::Abroot));
+        assert_eq!(detect("NAME=\"SteamOS\"\nID=steamos\nID_LIKE=arch\nVARIANT_ID=steamdeck", &["pacman"], false), System::ImageBased(ImageTool::SteamOs));
+        assert_eq!(detect("ID=\"aeon\"\nID_LIKE=\"suse opensuse opensuse-tumbleweed opensuse-microos opensuse-aeon microos\"", &["zypper"], false), System::ImageBased(ImageTool::TransactionalUpdate));
+        assert!(System::ImageBased(ImageTool::SteamOs).explanation().unwrap().contains("steamos-update"));
+        // The panel and the installer name the same system.
+        for tool in [ImageTool::RpmOstree, ImageTool::TransactionalUpdate, ImageTool::Abroot, ImageTool::SteamOs] {
+            assert_eq!(ImageTool::of(tool.system()), tool);
+        }
         assert!(System::Managed(plan::BackendId::Pacman).explanation().is_none());
     }
 

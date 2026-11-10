@@ -355,6 +355,42 @@ fn nixos_gets_flake_instructions_before_any_download() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("install Mandara through your flake"));
 }
 
+/// Image-based systems are named before the download, which, like every
+/// step here, writes only into the download folder.
+#[test]
+fn image_based_systems_are_recognised() {
+    let prefix = SCRIPT.strip_suffix("main \"$@\"\n").unwrap();
+    let script = format!("{prefix}image_based \"$1\"\n");
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/mandara-install/fixtures/image");
+    let check = |setup: &dyn Fn(&Path)| {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("etc")).unwrap();
+        std::fs::create_dir_all(dir.path().join("run")).unwrap();
+        setup(dir.path());
+        Command::new("sh").args(["-c", &script, "mandara-image-test"]).arg(dir.path()).env("LC_ALL", "C").output().unwrap().status.success()
+    };
+    assert!(check(&|root: &Path| std::fs::write(root.join("run/ostree-booted"), "").unwrap()), "Fedora Atomic, Bazzite, Bluefin");
+    for name in ["aeon.os-release", "kalpa.os-release", "microos.os-release", "steamos.os-release", "vanillaos.os-release"] {
+        let source = fixtures.join(name);
+        assert!(check(&|root: &Path| { std::fs::copy(&source, root.join("etc/os-release")).unwrap(); }), "{name}");
+    }
+    // A container of a Fedora Atomic image: its variant, with rpm-ostree.
+    let silverblue = fixtures.join("silverblue.os-release");
+    let atomic = |with_tool: bool| check(&|root: &Path| {
+        std::fs::copy(&silverblue, root.join("etc/os-release")).unwrap();
+        if with_tool {
+            std::fs::create_dir_all(root.join("usr/bin")).unwrap();
+            std::fs::write(root.join("usr/bin/rpm-ostree"), "").unwrap();
+        }
+    });
+    assert!(atomic(true), "Silverblue's variant with rpm-ostree");
+    assert!(!atomic(false), "the variant alone");
+    assert!(!check(&|_: &Path| {}), "no os-release");
+    for plain in ["ID=arch\n", "NAME=\"openSUSE Tumbleweed\"\nID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\n", "ID=fedora\nVARIANT_ID=workstation\n", "NAME=\"Ubuntu\"\nID=ubuntu\nID_LIKE=debian\n"] {
+        assert!(!check(&|root: &Path| std::fs::write(root.join("etc/os-release"), plain).unwrap()), "{plain}");
+    }
+}
+
 #[test]
 fn installer_input_uses_the_terminal_or_preserves_an_unattended_pipe() {
     use std::os::fd::{AsRawFd as _, FromRawFd as _};

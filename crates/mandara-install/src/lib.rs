@@ -18,6 +18,8 @@
 //!   and how each manager brings them up to date;
 //! * [`compositors`] — the compositors Mandara runs on and their packages,
 //!   offered when none is installed;
+//! * [`image`] — image-based (immutable) systems: detection, and the
+//!   tool that adds packages to the next image;
 //! * [`installer`] — the flows, against a [`host::Host`] so tests (and
 //!   `--dry-run`) change nothing;
 //! * `tui` — the wordmark and the arrow-key setup screen.
@@ -27,6 +29,7 @@ pub mod compositors;
 pub mod family;
 pub mod files;
 pub mod host;
+pub mod image;
 pub mod index;
 pub mod installer;
 pub mod packages;
@@ -37,6 +40,7 @@ mod tui;
 
 pub use args::{InstallArgs, UninstallArgs};
 pub use family::Family;
+pub use image::ImageSystem;
 pub use installer::{Facts, Installer, LoginProbe};
 pub use pkg::{PackageManager, Privilege};
 
