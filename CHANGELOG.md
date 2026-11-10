@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **The website fits phones again.** Its top bar is two tidy rows on a phone: the name with the Discord, Ko-fi and GitHub buttons, then the page links beside a small light / dark switch. The text on the AI Shell Agent card (and the NixOS, FreeBSD and immutable cards) no longer jitters while the shape behind it turns.
+
 ## 0.25.0 — 2026-11-10
 
 Mandara runs on FreeBSD: every release now has a FreeBSD build, with its
