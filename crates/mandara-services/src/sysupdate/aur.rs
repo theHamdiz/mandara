@@ -111,6 +111,19 @@ impl AurHelper {
         Step::new(StepKind::Aur, self.id(), self.upgrade_args()).env(self.env())
     }
 
+    /// The whole system through the helper, in a terminal (the
+    /// repositories, then the AUR).
+    pub fn full_upgrade_command(self) -> &'static str {
+        match self {
+            AurHelper::Paru => "paru",
+            AurHelper::Yay => "yay",
+            AurHelper::Pikaur => "pikaur -Syu",
+            AurHelper::Aura => "sudo pacman -Syu && aura -Au",
+            AurHelper::Trizen => "trizen -Syu",
+            AurHelper::Shelly => "shelly upgrade standard && shelly upgrade aur",
+        }
+    }
+
     /// The interactive command the terminal fallback runs.
     pub fn terminal_command(self) -> &'static str {
         match self {

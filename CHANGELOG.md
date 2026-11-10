@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Your AUR packages update in Mandara too.** On Arch, *Update all* now runs pacman, then your AUR helper, then Flatpak, all in the Updates panel's one progress card instead of opening a terminal, and the AUR's own *Update* button updates just the AUR. Mandara uses the AUR helper you have (paru first, then yay, pikaur, Aura, trizen or CachyOS's Shelly), or the one you pick under Studio → Plugins → Updates → *AUR helper*. The helper always runs as you, never as root, and when it installs what it built, its sudo asks for your password in Mandara's own password dialog (once more after the system step, since sudo can't reuse that approval; the dialog says so). The card shows which package is downloading, building or installing, *Cancel* stops a build, and a package that doesn't build is named with the reason, with *Open in terminal* when it needs you.
+
 ## 0.24.0 — 2026-11-09
 
 Update your whole system right from the Updates panel. Pick how every

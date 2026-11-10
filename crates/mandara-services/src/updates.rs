@@ -4,7 +4,7 @@
 //! | source  | check                                             | update command            |
 //! |---------|---------------------------------------------------|---------------------------|
 //! | pacman  | `checkupdates` (pacman-contrib, private sync db)  | `paru` / `yay` / `sudo pacman -Syu` |
-//! | AUR     | `paru -Qua` / `yay -Qua`                          | `paru -Sua` / `yay -Sua`  |
+//! | AUR     | `paru -Qua` / `yay -Qua` / `pikaur -Qua` / `trizen -Qua`; the AUR's web API for Aura and Shelly | `paru -Sua`, `yay -Sua`, `aura -Au`, `shelly upgrade aur`… |
 //! | apt     | `apt list --upgradable` (never `apt update`)      | `sudo apt update && sudo apt upgrade` |
 //! | dnf     | `dnf check-update` (exit 100 = updates)           | `sudo dnf upgrade`        |
 //! | zypper  | `zypper -q list-updates`                          | `sudo zypper update`      |
@@ -15,8 +15,9 @@
 //! Without `checkupdates` the pacman source reports a hint instead of
 //! touching the system sync database. Installing the updates is
 //! [`crate::sysupdate`]'s job (in the panel, with progress); the commands
-//! here are for the terminal fallback ([`open_terminal`]): AUR helpers,
-//! image-based systems, or when the user prefers a terminal. The parsers
+//! here are for the terminal fallback ([`open_terminal`]): image-based
+//! systems, AUR updates that need a person, or when the user prefers a
+//! terminal. The parsers
 //! are pure functions (fixture-tested); checks run with `LANG=C` and a
 //! timeout.
 
@@ -27,6 +28,8 @@ use std::time::{Duration, Instant};
 
 use mandara_i18n::{t, tf};
 use serde::{Deserialize, Serialize};
+
+use crate::sysupdate::aur::{self, AurHelper};
 
 /// Longest a single source's check may take (checkupdates downloads the
 /// sync databases; AUR helpers query aur.archlinux.org).
@@ -46,6 +49,12 @@ const CHECKUPDATES_NONE: i32 = 2;
 const APK_WORLD: &str = "/etc/apk/world";
 /// `dnf check-update` exit status meaning "updates available".
 const DNF_UPDATES: i32 = 100;
+/// The AUR's web API (`info` for many packages at once).
+const AUR_RPC_INFO: &str = "https://aur.archlinux.org/rpc/v5/info";
+/// Packages asked about per request (keeps the URL short).
+const AUR_RPC_BATCH: usize = 100;
+/// Foreign packages compared at most.
+const AUR_MAX_FOREIGN: usize = 2000;
 /// Terminals tried, in order, when none is configured.
 pub const TERMINALS: [&str; 5] = ["ghostty", "kitty", "foot", "alacritty", "wezterm"];
 
@@ -179,16 +188,38 @@ fn has(name: &str) -> bool {
     find_program(name).is_some()
 }
 
-/// The first AUR helper on `$PATH`.
+/// The AUR helper on `$PATH`: paru, then yay, then pikaur, Aura, trizen
+/// and Shelly.
 pub fn aur_helper() -> Option<&'static str> {
-    ["paru", "yay"].into_iter().find(|h| has(h))
+    aur_helper_preferring(None).map(AurHelper::id)
+}
+
+/// The AUR helper to update with: `preferred` when installed, else the
+/// first installed one (the sandbox's fake helper there).
+pub fn aur_helper_preferring(preferred: Option<AurHelper>) -> Option<AurHelper> {
+    if let Some(fake) = crate::sysupdate::fake_aur() {
+        return Some(fake);
+    }
+    aur::pick(preferred, |h| has(h.id()))
+}
+
+/// The AUR helpers installed here, in preference order.
+pub fn installed_aur_helpers() -> Vec<AurHelper> {
+    AurHelper::ALL.into_iter().filter(|h| has(h.id())).collect()
 }
 
 /// Shell command that installs `kind`'s updates.
 pub fn update_command(kind: SourceKind, helper: Option<&str>) -> String {
+    let helper_of = |h: &str| AurHelper::from_id(h);
     match kind {
-        SourceKind::Pacman => helper.map(str::to_string).unwrap_or_else(|| "sudo pacman -Syu".into()),
-        SourceKind::Aur => format!("{} -Sua", helper.unwrap_or("paru")),
+        SourceKind::Pacman => match helper.and_then(helper_of) {
+            Some(h) => h.full_upgrade_command().to_string(),
+            None => helper.map(str::to_string).unwrap_or_else(|| "sudo pacman -Syu".into()),
+        },
+        SourceKind::Aur => match helper.and_then(helper_of) {
+            Some(h) => h.terminal_command().to_string(),
+            None => format!("{} -Sua", helper.unwrap_or("paru")),
+        },
         SourceKind::Apt => "sudo apt update && sudo apt upgrade".into(),
         SourceKind::Dnf => "sudo dnf upgrade".into(),
         SourceKind::Zypper => "sudo zypper update".into(),
@@ -222,10 +253,13 @@ pub fn detect(opts: CheckOptions) -> Vec<Source> {
     let mut out = Vec::new();
     if has("pacman") {
         out.push(Source { kind: SourceKind::Pacman, tool: has("checkupdates").then(|| "checkupdates".into()), command: update_command(SourceKind::Pacman, helper) });
+        // The check: a helper that lists AUR updates itself, else (Aura,
+        // Shelly) the AUR's web API.
+        let checker = aur::checker(|h| has(h.id())).map(AurHelper::id).or(helper);
         if opts.aur
-            && let Some(h) = helper
+            && let Some(tool) = checker
         {
-            out.push(Source { kind: SourceKind::Aur, tool: Some(h.into()), command: update_command(SourceKind::Aur, helper) });
+            out.push(Source { kind: SourceKind::Aur, tool: Some(tool.into()), command: update_command(SourceKind::Aur, helper) });
         }
     }
     if has("apt") && has("dpkg") {
@@ -319,6 +353,7 @@ fn check_source(source: &Source) -> SourceReport {
             Some(CHECKUPDATES_NONE) => Ok(Vec::new()),
             _ => Err(failed(tool, code, &err)),
         }),
+        SourceKind::Aur if AurHelper::from_id(tool).is_some_and(|h| h.check_args().is_none()) => aur_web_updates(),
         SourceKind::Aur => run(tool, &["-Qua"], CHECK_TIMEOUT).and_then(|(code, out, err)| {
             // Helpers exit 1 with empty output when nothing is outdated.
             let pkgs = parse_arrow_list(&out);
@@ -366,13 +401,103 @@ fn check_source(source: &Source) -> SourceReport {
     report
 }
 
+/// AUR updates without a helper's own check: the installed foreign
+/// packages (`pacman -Qm`), their AUR versions from the web API, and
+/// pacman's `vercmp` for which are older. Development packages (`-git`)
+/// show only when their PKGBUILD's version changed.
+fn aur_web_updates() -> Result<Vec<Package>, String> {
+    crate::offline::check()?;
+    let (code, out, err) = run("pacman", &["-Qm"], CHECK_TIMEOUT)?;
+    // `pacman -Qm` exits 1 when there are no foreign packages.
+    if code != Some(0) && !out.trim().is_empty() {
+        return Err(failed("pacman", code, &err));
+    }
+    let installed = parse_foreign(&out);
+    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(CHECK_TIMEOUT)).build().into();
+    let mut outdated = Vec::new();
+    for batch in installed.chunks(AUR_RPC_BATCH) {
+        let mut req = agent.get(AUR_RPC_INFO).header("User-Agent", concat!("mandara-shell/", env!("CARGO_PKG_VERSION")));
+        for (name, _) in batch {
+            req = req.query("arg[]", name);
+        }
+        let mut response = req.call().map_err(|e| tf("The AUR couldn't be reached: {error}", &[("error", &e)]))?;
+        let body = response.body_mut().read_to_string().map_err(|e| e.to_string())?;
+        for (name, new) in parse_aur_info(&body) {
+            let Some((_, old)) = batch.iter().find(|(n, _)| *n == name) else { continue };
+            if *old != new && vercmp(old, &new) == Some(std::cmp::Ordering::Less) {
+                outdated.push(Package::new(&name, old, &new, None));
+            }
+        }
+    }
+    Ok(outdated)
+}
+
+/// `pacman -Qm`: `name version` lines (bounded).
+pub fn parse_foreign(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        .filter_map(|l| {
+            let mut w = l.split_whitespace();
+            Some((w.next()?.to_string(), w.next()?.to_string()))
+        })
+        .take(AUR_MAX_FOREIGN)
+        .collect()
+}
+
+/// The AUR web API's `info` answer: `(name, version)` of each result.
+pub fn parse_aur_info(json: &str) -> Vec<(String, String)> {
+    #[derive(Deserialize)]
+    struct Info {
+        #[serde(default)]
+        results: Vec<Pkg>,
+    }
+    #[derive(Deserialize)]
+    struct Pkg {
+        #[serde(rename = "Name")]
+        name: String,
+        #[serde(rename = "Version")]
+        version: String,
+    }
+    serde_json::from_str::<Info>(json).map(|i| i.results.into_iter().map(|p| (p.name, p.version)).collect()).unwrap_or_default()
+}
+
+/// pacman's own version order (`vercmp a b`: -1, 0 or 1).
+fn vercmp(a: &str, b: &str) -> Option<std::cmp::Ordering> {
+    let (code, out, _) = run("vercmp", &[a, b], CHECK_TIMEOUT).ok()?;
+    if code != Some(0) {
+        return None;
+    }
+    out.trim().parse::<i32>().ok().map(|n| n.cmp(&0))
+}
+
 /// Checks every detected source (in parallel; blocking — call off the UI
 /// thread).
 pub fn check(opts: CheckOptions) -> CheckResult {
+    if let Some(r) = fake_check() {
+        return r;
+    }
     let sources = detect(opts);
     let handles: Vec<_> = sources.into_iter().map(|s| std::thread::spawn(move || check_source(&s))).collect();
     let sources = handles.into_iter().filter_map(|h| h.join().ok()).collect();
     CheckResult { sources, checked_at: chrono::Local::now().timestamp() }
+}
+
+/// The sandbox's recorded system (`MANDARA_FAKE_SYSTEM_UPDATE` on Arch
+/// with `MANDARA_FAKE_AUR`): the packages the recordings update, so the
+/// panel lists what "Update all" then installs. Never in a release.
+fn fake_check() -> Option<CheckResult> {
+    #[cfg(all(feature = "fake-system-update", debug_assertions))]
+    if let Some(helper) = crate::sysupdate::fake_aur() {
+        let pkg = |name: &str, old: &str, new: &str, repo: &str| Package::new(name, old, new, Some(repo));
+        let pacman = ["ca-certificates-mozilla 3.132-1 3.133-1", "expat 2.9.0-1 2.10.0-1", "libnghttp2 1.70.0-1 1.71.0-1", "libnghttp3 1.18.0-1 1.19.0-1", "libngtcp2 1.25.0-1 1.26.0-1", "lz4 1:1.10.0-2 1:1.11.0-1", "sqlite 3.54.0-1 3.54.1-1", "tzdata 2026e-1 2026f-1"];
+        let report = |kind: SourceKind, packages: Vec<Package>, command: String| SourceReport { kind, packages, error: None, hint: None, command };
+        let sources = vec![
+            report(SourceKind::Pacman, pacman.iter().filter_map(|l| { let mut w = l.split(' '); Some(pkg(w.next()?, w.next()?, w.next()?, "core")) }).collect(), update_command(SourceKind::Pacman, Some(helper.id()))),
+            report(SourceKind::Aur, vec![pkg("cbonsai", "1.4.1-1", "1.4.2-1", "aur"), pkg("nerdfetch", "8.5.4-1", "8.5.5-1", "aur"), pkg("pfetch", "1.10.0-1", "1.11.0-1", "aur")], update_command(SourceKind::Aur, Some(helper.id()))),
+            report(SourceKind::Flatpak, vec![pkg("org.gnome.Calculator", "48.1", "48.2", "stable"), pkg("org.gnome.Platform", "", "", "48"), pkg("com.spotify.Client", "1.2.50", "1.2.52", "stable")], update_command(SourceKind::Flatpak, None)),
+        ];
+        return Some(CheckResult { sources, checked_at: chrono::Local::now().timestamp() });
+    }
+    None
 }
 
 // ── Parsers ──────────────────────────────────────────────────────────────
@@ -769,6 +894,22 @@ mod tests {
         assert_eq!(combined_command(&[SourceKind::Aur], Some("paru")), "paru");
         assert_eq!(combined_command(&[SourceKind::Pacman, SourceKind::Flatpak], None), "sudo pacman -Syu && flatpak update");
         assert_eq!(SourceKind::from_id("FLATPAK"), Some(SourceKind::Flatpak));
+        // Every helper's own terminal commands.
+        assert_eq!(update_command(SourceKind::Aur, Some("shelly")), "shelly upgrade aur");
+        assert_eq!(update_command(SourceKind::Aur, Some("aura")), "aura -Au");
+        assert_eq!(update_command(SourceKind::Pacman, Some("aura")), "sudo pacman -Syu && aura -Au");
+        assert_eq!(combined_command(&[SourceKind::Aur], Some("shelly")), "shelly upgrade standard && shelly upgrade aur");
+        assert_eq!(combined_command(&[SourceKind::Aur, SourceKind::Flatpak], Some("pikaur")), "pikaur -Syu && flatpak update");
+    }
+
+    #[test]
+    fn aur_web_api_answers() {
+        let foreign = parse_foreign("cbonsai 1.4.1-1\nyay-bin 13.0.0-1\n\nbroken\n");
+        assert_eq!(foreign, [("cbonsai".to_string(), "1.4.1-1".to_string()), ("yay-bin".to_string(), "13.0.0-1".to_string())]);
+        let json = r#"{"resultcount":2,"results":[{"Name":"cbonsai","Version":"1.4.2-1","Depends":["ncurses"]},{"Name":"yay-bin","Version":"13.1.0-1"}],"type":"multiinfo","version":5}"#;
+        assert_eq!(parse_aur_info(json), [("cbonsai".to_string(), "1.4.2-1".to_string()), ("yay-bin".to_string(), "13.1.0-1".to_string())]);
+        assert!(parse_aur_info(r#"{"error":"Too many package results.","resultcount":0,"type":"error"}"#).is_empty());
+        assert!(parse_aur_info("not json").is_empty());
     }
 
     #[test]

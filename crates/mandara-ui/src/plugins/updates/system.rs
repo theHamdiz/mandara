@@ -1,6 +1,7 @@
 //! The Updates panel's system update: the running job's card (phases,
 //! progress bar, the latest log lines, cancel at safe points, the summary
-//! with "restart required") and, on NixOS, the generations view (update and
+//! with "restart required", and the terminal for an AUR failure that needs
+//! a person) and, on NixOS, the generations view (update and
 //! rebuild modes, roll back, switch to a generation, compare two, clean up).
 //!
 //! The job itself is [`mandara_services::sysupdate::job`]: one owned worker
@@ -213,6 +214,7 @@ fn failure_title(kind: FailureKind) -> &'static str {
         FailureKind::NotAuthorized => t("Not authorized"),
         FailureKind::NoPrompt => t("No password prompt available"),
         FailureKind::Helper => t("Admin helper unavailable"),
+        FailureKind::BuildFailed => t("An AUR package didn't build"),
         FailureKind::Other => t("The update stopped"),
     }
 }
@@ -229,6 +231,7 @@ fn phase_icon(phase: Phase) -> &'static str {
         Phase::Activating => "zap",
         Phase::Cleaning => "trash",
         Phase::Flatpak => "box",
+        Phase::AurBuild => "box",
         Phase::Finished => "check",
     }
 }
@@ -380,8 +383,9 @@ fn full_log_button(palette: &MandaraPalette) -> AnyElement {
 fn running_card(job: &Job, s: &JobState, m: &Shared, log_open: bool, card_r: f32, palette: &MandaraPalette, cx: &App) -> (AnyElement, f32) {
     let accent = readable(palette.primary, palette);
     let phase = s.phase();
-    let what = match s.backend {
-        Some(b) if phase != Phase::Flatpak => tf("{phase} · {manager}", &[("phase", &phase.label()), ("manager", &b.manager_label())]),
+    // The program at work: the package manager, or the AUR helper.
+    let what = match s.manager() {
+        Some(manager) if phase != Phase::Flatpak => tf("{phase} · {manager}", &[("phase", &phase.label()), ("manager", &manager)]),
         _ => phase.label().to_string(),
     };
     // The item being worked on; the title already names the phase.
@@ -487,6 +491,13 @@ fn finished_card(s: &JobState, f: &Finished, m: &Shared, log_open: bool, card_r:
     let warn = readable(palette.warning_amber, palette);
     let m2 = m.clone();
     let retry_m = m.clone();
+    // An AUR failure that needs a person: the helper's own command in your
+    // terminal, where it can ask.
+    let terminal = match (&f.outcome, s.failed_step, s.helper) {
+        (JobOutcome::Failed(failure), Some(mandara_services::sysupdate::plan::StepKind::Aur), Some(helper)) if sysupdate::aur::needs_terminal(failure.kind) => Some(helper.terminal_command()),
+        _ => None,
+    };
+    let terminal_m = m.clone();
     let el = glass_card(palette)
         .rounded(px(card_r))
         .p(px(CARD_PAD_PX))
@@ -561,6 +572,12 @@ fn finished_card(s: &JobState, f: &Finished, m: &Shared, log_open: bool, card_r:
                 .child(log_toggle(m, log_open, palette))
                 .when(log_open, |el| el.child(full_log_button(palette)))
                 .child(div().flex_1())
+                .when_some(terminal, |el, command| {
+                    el.child(pill_button("upd-aur-terminal", Some("terminal"), t("Open in terminal"), readable(palette.primary, palette), palette, move |_, cx| {
+                        let _ = super::run_in_terminal(Some(&terminal_m), command, cx);
+                        notify(&terminal_m, cx);
+                    }))
+                })
                 .when(failed, |el| {
                     el.child(pill_button("upd-retry", Some("refresh"), t("Try again"), readable(palette.primary, palette), palette, move |_, cx| {
                         dismiss();

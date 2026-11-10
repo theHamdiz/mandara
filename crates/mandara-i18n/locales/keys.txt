@@ -275,7 +275,9 @@ AM
 API key
 APP
 APPS
+AUR helper
 AUR packages
+AUR packages are for Arch Linux
 AYAH FOR {date}
 AYAH OF THE DAY
 Abdul Basit Abdul Samad
@@ -482,8 +484,8 @@ Allow your user once:
 Already bound in your compositor config: {chords}
 Already in your rules below
 Already preparing a share
-Also check AUR packages with paru or yay
 Also check Flatpak apps and runtimes
+Also check and update AUR packages with the installed AUR helper
 Also checks the plugins you installed from the marketplace (Mandara's own plugins update with the shell)
 Also fire while a fullscreen app is shown (on MangoWM the bar must show over fullscreen windows too)
 Also here: {places}
@@ -513,6 +515,8 @@ Ambient
 Ambient sea, rain, wind, café, fire and noise — synthesized live
 Amplitude
 An API key is saved for this server
+An AUR package didn't build
+An AUR package didn't build. The log shows why; it often needs a fix from its maintainer. Nothing else was changed by this step.
 An Essay on Criticism
 An HOTP link needs a counter
 An action is still running
@@ -918,6 +922,7 @@ Build time p50
 Build your own
 Build your own plugins
 Build, switch now and boot it next time
+Building AUR packages
 Building the new generation
 Built for {arch}, but this computer is {host}: it probably won't start.
 Built in
@@ -3675,6 +3680,7 @@ Mandara's admin helper isn't set up, so the update can't run as administrator.
 Mandara's drop-in
 Mandara's glass, or Material You: colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar
 Mandara's own look, as it has always been
+Mandara's password dialog isn't available, so the AUR helper can't ask for your password.
 Mandara's shortcuts and your compositor's appear here
 MangoWM
 MangoWM and Niri only
@@ -4081,6 +4087,7 @@ NixOS system generations (and home-manager's), newest first
 NixOS {version}
 NixOS: how many of the newest generations a clean-up keeps (the running and booted ones always stay)
 No API key saved for this server
+No AUR helper is installed (paru, yay, pikaur, Aura, trizen or Shelly)
 No Bluetooth adapter
 No Docker or Podman socket found
 No Longer at Ease
@@ -4607,6 +4614,7 @@ Open in Files
 Open in Mandara Studio
 Open in Studio
 Open in editor
+Open in terminal
 Open in the reader
 Open link
 Open notes as preview
@@ -4664,13 +4672,13 @@ Opening your stations…
 Opening {collection}…
 Opening {url}
 Opening…
-Opens AUR updates, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm
 Opens drives and folders from Mandara; empty uses your default
 Opens files and links
 Opens links from Mandara; empty uses your default
 Opens on the first entry
 Opens on “{entry}”
 Opens the launcher
+Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm
 Opposite the sidebar
 Opt-in
 Opt-in: a fresh wallpaper every few hours. Missed runs never pile up; older files are cleaned up.
@@ -6661,6 +6669,7 @@ That widget is not on this tab
 That's Mandara itself — use Studio → Performance → Quit
 The 114 surahs: names, meaning, Makki or Madani and ayah counts
 The API key cannot be used in a request
+The AUR couldn't be reached: {error}
 The Analytical Engine weaves algebraical patterns just as the Jacquard-loom weaves flowers and leaves.
 The App Installer plugin is off: turn it on in Studio → Plugins
 The Applications folder is off (Studio → Dock → Applications folder)
@@ -6895,6 +6904,7 @@ The package manager needs a decision from you (a conflict or broken dependency).
 The package servers couldn't be reached. Check your connection and try again.
 The panel is not visible
 The panel that drops from the bar item, or none.
+The password dialog was cancelled, so the AUR packages weren't installed.
 The password is empty
 The password needs 8–63 characters
 The passwords don't match
@@ -7577,7 +7587,7 @@ Update cancelled
 Update installed
 Update it from Studio → Plugins.
 Update now
-Update the system in Mandara, with progress and Mandara's password dialog (system and Flatpak, or one)
+Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)
 Update to v{version}
 Update to v{version} · {size}
 Update to v{version} · {size} patch
@@ -7901,6 +7911,7 @@ Where the middle group sits along the edge
 Whether Mandara's pairing agent is registered with BlueZ
 Whether presentation mode is on, for how long, and what it will restore (JSON)
 Whether the hotspot runs, and its network name
+Which AUR helper updates AUR packages, as you; its sudo asks through Mandara's password dialog. Automatic prefers paru, then yay
 Which app has focus, per day; needs the Screen time plugin. Stays on this computer
 Which container engine the panel talks to
 Which edge it lives on; the power dock takes the other. Auto follows the locale (right for Arabic)
@@ -8143,7 +8154,7 @@ activating
 active
 add or remove
 after
-all (default), system or flatpak
+all (default), system, aur or flatpak
 all sahih
 all, pinned, a kind (code, color, …) or a collection id or name
 already recording
@@ -8508,6 +8519,7 @@ strftime pattern, e.g. Screenshot_%Y-%m-%d_%H-%M-%S
 strftime pattern; empty follows the 24-hour switch
 strftime pattern; empty uses the long date
 substring of the file name
+sudo didn't accept the password.
 sun / fixed / always
 swap {size}
 system (default) or user
@@ -8789,6 +8801,7 @@ your default
 {from}–{to} of {count}
 {gpu}% GPU / {cpu}% CPU
 {group} (continued)
+{helper} needs your password for sudo to install the AUR packages it built. sudo asks separately: the system update's approval can't be passed on to it.
 {host} closed the connection
 {host} didn't answer
 {host} has an invalid security certificate
@@ -8898,6 +8911,7 @@ your default
 {n}y
 {on} of {total} plugins on
 {outputs} refused the warmer colours: another night-light app may hold them (wlsunset, gammastep, hyprsunset…), or the compositor or display driver doesn't allow it.
+{package} didn't build: {reason}
 {package} is part of your system and can't be removed here
 {page} is back to its defaults — Undo is under Recent changes
 {path} already exists, so no command is added
