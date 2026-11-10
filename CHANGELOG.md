@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Mandara runs on FreeBSD.** Every release now comes with a FreeBSD build for FreeBSD 14.4 and newer on amd64, signed and checked like the Linux ones. The one-line install recognises FreeBSD, downloads that build (with FreeBSD's own `fetch` when curl isn't installed) and hands over to `mandara install`, and Studio → About → *Update now* keeps it current with small patches, just as on Linux. See the FreeBSD section of the install guide for the packages it uses and the compositors that run it.
+
 ### Under the hood
 
 - **Mandara compiles for FreeBSD.** The whole workspace, its tests included, now builds for FreeBSD 14 (amd64) without a single warning, and the FreeBSD check in CI is a required one: a change that breaks the FreeBSD build can't land. The bar, panels and Studio use the same Wayland layer surfaces there as on Linux.
