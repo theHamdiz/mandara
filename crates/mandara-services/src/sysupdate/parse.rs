@@ -90,6 +90,10 @@ impl Tracker {
                 self.build_total = 0;
                 self.installed = 0;
                 self.total = 0;
+                self.downloaded = 0;
+                self.download_total = 0;
+                self.hooks = 0;
+                self.hooks_total = 0;
                 self.building.clear();
                 self.failed_package = None;
             }

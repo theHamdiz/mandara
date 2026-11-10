@@ -406,7 +406,10 @@ fn cancel_during_an_aur_build_stops_the_helper() {
     let replay = Replay::new(BackendId::Pacman).hold(StepKind::Aur, 100);
     let job = start(Request::SystemAur { flatpak: true, helper: AurHelper::Paru }, arch_with(replay, d), quiet());
     wait_for(&job, |s| s.step_kind == Some(StepKind::Aur) && s.tracker.building == "nerdfetch");
-    job.with(|s| assert_eq!(s.manager(), Some("paru")));
+    job.with(|s| {
+        assert_eq!(s.manager(), Some("paru"));
+        assert_eq!((s.tracker.downloaded, s.tracker.download_total), (0, 0), "pacman's download counts don't carry into the AUR step");
+    });
     assert!(job.with(JobState::cancellable));
     assert!(job.cancel());
     let f = wait(&job);
