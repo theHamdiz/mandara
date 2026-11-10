@@ -111,6 +111,7 @@ impl<T> Drafts<T> {
 pub fn keep<T: 'static>(monitor: &str, draft: Option<T>, cx: &mut App) {
     if let Some(draft) = draft {
         cx.default_global::<Drafts<T>>().keep(monitor, draft);
+        tracing::debug!(monitor, kind = std::any::type_name::<T>(), "kept a sidebar card's draft");
     }
 }
 
@@ -119,7 +120,11 @@ pub fn take<T: 'static>(monitor: &str, cx: &mut App) -> Option<T> {
     if !cx.has_global::<Drafts<T>>() {
         return None;
     }
-    cx.global_mut::<Drafts<T>>().take(monitor)
+    let draft = cx.global_mut::<Drafts<T>>().take(monitor);
+    if draft.is_some() {
+        tracing::debug!(monitor, kind = std::any::type_name::<T>(), "a rebuilt sidebar card took its draft back");
+    }
+    draft
 }
 
 /// Runs `save` once, when the card `view` is released, while whatever
