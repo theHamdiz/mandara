@@ -1485,7 +1485,7 @@ fn bazzite_layers_only_what_its_image_lacks_in_one_transaction() {
     assert_eq!(facts.family, Family::Fedora);
     run(&mut host, &FakeProbe::default(), facts.clone(), dry(InstallArgs::default())).unwrap();
     let text = host.text();
-    assert!(text.contains("Bazzite 40 (FROM Fedora Kinoite) is image-based"), "{text}");
+    assert!(text.contains("Bazzite is image-based"), "{text}");
     assert!(text.contains("skipped google-noto-sans-telugu-fonts (not available)"), "{text}");
     assert!(text.contains("would run: sudo rpm-ostree install --idempotent greetd cage papirus-icon-theme i2c-tools\n"), "{text}");
     assert_eq!(text.matches("rpm-ostree install").count(), 1, "one transaction\n{text}");
