@@ -321,36 +321,53 @@ h1, h2, h3 { text-wrap: balance; }
 /* Bar styles: the stage and its tabs. */
 .bars-picker { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); gap: 16px; align-items: start; }
 .bar-stage { grid-column: 1; grid-row: 1; align-self: center; }
-.bar-tabs { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; gap: 8px; }
+.bar-tabs { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; gap: 4px; }
 .bar-shot { display: none; }
 .bar-shot img { width: 100%; border-radius: var(--r-xl); border: 1px solid var(--rim); box-shadow: var(--lift); }
 .bar-tab {
-  display: flex; flex-direction: column; gap: 4px; padding: 16px 20px; border-radius: var(--r-m); background: var(--tile); border: 1px solid var(--rim);
+  display: flex; flex-direction: column; gap: 4px; padding: 8px 18px; border-radius: var(--r-m); background: var(--tile); border: 1px solid var(--rim);
   cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1.45;
   transition: background-color 240ms var(--ease), color 240ms var(--ease), border-radius 320ms var(--spring);
 }
 .bar-tab:hover { border-radius: 30px; }
 .bar-tab b { color: var(--ink); font-size: 19px; font-weight: 650; letter-spacing: -.01em; }
+.bar-tab span { display: none; }
 .bar-tab code { display: none; margin-top: 8px; font-size: 12.5px; overflow-wrap: anywhere; }
 #bar-expressive:checked ~ .bar-stage .bar-expressive,
 #bar-tile-dock:checked ~ .bar-stage .bar-tile-dock,
 #bar-rail:checked ~ .bar-stage .bar-rail,
 #bar-segmented:checked ~ .bar-stage .bar-segmented,
+#bar-system-monitor:checked ~ .bar-stage .bar-system-monitor,
+#bar-stanley-bridge:checked ~ .bar-stage .bar-stanley-bridge,
+#bar-pharos-beam:checked ~ .bar-stage .bar-pharos-beam,
+#bar-raml-tram:checked ~ .bar-stage .bar-raml-tram,
 #bar-side-bars:checked ~ .bar-stage .bar-side-bars { display: block; }
 #bar-expressive:checked ~ .bar-tabs label[for="bar-expressive"],
 #bar-tile-dock:checked ~ .bar-tabs label[for="bar-tile-dock"],
 #bar-rail:checked ~ .bar-tabs label[for="bar-rail"],
 #bar-segmented:checked ~ .bar-tabs label[for="bar-segmented"],
+#bar-system-monitor:checked ~ .bar-tabs label[for="bar-system-monitor"],
+#bar-stanley-bridge:checked ~ .bar-tabs label[for="bar-stanley-bridge"],
+#bar-pharos-beam:checked ~ .bar-tabs label[for="bar-pharos-beam"],
+#bar-raml-tram:checked ~ .bar-tabs label[for="bar-raml-tram"],
 #bar-side-bars:checked ~ .bar-tabs label[for="bar-side-bars"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 30px; }
-#bar-expressive:checked ~ .bar-tabs label[for="bar-expressive"] :is(b, code),
-#bar-tile-dock:checked ~ .bar-tabs label[for="bar-tile-dock"] :is(b, code),
-#bar-rail:checked ~ .bar-tabs label[for="bar-rail"] :is(b, code),
-#bar-segmented:checked ~ .bar-tabs label[for="bar-segmented"] :is(b, code),
-#bar-side-bars:checked ~ .bar-tabs label[for="bar-side-bars"] :is(b, code) { color: var(--on-accent); display: block; }
+#bar-expressive:checked ~ .bar-tabs label[for="bar-expressive"] :is(span, b, code),
+#bar-tile-dock:checked ~ .bar-tabs label[for="bar-tile-dock"] :is(span, b, code),
+#bar-rail:checked ~ .bar-tabs label[for="bar-rail"] :is(span, b, code),
+#bar-segmented:checked ~ .bar-tabs label[for="bar-segmented"] :is(span, b, code),
+#bar-system-monitor:checked ~ .bar-tabs label[for="bar-system-monitor"] :is(span, b, code),
+#bar-stanley-bridge:checked ~ .bar-tabs label[for="bar-stanley-bridge"] :is(span, b, code),
+#bar-pharos-beam:checked ~ .bar-tabs label[for="bar-pharos-beam"] :is(span, b, code),
+#bar-raml-tram:checked ~ .bar-tabs label[for="bar-raml-tram"] :is(span, b, code),
+#bar-side-bars:checked ~ .bar-tabs label[for="bar-side-bars"] :is(span, b, code) { color: var(--on-accent); display: block; }
 #bar-expressive:focus-visible ~ .bar-tabs label[for="bar-expressive"],
 #bar-tile-dock:focus-visible ~ .bar-tabs label[for="bar-tile-dock"],
 #bar-rail:focus-visible ~ .bar-tabs label[for="bar-rail"],
 #bar-segmented:focus-visible ~ .bar-tabs label[for="bar-segmented"],
+#bar-system-monitor:focus-visible ~ .bar-tabs label[for="bar-system-monitor"],
+#bar-stanley-bridge:focus-visible ~ .bar-tabs label[for="bar-stanley-bridge"],
+#bar-pharos-beam:focus-visible ~ .bar-tabs label[for="bar-pharos-beam"],
+#bar-raml-tram:focus-visible ~ .bar-tabs label[for="bar-raml-tram"],
 #bar-side-bars:focus-visible ~ .bar-tabs label[for="bar-side-bars"] { outline: 3px solid var(--ink); outline-offset: 3px; }
 
 /* Pieces: a bento of real parts, each on its own tonal surface. */

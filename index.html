@@ -285,8 +285,8 @@
     <!-- Bar styles: one large stage, the styles beside it. -->
     <section class="section bars" id="bars" aria-labelledby="bars-title">
       <header class="section-head">
-        <h2 id="bars-title" class="display-2"><span class="d-heavy">Four new</span> <em>bars.</em></h2>
-        <p>Pick one in Studio → Bars → Presets or with its command. Panels still grow out of each one, and the left and right side bars can each wear a style of their own.</p>
+        <h2 id="bars-title" class="display-2"><span class="d-heavy">Eight</span> <em>bars.</em></h2>
+        <p>Pick one in Studio → Bars → Presets or with its command. Panels still grow out of each one, every style shows each workspace's apps on its buttons, and the left and right side bars can each wear a style of their own.</p>
       </header>
       <fieldset class="bars-picker">
         <legend class="visually-hidden">Bar styles</legend>
@@ -294,6 +294,10 @@
         <input class="bar-input" type="radio" name="bar-style" id="bar-tile-dock" value="tile-dock" />
         <input class="bar-input" type="radio" name="bar-style" id="bar-rail" value="rail" />
         <input class="bar-input" type="radio" name="bar-style" id="bar-segmented" value="segmented" />
+        <input class="bar-input" type="radio" name="bar-style" id="bar-system-monitor" value="system-monitor" />
+        <input class="bar-input" type="radio" name="bar-style" id="bar-stanley-bridge" value="stanley-bridge" />
+        <input class="bar-input" type="radio" name="bar-style" id="bar-pharos-beam" value="pharos-beam" />
+        <input class="bar-input" type="radio" name="bar-style" id="bar-raml-tram" value="raml-tram" />
         <input class="bar-input" type="radio" name="bar-style" id="bar-side-bars" value="side-bars" />
         <div class="bar-stage">
           <figure class="bar-shot bar-expressive">
@@ -320,6 +324,30 @@
               <img src="docs/screenshots/bar-style-segmented.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="The Segmented style: no bar, only rows of connected tiles under the top edge of the screen." />
             </picture>
           </figure>
+          <figure class="bar-shot bar-system-monitor">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/bar-style-system-monitor-light.webp" />
+              <img src="docs/screenshots/bar-style-system-monitor.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="The System monitor bar: a slim bar along the bottom where every reading sits on a square stat block in a monospace font, with CPU and memory rings and network rates." />
+            </picture>
+          </figure>
+          <figure class="bar-shot bar-stanley-bridge">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/bar-style-stanley-bridge-light.webp" />
+              <img src="docs/screenshots/bar-style-stanley-bridge.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="The Stanley Bridge bar: three floating docks of squircle tiles spanning the bottom of the screen." />
+            </picture>
+          </figure>
+          <figure class="bar-shot bar-pharos-beam">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/bar-style-pharos-beam-light.webp" />
+              <img src="docs/screenshots/bar-style-pharos-beam.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="The Pharos Beam bar: a half-width notch hanging from the top edge, with scalloped accent buttons and tonal tiles." />
+            </picture>
+          </figure>
+          <figure class="bar-shot bar-raml-tram">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/bar-style-raml-tram-light.webp" />
+              <img src="docs/screenshots/bar-style-raml-tram.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="The Raml Tram bar: a top bar joined to a rail of flower-shaped buttons down the left edge." />
+            </picture>
+          </figure>
           <figure class="bar-shot bar-side-bars">
             <picture>
               <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/bar-style-side-bars-light.webp" />
@@ -332,6 +360,10 @@
           <label class="bar-tab" for="bar-tile-dock"><b>Tile dock</b><span>One floating island of squircle tiles at the bottom.</span><code>mandara msg bar style tile-dock</code></label>
           <label class="bar-tab" for="bar-rail"><b>Rail</b><span>A wide left rail of flower-shaped buttons inside a screen frame.</span><code>mandara msg bar style rail</code></label>
           <label class="bar-tab" for="bar-segmented"><b>Segmented</b><span>No bar at all: rows of connected tiles under the top edge.</span><code>mandara msg bar style segmented</code></label>
+          <label class="bar-tab" for="bar-system-monitor"><b>System monitor</b><span>A slim bottom status line: every reading on a square stat block, with CPU and memory rings and network rates.</span><code>mandara msg bar style system-monitor</code></label>
+          <label class="bar-tab" for="bar-stanley-bridge"><b>Stanley Bridge</b><span>Three floating docks of squircle tiles spanning the bottom, after Tile dock.</span><code>mandara msg bar style stanley-bridge</code></label>
+          <label class="bar-tab" for="bar-pharos-beam"><b>Pharos Beam</b><span>A notch hanging from the top edge: scalloped accent buttons and tonal tiles, after Expressive.</span><code>mandara msg bar style pharos-beam</code></label>
+          <label class="bar-tab" for="bar-raml-tram"><b>Raml Tram</b><span>A top bar joined to a left rail of flower buttons, after Rail.</span><code>mandara msg bar style raml-tram</code></label>
           <label class="bar-tab" for="bar-side-bars"><b>Side bars too</b><span>The left and right side bars can each take a style of their own, apart from the main bar.</span><code>mandara msg side-bar style right tile-dock</code></label>
         </div>
       </fieldset>
