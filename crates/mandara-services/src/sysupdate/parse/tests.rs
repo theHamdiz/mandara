@@ -366,3 +366,53 @@ fn freebsd_recordings() {
     assert_eq!(backend(BackendId::Pkg).after(&freebsd_step(StepKind::Download, plan::FREEBSD_UPDATE), Some(1), &f), Next::Fail(FailureKind::Other));
     assert_eq!(backend(BackendId::Pkg).classify(&tail(&failed)), FailureKind::Keyring, "the key check failed on every mirror");
 }
+
+/// Recorded on FreeBSD 15.1-RELEASE installed from its distribution sets
+/// (pkg 2.8.4, as root through the helper): the ports repositories are
+/// `FreeBSD-ports` and `FreeBSD-ports-kmods` now, and freebsd-update skips
+/// the uninstalled source tree before it fetches. The network the
+/// recording was made on redirects plain HTTP, so every mirror's key
+/// failed its hash: a keyring failure, never "nothing to do".
+#[test]
+fn freebsd15_traditional_recordings() {
+    let p = backend(BackendId::Pkg);
+    let mut r = Tracker::default();
+    feed(BackendId::Pkg, StepKind::Refresh, &fixture("freebsd15/refresh.txt"), &mut r);
+    assert_eq!((r.phase, r.current.as_str()), (Phase::Refreshing, "FreeBSD-ports-kmods"));
+    let mut u = Tracker::default();
+    feed(BackendId::Pkg, StepKind::Download, &fixture("freebsd15/uptodate.txt"), &mut u);
+    assert!(u.nothing_to_do);
+    assert_eq!(p.after(&freebsd_step(StepKind::Download, "pkg"), Some(0), &u), Next::Continue);
+    let failed = fixture("freebsd15/base-key-failed.txt");
+    let mut f = Tracker::default();
+    feed(BackendId::Pkg, StepKind::Download, &failed, &mut f);
+    assert!(!f.nothing_to_do && f.warnings == 0);
+    assert_eq!(p.after(&freebsd_step(StepKind::Download, plan::FREEBSD_UPDATE), Some(1), &f), Next::Fail(FailureKind::Other));
+    assert_eq!(p.classify(&tail(&failed)), FailureKind::Keyring);
+}
+
+/// Recorded on FreeBSD 15.1-RELEASE's own VM image (a packaged base, pkg
+/// 2.6.2, through the helper): the whole system's 112 updates, 111 of them
+/// base packages from `FreeBSD-base`, the new kernel among them.
+#[test]
+fn freebsd15_packaged_base_recordings() {
+    let b = BackendId::PkgBase;
+    let mut r = Tracker::default();
+    feed(b, StepKind::Refresh, &fixture("freebsd15/pkgbase-refresh.txt"), &mut r);
+    assert_eq!((r.phase, r.current.as_str()), (Phase::Refreshing, "FreeBSD-base"));
+    let mut d = Tracker::default();
+    feed(b, StepKind::Download, &fixture("freebsd15/pkgbase-download.txt"), &mut d);
+    assert_eq!((d.downloaded, d.download_total, d.total), (111, 111, 112), "one package was in the cache already");
+    assert!(d.planned && !d.nothing_to_do);
+    assert_eq!(backend(b).after(&step(b, StepKind::Download), Some(0), &d), Next::Continue);
+    let mut i = Tracker::default();
+    feed(b, StepKind::Install, &fixture("freebsd15/pkgbase-install.txt"), &mut i);
+    assert_eq!((i.installed, i.total, i.changed), (112, 112, 112));
+    assert_eq!(i.restart_package.as_deref(), Some("FreeBSD-kernel-generic"), "the new kernel, not its debug symbols");
+    // freebsd-update's refusal on this system, which the pkg-base plan never
+    // triggers; the traditional plan still reads it as nothing to do.
+    let mut refused = Tracker::default();
+    feed(BackendId::Pkg, StepKind::Download, &fixture("freebsd15/base-pkgbase.txt"), &mut refused);
+    assert!(refused.nothing_to_do && refused.warnings == 1);
+    assert!(backend(b).steps().iter().all(|s| s.program == "pkg"));
+}

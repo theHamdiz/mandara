@@ -1,0 +1,4 @@
+Checking for upgrades (1 candidates): . done
+Processing candidates (1 candidates): . done
+Checking integrity... done (0 conflicting)
+Your packages are up to date.

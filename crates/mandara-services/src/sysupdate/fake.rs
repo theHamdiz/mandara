@@ -107,11 +107,16 @@ pub fn recording(backend: BackendId, kind: StepKind, scenario: Scenario) -> (&'s
         (B::Nix, K::DeleteGenerations, _) => (NIXOS_DELETE, 0),
         (B::Nix, K::CollectGarbage, _) => (fixture!("nix/gc.txt"), 0),
         (B::Nix, _, _) => (NIXOS_ACTIVATE, 0),
-        (B::Pkg, K::Refresh, S::Locked) => (fixture!("freebsd/locked.txt"), 1),
+        (B::Pkg | B::PkgBase, K::Refresh, S::Locked) => (fixture!("freebsd/locked.txt"), 1),
         (B::Pkg, K::Refresh, _) => (fixture!("freebsd/refresh.txt"), 0),
         (B::Pkg, _, S::UpToDate) => (fixture!("freebsd/uptodate.txt"), 0),
         (B::Pkg, K::Download, _) => (fixture!("freebsd/download.txt"), 0),
         (B::Pkg, _, _) => (fixture!("freebsd/install.txt"), 0),
+        // FreeBSD 15.1 with a packaged base: 111 base packages and one port.
+        (B::PkgBase, K::Refresh, _) => (fixture!("freebsd15/pkgbase-refresh.txt"), 0),
+        (B::PkgBase, _, S::UpToDate) => (fixture!("freebsd15/uptodate.txt"), 0),
+        (B::PkgBase, K::Download, _) => (fixture!("freebsd15/pkgbase-download.txt"), 0),
+        (B::PkgBase, _, _) => (fixture!("freebsd15/pkgbase-install.txt"), 0),
     }
 }
 

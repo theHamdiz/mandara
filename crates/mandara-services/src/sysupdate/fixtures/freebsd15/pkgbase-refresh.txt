@@ -1,0 +1,16 @@
+Updating FreeBSD-ports repository catalogue...
+Fetching meta.conf: . done
+Fetching data: .......... done
+Processing entries: .......... done
+FreeBSD-ports repository update completed. 38356 packages processed.
+Updating FreeBSD-ports-kmods repository catalogue...
+Fetching meta.conf: . done
+Fetching data: ...... done
+Processing entries: .......... done
+FreeBSD-ports-kmods repository update completed. 295 packages processed.
+Updating FreeBSD-base repository catalogue...
+Fetching meta.conf: . done
+Fetching data: .......... done
+Processing entries: .......... done
+FreeBSD-base repository update completed. 509 packages processed.
+All repositories are up to date.

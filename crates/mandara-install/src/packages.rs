@@ -24,9 +24,10 @@
 //! carry never blocks the rest. Gentoo names are full atoms
 //! (`category/name`).
 //!
-//! FreeBSD (names checked against the FreeBSD:14:amd64 `latest` package
-//! catalogue) has no NetworkManager, BlueZ, UDisks2 or
-//! power-profiles-daemon: Studio locks those panels there. Its services
+//! FreeBSD (names checked against the FreeBSD:14:amd64 `latest` and the
+//! FreeBSD:15:amd64 `quarterly` package catalogues) has no
+//! NetworkManager, BlueZ, UDisks2 or power-profiles-daemon: Studio locks
+//! those panels there. Its services
 //! are D-Bus, seatd (seat access for the compositor), ConsoleKit2
 //! (sessions, which polkit tracks), BSDisks (UDisks2's interface) and
 //! PipeWire with its OSS plugin. greetd isn't packaged for FreeBSD yet

@@ -702,6 +702,15 @@ pub fn apk(step: StepKind, line: &str, t: &mut Tracker) {
 const PKG_VERBS: [(&str, bool); 5] = [("Upgrading ", true), ("Installing ", true), ("Reinstalling ", true), ("Downgrading ", true), ("Deinstalling ", false)];
 /// Kernel modules from packages (`drm-61-kmod`): a restart loads them.
 const KMOD_SUFFIX: &str = "-kmod";
+/// A packaged base's kernel (`FreeBSD-kernel-generic`; not its `-dbg`
+/// symbols): a restart boots it.
+const BASE_KERNEL_PREFIX: &str = "FreeBSD-kernel-";
+const DEBUG_SUFFIX: &str = "-dbg";
+
+/// Whether updating pkg package `name` needs a restart to take effect.
+fn pkg_needs_restart(name: &str) -> bool {
+    name.ends_with(KMOD_SUFFIX) || (name.starts_with(BASE_KERNEL_PREFIX) && !name.ends_with(DEBUG_SUFFIX))
+}
 
 /// `[ 3/12] rest` → `(3, 12, rest)`: pkg's job counter (padded to the
 /// width of the total).
@@ -788,7 +797,7 @@ pub fn pkg(step: StepKind, line: &str, t: &mut Tracker) {
             t.set_current(rest);
             if changes {
                 t.changed_package(name);
-                if t.restart_package.is_none() && name.ends_with(KMOD_SUFFIX) {
+                if t.restart_package.is_none() && pkg_needs_restart(name) {
                     t.restart_package = Some(name.to_string());
                 }
             }

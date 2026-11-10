@@ -330,7 +330,7 @@ reboot is needed; after it, Mandara Login is one click away in Studio →
 Login screen. On SteamOS it installs into your home folder only
 ([Immutable systems](docs/install.md#immutable-systems)).
 
-On **FreeBSD** 14.4 or newer (amd64), the same command installs the
+On **FreeBSD 14+** (14.4 and newer, 15 included; amd64), the same command installs the
 FreeBSD build; without curl, use the base system's `fetch`
 ([FreeBSD install](docs/install.md#freebsd)).
 
