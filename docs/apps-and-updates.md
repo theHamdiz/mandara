@@ -114,6 +114,7 @@ the panel. Press **Update all**, or **Update** on one source:
 | Void | `xbps-install -S` | `xbps-install -uyD` | `xbps-install -uy` (xbps updates itself first when it must) |
 | Alpine | `apk update` | | `apk upgrade` |
 | FreeBSD | `pkg update` | `pkg upgrade -U -F -y`, then `freebsd-update fetch` | `pkg upgrade -U -y`, then `freebsd-update install` |
+| FreeBSD, packaged base | `pkg update` | `pkg upgrade -U -F -y` | `pkg upgrade -U -y` |
 
 ### The AUR
 
@@ -189,15 +190,25 @@ the same password dialog and progress:
   them after the packages. A patch to the kernel suggests a restart.
   Where ZFS boot environments work, freebsd-update snapshots the running
   system first, so you can boot back into it.
+- **A packaged base** (FreeBSD 15's installer and VM images install the
+  base system as `FreeBSD-*` packages): pkg updates the base system along
+  with everything else, from the `FreeBSD-base` repository, so the panel
+  counts those updates too and freebsd-update, which refuses such a
+  system, never runs. A new kernel (`FreeBSD-kernel-generic`) suggests a
+  restart. Mandara tells the two kinds apart the way freebsd-update does:
+  `pkg which /usr/bin/uname` names a `FreeBSD-*` package only on a
+  packaged base.
 
 Downloads can be cancelled; installing never is. A system freebsd-update
-doesn't manage (a -STABLE or -CURRENT build, or a packaged base) gets its
-packages updated and a warning that the base system was left alone. A
+doesn't manage (a -STABLE or -CURRENT build) gets its packages updated and
+a warning that the base system was left alone. A
 release past its end of life still installs what was published for it,
 with the same warning; plan the upgrade to a supported release
-(`freebsd-update upgrade -r …`), which Mandara leaves to you. In a
+(`freebsd-update upgrade -r …`, or the base packages' new release
+repository on a packaged base), which Mandara leaves to you. In a
 terminal, the same update is `sudo pkg upgrade` and
-`sudo freebsd-update fetch install`.
+`sudo freebsd-update fetch install` (only `sudo pkg upgrade` on a packaged
+base).
 
 The admin helper runs these programs only from root's own folders
 (`/usr/local/sbin/pkg`, `/usr/sbin/freebsd-update`), and pkexec comes with
