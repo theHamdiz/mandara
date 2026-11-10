@@ -46,7 +46,7 @@ fn run(system: System, replay: Replay, request: Request) -> (Job, Finished) {
 
 #[test]
 fn every_family_updates_end_to_end() {
-    for b in [BackendId::Pacman, BackendId::Apt, BackendId::Dnf, BackendId::ZypperDup, BackendId::ZypperUpdate, BackendId::Xbps, BackendId::Apk, BackendId::Pkg] {
+    for b in [BackendId::Pacman, BackendId::Apt, BackendId::Dnf, BackendId::ZypperDup, BackendId::ZypperUpdate, BackendId::Xbps, BackendId::Apk, BackendId::Pkg, BackendId::PkgBase] {
         let (job, f) = run(System::Managed(b), Replay::new(b), Request::System { flatpak: true });
         assert_eq!(f.outcome, JobOutcome::Done { nothing_to_do: false }, "{b:?}");
         assert!(f.changed > 0, "{b:?}");

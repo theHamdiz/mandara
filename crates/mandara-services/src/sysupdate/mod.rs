@@ -130,10 +130,21 @@ impl System {
         System::Managed(id)
     }
 
-    /// This system (reads `os-release` and the safe program folders).
+    /// This system (reads `os-release` and the safe program folders; on
+    /// FreeBSD, whether pkg installed the base system).
     pub fn detect() -> System {
         let os = read_os_release();
-        System::detect_with(&Probe { os: &os, has_program: &|p| find_safe(p).is_some(), ostree_booted: Path::new(OSTREE_BOOTED).exists() })
+        System::detect_with(&Probe { os: &os, has_program: &|p| find_safe(p).is_some(), ostree_booted: Path::new(OSTREE_BOOTED).exists() }).with_packaged_base(packaged_base)
+    }
+
+    /// FreeBSD whose base system came from packages (FreeBSD 15's default
+    /// install) updates it with pkg, never freebsd-update. `packaged` is
+    /// asked only on FreeBSD.
+    pub fn with_packaged_base(self, packaged: impl FnOnce() -> bool) -> System {
+        match self {
+            System::Managed(plan::BackendId::Pkg) if packaged() => System::Managed(plan::BackendId::PkgBase),
+            other => other,
+        }
     }
 
     /// Shown in the panel ("Arch Linux", "NixOS"…): the distribution's own
@@ -156,6 +167,45 @@ impl System {
             System::Unsupported => Some(t("Mandara can't update this distribution itself yet; use its own package manager").to_string()),
         }
     }
+}
+
+/// The file freebsd-update asks pkg about: pkg itself reads it for the
+/// system's ABI, so it exists everywhere, and on a packaged base a
+/// `FreeBSD-*` package owns it.
+#[cfg(target_os = "freebsd")]
+const BASE_PROBE_FILE: &str = "/usr/bin/uname";
+/// The prefix of every package of a packaged base.
+const BASE_PACKAGE_PREFIX: &str = "FreeBSD-";
+
+/// Whether `pkg which -q` answered with a base-system package (exit 0
+/// and its `FreeBSD-runtime-15.1`-style name): the same test
+/// freebsd-update uses to refuse a packaged base.
+pub fn is_base_package_owner(success: bool, stdout: &str) -> bool {
+    success && stdout.trim().starts_with(BASE_PACKAGE_PREFIX)
+}
+
+/// Whether this system's base came from packages (asked once per process:
+/// one `pkg which` run, on FreeBSD only).
+#[cfg(target_os = "freebsd")]
+pub fn packaged_base() -> bool {
+    static PACKAGED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *PACKAGED.get_or_init(|| {
+        let Some(pkg) = find_safe("pkg") else { return false };
+        std::process::Command::new(pkg)
+            .args(["which", "-q", BASE_PROBE_FILE])
+            .env_clear()
+            .env("PATH", SAFE_PATH)
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .is_ok_and(|o| is_base_package_owner(o.status.success(), &String::from_utf8_lossy(&o.stdout)))
+    })
+}
+
+/// Only FreeBSD has a packaged base.
+#[cfg(not(target_os = "freebsd"))]
+pub fn packaged_base() -> bool {
+    false
 }
 
 /// `os-release` of this system (empty when unreadable).
@@ -430,9 +480,30 @@ mod tests {
         assert_eq!(detect("ID=nixos", &[], false), System::NixOs);
         assert_eq!(detect("NAME=FreeBSD\nVERSION=\"14.4-RELEASE\"\nVERSION_ID=\"14.4\"\nID=freebsd\nANSI_COLOR=\"0;31\"\nPRETTY_NAME=\"FreeBSD 14.4-RELEASE\"\n", &[], false), System::Managed(Pkg));
         assert_eq!(System::Managed(Pkg).label(), "pkg");
+        assert_eq!(System::Managed(PkgBase).label(), "pkg");
         assert_eq!(detect("ID=gentoo", &[], false), System::Unsupported);
         assert_eq!(detect("ID=mystery", &["xbps-install"], false), System::Managed(Xbps));
         assert_eq!(detect("", &[], false), System::Unsupported);
+    }
+
+    /// FreeBSD 15.1's default install has a packaged base: pkg updates it
+    /// and freebsd-update is left out. Only FreeBSD asks.
+    #[test]
+    fn a_packaged_freebsd_base_updates_through_pkg() {
+        use plan::BackendId::*;
+        const FREEBSD_15: &str = "NAME=FreeBSD\nVERSION=\"15.1-RELEASE\"\nVERSION_ID=\"15.1\"\nID=freebsd\nANSI_COLOR=\"0;31\"\nPRETTY_NAME=\"FreeBSD 15.1-RELEASE\"\nCPE_NAME=\"cpe:/o:freebsd:freebsd:15.1\"\n";
+        let freebsd = detect(FREEBSD_15, &[], false);
+        assert_eq!(freebsd, System::Managed(Pkg));
+        assert_eq!(freebsd.with_packaged_base(|| true), System::Managed(PkgBase));
+        assert_eq!(freebsd.with_packaged_base(|| false), System::Managed(Pkg), "a traditional install keeps freebsd-update");
+        let linux = detect("ID=arch", &[], false);
+        assert_eq!(linux.with_packaged_base(|| panic!("asked on Linux")), System::Managed(Pacman));
+        // `pkg which -q /usr/bin/uname`, recorded on FreeBSD 15.1: a packaged
+        // base, a traditional one (exit 1, nothing printed), and a stray answer.
+        assert!(is_base_package_owner(true, "FreeBSD-runtime-15.1\n"));
+        assert!(!is_base_package_owner(false, ""));
+        assert!(!is_base_package_owner(true, "coreutils-9.5\n"));
+        assert!(!packaged_base() || cfg!(target_os = "freebsd"));
     }
 
     #[test]

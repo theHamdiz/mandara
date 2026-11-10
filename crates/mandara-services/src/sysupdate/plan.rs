@@ -19,6 +19,7 @@
 //! | Void | `xbps-install -S` | `xbps-install -uyD` | `xbps-install -uy` |
 //! | Alpine | `apk update` | — | `apk upgrade` |
 //! | FreeBSD | `pkg update` | `pkg upgrade -U -F -y`, then `freebsd-update fetch` | `pkg upgrade -U -y`, then `freebsd-update install` |
+//! | FreeBSD, packaged base | `pkg update` | `pkg upgrade -U -F -y` | `pkg upgrade -U -y` |
 //!
 //! Splitting refresh and download from the install step makes the safe
 //! point explicit: cancelling is offered until the install step starts,
@@ -188,10 +189,14 @@ pub enum BackendId {
     /// FreeBSD: packages with pkg, then the base system with
     /// freebsd-update.
     Pkg,
+    /// FreeBSD with a packaged base (FreeBSD 15's default): the base
+    /// system is packages too, so pkg updates everything and
+    /// freebsd-update (which refuses such a system) never runs.
+    PkgBase,
 }
 
 impl BackendId {
-    pub const ALL: [BackendId; 9] = [BackendId::Pacman, BackendId::Apt, BackendId::Dnf, BackendId::ZypperDup, BackendId::ZypperUpdate, BackendId::Xbps, BackendId::Apk, BackendId::Nix, BackendId::Pkg];
+    pub const ALL: [BackendId; 10] = [BackendId::Pacman, BackendId::Apt, BackendId::Dnf, BackendId::ZypperDup, BackendId::ZypperUpdate, BackendId::Xbps, BackendId::Apk, BackendId::Nix, BackendId::Pkg, BackendId::PkgBase];
 
     pub fn id(self) -> &'static str {
         match self {
@@ -204,6 +209,7 @@ impl BackendId {
             BackendId::Apk => "apk",
             BackendId::Nix => "nix",
             BackendId::Pkg => "pkg",
+            BackendId::PkgBase => "pkg-base",
         }
     }
 
@@ -221,7 +227,7 @@ impl BackendId {
             BackendId::Xbps => "XBPS",
             BackendId::Apk => "apk",
             BackendId::Nix => "Nix",
-            BackendId::Pkg => "pkg",
+            BackendId::Pkg | BackendId::PkgBase => "pkg",
         }
     }
 }
@@ -615,6 +621,28 @@ pub const FREEBSD_UPDATE_NOTHING: i32 = 2;
 /// refusal's words in the output.
 pub const FREEBSD_UPDATE_UNMANAGED: i32 = 1;
 
+/// pkg's and freebsd-update's own failure messages.
+const PKG_FAILURES: &[(&str, FailureKind)] = &[
+    ("cannot get an advisory lock", FailureKind::Locked),
+    ("locked by another process", FailureKind::Locked),
+    ("not enough space in", FailureKind::DiskFull),
+    ("conflicts with", FailureKind::Conflict),
+    ("conflicting", FailureKind::Conflict),
+    ("is locked and may not be modified", FailureKind::Conflict),
+    ("missing dependency", FailureKind::Conflict),
+    ("no trusted public keys found", FailureKind::Keyring),
+    ("invalid signature", FailureKind::Keyring),
+    ("signature verification failed", FailureKind::Keyring),
+    ("checksum mismatch", FailureKind::Keyring),
+    ("key has incorrect hash", FailureKind::Keyring),
+    ("no address record", FailureKind::Network),
+    ("unable to update repository", FailureKind::Network),
+    ("error updating repositories", FailureKind::Network),
+    ("mirrors... none found", FailureKind::Network),
+    ("no mirrors remaining", FailureKind::Network),
+    ("operation timed out", FailureKind::Network),
+];
+
 /// FreeBSD: third-party packages with pkg (refreshed, downloaded, then
 /// installed; `-U` because the catalogue was just refreshed), then the
 /// base system's security and errata patches with freebsd-update. The
@@ -651,26 +679,7 @@ impl SystemBackend for Pkg {
     }
 
     fn failure_patterns(&self) -> &'static [(&'static str, FailureKind)] {
-        &[
-            ("cannot get an advisory lock", FailureKind::Locked),
-            ("locked by another process", FailureKind::Locked),
-            ("not enough space in", FailureKind::DiskFull),
-            ("conflicts with", FailureKind::Conflict),
-            ("conflicting", FailureKind::Conflict),
-            ("is locked and may not be modified", FailureKind::Conflict),
-            ("missing dependency", FailureKind::Conflict),
-            ("no trusted public keys found", FailureKind::Keyring),
-            ("invalid signature", FailureKind::Keyring),
-            ("signature verification failed", FailureKind::Keyring),
-            ("checksum mismatch", FailureKind::Keyring),
-            ("key has incorrect hash", FailureKind::Keyring),
-            ("no address record", FailureKind::Network),
-            ("unable to update repository", FailureKind::Network),
-            ("error updating repositories", FailureKind::Network),
-            ("mirrors... none found", FailureKind::Network),
-            ("no mirrors remaining", FailureKind::Network),
-            ("operation timed out", FailureKind::Network),
-        ]
+        PKG_FAILURES
     }
 
     fn after(&self, step: &Step, code: Option<i32>, t: &Tracker) -> Next {
@@ -692,6 +701,33 @@ impl SystemBackend for Pkg {
     }
 }
 
+/// FreeBSD with a packaged base: pkg updates the base system's packages
+/// (`FreeBSD-*`, from the `FreeBSD-base` repository) along with every
+/// other package, so the same three pkg steps cover the whole system.
+pub struct PkgBase;
+
+impl SystemBackend for PkgBase {
+    fn id(&self) -> BackendId {
+        BackendId::PkgBase
+    }
+
+    fn steps(&self) -> Vec<Step> {
+        vec![
+            Step::new(StepKind::Refresh, "pkg", &["update"]),
+            Step::new(StepKind::Download, "pkg", &["upgrade", "-U", "-F", "-y"]),
+            Step::new(StepKind::Install, "pkg", &["upgrade", "-U", "-y"]),
+        ]
+    }
+
+    fn parse(&self, step: StepKind, line: &str, t: &mut Tracker) {
+        parse::pkg(step, line, t);
+    }
+
+    fn failure_patterns(&self) -> &'static [(&'static str, FailureKind)] {
+        PKG_FAILURES
+    }
+}
+
 /// The backend of `id`.
 pub fn backend(id: BackendId) -> &'static dyn SystemBackend {
     match id {
@@ -704,6 +740,7 @@ pub fn backend(id: BackendId) -> &'static dyn SystemBackend {
         BackendId::Apk => &Apk,
         BackendId::Nix => &super::nixos::NixBackend,
         BackendId::Pkg => &Pkg,
+        BackendId::PkgBase => &PkgBase,
     }
 }
 
@@ -753,6 +790,8 @@ mod tests {
             ]
         );
         assert!(backend(BackendId::Pkg).steps().iter().filter(|s| s.program == FREEBSD_UPDATE).all(|s| s.env == [("PAGER", "cat")]), "freebsd-update's lists never wait in a pager");
+        assert_eq!(shown(BackendId::PkgBase), ["refresh: pkg update", "download: pkg upgrade -U -F -y", "install: pkg upgrade -U -y"], "a packaged base never runs freebsd-update");
+        assert_eq!((BackendId::PkgBase.id(), BackendId::PkgBase.manager_label()), ("pkg-base", "pkg"));
         assert_eq!(flatpak_step().display(), "flatpak update -y --noninteractive");
     }
 
