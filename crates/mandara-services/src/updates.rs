@@ -301,7 +301,17 @@ pub fn detect(opts: CheckOptions) -> Vec<Source> {
     if opts.flatpak && has("flatpak") {
         out.push(Source { kind: SourceKind::Flatpak, tool: Some("flatpak".into()), command: update_command(SourceKind::Flatpak, None) });
     }
+    let image_based = matches!(crate::sysupdate::current_system(), crate::sysupdate::System::ImageBased(_));
+    out.retain(|s| checked_on(s.kind, image_based));
     out
+}
+
+/// Whether a source is checked: an image-based system (Fedora Atomic,
+/// openSUSE Aeon, Vanilla OS, SteamOS) updates its image with its own tool,
+/// so the package manager it carries (dnf, zypper, apt, pacman) can't update
+/// it and isn't offered; Flatpak apps live outside the image.
+fn checked_on(kind: SourceKind, image_based: bool) -> bool {
+    !image_based || kind == SourceKind::Flatpak
 }
 
 // ── Running checks ───────────────────────────────────────────────────────
@@ -879,6 +889,14 @@ pub fn fetch_news() -> Result<Vec<NewsItem>, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn image_based_systems_check_only_flatpak() {
+        for kind in super::SourceKind::ALL {
+            assert!(super::checked_on(kind, false), "{kind:?}");
+            assert_eq!(super::checked_on(kind, true), kind == super::SourceKind::Flatpak, "{kind:?}");
+        }
+    }
+
     use super::*;
 
     const CHECKUPDATES: &str = "brave-bin 1:1.97.59-1 -> 1:1.98.60-1\ngcc 16.2.1+r23+gd564253eb6c8-1 -> 16.2.1+r23+gd564253eb6c8-3\nlinux 6.17.1.arch1-1 -> 6.17.2.arch1-1\n";
