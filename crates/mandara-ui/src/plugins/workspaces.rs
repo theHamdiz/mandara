@@ -426,6 +426,8 @@ struct Pill<'a> {
     label: SharedString,
     active: bool,
     urgent: bool,
+    /// Windows are on it (shown or not as icons).
+    occupied: bool,
     apps: SmallVec<[&'a str; MAX_ICONS]>,
     extra: usize,
 }
@@ -516,8 +518,9 @@ fn pills<'a>(model: &'a NavigationModel, clients: &'a [ClientInfo], monitor: &st
         if look.hide_empty && !active && !urgent && !occupied && apps.is_empty() {
             return None;
         }
+        let occupied = occupied || !apps.is_empty();
         let (apps, extra) = if look.app_icons { (apps, extra) } else { (SmallVec::new(), 0) };
-        Some(Pill { id, label, active, urgent, apps, extra })
+        Some(Pill { id, label, active, urgent, occupied, apps, extra })
     };
     match model {
         NavigationModel::BitmaskTags { tags, .. } => tags.iter().filter_map(|t| mk(t.id, label(t.id, None), t.active, t.urgent, t.occupied)).collect(),
@@ -782,8 +785,8 @@ fn face<'a>(p: &Pill<'a>, square: bool) -> Face<'a> {
 
 /// The tags as buttons in the bar's own shapes
 /// ([`crate::bar::items::TagButtons`]): the one you're on in the accent,
-/// tags with windows in the bar's icon colour, empty ones in the raised
-/// surface, each with its app icon (or icons) as the shipped pills show
+/// tags with windows in the bar's icon colour (with app icons off too),
+/// empty ones in the raised surface, each with its app icon (or icons) as the shipped pills show
 /// them.
 fn shaped_strip(list: &[Pill], b: crate::bar::items::TagButtons, monitor: &SharedString, monochrome: bool, palette: &MandaraPalette) -> AnyElement {
     use mandara_config::surfaces::{BarIconFill, BarItemShape};
@@ -804,10 +807,10 @@ fn shaped_strip(list: &[Pill], b: crate::bar::items::TagButtons, monitor: &Share
             (palette.primary, palette.on_primary)
         } else if p.urgent {
             (palette.urgent_coral, palette.on_primary)
-        } else if p.apps.is_empty() {
-            (empty, palette.on_surface_variant)
-        } else {
+        } else if p.occupied {
             (busy, palette.on_surface)
+        } else {
+            (empty, palette.on_surface_variant)
         };
         let button = div()
             .id(("tag", i))
@@ -821,7 +824,7 @@ fn shaped_strip(list: &[Pill], b: crate::bar::items::TagButtons, monitor: &Share
             .gap(px(ICON_GAP))
             .cursor_pointer()
             .text_size(px(text::LABEL))
-            .font_weight(if p.active || !p.apps.is_empty() { gpui::FontWeight::SEMIBOLD } else { gpui::FontWeight::NORMAL })
+            .font_weight(if p.active || p.occupied { gpui::FontWeight::SEMIBOLD } else { gpui::FontWeight::NORMAL })
             .text_color(fg.hsla())
             .hover(|s| s.opacity(SHAPED_HOVER_OPACITY))
             .child(crate::shell::item_tile(&placed, fill, palette.surface_base, None));
@@ -1142,6 +1145,7 @@ mod tests {
                 cfg.plugins.settings.entry(ID.into()).or_default().insert("app_icons".into(), false.into());
                 let list = pills(model, &clients, "M", Look::of(&cfg));
                 assert!(list.iter().all(|p| p.apps.is_empty() && face(p, buttons.square()) == Face::Label), "{style:?}");
+                assert!(list.iter().find(|p| p.id == 2).is_some_and(|p| p.occupied), "{style:?}: a tag with windows still reads as busy");
                 cfg.plugins.settings.remove(ID);
             }
             // Every button sits inside the bar's thickness, in its shapes.
