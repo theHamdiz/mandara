@@ -1320,7 +1320,7 @@ impl<'a> Installer<'a> {
         // An image-based system gets greetd and cage with its next image;
         // the switch needs them, so it waits for the reboot.
         if installing && !self.args.no_deps && let Some(image) = self.facts.image {
-            self.image_login(image, exe, &missing);
+            self.image_login(image, &missing);
             return;
         }
         if installing {

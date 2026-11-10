@@ -1489,7 +1489,7 @@ fn bazzite_layers_only_what_its_image_lacks_in_one_transaction() {
     assert_eq!(text.matches("rpm-ostree install").count(), 1, "one transaction\n{text}");
     assert!(text.contains("would ask: Add 4 packages with rpm-ostree?"), "{text}");
     assert!(!text.contains("dnf install"), "{text}");
-    assert!(text.contains("Login screen — switch plan (after packages)"), "{text}");
+    assert!(!text.contains("switch plan"), "the plan is made after the reboot\n{text}");
     assert!(!text.contains("would run: sudo ") || !text.lines().any(|l| l.starts_with("would run: sudo ") && l.ends_with("greeter use mandara --apply")), "no switch before the reboot\n{text}");
     assert!(text.contains("Studio → Login screen → Login manager, or run: sudo"), "{text}");
     // The admin helper goes to /usr/local, which survives updates here.

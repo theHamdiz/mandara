@@ -202,7 +202,7 @@ impl Installer<'_> {
     /// Mandara Login on an image-based system whose image lacks greetd or
     /// cage (`missing`, programs): their packages are collected, and the
     /// switch waits for the next boot, when they exist.
-    pub(super) fn image_login(&mut self, image: ImageSystem, exe: &Path, missing: &[&str]) {
+    pub(super) fn image_login(&mut self, image: ImageSystem, missing: &[&str]) {
         let family = self.facts.family;
         let wanted: Vec<String> = missing.iter().map(|p| packages::login_package(family, p)).collect();
         let wanted: Vec<&str> = wanted.iter().map(String::as_str).collect();
@@ -214,12 +214,9 @@ impl Installer<'_> {
                 self.layer.login.push(p);
             }
         }
+        // No switch plan yet: it is made after the reboot, against the image
+        // that has greetd.
         self.layer.login_after_reboot = true;
-        if self.dry() {
-            for line in self.probe.switch_plan(exe, true).lines() {
-                self.say(Level::Info, line);
-            }
-        }
     }
 
     /// The root-owned files that must survive updates (the admin helper,
@@ -298,7 +295,8 @@ impl Installer<'_> {
             self.say(Level::Warn, tf("{tool} couldn't add the packages. Add them later with: {command}", &[("tool", &image.program()), ("command", &shown)]));
             return;
         }
-        self.say(Level::Ok, t("Restart your computer to start using the new packages. Everything else is ready now."));
+        let level = if self.dry() { Level::Info } else { Level::Ok };
+        self.say(level, t("Restart your computer to start using the new packages. Everything else is ready now."));
         self.login_after_reboot();
     }
 
