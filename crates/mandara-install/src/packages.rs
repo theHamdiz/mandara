@@ -30,7 +30,11 @@
 //! are D-Bus, seatd (seat access for the compositor), ConsoleKit2
 //! (sessions, which polkit tracks), BSDisks (UDisks2's interface) and
 //! PipeWire with its OSS plugin. greetd isn't packaged for FreeBSD yet
-//! (`docs/login-manager.md` builds it), and neither is the Inter font.
+//! (`docs/login-manager.md` builds it). Fonts: Alexandria and JetBrains
+//! Mono ship inside Mandara (JetBrains Mono's package is added too); Inter
+//! and Cairo have no package of their own, only inside `google-fonts`
+//! (1.1 GiB), which is left to the user: Arabic falls back to Alexandria
+//! and Noto Sans Arabic (`noto-sans-arabic`), Latin text to Alexandria.
 
 use crate::family::Family;
 

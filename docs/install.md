@@ -306,6 +306,28 @@ The installer runs as your user and asks for root through `sudo` (or
 `doas`) only for packages and system changes. Updates come from the
 Updates panel: [pkg and freebsd-update](apps-and-updates.md#freebsd).
 
+### What works on FreeBSD
+
+Mandara reads FreeBSD's own interfaces where Linux has procfs, sysfs or a
+Linux-only daemon:
+
+| Feature | On FreeBSD |
+|---|---|
+| Processes, CPU, memory, swap, load, uptime | `kern.proc`, `kern.cp_time(s)`, `vm.stats.vm`, `vm.swap_info`, `kern.boottime` (the process hunter, Resources, mini stats, the desktop system monitor, Studio → Performance) |
+| CPU temperature | `dev.cpu.N.temperature`, once `coretemp` (Intel) or `amdtemp` (AMD) is loaded: `kldload coretemp`, or `coretemp_load="YES"` in `/boot/loader.conf` |
+| Drives | `getfsstat`: UFS, ZFS pools, FAT, ext2 and exFAT mounts |
+| Battery and AC | UPower when it runs, else `hw.acpi.battery.*`, `hw.acpi.acline` and `acpiconf -i 0` |
+| Sound | PulseAudio or PipeWire when one runs; else the default OSS device through `mixer(8)` (volume and mute of output and input). Changing the default device runs `mixer -d` as root. Per-app volume and the visualizer need PulseAudio or PipeWire |
+| Network | `ifconfig`, the default route and a routing socket for changes; Wi-Fi through wpa_supplicant's control socket (`ctrl_interface_group=wheel` in `/etc/wpa_supplicant.conf` opens it to the `wheel` group). Joining hands wpa_supplicant the network's key, never your passphrase in a command line; `update_config=1` keeps it for the next boot. Turning Wi-Fi on or off runs `ifconfig wlan0 up/down` as root |
+| Brightness | backlight(9) devices in `/dev/backlight` (the `video` group may change them) |
+| Lock, sleep, restart, shut down | Mandara's own lock screen; ConsoleKit2 when it's on the system bus, else `shutdown -p now`, `shutdown -r now` and `acpiconf -s 3` through pkexec and Mandara's password dialog |
+
+Locked on FreeBSD, with the reason in Studio: Bluetooth (no BlueZ), power
+profiles (no power-profiles-daemon; `powerd` sets the CPU speed), the
+hotspot (no NetworkManager), hibernation (FreeBSD sleeps to RAM only),
+monitor brightness over DDC/CI, keyboard-light OSDs, and the Services,
+Crashes, Ports and App installer plugins, which manage Linux-only things.
+
 ## NixOS
 
 Mandara is a flake: Nix builds it from source (a release build, like the
