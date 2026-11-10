@@ -240,9 +240,11 @@ only the plumbing differs:
   which ends the stack before a keyring line can run: the plan says so,
   and `auth required pam_unix.so` fixes it.
 * **Password prompts** (polkit) need a ConsoleKit2 session for apps other
-  than the shell: add `session optional pam_ck_connector.so` to
-  `/usr/local/etc/pam.d/greetd`. Without one, Mandara's agent still answers
-  everything the shell asks (the Updates panel, the admin helper).
+  than the shell: add `session optional pam_ck_connector.so` to the greetd
+  PAM file OpenPAM reads, which is `/etc/pam.d/greetd` when it exists (as
+  `keyring-unlock` creates it) and `/usr/local/etc/pam.d/greetd`
+  otherwise. Without one, Mandara's agent still answers everything the
+  shell asks (the Updates panel, the admin helper).
 
 ## Unlock your keyrings at login: `greeter keyring-unlock`
 

@@ -102,9 +102,12 @@ fn no_community(p: &MandaraPalette) -> AnyElement {
         .child(div().text_size(px(text::LABEL)).text_color(p.on_surface_variant.hsla()).child(t("Follow a community to see its top posts here")))
         // A tab stop: Tab reaches it, and Enter or Space clicks it once
         // (GPUI turns the key's release on a focused element into a click).
+        // A ring in the accent shows keyboard focus; the transparent border
+        // keeps the pill the same size with and without it.
         .child(div().row().child(pill_button("reddit-card-discover", Some("globe"), t("Find communities"), accent, p, |_, cx| {
             if let Err(error) = super::discover(cx) { tracing::info!("reddit: {error}"); }
-        }).focusable().tab_index(0)))
+        }).focusable().tab_index(0).border_2().border_color(gpui::transparent_black())
+            .focus_visible(move |s| s.border_color(accent.hsla()))))
         .into_any_element()
 }
 
