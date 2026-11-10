@@ -94,10 +94,11 @@ pub struct ShellView {
     /// The chip last clicked: a plugin placed twice (in the bar and a side
     /// bar) opens its panel from the one you clicked.
     origin: Option<(usize, usize)>,
-    /// The sidebar's tabs: cached card lists, selection, menus.
+    /// The sidebar's tabs: its cards (only while it shows), selection, menus.
     tabs: crate::sidebar_tabs::SidebarTabs,
-    /// The notifications list shown in its own sidebar tab, when enabled.
-    sidebar_notifications: Option<AnyView>,
+    /// Drops the sidebar's cards once it stayed closed for
+    /// [`crate::sidebar_tabs::RELEASE_AFTER`] (cancelled when it opens).
+    sidebar_release: Option<gpui::Task<()>>,
     /// The main menu panel (right-click on empty bar space).
     menu: Option<(PanelSpec, PanelCx)>,
     /// The detached panel's plugin id and instance (see [`DETACHED_SLOT`]).
@@ -470,7 +471,7 @@ impl ShellView {
             zones: [Vec::new(), Vec::new(), Vec::new()],
             sides: [side_bars::SideBar::new(false), side_bars::SideBar::new(true)],
             origin: None,
-            sidebar_notifications: None,
+            sidebar_release: None,
             tabs: crate::sidebar_tabs::SidebarTabs::new(),
             menu: None,
             detached: None,
@@ -545,13 +546,8 @@ impl ShellView {
         }
         let notif_id = crate::plugins::notifications::ID;
         let notif_tab = placement.notifications_tab && enabled(notif_id);
-        self.sidebar_notifications = notif_tab
-            .then(|| {
-                let build = cx.global::<PluginRegistry>().get(notif_id).map(|f| f.build.clone())?;
-                mandara_plugins::guard("notifications tab startup", || build(window, cx, base_cx.fork()))?.sidebar
-            })
-            .flatten();
-        self.tabs.rebuild(&cfg.sidebar.tabs, &enabled, notif_tab.then_some(notif_id), &base_cx, window, cx);
+        // Cards are built when the sidebar shows them, not here.
+        self.tabs.rebuild(&cfg.sidebar.tabs, &enabled, notif_tab.then_some(notif_id), notif_tab, &base_cx, cx);
         if self.menu.is_none() {
             let build = cx.global::<PluginRegistry>().get(crate::plugins::main_menu::ID).map(|f| f.build.clone());
             if let Some(build) = build {
@@ -1518,7 +1514,7 @@ impl Render for ShellView {
                 let sidebar_up = crate::state::config(cx).read(cx).get().sidebar_active() && (this.shell.read(cx).sidebar_visible_on(&this.monitor) || crate::state::config(cx).read(cx).get().sidebar.pinned());
                 if sidebar_up && this.shell.read(cx).panel_on(&this.monitor).is_none() {
                     let cfg = crate::state::config(cx).read(cx).snapshot();
-                    let notifications = this.sidebar_notifications.is_some();
+                    let notifications = this.tabs.has_notifications();
                     if this.tabs.handle_key(e, &cfg.sidebar, notifications, cx) {
                         cx.stop_propagation();
                         cx.notify();
@@ -1770,6 +1766,20 @@ impl Render for ShellView {
         if sidebar_p <= HIDDEN_EPSILON {
             // The next opening picks its tab (the last one, or the first).
             self.tabs.on_hidden();
+            // Its cards go once it stays closed.
+            if self.tabs.is_live() && self.sidebar_release.is_none() {
+                self.sidebar_release = Some(cx.spawn(async move |this, cx| {
+                    cx.background_executor().timer(crate::sidebar_tabs::RELEASE_AFTER).await;
+                    let _ = this.update(cx, |this, cx| {
+                        this.sidebar_release = None;
+                        if this.sidebar.value() <= HIDDEN_EPSILON {
+                            this.tabs.release(cx);
+                        }
+                    });
+                }));
+            }
+        } else {
+            self.sidebar_release = None;
         }
         if sidebar_p > HIDDEN_EPSILON {
             let h = side_h;
@@ -1778,11 +1788,11 @@ impl Render for ShellView {
             let card_gap = ranges::CARD_SPACING.clamp(side_look.card_spacing, mandara_config::surfaces::defaults::CARD_SPACING_PX);
             let sidebar_cx = &self.sidebar_cx;
             sidebar_cx.set_progress(sidebar_p.min(1.0));
-            let notifications = self.sidebar_notifications.is_some();
+            let notifications = self.tabs.has_notifications();
             let sel = self.tabs.resolve(&cfg.sidebar, notifications, cx);
-            let cards: Vec<AnyElement> = match (&sel, &self.sidebar_notifications) {
-                (crate::sidebar_tabs::Sel::Notifications, Some(view)) => vec![view.clone().into_any_element()],
-                _ => self.tabs.cards(&sel).iter().enumerate().map(|(i, card)| reveal(sidebar_cx, i, card.clone())).collect(),
+            let cards: Vec<AnyElement> = match sel {
+                crate::sidebar_tabs::Sel::Notifications => self.tabs.notifications_view(window, cx).map(|view| view.into_any_element()).into_iter().collect(),
+                _ => self.tabs.cards(&sel, window, cx).iter().enumerate().map(|(i, card)| reveal(sidebar_cx, i, card.clone())).collect(),
             };
             let cards = if cards.is_empty() { vec![crate::sidebar_tabs::empty_tab(&palette)] } else { cards };
             // The switched-in tab slides from its side and fades in.
