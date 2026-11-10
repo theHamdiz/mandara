@@ -400,7 +400,7 @@ impl DockMenu {
                     _ => item.desktop.as_ref().and_then(|d| show_in_files_target(&d.exec, desktop_file(&d.id))),
                 };
                 if let Some(dir) = target {
-                    super::stacks::open_path(&dir);
+                    super::stacks::open_path(&dir, cx);
                 }
             }
             MenuAction::Uninstall => crate::state::open_studio_at(Some("applications/installed".into()), cx),
@@ -439,7 +439,7 @@ impl DockMenu {
                     });
                 }
             }
-            MenuAction::OpenTrash => super::open_trash(),
+            MenuAction::OpenTrash => super::open_trash(cx),
             MenuAction::EmptyTrash => {
                 // Two clicks: the first arms (the row turns into the
                 // confirmation), the second empties.

@@ -9280,3 +9280,5 @@
 "Keeps your feeds and saved articles in Mandara's state folder" = "Huhifadhi vyanzo vyako na makala ulizohifadhi kwenye folda ya hali ya Mandara"
 "Reads communities, threads and their pictures from reddit.com" = "Husoma jumuiya, mijadala na picha zake kutoka reddit.com"
 "Saves your game and best scores in Mandara's state folder" = "Huhifadhi mchezo wako na alama zako bora kwenye folda ya hali ya Mandara"
+"No app opens {type} files — choose one in Studio → Applications → Defaults" = "Hakuna programu inayofungua faili za {type} — chagua moja katika Studio → Programu → Chaguo-msingi"
+"No file manager found — choose one in Studio → Applications" = "Hakuna kidhibiti faili — chagua kimoja katika Studio → Programu"

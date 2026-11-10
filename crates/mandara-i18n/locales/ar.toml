@@ -9626,3 +9626,5 @@
 "Keeps your feeds and saved articles in Mandara's state folder" = "تحفظ خلاصاتك ومقالاتك المحفوظة في مجلد حالة Mandara"
 "Reads communities, threads and their pictures from reddit.com" = "يقرأ المجتمعات والنقاشات وصورها من reddit.com"
 "Saves your game and best scores in Mandara's state folder" = "تحفظ لعبتك وأفضل نتائجك في مجلد حالة Mandara"
+"No app opens {type} files — choose one in Studio → Applications → Defaults" = "لا يوجد تطبيق يفتح ملفات {type} — اختر واحدًا في الاستوديو ← التطبيقات ← الافتراضيات"
+"No file manager found — choose one in Studio → Applications" = "لم يُعثر على مدير ملفات — اختر واحدًا في الاستوديو ← التطبيقات"

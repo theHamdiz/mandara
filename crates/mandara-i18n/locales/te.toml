@@ -9281,3 +9281,5 @@
 "Keeps your feeds and saved articles in Mandara's state folder" = "మీ ఫీడ్‌లు మరియు సేవ్ చేసిన కథనాలను Mandara state ఫోల్డర్‌లో ఉంచుతుంది"
 "Reads communities, threads and their pictures from reddit.com" = "reddit.com నుండి కమ్యూనిటీలు, థ్రెడ్‌లు మరియు వాటి చిత్రాలను చదువుతుంది"
 "Saves your game and best scores in Mandara's state folder" = "మీ ఆట మరియు ఉత్తమ స్కోర్‌లను Mandara state ఫోల్డర్‌లో సేవ్ చేస్తుంది"
+"No app opens {type} files — choose one in Studio → Applications → Defaults" = "{type} ఫైళ్లను తెరిచే యాప్ లేదు — Studio → అప్లికేషన్‌లు → అప్రమేయాలు లో ఒకటి ఎంచుకోండి"
+"No file manager found — choose one in Studio → Applications" = "ఫైల్ మేనేజర్ కనబడలేదు — Studio → అప్లికేషన్‌లు లో ఒకటి ఎంచుకోండి"

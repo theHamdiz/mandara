@@ -9623,3 +9623,5 @@
 "Keeps your feeds and saved articles in Mandara's state folder" = "フィードと保存した記事を Mandara の状態フォルダに保存します"
 "Reads communities, threads and their pictures from reddit.com" = "reddit.com からコミュニティ、スレッドとその画像を読み込みます"
 "Saves your game and best scores in Mandara's state folder" = "ゲームとベストスコアを Mandara の状態フォルダに保存します"
+"No app opens {type} files — choose one in Studio → Applications → Defaults" = "{type} ファイルを開くアプリがありません — Studio → アプリケーション → 既定 で選んでください"
+"No file manager found — choose one in Studio → Applications" = "ファイルマネージャーが見つかりません — Studio → アプリケーション で選んでください"

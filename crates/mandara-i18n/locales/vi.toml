@@ -9280,3 +9280,5 @@
 "Keeps your feeds and saved articles in Mandara's state folder" = "Lưu nguồn tin và bài viết đã lưu của bạn trong thư mục trạng thái của Mandara"
 "Reads communities, threads and their pictures from reddit.com" = "Đọc cộng đồng, chủ đề thảo luận và ảnh của chúng từ reddit.com"
 "Saves your game and best scores in Mandara's state folder" = "Lưu ván chơi và điểm cao nhất của bạn trong thư mục trạng thái của Mandara"
+"No app opens {type} files — choose one in Studio → Applications → Defaults" = "Không có ứng dụng nào mở tệp {type} — hãy chọn một cái trong Studio → Ứng dụng → Mặc định"
+"No file manager found — choose one in Studio → Applications" = "Không thấy trình quản lý tệp — hãy chọn một cái trong Studio → Ứng dụng"

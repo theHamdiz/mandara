@@ -53,6 +53,7 @@ pub mod outputs;
 pub mod lock;
 pub mod night_light;
 pub mod osd;
+pub mod opener;
 pub mod overlays;
 pub mod polkit;
 pub mod powerctl;

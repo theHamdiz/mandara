@@ -439,7 +439,7 @@ pub fn stop(cx: &mut App) -> Result<async_channel::Receiver<Result<String, Strin
                 cx.notify();
             });
             if let (true, Ok(saved)) = (open_folder, &result) {
-                reveal(&saved.path);
+                reveal(&saved.path, cx);
             }
             notify(text.clone(), cx);
         });
@@ -561,14 +561,14 @@ pub fn trash(path: PathBuf, cx: &mut App) {
 }
 
 /// Opens a recording with its default app.
-pub fn open(path: &std::path::Path) {
-    crate::plugins::dock::stacks::open_path(path);
+pub fn open(path: &std::path::Path, cx: &mut App) {
+    crate::plugins::dock::stacks::open_path(path, cx);
 }
 
 /// Opens a recording's folder.
-pub fn reveal(path: &std::path::Path) {
+pub fn reveal(path: &std::path::Path, cx: &mut App) {
     if let Some(dir) = path.parent() {
-        crate::plugins::dock::stacks::open_path(dir);
+        crate::plugins::dock::stacks::open_path(dir, cx);
     }
 }
 

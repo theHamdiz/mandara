@@ -341,7 +341,7 @@ impl AppsGrid {
             }
             3 => {
                 if let Some(dir) = super::menu::show_in_files_target(&app.exec, super::menu::desktop_file(&app.id)) {
-                    super::stacks::open_path(&dir);
+                    super::stacks::open_path(&dir, cx);
                 }
                 return self.close(cx);
             }

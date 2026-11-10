@@ -4104,6 +4104,7 @@ No accounts yet
 No active connection
 No adapter found
 No app matches “{query}”
+No app opens {type} files — choose one in Studio → Applications → Defaults
 No apps are playing sound
 No apps here
 No apps in the tray
@@ -4159,6 +4160,7 @@ No favourites yet
 No feed found at this address
 No feeds yet
 No feeds yet. Add one above or pick from the starter feeds below.
+No file manager found — choose one in Studio → Applications
 No files match “{query}”
 No filesystem access
 No folder to write into

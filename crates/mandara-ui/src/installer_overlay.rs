@@ -890,9 +890,9 @@ fn icon_button(id: &'static str, glyph: &'static str, p: &MandaraPalette) -> gpu
 }
 
 /// Opens a file's folder.
-fn reveal(path: &Path) {
+fn reveal(path: &Path, cx: &mut App) {
     let dir = if path.is_dir() { path.to_path_buf() } else { path.parent().map(Path::to_path_buf).unwrap_or_default() };
-    crate::plugins::dock::stacks::open_path(&dir);
+    crate::plugins::dock::stacks::open_path(&dir, cx);
 }
 
 fn open_url(url: String) {
@@ -1246,9 +1246,9 @@ impl InstallerOverlay {
         let focused = self.action(Rc::new(move |cx| installer::dismiss(id, cx)));
         actions.push(button("installer-fail-close", t("Close"), false, focused, p).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| installer::dismiss(id, cx))).into_any_element());
         let show = path.clone();
-        let focused = self.action(Rc::new(move |_| reveal(&show)));
+        let focused = self.action(Rc::new(move |cx| reveal(&show, cx)));
         let show = path.clone();
-        actions.push(button("installer-fail-folder", t("Show file"), false, focused, p).on_click(cx.listener(move |_, _: &ClickEvent, _, _| reveal(&show))).into_any_element());
+        actions.push(button("installer-fail-folder", t("Show file"), false, focused, p).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| reveal(&show, cx))).into_any_element());
         let primary: Option<(&'static str, &str, Action)> = match fix {
             Fix::TryAgain => Some(("installer-fail-retry", t("Try again"), Rc::new(move |cx| installer::retry(id, cx)))),
             Fix::Settings => Some(("installer-fail-settings", t("Open settings"), Rc::new(move |cx| {
@@ -1262,7 +1262,7 @@ impl InstallerOverlay {
             Fix::OpenFolder => place.map(|dir| -> (&'static str, &str, Action) {
                 // The app's own folder is rolled back: open the one it sits in.
                 let at = std::iter::successors(Some(dir.as_path()), |d| d.parent()).find(|d| d.is_dir()).map(Path::to_path_buf).unwrap_or(dir);
-                ("installer-fail-open-folder", t("Open folder"), Rc::new(move |_| reveal(&at)))
+                ("installer-fail-open-folder", t("Open folder"), Rc::new(move |cx| reveal(&at, cx)))
             }),
             Fix::None => None,
         };
