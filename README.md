@@ -322,6 +322,14 @@ files (no compositor yet? it offers to install one). It works on Arch,
 Debian and Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus. Updates arrive by small binary patch: Studio → About →
 **Update now**.
 
+On **image-based systems** (Bazzite, Silverblue, Kinoite, Bluefin, Aurora,
+Aeon, Kalpa, Vanilla OS), the same command puts Mandara in your home folder
+and adds only the system packages the image lacks, in one `rpm-ostree`,
+`transactional-update` or `abroot` transaction after asking. It says when a
+reboot is needed; after it, Mandara Login is one click away in Studio →
+Login screen. On SteamOS it installs into your home folder only
+([Immutable systems](docs/install.md#immutable-systems)).
+
 On **FreeBSD** 14.4 or newer (amd64), the same command installs the
 FreeBSD build; without curl, use the base system's `fetch`
 ([FreeBSD install](docs/install.md#freebsd)).
@@ -334,7 +342,7 @@ module come with it). NixOS users update through their flake, not Studio's
 `nix flake update mandara`, then `sudo nixos-rebuild switch --flake .` (or
 `home-manager switch --flake .`). Use your input name if it differs from `mandara`.
 
-→ **[Install guide](docs/install.md)**: Arch packages, NixOS, FreeBSD, other
+→ **[Install guide](docs/install.md)**: Arch packages, NixOS, FreeBSD, immutable systems, other
 options, coming from another setup.
 
 ## Common questions

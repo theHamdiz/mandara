@@ -97,7 +97,9 @@ KWallet with your login password. Updates come later by binary patch
 (`mandara update`).
 
 It works on **Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo
-and Solus**; on NixOS, use the [flake](#nixos) instead. Besides the
+and Solus**, and on image-based systems such as Bazzite, Silverblue, Bluefin
+and Aeon (see [Immutable systems](#immutable-systems)); on NixOS, use the
+[flake](#nixos) instead. Besides the
 runtime libraries it installs, one by one so a missing package never stops
 it, fonts and colour emoji, Papirus icons, `xdg-utils`, the desktop portals
 of your compositors, and the services Studio talks to: PipeWire and
@@ -357,6 +359,78 @@ profiles (no power-profiles-daemon; `powerd` sets the CPU speed), the
 hotspot (no NetworkManager), hibernation (FreeBSD sleeps to RAM only),
 monitor brightness over DDC/CI, keyboard-light OSDs, and the Services,
 Crashes, Ports and App installer plugins, which manage Linux-only things.
+
+## Immutable systems
+
+Image-based ("immutable") systems boot a read-only image of `/usr` that
+their own tool replaces as a whole, so no package manager can install into
+the running system. The same one-line install works there:
+
+```bash
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh
+```
+
+The download script says it found an image-based system, downloads and
+verifies the release in your home folder's cache (nothing it does needs a
+writable `/usr`), and hands over to `mandara install`, which:
+
+- puts Mandara in your home folder as everywhere (`~/.local/bin/mandara`,
+  its desktop entry, icon and language packs), and hooks it into your
+  compositor (`~/.config/mandara/generated/`);
+- checks every package it would install elsewhere against the **running
+  image** (`rpm -q`, `dpkg-query` or `pacman -Q`), so nothing the image
+  already ships is layered again. On rpm-ostree, packages that
+  `rpm-ostree status` already requests for the next boot are skipped too;
+- asks **once**, at the end, before adding what is missing in **one
+  transaction** with the system's own tool. A package a repository lacks
+  fails that transaction, so it is retried with the essential packages
+  (the runtime libraries, greetd and cage) alone;
+- does everything that needs no reboot first, then says when a reboot is
+  needed.
+
+| System | Detected by | Missing packages are added with | Root-owned files that survive updates |
+|---|---|---|---|
+| Fedora Atomic: Silverblue, Kinoite, Sway Atomic and the others; Bazzite, Bluefin, Aurora | `/run/ostree-booted` | `rpm-ostree install --idempotent` (layering) | `/etc`, `/var`, `/usr/local` (a link to `/var/usrlocal`) |
+| openSUSE Aeon, Kalpa, MicroOS | `os-release` (`aeon`, `kalpa`, `microos` in `ID`/`ID_LIKE`) | `transactional-update pkg install` (a new snapshot) | `/etc`, `/var`, `/usr/local` (its own subvolume) |
+| Vanilla OS 2 | `abroot`, or `NAME="Vanilla OS"` | `abroot pkg add`, then `abroot pkg apply` once | `/etc`, `/var` |
+| SteamOS | `ID=steamos` | nothing (see below) | `/etc`, `/var`, `/home` |
+
+The packages arrive with the **next boot**. Until then, Mandara already
+runs if the image had its runtime libraries (every desktop image above
+does); fonts, portals and services that were missing start working after
+the reboot. To see what would be added without changing anything, run the
+install with `--dry-run`. If you decline, the installer prints the exact
+command to run later.
+
+**The admin helper** (the root-owned copy Studio's administrator actions
+run) goes to `/usr/local/lib/mandara`, which survives updates on Fedora
+Atomic and openSUSE. **Mandara Login** needs greetd and cage, which come
+with the same transaction. The switch itself needs them installed, so it
+waits for the reboot: after restarting, Mandara Login is one click away in
+Studio → Login screen → Login manager, or run the
+`sudo ~/.local/bin/mandara greeter use mandara --apply` command the installer
+prints. It writes greetd's config in `/etc/greetd` (kept across updates), and
+its media folders go to `/usr/local/share/mandara/login` because
+`/usr/share` is read-only.
+
+**Updates.** Studio → About → *Update now* keeps Mandara itself current, as
+everywhere, because it lives in your home folder. The system updates with
+its own tool (`rpm-ostree upgrade`, `ujust update` on Universal Blue images,
+`transactional-update dup`, `abroot upgrade`), and Mandara's Updates panel
+leaves it to that tool: it shows Flatpak updates and says how the system
+updates, instead of offering dnf, zypper, apt or pacman, which can't write
+the image.
+
+**SteamOS** keeps its image read-only, and every SteamOS update replaces it,
+removing anything installed into it. Mandara installs only into your home
+folder there and lists what it couldn't add. The admin helper and Mandara
+Login live in `/usr/local`, which SteamOS replaces too, so they are skipped,
+and Studio's administrator actions stay unavailable. Desktop Mode's Plasma
+session runs Mandara with `--compositor kwin`.
+
+**Building from source** on an image-based system needs a compiler and
+build tools in the running image. The installer says which are missing;
+build inside a toolbox or distrobox container instead, or install a release.
 
 ## NixOS
 
