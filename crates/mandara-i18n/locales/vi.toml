@@ -9316,6 +9316,7 @@
 "{command} failed ({status})" = "{command} thất bại ({status})"
 "Core {n}" = "Lõi {n}"
 "FreeBSD can't do this without ConsoleKit2" = "FreeBSD không làm được việc này nếu thiếu ConsoleKit2"
+"The login screen isn't allowed to do this ({error}). See {doc}" = "Màn hình đăng nhập không được phép làm việc này ({error}). Xem {doc}"
 "FreeBSD has no BlueZ, the Bluetooth service Mandara uses" = "FreeBSD không có BlueZ, dịch vụ Bluetooth mà Mandara dùng"
 "FreeBSD has no power-profiles-daemon; powerd(8) sets the processor's speed there" = "FreeBSD không có power-profiles-daemon; ở đó powerd(8) chỉnh tốc độ bộ xử lý"
 "FreeBSD has no systemd: its services are rc(8) scripts, which this plugin doesn't manage" = "FreeBSD không có systemd: dịch vụ của nó là các script rc(8), mà plugin này không quản lý"

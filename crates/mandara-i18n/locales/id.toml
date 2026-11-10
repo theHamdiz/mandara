@@ -9413,6 +9413,7 @@
 "{command} failed ({status})" = "{command} gagal ({status})"
 "Core {n}" = "Inti {n}"
 "FreeBSD can't do this without ConsoleKit2" = "FreeBSD tidak bisa melakukannya tanpa ConsoleKit2"
+"The login screen isn't allowed to do this ({error}). See {doc}" = "Layar masuk tidak diizinkan melakukan ini ({error}). Lihat {doc}"
 "FreeBSD has no BlueZ, the Bluetooth service Mandara uses" = "FreeBSD tidak punya BlueZ, layanan Bluetooth yang dipakai Mandara"
 "FreeBSD has no power-profiles-daemon; powerd(8) sets the processor's speed there" = "FreeBSD tidak punya power-profiles-daemon; di sana powerd(8) yang mengatur kecepatan prosesor"
 "FreeBSD has no systemd: its services are rc(8) scripts, which this plugin doesn't manage" = "FreeBSD tidak punya systemd: layanannya berupa skrip rc(8), yang tidak dikelola plugin ini"

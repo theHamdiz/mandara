@@ -122,6 +122,7 @@ struct FakeProbe {
     active: bool,
     outdated: bool,
     keyring: Option<String>,
+    power_rule: Option<Result<Option<String>, String>>,
 }
 
 impl LoginProbe for FakeProbe {
@@ -139,6 +140,10 @@ impl LoginProbe for FakeProbe {
 
     fn keyring_plan(&self) -> Option<String> {
         self.keyring.clone()
+    }
+
+    fn power_rule_plan(&self) -> Result<Option<String>, String> {
+        self.power_rule.clone().unwrap_or(Ok(None))
     }
 }
 
@@ -452,43 +457,60 @@ fn freebsd_starts_an_enabled_service_that_isnt_running() {
     assert!(host.text().contains("dbus was enabled but not running; started it"), "{}", host.text());
 }
 
+/// FreeBSD: the login screen's power buttons get Mandara's polkit rule
+/// through `greeter power-rule --apply` (which also takes the user out of
+/// `operator`, as its output says); nobody is ever added to `operator`, a
+/// rule in place already runs nothing, and a missing prerequisite is said.
 #[test]
-fn greetd_user_comes_from_the_default_session() {
-    assert_eq!(greetd_user(""), "greeter");
-    assert_eq!(greetd_user("[terminal]\nvt = 8\n[default_session]\ncommand = \"cage -s -- mandara greeter\"\nuser = \"_greetd\" # the login screen\n"), "_greetd");
-    assert_eq!(greetd_user("[initial_session]\nuser = \"layla\"\n[default_session]\ncommand = \"x\"\n"), "greeter", "only the default session's user");
-}
-
-/// FreeBSD: the login screen's user joins `operator`, so the login screen's
-/// power buttons work without ConsoleKit2; a member already is left alone,
-/// and a user greetd hasn't created yet gets the command to run later.
-#[test]
-fn freebsd_login_screen_user_joins_operator() {
-    let run_with = |group: &str, passwd: &str| {
+fn freebsd_login_screen_power_goes_through_the_polkit_rule() {
+    let run_with = |family: Family, power_rule: Result<Option<String>, String>, applied: &str| {
         let f = Fixture::new();
-        std::fs::create_dir_all(f.root().join("etc")).unwrap();
-        std::fs::create_dir_all(f.root().join("usr/local/etc/greetd")).unwrap();
-        std::fs::write(f.root().join("etc/group"), group).unwrap();
-        std::fs::write(f.root().join("etc/passwd"), passwd).unwrap();
-        std::fs::write(f.root().join("usr/local/etc/greetd/config.toml"), "[terminal]\nvt = 8\n[default_session]\ncommand = \"cage -s -- mandara greeter\"\nuser = \"greeter\"\n").unwrap();
-        let mut host = FakeHost::with(&["pkg", "sudo", "sway", "cage", "greetd"]);
+        let mut host = FakeHost::with(&["pkg", "sudo", "sway", "cage", "greetd", "systemctl"]);
         host.stdout.insert("sysrc -n -i dbus_enable".into(), "YES\n".into());
         host.stdout.insert("sysrc -n -i seatd_enable".into(), "YES\n".into());
-        let mut facts = f.facts(Family::FreeBSD);
+        let apply = format!("sudo {} greeter power-rule --apply", f.home().join(".local/bin/mandara").display());
+        host.stdout.insert(apply.clone(), applied.into());
+        let mut facts = f.facts(family);
         facts.user = "layla".into();
-        let probe = FakeProbe { active: true, ..Default::default() };
+        let probe = FakeProbe { active: true, power_rule: Some(power_rule), ..Default::default() };
         run(&mut host, &probe, facts, InstallArgs { yes: true, ..Default::default() }).unwrap();
-        (host.ran(), host.text())
+        let ran = host.ran();
+        assert!(!ran.iter().any(|c| c.contains("groupmod operator -m")), "never joins operator: {ran:#?}");
+        (ran.contains(&apply), host.text())
     };
-    let users = "layla:*:1001:1001:Layla:/home/layla:/bin/sh\ngreeter:*:965:965:greetd:/nonexistent:/usr/sbin/nologin\n";
-    let (ran, text) = run_with("wheel:*:0:root\noperator:*:5:root\nvideo:*:44:layla\n", users);
-    assert!(ran.iter().any(|c| c == "sudo pw groupmod operator -m greeter"), "{ran:#?}");
-    assert!(text.contains("added greeter to operator"), "{text}");
-    let (ran, _) = run_with("wheel:*:0:root\noperator:*:5:root,greeter\nvideo:*:44:layla\n", users);
-    assert!(!ran.iter().any(|c| c.contains("groupmod operator")), "a member already: {ran:#?}");
-    let (ran, text) = run_with("wheel:*:0:root\noperator:*:5:root\nvideo:*:44:layla\n", "layla:*:1001:1001:Layla:/home/layla:/bin/sh\n");
-    assert!(!ran.iter().any(|c| c.contains("groupmod operator")), "{ran:#?}");
-    assert!(text.contains("pw groupmod operator -m greeter"), "the command to run later: {text}");
+    let applied = "Login screen — power buttons plan (FreeBSD)\n\n  warning: x\n\n✓ backed up to /var/lib/mandara-greeter-backups/1\n✓ wrote /usr/local/etc/polkit-1/rules.d/50-mandara-greeter.rules (lets greeter suspend, restart and power off through ConsoleKit2)\n✓ took greeter out of operator (Mandara v0.24 and v0.25 added it; that group can read raw disks)\n";
+    let (ran, text) = run_with(Family::FreeBSD, Ok(Some("Status: changes needed".into())), applied);
+    assert!(ran, "{text}");
+    assert!(text.contains("wrote /usr/local/etc/polkit-1/rules.d/50-mandara-greeter.rules"), "{text}");
+    assert!(text.contains("took greeter out of operator"), "says what changed: {text}");
+    assert!(text.contains("\nx\n"), "the plan's warnings are passed on: {text}");
+    // Up to date: no root command at all, so re-runs are quiet.
+    let (ran, _) = run_with(Family::FreeBSD, Ok(None), "");
+    assert!(!ran, "nothing to change");
+    // polkit hides its rules from users, so root checks; a rule in place
+    // already prints nothing.
+    let (ran, text) = run_with(Family::FreeBSD, Ok(Some("Status: changes needed".into())), "Login screen — power buttons plan (FreeBSD)\n\nStatus: up to date\n\nNothing to change.\n");
+    assert!(ran);
+    assert!(!text.contains("50-mandara-greeter") && !text.contains("out of operator") && !text.contains("power buttons"), "{text}");
+    let (ran, text) = run_with(Family::FreeBSD, Err("ConsoleKit2 isn't installed: pkg install consolekit2".into()), "");
+    assert!(!ran);
+    assert!(text.contains("ConsoleKit2 isn't installed: pkg install consolekit2 Then run: sudo mandara greeter power-rule --apply"), "{text}");
+    // Elsewhere logind allows the buttons.
+    let (ran, _) = run_with(Family::Arch, Ok(Some("changes".into())), "");
+    assert!(!ran);
+}
+
+/// A dry run shows the rule's plan and the command, and runs nothing.
+#[test]
+fn freebsd_dry_run_shows_the_power_rule_plan() {
+    let f = Fixture::new();
+    let mut host = FakeHost::with(&["pkg", "sudo", "sway", "cage", "greetd"]);
+    let probe = FakeProbe { active: true, power_rule: Some(Ok(Some("Login screen — power buttons plan (FreeBSD)\n    write /usr/local/etc/polkit-1/rules.d/50-mandara-greeter.rules:".into()))), ..Default::default() };
+    run(&mut host, &probe, f.facts(Family::FreeBSD), InstallArgs { yes: true, dry_run: true, ..Default::default() }).unwrap();
+    let text = host.text();
+    assert!(text.contains("write /usr/local/etc/polkit-1/rules.d/50-mandara-greeter.rules:"), "{text}");
+    assert!(text.contains("greeter power-rule --apply"), "{text}");
+    assert!(!host.ran().iter().any(|c| c.contains("power-rule")), "{:#?}", host.ran());
 }
 
 /// FreeBSD: pkg installs everything, D-Bus and seatd are enabled with
@@ -647,7 +669,7 @@ fn no_restart_without_a_running_shell_of_this_installation() {
 fn active_login_screen_is_refreshed_when_outdated() {
     let f = Fixture::new();
     let mut host = FakeHost::with(&["pacman", "sudo", "greetd", "cage"]);
-    let probe = FakeProbe { active: true, outdated: true, keyring: None };
+    let probe = FakeProbe { active: true, outdated: true, ..Default::default() };
     run(&mut host, &probe, f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, ..Default::default() }).unwrap();
     let b = f.home().join(".local/bin/mandara").display().to_string();
     assert!(host.ran().contains(&format!("sudo {b} greeter use mandara --apply")));

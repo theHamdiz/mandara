@@ -9660,6 +9660,7 @@
 "{command} failed ({status})" = "{command} विफल रहा ({status})"
 "Core {n}" = "कोर {n}"
 "FreeBSD can't do this without ConsoleKit2" = "FreeBSD यह ConsoleKit2 के बिना नहीं कर सकता"
+"The login screen isn't allowed to do this ({error}). See {doc}" = "लॉगिन स्क्रीन को यह करने की अनुमति नहीं है ({error})। देखें {doc}"
 "FreeBSD has no BlueZ, the Bluetooth service Mandara uses" = "FreeBSD में BlueZ नहीं है, वह ब्लूटूथ सेवा जिसे Mandara इस्तेमाल करता है"
 "FreeBSD has no power-profiles-daemon; powerd(8) sets the processor's speed there" = "FreeBSD में power-profiles-daemon नहीं है; वहाँ प्रोसेसर की गति powerd(8) तय करता है"
 "FreeBSD has no systemd: its services are rc(8) scripts, which this plugin doesn't manage" = "FreeBSD में systemd नहीं है: उसकी सेवाएँ rc(8) स्क्रिप्ट हैं, जिन्हें यह प्लगइन नहीं संभालता"

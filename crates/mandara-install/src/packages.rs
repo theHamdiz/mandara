@@ -29,7 +29,8 @@
 //! NetworkManager, BlueZ, UDisks2 or power-profiles-daemon: Studio locks
 //! those panels there. Its services
 //! are D-Bus, seatd (seat access for the compositor), ConsoleKit2
-//! (sessions, which polkit tracks), BSDisks (UDisks2's interface) and
+//! (sessions, which polkit tracks, and the login screen's power buttons
+//! through Mandara's polkit rule), BSDisks (UDisks2's interface) and
 //! PipeWire with its OSS plugin. greetd isn't packaged for FreeBSD yet
 //! (`docs/login-manager.md` builds it). Fonts: Alexandria and JetBrains
 //! Mono ship inside Mandara (JetBrains Mono's package is added too); Inter
@@ -171,14 +172,6 @@ const FREEBSD: PackageSet = PackageSet {
 pub const FREEBSD_SERVICES: &[&str] = &["dbus", "seatd"];
 /// The group seatd hands its socket to (`seatd_args="-g video"`).
 pub const FREEBSD_SEAT_GROUP: &str = "video";
-/// FreeBSD lets this group run `shutdown` and suspend through `/dev/acpi`,
-/// so the login screen's power buttons work without ConsoleKit2. It can
-/// also read raw disk devices; docs/login-manager.md#freebsd states that
-/// trade-off and how to undo the membership.
-pub const FREEBSD_POWER_GROUP: &str = "operator";
-/// greetd's config on FreeBSD (its `[default_session] user` is the
-/// login screen's user).
-pub const FREEBSD_GREETD_CONFIG: &str = "/usr/local/etc/greetd/config.toml";
 
 /// The package groups of `family` (`None`: NixOS and unknown systems get
 /// hints instead).

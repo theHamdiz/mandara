@@ -9316,6 +9316,7 @@
 "{command} failed ({status})" = "{command} imeshindwa ({status})"
 "Core {n}" = "Kiini {n}"
 "FreeBSD can't do this without ConsoleKit2" = "FreeBSD haiwezi kufanya hivi bila ConsoleKit2"
+"The login screen isn't allowed to do this ({error}). See {doc}" = "Skrini ya kuingia hairuhusiwi kufanya hivi ({error}). Tazama {doc}"
 "FreeBSD has no BlueZ, the Bluetooth service Mandara uses" = "FreeBSD haina BlueZ, huduma ya Bluetooth ambayo Mandara hutumia"
 "FreeBSD has no power-profiles-daemon; powerd(8) sets the processor's speed there" = "FreeBSD haina power-profiles-daemon; huko powerd(8) huweka kasi ya kichakataji"
 "FreeBSD has no systemd: its services are rc(8) scripts, which this plugin doesn't manage" = "FreeBSD haina systemd: huduma zake ni hati za rc(8), ambazo programu-jalizi hii haizisimamii"

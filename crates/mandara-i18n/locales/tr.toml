@@ -9657,6 +9657,7 @@
 "{command} failed ({status})" = "{command} başarısız oldu ({status})"
 "Core {n}" = "Çekirdek {n}"
 "FreeBSD can't do this without ConsoleKit2" = "FreeBSD bunu ConsoleKit2 olmadan yapamaz"
+"The login screen isn't allowed to do this ({error}). See {doc}" = "Giriş ekranının bunu yapmasına izin verilmiyor ({error}). Bkz. {doc}"
 "FreeBSD has no BlueZ, the Bluetooth service Mandara uses" = "FreeBSD'de Mandara'nın kullandığı Bluetooth hizmeti BlueZ yok"
 "FreeBSD has no power-profiles-daemon; powerd(8) sets the processor's speed there" = "FreeBSD'de power-profiles-daemon yok; orada işlemci hızını powerd(8) ayarlar"
 "FreeBSD has no systemd: its services are rc(8) scripts, which this plugin doesn't manage" = "FreeBSD'de systemd yok: hizmetleri bu eklentinin yönetmediği rc(8) betikleridir"
