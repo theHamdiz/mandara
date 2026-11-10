@@ -36,6 +36,11 @@ numeric setting cannot become a related toggle or lose its explicit value.
 Single English requests stay single actions. FunctionGemma uses its native
 function declarations and call delimiters, preserving typed values and string
 arguments. Compiler weights are reused with KV state cleared between calls. The combined preview is validated before execution.
+Compiler weights are read in place from the memory-mapped model file instead
+of being copied into the worker's private memory, and token embeddings stay
+quantized, so the operating system can share and reclaim those pages. A single
+English Qwen request is ranked before Qwen loads, as with FunctionGemma; Qwen
+loads first only to translate or split a request.
 
 The test bench shows the candidates, generated JSON and measured retrieval
 and compilation time without executing anything. It also has a purge button.

@@ -35,6 +35,7 @@ the Trash opens in your file manager.
 - **Discord and Ko-fi in the website's top bar.** Join the community or support Mandara right from the floating bar, next to GitHub, in the page's own colours.
 - **FreeBSD and immutable systems on the website.** The install section gets a FreeBSD card and an "Immutable? No problem!" card beside NixOS, each with how to install there. The "Ask in your words" card types its example without moving the text around it, and the bar styles' preview sits centred beside its list.
 - **Mandara in motion, right on the homepage.** The website's first screen now plays a 40-second film: Looks recolouring the whole desktop in one click, the four bar styles, the launcher, panels springing open, live widgets, Studio changing colours as you watch, the Material You lock screen, and a nod to FreeBSD. It loops quietly with the sound off, *Sound on* plays its original soundtrack, and it loads only after the rest of the page.
+- **The `!` shell agent uses far less memory and answers sooner.** Its compilers now read their weights straight from the model file instead of copying them into memory, and Qwen keeps its word table compressed. In our tests a Qwen request's private memory fell from about 1.6 GiB to under 700 MiB and FunctionGemma's from about 570 MiB to about 470 MiB, and an English request with Qwen shows its candidates in about a fifth of a second instead of over a second, because Qwen now loads after the search. The previews are the same as before.
 
 ### Fixed
 
