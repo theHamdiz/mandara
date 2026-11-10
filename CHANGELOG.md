@@ -6,6 +6,9 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The website looks right on phones again: its top bar is two tidy rows, and
+the text on the AI Shell Agent card no longer jitters.
+
 ### Fixed
 
 - **The website fits phones again.** Its top bar is two tidy rows on a phone: the name with the Discord, Ko-fi and GitHub buttons, then the page links beside a small light / dark switch. The text on the AI Shell Agent card (and the NixOS, FreeBSD and immutable cards) no longer jitters while the shape behind it turns.
