@@ -31,13 +31,15 @@
 //! never goes to a file, an argument, the environment or the log. A request
 //! waits at most [`ANSWER_TIMEOUT`] for the dialog, the client at most
 //! [`CLIENT_TIMEOUT`]; with no session (no update waiting) there is no
-//! socket and the client refuses at once.
+//! socket and the client refuses at once. A request that arrives before the
+//! job has recorded the helper it just started (its first `sudo` can be that
+//! quick) waits up to [`REGISTER_TIMEOUT`] for it instead of being refused.
 
 use std::io::{Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use zeroize::Zeroizing;
@@ -54,6 +56,10 @@ pub const ANSWER_TIMEOUT: Duration = Duration::from_secs(180);
 pub const CLIENT_TIMEOUT: Duration = Duration::from_secs(195);
 /// How long the shell waits for a client to send its request.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long a request with the right token waits for the job to record the
+/// helper it started (the job stores it right after spawning, and the
+/// helper may ask first).
+pub const REGISTER_TIMEOUT: Duration = Duration::from_secs(2);
 /// How often the server looks at its stop flag and a waiting client.
 const POLL: Duration = Duration::from_millis(100);
 /// Random bytes of the token (hex in the environment).
@@ -181,6 +187,24 @@ struct Counters {
     gave_up: AtomicBool,
 }
 
+/// The helper's process id once the job has started it (0 before), with a
+/// signal for a request that arrived first.
+#[derive(Default)]
+struct Root {
+    pid: Mutex<i32>,
+    set: Condvar,
+}
+
+impl Root {
+    /// Wakes a request waiting for the helper (it was recorded, or the step
+    /// is over). Taking the lock first means the wake-up can't slip in
+    /// between the waiter's check and its wait.
+    fn wake(&self) {
+        drop(self.pid.lock().unwrap_or_else(|e| e.into_inner()));
+        self.set.notify_all();
+    }
+}
+
 /// The askpass of one AUR step. Dropping it stops the server, closes a
 /// dialog still open and removes the folder.
 pub struct Session {
@@ -188,7 +212,7 @@ pub struct Session {
     socket: PathBuf,
     program: PathBuf,
     token: Zeroizing<String>,
-    root: Arc<AtomicI32>,
+    root: Arc<Root>,
     armed: Arc<AtomicBool>,
     stop: Arc<AtomicBool>,
     counters: Arc<Counters>,
@@ -220,7 +244,7 @@ impl Session {
         std::os::unix::fs::symlink(exe, &program)?;
         std::os::unix::fs::symlink(exe, dir.path().join(SUDO))?;
         let token = new_token()?;
-        let root = Arc::new(AtomicI32::new(0));
+        let root = Arc::new(Root::default());
         let armed = Arc::new(AtomicBool::new(true));
         let stop = Arc::new(AtomicBool::new(false));
         let counters = Arc::new(Counters::default());
@@ -245,13 +269,16 @@ impl Session {
     }
 
     /// The helper's process: only it and its descendants are answered.
+    /// A request already waiting for it is answered now.
     pub fn set_root(&self, pid: u32) {
-        self.root.store(i32::try_from(pid).unwrap_or(0), Ordering::SeqCst);
+        *self.root.pid.lock().unwrap_or_else(|e| e.into_inner()) = i32::try_from(pid).unwrap_or(0);
+        self.root.set.notify_all();
     }
 
     /// Stops answering (the step is over) before the session is dropped.
     pub fn disarm(&self) {
         self.armed.store(false, Ordering::SeqCst);
+        self.root.wake();
     }
 
     pub fn socket(&self) -> &Path {
@@ -289,6 +316,7 @@ impl Drop for Session {
     fn drop(&mut self) {
         self.armed.store(false, Ordering::SeqCst);
         self.stop.store(true, Ordering::SeqCst);
+        self.root.wake();
         if let Some(t) = self.thread.take() {
             let _ = t.join();
         }
@@ -314,7 +342,7 @@ fn same(a: &[u8], b: &[u8]) -> bool {
 struct Server {
     listener: UnixListener,
     token: Zeroizing<String>,
-    root: Arc<AtomicI32>,
+    root: Arc<Root>,
     armed: Arc<AtomicBool>,
     stop: Arc<AtomicBool>,
     counters: Arc<Counters>,
@@ -372,13 +400,17 @@ impl Server {
         let (pid, uid) = peer(stream).ok_or(Refusal::NotOurs)?;
         // SAFETY: getuid has no preconditions.
         let me = unsafe { libc::getuid() };
-        let root = self.root.load(Ordering::SeqCst);
-        if uid != me || root <= 0 || !descends_from(pid, root, &proc_parent) {
+        if uid != me {
             return Err(Refusal::NotOurs);
         }
         let text = std::str::from_utf8(&buf[..n]).map_err(|_| Refusal::Malformed)?;
         let (token, prompt) = text.split_once('\n').ok_or(Refusal::Malformed)?;
         if !same(token.as_bytes(), self.token.as_bytes()) {
+            return Err(Refusal::NotOurs);
+        }
+        // Only a caller with the token waits for the helper to be recorded.
+        let root = self.registered_root();
+        if root <= 0 || !descends_from(pid, root, &proc_parent) {
             return Err(Refusal::NotOurs);
         }
         if !self.armed.load(Ordering::SeqCst) || self.stop.load(Ordering::SeqCst) || self.counters.gave_up.load(Ordering::SeqCst) {
@@ -401,6 +433,15 @@ impl Server {
             self.give_up();
         }
         result
+    }
+
+    /// The helper's process id, waiting up to [`REGISTER_TIMEOUT`] while the
+    /// job hasn't recorded it yet (0 if it never does or the step ends).
+    fn registered_root(&self) -> i32 {
+        let pid = self.root.pid.lock().unwrap_or_else(|e| e.into_inner());
+        let waiting = |p: &mut i32| *p <= 0 && self.armed.load(Ordering::SeqCst) && !self.stop.load(Ordering::SeqCst);
+        let (pid, _) = self.root.set.wait_timeout_while(pid, REGISTER_TIMEOUT, waiting).unwrap_or_else(|e| e.into_inner());
+        *pid
     }
 
     fn give_up(&self) {

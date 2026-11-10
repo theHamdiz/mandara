@@ -115,14 +115,61 @@ fn a_wrong_token_is_refused_without_a_dialog() {
 fn only_the_helpers_own_processes_are_answered() {
     let dialog = TestDialog::new(Behaviour::Answer("hunter2"));
     let f = session(dialog.clone(), ANSWER_TIMEOUT);
-    // Before the helper started, nobody is.
+    // A helper that is never recorded: refused once the wait runs out.
+    let started = Instant::now();
     assert!(ask(&f.session).err().unwrap().contains("not-ours"));
+    assert!(started.elapsed() >= REGISTER_TIMEOUT, "it waited for the helper first");
     // A helper that isn't this process or one of its parents.
     let mut other = std::process::Command::new("sleep").arg("10").spawn().unwrap();
     f.session.set_root(other.id());
     assert!(ask(&f.session).err().unwrap().contains("not-ours"), "a process outside the helper's tree, even with the token");
     let _ = other.kill();
     let _ = other.wait();
+    assert_eq!(dialog.asked(), 0);
+}
+
+#[test]
+fn a_request_before_the_helper_is_recorded_waits_for_it() {
+    // The helper's first sudo can ask before the job stores its process id
+    // (spawning returns first): that request is answered, not refused.
+    let dialog = TestDialog::new(Behaviour::Answer("hunter2"));
+    let f = session(dialog.clone(), ANSWER_TIMEOUT);
+    std::thread::scope(|s| {
+        let asking = s.spawn(|| ask(&f.session));
+        // The request is in and waiting before the helper is recorded.
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(!asking.is_finished(), "the early request waits");
+        f.session.set_root(std::process::id());
+        let secret = asking.join().unwrap().unwrap();
+        assert_eq!(secret.expose(), b"hunter2");
+    });
+    assert_eq!(f.session.answered(), 1);
+    assert_eq!(f.session.refused(), 0);
+    assert_eq!(dialog.asked(), 1);
+}
+
+#[test]
+fn ending_the_step_stops_waiting_for_the_helper() {
+    let dialog = TestDialog::new(Behaviour::Answer("hunter2"));
+    let f = session(dialog.clone(), ANSWER_TIMEOUT);
+    let started = Instant::now();
+    std::thread::scope(|s| {
+        let asking = s.spawn(|| ask(&f.session));
+        std::thread::sleep(Duration::from_millis(200));
+        f.session.disarm();
+        assert!(asking.join().unwrap().is_err());
+    });
+    assert!(started.elapsed() < REGISTER_TIMEOUT, "disarming wakes the waiting request");
+    assert_eq!(dialog.asked(), 0);
+}
+
+#[test]
+fn a_wrong_token_never_waits_for_the_helper() {
+    let dialog = TestDialog::new(Behaviour::Answer("hunter2"));
+    let f = session(dialog.clone(), ANSWER_TIMEOUT);
+    let started = Instant::now();
+    assert!(request(f.session.socket(), "0000", "x", Duration::from_secs(10)).err().unwrap().contains("not-ours"));
+    assert!(started.elapsed() < REGISTER_TIMEOUT);
     assert_eq!(dialog.asked(), 0);
 }
 
