@@ -152,12 +152,20 @@ pub fn greeter_user(existing: Option<&str>) -> String {
         .unwrap_or_else(|| "greeter".into())
 }
 
-/// `user`'s uid and gid from `<root>/etc/passwd`.
+/// Password databases, in the order they are searched: `/etc/passwd`,
+/// then `/usr/lib/passwd`, where image-based systems (Fedora Atomic's
+/// nss-altfiles) keep the system users their packages create, such as
+/// greetd's.
+const PASSWD_FILES: [&str; 2] = ["etc/passwd", "usr/lib/passwd"];
+
+/// `user`'s uid and gid from `<root>/etc/passwd` (or `/usr/lib/passwd`).
 pub(crate) fn passwd_ids_in(root: &Path, user: &str) -> Option<(u32, u32)> {
-    let passwd = std::fs::read_to_string(root.join("etc/passwd")).ok()?;
-    passwd.lines().find_map(|l| {
-        let f: Vec<&str> = l.split(':').collect();
-        (f.len() >= 4 && f[0] == user).then(|| Some((f[2].parse().ok()?, f[3].parse().ok()?)))?
+    PASSWD_FILES.iter().find_map(|file| {
+        let passwd = std::fs::read_to_string(root.join(file)).ok()?;
+        passwd.lines().find_map(|l| {
+            let f: Vec<&str> = l.split(':').collect();
+            (f.len() >= 4 && f[0] == user).then(|| Some((f[2].parse().ok()?, f[3].parse().ok()?)))?
+        })
     })
 }
 
@@ -333,13 +341,17 @@ pub fn install_runtime(root: &Path, exe: &Path, greeter_user: &str) -> Result<Ve
         std::fs::rename(&tmp, &dst).map_err(|e| err(&dst, e))?;
     }
     done.push(format!("installed {INSTALLED_EXE}"));
-    // 2. Media folders.
-    for d in [crate::config::SYSTEM_VIDEOS, crate::config::SYSTEM_IMAGES] {
-        let d = under(root, d);
-        std::fs::create_dir_all(&d).map_err(|e| err(&d, e))?;
+    // 2. Media folders: in /usr/local/share where /usr is a read-only
+    // image (Fedora Atomic, openSUSE Aeon); the login screen looks there too.
+    let mut media_parent = "/usr/share/mandara/login";
+    for (system, local) in [(crate::config::SYSTEM_VIDEOS, crate::config::LOCAL_VIDEOS), (crate::config::SYSTEM_IMAGES, crate::config::LOCAL_IMAGES)] {
+        let (d, fell_back) = media_dir(root, system, local, &|d| std::fs::create_dir_all(d))?;
+        if fell_back {
+            media_parent = "/usr/local/share/mandara/login";
+        }
         std::fs::set_permissions(&d, std::fs::Permissions::from_mode(MEDIA_DIR_MODE)).map_err(|e| err(&d, e))?;
     }
-    done.push("media folders under /usr/share/mandara/login".into());
+    done.push(format!("media folders under {media_parent}"));
     // 3. State dir.
     let state = under(root, STATE_DIR);
     std::fs::create_dir_all(&state).map_err(|e| err(&state, e))?;
@@ -407,6 +419,22 @@ pub fn install_language_pack(root: &Path, lang: mandara_i18n::Lang) -> Result<Op
     let langpacks = mandara_services::self_update::langpacks::published(&mandara_services::self_update::api_base(), version)?;
     mandara_services::self_update::langpacks::download(&langpacks, lang, &dir, &|_, _| {})?;
     Ok(Some(format!("{} language pack for the login screen (downloaded for {version})", lang.code())))
+}
+
+/// Creates the media folder `system` under `root` with `mkdir`, or `local`
+/// when `system` is on a read-only file system (an image-based system's
+/// `/usr`). The folder made, and whether it is `local`.
+fn media_dir(root: &Path, system: &str, local: &str, mkdir: &dyn Fn(&Path) -> std::io::Result<()>) -> Result<(PathBuf, bool), String> {
+    let d = under(root, system);
+    match mkdir(&d) {
+        Ok(()) => Ok((d, false)),
+        Err(e) if e.kind() == std::io::ErrorKind::ReadOnlyFilesystem => {
+            let d = under(root, local);
+            mkdir(&d).map_err(|e| format!("{}: {e}", d.display()))?;
+            Ok((d, true))
+        }
+        Err(e) => Err(format!("{}: {e}", d.display())),
+    }
 }
 
 /// `uid`'s home folder, from the password database.
@@ -519,6 +547,28 @@ impl UninstallPlan {
 
 #[cfg(test)]
 mod tests {
+    /// Image-based systems: greetd's user lives in /usr/lib/passwd, and a
+    /// read-only /usr/share sends the media folders to /usr/local/share.
+    #[test]
+    fn image_based_systems_keep_users_in_usr_lib_and_media_in_usr_local() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("etc")).unwrap();
+        std::fs::create_dir_all(root.join("usr/lib")).unwrap();
+        std::fs::write(root.join("etc/passwd"), "root:x:0:0:root:/root:/bin/bash\nu:x:1000:1000::/var/home/u:/bin/bash\n").unwrap();
+        std::fs::write(root.join("usr/lib/passwd"), "greeter:x:973:973:greetd greeter user:/var/lib/greetd:/sbin/nologin\n").unwrap();
+        assert_eq!(passwd_ids_in(root, "u"), Some((1000, 1000)));
+        assert_eq!(passwd_ids_in(root, "greeter"), Some((973, 973)), "from /usr/lib/passwd");
+        assert_eq!(passwd_ids_in(root, "nobody-here"), None);
+        let read_only_usr_share = |d: &Path| if d.starts_with(root.join("usr/share")) { Err(std::io::Error::from(std::io::ErrorKind::ReadOnlyFilesystem)) } else { std::fs::create_dir_all(d) };
+        let (d, local) = media_dir(root, crate::config::SYSTEM_VIDEOS, crate::config::LOCAL_VIDEOS, &read_only_usr_share).unwrap();
+        assert!(local && d == root.join("usr/local/share/mandara/login/videos") && d.is_dir());
+        let (d, local) = media_dir(root, crate::config::SYSTEM_IMAGES, crate::config::LOCAL_IMAGES, &|d| std::fs::create_dir_all(d)).unwrap();
+        assert!(!local && d == root.join("usr/share/mandara/login/backgrounds"));
+        let denied = |_: &Path| Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+        assert!(media_dir(root, crate::config::SYSTEM_IMAGES, crate::config::LOCAL_IMAGES, &denied).is_err(), "only a read-only file system falls back");
+    }
+
     use super::*;
 
     #[test]
