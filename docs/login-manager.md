@@ -247,7 +247,8 @@ only the plumbing differs:
   `optional` one. Then add `session optional pam_ck_connector.so` to the
   greetd PAM file OpenPAM reads, which is `/etc/pam.d/greetd` when it
   exists (as `keyring-unlock` creates it) and `/usr/local/etc/pam.d/greetd`
-  otherwise. Remove that line again before you uninstall `consolekit2`.
+  otherwise. Before you uninstall `consolekit2`, remove that line from both
+  files, if present, and never restore a PAM backup that still contains it.
   Without a ConsoleKit2 session, Mandara's agent still answers everything
   the shell asks (the Updates panel, the admin helper).
 
