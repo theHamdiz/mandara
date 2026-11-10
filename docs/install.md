@@ -392,7 +392,7 @@ writable `/usr`), and hands over to `mandara install`, which:
 |---|---|---|---|
 | Fedora Atomic: Silverblue, Kinoite, Sway Atomic and the others; Bazzite, Bluefin, Aurora | `/run/ostree-booted` | `rpm-ostree install --idempotent` (layering) | `/etc`, `/var`, `/usr/local` (a link to `/var/usrlocal`) |
 | openSUSE Aeon, Kalpa, MicroOS | `os-release` (`aeon`, `kalpa`, `microos` in `ID`/`ID_LIKE`) | `transactional-update pkg install` (a new snapshot) | `/etc`, `/var`, `/usr/local` (its own subvolume) |
-| Vanilla OS 2 | `abroot`, or `NAME="Vanilla OS"` | `abroot pkg add`, then `abroot pkg apply` once | `/etc`, `/var` |
+| Vanilla OS 2 | `abroot`, or `NAME="Vanilla OS"` | `abroot pkg add`, then `abroot pkg apply` once | `/etc`, `/var`, `/usr/local` (a link to `/var/usrlocal`) |
 | SteamOS | `ID=steamos` | nothing (see below) | `/etc`, `/var`, `/home` |
 
 The packages arrive with the **next boot**. Until then, Mandara already
@@ -404,7 +404,7 @@ command to run later.
 
 **The admin helper** (the root-owned copy Studio's administrator actions
 run) goes to `/usr/local/lib/mandara`, which survives updates on Fedora
-Atomic and openSUSE. **Mandara Login** needs greetd and cage, which come
+Atomic, openSUSE and Vanilla OS. **Mandara Login** needs greetd and cage, which come
 with the same transaction. The switch itself needs them installed, so it
 waits for the reboot: after restarting, Mandara Login is one click away in
 Studio → Login screen → Login manager, or run the

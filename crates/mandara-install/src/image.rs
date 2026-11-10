@@ -11,7 +11,7 @@
 //! |---|---|---|---|
 //! | Fedora Atomic (Silverblue, Kinoite, Sway Atomic…), Bazzite, Bluefin, Aurora | `/run/ostree-booted` | `rpm-ostree install --idempotent` (layering) | `/etc`, `/var`, `/usr/local` (a link to `/var/usrlocal`) |
 //! | openSUSE Aeon, Kalpa, MicroOS, SL Micro | `os-release` (`microos`, `aeon`, `kalpa`, `sl-micro`, `sle-micro` in `ID`/`ID_LIKE`) | `transactional-update pkg install` (a new snapshot) | `/etc`, `/var`, `/usr/local` (its own subvolume) |
-//! | Vanilla OS 2 | the `abroot` program, or `NAME="Vanilla OS"` | `abroot pkg add`, then `abroot pkg apply` (the other root) | `/etc`, `/var` |
+//! | Vanilla OS 2 | the `abroot` program, or `NAME="Vanilla OS"` | `abroot pkg add`, then `abroot pkg apply` (the other root) | `/etc`, `/var`, `/usr/local` (a link to `/var/usrlocal`, shared by both roots) |
 //! | SteamOS 3 | `ID=steamos` | nothing: the image is read-only, and packages put into it are removed by the next update | `/etc` (an overlay), `/var`, `/home` |
 //!
 //! NixOS is declarative rather than image-based and has its own path (the
@@ -103,11 +103,11 @@ impl ImageSystem {
     }
 
     /// Whether root-owned files in `/usr/local` survive updates: the admin
-    /// helper and Mandara Login's copy live there. SteamOS's `/usr` (with
-    /// `/usr/local`) is replaced by every update; ABRoot's `/usr/local`
-    /// belongs to the root it is in, so the other root lacks it.
+    /// helper and Mandara Login's copy live there. Fedora Atomic and ABRoot
+    /// link it to `/var/usrlocal`, openSUSE keeps it in its own subvolume;
+    /// SteamOS's `/usr` (with `/usr/local`) is replaced by every update.
     pub fn keeps_usr_local(self) -> bool {
-        matches!(self, ImageSystem::RpmOstree | ImageSystem::Transactional)
+        self != ImageSystem::SteamOs
     }
 
     /// argv adding `packages` to the next image (run as root). Packages
@@ -255,8 +255,8 @@ mod tests {
         for s in [ImageSystem::RpmOstree, ImageSystem::Transactional, ImageSystem::SteamOs] {
             assert_eq!(s.finish_argv(), None, "{s:?}");
         }
-        assert!(ImageSystem::RpmOstree.keeps_usr_local() && ImageSystem::Transactional.keeps_usr_local());
-        assert!(!ImageSystem::SteamOs.keeps_usr_local() && !ImageSystem::Abroot.keeps_usr_local());
+        assert!(ImageSystem::RpmOstree.keeps_usr_local() && ImageSystem::Transactional.keeps_usr_local() && ImageSystem::Abroot.keeps_usr_local());
+        assert!(!ImageSystem::SteamOs.keeps_usr_local());
         assert_eq!(ImageSystem::RpmOstree.update_command(), "rpm-ostree upgrade");
     }
 
