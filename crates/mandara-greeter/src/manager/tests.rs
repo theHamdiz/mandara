@@ -600,6 +600,81 @@ fn restore_refuses_a_foreign_undo_command() {
     assert!(RestorePlan::build(&root, "latest").unwrap_err().contains("unexpected undo command"));
 }
 
+/// A manifest's undo commands must be the ones the switch wrote: its tool,
+/// its units and their own rc variables, never another service or setting.
+#[test]
+fn restore_refuses_undo_commands_the_switch_never_wrote() {
+    let f = freebsd_with_sddm();
+    let root = f.root().as_freebsd();
+    SwitchPlan::build(&root, MANDARA, Kiosk::Cage, exe(&f)).unwrap().perform(&root, true, &mut Recorder::default()).unwrap();
+    let id = backups(&root).pop().unwrap();
+    let manifest = root.path(BACKUP_DIR).join(&id).join(MANIFEST);
+    let text = std::fs::read_to_string(&manifest).unwrap();
+    assert!(text.contains("\"sddm_enable=YES\""), "{text}");
+    for (from, to) in [
+        // Another service, another variable, a value rc.conf would run.
+        ("\"-s\", \"sddm\", \"sddm_enable=YES\"", "\"-s\", \"sshd\", \"sshd_enable=YES\""),
+        ("\"sddm_enable=YES\"", "\"sddm_flags=YES\""),
+        ("\"sddm_enable=YES\"", "\"sddm_enable=$(id)\""),
+        // The other system's tool.
+        ("\"sysrc\", \"-s\", \"sddm\", \"sddm_enable=YES\"", "\"systemctl\", \"enable\", \"sddm.service\""),
+    ] {
+        std::fs::write(&manifest, text.replacen(from, to, 1)).unwrap();
+        assert!(RestorePlan::build(&root, "latest").unwrap_err().contains("unexpected undo command"), "{to}");
+    }
+    std::fs::write(&manifest, text.replacen("previous_unit = \"sddm.service\"", "previous_unit = \"/tmp/evil.service\"", 1)).unwrap();
+    assert!(RestorePlan::build(&root, "latest").unwrap_err().contains("unexpected unit"));
+    // The undo the switch wrote passes, its `-x` (greetd was unset) included.
+    std::fs::write(&manifest, &text).unwrap();
+    assert_eq!(RestorePlan::build(&root, "latest").unwrap().commands, [argv("sysrc -s greetd -x greetd_enable"), argv("sysrc -s sddm sddm_enable=YES")]);
+
+    // systemd: `systemctl enable <path>` would link a unit file from anywhere.
+    let f = arch_with_sddm();
+    SwitchPlan::build(&f.root(), MANDARA, Kiosk::Cage, exe(&f)).unwrap().perform(&f.root(), true, &mut Recorder::default()).unwrap();
+    let id = backups(&f.root()).pop().unwrap();
+    let manifest = f.root().path(BACKUP_DIR).join(&id).join(MANIFEST);
+    let text = std::fs::read_to_string(&manifest).unwrap();
+    for (from, to) in [("\"enable\", \"sddm.service\"", "\"enable\", \"/tmp/evil.service\""), ("\"enable\", \"sddm.service\"", "\"enable\", \"sshd.service\""), ("\"enable\", \"sddm.service\"", "\"mask\", \"sddm.service\"")] {
+        std::fs::write(&manifest, text.replacen(from, to, 1)).unwrap();
+        assert!(RestorePlan::build(&f.root(), "latest").unwrap_err().contains("unexpected undo command"), "{to}");
+    }
+    // A backup from before `undo` was recorded derives commands from its units, also checked.
+    let legacy: String = text.lines().filter(|l| !l.starts_with("undo")).map(|l| format!("{l}\n")).collect();
+    std::fs::write(&manifest, legacy.replacen("previous_unit = \"sddm.service\"", "previous_unit = \"/tmp/evil.service\"", 1)).unwrap();
+    assert!(RestorePlan::build(&f.root(), "latest").unwrap_err().contains("unexpected unit"));
+}
+
+/// Backups live outside the greeter-owned state folder; ones left in the old
+/// place there still restore, unless something other than us made them.
+#[test]
+fn backups_stay_out_of_the_greeters_reach() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let f = arch_with_sddm();
+    let plan = SwitchPlan::build(&f.root(), MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    plan.perform(&f.root(), true, &mut Recorder::default()).unwrap();
+    let [(id, dir)] = backup_dirs(&f.root()).try_into().unwrap();
+    assert!(dir.starts_with(f.root().path(BACKUP_DIR)));
+    assert!(!dir.starts_with(f.root().path(crate::install::STATE_DIR)), "the greeter user owns its state folder");
+    assert_eq!(std::fs::metadata(f.root().path(BACKUP_DIR)).unwrap().permissions().mode() & 0o777, BACKUP_DIR_MODE);
+
+    // An older release's backup, in the old place, still restores.
+    let legacy = f.root().path(LEGACY_BACKUP_DIR);
+    std::fs::create_dir_all(&legacy).unwrap();
+    std::fs::rename(&dir, legacy.join(&id)).unwrap();
+    assert_eq!(backups(&f.root()), std::slice::from_ref(&id));
+    assert_eq!(RestorePlan::build(&f.root(), "latest").unwrap().commands, [systemctl("disable", GREETD_UNIT), systemctl("enable", "sddm.service")]);
+    // One that others may write, or reached through a link, could be the
+    // greeter's own: it is left out.
+    std::fs::set_permissions(legacy.join(&id), std::fs::Permissions::from_mode(0o777)).unwrap();
+    assert!(backups(&f.root()).is_empty());
+    std::fs::set_permissions(legacy.join(&id), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let moved = f.dir.path().join("elsewhere");
+    std::fs::rename(&legacy, &moved).unwrap();
+    std::os::unix::fs::symlink(&moved, &legacy).unwrap();
+    assert!(backups(&f.root()).is_empty());
+    assert!(RestorePlan::build(&f.root(), "latest").unwrap_err().contains("no switch backups"));
+}
+
 #[test]
 fn freebsd_greetd_is_built_not_installed() {
     let f = Fixture::new();

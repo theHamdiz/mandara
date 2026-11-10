@@ -82,7 +82,7 @@ Login screen — switch plan
   Now:    SDDM
   Target: Mandara Login (greetd greeter)
 
-  Files (each one backed up first to /var/lib/mandara-greeter/backups/<timestamp>/):
+  Files (each one backed up first to /var/lib/mandara-greeter-backups/<timestamp>/):
     install  /usr/local/lib/mandara/mandara-greeter (copy of ~/.local/bin/mandara), media folders, state dir
     update   /etc/greetd/config.toml
         - command = "agreety --cmd /bin/sh"
@@ -108,10 +108,15 @@ Login screen — switch plan
   enabled (`systemctl disable/enable`, never `--now`).
 * It refuses without root, validates first (binary installed, unit present,
   config parses), keeps a timestamped backup with a `manifest.toml` per
-  switch, and rolls back files and units if a step fails.
+  switch in `/var/lib/mandara-greeter-backups` (only root can change it,
+  unlike the folder the login screen's user owns), and rolls back files and units if
+  a step fails.
 * `restore latest` (or a backup id) puts the backed-up files back, removes
   files the switch created, and with `--apply` moves `display-manager.service`
-  back if the switch had moved it.
+  back if the switch had moved it. It runs only the service commands that
+  switch could have written, for its own units. Backups made by older
+  releases in `/var/lib/mandara-greeter/backups` still restore when root
+  owns them and nobody else can write them.
 * `MANDARA_GREETER_DRY_RUN=1` turns `use` and `restore` (and Studio's
   switch) into plan-only runs.
 
@@ -237,6 +242,13 @@ only the plumbing differs:
   `mandara install` adds the login screen's user (greetd's
   `[default_session] user`, usually `greeter`) to it; by hand that's
   `pw groupmod operator -m greeter`.
+  `operator` can do more than that: on a standard FreeBSD system it can
+  also read the raw disk devices (`/dev/ada0`, `/dev/nda0`, `/dev/da0`…),
+  so a login screen that was broken into could read an unencrypted
+  disk's data, password hashes included. If that matters more to you than
+  the buttons, take the user out again with
+  `pw groupmod operator -d greeter` and power off from a session instead;
+  with ConsoleKit2 running, the buttons don't need `operator` at all.
 * **PAM:** OpenPAM looks for greetd's policy in `/etc/pam.d/greetd`, then
   in the `greetd` lines of `/etc/pam.conf`, then in ports'
   `/usr/local/etc/pam.d/greetd`, and uses the first one it finds
@@ -325,7 +337,7 @@ sudo mandara greeter keyring-unlock --remove   # take Mandara's lines out again
   exists (openSUSE), a copy goes to `/etc/pam.d`, which takes precedence,
   and `--remove` deletes it again.
 * It refuses without root, backs the file up under
-  `/var/lib/mandara-greeter/backups/<timestamp>/` (so `greeter restore
+  `/var/lib/mandara-greeter-backups/<timestamp>/` (so `greeter restore
   latest` undoes it too), checks that nothing outside its markers changes,
   verifies the write and rolls back on any error. Running it twice changes
   nothing; a module installed later is added on the next run.

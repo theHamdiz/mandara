@@ -252,9 +252,9 @@ impl ModelWeights {
         let tok_embeddings = gg.tensor("token_embd.weight")?;
         let tok_embeddings = Arc::new(tok_embeddings);
         let norm = RmsNorm::from_qtensor(gg.tensor("output_norm.weight")?, rms_norm_eps)?;
-        let output = match gg.tensor("output.weight") {
-            Ok(tensor) => Arc::new(tensor),
-            Err(_) => tok_embeddings.clone(),
+        let output = match gg.optional_tensor("output.weight")? {
+            Some(tensor) => Arc::new(tensor),
+            None => tok_embeddings.clone(),
         };
 
         let global_rope = Arc::new(RotaryEmbedding::new(key_length, rope_freq_base, device)?);

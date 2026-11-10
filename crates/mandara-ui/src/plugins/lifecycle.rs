@@ -96,6 +96,9 @@ pub fn init(cx: &mut App) {
     cx.set_global(CommandGate(Rc::new(off_reason)));
     sync(cx);
     cx.observe(&config(cx), |_, cx| sync(cx)).detach();
+    // Radio's player lives outside its views, and a sidebar card is built
+    // only when its tab first shows.
+    super::radio::resume_at_startup(cx);
 }
 
 thread_local! {

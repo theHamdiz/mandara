@@ -461,9 +461,9 @@ impl ModelWeights {
 
         let norm = rms_norm(gg, "output_norm.weight", rms_norm_eps)?;
         // Load output projection tensor, falling back to tied embeddings like gemma3
-        let lm_head_tensor = match gg.tensor("output.weight") {
-            Ok(tensor) => Arc::new(tensor),
-            Err(_) => embed_tokens.clone(),
+        let lm_head_tensor = match gg.optional_tensor("output.weight")? {
+            Some(tensor) => Arc::new(tensor),
+            None => embed_tokens.clone(),
         };
         let lm_head = QMatMul::from_weights(lm_head_tensor)?;
         let span = tracing::span!(tracing::Level::TRACE, "model");
