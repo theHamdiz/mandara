@@ -706,6 +706,65 @@ fn a_backup_swapped_after_the_check_is_never_read() {
     assert!(!f.root().path("/etc/shadow").exists(), "the forged manifest was never read");
 }
 
+/// The race itself: the old folder is listed and trusted, then swapped for
+/// one the greeter user could have made before the backup is read. The
+/// read checks what it opens, not what was listed, and refuses it.
+#[test]
+fn a_backup_swapped_between_listing_and_reading_is_refused() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let f = arch_with_sddm();
+    let plan = SwitchPlan::build(&f.root(), MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    plan.perform(&f.root(), true, &mut Recorder::default()).unwrap();
+    let [(id, dir)] = backup_dirs(&f.root()).try_into().unwrap();
+    let legacy = f.root().path(LEGACY_BACKUP_DIR);
+    std::fs::create_dir_all(&legacy).unwrap();
+    std::fs::rename(&dir, legacy.join(&id)).unwrap();
+    let swap = |make: &dyn Fn(&Path)| {
+        let listed = backup_dirs(&f.root());
+        assert_eq!(listed.len(), 1, "trusted when listed");
+        // Swapped after the listing, before the read.
+        let kept = f.dir.path().join("kept");
+        std::fs::rename(&legacy, &kept).unwrap();
+        make(&kept);
+        let err = read_backup(&legacy, &id).unwrap_err();
+        assert!(err.contains("not a backup Mandara made") || err.contains("Too many levels of symbolic links") || err.contains("Not a directory"), "{err}");
+        // Put the real one back for the next case.
+        if std::fs::symlink_metadata(&legacy).unwrap().file_type().is_symlink() {
+            std::fs::remove_file(&legacy).unwrap();
+        } else {
+            std::fs::remove_dir_all(&legacy).unwrap();
+        }
+        std::fs::rename(&kept, &legacy).unwrap();
+    };
+    // A copy anyone may write (what the greeter user could make).
+    swap(&|kept| {
+        copy_tree(kept, &legacy);
+        std::fs::set_permissions(&legacy, std::fs::Permissions::from_mode(0o777)).unwrap();
+    });
+    // The same, one level down: the backup folder itself.
+    swap(&|kept| {
+        copy_tree(kept, &legacy);
+        std::fs::set_permissions(legacy.join(&id), std::fs::Permissions::from_mode(0o777)).unwrap();
+    });
+    // A link to a folder elsewhere.
+    swap(&|kept| std::os::unix::fs::symlink(kept, &legacy).unwrap());
+    // Untouched, it still reads.
+    assert!(read_backup(&legacy, &id).is_ok());
+}
+
+/// Copies the folder `from` (two levels deep, as a backups folder is) to `to`.
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap().flatten() {
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
 /// Only plain names inside the backup folder are read, never a path out of
 /// it, and never a file with other links (a hard link to someone else's).
 #[test]
