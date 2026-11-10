@@ -10,7 +10,15 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
+#[cfg(not(target_os = "freebsd"))]
 pub const GREETD_CONFIG: &str = "/etc/greetd/config.toml";
+/// FreeBSD: greetd reads `/usr/local/etc/greetd/config.toml` first (its
+/// FreeBSD port's prefix).
+#[cfg(target_os = "freebsd")]
+pub const GREETD_CONFIG: &str = "/usr/local/etc/greetd/config.toml";
+/// The VT a new greetd config runs on (FreeBSD: `ttyv8`, past the eight
+/// gettys of `/etc/ttys`).
+const FRESH_VT: i64 = if cfg!(target_os = "freebsd") { 8 } else { 1 };
 pub const BACKUP_SUFFIX: &str = "mandara-backup";
 pub const INSTALLED_EXE: &str = "/usr/local/lib/mandara/mandara-greeter";
 pub const STATE_DIR: &str = "/var/lib/mandara-greeter";
@@ -130,7 +138,7 @@ pub fn render_greetd_config(existing: Option<&str>, command: &str, user: &str) -
     table.insert("default_session".into(), toml::Value::Table(session));
     if !table.contains_key("terminal") {
         let mut terminal = toml::Table::new();
-        terminal.insert("vt".into(), toml::Value::Integer(1));
+        terminal.insert("vt".into(), toml::Value::Integer(FRESH_VT));
         table.insert("terminal".into(), toml::Value::Table(terminal));
     }
     format!("{MARKER}; previous file: {GREETD_CONFIG}.{BACKUP_SUFFIX}\n\n{}", toml::to_string(&table).unwrap_or_default())
@@ -179,13 +187,14 @@ impl InstallPlan {
         let existing = std::fs::read_to_string(GREETD_CONFIG).ok();
         let user = greeter_user(existing.as_deref());
         let new_config = render_greetd_config(existing.as_deref(), &kiosk.command(), &user);
-        let current_dm = current_display_manager(Path::new("/etc/systemd/system/display-manager.service"));
+        let root = crate::manager::SysRoot::system();
+        let current_dm = if root.freebsd() { crate::manager::display_manager(&root) } else { current_display_manager(Path::new("/etc/systemd/system/display-manager.service")) };
         let mut commands = Vec::new();
         if let Some(dm) = current_dm.as_deref().filter(|d| *d != "greetd") {
-            commands.push(vec!["systemctl".into(), "disable".into(), format!("{dm}.service")]);
+            commands.push(crate::manager::service_command(&root, "disable", &format!("{dm}.service")));
         }
         if current_dm.as_deref() != Some("greetd") {
-            commands.push(vec!["systemctl".into(), "enable".into(), "greetd.service".into()]);
+            commands.push(crate::manager::service_command(&root, "enable", "greetd.service"));
         }
         let mut warnings = Vec::new();
         if !crate::sessions::program_exists("greetd") && !Path::new("/usr/bin/greetd").exists() {
@@ -270,7 +279,8 @@ impl InstallPlan {
             println!("✓ wrote {path}");
         }
         // 5. greetd config (backup first; an existing backup is kept).
-        std::fs::create_dir_all("/etc/greetd").map_err(|e| err("/etc/greetd", e))?;
+        let greetd_dir = Path::new(GREETD_CONFIG).parent().unwrap_or(Path::new("/"));
+        std::fs::create_dir_all(greetd_dir).map_err(|e| err(&greetd_dir.display().to_string(), e))?;
         let backup = format!("{GREETD_CONFIG}.{BACKUP_SUFFIX}");
         if let Some(existing) = &self.existing
             && !existing.starts_with(MARKER)
@@ -438,8 +448,9 @@ impl UninstallPlan {
         let previous_dm = std::fs::read_to_string(Path::new(STATE_DIR).join("previous-dm")).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
         let mut commands = Vec::new();
         if let Some(dm) = &previous_dm {
-            commands.push(vec!["systemctl".into(), "disable".into(), "greetd.service".into()]);
-            commands.push(vec!["systemctl".into(), "enable".into(), format!("{dm}.service")]);
+            let root = crate::manager::SysRoot::system();
+            commands.push(crate::manager::service_command(&root, "disable", "greetd.service"));
+            commands.push(crate::manager::service_command(&root, "enable", &format!("{dm}.service")));
         }
         UninstallPlan { backup, ours, previous_dm, commands }
     }

@@ -6,6 +6,14 @@
 //! `unix-session` with the logind session id) unless another agent already
 //! holds the session — then polkitd refuses and we just log it.
 //!
+//! FreeBSD's polkit tracks sessions with ConsoleKit2 instead: the session
+//! id is the ConsoleKit session's object path
+//! (`GetSessionForUnixProcess`). Without a ConsoleKit session (a login
+//! whose PAM stack doesn't run `pam_ck_connector`), the agent registers
+//! for this process (`unix-process`), which still answers everything the
+//! shell itself asks for (pkexec authenticates for its parent); its setuid
+//! helper lives in `/usr/local/lib/polkit-1`.
+//!
 //! The password is never checked here: it goes to polkit's own helper,
 //! which runs PAM as root and reports the result straight to polkitd. The
 //! helper is reached through the socket-activated
@@ -44,8 +52,13 @@ const HELPER_LINE_QUEUE: usize = 32;
 
 pub const AGENT_PATH: &str = "/org/mandara/PolicyKit1/AuthenticationAgent";
 pub const HELPER_SOCKET: &str = "/run/polkit/agent-helper.socket";
+#[cfg(not(target_os = "freebsd"))]
 pub const HELPER_PATHS: [&str; 3] =
     ["/usr/lib/polkit-1/polkit-agent-helper-1", "/usr/libexec/polkit-agent-helper-1", "/usr/lib/policykit-1/polkit-agent-helper-1"];
+/// FreeBSD's polkit port (`sysutils/polkit`) installs its setuid helper
+/// under the ports prefix.
+#[cfg(target_os = "freebsd")]
+pub const HELPER_PATHS: [&str; 1] = ["/usr/local/lib/polkit-1/polkit-agent-helper-1"];
 
 /// Someone who may authenticate a request.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -572,21 +585,67 @@ async fn register(shared: Arc<Shared>) -> Result<(zbus::Connection, String), Age
     let unavailable = |e: zbus::Error| AgentStatus::Unavailable(e.to_string());
     let builder = zbus::connection::Builder::system().and_then(|b| b.serve_at(AGENT_PATH, Agent { shared })).map_err(unavailable)?;
     let conn = crate::runtime::connect(builder).await.map_err(unavailable)?;
-    let session = crate::logind::session_id(&conn).await.map_err(unavailable)?;
+    let (kind, subject, session) = agent_subject(&conn).await.map_err(unavailable)?;
     let authority =
         crate::actor::proxy(&conn, "org.freedesktop.PolicyKit1", "/org/freedesktop/PolicyKit1/Authority", "org.freedesktop.PolicyKit1.Authority")
             .await
             .map_err(unavailable)?;
-    let mut subject: HashMap<&str, Value> = HashMap::new();
-    subject.insert("session-id", Value::from(session.as_str()));
     let locale = std::env::var("LC_ALL").or_else(|_| std::env::var("LANG")).unwrap_or_else(|_| "en_US.UTF-8".into());
     // polkit declares the object path as a string (`s`), not `o`.
-    match authority.call::<_, _, ()>("RegisterAuthenticationAgent", &(("unix-session", subject), locale.as_str(), AGENT_PATH)).await {
+    match authority.call::<_, _, ()>("RegisterAuthenticationAgent", &((kind, subject), locale.as_str(), AGENT_PATH)).await {
         Ok(()) => Ok((conn, session)),
         Err(zbus::Error::MethodError(name, msg, _)) if msg.as_deref().is_some_and(|m| m.contains("already exists")) => {
             Err(AgentStatus::AnotherAgent(msg.unwrap_or_else(|| name.to_string())))
         }
         Err(err) => Err(unavailable(err)),
+    }
+}
+
+/// A polkit subject: its kind and details.
+type Subject = (&'static str, HashMap<&'static str, Value<'static>>);
+
+/// `unix-session` with `id`.
+fn session_subject(id: String) -> Subject {
+    ("unix-session", HashMap::from([("session-id", Value::from(id))]))
+}
+
+/// `unix-process` for this process (polkitd reads its start time itself
+/// when it is 0).
+pub fn process_subject(pid: u32, uid: u32) -> Subject {
+    let uid = i32::try_from(uid).unwrap_or(-1);
+    ("unix-process", HashMap::from([("pid", Value::from(pid)), ("start-time", Value::from(0u64)), ("uid", Value::from(uid))]))
+}
+
+/// What the agent registers for, and how it's logged: the logind session.
+#[cfg(not(target_os = "freebsd"))]
+async fn agent_subject(conn: &zbus::Connection) -> zbus::Result<(&'static str, HashMap<&'static str, Value<'static>>, String)> {
+    let session = crate::logind::session_id(conn).await?;
+    let (kind, details) = session_subject(session.clone());
+    Ok((kind, details, session))
+}
+
+/// FreeBSD: the ConsoleKit2 session polkit tracks, else this process.
+#[cfg(target_os = "freebsd")]
+async fn agent_subject(conn: &zbus::Connection) -> zbus::Result<(&'static str, HashMap<&'static str, Value<'static>>, String)> {
+    let pid = std::process::id();
+    let session = async {
+        let manager = crate::actor::proxy(conn, "org.freedesktop.ConsoleKit", "/org/freedesktop/ConsoleKit/Manager", "org.freedesktop.ConsoleKit.Manager").await?;
+        manager.call::<_, _, zbus::zvariant::OwnedObjectPath>("GetSessionForUnixProcess", &(pid,)).await
+    }
+    .await;
+    match session {
+        Ok(path) => {
+            let id = path.as_str().to_string();
+            let (kind, details) = session_subject(id.clone());
+            Ok((kind, details, id))
+        }
+        Err(err) => {
+            tracing::info!("polkit: no ConsoleKit session ({err}); registering for this process");
+            // SAFETY: getuid has no preconditions.
+            let uid = unsafe { libc::getuid() };
+            let (kind, details) = process_subject(pid, uid);
+            Ok((kind, details, format!("process {pid}")))
+        }
     }
 }
 
@@ -612,6 +671,21 @@ mod tests {
         assert!(!preview.is_stopped());
         preview.stop();
         assert!(preview.is_stopped());
+    }
+
+    /// The subjects polkitd parses (`a{sv}` with these exact types: `u`
+    /// pid, `t` start time, `i` uid; `s` session id).
+    #[test]
+    fn subjects_carry_polkits_types() {
+        let (kind, d) = process_subject(4242, 1001);
+        assert_eq!(kind, "unix-process");
+        assert_eq!(d["pid"], Value::from(4242u32));
+        assert_eq!(d["start-time"], Value::from(0u64));
+        assert_eq!(d["uid"], Value::from(1001i32));
+        let (kind, d) = session_subject("/org/freedesktop/ConsoleKit/Session2".into());
+        assert_eq!(kind, "unix-session");
+        assert_eq!(d["session-id"], Value::from("/org/freedesktop/ConsoleKit/Session2"));
+        assert_eq!(process_subject(1, u32::MAX).1["uid"], Value::from(-1i32), "an out-of-range uid lets polkitd look it up");
     }
 
     #[test]

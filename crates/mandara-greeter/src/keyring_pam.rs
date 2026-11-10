@@ -19,7 +19,12 @@
 //!
 //! When `/etc/pam.d/<service>` doesn't exist but the distribution ships
 //! `/usr/lib/pam.d/<service>` (openSUSE), a copy is created in `/etc/pam.d`
-//! (which takes precedence) and `--remove` deletes it again.
+//! (which takes precedence) and `--remove` deletes it again. FreeBSD's
+//! OpenPAM reads `/etc/pam.d` before ports' `/usr/local/etc/pam.d` the
+//! same way, so a ports-installed greetd's file is copied likewise (and
+//! survives package upgrades). OpenPAM on FreeBSD 14 doesn't know the
+//! `-` prefix: its lines are written without it (each module is checked
+//! to be installed first).
 //!
 //! Every write is planned first, needs root, is backed up under
 //! [`crate::manager::BACKUP_DIR`] (so `greeter restore latest` undoes it
@@ -42,6 +47,12 @@ pub const PAM_DIRS: [&str; 2] = ["/etc/pam.d", "/usr/lib/pam.d"];
 pub const ETC_PAM_DIR: &str = "/etc/pam.d";
 /// The distribution's directory (openSUSE ships service files there).
 pub const VENDOR_PAM_DIR: &str = "/usr/lib/pam.d";
+/// FreeBSD: base, then ports (OpenPAM's own order).
+pub const FREEBSD_PAM_DIRS: [&str; 2] = ["/etc/pam.d", "/usr/local/etc/pam.d"];
+/// Where FreeBSD's ports put their PAM service files.
+pub const FREEBSD_VENDOR_PAM_DIR: &str = "/usr/local/etc/pam.d";
+/// OpenPAM's module path on FreeBSD (base modules, then ports').
+pub const FREEBSD_MODULE_DIRS: [&str; 2] = ["/usr/lib", "/usr/local/lib"];
 /// PAM module directories across distributions and architectures.
 pub const MODULE_DIRS: [&str; 10] = [
     "/usr/lib/security",
@@ -140,11 +151,13 @@ impl Keyring {
             (Keyring::Gnome, Family::Debian) => "libpam-gnome-keyring",
             (Keyring::Gnome, Family::Fedora | Family::Suse) => "gnome-keyring-pam",
             (Keyring::Gnome, Family::Gentoo) => "gnome-base/gnome-keyring (USE=pam)",
+            (Keyring::Gnome, Family::FreeBSD) => "gnome-keyring",
             (Keyring::Gnome, _) => "gnome-keyring / libpam-gnome-keyring / gnome-keyring-pam",
             (Keyring::KWallet, Family::Arch) => "kwallet-pam",
             (Keyring::KWallet, Family::Debian) => "libpam-kwallet5",
             (Keyring::KWallet, Family::Fedora) => "pam-kwallet",
             (Keyring::KWallet, Family::Gentoo) => "kde-plasma/kwallet-pam",
+            (Keyring::KWallet, Family::FreeBSD) => "plasma6-kwallet-pam",
             (Keyring::KWallet, _) => "kwallet-pam / libpam-kwallet5 / pam-kwallet / pam_kwallet6",
         }
     }
@@ -269,7 +282,7 @@ fn resolve(root: &SysRoot, name: &str) -> Option<(String, String)> {
     if name.starts_with('/') {
         return root.read(name).map(|t| (name.to_string(), t));
     }
-    PAM_DIRS.iter().find_map(|d| {
+    pam_dirs(root).iter().find_map(|d| {
         let path = format!("{d}/{name}");
         root.read(&path).map(|t| (path, t))
     })
@@ -340,9 +353,25 @@ fn block_rules(text: &str) -> Vec<String> {
     text.lines().enumerate().filter(|(i, l)| in_blocks(&ranges, *i) && Rule::parse(l).is_some()).map(|(_, l)| l.trim().to_string()).collect()
 }
 
-/// A rule line as Mandara writes it.
-fn rule_line(ty: &str, module: &str, args: &str) -> String {
-    let ty = format!("-{ty}");
+/// Where PAM service files are looked up on `root`, first wins.
+fn pam_dirs(root: &SysRoot) -> &'static [&'static str] {
+    if root.freebsd() { &FREEBSD_PAM_DIRS } else { &PAM_DIRS }
+}
+
+/// The directory `root`'s packages put service files in.
+fn vendor_dir(root: &SysRoot) -> &'static str {
+    if root.freebsd() { FREEBSD_VENDOR_PAM_DIR } else { VENDOR_PAM_DIR }
+}
+
+/// Where `root`'s PAM modules are.
+fn module_dirs(root: &SysRoot) -> &'static [&'static str] {
+    if root.freebsd() { &FREEBSD_MODULE_DIRS } else { &MODULE_DIRS }
+}
+
+/// A rule line as Mandara writes it: `-auth` (skipped silently if the
+/// module goes away) where PAM knows the prefix (`nonfatal`), else plain.
+fn rule_line(ty: &str, module: &str, args: &str, nonfatal: bool) -> String {
+    let ty = if nonfatal { format!("-{ty}") } else { ty.to_string() };
     format!("{ty:<TYPE_COLUMN$} {CONTROL:<CONTROL_COLUMN$} {module} {args}").trim_end().to_string()
 }
 
@@ -420,8 +449,8 @@ fn with_copy_header(text: &str, vendor_path: &str) -> String {
 }
 
 /// True when `text` carries the copy header.
-fn is_vendor_copy(text: &str) -> bool {
-    text.lines().any(|l| l.trim().starts_with(BEGIN) && l.contains(VENDOR_PAM_DIR) && l.contains("copied from"))
+fn is_vendor_copy(text: &str, vendor_dir: &str) -> bool {
+    text.lines().any(|l| l.trim().starts_with(BEGIN) && l.contains(vendor_dir) && l.contains("copied from"))
 }
 
 /// The PAM service greetd authenticates user sessions with
@@ -441,7 +470,7 @@ pub fn autologin(root: &SysRoot) -> bool {
 
 /// The installed module of `k` (file name, absolute path).
 fn installed_module(root: &SysRoot, k: Keyring) -> Option<(String, String)> {
-    k.modules().iter().find_map(|m| MODULE_DIRS.iter().map(|d| format!("{d}/{m}")).find(|p| root.path(p).is_file()).map(|p| (m.to_string(), p)))
+    k.modules().iter().find_map(|m| module_dirs(root).iter().map(|d| format!("{d}/{m}")).find(|p| root.path(p).is_file()).map(|p| (m.to_string(), p)))
 }
 
 /// Each keyring's state in `text` (the service file at `file`).
@@ -498,6 +527,8 @@ pub struct KeyringPlan {
     pub removing: Vec<String>,
     /// greetd autologin is configured (no password, so no unlock).
     pub autologin: bool,
+    /// Where the system's packages put PAM service files.
+    pub vendor_dir: &'static str,
     pub errors: Vec<String>,
     pub warnings: Vec<String>,
 }
@@ -507,7 +538,8 @@ impl KeyringPlan {
         let service = greetd_service(root);
         let family = crate::manager::family(root);
         let path = format!("{ETC_PAM_DIR}/{service}");
-        let vendor_path = format!("{VENDOR_PAM_DIR}/{service}");
+        let vendor_dir = vendor_dir(root);
+        let vendor_path = format!("{vendor_dir}/{service}");
         let previous = root.read(&path);
         let vendor_text = root.read(&vendor_path);
         let mut plan = KeyringPlan {
@@ -521,6 +553,7 @@ impl KeyringPlan {
             adding: Vec::new(),
             removing: Vec::new(),
             autologin: autologin(root),
+            vendor_dir,
             errors: Vec::new(),
             warnings: Vec::new(),
         };
@@ -543,7 +576,7 @@ impl KeyringPlan {
         let base = strip_blocks(&text, &ranges);
         // Mandara's own copy of the vendor file keeps its header (and goes
         // away once nothing of Mandara's is left in it).
-        let own_copy = previous.as_deref().is_some_and(is_vendor_copy) && vendor_text.as_deref().is_some_and(|v| same_text(v, &base));
+        let own_copy = previous.as_deref().is_some_and(|p| is_vendor_copy(p, vendor_dir)) && vendor_text.as_deref().is_some_and(|v| same_text(v, &base));
         let note = "added by `mandara greeter keyring-unlock`; --remove takes it out";
         plan.contents = match action {
             Action::Add => {
@@ -552,10 +585,10 @@ impl KeyringPlan {
                 for s in &fresh {
                     let Some(module) = &s.module else { continue };
                     if !s.auth.present() {
-                        auth.push(rule_line(AUTH, module, s.keyring.auth_args()));
+                        auth.push(rule_line(AUTH, module, s.keyring.auth_args(), !root.freebsd()));
                     }
                     if !s.session.present() {
-                        session.push(rule_line(SESSION, module, s.keyring.session_args()));
+                        session.push(rule_line(SESSION, module, s.keyring.session_args(), !root.freebsd()));
                     }
                 }
                 if auth.is_empty() && session.is_empty() {
@@ -594,8 +627,15 @@ impl KeyringPlan {
         if action == Action::Add && plan.autologin {
             plan.warnings.push(format!("{GREETD_CONFIG} has an [initial_session] (autologin): that login has no password, so keyrings stay locked until you unlock them."));
         }
-        if action == Action::Add && plan.adding.iter().any(|l| l.starts_with(&format!("-{AUTH}"))) {
+        if action == Action::Add && plan.adding.iter().any(|l| l.trim_start_matches('-').starts_with(AUTH)) {
             let lines: Vec<&str> = base.lines().collect();
+            // FreeBSD's sample greetd file: `auth sufficient pam_unix.so`.
+            if let Some((_, rule)) = auth_anchor(root, &lines)
+                && rule.control == "sufficient"
+                && let Some(module) = rule.module()
+            {
+                plan.warnings.push(format!("`auth sufficient {module}` ends the auth stack once the password is right, so the keyring auth line after it doesn't run; making it `auth required {module}` fixes that (not done automatically)."));
+            }
             if let Some((_, rule)) = auth_anchor(root, &lines)
                 && rule.control == "include"
                 && let Some((inc_path, inc)) = resolve(root, &rule.target)
@@ -711,7 +751,7 @@ impl KeyringPlan {
     }
 
     fn vendor_path(&self) -> String {
-        format!("{VENDOR_PAM_DIR}/{}", self.service)
+        format!("{}/{}", self.vendor_dir, self.service)
     }
 
     /// Performs the plan as root (backup, write, verify; rollback on error).

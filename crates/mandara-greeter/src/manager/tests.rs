@@ -434,3 +434,68 @@ fn install_uses_the_distributions_package_manager() {
     g.bins(&["zypper"]);
     assert_eq!(install_command(&g.root(), Family::Unknown, &pkgs).unwrap(), ["zypper", "--non-interactive", "install", "--no-recommends", "greetd", "cage"]);
 }
+
+// ── FreeBSD: rc.conf instead of systemd ──────────────────────────────────
+
+fn freebsd_with_sddm() -> Fixture {
+    let f = Fixture::new();
+    f.file("/etc/os-release", "NAME=FreeBSD\nID=freebsd\n")
+        .file("/etc/defaults/rc.conf", "sddm_enable=\"NO\"\n")
+        .file("/etc/rc.conf", "hostname=\"bsd\"\ndbus_enable=\"YES\"\nsddm_enable=\"YES\"  # the login screen\n")
+        .file("/usr/local/etc/rc.d/sddm", "#!/bin/sh\n")
+        .file("/usr/local/etc/rc.d/greetd", "#!/bin/sh\n")
+        .file("/usr/local/bin/greetd", "")
+        .file("/usr/local/bin/cage", "");
+    f
+}
+
+#[test]
+fn rc_conf_values() {
+    let text = "# sddm_enable=\"YES\"\nsddm_enable=\"YES\"\nsddm_enable='NO' # later wins\ngreetd_enable=yes\n";
+    assert_eq!(rc_value(text, "sddm_enable").as_deref(), Some("NO"));
+    assert_eq!(rc_value(text, "greetd_enable").as_deref(), Some("yes"));
+    assert_eq!(rc_value(text, "gdm_enable"), None);
+    assert!(rc_yes("yes") && rc_yes("TRUE") && rc_yes(" On ") && rc_yes("1") && !rc_yes("NO") && !rc_yes(""));
+    let f = freebsd_with_sddm();
+    let root = f.root().as_freebsd();
+    assert!(root.rc_enabled("sddm") && root.rc_enabled("dbus") && !root.rc_enabled("greetd"));
+    // A service's own rc.conf.d file has the last word.
+    f.file("/usr/local/etc/rc.conf.d/sddm", "sddm_enable=NO\n");
+    assert!(!root.rc_enabled("sddm"));
+}
+
+#[test]
+fn freebsd_detects_and_switches_with_sysrc() {
+    let f = freebsd_with_sddm();
+    let root = f.root().as_freebsd();
+    let d = detect(&root);
+    assert_eq!(d.display_manager.as_deref(), Some("sddm"));
+    assert_eq!(d.active, Some("sddm"));
+    assert_eq!(d.family, Family::FreeBSD);
+    assert!(root.has_unit("greetd.service") && root.has_unit("sddm.service") && !root.has_unit("gdm.service"));
+    let plan = SwitchPlan::build(&root, MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    assert!(plan.errors.is_empty(), "{:?}", plan.errors);
+    assert_eq!(plan.commands, [vec!["sysrc".to_string(), "sddm_enable=NO".into()], vec!["sysrc".to_string(), "greetd_enable=YES".into()]]);
+    let fresh = &plan.writes[0].contents;
+    assert!(fresh.contains("vt = 8"), "past FreeBSD's gettys: {fresh}");
+    let mut rec = Recorder::default();
+    plan.perform(&root, true, &mut rec).unwrap();
+    assert_eq!(rec.log, ["sysrc sddm_enable=NO", "sysrc greetd_enable=YES"]);
+    assert!(!rec.log.iter().any(|c| c.contains("systemctl")));
+    let restore = RestorePlan::build(&root, "latest").unwrap();
+    assert_eq!(restore.commands, [vec!["sysrc".to_string(), "greetd_enable=NO".into()], vec!["sysrc".to_string(), "sddm_enable=YES".into()]]);
+    // A failed step is undone the rc.conf way.
+    assert_eq!(inverse(&["sysrc".into(), "sddm_enable=NO".into()]), Some(vec!["sysrc".to_string(), "sddm_enable=YES".into()]));
+}
+
+#[test]
+fn freebsd_greetd_is_built_not_installed() {
+    let f = Fixture::new();
+    f.file("/etc/os-release", "ID=freebsd\n").file("/usr/local/bin/cage", "");
+    let root = f.root().as_freebsd();
+    let missing = missing_for(&root, find(MANDARA).unwrap(), Kiosk::Cage, Family::FreeBSD);
+    assert_eq!(missing.len(), 1);
+    assert_eq!(missing[0].what, "greetd");
+    assert!(missing[0].describe().contains("docs/login-manager.md#freebsd"));
+    assert!(packages_for(&missing).is_empty(), "nothing for pkg to install");
+}
