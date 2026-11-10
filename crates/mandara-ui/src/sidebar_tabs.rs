@@ -40,7 +40,26 @@ use crate::state::{config, shell, update_config};
 use crate::text_field::TextField;
 
 /// Built-in plugins that have a sidebar card (third-party plugins all may).
-pub const SIDEBAR_WIDGETS: &[&str] = &["quick-settings", "weather", "notifications", "media", "pomodoro", "todo", "notes", "audio", "resources", "prayer-times", "jannah", "hadith", "quran", "radio", "sudoku", "2048"];
+/// Every built-in whose instance carries a `sidebar` view must be listed:
+/// Studio's widget picker, its plugin pages and `sidebar tab widget add`
+/// offer only these (a test checks the list against the sources).
+pub const SIDEBAR_WIDGETS: &[&str] = &[
+    "quick-settings", "weather", "notifications", "media", "pomodoro", "todo", "notes", "audio", "resources", "prayer-times", "jannah", "hadith", "quran", "radio",
+    "sudoku", "2048", "feeds", "reddit",
+];
+
+/// Whether the plugin of `manifest` can put a card on a sidebar tab.
+pub fn offers_card(manifest: &mandara_plugins::PluginManifest) -> bool {
+    SIDEBAR_WIDGETS.contains(&manifest.id.as_str()) || matches!(manifest.origin, mandara_plugins::PluginOrigin::ThirdParty { .. })
+}
+
+/// The cards of a tab the sidebar draws, top to bottom: those of plugins
+/// that are on, leaving out `skip` (the notifications card while it has
+/// its own tab). A card whose plugin is off stays on the tab, hidden, and
+/// comes back when the plugin is switched on again.
+pub fn shown_cards<'a>(cards: &'a [String], enabled: &'a dyn Fn(&str) -> bool, skip: Option<&'a str>) -> impl Iterator<Item = &'a String> + 'a {
+    cards.iter().filter(move |id| enabled(id) && skip != Some(id.as_str()))
+}
 /// Icons offered for a tab (Mandara's own set).
 pub const TAB_ICONS: &[&str] = &[
     "grid", "tiles", "bell", "calendar", "list-check", "note", "music", "headphones", "cpu", "monitor", "cloud-sun", "coffee", "heart",
@@ -276,10 +295,7 @@ impl SidebarTabs {
         self.cards = tabs
             .iter()
             .map(|tab| {
-                let cards = tab
-                    .cards
-                    .iter()
-                    .filter(|id| enabled(id) && skip != Some(id.as_str()))
+                let cards = shown_cards(&tab.cards, enabled, skip)
                     .filter_map(|id| {
                         if let Some((_, view)) = next_pool.get(id) {
                             return Some(AnyView::clone(view));
@@ -998,8 +1014,7 @@ fn edit(cx: &mut App, f: impl FnOnce(&mut SidebarConfig) -> Result<(), mandara_c
 
 /// Whether `id` can sit in a sidebar tab.
 pub fn has_sidebar_card(id: &str, cx: &App) -> bool {
-    let registry = cx.global::<PluginRegistry>();
-    registry.manifests().any(|m| m.id == id && (SIDEBAR_WIDGETS.contains(&id) || matches!(m.origin, mandara_plugins::PluginOrigin::ThirdParty { .. })))
+    cx.global::<PluginRegistry>().manifest(id).is_some_and(offers_card)
 }
 
 /// Placing a widget turns its plugin on (and brings back a removed one).
@@ -1203,6 +1218,114 @@ mod tests {
         // Ten tabs never fit the default sidebar with labels.
         let row = mandara_config::defaults::SIDEBAR_WIDTH_PX - 2.0 * (30.0 + tokens::XS) - 28.0;
         assert!(strip_width(&[60.0; 10], None, Some(0)) > strip_viewport(row, 30.0, true));
+    }
+
+    /// Every built-in source that builds a sidebar view, with its plugin.
+    /// A new card goes here and into [`SIDEBAR_WIDGETS`]; Feeds and Reddit
+    /// shipped cards that were missing from the list, so nothing offered them.
+    const CARD_SOURCES: &[(&str, &str)] = &[
+        ("plugins/audio.rs", crate::plugins::audio::ID),
+        ("plugins/feeds/mod.rs", crate::plugins::feeds::ID),
+        ("plugins/hadith/mod.rs", crate::plugins::hadith::ID),
+        ("plugins/jannah/mod.rs", crate::plugins::jannah::ID),
+        ("plugins/media.rs", crate::plugins::media::ID),
+        ("plugins/notes.rs", crate::plugins::notes::ID),
+        ("plugins/notifications.rs", crate::plugins::notifications::ID),
+        ("plugins/pomodoro.rs", crate::productivity::POMODORO_ID),
+        ("plugins/prayer.rs", crate::plugins::prayer::ID),
+        ("plugins/quick_settings.rs", crate::plugins::quick_settings::ID),
+        ("plugins/quran/mod.rs", crate::plugins::quran::ID),
+        ("plugins/radio/mod.rs", crate::plugins::radio::ID),
+        ("plugins/reddit/mod.rs", crate::plugins::reddit::ID),
+        ("plugins/resources.rs", crate::plugins::resources::ID),
+        ("plugins/sudoku.rs", crate::plugins::sudoku::ID),
+        ("plugins/tiles.rs", crate::plugins::tiles::ID),
+        ("plugins/todo.rs", crate::plugins::todo::ID),
+        ("plugins/weather.rs", crate::plugins::weather::ID),
+    ];
+
+    fn sources_with_cards(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<String>) {
+        for entry in std::fs::read_dir(dir).unwrap().map(Result::unwrap) {
+            let path = entry.path();
+            if path.is_dir() {
+                sources_with_cards(&path, root, out);
+            } else if path.extension().is_some_and(|e| e == "rs") && std::fs::read_to_string(&path).unwrap().contains(concat!("sidebar: ", "Some(")) {
+                out.push(path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"));
+            }
+        }
+    }
+
+    #[test]
+    fn every_built_in_card_is_offered() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut found = Vec::new();
+        sources_with_cards(&root, &root, &mut found);
+        // Third-party plugins are offered by their origin.
+        found.retain(|f| f != "plugins/external.rs");
+        found.sort();
+        let mut listed: Vec<String> = CARD_SOURCES.iter().map(|(f, _)| (*f).to_string()).collect();
+        listed.sort();
+        assert_eq!(found, listed, "a built-in builds a sidebar card: add it to CARD_SOURCES and SIDEBAR_WIDGETS");
+        let mut ids: Vec<&str> = CARD_SOURCES.iter().map(|(_, id)| *id).collect();
+        ids.sort_unstable();
+        let mut offered = SIDEBAR_WIDGETS.to_vec();
+        offered.sort_unstable();
+        assert_eq!(ids, offered, "SIDEBAR_WIDGETS must list exactly the built-ins with a card");
+    }
+
+    fn registry() -> PluginRegistry {
+        let mut r = PluginRegistry::default();
+        crate::plugins::register_builtin(&mut r);
+        r
+    }
+
+    const NEW_CARDS: [&str; 5] = [crate::plugins::feeds::ID, crate::plugins::reddit::ID, crate::plugins::radio::ID, crate::plugins::sudoku::ID, crate::plugins::tiles::ID];
+
+    #[test]
+    fn the_picker_lists_every_card_plugin() {
+        let r = registry();
+        for id in SIDEBAR_WIDGETS {
+            let manifest = r.manifest(id).unwrap_or_else(|| panic!("{id} is not registered"));
+            assert!(offers_card(manifest), "{id}");
+        }
+        for id in NEW_CARDS {
+            assert!(r.manifests().filter(|m| offers_card(m)).any(|m| m.id == id), "{id} must be in the sidebar's widget picker");
+        }
+        // Plugins without a card stay out of it.
+        assert!(!offers_card(r.manifest(crate::plugins::clock::ID).unwrap()));
+    }
+
+    #[test]
+    fn cards_follow_their_plugin_switch() {
+        let r = registry();
+        let mut cfg = ShellConfig::default();
+        let mut sidebar = SidebarConfig::default();
+        for id in NEW_CARDS {
+            sidebar.add_card(0, id, None).unwrap();
+        }
+        let shown = |cfg: &ShellConfig| -> Vec<String> {
+            let enabled = |id: &str| r.is_enabled(id, &cfg.plugins);
+            shown_cards(&sidebar.tabs[0].cards, &enabled, None).filter(|id| NEW_CARDS.contains(&id.as_str())).cloned().collect()
+        };
+        // Opt-in: hidden until switched on.
+        assert!(shown(&cfg).is_empty(), "the five plugins are off by default");
+        // Placing a card (Studio, the plugin page or the command) turns its plugin on.
+        for id in NEW_CARDS {
+            turn_on(&mut cfg, id);
+        }
+        assert_eq!(shown(&cfg), NEW_CARDS, "each shows once on, in the tab's order");
+        // Switching one off hides only its card, which stays on the tab.
+        mandara_plugins::lifecycle::set_enabled(&mut cfg, crate::plugins::feeds::ID, "Feeds", false, None).unwrap();
+        let now = shown(&cfg);
+        assert!(!now.iter().any(|c| c == crate::plugins::feeds::ID));
+        assert_eq!(now.len(), NEW_CARDS.len() - 1);
+        assert!(sidebar.tabs[0].cards.iter().any(|c| c == crate::plugins::feeds::ID), "kept for when it comes back");
+        mandara_plugins::lifecycle::set_enabled(&mut cfg, crate::plugins::feeds::ID, "Feeds", true, None).unwrap();
+        assert_eq!(shown(&cfg).len(), NEW_CARDS.len());
+        // The notifications card is skipped while it has its own tab.
+        let all = |_: &str| true;
+        let cards = vec!["notifications".to_string(), "reddit".to_string()];
+        assert_eq!(shown_cards(&cards, &all, Some("notifications")).collect::<Vec<_>>(), [&"reddit".to_string()]);
     }
 
     #[test]

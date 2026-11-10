@@ -204,6 +204,13 @@ pub fn open(target: &str, cx: &mut App) -> Result<(), String> {
     reveal(&shared, cx)
 }
 
+/// Show the panel on Discover, where you find and follow communities.
+pub(super) fn discover(cx: &mut App) -> Result<(), String> {
+    let shared = model::model();
+    { let mut m = shared.borrow_mut(); m.page = model::Page::Discover; m.searching = false; }
+    reveal(&shared, cx)
+}
+
 /// Show the panel: from its bar button, or (without one: an opt-in plugin
 /// starts without one) as a floating card.
 fn reveal(shared: &model::Shared, cx: &mut App) -> Result<(), String> {

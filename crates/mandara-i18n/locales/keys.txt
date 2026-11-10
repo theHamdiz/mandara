@@ -2266,6 +2266,7 @@ Filter packages…
 Find
 Find a surah by name or number…
 Find a window by title or app; Enter focuses it
+Find communities
 Find coordinates
 Find devices
 Find emoji by English or Arabic name
@@ -2377,6 +2378,7 @@ Folders, comma separated (empty: your home folders)
 Follow Mandara
 Follow Mandara, or a language of its own: its panel, bar item, sidebar card, widgets and the meanings it shows; the rest of Mandara keeps its language
 Follow Quick start above: your plugin shows up here, and in Installed, as soon as you copy it in.
+Follow a community to see its top posts here
 Follow sites you like: add their addresses or pick from tested starter feeds in Studio.
 Follow system
 Follow system preference

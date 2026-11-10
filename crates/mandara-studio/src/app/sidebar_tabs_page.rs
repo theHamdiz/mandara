@@ -15,11 +15,11 @@ use gpui::{
 use mandara_config::ShellConfig;
 use mandara_core::ToGpui;
 use mandara_i18n::{t, tf, tk};
-use mandara_plugins::{PluginOrigin, PluginRegistry};
+use mandara_plugins::PluginRegistry;
 use mandara_theme::{Color, MandaraPalette};
 use mandara_ui::bidi::Bidi as _;
 use mandara_ui::icons::{any_icon, icon};
-use mandara_ui::sidebar_tabs::{SIDEBAR_WIDGETS, TAB_ICONS, tab_label, turn_on};
+use mandara_ui::sidebar_tabs::{TAB_ICONS, offers_card, tab_label, turn_on};
 use mandara_ui::state::update_config;
 
 use super::designer::{DragChip, Lane, place};
@@ -382,7 +382,7 @@ impl StudioView {
         let registry = cx.global::<PluginRegistry>();
         let mut widgets: Vec<(mandara_plugins::PluginManifest, bool)> = registry
             .manifests()
-            .filter(|m| SIDEBAR_WIDGETS.contains(&m.id.as_str()) || matches!(m.origin, PluginOrigin::ThirdParty { .. }))
+            .filter(|m| offers_card(m))
             .filter(|m| query.is_empty() || m.display_name().to_lowercase().contains(&query) || m.display_description().to_lowercase().contains(&query) || m.id.contains(&query))
             .map(|m| (m.clone(), registry.is_enabled(&m.id, &cfg.plugins) && !cfg.plugins.is_removed(&m.id)))
             .collect();

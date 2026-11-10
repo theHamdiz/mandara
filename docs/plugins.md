@@ -89,7 +89,7 @@ The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
 | **Presentation mode** | One switch for talks and screen sharing: do not disturb, keep awake and hidden desktop widgets, all put back afterwards *(opt-in)* |
 | **Translator** | Translate text with DeepL or your own LibreTranslate server; text is sent only when you ask *(opt-in)* |
 | **Phone Connect** | Paired KDE Connect devices: battery, ring, ping and explicitly send clipboard text *(opt-in)* |
-| **Feeds** | A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search, a clean reader view, starter feeds and OPML *(opt-in)* |
+| **Feeds** | A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search, a clean reader view, starter feeds and OPML, and a sidebar card with your newest unread articles *(opt-in)* |
 | **Reddit** | Browse your communities, posts and comment threads in a panel (cards, compact or grid) and a sidebar card: limited mode on Reddit's public feeds out of the box, full mode with your own installed-app client id; NSFW hidden and spoilers covered by default *(opt-in)* |
 | **Home Assistant** | Your real home states and favourites, with controls for lights, switches, fans, scenes, scripts and buttons *(opt-in)* |
 | **Share to phone** | Clipboard text, a screenshot or a file, served once on your network behind a QR code *(opt-in)* |
@@ -122,6 +122,16 @@ widgets (Studio → Desktop widgets, or right-click the desktop → Add
 widget); switching one off hides its widgets until you switch it back on.
 Each has its own logo and a painted store cover; screenshots of the
 widgets themselves are in [Your desktop](desktop.md#desktop-widgets).
+
+**Sidebar cards** come from Quick settings, Weather, Notifications, Media,
+Audio, Resources, To-do, Notes, Pomodoro, Prayer times, Jannah, the Qur'an,
+Hadith, Radio, Feeds, Reddit, Sudoku and 2048 (and any third-party plugin).
+Every one of them is in Studio → Bars → Sidebar → **Tabs** → *Add a widget*,
+under *Add to sidebar* on its page in Studio → Plugins, and in
+`mandara msg sidebar tab widget add <tab> <id>`. Placing a card switches its
+plugin on; switching a plugin off hides its card, which stays on its tab
+and comes back when you switch the plugin on again. Switching a plugin on
+by itself doesn't add its card to a tab, so you choose where it goes.
 
 Every Mandara plugin can be **switched off**, which stops everything it
 runs (bar item, sidebar card, launcher entries and any background polling),
