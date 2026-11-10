@@ -23,6 +23,22 @@ pub const ESSENTIAL: &[(&str, &str)] = &[
     ("wallpaper-depth", tk("It draws the wallpaper's subject over the desktop clock; switch the depth effect off in Studio → Wallpaper instead")),
 ];
 
+/// Built-in plugins FreeBSD can't run, each with the reason Studio shows
+/// in place of its switch. They stay off there whatever the config says.
+pub const FREEBSD_UNSUPPORTED: &[(&str, &str)] = &[
+    ("bluetooth", tk("FreeBSD has no BlueZ, the Bluetooth service Mandara uses")),
+    ("services", tk("FreeBSD has no systemd: its services are rc(8) scripts, which this plugin doesn't manage")),
+    ("crashes", tk("It lists crashes from systemd-coredump, which FreeBSD doesn't have; FreeBSD writes core files instead")),
+    ("ports", tk("It reads Linux's socket tables in /proc/net, which FreeBSD doesn't have; sockstat(1) lists FreeBSD's")),
+    ("app-installer", tk("It installs Linux apps (AppImages and portable Linux builds), which FreeBSD can't run without Linux emulation")),
+];
+
+/// Why built-in `id` can't run on this system (English key; translate
+/// with `tr`), or `None` where it can.
+pub fn platform_reason(id: &str) -> Option<&'static str> {
+    if cfg!(target_os = "freebsd") { FREEBSD_UNSUPPORTED.iter().find(|(e, _)| *e == id).map(|(_, why)| *why) } else { None }
+}
+
 /// Why `id` can't be switched off, when it is [`ESSENTIAL`] (English key;
 /// translate with `tr`).
 pub fn essential_reason(id: &str) -> Option<&'static str> {
@@ -52,6 +68,9 @@ fn push_unique(list: &mut Vec<String>, id: &str) {
 /// Switches `id` on or off. Turning on a removed built-in restores it (with
 /// its layout positions); essential plugins refuse to turn off.
 pub fn set_enabled(cfg: &mut ShellConfig, id: &str, name: &str, on: bool, zone: Option<Zone>) -> Result<(), String> {
+    if on && let Some(why) = platform_reason(id) {
+        return Err(tf("{plugin} can't run on this system: {reason}", &[("plugin", &name), ("reason", &tr(why))]));
+    }
     if on {
         if cfg.plugins.is_removed(id) {
             restore(cfg, id, zone);
@@ -110,6 +129,18 @@ pub fn restore(cfg: &mut ShellConfig, id: &str, zone: Option<Zone>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn platform_locks_apply_only_where_they_belong() {
+        for (id, _) in FREEBSD_UNSUPPORTED {
+            assert!(essential_reason(id).is_none(), "{id}: a core plugin can't be platform-locked");
+            assert_eq!(platform_reason(id).is_some(), cfg!(target_os = "freebsd"));
+        }
+        assert_eq!(platform_reason("clock"), None);
+        let mut cfg = ShellConfig::default();
+        assert_eq!(set_enabled(&mut cfg, "bluetooth", "Bluetooth", true, None).is_err(), cfg!(target_os = "freebsd"));
+        assert!(set_enabled(&mut cfg, "bluetooth", "Bluetooth", false, None).is_ok(), "turning one off always works");
+    }
 
     #[test]
     fn essential_plugins_refuse_off_and_remove() {

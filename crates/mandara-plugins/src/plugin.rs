@@ -612,7 +612,9 @@ impl PluginRegistry {
     pub fn is_enabled(&self, id: &str, config: &mandara_config::PluginsConfig) -> bool {
         match self.get(id) {
             Some(f) => {
-                if f.manifest.origin == PluginOrigin::Builtin && crate::lifecycle::essential_reason(id).is_some() {
+                if f.manifest.origin == PluginOrigin::Builtin && crate::lifecycle::platform_reason(id).is_some() {
+                    false
+                } else if f.manifest.origin == PluginOrigin::Builtin && crate::lifecycle::essential_reason(id).is_some() {
                     true
                 } else if config.is_removed(id) || config.disabled.iter().any(|d| d == id) {
                     false
