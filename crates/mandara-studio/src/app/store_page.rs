@@ -1024,13 +1024,10 @@ impl StudioView {
     /// element ids unique when a plugin shows twice on a page.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn get_button(&mut self, scope: &str, m: &PluginManifest, enabled: bool, size: ButtonSize, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        if let Some(locked) = Locked::of(m) {
+            return locked.chip(p);
+        }
         let builtin = m.origin == PluginOrigin::Builtin;
-        if builtin && mandara_plugins::lifecycle::essential_reason(&m.id).is_some() {
-            return plugin_modal::always_on_chip(p).into_any_element();
-        }
-        if builtin && mandara_plugins::lifecycle::platform_reason(&m.id).is_some() {
-            return plugin_modal::unsupported_chip(p).into_any_element();
-        }
         let id = m.id.clone();
         let el_id = format!("store-get-{scope}-{}", m.id);
         if builtin && cfg.plugins.is_removed(&m.id) {
@@ -1637,13 +1634,14 @@ impl StudioView {
     }
 
     /// One plugin card in the library: tile, name, description, on / off
-    /// switch, origin badge (Mandara or third-party), version and settings.
+    /// switch (or the chip of a [`Locked`] built-in), origin badge (Mandara
+    /// or third-party), version and settings.
     fn plugin_card(&mut self, enabled: bool, m: PluginManifest, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let id = m.id.clone();
         let has_settings = plugin_modal::has_settings(&m);
         let (badge_text, badge_color) = origin_badge(&m, p);
         let toggle_id = id.clone();
-        let essential = m.origin == PluginOrigin::Builtin && mandara_plugins::lifecycle::essential_reason(&id).is_some();
+        let locked = Locked::of(&m);
         let update = self.updates.plugins.iter().any(|u| u.id == id && u.available);
         // A release installed despite failing the compliance check.
         self.market_local_prime(cx);
@@ -1683,9 +1681,10 @@ impl StudioView {
                             .child(div().text_size(px(TEXT_14_PX)).font_weight(FontWeight::SEMIBOLD).truncate().child(m.display_name()))
                             .child(div().text_size(px(TEXT_12_PX)).line_height(px(LEADING_16_PX)).text_color(if flag.is_some() { p.urgent_coral.hsla() } else { p.on_surface_variant.hsla() }).line_clamp(CARD_PITCH_LINES).child(flag.as_ref().map_or_else(|| m.display_description(), |f| f.short_warning()))),
                     )
-                    .child(if essential {
-                        // Core plugins have no switch.
-                        plugin_modal::always_on_chip(p).into_any_element()
+                    .child(if let Some(locked) = locked {
+                        // Core plugins and ones this system can't run have
+                        // no switch.
+                        locked.chip(p)
                     } else {
                         div()
                             .id(SharedString::from(format!("plugin-{id}")))
@@ -1938,6 +1937,37 @@ pub(super) fn empty_state(glyph: &'static str, title: &'static str, hint: &'stat
 /// Line height of the hero title, per unit of its size.
 const HERO_TITLE_LEADING: f32 = 1.15;
 
+/// Why a built-in plugin shows a chip in place of its switch and Get
+/// button, the same on every card and its detail page.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Locked {
+    /// Part of Mandara's core: always on.
+    Essential,
+    /// This system can't run it.
+    Unsupported,
+}
+
+impl Locked {
+    fn of(m: &PluginManifest) -> Option<Locked> {
+        if m.origin != PluginOrigin::Builtin {
+            None
+        } else if mandara_plugins::lifecycle::essential_reason(&m.id).is_some() {
+            Some(Locked::Essential)
+        } else if mandara_plugins::lifecycle::platform_reason(&m.id).is_some() {
+            Some(Locked::Unsupported)
+        } else {
+            None
+        }
+    }
+
+    fn chip(self, p: &MandaraPalette) -> AnyElement {
+        match self {
+            Locked::Essential => plugin_modal::always_on_chip(p).into_any_element(),
+            Locked::Unsupported => plugin_modal::unsupported_chip(p).into_any_element(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2006,5 +2036,21 @@ mod tests {
         assert_eq!(a, b, "a few pixels of resize reuse the decode");
         let ambient = cover_key(Art::Builtin("media".into()), 1000.0, 360.0, 2.0, Detail::Ambient);
         assert_eq!(ambient.w, AMBIENT_PX as u32);
+    }
+
+    /// The Installed tab's cards follow Discover and the detail page: a
+    /// built-in this system can't run has the chip, not a switch.
+    #[test]
+    fn locked_builtins_have_no_switch() {
+        let builtin = |id: &str| PluginManifest::builtin(id, id, "", None);
+        let essential = mandara_plugins::lifecycle::ESSENTIAL[0].0;
+        assert_eq!(Locked::of(&builtin(essential)), Some(Locked::Essential));
+        assert_eq!(Locked::of(&builtin("weather")), None);
+        for (id, _) in mandara_plugins::lifecycle::FREEBSD_UNSUPPORTED {
+            let want = if cfg!(target_os = "freebsd") { Some(Locked::Unsupported) } else { None };
+            assert_eq!(Locked::of(&builtin(id)), want, "{id}");
+        }
+        let third_party = PluginManifest { origin: PluginOrigin::ThirdParty { path: "/tmp/p".into() }, ..builtin(essential) };
+        assert_eq!(Locked::of(&third_party), None, "only built-ins are locked");
     }
 }

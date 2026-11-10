@@ -81,6 +81,28 @@ fn up_to_date_systems_stop_early() {
     }
 }
 
+/// FreeBSD: whatever freebsd-update answers (nothing to fetch, or a
+/// -STABLE system it refuses), `pkg upgrade` still installs the packages
+/// downloaded before it, and the job runs to its end.
+#[test]
+fn freebsd_packages_install_when_the_base_system_has_nothing_to_do() {
+    let b = BackendId::Pkg;
+    for base in [Scenario::UpToDate, Scenario::Fails] {
+        let (job, f) = run(System::Managed(b), Replay::new(b).base(base), Request::System { flatpak: false });
+        assert_eq!(f.outcome, JobOutcome::Done { nothing_to_do: false }, "{base:?}");
+        assert_eq!(f.changed, 6, "{base:?}: the six recorded packages, no base update");
+        assert_eq!(f.warnings, u32::from(base == Scenario::Fails), "{base:?}: the refusal is warned about once");
+        job.with(|s| {
+            assert_eq!(s.step as usize, plan::backend(b).steps().len(), "{base:?}: every step ran");
+            assert!(s.log.iter().any(|l| l.starts_with("[6/6] Upgrading drm-61-kmod")), "{base:?}: pkg upgrade installed");
+            assert!(s.log.iter().any(|l| l == "No updates are available to install."), "{base:?}");
+        });
+    }
+    // Nothing anywhere: still nothing to do.
+    let (_, f) = run(System::Managed(b), Replay::new(b).scenario(Scenario::UpToDate), Request::System { flatpak: false });
+    assert_eq!(f.outcome, JobOutcome::Done { nothing_to_do: true });
+}
+
 #[test]
 fn locks_and_network_failures_are_explained() {
     let (_, f) = run(System::Managed(BackendId::Pacman), Replay::new(BackendId::Pacman).scenario(Scenario::Locked), Request::System { flatpak: true });

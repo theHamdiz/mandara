@@ -818,7 +818,10 @@ pub fn freebsd_update(step: StepKind, line: &str, t: &mut Tracker) {
     }
     if l.starts_with("Cannot upgrade from a version that is not a release") || l.starts_with("freebsd-update: Cannot upgrade from a version that is not a release") || l.starts_with("freebsd-update is incompatible with the use of packaged base") {
         t.nothing_to_do = true;
-        t.warnings += 1;
+        // `install` repeats a packaged base's refusal: one warning.
+        if step != StepKind::Install {
+            t.warnings += 1;
+        }
         return;
     }
     if l.contains("HAS PASSED ITS END-OF-LIFE DATE") {

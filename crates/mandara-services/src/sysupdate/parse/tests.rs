@@ -296,31 +296,51 @@ fn freebsd_update_fetch_and_install() {
     assert_eq!(backend(BackendId::Pkg).after(&install, Some(0), &i), Next::Continue);
 }
 
+/// Nothing for freebsd-update to do (or a system it doesn't manage) still
+/// lets `pkg upgrade` install what was downloaded before it.
 #[test]
-fn freebsd_update_nothing_to_do_or_unmanaged_finishes() {
+fn freebsd_update_nothing_to_do_or_unmanaged_continues() {
+    let p = backend(BackendId::Pkg);
     let fetch = freebsd_step(StepKind::Download, plan::FREEBSD_UPDATE);
-    let (u, _) = replay_step(&fetch, Scenario::UpToDate);
+    let install = freebsd_step(StepKind::Install, plan::FREEBSD_UPDATE);
+    let (u, code) = replay_step(&fetch, Scenario::UpToDate);
+    assert_eq!(code, 0);
     assert!(u.nothing_to_do && u.warnings == 0);
-    assert_eq!(backend(BackendId::Pkg).after(&fetch, Some(0), &u), Next::Finish);
-    // A -STABLE system: freebsd-update refuses (exit 1); the packages were
-    // all there was to update, with a warning.
+    assert_eq!(p.after(&fetch, Some(code), &u), Next::Continue);
+    // A -STABLE system: freebsd-update refuses (exit 1) with a warning;
+    // its `install` doesn't check the release and finds nothing (exit 2).
     let (s, code) = replay_step(&fetch, Scenario::Fails);
-    assert_eq!(code, 1);
+    assert_eq!(code, plan::FREEBSD_UPDATE_UNMANAGED);
     assert!(s.nothing_to_do);
     assert_eq!(s.warnings, 1);
-    assert_eq!(backend(BackendId::Pkg).after(&fetch, Some(code), &s), Next::Finish);
+    assert_eq!(p.after(&fetch, Some(code), &s), Next::Continue);
+    let (n, code) = replay_step(&install, Scenario::Fails);
+    assert_eq!(code, plan::FREEBSD_UPDATE_NOTHING);
+    assert_eq!(p.after(&install, Some(code), &n), Next::Continue);
+    // Packaged base: both commands refuse with exit 1 (FreeBSD 14.4's
+    // /usr/sbin/freebsd-update), warned about once.
+    const PKGBASE: &str = "freebsd-update is incompatible with the use of packaged base.  Please see\nhttps://wiki.freebsd.org/PkgBase for more information.\n";
+    let mut b = Tracker::default();
+    feed(BackendId::Pkg, StepKind::Download, PKGBASE, &mut b);
+    assert!(b.nothing_to_do && b.warnings == 1);
+    assert_eq!(p.after(&fetch, Some(plan::FREEBSD_UPDATE_UNMANAGED), &b), Next::Continue);
+    b.begin_step(StepKind::Install);
+    feed(BackendId::Pkg, StepKind::Install, PKGBASE, &mut b);
+    assert!(b.nothing_to_do && b.warnings == 1, "{}", b.warnings);
+    assert_eq!(p.after(&install, Some(plan::FREEBSD_UPDATE_UNMANAGED), &b), Next::Continue);
     // Past its end of life: what was fetched is still installed.
     let mut eol = Tracker::default();
     feed(BackendId::Pkg, StepKind::Download, &format!("{}\nWARNING: FreeBSD 14.2-RELEASE-p5 HAS PASSED ITS END-OF-LIFE DATE.\nAny security issues discovered after Tue Sep 30 20:00:00 EEST 2025\nwill not have been corrected.\n", fixture("freebsd/base-fetch.txt")), &mut eol);
     assert!(eol.end_of_life && eol.warnings == 1);
-    assert_eq!(backend(BackendId::Pkg).after(&fetch, Some(1), &eol), Next::Continue);
+    assert_eq!(p.after(&fetch, Some(1), &eol), Next::Continue);
     // Nothing fetched, run separately: exit 2.
-    let install = freebsd_step(StepKind::Install, plan::FREEBSD_UPDATE);
     let (n, code) = replay_step(&install, Scenario::UpToDate);
     assert_eq!(code, plan::FREEBSD_UPDATE_NOTHING);
-    assert_eq!(backend(BackendId::Pkg).after(&install, Some(code), &n), Next::Continue);
+    assert_eq!(p.after(&install, Some(code), &n), Next::Continue);
     // Any other failure stops the update.
-    assert_eq!(backend(BackendId::Pkg).after(&install, Some(1), &Tracker::default()), Next::Fail(FailureKind::Other));
+    assert_eq!(p.after(&install, Some(1), &Tracker::default()), Next::Fail(FailureKind::Other));
+    assert_eq!(p.after(&fetch, Some(1), &Tracker::default()), Next::Fail(FailureKind::Other));
+    assert_eq!(p.after(&fetch, Some(3), &u), Next::Fail(FailureKind::Other), "nothing to do, but an unknown code");
 }
 
 #[test]

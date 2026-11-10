@@ -185,15 +185,31 @@ only the plumbing differs:
 
 * **greetd isn't packaged for FreeBSD yet** (a port is under review), and
   upstream greetd builds only on Linux. Build its FreeBSD branch (it adds
-  FreeBSD's VTs, an rc script and a PAM sample), as root:
+  FreeBSD's VTs, an rc script and a PAM sample). Install the tools as
+  root:
 
   ```sh
   pkg install git rust cage seatd
+  ```
+
+  Build it as your ordinary user, never as root (the build runs code
+  from greetd's dependencies):
+
+  ```sh
   git clone -b feature/freebsd-support https://github.com/adamretter/greetd
   cd greetd && cargo build --release
+  ```
+
+  Then, from the same `greetd` folder, install it as root. The branch's
+  sample config runs greetd on VT 1, where FreeBSD already runs a login
+  prompt, so the copy is set to VT 8 (`/dev/ttyv8`):
+
+  ```sh
   install -m 755 target/release/greetd target/release/agreety /usr/local/bin/
   install -m 555 greetd.rc /usr/local/etc/rc.d/greetd
-  mkdir -p /usr/local/etc/greetd && cp config.toml /usr/local/etc/greetd/
+  mkdir -p /usr/local/etc/greetd
+  sed 's/^vt = 1$/vt = 8/' config.toml > /usr/local/etc/greetd/config.toml
+  grep '^vt = 8$' /usr/local/etc/greetd/config.toml
   cp greetd.pam.freebsd.sample /usr/local/etc/pam.d/greetd
   pw useradd greeter -d /nonexistent -s /usr/sbin/nologin -c "greetd greeter"
   pw groupmod video -m greeter
@@ -216,7 +232,10 @@ only the plumbing differs:
   `/etc/pam.d` and adds its lines there (modules from `/usr/lib` and
   `/usr/local/lib`: `gnome-keyring`, `plasma6-kwallet-pam`). FreeBSD 14's
   PAM rejects the whole file over Linux's `-auth` prefix, so the lines are
-  written without it, and only for modules that are installed. greetd's
+  written without it, and only for modules that are installed. Without
+  the prefix a module that goes missing fails every greetd login, so run
+  `sudo mandara greeter keyring-unlock --remove` before uninstalling
+  `gnome-keyring` or `plasma6-kwallet-pam` (the plan warns about it). greetd's
   sample file checks the password with `auth sufficient pam_unix.so`,
   which ends the stack before a keyring line can run: the plan says so,
   and `auth required pam_unix.so` fixes it.

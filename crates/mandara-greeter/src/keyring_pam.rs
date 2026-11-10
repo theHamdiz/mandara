@@ -627,6 +627,17 @@ impl KeyringPlan {
         if action == Action::Add && plan.autologin {
             plan.warnings.push(format!("{GREETD_CONFIG} has an [initial_session] (autologin): that login has no password, so keyrings stay locked until you unlock them."));
         }
+        // OpenPAM has no `-` prefix: a listed module that goes missing fails
+        // the whole service, `optional` or not.
+        if action == Action::Add && root.freebsd() {
+            for s in &plan.modules {
+                if let Some(module) = &s.module
+                    && plan.adding.iter().any(|l| l.split_whitespace().nth(2) == Some(module.as_str()))
+                {
+                    plan.warnings.push(format!("FreeBSD's PAM can't skip a missing module: if {module} is uninstalled (package {}), every greetd login fails. Run `mandara greeter keyring-unlock --remove` before removing that package.", s.package));
+                }
+            }
+        }
         if action == Action::Add && plan.adding.iter().any(|l| l.trim_start_matches('-').starts_with(AUTH)) {
             let lines: Vec<&str> = base.lines().collect();
             // FreeBSD's sample greetd file: `auth sufficient pam_unix.so`.
