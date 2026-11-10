@@ -645,7 +645,8 @@
           <svg class="bsd-shape" viewBox="0 0 100 100" aria-hidden="true"><use href="#shape-clover" /></svg>
           <p class="bsd-kicker">Not just Linux</p>
           <h3 class="display-3">FreeBSD</h3>
-          <p>The same one line installs Mandara on FreeBSD 14: it fetches the FreeBSD build, checks its signature and sets everything up with <code>pkg</code>.</p>
+          <p>Every release has a FreeBSD 14 build. One line with FreeBSD’s own <code>fetch</code> downloads it, checks its signature and sets everything up with <code>pkg</code>:</p>
+          <pre><code>sh -c 'f=$(mktemp) &amp;&amp; trap "rm -f -- \"\$f\"" 0 &amp;&amp; fetch -o "$f" https://thehamdiz.github.io/mandara/install.sh &amp;&amp; sh "$f" "$@"' sh</code></pre>
           <ul class="bsd-facts">
             <li>Sway, Hyprland, niri and River from ports</li>
             <li>Sound through OSS, PulseAudio or PipeWire</li>

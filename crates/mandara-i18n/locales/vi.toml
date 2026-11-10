@@ -8178,7 +8178,7 @@
 "Phone Connect" = "Kết nối điện thoại"
 "Ping" = "Gửi tín hiệu ping"
 "Plasma's secure locker controls this screen. Custom lock widgets are available with Mandara's native locker on supported compositors." = "Trình khóa bảo mật của Plasma điều khiển màn hình này. Tiện ích khóa tùy chỉnh có sẵn với trình khóa gốc của Mandara trên compositor được hỗ trợ."
-"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "Bản biên dịch sẵn yêu cầu Linux trên CPU x86_64 hoặc aarch64."
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64." = "Bản biên dịch sẵn yêu cầu Linux trên CPU x86_64 hoặc aarch64, hoặc FreeBSD trên CPU x86_64."
 "Previews use sample data." = "Bản xem trước dùng dữ liệu mẫu."
 "Profile scope" = "Phạm vi hồ sơ"
 "Provider" = "Nhà cung cấp"

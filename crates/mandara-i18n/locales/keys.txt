@@ -5073,7 +5073,7 @@ Practice is the best of all instructors.
 Pray on time
 Prayer times
 Prayer times list
-Prebuilt releases require Linux on an x86_64 or aarch64 CPU.
+Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64.
 Precision
 Preferred apps
 Preparing local commands…

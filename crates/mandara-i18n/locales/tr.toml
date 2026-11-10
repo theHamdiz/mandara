@@ -8243,7 +8243,7 @@
 "Unpacking the installer…" = "Kurulum dosyaları arşivden çıkarılıyor…"
 "Ready. Opening Mandara’s installer…" = "Hazır. Mandara kurulum programı açılıyor…"
 "Install this tool and try again:" = "Bu aracı yükleyip yeniden deneyin:"
-"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "Hazır sürümler için Linux ve x86_64 veya aarch64 işlemci gerekir."
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64." = "Hazır sürümler için Linux ve x86_64 veya aarch64 işlemci ya da FreeBSD ve x86_64 işlemci gerekir."
 "The release mirror must use HTTPS." = "Sürüm aynası HTTPS kullanmalıdır."
 "Could not create a temporary download folder." = "Geçici indirme klasörü oluşturulamadı."
 "Download failed. Check your connection and try again." = "İndirme başarısız oldu. Bağlantınızı denetleyip yeniden deneyin."

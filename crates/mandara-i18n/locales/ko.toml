@@ -7996,7 +7996,7 @@
 "Unpacking the installer…" = "설치 프로그램의 압축을 푸는 중…"
 "Ready. Opening Mandara’s installer…" = "준비됐습니다. Mandara 설치 프로그램을 여는 중…"
 "Install this tool and try again:" = "이 도구를 설치한 뒤 다시 시도하세요:"
-"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "미리 빌드된 릴리스에는 Linux와 x86_64 또는 aarch64 CPU가 필요합니다."
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64." = "미리 빌드된 릴리스에는 Linux와 x86_64 또는 aarch64 CPU, 또는 FreeBSD와 x86_64 CPU가 필요합니다."
 "The release mirror must use HTTPS." = "릴리스 미러는 HTTPS를 사용해야 합니다."
 "Could not create a temporary download folder." = "임시 다운로드 폴더를 만들 수 없습니다."
 "Download failed. Check your connection and try again." = "다운로드에 실패했습니다. 연결을 확인한 뒤 다시 시도하세요."

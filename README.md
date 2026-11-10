@@ -322,6 +322,10 @@ files (no compositor yet? it offers to install one). It works on Arch,
 Debian and Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus. Updates arrive by small binary patch: Studio → About →
 **Update now**.
 
+On **FreeBSD** 14.4 or newer (amd64), the same command installs the
+FreeBSD build; without curl, use the base system's `fetch`
+([FreeBSD install](docs/install.md#freebsd)).
+
 On **NixOS**, Mandara is a flake: try it with
 `nix run github:theHamdiz/mandara`, or add it to your system with
 `programs.mandara.enable = true;` (a NixOS module and a Home Manager
@@ -330,7 +334,7 @@ module come with it). NixOS users update through their flake, not Studio's
 `nix flake update mandara`, then `sudo nixos-rebuild switch --flake .` (or
 `home-manager switch --flake .`). Use your input name if it differs from `mandara`.
 
-→ **[Install guide](docs/install.md)**: Arch packages, NixOS, other
+→ **[Install guide](docs/install.md)**: Arch packages, NixOS, FreeBSD, other
 options, coming from another setup.
 
 ## Common questions

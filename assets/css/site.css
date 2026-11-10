@@ -524,6 +524,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .bsd-shape use { fill: currentColor; }
 .bsd-kicker { font-size: 14px; font-weight: 600; letter-spacing: .02em; color: color-mix(in oklab, var(--second) 70%, var(--ink)); }
 .bsd .display-3 { margin-top: -8px; }
+.bsd pre { margin: 0; padding: 14px 18px; border-radius: var(--r-m); background: var(--ground); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; position: relative; }
 .bsd p code, .bsd-facts code { font-size: .88em; padding: 1px 6px; border-radius: 6px; background: var(--ground); }
 .bsd-facts { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 15px; }
 .bsd-facts li { padding-left: 18px; position: relative; }

@@ -212,15 +212,7 @@ pub fn rollback(exe: &Path) -> Result<(), String> {
 
 /// Whether another process (the shell or its supervisor) runs `exe`.
 pub fn running_from(exe: &Path) -> bool {
-    let me = std::process::id();
-    let Ok(entries) = std::fs::read_dir("/proc") else { return false };
-    entries.flatten().any(|e| {
-        let Some(pid) = e.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else { return false };
-        if pid == me {
-            return false;
-        }
-        std::fs::read_link(e.path().join("exe")).ok().and_then(|p| p.to_str().map(|s| s.strip_suffix(" (deleted)").unwrap_or(s).to_string())).is_some_and(|p| Path::new(&p) == exe)
-    })
+    super::processes::other_runs(exe)
 }
 
 #[cfg(test)]

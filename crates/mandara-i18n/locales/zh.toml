@@ -8238,7 +8238,7 @@
 "Unpacking the installer…" = "正在解压安装程序…"
 "Ready. Opening Mandara’s installer…" = "准备就绪。正在打开 Mandara 安装程序…"
 "Install this tool and try again:" = "请安装此工具后重试："
-"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "预编译版本需要 Linux 系统和 x86_64 或 aarch64 处理器。"
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64." = "预编译版本需要 Linux 系统和 x86_64 或 aarch64 处理器，或 FreeBSD 系统和 x86_64 处理器。"
 "The release mirror must use HTTPS." = "发布镜像必须使用 HTTPS。"
 "Could not create a temporary download folder." = "无法创建临时下载文件夹。"
 "Download failed. Check your connection and try again." = "下载失败。请检查网络连接后重试。"

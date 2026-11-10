@@ -8178,7 +8178,7 @@
 "Phone Connect" = "Muunganisho wa simu"
 "Ping" = "Tuma ping"
 "Plasma's secure locker controls this screen. Custom lock widgets are available with Mandara's native locker on supported compositors." = "Kifunga skrini salama cha Plasma kinadhibiti skrini hii. Wijeti maalumu za kufunga zinapatikana kwenye kifunga skrini asilia cha Mandara katika vikamilishaji vinavyotumika."
-"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "Matoleo yaliyotengenezwa tayari yanahitaji Linux kwenye CPU ya x86_64 au aarch64."
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64." = "Matoleo yaliyotengenezwa tayari yanahitaji Linux kwenye CPU ya x86_64 au aarch64, au FreeBSD kwenye CPU ya x86_64."
 "Previews use sample data." = "Muhtasari hutumia data ya mfano."
 "Profile scope" = "Upeo wa wasifu"
 "Provider" = "Mtoa huduma"

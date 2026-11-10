@@ -7997,7 +7997,7 @@
 "Unpacking the installer…" = "Mengekstrak pemasang…"
 "Ready. Opening Mandara’s installer…" = "Siap. Membuka pemasang Mandara…"
 "Install this tool and try again:" = "Pasang alat ini lalu coba lagi:"
-"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "Rilis siap pakai memerlukan Linux dengan CPU x86_64 atau aarch64."
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64." = "Rilis siap pakai memerlukan Linux dengan CPU x86_64 atau aarch64, atau FreeBSD dengan CPU x86_64."
 "The release mirror must use HTTPS." = "Cermin rilis harus menggunakan HTTPS."
 "Could not create a temporary download folder." = "Tidak dapat membuat folder unduhan sementara."
 "Download failed. Check your connection and try again." = "Unduhan gagal. Periksa koneksi Anda dan coba lagi."

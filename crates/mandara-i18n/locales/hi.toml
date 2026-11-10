@@ -8244,7 +8244,7 @@
 "Unpacking the installer…" = "इंस्टॉलर की फ़ाइलें निकाली जा रही हैं…"
 "Ready. Opening Mandara’s installer…" = "तैयार है। Mandara इंस्टॉलर खुल रहा है…"
 "Install this tool and try again:" = "यह टूल इंस्टॉल करें और फिर कोशिश करें:"
-"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "तैयार रिलीज़ के लिए Linux और x86_64 या aarch64 CPU चाहिए।"
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64." = "तैयार रिलीज़ के लिए Linux और x86_64 या aarch64 CPU, या FreeBSD और x86_64 CPU चाहिए।"
 "The release mirror must use HTTPS." = "रिलीज़ मिरर को HTTPS इस्तेमाल करना चाहिए।"
 "Could not create a temporary download folder." = "अस्थायी डाउनलोड फ़ोल्डर नहीं बनाया जा सका।"
 "Download failed. Check your connection and try again." = "डाउनलोड विफल रहा। अपना कनेक्शन जाँचें और फिर कोशिश करें।"

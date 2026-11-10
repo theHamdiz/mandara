@@ -10,12 +10,14 @@
 #      its CHANGELOG.md notes, checksums and build provenance.
 #
 # Mandara is a Wayland shell: it runs on Linux (glibc ≥ 2.35) on x86_64 and
-# aarch64. Artifacts:
+# aarch64, and on FreeBSD 14 (14.4 or newer) on amd64. Artifacts:
 #   mandara-<v>-x86_64-linux-gnu.tar.gz           portable x86_64
 #   mandara-<v>-x86_64-linux-gnu-x86-64-v3.tar.gz  tuned for AVX2-era CPUs
 #   mandara-<v>-aarch64-linux-gnu.tar.gz           ARM64
 #   mandara-<v>-{x86_64,aarch64}-linux-musl.tar.gz musl (Alpine, Void musl,
 #                                                  Chimera), built in Alpine
+#   mandara-<v>-x86_64-freebsd.tar.gz             FreeBSD 14 amd64, cross-built
+#                                                  against FreeBSD's own libc
 #   mandara_<v>-1_{amd64,arm64}.deb                Debian / Ubuntu
 #   mandara-<v>-1.{x86_64,aarch64}.rpm             Fedora / openSUSE
 #   PKGBUILD                                       Arch (mandara-shell-bin)
@@ -337,6 +339,141 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  # FreeBSD amd64, cross-built on Linux: Rust's FreeBSD target, clang and
+  # lld, against the system root of a pinned FreeBSD release (base.txz,
+  # checked against its SHA-256 before use). Built against the oldest
+  # supported 14.x, so it runs on that release and every newer 14.x.
+  # Wayland, xkbcommon, Vulkan and fontconfig are loaded at run time, so the
+  # binary links only FreeBSD's libc, libthr, libm and libgcc_s; the bundled
+  # FreeType is compiled from source for the target. The tarball, its build
+  # manifest, patches and update.json part are the same as every other
+  # target's.
+  build-freebsd:
+    name: Build x86_64-unknown-freebsd
+    permissions:
+      contents: read
+    needs: version
+    if: needs.version.outputs.released == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      TARGET: x86_64-unknown-freebsd
+      # When this release leaves download.freebsd.org it is still served,
+      # unchanged, by the archive host; the hash below vouches for both.
+      FREEBSD_RELEASE: 14.4-RELEASE
+      FREEBSD_BASE_SHA256: 769f60a6eea2938ad6b7943cfbcc17dfaf7d1f7ba59a32b869a00349302df853
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Cross toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends clang lld llvm pkg-config xz-utils
+          clang --version | head -n 1
+          ld.lld --version
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-freebsd
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-x86_64-unknown-freebsd
+
+      - uses: ./.github/actions/lto-swap
+
+      # Only the headers, the C runtime and the shared libraries are kept.
+      # pkg-config reads the system root's own files, so no Linux library
+      # can leak into the link.
+      - name: FreeBSD system root
+        run: |
+          base="$RUNNER_TEMP/base.txz"
+          curl --proto '=https' -fsSL --retry 5 -o "$base" "https://download.freebsd.org/releases/amd64/$FREEBSD_RELEASE/base.txz" \
+            || curl -fsSL --retry 5 -o "$base" "http://ftp-archive.freebsd.org/pub/FreeBSD-Archive/old-releases/amd64/$FREEBSD_RELEASE/base.txz"
+          echo "$FREEBSD_BASE_SHA256  $base" | sha256sum -c -
+          sysroot="$RUNNER_TEMP/freebsd-sysroot"
+          mkdir -p "$sysroot"
+          tar -xJf "$base" -C "$sysroot" --warning=no-unknown-keyword ./lib ./usr/lib ./usr/include ./usr/libdata/pkgconfig
+          rm -f "$base"
+          clang_target="x86_64-unknown-freebsd${FREEBSD_RELEASE%%.*}"
+          flags="--target=$clang_target --sysroot=$sysroot"
+          {
+            echo "CC_x86_64_unknown_freebsd=clang"
+            echo "CXX_x86_64_unknown_freebsd=clang++"
+            echo "AR_x86_64_unknown_freebsd=llvm-ar"
+            echo "CFLAGS_x86_64_unknown_freebsd=$flags"
+            echo "CXXFLAGS_x86_64_unknown_freebsd=$flags"
+            echo "CARGO_TARGET_X86_64_UNKNOWN_FREEBSD_LINKER=clang"
+            echo "CARGO_TARGET_X86_64_UNKNOWN_FREEBSD_RUSTFLAGS=-C link-arg=--target=$clang_target -C link-arg=--sysroot=$sysroot -C link-arg=-fuse-ld=lld"
+            echo "PKG_CONFIG_ALLOW_CROSS=1"
+            echo "PKG_CONFIG_SYSROOT_DIR_x86_64_unknown_freebsd=$sysroot"
+            echo "PKG_CONFIG_LIBDIR_x86_64_unknown_freebsd=$sysroot/usr/libdata/pkgconfig"
+            echo "PKG_CONFIG_PATH_x86_64_unknown_freebsd="
+            # fontconfig isn't part of FreeBSD's base system: font-kit opens
+            # it at run time, like the Wayland and Vulkan libraries.
+            echo "RUST_FONTCONFIG_DLOPEN=1"
+          } >> "$GITHUB_ENV"
+
+      - name: Build (release, fat LTO, fingerprinted)
+        run: |
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
+          cargo run --locked --quiet -p xtask -- build --target "$TARGET" --out dist --no-readme
+          { echo '```toml'; cat dist/*.build.toml; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      # The binary can't run here, so its ELF header and its libraries are
+      # checked instead: a FreeBSD executable that needs nothing beyond the
+      # base system, and never X11.
+      - name: Linked libraries
+        run: |
+          bin="target/$TARGET/release/mandara"
+          readelf -h "$bin" | grep -E 'OS/ABI: +UNIX - FreeBSD'
+          needed="$(readelf -d "$bin" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p')"
+          printf '%s\n' "$needed"
+          unexpected="$(printf '%s\n' "$needed" | grep -vxE 'libc\.so\.7|libthr\.so\.3|libm\.so\.5|libgcc_s\.so\.1' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "::error::the FreeBSD binary links more than FreeBSD's base system: $unexpected"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: failed-x86_64-unknown-freebsd
+          path: target/x86_64-unknown-freebsd/release/mandara
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Tarball
+        run: |
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
+          cargo xtask dist --target "$TARGET" --out dist
+
+      - name: Delta updates from earlier releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          key="${TARGET/-unknown-/-}"
+          prevs="$(gh release list --exclude-drafts --exclude-pre-releases --limit 40 --json tagName --jq '.[].tagName' \
+            | grep -E '^v[0-9]' | grep -vxF '${{ needs.version.outputs.tag }}' | head -n "$DELTA_FROM_RELEASES" || true)"
+          mkdir -p "$RUNNER_TEMP/previous"
+          args=()
+          for prev in $prevs; do
+            old="$RUNNER_TEMP/previous/mandara-${prev#v}-${key}.tar.gz"
+            gh release download "$prev" --dir "$RUNNER_TEMP/previous" --pattern "mandara-${prev#v}-${key}.tar.gz" || echo "no ${key} tarball in ${prev}"
+            if [ -f "$old" ]; then args+=(--previous "$old"); fi
+          done
+          cargo run --locked --quiet -p xtask -- update-part --target "$TARGET" --out dist "${args[@]}"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-x86_64-unknown-freebsd
+          path: dist/*
+          if-no-files-found: error
+
   plugins:
     name: Plugins
     permissions:
@@ -366,7 +503,7 @@ jobs:
 
   publish:
     name: Publish ${{ needs.version.outputs.tag }}
-    needs: [version, build, build-musl, plugins]
+    needs: [version, build, build-musl, build-freebsd, plugins]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

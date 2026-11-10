@@ -9,11 +9,12 @@ sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https
 ```
 
 The small [download script](../install.sh) shows Mandara's phoenix and the
-download progress, chooses the build for your CPU and GNU or musl system,
-then checks the release's Ed25519 signature and the archive's SHA-256
-**before extracting or running it**. It uses `curl`, `tar`, OpenSSL 3 or
-newer, `sha256sum` and the usual POSIX tools; it tells you when one is
-missing. Downloads retry on temporary connection errors and stop if the
+download progress, chooses the build for your CPU and system (GNU or musl
+Linux, or [FreeBSD](#freebsd)), then checks the release's Ed25519 signature
+and the archive's SHA-256 **before extracting or running it**. It uses
+`curl`, `tar`, OpenSSL 3 or newer, `sha256sum` and the usual POSIX tools
+(on FreeBSD, the base system's `fetch` and `sha256` do when curl isn't
+installed); it tells you when one is missing. Downloads retry on temporary connection errors and stop if the
 connection stalls. The command runs the script only after the download
 succeeds. It removes temporary files on completion, failure or interruption.
 
@@ -274,6 +275,25 @@ The recipes live in [`packaging/aur/`](../packaging/aur) and follow the
 
 ## FreeBSD
 
+Mandara runs on **FreeBSD 14.4 and newer 14.x releases, on amd64**, under
+a Wayland compositor. Every release has a FreeBSD build,
+`mandara-<version>-x86_64-freebsd.tar.gz`, signed and checked like the
+Linux ones. Install it with the same kind of one-line command, using
+FreeBSD's own `fetch` (no curl needed):
+
+```sh
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && fetch -o "$f" https://thehamdiz.github.io/mandara/install.sh && sh "$f" "$@"' sh
+```
+
+The download script sees FreeBSD (`uname -s`), downloads the FreeBSD
+tarball, verifies its signature and checksum with the base system's
+OpenSSL and SHA-256 tools, and hands over to `mandara install`, as on
+Linux.
+The tarball holds the `mandara` binary, Studio's desktop entry and icon,
+the lock screen's PAM file and every language pack. The binary needs only
+FreeBSD's base libraries; Wayland, xkbcommon, Vulkan and fontconfig are
+opened at run time from packages.
+
 `mandara install` knows FreeBSD 14 and newer (and GhostBSD) by
 `/etc/os-release`. It installs everything with `pkg install -y` (a fresh
 system's pkg bootstraps itself without asking), from FreeBSD's own
@@ -305,6 +325,13 @@ installer says so and leaves your login screen as it is. Build it as
 The installer runs as your user and asks for root through `sudo` (or
 `doas`) only for packages and system changes. Updates come from the
 Updates panel: [pkg and freebsd-update](apps-and-updates.md#freebsd).
+
+To use the tarball without the installer, install the libraries it opens
+at run time yourself:
+
+```sh
+pkg install wayland libxkbcommon vulkan-loader mesa-libs mesa-dri fontconfig freetype2 ca_root_nss dbus seatd
+```
 
 ### What works on FreeBSD
 
@@ -748,14 +775,15 @@ attestations:
 | Debian, Ubuntu, Mint, Pop!_OS (`.deb`) | ✓ | | ✓ |
 | Fedora, openSUSE, RHEL family (`.rpm`) | ✓ | | ✓ |
 | Arch, Manjaro, EndeavourOS, CachyOS (`PKGBUILD`) | ✓ | | ✓ |
+| FreeBSD 14.4 and newer (tarball) | ✓ (amd64) | | |
 
 Plus the bundled plugins, a build manifest per binary (source fingerprint,
 toolchain, SHA-256, lines of code), binary patches from the last five
 releases for [smart updates](apps-and-updates.md#updates-by-binary-patch), one language
 pack per language (`mandara-<v>-<code>.mlang`, and the compressed
 `.mlang.zst` the shell downloads), `update.json` and `SHA256SUMS`. Every
-package and tarball ships all language packs. The installer picks the right build for your system (glibc or
-musl, x86-64-v3 when your CPU supports it); Gentoo, Solus and other glibc
+package and tarball ships all language packs. The installer picks the right build for your system (glibc,
+musl or FreeBSD, x86-64-v3 when your CPU supports it); Gentoo, Solus and other glibc
 systems use the tarball. NixOS builds from source with the
 [flake](#nixos).
 

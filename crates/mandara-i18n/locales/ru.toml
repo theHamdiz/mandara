@@ -8243,7 +8243,7 @@
 "Unpacking the installer…" = "Распаковка установщика…"
 "Ready. Opening Mandara’s installer…" = "Всё готово. Запуск установщика Mandara…"
 "Install this tool and try again:" = "Установите этот инструмент и повторите попытку:"
-"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "Готовые сборки требуют Linux и процессор x86_64 или aarch64."
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64." = "Готовые сборки требуют Linux и процессор x86_64 или aarch64 либо FreeBSD и процессор x86_64."
 "The release mirror must use HTTPS." = "Зеркало выпусков должно использовать HTTPS."
 "Could not create a temporary download folder." = "Не удалось создать временную папку для загрузки."
 "Download failed. Check your connection and try again." = "Загрузка не удалась. Проверьте соединение и повторите попытку."
