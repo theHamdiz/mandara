@@ -20,8 +20,9 @@
   **Add widgets** button, or with
   `mandara msg sidebar tab widget add Overview feeds`. Placing a card
   switches its plugin on. A plugin you switch off takes its card out of
-  sight (it stays on the tab and returns when the plugin is back on), and a
-  hidden sidebar's cards keep no data and fetch nothing.
+  sight (it stays on the tab and returns when the plugin is back on). While
+  the sidebar is hidden the Feeds and Reddit cards let go of their rows and
+  fetch nothing.
 - **To-do lists:** tasks grouped into coloured lists with an Inbox, a chip
   switcher with counts, drag a task onto a list to move it, and completed
   tasks folded away per list. `/todo #Work send the report` in the launcher
