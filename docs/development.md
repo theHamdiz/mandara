@@ -128,6 +128,24 @@ A clean check doesn't mean a feature works there: readers of `/proc` and
 `/sys`, logind, NetworkManager, BlueZ and the package managers compile
 everywhere and find out at run time.
 
+### Building on FreeBSD
+
+Mandara builds natively on FreeBSD 14 (amd64) with the packages below, and
+runs under a Wayland compositor such as Sway. GPUI draws through Vulkan:
+the GPU's Mesa driver, or lavapipe (`mesa-dri`) in a VM without one.
+
+```sh
+pkg install rust pkgconf cmake-core gmake wayland wayland-protocols libxkbcommon \
+  fontconfig freetype2 vulkan-loader mesa-dri mesa-libs
+cargo build --locked --release -p mandara-app
+```
+
+The binary links only FreeBSD's libc, libthr, libm and libgcc_s; Wayland,
+xkbcommon and Vulkan are loaded at run time, and nothing links X11
+(`ldd target/release/mandara | grep -i x11` prints nothing). A release
+build (fat LTO, one codegen unit) needs about 10 GiB of memory for its
+final link.
+
 ## Local checks and cold builds
 
 For a focused edit, start with the affected crate and its callers, for
