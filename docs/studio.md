@@ -257,8 +257,11 @@ and verifies models, and provides a dry-run test bench. See
   release it re-anchors to the nearest of nine anchors and keeps its
   place. Select a widget (preview or list) to edit its depth (behind the
   subject or in front), anchor, offsets, size, opacity and displays, and
-  its own settings: clock style, seconds, numerals, weather; monitor rows,
-  refresh and width; decoration text, size, weight, letter spacing, shape
+  its own settings: clock style, seconds, numerals, weather; monitor
+  readings (CPU, CPU graph, GPU, VRAM, memory, swap, GPU power, CPU and GPU
+  temperature, fan, battery, disk, download, upload and the network graph,
+  each switched on or off; a GPU reading the machine can't show is locked
+  with the reason), refresh and width; decoration text, size, weight, letter spacing, shape
   and rotation; visualizer shape, bars, length, height, angle, gap, frame
   rate and silence stop; font, colours (automatic, text, accent or a
   custom `#rrggbb` / `oklch(L C H)`) and shadow / glow. The switch on each

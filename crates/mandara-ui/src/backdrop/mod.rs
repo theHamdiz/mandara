@@ -2191,7 +2191,7 @@ pub fn render_preview(input: &desktop::PreviewInput) -> Result<serde_json::Value
     let names: [&str; 0] = [];
     let o = widgets::OutputCx { id: 0, names: &names, logical: (lw, lh), physical: (pw, ph), scale120, tone: Some(&bg.tone), primary: input.primary, fonts: &fonts, depth, subject: None, safe: Insets::default() };
     let sampler = ws.items.iter().any(|w| matches!(w.kind, mandara_config::desktop_widgets::WidgetKind::Monitor(_))).then(|| {
-        let mut s = widgets::sysmon::Sampler::new();
+        let mut s = widgets::sysmon::Sampler::waiting();
         let mut wants = widgets::sysmon::Wants::default();
         for w in &ws.items {
             if let mandara_config::desktop_widgets::WidgetKind::Monitor(m) = &w.kind {

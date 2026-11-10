@@ -2494,6 +2494,9 @@ GPU Screen Recorder isn't installed
 GPU busy
 GPU power
 GPU temp
+GPU {n}
+GPU {n} power
+GPU {n} temp
 GRAPHICS
 GTK 3 / 4 & libadwaita
 Gabriel García Márquez
@@ -3015,6 +3018,7 @@ Install pacman-contrib to check for updates without touching the system database
 Install the tailscale package, then start tailscaled
 Install this binary even when its published checksum is unavailable or doesn't match.
 Install this tool and try again:
+Install your NVIDIA driver's utilities (nvidia-smi) to read this card
 Install {count} apps
 Install, preview and apply cursor themes, live, with size and hiding options
 Installed
@@ -3979,6 +3983,7 @@ Needs Mandara Login (greetd): its PAM file wasn't found.
 Needs Super, Ctrl or Alt
 Needs attention
 Needs no system access beyond drawing its own view
+Needs nvidia-smi
 Needs pacman-contrib
 Needs the Hadith plugin; today's hadith, its rotation and the meaning follow its settings.
 Needs the Jannah plugin; today's reminder, its rotation and the meaning follow its settings.
@@ -4083,6 +4088,7 @@ NixOS: how many of the newest generations a clean-up keeps (the running and boot
 No API key saved for this server
 No Bluetooth adapter
 No Docker or Podman socket found
+No GPU
 No Longer at Ease
 No Mandara command given
 No Mandara plugin `{id}`; see `mandara msg plugins list`
@@ -4166,6 +4172,7 @@ No filesystem access
 No folder to write into
 No fonts match
 No frames yet — the shell only draws while something changes. Open a panel to see it work.
+No graphics card found
 No hadith {reference} in {collection}
 No hotspot has been set up yet
 No icon theme is selected; standard fallbacks are in use
@@ -4353,6 +4360,7 @@ Not one of this app's leftovers: {path}
 Not placed
 Not reachable
 Not released yet
+Not reported
 Not running
 Not scanned yet
 Not set
@@ -5259,6 +5267,7 @@ Reading the shell's memory…
 Reading what Mandara installed…
 Reading your home…
 Reading your project folders
+Readings
 Reading…
 Reads Arabic (and Persian / Urdu) text
 Reads CPU, memory and disk usage
@@ -6459,6 +6468,7 @@ Surprise me
 Suspend
 Suspend, then hibernate
 Swahili proverb
+Swap
 Swap the left and right buttons
 Swatch shape
 Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts.
@@ -7665,6 +7675,7 @@ VPN {name}
 VPN {name} connected
 VPN {name} disconnected
 VRAM
+VRAM {n}
 Valid. The shell isn't running, so its load state is unknown.
 Valid. Turn it on in Installed to load it.
 Validate
@@ -8062,6 +8073,7 @@ Your dock's apps, or any apps and links, as tiles
 Your feeds
 Your first favourite
 Your graphics card can't encode this with GPU Screen Recorder
+Your graphics card doesn't report this
 Your hadith library
 Your home favourites, sensors and scenes
 Your home folder

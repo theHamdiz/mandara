@@ -396,13 +396,17 @@ Kinds:
   **`decoration`** `shape` = `tape`.
 - **`monitor`** — `style` = `column` or `gauges` (ring gauges for the
   readings that are a share, the rest listed under them); `rows` in order
-  (`cpu`, `cpu-graph`, `gpu`, `memory`, `gpu-power`, `cpu-temp`,
-  `gpu-temp`, `fan`, `battery`, `disk`, `download`, `upload`, `net-graph`;
-  rows the machine can't read are hidden), `interval_s` (1 … 60, default
+  (`cpu`, `cpu-graph`, `gpu`, `vram`, `memory`, `swap`, `gpu-power`,
+  `cpu-temp`, `gpu-temp`, `fan`, `battery`, `disk`, `download`, `upload`,
+  `net-graph`; every one but `vram` and `swap` by default; rows the machine
+  can't read are hidden, and the GPU rows show one line per GPU when there
+  are several), `interval_s` (1 … 60, default
   2), `width` (reference px), `title`. Sampling runs only while a monitor
   shows on a visible display (not covered by a fullscreen / tiled window,
   not locked, screens on) and only reads the shown rows; only the values
-  plane redraws.
+  plane redraws. The GPU readings (AMD and Intel from sysfs, NVIDIA from
+  `nvidia-smi`) come from the same sampler as the resources panel, so a
+  card is read once however many of them show.
 - **`weather`** — `layout` = `hero` or `compact`, `location`, `details`
   (feels like, humidity, wind), `days` (0 … 7 days ahead). From the
   Weather plugin's forecast; redrawn when it changes.

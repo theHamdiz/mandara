@@ -369,7 +369,8 @@ struct Snapshot {
     threads: usize,
     top: Vec<TopApp>,
     temps: Vec<ComponentTemp>,
-    gpus: Vec<Gpu>,
+    /// The shared GPU reading ([`crate::widgets::gpu_feed`]).
+    gpus: Arc<[Gpu]>,
     /// The process table had a previous sample (CPU figures are real).
     primed: bool,
     /// Formatted uptime (`4d 2h`).
@@ -489,7 +490,7 @@ impl Live {
     /// Feeds each GPU's load into its sparkline; forgets GPUs that vanished.
     fn record_gpus(&mut self) {
         let now = Instant::now();
-        let gpus = &self.snapshot.gpus;
+        let gpus = &self.snapshot.gpus[..];
         self.gpu_load.retain(|(slot, _)| gpus.iter().any(|g| g.slot == *slot));
         for g in gpus {
             let Some(load) = g.load else { continue };
@@ -749,12 +750,15 @@ async fn collect(sampler: Arc<Mutex<Sampler>>, executor: BackgroundExecutor) -> 
     }
 }
 
-/// Component temperatures and GPUs (blocking; may run `nvidia-smi`).
-fn hardware() -> (Vec<ComponentTemp>, Vec<Gpu>) {
+/// Component temperatures and GPUs (blocking; may run `nvidia-smi`). The
+/// GPUs come from the shell's one GPU sampler, shared with the desktop
+/// system monitor.
+fn hardware() -> (Vec<ComponentTemp>, Arc<[Gpu]>) {
+    let gpus = crate::widgets::gpu_feed::fresh(crate::widgets::gpu_feed::FRESH).gpus;
     if demo::active() {
-        return (demo::temperatures(), demo::gpus());
+        return (demo::temperatures(), gpus);
     }
-    (sensors::read_temperatures(std::path::Path::new("/")), sensors::read_all_gpus())
+    (sensors::read_temperatures(std::path::Path::new("/")), gpus)
 }
 
 /// Formatted uptime (`4d 2h`), or the demo's.
@@ -1651,6 +1655,7 @@ pub fn register(r: &mut PluginRegistry) {
                     "vram_total_bytes": g.vram_total,
                     "temp_c": g.temp_c.map(round1),
                     "freq_mhz": g.freq_mhz.map(f32::round),
+                    "power_w": g.power_w.map(round1),
                 })
             })
             .collect();
@@ -1734,6 +1739,7 @@ mod tests {
             vram_total: vram.then_some(2),
             temp_c: Some(50.0),
             freq_mhz: None,
+            power_w: None,
         }
     }
 
@@ -1776,9 +1782,9 @@ mod tests {
     #[test]
     fn gpu_histories_forget_removed_gpus() {
         let mut live = Live::new();
-        live.snapshot.gpus = vec![gpu("a", true), gpu("b", false)];
+        live.snapshot.gpus = vec![gpu("a", true), gpu("b", false)].into();
         live.record_gpus();
-        live.snapshot.gpus.truncate(1);
+        live.snapshot.gpus = live.snapshot.gpus[..1].into();
         live.record_gpus();
         assert_eq!(live.gpu_load.len(), 1);
     }
