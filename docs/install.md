@@ -428,6 +428,13 @@ Login live in `/usr/local`, which SteamOS replaces too, so they are skipped,
 and Studio's administrator actions stay unavailable. Desktop Mode's Plasma
 session runs Mandara with `--compositor kwin`.
 
+**Uninstalling** (`mandara uninstall`) removes Mandara from your home
+folder and leaves the packages it added to the image, which other apps may
+use too. Remove them with the system's own tool if you like:
+`rpm-ostree uninstall <packages>` (or `rpm-ostree reset` for every layered
+package), `transactional-update pkg remove <packages>`, or
+`abroot pkg remove <packages>` and `abroot pkg apply`.
+
 **Building from source** on an image-based system needs a compiler and
 build tools in the running image. The installer says which are missing;
 build inside a toolbox or distrobox container instead, or install a release.
