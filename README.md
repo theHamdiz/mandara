@@ -186,9 +186,11 @@ around, each one measured or shipped today:
 
 - **It's light.** Plugins load data when needed, and hidden panels stop
   their refresh work. [Measurements and setup](docs/performance.md)
-- **It looks the way you want.** Six bar styles, four presets that reshape
+- **It looks the way you want.** Six bar styles, eight presets that reshape
   the bar completely (a framed bar with a rail of scalloped buttons, a dock
-  of squircle tiles, a flower rail, rows of connected tiles), side bars of
+  of squircle tiles, a flower rail, rows of connected tiles, a monitoring
+  status line, three floating docks, a notch hanging from the top, a top
+  bar joined to a rail), side bars of
   icons and pills that join the top bar into one frame, one-click Looks, desktop widgets, a hundred dials for
   corners, glass and motion, and themes made from your wallpaper.
   [Your desktop](docs/desktop.md)
@@ -225,8 +227,9 @@ around, each one measured or shipped today:
 
 ### Bar styles
 
-Four presets reshape the whole bar in one click: pick one in **Studio →
-Bars → Presets**, or run `mandara msg bar style <name>`. Each side bar can
+Eight presets reshape the whole bar in one click: pick one in **Studio →
+Bars → Presets**, or run `mandara msg bar style <name>`. Every style shows
+the icon of the app on each workspace and tag button. Each side bar can
 take one of its own (`mandara msg side-bar style right <name>`).
 
 <table>
@@ -237,6 +240,14 @@ take one of its own (`mandara msg side-bar style right <name>`).
 <tr>
 <td width="50%" valign="top"><img src="docs/screenshots/bar-style-rail.webp" alt="The Rail bar style: a wide rail on the left edge with flower-shaped buttons and tiles, inside a thin screen frame" width="100%"/><br/><sub><b>Rail</b> (<code>rail</code>): a wide left rail of flower buttons in a screen frame.</sub></td>
 <td width="50%" valign="top"><img src="docs/screenshots/bar-style-segmented.webp" alt="The Segmented bar style: no bar, just rows of connected tiles under the top edge" width="100%"/><br/><sub><b>Segmented</b> (<code>segmented</code>): no bar, just rows of connected tiles.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-system-monitor.webp" alt="The System monitor bar style: a slim bar along the bottom of the screen where every reading sits on a square stat block in a monospace font, with CPU and memory rings, network rates and app icons on the workspace buttons" width="100%"/><br/><sub><b>System monitor</b> (<code>system-monitor</code>): a slim bottom status line of stat blocks, meters and rates.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-stanley-bridge.webp" alt="The Stanley Bridge bar style: three floating docks of squircle tiles spanning the bottom of the screen, with app icons on the workspace tiles" width="100%"/><br/><sub><b>Stanley Bridge</b> (<code>stanley-bridge</code>): three floating docks of squircle tiles along the bottom.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-pharos-beam.webp" alt="The Pharos Beam bar style: a half-width notch hanging from the top edge, with scalloped accent buttons, tonal tiles and app icons on the workspace buttons" width="100%"/><br/><sub><b>Pharos Beam</b> (<code>pharos-beam</code>): a notch of scalloped buttons and tonal tiles hanging from the top.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-raml-tram.webp" alt="The Raml Tram bar style: a top bar joined to a rail down the left edge, with flower-shaped buttons and app icons on the workspace buttons" width="100%"/><br/><sub><b>Raml Tram</b> (<code>raml-tram</code>): a top bar joined to a left rail of flower buttons.</sub></td>
 </tr>
 <tr>
 <td colspan="2" align="center"><img src="docs/screenshots/bar-style-side-bars.webp" alt="A Segmented top bar of connected tiles beside a right side bar styled as a Tile dock, with squircle tiles" width="50%"/><br/><sub><b>Side bars</b> take a style of their own: here a Tile dock rail beside a Segmented bar.</sub></td>
