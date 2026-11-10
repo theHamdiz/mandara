@@ -8179,7 +8179,7 @@
 "Phone Connect" = "Conexão com telefone"
 "Ping" = "Enviar ping"
 "Plasma's secure locker controls this screen. Custom lock widgets are available with Mandara's native locker on supported compositors." = "O bloqueador seguro do Plasma controla esta tela. Widgets de bloqueio personalizados estão disponíveis com o bloqueador nativo do Mandara em compositores compatíveis."
-"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "As versões pré-compiladas exigem Linux em uma CPU x86_64 ou aarch64."
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64." = "As versões pré-compiladas exigem Linux em uma CPU x86_64 ou aarch64, ou FreeBSD em uma CPU x86_64."
 "Previews use sample data." = "As prévias usam dados de exemplo."
 "Profile scope" = "Escopo do perfil"
 "Provider" = "Provedor"

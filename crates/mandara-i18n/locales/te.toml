@@ -8179,7 +8179,7 @@
 "Phone Connect" = "ఫోన్ అనుసంధానం"
 "Ping" = "పింగ్ పంపండి"
 "Plasma's secure locker controls this screen. Custom lock widgets are available with Mandara's native locker on supported compositors." = "Plasma సురక్షిత లాకర్ ఈ స్క్రీన్‌ను నియంత్రిస్తుంది. మద్దతు ఉన్న కంపోజిటర్‌లలో Mandara స్థానిక లాకర్‌తో అనుకూల లాక్ విజెట్‌లు అందుబాటులో ఉంటాయి."
-"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "ముందుగా నిర్మించిన విడుదలలకు x86_64 లేదా aarch64 CPU పై Linux అవసరం."
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64." = "ముందుగా నిర్మించిన విడుదలలకు x86_64 లేదా aarch64 CPU పై Linux, లేదా x86_64 CPU పై FreeBSD అవసరం."
 "Previews use sample data." = "ముందస్తు వీక్షణలు నమూనా డేటాను ఉపయోగిస్తాయి."
 "Profile scope" = "ప్రొఫైల్ పరిధి"
 "Provider" = "సేవాదారు"

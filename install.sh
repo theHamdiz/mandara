@@ -7,6 +7,7 @@ umask 077
 release_keys='2fde15bd0518f2352436174a3bcc1e41d62e3ac99647a9dfa773d6462970b43d'
 release_base=${MANDARA_BOOTSTRAP_BASE_URL:-https://github.com/theHamdiz/mandara/releases/latest/download}
 work=
+downloader=curl
 language=${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}
 language=${language%%[_.@-]*}
 
@@ -23,7 +24,7 @@ message() {
         ar:unpack) printf '%s\n' 'جارٍ فك ملفات المثبّت…' ;;
         ar:start) printf '%s\n' 'كل شيء جاهز. جارٍ فتح مثبّت Mandara…' ;;
         ar:missing_tool) printf '%s\n' 'ثبّت هذه الأداة ثم أعد المحاولة:' ;;
-        ar:unsupported) printf '%s\n' 'تتطلب الإصدارات الجاهزة Linux ومعالج x86_64 أو aarch64.' ;;
+        ar:unsupported) printf '%s\n' 'تتطلب الإصدارات الجاهزة Linux ومعالج x86_64 أو aarch64، أو FreeBSD ومعالج x86_64.' ;;
         ar:https) printf '%s\n' 'يجب أن تستخدم مرآة الإصدارات HTTPS.' ;;
         ar:temporary) printf '%s\n' 'تعذر إنشاء مجلد مؤقت للتنزيل.' ;;
         ar:failed_download) printf '%s\n' 'فشل التنزيل. تحقق من اتصالك وأعد المحاولة.' ;;
@@ -46,7 +47,7 @@ message() {
         fa:unpack) printf '%s\n' 'در حال استخراج فایل‌های نصب…' ;;
         fa:start) printf '%s\n' 'آماده است. در حال باز کردن نصب‌کنندهٔ Mandara…' ;;
         fa:missing_tool) printf '%s\n' 'این ابزار را نصب و دوباره تلاش کنید:' ;;
-        fa:unsupported) printf '%s\n' 'نسخه‌های آماده به Linux با پردازندهٔ x86_64 یا aarch64 نیاز دارند.' ;;
+        fa:unsupported) printf '%s\n' 'نسخه‌های آماده به Linux با پردازندهٔ x86_64 یا aarch64، یا FreeBSD با پردازندهٔ x86_64 نیاز دارند.' ;;
         fa:https) printf '%s\n' 'آینهٔ انتشار باید از HTTPS استفاده کند.' ;;
         fa:temporary) printf '%s\n' 'ساخت پوشهٔ موقت دریافت ممکن نشد.' ;;
         fa:failed_download) printf '%s\n' 'دریافت ناموفق بود. اتصال خود را بررسی و دوباره تلاش کنید.' ;;
@@ -69,7 +70,7 @@ message() {
         ur:unpack) printf '%s\n' 'انسٹالر کی فائلیں نکالی جا رہی ہیں…' ;;
         ur:start) printf '%s\n' 'تیار ہے۔ Mandara انسٹالر کھولا جا رہا ہے…' ;;
         ur:missing_tool) printf '%s\n' 'یہ ٹول نصب کریں اور دوبارہ کوشش کریں:' ;;
-        ur:unsupported) printf '%s\n' 'تیار ریلیز کے لیے Linux اور x86_64 یا aarch64 پروسیسر درکار ہے۔' ;;
+        ur:unsupported) printf '%s\n' 'تیار ریلیز کے لیے Linux اور x86_64 یا aarch64 پروسیسر، یا FreeBSD اور x86_64 پروسیسر درکار ہے۔' ;;
         ur:https) printf '%s\n' 'ریلیز مرر کو HTTPS استعمال کرنا چاہیے۔' ;;
         ur:temporary) printf '%s\n' 'ڈاؤن لوڈ کے لیے عارضی فولڈر نہیں بنایا جا سکا۔' ;;
         ur:failed_download) printf '%s\n' 'ڈاؤن لوڈ ناکام ہوا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔' ;;
@@ -92,7 +93,7 @@ message() {
         es:unpack) printf '%s\n' 'Descomprimiendo el instalador…' ;;
         es:start) printf '%s\n' 'Todo listo. Abriendo el instalador de Mandara…' ;;
         es:missing_tool) printf '%s\n' 'Instala esta herramienta y vuelve a intentarlo:' ;;
-        es:unsupported) printf '%s\n' 'Las versiones precompiladas requieren Linux con una CPU x86_64 o aarch64.' ;;
+        es:unsupported) printf '%s\n' 'Las versiones precompiladas requieren Linux con una CPU x86_64 o aarch64, o FreeBSD con una CPU x86_64.' ;;
         es:https) printf '%s\n' 'El servidor de versiones alternativo debe usar HTTPS.' ;;
         es:temporary) printf '%s\n' 'No se pudo crear una carpeta temporal para la descarga.' ;;
         es:failed_download) printf '%s\n' 'La descarga falló. Comprueba tu conexión y vuelve a intentarlo.' ;;
@@ -115,7 +116,7 @@ message() {
         pt:unpack) printf '%s\n' 'Extraindo o instalador…' ;;
         pt:start) printf '%s\n' 'Pronto. Abrindo o instalador do Mandara…' ;;
         pt:missing_tool) printf '%s\n' 'Instale esta ferramenta e tente novamente:' ;;
-        pt:unsupported) printf '%s\n' 'As versões pré-compiladas exigem Linux em uma CPU x86_64 ou aarch64.' ;;
+        pt:unsupported) printf '%s\n' 'As versões pré-compiladas exigem Linux em uma CPU x86_64 ou aarch64, ou FreeBSD em uma CPU x86_64.' ;;
         pt:https) printf '%s\n' 'O espelho de versões deve usar HTTPS.' ;;
         pt:temporary) printf '%s\n' 'Não foi possível criar uma pasta temporária para o download.' ;;
         pt:failed_download) printf '%s\n' 'O download falhou. Confira sua conexão e tente novamente.' ;;
@@ -138,7 +139,7 @@ message() {
         fr:unpack) printf '%s\n' 'Décompression du programme d’installation…' ;;
         fr:start) printf '%s\n' 'Tout est prêt. Ouverture du programme d’installation de Mandara…' ;;
         fr:missing_tool) printf '%s\n' 'Installez cet outil, puis réessayez :' ;;
-        fr:unsupported) printf '%s\n' 'Les versions précompilées nécessitent Linux et un processeur x86_64 ou aarch64.' ;;
+        fr:unsupported) printf '%s\n' 'Les versions précompilées nécessitent Linux et un processeur x86_64 ou aarch64, ou FreeBSD et un processeur x86_64.' ;;
         fr:https) printf '%s\n' 'Le miroir des versions doit utiliser HTTPS.' ;;
         fr:temporary) printf '%s\n' 'Impossible de créer un dossier temporaire pour le téléchargement.' ;;
         fr:failed_download) printf '%s\n' 'Le téléchargement a échoué. Vérifiez votre connexion et réessayez.' ;;
@@ -161,7 +162,7 @@ message() {
         de:unpack) printf '%s\n' 'Installationsprogramm wird entpackt…' ;;
         de:start) printf '%s\n' 'Alles bereit. Das Mandara-Installationsprogramm wird geöffnet…' ;;
         de:missing_tool) printf '%s\n' 'Installiere dieses Werkzeug und versuche es erneut:' ;;
-        de:unsupported) printf '%s\n' 'Vorgefertigte Versionen benötigen Linux mit einer x86_64- oder aarch64-CPU.' ;;
+        de:unsupported) printf '%s\n' 'Vorgefertigte Versionen benötigen Linux mit einer x86_64- oder aarch64-CPU oder FreeBSD mit einer x86_64-CPU.' ;;
         de:https) printf '%s\n' 'Der Download-Spiegel muss HTTPS verwenden.' ;;
         de:temporary) printf '%s\n' 'Ein temporärer Download-Ordner konnte nicht erstellt werden.' ;;
         de:failed_download) printf '%s\n' 'Download fehlgeschlagen. Prüfe deine Verbindung und versuche es erneut.' ;;
@@ -184,7 +185,7 @@ message() {
         tr:unpack) printf '%s\n' 'Kurulum dosyaları arşivden çıkarılıyor…' ;;
         tr:start) printf '%s\n' 'Hazır. Mandara kurulum programı açılıyor…' ;;
         tr:missing_tool) printf '%s\n' 'Bu aracı yükleyip yeniden deneyin:' ;;
-        tr:unsupported) printf '%s\n' 'Hazır sürümler için Linux ve x86_64 veya aarch64 işlemci gerekir.' ;;
+        tr:unsupported) printf '%s\n' 'Hazır sürümler için Linux ve x86_64 veya aarch64 işlemci ya da FreeBSD ve x86_64 işlemci gerekir.' ;;
         tr:https) printf '%s\n' 'Sürüm aynası HTTPS kullanmalıdır.' ;;
         tr:temporary) printf '%s\n' 'Geçici indirme klasörü oluşturulamadı.' ;;
         tr:failed_download) printf '%s\n' 'İndirme başarısız oldu. Bağlantınızı denetleyip yeniden deneyin.' ;;
@@ -207,7 +208,7 @@ message() {
         ru:unpack) printf '%s\n' 'Распаковка установщика…' ;;
         ru:start) printf '%s\n' 'Всё готово. Запуск установщика Mandara…' ;;
         ru:missing_tool) printf '%s\n' 'Установите этот инструмент и повторите попытку:' ;;
-        ru:unsupported) printf '%s\n' 'Готовые сборки требуют Linux и процессор x86_64 или aarch64.' ;;
+        ru:unsupported) printf '%s\n' 'Готовые сборки требуют Linux и процессор x86_64 или aarch64 либо FreeBSD и процессор x86_64.' ;;
         ru:https) printf '%s\n' 'Зеркало выпусков должно использовать HTTPS.' ;;
         ru:temporary) printf '%s\n' 'Не удалось создать временную папку для загрузки.' ;;
         ru:failed_download) printf '%s\n' 'Загрузка не удалась. Проверьте соединение и повторите попытку.' ;;
@@ -230,7 +231,7 @@ message() {
         hi:unpack) printf '%s\n' 'इंस्टॉलर की फ़ाइलें निकाली जा रही हैं…' ;;
         hi:start) printf '%s\n' 'तैयार है। Mandara इंस्टॉलर खुल रहा है…' ;;
         hi:missing_tool) printf '%s\n' 'यह टूल इंस्टॉल करें और फिर कोशिश करें:' ;;
-        hi:unsupported) printf '%s\n' 'तैयार रिलीज़ के लिए Linux और x86_64 या aarch64 CPU चाहिए।' ;;
+        hi:unsupported) printf '%s\n' 'तैयार रिलीज़ के लिए Linux और x86_64 या aarch64 CPU, या FreeBSD और x86_64 CPU चाहिए।' ;;
         hi:https) printf '%s\n' 'रिलीज़ मिरर को HTTPS इस्तेमाल करना चाहिए।' ;;
         hi:temporary) printf '%s\n' 'अस्थायी डाउनलोड फ़ोल्डर नहीं बनाया जा सका।' ;;
         hi:failed_download) printf '%s\n' 'डाउनलोड विफल रहा। अपना कनेक्शन जाँचें और फिर कोशिश करें।' ;;
@@ -253,7 +254,7 @@ message() {
         mr:unpack) printf '%s\n' 'इंस्टॉलर उलगडत आहे…' ;;
         mr:start) printf '%s\n' 'तयार. Mandara चे इंस्टॉलर उघडत आहे…' ;;
         mr:missing_tool) printf '%s\n' 'हे साधन बसवा आणि पुन्हा प्रयत्न करा:' ;;
-        mr:unsupported) printf '%s\n' 'आधी तयार केलेल्या आवृत्त्यांसाठी x86_64 किंवा aarch64 CPU वर Linux आवश्यक आहे.' ;;
+        mr:unsupported) printf '%s\n' 'आधी तयार केलेल्या आवृत्त्यांसाठी x86_64 किंवा aarch64 CPU वर Linux, किंवा x86_64 CPU वर FreeBSD आवश्यक आहे.' ;;
         mr:https) printf '%s\n' 'प्रकाशनाच्या पर्यायी सर्व्हरने HTTPS वापरणे आवश्यक आहे.' ;;
         mr:temporary) printf '%s\n' 'डाउनलोडसाठी तात्पुरते फोल्डर तयार करता आले नाही.' ;;
         mr:failed_download) printf '%s\n' 'डाउनलोड अयशस्वी. जोडणी तपासा आणि पुन्हा प्रयत्न करा.' ;;
@@ -276,7 +277,7 @@ message() {
         bn:unpack) printf '%s\n' 'ইনস্টলারের ফাইল আনপ্যাক করা হচ্ছে…' ;;
         bn:start) printf '%s\n' 'প্রস্তুত। Mandara ইনস্টলার খোলা হচ্ছে…' ;;
         bn:missing_tool) printf '%s\n' 'এই টুলটি ইনস্টল করে আবার চেষ্টা করুন:' ;;
-        bn:unsupported) printf '%s\n' 'আগে থেকে তৈরি রিলিজের জন্য Linux এবং x86_64 বা aarch64 CPU প্রয়োজন।' ;;
+        bn:unsupported) printf '%s\n' 'আগে থেকে তৈরি রিলিজের জন্য Linux এবং x86_64 বা aarch64 CPU, অথবা FreeBSD এবং x86_64 CPU প্রয়োজন।' ;;
         bn:https) printf '%s\n' 'রিলিজ মিররে HTTPS ব্যবহার করতে হবে।' ;;
         bn:temporary) printf '%s\n' 'ডাউনলোডের জন্য অস্থায়ী ফোল্ডার তৈরি করা যায়নি।' ;;
         bn:failed_download) printf '%s\n' 'ডাউনলোড ব্যর্থ হয়েছে। সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।' ;;
@@ -299,7 +300,7 @@ message() {
         te:unpack) printf '%s\n' 'ఇన్‌స్టాలర్‌ను అన్‌ప్యాక్ చేస్తోంది…' ;;
         te:start) printf '%s\n' 'సిద్ధంగా ఉంది. Mandara ఇన్‌స్టాలర్‌ను తెరుస్తోంది…' ;;
         te:missing_tool) printf '%s\n' 'ఈ సాధనాన్ని ఇన్‌స్టాల్ చేసి మళ్లీ ప్రయత్నించండి:' ;;
-        te:unsupported) printf '%s\n' 'ముందుగా నిర్మించిన విడుదలలకు x86_64 లేదా aarch64 CPU పై Linux అవసరం.' ;;
+        te:unsupported) printf '%s\n' 'ముందుగా నిర్మించిన విడుదలలకు x86_64 లేదా aarch64 CPU పై Linux, లేదా x86_64 CPU పై FreeBSD అవసరం.' ;;
         te:https) printf '%s\n' 'విడుదల మిర్రర్ తప్పనిసరిగా HTTPS ఉపయోగించాలి.' ;;
         te:temporary) printf '%s\n' 'డౌన్‌లోడ్ కోసం తాత్కాలిక ఫోల్డర్‌ను సృష్టించలేకపోయింది.' ;;
         te:failed_download) printf '%s\n' 'డౌన్‌లోడ్ విఫలమైంది. మీ కనెక్షన్‌ను తనిఖీ చేసి మళ్లీ ప్రయత్నించండి.' ;;
@@ -322,7 +323,7 @@ message() {
         id:unpack) printf '%s\n' 'Mengekstrak pemasang…' ;;
         id:start) printf '%s\n' 'Siap. Membuka pemasang Mandara…' ;;
         id:missing_tool) printf '%s\n' 'Pasang alat ini lalu coba lagi:' ;;
-        id:unsupported) printf '%s\n' 'Rilis siap pakai memerlukan Linux dengan CPU x86_64 atau aarch64.' ;;
+        id:unsupported) printf '%s\n' 'Rilis siap pakai memerlukan Linux dengan CPU x86_64 atau aarch64, atau FreeBSD dengan CPU x86_64.' ;;
         id:https) printf '%s\n' 'Cermin rilis harus menggunakan HTTPS.' ;;
         id:temporary) printf '%s\n' 'Tidak dapat membuat folder unduhan sementara.' ;;
         id:failed_download) printf '%s\n' 'Unduhan gagal. Periksa koneksi Anda dan coba lagi.' ;;
@@ -345,7 +346,7 @@ message() {
         sw:unpack) printf '%s\n' 'Inafungua kifurushi cha kisakinishi…' ;;
         sw:start) printf '%s\n' 'Tayari. Inafungua kisakinishi cha Mandara…' ;;
         sw:missing_tool) printf '%s\n' 'Sakinisha zana hii kisha ujaribu tena:' ;;
-        sw:unsupported) printf '%s\n' 'Matoleo yaliyotengenezwa tayari yanahitaji Linux kwenye CPU ya x86_64 au aarch64.' ;;
+        sw:unsupported) printf '%s\n' 'Matoleo yaliyotengenezwa tayari yanahitaji Linux kwenye CPU ya x86_64 au aarch64, au FreeBSD kwenye CPU ya x86_64.' ;;
         sw:https) printf '%s\n' 'Seva mbadala ya matoleo lazima itumie HTTPS.' ;;
         sw:temporary) printf '%s\n' 'Haikuweza kuunda folda ya muda ya upakuaji.' ;;
         sw:failed_download) printf '%s\n' 'Upakuaji umeshindwa. Kagua muunganisho wako kisha ujaribu tena.' ;;
@@ -368,7 +369,7 @@ message() {
         vi:unpack) printf '%s\n' 'Đang giải nén trình cài…' ;;
         vi:start) printf '%s\n' 'Sẵn sàng. Đang mở trình cài Mandara…' ;;
         vi:missing_tool) printf '%s\n' 'Cài công cụ này rồi thử lại:' ;;
-        vi:unsupported) printf '%s\n' 'Bản biên dịch sẵn yêu cầu Linux trên CPU x86_64 hoặc aarch64.' ;;
+        vi:unsupported) printf '%s\n' 'Bản biên dịch sẵn yêu cầu Linux trên CPU x86_64 hoặc aarch64, hoặc FreeBSD trên CPU x86_64.' ;;
         vi:https) printf '%s\n' 'Máy chủ phản chiếu bản phát hành phải dùng HTTPS.' ;;
         vi:temporary) printf '%s\n' 'Không tạo được thư mục tải xuống tạm thời.' ;;
         vi:failed_download) printf '%s\n' 'Tải xuống thất bại. Hãy kiểm tra kết nối và thử lại.' ;;
@@ -391,7 +392,7 @@ message() {
         zh:unpack) printf '%s\n' '正在解压安装程序…' ;;
         zh:start) printf '%s\n' '准备就绪。正在打开 Mandara 安装程序…' ;;
         zh:missing_tool) printf '%s\n' '请安装此工具后重试：' ;;
-        zh:unsupported) printf '%s\n' '预编译版本需要 Linux 系统和 x86_64 或 aarch64 处理器。' ;;
+        zh:unsupported) printf '%s\n' '预编译版本需要 Linux 系统和 x86_64 或 aarch64 处理器，或 FreeBSD 系统和 x86_64 处理器。' ;;
         zh:https) printf '%s\n' '发布镜像必须使用 HTTPS。' ;;
         zh:temporary) printf '%s\n' '无法创建临时下载文件夹。' ;;
         zh:failed_download) printf '%s\n' '下载失败。请检查网络连接后重试。' ;;
@@ -414,7 +415,7 @@ message() {
         ja:unpack) printf '%s\n' 'インストーラーを展開しています…' ;;
         ja:start) printf '%s\n' '準備完了。Mandara のインストーラーを開いています…' ;;
         ja:missing_tool) printf '%s\n' 'このツールをインストールして、もう一度お試しください：' ;;
-        ja:unsupported) printf '%s\n' 'ビルド済みリリースには Linux と x86_64 または aarch64 CPU が必要です。' ;;
+        ja:unsupported) printf '%s\n' 'ビルド済みリリースには、Linux と x86_64 または aarch64 CPU、あるいは FreeBSD と x86_64 CPU が必要です。' ;;
         ja:https) printf '%s\n' 'リリースミラーは HTTPS を使用する必要があります。' ;;
         ja:temporary) printf '%s\n' '一時ダウンロードフォルダーを作成できませんでした。' ;;
         ja:failed_download) printf '%s\n' 'ダウンロードに失敗しました。接続を確認して、もう一度お試しください。' ;;
@@ -437,7 +438,7 @@ message() {
         ko:unpack) printf '%s\n' '설치 프로그램의 압축을 푸는 중…' ;;
         ko:start) printf '%s\n' '준비됐습니다. Mandara 설치 프로그램을 여는 중…' ;;
         ko:missing_tool) printf '%s\n' '이 도구를 설치한 뒤 다시 시도하세요:' ;;
-        ko:unsupported) printf '%s\n' '미리 빌드된 릴리스에는 Linux와 x86_64 또는 aarch64 CPU가 필요합니다.' ;;
+        ko:unsupported) printf '%s\n' '미리 빌드된 릴리스에는 Linux와 x86_64 또는 aarch64 CPU, 또는 FreeBSD와 x86_64 CPU가 필요합니다.' ;;
         ko:https) printf '%s\n' '릴리스 미러는 HTTPS를 사용해야 합니다.' ;;
         ko:temporary) printf '%s\n' '임시 다운로드 폴더를 만들 수 없습니다.' ;;
         ko:failed_download) printf '%s\n' '다운로드에 실패했습니다. 연결을 확인한 뒤 다시 시도하세요.' ;;
@@ -460,7 +461,7 @@ message() {
         *:unpack) printf '%s\n' 'Unpacking the installer…' ;;
         *:start) printf '%s\n' 'Ready. Opening Mandara’s installer…' ;;
         *:missing_tool) printf '%s\n' 'Install this tool and try again:' ;;
-        *:unsupported) printf '%s\n' 'Prebuilt releases require Linux on an x86_64 or aarch64 CPU.' ;;
+        *:unsupported) printf '%s\n' 'Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64.' ;;
         *:https) printf '%s\n' 'The release mirror must use HTTPS.' ;;
         *:temporary) printf '%s\n' 'Could not create a temporary download folder.' ;;
         *:failed_download) printf '%s\n' 'Download failed. Check your connection and try again.' ;;
@@ -506,6 +507,10 @@ PHOENIX
 
 fetch() {
     name=$1 destination=$2 limit=$3 timeout=$4
+    if [ "$downloader" = fetch ]; then
+        fetch_base "$@"
+        return
+    fi
     # Keep retry warnings in logs; the terminal meter includes bytes and speed.
     if [ -t 2 ]; then progress=--progress-meter; else progress=--no-progress-meter; fi
     received=$(curl --fail --location --show-error "$progress" \
@@ -518,15 +523,46 @@ fetch() {
     say "  ✓ $(message download_ok) $name ($received B)"
 }
 
+# FreeBSD's own fetch(1), when curl isn't installed: it verifies HTTPS
+# certificates, retries soft failures (-a) and gives up on a transfer
+# stalled for 30 seconds (-T). Everything it downloads is checked against
+# the signed release before anything runs.
+fetch_base() {
+    if [ -t 2 ]; then quiet=; else quiet=-q; fi
+    attempt=0
+    until command fetch $quiet -a -T 30 -o "$destination" "$release_base/$name"; do
+        attempt=$((attempt + 1))
+        [ "$attempt" -le 3 ] || fail "${5:-failed_download}" "$name" "$(message manual) https://github.com/theHamdiz/mandara/releases/latest"
+        sleep "$attempt"
+    done
+    received=$(wc -c < "$destination" | tr -d ' ')
+    [ "$received" -le "$limit" ] || fail "${5:-failed_download}" "$name"
+    say "  ✓ $(message download_ok) $name ($received B)"
+}
+
+# SHA-256 of a file: GNU coreutils and FreeBSD 14 both have sha256sum;
+# older FreeBSD has only sha256(1).
+file_sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{ print $1 }'
+    else
+        sha256 -q "$1"
+    fi
+}
+
 # POSIX printf accepts octal escapes; no xxd, Python or shell hex extension.
+# They go in the format string, not through %b: FreeBSD's printf ends a %b
+# argument at its first zero byte, and keys and signatures contain them.
+# The format holds nothing but escapes, so no conversion can appear in it.
 hex_bytes() {
     octal=$(printf '%s\n' "$1" | LC_ALL=C awk '
         { for (i = 1; i < length($0); i += 2) {
             a = index("0123456789abcdef", substr($0, i, 1)) - 1
             b = index("0123456789abcdef", substr($0, i + 1, 1)) - 1
-            printf "\\0%03o", a * 16 + b
+            printf "\\%03o", a * 16 + b
         } }')
-    printf '%b' "$octal"
+    # shellcheck disable=SC2059
+    printf "$octal"
 }
 
 check_nixos() {
@@ -559,20 +595,43 @@ download_directory() {
 main() {
     banner
     check_nixos /
-    for program in curl tar openssl sha256sum awk mktemp uname; do
+    for program in tar openssl awk mktemp uname; do
         command -v "$program" >/dev/null 2>&1 || fail missing_tool "$program" "$(message manual) https://github.com/theHamdiz/mandara/releases/latest"
     done
-    [ "$(uname -s)" = Linux ] || fail unsupported
+    case $(uname -s) in
+        Linux) os=linux ;;
+        FreeBSD) os=freebsd ;;
+        *) fail unsupported ;;
+    esac
     case $(uname -m) in
         x86_64|amd64) arch=x86_64 ;;
         aarch64|arm64) arch=aarch64 ;;
         *) fail unsupported ;;
     esac
-    libc=gnu
-    if ! { command -v getconf >/dev/null 2>&1 && getconf GNU_LIBC_VERSION >/dev/null 2>&1; }; then
-        for loader in /lib/ld-musl-*.so.1 /usr/lib/ld-musl-*.so.1; do
-            if [ -e "$loader" ]; then libc=musl; break; fi
-        done
+    if [ "$os" = freebsd ]; then
+        # One FreeBSD build (amd64), on FreeBSD's own libc.
+        [ "$arch" = x86_64 ] || fail unsupported
+        libc=freebsd
+        platform=freebsd
+    else
+        libc=gnu
+        if ! { command -v getconf >/dev/null 2>&1 && getconf GNU_LIBC_VERSION >/dev/null 2>&1; }; then
+            for loader in /lib/ld-musl-*.so.1 /usr/lib/ld-musl-*.so.1; do
+                if [ -e "$loader" ]; then libc=musl; break; fi
+            done
+        fi
+        platform=linux-$libc
+    fi
+    downloader=curl
+    if ! command -v curl >/dev/null 2>&1; then
+        if [ "$os" = freebsd ] && command -v fetch >/dev/null 2>&1; then
+            downloader=fetch
+        else
+            fail missing_tool curl "$(message manual) https://github.com/theHamdiz/mandara/releases/latest"
+        fi
+    fi
+    if ! command -v sha256sum >/dev/null 2>&1 && ! { [ "$os" = freebsd ] && command -v sha256 >/dev/null 2>&1; }; then
+        fail missing_tool sha256sum "$(message manual) https://github.com/theHamdiz/mandara/releases/latest"
     fi
     protocols=https
     case "$release_base" in
@@ -580,7 +639,7 @@ main() {
         http://127.0.0.1:*) protocols=http ;;
         *) fail https ;;
     esac
-    archive="mandara-$arch-linux-$libc.tar.gz"
+    archive="mandara-$arch-$platform.tar.gz"
     download_directory
 
     say "[1/5] $(message signature)"
@@ -609,9 +668,8 @@ main() {
     say "[2/5] $(message download) $arch ($libc)"
     fetch "$archive" "$work/$archive" 1073741824 1800
     say "[3/5] $(message verify)"
-    if ! (cd "$work" && printf '%s  %s\n' "$expected" "$archive" | sha256sum -c - >/dev/null); then
-        fail bad_checksum
-    fi
+    actual=$(file_sha256 "$work/$archive") || fail bad_checksum
+    [ "$actual" = "$expected" ] || fail bad_checksum
     say "  ✓ $(message checksum_ok)"
     say "[4/5] $(message unpack)"
     tar -xzf "$work/$archive" -C "$work" || fail failed_unpack

@@ -20,6 +20,17 @@ fn main() {
     std::process::exit(std::env::var("BOOTSTRAP_EXIT").unwrap().parse().unwrap());
 }
 "#;
+/// Stands in for `uname`, answering `-s` and `-m` like another system.
+const UNAME_FIXTURE: &str = r#"
+fn main() {
+    let var = match std::env::args().nth(1).as_deref() {
+        Some("-s") => "FIXTURE_UNAME_S",
+        Some("-m") => "FIXTURE_UNAME_M",
+        other => panic!("unexpected uname {other:?}"),
+    };
+    println!("{}", std::env::var(var).unwrap());
+}
+"#;
 /// A stalled local client must not keep a fixture thread alive indefinitely.
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(5);
 /// Yield while a fixture has no connection, so shutdown needs no wake socket.
@@ -93,14 +104,18 @@ impl Drop for Server {
 #[derive(Clone, Copy)]
 enum Fault { None, Signature, Archive, MissingMetadata, MissingChecksum, MissingInstaller, ExtraInstaller, NotExecutable }
 
-fn archive(dir: &Path, fault: Fault) -> Vec<u8> {
-    let source = dir.join("fixture.rs");
-    let binary = dir.join("fixture");
-    std::fs::write(&source, FIXTURE).unwrap();
+fn compile(dir: &Path, name: &str, code: &str) -> std::path::PathBuf {
+    let source = dir.join(format!("{name}.rs"));
+    let binary = dir.join(name);
+    std::fs::write(&source, code).unwrap();
     let compiled = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
         .arg(&source).arg("-o").arg(&binary).output().unwrap();
     assert!(compiled.status.success(), "{}", String::from_utf8_lossy(&compiled.stderr));
-    let bytes = std::fs::read(binary).unwrap();
+    binary
+}
+
+fn archive(dir: &Path, fault: Fault) -> Vec<u8> {
+    let bytes = std::fs::read(compile(dir, "fixture", FIXTURE)).unwrap();
     let mut tar = tar::Builder::new(GzEncoder::new(Vec::new(), Compression::fast()));
     let mut header = tar::Header::new_gnu();
     header.set_size(bytes.len() as u64);
@@ -127,6 +142,11 @@ fn run_with_mask(fault: Fault, exit: i32, language: &str, mask: &str) -> (std::p
 }
 
 fn run_with_network(fault: Fault, exit: i32, language: &str, mask: &str, transient: Option<(&'static str, usize)>) -> (std::process::Output, Option<String>, Vec<String>) {
+    run_on(fault, exit, language, mask, transient, None)
+}
+
+/// `system`: what `uname -s` and `uname -m` answer (`None`: this machine).
+fn run_on(fault: Fault, exit: i32, language: &str, mask: &str, transient: Option<(&'static str, usize)>, system: Option<(&str, &str)>) -> (std::process::Output, Option<String>, Vec<String>) {
     let dir = tempfile::tempdir().unwrap();
     let archive = archive(dir.path(), fault);
     let hash = mandara_delta::hex(&Sha256::digest(&archive));
@@ -139,6 +159,10 @@ fn run_with_network(fault: Fault, exit: i32, language: &str, mask: &str, transie
             files.insert(format!("/{name}"), if matches!(fault, Fault::Archive) { b"damaged archive".to_vec() } else { archive.clone() });
         }
     }
+    // FreeBSD: one amd64 build, named without a libc.
+    let name = "mandara-x86_64-freebsd.tar.gz";
+    sums.push_str(&format!("{hash}  {name}\n"));
+    files.insert(format!("/{name}"), if matches!(fault, Fault::Archive) { b"damaged archive".to_vec() } else { archive.clone() });
     if matches!(fault, Fault::MissingChecksum) { sums = format!("{hash}  something-else.tar.gz\n"); }
     // Test keys are generated in memory and never replace the shipped trust root.
     let (private, public) = mandara_delta::signing::sign::generate().unwrap();
@@ -154,7 +178,15 @@ fn run_with_network(fault: Fault, exit: i32, language: &str, mask: &str, transie
     assert_ne!(script, SCRIPT);
     let script_path = dir.path().join("install.sh");
     std::fs::write(&script_path, script).unwrap();
-    let output = Command::new("sh").args(["-c", "umask \"$1\"; shift; exec sh \"$@\"", "fixture", mask]).arg(&script_path)
+    let mut command = Command::new("sh");
+    if let Some((kernel, machine)) = system {
+        let shims = dir.path().join("shims");
+        std::fs::create_dir(&shims).unwrap();
+        std::fs::rename(compile(dir.path(), "uname", UNAME_FIXTURE), shims.join("uname")).unwrap();
+        let path = std::env::join_paths(std::iter::once(shims).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()))).unwrap();
+        command.env("PATH", path).env("FIXTURE_UNAME_S", kernel).env("FIXTURE_UNAME_M", machine);
+    }
+    let output = command.args(["-c", "umask \"$1\"; shift; exec sh \"$@\"", "fixture", mask]).arg(&script_path)
         .args(["--prefix", "/tmp/a path with 'quotes' and $signs", "--no-deps", "--no-greeter", "--compositor", "kwin"])
         .env("MANDARA_BOOTSTRAP_BASE_URL", &server.url).env("NO_PROXY", "127.0.0.1")
         .env("LC_ALL", language)
@@ -186,6 +218,26 @@ fn a_signed_download_forwards_arguments_and_installer_failures() {
             assert!(bytes.strip_suffix(" B)").unwrap().parse::<u64>().unwrap() > 0, "{line}");
         }
     }
+}
+
+#[test]
+fn freebsd_downloads_the_freebsd_build_and_verifies_it_the_same_way() {
+    let (output, record, requests) = run_on(Fault::None, 0, "C", "0022", None, Some(("FreeBSD", "amd64")));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert_eq!(record.unwrap().split('\0').next(), Some("install"));
+    assert_eq!(requests, ["/SHA256SUMS", "/SHA256SUMS.sig", "/mandara-x86_64-freebsd.tar.gz"]);
+    assert!(stderr.contains("x86_64 (freebsd)") && stderr.contains("✓ Archive checksum verified."), "{stderr}");
+    for fault in [Fault::Signature, Fault::Archive] {
+        let (output, record, _) = run_on(fault, 0, "C", "0022", None, Some(("FreeBSD", "amd64")));
+        assert!(!output.status.success() && record.is_none());
+    }
+    // There is no FreeBSD build for other CPUs: nothing is downloaded.
+    let (output, record, requests) = run_on(Fault::None, 0, "C", "0022", None, Some(("FreeBSD", "arm64")));
+    assert!(!output.status.success() && record.is_none() && requests.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("or FreeBSD on x86_64."));
+    let (output, _, requests) = run_on(Fault::None, 0, "C", "0022", None, Some(("Darwin", "arm64")));
+    assert!(!output.status.success() && requests.is_empty());
 }
 
 #[test]

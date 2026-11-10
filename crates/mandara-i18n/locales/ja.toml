@@ -8245,7 +8245,7 @@
 "Unpacking the installer…" = "インストーラーを展開しています…"
 "Ready. Opening Mandara’s installer…" = "準備完了。Mandara のインストーラーを開いています…"
 "Install this tool and try again:" = "このツールをインストールして、もう一度お試しください："
-"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "ビルド済みリリースには Linux と x86_64 または aarch64 CPU が必要です。"
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64." = "ビルド済みリリースには、Linux と x86_64 または aarch64 CPU、あるいは FreeBSD と x86_64 CPU が必要です。"
 "The release mirror must use HTTPS." = "リリースミラーは HTTPS を使用する必要があります。"
 "Could not create a temporary download folder." = "一時ダウンロードフォルダーを作成できませんでした。"
 "Download failed. Check your connection and try again." = "ダウンロードに失敗しました。接続を確認して、もう一度お試しください。"

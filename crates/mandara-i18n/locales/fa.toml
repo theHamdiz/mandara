@@ -7998,7 +7998,7 @@
 "Unpacking the installer…" = "در حال استخراج فایل‌های نصب…"
 "Ready. Opening Mandara’s installer…" = "آماده است. در حال باز کردن نصب‌کنندهٔ Mandara…"
 "Install this tool and try again:" = "این ابزار را نصب و دوباره تلاش کنید:"
-"Prebuilt releases require Linux on an x86_64 or aarch64 CPU." = "نسخه‌های آماده به Linux با پردازندهٔ x86_64 یا aarch64 نیاز دارند."
+"Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64." = "نسخه‌های آماده به Linux با پردازندهٔ x86_64 یا aarch64، یا FreeBSD با پردازندهٔ x86_64 نیاز دارند."
 "The release mirror must use HTTPS." = "آینهٔ انتشار باید از HTTPS استفاده کند."
 "Could not create a temporary download folder." = "ساخت پوشهٔ موقت دریافت ممکن نشد."
 "Download failed. Check your connection and try again." = "دریافت ناموفق بود. اتصال خود را بررسی و دوباره تلاش کنید."
