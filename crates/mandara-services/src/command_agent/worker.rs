@@ -277,11 +277,23 @@ mod tests {
         let exe = dir.path().join("worker");
         std::fs::copy(std::env::current_exe().unwrap(), &exe).unwrap();
         std::fs::write(dir.path().join(".agent-worker-fixture"), b"owned test copy").unwrap();
-        let output = Command::new(&exe)
-            .args(["--exact", "command_agent::worker::tests::deleted_executable_child", "--ignored", "--test-threads=1"])
-            .env("MANDARA_AGENT_TEST_EXE", &exe)
-            .output()
-            .unwrap();
+        // A process another test forks while the copy is still open for
+        // writing inherits that descriptor, and Linux then refuses to run the
+        // copy ("Text file busy") until it execs or exits: wait it out.
+        let mut tries = 0;
+        let output = loop {
+            match Command::new(&exe)
+                .args(["--exact", "command_agent::worker::tests::deleted_executable_child", "--ignored", "--test-threads=1"])
+                .env("MANDARA_AGENT_TEST_EXE", &exe)
+                .output()
+            {
+                Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) && tries < 100 => {
+                    tries += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                other => break other.unwrap(),
+            }
+        };
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stdout));
         assert!(!exe.exists());
     }
