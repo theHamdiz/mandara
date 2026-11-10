@@ -100,9 +100,11 @@ fn no_community(p: &MandaraPalette) -> AnyElement {
             .child(icon_chip("messages", accent, CHIP_PX))
             .child(div().flex_1().min_w_0().text_size(px(text::BODY)).font_weight(FontWeight::SEMIBOLD).truncate().child(t("Reddit"))))
         .child(div().text_size(px(text::LABEL)).text_color(p.on_surface_variant.hsla()).child(t("Follow a community to see its top posts here")))
+        // A tab stop: Tab reaches it, and Enter or Space clicks it once
+        // (GPUI turns the key's release on a focused element into a click).
         .child(div().row().child(pill_button("reddit-card-discover", Some("globe"), t("Find communities"), accent, p, |_, cx| {
             if let Err(error) = super::discover(cx) { tracing::info!("reddit: {error}"); }
-        })))
+        }).focusable().tab_index(0)))
         .into_any_element()
 }
 

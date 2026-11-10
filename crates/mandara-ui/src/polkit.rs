@@ -761,15 +761,24 @@ impl mandara_services::sysupdate::askpass::Prompter for DialogPrompter {
                 }
             })
             .detach();
-        if self.jobs.try_send(job).is_err() {
-            tracing::warn!("askpass: the password dialog isn't available");
-        }
+        queue_ask(&self.jobs, job, &rtx, &cookie);
         Pending {
             answer: answer_rx,
             close: Box::new(move || {
                 let _ = rtx.try_send(PolkitReply::Cancel { cookie: cookie.clone() });
             }),
         }
+    }
+}
+
+/// Hands `job` to the UI thread. When it can't be (the dialog is gone or
+/// its queue is full), no dialog will answer: the request is answered
+/// "cancelled" through `replies` so the askpass doesn't wait for its
+/// timeout.
+fn queue_ask(jobs: &async_channel::Sender<AskJob>, job: AskJob, replies: &async_channel::Sender<PolkitReply>, cookie: &str) {
+    if jobs.try_send(job).is_err() {
+        tracing::warn!("askpass: the password dialog isn't available");
+        let _ = replies.try_send(PolkitReply::Cancel { cookie: cookie.to_owned() });
     }
 }
 
@@ -877,4 +886,35 @@ pub fn register(r: &mut PluginRegistry) {
         .example("polkit status")
         .example("polkit demo"),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn job(cookie: &str) -> (AskJob, async_channel::Sender<PolkitReply>, async_channel::Receiver<PolkitReply>) {
+        let (_etx, erx) = async_channel::unbounded::<PolkitEvent>();
+        let (rtx, rrx) = async_channel::unbounded::<PolkitReply>();
+        let request = AuthRequest { cookie: cookie.into(), action_id: String::new(), message: String::new(), icon_name: String::new(), details: Vec::new(), users: Vec::new() };
+        (AskJob { request, agent: PolkitAgent::from_channels(erx, rtx.clone()) }, rtx, rrx)
+    }
+
+    #[test]
+    fn an_askpass_request_with_no_dialog_is_cancelled_at_once() {
+        // The dialog's side is gone.
+        let (jobs, rx) = async_channel::bounded::<AskJob>(1);
+        drop(rx);
+        let (ask, rtx, rrx) = job("mandara-askpass-7");
+        queue_ask(&jobs, ask, &rtx, "mandara-askpass-7");
+        assert!(matches!(rrx.try_recv(), Ok(PolkitReply::Cancel { cookie }) if cookie == "mandara-askpass-7"));
+        // Its queue is full.
+        let (jobs, rx) = async_channel::bounded::<AskJob>(1);
+        let (first, rtx1, rrx1) = job("mandara-askpass-8");
+        queue_ask(&jobs, first, &rtx1, "mandara-askpass-8");
+        assert!(rrx1.try_recv().is_err(), "a queued request waits for its dialog");
+        let (second, rtx2, rrx2) = job("mandara-askpass-9");
+        queue_ask(&jobs, second, &rtx2, "mandara-askpass-9");
+        assert!(matches!(rrx2.try_recv(), Ok(PolkitReply::Cancel { cookie }) if cookie == "mandara-askpass-9"));
+        assert_eq!(rx.try_recv().map(|j| j.request.cookie).ok().as_deref(), Some("mandara-askpass-8"));
+    }
 }
