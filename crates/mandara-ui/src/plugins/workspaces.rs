@@ -728,6 +728,122 @@ fn layout_label(code: &str) -> (&'static str, &'static str) {
         .map_or(("grid", mandara_i18n::tk("Layout")), |&(_, glyph, name)| (glyph, name))
 }
 
+/// A tag's `+N` label for apps past the icons shown.
+fn overflow(extra: usize, fg: Color) -> AnyElement {
+    div().text_size(px(OVERFLOW_TEXT_PX)).text_color(fg.with_alpha(OVERFLOW_ALPHA).hsla()).child(format!("+{extra}")).into_any_element()
+}
+
+/// A tag's clicks: left views it, right toggles it into the composite
+/// view, middle toggles the focused window onto it.
+fn tag_actions(el: gpui::Stateful<gpui::Div>, monitor: &SharedString, id: u32) -> gpui::Stateful<gpui::Div> {
+    let (m1, m2) = (monitor.clone(), monitor.clone());
+    el.on_click(move |_, _, cx| {
+        let _ = dispatch(cx, |b| b.select_primary(&m1, id));
+    })
+    .on_mouse_down(MouseButton::Right, move |_, _, cx| {
+        cx.stop_propagation();
+        let _ = dispatch(cx, |b| b.toggle_secondary(&m2, id));
+    })
+    .on_mouse_down(MouseButton::Middle, move |_, _, cx| {
+        cx.stop_propagation();
+        let _ = dispatch(cx, |b| b.toggle_client_tag(None, id));
+    })
+}
+
+/// Gap between shaped tag buttons, and between the buttons of a
+/// connected group.
+const SHAPED_GAP_PX: f32 = 4.0;
+const CONNECTED_GAP_PX: f32 = 2.0;
+/// An app icon's share of a square button.
+const SHAPED_ICON_SHARE: f32 = 0.62;
+/// Empty buttons: the raised surface nudged toward the text colour; tags
+/// with apps on a bar without an icon colour: the accent's container tone
+/// toward the raised surface.
+const EMPTY_MIX: f32 = 0.08;
+const BUSY_MIX: f32 = 0.5;
+/// A button under the pointer.
+const SHAPED_HOVER_OPACITY: f32 = 0.85;
+
+/// What a shaped tag button shows: one app icon in a square button (the
+/// first app on it, while app icons are on), else its label; a wide
+/// button shows the label and every app icon of the pill.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Face<'a> {
+    Icon(&'a str),
+    Label,
+}
+
+fn face<'a>(p: &Pill<'a>, square: bool) -> Face<'a> {
+    match p.apps.first() {
+        Some(app) if square => Face::Icon(app),
+        _ => Face::Label,
+    }
+}
+
+/// The tags as buttons in the bar's own shapes
+/// ([`crate::bar::items::TagButtons`]): the one you're on in the accent,
+/// tags with windows in the bar's icon colour, empty ones in the raised
+/// surface, each with its app icon (or icons) as the shipped pills show
+/// them.
+fn shaped_strip(list: &[Pill], b: crate::bar::items::TagButtons, monitor: &SharedString, monochrome: bool, palette: &MandaraPalette) -> AnyElement {
+    use mandara_config::surfaces::{BarIconFill, BarItemShape};
+    let count = list.len();
+    let square = b.square();
+    let empty = palette.surface_container_high.mix(palette.on_surface, EMPTY_MIX);
+    // Tags with windows wear the bar's icon colour, like its other round
+    // buttons; with no icon colour of its own, a tone of the accent.
+    let busy = match b.fill {
+        BarIconFill::Match => palette.primary_container.mix(palette.surface_container_high, BUSY_MIX),
+        fill => crate::bar::items::icon_color(fill, palette.primary_container, palette),
+    };
+    let icon_px = (b.thick * SHAPED_ICON_SHARE).max(crate::style::bar_icon(ICON));
+    let gap = if b.look.item == BarItemShape::Connected && !square { CONNECTED_GAP_PX } else { SHAPED_GAP_PX };
+    let children = list.iter().enumerate().map(|(i, p)| {
+        let placed = b.place(p.width(), i, count);
+        let (fill, fg) = if p.active {
+            (palette.primary, palette.on_primary)
+        } else if p.urgent {
+            (palette.urgent_coral, palette.on_primary)
+        } else if p.apps.is_empty() {
+            (empty, palette.on_surface_variant)
+        } else {
+            (busy, palette.on_surface)
+        };
+        let button = div()
+            .id(("tag", i))
+            .relative()
+            .flex_none()
+            .w(placed.bounds.size.width)
+            .h(placed.bounds.size.height)
+            .flex()
+            .items_center()
+            .justify_center()
+            .gap(px(ICON_GAP))
+            .cursor_pointer()
+            .text_size(px(text::LABEL))
+            .font_weight(if p.active || !p.apps.is_empty() { gpui::FontWeight::SEMIBOLD } else { gpui::FontWeight::NORMAL })
+            .text_color(fg.hsla())
+            .hover(|s| s.opacity(SHAPED_HOVER_OPACITY))
+            .child(crate::shell::item_tile(&placed, fill, palette.surface_base, None));
+        let button = match face(p, square) {
+            Face::Icon(app) => button.child(app_icon(app, icon_px, fg, monochrome, palette)),
+            Face::Label if square => button.child(p.label.clone()),
+            Face::Label => {
+                let mut button = button.child(div().px(px(if p.apps.is_empty() { 0.0 } else { NUMBER_PAD_PX })).child(p.label.clone()));
+                for app in &p.apps {
+                    button = button.child(app_icon(app, crate::style::bar_icon(ICON), fg, monochrome, palette));
+                }
+                if p.extra > 0 {
+                    button = button.child(overflow(p.extra, fg));
+                }
+                button
+            }
+        };
+        tag_actions(button, monitor, p.id)
+    });
+    gpui::prelude::FluentBuilder::when(div().flex().items_center(), b.look.vertical, |el| el.flex_col()).gap(px(gap)).font_features(tabular_nums()).children(children).into_any_element()
+}
+
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Workspaces"), mandara_i18n::tk("Tags / workspaces with their apps"),Some(Zone::Left)), |window, cx, panel_cx| {
         let liquid = Rc::new(RefCell::new(Liquid::new()));
@@ -748,6 +864,11 @@ pub fn register(r: &mut PluginRegistry) {
                 let vertical = crate::bar::vertical(cx_ref);
                 let along = |p: &Pill| if vertical { PILL_H } else { p.width() };
 
+                // A bar that shapes its items gives every tag a button in
+                // its own shapes; otherwise the shipped pills and liquid.
+                let strip = if let Some(buttons) = crate::bar::items::tag_buttons(&cfg, vertical, ID) {
+                    shaped_strip(&list, buttons, &monitor, monochrome, palette)
+                } else {
                 // Pixel layout of every pill (along the strip).
                 let mut xs: SmallVec<[(f32, f32); APPS_INLINE * 2]> = SmallVec::with_capacity(list.len());
                 let mut x = 0.0;
@@ -779,8 +900,6 @@ pub fn register(r: &mut PluginRegistry) {
 
                 let hover = palette.on_surface.with_alpha(alpha(WASH_TRACK, palette)).hsla();
                 let children = list.iter().enumerate().map(|(i, p)| {
-                    let id = p.id;
-                    let (m1, m2) = (monitor.clone(), monitor.clone());
                     let (px0, pw) = xs[i];
                     let centre = px0 + pw / 2.0;
                     let under = blobs.covers(centre);
@@ -813,23 +932,14 @@ pub fn register(r: &mut PluginRegistry) {
                         pill = pill.child(app_icon(app, crate::style::bar_icon(ICON), fg, monochrome, palette));
                     }
                     if p.extra > 0 && !vertical {
-                        pill = pill.child(div().text_size(px(OVERFLOW_TEXT_PX)).text_color(fg.with_alpha(OVERFLOW_ALPHA).hsla()).child(format!("+{}", p.extra)));
+                        pill = pill.child(overflow(p.extra, fg));
                     }
-                    pill.on_click(move |_, _, cx| {
-                        let _ = dispatch(cx, |b| b.select_primary(&m1, id));
-                    })
-                    .on_mouse_down(MouseButton::Right, move |_, _, cx| {
-                        cx.stop_propagation();
-                        let _ = dispatch(cx, |b| b.toggle_secondary(&m2, id));
-                    })
-                    .on_mouse_down(MouseButton::Middle, move |_, _, cx| {
-                        cx.stop_propagation();
-                        let _ = dispatch(cx, |b| b.toggle_client_tag(None, id));
-                    })
+                    tag_actions(pill, &monitor, p.id)
                 });
-                let strip = gpui::prelude::FluentBuilder::when(div().relative().flex(), vertical, |el| el.flex_col()).gap(px(GAP)).font_features(tabular_nums()).child(indicator).children(children);
+                gpui::prelude::FluentBuilder::when(div().relative().flex(), vertical, |el| el.flex_col()).gap(px(GAP)).font_features(tabular_nums()).child(indicator).children(children).into_any_element()
+                };
                 if vertical {
-                    return strip.into_any_element();
+                    return strip;
                 }
                 // MangoWM: the active tag's layout; Umbriel: the active
                 // workspace's own layout (click cycles either), and a badge
@@ -838,7 +948,7 @@ pub fn register(r: &mut PluginRegistry) {
                     NavigationModel::BitmaskTags { active_layout, .. } => active_layout,
                     NavigationModel::Workspaces { workspaces } => match workspaces.iter().find(|w| w.active).map(|w| &w.layout).filter(|l| !l.is_empty()) {
                         Some(layout) => layout,
-                        None => return strip.into_any_element(),
+                        None => return strip,
                     },
                 };
                 let keymode = h.keymode.as_str();
@@ -985,6 +1095,64 @@ mod tests {
         let ws = |id: u32, active: bool| mandara_compositor::WorkspaceStatus { id, name: String::new(), active, occupied: false, urgent: false, layout: String::new() };
         let spaces = NavigationModel::Workspaces { workspaces: vec![ws(4, false), ws(7, true)] };
         assert_eq!((neighbour(&spaces, false), neighbour(&spaces, true)), (Some(4), None));
+    }
+
+    /// `cfg` with `style` and its preset's items: the bar's zones and,
+    /// for a style with a rail, the left side bar's groups.
+    fn styled(style: mandara_config::bar_styles::BarStyle) -> mandara_config::ShellConfig {
+        let mut cfg = mandara_config::ShellConfig::default();
+        style.apply(&mut cfg);
+        let ids = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let [l, c, r] = style.zones();
+        (cfg.bar.left, cfg.bar.center, cfg.bar.right) = (ids(l), ids(c), ids(r));
+        if let Some([t, m, b]) = style.rail() {
+            (cfg.side_bars.left.top, cfg.side_bars.left.middle, cfg.side_bars.left.bottom) = (ids(t), ids(m), ids(b));
+        }
+        cfg
+    }
+
+    #[test]
+    fn every_bar_style_shows_app_icons_in_its_own_tag_buttons() {
+        use mandara_config::bar_styles::BarStyle;
+        let ws = |id: u32| mandara_compositor::WorkspaceStatus { id, name: id.to_string(), active: id == 1, occupied: id == 2, urgent: false, layout: String::new() };
+        let models = [
+            NavigationModel::BitmaskTags { tags: vec![tag(1, true), tag(2, false), tag(3, false)], active_layout: "T".into(), keymode: String::new() },
+            NavigationModel::Workspaces { workspaces: vec![ws(1), ws(2), ws(3)] },
+        ];
+        let clients = vec![client("zed", 2)];
+        for style in BarStyle::ALL {
+            let mut cfg = styled(style);
+            // Where the preset puts the tags: its rail, or the bar itself.
+            let on_rail = cfg.side_bar_on(false) && cfg.side_bars.left.zones().iter().any(|z| z.iter().any(|id| id == ID));
+            assert!(on_rail || cfg.bar.left.iter().chain(&cfg.bar.center).any(|id| id == ID), "{style:?} places the tags");
+            let vertical = on_rail || cfg.bar.position.is_vertical();
+            let buttons = crate::bar::items::tag_buttons(&cfg, vertical, ID).unwrap_or_else(|| panic!("{style:?}: tags take the bar's shapes"));
+            assert_eq!(buttons.look.vertical, vertical);
+            assert!((crate::bar::items::TAG_MIN_PX..=crate::bar::items::TAG_MAX_PX).contains(&buttons.thick), "{style:?}");
+            for model in &models {
+                // App icons on (the default): the tag with an app shows it.
+                let list = pills(model, &clients, "M", Look::of(&cfg));
+                let busy = list.iter().find(|p| p.id == 2).unwrap();
+                match face(busy, buttons.square()) {
+                    Face::Icon(app) => assert_eq!(app, "zed", "{style:?}"),
+                    Face::Label => assert!(!buttons.square() && busy.apps.as_slice() == ["zed"], "{style:?}: a wide button shows the icons beside the number"),
+                }
+                assert_eq!(face(list.iter().find(|p| p.id == 3).unwrap(), buttons.square()), Face::Label, "an empty tag shows its number");
+                // Off: numbers only, in every style.
+                cfg.plugins.settings.entry(ID.into()).or_default().insert("app_icons".into(), false.into());
+                let list = pills(model, &clients, "M", Look::of(&cfg));
+                assert!(list.iter().all(|p| p.apps.is_empty() && face(p, buttons.square()) == Face::Label), "{style:?}");
+                cfg.plugins.settings.remove(ID);
+            }
+            // Every button sits inside the bar's thickness, in its shapes.
+            for i in 0..3 {
+                let placed = buttons.place(NUMBER_W, i, 3);
+                let across = if vertical { placed.bounds.size.width } else { placed.bounds.size.height };
+                assert!(f32::from(across) <= buttons.thick + 1e-3, "{style:?}");
+            }
+        }
+        // The shipped bar keeps its liquid pills (and their icons).
+        assert!(crate::bar::items::tag_buttons(&mandara_config::ShellConfig::default(), false, ID).is_none());
     }
 
     #[test]

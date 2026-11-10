@@ -1270,7 +1270,7 @@ fn capsule_colors(bar: &mandara_config::BarConfig, palette: &MandaraPalette) -> 
 /// One item's tile: a rounded rectangle, a squircle, or a Material 3
 /// Expressive shape painted from SDF circles ([`crate::components::shapes`]),
 /// in `color` over the bar's own `under` colour, with an optional outline.
-fn item_tile(placed: &crate::bar::items::Placed, color: Color, under: Color, edge: Option<Color>) -> AnyElement {
+pub(crate) fn item_tile(placed: &crate::bar::items::Placed, color: Color, under: Color, edge: Option<Color>) -> AnyElement {
     use crate::bar::items::Tile;
     use crate::components::cut::{Corner, Ink};
     use crate::components::surfaces::Surface as _;
