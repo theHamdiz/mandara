@@ -669,7 +669,7 @@ Articles per feed
 Articles you already have show at once; new ones follow.
 As
 As a solid rock is not shaken by the wind, wise people falter not amidst blame and praise.
-As tall as its buttons, or as tall as the panel beside it with the buttons kept together at the top
+As tall as its buttons, or as tall as the panel beside it with the buttons spread evenly over it
 Ask a window to close
 Ask for KeePassXC at login
 Ask for a new one at next login

@@ -109,7 +109,7 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Bars, tk("Main menu"), "/panels/menu_translucent", tk("Glass menu"), tk("The main menu is see-through glass with solid cards on it"), Toggle),
         s(Bars, tk("Main menu"), "/panels/menu_opacity", tk("Glass opacity"), tk("How see-through the main menu's glass is"), Control::Slider { min: 0.2, max: 1.0, step: 0.01, unit: "" }),
         s(Bars, tk("Main menu"), "/panels/menu_rail", tk("Rail"), tk("Every entry's name beside its icon, or a narrow icon-only column"), Choice(MENU_RAIL)),
-        s(Bars, tk("Main menu"), "/panels/menu_rail_height", tk("Rail height"), tk("As tall as its buttons, or as tall as the panel beside it with the buttons kept together at the top"), Choice(MENU_RAIL_HEIGHT)),
+        s(Bars, tk("Main menu"), "/panels/menu_rail_height", tk("Rail height"), tk("As tall as its buttons, or as tall as the panel beside it with the buttons spread evenly over it"), Choice(MENU_RAIL_HEIGHT)),
         s(Bars, tk("Main menu"), "/panels/menu_patterns", tk("Tile patterns"), tk("Home cards and action tiles in the main menu wear faint geometric patterns"), Toggle),
         s(Bars, tk("Main menu"), "/panels/menu_calligraphy", tk("Kufic calligraphy"), tk("The app and tool tiles wear a Kufic word instead of their geometric pattern"), Toggle),
         s(Bars, tk("Main menu"), "/panels/menu_tile_surface", tk("Tile surface"), tk("Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass"), Choice(MENU_TILE_SURFACE)),

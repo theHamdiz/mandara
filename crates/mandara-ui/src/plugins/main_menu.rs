@@ -78,8 +78,9 @@ const RAIL_COMPACT_RULE_W: f32 = 20.0;
 const RAIL_CAPTION_PAD: f32 = 2.0;
 /// About one line of that caption (only the stretched rail's sums use it).
 const RAIL_CAPTION_H: f32 = 18.0;
-/// The stretched rail (`panels.menu_rail_height`) fills the surface under
-/// its buttons with a mashrabiya lattice once that is at least this tall
+/// The stretched rail (`panels.menu_rail_height`) wears a mashrabiya
+/// lattice behind its lowest buttons once its spare height is at least this
+/// tall
 /// (less would be a sliver of beads, not a screen)...
 const RAIL_LATTICE_MIN: f32 = 24.0;
 /// ...rising at most this far from the rail's foot (the rest stays the
@@ -816,16 +817,24 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, themes: &Rc<RefCell<t
     let patterns = panels.menu_patterns;
     let plan = rail_plan(panels.menu_rail_height, compact, patterns, f32::from(fit.get().height) - PAD * 2.0);
     // Hugging: as tall as its buttons (it shrinks with fewer entries),
-    // centred in the menu's height. Stretched: as tall as the panel, the
-    // buttons one tight group at its top, the rest the rail's own surface.
+    // centred in the menu's height. Stretched: as tall as the panel, every
+    // button in a slot of one equal height ([`RailPlan::pitch`]), so they
+    // spread evenly from top to foot with the divider halfway between the
+    // groups.
+    let slot = |button: gpui::Stateful<gpui::Div>| -> gpui::AnyElement {
+        if plan.stretch {
+            div().flex_1().min_h(px(RAIL_BUTTON)).flex().flex_col().justify_center().when(compact, |el| el.items_center()).child(button).into_any_element()
+        } else {
+            button.into_any_element()
+        }
+    };
     let mut rail = div()
         .w(px(if compact { RAIL_COMPACT_W } else { RAIL_W }))
         .when(plan.stretch, |el| el.flex_1())
         .when(!plan.stretch, |el| el.flex_none())
         .flex()
         .flex_col()
-        .when(plan.stretch, |el| el.justify_start())
-        .when(!plan.stretch, |el| el.justify_center())
+        .justify_center()
         .gap(px(RAIL_GAP))
         .p(px(tokens::XS))
         .rounded(px(crate::style::card_radius()))
@@ -841,10 +850,10 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, themes: &Rc<RefCell<t
     // The menu's own pages.
     for (i, pg) in Page::ALL.into_iter().enumerate() {
         let page = page.clone();
-        rail = rail.child(rail_button(("menu-page", i), pg.icon(), pg.title(), pg == now).on_click(move |_, window, _| {
+        rail = rail.child(slot(rail_button(("menu-page", i), pg.icon(), pg.title(), pg == now).on_click(move |_, window, _| {
             page.set(pg);
             window.refresh();
-        }));
+        })));
     }
     // Shortcuts: each opens its own panel in the menu's place. A rule (and
     // in the full rail a caption) sets them apart from the pages above.
@@ -862,7 +871,7 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, themes: &Rc<RefCell<t
         )
     });
     for (i, (glyph, id, name)) in SHORTCUTS.into_iter().enumerate() {
-        rail = rail.child(rail_button(("menu-shortcut", i), glyph, name, false).on_click(move |_, _, cx| shell(cx).update(cx, |s, cx| s.set_panel(Some(id.into()), cx))));
+        rail = rail.child(slot(rail_button(("menu-shortcut", i), glyph, name, false).on_click(move |_, _, cx| shell(cx).update(cx, |s, cx| s.set_panel(Some(id.into()), cx)))));
     }
     let header = div()
         .h(px(HEADER_H))
@@ -940,8 +949,13 @@ struct RailPlan {
     height: f32,
     /// Where its buttons start, from the rail's top.
     group_top: f32,
-    /// The rail's own surface left under the buttons.
+    /// The height beyond its buttons, rule and gaps: centred around the
+    /// hugging rail, shared out evenly between the stretched rail's
+    /// buttons.
     spare: f32,
+    /// The slot each button sits centred in: its own height while hugging,
+    /// one equal share of the stretched rail's height otherwise.
+    pitch: f32,
     /// How far up from the rail's foot the stretched rail's lattice rises
     /// into that surface (0: none).
     lattice: f32,
@@ -950,34 +964,40 @@ struct RailPlan {
 /// The rail's buttons, rules and caption, top to bottom, with their gaps
 /// and padding: what a hugging rail is tall.
 fn rail_content_height(compact: bool) -> f32 {
-    let buttons = (Page::ALL.len() + SHORTCUTS.len()) as f32;
+    let buttons = RAIL_BUTTONS as f32;
     let rule = 1.0 + RAIL_GAP * 2.0;
     let caption = if compact { 0.0 } else { RAIL_CAPTION_H };
     let children = buttons + 1.0 + if compact { 0.0 } else { 1.0 };
     buttons * RAIL_BUTTON + rule + caption + RAIL_GAP * (children - 1.0) + tokens::XS * 2.0
 }
 
+/// How many buttons the rail holds (the pages and the panel shortcuts).
+const RAIL_BUTTONS: usize = Page::ALL.len() + SHORTCUTS.len();
+
 /// The rail's layout beside a panel whose content is `available` px tall.
-/// The buttons keep their one gap ([`RAIL_GAP`]) in every mode: a
-/// stretched rail never spreads them, it only grows its own surface under
-/// them. A panel no taller than the buttons leaves nothing to stretch.
+/// Hugging, the buttons keep their one gap ([`RAIL_GAP`]). Stretched, the
+/// height left over is shared out evenly: every button sits centred in a
+/// slot of one equal height, so the buttons spread from the rail's top to
+/// its foot (the divider and caption keep their size, halfway between the
+/// groups). A panel no taller than the buttons leaves nothing to stretch.
 fn rail_plan(mode: MenuRailHeight, compact: bool, patterns: bool, available: f32) -> RailPlan {
     let content = rail_content_height(compact);
     let room = available.max(content);
     match mode {
-        MenuRailHeight::Hug => RailPlan { stretch: false, height: content, group_top: (room - content) / 2.0, spare: 0.0, lattice: 0.0 },
+        MenuRailHeight::Hug => RailPlan { stretch: false, height: content, group_top: (room - content) / 2.0, spare: 0.0, pitch: RAIL_BUTTON, lattice: 0.0 },
         MenuRailHeight::Stretch => {
             let spare = room - content;
+            let pitch = RAIL_BUTTON + spare / RAIL_BUTTONS as f32;
             let lattice = if patterns && spare >= RAIL_LATTICE_MIN { spare.min(RAIL_LATTICE_MAX) } else { 0.0 };
-            RailPlan { stretch: true, height: room, group_top: 0.0, spare, lattice }
+            RailPlan { stretch: true, height: room, group_top: 0.0, spare, pitch, lattice }
         }
     }
 }
 
-/// The stretched rail's surface under its buttons, `h` px up from the foot
-/// of a rail `w` wide: the tiles' accent wash deepening toward the foot,
-/// and the mashrabiya lattice in the tiles' ink, dissolving into the
-/// rail's plain surface on its way up to the buttons. Centred, so it reads
+/// The stretched rail's surface behind its lowest buttons, `h` px up from
+/// the foot of a rail `w` wide: the tiles' accent wash deepening toward the
+/// foot, and the mashrabiya lattice in the tiles' ink, dissolving into the
+/// rail's plain surface on its way up. Centred, so it reads
 /// the same in either direction. At most a few copies of one cached SVG.
 fn rail_lattice(ink: &TileInk, palette: &MandaraPalette, w: f32, h: f32) -> gpui::AnyElement {
     let (cols, rows) = ((w / RAIL_LATTICE_PX).ceil() as usize, (h / RAIL_LATTICE_PX).ceil() as usize);
@@ -986,7 +1006,7 @@ fn rail_lattice(ink: &TileInk, palette: &MandaraPalette, w: f32, h: f32) -> gpui
     // contrast, and nothing but the lowest buttons ever sits on it.
     let colour = ink.shade.with_alpha(ink.shade_alpha.1).hsla();
     let rest = palette.surface_container;
-    // Clipped: the top row of copies reaches past `h`, under the buttons.
+    // Clipped: the top row of copies reaches past `h`.
     let mut el = crate::style::ClipRounded::clip_rounded(div().absolute().left_0().right_0().bottom_0().h(px(h))).bg(mandara_core::oklab_gradient(DOWN_DEG, rest, ink.wash_rest));
     for row in 0..rows {
         for col in 0..cols {
@@ -1058,12 +1078,13 @@ mod tests {
     }
 
     /// The rail hugs its buttons unless stretched. Stretched beside a tall
-    /// panel it is the panel's height with its buttons one tight group at
-    /// the top (never spread out) and the rest its own surface, wearing the
-    /// ornament once that is tall enough; beside a short panel there is
-    /// nothing to stretch and it is drawn just like the hugging rail.
+    /// panel it is the panel's height with its buttons spread evenly over
+    /// it (every slot one equal height, filling the rail exactly, never
+    /// bunched at the top), wearing the ornament behind the lowest ones
+    /// once there is room; beside a short panel there is nothing to stretch
+    /// and it is drawn just like the hugging rail.
     #[test]
-    fn the_rail_stretches_without_spreading_its_buttons() {
+    fn the_stretched_rail_spreads_its_buttons_evenly() {
         assert_eq!(mandara_config::surfaces::PanelsConfig::default().menu_rail_height, MenuRailHeight::Hug);
         for compact in [true, false] {
             let content = rail_content_height(compact);
@@ -1073,15 +1094,20 @@ mod tests {
                 // shipped one.
                 for tall in [content + 400.0, content + 60.0] {
                     let hug = rail_plan(MenuRailHeight::Hug, compact, patterns, tall);
-                    assert_eq!((hug.stretch, hug.height, hug.spare, hug.lattice), (false, content, 0.0, 0.0));
+                    assert_eq!((hug.stretch, hug.height, hug.spare, hug.pitch, hug.lattice), (false, content, 0.0, RAIL_BUTTON, 0.0));
                     assert_eq!(hug.group_top, (tall - content) / 2.0, "centred beside the panel");
                     let stretched = rail_plan(MenuRailHeight::Stretch, compact, patterns, tall);
                     assert!(stretched.stretch);
                     assert_eq!(stretched.height, tall, "as tall as the panel");
-                    assert_eq!(stretched.group_top, 0.0, "the buttons at the top");
-                    assert_eq!(stretched.spare, tall - content, "the buttons keep their own height and gaps");
+                    assert_eq!(stretched.group_top, 0.0, "from the rail's top");
+                    assert_eq!(stretched.spare, tall - content);
+                    assert!(stretched.pitch > RAIL_BUTTON, "the buttons spread out");
+                    // The slots take exactly the spare height: nothing left
+                    // over at the foot, the buttons reach the whole rail.
+                    let slots = stretched.pitch * RAIL_BUTTONS as f32;
+                    assert!((slots - (RAIL_BUTTON * RAIL_BUTTONS as f32 + stretched.spare)).abs() < 0.01, "{slots}");
                     assert_eq!(stretched.lattice > 0.0, patterns, "the lattice follows the tile patterns");
-                    assert!(stretched.lattice <= stretched.spare.min(RAIL_LATTICE_MAX), "under the buttons, never past its cap");
+                    assert!(stretched.lattice <= stretched.spare.min(RAIL_LATTICE_MAX), "never past its cap");
                     // A handful of copies of one cached drawing at most.
                     let width = if compact { RAIL_COMPACT_W } else { RAIL_W };
                     let copies = (width / RAIL_LATTICE_PX).ceil() * (stretched.lattice / RAIL_LATTICE_PX).ceil();
@@ -1094,7 +1120,7 @@ mod tests {
                     assert_eq!(stretched.height, short.max(content), "never shorter than its buttons");
                     assert_eq!(stretched.lattice, 0.0, "{short}: too little surface for the lattice");
                     if short <= content {
-                        assert_eq!((stretched.height, stretched.spare), (hug.height, hug.spare), "{short}: just the hugging rail");
+                        assert_eq!((stretched.height, stretched.spare, stretched.pitch), (hug.height, hug.spare, hug.pitch), "{short}: just the hugging rail");
                         assert_eq!(hug.group_top, 0.0);
                     }
                 }

@@ -107,9 +107,9 @@ power menu are the buttons at the top, so the rail doesn't repeat them;
 **Reload config** is on Apps & tools. **Rail** (Studio → Bars → Drop-down
 panels, under Main menu) shows each entry's name or icons only, and
 **Rail height** keeps the rail as tall as its buttons or stretches it to
-the panel's height: the buttons stay together at the top and the rest of
-the rail is its own surface, with a mashrabiya lattice rising from its
-foot and fading out before the buttons.
+the panel's height with its buttons spread evenly from top to foot (the
+divider stays halfway between the pages and the shortcuts), over a
+mashrabiya lattice rising from its foot and fading out on its way up.
 
 On a split bar (glass pills, island, micro pill, notch, *Segmented*, *Tile
 dock*) the gaps between the pieces are the desktop, so right-clicking them

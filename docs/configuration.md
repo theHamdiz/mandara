@@ -849,10 +849,13 @@ a side bar (no gaps), while clicks pass through empty bar space, and while
 empty bar space opens the desktop's menu itself.
 
 `menu_rail_height = "stretch"` (Bars → Drop-down panels → Main menu →
-*Rail height*) makes the main menu's rail as tall as the panel beside it. Its buttons stay one group at the top with their usual
-spacing, and the rest of the rail is its own surface; with tile patterns
-on (`panels.menu_patterns`) a mashrabiya lattice in the tiles' accent
-rises from its foot over a soft wash and fades out before the buttons.
+*Rail height*) makes the main menu's rail as tall as the panel beside it,
+with its buttons spread evenly over that height: each sits in a slot of
+the same height, so the gaps between them are equal and the divider stays
+halfway between the pages and the shortcuts. With tile patterns on
+(`panels.menu_patterns`) a mashrabiya lattice in the tiles' accent rises
+from its foot behind the lowest buttons over a soft wash and fades out on
+its way up.
 Beside a panel no taller than its buttons it
 looks like the hugging rail.
 
