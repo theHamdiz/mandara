@@ -143,7 +143,7 @@ cargo build --locked --release -p mandara-app
 The binary links only FreeBSD's libc, libthr, libm and libgcc_s; Wayland,
 xkbcommon and Vulkan are loaded at run time, and nothing links X11
 (`ldd target/release/mandara | grep -i x11` prints nothing). A release
-build (fat LTO, one codegen unit) needs about 10 GiB of memory for its
+build (fat LTO, one codegen unit) needs 13 GiB or more of memory for its
 final link.
 
 ## Local checks and cold builds
