@@ -30,6 +30,7 @@ pub mod fetch;
 pub mod install;
 pub mod langpacks;
 pub mod plugins;
+mod processes;
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
