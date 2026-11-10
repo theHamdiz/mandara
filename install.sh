@@ -602,6 +602,12 @@ image_based() {
         case "$fields " in
             *microos*|*aeon*|*kalpa*|*sl-micro*|*sle-micro*|*" steamos "*|*" Vanilla OS "*) return 0 ;;
         esac
+        # Fedora Atomic's variants, also where /run/ostree-booted can't be
+        # (a container of the image).
+        variant=$(awk -F= '$1 == "VARIANT_ID" { gsub(/["\047]/, "", $2); print $2 }' "$release")
+        case "$variant" in
+            silverblue|kinoite|*-atomic|sericea|onyx|bazzite*|bluefin*|aurora*) [ -e "$1/usr/bin/rpm-ostree" ] && return 0 ;;
+        esac
         return 1
     done
     return 1

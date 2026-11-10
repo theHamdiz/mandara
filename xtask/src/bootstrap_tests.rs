@@ -374,6 +374,17 @@ fn image_based_systems_are_recognised() {
         let source = fixtures.join(name);
         assert!(check(&|root: &Path| { std::fs::copy(&source, root.join("etc/os-release")).unwrap(); }), "{name}");
     }
+    // A container of a Fedora Atomic image: its variant, with rpm-ostree.
+    let silverblue = fixtures.join("silverblue.os-release");
+    let atomic = |with_tool: bool| check(&|root: &Path| {
+        std::fs::copy(&silverblue, root.join("etc/os-release")).unwrap();
+        if with_tool {
+            std::fs::create_dir_all(root.join("usr/bin")).unwrap();
+            std::fs::write(root.join("usr/bin/rpm-ostree"), "").unwrap();
+        }
+    });
+    assert!(atomic(true), "Silverblue's variant with rpm-ostree");
+    assert!(!atomic(false), "the variant alone");
     assert!(!check(&|_: &Path| {}), "no os-release");
     for plain in ["ID=arch\n", "NAME=\"openSUSE Tumbleweed\"\nID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\n", "ID=fedora\nVARIANT_ID=workstation\n", "NAME=\"Ubuntu\"\nID=ubuntu\nID_LIKE=debian\n"] {
         assert!(!check(&|root: &Path| std::fs::write(root.join("etc/os-release"), plain).unwrap()), "{plain}");
