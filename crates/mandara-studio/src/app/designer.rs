@@ -190,11 +190,10 @@ const ZONE_ITEM_H_PX: f32 = DIM_34_PX;
 const ZONE_TILE_PX: f32 = DIM_20_PX;
 /// The bar's three zones sit side by side while each gets this much.
 const ZONE_MIN_W_PX: f32 = DIM_200_PX;
-/// Widths of a zone's pill in a preset's tiny bar drawing: so much per
-/// item, within these bounds (a busy zone draws longer).
-const MOCK_PILL_PER_ITEM_PX: f32 = 3.0;
-const MOCK_PILL_MIN_PX: f32 = 6.0;
-const MOCK_PILL_MAX_PX: f32 = 26.0;
+/// A preset's tiny bar drawing marks each item of a zone with a dot this
+/// big, this far apart (a busy zone draws longer).
+const MOCK_ITEM_PX: f32 = 4.0;
+const MOCK_ITEM_GAP_PX: f32 = 2.0;
 
 struct Preset {
     name: &'static str,
@@ -574,7 +573,17 @@ impl StudioView {
         for (i, preset) in PRESETS.iter().enumerate() {
             let active = selected == Some(i);
             // A tiny drawing of the preset's bar (physical sides: never mirrored).
-            let pill = |items: &[&str]| div().w(px((items.len() as f32 * MOCK_PILL_PER_ITEM_PX).clamp(MOCK_PILL_MIN_PX, MOCK_PILL_MAX_PX))).h(px(DIM_8_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla());
+            // A zone: a dot per item, on a glass pill of its own when the
+            // groups float.
+            let pill = |items: &[&str], floating: bool| {
+                div()
+                    .flex_none()
+                    .ltr_row()
+                    .items_center()
+                    .gap(px(MOCK_ITEM_GAP_PX))
+                    .when(floating, |el| el.h(px(DIM_10_PX)).px(px(MOCK_ITEM_GAP_PX * 1.5)).rounded_full().bg(p.surface_container_high.hsla()))
+                    .children(items.iter().map(|_| div().flex_none().size(px(MOCK_ITEM_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla())))
+            };
             let mock = div()
                 .h(px(DIM_44_PX))
                 .rounded(px(RADIUS_10_PX))
@@ -589,9 +598,9 @@ impl StudioView {
                     _ if preset.position.is_vertical() => div().w(px(DIM_10_PX)).h_full().rounded(px(RADIUS_4_PX)).bg(p.surface_container_high.hsla()).py(px(SPACE_3_PX)).row().flex_col().items_center().justify_between().child(div().size(px(DIM_6_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla())).child(div().size(px(DIM_6_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla())),
                     BarLayout::Hairline => div().h(px(DIM_6_PX)).rounded(px(RADIUS_1_5_PX)).bg(p.surface_container_high.hsla()).border_b_1().border_color(p.primary.hsla()),
                     BarLayout::Micro | BarLayout::ContiguousIsland => div().row().justify_center().child(previews::centered(preset, p)),
-                    BarLayout::MinimalEdge => div().h(px(DIM_12_PX)).rounded(px(RADIUS_4_PX)).bg(p.surface_container_high.hsla()).px(px(SPACE_4_PX)).ltr_row().items_center().justify_between().child(pill(preset.left)).child(pill(preset.center)).child(pill(preset.right)),
-                    BarLayout::Notch => div().h(px(DIM_12_PX)).mt(px(-SPACE_6_PX)).mx(px(SPACE_10_PX)).rounded_b(px(RADIUS_6_PX)).bg(p.surface_container_high.hsla()).px(px(SPACE_4_PX)).ltr_row().items_center().justify_between().child(pill(preset.left)).child(pill(preset.center)).child(pill(preset.right)),
-                    BarLayout::FloatingPills => div().h(px(DIM_12_PX)).ltr_row().items_center().justify_between().child(pill(preset.left)).child(pill(preset.center)).child(pill(preset.right)),
+                    BarLayout::MinimalEdge => div().h(px(DIM_12_PX)).rounded(px(RADIUS_4_PX)).bg(p.surface_container_high.hsla()).px(px(SPACE_4_PX)).ltr_row().items_center().justify_between().child(pill(preset.left, false)).child(pill(preset.center, false)).child(pill(preset.right, false)),
+                    BarLayout::Notch => div().h(px(DIM_12_PX)).mt(px(-SPACE_6_PX)).mx(px(SPACE_10_PX)).rounded_b(px(RADIUS_6_PX)).bg(p.surface_container_high.hsla()).px(px(SPACE_4_PX)).ltr_row().items_center().justify_between().child(pill(preset.left, false)).child(pill(preset.center, false)).child(pill(preset.right, false)),
+                    BarLayout::FloatingPills => div().h(px(DIM_12_PX)).ltr_row().items_center().justify_between().child(pill(preset.left, true)).child(pill(preset.center, true)).child(pill(preset.right, true)),
                 } });
             presets.push(
                 div()
@@ -898,9 +907,9 @@ mod tests {
         for p in PRESETS {
             let key = match p.style {
                 Some(style) => (BarLayout::MinimalEdge, BarPosition::Top, Some(style), [0; 3]),
-                // Plain presets with the same layout and edge draw their
-                // zones as long as they are busy (Classic and Minimal).
-                None => (p.layout, p.position, None, [p.left.len(), p.center.len(), p.right.len()].map(|n| (n as f32 * MOCK_PILL_PER_ITEM_PX).clamp(MOCK_PILL_MIN_PX, MOCK_PILL_MAX_PX) as usize)),
+                // Plain presets with the same layout and edge draw a dot
+                // per item (Classic and Minimal).
+                None => (p.layout, p.position, None, [p.left.len(), p.center.len(), p.right.len()]),
             };
             assert!(!drawings.contains(&key), "{}: its card looks like another", p.name);
             drawings.push(key);

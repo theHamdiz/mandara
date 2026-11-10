@@ -249,14 +249,14 @@ const MOCK_SEGMENT_GAP_PX: f32 = 1.0;
 const MOCK_SEGMENT_INNER_PX: f32 = 1.5;
 /// System monitor: stat blocks, a narrow and a wide one, and the bar
 /// graphs' bars (heights of three little graphs).
-const MOCK_STAT_PX: f32 = 7.0;
+const MOCK_STAT_PX: f32 = 8.0;
 const MOCK_STAT_WIDE_PX: f32 = 11.0;
 const MOCK_STAT_PAD_PX: f32 = 1.0;
 const MOCK_STAT_GAP_PX: f32 = 1.0;
 const MOCK_STAT_BAR_PX: f32 = 1.5;
-const MOCK_GRAPH_A: [f32; 4] = [2.0, 4.0, 3.0, 5.0];
-const MOCK_GRAPH_B: [f32; 4] = [4.0, 2.0, 5.0, 3.0];
-const MOCK_GRAPH_C: [f32; 4] = [1.5, 3.0, 2.0, 4.0];
+const MOCK_GRAPH_A: [f32; 4] = [2.0, 5.0, 3.0, 6.0];
+const MOCK_GRAPH_B: [f32; 4] = [5.0, 2.5, 6.0, 4.0];
+const MOCK_GRAPH_C: [f32; 4] = [2.0, 4.0, 2.5, 5.0];
 /// The tertiary buttons' tone (as the bar's tertiary fill).
 const MOCK_TERTIARY_TONE: f32 = 0.35;
 /// Pharos Beam: the lantern's height (reaching the card's top edge) and
