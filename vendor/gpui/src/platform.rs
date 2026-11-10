@@ -3,7 +3,8 @@ mod keyboard;
 mod keystroke;
 mod platform_info;
 
-#[cfg(all(target_os = "linux", feature = "wayland"))]
+// Mandara patch 10: FreeBSD's Wayland client (gpui_linux) creates layer surfaces too.
+#[cfg(all(any(target_os = "linux", target_os = "freebsd"), feature = "wayland"))]
 #[expect(missing_docs)]
 pub mod layer_shell;
 
@@ -25,8 +26,9 @@ mod visual_test;
 ))]
 pub mod scap_screen_capture;
 
+// Mandara patch 10: `scap_screen_capture` above is built on FreeBSD too.
 #[cfg(all(
-    any(target_os = "windows", target_os = "linux"),
+    any(target_os = "windows", target_os = "linux", target_os = "freebsd"),
     feature = "screen-capture"
 ))]
 pub(crate) type PlatformScreenCaptureFrame = scap::frame::Frame;
@@ -1362,7 +1364,8 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     }
     fn start_window_resize(&self, _edge: ResizeEdge) {}
     fn set_exclusive_zone(&self, _zone: Pixels) {}
-    #[cfg(all(target_os = "linux", feature = "wayland"))]
+    // Mandara patch 10: and on FreeBSD.
+    #[cfg(all(any(target_os = "linux", target_os = "freebsd"), feature = "wayland"))]
     fn set_exclusive_edge(&self, _edge: layer_shell::Anchor) {}
     fn set_input_region(&self, _region: Option<&[Bounds<Pixels>]>) {}
     fn window_decorations(&self) -> Decorations {
@@ -2819,7 +2822,8 @@ pub enum WindowKind {
 
     /// A Wayland LayerShell window, used to draw overlays or backgrounds for applications such as
     /// docks, notifications or wallpapers.
-    #[cfg(all(target_os = "linux", feature = "wayland"))]
+    // Mandara patch 10: and on FreeBSD.
+    #[cfg(all(any(target_os = "linux", target_os = "freebsd"), feature = "wayland"))]
     LayerShell(layer_shell::LayerShellOptions),
 
     /// A window that appears on top of its parent window and blocks interaction with it

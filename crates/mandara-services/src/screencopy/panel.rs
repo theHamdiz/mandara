@@ -64,14 +64,14 @@ pub fn run(request: Request, current: impl Fn() -> bool) -> Result<Vec<u8>> {
     ensure!(wire.len() as u64 <= MAX_REQUEST_BYTES, "capture request too large");
     let mut bytes = Vec::with_capacity(INITIAL_OUTPUT_BYTES);
     ensure!(current(), "capture cancelled");
-    let executable = std::path::Path::new("/proc/self/exe");
+    let executable = mandara_config::paths::running_image()?;
     let mut command = Command::new(executable);
     command.arg("panel-capture-worker").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
     let parent = std::process::id() as libc::pid_t;
     // SAFETY: only async-signal-safe syscalls run between fork and exec. There
     // is no persistent state to flush if the shell exits during a capture.
     unsafe { command.pre_exec(move || {
-        if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL as libc::c_ulong, 0 as libc::c_ulong, 0 as libc::c_ulong, 0 as libc::c_ulong) != 0 { return Err(std::io::Error::last_os_error()); }
+        rustix::process::set_parent_process_death_signal(Some(rustix::process::Signal::KILL))?;
         if libc::getppid() != parent { return Err(std::io::Error::from_raw_os_error(libc::ESRCH)); }
         Ok(())
     }); }

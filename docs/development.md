@@ -97,31 +97,54 @@ pulled the crate in; build that dependency without its X11 feature.
 
 Run it alone with `cargo test -p xtask x11`.
 
-## Other platforms: the FreeBSD type-check
+## FreeBSD: the cross check
 
-CI's `freebsd-check` job type-checks the whole workspace for
-`x86_64-unknown-freebsd`. It only reports: it is allowed to fail and never
-blocks a merge or a release. Its errors show code that assumes Linux at
-compile time, such as Linux-only system calls (`prctl`, `inotify`, CPU
-affinity) and GPUI's layer shell, which the pinned GPUI builds only for
-Linux. It needs only Rust's FreeBSD standard library, no FreeBSD system
-root. To run it locally:
+CI's **FreeBSD build** job runs Clippy on the whole workspace, tests
+included, for `x86_64-unknown-freebsd`. Like the Linux build, any warning
+fails it, and it is a required check. It needs only Rust's FreeBSD standard
+library, no FreeBSD system root. To run it locally:
 
 ```bash
 rustup target add x86_64-unknown-freebsd
-PKG_CONFIG_ALLOW_CROSS=1 cargo check --workspace --keep-going --target x86_64-unknown-freebsd
+PKG_CONFIG_ALLOW_CROSS=1 cargo clippy --workspace --all-targets --target x86_64-unknown-freebsd
 ```
 
 `PKG_CONFIG_ALLOW_CROSS=1` lets the fontconfig and freetype build scripts
 read the host's pkg-config files (install their `-dev` packages), which is
 harmless because a check never links. Without it they stop early and hide
-GPUI's Linux platform and every crate above it. `--keep-going` checks
-every crate whose dependencies build, so one Linux-only crate doesn't
-hide the rest.
+GPUI's Linux platform and every crate above it.
 
-A clean check doesn't mean Mandara runs there: readers of `/proc` and
-`/sys`, logind, NetworkManager, BlueZ and greetd compile everywhere and
-only find out at run time.
+FreeBSD runs GPUI's Linux platform (Wayland only, the same layer surfaces),
+so code that differs between the two kernels is small and behind
+`cfg(target_os = "linux")` / `cfg(target_os = "freebsd")`: the supervisor's
+parent-death signal (`prctl` / `procctl`), the worker pool's CPU affinity
+(`sched_setaffinity` / `cpuset_setaffinity`), the depth helper's idle class
+(`SCHED_IDLE` / `rtprio`), the running binary (`/proc/self/exe` /
+`kern.proc.pathname`, `mandara_config::paths::running_image`) and the
+camera watcher's inotify (a timer elsewhere). Tests that drive a private
+Linux desktop through procfs and `SO_PEERCRED` are Linux-only.
+
+A clean check doesn't mean a feature works there: readers of `/proc` and
+`/sys`, logind, NetworkManager, BlueZ and the package managers compile
+everywhere and find out at run time.
+
+### Building on FreeBSD
+
+Mandara builds natively on FreeBSD 14 (amd64) with the packages below, and
+runs under a Wayland compositor such as Sway. GPUI draws through Vulkan:
+the GPU's Mesa driver, or lavapipe (`mesa-dri`) in a VM without one.
+
+```sh
+pkg install rust pkgconf cmake-core gmake wayland wayland-protocols libxkbcommon \
+  fontconfig freetype2 vulkan-loader mesa-dri mesa-libs
+cargo build --locked --release -p mandara-app
+```
+
+The binary links only FreeBSD's libc, libthr, libm and libgcc_s; Wayland,
+xkbcommon and Vulkan are loaded at run time, and nothing links X11
+(`ldd target/release/mandara | grep -i x11` prints nothing). A release
+build (fat LTO, one codegen unit) needs 13 GiB or more of memory for its
+final link.
 
 ## Local checks and cold builds
 

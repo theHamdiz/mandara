@@ -458,6 +458,18 @@ fn apply_guardrails() {
     if let Err(e) = setpriority_process(None, NICE) {
         tracing::debug!("depth helper: nice: {e}");
     }
+    idle_scheduling();
+    for (resource, limit) in [(Resource::Data, DATA_CAP_BYTES), (Resource::Cpu, CPU_BUDGET_SECS)] {
+        if let Err(e) = setrlimit(resource, Rlimit { current: Some(limit), maximum: Some(limit) }) {
+            tracing::debug!("depth helper: rlimit {resource:?}: {e}");
+        }
+    }
+}
+
+/// Puts this process in the idle scheduling class, so it only runs on CPU
+/// time nothing else wants. Failure leaves the normal policy in place.
+#[cfg(target_os = "linux")]
+fn idle_scheduling() {
     // musl's `sched_param` has more fields than glibc's (the sporadic
     // server's), so it's built zeroed rather than field by field.
     // SAFETY: `sched_param` is a plain C struct of integers; all zeroes is
@@ -469,10 +481,16 @@ fn apply_guardrails() {
     if unsafe { libc::sched_setscheduler(0, libc::SCHED_IDLE, &param) } != 0 {
         tracing::debug!("depth helper: SCHED_IDLE unavailable");
     }
-    for (resource, limit) in [(Resource::Data, DATA_CAP_BYTES), (Resource::Cpu, CPU_BUDGET_SECS)] {
-        if let Err(e) = setrlimit(resource, Rlimit { current: Some(limit), maximum: Some(limit) }) {
-            tracing::debug!("depth helper: rlimit {resource:?}: {e}");
-        }
+}
+
+/// FreeBSD's idle class is `rtprio(2)`'s `RTP_PRIO_IDLE`, at its lowest
+/// level, which an unprivileged process may set on itself (rtprio(2)).
+#[cfg(target_os = "freebsd")]
+fn idle_scheduling() {
+    let mut rtp = libc::rtprio { type_: libc::RTP_PRIO_IDLE, prio: libc::RTP_PRIO_MAX };
+    // SAFETY: plain syscall on this process (pid 0) with a valid struct.
+    if unsafe { libc::rtprio(libc::RTP_SET, 0, &mut rtp) } != 0 {
+        tracing::debug!("depth helper: RTP_PRIO_IDLE unavailable");
     }
 }
 

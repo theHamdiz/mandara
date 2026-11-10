@@ -23,6 +23,10 @@ About → What's new shows it too.
 - **The login screen preview keeps its buttons apart.** In `mandara greeter --demo`, the Midnight card's colour scheme switcher no longer sits on top of *Exit demo*: anything in a top corner moves just below the preview's buttons, in right-to-left languages too. The real login screen keeps the switcher where it was.
 - **The Feeds and Reddit sidebar cards show up.** Both plugins came with a sidebar card, but Studio's *Add a widget* list, the *Add to sidebar* button on their plugin pages and `mandara msg sidebar tab widget add` didn't offer them, so you couldn't put them on a tab. They're there now, next to the Radio, Sudoku and 2048 cards, and a check keeps every future card on that list. The Reddit card also shows a *Find communities* button when you follow no community, instead of nothing at all.
 
+### Under the hood
+
+- **Mandara compiles for FreeBSD.** The whole workspace, its tests included, now builds for FreeBSD 14 (amd64) without a single warning, and the FreeBSD check in CI is a required one: a change that breaks the FreeBSD build can't land. The bar, panels and Studio use the same Wayland layer surfaces there as on Linux.
+
 ## 0.24.0 — 2026-11-09
 
 Update your whole system right from the Updates panel. Pick how every

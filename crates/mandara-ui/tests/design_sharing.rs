@@ -1,5 +1,9 @@
 //! Full reading-card PNG delivery in a marked private desktop with real content.
 
+// The private desktop it drives identifies the shell through procfs and
+// SO_PEERCRED, which are Linux interfaces.
+#![cfg(target_os = "linux")]
+
 use std::io::{Read as _, Write as _};
 use std::path::Path;
 use std::process::{Child, Stdio};

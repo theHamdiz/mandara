@@ -1,5 +1,9 @@
 //! Seven-row theme navigation in a marked, private 4K/1.5 resource desktop.
 
+// The private desktop it drives identifies the shell through procfs and
+// SO_PEERCRED, which are Linux interfaces.
+#![cfg(target_os = "linux")]
+
 use std::collections::BTreeMap;
 use std::io::{BufRead as _, BufReader, Read as _, Write as _};
 use std::os::fd::AsRawFd as _;
