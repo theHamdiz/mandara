@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 
 mod path;
 mod completion;
+mod immutable;
+use immutable::Layer;
 use path::{add_to_path, path_hint};
 #[cfg(test)]
 use path::{PATH_MARK, fish_word, posix_path_line, sh_word};
@@ -22,6 +24,7 @@ use mandara_i18n::{Lang, packs};
 use crate::args::InstallArgs;
 use crate::compositors::{self, Compositor};
 use crate::family::{Family, OsRelease};
+use crate::image::{self, ImageSystem, OstreeStatus};
 use crate::files::{self, Paths};
 use crate::host::{Cmd, Fetch, Host, Io, Level, Row, TempDir};
 use crate::pkg::{PackageManager, Privilege};
@@ -50,6 +53,8 @@ const RC_YES: &str = "YES";
 /// Loads i2c-dev at boot (DDC/CI monitor brightness).
 const I2C_MODULES_LOAD: &str = "/etc/modules-load.d/i2c-dev.conf";
 const I2C_MODULE: &str = "i2c-dev";
+/// Where image-based systems (nss-altfiles) keep their system groups.
+const IMAGE_GROUP: &str = "/usr/lib/group";
 /// The group owning `/dev/i2c-*` when none exists yet.
 const I2C_DEFAULT_GROUP: &str = "i2c";
 /// Where rustup's installer binary is published (`<dist>/<triple>/rustup-init`).
@@ -100,6 +105,9 @@ pub trait LoginProbe {
 pub struct Facts {
     pub os: OsRelease,
     pub family: Family,
+    /// Image-based systems ([`ImageSystem`]): packages go into the next
+    /// image, which arrives with the next boot.
+    pub image: Option<ImageSystem>,
     pub arch: String,
     pub libc: &'static str,
     /// The CPU runs the x86-64-v3 tuned build.
@@ -139,6 +147,8 @@ impl Facts {
         let os_text = ["etc/os-release", "usr/lib/os-release"].iter().find_map(|p| std::fs::read_to_string(root.join(p)).ok()).unwrap_or_default();
         let os = OsRelease::parse(&os_text);
         let family = Family::detect(&os, |p| host.has_program(p));
+        let ostree_booted = root.join(image::OSTREE_BOOTED.trim_start_matches('/')).exists();
+        let image = ImageSystem::detect(&image::Probe { os: &os, ostree_booted, has_program: &|p| host.has_program(p) });
         let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
         let exe = std::env::current_exe().map(|p| PathBuf::from(p.to_string_lossy().trim_end_matches(DELETED_SUFFIX))).unwrap_or_else(|_| PathBuf::from(files::BINARY));
         let exe = std::fs::canonicalize(&exe).unwrap_or(exe);
@@ -147,6 +157,7 @@ impl Facts {
         Facts {
             os,
             family,
+            image,
             arch,
             libc: platform::compiled_libc(),
             x86_64_v3,
@@ -231,6 +242,10 @@ pub struct Installer<'a> {
     synced: bool,
     /// What the interactive setup screen chose (`None` when it didn't run).
     setup: Option<SetupChoices>,
+    /// Image-based systems: the packages collected for the next image.
+    layer: Layer,
+    /// The admin helper and Mandara Login were skipped (said once).
+    root_files_skipped: bool,
 }
 
 /// The answers taken on the interactive setup screen, so the steps below
@@ -259,7 +274,7 @@ impl<'a> Installer<'a> {
         };
         let paths = Paths::new(args.prefix.as_deref(), &facts.home, xdg);
         let privilege = Privilege::detect(facts.is_root, |p| host.has_program(p));
-        Installer { host, probe, facts, args, paths, privilege, tmp: None, synced: false, setup: None }
+        Installer { host, probe, facts, args, paths, privilege, tmp: None, synced: false, setup: None, layer: Layer::default(), root_files_skipped: false }
     }
 
     pub fn paths(&self) -> &Paths {
@@ -434,6 +449,7 @@ impl<'a> Installer<'a> {
         self.greeter(&bin);
         self.lock_hint();
         self.i2c();
+        self.image_packages();
         if running {
             self.restart(&bin);
         }
@@ -446,6 +462,9 @@ impl<'a> Installer<'a> {
     /// Runtime libraries (required), build tools (source builds, required),
     /// then fonts, portals and services one by one (optional).
     fn deps(&mut self, from_source: bool) -> Result<(), String> {
+        if let Some(image) = self.facts.image {
+            return self.image_deps(image, from_source);
+        }
         let family = self.facts.family;
         let Some(set) = packages::for_family(family) else {
             if family == Family::NixOS {
@@ -648,6 +667,10 @@ impl<'a> Installer<'a> {
     /// repositories when the package manager can say so quickly.
     fn compositor_package(&mut self, c: &Compositor) -> Option<&'static str> {
         let package = c.package(self.facts.family)?;
+        // The image's own tool resolves it when the transaction runs.
+        if self.facts.image.is_some() {
+            return Some(package);
+        }
         let pm = self.package_manager()?;
         // A dry run that would sync missing databases first can't ask them.
         let databases_ready = !self.dry() || index::missing(pm, &self.facts.root).is_empty();
@@ -663,6 +686,10 @@ impl<'a> Installer<'a> {
     /// Installs `c` (and its desktop portal, when it has one), then points
     /// `mandara setup` at it.
     fn install_compositor(&mut self, c: &Compositor, package: &str) {
+        if let Some(image) = self.facts.image {
+            self.image_compositor(image, c, package);
+            return;
+        }
         let Some(pm) = self.package_manager() else { return };
         if !self.as_root(Cmd::from_argv(pm.install_argv(&[package]))) {
             self.say(Level::Warn, format!("could not install {package}; install {} yourself, then run `mandara setup --compositor {}`", c.label, c.id));
@@ -1054,6 +1081,7 @@ impl<'a> Installer<'a> {
         self.admin_helper(exe);
         self.greeter(exe);
         self.i2c();
+        self.image_packages();
         Ok(())
     }
 
@@ -1253,6 +1281,10 @@ impl<'a> Installer<'a> {
             self.say(Level::Detail, "login screen: on NixOS, set programs.mandara.greeter.enable = true; and rebuild");
             return;
         }
+        // Mandara Login's copy lives in /usr/local, which SteamOS replaces.
+        if !self.image_keeps_root_files() {
+            return;
+        }
         self.say(Level::Step, "Login screen");
         let exe_s = exe.to_string_lossy().into_owned();
         let use_mandara = |exe: &str| Cmd::new(&[exe, "greeter", "use", "mandara", "--apply"]);
@@ -1285,6 +1317,12 @@ impl<'a> Installer<'a> {
             return;
         }
         let installing = !missing.is_empty();
+        // An image-based system gets greetd and cage with its next image;
+        // the switch needs them, so it waits for the reboot.
+        if installing && !self.args.no_deps && let Some(image) = self.facts.image {
+            self.image_login(image, exe, &missing);
+            return;
+        }
         if installing {
             let pkgs = packages::for_family(self.facts.family).map(|s| s.greeter).unwrap_or_default();
             if self.args.no_deps {
@@ -1389,6 +1427,9 @@ impl<'a> Installer<'a> {
             self.say(Level::Detail, "admin helper: on NixOS, install mandara through your configuration; Studio runs that root-owned copy for administrator actions");
             return;
         }
+        if !self.image_keeps_root_files() {
+            return;
+        }
         let exe_s = exe.to_string_lossy().into_owned();
         // FreeBSD's `install` has no GNU `-D` (create the folders on the
         // way) and its root group is `wheel`: the folder is made first.
@@ -1446,7 +1487,11 @@ impl<'a> Installer<'a> {
             return;
         }
         let devices = std::fs::read_dir(self.facts.sys("/dev")).into_iter().flatten().flatten().any(|e| e.file_name().to_string_lossy().starts_with("i2c-"));
-        let groups = std::fs::read_to_string(self.facts.sys("/etc/group")).unwrap_or_default();
+        let etc_groups = std::fs::read_to_string(self.facts.sys("/etc/group")).unwrap_or_default();
+        // Image-based systems (Fedora Atomic) keep their packages' system
+        // groups in /usr/lib/group, which `usermod` doesn't change.
+        let image_groups = std::fs::read_to_string(self.facts.sys(IMAGE_GROUP)).unwrap_or_default();
+        let groups = format!("{etc_groups}{}{image_groups}", if etc_groups.is_empty() || etc_groups.ends_with('\n') { "" } else { "\n" });
         let passwd = std::fs::read_to_string(self.facts.sys("/etc/passwd")).unwrap_or_default();
         let group = device_group(&self.facts.sys("/dev/i2c-0"), &groups).unwrap_or_else(|| I2C_DEFAULT_GROUP.to_string());
         let user = self.facts.user.clone();
@@ -1481,8 +1526,16 @@ impl<'a> Installer<'a> {
             self.say(Level::Warn, tf("Could not load {module}; check that the installed kernel includes it", &[("module", &I2C_MODULE)]));
             return;
         }
-        if group_gid(&group, &groups).is_none() {
-            self.as_root(Cmd::new(&["groupadd", "-r", group.as_str()]).io(Io::Quiet));
+        if group_gid(&group, &etc_groups).is_none() {
+            match image_groups.lines().find(|l| l.split(':').next() == Some(group.as_str())) {
+                // Copied into /etc/group (same gid) so `usermod` can add you.
+                Some(line) => {
+                    self.as_root(Cmd::new(&["tee", "-a", "/etc/group"]).stdin(format!("{line}\n")).io(Io::Quiet));
+                }
+                None => {
+                    self.as_root(Cmd::new(&["groupadd", "-r", group.as_str()]).io(Io::Quiet));
+                }
+            }
         }
         if !member && self.as_root(Cmd::new(&["usermod", "-aG", group.as_str(), user.as_str()])) && !self.dry() {
             self.say(Level::Ok, format!("added {user} to {group} (log in again for it to apply)"));
