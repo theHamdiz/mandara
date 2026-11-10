@@ -27,6 +27,12 @@ use crate::config::{Element, GreeterConfig};
 
 // ── Light ───────────────────────────────────────────────────────────────
 /// The arcs' and the glows' OKLCH lightness and chroma.
+/// The machined rim's inner light and shade: a hairline lit from above
+/// (offset up) and a soft shade under it.
+const RIM_LIFT: f32 = -1.0;
+const RIM_SHADE_BLUR: f32 = 2.0;
+/// The halo core's faint inner rim.
+const CORE_RIM_BLUR: f32 = 1.5;
 const ARC_LIGHTNESS: f32 = 0.85;
 const ARC_CHROMA: f32 = 0.13;
 const GLOW_LIGHTNESS: f32 = 0.52;
@@ -90,7 +96,7 @@ pub(super) fn field_fill(p: &MandaraPalette, focused: bool) -> Hsla {
 pub(super) fn field_shadows(k: f32) -> Vec<BoxShadow> {
     vec![
         BoxShadow { color: gpui::black().opacity(0.55), offset: point(px(0.0), px(2.0 * k)), blur_radius: px(5.0 * k), spread_radius: px(0.0), inset: true },
-        BoxShadow { color: gpui::white().opacity(0.07), offset: point(px(0.0), px(-1.0)), blur_radius: px(1.0), spread_radius: px(0.0), inset: true },
+        BoxShadow { color: gpui::white().opacity(0.07), offset: point(px(0.0), px(RIM_LIFT)), blur_radius: px(1.0), spread_radius: px(0.0), inset: true },
     ]
 }
 
@@ -220,7 +226,7 @@ impl GreeterView {
                 .border_color(gpui::white().opacity(0.16 + 0.08 * typing))
                 .shadow(vec![
                     BoxShadow { color: inner.hsla(), offset: point(px(0.0), px(0.0)), blur_radius: px(d * 0.08), spread_radius: px(0.0), inset: true },
-                    BoxShadow { color: gpui::white().opacity(0.07), offset: point(px(0.0), px(0.0)), blur_radius: px(1.5), spread_radius: px(0.0), inset: true },
+                    BoxShadow { color: gpui::white().opacity(0.07), offset: point(px(0.0), px(0.0)), blur_radius: px(CORE_RIM_BLUR), spread_radius: px(0.0), inset: true },
                 ]),
         );
         // Iridescent arcs in the theme's three accents.
@@ -320,7 +326,7 @@ impl GreeterView {
             .bg(core_fill.hsla())
             .shadow(vec![
                 BoxShadow { color: gpui::white().opacity(0.11), offset: point(px(0.0), px(1.0)), blur_radius: px(1.0), spread_radius: px(0.0), inset: true },
-                BoxShadow { color: gpui::black().opacity(0.3), offset: point(px(0.0), px(-1.0)), blur_radius: px(2.0), spread_radius: px(0.0), inset: true },
+                BoxShadow { color: gpui::black().opacity(0.3), offset: point(px(0.0), px(RIM_LIFT)), blur_radius: px(RIM_SHADE_BLUR), spread_radius: px(0.0), inset: true },
             ])
             .flex()
             .flex_col()
@@ -357,7 +363,7 @@ impl GreeterView {
             .shadow(vec![
                 glow(start.with_alpha(0.22).hsla(), 26.0 * k, 0.0),
                 BoxShadow { color: gpui::white().opacity(0.5), offset: point(px(0.0), px(1.0)), blur_radius: px(1.0), spread_radius: px(0.0), inset: true },
-                BoxShadow { color: gpui::black().opacity(0.14), offset: point(px(0.0), px(-1.0)), blur_radius: px(2.0), spread_radius: px(0.0), inset: true },
+                BoxShadow { color: gpui::black().opacity(0.14), offset: point(px(0.0), px(RIM_LIFT)), blur_radius: px(RIM_SHADE_BLUR), spread_radius: px(0.0), inset: true },
             ])
             .flex()
             .items_center()

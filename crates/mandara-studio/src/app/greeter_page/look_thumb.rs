@@ -12,6 +12,9 @@ use mandara_theme::{Color, MandaraPalette};
 const REF_W: f32 = 1920.0;
 /// The miniature's corner radius.
 const THUMB_RADIUS: f32 = 10.0;
+/// The double bezel's gap between the outer tray and the inner core, in
+/// the thumbnail.
+const BEZEL_GAP: f32 = 2.0;
 /// A digit's width and a line's height, as shares of the clock's size.
 const DIGIT_W: f32 = 0.62;
 const CLOCK_LINE: f32 = 0.9;
@@ -159,7 +162,7 @@ pub(super) fn thumb(cfg: &GreeterConfig, pal: &MandaraPalette, w: f32, h: f32) -
                 let mut el = at(x, y, cw, chh);
                 el = match style {
                     CardStyle::Hud => bordered(el).border_color(ink.with_alpha(0.25).hsla()).bg(Color::oklcha(0.18, 0.006, 250.0, 0.8).hsla()),
-                    CardStyle::Bezel => bordered(el.p(px(2.0))).border_color(ink.with_alpha(0.14).hsla()).rounded(px(card.radius * m.sc)).bg(ink.with_alpha(0.06).hsla()),
+                    CardStyle::Bezel => bordered(el.p(px(BEZEL_GAP))).border_color(ink.with_alpha(0.14).hsla()).rounded(px(card.radius * m.sc)).bg(ink.with_alpha(0.06).hsla()),
                     _ => bordered(el).rounded(px(card.radius * m.sc)).border_color(pal.outline.with_alpha(card.border.min(1.0) * 0.9).hsla()).bg(pal.surface_container.with_alpha(card.opacity).hsla()),
                 };
                 if style == CardStyle::Bezel {
