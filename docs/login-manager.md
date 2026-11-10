@@ -233,8 +233,10 @@ only the plumbing differs:
   wasn't set anywhere. Nothing is started or stopped.
 * **Power buttons:** Sleep, Restart and Shut Down on the login screen ask
   ConsoleKit2. Without it they run `shutdown` and `acpiconf -s 3`
-  directly, which FreeBSD allows only to root and the `operator` group, so
-  add the greeter user to it: `pw groupmod operator -m greeter`.
+  directly, which FreeBSD allows only to root and the `operator` group.
+  `mandara install` adds the login screen's user (greetd's
+  `[default_session] user`, usually `greeter`) to it; by hand that's
+  `pw groupmod operator -m greeter`.
 * **PAM:** OpenPAM looks for greetd's policy in `/etc/pam.d/greetd`, then
   in the `greetd` lines of `/etc/pam.conf`, then in ports'
   `/usr/local/etc/pam.d/greetd`, and uses the first one it finds

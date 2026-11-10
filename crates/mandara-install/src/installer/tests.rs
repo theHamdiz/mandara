@@ -429,6 +429,45 @@ fn cancelling_the_compositor_picker_changes_nothing() {
     assert!(fixture.home_files().is_empty());
 }
 
+#[test]
+fn greetd_user_comes_from_the_default_session() {
+    assert_eq!(greetd_user(""), "greeter");
+    assert_eq!(greetd_user("[terminal]\nvt = 8\n[default_session]\ncommand = \"cage -s -- mandara greeter\"\nuser = \"_greetd\" # the login screen\n"), "_greetd");
+    assert_eq!(greetd_user("[initial_session]\nuser = \"layla\"\n[default_session]\ncommand = \"x\"\n"), "greeter", "only the default session's user");
+}
+
+/// FreeBSD: the login screen's user joins `operator`, so the login screen's
+/// power buttons work without ConsoleKit2; a member already is left alone,
+/// and a user greetd hasn't created yet gets the command to run later.
+#[test]
+fn freebsd_login_screen_user_joins_operator() {
+    let run_with = |group: &str, passwd: &str| {
+        let f = Fixture::new();
+        std::fs::create_dir_all(f.root().join("etc")).unwrap();
+        std::fs::create_dir_all(f.root().join("usr/local/etc/greetd")).unwrap();
+        std::fs::write(f.root().join("etc/group"), group).unwrap();
+        std::fs::write(f.root().join("etc/passwd"), passwd).unwrap();
+        std::fs::write(f.root().join("usr/local/etc/greetd/config.toml"), "[terminal]\nvt = 8\n[default_session]\ncommand = \"cage -s -- mandara greeter\"\nuser = \"greeter\"\n").unwrap();
+        let mut host = FakeHost::with(&["pkg", "sudo", "sway", "cage", "greetd"]);
+        host.stdout.insert("sysrc -n -i dbus_enable".into(), "YES\n".into());
+        host.stdout.insert("sysrc -n -i seatd_enable".into(), "YES\n".into());
+        let mut facts = f.facts(Family::FreeBSD);
+        facts.user = "layla".into();
+        let probe = FakeProbe { active: true, ..Default::default() };
+        run(&mut host, &probe, facts, InstallArgs { yes: true, ..Default::default() }).unwrap();
+        (host.ran(), host.text())
+    };
+    let users = "layla:*:1001:1001:Layla:/home/layla:/bin/sh\ngreeter:*:965:965:greetd:/nonexistent:/usr/sbin/nologin\n";
+    let (ran, text) = run_with("wheel:*:0:root\noperator:*:5:root\nvideo:*:44:layla\n", users);
+    assert!(ran.iter().any(|c| c == "sudo pw groupmod operator -m greeter"), "{ran:#?}");
+    assert!(text.contains("added greeter to operator"), "{text}");
+    let (ran, _) = run_with("wheel:*:0:root\noperator:*:5:root,greeter\nvideo:*:44:layla\n", users);
+    assert!(!ran.iter().any(|c| c.contains("groupmod operator")), "a member already: {ran:#?}");
+    let (ran, text) = run_with("wheel:*:0:root\noperator:*:5:root\nvideo:*:44:layla\n", "layla:*:1001:1001:Layla:/home/layla:/bin/sh\n");
+    assert!(!ran.iter().any(|c| c.contains("groupmod operator")), "{ran:#?}");
+    assert!(text.contains("pw groupmod operator -m greeter"), "the command to run later: {text}");
+}
+
 /// FreeBSD: pkg installs everything, D-Bus and seatd are enabled with
 /// sysrc and started, you join seatd's group, the admin helper's folder is
 /// made first (no GNU `install -D`, root's group is `wheel`), and greetd

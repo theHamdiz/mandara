@@ -170,6 +170,12 @@ const FREEBSD: PackageSet = PackageSet {
 pub const FREEBSD_SERVICES: &[&str] = &["dbus", "seatd"];
 /// The group seatd hands its socket to (`seatd_args="-g video"`).
 pub const FREEBSD_SEAT_GROUP: &str = "video";
+/// FreeBSD lets this group run `shutdown` and suspend through `/dev/acpi`,
+/// so the login screen's power buttons work without ConsoleKit2.
+pub const FREEBSD_POWER_GROUP: &str = "operator";
+/// greetd's config on FreeBSD (its `[default_session] user` is the
+/// login screen's user).
+pub const FREEBSD_GREETD_CONFIG: &str = "/usr/local/etc/greetd/config.toml";
 
 /// The package groups of `family` (`None`: NixOS and unknown systems get
 /// hints instead).
