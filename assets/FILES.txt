@@ -299,3 +299,6 @@ assets/plugins/workspaces/icon.svg
 assets/plugins/world-clock/cover.png
 assets/plugins/world-clock/icon.png
 assets/plugins/world-clock/icon.svg
+assets/video/mandara-promo-poster.webp
+assets/video/mandara-promo.mp4
+assets/video/mandara-promo.webm

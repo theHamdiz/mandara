@@ -171,6 +171,23 @@ SVGs store sRGB values for desktop renderer compatibility. Use the OKLCH anchors
 - Jannah uses the Twilight background and existing `dawn` motif. Its cream pointed doorway frames a gold eight-pointed star and a soft glow, suggesting a gate opening onto light. The cover is an illustration with no panel capture; the glyph note is in `artwork/prompts.json`.
 - Qur'an uses the Twilight background and existing `paper` motif: a cream open book rests on a gold X-shaped rahle beneath a small eight-pointed star. Hadith uses the Corniche background and existing `tiles` motif: a closed manuscript has a gold cover medallion and page edge. Both use broad contours that remain readable at 32 px, with no text, calligraphy or figures. Their covers are illustrations with no panel capture; glyph notes are in `artwork/prompts.json`.
 
+## Promo film
+
+The homepage hero's film (`index.html`, `.film`), 40 s at 1920×1080 and 60 fps, looping.
+
+| Preview | File | Notes |
+| --- | --- | --- |
+| <img src="video/mandara-promo-poster.webp" width="128" alt="The film's first frame: Qaitbay Forest's big stacked clock over green glass ribbons"> | [WebM](video/mandara-promo.webm) | AV1 (SVT-AV1, 10-bit, CRF 28) with Opus 112 kbit/s; the page tries it first |
+| — | [MP4](video/mandara-promo.mp4) | H.264 High (CRF 22) with AAC 128 kbit/s, `+faststart`; the fallback |
+| — | [Poster frame](video/mandara-promo-poster.webp) | The film's first frame, so a poster swap is seamless |
+
+How it is made, so it can be remade for a release:
+
+- **Recording.** Only the headless sandbox, never a real session: `MANDARA_SANDBOX_RUNTIME=/tmp/mdr-promo WLR_RENDER_DRM_DEVICE=/dev/dri/renderD128 SANDBOX_TZ=Asia/Tokyo cargo xtask sandbox up --bin <release build> --size 2880x1620 --scale 2 --studio-size 1240x700`, then `sandbox audio play` for the fictional tracks. Render on the discrete GPU (the integrated one drops frames at this size), and add `cursor_hide_timeout=1` to the sandbox's `config/mango/config.conf` (then `msg compositor dispatch reload_config`) so the pointer only shows while it moves. Each scene is recorded on its own with `wl-screenrec --no-cursor --low-power=off -b "24 MB" --codec hevc` on the sandbox's Wayland socket (damage-driven, so frames come at the display's 60 Hz while something moves), driven by timed `mandara msg` commands, `wtype` for typing (wait 200 ms after it starts: the first key after its keymap upload is lost) and `sandbox pointer` for Studio's click.
+- **Scenes.** Wallpapers come from `msg wallgen generate` (liquid, low-poly and glass styles, seeds `0x41`–`0x55`). Looks (`look apply qaitbay-forest`, `anfushi-wave`, `night-frame`, each with its own wallpaper); the four `bar style`s; the launcher's *beacon* look with `music` and `=12*24+7` typed; `panel open media`, `panel open clock`, `sidebar toggle`; desktop widgets with the System monitor's GPU gauges (`MANDARA_RESOURCES_DEMO` readings) and `desktop widgets press … media:next`; Studio's Themes page switched to light, then to two themes with `theme set`; the Material You lock (`lock.design`, `lock --demo`) unlocked by typing. Run `look restore` and `bar style none` between scenes. No notifications, no personal data, no faith content.
+- **Edit.** Every scene is cut to whole beats of a 120 BPM grid, framed (a gentle crop or push on the 2880×1620 frames), given an Alexandria caption pill and followed by an end card rendered frame by frame from HTML with headless Chromium. The last 0.3 s fade into the first frame, so the loop has no seam.
+- **Music.** Original and fully synthesised: 20 bars of 120 BPM in D major (Bm–G–D–A), with a four-on-the-floor kick, claps, hats, a side-chained supersaw pad, a sub bass, a plucked arpeggio, a short lead hook, a riser into the end card and a swish on each cut, all built from oscillators and noise with no samples, then mixed to about −15 LUFS. The reverb tail wraps to the start so the music loops too.
+
 ## Sources and checks
 
 | Preview | File | Notes |
