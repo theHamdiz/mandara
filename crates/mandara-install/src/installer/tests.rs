@@ -1510,7 +1510,7 @@ fn bazzite_layers_only_what_its_image_lacks_in_one_transaction() {
     assert!(!ran.iter().any(|c| c.contains("dnf install") || c.contains("greeter use mandara")), "{ran:#?}");
     let text = host.text();
     assert!(text.contains("Restart your computer to start using the new packages"), "{text}");
-    assert!(text.contains("After restarting, switch to it in Studio → Login screen → Login manager"), "{text}");
+    assert!(text.contains("Mandara Login's packages arrive with the next boot: greetd cage. After restarting, switch to it in Studio → Login screen → Login manager"), "{text}");
     assert!(f.paths_binary_exists());
 }
 
@@ -1546,7 +1546,7 @@ fn packages_waiting_for_the_reboot_are_not_requested_again() {
     assert!(text.contains("Already waiting for the next boot: greetd cage"), "{text}");
     assert!(!host.ran().iter().any(|c| c.contains("rpm-ostree install")), "{:#?}", host.ran());
     assert!(text.contains("Restart your computer"), "{text}");
-    assert!(text.contains("After restarting, switch to it in Studio"), "{text}");
+    assert!(text.contains("Mandara Login's packages arrive with the next boot"), "{text}");
 }
 
 /// An optional package a repository lacks fails the whole transaction:
@@ -1619,7 +1619,7 @@ fn vanilla_adds_with_abroot_then_applies_once() {
     assert!(!ran.iter().any(|c| c.contains("apt-get") || c.contains("greeter use")), "{ran:#?}");
     let text = host.text();
     assert!(text.contains("skipped fonts-inter (not available)"), "{text}");
-    assert!(text.contains("Restart your computer") && text.contains("After restarting, switch to it in Studio"), "{text}");
+    assert!(text.contains("Restart your computer") && text.contains("Mandara Login's packages arrive with the next boot"), "{text}");
 }
 
 /// SteamOS: nothing goes into the read-only image; the home-folder parts
@@ -1695,4 +1695,22 @@ fn steamos_is_never_promised_packages() {
     let text = host.text();
     assert!(!text.contains("is image-based: Mandara goes into your home folder") && !text.contains("steamos-update"), "{text}");
     assert!(text.contains("Not available here: inter-font"), "{text}");
+}
+
+/// The closing line names only the login packages the image lacked:
+/// Bazzite ships cage, so greetd alone arrives with the next boot.
+#[test]
+fn the_closing_line_names_only_the_missing_login_packages() {
+    let f = Fixture::new();
+    let programs = ["rpm-ostree", "rpm", "sudo", "kwin_wayland", "cage"];
+    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &programs, &["greetd"]);
+    run(&mut host, &FakeProbe::default(), f.image_facts(BAZZITE, ImageSystem::RpmOstree), InstallArgs { yes: true, ..Default::default() }).unwrap();
+    let text = host.text();
+    assert!(host.ran().contains(&"sudo rpm-ostree install --idempotent greetd".to_string()), "{:#?}", host.ran());
+    assert!(text.contains("Mandara Login's packages arrive with the next boot: greetd. After restarting"), "{text}");
+    assert!(!text.contains("cage"), "cage is part of the image\n{text}");
+    // Both missing: both named.
+    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &["rpm-ostree", "rpm", "sudo", "kwin_wayland"], &["greetd", "cage"]);
+    run(&mut host, &FakeProbe::default(), f.image_facts(BAZZITE, ImageSystem::RpmOstree), InstallArgs { yes: true, ..Default::default() }).unwrap();
+    assert!(host.text().contains("Mandara Login's packages arrive with the next boot: greetd cage."), "{}", host.text());
 }

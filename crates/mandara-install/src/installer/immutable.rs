@@ -26,8 +26,9 @@ pub(super) struct Layer {
     pub(super) waiting: Vec<String>,
     /// The next boot brings packages already (requested earlier).
     pub(super) reboot_pending: bool,
-    /// Mandara Login waits for greetd and cage from the next image.
-    pub(super) login_after_reboot: bool,
+    /// Mandara Login waits for these (greetd, cage: the ones the image
+    /// lacks) from the next image.
+    pub(super) login_after_reboot: Vec<String>,
 }
 
 impl Layer {
@@ -219,7 +220,7 @@ impl Installer<'_> {
         }
         // No switch plan yet: it is made after the reboot, against the image
         // that has greetd.
-        self.layer.login_after_reboot = true;
+        self.layer.login_after_reboot = wanted.iter().map(|p| p.to_string()).collect();
     }
 
     /// The root-owned files that must survive updates (the admin helper,
@@ -309,13 +310,15 @@ impl Installer<'_> {
         self.login_after_reboot();
     }
 
-    /// How to switch to Mandara Login once greetd and cage are there.
+    /// How to switch to Mandara Login once its packages are there, naming
+    /// only the ones the image lacked (Bazzite ships cage, so greetd alone).
     fn login_after_reboot(&mut self) {
-        if !self.layer.login_after_reboot {
+        if self.layer.login_after_reboot.is_empty() {
             return;
         }
+        let packages = self.layer.login_after_reboot.join(" ");
         let bin = self.paths.binary().to_string_lossy().into_owned();
         let command = self.root_hint(&[bin.as_str(), "greeter", "use", "mandara", "--apply"]);
-        self.say(Level::Info, tf("Mandara Login needs greetd and cage, which arrive with the next boot. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}", &[("command", &command)]));
+        self.say(Level::Info, tf("Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}", &[("packages", &packages), ("command", &command)]));
     }
 }

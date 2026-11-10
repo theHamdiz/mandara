@@ -9697,5 +9697,5 @@
 "Trying again without the optional packages: {packages}" = "オプションのパッケージを除いて再試行しています：{packages}"
 "{tool} couldn't add the packages. Add them later with: {command}" = "{tool} はパッケージを追加できませんでした。後で次のコマンドで追加できます：{command}"
 "Restart your computer to start using the new packages. Everything else is ready now." = "新しいパッケージを使うにはコンピューターを再起動してください。それ以外はもう準備できています。"
-"Mandara Login needs greetd and cage, which arrive with the next boot. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Mandara Login には greetd と cage が必要で、次回の起動で使えるようになります。再起動後に Studio → ログイン画面 → ログインマネージャーで切り替えるか、次を実行してください：{command}"
+"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Mandara Login のパッケージは次回の起動で使えるようになります：{packages}。再起動後に Studio → ログイン画面 → ログインマネージャーで切り替えるか、次を実行してください：{command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "このシステムはイメージベースです。Mandara はホームフォルダーにインストールされ、インストーラーは足りないシステムパッケージだけを追加します。"

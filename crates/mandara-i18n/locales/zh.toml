@@ -9691,5 +9691,5 @@
 "Trying again without the optional packages: {packages}" = "正在不带可选软件包重试：{packages}"
 "{tool} couldn't add the packages. Add them later with: {command}" = "{tool} 无法添加这些软件包。稍后可用以下命令添加：{command}"
 "Restart your computer to start using the new packages. Everything else is ready now." = "重启电脑即可开始使用新软件包。其他一切现已就绪。"
-"Mandara Login needs greetd and cage, which arrive with the next boot. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Mandara Login 需要 greetd 和 cage，它们将随下次启动到来。重启后，可在 Studio → 登录界面 → 登录管理器中切换，或运行：{command}"
+"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Mandara Login 的软件包将随下次启动到来：{packages}。重启后，可在 Studio → 登录界面 → 登录管理器中切换，或运行：{command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "此系统基于镜像：Mandara 安装到你的主文件夹，安装程序只添加缺少的系统软件包。"

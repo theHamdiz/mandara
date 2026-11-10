@@ -9452,5 +9452,5 @@
 "Trying again without the optional packages: {packages}" = "ঐচ্ছিক প্যাকেজ ছাড়া আবার চেষ্টা করা হচ্ছে: {packages}"
 "{tool} couldn't add the packages. Add them later with: {command}" = "{tool} প্যাকেজগুলো যোগ করতে পারেনি। পরে এটি দিয়ে যোগ করুন: {command}"
 "Restart your computer to start using the new packages. Everything else is ready now." = "নতুন প্যাকেজ ব্যবহার শুরু করতে কম্পিউটার রিস্টার্ট করুন। বাকি সব এখনই প্রস্তুত।"
-"Mandara Login needs greetd and cage, which arrive with the next boot. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Mandara Login-এর greetd ও cage দরকার, যেগুলো পরের বুটের সঙ্গে আসবে। রিস্টার্টের পর স্টুডিও → লগইন স্ক্রিন → লগইন ম্যানেজার থেকে এতে বদলান, অথবা চালান: {command}"
+"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Mandara Login-এর প্যাকেজগুলো পরের বুটের সঙ্গে আসবে: {packages}। রিস্টার্টের পর স্টুডিও → লগইন স্ক্রিন → লগইন ম্যানেজার থেকে এতে বদলান, অথবা চালান: {command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "এই সিস্টেম ইমেজ-ভিত্তিক: Mandara আপনার হোম ফোল্ডারে ইনস্টল হয়, আর ইনস্টলার শুধু অনুপস্থিত সিস্টেম প্যাকেজ যোগ করে।"

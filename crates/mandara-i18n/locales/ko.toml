@@ -9450,5 +9450,5 @@
 "Trying again without the optional packages: {packages}" = "선택 패키지 없이 다시 시도하는 중: {packages}"
 "{tool} couldn't add the packages. Add them later with: {command}" = "{tool}이(가) 패키지를 추가하지 못했습니다. 나중에 다음 명령으로 추가하세요: {command}"
 "Restart your computer to start using the new packages. Everything else is ready now." = "새 패키지를 사용하려면 컴퓨터를 다시 시작하세요. 나머지는 모두 준비되었습니다."
-"Mandara Login needs greetd and cage, which arrive with the next boot. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Mandara Login에는 다음 부팅 때 들어오는 greetd와 cage가 필요합니다. 다시 시작한 뒤 Studio → 로그인 화면 → 로그인 관리자에서 전환하거나 다음을 실행하세요: {command}"
+"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Mandara Login 패키지는 다음 부팅 때 들어옵니다: {packages}. 다시 시작한 뒤 Studio → 로그인 화면 → 로그인 관리자에서 전환하거나 다음을 실행하세요: {command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "이 시스템은 이미지 기반입니다. Mandara는 홈 폴더에 설치되고, 설치 프로그램은 없는 시스템 패키지만 추가합니다."

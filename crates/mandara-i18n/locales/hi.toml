@@ -9698,5 +9698,5 @@
 "Trying again without the optional packages: {packages}" = "वैकल्पिक पैकेज के बिना फिर से कोशिश: {packages}"
 "{tool} couldn't add the packages. Add them later with: {command}" = "{tool} पैकेज नहीं जोड़ सका। बाद में इससे जोड़ें: {command}"
 "Restart your computer to start using the new packages. Everything else is ready now." = "नए पैकेज इस्तेमाल करने के लिए कंप्यूटर रीस्टार्ट करें। बाकी सब अभी तैयार है।"
-"Mandara Login needs greetd and cage, which arrive with the next boot. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Mandara Login को greetd और cage चाहिए, जो अगले बूट के साथ आएँगे। रीस्टार्ट के बाद Studio → लॉगिन स्क्रीन → लॉगिन मैनेजर में इस पर जाएँ, या चलाएँ: {command}"
+"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Mandara Login के पैकेज अगले बूट के साथ आएँगे: {packages}। रीस्टार्ट के बाद Studio → लॉगिन स्क्रीन → लॉगिन मैनेजर में इस पर जाएँ, या चलाएँ: {command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "यह सिस्टम इमेज-आधारित है: Mandara आपके होम फ़ोल्डर में इंस्टॉल होता है, और इंस्टॉलर केवल कम पड़ रहे सिस्टम पैकेज जोड़ता है।"
