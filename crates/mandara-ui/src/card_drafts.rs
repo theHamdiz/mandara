@@ -82,7 +82,11 @@ impl<T> Drafts<T> {
     pub fn keep(&mut self, monitor: &str, draft: T) {
         match self.slots.iter_mut().find(|(m, _)| &**m == monitor) {
             Some((_, slot)) => *slot = draft,
-            None => self.slots.push((monitor.into(), draft)),
+            None => {
+                // One slot per output, not the four a first push reserves.
+                self.slots.reserve_exact(1);
+                self.slots.push((monitor.into(), draft));
+            }
         }
     }
 
@@ -186,6 +190,7 @@ mod tests {
     fn drafts_are_kept_per_output_and_taken_once() {
         let mut drafts: Drafts<&str> = Drafts::default();
         drafts.keep("DP-1", "left");
+        assert_eq!(drafts.slots.capacity(), 1, "room for one output's draft only");
         drafts.keep("HDMI-A-1", "right");
         drafts.keep("DP-1", "left again");
         assert_eq!(drafts.len(), 2, "one draft per card and output");
