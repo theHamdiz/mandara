@@ -879,12 +879,19 @@ fn lib_command(cx: &mut App, f: impl FnOnce(&mut Library, &Player, &mut App) -> 
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Radio"), tk("Internet radio: curated stations by genre, your own stations and favourites, with live now-playing"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         resume_on_login(cx);
+        let sidebar = fn_view(None, panel::sidebar, window, cx);
+        if panel_cx.is_card() {
+            return PluginInstance { sidebar: Some(sidebar), ..PluginInstance::empty() };
+        }
         let bar = fn_view(None, bar::render, window, cx);
         let (view, size_cell) = panel::View::new(panel_cx.clone());
         let panel = fn_view(None, move |palette, window, cx| view.render(palette, window, cx), window, cx);
-        let sidebar = fn_view(None, panel::sidebar, window, cx);
         PluginInstance { bar: Some(bar), panel: Some(PanelSpec { view: panel, size: size_cell }), sidebar: Some(sidebar), on_click: None, on_secondary_click: Some(Rc::new(|_, cx| toggle(cx))) }
     });
+    // The card reads the player only if something already made it (playing,
+    // the panel, media keys) and makes nothing itself: it keeps nothing
+    // outside its view. The player is the plugin's own while it plays.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     r.command(ID, CommandSpec::new("radio status", tk("What plays: station, title, format, buffer, volume"), |_, cx| Ok(status_json(cx))));
     r.command(
         ID,

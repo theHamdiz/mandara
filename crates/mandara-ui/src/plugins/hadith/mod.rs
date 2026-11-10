@@ -1287,6 +1287,8 @@ pub fn register(r: &mut PluginRegistry) {
             PluginInstance { bar: Some(bar), panel: Some(panel), sidebar: Some(sidebar), on_click: None, on_secondary_click: None }
         },
     );
+    // The hadith of the day is the plugin's model; collections are cached only by the panel.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     // Registered after the plugin (registering clears a plugin's kinds).
     use mandara_config::desktop_widgets::{DesktopWidget, HadithLayout, HadithWidget, Look, Plate, WidgetKind};
     let one = |w: HadithWidget| vec![DesktopWidget { kind: WidgetKind::Hadith(w), ..DesktopWidget::default() }];

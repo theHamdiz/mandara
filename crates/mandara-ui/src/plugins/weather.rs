@@ -1019,6 +1019,8 @@ pub fn register(r: &mut PluginRegistry) {
             }
         },
     );
+    // The forecast is the hub's weather service (shared with the bar, lock screen and desktop); the card keeps only its view.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     r.command(
         ID,
         CommandSpec::new("weather", mandara_i18n::tk("Current conditions and forecast as JSON"), |_, cx| {

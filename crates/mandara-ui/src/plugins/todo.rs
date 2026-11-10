@@ -905,6 +905,8 @@ pub fn register(r: &mut PluginRegistry) {
             ..PluginInstance::empty()
         }
     });
+    // Lists live in the productivity model; the card's fields and menu state are its own.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     r.command(
         ID,
         CommandSpec::new("todo list", mandara_i18n::tk("Tasks (all lists, or one), open first"), |a, cx| {

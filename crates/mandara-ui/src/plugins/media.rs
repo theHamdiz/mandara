@@ -660,6 +660,29 @@ impl CoverSlot {
         drop_images(window, self.image.take());
         self.jobs.clear();
     }
+
+    /// [`Self::release`] from outside a window update: the cover leaves
+    /// every window's atlas.
+    fn release_everywhere(&mut self, cx: &mut App) {
+        if let Some(image) = self.image.take() {
+            cx.drop_image(image, None);
+        }
+        self.jobs.clear();
+    }
+}
+
+thread_local! {
+    /// The sidebar cards' covers, so closing the sidebar frees them at once
+    /// rather than when each card's idle watchdog next looks.
+    static SIDE_COVERS: RefCell<Vec<std::rc::Weak<RefCell<CoverSlot>>>> = const { RefCell::new(Vec::new()) };
+}
+
+/// The sidebar closed: its cards' covers go now (their views are gone).
+fn release_card(cx: &mut App) {
+    let covers: Vec<Rc<RefCell<CoverSlot>>> = SIDE_COVERS.with(|c| std::mem::take(&mut *c.borrow_mut()).into_iter().filter_map(|w| w.upgrade()).collect());
+    for cover in covers {
+        cover.borrow_mut().release_everywhere(cx);
+    }
 }
 
 // ── Pieces ───────────────────────────────────────────────────────────────
@@ -1242,6 +1265,11 @@ pub fn register(r: &mut PluginRegistry) {
         let side_drag: Rc<ScrubState> = Rc::default();
         let side_labels = Rc::new(RefCell::new(ScrubLabels::default()));
         let side_cover = Rc::new(RefCell::new(CoverSlot::default()));
+        SIDE_COVERS.with(|c| {
+            let mut c = c.borrow_mut();
+            c.retain(|w| w.strong_count() > 0);
+            c.push(Rc::downgrade(&side_cover));
+        });
         let side_keeper = Rc::new(IdleRelease::default());
         let sidebar = domain_view(Domains::MEDIA,
             None,
@@ -1299,6 +1327,8 @@ pub fn register(r: &mut PluginRegistry) {
             on_secondary_click: Some(Rc::new(|_, cx| send(cx, MediaCommand::PlayPause))),
         }
     });
+    // The card's cover is decoded for it alone: freed when the sidebar closes.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::shared(release_card));
 
     for (path, summary, command) in [
         ("media play-pause", tk("Toggle playback"), MediaCommand::PlayPause),

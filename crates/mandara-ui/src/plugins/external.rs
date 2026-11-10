@@ -125,6 +125,28 @@ pub fn status(id: &str) -> Option<String> {
     })
 }
 
+/// Whether third-party plugin `id` shows anywhere but the sidebar: a bar
+/// item, its panel (open or floating) or a desktop widget.
+fn shown_outside_sidebar(id: &str, cx: &App) -> bool {
+    let cfg = config(cx).read(cx).get();
+    let in_bar = cfg.plugin_places(id).iter().any(|slot| slot.lane != mandara_config::LayoutLane::Sidebar);
+    let on_desktop = cfg.desktop.widgets.items.iter().filter(|w| w.enabled).filter_map(dc::as_card).any(|c| dc::parse_plugin_card(&c.card).is_some_and(|(plugin, _)| plugin == id));
+    let panel = crate::state::shell(cx).read(cx).panel.as_deref() == Some(id) || crate::floating::is_floating(id, cx);
+    in_bar || on_desktop || panel
+}
+
+/// The sidebar closed: a plugin only its card showed is unloaded (its
+/// WebAssembly memory goes back), and loads again when the card next shows.
+fn release_card(id: &str, cx: &mut App) {
+    if shown_outside_sidebar(id, cx) || !LOADED.with(|l| l.borrow().contains_key(id)) {
+        return;
+    }
+    // A click handler may still hold the instance for a moment; the last
+    // handle frees it.
+    LOADED.with(|l| l.borrow_mut().remove(id));
+    mandara_services::memory::request_trim();
+}
+
 /// Forgets a plugin's instance and load error (removed or reloaded).
 fn forget(id: &str) {
     LOADED.with(|l| l.borrow_mut().remove(id));
@@ -400,10 +422,14 @@ fn register_one(r: &mut PluginRegistry, d: Discovered) {
     let widgets = d.widgets.clone();
     let mut catalog = wasm::PluginCatalogs::new(&d.dir);
     let plugin_id = d.id.clone();
-    r.register(manifest, move |window, cx, _panel_cx| {
+    r.register(manifest, move |window, cx, panel_cx| {
         // One plugin instance backs all three surfaces: a click in any of
         // them re-renders the others.
         let views = ViewSet::default();
+        if panel_cx.is_card() {
+            // A sidebar card: one surface (each costs a call into the plugin).
+            return PluginInstance { sidebar: Some(surface_view(&d, Surface::Sidebar, views, window, cx)), ..PluginInstance::empty() };
+        }
         PluginInstance {
             bar: Some(surface_view(&d, Surface::Bar, views.clone(), window, cx)),
             panel: Some(PanelSpec {
@@ -414,6 +440,10 @@ fn register_one(r: &mut PluginRegistry, d: Discovered) {
             ..PluginInstance::empty()
         }
     });
+    // The card renders a fresh tree each frame and keeps nothing; the
+    // plugin's loaded instance goes too when nothing else shows it.
+    let release_id = plugin_id.clone();
+    r.sidebar_card(&plugin_id, mandara_plugins::CardRelease::shared(move |cx| release_card(&release_id, cx)));
     // Its desktop widgets: cards the card host draws with the plugin's
     // `desktop-widget` view.
     for w in widgets {

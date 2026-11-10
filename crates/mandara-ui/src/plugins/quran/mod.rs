@@ -1242,6 +1242,8 @@ pub fn register(r: &mut PluginRegistry) {
             }
         },
     );
+    // The Qur'an text is the plugin's model (search, commands, panel); the card keeps only its view.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     // Registered after the plugin (registering clears a plugin's kinds).
     use mandara_config::desktop_widgets::{DesktopWidget, Look, Plate, QuranLayout, QuranWidget, WidgetKind};
     let one = |w: QuranWidget| vec![DesktopWidget { kind: WidgetKind::Quran(w), ..DesktopWidget::default() }];

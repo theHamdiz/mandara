@@ -231,6 +231,8 @@ struct Script {
     replies: Arc<Mutex<VecDeque<Response>>>,
     tokens: Arc<Mutex<VecDeque<Response>>>,
     calls: Arc<Mutex<Vec<String>>>,
+    /// Times the session closed its idle connections.
+    closed: Arc<Mutex<usize>>,
 }
 
 fn reply(status: u16, body: &[u8], remaining: f32) -> Response {
@@ -252,6 +254,28 @@ impl Transport for Script {
         self.calls.lock().unwrap().push(format!("TOKEN {url} {client_id}"));
         self.tokens.lock().unwrap().pop_front().ok_or_else(|| "no scripted token".into())
     }
+
+    fn close_idle(&mut self) {
+        *self.closed.lock().unwrap() += 1;
+    }
+}
+
+#[test]
+fn releasing_forgets_cached_pages_and_closes_idle_connections() {
+    let script = Script::default();
+    script.tokens.lock().unwrap().push_back(token_reply());
+    script.replies.lock().unwrap().extend([reply(200, LISTING, 90.0), reply(200, LISTING, 89.0)]);
+    let mut session = session(&script);
+    let now = Instant::now();
+    session.listing(&query(), None, 0, WANT, now).unwrap();
+    session.listing(&query(), None, 0, WANT, now).unwrap();
+    let gets = || script.calls.lock().unwrap().iter().filter(|c| c.starts_with("GET")).count();
+    assert_eq!(gets(), 1, "the second page came from the cache");
+    // The sidebar card went with nothing else reading.
+    session.release();
+    assert_eq!(*script.closed.lock().unwrap(), 1);
+    session.listing(&query(), None, 0, WANT, now).unwrap();
+    assert_eq!(gets(), 2, "nothing cached survives a release");
 }
 
 fn session(script: &Script) -> Session<Script> {
