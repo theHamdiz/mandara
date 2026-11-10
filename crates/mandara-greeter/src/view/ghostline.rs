@@ -243,7 +243,8 @@ pub(super) fn zone_label(offset_s: i32) -> String {
 pub(super) fn hud_overlay(f: &Frame, p: &MandaraPalette) -> AnyElement {
     let (vw, vh, u, s) = (f.vw, f.vh, f.u, f.scale);
     let hair = hairline(s);
-    let white = f.white;
+    // On the backdrop.
+    let white = f.ground;
     let mut root = div().absolute().top_0().left_0().w(px(vw)).h(px(vh));
     // The grid.
     let step = GRID_STEP * u;
@@ -395,9 +396,9 @@ impl GreeterView {
                 .text_size(px(d.size * k))
                 .line_height(px(d.size * k * DATE_LINE))
                 .font_weight(super::weight(d.weight))
-                .child(div().text_color(f.white.opacity(d.opacity)).child(text))
+                .child(div().text_color(f.ground.opacity(d.opacity)).child(text))
                 .when_some(zone, |el, zone| {
-                    el.child(div().size(px(3.0 * k)).bg(lit(p.primary).hsla())).child(div().font_family(f.mono_font.clone()).text_color(f.white.opacity(LABEL_ALPHA.max(d.opacity * 0.85))).child(zone))
+                    el.child(div().size(px(3.0 * k)).bg(lit(p.primary).hsla())).child(div().font_family(f.mono_font.clone()).text_color(f.ground.opacity(LABEL_ALPHA.max(d.opacity * 0.85))).child(zone))
                 })
         });
         div().flex().flex_col().items_end().child(face).children(date).into_any_element()
@@ -415,7 +416,7 @@ impl GreeterView {
             let y = snap(i as f32 / DAY_TICKS as f32 * (height - hair), s);
             let kind = if i % TICKS_PER_LABEL == 0 { 2 } else if i % 2 == 0 { 1 } else { 0 };
             let (len, alpha) = DAY_TICK[kind];
-            el = el.child(div().absolute().right_0().top(px(y)).w(px(snap(len * k, s))).h(px(hair)).bg(f.white.opacity(alpha)));
+            el = el.child(div().absolute().right_0().top(px(y)).w(px(snap(len * k, s))).h(px(hair)).bg(f.ground.opacity(alpha)));
             if kind == 2 {
                 let top = (y - label_h / 2.0).clamp(0.0, (height - label_h).max(0.0));
                 el = el.child(
@@ -429,7 +430,7 @@ impl GreeterView {
                         .font_family(f.mono_font.clone())
                         .font_features(tabular_nums())
                         .text_size(px(RULER_LABEL_PX * k))
-                        .text_color(f.white.opacity(LABEL_ALPHA))
+                        .text_color(f.ground.opacity(LABEL_ALPHA))
                         .child(SharedString::new_static(DAY_LABELS[i / TICKS_PER_LABEL])),
                 );
             }
@@ -847,5 +848,38 @@ mod tests {
         let accent = lit(crate::view::palette_for(&cfg).primary);
         assert!(accent.contrast_ratio(field) >= 4.5, "the accent on the field");
         assert!(white(cfg.date.opacity).over(ground).contrast_ratio(ground) >= 4.5, "the date");
+    }
+
+    /// With the light colours on, the wireframe keeps its graphite, and the
+    /// text on it and on the ground stays light and readable (WCAG AA).
+    #[test]
+    fn ghostline_text_meets_aa_contrast_in_light_mode() {
+        let mut cfg = GreeterConfig::default();
+        cfg.apply_look("ghostline");
+        cfg.theme.light = true;
+        assert!(!cfg.draws_light(), "the graphite stays");
+        let ground = Color::from_hex(&cfg.background.solid).unwrap();
+        let panel = ink(PANEL_INK, cfg.card.opacity).over(ground);
+        let field = ink(FIELD_INK, 0.92).over(panel);
+        let p = crate::view::palette_for(&cfg);
+        let picker = p.surface_dim.with_alpha(0.92).over(panel);
+        let on_cards = crate::view::foreground(&cfg);
+        let on_ground = super::super::ground_ink(&cfg, Some(ground));
+        let checks = [
+            ("label on panel", on_cards, LABEL_ALPHA, panel),
+            ("value on panel", on_cards, VALUE_ALPHA, panel),
+            ("name on panel", on_cards, 0.96, panel),
+            ("placeholder in field", on_cards, LABEL_ALPHA, field),
+            ("typed cells in field", on_cards, 0.94, field),
+            ("session picker", on_cards, 0.95, picker),
+            ("ruler label on ground", on_ground, LABEL_ALPHA, ground),
+            ("clock on ground", on_ground, cfg.clock.opacity, ground),
+            ("date on ground", on_ground, cfg.date.opacity, ground),
+        ];
+        for (what, ink, alpha, on) in checks {
+            let ratio = ink.with_alpha(alpha).over(on).contrast_ratio(on);
+            assert!(ratio >= 4.5, "light: {what}: {ratio:.2}");
+        }
+        assert!(lit(p.primary).contrast_ratio(field) >= 4.5, "light: the accent on the field");
     }
 }

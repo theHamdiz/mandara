@@ -286,7 +286,8 @@ mod chrome_halo;
 mod ghostline;
 #[cfg(test)]
 mod look_tests;
-mod meridian;
+/// Meridian's field and line, shared with Studio's look previews.
+pub mod meridian;
 mod preview_clock;
 
 /// The clock's rolling digits.
@@ -497,13 +498,15 @@ fn background_timing(cfg: &GreeterConfig) -> BackgroundOptions {
     }
 }
 
-/// The theme for a config: the preset's dark palette with the accent
+/// The theme for a config: the preset's palette (light when the screen
+/// [draws light](GreeterConfig::draws_light), else dark) with the accent
 /// override applied.
 pub fn palette_for(cfg: &GreeterConfig) -> MandaraPalette {
+    let dark = !cfg.draws_light();
     let p = mandara_theme::catalog::find(&cfg.theme.preset)
         .or_else(|| mandara_theme::catalog::find(mandara_theme::DEFAULT_THEME))
-        .map(|t| t.palette(!cfg.theme.light))
-        .unwrap_or_else(|| mandara_theme::engine::default_palette(!cfg.theme.light));
+        .map(|t| t.palette(dark))
+        .unwrap_or_else(|| mandara_theme::engine::default_palette(dark));
     with_accent(cfg, p)
 }
 
@@ -512,7 +515,7 @@ pub fn palette_for(cfg: &GreeterConfig) -> MandaraPalette {
 /// from it; otherwise (or with no picture) [`palette_for`].
 pub fn palette_for_seed(cfg: &GreeterConfig, seed: Option<Color>) -> MandaraPalette {
     match seed.filter(|_| cfg.theme.from_wallpaper) {
-        Some(seed) => with_accent(cfg, mandara_theme::material::palette_from_seed(seed, mandara_theme::SchemeVariant::TonalSpot, !cfg.theme.light)),
+        Some(seed) => with_accent(cfg, mandara_theme::material::palette_from_seed(seed, mandara_theme::SchemeVariant::TonalSpot, !cfg.draws_light())),
         None => palette_for(cfg),
     }
 }
@@ -520,10 +523,47 @@ pub fn palette_for_seed(cfg: &GreeterConfig, seed: Option<Color>) -> MandaraPale
 /// Dark text over a light screen (the light colours).
 const LIGHT_INK: (f32, f32, f32) = (0.23, 0.015, 255.0);
 
-/// The colour text and hairlines are drawn in: white, or with the light
-/// colours a deep ink.
+/// The colour text and hairlines are drawn in on the controls and cards,
+/// whose surfaces follow the colours: white, or when the screen draws
+/// light a deep ink.
 pub fn foreground(cfg: &GreeterConfig) -> Color {
-    if cfg.theme.light { Color::oklch(LIGHT_INK.0, LIGHT_INK.1, LIGHT_INK.2) } else { Color::oklch(1.0, 0.0, 0.0) }
+    if cfg.draws_light() { light_ink() } else { white_ink() }
+}
+
+fn white_ink() -> Color {
+    Color::oklch(1.0, 0.0, 0.0)
+}
+
+fn light_ink() -> Color {
+    Color::oklch(LIGHT_INK.0, LIGHT_INK.1, LIGHT_INK.2)
+}
+
+/// The colour of text straight on the backdrop (the clock, the date, a
+/// name without a card, the logo): it follows the backdrop rather than
+/// the colours. The aurora, pictures and footage are dark under their
+/// scrims, so they take white; a solid floor (`solid`, resolved) takes
+/// whichever ink reads better on it once dimmed; Meridian's field follows
+/// the colours.
+fn ground_ink(cfg: &GreeterConfig, solid: Option<Color>) -> Color {
+    if cfg.background.overlay == Overlay::Horizon {
+        return foreground(cfg);
+    }
+    let Some(floor) = solid.filter(|_| cfg.background.mode == BackgroundMode::Solid) else { return white_ink() };
+    let ground = Color::oklcha(0.0, 0.0, 0.0, cfg.background.dim.clamp(0.0, 0.95)).over(floor);
+    let dark = light_ink();
+    let white = white_ink();
+    if dark.contrast_ratio(ground) > white.contrast_ratio(ground) { dark } else { white }
+}
+
+/// Whether the clock face (or the line it sits on) draws the date itself,
+/// so the date element stays empty: the ruler and halo faces always, the
+/// vast face when Meridian's line is the card and puts it at its end.
+pub(crate) fn face_holds_date(cfg: &GreeterConfig) -> bool {
+    match cfg.clock.face {
+        ClockFace::Ruler | ClockFace::Halo => true,
+        ClockFace::Vast => cfg.card.enabled && cfg.card.style == CardStyle::Horizon,
+        ClockFace::Digits => false,
+    }
 }
 
 /// `p` with the config's accent override, if any.
@@ -1511,7 +1551,10 @@ struct Frame {
     vw: f32,
     vh: f32,
     now: Instant,
+    /// Ink on the controls and cards ([`foreground`]).
     white: Hsla,
+    /// Ink straight on the backdrop ([`ground_ink`]).
+    ground: Hsla,
     ui_font: SharedString,
     display_font: SharedString,
     mono_font: SharedString,
@@ -1546,7 +1589,7 @@ impl Frame {
             FieldStyle::Terminal => ghostline::field_fill(focused),
             FieldStyle::Recessed => chrome_halo::field_fill(p, focused),
             // Frosted white over light colours.
-            _ if cfg.theme.light => gpui::white().opacity((0.5 + cfg.theme.glass + if focused { 0.12 } else { 0.0 }).clamp(0.0, 1.0)),
+            _ if cfg.draws_light() => gpui::white().opacity((0.5 + cfg.theme.glass + if focused { 0.12 } else { 0.0 }).clamp(0.0, 1.0)),
             _ => self.white.opacity((cfg.theme.glass + if focused { 0.08 } else { 0.0 }).clamp(0.0, 1.0)),
         }
     }
@@ -1882,7 +1925,7 @@ impl GreeterView {
             accent.with_lightness(accent.lightness().max(TINT_LIGHTNESS)).with_alpha(c.opacity).hsla()
         });
         let new_row = || {
-            div().flex().font_family(font.clone()).font_features(tabular_nums()).text_size(px(size)).line_height(px(line)).font_weight(FontWeight(w)).text_color(f.white.opacity(c.opacity))
+            div().flex().font_family(font.clone()).font_features(tabular_nums()).text_size(px(size)).line_height(px(line)).font_weight(FontWeight(w)).text_color(f.ground.opacity(c.opacity))
         };
         let mut lines: smallvec::SmallVec<[gpui::Div; 3]> = smallvec::SmallVec::new();
         let mut row = new_row();
@@ -1932,7 +1975,7 @@ impl GreeterView {
         let d = &self.config.date;
         let text = self.date_text.as_ref().map(|(_, t)| t.clone()).unwrap_or_default();
         let font = if d.font.trim().is_empty() { f.ui_font.clone() } else { SharedString::from(d.font.clone()) };
-        div().font_family(font).text_size(px(d.size * k)).font_weight(weight(d.weight)).text_color(f.white.opacity(d.opacity)).child(shadowed(text, 1.5 * k, 0.3)).into_any_element()
+        div().font_family(font).text_size(px(d.size * k)).font_weight(weight(d.weight)).text_color(f.ground.opacity(d.opacity)).child(shadowed(text, 1.5 * k, 0.3)).into_any_element()
     }
 
     /// Width of the password field (and a full-width session picker): the
@@ -2083,7 +2126,7 @@ impl GreeterView {
                         .font_family(f.ui_font.clone())
                         .text_size(px(u.name_size * k))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(f.white.opacity(0.96))
+                        .text_color(if self.config.card.enabled { f.white } else { f.ground }.opacity(0.96))
                         .child(shadowed(name, 1.5 * k, 0.35)),
                 )
             })
@@ -2439,7 +2482,7 @@ impl GreeterView {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .child(icon("user", 18.0 * k, f.white.opacity(0.9)))
+                        .child(icon("user", 18.0 * k, f.ground.opacity(0.9)))
                         .into_any_element(),
                     tl("Other"),
                 ),
@@ -2460,10 +2503,10 @@ impl GreeterView {
                             .rounded(px(self.avatar_radius(48.0 * k)))
                             .p(px(2.0 * k))
                             .border_1()
-                            .border_color(if selected && focus_users { f.white.opacity(0.85) } else if selected { f.white.opacity(0.35) } else { gpui::transparent_black() })
+                            .border_color(if selected && focus_users { f.ground.opacity(0.85) } else if selected { f.ground.opacity(0.35) } else { gpui::transparent_black() })
                             .child(face),
                     )
-                    .child(div().font_family(f.ui_font.clone()).text_size(px(11.5 * k)).text_color(f.white.opacity(0.88)).child(label)),
+                    .child(div().font_family(f.ui_font.clone()).text_size(px(11.5 * k)).text_color(f.ground.opacity(0.88)).child(label)),
             );
         }
         row.into_any_element()
@@ -2497,9 +2540,10 @@ impl GreeterView {
                     },
                     e.user.display.split_whitespace().next().unwrap_or(&e.user.name).to_string(),
                 ),
-                None => (icon("user", snap_size(face * 0.7), f.white.opacity(0.9)).into_any_element(), tl("Other")),
+                None => (icon("user", snap_size(face * 0.7), if selected { f.tonal.on_secondary_container.hsla() } else { f.ground }.opacity(0.9)).into_any_element(), tl("Other")),
             };
-            let (bg, ink) = if selected { (f.tonal.secondary_container.hsla(), f.tonal.on_secondary_container.hsla()) } else { (gpui::transparent_black(), f.white.opacity(0.92)) };
+            // An unchosen chip is clear, on the backdrop.
+            let (bg, ink) = if selected { (f.tonal.secondary_container.hsla(), f.tonal.on_secondary_container.hsla()) } else { (gpui::transparent_black(), f.ground.opacity(0.92)) };
             row = row.child(
                 div()
                     .id(("user", i))
@@ -2530,7 +2574,10 @@ impl GreeterView {
         let cfg = &self.config;
         let h = M3_CHIP_H * k;
         let open = self.session_menu;
-        let (bg, ink) = if focused || open { (f.tonal.secondary_container.hsla(), f.tonal.on_secondary_container.hsla()) } else { (gpui::transparent_black(), f.white.opacity(0.92)) };
+        // A resting chip is clear: on the card when it holds the session,
+        // else on the backdrop.
+        let resting = if cfg.card.enabled && cfg.card.session_inside { f.white } else { f.ground };
+        let (bg, ink) = if focused || open { (f.tonal.secondary_container.hsla(), f.tonal.on_secondary_container.hsla()) } else { (gpui::transparent_black(), resting.opacity(0.92)) };
         let chip = div()
             .id("session")
             .h(px(h))
@@ -2734,7 +2781,7 @@ impl GreeterView {
                                 .hover(|s| s.bg(gpui::white().opacity(0.14))),
                         }
                     })
-                    .when(pc.labels, |el| el.child(div().font_family(f.ui_font.clone()).text_size(px(11.5 * k)).text_color(f.white.opacity(0.85)).child(action.label()))),
+                    .when(pc.labels, |el| el.child(div().font_family(f.ui_font.clone()).text_size(px(11.5 * k)).text_color(f.ground.opacity(0.85)).child(action.label()))),
             );
         }
         row.into_any_element()
@@ -2828,7 +2875,7 @@ impl GreeterView {
                 let a = self.palette.primary;
                 a.with_lightness(a.lightness().max(TINT_LIGHTNESS)).with_alpha(l.opacity).hsla()
             } else {
-                f.white.opacity(l.opacity)
+                f.ground.opacity(l.opacity)
             };
             return div().child(icon("emblem", d, ink)).into_any_element();
         }
@@ -2887,7 +2934,7 @@ impl GreeterView {
             .bg(gpui::black().opacity(0.28))
             .font_family(f.ui_font.clone())
             .text_size(px(self.config.banner.size * k))
-            .text_color(f.white.opacity(0.92))
+            .text_color(f.ground.opacity(0.92))
             .child(text)
             .into_any_element()
     }
@@ -3049,6 +3096,7 @@ impl Render for GreeterView {
             vh,
             now,
             white: foreground(cfg).hsla(),
+            ground: ground_ink(cfg, self.bg_key.solid).hsla(),
             ui_font: match self.config.font.trim() {
                 "" if rtl => fonts.arabic.clone(),
                 "" => fonts.ui.clone(),
@@ -3185,8 +3233,9 @@ impl Render for GreeterView {
                     ClockFace::Halo => self.halo_clock(&f, k),
                     ClockFace::Vast => self.vast_clock(&f, k),
                 },
-                // The ruler and halo faces hold the date.
-                Element::Date if cfg.clock.face != ClockFace::Digits => div().into_any_element(),
+                // The ruler and halo faces hold the date, and Meridian's
+                // line does with the vast face.
+                Element::Date if face_holds_date(cfg) => div().into_any_element(),
                 Element::Date => self.date_el(&f, k),
                 Element::User if cfg.card.enabled => self.card_el(&f, k, caps, cx),
                 Element::User => self.user_el(&f, k, cx),
@@ -3246,7 +3295,7 @@ impl Render for GreeterView {
                             .items_center()
                             .gap(px(7.0 * k))
                             .child(div().size(px(7.0 * k)).rounded_full().bg(p.primary.with_lightness(0.85).hsla()))
-                            .child(div().text_size(px(12.0 * k)).font_weight(FontWeight::SEMIBOLD).text_color(f.white.opacity(0.95)).child(tl("Login screen preview"))),
+                            .child(div().text_size(px(12.0 * k)).font_weight(FontWeight::SEMIBOLD).text_color(f.ground.opacity(0.95)).child(tl("Login screen preview"))),
                     )
                     .child(
                         div()
@@ -3265,8 +3314,8 @@ impl Render for GreeterView {
                                 this.exit = true;
                                 cx.notify();
                             }))
-                            .child(icon("close", 14.0 * k, f.white.opacity(0.95)))
-                            .child(div().text_size(px(12.5 * k)).font_weight(FontWeight::MEDIUM).text_color(f.white.opacity(0.95)).child(tl("Exit demo"))),
+                            .child(icon("close", 14.0 * k, f.ground.opacity(0.95)))
+                            .child(div().text_size(px(12.5 * k)).font_weight(FontWeight::MEDIUM).text_color(f.ground.opacity(0.95)).child(tl("Exit demo"))),
                     ),
             );
         }
@@ -3339,6 +3388,88 @@ mod tests {
         // Typing folders / dragging the softening waits for the edits to settle.
         assert_eq!(key(&|c| c.background.blur += 0.1), BackgroundChange::RebuildSettled);
         assert_eq!(key(&|c| c.background.video_dirs.push("/tmp/x".into())), BackgroundChange::RebuildSettled);
+    }
+
+    /// With the light colours on, text straight on the default backdrop
+    /// (the aurora, dark under its scrim) stays white and readable (WCAG
+    /// AA), while the controls keep the light palette and its deep ink.
+    #[test]
+    fn light_colours_keep_backdrop_text_readable() {
+        let mut cfg = GreeterConfig::default();
+        cfg.theme.light = true;
+        assert!(cfg.draws_light());
+        let ink = ground_ink(&cfg, None);
+        let scrim = Color::oklcha(0.0, 0.0, 0.0, cfg.background.dim);
+        // The aurora's sky at its top and bottom, for any theme's hue.
+        for hue in (0..360).step_by(30).map(|h| h as f32) {
+            for sky in [Color::oklch(0.25, 0.09, hue), Color::oklch(0.11, 0.07, hue)] {
+                let ground = scrim.over(sky);
+                for (what, alpha) in [("the clock", cfg.clock.opacity), ("the date", cfg.date.opacity), ("the name", 0.96), ("the logo", cfg.logo.opacity)] {
+                    let ratio = ink.with_alpha(alpha).over(ground).contrast_ratio(ground);
+                    assert!(ratio >= 4.5, "{what} over the sky at {hue}°: {ratio:.2}");
+                }
+                // The frosted field keeps the light colours' deep ink.
+                let field = Color::oklcha(1.0, 0.0, 0.0, 0.5 + cfg.theme.glass).over(ground);
+                let typed = foreground(&cfg).with_alpha(0.95).over(field).contrast_ratio(field);
+                assert!(typed >= 4.5, "typing in the frosted field at {hue}°: {typed:.2}");
+            }
+        }
+    }
+
+    /// Text on the backdrop follows the backdrop, not the colours: a light
+    /// solid floor takes the deep ink even with the dark colours, a dark
+    /// one white even with the light colours, and an unset one follows the
+    /// colours (it is the theme's own floor).
+    #[test]
+    fn backdrop_ink_follows_the_floor() {
+        let white = white_ink();
+        let mut cfg = GreeterConfig::default();
+        cfg.background.mode = BackgroundMode::Solid;
+        cfg.background.dim = 0.0;
+        let paper = Color::from_hex("#f3efe6").unwrap();
+        let night = Color::from_hex("#0b0d10").unwrap();
+        for light in [false, true] {
+            cfg.theme.light = light;
+            assert_eq!(ground_ink(&cfg, Some(paper)), light_ink(), "a light floor (light colours {light})");
+            assert_eq!(ground_ink(&cfg, Some(night)), white, "a dark floor (light colours {light})");
+            let floor = palette_for(&cfg).surface_dim;
+            assert_eq!(ground_ink(&cfg, Some(floor)), foreground(&cfg), "the theme's floor (light colours {light})");
+        }
+        // A deep dim turns a light floor dark.
+        cfg.background.dim = 0.9;
+        assert_eq!(ground_ink(&cfg, Some(paper)), white);
+        // Pictures, footage and the aurora are dark under their scrims.
+        cfg.theme.light = true;
+        for mode in [BackgroundMode::Auto, BackgroundMode::Video, BackgroundMode::Stills, BackgroundMode::Aurora] {
+            cfg.background.mode = mode;
+            assert_eq!(ground_ink(&cfg, Some(paper)), white, "{mode:?}");
+        }
+        // Meridian's field follows the colours.
+        let mut meridian = GreeterConfig::default();
+        meridian.apply_look("meridian");
+        for light in [false, true] {
+            meridian.theme.light = light;
+            assert_eq!(ground_ink(&meridian, Some(paper)), foreground(&meridian));
+        }
+    }
+
+    /// Ghostline's and Chrome Halo's dark pieces keep the dark colours with
+    /// the light ones on; every other look takes them.
+    #[test]
+    fn dark_pieces_keep_the_dark_colours() {
+        for (id, _, _) in crate::config::LOOKS {
+            let mut cfg = GreeterConfig::default();
+            cfg.apply_look(id);
+            cfg.theme.light = true;
+            let dark = matches!(id, "ghostline" | "chrome-halo");
+            assert_eq!(cfg.draws_light(), !dark, "{id}");
+            let mut night = cfg.clone();
+            night.theme.light = false;
+            assert_eq!(palette_for(&cfg) == palette_for(&night), dark, "{id}: the dark palette");
+            if dark {
+                assert_eq!(foreground(&cfg), white_ink(), "{id}: light text");
+            }
+        }
     }
 
     #[test]

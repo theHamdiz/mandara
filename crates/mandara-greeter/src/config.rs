@@ -603,7 +603,9 @@ pub struct ThemeConfig {
     /// Colours made from the picture behind the login screen (Material's
     /// dynamic colour); the preset when it shows no picture.
     pub from_wallpaper: bool,
-    /// The theme's light colours: dark text over a light screen.
+    /// The theme's light colours: light controls with dark text (text on
+    /// the backdrop follows the backdrop, and dark pieces stay dark; see
+    /// [`GreeterConfig::draws_light`]).
     pub light: bool,
 }
 
@@ -1152,6 +1154,17 @@ impl GreeterConfig {
         }
         self.normalize();
         true
+    }
+
+    /// Whether the login screen is drawn in the light colours: they are on
+    /// and nothing on it is machined from a fixed dark ink. Ghostline's and
+    /// Chrome Halo's pieces (the wireframe and double-bezel cards, the
+    /// terminal and recessed fields) are dark by design, so with any of
+    /// them the screen keeps its dark colours and light text.
+    pub fn draws_light(&self) -> bool {
+        let dark_card = self.card.enabled && matches!(self.card.style, CardStyle::Hud | CardStyle::Bezel);
+        let dark_field = matches!(self.password.style, FieldStyle::Terminal | FieldStyle::Recessed);
+        self.theme.light && !dark_card && !dark_field
     }
 
     /// The look this config matches exactly, if any (Meridian with its

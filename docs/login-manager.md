@@ -434,7 +434,9 @@ Three looks put the sign-in somewhere other than the middle:
 
 Ghostline and Chrome Halo keep their sides in right-to-left languages (the
 side is the design); everything inside them mirrors. Meridian mirrors
-whole: it starts from the golden point on the right. Each piece is a
+whole: it starts from the golden point on the right. Ghostline's and
+Chrome Halo's cards and fields are dark by design, so with the light
+colours on they keep their dark colours and light text. Each piece is a
 setting of its own, so it mixes with the others: the clock faces (Clock &
 date → **Clock face**), the card styles (Sign-in → **Card style**:
 wireframe, double bezel, on a line), the **Terminal** and **Recessed**
@@ -659,7 +661,7 @@ rim = 0.6
 roundness = 1.0
 switcher = []                    # schemes the "themes" element offers (ids)
 from_wallpaper = false           # colours from the picture behind (dynamic colour)
-light = false                    # the theme's light colours: dark text over a light screen
+light = false                    # the theme's light colours: light controls with dark text (text on the backdrop follows the backdrop)
 
 [motion]
 entrance = true

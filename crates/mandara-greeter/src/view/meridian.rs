@@ -25,15 +25,15 @@ use crate::power::PowerAction;
 use crate::sessions::SessionKind;
 
 /// The line's height on the screen: the golden section from the top.
-pub(super) const GOLDEN: f32 = 0.618;
+pub const GOLDEN: f32 = 0.618;
 /// The vast numerals are this many times the clock's size, their line
 /// this share of it.
 pub(super) const VAST_SCALE: f32 = 4.0;
 const VAST_LINE: f32 = 0.9;
 /// The field: light (dawn ivory to pale stone) and dark (deep ink), as
 /// OKLCH lightness, chroma and hue at the top and the bottom.
-const DAWN: [(f32, f32, f32); 2] = [(0.975, 0.012, 85.0), (0.905, 0.01, 70.0)];
-const NIGHT: [(f32, f32, f32); 2] = [(0.205, 0.022, 262.0), (0.125, 0.018, 258.0)];
+pub const DAWN: [(f32, f32, f32); 2] = [(0.975, 0.012, 85.0), (0.905, 0.01, 70.0)];
+pub const NIGHT: [(f32, f32, f32); 2] = [(0.205, 0.022, 262.0), (0.125, 0.018, 258.0)];
 /// The line's ink, and around the caret.
 const LINE_ALPHA: f32 = 0.24;
 const SEGMENT_W: f32 = 280.0;
@@ -85,7 +85,7 @@ fn field_ink(stop: (f32, f32, f32)) -> Color {
 /// opaque OKLab tone: translucent ink over a light field blends in linear
 /// light and reads far weaker than its alpha suggests.
 pub(super) fn tone(cfg: &crate::config::GreeterConfig, level: f32) -> gpui::Hsla {
-    let [top, bottom] = if cfg.theme.light { DAWN } else { NIGHT };
+    let [top, bottom] = if cfg.draws_light() { DAWN } else { NIGHT };
     let field = field_ink(top).mix(field_ink(bottom), 0.5);
     field.mix(super::foreground(cfg), level).hsla()
 }
@@ -137,7 +137,7 @@ impl GreeterView {
     pub(super) fn horizon_overlay(&self, f: &Frame) -> AnyElement {
         let (vw, vh, s) = (f.vw, f.vh, f.scale);
         let hair = hairline(s);
-        let [top, bottom] = if self.config.theme.light { DAWN } else { NIGHT };
+        let [top, bottom] = if self.config.draws_light() { DAWN } else { NIGHT };
         let y = ((vh * GOLDEN) * s).round() / s;
         // Drawn in from the centre with the sign-in's entrance.
         let drawn = self.enter[element_index(Element::User)].value().clamp(0.0, 1.0);
@@ -283,8 +283,9 @@ impl GreeterView {
             }
             band = band.child(end(if narrow { below(div()) } else { above(div()) }, margin).child(row));
         }
-        // The date at the end, under the line (the vast face leaves it here).
-        if cfg.clock.face != ClockFace::Digits && cfg.placement(Element::Date).visible {
+        // The date at the end, under the line (the vast face leaves it
+        // here; the ruler and halo faces draw their own).
+        if cfg.clock.face == ClockFace::Vast && super::face_holds_date(cfg) && cfg.placement(Element::Date).visible {
             let d = &cfg.date;
             let text = words.map(|w| w.date.1.clone()).unwrap_or_default();
             let place = if narrow && !cfg.placement(Element::Power).visible { second_row(div()) } else { below(div()) };

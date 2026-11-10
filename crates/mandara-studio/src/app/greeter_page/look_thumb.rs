@@ -6,6 +6,8 @@
 use gpui::{AnyElement, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, px};
 use mandara_core::{ToGpui, oklab_gradient};
 use mandara_greeter::config::{BackgroundMode, CardStyle, ClockFace, Element, GreeterConfig, Overlay};
+// Meridian's field and line height.
+use mandara_greeter::view::meridian::{DAWN, GOLDEN, NIGHT};
 use mandara_theme::{Color, MandaraPalette};
 
 /// The reference screen's width (placements are written for 1920 × 1080).
@@ -26,10 +28,6 @@ const FIELD_H: f32 = 44.0;
 /// The miniature cards' reference heights.
 const CARD_H: f32 = 400.0;
 const PLAIN_CARD_H: f32 = 300.0;
-/// Meridian's field and line height.
-const GOLDEN: f32 = 0.618;
-const DAWN: [(f32, f32, f32); 2] = [(0.975, 0.012, 85.0), (0.905, 0.01, 70.0)];
-const NIGHT: [(f32, f32, f32); 2] = [(0.205, 0.022, 262.0), (0.125, 0.018, 258.0)];
 const SWATCH_DEG: f32 = 160.0;
 const ACCENT_L: f32 = 0.78;
 
@@ -64,7 +62,7 @@ pub(super) fn thumb(cfg: &GreeterConfig, pal: &MandaraPalette, w: f32, h: f32) -
     let accent = pal.primary.with_lightness(pal.primary.lightness().max(ACCENT_L));
     let bg = match cfg.background.overlay {
         Overlay::Horizon => {
-            let [top, bottom] = if cfg.theme.light { DAWN } else { NIGHT };
+            let [top, bottom] = if cfg.draws_light() { DAWN } else { NIGHT };
             oklab_gradient(180.0, Color::oklch(top.0, top.1, top.2), Color::oklch(bottom.0, bottom.1, bottom.2))
         }
         // A solid ground is the look's own colour, lit a little by its accent.

@@ -223,3 +223,31 @@ fn the_new_options_parse_by_name() {
     assert_eq!((old.clock.face, old.card.style, old.background.overlay), (ClockFace::Digits, CardStyle::Plain, Overlay::None));
     assert!(GreeterConfig::parse("[clock]\nface = \"sundial\"\n").is_err());
 }
+
+/// The date shows exactly once: the ruler and halo faces draw it, the vast
+/// face leaves it to Meridian's line only when that line is the card, and
+/// otherwise the date element draws it.
+#[test]
+fn the_date_shows_once_with_every_face_and_card() {
+    let styles = [CardStyle::Plain, CardStyle::Hud, CardStyle::Bezel, CardStyle::Horizon];
+    for face in [ClockFace::Digits, ClockFace::Ruler, ClockFace::Halo, ClockFace::Vast] {
+        for style in styles {
+            for enabled in [true, false] {
+                let mut cfg = GreeterConfig::default();
+                cfg.clock.face = face;
+                cfg.card.style = style;
+                cfg.card.enabled = enabled;
+                let on_the_line = enabled && style == CardStyle::Horizon && face == ClockFace::Vast;
+                let in_the_face = matches!(face, ClockFace::Ruler | ClockFace::Halo);
+                assert_eq!(face_holds_date(&cfg), in_the_face || on_the_line, "{face:?} with {style:?} (card on: {enabled})");
+            }
+        }
+    }
+    // Meridian's own look keeps its date on the line.
+    let mut meridian = GreeterConfig::default();
+    meridian.apply_look("meridian");
+    assert!(face_holds_date(&meridian));
+    // The vast face on the plain card puts the date element back.
+    meridian.card.style = CardStyle::Plain;
+    assert!(!face_holds_date(&meridian));
+}

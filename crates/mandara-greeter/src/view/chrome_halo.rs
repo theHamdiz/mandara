@@ -241,7 +241,7 @@ impl GreeterView {
         let date = cfg.placement(Element::Date).visible.then(|| {
             let font = if dc.font.trim().is_empty() { f.ui_font.clone() } else { SharedString::from(dc.font.clone()) };
             let text = self.date_text.as_ref().map(|(_, t)| t.clone()).unwrap_or_default();
-            div().mt(px(HALO_DATE_GAP * k)).font_family(font).text_size(px(dc.size * k)).font_weight(super::weight(dc.weight)).text_color(f.white.opacity(dc.opacity)).child(text)
+            div().mt(px(HALO_DATE_GAP * k)).font_family(font).text_size(px(dc.size * k)).font_weight(super::weight(dc.weight)).text_color(f.ground.opacity(dc.opacity)).child(text)
         });
         root.child(div().relative().flex().flex_col().items_center().child(self.clock_el(f, k)).children(date)).into_any_element()
     }
@@ -412,6 +412,42 @@ mod tests {
             assert!(ink.contrast_ratio(stop) >= 4.5, "the pill's label on {stop:?}");
         }
         assert!(white(cfg.date.opacity).over(ground).contrast_ratio(ground) >= 4.5, "the date in the ring");
+    }
+
+    /// With the light colours on, the module and the ring keep their deep
+    /// ink, and every word on them stays light and readable (WCAG AA).
+    #[test]
+    fn chrome_halo_text_meets_aa_contrast_in_light_mode() {
+        let mut cfg = GreeterConfig::default();
+        cfg.apply_look("chrome-halo");
+        cfg.theme.light = true;
+        assert!(!cfg.draws_light(), "the deep ink stays");
+        let p = crate::view::palette_for(&cfg);
+        let ground = Color::from_hex(&cfg.background.solid).unwrap();
+        let core = Color::oklcha(CORE_INK.0, CORE_INK.1, surface_hue(&p), cfg.card.opacity).over(Color::oklcha(1.0, 0.0, 0.0, 0.045).over(ground));
+        let field = Color::oklcha(FIELD_INK.0, FIELD_INK.1, surface_hue(&p), 0.94).over(core);
+        let on_cards = crate::view::foreground(&cfg);
+        let on_ground = super::super::ground_ink(&cfg, Some(ground));
+        let checks = [
+            ("login line", on_cards, 0.56, core),
+            ("eyebrow", on_cards, 0.82, core),
+            ("name", on_cards, 0.96, core),
+            ("typed text in field", on_cards, 0.95, field),
+            ("session pill", on_cards, 0.95, field),
+        ];
+        for (what, ink, alpha, on) in checks {
+            let ratio = ink.with_alpha(alpha).over(on).contrast_ratio(on);
+            assert!(ratio >= 4.5, "light: {what}: {ratio:.2}");
+        }
+        // The digits and the date sit on the ground inside the ring, under
+        // its pale bloom (at its strongest, while typing).
+        let bloom = light(p.primary, &p, 0.86, 0.05).with_alpha(0.14).over(ground);
+        for on in [ground, bloom] {
+            for (what, alpha) in [("the clock in the ring", cfg.clock.opacity), ("the date in the ring", cfg.date.opacity)] {
+                let ratio = on_ground.with_alpha(alpha).over(on).contrast_ratio(on);
+                assert!(ratio >= 4.5, "light: {what}: {ratio:.2}");
+            }
+        }
     }
 
     #[test]
