@@ -204,6 +204,10 @@ struct Preset {
     left: &'static [&'static str],
     center: &'static [&'static str],
     right: &'static [&'static str],
+    /// A plain preset groups each zone on a soft capsule of its own
+    /// (`bar.capsules`); the other plain presets turn them off, so none
+    /// lingers from the last one.
+    capsules: bool,
     /// A bar style preset: it sets the bar's look too (and Expressive's
     /// rail), and any other preset puts that look back.
     style: Option<BarStyle>,
@@ -213,7 +217,7 @@ struct Preset {
 /// style's, see the tests) and the style's own items.
 const fn styled(name: &'static str, blurb: &'static str, style: BarStyle, layout: BarLayout, position: BarPosition, height: f32) -> Preset {
     let [left, center, right] = style.zones();
-    Preset { name, blurb, layout, position, height, left, center, right, style: Some(style) }
+    Preset { name, blurb, layout, position, height, left, center, right, capsules: false, style: Some(style) }
 }
 
 const PRESETS: &[Preset] = &[
@@ -227,6 +231,7 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces", "active-window"],
         center: &["clock", "media"],
         right: &["weather", "resources", "clipboard", "screenshot", "network", "bluetooth", "audio", "notifications", "session"],
+        capsules: false,
         style: None,
     },
     Preset {
@@ -238,6 +243,7 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces", "active-window"],
         center: &["clock", "media"],
         right: &["weather", "tray", "network", "bluetooth", "audio", "notifications", "session"],
+        capsules: true,
         style: None,
     },
     Preset {
@@ -249,6 +255,7 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces"],
         center: &["clock", "media"],
         right: &["network", "bluetooth", "audio", "notifications", "session"],
+        capsules: false,
         style: None,
     },
     Preset {
@@ -260,6 +267,7 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces"],
         center: &["clock"],
         right: &["media", "audio", "notifications", "session"],
+        capsules: false,
         style: None,
     },
     Preset {
@@ -271,17 +279,23 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces"],
         center: &["clock"],
         right: &["audio", "notifications", "session"],
+        capsules: false,
         style: None,
     },
     Preset {
+        // A work desk along the bottom edge: the focus zone (the timer and
+        // the window you're in) in the middle, tasks and notes on the left,
+        // the system's load with the clock on the right, each zone on a
+        // capsule of its own.
         name: tk("Productive"),
-        blurb: tk("Tasks, focus timer and system load"),
-        layout: BarLayout::FloatingPills,
-        position: BarPosition::Top,
-        height: 30.0,
-        left: &["launcher", "workspaces", "active-window"],
-        center: &["clock", "pomodoro"],
-        right: &["todo", "notes", "resources", "audio", "notifications", "session"],
+        blurb: tk("A work desk along the bottom: focus timer in the middle, tasks, notes and system load in zones of their own"),
+        layout: BarLayout::MinimalEdge,
+        position: BarPosition::Bottom,
+        height: 34.0,
+        left: &["launcher", "workspaces", "todo", "notes"],
+        center: &["pomodoro", "active-window"],
+        right: &["resources", "clock", "audio", "notifications", "session"],
+        capsules: true,
         style: None,
     },
     Preset {
@@ -293,6 +307,7 @@ const PRESETS: &[Preset] = &[
         left: &["workspaces", "mini-stats"],
         center: &["clock", "media"],
         right: &["tray", "network", "audio", "notifications", "session"],
+        capsules: false,
         style: None,
     },
     Preset {
@@ -304,6 +319,7 @@ const PRESETS: &[Preset] = &[
         left: &[],
         center: &["workspaces", "clock", "audio", "session"],
         right: &[],
+        capsules: false,
         style: None,
     },
     Preset {
@@ -315,6 +331,7 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces"],
         center: &["clock"],
         right: &["tray", "audio", "network", "notifications", "session"],
+        capsules: false,
         style: None,
     },
     Preset {
@@ -326,6 +343,7 @@ const PRESETS: &[Preset] = &[
         left: &["launcher", "workspaces"],
         center: &["media"],
         right: &["clock", "network", "audio", "notifications", "session"],
+        capsules: false,
         style: None,
     },
     styled(tk("Expressive"), tk("Round buttons, tonal tiles and a scalloped rail inside a frame round the screen"), BarStyle::Expressive, BarLayout::MinimalEdge, BarPosition::Bottom, 52.0),
@@ -354,6 +372,7 @@ fn apply_preset_in(c: &mut ShellConfig, p: &Preset, replace_items: bool, known: 
             c.bar.layout = p.layout;
             c.bar.position = p.position;
             c.bar.height = p.height;
+            c.bar.capsules = p.capsules;
         }
     }
     if replace_items {
@@ -371,10 +390,9 @@ fn apply_preset_in(c: &mut ShellConfig, p: &Preset, replace_items: bool, known: 
             }
         }
     }
-    // The notch look: grouped capsules and a soft shadow under it (a
-    // style brings its own look).
+    // The notch look: a soft shadow under its grouped capsules (a style
+    // brings its own look).
     if p.layout == BarLayout::Notch && p.style.is_none() {
-        c.bar.capsules = true;
         c.bar.shadow = true;
     }
 }
@@ -574,7 +592,8 @@ impl StudioView {
             let active = selected == Some(i);
             // A tiny drawing of the preset's bar (physical sides: never mirrored).
             // A zone: a dot per item, on a glass pill of its own when the
-            // groups float.
+            // groups float, or on its soft capsule inside the bar
+            // (`bar.capsules`: Notch, Productive).
             let pill = |items: &[&str], floating: bool| {
                 div()
                     .flex_none()
@@ -582,6 +601,7 @@ impl StudioView {
                     .items_center()
                     .gap(px(MOCK_ITEM_GAP_PX))
                     .when(floating, |el| el.h(px(DIM_10_PX)).px(px(MOCK_ITEM_GAP_PX * 1.5)).rounded_full().bg(p.surface_container_high.hsla()))
+                    .when(!floating && preset.capsules, |el| el.h(px(DIM_8_PX)).px(px(MOCK_ITEM_GAP_PX * 1.5)).rounded_full().bg(p.on_surface.with_alpha(ALPHA_12).hsla()))
                     .children(items.iter().map(|_| div().flex_none().size(px(MOCK_ITEM_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla())))
             };
             let mock = div()
@@ -871,7 +891,7 @@ mod tests {
     /// its style, the items' shapes and colour, the bar font and the rail.
     fn visible(c: &ShellConfig) -> (BarLayout, BarPosition, u32, Option<BarStyle>, String) {
         let b = &c.bar;
-        let shapes = format!("{:?} {:?} {:?} {} {} {} {}", b.item_shape, b.icon_shape, b.icon_fill, b.item_capsules, c.typography.bar_font, c.side_bars_join(), c.bar_layout() == BarLayout::Notch);
+        let shapes = format!("{:?} {:?} {:?} {} {} {} {} {}", b.item_shape, b.icon_shape, b.icon_fill, b.item_capsules, b.capsules, c.typography.bar_font, c.side_bars_join(), c.bar_layout() == BarLayout::Notch);
         (b.layout, b.position, b.height.to_bits(), b.style, shapes)
     }
 
@@ -903,16 +923,69 @@ mod tests {
     fn every_preset_card_has_its_own_drawing() {
         // Plain presets draw their layout and edge; style presets draw
         // their style. No two cards share a drawing.
-        let mut drawings: Vec<(BarLayout, BarPosition, Option<BarStyle>, [usize; 3])> = Vec::new();
+        let mut drawings: Vec<(BarLayout, BarPosition, Option<BarStyle>, bool, [usize; 3])> = Vec::new();
         for p in PRESETS {
             let key = match p.style {
-                Some(style) => (BarLayout::MinimalEdge, BarPosition::Top, Some(style), [0; 3]),
+                Some(style) => (BarLayout::MinimalEdge, BarPosition::Top, Some(style), false, [0; 3]),
                 // Plain presets with the same layout and edge draw a dot
-                // per item (Classic and Minimal).
-                None => (p.layout, p.position, None, [p.left.len(), p.center.len(), p.right.len()]),
+                // per item (Classic and Minimal), on zone capsules when
+                // they have them.
+                None => (p.layout, p.position, None, p.capsules, [p.left.len(), p.center.len(), p.right.len()]),
             };
             assert!(!drawings.contains(&key), "{}: its card looks like another", p.name);
             drawings.push(key);
         }
+    }
+
+    #[test]
+    fn no_two_presets_are_the_same_bar_with_other_items() {
+        // Glass pills and Productive were once the same floating pills at
+        // the top with a few items swapped. Two presets may share a bar
+        // (layout, style, edge and zone capsules) only when one is the
+        // other with fewer items (Minimal is Classic trimmed down).
+        let bar = |p: &Preset| (p.layout, p.style, p.position, p.capsules);
+        let trimmed = |small: &Preset, big: &Preset| [(small.left, big.left), (small.center, big.center), (small.right, big.right)].iter().all(|(s, b)| s.iter().all(|id| b.contains(id)));
+        for (i, a) in PRESETS.iter().enumerate() {
+            for b in &PRESETS[i + 1..] {
+                assert_ne!((bar(a), [a.left, a.center, a.right]), (bar(b), [b.left, b.center, b.right]), "{} and {} are the same preset", a.name, b.name);
+                if bar(a) == bar(b) {
+                    assert!(trimmed(a, b) || trimmed(b, a), "{} and {} are the same bar with other items", a.name, b.name);
+                }
+                // Studio recognises the chosen preset by its bar and its
+                // middle zone, so no two may share both.
+                assert!(bar(a) != bar(b) || a.center != b.center, "{} and {} light up together", a.name, b.name);
+            }
+        }
+        // Productive is a bar of its own: not Glass pills, not Classic,
+        // not the System monitor strip along the same edge.
+        let named = |name: &str| PRESETS.iter().find(|p| p.name == name).unwrap();
+        let productive = named("Productive");
+        for other in PRESETS.iter().filter(|p| p.name != "Productive") {
+            assert_ne!(bar(productive), bar(other), "Productive's bar is {}'s", other.name);
+        }
+        assert_ne!((productive.layout, productive.position), (named("Glass pills").layout, named("Glass pills").position));
+        assert!(productive.center.contains(&"pomodoro"), "the focus timer sits in the middle");
+    }
+
+    #[test]
+    fn zone_capsules_come_and_go_with_their_presets() {
+        let known: Vec<String> = PRESETS.iter().flat_map(|p| [p.left, p.center, p.right]).flatten().map(|id| (*id).to_string()).collect();
+        let named = |name: &str| PRESETS.iter().find(|p| p.name == name).unwrap();
+        let mut c = bar();
+        apply_preset_in(&mut c, named("Productive"), true, &known);
+        assert!(c.bar.capsules);
+        assert_eq!((c.bar.layout, c.bar.position, c.bar.height), (BarLayout::MinimalEdge, BarPosition::Bottom, 34.0));
+        assert_eq!(c.bar.center, ["pomodoro", "active-window"]);
+        let index = PRESETS.iter().position(|p| p.name == "Productive").unwrap();
+        assert_eq!(PresetSelection::default().active(&c), Some(index), "recognised without a click");
+        // Leaving for a preset without them takes them away.
+        for name in ["Glass pills", "Classic"] {
+            let mut moved = c.clone();
+            apply_preset_in(&mut moved, named(name), false, &known);
+            assert!(!moved.bar.capsules, "{name}");
+        }
+        // The Notch keeps its own, with its shadow.
+        apply_preset_in(&mut c, named("Notch"), false, &known);
+        assert!(c.bar.capsules && c.bar.shadow);
     }
 }

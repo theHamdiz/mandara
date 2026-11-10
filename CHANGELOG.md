@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **The Productive bar preset has a look of its own.** It used to be the Glass pills bar with a few items swapped. Now it's a work desk along the bottom edge: the focus timer and the window you're in sit in the middle, your to-dos and notes on the left, system load and the clock on the right, each group on a soft capsule of its own. Its card in Studio → Bars → Presets draws exactly that, and picking another preset afterwards takes the capsules away again.
+
 ## 0.25.1 — 2026-11-10
 
 On FreeBSD, the login screen's power buttons no longer need the `operator`
