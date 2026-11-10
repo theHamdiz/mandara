@@ -75,7 +75,7 @@ async fn call_interactive(method: &'static str) -> Result<(), String> {
         && crate::freebsd::power::bus_missing(e)
         && crate::freebsd::power::command(method).is_some()
     {
-        return crate::runtime::unblock(move || crate::freebsd::power::run(method)).await;
+        return crate::runtime::unblock(move || crate::freebsd::power::run(method, crate::freebsd::power::Via::Pkexec)).await;
     }
     result.map_err(bus_error)
 }

@@ -110,10 +110,10 @@ impl SessionAction {
             // compositor ends the session when it quits.
             return Err(tf("{action} failed ({call}): {error}", &[("action", &self.label()), ("call", &self.describe()), ("error", &t("Quit the compositor to log out"))]));
         }
-        let conn = crate::runtime::system().await.map_err(err)?;
         use crate::logind::bus::{DEST, MANAGER, MANAGER_PATH, SESSION};
         match self {
             SessionAction::Lock | SessionAction::Logout => {
+                let conn = crate::runtime::system().await.map_err(err)?;
                 // This shell's own session (the one the lock screen answers
                 // for), not logind's "auto" guess.
                 let path = crate::logind::session_path(&conn).await.map_err(err)?;
@@ -128,7 +128,10 @@ impl SessionAction {
                     SessionAction::Reboot => "Reboot",
                     _ => "PowerOff",
                 };
+                // A system bus that can't be reached counts like a manager
+                // that isn't on it (FreeBSD falls back below).
                 let result = async {
+                    let conn = crate::runtime::system().await?;
                     let manager = proxy(&conn, DEST, MANAGER_PATH, MANAGER).await?;
                     // `interactive = true` lets polkit prompt when required.
                     manager.call::<_, _, ()>(method, &(true,)).await
@@ -140,7 +143,7 @@ impl SessionAction {
                 if let Err(e) = &result
                     && crate::freebsd::power::bus_missing(e)
                 {
-                    return crate::freebsd::power::run(method).map_err(|e| tf("{action} failed ({call}): {error}", &[("action", &self.label()), ("call", &self.describe()), ("error", &e)]));
+                    return crate::freebsd::power::run(method, crate::freebsd::power::Via::Pkexec).map_err(|e| tf("{action} failed ({call}): {error}", &[("action", &self.label()), ("call", &self.describe()), ("error", &e)]));
                 }
                 result.map_err(err)
             }
