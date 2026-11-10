@@ -9653,6 +9653,7 @@
 "{command} failed ({status})" = "{command} 失败（{status}）"
 "Core {n}" = "核心 {n}"
 "FreeBSD can't do this without ConsoleKit2" = "没有 ConsoleKit2，FreeBSD 无法执行此操作"
+"The login screen isn't allowed to do this ({error}). See {doc}" = "登录界面无权执行此操作（{error}）。请参阅 {doc}"
 "FreeBSD has no BlueZ, the Bluetooth service Mandara uses" = "FreeBSD 没有 BlueZ，即 Mandara 使用的蓝牙服务"
 "FreeBSD has no power-profiles-daemon; powerd(8) sets the processor's speed there" = "FreeBSD 没有 power-profiles-daemon；在那里由 powerd(8) 调节处理器速度"
 "FreeBSD has no systemd: its services are rc(8) scripts, which this plugin doesn't manage" = "FreeBSD 没有 systemd：它的服务是 rc(8) 脚本，此插件不管理这些脚本"

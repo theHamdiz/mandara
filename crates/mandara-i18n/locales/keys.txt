@@ -6934,6 +6934,7 @@ The local agent could not compile this command
 The location you add here is public and allows weather requests on this screen. Studio previews do not contact the weather service.
 The lock screen did not confirm that the session is locked
 The lock screen's text
+The login screen isn't allowed to do this ({error}). See {doc}
 The main menu is see-through glass with solid cards on it
 The main menu opens from the bar only
 The meaning couldn't be loaded

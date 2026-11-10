@@ -26,6 +26,7 @@ pub mod manager;
 pub mod media;
 pub mod pacing;
 pub mod power;
+pub mod power_rule;
 pub mod sessions;
 pub mod users;
 pub mod view;

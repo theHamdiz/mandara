@@ -9317,6 +9317,7 @@
 "{command} failed ({status})" = "{command} अयशस्वी झाले ({status})"
 "Core {n}" = "कोर {n}"
 "FreeBSD can't do this without ConsoleKit2" = "ConsoleKit2 शिवाय FreeBSD हे करू शकत नाही"
+"The login screen isn't allowed to do this ({error}). See {doc}" = "लॉगिन स्क्रीनला हे करण्याची परवानगी नाही ({error}). {doc} पहा"
 "FreeBSD has no BlueZ, the Bluetooth service Mandara uses" = "FreeBSD मध्ये BlueZ नाही, ही Mandara वापरत असलेली ब्लूटूथ सेवा आहे"
 "FreeBSD has no power-profiles-daemon; powerd(8) sets the processor's speed there" = "FreeBSD मध्ये power-profiles-daemon नाही; तिथे प्रोसेसरचा वेग powerd(8) ठरवते"
 "FreeBSD has no systemd: its services are rc(8) scripts, which this plugin doesn't manage" = "FreeBSD मध्ये systemd नाही: त्याच्या सेवा rc(8) स्क्रिप्ट आहेत, ज्या हे प्लगइन सांभाळत नाही"

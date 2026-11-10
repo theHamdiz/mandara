@@ -237,18 +237,44 @@ only the plumbing differs:
   the value each setting had, in the file it was in, and removes one that
   wasn't set anywhere. Nothing is started or stopped.
 * **Power buttons:** Sleep, Restart and Shut Down on the login screen ask
-  ConsoleKit2. Without it they run `shutdown` and `acpiconf -s 3`
-  directly, which FreeBSD allows only to root and the `operator` group.
-  `mandara install` adds the login screen's user (greetd's
-  `[default_session] user`, usually `greeter`) to it; by hand that's
-  `pw groupmod operator -m greeter`.
-  `operator` can do more than that: on a standard FreeBSD system it can
-  also read the raw disk devices (`/dev/ada0`, `/dev/nda0`, `/dev/da0`…),
-  so a login screen that was broken into could read an unencrypted
-  disk's data, password hashes included. If that matters more to you than
-  the buttons, take the user out again with
-  `pw groupmod operator -d greeter` and power off from a session instead;
-  with ConsoleKit2 running, the buttons don't need `operator` at all.
+  ConsoleKit2, which `mandara install` installs (D-Bus starts it when
+  asked). The login screen's user (greetd's `[default_session] user`,
+  usually `greeter`) has no ConsoleKit2 session, so ConsoleKit2 refuses it
+  by default. `mandara install` adds one polkit rule for it, in a file of
+  Mandara's own: `/usr/local/etc/polkit-1/rules.d/50-mandara-greeter.rules`.
+  The rule lets that user, and no one else, suspend, restart and power off
+  through ConsoleKit2 (`org.freedesktop.consolekit.system.suspend`,
+  `.restart` and `.stop`) and allows nothing more: while another user is
+  logged in, those still need an administrator, and the user gets no
+  hibernation, no pkexec and no access to the disks. By hand, or to look
+  first:
+
+  ```sh
+  mandara greeter power-rule                  # the plan (changes nothing)
+  sudo mandara greeter power-rule --apply     # write the rule (backed up first)
+  sudo mandara greeter power-rule --remove    # delete Mandara's rule again
+  ```
+
+  The rule takes effect right away; polkit notices new rules by itself. A
+  file at that path that isn't Mandara's is never replaced. The first
+  press after boot can take about four seconds: D-Bus starts ConsoleKit2
+  for it, and ConsoleKit2 leaves that first call unanswered while polkit
+  starts, so the login screen asks a second time.
+  Mandara 0.24 and 0.25 put the login screen's user in the `operator`
+  group instead, which can also read the raw disk devices (`/dev/ada0`,
+  `/dev/nda0`, `/dev/da0`…), so a login screen that was broken into could
+  read an unencrypted disk's data, password hashes included. The first
+  `mandara install` that writes the rule takes the user out of `operator`
+  again (`pw groupmod operator -d greeter`) and says so. It does this only
+  for greetd's login-screen user, only when `operator` isn't its primary
+  group, and only for an account that can't log in (a `nologin` or
+  `false` shell). For anyone else it prints the command instead, and later
+  runs never touch `operator`. `greeter restore` removes the rule again
+  but doesn't put the user back in `operator`.
+  Without ConsoleKit2 the buttons fall back to running `shutdown` and
+  `acpiconf -s 3` directly, which FreeBSD allows only to root and
+  `operator`. Mandara doesn't add anyone there, so the login screen then
+  shows what went wrong and points to this section.
 * **PAM:** OpenPAM looks for greetd's policy in `/etc/pam.d/greetd`, then
   in the `greetd` lines of `/etc/pam.conf`, then in ports'
   `/usr/local/etc/pam.d/greetd`, and uses the first one it finds

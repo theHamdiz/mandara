@@ -40,9 +40,10 @@ impl PowerAction {
     }
 
     /// Calls `org.freedesktop.login1.Manager.<method>(interactive = true)`
-    /// (ConsoleKit2's manager on FreeBSD) on a helper thread. FreeBSD
-    /// without ConsoleKit2 runs the base system's `shutdown` / `acpiconf`
-    /// instead. Always an error in demo mode.
+    /// (ConsoleKit2's manager on FreeBSD, which Mandara's polkit rule lets
+    /// the login screen's user use) on a helper thread. FreeBSD without
+    /// ConsoleKit2 runs the base system's `shutdown` / `acpiconf` instead.
+    /// Always an error in demo mode.
     pub fn run(self, demo: bool) -> Result<(), String> {
         if demo {
             return Err(crate::i18n::tl("Power actions are disabled in the demo"));
@@ -58,21 +59,37 @@ impl PowerAction {
     async fn call(self) -> Result<(), String> {
         use mandara_services::logind::bus;
         let result = async {
+            // FreeBSD: a bounded wait, and one more try when ConsoleKit2,
+            // started by this call, left it unanswered.
+            #[cfg(target_os = "freebsd")]
+            let conn = zbus::connection::Builder::system()?.method_timeout(mandara_services::freebsd::power::MANAGER_TIMEOUT).build().await?;
+            #[cfg(not(target_os = "freebsd"))]
             let conn = zbus::Connection::system().await?;
             let proxy = zbus::Proxy::new(&conn, bus::DEST, bus::MANAGER_PATH, bus::MANAGER).await?;
-            proxy.call::<_, _, ()>(self.method(), &(true,)).await
+            let result = proxy.call::<_, _, ()>(self.method(), &(true,)).await;
+            #[cfg(target_os = "freebsd")]
+            if result.as_ref().is_err_and(mandara_services::freebsd::power::timed_out) {
+                tracing::info!("ConsoleKit2 left {} unanswered; asking again", self.method());
+                return proxy.call::<_, _, ()>(self.method(), &(true,)).await;
+            }
+            result
         }
         .await;
-        // No login manager to ask (no ConsoleKit2, or no system bus): the
-        // base system's tools, run directly, since the login screen has no
-        // password prompt for pkexec; FreeBSD allows them to the `operator`
-        // group. A manager that refuses keeps its error.
+        // FreeBSD: ConsoleKit2 answers when Mandara's polkit rule allows
+        // the login screen's user. Without ConsoleKit2 (or a system bus)
+        // the base system's tools run directly, which works only where an
+        // administrator gave this user those rights. A refusal is never
+        // retried another way; either failure points to the docs.
         #[cfg(target_os = "freebsd")]
-        if let Err(e) = &result
-            && mandara_services::freebsd::power::bus_missing(e)
         {
-            return mandara_services::freebsd::power::run(self.method(), mandara_services::freebsd::power::Via::Direct);
+            use mandara_services::freebsd::power::{self as fbsd, LoginStep};
+            match fbsd::login_step(&result) {
+                LoginStep::Done => Ok(()),
+                LoginStep::Direct => fbsd::run(self.method(), fbsd::Via::Direct).map_err(|e| fbsd::login_screen_error(&e)),
+                LoginStep::Refused => Err(result.err().map(|e| fbsd::login_screen_error(&fbsd::short_error(&e))).unwrap_or_default()),
+            }
         }
+        #[cfg(not(target_os = "freebsd"))]
         result.map_err(|e| e.to_string())
     }
 }

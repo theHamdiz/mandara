@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **The login screen on FreeBSD no longer needs the `operator` group, which could read your disks.** Mandara Login's Sleep, Restart and Shut Down buttons now go through ConsoleKit2 with one small polkit rule that lets the login screen's user do exactly those three things and nothing else. The next `mandara install` writes it and takes that user back out of `operator`, where 0.24 and 0.25 had put it, and tells you it did. The first press after boot no longer leaves the login screen waiting forever, and `mandara greeter power-rule` shows or undoes the rule.
+
 ## 0.25.0 — 2026-11-10
 
 Mandara runs on FreeBSD: every release now has a FreeBSD build, with its

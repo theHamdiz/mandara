@@ -281,6 +281,7 @@ mandara greeter list                       # the active login screen and every c
 mandara greeter use tuigreet --dry-run     # use <name> [--apply] [--install] [--compositor cage|niri|hyprland]; needs sudo to switch; --install first adds what it lacks (greeter, greetd, cage) with your package manager
 sudo mandara greeter restore latest        # undo a switch from its backup (--apply: the display manager too)
 sudo mandara greeter keyring-unlock --apply  # unlock GNOME Keyring / KWallet at a password login (--remove undoes it)
+sudo mandara greeter power-rule --apply     # FreeBSD: the login screen's power buttons through ConsoleKit2, a polkit rule for greetd's user alone (--remove undoes it)
 mandara greeter --demo                     # preview Mandara Login; install, apply-config, uninstall
 ```
 

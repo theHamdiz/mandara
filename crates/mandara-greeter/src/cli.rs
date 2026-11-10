@@ -6,6 +6,7 @@ use clap::{Args, Subcommand};
 use crate::install::{InstallPlan, Kiosk, UninstallPlan};
 use crate::keyring_pam::{Action, KeyringPlan};
 use crate::manager::{self, RestorePlan, Runner as _, SwitchPlan, SysRoot, SystemRunner};
+use crate::power_rule::PowerRulePlan;
 
 #[derive(Args, Debug, Clone)]
 pub struct GreeterArgs {
@@ -60,6 +61,22 @@ pub enum GreeterAction {
         #[arg(long, conflicts_with = "remove")]
         apply: bool,
         /// Take Mandara's lines out again.
+        #[arg(long)]
+        remove: bool,
+        /// Only print the plan.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// FreeBSD: let the login screen's Sleep, Restart and Shut Down buttons
+    /// work through ConsoleKit2 with a polkit rule for greetd's user alone
+    /// (backed up), and take that user out of `operator`, which Mandara
+    /// v0.24 and v0.25 added it to. Prints the plan; --apply writes the
+    /// rule, --remove deletes it (root only).
+    PowerRule {
+        /// Write the rule.
+        #[arg(long, conflicts_with = "remove")]
+        apply: bool,
+        /// Delete Mandara's rule again.
         #[arg(long)]
         remove: bool,
         /// Only print the plan.
@@ -150,6 +167,19 @@ pub fn main(args: GreeterArgs) -> Result<()> {
                 return if plan.errors.is_empty() { Ok(()) } else { bail!("this change can't run (see the errors above)") };
             }
             println!("{}", plan.execute(&root).map_err(anyhow::Error::msg)?);
+            Ok(())
+        }
+        Some(GreeterAction::PowerRule { apply, remove, dry_run }) => {
+            let root = SysRoot::system();
+            let plan = PowerRulePlan::build(&root, if remove { Action::Remove } else { Action::Add });
+            println!("{}", plan.describe());
+            if dry_run || manager::forced_dry_run() || !(apply || remove) {
+                if !(apply || remove) && !dry_run && plan.changes() {
+                    println!("Run with --apply (as root) to make this change.");
+                }
+                return if plan.errors.is_empty() { Ok(()) } else { bail!("this change can't run (see the errors above)") };
+            }
+            println!("{}", plan.execute(&root, &mut SystemRunner).map_err(anyhow::Error::msg)?);
             Ok(())
         }
         Some(GreeterAction::ApplyConfig { from }) => {

@@ -88,6 +88,8 @@ pub const RC_CONF_FILES: [&str; 3] = ["/etc/defaults/rc.conf", "/etc/rc.conf", "
 pub const RC_CONF_DIRS: [&str; 2] = ["/etc/rc.conf.d", "/usr/local/etc/rc.conf.d"];
 /// Shown in every plan and result: when the change becomes visible.
 pub const TAKES_EFFECT: &str = "Takes effect at the next boot (or the next time the login screen starts); the running session is not touched.";
+/// … for a polkit rule, which polkit notices by itself.
+pub const POLKIT_TAKES_EFFECT: &str = "Takes effect right away; polkit reads its rules again by itself.";
 
 /// A filesystem root: `/` for the real system, a fixture tree in tests.
 #[derive(Clone, Debug)]
@@ -953,6 +955,7 @@ impl SwitchPlan {
             units_switched: false,
             undo: self.undo.iter().rev().cloned().collect(),
             files: Vec::new(),
+            left_groups: Vec::new(),
         };
         let mut backup = Backup::create(root, manifest, &self.writes)?;
         let mut log = vec![format!("backed up to {}", backup.logical_dir())];
@@ -1065,6 +1068,18 @@ pub struct Manifest {
     pub undo: Vec<Vec<String>>,
     #[serde(default)]
     pub files: Vec<BackedUpFile>,
+    /// Group memberships the change took away (`greeter power-rule`
+    /// taking the login screen's user out of `operator`). Restore never
+    /// adds them back; it shows the command instead.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub left_groups: Vec<LeftGroup>,
+}
+
+/// A user the change took out of a group.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LeftGroup {
+    pub user: String,
+    pub group: String,
 }
 
 pub(crate) struct Backup {
@@ -1111,7 +1126,7 @@ impl Backup {
         Ok(b)
     }
 
-    fn save(&self) -> Result<(), String> {
+    pub(crate) fn save(&self) -> Result<(), String> {
         let text = toml::to_string(&self.manifest).map_err(|e| e.to_string())?;
         std::fs::write(self.dir.join(MANIFEST), text).map_err(|e| format!("writing the backup manifest: {e}"))
     }
@@ -1330,6 +1345,8 @@ impl RestorePlan {
         let mut s = format!("Login screen — restore plan (backup {}, made {})\n\n", self.id, self.manifest.created);
         if self.manifest.target == crate::keyring_pam::BACKUP_TARGET {
             let _ = writeln!(s, "  Undoes a `greeter keyring-unlock` change.");
+        } else if self.manifest.target == crate::power_rule::BACKUP_TARGET {
+            let _ = writeln!(s, "  Undoes a `greeter power-rule` change.");
         } else {
             let _ = writeln!(s, "  Undoes the switch to {}.", find(&self.manifest.target).map_or(self.manifest.target.as_str(), |m| m.name));
         }
@@ -1343,14 +1360,23 @@ impl RestorePlan {
                 }
             }
         }
+        for g in &self.manifest.left_groups {
+            let _ = writeln!(s, "    keeps {} out of {} (that group can read raw disks; by hand: pw groupmod {} -m {})", g.user, g.group, g.group, g.user);
+        }
         if !self.commands.is_empty() {
             let _ = writeln!(s, "\n  Services (run with --apply; nothing is started or stopped):");
             for c in &self.commands {
                 let _ = writeln!(s, "    {}", c.join(" "));
             }
         }
-        let _ = writeln!(s, "\n  {TAKES_EFFECT}");
+        let _ = writeln!(s, "\n  {}", self.takes_effect());
         s
+    }
+
+    /// polkit reads a changed rule right away; everything else waits for
+    /// the login screen's next start.
+    fn takes_effect(&self) -> &'static str {
+        if self.manifest.target == crate::power_rule::BACKUP_TARGET { POLKIT_TAKES_EFFECT } else { TAKES_EFFECT }
     }
 
     pub fn execute(&self, root: &SysRoot, apply: bool, runner: &mut dyn Runner) -> Result<String, String> {
@@ -1378,7 +1404,7 @@ impl RestorePlan {
             }
             let _ = writeln!(s, "(or re-run with --apply)");
         } else {
-            let _ = writeln!(s, "\n{TAKES_EFFECT}");
+            let _ = writeln!(s, "\n{}", self.takes_effect());
         }
         Ok(s)
     }

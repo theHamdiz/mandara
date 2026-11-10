@@ -98,6 +98,9 @@ pub trait LoginProbe {
     fn switch_plan(&self, exe: &Path, after_packages: bool) -> String;
     /// What `greeter keyring-unlock --apply` would change, when anything.
     fn keyring_plan(&self) -> Option<String>;
+    /// FreeBSD: what `greeter power-rule --apply` would change, when
+    /// anything (`Err`: why it can't, such as polkit missing).
+    fn power_rule_plan(&self) -> Result<Option<String>, String>;
 }
 
 /// What was detected about the system.
@@ -312,16 +315,22 @@ impl<'a> Installer<'a> {
             self.say(Level::Detail, format!("would run: {shown}"));
             return true;
         }
+        self.root_output(cmd).is_some_and(|o| o.success)
+    }
+
+    /// Runs `cmd` as root and returns its output (`None`: it couldn't
+    /// start, which is said). Not for dry runs.
+    fn root_output(&mut self, cmd: Cmd) -> Option<crate::host::Output> {
         let Some(argv) = self.privilege.wrap(cmd.argv.clone()) else {
             self.say(Level::Warn, format!("no sudo/doas/run0/pkexec: run as root: {}", cmd.display()));
-            return false;
+            return None;
         };
         let cmd = Cmd { argv, ..cmd };
         match self.host.run(&cmd) {
-            Ok(o) => o.success,
+            Ok(o) => Some(o),
             Err(e) => {
                 self.say(Level::Warn, format!("{}: {e}", cmd.display()));
-                false
+                None
             }
         }
     }
@@ -1314,7 +1323,7 @@ impl<'a> Installer<'a> {
             } else {
                 self.say(Level::Ok, "Mandara Login is your login screen");
             }
-            self.freebsd_greeter_power();
+            self.freebsd_greeter_power(exe);
             self.keyring_unlock(exe);
             return;
         }
@@ -1361,45 +1370,57 @@ impl<'a> Installer<'a> {
             }
             let bin = self.paths.binary().to_string_lossy().into_owned();
             self.as_root(use_mandara(&bin));
-            self.freebsd_greeter_power();
+            self.freebsd_greeter_power(exe);
             self.keyring_unlock(exe);
             return;
         }
         if self.as_root(use_mandara(&exe_s)) {
             self.say(Level::Ok, "Mandara Login is your login screen from the next boot (undo: sudo mandara greeter restore latest)");
-            self.freebsd_greeter_power();
+            self.freebsd_greeter_power(exe);
             self.keyring_unlock(exe);
         } else {
             self.say(Level::Warn, "the login screen was not changed; see above, or switch later in Studio → Login screen → Login manager");
         }
     }
 
-    /// FreeBSD: the login screen's user joins `operator`, which FreeBSD
-    /// allows to shut down and suspend, so the login screen's power buttons
-    /// work without ConsoleKit2. Nothing to do when it's a member already.
-    fn freebsd_greeter_power(&mut self) {
+    /// FreeBSD: the login screen's power buttons go through ConsoleKit2,
+    /// which Mandara's polkit rule (`greeter power-rule`, a drop-in file,
+    /// backed up) allows greetd's user alone. The same run takes that user
+    /// out of `operator`, where v0.24 and v0.25 put it. Nothing runs when
+    /// the rule is in place already.
+    fn freebsd_greeter_power(&mut self, exe: &Path) {
         if self.facts.family != Family::FreeBSD {
             return;
         }
-        let group = packages::FREEBSD_POWER_GROUP;
-        let config = std::fs::read_to_string(self.facts.sys(packages::FREEBSD_GREETD_CONFIG)).unwrap_or_default();
-        let user = greetd_user(&config);
-        let groups = std::fs::read_to_string(self.facts.sys("/etc/group")).unwrap_or_default();
-        let passwd = std::fs::read_to_string(self.facts.sys("/etc/passwd")).unwrap_or_default();
-        let hint = self.root_hint(&["pw", "groupmod", group, "-m", user.as_str()]);
-        if !passwd.lines().any(|l| l.split(':').next() == Some(user.as_str())) {
-            self.say(Level::Warn, format!("the login screen's user {user} doesn't exist yet; once greetd has created it, run: {hint}"));
-            return;
-        }
-        if user_in_group(&user, group, &groups, &passwd) {
-            return;
-        }
-        if self.as_root(Cmd::new(&["pw", "groupmod", group, "-m", user.as_str()]).io(Io::Quiet)) {
-            if !self.dry() {
-                self.say(Level::Ok, format!("added {user} to {group}, so the login screen's power buttons work"));
+        let hint = self.root_hint(&["mandara", "greeter", "power-rule", "--apply"]);
+        let plan = match self.probe.power_rule_plan() {
+            Ok(Some(plan)) => plan,
+            Ok(None) => return,
+            Err(e) => {
+                self.say(Level::Warn, format!("the login screen's power buttons aren't set up: {e} Then run: {hint}"));
+                return;
             }
-        } else {
-            self.say(Level::Warn, format!("the login screen's power buttons need {user} in {group}: run {hint}"));
+        };
+        if self.dry() {
+            for line in plan.lines() {
+                self.say(Level::Info, line);
+            }
+            let bin = self.paths.binary().to_string_lossy().into_owned();
+            self.as_root(Cmd::new(&[bin.as_str(), "greeter", "power-rule", "--apply"]));
+            return;
+        }
+        let exe_s = exe.to_string_lossy().into_owned();
+        match self.root_output(Cmd::new(&[exe_s.as_str(), "greeter", "power-rule", "--apply"]).io(Io::Capture)) {
+            Some(out) if out.success => {
+                for line in out.stdout.lines().map(str::trim) {
+                    if let Some(done) = line.strip_prefix("✓ ") {
+                        self.say(Level::Ok, done);
+                    } else if let Some(warning) = line.strip_prefix("warning: ") {
+                        self.say(Level::Warn, warning);
+                    }
+                }
+            }
+            _ => self.say(Level::Warn, format!("the login screen's power buttons weren't set up; run: {hint}")),
         }
     }
 
@@ -1718,23 +1739,6 @@ fn device_group(device: &Path, groups: &str) -> Option<String> {
 /// Whether `user` is in `group`: listed as a member, or it's their primary
 /// group (from `/etc/passwd`).
 /// greetd's `[default_session] user`, else `greeter` (greetd's default).
-fn greetd_user(config: &str) -> String {
-    let mut in_session = false;
-    for line in config.lines().map(str::trim) {
-        if line.starts_with('[') {
-            in_session = line == "[default_session]";
-            continue;
-        }
-        if in_session && let Some((key, value)) = line.split_once('=') && key.trim() == "user" {
-            let value = value.split('#').next().unwrap_or_default().trim().trim_matches(|c| c == '"' || c == '\'');
-            if !value.is_empty() {
-                return value.to_owned();
-            }
-        }
-    }
-    "greeter".into()
-}
-
 fn user_in_group(user: &str, group: &str, groups: &str, passwd: &str) -> bool {
     let member = groups.lines().any(|l| {
         let f: Vec<&str> = l.split(':').collect();

@@ -1,6 +1,7 @@
 //! Mandara Login's state for `mandara install`, asked in-process: whether
 //! it is the login screen, whether its installed copy is out of date, and
-//! what `greeter use mandara` / `greeter keyring-unlock` would change.
+//! what `greeter use mandara` / `greeter keyring-unlock` / `greeter
+//! power-rule` would change.
 
 use std::path::{Path, PathBuf};
 
@@ -9,6 +10,7 @@ use mandara_install::LoginProbe;
 use crate::install::Kiosk;
 use crate::keyring_pam::{Action, KeyringPlan};
 use crate::manager::{self, MANDARA, SwitchPlan, SysRoot};
+use crate::power_rule::PowerRulePlan;
 
 /// greetd's unit name without `.service`, as `display-manager.service`
 /// points to it.
@@ -51,5 +53,13 @@ impl LoginProbe for InstallerProbe {
     fn keyring_plan(&self) -> Option<String> {
         let plan = KeyringPlan::build(&SysRoot::system(), Action::Add);
         plan.changes().then(|| plan.describe())
+    }
+
+    fn power_rule_plan(&self) -> Result<Option<String>, String> {
+        let plan = PowerRulePlan::build(&SysRoot::system(), Action::Add);
+        if !plan.errors.is_empty() {
+            return Err(plan.errors.join(" "));
+        }
+        Ok(plan.changes().then(|| plan.describe()))
     }
 }

@@ -9412,6 +9412,7 @@
 "{command} failed ({status})" = "{command} 실패 ({status})"
 "Core {n}" = "코어 {n}"
 "FreeBSD can't do this without ConsoleKit2" = "FreeBSD는 ConsoleKit2 없이 이 작업을 할 수 없습니다"
+"The login screen isn't allowed to do this ({error}). See {doc}" = "로그인 화면에는 이 작업이 허용되지 않습니다({error}). {doc}을(를) 참조하세요"
 "FreeBSD has no BlueZ, the Bluetooth service Mandara uses" = "FreeBSD에는 Mandara가 쓰는 블루투스 서비스인 BlueZ가 없습니다"
 "FreeBSD has no power-profiles-daemon; powerd(8) sets the processor's speed there" = "FreeBSD에는 power-profiles-daemon이 없습니다. 그곳에서는 powerd(8)가 프로세서 속도를 정합니다"
 "FreeBSD has no systemd: its services are rc(8) scripts, which this plugin doesn't manage" = "FreeBSD에는 systemd가 없습니다. 서비스는 rc(8) 스크립트이며 이 플러그인은 관리하지 않습니다"

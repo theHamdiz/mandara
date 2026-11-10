@@ -313,10 +313,13 @@ UPower, AccountsService, GeoClue, BSDisks and GNOME Keyring. Then it:
   already alone;
 - adds you to the `video` group, seatd's, so a compositor can open the
   seat (log in again afterwards);
-- once Mandara Login is set up, adds the login screen's user to
-  `operator`, so its Sleep, Restart and Shut Down buttons work without
-  ConsoleKit2 (`operator` can also read raw disks; see
-  [Login screen → FreeBSD](login-manager.md#freebsd) for the trade-off);
+- once Mandara Login is set up, writes one polkit rule,
+  `/usr/local/etc/polkit-1/rules.d/50-mandara-greeter.rules` (backed up,
+  Mandara's own file), so the login screen's user may suspend, restart and
+  power off through ConsoleKit2 and do nothing else; the first time, it
+  also takes that user out of `operator`, which Mandara 0.24 and 0.25
+  added it to and which can read raw disks (see
+  [Login screen → FreeBSD](login-manager.md#freebsd));
 - puts the admin helper in `/usr/local/lib/mandara` (owned by
   `root:wheel`), which Studio and the Updates panel run through pkexec.
 
