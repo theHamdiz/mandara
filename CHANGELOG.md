@@ -8,8 +8,9 @@ About → What's new shows it too.
 
 Mandara Login has three new looks that move the sign-in off the middle of
 the screen: Ghostline, Chrome Halo and Meridian. The Productive bar is a
-work desk of its own, and on a portrait screen the login screen is no
-longer drawn oversized.
+work desk of its own, on a portrait screen the login screen is no longer
+drawn oversized, and the website is readable in every colour and never
+wider than your phone.
 
 ### New
 
