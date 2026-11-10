@@ -204,6 +204,13 @@ pub fn open(target: &str, cx: &mut App) -> Result<(), String> {
     reveal(&shared, cx)
 }
 
+/// Show the panel on Discover, where you find and follow communities.
+pub(super) fn discover(cx: &mut App) -> Result<(), String> {
+    let shared = model::model();
+    { let mut m = shared.borrow_mut(); m.page = model::Page::Discover; m.searching = false; }
+    reveal(&shared, cx)
+}
+
 /// Show the panel: from its bar button, or (without one: an opt-in plugin
 /// starts without one) as a floating card.
 fn reveal(shared: &model::Shared, cx: &mut App) -> Result<(), String> {
@@ -219,8 +226,35 @@ fn reveal(shared: &model::Shared, cx: &mut App) -> Result<(), String> {
     Ok(())
 }
 
+/// Follows the shell once per process (sidebar cards are built every time
+/// the sidebar opens): what the reader holds goes once the panel closes;
+/// nothing is created until the reader is first used.
+fn follow_shell(cx: &mut App) {
+    thread_local! { static FOLLOWING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+    if FOLLOWING.with(|f| f.replace(true)) { return; }
+    cx.observe(&crate::state::shell(cx), |shell, cx| {
+        let open = shell.read(cx).panel.as_deref() == Some(ID) || crate::floating::is_floating(ID, cx);
+        if let Some(shared) = if open { Some(model::model()) } else { model::existing() } {
+            model::Model::follow_panel(&shared, open, cx);
+        }
+    }).detach();
+}
+
+/// The sidebar closed: the card's posts go, and with the panel closed too
+/// the session forgets the replies it kept for them.
+fn release_card(cx: &mut App) {
+    let Some(shared) = model::existing() else { return };
+    let open = crate::state::shell(cx).read(cx).panel.as_deref() == Some(ID) || crate::floating::is_floating(ID, cx);
+    model::Model::release_card(&shared, open, cx);
+}
+
 pub fn register(registry: &mut PluginRegistry) {
     registry.register(PluginManifest::builtin(ID, tk("Reddit"), tk("Browse Reddit communities, posts and comment threads"), Some(Zone::Right)).opt_in(), |window, cx, context| {
+        follow_shell(cx);
+        let sidebar = model_view(None, sidebar::render, window, cx);
+        if context.is_card() {
+            return PluginInstance { sidebar: Some(sidebar), ..PluginInstance::empty() };
+        }
         let bar = model_view(None, |p, _, _| icon("messages", crate::style::bar_icon(BAR_ICON_PX), readable(p.primary, p)).into_any_element(), window, cx);
         let search = panel::search_field(cx);
         let add = panel::add_field(cx);
@@ -228,20 +262,10 @@ pub fn register(registry: &mut PluginRegistry) {
         let panel_size = Rc::new(Cell::new(size(px(PANEL_W), px(PANEL_H))));
         let fields = panel::Fields { search, add, size: panel_size.clone() };
         let view = model_view(None, move |p, window, cx| panel::render(&context, &fields, p, window, cx), window, cx);
-        // Release what the reader holds once the panel closes; nothing is
-        // created until the reader is first used.
-        cx.observe(&crate::state::shell(cx), |shell, cx| {
-            let open = shell.read(cx).panel.as_deref() == Some(ID) || crate::floating::is_floating(ID, cx);
-            let sidebar = shell.read(cx).sidebar_visible();
-            if let Some(shared) = if open { Some(model::model()) } else { model::existing() } {
-                model::Model::follow_panel(&shared, open, cx);
-                // A hidden sidebar card keeps nothing and asks for nothing.
-                if !sidebar && shared.borrow().card.query.is_some() { shared.borrow_mut().drop_card(); }
-            }
-        }).detach();
-        let sidebar = model_view(None, sidebar::render, window, cx);
         PluginInstance { bar: Some(bar), panel: Some(PanelSpec { view, size: panel_size }), sidebar: Some(sidebar), ..PluginInstance::empty() }
     });
+    // The card's posts live in the shared model: they go when the sidebar closes.
+    registry.sidebar_card(ID, mandara_plugins::CardRelease::shared(release_card));
     registry.command(ID, CommandSpec::new("reddit open", tk("Open a community or a post in the Reddit panel"), |args, cx| {
         open(&args.rest(0), cx)?;
         Ok(serde_json::json!({ "opened": args.rest(0) }))

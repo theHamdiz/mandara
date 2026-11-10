@@ -34,6 +34,19 @@ pub enum BarStyle {
     /// No bar at all: each group is a row of connected tiles floating
     /// under the top edge.
     Segmented,
+    /// A dense status line along the bottom edge: every reading on a
+    /// square-cornered stat block, in the monospace font, meters and
+    /// rates in the middle.
+    SystemMonitor,
+    /// Tile dock split into three floating docks along the bottom (the
+    /// arches of a bridge), with tertiary squircle buttons.
+    StanleyBridge,
+    /// Expressive's tonal tiles and scalloped accent buttons in a narrow
+    /// lantern hanging from the top edge.
+    PharosBeam,
+    /// A top bar joined to a rail down the left edge (a tram line running
+    /// across and down the screen), with flower buttons on both.
+    RamlTram,
 }
 
 /// Plugin ids of a bar's three zones (start, middle, end; top to bottom on
@@ -64,10 +77,36 @@ struct Look {
     screen_frame: bool,
     frame_thickness: f32,
     vertical_width: f32,
+    notch_width: f32,
+    /// The bar's text in the monospace font (`typography.bar_font`).
+    mono: bool,
+}
+
+/// A rail a style joins to its bar: the left side bar's width, item size,
+/// spacing and wash, and the shape of its icon items.
+struct RailLook {
+    width: f32,
+    chip_size: f32,
+    chip_spacing: f32,
+    chip_fill: f32,
+    icon_shape: BarIconShape,
 }
 
 impl BarStyle {
-    pub const ALL: [BarStyle; 4] = [BarStyle::Expressive, BarStyle::TileDock, BarStyle::Rail, BarStyle::Segmented];
+    pub const ALL: [BarStyle; 8] = [
+        BarStyle::Expressive,
+        BarStyle::TileDock,
+        BarStyle::Rail,
+        BarStyle::Segmented,
+        BarStyle::SystemMonitor,
+        BarStyle::StanleyBridge,
+        BarStyle::PharosBeam,
+        BarStyle::RamlTram,
+    ];
+
+    /// The styles a side bar can take on its own (`side-bar style`, the
+    /// side bars' Style chips).
+    pub const SIDE: [BarStyle; 4] = [BarStyle::Expressive, BarStyle::TileDock, BarStyle::Rail, BarStyle::Segmented];
 
     /// The id used by `bar style` and in the config.
     pub fn id(self) -> &'static str {
@@ -76,11 +115,20 @@ impl BarStyle {
             BarStyle::TileDock => "tile-dock",
             BarStyle::Rail => "rail",
             BarStyle::Segmented => "segmented",
+            BarStyle::SystemMonitor => "system-monitor",
+            BarStyle::StanleyBridge => "stanley-bridge",
+            BarStyle::PharosBeam => "pharos-beam",
+            BarStyle::RamlTram => "raml-tram",
         }
     }
 
     pub fn from_id(id: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|s| s.id() == id)
+    }
+
+    /// A style a side bar can take on its own ([`Self::SIDE`]).
+    pub fn from_side_id(id: &str) -> Option<Self> {
+        Self::SIDE.into_iter().find(|s| s.id() == id)
     }
 
     pub fn layout(self) -> BarLayout {
@@ -102,6 +150,10 @@ impl BarStyle {
             BarStyle::TileDock => [&["launcher", "screenshot", "clipboard", "color-picker"], &["workspaces", "media"], &["clock", "audio", "notifications", "session"]],
             BarStyle::Rail => [&["launcher", "workspaces"], &["clock"], &["audio", "network", "notifications", "session"]],
             BarStyle::Segmented => [&["launcher", "workspaces", "active-window"], &["clock", "media"], &["network", "bluetooth", "audio", "notifications", "session"]],
+            BarStyle::SystemMonitor => [&["launcher", "workspaces", "processes"], &["mini-stats", "resources", "net-speed"], &["drives", "clock", "audio", "session"]],
+            BarStyle::StanleyBridge => [&["launcher", "workspaces"], &["media", "clock"], &["audio", "network", "bluetooth", "notifications", "session"]],
+            BarStyle::PharosBeam => [&["launcher", "workspaces"], &["clock", "media"], &["weather", "audio", "notifications", "session"]],
+            BarStyle::RamlTram => [&["active-window"], &["clock", "media"], &["weather", "tray", "bluetooth", "notifications"]],
         }
     }
 
@@ -110,6 +162,16 @@ impl BarStyle {
     pub const fn rail(self) -> Option<Zones> {
         match self {
             BarStyle::Expressive => Some([&["launcher"], &["clock", "workspaces"], &["audio", "network", "bluetooth"]]),
+            BarStyle::RamlTram => Some([&["launcher"], &["workspaces"], &["network", "audio", "session"]]),
+            _ => None,
+        }
+    }
+
+    /// The rail's own look, for the styles that join one ([`Self::rail`]).
+    fn rail_look(self) -> Option<RailLook> {
+        match self {
+            BarStyle::Expressive => Some(RailLook { width: 42.0, chip_size: 32.0, chip_spacing: 6.0, chip_fill: 1.6, icon_shape: BarIconShape::Cookie }),
+            BarStyle::RamlTram => Some(RailLook { width: 46.0, chip_size: 34.0, chip_spacing: 8.0, chip_fill: 1.4, icon_shape: BarIconShape::Flower }),
             _ => None,
         }
     }
@@ -139,6 +201,8 @@ impl BarStyle {
             screen_frame: base.screen_frame,
             frame_thickness: base.frame_thickness,
             vertical_width: base.vertical_width,
+            notch_width: base.notch_width,
+            mono: false,
         };
         match self {
             BarStyle::Expressive => Look {
@@ -213,6 +277,81 @@ impl BarStyle {
                 rim_intensity: 0.0,
                 ..plain
             },
+            // Stat blocks: square-cornered container tiles almost as tall
+            // as the strip, packed tight, numbers in the monospace font.
+            BarStyle::SystemMonitor => Look {
+                layout: BarLayout::MinimalEdge,
+                position: BarPosition::Bottom,
+                height: 30.0,
+                item_shape: BarItemShape::Tile,
+                capsule_fill: BarCapsuleFill::Container,
+                capsule_strength: 1.3,
+                item_inset: 4.0,
+                chip_padding: 9.0,
+                chip_spacing: 3.0,
+                corner_radius: 5.0,
+                flare_radius: 10.0,
+                mono: true,
+                ..plain
+            },
+            BarStyle::StanleyBridge => Look {
+                layout: BarLayout::FloatingPills,
+                position: BarPosition::Bottom,
+                height: 48.0,
+                item_shape: BarItemShape::Squircle,
+                icon_shape: BarIconShape::Squircle,
+                icon_fill: BarIconFill::Tertiary,
+                capsule_fill: BarCapsuleFill::Container,
+                capsule_strength: 1.2,
+                item_inset: 6.0,
+                chip_padding: 11.0,
+                chip_spacing: 6.0,
+                corner_radius: 18.0,
+                edge_gap: 10.0,
+                shadow: true,
+                icon_scale: 1.2,
+                ..plain
+            },
+            BarStyle::PharosBeam => Look {
+                layout: BarLayout::Notch,
+                position: BarPosition::Top,
+                height: 44.0,
+                item_shape: BarItemShape::Tile,
+                icon_shape: BarIconShape::Burst,
+                icon_fill: BarIconFill::Accent,
+                capsule_fill: BarCapsuleFill::Container,
+                capsule_strength: 1.2,
+                item_inset: 5.0,
+                chip_padding: 10.0,
+                chip_spacing: 6.0,
+                corner_radius: 12.0,
+                flare_radius: 20.0,
+                tint: 0.12,
+                shadow: true,
+                icon_scale: 1.05,
+                notch_width: 0.5,
+                ..plain
+            },
+            // Icon items stay round: their padding keeps them within the
+            // icon-sized share of the items' thickness.
+            BarStyle::RamlTram => Look {
+                layout: BarLayout::MinimalEdge,
+                position: BarPosition::Top,
+                height: 38.0,
+                item_shape: BarItemShape::Tile,
+                icon_shape: BarIconShape::Flower,
+                icon_fill: BarIconFill::Tertiary,
+                capsule_fill: BarCapsuleFill::Container,
+                capsule_strength: 1.2,
+                item_inset: 5.0,
+                chip_padding: 7.0,
+                chip_spacing: 6.0,
+                corner_radius: 12.0,
+                flare_radius: 22.0,
+                tint: 0.06,
+                icon_scale: 1.05,
+                ..plain
+            },
         }
     }
 
@@ -248,18 +387,22 @@ impl BarStyle {
         bar.screen_frame = l.screen_frame;
         bar.frame_thickness = l.frame_thickness;
         bar.vertical_width = l.vertical_width;
+        bar.notch_width = l.notch_width;
         bar.floating_frame = false;
         bar.style = Some(self);
-        if self == BarStyle::Expressive {
+        if l.mono {
+            cfg.typography.bar_font.clone_from(&cfg.typography.mono_font);
+        }
+        if let Some(rail) = self.rail_look() {
             let sb = &mut cfg.side_bars;
             sb.enabled = true;
             sb.joined = true;
             sb.chips = SideBarChips::Pills;
-            sb.icon_shape = BarIconShape::Cookie;
-            sb.width = RAIL_WIDTH_PX;
-            sb.chip_size = RAIL_CHIP_PX;
-            sb.chip_spacing = RAIL_SPACING_PX;
-            sb.chip_fill = RAIL_FILL;
+            sb.icon_shape = rail.icon_shape;
+            sb.width = rail.width;
+            sb.chip_size = rail.chip_size;
+            sb.chip_spacing = rail.chip_spacing;
+            sb.chip_fill = rail.chip_fill;
             sb.left.enabled = true;
             sb.left.pinned = true;
             sb.right.enabled = false;
@@ -291,6 +434,12 @@ impl BarStyle {
             BarStyle::Rail => SideLook { item_shape: BarItemShape::Tile, icon_shape: BarIconShape::Flower, icon_fill: BarIconFill::Tertiary, item_inset: 4.0 },
             // Connected groups: icons stay in the group's shape.
             BarStyle::Segmented => SideLook { item_shape: BarItemShape::Connected, icon_shape: BarIconShape::Match, icon_fill: BarIconFill::Match, item_inset: 5.0 },
+            // Not offered for a side bar alone (see `SIDE`), but each has
+            // its own item look if a config names it.
+            BarStyle::SystemMonitor => SideLook { item_shape: BarItemShape::Tile, icon_shape: BarIconShape::Match, icon_fill: BarIconFill::Match, item_inset: 3.0 },
+            BarStyle::StanleyBridge => SideLook { item_shape: BarItemShape::Squircle, icon_shape: BarIconShape::Squircle, icon_fill: BarIconFill::Tertiary, item_inset: 3.0 },
+            BarStyle::PharosBeam => SideLook { item_shape: BarItemShape::Tile, icon_shape: BarIconShape::Burst, icon_fill: BarIconFill::Accent, item_inset: 4.0 },
+            BarStyle::RamlTram => SideLook { item_shape: BarItemShape::Tile, icon_shape: BarIconShape::Flower, icon_fill: BarIconFill::Tertiary, item_inset: 5.0 },
         }
     }
 
@@ -332,13 +481,6 @@ pub fn clear_side(cfg: &mut ShellConfig, right: bool) {
     side.item_inset = None;
 }
 
-/// The rail Expressive joins to its bar: width, item size and spacing,
-/// and the strength of its items' wash.
-const RAIL_WIDTH_PX: f32 = 42.0;
-const RAIL_CHIP_PX: f32 = 32.0;
-const RAIL_SPACING_PX: f32 = 6.0;
-const RAIL_FILL: f32 = 1.6;
-
 /// Puts back every field the bar's recorded style changed (to its
 /// default) and forgets the style. Nothing happens without one, so a bar
 /// you shaped yourself is never touched.
@@ -366,7 +508,11 @@ pub fn clear(cfg: &mut ShellConfig) {
     bar.screen_frame = d.screen_frame;
     bar.frame_thickness = d.frame_thickness;
     bar.vertical_width = d.vertical_width;
-    if style == BarStyle::Expressive {
+    bar.notch_width = d.notch_width;
+    if style.look().mono {
+        cfg.typography.bar_font = crate::TypographyConfig::default().bar_font;
+    }
+    if style.rail_look().is_some() {
         let d = crate::side_bars::SideBarsConfig::default();
         let sb = &mut cfg.side_bars;
         sb.enabled = d.enabled;
@@ -444,6 +590,7 @@ mod tests {
             c.side_bars.right = before.side_bars.right.clone();
             assert_eq!(c.bar, before.bar, "{style:?}");
             assert_eq!(c.side_bars, before.side_bars, "{style:?}");
+            assert_eq!(c.typography, before.typography, "{style:?}: the bar font comes back");
         }
         // A bar shaped by hand (no style recorded) is left alone.
         let mut hand = ShellConfig::default();
@@ -455,7 +602,7 @@ mod tests {
 
     #[test]
     fn a_side_bar_takes_a_style_of_its_own_and_gives_it_back() {
-        for style in BarStyle::ALL {
+        for style in BarStyle::SIDE {
             let mut cfg = ShellConfig::default();
             BarStyle::TileDock.apply(&mut cfg);
             let main = cfg.bar.clone();
@@ -471,7 +618,7 @@ mod tests {
             let back: ShellConfig = toml::from_str(&toml::to_string(&cfg).expect("serializes")).expect("parses");
             assert_eq!(back.side_bars, cfg.side_bars, "{style:?}");
             // Another style replaces it whole; none puts the shared look back.
-            let other = BarStyle::ALL.into_iter().find(|o| *o != style).unwrap();
+            let other = BarStyle::SIDE.into_iter().find(|o| *o != style).unwrap();
             other.apply_to_side(&mut cfg, true);
             assert!(other.side_matches(&cfg, true) && !style.side_matches(&cfg, true));
             clear_side(&mut cfg, true);
@@ -497,6 +644,43 @@ mod tests {
         let old: ShellConfig = toml::from_str("[side_bars.left]\nenabled = true\n").expect("parses");
         assert_eq!(old.side_bars.left.style, None);
         assert_eq!(old.side_bars.left.item_shape, None);
+    }
+
+    #[test]
+    fn the_new_styles_set_their_own_signature() {
+        // System monitor: a slim bottom status line in the monospace font.
+        let mut cfg = ShellConfig::default();
+        cfg.typography.mono_font = "Iosevka".into();
+        BarStyle::SystemMonitor.apply(&mut cfg);
+        assert_eq!((cfg.bar.layout, cfg.bar.position, cfg.bar.item_shape), (BarLayout::MinimalEdge, BarPosition::Bottom, BarItemShape::Tile));
+        assert_eq!(cfg.typography.bar_font, "Iosevka");
+        assert!(!cfg.side_bars.enabled && !cfg.bar.screen_frame);
+        // Pharos Beam: a narrower notch than the shipped one.
+        BarStyle::PharosBeam.apply(&mut cfg);
+        assert_eq!(cfg.typography.bar_font, "", "the monospace bar went with System monitor");
+        assert_eq!(cfg.bar.layout, BarLayout::Notch);
+        assert!(cfg.bar.notch_width() < BarConfig::default().notch_width());
+        // Raml Tram: a top bar joined to a flower rail on the left.
+        BarStyle::RamlTram.apply(&mut cfg);
+        assert_eq!(cfg.bar.notch_width, BarConfig::default().notch_width);
+        assert_eq!(cfg.bar.position, BarPosition::Top);
+        assert!(cfg.side_bar_on(false) && !cfg.side_bar_on(true) && cfg.side_bars_join());
+        assert_eq!(cfg.side_bars.icon_shape, BarIconShape::Flower);
+        assert_eq!(cfg.side_bars.chips, SideBarChips::Pills);
+        assert!(BarStyle::RamlTram.rail().is_some());
+        // Stanley Bridge: three floating docks, the rail gone.
+        BarStyle::StanleyBridge.apply(&mut cfg);
+        assert!(!cfg.side_bars.enabled);
+        assert_eq!((cfg.bar.layout, cfg.bar.position, cfg.bar.icon_fill), (BarLayout::FloatingPills, BarPosition::Bottom, BarIconFill::Tertiary));
+        // A bar font you chose yourself is never cleared without a style.
+        let mut hand = ShellConfig::default();
+        hand.typography.bar_font = "Cairo".into();
+        clear(&mut hand);
+        assert_eq!(hand.typography.bar_font, "Cairo");
+        // Only the first four take a side bar on their own.
+        for style in BarStyle::ALL {
+            assert_eq!(BarStyle::from_side_id(style.id()).is_some(), BarStyle::SIDE.contains(&style));
+        }
     }
 
     #[test]

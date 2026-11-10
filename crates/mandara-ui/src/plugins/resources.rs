@@ -233,8 +233,10 @@ const REVEAL_TOP: usize = 5;
 // ── Units ────────────────────────────────────────────────────────────────
 
 /// `scaling_cur_freq` kHz per GHz.
+#[cfg(not(target_os = "freebsd"))]
 const KHZ_PER_GHZ: f32 = 1e6;
 /// hwmon reports milli-degrees Celsius.
+#[cfg(not(target_os = "freebsd"))]
 const MILLI: f32 = 1000.0;
 /// One decimal place for JSON readings.
 const ROUND_TENTHS: f64 = 10.0;
@@ -369,7 +371,8 @@ struct Snapshot {
     threads: usize,
     top: Vec<TopApp>,
     temps: Vec<ComponentTemp>,
-    gpus: Vec<Gpu>,
+    /// The shared GPU reading ([`crate::widgets::gpu_feed`]).
+    gpus: Arc<[Gpu]>,
     /// The process table had a previous sample (CPU figures are real).
     primed: bool,
     /// Formatted uptime (`4d 2h`).
@@ -489,7 +492,7 @@ impl Live {
     /// Feeds each GPU's load into its sparkline; forgets GPUs that vanished.
     fn record_gpus(&mut self) {
         let now = Instant::now();
-        let gpus = &self.snapshot.gpus;
+        let gpus = &self.snapshot.gpus[..];
         self.gpu_load.retain(|(slot, _)| gpus.iter().any(|g| g.slot == *slot));
         for g in gpus {
             let Some(load) = g.load else { continue };
@@ -539,6 +542,18 @@ fn meminfo() -> (u64, u64, u64, u64) {
     if demo::active() {
         return demo::meminfo();
     }
+    #[cfg(target_os = "freebsd")]
+    {
+        mandara_services::freebsd::host::memory().map(|m| (m.used(), m.total, m.swap_used, m.swap_total)).unwrap_or_default()
+    }
+    #[cfg(not(target_os = "freebsd"))]
+    {
+        linux_meminfo()
+    }
+}
+
+#[cfg(not(target_os = "freebsd"))]
+fn linux_meminfo() -> (u64, u64, u64, u64) {
     const KIB: u64 = 1024;
     let text = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
     let field = |name: &str| -> u64 {
@@ -554,6 +569,18 @@ fn cpu_freq_ghz() -> Option<f32> {
     if demo::active() {
         return Some(demo::cpu_freq_ghz());
     }
+    #[cfg(target_os = "freebsd")]
+    {
+        mandara_services::freebsd::host::cpu_freq_ghz()
+    }
+    #[cfg(not(target_os = "freebsd"))]
+    {
+        linux_cpu_freq_ghz()
+    }
+}
+
+#[cfg(not(target_os = "freebsd"))]
+fn linux_cpu_freq_ghz() -> Option<f32> {
     // cpufreq is cheap and per-policy; fall back to /proc/cpuinfo.
     let mut sum = 0.0;
     let mut n = 0_u32;
@@ -580,6 +607,18 @@ fn cpu_temp_c() -> Option<f32> {
     if demo::active() {
         return Some(demo::cpu_temp_c());
     }
+    #[cfg(target_os = "freebsd")]
+    {
+        mandara_services::freebsd::host::cpu_temperature()
+    }
+    #[cfg(not(target_os = "freebsd"))]
+    {
+        linux_cpu_temp_c()
+    }
+}
+
+#[cfg(not(target_os = "freebsd"))]
+fn linux_cpu_temp_c() -> Option<f32> {
     for e in std::fs::read_dir("/sys/class/hwmon").ok()?.flatten() {
         let name = std::fs::read_to_string(e.path().join("name")).unwrap_or_default();
         if matches!(name.trim(), "k10temp" | "coretemp" | "zenpower" | "cpu_thermal" | "acpitz")
@@ -595,6 +634,18 @@ fn loadavg() -> [f32; 3] {
     if demo::active() {
         return demo::loadavg();
     }
+    #[cfg(target_os = "freebsd")]
+    {
+        mandara_services::freebsd::host::loadavg()
+    }
+    #[cfg(not(target_os = "freebsd"))]
+    {
+        linux_loadavg()
+    }
+}
+
+#[cfg(not(target_os = "freebsd"))]
+fn linux_loadavg() -> [f32; 3] {
     let text = std::fs::read_to_string("/proc/loadavg").unwrap_or_default();
     let mut it = text.split_whitespace().filter_map(|v| v.parse::<f32>().ok());
     [it.next().unwrap_or(0.0), it.next().unwrap_or(0.0), it.next().unwrap_or(0.0)]
@@ -653,8 +704,8 @@ fn read_disks() -> Vec<Disk> {
         return demo::disks();
     }
     let mut disks: Vec<Disk> = Vec::new();
-    for (_, mount, fstype) in parse_mounts(&std::fs::read_to_string("/proc/mounts").unwrap_or_default()) {
-        let Some((used, total)) = disk_usage(&mount) else { continue };
+    for (mount, fstype, usage) in mounts() {
+        let Some((used, total)) = usage.or_else(|| disk_usage(&mount)) else { continue };
         // Skip tiny boot / EFI partitions and filesystems already listed.
         if total < MIN_DISK_BYTES || disks.iter().any(|d| (d.used, d.total) == (used, total)) {
             continue;
@@ -667,7 +718,22 @@ fn read_disks() -> Vec<Disk> {
     disks
 }
 
+/// `(mount, fstype, (used, total) when already known)` of each local
+/// filesystem: `/proc/mounts` (each measured with statvfs), or FreeBSD's
+/// `getfsstat`, which carries the figures itself.
+#[cfg(not(target_os = "freebsd"))]
+fn mounts() -> Vec<(String, String, Option<(u64, u64)>)> {
+    parse_mounts(&std::fs::read_to_string("/proc/mounts").unwrap_or_default()).into_iter().map(|(_, mount, fstype)| (mount, fstype, None)).collect()
+}
+
+#[cfg(target_os = "freebsd")]
+fn mounts() -> Vec<(String, String, Option<(u64, u64)>)> {
+    use mandara_services::freebsd::mounts;
+    mounts::local(mounts::all()).into_iter().map(|m| (m.mount, m.fstype, (m.total > 0).then_some((m.used, m.total)))).collect()
+}
+
 /// `hostname · Linux 6.x` (blocking procfs reads — background only).
+#[cfg(not(target_os = "freebsd"))]
 fn host_line() -> String {
     let host = std::fs::read_to_string("/proc/sys/kernel/hostname").unwrap_or_default().trim().to_string();
     let kernel = if demo::active() {
@@ -680,6 +746,14 @@ fn host_line() -> String {
         (false, true) => host,
         _ => format!("Linux {kernel}"),
     }
+}
+
+/// `hostname · FreeBSD 14.4` (sysctl reads).
+#[cfg(target_os = "freebsd")]
+fn host_line() -> String {
+    let host = mandara_services::freebsd::host::hostname();
+    let system = if demo::active() { format!("Linux {}", demo::KERNEL) } else { mandara_services::freebsd::host::system() };
+    if host.is_empty() { system } else { format!("{host} · {system}") }
 }
 
 fn threads() -> usize {
@@ -749,12 +823,15 @@ async fn collect(sampler: Arc<Mutex<Sampler>>, executor: BackgroundExecutor) -> 
     }
 }
 
-/// Component temperatures and GPUs (blocking; may run `nvidia-smi`).
-fn hardware() -> (Vec<ComponentTemp>, Vec<Gpu>) {
+/// Component temperatures and GPUs (blocking; may run `nvidia-smi`). The
+/// GPUs come from the shell's one GPU sampler, shared with the desktop
+/// system monitor.
+fn hardware() -> (Vec<ComponentTemp>, Arc<[Gpu]>) {
+    let gpus = crate::widgets::gpu_feed::fresh(crate::widgets::gpu_feed::FRESH).gpus;
     if demo::active() {
-        return (demo::temperatures(), demo::gpus());
+        return (demo::temperatures(), gpus);
     }
-    (sensors::read_temperatures(std::path::Path::new("/")), sensors::read_all_gpus())
+    (sensors::read_temperatures(std::path::Path::new("/")), gpus)
 }
 
 /// Formatted uptime (`4d 2h`), or the demo's.
@@ -1469,9 +1546,82 @@ fn panel_view(p: PanelCx, live: Rc<RefCell<Live>>, size_cell: Rc<Cell<gpui::Size
     }
 }
 
+/// The sidebar card: CPU and memory with their sparklines and the first
+/// disks, from `side_live`.
+fn sidebar_card(side_live: Rc<RefCell<Live>>, window: &mut Window, cx: &mut App) -> gpui::AnyView {
+    fn_view(
+        None,
+        move |palette, window, cx| {
+            let (cpu, mem) = {
+                let s = crate::hub::resources_entity(cx).read(cx);
+                (s.cpu, s.mem)
+            };
+            let units = crate::state::config(cx).read(cx).get().units();
+            let mut guard = side_live.borrow_mut();
+            guard.tuning = Tuning::of(cx);
+            guard.views.track(window);
+            guard.record(cpu, mem);
+            guard.labels(units);
+            let l = &*guard;
+            let [cpu_c, mem_c, _] = colors(palette);
+            let mini = |icon_name: &'static str, label: &'static str, v: f32, h: &History, (a, b): (Color, Color)| {
+                div()
+                    .flex_1()
+                    .min_w(px(0.0))
+                    .flex()
+                    .flex_col()
+                    .gap(px(ROW_GAP_PX))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(ROW_GAP_PX))
+                            .child(icon(icon_name, CARD_ICON_PX, a))
+                            .child(div().flex_1().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(label))
+                            .child(div().font_features(tabular_nums()).text_size(px(text::BODY_S)).font_weight(FontWeight::SEMIBOLD).child(percent_text(v))),
+                    )
+                    .child(sparkline(h, SIDEBAR_SPARK_H_PX, a.with_alpha(SPARK_FROM_ALPHA), b, palette))
+            };
+            let disks = l.labels.as_ref().map_or(&[][..], |labels| &labels.disks[..labels.disks.len().min(SIDEBAR_DISKS)]);
+            card(palette)
+                .flex()
+                .flex_col()
+                .gap(px(tokens::MD))
+                .child(div().flex().gap(px(tokens::MD)).child(mini("cpu", t("CPU"), cpu, &l.cpu, cpu_c)).child(mini("memory", t("Memory"), mem, &l.mem, mem_c)))
+                .when(!disks.is_empty(), |el| el.child(storage(disks, l.tuning, palette)))
+                .into_any_element()
+        },
+        window,
+        cx,
+    )
+}
+
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Resources"), tk("CPU, memory and disk usage"), Some(Zone::Right)), |window, cx, panel_cx| {
         let live = Rc::new(RefCell::new(Live::new()));
+        if panel_cx.is_card() {
+            // A sidebar card: only its disks to prime (no host line,
+            // temperatures or GPUs, which may run `nvidia-smi`).
+            let task = cx.background_executor().spawn(async { read_disks() });
+            let prime = live.clone();
+            cx.spawn(async move |cx| {
+                let disks = task.await;
+                let views = {
+                    let mut l = prime.borrow_mut();
+                    if l.disks_at.is_none() {
+                        l.disks = disks;
+                        l.disks_at = Some(Instant::now());
+                    }
+                    l.generation += 1;
+                    l.views.clone()
+                };
+                views.notify_async(cx);
+            })
+            .detach();
+            let sidebar = sidebar_card(live, window, cx);
+            super::follow(&sidebar, &crate::hub::resources_entity(cx), cx);
+            return PluginInstance { sidebar: Some(sidebar), ..PluginInstance::empty() };
+        }
         // Displayed values spring toward each smoothed sample.
         let shown = Rc::new(RefCell::new((
             Readout::new(CHIP_SPRING, CHIP_SNAP_BELOW, PERCENT_STEP),
@@ -1544,52 +1694,7 @@ pub fn register(r: &mut PluginRegistry) {
             .detach();
         }
         let panel = fn_view(None, panel_view(panel_cx.clone(), live.clone(), size_cell.clone()), window, cx);
-        let side_live = live.clone();
-        let sidebar = fn_view(
-            None,
-            move |palette, window, cx| {
-                let (cpu, mem) = {
-                    let s = crate::hub::resources_entity(cx).read(cx);
-                    (s.cpu, s.mem)
-                };
-                let units = crate::state::config(cx).read(cx).get().units();
-                let mut guard = side_live.borrow_mut();
-                guard.tuning = Tuning::of(cx);
-                guard.views.track(window);
-                guard.record(cpu, mem);
-                guard.labels(units);
-                let l = &*guard;
-                let [cpu_c, mem_c, _] = colors(palette);
-                let mini = |icon_name: &'static str, label: &'static str, v: f32, h: &History, (a, b): (Color, Color)| {
-                    div()
-                        .flex_1()
-                        .min_w(px(0.0))
-                        .flex()
-                        .flex_col()
-                        .gap(px(ROW_GAP_PX))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(ROW_GAP_PX))
-                                .child(icon(icon_name, CARD_ICON_PX, a))
-                                .child(div().flex_1().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(label))
-                                .child(div().font_features(tabular_nums()).text_size(px(text::BODY_S)).font_weight(FontWeight::SEMIBOLD).child(percent_text(v))),
-                        )
-                        .child(sparkline(h, SIDEBAR_SPARK_H_PX, a.with_alpha(SPARK_FROM_ALPHA), b, palette))
-                };
-                let disks = l.labels.as_ref().map_or(&[][..], |labels| &labels.disks[..labels.disks.len().min(SIDEBAR_DISKS)]);
-                card(palette)
-                    .flex()
-                    .flex_col()
-                    .gap(px(tokens::MD))
-                    .child(div().flex().gap(px(tokens::MD)).child(mini("cpu", t("CPU"), cpu, &l.cpu, cpu_c)).child(mini("memory", t("Memory"), mem, &l.mem, mem_c)))
-                    .when(!disks.is_empty(), |el| el.child(storage(disks, l.tuning, palette)))
-                    .into_any_element()
-            },
-            window,
-            cx,
-        );
+        let sidebar = sidebar_card(live.clone(), window, cx);
         let samples = crate::hub::resources_entity(cx);
         for view in [&bar, &panel, &sidebar] {
             super::follow(view, &samples, cx);
@@ -1610,6 +1715,8 @@ pub fn register(r: &mut PluginRegistry) {
             })),
         }
     });
+    // Its history and disks live in its view; samples come from the hub's sampler.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     r.command(ID, CommandSpec::new("system resources", tk("CPU, memory, GPUs, temperatures, disks and uptime"), |_, cx| {
         let units = crate::state::config(cx).read(cx).get().units();
         let mut s = SystemSampler::default();
@@ -1651,6 +1758,7 @@ pub fn register(r: &mut PluginRegistry) {
                     "vram_total_bytes": g.vram_total,
                     "temp_c": g.temp_c.map(round1),
                     "freq_mhz": g.freq_mhz.map(f32::round),
+                    "power_w": g.power_w.map(round1),
                 })
             })
             .collect();
@@ -1734,6 +1842,7 @@ mod tests {
             vram_total: vram.then_some(2),
             temp_c: Some(50.0),
             freq_mhz: None,
+            power_w: None,
         }
     }
 
@@ -1776,9 +1885,9 @@ mod tests {
     #[test]
     fn gpu_histories_forget_removed_gpus() {
         let mut live = Live::new();
-        live.snapshot.gpus = vec![gpu("a", true), gpu("b", false)];
+        live.snapshot.gpus = vec![gpu("a", true), gpu("b", false)].into();
         live.record_gpus();
-        live.snapshot.gpus.truncate(1);
+        live.snapshot.gpus = live.snapshot.gpus[..1].into();
         live.record_gpus();
         assert_eq!(live.gpu_load.len(), 1);
     }

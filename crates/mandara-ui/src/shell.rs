@@ -94,10 +94,11 @@ pub struct ShellView {
     /// The chip last clicked: a plugin placed twice (in the bar and a side
     /// bar) opens its panel from the one you clicked.
     origin: Option<(usize, usize)>,
-    /// The sidebar's tabs: cached card lists, selection, menus.
+    /// The sidebar's tabs: its cards (only while it shows), selection, menus.
     tabs: crate::sidebar_tabs::SidebarTabs,
-    /// The notifications list shown in its own sidebar tab, when enabled.
-    sidebar_notifications: Option<AnyView>,
+    /// Drops the sidebar's cards once it stayed closed for
+    /// [`crate::sidebar_tabs::RELEASE_AFTER`] (cancelled when it opens).
+    sidebar_release: Option<gpui::Task<()>>,
     /// The main menu panel (right-click on empty bar space).
     menu: Option<(PanelSpec, PanelCx)>,
     /// The detached panel's plugin id and instance (see [`DETACHED_SLOT`]).
@@ -470,7 +471,7 @@ impl ShellView {
             zones: [Vec::new(), Vec::new(), Vec::new()],
             sides: [side_bars::SideBar::new(false), side_bars::SideBar::new(true)],
             origin: None,
-            sidebar_notifications: None,
+            sidebar_release: None,
             tabs: crate::sidebar_tabs::SidebarTabs::new(),
             menu: None,
             detached: None,
@@ -545,13 +546,8 @@ impl ShellView {
         }
         let notif_id = crate::plugins::notifications::ID;
         let notif_tab = placement.notifications_tab && enabled(notif_id);
-        self.sidebar_notifications = notif_tab
-            .then(|| {
-                let build = cx.global::<PluginRegistry>().get(notif_id).map(|f| f.build.clone())?;
-                mandara_plugins::guard("notifications tab startup", || build(window, cx, base_cx.fork()))?.sidebar
-            })
-            .flatten();
-        self.tabs.rebuild(&cfg.sidebar.tabs, &enabled, notif_tab.then_some(notif_id), &base_cx, window, cx);
+        // Cards are built when the sidebar shows them, not here.
+        self.tabs.rebuild(&cfg.sidebar.tabs, &enabled, notif_tab.then_some(notif_id), notif_tab, &base_cx, cx);
         if self.menu.is_none() {
             let build = cx.global::<PluginRegistry>().get(crate::plugins::main_menu::ID).map(|f| f.build.clone());
             if let Some(build) = build {
@@ -612,11 +608,16 @@ impl ShellView {
     /// Fits each zone into its share of the bar ([`layout::zone_limits`]),
     /// so the zones never run into each other: a long window title is
     /// ellipsized short of the clock instead of sliding under it (issue
-    /// #21). Sets every slot's limit for this frame.
-    fn fit_zones(&self) {
-        let m = &self.metrics;
-        let (along, _) = layout::bar_axes(m, self.surface);
+    /// #21). Sets every slot's limit for this frame. The notch first grows
+    /// to hold its items ([`layout::notch_fit`]), so they're only squeezed
+    /// once it reaches the edge.
+    fn fit_zones(&mut self) {
+        let (along, _) = layout::bar_axes(&self.metrics, self.surface);
         let lengths: [smallvec::SmallVec<[f32; 16]>; 3] = std::array::from_fn(|z| self.zones[z].iter().map(|s| self.slot_length(s)).collect());
+        if self.metrics.notch() {
+            self.metrics.notch_fit = layout::notch_fit(&self.metrics, [&lengths[0], &lengths[1], &lengths[2]]);
+        }
+        let m = &self.metrics;
         let wanted: [f32; 3] = std::array::from_fn(|z| layout::zone_width(&lengths[z], m));
         let limits = layout::zone_limits(m, along, wanted);
         for (z, zone) in self.zones.iter().enumerate() {
@@ -894,15 +895,21 @@ impl ShellView {
             }
             mandara_config::surfaces::BarRightClick::MainMenu => {
                 let along = if self.metrics.vertical { y } else { x };
-                let shell = self.shell.clone();
-                crate::state::on_bar(&self.monitor, cx, |cx| {
-                    shell.update(cx, |s, cx| {
-                        s.panel_anchor = Some(along);
-                        s.toggle_panel(crate::plugins::main_menu::ID, cx);
-                    })
-                })
+                toggle_main_menu(&self.monitor, along, cx);
             }
         }
+    }
+
+    /// Where a right-click at `at` (output px) on this bar's output, `output`
+    /// px big, falls along the bar: `Some` in the strip the bar takes along
+    /// its edge while the bar shows ([`layout::band_hit`], with the metrics
+    /// this frame already resolved), `None` elsewhere or while it is slid
+    /// away.
+    pub(crate) fn gap_hit(&self, output: (f32, f32), at: (f32, f32)) -> Option<f32> {
+        if self.autohide.is_hidden() {
+            return None;
+        }
+        layout::band_hit(&self.metrics, output, at)
     }
 
     /// The main menu's frosted wallpaper, decoded and ready to draw: `None`
@@ -1230,6 +1237,19 @@ impl ShellView {
     }
 }
 
+/// Opens (or closes) the main menu on `monitor`'s bar, `along` px down the
+/// bar: a right-click on empty bar space, or in a split bar's gaps
+/// ([`crate::bar::gaps`]).
+pub(crate) fn toggle_main_menu(monitor: &str, along: f32, cx: &mut App) {
+    let shell = shell(cx);
+    crate::state::on_bar(monitor, cx, |cx| {
+        shell.update(cx, |s, cx| {
+            s.panel_anchor = Some(along);
+            s.toggle_panel(crate::plugins::main_menu::ID, cx);
+        })
+    })
+}
+
 #[derive(Copy, Clone)]
 enum EdgeAction {
     Launcher,
@@ -1270,7 +1290,7 @@ fn capsule_colors(bar: &mandara_config::BarConfig, palette: &MandaraPalette) -> 
 /// One item's tile: a rounded rectangle, a squircle, or a Material 3
 /// Expressive shape painted from SDF circles ([`crate::components::shapes`]),
 /// in `color` over the bar's own `under` colour, with an optional outline.
-fn item_tile(placed: &crate::bar::items::Placed, color: Color, under: Color, edge: Option<Color>) -> AnyElement {
+pub(crate) fn item_tile(placed: &crate::bar::items::Placed, color: Color, under: Color, edge: Option<Color>) -> AnyElement {
     use crate::bar::items::Tile;
     use crate::components::cut::{Corner, Ink};
     use crate::components::surfaces::Surface as _;
@@ -1325,7 +1345,6 @@ impl Render for ShellView {
         // Resolved once per frame: geometry, radii (global roundness) and
         // the panel / sidebar springs follow Studio edits immediately.
         self.metrics = Metrics::of(&cfg, crate::style::radius_scale());
-        let m = self.metrics;
         let (panel_spring, panel_custom) = spring_for(PANEL_SPRING, &cfg.panels.spring);
         self.panel.set_config(panel_spring);
         self.panel_custom = panel_custom;
@@ -1336,6 +1355,8 @@ impl Render for ShellView {
         self.ensure_detached(window, cx);
         self.update_targets(&cfg);
         self.update_sides(&cfg);
+        // (After the targets: the notch has grown to hold its items.)
+        let m = self.metrics;
         // (Before the panel: an open sidebar moves the panel.)
         // A side bar on the sidebar's edge replaces it.
         let sidebar_up = cfg.sidebar_active() && (cfg.sidebar.pinned() || self.shell.read(cx).sidebar_visible_on(&self.monitor));
@@ -1518,7 +1539,7 @@ impl Render for ShellView {
                 let sidebar_up = crate::state::config(cx).read(cx).get().sidebar_active() && (this.shell.read(cx).sidebar_visible_on(&this.monitor) || crate::state::config(cx).read(cx).get().sidebar.pinned());
                 if sidebar_up && this.shell.read(cx).panel_on(&this.monitor).is_none() {
                     let cfg = crate::state::config(cx).read(cx).snapshot();
-                    let notifications = this.sidebar_notifications.is_some();
+                    let notifications = this.tabs.has_notifications();
                     if this.tabs.handle_key(e, &cfg.sidebar, notifications, cx) {
                         cx.stop_propagation();
                         cx.notify();
@@ -1770,6 +1791,23 @@ impl Render for ShellView {
         if sidebar_p <= HIDDEN_EPSILON {
             // The next opening picks its tab (the last one, or the first).
             self.tabs.on_hidden();
+            // Its cards go once it stays closed.
+            if self.tabs.is_live() && self.sidebar_release.is_none() {
+                self.sidebar_release = Some(cx.spawn_in(window, async move |this, cx| {
+                    cx.background_executor().timer(crate::sidebar_tabs::RELEASE_AFTER).await;
+                    let _ = this.update_in(cx, |this, window, cx| {
+                        this.sidebar_release = None;
+                        // The cards' frames grew this window's frame buffers and
+                        // layout tree (a Sudoku board is thousands of elements):
+                        // give that room back too, before the allocator trim.
+                        if this.sidebar.value() <= HIDDEN_EPSILON && this.tabs.release(cx) {
+                            window.shrink_frame_buffers(cx);
+                        }
+                    });
+                }));
+            }
+        } else {
+            self.sidebar_release = None;
         }
         if sidebar_p > HIDDEN_EPSILON {
             let h = side_h;
@@ -1778,11 +1816,11 @@ impl Render for ShellView {
             let card_gap = ranges::CARD_SPACING.clamp(side_look.card_spacing, mandara_config::surfaces::defaults::CARD_SPACING_PX);
             let sidebar_cx = &self.sidebar_cx;
             sidebar_cx.set_progress(sidebar_p.min(1.0));
-            let notifications = self.sidebar_notifications.is_some();
+            let notifications = self.tabs.has_notifications();
             let sel = self.tabs.resolve(&cfg.sidebar, notifications, cx);
-            let cards: Vec<AnyElement> = match (&sel, &self.sidebar_notifications) {
-                (crate::sidebar_tabs::Sel::Notifications, Some(view)) => vec![view.clone().into_any_element()],
-                _ => self.tabs.cards(&sel).iter().enumerate().map(|(i, card)| reveal(sidebar_cx, i, card.clone())).collect(),
+            let cards: Vec<AnyElement> = match sel {
+                crate::sidebar_tabs::Sel::Notifications => self.tabs.notifications_view(window, cx).map(|view| view.into_any_element()).into_iter().collect(),
+                _ => self.tabs.cards(&sel, window, cx).iter().enumerate().map(|(i, card)| reveal(sidebar_cx, i, card.clone())).collect(),
             };
             let cards = if cards.is_empty() { vec![crate::sidebar_tabs::empty_tab(&palette)] } else { cards };
             // The switched-in tab slides from its side and fades in.

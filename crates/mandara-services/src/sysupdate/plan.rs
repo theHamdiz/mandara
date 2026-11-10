@@ -18,6 +18,8 @@
 //! | openSUSE Leap | `zypper -n refresh` | `zypper -n update --download-only` | `zypper -n update` |
 //! | Void | `xbps-install -S` | `xbps-install -uyD` | `xbps-install -uy` |
 //! | Alpine | `apk update` | — | `apk upgrade` |
+//! | FreeBSD | `pkg update` | `pkg upgrade -U -F -y`, then `freebsd-update fetch` | `pkg upgrade -U -y`, then `freebsd-update install` |
+//! | FreeBSD, packaged base | `pkg update` | `pkg upgrade -U -F -y` | `pkg upgrade -U -y` |
 //!
 //! Splitting refresh and download from the install step makes the safe
 //! point explicit: cancelling is offered until the install step starts,
@@ -45,10 +47,12 @@ pub enum StepKind {
     DeleteGenerations,
     CollectGarbage,
     Bootloader,
+    /// AUR packages, built and installed by the AUR helper as you.
+    Aur,
 }
 
 impl StepKind {
-    pub const ALL: [StepKind; 12] = [
+    pub const ALL: [StepKind; 13] = [
         StepKind::Refresh,
         StepKind::Download,
         StepKind::Install,
@@ -61,6 +65,7 @@ impl StepKind {
         StepKind::DeleteGenerations,
         StepKind::CollectGarbage,
         StepKind::Bootloader,
+        StepKind::Aur,
     ];
 
     pub fn id(self) -> &'static str {
@@ -77,6 +82,7 @@ impl StepKind {
             StepKind::DeleteGenerations => "delete-generations",
             StepKind::CollectGarbage => "collect-garbage",
             StepKind::Bootloader => "bootloader",
+            StepKind::Aur => "aur",
         }
     }
 
@@ -87,9 +93,10 @@ impl StepKind {
     /// Whether stopping now leaves the system as it was: refreshing,
     /// downloading and building only add to caches, and Flatpak deploys
     /// each app atomically. Installing, activating and deleting are never
-    /// interrupted.
+    /// interrupted. The AUR step is stopped only while it builds (the job
+    /// holds a cancel back while the helper's pacman installs).
     pub fn cancellable(self) -> bool {
-        matches!(self, StepKind::Refresh | StepKind::Download | StepKind::FlakeUpdate | StepKind::ChannelUpdate | StepKind::Build | StepKind::Flatpak)
+        matches!(self, StepKind::Refresh | StepKind::Download | StepKind::FlakeUpdate | StepKind::ChannelUpdate | StepKind::Build | StepKind::Flatpak | StepKind::Aur)
     }
 
     /// The phase shown when the step starts (parsers refine it).
@@ -102,6 +109,7 @@ impl StepKind {
             StepKind::Build => Phase::Building,
             StepKind::Activate | StepKind::Bootloader => Phase::Activating,
             StepKind::DeleteGenerations | StepKind::CollectGarbage => Phase::Cleaning,
+            StepKind::Aur => Phase::AurBuild,
         }
     }
 }
@@ -178,10 +186,17 @@ pub enum BackendId {
     Apk,
     /// NixOS generations (planned by [`super::nixos::plan`]).
     Nix,
+    /// FreeBSD: packages with pkg, then the base system with
+    /// freebsd-update.
+    Pkg,
+    /// FreeBSD with a packaged base (FreeBSD 15's default): the base
+    /// system is packages too, so pkg updates everything and
+    /// freebsd-update (which refuses such a system) never runs.
+    PkgBase,
 }
 
 impl BackendId {
-    pub const ALL: [BackendId; 8] = [BackendId::Pacman, BackendId::Apt, BackendId::Dnf, BackendId::ZypperDup, BackendId::ZypperUpdate, BackendId::Xbps, BackendId::Apk, BackendId::Nix];
+    pub const ALL: [BackendId; 10] = [BackendId::Pacman, BackendId::Apt, BackendId::Dnf, BackendId::ZypperDup, BackendId::ZypperUpdate, BackendId::Xbps, BackendId::Apk, BackendId::Nix, BackendId::Pkg, BackendId::PkgBase];
 
     pub fn id(self) -> &'static str {
         match self {
@@ -193,6 +208,8 @@ impl BackendId {
             BackendId::Xbps => "xbps",
             BackendId::Apk => "apk",
             BackendId::Nix => "nix",
+            BackendId::Pkg => "pkg",
+            BackendId::PkgBase => "pkg-base",
         }
     }
 
@@ -210,6 +227,7 @@ impl BackendId {
             BackendId::Xbps => "XBPS",
             BackendId::Apk => "apk",
             BackendId::Nix => "Nix",
+            BackendId::Pkg | BackendId::PkgBase => "pkg",
         }
     }
 }
@@ -586,6 +604,130 @@ impl SystemBackend for Apk {
     }
 }
 
+// ── FreeBSD ──────────────────────────────────────────────────────────────
+
+/// `freebsd-update`, the base system's updater.
+pub const FREEBSD_UPDATE: &str = "freebsd-update";
+/// freebsd-update refuses to `fetch` without a terminal unless told it
+/// runs unattended (it would otherwise ask to be run from cron).
+const FREEBSD_UPDATE_UNATTENDED: &str = "--not-running-from-cron";
+/// freebsd-update pages its file lists through `$PAGER` (`less` when
+/// unset): `cat` prints them straight into the log.
+const FREEBSD_UPDATE_ENV: &[(&str, &str)] = &[("PAGER", "cat")];
+/// freebsd-update's exit code for "nothing was fetched to install".
+pub const FREEBSD_UPDATE_NOTHING: i32 = 2;
+/// freebsd-update's exit code when it refuses the system (not a -RELEASE,
+/// or a packaged base); also any other error, so it counts only with the
+/// refusal's words in the output.
+pub const FREEBSD_UPDATE_UNMANAGED: i32 = 1;
+
+/// pkg's and freebsd-update's own failure messages.
+const PKG_FAILURES: &[(&str, FailureKind)] = &[
+    ("cannot get an advisory lock", FailureKind::Locked),
+    ("locked by another process", FailureKind::Locked),
+    ("not enough space in", FailureKind::DiskFull),
+    ("conflicts with", FailureKind::Conflict),
+    ("conflicting", FailureKind::Conflict),
+    ("is locked and may not be modified", FailureKind::Conflict),
+    ("missing dependency", FailureKind::Conflict),
+    ("no trusted public keys found", FailureKind::Keyring),
+    ("invalid signature", FailureKind::Keyring),
+    ("signature verification failed", FailureKind::Keyring),
+    ("checksum mismatch", FailureKind::Keyring),
+    ("key has incorrect hash", FailureKind::Keyring),
+    ("no address record", FailureKind::Network),
+    ("unable to update repository", FailureKind::Network),
+    ("error updating repositories", FailureKind::Network),
+    ("mirrors... none found", FailureKind::Network),
+    ("no mirrors remaining", FailureKind::Network),
+    ("operation timed out", FailureKind::Network),
+];
+
+/// FreeBSD: third-party packages with pkg (refreshed, downloaded, then
+/// installed; `-U` because the catalogue was just refreshed), then the
+/// base system's security and errata patches with freebsd-update. The
+/// steps are interleaved so every download happens before anything is
+/// installed: cancelling stays possible until `pkg upgrade` installs.
+pub struct Pkg;
+
+impl Pkg {
+    fn freebsd_update(kind: StepKind, verb: &'static str) -> Step {
+        Step::new(kind, FREEBSD_UPDATE, &[FREEBSD_UPDATE_UNATTENDED, verb]).env(FREEBSD_UPDATE_ENV)
+    }
+}
+
+impl SystemBackend for Pkg {
+    fn id(&self) -> BackendId {
+        BackendId::Pkg
+    }
+
+    fn steps(&self) -> Vec<Step> {
+        vec![
+            Step::new(StepKind::Refresh, "pkg", &["update"]),
+            Step::new(StepKind::Download, "pkg", &["upgrade", "-U", "-F", "-y"]),
+            Pkg::freebsd_update(StepKind::Download, "fetch"),
+            Step::new(StepKind::Install, "pkg", &["upgrade", "-U", "-y"]),
+            Pkg::freebsd_update(StepKind::Install, "install"),
+        ]
+    }
+
+    fn parse(&self, step: StepKind, line: &str, t: &mut Tracker) {
+        // Both programs run in download and install steps; their output
+        // never overlaps, so each parser ignores the other's lines.
+        parse::pkg(step, line, t);
+        parse::freebsd_update(step, line, t);
+    }
+
+    fn failure_patterns(&self) -> &'static [(&'static str, FailureKind)] {
+        PKG_FAILURES
+    }
+
+    fn after(&self, step: &Step, code: Option<i32>, t: &Tracker) -> Next {
+        let base = step.program == FREEBSD_UPDATE;
+        match (step.kind, code) {
+            // Nothing to fetch for the base system (exit 0), or
+            // freebsd-update doesn't manage it (exit 1: a -STABLE system,
+            // packaged base): the packages downloaded before still install.
+            (StepKind::Download, Some(0 | FREEBSD_UPDATE_UNMANAGED)) if base && t.nothing_to_do => Next::Continue,
+            // Past its end of life, freebsd-update still fetches what was
+            // published, then exits 1 with a warning: install that.
+            (StepKind::Download, Some(1)) if base && t.end_of_life => Next::Continue,
+            // Then nothing is fetched to install (exit 2; a -STABLE system
+            // too), or packaged base is refused again (exit 1).
+            (StepKind::Install, Some(FREEBSD_UPDATE_NOTHING | FREEBSD_UPDATE_UNMANAGED)) if base && t.nothing_to_do => Next::Continue,
+            (_, Some(0)) => Next::Continue,
+            _ => Next::Fail(FailureKind::Other),
+        }
+    }
+}
+
+/// FreeBSD with a packaged base: pkg updates the base system's packages
+/// (`FreeBSD-*`, from the `FreeBSD-base` repository) along with every
+/// other package, so the same three pkg steps cover the whole system.
+pub struct PkgBase;
+
+impl SystemBackend for PkgBase {
+    fn id(&self) -> BackendId {
+        BackendId::PkgBase
+    }
+
+    fn steps(&self) -> Vec<Step> {
+        vec![
+            Step::new(StepKind::Refresh, "pkg", &["update"]),
+            Step::new(StepKind::Download, "pkg", &["upgrade", "-U", "-F", "-y"]),
+            Step::new(StepKind::Install, "pkg", &["upgrade", "-U", "-y"]),
+        ]
+    }
+
+    fn parse(&self, step: StepKind, line: &str, t: &mut Tracker) {
+        parse::pkg(step, line, t);
+    }
+
+    fn failure_patterns(&self) -> &'static [(&'static str, FailureKind)] {
+        PKG_FAILURES
+    }
+}
+
 /// The backend of `id`.
 pub fn backend(id: BackendId) -> &'static dyn SystemBackend {
     match id {
@@ -597,6 +739,8 @@ pub fn backend(id: BackendId) -> &'static dyn SystemBackend {
         BackendId::Xbps => &Xbps,
         BackendId::Apk => &Apk,
         BackendId::Nix => &super::nixos::NixBackend,
+        BackendId::Pkg => &Pkg,
+        BackendId::PkgBase => &PkgBase,
     }
 }
 
@@ -635,6 +779,19 @@ mod tests {
         assert_eq!(shown(BackendId::ZypperUpdate)[2], "install: zypper --non-interactive --no-color update");
         assert_eq!(shown(BackendId::Xbps), ["refresh: xbps-install -S", "download: xbps-install -uyD", "install: xbps-install -uy"]);
         assert_eq!(shown(BackendId::Apk), ["refresh: apk update", "install: apk upgrade --no-progress"]);
+        assert_eq!(
+            shown(BackendId::Pkg),
+            [
+                "refresh: pkg update",
+                "download: pkg upgrade -U -F -y",
+                "download: freebsd-update --not-running-from-cron fetch",
+                "install: pkg upgrade -U -y",
+                "install: freebsd-update --not-running-from-cron install"
+            ]
+        );
+        assert!(backend(BackendId::Pkg).steps().iter().filter(|s| s.program == FREEBSD_UPDATE).all(|s| s.env == [("PAGER", "cat")]), "freebsd-update's lists never wait in a pager");
+        assert_eq!(shown(BackendId::PkgBase), ["refresh: pkg update", "download: pkg upgrade -U -F -y", "install: pkg upgrade -U -y"], "a packaged base never runs freebsd-update");
+        assert_eq!((BackendId::PkgBase.id(), BackendId::PkgBase.manager_label()), ("pkg-base", "pkg"));
         assert_eq!(flatpak_step().display(), "flatpak update -y --noninteractive");
     }
 
@@ -657,7 +814,7 @@ mod tests {
 
     #[test]
     fn only_refresh_download_and_build_are_cancellable() {
-        let yes = [StepKind::Refresh, StepKind::Download, StepKind::FlakeUpdate, StepKind::ChannelUpdate, StepKind::Build, StepKind::Flatpak];
+        let yes = [StepKind::Refresh, StepKind::Download, StepKind::FlakeUpdate, StepKind::ChannelUpdate, StepKind::Build, StepKind::Flatpak, StepKind::Aur];
         for k in StepKind::ALL {
             assert_eq!(k.cancellable(), yes.contains(&k), "{k:?}");
             assert_eq!(StepKind::from_id(k.id()), Some(k));

@@ -86,6 +86,9 @@ pub struct Metrics {
     pub accent_line: bool,
     /// Notch: the share of the edge it spans.
     pub notch_width: f32,
+    /// Notch: how wide its items need it, px ([`notch_fit`]; 0 until they
+    /// are measured). It grows past [`Self::notch_width`] to hold them.
+    pub notch_fit: f32,
     /// Inset of the items from the bar's long edges (`bar.item_inset`).
     pub item_inset: f32,
     /// The shortest an item is along the bar: its thickness across while
@@ -144,6 +147,7 @@ impl Metrics {
             screen_frame,
             accent_line: layout == BarLayout::Hairline && bar.accent_line,
             notch_width: bar.notch_width(),
+            notch_fit: 0.0,
             item_inset,
             min_chip: if bar.item_capsules && bar.icon_shape != mandara_config::surfaces::BarIconShape::Match {
                 let inset = if layout.is_compact() { COMPACT_CHIP_INSET } else { item_inset };
@@ -191,10 +195,21 @@ impl Metrics {
     }
 
     /// The edge frame's rect (top-oriented): the full edge, inset by the
-    /// edge and side gaps while it floats, or the notch's middle share.
+    /// edge and side gaps while it floats, or the notch's middle share,
+    /// widened to hold its items ([`Self::notch_fit`]) up to the edge less
+    /// its shoulders. Items that need more than that are fitted like any
+    /// edge frame's ([`zone_limits`], [`fit_slots`]).
     pub fn frame(&self, surface_width: f32) -> Bounds<Pixels> {
         if self.notch() {
             let w = (surface_width * self.notch_width).round();
+            let flare = self.flare.max(0.0);
+            let fit = self.notch_fit.min(surface_width - flare * 2.0);
+            if fit > w {
+                // Grown: whole px with the same room either side (the items
+                // are placed from both ends), the shoulders on screen.
+                let x = ((surface_width - fit) / 2.0).floor().max(flare.ceil());
+                return rect(x, 0.0, (surface_width - x * 2.0).max(0.0), self.height);
+            }
             rect(((surface_width - w) / 2.0).round(), 0.0, w, self.height)
         } else if self.floating_frame {
             rect(self.side_gap, self.edge_gap, (surface_width - self.side_gap * 2.0).max(0.0), self.height)
@@ -231,6 +246,36 @@ pub fn zone_width(slot_widths: &[f32], m: &Metrics) -> f32 {
         visible += 1;
     }
     if visible == 0 { 0.0 } else { total + m.chip_gap * (visible - 1) as f32 }
+}
+
+/// Rounding slack the notch keeps past its items' width, px: the fitting
+/// floors each slot's room, which must never squeeze one that fits.
+const NOTCH_FIT_SLACK_PX: f32 = 1.0;
+
+/// How wide the notch must be to hold zones made of these slots (content
+/// widths in bar order, as for [`zone_width`]) whole: the zones, the gaps
+/// that keep them apart ([`zone_limits`]) and its rounded ends, in whole
+/// px. 0 without items. Allocation-free: run on every bar layout.
+pub fn notch_fit(m: &Metrics, zones: [&[f32]; 3]) -> f32 {
+    // Each slot rounded up, so the floored room fitting gives it is never
+    // short of its content.
+    let fit = |slots: &[f32]| {
+        let (mut total, mut visible) = (0.0, 0usize);
+        for w in slots.iter().copied().filter(|w| *w >= 1.0) {
+            total += m.chip_length(w.ceil());
+            visible += 1;
+        }
+        if visible == 0 { 0.0 } else { total + m.chip_gap * (visible - 1) as f32 }
+    };
+    let [l, c, r] = zones.map(fit);
+    if l + c + r <= 0.0 {
+        return 0.0;
+    }
+    // The middle zone keeps a gap on either side; without one the two
+    // sides keep one between them (as `spread_limits` splits the room).
+    let gaps = if c > 0.0 { ZONE_GAP * 2.0 } else { ZONE_GAP };
+    let ends = (m.frame_radius() * 0.5 + m.chip_inset()) * 2.0;
+    (l + c + r + gaps + ends + NOTCH_FIT_SLACK_PX).ceil()
 }
 
 /// Narrowest a slot is squeezed to before it is left out of a full zone
@@ -608,6 +653,20 @@ pub fn reserved_rect(m: &Metrics, surface: (f32, f32)) -> Bounds<Pixels> {
     orient(m.position, rect(0.0, 0.0, along, exclusive_zone(m)), surface)
 }
 
+/// Where `at` (output px) falls along the bar, when it lies in the band
+/// the bar takes along its edge on an output `output` px big: the whole
+/// length of the edge, from the screen edge out to the bar's far side, so
+/// the margin between a floating bar and the edge and every gap between
+/// its pieces count. The screen frame on the other edges does not. A
+/// handful of comparisons: no state, nothing allocated.
+pub fn band_hit(m: &Metrics, output: (f32, f32), at: (f32, f32)) -> Option<f32> {
+    let band = reserved_rect(m, output);
+    let (x, y) = at;
+    let (x0, y0) = (x_of(&band), y_of(&band));
+    let inside = x >= x0 && x < x0 + w_of(&band) && y >= y0 && y < y0 + h_of(&band);
+    inside.then_some(if m.vertical { y } else { x })
+}
+
 /// The screen frame around a side bar's display: the three thin strips on
 /// the edges without the bar, and the inner opening whose corners get
 /// concave flares. `None` without a frame.
@@ -809,6 +868,62 @@ mod tests {
         // Panels stay on the notch's straight edge.
         let panel = dashboard_rect(&m, g.pills[0], size(px(300.0), px(200.0)), 1920.0, 1000.0);
         assert!(x_of(&panel) >= x_of(&frame) + m.frame_radius());
+    }
+
+    #[test]
+    fn a_notch_grows_to_hold_its_items_and_squeezes_only_at_the_edge() {
+        use mandara_config::bar_styles::BarStyle;
+        let sw = 1920.0;
+        let mut m = styled(BarStyle::PharosBeam);
+        let share = m.frame(sw);
+        assert_eq!(w_of(&share), 960.0, "half the edge while its items fit");
+        // The items: content widths of the slots in each zone.
+        let fitted = |m: &Metrics, zones: [&[f32]; 3]| {
+            let wanted = zones.map(|z| zone_width(z, m));
+            let limits = zone_limits(m, sw, wanted);
+            std::array::from_fn::<_, 3, _>(|z| fit_slots(zones[z], m, limits[z], z == 2))
+        };
+        let whole = |zones: [&[f32]; 3], fit: &[smallvec::SmallVec<[Option<f32>; 16]>; 3]| {
+            zones.iter().zip(fit).all(|(z, f)| z.iter().zip(f).all(|(w, l)| l.is_some_and(|l| l >= *w)))
+        };
+        // Few items: the notch keeps its share.
+        let small: [&[f32]; 3] = [&[24.0, 180.0], &[60.0, 120.0], &[24.0, 24.0, 24.0]];
+        m.notch_fit = notch_fit(&m, small);
+        assert!(m.notch_fit < 960.0);
+        assert_eq!(m.frame(sw), share);
+        assert!(whole(small, &fitted(&m, small)));
+        // Wider than half the output (the shipped items): it grows to
+        // hold every one whole, centred, and stays inside its shoulders.
+        let wide: [&[f32]; 3] = [&[24.0, 320.5, 96.0], &[60.0, 220.0], &[90.0, 140.3, 24.0, 24.0, 24.0, 24.0]];
+        m.notch_fit = notch_fit(&m, wide);
+        assert!(m.notch_fit > 960.0 && m.notch_fit < sw - m.flare * 2.0);
+        let frame = m.frame(sw);
+        assert!(w_of(&frame) >= m.notch_fit && w_of(&frame) <= m.notch_fit + 1.0);
+        assert_eq!(x_of(&frame), sw - x_of(&frame) - w_of(&frame), "centred on whole px");
+        let fit = fitted(&m, wide);
+        assert!(whole(wide, &fit), "nothing squeezed or left out");
+        let widths = std::array::from_fn(|z| zone_width(wide[z], &m));
+        let g = compute(&m, sw, widths);
+        assert!(x_of(&g.pills[0]) >= x_of(&frame) && x_of(&g.pills[2]) + w_of(&g.pills[2]) <= x_of(&frame) + w_of(&frame));
+        assert!(x_of(&g.pills[0]) + w_of(&g.pills[0]) <= x_of(&g.pills[1]) && x_of(&g.pills[1]) + w_of(&g.pills[1]) <= x_of(&g.pills[2]));
+        // Wider than the output: the notch stops at the edge less its
+        // shoulders, and the edge frame's fitting squeezes the innermost
+        // slot (a long title) instead of leaving items out.
+        let huge: [&[f32]; 3] = [&[24.0, 320.0, 1400.0], &[60.0, 220.0], &[90.0, 140.0, 24.0, 24.0]];
+        m.notch_fit = notch_fit(&m, huge);
+        assert!(m.notch_fit > sw);
+        let frame = m.frame(sw);
+        assert!(x_of(&frame) >= m.flare && x_of(&frame) + w_of(&frame) <= sw - m.flare, "the shoulders stay on screen");
+        let fit = fitted(&m, huge);
+        assert!(fit.iter().all(|z| z.iter().all(Option::is_some)), "every item kept");
+        assert!(fit[0][2].is_some_and(|l| l < 1400.0), "the title is squeezed");
+        // A notch set wider than that by hand keeps its width.
+        m.notch_width = 1.0;
+        assert_eq!(w_of(&m.frame(sw)), sw);
+        // No items yet: the configured share.
+        let mut fresh = styled(BarStyle::PharosBeam);
+        fresh.notch_fit = notch_fit(&fresh, [&[], &[0.0], &[]]);
+        assert_eq!((fresh.notch_fit, fresh.frame(sw)), (0.0, share));
     }
 
     fn m(layout: BarLayout) -> Metrics {
@@ -1243,6 +1358,77 @@ mod tests {
         }
         // The screen frame reserves nothing beyond the bar.
         assert_eq!(exclusive_zone(&side(BarPosition::Left, true)), exclusive_zone(&side(BarPosition::Left, false)));
+    }
+
+    /// A bar's band: the whole length of its edge, from the screen edge to
+    /// the bar's far side (the margin of a floating bar included), on every
+    /// edge; the screen frame on the other edges is the desktop's.
+    #[test]
+    fn the_band_hit_covers_the_bars_strip_on_every_edge() {
+        let (w, h) = SCREEN;
+        let split = |position: BarPosition, edge_gap: f32| {
+            let mut cfg = ShellConfig::default();
+            cfg.bar.layout = BarLayout::FloatingPills;
+            cfg.bar.position = position;
+            cfg.bar.height = 36.0;
+            cfg.bar.edge_gap = edge_gap;
+            Metrics::of(&cfg, 1.0)
+        };
+        // Top: the 10 px margin above the pills, the gaps between them, and
+        // the far ends of the edge are all in the band; just past it isn't.
+        let top = split(BarPosition::Top, 10.0);
+        assert_eq!(exclusive_zone(&top), 46.0);
+        assert_eq!(band_hit(&top, SCREEN, (5.0, 2.0)), Some(5.0), "the margin by the screen edge");
+        assert_eq!(band_hit(&top, SCREEN, (1200.0, 45.5)), Some(1200.0), "the pills' far side");
+        assert_eq!(band_hit(&top, SCREEN, (w - 0.5, 20.0)), Some(w - 0.5), "the far end of the edge");
+        assert_eq!(band_hit(&top, SCREEN, (1200.0, 46.0)), None, "just below the band");
+        assert_eq!(band_hit(&top, SCREEN, (1200.0, 700.0)), None, "the desktop");
+        // Bottom: mirrored.
+        let bottom = split(BarPosition::Bottom, 10.0);
+        assert_eq!(band_hit(&bottom, SCREEN, (300.0, h - 1.0)), Some(300.0), "the margin by the screen edge");
+        assert_eq!(band_hit(&bottom, SCREEN, (300.0, h - 46.0)), Some(300.0), "the pills' far side");
+        assert_eq!(band_hit(&bottom, SCREEN, (300.0, h - 46.5)), None, "just above the band");
+        assert_eq!(band_hit(&bottom, SCREEN, (300.0, 10.0)), None, "the top edge isn't the bar's");
+        // No margin: the band is the bar's height.
+        let flush = split(BarPosition::Top, 0.0);
+        assert_eq!(band_hit(&flush, SCREEN, (10.0, 35.5)), Some(10.0));
+        assert_eq!(band_hit(&flush, SCREEN, (10.0, 36.0)), None);
+        // A floating edge frame keeps its margin in the band too.
+        let mut cfg = ShellConfig::default();
+        cfg.bar.floating_frame = true;
+        cfg.bar.edge_gap = 8.0;
+        let floating = Metrics::of(&cfg, 1.0);
+        assert_eq!(band_hit(&floating, SCREEN, (4.0, 3.0)), Some(4.0));
+        assert_eq!(band_hit(&floating, SCREEN, (4.0, exclusive_zone(&floating))), None);
+        // A flush top bar's screen frame (the strips on the other edges) is
+        // the desktop's.
+        let mut cfg = ShellConfig::default();
+        cfg.bar.screen_frame = true;
+        let framed = Metrics::of(&cfg, 1.0);
+        assert!(framed.frame_strips > 0.0);
+        assert_eq!(band_hit(&framed, SCREEN, (1.0, h - 1.0)), None, "the far strip");
+        assert_eq!(band_hit(&framed, SCREEN, (1.0, exclusive_zone(&framed) + 4.0)), None, "a side strip");
+        // Side bars, framed or not: the band is the bar's column along its
+        // whole edge (measured down the bar); the frame strips aren't.
+        for frame in [false, true] {
+            for position in [BarPosition::Left, BarPosition::Right] {
+                let m = side(position, frame);
+                let zone = exclusive_zone(&m);
+                let (inner, outer) = if position == BarPosition::Left { (zone - 0.5, zone + 1.0) } else { (w - zone, w - zone - 1.0) };
+                assert_eq!(band_hit(&m, SCREEN, (inner, 700.0)), Some(700.0), "{position:?} frame {frame}");
+                assert_eq!(band_hit(&m, SCREEN, (inner, 0.0)), Some(0.0), "{position:?}: the top end");
+                assert_eq!(band_hit(&m, SCREEN, (inner, h - 0.5)), Some(h - 0.5), "{position:?}: the bottom end");
+                assert_eq!(band_hit(&m, SCREEN, (outer, 700.0)), None, "{position:?}: past the bar");
+                if frame {
+                    let t = m.screen_frame;
+                    assert_eq!(band_hit(&m, SCREEN, (w / 2.0, t / 2.0)), None, "{position:?}: the top frame strip");
+                    assert_eq!(band_hit(&m, SCREEN, (w / 2.0, h - t / 2.0)), None, "{position:?}: the bottom frame strip");
+                }
+            }
+        }
+        // Off the output: never.
+        assert_eq!(band_hit(&top, SCREEN, (-1.0, 5.0)), None);
+        assert_eq!(band_hit(&top, SCREEN, (w, 5.0)), None);
     }
 
     #[test]

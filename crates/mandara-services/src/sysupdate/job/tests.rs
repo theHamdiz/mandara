@@ -46,7 +46,7 @@ fn run(system: System, replay: Replay, request: Request) -> (Job, Finished) {
 
 #[test]
 fn every_family_updates_end_to_end() {
-    for b in [BackendId::Pacman, BackendId::Apt, BackendId::Dnf, BackendId::ZypperDup, BackendId::ZypperUpdate, BackendId::Xbps, BackendId::Apk] {
+    for b in [BackendId::Pacman, BackendId::Apt, BackendId::Dnf, BackendId::ZypperDup, BackendId::ZypperUpdate, BackendId::Xbps, BackendId::Apk, BackendId::Pkg, BackendId::PkgBase] {
         let (job, f) = run(System::Managed(b), Replay::new(b), Request::System { flatpak: true });
         assert_eq!(f.outcome, JobOutcome::Done { nothing_to_do: false }, "{b:?}");
         assert!(f.changed > 0, "{b:?}");
@@ -79,6 +79,28 @@ fn up_to_date_systems_stop_early() {
         assert_eq!(f.outcome, JobOutcome::Done { nothing_to_do: true }, "{b:?}");
         job.with(|s| assert!(s.step < s.steps, "{b:?}: the install step was skipped"));
     }
+}
+
+/// FreeBSD: whatever freebsd-update answers (nothing to fetch, or a
+/// -STABLE system it refuses), `pkg upgrade` still installs the packages
+/// downloaded before it, and the job runs to its end.
+#[test]
+fn freebsd_packages_install_when_the_base_system_has_nothing_to_do() {
+    let b = BackendId::Pkg;
+    for base in [Scenario::UpToDate, Scenario::Fails] {
+        let (job, f) = run(System::Managed(b), Replay::new(b).base(base), Request::System { flatpak: false });
+        assert_eq!(f.outcome, JobOutcome::Done { nothing_to_do: false }, "{base:?}");
+        assert_eq!(f.changed, 6, "{base:?}: the six recorded packages, no base update");
+        assert_eq!(f.warnings, u32::from(base == Scenario::Fails), "{base:?}: the refusal is warned about once");
+        job.with(|s| {
+            assert_eq!(s.step as usize, plan::backend(b).steps().len(), "{base:?}: every step ran");
+            assert!(s.log.iter().any(|l| l.starts_with("[6/6] Upgrading drm-61-kmod")), "{base:?}: pkg upgrade installed");
+            assert!(s.log.iter().any(|l| l == "No updates are available to install."), "{base:?}");
+        });
+    }
+    // Nothing anywhere: still nothing to do.
+    let (_, f) = run(System::Managed(b), Replay::new(b).scenario(Scenario::UpToDate), Request::System { flatpak: false });
+    assert_eq!(f.outcome, JobOutcome::Done { nothing_to_do: true });
 }
 
 #[test]
@@ -337,4 +359,167 @@ fn nixos_refuses_a_missing_generation() {
     let (_dir, _, f) = nix_job(NixAction::SwitchTo(99), Scenario::Success);
     let JobOutcome::Failed(failure) = f.outcome else { panic!("{f:?}") };
     assert!(failure.detail.contains("doesn't exist"), "{}", failure.detail);
+}
+
+// ── The AUR step ─────────────────────────────────────────────────────────
+
+/// A password dialog that answers every request with `answer` (`None`:
+/// cancelled) and counts them.
+struct Dialog {
+    answer: Option<&'static str>,
+    asked: std::sync::atomic::AtomicU32,
+}
+
+impl askpass::Prompter for Dialog {
+    fn ask(&self, _request: askpass::AskRequest) -> askpass::Pending {
+        self.asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let _ = tx.send(self.answer.map(|a| askpass::Secret::from_string(a.to_string())));
+        askpass::Pending { answer: rx, close: Box::new(|| {}) }
+    }
+}
+
+fn dialog(answer: Option<&'static str>) -> Arc<Dialog> {
+    Arc::new(Dialog { answer, asked: Default::default() })
+}
+
+fn arch_with(replay: Replay, prompter: Arc<Dialog>) -> Arc<dyn Launcher> {
+    Arc::new(FakeLauncher::new(System::Managed(BackendId::Pacman), replay, NixPaths::under(Path::new("/nonexistent"))).with_prompter(prompter))
+}
+
+#[test]
+fn update_all_on_arch_runs_pacman_then_the_aur_then_flatpak_in_one_job() {
+    for helper in [AurHelper::Paru, AurHelper::Yay] {
+        let d = dialog(Some("hunter2"));
+        let job = start(Request::SystemAur { flatpak: true, helper }, arch_with(Replay::new(BackendId::Pacman), d.clone()), quiet());
+        let f = wait(&job);
+        assert_eq!(f.outcome, JobOutcome::Done { nothing_to_do: false }, "{helper:?}");
+        job.with(|s| {
+            assert_eq!(s.steps, 4, "pacman's two steps, the AUR and Flatpak");
+            assert_eq!(s.step, 4);
+            assert_eq!(s.backend, Some(BackendId::Pacman));
+            assert_eq!(s.helper, Some(helper));
+            assert!(s.log.iter().any(|l| l.contains("Making package: pfetch")), "the helper's output is in the log");
+            assert!(!s.log.iter().any(|l| l.contains(crate::sysupdate::fake::ASKPASS_MARK) || l.contains("hunter2")), "the password and the askpass never reach the log");
+        });
+        assert!(f.changed >= 8 + 3, "{helper:?}: pacman's 8 and the AUR's 3 ({})", f.changed);
+        assert_eq!(d.asked.load(std::sync::atomic::Ordering::SeqCst), 1, "{helper:?}: one password for the AUR step (its sudo keeps it)");
+    }
+}
+
+#[test]
+fn an_aur_update_alone_needs_no_root_helper() {
+    let d = dialog(Some("hunter2"));
+    let job = start(Request::Aur { helper: AurHelper::Paru, flatpak: false }, arch_with(Replay::new(BackendId::Pacman), d.clone()), quiet());
+    let f = wait(&job);
+    assert_eq!(f.outcome, JobOutcome::Done { nothing_to_do: false });
+    job.with(|s| {
+        assert_eq!((s.step, s.steps), (1, 1));
+        assert_eq!(s.backend, None, "pacman's root helper never ran");
+        assert_eq!(s.manager(), Some("paru"), "named after its last step");
+    });
+    assert_eq!(f.changed, 3);
+}
+
+#[test]
+fn cancel_during_an_aur_build_stops_the_helper() {
+    let d = dialog(Some("hunter2"));
+    // Line 100 of paru's recording: building nerdfetch, cbonsai installed.
+    let replay = Replay::new(BackendId::Pacman).hold(StepKind::Aur, 100);
+    let job = start(Request::SystemAur { flatpak: true, helper: AurHelper::Paru }, arch_with(replay, d), quiet());
+    wait_for(&job, |s| s.step_kind == Some(StepKind::Aur) && s.tracker.building == "nerdfetch");
+    job.with(|s| {
+        assert_eq!(s.manager(), Some("paru"));
+        assert_eq!((s.tracker.downloaded, s.tracker.download_total), (0, 0), "pacman's download counts don't carry into the AUR step");
+    });
+    assert!(job.with(JobState::cancellable));
+    assert!(job.cancel());
+    let f = wait(&job);
+    assert_eq!(f.outcome, JobOutcome::Cancelled);
+    job.with(|s| assert_eq!(s.step, 3, "Flatpak didn't run after the cancel"));
+    assert!(f.changed >= 9, "pacman's packages and cbonsai stay installed");
+}
+
+#[test]
+fn the_aur_step_isnt_cancelled_while_pacman_installs_what_it_built() {
+    let mut s = JobState::new(Request::Aur { helper: AurHelper::Paru, flatpak: false });
+    s.step_kind = Some(StepKind::Aur);
+    s.tracker.phase = Phase::AurBuild;
+    assert!(s.cancellable());
+    for p in [Phase::Installing, Phase::Hooks, Phase::Verifying] {
+        s.tracker.phase = p;
+        assert!(!s.cancellable(), "{p:?}");
+    }
+}
+
+#[test]
+fn a_failed_aur_build_names_the_package() {
+    let d = dialog(Some("hunter2"));
+    let job = start(Request::SystemAur { flatpak: true, helper: AurHelper::Paru }, arch_with(Replay::new(BackendId::Pacman).aur(Scenario::Fails), d), quiet());
+    let f = wait(&job);
+    let JobOutcome::Failed(failure) = &f.outcome else { panic!("{f:?}") };
+    assert_eq!(failure.kind, FailureKind::BuildFailed);
+    assert!(failure.detail.starts_with("cbonsai didn't build"), "{}", failure.detail);
+    assert!(failure.detail.contains("PKGBUILD: line 19: make: command not found"), "{}", failure.detail);
+    job.with(|s| {
+        assert_eq!(s.failed_step, Some(StepKind::Aur));
+        assert_eq!(s.tracker.failed_package.as_deref(), Some("cbonsai"));
+        assert_eq!(s.step, 3, "Flatpak didn't run");
+    });
+    assert_eq!(f.changed, 8, "pacman's packages were updated before");
+    // yay says it differently.
+    let job = start(Request::Aur { helper: AurHelper::Yay, flatpak: false }, arch_with(Replay::new(BackendId::Pacman).aur(Scenario::Fails), dialog(Some("x"))), quiet());
+    let f = wait(&job);
+    assert!(matches!(&f.outcome, JobOutcome::Failed(Failure { kind: FailureKind::BuildFailed, detail }) if detail.starts_with("cbonsai didn't build")), "{f:?}");
+}
+
+#[test]
+fn a_cancelled_password_dialog_stops_the_aur_step() {
+    let d = dialog(None);
+    let job = start(Request::Aur { helper: AurHelper::Paru, flatpak: true }, arch_with(Replay::new(BackendId::Pacman), d.clone()), quiet());
+    let f = wait(&job);
+    assert!(matches!(&f.outcome, JobOutcome::Failed(Failure { kind: FailureKind::NotAuthorized, .. })), "{f:?}");
+    assert_eq!(d.asked.load(std::sync::atomic::Ordering::SeqCst), 1, "asked once, never again");
+    job.with(|s| assert_eq!(s.step, 1, "Flatpak didn't run"));
+}
+
+#[test]
+fn three_wrong_passwords_are_not_authorized() {
+    let d = dialog(Some("wrong"));
+    let job = start(Request::Aur { helper: AurHelper::Paru, flatpak: false }, arch_with(Replay::new(BackendId::Pacman), d.clone()), quiet());
+    let f = wait(&job);
+    assert!(matches!(&f.outcome, JobOutcome::Failed(Failure { kind: FailureKind::NotAuthorized, .. })), "{f:?}");
+    assert_eq!(d.asked.load(std::sync::atomic::Ordering::SeqCst), 3, "sudo's three tries");
+    job.with(|s| assert!(s.log.iter().any(|l| l == "Sorry, try again.")));
+}
+
+#[test]
+fn without_mandaras_dialog_the_aur_step_explains_itself() {
+    if askpass::prompter().is_some() {
+        return;
+    }
+    let launcher: Arc<dyn Launcher> = Arc::new(FakeLauncher::new(System::Managed(BackendId::Pacman), Replay::new(BackendId::Pacman), NixPaths::under(Path::new("/nonexistent"))));
+    let job = start(Request::Aur { helper: AurHelper::Paru, flatpak: false }, launcher, quiet());
+    let f = wait(&job);
+    assert!(matches!(&f.outcome, JobOutcome::Failed(Failure { kind: FailureKind::NoPrompt, .. })), "{f:?}");
+}
+
+#[test]
+fn an_up_to_date_aur_is_nothing_to_do() {
+    let job = start(Request::Aur { helper: AurHelper::Yay, flatpak: false }, arch_with(Replay::new(BackendId::Pacman).aur(Scenario::UpToDate), dialog(Some("x"))), quiet());
+    let f = wait(&job);
+    assert_eq!(f.outcome, JobOutcome::Done { nothing_to_do: true });
+}
+
+#[test]
+fn requests_with_the_aur_say_which_steps_they_run() {
+    let r = Request::SystemAur { flatpak: true, helper: AurHelper::Paru };
+    assert_eq!((r.root_args(), r.flatpak(), r.aur()), (Some(vec!["apply".to_string()]), true, Some(AurHelper::Paru)));
+    let r = Request::Aur { helper: AurHelper::Shelly, flatpak: false };
+    assert_eq!((r.root_args(), r.flatpak(), r.aur()), (None, false, Some(AurHelper::Shelly)));
+    assert_eq!(Request::System { flatpak: true }.aur(), None);
+    assert_eq!(serde_json::to_value(&r).unwrap(), serde_json::json!({ "kind": "aur", "helper": "shelly", "flatpak": false }));
+    assert_eq!(build_reason(&["make: nope", "==> ERROR: A failure occurred in build().", "    Aborting..."]), Some("make: nope"));
+    assert_eq!(build_reason(&["/home/u/.cache/paru/clone/x/PKGBUILD: line 3: oops", "==> ERROR: A failure occurred in build()."]), Some("PKGBUILD: line 3: oops"));
+    assert_eq!(build_reason(&["nothing failed here"]), None);
 }

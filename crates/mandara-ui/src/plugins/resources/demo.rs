@@ -71,6 +71,7 @@ struct DemoGpu {
     vram_total: u64,
     temp_c: f32,
     freq_mhz: f32,
+    power_w: f32,
 }
 
 const DISCRETE_GPU: DemoGpu = DemoGpu {
@@ -84,6 +85,7 @@ const DISCRETE_GPU: DemoGpu = DemoGpu {
     vram_total: 16 * GB,
     temp_c: 47.0,
     freq_mhz: 1_350.0,
+    power_w: 23.0,
 };
 
 const INTEGRATED_GPU: DemoGpu = DemoGpu {
@@ -97,6 +99,7 @@ const INTEGRATED_GPU: DemoGpu = DemoGpu {
     vram_total: 2 * GB,
     temp_c: 44.0,
     freq_mhz: 600.0,
+    power_w: 6.0,
 };
 
 const GPUS: [&DemoGpu; 2] = [&DISCRETE_GPU, &INTEGRATED_GPU];
@@ -227,6 +230,7 @@ pub fn gpus() -> Vec<Gpu> {
             vram_total: Some(g.vram_total),
             temp_c: Some(g.temp_c),
             freq_mhz: Some(g.freq_mhz),
+            power_w: Some(g.power_w),
         })
         .collect()
 }

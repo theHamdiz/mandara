@@ -6,7 +6,8 @@
 //! third-party source (the AUR, Copr, a PPA, Gentoo's GURU) isn't offered
 //! there, and the installer never adds a repository. Names were checked
 //! against each family's repositories (Arch extra, Debian sid and Ubuntu
-//! 26.04, Fedora 44, openSUSE Tumbleweed, Void, Alpine 3.24); where a
+//! 26.04, Fedora 44, openSUSE Tumbleweed, Void, Alpine 3.24, FreeBSD 14's
+//! and 15's package catalogues); where a
 //! release may lack a package (Debian stable has no Hyprland), the
 //! installer also asks the package manager before offering it
 //! ([`crate::index::available_query`]).
@@ -38,12 +39,12 @@ pub const SUPPORTED: &[Compositor] = &[
     // compositor package the installer offers to add to another desktop.
     Compositor { id: "kwin", aliases: &["kde", "plasma"], label: "KWin (Plasma)", programs: &["kwin_wayland"], packages: &[] },
     Compositor { id: "mango", aliases: &["mangowm"], label: "MangoWM", programs: &["mango"], packages: &[(Family::Arch, "mangowm"), (Family::Alpine, "mangowm")] },
-    Compositor { id: "niri", aliases: &[], label: "Niri", programs: &["niri"], packages: &[(Family::Arch, "niri"), (Family::Fedora, "niri"), (Family::Suse, "niri"), (Family::Void, "niri"), (Family::Alpine, "niri")] },
-    Compositor { id: "hyprland", aliases: &["hypr"], label: "Hyprland", programs: &["Hyprland", "hyprland"], packages: &[(Family::Arch, "hyprland"), (Family::Debian, "hyprland"), (Family::Suse, "hyprland"), (Family::Alpine, "hyprland")] },
-    Compositor { id: "sway", aliases: &[], label: "Sway", programs: &["sway"], packages: &[(Family::Arch, "sway"), (Family::Debian, "sway"), (Family::Fedora, "sway"), (Family::Suse, "sway"), (Family::Void, "sway"), (Family::Alpine, "sway")] },
+    Compositor { id: "niri", aliases: &[], label: "Niri", programs: &["niri"], packages: &[(Family::Arch, "niri"), (Family::Fedora, "niri"), (Family::Suse, "niri"), (Family::Void, "niri"), (Family::Alpine, "niri"), (Family::FreeBSD, "niri")] },
+    Compositor { id: "hyprland", aliases: &["hypr"], label: "Hyprland", programs: &["Hyprland", "hyprland"], packages: &[(Family::Arch, "hyprland"), (Family::Debian, "hyprland"), (Family::Suse, "hyprland"), (Family::Alpine, "hyprland"), (Family::FreeBSD, "hyprland")] },
+    Compositor { id: "sway", aliases: &[], label: "Sway", programs: &["sway"], packages: &[(Family::Arch, "sway"), (Family::Debian, "sway"), (Family::Fedora, "sway"), (Family::Suse, "sway"), (Family::Void, "sway"), (Family::Alpine, "sway"), (Family::FreeBSD, "sway")] },
     // River's classic line (0.3): Arch packages it as `river-classic`;
     // elsewhere `river` may be 0.4+, which Mandara can't drive.
-    Compositor { id: "river", aliases: &[], label: "River Classic", programs: &["river"], packages: &[(Family::Arch, "river-classic")] },
+    Compositor { id: "river", aliases: &[], label: "River Classic", programs: &["river"], packages: &[(Family::Arch, "river-classic"), (Family::FreeBSD, "river-classic")] },
     // Not packaged by any distribution yet: supported once installed.
     Compositor { id: "umbriel", aliases: &[], label: "Umbriel", programs: &["umbriel"], packages: &[] },
 ];
@@ -97,6 +98,7 @@ mod tests {
         assert_eq!(names(Family::Fedora), [("niri", "niri"), ("sway", "sway")]);
         assert_eq!(names(Family::Suse), [("niri", "niri"), ("hyprland", "hyprland"), ("sway", "sway")]);
         assert_eq!(names(Family::Void), [("niri", "niri"), ("sway", "sway")]);
+        assert_eq!(names(Family::FreeBSD), [("niri", "niri"), ("hyprland", "hyprland"), ("sway", "sway"), ("river", "river-classic")]);
         // Overlays and hand-built systems: nothing offered.
         for f in [Family::Gentoo, Family::Solus, Family::NixOS, Family::Unknown] {
             assert!(names(f).is_empty(), "{f}");

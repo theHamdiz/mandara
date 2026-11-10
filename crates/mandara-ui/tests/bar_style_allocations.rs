@@ -1,9 +1,11 @@
 //! The bar styles lay out and shape their items without allocating: a
-//! frame of every style preset (Expressive, Tile dock, Rail, Segmented and
-//! the shipped bar) fits its zones, places every item's tile, walks the
-//! discs of its round shapes and its screen frame from fixed arrays,
-//! iterators and plain numbers. The shapes' unit discs are worked out once
-//! and kept, so only the first frame builds them.
+//! frame of every style preset (Expressive, Tile dock, Rail, Segmented,
+//! System monitor, Stanley Bridge, Pharos Beam, Raml Tram and the shipped
+//! bar) fits its zones, places every item's tile and every workspace / tag
+//! button in the bar's shapes, walks the discs of its round shapes and its
+//! screen frame from fixed arrays, iterators and plain numbers. The shapes'
+//! unit discs are worked out once and kept, so only the first frame builds
+//! them.
 
 use std::hint::black_box;
 
@@ -11,7 +13,7 @@ use gpui::{Bounds, Pixels, point, px, size};
 use mandara_config::ShellConfig;
 use mandara_config::bar_styles::BarStyle;
 use mandara_theme::{Color, MandaraPalette};
-use mandara_ui::bar::items::{self, ItemLook, Tile};
+use mandara_ui::bar::items::{self, ItemLook, TagButtons, Tile};
 use mandara_ui::bar::layout::{self, Metrics};
 use mandara_ui::components::shapes;
 
@@ -30,10 +32,26 @@ fn rect(x: f32, y: f32, w: f32, h: f32) -> Bounds<Pixels> {
     Bounds { origin: point(px(x), px(y)), size: size(px(w), px(h)) }
 }
 
-/// One frame of the bar `m` with item look `look`, `t` into a hover
-/// (items breathe by a pixel), folded into a number.
-fn frame(m: &Metrics, look: &ItemLook, palette: &MandaraPalette, t: f32) -> f32 {
+/// Tags on the strip and the content length of each button (a number, or
+/// a number and app icons).
+const TAGS: [f32; 9] = [22.0, 54.0, 36.0, 54.0, 71.0, 22.0, 22.0, 22.0, 22.0];
+
+/// One frame of the bar `m` with item look `look` and tag buttons `tags`,
+/// `t` into a hover (items breathe by a pixel), folded into a number.
+fn frame(m: &Metrics, look: &ItemLook, tags: Option<&TagButtons>, palette: &MandaraPalette, t: f32) -> f32 {
     let mut sum = 0.0;
+    // The workspace / tag buttons in the bar's shapes.
+    if let Some(b) = tags {
+        for (i, along) in TAGS.iter().enumerate() {
+            let placed = b.place(along + t, i, TAGS.len());
+            sum += f32::from(items::wash_corners(&placed).top_left) + f32::from(placed.bounds.size.width);
+            if let Tile::Shape(shape) = placed.tile {
+                for disc in shapes::discs(shape, 0.0, 0.0, f32::from(placed.bounds.size.width)) {
+                    sum += disc.x + disc.y + disc.r;
+                }
+            }
+        }
+    }
     let (along, _) = layout::bar_axes(m, SURFACE);
     let wanted: [f32; 3] = std::array::from_fn(|z| layout::zone_width(&ZONES[z], m));
     let limits = layout::zone_limits(m, along, wanted);
@@ -80,41 +98,49 @@ fn frame(m: &Metrics, look: &ItemLook, palette: &MandaraPalette, t: f32) -> f32 
 #[test]
 fn every_bar_style_lays_out_and_shapes_its_frames_without_allocating() {
     let palette = mandara_theme::engine::default_palette(true);
-    let mut setups: Vec<(&str, Metrics, ItemLook)> = Vec::new();
+    let mut setups: Vec<(&str, Metrics, ItemLook, Option<TagButtons>)> = Vec::new();
     for style in BarStyle::ALL {
         let mut cfg = ShellConfig::default();
         style.apply(&mut cfg);
         let m = Metrics::of(&cfg, 1.0);
         let look = ItemLook { item: cfg.bar.item_shape, icon: cfg.bar.icon_shape, radius: m.radius, vertical: m.vertical };
-        setups.push((style.id(), m, look));
-        // Expressive's rail: the side bar's cookies.
-        if style == BarStyle::Expressive {
+        let tags = items::tag_buttons(&cfg, m.vertical, "workspaces");
+        assert!(tags.is_some(), "{}: its tags take its shapes", style.id());
+        setups.push((style.id(), m, look, tags));
+        // A style's rail (Expressive's cookies, Raml Tram's flowers).
+        if style.rail().is_some() {
+            cfg.side_bars.left.middle = vec!["workspaces".into()];
             let rail = cfg.side_bars.icon_shape(&cfg.bar);
             let side = mandara_ui::bar::side::metrics(&cfg, false, 1.0);
-            setups.push(("expressive rail", side, ItemLook { item: cfg.bar.item_shape, icon: rail, radius: side.radius, vertical: true }));
+            let tags = items::tag_buttons(&cfg, true, "workspaces");
+            assert!(tags.is_some_and(|t| t.look.vertical && t.square()), "{}: the rail's tags are round buttons", style.id());
+            setups.push(("rail", side, ItemLook { item: cfg.bar.item_shape, icon: rail, radius: side.radius, vertical: true }, tags));
         }
     }
     // A side bar styled on its own, beside a differently styled main bar.
-    for style in BarStyle::ALL {
+    for (style, name) in BarStyle::SIDE.into_iter().zip(["side bar expressive", "side bar tile-dock", "side bar rail", "side bar segmented"]) {
         let mut cfg = ShellConfig::default();
         BarStyle::Segmented.apply(&mut cfg);
         cfg.side_bars.enabled = true;
         style.apply_to_side(&mut cfg, true);
+        cfg.side_bars.right.top = vec!["workspaces".into()];
         let side = mandara_ui::bar::side::metrics(&cfg, true, 1.0);
         let items = cfg.side_bars.items(true, &cfg.bar);
-        setups.push((["side bar expressive", "side bar tile-dock", "side bar rail", "side bar segmented"][style as usize], side, ItemLook { item: items.item_shape, icon: items.icon_shape, radius: side.radius, vertical: true }));
+        let tags = items::tag_buttons(&cfg, true, "workspaces");
+        setups.push((name, side, ItemLook { item: items.item_shape, icon: items.icon_shape, radius: side.radius, vertical: true }, tags));
     }
     let plain = ShellConfig::default();
     let m = Metrics::of(&plain, 1.0);
-    setups.push(("shipped", m, ItemLook { item: plain.bar.item_shape, icon: plain.bar.icon_shape, radius: m.radius, vertical: false }));
+    assert!(items::tag_buttons(&plain, false, "workspaces").is_none(), "the shipped bar keeps its liquid pills");
+    setups.push(("shipped", m, ItemLook { item: plain.bar.item_shape, icon: plain.bar.icon_shape, radius: m.radius, vertical: false }, None));
     // Every shape's unit discs, worked out once (as the first frame does).
     for shape in shapes::Shape::ALL {
         black_box(shapes::unit(shape));
     }
-    for (name, m, look) in &setups {
+    for (name, m, look, tags) in &setups {
         let counted = allocations(|| {
             for i in 0..FRAMES {
-                black_box(frame(m, look, &palette, (i % 2) as f32));
+                black_box(frame(m, look, tags.as_ref(), &palette, (i % 2) as f32));
             }
         });
         assert_eq!(counted, (0, 0), "{name}: no allocation over {FRAMES} frames");

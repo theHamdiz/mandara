@@ -23,6 +23,19 @@
 //! opt and svc are tried one package at a time, so a name a release doesn't
 //! carry never blocks the rest. Gentoo names are full atoms
 //! (`category/name`).
+//!
+//! FreeBSD (names checked against the FreeBSD:14:amd64 `latest` and the
+//! FreeBSD:15:amd64 `quarterly` package catalogues) has no
+//! NetworkManager, BlueZ, UDisks2 or power-profiles-daemon: Studio locks
+//! those panels there. Its services
+//! are D-Bus, seatd (seat access for the compositor), ConsoleKit2
+//! (sessions, which polkit tracks), BSDisks (UDisks2's interface) and
+//! PipeWire with its OSS plugin. greetd isn't packaged for FreeBSD yet
+//! (`docs/login-manager.md` builds it). Fonts: Alexandria and JetBrains
+//! Mono ship inside Mandara (JetBrains Mono's package is added too); Inter
+//! and Cairo have no package of their own, only inside `google-fonts`
+//! (1.1 GiB), which is left to the user: Arabic falls back to Alexandria
+//! and Noto Sans Arabic (`noto-sans-arabic`), Latin text to Alexandria.
 
 use crate::family::Family;
 
@@ -126,6 +139,47 @@ const SOLUS: PackageSet = PackageSet {
     greeter: &[],
 };
 
+const FREEBSD: PackageSet = PackageSet {
+    run: &["libxkbcommon", "wayland", "vulkan-loader", "mesa-libs", "mesa-dri", "fontconfig", "freetype2", "ca_root_nss"],
+    build: &["git", "curl", "pkgconf", "cmake", "gmake"],
+    opt: &[
+        "xdg-desktop-portal",
+        "xdg-desktop-portal-gtk",
+        "noto-basic",
+        "noto-sans-arabic",
+        "noto-sans-devanagari",
+        "noto-sans-bengali",
+        "noto-sans-telugu",
+        "noto-sc",
+        "noto-tc",
+        "noto-jp",
+        "noto-kr",
+        "jetbrains-mono",
+        "noto-emoji",
+        "papirus-icon-theme",
+        "xdg-utils",
+        "wl-clipboard",
+    ],
+    svc: &["dbus", "seatd", "consolekit2", "accountsservice", "geoclue", "freedesktop-sound-theme", "bsdisks", "upower", "i2c-tools", "openvpn", "pipewire", "pipewire-spa-oss", "wireplumber", "polkit", "gnome-keyring"],
+    greeter: &["cage"],
+};
+
+/// FreeBSD services `mandara install` enables (`sysrc <name>_enable=YES`)
+/// and starts (`service <name> start`) once their packages are in: D-Bus
+/// (every service Mandara talks to) and seatd (the compositor's seat).
+/// ConsoleKit2 has no rc script: D-Bus starts it when asked.
+pub const FREEBSD_SERVICES: &[&str] = &["dbus", "seatd"];
+/// The group seatd hands its socket to (`seatd_args="-g video"`).
+pub const FREEBSD_SEAT_GROUP: &str = "video";
+/// FreeBSD lets this group run `shutdown` and suspend through `/dev/acpi`,
+/// so the login screen's power buttons work without ConsoleKit2. It can
+/// also read raw disk devices; docs/login-manager.md#freebsd states that
+/// trade-off and how to undo the membership.
+pub const FREEBSD_POWER_GROUP: &str = "operator";
+/// greetd's config on FreeBSD (its `[default_session] user` is the
+/// login screen's user).
+pub const FREEBSD_GREETD_CONFIG: &str = "/usr/local/etc/greetd/config.toml";
+
 /// The package groups of `family` (`None`: NixOS and unknown systems get
 /// hints instead).
 pub fn for_family(family: Family) -> Option<&'static PackageSet> {
@@ -138,6 +192,7 @@ pub fn for_family(family: Family) -> Option<&'static PackageSet> {
         Family::Alpine => Some(&ALPINE),
         Family::Gentoo => Some(&GENTOO),
         Family::Solus => Some(&SOLUS),
+        Family::FreeBSD => Some(&FREEBSD),
         Family::NixOS | Family::Unknown => None,
     }
 }
@@ -206,7 +261,7 @@ mod tests {
     #[test]
     fn every_family_has_run_and_svc() {
         let with_tables: Vec<Family> = sets().map(|(f, _)| f).collect();
-        assert_eq!(with_tables, [Family::Arch, Family::Debian, Family::Fedora, Family::Suse, Family::Void, Family::Alpine, Family::Gentoo, Family::Solus]);
+        assert_eq!(with_tables, [Family::Arch, Family::Debian, Family::Fedora, Family::Suse, Family::Void, Family::Alpine, Family::Gentoo, Family::Solus, Family::FreeBSD]);
         for (f, s) in sets() {
             assert!(!s.run.is_empty(), "{f}: no runtime packages");
             assert!(!s.svc.is_empty(), "{f}: no service packages");
@@ -249,7 +304,7 @@ mod tests {
     fn every_family_covers_the_shared_services() {
         // Roles every svc list must cover (a substring of the package name).
         const ROLES: &[&str] = &["accountsservice", "geoclue", "sound-theme", "udisks", "upower", "power-profiles", "i2c-tools", "openvpn", "pipewire", "wireplumber", "bluez", "polkit", "gnome-keyring"];
-        for (f, s) in sets() {
+        for (f, s) in sets().filter(|(f, _)| *f != Family::FreeBSD) {
             for role in ROLES {
                 assert!(s.svc.iter().any(|p| p.to_ascii_lowercase().contains(role)), "{f}: svc lacks {role}");
             }
@@ -259,6 +314,26 @@ mod tests {
             }
             assert!(s.opt.iter().any(|p| p.contains("emoji")), "{f}: opt lacks a colour emoji font");
         }
+    }
+
+    /// FreeBSD has no NetworkManager, BlueZ, UDisks2 or
+    /// power-profiles-daemon (Studio locks those panels); everything else
+    /// has a FreeBSD package, plus its own session services.
+    #[test]
+    fn freebsd_covers_what_it_has() {
+        let s = for_family(Family::FreeBSD).unwrap();
+        for role in ["accountsservice", "geoclue", "sound-theme", "disks", "upower", "i2c-tools", "openvpn", "pipewire", "wireplumber", "polkit", "gnome-keyring", "dbus", "seatd", "consolekit2"] {
+            assert!(s.svc.iter().any(|p| p.contains(role)), "freebsd: svc lacks {role}");
+        }
+        for absent in ["networkmanager", "bluez", "udisks2", "power-profiles-daemon", "greetd"] {
+            assert!(s.groups().iter().all(|(_, pkgs)| !pkgs.iter().any(|p| p.to_ascii_lowercase().contains(absent))), "freebsd has no {absent} package");
+        }
+        for want in ["xdg-desktop-portal", "papirus-icon-theme", "xdg-utils", "noto-emoji", "noto-sans-arabic"] {
+            assert!(s.opt.contains(&want), "freebsd: opt lacks {want}");
+        }
+        assert_eq!(s.greeter, ["cage"], "greetd isn't packaged for FreeBSD");
+        assert_eq!(FREEBSD_SERVICES, ["dbus", "seatd"]);
+        assert_eq!(portal_packages(Family::FreeBSD, |p| p == "sway" || p == "niri"), ["xdg-desktop-portal-wlr", "xdg-desktop-portal-gnome"]);
     }
 
     #[test]

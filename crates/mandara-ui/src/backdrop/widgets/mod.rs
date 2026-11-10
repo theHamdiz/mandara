@@ -958,6 +958,12 @@ fn face_separator() -> &'static str {
 
 /// Full scale of the thermal arcs: degrees Celsius and fan RPM.
 const TEMP_SCALE_C: f32 = 100.0;
+/// The label plane's key covers this many GPUs' readings (four bits each),
+/// then their count from bit [`GPU_COUNT_SHIFT`].
+const KEYED_GPUS: usize = 8;
+const GPU_MASK_BITS: usize = 4;
+const GPU_COUNT_SHIFT: u32 = 56;
+const GPU_COUNT_MAX: usize = 255;
 const FAN_SCALE_RPM: f32 = 3000.0;
 
 /// `6.1 / 31.2 GB`: both in the total's unit.
@@ -989,6 +995,10 @@ pub fn monitor_lines(w: &MonitorWidget, s: Option<&sysmon::Sampler>, units: Unit
     let mut out = Vec::new();
     for row in &w.rows {
         let row = *row;
+        if row.is_gpu() {
+            gpu_lines(row, r, &l, units, gauges, settled, &mut out);
+            continue;
+        }
         let line = |label: &str, value: Option<String>, share: Option<f32>| -> Option<MonitorLine> {
             if value.is_none() && settled {
                 return None;
@@ -998,7 +1008,6 @@ pub fn monitor_lines(w: &MonitorWidget, s: Option<&sysmon::Sampler>, units: Unit
         let rate = |v: Option<f64>| v.map(|b| format!("{}{}", format_bytes(b as u64), l.word(tk("/s"))));
         let made = match row {
             MonitorRow::Cpu => line(tk("CPU"), r.and_then(|r| r.cpu).map(percent), Some(r.and_then(|r| r.cpu).unwrap_or(0.0))),
-            MonitorRow::Gpu => line(tk("GPU"), r.and_then(|r| r.gpu).map(percent), Some(r.and_then(|r| r.gpu).unwrap_or(0.0))),
             MonitorRow::Memory => {
                 let mem = r.and_then(|r| r.memory);
                 line(tk("Memory"), mem.map(|(u, tot)| if gauges { percent(share(u, tot)) } else { pair_bytes(u, tot) }), Some(mem.map(|(u, tot)| share(u, tot)).unwrap_or(0.0))).map(|mut ln| {
@@ -1006,17 +1015,17 @@ pub fn monitor_lines(w: &MonitorWidget, s: Option<&sysmon::Sampler>, units: Unit
                     ln
                 })
             }
-            MonitorRow::GpuPower => line(tk("GPU power"), r.and_then(|r| r.gpu_power_w).map(|w| format!("{w:.0} W")), None),
+            MonitorRow::Swap => {
+                let swap = r.and_then(|r| r.swap);
+                line(tk("Swap"), swap.map(|(u, tot)| if gauges { percent(share(u, tot)) } else { pair_bytes(u, tot) }), Some(swap.map(|(u, tot)| share(u, tot)).unwrap_or(0.0)))
+            }
             MonitorRow::CpuTemp => line(tk("CPU temp"), r.and_then(|r| r.cpu_temp).map(|c| units.format_degrees(c)), None).map(|mut ln| {
                 ln.level = r.and_then(|r| r.cpu_temp).map(|c| c / TEMP_SCALE_C);
                 ln.short = Some(l.word(tk("CPU")));
                 ln
             }),
-            MonitorRow::GpuTemp => line(tk("GPU temp"), r.and_then(|r| r.gpu_temp).map(|c| units.format_degrees(c)), None).map(|mut ln| {
-                ln.level = r.and_then(|r| r.gpu_temp).map(|c| c / TEMP_SCALE_C);
-                ln.short = Some(l.word(tk("GPU")));
-                ln
-            }),
+            // Handled above.
+            MonitorRow::Gpu | MonitorRow::Vram | MonitorRow::GpuPower | MonitorRow::GpuTemp => None,
             MonitorRow::Fan => line(tk("Fan"), r.and_then(|r| r.fan_rpm).map(|v| format!("{v} {}", l.word(tk("RPM")))), None).map(|mut ln| {
                 ln.level = r.and_then(|r| r.fan_rpm).map(|v| v as f32 / FAN_SCALE_RPM);
                 ln
@@ -1043,6 +1052,45 @@ pub fn monitor_lines(w: &MonitorWidget, s: Option<&sysmon::Sampler>, units: Unit
         out.extend(made);
     }
     out
+}
+
+/// The lines of a GPU row: one per GPU that reports it (numbered when
+/// there are several). Before the GPU sampler's first reading a single
+/// placeholder holds the place; after it, a reading no GPU has shows no
+/// line at all.
+fn gpu_lines(row: MonitorRow, r: Option<&sysmon::Reading>, l: &Lingo, units: Units, gauges: bool, settled: bool, out: &mut Vec<MonitorLine>) {
+    let gpus = r.map_or(&[][..], |r| &r.gpus[..]);
+    let probed = r.is_some_and(|r| r.gpus_probed);
+    if gpus.is_empty() {
+        if !probed && !settled {
+            out.extend(gpu_line(row, &sysmon::GpuReading::default(), None, l, units, gauges));
+        }
+        return;
+    }
+    let several = gpus.len() > 1;
+    out.extend(gpus.iter().enumerate().filter_map(|(i, g)| gpu_line(row, g, several.then_some(i + 1), l, units, gauges)));
+}
+
+/// GPU `g`'s line for `row` (`n` numbers it among several), `None` when it
+/// doesn't report that reading; an unread one (the placeholder) is a dash.
+fn gpu_line(row: MonitorRow, g: &sysmon::GpuReading, n: Option<usize>, l: &Lingo, units: Units, gauges: bool) -> Option<MonitorLine> {
+    let placeholder = *g == sysmon::GpuReading::default();
+    let named = |single: &str, numbered: &str| match n {
+        Some(n) => mandara_i18n::fill(&l.word(numbered), &[("n", &l.digits(n.to_string()))]),
+        None => l.word(single),
+    };
+    let share = |(u, t): (u64, u64)| u as f32 / t.max(1) as f32;
+    let (label, value, share, level, short) = match row {
+        MonitorRow::Gpu => (named(tk("GPU"), tk("GPU {n}")), g.load.map(percent), Some(g.load.unwrap_or(0.0)), None, None),
+        MonitorRow::Vram => (named(tk("VRAM"), tk("VRAM {n}")), g.vram.map(|v| if gauges { percent(share(v)) } else { pair_bytes(v.0, v.1) }), Some(g.vram.map(share).unwrap_or(0.0)), None, None),
+        MonitorRow::GpuTemp => (named(tk("GPU temp"), tk("GPU {n} temp")), g.temp.map(|c| units.format_degrees(c)), None, g.temp.map(|c| c / TEMP_SCALE_C), Some(named(tk("GPU"), tk("GPU {n}")))),
+        MonitorRow::GpuPower => (named(tk("GPU power"), tk("GPU {n} power")), g.power_w.map(|w| format!("{w:.0} W")), None, None, None),
+        _ => return None,
+    };
+    if value.is_none() && !placeholder {
+        return None;
+    }
+    Some(MonitorLine { row: Some(row), label, value: l.digits(value.unwrap_or_else(|| "—".to_string())), share: share.filter(|_| gauges), level, short, ..Default::default() })
 }
 
 // ── Layout of one widget ─────────────────────────────────────────────────
@@ -1437,8 +1485,11 @@ fn push_layers(layers: &mut Layers, st: &State, a: Option<usize>, b: Option<usiz
 
 /// Which monitor readings exist (keys the label plane).
 fn availability(r: &sysmon::Reading, samples: u64) -> u64 {
-    let bits = [r.cpu.is_some(), r.gpu.is_some(), r.memory.is_some(), r.disk.is_some(), r.gpu_power_w.is_some(), r.cpu_temp.is_some(), r.gpu_temp.is_some(), r.fan_rpm.is_some(), r.battery.is_some(), r.down.is_some(), samples >= 2];
-    bits.iter().enumerate().fold(0, |acc, (i, b)| acc | ((*b as u64) << i))
+    let bits = [r.cpu.is_some(), r.memory.is_some(), r.swap.is_some(), r.disk.is_some(), r.cpu_temp.is_some(), r.fan_rpm.is_some(), r.battery.is_some(), r.down.is_some(), samples >= 2, r.gpus_probed];
+    let flags = bits.iter().enumerate().fold(0, |acc, (i, b)| acc | ((*b as u64) << i));
+    // Each GPU's four readings (the lines and their labels), and how many.
+    let gpus = r.gpus.iter().take(KEYED_GPUS).enumerate().fold(0u64, |acc, (i, g)| acc | (u64::from(g.mask()) << (GPU_MASK_BITS * i)));
+    flags | (gpus << bits.len()) | ((r.gpus.len().min(GPU_COUNT_MAX) as u64) << GPU_COUNT_SHIFT)
 }
 
 /// The live content's tick: the second (seconds clocks) or the sample.
@@ -1830,7 +1881,7 @@ pub fn preview_bands() -> [f32; mandara_services::spectrum::BANDS] {
 /// gallery), as straight RGBA.
 pub fn thumbnail(w: &DesktopWidget, size: (u32, u32), fonts: &FontNames, primary: Color, text: &mut TextPainter) -> Option<image::RgbaImage> {
     let mut canvas = Pixmap::new(size.0.max(1), size.1.max(1))?;
-    let mut sample = sysmon::Sampler::new();
+    let mut sample = sysmon::Sampler::preview();
     if let WidgetKind::Monitor(m) = &w.kind {
         let mut wants = sysmon::Wants::default();
         wants.add(&m.rows);
@@ -1932,6 +1983,93 @@ mod tests {
         assert_eq!(pair_bytes(6_100_000_000, 31_200_000_000), "6.1 / 31.2 GB");
         let lines = monitor_lines(&MonitorWidget::default(), None, Units::Metric, false);
         assert!(lines.iter().any(|l| l.label == "CPU" && l.value == "—"), "unknown until sampled");
+    }
+
+    /// A settled sampler holding `gpus` and every other reading.
+    fn sampled(gpus: Vec<sysmon::GpuReading>) -> sysmon::Sampler {
+        let mut s = sysmon::Sampler::preview();
+        s.samples = 2;
+        s.reading = sysmon::Reading {
+            cpu: Some(0.25),
+            memory: Some((4 << 30, 16 << 30)),
+            swap: Some((1 << 30, 8 << 30)),
+            disk: Some((100 << 30, 500 << 30)),
+            cpu_temp: Some(55.0),
+            gpus,
+            gpus_probed: true,
+            fan_rpm: Some(900),
+            battery: Some(0.8),
+            down: Some(1000.0),
+            up: Some(10.0),
+        };
+        s
+    }
+
+    fn nvidia() -> sysmon::GpuReading {
+        sysmon::GpuReading { load: Some(0.42), vram: Some((3 << 30, 12 << 30)), temp: Some(61.0), power_w: Some(140.0) }
+    }
+
+    fn rows_of(lines: &[MonitorLine]) -> Vec<MonitorRow> {
+        lines.iter().filter_map(|l| l.row).collect()
+    }
+
+    #[test]
+    fn every_reading_on_shows_each_once_and_one_alone_shows_only_it() {
+        let all = MonitorWidget { rows: MonitorRow::ALL.to_vec(), ..MonitorWidget::default() };
+        let s = sampled(vec![nvidia()]);
+        let lines = monitor_lines(&all, Some(&s), Units::Metric, false);
+        assert_eq!(rows_of(&lines), MonitorRow::ALL, "one line per reading, in order");
+        let label = |r: MonitorRow| lines.iter().find(|l| l.row == Some(r)).map(|l| (l.label.as_str(), l.value.as_str()));
+        assert_eq!(label(MonitorRow::Gpu), Some(("GPU", "42%")));
+        assert!(label(MonitorRow::Vram).is_some_and(|(_, v)| v.contains('/')));
+        assert_eq!(label(MonitorRow::GpuPower), Some(("GPU power", "140 W")));
+        assert!(label(MonitorRow::Swap).is_some_and(|(l, v)| l == "Swap" && v.contains('/')));
+        for one in MonitorRow::ALL {
+            let w = MonitorWidget { rows: vec![one], ..MonitorWidget::default() };
+            assert_eq!(rows_of(&monitor_lines(&w, Some(&s), Units::Metric, false)), [one], "{one:?} alone");
+        }
+        // Both lay out; every reading makes a taller column than one.
+        let fonts = FontNames::default();
+        let names = ["DP-1"];
+        let o = OutputCx { id: 1, names: &names, logical: (1920.0, 1080.0), physical: (1920, 1080), scale120: mandara_core::shm_canvas::SCALE_DENOMINATOR, tone: None, primary: Color::oklch(0.6, 0.15, 200.0), fonts: &fonts, depth: false, subject: None, safe: Insets::default() };
+        let mut text = TextPainter::new();
+        let now = Local::now();
+        let height = |m: MonitorWidget, text: &mut TextPainter| {
+            let w = DesktopWidget { kind: WidgetKind::Monitor(m), ..Default::default() };
+            lay_out(&w, &o, &scene(vec![w.clone()]), Some(&s), &now, text).expect("laid out").comp.size.1
+        };
+        let tall = height(all.clone(), &mut text);
+        let short = height(MonitorWidget { rows: vec![MonitorRow::Vram], ..MonitorWidget::default() }, &mut text);
+        assert!(tall > short * 4.0 && short > 0.0, "{tall} vs {short}");
+        for style in [MonitorStyle::Gauges, MonitorStyle::Meters, MonitorStyle::Bars, MonitorStyle::Thermals] {
+            assert!(height(MonitorWidget { style, ..all.clone() }, &mut text) > 0.0, "{style:?}");
+        }
+    }
+
+    #[test]
+    fn several_gpus_get_a_line_each_and_none_leaves_no_empty_row() {
+        let w = MonitorWidget { rows: vec![MonitorRow::Gpu, MonitorRow::Vram, MonitorRow::GpuTemp, MonitorRow::GpuPower], ..MonitorWidget::default() };
+        // An NVIDIA card and an APU that reports no power.
+        let apu = sysmon::GpuReading { load: Some(0.05), vram: Some((1 << 30, 2 << 30)), temp: Some(48.0), power_w: None };
+        let lines = monitor_lines(&w, Some(&sampled(vec![nvidia(), apu])), Units::Metric, false);
+        let labels: Vec<&str> = lines.iter().map(|l| l.label.as_str()).collect();
+        assert_eq!(labels, ["GPU 1", "GPU 2", "VRAM 1", "VRAM 2", "GPU 1 temp", "GPU 2 temp", "GPU 1 power"]);
+        assert_eq!(lines[4].short.as_deref(), Some("GPU 1"));
+        // No GPU: no GPU rows at all, not even a dash, once the GPUs were read.
+        let none = monitor_lines(&MonitorWidget::default(), Some(&sampled(vec![])), Units::Metric, false);
+        assert!(none.iter().all(|l| !l.row.is_some_and(MonitorRow::is_gpu)), "{none:?}");
+        assert!(none.iter().any(|l| l.row == Some(MonitorRow::Cpu)));
+        // Before the first GPU reading a dash holds the place.
+        let mut early = sampled(vec![]);
+        (early.reading.gpus_probed, early.samples) = (false, 1);
+        let lines = monitor_lines(&w, Some(&early), Units::Metric, false);
+        assert_eq!(lines.len(), 4);
+        assert!(lines.iter().all(|l| l.value == "—"));
+        // The label plane's key follows the GPU lines.
+        let one = sampled(vec![nvidia()]);
+        let two = sampled(vec![nvidia(), apu]);
+        assert_ne!(availability(&one.reading, 2), availability(&two.reading, 2));
+        assert_ne!(availability(&sampled(vec![apu]).reading, 2), availability(&one.reading, 2), "a reading missing changes the key");
     }
 
     /// A compositor stand-in: which planes exist, which are mapped, the

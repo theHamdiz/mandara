@@ -176,9 +176,9 @@ around, each one measured or shipped today:
     takes over an existing setup without losing it, and updates arrive as
     small, signed binary patches from Studio → About → Update now. NixOS
     gets a flake with NixOS and Home Manager modules, updated through the
-    flake. The Updates panel updates your whole system too, with live
-    progress and Mandara's own password dialog, and manages NixOS
-    generations. [How](docs/apps-and-updates.md#system-updates)
+    flake. The Updates panel updates your whole system too, AUR packages
+    included, with live progress and Mandara's own password dialog, and
+    manages NixOS generations. [How](docs/apps-and-updates.md#system-updates)
 12. **Made for everyone.** 20 interface languages, right-to-left Arabic,
     Persian and Urdu included, and fonts chosen for every script it shows.
 
@@ -186,9 +186,11 @@ around, each one measured or shipped today:
 
 - **It's light.** Plugins load data when needed, and hidden panels stop
   their refresh work. [Measurements and setup](docs/performance.md)
-- **It looks the way you want.** Six bar styles, four presets that reshape
+- **It looks the way you want.** Six bar styles, eight presets that reshape
   the bar completely (a framed bar with a rail of scalloped buttons, a dock
-  of squircle tiles, a flower rail, rows of connected tiles), side bars of
+  of squircle tiles, a flower rail, rows of connected tiles, a monitoring
+  status line, three floating docks, a notch hanging from the top, a top
+  bar joined to a rail), side bars of
   icons and pills that join the top bar into one frame, one-click Looks, desktop widgets, a hundred dials for
   corners, glass and motion, and themes made from your wallpaper.
   [Your desktop](docs/desktop.md)
@@ -225,8 +227,9 @@ around, each one measured or shipped today:
 
 ### Bar styles
 
-Four presets reshape the whole bar in one click: pick one in **Studio →
-Bars → Presets**, or run `mandara msg bar style <name>`. Each side bar can
+Eight presets reshape the whole bar in one click: pick one in **Studio →
+Bars → Presets**, or run `mandara msg bar style <name>`. Every style shows
+the icon of the app on each workspace and tag button. Each side bar can
 take one of its own (`mandara msg side-bar style right <name>`).
 
 <table>
@@ -237,6 +240,14 @@ take one of its own (`mandara msg side-bar style right <name>`).
 <tr>
 <td width="50%" valign="top"><img src="docs/screenshots/bar-style-rail.webp" alt="The Rail bar style: a wide rail on the left edge with flower-shaped buttons and tiles, inside a thin screen frame" width="100%"/><br/><sub><b>Rail</b> (<code>rail</code>): a wide left rail of flower buttons in a screen frame.</sub></td>
 <td width="50%" valign="top"><img src="docs/screenshots/bar-style-segmented.webp" alt="The Segmented bar style: no bar, just rows of connected tiles under the top edge" width="100%"/><br/><sub><b>Segmented</b> (<code>segmented</code>): no bar, just rows of connected tiles.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-system-monitor.webp" alt="The System monitor bar style: a slim bar along the bottom of the screen where every reading sits on a square stat block in a monospace font, with CPU and memory rings, network rates and app icons on the workspace buttons" width="100%"/><br/><sub><b>System monitor</b> (<code>system-monitor</code>): a slim bottom status line of stat blocks, meters and rates.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-stanley-bridge.webp" alt="The Stanley Bridge bar style: three floating docks of squircle tiles spanning the bottom of the screen, with app icons on the workspace tiles" width="100%"/><br/><sub><b>Stanley Bridge</b> (<code>stanley-bridge</code>): three floating docks of squircle tiles along the bottom.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-pharos-beam.webp" alt="The Pharos Beam bar style: a half-width notch hanging from the top edge, with scalloped accent buttons, tonal tiles and app icons on the workspace buttons" width="100%"/><br/><sub><b>Pharos Beam</b> (<code>pharos-beam</code>): a notch of scalloped buttons and tonal tiles hanging from the top.</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/bar-style-raml-tram.webp" alt="The Raml Tram bar style: a top bar joined to a rail down the left edge, with flower-shaped buttons and app icons on the workspace buttons" width="100%"/><br/><sub><b>Raml Tram</b> (<code>raml-tram</code>): a top bar joined to a left rail of flower buttons.</sub></td>
 </tr>
 <tr>
 <td colspan="2" align="center"><img src="docs/screenshots/bar-style-side-bars.webp" alt="A Segmented top bar of connected tiles beside a right side bar styled as a Tile dock, with squircle tiles" width="50%"/><br/><sub><b>Side bars</b> take a style of their own: here a Tile dock rail beside a Segmented bar.</sub></td>
@@ -255,16 +266,21 @@ take one of its own (`mandara msg side-bar style right <name>`).
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="docs/screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons" width="100%"/><br/><sub><b>Mandara Login</b>, the login screen: the <b>Mandara</b> design</sub></td>
-<td width="50%" valign="top"><img src="docs/screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine over dusk waves" width="100%"/><br/><sub>…and its <b>Midnight card</b> design</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons, with the Mandara emblem above the keyboard pill" width="100%"/><br/><sub><b>Mandara Login</b>, the login screen: the <b>Mandara</b> design</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine over violet and coral dusk waves" width="100%"/><br/><sub>…its <b>Midnight card</b> design</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/greeter-material-you.webp" alt="Mandara Login in its Material You design: a big stacked clock with the hours in pink, and a tonal card with the scalloped avatar, a filled password field, a round sign-in button and a session chip, in colours taken from coral, gold and magenta ribbons" width="100%"/><br/><sub>…and its <b>Material You</b> design</sub></td>
 </tr>
+</table>
+
+<table>
 <tr>
-<td colspan="2" align="center"><img src="docs/screenshots/lock-screen.webp" alt="The lock screen over soft violet and coral waves: the date, a big clock, the avatar and the password field" width="50%"/><br/><sub><b>The lock screen</b>, made to match</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/lock-screen.webp" alt="The lock screen in its Mandara design over blurred coral, violet and gold ribbons: the date, a big clock, the avatar and the glass password field" width="100%"/><br/><sub><b>The lock screen</b>, made to match: the <b>Mandara</b> design</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/lock-screen-material-you.webp" alt="The lock screen in its Material You design over blurred blue and teal ribbons: the date, a big stacked clock, and a tonal card with the scalloped avatar, a filled password field and a round button" width="100%"/><br/><sub>…and its <b>Material You</b> design</sub></td>
 </tr>
 </table>
 
 <p align="center">
-  <img src="docs/screenshots/studio-login.webp" alt="Studio: the login screen designer with a live preview" width="100%"/>
+  <img src="docs/screenshots/studio-login.webp" alt="Studio: the login screen designer with a live preview, the Try it buttons and the three Looks: Mandara, Midnight card and Material You" width="100%"/>
   <br/>
   <sub><b>Mandara Studio</b>: every setting, live, with previews like this login screen designer.</sub>
 </p>
@@ -317,6 +333,18 @@ files (no compositor yet? it offers to install one). It works on Arch,
 Debian and Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus. Updates arrive by small binary patch: Studio → About →
 **Update now**.
 
+On **image-based systems** (Bazzite, Silverblue, Kinoite, Bluefin, Aurora,
+Aeon, Kalpa, Vanilla OS), the same command puts Mandara in your home folder
+and adds only the system packages the image lacks, in one `rpm-ostree`,
+`transactional-update` or `abroot` transaction after asking. It says when a
+reboot is needed; after it, Mandara Login is one click away in Studio →
+Login screen. On SteamOS it installs into your home folder only
+([Immutable systems](docs/install.md#immutable-systems)).
+
+On **FreeBSD 14+** (14.4 and newer, 15 included; amd64), the same command installs the
+FreeBSD build; without curl, use the base system's `fetch`
+([FreeBSD install](docs/install.md#freebsd)).
+
 On **NixOS**, Mandara is a flake: try it with
 `nix run github:theHamdiz/mandara`, or add it to your system with
 `programs.mandara.enable = true;` (a NixOS module and a Home Manager
@@ -325,7 +353,7 @@ module come with it). NixOS users update through their flake, not Studio's
 `nix flake update mandara`, then `sudo nixos-rebuild switch --flake .` (or
 `home-manager switch --flake .`). Use your input name if it differs from `mandara`.
 
-→ **[Install guide](docs/install.md)**: Arch packages, NixOS, other
+→ **[Install guide](docs/install.md)**: Arch packages, NixOS, FreeBSD, immutable systems, other
 options, coming from another setup.
 
 ## Common questions

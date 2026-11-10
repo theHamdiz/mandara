@@ -473,7 +473,7 @@ impl StackPopover {
 
     fn open_file(&mut self, i: usize, cx: &mut Context<Self>) {
         if let Some(e) = self.files.get(i) {
-            open_path(&e.path);
+            open_path(&e.path, cx);
         }
         self.close(cx);
     }
@@ -556,7 +556,7 @@ impl StackPopover {
         let Some(e) = self.files.get(i).cloned() else { return };
         match row {
             0 => return self.open_file(i, cx),
-            1 => open_path(e.path.parent().unwrap_or(&e.path)),
+            1 => open_path(e.path.parent().unwrap_or(&e.path), cx),
             _ => match move_to_trash(std::slice::from_ref(&e.path)) {
                 Ok(_) => {
                     self.files.remove(i);
@@ -672,12 +672,16 @@ impl StackPopover {
                 .child(label);
             let w = s + FAN_LABEL_GAP + label_w;
             let x = if labels_left { c.0 + s / 2.0 - w } else { c.0 - s / 2.0 };
-            let mut row = div().id(("stack-fan", k)).absolute().left(px(x)).top(px(c.1 - s / 2.0)).h(px(s)).w(px(w)).flex().items_center().gap(px(FAN_LABEL_GAP)).opacity(item_alpha).cursor_pointer();
+            // `occlude`: the full-screen dismiss catcher behind must not see
+            // a press on a row. It closed the fan on mouse down, the rows
+            // folded back towards the icon, and the click (on mouse up)
+            // missed every row but the one next to the icon.
+            let mut row = div().id(("stack-fan", k)).occlude().absolute().left(px(x)).top(px(c.1 - s / 2.0)).h(px(s)).w(px(w)).flex().items_center().gap(px(FAN_LABEL_GAP)).opacity(item_alpha).cursor_pointer();
             row = if labels_left { row.flex_row().justify_end().child(label_el).child(tile) } else { row.flex_row().child(tile).child(label_el) };
             if is_folder_row {
                 let dir = stack_dir(&self.stack);
                 row = row.on_click(cx.listener(move |this, _, _, cx| {
-                    open_path(&dir);
+                    open_path(&dir, cx);
                     this.close(cx);
                 }));
             } else {
@@ -873,7 +877,7 @@ impl Render for StackPopover {
                         .child(icon(crate::bidi::dir_icon("external"), text::BODY_S, accent))
                         .child(t("Open in Files"))
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            open_path(&dir);
+                            open_path(&dir, cx);
                             this.close(cx);
                         })),
                 );
@@ -925,14 +929,10 @@ impl Render for StackPopover {
 struct Popover(Option<(usize, WindowHandle<StackPopover>)>);
 impl Global for Popover {}
 
-/// Opens a file or folder with its default app, off the UI thread.
-pub fn open_path(path: &Path) {
-    let uri = format!("file://{}", mandara_services::app_uninstall::percent_encode(path));
-    std::thread::spawn(move || {
-        if let Err(err) = mandara_services::session::open_uri(&uri) {
-            tracing::warn!("dock: opening {uri}: {err}");
-        }
-    });
+/// Opens a file with the app for its type, or a folder in the file
+/// manager ([`crate::opener`]: off the UI thread, failures notified).
+pub fn open_path(path: &Path, cx: &mut App) {
+    crate::opener::open_path(path, cx);
 }
 
 /// Whether stack `index`'s popover is open (and not closing).

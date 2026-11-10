@@ -1157,6 +1157,22 @@ impl Frame {
         }
     }
 
+    /// Mandara patch: frees the spare room a larger frame left behind,
+    /// keeping this frame's contents.
+    pub(crate) fn shrink_to_fit(&mut self) {
+        self.element_states.shrink_to_fit();
+        self.accessed_element_states.shrink_to_fit();
+        self.mouse_listeners.shrink_to_fit();
+        self.dispatch_tree.shrink_to_fit();
+        self.scene.shrink_to_fit();
+        self.hitboxes.shrink_to_fit();
+        self.window_control_hitboxes.shrink_to_fit();
+        self.deferred_draws.shrink_to_fit();
+        self.input_handlers.shrink_to_fit();
+        self.tooltip_requests.shrink_to_fit();
+        self.cursor_styles.shrink_to_fit();
+    }
+
     pub(crate) fn cursor_style(&self, window: &Window) -> Option<CursorStyle> {
         self.cursor_styles
             .iter()
@@ -2638,7 +2654,8 @@ impl Window {
     /// This is only needed to disambiguate a corner-anchored surface; otherwise the
     /// edge is deduced from the anchor. The edge must be a single edge the surface
     /// is anchored to, or it is ignored. (Wayland layer-shell windows only)
-    #[cfg(all(target_os = "linux", feature = "wayland"))]
+    // Mandara patch 10: and on FreeBSD.
+    #[cfg(all(any(target_os = "linux", target_os = "freebsd"), feature = "wayland"))]
     pub fn set_exclusive_edge(&self, edge: crate::layer_shell::Anchor) {
         self.platform_window.set_exclusive_edge(edge);
     }
@@ -5527,6 +5544,24 @@ impl Window {
     pub fn set_view_id(&mut self, view_id: EntityId) {
         self.invalidator.debug_assert_prepaint();
         self.next_frame.dispatch_tree.set_view_id(view_id);
+    }
+
+    /// Mandara patch: gives back the room large frames left in this window's
+    /// frame buffers, layout tree and the app's element arena, keeping what
+    /// the last frame holds. For a lifecycle boundary (a surface's content
+    /// went away for good), never per frame; does nothing during a draw.
+    pub fn shrink_frame_buffers(&mut self, cx: &mut App) {
+        if !self.invalidator.not_drawing() {
+            return;
+        }
+        self.rendered_frame.shrink_to_fit();
+        self.next_frame.shrink_to_fit();
+        if let Some(engine) = self.layout_engine.as_mut() {
+            engine.shrink();
+        }
+        if let Ok(mut arena) = cx.element_arena.try_borrow_mut() {
+            arena.shrink();
+        }
     }
 
     /// Get the entity ID for the currently rendering view

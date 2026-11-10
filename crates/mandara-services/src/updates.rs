@@ -4,19 +4,21 @@
 //! | source  | check                                             | update command            |
 //! |---------|---------------------------------------------------|---------------------------|
 //! | pacman  | `checkupdates` (pacman-contrib, private sync db)  | `paru` / `yay` / `sudo pacman -Syu` |
-//! | AUR     | `paru -Qua` / `yay -Qua`                          | `paru -Sua` / `yay -Sua`  |
+//! | AUR     | `paru -Qua` / `yay -Qua` / `pikaur -Qua` / `trizen -Qua`; the AUR's web API for Aura and Shelly | `paru -Sua`, `yay -Sua`, `aura -Au`, `shelly upgrade aur`… |
 //! | apt     | `apt list --upgradable` (never `apt update`)      | `sudo apt update && sudo apt upgrade` |
 //! | dnf     | `dnf check-update` (exit 100 = updates)           | `sudo dnf upgrade`        |
 //! | zypper  | `zypper -q list-updates`                          | `sudo zypper update`      |
 //! | xbps    | `xbps-install -Mun` (in-memory repository sync)   | `sudo xbps-install -Su`   |
 //! | apk     | `apk list -u` (the cached index)                  | `sudo apk upgrade -U`     |
+//! | pkg     | `pkg version -vRUl '<'` (the cached catalogue)    | `sudo pkg upgrade`        |
 //! | flatpak | `flatpak remote-ls --updates` + `flatpak list`    | `flatpak update`          |
 //!
 //! Without `checkupdates` the pacman source reports a hint instead of
 //! touching the system sync database. Installing the updates is
 //! [`crate::sysupdate`]'s job (in the panel, with progress); the commands
-//! here are for the terminal fallback ([`open_terminal`]): AUR helpers,
-//! image-based systems, or when the user prefers a terminal. The parsers
+//! here are for the terminal fallback ([`open_terminal`]): image-based
+//! systems, AUR updates that need a person, or when the user prefers a
+//! terminal. The parsers
 //! are pure functions (fixture-tested); checks run with `LANG=C` and a
 //! timeout.
 
@@ -27,6 +29,8 @@ use std::time::{Duration, Instant};
 
 use mandara_i18n::{t, tf};
 use serde::{Deserialize, Serialize};
+
+use crate::sysupdate::aur::{self, AurHelper};
 
 /// Longest a single source's check may take (checkupdates downloads the
 /// sync databases; AUR helpers query aur.archlinux.org).
@@ -41,11 +45,29 @@ pub const ARCH_NEWS_URL: &str = "https://archlinux.org/feeds/news/";
 pub const NEWS_ITEMS: usize = 5;
 /// `checkupdates` exit status meaning "no updates".
 const CHECKUPDATES_NONE: i32 = 2;
+/// `pacman -Q` with a filter (`-Qm`) that matches nothing exits 1, printing
+/// nothing on either stream (pacman's `query.c`: no match sets `ret = 1`).
+const PACMAN_QUERY_NONE: i32 = 1;
 /// Present on Alpine (apk's list of wanted packages); an `apk` binary
 /// alone may be another tool.
 const APK_WORLD: &str = "/etc/apk/world";
+/// Where pkg keeps its local package database: a `pkg` binary elsewhere
+/// (Termux has one) is another tool.
+const PKG_DB: &str = "/var/db/pkg/local.sqlite";
+/// `pkg version`'s arguments: verbose, against the remote catalogue as
+/// last fetched (`-U`: no catalogue update, which needs root), only
+/// packages older than it.
+const PKG_VERSION_ARGS: [&str; 4] = ["version", "-vRU", "-l", "<"];
 /// `dnf check-update` exit status meaning "updates available".
 const DNF_UPDATES: i32 = 100;
+/// The AUR's web API (`info` for many packages at once).
+const AUR_RPC_INFO: &str = "https://aur.archlinux.org/rpc/v5/info";
+/// Packages asked about per request (keeps the URL short).
+const AUR_RPC_BATCH: usize = 100;
+/// Longest AUR error text shown (bytes).
+const AUR_MAX_ERROR: usize = 200;
+/// Foreign packages compared at most.
+const AUR_MAX_FOREIGN: usize = 2000;
 /// Terminals tried, in order, when none is configured.
 pub const TERMINALS: [&str; 5] = ["ghostty", "kitty", "foot", "alacritty", "wezterm"];
 
@@ -59,11 +81,13 @@ pub enum SourceKind {
     Zypper,
     Xbps,
     Apk,
+    /// FreeBSD's packages.
+    Pkg,
     Flatpak,
 }
 
 impl SourceKind {
-    pub const ALL: [SourceKind; 8] = [SourceKind::Pacman, SourceKind::Aur, SourceKind::Apt, SourceKind::Dnf, SourceKind::Zypper, SourceKind::Xbps, SourceKind::Apk, SourceKind::Flatpak];
+    pub const ALL: [SourceKind; 9] = [SourceKind::Pacman, SourceKind::Aur, SourceKind::Apt, SourceKind::Dnf, SourceKind::Zypper, SourceKind::Xbps, SourceKind::Apk, SourceKind::Pkg, SourceKind::Flatpak];
 
     /// Command-line name (`updates run pacman`).
     pub fn id(self) -> &'static str {
@@ -76,6 +100,7 @@ impl SourceKind {
             SourceKind::Xbps => "xbps",
             SourceKind::Apk => "apk",
             SourceKind::Flatpak => "flatpak",
+            SourceKind::Pkg => "pkg",
         }
     }
 
@@ -94,6 +119,7 @@ impl SourceKind {
             SourceKind::Xbps => "XBPS",
             SourceKind::Apk => "apk",
             SourceKind::Flatpak => "Flatpak",
+            SourceKind::Pkg => "pkg",
         }
     }
 }
@@ -179,22 +205,45 @@ fn has(name: &str) -> bool {
     find_program(name).is_some()
 }
 
-/// The first AUR helper on `$PATH`.
+/// The AUR helper on `$PATH`: paru, then yay, then pikaur, Aura, trizen
+/// and Shelly.
 pub fn aur_helper() -> Option<&'static str> {
-    ["paru", "yay"].into_iter().find(|h| has(h))
+    aur_helper_preferring(None).map(AurHelper::id)
+}
+
+/// The AUR helper to update with: `preferred` when installed, else the
+/// first installed one (the sandbox's fake helper there).
+pub fn aur_helper_preferring(preferred: Option<AurHelper>) -> Option<AurHelper> {
+    if let Some(fake) = crate::sysupdate::fake_aur() {
+        return Some(fake);
+    }
+    aur::pick(preferred, |h| has(h.id()))
+}
+
+/// The AUR helpers installed here, in preference order.
+pub fn installed_aur_helpers() -> Vec<AurHelper> {
+    AurHelper::ALL.into_iter().filter(|h| has(h.id())).collect()
 }
 
 /// Shell command that installs `kind`'s updates.
 pub fn update_command(kind: SourceKind, helper: Option<&str>) -> String {
+    let helper_of = |h: &str| AurHelper::from_id(h);
     match kind {
-        SourceKind::Pacman => helper.map(str::to_string).unwrap_or_else(|| "sudo pacman -Syu".into()),
-        SourceKind::Aur => format!("{} -Sua", helper.unwrap_or("paru")),
+        SourceKind::Pacman => match helper.and_then(helper_of) {
+            Some(h) => h.full_upgrade_command().to_string(),
+            None => helper.map(str::to_string).unwrap_or_else(|| "sudo pacman -Syu".into()),
+        },
+        SourceKind::Aur => match helper.and_then(helper_of) {
+            Some(h) => h.terminal_command().to_string(),
+            None => format!("{} -Sua", helper.unwrap_or("paru")),
+        },
         SourceKind::Apt => "sudo apt update && sudo apt upgrade".into(),
         SourceKind::Dnf => "sudo dnf upgrade".into(),
         SourceKind::Zypper => "sudo zypper update".into(),
         SourceKind::Xbps => "sudo xbps-install -Su".into(),
         SourceKind::Apk => "sudo apk upgrade -U".into(),
         SourceKind::Flatpak => "flatpak update".into(),
+        SourceKind::Pkg => "sudo pkg upgrade".into(),
     }
 }
 
@@ -222,10 +271,13 @@ pub fn detect(opts: CheckOptions) -> Vec<Source> {
     let mut out = Vec::new();
     if has("pacman") {
         out.push(Source { kind: SourceKind::Pacman, tool: has("checkupdates").then(|| "checkupdates".into()), command: update_command(SourceKind::Pacman, helper) });
+        // The check: a helper that lists AUR updates itself, else (Aura,
+        // Shelly) the AUR's web API.
+        let checker = aur::checker(|h| has(h.id())).map(AurHelper::id).or(helper);
         if opts.aur
-            && let Some(h) = helper
+            && let Some(tool) = checker
         {
-            out.push(Source { kind: SourceKind::Aur, tool: Some(h.into()), command: update_command(SourceKind::Aur, helper) });
+            out.push(Source { kind: SourceKind::Aur, tool: Some(tool.into()), command: update_command(SourceKind::Aur, helper) });
         }
     }
     if has("apt") && has("dpkg") {
@@ -243,10 +295,23 @@ pub fn detect(opts: CheckOptions) -> Vec<Source> {
     if has("apk") && Path::new(APK_WORLD).exists() {
         out.push(Source { kind: SourceKind::Apk, tool: Some("apk".into()), command: update_command(SourceKind::Apk, None) });
     }
+    if has("pkg") && Path::new(PKG_DB).exists() {
+        out.push(Source { kind: SourceKind::Pkg, tool: Some("pkg".into()), command: update_command(SourceKind::Pkg, None) });
+    }
     if opts.flatpak && has("flatpak") {
         out.push(Source { kind: SourceKind::Flatpak, tool: Some("flatpak".into()), command: update_command(SourceKind::Flatpak, None) });
     }
+    let image_based = matches!(crate::sysupdate::current_system(), crate::sysupdate::System::ImageBased(_));
+    out.retain(|s| checked_on(s.kind, image_based));
     out
+}
+
+/// Whether a source is checked: an image-based system (Fedora Atomic,
+/// openSUSE Aeon, Vanilla OS, SteamOS) updates its image with its own tool,
+/// so the package manager it carries (dnf, zypper, apt, pacman) can't update
+/// it and isn't offered; Flatpak apps live outside the image.
+fn checked_on(kind: SourceKind, image_based: bool) -> bool {
+    !image_based || kind == SourceKind::Flatpak
 }
 
 // ── Running checks ───────────────────────────────────────────────────────
@@ -319,6 +384,7 @@ fn check_source(source: &Source) -> SourceReport {
             Some(CHECKUPDATES_NONE) => Ok(Vec::new()),
             _ => Err(failed(tool, code, &err)),
         }),
+        SourceKind::Aur if AurHelper::from_id(tool).is_some_and(|h| h.check_args().is_none()) => aur_web_updates(),
         SourceKind::Aur => run(tool, &["-Qua"], CHECK_TIMEOUT).and_then(|(code, out, err)| {
             // Helpers exit 1 with empty output when nothing is outdated.
             let pkgs = parse_arrow_list(&out);
@@ -345,6 +411,10 @@ fn check_source(source: &Source) -> SourceReport {
             Some(0) => Ok(parse_apk(&out)),
             _ => Err(failed(tool, code, &err)),
         }),
+        SourceKind::Pkg => run(tool, &PKG_VERSION_ARGS, CHECK_TIMEOUT).and_then(|(code, out, err)| match code {
+            Some(0) => Ok(parse_pkg_version(&out)),
+            _ => Err(failed(tool, code, &err)),
+        }),
         SourceKind::Flatpak => {
             let cols = "--columns=application,version,branch";
             run(tool, &["remote-ls", "--updates", cols], CHECK_TIMEOUT).and_then(|(code, updates, err)| {
@@ -366,13 +436,135 @@ fn check_source(source: &Source) -> SourceReport {
     report
 }
 
+/// AUR updates without a helper's own check: the installed foreign
+/// packages (`pacman -Qm`), their AUR versions from the web API, and
+/// pacman's `vercmp` for which are older. Development packages (`-git`)
+/// show only when their PKGBUILD's version changed.
+fn aur_web_updates() -> Result<Vec<Package>, String> {
+    crate::offline::check()?;
+    let (code, out, err) = run("pacman", &["-Qm"], CHECK_TIMEOUT)?;
+    let installed = foreign_packages(code, &out, &err)?;
+    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(CHECK_TIMEOUT)).build().into();
+    let mut outdated = Vec::new();
+    for batch in installed.chunks(AUR_RPC_BATCH) {
+        let mut req = agent.get(AUR_RPC_INFO).header("User-Agent", concat!("mandara-shell/", env!("CARGO_PKG_VERSION")));
+        for (name, _) in batch {
+            req = req.query("arg[]", name);
+        }
+        let mut response = req.call().map_err(|e| tf("The AUR couldn't be reached: {error}", &[("error", &e)]))?;
+        let body = response.body_mut().read_to_string().map_err(|e| e.to_string())?;
+        for (name, new) in parse_aur_info(&body)? {
+            let Some((_, old)) = batch.iter().find(|(n, _)| *n == name) else { continue };
+            if *old != new && vercmp(old, &new) == Some(std::cmp::Ordering::Less) {
+                outdated.push(Package::new(&name, old, &new, None));
+            }
+        }
+    }
+    Ok(outdated)
+}
+
+/// What `pacman -Qm` exiting with `code` said: its packages, none (only
+/// pacman's silent "nothing matched" exit), or why it failed (any other
+/// code, a signal, or a complaint on standard error).
+fn foreign_packages(code: Option<i32>, out: &str, err: &str) -> Result<Vec<(String, String)>, String> {
+    match code {
+        Some(0) => Ok(parse_foreign(out)),
+        Some(PACMAN_QUERY_NONE) if out.trim().is_empty() && err.trim().is_empty() => Ok(Vec::new()),
+        _ => Err(failed("pacman", code, err)),
+    }
+}
+
+/// `pacman -Qm`: `name version` lines (bounded).
+pub fn parse_foreign(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        .filter_map(|l| {
+            let mut w = l.split_whitespace();
+            Some((w.next()?.to_string(), w.next()?.to_string()))
+        })
+        .take(AUR_MAX_FOREIGN)
+        .collect()
+}
+
+/// The AUR web API's `info` answer: `(name, version)` of each result (none
+/// is a valid answer), or why it isn't one: the API's own error, or JSON
+/// without a result list.
+pub fn parse_aur_info(json: &str) -> Result<Vec<(String, String)>, String> {
+    #[derive(Deserialize)]
+    struct Info {
+        #[serde(rename = "type", default)]
+        kind: String,
+        #[serde(default)]
+        error: Option<String>,
+        results: Vec<Pkg>,
+    }
+    #[derive(Deserialize)]
+    struct Failure {
+        error: String,
+    }
+    #[derive(Deserialize)]
+    struct Pkg {
+        #[serde(rename = "Name")]
+        name: String,
+        #[serde(rename = "Version")]
+        version: String,
+    }
+    let api_error = |error: &str| {
+        // One bounded line of the server's text.
+        let line = error.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or_default();
+        if line.is_empty() {
+            return tf("Unexpected answer from the AUR: {error}", &[("error", &r#""type": "error""#)]);
+        }
+        tf("The AUR answered with an error: {error}", &[("error", &&line[..line.floor_char_boundary(AUR_MAX_ERROR)])])
+    };
+    match serde_json::from_str::<Info>(json) {
+        Ok(Info { kind, error, .. }) if kind == "error" || error.is_some() => Err(api_error(error.as_deref().unwrap_or_default())),
+        Ok(info) => Ok(info.results.into_iter().map(|p| (p.name, p.version)).collect()),
+        // An error answer without a result list.
+        Err(e) => match serde_json::from_str::<Failure>(json) {
+            Ok(f) => Err(api_error(&f.error)),
+            Err(_) => Err(tf("Unexpected answer from the AUR: {error}", &[("error", &e)])),
+        },
+    }
+}
+
+/// pacman's own version order (`vercmp a b`: -1, 0 or 1).
+fn vercmp(a: &str, b: &str) -> Option<std::cmp::Ordering> {
+    let (code, out, _) = run("vercmp", &[a, b], CHECK_TIMEOUT).ok()?;
+    if code != Some(0) {
+        return None;
+    }
+    out.trim().parse::<i32>().ok().map(|n| n.cmp(&0))
+}
+
 /// Checks every detected source (in parallel; blocking — call off the UI
 /// thread).
 pub fn check(opts: CheckOptions) -> CheckResult {
+    if let Some(r) = fake_check() {
+        return r;
+    }
     let sources = detect(opts);
     let handles: Vec<_> = sources.into_iter().map(|s| std::thread::spawn(move || check_source(&s))).collect();
     let sources = handles.into_iter().filter_map(|h| h.join().ok()).collect();
     CheckResult { sources, checked_at: chrono::Local::now().timestamp() }
+}
+
+/// The sandbox's recorded system (`MANDARA_FAKE_SYSTEM_UPDATE` on Arch
+/// with `MANDARA_FAKE_AUR`): the packages the recordings update, so the
+/// panel lists what "Update all" then installs. Never in a release.
+fn fake_check() -> Option<CheckResult> {
+    #[cfg(all(feature = "fake-system-update", debug_assertions))]
+    if let Some(helper) = crate::sysupdate::fake_aur() {
+        let pkg = |name: &str, old: &str, new: &str, repo: &str| Package::new(name, old, new, Some(repo));
+        let pacman = ["ca-certificates-mozilla 3.132-1 3.133-1", "expat 2.9.0-1 2.10.0-1", "libnghttp2 1.70.0-1 1.71.0-1", "libnghttp3 1.18.0-1 1.19.0-1", "libngtcp2 1.25.0-1 1.26.0-1", "lz4 1:1.10.0-2 1:1.11.0-1", "sqlite 3.54.0-1 3.54.1-1", "tzdata 2026e-1 2026f-1"];
+        let report = |kind: SourceKind, packages: Vec<Package>, command: String| SourceReport { kind, packages, error: None, hint: None, command };
+        let sources = vec![
+            report(SourceKind::Pacman, pacman.iter().filter_map(|l| { let mut w = l.split(' '); Some(pkg(w.next()?, w.next()?, w.next()?, "core")) }).collect(), update_command(SourceKind::Pacman, Some(helper.id()))),
+            report(SourceKind::Aur, vec![pkg("cbonsai", "1.4.1-1", "1.4.2-1", "aur"), pkg("nerdfetch", "8.5.4-1", "8.5.5-1", "aur"), pkg("pfetch", "1.10.0-1", "1.11.0-1", "aur")], update_command(SourceKind::Aur, Some(helper.id()))),
+            report(SourceKind::Flatpak, vec![pkg("org.gnome.Calculator", "48.1", "48.2", "stable"), pkg("org.gnome.Platform", "", "", "48"), pkg("com.spotify.Client", "1.2.50", "1.2.52", "stable")], update_command(SourceKind::Flatpak, None)),
+        ];
+        return Some(CheckResult { sources, checked_at: chrono::Local::now().timestamp() });
+    }
+    None
 }
 
 // ── Parsers ──────────────────────────────────────────────────────────────
@@ -498,6 +690,21 @@ pub fn parse_apk(text: &str) -> Vec<Package> {
             let (name, new) = apk_split(head.split_whitespace().next()?)?;
             let old = apk_split(from.trim().trim_end_matches(']')).map_or("", |(_, v)| v);
             Some(Package::new(name, old, new, None))
+        })
+        .collect()
+}
+
+/// `pkg version -vRUl '<'`: `name-1.2.3_1   <   needs updating (remote
+/// has 1.2.4)`, one line per outdated package (pkg versions never contain
+/// `-`, so the last one ends the name).
+pub fn parse_pkg_version(text: &str) -> Vec<Package> {
+    text.lines()
+        .filter_map(|line| {
+            let (head, rest) = line.split_once(" needs updating (")?;
+            let pkgver = head.split_whitespace().next()?;
+            let (name, old) = pkgver.rsplit_once('-')?;
+            let (repo, new) = rest.trim_end().trim_end_matches(')').split_once(" has ")?;
+            Some(Package::new(name, old, new.trim(), Some(repo.trim())))
         })
         .collect()
 }
@@ -682,6 +889,14 @@ pub fn fetch_news() -> Result<Vec<NewsItem>, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn image_based_systems_check_only_flatpak() {
+        for kind in super::SourceKind::ALL {
+            assert!(super::checked_on(kind, false), "{kind:?}");
+            assert_eq!(super::checked_on(kind, true), kind == super::SourceKind::Flatpak, "{kind:?}");
+        }
+    }
+
     use super::*;
 
     const CHECKUPDATES: &str = "brave-bin 1:1.97.59-1 -> 1:1.98.60-1\ngcc 16.2.1+r23+gd564253eb6c8-1 -> 16.2.1+r23+gd564253eb6c8-3\nlinux 6.17.1.arch1-1 -> 6.17.2.arch1-1\n";
@@ -740,6 +955,24 @@ mod tests {
         assert_eq!(SourceKind::from_id("xbps"), Some(SourceKind::Xbps));
     }
 
+    /// `pkg version -vRUl '<'` as pkg 2.x prints it (name and version
+    /// padded to 35 columns, the status character, the verbose note).
+    const PKG_VERSION: &str = "curl-8.22.0                        <   needs updating (remote has 8.23.0)\ndrm-61-kmod-6.1.128.1404000_10     <   needs updating (remote has 6.1.128.1404000_11)\npy311-setuptools-63.1.0_3          <   needs updating (remote has 80.9.0)\nsqlite3-3.54.0,1                   <   needs updating (remote has 3.54.1,1)\n";
+
+    #[test]
+    fn parses_pkg_version() {
+        let p = parse_pkg_version(PKG_VERSION);
+        assert_eq!(p.len(), 4);
+        assert_eq!(p[0], Package::new("curl", "8.22.0", "8.23.0", Some("remote")));
+        assert_eq!(p[1], Package::new("drm-61-kmod", "6.1.128.1404000_10", "6.1.128.1404000_11", Some("remote")), "dashes in the name");
+        assert_eq!(p[2].name, "py311-setuptools");
+        assert_eq!((p[3].old.as_str(), p[3].new.as_str()), ("3.54.0,1", "3.54.1,1"), "epochs stay in the version");
+        assert!(parse_pkg_version("pkg-2.9.0                          =   up-to-date with remote\n").is_empty());
+        assert_eq!(SourceKind::from_id("pkg"), Some(SourceKind::Pkg));
+        assert_eq!(update_command(SourceKind::Pkg, None), "sudo pkg upgrade");
+        assert_eq!(combined_command(&[SourceKind::Flatpak, SourceKind::Pkg], None), "sudo pkg upgrade && flatpak update");
+    }
+
     #[test]
     fn parses_flatpak_matching_branches() {
         let p = parse_flatpak(FLATPAK_UPDATES, FLATPAK_LIST);
@@ -769,6 +1002,67 @@ mod tests {
         assert_eq!(combined_command(&[SourceKind::Aur], Some("paru")), "paru");
         assert_eq!(combined_command(&[SourceKind::Pacman, SourceKind::Flatpak], None), "sudo pacman -Syu && flatpak update");
         assert_eq!(SourceKind::from_id("FLATPAK"), Some(SourceKind::Flatpak));
+        // Every helper's own terminal commands.
+        assert_eq!(update_command(SourceKind::Aur, Some("shelly")), "shelly upgrade aur");
+        assert_eq!(update_command(SourceKind::Aur, Some("aura")), "aura -Au");
+        assert_eq!(update_command(SourceKind::Pacman, Some("aura")), "sudo pacman -Syu && aura -Au");
+        assert_eq!(combined_command(&[SourceKind::Aur], Some("shelly")), "shelly upgrade standard && shelly upgrade aur");
+        assert_eq!(combined_command(&[SourceKind::Aur, SourceKind::Flatpak], Some("pikaur")), "pikaur -Syu && flatpak update");
+    }
+
+    #[test]
+    fn aur_web_api_answers() {
+        let foreign = parse_foreign("cbonsai 1.4.1-1\nyay-bin 13.0.0-1\n\nbroken\n");
+        assert_eq!(foreign, [("cbonsai".to_string(), "1.4.1-1".to_string()), ("yay-bin".to_string(), "13.0.0-1".to_string())]);
+        let json = r#"{"resultcount":2,"results":[{"Name":"cbonsai","Version":"1.4.2-1","Depends":["ncurses"]},{"Name":"yay-bin","Version":"13.1.0-1"}],"type":"multiinfo","version":5}"#;
+        assert_eq!(parse_aur_info(json).unwrap(), [("cbonsai".to_string(), "1.4.2-1".to_string()), ("yay-bin".to_string(), "13.1.0-1".to_string())]);
+    }
+
+    #[test]
+    fn aur_web_api_errors_are_check_failures() {
+        let ok = |json: &str| parse_aur_info(json).unwrap();
+        let err = |json: &str| parse_aur_info(json).unwrap_err();
+        // A valid answer with no results (none of the packages is in the AUR).
+        assert!(ok(r#"{"resultcount":0,"results":[],"type":"multiinfo","version":5}"#).is_empty());
+        let json = r#"{"resultcount":1,"results":[{"Name":"cbonsai","Version":"1.4.2-1"}],"type":"multiinfo","version":5}"#;
+        assert_eq!(ok(json), [("cbonsai".to_string(), "1.4.2-1".to_string())]);
+        // The API's own errors, with or without an (empty) result list.
+        let e = err(r#"{"error":"Too many package results.","resultcount":0,"results":[],"type":"error","version":5}"#);
+        assert!(e.contains("Too many package results."), "{e}");
+        assert!(err(r#"{"error":"Too many package results.","resultcount":0,"type":"error"}"#).contains("Too many package results."));
+        let e = err(r#"{"resultcount":0,"results":[],"type":"error","version":5}"#);
+        assert!(e.ends_with(r#""type": "error""#), "an error without its text still fails: {e}");
+        // Not an answer at all.
+        for bad in ["not json", "", "{}", r#"{"resultcount":0,"type":"multiinfo"}"#, r#"{"results":[{"Name":"cbonsai"}]}"#, "<html>502 Bad Gateway</html>"] {
+            assert!(parse_aur_info(bad).is_err(), "{bad:?}");
+        }
+        // The server's text is one bounded line.
+        let long = format!(r#"{{"error":"{}\nsecond line","type":"error"}}"#, "é".repeat(400));
+        let e = err(&long);
+        assert!(!e.contains('\n') && !e.contains("second line") && e.len() < AUR_MAX_ERROR + 100, "{e}");
+    }
+
+    #[test]
+    fn only_pacmans_silent_no_match_is_no_foreign_packages() {
+        // Measured with pacman 7.1: `-Qm` on a database with no foreign
+        // packages exits 1 and prints nothing on either stream.
+        assert_eq!(foreign_packages(Some(1), "", ""), Ok(Vec::new()));
+        assert_eq!(foreign_packages(Some(1), "\n", " \n"), Ok(Vec::new()));
+        assert_eq!(foreign_packages(Some(0), "cbonsai 1.4.1-1\n", ""), Ok(vec![("cbonsai".to_string(), "1.4.1-1".to_string())]));
+        // Warnings on success don't make it fail.
+        assert_eq!(foreign_packages(Some(0), "cbonsai 1.4.1-1\n", "warning: something\n").map(|p| p.len()), Ok(1));
+        // A failure with an explanation (a missing config, missing sync
+        // databases), even with no output.
+        let e = foreign_packages(Some(1), "", "error: config file /etc/pacman.conf could not be read: No such file or directory\n").unwrap_err();
+        assert!(e.contains("could not be read"), "{e}");
+        assert!(foreign_packages(Some(1), "", "warning: database file for 'core' does not exist (use '-Sy' to download)\n").is_err());
+        // Output with a failing exit is not a complete list.
+        assert!(foreign_packages(Some(1), "cbonsai 1.4.1-1\n", "").is_err());
+        // Any other exit code, or a signal.
+        assert!(foreign_packages(Some(2), "", "").is_err());
+        assert!(foreign_packages(Some(127), "", "").is_err());
+        assert!(foreign_packages(None, "", "").is_err());
+        assert!(foreign_packages(None, "cbonsai 1.4.1-1\n", "").is_err());
     }
 
     #[test]

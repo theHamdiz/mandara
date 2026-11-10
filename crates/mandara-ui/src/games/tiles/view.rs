@@ -118,16 +118,21 @@ pub struct TilesView {
     swipe: Swipe,
     /// The sidebar card's laid-out width.
     measured: std::rc::Rc<std::cell::Cell<f32>>,
+    /// The model, theme (and config) observers and the model's hold on
+    /// this view, dropped with it.
+    _subscriptions: Vec<gpui::Subscription>,
 }
 
 impl TilesView {
     pub fn new(model: Entity<Tiles>, surface: Surface, _window: &mut Window, cx: &mut Context<Self>) -> Self {
-        cx.observe(&model, |_, _, cx| cx.notify()).detach();
-        cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
+        let mut subscriptions = Vec::with_capacity(4);
+        subscriptions.push(crate::games::join_tiles(cx));
+        subscriptions.push(cx.observe(&model, |_, _, cx| cx.notify()));
+        subscriptions.push(cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()));
         if matches!(surface, Surface::Desktop { .. }) {
-            cx.observe(&crate::state::config(cx), |_, _, cx| cx.notify()).detach();
+            subscriptions.push(cx.observe(&crate::state::config(cx), |_, _, cx| cx.notify()));
         }
-        Self { model, focus: cx.focus_handle(), surface, opened: false, input: None, drawn: Vec::with_capacity(MAX_CELLS), seen: (u64::MAX, 0), clock: FrameClock::new(), swipe: Swipe::default(), measured: std::rc::Rc::new(std::cell::Cell::new(super::super::SIDEBAR_WIDTH_PX)) }
+        Self { model, focus: cx.focus_handle(), surface, opened: false, input: None, drawn: Vec::with_capacity(MAX_CELLS), seen: (u64::MAX, 0), clock: FrameClock::new(), swipe: Swipe::default(), measured: std::rc::Rc::new(std::cell::Cell::new(super::super::SIDEBAR_WIDTH_PX)), _subscriptions: subscriptions }
     }
 
     fn geometry(&self, cx: &App) -> (f32, GameStyle) {

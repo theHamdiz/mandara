@@ -85,8 +85,9 @@ fn shell_views(cx: &App) -> Vec<(String, Entity<ShellView>)> {
     cx.try_global::<Shells>().map(|s| s.0.iter().filter_map(|(m, v)| Some((m.clone(), v.upgrade()?))).collect()).unwrap_or_default()
 }
 
-fn shell_view(monitor: &str, cx: &App) -> Option<Entity<ShellView>> {
-    shell_views(cx).into_iter().find(|(m, _)| m == monitor).map(|(_, v)| v)
+/// `monitor`'s shell surface, looked up in place (nothing collected).
+pub(crate) fn shell_view(monitor: &str, cx: &App) -> Option<Entity<ShellView>> {
+    cx.try_global::<Shells>()?.0.iter().find(|(m, _)| m == monitor).and_then(|(_, v)| v.upgrade())
 }
 
 /// Copy the visible panel through the same bounded path as its camera button.

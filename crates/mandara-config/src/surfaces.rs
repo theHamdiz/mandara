@@ -434,6 +434,9 @@ pub struct PanelsConfig {
     pub menu_opacity: f32,
     /// The main menu's rail: names beside the icons, or icons only.
     pub menu_rail: MenuRail,
+    /// The rail's height: as tall as its buttons (the default), or as tall
+    /// as the panel beside it.
+    pub menu_rail_height: MenuRailHeight,
     /// Home cards and action tiles in the main menu wear faint geometric
     /// patterns.
     pub menu_patterns: bool,
@@ -461,6 +464,20 @@ pub enum MenuRail {
     /// was).
     #[default]
     Compact,
+}
+
+/// How tall the main menu's rail is.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MenuRailHeight {
+    /// As tall as its buttons, centred beside the panel (the menu as it
+    /// always was).
+    #[default]
+    Hug,
+    /// As tall as the panel beside it: the buttons stay one tight group at
+    /// the top and the rest of the rail is its own surface, with a
+    /// mashrabiya lattice rising from its foot (while tile patterns are on).
+    Stretch,
 }
 
 /// How Home cards and action tiles in the main menu are drawn.
@@ -507,6 +524,7 @@ impl Default for PanelsConfig {
             menu_translucent: true,
             menu_opacity: 0.62,
             menu_rail: MenuRail::Compact,
+            menu_rail_height: MenuRailHeight::Hug,
             menu_patterns: true,
             menu_calligraphy: false,
             menu_tile_surface: MenuTileSurface::Flat,
@@ -701,5 +719,17 @@ mod tests {
         assert_eq!(old.menu_rail, MenuRail::Compact);
         let full: PanelsConfig = toml::from_str("menu_rail = \"full\"").unwrap();
         assert_eq!(full.menu_rail, MenuRail::Full);
+    }
+
+    #[test]
+    fn the_main_menu_rail_hugs_its_buttons_unless_stretched() {
+        assert_eq!(PanelsConfig::default().menu_rail_height, MenuRailHeight::Hug);
+        // A config from before the setting existed keeps the hugging rail.
+        let old: PanelsConfig = toml::from_str("menu_rail = \"full\"").unwrap();
+        assert_eq!(old.menu_rail_height, MenuRailHeight::Hug);
+        let tall: PanelsConfig = toml::from_str("menu_rail_height = \"stretch\"").unwrap();
+        assert_eq!(tall.menu_rail_height, MenuRailHeight::Stretch);
+        assert!(toml::to_string(&tall).unwrap().contains("menu_rail_height = \"stretch\""));
+        assert!(toml::from_str::<PanelsConfig>("menu_rail_height = \"tall\"").is_err());
     }
 }

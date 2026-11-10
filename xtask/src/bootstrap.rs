@@ -21,7 +21,7 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     ("unpack", tk("Unpacking the installer…")),
     ("start", tk("Ready. Opening Mandara’s installer…")),
     ("missing_tool", tk("Install this tool and try again:")),
-    ("unsupported", tk("Prebuilt releases require Linux on an x86_64 or aarch64 CPU.")),
+    ("unsupported", tk("Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64.")),
     ("https", tk("The release mirror must use HTTPS.")),
     ("temporary", tk("Could not create a temporary download folder.")),
     ("failed_download", tk("Download failed. Check your connection and try again.")),
@@ -34,6 +34,7 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     ("missing_installer", tk("The release does not contain exactly one executable installer.")),
     ("manual", tk("Manual downloads:")),
     ("nixos", tk("On NixOS, install Mandara through your flake.")),
+    ("image", tk("This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks.")),
 ];
 
 fn quoted(text: &str) -> String {

@@ -5,7 +5,9 @@
 //! snapshot in environment variables when the shell starts it; the battery
 //! is read live from sysfs.
 
-use std::path::{Path, PathBuf};
+#[cfg(any(test, not(target_os = "freebsd")))]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use mandara_config::ShellConfig;
@@ -16,6 +18,7 @@ pub const MEDIA_ENV: &str = "MANDARA_LOCK_MEDIA";
 pub const NOTIFICATIONS_ENV: &str = "MANDARA_LOCK_NOTIFICATIONS";
 pub const WEATHER_ENV: &str = "MANDARA_LOCK_WEATHER";
 /// sysfs power supplies (batteries report `type` = `Battery`).
+#[cfg(not(target_os = "freebsd"))]
 const POWER_SUPPLY: &str = "/sys/class/power_supply";
 /// Blur radius → Gaussian sigma on the 480 px working copy (the default
 /// 28 px radius gives the original 7.0 sigma).
@@ -65,10 +68,19 @@ pub fn init(cx: &mut gpui::App) {
 }
 
 /// Battery `(percent, charging)` of the first system battery.
+#[cfg(not(target_os = "freebsd"))]
 pub fn battery() -> Option<(u8, bool)> {
     battery_in(Path::new(POWER_SUPPLY))
 }
 
+/// FreeBSD: the ACPI battery sysctls.
+#[cfg(target_os = "freebsd")]
+pub fn battery() -> Option<(u8, bool)> {
+    use mandara_services::power::ChargeState;
+    mandara_services::freebsd::acpi::level().map(|(pct, state)| (pct, state.is_charging() || state == ChargeState::FullyCharged))
+}
+
+#[cfg(any(test, not(target_os = "freebsd")))]
 fn battery_in(root: &Path) -> Option<(u8, bool)> {
     let mut entries: Vec<PathBuf> = std::fs::read_dir(root).ok()?.flatten().map(|e| e.path()).collect();
     entries.sort();

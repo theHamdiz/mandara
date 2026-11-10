@@ -40,6 +40,7 @@ use mandara_plugins::{DesktopWidgetType, PluginRegistry};
 use mandara_theme::MandaraPalette;
 use mandara_ui::backdrop::paint::FontNames;
 use mandara_ui::backdrop::widgets::{PreviewLayer, render_image};
+use mandara_ui::widgets::gpu_feed::GpuCaps;
 use mandara_ui::bidi::Bidi as _;
 use mandara_ui::desktop_plugins::{self as dp, face_label, vis_label};
 use mandara_ui::lock::paint::TextPainter;
@@ -185,21 +186,7 @@ fn add(cx: &mut gpui::App, widgets: Vec<DesktopWidget>) -> Option<String> {
 // ── Labels ───────────────────────────────────────────────────────────────
 
 fn row_label(r: MonitorRow) -> &'static str {
-    match r {
-        MonitorRow::Cpu => tk("CPU"),
-        MonitorRow::CpuGraph => tk("CPU graph"),
-        MonitorRow::Gpu => tk("GPU"),
-        MonitorRow::Memory => tk("Memory"),
-        MonitorRow::GpuPower => tk("GPU power"),
-        MonitorRow::CpuTemp => tk("CPU temp"),
-        MonitorRow::GpuTemp => tk("GPU temp"),
-        MonitorRow::Fan => tk("Fan"),
-        MonitorRow::Battery => tk("Battery"),
-        MonitorRow::Disk => tk("Disk"),
-        MonitorRow::Download => tk("Download"),
-        MonitorRow::Upload => tk("Upload"),
-        MonitorRow::NetGraph => tk("Network graph"),
-    }
+    mandara_ui::backdrop::widgets::sysmon::row_label(r)
 }
 
 fn shape_label(s: DecorShape) -> &'static str {
@@ -1383,7 +1370,7 @@ impl StudioView {
                 if m.style == MonitorStyle::Meters {
                     rows.push(row(p, t("Segments"), slider(&id, "msegs", m.segments as f32, (ranges::SEGMENTS.0 as f32, ranges::SEGMENTS.1 as f32), 1.0, "", monitor_set(|m, v: f32| m.segments = as_count(v)), p)));
                 }
-                rows.push(row(p, t("Rows"), monitor_rows(&id, &m.rows, p, cx)));
+                rows.push(row(p, t("Readings"), monitor_rows(&id, &m.rows, p, cx)));
                 rows.push(row(p, t("Refresh"), slider(&id, "interval", m.interval_s as f32, (ranges::MONITOR_INTERVAL_S.0 as f32, ranges::MONITOR_INTERVAL_S.1 as f32), 1.0, " s", set(|m, v| m.interval_s = v as u32), p)));
                 rows.push(row(p, t("Width"), slider(&id, "width", m.width, ranges::MONITOR_WIDTH_PX, 2.0, " px", set(|m, v| m.width = v), p)));
                 let title = self.list_field(format!("dw-title-{id}"), &m.title, tk("Title (optional)"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Monitor(m) = &mut w.kind { m.title = v })), cx);
@@ -1982,37 +1969,73 @@ fn displays(id: &str, current: &[String], cfg: &ShellConfig, p: &MandaraPalette,
     div().row().flex_wrap().gap(px(SPACE_4_PX)).children(chips).into_any_element()
 }
 
+/// What this machine's GPUs can show, probed once off the UI thread (sysfs
+/// and whether `nvidia-smi` is installed; nothing is run). `None` until the
+/// probe lands; the page redraws then.
+struct GpuProbe(Option<GpuCaps>);
+/// A locked reading's chip.
+const LOCKED_ALPHA: f32 = ALPHA_50;
+impl gpui::Global for GpuProbe {}
+
+fn gpu_caps(cx: &mut Context<StudioView>) -> Option<GpuCaps> {
+    if let Some(probe) = cx.try_global::<GpuProbe>() {
+        return probe.0;
+    }
+    cx.set_global(GpuProbe(None));
+    let task = cx.background_executor().spawn(async { GpuCaps::probe() });
+    cx.spawn(async move |this, cx| {
+        let caps = task.await;
+        let _ = this.update(cx, |_, cx| {
+            cx.set_global(GpuProbe(Some(caps)));
+            cx.notify();
+        });
+    })
+    .detach();
+    None
+}
+
+/// One chip per reading, switched on or off; the GPU readings this machine
+/// can't show are locked, with the reason under the chips.
 fn monitor_rows(id: &str, rows: &[MonitorRow], p: &MandaraPalette, cx: &mut Context<StudioView>) -> AnyElement {
-    let chips = MonitorRow::ALL.into_iter().map(|r| {
-        let on = rows.contains(&r);
-        let id = id.to_string();
-        div()
-            .id(SharedString::from(format!("dw-r-{r:?}-{id}")))
-            .px(px(SPACE_10_PX))
-            .h(px(DIM_28_PX))
-            .rounded_full()
-            .row()
-            .items_center()
-            .cursor_pointer()
-            .text_size(px(TEXT_12_PX))
-            .when(on, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()))
-            .when(!on, |el| el.bg(p.surface_container_high.hsla()).text_color(p.on_surface_variant.hsla()))
-            .child(tr(row_label(r)).to_string())
-            .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
-                edit(cx, &id, move |w| {
-                    if let WidgetKind::Monitor(m) = &mut w.kind {
-                        if let Some(i) = m.rows.iter().position(|x| *x == r) {
-                            m.rows.remove(i);
-                        } else {
-                            // Keep the canonical order.
-                            m.rows.push(r);
-                            m.rows.sort_by_key(|x| MonitorRow::ALL.iter().position(|y| y == x));
-                        }
-                    }
-                });
-            }))
-    });
-    div().row().flex_wrap().gap(px(SPACE_4_PX)).children(chips).into_any_element()
+    let caps = gpu_caps(cx);
+    let mut reasons: Vec<&'static str> = Vec::new();
+    let chips: Vec<AnyElement> = MonitorRow::ALL
+        .into_iter()
+        .map(|r| {
+            let support = GpuCaps::row(caps, r);
+            let locked = !support.available();
+            if let Some(why) = support.reason().filter(|w| !reasons.contains(w)) {
+                reasons.push(why);
+            }
+            let on = rows.contains(&r) && !locked;
+            let id = id.to_string();
+            div()
+                .id(SharedString::from(format!("dw-r-{r:?}-{id}")))
+                .px(px(SPACE_10_PX))
+                .h(px(DIM_28_PX))
+                .rounded_full()
+                .row()
+                .items_center()
+                .gap(px(SPACE_4_PX))
+                .text_size(px(TEXT_12_PX))
+                .when(on, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()))
+                .when(!on, |el| el.bg(p.surface_container_high.hsla()).text_color(p.on_surface_variant.hsla()))
+                .when(locked, |el| el.opacity(LOCKED_ALPHA).child(mandara_ui::icons::icon("lock", ICON_12_PX, p.on_surface_variant)))
+                .child(tr(row_label(r)).to_string())
+                .when(!locked, |el| {
+                    el.cursor_pointer().on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                        edit(cx, &id, move |w| {
+                            if let WidgetKind::Monitor(m) = &mut w.kind {
+                                r.toggle_in(&mut m.rows);
+                            }
+                        });
+                    }))
+                })
+                .into_any_element()
+        })
+        .collect();
+    let notes = reasons.into_iter().map(|why| hint(&tr(why), p));
+    div().flex().flex_col().gap(px(SPACE_6_PX)).child(div().row().flex_wrap().gap(px(SPACE_4_PX)).children(chips)).children(notes).into_any_element()
 }
 
 /// Fit the painter’s visible bounds and render at the display’s pixel density.

@@ -215,6 +215,69 @@ own rounded mask too, so the cut corners and squircles came out rounded.
 Mandara's `components::surfaces` tests cover the mask (a card flush with a
 rounded panel's corner keeps that corner and loses only its own rounding).
 
+## 10. FreeBSD uses the Linux platform's layer shell and queue (`gpui.rs`, `platform.rs`, `window.rs`)
+
+Upstream's Linux platform (`gpui_linux`, chosen by `gpui_platform` for
+`any(target_os = "linux", target_os = "freebsd")`) also serves FreeBSD, but a
+few items it needs from this crate were gated on `target_os = "linux"` alone,
+so a FreeBSD build of `gpui_linux` failed: the priority queue its dispatcher
+uses, and the Wayland layer-shell types its Wayland client creates layer
+surfaces with. Each cfg now reads `any(target_os = "linux", target_os =
+"freebsd")`:
+
+* `mod queue` and `pub use queue::{PriorityQueueReceiver, PriorityQueueSender}`
+  (`gpui.rs`);
+* `pub mod layer_shell`, `PlatformWindow::set_exclusive_edge` and
+  `WindowKind::LayerShell` (`platform.rs`), still behind `feature = "wayland"`;
+* `Window::set_exclusive_edge` (`window.rs`);
+* `PlatformScreenCaptureFrame` with `screen-capture` (`platform.rs`), whose
+  `scap_screen_capture` module upstream already builds on FreeBSD.
+
+Linux is unchanged: every item keeps its Linux cfg. Nothing in `gpui_linux`
+or `gpui_wgpu` needed changing; both already treat FreeBSD like Linux
+(Wayland client, `wl_touch`, fonts, input, the wgpu renderer). The FreeBSD
+check in CI (`cargo clippy --workspace --all-targets --target
+x86_64-unknown-freebsd`) covers this patch.
+
+## 11. Forgetting dropped views (`app.rs`, `app/entity_map.rs`)
+
+Mandara builds its sidebar cards when the sidebar opens and drops them when
+it closes, so views come and go all session. Two things kept a trace of each
+dropped view:
+
+* `App::notify(id)` takes the entity's window invalidators and always put
+  the entry back, so notifying an entity after it was released (a redraw
+  timer that fires late, a model telling the views it remembers) left one
+  empty `window_invalidators_by_entity` entry per dead id for good. An empty
+  list is now removed instead; a live entity's list is put back as before.
+* Hosts that remember views by `EntityId` to notify them later had no way to
+  tell a dropped one. `App::entity_alive(id)` (through
+  `EntityMap::is_alive`) says whether the entity still has a strong handle,
+  so they can forget it.
+
+Behaviour is otherwise unchanged: an empty entry and a missing one mean the
+same to every reader of the map. `app::test::notifying_a_dropped_entity_leaves_no_trace`
+covers both.
+
+## 12. Giving back a large frame's room (`window.rs`, `arena.rs`, `taffy.rs`, `scene.rs`, `key_dispatch.rs`, `bounds_tree.rs`)
+
+A window keeps the capacity its largest frame needed: the element arena's
+1 MiB chunks, the layout tree's node storage, the dispatch tree, the scene's
+primitive lists and the frame's listener and hitbox lists are cleared every
+frame but never shrink. That is right while a surface shows (no allocation per
+frame), but after Mandara's sidebar closes the room its cards needed (a Sudoku
+board is thousands of elements) stayed for good, about 1.2 MiB for one card.
+
+`Window::shrink_frame_buffers(cx)` frees that spare room once, at a lifecycle
+boundary the host chooses: both frames shrink to their contents
+(`Frame::shrink_to_fit`, with `DispatchTree`, `Scene` and `BoundsTree`
+helpers), the layout engine starts from a fresh tree (it is rebuilt at the
+start of every frame anyway) and the arena keeps only its first chunk
+(`Arena::shrink`, which does nothing while a draw holds it or anything is
+allocated in it). It does nothing during a draw. Frames are unchanged
+otherwise, and a surface that shows again grows the room back on its first
+frame.
+
 ## Packaging changes
 
 `Cargo.toml` spells out the workspace-inherited fields and dependencies with

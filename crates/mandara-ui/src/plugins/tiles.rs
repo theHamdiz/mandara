@@ -28,11 +28,16 @@ const ACTIONS: [&str; 5] = ["status", "new", "move", "undo", "continue"];
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, "2048", tk("Slide and merge the tiles to reach 2048, in the bar and on the desktop"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         let model = crate::games::tiles(cx);
+        if panel_cx.is_card() {
+            // A sidebar card: only the card (it holds the model while it lives).
+            let sidebar = cx.new(|cx| TilesView::new(model, Surface::Sidebar, window, cx));
+            return PluginInstance { sidebar: Some(sidebar.into()), ..PluginInstance::empty() };
+        }
         let bar = fn_view_observing(
             None,
             {
                 let model = model.clone();
-                move |cx| cx.observe(&model, |_, _, cx| cx.notify()).detach()
+                move |cx| Some(cx.observe(&model, |_, _, cx| cx.notify()))
             },
             |palette, _, cx| {
                 let score = crate::games::tiles_if_live(cx).and_then(|m| {
@@ -62,6 +67,8 @@ pub fn register(r: &mut PluginRegistry) {
             on_secondary_click: None,
         }
     });
+    // The game's model goes (saved) with its last view: `games::join_tiles`.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     r.desktop_widget(
         DesktopWidgetType::new(ID, "card", "2048", tk("Play 2048 right on the desktop: click it, then use the arrows or drag"), "game-2048", || vec![dc::new_card(dc::TILES, Anchor::Center)]).in_menu(),
     );
@@ -71,6 +78,7 @@ pub fn register(r: &mut PluginRegistry) {
             let action = a.get(0).unwrap_or("status");
             let value = a.get(1);
             let model = crate::games::tiles(cx);
+            crate::games::tiles_command_done(cx);
             let changed = model.update(cx, |m, cx| -> Result<bool, String> {
                 if !m.loaded && action != "status" {
                     return Err(mandara_i18n::t("Loading…").to_string());

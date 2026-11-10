@@ -325,7 +325,7 @@ fn sync(cx: &mut App) {
 
 /// Whether a notification list is on screen: the bar's notifications panel,
 /// or the sidebar (opened or hover-revealed) on its Notifications tab.
-fn list_on_screen(cx: &App) -> bool {
+pub(crate) fn list_on_screen(cx: &App) -> bool {
     let s = crate::state::shell(cx).read(cx);
     let sidebar_tab = (s.sidebar_open || s.sidebar_hover) && config(cx).read(cx).get().sidebar.notifications_tab && crate::sidebar_tabs::notifications_selected(cx);
     s.panel.as_deref() == Some(crate::plugins::notifications::ID) || sidebar_tab

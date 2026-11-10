@@ -10,6 +10,19 @@
   and Ctrl+Tab / Ctrl+1–9 switch tabs. The **+** button stays pinned while
   the tabs scroll sideways (wheel, touchpad or drag) under edge fades, and
   idle tabs shrink to icons only when their labels don't fit.
+- **Cards you can add:** Quick settings, Weather, Notifications, Media,
+  Audio, Resources, To-do, Notes, Pomodoro, Prayer times, Jannah, the
+  Qur'an, Hadith, Radio (now playing, favourite, previous / play / next and
+  volume), Feeds (your newest unread articles), Reddit (a community's top
+  posts), and live Sudoku and 2048 boards, plus any third-party plugin's
+  card. Pick them under *Add a widget* in Studio → Bars → Sidebar →
+  **Tabs**, with *Add to sidebar* on a plugin's page, from an empty tab's
+  **Add widgets** button, or with
+  `mandara msg sidebar tab widget add Overview feeds`. Placing a card
+  switches its plugin on. A plugin you switch off takes its card out of
+  sight (it stays on the tab and returns when the plugin is back on). While
+  the sidebar is hidden the Feeds and Reddit cards let go of their rows and
+  fetch nothing.
 - **To-do lists:** tasks grouped into coloured lists with an Inbox, a chip
   switcher with counts, drag a task onto a list to move it, and completed
   tasks folded away per list. `/todo #Work send the report` in the launcher

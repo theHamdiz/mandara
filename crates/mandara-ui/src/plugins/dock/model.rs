@@ -553,7 +553,11 @@ pub fn note_closed(closed: &mut Vec<String>, before: &[String], now: &[String], 
 
 /// `path` quoted for an `Exec` line.
 fn quote(path: &std::path::Path) -> String {
-    let s = path.to_string_lossy();
+    quote_str(&path.to_string_lossy())
+}
+
+/// `s` quoted for an `Exec` line.
+fn quote_str(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
     for c in s.chars() {
@@ -596,6 +600,26 @@ pub fn exec_with_files(exec: &str, files: &[std::path::PathBuf]) -> String {
     }
     if !used {
         out.extend(files.iter().map(|f| quote(f)));
+    }
+    out.join(" ")
+}
+
+/// `exec` with an address (`trash:///`) in its file code, whichever it is,
+/// or appended when it has none.
+pub fn exec_with_uri(exec: &str, uri: &str) -> String {
+    let mut used = false;
+    let mut out: Vec<String> = exec
+        .split_whitespace()
+        .map(|word| match word {
+            "%f" | "%u" | "%F" | "%U" => {
+                used = true;
+                quote_str(uri)
+            }
+            _ => word.to_string(),
+        })
+        .collect();
+    if !used {
+        out.push(quote_str(uri));
     }
     out.join(" ")
 }
@@ -870,6 +894,20 @@ mod tests {
         assert_eq!(exec_with_files("kitty", &files[..1]), "kitty \"/tmp/a b.txt\"");
         assert_eq!(crate::apps::parse_exec(&exec_with_files("app %F", &files)), ["app", "/tmp/a b.txt", "/tmp/c$.md"]);
         assert_eq!(crate::apps::parse_exec(&exec_with_files("gedit %U", &files)), ["gedit", "file:///tmp/a%20b.txt", "file:///tmp/c%24.md"], "a literal % survives the Exec unescaping");
+    }
+
+    #[test]
+    fn an_address_fills_any_file_code() {
+        for (exec, argv) in [
+            ("nautilus --new-window %U", &["nautilus", "--new-window", "trash:///"][..]),
+            ("dolphin %u", &["dolphin", "trash:///"]),
+            ("thunar %F", &["thunar", "trash:///"]),
+            ("pcmanfm", &["pcmanfm", "trash:///"]),
+            ("caja --no-desktop %U %i", &["caja", "--no-desktop", "trash:///"]),
+        ] {
+            assert_eq!(crate::apps::parse_exec(&exec_with_uri(exec, "trash:///")), argv, "{exec}");
+        }
+        assert_eq!(crate::apps::parse_exec(&exec_with_uri("x %u", "trash:/a%20b")), ["x", "trash:/a%20b"], "a literal % survives the Exec unescaping");
     }
 
     #[test]

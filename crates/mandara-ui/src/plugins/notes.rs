@@ -21,6 +21,7 @@ use serde_json::json;
 use super::fn_view;
 use super::todo::color_of;
 use crate::bidi::Bidi as _;
+use crate::card_drafts::TextDraft;
 use crate::icons::{any_icon, icon};
 use crate::kit::{card, icon_button, reveal, text, tokens};
 use crate::markdown::{self, Doc, RenderCx};
@@ -168,7 +169,7 @@ enum Menu {
     Note(u64),
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Naming {
     New,
     Rename(u64),
@@ -204,6 +205,104 @@ fn refresh(cx: &mut App) {
 fn set_ui(ui: &Ui, cx: &mut App, f: impl FnOnce(&mut NotesUi)) {
     f(&mut ui.borrow_mut());
     refresh(cx);
+}
+
+/// What the notes card was in the middle of when the sidebar let it go
+/// ([`crate::card_drafts`]): the open note, the search and a topic being
+/// named. A note's text, saved or not, is the model's ([`Productivity::edit_note`]
+/// takes every keystroke and saves it), so only where the editor stood is
+/// kept. The shown topic is the model's and stays anyway.
+#[derive(Debug, PartialEq, Eq)]
+struct NotesDraft {
+    /// The notes folder this belongs to (note and topic ids are per folder).
+    root: u64,
+    note: Option<OpenNote>,
+    /// The search bar was open, with what was typed in it.
+    searching: bool,
+    query: Option<TextDraft>,
+    naming: Option<(Naming, TextDraft)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct OpenNote {
+    id: u64,
+    /// In its editor (else rendered).
+    editing: bool,
+    /// The editor's caret, bytes.
+    caret: u32,
+}
+
+/// A folder's identity for [`NotesDraft::root`], without keeping its path.
+fn root_key(root: &std::path::Path) -> u64 {
+    use std::hash::{Hash as _, Hasher as _};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    root.hash(&mut h);
+    h.finish()
+}
+
+impl NotesDraft {
+    /// `None` when the card showed nothing to come back to.
+    fn new(root: u64, note: Option<OpenNote>, searching: bool, query: Option<TextDraft>, naming: Option<Naming>, name: Option<TextDraft>) -> Option<Self> {
+        let naming = naming.zip(name);
+        let query = query.filter(|_| searching);
+        (note.is_some() || searching || naming.is_some()).then_some(Self { root, note, searching, query, naming })
+    }
+
+    /// What still applies to `store`: a note or topic of another folder,
+    /// or one removed meanwhile, is left out.
+    fn applicable(mut self, store: &NotesSnapshot) -> Self {
+        if self.root != root_key(&store.root) {
+            self.note = None;
+            self.naming = self.naming.filter(|(naming, _)| *naming == Naming::New);
+        }
+        self.note = self.note.filter(|n| store.note(n.id).is_some());
+        self.naming = self.naming.filter(|(naming, _)| match naming {
+            Naming::New => true,
+            Naming::Rename(id) => store.topic(*id).is_some(),
+        });
+        self
+    }
+}
+
+/// The card's place, saved into a [`NotesDraft`] as its view is released
+/// and put back into the next card on the same output.
+fn keep_drafts(view: &gpui::AnyView, card: PanelCx, ui: Ui, f: Fields, cx: &mut App) {
+    if let Some(draft) = crate::card_drafts::take::<NotesDraft>(card.monitor(), cx) {
+        let p = productivity(cx).read(cx);
+        let draft = draft.applicable(&p.notes);
+        let text = draft.note.and_then(|n| p.notes.note(n.id)).map(|note| note.text.clone());
+        let mut u = ui.borrow_mut();
+        if let (Some(note), Some(text)) = (draft.note, text) {
+            let (font, size) = editor_font(cx);
+            f.editor.update(cx, |e, _| {
+                e.set(&text);
+                e.set_font(font, Some(size));
+                e.set_caret(note.caret as usize);
+            });
+            u.selected = Some(note.id);
+            u.editing = note.editing;
+        }
+        u.searching = draft.searching;
+        if let Some(query) = draft.query {
+            u.query = query.text().to_owned();
+            f.search.update(cx, |s, _| query.restore(s));
+        }
+        if let Some((naming, name)) = draft.naming {
+            f.name.update(cx, |n, _| name.restore(n));
+            u.naming = Some(naming);
+        }
+    }
+    crate::card_drafts::on_release(view, cx, move |cx| {
+        let (root, note, searching, naming) = {
+            let u = ui.borrow();
+            let root = u.root.as_deref().map_or_else(|| root_key(&productivity(cx).read(cx).notes.root), root_key);
+            let caret = f.editor.read(cx).caret() as u32;
+            (root, u.selected.map(|id| OpenNote { id, editing: u.editing, caret }), u.searching, u.naming)
+        };
+        let query = if searching { f.search.update(cx, |s, _| TextDraft::take(s)) } else { None };
+        let name = naming.and_then(|_| f.name.update(cx, |n, _| TextDraft::take(n)));
+        crate::card_drafts::keep(card.monitor(), NotesDraft::new(root, note, searching, query, naming, name), cx);
+    });
 }
 
 /// One surface's fields (note editor, topic name, search).
@@ -837,10 +936,13 @@ fn body(p: &Productivity, ui: &Ui, f: &Fields, palette: &MandaraPalette, limit: 
         .into_any_element()
 }
 
-fn surface(limit: usize, ids: &'static Ids, in_card: bool, reveal_cx: Option<PanelCx>, window: &mut Window, cx: &mut App) -> gpui::AnyView {
+/// One surface (card or panel). A sidebar card's build (`drafts`: its
+/// context) comes back as it was across the sidebar's close.
+fn surface(limit: usize, ids: &'static Ids, in_card: bool, reveal_cx: Option<PanelCx>, drafts: Option<PanelCx>, window: &mut Window, cx: &mut App) -> gpui::AnyView {
     let ui: Ui = Rc::default();
     let f = fields(&ui, cx);
-    fn_view(
+    let kept = drafts.map(|card| (card, ui.clone(), f.clone()));
+    let view = fn_view(
         None,
         move |palette, _, cx| {
             let mono = crate::fonts::fonts(cx).mono;
@@ -850,7 +952,11 @@ fn surface(limit: usize, ids: &'static Ids, in_card: bool, reveal_cx: Option<Pan
         },
         window,
         cx,
-    )
+    );
+    if let Some((card, ui, f)) = kept {
+        keep_drafts(&view, card, ui, f, cx);
+    }
+    view
 }
 
 fn note_id(a: &mandara_plugins::Args, i: usize) -> Result<u64, String> {
@@ -915,8 +1021,8 @@ fn complete<T: Send + 'static>(
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Notes"), mandara_i18n::tk("Markdown notes in topics, saved as .md files"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         let bar = fn_view(None, |palette, _, _| div().flex().items_center().child(icon("note", crate::style::bar_icon(BAR_ICON_PX), palette.on_surface)).into_any_element(), window, cx);
-        let panel = surface(PANEL_NOTES, &PANEL_IDS, false, Some(panel_cx.clone()), window, cx);
-        let sidebar = surface(CARD_NOTES, &CARD_IDS, true, None, window, cx);
+        let panel = surface(PANEL_NOTES, &PANEL_IDS, false, Some(panel_cx.clone()), None, window, cx);
+        let sidebar = surface(CARD_NOTES, &CARD_IDS, true, None, panel_cx.is_card().then(|| panel_cx.clone()), window, cx);
         PluginInstance {
             bar: Some(bar),
             panel: Some(PanelSpec { view: panel, size: Rc::new(Cell::new(size(px(PANEL_W_PX), px(PANEL_H_PX)))) }),
@@ -924,6 +1030,9 @@ pub fn register(r: &mut PluginRegistry) {
             ..PluginInstance::empty()
         }
     });
+    // Notes live in the productivity model; the card's parsed-note cache
+    // and fields are its own, and where it stood is kept as a draft.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     r.command(
         ID,
         CommandSpec::new("notes list", mandara_i18n::tk("Notes (every topic, or one), most recently edited first"), |a, cx| {
@@ -1098,4 +1207,61 @@ pub fn register(r: &mut PluginRegistry) {
         })
         .arg(ArgSpec::required("topic", ArgKind::String, mandara_i18n::tk("topic name or id, or all"))),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::notes_store::Note;
+
+    fn store(root: &str) -> NotesSnapshot {
+        let mut s = NotesSnapshot::empty(PathBuf::from(root));
+        s.topics.push(Topic { id: 5, name: "Work".into(), ..Topic::default() });
+        s.notes.push(Arc::new(Note { id: 9, topic: 5, path: None, text: "# Plan\nhalf-written".into(), updated: 0 }));
+        s
+    }
+
+    fn typed(text: &str) -> Option<TextDraft> {
+        TextDraft::new(text.to_owned(), text.len(), true)
+    }
+
+    #[test]
+    fn a_card_showing_nothing_keeps_no_draft() {
+        assert_eq!(NotesDraft::new(1, None, false, None, None, None), None);
+        assert_eq!(NotesDraft::new(1, None, false, typed("stale"), None, None), None, "a closed search's text is no draft");
+    }
+
+    #[test]
+    fn the_open_note_search_and_topic_name_come_back() {
+        let s = store("/notes");
+        let note = OpenNote { id: 9, editing: true, caret: 7 };
+        let d = NotesDraft::new(root_key(&s.root), Some(note), true, typed("plan"), Some(Naming::Rename(5)), typed("Wo")).unwrap().applicable(&s);
+        assert_eq!(d.note, Some(note), "the note, its editor and caret");
+        assert!(d.searching);
+        assert_eq!(d.query.as_ref().map(TextDraft::text), Some("plan"));
+        assert_eq!(d.naming.as_ref().map(|(n, t)| (*n, t.text())), Some((Naming::Rename(5), "Wo")));
+    }
+
+    #[test]
+    fn another_folder_or_a_removed_note_is_left_out() {
+        let s = store("/notes");
+        let note = OpenNote { id: 9, editing: false, caret: 0 };
+        let other = NotesDraft::new(root_key(std::path::Path::new("/elsewhere")), Some(note), false, None, Some(Naming::Rename(5)), typed("Wo")).unwrap().applicable(&s);
+        assert_eq!((other.note, other.naming), (None, None), "ids belong to their folder");
+        let new_topic = NotesDraft::new(root_key(std::path::Path::new("/elsewhere")), None, false, None, Some(Naming::New), typed("Ideas")).unwrap().applicable(&s);
+        assert_eq!(new_topic.naming.map(|(n, _)| n), Some(Naming::New), "a new topic's name fits any folder");
+        let gone = NotesDraft::new(root_key(&s.root), Some(OpenNote { id: 404, ..note }), false, None, Some(Naming::Rename(404)), typed("x")).unwrap().applicable(&s);
+        assert_eq!((gone.note, gone.naming), (None, None));
+    }
+
+    #[test]
+    fn a_typical_draft_is_small() {
+        // The note's text is the model's: the draft holds only where it stood.
+        let slot = std::mem::size_of::<(Box<str>, NotesDraft)>();
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(slot, 112);
+        assert!(slot <= 112, "{slot} bytes");
+    }
 }

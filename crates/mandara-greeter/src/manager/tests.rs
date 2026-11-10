@@ -350,7 +350,7 @@ fn switch_then_restore_latest() {
     let restore = RestorePlan::build(&f.root(), "latest").unwrap();
     assert!(restore.manifest.units_switched);
     assert_eq!(restore.commands, vec![systemctl("disable", GREETD_UNIT), systemctl("enable", "sddm.service")]);
-    assert!(restore.describe().contains("restore  /etc/greetd/config.toml"));
+    assert!(restore.describe().contains(&format!("restore  {GREETD_CONFIG}")));
     let mut rec = Recorder::default();
     restore.perform(&f.root(), true, &mut rec).unwrap();
     assert_eq!(f.read(GREETD_CONFIG).as_deref(), Some(SDDM_CONFIG));
@@ -433,4 +433,365 @@ fn install_uses_the_distributions_package_manager() {
     let g = Fixture::new();
     g.bins(&["zypper"]);
     assert_eq!(install_command(&g.root(), Family::Unknown, &pkgs).unwrap(), ["zypper", "--non-interactive", "install", "--no-recommends", "greetd", "cage"]);
+}
+
+// ── FreeBSD: rc.conf instead of systemd ──────────────────────────────────
+
+fn freebsd_with_sddm() -> Fixture {
+    let f = Fixture::new();
+    f.file("/etc/os-release", "NAME=FreeBSD\nID=freebsd\n")
+        .file("/etc/defaults/rc.conf", "sddm_enable=\"NO\"\n")
+        .file("/etc/rc.conf", "hostname=\"bsd\"\ndbus_enable=\"YES\"\nsddm_enable=\"YES\"  # the login screen\n")
+        .file("/usr/local/etc/rc.d/sddm", "#!/bin/sh\n")
+        .file("/usr/local/etc/rc.d/greetd", "#!/bin/sh\n")
+        .file("/usr/local/bin/greetd", "")
+        .file("/usr/local/bin/cage", "");
+    f
+}
+
+#[test]
+fn rc_conf_values() {
+    let text = "# sddm_enable=\"YES\"\nsddm_enable=\"YES\"\nsddm_enable='NO' # later wins\ngreetd_enable=yes\n";
+    assert_eq!(rc_value(text, "sddm_enable").as_deref(), Some("NO"));
+    assert_eq!(rc_value(text, "greetd_enable").as_deref(), Some("yes"));
+    assert_eq!(rc_value(text, "gdm_enable"), None);
+    assert!(rc_yes("yes") && rc_yes("TRUE") && rc_yes(" On ") && rc_yes("1") && !rc_yes("NO") && !rc_yes(""));
+    let f = freebsd_with_sddm();
+    let root = f.root().as_freebsd();
+    assert!(root.rc_enabled("sddm") && root.rc_enabled("dbus") && !root.rc_enabled("greetd"));
+    // A service's own rc.conf.d file has the last word.
+    f.file("/usr/local/etc/rc.conf.d/sddm", "sddm_enable=NO\n");
+    assert!(!root.rc_enabled("sddm"));
+}
+
+#[test]
+fn freebsd_detects_and_switches_with_sysrc() {
+    let f = freebsd_with_sddm();
+    let root = f.root().as_freebsd();
+    let d = detect(&root);
+    assert_eq!(d.display_manager.as_deref(), Some("sddm"));
+    assert_eq!(d.active, Some("sddm"));
+    assert_eq!(d.family, Family::FreeBSD);
+    assert!(root.has_unit("greetd.service") && root.has_unit("sddm.service") && !root.has_unit("gdm.service"));
+    let plan = SwitchPlan::build(&root, MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    assert!(plan.errors.is_empty(), "{:?}", plan.errors);
+    assert_eq!(plan.commands, [argv("sysrc -s sddm sddm_enable=NO"), argv("sysrc -s greetd greetd_enable=YES")]);
+    // sddm's own value comes back; greetd_enable wasn't set, so it goes again.
+    assert_eq!(plan.undo, [argv("sysrc -s sddm sddm_enable=YES"), argv("sysrc -s greetd -x greetd_enable")]);
+    let fresh = &plan.writes[0].contents;
+    assert!(fresh.contains("vt = 8"), "past FreeBSD's gettys: {fresh}");
+    let mut rec = Recorder::default();
+    plan.perform(&root, true, &mut rec).unwrap();
+    assert_eq!(rec.log, ["sysrc -s sddm sddm_enable=NO", "sysrc -s greetd greetd_enable=YES"]);
+    assert!(!rec.log.iter().any(|c| c.contains("systemctl")));
+    let restore = RestorePlan::build(&root, "latest").unwrap();
+    assert_eq!(restore.commands, [argv("sysrc -s greetd -x greetd_enable"), argv("sysrc -s sddm sddm_enable=YES")]);
+}
+
+fn argv(line: &str) -> Vec<String> {
+    line.split(' ').map(str::to_string).collect()
+}
+
+/// sysrc(8) on a fixture root, as `sysrc -s <name>` behaves: the rc files
+/// plus the service's rc.conf.d entries; `var=value` replaces the last
+/// assignment in the last file that has one (else appends to
+/// /etc/rc.conf), `-x var` removes it from all of them.
+struct FakeSysrc<'a> {
+    root: &'a SysRoot,
+    log: Vec<String>,
+    fail_on: Option<&'static str>,
+}
+
+impl Runner for FakeSysrc<'_> {
+    fn run(&mut self, argv: &[String]) -> Result<(), String> {
+        let line = argv.join(" ");
+        self.log.push(line.clone());
+        if self.fail_on == Some(line.as_str()) {
+            return Err(format!("`{line}` failed"));
+        }
+        let [sysrc, s, name, rest @ ..] = argv else { panic!("{line}") };
+        assert_eq!((sysrc.as_str(), s.as_str()), ("sysrc", "-s"), "{line}");
+        let files: Vec<String> = self.root.rc_files(name).into_iter().skip(1).collect();
+        let has = |text: &str, var: &str| text.lines().any(|l| l.trim_start().starts_with(&format!("{var}=")));
+        match rest {
+            [x, var] if x == "-x" => {
+                for file in &files {
+                    if let Some(text) = self.root.read(file) {
+                        let kept: String = text.lines().filter(|l| !l.trim_start().starts_with(&format!("{var}="))).map(|l| format!("{l}\n")).collect();
+                        std::fs::write(self.root.path(file), kept).unwrap();
+                    }
+                }
+            }
+            [set] => {
+                let (var, value) = set.split_once('=').unwrap();
+                let new = format!("{var}=\"{value}\"");
+                match files.iter().rev().find(|f| self.root.read(f).is_some_and(|t| has(&t, var))) {
+                    Some(file) => {
+                        let text = self.root.read(file).unwrap();
+                        let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+                        let last = lines.iter().rposition(|l| l.trim_start().starts_with(&format!("{var}="))).unwrap();
+                        lines[last] = new;
+                        std::fs::write(self.root.path(file), lines.iter().map(|l| format!("{l}\n")).collect::<String>()).unwrap();
+                    }
+                    None => {
+                        let text = self.root.read("/etc/rc.conf").unwrap_or_default();
+                        std::fs::write(self.root.path("/etc/rc.conf"), format!("{text}{new}\n")).unwrap();
+                    }
+                }
+            }
+            _ => panic!("{line}"),
+        }
+        Ok(())
+    }
+}
+
+/// A service's own rc.conf.d entry has the last word: switching changes
+/// the effective setting there, and restore (or a rollback) puts every
+/// file back as it was.
+#[test]
+fn freebsd_switch_follows_rc_conf_d_overrides_and_restores_them() {
+    const RC_CONF: &str = "hostname=\"bsd\"\nsddm_enable=\"NO\"\ngreetd_enable=\"YES\"\n";
+    const SDDM_OWN: &str = "sddm_flags=\"-v\"\nsddm_enable=\"YES\"\n";
+    const GREETD_OWN: &str = "greetd_enable=\"NO\"\n";
+    let f = freebsd_with_sddm();
+    f.file("/etc/rc.conf", RC_CONF).file("/etc/rc.conf.d/sddm", SDDM_OWN).file("/usr/local/etc/rc.conf.d/greetd/10-off", GREETD_OWN);
+    let root = f.root().as_freebsd();
+    assert!(root.rc_enabled("sddm") && !root.rc_enabled("greetd"), "the overrides win over rc.conf");
+    assert_eq!(root.rc_setting("greetd").as_deref(), Some("NO"));
+    let plan = SwitchPlan::build(&root, MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    assert!(plan.errors.is_empty(), "{:?}", plan.errors);
+    assert_eq!(plan.undo, [argv("sysrc -s sddm sddm_enable=YES"), argv("sysrc -s greetd greetd_enable=NO")]);
+    let mut sysrc = FakeSysrc { root: &root, log: Vec::new(), fail_on: None };
+    plan.perform(&root, true, &mut sysrc).unwrap();
+    assert!(!root.rc_enabled("sddm") && root.rc_enabled("greetd"), "the effective settings changed");
+    assert_eq!(f.read("/etc/rc.conf").as_deref(), Some(RC_CONF), "rc.conf's own lines were already right");
+    assert_eq!(f.read("/etc/rc.conf.d/sddm").as_deref(), Some("sddm_flags=\"-v\"\nsddm_enable=\"NO\"\n"));
+    let restore = RestorePlan::build(&root, "latest").unwrap();
+    restore.perform(&root, true, &mut sysrc).unwrap();
+    assert!(root.rc_enabled("sddm") && !root.rc_enabled("greetd"));
+    assert_eq!(f.read("/etc/rc.conf").as_deref(), Some(RC_CONF));
+    assert_eq!(f.read("/etc/rc.conf.d/sddm").as_deref(), Some(SDDM_OWN));
+    assert_eq!(f.read("/usr/local/etc/rc.conf.d/greetd/10-off").as_deref(), Some(GREETD_OWN));
+
+    // A failed step rolls back the steps before it the same way.
+    let plan = SwitchPlan::build(&root, MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    let mut sysrc = FakeSysrc { root: &root, log: Vec::new(), fail_on: Some("sysrc -s greetd greetd_enable=YES") };
+    assert!(plan.perform(&root, true, &mut sysrc).unwrap_err().contains("rolled back"));
+    assert_eq!(sysrc.log, ["sysrc -s sddm sddm_enable=NO", "sysrc -s greetd greetd_enable=YES", "sysrc -s sddm sddm_enable=YES"]);
+    assert_eq!(f.read("/etc/rc.conf.d/sddm").as_deref(), Some(SDDM_OWN));
+    assert!(root.rc_enabled("sddm"));
+}
+
+/// Only the service tools a switch runs come back out of a backup.
+#[test]
+fn restore_refuses_a_foreign_undo_command() {
+    let f = freebsd_with_sddm();
+    let root = f.root().as_freebsd();
+    SwitchPlan::build(&root, MANDARA, Kiosk::Cage, exe(&f)).unwrap().perform(&root, true, &mut Recorder::default()).unwrap();
+    let id = backups(&root).pop().unwrap();
+    let manifest = root.path(BACKUP_DIR).join(&id).join(MANIFEST);
+    let text = std::fs::read_to_string(&manifest).unwrap();
+    assert!(text.contains("undo"), "{text}");
+    // A backup from before `undo` was recorded derives the commands.
+    let legacy: String = text.lines().filter(|l| !l.starts_with("undo")).map(|l| format!("{l}\n")).collect();
+    std::fs::write(&manifest, legacy).unwrap();
+    assert_eq!(RestorePlan::build(&root, "latest").unwrap().commands, [argv("sysrc -s greetd greetd_enable=NO"), argv("sysrc -s sddm sddm_enable=YES")]);
+    std::fs::write(&manifest, text.replacen("\"sysrc\"", "\"/bin/rm\"", 1)).unwrap();
+    assert!(RestorePlan::build(&root, "latest").unwrap_err().contains("unexpected undo command"));
+}
+
+/// A manifest's undo commands must be the ones the switch wrote: its tool,
+/// its units and their own rc variables, never another service or setting.
+#[test]
+fn restore_refuses_undo_commands_the_switch_never_wrote() {
+    let f = freebsd_with_sddm();
+    let root = f.root().as_freebsd();
+    SwitchPlan::build(&root, MANDARA, Kiosk::Cage, exe(&f)).unwrap().perform(&root, true, &mut Recorder::default()).unwrap();
+    let id = backups(&root).pop().unwrap();
+    let manifest = root.path(BACKUP_DIR).join(&id).join(MANIFEST);
+    let text = std::fs::read_to_string(&manifest).unwrap();
+    assert!(text.contains("\"sddm_enable=YES\""), "{text}");
+    for (from, to) in [
+        // Another service, another variable, a value rc.conf would run.
+        ("\"-s\", \"sddm\", \"sddm_enable=YES\"", "\"-s\", \"sshd\", \"sshd_enable=YES\""),
+        ("\"sddm_enable=YES\"", "\"sddm_flags=YES\""),
+        ("\"sddm_enable=YES\"", "\"sddm_enable=$(id)\""),
+        // The other system's tool.
+        ("\"sysrc\", \"-s\", \"sddm\", \"sddm_enable=YES\"", "\"systemctl\", \"enable\", \"sddm.service\""),
+    ] {
+        std::fs::write(&manifest, text.replacen(from, to, 1)).unwrap();
+        assert!(RestorePlan::build(&root, "latest").unwrap_err().contains("unexpected undo command"), "{to}");
+    }
+    std::fs::write(&manifest, text.replacen("previous_unit = \"sddm.service\"", "previous_unit = \"/tmp/evil.service\"", 1)).unwrap();
+    assert!(RestorePlan::build(&root, "latest").unwrap_err().contains("unexpected unit"));
+    // The undo the switch wrote passes, its `-x` (greetd was unset) included.
+    std::fs::write(&manifest, &text).unwrap();
+    assert_eq!(RestorePlan::build(&root, "latest").unwrap().commands, [argv("sysrc -s greetd -x greetd_enable"), argv("sysrc -s sddm sddm_enable=YES")]);
+
+    // systemd: `systemctl enable <path>` would link a unit file from anywhere.
+    let f = arch_with_sddm();
+    SwitchPlan::build(&f.root(), MANDARA, Kiosk::Cage, exe(&f)).unwrap().perform(&f.root(), true, &mut Recorder::default()).unwrap();
+    let id = backups(&f.root()).pop().unwrap();
+    let manifest = f.root().path(BACKUP_DIR).join(&id).join(MANIFEST);
+    let text = std::fs::read_to_string(&manifest).unwrap();
+    for (from, to) in [("\"enable\", \"sddm.service\"", "\"enable\", \"/tmp/evil.service\""), ("\"enable\", \"sddm.service\"", "\"enable\", \"sshd.service\""), ("\"enable\", \"sddm.service\"", "\"mask\", \"sddm.service\"")] {
+        std::fs::write(&manifest, text.replacen(from, to, 1)).unwrap();
+        assert!(RestorePlan::build(&f.root(), "latest").unwrap_err().contains("unexpected undo command"), "{to}");
+    }
+    // A backup from before `undo` was recorded derives commands from its units, also checked.
+    let legacy: String = text.lines().filter(|l| !l.starts_with("undo")).map(|l| format!("{l}\n")).collect();
+    std::fs::write(&manifest, legacy.replacen("previous_unit = \"sddm.service\"", "previous_unit = \"/tmp/evil.service\"", 1)).unwrap();
+    assert!(RestorePlan::build(&f.root(), "latest").unwrap_err().contains("unexpected unit"));
+}
+
+/// Backups live outside the greeter-owned state folder; ones left in the old
+/// place there still restore, unless something other than us made them.
+#[test]
+fn backups_stay_out_of_the_greeters_reach() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let f = arch_with_sddm();
+    let plan = SwitchPlan::build(&f.root(), MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    plan.perform(&f.root(), true, &mut Recorder::default()).unwrap();
+    let [(id, dir)] = backup_dirs(&f.root()).try_into().unwrap();
+    assert!(dir.starts_with(f.root().path(BACKUP_DIR)));
+    assert!(!dir.starts_with(f.root().path(crate::install::STATE_DIR)), "the greeter user owns its state folder");
+    assert_eq!(std::fs::metadata(f.root().path(BACKUP_DIR)).unwrap().permissions().mode() & 0o777, BACKUP_DIR_MODE);
+
+    // An older release's backup, in the old place, still restores.
+    let legacy = f.root().path(LEGACY_BACKUP_DIR);
+    std::fs::create_dir_all(&legacy).unwrap();
+    std::fs::rename(&dir, legacy.join(&id)).unwrap();
+    assert_eq!(backups(&f.root()), std::slice::from_ref(&id));
+    assert_eq!(RestorePlan::build(&f.root(), "latest").unwrap().commands, [systemctl("disable", GREETD_UNIT), systemctl("enable", "sddm.service")]);
+    // One that others may write, or reached through a link, could be the
+    // greeter's own: it is left out.
+    std::fs::set_permissions(legacy.join(&id), std::fs::Permissions::from_mode(0o777)).unwrap();
+    assert!(backups(&f.root()).is_empty());
+    std::fs::set_permissions(legacy.join(&id), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let moved = f.dir.path().join("elsewhere");
+    std::fs::rename(&legacy, &moved).unwrap();
+    std::os::unix::fs::symlink(&moved, &legacy).unwrap();
+    assert!(backups(&f.root()).is_empty());
+    assert!(RestorePlan::build(&f.root(), "latest").unwrap_err().contains("no switch backups"));
+}
+
+/// A restore reads the whole backup when it is planned, through handles it
+/// checked: swapping the old backup folder for another one between the
+/// check and the restore (the greeter user owns the folder around it)
+/// changes nothing that is put back.
+#[test]
+fn a_backup_swapped_after_the_check_is_never_read() {
+    let f = arch_with_sddm();
+    let plan = SwitchPlan::build(&f.root(), MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    plan.perform(&f.root(), true, &mut Recorder::default()).unwrap();
+    let [(id, dir)] = backup_dirs(&f.root()).try_into().unwrap();
+    let legacy = f.root().path(LEGACY_BACKUP_DIR);
+    std::fs::create_dir_all(&legacy).unwrap();
+    std::fs::rename(&dir, legacy.join(&id)).unwrap();
+
+    let restore = RestorePlan::build(&f.root(), &id).unwrap();
+    let (file, copy) = restore.manifest.files.iter().find_map(|b| b.copy.clone().map(|c| (b.path.clone(), c))).expect("a backed-up file");
+    let original = std::fs::read_to_string(legacy.join(&id).join(&copy)).unwrap();
+
+    // Swapped after the check: the same names, the attacker's contents.
+    std::fs::rename(&legacy, f.dir.path().join("checked")).unwrap();
+    std::fs::create_dir_all(legacy.join(&id)).unwrap();
+    std::fs::write(legacy.join(&id).join(&copy), "attacker").unwrap();
+    let mut forged = restore.manifest.clone();
+    forged.files.iter_mut().for_each(|b| b.path = "/etc/shadow".into());
+    std::fs::write(legacy.join(&id).join(MANIFEST), toml::to_string(&forged).unwrap()).unwrap();
+
+    restore.perform(&f.root(), false, &mut Recorder::default()).unwrap();
+    assert_eq!(std::fs::read_to_string(f.root().path(&file)).unwrap(), original, "what was checked is what comes back");
+    assert!(!f.root().path("/etc/shadow").exists(), "the forged manifest was never read");
+}
+
+/// The race itself: the old folder is listed and trusted, then swapped for
+/// one the greeter user could have made before the backup is read. The
+/// read checks what it opens, not what was listed, and refuses it.
+#[test]
+fn a_backup_swapped_between_listing_and_reading_is_refused() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let f = arch_with_sddm();
+    let plan = SwitchPlan::build(&f.root(), MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    plan.perform(&f.root(), true, &mut Recorder::default()).unwrap();
+    let [(id, dir)] = backup_dirs(&f.root()).try_into().unwrap();
+    let legacy = f.root().path(LEGACY_BACKUP_DIR);
+    std::fs::create_dir_all(&legacy).unwrap();
+    std::fs::rename(&dir, legacy.join(&id)).unwrap();
+    let swap = |make: &dyn Fn(&Path)| {
+        let listed = backup_dirs(&f.root());
+        assert_eq!(listed.len(), 1, "trusted when listed");
+        // Swapped after the listing, before the read.
+        let kept = f.dir.path().join("kept");
+        std::fs::rename(&legacy, &kept).unwrap();
+        make(&kept);
+        let err = read_backup(&legacy, &id).unwrap_err();
+        assert!(err.contains("not a backup Mandara made") || err.contains("Too many levels of symbolic links") || err.contains("Not a directory"), "{err}");
+        // Put the real one back for the next case.
+        if std::fs::symlink_metadata(&legacy).unwrap().file_type().is_symlink() {
+            std::fs::remove_file(&legacy).unwrap();
+        } else {
+            std::fs::remove_dir_all(&legacy).unwrap();
+        }
+        std::fs::rename(&kept, &legacy).unwrap();
+    };
+    // A copy anyone may write (what the greeter user could make).
+    swap(&|kept| {
+        copy_tree(kept, &legacy);
+        std::fs::set_permissions(&legacy, std::fs::Permissions::from_mode(0o777)).unwrap();
+    });
+    // The same, one level down: the backup folder itself.
+    swap(&|kept| {
+        copy_tree(kept, &legacy);
+        std::fs::set_permissions(legacy.join(&id), std::fs::Permissions::from_mode(0o777)).unwrap();
+    });
+    // A link to a folder elsewhere.
+    swap(&|kept| std::os::unix::fs::symlink(kept, &legacy).unwrap());
+    // Untouched, it still reads.
+    assert!(read_backup(&legacy, &id).is_ok());
+}
+
+/// Copies the folder `from` (two levels deep, as a backups folder is) to `to`.
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap().flatten() {
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
+/// Only plain names inside the backup folder are read, never a path out of
+/// it, and never a file with other links (a hard link to someone else's).
+#[test]
+fn a_backup_reads_only_its_own_files() {
+    let f = arch_with_sddm();
+    let plan = SwitchPlan::build(&f.root(), MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    plan.perform(&f.root(), true, &mut Recorder::default()).unwrap();
+    let [(id, dir)] = backup_dirs(&f.root()).try_into().unwrap();
+    let text = std::fs::read_to_string(dir.join(MANIFEST)).unwrap();
+    let mut m: Manifest = toml::from_str(&text).unwrap();
+    let copy = m.files.iter().find_map(|b| b.copy.clone()).unwrap();
+    std::fs::hard_link(dir.join(&copy), f.dir.path().join("other-link")).unwrap();
+    assert!(RestorePlan::build(&f.root(), &id).unwrap_err().contains("not a backup Mandara made"), "a file with two links");
+    std::fs::remove_file(f.dir.path().join("other-link")).unwrap();
+    m.files.iter_mut().filter(|b| b.copy.is_some()).for_each(|b| b.copy = Some("../../../etc/passwd".into()));
+    std::fs::write(dir.join(MANIFEST), toml::to_string(&m).unwrap()).unwrap();
+    assert!(RestorePlan::build(&f.root(), &id).unwrap_err().contains("unexpected file name"));
+}
+
+#[test]
+fn freebsd_greetd_is_built_not_installed() {
+    let f = Fixture::new();
+    f.file("/etc/os-release", "ID=freebsd\n").file("/usr/local/bin/cage", "");
+    let root = f.root().as_freebsd();
+    let missing = missing_for(&root, find(MANDARA).unwrap(), Kiosk::Cage, Family::FreeBSD);
+    assert_eq!(missing.len(), 1);
+    assert_eq!(missing[0].what, "greetd");
+    assert!(missing[0].describe().contains("docs/login-manager.md#freebsd"));
+    assert!(packages_for(&missing).is_empty(), "nothing for pkg to install");
 }

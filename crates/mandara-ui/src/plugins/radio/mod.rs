@@ -794,6 +794,21 @@ fn resume_on_login(cx: &mut App) {
     });
 }
 
+/// Resumes at startup a Radio that shows as a sidebar card, without building
+/// the card: the player lives outside Radio's views. Bar placements resume
+/// when their item is made; the once-only guard keeps it to one start.
+pub(crate) fn resume_at_startup(cx: &mut App) {
+    let wanted = cx.try_global::<PluginRegistry>().is_some_and(|r| resumes_at_startup(config(cx).read(cx).get(), r));
+    if wanted {
+        resume_on_login(cx);
+    }
+}
+
+/// Whether startup resumes Radio: it is on and a tab of the sidebar shows its card.
+fn resumes_at_startup(cfg: &mandara_config::ShellConfig, registry: &PluginRegistry) -> bool {
+    cfg.sidebar.enabled && cfg.sidebar.has_card(ID) && registry.is_enabled(ID, &cfg.plugins)
+}
+
 /// The shelf of station `id` (curated, yours once read, else Other).
 pub(crate) fn station_category(id: &str, cx: &App) -> Category {
     if let Some(c) = station::curated(id) {
@@ -878,13 +893,22 @@ fn lib_command(cx: &mut App, f: impl FnOnce(&mut Library, &Player, &mut App) -> 
 
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Radio"), tk("Internet radio: curated stations by genre, your own stations and favourites, with live now-playing"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
+        let sidebar = fn_view(None, panel::sidebar, window, cx);
+        // A card is built only when its tab first shows, which is no time to
+        // start playing: a sidebar Radio resumes at startup instead.
+        if panel_cx.is_card() {
+            return PluginInstance { sidebar: Some(sidebar), ..PluginInstance::empty() };
+        }
         resume_on_login(cx);
         let bar = fn_view(None, bar::render, window, cx);
         let (view, size_cell) = panel::View::new(panel_cx.clone());
         let panel = fn_view(None, move |palette, window, cx| view.render(palette, window, cx), window, cx);
-        let sidebar = fn_view(None, panel::sidebar, window, cx);
         PluginInstance { bar: Some(bar), panel: Some(PanelSpec { view: panel, size: size_cell }), sidebar: Some(sidebar), on_click: None, on_secondary_click: Some(Rc::new(|_, cx| toggle(cx))) }
     });
+    // The card reads the player only if something already made it (playing,
+    // the panel, media keys) and makes nothing itself: it keeps nothing
+    // outside its view. The player is the plugin's own while it plays.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     r.command(ID, CommandSpec::new("radio status", tk("What plays: station, title, format, buffer, volume"), |_, cx| Ok(status_json(cx))));
     r.command(
         ID,
@@ -1017,6 +1041,26 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A Radio placed only in the sidebar resumes at startup, not when its
+    /// tab first shows; an off Radio or one without a card doesn't.
+    #[test]
+    fn sidebar_radio_resumes_at_startup() {
+        let mut registry = PluginRegistry::default();
+        super::super::register_builtin(&mut registry);
+        let mut cfg = mandara_config::ShellConfig::default();
+        cfg.sidebar.tabs[0].cards.retain(|c| c != ID);
+        assert!(!resumes_at_startup(&cfg, &registry), "off and not placed");
+        cfg.sidebar.tabs[0].cards.push(ID.into());
+        assert!(!resumes_at_startup(&cfg, &registry), "Radio ships switched off");
+        mandara_plugins::lifecycle::set_enabled(&mut cfg, ID, "Radio", true, None).unwrap();
+        assert!(resumes_at_startup(&cfg, &registry));
+        cfg.sidebar.enabled = false;
+        assert!(!resumes_at_startup(&cfg, &registry), "the sidebar is off");
+        cfg.sidebar.enabled = true;
+        cfg.sidebar.tabs[0].cards.retain(|c| c != ID);
+        assert!(!resumes_at_startup(&cfg, &registry), "no card: its bar item resumes instead");
+    }
 
     fn cfg(table: &str) -> mandara_config::ShellConfig {
         toml::from_str(&format!("[plugins.settings.radio]\n{table}")).unwrap()

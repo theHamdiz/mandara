@@ -318,12 +318,9 @@ fn open_files_with(item: &Item, files: &[PathBuf], cx: &mut App) {
     }
 }
 
-pub(crate) fn open_trash() {
-    std::thread::spawn(|| {
-        if let Err(err) = mandara_services::session::open_uri("trash:///") {
-            tracing::warn!("trash: {err}");
-        }
-    });
+/// Opens the Trash in the file manager ([`crate::opener`]).
+pub(crate) fn open_trash(cx: &mut App) {
+    crate::opener::open_trash(cx);
 }
 
 /// Follows windows for recent apps, lingering icons and launch bounces
@@ -714,7 +711,7 @@ impl DockView {
                     applications::toggle(&self.monitor, anchor, cx);
                 }
             }
-            Kind::Trash => open_trash(),
+            Kind::Trash => open_trash(cx),
             Kind::Media => crate::plugins::media::send(cx, mandara_services::MediaCommand::PlayPause),
             Kind::Stack(i) => {
                 if let Some(r) = self.rect(key) {

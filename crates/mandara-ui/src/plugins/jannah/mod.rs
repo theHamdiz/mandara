@@ -1155,6 +1155,8 @@ pub fn register(r: &mut PluginRegistry) {
             }
         },
     );
+    // The day's reminder and catalogue are the plugin's model, shared with its panel and bar.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     // Registered after the plugin (registering clears a plugin's kinds).
     use mandara_config::desktop_widgets::{DesktopWidget, JannahLayout, JannahWidget, Look, Plate, WidgetKind};
     let one = |w: JannahWidget| vec![DesktopWidget { kind: WidgetKind::Jannah(w), ..DesktopWidget::default() }];

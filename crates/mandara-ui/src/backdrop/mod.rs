@@ -303,7 +303,12 @@ pub fn init_on(layer: CanvasLayer, fallback: impl FnOnce(&mut App) + 'static, cx
                     refresh(cx);
                 }
                 Event::Menu(output, x, y, size) => {
-                    crate::desktop_text::after_save(cx, move |cx| crate::desktop_menu::open_sized(&output, (x, y), size, cx));
+                    // In a split bar's gaps it may be the bar's main menu.
+                    crate::desktop_text::after_save(cx, move |cx| {
+                        if let Err(output) = crate::bar::gaps::route(output, (x, y), size, cx) {
+                            crate::desktop_menu::open_sized(&output, (x, y), size, cx);
+                        }
+                    });
                 }
                 Event::Boxes(boxes) => crate::desktop_edit::on_boxes(boxes, cx),
                 Event::Widget(id, action) => {
@@ -2191,7 +2196,7 @@ pub fn render_preview(input: &desktop::PreviewInput) -> Result<serde_json::Value
     let names: [&str; 0] = [];
     let o = widgets::OutputCx { id: 0, names: &names, logical: (lw, lh), physical: (pw, ph), scale120, tone: Some(&bg.tone), primary: input.primary, fonts: &fonts, depth, subject: None, safe: Insets::default() };
     let sampler = ws.items.iter().any(|w| matches!(w.kind, mandara_config::desktop_widgets::WidgetKind::Monitor(_))).then(|| {
-        let mut s = widgets::sysmon::Sampler::new();
+        let mut s = widgets::sysmon::Sampler::waiting();
         let mut wants = widgets::sysmon::Wants::default();
         for w in &ws.items {
             if let mandara_config::desktop_widgets::WidgetKind::Monitor(m) = &w.kind {

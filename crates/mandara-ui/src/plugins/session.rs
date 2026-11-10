@@ -3,7 +3,7 @@
 //! `launcher looks` / `launcher look <id>`, the ready-made launcher looks).
 
 use gpui::{IntoElement, ParentElement, Styled, div};
-use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
+use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, Output, PluginInstance, PluginManifest, PluginRegistry, Zone};
 use mandara_config::workflow::{LAUNCHER_LOOKS, LauncherLookPreset, LauncherPosition};
 use mandara_services::SessionAction;
 use serde_json::json;
@@ -88,14 +88,13 @@ pub fn register(r: &mut PluginRegistry) {
     }
     r.command(
         ID,
-        CommandSpec::new("session run", mandara_i18n::tk("Lock, log out, sleep, hibernate, restart or shut down"), |a, _| {
+        CommandSpec::new_output("session run", mandara_i18n::tk("Lock, log out, sleep, hibernate, restart or shut down"), |a, _| {
             let id = a.str(0)?;
             let action = SessionAction::from_id(id).ok_or_else(|| format!("unknown action {id:?}"))?;
             if action.is_destructive() && a.get(1) != Some("confirm") {
                 return Err(format!("`{id}` ends the session; repeat as `session run {id} confirm`"));
             }
-            action.run()?;
-            Ok(json!({ "action": action.id(), "via": action.describe() }))
+            run_off_thread(action, SessionAction::run)
         })
         .arg(ArgSpec::required("action", ArgKind::Enum, mandara_i18n::tk("session action")).choices(&["lock", "logout", "suspend", "hibernate", "reboot", "shutdown"]))
         .arg(ArgSpec::optional("confirm", ArgKind::Enum, mandara_i18n::tk("required for logout / reboot / shutdown")).choices(&["confirm"]))
@@ -230,9 +229,50 @@ fn looks_json(look: &mandara_config::workflow::LauncherLook) -> serde_json::Valu
     json!({ "active": active, "looks": looks })
 }
 
+/// Runs a session action on a thread of its own and answers once it is done.
+/// On FreeBSD a power action can wait on pkexec, and the UI thread must stay
+/// free to show and answer Mandara's password dialog meanwhile.
+fn run_off_thread(action: SessionAction, run: impl FnOnce(SessionAction) -> Result<(), String> + Send + 'static) -> Result<Output, String> {
+    let (tx, rx) = async_channel::bounded(1);
+    std::thread::Builder::new()
+        .name("mandara-session-command".into())
+        .spawn(move || {
+            let result = run(action).map(|()| json!({ "action": action.id(), "via": action.describe() }).to_string());
+            let _ = tx.send_blocking(result);
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(Output::Pending(rx))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `session run` answers before the action finishes, and the action runs
+    /// off the calling (UI) thread, so a pkexec prompt can't freeze the shell.
+    #[test]
+    fn session_run_waits_on_its_own_thread() {
+        let caller = std::thread::current().id();
+        let (release, gate) = async_channel::bounded::<()>(1);
+        let (seen, ran_on) = async_channel::bounded(1);
+        let output = run_off_thread(SessionAction::Reboot, move |action| {
+            let _ = seen.send_blocking(std::thread::current().id());
+            gate.recv_blocking().map_err(|e| e.to_string())?;
+            assert_eq!(action, SessionAction::Reboot);
+            Err("refused".into())
+        })
+        .unwrap();
+        let Output::Pending(rx) = output else { panic!("session run answered synchronously") };
+        assert_ne!(ran_on.recv_blocking().unwrap(), caller);
+        assert!(rx.try_recv().is_err(), "answered before the action finished");
+        release.send_blocking(()).unwrap();
+        assert_eq!(rx.recv_blocking().unwrap(), Err("refused".to_string()));
+
+        let Output::Pending(rx) = run_off_thread(SessionAction::Lock, |_| Ok(())).unwrap() else { panic!() };
+        let reply: serde_json::Value = serde_json::from_str(&rx.recv_blocking().unwrap().unwrap()).unwrap();
+        assert_eq!(reply["action"], SessionAction::Lock.id());
+        assert_eq!(reply["via"], SessionAction::Lock.describe());
+    }
 
     #[test]
     fn launcher_art_fills_the_button_without_overflowing_short_bars() {

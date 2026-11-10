@@ -3,7 +3,8 @@
 //! The worker starts the root helper through pkexec (so the shell's polkit
 //! agent shows Mandara's password dialog), reads its output incrementally
 //! into a bounded [`JobState`] (a capped ring of recent log lines plus the
-//! parsed progress), then runs the rootless Flatpak step. The UI reads the
+//! parsed progress), then runs the rootless steps: the AUR helper on Arch
+//! (with Mandara's askpass for its `sudo`) and Flatpak. The UI reads the
 //! state under a short lock and is pinged through a coalescing callback,
 //! never per line. The job keeps running when its panel closes; nothing
 //! but a cancel request at a safe point stops it early.
@@ -18,6 +19,8 @@ use std::time::{Duration, Instant};
 use mandara_i18n::t;
 use serde::{Deserialize, Serialize};
 
+use super::askpass;
+use super::aur::{self, AurHelper};
 use super::helper::{self, CancelSignal, Runner};
 use super::nixos::{self, InputChange, NixAction, Setup};
 use super::parse::Tracker;
@@ -48,19 +51,33 @@ pub enum Request {
     Flatpak,
     /// A NixOS action.
     Nix { action: NixAction },
+    /// Arch: the system packages, then AUR packages with `helper` (as
+    /// you), then (optionally) Flatpak.
+    SystemAur { flatpak: bool, helper: AurHelper },
+    /// Only AUR packages (as you; `sudo` asks through Mandara's dialog),
+    /// then (optionally) Flatpak.
+    Aur { helper: AurHelper, flatpak: bool },
 }
 
 impl Request {
     fn root_args(&self) -> Option<Vec<String>> {
         match self {
-            Request::System { .. } => Some(vec!["apply".into()]),
-            Request::Flatpak => None,
+            Request::System { .. } | Request::SystemAur { .. } => Some(vec!["apply".into()]),
+            Request::Flatpak | Request::Aur { .. } => None,
             Request::Nix { action } => Some(action.args()),
         }
     }
 
     fn flatpak(&self) -> bool {
-        matches!(self, Request::System { flatpak: true } | Request::Flatpak)
+        matches!(self, Request::System { flatpak: true } | Request::SystemAur { flatpak: true, .. } | Request::Aur { flatpak: true, .. } | Request::Flatpak)
+    }
+
+    /// The AUR helper this request runs, if any.
+    pub fn aur(&self) -> Option<AurHelper> {
+        match self {
+            Request::SystemAur { helper, .. } | Request::Aur { helper, .. } => Some(*helper),
+            _ => None,
+        }
     }
 }
 
@@ -108,6 +125,11 @@ pub struct JobState {
     in_user_step: bool,
     /// The helper answered a cancel request with "not now".
     pub cancel_refused: bool,
+    /// The AUR helper of the AUR step, once it started.
+    pub helper: Option<AurHelper>,
+    /// The step that failed (the panel offers the terminal for the AUR
+    /// step's failures).
+    pub failed_step: Option<StepKind>,
     pub log: VecDeque<String>,
     /// Lines that fell out of [`JobState::log`].
     pub dropped: u64,
@@ -129,6 +151,8 @@ impl JobState {
             cancel_requested: false,
             in_user_step: false,
             cancel_refused: false,
+            helper: None,
+            failed_step: None,
             log: VecDeque::with_capacity(LOG_LINES),
             dropped: 0,
             started: Instant::now(),
@@ -152,7 +176,19 @@ impl JobState {
 
     /// Whether a cancel can be offered right now.
     pub fn cancellable(&self) -> bool {
-        self.finished.is_none() && !self.cancel_requested && self.step_kind.is_some_and(StepKind::cancellable)
+        // The AUR helper's pacman installing what it built isn't stopped.
+        let installing_aur = self.step_kind == Some(StepKind::Aur) && matches!(self.tracker.phase, Phase::Installing | Phase::Hooks | Phase::Verifying);
+        self.finished.is_none() && !self.cancel_requested && self.step_kind.is_some_and(StepKind::cancellable) && !installing_aur
+    }
+
+    /// The program the current step runs, as the card names it (`paru`
+    /// during the AUR step, else the package manager); `None` for Flatpak.
+    pub fn manager(&self) -> Option<&'static str> {
+        match self.step_kind.or(self.tracker.step) {
+            Some(StepKind::Aur) => self.helper.map(AurHelper::label),
+            Some(StepKind::Flatpak) => None,
+            _ => self.backend.map(BackendId::manager_label),
+        }
     }
 
     /// 0–1 over the whole job: finished steps plus the current one's share.
@@ -243,6 +279,37 @@ pub trait Launcher: Send + Sync {
     fn restart_facts(&self) -> (String, PathBuf, PathBuf) {
         (super::kernel_release(), PathBuf::from(MODULES), PathBuf::from(REBOOT_REQUIRED))
     }
+    /// The password dialog the AUR step's `sudo` asks through (the shell's).
+    fn prompter(&self) -> Option<Arc<dyn askpass::Prompter>> {
+        askpass::prompter()
+    }
+    /// Where the AUR step's askpass folder goes (your runtime folder).
+    fn askpass_parent(&self) -> PathBuf {
+        std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).filter(|p| p.is_dir()).unwrap_or_else(std::env::temp_dir)
+    }
+    /// Runs the AUR helper's `step` as you, with `session`'s askpass.
+    fn aur(&self, step: &Step, session: &askpass::Session, line: &mut dyn FnMut(&str), cancel: &CancelSignal) -> std::io::Result<Option<i32>> {
+        run_aur(step, session, line, cancel)
+    }
+}
+
+/// Runs an AUR helper as you: no terminal (its own session, so `sudo`
+/// can't read one and a cancel reaches the whole build), standard input
+/// closed, `LANG=C`, and the askpass folder first on `PATH`.
+pub fn run_aur(step: &Step, session: &askpass::Session, line: &mut dyn FnMut(&str), cancel: &CancelSignal) -> std::io::Result<Option<i32>> {
+    use std::os::unix::process::CommandExt as _;
+    let program = crate::updates::find_program(step.program).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, format!("{} is not installed", step.program)))?;
+    let mut cmd = Command::new(program);
+    cmd.args(&step.args).env("LANG", "C").env("LC_ALL", "C").envs(step.env.iter().copied()).envs(session.env()).env("PATH", session.path()).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    // SAFETY: setsid is async-signal-safe and allocates nothing; it runs
+    // in the forked child before exec.
+    unsafe {
+        cmd.pre_exec(|| if libc::setsid() == -1 { Err(std::io::Error::last_os_error()) } else { Ok(()) });
+    }
+    let mut child = cmd.spawn()?;
+    session.set_root(child.id());
+    let gate = cancel.clone();
+    helper::pump_with(&mut child, line, cancel, &move || gate.is_cancellable())
 }
 
 /// Runs rootless programs (Flatpak, a user-owned flake's update) found on
@@ -340,7 +407,7 @@ pub fn start(request: Request, launcher: Arc<dyn Launcher>, changed: Arc<dyn Fn(
     let spawned = std::thread::Builder::new().name("mandara-sysupdate".into()).spawn(move || {
         let started = Instant::now();
         let log_file = std::fs::File::create(log_path()).ok().map(std::io::BufWriter::new);
-        let mut w = Worker { job: &worker, changed: &*changed, log_file, stderr_tail: VecDeque::with_capacity(STDERR_LINES) };
+        let mut w = Worker { job: &worker, changed: &changed, log_file, stderr_tail: VecDeque::with_capacity(STDERR_LINES) };
         let finished = w.run(&request, &*launcher, rx, started);
         if let Some(f) = w.log_file.as_mut() {
             let _ = f.flush();
@@ -358,7 +425,7 @@ pub fn start(request: Request, launcher: Arc<dyn Launcher>, changed: Arc<dyn Fn(
 
 struct Worker<'a> {
     job: &'a Job,
-    changed: &'a (dyn Fn() + Send + Sync),
+    changed: &'a Arc<dyn Fn() + Send + Sync>,
     log_file: Option<std::io::BufWriter<std::fs::File>>,
     stderr_tail: VecDeque<String>,
 }
@@ -396,7 +463,7 @@ impl Worker<'_> {
             }
         }
         let root_args = request.root_args();
-        let extra_steps = u32::from(request.flatpak()) + u32::from(user_flake.is_some());
+        let extra_steps = u32::from(request.flatpak()) + u32::from(user_flake.is_some()) + u32::from(request.aur().is_some());
         self.update(|s| s.steps = extra_steps);
 
         if let Some(dir) = user_flake {
@@ -423,6 +490,13 @@ impl Worker<'_> {
                     return self.finish(finished, started, launcher);
                 }
             }
+        }
+
+        if let Some(h) = request.aur()
+            && let Err(outcome) = self.aur_step(launcher, h)
+        {
+            finished.outcome = outcome;
+            return self.finish(finished, started, launcher);
         }
 
         if request.flatpak() {
@@ -518,6 +592,115 @@ impl Worker<'_> {
                 Err(JobOutcome::Failed(Failure { kind, detail: lines.iter().rfind(|l| !l.trim().is_empty()).map_or_else(|| format!("exit {code:?}"), |l| l.to_string()) }))
             }
             Err(e) => Err(JobOutcome::Failed(Failure { kind: FailureKind::Other, detail: e.to_string() })),
+        }
+    }
+
+    /// The AUR step: `helper` as you, its `sudo` answered by an askpass
+    /// session that lives exactly as long as the step.
+    fn aur_step(&mut self, launcher: &dyn Launcher, helper: AurHelper) -> Result<(), JobOutcome> {
+        let step = helper.step();
+        let cancel = self.job.user_cancel.clone();
+        let fail = |w: &mut Self, kind: FailureKind, detail: String| {
+            w.update(|s| s.failed_step = Some(StepKind::Aur));
+            Err(JobOutcome::Failed(Failure { kind, detail }))
+        };
+        self.update(|s| {
+            s.step += 1;
+            s.steps = s.steps.max(s.step);
+            s.step_kind = Some(StepKind::Aur);
+            s.helper = Some(helper);
+            s.tracker.begin_step(StepKind::Aur);
+            s.cancel_refused = false;
+            if !s.in_user_step {
+                s.in_user_step = true;
+                s.cancel_requested = false;
+                cancel.clear();
+            }
+        });
+        cancel.set_cancellable(true);
+        let Some(prompter) = launcher.prompter() else {
+            self.update(|s| s.step_kind = None);
+            return fail(self, FailureKind::NoPrompt, t("Mandara's password dialog isn't available, so the AUR helper can't ask for your password.").to_string());
+        };
+        // "Waiting for your password…" while the dialog is up.
+        let job = self.job.clone();
+        let changed = self.changed.clone();
+        let on_ask: askpass::OnAsk = Box::new(move |asking| {
+            {
+                let mut s = job.state.lock().unwrap_or_else(|e| e.into_inner());
+                if asking {
+                    s.tracker.phase = Phase::Authorizing;
+                } else if s.tracker.phase == Phase::Authorizing {
+                    s.tracker.phase = Phase::AurBuild;
+                }
+                s.revision += 1;
+            }
+            changed();
+        });
+        let give_up = cancel.clone();
+        let session = match askpass::Session::open(&launcher.askpass_parent(), &mandara_config::paths::self_exe(), prompter, helper.label(), on_ask, Box::new(move || give_up.request())) {
+            Ok(s) => s,
+            Err(e) => {
+                self.update(|s| s.step_kind = None);
+                return fail(self, FailureKind::NoPrompt, e.to_string());
+            }
+        };
+        let mut tail: VecDeque<String> = VecDeque::with_capacity(16);
+        let job = self.job;
+        let changed = self.changed;
+        let log_file = &mut self.log_file;
+        let gate = cancel.clone();
+        let result = launcher.aur(
+            &step,
+            &session,
+            &mut |line| {
+                let line = protocol::clean_line(line);
+                {
+                    let mut s = job.state.lock().unwrap_or_else(|e| e.into_inner());
+                    aur::parse_line(&line, &mut s.tracker);
+                    // A cancel waits while pacman installs what was built.
+                    gate.set_cancellable(!matches!(s.tracker.phase, Phase::Installing | Phase::Hooks | Phase::Verifying));
+                    if !line.is_empty() {
+                        s.push_log(&line);
+                    }
+                    s.revision += 1;
+                }
+                if line.is_empty() {
+                    return;
+                }
+                if let Some(f) = log_file.as_mut() {
+                    let _ = writeln!(f, "{line}");
+                }
+                if tail.len() == 16 {
+                    tail.pop_front();
+                }
+                tail.push_back(line.into_owned());
+                changed();
+            },
+            &cancel,
+        );
+        session.disarm();
+        let (gave_up, refused_all) = (session.gave_up(), session.cancelled());
+        drop(session);
+        self.update(|s| s.step_kind = None);
+        let package = self.job.with(|s| s.tracker.failed_package.clone());
+        match result {
+            Ok(Some(0)) if package.is_none() => Ok(()),
+            // You cancelled the password dialog (or it kept failing):
+            // the helper was stopped for it.
+            _ if gave_up => fail(self, FailureKind::NotAuthorized, if refused_all { t("The password dialog was cancelled, so the AUR packages weren't installed.").to_string() } else { t("sudo didn't accept the password.").to_string() }),
+            _ if cancel.requested() => Err(JobOutcome::Cancelled),
+            Ok(code) => {
+                let lines: Vec<&str> = tail.iter().map(String::as_str).collect();
+                let kind = if package.is_some() { FailureKind::BuildFailed } else { aur::classify(&lines) };
+                let last = lines.iter().rfind(|l| !l.trim().is_empty()).map_or_else(|| format!("exit {code:?}"), |l| l.to_string());
+                let detail = match &package {
+                    Some(p) => mandara_i18n::tf("{package} didn't build: {reason}", &[("package", p), ("reason", &build_reason(&lines).unwrap_or(last.as_str()))]),
+                    None => last,
+                };
+                fail(self, kind, detail)
+            }
+            Err(e) => fail(self, FailureKind::Other, e.to_string()),
         }
     }
 
@@ -641,6 +824,17 @@ impl Worker<'_> {
         let mut s = self.job.state.lock().unwrap_or_else(|e| e.into_inner());
         self.log(&mut s, &line);
     }
+}
+
+/// The line of a failed build that says why: the build's own last error
+/// before makepkg's `==> ERROR: A failure occurred in …` (`PKGBUILD: line
+/// 19: make: command not found`), else that line itself.
+fn build_reason<'a>(lines: &[&'a str]) -> Option<&'a str> {
+    let at = lines.iter().position(|l| l.trim_start().starts_with("==> ERROR:"))?;
+    let before = lines[..at].iter().rev().map(|l| l.trim()).find(|l| !l.is_empty() && !l.starts_with("==>") && !l.starts_with("->"));
+    let line = before.unwrap_or_else(|| lines[at].trim());
+    // A clone folder's path says nothing to you.
+    Some(line.rfind("/PKGBUILD: ").map_or(line, |i| &line[i + 1..]))
 }
 
 /// The text a helper line shows in the log (`None`: machine-only, such as

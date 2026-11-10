@@ -3,7 +3,7 @@
 //! drop-down panels (`[panels]`). Slider bounds come from
 //! `mandara_config::surfaces::ranges`, the same spans the shell clamps to.
 
-use mandara_config::surfaces::{defaults, ranges};
+use mandara_config::surfaces::{BarRightClick, defaults, ranges};
 use mandara_config::desktop::{AutoHideMode, CornerAction};
 use mandara_config::{BarLayout, ShellConfig};
 use mandara_i18n::tk;
@@ -58,6 +58,10 @@ const FRAMED_STYLES: &str = tk("Side bar, edge frame and hairline only");
 const ITEM_CAPSULES_FIRST: &str = tk("Turn on Item capsules first");
 const COMPACT_INSET: &str = tk("The hairline and the micro pill keep a fine inset");
 const SIDE_BAR_STAYS: &str = tk("A side bar always stays on screen");
+/// `bar.right_click_gaps` on a full-width bar (or a side bar).
+pub const NO_GAPS: &str = tk("Only split bars have gaps: glass pills, island, micro pill and notch");
+/// `bar.right_click_gaps` while empty bar space opens the desktop's menu.
+pub const GAPS_DESKTOP_MENU: &str = tk("Right-clicking empty bar space opens the desktop's menu");
 const FRAME_FIRST_OFF: &str = tk("The screen frame already joins the bar to the edges");
 const CLICKS_PASS_THROUGH: &str = tk("Empty bar space clicks through to windows");
 const COMMAND_FIRST: &str = tk("Pick Command as the action first");
@@ -155,7 +159,9 @@ pub fn locked(path: &str, cfg: &ShellConfig) -> Option<&'static str> {
     match path {
         "/bar/capsule_fill" | "/bar/capsule_strength" | "/bar/capsule_outline" if !capsules => Some(CAPSULES_FIRST),
         "/bar/window_gap" if floats_over => Some(FLOATS_OVER_WINDOWS),
-        "/bar/right_click" | "/bar/middle_click/action" | "/bar/middle_click/command" | "/bar/scroll" if cfg.bar.click_through => Some(CLICKS_PASS_THROUGH),
+        "/bar/right_click" | "/bar/right_click_gaps" | "/bar/middle_click/action" | "/bar/middle_click/command" | "/bar/scroll" if cfg.bar.click_through => Some(CLICKS_PASS_THROUGH),
+        "/bar/right_click_gaps" if cfg.bar_layout().is_full_width() => Some(NO_GAPS),
+        "/bar/right_click_gaps" if cfg.bar.right_click == BarRightClick::DesktopMenu => Some(GAPS_DESKTOP_MENU),
         "/bar/middle_click/command" if cfg.bar.middle_click.action != CornerAction::Command => Some(COMMAND_FIRST),
         "/bar/layout" if vertical => Some(SIDE_BAR_FRAME),
         "/bar/compact_height" if !compact => Some(COMPACT_ONLY),
@@ -244,6 +250,41 @@ mod tests {
         for path in ["/bar/right_click", "/bar/middle_click/action", "/bar/scroll"] {
             assert_eq!(locked(path, &cfg), Some(CLICKS_PASS_THROUGH), "{path}");
         }
+    }
+
+    /// Right-clicks in the gaps only apply to a split bar whose empty space
+    /// opens the main menu; the lock agrees with what the shell does
+    /// ([`ShellConfig::bar_gaps_open_menu`]).
+    #[test]
+    fn the_gap_click_setting_locks_where_there_are_no_gaps() {
+        const PATH: &str = "/bar/right_click_gaps";
+        let mut cfg = ShellConfig::default();
+        assert_eq!(locked(PATH, &cfg), Some(NO_GAPS), "the default edge frame spans the edge");
+        for layout in BarLayout::ALL {
+            cfg.bar.layout = layout;
+            assert_eq!(locked(PATH, &cfg).is_some(), layout.is_full_width(), "{layout:?}");
+        }
+        cfg.bar.layout = BarLayout::FloatingPills;
+        for position in [mandara_config::BarPosition::Left, mandara_config::BarPosition::Right] {
+            cfg.bar.position = position;
+            assert_eq!(locked(PATH, &cfg), Some(NO_GAPS), "a side bar is an edge frame");
+        }
+        cfg.bar.position = mandara_config::BarPosition::Top;
+        // Side bars joined to a split top bar turn it into the edge frame.
+        cfg.side_bars.enabled = true;
+        cfg.side_bars.joined = true;
+        assert_eq!(locked(PATH, &cfg), Some(NO_GAPS));
+        cfg.side_bars.enabled = false;
+        cfg.bar.right_click = BarRightClick::DesktopMenu;
+        assert_eq!(locked(PATH, &cfg), Some(GAPS_DESKTOP_MENU));
+        cfg.bar.right_click = BarRightClick::MainMenu;
+        cfg.bar.click_through = true;
+        assert_eq!(locked(PATH, &cfg), Some(CLICKS_PASS_THROUGH));
+        cfg.bar.click_through = false;
+        assert_eq!(locked(PATH, &cfg), None);
+        // Whenever it is unlocked and on, the shell routes the gaps.
+        cfg.bar.right_click_gaps = true;
+        assert!(cfg.bar_gaps_open_menu());
     }
 
     #[test]

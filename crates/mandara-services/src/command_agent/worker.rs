@@ -94,29 +94,30 @@ pub fn worker_main(settings: impl FnOnce() -> Vec<super::catalog::Command>) -> R
         if request.prepare_index {
             return emit(&Event::Ready { actions: vec![], words: vec![], inference_ms: 0.0 });
         }
-        let mut compiler = if request.engine == super::Engine::Qwen {
+        // Only translation or clause planning needs the compiler before
+        // retrieval; a single English request ranks first, as with FunctionGemma.
+        let plans = request.engine == super::Engine::Qwen && request.preferred_command.is_none() && compiler::plans(&request.query);
+        let mut compiler = if plans {
             models::check(models::compiler(request.engine), false, &cancel)?;
             Some(compiler::Compiler::load(request.engine)?)
         } else {
             None
         };
         let start = Instant::now();
-        let queries = if request.preferred_command.is_none()
-            && let Some(compiler) = &mut compiler
-        {
+        let queries = if let Some(compiler) = &mut compiler {
             compiler.retrieval_queries(&request.query)?
         } else {
             vec![request.query.clone()]
         };
-        let query_vectors = queries
+        let rankings = queries
             .iter()
-            .map(|q| embedder.embed(q, true))
+            .map(|q| Ok(embeddings::ranking(&embedder.embed(q, true)?, &vectors)))
             .collect::<Result<Vec<_>>>()?;
-        let matches = embeddings::retrieve_clauses(&query_vectors, &request.catalog, &vectors);
+        let matches = embeddings::retrieve_clauses(&rankings, &request.catalog);
         let selected = queries
             .iter()
-            .zip(&query_vectors)
-            .map(|(query, vector)| {
+            .zip(&rankings)
+            .map(|(query, ranked)| {
                 if let Some(path) = &request.preferred_command {
                     return request
                         .catalog
@@ -125,7 +126,6 @@ pub fn worker_main(settings: impl FnOnce() -> Vec<super::catalog::Command>) -> R
                         .map(|command| vec![command])
                         .ok_or_else(|| anyhow::anyhow!("selected command is no longer available"));
                 }
-                let ranked = embeddings::ranking(vector, &vectors);
                 super::selection::candidates(
                     query,
                     ranked.iter().map(|(index, _)| &request.catalog[*index]).filter(|command| matches.iter().any(|m| m.command.path == command.path)),
@@ -137,7 +137,7 @@ pub fn worker_main(settings: impl FnOnce() -> Vec<super::catalog::Command>) -> R
             retrieval_ms: start.elapsed().as_secs_f64() * 1000.0,
         })?;
         let selected = selected?;
-        drop((embedder, vectors, query_vectors));
+        drop((embedder, vectors, rankings));
         let mut compiler = match compiler {
             Some(compiler) => compiler,
             None => {
@@ -156,14 +156,7 @@ pub fn worker_main(settings: impl FnOnce() -> Vec<super::catalog::Command>) -> R
 
 /// Linux procfs keeps the running inode executable after an atomic update.
 fn worker_executable() -> Result<std::path::PathBuf> {
-    #[cfg(target_os = "linux")]
-    {
-        Ok("/proc/self/exe".into())
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        Ok(std::env::current_exe()?)
-    }
+    Ok(mandara_config::paths::running_image()?)
 }
 
 struct Child(std::process::Child);
@@ -284,11 +277,23 @@ mod tests {
         let exe = dir.path().join("worker");
         std::fs::copy(std::env::current_exe().unwrap(), &exe).unwrap();
         std::fs::write(dir.path().join(".agent-worker-fixture"), b"owned test copy").unwrap();
-        let output = Command::new(&exe)
-            .args(["--exact", "command_agent::worker::tests::deleted_executable_child", "--ignored", "--test-threads=1"])
-            .env("MANDARA_AGENT_TEST_EXE", &exe)
-            .output()
-            .unwrap();
+        // A process another test forks while the copy is still open for
+        // writing inherits that descriptor, and Linux then refuses to run the
+        // copy ("Text file busy") until it execs or exits: wait it out.
+        let mut tries = 0;
+        let output = loop {
+            match Command::new(&exe)
+                .args(["--exact", "command_agent::worker::tests::deleted_executable_child", "--ignored", "--test-threads=1"])
+                .env("MANDARA_AGENT_TEST_EXE", &exe)
+                .output()
+            {
+                Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) && tries < 100 => {
+                    tries += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                other => break other.unwrap(),
+            }
+        };
         assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stdout));
         assert!(!exe.exists());
     }

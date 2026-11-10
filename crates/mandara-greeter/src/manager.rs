@@ -14,6 +14,16 @@
 //!   (the files it changes plus a manifest); a failed step rolls back, and
 //!   [`RestorePlan`] (`mandara greeter restore latest`) undoes a switch.
 //!
+//! On FreeBSD ([`SysRoot::freebsd`]) there is no systemd: the enabled
+//! login manager is the one whose `<name>_enable` is `YES` in rc.conf, its
+//! rc script lives in `/usr/local/etc/rc.d` or `/etc/rc.d`, and switching
+//! is `sysrc -s <old> <old>_enable=NO` + `sysrc -s <new> <new>_enable=YES`
+//! (`-s` makes sysrc change the setting in a service's own
+//! `rc.conf.d/<name>` too, so the effective value changes). Undoing puts
+//! back exactly the value each variable had before, in the file it was
+//! in, or removes a variable no rc file set. Unit names (`sddm.service`)
+//! stay the plan's and the backups' vocabulary; only the commands differ.
+//!
 //! Everything takes a [`SysRoot`] so tests run against fixture trees.
 
 use std::fmt::Write as _;
@@ -33,14 +43,25 @@ pub const DISPLAY_MANAGER_LINK: &str = "/etc/systemd/system/display-manager.serv
 pub const UNIT_DIRS: [&str; 4] = ["/etc/systemd/system", "/usr/lib/systemd/system", "/lib/systemd/system", "/usr/local/lib/systemd/system"];
 /// Where greeter binaries are looked up (plus `$PATH` on the real system).
 pub const BIN_DIRS: [&str; 6] = ["/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"];
-/// Timestamped switch backups (one folder each, with a [`MANIFEST`]).
-pub const BACKUP_DIR: &str = "/var/lib/mandara-greeter/backups";
+/// Timestamped switch backups (one folder each, with a [`MANIFEST`]): only
+/// root may change them, outside the greeter's state folder, whose owner could otherwise
+/// swap in a manifest that `restore` then carries out as root.
+pub const BACKUP_DIR: &str = "/var/lib/mandara-greeter-backups";
+/// Where backups were kept before, inside the greeter-owned state folder.
+/// Restore still finds them, but only folders and manifests that root (or
+/// the user looking, for a dry run) owns and nobody else may write.
+pub const LEGACY_BACKUP_DIR: &str = "/var/lib/mandara-greeter/backups";
+/// Readable like the system files the backups copy, so a dry-run restore
+/// shows its plan without sudo; only root writes.
+const BACKUP_DIR_MODE: u32 = 0o755;
 pub const MANIFEST: &str = "manifest.toml";
 /// `MANDARA_GREETER_DRY_RUN=1` forces `use` / `restore` (and Studio's
 /// "Use" button) to only print the plan.
 pub const DRY_RUN_ENV: &str = "MANDARA_GREETER_DRY_RUN";
 /// greetd's default greeter user when its config names none.
 pub const DEFAULT_GREETER_USER: &str = "greeter";
+/// How to build greetd where it isn't packaged (FreeBSD).
+pub const FREEBSD_GREETD_DOC: &str = "https://github.com/theHamdiz/mandara/blob/main/docs/login-manager.md#freebsd";
 /// Id of Mandara Login in [`MANAGERS`]: the default choice everywhere.
 pub const MANDARA: &str = "mandara";
 const GREETD: &str = "greetd";
@@ -57,6 +78,14 @@ const BACKUP_ID_FORMAT: &str = "%Y%m%d-%H%M%S";
 const FRESH_CONFIG_HEADER: &str = "# Written by `mandara greeter use`.";
 /// VT greetd runs on in a config written from scratch.
 const FRESH_CONFIG_VT: i64 = 1;
+/// FreeBSD: `/dev/ttyv8`, past the eight gettys of `/etc/ttys`.
+const FREEBSD_FRESH_CONFIG_VT: i64 = 8;
+/// Where FreeBSD's rc scripts live (ports, then base).
+pub const RC_DIRS: [&str; 2] = ["/usr/local/etc/rc.d", "/etc/rc.d"];
+/// rc.conf files, in the order rc.subr reads them (later wins); a
+/// service's own `rc.conf.d/<name>` comes last.
+pub const RC_CONF_FILES: [&str; 3] = ["/etc/defaults/rc.conf", "/etc/rc.conf", "/etc/rc.conf.local"];
+pub const RC_CONF_DIRS: [&str; 2] = ["/etc/rc.conf.d", "/usr/local/etc/rc.conf.d"];
 /// Shown in every plan and result: when the change becomes visible.
 pub const TAKES_EFFECT: &str = "Takes effect at the next boot (or the next time the login screen starts); the running session is not touched.";
 
@@ -66,15 +95,28 @@ pub struct SysRoot {
     base: PathBuf,
     /// Also search `$PATH` for binaries (the real system only).
     use_path_env: bool,
+    /// A FreeBSD system: rc.conf services, OpenPAM, `/usr/local` ports.
+    freebsd: bool,
 }
 
 impl SysRoot {
     pub fn system() -> SysRoot {
-        SysRoot { base: PathBuf::from("/"), use_path_env: true }
+        SysRoot { base: PathBuf::from("/"), use_path_env: true, freebsd: cfg!(target_os = "freebsd") }
     }
 
     pub fn at(base: impl Into<PathBuf>) -> SysRoot {
-        SysRoot { base: base.into(), use_path_env: false }
+        SysRoot { base: base.into(), use_path_env: false, freebsd: false }
+    }
+
+    /// The same root, as a FreeBSD system (tests on any platform).
+    pub fn as_freebsd(mut self) -> SysRoot {
+        self.freebsd = true;
+        self
+    }
+
+    /// Whether services are FreeBSD rc scripts (no systemd).
+    pub fn freebsd(&self) -> bool {
+        self.freebsd
     }
 
     pub fn base(&self) -> &Path {
@@ -94,7 +136,48 @@ impl SysRoot {
     }
 
     pub fn has_unit(&self, unit: &str) -> bool {
+        if self.freebsd {
+            return RC_DIRS.iter().any(|d| self.path(d).join(rc_name(unit)).is_file());
+        }
         UNIT_DIRS.iter().any(|d| self.path(d).join(unit).exists())
+    }
+
+    /// Whether rc.conf turns `service` on (`<service>_enable="YES"`).
+    pub fn rc_enabled(&self, service: &str) -> bool {
+        self.rc_last(service, true).is_some_and(|v| rc_yes(&v))
+    }
+
+    /// The value `<service>_enable` has in the rc files sysrc edits (not
+    /// `/etc/defaults/rc.conf`): None when none of them sets it.
+    pub fn rc_setting(&self, service: &str) -> Option<String> {
+        self.rc_last(service, false)
+    }
+
+    /// The last value rc.subr's `load_rc_config <service>` gives
+    /// `<service>_enable`, optionally counting the defaults file.
+    fn rc_last(&self, service: &str, defaults: bool) -> Option<String> {
+        let var = rc_var(service);
+        let skip = usize::from(!defaults);
+        self.rc_files(service).iter().skip(skip).rev().find_map(|f| self.read(f).and_then(|t| rc_value(&t, &var)))
+    }
+
+    /// The rc files `load_rc_config <service>` reads, in order (later
+    /// wins): [`RC_CONF_FILES`], then the service's own `rc.conf.d/<name>`
+    /// in each of [`RC_CONF_DIRS`], a file or a folder of files.
+    fn rc_files(&self, service: &str) -> Vec<String> {
+        let mut out: Vec<String> = RC_CONF_FILES.iter().map(|f| f.to_string()).collect();
+        for d in RC_CONF_DIRS {
+            let own = format!("{d}/{service}");
+            let p = self.path(&own);
+            if p.is_dir() {
+                let mut names: Vec<String> = std::fs::read_dir(&p).into_iter().flatten().flatten().filter(|e| e.path().is_file()).map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| !n.starts_with('.')).collect();
+                names.sort();
+                out.extend(names.into_iter().map(|n| format!("{own}/{n}")));
+            } else {
+                out.push(own);
+            }
+        }
+        out
     }
 
     pub(crate) fn read(&self, abs: &str) -> Option<String> {
@@ -215,6 +298,9 @@ pub struct Missing {
 
 impl Missing {
     pub fn describe(&self) -> String {
+        if self.package.is_empty() {
+            return format!("{} isn't installed, and this system has no package for it — build it first ({FREEBSD_GREETD_DOC})", self.what);
+        }
         format!("{} isn't installed — install it first (package {})", self.what, self.package)
     }
 }
@@ -293,8 +379,12 @@ impl Detection {
     }
 }
 
-/// The display manager behind `<root>/etc/systemd/system/display-manager.service`.
+/// The display manager behind `<root>/etc/systemd/system/display-manager.service`
+/// (FreeBSD: the first known login manager rc.conf enables).
 pub fn display_manager(root: &SysRoot) -> Option<String> {
+    if root.freebsd() {
+        return std::iter::once(GREETD).chain(MANAGERS.iter().filter(|m| m.kind == Kind::DisplayManager).flat_map(|m| m.units.iter().map(|u| rc_name(u)))).find(|name| root.rc_enabled(name)).map(str::to_string);
+    }
     let target = std::fs::read_link(root.path(DISPLAY_MANAGER_LINK)).ok()?;
     let name = target.file_name()?.to_string_lossy().trim_end_matches(UNIT_SUFFIX).to_string();
     (!name.is_empty()).then_some(name)
@@ -331,7 +421,9 @@ pub fn missing_for(root: &SysRoot, m: &LoginManager, kiosk: Kiosk, family: Famil
     match m.kind {
         Kind::GreetdGreeter => {
             if !greetd_installed(root) {
-                out.push(miss(GREETD, &login_package(family, GREETD)));
+                // Not packaged for FreeBSD yet: no package to install.
+                let package = if family == Family::FreeBSD { String::new() } else { login_package(family, GREETD) };
+                out.push(miss(GREETD, &package));
             }
             if !m.is_mandara() && !m.binaries.iter().any(|b| root.has_binary(b)) {
                 out.push(miss(m.binaries.first().copied().unwrap_or(m.id), m.packages.for_family(family)));
@@ -454,9 +546,14 @@ fn line_key(line: &str) -> Option<&str> {
 /// other line (comments, `user`, `[terminal]`, `initial_session`) as is.
 /// Without a config, writes a fresh one (vt 1, `user = default_user`).
 pub fn set_default_session_command(existing: Option<&str>, command: &str, default_user: &str) -> String {
+    set_default_session_command_on(existing, command, default_user, FRESH_CONFIG_VT)
+}
+
+/// [`set_default_session_command`] with the VT a fresh config uses.
+fn set_default_session_command_on(existing: Option<&str>, command: &str, default_user: &str, fresh_vt: i64) -> String {
     let cmd_line = format!("command = {}", toml_string(command));
     let Some(text) = existing.filter(|t| !t.trim().is_empty()) else {
-        return format!("{FRESH_CONFIG_HEADER}\n\n[terminal]\nvt = {FRESH_CONFIG_VT}\n\n[default_session]\n{cmd_line}\nuser = {}\n", toml_string(default_user));
+        return format!("{FRESH_CONFIG_HEADER}\n\n[terminal]\nvt = {fresh_vt}\n\n[default_session]\n{cmd_line}\nuser = {}\n", toml_string(default_user));
     };
     let mut out: Vec<String> = Vec::new();
     let mut in_session = false;
@@ -564,17 +661,78 @@ impl Runner for SystemRunner {
 }
 
 fn systemctl(verb: &str, unit: &str) -> Vec<String> {
-    vec!["systemctl".into(), verb.into(), unit.into()]
+    vec![SYSTEMCTL.into(), verb.into(), unit.into()]
 }
 
-/// The command that undoes `cmd` (`enable` ↔ `disable`).
-fn inverse(cmd: &[String]) -> Option<Vec<String>> {
-    let verb = match cmd.get(1)?.as_str() {
-        "enable" => "disable",
-        "disable" => "enable",
-        _ => return None,
-    };
-    Some(systemctl(verb, cmd.get(2)?))
+/// `unit`'s rc script name (`sddm.service` → `sddm`).
+pub fn rc_name(unit: &str) -> &str {
+    unit.trim_end_matches(UNIT_SUFFIX)
+}
+
+/// `<service>_enable`, the variable rc.subr checks.
+fn rc_var(service: &str) -> String {
+    format!("{}_enable", service.replace('-', "_"))
+}
+
+/// `sysrc -s <name> <name>_enable=<value>`. With `-s`, sysrc also searches
+/// the service's `rc.conf.d/<name>` overrides and changes the last
+/// assignment rc.subr reads (appending to `/etc/rc.conf` when there is
+/// none), so the service's effective setting is the one written.
+fn sysrc(unit: &str, value: &str) -> Vec<String> {
+    let name = rc_name(unit);
+    vec![SYSRC.into(), "-s".into(), name.into(), format!("{}={value}", rc_var(name))]
+}
+
+/// Enables or disables `unit` at boot on `root` (nothing is started or
+/// stopped).
+pub(crate) fn service_command(root: &SysRoot, verb: &str, unit: &str) -> Vec<String> {
+    if root.freebsd() { sysrc(unit, if verb == "enable" { RC_YES } else { RC_NO }) } else { systemctl(verb, unit) }
+}
+
+/// The command that undoes [`service_command`]`(root, verb, unit)`, read
+/// from `root` before that runs: systemd flips `enable` / `disable`; on
+/// FreeBSD the variable gets back the value it had (sysrc writes it to the
+/// same last file), or is removed again when no rc file set it.
+pub(crate) fn undo_command(root: &SysRoot, verb: &str, unit: &str) -> Vec<String> {
+    if !root.freebsd() {
+        return systemctl(if verb == "enable" { "disable" } else { "enable" }, unit);
+    }
+    let name = rc_name(unit);
+    match root.rc_setting(name) {
+        Some(value) => sysrc(unit, &value),
+        None => vec![SYSRC.into(), "-s".into(), name.into(), "-x".into(), rc_var(name)],
+    }
+}
+
+const SYSRC: &str = "sysrc";
+const SYSTEMCTL: &str = "systemctl";
+
+const RC_YES: &str = "YES";
+const RC_NO: &str = "NO";
+
+/// The last value `var` gets in rc.conf-style `text` (`var="YES"`,
+/// comments and quotes dropped).
+pub fn rc_value(text: &str, var: &str) -> Option<String> {
+    text.lines()
+        .rev()
+        .find_map(|l| {
+            let l = l.trim();
+            let (k, v) = l.split_once('=')?;
+            if k.trim() != var || l.starts_with('#') {
+                return None;
+            }
+            let v = v.trim();
+            let v = match v.chars().next() {
+                Some(q @ ('"' | '\'')) => v[1..].split(q).next().unwrap_or_default(),
+                _ => v.split(['#', ' ', '\t', ';']).next().unwrap_or_default(),
+            };
+            Some(v.to_string())
+        })
+}
+
+/// rc.subr's `checkyesno`: `YES`, `TRUE`, `ON` or `1`, any case.
+pub fn rc_yes(value: &str) -> bool {
+    matches!(value.trim().to_ascii_uppercase().as_str(), "YES" | "TRUE" | "ON" | "1")
 }
 
 /// The unit name for display manager `dm` (`sddm` → `sddm.service`).
@@ -607,6 +765,8 @@ pub struct SwitchPlan {
     pub new_unit: Option<String>,
     /// `systemctl` commands (run with `--apply` only).
     pub commands: Vec<Vec<String>>,
+    /// `undo[i]` reverses `commands[i]` (worked out before they run).
+    pub undo: Vec<Vec<String>>,
     pub already_active: bool,
     /// Validation failures: the plan refuses to run while any are set.
     pub errors: Vec<String>,
@@ -625,6 +785,11 @@ impl SwitchPlan {
         let mut warnings = Vec::new();
         let mut writes = Vec::new();
         let mut commands = Vec::new();
+        let mut undo = Vec::new();
+        let mut service = |verb: &str, unit: &str| {
+            commands.push(service_command(root, verb, unit));
+            undo.push(undo_command(root, verb, unit));
+        };
         let current = detection.display_manager.clone();
         let greeter_user = detection.greetd.user.clone().unwrap_or_else(|| DEFAULT_GREETER_USER.into());
         let new_unit;
@@ -641,7 +806,8 @@ impl SwitchPlan {
                     errors.push(format!("{GREETD_CONFIG} doesn't parse ({e}); fix it first"));
                 } else if !already_active {
                     let previous = root.read(GREETD_CONFIG);
-                    let contents = set_default_session_command(previous.as_deref(), &command, &greeter_user);
+                    let vt = if root.freebsd() { FREEBSD_FRESH_CONFIG_VT } else { FRESH_CONFIG_VT };
+                    let contents = set_default_session_command_on(previous.as_deref(), &command, &greeter_user, vt);
                     if let Err(e) = validate_greetd_rewrite(previous.as_deref(), &contents, &command) {
                         errors.push(e);
                     }
@@ -657,9 +823,9 @@ impl SwitchPlan {
                 }
                 if current.as_deref() != Some(GREETD) {
                     if let Some(dm) = &current {
-                        commands.push(systemctl("disable", &unit_of(dm)));
+                        service("disable", &unit_of(dm));
                     }
-                    commands.push(systemctl("enable", GREETD_UNIT));
+                    service("enable", GREETD_UNIT);
                 }
             }
             Kind::DisplayManager => {
@@ -667,10 +833,10 @@ impl SwitchPlan {
                 already_active = current.as_deref().and_then(manager_for_unit).is_some_and(|m| m.id == target.id);
                 if !already_active {
                     if let Some(dm) = &current {
-                        commands.push(systemctl("disable", &unit_of(dm)));
+                        service("disable", &unit_of(dm));
                     }
                     if let Some(u) = &unit {
-                        commands.push(systemctl("enable", u));
+                        service("enable", u);
                     }
                 }
                 new_unit = unit;
@@ -695,6 +861,7 @@ impl SwitchPlan {
             writes,
             new_unit,
             commands: if already_active { Vec::new() } else { commands },
+            undo: if already_active { Vec::new() } else { undo },
             already_active,
             errors,
             warnings,
@@ -784,11 +951,13 @@ impl SwitchPlan {
             previous_unit: self.detection.display_manager.as_deref().map(unit_of),
             new_unit: self.new_unit.clone(),
             units_switched: false,
+            undo: self.undo.iter().rev().cloned().collect(),
             files: Vec::new(),
         };
         let mut backup = Backup::create(root, manifest, &self.writes)?;
         let mut log = vec![format!("backed up to {}", backup.logical_dir())];
-        let mut done: Vec<Vec<String>> = Vec::new();
+        // How many service commands ran (rollback undoes those).
+        let mut done = 0;
         let result = (|| -> Result<(), String> {
             if self.install_mandara {
                 log.extend(install_runtime(root.base(), &self.exe, &self.greeter_user)?);
@@ -804,17 +973,15 @@ impl SwitchPlan {
             if apply {
                 for c in &self.commands {
                     runner.run(c)?;
-                    done.push(c.clone());
+                    done += 1;
                 }
             }
             Ok(())
         })();
         if let Err(e) = result {
             let mut notes = Vec::new();
-            for c in done.iter().rev() {
-                if let Some(undo) = inverse(c)
-                    && let Err(err) = runner.run(&undo)
-                {
+            for undo in self.undo[..done].iter().rev() {
+                if let Err(err) = runner.run(undo) {
                     notes.push(err);
                 }
             }
@@ -891,6 +1058,11 @@ pub struct Manifest {
     pub new_unit: Option<String>,
     /// The service commands ran (`--apply`), so restore reverses them.
     pub units_switched: bool,
+    /// The commands that reverse them, in order (`sysrc` puts back each
+    /// rc.conf value exactly). Older backups have none: restore then
+    /// derives them from the units.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub undo: Vec<Vec<String>>,
     #[serde(default)]
     pub files: Vec<BackedUpFile>,
 }
@@ -904,6 +1076,16 @@ pub(crate) struct Backup {
 impl Backup {
     pub(crate) fn create(root: &SysRoot, mut manifest: Manifest, writes: &[FileWrite]) -> Result<Backup, String> {
         let base = root.path(BACKUP_DIR);
+        if let Some(parent) = base.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        }
+        {
+            use std::os::unix::fs::DirBuilderExt as _;
+            match std::fs::DirBuilder::new().mode(BACKUP_DIR_MODE).create(&base) {
+                Err(e) if e.kind() != std::io::ErrorKind::AlreadyExists => return Err(format!("{}: {e}", base.display())),
+                _ => {}
+            }
+        }
         let stamp = chrono::Local::now().format(BACKUP_ID_FORMAT).to_string();
         let mut id = stamp.clone();
         let mut n = 1;
@@ -945,13 +1127,25 @@ impl Backup {
 }
 
 fn restore_files(root: &SysRoot, dir: &Path, manifest: &Manifest) -> Result<Vec<String>, String> {
-    let mut done = Vec::new();
+    let mut copies = Vec::with_capacity(manifest.files.len());
     for f in &manifest.files {
+        copies.push(match &f.copy {
+            Some(copy) => Some(std::fs::read_to_string(dir.join(copy)).map_err(|e| format!("reading the backup of {}: {e}", f.path))?),
+            None => None,
+        });
+    }
+    put_back(root, manifest, &copies)
+}
+
+/// Writes `copies` (one per manifest file, `None` where the file didn't
+/// exist) back in place.
+fn put_back(root: &SysRoot, manifest: &Manifest, copies: &[Option<String>]) -> Result<Vec<String>, String> {
+    let mut done = Vec::new();
+    for (f, copy) in manifest.files.iter().zip(copies) {
         let p = root.path(&f.path);
-        match &f.copy {
-            Some(copy) => {
-                let text = std::fs::read_to_string(dir.join(copy)).map_err(|e| format!("reading the backup of {}: {e}", f.path))?;
-                write_atomic(&p, &text)?;
+        match copy {
+            Some(text) => {
+                write_atomic(&p, text)?;
                 done.push(format!("restored {}", f.path));
             }
             None => {
@@ -967,46 +1161,169 @@ fn restore_files(root: &SysRoot, dir: &Path, manifest: &Manifest) -> Result<Vec<
 
 /// Backup ids under `root`, oldest first.
 pub fn backups(root: &SysRoot) -> Vec<String> {
-    let mut ids: Vec<String> = std::fs::read_dir(root.path(BACKUP_DIR))
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|e| e.path().join(MANIFEST).is_file())
-        .map(|e| e.file_name().to_string_lossy().into_owned())
-        .collect();
-    ids.sort();
-    ids
+    backup_dirs(root).into_iter().map(|(id, _)| id).collect()
+}
+
+/// Backups under `root` and their folders, oldest first: those in
+/// [`BACKUP_DIR`], then trusted ones left in [`LEGACY_BACKUP_DIR`].
+fn backup_dirs(root: &SysRoot) -> Vec<(String, PathBuf)> {
+    let mut found: Vec<(String, PathBuf)> = Vec::new();
+    for (base, legacy) in [(root.path(BACKUP_DIR), false), (root.path(LEGACY_BACKUP_DIR), true)] {
+        if legacy && !owned_by_us(&base) {
+            continue;
+        }
+        for entry in std::fs::read_dir(&base).into_iter().flatten().flatten() {
+            let (dir, id) = (entry.path(), entry.file_name().to_string_lossy().into_owned());
+            let manifest = dir.join(MANIFEST);
+            let usable = if legacy { owned_by_us(&dir) && owned_by_us(&manifest) && manifest.is_file() } else { manifest.is_file() };
+            if usable && !found.iter().any(|(known, _)| *known == id) {
+                found.push((id, dir));
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// Whether `path` itself (not a link's target) belongs to root or to the
+/// user running this (root, for a real restore), and only its owner may
+/// write it.
+fn owned_by_us(path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    // SAFETY: geteuid has no preconditions.
+    let me = unsafe { libc::geteuid() };
+    std::fs::symlink_metadata(path).is_ok_and(|m| !m.file_type().is_symlink() && (m.uid() == 0 || m.uid() == me) && m.mode() & 0o022 == 0)
+}
+
+/// A unit name a switch can record: `<name>.service` in systemd's unit
+/// name alphabet, no path and no leading `-` (never read as an option).
+fn plain_unit(unit: &str) -> bool {
+    unit.strip_suffix(UNIT_SUFFIX).is_some_and(|stem| !stem.is_empty() && !stem.starts_with('-') && stem.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '@' | ':')))
+}
+
+/// A value an rc variable can be put back to (`YES`, `NO`, `onestart`…).
+fn plain_rc_value(value: &str) -> bool {
+    value.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+}
+
+/// Whether `c` is an undo command a switch between `units` writes on
+/// `root`: [`undo_command`]'s shape for one of those units, with the
+/// service tool of `root`'s system. Anything else (another program, a
+/// unit file path, another rc variable) is refused.
+fn expected_undo(root: &SysRoot, c: &[String], units: &[&str]) -> bool {
+    let ours = |name: &str| units.iter().any(|u| rc_name(u) == name);
+    match c {
+        [tool, verb, unit] if !root.freebsd() && tool == SYSTEMCTL => matches!(verb.as_str(), "enable" | "disable") && units.contains(&unit.as_str()),
+        [tool, s, name, set] if root.freebsd() && tool == SYSRC && s == "-s" && ours(name) => set.split_once('=').is_some_and(|(var, value)| var == rc_var(name) && plain_rc_value(value)),
+        [tool, s, name, x, var] if root.freebsd() && tool == SYSRC && s == "-s" && x == "-x" && ours(name) => *var == rc_var(name),
+        _ => false,
+    }
+}
+
+/// Opens `name` inside the already opened folder `dir` (or the path
+/// `name` itself without one) without following a link, and checks what
+/// was opened, not the path: a folder or a single-link file, belonging to
+/// root or to us, that nobody else may write. Every later read goes
+/// through the handle, so swapping the path afterwards changes nothing.
+fn open_trusted(dir: Option<&std::fs::File>, name: &Path, folder: bool) -> Result<std::fs::File, String> {
+    use std::os::fd::{AsRawFd as _, FromRawFd as _};
+    use std::os::unix::ffi::OsStrExt as _;
+    use std::os::unix::fs::MetadataExt as _;
+    let c = std::ffi::CString::new(name.as_os_str().as_bytes()).map_err(|_| format!("{}: not a plain name", name.display()))?;
+    let flags = libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC | if folder { libc::O_DIRECTORY } else { libc::O_NONBLOCK };
+    // SAFETY: `c` is a valid NUL-terminated string and the folder's
+    // descriptor (if any) stays open for the call; a returned descriptor
+    // is owned by the File below and nothing else.
+    let fd = unsafe { libc::openat(dir.map_or(libc::AT_FDCWD, |d| d.as_raw_fd()), c.as_ptr(), flags) };
+    if fd < 0 {
+        return Err(format!("{}: {}", name.display(), std::io::Error::last_os_error()));
+    }
+    // SAFETY: `fd` was just opened above and is owned by nothing else.
+    let file = unsafe { std::fs::File::from_raw_fd(fd) };
+    let m = file.metadata().map_err(|e| format!("{}: {e}", name.display()))?;
+    // SAFETY: geteuid has no preconditions.
+    let me = unsafe { libc::geteuid() };
+    let kind = if folder { m.is_dir() } else { m.is_file() && m.nlink() == 1 };
+    if !kind || !(m.uid() == 0 || m.uid() == me) || m.mode() & 0o022 != 0 {
+        return Err(format!("{}: not a backup Mandara made", name.display()));
+    }
+    Ok(file)
+}
+
+/// A backup's manifest and copies, read whole through verified handles
+/// (see [`open_trusted`]) from the folder `base`/`id`.
+fn read_backup(base: &Path, id: &str) -> Result<(Manifest, Vec<Option<String>>), String> {
+    use std::io::Read as _;
+    let read = |dir: &std::fs::File, name: &str| -> Result<String, String> {
+        // One plain name inside the backup, never a path out of it.
+        if name.is_empty() || name.starts_with('.') || name.contains('/') {
+            return Err(format!("backup {id}: unexpected file name {name:?}"));
+        }
+        let mut text = String::new();
+        open_trusted(Some(dir), Path::new(name), false)?.read_to_string(&mut text).map_err(|e| format!("backup {id}: {name}: {e}"))?;
+        Ok(text)
+    };
+    let dir = open_trusted(Some(&open_trusted(None, base, true)?), Path::new(id), true)?;
+    let manifest: Manifest = toml::from_str(&read(&dir, MANIFEST)?).map_err(|e| format!("backup {id}: invalid manifest: {e}"))?;
+    let mut copies = Vec::with_capacity(manifest.files.len());
+    for f in &manifest.files {
+        copies.push(match &f.copy {
+            Some(copy) => Some(read(&dir, copy)?),
+            None => None,
+        });
+    }
+    Ok((manifest, copies))
 }
 
 /// `mandara greeter restore <id|latest>`.
 #[derive(Debug)]
 pub struct RestorePlan {
     pub id: String,
-    dir: PathBuf,
     pub manifest: Manifest,
+    /// The backed-up files' contents, one per manifest file (`None`: it
+    /// didn't exist), read when the plan was made.
+    copies: Vec<Option<String>>,
     pub commands: Vec<Vec<String>>,
 }
 
 impl RestorePlan {
     pub fn build(root: &SysRoot, which: &str) -> Result<RestorePlan, String> {
-        let all = backups(root);
-        let id = if which == "latest" { all.last().cloned() } else { all.iter().find(|i| *i == which).cloned() };
-        let Some(id) = id else {
-            return Err(if all.is_empty() { format!("no switch backups in {BACKUP_DIR}") } else { format!("no backup {which:?}; available: {}", all.join(", ")) });
+        let all = backup_dirs(root);
+        let found = if which == "latest" { all.last() } else { all.iter().find(|(i, _)| i == which) };
+        let Some((id, dir)) = found.cloned() else {
+            let ids: Vec<&str> = all.iter().map(|(i, _)| i.as_str()).collect();
+            return Err(if all.is_empty() { format!("no switch backups in {BACKUP_DIR}") } else { format!("no backup {which:?}; available: {}", ids.join(", ")) });
         };
-        let dir = root.path(BACKUP_DIR).join(&id);
-        let text = std::fs::read_to_string(dir.join(MANIFEST)).map_err(|e| format!("{}: {e}", dir.display()))?;
-        let manifest: Manifest = toml::from_str(&text).map_err(|e| format!("backup {id}: invalid manifest: {e}"))?;
+        // Read whole now, through checked handles: the old folder sits in
+        // the greeter user's own state folder, and nothing it swaps in
+        // after this point is ever read.
+        let base = dir.parent().ok_or_else(|| format!("backup {id}: no folder"))?;
+        let (manifest, copies) = read_backup(base, &id)?;
         let mut commands = Vec::new();
-        if manifest.units_switched && manifest.previous_unit != manifest.new_unit {
+        // The units the switch moved between, as a switch records them.
+        let recorded = [&manifest.previous_unit, &manifest.new_unit];
+        if manifest.units_switched
+            && let Some(u) = recorded.into_iter().flatten().find(|u| !plain_unit(u))
+        {
+            return Err(format!("backup {id}: unexpected unit `{u}`"));
+        }
+        let units: Vec<&str> = recorded.into_iter().flatten().map(String::as_str).collect();
+        if manifest.units_switched && !manifest.undo.is_empty() {
+            // Only the service commands that switch writes, never another
+            // program, unit or rc variable.
+            if let Some(c) = manifest.undo.iter().find(|c| !expected_undo(root, c, &units)) {
+                return Err(format!("backup {id}: unexpected undo command `{}`", c.join(" ")));
+            }
+            commands.clone_from(&manifest.undo);
+        } else if manifest.units_switched && manifest.previous_unit != manifest.new_unit {
             if let Some(u) = &manifest.new_unit {
-                commands.push(systemctl("disable", u));
+                commands.push(service_command(root, "disable", u));
             }
             if let Some(u) = &manifest.previous_unit {
-                commands.push(systemctl("enable", u));
+                commands.push(service_command(root, "enable", u));
             }
         }
-        Ok(RestorePlan { id, dir, manifest, commands })
+        Ok(RestorePlan { id, manifest, copies, commands })
     }
 
     pub fn describe(&self) -> String {
@@ -1044,7 +1361,7 @@ impl RestorePlan {
     }
 
     pub(crate) fn perform(&self, root: &SysRoot, apply: bool, runner: &mut dyn Runner) -> Result<String, String> {
-        let mut log = restore_files(root, &self.dir, &self.manifest)?;
+        let mut log = put_back(root, &self.manifest, &self.copies)?;
         if apply {
             for c in &self.commands {
                 runner.run(c)?;

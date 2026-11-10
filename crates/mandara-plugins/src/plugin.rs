@@ -339,6 +339,8 @@ impl PluginManifest {
 pub struct PanelCx {
     progress: Rc<Cell<f32>>,
     monitor: Rc<str>,
+    /// Built for a sidebar card ([`Self::is_card`]).
+    card: bool,
 }
 
 /// Per-element reveal parameters for staggered panel entrances.
@@ -356,7 +358,7 @@ impl PanelCx {
 
     /// Context for a surface on output `monitor` (compositor output name).
     pub fn for_monitor(monitor: &str) -> Self {
-        Self { progress: Rc::default(), monitor: Rc::from(monitor) }
+        Self { progress: Rc::default(), monitor: Rc::from(monitor), card: false }
     }
 
     /// Compositor output name of the surface (empty if unknown).
@@ -366,7 +368,20 @@ impl PanelCx {
 
     /// A fresh progress cell on the same monitor (one per panel).
     pub fn fork(&self) -> Self {
-        Self { progress: Rc::default(), monitor: self.monitor.clone() }
+        Self { progress: Rc::default(), monitor: self.monitor.clone(), card: false }
+    }
+
+    /// A context for building a sidebar card on the same monitor. The host
+    /// keeps only the instance's `sidebar` view (built each time the
+    /// sidebar opens, dropped when it closes), so a plugin may skip the
+    /// bar item, the panel and their background work.
+    pub fn for_card(&self) -> Self {
+        Self { progress: Rc::default(), monitor: self.monitor.clone(), card: true }
+    }
+
+    /// Whether this build is for a sidebar card only ([`Self::for_card`]).
+    pub fn is_card(&self) -> bool {
+        self.card
     }
 
     /// Morph progress of the panel, `0` (collapsed) to `1` (open).
@@ -415,12 +430,44 @@ pub struct PluginInstance {
 
 pub type BuildFn = Rc<dyn Fn(&mut Window, &mut App, PanelCx) -> PluginInstance>;
 
+/// How a plugin's sidebar card gives its memory back when the sidebar
+/// closes. The sidebar drops every card's views then (and builds them again
+/// when it opens); this says what else a card leaves behind. Every plugin
+/// with a sidebar card declares one ([`PluginRegistry::sidebar_card`]).
+#[derive(Clone)]
+pub enum CardRelease {
+    /// Everything the card holds lives in its views and goes with them.
+    Views,
+    /// The card also fills data outside its views (rows, pictures, a
+    /// model) that only it uses: this frees it once the views are gone,
+    /// keeping whatever the plugin's other surfaces still show.
+    Shared(Rc<dyn Fn(&mut App)>),
+}
+
+impl CardRelease {
+    /// [`Self::Shared`] with `release`.
+    pub fn shared(release: impl Fn(&mut App) + 'static) -> Self {
+        Self::Shared(Rc::new(release))
+    }
+}
+
+impl std::fmt::Debug for CardRelease {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Views => "Views",
+            Self::Shared(_) => "Shared",
+        })
+    }
+}
+
 pub struct PluginFactory {
     pub manifest: PluginManifest,
     pub build: BuildFn,
     /// Bumped each time this plugin is (re)registered, so hosts can tell a
     /// hot-reloaded plugin from the instance they already hold.
     pub generation: u64,
+    /// How its sidebar card releases its memory (`None`: not declared).
+    pub card: Option<CardRelease>,
 }
 
 impl PluginInstance {
@@ -530,7 +577,7 @@ impl PluginRegistry {
         // A plugin registered again offers its desktop widgets anew.
         self.widgets.retain(|w| w.plugin != manifest.id);
         self.generation += 1;
-        self.factories.push(PluginFactory { manifest, build: Rc::new(build), generation: self.generation });
+        self.factories.push(PluginFactory { manifest, build: Rc::new(build), generation: self.generation, card: None });
         self.reindex();
     }
 
@@ -538,6 +585,15 @@ impl PluginRegistry {
     fn reindex(&mut self) {
         self.by_id.clear();
         self.by_id.extend(self.factories.iter().enumerate().map(|(i, f)| (f.manifest.id.as_str().into(), i)));
+    }
+
+    /// Declares how plugin `id`'s sidebar card releases its memory (call
+    /// after [`Self::register`], which starts undeclared). Unknown ids are
+    /// ignored.
+    pub fn sidebar_card(&mut self, id: &str, release: CardRelease) {
+        if let Some(&i) = self.by_id.get(id) {
+            self.factories[i].card = Some(release);
+        }
     }
 
     /// Removes a plugin (hot unload) and the desktop widgets it offered.
@@ -612,7 +668,9 @@ impl PluginRegistry {
     pub fn is_enabled(&self, id: &str, config: &mandara_config::PluginsConfig) -> bool {
         match self.get(id) {
             Some(f) => {
-                if f.manifest.origin == PluginOrigin::Builtin && crate::lifecycle::essential_reason(id).is_some() {
+                if f.manifest.origin == PluginOrigin::Builtin && crate::lifecycle::platform_reason(id).is_some() {
+                    false
+                } else if f.manifest.origin == PluginOrigin::Builtin && crate::lifecycle::essential_reason(id).is_some() {
                     true
                 } else if config.is_removed(id) || config.disabled.iter().any(|d| d == id) {
                     false

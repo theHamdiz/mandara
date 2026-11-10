@@ -3227,8 +3227,21 @@ impl App {
             }
         }
 
-        self.window_invalidators_by_entity
-            .insert(entity_id, window_invalidators);
+        // Mandara patch: a dropped (or never drawn) entity has no invalidators;
+        // putting an empty entry back would keep one map entry per dead id forever.
+        if window_invalidators.is_empty() {
+            self.window_invalidators_by_entity.remove(&entity_id);
+        } else {
+            self.window_invalidators_by_entity
+                .insert(entity_id, window_invalidators);
+        }
+    }
+
+    /// Whether entity `id` still has a strong handle. Views remembered by
+    /// id (to notify them later) use it to forget the dropped ones.
+    // Mandara patch.
+    pub fn entity_alive(&self, id: EntityId) -> bool {
+        self.entities.is_alive(id)
     }
 
     /// Returns the name for this [`App`].
@@ -3785,6 +3798,26 @@ mod test {
             self.0.set(self.0.get() + 1);
             Empty
         }
+    }
+
+    // Mandara patch 11.
+    #[gpui::test]
+    fn notifying_a_dropped_entity_leaves_no_trace(cx: &mut TestAppContext) {
+        let entity = cx.new(|_| ());
+        let id = entity.entity_id();
+        cx.update(|cx| {
+            assert!(cx.entity_alive(id));
+            cx.notify(id);
+            assert!(!cx.window_invalidators_by_entity.contains_key(&id), "never drawn: no entry");
+        });
+        drop(entity);
+        cx.run_until_parked();
+        cx.update(|cx| {
+            assert!(!cx.entity_alive(id));
+            // A redraw timer firing after the view went.
+            cx.notify(id);
+            assert!(!cx.window_invalidators_by_entity.contains_key(&id));
+        });
     }
 
     #[gpui::test]

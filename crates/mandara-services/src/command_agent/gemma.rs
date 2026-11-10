@@ -1,11 +1,10 @@
 //! Gemma 3 GGUF inference with bounded context and quantized token lookup.
 //!
 //! Adapted from Hugging Face Candle 0.11.1, quantized_gemma3.rs, under
-//! Apache-2.0. See gemma.LICENSE. Mandara changes: quantized tied embeddings,
+//! Apache-2.0. See gemma.LICENSE. Mandara changes: zero-copy mapped weights, quantized tied embeddings,
 //! shared bounded rotary tables, GELU activation and absolute-position masks.
 
 use candle::quantized::QTensor;
-use candle::quantized::gguf_file;
 use candle::{DType, Device, IndexOp, Result, Tensor};
 use candle_core as candle;
 use candle_nn::Module;
@@ -207,7 +206,8 @@ pub struct ModelWeights {
 
 impl ModelWeights {
     /// Load quantized weights while sharing tied embeddings and rotary tables.
-    pub fn from_gguf<R: std::io::Seek + std::io::Read>(ct: gguf_file::Content, reader: &mut R, device: &Device) -> Result<Self> {
+    pub fn from_gguf(gg: &super::mapped::Gguf, device: &Device) -> Result<Self> {
+        let ct = &gg.content;
         // Detect architecture prefix by probing which keys exist in metadata.
         // This supports gemma3, gemma2, gemma, gemma-embedding, and future variants.
         let prefix = ["gemma3", "gemma2", "gemma", "gemma-embedding"]
@@ -249,12 +249,12 @@ impl ModelWeights {
         let neg_inf = Tensor::new(f32::NEG_INFINITY, device)?;
 
         // Load token embeddings and output projection
-        let tok_embeddings = ct.tensor(reader, "token_embd.weight", device)?;
+        let tok_embeddings = gg.tensor("token_embd.weight")?;
         let tok_embeddings = Arc::new(tok_embeddings);
-        let norm = RmsNorm::from_qtensor(ct.tensor(reader, "output_norm.weight", device)?, rms_norm_eps)?;
-        let output = match ct.tensor(reader, "output.weight", device) {
-            Ok(tensor) => Arc::new(tensor),
-            Err(_) => tok_embeddings.clone(),
+        let norm = RmsNorm::from_qtensor(gg.tensor("output_norm.weight")?, rms_norm_eps)?;
+        let output = match gg.optional_tensor("output.weight")? {
+            Some(tensor) => Arc::new(tensor),
+            None => tok_embeddings.clone(),
         };
 
         let global_rope = Arc::new(RotaryEmbedding::new(key_length, rope_freq_base, device)?);
@@ -263,26 +263,26 @@ impl ModelWeights {
         for layer_idx in 0..block_count {
             let prefix = format!("blk.{layer_idx}");
 
-            let attention_wq = ct.tensor(reader, &format!("{prefix}.attn_q.weight"), device)?;
-            let attention_wk = ct.tensor(reader, &format!("{prefix}.attn_k.weight"), device)?;
-            let attention_wv = ct.tensor(reader, &format!("{prefix}.attn_v.weight"), device)?;
-            let attention_wo = ct.tensor(reader, &format!("{prefix}.attn_output.weight"), device)?;
+            let attention_wq = gg.tensor(&format!("{prefix}.attn_q.weight"))?;
+            let attention_wk = gg.tensor(&format!("{prefix}.attn_k.weight"))?;
+            let attention_wv = gg.tensor(&format!("{prefix}.attn_v.weight"))?;
+            let attention_wo = gg.tensor(&format!("{prefix}.attn_output.weight"))?;
 
-            let attention_q_norm = RmsNorm::from_qtensor(ct.tensor(reader, &format!("{prefix}.attn_q_norm.weight"), device)?, rms_norm_eps)?;
+            let attention_q_norm = RmsNorm::from_qtensor(gg.tensor(&format!("{prefix}.attn_q_norm.weight"))?, rms_norm_eps)?;
 
-            let attention_k_norm = RmsNorm::from_qtensor(ct.tensor(reader, &format!("{prefix}.attn_k_norm.weight"), device)?, rms_norm_eps)?;
+            let attention_k_norm = RmsNorm::from_qtensor(gg.tensor(&format!("{prefix}.attn_k_norm.weight"))?, rms_norm_eps)?;
 
-            let attention_norm = RmsNorm::from_qtensor(ct.tensor(reader, &format!("{prefix}.attn_norm.weight"), device)?, rms_norm_eps)?;
+            let attention_norm = RmsNorm::from_qtensor(gg.tensor(&format!("{prefix}.attn_norm.weight"))?, rms_norm_eps)?;
 
-            let post_attention_norm = RmsNorm::from_qtensor(ct.tensor(reader, &format!("{prefix}.post_attention_norm.weight"), device)?, rms_norm_eps)?;
+            let post_attention_norm = RmsNorm::from_qtensor(gg.tensor(&format!("{prefix}.post_attention_norm.weight"))?, rms_norm_eps)?;
 
-            let ffn_norm = RmsNorm::from_qtensor(ct.tensor(reader, &format!("{prefix}.ffn_norm.weight"), device)?, rms_norm_eps)?;
+            let ffn_norm = RmsNorm::from_qtensor(gg.tensor(&format!("{prefix}.ffn_norm.weight"))?, rms_norm_eps)?;
 
-            let post_ffn_norm = RmsNorm::from_qtensor(ct.tensor(reader, &format!("{prefix}.post_ffw_norm.weight"), device)?, rms_norm_eps)?;
+            let post_ffn_norm = RmsNorm::from_qtensor(gg.tensor(&format!("{prefix}.post_ffw_norm.weight"))?, rms_norm_eps)?;
 
-            let feed_forward_gate = ct.tensor(reader, &format!("{prefix}.ffn_gate.weight"), device)?;
-            let feed_forward_up = ct.tensor(reader, &format!("{prefix}.ffn_up.weight"), device)?;
-            let feed_forward_down = ct.tensor(reader, &format!("{prefix}.ffn_down.weight"), device)?;
+            let feed_forward_gate = gg.tensor(&format!("{prefix}.ffn_gate.weight"))?;
+            let feed_forward_up = gg.tensor(&format!("{prefix}.ffn_up.weight"))?;
+            let feed_forward_down = gg.tensor(&format!("{prefix}.ffn_down.weight"))?;
 
             let mlp = Mlp {
                 feed_forward_gate: QMatMul::from_qtensor(feed_forward_gate)?,

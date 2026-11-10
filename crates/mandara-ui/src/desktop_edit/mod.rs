@@ -161,6 +161,8 @@ enum PopupKind {
     Widget(String),
     /// Add a widget at a point (`None`: the display's centre).
     Add(Option<(f32, f32)>),
+    /// A system monitor's readings, each switched on or off in place.
+    Readings(String),
 }
 
 #[derive(Clone, Debug)]
@@ -446,9 +448,22 @@ fn can_duplicate(id: &str, cfg: &ShellConfig) -> bool {
 }
 
 fn run_popup(action: Action, popup: &Popup, cx: &mut App) {
+    // The readings list stays open while readings are switched.
+    if let Action::ToggleReading(id, row) = action {
+        push_undo(cx);
+        write(&id, move |w| {
+            if let WidgetKind::Monitor(m) = &mut w.kind {
+                row.toggle_in(&mut m.rows);
+            }
+        }, cx);
+        return;
+    }
     if let Some(m) = model(cx) {
         m.update(cx, |m, cx| {
-            m.popup = None;
+            m.popup = match &action {
+                Action::Readings(id) => Some(Popup { kind: PopupKind::Readings(id.clone()), hover: None, ..popup.clone() }),
+                _ => None,
+            };
             cx.notify();
         });
     }
@@ -456,7 +471,7 @@ fn run_popup(action: Action, popup: &Popup, cx: &mut App) {
         Action::Add(kind) => {
             let at = match popup.kind {
                 PopupKind::Add(at) => at,
-                PopupKind::Widget(_) => None,
+                PopupKind::Widget(_) | PopupKind::Readings(_) => None,
             };
             add_at(kind, &popup.output, at, cx);
         }
@@ -486,11 +501,41 @@ fn popup_entries(kind: &PopupKind, output: &str, cfg: &ShellConfig, cx: &App) ->
                     menu::entry(0, "monitor", t("Only on this display"), Action::ShowOn(id.clone(), Some(output.to_string())))
                 });
             }
+            if cfg.desktop.widgets.get(id).is_some_and(|w| matches!(w.kind, WidgetKind::Monitor(_))) {
+                entries.push(menu::entry(1, "gauge", t("Readings"), Action::Readings(id.clone())).submenu());
+            }
             entries.push(menu::entry(1, "sliders", t("Settings in Studio"), Action::WidgetSettings));
             entries.push(menu::entry(2, "trash", t("Remove"), Action::Remove(id.clone())).danger());
             entries
         }
+        PopupKind::Readings(id) => {
+            let rows = cfg.desktop.widgets.get(id).and_then(|w| match &w.kind {
+                WidgetKind::Monitor(m) => Some(&m.rows[..]),
+                _ => None,
+            });
+            reading_entries(id, rows.unwrap_or_default(), crate::widgets::gpu_feed::peek().caps())
+        }
     }
+}
+
+/// A monitor's readings as menu rows: ticked when shown; a GPU reading this
+/// machine can't show is locked with the reason as its hint (`caps` is
+/// `None` until the GPUs were first read, and then nothing is locked).
+fn reading_entries(id: &str, rows: &[dw::MonitorRow], caps: Option<crate::widgets::gpu_feed::GpuCaps>) -> Vec<Entry> {
+    let mut entries: Vec<Entry> = dw::MonitorRow::ALL
+        .into_iter()
+        .map(|r| {
+            let support = crate::widgets::gpu_feed::GpuCaps::row(caps, r);
+            let locked = !support.available();
+            let on = rows.contains(&r) && !locked;
+            // Groups: processor and memory, graphics, the rest.
+            let group = if r.is_gpu() { 1 } else if matches!(r, dw::MonitorRow::Cpu | dw::MonitorRow::CpuGraph | dw::MonitorRow::Memory | dw::MonitorRow::Swap) { 0 } else { 2 };
+            let hint = support.short_reason().map(|w| menu::Hint::Text(t(w).into()));
+            menu::entry(group, if locked { "lock" } else if on { "check" } else { "circle" }, t(crate::backdrop::widgets::sysmon::row_label(r)), Action::ToggleReading(id.to_string(), r)).hint(hint).enabled(!locked)
+        })
+        .collect();
+    entries.sort_by_key(|e| e.group);
+    entries
 }
 
 // ── Gestures ─────────────────────────────────────────────────────────────
@@ -1186,4 +1231,31 @@ pub fn register(r: &mut PluginRegistry) {
         .arg(ArgSpec::required("y", ArgKind::Number, tk("logical px from the top")))
         .example("desktop menu DP-1 800 500"),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::widgets::gpu_feed::{GpuCaps, Support};
+
+    #[test]
+    fn the_readings_menu_ticks_shown_rows_and_locks_missing_gpu_readings() {
+        let rows = dw::MonitorRow::DEFAULT;
+        let none = GpuCaps { load: Support::NoGpu, vram: Support::NoGpu, temp: Support::NoGpu, power: Support::NoGpu };
+        let entries = reading_entries("monitor-1", &rows, Some(none));
+        assert_eq!(entries.len(), dw::MonitorRow::ALL.len(), "every reading is an option");
+        assert!(entries.windows(2).all(|w| w[0].group <= w[1].group), "grouped, each group once");
+        let find = |e: &[Entry], r: dw::MonitorRow| e.iter().find(|x| x.action == Action::ToggleReading("monitor-1".into(), r)).cloned().expect("row");
+        let gpu = find(&entries, dw::MonitorRow::Gpu);
+        assert!(!gpu.enabled && gpu.icon == "lock" && gpu.hint == Some(menu::Hint::Text("No GPU".into())), "locked with its reason");
+        let cpu = find(&entries, dw::MonitorRow::Cpu);
+        assert!(cpu.enabled && cpu.icon == "check");
+        assert_eq!(find(&entries, dw::MonitorRow::Swap).icon, "circle", "opt-in: off by default");
+        // Unknown GPUs (not read yet) lock nothing; a GPU unlocks its rows.
+        assert!(reading_entries("monitor-1", &rows, None).iter().all(|e| e.enabled));
+        let nvidia = GpuCaps { load: Support::Yes, vram: Support::Yes, temp: Support::Yes, power: Support::NotReported };
+        let entries = reading_entries("monitor-1", &rows, Some(nvidia));
+        assert!(find(&entries, dw::MonitorRow::Gpu).enabled && find(&entries, dw::MonitorRow::Vram).enabled);
+        assert!(!find(&entries, dw::MonitorRow::GpuPower).enabled);
+    }
 }

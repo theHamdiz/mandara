@@ -16,11 +16,13 @@ pub enum PackageManager {
     Apk,
     Emerge,
     Eopkg,
+    /// FreeBSD's pkg.
+    Pkg,
 }
 
 impl PackageManager {
     /// Every manager, in the order an unknown system is probed.
-    pub const ALL: [PackageManager; 8] = [PackageManager::Pacman, PackageManager::AptGet, PackageManager::Dnf, PackageManager::Zypper, PackageManager::Xbps, PackageManager::Apk, PackageManager::Emerge, PackageManager::Eopkg];
+    pub const ALL: [PackageManager; 9] = [PackageManager::Pacman, PackageManager::AptGet, PackageManager::Dnf, PackageManager::Zypper, PackageManager::Xbps, PackageManager::Apk, PackageManager::Emerge, PackageManager::Eopkg, PackageManager::Pkg];
 
     /// The program that identifies it.
     pub fn binary(self) -> &'static str {
@@ -33,7 +35,16 @@ impl PackageManager {
             PackageManager::Apk => "apk",
             PackageManager::Emerge => "emerge",
             PackageManager::Eopkg => "eopkg",
+            PackageManager::Pkg => "pkg",
         }
+    }
+
+    /// Whether finding [`Self::binary`] identifies this manager on a
+    /// system `os-release` doesn't name. `pkg` is too common a name to
+    /// mean FreeBSD anywhere else (FreeBSD itself always has
+    /// `os-release`).
+    pub fn probed(self) -> bool {
+        self != PackageManager::Pkg || cfg!(target_os = "freebsd")
     }
 
     /// The family whose package names it takes.
@@ -47,6 +58,7 @@ impl PackageManager {
             PackageManager::Apk => Family::Alpine,
             PackageManager::Emerge => Family::Gentoo,
             PackageManager::Eopkg => Family::Solus,
+            PackageManager::Pkg => Family::FreeBSD,
         }
     }
 
@@ -58,7 +70,7 @@ impl PackageManager {
     /// The manager to use: `family`'s own when installed, else the first
     /// installed one. `None` when no known manager is installed.
     pub fn detect(family: Family, has_program: impl Fn(&str) -> bool) -> Option<PackageManager> {
-        PackageManager::for_family(family).filter(|pm| has_program(pm.binary())).or_else(|| PackageManager::ALL.into_iter().find(|pm| has_program(pm.binary())))
+        PackageManager::for_family(family).filter(|pm| has_program(pm.binary())).or_else(|| PackageManager::ALL.into_iter().find(|pm| pm.probed() && has_program(pm.binary())))
     }
 
     /// The argv prefix that installs packages without asking (the package
@@ -73,6 +85,9 @@ impl PackageManager {
             PackageManager::Apk => &["apk", "add"],
             PackageManager::Emerge => &["emerge", "--noreplace"],
             PackageManager::Eopkg => &["eopkg", "install", "-y"],
+            // A fresh system's `pkg` is base's bootstrapper, which asks
+            // before installing pkg itself unless told yes.
+            PackageManager::Pkg => &["env", "ASSUME_ALWAYS_YES=yes", "pkg", "install", "-y"],
         }
     }
 
@@ -157,6 +172,7 @@ mod tests {
         assert_eq!(PackageManager::Apk.install_argv(&pkgs), ["apk", "add", "greetd", "cage"]);
         assert_eq!(PackageManager::Emerge.install_argv(&["gui-libs/greetd"]), ["emerge", "--noreplace", "gui-libs/greetd"]);
         assert_eq!(PackageManager::Eopkg.install_argv(&pkgs), ["eopkg", "install", "-y", "greetd", "cage"]);
+        assert_eq!(PackageManager::Pkg.install_argv(&["seatd", "cage"]), ["env", "ASSUME_ALWAYS_YES=yes", "pkg", "install", "-y", "seatd", "cage"]);
     }
 
     #[test]
@@ -179,6 +195,10 @@ mod tests {
         // The family's manager missing: whichever is installed.
         assert_eq!(PackageManager::detect(Family::Debian, |b| b == "apk"), Some(PackageManager::Apk));
         assert_eq!(PackageManager::detect(Family::Arch, |_| false), None);
+        assert_eq!(PackageManager::detect(Family::FreeBSD, |b| b == "pkg"), Some(PackageManager::Pkg));
+        if !cfg!(target_os = "freebsd") {
+            assert_eq!(PackageManager::detect(Family::Unknown, |b| b == "pkg"), None, "a `pkg` on Linux is another tool");
+        }
     }
 
     #[test]

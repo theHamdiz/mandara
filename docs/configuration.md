@@ -396,13 +396,17 @@ Kinds:
   **`decoration`** `shape` = `tape`.
 - **`monitor`** — `style` = `column` or `gauges` (ring gauges for the
   readings that are a share, the rest listed under them); `rows` in order
-  (`cpu`, `cpu-graph`, `gpu`, `memory`, `gpu-power`, `cpu-temp`,
-  `gpu-temp`, `fan`, `battery`, `disk`, `download`, `upload`, `net-graph`;
-  rows the machine can't read are hidden), `interval_s` (1 … 60, default
+  (`cpu`, `cpu-graph`, `gpu`, `vram`, `memory`, `swap`, `gpu-power`,
+  `cpu-temp`, `gpu-temp`, `fan`, `battery`, `disk`, `download`, `upload`,
+  `net-graph`; every one but `vram` and `swap` by default; rows the machine
+  can't read are hidden, and the GPU rows show one line per GPU when there
+  are several), `interval_s` (1 … 60, default
   2), `width` (reference px), `title`. Sampling runs only while a monitor
   shows on a visible display (not covered by a fullscreen / tiled window,
   not locked, screens on) and only reads the shown rows; only the values
-  plane redraws.
+  plane redraws. The GPU readings (AMD and Intel from sysfs, NVIDIA from
+  `nvidia-smi`) come from the same sampler as the resources panel, so a
+  card is read once however many of them show.
 - **`weather`** — `layout` = `hero` or `compact`, `location`, `details`
   (feels like, humidity, wind), `days` (0 … 7 days ahead). From the
   Weather plugin's forecast; redrawn when it changes.
@@ -684,15 +688,24 @@ circles. `side_bars.icon_shape` does the same for a side bar's pill items
 styles.
 
 **Bar styles** set all of this at once: Studio → Bars → Presets
-(*Expressive*, *Tile dock*, *Rail*, *Segmented*) or
-`mandara msg bar style expressive|tile-dock|rail|segmented|none`. A style
-sets the layout, edge and height, the item and icon shapes and colours,
-insets and spacing, the screen frame, and for *Expressive* a rail of
-scalloped buttons joined to the bar (`[side_bars]`, left side on, right
-side off). The bar remembers it as `bar.style`; picking any other preset
-or a Look, or `bar style none`, first puts every field the style changed
-back to its default. Studio's presets can replace your items too; `bar
-style` never does.
+(*Expressive*, *Tile dock*, *Rail*, *Segmented*, *System monitor*,
+*Stanley Bridge*, *Pharos Beam*, *Raml Tram*) or
+`mandara msg bar style expressive|tile-dock|rail|segmented|system-monitor|stanley-bridge|pharos-beam|raml-tram|none`.
+A style sets the layout, edge and height, the item and icon shapes and
+colours, insets and spacing, the screen frame, the notch's width
+(*Pharos Beam*), the bar font (*System monitor* uses your monospace font,
+`typography.bar_font`), and for *Expressive* and *Raml Tram* a rail joined
+to the bar (`[side_bars]`, left side on, right side off: scalloped
+buttons for Expressive, flowers for Raml Tram). The bar remembers it as
+`bar.style`; picking any other preset or a Look, or `bar style none`,
+first puts every field the style changed back to its default. Studio's
+presets can replace your items too; `bar style` never does.
+
+While a bar draws its items on tiles of their own (every style, and a
+side bar with pill items), the workspace / tag buttons take its shapes
+too: each tag is a flower, cookie, burst, squircle, tile or a piece of a
+connected group, showing the icon of the app on it (or its number when
+it's empty, or when `[plugins.settings.workspaces] app_icons = false`).
 
 ### Bar commands
 
@@ -770,7 +783,8 @@ style = "tile-dock"      # the bar style that set these (see below)
 
 A **bar style for one side bar** sets those keys at once:
 Studio → Bars → Side bars (the *Style* chips above each bar's groups) or
-`mandara msg side-bar style left|right expressive|tile-dock|rail|segmented|none`.
+`mandara msg side-bar style left|right expressive|tile-dock|rail|segmented|none`
+(the four original styles; the newer ones shape the whole bar).
 It shapes that bar alone: the main bar, the other side bar and the shared
 settings stay as they are. Another style, or `none` (*Shared*), clears
 exactly what the last one set; a side bar you shaped by hand is never
@@ -807,6 +821,43 @@ the same tab holds their behavior, shape, items and material.
 Commands: `mandara msg side-bars on|off|toggle`, `side-bars join
 on|off|toggle`, `side-bar pin left|right [on|off|toggle]`, `side-bar show
 left|right [on|off|toggle]`, `side-bars status`.
+
+## Main menu
+
+Right-clicking empty bar space opens the main menu (`bar.right_click`).
+A split bar (glass pills, the island, the micro pill, the notch, and the
+*Segmented* and *Tile dock* styles built from them) has gaps between its
+pieces, and those are the desktop: a right-click there opens the desktop's
+menu. To have the main menu there too:
+
+```toml
+[bar]
+right_click_gaps = true   # default false: the gaps are the desktop
+
+[panels]
+menu_rail_height = "stretch"   # hug (the default): as tall as its buttons
+```
+
+With `right_click_gaps` on, a right-click anywhere in the strip the bar
+takes along its edge (between its pieces, past its ends, and in the margin
+between a floating bar and the screen edge) opens the main menu. The
+desktop's menu is still a right-click anywhere else on the desktop, and
+the main menu's **Apps & tools** page gains a **Desktop menu** tile that
+opens it where you clicked. Studio shows the setting (Bars → Bar →
+Behaviour → *Main menu in the bar's gaps*) locked for a full-width bar or
+a side bar (no gaps), while clicks pass through empty bar space, and while
+empty bar space opens the desktop's menu itself.
+
+`menu_rail_height = "stretch"` (Bars → Drop-down panels → Main menu →
+*Rail height*) makes the main menu's rail as tall as the panel beside it,
+with its buttons spread evenly over that height: each sits in a slot of
+the same height, so the gaps between them are equal and the divider stays
+halfway between the pages and the shortcuts. With tile patterns on
+(`panels.menu_patterns`) a mashrabiya lattice in the tiles' accent rises
+from its foot behind the lowest buttons over a soft wash and fades out on
+its way up.
+Beside a panel no taller than its buttons it
+looks like the hugging rail.
 
 ## Looks
 

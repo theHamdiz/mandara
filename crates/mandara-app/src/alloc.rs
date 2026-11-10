@@ -69,6 +69,10 @@ pub const NAME: &str = if cfg!(feature = "alloc-mimalloc") {
     "jemalloc"
 } else if cfg!(target_env = "musl") {
     "musl"
+} else if cfg!(target_os = "freebsd") {
+    // The system allocator: FreeBSD's libc malloc is its own jemalloc. The
+    // glibc tuning and trim hook don't apply.
+    "FreeBSD libc"
 } else if cfg!(feature = "alloc-system-tuned") {
     "glibc (tuned)"
 } else {

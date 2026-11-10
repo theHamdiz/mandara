@@ -9,10 +9,27 @@ pub const V3_SUFFIX: &str = "-x86-64-v3";
 /// CPU architectures with prebuilt releases.
 pub const RELEASED_ARCHES: &[&str] = &["x86_64", "aarch64"];
 
-/// The C library this binary links (`gnu` or `musl`): the system's, since
-/// a dynamically linked binary only runs on its own libc.
+/// What FreeBSD builds report as their C library: FreeBSD's own libc
+/// comes with the system, so release names say only `freebsd`.
+pub const FREEBSD: &str = "freebsd";
+
+/// The C library this binary links (`gnu` or `musl`, [`FREEBSD`] there):
+/// the system's, since a dynamically linked binary only runs on its own
+/// libc.
 pub fn compiled_libc() -> &'static str {
-    if cfg!(target_env = "musl") { "musl" } else { "gnu" }
+    if cfg!(target_os = "freebsd") {
+        FREEBSD
+    } else if cfg!(target_env = "musl") {
+        "musl"
+    } else {
+        "gnu"
+    }
+}
+
+/// `<arch>-linux-<libc>`, or `<arch>-freebsd` (the platform part of
+/// release names and `update.json` targets).
+fn platform(arch: &str, libc: &str) -> String {
+    if libc == FREEBSD { format!("{arch}-{FREEBSD}") } else { format!("{arch}-linux-{libc}") }
 }
 
 /// The release target this binary was built for, as release assets and
@@ -21,12 +38,16 @@ pub fn compiled_libc() -> &'static str {
 pub fn compiled_target() -> String {
     let libc = compiled_libc();
     let v3 = libc == "gnu" && cfg!(all(target_arch = "x86_64", target_feature = "avx2", target_feature = "bmi2", target_feature = "fma", target_feature = "movbe"));
-    format!("{}-linux-{libc}{}", std::env::consts::ARCH, if v3 { V3_SUFFIX } else { "" })
+    format!("{}{}", platform(std::env::consts::ARCH, libc), if v3 { V3_SUFFIX } else { "" })
 }
 
-/// rustup's host triple for this system (`x86_64-unknown-linux-gnu`).
+/// rustup's host triple for this system (`x86_64-unknown-linux-gnu`,
+/// `x86_64-unknown-freebsd`).
 pub fn rust_triple() -> String {
-    format!("{}-unknown-linux-{}", std::env::consts::ARCH, compiled_libc())
+    match compiled_libc() {
+        FREEBSD => format!("{}-unknown-{FREEBSD}", std::env::consts::ARCH),
+        libc => format!("{}-unknown-linux-{libc}", std::env::consts::ARCH),
+    }
 }
 
 /// Whether `/proc/cpuinfo` text shows every x86-64-v3 flag.
@@ -40,7 +61,7 @@ pub fn cpu_supports_x86_64_v3(cpuinfo: &str) -> bool {
 /// (file stems, without `.tar.gz`): the x86-64-v3 build when the CPU has
 /// it (glibc only), then the baseline.
 pub fn release_candidates(version: &str, arch: &str, libc: &str, v3: bool) -> Vec<String> {
-    let base = format!("mandara-{version}-{arch}-linux-{libc}");
+    let base = format!("mandara-{version}-{}", platform(arch, libc));
     let mut out = Vec::new();
     if v3 && arch == "x86_64" && libc == "gnu" {
         out.push(format!("{base}{V3_SUFFIX}"));
@@ -76,6 +97,7 @@ mod tests {
         assert_eq!(release_candidates("0.2.0", "x86_64", "gnu", true), ["mandara-0.2.0-x86_64-linux-gnu-x86-64-v3", "mandara-0.2.0-x86_64-linux-gnu"]);
         assert_eq!(release_candidates("0.2.0", "x86_64", "musl", true), ["mandara-0.2.0-x86_64-linux-musl"]);
         assert_eq!(release_candidates("0.2.0", "aarch64", "gnu", true), ["mandara-0.2.0-aarch64-linux-gnu"]);
+        assert_eq!(release_candidates("0.25.0", "x86_64", FREEBSD, true), ["mandara-0.25.0-x86_64-freebsd"], "one FreeBSD build, no tuned variant");
     }
 
     #[test]
@@ -93,7 +115,10 @@ mod tests {
     #[test]
     fn targets_name_this_build() {
         let t = compiled_target();
-        assert!(t.starts_with(std::env::consts::ARCH) && t.contains("-linux-"), "{t}");
-        assert!(rust_triple().contains("-unknown-linux-"));
+        let os = if cfg!(target_os = "freebsd") { "-freebsd" } else { "-linux-" };
+        assert!(t.starts_with(std::env::consts::ARCH) && t.contains(os), "{t}");
+        assert!(rust_triple().contains(if cfg!(target_os = "freebsd") { "-unknown-freebsd" } else { "-unknown-linux-" }));
+        assert_eq!(platform("x86_64", FREEBSD), "x86_64-freebsd");
+        assert_eq!(platform("x86_64", "musl"), "x86_64-linux-musl");
     }
 }

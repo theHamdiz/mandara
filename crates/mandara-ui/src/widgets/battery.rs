@@ -1,4 +1,4 @@
-//! Battery status from `/sys/class/power_supply` (UPower integration arrives
+//! Battery status from `/sys/class/power_supply` (ACPI sysctls on FreeBSD) (UPower integration arrives
 //! with `mandara-services`; sysfs keeps the bar useful without D-Bus).
 
 use std::fs;
@@ -59,8 +59,24 @@ pub fn read_battery_from(root: &Path) -> Option<BatteryInfo> {
     })
 }
 
+#[cfg(not(target_os = "freebsd"))]
 pub fn read_battery() -> Option<BatteryInfo> {
     read_battery_from(Path::new("/sys/class/power_supply"))
+}
+
+/// FreeBSD: the ACPI battery sysctls.
+#[cfg(target_os = "freebsd")]
+pub fn read_battery() -> Option<BatteryInfo> {
+    use mandara_services::power::ChargeState as Acpi;
+    let (percent, state) = mandara_services::freebsd::acpi::level()?;
+    let state = match state {
+        Acpi::Charging | Acpi::PendingCharge => ChargeState::Charging,
+        Acpi::Discharging | Acpi::Empty => ChargeState::Discharging,
+        Acpi::FullyCharged => ChargeState::Full,
+        Acpi::PendingDischarge => ChargeState::NotCharging,
+        Acpi::Unknown => ChargeState::Unknown,
+    };
+    Some(BatteryInfo { percent, state })
 }
 
 #[cfg(test)]

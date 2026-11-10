@@ -9,11 +9,12 @@ sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https
 ```
 
 The small [download script](../install.sh) shows Mandara's phoenix and the
-download progress, chooses the build for your CPU and GNU or musl system,
-then checks the release's Ed25519 signature and the archive's SHA-256
-**before extracting or running it**. It uses `curl`, `tar`, OpenSSL 3 or
-newer, `sha256sum` and the usual POSIX tools; it tells you when one is
-missing. Downloads retry on temporary connection errors and stop if the
+download progress, chooses the build for your CPU and system (GNU or musl
+Linux, or [FreeBSD](#freebsd)), then checks the release's Ed25519 signature
+and the archive's SHA-256 **before extracting or running it**. It uses
+`curl`, `tar`, OpenSSL 3 or newer, `sha256sum` and the usual POSIX tools
+(on FreeBSD, the base system's `fetch` and `sha256` do when curl isn't
+installed); it tells you when one is missing. Downloads retry on temporary connection errors and stop if the
 connection stalls. The command runs the script only after the download
 succeeds. It removes temporary files on completion, failure or interruption.
 
@@ -96,7 +97,9 @@ KWallet with your login password. Updates come later by binary patch
 (`mandara update`).
 
 It works on **Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo
-and Solus**; on NixOS, use the [flake](#nixos) instead. Besides the
+and Solus**, and on image-based systems such as Bazzite, Silverblue, Bluefin
+and Aeon (see [Immutable systems](#immutable-systems)); on NixOS, use the
+[flake](#nixos) instead. Besides the
 runtime libraries it installs, one by one so a missing package never stops
 it, fonts and colour emoji, Papirus icons, `xdg-utils`, the desktop portals
 of your compositors, and the services Studio talks to: PipeWire and
@@ -271,6 +274,183 @@ mandara setup
 
 The recipes live in [`packaging/aur/`](../packaging/aur) and follow the
 [AUR submission guidelines](https://wiki.archlinux.org/title/AUR_submission_guidelines).
+
+## FreeBSD
+
+Mandara runs on **FreeBSD 14+ (14.4 and newer, FreeBSD 15 included), on
+amd64**, under a Wayland compositor. Every release has a FreeBSD build,
+`mandara-<version>-x86_64-freebsd.tar.gz`, signed and checked like the
+Linux ones. Install it with the same kind of one-line command, using
+FreeBSD's own `fetch` (no curl needed):
+
+```sh
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && fetch -o "$f" https://thehamdiz.github.io/mandara/install.sh && sh "$f" "$@"' sh
+```
+
+The download script sees FreeBSD (`uname -s`), downloads the FreeBSD
+tarball, verifies its signature and checksum with the base system's
+OpenSSL and SHA-256 tools, and hands over to `mandara install`, as on
+Linux.
+The tarball holds the `mandara` binary, Studio's desktop entry and icon,
+the lock screen's PAM file and every language pack. The binary needs only
+FreeBSD's base libraries; Wayland, xkbcommon, Vulkan and fontconfig are
+opened at run time from packages. One build serves every supported
+release: it is built against FreeBSD 14.4's base system, and FreeBSD keeps
+running programs built for an earlier release, so the same binary runs
+unchanged on 14.4, newer 14.x releases and 15. The packages come from
+your own release's repository (`FreeBSD:14:amd64` or `FreeBSD:15:amd64`).
+
+`mandara install` knows FreeBSD 14 and 15 (and GhostBSD) by
+`/etc/os-release`. It installs everything with `pkg install -y` (a fresh
+system's pkg bootstraps itself without asking), from FreeBSD's own
+package names: Wayland, xkbcommon, Mesa and the Vulkan loader, fonts for
+every interface language, portals, PipeWire with its OSS plugin
+(`pipewire-spa-oss`) and WirePlumber, polkit, ConsoleKit2, D-Bus, seatd,
+UPower, AccountsService, GeoClue, BSDisks and GNOME Keyring. Then it:
+
+- enables and starts D-Bus and seatd in rc.conf (`sysrc dbus_enable=YES`,
+  `service dbus start`, the same for `seatd`), leaving any that are on
+  already alone;
+- adds you to the `video` group, seatd's, so a compositor can open the
+  seat (log in again afterwards);
+- once Mandara Login is set up, adds the login screen's user to
+  `operator`, so its Sleep, Restart and Shut Down buttons work without
+  ConsoleKit2 (`operator` can also read raw disks; see
+  [Login screen → FreeBSD](login-manager.md#freebsd) for the trade-off);
+- puts the admin helper in `/usr/local/lib/mandara` (owned by
+  `root:wheel`), which Studio and the Updates panel run through pkexec.
+
+It can install Niri, Hyprland, Sway or River Classic (`river-classic`)
+from FreeBSD's packages. The Inter font isn't packaged for FreeBSD, so
+Mandara falls back to its other fonts. NetworkManager, BlueZ, UDisks2's
+own daemon and power-profiles-daemon don't exist on FreeBSD; Studio shows
+those panels locked with the reason. External monitor brightness over
+DDC/CI isn't set up there yet.
+
+greetd, which Mandara Login runs on, isn't packaged for FreeBSD yet: the
+installer says so and leaves your login screen as it is. Build it as
+[Mandara Login on FreeBSD](login-manager.md#freebsd) shows, then run
+`sudo mandara greeter use mandara --apply`.
+
+The installer runs as your user and asks for root through `sudo` (or
+`doas`) only for packages and system changes. Updates come from the
+Updates panel: [pkg and freebsd-update](apps-and-updates.md#freebsd).
+
+To use the tarball without the installer, install the libraries it opens
+at run time yourself:
+
+```sh
+pkg install wayland libxkbcommon vulkan-loader mesa-libs mesa-dri fontconfig freetype2 ca_root_nss dbus seatd
+```
+
+### What works on FreeBSD
+
+Mandara reads FreeBSD's own interfaces where Linux has procfs, sysfs or a
+Linux-only daemon:
+
+| Feature | On FreeBSD |
+|---|---|
+| Processes, CPU, memory, swap, load, uptime | `kern.proc`, `kern.cp_time(s)`, `vm.stats.vm`, `vm.swap_info`, `kern.boottime` (the process hunter, Resources, mini stats, the desktop system monitor, Studio → Performance) |
+| CPU temperature | `dev.cpu.N.temperature`, once `coretemp` (Intel) or `amdtemp` (AMD) is loaded: `kldload coretemp`, or `coretemp_load="YES"` in `/boot/loader.conf` |
+| Drives | `getfsstat`: UFS, ZFS pools, FAT, ext2 and exFAT mounts |
+| Battery and AC | UPower when it runs, else `hw.acpi.battery.*`, `hw.acpi.acline` and `acpiconf -i 0` |
+| Sound | PulseAudio or PipeWire when one runs; else the default OSS device through `mixer(8)` (volume and mute of output and input). Changing the default device runs `mixer -d` as root. Per-app volume and the visualizer need PulseAudio or PipeWire |
+| Network | `ifconfig`, the default route and a routing socket for changes; Wi-Fi through wpa_supplicant's control socket (`ctrl_interface_group=wheel` in `/etc/wpa_supplicant.conf` opens it to the `wheel` group). Joining hands wpa_supplicant the network's key, never your passphrase in a command line; `update_config=1` keeps it for the next boot. Turning Wi-Fi on or off runs `ifconfig wlan0 up/down` as root |
+| Brightness | backlight(9) devices in `/dev/backlight` (the `video` group may change them) |
+| Lock, sleep, restart, shut down | Mandara's own lock screen; ConsoleKit2 when it's on the system bus, else `shutdown -p now`, `shutdown -r now` and `acpiconf -s 3` through pkexec and Mandara's password dialog |
+
+Locked on FreeBSD, with the reason in Studio: Bluetooth (no BlueZ), power
+profiles (no power-profiles-daemon; `powerd` sets the CPU speed), the
+hotspot (no NetworkManager), hibernation (FreeBSD sleeps to RAM only),
+monitor brightness over DDC/CI, keyboard-light OSDs, and the Services,
+Crashes, Ports and App installer plugins, which manage Linux-only things.
+
+## Immutable systems
+
+Image-based ("immutable") systems boot a read-only image of `/usr` that
+their own tool replaces as a whole, so no package manager can install into
+the running system. The same one-line install works there:
+
+```bash
+sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh
+```
+
+The download script says it found an image-based system, downloads and
+verifies the release in your home folder's cache (nothing it does needs a
+writable `/usr`), and hands over to `mandara install`, which:
+
+- puts Mandara in your home folder as everywhere (`~/.local/bin/mandara`,
+  its desktop entry, icon and language packs), and hooks it into your
+  compositor (`~/.config/mandara/generated/`);
+- checks every package it would install elsewhere against the **running
+  image**, so nothing the image already ships is layered again. It asks
+  what *provides* each one (`rpm -q --whatprovides`, `pacman -T`;
+  `dpkg-query` on Vanilla OS), so a replacement the image ships under
+  another name counts: Bazzite's own BlueZ and WirePlumber builds, or
+  tuned-ppd standing in for power-profiles-daemon. On rpm-ostree, packages
+  that `rpm-ostree status` already requests for the next boot are skipped
+  too;
+- asks **once**, at the end, before adding what is missing in **one
+  transaction** with the system's own tool. One name a repository lacks
+  fails a whole transaction, so on rpm-ostree the optional packages are
+  first checked with `dnf repoquery` (as you, read-only) and those your
+  release doesn't carry are skipped with a note; should the transaction
+  still fail, it is retried with the essential packages (the runtime
+  libraries, greetd and cage) alone. ABRoot checks each name itself, so
+  there an unavailable optional package is skipped while it is recorded;
+- does everything that needs no reboot first, then says when a reboot is
+  needed.
+
+| System | Detected by | Missing packages are added with | Root-owned files that survive updates |
+|---|---|---|---|
+| Fedora Atomic: Silverblue, Kinoite, Sway Atomic and the others; Bazzite, Bluefin, Aurora | `/run/ostree-booted` | `rpm-ostree install --idempotent` (layering) | `/etc`, `/var`, `/usr/local` (a link to `/var/usrlocal`) |
+| openSUSE Aeon, Kalpa, MicroOS | `os-release` (`aeon`, `kalpa`, `microos` in `ID`/`ID_LIKE`) | `transactional-update pkg install` (a new snapshot) | `/etc`, `/var`, `/usr/local` (its own subvolume) |
+| Vanilla OS 2 | `abroot`, or `NAME="Vanilla OS"` | `abroot pkg add`, then `abroot pkg apply` once | `/etc`, `/var`, `/usr/local` (a link to `/var/usrlocal`) |
+| SteamOS | `ID=steamos` | nothing (see below) | `/etc`, `/var`, `/home` |
+
+The packages arrive with the **next boot**. Until then, Mandara already
+runs if the image had its runtime libraries (every desktop image above
+does); fonts, portals and services that were missing start working after
+the reboot. To see what would be added without changing anything, run the
+install with `--dry-run`. If you decline, the installer prints the exact
+command to run later.
+
+**The admin helper** (the root-owned copy Studio's administrator actions
+run) goes to `/usr/local/lib/mandara`, which survives updates on Fedora
+Atomic, openSUSE and Vanilla OS. **Mandara Login** needs greetd and cage, which come
+with the same transaction. The switch itself needs them installed, so it
+waits for the reboot: after restarting, Mandara Login is one click away in
+Studio → Login screen → Login manager, or run the
+`sudo ~/.local/bin/mandara greeter use mandara --apply` command the installer
+prints. It writes greetd's config in `/etc/greetd` (kept across updates), and
+its media folders go to `/usr/local/share/mandara/login` because
+`/usr/share` is read-only.
+
+**Updates.** Studio → About → *Update now* keeps Mandara itself current, as
+everywhere, because it lives in your home folder. The system updates with
+its own tool (`rpm-ostree upgrade`, `ujust update` on Universal Blue images,
+`transactional-update dup`, `abroot upgrade`), and Mandara's Updates panel
+leaves it to that tool: it shows Flatpak updates and says how the system
+updates, instead of offering dnf, zypper, apt or pacman, which can't write
+the image.
+
+**SteamOS** keeps its image read-only, and every SteamOS update replaces it,
+removing anything installed into it. Mandara installs only into your home
+folder there and lists what it couldn't add. The admin helper and Mandara
+Login live in `/usr/local`, which SteamOS replaces too, so they are skipped,
+and Studio's administrator actions stay unavailable. Desktop Mode's Plasma
+session runs Mandara with `--compositor kwin`.
+
+**Uninstalling** (`mandara uninstall`) removes Mandara from your home
+folder and leaves the packages it added to the image, which other apps may
+use too. Remove them with the system's own tool if you like:
+`rpm-ostree uninstall <packages>` (or `rpm-ostree reset` for every layered
+package), `transactional-update pkg remove <packages>`, or
+`abroot pkg remove <packages>` and `abroot pkg apply`.
+
+**Building from source** on an image-based system needs a compiler and
+build tools in the running image. The installer says which are missing;
+build inside a toolbox or distrobox container instead, or install a release.
 
 ## NixOS
 
@@ -692,21 +872,22 @@ attestations:
 | Debian, Ubuntu, Mint, Pop!_OS (`.deb`) | ✓ | | ✓ |
 | Fedora, openSUSE, RHEL family (`.rpm`) | ✓ | | ✓ |
 | Arch, Manjaro, EndeavourOS, CachyOS (`PKGBUILD`) | ✓ | | ✓ |
+| FreeBSD 14.4 and newer, 15 included (tarball) | ✓ (amd64) | | |
 
 Plus the bundled plugins, a build manifest per binary (source fingerprint,
 toolchain, SHA-256, lines of code), binary patches from the last five
 releases for [smart updates](apps-and-updates.md#updates-by-binary-patch), one language
 pack per language (`mandara-<v>-<code>.mlang`, and the compressed
 `.mlang.zst` the shell downloads), `update.json` and `SHA256SUMS`. Every
-package and tarball ships all language packs. The installer picks the right build for your system (glibc or
-musl, x86-64-v3 when your CPU supports it); Gentoo, Solus and other glibc
+package and tarball ships all language packs. The installer picks the right build for your system (glibc,
+musl or FreeBSD, x86-64-v3 when your CPU supports it); Gentoo, Solus and other glibc
 systems use the tarball. NixOS builds from source with the
 [flake](#nixos).
 
 From a clone, `cargo xtask build && target/release/mandara install`
 installs that checkout (or `mandara install --from-source` builds it).
 
-**Requirements:** Linux with a Wayland compositor (MangoWM, Niri,
+**Requirements:** Linux or [FreeBSD](#freebsd) with a Wayland compositor (MangoWM, Niri,
 Hyprland, Sway, River Classic, Umbriel or KWin; the installer can install one), a Vulkan-capable
 GPU, and PipeWire or PulseAudio for sound features.
 

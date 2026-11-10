@@ -104,7 +104,10 @@ pub(super) fn tiles_with(
                         "qs-bt",
                         if bt.powered { "bluetooth" } else { "bluetooth-off" },
                         mandara_i18n::t("Bluetooth"),
-                        Some(if !bt.powered {
+                        // FreeBSD has no BlueZ: the tile says so and does nothing.
+                        Some(if cfg!(target_os = "freebsd") {
+                            mandara_i18n::t("Not available here").into()
+                        } else if !bt.powered {
                             mandara_i18n::t("Off").into()
                         } else if bt.connected_count() > 0 {
                             mandara_i18n::tf("{count} connected", &[("count", &bt.connected_count())])
@@ -114,7 +117,7 @@ pub(super) fn tiles_with(
                         bt.powered,
                         palette,
                         move |_, cx| {
-                            if let Some(s) = super::hub_bluetooth(cx) {
+                            if let Some(s) = super::hub_bluetooth(cx).filter(|_| !cfg!(target_os = "freebsd")) {
                                 s.send(BluetoothCommand::SetPower(!bt_on));
                             }
                         },
@@ -243,6 +246,8 @@ pub fn register(r: &mut PluginRegistry) {
         let sidebar = fn_view(None, |palette, _, cx| tiles(palette, cx), window, cx);
         PluginInstance { sidebar: Some(sidebar), ..PluginInstance::empty() }
     });
+    // The tiles read the hub and settings; nothing outside the view.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     r.command(
         ID,
         CommandSpec::new("keep-awake", mandara_i18n::tk("Block idle and sleep (logind inhibitor)"), |a, cx| {

@@ -2296,7 +2296,12 @@ impl Render for LauncherView {
         let dim = look.dim.clamp(0.0, DIM_MAX) * progress;
         // Joined to the bar, the dim follows its shape.
         let dim_el = (dim > 0.0).then(|| {
-            crate::bar::scrim::element((sw, sh), &crate::bar::layout::Metrics::of(&cfg, crate::style::radius_scale()), place.keep_bright, gpui::black().opacity(dim), scale)
+            let mut bar = crate::bar::layout::Metrics::of(&cfg, crate::style::radius_scale());
+            // A notch grown to hold its items stays bright whole.
+            if let Some((_, width)) = bar_span {
+                bar.notch_fit = width;
+            }
+            crate::bar::scrim::element((sw, sh), &bar, place.keep_bright, gpui::black().opacity(dim), scale)
         });
         let hover_close = place.hover_close;
 

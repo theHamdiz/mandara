@@ -1,11 +1,16 @@
 //! The sidebar's tabs: the user's tabs of plugin cards
 //! (`mandara_config::sidebar`) plus the built-in Notifications tab.
 //!
-//! * One live instance per plugin backs every tab that shows it (only the
-//!   visible tab renders, so a card appears once per frame), and instances
-//!   survive layout edits — Studio drags never reset a card's state.
-//! * Card lists are cached per tab and rebuilt only when the layout changes;
-//!   only the visible tab's cards render and tick.
+//! * Cards exist only while the sidebar shows: a tab's cards are built when
+//!   it first shows after the sidebar opens, and every card is dropped
+//!   [`RELEASE_AFTER`] after the sidebar finished closing, with what each
+//!   card keeps outside its views ([`mandara_plugins::CardRelease`]); the
+//!   allocator then gives the freed pages back. A closed sidebar holds no
+//!   card views, rows, pictures, timers or tasks.
+//! * While it shows, one live instance per plugin backs every tab that
+//!   shows it (only the visible tab renders, so a card appears once per
+//!   frame), and instances survive layout edits — Studio drags never reset
+//!   a card's state. Only the visible tab's cards render and tick.
 //! * The last tab is remembered in `$XDG_STATE_HOME/mandara/sidebar.toml`
 //!   (unless "Always open on the first tab"), and each tab keeps its own
 //!   scroll position.
@@ -40,13 +45,111 @@ use crate::state::{config, shell, update_config};
 use crate::text_field::TextField;
 
 /// Built-in plugins that have a sidebar card (third-party plugins all may).
-pub const SIDEBAR_WIDGETS: &[&str] = &["quick-settings", "weather", "notifications", "media", "pomodoro", "todo", "notes", "audio", "resources", "prayer-times", "jannah", "hadith", "quran", "radio", "sudoku", "2048"];
+/// Every built-in whose instance carries a `sidebar` view must be listed:
+/// Studio's widget picker, its plugin pages and `sidebar tab widget add`
+/// offer only these (a test checks the list against the sources).
+pub const SIDEBAR_WIDGETS: &[&str] = &[
+    "quick-settings", "weather", "notifications", "media", "pomodoro", "todo", "notes", "audio", "resources", "prayer-times", "jannah", "hadith", "quran", "radio",
+    "sudoku", "2048", "feeds", "reddit",
+];
+
+/// Whether the plugin of `manifest` can put a card on a sidebar tab.
+pub fn offers_card(manifest: &mandara_plugins::PluginManifest) -> bool {
+    SIDEBAR_WIDGETS.contains(&manifest.id.as_str()) || matches!(manifest.origin, mandara_plugins::PluginOrigin::ThirdParty { .. })
+}
+
+/// The cards of a tab the sidebar draws, top to bottom: those of plugins
+/// that are on, leaving out `skip` (the notifications card while it has
+/// its own tab). A card whose plugin is off stays on the tab, hidden, and
+/// comes back when the plugin is switched on again.
+pub fn shown_cards<'a>(cards: &'a [String], enabled: &'a dyn Fn(&str) -> bool, skip: Option<&'a str>) -> impl Iterator<Item = &'a String> + 'a {
+    cards.iter().filter(move |id| enabled(id) && skip != Some(id.as_str()))
+}
 /// Icons offered for a tab (Mandara's own set).
 pub const TAB_ICONS: &[&str] = &[
     "grid", "tiles", "bell", "calendar", "list-check", "note", "music", "headphones", "cpu", "monitor", "cloud-sun", "coffee", "heart",
     "bolt", "zap", "globe", "folder", "terminal", "clock", "timer", "leaf", "flame", "user", "sliders", "image", "package", "server",
     "shield", "key", "box", "pencil", "waves", "crescent", "sun", "moon",
 ];
+
+/// How long the sidebar stays closed before its cards are dropped: a quick
+/// close and reopen (or a hover-revealed sidebar brushed twice) keeps them.
+pub const RELEASE_AFTER: std::time::Duration = std::time::Duration::from_millis(1500);
+
+/// The sidebar's card instances. A tab's list is built when it first shows
+/// (one instance per plugin, shared by every tab that shows it) and
+/// everything goes at [`Self::release`]. Generic over the view type so the
+/// bookkeeping is testable without a window.
+pub struct CardPool<V> {
+    /// Each tab's shown plugin ids, from the layout.
+    layout: Vec<(String, Vec<String>)>,
+    /// Built lists of the tabs shown since the sidebar opened.
+    built: Vec<(String, Vec<V>)>,
+    /// Live instances by plugin id, with their plugin build's generation.
+    pool: HashMap<String, (u64, V)>,
+}
+
+impl<V> Default for CardPool<V> {
+    fn default() -> Self {
+        Self { layout: Vec::new(), built: Vec::new(), pool: HashMap::new() }
+    }
+}
+
+impl<V: Clone> CardPool<V> {
+    /// A new layout: live instances still shown by an unchanged plugin
+    /// build stay; the rest go. Lists are rebuilt as their tab shows.
+    pub fn set_layout(&mut self, layout: Vec<(String, Vec<String>)>, generation: impl Fn(&str) -> Option<u64>) {
+        self.built.clear();
+        self.pool.retain(|id, (g, _)| layout.iter().any(|(_, ids)| ids.contains(id)) && generation(id) == Some(*g));
+        self.layout = layout;
+    }
+
+    /// Tab `tab`'s cards, built now if needed: `build` makes an instance
+    /// (with its plugin's build generation) for a plugin without one.
+    pub fn ensure(&mut self, tab: &str, generation: impl Fn(&str) -> Option<u64>, mut build: impl FnMut(&str) -> Option<V>) -> &[V] {
+        let at = match self.built.iter().position(|(t, _)| t == tab) {
+            Some(at) => at,
+            None => {
+                let ids = self.layout.iter().find(|(t, _)| t == tab).map(|(_, ids)| ids.as_slice()).unwrap_or_default();
+                let mut cards = Vec::with_capacity(ids.len());
+                for id in ids {
+                    let Some(g) = generation(id) else { continue };
+                    let view = match self.pool.get(id) {
+                        Some((have, view)) if *have == g => view.clone(),
+                        _ => {
+                            let Some(view) = build(id) else { continue };
+                            self.pool.insert(id.clone(), (g, view.clone()));
+                            view
+                        }
+                    };
+                    cards.push(view);
+                }
+                self.built.push((tab.to_string(), cards));
+                self.built.len() - 1
+            }
+        };
+        &self.built[at].1
+    }
+
+    /// Tab `tab`'s built cards (empty until [`Self::ensure`]).
+    pub fn cards(&self, tab: &str) -> &[V] {
+        self.built.iter().find(|(t, _)| t == tab).map_or(&[], |(_, c)| c.as_slice())
+    }
+
+    /// Whether any card instance is alive.
+    pub fn is_live(&self) -> bool {
+        !self.pool.is_empty() || !self.built.is_empty()
+    }
+
+    /// Drops every card instance (the layout stays), returning the plugins
+    /// whose cards went. Spare capacity goes too.
+    pub fn release(&mut self) -> Vec<String> {
+        self.built = Vec::new();
+        let ids = self.pool.drain().map(|(id, _)| id).collect();
+        self.pool.shrink_to_fit();
+        ids
+    }
+}
 
 /// How far switched-in cards travel, logical px.
 const SLIDE_PX: f32 = 28.0;
@@ -194,10 +297,14 @@ fn order(cfg: &SidebarConfig, notifications: bool) -> Vec<Sel> {
 /// The sidebar's tab state, owned by each shell view.
 pub struct SidebarTabs {
     sel: Sel,
-    /// Built cards per tab, in strip order (shared instances).
-    cards: Vec<(String, Vec<AnyView>)>,
-    /// Live card instances by plugin id, with their factory generation.
-    pool: HashMap<String, (u64, AnyView)>,
+    /// The card instances (only while the sidebar shows).
+    cards: CardPool<AnyView>,
+    /// The Notifications tab's view (only while it shows), and whether the
+    /// layout has that tab.
+    notifications: Option<AnyView>,
+    notifications_tab: bool,
+    /// The output's context the cards are built with.
+    base_cx: PanelCx,
     scroll: HashMap<String, ScrollHandle>,
     /// The cards' overlay scroll bar (one per sidebar, whichever tab shows).
     bar: std::rc::Rc<crate::scrollbar::ScrollbarState>,
@@ -236,8 +343,10 @@ impl SidebarTabs {
         anim.snap_to(1.0);
         Self {
             sel: Sel::Tab(String::new()),
-            cards: Vec::new(),
-            pool: HashMap::new(),
+            cards: CardPool::default(),
+            notifications: None,
+            notifications_tab: false,
+            base_cx: PanelCx::default(),
             scroll: HashMap::new(),
             bar: crate::scrollbar::ScrollbarState::new(),
             anim,
@@ -267,37 +376,75 @@ impl SidebarTabs {
         tabs.iter().map(|t| (t.id.clone(), t.cards.clone())).collect()
     }
 
-    /// Rebuilds the per-tab card lists, reusing live instances. `enabled`
-    /// says whether a plugin is on; `skip` is left out (the notifications
-    /// card while it has its own tab).
-    pub fn rebuild(&mut self, tabs: &[SidebarTab], enabled: &dyn Fn(&str) -> bool, skip: Option<&str>, base_cx: &PanelCx, window: &mut Window, cx: &mut App) {
-        let mut pool = std::mem::take(&mut self.pool);
-        let mut next_pool = HashMap::new();
-        self.cards = tabs
-            .iter()
-            .map(|tab| {
-                let cards = tab
-                    .cards
-                    .iter()
-                    .filter(|id| enabled(id) && skip != Some(id.as_str()))
-                    .filter_map(|id| {
-                        if let Some((_, view)) = next_pool.get(id) {
-                            return Some(AnyView::clone(view));
-                        }
-                        let (build, generation) = cx.global::<PluginRegistry>().get(id).map(|f| (f.build.clone(), f.generation))?;
-                        let view = match pool.remove(id) {
-                            Some((g, view)) if g == generation => view,
-                            _ => mandara_plugins::guard(&format!("plugin `{id}` startup"), || build(window, cx, base_cx.fork()))?.sidebar?,
-                        };
-                        next_pool.insert(id.clone(), (generation, view.clone()));
-                        Some(view)
-                    })
-                    .collect();
-                (tab.id.clone(), cards)
-            })
-            .collect();
-        self.pool = next_pool;
+    /// Takes a new layout. `enabled` says whether a plugin is on; `skip`
+    /// is left out (the notifications card while it has its own tab, shown
+    /// when `notifications_tab`). Builds nothing: cards are made as their
+    /// tab shows ([`Self::cards`]); live ones still shown are kept.
+    pub fn rebuild(&mut self, tabs: &[SidebarTab], enabled: &dyn Fn(&str) -> bool, skip: Option<&str>, notifications_tab: bool, base_cx: &PanelCx, cx: &App) {
+        let layout = tabs.iter().map(|tab| (tab.id.clone(), shown_cards(&tab.cards, enabled, skip).cloned().collect())).collect();
+        let registry = cx.global::<PluginRegistry>();
+        self.cards.set_layout(layout, |id| registry.get(id).map(|f| f.generation));
+        self.notifications_tab = notifications_tab;
+        // A plugin reload or a switch makes the tab's view anew.
+        self.notifications = None;
+        self.base_cx = base_cx.clone();
         self.scroll.retain(|id, _| tabs.iter().any(|t| &t.id == id));
+    }
+
+    /// Whether the layout has the Notifications tab.
+    pub fn has_notifications(&self) -> bool {
+        self.notifications_tab
+    }
+
+    /// The Notifications tab's view, built when it first shows.
+    pub fn notifications_view(&mut self, window: &mut Window, cx: &mut App) -> Option<AnyView> {
+        if !self.notifications_tab {
+            return None;
+        }
+        if self.notifications.is_none() {
+            let id = crate::plugins::notifications::ID;
+            let build = cx.global::<PluginRegistry>().get(id).map(|f| f.build.clone())?;
+            let card_cx = self.base_cx.for_card();
+            self.notifications = mandara_plugins::guard("notifications tab startup", || build(window, cx, card_cx))?.sidebar;
+        }
+        self.notifications.clone()
+    }
+
+    /// Whether any card (or the Notifications tab's view) is alive.
+    pub fn is_live(&self) -> bool {
+        self.cards.is_live() || self.notifications.is_some()
+    }
+
+    /// The sidebar has stayed closed: every card goes, then what each card
+    /// keeps outside its views (unless a sidebar shows again somewhere),
+    /// and the allocator returns the freed pages. Returns whether anything
+    /// was released.
+    pub fn release(&mut self, cx: &mut App) -> bool {
+        let mut ids = self.cards.release();
+        if self.notifications.take().is_some() && !ids.iter().any(|id| id == crate::plugins::notifications::ID) {
+            ids.push(crate::plugins::notifications::ID.to_string());
+        }
+        if ids.is_empty() {
+            return false;
+        }
+        // After the views are actually gone (dropped entities are released
+        // before the next effect runs).
+        cx.defer(move |cx| {
+            if !crate::state::shell(cx).read(cx).sidebar_visible() {
+                let hooks: Vec<_> = {
+                    let registry = cx.global::<PluginRegistry>();
+                    ids.iter().filter_map(|id| match registry.get(id)?.card.as_ref()? {
+                        mandara_plugins::CardRelease::Shared(release) => Some(release.clone()),
+                        mandara_plugins::CardRelease::Views => None,
+                    }).collect()
+                };
+                for release in hooks {
+                    release(cx);
+                }
+            }
+            mandara_services::memory::request_trim();
+        });
+        true
     }
 
     /// The sidebar finished hiding: the next opening picks its tab again,
@@ -419,12 +566,26 @@ impl SidebarTabs {
         true
     }
 
-    /// The visible tab's cards (empty for Notifications).
-    pub fn cards(&self, sel: &Sel) -> &[AnyView] {
-        match sel {
-            Sel::Tab(id) => self.cards.iter().find(|(t, _)| t == id).map_or(&[], |(_, c)| c.as_slice()),
-            Sel::Notifications => &[],
+    /// The visible tab's cards (empty for Notifications), built on first
+    /// show since the sidebar opened.
+    pub fn cards(&mut self, sel: &Sel, window: &mut Window, cx: &mut App) -> &[AnyView] {
+        let Sel::Tab(id) = sel else { return &[] };
+        // Built cards are cached: the common path compares tab ids only.
+        if self.cards.built.iter().any(|(t, _)| t == id) {
+            return self.cards.cards(id);
         }
+        // Read the plugins' build generations up front (building needs the app mutably).
+        let generations: Vec<(String, Option<u64>)> = {
+            let registry = cx.global::<PluginRegistry>();
+            self.cards.layout.iter().find(|(t, _)| t == id).map(|(_, ids)| ids.iter().map(|i| (i.clone(), registry.get(i).map(|f| f.generation))).collect()).unwrap_or_default()
+        };
+        let lookup = |id: &str| generations.iter().find(|(i, _)| i == id).and_then(|(_, g)| *g);
+        let base_cx = &self.base_cx;
+        self.cards.ensure(id, lookup, |plugin| {
+            let build = cx.global::<PluginRegistry>().get(plugin).map(|f| f.build.clone())?;
+            let card_cx = base_cx.for_card();
+            mandara_plugins::guard(&format!("plugin `{plugin}` startup"), || build(window, cx, card_cx))?.sidebar
+        })
     }
 
     /// The scroll position of `sel`'s card list.
@@ -998,8 +1159,7 @@ fn edit(cx: &mut App, f: impl FnOnce(&mut SidebarConfig) -> Result<(), mandara_c
 
 /// Whether `id` can sit in a sidebar tab.
 pub fn has_sidebar_card(id: &str, cx: &App) -> bool {
-    let registry = cx.global::<PluginRegistry>();
-    registry.manifests().any(|m| m.id == id && (SIDEBAR_WIDGETS.contains(&id) || matches!(m.origin, mandara_plugins::PluginOrigin::ThirdParty { .. })))
+    cx.global::<PluginRegistry>().manifest(id).is_some_and(offers_card)
 }
 
 /// Placing a widget turns its plugin on (and brings back a removed one).
@@ -1151,6 +1311,102 @@ pub fn register(r: &mut PluginRegistry) {
 mod tests {
     use super::*;
 
+    fn layout(tabs: &[(&str, &[&str])]) -> Vec<(String, Vec<String>)> {
+        tabs.iter().map(|(t, ids)| ((*t).to_string(), ids.iter().map(|i| (*i).to_string()).collect())).collect()
+    }
+
+    /// Every plugin at build generation 1.
+    fn gen1(_: &str) -> Option<u64> {
+        Some(1)
+    }
+
+    #[test]
+    fn cards_are_built_when_their_tab_shows_and_shared_across_tabs() {
+        let mut pool: CardPool<Rc<String>> = CardPool::default();
+        pool.set_layout(layout(&[("a", &["media", "sudoku"]), ("b", &["sudoku", "radio"])]), gen1);
+        assert!(!pool.is_live(), "a layout alone builds nothing");
+        let mut built = Vec::new();
+        let mut build = |id: &str| {
+            built.push(id.to_string());
+            Some(Rc::new(id.to_string()))
+        };
+        assert_eq!(pool.ensure("a", gen1, &mut build).len(), 2);
+        assert_eq!(pool.ensure("b", gen1, &mut build).len(), 2);
+        assert_eq!(built, ["media", "sudoku", "radio"], "one instance per plugin");
+        assert!(Rc::ptr_eq(&pool.cards("a")[1], &pool.cards("b")[0]), "both tabs show the same Sudoku");
+        // A tab already built is not built again.
+        pool.ensure("a", gen1, |_| panic!("cached"));
+    }
+
+    #[test]
+    fn release_drops_every_card_and_a_reopening_rebuilds_them() {
+        let mut pool: CardPool<Rc<String>> = CardPool::default();
+        pool.set_layout(layout(&[("a", &["feeds", "reddit", "2048"])]), gen1);
+        let cards: Vec<Rc<String>> = pool.ensure("a", gen1, |id| Some(Rc::new(id.to_string()))).to_vec();
+        let weak: Vec<_> = cards.iter().map(Rc::downgrade).collect();
+        drop(cards);
+        let mut released = pool.release();
+        released.sort();
+        assert_eq!(released, ["2048", "feeds", "reddit"]);
+        assert!(!pool.is_live());
+        assert!(weak.iter().all(|w| w.upgrade().is_none()), "nothing keeps a card alive");
+        assert!(pool.cards("a").is_empty());
+        assert!(pool.release().is_empty(), "a second release has nothing to drop");
+        // The layout stays: opening again builds every card anew.
+        let mut built = 0;
+        assert_eq!(pool.ensure("a", gen1, |id| { built += 1; Some(Rc::new(id.to_string())) }).len(), 3);
+        assert_eq!(built, 3);
+    }
+
+    #[test]
+    fn layout_edits_keep_live_cards_and_reloads_rebuild_theirs() {
+        let mut pool: CardPool<Rc<String>> = CardPool::default();
+        pool.set_layout(layout(&[("a", &["feeds", "radio"])]), gen1);
+        let feeds = pool.ensure("a", gen1, |id| Some(Rc::new(id.to_string())))[0].clone();
+        // Moving Radio to another tab keeps both cards' state.
+        pool.set_layout(layout(&[("a", &["feeds"]), ("b", &["radio"])]), gen1);
+        assert!(Rc::ptr_eq(&pool.ensure("a", gen1, |_| panic!("kept"))[0], &feeds));
+        pool.ensure("b", gen1, |_| panic!("moved, not rebuilt"));
+        // Taking Radio off every tab lets its instance go.
+        pool.set_layout(layout(&[("a", &["feeds"]), ("b", &[])]), gen1);
+        let radio = pool.cards("b").first().cloned();
+        assert!(radio.is_none());
+        pool.set_layout(layout(&[("a", &["feeds"]), ("b", &["radio"])]), gen1);
+        let mut built = Vec::new();
+        pool.ensure("b", gen1, |id| { built.push(id.to_string()); Some(Rc::new(id.to_string())) });
+        assert_eq!(built, ["radio"], "made anew once it comes back");
+        // A hot-reloaded plugin (new build generation) is built again.
+        let gen2 = |id: &str| Some(if id == "feeds" { 2 } else { 1 });
+        pool.set_layout(layout(&[("a", &["feeds"])]), gen2);
+        let fresh = pool.ensure("a", gen2, |id| Some(Rc::new(id.to_string())))[0].clone();
+        assert!(!Rc::ptr_eq(&fresh, &feeds));
+        // An unregistered plugin shows nothing.
+        pool.set_layout(layout(&[("a", &["gone"])]), |_| None);
+        assert!(pool.ensure("a", |_| None, |_| panic!("not registered")).is_empty());
+    }
+
+    #[test]
+    fn every_card_declares_how_it_releases() {
+        let r = registry();
+        for id in SIDEBAR_WIDGETS {
+            let factory = r.get(id).unwrap_or_else(|| panic!("{id} is not registered"));
+            assert!(factory.card.is_some(), "{id} has a sidebar card but no `sidebar_card` declaration: say what it keeps outside its views (mandara_plugins::CardRelease)");
+        }
+        // Every built-in a user can put on a tab is on that list.
+        for m in r.manifests().filter(|m| offers_card(m)) {
+            assert!(r.get(&m.id).is_some_and(|f| f.card.is_some()), "{}", m.id);
+        }
+    }
+
+    #[test]
+    fn card_builds_are_marked_for_the_card() {
+        let base = PanelCx::for_monitor("DP-1");
+        assert!(!base.is_card() && !base.fork().is_card());
+        let card = base.for_card();
+        assert!(card.is_card());
+        assert_eq!(card.monitor(), "DP-1");
+    }
+
     #[test]
     fn flags_are_split_from_words() {
         let w = |s: &str| s.split(' ').map(str::to_string).collect::<Vec<_>>();
@@ -1203,6 +1459,114 @@ mod tests {
         // Ten tabs never fit the default sidebar with labels.
         let row = mandara_config::defaults::SIDEBAR_WIDTH_PX - 2.0 * (30.0 + tokens::XS) - 28.0;
         assert!(strip_width(&[60.0; 10], None, Some(0)) > strip_viewport(row, 30.0, true));
+    }
+
+    /// Every built-in source that builds a sidebar view, with its plugin.
+    /// A new card goes here and into [`SIDEBAR_WIDGETS`]; Feeds and Reddit
+    /// shipped cards that were missing from the list, so nothing offered them.
+    const CARD_SOURCES: &[(&str, &str)] = &[
+        ("plugins/audio.rs", crate::plugins::audio::ID),
+        ("plugins/feeds/mod.rs", crate::plugins::feeds::ID),
+        ("plugins/hadith/mod.rs", crate::plugins::hadith::ID),
+        ("plugins/jannah/mod.rs", crate::plugins::jannah::ID),
+        ("plugins/media.rs", crate::plugins::media::ID),
+        ("plugins/notes.rs", crate::plugins::notes::ID),
+        ("plugins/notifications.rs", crate::plugins::notifications::ID),
+        ("plugins/pomodoro.rs", crate::productivity::POMODORO_ID),
+        ("plugins/prayer.rs", crate::plugins::prayer::ID),
+        ("plugins/quick_settings.rs", crate::plugins::quick_settings::ID),
+        ("plugins/quran/mod.rs", crate::plugins::quran::ID),
+        ("plugins/radio/mod.rs", crate::plugins::radio::ID),
+        ("plugins/reddit/mod.rs", crate::plugins::reddit::ID),
+        ("plugins/resources.rs", crate::plugins::resources::ID),
+        ("plugins/sudoku.rs", crate::plugins::sudoku::ID),
+        ("plugins/tiles.rs", crate::plugins::tiles::ID),
+        ("plugins/todo.rs", crate::plugins::todo::ID),
+        ("plugins/weather.rs", crate::plugins::weather::ID),
+    ];
+
+    fn sources_with_cards(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<String>) {
+        for entry in std::fs::read_dir(dir).unwrap().map(Result::unwrap) {
+            let path = entry.path();
+            if path.is_dir() {
+                sources_with_cards(&path, root, out);
+            } else if path.extension().is_some_and(|e| e == "rs") && std::fs::read_to_string(&path).unwrap().contains(concat!("sidebar: ", "Some(")) {
+                out.push(path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"));
+            }
+        }
+    }
+
+    #[test]
+    fn every_built_in_card_is_offered() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut found = Vec::new();
+        sources_with_cards(&root, &root, &mut found);
+        // Third-party plugins are offered by their origin.
+        found.retain(|f| f != "plugins/external.rs");
+        found.sort();
+        let mut listed: Vec<String> = CARD_SOURCES.iter().map(|(f, _)| (*f).to_string()).collect();
+        listed.sort();
+        assert_eq!(found, listed, "a built-in builds a sidebar card: add it to CARD_SOURCES and SIDEBAR_WIDGETS");
+        let mut ids: Vec<&str> = CARD_SOURCES.iter().map(|(_, id)| *id).collect();
+        ids.sort_unstable();
+        let mut offered = SIDEBAR_WIDGETS.to_vec();
+        offered.sort_unstable();
+        assert_eq!(ids, offered, "SIDEBAR_WIDGETS must list exactly the built-ins with a card");
+    }
+
+    fn registry() -> PluginRegistry {
+        let mut r = PluginRegistry::default();
+        crate::plugins::register_builtin(&mut r);
+        r
+    }
+
+    const NEW_CARDS: [&str; 5] = [crate::plugins::feeds::ID, crate::plugins::reddit::ID, crate::plugins::radio::ID, crate::plugins::sudoku::ID, crate::plugins::tiles::ID];
+
+    #[test]
+    fn the_picker_lists_every_card_plugin() {
+        let r = registry();
+        for id in SIDEBAR_WIDGETS {
+            let manifest = r.manifest(id).unwrap_or_else(|| panic!("{id} is not registered"));
+            assert!(offers_card(manifest), "{id}");
+        }
+        for id in NEW_CARDS {
+            assert!(r.manifests().filter(|m| offers_card(m)).any(|m| m.id == id), "{id} must be in the sidebar's widget picker");
+        }
+        // Plugins without a card stay out of it.
+        assert!(!offers_card(r.manifest(crate::plugins::clock::ID).unwrap()));
+    }
+
+    #[test]
+    fn cards_follow_their_plugin_switch() {
+        let r = registry();
+        let mut cfg = ShellConfig::default();
+        let mut sidebar = SidebarConfig::default();
+        for id in NEW_CARDS {
+            sidebar.add_card(0, id, None).unwrap();
+        }
+        let shown = |cfg: &ShellConfig| -> Vec<String> {
+            let enabled = |id: &str| r.is_enabled(id, &cfg.plugins);
+            shown_cards(&sidebar.tabs[0].cards, &enabled, None).filter(|id| NEW_CARDS.contains(&id.as_str())).cloned().collect()
+        };
+        // Opt-in: hidden until switched on.
+        assert!(shown(&cfg).is_empty(), "the five plugins are off by default");
+        // Placing a card (Studio, the plugin page or the command) turns its plugin on.
+        for id in NEW_CARDS {
+            turn_on(&mut cfg, id);
+        }
+        assert_eq!(shown(&cfg), NEW_CARDS, "each shows once on, in the tab's order");
+        // Switching one off hides only its card, which stays on the tab.
+        mandara_plugins::lifecycle::set_enabled(&mut cfg, crate::plugins::feeds::ID, "Feeds", false, None).unwrap();
+        let now = shown(&cfg);
+        assert!(!now.iter().any(|c| c == crate::plugins::feeds::ID));
+        assert_eq!(now.len(), NEW_CARDS.len() - 1);
+        assert!(sidebar.tabs[0].cards.iter().any(|c| c == crate::plugins::feeds::ID), "kept for when it comes back");
+        mandara_plugins::lifecycle::set_enabled(&mut cfg, crate::plugins::feeds::ID, "Feeds", true, None).unwrap();
+        assert_eq!(shown(&cfg).len(), NEW_CARDS.len());
+        // The notifications card is skipped while it has its own tab.
+        let all = |_: &str| true;
+        let cards = vec!["notifications".to_string(), "reddit".to_string()];
+        assert_eq!(shown_cards(&cards, &all, Some("notifications")).collect::<Vec<_>>(), [&"reddit".to_string()]);
     }
 
     #[test]

@@ -139,6 +139,10 @@ pub enum Action {
     /// Shows the widget on one output only (`None`: on every one).
     ShowOn(String, Option<String>),
     WidgetSettings,
+    /// Opens a system monitor's list of readings.
+    Readings(String),
+    /// Switches one reading of a system monitor on or off.
+    ToggleReading(String, mandara_config::desktop_widgets::MonitorRow),
 }
 
 /// What sits right-aligned on a row.
@@ -441,7 +445,7 @@ pub fn run(action: &Action, output: &str, at: (f32, f32), size: (f32, f32), cx: 
             })
             .detach();
         }
-        Action::AddMenu | Action::Remove(_) | Action::Duplicate(_) | Action::Hide(_) | Action::ShowOn(..) | Action::WidgetSettings => {}
+        Action::AddMenu | Action::Remove(_) | Action::Duplicate(_) | Action::Hide(_) | Action::ShowOn(..) | Action::WidgetSettings | Action::Readings(_) | Action::ToggleReading(..) => {}
     }
 }
 
@@ -637,7 +641,18 @@ impl Render for DesktopMenu {
                     .absolute()
                     .inset_0()
                     .on_mouse_down(MouseButton::Right, cx.listener(|this, e: &MouseDownEvent, _, cx| {
-                        this.at = (f32::from(e.position.x), f32::from(e.position.y));
+                        let at = (f32::from(e.position.x), f32::from(e.position.y));
+                        // In a split bar's gaps (`bar.right_click_gaps`) the
+                        // bar's main menu takes over from this one.
+                        if crate::bar::gaps::hit(&this.output, at, Some(this.size), cx).is_some() {
+                            let (output, size) = (this.output.clone(), this.size);
+                            cx.defer(move |cx| {
+                                close(cx);
+                                let _ = crate::bar::gaps::route(output, at, Some(size), cx);
+                            });
+                            return;
+                        }
+                        this.at = at;
                         this.sub = false;
                         this.hover = None;
                         cx.notify();

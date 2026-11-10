@@ -18,13 +18,17 @@ const PID_REFRESH_SAMPLES: u32 = 10;
 const PERCENT: f32 = 100.0;
 /// KiB per MiB.
 const KIB_PER_MIB: f32 = 1024.0;
+#[cfg(any(test, not(target_os = "freebsd")))]
 const KIB_PER_GIB: u64 = 1024 * 1024;
 const BYTES_PER_KIB: u64 = 1024;
 /// Shortest interval CPU usage is computed over (guards a zero divisor).
 const MIN_SAMPLE_SECS: f32 = 1e-3;
 /// `/proc/<pid>/stat` fields after the command name: state is 0.
+#[cfg(any(test, not(target_os = "freebsd")))]
 const STAT_UTIME: usize = 11;
+#[cfg(any(test, not(target_os = "freebsd")))]
 const STAT_STIME: usize = 12;
+#[cfg(any(test, not(target_os = "freebsd")))]
 const STAT_THREADS: usize = 17;
 
 /// Resolves the running shell's pid (over IPC); installed by the app.
@@ -107,12 +111,33 @@ struct Raw {
     vram_kib: Option<u64>,
 }
 
+/// FreeBSD: `kern.proc.pid.<pid>` (CPU time in microseconds; DRM fdinfo
+/// has no FreeBSD counterpart, so no VRAM figure).
+#[cfg(target_os = "freebsd")]
+fn read_raw(pid: u32) -> Option<Raw> {
+    let p = mandara_services::freebsd::procs::one(pid)?;
+    Some(Raw { ticks: p.runtime_us, rss_kib: p.rss / BYTES_PER_KIB, threads: p.threads, vram_kib: None })
+}
+
+/// Units of [`Raw::ticks`] per second.
+#[cfg(target_os = "freebsd")]
+fn ticks_per_second() -> f32 {
+    mandara_services::freebsd::procs::RUNTIME_PER_SECOND
+}
+
+#[cfg(not(target_os = "freebsd"))]
+fn ticks_per_second() -> f32 {
+    rustix::param::clock_ticks_per_second() as f32
+}
+
+#[cfg(not(target_os = "freebsd"))]
 fn read_raw(pid: u32) -> Option<Raw> {
     let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
     let raw = parse_stat(&stat, &std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?)?;
     Some(Raw { vram_kib: read_vram_kib(pid), ..raw })
 }
 
+#[cfg(not(target_os = "freebsd"))]
 /// Video memory of `pid`: every open DRM file reports its client's usage in
 /// `/proc/<pid>/fdinfo` (one GPU client can be open through several files,
 /// so each client id counts once).
@@ -126,10 +151,12 @@ fn read_vram_kib(pid: u32) -> Option<u64> {
     (!clients.is_empty()).then(|| clients.values().sum())
 }
 
+#[cfg(any(test, not(target_os = "freebsd")))]
 /// Keys drivers use for device-local memory in fdinfo (amdgpu, then the
 /// generic DRM region name used by i915 / xe and others).
 const VRAM_KEYS: &[&str] = &["drm-memory-vram", "drm-total-local0"];
 
+#[cfg(any(test, not(target_os = "freebsd")))]
 /// `(client id, KiB)` from one fdinfo file, if it is a DRM client that
 /// reports device memory.
 fn parse_fdinfo(text: &str) -> Option<(String, u64)> {
@@ -148,6 +175,7 @@ fn parse_fdinfo(text: &str) -> Option<(String, u64)> {
     Some((client, kib))
 }
 
+#[cfg(any(test, not(target_os = "freebsd")))]
 /// Parses `utime + stime`, the thread count and `VmRSS`. The command name
 /// in `stat` may contain spaces, so fields are counted after the last `)`.
 fn parse_stat(stat: &str, status: &str) -> Option<Raw> {
@@ -191,7 +219,7 @@ pub fn poll_while(monitor: &Entity<PerfMonitor>, active: impl Fn(&mut AsyncApp) 
     let link = cx.try_global::<ShellLink>().cloned();
     let weak = monitor.downgrade();
     cx.spawn(async move |cx| {
-        let hz = rustix::param::clock_ticks_per_second() as f32;
+        let hz = ticks_per_second();
         let me = std::process::id();
         let mut shell_prev: Option<(Raw, Instant)> = None;
         let mut studio_prev: Option<(Raw, Instant)> = None;

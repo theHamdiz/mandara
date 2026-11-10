@@ -37,11 +37,16 @@ changes; an empty collection starts no painter or weather service.
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons" width="100%"/><br/><sub><b>Mandara Login</b>, the login manager: the <b>Mandara</b> design</sub></td>
-<td width="50%" valign="top"><img src="screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" width="100%"/><br/><sub>The <b>Midnight card</b> design</sub></td>
+<td width="33%" valign="top"><img src="screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons, with the Mandara emblem above the keyboard pill" width="100%"/><br/><sub><b>Mandara Login</b>, the login manager: the <b>Mandara</b> design</sub></td>
+<td width="33%" valign="top"><img src="screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" width="100%"/><br/><sub>The <b>Midnight card</b> design</sub></td>
+<td width="33%" valign="top"><img src="screenshots/greeter-material-you.webp" alt="Mandara Login in its Material You design: a big stacked clock and a tonal card with the scalloped avatar, a filled password field, a round sign-in button and a session chip, in colours from the wallpaper" width="100%"/><br/><sub>The <b>Material You</b> design</sub></td>
 </tr>
+</table>
+
+<table>
 <tr>
-<td colspan="2" align="center"><img src="screenshots/lock-screen.webp" alt="The lock screen: the date, a big clock, the avatar and the password field over soft violet and coral waves" width="50%"/><br/><sub><b>Lock screen</b></sub></td>
+<td width="50%" valign="top"><img src="screenshots/lock-screen.webp" alt="The lock screen in its Mandara design: the date, a big clock, the avatar and the glass password field over blurred coral, violet and gold ribbons" width="100%"/><br/><sub><b>Lock screen</b>: the <b>Mandara</b> design</sub></td>
+<td width="50%" valign="top"><img src="screenshots/lock-screen-material-you.webp" alt="The lock screen in its Material You design: the date, a big stacked clock, and a tonal card with the scalloped avatar, a filled password field and a round button over blurred blue and teal ribbons" width="100%"/><br/><sub>The <b>Material You</b> design</sub></td>
 </tr>
 </table>
 
@@ -116,7 +121,7 @@ changes; an empty collection starts no painter or weather service.
   screen → **Hide typing as**. Reduced motion skips the pop and fade.
 
 <p align="center">
-  <img src="screenshots/studio-login.webp" alt="Studio: the login screen designer with a live preview" width="100%"/>
+  <img src="screenshots/studio-login.webp" alt="Studio: the login screen designer with a live preview, the Try it buttons and the three Looks: Mandara, Midnight card and Material You" width="100%"/>
   <br/>
   <sub>Studio → Login screen: the designer with a live preview.</sub>
 </p>

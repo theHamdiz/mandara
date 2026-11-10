@@ -24,6 +24,7 @@ pub mod bars;
 pub mod recorder_settings;
 mod tuning_settings;
 mod integration_settings;
+mod platform_settings;
 pub mod workflow_settings;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -543,6 +544,24 @@ const BOOL_SCHEMES: &[(&str, &str)] = &[("tonal-spot", tk("Tonal spot")), ("vibr
 
 /// The depth plugin's group on the Wallpaper page.
 pub const DEPTH_GROUP: &str = tk("Depth clock");
+/// The AUR helper choices (program names are proper nouns).
+const AUR_HELPERS: &[(&str, &str)] = &[(mandara_ui::plugins::updates::AUR_HELPER_AUTO, tk("Automatic")), ("paru", "paru"), ("yay", "yay"), ("pikaur", "pikaur"), ("aura", "Aura"), ("trizen", "trizen"), ("shelly", "Shelly")];
+
+/// The AUR helpers installed here (looked up once: Studio's own process).
+fn installed_aur_helpers() -> &'static [mandara_services::sysupdate::aur::AurHelper] {
+    static INSTALLED: OnceLock<Vec<mandara_services::sysupdate::aur::AurHelper>> = OnceLock::new();
+    INSTALLED.get_or_init(mandara_services::updates::installed_aur_helpers)
+}
+
+/// Why the AUR helper choice (or one of its choices) can't be picked.
+fn aur_helper_locked(raw: Option<&str>) -> Option<&'static str> {
+    let installed = installed_aur_helpers();
+    if installed.is_empty() {
+        return Some(tk("No AUR helper is installed (paru, yay, pikaur, Aura, trizen or Shelly)"));
+    }
+    let helper = raw.and_then(mandara_services::sysupdate::aur::AurHelper::from_id)?;
+    (!installed.contains(&helper)).then_some(tk("Not installed"))
+}
 /// Step of the model mode's clock-depth slider.
 const DEPTH_SPLIT_STEP: f64 = 0.05;
 
@@ -590,6 +609,7 @@ pub fn required_plugin(path: &str) -> Option<&'static str> {
 /// place of its control), e.g. the launcher's hover edge while the dock
 /// owns the bottom edge (`ShellConfig::launcher_hover_enabled`).
 pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
+    if let Some(reason) = platform_settings::locked(setting.path) { return Some(reason); }
     if let Some(reason) = integration_settings::locked(setting.path, cfg) { return Some(reason); }
     if let Some(reason) = system_settings::kwin_locked(setting.path, running_compositor()) { return Some(reason); }
     match setting.path {
@@ -608,6 +628,7 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         "/wallpaper/depth/split" if cfg.wallpaper.depth.auto_split => Some(tk("Set per wallpaper while the automatic split is on")),
         "/wallpaper/depth/regenerate" | "/wallpaper/depth/place_clock" if !cfg.wallpaper.depth_effect => Some(tk("Turn on the depth effect first")),
         path if path.starts_with("/plugins/settings/screenshot/record_") => recorder_settings::locked(path, cfg),
+        "/plugins/settings/updates/aur_helper" => aur_helper_locked(None),
         path => side_bar_settings::locked(path, cfg).or_else(|| surface_settings::locked(path, cfg)),
     }
 }
@@ -635,7 +656,12 @@ pub(crate) const RIVER_LACKS: &[&str] = &["/compositor/look/gaps_inner", "/compo
 /// Why choice `raw` of `setting` can't be picked under `cfg` right now
 /// (shown disabled, with the reason under the choices).
 pub fn choice_locked(setting: &Setting, raw: &str, cfg: &ShellConfig) -> Option<&'static str> {
-    if setting.path.starts_with("/plugins/settings/screenshot/record_") { recorder_settings::choice_locked(setting.path, raw, cfg) } else { None }
+    if let Some(reason) = platform_settings::choice_locked(setting.path, raw) { return Some(reason); }
+    match setting.path {
+        path if path.starts_with("/plugins/settings/screenshot/record_") => recorder_settings::choice_locked(path, raw, cfg),
+        "/plugins/settings/updates/aur_helper" => aur_helper_locked(Some(raw)),
+        _ => None,
+    }
 }
 
 /// What a click on a locked toggle saves: a toggle that can't apply right
@@ -947,7 +973,16 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Power"), "/plugins/settings/power/show_peripherals", tk("Peripheral batteries"), tk("List mice, keyboards and headsets that report a battery"), Toggle, Value::from(true)),
         sd(Plugins, tk("Power"), "/plugins/settings/power/history_hours", tk("Charge history"), tk("Time span of the battery charge sparkline"), slider(1.0, 48.0, 1.0, " h"), Value::from(12)),
         sd(Plugins, tk("Updates"), "/plugins/settings/updates/interval_hours", tk("Check every"), tk("How often to look for updates while the chip is in the bar"), slider(1.0, 24.0, 1.0, " h"), Value::from(3)),
-        sd(Plugins, tk("Updates"), "/plugins/settings/updates/aur", tk("AUR packages"), tk("Also check AUR packages with paru or yay"), Toggle, Value::from(true)),
+        sd(Plugins, tk("Updates"), "/plugins/settings/updates/aur", tk("AUR packages"), tk("Also check and update AUR packages with the installed AUR helper"), Toggle, Value::from(true)),
+        sd(
+            Plugins,
+            tk("Updates"),
+            "/plugins/settings/updates/aur_helper",
+            tk("AUR helper"),
+            tk("Which AUR helper updates AUR packages, as you; its sudo asks through Mandara's password dialog. Automatic prefers paru, then yay"),
+            Choice(AUR_HELPERS),
+            Value::from(mandara_ui::plugins::updates::AUR_HELPER_AUTO),
+        ),
         sd(Plugins, tk("Updates"), "/plugins/settings/updates/flatpak", "Flatpak", tk("Also check Flatpak apps and runtimes"), Toggle, Value::from(true)),
         sd(Plugins, tk("Updates"), "/plugins/settings/updates/notify", tk("Notify about updates"), tk("A notification when new updates appear"), Toggle, Value::from(true)),
         sd(Plugins, tk("Updates"), "/plugins/settings/updates/arch_news", tk("Arch news"), tk("Latest archlinux.org news headline (fetched only while the panel is open)"), Toggle, Value::from(true)),
@@ -962,7 +997,7 @@ fn build() -> Vec<Setting> {
             Choice(const { &[("mandara", tk("In Mandara")), ("terminal", tk("In a terminal"))] }),
             Value::from("mandara"),
         ),
-        sd(Plugins, tk("Updates"), "/plugins/settings/updates/terminal", tk("Terminal"), tk("Opens AUR updates, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm"), Text { placeholder: "ghostty" }, Value::from("")),
+        sd(Plugins, tk("Updates"), "/plugins/settings/updates/terminal", tk("Terminal"), tk("Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm"), Text { placeholder: "ghostty" }, Value::from("")),
         sd(Plugins, tk("Updates"), "/plugins/settings/updates/nixos_keep", tk("Generations to keep"), tk("NixOS: how many of the newest generations a clean-up keeps (the running and booted ones always stay)"), slider(1.0, 30.0, 1.0, ""), Value::from(5)),
         sd(Plugins, tk("World clock"), "/plugins/settings/world-clock/cities", tk("Cities"), tk("Comma-separated city names (English or Arabic) or time zones like Europe/Lisbon"), Text { placeholder: "Alexandria, London, New York, Tokyo" }, Value::from("Alexandria, London, New York, Tokyo")),
         sd(Plugins, tk("World clock"), "/plugins/settings/world-clock/clock", tk("Time format"), tk("12- or 24-hour times; Follow the shell uses General → 24-hour clock"), Choice(const { &[("shell", tk("Follow the shell")), ("24", tk("24-hour")), ("12", tk("12-hour"))] }), Value::from("shell")),

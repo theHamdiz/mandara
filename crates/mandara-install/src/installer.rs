@@ -6,10 +6,13 @@
 //! files, no services (read-only checks and downloads into a private temp
 //! folder still run, so the plan is the real one).
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 mod path;
 mod completion;
+mod immutable;
+use immutable::Layer;
 use path::{add_to_path, path_hint};
 #[cfg(test)]
 use path::{PATH_MARK, fish_word, posix_path_line, sh_word};
@@ -21,6 +24,7 @@ use mandara_i18n::{Lang, packs};
 use crate::args::InstallArgs;
 use crate::compositors::{self, Compositor};
 use crate::family::{Family, OsRelease};
+use crate::image::{self, ImageSystem, OstreeStatus};
 use crate::files::{self, Paths};
 use crate::host::{Cmd, Fetch, Host, Io, Level, Row, TempDir};
 use crate::pkg::{PackageManager, Privilege};
@@ -30,6 +34,8 @@ use crate::release::{self, ARCHIVE_SUFFIX, MAX_ARCHIVE_BYTES, MAX_JSON_BYTES, SU
 use crate::tui;
 use mandara_i18n::{t, tf};
 
+/// How to build greetd on FreeBSD.
+const FREEBSD_GREETD_DOC: &str = "https://github.com/theHamdiz/mandara/blob/main/docs/login-manager.md#freebsd";
 /// greetd + its kiosk compositor: what Mandara Login needs installed.
 const LOGIN_PROGRAMS: &[&str] = &["greetd", "cage"];
 /// The lock screen's own PAM service (else `login` is used).
@@ -37,9 +43,18 @@ const LOCK_PAM: &str = "/etc/pam.d/mandara-lock";
 /// Studio's admin helper: the root-owned copy of Mandara its administrator
 /// actions run as root (`mandara_config::admin::ADMIN_EXE`).
 pub const ADMIN_EXE: &str = "/usr/local/lib/mandara/mandara-admin";
+/// Where the admin helper lives (FreeBSD's `install` can't create it
+/// on the way, as GNU's `-D` does).
+const ADMIN_DIR: &str = "/usr/local/lib/mandara";
+/// FreeBSD's root group.
+const FREEBSD_ROOT_GROUP: &str = "wheel";
+/// How FreeBSD's rc.conf says yes.
+const RC_YES: &str = "YES";
 /// Loads i2c-dev at boot (DDC/CI monitor brightness).
 const I2C_MODULES_LOAD: &str = "/etc/modules-load.d/i2c-dev.conf";
 const I2C_MODULE: &str = "i2c-dev";
+/// Where image-based systems (nss-altfiles) keep their system groups.
+const IMAGE_GROUP: &str = "/usr/lib/group";
 /// The group owning `/dev/i2c-*` when none exists yet.
 const I2C_DEFAULT_GROUP: &str = "i2c";
 /// Where rustup's installer binary is published (`<dist>/<triple>/rustup-init`).
@@ -90,6 +105,9 @@ pub trait LoginProbe {
 pub struct Facts {
     pub os: OsRelease,
     pub family: Family,
+    /// Image-based systems ([`ImageSystem`]): packages go into the next
+    /// image, which arrives with the next boot.
+    pub image: Option<ImageSystem>,
     pub arch: String,
     pub libc: &'static str,
     /// The CPU runs the x86-64-v3 tuned build.
@@ -129,6 +147,8 @@ impl Facts {
         let os_text = ["etc/os-release", "usr/lib/os-release"].iter().find_map(|p| std::fs::read_to_string(root.join(p)).ok()).unwrap_or_default();
         let os = OsRelease::parse(&os_text);
         let family = Family::detect(&os, |p| host.has_program(p));
+        let ostree_booted = root.join(image::OSTREE_BOOTED.trim_start_matches('/')).exists();
+        let image = ImageSystem::detect(&image::Probe { os: &os, ostree_booted, has_program: &|p| host.has_program(p) });
         let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
         let exe = std::env::current_exe().map(|p| PathBuf::from(p.to_string_lossy().trim_end_matches(DELETED_SUFFIX))).unwrap_or_else(|_| PathBuf::from(files::BINARY));
         let exe = std::fs::canonicalize(&exe).unwrap_or(exe);
@@ -137,6 +157,7 @@ impl Facts {
         Facts {
             os,
             family,
+            image,
             arch,
             libc: platform::compiled_libc(),
             x86_64_v3,
@@ -221,6 +242,10 @@ pub struct Installer<'a> {
     synced: bool,
     /// What the interactive setup screen chose (`None` when it didn't run).
     setup: Option<SetupChoices>,
+    /// Image-based systems: the packages collected for the next image.
+    layer: Layer,
+    /// The admin helper and Mandara Login were skipped (said once).
+    root_files_skipped: bool,
 }
 
 /// The answers taken on the interactive setup screen, so the steps below
@@ -249,7 +274,7 @@ impl<'a> Installer<'a> {
         };
         let paths = Paths::new(args.prefix.as_deref(), &facts.home, xdg);
         let privilege = Privilege::detect(facts.is_root, |p| host.has_program(p));
-        Installer { host, probe, facts, args, paths, privilege, tmp: None, synced: false, setup: None }
+        Installer { host, probe, facts, args, paths, privilege, tmp: None, synced: false, setup: None, layer: Layer::default(), root_files_skipped: false }
     }
 
     pub fn paths(&self) -> &Paths {
@@ -414,14 +439,20 @@ impl<'a> Installer<'a> {
             return self.dry_run_summary(&exe);
         }
         let stage = stage.ok_or("nothing to install")?;
+        // Checked before the binary is replaced: afterwards the path names
+        // the new file, not the one the running shell was started from.
+        let bin = self.paths.binary();
+        let running = self.shell_runs(&bin);
         self.install_files(&stage)?;
         self.compositor();
-        let bin = self.paths.binary();
         self.admin_helper(&bin);
         self.greeter(&bin);
         self.lock_hint();
         self.i2c();
-        self.restart();
+        self.image_packages();
+        if running {
+            self.restart(&bin);
+        }
         self.completion();
         Ok(())
     }
@@ -431,6 +462,9 @@ impl<'a> Installer<'a> {
     /// Runtime libraries (required), build tools (source builds, required),
     /// then fonts, portals and services one by one (optional).
     fn deps(&mut self, from_source: bool) -> Result<(), String> {
+        if let Some(image) = self.facts.image {
+            return self.image_deps(image, from_source);
+        }
         let family = self.facts.family;
         let Some(set) = packages::for_family(family) else {
             if family == Family::NixOS {
@@ -633,6 +667,10 @@ impl<'a> Installer<'a> {
     /// repositories when the package manager can say so quickly.
     fn compositor_package(&mut self, c: &Compositor) -> Option<&'static str> {
         let package = c.package(self.facts.family)?;
+        // The image's own tool resolves it when the transaction runs.
+        if self.facts.image.is_some() {
+            return Some(package);
+        }
         let pm = self.package_manager()?;
         // A dry run that would sync missing databases first can't ask them.
         let databases_ready = !self.dry() || index::missing(pm, &self.facts.root).is_empty();
@@ -648,6 +686,10 @@ impl<'a> Installer<'a> {
     /// Installs `c` (and its desktop portal, when it has one), then points
     /// `mandara setup` at it.
     fn install_compositor(&mut self, c: &Compositor, package: &str) {
+        if let Some(image) = self.facts.image {
+            self.image_compositor(image, c, package);
+            return;
+        }
         let Some(pm) = self.package_manager() else { return };
         if !self.as_root(Cmd::from_argv(pm.install_argv(&[package]))) {
             self.say(Level::Warn, format!("could not install {package}; install {} yourself, then run `mandara setup --compositor {}`", c.label, c.id));
@@ -669,6 +711,10 @@ impl<'a> Installer<'a> {
     /// on (harmless); NetworkManager only gets a hint, since it would take
     /// over from another network manager (systemd-networkd, iwd, connman).
     fn services_hint(&mut self) {
+        if self.facts.family == Family::FreeBSD {
+            self.freebsd_services();
+            return;
+        }
         if !self.has("systemctl") {
             return;
         }
@@ -680,6 +726,63 @@ impl<'a> Installer<'a> {
             self.say(Level::Warn, "The Network panel needs NetworkManager running. If nothing else manages your network:");
             let hint = self.root_hint(&["systemctl", "enable", "--now", "NetworkManager"]);
             self.say(Level::Info, format!("  {hint}"));
+        }
+    }
+
+    /// FreeBSD: D-Bus and seatd enabled in rc.conf (`sysrc`) and started
+    /// (`service`) when they aren't yet, and you in seatd's group, so a
+    /// compositor can open the seat. Network and Bluetooth have no
+    /// FreeBSD service here (Studio shows those panels locked).
+    fn freebsd_services(&mut self) {
+        for name in packages::FREEBSD_SERVICES {
+            let var = format!("{name}_enable");
+            let enabled = self.run(Cmd::new(&["sysrc", "-n", "-i", var.as_str()]).io(Io::Capture)).is_some_and(|o| rc_yes(&o.stdout));
+            if enabled {
+                // Enabled in rc.conf isn't the same as running: start one
+                // that was enabled but never started (or has stopped).
+                if self.run(Cmd::new(&["service", name, "status"]).io(Io::Quiet)).is_some_and(|o| o.success) {
+                    continue;
+                }
+                if self.as_root(Cmd::new(&["service", name, "start"]).io(Io::Quiet)) {
+                    if !self.dry() {
+                        self.say(Level::Ok, format!("{name} was enabled but not running; started it"));
+                    }
+                } else {
+                    let hint = self.root_hint(&["service", name, "start"]);
+                    self.say(Level::Warn, format!("{name} is enabled but not running; run: {hint}"));
+                }
+                continue;
+            }
+            let set = format!("{var}={RC_YES}");
+            if !self.as_root(Cmd::new(&["sysrc", set.as_str()]).io(Io::Quiet)) {
+                let hint = format!("{} && {}", self.root_hint(&["sysrc", set.as_str()]), self.root_hint(&["service", name, "start"]));
+                self.say(Level::Warn, format!("{name} isn't enabled; run: {hint}"));
+                continue;
+            }
+            // Already running (started by hand) is fine too.
+            let started = self.as_root(Cmd::new(&["service", name, "start"]).io(Io::Quiet)) || self.run(Cmd::new(&["service", name, "status"]).io(Io::Quiet)).is_some_and(|o| o.success);
+            if !self.dry() {
+                if started {
+                    self.say(Level::Ok, format!("{name} enabled and started"));
+                } else {
+                    self.say(Level::Warn, format!("{name} is enabled but didn't start; it starts at the next boot"));
+                }
+            }
+        }
+        let group = packages::FREEBSD_SEAT_GROUP;
+        let groups = std::fs::read_to_string(self.facts.sys("/etc/group")).unwrap_or_default();
+        let passwd = std::fs::read_to_string(self.facts.sys("/etc/passwd")).unwrap_or_default();
+        let user = self.facts.user.clone();
+        if user.is_empty() || user_in_group(&user, group, &groups, &passwd) {
+            return;
+        }
+        if self.as_root(Cmd::new(&["pw", "groupmod", group, "-m", user.as_str()]).io(Io::Quiet)) {
+            if !self.dry() {
+                self.say(Level::Ok, format!("added {user} to {group}, seatd's group (log in again for it to apply)"));
+            }
+        } else {
+            let hint = self.root_hint(&["pw", "groupmod", group, "-m", user.as_str()]);
+            self.say(Level::Warn, format!("compositors need {user} in the {group} group (seatd): run {hint}"));
         }
     }
 
@@ -991,6 +1094,7 @@ impl<'a> Installer<'a> {
         self.admin_helper(exe);
         self.greeter(exe);
         self.i2c();
+        self.image_packages();
         Ok(())
     }
 
@@ -1190,6 +1294,10 @@ impl<'a> Installer<'a> {
             self.say(Level::Detail, "login screen: on NixOS, set programs.mandara.greeter.enable = true; and rebuild");
             return;
         }
+        // Mandara Login's copy lives in /usr/local, which SteamOS replaces.
+        if !self.image_keeps_root_files() {
+            return;
+        }
         self.say(Level::Step, "Login screen");
         let exe_s = exe.to_string_lossy().into_owned();
         let use_mandara = |exe: &str| Cmd::new(&[exe, "greeter", "use", "mandara", "--apply"]);
@@ -1206,6 +1314,7 @@ impl<'a> Installer<'a> {
             } else {
                 self.say(Level::Ok, "Mandara Login is your login screen");
             }
+            self.freebsd_greeter_power();
             self.keyring_unlock(exe);
             return;
         }
@@ -1215,7 +1324,18 @@ impl<'a> Installer<'a> {
             return;
         }
         let missing: Vec<&str> = LOGIN_PROGRAMS.iter().copied().filter(|p| !self.has(p)).collect();
+        // greetd isn't packaged for FreeBSD yet: it is built by hand.
+        if self.facts.family == Family::FreeBSD && missing.contains(&"greetd") {
+            self.say(Level::Warn, format!("greetd isn't packaged for FreeBSD yet: build and install it as {FREEBSD_GREETD_DOC} shows, then run: {hint}"));
+            return;
+        }
         let installing = !missing.is_empty();
+        // An image-based system gets greetd and cage with its next image;
+        // the switch needs them, so it waits for the reboot.
+        if installing && !self.args.no_deps && let Some(image) = self.facts.image {
+            self.image_login(image, &missing);
+            return;
+        }
         if installing {
             let pkgs = packages::for_family(self.facts.family).map(|s| s.greeter).unwrap_or_default();
             if self.args.no_deps {
@@ -1241,14 +1361,45 @@ impl<'a> Installer<'a> {
             }
             let bin = self.paths.binary().to_string_lossy().into_owned();
             self.as_root(use_mandara(&bin));
+            self.freebsd_greeter_power();
             self.keyring_unlock(exe);
             return;
         }
         if self.as_root(use_mandara(&exe_s)) {
             self.say(Level::Ok, "Mandara Login is your login screen from the next boot (undo: sudo mandara greeter restore latest)");
+            self.freebsd_greeter_power();
             self.keyring_unlock(exe);
         } else {
             self.say(Level::Warn, "the login screen was not changed; see above, or switch later in Studio → Login screen → Login manager");
+        }
+    }
+
+    /// FreeBSD: the login screen's user joins `operator`, which FreeBSD
+    /// allows to shut down and suspend, so the login screen's power buttons
+    /// work without ConsoleKit2. Nothing to do when it's a member already.
+    fn freebsd_greeter_power(&mut self) {
+        if self.facts.family != Family::FreeBSD {
+            return;
+        }
+        let group = packages::FREEBSD_POWER_GROUP;
+        let config = std::fs::read_to_string(self.facts.sys(packages::FREEBSD_GREETD_CONFIG)).unwrap_or_default();
+        let user = greetd_user(&config);
+        let groups = std::fs::read_to_string(self.facts.sys("/etc/group")).unwrap_or_default();
+        let passwd = std::fs::read_to_string(self.facts.sys("/etc/passwd")).unwrap_or_default();
+        let hint = self.root_hint(&["pw", "groupmod", group, "-m", user.as_str()]);
+        if !passwd.lines().any(|l| l.split(':').next() == Some(user.as_str())) {
+            self.say(Level::Warn, format!("the login screen's user {user} doesn't exist yet; once greetd has created it, run: {hint}"));
+            return;
+        }
+        if user_in_group(&user, group, &groups, &passwd) {
+            return;
+        }
+        if self.as_root(Cmd::new(&["pw", "groupmod", group, "-m", user.as_str()]).io(Io::Quiet)) {
+            if !self.dry() {
+                self.say(Level::Ok, format!("added {user} to {group}, so the login screen's power buttons work"));
+            }
+        } else {
+            self.say(Level::Warn, format!("the login screen's power buttons need {user} in {group}: run {hint}"));
         }
     }
 
@@ -1289,9 +1440,20 @@ impl<'a> Installer<'a> {
             self.say(Level::Detail, "admin helper: on NixOS, install mandara through your configuration; Studio runs that root-owned copy for administrator actions");
             return;
         }
+        if !self.image_keeps_root_files() {
+            return;
+        }
         let exe_s = exe.to_string_lossy().into_owned();
-        let argv = ["install", "-D", "-o", "root", "-g", "root", "-m", "0755", exe_s.as_str(), ADMIN_EXE];
+        // FreeBSD's `install` has no GNU `-D` (create the folders on the
+        // way) and its root group is `wheel`: the folder is made first.
+        let freebsd = self.facts.family == Family::FreeBSD;
+        let group = if freebsd { FREEBSD_ROOT_GROUP } else { "root" };
+        let dir = ["install", "-d", "-o", "root", "-g", group, "-m", "0755", ADMIN_DIR];
+        let argv: Vec<&str> = if freebsd { vec!["install", "-o", "root", "-g", group, "-m", "0755", exe_s.as_str(), ADMIN_EXE] } else { vec!["install", "-D", "-o", "root", "-g", group, "-m", "0755", exe_s.as_str(), ADMIN_EXE] };
         if self.dry() {
+            if freebsd {
+                self.as_root(Cmd::new(&dir));
+            }
             self.as_root(Cmd::new(&argv));
             return;
         }
@@ -1300,10 +1462,11 @@ impl<'a> Installer<'a> {
             self.say(Level::Info, "skipped; Studio installs it the first time it needs administrator rights");
             return;
         }
-        if self.as_root(Cmd::new(&argv).io(Io::Quiet)) {
+        let made_dir = !freebsd || self.as_root(Cmd::new(&dir).io(Io::Quiet));
+        if made_dir && self.as_root(Cmd::new(&argv).io(Io::Quiet)) {
             self.say(Level::Ok, format!("admin helper: {ADMIN_EXE}"));
         } else {
-            let hint = self.root_hint(&argv);
+            let hint = if freebsd { format!("{} && {}", self.root_hint(&dir), self.root_hint(&argv)) } else { self.root_hint(&argv) };
             self.say(Level::Warn, format!("admin helper not installed; run: {hint}"));
         }
     }
@@ -1312,7 +1475,10 @@ impl<'a> Installer<'a> {
     fn lock_hint(&mut self) {
         // On NixOS `programs.mandara.enable` declares the PAM service.
         if self.facts.family != Family::NixOS && !self.facts.sys(LOCK_PAM).exists() {
-            let hint = self.root_hint(&["install", "-Dm644", "share/pam.d/mandara-lock", LOCK_PAM]);
+            // `/etc/pam.d` always exists on FreeBSD, whose `install` has
+            // no `-D`.
+            let install: &[&str] = if self.facts.family == Family::FreeBSD { &["install", "-m", "644"] } else { &["install", "-Dm644"] };
+            let hint = self.root_hint(&[install, &["share/pam.d/mandara-lock", LOCK_PAM]].concat());
             self.say(Level::Detail, format!("Lock screen: `mandara lock` (preview: `mandara lock --demo`). Optional dedicated PAM service, from the release tarball: {hint}"));
         }
     }
@@ -1320,6 +1486,12 @@ impl<'a> Installer<'a> {
     /// Studio → Displays talks DDC/CI over `/dev/i2c-*`: it needs the
     /// i2c-dev module and, on most distributions, the i2c group.
     fn i2c(&mut self) {
+        // FreeBSD's DDC/CI path (iic(4)) isn't wired up: Studio shows
+        // external monitor brightness locked there.
+        if self.facts.family == Family::FreeBSD {
+            self.say(Level::Detail, "External monitor brightness (DDC/CI) isn't available on FreeBSD yet; built-in screens use backlight(8).");
+            return;
+        }
         let external = std::fs::read_dir(self.facts.sys("/sys/class/drm")).into_iter().flatten().flatten().any(|e| {
             let n = e.file_name().to_string_lossy().into_owned();
             n.starts_with("card") && (n.contains("-DP-") || n.contains("-HDMI-"))
@@ -1328,7 +1500,11 @@ impl<'a> Installer<'a> {
             return;
         }
         let devices = std::fs::read_dir(self.facts.sys("/dev")).into_iter().flatten().flatten().any(|e| e.file_name().to_string_lossy().starts_with("i2c-"));
-        let groups = std::fs::read_to_string(self.facts.sys("/etc/group")).unwrap_or_default();
+        let etc_groups = std::fs::read_to_string(self.facts.sys("/etc/group")).unwrap_or_default();
+        // Image-based systems (Fedora Atomic) keep their packages' system
+        // groups in /usr/lib/group, which `usermod` doesn't change.
+        let image_groups = std::fs::read_to_string(self.facts.sys(IMAGE_GROUP)).unwrap_or_default();
+        let groups = format!("{etc_groups}{}{image_groups}", if etc_groups.is_empty() || etc_groups.ends_with('\n') { "" } else { "\n" });
         let passwd = std::fs::read_to_string(self.facts.sys("/etc/passwd")).unwrap_or_default();
         let group = device_group(&self.facts.sys("/dev/i2c-0"), &groups).unwrap_or_else(|| I2C_DEFAULT_GROUP.to_string());
         let user = self.facts.user.clone();
@@ -1363,32 +1539,52 @@ impl<'a> Installer<'a> {
             self.say(Level::Warn, tf("Could not load {module}; check that the installed kernel includes it", &[("module", &I2C_MODULE)]));
             return;
         }
-        if group_gid(&group, &groups).is_none() {
-            self.as_root(Cmd::new(&["groupadd", "-r", group.as_str()]).io(Io::Quiet));
+        if group_gid(&group, &etc_groups).is_none() {
+            match image_groups.lines().find(|l| l.split(':').next() == Some(group.as_str())) {
+                // Copied into /etc/group (same gid) so `usermod` can add you.
+                Some(line) => {
+                    self.as_root(Cmd::new(&["tee", "-a", "/etc/group"]).stdin(format!("{line}\n")).io(Io::Quiet));
+                }
+                None => {
+                    self.as_root(Cmd::new(&["groupadd", "-r", group.as_str()]).io(Io::Quiet));
+                }
+            }
         }
         if !member && self.as_root(Cmd::new(&["usermod", "-aG", group.as_str(), user.as_str()])) && !self.dry() {
             self.say(Level::Ok, format!("added {user} to {group} (log in again for it to apply)"));
         }
     }
 
-    /// Restarts a running shell, only if it runs this installation.
-    fn restart(&mut self) {
-        let bin = self.paths.binary();
-        let Ok(procs) = std::fs::read_dir(self.facts.sys("/proc")) else { return };
-        for e in procs.flatten() {
-            let dir = e.path();
-            if !e.file_name().to_string_lossy().bytes().all(|b| b.is_ascii_digit()) || std::fs::read_to_string(dir.join("comm")).map(|c| c.trim() != files::BINARY).unwrap_or(true) {
-                continue;
-            }
-            let Ok(target) = std::fs::read_link(dir.join("exe")) else { continue };
-            if Path::new(target.to_string_lossy().trim_end_matches(DELETED_SUFFIX)) != bin {
-                continue;
-            }
-            if self.run(Cmd::new(&[bin.to_string_lossy().as_ref(), "msg", "restart"]).io(Io::Quiet)).is_some_and(|o| o.success) {
-                self.say(Level::Ok, "restarted the running shell on the new version");
-            }
-            break;
+    /// Restarts the running shell (one [`Self::shell_runs`] found running
+    /// this installation) on the new binary.
+    fn restart(&mut self, bin: &Path) {
+        if self.run(Cmd::new(&[bin.to_string_lossy().as_ref(), "msg", "restart"]).io(Io::Quiet)).is_some_and(|o| o.success) {
+            self.say(Level::Ok, "restarted the running shell on the new version");
         }
+    }
+
+    /// Whether a running `mandara` process runs `bin` (procfs). The kernel
+    /// names the binary with every symlink resolved, so `bin` is too.
+    #[cfg(not(target_os = "freebsd"))]
+    fn shell_runs(&mut self, bin: &Path) -> bool {
+        let Ok(procs) = std::fs::read_dir(self.facts.sys("/proc")) else { return false };
+        let bin = canonical(bin);
+        procs.flatten().any(|e| {
+            let dir = e.path();
+            e.file_name().to_string_lossy().bytes().all(|b| b.is_ascii_digit())
+                && std::fs::read_to_string(dir.join("comm")).is_ok_and(|c| c.trim() == files::BINARY)
+                && std::fs::read_link(dir.join("exe")).is_ok_and(|target| canonical(Path::new(target.to_string_lossy().trim_end_matches(DELETED_SUFFIX))) == bin)
+        })
+    }
+
+    /// Whether a running `mandara` process runs `bin`. FreeBSD has no
+    /// procfs: `pgrep` finds the processes and the kernel names each one's
+    /// binary (`kern.proc.pathname`), with symlinks resolved.
+    #[cfg(target_os = "freebsd")]
+    fn shell_runs(&mut self, bin: &Path) -> bool {
+        let pids = self.run(Cmd::new(&["pgrep", "-x", files::BINARY]).io(Io::Capture)).map(|o| o.stdout).unwrap_or_default();
+        let bin = canonical(bin);
+        pids.split_whitespace().filter_map(|p| p.parse::<i32>().ok()).any(|pid| freebsd_exe(pid).is_some_and(|exe| canonical(&exe) == bin))
     }
 
     // ── Uninstall ───────────────────────────────────────────────────────
@@ -1467,6 +1663,34 @@ impl<'a> Installer<'a> {
     }
 }
 
+/// Whether an rc.conf value (`sysrc -n` output) means yes: `YES`, `TRUE`,
+/// `ON` or `1`, any case, as rc.subr's `checkyesno` reads it.
+fn rc_yes(value: &str) -> bool {
+    matches!(value.trim().to_ascii_uppercase().as_str(), "YES" | "TRUE" | "ON" | "1")
+}
+
+/// `path` with its symlinks resolved, or as it is when it doesn't exist.
+fn canonical(path: &Path) -> Cow<'_, Path> {
+    std::fs::canonicalize(path).map_or(Cow::Borrowed(path), Cow::Owned)
+}
+
+/// The binary process `pid` runs (`kern.proc.pathname`).
+#[cfg(target_os = "freebsd")]
+fn freebsd_exe(pid: i32) -> Option<PathBuf> {
+    use std::os::unix::ffi::OsStringExt as _;
+    let mib = [libc::CTL_KERN, libc::KERN_PROC, libc::KERN_PROC_PATHNAME, pid];
+    let mut buf = vec![0u8; libc::PATH_MAX as usize];
+    let mut len = buf.len();
+    // SAFETY: a four-entry MIB and a buffer of `len` bytes the kernel
+    // fills with a NUL-terminated path; no new value is set.
+    let rc = unsafe { libc::sysctl(mib.as_ptr(), mib.len() as libc::c_uint, buf.as_mut_ptr().cast(), &mut len, std::ptr::null(), 0) };
+    if rc != 0 {
+        return None;
+    }
+    buf.truncate(len.saturating_sub(1));
+    Some(PathBuf::from(std::ffi::OsString::from_vec(buf)))
+}
+
 /// Writes `bytes` as an executable file.
 fn write_executable(path: &Path, bytes: &[u8]) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt as _;
@@ -1493,6 +1717,24 @@ fn device_group(device: &Path, groups: &str) -> Option<String> {
 
 /// Whether `user` is in `group`: listed as a member, or it's their primary
 /// group (from `/etc/passwd`).
+/// greetd's `[default_session] user`, else `greeter` (greetd's default).
+fn greetd_user(config: &str) -> String {
+    let mut in_session = false;
+    for line in config.lines().map(str::trim) {
+        if line.starts_with('[') {
+            in_session = line == "[default_session]";
+            continue;
+        }
+        if in_session && let Some((key, value)) = line.split_once('=') && key.trim() == "user" {
+            let value = value.split('#').next().unwrap_or_default().trim().trim_matches(|c| c == '"' || c == '\'');
+            if !value.is_empty() {
+                return value.to_owned();
+            }
+        }
+    }
+    "greeter".into()
+}
+
 fn user_in_group(user: &str, group: &str, groups: &str, passwd: &str) -> bool {
     let member = groups.lines().any(|l| {
         let f: Vec<&str> = l.split(':').collect();

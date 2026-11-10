@@ -82,7 +82,7 @@ Login screen — switch plan
   Now:    SDDM
   Target: Mandara Login (greetd greeter)
 
-  Files (each one backed up first to /var/lib/mandara-greeter/backups/<timestamp>/):
+  Files (each one backed up first to /var/lib/mandara-greeter-backups/<timestamp>/):
     install  /usr/local/lib/mandara/mandara-greeter (copy of ~/.local/bin/mandara), media folders, state dir
     update   /etc/greetd/config.toml
         - command = "agreety --cmd /bin/sh"
@@ -108,10 +108,15 @@ Login screen — switch plan
   enabled (`systemctl disable/enable`, never `--now`).
 * It refuses without root, validates first (binary installed, unit present,
   config parses), keeps a timestamped backup with a `manifest.toml` per
-  switch, and rolls back files and units if a step fails.
+  switch in `/var/lib/mandara-greeter-backups` (only root can change it,
+  unlike the folder the login screen's user owns), and rolls back files and units if
+  a step fails.
 * `restore latest` (or a backup id) puts the backed-up files back, removes
   files the switch created, and with `--apply` moves `display-manager.service`
-  back if the switch had moved it.
+  back if the switch had moved it. It runs only the service commands that
+  switch could have written, for its own units. Backups made by older
+  releases in `/var/lib/mandara-greeter/backups` still restore when root
+  owns them and nobody else can write them.
 * `MANDARA_GREETER_DRY_RUN=1` turns `use` and `restore` (and Studio's
   switch) into plan-only runs.
 
@@ -178,6 +183,115 @@ The previous display manager is recorded at install time in
 `/var/lib/mandara-greeter/previous-dm`. Without it, re-enable yours by hand,
 e.g. `sudo systemctl disable greetd && sudo systemctl enable sddm`.
 
+## FreeBSD
+
+Mandara Login runs on FreeBSD under greetd and `cage` like anywhere else;
+only the plumbing differs:
+
+* **greetd isn't packaged for FreeBSD yet** (a port is under review), and
+  upstream greetd builds only on Linux. Build its FreeBSD branch (it adds
+  FreeBSD's VTs, an rc script and a PAM sample). Install the tools as
+  root:
+
+  ```sh
+  pkg install git rust cage seatd
+  ```
+
+  Build it as your ordinary user, never as root (the build runs code
+  from greetd's dependencies):
+
+  ```sh
+  git clone -b feature/freebsd-support https://github.com/adamretter/greetd
+  cd greetd && cargo build --release
+  ```
+
+  Then, from the same `greetd` folder, install it as root. The branch's
+  sample config runs greetd on VT 1, where FreeBSD already runs a login
+  prompt, so the copy is set to VT 8 (`/dev/ttyv8`):
+
+  ```sh
+  install -m 755 target/release/greetd target/release/agreety /usr/local/bin/
+  install -m 555 greetd.rc /usr/local/etc/rc.d/greetd
+  mkdir -p /usr/local/etc/greetd
+  sed 's/^vt = 1$/vt = 8/' config.toml > /usr/local/etc/greetd/config.toml
+  grep '^vt = 8$' /usr/local/etc/greetd/config.toml
+  cp greetd.pam.freebsd.sample /usr/local/etc/pam.d/greetd
+  pw useradd greeter -d /nonexistent -s /usr/sbin/nologin -c "greetd greeter"
+  pw groupmod video -m greeter
+  sysrc seatd_enable=YES && service seatd start
+  ```
+
+  Then `sudo mandara greeter use mandara --apply` (or Studio → Login
+  screen → Login manager) points greetd at Mandara Login.
+* **Config:** `/usr/local/etc/greetd/config.toml` (greetd's FreeBSD
+  build reads it before `/etc/greetd/config.toml`). A config Mandara
+  writes from scratch uses VT 8 (`/dev/ttyv8`, past the eight gettys of
+  `/etc/ttys`).
+* **Switching** uses rc.conf instead of systemd: the active login screen is
+  the one with `<name>_enable="YES"` (`greetd`, `sddm`, `gdm`, `lightdm`…,
+  rc scripts in `/usr/local/etc/rc.d` and `/etc/rc.d`), and `--apply` runs
+  `sysrc -s sddm sddm_enable=NO` and `sysrc -s greetd greetd_enable=YES`.
+  With `-s`, sysrc also edits a service's own `/etc/rc.conf.d/<name>` or
+  `/usr/local/etc/rc.conf.d/<name>`, which rc reads after rc.conf, so the
+  setting that counts is the one changed. `greeter restore` puts back
+  the value each setting had, in the file it was in, and removes one that
+  wasn't set anywhere. Nothing is started or stopped.
+* **Power buttons:** Sleep, Restart and Shut Down on the login screen ask
+  ConsoleKit2. Without it they run `shutdown` and `acpiconf -s 3`
+  directly, which FreeBSD allows only to root and the `operator` group.
+  `mandara install` adds the login screen's user (greetd's
+  `[default_session] user`, usually `greeter`) to it; by hand that's
+  `pw groupmod operator -m greeter`.
+  `operator` can do more than that: on a standard FreeBSD system it can
+  also read the raw disk devices (`/dev/ada0`, `/dev/nda0`, `/dev/da0`…),
+  so a login screen that was broken into could read an unencrypted
+  disk's data, password hashes included. If that matters more to you than
+  the buttons, take the user out again with
+  `pw groupmod operator -d greeter` and power off from a session instead;
+  with ConsoleKit2 running, the buttons don't need `operator` at all.
+* **PAM:** OpenPAM looks for greetd's policy in `/etc/pam.d/greetd`, then
+  in the `greetd` lines of `/etc/pam.conf`, then in ports'
+  `/usr/local/etc/pam.d/greetd`, and uses the first one it finds
+  (pam.conf(5)). `keyring-unlock` copies greetd's file from
+  `/usr/local/etc/pam.d` into `/etc/pam.d` and adds its lines there
+  (modules from `/usr/lib` and `/usr/local/lib`: `gnome-keyring`,
+  `plasma6-kwallet-pam`). FreeBSD 14's
+  PAM rejects the whole file over Linux's `-auth` prefix (15's accepts
+  it), so on both the lines are written without it, and only for modules
+  that are installed. Without
+  the prefix a module that goes missing fails every greetd login, so run
+  `sudo mandara greeter keyring-unlock --remove` before uninstalling
+  `gnome-keyring` or `plasma6-kwallet-pam` (the plan warns about it). greetd's
+  sample file checks the password with `auth sufficient pam_unix.so`,
+  which ends the stack before a keyring line can run: the plan says so,
+  and `auth required pam_unix.so` fixes it. When `/etc/pam.conf` holds
+  greetd's policy and `/etc/pam.d/greetd` doesn't exist, `keyring-unlock`
+  changes nothing: a new `/etc/pam.d/greetd` would replace that policy.
+  Add the lines to `/etc/pam.conf` yourself, each starting with `greetd`
+  (`greetd auth optional pam_gnome_keyring.so`), or move greetd's lines
+  into `/etc/pam.d/greetd` first.
+* **Password prompts** (polkit) need a ConsoleKit2 session for apps other
+  than the shell. First make sure ConsoleKit2 is installed
+  (`sudo pkg install consolekit2`) and that
+  `/usr/local/lib/pam_ck_connector.so` exists: OpenPAM fails the whole
+  login when a PAM line names a module that isn't there, even an
+  `optional` one. Then add the line to the greetd policy OpenPAM uses,
+  the first of these that has one:
+  1. `/etc/pam.d/greetd`, if the file exists (`keyring-unlock` creates
+     it): add `session optional pam_ck_connector.so`;
+  2. `/etc/pam.conf`, if `grep '^[[:space:]]*greetd[[:space:]]' /etc/pam.conf`
+     prints lines: add `greetd session optional pam_ck_connector.so`
+     there, with the `greetd` service name in front;
+  3. otherwise `/usr/local/etc/pam.d/greetd`: add
+     `session optional pam_ck_connector.so`.
+
+  Before you uninstall `consolekit2`, remove that line from each of these
+  files that has it (`grep -n pam_ck_connector /etc/pam.d/greetd
+  /etc/pam.conf /usr/local/etc/pam.d/greetd` lists them), and never
+  restore a PAM backup that still contains it.
+  Without a ConsoleKit2 session, Mandara's agent still answers everything
+  the shell asks (the Updates panel, the admin helper).
+
 ## Unlock your keyrings at login: `greeter keyring-unlock`
 
 GNOME Keyring and KWallet can open with the password you type at the login
@@ -223,7 +337,7 @@ sudo mandara greeter keyring-unlock --remove   # take Mandara's lines out again
   exists (openSUSE), a copy goes to `/etc/pam.d`, which takes precedence,
   and `--remove` deletes it again.
 * It refuses without root, backs the file up under
-  `/var/lib/mandara-greeter/backups/<timestamp>/` (so `greeter restore
+  `/var/lib/mandara-greeter-backups/<timestamp>/` (so `greeter restore
   latest` undoes it too), checks that nothing outside its markers changes,
   verifies the write and rolls back on any error. Running it twice changes
   nothing; a module installed later is added on the next run.
@@ -268,8 +382,9 @@ glass, and Motion & accessibility.
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons" width="100%"/><br/><sub><b>Mandara</b>: everything floats on the backdrop</sub></td>
-<td width="50%" valign="top"><img src="screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" width="100%"/><br/><sub><b>Midnight card</b>: one outlined card in navy and citrine</sub></td>
+<td width="33%" valign="top"><img src="screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons, with the Mandara emblem above the keyboard pill" width="100%"/><br/><sub><b>Mandara</b>: everything floats on the backdrop</sub></td>
+<td width="33%" valign="top"><img src="screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" width="100%"/><br/><sub><b>Midnight card</b>: one outlined card in navy and citrine</sub></td>
+<td width="33%" valign="top"><img src="screenshots/greeter-material-you.webp" alt="Mandara Login in its Material You design: a big stacked clock and a tonal card with the scalloped avatar, a filled password field, a round sign-in button and a session chip, in colours from the wallpaper" width="100%"/><br/><sub><b>Material You</b>: colours from the wallpaper, one tonal card</sub></td>
 </tr>
 </table>
 

@@ -19,8 +19,12 @@
 //! * [`job`]: the user side. One owned worker thread starts the helper (and
 //!   the rootless Flatpak step), reads its output incrementally into a
 //!   bounded state, and keeps running while the panel is closed;
-//! * [`nixos`]: NixOS generations, flake inputs, closure diffs and clean-up.
+//! * [`nixos`]: NixOS generations, flake inputs, closure diffs and clean-up;
+//! * [`aur`]: the AUR step on Arch, run as you by the installed AUR helper,
+//!   with [`askpass`] answering its `sudo` through Mandara's password dialog.
 
+pub mod askpass;
+pub mod aur;
 pub mod helper;
 pub mod job;
 pub mod nixos;
@@ -39,15 +43,24 @@ use serde::{Deserialize, Serialize};
 
 /// Folders the root side looks for programs in, in order. Only root-owned
 /// files there are run as root; `$PATH` is never consulted.
-pub const SAFE_DIRS: [&str; 5] = ["/run/current-system/sw/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"];
+#[cfg(not(target_os = "freebsd"))]
+pub const SAFE_DIRS: &[&str] = &["/run/current-system/sw/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"];
+/// FreeBSD: packages live in `/usr/local` (`/usr/local/sbin/pkg`; the
+/// `/usr/sbin/pkg` in base only bootstraps it, so it comes second), the
+/// base system's tools (`freebsd-update`) in `/usr/sbin`.
+#[cfg(target_os = "freebsd")]
+pub const SAFE_DIRS: &[&str] = &["/usr/local/sbin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"];
 /// `PATH` given to every program the root side runs.
+#[cfg(not(target_os = "freebsd"))]
 pub const SAFE_PATH: &str = "/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin";
+/// FreeBSD root's own default `PATH` (package scripts call tools from
+/// `/usr/local/bin`).
+#[cfg(target_os = "freebsd")]
+pub const SAFE_PATH: &str = "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin";
 /// Where `os-release` is read from (the first that exists).
 const OS_RELEASE: [&str; 2] = ["/etc/os-release", "/usr/lib/os-release"];
-/// Present on rpm-ostree (Fedora Atomic) systems.
-const OSTREE_BOOTED: &str = "/run/ostree-booted";
-/// Ids of image-based openSUSE systems (transactional-update).
-const TRANSACTIONAL_IDS: [&str; 4] = ["microos", "aeon", "kalpa", "sle-micro"];
+pub use mandara_install::image::OSTREE_BOOTED;
+use mandara_install::ImageSystem;
 /// openSUSE ids that update with `zypper dup` (rolling releases).
 const SUSE_ROLLING_IDS: [&str; 2] = ["opensuse-tumbleweed", "opensuse-slowroll"];
 
@@ -71,14 +84,35 @@ pub enum System {
 pub enum ImageTool {
     RpmOstree,
     TransactionalUpdate,
+    /// Vanilla OS 2.
+    Abroot,
+    /// SteamOS 3.
+    SteamOs,
 }
 
 impl ImageTool {
-    pub fn command(self) -> &'static str {
+    /// The installer's view of the same system (`mandara install` adds
+    /// packages to these images with the same tool).
+    pub fn system(self) -> ImageSystem {
         match self {
-            ImageTool::RpmOstree => "rpm-ostree upgrade",
-            ImageTool::TransactionalUpdate => "transactional-update dup",
+            ImageTool::RpmOstree => ImageSystem::RpmOstree,
+            ImageTool::TransactionalUpdate => ImageSystem::Transactional,
+            ImageTool::Abroot => ImageSystem::Abroot,
+            ImageTool::SteamOs => ImageSystem::SteamOs,
         }
+    }
+
+    fn of(system: ImageSystem) -> ImageTool {
+        match system {
+            ImageSystem::RpmOstree => ImageTool::RpmOstree,
+            ImageSystem::Transactional => ImageTool::TransactionalUpdate,
+            ImageSystem::Abroot => ImageTool::Abroot,
+            ImageSystem::SteamOs => ImageTool::SteamOs,
+        }
+    }
+
+    pub fn command(self) -> &'static str {
+        self.system().update_command()
     }
 }
 
@@ -92,12 +126,9 @@ pub struct Probe<'a> {
 impl System {
     /// From `os-release`, the installed package manager and image markers.
     pub fn detect_with(p: &Probe<'_>) -> System {
-        if p.ostree_booted {
-            return System::ImageBased(ImageTool::RpmOstree);
-        }
-        let ids = || std::iter::once(p.os.id.as_str()).chain(p.os.id_like.iter().map(String::as_str));
-        if ids().any(|id| TRANSACTIONAL_IDS.iter().any(|t| id.contains(t))) {
-            return System::ImageBased(ImageTool::TransactionalUpdate);
+        // The installer's own detection, so both agree on the system.
+        if let Some(image) = ImageSystem::detect(&mandara_install::image::Probe { os: p.os, ostree_booted: p.ostree_booted, has_program: p.has_program }) {
+            return System::ImageBased(ImageTool::of(image));
         }
         let family = Family::detect(p.os, |b| (p.has_program)(b));
         let id = match family {
@@ -108,16 +139,28 @@ impl System {
             Family::Suse => plan::BackendId::ZypperUpdate,
             Family::Void => plan::BackendId::Xbps,
             Family::Alpine => plan::BackendId::Apk,
+            Family::FreeBSD => plan::BackendId::Pkg,
             Family::NixOS => return System::NixOs,
             Family::Gentoo | Family::Solus | Family::Unknown => return System::Unsupported,
         };
         System::Managed(id)
     }
 
-    /// This system (reads `os-release` and the safe program folders).
+    /// This system (reads `os-release` and the safe program folders; on
+    /// FreeBSD, whether pkg installed the base system).
     pub fn detect() -> System {
         let os = read_os_release();
-        System::detect_with(&Probe { os: &os, has_program: &|p| find_safe(p).is_some(), ostree_booted: Path::new(OSTREE_BOOTED).exists() })
+        System::detect_with(&Probe { os: &os, has_program: &|p| find_safe(p).is_some(), ostree_booted: Path::new(OSTREE_BOOTED).exists() }).with_packaged_base(packaged_base)
+    }
+
+    /// FreeBSD whose base system came from packages (FreeBSD 15's default
+    /// install) updates it with pkg, never freebsd-update. `packaged` is
+    /// asked only on FreeBSD.
+    pub fn with_packaged_base(self, packaged: impl FnOnce() -> bool) -> System {
+        match self {
+            System::Managed(plan::BackendId::Pkg) if packaged() => System::Managed(plan::BackendId::PkgBase),
+            other => other,
+        }
     }
 
     /// Shown in the panel ("Arch Linux", "NixOS"…): the distribution's own
@@ -128,6 +171,8 @@ impl System {
             System::NixOs => "NixOS",
             System::ImageBased(ImageTool::RpmOstree) => "rpm-ostree",
             System::ImageBased(ImageTool::TransactionalUpdate) => "transactional-update",
+            System::ImageBased(ImageTool::Abroot) => "abroot",
+            System::ImageBased(ImageTool::SteamOs) => "SteamOS",
             System::Unsupported => "",
         }
     }
@@ -140,6 +185,45 @@ impl System {
             System::Unsupported => Some(t("Mandara can't update this distribution itself yet; use its own package manager").to_string()),
         }
     }
+}
+
+/// The file freebsd-update asks pkg about: pkg itself reads it for the
+/// system's ABI, so it exists everywhere, and on a packaged base a
+/// `FreeBSD-*` package owns it.
+#[cfg(target_os = "freebsd")]
+const BASE_PROBE_FILE: &str = "/usr/bin/uname";
+/// The prefix of every package of a packaged base.
+const BASE_PACKAGE_PREFIX: &str = "FreeBSD-";
+
+/// Whether `pkg which -q` answered with a base-system package (exit 0
+/// and its `FreeBSD-runtime-15.1`-style name): the same test
+/// freebsd-update uses to refuse a packaged base.
+pub fn is_base_package_owner(success: bool, stdout: &str) -> bool {
+    success && stdout.trim().starts_with(BASE_PACKAGE_PREFIX)
+}
+
+/// Whether this system's base came from packages (asked once per process:
+/// one `pkg which` run, on FreeBSD only).
+#[cfg(target_os = "freebsd")]
+pub fn packaged_base() -> bool {
+    static PACKAGED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *PACKAGED.get_or_init(|| {
+        let Some(pkg) = find_safe("pkg") else { return false };
+        std::process::Command::new(pkg)
+            .args(["which", "-q", BASE_PROBE_FILE])
+            .env_clear()
+            .env("PATH", SAFE_PATH)
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .is_ok_and(|o| is_base_package_owner(o.status.success(), &String::from_utf8_lossy(&o.stdout)))
+    })
+}
+
+/// Only FreeBSD has a packaged base.
+#[cfg(not(target_os = "freebsd"))]
+pub fn packaged_base() -> bool {
+    false
 }
 
 /// `os-release` of this system (empty when unreadable).
@@ -210,10 +294,32 @@ pub fn launcher() -> std::sync::Arc<dyn job::Launcher> {
             fn restart_facts(&self) -> (String, PathBuf, PathBuf) {
                 fake_launcher().map_or_else(|| (String::new(), PathBuf::new(), PathBuf::new()), |f| f.restart_facts())
             }
+            fn prompter(&self) -> Option<std::sync::Arc<dyn askpass::Prompter>> {
+                askpass::prompter()
+            }
+            fn aur(&self, step: &plan::Step, session: &askpass::Session, line: &mut dyn FnMut(&str), cancel: &helper::CancelSignal) -> std::io::Result<Option<i32>> {
+                match fake_launcher() {
+                    Some(f) => f.aur(step, session, line, cancel),
+                    None => job::run_aur(step, session, line, cancel),
+                }
+            }
         }
         return std::sync::Arc::new(Shared);
     }
     std::sync::Arc::new(job::PkexecLauncher)
+}
+
+/// The AUR helper the sandbox's fake pretends is installed
+/// (`MANDARA_FAKE_AUR`; `None` outside the sandbox).
+pub fn fake_aur() -> Option<aur::AurHelper> {
+    #[cfg(all(feature = "fake-system-update", debug_assertions))]
+    {
+        fake_launcher().and_then(|f| f.aur)
+    }
+    #[cfg(not(all(feature = "fake-system-update", debug_assertions)))]
+    {
+        None
+    }
 }
 
 /// The NixOS files read for generations (the fake's tree in the sandbox).
@@ -258,6 +364,8 @@ pub enum Phase {
     /// NixOS: deleting generations and collecting garbage.
     Cleaning,
     Flatpak,
+    /// The AUR helper builds packages.
+    AurBuild,
     Finished,
 }
 
@@ -275,6 +383,7 @@ impl Phase {
             Phase::Activating => t("Switching to it"),
             Phase::Cleaning => t("Cleaning up"),
             Phase::Flatpak => t("Updating Flatpak apps"),
+            Phase::AurBuild => t("Building AUR packages"),
             Phase::Finished => t("Finished"),
         }
     }
@@ -298,6 +407,8 @@ pub enum FailureKind {
     NoPrompt,
     /// The admin helper is missing or too old and couldn't be set up.
     Helper,
+    /// An AUR package didn't build.
+    BuildFailed,
     Other,
 }
 
@@ -313,6 +424,7 @@ impl FailureKind {
             FailureKind::NotAuthorized => t("The update needs an administrator's password, and it wasn't given."),
             FailureKind::NoPrompt => t("No password prompt is available: make sure polkit (pkexec) is installed and Mandara's polkit agent is running."),
             FailureKind::Helper => t("Mandara's admin helper isn't set up, so the update can't run as administrator."),
+            FailureKind::BuildFailed => t("An AUR package didn't build. The log shows why; it often needs a fix from its maintainer. Nothing else was changed by this step."),
             FailureKind::Other => t("The update stopped with an error. The log shows what the package manager said."),
         }
     }
@@ -344,8 +456,23 @@ pub fn kernel_modules_missing(release: &str, modules_root: &Path) -> bool {
 }
 
 /// The running kernel release (`uname -r`).
+#[cfg(not(target_os = "freebsd"))]
 pub fn kernel_release() -> String {
     std::fs::read_to_string("/proc/sys/kernel/osrelease").map(|s| s.trim().to_string()).unwrap_or_default()
+}
+
+/// The running kernel release (`uname -r`, `kern.osrelease`).
+#[cfg(target_os = "freebsd")]
+pub fn kernel_release() -> String {
+    // SAFETY: uname fills the zeroed struct it is given; its fields are
+    // NUL-terminated within their fixed size.
+    unsafe {
+        let mut u: libc::utsname = std::mem::zeroed();
+        if libc::uname(&mut u) != 0 {
+            return String::new();
+        }
+        std::ffi::CStr::from_ptr(u.release.as_ptr()).to_string_lossy().into_owned()
+    }
 }
 
 #[cfg(test)]
@@ -369,9 +496,32 @@ mod tests {
         assert_eq!(detect("ID=void", &[], false), System::Managed(Xbps));
         assert_eq!(detect("ID=alpine", &[], false), System::Managed(Apk));
         assert_eq!(detect("ID=nixos", &[], false), System::NixOs);
+        assert_eq!(detect("NAME=FreeBSD\nVERSION=\"14.4-RELEASE\"\nVERSION_ID=\"14.4\"\nID=freebsd\nANSI_COLOR=\"0;31\"\nPRETTY_NAME=\"FreeBSD 14.4-RELEASE\"\n", &[], false), System::Managed(Pkg));
+        assert_eq!(System::Managed(Pkg).label(), "pkg");
+        assert_eq!(System::Managed(PkgBase).label(), "pkg");
         assert_eq!(detect("ID=gentoo", &[], false), System::Unsupported);
         assert_eq!(detect("ID=mystery", &["xbps-install"], false), System::Managed(Xbps));
         assert_eq!(detect("", &[], false), System::Unsupported);
+    }
+
+    /// FreeBSD 15.1's default install has a packaged base: pkg updates it
+    /// and freebsd-update is left out. Only FreeBSD asks.
+    #[test]
+    fn a_packaged_freebsd_base_updates_through_pkg() {
+        use plan::BackendId::*;
+        const FREEBSD_15: &str = "NAME=FreeBSD\nVERSION=\"15.1-RELEASE\"\nVERSION_ID=\"15.1\"\nID=freebsd\nANSI_COLOR=\"0;31\"\nPRETTY_NAME=\"FreeBSD 15.1-RELEASE\"\nCPE_NAME=\"cpe:/o:freebsd:freebsd:15.1\"\n";
+        let freebsd = detect(FREEBSD_15, &[], false);
+        assert_eq!(freebsd, System::Managed(Pkg));
+        assert_eq!(freebsd.with_packaged_base(|| true), System::Managed(PkgBase));
+        assert_eq!(freebsd.with_packaged_base(|| false), System::Managed(Pkg), "a traditional install keeps freebsd-update");
+        let linux = detect("ID=arch", &[], false);
+        assert_eq!(linux.with_packaged_base(|| panic!("asked on Linux")), System::Managed(Pacman));
+        // `pkg which -q /usr/bin/uname`, recorded on FreeBSD 15.1: a packaged
+        // base, a traditional one (exit 1, nothing printed), and a stray answer.
+        assert!(is_base_package_owner(true, "FreeBSD-runtime-15.1\n"));
+        assert!(!is_base_package_owner(false, ""));
+        assert!(!is_base_package_owner(true, "coreutils-9.5\n"));
+        assert!(!packaged_base() || cfg!(target_os = "freebsd"));
     }
 
     #[test]
@@ -379,6 +529,17 @@ mod tests {
         assert_eq!(detect("ID=fedora\nVARIANT_ID=silverblue", &[], true), System::ImageBased(ImageTool::RpmOstree));
         assert_eq!(detect("ID=\"opensuse-microos\"\nID_LIKE=\"suse opensuse opensuse-tumbleweed\"", &[], false), System::ImageBased(ImageTool::TransactionalUpdate));
         assert!(System::ImageBased(ImageTool::RpmOstree).explanation().unwrap().contains("rpm-ostree upgrade"));
+        // Vanilla OS (its ID is its base's) and SteamOS (ID_LIKE=arch) never
+        // reach apt or pacman, which can't write their images.
+        let vanilla = "NAME=\"Vanilla OS\"\nPRETTY_NAME=\"Vanilla OS 2 stable\"\nID=ubuntu\nID_LIKE=debian";
+        assert_eq!(detect(vanilla, &["apt-get"], false), System::ImageBased(ImageTool::Abroot));
+        assert_eq!(detect("NAME=\"SteamOS\"\nID=steamos\nID_LIKE=arch\nVARIANT_ID=steamdeck", &["pacman"], false), System::ImageBased(ImageTool::SteamOs));
+        assert_eq!(detect("ID=\"aeon\"\nID_LIKE=\"suse opensuse opensuse-tumbleweed opensuse-microos opensuse-aeon microos\"", &["zypper"], false), System::ImageBased(ImageTool::TransactionalUpdate));
+        assert!(System::ImageBased(ImageTool::SteamOs).explanation().unwrap().contains("steamos-update"));
+        // The panel and the installer name the same system.
+        for tool in [ImageTool::RpmOstree, ImageTool::TransactionalUpdate, ImageTool::Abroot, ImageTool::SteamOs] {
+            assert_eq!(ImageTool::of(tool.system()), tool);
+        }
         assert!(System::Managed(plan::BackendId::Pacman).explanation().is_none());
     }
 

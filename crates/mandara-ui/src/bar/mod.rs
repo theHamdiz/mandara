@@ -3,6 +3,7 @@
 pub mod layout;
 pub mod items;
 pub mod autohide;
+pub mod gaps;
 pub mod side;
 pub(crate) mod scrim;
 

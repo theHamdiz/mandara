@@ -122,6 +122,7 @@ A connection's IPv4 method, addresses, gateway and DNS
 A container using this much CPU (percent of one core) is highlighted
 A daily reminder of the final home
 A day's events, ISO week and Hijri date as JSON
+A dense status line along the bottom: stat blocks, live meters and rates in monospace
 A design-first Wayland desktop shell, written entirely in Rust.
 A device battery this low turns amber; Power → peripheral alerts sets when it turns coral
 A digit removes its pencil marks from the cells it sees
@@ -159,6 +160,7 @@ A hairline edge around each capsule
 A hook still running after this is stopped (rules can set their own)
 A label above the icon under the pointer
 A label: size, bold and tone style it
+A lantern of scalloped accent buttons and tonal tiles hanging from the top edge
 A launch counts half as much after this many days
 A library of the hadith collections, downloaded on demand, with a hadith of the day, a reader, search and bookmarks (opt-in)
 A light drizzle. A hood will do.
@@ -275,7 +277,9 @@ AM
 API key
 APP
 APPS
+AUR helper
 AUR packages
+AUR packages are for Arch Linux
 AYAH FOR {date}
 AYAH OF THE DAY
 Abdul Basit Abdul Samad
@@ -398,6 +402,7 @@ Add your Reddit app's client id in Studio to start reading
 Add your translation API key in Studio
 Add yourself to the {group} group (`sudo usermod -aG {group} $USER`), then log out and back in.
 Add {app} to your apps (~/.local/share/applications)
+Add {count} packages with {tool}? They arrive with the next boot: {packages}
 Added
 Added here
 Added {account}
@@ -482,8 +487,9 @@ Allow your user once:
 Already bound in your compositor config: {chords}
 Already in your rules below
 Already preparing a share
-Also check AUR packages with paru or yay
+Already waiting for the next boot: {packages}
 Also check Flatpak apps and runtimes
+Also check and update AUR packages with the installed AUR helper
 Also checks the plugins you installed from the marketplace (Mandara's own plugins update with the shell)
 Also fire while a fullscreen app is shown (on MangoWM the bar must show over fullscreen windows too)
 Also here: {places}
@@ -513,6 +519,8 @@ Ambient
 Ambient sea, rain, wind, café, fire and noise — synthesized live
 Amplitude
 An API key is saved for this server
+An AUR package didn't build
+An AUR package didn't build. The log shows why; it often needs a fix from its maintainer. Nothing else was changed by this step.
 An Essay on Criticism
 An HOTP link needs a counter
 An action is still running
@@ -661,6 +669,7 @@ Articles per feed
 Articles you already have show at once; new ones follow.
 As
 As a solid rock is not shaken by the wind, wise people falter not amidst blame and praise.
+As tall as its buttons, or as tall as the panel beside it with the buttons spread evenly over it
 Ask a window to close
 Ask for KeePassXC at login
 Ask for a new one at next login
@@ -918,6 +927,8 @@ Build time p50
 Build your own
 Build your own plugins
 Build, switch now and boot it next time
+Building AUR packages
+Building Mandara needs build tools this system's image doesn't have ({packages}). Build inside a toolbox or distrobox container, or install a release instead.
 Building the new generation
 Built for {arch}, but this computer is {host}: it probably won't start.
 Built in
@@ -1073,6 +1084,7 @@ Changes are picked up live: add, rebuild or delete a plugin and the shell and th
 Changes start at this time
 Changes the bar's style, position and height. Your items stay unless you choose to replace them.
 Changes volumes and devices (PipeWire / PulseAudio)
+Changing {name} needs membership in the video group
 Channels
 Channels · {channel}
 Chapter II
@@ -1420,6 +1432,7 @@ Copy with meaning
 Copy {file} ({size}) to {dir}
 Copying…
 Coral
+Core {n}
 Corner curves
 Corner cut
 Corner radius
@@ -1732,6 +1745,7 @@ Desktop fun
 Desktop ids listed first, in this order (Ctrl+P in the launcher pins too)
 Desktop ids never listed
 Desktop info
+Desktop menu
 Desktop productivity
 Desktop shortcuts and you
 Desktop sky
@@ -2122,6 +2136,7 @@ Every prayer time today, the next one lit
 Every setting, live
 Every shortcut: chord, keys, action, description, group and source file (JSON)
 Every step you take toward learning is a step on an easy road.
+Every system package Mandara needs is already part of this system.
 Every task with its progress, elapsed time, ETA and status (JSON)
 Every variable of the style, then tone, light, texture and layout. The preview follows as you drag.
 Every {every}
@@ -2266,6 +2281,7 @@ Filter packages…
 Find
 Find a surah by name or number…
 Find a window by title or app; Enter focuses it
+Find communities
 Find coordinates
 Find devices
 Find emoji by English or Arabic name
@@ -2306,6 +2322,7 @@ First shape
 First {shown} of {n} matches
 Fit
 Fit & effects
+Fit the buttons
 Fits in
 Five
 Five past {hour}
@@ -2377,6 +2394,7 @@ Folders, comma separated (empty: your home folders)
 Follow Mandara
 Follow Mandara, or a language of its own: its panel, bar item, sidebar card, widgets and the meanings it shows; the rest of Mandara keeps its language
 Follow Quick start above: your plugin shows up here, and in Installed, as soon as you copy it in.
+Follow a community to see its top posts here
 Follow sites you like: add their addresses or pick from tested starter feeds in Studio.
 Follow system
 Follow system preference
@@ -2445,6 +2463,11 @@ Francis Bacon
 Frankenstein
 Free and open: plugins are GitHub repositories tagged mandara-plugin. They run sandboxed — no files, network or system access unless they ask for commands.
 Free, on GitHub: no account, no review queue
+FreeBSD can't do this without ConsoleKit2
+FreeBSD has no BlueZ, the Bluetooth service Mandara uses
+FreeBSD has no power-profiles-daemon; powerd(8) sets the processor's speed there
+FreeBSD has no systemd: its services are rc(8) scripts, which this plugin doesn't manage
+FreeBSD sleeps by suspending to memory (ACPI S3) only
 Freed {size}
 Freeze a running container's processes
 Frequency
@@ -2494,6 +2517,9 @@ GPU Screen Recorder isn't installed
 GPU busy
 GPU power
 GPU temp
+GPU {n}
+GPU {n} power
+GPU {n} temp
 GRAPHICS
 GTK 3 / 4 & libadwaita
 Gabriel García Márquez
@@ -2768,6 +2794,7 @@ Hotspot name
 Hotspot on
 Hotspot stopped
 Hotspot {name} is on — scan the code to join
+Hotspots are made with NetworkManager, which FreeBSD doesn't have
 Hottest core
 Hour
 Hour marks
@@ -3015,6 +3042,8 @@ Install pacman-contrib to check for updates without touching the system database
 Install the tailscale package, then start tailscaled
 Install this binary even when its published checksum is unavailable or doesn't match.
 Install this tool and try again:
+Install your NVIDIA driver's utilities (nvidia-smi) to read this card
+Install {compositor} yourself, then run: {command}
 Install {count} apps
 Install, preview and apply cursor themes, live, with size and hiding options
 Installed
@@ -3096,17 +3125,20 @@ It crashes or runs past its time budget: {error}
 It draws the wallpaper's subject over the desktop clock; switch the depth effect off in Studio → Wallpaper instead
 It fails to start: {error}
 It holds Mandara Studio, the settings and the session actions
+It installs Linux apps (AppImages and portable Linux builds), which FreeBSD can't run without Linux emulation
 It is in general the unexplored that attracts us.
 It is in the character of growth that we should learn from both pleasant and unpleasant experiences.
 It is not enough to know, we must also apply; it is not enough to will, we must also do.
 It is not that we have a short space of time, but that we waste much of it.
 It is only with the heart that one can see rightly; what is essential is invisible to the eye.
 It is the on-screen way to lock, log out, restart and shut down
+It lists crashes from systemd-coredump, which FreeBSD doesn't have; FreeBSD writes core files instead
 It lost its connection to the compositor ({error}). Turn night light off and on again to retry.
 It moves only while the desktop shows, a few frames a second.
 It opens apps and runs Mandara's commands, including the one that turns plugins back on
 It plays: {details}
 It poses as Mandara's built-in {plugin} plugin
+It reads Linux's socket tables in /proc/net, which FreeBSD doesn't have; sockstat(1) lists FreeBSD's
 It runs commands without being asked ({command})
 It shows nothing: its bar item, panel and sidebar card are all empty
 It shows nothing: its bar item, panel, sidebar card and desktop widgets are all empty
@@ -3239,6 +3271,7 @@ Keyboard layouts
 Keyboard layouts (xkb) matching a search
 Keyboard light down
 Keyboard light up
+Keyboard lights are read from Linux's /sys/class/leds, which FreeBSD doesn't have
 Keyboard model
 Keyboard only
 Keyboard shortcut
@@ -3595,6 +3628,7 @@ Main
 Main display
 Main for nights, Dawn for mornings.
 Main menu
+Main menu in the bar's gaps
 Mains
 Mains power
 Maintenance
@@ -3620,6 +3654,7 @@ Manage compositor drop-in
 Mandara
 Mandara Corniche
 Mandara Login shows your wallpaper when your account is picked (a copy goes to /var/lib/mandara-login)
+Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}
 Mandara Obsidian
 Mandara Shell
 Mandara Shell isn't running
@@ -3675,6 +3710,7 @@ Mandara's admin helper isn't set up, so the update can't run as administrator.
 Mandara's drop-in
 Mandara's glass, or Material You: colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar
 Mandara's own look, as it has always been
+Mandara's password dialog isn't available, so the AUR helper can't ask for your password.
 Mandara's shortcuts and your compositor's appear here
 MangoWM
 MangoWM and Niri only
@@ -3848,6 +3884,7 @@ Mon
 Monday
 Monitor
 Monitor brightness
+Monitor brightness over DDC/CI uses Linux's i2c-dev, which FreeBSD doesn't have
 Monochrome
 Monochrome ink: a hairline bar dense with stats, a greeting and a calendar.
 Monochrome symbolic icons tint with the theme
@@ -3979,6 +4016,7 @@ Needs Mandara Login (greetd): its PAM file wasn't found.
 Needs Super, Ctrl or Alt
 Needs attention
 Needs no system access beyond drawing its own view
+Needs nvidia-smi
 Needs pacman-contrib
 Needs the Hadith plugin; today's hadith, its rotation and the meaning follow its settings.
 Needs the Jannah plugin; today's reminder, its rotation and the meaning follow its settings.
@@ -4081,8 +4119,10 @@ NixOS system generations (and home-manager's), newest first
 NixOS {version}
 NixOS: how many of the newest generations a clean-up keeps (the running and booted ones always stay)
 No API key saved for this server
+No AUR helper is installed (paru, yay, pikaur, Aura, trizen or Shelly)
 No Bluetooth adapter
 No Docker or Podman socket found
+No GPU
 No Longer at Ease
 No Mandara command given
 No Mandara plugin `{id}`; see `mandara msg plugins list`
@@ -4104,6 +4144,7 @@ No accounts yet
 No active connection
 No adapter found
 No app matches “{query}”
+No app opens {type} files — choose one in Studio → Applications → Defaults
 No apps are playing sound
 No apps here
 No apps in the tray
@@ -4159,11 +4200,13 @@ No favourites yet
 No feed found at this address
 No feeds yet
 No feeds yet. Add one above or pick from the starter feeds below.
+No file manager found — choose one in Studio → Applications
 No files match “{query}”
 No filesystem access
 No folder to write into
 No fonts match
 No frames yet — the shell only draws while something changes. Open a panel to see it work.
+No graphics card found
 No hadith {reference} in {collection}
 No hotspot has been set up yet
 No icon theme is selected; standard fallbacks are in use
@@ -4194,6 +4237,7 @@ No lyrics found
 No matches
 No menu
 No menu entry {id}
+No microphone
 No model in memory: Load one below to warm it up
 No model named {model}
 No models installed
@@ -4218,6 +4262,7 @@ No package manager found
 No package manager on this computer can install it.
 No package manager on this system says it installed this app
 No package matches “{query}”
+No packages were added. Add them later with: {command}
 No password prompt available
 No password prompt is available: make sure polkit (pkexec) is installed and Mandara's polkit agent is running.
 No path {key}
@@ -4267,6 +4312,7 @@ No shortcuts found in your compositor config.
 No shortcuts yet
 No skill name given
 No skill named “{name}”
+No sound device
 No sound for "{event}" in this theme
 No sound server (PulseAudio / PipeWire) found
 No stack named “{name}” (see `mandara msg dock stack list`)
@@ -4335,6 +4381,7 @@ Not authorized to do that
 Not authorized — the authentication was cancelled or refused
 Not authorized: the request was cancelled or the password was wrong
 Not available
+Not available here
 Not checked yet
 Not connected
 Not downloaded yet: open the Hadith panel
@@ -4351,6 +4398,7 @@ Not one of this app's leftovers: {path}
 Not placed
 Not reachable
 Not released yet
+Not reported
 Not running
 Not scanned yet
 Not set
@@ -4544,6 +4592,7 @@ One island
 One light line, stacked hours over minutes, or a small clock
 One line
 One line of body text in popups
+One line of flower stops running along the top and down the left edge
 One line per result
 One lookup with the method above; IP lookups send your address to ipapi.co
 One never notices what has been done; one can only see what remains to be done.
@@ -4567,6 +4616,7 @@ Only build it, to see that it works
 Only each app's most recent window
 Only in {desktops}
 Only on this display
+Only split bars have gaps: glass pills, island, micro pill and notch
 Only stations you added can be removed
 Only tags and workspaces with windows (plus the one you are on)
 Only the built-in encoder uses this; the others follow Resolution
@@ -4607,6 +4657,7 @@ Open in Files
 Open in Mandara Studio
 Open in Studio
 Open in editor
+Open in terminal
 Open in the reader
 Open link
 Open notes as preview
@@ -4664,13 +4715,13 @@ Opening your stations…
 Opening {collection}…
 Opening {url}
 Opening…
-Opens AUR updates, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm
 Opens drives and folders from Mandara; empty uses your default
 Opens files and links
 Opens links from Mandara; empty uses your default
 Opens on the first entry
 Opens on “{entry}”
 Opens the launcher
+Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm
 Opposite the sidebar
 Opt-in
 Opt-in: a fresh wallpaper every few hours. Missed runs never pile up; older files are cleaned up.
@@ -4740,6 +4791,7 @@ PNG, JPEG or WebP. It's cropped to a square and saved at 256 × 256.
 PROCESS
 Package: installed system-wide by your package manager, for every user.
 Package: {package}
+Packages for the next boot
 Packaging badges
 Padding
 Pages
@@ -4762,6 +4814,7 @@ Palette
 Panel animation
 Panel capture failed: {error}
 Panel edges
+Panel height
 Panel image copied
 Panel radius
 Panels
@@ -4837,6 +4890,7 @@ People, sign-in, lock and privacy
 Per-app notification rules, in order
 Per-app output
 Per-app rules
+Per-app sound needs PulseAudio or PipeWire; FreeBSD's own sound system has one volume per device
 Per-tag layouts
 Perfect your wudu
 Performance
@@ -4853,6 +4907,7 @@ Petals
 PgDn
 PgUp
 Pharos
+Pharos Beam
 Pharos Night
 Phone
 Phone Connect
@@ -5036,7 +5091,7 @@ Practice is the best of all instructors.
 Pray on time
 Prayer times
 Prayer times list
-Prebuilt releases require Linux on an x86_64 or aarch64 CPU.
+Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64.
 Precision
 Preferred apps
 Preparing local commands…
@@ -5165,6 +5220,7 @@ Quit
 Quit Mandara
 Quit Mandara Shell
 Quit the compositor
+Quit the compositor to log out
 Quotation mark
 Quote
 Quote card
@@ -5190,6 +5246,7 @@ Radio stations
 Radio · {shelf}
 Radius
 Rail
+Rail height
 Rain
 Rain today. Don't forget an umbrella.
 Rainy study
@@ -5203,6 +5260,7 @@ Raised on a soft shadow that lifts on hover and settles as you press
 Rajab
 Ralph Waldo Emerson
 Ramadan
+Raml Tram
 Random
 Random wallpaper
 Rank by use
@@ -5257,6 +5315,7 @@ Reading the shell's memory…
 Reading what Mandara installed…
 Reading your home…
 Reading your project folders
+Readings
 Reading…
 Reads Arabic (and Persian / Urdu) text
 Reads CPU, memory and disk usage
@@ -5496,6 +5555,7 @@ Restart shell
 Restart targets: firmware setup support and boot-loader entries (JSON)
 Restart the shell process (config and plugins reload from scratch)
 Restart to finish: {reason}
+Restart your computer to start using the new packages. Everything else is ready now.
 Restarted {count} containers
 Restarted {name}
 Restarted {unit}
@@ -5548,6 +5608,8 @@ Right side bar
 Right tile
 Right-click empty bar space
 Right-click on empty bar space
+Right-clicking between a split bar's pieces opens the main menu; the rest of the desktop, and Main menu → Apps & tools → Desktop menu, still open the desktop's menu
+Right-clicking empty bar space opens the desktop's menu
 Rim brightness
 Rim intensity
 Rim light
@@ -6280,6 +6342,7 @@ Stacks on the dock's right side: list, add or remove a folder
 Stalled
 Stand up, stretch and rest your eyes for {n} minutes
 Standard
+Stanley Bridge
 Stanley Sunset
 Stars
 Start
@@ -6457,6 +6520,7 @@ Surprise me
 Suspend
 Suspend, then hibernate
 Swahili proverb
+Swap
 Swap the left and right buttons
 Swatch shape
 Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts.
@@ -6511,6 +6575,7 @@ System folders come from $XDG_DATA_DIRS: distribution packages create them, and 
 System gauges
 System meters
 System monitor
+System packages
 System process
 System services
 System sound
@@ -6661,6 +6726,8 @@ That widget is not on this tab
 That's Mandara itself — use Studio → Performance → Quit
 The 114 surahs: names, meaning, Makki or Madani and ayah counts
 The API key cannot be used in a request
+The AUR answered with an error: {error}
+The AUR couldn't be reached: {error}
 The Analytical Engine weaves algebraical patterns just as the Jacquard-loom weaves flowers and leaves.
 The App Installer plugin is off: turn it on in Studio → Plugins
 The Applications folder is off (Studio → Dock → Applications folder)
@@ -6895,6 +6962,7 @@ The package manager needs a decision from you (a conflict or broken dependency).
 The package servers couldn't be reached. Check your connection and try again.
 The panel is not visible
 The panel that drops from the bar item, or none.
+The password dialog was cancelled, so the AUR packages weren't installed.
 The password is empty
 The password needs 8–63 characters
 The passwords don't match
@@ -7035,6 +7103,7 @@ The update stopped with an error. The log shows what the package manager said.
 The upright line between a slider's fill and its track; None shows the fill alone
 The uptime monitor stopped
 The verse or hadith on screen now and today's step
+The visualizer listens through PulseAudio or PipeWire; start one to use it
 The volume beside the speaker icon
 The volume, brightness and mixer sliders in the main menu, panels and the sidebar
 The wallpaper Mandara is drawing
@@ -7174,6 +7243,7 @@ This sign-in method needs more than a password
 This site offers several feeds:
 This station uses a format Mandara can't play
 This style uses Compact height
+This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks.
 This system is image-based: it updates with {command}, which Mandara leaves to it
 This tab is empty
 This text is too large to send to a phone
@@ -7187,6 +7257,7 @@ This week {used} of {budget} ({percent}%)
 This workspace only
 Thread fade
 Three
+Three floating docks of squircle tiles spanning the bottom like a bridge's arches
 Threshold for peripherals (per-device overrides in config.toml under [power.device_thresholds])
 Through do not disturb
 Thu
@@ -7350,6 +7421,7 @@ Try other words or another theme
 Try other words, another collection or any grade
 Try part of a unit name or its description
 Trying again at {time}
+Trying again without the optional packages: {packages}
 Tue
 Tuning
 Turbulence
@@ -7458,6 +7530,7 @@ Unexpected Wallhaven response: {error}
 Unexpected answer from GitHub: {error}
 Unexpected answer from Ollama: {error}
 Unexpected answer from tailscale: {error}
+Unexpected answer from the AUR: {error}
 Unexpected answer from the Qur'an service: {error}
 Unexpected argument {value}
 Unexpected hadith file: {error}
@@ -7502,6 +7575,7 @@ Unknown profile “{profile}” (available: {names})
 Unknown session action
 Unknown shelf {name}
 Unknown size {size}: use display, 1080p, 1440p, 4k, 5k, 8k, uw1440, portrait4k or WIDTHxHEIGHT
+Unknown sound device {name}
 Unknown source `{source}`
 Unknown state
 Unknown style {style}; see `wallgen styles`
@@ -7577,7 +7651,7 @@ Update cancelled
 Update installed
 Update it from Studio → Plugins.
 Update now
-Update the system in Mandara, with progress and Mandara's password dialog (system and Flatpak, or one)
+Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)
 Update to v{version}
 Update to v{version} · {size}
 Update to v{version} · {size} patch
@@ -7663,6 +7737,7 @@ VPN {name}
 VPN {name} connected
 VPN {name} disconnected
 VRAM
+VRAM {n}
 Valid. The shell isn't running, so its load state is unknown.
 Valid. Turn it on in Installed to load it.
 Validate
@@ -7901,6 +7976,7 @@ Where the middle group sits along the edge
 Whether Mandara's pairing agent is registered with BlueZ
 Whether presentation mode is on, for how long, and what it will restore (JSON)
 Whether the hotspot runs, and its network name
+Which AUR helper updates AUR packages, as you; its sudo asks through Mandara's password dialog. Automatic prefers paru, then yay
 Which app has focus, per day; needs the Screen time plugin. Stays on this computer
 Which container engine the panel talks to
 Which edge it lives on; the power dock takes the other. Auto follows the locale (right for Arabic)
@@ -8060,6 +8136,7 @@ Your dock's apps, or any apps and links, as tiles
 Your feeds
 Your first favourite
 Your graphics card can't encode this with GPU Screen Recorder
+Your graphics card doesn't report this
 Your hadith library
 Your home favourites, sensors and scenes
 Your home folder
@@ -8143,7 +8220,7 @@ activating
 active
 add or remove
 after
-all (default), system or flatpak
+all (default), system, aur or flatpak
 all sahih
 all, pinned, a kind (code, color, …) or a collection id or name
 already recording
@@ -8268,6 +8345,7 @@ function / dispatcher / action name, then its arguments
 geoclue or ip (default: the configured mode)
 graded
 greetd greeter
+greetd isn't packaged for FreeBSD: build and install it from source first (Mandara's login manager guide has the steps), then apply
 h
 haiku, 1686
 has an unclosed group
@@ -8508,6 +8586,7 @@ strftime pattern, e.g. Screenshot_%Y-%m-%d_%H-%M-%S
 strftime pattern; empty follows the 24-hour switch
 strftime pattern; empty uses the long date
 substring of the file name
+sudo didn't accept the password.
 sun / fixed / always
 swap {size}
 system (default) or user
@@ -8591,6 +8670,7 @@ user@host
 username
 volume-change, notification, notification-critical, power-plug, screenshot, login, battery-low… or a sound name
 waits for it
+wallpaper & widgets
 wf-recorder can't pause: stop, and start a new recording
 wf-recorder isn't installed
 wf-recorder records one sound source at a time
@@ -8626,6 +8706,9 @@ words in Arabic or in your language, or a reference
 words to look for
 words, then optionally --collection <id> and --grade sahih|hasan|daif
 workspace
+wpa_supplicant didn't add the network
+wpa_supplicant isn't running, or its control socket isn't open to you (ctrl_interface_group in wpa_supplicant.conf)
+wpa_supplicant refused {ssid}
 yes
 your compositor
 your default
@@ -8656,7 +8739,9 @@ your default
 {collection} couldn't be opened
 {collection} isn't downloaded
 {collection} isn't downloaded: run `hadith download {id}`
+{command} failed ({status})
 {compositor} (installed)
+{compositor} ({package}) arrives with the next boot; pick it on your login screen then.
 {compositor} can't read this line: something in its syntax is broken (a missing bracket, quote or `=`), so it may skip everything after it.
 {compositor} doesn't know `{key}`. It may be misspelled, or it was renamed or removed in a newer version.
 {compositor} has no config file here yet.
@@ -8789,6 +8874,7 @@ your default
 {from}–{to} of {count}
 {gpu}% GPU / {cpu}% CPU
 {group} (continued)
+{helper} needs your password for sudo to install the AUR packages it built. sudo asks separately: the system update's approval can't be passed on to it.
 {host} closed the connection
 {host} didn't answer
 {host} has an invalid security certificate
@@ -8898,6 +8984,7 @@ your default
 {n}y
 {on} of {total} plugins on
 {outputs} refused the warmer colours: another night-light app may hold them (wlsunset, gammastep, hyprsunset…), or the compositor or display driver doesn't allow it.
+{package} didn't build: {reason}
 {package} is part of your system and can't be removed here
 {page} is back to its defaults — Undo is under Recent changes
 {path} already exists, so no command is added
@@ -8921,6 +9008,7 @@ your default
 {percent}% · charging
 {percent}% — you can unplug the charger
 {phase} · {manager}
+{plugin} can't run on this system: {reason}
 {plugin} failed to start
 {plugin} has no panel
 {plugin} is not floating
@@ -8961,6 +9049,9 @@ your default
 {stopped} stopped
 {style} controls
 {style} has no parameter {key}; see `wallgen styles`
+{system} is image-based: Mandara goes into your home folder, and only the system packages it lacks are added with {tool}, for the next boot.
+{system} keeps its system image read-only, and the next system update removes packages added to it, so Mandara installs only into your home folder. Not available here: {packages}
+{system} replaces its system files with every update, so the admin helper and Mandara Login are skipped; Studio's administrator actions stay unavailable.
 {taken} taken
 {taken} taken · {skipped} skipped
 {target} has no valid host
@@ -8975,6 +9066,8 @@ your default
 {theme} wasn't installed by Mandara, so it stays
 {time} left
 {time} today
+{tool} couldn't add the packages. Add them later with: {command}
+{tool} isn't installed, so Mandara can't add system packages. Add these with your system's own tools: {packages}
 {tool} rejected the result, so nothing was changed: {report}
 {total} frames drawn since start
 {unit}: {error}

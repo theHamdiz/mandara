@@ -410,7 +410,7 @@ fn every_bar_style_has_a_control_a_shot_and_its_command() {
     let css = site_css();
     let inputs: Vec<_> = page.descendants().filter(|n| n.has_tag_name("input") && n.attribute("name") == Some("bar-style")).collect();
     let ids: Vec<_> = inputs.iter().map(|n| n.attribute("value").unwrap()).collect();
-    assert_eq!(ids, ["expressive", "tile-dock", "rail", "segmented", "side-bars"]);
+    assert_eq!(ids, ["expressive", "tile-dock", "rail", "segmented", "system-monitor", "stanley-bridge", "pharos-beam", "raml-tram", "side-bars"]);
     assert_eq!(inputs.iter().filter(|n| n.has_attribute("checked")).count(), 1);
     assert!(css.contains(".bar-shot { display: none;"), "unpicked shots stay unloaded");
     for id in ids {
@@ -422,6 +422,10 @@ fn every_bar_style_has_a_control_a_shot_and_its_command() {
         let img = figure.descendants().find(|n| n.has_tag_name("img")).unwrap();
         assert_eq!(img.attribute("src"), Some(format!("docs/screenshots/bar-style-{id}.webp").as_str()));
         assert_eq!(img.attribute("loading"), Some("lazy"));
+        // Its light twin, for a page in light mode.
+        let light = figure.descendants().find(|n| n.has_tag_name("source")).unwrap();
+        assert_eq!(light.attribute("srcset"), Some(format!("docs/screenshots/bar-style-{id}-light.webp").as_str()));
+        assert!(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(format!("docs/screenshots/bar-style-{id}-light.webp")).is_file());
         if id != "side-bars" {
             let command = label.descendants().find(|n| n.has_tag_name("code")).unwrap();
             assert_eq!(text_of(command), format!("mandara msg bar style {id}"));

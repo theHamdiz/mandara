@@ -113,7 +113,29 @@ pub fn is_cargo_output(path: &Path) -> bool {
 
 fn dir_writable(path: &Path) -> bool {
     let dir = path.parent().unwrap_or(Path::new("/"));
-    rustix::fs::access(dir, rustix::fs::Access::WRITE_OK).is_ok() && rustix::fs::access(path, rustix::fs::Access::WRITE_OK).is_ok()
+    rustix::fs::access(dir, rustix::fs::Access::WRITE_OK).is_ok() && file_writable(path)
+}
+
+/// Whether you may write `path`. FreeBSD answers "text file busy" for a
+/// program that is running (the shell's own binary, always), before it
+/// looks at permissions; the update replaces the file by renaming a new
+/// one over it, never by writing into it, so there the file's owner and
+/// mode decide. Linux never refuses that way.
+fn file_writable(path: &Path) -> bool {
+    match rustix::fs::access(path, rustix::fs::Access::WRITE_OK) {
+        Ok(()) => true,
+        Err(rustix::io::Errno::TXTBSY) => owner_writable(path),
+        Err(_) => false,
+    }
+}
+
+/// `path` is yours and has its owner's write bit (or you are root).
+fn owner_writable(path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    const OWNER_WRITE: u32 = 0o200;
+    let Ok(meta) = std::fs::metadata(path) else { return false };
+    let me = rustix::process::geteuid();
+    me.is_root() || (meta.uid() == me.as_raw() && meta.mode() & OWNER_WRITE != 0)
 }
 
 /// Runs a read-only ownership query; `true` when it exits 0 in time.
@@ -212,15 +234,7 @@ pub fn rollback(exe: &Path) -> Result<(), String> {
 
 /// Whether another process (the shell or its supervisor) runs `exe`.
 pub fn running_from(exe: &Path) -> bool {
-    let me = std::process::id();
-    let Ok(entries) = std::fs::read_dir("/proc") else { return false };
-    entries.flatten().any(|e| {
-        let Some(pid) = e.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else { return false };
-        if pid == me {
-            return false;
-        }
-        std::fs::read_link(e.path().join("exe")).ok().and_then(|p| p.to_str().map(|s| s.strip_suffix(" (deleted)").unwrap_or(s).to_string())).is_some_and(|p| Path::new(&p) == exe)
-    })
+    super::processes::other_runs(exe)
 }
 
 #[cfg(test)]
@@ -278,6 +292,40 @@ mod tests {
         std::fs::write(&exe, b"\x7fELF old").unwrap();
         assert_eq!(classify(&exe, &|_| None), Install::SelfManaged(exe.clone()));
         assert!(matches!(classify(Path::new("/usr/local/bin/definitely-not-here"), &|_| None), Install::ReadOnly(_) | Install::SelfManaged(_)));
+    }
+
+    /// The running binary stays updatable: FreeBSD refuses `access(W_OK)`
+    /// on a program while it runs (ETXTBSY), which made Studio call every
+    /// FreeBSD install read-only.
+    #[test]
+    fn a_running_binary_is_still_self_managed() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("bin/mandara");
+        std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        // `sleep` from PATH: NixOS and its build sandbox have no /bin/sleep.
+        let sleep = crate::updates::find_program("sleep").expect("sleep on PATH");
+        std::fs::copy(sleep, &exe).unwrap();
+        std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(MODE_EXECUTABLE)).unwrap();
+        // A fork on another test thread may still hold the fresh copy open for
+        // writing for a moment, and the kernel refuses to run it ("Text file busy").
+        let mut tries = 0;
+        let mut running = loop {
+            match Command::new(&exe).arg("30").spawn() {
+                Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) && tries < 100 => {
+                    tries += 1;
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                other => break other.unwrap(),
+            }
+        };
+        let install = classify(&exe, &|_| None);
+        let _ = running.kill();
+        let _ = running.wait();
+        assert_eq!(install, Install::SelfManaged(exe.clone()));
+        assert!(owner_writable(&exe));
+        std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o555)).unwrap();
+        assert!(!owner_writable(&exe) || rustix::process::geteuid().is_root(), "no write bit, not root");
     }
 
     #[test]

@@ -171,8 +171,9 @@ impl Fixture {
 
     fn facts(&self, family: Family) -> Facts {
         Facts {
-            os: OsRelease { id: family.name().into(), id_like: Vec::new(), pretty_name: format!("Test {family}") },
+            os: OsRelease { id: family.name().into(), pretty_name: format!("Test {family}"), ..Default::default() },
             family,
+            image: None,
             arch: "x86_64".into(),
             libc: "gnu",
             x86_64_v3: false,
@@ -253,6 +254,10 @@ fn dry_run_prints_every_package_per_family_and_changes_nothing() {
         // Login screen: greetd + cage, then the switch and the keyring offer.
         if set.greeter.is_empty() {
             assert!(text.contains("install greetd and cage with your package manager"), "{family}\n{text}");
+        } else if family == Family::FreeBSD {
+            // greetd isn't packaged for FreeBSD: built by hand, then switched.
+            assert!(text.contains("greetd isn't packaged for FreeBSD yet"), "{family}\n{text}");
+            assert!(text.contains("docs/login-manager.md#freebsd"), "{family}\n{text}");
         } else {
             assert!(text.contains(&format!("would run: sudo {}", pm.install_argv(set.greeter).join(" "))), "{family}\n{text}");
             assert!(text.contains("Login screen — switch plan (after packages)"));
@@ -263,7 +268,7 @@ fn dry_run_prints_every_package_per_family_and_changes_nothing() {
         assert!(text.contains("then run: mandara setup --autostart"));
         assert!(text.contains("dry run: nothing will be changed"));
         // Nothing ran as root, nothing was written.
-        assert!(host.ran().iter().all(|c| c.starts_with("systemctl list-unit-files") || c.starts_with("systemctl is-")), "{family}: {:?}", host.ran());
+        assert!(host.ran().iter().all(|c| c.starts_with("systemctl list-unit-files") || c.starts_with("systemctl is-") || c.starts_with("sysrc -n -i ") || c.starts_with("service ") && c.ends_with(" status")), "{family}: {:?}", host.ran());
         assert!(f.home_files().is_empty(), "{family}: {:?}", f.home_files());
     }
 }
@@ -425,6 +430,105 @@ fn cancelling_the_compositor_picker_changes_nothing() {
     assert!(fixture.home_files().is_empty());
 }
 
+/// FreeBSD: a service rc.conf enables but that isn't running is started,
+/// and one that runs already is left alone.
+#[test]
+fn freebsd_starts_an_enabled_service_that_isnt_running() {
+    let f = Fixture::new();
+    std::fs::create_dir_all(f.root().join("etc")).unwrap();
+    std::fs::write(f.root().join("etc/group"), "wheel:*:0:root\nvideo:*:44:layla\n").unwrap();
+    std::fs::write(f.root().join("etc/passwd"), "layla:*:1001:1001:Layla:/home/layla:/bin/sh\n").unwrap();
+    let mut host = FakeHost::with(&["pkg", "sudo", "sway", "cage"]);
+    host.stdout.insert("sysrc -n -i dbus_enable".into(), "YES\n".into());
+    host.stdout.insert("sysrc -n -i seatd_enable".into(), "YES\n".into());
+    host.failing.insert("service dbus status".into());
+    let mut facts = f.facts(Family::FreeBSD);
+    facts.user = "layla".into();
+    run(&mut host, &FakeProbe::default(), facts, InstallArgs { yes: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    assert!(ran.iter().any(|c| c == "sudo service dbus start"), "{ran:#?}");
+    assert!(!ran.iter().any(|c| c == "sudo service seatd start"), "seatd runs already: {ran:#?}");
+    assert!(!ran.iter().any(|c| c.contains("dbus_enable=YES")), "already enabled: {ran:#?}");
+    assert!(host.text().contains("dbus was enabled but not running; started it"), "{}", host.text());
+}
+
+#[test]
+fn greetd_user_comes_from_the_default_session() {
+    assert_eq!(greetd_user(""), "greeter");
+    assert_eq!(greetd_user("[terminal]\nvt = 8\n[default_session]\ncommand = \"cage -s -- mandara greeter\"\nuser = \"_greetd\" # the login screen\n"), "_greetd");
+    assert_eq!(greetd_user("[initial_session]\nuser = \"layla\"\n[default_session]\ncommand = \"x\"\n"), "greeter", "only the default session's user");
+}
+
+/// FreeBSD: the login screen's user joins `operator`, so the login screen's
+/// power buttons work without ConsoleKit2; a member already is left alone,
+/// and a user greetd hasn't created yet gets the command to run later.
+#[test]
+fn freebsd_login_screen_user_joins_operator() {
+    let run_with = |group: &str, passwd: &str| {
+        let f = Fixture::new();
+        std::fs::create_dir_all(f.root().join("etc")).unwrap();
+        std::fs::create_dir_all(f.root().join("usr/local/etc/greetd")).unwrap();
+        std::fs::write(f.root().join("etc/group"), group).unwrap();
+        std::fs::write(f.root().join("etc/passwd"), passwd).unwrap();
+        std::fs::write(f.root().join("usr/local/etc/greetd/config.toml"), "[terminal]\nvt = 8\n[default_session]\ncommand = \"cage -s -- mandara greeter\"\nuser = \"greeter\"\n").unwrap();
+        let mut host = FakeHost::with(&["pkg", "sudo", "sway", "cage", "greetd"]);
+        host.stdout.insert("sysrc -n -i dbus_enable".into(), "YES\n".into());
+        host.stdout.insert("sysrc -n -i seatd_enable".into(), "YES\n".into());
+        let mut facts = f.facts(Family::FreeBSD);
+        facts.user = "layla".into();
+        let probe = FakeProbe { active: true, ..Default::default() };
+        run(&mut host, &probe, facts, InstallArgs { yes: true, ..Default::default() }).unwrap();
+        (host.ran(), host.text())
+    };
+    let users = "layla:*:1001:1001:Layla:/home/layla:/bin/sh\ngreeter:*:965:965:greetd:/nonexistent:/usr/sbin/nologin\n";
+    let (ran, text) = run_with("wheel:*:0:root\noperator:*:5:root\nvideo:*:44:layla\n", users);
+    assert!(ran.iter().any(|c| c == "sudo pw groupmod operator -m greeter"), "{ran:#?}");
+    assert!(text.contains("added greeter to operator"), "{text}");
+    let (ran, _) = run_with("wheel:*:0:root\noperator:*:5:root,greeter\nvideo:*:44:layla\n", users);
+    assert!(!ran.iter().any(|c| c.contains("groupmod operator")), "a member already: {ran:#?}");
+    let (ran, text) = run_with("wheel:*:0:root\noperator:*:5:root\nvideo:*:44:layla\n", "layla:*:1001:1001:Layla:/home/layla:/bin/sh\n");
+    assert!(!ran.iter().any(|c| c.contains("groupmod operator")), "{ran:#?}");
+    assert!(text.contains("pw groupmod operator -m greeter"), "the command to run later: {text}");
+}
+
+/// FreeBSD: pkg installs everything, D-Bus and seatd are enabled with
+/// sysrc and started, you join seatd's group, the admin helper's folder is
+/// made first (no GNU `install -D`, root's group is `wheel`), and greetd
+/// (not packaged) is left to its build guide.
+#[test]
+fn freebsd_install_uses_pkg_rc_conf_and_wheel() {
+    let f = Fixture::new();
+    std::fs::create_dir_all(f.root().join("etc")).unwrap();
+    std::fs::write(f.root().join("etc/group"), "wheel:*:0:root\nvideo:*:44:\n").unwrap();
+    std::fs::write(f.root().join("etc/passwd"), "layla:*:1001:1001:Layla:/home/layla:/bin/sh\n").unwrap();
+    let mut host = FakeHost::with(&["pkg", "sudo", "sway", "cage"]);
+    // dbus is already on; seatd isn't.
+    host.stdout.insert("sysrc -n -i dbus_enable".into(), "YES\n".into());
+    host.stdout.insert("sysrc -n -i seatd_enable".into(), "NO\n".into());
+    let mut facts = f.facts(Family::FreeBSD);
+    facts.user = "layla".into();
+    run(&mut host, &FakeProbe::default(), facts, InstallArgs { yes: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    let pos = |needle: &str| ran.iter().position(|c| c == needle).unwrap_or_else(|| panic!("{needle} not run: {ran:#?}"));
+    let required = pos("sudo env ASSUME_ALWAYS_YES=yes pkg install -y libxkbcommon wayland vulkan-loader mesa-libs mesa-dri fontconfig freetype2 ca_root_nss");
+    pos("sudo env ASSUME_ALWAYS_YES=yes pkg install -y seatd");
+    let enable = pos("sudo sysrc seatd_enable=YES");
+    let start = pos("sudo service seatd start");
+    assert!(required < enable && enable < start);
+    assert!(!ran.iter().any(|c| c.contains("dbus_enable=YES") || c == "sudo service dbus start"), "dbus was on already: {ran:#?}");
+    pos("sudo pw groupmod video -m layla");
+    assert!(!ran.iter().any(|c| c.contains("systemctl")), "no systemd on FreeBSD: {ran:#?}");
+    let dir = pos("sudo install -d -o root -g wheel -m 0755 /usr/local/lib/mandara");
+    let helper = ran.iter().position(|c| c.starts_with("sudo install -o root -g wheel -m 0755 ") && c.ends_with(super::ADMIN_EXE)).unwrap_or_else(|| panic!("{ran:#?}"));
+    assert!(dir < helper);
+    assert!(!ran.iter().any(|c| c.contains("modprobe") || c.contains("modules-load.d")), "no Linux modules: {ran:#?}");
+    let text = host.text();
+    assert!(text.contains("seatd enabled and started"), "{text}");
+    assert!(text.contains("greetd isn't packaged for FreeBSD yet"), "{text}");
+    assert!(text.contains("External monitor brightness (DDC/CI) isn't available on FreeBSD yet"), "{text}");
+    assert!(!ran.iter().any(|c| c.contains("greeter use mandara")), "no switch without greetd: {ran:#?}");
+}
+
 #[test]
 fn real_install_puts_files_in_place_and_runs_setup_and_greeter() {
     let f = Fixture::new();
@@ -472,6 +576,71 @@ fn conflicts_are_retired_when_accepted() {
     let ran = host.ran();
     assert!(ran.contains(&format!("{b} setup")), "{ran:#?}");
     assert!(ran.contains(&format!("{b} setup --fix-conflicts")));
+}
+
+/// A fake running shell: `/proc/<pid>` under the fixture root, its `exe`
+/// naming `target` as the kernel would (symlinks resolved).
+#[cfg(not(target_os = "freebsd"))]
+fn running_shell(f: &Fixture, target: &Path) {
+    let dir = f.root().join("proc/4242");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("comm"), "mandara\n").unwrap();
+    std::os::unix::fs::symlink(target, dir.join("exe")).unwrap();
+}
+
+#[cfg(not(target_os = "freebsd"))]
+fn restarted(host: &FakeHost, bin: &Path) -> bool {
+    host.ran().contains(&format!("{} msg restart", bin.display()))
+}
+
+/// A prefix behind a symlink: the kernel names the resolved path, and the
+/// shell running there is still this installation's.
+#[cfg(not(target_os = "freebsd"))]
+#[test]
+fn the_running_shell_is_found_through_a_symlinked_prefix() {
+    let f = Fixture::new();
+    let (real, link) = (f.dir.path().join("real"), f.dir.path().join("link"));
+    std::fs::create_dir_all(real.join("bin")).unwrap();
+    std::fs::write(real.join("bin/mandara"), b"old").unwrap();
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    running_shell(&f, &real.join("bin/mandara"));
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    let args = InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, prefix: Some(link.clone()), ..Default::default() };
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), args).unwrap();
+    assert!(restarted(&host, &link.join("bin/mandara")), "{:#?}", host.ran());
+}
+
+/// Whether the shell runs this installation is decided before the binary
+/// is replaced: here the old `mandara` was a symlink the new file replaces,
+/// so afterwards the path no longer leads to what the shell runs.
+#[cfg(not(target_os = "freebsd"))]
+#[test]
+fn the_running_shell_is_matched_before_the_binary_is_replaced() {
+    let f = Fixture::new();
+    let old = f.dir.path().join("checkout/target/release/mandara");
+    std::fs::create_dir_all(old.parent().unwrap()).unwrap();
+    std::fs::write(&old, b"old").unwrap();
+    let bin = f.home().join(".local/bin/mandara");
+    std::fs::create_dir_all(bin.parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink(&old, &bin).unwrap();
+    running_shell(&f, &old);
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
+    assert!(!bin.is_symlink() && std::fs::read(&old).unwrap() == b"old", "the install replaced the link, not its target");
+    assert!(restarted(&host, &bin), "{:#?}", host.ran());
+}
+
+#[cfg(not(target_os = "freebsd"))]
+#[test]
+fn no_restart_without_a_running_shell_of_this_installation() {
+    let f = Fixture::new();
+    let elsewhere = f.dir.path().join("other/mandara");
+    std::fs::create_dir_all(elsewhere.parent().unwrap()).unwrap();
+    std::fs::write(&elsewhere, b"other").unwrap();
+    running_shell(&f, &elsewhere);
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
+    assert!(!restarted(&host, &f.home().join(".local/bin/mandara")), "{:#?}", host.ran());
 }
 
 #[test]
@@ -1272,4 +1441,298 @@ fn failed_kwin_availability_is_not_reported_as_a_config_or_keyboard_error() {
     assert!(!text.contains("your compositor reports errors in its config"));
     assert!(!text.contains("Install libxkbcommon"));
     assert!(host.ran().iter().all(|command| !command.contains("--fix-conflicts")));
+}
+
+// ── Image-based systems ─────────────────────────────────────────────────
+
+const BAZZITE: &str = include_str!("../../fixtures/image/bazzite.os-release");
+const AEON: &str = include_str!("../../fixtures/image/aeon.os-release");
+const VANILLA: &str = include_str!("../../fixtures/image/vanillaos.os-release");
+const STEAMOS: &str = include_str!("../../fixtures/image/steamos.os-release");
+const STATUS_PENDING: &str = include_str!("../../fixtures/image/rpm-ostree-status-pending.json");
+const STATUS_BOOTED: &str = include_str!("../../fixtures/image/rpm-ostree-status-booted.json");
+
+impl Fixture {
+    /// An image-based system: its os-release, family and tool.
+    fn image_facts(&self, os_release: &str, image: ImageSystem) -> Facts {
+        let os = OsRelease::parse(os_release);
+        let family = Family::detect(&os, |_| false);
+        Facts { os, family, image: Some(image), ..self.facts(family) }
+    }
+}
+
+/// A host whose image has every package of `family`'s tables except
+/// `lacking`, answering `image`'s query the way its tool does.
+fn image_host(image: ImageSystem, family: Family, programs: &[&str], lacking: &[&str]) -> FakeHost {
+    let mut host = FakeHost::with(programs);
+    let set = packages::for_family(family).unwrap();
+    let portals = packages::portal_packages(family, |p| programs.contains(&p));
+    let optional: Vec<&str> = set.opt.iter().chain(set.svc).chain(portals.iter()).copied().collect();
+    for group in [set.run.to_vec(), optional, set.build.to_vec(), set.greeter.to_vec()] {
+        let reply: String = group
+            .iter()
+            .map(|p| match (lacking.contains(p), image) {
+                (true, ImageSystem::RpmOstree | ImageSystem::Transactional) => format!("no package provides {p}\n"),
+                (true, ImageSystem::SteamOs) => format!("{p}\n"),
+                (true, ImageSystem::Abroot) | (false, ImageSystem::SteamOs) => String::new(),
+                (false, ImageSystem::Abroot) => format!("{p} ii \n"),
+                (false, _) => format!("{p}-1.0-1.x86_64\n"),
+            })
+            .collect();
+        // Nothing else provides power-profiles-daemon's role here.
+        let reply = if image.query_argv(&group).iter().any(|a| a == "ppd-service") { format!("{reply}no package provides ppd-service\n") } else { reply };
+        host.stdout.insert(image.query_argv(&group).join(" "), reply);
+    }
+    host
+}
+
+/// Bazzite (KDE, so KWin is there) lacking two optional packages and
+/// greetd + cage: one rpm-ostree transaction adds exactly those, after one
+/// question, at the end; nothing goes through dnf, and the login screen
+/// switch waits for the reboot.
+#[test]
+fn bazzite_layers_only_what_its_image_lacks_in_one_transaction() {
+    let f = Fixture::new();
+    let programs = ["rpm-ostree", "rpm", "dnf", "sudo", "systemctl", "kwin_wayland"];
+    let lacking = ["papirus-icon-theme", "i2c-tools", "google-noto-sans-telugu-fonts", "greetd", "cage"];
+    let repositories = |host: &mut FakeHost| {
+        // The repositories have no google-noto-sans-telugu-fonts here: it is skipped, not layered.
+        let argv = ImageSystem::RpmOstree.available_argv(&["google-noto-sans-telugu-fonts", "papirus-icon-theme", "i2c-tools"], |p| p == "dnf").unwrap();
+        host.stdout.insert(argv.join(" "), "papirus-icon-theme\ni2c-tools\n".into());
+        host.stdout.insert(OstreeStatus::argv().join(" "), STATUS_BOOTED.into());
+    };
+    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &programs, &lacking);
+    repositories(&mut host);
+    let facts = f.image_facts(BAZZITE, ImageSystem::RpmOstree);
+    assert_eq!(facts.family, Family::Fedora);
+    run(&mut host, &FakeProbe::default(), facts.clone(), dry(InstallArgs::default())).unwrap();
+    let text = host.text();
+    assert!(text.contains("Bazzite is image-based"), "{text}");
+    assert!(text.contains("skipped google-noto-sans-telugu-fonts (not available)"), "{text}");
+    assert!(text.contains("would run: sudo rpm-ostree install --idempotent greetd cage papirus-icon-theme i2c-tools\n"), "{text}");
+    assert_eq!(text.matches("rpm-ostree install").count(), 1, "one transaction\n{text}");
+    assert!(text.contains("would ask: Add 4 packages with rpm-ostree?"), "{text}");
+    assert!(!text.contains("dnf install"), "{text}");
+    assert!(!text.contains("switch plan"), "the plan is made after the reboot\n{text}");
+    assert!(!text.contains("would run: sudo ") || !text.lines().any(|l| l.starts_with("would run: sudo ") && l.ends_with("greeter use mandara --apply")), "no switch before the reboot\n{text}");
+    assert!(text.contains("Studio → Login screen → Login manager, or run: sudo"), "{text}");
+    // The admin helper goes to /usr/local, which survives updates here.
+    assert!(text.contains(&format!("would run: sudo install -D -o root -g root -m 0755 {} {ADMIN_EXE}", f.exe().display())), "{text}");
+    assert!(f.home_files().is_empty(), "a dry run changes nothing");
+
+    // The real run: everything else first, then the one transaction.
+    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &programs, &lacking);
+    repositories(&mut host);
+    run(&mut host, &FakeProbe::default(), facts, InstallArgs { yes: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    let layered = ran.iter().position(|c| c == "sudo rpm-ostree install --idempotent greetd cage papirus-icon-theme i2c-tools").unwrap_or_else(|| panic!("{ran:#?}"));
+    let setup = ran.iter().position(|c| c.ends_with(" setup --autostart")).unwrap();
+    let helper = ran.iter().position(|c| c.contains(ADMIN_EXE)).unwrap();
+    assert!(setup < layered && helper < layered, "the reboot-free steps run first\n{ran:#?}");
+    assert!(!ran.iter().any(|c| c.contains("dnf install") || c.contains("greeter use mandara")), "{ran:#?}");
+    let text = host.text();
+    assert!(text.contains("Restart your computer to start using the new packages"), "{text}");
+    assert!(text.contains("Mandara Login's packages arrive with the next boot: greetd cage. After restarting, switch to it in Studio → Login screen → Login manager"), "{text}");
+    assert!(f.paths_binary_exists());
+}
+
+impl Fixture {
+    fn paths_binary_exists(&self) -> bool {
+        self.home().join(".local/bin/mandara").is_file()
+    }
+}
+
+/// Nothing missing: nothing is layered, nothing is asked.
+#[test]
+fn a_complete_image_layers_nothing() {
+    let f = Fixture::new();
+    let programs = ["rpm-ostree", "rpm", "sudo", "kwin_wayland", "greetd", "cage"];
+    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &programs, &[]);
+    run(&mut host, &FakeProbe::default(), f.image_facts(BAZZITE, ImageSystem::RpmOstree), dry(InstallArgs::default())).unwrap();
+    let text = host.text();
+    assert!(text.contains("Every system package Mandara needs is already part of this system."), "{text}");
+    assert!(!text.contains("rpm-ostree install") && !text.contains("Add "), "{text}");
+    assert!(text.contains("would run: sudo ") && text.contains("greeter use mandara --apply"), "greetd is there: the usual switch\n{text}");
+}
+
+/// A second run before the reboot: what the next boot already brings is
+/// neither layered nor asked again.
+#[test]
+fn packages_waiting_for_the_reboot_are_not_requested_again() {
+    let f = Fixture::new();
+    let programs = ["rpm-ostree", "rpm", "sudo", "kwin_wayland"];
+    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &programs, &["greetd", "cage"]);
+    host.stdout.insert(OstreeStatus::argv().join(" "), STATUS_PENDING.into());
+    run(&mut host, &FakeProbe::default(), f.image_facts(BAZZITE, ImageSystem::RpmOstree), InstallArgs { yes: true, ..Default::default() }).unwrap();
+    let text = host.text();
+    assert!(text.contains("Already waiting for the next boot: greetd cage"), "{text}");
+    assert!(!host.ran().iter().any(|c| c.contains("rpm-ostree install")), "{:#?}", host.ran());
+    assert!(text.contains("Restart your computer"), "{text}");
+    assert!(text.contains("Mandara Login's packages arrive with the next boot"), "{text}");
+}
+
+/// An optional package a repository lacks fails the whole transaction:
+/// it is retried with the essential packages.
+#[test]
+fn a_failed_transaction_is_retried_without_the_optional_packages() {
+    let f = Fixture::new();
+    let programs = ["rpm-ostree", "rpm", "sudo", "kwin_wayland"];
+    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &programs, &["greetd", "cage", "papirus-icon-theme"]);
+    host.failing.insert("sudo rpm-ostree install --idempotent greetd cage papirus-icon-theme".into());
+    run(&mut host, &FakeProbe::default(), f.image_facts(BAZZITE, ImageSystem::RpmOstree), InstallArgs { yes: true, ..Default::default() }).unwrap();
+    assert!(host.ran().contains(&"sudo rpm-ostree install --idempotent greetd cage".to_string()), "{:#?}", host.ran());
+    assert!(host.text().contains("Trying again without the optional packages: papirus-icon-theme"));
+    assert!(host.text().contains("Restart your computer"));
+    // Both fail: the command to run later, and the install still succeeds.
+    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &programs, &["greetd", "cage", "papirus-icon-theme"]);
+    host.failing.insert("sudo rpm-ostree install --idempotent greetd cage papirus-icon-theme".into());
+    host.failing.insert("sudo rpm-ostree install --idempotent greetd cage".into());
+    run(&mut host, &FakeProbe::default(), f.image_facts(BAZZITE, ImageSystem::RpmOstree), InstallArgs { yes: true, ..Default::default() }).unwrap();
+    assert!(host.text().contains("rpm-ostree couldn't add the packages. Add them later with: sudo rpm-ostree install --idempotent greetd cage papirus-icon-theme"), "{}", host.text());
+    assert!(!host.text().contains("Restart your computer"));
+}
+
+/// Declined: nothing is layered, and the command is shown.
+#[test]
+fn declining_layering_adds_nothing() {
+    let f = Fixture::new();
+    let programs = ["rpm-ostree", "rpm", "sudo", "kwin_wayland"];
+    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &programs, &["i2c-tools"]);
+    host.answers = Some(false);
+    run(&mut host, &FakeProbe::default(), f.image_facts(BAZZITE, ImageSystem::RpmOstree), InstallArgs { no_greeter: true, ..Default::default() }).unwrap();
+    assert!(!host.ran().iter().any(|c| c.contains("rpm-ostree install")));
+    assert!(host.text().contains("No packages were added. Add them later with: sudo rpm-ostree install --idempotent i2c-tools"), "{}", host.text());
+}
+
+/// openSUSE Aeon: transactional-update, with openSUSE's package names.
+#[test]
+fn aeon_uses_transactional_update() {
+    let f = Fixture::new();
+    let programs = ["transactional-update", "rpm", "sudo", "niri"];
+    let mut host = image_host(ImageSystem::Transactional, Family::Suse, &programs, &["greetd", "cage", "xdg-desktop-portal-gnome"]);
+    let facts = f.image_facts(AEON, ImageSystem::Transactional);
+    assert_eq!(facts.family, Family::Suse);
+    run(&mut host, &FakeProbe::default(), facts, dry(InstallArgs::default())).unwrap();
+    let text = host.text();
+    assert!(text.contains("would run: sudo transactional-update --non-interactive pkg install --no-recommends greetd cage xdg-desktop-portal-gnome\n"), "{text}");
+    assert!(!text.contains("zypper"), "{text}");
+    assert!(!text.contains("rpm-ostree status"), "{text}");
+}
+
+/// Vanilla OS: abroot records the packages, then builds the other root
+/// once. Its /usr/local is /var/usrlocal, shared by both roots, so the admin
+/// helper is installed, and greetd + cage come with the build.
+#[test]
+fn vanilla_adds_with_abroot_then_applies_once() {
+    let f = Fixture::new();
+    let programs = ["abroot", "dpkg-query", "sudo", "kwin_wayland"];
+    let mut host = image_host(ImageSystem::Abroot, Family::Debian, &programs, &["fonts-inter", "i2c-tools", "libvulkan1", "greetd", "cage"]);
+    // abroot checks each package against the repositories as it records it.
+    host.failing.insert("sudo abroot pkg add fonts-inter".into());
+    let facts = f.image_facts(VANILLA, ImageSystem::Abroot);
+    assert_eq!(facts.family, Family::Debian);
+    run(&mut host, &FakeProbe::default(), facts, InstallArgs { yes: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    let essential = ran.iter().position(|c| c == "sudo abroot pkg add libvulkan1 greetd cage").unwrap_or_else(|| panic!("{ran:#?}"));
+    let optional = ran.iter().position(|c| c == "sudo abroot pkg add i2c-tools").unwrap();
+    let apply = ran.iter().position(|c| c == "sudo abroot pkg apply").unwrap();
+    assert!(essential < optional && optional < apply && ran.iter().filter(|c| c.contains("abroot pkg apply")).count() == 1, "{ran:#?}");
+    assert!(ran.iter().any(|c| c.contains(ADMIN_EXE)), "{ran:#?}");
+    assert!(!ran.iter().any(|c| c.contains("apt-get") || c.contains("greeter use")), "{ran:#?}");
+    let text = host.text();
+    assert!(text.contains("skipped fonts-inter (not available)"), "{text}");
+    assert!(text.contains("Restart your computer") && text.contains("Mandara Login's packages arrive with the next boot"), "{text}");
+}
+
+/// SteamOS: nothing goes into the read-only image; the home-folder parts
+/// install, and what's missing is explained.
+#[test]
+fn steamos_installs_into_the_home_folder_only() {
+    let f = Fixture::new();
+    let programs = ["pacman", "sudo", "steamos-readonly", "kwin_wayland"];
+    let mut host = image_host(ImageSystem::SteamOs, Family::Arch, &programs, &["inter-font", "power-profiles-daemon"]);
+    let facts = f.image_facts(STEAMOS, ImageSystem::SteamOs);
+    assert_eq!(facts.family, Family::Arch);
+    run(&mut host, &FakeProbe::default(), facts, InstallArgs { yes: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    assert!(!ran.iter().any(|c| c.contains("pacman -S") || c.contains("steamos-readonly") || c.contains(ADMIN_EXE) || c.contains("greeter use")), "{ran:#?}");
+    let text = host.text();
+    assert!(text.contains("SteamOS keeps its system image read-only") && text.contains("Not available here: inter-font power-profiles-daemon"), "{text}");
+    assert!(text.contains("SteamOS replaces its system files with every update"), "{text}");
+    assert!(f.paths_binary_exists(), "the home-folder parts are installed");
+}
+
+/// A source build runs before any reboot: it needs its tools in the image.
+#[test]
+fn source_builds_on_an_image_need_tools_in_the_image() {
+    let f = Fixture::new();
+    let programs = ["rpm-ostree", "rpm", "sudo", "kwin_wayland"];
+    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &programs, &["gcc", "cmake"]);
+    let err = run(&mut host, &FakeProbe::default(), f.image_facts(BAZZITE, ImageSystem::RpmOstree), InstallArgs { from_source: true, yes: true, ..Default::default() }).unwrap_err();
+    assert!(err.contains("(gcc cmake)") && err.contains("toolbox"), "{err}");
+}
+
+/// Fedora Atomic keeps the i2c group in /usr/lib/group: its line is copied
+/// into /etc/group (same gid) before `usermod`, never a second group.
+#[test]
+fn atomic_groups_are_copied_into_etc_group() {
+    let f = Fixture::new();
+    let root = f.root();
+    std::fs::create_dir_all(root.join("sys/class/drm/card1-DP-1")).unwrap();
+    std::fs::create_dir_all(root.join("dev")).unwrap();
+    std::fs::create_dir_all(root.join("usr/lib")).unwrap();
+    std::fs::write(root.join("etc/group"), "wheel:x:10:u\nu:x:1000:\n").unwrap();
+    std::fs::write(root.join("usr/lib/group"), "root:x:0:\ni2c:x:976:\n").unwrap();
+    std::fs::write(root.join("etc/passwd"), "u:x:1000:1000::/var/home/u:/bin/bash\n").unwrap();
+    let mut host = FakeHost::with(&["rpm-ostree", "sudo"]);
+    host.answers = Some(true);
+    run(&mut host, &FakeProbe::default(), f.image_facts(BAZZITE, ImageSystem::RpmOstree), InstallArgs { no_deps: true, no_greeter: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    assert!(!ran.iter().any(|c| c.contains("groupadd")), "{ran:#?}");
+    let copy = host.ran.iter().find(|c| c.argv.ends_with(&["tee".into(), "-a".into(), "/etc/group".into()])).unwrap_or_else(|| panic!("{ran:#?}"));
+    assert_eq!(copy.stdin.as_deref(), Some(&b"i2c:x:976:\n"[..]));
+    assert!(ran.contains(&"sudo usermod -aG i2c u".to_string()));
+}
+
+/// abroot asks you to accept its terms on first use: its first call keeps
+/// the terminal even when every package is optional.
+#[test]
+fn abroots_first_call_keeps_the_terminal() {
+    let f = Fixture::new();
+    let programs = ["abroot", "dpkg-query", "sudo", "kwin_wayland", "greetd", "cage"];
+    let mut host = image_host(ImageSystem::Abroot, Family::Debian, &programs, &["fonts-inter", "i2c-tools"]);
+    run(&mut host, &FakeProbe::default(), f.image_facts(VANILLA, ImageSystem::Abroot), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap();
+    let adds: Vec<&Cmd> = host.ran.iter().filter(|c| c.argv.iter().any(|a| a == "abroot")).collect();
+    assert_eq!(adds.iter().map(|c| c.display()).collect::<Vec<_>>(), ["sudo abroot pkg add fonts-inter", "sudo abroot pkg add i2c-tools", "sudo abroot pkg apply"]);
+    assert_eq!(adds[0].io, Io::Inherit);
+    assert_eq!(adds[1].io, Io::Quiet);
+}
+
+/// SteamOS is told what it lacks, never that a tool will add it.
+#[test]
+fn steamos_is_never_promised_packages() {
+    let f = Fixture::new();
+    let mut host = image_host(ImageSystem::SteamOs, Family::Arch, &["pacman", "sudo", "kwin_wayland"], &["inter-font"]);
+    run(&mut host, &FakeProbe::default(), f.image_facts(STEAMOS, ImageSystem::SteamOs), dry(InstallArgs::default())).unwrap();
+    let text = host.text();
+    assert!(!text.contains("is image-based: Mandara goes into your home folder") && !text.contains("steamos-update"), "{text}");
+    assert!(text.contains("Not available here: inter-font"), "{text}");
+}
+
+/// The closing line names only the login packages the image lacked:
+/// Bazzite ships cage, so greetd alone arrives with the next boot.
+#[test]
+fn the_closing_line_names_only_the_missing_login_packages() {
+    let f = Fixture::new();
+    let programs = ["rpm-ostree", "rpm", "sudo", "kwin_wayland", "cage"];
+    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &programs, &["greetd"]);
+    run(&mut host, &FakeProbe::default(), f.image_facts(BAZZITE, ImageSystem::RpmOstree), InstallArgs { yes: true, ..Default::default() }).unwrap();
+    let text = host.text();
+    assert!(host.ran().contains(&"sudo rpm-ostree install --idempotent greetd".to_string()), "{:#?}", host.ran());
+    assert!(text.contains("Mandara Login's packages arrive with the next boot: greetd. After restarting"), "{text}");
+    assert!(!text.contains("cage"), "cage is part of the image\n{text}");
+    // Both missing: both named.
+    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &["rpm-ostree", "rpm", "sudo", "kwin_wayland"], &["greetd", "cage"]);
+    run(&mut host, &FakeProbe::default(), f.image_facts(BAZZITE, ImageSystem::RpmOstree), InstallArgs { yes: true, ..Default::default() }).unwrap();
+    assert!(host.text().contains("Mandara Login's packages arrive with the next boot: greetd cage."), "{}", host.text());
 }

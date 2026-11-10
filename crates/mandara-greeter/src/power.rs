@@ -40,7 +40,9 @@ impl PowerAction {
     }
 
     /// Calls `org.freedesktop.login1.Manager.<method>(interactive = true)`
-    /// on a helper thread. Always an error in demo mode.
+    /// (ConsoleKit2's manager on FreeBSD) on a helper thread. FreeBSD
+    /// without ConsoleKit2 runs the base system's `shutdown` / `acpiconf`
+    /// instead. Always an error in demo mode.
     pub fn run(self, demo: bool) -> Result<(), String> {
         if demo {
             return Err(crate::i18n::tl("Power actions are disabled in the demo"));
@@ -54,11 +56,24 @@ impl PowerAction {
     }
 
     async fn call(self) -> Result<(), String> {
-        let conn = zbus::Connection::system().await.map_err(|e| e.to_string())?;
-        let proxy = zbus::Proxy::new(&conn, "org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager")
-            .await
-            .map_err(|e| e.to_string())?;
-        proxy.call::<_, _, ()>(self.method(), &(true,)).await.map_err(|e| e.to_string())
+        use mandara_services::logind::bus;
+        let result = async {
+            let conn = zbus::Connection::system().await?;
+            let proxy = zbus::Proxy::new(&conn, bus::DEST, bus::MANAGER_PATH, bus::MANAGER).await?;
+            proxy.call::<_, _, ()>(self.method(), &(true,)).await
+        }
+        .await;
+        // No login manager to ask (no ConsoleKit2, or no system bus): the
+        // base system's tools, run directly, since the login screen has no
+        // password prompt for pkexec; FreeBSD allows them to the `operator`
+        // group. A manager that refuses keeps its error.
+        #[cfg(target_os = "freebsd")]
+        if let Err(e) = &result
+            && mandara_services::freebsd::power::bus_missing(e)
+        {
+            return mandara_services::freebsd::power::run(self.method(), mandara_services::freebsd::power::Via::Direct);
+        }
+        result.map_err(|e| e.to_string())
     }
 }
 

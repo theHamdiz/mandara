@@ -26,14 +26,22 @@ How Mandara looks and feels, and how much of it you can shape.
   bar space do (main menu or desktop menu; any hot-corner action;
   workspaces or volume). `mandara msg bar hide` / `show` / `toggle` puts
   the bar away until you want it back.
-- **Bars that look nothing alike.** Four style presets in Studio → Bars
+- **Bars that look nothing alike.** Eight style presets in Studio → Bars
   reshape the whole bar: **Expressive** (a tall bottom bar inside a frame
   round the screen, joined to a rail on the left: round accent buttons,
   tonal tiles for the widgets and scalloped badges down the rail),
   **Tile dock** (one floating island of large squircle tiles at the
   bottom), **Rail** (a wide left rail of flower-shaped buttons in a screen
-  frame) and **Segmented** (no bar at all, just rows of connected tiles
-  under the top edge). They're built from settings you can keep tuning:
+  frame), **Segmented** (no bar at all, just rows of connected tiles
+  under the top edge), **System monitor** (a dense status line along the
+  bottom: every reading on a square-cornered stat block, meters and rates
+  in the middle, in your monospace font), **Stanley Bridge** (Tile dock
+  split into three floating docks of tertiary squircles spanning the
+  bottom), **Pharos Beam** (a narrow lantern of tonal tiles and scalloped
+  accent buttons hanging from the top edge) and **Raml Tram** (one line of
+  flower stops running along the top and down the left edge: a top bar
+  joined to a rail). In every style the workspace and tag buttons take the
+  bar's own shapes and show the icon of the app on each tag. They're built from settings you can keep tuning:
   items as capsules, tiles, squircles or connected groups; icon items as
   circles or Material 3 Expressive cookies, clovers, flowers and bursts in
   the accent or tertiary tone; the items' inset from the bar's edges; and
@@ -97,7 +105,23 @@ come shortcuts that open Sound, Network, Bluetooth, the system monitor,
 weather, the calendar or notifications in the menu's place. Studio and the
 power menu are the buttons at the top, so the rail doesn't repeat them;
 **Reload config** is on Apps & tools. **Rail** (Studio → Bars → Drop-down
-panels, under Main menu) shows each entry's name or icons only.
+panels, under Main menu) shows each entry's name or icons only, and
+**Rail height** keeps the rail as tall as its buttons or stretches it to
+the panel's height with its buttons spread evenly from top to foot (the
+divider stays halfway between the pages and the shortcuts), over a
+mashrabiya lattice rising from its foot and fading out on its way up.
+
+On a split bar (glass pills, island, micro pill, notch, *Segmented*, *Tile
+dock*) the gaps between the pieces are the desktop, so right-clicking them
+opens the desktop's menu. Turn on **Main menu in the bar's gaps** (Studio →
+Bars → Bar → Behaviour) and a right-click anywhere in the bar's strip opens
+the main menu instead. Studio locks that switch until a right-click on
+empty bar space opens the main menu: first set **Right-click on empty bar
+space** to *The bar's main menu* and turn **Click through empty space**
+off, both in the same Behaviour section (see
+[Configuration → Main menu](configuration.md#main-menu)). The desktop's
+menu is still a right-click anywhere else on the desktop, or **Desktop menu** on the main menu's Apps & tools
+page, which opens it where you clicked.
 
 Open **Look** in the main menu to pick a theme. The cards fill the
 available height; longer catalogs use compact scrolling rows. Built-in
@@ -201,7 +225,9 @@ existing widgets. Eligible kinds can also be added to
 - **Desktop widgets:** hero clocks (superscript, headline, day block, ring,
   greeting, giant day numeral, minimal, and an analog dial with an optional
   seconds hand), a system monitor as a column with live graphs or as ring
-  gauges, the weather with the days ahead, a world clock, a countdown to a
+  gauges (CPU, memory, swap, every GPU's load, video memory, temperature and
+  power, disk, network and battery, each one yours to switch on or off,
+  also from its right-click menu in *Edit desktop*), the weather with the days ahead, a world clock, a countdown to a
   date, text and shape decorations (discs, stripes, waves, frames, and
   vertical text: kana and CJK stand upright, Arabic and Latin keep their
   joined line turned toward the screen's middle) and an audio visualizer

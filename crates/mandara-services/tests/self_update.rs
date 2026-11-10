@@ -170,14 +170,29 @@ fn self_update_and_plugin_updates_end_to_end() {
     assert!(patch_bytes.len() * 20 < tarball.len(), "patch {} vs tarball {}", patch_bytes.len(), tarball.len());
     let mut manifest = Manifest { schema: SCHEMA, name: "mandara".into(), version: NEW.into(), ..Default::default() };
     manifest.targets.insert(target.clone(), entry);
+    // The release also carries the other platform's build (FreeBSD on
+    // Linux, Linux on FreeBSD), with its own tarball and patch: each
+    // install must pick only its own.
+    let arch = std::env::consts::ARCH;
+    let sibling = if target.ends_with("-freebsd") { format!("{arch}-linux-gnu") } else { format!("{arch}-freebsd") };
+    let (mut sibling_old, mut sibling_new) = (old_bin.clone(), new_bin.clone());
+    sibling_old[64] ^= 0x5a;
+    sibling_new[64] ^= 0x5a;
+    let sibling_top = format!("mandara-{NEW}-{sibling}");
+    let sibling_tarball_name = format!("{sibling_top}.tar.gz");
+    let sibling_tarball = tar_gz(&[(format!("{sibling_top}/{SHELL_BINARY}"), &sibling_new)]);
+    let (sibling_entry, sibling_patches) = mandara_delta::create::target_entry("mandara", NEW, Some(&sibling), &(sibling_tarball_name.clone(), sibling_tarball.clone()), SHELL_BINARY, &sibling_new, &[(OLD, &sibling_old)]).unwrap();
+    let (sibling_patch_name, sibling_patch_bytes) = sibling_patches.into_iter().next().unwrap();
+    assert!(sibling_patch_name.ends_with(&format!("-{sibling}.patch.zst")), "{sibling_patch_name}");
+    manifest.targets.insert(sibling.clone(), sibling_entry);
     // The release key: the mock release is signed like a real one.
     let (private, _) = mandara_delta::signing::sign::generate().unwrap();
     su::trust_keys_for_tests(vec![mandara_delta::signing::sign::public_key(&private).unwrap()]);
     let manifest_json = manifest.to_json();
-    let sums = format!("{}  {tarball_name}\n{}  {MANIFEST_FILE}\n", mandara_delta::sha256_hex(&tarball), mandara_delta::sha256_hex(manifest_json.as_bytes()));
+    let sums = format!("{}  {tarball_name}\n{}  {sibling_tarball_name}\n{}  {MANIFEST_FILE}\n", mandara_delta::sha256_hex(&tarball), mandara_delta::sha256_hex(&sibling_tarball), mandara_delta::sha256_hex(manifest_json.as_bytes()));
     let sig = mandara_delta::signing::sign::sign(&private, sums.as_bytes()).unwrap();
     let release = |with_manifest: bool| {
-        let mut assets = vec![asset(&base, &tarball_name, tarball.len()), asset(&base, &patch_name, patch_bytes.len()), asset(&base, &older_patch_name, older_patch_bytes.len()), asset(&base, "SHA256SUMS", sums.len()), asset(&base, "SHA256SUMS.sig", sig.len())];
+        let mut assets = vec![asset(&base, &tarball_name, tarball.len()), asset(&base, &patch_name, patch_bytes.len()), asset(&base, &older_patch_name, older_patch_bytes.len()), asset(&base, &sibling_tarball_name, sibling_tarball.len()), asset(&base, &sibling_patch_name, sibling_patch_bytes.len()), asset(&base, "SHA256SUMS", sums.len()), asset(&base, "SHA256SUMS.sig", sig.len())];
         if with_manifest {
             assets.push(asset(&base, MANIFEST_FILE, 1));
         }
@@ -190,6 +205,8 @@ fn self_update_and_plugin_updates_end_to_end() {
         r.insert(format!("/download/{tarball_name}"), tarball.clone());
         r.insert(format!("/download/{patch_name}"), patch_bytes.clone());
         r.insert(format!("/download/{older_patch_name}"), older_patch_bytes.clone());
+        r.insert(format!("/download/{sibling_tarball_name}"), sibling_tarball.clone());
+        r.insert(format!("/download/{sibling_patch_name}"), sibling_patch_bytes.clone());
         r.insert("/download/SHA256SUMS".into(), sums.clone().into_bytes());
         r.insert("/download/SHA256SUMS.sig".into(), sig.clone().into_bytes());
     }
@@ -209,6 +226,22 @@ fn self_update_and_plugin_updates_end_to_end() {
     assert_eq!(info.download_size(true), Some(tarball.len() as u64));
     assert!(info.signed_sums.as_deref() == Some(sums.as_str()));
     assert!(!su::check_with(&base, NEW, &target).unwrap().available);
+    assert_eq!(info.full.as_ref().map(|f| f.file.as_str()), Some(tarball_name.as_str()));
+    assert_eq!(info.patch.as_ref().map(|p| p.download.file.as_str()), Some(patch_name.as_str()));
+
+    // The other platform's install gets its own tarball, patch and binary
+    // hash from the same release, and its patch rebuilds its own binary.
+    let other = su::check_with(&base, OLD, &sibling).unwrap();
+    assert!(other.available);
+    assert_eq!(other.full.as_ref().map(|f| f.file.as_str()), Some(sibling_tarball_name.as_str()));
+    assert_eq!(other.patch.as_ref().map(|p| p.download.file.as_str()), Some(sibling_patch_name.as_str()));
+    assert_eq!(other.binary_sha256, Some(mandara_delta::sha256_hex(&sibling_new)));
+    let other_exe = root.path().join("other/bin/mandara");
+    std::fs::create_dir_all(other_exe.parent().unwrap()).unwrap();
+    std::fs::write(&other_exe, &sibling_old).unwrap();
+    let report = su::apply(&other, &other_exe, ApplyOptions::default(), &|_| {}).unwrap();
+    assert_eq!((report.method, report.downloaded), (Method::Delta, sibling_patch_bytes.len() as u64));
+    assert_eq!(std::fs::read(&other_exe).unwrap(), sibling_new);
 
     // Signed releases: no signature, a signature by another key, or a
     // listing changed after signing → nothing is offered.

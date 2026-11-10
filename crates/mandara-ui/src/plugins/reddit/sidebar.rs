@@ -15,7 +15,7 @@ use super::panel::{age, count, hidden, stat};
 use super::{Settings, current};
 use crate::bidi::Bidi as _;
 use crate::kit::{alpha, text, tokens};
-use crate::plugins::panel_fx::{EXPIRY_MARGIN, glass_card, icon_chip, readable, redraw_in};
+use crate::plugins::panel_fx::{EXPIRY_MARGIN, glass_card, icon_chip, pill_button, readable, redraw_in};
 
 /// Posts the card shows.
 pub(super) const CARD_POSTS: usize = 5;
@@ -37,7 +37,7 @@ pub(super) fn render(p: &MandaraPalette, window: &mut Window, cx: &mut App) -> A
     let settings = current(cx);
     let shared = model::model();
     shared.borrow().views.track(window);
-    let Some(sub) = community(&settings) else { return div().into_any_element() };
+    let Some(sub) = community(&settings) else { return no_community(p) };
     let want = super::want(window.scale_factor());
     let query = Query { subreddit: sub.clone(), sort: settings.sort, span: settings.span, search: None };
     let next = shared.borrow_mut().want_card(query, want, CARD_REFRESH, Instant::now());
@@ -89,6 +89,26 @@ pub(super) fn render(p: &MandaraPalette, window: &mut Window, cx: &mut App) -> A
     }
     column.when(limited, |el| el.child(div().text_size(px(text::CAPTION)).text_color(p.on_surface_variant.hsla())
         .child(t("Scores and comment counts need your own Reddit app (Studio → Plugins → Reddit)")))).into_any_element()
+}
+
+/// The card without a community to follow: a way to pick one, never an
+/// empty, zero-height card.
+fn no_community(p: &MandaraPalette) -> AnyElement {
+    let accent = readable(p.primary, p);
+    glass_card(p).p(px(tokens::MD)).flex().flex_col().gap(px(tokens::SM))
+        .child(div().row().items_center().gap(px(tokens::SM))
+            .child(icon_chip("messages", accent, CHIP_PX))
+            .child(div().flex_1().min_w_0().text_size(px(text::BODY)).font_weight(FontWeight::SEMIBOLD).truncate().child(t("Reddit"))))
+        .child(div().text_size(px(text::LABEL)).text_color(p.on_surface_variant.hsla()).child(t("Follow a community to see its top posts here")))
+        // A tab stop: Tab reaches it, and Enter or Space clicks it once
+        // (GPUI turns the key's release on a focused element into a click).
+        // A ring in the accent shows keyboard focus; the transparent border
+        // keeps the pill the same size with and without it.
+        .child(div().row().child(pill_button("reddit-card-discover", Some("globe"), t("Find communities"), accent, p, |_, cx| {
+            if let Err(error) = super::discover(cx) { tracing::info!("reddit: {error}"); }
+        }).focusable().tab_index(0).border_2().border_color(gpui::transparent_black())
+            .focus_visible(move |s| s.border_color(accent.hsla()))))
+        .into_any_element()
 }
 
 fn tr_sort(sort: mandara_services::reddit::Sort) -> String { mandara_i18n::tr(super::panel::sort_label(sort)).to_string() }

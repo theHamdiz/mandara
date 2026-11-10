@@ -1002,6 +1002,8 @@ pub fn register(r: &mut PluginRegistry) {
             })),
         }
     });
+    // Times and the adhan are the plugin's own (notifications run without a view).
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     adhan::register_commands(r, own_lang);
     // Every command answers in the plugin's own language.
     let mut add = |spec: CommandSpec| r.command(ID, plugin_lang::speaking(spec, own_lang));

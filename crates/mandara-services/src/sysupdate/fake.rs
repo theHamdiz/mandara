@@ -8,15 +8,25 @@
 //! with these recordings, so the progress UI sees exactly the stream the
 //! real helper writes. Only the Flatpak, `nixos-rebuild` activation and
 //! generation-deletion texts are illustrative (no container can run them).
+//!
+//! The AUR recordings (`fixtures/aur/`) are paru 2.2.0 and yay 13.1.0 run
+//! as a user in a clean Arch container, without a terminal and with a
+//! `sudo -A` wrapper first on `PATH`, as the real step runs them; the
+//! other helpers replay paru's. Their askpass printed [`ASKPASS_MARK`] to
+//! sudo's standard error, so each recording shows exactly where the
+//! helper asked for a password: the replay asks there, through the real
+//! askpass socket and the registered password dialog.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use super::askpass;
+use super::aur::AurHelper;
 use super::helper::{self, Action, CancelSignal, Out, Runner};
 use super::job::{Launcher, RootProc};
 use super::nixos::{self, NixPaths};
-use super::plan::{BackendId, Step, StepKind};
+use super::plan::{BackendId, FREEBSD_UPDATE, Step, StepKind};
 use super::{Failure, System};
 
 macro_rules! fixture {
@@ -35,6 +45,13 @@ pub enum Scenario {
     /// A build fails (NixOS) / a download fails (Void).
     Fails,
 }
+
+/// Where a recorded helper asked sudo's askpass (followed by sudo's prompt).
+pub const ASKPASS_MARK: &str = "@@ASKPASS@@";
+/// sudo's own tries per run.
+const SUDO_TRIES: u32 = 3;
+/// The sandbox's "wrong password": anything else is accepted.
+const WRONG_PASSWORD: &[u8] = b"wrong";
 
 /// How often a held replay looks for a cancel.
 const HOLD_POLL: Duration = Duration::from_millis(50);
@@ -90,6 +107,46 @@ pub fn recording(backend: BackendId, kind: StepKind, scenario: Scenario) -> (&'s
         (B::Nix, K::DeleteGenerations, _) => (NIXOS_DELETE, 0),
         (B::Nix, K::CollectGarbage, _) => (fixture!("nix/gc.txt"), 0),
         (B::Nix, _, _) => (NIXOS_ACTIVATE, 0),
+        (B::Pkg | B::PkgBase, K::Refresh, S::Locked) => (fixture!("freebsd/locked.txt"), 1),
+        (B::Pkg, K::Refresh, _) => (fixture!("freebsd/refresh.txt"), 0),
+        (B::Pkg, _, S::UpToDate) => (fixture!("freebsd/uptodate.txt"), 0),
+        (B::Pkg, K::Download, _) => (fixture!("freebsd/download.txt"), 0),
+        (B::Pkg, _, _) => (fixture!("freebsd/install.txt"), 0),
+        // FreeBSD 15.1 with a packaged base: 111 base packages and one port.
+        (B::PkgBase, K::Refresh, _) => (fixture!("freebsd15/pkgbase-refresh.txt"), 0),
+        (B::PkgBase, _, S::UpToDate) => (fixture!("freebsd15/uptodate.txt"), 0),
+        (B::PkgBase, K::Download, _) => (fixture!("freebsd15/pkgbase-download.txt"), 0),
+        (B::PkgBase, _, _) => (fixture!("freebsd15/pkgbase-install.txt"), 0),
+    }
+}
+
+/// The recording of `step`: FreeBSD's base-system steps (freebsd-update)
+/// have their own, the rest follow [`recording`].
+pub fn recording_of(backend: BackendId, step: &Step, scenario: Scenario) -> (&'static str, i32) {
+    if backend != BackendId::Pkg || step.program != FREEBSD_UPDATE {
+        return recording(backend, step.kind, scenario);
+    }
+    match (step.kind, scenario) {
+        (StepKind::Download, Scenario::UpToDate) => (fixture!("freebsd/base-uptodate.txt"), 0),
+        (StepKind::Download, Scenario::Fails) => (fixture!("freebsd/base-not-release.txt"), 1),
+        (StepKind::Download, _) => (fixture!("freebsd/base-fetch.txt"), 0),
+        // `install` never checks the release, so a -STABLE system has
+        // nothing fetched either.
+        (_, Scenario::UpToDate | Scenario::Fails) => ("No updates are available to install.\nRun 'freebsd-update [options] fetch' first.\n", super::plan::FREEBSD_UPDATE_NOTHING),
+        _ => (fixture!("freebsd/base-install.txt"), 0),
+    }
+}
+
+/// The recording and exit code of the AUR step under `helper` (paru's for
+/// the helpers no recording exists of).
+pub fn aur_recording(helper: AurHelper, scenario: Scenario) -> (&'static str, i32) {
+    match (helper, scenario) {
+        (AurHelper::Yay, Scenario::UpToDate) => (fixture!("aur/yay-uptodate.txt"), 0),
+        (AurHelper::Yay, Scenario::Fails) => (fixture!("aur/yay-buildfail.txt"), 1),
+        (AurHelper::Yay, _) => (fixture!("aur/yay-upgrade.txt"), 0),
+        (_, Scenario::UpToDate) => (fixture!("aur/paru-uptodate.txt"), 0),
+        (_, Scenario::Fails) => (fixture!("aur/paru-buildfail.txt"), 1),
+        (_, _) => (fixture!("aur/paru-upgrade.txt"), 0),
     }
 }
 
@@ -109,15 +166,66 @@ pub struct Replay {
     hold: Option<(StepKind, usize)>,
     /// A flake folder whose `flake.lock` the fake update rewrites.
     flake_dir: Option<PathBuf>,
+    /// What the AUR step's recording shows.
+    aur_scenario: Scenario,
+    /// What FreeBSD's base-system steps (freebsd-update) show, when it
+    /// differs from the packages'.
+    base_scenario: Option<Scenario>,
 }
 
 impl Replay {
     pub fn new(backend: BackendId) -> Replay {
-        Replay { backend, scenario: Scenario::Success, delay: Duration::ZERO, hold: None, flake_dir: None }
+        Replay { backend, scenario: Scenario::Success, delay: Duration::ZERO, hold: None, flake_dir: None, aur_scenario: Scenario::Success, base_scenario: None }
+    }
+
+    /// The AUR step's recording.
+    pub fn aur(mut self, s: Scenario) -> Replay {
+        self.aur_scenario = s;
+        self
+    }
+
+    /// Replays the AUR step of `helper`: each recorded askpass call asks
+    /// through `session` as sudo would (three tries), and a cancel stops
+    /// it only while it may be stopped.
+    pub fn run_aur(&self, helper: AurHelper, session: &askpass::Session, line: &mut dyn FnMut(&str), cancel: &CancelSignal) -> std::io::Result<Option<i32>> {
+        let (text, code) = aur_recording(helper, self.aur_scenario);
+        // The replay itself stands in for the helper's process tree.
+        session.set_root(std::process::id());
+        for (i, l) in text.lines().enumerate() {
+            if cancel.requested() && cancel.is_cancellable() {
+                return Ok(Some(130));
+            }
+            if self.hold.is_some_and(|(k, at)| k == StepKind::Aur && at == i) {
+                while !(cancel.requested() && cancel.is_cancellable()) {
+                    std::thread::sleep(HOLD_POLL);
+                }
+                return Ok(Some(130));
+            }
+            if let Some(prompt) = l.strip_prefix(ASKPASS_MARK) {
+                if let Err(said) = sudo_asks(session, prompt.trim(), line) {
+                    line(said);
+                    line("sudo: a password is required");
+                    line(" -> exit status 1");
+                    return Ok(Some(1));
+                }
+                continue;
+            }
+            line(l);
+            if !self.delay.is_zero() {
+                std::thread::sleep(self.delay);
+            }
+        }
+        Ok(Some(code))
     }
 
     pub fn scenario(mut self, s: Scenario) -> Replay {
         self.scenario = s;
+        self
+    }
+
+    /// FreeBSD's base-system steps show `s` instead.
+    pub fn base(mut self, s: Scenario) -> Replay {
+        self.base_scenario = Some(s);
         self
     }
 
@@ -136,7 +244,8 @@ impl Replay {
 
 impl Runner for Replay {
     fn run(&self, step: &Step, line: &mut dyn FnMut(&str), cancel: &CancelSignal) -> std::io::Result<Option<i32>> {
-        let (text, code) = recording(self.backend, step.kind, self.scenario);
+        let scenario = self.base_scenario.filter(|_| step.program == FREEBSD_UPDATE).unwrap_or(self.scenario);
+        let (text, code) = recording_of(self.backend, step, scenario);
         for (i, l) in text.lines().enumerate() {
             if step.kind.cancellable() && cancel.requested() {
                 return Ok(Some(130));
@@ -161,12 +270,29 @@ impl Runner for Replay {
     }
 }
 
+/// One recorded sudo password prompt: up to three tries through the
+/// askpass, as sudo makes them. `Err` carries sudo's last words.
+fn sudo_asks(session: &askpass::Session, prompt: &str, line: &mut dyn FnMut(&str)) -> Result<(), &'static str> {
+    for _ in 0..SUDO_TRIES {
+        match askpass::request(session.socket(), session.token(), prompt, askpass::CLIENT_TIMEOUT) {
+            Ok(secret) if secret.expose() == WRONG_PASSWORD => line("Sorry, try again."),
+            Ok(_) => return Ok(()),
+            Err(_) => return Err("sudo: no password was provided"),
+        }
+    }
+    Err("sudo: 3 incorrect password attempts")
+}
+
 /// A launcher whose "root helper" is the real root-side loop, in-process,
 /// replaying recordings.
 pub struct FakeLauncher {
     pub system: System,
     pub replay: Arc<Replay>,
     pub nix: NixPaths,
+    /// The AUR helper the sandbox pretends is installed.
+    pub aur: Option<AurHelper>,
+    /// The password dialog (tests); else the shell's.
+    pub prompter: Option<Arc<dyn askpass::Prompter>>,
 }
 
 struct ReplayRef(Arc<Replay>);
@@ -179,7 +305,13 @@ impl Runner for ReplayRef {
 
 impl FakeLauncher {
     pub fn new(system: System, replay: Replay, nix: NixPaths) -> FakeLauncher {
-        FakeLauncher { system, replay: Arc::new(replay), nix }
+        FakeLauncher { system, replay: Arc::new(replay), nix, aur: None, prompter: None }
+    }
+
+    /// Answers the AUR step's password requests with `p` (tests).
+    pub fn with_prompter(mut self, p: Arc<dyn askpass::Prompter>) -> FakeLauncher {
+        self.prompter = Some(p);
+        self
     }
 }
 
@@ -238,6 +370,15 @@ impl Launcher for FakeLauncher {
 
     fn restart_facts(&self) -> (String, PathBuf, PathBuf) {
         (String::new(), PathBuf::from("/nonexistent"), PathBuf::from("/nonexistent"))
+    }
+
+    fn prompter(&self) -> Option<Arc<dyn askpass::Prompter>> {
+        self.prompter.clone().or_else(askpass::prompter)
+    }
+
+    fn aur(&self, step: &Step, session: &askpass::Session, line: &mut dyn FnMut(&str), cancel: &CancelSignal) -> std::io::Result<Option<i32>> {
+        let helper = AurHelper::from_id(step.program).ok_or_else(|| std::io::Error::other("not an AUR helper"))?;
+        self.replay.run_aur(helper, session, line, cancel)
     }
 }
 
@@ -332,20 +473,34 @@ fn set_link_time(link: &Path, when: std::time::SystemTime) -> std::io::Result<()
 
 /// The sandbox configuration: `MANDARA_FAKE_SYSTEM_UPDATE=<backend>[:<scenario>]`
 /// (`pacman`, `apt:locked`, `nixos`, `nixos:fails`…), with
-/// `MANDARA_FAKE_SYSTEM_UPDATE_DELAY_MS` per line and
-/// `MANDARA_FAKE_SYSTEM_UPDATE_HOLD=<step>:<line>` to pause mid-way.
+/// `MANDARA_FAKE_SYSTEM_UPDATE_DELAY_MS` per line,
+/// `MANDARA_FAKE_SYSTEM_UPDATE_HOLD=<step>:<line>` to pause mid-way (`aur:40`)
+/// and `MANDARA_FAKE_AUR=<helper>[:<scenario>]` (`paru`, `yay:fails`) for
+/// an installed AUR helper with pending AUR updates.
 #[cfg(all(feature = "fake-system-update", debug_assertions))]
 pub fn from_env() -> Option<(System, Scenario)> {
     let spec = std::env::var("MANDARA_FAKE_SYSTEM_UPDATE").ok()?;
     let (name, scenario) = spec.split_once(':').unwrap_or((&spec, ""));
     let system = if name == "nixos" { System::NixOs } else { System::Managed(BackendId::from_id(name)?) };
-    let scenario = match scenario {
+    Some((system, scenario_named(scenario)))
+}
+
+#[cfg(all(feature = "fake-system-update", debug_assertions))]
+fn scenario_named(name: &str) -> Scenario {
+    match name {
         "uptodate" => Scenario::UpToDate,
         "locked" => Scenario::Locked,
         "fails" => Scenario::Fails,
         _ => Scenario::Success,
-    };
-    Some((system, scenario))
+    }
+}
+
+/// `MANDARA_FAKE_AUR=<helper>[:<scenario>]`.
+#[cfg(all(feature = "fake-system-update", debug_assertions))]
+pub fn aur_from_env() -> Option<(AurHelper, Scenario)> {
+    let spec = std::env::var("MANDARA_FAKE_AUR").ok()?;
+    let (name, scenario) = spec.split_once(':').unwrap_or((&spec, ""));
+    Some((AurHelper::from_id(name)?, scenario_named(scenario)))
 }
 
 /// The sandbox's launcher (a fixture NixOS tree under the runtime folder).
@@ -362,8 +517,11 @@ pub fn launcher() -> Option<FakeLauncher> {
         System::Managed(b) => b,
         _ => BackendId::Nix,
     };
-    let replay = Replay { backend, scenario, delay, hold, flake_dir: Some(nix.etc_nixos.clone()) };
-    Some(FakeLauncher::new(system, replay, nix))
+    let aur = aur_from_env();
+    let replay = Replay { backend, scenario, delay, hold, flake_dir: Some(nix.etc_nixos.clone()), aur_scenario: aur.map_or(Scenario::Success, |(_, s)| s) };
+    let mut launcher = FakeLauncher::new(system, replay, nix);
+    launcher.aur = aur.map(|(h, _)| h);
+    Some(launcher)
 }
 
 /// Where the sandbox's fixture NixOS tree lives.

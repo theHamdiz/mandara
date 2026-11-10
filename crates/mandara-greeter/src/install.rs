@@ -10,7 +10,15 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
+#[cfg(not(target_os = "freebsd"))]
 pub const GREETD_CONFIG: &str = "/etc/greetd/config.toml";
+/// FreeBSD: greetd reads `/usr/local/etc/greetd/config.toml` first (its
+/// FreeBSD port's prefix).
+#[cfg(target_os = "freebsd")]
+pub const GREETD_CONFIG: &str = "/usr/local/etc/greetd/config.toml";
+/// The VT a new greetd config runs on (FreeBSD: `ttyv8`, past the eight
+/// gettys of `/etc/ttys`).
+const FRESH_VT: i64 = if cfg!(target_os = "freebsd") { 8 } else { 1 };
 pub const BACKUP_SUFFIX: &str = "mandara-backup";
 pub const INSTALLED_EXE: &str = "/usr/local/lib/mandara/mandara-greeter";
 pub const STATE_DIR: &str = "/var/lib/mandara-greeter";
@@ -130,7 +138,7 @@ pub fn render_greetd_config(existing: Option<&str>, command: &str, user: &str) -
     table.insert("default_session".into(), toml::Value::Table(session));
     if !table.contains_key("terminal") {
         let mut terminal = toml::Table::new();
-        terminal.insert("vt".into(), toml::Value::Integer(1));
+        terminal.insert("vt".into(), toml::Value::Integer(FRESH_VT));
         table.insert("terminal".into(), toml::Value::Table(terminal));
     }
     format!("{MARKER}; previous file: {GREETD_CONFIG}.{BACKUP_SUFFIX}\n\n{}", toml::to_string(&table).unwrap_or_default())
@@ -144,12 +152,20 @@ pub fn greeter_user(existing: Option<&str>) -> String {
         .unwrap_or_else(|| "greeter".into())
 }
 
-/// `user`'s uid and gid from `<root>/etc/passwd`.
+/// Password databases, in the order they are searched: `/etc/passwd`,
+/// then `/usr/lib/passwd`, where image-based systems (Fedora Atomic's
+/// nss-altfiles) keep the system users their packages create, such as
+/// greetd's.
+const PASSWD_FILES: [&str; 2] = ["etc/passwd", "usr/lib/passwd"];
+
+/// `user`'s uid and gid from `<root>/etc/passwd` (or `/usr/lib/passwd`).
 pub(crate) fn passwd_ids_in(root: &Path, user: &str) -> Option<(u32, u32)> {
-    let passwd = std::fs::read_to_string(root.join("etc/passwd")).ok()?;
-    passwd.lines().find_map(|l| {
-        let f: Vec<&str> = l.split(':').collect();
-        (f.len() >= 4 && f[0] == user).then(|| Some((f[2].parse().ok()?, f[3].parse().ok()?)))?
+    PASSWD_FILES.iter().find_map(|file| {
+        let passwd = std::fs::read_to_string(root.join(file)).ok()?;
+        passwd.lines().find_map(|l| {
+            let f: Vec<&str> = l.split(':').collect();
+            (f.len() >= 4 && f[0] == user).then(|| Some((f[2].parse().ok()?, f[3].parse().ok()?)))?
+        })
     })
 }
 
@@ -179,13 +195,14 @@ impl InstallPlan {
         let existing = std::fs::read_to_string(GREETD_CONFIG).ok();
         let user = greeter_user(existing.as_deref());
         let new_config = render_greetd_config(existing.as_deref(), &kiosk.command(), &user);
-        let current_dm = current_display_manager(Path::new("/etc/systemd/system/display-manager.service"));
+        let root = crate::manager::SysRoot::system();
+        let current_dm = if root.freebsd() { crate::manager::display_manager(&root) } else { current_display_manager(Path::new("/etc/systemd/system/display-manager.service")) };
         let mut commands = Vec::new();
         if let Some(dm) = current_dm.as_deref().filter(|d| *d != "greetd") {
-            commands.push(vec!["systemctl".into(), "disable".into(), format!("{dm}.service")]);
+            commands.push(crate::manager::service_command(&root, "disable", &format!("{dm}.service")));
         }
         if current_dm.as_deref() != Some("greetd") {
-            commands.push(vec!["systemctl".into(), "enable".into(), "greetd.service".into()]);
+            commands.push(crate::manager::service_command(&root, "enable", "greetd.service"));
         }
         let mut warnings = Vec::new();
         if !crate::sessions::program_exists("greetd") && !Path::new("/usr/bin/greetd").exists() {
@@ -270,7 +287,8 @@ impl InstallPlan {
             println!("✓ wrote {path}");
         }
         // 5. greetd config (backup first; an existing backup is kept).
-        std::fs::create_dir_all("/etc/greetd").map_err(|e| err("/etc/greetd", e))?;
+        let greetd_dir = Path::new(GREETD_CONFIG).parent().unwrap_or(Path::new("/"));
+        std::fs::create_dir_all(greetd_dir).map_err(|e| err(&greetd_dir.display().to_string(), e))?;
         let backup = format!("{GREETD_CONFIG}.{BACKUP_SUFFIX}");
         if let Some(existing) = &self.existing
             && !existing.starts_with(MARKER)
@@ -323,13 +341,17 @@ pub fn install_runtime(root: &Path, exe: &Path, greeter_user: &str) -> Result<Ve
         std::fs::rename(&tmp, &dst).map_err(|e| err(&dst, e))?;
     }
     done.push(format!("installed {INSTALLED_EXE}"));
-    // 2. Media folders.
-    for d in [crate::config::SYSTEM_VIDEOS, crate::config::SYSTEM_IMAGES] {
-        let d = under(root, d);
-        std::fs::create_dir_all(&d).map_err(|e| err(&d, e))?;
+    // 2. Media folders: in /usr/local/share where /usr is a read-only
+    // image (Fedora Atomic, openSUSE Aeon); the login screen looks there too.
+    let mut media_parent = "/usr/share/mandara/login";
+    for (system, local) in [(crate::config::SYSTEM_VIDEOS, crate::config::LOCAL_VIDEOS), (crate::config::SYSTEM_IMAGES, crate::config::LOCAL_IMAGES)] {
+        let (d, fell_back) = media_dir(root, system, local, &|d| std::fs::create_dir_all(d))?;
+        if fell_back {
+            media_parent = "/usr/local/share/mandara/login";
+        }
         std::fs::set_permissions(&d, std::fs::Permissions::from_mode(MEDIA_DIR_MODE)).map_err(|e| err(&d, e))?;
     }
-    done.push("media folders under /usr/share/mandara/login".into());
+    done.push(format!("media folders under {media_parent}"));
     // 3. State dir.
     let state = under(root, STATE_DIR);
     std::fs::create_dir_all(&state).map_err(|e| err(&state, e))?;
@@ -399,6 +421,22 @@ pub fn install_language_pack(root: &Path, lang: mandara_i18n::Lang) -> Result<Op
     Ok(Some(format!("{} language pack for the login screen (downloaded for {version})", lang.code())))
 }
 
+/// Creates the media folder `system` under `root` with `mkdir`, or `local`
+/// when `system` is on a read-only file system (an image-based system's
+/// `/usr`). The folder made, and whether it is `local`.
+fn media_dir(root: &Path, system: &str, local: &str, mkdir: &dyn Fn(&Path) -> std::io::Result<()>) -> Result<(PathBuf, bool), String> {
+    let d = under(root, system);
+    match mkdir(&d) {
+        Ok(()) => Ok((d, false)),
+        Err(e) if e.kind() == std::io::ErrorKind::ReadOnlyFilesystem => {
+            let d = under(root, local);
+            mkdir(&d).map_err(|e| format!("{}: {e}", d.display()))?;
+            Ok((d, true))
+        }
+        Err(e) => Err(format!("{}: {e}", d.display())),
+    }
+}
+
 /// `uid`'s home folder, from the password database.
 fn home_of(uid: u32) -> Option<PathBuf> {
     // SAFETY: getpwuid returns a pointer into static storage or null; the
@@ -438,8 +476,9 @@ impl UninstallPlan {
         let previous_dm = std::fs::read_to_string(Path::new(STATE_DIR).join("previous-dm")).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
         let mut commands = Vec::new();
         if let Some(dm) = &previous_dm {
-            commands.push(vec!["systemctl".into(), "disable".into(), "greetd.service".into()]);
-            commands.push(vec!["systemctl".into(), "enable".into(), format!("{dm}.service")]);
+            let root = crate::manager::SysRoot::system();
+            commands.push(crate::manager::service_command(&root, "disable", "greetd.service"));
+            commands.push(crate::manager::service_command(&root, "enable", &format!("{dm}.service")));
         }
         UninstallPlan { backup, ours, previous_dm, commands }
     }
@@ -508,6 +547,28 @@ impl UninstallPlan {
 
 #[cfg(test)]
 mod tests {
+    /// Image-based systems: greetd's user lives in /usr/lib/passwd, and a
+    /// read-only /usr/share sends the media folders to /usr/local/share.
+    #[test]
+    fn image_based_systems_keep_users_in_usr_lib_and_media_in_usr_local() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("etc")).unwrap();
+        std::fs::create_dir_all(root.join("usr/lib")).unwrap();
+        std::fs::write(root.join("etc/passwd"), "root:x:0:0:root:/root:/bin/bash\nu:x:1000:1000::/var/home/u:/bin/bash\n").unwrap();
+        std::fs::write(root.join("usr/lib/passwd"), "greeter:x:973:973:greetd greeter user:/var/lib/greetd:/sbin/nologin\n").unwrap();
+        assert_eq!(passwd_ids_in(root, "u"), Some((1000, 1000)));
+        assert_eq!(passwd_ids_in(root, "greeter"), Some((973, 973)), "from /usr/lib/passwd");
+        assert_eq!(passwd_ids_in(root, "nobody-here"), None);
+        let read_only_usr_share = |d: &Path| if d.starts_with(root.join("usr/share")) { Err(std::io::Error::from(std::io::ErrorKind::ReadOnlyFilesystem)) } else { std::fs::create_dir_all(d) };
+        let (d, local) = media_dir(root, crate::config::SYSTEM_VIDEOS, crate::config::LOCAL_VIDEOS, &read_only_usr_share).unwrap();
+        assert!(local && d == root.join("usr/local/share/mandara/login/videos") && d.is_dir());
+        let (d, local) = media_dir(root, crate::config::SYSTEM_IMAGES, crate::config::LOCAL_IMAGES, &|d| std::fs::create_dir_all(d)).unwrap();
+        assert!(!local && d == root.join("usr/share/mandara/login/backgrounds"));
+        let denied = |_: &Path| Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+        assert!(media_dir(root, crate::config::SYSTEM_IMAGES, crate::config::LOCAL_IMAGES, &denied).is_err(), "only a read-only file system falls back");
+    }
+
     use super::*;
 
     #[test]
@@ -526,7 +587,7 @@ mod tests {
     fn fresh_config_gets_vt1_and_default_user() {
         let out = render_greetd_config(None, "x", &greeter_user(None));
         let t: toml::Table = toml::from_str(&out).unwrap();
-        assert_eq!(t["terminal"]["vt"].as_integer(), Some(1));
+        assert_eq!(t["terminal"]["vt"].as_integer(), Some(FRESH_VT), "1 on Linux, 8 on FreeBSD");
         assert_eq!(t["default_session"]["user"].as_str(), Some("greeter"));
         assert_eq!(greeter_user(Some("[default_session]\nuser = \"_greetd\"\n")), "_greetd");
     }

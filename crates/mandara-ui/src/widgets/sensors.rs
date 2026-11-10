@@ -16,6 +16,8 @@ use mandara_i18n::{tf, tk, tr};
 /// Readings at or beyond these bounds are disconnected / bogus sensors.
 const MIN_C: f32 = -40.0;
 const MAX_C: f32 = 150.0;
+/// hwmon reports power in micro-watts.
+const MICROWATTS_PER_WATT: f64 = 1_000_000.0;
 
 // ── Components ───────────────────────────────────────────────────────────
 
@@ -405,6 +407,11 @@ fn power_supply_batteries(root: &Path) -> Vec<ComponentTemp> {
 /// and ordered CPU → GPU → storage → memory → board → network → battery →
 /// other.
 pub fn read_temperatures(root: &Path) -> Vec<ComponentTemp> {
+    // FreeBSD has no hwmon: the live system's CPU sensors are sysctls.
+    #[cfg(target_os = "freebsd")]
+    if root == Path::new("/") || root == Path::new("/sys/class/hwmon") {
+        return freebsd_temperatures();
+    }
     let chips = read_chips(root);
     let model = cpu_model(root);
     let mut out: Vec<ComponentTemp> = Vec::new();
@@ -445,6 +452,23 @@ pub fn read_temperatures(root: &Path) -> Vec<ComponentTemp> {
     }
     out.sort_by_key(|c| c.kind);
     out
+}
+
+/// FreeBSD: one CPU component from `dev.cpu.N.temperature` (coretemp(4)
+/// or amdtemp(4)), the hottest core leading and each core listed.
+#[cfg(target_os = "freebsd")]
+fn freebsd_temperatures() -> Vec<ComponentTemp> {
+    cpu_from_cores(&mandara_services::freebsd::host::cpu_temperatures(), mandara_services::freebsd::host::cpu_model())
+}
+
+/// A CPU component from per-core readings (°C, in core order).
+#[cfg(any(test, target_os = "freebsd"))]
+fn cpu_from_cores(cores: &[f32], model: String) -> Vec<ComponentTemp> {
+    let Some(hottest) = cores.iter().copied().reduce(f32::max) else { return Vec::new() };
+    let readings = if cores.len() > 1 { cores.iter().enumerate().map(|(i, c)| Reading { label: Label::Numbered(tk("Core {n}"), i as u32), celsius: *c }).collect() } else { Vec::new() };
+    let (warm, hot) = Component::Cpu.thresholds();
+    let device = Some(model.trim().to_string()).filter(|m| !m.is_empty());
+    vec![ComponentTemp { kind: Component::Cpu, name: Label::Key(tk("CPU")), device, celsius: hottest, readings, warm, hot, chip: "dev.cpu".into() }]
 }
 
 /// The CPU package temperature, if any sensor reports one.
@@ -506,6 +530,8 @@ pub struct Gpu {
     pub vram_total: Option<u64>,
     pub temp_c: Option<f32>,
     pub freq_mhz: Option<f32>,
+    /// Board power draw in watts.
+    pub power_w: Option<f32>,
 }
 
 impl Gpu {
@@ -642,6 +668,13 @@ fn amd_freq_mhz(device: &Path, hwmon: Option<&Path>) -> Option<f32> {
     mhz[..mhz.len() - 3].parse().ok()
 }
 
+/// Power draw in watts from hwmon `power1_average` (discrete cards) or
+/// `power1_input` (APUs), both micro-watts.
+fn hwmon_gpu_power(hwmon: Option<&Path>) -> Option<f32> {
+    let h = hwmon?;
+    ["power1_average", "power1_input"].iter().find_map(|f| read_num::<f64>(h.join(f))).map(|uw| (uw / MICROWATTS_PER_WATT) as f32)
+}
+
 fn hwmon_gpu_temp(hwmon: Option<&Path>) -> Option<f32> {
     let chip = read_chip(hwmon?)?;
     let t = labelled(&chip, |l| l == "edge").or_else(|| labelled(&chip, |l| l == "pkg")).unwrap_or(&chip.temps[0]);
@@ -666,6 +699,7 @@ fn read_gpu(root: &Path, card: &Path) -> Option<Gpu> {
         vram_total: None,
         temp_c: hwmon_gpu_temp(hwmon.as_deref()),
         freq_mhz: None,
+        power_w: None,
     };
     match vendor {
         GpuVendor::Amd => {
@@ -673,6 +707,7 @@ fn read_gpu(root: &Path, card: &Path) -> Option<Gpu> {
             gpu.vram_used = read_num(device.join("mem_info_vram_used"));
             gpu.vram_total = read_num::<u64>(device.join("mem_info_vram_total")).filter(|t| *t > 0);
             gpu.freq_mhz = amd_freq_mhz(&device, hwmon.as_deref());
+            gpu.power_w = hwmon_gpu_power(hwmon.as_deref());
             // APUs carve "VRAM" out of system memory and report no VRAM vendor.
             gpu.integrated = !device.join("mem_info_vram_vendor").exists();
         }
@@ -706,9 +741,12 @@ fn smi_field<T: std::str::FromStr>(s: Option<&str>) -> Option<T> {
     s?.trim().parse().ok()
 }
 
-/// Parses `nvidia-smi --query-gpu=pci.bus_id,name,utilization.gpu,
-/// memory.used,memory.total,temperature.gpu,clocks.gr
-/// --format=csv,noheader,nounits` (`[N/A]` fields become `None`).
+/// The `nvidia-smi --query-gpu` fields [`parse_nvidia_smi`] reads, in order.
+pub const NVIDIA_SMI_QUERY: &str = "--query-gpu=pci.bus_id,name,utilization.gpu,memory.used,memory.total,temperature.gpu,clocks.gr,power.draw";
+
+/// Parses `nvidia-smi` [`NVIDIA_SMI_QUERY`] rows with
+/// `--format=csv,noheader,nounits` (`[N/A]` fields become `None`; a row
+/// without the trailing power field, from an older query, still parses).
 pub fn parse_nvidia_smi(text: &str) -> Vec<Gpu> {
     text.lines()
         .filter(|l| !l.trim().is_empty())
@@ -734,6 +772,7 @@ pub fn parse_nvidia_smi(text: &str) -> Vec<Gpu> {
                 vram_total: mib(smi_field(f.get(4).copied())),
                 temp_c: smi_field::<f32>(f.get(5).copied()).filter(|c| *c > MIN_C && *c < MAX_C),
                 freq_mhz: smi_field(f.get(6).copied()),
+                power_w: smi_field::<f32>(f.get(7).copied()).filter(|w| *w >= 0.0),
             })
         })
         .collect()
@@ -750,11 +789,18 @@ pub fn merge_nvidia(gpus: &mut Vec<Gpu>, smi: Vec<Gpu>) {
                 g.vram_total = s.vram_total.or(g.vram_total);
                 g.temp_c = s.temp_c.or(g.temp_c);
                 g.freq_mhz = s.freq_mhz.or(g.freq_mhz);
+                g.power_w = s.power_w.or(g.power_w);
             }
             None => gpus.push(s),
         }
     }
     gpus.sort_by_key(|g| g.integrated);
+}
+
+/// Whether `nvidia-smi` is installed (found once on `PATH`). Blocking on
+/// first use: call off the UI thread.
+pub fn has_nvidia_smi() -> bool {
+    nvidia_smi_path().is_some()
 }
 
 fn nvidia_smi_path() -> Option<&'static Path> {
@@ -781,7 +827,7 @@ pub fn nvidia_smi() -> Vec<Gpu> {
             return gpus.clone();
         }
     let gpus = std::process::Command::new(bin)
-        .args(["--query-gpu=pci.bus_id,name,utilization.gpu,memory.used,memory.total,temperature.gpu,clocks.gr", "--format=csv,noheader,nounits"])
+        .args([NVIDIA_SMI_QUERY, "--format=csv,noheader,nounits"])
         .stdin(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .output()
@@ -805,6 +851,19 @@ pub fn read_all_gpus() -> Vec<Gpu> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn freebsd_cores_make_one_cpu_component() {
+        let cpu = cpu_from_cores(&[48.5, 52.0, 50.1], "Intel(R) Core(TM) i7 ".into());
+        assert_eq!(cpu.len(), 1);
+        assert_eq!(cpu[0].kind, Component::Cpu);
+        assert_eq!(cpu[0].celsius, 52.0);
+        assert_eq!(cpu[0].readings.len(), 3);
+        assert_eq!(cpu[0].readings[2].label, Label::Numbered("Core {n}", 2));
+        assert_eq!(cpu[0].device.as_deref(), Some("Intel(R) Core(TM) i7"));
+        assert!(cpu_from_cores(&[], String::new()).is_empty(), "no coretemp / amdtemp: no reading");
+        assert!(cpu_from_cores(&[40.0], String::new())[0].readings.is_empty());
+    }
 
     struct Tree(PathBuf);
 
@@ -961,7 +1020,8 @@ mod tests {
             .file(&format!("{d}/hwmon/hwmon3/temp1_input"), "53000\n")
             .file(&format!("{d}/hwmon/hwmon3/temp1_label"), "edge\n")
             .file(&format!("{d}/hwmon/hwmon3/freq1_label"), "sclk\n")
-            .file(&format!("{d}/hwmon/hwmon3/freq1_input"), "2390000000\n");
+            .file(&format!("{d}/hwmon/hwmon3/freq1_input"), "2390000000\n")
+            .file(&format!("{d}/hwmon/hwmon3/power1_average"), "17000000\n");
         let d0 = "sys/class/drm/card0/device";
         t.file(&format!("{d0}/vendor"), "0x8086\n")
             .file(&format!("{d0}/device"), "0xa780\n")
@@ -982,11 +1042,13 @@ mod tests {
         assert!((amd.vram_fraction().unwrap() - 0.4836).abs() < 1e-3);
         assert_eq!(amd.temp_c, Some(53.0));
         assert_eq!(amd.freq_mhz, Some(2390.0));
+        assert_eq!(amd.power_w, Some(17.0));
         let intel = &gpus[1];
         assert!(intel.integrated);
         assert_eq!(intel.name.as_deref(), Some("Intel UHD Graphics 770"));
         assert_eq!((intel.load, intel.vram_total, intel.temp_c), (None, None, None));
         assert_eq!(intel.freq_mhz, Some(1450.0));
+        assert_eq!(intel.power_w, None);
         assert_eq!(intel.display_name(), "Intel UHD Graphics 770");
         let unnamed = Gpu { name: None, ..intel.clone() };
         assert_eq!(unnamed.display_name(), "Intel GPU");
@@ -996,8 +1058,20 @@ mod tests {
     fn amd_dpm_fallback_clock() {
         let t = Tree::new("dpm");
         let d = "sys/class/drm/card0/device";
-        t.file(&format!("{d}/vendor"), "0x1002\n").file(&format!("{d}/device"), "0x13c0\n").file(&format!("{d}/pp_dpm_sclk"), "0: 600Mhz *\n1: 700Mhz\n2: 2200Mhz\n");
+        // An APU: power comes as `power1_input`, VRAM is carved out of RAM.
+        t.file(&format!("{d}/vendor"), "0x1002\n")
+            .file(&format!("{d}/device"), "0x13c0\n")
+            .file(&format!("{d}/pp_dpm_sclk"), "0: 600Mhz *\n1: 700Mhz\n2: 2200Mhz\n")
+            .file(&format!("{d}/gpu_busy_percent"), "0\n")
+            .file(&format!("{d}/mem_info_vram_used"), "1138102272\n")
+            .file(&format!("{d}/mem_info_vram_total"), "2147483648\n")
+            .file(&format!("{d}/hwmon/hwmon4/name"), "amdgpu\n")
+            .file(&format!("{d}/hwmon/hwmon4/temp1_input"), "56000\n")
+            .file(&format!("{d}/hwmon/hwmon4/power1_input"), "132000\n");
         let gpus = read_gpus(&t.0);
+        assert_eq!((gpus[0].load, gpus[0].temp_c), (Some(0.0), Some(56.0)));
+        assert_eq!((gpus[0].vram_used, gpus[0].vram_total), (Some(1_138_102_272), Some(2_147_483_648)));
+        assert!((gpus[0].power_w.unwrap() - 0.132).abs() < 1e-6);
         assert_eq!(gpus[0].freq_mhz, Some(600.0));
         assert!(gpus[0].integrated);
         assert_eq!(gpus[0].name, None, "no pci.ids in this tree");
@@ -1006,19 +1080,24 @@ mod tests {
 
     #[test]
     fn nvidia_smi_rows_merge_by_slot() {
-        let text = "00000000:01:00.0, NVIDIA GeForce RTX 4070, 12, 1024, 12282, 45, 2505\n00000000:02:00.0, NVIDIA T400, [N/A], 10, 2048, [N/A], [N/A]\n";
+        // `NVIDIA_SMI_QUERY` rows: a desktop card, a card without sensors
+        // and a row from the older query without the power field.
+        let text = "00000000:01:00.0, NVIDIA GeForce RTX 4070, 12, 1024, 12282, 45, 2505, 31.52\n00000000:02:00.0, NVIDIA T400, [N/A], 10, 2048, [N/A], [N/A], [N/A]\n00000000:03:00.0, NVIDIA RTX A2000, 3, 512, 6138, 39, 210\n";
         let smi = parse_nvidia_smi(text);
-        assert_eq!(smi.len(), 2);
+        assert_eq!(smi.len(), 3);
         assert_eq!(smi[0].slot, "0000:01:00.0");
         assert_eq!(smi[0].load, Some(0.12));
-        assert_eq!(smi[0].vram_total, Some(12282 * 1024 * 1024));
-        assert_eq!(smi[1].load, None);
-        assert_eq!(smi[1].temp_c, None);
-        let mut gpus = vec![Gpu { slot: "0000:01:00.0".into(), vendor: GpuVendor::Nvidia, name: None, integrated: false, load: None, vram_used: None, vram_total: None, temp_c: Some(44.0), freq_mhz: None }];
+        assert_eq!((smi[0].vram_used, smi[0].vram_total), (Some(1024 * 1024 * 1024), Some(12282 * 1024 * 1024)));
+        assert_eq!(smi[0].power_w, Some(31.52));
+        assert_eq!((smi[1].load, smi[1].temp_c, smi[1].power_w), (None, None, None));
+        assert_eq!((smi[2].temp_c, smi[2].power_w), (Some(39.0), None));
+        let mut gpus = vec![Gpu { slot: "0000:01:00.0".into(), vendor: GpuVendor::Nvidia, name: None, integrated: false, load: None, vram_used: None, vram_total: None, temp_c: Some(44.0), freq_mhz: None, power_w: None }];
         merge_nvidia(&mut gpus, smi);
-        assert_eq!(gpus.len(), 2);
+        assert_eq!(gpus.len(), 3);
         assert_eq!(gpus[0].name.as_deref(), Some("NVIDIA GeForce RTX 4070"));
         assert_eq!(gpus[0].temp_c, Some(45.0));
+        assert_eq!(gpus[0].power_w, Some(31.52));
+        assert!(NVIDIA_SMI_QUERY.ends_with(",power.draw"), "the power field stays last so older rows still parse");
     }
 
     #[test]

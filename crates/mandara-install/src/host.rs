@@ -555,7 +555,7 @@ mod tests {
         use std::os::fd::FromRawFd as _;
         let (mut master, mut slave) = (-1, -1);
         // SAFETY: openpty initializes distinct owned descriptors on success.
-        assert_eq!(unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null(), std::ptr::null()) }, 0);
+        assert_eq!(unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()) }, 0);
         // SAFETY: each descriptor is transferred to one File.
         let (mut master, slave) = unsafe { (File::from_raw_fd(master), File::from_raw_fd(slave)) };
         let inspect = slave.try_clone().unwrap();
@@ -670,7 +670,7 @@ mod tests {
         let (mut master, mut slave) = (-1, -1);
         // SAFETY: openpty initializes both descriptors on success; default
         // attributes give the slave canonical terminal input.
-        assert_eq!(unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null(), std::ptr::null()) }, 0);
+        assert_eq!(unsafe { libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()) }, 0);
         // SAFETY: these are distinct descriptors returned by openpty, each
         // transferred to one File and closed by it.
         let (mut master, slave) = unsafe { (std::fs::File::from_raw_fd(master), std::fs::File::from_raw_fd(slave)) };

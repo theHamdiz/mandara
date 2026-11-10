@@ -44,11 +44,16 @@ fn digit(s: Option<&str>) -> Result<u8, String> {
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Sudoku"), tk("The number puzzle with notes, hints and undo, in the bar and on the desktop"), Some(Zone::Right)).opt_in(), |window, cx, panel_cx| {
         let model = crate::games::sudoku(cx);
+        if panel_cx.is_card() {
+            // A sidebar card: only the card (it holds the model while it lives).
+            let sidebar = cx.new(|cx| SudokuView::new(model, Surface::Sidebar, window, cx));
+            return PluginInstance { sidebar: Some(sidebar.into()), ..PluginInstance::empty() };
+        }
         let bar = fn_view_observing(
             None,
             {
                 let model = model.clone();
-                move |cx| cx.observe(&model, |_, _, cx| cx.notify()).detach()
+                move |cx| Some(cx.observe(&model, |_, _, cx| cx.notify()))
             },
             |palette, window, cx| {
                 let shown = crate::games::sudoku_if_live(cx).and_then(|m| {
@@ -82,6 +87,8 @@ pub fn register(r: &mut PluginRegistry) {
             on_secondary_click: None,
         }
     });
+    // The game's model goes (saved) with its last view: `games::join_sudoku`.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     r.desktop_widget(
         DesktopWidgetType::new(ID, "card", tk("Sudoku"), tk("Play Sudoku right on the desktop: click it, then type or tap"), "sudoku", || vec![dc::new_card(dc::SUDOKU, Anchor::Center)]).in_menu(),
     );
@@ -91,6 +98,7 @@ pub fn register(r: &mut PluginRegistry) {
             let action = a.get(0).unwrap_or("status");
             let value = a.get(1);
             let model = crate::games::sudoku(cx);
+            crate::games::sudoku_command_done(cx);
             let changed = model.update(cx, |m, cx| -> Result<bool, String> {
                 if !m.loaded && action != "status" {
                     return Err(mandara_i18n::t("Loading…").to_string());

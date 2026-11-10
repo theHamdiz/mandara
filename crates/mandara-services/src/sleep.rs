@@ -27,9 +27,10 @@ use zbus::zvariant::OwnedValue;
 
 use crate::actor::proxy;
 
-const LOGIND: &str = "org.freedesktop.login1";
-const LOGIND_PATH: &str = "/org/freedesktop/login1";
-const MANAGER_IFACE: &str = "org.freedesktop.login1.Manager";
+/// logind (ConsoleKit2 on FreeBSD: the same manager API).
+const LOGIND: &str = crate::logind::bus::DEST;
+const LOGIND_PATH: &str = crate::logind::bus::MANAGER_PATH;
+const MANAGER_IFACE: &str = crate::logind::bus::MANAGER;
 const UPOWER: &str = "org.freedesktop.UPower";
 const UPOWER_PATH: &str = "/org/freedesktop/UPower";
 const PROPERTIES_IFACE: &str = "org.freedesktop.DBus.Properties";
@@ -60,11 +61,23 @@ async fn manager(conn: &zbus::Connection) -> zbus::Result<zbus::Proxy<'static>> 
 /// Calls a logind manager method taking only `interactive: bool`.
 async fn call_interactive(method: &'static str) -> Result<(), String> {
     if dry_run() {
-        tracing::info!("dry run: login1.Manager.{method}");
+        tracing::info!("dry run: {}.Manager.{method}", crate::logind::bus::SHORT);
         return Ok(());
     }
-    let conn = crate::runtime::system().await.map_err(bus_error)?;
-    manager(&conn).await.map_err(bus_error)?.call::<_, _, ()>(method, &(true,)).await.map_err(bus_error)
+    let result = async {
+        let conn = crate::runtime::system().await?;
+        manager(&conn).await?.call::<_, _, ()>(method, &(true,)).await
+    }
+    .await;
+    // FreeBSD without ConsoleKit2: `acpiconf -s 3` through pkexec.
+    #[cfg(target_os = "freebsd")]
+    if let Err(e) = &result
+        && crate::freebsd::power::bus_missing(e)
+        && crate::freebsd::power::command(method).is_some()
+    {
+        return crate::runtime::unblock(move || crate::freebsd::power::run(method, crate::freebsd::power::Via::Pkexec)).await;
+    }
+    result.map_err(bus_error)
 }
 
 /// Sleeps the computer the way `mode` says (polkit may prompt).
@@ -163,6 +176,18 @@ async fn delay_inhibitor(m: &zbus::Proxy<'_>, what: &str, why: &str) -> Option<s
     match m.call::<_, _, zbus::zvariant::OwnedFd>("Inhibit", &(what, INHIBITOR_WHO, why, "delay")).await {
         Ok(fd) => Some(fd.into()),
         Err(e) => {
+            // FreeBSD without ConsoleKit2 has no login manager to ask; say
+            // so once rather than on every re-check.
+            #[cfg(target_os = "freebsd")]
+            {
+                static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                if WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                    tracing::debug!("ConsoleKit: no {what} delay inhibitor: {e}");
+                } else {
+                    tracing::warn!("ConsoleKit: no {what} delay inhibitor: {e}");
+                }
+            }
+            #[cfg(not(target_os = "freebsd"))]
             tracing::warn!("logind: no {what} delay inhibitor: {e}");
             None
         }

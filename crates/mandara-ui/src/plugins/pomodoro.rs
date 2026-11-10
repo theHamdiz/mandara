@@ -214,6 +214,8 @@ pub fn register(r: &mut PluginRegistry) {
             on_secondary_click: Some(Rc::new(|_, cx| productivity(cx).update(cx, |p, cx| p.toggle(cx)))),
         }
     });
+    // The timer is the productivity model (the bar and panel run it); the card keeps only its view.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     r.command(
         ID,
         CommandSpec::new("pomodoro", mandara_i18n::tk("Control the focus timer"), |a, cx| {

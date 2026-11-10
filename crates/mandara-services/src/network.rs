@@ -1,37 +1,57 @@
 //! NetworkManager actor (system bus): connectivity, Wi-Fi radio, the active
 //! access point and nearby networks; connect / disconnect / toggle commands.
+//! FreeBSD has no NetworkManager: [`freebsd`] reads `ifconfig` and
+//! wpa_supplicant instead.
 //!
 //! Event-driven: NetworkManager's signals (state, radio, active connection,
 //! access-point strength) trigger a debounced re-read;
 //! a slow fallback poll covers anything a signal missed.
 
+#[cfg(not(target_os = "freebsd"))]
 use std::collections::HashMap;
+#[cfg(not(target_os = "freebsd"))]
 use std::time::Duration;
 
+#[cfg(not(target_os = "freebsd"))]
 use anyhow::Result;
 use serde::Serialize;
+#[cfg(not(target_os = "freebsd"))]
 use zbus::Connection;
+#[cfg(not(target_os = "freebsd"))]
 use zbus::zvariant::{OwnedObjectPath, Value};
 
-use crate::actor::{Envelope, ServiceHandle, Wake, drain_signals, next_wake, proxy, reply, signals_from};
+use crate::actor::ServiceHandle;
+#[cfg(not(target_os = "freebsd"))]
+use crate::actor::{Envelope, Wake, drain_signals, next_wake, proxy, reply, signals_from};
 use crate::runtime;
 
+#[cfg(not(target_os = "freebsd"))]
 const NM: &str = "org.freedesktop.NetworkManager";
+#[cfg(not(target_os = "freebsd"))]
 const NM_PATH: &str = "/org/freedesktop/NetworkManager";
+#[cfg(not(target_os = "freebsd"))]
 const AP_IFACE: &str = "org.freedesktop.NetworkManager.AccessPoint";
+#[cfg(not(target_os = "freebsd"))]
 const PROPERTIES_IFACE: &str = "org.freedesktop.DBus.Properties";
 /// `NMDeviceType` of a Wi-Fi device.
+#[cfg(not(target_os = "freebsd"))]
 const DEVICE_TYPE_WIFI: u32 = 2;
 /// `NM80211ApFlags`: the AP requires privacy (WEP or better).
+#[cfg(not(target_os = "freebsd"))]
 const AP_FLAG_PRIVACY: u32 = 0x1;
 /// `NMState` bounds: CONNECTING (40) up to, not including, CONNECTED_LOCAL (50);
 /// CONNECTED_GLOBAL is 70.
+#[cfg(not(target_os = "freebsd"))]
 const NM_STATE_CONNECTING: u32 = 40;
+#[cfg(not(target_os = "freebsd"))]
 const NM_STATE_CONNECTED_LOCAL: u32 = 50;
+#[cfg(not(target_os = "freebsd"))]
 const NM_STATE_CONNECTED_GLOBAL: u32 = 70;
 /// Signals coalesced into one re-read (a scan fires dozens at once).
+#[cfg(not(target_os = "freebsd"))]
 const DEBOUNCE: Duration = Duration::from_millis(400);
 /// Re-read even without signals this often.
+#[cfg(not(target_os = "freebsd"))]
 const FALLBACK_POLL: Duration = Duration::from_secs(60);
 /// State updates buffered for the UI.
 const UPDATE_QUEUE: usize = 8;
@@ -88,6 +108,19 @@ pub enum NetworkCommand {
 
 pub type NetworkService = ServiceHandle<NetworkState, NetworkCommand>;
 
+#[cfg(any(test, target_os = "freebsd"))]
+mod freebsd;
+
+/// FreeBSD: `ifconfig` and wpa_supplicant ([`freebsd`]).
+#[cfg(target_os = "freebsd")]
+pub fn spawn_network_service() -> NetworkService {
+    let (tx, updates) = async_channel::bounded(UPDATE_QUEUE);
+    let (commands, rx) = async_channel::bounded(COMMAND_QUEUE);
+    runtime::spawn("network", freebsd::run(tx, rx));
+    ServiceHandle::new(updates, commands)
+}
+
+#[cfg(not(target_os = "freebsd"))]
 pub fn spawn_network_service() -> NetworkService {
     let (tx, updates) = async_channel::bounded(UPDATE_QUEUE);
     let (commands, rx) = async_channel::bounded(COMMAND_QUEUE);
@@ -113,6 +146,7 @@ pub fn spawn_network_service() -> NetworkService {
     ServiceHandle::new(updates, commands)
 }
 
+#[cfg(not(target_os = "freebsd"))]
 async fn run(conn: &Connection, tx: &async_channel::Sender<NetworkState>, rx: &async_channel::Receiver<Envelope<NetworkCommand>>) -> Result<()> {
     let mut signals = signals_from(conn, NM).await?;
     let mut last: Option<NetworkState> = None;
@@ -140,17 +174,21 @@ async fn run(conn: &Connection, tx: &async_channel::Sender<NetworkState>, rx: &a
 /// `NM_ACTIVE_CONNECTION_STATE_ACTIVATED`: a VPN counts as connected only
 /// then (not while activating — a VPN that then fails would announce
 /// "connected" and "disconnected").
+#[cfg(not(target_os = "freebsd"))]
 const NM_ACTIVE_CONNECTION_ACTIVATED: u32 = 2;
 
 /// Active-connection types that are VPNs.
+#[cfg(not(target_os = "freebsd"))]
 fn is_vpn_kind(kind: &str) -> bool {
     matches!(kind, "vpn" | "wireguard")
 }
 
+#[cfg(not(target_os = "freebsd"))]
 fn ssid_from_bytes(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).trim_end_matches('\0').to_string()
 }
 
+#[cfg(not(target_os = "freebsd"))]
 async fn devices(conn: &Connection) -> Result<Vec<(OwnedObjectPath, u32)>> {
     let nm = proxy(conn, NM, NM_PATH, NM).await?;
     let paths: Vec<OwnedObjectPath> = nm.call("GetDevices", &()).await?;
@@ -163,11 +201,13 @@ async fn devices(conn: &Connection) -> Result<Vec<(OwnedObjectPath, u32)>> {
     Ok(out)
 }
 
+#[cfg(not(target_os = "freebsd"))]
 async fn wifi_device(conn: &Connection) -> Result<Option<OwnedObjectPath>> {
     Ok(devices(conn).await?.into_iter().find(|(_, k)| *k == DEVICE_TYPE_WIFI).map(|(p, _)| p))
 }
 
 /// One access point, read with a single `GetAll` round trip.
+#[cfg(not(target_os = "freebsd"))]
 async fn read_ap(conn: &Connection, path: &str) -> Result<AccessPoint> {
     let props = proxy(conn, NM, path, PROPERTIES_IFACE).await?;
     let all: HashMap<String, zbus::zvariant::OwnedValue> = props.call("GetAll", &(AP_IFACE,)).await?;
@@ -185,10 +225,12 @@ async fn read_ap(conn: &Connection, path: &str) -> Result<AccessPoint> {
 /// What a machine with no primary connection shows: connecting only while a
 /// device really is connecting. "Connected locally / to the site" (a
 /// container or VM bridge, Wi-Fi switched off) is not connecting (#24).
+#[cfg(not(target_os = "freebsd"))]
 fn without_primary(nm_state: u32) -> Connectivity {
     if (NM_STATE_CONNECTING..NM_STATE_CONNECTED_LOCAL).contains(&nm_state) { Connectivity::Connecting } else { Connectivity::Disconnected }
 }
 
+#[cfg(not(target_os = "freebsd"))]
 async fn read_state(conn: &Connection) -> Result<NetworkState> {
     let nm = proxy(conn, NM, NM_PATH, NM).await?;
     let nm_state: u32 = nm.get_property("State").await?;
@@ -255,6 +297,7 @@ async fn read_state(conn: &Connection) -> Result<NetworkState> {
     Ok(state)
 }
 
+#[cfg(not(target_os = "freebsd"))]
 async fn execute(conn: &Connection, command: NetworkCommand) -> Result<String> {
     let nm = proxy(conn, NM, NM_PATH, NM).await?;
     match command {
@@ -317,7 +360,7 @@ pub fn strength_tier(strength: u8) -> u8 {
     STRENGTH_TIERS.iter().filter(|lower| strength >= **lower).count() as u8
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "freebsd")))]
 mod tests {
     use super::*;
 

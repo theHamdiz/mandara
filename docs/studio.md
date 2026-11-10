@@ -257,8 +257,11 @@ and verifies models, and provides a dry-run test bench. See
   release it re-anchors to the nearest of nine anchors and keeps its
   place. Select a widget (preview or list) to edit its depth (behind the
   subject or in front), anchor, offsets, size, opacity and displays, and
-  its own settings: clock style, seconds, numerals, weather; monitor rows,
-  refresh and width; decoration text, size, weight, letter spacing, shape
+  its own settings: clock style, seconds, numerals, weather; monitor
+  readings (CPU, CPU graph, GPU, VRAM, memory, swap, GPU power, CPU and GPU
+  temperature, fan, battery, disk, download, upload and the network graph,
+  each switched on or off; a GPU reading the machine can't show is locked
+  with the reason), refresh and width; decoration text, size, weight, letter spacing, shape
   and rotation; visualizer shape, bars, length, height, angle, gap, frame
   rate and silence stop; font, colours (automatic, text, accent or a
   custom `#rrggbb` / `oklch(L C H)`) and shadow / glow. The switch on each
@@ -285,8 +288,11 @@ and verifies models, and provides a dry-run test bench. See
   The chosen bar preset stays highlighted when you keep your own items.
   Manual item, layout or position changes clear that selection.
   Bar presets (System monitor, Classic, Notch, Glass pills, Dynamic island,
-  Minimal, Productive, Hairline, Micro pill, Side bar, Dock) apply the style
-  in one click and keep your items. Turn on **Replace bar items** to use
+  Minimal, Productive, Hairline, Micro pill, Side bar, Dock, and the style
+  presets Expressive, Tile dock, Rail, Segmented, Stanley Bridge, Pharos
+  Beam and Raml Tram) apply the style in one click and keep your items;
+  each card draws its bar in miniature. System monitor is a style of its
+  own: a slim bottom status line of stat blocks in the monospace font. Turn on **Replace bar items** to use
   the preset's arrangement too. **Profiles & backup → Bar** saves only
   the bar and side-bar configuration, leaving the theme and desktop widgets alone.
 - **Radii, per bar style.** *Bar radius* rounds the glass pills and the

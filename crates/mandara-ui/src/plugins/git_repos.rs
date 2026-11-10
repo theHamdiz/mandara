@@ -437,7 +437,7 @@ fn actions(r: &Repo, row: &Row, m: &Shared, palette: &MandaraPalette, cx: &App) 
             }
         }),
     );
-    let folder = button("git-folder", "folder", tk("Open folder"), Rc::new(move |_| super::dock::stacks::open_path(&p2)));
+    let folder = button("git-folder", "folder", tk("Open folder"), Rc::new(move |cx| super::dock::stacks::open_path(&p2, cx)));
     let copy = button(
         "git-copy",
         "copy",

@@ -113,20 +113,111 @@ the panel. Press **Update all**, or **Update** on one source:
 | openSUSE Leap | `zypper -n refresh` | `zypper -n update --download-only` | `zypper -n update` |
 | Void | `xbps-install -S` | `xbps-install -uyD` | `xbps-install -uy` (xbps updates itself first when it must) |
 | Alpine | `apk update` | | `apk upgrade` |
+| FreeBSD | `pkg update` | `pkg upgrade -U -F -y`, then `freebsd-update fetch` | `pkg upgrade -U -y`, then `freebsd-update install` |
+| FreeBSD, packaged base | `pkg update` | `pkg upgrade -U -F -y` | `pkg upgrade -U -y` |
 
-The AUR is left to your AUR helper (its *Update* button opens your
-terminal: AUR packages are never built as root). Image-based systems
-(Fedora Atomic's `rpm-ostree`, openSUSE MicroOS / Aeon's
-`transactional-update`) update with their own tool, and the panel says so.
-Prefer a terminal anyway? Set **Run updates → In a terminal** in the
-plugin's settings. Scriptable: `mandara msg updates apply [all|system|flatpak]`,
-`updates job` (phase, progress, recent log lines, summary) and
-`updates cancel`.
+### The AUR
+
+On Arch and its derivatives, **Update all** also updates your AUR packages,
+in the same card: pacman updates the repositories first (as administrator),
+then your AUR helper builds and installs the AUR packages **as you**, then
+Flatpak. The AUR source's own *Update* button updates only the AUR. Mandara
+finds the helper you have installed, preferring **paru**, then **yay**,
+then pikaur, Aura, trizen and CachyOS's **Shelly**; pick another under
+Studio → Plugins → Updates → *AUR helper* (locked, with the reason, when
+none is installed).
+
+- **Never as root.** The helper runs as you, without a terminal, with
+  fixed flags that skip its questions and PKGBUILD reviews (`paru -Sua
+  --noconfirm --skipreview`, `yay -Sua --noconfirm --answer… None`,
+  `shelly upgrade aur --no-confirm`…). Only AUR packages are upgraded
+  there (`-Sua`): the repositories are pacman's step.
+- **Its sudo asks in Mandara.** When the helper installs what it built, its
+  `sudo` asks for your password in Mandara's own password dialog. sudo
+  can't reuse the system step's approval (that one went through polkit),
+  so the AUR step asks once more, and the dialog says why; paru's and
+  yay's keep-alive (`--sudoloop`) keeps that one approval for the whole
+  step, even through long builds. If only AUR packages are waiting, there
+  is just that one password.
+- **How the password travels.** For the step, Mandara makes a private
+  folder (only you can open it) with a socket, a one-time key and two
+  links to itself: `sudo`, first on the helper's `PATH`, runs your real
+  sudo as `sudo -A`, and `SUDO_ASKPASS` points at `mandara-askpass`, which
+  asks the shell over the socket. The shell answers only programs started
+  by that helper (it checks the caller's user and process tree as well as
+  the key), only while the step runs, and gives up after three minutes
+  without an answer. The password never touches a file, a command line,
+  the environment or the log, and its memory is wiped right after use.
+  Cancelling the dialog stops the step instead of asking again.
+- **Progress and cancel.** The card names the helper and the package being
+  downloaded, built or installed, with built/total counts. *Cancel* stops
+  the build; while the helper's pacman installs what was built, a cancel
+  waits until that package is in, so nothing is left half installed.
+- **When a build fails**, the card names the package and the line that
+  said why (`cbonsai didn't build: PKGBUILD: line 19: make: command not
+  found`). Builds that fail, and conflicts or signatures that need your
+  decision, offer **Open in terminal**, which runs the helper's own
+  command (`paru -Sua`…) where it can ask you.
+
+### Other systems
+
+Image-based systems (Fedora Atomic's `rpm-ostree`, Bazzite, Bluefin and
+Aurora included, openSUSE MicroOS / Aeon / Kalpa's `transactional-update`,
+Vanilla OS's `abroot`, SteamOS's `steamos-update`) update with their own
+tool, and the panel says so. It checks only Flatpak there, since the
+package manager such a system carries (dnf, zypper, apt, pacman) can't
+update its image ([Immutable systems](install.md#immutable-systems)). Prefer a terminal anyway? Set **Run updates → In a terminal** in
+the plugin's settings (the AUR included). Scriptable: `mandara msg updates
+apply [all|system|aur|flatpak]`, `updates job` (phase, progress, recent
+log lines, summary) and `updates cancel`.
 
 **If no password dialog appears**, polkit is missing or its agent isn't
 running: install your distribution's polkit package (`polkit`, `polkitd`
 and `pkexec` on Debian), and keep Studio → General → Security → *Authentication dialogs* on.
 `mandara install` installs both.
+
+### FreeBSD
+
+On FreeBSD the panel counts your package updates with
+`pkg version -vRUl '<'` (read-only, against the catalogue as pkg last
+fetched it) and **Update all** updates both halves of the system, with
+the same password dialog and progress:
+
+- **Packages** with pkg: the catalogues refresh, every package downloads
+  first, then they install. A kernel module from packages (`drm-61-kmod`
+  and friends) suggests a restart.
+- **The base system** with freebsd-update, the security and errata patches
+  of your release (`14.4-RELEASE-p4`): Mandara runs it unattended
+  (`--not-running-from-cron`, file lists printed into the log instead of a
+  pager), downloads the patches together with the packages, and installs
+  them after the packages. A patch to the kernel suggests a restart.
+  Where ZFS boot environments work, freebsd-update snapshots the running
+  system first, so you can boot back into it.
+- **A packaged base** (the base system installed as `FreeBSD-*` packages:
+  the default in FreeBSD 15's VM and cloud images, and the installer's
+  *Packages* choice; its *Distribution Sets* choice gives a traditional
+  base, which freebsd-update patches as above): pkg updates the base
+  system along with everything else, from the `FreeBSD-base` repository, so the panel
+  counts those updates too and freebsd-update, which refuses such a
+  system, never runs. A new kernel (`FreeBSD-kernel-generic`) suggests a
+  restart. Mandara tells the two kinds apart the way freebsd-update does:
+  `pkg which /usr/bin/uname` names a `FreeBSD-*` package only on a
+  packaged base.
+
+Downloads can be cancelled; installing never is. A system freebsd-update
+doesn't manage (a -STABLE or -CURRENT build) gets its packages updated and
+a warning that the base system was left alone. A
+release past its end of life still installs what was published for it,
+with the same warning; plan the upgrade to a supported release
+(`freebsd-update upgrade -r …`, or the base packages' new release
+repository on a packaged base), which Mandara leaves to you. In a
+terminal, the same update is `sudo pkg upgrade` and
+`sudo freebsd-update fetch install` (only `sudo pkg upgrade` on a packaged
+base; `pkg which /usr/bin/uname` tells you which kind you have).
+
+The admin helper runs these programs only from root's own folders
+(`/usr/local/sbin/pkg`, `/usr/sbin/freebsd-update`), and pkexec comes with
+FreeBSD's `polkit` package.
 
 ### NixOS: generations
 

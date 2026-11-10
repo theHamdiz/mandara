@@ -8,10 +8,11 @@
 //!
 //! "Update" runs the system update itself ([`system`]): the distribution's
 //! own package manager through Mandara's password dialog (polkit and the
-//! root-owned admin helper), with live phases, progress and log, then
-//! Flatpak as you. On NixOS the panel manages generations instead. AUR
-//! helpers, image-based systems and the "Terminal" setting open your
-//! terminal with the command, as before.
+//! root-owned admin helper), with live phases, progress and log, then on
+//! Arch the AUR helper as you (its `sudo` asks through the same dialog),
+//! then Flatpak as you. On NixOS the panel manages generations instead.
+//! Image-based systems, AUR failures that need a person and the
+//! "Terminal" setting open your terminal with the command.
 //! Commands: `updates list|check|sources|run|apply|job|cancel|news` and
 //! `updates nixos …`.
 
@@ -29,6 +30,7 @@ use gpui::{
 use mandara_core::{ToGpui, oklab_gradient};
 use mandara_i18n::{t, tf, tk};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, Output, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry};
+use mandara_services::sysupdate::aur::AurHelper;
 use mandara_services::sysupdate::job::Request;
 use mandara_services::sysupdate::nixos::{self as nix, NixAction};
 use mandara_services::sysupdate::{self, System};
@@ -79,6 +81,8 @@ const JOB_LOG_LINES: usize = 20;
 /// `run_in` values: Mandara runs the update (default), or a terminal.
 const RUN_IN_MANDARA: &str = "mandara";
 const RUN_IN_TERMINAL: &str = "terminal";
+/// `aur_helper`: pick the installed one (paru first).
+pub const AUR_HELPER_AUTO: &str = "auto";
 /// Cached last result (survives shell restarts so it isn't re-announced).
 const CACHE_FILE: &str = "updates.json";
 
@@ -215,9 +219,10 @@ struct Model {
     reloading: bool,
     /// Panels of this plugin currently open (any monitor).
     open_panels: usize,
-    /// The AUR helper on `$PATH`, resolved off the UI thread with each
-    /// check (looking it up walks `$PATH`).
-    helper: Option<&'static str>,
+    /// The AUR helper that updates the AUR (the preferred one when it is
+    /// installed), resolved off the UI thread with each check (looking it
+    /// up walks `$PATH`).
+    helper: Option<AurHelper>,
     checking: bool,
     /// CLI callers waiting for the running check.
     waiters: Vec<async_channel::Sender<Result<String, String>>>,
@@ -343,6 +348,8 @@ struct Settings {
     terminal: String,
     /// Run updates in Mandara (with progress) rather than a terminal.
     in_mandara: bool,
+    /// The AUR helper chosen in Studio (`aur_helper`; `None`: automatic).
+    aur_helper: Option<AurHelper>,
     /// NixOS: generations a clean-up keeps by default (`nixos_keep`).
     nixos_keep: u32,
 }
@@ -360,6 +367,7 @@ fn settings(cx: &App) -> Settings {
         // The plugin's own terminal, else Studio → Applications' choice.
         terminal: Some(s.setting(ID, "terminal", String::new())).filter(|t| !t.trim().is_empty()).unwrap_or_else(|| cfg.apps.terminal_command().unwrap_or_default()),
         in_mandara: s.setting(ID, "run_in", String::from(RUN_IN_MANDARA)) != RUN_IN_TERMINAL,
+        aur_helper: AurHelper::from_id(&s.setting(ID, "aur_helper", String::from(AUR_HELPER_AUTO))),
         nixos_keep: (s.setting(ID, "nixos_keep", f64::from(system::DEFAULT_KEEP)).round().max(1.0) as u32).min(*nix::KEEP_RANGE.end()),
     }
 }
@@ -377,7 +385,8 @@ fn shared(cx: &mut App) -> Shared {
     SHARED.with(|s| *s.borrow_mut() = Rc::downgrade(&m));
     // The cached result (file read + JSON parse) and the AUR helper lookup
     // stay off the UI thread.
-    let load = cx.background_executor().spawn(async { (load_cache(), updates::aur_helper(), sysupdate::current_system()) });
+    let preferred = settings(cx).aur_helper;
+    let load = cx.background_executor().spawn(async move { (load_cache(), updates::aur_helper_preferring(preferred), sysupdate::current_system()) });
     let weak = Rc::downgrade(&m);
     cx.spawn(async move |cx| {
         let (cached, helper, system) = load.await;
@@ -431,12 +440,12 @@ fn start_check(m: &Shared, reply: Option<async_channel::Sender<Result<String, St
         }
         mb.checking = true;
     }
-    let opts = settings(cx).opts;
+    let Settings { opts, aur_helper: preferred, .. } = settings(cx);
     // Check, cache write and helper lookup all run off the UI thread.
     let task = cx.background_executor().spawn(async move {
         let result = updates::check(opts);
         save_cache(&result);
-        (result, updates::aur_helper())
+        (result, updates::aur_helper_preferring(preferred))
     });
     let weak = Rc::downgrade(m);
     cx.spawn(async move |cx| {
@@ -572,44 +581,58 @@ fn badge(label: impl Into<SharedString>, tint: Color, palette: &MandaraPalette) 
 enum UpdateAction {
     /// Mandara runs it, with progress and its own password dialog.
     Job(Request),
-    /// Opens the terminal with this command (AUR helpers, image-based
-    /// systems, or the "Terminal" setting).
+    /// Opens the terminal with this command (image-based systems, or the
+    /// "Terminal" setting).
     Terminal(String),
 }
 
 /// Whether Mandara's own update job updates `kind` on `system`: Flatpak
 /// always, a package manager only when it is the system's own (so `dnf` on
-/// a Debian system goes to the terminal), the AUR never.
-fn job_covers(kind: SourceKind, system: Option<System>) -> bool {
+/// a Debian system goes to the terminal), the AUR on Arch when an AUR
+/// helper (`aur`) is installed.
+fn job_covers(kind: SourceKind, system: Option<System>, aur: Option<AurHelper>) -> bool {
     use mandara_services::sysupdate::plan::BackendId as B;
     match (kind, system) {
         (SourceKind::Flatpak, _) => true,
+        (SourceKind::Aur, Some(System::Managed(B::Pacman))) => aur.is_some(),
         (_, Some(System::Managed(backend))) => matches!(
             (kind, backend),
-            (SourceKind::Pacman, B::Pacman) | (SourceKind::Apt, B::Apt) | (SourceKind::Dnf, B::Dnf) | (SourceKind::Zypper, B::ZypperDup | B::ZypperUpdate) | (SourceKind::Xbps, B::Xbps) | (SourceKind::Apk, B::Apk)
+            (SourceKind::Pacman, B::Pacman) | (SourceKind::Apt, B::Apt) | (SourceKind::Dnf, B::Dnf) | (SourceKind::Zypper, B::ZypperDup | B::ZypperUpdate) | (SourceKind::Xbps, B::Xbps) | (SourceKind::Apk, B::Apk) | (SourceKind::Pkg, B::Pkg)
         ),
         _ => false,
     }
 }
 
-/// The action of one source's Update button.
-fn source_action(kind: SourceKind, command: &str, system: Option<System>, in_mandara: bool) -> UpdateAction {
-    match kind {
-        SourceKind::Flatpak if in_mandara => UpdateAction::Job(Request::Flatpak),
-        _ if in_mandara && job_covers(kind, system) => UpdateAction::Job(Request::System { flatpak: false }),
+/// The action of one source's Update button: just that source.
+fn source_action(kind: SourceKind, command: &str, system: Option<System>, in_mandara: bool, aur: Option<AurHelper>) -> UpdateAction {
+    match (kind, aur) {
+        (SourceKind::Flatpak, _) if in_mandara => UpdateAction::Job(Request::Flatpak),
+        (SourceKind::Aur, Some(helper)) if in_mandara && job_covers(kind, system, aur) => UpdateAction::Job(Request::Aur { helper, flatpak: false }),
+        (SourceKind::Aur, Some(helper)) => UpdateAction::Terminal(helper.terminal_command().to_string()),
+        _ if in_mandara && job_covers(kind, system, aur) => UpdateAction::Job(Request::System { flatpak: false }),
         _ => UpdateAction::Terminal(command.to_string()),
     }
 }
 
-/// The action of "Update all": the system and Flatpak in Mandara when that
-/// job covers every pending source, else the combined terminal command (so
-/// AUR packages, or an image-based system's own update, aren't skipped).
-fn all_action(kinds: &[SourceKind], helper: Option<&str>, system: Option<System>, in_mandara: bool) -> UpdateAction {
+/// The action of "Update all": one job in Mandara when it covers every
+/// pending source (on Arch: pacman, then the AUR helper, then Flatpak),
+/// else the combined terminal command (so an image-based system's own
+/// update isn't skipped).
+fn all_action(kinds: &[SourceKind], aur: Option<AurHelper>, system: Option<System>, in_mandara: bool) -> UpdateAction {
     let flatpak = kinds.contains(&SourceKind::Flatpak);
-    let covered = kinds.iter().all(|&k| job_covers(k, system));
-    match system.filter(|_| in_mandara && covered).and_then(|s| system::system_request(s, flatpak)) {
+    let covered = kinds.iter().all(|&k| job_covers(k, system, aur));
+    let aur_pending = aur.filter(|_| kinds.contains(&SourceKind::Aur));
+    // Only AUR packages (and Flatpak) pending: the repositories are
+    // current, so the AUR step needs no root step (and no second password).
+    let system_pending = kinds.iter().any(|k| !matches!(k, SourceKind::Aur | SourceKind::Flatpak));
+    let request = system.filter(|_| in_mandara && covered).and_then(|s| match aur_pending {
+        Some(helper) if system_pending => Some(Request::SystemAur { flatpak, helper }),
+        Some(helper) => Some(Request::Aur { helper, flatpak }),
+        None => system::system_request(s, flatpak),
+    });
+    match request {
         Some(r) => UpdateAction::Job(r),
-        None => UpdateAction::Terminal(updates::combined_command(kinds, helper)),
+        None => UpdateAction::Terminal(updates::combined_command(kinds, aur.map(AurHelper::id))),
     }
 }
 
@@ -1195,7 +1218,7 @@ impl View {
                 continue;
             }
             let is_open = !r.packages.is_empty() && (searching || open.contains(&r.kind));
-            rows.push(group_row(r, hits.len(), is_open, source_action(r.kind, &r.command, system, s.in_mandara), m, row_r, palette));
+            rows.push(group_row(r, hits.len(), is_open, source_action(r.kind, &r.command, system, s.in_mandara, helper), m, row_r, palette));
             list_h += GROUP_H + ROW_GAP;
             if is_open {
                 for p in hits.iter().take(ROWS_PER_GROUP) {
@@ -1418,7 +1441,8 @@ pub fn register(r: &mut PluginRegistry) {
         CommandSpec::new("updates sources", tk("Detected package sources, their checkers and update commands"), |_, cx| {
             let s = settings(cx);
             // `recorded`: the sandbox's recorded-output fake runs updates (never in a release).
-            Ok(json!({ "sources": updates::detect(s.opts), "terminal": updates::resolve_terminal(&s.terminal), "system": sysupdate::current_system(), "recorded": sysupdate::fake_active(), "run_in_mandara": s.in_mandara }))
+            // `aur_helper`: the one AUR updates run with (the preferred one when installed).
+            Ok(json!({ "sources": updates::detect(s.opts), "terminal": updates::resolve_terminal(&s.terminal), "system": sysupdate::current_system(), "recorded": sysupdate::fake_active(), "run_in_mandara": s.in_mandara, "aur_helper": updates::aur_helper_preferring(s.aur_helper), "aur_helpers": updates::installed_aur_helpers() }))
         }),
     );
     r.command(
@@ -1426,7 +1450,7 @@ pub fn register(r: &mut PluginRegistry) {
         CommandSpec::new("updates run", tk("Open a terminal running the update command (all sources with updates, or one)"), |a, cx| {
             let s = settings(cx);
             let detected = updates::detect(s.opts);
-            let helper = updates::aur_helper();
+            let helper = updates::aur_helper_preferring(s.aur_helper).map(AurHelper::id);
             let command = match a.get(0) {
                 Some(id) => {
                     let kind = SourceKind::from_id(id).ok_or_else(|| tf("Unknown source `{source}`", &[("source", &id)]))?;
@@ -1458,17 +1482,18 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("updates apply", tk("Update the system in Mandara, with progress and Mandara's password dialog (system and Flatpak, or one)"), |a, cx| {
+        CommandSpec::new("updates apply", tk("Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)"), |a, cx| {
             let s = settings(cx);
             let flatpak = s.opts.flatpak && updates::find_program("flatpak").is_some();
-            let request = apply_request(a.get(0).unwrap_or("all"), sysupdate::current_system(), flatpak)?;
+            let aur = updates::aur_helper_preferring(s.aur_helper).filter(|_| s.opts.aur);
+            let request = apply_request(a.get(0).unwrap_or("all"), sysupdate::current_system(), flatpak, aur)?;
             system::start(request.clone(), cx)?;
             if let Some(m) = alive() {
                 notify(&m, cx);
             }
             Ok(json!({ "started": request, "log": mandara_services::sysupdate::job::log_path() }))
         })
-        .arg(ArgSpec::optional("what", ArgKind::String, tk("all (default), system or flatpak")).choices(&["all", "system", "flatpak"]))
+        .arg(ArgSpec::optional("what", ArgKind::String, tk("all (default), system, aur or flatpak")).choices(&["all", "system", "aur", "flatpak"]))
         .example("updates apply"),
     );
     r.command(
@@ -1551,13 +1576,21 @@ pub fn register(r: &mut PluginRegistry) {
     );
 }
 
-/// What `updates apply <what>` starts on `system`. Systems Mandara doesn't
-/// update are explained here, before the helper is prepared or a password
-/// is asked for.
-fn apply_request(what: &str, system: System, flatpak: bool) -> Result<Request, String> {
+/// What `updates apply <what>` starts on `system` (`aur`: the AUR helper,
+/// on Arch). Systems Mandara doesn't update are explained here, before the
+/// helper is prepared or a password is asked for.
+fn apply_request(what: &str, system: System, flatpak: bool, aur: Option<AurHelper>) -> Result<Request, String> {
+    use mandara_services::sysupdate::plan::BackendId;
+    let arch = system == System::Managed(BackendId::Pacman);
     match (what, system) {
         ("flatpak", _) => Ok(Request::Flatpak),
+        ("aur", _) => match aur.filter(|_| arch) {
+            Some(helper) => Ok(Request::Aur { helper, flatpak: false }),
+            None if arch => Err(t("No AUR helper is installed (paru, yay, pikaur, Aura, trizen or Shelly)").into()),
+            None => Err(t("AUR packages are for Arch Linux").into()),
+        },
         ("system" | "all", System::NixOs) => Err(t("On NixOS, use `updates nixos update`").into()),
+        ("all", System::Managed(_)) if arch && aur.is_some() => Ok(Request::SystemAur { flatpak, helper: aur.unwrap_or(AurHelper::Paru) }),
         (_, System::Managed(_)) => Ok(Request::System { flatpak: flatpak && what != "system" }),
         (_, other) => Err(other.explanation().unwrap_or_default()),
     }
@@ -1572,46 +1605,71 @@ mod tests {
         use SourceKind::*;
         use mandara_services::sysupdate::ImageTool;
         let pacman = Some(System::Managed(mandara_services::sysupdate::plan::BackendId::Pacman));
-        assert_eq!(all_action(&[Pacman, Flatpak], Some("paru"), pacman, true), UpdateAction::Job(Request::System { flatpak: true }));
-        // The job never runs the AUR helper: the terminal's command does both.
+        let paru = Some(AurHelper::Paru);
+        assert_eq!(all_action(&[Pacman, Flatpak], paru, pacman, true), UpdateAction::Job(Request::System { flatpak: true }));
+        // pacman as root, then the AUR helper as you, then Flatpak: one job.
+        assert_eq!(all_action(&[Pacman, Aur, Flatpak], paru, pacman, true), UpdateAction::Job(Request::SystemAur { flatpak: true, helper: AurHelper::Paru }));
+        assert_eq!(all_action(&[Pacman, Aur], Some(AurHelper::Shelly), pacman, true), UpdateAction::Job(Request::SystemAur { flatpak: false, helper: AurHelper::Shelly }));
+        // Only the AUR pending: no root step, one password.
+        assert_eq!(all_action(&[Aur], paru, pacman, true), UpdateAction::Job(Request::Aur { helper: AurHelper::Paru, flatpak: false }));
+        assert_eq!(all_action(&[Aur, Flatpak], Some(AurHelper::Yay), pacman, true), UpdateAction::Job(Request::Aur { helper: AurHelper::Yay, flatpak: true }));
+        // Without an installed helper, nothing can update the AUR in Mandara.
         let both = [Pacman, Aur];
-        assert_eq!(all_action(&both, Some("paru"), pacman, true), UpdateAction::Terminal(updates::combined_command(&both, Some("paru"))));
-        assert_eq!(all_action(&[Aur], Some("paru"), pacman, true), UpdateAction::Terminal(updates::combined_command(&[Aur], Some("paru"))));
+        assert_eq!(all_action(&both, None, pacman, true), UpdateAction::Terminal(updates::combined_command(&both, None)));
         // An image-based system's own update isn't a Flatpak-only job.
         let ostree = Some(System::ImageBased(ImageTool::RpmOstree));
         let pending = [Dnf, Flatpak];
         assert_eq!(all_action(&pending, None, ostree, true), UpdateAction::Terminal(updates::combined_command(&pending, None)));
         assert_eq!(all_action(&[Flatpak], None, ostree, true), UpdateAction::Job(Request::Flatpak));
+        // The Terminal setting still forces the terminal, AUR included.
         assert!(matches!(all_action(&[Pacman], None, pacman, false), UpdateAction::Terminal(_)), "the Terminal setting");
+        assert_eq!(all_action(&both, paru, pacman, false), UpdateAction::Terminal(updates::combined_command(&both, Some("paru"))));
+    }
+
+    #[test]
+    fn the_aur_button_updates_only_the_aur() {
+        let pacman = Some(System::Managed(mandara_services::sysupdate::plan::BackendId::Pacman));
+        assert_eq!(source_action(SourceKind::Aur, "paru -Sua", pacman, true, Some(AurHelper::Paru)), UpdateAction::Job(Request::Aur { helper: AurHelper::Paru, flatpak: false }));
+        assert_eq!(source_action(SourceKind::Pacman, "paru", pacman, true, Some(AurHelper::Paru)), UpdateAction::Job(Request::System { flatpak: false }), "pacman's button runs no AUR step");
+        assert_eq!(source_action(SourceKind::Aur, "paru -Sua", pacman, false, Some(AurHelper::Shelly)), UpdateAction::Terminal("shelly upgrade aur".into()), "the Terminal setting, with the chosen helper");
+        assert_eq!(source_action(SourceKind::Aur, "paru -Sua", pacman, true, None), UpdateAction::Terminal("paru -Sua".into()));
+        assert!(job_covers(SourceKind::Aur, pacman, Some(AurHelper::Yay)));
+        assert!(!job_covers(SourceKind::Aur, pacman, None));
+        assert!(!job_covers(SourceKind::Aur, Some(System::Managed(mandara_services::sysupdate::plan::BackendId::Apt)), Some(AurHelper::Paru)), "the AUR only on Arch");
     }
 
     #[test]
     fn only_the_systems_own_package_manager_runs_in_mandara() {
         use mandara_services::sysupdate::plan::BackendId;
         let debian = Some(System::Managed(BackendId::Apt));
-        assert_eq!(source_action(SourceKind::Apt, "sudo apt upgrade", debian, true), UpdateAction::Job(Request::System { flatpak: false }));
-        assert_eq!(source_action(SourceKind::Dnf, "sudo dnf upgrade", debian, true), UpdateAction::Terminal("sudo dnf upgrade".into()), "dnf on Debian isn't the system's manager");
-        assert_eq!(source_action(SourceKind::Flatpak, "flatpak update", debian, true), UpdateAction::Job(Request::Flatpak));
+        assert_eq!(source_action(SourceKind::Apt, "sudo apt upgrade", debian, true, None), UpdateAction::Job(Request::System { flatpak: false }));
+        assert_eq!(source_action(SourceKind::Dnf, "sudo dnf upgrade", debian, true, None), UpdateAction::Terminal("sudo dnf upgrade".into()), "dnf on Debian isn't the system's manager");
+        assert_eq!(source_action(SourceKind::Flatpak, "flatpak update", debian, true, None), UpdateAction::Job(Request::Flatpak));
         let pending = [SourceKind::Apt, SourceKind::Dnf];
         assert_eq!(all_action(&pending, None, debian, true), UpdateAction::Terminal(updates::combined_command(&pending, None)));
         let suse = Some(System::Managed(BackendId::ZypperDup));
-        assert_eq!(source_action(SourceKind::Zypper, "sudo zypper dup", suse, true), UpdateAction::Job(Request::System { flatpak: false }));
+        assert_eq!(source_action(SourceKind::Zypper, "sudo zypper dup", suse, true, None), UpdateAction::Job(Request::System { flatpak: false }));
     }
 
     #[test]
     fn apply_asks_for_no_password_on_systems_mandara_doesnt_update() {
         use mandara_services::sysupdate::ImageTool;
         let pacman = System::Managed(mandara_services::sysupdate::plan::BackendId::Pacman);
-        assert_eq!(apply_request("system", pacman, true), Ok(Request::System { flatpak: false }));
-        assert_eq!(apply_request("all", pacman, true), Ok(Request::System { flatpak: true }));
-        assert_eq!(apply_request("all", pacman, false), Ok(Request::System { flatpak: false }));
+        assert_eq!(apply_request("system", pacman, true, None), Ok(Request::System { flatpak: false }));
+        assert_eq!(apply_request("all", pacman, true, None), Ok(Request::System { flatpak: true }));
+        assert_eq!(apply_request("all", pacman, false, None), Ok(Request::System { flatpak: false }));
+        assert_eq!(apply_request("all", pacman, true, Some(AurHelper::Yay)), Ok(Request::SystemAur { flatpak: true, helper: AurHelper::Yay }));
+        assert_eq!(apply_request("system", pacman, true, Some(AurHelper::Yay)), Ok(Request::System { flatpak: false }), "system means the repositories only");
+        assert_eq!(apply_request("aur", pacman, true, Some(AurHelper::Paru)), Ok(Request::Aur { helper: AurHelper::Paru, flatpak: false }));
+        assert!(apply_request("aur", pacman, true, None).is_err(), "no helper installed");
         for other in [System::ImageBased(ImageTool::RpmOstree), System::Unsupported] {
             for what in ["system", "all"] {
-                assert_eq!(apply_request(what, other, true), Err(other.explanation().unwrap()), "{what} on {other:?}");
+                assert_eq!(apply_request(what, other, true, None), Err(other.explanation().unwrap()), "{what} on {other:?}");
             }
-            assert_eq!(apply_request("flatpak", other, true), Ok(Request::Flatpak), "Flatpak needs no root");
+            assert_eq!(apply_request("flatpak", other, true, None), Ok(Request::Flatpak), "Flatpak needs no root");
+            assert!(apply_request("aur", other, true, Some(AurHelper::Paru)).is_err(), "the AUR is Arch's");
         }
-        assert!(apply_request("system", System::NixOs, true).is_err());
+        assert!(apply_request("system", System::NixOs, true, None).is_err());
     }
 
     fn report(kind: SourceKind, names: &[&str]) -> SourceReport {

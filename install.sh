@@ -7,6 +7,7 @@ umask 077
 release_keys='2fde15bd0518f2352436174a3bcc1e41d62e3ac99647a9dfa773d6462970b43d'
 release_base=${MANDARA_BOOTSTRAP_BASE_URL:-https://github.com/theHamdiz/mandara/releases/latest/download}
 work=
+downloader=curl
 language=${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}
 language=${language%%[_.@-]*}
 
@@ -23,7 +24,7 @@ message() {
         ar:unpack) printf '%s\n' 'جارٍ فك ملفات المثبّت…' ;;
         ar:start) printf '%s\n' 'كل شيء جاهز. جارٍ فتح مثبّت Mandara…' ;;
         ar:missing_tool) printf '%s\n' 'ثبّت هذه الأداة ثم أعد المحاولة:' ;;
-        ar:unsupported) printf '%s\n' 'تتطلب الإصدارات الجاهزة Linux ومعالج x86_64 أو aarch64.' ;;
+        ar:unsupported) printf '%s\n' 'تتطلب الإصدارات الجاهزة Linux ومعالج x86_64 أو aarch64، أو FreeBSD ومعالج x86_64.' ;;
         ar:https) printf '%s\n' 'يجب أن تستخدم مرآة الإصدارات HTTPS.' ;;
         ar:temporary) printf '%s\n' 'تعذر إنشاء مجلد مؤقت للتنزيل.' ;;
         ar:failed_download) printf '%s\n' 'فشل التنزيل. تحقق من اتصالك وأعد المحاولة.' ;;
@@ -36,6 +37,7 @@ message() {
         ar:missing_installer) printf '%s\n' 'لا يحتوي الإصدار على مثبّت تنفيذي واحد بالضبط.' ;;
         ar:manual) printf '%s\n' 'التنزيل اليدوي:' ;;
         ar:nixos) printf '%s\n' 'على NixOS، ثبّت Mandara من خلال إعدادات flake.' ;;
+        ar:image) printf '%s\n' 'هذا النظام قائم على الصور: يُثبَّت Mandara في مجلدك الشخصي، ولا يضيف المثبّت إلا حزم النظام الناقصة.' ;;
         fa:welcome) printf '%s\n' 'میزکار Wayland شما. بیایید آماده‌اش کنیم.' ;;
         fa:signature) printf '%s\n' 'در حال بررسی امضای انتشار…' ;;
         fa:signature_ok) printf '%s\n' 'امضای انتشار تأیید شد.' ;;
@@ -46,7 +48,7 @@ message() {
         fa:unpack) printf '%s\n' 'در حال استخراج فایل‌های نصب…' ;;
         fa:start) printf '%s\n' 'آماده است. در حال باز کردن نصب‌کنندهٔ Mandara…' ;;
         fa:missing_tool) printf '%s\n' 'این ابزار را نصب و دوباره تلاش کنید:' ;;
-        fa:unsupported) printf '%s\n' 'نسخه‌های آماده به Linux با پردازندهٔ x86_64 یا aarch64 نیاز دارند.' ;;
+        fa:unsupported) printf '%s\n' 'نسخه‌های آماده به Linux با پردازندهٔ x86_64 یا aarch64، یا FreeBSD با پردازندهٔ x86_64 نیاز دارند.' ;;
         fa:https) printf '%s\n' 'آینهٔ انتشار باید از HTTPS استفاده کند.' ;;
         fa:temporary) printf '%s\n' 'ساخت پوشهٔ موقت دریافت ممکن نشد.' ;;
         fa:failed_download) printf '%s\n' 'دریافت ناموفق بود. اتصال خود را بررسی و دوباره تلاش کنید.' ;;
@@ -59,6 +61,7 @@ message() {
         fa:missing_installer) printf '%s\n' 'تعداد نصب‌کننده‌های قابل اجرای این انتشار دقیقاً یک نیست.' ;;
         fa:manual) printf '%s\n' 'دریافت دستی:' ;;
         fa:nixos) printf '%s\n' 'در NixOS، Mandara را از طریق flake خود نصب کنید.' ;;
+        fa:image) printf '%s\n' 'این سیستم مبتنی بر ایمیج است: Mandara در پوشهٔ خانگی شما نصب می‌شود و نصب‌کننده فقط بسته‌های سیستمیِ کم‌بود را می‌افزاید.' ;;
         ur:welcome) printf '%s\n' 'آپ کا Wayland ڈیسک ٹاپ۔ آئیے اسے تیار کریں۔' ;;
         ur:signature) printf '%s\n' 'ریلیز کے دستخط کی تصدیق ہو رہی ہے…' ;;
         ur:signature_ok) printf '%s\n' 'ریلیز کے دستخط کی تصدیق ہو گئی۔' ;;
@@ -69,7 +72,7 @@ message() {
         ur:unpack) printf '%s\n' 'انسٹالر کی فائلیں نکالی جا رہی ہیں…' ;;
         ur:start) printf '%s\n' 'تیار ہے۔ Mandara انسٹالر کھولا جا رہا ہے…' ;;
         ur:missing_tool) printf '%s\n' 'یہ ٹول نصب کریں اور دوبارہ کوشش کریں:' ;;
-        ur:unsupported) printf '%s\n' 'تیار ریلیز کے لیے Linux اور x86_64 یا aarch64 پروسیسر درکار ہے۔' ;;
+        ur:unsupported) printf '%s\n' 'تیار ریلیز کے لیے Linux اور x86_64 یا aarch64 پروسیسر، یا FreeBSD اور x86_64 پروسیسر درکار ہے۔' ;;
         ur:https) printf '%s\n' 'ریلیز مرر کو HTTPS استعمال کرنا چاہیے۔' ;;
         ur:temporary) printf '%s\n' 'ڈاؤن لوڈ کے لیے عارضی فولڈر نہیں بنایا جا سکا۔' ;;
         ur:failed_download) printf '%s\n' 'ڈاؤن لوڈ ناکام ہوا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔' ;;
@@ -82,6 +85,7 @@ message() {
         ur:missing_installer) printf '%s\n' 'ریلیز میں قابلِ اجرا انسٹالرز کی تعداد ایک نہیں ہے۔' ;;
         ur:manual) printf '%s\n' 'دستی ڈاؤن لوڈ:' ;;
         ur:nixos) printf '%s\n' 'NixOS پر Mandara اپنی flake کے ذریعے نصب کریں۔' ;;
+        ur:image) printf '%s\n' 'یہ سسٹم امیج پر مبنی ہے: Mandara آپ کے ہوم فولڈر میں نصب ہوتا ہے، اور انسٹالر صرف کم سسٹم پیکجز شامل کرتا ہے۔' ;;
         es:welcome) printf '%s\n' 'Tu escritorio Wayland. Vamos a prepararlo.' ;;
         es:signature) printf '%s\n' 'Comprobando la firma de la versión…' ;;
         es:signature_ok) printf '%s\n' 'Firma de la versión verificada.' ;;
@@ -92,7 +96,7 @@ message() {
         es:unpack) printf '%s\n' 'Descomprimiendo el instalador…' ;;
         es:start) printf '%s\n' 'Todo listo. Abriendo el instalador de Mandara…' ;;
         es:missing_tool) printf '%s\n' 'Instala esta herramienta y vuelve a intentarlo:' ;;
-        es:unsupported) printf '%s\n' 'Las versiones precompiladas requieren Linux con una CPU x86_64 o aarch64.' ;;
+        es:unsupported) printf '%s\n' 'Las versiones precompiladas requieren Linux con una CPU x86_64 o aarch64, o FreeBSD con una CPU x86_64.' ;;
         es:https) printf '%s\n' 'El servidor de versiones alternativo debe usar HTTPS.' ;;
         es:temporary) printf '%s\n' 'No se pudo crear una carpeta temporal para la descarga.' ;;
         es:failed_download) printf '%s\n' 'La descarga falló. Comprueba tu conexión y vuelve a intentarlo.' ;;
@@ -105,6 +109,7 @@ message() {
         es:missing_installer) printf '%s\n' 'La versión no contiene exactamente un instalador ejecutable.' ;;
         es:manual) printf '%s\n' 'Descargas manuales:' ;;
         es:nixos) printf '%s\n' 'En NixOS, instala Mandara mediante tu flake.' ;;
+        es:image) printf '%s\n' 'Este sistema se basa en imágenes: Mandara se instala en tu carpeta personal y el instalador añade solo los paquetes del sistema que faltan.' ;;
         pt:welcome) printf '%s\n' 'Sua área de trabalho Wayland. Vamos prepará-la.' ;;
         pt:signature) printf '%s\n' 'Verificando a assinatura da versão…' ;;
         pt:signature_ok) printf '%s\n' 'Assinatura da versão verificada.' ;;
@@ -115,7 +120,7 @@ message() {
         pt:unpack) printf '%s\n' 'Extraindo o instalador…' ;;
         pt:start) printf '%s\n' 'Pronto. Abrindo o instalador do Mandara…' ;;
         pt:missing_tool) printf '%s\n' 'Instale esta ferramenta e tente novamente:' ;;
-        pt:unsupported) printf '%s\n' 'As versões pré-compiladas exigem Linux em uma CPU x86_64 ou aarch64.' ;;
+        pt:unsupported) printf '%s\n' 'As versões pré-compiladas exigem Linux em uma CPU x86_64 ou aarch64, ou FreeBSD em uma CPU x86_64.' ;;
         pt:https) printf '%s\n' 'O espelho de versões deve usar HTTPS.' ;;
         pt:temporary) printf '%s\n' 'Não foi possível criar uma pasta temporária para o download.' ;;
         pt:failed_download) printf '%s\n' 'O download falhou. Confira sua conexão e tente novamente.' ;;
@@ -128,6 +133,7 @@ message() {
         pt:missing_installer) printf '%s\n' 'A versão não contém exatamente um instalador executável.' ;;
         pt:manual) printf '%s\n' 'Downloads manuais:' ;;
         pt:nixos) printf '%s\n' 'No NixOS, instale o Mandara pelo seu flake.' ;;
+        pt:image) printf '%s\n' 'Este sistema é baseado em imagem: o Mandara se instala na sua pasta pessoal, e o instalador adiciona só os pacotes de sistema que faltam.' ;;
         fr:welcome) printf '%s\n' 'Votre bureau Wayland. Préparons-le ensemble.' ;;
         fr:signature) printf '%s\n' 'Vérification de la signature de la version…' ;;
         fr:signature_ok) printf '%s\n' 'Signature de la version vérifiée.' ;;
@@ -138,7 +144,7 @@ message() {
         fr:unpack) printf '%s\n' 'Décompression du programme d’installation…' ;;
         fr:start) printf '%s\n' 'Tout est prêt. Ouverture du programme d’installation de Mandara…' ;;
         fr:missing_tool) printf '%s\n' 'Installez cet outil, puis réessayez :' ;;
-        fr:unsupported) printf '%s\n' 'Les versions précompilées nécessitent Linux et un processeur x86_64 ou aarch64.' ;;
+        fr:unsupported) printf '%s\n' 'Les versions précompilées nécessitent Linux et un processeur x86_64 ou aarch64, ou FreeBSD et un processeur x86_64.' ;;
         fr:https) printf '%s\n' 'Le miroir des versions doit utiliser HTTPS.' ;;
         fr:temporary) printf '%s\n' 'Impossible de créer un dossier temporaire pour le téléchargement.' ;;
         fr:failed_download) printf '%s\n' 'Le téléchargement a échoué. Vérifiez votre connexion et réessayez.' ;;
@@ -151,6 +157,7 @@ message() {
         fr:missing_installer) printf '%s\n' 'La version ne contient pas exactement un programme d’installation exécutable.' ;;
         fr:manual) printf '%s\n' 'Téléchargements manuels :' ;;
         fr:nixos) printf '%s\n' 'Sur NixOS, installez Mandara avec votre flake.' ;;
+        fr:image) printf '%s\n' 'Ce système est basé sur une image : Mandara s’installe dans votre dossier personnel, et l’installateur n’ajoute que les paquets système manquants.' ;;
         de:welcome) printf '%s\n' 'Dein Wayland-Desktop. Machen wir ihn startklar.' ;;
         de:signature) printf '%s\n' 'Signatur der Veröffentlichung wird geprüft…' ;;
         de:signature_ok) printf '%s\n' 'Signatur der Veröffentlichung bestätigt.' ;;
@@ -161,7 +168,7 @@ message() {
         de:unpack) printf '%s\n' 'Installationsprogramm wird entpackt…' ;;
         de:start) printf '%s\n' 'Alles bereit. Das Mandara-Installationsprogramm wird geöffnet…' ;;
         de:missing_tool) printf '%s\n' 'Installiere dieses Werkzeug und versuche es erneut:' ;;
-        de:unsupported) printf '%s\n' 'Vorgefertigte Versionen benötigen Linux mit einer x86_64- oder aarch64-CPU.' ;;
+        de:unsupported) printf '%s\n' 'Vorgefertigte Versionen benötigen Linux mit einer x86_64- oder aarch64-CPU oder FreeBSD mit einer x86_64-CPU.' ;;
         de:https) printf '%s\n' 'Der Download-Spiegel muss HTTPS verwenden.' ;;
         de:temporary) printf '%s\n' 'Ein temporärer Download-Ordner konnte nicht erstellt werden.' ;;
         de:failed_download) printf '%s\n' 'Download fehlgeschlagen. Prüfe deine Verbindung und versuche es erneut.' ;;
@@ -174,6 +181,7 @@ message() {
         de:missing_installer) printf '%s\n' 'Die Veröffentlichung enthält nicht genau ein ausführbares Installationsprogramm.' ;;
         de:manual) printf '%s\n' 'Manuelle Downloads:' ;;
         de:nixos) printf '%s\n' 'Installiere Mandara unter NixOS über deinen Flake.' ;;
+        de:image) printf '%s\n' 'Dieses System ist abbildbasiert: Mandara installiert sich in deinen Home-Ordner, und der Installer fügt nur fehlende Systempakete hinzu.' ;;
         tr:welcome) printf '%s\n' 'Wayland masaüstünüz. Birlikte hazırlayalım.' ;;
         tr:signature) printf '%s\n' 'Sürüm imzası denetleniyor…' ;;
         tr:signature_ok) printf '%s\n' 'Sürüm imzası doğrulandı.' ;;
@@ -184,7 +192,7 @@ message() {
         tr:unpack) printf '%s\n' 'Kurulum dosyaları arşivden çıkarılıyor…' ;;
         tr:start) printf '%s\n' 'Hazır. Mandara kurulum programı açılıyor…' ;;
         tr:missing_tool) printf '%s\n' 'Bu aracı yükleyip yeniden deneyin:' ;;
-        tr:unsupported) printf '%s\n' 'Hazır sürümler için Linux ve x86_64 veya aarch64 işlemci gerekir.' ;;
+        tr:unsupported) printf '%s\n' 'Hazır sürümler için Linux ve x86_64 veya aarch64 işlemci ya da FreeBSD ve x86_64 işlemci gerekir.' ;;
         tr:https) printf '%s\n' 'Sürüm aynası HTTPS kullanmalıdır.' ;;
         tr:temporary) printf '%s\n' 'Geçici indirme klasörü oluşturulamadı.' ;;
         tr:failed_download) printf '%s\n' 'İndirme başarısız oldu. Bağlantınızı denetleyip yeniden deneyin.' ;;
@@ -197,6 +205,7 @@ message() {
         tr:missing_installer) printf '%s\n' 'Sürümdeki çalıştırılabilir kurulum programı sayısı tam olarak bir değil.' ;;
         tr:manual) printf '%s\n' 'Elle indirme:' ;;
         tr:nixos) printf '%s\n' 'NixOS üzerinde Mandara’yı flake yapılandırmanızla yükleyin.' ;;
+        tr:image) printf '%s\n' 'Bu sistem imaj tabanlıdır: Mandara ev klasörünüze kurulur ve kurulum programı yalnızca eksik sistem paketlerini ekler.' ;;
         ru:welcome) printf '%s\n' 'Ваш рабочий стол Wayland. Подготовим его к работе.' ;;
         ru:signature) printf '%s\n' 'Проверка подписи выпуска…' ;;
         ru:signature_ok) printf '%s\n' 'Подпись выпуска проверена.' ;;
@@ -207,7 +216,7 @@ message() {
         ru:unpack) printf '%s\n' 'Распаковка установщика…' ;;
         ru:start) printf '%s\n' 'Всё готово. Запуск установщика Mandara…' ;;
         ru:missing_tool) printf '%s\n' 'Установите этот инструмент и повторите попытку:' ;;
-        ru:unsupported) printf '%s\n' 'Готовые сборки требуют Linux и процессор x86_64 или aarch64.' ;;
+        ru:unsupported) printf '%s\n' 'Готовые сборки требуют Linux и процессор x86_64 или aarch64 либо FreeBSD и процессор x86_64.' ;;
         ru:https) printf '%s\n' 'Зеркало выпусков должно использовать HTTPS.' ;;
         ru:temporary) printf '%s\n' 'Не удалось создать временную папку для загрузки.' ;;
         ru:failed_download) printf '%s\n' 'Загрузка не удалась. Проверьте соединение и повторите попытку.' ;;
@@ -220,6 +229,7 @@ message() {
         ru:missing_installer) printf '%s\n' 'Количество исполняемых установщиков в выпуске не равно одному.' ;;
         ru:manual) printf '%s\n' 'Загрузка вручную:' ;;
         ru:nixos) printf '%s\n' 'В NixOS установите Mandara через свой flake.' ;;
+        ru:image) printf '%s\n' 'Эта система основана на образах: Mandara устанавливается в домашнюю папку, а установщик добавляет только недостающие системные пакеты.' ;;
         hi:welcome) printf '%s\n' 'आपका Wayland डेस्कटॉप। आइए इसे तैयार करें।' ;;
         hi:signature) printf '%s\n' 'रिलीज़ के हस्ताक्षर की जाँच हो रही है…' ;;
         hi:signature_ok) printf '%s\n' 'रिलीज़ का हस्ताक्षर सत्यापित है।' ;;
@@ -230,7 +240,7 @@ message() {
         hi:unpack) printf '%s\n' 'इंस्टॉलर की फ़ाइलें निकाली जा रही हैं…' ;;
         hi:start) printf '%s\n' 'तैयार है। Mandara इंस्टॉलर खुल रहा है…' ;;
         hi:missing_tool) printf '%s\n' 'यह टूल इंस्टॉल करें और फिर कोशिश करें:' ;;
-        hi:unsupported) printf '%s\n' 'तैयार रिलीज़ के लिए Linux और x86_64 या aarch64 CPU चाहिए।' ;;
+        hi:unsupported) printf '%s\n' 'तैयार रिलीज़ के लिए Linux और x86_64 या aarch64 CPU, या FreeBSD और x86_64 CPU चाहिए।' ;;
         hi:https) printf '%s\n' 'रिलीज़ मिरर को HTTPS इस्तेमाल करना चाहिए।' ;;
         hi:temporary) printf '%s\n' 'अस्थायी डाउनलोड फ़ोल्डर नहीं बनाया जा सका।' ;;
         hi:failed_download) printf '%s\n' 'डाउनलोड विफल रहा। अपना कनेक्शन जाँचें और फिर कोशिश करें।' ;;
@@ -243,6 +253,7 @@ message() {
         hi:missing_installer) printf '%s\n' 'रिलीज़ में चलने योग्य इंस्टॉलर की संख्या ठीक एक नहीं है।' ;;
         hi:manual) printf '%s\n' 'मैन्युअल डाउनलोड:' ;;
         hi:nixos) printf '%s\n' 'NixOS पर अपनी flake से Mandara इंस्टॉल करें।' ;;
+        hi:image) printf '%s\n' 'यह सिस्टम इमेज-आधारित है: Mandara आपके होम फ़ोल्डर में इंस्टॉल होता है, और इंस्टॉलर केवल कम पड़ रहे सिस्टम पैकेज जोड़ता है।' ;;
         mr:welcome) printf '%s\n' 'तुमचा Wayland डेस्कटॉप. चला, तो तयार करूया.' ;;
         mr:signature) printf '%s\n' 'प्रकाशनाची स्वाक्षरी तपासत आहे…' ;;
         mr:signature_ok) printf '%s\n' 'प्रकाशनाची स्वाक्षरी पडताळली.' ;;
@@ -253,7 +264,7 @@ message() {
         mr:unpack) printf '%s\n' 'इंस्टॉलर उलगडत आहे…' ;;
         mr:start) printf '%s\n' 'तयार. Mandara चे इंस्टॉलर उघडत आहे…' ;;
         mr:missing_tool) printf '%s\n' 'हे साधन बसवा आणि पुन्हा प्रयत्न करा:' ;;
-        mr:unsupported) printf '%s\n' 'आधी तयार केलेल्या आवृत्त्यांसाठी x86_64 किंवा aarch64 CPU वर Linux आवश्यक आहे.' ;;
+        mr:unsupported) printf '%s\n' 'आधी तयार केलेल्या आवृत्त्यांसाठी x86_64 किंवा aarch64 CPU वर Linux, किंवा x86_64 CPU वर FreeBSD आवश्यक आहे.' ;;
         mr:https) printf '%s\n' 'प्रकाशनाच्या पर्यायी सर्व्हरने HTTPS वापरणे आवश्यक आहे.' ;;
         mr:temporary) printf '%s\n' 'डाउनलोडसाठी तात्पुरते फोल्डर तयार करता आले नाही.' ;;
         mr:failed_download) printf '%s\n' 'डाउनलोड अयशस्वी. जोडणी तपासा आणि पुन्हा प्रयत्न करा.' ;;
@@ -266,6 +277,7 @@ message() {
         mr:missing_installer) printf '%s\n' 'प्रकाशनात चालवता येईल असे नेमके एक इंस्टॉलर नाही.' ;;
         mr:manual) printf '%s\n' 'स्वहस्ते डाउनलोड:' ;;
         mr:nixos) printf '%s\n' 'NixOS वर तुमच्या flake मधून Mandara बसवा.' ;;
+        mr:image) printf '%s\n' 'ही सिस्टम इमेज-आधारित आहे: Mandara तुमच्या होम फोल्डरमध्ये बसते, आणि इंस्टॉलर फक्त नसलेली सिस्टम पॅकेजेस जोडतो.' ;;
         bn:welcome) printf '%s\n' 'আপনার Wayland ডেস্কটপ। চলুন প্রস্তুত করি।' ;;
         bn:signature) printf '%s\n' 'রিলিজের স্বাক্ষর যাচাই করা হচ্ছে…' ;;
         bn:signature_ok) printf '%s\n' 'রিলিজের স্বাক্ষর যাচাই করা হয়েছে।' ;;
@@ -276,7 +288,7 @@ message() {
         bn:unpack) printf '%s\n' 'ইনস্টলারের ফাইল আনপ্যাক করা হচ্ছে…' ;;
         bn:start) printf '%s\n' 'প্রস্তুত। Mandara ইনস্টলার খোলা হচ্ছে…' ;;
         bn:missing_tool) printf '%s\n' 'এই টুলটি ইনস্টল করে আবার চেষ্টা করুন:' ;;
-        bn:unsupported) printf '%s\n' 'আগে থেকে তৈরি রিলিজের জন্য Linux এবং x86_64 বা aarch64 CPU প্রয়োজন।' ;;
+        bn:unsupported) printf '%s\n' 'আগে থেকে তৈরি রিলিজের জন্য Linux এবং x86_64 বা aarch64 CPU, অথবা FreeBSD এবং x86_64 CPU প্রয়োজন।' ;;
         bn:https) printf '%s\n' 'রিলিজ মিররে HTTPS ব্যবহার করতে হবে।' ;;
         bn:temporary) printf '%s\n' 'ডাউনলোডের জন্য অস্থায়ী ফোল্ডার তৈরি করা যায়নি।' ;;
         bn:failed_download) printf '%s\n' 'ডাউনলোড ব্যর্থ হয়েছে। সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।' ;;
@@ -289,6 +301,7 @@ message() {
         bn:missing_installer) printf '%s\n' 'রিলিজে চালানো যায় এমন ইনস্টলারের সংখ্যা ঠিক এক নয়।' ;;
         bn:manual) printf '%s\n' 'নিজে ডাউনলোড করুন:' ;;
         bn:nixos) printf '%s\n' 'NixOS-এ আপনার flake দিয়ে Mandara ইনস্টল করুন।' ;;
+        bn:image) printf '%s\n' 'এই সিস্টেম ইমেজ-ভিত্তিক: Mandara আপনার হোম ফোল্ডারে ইনস্টল হয়, আর ইনস্টলার শুধু অনুপস্থিত সিস্টেম প্যাকেজ যোগ করে।' ;;
         te:welcome) printf '%s\n' 'మీ Wayland డెస్క్‌టాప్. దాన్ని సిద్ధం చేద్దాం.' ;;
         te:signature) printf '%s\n' 'విడుదల సంతకాన్ని తనిఖీ చేస్తోంది…' ;;
         te:signature_ok) printf '%s\n' 'విడుదల సంతకం ధృవీకరించబడింది.' ;;
@@ -299,7 +312,7 @@ message() {
         te:unpack) printf '%s\n' 'ఇన్‌స్టాలర్‌ను అన్‌ప్యాక్ చేస్తోంది…' ;;
         te:start) printf '%s\n' 'సిద్ధంగా ఉంది. Mandara ఇన్‌స్టాలర్‌ను తెరుస్తోంది…' ;;
         te:missing_tool) printf '%s\n' 'ఈ సాధనాన్ని ఇన్‌స్టాల్ చేసి మళ్లీ ప్రయత్నించండి:' ;;
-        te:unsupported) printf '%s\n' 'ముందుగా నిర్మించిన విడుదలలకు x86_64 లేదా aarch64 CPU పై Linux అవసరం.' ;;
+        te:unsupported) printf '%s\n' 'ముందుగా నిర్మించిన విడుదలలకు x86_64 లేదా aarch64 CPU పై Linux, లేదా x86_64 CPU పై FreeBSD అవసరం.' ;;
         te:https) printf '%s\n' 'విడుదల మిర్రర్ తప్పనిసరిగా HTTPS ఉపయోగించాలి.' ;;
         te:temporary) printf '%s\n' 'డౌన్‌లోడ్ కోసం తాత్కాలిక ఫోల్డర్‌ను సృష్టించలేకపోయింది.' ;;
         te:failed_download) printf '%s\n' 'డౌన్‌లోడ్ విఫలమైంది. మీ కనెక్షన్‌ను తనిఖీ చేసి మళ్లీ ప్రయత్నించండి.' ;;
@@ -312,6 +325,7 @@ message() {
         te:missing_installer) printf '%s\n' 'విడుదలలో అమలు చేయగల ఇన్‌స్టాలర్ ఖచ్చితంగా ఒకటి లేదు.' ;;
         te:manual) printf '%s\n' 'మానవీయ డౌన్‌లోడ్‌లు:' ;;
         te:nixos) printf '%s\n' 'NixOS లో మీ flake ద్వారా Mandara ను ఇన్‌స్టాల్ చేయండి.' ;;
+        te:image) printf '%s\n' 'ఈ సిస్టమ్ ఇమేజ్ ఆధారితం: Mandara మీ హోమ్ ఫోల్డర్‌లో ఇన్‌స్టాల్ అవుతుంది, ఇన్‌స్టాలర్ తప్పిపోయిన సిస్టమ్ ప్యాకేజీలను మాత్రమే జోడిస్తుంది.' ;;
         id:welcome) printf '%s\n' 'Desktop Wayland Anda. Mari kita siapkan.' ;;
         id:signature) printf '%s\n' 'Memeriksa tanda tangan rilis…' ;;
         id:signature_ok) printf '%s\n' 'Tanda tangan rilis terverifikasi.' ;;
@@ -322,7 +336,7 @@ message() {
         id:unpack) printf '%s\n' 'Mengekstrak pemasang…' ;;
         id:start) printf '%s\n' 'Siap. Membuka pemasang Mandara…' ;;
         id:missing_tool) printf '%s\n' 'Pasang alat ini lalu coba lagi:' ;;
-        id:unsupported) printf '%s\n' 'Rilis siap pakai memerlukan Linux dengan CPU x86_64 atau aarch64.' ;;
+        id:unsupported) printf '%s\n' 'Rilis siap pakai memerlukan Linux dengan CPU x86_64 atau aarch64, atau FreeBSD dengan CPU x86_64.' ;;
         id:https) printf '%s\n' 'Cermin rilis harus menggunakan HTTPS.' ;;
         id:temporary) printf '%s\n' 'Tidak dapat membuat folder unduhan sementara.' ;;
         id:failed_download) printf '%s\n' 'Unduhan gagal. Periksa koneksi Anda dan coba lagi.' ;;
@@ -335,6 +349,7 @@ message() {
         id:missing_installer) printf '%s\n' 'Rilis tidak berisi tepat satu pemasang yang dapat dijalankan.' ;;
         id:manual) printf '%s\n' 'Unduhan manual:' ;;
         id:nixos) printf '%s\n' 'Di NixOS, pasang Mandara melalui flake Anda.' ;;
+        id:image) printf '%s\n' 'Sistem ini berbasis image: Mandara dipasang di folder rumah Anda, dan pemasang hanya menambahkan paket sistem yang belum ada.' ;;
         sw:welcome) printf '%s\n' 'Eneo-kazi lako la Wayland. Hebu tuliandae.' ;;
         sw:signature) printf '%s\n' 'Inakagua sahihi ya toleo…' ;;
         sw:signature_ok) printf '%s\n' 'Sahihi ya toleo imethibitishwa.' ;;
@@ -345,7 +360,7 @@ message() {
         sw:unpack) printf '%s\n' 'Inafungua kifurushi cha kisakinishi…' ;;
         sw:start) printf '%s\n' 'Tayari. Inafungua kisakinishi cha Mandara…' ;;
         sw:missing_tool) printf '%s\n' 'Sakinisha zana hii kisha ujaribu tena:' ;;
-        sw:unsupported) printf '%s\n' 'Matoleo yaliyotengenezwa tayari yanahitaji Linux kwenye CPU ya x86_64 au aarch64.' ;;
+        sw:unsupported) printf '%s\n' 'Matoleo yaliyotengenezwa tayari yanahitaji Linux kwenye CPU ya x86_64 au aarch64, au FreeBSD kwenye CPU ya x86_64.' ;;
         sw:https) printf '%s\n' 'Seva mbadala ya matoleo lazima itumie HTTPS.' ;;
         sw:temporary) printf '%s\n' 'Haikuweza kuunda folda ya muda ya upakuaji.' ;;
         sw:failed_download) printf '%s\n' 'Upakuaji umeshindwa. Kagua muunganisho wako kisha ujaribu tena.' ;;
@@ -358,6 +373,7 @@ message() {
         sw:missing_installer) printf '%s\n' 'Toleo halina kisakinishi kimoja tu kinachoweza kutekelezwa.' ;;
         sw:manual) printf '%s\n' 'Upakuaji wa mwenyewe:' ;;
         sw:nixos) printf '%s\n' 'Katika NixOS, sakinisha Mandara kupitia flake yako.' ;;
+        sw:image) printf '%s\n' 'Mfumo huu ni wa picha: Mandara inasakinishwa kwenye folda yako ya nyumbani, na kisakinishi huongeza tu vifurushi vya mfumo vinavyokosekana.' ;;
         vi:welcome) printf '%s\n' 'Màn hình nền Wayland của bạn. Cùng chuẩn bị nhé.' ;;
         vi:signature) printf '%s\n' 'Đang kiểm tra chữ ký bản phát hành…' ;;
         vi:signature_ok) printf '%s\n' 'Đã xác minh chữ ký bản phát hành.' ;;
@@ -368,7 +384,7 @@ message() {
         vi:unpack) printf '%s\n' 'Đang giải nén trình cài…' ;;
         vi:start) printf '%s\n' 'Sẵn sàng. Đang mở trình cài Mandara…' ;;
         vi:missing_tool) printf '%s\n' 'Cài công cụ này rồi thử lại:' ;;
-        vi:unsupported) printf '%s\n' 'Bản biên dịch sẵn yêu cầu Linux trên CPU x86_64 hoặc aarch64.' ;;
+        vi:unsupported) printf '%s\n' 'Bản biên dịch sẵn yêu cầu Linux trên CPU x86_64 hoặc aarch64, hoặc FreeBSD trên CPU x86_64.' ;;
         vi:https) printf '%s\n' 'Máy chủ phản chiếu bản phát hành phải dùng HTTPS.' ;;
         vi:temporary) printf '%s\n' 'Không tạo được thư mục tải xuống tạm thời.' ;;
         vi:failed_download) printf '%s\n' 'Tải xuống thất bại. Hãy kiểm tra kết nối và thử lại.' ;;
@@ -381,6 +397,7 @@ message() {
         vi:missing_installer) printf '%s\n' 'Bản phát hành không chứa đúng một trình cài có thể thực thi.' ;;
         vi:manual) printf '%s\n' 'Tải xuống thủ công:' ;;
         vi:nixos) printf '%s\n' 'Trên NixOS, hãy cài Mandara bằng flake của bạn.' ;;
+        vi:image) printf '%s\n' 'Hệ thống này dựa trên image: Mandara được cài vào thư mục nhà của bạn, và trình cài chỉ thêm các gói hệ thống còn thiếu.' ;;
         zh:welcome) printf '%s\n' '你的 Wayland 桌面。让我们准备就绪。' ;;
         zh:signature) printf '%s\n' '正在检查发布版本签名…' ;;
         zh:signature_ok) printf '%s\n' '已验证发行版签名。' ;;
@@ -391,7 +408,7 @@ message() {
         zh:unpack) printf '%s\n' '正在解压安装程序…' ;;
         zh:start) printf '%s\n' '准备就绪。正在打开 Mandara 安装程序…' ;;
         zh:missing_tool) printf '%s\n' '请安装此工具后重试：' ;;
-        zh:unsupported) printf '%s\n' '预编译版本需要 Linux 系统和 x86_64 或 aarch64 处理器。' ;;
+        zh:unsupported) printf '%s\n' '预编译版本需要 Linux 系统和 x86_64 或 aarch64 处理器，或 FreeBSD 系统和 x86_64 处理器。' ;;
         zh:https) printf '%s\n' '发布镜像必须使用 HTTPS。' ;;
         zh:temporary) printf '%s\n' '无法创建临时下载文件夹。' ;;
         zh:failed_download) printf '%s\n' '下载失败。请检查网络连接后重试。' ;;
@@ -404,6 +421,7 @@ message() {
         zh:missing_installer) printf '%s\n' '发布版本中的可执行安装程序数量不是一个。' ;;
         zh:manual) printf '%s\n' '手动下载：' ;;
         zh:nixos) printf '%s\n' '在 NixOS 上，请通过你的 flake 安装 Mandara。' ;;
+        zh:image) printf '%s\n' '此系统基于镜像：Mandara 安装到你的主文件夹，安装程序只添加缺少的系统软件包。' ;;
         ja:welcome) printf '%s\n' 'あなたの Wayland デスクトップ。準備を始めましょう。' ;;
         ja:signature) printf '%s\n' 'リリースの署名を確認しています…' ;;
         ja:signature_ok) printf '%s\n' 'リリースの署名を確認しました。' ;;
@@ -414,7 +432,7 @@ message() {
         ja:unpack) printf '%s\n' 'インストーラーを展開しています…' ;;
         ja:start) printf '%s\n' '準備完了。Mandara のインストーラーを開いています…' ;;
         ja:missing_tool) printf '%s\n' 'このツールをインストールして、もう一度お試しください：' ;;
-        ja:unsupported) printf '%s\n' 'ビルド済みリリースには Linux と x86_64 または aarch64 CPU が必要です。' ;;
+        ja:unsupported) printf '%s\n' 'ビルド済みリリースには、Linux と x86_64 または aarch64 CPU、あるいは FreeBSD と x86_64 CPU が必要です。' ;;
         ja:https) printf '%s\n' 'リリースミラーは HTTPS を使用する必要があります。' ;;
         ja:temporary) printf '%s\n' '一時ダウンロードフォルダーを作成できませんでした。' ;;
         ja:failed_download) printf '%s\n' 'ダウンロードに失敗しました。接続を確認して、もう一度お試しください。' ;;
@@ -427,6 +445,7 @@ message() {
         ja:missing_installer) printf '%s\n' 'リリース内の実行可能なインストーラーの数が1つではありません。' ;;
         ja:manual) printf '%s\n' '手動ダウンロード：' ;;
         ja:nixos) printf '%s\n' 'NixOS では flake を使って Mandara をインストールしてください。' ;;
+        ja:image) printf '%s\n' 'このシステムはイメージベースです。Mandara はホームフォルダーにインストールされ、インストーラーは足りないシステムパッケージだけを追加します。' ;;
         ko:welcome) printf '%s\n' '나만의 Wayland 데스크톱. 함께 준비해 봅시다.' ;;
         ko:signature) printf '%s\n' '릴리스 서명을 확인하는 중…' ;;
         ko:signature_ok) printf '%s\n' '릴리스 서명이 확인되었습니다.' ;;
@@ -437,7 +456,7 @@ message() {
         ko:unpack) printf '%s\n' '설치 프로그램의 압축을 푸는 중…' ;;
         ko:start) printf '%s\n' '준비됐습니다. Mandara 설치 프로그램을 여는 중…' ;;
         ko:missing_tool) printf '%s\n' '이 도구를 설치한 뒤 다시 시도하세요:' ;;
-        ko:unsupported) printf '%s\n' '미리 빌드된 릴리스에는 Linux와 x86_64 또는 aarch64 CPU가 필요합니다.' ;;
+        ko:unsupported) printf '%s\n' '미리 빌드된 릴리스에는 Linux와 x86_64 또는 aarch64 CPU, 또는 FreeBSD와 x86_64 CPU가 필요합니다.' ;;
         ko:https) printf '%s\n' '릴리스 미러는 HTTPS를 사용해야 합니다.' ;;
         ko:temporary) printf '%s\n' '임시 다운로드 폴더를 만들 수 없습니다.' ;;
         ko:failed_download) printf '%s\n' '다운로드에 실패했습니다. 연결을 확인한 뒤 다시 시도하세요.' ;;
@@ -450,6 +469,7 @@ message() {
         ko:missing_installer) printf '%s\n' '릴리스의 실행 가능한 설치 프로그램 수가 정확히 하나가 아닙니다.' ;;
         ko:manual) printf '%s\n' '직접 다운로드:' ;;
         ko:nixos) printf '%s\n' 'NixOS에서는 flake를 통해 Mandara를 설치하세요.' ;;
+        ko:image) printf '%s\n' '이 시스템은 이미지 기반입니다. Mandara는 홈 폴더에 설치되고, 설치 프로그램은 없는 시스템 패키지만 추가합니다.' ;;
         *:welcome) printf '%s\n' 'Your Wayland desktop. Let’s get it ready.' ;;
         *:signature) printf '%s\n' 'Checking the release signature…' ;;
         *:signature_ok) printf '%s\n' 'Release signature verified.' ;;
@@ -460,7 +480,7 @@ message() {
         *:unpack) printf '%s\n' 'Unpacking the installer…' ;;
         *:start) printf '%s\n' 'Ready. Opening Mandara’s installer…' ;;
         *:missing_tool) printf '%s\n' 'Install this tool and try again:' ;;
-        *:unsupported) printf '%s\n' 'Prebuilt releases require Linux on an x86_64 or aarch64 CPU.' ;;
+        *:unsupported) printf '%s\n' 'Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64.' ;;
         *:https) printf '%s\n' 'The release mirror must use HTTPS.' ;;
         *:temporary) printf '%s\n' 'Could not create a temporary download folder.' ;;
         *:failed_download) printf '%s\n' 'Download failed. Check your connection and try again.' ;;
@@ -473,6 +493,7 @@ message() {
         *:missing_installer) printf '%s\n' 'The release does not contain exactly one executable installer.' ;;
         *:manual) printf '%s\n' 'Manual downloads:' ;;
         *:nixos) printf '%s\n' 'On NixOS, install Mandara through your flake.' ;;
+        *:image) printf '%s\n' 'This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks.' ;;
     esac
 }
 # End generated messages
@@ -506,6 +527,10 @@ PHOENIX
 
 fetch() {
     name=$1 destination=$2 limit=$3 timeout=$4
+    if [ "$downloader" = fetch ]; then
+        fetch_base "$@"
+        return
+    fi
     # Keep retry warnings in logs; the terminal meter includes bytes and speed.
     if [ -t 2 ]; then progress=--progress-meter; else progress=--no-progress-meter; fi
     received=$(curl --fail --location --show-error "$progress" \
@@ -518,21 +543,74 @@ fetch() {
     say "  ✓ $(message download_ok) $name ($received B)"
 }
 
+# FreeBSD's own fetch(1), when curl isn't installed: it verifies HTTPS
+# certificates, retries soft failures (-a) and gives up on a transfer
+# stalled for 30 seconds (-T). Everything it downloads is checked against
+# the signed release before anything runs.
+fetch_base() {
+    if [ -t 2 ]; then quiet=; else quiet=-q; fi
+    attempt=0
+    until command fetch $quiet -a -T 30 -o "$destination" "$release_base/$name"; do
+        attempt=$((attempt + 1))
+        [ "$attempt" -le 3 ] || fail "${5:-failed_download}" "$name" "$(message manual) https://github.com/theHamdiz/mandara/releases/latest"
+        sleep "$attempt"
+    done
+    received=$(wc -c < "$destination" | tr -d ' ')
+    [ "$received" -le "$limit" ] || fail "${5:-failed_download}" "$name"
+    say "  ✓ $(message download_ok) $name ($received B)"
+}
+
+# SHA-256 of a file: GNU coreutils and FreeBSD 14 and 15 have sha256sum;
+# older FreeBSD has only sha256(1).
+file_sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{ print $1 }'
+    else
+        sha256 -q "$1"
+    fi
+}
+
 # POSIX printf accepts octal escapes; no xxd, Python or shell hex extension.
+# They go in the format string, not through %b: FreeBSD's printf ends a %b
+# argument at its first zero byte, and keys and signatures contain them.
+# The format holds nothing but escapes, so no conversion can appear in it.
 hex_bytes() {
     octal=$(printf '%s\n' "$1" | LC_ALL=C awk '
         { for (i = 1; i < length($0); i += 2) {
             a = index("0123456789abcdef", substr($0, i, 1)) - 1
             b = index("0123456789abcdef", substr($0, i + 1, 1)) - 1
-            printf "\\0%03o", a * 16 + b
+            printf "\\%03o", a * 16 + b
         } }')
-    printf '%b' "$octal"
+    # shellcheck disable=SC2059
+    printf "$octal"
 }
 
 check_nixos() {
     if [ -e "$1/etc/NIXOS" ] || [ -e "$1/run/current-system/nixos-version" ]; then
         fail nixos 'https://thehamdiz.github.io/mandara/docs/install.html#nixos'
     fi
+}
+
+# Image-based systems (Fedora Atomic and Bazzite, openSUSE Aeon, Vanilla OS,
+# SteamOS) keep /usr read-only. Nothing here writes outside the download
+# folder in your home; `mandara install` adds what the image lacks.
+image_based() {
+    [ -e "$1/run/ostree-booted" ] && return 0
+    for release in "$1/etc/os-release" "$1/usr/lib/os-release"; do
+        [ -r "$release" ] || continue
+        fields=$(awk -F= '$1 == "ID" || $1 == "ID_LIKE" || $1 == "NAME" { gsub(/["\047]/, "", $2); printf " %s", $2 }' "$release")
+        case "$fields " in
+            *microos*|*aeon*|*kalpa*|*sl-micro*|*sle-micro*|*" steamos "*|*" Vanilla OS "*) return 0 ;;
+        esac
+        # Fedora Atomic's variants, also where /run/ostree-booted can't be
+        # (a container of the image).
+        variant=$(awk -F= '$1 == "VARIANT_ID" { gsub(/["\047]/, "", $2); print $2 }' "$release")
+        case "$variant" in
+            silverblue|kinoite|*-atomic|sericea|onyx|bazzite*|bluefin*|aurora*) [ -e "$1/usr/bin/rpm-ostree" ] && return 0 ;;
+        esac
+        return 1
+    done
+    return 1
 }
 
 run_installer() {
@@ -559,20 +637,47 @@ download_directory() {
 main() {
     banner
     check_nixos /
-    for program in curl tar openssl sha256sum awk mktemp uname; do
+    for program in tar openssl awk mktemp uname; do
         command -v "$program" >/dev/null 2>&1 || fail missing_tool "$program" "$(message manual) https://github.com/theHamdiz/mandara/releases/latest"
     done
-    [ "$(uname -s)" = Linux ] || fail unsupported
+    if image_based /; then
+        say "$(message image)"
+        say ''
+    fi
+    case $(uname -s) in
+        Linux) os=linux ;;
+        FreeBSD) os=freebsd ;;
+        *) fail unsupported ;;
+    esac
     case $(uname -m) in
         x86_64|amd64) arch=x86_64 ;;
         aarch64|arm64) arch=aarch64 ;;
         *) fail unsupported ;;
     esac
-    libc=gnu
-    if ! { command -v getconf >/dev/null 2>&1 && getconf GNU_LIBC_VERSION >/dev/null 2>&1; }; then
-        for loader in /lib/ld-musl-*.so.1 /usr/lib/ld-musl-*.so.1; do
-            if [ -e "$loader" ]; then libc=musl; break; fi
-        done
+    if [ "$os" = freebsd ]; then
+        # One FreeBSD build (amd64), on FreeBSD's own libc.
+        [ "$arch" = x86_64 ] || fail unsupported
+        libc=freebsd
+        platform=freebsd
+    else
+        libc=gnu
+        if ! { command -v getconf >/dev/null 2>&1 && getconf GNU_LIBC_VERSION >/dev/null 2>&1; }; then
+            for loader in /lib/ld-musl-*.so.1 /usr/lib/ld-musl-*.so.1; do
+                if [ -e "$loader" ]; then libc=musl; break; fi
+            done
+        fi
+        platform=linux-$libc
+    fi
+    downloader=curl
+    if ! command -v curl >/dev/null 2>&1; then
+        if [ "$os" = freebsd ] && command -v fetch >/dev/null 2>&1; then
+            downloader=fetch
+        else
+            fail missing_tool curl "$(message manual) https://github.com/theHamdiz/mandara/releases/latest"
+        fi
+    fi
+    if ! command -v sha256sum >/dev/null 2>&1 && ! { [ "$os" = freebsd ] && command -v sha256 >/dev/null 2>&1; }; then
+        fail missing_tool sha256sum "$(message manual) https://github.com/theHamdiz/mandara/releases/latest"
     fi
     protocols=https
     case "$release_base" in
@@ -580,7 +685,7 @@ main() {
         http://127.0.0.1:*) protocols=http ;;
         *) fail https ;;
     esac
-    archive="mandara-$arch-linux-$libc.tar.gz"
+    archive="mandara-$arch-$platform.tar.gz"
     download_directory
 
     say "[1/5] $(message signature)"
@@ -609,9 +714,8 @@ main() {
     say "[2/5] $(message download) $arch ($libc)"
     fetch "$archive" "$work/$archive" 1073741824 1800
     say "[3/5] $(message verify)"
-    if ! (cd "$work" && printf '%s  %s\n' "$expected" "$archive" | sha256sum -c - >/dev/null); then
-        fail bad_checksum
-    fi
+    actual=$(file_sha256 "$work/$archive") || fail bad_checksum
+    [ "$actual" = "$expected" ] || fail bad_checksum
     say "  ✓ $(message checksum_ok)"
     say "[4/5] $(message unpack)"
     tar -xzf "$work/$archive" -C "$work" || fail failed_unpack

@@ -1,5 +1,6 @@
-//! CPU and memory load from procfs.
+//! CPU and memory load from procfs (sysctl on FreeBSD).
 
+#[cfg(not(target_os = "freebsd"))]
 use std::fs;
 
 /// Aggregate CPU jiffies from the first line of `/proc/stat`.
@@ -49,12 +50,26 @@ pub fn parse_mem_usage(meminfo: &str) -> Option<f32> {
     Some(1.0 - available as f32 / total as f32)
 }
 
+#[cfg(not(target_os = "freebsd"))]
 pub fn read_cpu_times() -> Option<CpuTimes> {
     parse_cpu_times(&fs::read_to_string("/proc/stat").ok()?)
 }
 
+/// FreeBSD: `kern.cp_time`.
+#[cfg(target_os = "freebsd")]
+pub fn read_cpu_times() -> Option<CpuTimes> {
+    mandara_services::freebsd::host::cpu_ticks().map(|t| CpuTimes { busy: t.busy, total: t.total })
+}
+
+#[cfg(not(target_os = "freebsd"))]
 pub fn read_mem_usage() -> Option<f32> {
     parse_mem_usage(&fs::read_to_string("/proc/meminfo").ok()?)
+}
+
+/// FreeBSD: `vm.stats.vm` page counts.
+#[cfg(target_os = "freebsd")]
+pub fn read_mem_usage() -> Option<f32> {
+    mandara_services::freebsd::host::memory()?.used_fraction()
 }
 
 /// `(used, total)` bytes of the filesystem containing `path`.
@@ -83,8 +98,42 @@ pub fn format_bytes(bytes: u64) -> String {
 
 /// System uptime as `3d 4h` / `5h 12m` / `7m`.
 pub fn uptime() -> Option<String> {
+    uptime_secs().map(format_uptime)
+}
+
+/// Seconds since boot (`/proc/uptime`; `kern.boottime` on FreeBSD).
+#[cfg(not(target_os = "freebsd"))]
+pub fn uptime_secs() -> Option<u64> {
     let secs: f64 = fs::read_to_string("/proc/uptime").ok()?.split_whitespace().next()?.parse().ok()?;
-    Some(format_uptime(secs as u64))
+    Some(secs as u64)
+}
+
+#[cfg(target_os = "freebsd")]
+pub fn uptime_secs() -> Option<u64> {
+    mandara_services::freebsd::host::uptime_secs()
+}
+
+/// This machine's host name (`/proc/sys/kernel/hostname`; `kern.hostname`
+/// on FreeBSD).
+#[cfg(not(target_os = "freebsd"))]
+pub fn hostname() -> String {
+    fs::read_to_string("/proc/sys/kernel/hostname").map(|h| h.trim().to_string()).unwrap_or_default()
+}
+
+#[cfg(target_os = "freebsd")]
+pub fn hostname() -> String {
+    mandara_services::freebsd::host::hostname()
+}
+
+/// The kernel release (`6.17.2-arch1-1`; `14.4-RELEASE` on FreeBSD).
+#[cfg(not(target_os = "freebsd"))]
+pub fn kernel_release() -> String {
+    fs::read_to_string("/proc/sys/kernel/osrelease").map(|s| s.trim().to_string()).unwrap_or_default()
+}
+
+#[cfg(target_os = "freebsd")]
+pub fn kernel_release() -> String {
+    mandara_services::freebsd::host::os_release()
 }
 
 /// `secs` as `3d 4h` / `5h 12m` / `7m`.

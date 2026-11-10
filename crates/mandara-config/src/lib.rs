@@ -4,6 +4,7 @@
 pub mod admin;
 pub mod alerts;
 pub mod apps;
+pub mod open;
 pub mod bar_styles;
 pub mod kwin;
 pub mod compositor;
