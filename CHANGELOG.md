@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.26.0 — 2026-11-10
+
 Mandara Login has three new looks that move the sign-in off the middle of
 the screen: Ghostline, Chrome Halo and Meridian. The Productive bar is a
 work desk of its own, on a portrait screen the login screen is no longer
