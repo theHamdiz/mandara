@@ -1669,3 +1669,28 @@ fn atomic_groups_are_copied_into_etc_group() {
     assert_eq!(copy.stdin.as_deref(), Some(&b"i2c:x:976:\n"[..]));
     assert!(ran.contains(&"sudo usermod -aG i2c u".to_string()));
 }
+
+/// abroot asks you to accept its terms on first use: its first call keeps
+/// the terminal even when every package is optional.
+#[test]
+fn abroots_first_call_keeps_the_terminal() {
+    let f = Fixture::new();
+    let programs = ["abroot", "dpkg-query", "sudo", "kwin_wayland", "greetd", "cage"];
+    let mut host = image_host(ImageSystem::Abroot, Family::Debian, &programs, &["fonts-inter", "i2c-tools"]);
+    run(&mut host, &FakeProbe::default(), f.image_facts(VANILLA, ImageSystem::Abroot), InstallArgs { yes: true, no_greeter: true, ..Default::default() }).unwrap();
+    let adds: Vec<&Cmd> = host.ran.iter().filter(|c| c.argv.iter().any(|a| a == "abroot")).collect();
+    assert_eq!(adds.iter().map(|c| c.display()).collect::<Vec<_>>(), ["sudo abroot pkg add fonts-inter", "sudo abroot pkg add i2c-tools", "sudo abroot pkg apply"]);
+    assert_eq!(adds[0].io, Io::Inherit);
+    assert_eq!(adds[1].io, Io::Quiet);
+}
+
+/// SteamOS is told what it lacks, never that a tool will add it.
+#[test]
+fn steamos_is_never_promised_packages() {
+    let f = Fixture::new();
+    let mut host = image_host(ImageSystem::SteamOs, Family::Arch, &["pacman", "sudo", "kwin_wayland"], &["inter-font"]);
+    run(&mut host, &FakeProbe::default(), f.image_facts(STEAMOS, ImageSystem::SteamOs), dry(InstallArgs::default())).unwrap();
+    let text = host.text();
+    assert!(!text.contains("is image-based: Mandara goes into your home folder") && !text.contains("steamos-update"), "{text}");
+    assert!(text.contains("Not available here: inter-font"), "{text}");
+}

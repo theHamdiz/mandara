@@ -120,7 +120,10 @@ impl Installer<'_> {
     pub(super) fn image_deps(&mut self, image: ImageSystem, from_source: bool) -> Result<(), String> {
         let system = self.system_name();
         self.say(Level::Step, t("System packages"));
-        self.say(Level::Info, tf("{system} is image-based: Mandara goes into your home folder, and only the system packages it lacks are added with {tool}, for the next boot.", &[("system", &system), ("tool", &image.program())]));
+        // SteamOS takes no packages: what it lacks is listed below instead.
+        if image.takes_packages() {
+            self.say(Level::Info, tf("{system} is image-based: Mandara goes into your home folder, and only the system packages it lacks are added with {tool}, for the next boot.", &[("system", &system), ("tool", &image.program())]));
+        }
         let family = self.facts.family;
         let Some(set) = packages::for_family(family) else {
             for line in packages::UNKNOWN_HINT {
@@ -269,8 +272,14 @@ impl Installer<'_> {
             // ones together, the optional ones one by one, then one build.
             let mut added = essential.is_empty() || image.add_argv(&essential).is_some_and(|argv| self.as_root(Cmd::from_argv(argv)));
             if added {
+                // abroot's first use asks you to accept its terms: that call
+                // keeps the terminal, the rest are quiet.
+                let mut io = if essential.is_empty() { Io::Inherit } else { Io::Quiet };
                 for p in self.layer.optional.clone() {
-                    let recorded = image.add_argv(&[p.as_str()]).is_some_and(|argv| self.as_root(Cmd::from_argv(argv).io(Io::Quiet)));
+                    let recorded = image.add_argv(&[p.as_str()]).is_some_and(|argv| self.as_root(Cmd::from_argv(argv).io(io)));
+                    if recorded {
+                        io = Io::Quiet;
+                    }
                     if !recorded && !self.dry() {
                         self.say(Level::Detail, format!("skipped {p} (not available)"));
                     }
