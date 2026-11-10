@@ -9400,6 +9400,8 @@
 "Open in terminal" = "Buka di terminal"
 "Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm" = "Membuka pembaruan yang memerlukan keputusan Anda, dan semua pembaruan saat dijalankan di terminal; kosong berarti mendeteksi ghostty, kitty, foot, alacritty, atau wezterm"
 "The AUR couldn't be reached: {error}" = "AUR tidak dapat dijangkau: {error}"
+"The AUR answered with an error: {error}" = "AUR menjawab dengan galat: {error}"
+"Unexpected answer from the AUR: {error}" = "Jawaban tak terduga dari AUR: {error}"
 "The password dialog was cancelled, so the AUR packages weren't installed." = "Dialog kata sandi dibatalkan, jadi paket AUR tidak dipasang."
 "Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)" = "Perbarui sistem di Mandara, dengan kemajuan dan dialog kata sandi Mandara (sistem, AUR, dan Flatpak, atau salah satunya)"
 "Which AUR helper updates AUR packages, as you; its sudo asks through Mandara's password dialog. Automatic prefers paru, then yay" = "Pembantu AUR mana yang memperbarui paket AUR sebagai Anda; sudo-nya meminta kata sandi lewat dialog Mandara. Otomatis memilih paru, lalu yay"

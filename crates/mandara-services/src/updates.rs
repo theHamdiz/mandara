@@ -45,6 +45,9 @@ pub const ARCH_NEWS_URL: &str = "https://archlinux.org/feeds/news/";
 pub const NEWS_ITEMS: usize = 5;
 /// `checkupdates` exit status meaning "no updates".
 const CHECKUPDATES_NONE: i32 = 2;
+/// `pacman -Q` with a filter (`-Qm`) that matches nothing exits 1, printing
+/// nothing on either stream (pacman's `query.c`: no match sets `ret = 1`).
+const PACMAN_QUERY_NONE: i32 = 1;
 /// Present on Alpine (apk's list of wanted packages); an `apk` binary
 /// alone may be another tool.
 const APK_WORLD: &str = "/etc/apk/world";
@@ -61,6 +64,8 @@ const DNF_UPDATES: i32 = 100;
 const AUR_RPC_INFO: &str = "https://aur.archlinux.org/rpc/v5/info";
 /// Packages asked about per request (keeps the URL short).
 const AUR_RPC_BATCH: usize = 100;
+/// Longest AUR error text shown (bytes).
+const AUR_MAX_ERROR: usize = 200;
 /// Foreign packages compared at most.
 const AUR_MAX_FOREIGN: usize = 2000;
 /// Terminals tried, in order, when none is configured.
@@ -428,11 +433,7 @@ fn check_source(source: &Source) -> SourceReport {
 fn aur_web_updates() -> Result<Vec<Package>, String> {
     crate::offline::check()?;
     let (code, out, err) = run("pacman", &["-Qm"], CHECK_TIMEOUT)?;
-    // `pacman -Qm` exits 1 when there are no foreign packages.
-    if code != Some(0) && !out.trim().is_empty() {
-        return Err(failed("pacman", code, &err));
-    }
-    let installed = parse_foreign(&out);
+    let installed = foreign_packages(code, &out, &err)?;
     let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(CHECK_TIMEOUT)).build().into();
     let mut outdated = Vec::new();
     for batch in installed.chunks(AUR_RPC_BATCH) {
@@ -442,7 +443,7 @@ fn aur_web_updates() -> Result<Vec<Package>, String> {
         }
         let mut response = req.call().map_err(|e| tf("The AUR couldn't be reached: {error}", &[("error", &e)]))?;
         let body = response.body_mut().read_to_string().map_err(|e| e.to_string())?;
-        for (name, new) in parse_aur_info(&body) {
+        for (name, new) in parse_aur_info(&body)? {
             let Some((_, old)) = batch.iter().find(|(n, _)| *n == name) else { continue };
             if *old != new && vercmp(old, &new) == Some(std::cmp::Ordering::Less) {
                 outdated.push(Package::new(&name, old, &new, None));
@@ -450,6 +451,17 @@ fn aur_web_updates() -> Result<Vec<Package>, String> {
         }
     }
     Ok(outdated)
+}
+
+/// What `pacman -Qm` exiting with `code` said: its packages, none (only
+/// pacman's silent "nothing matched" exit), or why it failed (any other
+/// code, a signal, or a complaint on standard error).
+fn foreign_packages(code: Option<i32>, out: &str, err: &str) -> Result<Vec<(String, String)>, String> {
+    match code {
+        Some(0) => Ok(parse_foreign(out)),
+        Some(PACMAN_QUERY_NONE) if out.trim().is_empty() && err.trim().is_empty() => Ok(Vec::new()),
+        _ => Err(failed("pacman", code, err)),
+    }
 }
 
 /// `pacman -Qm`: `name version` lines (bounded).
@@ -463,12 +475,21 @@ pub fn parse_foreign(text: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-/// The AUR web API's `info` answer: `(name, version)` of each result.
-pub fn parse_aur_info(json: &str) -> Vec<(String, String)> {
+/// The AUR web API's `info` answer: `(name, version)` of each result (none
+/// is a valid answer), or why it isn't one: the API's own error, or JSON
+/// without a result list.
+pub fn parse_aur_info(json: &str) -> Result<Vec<(String, String)>, String> {
     #[derive(Deserialize)]
     struct Info {
+        #[serde(rename = "type", default)]
+        kind: String,
         #[serde(default)]
+        error: Option<String>,
         results: Vec<Pkg>,
+    }
+    #[derive(Deserialize)]
+    struct Failure {
+        error: String,
     }
     #[derive(Deserialize)]
     struct Pkg {
@@ -477,7 +498,23 @@ pub fn parse_aur_info(json: &str) -> Vec<(String, String)> {
         #[serde(rename = "Version")]
         version: String,
     }
-    serde_json::from_str::<Info>(json).map(|i| i.results.into_iter().map(|p| (p.name, p.version)).collect()).unwrap_or_default()
+    let api_error = |error: &str| {
+        // One bounded line of the server's text.
+        let line = error.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or_default();
+        if line.is_empty() {
+            return tf("Unexpected answer from the AUR: {error}", &[("error", &r#""type": "error""#)]);
+        }
+        tf("The AUR answered with an error: {error}", &[("error", &&line[..line.floor_char_boundary(AUR_MAX_ERROR)])])
+    };
+    match serde_json::from_str::<Info>(json) {
+        Ok(Info { kind, error, .. }) if kind == "error" || error.is_some() => Err(api_error(error.as_deref().unwrap_or_default())),
+        Ok(info) => Ok(info.results.into_iter().map(|p| (p.name, p.version)).collect()),
+        // An error answer without a result list.
+        Err(e) => match serde_json::from_str::<Failure>(json) {
+            Ok(f) => Err(api_error(&f.error)),
+            Err(_) => Err(tf("Unexpected answer from the AUR: {error}", &[("error", &e)])),
+        },
+    }
 }
 
 /// pacman's own version order (`vercmp a b`: -1, 0 or 1).
@@ -960,9 +997,54 @@ mod tests {
         let foreign = parse_foreign("cbonsai 1.4.1-1\nyay-bin 13.0.0-1\n\nbroken\n");
         assert_eq!(foreign, [("cbonsai".to_string(), "1.4.1-1".to_string()), ("yay-bin".to_string(), "13.0.0-1".to_string())]);
         let json = r#"{"resultcount":2,"results":[{"Name":"cbonsai","Version":"1.4.2-1","Depends":["ncurses"]},{"Name":"yay-bin","Version":"13.1.0-1"}],"type":"multiinfo","version":5}"#;
-        assert_eq!(parse_aur_info(json), [("cbonsai".to_string(), "1.4.2-1".to_string()), ("yay-bin".to_string(), "13.1.0-1".to_string())]);
-        assert!(parse_aur_info(r#"{"error":"Too many package results.","resultcount":0,"type":"error"}"#).is_empty());
-        assert!(parse_aur_info("not json").is_empty());
+        assert_eq!(parse_aur_info(json).unwrap(), [("cbonsai".to_string(), "1.4.2-1".to_string()), ("yay-bin".to_string(), "13.1.0-1".to_string())]);
+    }
+
+    #[test]
+    fn aur_web_api_errors_are_check_failures() {
+        let ok = |json: &str| parse_aur_info(json).unwrap();
+        let err = |json: &str| parse_aur_info(json).unwrap_err();
+        // A valid answer with no results (none of the packages is in the AUR).
+        assert!(ok(r#"{"resultcount":0,"results":[],"type":"multiinfo","version":5}"#).is_empty());
+        let json = r#"{"resultcount":1,"results":[{"Name":"cbonsai","Version":"1.4.2-1"}],"type":"multiinfo","version":5}"#;
+        assert_eq!(ok(json), [("cbonsai".to_string(), "1.4.2-1".to_string())]);
+        // The API's own errors, with or without an (empty) result list.
+        let e = err(r#"{"error":"Too many package results.","resultcount":0,"results":[],"type":"error","version":5}"#);
+        assert!(e.contains("Too many package results."), "{e}");
+        assert!(err(r#"{"error":"Too many package results.","resultcount":0,"type":"error"}"#).contains("Too many package results."));
+        let e = err(r#"{"resultcount":0,"results":[],"type":"error","version":5}"#);
+        assert!(e.ends_with(r#""type": "error""#), "an error without its text still fails: {e}");
+        // Not an answer at all.
+        for bad in ["not json", "", "{}", r#"{"resultcount":0,"type":"multiinfo"}"#, r#"{"results":[{"Name":"cbonsai"}]}"#, "<html>502 Bad Gateway</html>"] {
+            assert!(parse_aur_info(bad).is_err(), "{bad:?}");
+        }
+        // The server's text is one bounded line.
+        let long = format!(r#"{{"error":"{}\nsecond line","type":"error"}}"#, "é".repeat(400));
+        let e = err(&long);
+        assert!(!e.contains('\n') && !e.contains("second line") && e.len() < AUR_MAX_ERROR + 100, "{e}");
+    }
+
+    #[test]
+    fn only_pacmans_silent_no_match_is_no_foreign_packages() {
+        // Measured with pacman 7.1: `-Qm` on a database with no foreign
+        // packages exits 1 and prints nothing on either stream.
+        assert_eq!(foreign_packages(Some(1), "", ""), Ok(Vec::new()));
+        assert_eq!(foreign_packages(Some(1), "\n", " \n"), Ok(Vec::new()));
+        assert_eq!(foreign_packages(Some(0), "cbonsai 1.4.1-1\n", ""), Ok(vec![("cbonsai".to_string(), "1.4.1-1".to_string())]));
+        // Warnings on success don't make it fail.
+        assert_eq!(foreign_packages(Some(0), "cbonsai 1.4.1-1\n", "warning: something\n").map(|p| p.len()), Ok(1));
+        // A failure with an explanation (a missing config, missing sync
+        // databases), even with no output.
+        let e = foreign_packages(Some(1), "", "error: config file /etc/pacman.conf could not be read: No such file or directory\n").unwrap_err();
+        assert!(e.contains("could not be read"), "{e}");
+        assert!(foreign_packages(Some(1), "", "warning: database file for 'core' does not exist (use '-Sy' to download)\n").is_err());
+        // Output with a failing exit is not a complete list.
+        assert!(foreign_packages(Some(1), "cbonsai 1.4.1-1\n", "").is_err());
+        // Any other exit code, or a signal.
+        assert!(foreign_packages(Some(2), "", "").is_err());
+        assert!(foreign_packages(Some(127), "", "").is_err());
+        assert!(foreign_packages(None, "", "").is_err());
+        assert!(foreign_packages(None, "cbonsai 1.4.1-1\n", "").is_err());
     }
 
     #[test]

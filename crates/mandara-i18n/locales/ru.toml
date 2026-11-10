@@ -9644,6 +9644,8 @@
 "Open in terminal" = "Открыть в терминале"
 "Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm" = "Открывает обновления, которым нужно ваше решение, и все обновления, если они запускаются в терминале; пусто — определить ghostty, kitty, foot, alacritty или wezterm"
 "The AUR couldn't be reached: {error}" = "Не удалось связаться с AUR: {error}"
+"The AUR answered with an error: {error}" = "AUR ответил ошибкой: {error}"
+"Unexpected answer from the AUR: {error}" = "Неожиданный ответ от AUR: {error}"
 "The password dialog was cancelled, so the AUR packages weren't installed." = "Окно ввода пароля было закрыто, поэтому пакеты AUR не установлены."
 "Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)" = "Обновить систему в Mandara с прогрессом и окном ввода пароля Mandara (система, AUR и Flatpak или что-то одно)"
 "Which AUR helper updates AUR packages, as you; its sudo asks through Mandara's password dialog. Automatic prefers paru, then yay" = "Какой помощник AUR обновляет пакеты AUR от вашего имени; его sudo запрашивает пароль через окно Mandara. «Автоматически» выбирает paru, затем yay"
