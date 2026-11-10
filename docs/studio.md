@@ -288,8 +288,11 @@ and verifies models, and provides a dry-run test bench. See
   The chosen bar preset stays highlighted when you keep your own items.
   Manual item, layout or position changes clear that selection.
   Bar presets (System monitor, Classic, Notch, Glass pills, Dynamic island,
-  Minimal, Productive, Hairline, Micro pill, Side bar, Dock) apply the style
-  in one click and keep your items. Turn on **Replace bar items** to use
+  Minimal, Productive, Hairline, Micro pill, Side bar, Dock, and the style
+  presets Expressive, Tile dock, Rail, Segmented, Stanley Bridge, Pharos
+  Beam and Raml Tram) apply the style in one click and keep your items;
+  each card draws its bar in miniature. System monitor is a style of its
+  own: a slim bottom status line of stat blocks in the monospace font. Turn on **Replace bar items** to use
   the preset's arrangement too. **Profiles & backup → Bar** saves only
   the bar and side-bar configuration, leaving the theme and desktop widgets alone.
 - **Radii, per bar style.** *Bar radius* rounds the glass pills and the

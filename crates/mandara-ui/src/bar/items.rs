@@ -165,6 +165,74 @@ pub fn opaque(color: Color, under: Color) -> Option<Color> {
     }
 }
 
+/// Space between a bar item's tile and the workspace / tag buttons inside
+/// it, on each side across the bar.
+pub const TAG_INSET_PX: f32 = 4.0;
+/// The tag buttons' thickness across the bar: at least the shipped pill's,
+/// at most a comfortable round button's.
+pub const TAG_MIN_PX: f32 = 22.0;
+pub const TAG_MAX_PX: f32 = 32.0;
+
+/// How a bar that shapes its items draws the workspace / tag buttons of
+/// the plugin it holds: each button in the bar's own shapes (a flower, a
+/// cookie, a squircle, a connected group…), coloured with its icon fill.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct TagButtons {
+    pub look: ItemLook,
+    pub fill: BarIconFill,
+    /// The buttons' thickness across the bar.
+    pub thick: f32,
+}
+
+impl TagButtons {
+    /// Square buttons in the icon shape, each with one app icon or the
+    /// number (a side bar always; a top or bottom bar with round icon
+    /// shapes). Otherwise buttons take the item shape and the shipped
+    /// pill's content: the number and up to three app icons.
+    pub fn square(&self) -> bool {
+        self.look.vertical || self.look.squares_icons()
+    }
+
+    /// Button `index` of `count` with content `along` long, placed at the
+    /// origin.
+    pub fn place(&self, along: f32, index: usize, count: usize) -> Placed {
+        let t = self.thick;
+        let along = if self.square() { t } else { along.max(t) };
+        let r = if self.look.vertical { Bounds { origin: point(px(0.0), px(0.0)), size: size(px(t), px(along)) } } else { Bounds { origin: point(px(0.0), px(0.0)), size: size(px(along), px(t)) } };
+        tile(&self.look, r, index, count)
+    }
+}
+
+/// The tag buttons of `plugin` drawn on a side bar (`vertical`) or a top /
+/// bottom one: `Some` while that bar draws its items on tiles of their own
+/// (`bar.item_capsules`, every bar style; a side bar with pill items).
+/// Plain values only (no allocation).
+pub fn tag_buttons(cfg: &mandara_config::ShellConfig, vertical: bool, plugin: &str) -> Option<TagButtons> {
+    let scale = crate::style::radius_scale();
+    let thick = |room: f32| (room - 2.0 * TAG_INSET_PX).clamp(TAG_MIN_PX, TAG_MAX_PX);
+    // In a column form beside a top or bottom bar, the plugin sits on the
+    // side bar that holds it (the left one first).
+    let side = vertical.then(|| [false, true].into_iter().find(|right| cfg.side_bar_on(*right) && cfg.side_bars.side(*right).zones().iter().any(|z| z.iter().any(|id| id == plugin)))).flatten();
+    match side {
+        Some(right) => {
+            let items = cfg.side_bars.items(right, &cfg.bar);
+            if items.chips != mandara_config::side_bars::SideBarChips::Pills {
+                return None;
+            }
+            let m = super::side::metrics(cfg, right, scale);
+            Some(TagButtons { look: ItemLook { item: items.item_shape, icon: items.icon_shape, radius: m.radius, vertical: true }, fill: items.icon_fill, thick: thick(items.chip_size) })
+        }
+        None => {
+            let bar = &cfg.bar;
+            if !bar.item_capsules {
+                return None;
+            }
+            let m = super::layout::Metrics::of(cfg, scale);
+            Some(TagButtons { look: ItemLook { item: bar.item_shape, icon: bar.icon_shape, radius: m.radius, vertical }, fill: bar.icon_fill, thick: thick(m.height - 2.0 * m.chip_inset()) })
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,6 +321,26 @@ mod tests {
             }
         }
         assert_eq!(connected(0, 1, 30.0, false), Corners::all(px(15.0)), "a lone item is a capsule");
+    }
+
+    #[test]
+    fn every_style_keeps_its_icon_items_round() {
+        use mandara_config::bar_styles::BarStyle;
+        /// A bare icon item's content: one icon at the bar's icon scale.
+        const ICON_CONTENT_PX: f32 = 16.0;
+        for style in BarStyle::ALL {
+            let mut cfg = mandara_config::ShellConfig::default();
+            style.apply(&mut cfg);
+            if cfg.bar.icon_shape == BarIconShape::Match {
+                continue;
+            }
+            let m = crate::bar::layout::Metrics::of(&cfg, 1.0);
+            let across = m.height - 2.0 * m.chip_inset();
+            let along = m.chip_length(ICON_CONTENT_PX * cfg.bar.icon_scale());
+            let rect = if m.vertical { r(0.0, 0.0, across, along) } else { r(0.0, 0.0, along, across) };
+            let look = ItemLook { item: cfg.bar.item_shape, icon: cfg.bar.icon_shape, radius: m.radius, vertical: m.vertical };
+            assert!(tile(&look, rect, 0, 1).icon, "{style:?}: an icon item is a {:?}, not a tile", cfg.bar.icon_shape);
+        }
     }
 
     #[test]

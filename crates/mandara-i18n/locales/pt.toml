@@ -9337,3 +9337,12 @@
 "wpa_supplicant didn't add the network" = "O wpa_supplicant não adicionou a rede"
 "wpa_supplicant isn't running, or its control socket isn't open to you (ctrl_interface_group in wpa_supplicant.conf)" = "O wpa_supplicant não está rodando, ou o socket de controle dele não está aberto para você (ctrl_interface_group em wpa_supplicant.conf)"
 "wpa_supplicant refused {ssid}" = "O wpa_supplicant recusou {ssid}"
+
+# ── Bar presets: System monitor, Stanley Bridge, Pharos Beam, Raml Tram ──
+"A dense status line along the bottom: stat blocks, live meters and rates in monospace" = "Uma linha de status densa embaixo: blocos de dados, medidores ao vivo e taxas em monoespaçada"
+"Stanley Bridge" = "Ponte Stanley"
+"Three floating docks of squircle tiles spanning the bottom like a bridge's arches" = "Três docks flutuantes de blocos squircle cruzando a parte de baixo como os arcos de uma ponte"
+"Pharos Beam" = "Feixe de Faros"
+"A lantern of scalloped accent buttons and tonal tiles hanging from the top edge" = "Uma lanterna de botões recortados de destaque e blocos tonais pendurada na borda superior"
+"Raml Tram" = "Bonde de Raml"
+"One line of flower stops running along the top and down the left edge" = "Uma única linha de paradas em flor ao longo do topo e descendo pela borda esquerda"

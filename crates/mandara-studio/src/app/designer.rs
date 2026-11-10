@@ -190,10 +190,10 @@ const ZONE_ITEM_H_PX: f32 = DIM_34_PX;
 const ZONE_TILE_PX: f32 = DIM_20_PX;
 /// The bar's three zones sit side by side while each gets this much.
 const ZONE_MIN_W_PX: f32 = DIM_200_PX;
-/// Widths of the widget pills in a preset's tiny bar drawing.
-const MOCK_PILL_A_PX: f32 = 18.0;
-const MOCK_PILL_B_PX: f32 = 14.0;
-const MOCK_PILL_C_PX: f32 = 22.0;
+/// A preset's tiny bar drawing marks each item of a zone with a dot this
+/// big, this far apart (a busy zone draws longer).
+const MOCK_ITEM_PX: f32 = 4.0;
+const MOCK_ITEM_GAP_PX: f32 = 2.0;
 
 struct Preset {
     name: &'static str,
@@ -217,17 +217,7 @@ const fn styled(name: &'static str, blurb: &'static str, style: BarStyle, layout
 }
 
 const PRESETS: &[Preset] = &[
-    Preset {
-        name: tk("System monitor"),
-        blurb: tk("CPU, memory, GPUs, temperatures, disks and uptime"),
-        layout: BarLayout::MinimalEdge,
-        position: BarPosition::Top,
-        height: 30.0,
-        left: &["launcher", "workspaces"],
-        center: &["mini-stats", "processes"],
-        right: &["resources", "net-speed", "drives", "clock", "audio", "session"],
-        style: None,
-    },
+    styled(tk("System monitor"), tk("A dense status line along the bottom: stat blocks, live meters and rates in monospace"), BarStyle::SystemMonitor, BarLayout::MinimalEdge, BarPosition::Bottom, 30.0),
     Preset {
         name: tk("Classic"),
         blurb: tk("Edge-to-edge frame, everything at hand"),
@@ -342,6 +332,9 @@ const PRESETS: &[Preset] = &[
     styled(tk("Tile dock"), tk("A floating island of large squircle tiles at the bottom"), BarStyle::TileDock, BarLayout::ContiguousIsland, BarPosition::Bottom, 56.0),
     styled(tk("Rail"), tk("A wide rail of flower buttons and tiles inside a screen frame"), BarStyle::Rail, BarLayout::MinimalEdge, BarPosition::Left, 30.0),
     styled(tk("Segmented"), tk("No bar, just rows of connected tiles under the top edge"), BarStyle::Segmented, BarLayout::FloatingPills, BarPosition::Top, 36.0),
+    styled(tk("Stanley Bridge"), tk("Three floating docks of squircle tiles spanning the bottom like a bridge's arches"), BarStyle::StanleyBridge, BarLayout::FloatingPills, BarPosition::Bottom, 48.0),
+    styled(tk("Pharos Beam"), tk("A lantern of scalloped accent buttons and tonal tiles hanging from the top edge"), BarStyle::PharosBeam, BarLayout::Notch, BarPosition::Top, 44.0),
+    styled(tk("Raml Tram"), tk("One line of flower stops running along the top and down the left edge"), BarStyle::RamlTram, BarLayout::MinimalEdge, BarPosition::Top, 38.0),
 ];
 
 fn apply_preset(p: &'static Preset, replace_items: bool, cx: &mut App) {
@@ -370,7 +363,7 @@ fn apply_preset_in(c: &mut ShellConfig, p: &Preset, replace_items: bool, known: 
         for (ids, to) in [(left, Lane::Left), (center, Lane::Center), (right, Lane::Right)] {
             for id in ids { place_in(c, &id, Lane::Tray, to, None); }
         }
-        // Expressive's rail: the left side bar's groups.
+        // A style's rail (Expressive, Raml Tram): the left side bar's groups.
         if let Some(rail) = p.style.and_then(BarStyle::rail) {
             for (zone, ids) in SideZone::ALL.into_iter().zip(rail) {
                 c.side_bars.left.zone_mut(zone).clear();
@@ -378,8 +371,9 @@ fn apply_preset_in(c: &mut ShellConfig, p: &Preset, replace_items: bool, known: 
             }
         }
     }
-    // The notch look: grouped capsules and a soft shadow under it.
-    if p.layout == BarLayout::Notch {
+    // The notch look: grouped capsules and a soft shadow under it (a
+    // style brings its own look).
+    if p.layout == BarLayout::Notch && p.style.is_none() {
         c.bar.capsules = true;
         c.bar.shadow = true;
     }
@@ -406,11 +400,11 @@ fn side_style_row(cfg: &ShellConfig, right: bool, p: &MandaraPalette) -> AnyElem
         .gap(px(SPACE_6_PX))
         .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("Style")))
         .child(chip(None, tk("Shared")))
-        .children(BarStyle::ALL.into_iter().zip(SIDE_STYLE_NAMES).map(|(style, name)| chip(Some(style), name)))
+        .children(BarStyle::SIDE.into_iter().zip(SIDE_STYLE_NAMES).map(|(style, name)| chip(Some(style), name)))
         .into_any_element()
 }
 
-/// The style chips' names, in [`BarStyle::ALL`] order.
+/// The style chips' names, in [`BarStyle::SIDE`] order.
 const SIDE_STYLE_NAMES: [&str; 4] = [tk("Expressive"), tk("Tile dock"), tk("Rail"), tk("Segmented")];
 
 impl StudioView {
@@ -579,7 +573,17 @@ impl StudioView {
         for (i, preset) in PRESETS.iter().enumerate() {
             let active = selected == Some(i);
             // A tiny drawing of the preset's bar (physical sides: never mirrored).
-            let pill = |w: f32| div().w(px(w)).h(px(DIM_8_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla());
+            // A zone: a dot per item, on a glass pill of its own when the
+            // groups float.
+            let pill = |items: &[&str], floating: bool| {
+                div()
+                    .flex_none()
+                    .ltr_row()
+                    .items_center()
+                    .gap(px(MOCK_ITEM_GAP_PX))
+                    .when(floating, |el| el.h(px(DIM_10_PX)).px(px(MOCK_ITEM_GAP_PX * 1.5)).rounded_full().bg(p.surface_container_high.hsla()))
+                    .children(items.iter().map(|_| div().flex_none().size(px(MOCK_ITEM_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla())))
+            };
             let mock = div()
                 .h(px(DIM_44_PX))
                 .rounded(px(RADIUS_10_PX))
@@ -594,9 +598,9 @@ impl StudioView {
                     _ if preset.position.is_vertical() => div().w(px(DIM_10_PX)).h_full().rounded(px(RADIUS_4_PX)).bg(p.surface_container_high.hsla()).py(px(SPACE_3_PX)).row().flex_col().items_center().justify_between().child(div().size(px(DIM_6_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla())).child(div().size(px(DIM_6_PX)).rounded_full().bg(p.primary.with_alpha(ALPHA_75).hsla())),
                     BarLayout::Hairline => div().h(px(DIM_6_PX)).rounded(px(RADIUS_1_5_PX)).bg(p.surface_container_high.hsla()).border_b_1().border_color(p.primary.hsla()),
                     BarLayout::Micro | BarLayout::ContiguousIsland => div().row().justify_center().child(previews::centered(preset, p)),
-                    BarLayout::MinimalEdge => div().h(px(DIM_12_PX)).rounded(px(RADIUS_4_PX)).bg(p.surface_container_high.hsla()).px(px(SPACE_4_PX)).ltr_row().items_center().justify_between().child(pill(MOCK_PILL_A_PX)).child(pill(MOCK_PILL_B_PX)).child(pill(MOCK_PILL_C_PX)),
-                    BarLayout::Notch => div().h(px(DIM_12_PX)).mt(px(-SPACE_6_PX)).mx(px(SPACE_10_PX)).rounded_b(px(RADIUS_6_PX)).bg(p.surface_container_high.hsla()).px(px(SPACE_4_PX)).ltr_row().items_center().justify_between().child(pill(MOCK_PILL_A_PX)).child(pill(MOCK_PILL_B_PX)).child(pill(MOCK_PILL_C_PX)),
-                    BarLayout::FloatingPills => div().h(px(DIM_12_PX)).ltr_row().items_center().justify_between().child(pill(MOCK_PILL_A_PX)).child(pill(MOCK_PILL_B_PX)).child(pill(MOCK_PILL_C_PX)),
+                    BarLayout::MinimalEdge => div().h(px(DIM_12_PX)).rounded(px(RADIUS_4_PX)).bg(p.surface_container_high.hsla()).px(px(SPACE_4_PX)).ltr_row().items_center().justify_between().child(pill(preset.left, false)).child(pill(preset.center, false)).child(pill(preset.right, false)),
+                    BarLayout::Notch => div().h(px(DIM_12_PX)).mt(px(-SPACE_6_PX)).mx(px(SPACE_10_PX)).rounded_b(px(RADIUS_6_PX)).bg(p.surface_container_high.hsla()).px(px(SPACE_4_PX)).ltr_row().items_center().justify_between().child(pill(preset.left, false)).child(pill(preset.center, false)).child(pill(preset.right, false)),
+                    BarLayout::FloatingPills => div().h(px(DIM_12_PX)).ltr_row().items_center().justify_between().child(pill(preset.left, true)).child(pill(preset.center, true)).child(pill(preset.right, true)),
                 } });
             presets.push(
                 div()
@@ -693,7 +697,8 @@ mod tests {
             selection.active(&edited);
             assert!(selection.chosen.is_none());
         }
-        for (layout, position) in [(BarLayout::Hairline, config.bar.position), (config.bar.layout, BarPosition::Bottom)] {
+        let other_edge = if config.bar.position == BarPosition::Bottom { BarPosition::Top } else { BarPosition::Bottom };
+        for (layout, position) in [(BarLayout::Hairline, config.bar.position), (config.bar.layout, other_edge)] {
             let mut edited = config.clone();
             edited.bar.layout = layout;
             edited.bar.position = position;
@@ -706,12 +711,13 @@ mod tests {
     #[test]
     fn an_existing_exact_preset_remains_recognizable_without_a_click() {
         let mut config = ShellConfig::default();
-        let preset = &PRESETS[0];
+        let index = PRESETS.iter().position(|p| p.style.is_none()).unwrap();
+        let preset = &PRESETS[index];
         config.bar.layout = preset.layout;
         config.bar.position = preset.position;
         config.bar.center = preset.center.iter().map(|id| (*id).into()).collect();
         let mut selection = PresetSelection::default();
-        assert_eq!(selection.active(&config), Some(0));
+        assert_eq!(selection.active(&config), Some(index));
     }
 
     #[test]
@@ -827,5 +833,86 @@ mod tests {
         assert!(!c.side_bars.enabled && !c.bar.screen_frame && !c.bar.item_capsules);
         assert_eq!(c.bar.center, items);
         assert_eq!(selection.active(&c), None, "Classic's own items differ");
+        // Every style preset: picked over a bar shaped by hand, then left
+        // for Classic, gives back all it set and keeps the hand-made rest.
+        // Every plugin a preset or its rail places.
+        let mut every: Vec<String> = Vec::new();
+        for p in PRESETS {
+            let rail = p.style.and_then(BarStyle::rail).unwrap_or_default();
+            for id in [p.left, p.center, p.right].into_iter().chain(rail).flatten() {
+                if !every.iter().any(|k| k == id) {
+                    every.push((*id).to_string());
+                }
+            }
+        }
+        let known = every;
+        for p in &styles {
+            let style = p.style.unwrap();
+            let mut hand = bar();
+            hand.bar.text_scale = 1.15;
+            hand.bar.show_seconds = true;
+            apply_preset_in(&mut hand, p, true, &known);
+            assert!(style.matches(&hand), "{}", p.name);
+            assert_eq!((hand.bar.layout, hand.bar.position, hand.bar.height), (p.layout, p.position, p.height), "{}", p.name);
+            let index = PRESETS.iter().position(|q| std::ptr::eq(q, *p)).unwrap();
+            assert_eq!(PresetSelection::default().active(&hand), Some(index), "{} is recognised", p.name);
+            apply_preset_in(&mut hand, classic, false, &known);
+            let d = ShellConfig::default();
+            assert_eq!(hand.bar.style, None, "{}", p.name);
+            assert_eq!((hand.bar.item_shape, hand.bar.icon_shape, hand.bar.icon_fill, hand.bar.item_capsules), (d.bar.item_shape, d.bar.icon_shape, d.bar.icon_fill, d.bar.item_capsules), "{}", p.name);
+            assert_eq!((hand.bar.notch_width, hand.bar.screen_frame, hand.side_bars.enabled), (d.bar.notch_width, d.bar.screen_frame, d.side_bars.enabled), "{}", p.name);
+            assert_eq!(hand.typography.bar_font, d.typography.bar_font, "{}", p.name);
+            assert_eq!((hand.bar.text_scale, hand.bar.show_seconds), (1.15, true), "{}: your own settings stay", p.name);
+            assert_eq!((hand.bar.layout, hand.bar.position, hand.bar.height), (classic.layout, classic.position, classic.height));
+        }
+    }
+
+    /// What a preset makes the bar look like: its layout, edge and height,
+    /// its style, the items' shapes and colour, the bar font and the rail.
+    fn visible(c: &ShellConfig) -> (BarLayout, BarPosition, u32, Option<BarStyle>, String) {
+        let b = &c.bar;
+        let shapes = format!("{:?} {:?} {:?} {} {} {} {}", b.item_shape, b.icon_shape, b.icon_fill, b.item_capsules, c.typography.bar_font, c.side_bars_join(), c.bar_layout() == BarLayout::Notch);
+        (b.layout, b.position, b.height.to_bits(), b.style, shapes)
+    }
+
+    #[test]
+    fn no_two_presets_look_alike() {
+        let mut seen: Vec<(&str, (BarLayout, BarPosition, u32, Option<BarStyle>, String))> = Vec::new();
+        for p in PRESETS {
+            let mut c = ShellConfig::default();
+            apply_preset_in(&mut c, p, true, &[]);
+            let look = visible(&c);
+            if let Some((other, _)) = seen.iter().find(|(_, l)| *l == look) {
+                panic!("{} looks just like {other}: {look:?}", p.name);
+            }
+            seen.push((p.name, look));
+        }
+        // The look-alike this guards against: System monitor is not Classic
+        // with other items.
+        let named = |name: &str| seen.iter().find(|(n, _)| *n == name).map(|(_, l)| l.clone()).unwrap();
+        let (monitor, classic) = (named("System monitor"), named("Classic"));
+        assert_ne!((monitor.0, monitor.1), (classic.0, classic.1), "a different edge or layout");
+        assert_ne!(monitor.4, classic.4, "a different shape language");
+        let names: Vec<&str> = PRESETS.iter().map(|p| p.name).collect();
+        for name in ["Stanley Bridge", "Pharos Beam", "Raml Tram"] {
+            assert!(names.contains(&name), "{name} has a card");
+        }
+    }
+
+    #[test]
+    fn every_preset_card_has_its_own_drawing() {
+        // Plain presets draw their layout and edge; style presets draw
+        // their style. No two cards share a drawing.
+        let mut drawings: Vec<(BarLayout, BarPosition, Option<BarStyle>, [usize; 3])> = Vec::new();
+        for p in PRESETS {
+            let key = match p.style {
+                Some(style) => (BarLayout::MinimalEdge, BarPosition::Top, Some(style), [0; 3]),
+                // Plain presets with the same layout and edge draw a dot
+                // per item (Classic and Minimal).
+                None => (p.layout, p.position, None, [p.left.len(), p.center.len(), p.right.len()]),
+            };
+            assert!(!drawings.contains(&key), "{}: its card looks like another", p.name);
+            drawings.push(key);
+        }
     }
 }

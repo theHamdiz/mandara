@@ -688,15 +688,24 @@ circles. `side_bars.icon_shape` does the same for a side bar's pill items
 styles.
 
 **Bar styles** set all of this at once: Studio → Bars → Presets
-(*Expressive*, *Tile dock*, *Rail*, *Segmented*) or
-`mandara msg bar style expressive|tile-dock|rail|segmented|none`. A style
-sets the layout, edge and height, the item and icon shapes and colours,
-insets and spacing, the screen frame, and for *Expressive* a rail of
-scalloped buttons joined to the bar (`[side_bars]`, left side on, right
-side off). The bar remembers it as `bar.style`; picking any other preset
-or a Look, or `bar style none`, first puts every field the style changed
-back to its default. Studio's presets can replace your items too; `bar
-style` never does.
+(*Expressive*, *Tile dock*, *Rail*, *Segmented*, *System monitor*,
+*Stanley Bridge*, *Pharos Beam*, *Raml Tram*) or
+`mandara msg bar style expressive|tile-dock|rail|segmented|system-monitor|stanley-bridge|pharos-beam|raml-tram|none`.
+A style sets the layout, edge and height, the item and icon shapes and
+colours, insets and spacing, the screen frame, the notch's width
+(*Pharos Beam*), the bar font (*System monitor* uses your monospace font,
+`typography.bar_font`), and for *Expressive* and *Raml Tram* a rail joined
+to the bar (`[side_bars]`, left side on, right side off: scalloped
+buttons for Expressive, flowers for Raml Tram). The bar remembers it as
+`bar.style`; picking any other preset or a Look, or `bar style none`,
+first puts every field the style changed back to its default. Studio's
+presets can replace your items too; `bar style` never does.
+
+While a bar draws its items on tiles of their own (every style, and a
+side bar with pill items), the workspace / tag buttons take its shapes
+too: each tag is a flower, cookie, burst, squircle, tile or a piece of a
+connected group, showing the icon of the app on it (or its number when
+it's empty, or when `[plugins.settings.workspaces] app_icons = false`).
 
 ### Bar commands
 
@@ -774,7 +783,8 @@ style = "tile-dock"      # the bar style that set these (see below)
 
 A **bar style for one side bar** sets those keys at once:
 Studio → Bars → Side bars (the *Style* chips above each bar's groups) or
-`mandara msg side-bar style left|right expressive|tile-dock|rail|segmented|none`.
+`mandara msg side-bar style left|right expressive|tile-dock|rail|segmented|none`
+(the four original styles; the newer ones shape the whole bar).
 It shapes that bar alone: the main bar, the other side bar and the shared
 settings stay as they are. Another style, or `none` (*Shared*), clears
 exactly what the last one set; a side bar you shaped by hand is never
