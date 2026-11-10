@@ -608,11 +608,16 @@ impl ShellView {
     /// Fits each zone into its share of the bar ([`layout::zone_limits`]),
     /// so the zones never run into each other: a long window title is
     /// ellipsized short of the clock instead of sliding under it (issue
-    /// #21). Sets every slot's limit for this frame.
-    fn fit_zones(&self) {
-        let m = &self.metrics;
-        let (along, _) = layout::bar_axes(m, self.surface);
+    /// #21). Sets every slot's limit for this frame. The notch first grows
+    /// to hold its items ([`layout::notch_fit`]), so they're only squeezed
+    /// once it reaches the edge.
+    fn fit_zones(&mut self) {
+        let (along, _) = layout::bar_axes(&self.metrics, self.surface);
         let lengths: [smallvec::SmallVec<[f32; 16]>; 3] = std::array::from_fn(|z| self.zones[z].iter().map(|s| self.slot_length(s)).collect());
+        if self.metrics.notch() {
+            self.metrics.notch_fit = layout::notch_fit(&self.metrics, [&lengths[0], &lengths[1], &lengths[2]]);
+        }
+        let m = &self.metrics;
         let wanted: [f32; 3] = std::array::from_fn(|z| layout::zone_width(&lengths[z], m));
         let limits = layout::zone_limits(m, along, wanted);
         for (z, zone) in self.zones.iter().enumerate() {
@@ -1340,7 +1345,6 @@ impl Render for ShellView {
         // Resolved once per frame: geometry, radii (global roundness) and
         // the panel / sidebar springs follow Studio edits immediately.
         self.metrics = Metrics::of(&cfg, crate::style::radius_scale());
-        let m = self.metrics;
         let (panel_spring, panel_custom) = spring_for(PANEL_SPRING, &cfg.panels.spring);
         self.panel.set_config(panel_spring);
         self.panel_custom = panel_custom;
@@ -1351,6 +1355,8 @@ impl Render for ShellView {
         self.ensure_detached(window, cx);
         self.update_targets(&cfg);
         self.update_sides(&cfg);
+        // (After the targets: the notch has grown to hold its items.)
+        let m = self.metrics;
         // (Before the panel: an open sidebar moves the panel.)
         // A side bar on the sidebar's edge replaces it.
         let sidebar_up = cfg.sidebar_active() && (cfg.sidebar.pinned() || self.shell.read(cx).sidebar_visible_on(&self.monitor));
