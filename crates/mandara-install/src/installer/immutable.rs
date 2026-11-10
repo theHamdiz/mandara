@@ -20,8 +20,10 @@ pub(super) struct Layer {
     pub(super) optional: Vec<String>,
     /// greetd + cage for Mandara Login, and a compositor picked here.
     pub(super) login: Vec<String>,
-    /// Already requested for the next boot (`rpm-ostree status`).
+    /// Every package the next boot's image requests (`rpm-ostree status`).
     pub(super) pending: Vec<String>,
+    /// The ones of them Mandara wants, waiting for the reboot.
+    pub(super) waiting: Vec<String>,
     /// The next boot brings packages already (requested earlier).
     pub(super) reboot_pending: bool,
     /// Mandara Login waits for greetd and cage from the next image.
@@ -127,14 +129,11 @@ impl Installer<'_> {
         let optional: Vec<&str> = set.opt.iter().chain(set.svc).chain(portals.iter()).copied().collect();
         let required = self.image_missing(image, set.run);
         let optional = self.image_missing(image, &optional);
-        let pending = &self.layer.pending;
-        let (required, optional): (Vec<String>, Vec<String>) = (required.iter().filter(|p| !pending.iter().any(|q| q == *p)).map(|p| p.to_string()).collect(), optional.iter().filter(|p| !pending.iter().any(|q| q == *p)).map(|p| p.to_string()).collect());
-        if !self.layer.pending.is_empty() && self.layer.reboot_pending {
-            let list = self.layer.pending.join(" ");
-            self.say(Level::Info, tf("Already waiting for the next boot: {packages}", &[("packages", &list)]));
-        }
+        let (required, optional) = (self.not_waiting(&required), self.not_waiting(&optional));
         if required.is_empty() && optional.is_empty() {
-            self.say(Level::Ok, t("Every system package Mandara needs is already part of this system."));
+            if self.layer.waiting.is_empty() {
+                self.say(Level::Ok, t("Every system package Mandara needs is already part of this system."));
+            }
         } else {
             let wanted: Vec<&str> = required.iter().chain(&optional).map(String::as_str).collect();
             if self.image_can_add(image, &wanted) {
@@ -144,6 +143,22 @@ impl Installer<'_> {
         }
         self.services_hint();
         Ok(())
+    }
+
+    /// `missing` without what the next boot already brings (remembered in
+    /// [`Layer::waiting`]).
+    fn not_waiting(&mut self, missing: &[&str]) -> Vec<String> {
+        let mut out = Vec::new();
+        for p in missing {
+            if self.layer.pending.iter().any(|q| q == p) {
+                if !self.layer.waiting.iter().any(|q| q == p) {
+                    self.layer.waiting.push(p.to_string());
+                }
+            } else {
+                out.push(p.to_string());
+            }
+        }
+        out
     }
 
     /// Collects a compositor picked by the installer (and its portal).
@@ -175,8 +190,10 @@ impl Installer<'_> {
         if !self.image_can_add(image, &wanted) {
             return;
         }
-        for p in wanted.iter().filter(|p| !self.layer.has(p)).map(|p| p.to_string()).collect::<Vec<_>>() {
-            self.layer.login.push(p);
+        for p in self.not_waiting(&wanted) {
+            if !self.layer.has(&p) {
+                self.layer.login.push(p);
+            }
         }
         self.layer.login_after_reboot = true;
         if self.dry() {
@@ -210,8 +227,12 @@ impl Installer<'_> {
     pub(super) fn image_packages(&mut self) {
         let Some(image) = self.facts.image else { return };
         let all: Vec<String> = self.layer.all().into_iter().map(str::to_string).collect();
+        if !self.layer.waiting.is_empty() {
+            let list = self.layer.waiting.join(" ");
+            self.say(Level::Info, tf("Already waiting for the next boot: {packages}", &[("packages", &list)]));
+        }
         if all.is_empty() {
-            if self.layer.reboot_pending && !self.layer.pending.is_empty() {
+            if self.layer.reboot_pending && !self.layer.waiting.is_empty() {
                 self.say(Level::Info, t("Restart your computer to start using the new packages. Everything else is ready now."));
             }
             self.login_after_reboot();
