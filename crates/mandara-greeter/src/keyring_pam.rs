@@ -22,7 +22,10 @@
 //! (which takes precedence) and `--remove` deletes it again. FreeBSD's
 //! OpenPAM reads `/etc/pam.d` before ports' `/usr/local/etc/pam.d` the
 //! same way, so a ports-installed greetd's file is copied likewise (and
-//! survives package upgrades). OpenPAM on FreeBSD 14 doesn't know the
+//! survives package upgrades). OpenPAM reads `/etc/pam.conf` between the
+//! two: when it holds greetd's policy and `/etc/pam.d/<service>` doesn't
+//! exist, a copy would replace that policy, so the plan refuses to add
+//! and says why (see [`PAM_CONF`]). OpenPAM on FreeBSD 14 doesn't know the
 //! `-` prefix: its lines are written without it (each module is checked
 //! to be installed first).
 //!
@@ -51,6 +54,10 @@ pub const VENDOR_PAM_DIR: &str = "/usr/lib/pam.d";
 pub const FREEBSD_PAM_DIRS: [&str; 2] = ["/etc/pam.d", "/usr/local/etc/pam.d"];
 /// Where FreeBSD's ports put their PAM service files.
 pub const FREEBSD_VENDOR_PAM_DIR: &str = "/usr/local/etc/pam.d";
+/// FreeBSD: OpenPAM's single-file policy, read after `/etc/pam.d/<service>`
+/// and before ports' `/usr/local/etc/pam.d/<service>` (pam.conf(5)).
+/// Its lines carry the service name as an extra first field.
+pub const PAM_CONF: &str = "/etc/pam.conf";
 /// OpenPAM's module path on FreeBSD (base modules, then ports').
 pub const FREEBSD_MODULE_DIRS: [&str; 2] = ["/usr/lib", "/usr/local/lib"];
 /// PAM module directories across distributions and architectures.
@@ -448,6 +455,23 @@ fn with_copy_header(text: &str, vendor_path: &str) -> String {
     s
 }
 
+/// `service`'s rules in pam.conf-style `text`, without the service field
+/// (so they read like a `pam.d` file); None when it has none. OpenPAM uses
+/// these when `/etc/pam.d/<service>` doesn't exist.
+fn pam_conf_policy(text: &str, service: &str) -> Option<String> {
+    let mut out = String::new();
+    for line in text.lines() {
+        let t = line.trim_start();
+        if t.starts_with('#') {
+            continue;
+        }
+        let Some(rest) = t.strip_prefix(service).filter(|r| r.starts_with([' ', '\t'])) else { continue };
+        out.push_str(rest.trim_start());
+        out.push('\n');
+    }
+    (!out.is_empty()).then_some(out)
+}
+
 /// True when `text` carries the copy header.
 fn is_vendor_copy(text: &str, vendor_dir: &str) -> bool {
     text.lines().any(|l| l.trim().starts_with(BEGIN) && l.contains(vendor_dir) && l.contains("copied from"))
@@ -557,6 +581,25 @@ impl KeyringPlan {
             errors: Vec::new(),
             warnings: Vec::new(),
         };
+        // FreeBSD: without /etc/pam.d/<service>, /etc/pam.conf's lines for
+        // the service come before the port's file. A new /etc/pam.d copy
+        // would silently replace that policy (its own auth and session
+        // rules), so only report on it; there is nothing of Mandara's to
+        // remove.
+        if previous.is_none()
+            && root.freebsd()
+            && let Some(policy) = root.read(PAM_CONF).and_then(|t| pam_conf_policy(&t, &plan.service))
+        {
+            plan.vendor = None;
+            plan.modules = statuses(root, &policy, PAM_CONF, &[], family);
+            if action == Action::Add && plan.modules.iter().any(|s| s.installed() && !s.unlocks_at_login()) {
+                plan.errors.push(format!(
+                    "{PAM_CONF} holds the `{svc}` PAM policy, which OpenPAM uses because {path} doesn't exist; creating {path} would replace it. Add the keyring lines to {PAM_CONF} by hand (each starting with `{svc}`), or move the `{svc}` lines into {path} first, then run this again.",
+                    svc = plan.service
+                ));
+            }
+            return plan;
+        }
         let Some((file, text)) = previous.clone().map(|t| (path.clone(), t)).or_else(|| vendor_text.clone().map(|t| (vendor_path.clone(), t))) else {
             plan.errors.push(format!("greetd's PAM service `{}` wasn't found ({path} or {vendor_path}); is greetd installed?", plan.service));
             plan.modules = statuses(root, "", &path, &[], family);
