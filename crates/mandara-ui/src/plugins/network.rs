@@ -144,6 +144,17 @@ struct Rates {
     up_text: Cached<u64>,
 }
 
+#[cfg(target_os = "freebsd")]
+fn default_iface() -> Option<String> {
+    mandara_services::freebsd::net::default_interface()
+}
+
+#[cfg(target_os = "freebsd")]
+fn counters(iface: &str) -> Option<(u64, u64)> {
+    mandara_services::freebsd::net::traffic().into_iter().find(|(name, _, _)| name == iface).map(|(_, rx, tx)| (rx, tx))
+}
+
+#[cfg(not(target_os = "freebsd"))]
 fn default_iface() -> Option<String> {
     std::fs::read_to_string("/proc/net/route")
         .ok()?
@@ -154,6 +165,7 @@ fn default_iface() -> Option<String> {
         .map(str::to_string)
 }
 
+#[cfg(not(target_os = "freebsd"))]
 fn counters(iface: &str) -> Option<(u64, u64)> {
     let read = |f: &str| std::fs::read_to_string(format!("/sys/class/net/{iface}/statistics/{f}")).ok()?.trim().parse::<u64>().ok();
     Some((read("rx_bytes")?, read("tx_bytes")?))

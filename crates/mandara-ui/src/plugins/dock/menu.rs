@@ -273,8 +273,27 @@ pub fn set_open_at_login(id: &str, on: bool) -> Result<(), String> {
     r.map_err(|e| format!("{e:#}"))
 }
 
+/// FreeBSD: [`pids_of`] from `kern.proc` (command names are 19 bytes).
+#[cfg(target_os = "freebsd")]
+pub fn pids_of(program: &str) -> Vec<u32> {
+    use mandara_services::freebsd::procs;
+    let base = std::path::Path::new(program).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    if base.is_empty() {
+        return Vec::new();
+    }
+    let (me, uid) = (std::process::id(), rustix::process::getuid().as_raw());
+    let comm_name: String = base.chars().take(19).collect();
+    procs::all()
+        .into_iter()
+        .filter(|p| p.pid != me && p.uid == uid && !p.system)
+        .filter(|p| p.name == comm_name || procs::executable(p.pid).and_then(|e| e.file_name().map(|n| n.to_string_lossy() == base)).unwrap_or(false))
+        .map(|p| p.pid)
+        .collect()
+}
+
 /// Process ids whose command name or executable matches `program`
 /// (`/proc`; only this user's processes, never the shell itself).
+#[cfg(not(target_os = "freebsd"))]
 pub fn pids_of(program: &str) -> Vec<u32> {
     use std::os::unix::fs::MetadataExt as _;
     let base = std::path::Path::new(program).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();

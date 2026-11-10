@@ -312,7 +312,11 @@ fn own_drm_fdinfo() -> Vec<String> {
 }
 
 fn memory_report(cx: &gpui::App) -> Value {
+    #[cfg(not(target_os = "freebsd"))]
     let roll = smaps_rollup(&std::fs::read_to_string("/proc/self/smaps_rollup").unwrap_or_default());
+    // FreeBSD has no smaps: the resident set from this process's kinfo_proc.
+    #[cfg(target_os = "freebsd")]
+    let roll: HashMap<String, u64> = mandara_services::freebsd::procs::one(std::process::id()).map(|p| HashMap::from([("Rss".to_string(), p.rss / KIB)])).unwrap_or_default();
     let get = |k: &str| roll.get(k).copied().unwrap_or(0);
     let (gpu, engines) = drm_usage(&own_drm_fdinfo());
     let registry = cx.global::<PluginRegistry>();

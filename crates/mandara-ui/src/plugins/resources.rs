@@ -233,8 +233,10 @@ const REVEAL_TOP: usize = 5;
 // ── Units ────────────────────────────────────────────────────────────────
 
 /// `scaling_cur_freq` kHz per GHz.
+#[cfg(not(target_os = "freebsd"))]
 const KHZ_PER_GHZ: f32 = 1e6;
 /// hwmon reports milli-degrees Celsius.
+#[cfg(not(target_os = "freebsd"))]
 const MILLI: f32 = 1000.0;
 /// One decimal place for JSON readings.
 const ROUND_TENTHS: f64 = 10.0;
@@ -539,6 +541,18 @@ fn meminfo() -> (u64, u64, u64, u64) {
     if demo::active() {
         return demo::meminfo();
     }
+    #[cfg(target_os = "freebsd")]
+    {
+        mandara_services::freebsd::host::memory().map(|m| (m.used(), m.total, m.swap_used, m.swap_total)).unwrap_or_default()
+    }
+    #[cfg(not(target_os = "freebsd"))]
+    {
+        linux_meminfo()
+    }
+}
+
+#[cfg(not(target_os = "freebsd"))]
+fn linux_meminfo() -> (u64, u64, u64, u64) {
     const KIB: u64 = 1024;
     let text = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
     let field = |name: &str| -> u64 {
@@ -554,6 +568,18 @@ fn cpu_freq_ghz() -> Option<f32> {
     if demo::active() {
         return Some(demo::cpu_freq_ghz());
     }
+    #[cfg(target_os = "freebsd")]
+    {
+        mandara_services::freebsd::host::cpu_freq_ghz()
+    }
+    #[cfg(not(target_os = "freebsd"))]
+    {
+        linux_cpu_freq_ghz()
+    }
+}
+
+#[cfg(not(target_os = "freebsd"))]
+fn linux_cpu_freq_ghz() -> Option<f32> {
     // cpufreq is cheap and per-policy; fall back to /proc/cpuinfo.
     let mut sum = 0.0;
     let mut n = 0_u32;
@@ -580,6 +606,18 @@ fn cpu_temp_c() -> Option<f32> {
     if demo::active() {
         return Some(demo::cpu_temp_c());
     }
+    #[cfg(target_os = "freebsd")]
+    {
+        mandara_services::freebsd::host::cpu_temperature()
+    }
+    #[cfg(not(target_os = "freebsd"))]
+    {
+        linux_cpu_temp_c()
+    }
+}
+
+#[cfg(not(target_os = "freebsd"))]
+fn linux_cpu_temp_c() -> Option<f32> {
     for e in std::fs::read_dir("/sys/class/hwmon").ok()?.flatten() {
         let name = std::fs::read_to_string(e.path().join("name")).unwrap_or_default();
         if matches!(name.trim(), "k10temp" | "coretemp" | "zenpower" | "cpu_thermal" | "acpitz")
@@ -595,6 +633,18 @@ fn loadavg() -> [f32; 3] {
     if demo::active() {
         return demo::loadavg();
     }
+    #[cfg(target_os = "freebsd")]
+    {
+        mandara_services::freebsd::host::loadavg()
+    }
+    #[cfg(not(target_os = "freebsd"))]
+    {
+        linux_loadavg()
+    }
+}
+
+#[cfg(not(target_os = "freebsd"))]
+fn linux_loadavg() -> [f32; 3] {
     let text = std::fs::read_to_string("/proc/loadavg").unwrap_or_default();
     let mut it = text.split_whitespace().filter_map(|v| v.parse::<f32>().ok());
     [it.next().unwrap_or(0.0), it.next().unwrap_or(0.0), it.next().unwrap_or(0.0)]
@@ -653,8 +703,8 @@ fn read_disks() -> Vec<Disk> {
         return demo::disks();
     }
     let mut disks: Vec<Disk> = Vec::new();
-    for (_, mount, fstype) in parse_mounts(&std::fs::read_to_string("/proc/mounts").unwrap_or_default()) {
-        let Some((used, total)) = disk_usage(&mount) else { continue };
+    for (mount, fstype, usage) in mounts() {
+        let Some((used, total)) = usage.or_else(|| disk_usage(&mount)) else { continue };
         // Skip tiny boot / EFI partitions and filesystems already listed.
         if total < MIN_DISK_BYTES || disks.iter().any(|d| (d.used, d.total) == (used, total)) {
             continue;
@@ -667,7 +717,22 @@ fn read_disks() -> Vec<Disk> {
     disks
 }
 
+/// `(mount, fstype, (used, total) when already known)` of each local
+/// filesystem: `/proc/mounts` (each measured with statvfs), or FreeBSD's
+/// `getfsstat`, which carries the figures itself.
+#[cfg(not(target_os = "freebsd"))]
+fn mounts() -> Vec<(String, String, Option<(u64, u64)>)> {
+    parse_mounts(&std::fs::read_to_string("/proc/mounts").unwrap_or_default()).into_iter().map(|(_, mount, fstype)| (mount, fstype, None)).collect()
+}
+
+#[cfg(target_os = "freebsd")]
+fn mounts() -> Vec<(String, String, Option<(u64, u64)>)> {
+    use mandara_services::freebsd::mounts;
+    mounts::local(mounts::all()).into_iter().map(|m| (m.mount, m.fstype, (m.total > 0).then_some((m.used, m.total)))).collect()
+}
+
 /// `hostname · Linux 6.x` (blocking procfs reads — background only).
+#[cfg(not(target_os = "freebsd"))]
 fn host_line() -> String {
     let host = std::fs::read_to_string("/proc/sys/kernel/hostname").unwrap_or_default().trim().to_string();
     let kernel = if demo::active() {
@@ -680,6 +745,14 @@ fn host_line() -> String {
         (false, true) => host,
         _ => format!("Linux {kernel}"),
     }
+}
+
+/// `hostname · FreeBSD 14.4` (sysctl reads).
+#[cfg(target_os = "freebsd")]
+fn host_line() -> String {
+    let host = mandara_services::freebsd::host::hostname();
+    let system = if demo::active() { format!("Linux {}", demo::KERNEL) } else { mandara_services::freebsd::host::system() };
+    if host.is_empty() { system } else { format!("{host} · {system}") }
 }
 
 fn threads() -> usize {

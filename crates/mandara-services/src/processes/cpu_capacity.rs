@@ -1,10 +1,13 @@
 //! Counts online CPU rows without keeping the complete procfs table.
 
-use std::io::{self, Read};
+use std::io;
+#[cfg(any(test, not(target_os = "freebsd")))]
+use std::io::Read;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// A read window, not a limit: the parser continues until EOF regardless of
 /// the number of CPUs or the length of other rows in `/proc/stat`.
+#[cfg(any(test, not(target_os = "freebsd")))]
 const READ_BYTES: usize = 1024;
 
 /// The last known online CPU count (0 until first read).
@@ -28,12 +31,20 @@ pub(super) fn get() -> usize {
 }
 
 /// Refreshes the host-wide count on a background sample, including hotplug.
+#[cfg(not(target_os = "freebsd"))]
 pub(super) fn refresh() -> usize {
     CAPACITY.update(std::fs::File::open("/proc/stat").and_then(count))
 }
 
+/// FreeBSD: the online CPUs `kern.smp.cpus` reports.
+#[cfg(target_os = "freebsd")]
+pub(super) fn refresh() -> usize {
+    CAPACITY.update(crate::freebsd::host::cpu_count().ok_or_else(|| io::Error::other("kern.smp.cpus")))
+}
+
 /// Streaming state for one `/proc/stat` line: does it start with
 /// `cpu<digits>` followed by whitespace?
+#[cfg(any(test, not(target_os = "freebsd")))]
 #[derive(Default)]
 struct CpuRow {
     prefix: u8,
@@ -42,6 +53,7 @@ struct CpuRow {
     ended: bool,
 }
 
+#[cfg(any(test, not(target_os = "freebsd")))]
 impl CpuRow {
     /// Feeds the line's next byte; only its first word matters.
     fn push(&mut self, byte: u8) {
@@ -67,6 +79,7 @@ impl CpuRow {
 
 /// Counts per-CPU rows through EOF with one fixed `READ_BYTES` buffer,
 /// retrying interrupted reads.
+#[cfg(any(test, not(target_os = "freebsd")))]
 fn count(mut reader: impl Read) -> io::Result<usize> {
     let mut buffer = [0; READ_BYTES];
     let mut row = CpuRow::default();

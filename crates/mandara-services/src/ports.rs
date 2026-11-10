@@ -375,6 +375,8 @@ mod tests {
     }
 
     #[test]
+    // FreeBSD has no /proc/net; the Ports plugin is locked there.
+    #[cfg(not(target_os = "freebsd"))]
     fn finds_its_own_listening_socket() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();

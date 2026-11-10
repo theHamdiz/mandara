@@ -84,6 +84,12 @@ pub fn gamma_tools_in(names: impl IntoIterator<Item = String>) -> Vec<String> {
 
 /// The [`GAMMA_TOOLS`] running now (your own processes are all that's
 /// readable, which is where they run).
+#[cfg(target_os = "freebsd")]
+pub fn running_gamma_tools() -> Vec<String> {
+    gamma_tools_in(crate::freebsd::procs::all().into_iter().map(|p| p.name))
+}
+
+#[cfg(not(target_os = "freebsd"))]
 pub fn running_gamma_tools() -> Vec<String> {
     let names = std::fs::read_dir("/proc").into_iter().flatten().flatten().filter(|e| e.file_name().to_string_lossy().bytes().all(|b| b.is_ascii_digit())).filter_map(|e| std::fs::read_to_string(e.path().join("comm")).ok());
     gamma_tools_in(names)

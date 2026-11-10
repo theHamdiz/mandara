@@ -296,7 +296,7 @@ pub(crate) fn me() -> Me {
     let user = std::fs::read_to_string("/etc/passwd").ok().and_then(|t| crate::lock::parse_passwd(&t, uid));
     let login = user.as_ref().map(|u| u.name.clone()).or_else(|| std::env::var("USER").ok()).unwrap_or_default();
     let name = user.as_ref().map(|u| u.display.clone()).filter(|d| !d.is_empty()).unwrap_or_else(|| login.clone());
-    let host = std::fs::read_to_string("/proc/sys/kernel/hostname").map(|h| h.trim().to_string()).unwrap_or_default();
+    let host = crate::widgets::system::hostname();
     let home = user.map(|u| u.home).or_else(dirs::home_dir).unwrap_or_default();
     let picture = [home.join(".face"), PathBuf::from(format!("/var/lib/AccountsService/icons/{login}"))].into_iter().find(|p| p.is_file());
     Me { name, login, host, picture }
@@ -304,11 +304,11 @@ pub(crate) fn me() -> Me {
 
 /// "3 h 17 min" since boot.
 pub(crate) fn uptime_secs() -> Option<u64> {
-    Some(std::fs::read_to_string("/proc/uptime").ok()?.split_whitespace().next()?.parse::<f64>().ok()? as u64)
+    crate::widgets::system::uptime_secs()
 }
 
 fn uptime() -> Option<String> {
-    let secs = std::fs::read_to_string("/proc/uptime").ok()?.split_whitespace().next()?.parse::<f64>().ok()? as u64;
+    let secs = uptime_secs()?;
     let (d, h, m) = (secs / 86_400, secs % 86_400 / 3600, secs % 3600 / 60);
     Some(match (d, h) {
         (0, 0) => tf("{m} min", &[("m", &m)]),

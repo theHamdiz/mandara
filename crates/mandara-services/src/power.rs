@@ -584,9 +584,25 @@ async fn read_state(conn: &Connection) -> PowerState {
     };
     let (upower, upower_error, on_battery, devices) = match read_devices(conn).await {
         Ok((on_battery, devices)) => (true, None, on_battery, devices),
+        #[cfg(target_os = "freebsd")]
+        Err(e) => acpi_fallback(e).await,
+        #[cfg(not(target_os = "freebsd"))]
         Err(e) => (false, Some(e), false, Vec::new()),
     };
     PowerState { ready: true, profiles, profiles_error, upower, upower_error, on_battery, devices }
+}
+
+/// FreeBSD without UPower: the battery and power source from the ACPI
+/// sysctls (read on the blocking pool: `acpiconf` is a process). A machine
+/// whose ACPI reports a power source counts as answered, like UPower.
+#[cfg(target_os = "freebsd")]
+async fn acpi_fallback(upower_error: String) -> (bool, Option<String>, bool, Vec<PowerDevice>) {
+    use crate::freebsd::acpi;
+    let (acline, battery) = crate::runtime::unblock(|| (acpi::acline(), acpi::read_battery())).await;
+    match acline {
+        Some(line) => (true, None, line == 0 && battery.is_some(), battery.into_iter().collect()),
+        None => (false, Some(upower_error), false, Vec::new()),
+    }
 }
 
 /// `GetHistory` of a device over the last `span` (blocking; run it on a

@@ -81,6 +81,12 @@ mod tests {
     /// How often the tests look again.
     const POLL: Duration = Duration::from_millis(50);
 
+    #[cfg(target_os = "freebsd")]
+    fn zombie(pid: u32) -> bool {
+        crate::freebsd::procs::one(pid).is_some_and(|p| p.state == 'Z')
+    }
+
+    #[cfg(not(target_os = "freebsd"))]
     fn zombie(pid: u32) -> bool {
         std::fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|s| s.rsplit(')').next().is_some_and(|rest| rest.trim_start().starts_with('Z')))
     }

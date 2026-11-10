@@ -40,6 +40,7 @@ impl PowerAction {
     }
 
     /// Calls `org.freedesktop.login1.Manager.<method>(interactive = true)`
+    /// (ConsoleKit2's manager on FreeBSD)
     /// on a helper thread. Always an error in demo mode.
     pub fn run(self, demo: bool) -> Result<(), String> {
         if demo {
@@ -55,7 +56,8 @@ impl PowerAction {
 
     async fn call(self) -> Result<(), String> {
         let conn = zbus::Connection::system().await.map_err(|e| e.to_string())?;
-        let proxy = zbus::Proxy::new(&conn, "org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager")
+        use mandara_services::logind::bus;
+        let proxy = zbus::Proxy::new(&conn, bus::DEST, bus::MANAGER_PATH, bus::MANAGER)
             .await
             .map_err(|e| e.to_string())?;
         proxy.call::<_, _, ()>(self.method(), &(true,)).await.map_err(|e| e.to_string())

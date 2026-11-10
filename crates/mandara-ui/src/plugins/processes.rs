@@ -329,6 +329,7 @@ struct Totals {
 }
 
 /// Kibibytes → bytes (`/proc/meminfo` reports kB).
+#[cfg(not(target_os = "freebsd"))]
 const BYTES_PER_KIB: u64 = 1024;
 
 fn meminfo() -> (u64, u64) {
@@ -336,6 +337,18 @@ fn meminfo() -> (u64, u64) {
         let (used, total, _, _) = demo::meminfo();
         return (used, total);
     }
+    #[cfg(target_os = "freebsd")]
+    {
+        mandara_services::freebsd::host::memory().map(|m| (m.used(), m.total)).unwrap_or_default()
+    }
+    #[cfg(not(target_os = "freebsd"))]
+    {
+        linux_meminfo()
+    }
+}
+
+#[cfg(not(target_os = "freebsd"))]
+fn linux_meminfo() -> (u64, u64) {
     let text = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
     let field = |name: &str| -> u64 { text.lines().find(|l| l.starts_with(name)).and_then(|l| l.split_whitespace().nth(1)?.parse::<u64>().ok()).unwrap_or(0) * BYTES_PER_KIB };
     let total = field("MemTotal:");

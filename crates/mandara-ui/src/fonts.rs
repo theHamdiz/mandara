@@ -183,7 +183,7 @@ fn pick_mono(installed: &[String], wanted: &str, fixed_pitch: impl FnOnce() -> O
 /// database: only used when no known monospace family is installed).
 fn system_fixed_pitch_family() -> Option<String> {
     let mut db = fontdb::Database::new();
-    db.load_system_fonts();
+    mandara_services::system_fonts::load(&mut db);
     let mut families: Vec<String> = db.faces().filter(|f| f.monospaced).filter_map(|f| f.families.first().map(|(name, _)| name.clone())).collect();
     families.sort();
     families.into_iter().next()

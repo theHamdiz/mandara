@@ -218,7 +218,7 @@ fn changed_per_section(cfg: &ShellConfig) -> HashMap<Section, usize> {
 fn support_report(cfg: &ShellConfig, version: &str) -> String {
     let read = |p: &str| std::fs::read_to_string(p).unwrap_or_default();
     let os = read("/etc/os-release").lines().find_map(|l| l.strip_prefix("PRETTY_NAME=")).map(|v| v.trim_matches('"').to_string()).unwrap_or_default();
-    let kernel = read("/proc/sys/kernel/osrelease").trim().to_string();
+    let kernel = mandara_ui::widgets::system::kernel_release();
     let compositor = mandara_compositor::detected().map(|k| format!("{k:?}")).unwrap_or_else(|| "none".into());
     let env = |k: &str| std::env::var(k).unwrap_or_default();
     let (config_text, _) = profiles::export_text(cfg, ExportOptions { changes_only: true, redact: true }).unwrap_or_default();

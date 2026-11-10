@@ -178,7 +178,7 @@ fn fonts() -> &'static fontdb::Database {
     static DB: OnceLock<fontdb::Database> = OnceLock::new();
     DB.get_or_init(|| {
         let mut db = fontdb::Database::new();
-        db.load_system_fonts();
+        crate::system_fonts::load(&mut db);
         db
     })
 }

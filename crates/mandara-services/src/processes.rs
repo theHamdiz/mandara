@@ -1,4 +1,4 @@
-//! Process table from `/proc`: names, command lines, owners, memory and CPU
+//! Process table from `/proc` (`kern.proc` sysctls on FreeBSD): names, command lines, owners, memory and CPU
 //! usage (sampled between snapshots), ranked search by name or PID, and
 //! signalling (terminate / force kill).
 
@@ -9,6 +9,8 @@ use mandara_i18n::{t, tf};
 use serde::Serialize;
 
 mod cpu_capacity;
+#[cfg(target_os = "freebsd")]
+mod freebsd;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Process {
@@ -39,12 +41,17 @@ const MIN_SAMPLE_GAP_S: f32 = 0.05;
 const PERCENT: f32 = 100.0;
 /// `/proc/<pid>/stat` fields after `(comm)`, 0-based from `state` (field 3):
 /// ppid (4), utime (14), stime (15), rss in pages (24).
+#[cfg(not(target_os = "freebsd"))]
 const STAT_PPID: usize = 1;
+#[cfg(not(target_os = "freebsd"))]
 const STAT_UTIME: usize = 11;
+#[cfg(not(target_os = "freebsd"))]
 const STAT_STIME: usize = 12;
+#[cfg(not(target_os = "freebsd"))]
 const STAT_RSS: usize = 21;
 /// Keep ordinary procfs files between samples without retaining an unusually
 /// large command line after its process exits.
+#[cfg(any(test, not(target_os = "freebsd")))]
 const PROC_REUSE_BYTES: usize = 4 * 1024;
 
 impl Process {
@@ -53,6 +60,7 @@ impl Process {
     }
 }
 
+#[cfg(not(target_os = "freebsd"))]
 /// File buffers reused across processes and samples.
 #[derive(Default)]
 struct ProcReader {
@@ -61,6 +69,7 @@ struct ProcReader {
     bytes: Vec<u8>,
 }
 
+#[cfg(not(target_os = "freebsd"))]
 impl ProcReader {
     fn path(&mut self, pid: u32, file: &str) -> &str {
         use std::fmt::Write as _;
@@ -103,6 +112,7 @@ pub struct Sampler {
     prev: HashMap<u32, u64>,
     at: Option<Instant>,
     users: HashMap<u32, String>,
+    #[cfg(not(target_os = "freebsd"))]
     reader: ProcReader,
 }
 
@@ -121,28 +131,44 @@ impl Sampler {
         let cpus = cpu_capacity::refresh() as f32;
         let elapsed = self.at.map(|t| now.duration_since(t).as_secs_f32()).unwrap_or(0.0);
         let mut out = Vec::with_capacity(self.prev.len());
-        let Ok(dir) = std::fs::read_dir("/proc") else { return out };
-        let page = page_size();
-        for entry in dir.flatten() {
-            let Some(pid) = entry.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else { continue };
-            let Some(mut p) = read_process(pid, &self.users, &mut self.reader, page) else { continue };
-            if elapsed > MIN_SAMPLE_GAP_S
-                && let Some(prev) = self.prev.get(&pid)
-            {
-                p.cpu = share_of_machine(p.ticks.saturating_sub(*prev), elapsed, hz, cpus);
+        #[cfg(target_os = "freebsd")]
+        freebsd::read_all(&self.users, &mut out);
+        #[cfg(not(target_os = "freebsd"))]
+        {
+            let Ok(dir) = std::fs::read_dir("/proc") else { return out };
+            let page = page_size();
+            for entry in dir.flatten() {
+                let Some(pid) = entry.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else { continue };
+                let Some(p) = read_process(pid, &self.users, &mut self.reader, page) else { continue };
+                out.push(p);
             }
-            out.push(p);
+        }
+        if elapsed > MIN_SAMPLE_GAP_S {
+            for p in &mut out {
+                if let Some(prev) = self.prev.get(&p.pid) {
+                    p.cpu = share_of_machine(p.ticks.saturating_sub(*prev), elapsed, hz, cpus);
+                }
+            }
         }
         self.prev.clear();
         self.prev.extend(out.iter().map(|p| (p.pid, p.ticks)));
         self.at = Some(now);
+        #[cfg(not(target_os = "freebsd"))]
         self.reader.finish_sample();
         out
     }
 }
 
+/// Units of [`Process::ticks`] per second: clock ticks from procfs, the
+/// microseconds of `ki_runtime` on FreeBSD.
+#[cfg(not(target_os = "freebsd"))]
 fn clock_ticks() -> u64 {
     rustix::param::clock_ticks_per_second()
+}
+
+#[cfg(target_os = "freebsd")]
+fn clock_ticks() -> u64 {
+    crate::freebsd::procs::RUNTIME_PER_SECOND as u64
 }
 
 /// Host-wide logical CPUs, matching the aggregate `/proc/stat` gauge even
@@ -159,6 +185,7 @@ fn share_of_machine(ticks: u64, elapsed_s: f32, hz: f32, cpus: f32) -> f32 {
     ((ticks as f32 / hz) / elapsed_s * PERCENT / cpus.max(1.0)).min(PERCENT)
 }
 
+#[cfg(not(target_os = "freebsd"))]
 fn page_size() -> u64 {
     rustix::param::page_size() as u64
 }
@@ -176,6 +203,7 @@ fn read_users() -> HashMap<u32, String> {
         .collect()
 }
 
+#[cfg(not(target_os = "freebsd"))]
 /// One process, or `None` for kernel threads and vanished pids. Kernel
 /// threads are recognized from `stat` alone, before any other file is read.
 fn read_process(pid: u32, users: &HashMap<u32, String>, reader: &mut ProcReader, page: u64) -> Option<Process> {
@@ -288,8 +316,14 @@ pub fn kill(pid: u32, force: bool) -> Result<(), String> {
     })
 }
 
+#[cfg(not(target_os = "freebsd"))]
 pub fn is_alive(pid: u32) -> bool {
     std::path::Path::new(&format!("/proc/{pid}")).exists()
+}
+
+#[cfg(target_os = "freebsd")]
+pub fn is_alive(pid: u32) -> bool {
+    crate::freebsd::procs::is_alive(pid)
 }
 
 #[cfg(test)]
@@ -340,6 +374,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(target_os = "freebsd"))]
     fn proc_reader_keeps_small_buffers_and_releases_unusual_command_lines() {
         let mut reader = ProcReader { path: String::with_capacity(32), text: String::from("a process stat"), bytes: Vec::from(b"command\0line".as_slice()) };
         let pointers = (reader.path.as_ptr(), reader.text.as_ptr(), reader.bytes.as_ptr());

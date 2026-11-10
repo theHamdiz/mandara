@@ -220,8 +220,11 @@ impl Sampler {
         if wants.battery {
             r.battery = read_f(&self.paths.battery).map(|v| v / 100.0);
         }
+        // FreeBSD has none of the procfs / sysfs files above.
+        #[cfg(target_os = "freebsd")]
+        freebsd_readings(r, wants);
         if wants.net {
-            let next = std::fs::read_to_string("/proc/net/dev").ok().and_then(|t| net_bytes(&t));
+            let next = read_net_bytes();
             let (down, up) = match (self.prev_net, next) {
                 (Some((rx0, tx0, t0)), Some((rx, tx))) => {
                     let dt = now.saturating_duration_since(t0).as_secs_f64().max(f64::EPSILON);
@@ -287,6 +290,35 @@ pub fn net_bytes(text: &str) -> Option<(u64, u64)> {
         }
     }
     any.then_some((rx, tx))
+}
+
+/// Received / sent bytes of every link but loopback: `/proc/net/dev`, or
+/// FreeBSD's `getifaddrs` link data.
+#[cfg(not(target_os = "freebsd"))]
+fn read_net_bytes() -> Option<(u64, u64)> {
+    std::fs::read_to_string("/proc/net/dev").ok().and_then(|t| net_bytes(&t))
+}
+
+#[cfg(target_os = "freebsd")]
+fn read_net_bytes() -> Option<(u64, u64)> {
+    let links = mandara_services::freebsd::net::traffic();
+    (!links.is_empty()).then(|| links.iter().fold((0, 0), |(rx, tx), (_, r, t)| (rx + r, tx + t)))
+}
+
+/// FreeBSD: memory from `vm.stats.vm`, the CPU temperature from
+/// `dev.cpu.N.temperature` and the battery from the ACPI sysctls.
+#[cfg(target_os = "freebsd")]
+fn freebsd_readings(r: &mut Reading, wants: Wants) {
+    use mandara_services::freebsd::host;
+    if wants.memory {
+        r.memory = host::memory().map(|m| (m.used(), m.total));
+    }
+    if wants.cpu_temp {
+        r.cpu_temp = host::cpu_temperature();
+    }
+    if wants.battery {
+        r.battery = crate::widgets::battery::read_battery().map(|b| f32::from(b.percent) / 100.0);
+    }
 }
 
 fn read_trim(p: &Path) -> Option<String> {
