@@ -403,7 +403,7 @@
           <svg class="agent-shape" viewBox="0 0 100 100" aria-hidden="true"><use href="#shape-cookie" /></svg>
           <h3 class="display-3">Ask in <em>your words.</em></h3>
           <p>Turn on the optional AI Shell Agent in Studio, download its required models once, then type <code>!switch to dark mode</code> in the launcher. Control your shell in natural language: you see the exact action before it runs, and it works offline, so your words stay on your computer.</p>
-          <p class="agent-line" aria-hidden="true"><span class="agent-bang">!</span><span class="agent-typed">switch to dark mode</span></p>
+          <p class="agent-line" aria-hidden="true"><span class="agent-bang">!</span><span class="agent-typed">switch to dark mode</span><span class="agent-caret"></span></p>
           <a class="text-link" href="docs/command-agent.html">Meet the AI Shell Agent</a>
         </div>
       </div>
@@ -660,6 +660,17 @@
           <p>Mandara is a flake with a NixOS module. Try it without installing:</p>
           <pre><code>nix run github:theHamdiz/mandara</code></pre>
           <a class="text-link" href="docs/install.html#nixos">Add it to your system</a>
+        </div>
+        <div class="imm">
+          <svg class="imm-shape" viewBox="0 0 100 100" aria-hidden="true"><use href="#shape-burst" /></svg>
+          <h3 class="display-3">Immutable? <em>No problem!</em></h3>
+          <p>On Bazzite, Silverblue, Kinoite, Bluefin, Aurora, Aeon or Kalpa, the same one-line install sets Mandara up in your home folder and adds only what your image is missing, with <code>rpm-ostree</code> or <code>transactional-update</code>.</p>
+          <ul class="imm-facts">
+            <li>Nothing your image already ships gets layered again</li>
+            <li>Tells you when a reboot is needed, and sets up the rest right away</li>
+            <li>Mandara Login is ready after that reboot</li>
+          </ul>
+          <a class="text-link" href="docs/install.html#immutable-systems">Install on an immutable system</a>
         </div>
         <div class="cli">
           <h3 class="display-3">The commands you’ll use</h3>
