@@ -189,6 +189,9 @@ impl Compiler {
     /// Translate and separate requested actions so one clause cannot crowd out another.
     pub fn retrieval_queries(&mut self, query: &str) -> Result<Vec<String>> {
         ensure!(self.engine == Engine::Qwen, "query planning requires Qwen");
+        if !plans(query) {
+            return Ok(vec![query.to_owned()]);
+        }
         let english = if query.is_ascii() {
             query.to_owned()
         } else {
@@ -282,6 +285,11 @@ impl Compiler {
     }
 }
 
+/// Whether Qwen must translate or split the request before retrieval.
+pub(super) fn plans(query: &str) -> bool {
+    !query.is_ascii() || compound(query)
+}
+
 /// Keep ordinary requests on the single-action path while recognizing common joiners.
 fn compound(query: &str) -> bool {
     query.contains([';', ',']) || query.split_whitespace().any(|word| matches!(word.to_ascii_lowercase().as_str(), "and" | "then" | "also" | "plus" | "&"))
@@ -313,7 +321,8 @@ mod tests {
     #[test]
     fn compound_markers_reach_the_planner_without_expanding_single_actions() {
         for query in ["mute the microphone, open the calendar", "dark mode; mute audio", "dark mode plus mute audio", "mute audio also open calendar", "mute audio & open calendar"] { assert!(compound(query), "{query}"); }
-        for query in ["open calendar", "read quran 2:255", "set volume to 40"] { assert!(!compound(query), "{query}"); }
+        for query in ["open calendar", "read quran 2:255", "set volume to 40"] { assert!(!compound(query) && !plans(query), "{query}"); }
+        for query in ["اضبط الصوت على ٤٠", "mute audio and open calendar"] { assert!(plans(query), "{query}"); }
     }
 
     #[test]
