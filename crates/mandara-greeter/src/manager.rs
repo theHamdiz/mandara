@@ -1127,13 +1127,25 @@ impl Backup {
 }
 
 fn restore_files(root: &SysRoot, dir: &Path, manifest: &Manifest) -> Result<Vec<String>, String> {
-    let mut done = Vec::new();
+    let mut copies = Vec::with_capacity(manifest.files.len());
     for f in &manifest.files {
+        copies.push(match &f.copy {
+            Some(copy) => Some(std::fs::read_to_string(dir.join(copy)).map_err(|e| format!("reading the backup of {}: {e}", f.path))?),
+            None => None,
+        });
+    }
+    put_back(root, manifest, &copies)
+}
+
+/// Writes `copies` (one per manifest file, `None` where the file didn't
+/// exist) back in place.
+fn put_back(root: &SysRoot, manifest: &Manifest, copies: &[Option<String>]) -> Result<Vec<String>, String> {
+    let mut done = Vec::new();
+    for (f, copy) in manifest.files.iter().zip(copies) {
         let p = root.path(&f.path);
-        match &f.copy {
-            Some(copy) => {
-                let text = std::fs::read_to_string(dir.join(copy)).map_err(|e| format!("reading the backup of {}: {e}", f.path))?;
-                write_atomic(&p, &text)?;
+        match copy {
+            Some(text) => {
+                write_atomic(&p, text)?;
                 done.push(format!("restored {}", f.path));
             }
             None => {
@@ -1208,12 +1220,69 @@ fn expected_undo(root: &SysRoot, c: &[String], units: &[&str]) -> bool {
     }
 }
 
+/// Opens `name` inside the already opened folder `dir` (or the path
+/// `name` itself without one) without following a link, and checks what
+/// was opened, not the path: a folder or a single-link file, belonging to
+/// root or to us, that nobody else may write. Every later read goes
+/// through the handle, so swapping the path afterwards changes nothing.
+fn open_trusted(dir: Option<&std::fs::File>, name: &Path, folder: bool) -> Result<std::fs::File, String> {
+    use std::os::fd::{AsRawFd as _, FromRawFd as _};
+    use std::os::unix::ffi::OsStrExt as _;
+    use std::os::unix::fs::MetadataExt as _;
+    let c = std::ffi::CString::new(name.as_os_str().as_bytes()).map_err(|_| format!("{}: not a plain name", name.display()))?;
+    let flags = libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC | if folder { libc::O_DIRECTORY } else { libc::O_NONBLOCK };
+    // SAFETY: `c` is a valid NUL-terminated string and the folder's
+    // descriptor (if any) stays open for the call; a returned descriptor
+    // is owned by the File below and nothing else.
+    let fd = unsafe { libc::openat(dir.map_or(libc::AT_FDCWD, |d| d.as_raw_fd()), c.as_ptr(), flags) };
+    if fd < 0 {
+        return Err(format!("{}: {}", name.display(), std::io::Error::last_os_error()));
+    }
+    // SAFETY: `fd` was just opened above and is owned by nothing else.
+    let file = unsafe { std::fs::File::from_raw_fd(fd) };
+    let m = file.metadata().map_err(|e| format!("{}: {e}", name.display()))?;
+    // SAFETY: geteuid has no preconditions.
+    let me = unsafe { libc::geteuid() };
+    let kind = if folder { m.is_dir() } else { m.is_file() && m.nlink() == 1 };
+    if !kind || !(m.uid() == 0 || m.uid() == me) || m.mode() & 0o022 != 0 {
+        return Err(format!("{}: not a backup Mandara made", name.display()));
+    }
+    Ok(file)
+}
+
+/// A backup's manifest and copies, read whole through verified handles
+/// (see [`open_trusted`]) from the folder `base`/`id`.
+fn read_backup(base: &Path, id: &str) -> Result<(Manifest, Vec<Option<String>>), String> {
+    use std::io::Read as _;
+    let read = |dir: &std::fs::File, name: &str| -> Result<String, String> {
+        // One plain name inside the backup, never a path out of it.
+        if name.is_empty() || name.starts_with('.') || name.contains('/') {
+            return Err(format!("backup {id}: unexpected file name {name:?}"));
+        }
+        let mut text = String::new();
+        open_trusted(Some(dir), Path::new(name), false)?.read_to_string(&mut text).map_err(|e| format!("backup {id}: {name}: {e}"))?;
+        Ok(text)
+    };
+    let dir = open_trusted(Some(&open_trusted(None, base, true)?), Path::new(id), true)?;
+    let manifest: Manifest = toml::from_str(&read(&dir, MANIFEST)?).map_err(|e| format!("backup {id}: invalid manifest: {e}"))?;
+    let mut copies = Vec::with_capacity(manifest.files.len());
+    for f in &manifest.files {
+        copies.push(match &f.copy {
+            Some(copy) => Some(read(&dir, copy)?),
+            None => None,
+        });
+    }
+    Ok((manifest, copies))
+}
+
 /// `mandara greeter restore <id|latest>`.
 #[derive(Debug)]
 pub struct RestorePlan {
     pub id: String,
-    dir: PathBuf,
     pub manifest: Manifest,
+    /// The backed-up files' contents, one per manifest file (`None`: it
+    /// didn't exist), read when the plan was made.
+    copies: Vec<Option<String>>,
     pub commands: Vec<Vec<String>>,
 }
 
@@ -1225,8 +1294,11 @@ impl RestorePlan {
             let ids: Vec<&str> = all.iter().map(|(i, _)| i.as_str()).collect();
             return Err(if all.is_empty() { format!("no switch backups in {BACKUP_DIR}") } else { format!("no backup {which:?}; available: {}", ids.join(", ")) });
         };
-        let text = std::fs::read_to_string(dir.join(MANIFEST)).map_err(|e| format!("{}: {e}", dir.display()))?;
-        let manifest: Manifest = toml::from_str(&text).map_err(|e| format!("backup {id}: invalid manifest: {e}"))?;
+        // Read whole now, through checked handles: the old folder sits in
+        // the greeter user's own state folder, and nothing it swaps in
+        // after this point is ever read.
+        let base = dir.parent().ok_or_else(|| format!("backup {id}: no folder"))?;
+        let (manifest, copies) = read_backup(base, &id)?;
         let mut commands = Vec::new();
         // The units the switch moved between, as a switch records them.
         let recorded = [&manifest.previous_unit, &manifest.new_unit];
@@ -1251,7 +1323,7 @@ impl RestorePlan {
                 commands.push(service_command(root, "enable", u));
             }
         }
-        Ok(RestorePlan { id, dir, manifest, commands })
+        Ok(RestorePlan { id, manifest, copies, commands })
     }
 
     pub fn describe(&self) -> String {
@@ -1289,7 +1361,7 @@ impl RestorePlan {
     }
 
     pub(crate) fn perform(&self, root: &SysRoot, apply: bool, runner: &mut dyn Runner) -> Result<String, String> {
-        let mut log = restore_files(root, &self.dir, &self.manifest)?;
+        let mut log = put_back(root, &self.manifest, &self.copies)?;
         if apply {
             for c in &self.commands {
                 runner.run(c)?;

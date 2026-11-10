@@ -675,6 +675,56 @@ fn backups_stay_out_of_the_greeters_reach() {
     assert!(RestorePlan::build(&f.root(), "latest").unwrap_err().contains("no switch backups"));
 }
 
+/// A restore reads the whole backup when it is planned, through handles it
+/// checked: swapping the old backup folder for another one between the
+/// check and the restore (the greeter user owns the folder around it)
+/// changes nothing that is put back.
+#[test]
+fn a_backup_swapped_after_the_check_is_never_read() {
+    let f = arch_with_sddm();
+    let plan = SwitchPlan::build(&f.root(), MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    plan.perform(&f.root(), true, &mut Recorder::default()).unwrap();
+    let [(id, dir)] = backup_dirs(&f.root()).try_into().unwrap();
+    let legacy = f.root().path(LEGACY_BACKUP_DIR);
+    std::fs::create_dir_all(&legacy).unwrap();
+    std::fs::rename(&dir, legacy.join(&id)).unwrap();
+
+    let restore = RestorePlan::build(&f.root(), &id).unwrap();
+    let (file, copy) = restore.manifest.files.iter().find_map(|b| b.copy.clone().map(|c| (b.path.clone(), c))).expect("a backed-up file");
+    let original = std::fs::read_to_string(legacy.join(&id).join(&copy)).unwrap();
+
+    // Swapped after the check: the same names, the attacker's contents.
+    std::fs::rename(&legacy, f.dir.path().join("checked")).unwrap();
+    std::fs::create_dir_all(legacy.join(&id)).unwrap();
+    std::fs::write(legacy.join(&id).join(&copy), "attacker").unwrap();
+    let mut forged = restore.manifest.clone();
+    forged.files.iter_mut().for_each(|b| b.path = "/etc/shadow".into());
+    std::fs::write(legacy.join(&id).join(MANIFEST), toml::to_string(&forged).unwrap()).unwrap();
+
+    restore.perform(&f.root(), false, &mut Recorder::default()).unwrap();
+    assert_eq!(std::fs::read_to_string(f.root().path(&file)).unwrap(), original, "what was checked is what comes back");
+    assert!(!f.root().path("/etc/shadow").exists(), "the forged manifest was never read");
+}
+
+/// Only plain names inside the backup folder are read, never a path out of
+/// it, and never a file with other links (a hard link to someone else's).
+#[test]
+fn a_backup_reads_only_its_own_files() {
+    let f = arch_with_sddm();
+    let plan = SwitchPlan::build(&f.root(), MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    plan.perform(&f.root(), true, &mut Recorder::default()).unwrap();
+    let [(id, dir)] = backup_dirs(&f.root()).try_into().unwrap();
+    let text = std::fs::read_to_string(dir.join(MANIFEST)).unwrap();
+    let mut m: Manifest = toml::from_str(&text).unwrap();
+    let copy = m.files.iter().find_map(|b| b.copy.clone()).unwrap();
+    std::fs::hard_link(dir.join(&copy), f.dir.path().join("other-link")).unwrap();
+    assert!(RestorePlan::build(&f.root(), &id).unwrap_err().contains("not a backup Mandara made"), "a file with two links");
+    std::fs::remove_file(f.dir.path().join("other-link")).unwrap();
+    m.files.iter_mut().filter(|b| b.copy.is_some()).for_each(|b| b.copy = Some("../../../etc/passwd".into()));
+    std::fs::write(dir.join(MANIFEST), toml::to_string(&m).unwrap()).unwrap();
+    assert!(RestorePlan::build(&f.root(), &id).unwrap_err().contains("unexpected file name"));
+}
+
 #[test]
 fn freebsd_greetd_is_built_not_installed() {
     let f = Fixture::new();
