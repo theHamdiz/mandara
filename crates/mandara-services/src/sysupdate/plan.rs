@@ -610,6 +610,10 @@ const FREEBSD_UPDATE_UNATTENDED: &str = "--not-running-from-cron";
 const FREEBSD_UPDATE_ENV: &[(&str, &str)] = &[("PAGER", "cat")];
 /// freebsd-update's exit code for "nothing was fetched to install".
 pub const FREEBSD_UPDATE_NOTHING: i32 = 2;
+/// freebsd-update's exit code when it refuses the system (not a -RELEASE,
+/// or a packaged base); also any other error, so it counts only with the
+/// refusal's words in the output.
+pub const FREEBSD_UPDATE_UNMANAGED: i32 = 1;
 
 /// FreeBSD: third-party packages with pkg (refreshed, downloaded, then
 /// installed; `-U` because the catalogue was just refreshed), then the
@@ -672,14 +676,16 @@ impl SystemBackend for Pkg {
     fn after(&self, step: &Step, code: Option<i32>, t: &Tracker) -> Next {
         let base = step.program == FREEBSD_UPDATE;
         match (step.kind, code) {
-            // Nothing to fetch for the base system (or freebsd-update
-            // doesn't manage it: a -STABLE system, packaged base): the
-            // packages are all that was to do.
-            (StepKind::Download, _) if base && t.nothing_to_do => Next::Finish,
+            // Nothing to fetch for the base system (exit 0), or
+            // freebsd-update doesn't manage it (exit 1: a -STABLE system,
+            // packaged base): the packages downloaded before still install.
+            (StepKind::Download, Some(0 | FREEBSD_UPDATE_UNMANAGED)) if base && t.nothing_to_do => Next::Continue,
             // Past its end of life, freebsd-update still fetches what was
             // published, then exits 1 with a warning: install that.
             (StepKind::Download, Some(1)) if base && t.end_of_life => Next::Continue,
-            (StepKind::Install, Some(FREEBSD_UPDATE_NOTHING)) if base && t.nothing_to_do => Next::Continue,
+            // Then nothing is fetched to install (exit 2; a -STABLE system
+            // too), or packaged base is refused again (exit 1).
+            (StepKind::Install, Some(FREEBSD_UPDATE_NOTHING | FREEBSD_UPDATE_UNMANAGED)) if base && t.nothing_to_do => Next::Continue,
             (_, Some(0)) => Next::Continue,
             _ => Next::Fail(FailureKind::Other),
         }

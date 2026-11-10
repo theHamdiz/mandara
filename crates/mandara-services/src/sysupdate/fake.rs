@@ -125,7 +125,9 @@ pub fn recording_of(backend: BackendId, step: &Step, scenario: Scenario) -> (&'s
         (StepKind::Download, Scenario::UpToDate) => (fixture!("freebsd/base-uptodate.txt"), 0),
         (StepKind::Download, Scenario::Fails) => (fixture!("freebsd/base-not-release.txt"), 1),
         (StepKind::Download, _) => (fixture!("freebsd/base-fetch.txt"), 0),
-        (_, Scenario::UpToDate) => ("No updates are available to install.\nRun 'freebsd-update [options] fetch' first.\n", super::plan::FREEBSD_UPDATE_NOTHING),
+        // `install` never checks the release, so a -STABLE system has
+        // nothing fetched either.
+        (_, Scenario::UpToDate | Scenario::Fails) => ("No updates are available to install.\nRun 'freebsd-update [options] fetch' first.\n", super::plan::FREEBSD_UPDATE_NOTHING),
         _ => (fixture!("freebsd/base-install.txt"), 0),
     }
 }
@@ -161,11 +163,14 @@ pub struct Replay {
     flake_dir: Option<PathBuf>,
     /// What the AUR step's recording shows.
     aur_scenario: Scenario,
+    /// What FreeBSD's base-system steps (freebsd-update) show, when it
+    /// differs from the packages'.
+    base_scenario: Option<Scenario>,
 }
 
 impl Replay {
     pub fn new(backend: BackendId) -> Replay {
-        Replay { backend, scenario: Scenario::Success, delay: Duration::ZERO, hold: None, flake_dir: None, aur_scenario: Scenario::Success }
+        Replay { backend, scenario: Scenario::Success, delay: Duration::ZERO, hold: None, flake_dir: None, aur_scenario: Scenario::Success, base_scenario: None }
     }
 
     /// The AUR step's recording.
@@ -213,6 +218,12 @@ impl Replay {
         self
     }
 
+    /// FreeBSD's base-system steps show `s` instead.
+    pub fn base(mut self, s: Scenario) -> Replay {
+        self.base_scenario = Some(s);
+        self
+    }
+
     /// Waits at line `line` of `step` until cancelled.
     pub fn hold(mut self, step: StepKind, line: usize) -> Replay {
         self.hold = Some((step, line));
@@ -228,7 +239,8 @@ impl Replay {
 
 impl Runner for Replay {
     fn run(&self, step: &Step, line: &mut dyn FnMut(&str), cancel: &CancelSignal) -> std::io::Result<Option<i32>> {
-        let (text, code) = recording_of(self.backend, step, self.scenario);
+        let scenario = self.base_scenario.filter(|_| step.program == FREEBSD_UPDATE).unwrap_or(self.scenario);
+        let (text, code) = recording_of(self.backend, step, scenario);
         for (i, l) in text.lines().enumerate() {
             if step.kind.cancellable() && cancel.requested() {
                 return Ok(Some(130));
