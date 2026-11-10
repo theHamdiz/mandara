@@ -345,3 +345,23 @@ fn a_sufficient_password_line_is_flagged() {
     let plan = KeyringPlan::build(&f.root().as_freebsd(), Action::Add);
     assert!(plan.warnings.iter().any(|w| w.contains("`auth sufficient pam_unix.so`")), "{:?}", plan.warnings);
 }
+
+/// OpenPAM fails a service whose module file is gone, `optional` or not:
+/// the plan says to take the lines out before uninstalling the package.
+#[test]
+fn freebsd_warns_that_uninstalling_the_keyring_module_breaks_login() {
+    let f = freebsd();
+    let root = f.root().as_freebsd();
+    let plan = KeyringPlan::build(&root, Action::Add);
+    let warned = |p: &KeyringPlan| p.warnings.iter().filter(|w| w.contains("--remove") && w.contains("pam_gnome_keyring.so")).count();
+    assert_eq!(warned(&plan), 1, "one warning for the module, naming its package: {:?}", plan.warnings);
+    assert!(plan.warnings.iter().any(|w| w.contains("package gnome-keyring")), "{:?}", plan.warnings);
+    plan.perform(&root).unwrap();
+    assert_eq!(warned(&KeyringPlan::build(&root, Action::Add)), 0, "nothing new is written");
+    assert_eq!(warned(&KeyringPlan::build(&root, Action::Remove)), 0);
+    // Linux's `-` lines skip a missing module.
+    let linux = Fixture::new();
+    linux.file("/etc/pam.d/greetd", FREEBSD_GREETD).module("/usr/lib/security", "pam_gnome_keyring.so");
+    let plan = KeyringPlan::build(&linux.root(), Action::Add);
+    assert!(!plan.adding.is_empty() && warned(&plan) == 0, "{:?}", plan.warnings);
+}
