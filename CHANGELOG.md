@@ -10,6 +10,10 @@ About → What's new shows it too.
 
 - **Fresh login and lock screen pictures.** The README and the lock and login guides now show Mandara Login in all three of its designs (Mandara with its emblem, Midnight card and Material You), the lock screen in its Mandara and Material You designs, and Studio's Login screen page with its three looks.
 
+### Fixed
+
+- **The login screen preview keeps its buttons apart.** In `mandara greeter --demo`, the Midnight card's colour scheme switcher no longer sits on top of *Exit demo*: anything in a top corner moves just below the preview's buttons, in right-to-left languages too. The real login screen keeps the switcher where it was.
+
 ## 0.24.0 — 2026-11-09
 
 Update your whole system right from the Updates panel. Pick how every

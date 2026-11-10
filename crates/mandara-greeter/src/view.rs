@@ -61,6 +61,12 @@ const DEMO_TYPED_RESET: Duration = Duration::from_millis(3200);
 const DEMO_ERROR_RESET: Duration = Duration::from_millis(3000);
 /// See [`DEMO_TYPED_RESET`].
 const DEMO_SUCCESS_RESET: Duration = Duration::from_millis(1800);
+/// The demo's top chrome (the preview pill and Exit demo), in reference
+/// px: its inset from the screen edges and the height of its row.
+const DEMO_CHROME_INSET: f32 = 22.0;
+const DEMO_CHROME_HEIGHT: f32 = 32.0;
+/// Space kept between the demo's chrome and an element moved below it.
+const DEMO_CHROME_GAP: f32 = 12.0;
 /// Two Escape presses this close together count as a double press (input gesture, not a look setting).
 const DOUBLE_ESCAPE: Duration = Duration::from_millis(700);
 /// The success state shows this long before the session starts (covers the greetd hand-off).
@@ -1349,6 +1355,18 @@ impl GreeterView {
     }
 }
 
+/// The demo's chrome fills both top corners (the preview pill on one side,
+/// Exit demo on the other, swapped in right-to-left languages), so an
+/// element anchored to a top corner sits below it instead of under it.
+/// `y` is the element's offset from the top edge in reference px; other
+/// anchors, and a real login screen, keep it as it is.
+fn clear_demo_chrome(anchor: Anchor, y: f32) -> f32 {
+    match anchor {
+        Anchor::TopLeft | Anchor::TopRight => y.max(DEMO_CHROME_INSET + DEMO_CHROME_HEIGHT + DEMO_CHROME_GAP),
+        _ => y,
+    }
+}
+
 /// Where a dragged element lands: the anchor whose screen point is nearest
 /// the element's matching point, and the offset from it in reference
 /// pixels (`u` = output pixels per reference pixel). Offsets within 7 px
@@ -1725,8 +1743,9 @@ impl GreeterView {
         let enter = self.enter[element_index(e)].value();
         let wake = self.wake.value().clamp(0.0, 1.0);
         let (fx, fy) = pl.anchor.fraction();
+        let y = if self.demo() { clear_demo_chrome(pl.anchor, pl.y) } else { pl.y };
         let mut dx = pl.x * f.u;
-        let mut dy = pl.y * f.u + 18.0 * f.u * (1.0 - enter.clamp(0.0, 1.2));
+        let mut dy = y * f.u + 18.0 * f.u * (1.0 - enter.clamp(0.0, 1.2));
         let mut alpha = enter.clamp(0.0, 1.0);
         if e.wakes() {
             alpha *= wake;
@@ -3103,9 +3122,10 @@ impl Render for GreeterView {
             root = root.child(
                 div()
                     .absolute()
-                    .top(px(22.0 * k))
-                    .left(px(22.0 * k))
-                    .w(px(vw - 44.0 * k))
+                    .top(px(DEMO_CHROME_INSET * k))
+                    .left(px(DEMO_CHROME_INSET * k))
+                    .w(px(vw - 2.0 * DEMO_CHROME_INSET * k))
+                    .h(px(DEMO_CHROME_HEIGHT * k))
                     .flex()
                     .when(rtl, |el| el.flex_row_reverse())
                     .justify_between()
@@ -3126,7 +3146,7 @@ impl Render for GreeterView {
                     .child(
                         div()
                             .id("exit-demo")
-                            .h(px(32.0 * k))
+                            .h(px(DEMO_CHROME_HEIGHT * k))
                             .px(px(14.0 * k))
                             .rounded_full()
                             .bg(gpui::white().opacity(0.16))
@@ -3174,6 +3194,24 @@ impl Render for GreeterView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn demo_chrome_never_covers_top_corner_elements() {
+        let below = DEMO_CHROME_INSET + DEMO_CHROME_HEIGHT + DEMO_CHROME_GAP;
+        // The Midnight card shows its scheme switcher in the top-right
+        // corner, inside the chrome's row: the demo moves it below.
+        let mut cfg = GreeterConfig::default();
+        assert!(cfg.apply_look("midnight-card"));
+        let switcher = cfg.placement(Element::Themes);
+        assert!(switcher.visible && switcher.anchor == Anchor::TopRight && switcher.y < below, "{switcher:?}");
+        assert_eq!(clear_demo_chrome(switcher.anchor, switcher.y), below);
+        // Above the edge too; one already lower, and every other anchor, stays put.
+        assert_eq!(clear_demo_chrome(Anchor::TopLeft, -10.0), below);
+        assert_eq!(clear_demo_chrome(Anchor::TopRight, 120.0), 120.0);
+        for anchor in [Anchor::Top, Anchor::Left, Anchor::Center, Anchor::Right, Anchor::BottomLeft, Anchor::Bottom, Anchor::BottomRight] {
+            assert_eq!(clear_demo_chrome(anchor, 28.0), 28.0, "{anchor:?}");
+        }
+    }
 
     #[test]
     fn background_edits_rebuild_only_for_new_sources() {
