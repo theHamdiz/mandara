@@ -63,6 +63,13 @@ impl Gguf {
         };
         QTensor::new(QStorage::Cpu(storage), info.shape.clone())
     }
+
+    /// Borrow a tensor the model may leave out, such as an untied output projection.
+    /// Only absence gives `None`: a recorded tensor that fails validation is an error,
+    /// so a damaged weight never silently falls back to a substitute.
+    pub fn optional_tensor(&self, name: &str) -> Result<Option<QTensor>> {
+        if self.content.tensor_infos.contains_key(name) { self.tensor(name).map(Some) } else { Ok(None) }
+    }
 }
 
 /// Blocks borrowed from the mapping. A requantization, which inference never
@@ -210,7 +217,11 @@ mod tests {
         let len = file.metadata().unwrap().len();
         file.set_len(len - 1).unwrap();
         drop(file);
-        assert!(Gguf::open(&path).unwrap().tensor("w").is_err());
+        let map = Gguf::open(&path).unwrap();
+        assert!(map.tensor("w").is_err());
+        // An optional tensor that is present but damaged is an error, not absent.
+        assert!(map.optional_tensor("w").is_err());
+        assert!(map.optional_tensor("output.weight").unwrap().is_none());
     }
 
     /// Requantizing a borrowed tensor writes owned blocks and leaves the file untouched.
