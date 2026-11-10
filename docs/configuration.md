@@ -822,6 +822,40 @@ Commands: `mandara msg side-bars on|off|toggle`, `side-bars join
 on|off|toggle`, `side-bar pin left|right [on|off|toggle]`, `side-bar show
 left|right [on|off|toggle]`, `side-bars status`.
 
+## Main menu
+
+Right-clicking empty bar space opens the main menu (`bar.right_click`).
+A split bar (glass pills, the island, the micro pill, the notch, and the
+*Segmented* and *Tile dock* styles built from them) has gaps between its
+pieces, and those are the desktop: a right-click there opens the desktop's
+menu. To have the main menu there too:
+
+```toml
+[bar]
+right_click_gaps = true   # default false: the gaps are the desktop
+
+[panels]
+menu_rail_height = "stretch"   # hug (the default): as tall as its buttons
+```
+
+With `right_click_gaps` on, a right-click anywhere in the strip the bar
+takes along its edge (between its pieces, past its ends, and in the margin
+between a floating bar and the screen edge) opens the main menu. The
+desktop's menu is still a right-click anywhere else on the desktop, and
+the main menu's **Apps & tools** page gains a **Desktop menu** tile that
+opens it where you clicked. Studio shows the setting (Bars → Bar →
+Behaviour → *Main menu in the bar's gaps*) locked for a full-width bar or
+a side bar (no gaps), while clicks pass through empty bar space, and while
+empty bar space opens the desktop's menu itself.
+
+`menu_rail_height = "stretch"` (Bars → Drop-down panels → Main menu →
+*Rail height*) makes the main menu's rail as tall as the panel beside it. Its buttons stay one group at the top with their usual
+spacing, and the rest of the rail is its own surface; with tile patterns
+on (`panels.menu_patterns`) a mashrabiya lattice in the tiles' accent
+rises from its foot over a soft wash and fades out before the buttons.
+Beside a panel no taller than its buttons it
+looks like the hugging rail.
+
 ## Looks
 
 `[looks]` remembers which one-click look is applied (`active`, empty = your

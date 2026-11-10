@@ -635,9 +635,40 @@ fn motif_svg(m: Motif) -> String {
     }
 }
 
+/// The stretched rail's lattice (`art/rail-lattice.svg`): the mashrabiya's
+/// turned beads and lozenges as one seamless square, tiled under the rail's
+/// buttons (the rail fades it out toward them).
+pub const RAIL_LATTICE: &str = "art/rail-lattice.svg";
+const RAIL_LATTICE_NAME: &str = "rail-lattice";
+
+/// [`RAIL_LATTICE`]: the beads sit half a step in from every edge and the
+/// bars and lozenges run across them, so copies laid side by side and one
+/// over another meet without a seam.
+fn rail_lattice() -> String {
+    let step = 15.0;
+    let n = (VIEW / step) as i32;
+    let mut body = String::new();
+    // One cell beyond each edge too: the viewBox crops what crosses it.
+    for row in -1..=n {
+        for col in -1..=n {
+            let (x, y) = (col as f32 * step + step / 2.0, row as f32 * step + step / 2.0);
+            let _ = write!(body, r#"<circle cx="{x}" cy="{y}" r="3"/><path d="M{} {y}H{}"/><path d="M{x} {}V{}"/>"#, x + 3.0, x + step - 3.0, y + 3.0, y + step - 3.0);
+            if (row + col).rem_euclid(2) == 0 {
+                let (cx, cy, s) = (x + step / 2.0, y + step / 2.0, 3.2);
+                let _ = write!(body, r#"<path d="{}"/>"#, poly(&[(cx, cy - s), (cx + s, cy), (cx, cy + s), (cx - s, cy)]));
+            }
+        }
+    }
+    svg(&body)
+}
+
 /// The SVG of `art/<name>.svg` for a tile ornament, built once.
 pub fn asset(name: &str) -> Option<String> {
     static MOTIFS: OnceLock<Vec<String>> = OnceLock::new();
+    static LATTICE: OnceLock<String> = OnceLock::new();
+    if name == RAIL_LATTICE_NAME {
+        return Some(LATTICE.get_or_init(rail_lattice).clone());
+    }
     if let Some(key) = name.strip_prefix(WORD_PREFIX) {
         return word(key).map(word_svg);
     }
@@ -682,6 +713,19 @@ mod tests {
             assert!(o.units().is_none_or(|(w, h)| w > 0.0 && h > 0.0), "{name}");
         }
         assert!(asset("tile-word-nope").is_none() && asset("tile-motif-nope").is_none() && asset("jannah-crown").is_none());
+    }
+
+    /// The rail's lattice is served under its path, parses and draws, and
+    /// tiles seamlessly: whole steps across, so its edges line up.
+    #[test]
+    fn the_rail_lattice_is_a_seamless_square() {
+        let name = RAIL_LATTICE.strip_prefix("art/").and_then(|p| p.strip_suffix(".svg")).unwrap();
+        let svg = asset(name).expect("the rail lattice asset");
+        let tree = usvg::Tree::from_str(&svg, &usvg::Options::default()).unwrap();
+        assert!(tree.root().has_children());
+        assert_eq!((tree.size().width(), tree.size().height()), (VIEW, VIEW), "a square");
+        assert_eq!(VIEW % 15.0, 0.0, "whole lattice steps across, so copies meet without a seam");
+        assert_eq!((VIEW / 15.0) as i32 % 2, 0, "an even count keeps the lozenges alternating across copies");
     }
 
     /// Every action's word is in the generated table.

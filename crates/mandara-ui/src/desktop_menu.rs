@@ -641,7 +641,18 @@ impl Render for DesktopMenu {
                     .absolute()
                     .inset_0()
                     .on_mouse_down(MouseButton::Right, cx.listener(|this, e: &MouseDownEvent, _, cx| {
-                        this.at = (f32::from(e.position.x), f32::from(e.position.y));
+                        let at = (f32::from(e.position.x), f32::from(e.position.y));
+                        // In a split bar's gaps (`bar.right_click_gaps`) the
+                        // bar's main menu takes over from this one.
+                        if crate::bar::gaps::hit(&this.output, at, Some(this.size), cx).is_some() {
+                            let (output, size) = (this.output.clone(), this.size);
+                            cx.defer(move |cx| {
+                                close(cx);
+                                let _ = crate::bar::gaps::route(output, at, Some(size), cx);
+                            });
+                            return;
+                        }
+                        this.at = at;
                         this.sub = false;
                         this.hover = None;
                         cx.notify();

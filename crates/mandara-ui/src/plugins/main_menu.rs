@@ -32,7 +32,7 @@ use mandara_core::{FrameClock, SpringConfig, SpringValue, ToGpui};
 use mandara_i18n::{t, tf, tk, tr};
 use mandara_plugins::{CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry};
 use mandara_services::MediaCommand;
-use mandara_config::surfaces::MenuRail;
+use mandara_config::surfaces::{MenuRail, MenuRailHeight};
 use mandara_theme::{MandaraPalette, ThemeSource, catalog};
 use serde_json::json;
 
@@ -76,6 +76,22 @@ const RAIL_COMPACT_RULE_W: f32 = 20.0;
 /// The full rail's "Panels" caption over the shortcuts: its inset matches
 /// the rows' text.
 const RAIL_CAPTION_PAD: f32 = 2.0;
+/// About one line of that caption (only the stretched rail's sums use it).
+const RAIL_CAPTION_H: f32 = 18.0;
+/// The stretched rail (`panels.menu_rail_height`) fills the surface under
+/// its buttons with a mashrabiya lattice once that is at least this tall
+/// (less would be a sliver of beads, not a screen)...
+const RAIL_LATTICE_MIN: f32 = 24.0;
+/// ...rising at most this far from the rail's foot (the rest stays the
+/// rail's plain surface, and only a few copies are ever drawn)...
+const RAIL_LATTICE_MAX: f32 = 240.0;
+/// ...as copies of a seamless square this big (12 px between beads, the
+/// density of the Look page's ornaments).
+const RAIL_LATTICE_PX: f32 = 96.0;
+/// The lattice's ink and wash: the mashrabiya's, in the theme's own accent.
+const RAIL_ORNAMENT: Ornament = Ornament::motif(Motif::Mashrabiya, 0.0);
+/// CSS angle of a gradient running from the top down.
+const DOWN_DEG: f32 = 180.0;
 
 /// Rail shortcuts: a panel of its own each (icon, plugin id, name).
 const SHORTCUTS: [(&str, &str, &str); 7] = [
@@ -254,7 +270,16 @@ const APPS: &[Action] = &[
         close(cx);
         let _ = crate::state::reload_config_from_disk(cx);
     } },
+    // Last: shown only while the bar's gaps open this menu ([`apps`]).
+    Action { icon: "pointer", label: tk("Desktop menu"), ornament: Ornament::motif(Motif::Zellige, -96.0), hint: tk("wallpaper & widgets"), run: crate::bar::gaps::open_desktop_menu },
 ];
+
+/// The Apps page's tiles. While a right-click in the bar's gaps opens this
+/// menu (`bar.right_click_gaps`) the desktop's menu is one tile away: the
+/// last one, left out otherwise.
+fn apps(cfg: &mandara_config::ShellConfig) -> &'static [Action] {
+    if cfg.bar_gaps_open_menu() { APPS } else { &APPS[..APPS.len() - 1] }
+}
 
 const LOOK: &[Action] = &[
     Action { icon: "moon", label: tk("Toggle light / dark"), ornament: Ornament::motif(Motif::Shamsa, 0.0), hint: "Super+Shift+T", run: |cx| {
@@ -787,19 +812,32 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, themes: &Rc<RefCell<t
             .when(!compact, |el| el.mx(px(tokens::SM)))
             .bg(palette.outline.with_alpha(RAIL_RULE_ALPHA).hsla())
     };
-    // As tall as its buttons (it shrinks with fewer entries), centred in the
-    // menu's height.
+    let panels = &config(cx).read(cx).get().panels;
+    let patterns = panels.menu_patterns;
+    let plan = rail_plan(panels.menu_rail_height, compact, patterns, f32::from(fit.get().height) - PAD * 2.0);
+    // Hugging: as tall as its buttons (it shrinks with fewer entries),
+    // centred in the menu's height. Stretched: as tall as the panel, the
+    // buttons one tight group at its top, the rest the rail's own surface.
     let mut rail = div()
         .w(px(if compact { RAIL_COMPACT_W } else { RAIL_W }))
-        .flex_none()
+        .when(plan.stretch, |el| el.flex_1())
+        .when(!plan.stretch, |el| el.flex_none())
         .flex()
         .flex_col()
-        .justify_center()
+        .when(plan.stretch, |el| el.justify_start())
+        .when(!plan.stretch, |el| el.justify_center())
         .gap(px(RAIL_GAP))
         .p(px(tokens::XS))
         .rounded(px(crate::style::card_radius()))
         .bg(palette.surface_container.hsla())
         .when(compact, |el| el.items_center());
+    if plan.lattice > 0.0 {
+        // Under the buttons (drawn first, out of the flow).
+        let mut glow = glow.borrow_mut();
+        glow.follow(palette);
+        let ink = glow.ink("menu-rail", RAIL_ORNAMENT, palette, false);
+        rail = crate::style::ClipRounded::clip_rounded(rail.relative()).child(rail_lattice(&ink, palette, if compact { RAIL_COMPACT_W } else { RAIL_W }, plan.lattice));
+    }
     // The menu's own pages.
     for (i, pg) in Page::ALL.into_iter().enumerate() {
         let page = page.clone();
@@ -842,10 +880,10 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, themes: &Rc<RefCell<t
         }))
         .child(icon_button("menu-close", "close", HEADER_BUTTON, palette.on_surface_variant, None, |_, cx| close(cx)));
     let panels = &config(cx).read(cx).get().panels;
-    let tc = TileCx { glow, patterns: panels.menu_patterns, calligraphy: panels.menu_calligraphy, compact: false, surface: panels.menu_tile_surface, shadow: panels.menu_tile_shadow() };
+    let tc = TileCx { glow, patterns, calligraphy: panels.menu_calligraphy, compact: false, surface: panels.menu_tile_surface, shadow: panels.menu_tile_shadow() };
     let body = match now {
         Page::Home => home(palette, p, &tc, window, cx),
-        Page::Apps => tiles(APPS, palette, p, &tc, window),
+        Page::Apps => tiles(apps(config(cx).read(cx).get()), palette, p, &tc, window),
         Page::Look => look(palette, p, &tc, themes, window, cx),
     };
     // Home sets the menu's height (it's the fullest page); the other pages
@@ -890,6 +928,75 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, themes: &Rc<RefCell<t
                 .child(div().flex_1().min_w(px(0.0)).flex().flex_col().gap(px(tokens::SM)).child(header).child(div().flex_1().min_h(px(0.0)).flex().flex_col().child(body))),
         )
         .into_any_element()
+}
+
+/// How the rail sits beside the panel.
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct RailPlan {
+    /// As tall as the panel (`panels.menu_rail_height`), else as its
+    /// buttons.
+    stretch: bool,
+    /// The rail's height in a panel whose content is `available` tall.
+    height: f32,
+    /// Where its buttons start, from the rail's top.
+    group_top: f32,
+    /// The rail's own surface left under the buttons.
+    spare: f32,
+    /// How far up from the rail's foot the stretched rail's lattice rises
+    /// into that surface (0: none).
+    lattice: f32,
+}
+
+/// The rail's buttons, rules and caption, top to bottom, with their gaps
+/// and padding: what a hugging rail is tall.
+fn rail_content_height(compact: bool) -> f32 {
+    let buttons = (Page::ALL.len() + SHORTCUTS.len()) as f32;
+    let rule = 1.0 + RAIL_GAP * 2.0;
+    let caption = if compact { 0.0 } else { RAIL_CAPTION_H };
+    let children = buttons + 1.0 + if compact { 0.0 } else { 1.0 };
+    buttons * RAIL_BUTTON + rule + caption + RAIL_GAP * (children - 1.0) + tokens::XS * 2.0
+}
+
+/// The rail's layout beside a panel whose content is `available` px tall.
+/// The buttons keep their one gap ([`RAIL_GAP`]) in every mode: a
+/// stretched rail never spreads them, it only grows its own surface under
+/// them. A panel no taller than the buttons leaves nothing to stretch.
+fn rail_plan(mode: MenuRailHeight, compact: bool, patterns: bool, available: f32) -> RailPlan {
+    let content = rail_content_height(compact);
+    let room = available.max(content);
+    match mode {
+        MenuRailHeight::Hug => RailPlan { stretch: false, height: content, group_top: (room - content) / 2.0, spare: 0.0, lattice: 0.0 },
+        MenuRailHeight::Stretch => {
+            let spare = room - content;
+            let lattice = if patterns && spare >= RAIL_LATTICE_MIN { spare.min(RAIL_LATTICE_MAX) } else { 0.0 };
+            RailPlan { stretch: true, height: room, group_top: 0.0, spare, lattice }
+        }
+    }
+}
+
+/// The stretched rail's surface under its buttons, `h` px up from the foot
+/// of a rail `w` wide: the tiles' accent wash deepening toward the foot,
+/// and the mashrabiya lattice in the tiles' ink, dissolving into the
+/// rail's plain surface on its way up to the buttons. Centred, so it reads
+/// the same in either direction. At most a few copies of one cached SVG.
+fn rail_lattice(ink: &TileInk, palette: &MandaraPalette, w: f32, h: f32) -> gpui::AnyElement {
+    let (cols, rows) = ((w / RAIL_LATTICE_PX).ceil() as usize, (h / RAIL_LATTICE_PX).ceil() as usize);
+    let left = (w - cols as f32 * RAIL_LATTICE_PX) / 2.0;
+    // The tiles' ink under the pointer: still capped for the labels'
+    // contrast, and nothing but the lowest buttons ever sits on it.
+    let colour = ink.shade.with_alpha(ink.shade_alpha.1).hsla();
+    let rest = palette.surface_container;
+    // Clipped: the top row of copies reaches past `h`, under the buttons.
+    let mut el = crate::style::ClipRounded::clip_rounded(div().absolute().left_0().right_0().bottom_0().h(px(h))).bg(mandara_core::oklab_gradient(DOWN_DEG, rest, ink.wash_rest));
+    for row in 0..rows {
+        for col in 0..cols {
+            el = el.child(
+                gpui::svg().path(ornament::RAIL_LATTICE).absolute().left(px(left + col as f32 * RAIL_LATTICE_PX)).bottom(px(row as f32 * RAIL_LATTICE_PX)).size(px(RAIL_LATTICE_PX)).text_color(colour),
+            );
+        }
+    }
+    // The rail's own surface over the lattice's top, clearing toward the foot.
+    el.child(div().absolute().inset_0().bg(mandara_core::oklab_gradient(DOWN_DEG, rest, rest.with_alpha(0.0)))).into_any_element()
 }
 
 pub fn register(r: &mut PluginRegistry) {
@@ -948,6 +1055,66 @@ mod tests {
         for (glyph, _, name) in SHORTCUTS {
             assert!(!HEADER.contains(&glyph), "{name} repeats a header button");
         }
+    }
+
+    /// The rail hugs its buttons unless stretched. Stretched beside a tall
+    /// panel it is the panel's height with its buttons one tight group at
+    /// the top (never spread out) and the rest its own surface, wearing the
+    /// ornament once that is tall enough; beside a short panel there is
+    /// nothing to stretch and it is drawn just like the hugging rail.
+    #[test]
+    fn the_rail_stretches_without_spreading_its_buttons() {
+        assert_eq!(mandara_config::surfaces::PanelsConfig::default().menu_rail_height, MenuRailHeight::Hug);
+        for compact in [true, false] {
+            let content = rail_content_height(compact);
+            assert!(content > RAIL_BUTTON * 10.0, "ten buttons, a rule and their gaps");
+            for patterns in [true, false] {
+                // A tall panel (many quick toggles, large text) and the
+                // shipped one.
+                for tall in [content + 400.0, content + 60.0] {
+                    let hug = rail_plan(MenuRailHeight::Hug, compact, patterns, tall);
+                    assert_eq!((hug.stretch, hug.height, hug.spare, hug.lattice), (false, content, 0.0, 0.0));
+                    assert_eq!(hug.group_top, (tall - content) / 2.0, "centred beside the panel");
+                    let stretched = rail_plan(MenuRailHeight::Stretch, compact, patterns, tall);
+                    assert!(stretched.stretch);
+                    assert_eq!(stretched.height, tall, "as tall as the panel");
+                    assert_eq!(stretched.group_top, 0.0, "the buttons at the top");
+                    assert_eq!(stretched.spare, tall - content, "the buttons keep their own height and gaps");
+                    assert_eq!(stretched.lattice > 0.0, patterns, "the lattice follows the tile patterns");
+                    assert!(stretched.lattice <= stretched.spare.min(RAIL_LATTICE_MAX), "under the buttons, never past its cap");
+                    // A handful of copies of one cached drawing at most.
+                    let width = if compact { RAIL_COMPACT_W } else { RAIL_W };
+                    let copies = (width / RAIL_LATTICE_PX).ceil() * (stretched.lattice / RAIL_LATTICE_PX).ceil();
+                    assert!(copies <= 6.0, "{copies} copies");
+                }
+                // A short panel: nothing to stretch, no sliver of pattern.
+                for short in [content - 120.0, content, content + RAIL_LATTICE_MIN - 1.0] {
+                    let stretched = rail_plan(MenuRailHeight::Stretch, compact, patterns, short);
+                    let hug = rail_plan(MenuRailHeight::Hug, compact, patterns, short);
+                    assert_eq!(stretched.height, short.max(content), "never shorter than its buttons");
+                    assert_eq!(stretched.lattice, 0.0, "{short}: too little surface for the lattice");
+                    if short <= content {
+                        assert_eq!((stretched.height, stretched.spare), (hug.height, hug.spare), "{short}: just the hugging rail");
+                        assert_eq!(hug.group_top, 0.0);
+                    }
+                }
+            }
+        }
+    }
+
+    /// The desktop's menu is a tile away while the bar's gaps open this
+    /// menu; otherwise the Apps page is as it always was.
+    #[test]
+    fn the_desktop_menu_tile_shows_only_while_the_gaps_open_the_menu() {
+        let last = APPS.last().unwrap();
+        assert_eq!(last.label, "Desktop menu");
+        let mut cfg = mandara_config::ShellConfig::default();
+        assert_eq!(apps(&cfg).len(), APPS.len() - 1, "off by default");
+        cfg.bar.right_click_gaps = true;
+        assert_eq!(apps(&cfg).len(), APPS.len() - 1, "the full-width edge frame has no gaps");
+        cfg.bar.layout = mandara_config::BarLayout::FloatingPills;
+        assert_eq!(apps(&cfg).len(), APPS.len());
+        assert!(apps(&cfg).len().is_multiple_of(TILES_PER_ROW), "three full rows");
     }
 
     /// Φ(x), the standard normal CDF, by Simpson's rule over [-8, x].

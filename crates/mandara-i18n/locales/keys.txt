@@ -667,6 +667,7 @@ Articles per feed
 Articles you already have show at once; new ones follow.
 As
 As a solid rock is not shaken by the wind, wise people falter not amidst blame and praise.
+As tall as its buttons, or as tall as the panel beside it with the buttons kept together at the top
 Ask a window to close
 Ask for KeePassXC at login
 Ask for a new one at next login
@@ -1741,6 +1742,7 @@ Desktop fun
 Desktop ids listed first, in this order (Ctrl+P in the launcher pins too)
 Desktop ids never listed
 Desktop info
+Desktop menu
 Desktop productivity
 Desktop shortcuts and you
 Desktop sky
@@ -2316,6 +2318,7 @@ First shape
 First {shown} of {n} matches
 Fit
 Fit & effects
+Fit the buttons
 Fits in
 Five
 Five past {hour}
@@ -3620,6 +3623,7 @@ Main
 Main display
 Main for nights, Dawn for mornings.
 Main menu
+Main menu in the bar's gaps
 Mains
 Mains power
 Maintenance
@@ -4605,6 +4609,7 @@ Only build it, to see that it works
 Only each app's most recent window
 Only in {desktops}
 Only on this display
+Only split bars have gaps: glass pills, island, micro pill and notch
 Only stations you added can be removed
 Only tags and workspaces with windows (plus the one you are on)
 Only the built-in encoder uses this; the others follow Resolution
@@ -4801,6 +4806,7 @@ Palette
 Panel animation
 Panel capture failed: {error}
 Panel edges
+Panel height
 Panel image copied
 Panel radius
 Panels
@@ -5232,6 +5238,7 @@ Radio stations
 Radio · {shelf}
 Radius
 Rail
+Rail height
 Rain
 Rain today. Don't forget an umbrella.
 Rainy study
@@ -5592,6 +5599,8 @@ Right side bar
 Right tile
 Right-click empty bar space
 Right-click on empty bar space
+Right-clicking between a split bar's pieces opens the main menu; the rest of the desktop, and Main menu → Apps & tools → Desktop menu, still open the desktop's menu
+Right-clicking empty bar space opens the desktop's menu
 Rim brightness
 Rim intensity
 Rim light
@@ -8649,6 +8658,7 @@ user@host
 username
 volume-change, notification, notification-critical, power-plug, screenshot, login, battery-low… or a sound name
 waits for it
+wallpaper & widgets
 wf-recorder can't pause: stop, and start a new recording
 wf-recorder isn't installed
 wf-recorder records one sound source at a time

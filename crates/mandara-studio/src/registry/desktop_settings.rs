@@ -12,6 +12,8 @@ const MENU_TILE_SURFACE: &[(&str, &str)] = &[("flat", tk("Flat")), ("3d", tk("3D
 const BAR_RIGHT_CLICK: &[(&str, &str)] = &[("main-menu", tk("The bar's main menu")), ("desktop-menu", tk("The desktop's menu"))];
 /// `panels.menu_rail`: names beside the main menu's icons, or icons only.
 const MENU_RAIL: &[(&str, &str)] = &[("compact", tk("Compact")), ("full", tk("Full"))];
+/// `panels.menu_rail_height`: as tall as its buttons, or as the panel.
+const MENU_RAIL_HEIGHT: &[(&str, &str)] = &[("hug", tk("Fit the buttons")), ("stretch", tk("Panel height"))];
 /// `bar.scroll`.
 const BAR_SCROLL: &[(&str, &str)] = &[("none", tk("Nothing")), ("workspaces", tk("Switch workspace")), ("volume", tk("Change volume"))];
 const AUTO_HIDE: &[(&str, &str)] = &[("never", tk("Never")), ("always", tk("Always")), ("overlap", tk("When a window covers it")), ("fullscreen", tk("Fullscreen only"))];
@@ -93,12 +95,21 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Bars, tk("Behaviour"), "/bar/auto_hide/reveal_on_workspace_switch", tk("Peek on workspace switch"), tk("Show the hidden bar briefly when you change workspace or tag"), Toggle),
         s(Bars, tk("Behaviour"), "/bar/click_through", tk("Click through empty space"), tk("Clicks between bar items reach the window below (no main menu on right-click there)"), Toggle),
         s(Bars, tk("Behaviour"), "/bar/right_click", tk("Right-click on empty bar space"), tk("What opens when you right-click the bar between and around its items"), Choice(BAR_RIGHT_CLICK)),
+        s(
+            Bars,
+            tk("Behaviour"),
+            "/bar/right_click_gaps",
+            tk("Main menu in the bar's gaps"),
+            tk("Right-clicking between a split bar's pieces opens the main menu; the rest of the desktop, and Main menu → Apps & tools → Desktop menu, still open the desktop's menu"),
+            Toggle,
+        ),
         s(Bars, tk("Behaviour"), "/bar/middle_click/action", tk("Middle-click on empty bar space"), tk("What a middle click between and around the bar's items does"), Choice(CORNER)),
         s(Bars, tk("Behaviour"), "/bar/middle_click/command", tk("Middle-click command"), tk("Run with sh -c when the action is Command"), Text { placeholder: "ghostty" }),
         s(Bars, tk("Behaviour"), "/bar/scroll", tk("Scroll on empty bar space"), tk("Scrolling between and around the bar's items switches workspace or changes the volume"), Choice(BAR_SCROLL)),
         s(Bars, tk("Main menu"), "/panels/menu_translucent", tk("Glass menu"), tk("The main menu is see-through glass with solid cards on it"), Toggle),
         s(Bars, tk("Main menu"), "/panels/menu_opacity", tk("Glass opacity"), tk("How see-through the main menu's glass is"), Control::Slider { min: 0.2, max: 1.0, step: 0.01, unit: "" }),
         s(Bars, tk("Main menu"), "/panels/menu_rail", tk("Rail"), tk("Every entry's name beside its icon, or a narrow icon-only column"), Choice(MENU_RAIL)),
+        s(Bars, tk("Main menu"), "/panels/menu_rail_height", tk("Rail height"), tk("As tall as its buttons, or as tall as the panel beside it with the buttons kept together at the top"), Choice(MENU_RAIL_HEIGHT)),
         s(Bars, tk("Main menu"), "/panels/menu_patterns", tk("Tile patterns"), tk("Home cards and action tiles in the main menu wear faint geometric patterns"), Toggle),
         s(Bars, tk("Main menu"), "/panels/menu_calligraphy", tk("Kufic calligraphy"), tk("The app and tool tiles wear a Kufic word instead of their geometric pattern"), Toggle),
         s(Bars, tk("Main menu"), "/panels/menu_tile_surface", tk("Tile surface"), tk("Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass"), Choice(MENU_TILE_SURFACE)),

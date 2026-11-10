@@ -608,6 +608,20 @@ pub fn reserved_rect(m: &Metrics, surface: (f32, f32)) -> Bounds<Pixels> {
     orient(m.position, rect(0.0, 0.0, along, exclusive_zone(m)), surface)
 }
 
+/// Where `at` (output px) falls along the bar, when it lies in the band
+/// the bar takes along its edge on an output `output` px big: the whole
+/// length of the edge, from the screen edge out to the bar's far side, so
+/// the margin between a floating bar and the edge and every gap between
+/// its pieces count. The screen frame on the other edges does not. A
+/// handful of comparisons: no state, nothing allocated.
+pub fn band_hit(m: &Metrics, output: (f32, f32), at: (f32, f32)) -> Option<f32> {
+    let band = reserved_rect(m, output);
+    let (x, y) = at;
+    let (x0, y0) = (x_of(&band), y_of(&band));
+    let inside = x >= x0 && x < x0 + w_of(&band) && y >= y0 && y < y0 + h_of(&band);
+    inside.then_some(if m.vertical { y } else { x })
+}
+
 /// The screen frame around a side bar's display: the three thin strips on
 /// the edges without the bar, and the inner opening whose corners get
 /// concave flares. `None` without a frame.
@@ -1243,6 +1257,77 @@ mod tests {
         }
         // The screen frame reserves nothing beyond the bar.
         assert_eq!(exclusive_zone(&side(BarPosition::Left, true)), exclusive_zone(&side(BarPosition::Left, false)));
+    }
+
+    /// A bar's band: the whole length of its edge, from the screen edge to
+    /// the bar's far side (the margin of a floating bar included), on every
+    /// edge; the screen frame on the other edges is the desktop's.
+    #[test]
+    fn the_band_hit_covers_the_bars_strip_on_every_edge() {
+        let (w, h) = SCREEN;
+        let split = |position: BarPosition, edge_gap: f32| {
+            let mut cfg = ShellConfig::default();
+            cfg.bar.layout = BarLayout::FloatingPills;
+            cfg.bar.position = position;
+            cfg.bar.height = 36.0;
+            cfg.bar.edge_gap = edge_gap;
+            Metrics::of(&cfg, 1.0)
+        };
+        // Top: the 10 px margin above the pills, the gaps between them, and
+        // the far ends of the edge are all in the band; just past it isn't.
+        let top = split(BarPosition::Top, 10.0);
+        assert_eq!(exclusive_zone(&top), 46.0);
+        assert_eq!(band_hit(&top, SCREEN, (5.0, 2.0)), Some(5.0), "the margin by the screen edge");
+        assert_eq!(band_hit(&top, SCREEN, (1200.0, 45.5)), Some(1200.0), "the pills' far side");
+        assert_eq!(band_hit(&top, SCREEN, (w - 0.5, 20.0)), Some(w - 0.5), "the far end of the edge");
+        assert_eq!(band_hit(&top, SCREEN, (1200.0, 46.0)), None, "just below the band");
+        assert_eq!(band_hit(&top, SCREEN, (1200.0, 700.0)), None, "the desktop");
+        // Bottom: mirrored.
+        let bottom = split(BarPosition::Bottom, 10.0);
+        assert_eq!(band_hit(&bottom, SCREEN, (300.0, h - 1.0)), Some(300.0), "the margin by the screen edge");
+        assert_eq!(band_hit(&bottom, SCREEN, (300.0, h - 46.0)), Some(300.0), "the pills' far side");
+        assert_eq!(band_hit(&bottom, SCREEN, (300.0, h - 46.5)), None, "just above the band");
+        assert_eq!(band_hit(&bottom, SCREEN, (300.0, 10.0)), None, "the top edge isn't the bar's");
+        // No margin: the band is the bar's height.
+        let flush = split(BarPosition::Top, 0.0);
+        assert_eq!(band_hit(&flush, SCREEN, (10.0, 35.5)), Some(10.0));
+        assert_eq!(band_hit(&flush, SCREEN, (10.0, 36.0)), None);
+        // A floating edge frame keeps its margin in the band too.
+        let mut cfg = ShellConfig::default();
+        cfg.bar.floating_frame = true;
+        cfg.bar.edge_gap = 8.0;
+        let floating = Metrics::of(&cfg, 1.0);
+        assert_eq!(band_hit(&floating, SCREEN, (4.0, 3.0)), Some(4.0));
+        assert_eq!(band_hit(&floating, SCREEN, (4.0, exclusive_zone(&floating))), None);
+        // A flush top bar's screen frame (the strips on the other edges) is
+        // the desktop's.
+        let mut cfg = ShellConfig::default();
+        cfg.bar.screen_frame = true;
+        let framed = Metrics::of(&cfg, 1.0);
+        assert!(framed.frame_strips > 0.0);
+        assert_eq!(band_hit(&framed, SCREEN, (1.0, h - 1.0)), None, "the far strip");
+        assert_eq!(band_hit(&framed, SCREEN, (1.0, exclusive_zone(&framed) + 4.0)), None, "a side strip");
+        // Side bars, framed or not: the band is the bar's column along its
+        // whole edge (measured down the bar); the frame strips aren't.
+        for frame in [false, true] {
+            for position in [BarPosition::Left, BarPosition::Right] {
+                let m = side(position, frame);
+                let zone = exclusive_zone(&m);
+                let (inner, outer) = if position == BarPosition::Left { (zone - 0.5, zone + 1.0) } else { (w - zone, w - zone - 1.0) };
+                assert_eq!(band_hit(&m, SCREEN, (inner, 700.0)), Some(700.0), "{position:?} frame {frame}");
+                assert_eq!(band_hit(&m, SCREEN, (inner, 0.0)), Some(0.0), "{position:?}: the top end");
+                assert_eq!(band_hit(&m, SCREEN, (inner, h - 0.5)), Some(h - 0.5), "{position:?}: the bottom end");
+                assert_eq!(band_hit(&m, SCREEN, (outer, 700.0)), None, "{position:?}: past the bar");
+                if frame {
+                    let t = m.screen_frame;
+                    assert_eq!(band_hit(&m, SCREEN, (w / 2.0, t / 2.0)), None, "{position:?}: the top frame strip");
+                    assert_eq!(band_hit(&m, SCREEN, (w / 2.0, h - t / 2.0)), None, "{position:?}: the bottom frame strip");
+                }
+            }
+        }
+        // Off the output: never.
+        assert_eq!(band_hit(&top, SCREEN, (-1.0, 5.0)), None);
+        assert_eq!(band_hit(&top, SCREEN, (w, 5.0)), None);
     }
 
     #[test]
