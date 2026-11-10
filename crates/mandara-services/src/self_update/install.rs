@@ -303,9 +303,22 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let exe = dir.path().join("bin/mandara");
         std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
-        std::fs::copy("/bin/sleep", &exe).unwrap();
+        // `sleep` from PATH: NixOS and its build sandbox have no /bin/sleep.
+        let sleep = crate::updates::find_program("sleep").expect("sleep on PATH");
+        std::fs::copy(sleep, &exe).unwrap();
         std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(MODE_EXECUTABLE)).unwrap();
-        let mut running = Command::new(&exe).arg("30").spawn().unwrap();
+        // A fork on another test thread may still hold the fresh copy open for
+        // writing for a moment, and the kernel refuses to run it ("Text file busy").
+        let mut tries = 0;
+        let mut running = loop {
+            match Command::new(&exe).arg("30").spawn() {
+                Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) && tries < 100 => {
+                    tries += 1;
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                other => break other.unwrap(),
+            }
+        };
         let install = classify(&exe, &|_| None);
         let _ = running.kill();
         let _ = running.wait();
