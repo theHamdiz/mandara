@@ -21,6 +21,7 @@ longer drawn oversized.
 
 ### Fixed
 
+- **The website is readable in every colour and never wider than your phone.** Every piece of text now meets the WCAG AA contrast minimum in light and dark, in all seven Looks: the faint Arabic word in the hero, the notification caption, the FreeBSD and immutable-system cards (their lists, links and the shapes behind them) and the typed agent line, which disappeared completely in Pharos Ink. On a phone the page stays exactly as wide as the screen: the turning shapes in the hero and the shortcut search box no longer push it sideways, at any width from 320 px up.
 - **The login screen fits portrait screens.** On a screen turned upright, Mandara Login sized everything by the screen's height and drew it far too large. It now sizes by the shorter side, so a portrait screen looks like the same screen turned landscape.
 
 ## 0.25.1 — 2026-11-10

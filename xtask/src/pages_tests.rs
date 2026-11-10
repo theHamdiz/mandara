@@ -562,3 +562,25 @@ fn launcher_examples_on_the_homepage_start_with_bang() {
     let agent = page.descendants().find(|n| has_class(*n, "agent-copy")).unwrap();
     assert!(text_of(agent).contains("download its required models"));
 }
+
+/// A phone never scrolls the page sideways: the root clips (with `hidden`
+/// as the fallback where `clip` is missing), the hero clips its turning
+/// blobs, and the shortcut search box may shrink below its natural width.
+#[test]
+fn the_page_is_never_wider_than_the_screen() {
+    let css = site_css();
+    assert!(css.contains("overflow-x: hidden; overflow-x: clip; }"), "the root clips sideways overflow");
+    let hero = css.split("\n.hero {").nth(1).and_then(|r| r.split('}').next()).unwrap();
+    assert!(hero.contains("overflow-x: clip;"), "the hero clips its blobs");
+    let search = css.split("\n.keys-search {").nth(1).and_then(|r| r.split('}').next()).unwrap();
+    assert!(search.contains("min-width: 0;"), "the search box can shrink on a narrow phone");
+}
+
+/// The agent card's typed line keeps its own ink on its own ground: the
+/// card's `.agent p` colour (made for the card's tint) must not reach it,
+/// or a Look whose card ink equals the page ground hides the line.
+#[test]
+fn the_agent_line_keeps_its_own_ink() {
+    let css = site_css();
+    assert!(css.contains(".agent p.agent-line, .agent-line { color: var(--ink); }"));
+}
