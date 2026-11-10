@@ -338,6 +338,44 @@ fn freebsd_copies_the_ports_file_and_writes_plain_openpam_lines() {
     assert!(!KeyringPlan::build(&f.root(), Action::Add).errors.is_empty());
 }
 
+/// OpenPAM reads /etc/pam.conf after /etc/pam.d and before the port's
+/// file: when it holds greetd's policy, a new /etc/pam.d/greetd would
+/// replace that policy, so adding is refused and nothing is written.
+#[test]
+fn freebsd_keeps_a_pam_conf_policy() {
+    const PAM_CONF_TEXT: &str = "# local policy\nsshd\tauth\trequired\tpam_unix.so\ngreetd\tauth\trequired\tpam_unix.so\ngreetd  account required pam_unix.so\n  greetd session required pam_lastlog.so\ngreetdx auth required pam_deny.so\n";
+    let f = freebsd();
+    f.file(PAM_CONF, PAM_CONF_TEXT);
+    let root = f.root().as_freebsd();
+    assert_eq!(pam_conf_policy(PAM_CONF_TEXT, "greetd").as_deref(), Some("auth\trequired\tpam_unix.so\naccount required pam_unix.so\nsession required pam_lastlog.so\n"));
+    assert_eq!(pam_conf_policy(PAM_CONF_TEXT, "login"), None);
+    let plan = KeyringPlan::build(&root, Action::Add);
+    assert!(plan.errors.iter().any(|e| e.contains(PAM_CONF) && e.contains("would replace it")), "{:?}", plan.errors);
+    assert!(!plan.changes() && plan.vendor.is_none());
+    assert!(plan.describe().ends_with("Status: error\n"));
+    assert!(plan.perform(&root).is_err());
+    assert!(f.read("/etc/pam.d/greetd").is_none(), "no copy that would override {PAM_CONF}");
+    assert_eq!(f.read(PAM_CONF).as_deref(), Some(PAM_CONF_TEXT));
+    // --remove has nothing of Mandara's to take out and still works.
+    let remove = KeyringPlan::build(&root, Action::Remove);
+    assert!(remove.errors.is_empty() && !remove.changes(), "{:?}", remove.errors);
+    assert_eq!(remove.perform(&root).unwrap(), "Nothing to change.");
+    // Keyring lines added to pam.conf by hand count as set up.
+    f.file(PAM_CONF, &format!("{PAM_CONF_TEXT}greetd auth optional pam_gnome_keyring.so\ngreetd session optional pam_gnome_keyring.so auto_start\n"));
+    let plan = KeyringPlan::build(&root, Action::Add);
+    assert!(plan.errors.is_empty() && !plan.changes(), "{:?}", plan.errors);
+    let gnome = plan.modules.iter().find(|m| m.keyring == Keyring::Gnome).unwrap();
+    assert_eq!(gnome.auth, Hook::Elsewhere(PAM_CONF.into()));
+    // An existing /etc/pam.d/greetd comes first, so it is edited as before.
+    f.file("/etc/pam.d/greetd", FREEBSD_GREETD);
+    let plan = KeyringPlan::build(&root, Action::Add);
+    assert!(plan.errors.is_empty() && plan.changes(), "{:?}", plan.errors);
+    // Linux has no pam.conf fallback.
+    let linux = Fixture::new();
+    linux.file(PAM_CONF, PAM_CONF_TEXT).file("/usr/lib/pam.d/greetd", FREEBSD_GREETD).module("/usr/lib/security", "pam_gnome_keyring.so");
+    assert!(KeyringPlan::build(&linux.root(), Action::Add).errors.is_empty());
+}
+
 #[test]
 fn a_sufficient_password_line_is_flagged() {
     let f = freebsd();

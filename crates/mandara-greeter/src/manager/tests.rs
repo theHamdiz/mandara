@@ -475,17 +475,129 @@ fn freebsd_detects_and_switches_with_sysrc() {
     assert!(root.has_unit("greetd.service") && root.has_unit("sddm.service") && !root.has_unit("gdm.service"));
     let plan = SwitchPlan::build(&root, MANDARA, Kiosk::Cage, exe(&f)).unwrap();
     assert!(plan.errors.is_empty(), "{:?}", plan.errors);
-    assert_eq!(plan.commands, [vec!["sysrc".to_string(), "sddm_enable=NO".into()], vec!["sysrc".to_string(), "greetd_enable=YES".into()]]);
+    assert_eq!(plan.commands, [argv("sysrc -s sddm sddm_enable=NO"), argv("sysrc -s greetd greetd_enable=YES")]);
+    // sddm's own value comes back; greetd_enable wasn't set, so it goes again.
+    assert_eq!(plan.undo, [argv("sysrc -s sddm sddm_enable=YES"), argv("sysrc -s greetd -x greetd_enable")]);
     let fresh = &plan.writes[0].contents;
     assert!(fresh.contains("vt = 8"), "past FreeBSD's gettys: {fresh}");
     let mut rec = Recorder::default();
     plan.perform(&root, true, &mut rec).unwrap();
-    assert_eq!(rec.log, ["sysrc sddm_enable=NO", "sysrc greetd_enable=YES"]);
+    assert_eq!(rec.log, ["sysrc -s sddm sddm_enable=NO", "sysrc -s greetd greetd_enable=YES"]);
     assert!(!rec.log.iter().any(|c| c.contains("systemctl")));
     let restore = RestorePlan::build(&root, "latest").unwrap();
-    assert_eq!(restore.commands, [vec!["sysrc".to_string(), "greetd_enable=NO".into()], vec!["sysrc".to_string(), "sddm_enable=YES".into()]]);
-    // A failed step is undone the rc.conf way.
-    assert_eq!(inverse(&["sysrc".into(), "sddm_enable=NO".into()]), Some(vec!["sysrc".to_string(), "sddm_enable=YES".into()]));
+    assert_eq!(restore.commands, [argv("sysrc -s greetd -x greetd_enable"), argv("sysrc -s sddm sddm_enable=YES")]);
+}
+
+fn argv(line: &str) -> Vec<String> {
+    line.split(' ').map(str::to_string).collect()
+}
+
+/// sysrc(8) on a fixture root, as `sysrc -s <name>` behaves: the rc files
+/// plus the service's rc.conf.d entries; `var=value` replaces the last
+/// assignment in the last file that has one (else appends to
+/// /etc/rc.conf), `-x var` removes it from all of them.
+struct FakeSysrc<'a> {
+    root: &'a SysRoot,
+    log: Vec<String>,
+    fail_on: Option<&'static str>,
+}
+
+impl Runner for FakeSysrc<'_> {
+    fn run(&mut self, argv: &[String]) -> Result<(), String> {
+        let line = argv.join(" ");
+        self.log.push(line.clone());
+        if self.fail_on == Some(line.as_str()) {
+            return Err(format!("`{line}` failed"));
+        }
+        let [sysrc, s, name, rest @ ..] = argv else { panic!("{line}") };
+        assert_eq!((sysrc.as_str(), s.as_str()), ("sysrc", "-s"), "{line}");
+        let files: Vec<String> = self.root.rc_files(name).into_iter().skip(1).collect();
+        let has = |text: &str, var: &str| text.lines().any(|l| l.trim_start().starts_with(&format!("{var}=")));
+        match rest {
+            [x, var] if x == "-x" => {
+                for file in &files {
+                    if let Some(text) = self.root.read(file) {
+                        let kept: String = text.lines().filter(|l| !l.trim_start().starts_with(&format!("{var}="))).map(|l| format!("{l}\n")).collect();
+                        std::fs::write(self.root.path(file), kept).unwrap();
+                    }
+                }
+            }
+            [set] => {
+                let (var, value) = set.split_once('=').unwrap();
+                let new = format!("{var}=\"{value}\"");
+                match files.iter().rev().find(|f| self.root.read(f).is_some_and(|t| has(&t, var))) {
+                    Some(file) => {
+                        let text = self.root.read(file).unwrap();
+                        let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+                        let last = lines.iter().rposition(|l| l.trim_start().starts_with(&format!("{var}="))).unwrap();
+                        lines[last] = new;
+                        std::fs::write(self.root.path(file), lines.iter().map(|l| format!("{l}\n")).collect::<String>()).unwrap();
+                    }
+                    None => {
+                        let text = self.root.read("/etc/rc.conf").unwrap_or_default();
+                        std::fs::write(self.root.path("/etc/rc.conf"), format!("{text}{new}\n")).unwrap();
+                    }
+                }
+            }
+            _ => panic!("{line}"),
+        }
+        Ok(())
+    }
+}
+
+/// A service's own rc.conf.d entry has the last word: switching changes
+/// the effective setting there, and restore (or a rollback) puts every
+/// file back as it was.
+#[test]
+fn freebsd_switch_follows_rc_conf_d_overrides_and_restores_them() {
+    const RC_CONF: &str = "hostname=\"bsd\"\nsddm_enable=\"NO\"\ngreetd_enable=\"YES\"\n";
+    const SDDM_OWN: &str = "sddm_flags=\"-v\"\nsddm_enable=\"YES\"\n";
+    const GREETD_OWN: &str = "greetd_enable=\"NO\"\n";
+    let f = freebsd_with_sddm();
+    f.file("/etc/rc.conf", RC_CONF).file("/etc/rc.conf.d/sddm", SDDM_OWN).file("/usr/local/etc/rc.conf.d/greetd/10-off", GREETD_OWN);
+    let root = f.root().as_freebsd();
+    assert!(root.rc_enabled("sddm") && !root.rc_enabled("greetd"), "the overrides win over rc.conf");
+    assert_eq!(root.rc_setting("greetd").as_deref(), Some("NO"));
+    let plan = SwitchPlan::build(&root, MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    assert!(plan.errors.is_empty(), "{:?}", plan.errors);
+    assert_eq!(plan.undo, [argv("sysrc -s sddm sddm_enable=YES"), argv("sysrc -s greetd greetd_enable=NO")]);
+    let mut sysrc = FakeSysrc { root: &root, log: Vec::new(), fail_on: None };
+    plan.perform(&root, true, &mut sysrc).unwrap();
+    assert!(!root.rc_enabled("sddm") && root.rc_enabled("greetd"), "the effective settings changed");
+    assert_eq!(f.read("/etc/rc.conf").as_deref(), Some(RC_CONF), "rc.conf's own lines were already right");
+    assert_eq!(f.read("/etc/rc.conf.d/sddm").as_deref(), Some("sddm_flags=\"-v\"\nsddm_enable=\"NO\"\n"));
+    let restore = RestorePlan::build(&root, "latest").unwrap();
+    restore.perform(&root, true, &mut sysrc).unwrap();
+    assert!(root.rc_enabled("sddm") && !root.rc_enabled("greetd"));
+    assert_eq!(f.read("/etc/rc.conf").as_deref(), Some(RC_CONF));
+    assert_eq!(f.read("/etc/rc.conf.d/sddm").as_deref(), Some(SDDM_OWN));
+    assert_eq!(f.read("/usr/local/etc/rc.conf.d/greetd/10-off").as_deref(), Some(GREETD_OWN));
+
+    // A failed step rolls back the steps before it the same way.
+    let plan = SwitchPlan::build(&root, MANDARA, Kiosk::Cage, exe(&f)).unwrap();
+    let mut sysrc = FakeSysrc { root: &root, log: Vec::new(), fail_on: Some("sysrc -s greetd greetd_enable=YES") };
+    assert!(plan.perform(&root, true, &mut sysrc).unwrap_err().contains("rolled back"));
+    assert_eq!(sysrc.log, ["sysrc -s sddm sddm_enable=NO", "sysrc -s greetd greetd_enable=YES", "sysrc -s sddm sddm_enable=YES"]);
+    assert_eq!(f.read("/etc/rc.conf.d/sddm").as_deref(), Some(SDDM_OWN));
+    assert!(root.rc_enabled("sddm"));
+}
+
+/// Only the service tools a switch runs come back out of a backup.
+#[test]
+fn restore_refuses_a_foreign_undo_command() {
+    let f = freebsd_with_sddm();
+    let root = f.root().as_freebsd();
+    SwitchPlan::build(&root, MANDARA, Kiosk::Cage, exe(&f)).unwrap().perform(&root, true, &mut Recorder::default()).unwrap();
+    let id = backups(&root).pop().unwrap();
+    let manifest = root.path(BACKUP_DIR).join(&id).join(MANIFEST);
+    let text = std::fs::read_to_string(&manifest).unwrap();
+    assert!(text.contains("undo"), "{text}");
+    // A backup from before `undo` was recorded derives the commands.
+    let legacy: String = text.lines().filter(|l| !l.starts_with("undo")).map(|l| format!("{l}\n")).collect();
+    std::fs::write(&manifest, legacy).unwrap();
+    assert_eq!(RestorePlan::build(&root, "latest").unwrap().commands, [argv("sysrc -s greetd greetd_enable=NO"), argv("sysrc -s sddm sddm_enable=YES")]);
+    std::fs::write(&manifest, text.replacen("\"sysrc\"", "\"/bin/rm\"", 1)).unwrap();
+    assert!(RestorePlan::build(&root, "latest").unwrap_err().contains("unexpected undo command"));
 }
 
 #[test]

@@ -17,9 +17,12 @@
 //! On FreeBSD ([`SysRoot::freebsd`]) there is no systemd: the enabled
 //! login manager is the one whose `<name>_enable` is `YES` in rc.conf, its
 //! rc script lives in `/usr/local/etc/rc.d` or `/etc/rc.d`, and switching
-//! is `sysrc <old>_enable=NO` + `sysrc <new>_enable=YES`. Unit names
-//! (`sddm.service`) stay the plan's and the backups' vocabulary; only the
-//! commands differ.
+//! is `sysrc -s <old> <old>_enable=NO` + `sysrc -s <new> <new>_enable=YES`
+//! (`-s` makes sysrc change the setting in a service's own
+//! `rc.conf.d/<name>` too, so the effective value changes). Undoing puts
+//! back exactly the value each variable had before, in the file it was
+//! in, or removes a variable no rc file set. Unit names (`sddm.service`)
+//! stay the plan's and the backups' vocabulary; only the commands differ.
 //!
 //! Everything takes a [`SysRoot`] so tests run against fixture trees.
 
@@ -132,15 +135,40 @@ impl SysRoot {
 
     /// Whether rc.conf turns `service` on (`<service>_enable="YES"`).
     pub fn rc_enabled(&self, service: &str) -> bool {
-        let var = format!("{}_enable", service.replace('-', "_"));
-        let own = RC_CONF_DIRS.map(|d| format!("{d}/{service}"));
-        let mut on = false;
-        for file in RC_CONF_FILES.iter().copied().chain(own.iter().map(String::as_str)) {
-            if let Some(v) = self.read(file).and_then(|t| rc_value(&t, &var)) {
-                on = rc_yes(&v);
+        self.rc_last(service, true).is_some_and(|v| rc_yes(&v))
+    }
+
+    /// The value `<service>_enable` has in the rc files sysrc edits (not
+    /// `/etc/defaults/rc.conf`): None when none of them sets it.
+    pub fn rc_setting(&self, service: &str) -> Option<String> {
+        self.rc_last(service, false)
+    }
+
+    /// The last value rc.subr's `load_rc_config <service>` gives
+    /// `<service>_enable`, optionally counting the defaults file.
+    fn rc_last(&self, service: &str, defaults: bool) -> Option<String> {
+        let var = rc_var(service);
+        let skip = usize::from(!defaults);
+        self.rc_files(service).iter().skip(skip).rev().find_map(|f| self.read(f).and_then(|t| rc_value(&t, &var)))
+    }
+
+    /// The rc files `load_rc_config <service>` reads, in order (later
+    /// wins): [`RC_CONF_FILES`], then the service's own `rc.conf.d/<name>`
+    /// in each of [`RC_CONF_DIRS`], a file or a folder of files.
+    fn rc_files(&self, service: &str) -> Vec<String> {
+        let mut out: Vec<String> = RC_CONF_FILES.iter().map(|f| f.to_string()).collect();
+        for d in RC_CONF_DIRS {
+            let own = format!("{d}/{service}");
+            let p = self.path(&own);
+            if p.is_dir() {
+                let mut names: Vec<String> = std::fs::read_dir(&p).into_iter().flatten().flatten().filter(|e| e.path().is_file()).map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| !n.starts_with('.')).collect();
+                names.sort();
+                out.extend(names.into_iter().map(|n| format!("{own}/{n}")));
+            } else {
+                out.push(own);
             }
         }
-        on
+        out
     }
 
     pub(crate) fn read(&self, abs: &str) -> Option<String> {
@@ -624,7 +652,7 @@ impl Runner for SystemRunner {
 }
 
 fn systemctl(verb: &str, unit: &str) -> Vec<String> {
-    vec!["systemctl".into(), verb.into(), unit.into()]
+    vec![SYSTEMCTL.into(), verb.into(), unit.into()]
 }
 
 /// `unit`'s rc script name (`sddm.service` → `sddm`).
@@ -632,31 +660,43 @@ pub fn rc_name(unit: &str) -> &str {
     unit.trim_end_matches(UNIT_SUFFIX)
 }
 
-/// `sysrc <name>_enable=YES|NO`: rc.conf turns `unit`'s service on or off.
-fn sysrc(enable: bool, unit: &str) -> Vec<String> {
-    vec!["sysrc".into(), format!("{}_enable={}", rc_name(unit).replace('-', "_"), if enable { RC_YES } else { RC_NO })]
+/// `<service>_enable`, the variable rc.subr checks.
+fn rc_var(service: &str) -> String {
+    format!("{}_enable", service.replace('-', "_"))
+}
+
+/// `sysrc -s <name> <name>_enable=<value>`. With `-s`, sysrc also searches
+/// the service's `rc.conf.d/<name>` overrides and changes the last
+/// assignment rc.subr reads (appending to `/etc/rc.conf` when there is
+/// none), so the service's effective setting is the one written.
+fn sysrc(unit: &str, value: &str) -> Vec<String> {
+    let name = rc_name(unit);
+    vec![SYSRC.into(), "-s".into(), name.into(), format!("{}={value}", rc_var(name))]
 }
 
 /// Enables or disables `unit` at boot on `root` (nothing is started or
 /// stopped).
 pub(crate) fn service_command(root: &SysRoot, verb: &str, unit: &str) -> Vec<String> {
-    if root.freebsd() { sysrc(verb == "enable", unit) } else { systemctl(verb, unit) }
+    if root.freebsd() { sysrc(unit, if verb == "enable" { RC_YES } else { RC_NO }) } else { systemctl(verb, unit) }
 }
 
-/// The command that undoes `cmd` (`enable` ↔ `disable`, `YES` ↔ `NO`).
-fn inverse(cmd: &[String]) -> Option<Vec<String>> {
-    if cmd.first().is_some_and(|c| c == "sysrc") {
-        let (var, value) = cmd.get(1)?.split_once('=')?;
-        let flipped = if rc_yes(value) { RC_NO } else { RC_YES };
-        return Some(vec!["sysrc".into(), format!("{var}={flipped}")]);
+/// The command that undoes [`service_command`]`(root, verb, unit)`, read
+/// from `root` before that runs: systemd flips `enable` / `disable`; on
+/// FreeBSD the variable gets back the value it had (sysrc writes it to the
+/// same last file), or is removed again when no rc file set it.
+pub(crate) fn undo_command(root: &SysRoot, verb: &str, unit: &str) -> Vec<String> {
+    if !root.freebsd() {
+        return systemctl(if verb == "enable" { "disable" } else { "enable" }, unit);
     }
-    let verb = match cmd.get(1)?.as_str() {
-        "enable" => "disable",
-        "disable" => "enable",
-        _ => return None,
-    };
-    Some(systemctl(verb, cmd.get(2)?))
+    let name = rc_name(unit);
+    match root.rc_setting(name) {
+        Some(value) => sysrc(unit, &value),
+        None => vec![SYSRC.into(), "-s".into(), name.into(), "-x".into(), rc_var(name)],
+    }
 }
+
+const SYSRC: &str = "sysrc";
+const SYSTEMCTL: &str = "systemctl";
 
 const RC_YES: &str = "YES";
 const RC_NO: &str = "NO";
@@ -716,6 +756,8 @@ pub struct SwitchPlan {
     pub new_unit: Option<String>,
     /// `systemctl` commands (run with `--apply` only).
     pub commands: Vec<Vec<String>>,
+    /// `undo[i]` reverses `commands[i]` (worked out before they run).
+    pub undo: Vec<Vec<String>>,
     pub already_active: bool,
     /// Validation failures: the plan refuses to run while any are set.
     pub errors: Vec<String>,
@@ -734,6 +776,11 @@ impl SwitchPlan {
         let mut warnings = Vec::new();
         let mut writes = Vec::new();
         let mut commands = Vec::new();
+        let mut undo = Vec::new();
+        let mut service = |verb: &str, unit: &str| {
+            commands.push(service_command(root, verb, unit));
+            undo.push(undo_command(root, verb, unit));
+        };
         let current = detection.display_manager.clone();
         let greeter_user = detection.greetd.user.clone().unwrap_or_else(|| DEFAULT_GREETER_USER.into());
         let new_unit;
@@ -767,9 +814,9 @@ impl SwitchPlan {
                 }
                 if current.as_deref() != Some(GREETD) {
                     if let Some(dm) = &current {
-                        commands.push(service_command(root, "disable", &unit_of(dm)));
+                        service("disable", &unit_of(dm));
                     }
-                    commands.push(service_command(root, "enable", GREETD_UNIT));
+                    service("enable", GREETD_UNIT);
                 }
             }
             Kind::DisplayManager => {
@@ -777,10 +824,10 @@ impl SwitchPlan {
                 already_active = current.as_deref().and_then(manager_for_unit).is_some_and(|m| m.id == target.id);
                 if !already_active {
                     if let Some(dm) = &current {
-                        commands.push(service_command(root, "disable", &unit_of(dm)));
+                        service("disable", &unit_of(dm));
                     }
                     if let Some(u) = &unit {
-                        commands.push(service_command(root, "enable", u));
+                        service("enable", u);
                     }
                 }
                 new_unit = unit;
@@ -805,6 +852,7 @@ impl SwitchPlan {
             writes,
             new_unit,
             commands: if already_active { Vec::new() } else { commands },
+            undo: if already_active { Vec::new() } else { undo },
             already_active,
             errors,
             warnings,
@@ -894,11 +942,13 @@ impl SwitchPlan {
             previous_unit: self.detection.display_manager.as_deref().map(unit_of),
             new_unit: self.new_unit.clone(),
             units_switched: false,
+            undo: self.undo.iter().rev().cloned().collect(),
             files: Vec::new(),
         };
         let mut backup = Backup::create(root, manifest, &self.writes)?;
         let mut log = vec![format!("backed up to {}", backup.logical_dir())];
-        let mut done: Vec<Vec<String>> = Vec::new();
+        // How many service commands ran (rollback undoes those).
+        let mut done = 0;
         let result = (|| -> Result<(), String> {
             if self.install_mandara {
                 log.extend(install_runtime(root.base(), &self.exe, &self.greeter_user)?);
@@ -914,17 +964,15 @@ impl SwitchPlan {
             if apply {
                 for c in &self.commands {
                     runner.run(c)?;
-                    done.push(c.clone());
+                    done += 1;
                 }
             }
             Ok(())
         })();
         if let Err(e) = result {
             let mut notes = Vec::new();
-            for c in done.iter().rev() {
-                if let Some(undo) = inverse(c)
-                    && let Err(err) = runner.run(&undo)
-                {
+            for undo in self.undo[..done].iter().rev() {
+                if let Err(err) = runner.run(undo) {
                     notes.push(err);
                 }
             }
@@ -1001,6 +1049,11 @@ pub struct Manifest {
     pub new_unit: Option<String>,
     /// The service commands ran (`--apply`), so restore reverses them.
     pub units_switched: bool,
+    /// The commands that reverse them, in order (`sysrc` puts back each
+    /// rc.conf value exactly). Older backups have none: restore then
+    /// derives them from the units.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub undo: Vec<Vec<String>>,
     #[serde(default)]
     pub files: Vec<BackedUpFile>,
 }
@@ -1108,7 +1161,13 @@ impl RestorePlan {
         let text = std::fs::read_to_string(dir.join(MANIFEST)).map_err(|e| format!("{}: {e}", dir.display()))?;
         let manifest: Manifest = toml::from_str(&text).map_err(|e| format!("backup {id}: invalid manifest: {e}"))?;
         let mut commands = Vec::new();
-        if manifest.units_switched && manifest.previous_unit != manifest.new_unit {
+        if manifest.units_switched && !manifest.undo.is_empty() {
+            // Only the service tools a switch runs, never another program.
+            if let Some(c) = manifest.undo.iter().find(|c| !c.first().is_some_and(|p| p == SYSRC || p == SYSTEMCTL)) {
+                return Err(format!("backup {id}: unexpected undo command `{}`", c.join(" ")));
+            }
+            commands.clone_from(&manifest.undo);
+        } else if manifest.units_switched && manifest.previous_unit != manifest.new_unit {
             if let Some(u) = &manifest.new_unit {
                 commands.push(service_command(root, "disable", u));
             }
