@@ -6,6 +6,7 @@
 //! files, no services (read-only checks and downloads into a private temp
 //! folder still run, so the plan is the real one).
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 mod path;
@@ -423,14 +424,19 @@ impl<'a> Installer<'a> {
             return self.dry_run_summary(&exe);
         }
         let stage = stage.ok_or("nothing to install")?;
+        // Checked before the binary is replaced: afterwards the path names
+        // the new file, not the one the running shell was started from.
+        let bin = self.paths.binary();
+        let running = self.shell_runs(&bin);
         self.install_files(&stage)?;
         self.compositor();
-        let bin = self.paths.binary();
         self.admin_helper(&bin);
         self.greeter(&bin);
         self.lock_hint();
         self.i2c();
-        self.restart();
+        if running {
+            self.restart(&bin);
+        }
         self.completion();
         Ok(())
     }
@@ -1451,33 +1457,36 @@ impl<'a> Installer<'a> {
         }
     }
 
-    /// Restarts a running shell, only if it runs this installation.
-    fn restart(&mut self) {
-        let bin = self.paths.binary();
-        if self.shell_runs(&bin) && self.run(Cmd::new(&[bin.to_string_lossy().as_ref(), "msg", "restart"]).io(Io::Quiet)).is_some_and(|o| o.success) {
+    /// Restarts the running shell (one [`Self::shell_runs`] found running
+    /// this installation) on the new binary.
+    fn restart(&mut self, bin: &Path) {
+        if self.run(Cmd::new(&[bin.to_string_lossy().as_ref(), "msg", "restart"]).io(Io::Quiet)).is_some_and(|o| o.success) {
             self.say(Level::Ok, "restarted the running shell on the new version");
         }
     }
 
-    /// Whether a running `mandara` process runs `bin` (procfs).
+    /// Whether a running `mandara` process runs `bin` (procfs). The kernel
+    /// names the binary with every symlink resolved, so `bin` is too.
     #[cfg(not(target_os = "freebsd"))]
     fn shell_runs(&mut self, bin: &Path) -> bool {
         let Ok(procs) = std::fs::read_dir(self.facts.sys("/proc")) else { return false };
+        let bin = canonical(bin);
         procs.flatten().any(|e| {
             let dir = e.path();
             e.file_name().to_string_lossy().bytes().all(|b| b.is_ascii_digit())
                 && std::fs::read_to_string(dir.join("comm")).is_ok_and(|c| c.trim() == files::BINARY)
-                && std::fs::read_link(dir.join("exe")).is_ok_and(|target| Path::new(target.to_string_lossy().trim_end_matches(DELETED_SUFFIX)) == bin)
+                && std::fs::read_link(dir.join("exe")).is_ok_and(|target| canonical(Path::new(target.to_string_lossy().trim_end_matches(DELETED_SUFFIX))) == bin)
         })
     }
 
     /// Whether a running `mandara` process runs `bin`. FreeBSD has no
     /// procfs: `pgrep` finds the processes and the kernel names each one's
-    /// binary (`kern.proc.pathname`).
+    /// binary (`kern.proc.pathname`), with symlinks resolved.
     #[cfg(target_os = "freebsd")]
     fn shell_runs(&mut self, bin: &Path) -> bool {
         let pids = self.run(Cmd::new(&["pgrep", "-x", files::BINARY]).io(Io::Capture)).map(|o| o.stdout).unwrap_or_default();
-        pids.split_whitespace().filter_map(|p| p.parse::<i32>().ok()).any(|pid| freebsd_exe(pid).is_some_and(|exe| exe == bin))
+        let bin = canonical(bin);
+        pids.split_whitespace().filter_map(|p| p.parse::<i32>().ok()).any(|pid| freebsd_exe(pid).is_some_and(|exe| canonical(&exe) == bin))
     }
 
     // ── Uninstall ───────────────────────────────────────────────────────
@@ -1560,6 +1569,11 @@ impl<'a> Installer<'a> {
 /// `ON` or `1`, any case, as rc.subr's `checkyesno` reads it.
 fn rc_yes(value: &str) -> bool {
     matches!(value.trim().to_ascii_uppercase().as_str(), "YES" | "TRUE" | "ON" | "1")
+}
+
+/// `path` with its symlinks resolved, or as it is when it doesn't exist.
+fn canonical(path: &Path) -> Cow<'_, Path> {
+    std::fs::canonicalize(path).map_or(Cow::Borrowed(path), Cow::Owned)
 }
 
 /// The binary process `pid` runs (`kern.proc.pathname`).

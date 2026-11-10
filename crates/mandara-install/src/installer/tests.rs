@@ -516,6 +516,71 @@ fn conflicts_are_retired_when_accepted() {
     assert!(ran.contains(&format!("{b} setup --fix-conflicts")));
 }
 
+/// A fake running shell: `/proc/<pid>` under the fixture root, its `exe`
+/// naming `target` as the kernel would (symlinks resolved).
+#[cfg(not(target_os = "freebsd"))]
+fn running_shell(f: &Fixture, target: &Path) {
+    let dir = f.root().join("proc/4242");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("comm"), "mandara\n").unwrap();
+    std::os::unix::fs::symlink(target, dir.join("exe")).unwrap();
+}
+
+#[cfg(not(target_os = "freebsd"))]
+fn restarted(host: &FakeHost, bin: &Path) -> bool {
+    host.ran().contains(&format!("{} msg restart", bin.display()))
+}
+
+/// A prefix behind a symlink: the kernel names the resolved path, and the
+/// shell running there is still this installation's.
+#[cfg(not(target_os = "freebsd"))]
+#[test]
+fn the_running_shell_is_found_through_a_symlinked_prefix() {
+    let f = Fixture::new();
+    let (real, link) = (f.dir.path().join("real"), f.dir.path().join("link"));
+    std::fs::create_dir_all(real.join("bin")).unwrap();
+    std::fs::write(real.join("bin/mandara"), b"old").unwrap();
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    running_shell(&f, &real.join("bin/mandara"));
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    let args = InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, prefix: Some(link.clone()), ..Default::default() };
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), args).unwrap();
+    assert!(restarted(&host, &link.join("bin/mandara")), "{:#?}", host.ran());
+}
+
+/// Whether the shell runs this installation is decided before the binary
+/// is replaced: here the old `mandara` was a symlink the new file replaces,
+/// so afterwards the path no longer leads to what the shell runs.
+#[cfg(not(target_os = "freebsd"))]
+#[test]
+fn the_running_shell_is_matched_before_the_binary_is_replaced() {
+    let f = Fixture::new();
+    let old = f.dir.path().join("checkout/target/release/mandara");
+    std::fs::create_dir_all(old.parent().unwrap()).unwrap();
+    std::fs::write(&old, b"old").unwrap();
+    let bin = f.home().join(".local/bin/mandara");
+    std::fs::create_dir_all(bin.parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink(&old, &bin).unwrap();
+    running_shell(&f, &old);
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
+    assert!(!bin.is_symlink() && std::fs::read(&old).unwrap() == b"old", "the install replaced the link, not its target");
+    assert!(restarted(&host, &bin), "{:#?}", host.ran());
+}
+
+#[cfg(not(target_os = "freebsd"))]
+#[test]
+fn no_restart_without_a_running_shell_of_this_installation() {
+    let f = Fixture::new();
+    let elsewhere = f.dir.path().join("other/mandara");
+    std::fs::create_dir_all(elsewhere.parent().unwrap()).unwrap();
+    std::fs::write(&elsewhere, b"other").unwrap();
+    running_shell(&f, &elsewhere);
+    let mut host = FakeHost::with(&["pacman", "sudo"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
+    assert!(!restarted(&host, &f.home().join(".local/bin/mandara")), "{:#?}", host.ran());
+}
+
 #[test]
 fn active_login_screen_is_refreshed_when_outdated() {
     let f = Fixture::new();
