@@ -88,6 +88,13 @@ impl EntityMap {
         }
     }
 
+    /// Whether entity `id` still has a strong handle (Mandara: hosts that
+    /// remember views by id prune the ones that were dropped).
+    // Mandara patch.
+    pub fn is_alive(&self, id: EntityId) -> bool {
+        self.ref_counts.read().counts.get(id).is_some_and(|count| count.load(SeqCst) > 0)
+    }
+
     #[doc(hidden)]
     pub fn ref_counts_drop_handle(&self) -> Arc<RwLock<EntityRefCounts>> {
         self.ref_counts.clone()

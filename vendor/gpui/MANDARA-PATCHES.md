@@ -239,6 +239,26 @@ or `gpui_wgpu` needed changing; both already treat FreeBSD like Linux
 check in CI (`cargo clippy --workspace --all-targets --target
 x86_64-unknown-freebsd`) covers this patch.
 
+## 11. Forgetting dropped views (`app.rs`, `app/entity_map.rs`)
+
+Mandara builds its sidebar cards when the sidebar opens and drops them when
+it closes, so views come and go all session. Two things kept a trace of each
+dropped view:
+
+* `App::notify(id)` takes the entity's window invalidators and always put
+  the entry back, so notifying an entity after it was released (a redraw
+  timer that fires late, a model telling the views it remembers) left one
+  empty `window_invalidators_by_entity` entry per dead id for good. An empty
+  list is now removed instead; a live entity's list is put back as before.
+* Hosts that remember views by `EntityId` to notify them later had no way to
+  tell a dropped one. `App::entity_alive(id)` (through
+  `EntityMap::is_alive`) says whether the entity still has a strong handle,
+  so they can forget it.
+
+Behaviour is otherwise unchanged: an empty entry and a missing one mean the
+same to every reader of the map. `app::test::notifying_a_dropped_entity_leaves_no_trace`
+covers both.
+
 ## Packaging changes
 
 `Cargo.toml` spells out the workspace-inherited fields and dependencies with
