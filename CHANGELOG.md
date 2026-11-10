@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.25.1 — 2026-11-10
+
 On FreeBSD, the login screen's power buttons no longer need the `operator`
 group, which could read your disks. The website looks right on phones
 again, and the text on the AI Shell Agent card no longer jitters.
