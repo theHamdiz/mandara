@@ -225,12 +225,23 @@ only the plumbing differs:
 * **Switching** uses rc.conf instead of systemd: the active login screen is
   the one with `<name>_enable="YES"` (`greetd`, `sddm`, `gdm`, `lightdm`…,
   rc scripts in `/usr/local/etc/rc.d` and `/etc/rc.d`), and `--apply` runs
-  `sysrc sddm_enable=NO` and `sysrc greetd_enable=YES`; `greeter restore`
-  turns them back. Nothing is started or stopped.
-* **PAM:** FreeBSD reads `/etc/pam.d` before ports' `/usr/local/etc/pam.d`.
-  `keyring-unlock` copies greetd's file from `/usr/local/etc/pam.d` into
-  `/etc/pam.d` and adds its lines there (modules from `/usr/lib` and
-  `/usr/local/lib`: `gnome-keyring`, `plasma6-kwallet-pam`). FreeBSD 14's
+  `sysrc -s sddm sddm_enable=NO` and `sysrc -s greetd greetd_enable=YES`.
+  With `-s`, sysrc also edits a service's own `/etc/rc.conf.d/<name>` or
+  `/usr/local/etc/rc.conf.d/<name>`, which rc reads after rc.conf, so the
+  setting that counts is the one changed. `greeter restore` puts back
+  the value each setting had, in the file it was in, and removes one that
+  wasn't set anywhere. Nothing is started or stopped.
+* **Power buttons:** Sleep, Restart and Shut Down on the login screen ask
+  ConsoleKit2. Without it they run `shutdown` and `acpiconf -s 3`
+  directly, which FreeBSD allows only to root and the `operator` group, so
+  add the greeter user to it: `pw groupmod operator -m greeter`.
+* **PAM:** OpenPAM looks for greetd's policy in `/etc/pam.d/greetd`, then
+  in the `greetd` lines of `/etc/pam.conf`, then in ports'
+  `/usr/local/etc/pam.d/greetd`, and uses the first one it finds
+  (pam.conf(5)). `keyring-unlock` copies greetd's file from
+  `/usr/local/etc/pam.d` into `/etc/pam.d` and adds its lines there
+  (modules from `/usr/lib` and `/usr/local/lib`: `gnome-keyring`,
+  `plasma6-kwallet-pam`). FreeBSD 14's
   PAM rejects the whole file over Linux's `-auth` prefix, so the lines are
   written without it, and only for modules that are installed. Without
   the prefix a module that goes missing fails every greetd login, so run
@@ -238,17 +249,31 @@ only the plumbing differs:
   `gnome-keyring` or `plasma6-kwallet-pam` (the plan warns about it). greetd's
   sample file checks the password with `auth sufficient pam_unix.so`,
   which ends the stack before a keyring line can run: the plan says so,
-  and `auth required pam_unix.so` fixes it.
+  and `auth required pam_unix.so` fixes it. When `/etc/pam.conf` holds
+  greetd's policy and `/etc/pam.d/greetd` doesn't exist, `keyring-unlock`
+  changes nothing: a new `/etc/pam.d/greetd` would replace that policy.
+  Add the lines to `/etc/pam.conf` yourself, each starting with `greetd`
+  (`greetd auth optional pam_gnome_keyring.so`), or move greetd's lines
+  into `/etc/pam.d/greetd` first.
 * **Password prompts** (polkit) need a ConsoleKit2 session for apps other
   than the shell. First make sure ConsoleKit2 is installed
   (`sudo pkg install consolekit2`) and that
   `/usr/local/lib/pam_ck_connector.so` exists: OpenPAM fails the whole
   login when a PAM line names a module that isn't there, even an
-  `optional` one. Then add `session optional pam_ck_connector.so` to the
-  greetd PAM file OpenPAM reads, which is `/etc/pam.d/greetd` when it
-  exists (as `keyring-unlock` creates it) and `/usr/local/etc/pam.d/greetd`
-  otherwise. Before you uninstall `consolekit2`, remove that line from both
-  files, if present, and never restore a PAM backup that still contains it.
+  `optional` one. Then add the line to the greetd policy OpenPAM uses,
+  the first of these that has one:
+  1. `/etc/pam.d/greetd`, if the file exists (`keyring-unlock` creates
+     it): add `session optional pam_ck_connector.so`;
+  2. `/etc/pam.conf`, if `grep '^[[:space:]]*greetd[[:space:]]' /etc/pam.conf`
+     prints lines: add `greetd session optional pam_ck_connector.so`
+     there, with the `greetd` service name in front;
+  3. otherwise `/usr/local/etc/pam.d/greetd`: add
+     `session optional pam_ck_connector.so`.
+
+  Before you uninstall `consolekit2`, remove that line from each of these
+  files that has it (`grep -n pam_ck_connector /etc/pam.d/greetd
+  /etc/pam.conf /usr/local/etc/pam.d/greetd` lists them), and never
+  restore a PAM backup that still contains it.
   Without a ConsoleKit2 session, Mandara's agent still answers everything
   the shell asks (the Updates panel, the admin helper).
 
