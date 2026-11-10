@@ -26,14 +26,22 @@ How Mandara looks and feels, and how much of it you can shape.
   bar space do (main menu or desktop menu; any hot-corner action;
   workspaces or volume). `mandara msg bar hide` / `show` / `toggle` puts
   the bar away until you want it back.
-- **Bars that look nothing alike.** Four style presets in Studio → Bars
+- **Bars that look nothing alike.** Eight style presets in Studio → Bars
   reshape the whole bar: **Expressive** (a tall bottom bar inside a frame
   round the screen, joined to a rail on the left: round accent buttons,
   tonal tiles for the widgets and scalloped badges down the rail),
   **Tile dock** (one floating island of large squircle tiles at the
   bottom), **Rail** (a wide left rail of flower-shaped buttons in a screen
-  frame) and **Segmented** (no bar at all, just rows of connected tiles
-  under the top edge). They're built from settings you can keep tuning:
+  frame), **Segmented** (no bar at all, just rows of connected tiles
+  under the top edge), **System monitor** (a dense status line along the
+  bottom: every reading on a square-cornered stat block, meters and rates
+  in the middle, in your monospace font), **Stanley Bridge** (Tile dock
+  split into three floating docks of tertiary squircles spanning the
+  bottom), **Pharos Beam** (a narrow lantern of tonal tiles and scalloped
+  accent buttons hanging from the top edge) and **Raml Tram** (one line of
+  flower stops running along the top and down the left edge: a top bar
+  joined to a rail). In every style the workspace and tag buttons take the
+  bar's own shapes and show the icon of the app on each tag. They're built from settings you can keep tuning:
   items as capsules, tiles, squircles or connected groups; icon items as
   circles or Material 3 Expressive cookies, clovers, flowers and bursts in
   the accent or tertiary tone; the items' inset from the bar's edges; and
