@@ -508,17 +508,27 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 
 /* Install. */
 .install-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
-.install-main { grid-column: span 8; display: flex; flex-direction: column; gap: 24px; padding: clamp(20px, 3vw, 36px); border-radius: var(--r-xl); background: var(--tile); border: 1px solid var(--rim); }
+.install-main { grid-column: span 12; display: flex; flex-direction: column; gap: 24px; padding: clamp(20px, 3vw, 36px); border-radius: var(--r-xl); background: var(--tile); border: 1px solid var(--rim); }
 .install-main .install-command code { background: var(--ground); font-size: 14px; }
 .stages { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; counter-reset: stage; }
 .stages li { counter-increment: stage; display: flex; flex-direction: column; gap: 6px; padding: 18px; border-radius: var(--r-m); background: var(--tile-2); color: var(--muted); font-size: 14px; line-height: 1.45; }
 .stages li::before { content: counter(stage, decimal-leading-zero); font-size: 34px; font-weight: 200; color: var(--accent); line-height: 1; font-variant-numeric: tabular-nums; }
 .stages b { color: var(--ink); font-size: 17px; font-weight: 650; }
-.nix { grid-column: span 4; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 14px; padding: clamp(20px, 3vw, 36px); border-radius: var(--r-xl); background: var(--soft); color: var(--on-soft); }
+.nix { grid-column: span 6; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 14px; padding: clamp(20px, 3vw, 36px); border-radius: var(--r-xl); background: var(--soft); color: var(--on-soft); }
 .nix-shape { position: absolute; width: 200px; right: -60px; bottom: -60px; color: color-mix(in oklab, var(--on-soft) 10%, transparent); }
 .nix-shape use { fill: currentColor; }
 .nix pre { margin: 0; padding: 14px 18px; border-radius: var(--r-m); background: var(--ground); color: var(--ink); overflow-x: auto; }
 .nix .text-link { color: var(--on-soft); margin-top: auto; }
+.bsd { grid-column: span 6; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 14px; padding: clamp(20px, 3vw, 36px); border-radius: var(--r-xl); background: color-mix(in oklab, var(--second) 22%, var(--tile)); border: 1px solid var(--rim); }
+.bsd-shape { position: absolute; width: 190px; right: -50px; top: -50px; color: color-mix(in oklab, var(--second) 26%, transparent); }
+.bsd-shape use { fill: currentColor; }
+.bsd-kicker { font-size: 14px; font-weight: 600; letter-spacing: .02em; color: color-mix(in oklab, var(--second) 70%, var(--ink)); }
+.bsd .display-3 { margin-top: -8px; }
+.bsd p code, .bsd-facts code { font-size: .88em; padding: 1px 6px; border-radius: 6px; background: var(--ground); }
+.bsd-facts { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 15px; }
+.bsd-facts li { padding-left: 18px; position: relative; }
+.bsd-facts li::before { content: ""; position: absolute; left: 0; top: .6em; width: 8px; height: 8px; border-radius: 3px; background: var(--second); }
+.bsd .text-link { margin-top: auto; }
 .cli, .first { grid-column: span 6; display: flex; flex-direction: column; gap: 18px; padding: clamp(20px, 3vw, 36px); border-radius: var(--r-xl); background: var(--tile); border: 1px solid var(--rim); }
 .cli dl { display: flex; flex-direction: column; gap: 12px; }
 .cli dl div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: baseline; padding-top: 12px; border-top: 1px solid var(--rim); }
@@ -568,7 +578,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
   .blob-cookie { animation: spin 60s linear infinite; }
   .blob-flower { animation: spin 48s linear infinite reverse; }
   .blob-clover { animation: spin 36s linear infinite; }
-  .agent-shape, .nix-shape { animation: spin 70s linear infinite; }
+  .agent-shape, .nix-shape, .bsd-shape { animation: spin 70s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .wave-ready .ch { animation: breathe 3.6s var(--ease) infinite; animation-delay: calc(var(--i) * 140ms); }
   @keyframes breathe { 0%, 100% { font-weight: var(--from, 200); } 50% { font-weight: var(--to, 900); } }
@@ -598,7 +608,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
   .piece-slider, .piece-shapes, .piece-toast { grid-column: span 12; }
   .piece-tags { grid-column: span 12; }
   .piece-clock, .piece-toggle { grid-column: span 6; }
-  .install-main, .nix, .cli, .first { grid-column: span 12; }
+  .install-main, .nix, .bsd, .cli, .first { grid-column: span 12; }
   .foot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fact-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fact:nth-child(3) { padding-left: 0; border-left: 0; }

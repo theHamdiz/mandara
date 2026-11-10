@@ -20,6 +20,7 @@ About → What's new shows it too.
 - **Fresh login and lock screen pictures.** The README and the lock and login guides now show Mandara Login in all three of its designs (Mandara with its emblem, Midnight card and Material You), the lock screen in its Mandara and Material You designs, and Studio's Login screen page with its three looks.
 - **The System monitor desktop widget shows your NVIDIA GPU, and every reading is yours to pick.** The widget now reads its GPUs from the same place as the Resources panel, so NVIDIA cards (through `nvidia-smi`) show up next to AMD and Intel ones, with load, video memory, temperature and power draw, one line per GPU when you have several. Two new readings join the rest, **VRAM** and **Swap**, off until you switch them on. Pick what the widget shows in Studio → Desktop widgets → *Readings*, or right-click the widget in *Edit desktop* and choose *Readings* to tick them right there. A GPU reading your machine can't show is locked with the reason (no graphics card, `nvidia-smi` missing, or a card that doesn't report it), and the widget leaves it out instead of showing an empty row. Existing widgets look exactly as before.
 - **Discord and Ko-fi in the website's top bar.** Join the community or support Mandara right from the floating bar, next to GitHub, in the page's own colours.
+- **FreeBSD on the website.** The install section gets a FreeBSD card beside NixOS: the same one line installs Mandara there, with what works on FreeBSD a click away.
 
 ### Fixed
 
