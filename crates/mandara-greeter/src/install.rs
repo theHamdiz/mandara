@@ -537,7 +537,7 @@ mod tests {
     fn fresh_config_gets_vt1_and_default_user() {
         let out = render_greetd_config(None, "x", &greeter_user(None));
         let t: toml::Table = toml::from_str(&out).unwrap();
-        assert_eq!(t["terminal"]["vt"].as_integer(), Some(1));
+        assert_eq!(t["terminal"]["vt"].as_integer(), Some(FRESH_VT), "1 on Linux, 8 on FreeBSD");
         assert_eq!(t["default_session"]["user"].as_str(), Some("greeter"));
         assert_eq!(greeter_user(Some("[default_session]\nuser = \"_greetd\"\n")), "_greetd");
     }

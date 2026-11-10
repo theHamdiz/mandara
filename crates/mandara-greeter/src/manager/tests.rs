@@ -350,7 +350,7 @@ fn switch_then_restore_latest() {
     let restore = RestorePlan::build(&f.root(), "latest").unwrap();
     assert!(restore.manifest.units_switched);
     assert_eq!(restore.commands, vec![systemctl("disable", GREETD_UNIT), systemctl("enable", "sddm.service")]);
-    assert!(restore.describe().contains("restore  /etc/greetd/config.toml"));
+    assert!(restore.describe().contains(&format!("restore  {GREETD_CONFIG}")));
     let mut rec = Recorder::default();
     restore.perform(&f.root(), true, &mut rec).unwrap();
     assert_eq!(f.read(GREETD_CONFIG).as_deref(), Some(SDDM_CONFIG));
