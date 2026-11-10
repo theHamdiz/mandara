@@ -570,15 +570,31 @@ pub fn invoked_as_askpass(argv0: &std::ffi::OsStr) -> bool {
 }
 
 /// Whether this process is a session's `sudo` wrapper: started as `sudo`
-/// from the folder that holds the socket in its environment.
+/// from the folder that holds the socket in its environment. A bare `sudo`
+/// (yay starts it by name) is the one `PATH` finds first.
 pub fn invoked_as_sudo(argv0: &std::ffi::OsStr) -> bool {
-    is_wrapper(argv0, std::env::var_os(ENV_SOCKET).as_deref())
+    is_wrapper(argv0, std::env::var_os(ENV_SOCKET).as_deref(), std::env::var_os("PATH").as_deref())
 }
 
-fn is_wrapper(argv0: &std::ffi::OsStr, socket: Option<&std::ffi::OsStr>) -> bool {
+fn is_wrapper(argv0: &std::ffi::OsStr, socket: Option<&std::ffi::OsStr>, path: Option<&std::ffi::OsStr>) -> bool {
     let me = Path::new(argv0);
     let Some(socket) = socket else { return false };
-    me.file_name().is_some_and(|n| n == SUDO) && me.parent().is_some_and(|d| d.as_os_str() != "" && Some(d) == Path::new(socket).parent())
+    if me.file_name().is_none_or(|n| n != SUDO) {
+        return false;
+    }
+    let folder = Path::new(socket).parent();
+    match me.parent() {
+        Some(d) if d.as_os_str() != "" => Some(d) == folder,
+        // Started by name: the folder exec found it in, as a link path
+        // (never canonicalized: the link's target is the `mandara` binary).
+        _ => path.and_then(|p| std::env::split_paths(p).find(|d| d.as_os_str() != "" && is_executable(&d.join(SUDO)))).is_some_and(|d| Some(d.as_path()) == folder),
+    }
+}
+
+/// Whether `path` is an executable file (what `execvp` takes from `PATH`).
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt as _;
+    std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
 
 /// The real sudo's arguments: `-A` first, then the caller's, unchanged.

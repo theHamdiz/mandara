@@ -276,12 +276,41 @@ fn the_sudo_wrapper_adds_askpass_and_only_answers_in_its_folder() {
     let args = sudo_args(["pacman", "-U", "/tmp/x.pkg.tar.zst"].map(std::ffi::OsString::from));
     assert_eq!(args, ["-A", "pacman", "-U", "/tmp/x.pkg.tar.zst"]);
     let socket = std::ffi::OsStr::new("/run/user/1000/mandara-askpass-x/socket");
-    assert!(is_wrapper(std::ffi::OsStr::new("/run/user/1000/mandara-askpass-x/sudo"), Some(socket)));
-    assert!(!is_wrapper(std::ffi::OsStr::new("/usr/bin/sudo"), Some(socket)));
-    assert!(!is_wrapper(std::ffi::OsStr::new("sudo"), Some(socket)));
-    assert!(!is_wrapper(std::ffi::OsStr::new("/run/user/1000/mandara-askpass-x/sudo"), None));
+    assert!(is_wrapper(std::ffi::OsStr::new("/run/user/1000/mandara-askpass-x/sudo"), Some(socket), None));
+    assert!(!is_wrapper(std::ffi::OsStr::new("/usr/bin/sudo"), Some(socket), None));
+    assert!(!is_wrapper(std::ffi::OsStr::new("sudo"), Some(socket), None));
+    assert!(!is_wrapper(std::ffi::OsStr::new("/run/user/1000/mandara-askpass-x/sudo"), None, None));
     assert!(invoked_as_askpass(std::ffi::OsStr::new("/run/user/1000/mandara-askpass-x/mandara-askpass")));
     assert!(!invoked_as_askpass(std::ffi::OsStr::new("/usr/bin/mandara")));
+}
+
+#[test]
+fn the_sudo_wrapper_started_by_name_is_found_through_path() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let session = tempfile::tempdir().unwrap();
+    let other = tempfile::tempdir().unwrap();
+    let exe = other.path().join("mandara");
+    std::fs::write(&exe, b"").unwrap();
+    std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
+    // The session's `sudo` is a link to the binary, as in `Session::open`.
+    std::os::unix::fs::symlink(&exe, session.path().join("sudo")).unwrap();
+    let socket = session.path().join("socket");
+    let socket = Some(socket.as_os_str());
+    let sudo = std::ffi::OsStr::new("sudo");
+    let path = |dirs: &[&Path]| std::env::join_paths(dirs).unwrap();
+    // The helper's PATH puts the session folder first (an empty entry and
+    // a folder without sudo are passed over).
+    assert!(is_wrapper(sudo, socket, Some(&path(&[Path::new(""), other.path().join("none").as_path(), session.path(), other.path()]))));
+    // Another sudo found first, or none at all, is not the wrapper.
+    std::fs::copy(&exe, other.path().join("sudo")).unwrap();
+    assert!(!is_wrapper(sudo, socket, Some(&path(&[other.path(), session.path()]))));
+    assert!(!is_wrapper(sudo, socket, Some(&path(&[other.path().join("none").as_path()]))));
+    assert!(!is_wrapper(sudo, socket, None));
+    // A sudo that can't be run is skipped, as exec skips it.
+    std::fs::set_permissions(other.path().join("sudo"), std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(is_wrapper(sudo, socket, Some(&path(&[other.path(), session.path()]))));
+    // Any other name never is.
+    assert!(!is_wrapper(std::ffi::OsStr::new("mandara"), socket, Some(&path(&[session.path()]))));
 }
 
 #[test]
