@@ -430,6 +430,28 @@ fn cancelling_the_compositor_picker_changes_nothing() {
     assert!(fixture.home_files().is_empty());
 }
 
+/// FreeBSD: a service rc.conf enables but that isn't running is started,
+/// and one that runs already is left alone.
+#[test]
+fn freebsd_starts_an_enabled_service_that_isnt_running() {
+    let f = Fixture::new();
+    std::fs::create_dir_all(f.root().join("etc")).unwrap();
+    std::fs::write(f.root().join("etc/group"), "wheel:*:0:root\nvideo:*:44:layla\n").unwrap();
+    std::fs::write(f.root().join("etc/passwd"), "layla:*:1001:1001:Layla:/home/layla:/bin/sh\n").unwrap();
+    let mut host = FakeHost::with(&["pkg", "sudo", "sway", "cage"]);
+    host.stdout.insert("sysrc -n -i dbus_enable".into(), "YES\n".into());
+    host.stdout.insert("sysrc -n -i seatd_enable".into(), "YES\n".into());
+    host.failing.insert("service dbus status".into());
+    let mut facts = f.facts(Family::FreeBSD);
+    facts.user = "layla".into();
+    run(&mut host, &FakeProbe::default(), facts, InstallArgs { yes: true, ..Default::default() }).unwrap();
+    let ran = host.ran();
+    assert!(ran.iter().any(|c| c == "sudo service dbus start"), "{ran:#?}");
+    assert!(!ran.iter().any(|c| c == "sudo service seatd start"), "seatd runs already: {ran:#?}");
+    assert!(!ran.iter().any(|c| c.contains("dbus_enable=YES")), "already enabled: {ran:#?}");
+    assert!(host.text().contains("dbus was enabled but not running; started it"), "{}", host.text());
+}
+
 #[test]
 fn greetd_user_comes_from_the_default_session() {
     assert_eq!(greetd_user(""), "greeter");

@@ -738,6 +738,19 @@ impl<'a> Installer<'a> {
             let var = format!("{name}_enable");
             let enabled = self.run(Cmd::new(&["sysrc", "-n", "-i", var.as_str()]).io(Io::Capture)).is_some_and(|o| rc_yes(&o.stdout));
             if enabled {
+                // Enabled in rc.conf isn't the same as running: start one
+                // that was enabled but never started (or has stopped).
+                if self.run(Cmd::new(&["service", name, "status"]).io(Io::Quiet)).is_some_and(|o| o.success) {
+                    continue;
+                }
+                if self.as_root(Cmd::new(&["service", name, "start"]).io(Io::Quiet)) {
+                    if !self.dry() {
+                        self.say(Level::Ok, format!("{name} was enabled but not running; started it"));
+                    }
+                } else {
+                    let hint = self.root_hint(&["service", name, "start"]);
+                    self.say(Level::Warn, format!("{name} is enabled but not running; run: {hint}"));
+                }
                 continue;
             }
             let set = format!("{var}={RC_YES}");
