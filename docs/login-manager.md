@@ -33,8 +33,9 @@ The demo opens as an overlay on your current session. Nothing is real:
   plays the zoom-and-dissolve transition and closes it.
 
 Options: `--lang ar`, `--theme mandara-obsidian`, `--background
-aurora|stills|video|solid`, `--look mandara|midnight-card|material-you`
-(starts from that look, as Studio's Looks tab would). The demo reads your Studio draft
+aurora|stills|video|solid`, `--look
+mandara|midnight-card|material-you|ghostline|chrome-halo|meridian` (starts
+from that look, as Studio's Looks tab would), `--scheme light|dark`. The demo reads your Studio draft
 (`~/.config/mandara/greeter.toml`), your own clips in
 `~/.local/share/mandara/login/videos/` and your wallpapers in
 `~/Pictures/Wallpapers`.
@@ -400,7 +401,47 @@ shape, a filled password field with a round button beside it that squares
 off while held, and the session as a chip with a menu; other people as
 chips, tonal power buttons and the emblem in the accent colour). The
 scalloped avatar turns a little with each key and morphs into a circle while
-the password is checked; reduced motion holds it still. Who is listed, sessions, folders, language and
+the password is checked; reduced motion holds it still.
+
+Three looks put the sign-in somewhere other than the middle:
+
+* **Ghostline**, on the left: graphite and ice-white hairlines with one
+  cold cyan accent and a sparing pink-magenta one. A bracketed wireframe
+  panel holds a ruled header with the computer's name, live readouts (the
+  keyboard layout, the uptime and the time zone, read from the system and
+  left out when they can't be), your picture and name, and a terminal
+  password line: a prompt, one segmented cell per character and a block
+  caret, with the sign-in key at its end. On the right, thin monospace
+  digits stack beside a ruler of the day whose marker shows the time, and
+  a measured frame (corner brackets, a faint grid, tick rulers and a slow
+  scan line) sits over the backdrop.
+* **Chrome Halo**, on the right: deep ink and holographic light, warm. A
+  light clock and the date sit inside a luminous ring of iridescent arcs
+  in the theme's three accents; the arcs turn slowly, step with each key,
+  brighten while you type and flash coral on a wrong password, and a small
+  satellite traces an outer orbit. The sign-in is a machined double-bezel
+  module (an outer tray with a hairline rim around an inner core) with a
+  recessed field and a pill button whose arrow sits in a circle of its own.
+* **Meridian**: no card and no boxes. One calm field (dawn ivory to pale
+  stone, or deep ink with the light colours off) crossed by a single
+  hairline at the golden height, which draws itself in from the centre and
+  brightens around the caret. Your name and the characters you type are
+  set on that line from the golden point like type; the session and the
+  keyboard layout are small words at its start, power and the date at its
+  end (under the line on screens narrower than 3:2). Enormous hairline
+  numerals sit behind everything at a whisper of contrast, cropped by the
+  screen's edges. Click your name to move to the next person.
+
+Ghostline and Chrome Halo keep their sides in right-to-left languages (the
+side is the design); everything inside them mirrors. Meridian mirrors
+whole: it starts from the golden point on the right. Each piece is a
+setting of its own, so it mixes with the others: the clock faces (Clock &
+date → **Clock face**), the card styles (Sign-in → **Card style**:
+wireframe, double bezel, on a line), the **Terminal** and **Recessed**
+fields, the **pill** sign-in button, the HUD, prism and horizon
+**Overlays** (Background), and **Light colours** (Theme & glass).
+
+Who is listed, sessions, folders, language and
 accessibility stay as they are, and every part stays editable in the other
 tabs: Layout, Background, Clock & date, Sign-in (card, user, password
 field), Session, power & extras (logo, scheme switcher, language), Theme &
@@ -411,6 +452,11 @@ glass, and Motion & accessibility.
 <td width="33%" valign="top"><img src="screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons, with the Mandara emblem above the keyboard pill" width="100%"/><br/><sub><b>Mandara</b>: everything floats on the backdrop</sub></td>
 <td width="33%" valign="top"><img src="screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" width="100%"/><br/><sub><b>Midnight card</b>: one outlined card in navy and citrine</sub></td>
 <td width="33%" valign="top"><img src="screenshots/greeter-material-you.webp" alt="Mandara Login in its Material You design: a big stacked clock and a tonal card with the scalloped avatar, a filled password field, a round sign-in button and a session chip, in colours from the wallpaper" width="100%"/><br/><sub><b>Material You</b>: colours from the wallpaper, one tonal card</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><img src="screenshots/greeter-ghostline.webp" alt="Mandara Login in its Ghostline design: a bracketed wireframe sign-in panel on the left with live readouts and a terminal password line of segmented cells, and a thin stacked clock beside a ruler of the day on the right, on graphite" width="100%"/><br/><sub><b>Ghostline</b>: a wireframe panel on the left</sub></td>
+<td width="33%" valign="top"><img src="screenshots/greeter-chrome-halo.webp" alt="Mandara Login in its Chrome Halo design: a light clock inside a luminous ring of iridescent arcs on the left, and a double-bezel sign-in module with a pill button on the right, on deep ink" width="100%"/><br/><sub><b>Chrome Halo</b>: a ring of light, a machined module on the right</sub></td>
+<td width="33%" valign="top"><picture><source media="(prefers-color-scheme: light)" srcset="screenshots/greeter-meridian-light.webp"/><img src="screenshots/greeter-meridian.webp" alt="Mandara Login in its Meridian design: the name and the typed characters on one hairline across a calm field, small words at its ends, over enormous faint numerals" width="100%"/></picture><br/><sub><b>Meridian</b>: one line, light or dark</sub></td>
 </tr>
 </table>
 
@@ -519,6 +565,7 @@ solid = ""                       # color for mode = "solid"
 orbs = true                      # drifting light orbs
 orb_intensity = 0.5
 parallax = 14.0                  # pointer parallax depth (px)
+overlay = "none"                 # none | hud (a measured frame) | prism (holographic light) | horizon (a calm field and a line; covers the backdrop)
 
 [clock]
 format_24h = true
@@ -531,6 +578,7 @@ opacity = 0.95
 roll_digits = true
 stacked = false                  # hours over minutes
 tint = false                     # hours in a tone of the accent
+face = "digits"                  # digits | ruler (beside a ruler of the day) | halo (in a ring of light) | vast (enormous, behind everything)
 
 [date]
 format = ""                      # strftime; empty = the language's default
@@ -551,8 +599,8 @@ hidden = []                      # login names never listed
 switcher = "faces"               # faces | chips (the other people)
 
 [password]
-style = "glass"                  # glass | solid | inset | outline | underline | filled
-submit = "inside"                # inside | beside | hidden (Enter signs in)
+style = "glass"                  # glass | solid | inset | outline | underline | filled | terminal | recessed
+submit = "inside"                # inside | beside | hidden (Enter signs in) | pill (a full-width pill under the field)
 mask = "dots"                    # dots | shapes (a varied shape per character)
 accent_border = false            # accent border while focused
 text_size = 15.0
@@ -588,6 +636,7 @@ border = 1.0
 border_color = ""                # #rrggbb, empty = the theme's outline
 back_button = true               # back to the user switcher
 session_inside = true
+style = "plain"                  # plain | hud (wireframe, live readouts) | bezel (double bezel) | horizon (no card: on a line)
 
 [logo]                           # shown with the "logo" layout element
 path = ""                        # PNG / SVG, empty = Mandara's emblem
@@ -610,6 +659,7 @@ rim = 0.6
 roundness = 1.0
 switcher = []                    # schemes the "themes" element offers (ids)
 from_wallpaper = false           # colours from the picture behind (dynamic colour)
+light = false                    # the theme's light colours: dark text over a light screen
 
 [motion]
 entrance = true

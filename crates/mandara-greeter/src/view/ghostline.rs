@@ -803,6 +803,26 @@ mod tests {
         assert_eq!(zone_label(20_700), "UTC+05:45");
     }
 
+    /// The readouts come from this system (procfs on Linux, sysctl on
+    /// FreeBSD): a host name, an uptime and a time zone, refreshed per
+    /// minute and in the current language.
+    #[test]
+    fn readouts_are_read_from_this_system() {
+        let now = chrono::Local::now();
+        let mut slot = None;
+        Telemetry::refresh(&mut slot, &now);
+        let t = slot.expect("made on first use");
+        assert!(!t.host.is_empty(), "a host name");
+        assert!(t.uptime.as_ref().is_some_and(|u| !u.is_empty()), "an uptime");
+        assert_eq!(t.zone.as_ref(), zone_label(now.offset().local_minus_utc()));
+        assert!(!t.sign_in.is_empty() && !t.keyboard.is_empty() && t.keyboard.to_uppercase() == t.keyboard.as_ref());
+        // The next minute advances the uptime without reading the system again.
+        let boot = t.boot;
+        let mut slot = Some(t);
+        Telemetry::refresh(&mut slot, &(now + chrono::Duration::minutes(1)));
+        assert_eq!(slot.unwrap().boot, boot);
+    }
+
     #[test]
     fn hairlines_are_whole_device_pixels() {
         assert_eq!(hairline(1.0), 1.0);

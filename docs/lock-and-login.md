@@ -41,6 +41,11 @@ changes; an empty collection starts no painter or weather service.
 <td width="33%" valign="top"><img src="screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" width="100%"/><br/><sub>The <b>Midnight card</b> design</sub></td>
 <td width="33%" valign="top"><img src="screenshots/greeter-material-you.webp" alt="Mandara Login in its Material You design: a big stacked clock and a tonal card with the scalloped avatar, a filled password field, a round sign-in button and a session chip, in colours from the wallpaper" width="100%"/><br/><sub>The <b>Material You</b> design</sub></td>
 </tr>
+<tr>
+<td width="33%" valign="top"><img src="screenshots/greeter-ghostline.webp" alt="Mandara Login in its Ghostline design: a bracketed wireframe sign-in panel on the left with live readouts and a terminal password line, and a thin stacked clock beside a ruler of the day on the right, on graphite" width="100%"/><br/><sub>The <b>Ghostline</b> design</sub></td>
+<td width="33%" valign="top"><img src="screenshots/greeter-chrome-halo.webp" alt="Mandara Login in its Chrome Halo design: a light clock inside a luminous ring of iridescent arcs on the left, and a double-bezel sign-in module with a pill button on the right, on deep ink" width="100%"/><br/><sub>The <b>Chrome Halo</b> design</sub></td>
+<td width="33%" valign="top"><picture><source media="(prefers-color-scheme: light)" srcset="screenshots/greeter-meridian-light.webp"/><img src="screenshots/greeter-meridian.webp" alt="Mandara Login in its Meridian design: the name and the typed characters on one hairline across a calm field, over enormous faint numerals" width="100%"/></picture><br/><sub>The <b>Meridian</b> design, light or dark</sub></td>
+</tr>
 </table>
 
 <table>

@@ -1096,7 +1096,7 @@ impl GreeterConfig {
                 for pl in &mut self.layout {
                     match pl.element {
                         Element::User => (pl.anchor, pl.x, pl.y) = (Anchor::Right, -CHROME_HALO_INSET, 120.0),
-                        Element::Users => (pl.anchor, pl.x, pl.y) = (Anchor::Right, -CHROME_HALO_INSET, 420.0),
+                        Element::Users => (pl.anchor, pl.x, pl.y) = (Anchor::Right, -CHROME_HALO_INSET, 400.0),
                         Element::Clock => (pl.anchor, pl.x, pl.y) = (Anchor::TopLeft, 150.0, 250.0),
                         Element::Logo => (pl.anchor, pl.x, pl.y) = (Anchor::BottomLeft, 40.0, -40.0),
                         Element::Power => (pl.x, pl.y) = (-40.0, -40.0),

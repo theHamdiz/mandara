@@ -3,9 +3,9 @@
 //! the sign-in shows on the side it really takes and the clock in its own
 //! face.
 
-use gpui::{AnyElement, IntoElement, ParentElement, Styled, div, px};
+use gpui::{AnyElement, FontWeight, IntoElement, ParentElement, SharedString, Styled, div, px};
 use mandara_core::{ToGpui, oklab_gradient};
-use mandara_greeter::config::{CardStyle, ClockFace, Element, GreeterConfig, Overlay};
+use mandara_greeter::config::{BackgroundMode, CardStyle, ClockFace, Element, GreeterConfig, Overlay};
 use mandara_theme::{Color, MandaraPalette};
 
 /// The reference screen's width (placements are written for 1920 × 1080).
@@ -64,7 +64,11 @@ pub(super) fn thumb(cfg: &GreeterConfig, pal: &MandaraPalette, w: f32, h: f32) -
             let [top, bottom] = if cfg.theme.light { DAWN } else { NIGHT };
             oklab_gradient(180.0, Color::oklch(top.0, top.1, top.2), Color::oklch(bottom.0, bottom.1, bottom.2))
         }
-        _ => oklab_gradient(SWATCH_DEG, pal.surface_dim, pal.primary.with_lightness(0.32).with_chroma(pal.primary.chroma().min(0.08))),
+        // A solid ground is the look's own colour, lit a little by its accent.
+        _ => {
+            let floor = if cfg.background.mode == BackgroundMode::Solid { Color::from_hex(cfg.background.solid.trim()).unwrap_or(pal.surface_dim) } else { pal.surface_dim };
+            oklab_gradient(SWATCH_DEG, floor, pal.primary.with_lightness(0.32).with_chroma(pal.primary.chroma().min(0.08)).mix(floor, 0.4))
+        }
     };
     let mut root = div().relative().w(px(w)).h(px(h)).overflow_hidden().rounded(px(THUMB_RADIUS)).bg(bg);
     // The overlay.
@@ -119,9 +123,19 @@ pub(super) fn thumb(cfg: &GreeterConfig, pal: &MandaraPalette, w: f32, h: f32) -
                 .child(bar(x + dw * 0.22, y + dw * 0.44, dw * 0.56, dw * 0.12, 0.85));
         }
         ClockFace::Vast => {
+            // Real hairline numerals, as faint as on the screen.
             let s = c.size * 4.0;
             let (x, y, cw, ch) = m.place(cfg, Element::Clock, (4.4 * DIGIT_W * s, CLOCK_LINE * s));
-            root = root.child(at(x, y, cw, ch).rounded(px(ch * 0.2)).bg(ink.with_alpha(0.07).hsla()));
+            root = root.child(
+                at(x, y, cw, ch)
+                    .flex()
+                    .items_center()
+                    .text_size(px(s * m.sc))
+                    .line_height(px(ch))
+                    .font_weight(FontWeight(c.weight as f32))
+                    .text_color(ink.with_alpha((c.opacity * 1.6).min(0.2)).hsla())
+                    .child(SharedString::new_static("09:41")),
+            );
         }
     }
     // The sign-in.

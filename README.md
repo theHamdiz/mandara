@@ -268,7 +268,12 @@ take one of its own (`mandara msg side-bar style right <name>`).
 <tr>
 <td width="33%" valign="top"><img src="docs/screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons, with the Mandara emblem above the keyboard pill" width="100%"/><br/><sub><b>Mandara Login</b>, the login screen: the <b>Mandara</b> design</sub></td>
 <td width="33%" valign="top"><img src="docs/screenshots/greeter-midnight.webp" alt="Mandara Login in its Midnight card design: a quiet clock over one outlined card with the user, password and session, in midnight navy and citrine over violet and coral dusk waves" width="100%"/><br/><sub>…its <b>Midnight card</b> design</sub></td>
-<td width="33%" valign="top"><img src="docs/screenshots/greeter-material-you.webp" alt="Mandara Login in its Material You design: a big stacked clock with the hours in pink, and a tonal card with the scalloped avatar, a filled password field, a round sign-in button and a session chip, in colours taken from coral, gold and magenta ribbons" width="100%"/><br/><sub>…and its <b>Material You</b> design</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/greeter-material-you.webp" alt="Mandara Login in its Material You design: a big stacked clock with the hours in pink, and a tonal card with the scalloped avatar, a filled password field, a round sign-in button and a session chip, in colours taken from coral, gold and magenta ribbons" width="100%"/><br/><sub>…its <b>Material You</b> design</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><img src="docs/screenshots/greeter-ghostline.webp" alt="Mandara Login in its Ghostline design: on graphite with ice-white hairlines, a bracketed wireframe sign-in panel on the left with live readouts of the keyboard layout, uptime and time zone and a terminal password line of segmented cells, and on the right a thin stacked clock beside a ruler of the day" width="100%"/><br/><sub>…<b>Ghostline</b>, sign-in on the left in a wireframe panel</sub></td>
+<td width="33%" valign="top"><img src="docs/screenshots/greeter-chrome-halo.webp" alt="Mandara Login in its Chrome Halo design: on deep ink with soft holographic light, a light clock inside a luminous ring of iridescent arcs on the left, and on the right a machined double-bezel sign-in module with a glowing field and a gold pill button" width="100%"/><br/><sub>…<b>Chrome Halo</b>, a ring of light and a machined module on the right</sub></td>
+<td width="33%" valign="top"><picture><source media="(prefers-color-scheme: light)" srcset="docs/screenshots/greeter-meridian-light.webp"/><img src="docs/screenshots/greeter-meridian.webp" alt="Mandara Login in its Meridian design: no boxes, the name and the typed characters set on one hairline across a calm field at the golden height, small words for the session, power and date at its ends, over enormous faint numerals" width="100%"/></picture><br/><sub>…and <b>Meridian</b>, everything on one line, light or dark</sub></td>
 </tr>
 </table>
 
@@ -280,7 +285,7 @@ take one of its own (`mandara msg side-bar style right <name>`).
 </table>
 
 <p align="center">
-  <img src="docs/screenshots/studio-login.webp" alt="Studio: the login screen designer with a live preview, the Try it buttons and the three Looks: Mandara, Midnight card and Material You" width="100%"/>
+  <img src="docs/screenshots/studio-login.webp" alt="Studio: the login screen designer with a live preview of the Chrome Halo look, the Try it buttons and the six Looks: Mandara, Midnight card, Material You, Ghostline, Chrome Halo and Meridian" width="100%"/>
   <br/>
   <sub><b>Mandara Studio</b>: every setting, live, with previews like this login screen designer.</sub>
 </p>

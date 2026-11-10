@@ -6,6 +6,18 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Mandara Login has three new looks that move the sign-in off the middle of
+the screen: Ghostline, Chrome Halo and Meridian. On a portrait screen the
+login screen is no longer drawn oversized.
+
+### New
+
+- **Three new login screen looks: Ghostline, Chrome Halo and Meridian.** Studio → Login screen → Looks now has six designs, three to a row, each with a small picture of where things sit. **Ghostline** puts the sign-in on the left in a bracketed wireframe panel on graphite, with live readouts (keyboard layout, uptime, time zone), a terminal password line that fills one cell per key, and a thin clock beside a ruler of the day on the right. **Chrome Halo** sets a light clock inside a slowly turning ring of iridescent light that brightens as you type, with a machined two-layer sign-in module and a pill button on the right. **Meridian** has no boxes at all: your name and password sit on one fine line across a calm dawn field, over enormous faint numerals, in light or dark. Every piece is also a setting you can mix into any look: clock faces, card styles, the terminal and recessed fields, the pill button, the HUD, prism and horizon overlays, and *Light colours*. All three work on FreeBSD too, and `mandara greeter --demo --look ghostline` (or `chrome-halo`, `meridian`, with `--scheme light` or `dark`) previews them.
+
+### Fixed
+
+- **The login screen fits portrait screens.** On a screen turned upright, Mandara Login sized everything by the screen's height and drew it far too large. It now sizes by the shorter side, so a portrait screen looks like the same screen turned landscape.
+
 ## 0.25.1 — 2026-11-10
 
 On FreeBSD, the login screen's power buttons no longer need the `operator`

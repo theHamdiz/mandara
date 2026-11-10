@@ -51,7 +51,7 @@ mod manager;
 
 /// The Looks tab's cards: three to a row (six looks make 3 × 2), fewer
 /// when the page is narrow.
-const LOOK_GRID: CardGrid = CardGrid { min_w: 200.0, max_w: 420.0, gap: SPACE_10_PX };
+const LOOK_GRID: CardGrid = CardGrid { min_w: 200.0, max_w: 640.0, gap: SPACE_10_PX };
 const LOOK_COLUMNS: usize = 3;
 /// Each card's preview, 16:9 like the screen.
 const LOOK_THUMB_ASPECT: f32 = 9.0 / 16.0;
