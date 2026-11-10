@@ -378,9 +378,13 @@ writable `/usr`), and hands over to `mandara install`, which:
   its desktop entry, icon and language packs), and hooks it into your
   compositor (`~/.config/mandara/generated/`);
 - checks every package it would install elsewhere against the **running
-  image** (`rpm -q`, `dpkg-query` or `pacman -Q`), so nothing the image
-  already ships is layered again. On rpm-ostree, packages that
-  `rpm-ostree status` already requests for the next boot are skipped too;
+  image**, so nothing the image already ships is layered again. It asks
+  what *provides* each one (`rpm -q --whatprovides`, `pacman -T`;
+  `dpkg-query` on Vanilla OS), so a replacement the image ships under
+  another name counts: Bazzite's own BlueZ and WirePlumber builds, or
+  tuned-ppd standing in for power-profiles-daemon. On rpm-ostree, packages
+  that `rpm-ostree status` already requests for the next boot are skipped
+  too;
 - asks **once**, at the end, before adding what is missing in **one
   transaction** with the system's own tool. One name a repository lacks
   fails a whole transaction, so on rpm-ostree the optional packages are
