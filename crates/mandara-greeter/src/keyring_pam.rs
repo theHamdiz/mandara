@@ -791,7 +791,7 @@ impl KeyringPlan {
         if root.read(&self.path) != self.previous {
             return Err(format!("{} changed since the plan was made; run it again (nothing was changed)", self.path));
         }
-        let manifest = Manifest { created: chrono::Local::now().to_rfc3339(), target: BACKUP_TARGET.into(), previous_unit: None, new_unit: None, units_switched: false, files: Vec::new() };
+        let manifest = Manifest { created: chrono::Local::now().to_rfc3339(), target: BACKUP_TARGET.into(), previous_unit: None, new_unit: None, units_switched: false, undo: Vec::new(), files: Vec::new() };
         let write = FileWrite { path: self.path.clone(), contents: self.contents.clone().unwrap_or_default(), previous: self.previous.clone() };
         let backup = Backup::create(root, manifest, std::slice::from_ref(&write))?;
         let mut log = vec![format!("backed up to {}", backup.logical_dir())];
