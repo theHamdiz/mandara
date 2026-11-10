@@ -6,6 +6,12 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **System updates on FreeBSD.** The Updates panel counts your package updates with pkg, and *Update all* updates both halves of a FreeBSD system right in the panel: your packages with pkg, then your release's security and errata patches with freebsd-update, behind Mandara's own password dialog. Everything downloads first (and can be cancelled until then), then installs, with the same live phases, counts and log as elsewhere; a new kernel or kernel module suggests a restart, and a -STABLE system or a release past its end of life gets its packages updated with a clear warning about the base system.
+- **`mandara install` on FreeBSD.** The installer recognises FreeBSD (and GhostBSD), installs everything from FreeBSD's own packages with pkg, turns on D-Bus and seatd in rc.conf and starts them, adds you to seatd's group so a compositor can open the seat, sets up the admin helper the FreeBSD way, and can install Niri, Hyprland, Sway or River Classic for you. What FreeBSD doesn't have (NetworkManager, BlueZ, monitor brightness over DDC/CI) is skipped with a short note instead of an error.
+- **Mandara Login on FreeBSD.** Once greetd is built (it isn't packaged for FreeBSD yet; the guide shows how), `mandara greeter use mandara` switches login screens through rc.conf, reads greetd's config from `/usr/local/etc/greetd`, and *Unlock keyrings at login* writes PAM lines FreeBSD understands. Mandara's password dialog works with FreeBSD's polkit and ConsoleKit2 sessions too.
+
 ## 0.24.0 — 2026-11-09
 
 Update your whole system right from the Updates panel. Pick how every

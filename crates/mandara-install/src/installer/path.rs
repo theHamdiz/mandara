@@ -191,7 +191,8 @@ mod tests {
         let updated = std::fs::read_to_string(&profile).unwrap();
         assert!(!updated.contains("/old/bin"));
         assert!(updated.ends_with("export EDITOR=vi\n"));
-        let output = std::process::Command::new("sh")
+        // `/bin/sh`: with this PATH a bare `sh` isn't found on FreeBSD.
+        let output = std::process::Command::new("/bin/sh")
             .args(["-c", ". \"$1\"; printf '%s' \"$PATH\"", "mandara-profile-test"])
             .arg(&profile).env("PATH", "/usr/bin").output().unwrap();
         assert!(output.status.success());

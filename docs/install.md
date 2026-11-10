@@ -272,6 +272,40 @@ mandara setup
 The recipes live in [`packaging/aur/`](../packaging/aur) and follow the
 [AUR submission guidelines](https://wiki.archlinux.org/title/AUR_submission_guidelines).
 
+## FreeBSD
+
+`mandara install` knows FreeBSD 14 and newer (and GhostBSD) by
+`/etc/os-release`. It installs everything with `pkg install -y` (a fresh
+system's pkg bootstraps itself without asking), from FreeBSD's own
+package names: Wayland, xkbcommon, Mesa and the Vulkan loader, fonts for
+every interface language, portals, PipeWire with its OSS plugin
+(`pipewire-spa-oss`) and WirePlumber, polkit, ConsoleKit2, D-Bus, seatd,
+UPower, AccountsService, GeoClue, BSDisks and GNOME Keyring. Then it:
+
+- enables and starts D-Bus and seatd in rc.conf (`sysrc dbus_enable=YES`,
+  `service dbus start`, the same for `seatd`), leaving any that are on
+  already alone;
+- adds you to the `video` group, seatd's, so a compositor can open the
+  seat (log in again afterwards);
+- puts the admin helper in `/usr/local/lib/mandara` (owned by
+  `root:wheel`), which Studio and the Updates panel run through pkexec.
+
+It can install Niri, Hyprland, Sway or River Classic (`river-classic`)
+from FreeBSD's packages. The Inter font isn't packaged for FreeBSD, so
+Mandara falls back to its other fonts. NetworkManager, BlueZ, UDisks2's
+own daemon and power-profiles-daemon don't exist on FreeBSD; Studio shows
+those panels locked with the reason. External monitor brightness over
+DDC/CI isn't set up there yet.
+
+greetd, which Mandara Login runs on, isn't packaged for FreeBSD yet: the
+installer says so and leaves your login screen as it is. Build it as
+[Mandara Login on FreeBSD](login-manager.md#freebsd) shows, then run
+`sudo mandara greeter use mandara --apply`.
+
+The installer runs as your user and asks for root through `sudo` (or
+`doas`) only for packages and system changes. Updates come from the
+Updates panel: [pkg and freebsd-update](apps-and-updates.md#freebsd).
+
 ## NixOS
 
 Mandara is a flake: Nix builds it from source (a release build, like the
@@ -706,7 +740,7 @@ systems use the tarball. NixOS builds from source with the
 From a clone, `cargo xtask build && target/release/mandara install`
 installs that checkout (or `mandara install --from-source` builds it).
 
-**Requirements:** Linux with a Wayland compositor (MangoWM, Niri,
+**Requirements:** Linux or [FreeBSD](#freebsd) with a Wayland compositor (MangoWM, Niri,
 Hyprland, Sway, River Classic, Umbriel or KWin; the installer can install one), a Vulkan-capable
 GPU, and PipeWire or PulseAudio for sound features.
 

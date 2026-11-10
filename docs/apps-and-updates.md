@@ -113,6 +113,7 @@ the panel. Press **Update all**, or **Update** on one source:
 | openSUSE Leap | `zypper -n refresh` | `zypper -n update --download-only` | `zypper -n update` |
 | Void | `xbps-install -S` | `xbps-install -uyD` | `xbps-install -uy` (xbps updates itself first when it must) |
 | Alpine | `apk update` | | `apk upgrade` |
+| FreeBSD | `pkg update` | `pkg upgrade -U -F -y`, then `freebsd-update fetch` | `pkg upgrade -U -y`, then `freebsd-update install` |
 
 The AUR is left to your AUR helper (its *Update* button opens your
 terminal: AUR packages are never built as root). Image-based systems
@@ -127,6 +128,37 @@ plugin's settings. Scriptable: `mandara msg updates apply [all|system|flatpak]`,
 running: install your distribution's polkit package (`polkit`, `polkitd`
 and `pkexec` on Debian), and keep Studio → General → Security → *Authentication dialogs* on.
 `mandara install` installs both.
+
+### FreeBSD
+
+On FreeBSD the panel counts your package updates with
+`pkg version -vRUl '<'` (read-only, against the catalogue as pkg last
+fetched it) and **Update all** updates both halves of the system, with
+the same password dialog and progress:
+
+- **Packages** with pkg: the catalogues refresh, every package downloads
+  first, then they install. A kernel module from packages (`drm-61-kmod`
+  and friends) suggests a restart.
+- **The base system** with freebsd-update, the security and errata patches
+  of your release (`14.4-RELEASE-p4`): Mandara runs it unattended
+  (`--not-running-from-cron`, file lists printed into the log instead of a
+  pager), downloads the patches together with the packages, and installs
+  them after the packages. A patch to the kernel suggests a restart.
+  Where ZFS boot environments work, freebsd-update snapshots the running
+  system first, so you can boot back into it.
+
+Downloads can be cancelled; installing never is. A system freebsd-update
+doesn't manage (a -STABLE or -CURRENT build, or a packaged base) gets its
+packages updated and a warning that the base system was left alone. A
+release past its end of life still installs what was published for it,
+with the same warning; plan the upgrade to a supported release
+(`freebsd-update upgrade -r …`), which Mandara leaves to you. In a
+terminal, the same update is `sudo pkg upgrade` and
+`sudo freebsd-update fetch install`.
+
+The admin helper runs these programs only from root's own folders
+(`/usr/local/sbin/pkg`, `/usr/sbin/freebsd-update`), and pkexec comes with
+FreeBSD's `polkit` package.
 
 ### NixOS: generations
 
