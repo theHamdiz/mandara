@@ -43,8 +43,17 @@ pub const DISPLAY_MANAGER_LINK: &str = "/etc/systemd/system/display-manager.serv
 pub const UNIT_DIRS: [&str; 4] = ["/etc/systemd/system", "/usr/lib/systemd/system", "/lib/systemd/system", "/usr/local/lib/systemd/system"];
 /// Where greeter binaries are looked up (plus `$PATH` on the real system).
 pub const BIN_DIRS: [&str; 6] = ["/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"];
-/// Timestamped switch backups (one folder each, with a [`MANIFEST`]).
-pub const BACKUP_DIR: &str = "/var/lib/mandara-greeter/backups";
+/// Timestamped switch backups (one folder each, with a [`MANIFEST`]): only
+/// root may change them, outside the greeter's state folder, whose owner could otherwise
+/// swap in a manifest that `restore` then carries out as root.
+pub const BACKUP_DIR: &str = "/var/lib/mandara-greeter-backups";
+/// Where backups were kept before, inside the greeter-owned state folder.
+/// Restore still finds them, but only folders and manifests that root (or
+/// the user looking, for a dry run) owns and nobody else may write.
+pub const LEGACY_BACKUP_DIR: &str = "/var/lib/mandara-greeter/backups";
+/// Readable like the system files the backups copy, so a dry-run restore
+/// shows its plan without sudo; only root writes.
+const BACKUP_DIR_MODE: u32 = 0o755;
 pub const MANIFEST: &str = "manifest.toml";
 /// `MANDARA_GREETER_DRY_RUN=1` forces `use` / `restore` (and Studio's
 /// "Use" button) to only print the plan.
@@ -1067,6 +1076,16 @@ pub(crate) struct Backup {
 impl Backup {
     pub(crate) fn create(root: &SysRoot, mut manifest: Manifest, writes: &[FileWrite]) -> Result<Backup, String> {
         let base = root.path(BACKUP_DIR);
+        if let Some(parent) = base.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        }
+        {
+            use std::os::unix::fs::DirBuilderExt as _;
+            match std::fs::DirBuilder::new().mode(BACKUP_DIR_MODE).create(&base) {
+                Err(e) if e.kind() != std::io::ErrorKind::AlreadyExists => return Err(format!("{}: {e}", base.display())),
+                _ => {}
+            }
+        }
         let stamp = chrono::Local::now().format(BACKUP_ID_FORMAT).to_string();
         let mut id = stamp.clone();
         let mut n = 1;
@@ -1130,15 +1149,63 @@ fn restore_files(root: &SysRoot, dir: &Path, manifest: &Manifest) -> Result<Vec<
 
 /// Backup ids under `root`, oldest first.
 pub fn backups(root: &SysRoot) -> Vec<String> {
-    let mut ids: Vec<String> = std::fs::read_dir(root.path(BACKUP_DIR))
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|e| e.path().join(MANIFEST).is_file())
-        .map(|e| e.file_name().to_string_lossy().into_owned())
-        .collect();
-    ids.sort();
-    ids
+    backup_dirs(root).into_iter().map(|(id, _)| id).collect()
+}
+
+/// Backups under `root` and their folders, oldest first: those in
+/// [`BACKUP_DIR`], then trusted ones left in [`LEGACY_BACKUP_DIR`].
+fn backup_dirs(root: &SysRoot) -> Vec<(String, PathBuf)> {
+    let mut found: Vec<(String, PathBuf)> = Vec::new();
+    for (base, legacy) in [(root.path(BACKUP_DIR), false), (root.path(LEGACY_BACKUP_DIR), true)] {
+        if legacy && !owned_by_us(&base) {
+            continue;
+        }
+        for entry in std::fs::read_dir(&base).into_iter().flatten().flatten() {
+            let (dir, id) = (entry.path(), entry.file_name().to_string_lossy().into_owned());
+            let manifest = dir.join(MANIFEST);
+            let usable = if legacy { owned_by_us(&dir) && owned_by_us(&manifest) && manifest.is_file() } else { manifest.is_file() };
+            if usable && !found.iter().any(|(known, _)| *known == id) {
+                found.push((id, dir));
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// Whether `path` itself (not a link's target) belongs to root or to the
+/// user running this (root, for a real restore), and only its owner may
+/// write it.
+fn owned_by_us(path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    // SAFETY: geteuid has no preconditions.
+    let me = unsafe { libc::geteuid() };
+    std::fs::symlink_metadata(path).is_ok_and(|m| !m.file_type().is_symlink() && (m.uid() == 0 || m.uid() == me) && m.mode() & 0o022 == 0)
+}
+
+/// A unit name a switch can record: `<name>.service` in systemd's unit
+/// name alphabet, no path and no leading `-` (never read as an option).
+fn plain_unit(unit: &str) -> bool {
+    unit.strip_suffix(UNIT_SUFFIX).is_some_and(|stem| !stem.is_empty() && !stem.starts_with('-') && stem.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '@' | ':')))
+}
+
+/// A value an rc variable can be put back to (`YES`, `NO`, `onestart`…).
+fn plain_rc_value(value: &str) -> bool {
+    value.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+}
+
+/// Whether `c` is an undo command a switch between `units` writes on
+/// `root`: [`undo_command`]'s shape for one of those units, with the
+/// service tool of `root`'s system. Anything else (another program, a
+/// unit file path, another rc variable) is refused.
+fn expected_undo(root: &SysRoot, c: &[String], units: &[&str]) -> bool {
+    let ours = |name: &str| units.iter().any(|u| rc_name(u) == name);
+    match c {
+        [tool, verb, unit] if !root.freebsd() && tool == SYSTEMCTL => matches!(verb.as_str(), "enable" | "disable") && units.contains(&unit.as_str()),
+        [tool, s, name, set] if root.freebsd() && tool == SYSRC && s == "-s" && ours(name) => set.split_once('=').is_some_and(|(var, value)| var == rc_var(name) && plain_rc_value(value)),
+        [tool, s, name, x, var] if root.freebsd() && tool == SYSRC && s == "-s" && x == "-x" && ours(name) => *var == rc_var(name),
+        _ => false,
+    }
 }
 
 /// `mandara greeter restore <id|latest>`.
@@ -1152,18 +1219,27 @@ pub struct RestorePlan {
 
 impl RestorePlan {
     pub fn build(root: &SysRoot, which: &str) -> Result<RestorePlan, String> {
-        let all = backups(root);
-        let id = if which == "latest" { all.last().cloned() } else { all.iter().find(|i| *i == which).cloned() };
-        let Some(id) = id else {
-            return Err(if all.is_empty() { format!("no switch backups in {BACKUP_DIR}") } else { format!("no backup {which:?}; available: {}", all.join(", ")) });
+        let all = backup_dirs(root);
+        let found = if which == "latest" { all.last() } else { all.iter().find(|(i, _)| i == which) };
+        let Some((id, dir)) = found.cloned() else {
+            let ids: Vec<&str> = all.iter().map(|(i, _)| i.as_str()).collect();
+            return Err(if all.is_empty() { format!("no switch backups in {BACKUP_DIR}") } else { format!("no backup {which:?}; available: {}", ids.join(", ")) });
         };
-        let dir = root.path(BACKUP_DIR).join(&id);
         let text = std::fs::read_to_string(dir.join(MANIFEST)).map_err(|e| format!("{}: {e}", dir.display()))?;
         let manifest: Manifest = toml::from_str(&text).map_err(|e| format!("backup {id}: invalid manifest: {e}"))?;
         let mut commands = Vec::new();
+        // The units the switch moved between, as a switch records them.
+        let recorded = [&manifest.previous_unit, &manifest.new_unit];
+        if manifest.units_switched
+            && let Some(u) = recorded.into_iter().flatten().find(|u| !plain_unit(u))
+        {
+            return Err(format!("backup {id}: unexpected unit `{u}`"));
+        }
+        let units: Vec<&str> = recorded.into_iter().flatten().map(String::as_str).collect();
         if manifest.units_switched && !manifest.undo.is_empty() {
-            // Only the service tools a switch runs, never another program.
-            if let Some(c) = manifest.undo.iter().find(|c| !c.first().is_some_and(|p| p == SYSRC || p == SYSTEMCTL)) {
+            // Only the service commands that switch writes, never another
+            // program, unit or rc variable.
+            if let Some(c) = manifest.undo.iter().find(|c| !expected_undo(root, c, &units)) {
                 return Err(format!("backup {id}: unexpected undo command `{}`", c.join(" ")));
             }
             commands.clone_from(&manifest.undo);
