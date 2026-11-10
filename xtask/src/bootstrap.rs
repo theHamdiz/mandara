@@ -34,6 +34,7 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     ("missing_installer", tk("The release does not contain exactly one executable installer.")),
     ("manual", tk("Manual downloads:")),
     ("nixos", tk("On NixOS, install Mandara through your flake.")),
+    ("image", tk("This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks.")),
 ];
 
 fn quoted(text: &str) -> String {

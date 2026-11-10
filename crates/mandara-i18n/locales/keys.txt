@@ -400,6 +400,7 @@ Add your Reddit app's client id in Studio to start reading
 Add your translation API key in Studio
 Add yourself to the {group} group (`sudo usermod -aG {group} $USER`), then log out and back in.
 Add {app} to your apps (~/.local/share/applications)
+Add {count} packages with {tool}? They arrive with the next boot: {packages}
 Added
 Added here
 Added {account}
@@ -484,6 +485,7 @@ Allow your user once:
 Already bound in your compositor config: {chords}
 Already in your rules below
 Already preparing a share
+Already waiting for the next boot: {packages}
 Also check Flatpak apps and runtimes
 Also check and update AUR packages with the installed AUR helper
 Also checks the plugins you installed from the marketplace (Mandara's own plugins update with the shell)
@@ -923,6 +925,7 @@ Build your own
 Build your own plugins
 Build, switch now and boot it next time
 Building AUR packages
+Building Mandara needs build tools this system's image doesn't have ({packages}). Build inside a toolbox or distrobox container, or install a release instead.
 Building the new generation
 Built for {arch}, but this computer is {host}: it probably won't start.
 Built in
@@ -2129,6 +2132,7 @@ Every prayer time today, the next one lit
 Every setting, live
 Every shortcut: chord, keys, action, description, group and source file (JSON)
 Every step you take toward learning is a step on an easy road.
+Every system package Mandara needs is already part of this system.
 Every task with its progress, elapsed time, ETA and status (JSON)
 Every variable of the style, then tone, light, texture and layout. The preview follows as you drag.
 Every {every}
@@ -3034,6 +3038,7 @@ Install the tailscale package, then start tailscaled
 Install this binary even when its published checksum is unavailable or doesn't match.
 Install this tool and try again:
 Install your NVIDIA driver's utilities (nvidia-smi) to read this card
+Install {compositor} yourself, then run: {command}
 Install {count} apps
 Install, preview and apply cursor themes, live, with size and hiding options
 Installed
@@ -3642,6 +3647,7 @@ Manage
 Manage compositor drop-in
 Mandara
 Mandara Corniche
+Mandara Login needs greetd and cage, which arrive with the next boot. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}
 Mandara Login shows your wallpaper when your account is picked (a copy goes to /var/lib/mandara-login)
 Mandara Obsidian
 Mandara Shell
@@ -4250,6 +4256,7 @@ No package manager found
 No package manager on this computer can install it.
 No package manager on this system says it installed this app
 No package matches “{query}”
+No packages were added. Add them later with: {command}
 No password prompt available
 No password prompt is available: make sure polkit (pkexec) is installed and Mandara's polkit agent is running.
 No path {key}
@@ -4776,6 +4783,7 @@ PNG, JPEG or WebP. It's cropped to a square and saved at 256 × 256.
 PROCESS
 Package: installed system-wide by your package manager, for every user.
 Package: {package}
+Packages for the next boot
 Packaging badges
 Padding
 Pages
@@ -5535,6 +5543,7 @@ Restart shell
 Restart targets: firmware setup support and boot-loader entries (JSON)
 Restart the shell process (config and plugins reload from scratch)
 Restart to finish: {reason}
+Restart your computer to start using the new packages. Everything else is ready now.
 Restarted {count} containers
 Restarted {name}
 Restarted {unit}
@@ -6551,6 +6560,7 @@ System folders come from $XDG_DATA_DIRS: distribution packages create them, and 
 System gauges
 System meters
 System monitor
+System packages
 System process
 System services
 System sound
@@ -7218,6 +7228,7 @@ This sign-in method needs more than a password
 This site offers several feeds:
 This station uses a format Mandara can't play
 This style uses Compact height
+This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks.
 This system is image-based: it updates with {command}, which Mandara leaves to it
 This tab is empty
 This text is too large to send to a phone
@@ -7394,6 +7405,7 @@ Try other words or another theme
 Try other words, another collection or any grade
 Try part of a unit name or its description
 Trying again at {time}
+Trying again without the optional packages: {packages}
 Tue
 Tuning
 Turbulence
@@ -8712,6 +8724,7 @@ your default
 {collection} isn't downloaded: run `hadith download {id}`
 {command} failed ({status})
 {compositor} (installed)
+{compositor} ({package}) arrives with the next boot; pick it on your login screen then.
 {compositor} can't read this line: something in its syntax is broken (a missing bracket, quote or `=`), so it may skip everything after it.
 {compositor} doesn't know `{key}`. It may be misspelled, or it was renamed or removed in a newer version.
 {compositor} has no config file here yet.
@@ -9019,6 +9032,9 @@ your default
 {stopped} stopped
 {style} controls
 {style} has no parameter {key}; see `wallgen styles`
+{system} is image-based: Mandara goes into your home folder, and only the system packages it lacks are added with {tool}, for the next boot.
+{system} keeps its system image read-only, and the next system update removes packages added to it, so Mandara installs only into your home folder. Not available here: {packages}
+{system} replaces its system files with every update, so the admin helper and Mandara Login are skipped; Studio's administrator actions stay unavailable.
 {taken} taken
 {taken} taken · {skipped} skipped
 {target} has no valid host
@@ -9033,6 +9049,8 @@ your default
 {theme} wasn't installed by Mandara, so it stays
 {time} left
 {time} today
+{tool} couldn't add the packages. Add them later with: {command}
+{tool} isn't installed, so Mandara can't add system packages. Add these with your system's own tools: {packages}
 {tool} rejected the result, so nothing was changed: {report}
 {total} frames drawn since start
 {unit}: {error}

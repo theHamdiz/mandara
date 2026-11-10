@@ -37,6 +37,7 @@ message() {
         ar:missing_installer) printf '%s\n' 'لا يحتوي الإصدار على مثبّت تنفيذي واحد بالضبط.' ;;
         ar:manual) printf '%s\n' 'التنزيل اليدوي:' ;;
         ar:nixos) printf '%s\n' 'على NixOS، ثبّت Mandara من خلال إعدادات flake.' ;;
+        ar:image) printf '%s\n' 'هذا النظام قائم على الصور: يُثبَّت Mandara في مجلدك الشخصي، ولا يضيف المثبّت إلا حزم النظام الناقصة.' ;;
         fa:welcome) printf '%s\n' 'میزکار Wayland شما. بیایید آماده‌اش کنیم.' ;;
         fa:signature) printf '%s\n' 'در حال بررسی امضای انتشار…' ;;
         fa:signature_ok) printf '%s\n' 'امضای انتشار تأیید شد.' ;;
@@ -60,6 +61,7 @@ message() {
         fa:missing_installer) printf '%s\n' 'تعداد نصب‌کننده‌های قابل اجرای این انتشار دقیقاً یک نیست.' ;;
         fa:manual) printf '%s\n' 'دریافت دستی:' ;;
         fa:nixos) printf '%s\n' 'در NixOS، Mandara را از طریق flake خود نصب کنید.' ;;
+        fa:image) printf '%s\n' 'این سیستم مبتنی بر ایمیج است: Mandara در پوشهٔ خانگی شما نصب می‌شود و نصب‌کننده فقط بسته‌های سیستمیِ کم‌بود را می‌افزاید.' ;;
         ur:welcome) printf '%s\n' 'آپ کا Wayland ڈیسک ٹاپ۔ آئیے اسے تیار کریں۔' ;;
         ur:signature) printf '%s\n' 'ریلیز کے دستخط کی تصدیق ہو رہی ہے…' ;;
         ur:signature_ok) printf '%s\n' 'ریلیز کے دستخط کی تصدیق ہو گئی۔' ;;
@@ -83,6 +85,7 @@ message() {
         ur:missing_installer) printf '%s\n' 'ریلیز میں قابلِ اجرا انسٹالرز کی تعداد ایک نہیں ہے۔' ;;
         ur:manual) printf '%s\n' 'دستی ڈاؤن لوڈ:' ;;
         ur:nixos) printf '%s\n' 'NixOS پر Mandara اپنی flake کے ذریعے نصب کریں۔' ;;
+        ur:image) printf '%s\n' 'یہ سسٹم امیج پر مبنی ہے: Mandara آپ کے ہوم فولڈر میں نصب ہوتا ہے، اور انسٹالر صرف کم سسٹم پیکجز شامل کرتا ہے۔' ;;
         es:welcome) printf '%s\n' 'Tu escritorio Wayland. Vamos a prepararlo.' ;;
         es:signature) printf '%s\n' 'Comprobando la firma de la versión…' ;;
         es:signature_ok) printf '%s\n' 'Firma de la versión verificada.' ;;
@@ -106,6 +109,7 @@ message() {
         es:missing_installer) printf '%s\n' 'La versión no contiene exactamente un instalador ejecutable.' ;;
         es:manual) printf '%s\n' 'Descargas manuales:' ;;
         es:nixos) printf '%s\n' 'En NixOS, instala Mandara mediante tu flake.' ;;
+        es:image) printf '%s\n' 'Este sistema se basa en imágenes: Mandara se instala en tu carpeta personal y el instalador añade solo los paquetes del sistema que faltan.' ;;
         pt:welcome) printf '%s\n' 'Sua área de trabalho Wayland. Vamos prepará-la.' ;;
         pt:signature) printf '%s\n' 'Verificando a assinatura da versão…' ;;
         pt:signature_ok) printf '%s\n' 'Assinatura da versão verificada.' ;;
@@ -129,6 +133,7 @@ message() {
         pt:missing_installer) printf '%s\n' 'A versão não contém exatamente um instalador executável.' ;;
         pt:manual) printf '%s\n' 'Downloads manuais:' ;;
         pt:nixos) printf '%s\n' 'No NixOS, instale o Mandara pelo seu flake.' ;;
+        pt:image) printf '%s\n' 'Este sistema é baseado em imagem: o Mandara se instala na sua pasta pessoal, e o instalador adiciona só os pacotes de sistema que faltam.' ;;
         fr:welcome) printf '%s\n' 'Votre bureau Wayland. Préparons-le ensemble.' ;;
         fr:signature) printf '%s\n' 'Vérification de la signature de la version…' ;;
         fr:signature_ok) printf '%s\n' 'Signature de la version vérifiée.' ;;
@@ -152,6 +157,7 @@ message() {
         fr:missing_installer) printf '%s\n' 'La version ne contient pas exactement un programme d’installation exécutable.' ;;
         fr:manual) printf '%s\n' 'Téléchargements manuels :' ;;
         fr:nixos) printf '%s\n' 'Sur NixOS, installez Mandara avec votre flake.' ;;
+        fr:image) printf '%s\n' 'Ce système est basé sur une image : Mandara s’installe dans votre dossier personnel, et l’installateur n’ajoute que les paquets système manquants.' ;;
         de:welcome) printf '%s\n' 'Dein Wayland-Desktop. Machen wir ihn startklar.' ;;
         de:signature) printf '%s\n' 'Signatur der Veröffentlichung wird geprüft…' ;;
         de:signature_ok) printf '%s\n' 'Signatur der Veröffentlichung bestätigt.' ;;
@@ -175,6 +181,7 @@ message() {
         de:missing_installer) printf '%s\n' 'Die Veröffentlichung enthält nicht genau ein ausführbares Installationsprogramm.' ;;
         de:manual) printf '%s\n' 'Manuelle Downloads:' ;;
         de:nixos) printf '%s\n' 'Installiere Mandara unter NixOS über deinen Flake.' ;;
+        de:image) printf '%s\n' 'Dieses System ist abbildbasiert: Mandara installiert sich in deinen Home-Ordner, und der Installer fügt nur fehlende Systempakete hinzu.' ;;
         tr:welcome) printf '%s\n' 'Wayland masaüstünüz. Birlikte hazırlayalım.' ;;
         tr:signature) printf '%s\n' 'Sürüm imzası denetleniyor…' ;;
         tr:signature_ok) printf '%s\n' 'Sürüm imzası doğrulandı.' ;;
@@ -198,6 +205,7 @@ message() {
         tr:missing_installer) printf '%s\n' 'Sürümdeki çalıştırılabilir kurulum programı sayısı tam olarak bir değil.' ;;
         tr:manual) printf '%s\n' 'Elle indirme:' ;;
         tr:nixos) printf '%s\n' 'NixOS üzerinde Mandara’yı flake yapılandırmanızla yükleyin.' ;;
+        tr:image) printf '%s\n' 'Bu sistem imaj tabanlıdır: Mandara ev klasörünüze kurulur ve kurulum programı yalnızca eksik sistem paketlerini ekler.' ;;
         ru:welcome) printf '%s\n' 'Ваш рабочий стол Wayland. Подготовим его к работе.' ;;
         ru:signature) printf '%s\n' 'Проверка подписи выпуска…' ;;
         ru:signature_ok) printf '%s\n' 'Подпись выпуска проверена.' ;;
@@ -221,6 +229,7 @@ message() {
         ru:missing_installer) printf '%s\n' 'Количество исполняемых установщиков в выпуске не равно одному.' ;;
         ru:manual) printf '%s\n' 'Загрузка вручную:' ;;
         ru:nixos) printf '%s\n' 'В NixOS установите Mandara через свой flake.' ;;
+        ru:image) printf '%s\n' 'Эта система основана на образах: Mandara устанавливается в домашнюю папку, а установщик добавляет только недостающие системные пакеты.' ;;
         hi:welcome) printf '%s\n' 'आपका Wayland डेस्कटॉप। आइए इसे तैयार करें।' ;;
         hi:signature) printf '%s\n' 'रिलीज़ के हस्ताक्षर की जाँच हो रही है…' ;;
         hi:signature_ok) printf '%s\n' 'रिलीज़ का हस्ताक्षर सत्यापित है।' ;;
@@ -244,6 +253,7 @@ message() {
         hi:missing_installer) printf '%s\n' 'रिलीज़ में चलने योग्य इंस्टॉलर की संख्या ठीक एक नहीं है।' ;;
         hi:manual) printf '%s\n' 'मैन्युअल डाउनलोड:' ;;
         hi:nixos) printf '%s\n' 'NixOS पर अपनी flake से Mandara इंस्टॉल करें।' ;;
+        hi:image) printf '%s\n' 'यह सिस्टम इमेज-आधारित है: Mandara आपके होम फ़ोल्डर में इंस्टॉल होता है, और इंस्टॉलर केवल कम पड़ रहे सिस्टम पैकेज जोड़ता है।' ;;
         mr:welcome) printf '%s\n' 'तुमचा Wayland डेस्कटॉप. चला, तो तयार करूया.' ;;
         mr:signature) printf '%s\n' 'प्रकाशनाची स्वाक्षरी तपासत आहे…' ;;
         mr:signature_ok) printf '%s\n' 'प्रकाशनाची स्वाक्षरी पडताळली.' ;;
@@ -267,6 +277,7 @@ message() {
         mr:missing_installer) printf '%s\n' 'प्रकाशनात चालवता येईल असे नेमके एक इंस्टॉलर नाही.' ;;
         mr:manual) printf '%s\n' 'स्वहस्ते डाउनलोड:' ;;
         mr:nixos) printf '%s\n' 'NixOS वर तुमच्या flake मधून Mandara बसवा.' ;;
+        mr:image) printf '%s\n' 'ही सिस्टम इमेज-आधारित आहे: Mandara तुमच्या होम फोल्डरमध्ये बसते, आणि इंस्टॉलर फक्त नसलेली सिस्टम पॅकेजेस जोडतो.' ;;
         bn:welcome) printf '%s\n' 'আপনার Wayland ডেস্কটপ। চলুন প্রস্তুত করি।' ;;
         bn:signature) printf '%s\n' 'রিলিজের স্বাক্ষর যাচাই করা হচ্ছে…' ;;
         bn:signature_ok) printf '%s\n' 'রিলিজের স্বাক্ষর যাচাই করা হয়েছে।' ;;
@@ -290,6 +301,7 @@ message() {
         bn:missing_installer) printf '%s\n' 'রিলিজে চালানো যায় এমন ইনস্টলারের সংখ্যা ঠিক এক নয়।' ;;
         bn:manual) printf '%s\n' 'নিজে ডাউনলোড করুন:' ;;
         bn:nixos) printf '%s\n' 'NixOS-এ আপনার flake দিয়ে Mandara ইনস্টল করুন।' ;;
+        bn:image) printf '%s\n' 'এই সিস্টেম ইমেজ-ভিত্তিক: Mandara আপনার হোম ফোল্ডারে ইনস্টল হয়, আর ইনস্টলার শুধু অনুপস্থিত সিস্টেম প্যাকেজ যোগ করে।' ;;
         te:welcome) printf '%s\n' 'మీ Wayland డెస్క్‌టాప్. దాన్ని సిద్ధం చేద్దాం.' ;;
         te:signature) printf '%s\n' 'విడుదల సంతకాన్ని తనిఖీ చేస్తోంది…' ;;
         te:signature_ok) printf '%s\n' 'విడుదల సంతకం ధృవీకరించబడింది.' ;;
@@ -313,6 +325,7 @@ message() {
         te:missing_installer) printf '%s\n' 'విడుదలలో అమలు చేయగల ఇన్‌స్టాలర్ ఖచ్చితంగా ఒకటి లేదు.' ;;
         te:manual) printf '%s\n' 'మానవీయ డౌన్‌లోడ్‌లు:' ;;
         te:nixos) printf '%s\n' 'NixOS లో మీ flake ద్వారా Mandara ను ఇన్‌స్టాల్ చేయండి.' ;;
+        te:image) printf '%s\n' 'ఈ సిస్టమ్ ఇమేజ్ ఆధారితం: Mandara మీ హోమ్ ఫోల్డర్‌లో ఇన్‌స్టాల్ అవుతుంది, ఇన్‌స్టాలర్ తప్పిపోయిన సిస్టమ్ ప్యాకేజీలను మాత్రమే జోడిస్తుంది.' ;;
         id:welcome) printf '%s\n' 'Desktop Wayland Anda. Mari kita siapkan.' ;;
         id:signature) printf '%s\n' 'Memeriksa tanda tangan rilis…' ;;
         id:signature_ok) printf '%s\n' 'Tanda tangan rilis terverifikasi.' ;;
@@ -336,6 +349,7 @@ message() {
         id:missing_installer) printf '%s\n' 'Rilis tidak berisi tepat satu pemasang yang dapat dijalankan.' ;;
         id:manual) printf '%s\n' 'Unduhan manual:' ;;
         id:nixos) printf '%s\n' 'Di NixOS, pasang Mandara melalui flake Anda.' ;;
+        id:image) printf '%s\n' 'Sistem ini berbasis image: Mandara dipasang di folder rumah Anda, dan pemasang hanya menambahkan paket sistem yang belum ada.' ;;
         sw:welcome) printf '%s\n' 'Eneo-kazi lako la Wayland. Hebu tuliandae.' ;;
         sw:signature) printf '%s\n' 'Inakagua sahihi ya toleo…' ;;
         sw:signature_ok) printf '%s\n' 'Sahihi ya toleo imethibitishwa.' ;;
@@ -359,6 +373,7 @@ message() {
         sw:missing_installer) printf '%s\n' 'Toleo halina kisakinishi kimoja tu kinachoweza kutekelezwa.' ;;
         sw:manual) printf '%s\n' 'Upakuaji wa mwenyewe:' ;;
         sw:nixos) printf '%s\n' 'Katika NixOS, sakinisha Mandara kupitia flake yako.' ;;
+        sw:image) printf '%s\n' 'Mfumo huu ni wa picha: Mandara inasakinishwa kwenye folda yako ya nyumbani, na kisakinishi huongeza tu vifurushi vya mfumo vinavyokosekana.' ;;
         vi:welcome) printf '%s\n' 'Màn hình nền Wayland của bạn. Cùng chuẩn bị nhé.' ;;
         vi:signature) printf '%s\n' 'Đang kiểm tra chữ ký bản phát hành…' ;;
         vi:signature_ok) printf '%s\n' 'Đã xác minh chữ ký bản phát hành.' ;;
@@ -382,6 +397,7 @@ message() {
         vi:missing_installer) printf '%s\n' 'Bản phát hành không chứa đúng một trình cài có thể thực thi.' ;;
         vi:manual) printf '%s\n' 'Tải xuống thủ công:' ;;
         vi:nixos) printf '%s\n' 'Trên NixOS, hãy cài Mandara bằng flake của bạn.' ;;
+        vi:image) printf '%s\n' 'Hệ thống này dựa trên image: Mandara được cài vào thư mục nhà của bạn, và trình cài chỉ thêm các gói hệ thống còn thiếu.' ;;
         zh:welcome) printf '%s\n' '你的 Wayland 桌面。让我们准备就绪。' ;;
         zh:signature) printf '%s\n' '正在检查发布版本签名…' ;;
         zh:signature_ok) printf '%s\n' '已验证发行版签名。' ;;
@@ -405,6 +421,7 @@ message() {
         zh:missing_installer) printf '%s\n' '发布版本中的可执行安装程序数量不是一个。' ;;
         zh:manual) printf '%s\n' '手动下载：' ;;
         zh:nixos) printf '%s\n' '在 NixOS 上，请通过你的 flake 安装 Mandara。' ;;
+        zh:image) printf '%s\n' '此系统基于镜像：Mandara 安装到你的主文件夹，安装程序只添加缺少的系统软件包。' ;;
         ja:welcome) printf '%s\n' 'あなたの Wayland デスクトップ。準備を始めましょう。' ;;
         ja:signature) printf '%s\n' 'リリースの署名を確認しています…' ;;
         ja:signature_ok) printf '%s\n' 'リリースの署名を確認しました。' ;;
@@ -428,6 +445,7 @@ message() {
         ja:missing_installer) printf '%s\n' 'リリース内の実行可能なインストーラーの数が1つではありません。' ;;
         ja:manual) printf '%s\n' '手動ダウンロード：' ;;
         ja:nixos) printf '%s\n' 'NixOS では flake を使って Mandara をインストールしてください。' ;;
+        ja:image) printf '%s\n' 'このシステムはイメージベースです。Mandara はホームフォルダーにインストールされ、インストーラーは足りないシステムパッケージだけを追加します。' ;;
         ko:welcome) printf '%s\n' '나만의 Wayland 데스크톱. 함께 준비해 봅시다.' ;;
         ko:signature) printf '%s\n' '릴리스 서명을 확인하는 중…' ;;
         ko:signature_ok) printf '%s\n' '릴리스 서명이 확인되었습니다.' ;;
@@ -451,6 +469,7 @@ message() {
         ko:missing_installer) printf '%s\n' '릴리스의 실행 가능한 설치 프로그램 수가 정확히 하나가 아닙니다.' ;;
         ko:manual) printf '%s\n' '직접 다운로드:' ;;
         ko:nixos) printf '%s\n' 'NixOS에서는 flake를 통해 Mandara를 설치하세요.' ;;
+        ko:image) printf '%s\n' '이 시스템은 이미지 기반입니다. Mandara는 홈 폴더에 설치되고, 설치 프로그램은 없는 시스템 패키지만 추가합니다.' ;;
         *:welcome) printf '%s\n' 'Your Wayland desktop. Let’s get it ready.' ;;
         *:signature) printf '%s\n' 'Checking the release signature…' ;;
         *:signature_ok) printf '%s\n' 'Release signature verified.' ;;
@@ -474,6 +493,7 @@ message() {
         *:missing_installer) printf '%s\n' 'The release does not contain exactly one executable installer.' ;;
         *:manual) printf '%s\n' 'Manual downloads:' ;;
         *:nixos) printf '%s\n' 'On NixOS, install Mandara through your flake.' ;;
+        *:image) printf '%s\n' 'This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks.' ;;
     esac
 }
 # End generated messages
@@ -571,6 +591,22 @@ check_nixos() {
     fi
 }
 
+# Image-based systems (Fedora Atomic and Bazzite, openSUSE Aeon, Vanilla OS,
+# SteamOS) keep /usr read-only. Nothing here writes outside the download
+# folder in your home; `mandara install` adds what the image lacks.
+image_based() {
+    [ -e "$1/run/ostree-booted" ] && return 0
+    for release in "$1/etc/os-release" "$1/usr/lib/os-release"; do
+        [ -r "$release" ] || continue
+        fields=$(awk -F= '$1 == "ID" || $1 == "ID_LIKE" || $1 == "NAME" { gsub(/["\047]/, "", $2); printf " %s", $2 }' "$release")
+        case "$fields " in
+            *microos*|*aeon*|*kalpa*|*sl-micro*|*sle-micro*|*" steamos "*|*" Vanilla OS "*) return 0 ;;
+        esac
+        return 1
+    done
+    return 1
+}
+
 run_installer() {
     if ( : </dev/tty ) 2>/dev/null; then
         "$@" </dev/tty
@@ -598,6 +634,10 @@ main() {
     for program in tar openssl awk mktemp uname; do
         command -v "$program" >/dev/null 2>&1 || fail missing_tool "$program" "$(message manual) https://github.com/theHamdiz/mandara/releases/latest"
     done
+    if image_based /; then
+        say "$(message image)"
+        say ''
+    fi
     case $(uname -s) in
         Linux) os=linux ;;
         FreeBSD) os=freebsd ;;
