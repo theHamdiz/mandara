@@ -151,7 +151,7 @@ fn side_bar_commands(r: &mut PluginRegistry) {
             let right = side_arg(a.str(0)?)?;
             let style = match a.str(1)? {
                 "none" => None,
-                other => Some(BarStyle::from_id(other).ok_or_else(|| format!("unknown bar style {other:?}"))?),
+                other => Some(BarStyle::from_side_id(other).ok_or_else(|| format!("unknown side bar style {other:?}"))?),
             };
             update_config(cx, |c| match style {
                 Some(style) => style.apply_to_side(c, right),
@@ -549,7 +549,7 @@ pub fn register(r: &mut PluginRegistry) {
             let cfg = config(cx).read(cx).get().bar.clone();
             Ok(json!({ "style": cfg.style, "layout": cfg.layout, "position": cfg.position, "item_shape": cfg.item_shape, "icon_shape": cfg.icon_shape }))
         })
-        .arg(ArgSpec::required("style", ArgKind::Enum, mandara_i18n::tk("bar style")).choices(&["expressive", "tile-dock", "rail", "segmented", "none"]))
+        .arg(ArgSpec::required("style", ArgKind::Enum, mandara_i18n::tk("bar style")).choices(&["expressive", "tile-dock", "rail", "segmented", "system-monitor", "stanley-bridge", "pharos-beam", "raml-tram", "none"]))
         .example("bar style expressive"),
     );
 
