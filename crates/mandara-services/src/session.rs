@@ -1,4 +1,6 @@
-//! Session / power actions and idle inhibition over logind's D-Bus API.
+//! Session / power actions and idle inhibition over logind's D-Bus API
+//! (ConsoleKit2's on FreeBSD, with the base system's `shutdown` and
+//! `acpiconf` as the fallback).
 
 use mandara_i18n::{t, tf};
 use serde::Serialize;
@@ -57,6 +59,20 @@ impl SessionAction {
     }
 
     /// The logind call this action makes (documentation / diagnostics).
+    #[cfg(target_os = "freebsd")]
+    pub fn describe(self) -> &'static str {
+        match self {
+            SessionAction::Lock => "ConsoleKit.Session.Lock",
+            SessionAction::Logout => "compositor quit",
+            SessionAction::Suspend => "ConsoleKit.Manager.Suspend / acpiconf -s 3",
+            SessionAction::Hibernate => "ConsoleKit.Manager.Hibernate",
+            SessionAction::Reboot => "ConsoleKit.Manager.Reboot / shutdown -r now",
+            SessionAction::Shutdown => "ConsoleKit.Manager.PowerOff / shutdown -p now",
+        }
+    }
+
+    /// The logind call this action makes (documentation / diagnostics).
+    #[cfg(not(target_os = "freebsd"))]
     pub fn describe(self) -> &'static str {
         match self {
             SessionAction::Lock => "login1.Session.Lock",
@@ -88,27 +104,45 @@ impl SessionAction {
                 Err(MangoQuit::Refused(e)) => return Err(tf("{action} failed ({call}): {error}", &[("action", &self.label()), ("call", &"MangoWM dispatch quit"), ("error", &e)])),
             }
         }
+        #[cfg(target_os = "freebsd")]
+        if self == SessionAction::Logout {
+            // ConsoleKit2 sessions can't be terminated over D-Bus; the
+            // compositor ends the session when it quits.
+            return Err(tf("{action} failed ({call}): {error}", &[("action", &self.label()), ("call", &self.describe()), ("error", &t("Quit the compositor to log out"))]));
+        }
         let conn = crate::runtime::system().await.map_err(err)?;
-        const DEST: &str = "org.freedesktop.login1";
+        use crate::logind::bus::{DEST, MANAGER, MANAGER_PATH, SESSION};
         match self {
             SessionAction::Lock | SessionAction::Logout => {
                 // This shell's own session (the one the lock screen answers
                 // for), not logind's "auto" guess.
                 let path = crate::logind::session_path(&conn).await.map_err(err)?;
-                let session = proxy(&conn, DEST, path.as_str(), "org.freedesktop.login1.Session").await.map_err(err)?;
+                let session = proxy(&conn, DEST, path.as_str(), SESSION).await.map_err(err)?;
                 let method = if self == SessionAction::Lock { "Lock" } else { "Terminate" };
                 session.call::<_, _, ()>(method, &()).await.map_err(err)
             }
             _ => {
-                let manager = proxy(&conn, DEST, "/org/freedesktop/login1", "org.freedesktop.login1.Manager").await.map_err(err)?;
                 let method = match self {
                     SessionAction::Suspend => "Suspend",
                     SessionAction::Hibernate => "Hibernate",
                     SessionAction::Reboot => "Reboot",
                     _ => "PowerOff",
                 };
-                // `interactive = true` lets polkit prompt when required.
-                manager.call::<_, _, ()>(method, &(true,)).await.map_err(err)
+                let result = async {
+                    let manager = proxy(&conn, DEST, MANAGER_PATH, MANAGER).await?;
+                    // `interactive = true` lets polkit prompt when required.
+                    manager.call::<_, _, ()>(method, &(true,)).await
+                }
+                .await;
+                // FreeBSD without ConsoleKit2: the base system's own tools,
+                // as root through pkexec and Mandara's password prompt.
+                #[cfg(target_os = "freebsd")]
+                if let Err(e) = &result
+                    && crate::freebsd::power::bus_missing(e)
+                {
+                    return crate::freebsd::power::run(method).map_err(|e| tf("{action} failed ({call}): {error}", &[("action", &self.label()), ("call", &self.describe()), ("error", &e)]));
+                }
+                result.map_err(err)
             }
         }
     }
@@ -156,7 +190,8 @@ pub fn inhibit_idle(why: &str) -> Result<Inhibitor, String> {
     crate::runtime::block_on(async move {
         {
             let conn = crate::runtime::system().await.map_err(|e| e.to_string())?;
-            let manager = crate::actor::proxy(&conn, "org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager")
+            use crate::logind::bus;
+            let manager = crate::actor::proxy(&conn, bus::DEST, bus::MANAGER_PATH, bus::MANAGER)
                 .await
                 .map_err(|e| e.to_string())?;
             let fd: zbus::zvariant::OwnedFd = manager
@@ -233,7 +268,7 @@ mod tests {
     fn ids_round_trip_and_destructiveness() {
         for a in SessionAction::ALL {
             assert_eq!(SessionAction::from_id(a.id()), Some(a));
-            assert!(a.describe().contains("login1") || a == SessionAction::Logout);
+            assert!(a.describe().contains(crate::logind::bus::SHORT) || a == SessionAction::Logout);
         }
         assert!(SessionAction::Shutdown.is_destructive());
         assert!(!SessionAction::Lock.is_destructive());

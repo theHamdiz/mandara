@@ -291,6 +291,10 @@ fn log_lines(cx: &App) -> usize {
 fn host_memory() -> u64 {
     static TOTAL: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
     *TOTAL.get_or_init(|| {
+        #[cfg(target_os = "freebsd")]
+        if let Some(m) = mandara_services::freebsd::host::memory() {
+            return m.total;
+        }
         let text = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
         text.lines().find(|l| l.starts_with("MemTotal:")).and_then(|l| l.split_whitespace().nth(1)?.parse::<u64>().ok()).unwrap_or(0) * KIB
     })

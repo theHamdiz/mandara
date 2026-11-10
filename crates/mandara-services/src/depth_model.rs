@@ -438,7 +438,20 @@ pub struct WorkerReport {
     pub peak_rss_kib: u64,
 }
 
+/// FreeBSD: the peak resident set (`VmHWM:`) from getrusage(2), in KiB;
+/// there is no `/proc/self/status`.
+#[cfg(target_os = "freebsd")]
+fn status_kib(key: &str) -> u64 {
+    if key != "VmHWM:" {
+        return 0;
+    }
+    // SAFETY: getrusage fills the zeroed struct it is given.
+    let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
+    if unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage) } == 0 { u64::try_from(usage.ru_maxrss).unwrap_or(0) } else { 0 }
+}
+
 /// `/proc/self/status` field `key` in KiB.
+#[cfg(not(target_os = "freebsd"))]
 fn status_kib(key: &str) -> u64 {
     std::fs::read_to_string("/proc/self/status")
         .ok()

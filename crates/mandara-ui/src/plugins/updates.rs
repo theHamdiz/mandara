@@ -597,7 +597,7 @@ fn job_covers(kind: SourceKind, system: Option<System>, aur: Option<AurHelper>) 
         (SourceKind::Aur, Some(System::Managed(B::Pacman))) => aur.is_some(),
         (_, Some(System::Managed(backend))) => matches!(
             (kind, backend),
-            (SourceKind::Pacman, B::Pacman) | (SourceKind::Apt, B::Apt) | (SourceKind::Dnf, B::Dnf) | (SourceKind::Zypper, B::ZypperDup | B::ZypperUpdate) | (SourceKind::Xbps, B::Xbps) | (SourceKind::Apk, B::Apk)
+            (SourceKind::Pacman, B::Pacman) | (SourceKind::Apt, B::Apt) | (SourceKind::Dnf, B::Dnf) | (SourceKind::Zypper, B::ZypperDup | B::ZypperUpdate) | (SourceKind::Xbps, B::Xbps) | (SourceKind::Apk, B::Apk) | (SourceKind::Pkg, B::Pkg)
         ),
         _ => false,
     }

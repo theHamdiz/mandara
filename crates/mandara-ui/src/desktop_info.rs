@@ -42,6 +42,12 @@ fn field(text: &str, key: &str) -> Option<String> {
 }
 
 /// The processor's model name.
+#[cfg(target_os = "freebsd")]
+fn cpu_name() -> String {
+    mandara_services::freebsd::host::cpu_model()
+}
+
+#[cfg(not(target_os = "freebsd"))]
 fn cpu_name() -> String {
     std::fs::read_to_string("/proc/cpuinfo").ok().and_then(|t| t.lines().find_map(|l| l.strip_prefix("model name").and_then(|r| r.split_once(':')).map(|(_, v)| v.trim().to_string()))).unwrap_or_default()
 }
@@ -107,7 +113,7 @@ fn read_machine() -> Machine {
     let logo_path = crate::icon_theme::distro_logo().and_then(|name| crate::icon_theme::resolve(&name, None, false)).map(|r| r.path);
     Machine {
         os: field(&release, "PRETTY_NAME").unwrap_or_default(),
-        kernel: std::fs::read_to_string("/proc/sys/kernel/osrelease").map(|s| s.trim().to_string()).unwrap_or_default(),
+        kernel: crate::widgets::system::kernel_release(),
         cpu: cpu_name(),
         gpu: gpu_name(),
         shell,
@@ -116,6 +122,12 @@ fn read_machine() -> Machine {
 }
 
 /// Memory used and total, bytes.
+#[cfg(target_os = "freebsd")]
+fn memory() -> (u64, u64) {
+    mandara_services::freebsd::host::memory().map(|m| (m.used(), m.total)).unwrap_or_default()
+}
+
+#[cfg(not(target_os = "freebsd"))]
 fn memory() -> (u64, u64) {
     let text = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
     let kb = |key: &str| text.lines().find_map(|l| l.strip_prefix(key)).and_then(|r| r.split_whitespace().next()).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0) * KIB;
@@ -123,6 +135,7 @@ fn memory() -> (u64, u64) {
     (total.saturating_sub(free), total)
 }
 
+#[cfg(not(target_os = "freebsd"))]
 const KIB: u64 = 1024;
 /// The machine's logo, drawn at most this big, physical px.
 const LOGO_PX: u32 = 220;

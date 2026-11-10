@@ -47,6 +47,9 @@ pub struct Tracker {
     pub restarts: u32,
     /// Non-fatal warnings (a repository that couldn't be refreshed).
     pub warnings: u32,
+    /// FreeBSD: the running release is past its end of life
+    /// (freebsd-update still fetched what it had, then said so).
+    pub end_of_life: bool,
     /// NixOS: derivations built of how many.
     pub built: u32,
     pub build_total: u32,
@@ -690,6 +693,199 @@ pub fn apk(step: StepKind, line: &str, t: &mut Tracker) {
     }
     if l.starts_with("OK: ") && step == StepKind::Install && !t.planned {
         t.nothing_to_do = true;
+    }
+}
+
+// ── pkg (FreeBSD) ────────────────────────────────────────────────────────
+
+/// pkg's job verbs: (`[n/m] <verb> …`, whether it changes a package).
+const PKG_VERBS: [(&str, bool); 5] = [("Upgrading ", true), ("Installing ", true), ("Reinstalling ", true), ("Downgrading ", true), ("Deinstalling ", false)];
+/// Kernel modules from packages (`drm-61-kmod`): a restart loads them.
+const KMOD_SUFFIX: &str = "-kmod";
+
+/// `[ 3/12] rest` → `(3, 12, rest)`: pkg's job counter (padded to the
+/// width of the total).
+fn bracketed(line: &str) -> Option<(u32, u32, &str)> {
+    let rest = line.strip_prefix('[')?;
+    let (inner, after) = rest.split_once(']')?;
+    let (n, m) = inner.split_once('/')?;
+    Some((n.trim().parse().ok()?, m.trim().parse().ok()?, after.trim_start()))
+}
+
+/// `name-1.2.3_1` → `name` (pkg versions never contain `-`).
+fn pkg_name(pkgver: &str) -> &str {
+    pkgver.rsplit_once('-').map_or(pkgver, |(n, _)| n)
+}
+
+/// `pkg update` and `pkg upgrade` without a terminal: one line per job
+/// (`[n/m] Fetching name-1.0: .......... done`, `[n/m] Upgrading name from
+/// 1.0 to 1.1...`), the summary (`The following N package(s) will be
+/// affected`) and the catalogue's own lines.
+pub fn pkg(step: StepKind, line: &str, t: &mut Tracker) {
+    let l = line.trim();
+    if l == "Your packages are up to date." {
+        t.nothing_to_do = true;
+        return;
+    }
+    if let Some(repo) = l.strip_prefix("Updating ").and_then(|r| r.strip_suffix(" repository catalogue...")) {
+        t.phase(Phase::Refreshing);
+        t.set_current(repo);
+        return;
+    }
+    // The catalogue's own files and entries: the repository stays the
+    // current item.
+    if l.starts_with("Processing entries") || l.starts_with("Fetching meta.conf") || l.starts_with("Fetching data.pkg") || l.starts_with("Fetching packagesite") {
+        return;
+    }
+    if l.starts_with("Checking for upgrades") || l.starts_with("Processing candidates") {
+        t.set_current(l.split(':').next().unwrap_or(l));
+        return;
+    }
+    // "The following 12 package(s) will be affected (of 0 checked):"
+    if let Some(n) = l.strip_prefix("The following ").and_then(|r| r.split_once(' ')).filter(|(_, r)| r.starts_with("package(s) will be affected")).and_then(|(n, _)| n.parse::<u32>().ok()) {
+        t.total = n;
+        t.planned = true;
+        if step == StepKind::Download {
+            t.download_total = n;
+        }
+        return;
+    }
+    if l.starts_with("Checking integrity...") {
+        t.phase(Phase::Verifying);
+        t.set_current(l.trim_end_matches(|c: char| c != '.').trim_end_matches('.'));
+        return;
+    }
+    if let Some(trigger) = l.strip_prefix("==> Running trigger: ") {
+        t.phase(Phase::Hooks);
+        t.hooks += 1;
+        t.set_current(trigger);
+        return;
+    }
+    let Some((n, m, body)) = bracketed(l) else { return };
+    if let Some(item) = body.strip_prefix("Fetching ") {
+        let name = item.split(':').next().unwrap_or(item);
+        t.phase(Phase::Downloading);
+        t.download_total = m;
+        // The line arrives once the file is in (`… done`).
+        t.downloaded = if body.ends_with("done") { n } else { n.saturating_sub(1) };
+        t.set_current(name);
+        return;
+    }
+    if body.starts_with("Extracting ") || body.starts_with("Deleting files for ") {
+        return;
+    }
+    for (verb, changes) in PKG_VERBS {
+        if let Some(rest) = body.strip_prefix(verb) {
+            // "Upgrading curl from 8.9.1 to 8.10.1..." or "Installing curl-8.10.1..."
+            let rest = rest.trim_end_matches('.');
+            let name = match rest.split_once(" from ") {
+                Some((name, _)) => name,
+                None => pkg_name(rest),
+            };
+            t.phase(Phase::Installing);
+            t.installed = n;
+            t.total = m;
+            t.set_current(rest);
+            if changes {
+                t.changed_package(name);
+                if t.restart_package.is_none() && name.ends_with(KMOD_SUFFIX) {
+                    t.restart_package = Some(name.to_string());
+                }
+            }
+            return;
+        }
+    }
+}
+
+// ── freebsd-update ───────────────────────────────────────────────────────
+
+/// Where the kernel lives: a fetched update that changes it needs a
+/// restart.
+const FREEBSD_KERNEL_DIR: &str = "/boot/kernel/";
+/// What freebsd-update prints while it installs.
+const FREEBSD_INSTALLING: &str = "Installing updates...";
+
+/// `freebsd-update fetch` / `install` (`--not-running-from-cron`,
+/// `PAGER=cat`): its progress lines (`Fetching 42 patches.....10....20.
+/// done.`), the file lists of the fetched update and its "nothing to do"
+/// answers. A system freebsd-update doesn't manage (not a -RELEASE, or a
+/// packaged base) counts as nothing to do, with a warning.
+pub fn freebsd_update(step: StepKind, line: &str, t: &mut Tracker) {
+    let l = line.trim();
+    if l.starts_with("No updates needed to update system to") || l == "No updates are available to install." {
+        t.nothing_to_do = true;
+        return;
+    }
+    if l.starts_with("Cannot upgrade from a version that is not a release") || l.starts_with("freebsd-update: Cannot upgrade from a version that is not a release") || l.starts_with("freebsd-update is incompatible with the use of packaged base") {
+        t.nothing_to_do = true;
+        t.warnings += 1;
+        return;
+    }
+    if l.contains("HAS PASSED ITS END-OF-LIFE DATE") {
+        t.end_of_life = true;
+        t.warnings += 1;
+        return;
+    }
+    if l.starts_with("Kernel updates have been installed.") {
+        t.reboot = true;
+        return;
+    }
+    if l.starts_with("Looking up ") || l.starts_with("Fetching metadata") || l.starts_with("Applying metadata patches") || l.starts_with("Fetching public key") {
+        t.phase(Phase::Refreshing);
+        t.set_current(l.split("...").next().unwrap_or(l));
+        return;
+    }
+    if l.starts_with("Inspecting system") || l.starts_with("Preparing to download files") {
+        t.phase(Phase::Verifying);
+        t.set_current(l.split("...").next().unwrap_or(l));
+        return;
+    }
+    // "Fetching 42 patches.....10....20....30....40. done." /
+    // "Fetching 3 files... done." (the line ends when they are in).
+    if let Some(rest) = l.strip_prefix("Fetching ")
+        && let Some((n, what)) = rest.split_once(' ')
+        && let Ok(n) = n.parse::<u32>()
+        && (what.starts_with("patches") || what.starts_with("files"))
+    {
+        t.phase(Phase::Downloading);
+        t.downloaded = n;
+        t.download_total = n;
+        t.set_current(&rest[..rest.find('.').unwrap_or(rest.len())]);
+        return;
+    }
+    if l.starts_with("Applying patches") {
+        t.set_current(l.split("...").next().unwrap_or(l));
+        return;
+    }
+    if l.starts_with("The following files will be") {
+        t.planned = true;
+        return;
+    }
+    if l.starts_with('/') && step == StepKind::Download && t.planned {
+        // One line per file of the fetched update.
+        t.total += 1;
+        if l.starts_with(FREEBSD_KERNEL_DIR) {
+            t.reboot = true;
+        }
+        return;
+    }
+    if l.starts_with("Creating snapshot of existing boot environment") {
+        t.phase(Phase::Verifying);
+        t.set_current(l.split("...").next().unwrap_or(l));
+        return;
+    }
+    if l.starts_with(FREEBSD_INSTALLING) {
+        t.phase(Phase::Installing);
+        t.set_current(FREEBSD_INSTALLING.trim_end_matches('.'));
+        if l.ends_with("done.") {
+            t.changed += 1;
+        }
+        return;
+    }
+    // certctl's lines may come between "Installing updates..." and its
+    // " done.".
+    if l == "done." && step == StepKind::Install && t.current == FREEBSD_INSTALLING.trim_end_matches('.') {
+        t.changed += 1;
     }
 }
 

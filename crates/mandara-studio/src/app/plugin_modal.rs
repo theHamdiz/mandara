@@ -559,6 +559,24 @@ pub(super) fn always_on_chip(p: &MandaraPalette) -> gpui::Div {
         .child(t("Always on"))
 }
 
+/// Stands in for the switch of a plugin this system can't run.
+pub(super) fn unsupported_chip(p: &MandaraPalette) -> gpui::Div {
+    div()
+        .flex_none()
+        .h(px(DIM_28_PX))
+        .px(px(SPACE_10_PX))
+        .rounded_full()
+        .row()
+        .items_center()
+        .gap(px(SPACE_6_PX))
+        .bg(p.on_surface.with_alpha(ALPHA_12).hsla())
+        .text_color(p.on_surface_variant.hsla())
+        .text_size(px(TEXT_12_PX))
+        .font_weight(FontWeight::MEDIUM)
+        .child(icon("lock", ICON_13_PX, p.on_surface_variant))
+        .child(t("Not available here"))
+}
+
 impl StudioView {
     /// Opens `id`'s detail or settings modal (Plugins page underneath).
     pub fn open_plugin(&mut self, id: &str, view: ModalView, window: &mut Window, cx: &mut Context<Self>) {
@@ -771,6 +789,7 @@ impl StudioView {
         let art = store::art_of(m);
         let builtin = m.origin == PluginOrigin::Builtin;
         let essential = if builtin { mandara_plugins::lifecycle::essential_reason(&m.id) } else { None };
+        let unsupported = if builtin { mandara_plugins::lifecycle::platform_reason(&m.id) } else { None };
         let removed = builtin && cfg.plugins.is_removed(&m.id);
         let (origin_label, origin_color) = origin(m, p);
         let author = if m.author.is_empty() { t("Unknown author").to_string() } else { m.author.clone() };
@@ -1122,6 +1141,21 @@ impl StudioView {
                 .child(icon("lock", ICON_14_PX, p.primary))
                 .child(div().flex_1().min_w(px(0.0)).child(mandara_ui::bidi::paragraph(tf("Part of Mandara's core, so it is always on. {reason}", &[("reason", &tr(why))]))))
         });
+        // A plugin this system can't run says why in place of its switch.
+        let unsupported_note = unsupported.map(|why| {
+            div()
+                .px(px(SPACE_14_PX))
+                .py(px(SPACE_10_PX))
+                .rounded(px(RADIUS_12_PX))
+                .row()
+                .items_start()
+                .gap(px(SPACE_8_PX))
+                .bg(p.on_surface.with_alpha(ALPHA_8).hsla())
+                .text_size(px(TEXT_12_5_PX))
+                .text_color(p.on_surface.hsla())
+                .child(icon("lock", ICON_14_PX, p.on_surface_variant))
+                .child(div().flex_1().min_w(px(0.0)).child(mandara_ui::bidi::paragraph(tr(why))))
+        });
 
         div()
             .row()
@@ -1137,6 +1171,7 @@ impl StudioView {
                     .gap(px(SPACE_22_PX))
                     .child(info_strip)
                     .children(essential_note)
+                    .children(unsupported_note)
                     .children(flag_note)
                     .children(message)
                     .child(band)

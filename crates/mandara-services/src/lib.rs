@@ -21,6 +21,8 @@ pub mod containers;
 pub mod credentials;
 pub mod desktop_feeds;
 pub mod feeds;
+#[cfg(any(test, target_os = "freebsd"))]
+pub mod freebsd;
 pub mod cursors;
 pub mod ddc;
 pub mod drives;
@@ -63,6 +65,7 @@ pub mod reddit;
 pub mod sounds;
 pub mod leds;
 pub mod system_events;
+pub mod system_fonts;
 pub mod ocr;
 pub mod power;
 pub mod prayer;

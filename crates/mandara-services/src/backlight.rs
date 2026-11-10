@@ -1,5 +1,5 @@
 //! Hardware sources for on-screen displays: the display backlight
-//! (`/sys/class/backlight`, changed through logind's
+//! (`/sys/class/backlight`, or `/dev/backlight` on FreeBSD; changed through logind's
 //! `Session.SetBrightness` so no root or udev rule is needed) and the
 //! keyboard Caps Lock LED.
 //!
@@ -15,6 +15,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 
+#[cfg(not(target_os = "freebsd"))]
 const BACKLIGHT_ROOT: &str = "/sys/class/backlight";
 const LEDS_ROOT: &str = "/sys/class/leds";
 /// Lowest brightness `raw_for` allows, as a fraction of the maximum.
@@ -22,6 +23,7 @@ const MIN_LEVEL: f32 = 0.01;
 /// Re-read interval for backlight drivers that never notify.
 const BACKLIGHT_RESYNC: Duration = Duration::from_secs(30);
 /// Back-off after a failed `poll(2)`.
+#[cfg(not(target_os = "freebsd"))]
 const POLL_RETRY: Duration = Duration::from_secs(1);
 /// Caps Lock LED sampling interval while the OSD wants it.
 const CAPSLOCK_SAMPLE: Duration = Duration::from_millis(200);
@@ -55,6 +57,7 @@ impl Backlight {
         ((level.clamp(0.0, 1.0) * self.max as f32).round() as u32).clamp(floor.min(self.max), self.max)
     }
 
+    #[cfg(not(target_os = "freebsd"))]
     fn read(dir: &Path) -> Option<Self> {
         let name = dir.file_name()?.to_string_lossy().to_string();
         let max = read_u32(&dir.join("max_brightness"))?;
@@ -75,6 +78,7 @@ fn pread_u32(file: &std::fs::File) -> Option<u32> {
 }
 
 /// Every backlight device.
+#[cfg(not(target_os = "freebsd"))]
 pub fn devices() -> Vec<Backlight> {
     let Ok(dir) = std::fs::read_dir(BACKLIGHT_ROOT) else { return Vec::new() };
     dir.flatten().filter_map(|e| Backlight::read(&e.path())).filter(|b| b.max > 0).collect()
@@ -82,6 +86,7 @@ pub fn devices() -> Vec<Backlight> {
 
 /// The backlight to drive: firmware interfaces beat platform ones beat raw
 /// registers (the kernel's own preference order), then the finest range.
+#[cfg(not(target_os = "freebsd"))]
 pub fn primary() -> Option<Backlight> {
     let rank = |b: &Backlight| match std::fs::read_to_string(Path::new(BACKLIGHT_ROOT).join(&b.name).join("type")).unwrap_or_default().trim() {
         "firmware" => 0,
@@ -92,6 +97,7 @@ pub fn primary() -> Option<Backlight> {
 }
 
 /// Re-reads one device.
+#[cfg(not(target_os = "freebsd"))]
 pub fn read(name: &str) -> Option<Backlight> {
     Backlight::read(&Path::new(BACKLIGHT_ROOT).join(name))
 }
@@ -99,6 +105,7 @@ pub fn read(name: &str) -> Option<Backlight> {
 /// Sets the raw brightness through logind (`org.freedesktop.login1`
 /// `Session.SetBrightness("backlight", name, value)` on the caller's
 /// session) on the service runtime; the receiver gets the result.
+#[cfg(not(target_os = "freebsd"))]
 pub fn set_brightness(name: &str, value: u32) -> async_channel::Receiver<Result<String, String>> {
     let (tx, rx) = async_channel::bounded(1);
     let name = name.to_string();
@@ -117,6 +124,7 @@ pub fn set_brightness(name: &str, value: u32) -> async_channel::Receiver<Result<
 }
 
 /// Follows the primary backlight. `None` when the machine has none.
+#[cfg(not(target_os = "freebsd"))]
 pub fn watch_backlight() -> Option<async_channel::Receiver<Backlight>> {
     let device = primary()?;
     let dir = PathBuf::from(BACKLIGHT_ROOT).join(&device.name);
@@ -145,6 +153,76 @@ pub fn watch_backlight() -> Option<async_channel::Receiver<Backlight>> {
             let timeout = Timespec { tv_sec: BACKLIGHT_RESYNC.as_secs() as i64, tv_nsec: 0 };
             if poll(&mut fds, Some(&timeout)).is_err() {
                 std::thread::sleep(POLL_RETRY);
+            }
+        }
+    });
+    Some(rx)
+}
+
+// ── FreeBSD: backlight(9) devices, percent levels ──────────────────────────
+
+#[cfg(target_os = "freebsd")]
+fn from_device(d: crate::freebsd::backlight::Device) -> Backlight {
+    Backlight { name: d.name, brightness: d.percent, max: 100 }
+}
+
+/// Every panel backlight in `/dev/backlight` (keyboard ones excluded).
+#[cfg(target_os = "freebsd")]
+pub fn devices() -> Vec<Backlight> {
+    use crate::freebsd::backlight as bl;
+    bl::devices().into_iter().filter(|d| d.kind == bl::TYPE_PANEL).map(from_device).collect()
+}
+
+/// The first panel backlight.
+#[cfg(target_os = "freebsd")]
+pub fn primary() -> Option<Backlight> {
+    devices().into_iter().next()
+}
+
+#[cfg(target_os = "freebsd")]
+pub fn read(name: &str) -> Option<Backlight> {
+    crate::freebsd::backlight::read(name).map(from_device)
+}
+
+/// Sets `name` to `value` percent with its ioctl, on the blocking pool.
+#[cfg(target_os = "freebsd")]
+pub fn set_brightness(name: &str, value: u32) -> async_channel::Receiver<Result<String, String>> {
+    let (tx, rx) = async_channel::bounded(1);
+    let name = name.to_string();
+    crate::runtime::spawn("set-brightness", async move {
+        let result = crate::runtime::unblock(move || {
+            crate::freebsd::backlight::set(&name, value).map(|_| format!("{name} = {value}")).map_err(|e| {
+                if e.kind() == std::io::ErrorKind::PermissionDenied {
+                    mandara_i18n::tf("Changing {name} needs membership in the video group", &[("name", &name)])
+                } else {
+                    e.to_string()
+                }
+            })
+        })
+        .await;
+        let _ = tx.send(result).await;
+    });
+    rx
+}
+
+/// Follows the primary backlight. backlight(9) has no change events, so
+/// this re-reads it every [`BACKLIGHT_RESYNC`] (Mandara's own changes are
+/// known at once).
+#[cfg(target_os = "freebsd")]
+pub fn watch_backlight() -> Option<async_channel::Receiver<Backlight>> {
+    let device = primary()?;
+    let (tx, rx) = async_channel::bounded(UPDATE_QUEUE);
+    crate::runtime::spawn("backlight", async move {
+        let mut last = device.brightness;
+        while !tx.is_closed() {
+            crate::runtime::sleep(BACKLIGHT_RESYNC).await;
+            let name = device.name.clone();
+            let Some(now) = crate::runtime::unblock(move || read(&name)).await else { return };
+            if now.brightness != last {
+                last = now.brightness;
+                if tx.send(now).await.is_err() {
+                    return;
+                }
             }
         }
     });

@@ -14,6 +14,7 @@
 //! | emerge | the Gentoo repository tree | `emerge --sync` |
 //! | dnf, zypper, apk, eopkg | nothing: they fetch metadata themselves | `dnf makecache --refresh`, `zypper refresh`, `apk update`, `eopkg update-repo`, only after an install failed |
 //! | xbps | nothing: `xbps-install -S` syncs on every install | — |
+//! | pkg (FreeBSD) | nothing: `pkg install` updates its catalogue first | `pkg update`, only after an install failed |
 
 use std::path::{Path, PathBuf};
 
@@ -54,7 +55,7 @@ pub fn missing(pm: PackageManager, root: &Path) -> Vec<String> {
             let synced = GENTOO_TREES.iter().any(|t| sys(root, t).join(GENTOO_TREE_MARK).is_file());
             if synced { Vec::new() } else { vec!["Gentoo repository".to_string()] }
         }
-        PackageManager::Dnf | PackageManager::Zypper | PackageManager::Xbps | PackageManager::Apk | PackageManager::Eopkg => Vec::new(),
+        PackageManager::Dnf | PackageManager::Zypper | PackageManager::Xbps | PackageManager::Apk | PackageManager::Eopkg | PackageManager::Pkg => Vec::new(),
     }
 }
 
@@ -76,6 +77,7 @@ pub fn sync_argv(pm: PackageManager, unattended: bool) -> Option<Vec<String>> {
         PackageManager::Apk => &["apk", "update"],
         PackageManager::Emerge => &["emerge", "--sync"],
         PackageManager::Eopkg => &["eopkg", "update-repo"],
+        PackageManager::Pkg => &["pkg", "update"],
         PackageManager::Xbps => return None,
     };
     Some(argv.iter().map(|a| a.to_string()).collect())
@@ -109,6 +111,8 @@ pub fn available_query(pm: PackageManager, package: &str) -> Option<(Vec<String>
         PackageManager::AptGet => (&["apt-cache", "show"], by_exit),
         PackageManager::Xbps => (&["xbps-query", "-R"], by_exit),
         PackageManager::Apk => (&["apk", "search", "-x"], by_listing),
+        // `-U`: the cached catalogue, without root.
+        PackageManager::Pkg => (&["pkg", "rquery", "-U", "%n"], by_listing),
         PackageManager::Dnf | PackageManager::Zypper | PackageManager::Emerge | PackageManager::Eopkg => return None,
     };
     Some((argv.iter().map(|a| a.to_string()).chain([package.to_string()]).collect(), judge))
@@ -253,7 +257,7 @@ mod tests {
     #[test]
     fn self_refreshing_managers_are_never_flagged() {
         let dir = tempfile::tempdir().unwrap();
-        for pm in [PackageManager::Dnf, PackageManager::Zypper, PackageManager::Xbps, PackageManager::Apk, PackageManager::Eopkg] {
+        for pm in [PackageManager::Dnf, PackageManager::Zypper, PackageManager::Xbps, PackageManager::Apk, PackageManager::Eopkg, PackageManager::Pkg] {
             assert!(missing(pm, dir.path()).is_empty(), "{pm:?}");
         }
     }
@@ -269,6 +273,7 @@ mod tests {
         assert_eq!(argv(PackageManager::Apk, true).as_deref(), Some("apk update"));
         assert_eq!(argv(PackageManager::Emerge, true).as_deref(), Some("emerge --sync"));
         assert_eq!(argv(PackageManager::Eopkg, true).as_deref(), Some("eopkg update-repo"));
+        assert_eq!(argv(PackageManager::Pkg, true).as_deref(), Some("pkg update"));
         assert_eq!(argv(PackageManager::Xbps, true), None);
         for pm in PackageManager::ALL {
             // Never a bare `-Sy`: no partial upgrades on Arch.
@@ -286,7 +291,12 @@ mod tests {
         assert_eq!(q(PackageManager::AptGet).as_deref(), Some("apt-cache show niri"));
         assert_eq!(q(PackageManager::Xbps).as_deref(), Some("xbps-query -R niri"));
         assert_eq!(q(PackageManager::Apk).as_deref(), Some("apk search -x niri"));
+        assert_eq!(q(PackageManager::Pkg).as_deref(), Some("pkg rquery -U %n niri"));
         assert_eq!(q(PackageManager::Dnf), None);
+        // pkg rquery prints nothing (exit 0) for a package the catalogue lacks.
+        let (_, judge) = available_query(PackageManager::Pkg, "x").unwrap();
+        assert!(!judge(&crate::host::Output { success: true, ..Default::default() }));
+        assert!(judge(&crate::host::Output { success: true, stdout: "niri\n".into(), ..Default::default() }));
         // apk lists nothing (and still succeeds) for a package it lacks.
         let (_, judge) = available_query(PackageManager::Apk, "x").unwrap();
         assert!(!judge(&crate::host::Output { success: true, ..Default::default() }));

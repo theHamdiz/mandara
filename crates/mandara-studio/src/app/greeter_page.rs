@@ -273,7 +273,7 @@ impl GreeterPage {
             // (screenshots, layout testing).
             group: std::env::var("MANDARA_STUDIO_LOGIN_GROUP").ok().and_then(|v| Group::ALL.into_iter().find(|g| format!("{g:?}").eq_ignore_ascii_case(&v))).unwrap_or(Group::Looks),
             selected: None,
-            message: None,
+            message: greetd_missing().map(|why| (false, why)),
             applying: false,
             idle: false,
             fields: HashMap::new(),
@@ -311,6 +311,11 @@ impl GreeterPage {
 
     fn apply_system(&mut self, cx: &mut Context<Self>) {
         if self.applying {
+            return;
+        }
+        if let Some(why) = greetd_missing() {
+            self.message = Some((false, why));
+            cx.notify();
             return;
         }
         self.save();
@@ -1065,6 +1070,19 @@ thread_local! {
     /// The element the "Selected" sliders edit (fn-pointer setters can't
     /// capture it).
     static SELECTED: std::cell::Cell<Option<Element>> = const { std::cell::Cell::new(None) };
+}
+
+/// Why Mandara Login can't be applied here: FreeBSD has no greetd package,
+/// so until greetd is built from source the login screen stays locked.
+#[cfg(target_os = "freebsd")]
+fn greetd_missing() -> Option<String> {
+    let installed = mandara_greeter::sessions::program_exists("greetd") || ["/usr/local/sbin/greetd", "/usr/local/bin/greetd"].iter().any(|p| std::path::Path::new(p).exists());
+    (!installed).then(|| mandara_i18n::t("greetd isn't packaged for FreeBSD: build and install it from source first (Mandara's login manager guide has the steps), then apply").to_string())
+}
+
+#[cfg(not(target_os = "freebsd"))]
+fn greetd_missing() -> Option<String> {
+    None
 }
 
 fn sel_ref(c: &mut GreeterConfig) -> &mut mandara_greeter::config::Placement {

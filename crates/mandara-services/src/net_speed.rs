@@ -1,4 +1,5 @@
-//! Network throughput: per-interface byte counters from `/proc/net/dev`,
+//! Network throughput: per-interface byte counters from `/proc/net/dev`
+//! (`getifaddrs` link data on FreeBSD),
 //! rates between samples, local addresses (`getifaddrs`), the public
 //! address (one HTTPS request to a configurable endpoint) and a download
 //! speed test against Cloudflare's speed endpoint.
@@ -64,8 +65,15 @@ pub fn parse_proc_net_dev(text: &str) -> Vec<Counters> {
         .collect()
 }
 
+#[cfg(not(target_os = "freebsd"))]
 pub fn read_counters() -> Vec<Counters> {
     parse_proc_net_dev(&std::fs::read_to_string("/proc/net/dev").unwrap_or_default())
+}
+
+/// FreeBSD: each link's `if_data` counters (`getifaddrs`).
+#[cfg(target_os = "freebsd")]
+pub fn read_counters() -> Vec<Counters> {
+    crate::freebsd::net::traffic().into_iter().map(|(name, rx_bytes, tx_bytes)| Counters { name, rx_bytes, tx_bytes }).collect()
 }
 
 /// What kind of link an interface is (for icons and for which interfaces
@@ -84,6 +92,7 @@ pub enum LinkKind {
 
 impl LinkKind {
     /// Classifies by name, refined by sysfs when available.
+    #[cfg(not(target_os = "freebsd"))]
     pub fn classify(name: &str) -> Self {
         let sys = std::path::Path::new("/sys/class/net").join(name);
         if sys.join("wireless").exists() || sys.join("phy80211").exists() {
@@ -94,6 +103,27 @@ impl LinkKind {
             return LinkKind::Ethernet;
         }
         by_name
+    }
+
+    /// FreeBSD names its links by driver (`em0`, `igb0`, `vtnet0`; Wi-Fi
+    /// is `wlanN`), so only its virtual and tunnel families need naming.
+    #[cfg(target_os = "freebsd")]
+    pub fn classify(name: &str) -> Self {
+        Self::from_freebsd_name(name)
+    }
+
+    pub fn from_freebsd_name(name: &str) -> Self {
+        const VIRTUAL: &[&str] = &["bridge", "epair", "lagg", "vlan", "vm-", "pflog", "pfsync", "enc", "gif", "stf"];
+        const TUNNEL: &[&str] = &["tun", "tap", "wg", "ovpn", "tailscale", "zt", "ipsec"];
+        if name.starts_with("wlan") {
+            LinkKind::Wifi
+        } else if TUNNEL.iter().any(|p| name.starts_with(p)) {
+            LinkKind::Tunnel
+        } else if VIRTUAL.iter().any(|p| name.starts_with(p)) {
+            LinkKind::Virtual
+        } else {
+            LinkKind::Ethernet
+        }
     }
 
     pub fn from_name(name: &str) -> Self {
@@ -462,6 +492,16 @@ pub fn addresses_by_iface(list: &[LocalAddr]) -> BTreeMap<String, Vec<IpAddr>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn freebsd_links_are_named_by_driver() {
+        assert_eq!(LinkKind::from_freebsd_name("vtnet0"), LinkKind::Ethernet);
+        assert_eq!(LinkKind::from_freebsd_name("igb1"), LinkKind::Ethernet);
+        assert_eq!(LinkKind::from_freebsd_name("wlan0"), LinkKind::Wifi);
+        assert_eq!(LinkKind::from_freebsd_name("bridge0"), LinkKind::Virtual);
+        assert_eq!(LinkKind::from_freebsd_name("epair0b"), LinkKind::Virtual);
+        assert_eq!(LinkKind::from_freebsd_name("wg0"), LinkKind::Tunnel);
+    }
 
     const SAMPLE: &str = "Inter-|   Receive                                                |  Transmit
  face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed

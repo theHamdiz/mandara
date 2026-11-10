@@ -14,6 +14,13 @@
 //!   (the files it changes plus a manifest); a failed step rolls back, and
 //!   [`RestorePlan`] (`mandara greeter restore latest`) undoes a switch.
 //!
+//! On FreeBSD ([`SysRoot::freebsd`]) there is no systemd: the enabled
+//! login manager is the one whose `<name>_enable` is `YES` in rc.conf, its
+//! rc script lives in `/usr/local/etc/rc.d` or `/etc/rc.d`, and switching
+//! is `sysrc <old>_enable=NO` + `sysrc <new>_enable=YES`. Unit names
+//! (`sddm.service`) stay the plan's and the backups' vocabulary; only the
+//! commands differ.
+//!
 //! Everything takes a [`SysRoot`] so tests run against fixture trees.
 
 use std::fmt::Write as _;
@@ -41,6 +48,8 @@ pub const MANIFEST: &str = "manifest.toml";
 pub const DRY_RUN_ENV: &str = "MANDARA_GREETER_DRY_RUN";
 /// greetd's default greeter user when its config names none.
 pub const DEFAULT_GREETER_USER: &str = "greeter";
+/// How to build greetd where it isn't packaged (FreeBSD).
+pub const FREEBSD_GREETD_DOC: &str = "https://github.com/theHamdiz/mandara/blob/main/docs/login-manager.md#freebsd";
 /// Id of Mandara Login in [`MANAGERS`]: the default choice everywhere.
 pub const MANDARA: &str = "mandara";
 const GREETD: &str = "greetd";
@@ -57,6 +66,14 @@ const BACKUP_ID_FORMAT: &str = "%Y%m%d-%H%M%S";
 const FRESH_CONFIG_HEADER: &str = "# Written by `mandara greeter use`.";
 /// VT greetd runs on in a config written from scratch.
 const FRESH_CONFIG_VT: i64 = 1;
+/// FreeBSD: `/dev/ttyv8`, past the eight gettys of `/etc/ttys`.
+const FREEBSD_FRESH_CONFIG_VT: i64 = 8;
+/// Where FreeBSD's rc scripts live (ports, then base).
+pub const RC_DIRS: [&str; 2] = ["/usr/local/etc/rc.d", "/etc/rc.d"];
+/// rc.conf files, in the order rc.subr reads them (later wins); a
+/// service's own `rc.conf.d/<name>` comes last.
+pub const RC_CONF_FILES: [&str; 3] = ["/etc/defaults/rc.conf", "/etc/rc.conf", "/etc/rc.conf.local"];
+pub const RC_CONF_DIRS: [&str; 2] = ["/etc/rc.conf.d", "/usr/local/etc/rc.conf.d"];
 /// Shown in every plan and result: when the change becomes visible.
 pub const TAKES_EFFECT: &str = "Takes effect at the next boot (or the next time the login screen starts); the running session is not touched.";
 
@@ -66,15 +83,28 @@ pub struct SysRoot {
     base: PathBuf,
     /// Also search `$PATH` for binaries (the real system only).
     use_path_env: bool,
+    /// A FreeBSD system: rc.conf services, OpenPAM, `/usr/local` ports.
+    freebsd: bool,
 }
 
 impl SysRoot {
     pub fn system() -> SysRoot {
-        SysRoot { base: PathBuf::from("/"), use_path_env: true }
+        SysRoot { base: PathBuf::from("/"), use_path_env: true, freebsd: cfg!(target_os = "freebsd") }
     }
 
     pub fn at(base: impl Into<PathBuf>) -> SysRoot {
-        SysRoot { base: base.into(), use_path_env: false }
+        SysRoot { base: base.into(), use_path_env: false, freebsd: false }
+    }
+
+    /// The same root, as a FreeBSD system (tests on any platform).
+    pub fn as_freebsd(mut self) -> SysRoot {
+        self.freebsd = true;
+        self
+    }
+
+    /// Whether services are FreeBSD rc scripts (no systemd).
+    pub fn freebsd(&self) -> bool {
+        self.freebsd
     }
 
     pub fn base(&self) -> &Path {
@@ -94,7 +124,23 @@ impl SysRoot {
     }
 
     pub fn has_unit(&self, unit: &str) -> bool {
+        if self.freebsd {
+            return RC_DIRS.iter().any(|d| self.path(d).join(rc_name(unit)).is_file());
+        }
         UNIT_DIRS.iter().any(|d| self.path(d).join(unit).exists())
+    }
+
+    /// Whether rc.conf turns `service` on (`<service>_enable="YES"`).
+    pub fn rc_enabled(&self, service: &str) -> bool {
+        let var = format!("{}_enable", service.replace('-', "_"));
+        let own = RC_CONF_DIRS.map(|d| format!("{d}/{service}"));
+        let mut on = false;
+        for file in RC_CONF_FILES.iter().copied().chain(own.iter().map(String::as_str)) {
+            if let Some(v) = self.read(file).and_then(|t| rc_value(&t, &var)) {
+                on = rc_yes(&v);
+            }
+        }
+        on
     }
 
     pub(crate) fn read(&self, abs: &str) -> Option<String> {
@@ -215,6 +261,9 @@ pub struct Missing {
 
 impl Missing {
     pub fn describe(&self) -> String {
+        if self.package.is_empty() {
+            return format!("{} isn't installed, and this system has no package for it — build it first ({FREEBSD_GREETD_DOC})", self.what);
+        }
         format!("{} isn't installed — install it first (package {})", self.what, self.package)
     }
 }
@@ -293,8 +342,12 @@ impl Detection {
     }
 }
 
-/// The display manager behind `<root>/etc/systemd/system/display-manager.service`.
+/// The display manager behind `<root>/etc/systemd/system/display-manager.service`
+/// (FreeBSD: the first known login manager rc.conf enables).
 pub fn display_manager(root: &SysRoot) -> Option<String> {
+    if root.freebsd() {
+        return std::iter::once(GREETD).chain(MANAGERS.iter().filter(|m| m.kind == Kind::DisplayManager).flat_map(|m| m.units.iter().map(|u| rc_name(u)))).find(|name| root.rc_enabled(name)).map(str::to_string);
+    }
     let target = std::fs::read_link(root.path(DISPLAY_MANAGER_LINK)).ok()?;
     let name = target.file_name()?.to_string_lossy().trim_end_matches(UNIT_SUFFIX).to_string();
     (!name.is_empty()).then_some(name)
@@ -331,7 +384,9 @@ pub fn missing_for(root: &SysRoot, m: &LoginManager, kiosk: Kiosk, family: Famil
     match m.kind {
         Kind::GreetdGreeter => {
             if !greetd_installed(root) {
-                out.push(miss(GREETD, &login_package(family, GREETD)));
+                // Not packaged for FreeBSD yet: no package to install.
+                let package = if family == Family::FreeBSD { String::new() } else { login_package(family, GREETD) };
+                out.push(miss(GREETD, &package));
             }
             if !m.is_mandara() && !m.binaries.iter().any(|b| root.has_binary(b)) {
                 out.push(miss(m.binaries.first().copied().unwrap_or(m.id), m.packages.for_family(family)));
@@ -454,9 +509,14 @@ fn line_key(line: &str) -> Option<&str> {
 /// other line (comments, `user`, `[terminal]`, `initial_session`) as is.
 /// Without a config, writes a fresh one (vt 1, `user = default_user`).
 pub fn set_default_session_command(existing: Option<&str>, command: &str, default_user: &str) -> String {
+    set_default_session_command_on(existing, command, default_user, FRESH_CONFIG_VT)
+}
+
+/// [`set_default_session_command`] with the VT a fresh config uses.
+fn set_default_session_command_on(existing: Option<&str>, command: &str, default_user: &str, fresh_vt: i64) -> String {
     let cmd_line = format!("command = {}", toml_string(command));
     let Some(text) = existing.filter(|t| !t.trim().is_empty()) else {
-        return format!("{FRESH_CONFIG_HEADER}\n\n[terminal]\nvt = {FRESH_CONFIG_VT}\n\n[default_session]\n{cmd_line}\nuser = {}\n", toml_string(default_user));
+        return format!("{FRESH_CONFIG_HEADER}\n\n[terminal]\nvt = {fresh_vt}\n\n[default_session]\n{cmd_line}\nuser = {}\n", toml_string(default_user));
     };
     let mut out: Vec<String> = Vec::new();
     let mut in_session = false;
@@ -567,14 +627,63 @@ fn systemctl(verb: &str, unit: &str) -> Vec<String> {
     vec!["systemctl".into(), verb.into(), unit.into()]
 }
 
-/// The command that undoes `cmd` (`enable` ↔ `disable`).
+/// `unit`'s rc script name (`sddm.service` → `sddm`).
+pub fn rc_name(unit: &str) -> &str {
+    unit.trim_end_matches(UNIT_SUFFIX)
+}
+
+/// `sysrc <name>_enable=YES|NO`: rc.conf turns `unit`'s service on or off.
+fn sysrc(enable: bool, unit: &str) -> Vec<String> {
+    vec!["sysrc".into(), format!("{}_enable={}", rc_name(unit).replace('-', "_"), if enable { RC_YES } else { RC_NO })]
+}
+
+/// Enables or disables `unit` at boot on `root` (nothing is started or
+/// stopped).
+pub(crate) fn service_command(root: &SysRoot, verb: &str, unit: &str) -> Vec<String> {
+    if root.freebsd() { sysrc(verb == "enable", unit) } else { systemctl(verb, unit) }
+}
+
+/// The command that undoes `cmd` (`enable` ↔ `disable`, `YES` ↔ `NO`).
 fn inverse(cmd: &[String]) -> Option<Vec<String>> {
+    if cmd.first().is_some_and(|c| c == "sysrc") {
+        let (var, value) = cmd.get(1)?.split_once('=')?;
+        let flipped = if rc_yes(value) { RC_NO } else { RC_YES };
+        return Some(vec!["sysrc".into(), format!("{var}={flipped}")]);
+    }
     let verb = match cmd.get(1)?.as_str() {
         "enable" => "disable",
         "disable" => "enable",
         _ => return None,
     };
     Some(systemctl(verb, cmd.get(2)?))
+}
+
+const RC_YES: &str = "YES";
+const RC_NO: &str = "NO";
+
+/// The last value `var` gets in rc.conf-style `text` (`var="YES"`,
+/// comments and quotes dropped).
+pub fn rc_value(text: &str, var: &str) -> Option<String> {
+    text.lines()
+        .rev()
+        .find_map(|l| {
+            let l = l.trim();
+            let (k, v) = l.split_once('=')?;
+            if k.trim() != var || l.starts_with('#') {
+                return None;
+            }
+            let v = v.trim();
+            let v = match v.chars().next() {
+                Some(q @ ('"' | '\'')) => v[1..].split(q).next().unwrap_or_default(),
+                _ => v.split(['#', ' ', '\t', ';']).next().unwrap_or_default(),
+            };
+            Some(v.to_string())
+        })
+}
+
+/// rc.subr's `checkyesno`: `YES`, `TRUE`, `ON` or `1`, any case.
+pub fn rc_yes(value: &str) -> bool {
+    matches!(value.trim().to_ascii_uppercase().as_str(), "YES" | "TRUE" | "ON" | "1")
 }
 
 /// The unit name for display manager `dm` (`sddm` → `sddm.service`).
@@ -641,7 +750,8 @@ impl SwitchPlan {
                     errors.push(format!("{GREETD_CONFIG} doesn't parse ({e}); fix it first"));
                 } else if !already_active {
                     let previous = root.read(GREETD_CONFIG);
-                    let contents = set_default_session_command(previous.as_deref(), &command, &greeter_user);
+                    let vt = if root.freebsd() { FREEBSD_FRESH_CONFIG_VT } else { FRESH_CONFIG_VT };
+                    let contents = set_default_session_command_on(previous.as_deref(), &command, &greeter_user, vt);
                     if let Err(e) = validate_greetd_rewrite(previous.as_deref(), &contents, &command) {
                         errors.push(e);
                     }
@@ -657,9 +767,9 @@ impl SwitchPlan {
                 }
                 if current.as_deref() != Some(GREETD) {
                     if let Some(dm) = &current {
-                        commands.push(systemctl("disable", &unit_of(dm)));
+                        commands.push(service_command(root, "disable", &unit_of(dm)));
                     }
-                    commands.push(systemctl("enable", GREETD_UNIT));
+                    commands.push(service_command(root, "enable", GREETD_UNIT));
                 }
             }
             Kind::DisplayManager => {
@@ -667,10 +777,10 @@ impl SwitchPlan {
                 already_active = current.as_deref().and_then(manager_for_unit).is_some_and(|m| m.id == target.id);
                 if !already_active {
                     if let Some(dm) = &current {
-                        commands.push(systemctl("disable", &unit_of(dm)));
+                        commands.push(service_command(root, "disable", &unit_of(dm)));
                     }
                     if let Some(u) = &unit {
-                        commands.push(systemctl("enable", u));
+                        commands.push(service_command(root, "enable", u));
                     }
                 }
                 new_unit = unit;
@@ -1000,10 +1110,10 @@ impl RestorePlan {
         let mut commands = Vec::new();
         if manifest.units_switched && manifest.previous_unit != manifest.new_unit {
             if let Some(u) = &manifest.new_unit {
-                commands.push(systemctl("disable", u));
+                commands.push(service_command(root, "disable", u));
             }
             if let Some(u) = &manifest.previous_unit {
-                commands.push(systemctl("enable", u));
+                commands.push(service_command(root, "enable", u));
             }
         }
         Ok(RestorePlan { id, dir, manifest, commands })

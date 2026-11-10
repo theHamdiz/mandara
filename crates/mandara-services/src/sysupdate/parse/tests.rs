@@ -238,3 +238,111 @@ fn counts_and_fractions() {
     t.set_current(&long);
     assert_eq!(t.current.len(), 120);
 }
+
+/// The step of FreeBSD's plan that runs `program` for `kind`.
+fn freebsd_step(kind: StepKind, program: &str) -> Step {
+    backend(BackendId::Pkg).steps().into_iter().find(|s| s.kind == kind && s.program == program).unwrap()
+}
+
+fn replay_step(step: &Step, scenario: Scenario) -> (Tracker, i32) {
+    let (text, code) = crate::sysupdate::fake::recording_of(BackendId::Pkg, step, scenario);
+    let mut t = Tracker::default();
+    feed(BackendId::Pkg, step.kind, text, &mut t);
+    (t, code)
+}
+
+#[test]
+fn pkg_refresh_download_and_install() {
+    let r = run(BackendId::Pkg, StepKind::Refresh, Scenario::Success);
+    assert_eq!(r.phase, Phase::Refreshing);
+    assert_eq!(r.current, "FreeBSD-kmods", "the last catalogue refreshed");
+    let d = run(BackendId::Pkg, StepKind::Download, Scenario::Success);
+    assert_eq!((d.downloaded, d.download_total, d.total), (6, 6, 6));
+    assert_eq!(d.phase, Phase::Downloading);
+    assert_eq!(d.current, "sqlite3-3.54.1,1");
+    assert!(!d.nothing_to_do && d.planned);
+    let i = run(BackendId::Pkg, StepKind::Install, Scenario::Success);
+    assert_eq!((i.installed, i.total, i.changed), (6, 6, 6));
+    assert_eq!(i.phase, Phase::Installing);
+    assert_eq!(i.restart_package.as_deref(), Some("drm-61-kmod"), "a kernel module asks for a restart");
+    assert_eq!(i.counts(), Some((6, 6)));
+}
+
+#[test]
+fn pkg_up_to_date_still_checks_the_base_system() {
+    let u = run(BackendId::Pkg, StepKind::Download, Scenario::UpToDate);
+    assert!(u.nothing_to_do);
+    // The packages are current; freebsd-update still runs next.
+    assert_eq!(backend(BackendId::Pkg).after(&freebsd_step(StepKind::Download, "pkg"), Some(0), &u), Next::Continue);
+    let locked = recording(BackendId::Pkg, StepKind::Refresh, Scenario::Locked).0;
+    assert_eq!(backend(BackendId::Pkg).classify(&tail(locked)), FailureKind::Locked);
+}
+
+#[test]
+fn freebsd_update_fetch_and_install() {
+    let fetch = freebsd_step(StepKind::Download, plan::FREEBSD_UPDATE);
+    let (f, code) = replay_step(&fetch, Scenario::Success);
+    assert_eq!(code, 0);
+    assert_eq!((f.downloaded, f.download_total), (1, 1), "the last download line: one whole file");
+    assert_eq!(f.total, 15, "files the update changes");
+    assert!(f.reboot, "/boot/kernel/kernel changes: restart");
+    assert!(!f.nothing_to_do);
+    assert_eq!(backend(BackendId::Pkg).after(&fetch, Some(0), &f), Next::Continue);
+    let install = freebsd_step(StepKind::Install, plan::FREEBSD_UPDATE);
+    let (i, code) = replay_step(&install, Scenario::Success);
+    assert_eq!(code, 0);
+    assert_eq!(i.phase, Phase::Installing);
+    assert_eq!(i.changed, 1, "the base system counts as one change");
+    assert_eq!(backend(BackendId::Pkg).after(&install, Some(0), &i), Next::Continue);
+}
+
+#[test]
+fn freebsd_update_nothing_to_do_or_unmanaged_finishes() {
+    let fetch = freebsd_step(StepKind::Download, plan::FREEBSD_UPDATE);
+    let (u, _) = replay_step(&fetch, Scenario::UpToDate);
+    assert!(u.nothing_to_do && u.warnings == 0);
+    assert_eq!(backend(BackendId::Pkg).after(&fetch, Some(0), &u), Next::Finish);
+    // A -STABLE system: freebsd-update refuses (exit 1); the packages were
+    // all there was to update, with a warning.
+    let (s, code) = replay_step(&fetch, Scenario::Fails);
+    assert_eq!(code, 1);
+    assert!(s.nothing_to_do);
+    assert_eq!(s.warnings, 1);
+    assert_eq!(backend(BackendId::Pkg).after(&fetch, Some(code), &s), Next::Finish);
+    // Past its end of life: what was fetched is still installed.
+    let mut eol = Tracker::default();
+    feed(BackendId::Pkg, StepKind::Download, &format!("{}\nWARNING: FreeBSD 14.2-RELEASE-p5 HAS PASSED ITS END-OF-LIFE DATE.\nAny security issues discovered after Tue Sep 30 20:00:00 EEST 2025\nwill not have been corrected.\n", fixture("freebsd/base-fetch.txt")), &mut eol);
+    assert!(eol.end_of_life && eol.warnings == 1);
+    assert_eq!(backend(BackendId::Pkg).after(&fetch, Some(1), &eol), Next::Continue);
+    // Nothing fetched, run separately: exit 2.
+    let install = freebsd_step(StepKind::Install, plan::FREEBSD_UPDATE);
+    let (n, code) = replay_step(&install, Scenario::UpToDate);
+    assert_eq!(code, plan::FREEBSD_UPDATE_NOTHING);
+    assert_eq!(backend(BackendId::Pkg).after(&install, Some(code), &n), Next::Continue);
+    // Any other failure stops the update.
+    assert_eq!(backend(BackendId::Pkg).after(&install, Some(1), &Tracker::default()), Next::Fail(FailureKind::Other));
+}
+
+#[test]
+fn freebsd_failures_are_classified() {
+    let p = backend(BackendId::Pkg);
+    assert_eq!(p.classify(&["pkg: https://pkg.FreeBSD.org/FreeBSD:14:amd64/quarterly/meta.txz: No address record", "Unable to update repository FreeBSD", "Error updating repositories!"]), FailureKind::Network);
+    assert_eq!(p.classify(&["pkg: Not enough space in /var/cache/pkg, needed 21 MiB available 3 MiB"]), FailureKind::DiskFull);
+    assert_eq!(p.classify(&["pkg: No trusted public keys found"]), FailureKind::Keyring);
+    assert_eq!(p.classify(&["Looking up update.FreeBSD.org mirrors... none found.", "Fetching metadata signature for 14.4-RELEASE from update.FreeBSD.org... failed."]), FailureKind::Network);
+}
+
+/// Recorded on FreeBSD 14.4 (pkg 2.9.0, as root through the helper's
+/// clean environment).
+#[test]
+fn freebsd_recordings() {
+    let mut r = Tracker::default();
+    feed(BackendId::Pkg, StepKind::Refresh, &fixture("freebsd/refresh-current.txt"), &mut r);
+    assert_eq!((r.phase, r.current.as_str()), (Phase::Refreshing, "FreeBSD-kmods"));
+    let failed = fixture("freebsd/base-key-failed.txt");
+    let mut f = Tracker::default();
+    feed(BackendId::Pkg, StepKind::Download, &failed, &mut f);
+    assert!(!f.nothing_to_do, "a failure, not an unmanaged system");
+    assert_eq!(backend(BackendId::Pkg).after(&freebsd_step(StepKind::Download, plan::FREEBSD_UPDATE), Some(1), &f), Next::Fail(FailureKind::Other));
+    assert_eq!(backend(BackendId::Pkg).classify(&tail(&failed)), FailureKind::Keyring, "the key check failed on every mirror");
+}

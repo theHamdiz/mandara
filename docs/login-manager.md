@@ -178,6 +178,53 @@ The previous display manager is recorded at install time in
 `/var/lib/mandara-greeter/previous-dm`. Without it, re-enable yours by hand,
 e.g. `sudo systemctl disable greetd && sudo systemctl enable sddm`.
 
+## FreeBSD
+
+Mandara Login runs on FreeBSD under greetd and `cage` like anywhere else;
+only the plumbing differs:
+
+* **greetd isn't packaged for FreeBSD yet** (a port is under review), and
+  upstream greetd builds only on Linux. Build its FreeBSD branch (it adds
+  FreeBSD's VTs, an rc script and a PAM sample), as root:
+
+  ```sh
+  pkg install git rust cage seatd
+  git clone -b feature/freebsd-support https://github.com/adamretter/greetd
+  cd greetd && cargo build --release
+  install -m 755 target/release/greetd target/release/agreety /usr/local/bin/
+  install -m 555 greetd.rc /usr/local/etc/rc.d/greetd
+  mkdir -p /usr/local/etc/greetd && cp config.toml /usr/local/etc/greetd/
+  cp greetd.pam.freebsd.sample /usr/local/etc/pam.d/greetd
+  pw useradd greeter -d /nonexistent -s /usr/sbin/nologin -c "greetd greeter"
+  pw groupmod video -m greeter
+  sysrc seatd_enable=YES && service seatd start
+  ```
+
+  Then `sudo mandara greeter use mandara --apply` (or Studio → Login
+  screen → Login manager) points greetd at Mandara Login.
+* **Config:** `/usr/local/etc/greetd/config.toml` (greetd's FreeBSD
+  build reads it before `/etc/greetd/config.toml`). A config Mandara
+  writes from scratch uses VT 8 (`/dev/ttyv8`, past the eight gettys of
+  `/etc/ttys`).
+* **Switching** uses rc.conf instead of systemd: the active login screen is
+  the one with `<name>_enable="YES"` (`greetd`, `sddm`, `gdm`, `lightdm`…,
+  rc scripts in `/usr/local/etc/rc.d` and `/etc/rc.d`), and `--apply` runs
+  `sysrc sddm_enable=NO` and `sysrc greetd_enable=YES`; `greeter restore`
+  turns them back. Nothing is started or stopped.
+* **PAM:** FreeBSD reads `/etc/pam.d` before ports' `/usr/local/etc/pam.d`.
+  `keyring-unlock` copies greetd's file from `/usr/local/etc/pam.d` into
+  `/etc/pam.d` and adds its lines there (modules from `/usr/lib` and
+  `/usr/local/lib`: `gnome-keyring`, `plasma6-kwallet-pam`). FreeBSD 14's
+  PAM rejects the whole file over Linux's `-auth` prefix, so the lines are
+  written without it, and only for modules that are installed. greetd's
+  sample file checks the password with `auth sufficient pam_unix.so`,
+  which ends the stack before a keyring line can run: the plan says so,
+  and `auth required pam_unix.so` fixes it.
+* **Password prompts** (polkit) need a ConsoleKit2 session for apps other
+  than the shell: add `session optional pam_ck_connector.so` to
+  `/usr/local/etc/pam.d/greetd`. Without one, Mandara's agent still answers
+  everything the shell asks (the Updates panel, the admin helper).
+
 ## Unlock your keyrings at login: `greeter keyring-unlock`
 
 GNOME Keyring and KWallet can open with the password you type at the login

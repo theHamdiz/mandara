@@ -19,6 +19,8 @@ pub enum Family {
     Solus,
     /// Declarative: packages go into the system configuration (hints only).
     NixOS,
+    /// FreeBSD and its derivatives (pkg, rc.conf services, `/usr/local`).
+    FreeBSD,
     Unknown,
 }
 
@@ -34,6 +36,7 @@ const IDS: &[(Family, &[&str])] = &[
     (Family::Gentoo, &["gentoo", "funtoo"]),
     (Family::NixOS, &["nixos"]),
     (Family::Solus, &["solus"]),
+    (Family::FreeBSD, &["freebsd", "ghostbsd"]),
 ];
 
 /// The fields of `os-release` the installer uses.
@@ -75,7 +78,7 @@ impl OsRelease {
 
 impl Family {
     /// Every family with package tables, then the hint-only ones.
-    pub const ALL: [Family; 10] = [Family::Arch, Family::Debian, Family::Fedora, Family::Suse, Family::Void, Family::Alpine, Family::Gentoo, Family::Solus, Family::NixOS, Family::Unknown];
+    pub const ALL: [Family; 11] = [Family::Arch, Family::Debian, Family::Fedora, Family::Suse, Family::Void, Family::Alpine, Family::Gentoo, Family::Solus, Family::FreeBSD, Family::NixOS, Family::Unknown];
 
     /// The family of one `os-release` id.
     pub fn from_id(id: &str) -> Option<Family> {
@@ -88,7 +91,7 @@ impl Family {
         std::iter::once(os.id.as_str())
             .chain(os.id_like.iter().map(String::as_str))
             .find_map(Family::from_id)
-            .or_else(|| PackageManager::ALL.iter().find(|pm| has_program(pm.binary())).map(|pm| pm.family()))
+            .or_else(|| PackageManager::ALL.iter().find(|pm| pm.probed() && has_program(pm.binary())).map(|pm| pm.family()))
             .unwrap_or(Family::Unknown)
     }
 
@@ -104,6 +107,7 @@ impl Family {
             Family::Gentoo => "gentoo",
             Family::Solus => "solus",
             Family::NixOS => "nixos",
+            Family::FreeBSD => "freebsd",
             Family::Unknown => "unknown",
         }
     }
@@ -159,5 +163,20 @@ mod tests {
         assert_eq!(Family::detect(&os("ID=mystery"), |b| b == "xbps-install"), Family::Void);
         assert_eq!(Family::detect(&os(""), |b| b == "emerge"), Family::Gentoo);
         assert_eq!(Family::detect(&os(""), |_| false), Family::Unknown);
+        // Another tool named `pkg` on Linux never makes it FreeBSD.
+        if !cfg!(target_os = "freebsd") {
+            assert_eq!(Family::detect(&os("ID=mystery"), |b| b == "pkg"), Family::Unknown);
+        }
+    }
+
+    /// FreeBSD 13+ writes `/etc/os-release` (`/var/run/os-release`).
+    #[test]
+    fn freebsd_and_derivatives() {
+        let none = |_: &str| false;
+        let freebsd = os("NAME=FreeBSD\nVERSION=\"14.4-RELEASE\"\nVERSION_ID=\"14.4\"\nID=freebsd\nANSI_COLOR=\"0;31\"\nPRETTY_NAME=\"FreeBSD 14.4-RELEASE\"\nCPE_NAME=\"cpe:/o:freebsd:freebsd:14.4\"\n");
+        assert_eq!(Family::detect(&freebsd, none), Family::FreeBSD);
+        assert_eq!(freebsd.display_name(), "FreeBSD 14.4-RELEASE");
+        assert_eq!(Family::detect(&os("ID=ghostbsd\nID_LIKE=freebsd"), none), Family::FreeBSD);
+        assert_eq!(Family::FreeBSD.name(), "freebsd");
     }
 }

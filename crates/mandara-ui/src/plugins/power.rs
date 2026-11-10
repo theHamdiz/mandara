@@ -1510,7 +1510,9 @@ impl View {
             let switching = mb.switching.as_ref().map(|(s, _)| s.as_str());
             let profiles = state.profiles.as_ref().filter(|p| !p.available.is_empty());
             let unavailable = || {
-                let hint = if state.profiles_error.as_ref().is_some_and(|e| !e.is_empty()) {
+                let hint = if cfg!(target_os = "freebsd") {
+                    t("FreeBSD has no power-profiles-daemon; powerd(8) sets the processor's speed there")
+                } else if state.profiles_error.as_ref().is_some_and(|e| !e.is_empty()) {
                     t("Install and enable power-profiles-daemon to switch profiles")
                 } else {
                     t("No profiles reported by the daemon")

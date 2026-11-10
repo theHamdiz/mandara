@@ -407,6 +407,11 @@ fn power_supply_batteries(root: &Path) -> Vec<ComponentTemp> {
 /// and ordered CPU → GPU → storage → memory → board → network → battery →
 /// other.
 pub fn read_temperatures(root: &Path) -> Vec<ComponentTemp> {
+    // FreeBSD has no hwmon: the live system's CPU sensors are sysctls.
+    #[cfg(target_os = "freebsd")]
+    if root == Path::new("/") || root == Path::new("/sys/class/hwmon") {
+        return freebsd_temperatures();
+    }
     let chips = read_chips(root);
     let model = cpu_model(root);
     let mut out: Vec<ComponentTemp> = Vec::new();
@@ -447,6 +452,23 @@ pub fn read_temperatures(root: &Path) -> Vec<ComponentTemp> {
     }
     out.sort_by_key(|c| c.kind);
     out
+}
+
+/// FreeBSD: one CPU component from `dev.cpu.N.temperature` (coretemp(4)
+/// or amdtemp(4)), the hottest core leading and each core listed.
+#[cfg(target_os = "freebsd")]
+fn freebsd_temperatures() -> Vec<ComponentTemp> {
+    cpu_from_cores(&mandara_services::freebsd::host::cpu_temperatures(), mandara_services::freebsd::host::cpu_model())
+}
+
+/// A CPU component from per-core readings (°C, in core order).
+#[cfg(any(test, target_os = "freebsd"))]
+fn cpu_from_cores(cores: &[f32], model: String) -> Vec<ComponentTemp> {
+    let Some(hottest) = cores.iter().copied().reduce(f32::max) else { return Vec::new() };
+    let readings = if cores.len() > 1 { cores.iter().enumerate().map(|(i, c)| Reading { label: Label::Numbered(tk("Core {n}"), i as u32), celsius: *c }).collect() } else { Vec::new() };
+    let (warm, hot) = Component::Cpu.thresholds();
+    let device = Some(model.trim().to_string()).filter(|m| !m.is_empty());
+    vec![ComponentTemp { kind: Component::Cpu, name: Label::Key(tk("CPU")), device, celsius: hottest, readings, warm, hot, chip: "dev.cpu".into() }]
 }
 
 /// The CPU package temperature, if any sensor reports one.
@@ -829,6 +851,19 @@ pub fn read_all_gpus() -> Vec<Gpu> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn freebsd_cores_make_one_cpu_component() {
+        let cpu = cpu_from_cores(&[48.5, 52.0, 50.1], "Intel(R) Core(TM) i7 ".into());
+        assert_eq!(cpu.len(), 1);
+        assert_eq!(cpu[0].kind, Component::Cpu);
+        assert_eq!(cpu[0].celsius, 52.0);
+        assert_eq!(cpu[0].readings.len(), 3);
+        assert_eq!(cpu[0].readings[2].label, Label::Numbered("Core {n}", 2));
+        assert_eq!(cpu[0].device.as_deref(), Some("Intel(R) Core(TM) i7"));
+        assert!(cpu_from_cores(&[], String::new()).is_empty(), "no coretemp / amdtemp: no reading");
+        assert!(cpu_from_cores(&[40.0], String::new())[0].readings.is_empty());
+    }
 
     struct Tree(PathBuf);
 

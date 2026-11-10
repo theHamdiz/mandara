@@ -24,6 +24,7 @@ pub mod bars;
 pub mod recorder_settings;
 mod tuning_settings;
 mod integration_settings;
+mod platform_settings;
 pub mod workflow_settings;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -608,6 +609,7 @@ pub fn required_plugin(path: &str) -> Option<&'static str> {
 /// place of its control), e.g. the launcher's hover edge while the dock
 /// owns the bottom edge (`ShellConfig::launcher_hover_enabled`).
 pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
+    if let Some(reason) = platform_settings::locked(setting.path) { return Some(reason); }
     if let Some(reason) = integration_settings::locked(setting.path, cfg) { return Some(reason); }
     if let Some(reason) = system_settings::kwin_locked(setting.path, running_compositor()) { return Some(reason); }
     match setting.path {
@@ -654,6 +656,7 @@ pub(crate) const RIVER_LACKS: &[&str] = &["/compositor/look/gaps_inner", "/compo
 /// Why choice `raw` of `setting` can't be picked under `cfg` right now
 /// (shown disabled, with the reason under the choices).
 pub fn choice_locked(setting: &Setting, raw: &str, cfg: &ShellConfig) -> Option<&'static str> {
+    if let Some(reason) = platform_settings::choice_locked(setting.path, raw) { return Some(reason); }
     match setting.path {
         path if path.starts_with("/plugins/settings/screenshot/record_") => recorder_settings::choice_locked(path, raw, cfg),
         "/plugins/settings/updates/aur_helper" => aur_helper_locked(Some(raw)),

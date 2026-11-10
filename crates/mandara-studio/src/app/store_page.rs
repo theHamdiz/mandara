@@ -1028,6 +1028,9 @@ impl StudioView {
         if builtin && mandara_plugins::lifecycle::essential_reason(&m.id).is_some() {
             return plugin_modal::always_on_chip(p).into_any_element();
         }
+        if builtin && mandara_plugins::lifecycle::platform_reason(&m.id).is_some() {
+            return plugin_modal::unsupported_chip(p).into_any_element();
+        }
         let id = m.id.clone();
         let el_id = format!("store-get-{scope}-{}", m.id);
         if builtin && cfg.plugins.is_removed(&m.id) {

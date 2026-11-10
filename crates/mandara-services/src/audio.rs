@@ -1,7 +1,8 @@
 //! Audio actor: default sink / source volume and mute over the PulseAudio
 //! native protocol (pure Rust via the `pulseaudio` crate; works with
 //! PipeWire's pipewire-pulse). A second connection subscribes to server
-//! events so changes from any app show up instantly.
+//! events so changes from any app show up instantly. On FreeBSD without a
+//! sound server, the default OSS device is driven through `mixer(8)`.
 
 use std::ffi::CString;
 use std::io::BufReader;
@@ -18,6 +19,8 @@ const PULSE_READ_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub mod heard;
 pub mod mute;
+#[cfg(target_os = "freebsd")]
+mod oss;
 
 /// Upper bound for boosted volume.
 pub const MAX_VOLUME: f32 = 1.5;
@@ -37,6 +40,12 @@ const PULSE_COOKIE_LEN: usize = 256;
 /// file itself, so a fresh account has none.
 pub fn pulse_cookie() -> Vec<u8> {
     pulseaudio::cookie_path_from_env().and_then(|p| std::fs::read(p).ok()).filter(|c| c.len() == PULSE_COOKIE_LEN).unwrap_or_else(|| vec![0; PULSE_COOKIE_LEN])
+}
+
+/// Whether a PulseAudio-protocol server (PulseAudio, or PipeWire's
+/// pipewire-pulse) is listening for this user (one stat, no connection).
+pub fn sound_server_running() -> bool {
+    pulseaudio::socket_path_from_env().is_some_and(|p| p.exists())
 }
 
 pub fn set_volume_limit(limit: f32) {
@@ -414,6 +423,10 @@ fn read_mixer(p: &mut Pulse) -> Result<Mixer, String> {
 
 /// Application streams plus output / input devices, read once.
 pub fn mixer() -> Result<Mixer, String> {
+    #[cfg(target_os = "freebsd")]
+    if Pulse::connect("Mandara Mixer").is_err() {
+        return oss::mixer();
+    }
     read_mixer(&mut Pulse::connect("Mandara Mixer")?)
 }
 
@@ -431,12 +444,20 @@ pub fn set_stream_mute(index: u32, mute: bool) -> Result<(), String> {
 
 /// Makes `name` (a [`Device::name`]) the default output.
 pub fn set_default_output(name: &str) -> Result<(), String> {
+    #[cfg(target_os = "freebsd")]
+    if Pulse::connect("Mandara Mixer").is_err() {
+        return oss::set_default(name);
+    }
     let name = CString::new(name).map_err(|e| e.to_string())?;
     Pulse::connect("Mandara Mixer")?.ack(Command::SetDefaultSink(name))
 }
 
 /// Makes `name` the default input.
 pub fn set_default_input(name: &str) -> Result<(), String> {
+    #[cfg(target_os = "freebsd")]
+    if Pulse::connect("Mandara Mixer").is_err() {
+        return oss::set_default(name);
+    }
     let name = CString::new(name).map_err(|e| e.to_string())?;
     Pulse::connect("Mandara Mixer")?.ack(Command::SetDefaultSource(name))
 }
@@ -606,6 +627,9 @@ pub fn spawn_audio_service() -> AudioService {
                         *conn = None; // reconnect next round
                         AudioState::default()
                     }
+                    #[cfg(target_os = "freebsd")]
+                    None => AudioState { all_muted, ..oss::state().unwrap_or_default() },
+                    #[cfg(not(target_os = "freebsd"))]
                     None => AudioState::default(),
                 }
             })
@@ -624,6 +648,8 @@ pub fn spawn_audio_service() -> AudioService {
                     let global = global.clone();
                     let (c, result) = with_pulse(conn.take(), move |conn| match conn.as_mut() {
                         Some(p) => execute(p, &state, command, &global),
+                        #[cfg(target_os = "freebsd")]
+                        None if state.available => oss::execute(&state, command),
                         None => Err(mandara_i18n::t("The audio server is unavailable").into()),
                     })
                     .await;
