@@ -382,9 +382,13 @@ writable `/usr`), and hands over to `mandara install`, which:
   already ships is layered again. On rpm-ostree, packages that
   `rpm-ostree status` already requests for the next boot are skipped too;
 - asks **once**, at the end, before adding what is missing in **one
-  transaction** with the system's own tool. A package a repository lacks
-  fails that transaction, so it is retried with the essential packages
-  (the runtime libraries, greetd and cage) alone;
+  transaction** with the system's own tool. One name a repository lacks
+  fails a whole transaction, so on rpm-ostree the optional packages are
+  first checked with `dnf repoquery` (as you, read-only) and those your
+  release doesn't carry are skipped with a note; should the transaction
+  still fail, it is retried with the essential packages (the runtime
+  libraries, greetd and cage) alone. ABRoot checks each name itself, so
+  there an unavailable optional package is skipped while it is recorded;
 - does everything that needs no reboot first, then says when a reboot is
   needed.
 
