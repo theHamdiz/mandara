@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **Discord and Ko-fi in the website's top bar.** Join the community or support Mandara right from the floating bar, next to GitHub, in the page's own colours.
+
 ## 0.24.0 — 2026-11-09
 
 Update your whole system right from the Updates panel. Pick how every

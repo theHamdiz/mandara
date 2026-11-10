@@ -192,8 +192,28 @@ h1, h2, h3 { text-wrap: balance; }
 .scheme { display: flex; padding: 3px; border-radius: 999px; background: var(--tile); }
 .scheme button { min-height: 38px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; transition: background-color 200ms var(--ease), color 200ms var(--ease); }
 .scheme button[aria-pressed="true"] { background: var(--soft); color: var(--on-soft); }
-.island-cta { display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 15px; text-decoration: none; transition: border-radius 320ms var(--spring); }
+.island-cta { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px 0 14px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 15px; text-decoration: none; transition: border-radius 320ms var(--spring), background-color var(--theme-time) var(--ease); }
 .island-cta:hover { border-radius: 14px; }
+.island-cta svg, .social svg { width: 18px; height: 18px; flex: none; fill: currentColor; }
+/* Community links: tonal pills tinted by the page's own second and third
+   colours, so they follow every Look and scheme. */
+.island-social { display: flex; gap: 6px; }
+.social {
+  --tint: var(--third);
+  display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 14px 0 12px; border-radius: 999px;
+  background: color-mix(in oklab, var(--tint) 16%, transparent); color: var(--ink); font-size: 14px; font-weight: 600; text-decoration: none;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tint) 22%, transparent);
+  transition: border-radius 320ms var(--spring), background-color 200ms var(--ease), transform 160ms var(--ease);
+}
+.social svg { color: color-mix(in oklab, var(--tint) 75%, var(--ink)); }
+.social-kofi { --tint: var(--second); }
+.social:hover { border-radius: 14px; background: color-mix(in oklab, var(--tint) 28%, transparent); }
+.social:active { transform: scale(.96); }
+
+@media (max-width: 1240px) {
+  .social { width: 44px; padding: 0; justify-content: center; }
+  .social span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 
 /* ── Hero ─────────────────────────────────────────────────────────────── */
 
@@ -589,7 +609,8 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
   .island-links { order: 3; flex-basis: 100%; overflow-x: auto; scrollbar-width: none; margin: 0 -4px; }
   .island-links a { padding: 8px 12px; white-space: nowrap; }
   .island-tools { margin-left: auto; }
-  .island-cta { display: none; }
+  .social, .island-cta { width: 44px; padding: 0; justify-content: center; }
+  .social span, .island-cta span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .hero-arabic { display: none; }
   .hero { padding-top: 150px; }
   html { scroll-padding-top: 140px; }
