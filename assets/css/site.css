@@ -192,6 +192,7 @@ h1, h2, h3 { text-wrap: balance; }
 .scheme { display: flex; padding: 3px; border-radius: 999px; background: var(--tile); }
 .scheme button { min-height: 38px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; transition: background-color 200ms var(--ease), color 200ms var(--ease); }
 .scheme button[aria-pressed="true"] { background: var(--soft); color: var(--on-soft); }
+.scheme svg { display: none; width: 16px; height: 16px; fill: currentColor; }
 .island-cta { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px 0 14px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 15px; text-decoration: none; transition: border-radius 320ms var(--spring), background-color var(--theme-time) var(--ease); }
 .island-cta:hover { border-radius: 14px; }
 .island-cta svg, .social svg { width: 18px; height: 18px; flex: none; fill: currentColor; }
@@ -463,7 +464,11 @@ h1, h2, h3 { text-wrap: balance; }
 .agent-shape { position: absolute; width: 220px; right: -70px; top: -70px; color: color-mix(in oklab, var(--on-soft) 10%, transparent); }
 /* The text sits above the turning shape on its own layer, so the shape's
    frames never repaint or shift it. */
-.agent > :not(.agent-shape), .nix > :not(.nix-shape), .bsd > :not(.bsd-shape), .imm > :not(.imm-shape) { position: relative; }
+/* The text sits on a layer of its own, above the spinning shape, for good:
+   as the shape turns its outline overlaps more or less of the text, and
+   without a fixed layer the browser keeps moving the text in and out of
+   one, which reads as jitter. */
+.agent > :not(.agent-shape), .nix > :not(.nix-shape), .bsd > :not(.bsd-shape), .imm > :not(.imm-shape) { position: relative; z-index: 1; will-change: transform; }
 .agent-shape, .nix-shape, .bsd-shape, .imm-shape, .blob { will-change: transform; pointer-events: none; }
 .agent-shape use { fill: currentColor; }
 .agent-line { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-radius: 999px; background: var(--ground); color: var(--ink); font-family: var(--code); font-size: 15px; }
@@ -667,6 +672,29 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
   .shelf-group { grid-template-columns: minmax(0, 1fr); }
   .cli dl div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .piece-toast { flex-direction: column; align-items: flex-start; }
+}
+/* Phones: two tidy rows. The brand and the community and GitHub buttons
+   on top; the page links (scrolling, fading at the edge) beside a
+   three-icon scheme switch below. */
+@media (max-width: 600px) {
+  .topbar { top: 10px; }
+  .island { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "brand social" "links scheme"; row-gap: 6px; column-gap: 8px; padding: 8px; border-radius: 26px; }
+  .brand { grid-area: brand; padding-left: 4px; font-size: 17px; }
+  .brand img { width: 30px; height: 30px; }
+  .island-tools { display: contents; }
+  .island-social { grid-area: social; gap: 6px; }
+  .island-cta { grid-area: social; justify-self: end; }
+  .island-social { margin-right: 46px; }
+  .social, .island-cta { width: 40px; min-height: 40px; }
+  .island-links { grid-area: links; order: 0; margin: 0; flex-basis: auto; min-width: 0; padding-right: 12px;
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+  .island-links a { padding: 8px 10px; font-size: 14px; }
+  .scheme { grid-area: scheme; align-self: center; justify-self: end; padding: 2px; }
+  .scheme button { min-height: 34px; width: 34px; padding: 0; display: grid; place-items: center; }
+  .scheme svg { display: block; }
+  .scheme span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .hero { padding-top: 132px; }
+  html { scroll-padding-top: 124px; }
 }
 @media (max-width: 560px) {
   body { font-size: 16px; }

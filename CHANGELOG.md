@@ -6,9 +6,14 @@ About → What's new shows it too.
 
 ## Unreleased
 
+On FreeBSD, the login screen's power buttons no longer need the `operator`
+group, which could read your disks. The website looks right on phones
+again, and the text on the AI Shell Agent card no longer jitters.
+
 ### Fixed
 
 - **The login screen on FreeBSD no longer needs the `operator` group, which could read your disks.** Mandara Login's Sleep, Restart and Shut Down buttons now go through ConsoleKit2 with one small polkit rule that lets the login screen's user do exactly those three things and nothing else. The next `mandara install` writes it and takes that user back out of `operator`, where 0.24 and 0.25 had put it, and tells you it did. The first press after boot no longer leaves the login screen waiting forever, and `mandara greeter power-rule` shows or undoes the rule.
+- **The website fits phones again.** Its top bar is two tidy rows on a phone: the name with the Discord, Ko-fi and GitHub buttons, then the page links beside a small light / dark switch. The text on the AI Shell Agent card (and the NixOS, FreeBSD and immutable cards) no longer jitters while the shape behind it turns.
 
 ## 0.25.0 — 2026-11-10
 
