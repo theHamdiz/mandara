@@ -96,9 +96,16 @@ pub const EXPIRY_MARGIN: Duration = Duration::from_millis(20);
 /// The views that display one plugin model. Async results (a finished
 /// scan, a command's reply) notify exactly these views instead of
 /// refreshing every window of the shell, which also bypasses GPUI's view
-/// caches. Views register themselves from their render.
+/// caches. Views register themselves from their render; dropped views (a
+/// sidebar card is rebuilt each time the sidebar opens) are forgotten at
+/// the next notification.
 #[derive(Clone, Default)]
 pub struct ViewSet(Rc<RefCell<SmallVec<[EntityId; 4]>>>);
+
+/// More registered views than this means dropped ones piled up between
+/// notifications: the oldest is forgotten (live views re-register when
+/// they render).
+const VIEWSET_CAP: usize = 32;
 
 impl ViewSet {
     /// Registers the view being rendered (call from its render).
@@ -106,16 +113,33 @@ impl ViewSet {
         let view = window.current_view();
         let mut views = self.0.borrow_mut();
         if !views.contains(&view) {
+            if views.len() >= VIEWSET_CAP {
+                views.remove(0);
+            }
             views.push(view);
         }
     }
 
-    /// Re-renders every registered view (hidden ones cost nothing).
+    /// Re-renders every registered view (hidden ones cost nothing),
+    /// forgetting the ones that were dropped.
     pub fn notify(&self, cx: &mut App) {
-        let views = self.0.borrow().clone();
+        let views = {
+            let mut views = self.0.borrow_mut();
+            views.retain(|view| cx.entity_alive(*view));
+            views.clone()
+        };
         for view in views {
             cx.notify(view);
         }
+    }
+
+    /// Registered views (tests and diagnostics).
+    pub fn len(&self) -> usize {
+        self.0.borrow().len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.borrow().is_empty()
     }
 
     /// [`Self::notify`] from an async task.

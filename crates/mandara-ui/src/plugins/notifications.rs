@@ -310,6 +310,24 @@ fn touch_thumbnail(path: &Arc<Path>, cx: &mut App) {
     }
 }
 
+/// The sidebar closed: with no notification list or popup left on screen,
+/// the thumbnails its cards decoded leave the asset cache and the atlas
+/// (they would otherwise wait for the next render to age out).
+fn release_card(cx: &mut App) {
+    if crate::toasts::list_on_screen(cx) || hub(cx).read(cx).notifications.items.iter().any(|n| n.popup) {
+        return;
+    }
+    let all: Vec<Arc<Path>> = THUMBS.with(|t| {
+        let mut t = t.borrow_mut();
+        let all = t.drain(..).map(|(path, _)| path).collect();
+        t.shrink_to(THUMB_CACHE_CAP);
+        all
+    });
+    for path in &all {
+        evict_thumbnail(path, cx);
+    }
+}
+
 /// An image source that decodes `path` as a bounded thumbnail (SVGs are
 /// vector: GPUI rasterizes those at their drawn size already).
 fn thumbnail_source(path: Arc<Path>) -> gpui::ImageSource {
@@ -915,7 +933,7 @@ pub fn register(r: &mut PluginRegistry) {
         let observed = swipe.clone();
         let panel = domain_view_observing(Domains::NOTIFICATIONS,
             None,
-            move |cx| { cx.observe(&observed, |_, _, cx| cx.notify()).detach(); },
+            move |cx| Some(cx.observe(&observed, |_, _, cx| cx.notify())),
             move |palette, window, cx| {
                 // Opening the panel marks everything read.
                 let unread = hub(cx).read(cx).notifications.unread();
@@ -962,7 +980,7 @@ pub fn register(r: &mut PluginRegistry) {
         let observed = swipe.clone();
         let sidebar = domain_view_observing(Domains::NOTIFICATIONS,
             None,
-            move |cx| { cx.observe(&observed, |_, _, cx| cx.notify()).detach(); },
+            move |cx| Some(cx.observe(&observed, |_, _, cx| cx.notify())),
             move |palette, window, cx| {
                 let hub = hub(cx);
                 // Only rendered while the sidebar shows: tick then, not on a timer.
@@ -989,6 +1007,8 @@ pub fn register(r: &mut PluginRegistry) {
             })),
         }
     });
+    // Cards decode app pictures into the shared thumbnail cache.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::shared(release_card));
 
     r.command(ID, CommandSpec::new("notifications list", tk("Notification history, newest first"), |_, cx| Ok(json(&hub(cx).read(cx).notifications.items))));
     r.command(

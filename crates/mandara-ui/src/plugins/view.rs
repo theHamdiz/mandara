@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use gpui::{AnyElement, AnyView, App, AppContext as _, Context, IntoElement, Render, Window};
+use gpui::{AnyElement, AnyView, App, AppContext as _, Context, IntoElement, Render, Subscription, Window};
 use mandara_theme::MandaraPalette;
 use crate::hub::Domains;
 
@@ -14,6 +14,11 @@ pub struct FnView {
     failed: bool,
     /// Where the view was built (`media.rs:629`), for `diagnostics views`.
     label: &'static std::panic::Location<'static>,
+    /// What it observes. Kept, not detached: the shell's long-lived
+    /// entities (theme, config, hub) would otherwise keep one dead
+    /// callback per dropped view until they next change, and sidebar
+    /// cards are built every time the sidebar opens.
+    _subscriptions: Vec<Subscription>,
 }
 
 #[derive(Clone, Copy)]
@@ -37,30 +42,33 @@ impl FnView {
         render: impl Fn(&MandaraPalette, &mut Window, &mut App) -> AnyElement + 'static,
         cx: &mut Context<Self>,
     ) -> Self {
+        // At most six: hub, productivity, recorder, theme, config, shell
+        // (plus one a caller adds), reserved once.
+        let mut subscriptions = Vec::with_capacity(7);
         if matches!(updates, Updates::Hub) {
             let hub = crate::hub::hub(cx);
-            cx.observe(&hub, |_, _, cx| cx.notify()).detach();
+            subscriptions.push(cx.observe(&hub, |_, _, cx| cx.notify()));
             if let Some(p) = cx.try_global::<crate::productivity::GlobalProductivity>().map(|g| g.0.clone()) {
-                cx.observe(&p, |_, _, cx| cx.notify()).detach();
+                subscriptions.push(cx.observe(&p, |_, _, cx| cx.notify()));
             }
             if let Some(r) = crate::recorder::recorder(cx) {
-                cx.observe(&r, |_, _, cx| cx.notify()).detach();
+                subscriptions.push(cx.observe(&r, |_, _, cx| cx.notify()));
             }
         }
         if let Updates::Domains(domains) = updates {
             let hub = crate::hub::hub(cx);
             let mut revision = hub.read(cx).revision(domains);
-            cx.observe(&hub, move |_, hub, cx| {
+            subscriptions.push(cx.observe(&hub, move |_, hub, cx| {
                 let next = hub.read(cx).revision(domains);
                 if next != revision {
                     revision = next;
                     cx.notify();
                 }
-            }).detach();
+            }));
         }
-        cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
-        cx.observe(&crate::state::config(cx), |_, _, cx| cx.notify()).detach();
-        cx.observe(&crate::state::shell(cx), |_, _, cx| cx.notify()).detach();
+        subscriptions.push(cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()));
+        subscriptions.push(cx.observe(&crate::state::config(cx), |_, _, cx| cx.notify()));
+        subscriptions.push(cx.observe(&crate::state::shell(cx), |_, _, cx| cx.notify()));
         // A visible render owns the next tick. Once hidden, its last pending
         // tick expires without starting another timer or retaining the view.
         let render: Box<dyn Fn(&MandaraPalette, &mut Window, &mut App) -> AnyElement> = match tick {
@@ -71,7 +79,15 @@ impl FnView {
             None => Box::new(render),
         };
         let label = std::panic::Location::caller();
-        Self { render, failed: false, label }
+        Self { render, failed: false, label, _subscriptions: subscriptions }
+    }
+}
+
+impl FnView {
+    /// Also re-render whenever `source` notifies, for as long as this view
+    /// lives ([`super::follow`]).
+    pub fn observe_too<T: 'static>(&mut self, source: &gpui::Entity<T>, cx: &mut Context<Self>) {
+        self._subscriptions.push(cx.observe(source, |_, _, cx| cx.notify()));
     }
 }
 
@@ -110,15 +126,16 @@ pub fn fn_view(
     _window: &mut Window,
     cx: &mut App,
 ) -> AnyView {
-    build(tick, Updates::Hub, |_| {}, render, cx)
+    build(tick, Updates::Hub, |_| None, render, cx)
 }
 
 /// [`fn_view`] that also re-renders on what `observe` subscribes it to
-/// (an entity only this view cares about, such as a running clock).
+/// (an entity only this view cares about, such as a running clock). The
+/// returned subscription lives as long as the view.
 #[track_caller]
 pub fn fn_view_observing(
     tick: Option<Duration>,
-    observe: impl FnOnce(&mut Context<FnView>),
+    observe: impl FnOnce(&mut Context<FnView>) -> Option<Subscription>,
     render: impl Fn(&MandaraPalette, &mut Window, &mut App) -> AnyElement + 'static,
     _window: &mut Window,
     cx: &mut App,
@@ -135,7 +152,7 @@ pub fn model_view(
     _window: &mut Window,
     cx: &mut App,
 ) -> AnyView {
-    build(tick, Updates::Model, |_| {}, render, cx)
+    build(tick, Updates::Model, |_| None, render, cx)
 }
 
 /// Follow the selected hub services and the view's own model callbacks.
@@ -147,15 +164,16 @@ pub fn domain_view(
     _window: &mut Window,
     cx: &mut App,
 ) -> AnyView {
-    build(tick, Updates::Domains(domains), |_| {}, render, cx)
+    build(tick, Updates::Domains(domains), |_| None, render, cx)
 }
 
-/// A service-scoped view with additional model-specific observers.
+/// A service-scoped view with an additional model-specific observer (kept
+/// as long as the view).
 #[track_caller]
 pub fn domain_view_observing(
     domains: Domains,
     tick: Option<Duration>,
-    observe: impl FnOnce(&mut Context<FnView>),
+    observe: impl FnOnce(&mut Context<FnView>) -> Option<Subscription>,
     render: impl Fn(&MandaraPalette, &mut Window, &mut App) -> AnyElement + 'static,
     _window: &mut Window,
     cx: &mut App,
@@ -166,7 +184,7 @@ pub fn domain_view_observing(
 #[track_caller]
 fn build(
     tick: Option<Duration>, updates: Updates,
-    observe: impl FnOnce(&mut Context<FnView>),
+    observe: impl FnOnce(&mut Context<FnView>) -> Option<Subscription>,
     render: impl Fn(&MandaraPalette, &mut Window, &mut App) -> AnyElement + 'static,
     cx: &mut App,
 ) -> AnyView {
@@ -174,7 +192,7 @@ fn build(
     cx.new(|cx| {
         let mut view = FnView::with_updates(tick, updates, render, cx);
         view.label = label;
-        observe(cx);
+        view._subscriptions.extend(observe(cx));
         view
     }).into()
 }
