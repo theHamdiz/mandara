@@ -653,10 +653,12 @@ impl SystemBackend for Pkg {
             ("invalid signature", FailureKind::Keyring),
             ("signature verification failed", FailureKind::Keyring),
             ("checksum mismatch", FailureKind::Keyring),
+            ("key has incorrect hash", FailureKind::Keyring),
             ("no address record", FailureKind::Network),
             ("unable to update repository", FailureKind::Network),
             ("error updating repositories", FailureKind::Network),
             ("mirrors... none found", FailureKind::Network),
+            ("no mirrors remaining", FailureKind::Network),
             ("operation timed out", FailureKind::Network),
         ]
     }

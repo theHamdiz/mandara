@@ -331,3 +331,18 @@ fn freebsd_failures_are_classified() {
     assert_eq!(p.classify(&["pkg: No trusted public keys found"]), FailureKind::Keyring);
     assert_eq!(p.classify(&["Looking up update.FreeBSD.org mirrors... none found.", "Fetching metadata signature for 14.4-RELEASE from update.FreeBSD.org... failed."]), FailureKind::Network);
 }
+
+/// Recorded on FreeBSD 14.4 (pkg 2.9.0, as root through the helper's
+/// clean environment).
+#[test]
+fn freebsd_recordings() {
+    let mut r = Tracker::default();
+    feed(BackendId::Pkg, StepKind::Refresh, &fixture("freebsd/refresh-current.txt"), &mut r);
+    assert_eq!((r.phase, r.current.as_str()), (Phase::Refreshing, "FreeBSD-kmods"));
+    let failed = fixture("freebsd/base-key-failed.txt");
+    let mut f = Tracker::default();
+    feed(BackendId::Pkg, StepKind::Download, &failed, &mut f);
+    assert!(!f.nothing_to_do, "a failure, not an unmanaged system");
+    assert_eq!(backend(BackendId::Pkg).after(&freebsd_step(StepKind::Download, plan::FREEBSD_UPDATE), Some(1), &f), Next::Fail(FailureKind::Other));
+    assert_eq!(backend(BackendId::Pkg).classify(&tail(&failed)), FailureKind::Keyring, "the key check failed on every mirror");
+}
