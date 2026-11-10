@@ -6701,6 +6701,7 @@ That widget is not on this tab
 That's Mandara itself — use Studio → Performance → Quit
 The 114 surahs: names, meaning, Makki or Madani and ayah counts
 The API key cannot be used in a request
+The AUR answered with an error: {error}
 The AUR couldn't be reached: {error}
 The Analytical Engine weaves algebraical patterns just as the Jacquard-loom weaves flowers and leaves.
 The App Installer plugin is off: turn it on in Studio → Plugins
@@ -7501,6 +7502,7 @@ Unexpected Wallhaven response: {error}
 Unexpected answer from GitHub: {error}
 Unexpected answer from Ollama: {error}
 Unexpected answer from tailscale: {error}
+Unexpected answer from the AUR: {error}
 Unexpected answer from the Qur'an service: {error}
 Unexpected argument {value}
 Unexpected hadith file: {error}

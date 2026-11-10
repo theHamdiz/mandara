@@ -9304,6 +9304,8 @@
 "Open in terminal" = "टर्मिनलमध्ये उघडा"
 "Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm" = "तुमच्या निर्णयाची गरज असलेले अपडेट्स, आणि टर्मिनलमध्ये चालताना प्रत्येक अपडेट उघडते; रिकामे असल्यास ghostty, kitty, foot, alacritty किंवा wezterm शोधते"
 "The AUR couldn't be reached: {error}" = "AUR पर्यंत पोहोचता आले नाही: {error}"
+"The AUR answered with an error: {error}" = "AUR ने त्रुटीसह उत्तर दिले: {error}"
+"Unexpected answer from the AUR: {error}" = "AUR कडून अनपेक्षित उत्तर: {error}"
 "The password dialog was cancelled, so the AUR packages weren't installed." = "पासवर्ड डायलॉग रद्द झाला, म्हणून AUR पॅकेजेस इन्स्टॉल झाली नाहीत."
 "Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)" = "Mandara मध्ये सिस्टम अपडेट करा, प्रगती आणि Mandara च्या पासवर्ड डायलॉगसह (सिस्टम, AUR आणि Flatpak, किंवा एक)"
 "Which AUR helper updates AUR packages, as you; its sudo asks through Mandara's password dialog. Automatic prefers paru, then yay" = "कोणता AUR हेल्पर तुमच्या वतीने AUR पॅकेजेस अपडेट करेल; त्याचा sudo Mandara च्या पासवर्ड डायलॉगमधून विचारतो. स्वयंचलित आधी paru, मग yay निवडते"

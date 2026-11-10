@@ -9303,6 +9303,8 @@
 "Open in terminal" = "Fungua kwenye terminali"
 "Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm" = "Hufungua masasisho yanayohitaji uamuzi wako, na kila sasisho yanapoendeshwa kwenye terminali; tupu hutambua ghostty, kitty, foot, alacritty au wezterm"
 "The AUR couldn't be reached: {error}" = "AUR haikufikika: {error}"
+"The AUR answered with an error: {error}" = "AUR ilijibu kwa hitilafu: {error}"
+"Unexpected answer from the AUR: {error}" = "Jibu lisilotarajiwa kutoka AUR: {error}"
 "The password dialog was cancelled, so the AUR packages weren't installed." = "Dirisha la nenosiri lilighairiwa, kwa hiyo vifurushi vya AUR havikusakinishwa."
 "Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)" = "Sasisha mfumo ndani ya Mandara, kwa maendeleo na dirisha la nenosiri la Mandara (mfumo, AUR na Flatpak, au kimoja)"
 "Which AUR helper updates AUR packages, as you; its sudo asks through Mandara's password dialog. Automatic prefers paru, then yay" = "Msaidizi gani wa AUR asasishe vifurushi vya AUR kwa niaba yako; sudo yake huuliza kupitia dirisha la nenosiri la Mandara. Kiotomatiki hupendelea paru, kisha yay"

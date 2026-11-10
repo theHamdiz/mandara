@@ -9640,6 +9640,8 @@
 "Open in terminal" = "在终端中打开"
 "Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm" = "打开需要你决定的更新，以及在终端中运行时的所有更新；留空则检测 ghostty、kitty、foot、alacritty 或 wezterm"
 "The AUR couldn't be reached: {error}" = "无法连接 AUR：{error}"
+"The AUR answered with an error: {error}" = "AUR 返回了错误：{error}"
+"Unexpected answer from the AUR: {error}" = "AUR 响应异常：{error}"
 "The password dialog was cancelled, so the AUR packages weren't installed." = "密码对话框已取消，因此未安装 AUR 软件包。"
 "Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)" = "在 Mandara 中更新系统，显示进度并使用 Mandara 的密码对话框（系统、AUR 和 Flatpak，或其中之一）"
 "Which AUR helper updates AUR packages, as you; its sudo asks through Mandara's password dialog. Automatic prefers paru, then yay" = "由哪个 AUR 助手以你的身份更新 AUR 软件包；它的 sudo 通过 Mandara 的密码对话框询问。自动优先 paru，其次 yay"

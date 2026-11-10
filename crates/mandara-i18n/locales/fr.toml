@@ -9645,6 +9645,8 @@
 "Open in terminal" = "Ouvrir dans le terminal"
 "Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm" = "Ouvre les mises à jour qui demandent ta décision, et toutes les mises à jour quand elles s'exécutent dans un terminal ; vide : détecte ghostty, kitty, foot, alacritty ou wezterm"
 "The AUR couldn't be reached: {error}" = "L'AUR est injoignable : {error}"
+"The AUR answered with an error: {error}" = "L'AUR a répondu par une erreur : {error}"
+"Unexpected answer from the AUR: {error}" = "Réponse inattendue de l'AUR : {error}"
 "The password dialog was cancelled, so the AUR packages weren't installed." = "La fenêtre de mot de passe a été annulée, les paquets AUR n'ont donc pas été installés."
 "Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)" = "Mettre à jour le système dans Mandara, avec la progression et la fenêtre de mot de passe de Mandara (système, AUR et Flatpak, ou l'un d'eux)"
 "Which AUR helper updates AUR packages, as you; its sudo asks through Mandara's password dialog. Automatic prefers paru, then yay" = "L'assistant AUR qui met à jour les paquets AUR, en ton nom ; son sudo demande via la fenêtre de mot de passe de Mandara. Automatique préfère paru, puis yay"

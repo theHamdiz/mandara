@@ -9649,6 +9649,8 @@
 "Open in terminal" = "فتح في الطرفية"
 "Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm" = "يفتح التحديثات التي تحتاج إلى قرارك، وكل التحديثات عند تشغيلها في طرفية؛ إذا تُرك فارغًا يكتشف ghostty أو kitty أو foot أو alacritty أو wezterm"
 "The AUR couldn't be reached: {error}" = "تعذّر الوصول إلى AUR: {error}"
+"The AUR answered with an error: {error}" = "ردّ AUR بخطأ: {error}"
+"Unexpected answer from the AUR: {error}" = "استجابة غير متوقعة من AUR: {error}"
 "The password dialog was cancelled, so the AUR packages weren't installed." = "أُلغيت نافذة كلمة المرور، لذا لم تُثبَّت حزم AUR."
 "Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)" = "تحديث النظام في Mandara مع عرض التقدّم ونافذة كلمة مرور Mandara (النظام وAUR وFlatpak، أو أحدها)"
 "Which AUR helper updates AUR packages, as you; its sudo asks through Mandara's password dialog. Automatic prefers paru, then yay" = "مساعد AUR الذي يحدّث حزم AUR باسمك؛ ويطلب sudo الخاص به كلمة المرور عبر نافذة Mandara. الوضع التلقائي يفضّل paru ثم yay"

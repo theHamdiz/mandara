@@ -9399,6 +9399,8 @@
 "Open in terminal" = "터미널에서 열기"
 "Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm" = "결정이 필요한 업데이트와, 터미널에서 실행할 때의 모든 업데이트를 엽니다. 비워 두면 ghostty, kitty, foot, alacritty 또는 wezterm을 찾습니다"
 "The AUR couldn't be reached: {error}" = "AUR에 연결할 수 없습니다: {error}"
+"The AUR answered with an error: {error}" = "AUR이 오류를 반환했습니다: {error}"
+"Unexpected answer from the AUR: {error}" = "AUR에서 예상치 못한 응답: {error}"
 "The password dialog was cancelled, so the AUR packages weren't installed." = "암호 대화상자가 취소되어 AUR 패키지를 설치하지 않았습니다."
 "Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)" = "진행 상황과 Mandara 암호 대화상자로 Mandara에서 시스템 업데이트(시스템, AUR, Flatpak 또는 그중 하나)"
 "Which AUR helper updates AUR packages, as you; its sudo asks through Mandara's password dialog. Automatic prefers paru, then yay" = "사용자 권한으로 AUR 패키지를 업데이트할 AUR 도우미. 그 sudo는 Mandara 암호 대화상자로 묻습니다. 자동은 paru, 그다음 yay를 우선합니다"

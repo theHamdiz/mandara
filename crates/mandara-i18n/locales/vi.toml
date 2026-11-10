@@ -9303,6 +9303,8 @@
 "Open in terminal" = "Mở trong terminal"
 "Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm" = "Mở các bản cập nhật cần bạn quyết định, và mọi bản cập nhật khi chạy trong terminal; để trống sẽ dò ghostty, kitty, foot, alacritty hoặc wezterm"
 "The AUR couldn't be reached: {error}" = "Không kết nối được AUR: {error}"
+"The AUR answered with an error: {error}" = "AUR trả về lỗi: {error}"
+"Unexpected answer from the AUR: {error}" = "AUR trả lời không đúng dạng: {error}"
 "The password dialog was cancelled, so the AUR packages weren't installed." = "Hộp thoại mật khẩu đã bị hủy, nên các gói AUR không được cài."
 "Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)" = "Cập nhật hệ thống trong Mandara, có tiến trình và hộp thoại mật khẩu của Mandara (hệ thống, AUR và Flatpak, hoặc một trong số đó)"
 "Which AUR helper updates AUR packages, as you; its sudo asks through Mandara's password dialog. Automatic prefers paru, then yay" = "Trình hỗ trợ AUR nào cập nhật gói AUR dưới danh nghĩa bạn; sudo của nó hỏi qua hộp thoại mật khẩu của Mandara. Tự động ưu tiên paru, rồi yay"

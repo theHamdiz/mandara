@@ -9400,6 +9400,8 @@
 "Open in terminal" = "باز کردن در ترمینال"
 "Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm" = "به‌روزرسانی‌هایی را که به تصمیم تو نیاز دارند، و همهٔ به‌روزرسانی‌ها را وقتی در ترمینال اجرا می‌شوند، باز می‌کند؛ خالی یعنی ghostty، kitty، foot، alacritty یا wezterm شناسایی شود"
 "The AUR couldn't be reached: {error}" = "دسترسی به AUR ممکن نشد: {error}"
+"The AUR answered with an error: {error}" = "AUR با خطا پاسخ داد: {error}"
+"Unexpected answer from the AUR: {error}" = "پاسخ غیرمنتظره از AUR: {error}"
 "The password dialog was cancelled, so the AUR packages weren't installed." = "پنجرهٔ گذرواژه لغو شد، پس بسته‌های AUR نصب نشدند."
 "Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)" = "به‌روزرسانی سیستم در Mandara، با نمایش پیشرفت و پنجرهٔ گذرواژهٔ Mandara (سیستم، AUR و Flatpak، یا یکی از آن‌ها)"
 "Which AUR helper updates AUR packages, as you; its sudo asks through Mandara's password dialog. Automatic prefers paru, then yay" = "کدام دستیار AUR بسته‌های AUR را به نام تو به‌روز کند؛ sudo آن از راه پنجرهٔ گذرواژهٔ Mandara می‌پرسد. حالت خودکار اول paru و بعد yay را ترجیح می‌دهد"
