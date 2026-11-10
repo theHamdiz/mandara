@@ -77,6 +77,24 @@ impl Installer<'_> {
         }
     }
 
+    /// The `packages` the repositories carry, where the tool won't say
+    /// before its transaction ([`ImageSystem::available_argv`]); the others
+    /// are reported as skipped, as optional packages are elsewhere. All of
+    /// them when the query can't run.
+    fn image_available<'p>(&mut self, image: ImageSystem, packages: &[&'p str]) -> Vec<&'p str> {
+        if packages.is_empty() {
+            return Vec::new();
+        }
+        let Some(argv) = image.available_argv(packages, |p| self.has(p)) else { return packages.to_vec() };
+        let Some(out) = self.run(Cmd::from_argv(argv).env("LC_ALL", "C").io(Io::Capture)).filter(|o| o.success) else { return packages.to_vec() };
+        let available = image::available_packages(&out.stdout);
+        let (kept, skipped): (Vec<&str>, Vec<&str>) = packages.iter().partition(|p| available.contains(p));
+        for p in skipped {
+            self.say(Level::Detail, format!("skipped {p} (not available)"));
+        }
+        kept
+    }
+
     /// Says why `packages` can't be added here: SteamOS's image takes no
     /// packages, elsewhere the tool may be missing. True when they can.
     fn image_can_add(&mut self, image: ImageSystem, packages: &[&str]) -> bool {
@@ -129,6 +147,7 @@ impl Installer<'_> {
         let optional: Vec<&str> = set.opt.iter().chain(set.svc).chain(portals.iter()).copied().collect();
         let required = self.image_missing(image, set.run);
         let optional = self.image_missing(image, &optional);
+        let optional = self.image_available(image, &optional);
         let (required, optional) = (self.not_waiting(&required), self.not_waiting(&optional));
         if required.is_empty() && optional.is_empty() {
             if self.layer.waiting.is_empty() {

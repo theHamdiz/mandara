@@ -1470,13 +1470,21 @@ fn image_host(image: ImageSystem, family: Family, programs: &[&str], lacking: &[
 fn bazzite_layers_only_what_its_image_lacks_in_one_transaction() {
     let f = Fixture::new();
     let programs = ["rpm-ostree", "rpm", "dnf", "sudo", "systemctl", "kwin_wayland"];
-    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &programs, &["papirus-icon-theme", "i2c-tools", "greetd", "cage"]);
-    host.stdout.insert(OstreeStatus::argv().join(" "), STATUS_BOOTED.into());
+    let lacking = ["papirus-icon-theme", "i2c-tools", "google-noto-sans-telugu-fonts", "greetd", "cage"];
+    let repositories = |host: &mut FakeHost| {
+        // The repositories have no google-noto-sans-telugu-fonts here: it is skipped, not layered.
+        let argv = ImageSystem::RpmOstree.available_argv(&["google-noto-sans-telugu-fonts", "papirus-icon-theme", "i2c-tools"], |p| p == "dnf").unwrap();
+        host.stdout.insert(argv.join(" "), "papirus-icon-theme\ni2c-tools\n".into());
+        host.stdout.insert(OstreeStatus::argv().join(" "), STATUS_BOOTED.into());
+    };
+    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &programs, &lacking);
+    repositories(&mut host);
     let facts = f.image_facts(BAZZITE, ImageSystem::RpmOstree);
     assert_eq!(facts.family, Family::Fedora);
     run(&mut host, &FakeProbe::default(), facts.clone(), dry(InstallArgs::default())).unwrap();
     let text = host.text();
     assert!(text.contains("Bazzite 40 (FROM Fedora Kinoite) is image-based"), "{text}");
+    assert!(text.contains("skipped google-noto-sans-telugu-fonts (not available)"), "{text}");
     assert!(text.contains("would run: sudo rpm-ostree install --idempotent greetd cage papirus-icon-theme i2c-tools\n"), "{text}");
     assert_eq!(text.matches("rpm-ostree install").count(), 1, "one transaction\n{text}");
     assert!(text.contains("would ask: Add 4 packages with rpm-ostree?"), "{text}");
@@ -1489,15 +1497,15 @@ fn bazzite_layers_only_what_its_image_lacks_in_one_transaction() {
     assert!(f.home_files().is_empty(), "a dry run changes nothing");
 
     // The real run: everything else first, then the one transaction.
-    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &programs, &["papirus-icon-theme", "i2c-tools", "greetd", "cage"]);
-    host.stdout.insert(OstreeStatus::argv().join(" "), STATUS_BOOTED.into());
+    let mut host = image_host(ImageSystem::RpmOstree, Family::Fedora, &programs, &lacking);
+    repositories(&mut host);
     run(&mut host, &FakeProbe::default(), facts, InstallArgs { yes: true, ..Default::default() }).unwrap();
     let ran = host.ran();
     let layered = ran.iter().position(|c| c == "sudo rpm-ostree install --idempotent greetd cage papirus-icon-theme i2c-tools").unwrap_or_else(|| panic!("{ran:#?}"));
     let setup = ran.iter().position(|c| c.ends_with(" setup --autostart")).unwrap();
     let helper = ran.iter().position(|c| c.contains(ADMIN_EXE)).unwrap();
     assert!(setup < layered && helper < layered, "the reboot-free steps run first\n{ran:#?}");
-    assert!(!ran.iter().any(|c| c.contains("dnf ") || c.contains("greeter use mandara")), "{ran:#?}");
+    assert!(!ran.iter().any(|c| c.contains("dnf install") || c.contains("greeter use mandara")), "{ran:#?}");
     let text = host.text();
     assert!(text.contains("Restart your computer to start using the new packages"), "{text}");
     assert!(text.contains("After restarting, switch to it in Studio → Login screen → Login manager"), "{text}");

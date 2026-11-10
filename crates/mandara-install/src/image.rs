@@ -141,6 +141,29 @@ impl ImageSystem {
     }
 }
 
+/// The repository query that says which packages an rpm-ostree system can
+/// layer: dnf reads the same repositories (as the user, from its own cache).
+const DNF_PROGRAMS: [&str; 2] = ["dnf5", "dnf"];
+
+impl ImageSystem {
+    /// argv listing, one name per line, which of `packages` the system's
+    /// repositories carry (as the user; read-only), so a name a release
+    /// lacks never fails the whole transaction. `None` where the tool
+    /// checks names itself (ABRoot) or no query is installed.
+    pub fn available_argv<S: AsRef<str>>(self, packages: &[S], has_program: impl Fn(&str) -> bool) -> Option<Vec<String>> {
+        if self != ImageSystem::RpmOstree {
+            return None;
+        }
+        let dnf = DNF_PROGRAMS.into_iter().find(|p| has_program(p))?;
+        Some([dnf, "-q", "repoquery", "--qf", "%{name}\n"].iter().map(|a| a.to_string()).chain(packages.iter().map(|p| p.as_ref().to_string())).collect())
+    }
+}
+
+/// The names [`ImageSystem::available_argv`]'s output lists.
+pub fn available_packages(stdout: &str) -> Vec<&str> {
+    stdout.lines().map(str::trim).filter(|l| !l.is_empty() && !l.contains(char::is_whitespace)).collect()
+}
+
 /// Which of `wanted` [`ImageSystem::query_argv`]'s output doesn't list as
 /// installed. `rpm -q` prints installed names (and "package X is not
 /// installed" for the others), `dpkg-query` `name ii`, `pacman -Q`
@@ -271,6 +294,18 @@ mod tests {
         let dpkg = "fontconfig ii \ngreetd rc \n";
         assert_eq!(missing_packages(ImageSystem::Abroot, dpkg, &wanted), ["greetd", "cage"]);
         assert_eq!(missing_packages(ImageSystem::SteamOs, "fontconfig 2.15.0-1\n", &wanted), ["greetd", "cage"]);
+    }
+
+    #[test]
+    fn repositories_are_asked_where_the_tool_wouldnt_say() {
+        let pkgs = ["papirus-icon-theme", "no-such-font"];
+        assert_eq!(ImageSystem::RpmOstree.available_argv(&pkgs, |p| p == "dnf5" || p == "dnf").unwrap(), ["dnf5", "-q", "repoquery", "--qf", "%{name}\n", "papirus-icon-theme", "no-such-font"]);
+        assert_eq!(ImageSystem::RpmOstree.available_argv(&pkgs, |p| p == "dnf").unwrap()[0], "dnf");
+        assert_eq!(ImageSystem::RpmOstree.available_argv(&pkgs, |_| false), None);
+        for other in [ImageSystem::Transactional, ImageSystem::Abroot, ImageSystem::SteamOs] {
+            assert_eq!(other.available_argv(&pkgs, |_| true), None, "{other:?}");
+        }
+        assert_eq!(available_packages("papirus-icon-theme\n\nUpdating and loading repositories:\n"), ["papirus-icon-theme"]);
     }
 
     #[test]
