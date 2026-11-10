@@ -556,12 +556,13 @@ fn ground_ink(cfg: &GreeterConfig, solid: Option<Color>) -> Color {
 }
 
 /// Whether the clock face (or the line it sits on) draws the date itself,
-/// so the date element stays empty: the ruler and halo faces always, the
-/// vast face when Meridian's line is the card and puts it at its end.
+/// so the date element stays empty: the ruler and halo faces while the
+/// clock is shown, the vast face while Meridian's line is the card (shown)
+/// and puts it at its end. A hidden clock or card hands the date back.
 pub(crate) fn face_holds_date(cfg: &GreeterConfig) -> bool {
     match cfg.clock.face {
-        ClockFace::Ruler | ClockFace::Halo => true,
-        ClockFace::Vast => cfg.card.enabled && cfg.card.style == CardStyle::Horizon,
+        ClockFace::Ruler | ClockFace::Halo => cfg.placement(Element::Clock).visible,
+        ClockFace::Vast => cfg.card.enabled && cfg.card.style == CardStyle::Horizon && cfg.placement(Element::User).visible,
         ClockFace::Digits => false,
     }
 }

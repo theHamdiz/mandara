@@ -247,7 +247,19 @@ fn the_date_shows_once_with_every_face_and_card() {
     let mut meridian = GreeterConfig::default();
     meridian.apply_look("meridian");
     assert!(face_holds_date(&meridian));
+    // Hiding the line (the card) hands the date back to its own element.
+    meridian.placement_mut(Element::User).visible = false;
+    assert!(!face_holds_date(&meridian));
+    meridian.placement_mut(Element::User).visible = true;
     // The vast face on the plain card puts the date element back.
     meridian.card.style = CardStyle::Plain;
     assert!(!face_holds_date(&meridian));
+    // A hidden ruler or halo clock can't show the date: its element does.
+    for face in [ClockFace::Ruler, ClockFace::Halo] {
+        let mut cfg = GreeterConfig::default();
+        cfg.clock.face = face;
+        assert!(face_holds_date(&cfg), "{face:?} shown");
+        cfg.placement_mut(Element::Clock).visible = false;
+        assert!(!face_holds_date(&cfg), "{face:?} hidden");
+    }
 }
