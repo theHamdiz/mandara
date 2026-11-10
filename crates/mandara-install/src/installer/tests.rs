@@ -1582,7 +1582,7 @@ fn aeon_uses_transactional_update() {
     assert_eq!(facts.family, Family::Suse);
     run(&mut host, &FakeProbe::default(), facts, dry(InstallArgs::default())).unwrap();
     let text = host.text();
-    assert!(text.contains("would run: sudo transactional-update --non-interactive pkg install greetd cage xdg-desktop-portal-gnome\n"), "{text}");
+    assert!(text.contains("would run: sudo transactional-update --non-interactive pkg install --no-recommends greetd cage xdg-desktop-portal-gnome\n"), "{text}");
     assert!(!text.contains("zypper"), "{text}");
     assert!(!text.contains("rpm-ostree status"), "{text}");
 }
@@ -1594,14 +1594,19 @@ fn aeon_uses_transactional_update() {
 fn vanilla_adds_with_abroot_then_applies_once() {
     let f = Fixture::new();
     let programs = ["abroot", "dpkg-query", "sudo", "kwin_wayland"];
-    let mut host = image_host(ImageSystem::Abroot, Family::Debian, &programs, &["fonts-inter", "i2c-tools"]);
+    let mut host = image_host(ImageSystem::Abroot, Family::Debian, &programs, &["fonts-inter", "i2c-tools", "libvulkan1"]);
+    // abroot checks each package against the repositories as it records it.
+    host.failing.insert("sudo abroot pkg add fonts-inter".into());
     let facts = f.image_facts(VANILLA, ImageSystem::Abroot);
     assert_eq!(facts.family, Family::Debian);
     run(&mut host, &FakeProbe::default(), facts, InstallArgs { yes: true, ..Default::default() }).unwrap();
     let ran = host.ran();
-    let add = ran.iter().position(|c| c == "sudo abroot pkg add fonts-inter i2c-tools").unwrap_or_else(|| panic!("{ran:#?}"));
+    let required = ran.iter().position(|c| c == "sudo abroot pkg add libvulkan1").unwrap_or_else(|| panic!("{ran:#?}"));
+    let optional = ran.iter().position(|c| c == "sudo abroot pkg add i2c-tools").unwrap();
     let apply = ran.iter().position(|c| c == "sudo abroot pkg apply").unwrap();
-    assert!(add < apply && ran.iter().filter(|c| c.contains("abroot pkg apply")).count() == 1);
+    assert!(required < optional && optional < apply && ran.iter().filter(|c| c.contains("abroot pkg apply")).count() == 1, "{ran:#?}");
+    assert!(host.text().contains("skipped fonts-inter (not available)"), "{}", host.text());
+    assert!(host.text().contains("Restart your computer"), "{}", host.text());
     assert!(!ran.iter().any(|c| c.contains("apt-get") || c.contains(ADMIN_EXE) || c.contains("greeter use")), "{ran:#?}");
     assert!(host.text().contains("replaces its system files with every update"), "{}", host.text());
 }

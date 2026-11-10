@@ -225,16 +225,35 @@ impl Installer<'_> {
             self.say(Level::Info, tf("No packages were added. Add them later with: {command}", &[("command", &shown)]));
             return;
         }
-        let mut added = self.as_root(Cmd::from_argv(argv));
         let essential: Vec<String> = self.layer.essential().into_iter().map(str::to_string).collect();
+        if let Some(finish) = image.finish_argv() {
+            // ABRoot only records packages (checking each is in the
+            // repositories) and stops at the first unknown one: the essential
+            // ones together, the optional ones one by one, then one build.
+            let mut added = essential.is_empty() || image.add_argv(&essential).is_some_and(|argv| self.as_root(Cmd::from_argv(argv)));
+            if added {
+                for p in self.layer.optional.clone() {
+                    let recorded = image.add_argv(&[p.as_str()]).is_some_and(|argv| self.as_root(Cmd::from_argv(argv).io(Io::Quiet)));
+                    if !recorded && !self.dry() {
+                        self.say(Level::Detail, format!("skipped {p} (not available)"));
+                    }
+                }
+                added = self.as_root(Cmd::from_argv(finish));
+            }
+            self.image_packages_done(image, added, &shown);
+            return;
+        }
+        let mut added = self.as_root(Cmd::from_argv(argv));
         if !added && !self.layer.optional.is_empty() && !essential.is_empty() {
             let optional = self.layer.optional.join(" ");
             self.say(Level::Warn, tf("Trying again without the optional packages: {packages}", &[("packages", &optional)]));
             added = image.add_argv(&essential).is_some_and(|argv| self.as_root(Cmd::from_argv(argv)));
         }
-        if added && let Some(finish) = image.finish_argv() {
-            added = self.as_root(Cmd::from_argv(finish));
-        }
+        self.image_packages_done(image, added, &shown);
+    }
+
+    /// What the transaction's outcome means for the next boot.
+    fn image_packages_done(&mut self, image: ImageSystem, added: bool, shown: &str) {
         if !added {
             self.say(Level::Warn, tf("{tool} couldn't add the packages. Add them later with: {command}", &[("tool", &image.program()), ("command", &shown)]));
             return;

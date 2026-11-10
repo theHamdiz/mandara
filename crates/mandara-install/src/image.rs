@@ -116,7 +116,7 @@ impl ImageSystem {
     pub fn add_argv<S: AsRef<str>>(self, packages: &[S]) -> Option<Vec<String>> {
         let prefix: &[&str] = match self {
             ImageSystem::RpmOstree => &["rpm-ostree", "install", "--idempotent"],
-            ImageSystem::Transactional => &["transactional-update", "--non-interactive", "pkg", "install"],
+            ImageSystem::Transactional => &["transactional-update", "--non-interactive", "pkg", "install", "--no-recommends"],
             ImageSystem::Abroot => &["abroot", "pkg", "add"],
             ImageSystem::SteamOs => return None,
         };
@@ -249,7 +249,7 @@ mod tests {
     fn every_tool_has_its_command_plan() {
         let pkgs = ["greetd", "cage"];
         assert_eq!(ImageSystem::RpmOstree.add_argv(&pkgs).unwrap(), ["rpm-ostree", "install", "--idempotent", "greetd", "cage"]);
-        assert_eq!(ImageSystem::Transactional.add_argv(&pkgs).unwrap(), ["transactional-update", "--non-interactive", "pkg", "install", "greetd", "cage"]);
+        assert_eq!(ImageSystem::Transactional.add_argv(&pkgs).unwrap(), ["transactional-update", "--non-interactive", "pkg", "install", "--no-recommends", "greetd", "cage"]);
         assert_eq!(ImageSystem::Abroot.add_argv(&pkgs).unwrap(), ["abroot", "pkg", "add", "greetd", "cage"]);
         assert_eq!(ImageSystem::Abroot.finish_argv().unwrap(), ["abroot", "pkg", "apply"]);
         for s in [ImageSystem::RpmOstree, ImageSystem::Transactional, ImageSystem::SteamOs] {
