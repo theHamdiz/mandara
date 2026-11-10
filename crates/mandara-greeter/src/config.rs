@@ -67,6 +67,25 @@ impl BackgroundMode {
     }
 }
 
+/// Something drawn over the backdrop, under the controls.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Overlay {
+    #[default]
+    None,
+    /// A measured frame: corner brackets, a faint grid, tick rulers along
+    /// the edges and a slow scan line (still with reduced motion).
+    Hud,
+    /// Soft holographic light: wide glows in the theme's accents over a
+    /// deep ink sky, drifting very slowly.
+    Prism,
+    /// One calm field (dawn ivory to pale stone, or deep ink with the
+    /// light colours off) crossed by a single hairline at the golden
+    /// height, which draws itself in from the centre and brightens around
+    /// the caret. It covers the backdrop.
+    Horizon,
+}
+
 /// How videos are decoded.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -129,6 +148,8 @@ pub struct BackgroundConfig {
     pub user_wallpaper: bool,
     /// Pointer parallax depth in px (0 = off).
     pub parallax: f32,
+    /// Drawn over the backdrop.
+    pub overlay: Overlay,
 }
 
 impl Default for BackgroundConfig {
@@ -157,11 +178,30 @@ impl Default for BackgroundConfig {
             orb_intensity: 0.5,
             user_wallpaper: true,
             parallax: 14.0,
+            overlay: Overlay::None,
         }
     }
 }
 
 // ── Clock & date ────────────────────────────────────────────────────────
+
+/// How the clock is drawn.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ClockFace {
+    /// Big digits, in a row or stacked.
+    #[default]
+    Digits,
+    /// Thin monospace digits stacked beside a ruler of the day, whose
+    /// marker shows the time; the date and time zone sit under them.
+    Ruler,
+    /// Light digits inside a luminous ring of iridescent light that turns
+    /// slowly and brightens while you type; the date sits under them.
+    Halo,
+    /// Enormous hairline numerals behind everything at a whisper of
+    /// contrast, cropped by the screen's edges (four times the size).
+    Vast,
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -183,11 +223,14 @@ pub struct ClockConfig {
     /// Weight of the big idle clock (0 = the same as `weight`): waking
     /// the screen moves the font's weight between the two.
     pub idle_weight: u16,
+    /// The ruler and halo faces draw the date themselves (when the date
+    /// is shown).
+    pub face: ClockFace,
 }
 
 impl Default for ClockConfig {
     fn default() -> Self {
-        Self { format_24h: true, seconds: false, font: String::new(), size: L::CLOCK_SIZE, weight: L::CLOCK_WEIGHT, opacity: 0.95, roll_digits: true, stacked: false, tint: false, idle_weight: 0 }
+        Self { format_24h: true, seconds: false, font: String::new(), size: L::CLOCK_SIZE, weight: L::CLOCK_WEIGHT, opacity: 0.95, roll_digits: true, stacked: false, tint: false, idle_weight: 0, face: ClockFace::Digits }
     }
 }
 
@@ -309,6 +352,12 @@ pub enum FieldStyle {
     /// corners, an indicator line that thickens in the accent while
     /// focused, and the hint floating up as a label once you type.
     Filled,
+    /// A terminal line: a prompt, one cell per character and a block
+    /// caret, in hairlines.
+    Terminal,
+    /// A deep field sunk into its panel, with an inner highlight and a
+    /// soft accent halo while focused.
+    Recessed,
 }
 
 /// Where the sign-in button sits.
@@ -322,6 +371,8 @@ pub enum SubmitButton {
     Beside,
     /// None: Enter signs in.
     Hidden,
+    /// A full-width pill under the field, its arrow in a circle of its own.
+    Pill,
 }
 
 /// How typed characters are masked.
@@ -442,6 +493,26 @@ impl Default for PowerConfig {
     }
 }
 
+/// How the sign-in card is built.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CardStyle {
+    /// One panel with the user over the field.
+    #[default]
+    Plain,
+    /// A wireframe panel: corner brackets, a ruled header with the host
+    /// name and a footer of live readouts (keyboard layout, uptime, time
+    /// zone).
+    Hud,
+    /// A machined module: an outer tray with a hairline rim around an
+    /// inner core with its own highlight and a concentric radius.
+    Bezel,
+    /// No card at all: the name and the typed characters ride on a line
+    /// across the screen at the golden height, set like type; the session,
+    /// power, keyboard layout and date are small words at its ends.
+    Horizon,
+}
+
 /// A card behind the user, the password field and (optionally) the
 /// session picker, drawn where the user card is placed. Off: the pieces
 /// float on the backdrop at their own places.
@@ -462,11 +533,12 @@ pub struct CardConfig {
     pub back_button: bool,
     /// The session picker sits inside the card, under the password.
     pub session_inside: bool,
+    pub style: CardStyle,
 }
 
 impl Default for CardConfig {
     fn default() -> Self {
-        Self { enabled: false, width: 460.0, padding: 22.0, radius: 22.0, fill: String::new(), opacity: 1.0, border: 1.0, border_color: String::new(), back_button: true, session_inside: true }
+        Self { enabled: false, width: 460.0, padding: 22.0, radius: 22.0, fill: String::new(), opacity: 1.0, border: 1.0, border_color: String::new(), back_button: true, session_inside: true, style: CardStyle::Plain }
     }
 }
 
@@ -531,11 +603,15 @@ pub struct ThemeConfig {
     /// Colours made from the picture behind the login screen (Material's
     /// dynamic colour); the preset when it shows no picture.
     pub from_wallpaper: bool,
+    /// The theme's light colours: light controls with dark text (text on
+    /// the backdrop follows the backdrop, and dark pieces stay dark; see
+    /// [`GreeterConfig::draws_light`]).
+    pub light: bool,
 }
 
 impl Default for ThemeConfig {
     fn default() -> Self {
-        Self { preset: "montaza-twilight".into(), accent: String::new(), glass: 0.18, rim: 0.6, roundness: 1.0, switcher: Vec::new(), from_wallpaper: false }
+        Self { preset: "montaza-twilight".into(), accent: String::new(), glass: 0.18, rim: 0.6, roundness: 1.0, switcher: Vec::new(), from_wallpaper: false, light: false }
     }
 }
 
@@ -770,11 +846,33 @@ impl GreeterConfig {
 /// Applying one ([`GreeterConfig::apply_look`]) changes how the screen
 /// looks and where things sit; who is listed, sessions, folders, language
 /// and accessibility stay as they are.
-pub const LOOKS: [(&str, &str, &str); 3] = [
+pub const LOOKS: [(&str, &str, &str); 6] = [
     ("mandara", "Mandara", "A big clock, your picture over a glass field, everything floating on the backdrop"),
     ("midnight-card", "Midnight card", "A quiet clock over one outlined card with the user, password and session, in midnight navy and citrine"),
     ("material-you", "Material You", "Colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar, chips and tonal buttons"),
+    ("ghostline", "Ghostline", "Graphite and ice-white hairlines: a wireframe sign-in panel on the left with live readouts, a terminal password line and a ruler clock, in cold cyan"),
+    ("chrome-halo", "Chrome Halo", "Deep ink and holographic light: a luminous ring around a light clock, and a machined sign-in module on the right with a pill button"),
+    ("meridian", "Meridian", "No boxes: your name and password ride on one hairline across a calm dawn field, over enormous whisper-thin numerals; light or dark"),
 ];
+
+/// Where a look puts the sign-in: the horizontal anchor of its user card.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Side {
+    Left,
+    Center,
+    Right,
+}
+
+impl GreeterConfig {
+    /// Which side of the screen the sign-in sits on.
+    pub fn credentials_side(&self) -> Side {
+        match self.placement(Element::User).anchor.fraction().0 {
+            x if x < 0.25 => Side::Left,
+            x if x > 0.75 => Side::Right,
+            _ => Side::Center,
+        }
+    }
+}
 
 impl GreeterConfig {
     /// Applies look `id` from [`LOOKS`]; `false` for an unknown id.
@@ -904,21 +1002,189 @@ impl GreeterConfig {
                     }
                 }
             }
+            "ghostline" => {
+                // Cyberpunk made clean: graphite, ice-white hairlines, one
+                // cold cyan accent (the theme's magenta-pink tertiary is the
+                // sparing second one), everything measured.
+                self.theme.preset = "vesper".into();
+                self.theme.accent = "#5fd7ff".into();
+                self.theme.glass = 0.0;
+                self.theme.rim = 0.0;
+                self.theme.roundness = 0.12;
+                self.background.mode = BackgroundMode::Solid;
+                self.background.solid = "#0b0d10".into();
+                self.background.user_wallpaper = false;
+                self.background.orbs = false;
+                self.background.dim = 0.0;
+                self.background.vignette = 0.3;
+                self.background.grain = 0.4;
+                self.background.parallax = 0.0;
+                self.background.overlay = Overlay::Hud;
+                self.clock.face = ClockFace::Ruler;
+                self.clock.size = 168.0;
+                self.clock.weight = 200;
+                self.clock.stacked = true;
+                self.clock.opacity = 0.96;
+                self.date.size = 13.0;
+                self.date.weight = 500;
+                self.date.opacity = 0.62;
+                self.user.avatar_shape = AvatarShape::Rounded;
+                self.user.avatar_size = 52.0;
+                self.user.glow_ring = false;
+                self.user.name_size = 18.0;
+                self.password.style = FieldStyle::Terminal;
+                self.password.mask = PasswordMask::Dots;
+                self.password.accent_border = true;
+                self.password.height = 46.0;
+                self.password.text_size = 14.0;
+                self.password.glow = false;
+                self.session.style = SessionStyle::Field;
+                self.power.style = PowerStyle::Outlined;
+                self.power.labels = false;
+                self.power.size = 36.0;
+                self.card = CardConfig { enabled: true, style: CardStyle::Hud, width: 420.0, padding: 26.0, radius: 2.0, border: 1.0, opacity: 0.86, ..CardConfig::default() };
+                self.logo.size = 26.0;
+                self.logo.opacity = 0.92;
+                self.logo.accent = true;
+                for pl in &mut self.layout {
+                    match pl.element {
+                        Element::User => (pl.anchor, pl.x, pl.y) = (Anchor::Left, GHOSTLINE_INSET, 0.0),
+                        Element::Users => (pl.anchor, pl.x, pl.y) = (Anchor::Left, GHOSTLINE_INSET, 380.0),
+                        Element::Clock => (pl.anchor, pl.x, pl.y) = (Anchor::Right, -GHOSTLINE_INSET, -10.0),
+                        Element::Keyboard => pl.visible = false,
+                        Element::Logo => (pl.anchor, pl.x, pl.y) = (Anchor::TopLeft, 48.0, 48.0),
+                        Element::Power => (pl.x, pl.y) = (-40.0, -40.0),
+                        _ => {}
+                    }
+                }
+            }
+            "chrome-halo" => {
+                // Liquid chrome and iridescent light on deep ink, warm: the
+                // ring takes the theme's gold, periwinkle and rose.
+                self.theme.preset = "pharos-night".into();
+                self.theme.glass = 0.0;
+                self.theme.rim = 0.0;
+                self.background.mode = BackgroundMode::Solid;
+                self.background.solid = "#06070e".into();
+                self.background.user_wallpaper = false;
+                self.background.orbs = false;
+                self.background.dim = 0.0;
+                self.background.vignette = 0.3;
+                self.background.grain = 0.6;
+                self.background.parallax = 8.0;
+                self.background.overlay = Overlay::Prism;
+                self.clock.face = ClockFace::Halo;
+                self.clock.size = 124.0;
+                self.clock.weight = 200;
+                self.clock.opacity = 1.0;
+                self.date.size = 15.0;
+                self.date.weight = 400;
+                self.date.opacity = 0.72;
+                self.user.avatar_size = 60.0;
+                self.user.glow_ring = false;
+                self.user.name_size = 20.0;
+                self.password.style = FieldStyle::Recessed;
+                self.password.submit = SubmitButton::Pill;
+                self.password.height = 52.0;
+                self.password.text_size = 15.0;
+                self.password.reveal_toggle = true;
+                self.session.style = SessionStyle::Pill;
+                self.power.labels = false;
+                self.power.size = 40.0;
+                self.card = CardConfig { enabled: true, style: CardStyle::Bezel, width: 404.0, padding: 28.0, radius: 34.0, border: 1.0, opacity: 0.92, ..CardConfig::default() };
+                self.logo.size = 30.0;
+                self.logo.opacity = 0.95;
+                self.logo.accent = true;
+                for pl in &mut self.layout {
+                    match pl.element {
+                        Element::User => (pl.anchor, pl.x, pl.y) = (Anchor::Right, -CHROME_HALO_INSET, 120.0),
+                        Element::Users => (pl.anchor, pl.x, pl.y) = (Anchor::Right, -CHROME_HALO_INSET, 400.0),
+                        Element::Clock => (pl.anchor, pl.x, pl.y) = (Anchor::TopLeft, 150.0, 250.0),
+                        Element::Logo => (pl.anchor, pl.x, pl.y) = (Anchor::BottomLeft, 40.0, -40.0),
+                        Element::Power => (pl.x, pl.y) = (-40.0, -40.0),
+                        _ => {}
+                    }
+                }
+            }
+            "meridian" => {
+                // Editorial calm: one field, one line, type on it, one
+                // accent at most (a warm terracotta, for the caret alone).
+                self.theme.preset = "mandara-corniche".into();
+                self.theme.accent = "#c0623a".into();
+                self.theme.light = true;
+                self.theme.glass = 0.0;
+                self.theme.rim = 0.0;
+                self.background.mode = BackgroundMode::Solid;
+                self.background.solid = "#f3efe6".into();
+                self.background.user_wallpaper = false;
+                self.background.orbs = false;
+                self.background.dim = 0.0;
+                self.background.vignette = 0.0;
+                self.background.grain = 0.35;
+                self.background.parallax = 0.0;
+                self.background.overlay = Overlay::Horizon;
+                self.clock.face = ClockFace::Vast;
+                self.clock.size = 150.0;
+                self.clock.weight = 100;
+                self.clock.opacity = 0.075;
+                self.clock.roll_digits = false;
+                self.date.size = 11.5;
+                self.date.weight = 500;
+                self.date.opacity = 0.7;
+                self.user.avatar_source = AvatarSource::Icon;
+                self.user.name_size = 40.0;
+                self.password.mask = PasswordMask::Dots;
+                self.password.glow = false;
+                self.password.text_size = 15.0;
+                self.password.reveal_toggle = false;
+                self.card = CardConfig { enabled: true, style: CardStyle::Horizon, ..CardConfig::default() };
+                self.logo.size = 22.0;
+                self.logo.opacity = 0.85;
+                for pl in &mut self.layout {
+                    match pl.element {
+                        Element::User => (pl.anchor, pl.x, pl.y) = (Anchor::Left, 0.0, 0.0),
+                        Element::Clock => (pl.anchor, pl.x, pl.y) = (Anchor::BottomRight, 40.0, 70.0),
+                        Element::Users | Element::Keyboard | Element::Power => pl.visible = false,
+                        Element::Logo => (pl.anchor, pl.x, pl.y) = (Anchor::TopLeft, 56.0, 56.0),
+                        _ => {}
+                    }
+                }
+            }
             _ => return false,
         }
         self.normalize();
         true
     }
 
-    /// The look this config matches exactly, if any.
+    /// Whether the login screen is drawn in the light colours: they are on
+    /// and nothing on it is machined from a fixed dark ink. Ghostline's and
+    /// Chrome Halo's pieces (the wireframe and double-bezel cards, the
+    /// terminal and recessed fields) are dark by design, so with any of
+    /// them the screen keeps its dark colours and light text.
+    pub fn draws_light(&self) -> bool {
+        let dark_card = self.card.enabled && matches!(self.card.style, CardStyle::Hud | CardStyle::Bezel);
+        let dark_field = matches!(self.password.style, FieldStyle::Terminal | FieldStyle::Recessed);
+        self.theme.light && !dark_card && !dark_field
+    }
+
+    /// The look this config matches exactly, if any (Meridian with its
+    /// light colours on or off).
     pub fn current_look(&self) -> Option<&'static str> {
         LOOKS.iter().map(|(id, _, _)| *id).find(|id| {
             let mut probe = self.clone();
             probe.apply_look(id);
+            if *id == "meridian" {
+                probe.theme.light = self.theme.light;
+            }
             probe == *self
         })
     }
 }
+
+/// Ghostline's sign-in panel and clock: this far in from their edges.
+const GHOSTLINE_INSET: f32 = 104.0;
+/// Chrome Halo's sign-in module: this far in from the right edge.
+const CHROME_HALO_INSET: f32 = 120.0;
 
 /// The flagship arrangement: date over a big clock at the top, the user
 /// card below center, session bottom-left, power bottom-right.

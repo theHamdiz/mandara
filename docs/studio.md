@@ -209,7 +209,7 @@ narrow ones; everything mirrors for right-to-left languages.
 | Page | What it covers |
 |---|---|
 | **Users** | AccountsService accounts: create, edit, delete, photos, passwords. |
-| **Login screen** | Mandara Login (greetd greeter) with a live, draggable preview; beside it Apply to login screen, Preview full screen and **Try it** (entrance, typing, wrong password, success, idle clock). Tabs: Looks (ready-made designs), Layout, Background, Clock, Sign-in, Session, Theme, Motion; settings that depend on another one show only once it's on. The **Login manager** tab to switch login screens (Mandara Login, other greetd greeters, SDDM, GDM, …): **Use** for an installed one, **Install & use** for one that isn't (it installs the login manager or greeter with greetd, cage or LightDM's greeter through the system's package manager, after showing the plan). |
+| **Login screen** | Mandara Login (greetd greeter) with a live, draggable preview; beside it Apply to login screen, Preview full screen and **Try it** (entrance, typing, wrong password, success, idle clock). Tabs: Looks (six ready-made designs, Mandara, Midnight card, Material You, Ghostline, Chrome Halo and Meridian, three to a row, each with a miniature drawn from its own layout so the sign-in shows on its side), Layout, Background, Clock, Sign-in, Session, Theme, Motion; settings that depend on another one show only once it's on. The **Login manager** tab to switch login screens (Mandara Login, other greetd greeters, SDDM, GDM, …): **Use** for an installed one, **Install & use** for one that isn't (it installs the login manager or greeter with greetd, cage or LightDM's greeter through the system's package manager, after showing the plan). |
 | **Lock appearance** | Clock style, background, avatar, media, weather, notifications, battery and its low-battery mark, OLED care. |
 | **Privacy** | Microphone / camera / screen-share indicators, offline mode. |
 
@@ -292,7 +292,10 @@ and verifies models, and provides a dry-run test bench. See
   presets Expressive, Tile dock, Rail, Segmented, Stanley Bridge, Pharos
   Beam and Raml Tram) apply the style in one click and keep your items;
   each card draws its bar in miniature. System monitor is a style of its
-  own: a slim bottom status line of stat blocks in the monospace font. Turn on **Replace bar items** to use
+  own: a slim bottom status line of stat blocks in the monospace font.
+  Productive is a work desk along the bottom edge: the focus timer and the
+  window you're in sit in the middle, to-dos and notes on the left, system
+  load and the clock on the right, each zone on a soft capsule of its own. Turn on **Replace bar items** to use
   the preset's arrangement too. **Profiles & backup → Bar** saves only
   the bar and side-bar configuration, leaving the theme and desktop widgets alone.
 - **Radii, per bar style.** *Bar radius* rounds the glass pills and the

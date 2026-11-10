@@ -264,6 +264,7 @@ A volume this full turns its ring amber
 A wallpaper is already being generated
 A website or feed address
 A wide rail of flower buttons and tiles inside a screen frame
+A work desk along the bottom: focus timer in the middle, tasks, notes and system load in zones of their own
 A “Mandara” Kvantum theme in ~/.cache/mandara/themes/kvantum
 A “Mandara” color scheme in ~/.config/wezterm/colors
 A “Mandara” color scheme in ~/.local/share/color-schemes
@@ -6651,7 +6652,6 @@ Tasks in the panel
 Tasks in the sidebar card
 Tasks listed at most
 Tasks on lined paper with square boxes
-Tasks, focus timer and system load
 Tasks, notes, focus timers and sign-in codes
 Technical details
 Technology

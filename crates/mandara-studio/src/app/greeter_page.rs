@@ -33,8 +33,8 @@ use gpui::{
 };
 use mandara_core::ToGpui;
 use mandara_greeter::config::{
-    Anchor, AvatarShape, AvatarSource, BackgroundMode, Element, FieldStyle, GreeterConfig, LOOKS, PasswordMask, PowerStyle, SessionStyle, SubmitButton, UserList, UserSwitcher,
-    VideoMode,
+    Anchor, AvatarShape, AvatarSource, BackgroundMode, CardStyle, ClockFace, Element, FieldStyle, GreeterConfig, LOOKS, Overlay, PasswordMask, PowerStyle, SessionStyle, SubmitButton,
+    UserList, UserSwitcher, VideoMode,
 };
 use mandara_greeter::i18n::{tl, tlf};
 use mandara_greeter::view::{GreeterView, PreviewEvent, Simulate};
@@ -46,7 +46,15 @@ use super::StudioView;
 use super::choice::{ChoiceItem, GREETER_CHOICE, placed};
 use crate::tokens::*;
 
+mod look_thumb;
 mod manager;
+
+/// The Looks tab's cards: three to a row (six looks make 3 × 2), fewer
+/// when the page is narrow.
+const LOOK_GRID: CardGrid = CardGrid { min_w: 200.0, max_w: 640.0, gap: SPACE_10_PX };
+const LOOK_COLUMNS: usize = 3;
+/// Each card's preview, 16:9 like the screen.
+const LOOK_THUMB_ASPECT: f32 = 9.0 / 16.0;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Group {
@@ -740,6 +748,7 @@ impl GreeterPage {
             look.push(self.slider(p, "bg-orb-k", tl("Orb intensity"), b.orb_intensity, 0.0, 1.0, 0.01, "", |c, v| c.background.orb_intensity = v, cx));
         }
         look.push(self.slider(p, "bg-parallax", tl("Pointer parallax"), b.parallax, 0.0, 60.0, 1.0, " px", |c, v| c.background.parallax = v, cx));
+        look.push(self.choice(p, "bg-overlay", tl("Overlay"), b.overlay, vec![(tl("None"), Overlay::None), (tl("HUD frame"), Overlay::Hud), (tl("Prism light"), Overlay::Prism), (tl("Horizon"), Overlay::Horizon)], |c, v| c.background.overlay = v, cx));
         let mut cards = vec![Self::card(p, tl("Source"), source)];
         if !timing.is_empty() {
             cards.push(Self::card(p, tl("Timing"), timing));
@@ -763,6 +772,7 @@ impl GreeterPage {
             self.slider(p, "clk-opacity", tl("Opacity"), c.opacity, 0.2, 1.0, 0.01, "", |c, v| c.clock.opacity = v, cx),
             self.toggle(p, "clk-stack", tl("Hours over minutes"), c.stacked, |c, v| c.clock.stacked = v, cx),
             self.toggle(p, "clk-tint", tl("Hours in the accent colour"), c.tint, |c, v| c.clock.tint = v, cx),
+            self.choice(p, "clk-face", tl("Clock face"), c.face, vec![(tl("Digits"), ClockFace::Digits), (tl("Day ruler"), ClockFace::Ruler), (tl("Halo ring"), ClockFace::Halo), (tl("Vast, behind everything"), ClockFace::Vast)], |c, v| c.clock.face = v, cx),
         ];
         let date = vec![
             self.text(p, "date-fmt", tl("Format"), d.format.clone(), tl("strftime, e.g. %A %-d %B (empty = language default)"), |c, v| c.date.format = v, cx),
@@ -795,6 +805,7 @@ impl GreeterPage {
         let card = self.draft.card.clone();
         let mut card_rows = vec![self.toggle(p, "card-on", tl("Put the sign-in on a card"), card.enabled, |c, v| c.card.enabled = v, cx)];
         if card.enabled {
+            card_rows.push(self.choice(p, "card-style", tl("Card style"), card.style, vec![(tl("Plain"), CardStyle::Plain), (tl("Wireframe"), CardStyle::Hud), (tl("Double bezel"), CardStyle::Bezel), (tl("On a line"), CardStyle::Horizon)], |c, v| c.card.style = v, cx));
             card_rows.extend([
                 self.slider(p, "card-w", tl("Card width"), card.width, 280.0, 720.0, 2.0, " px", |c, v| c.card.width = v, cx),
                 self.slider(p, "card-pad", tl("Padding"), card.padding, 8.0, 48.0, 1.0, " px", |c, v| c.card.padding = v, cx),
@@ -808,8 +819,8 @@ impl GreeterPage {
             ]);
         }
         let password = vec![
-            self.choice(p, "pw-style", tl("Style"), pw.style, vec![(tl("Glass"), FieldStyle::Glass), (tl("Solid"), FieldStyle::Solid), (tl("Inset"), FieldStyle::Inset), (tl("Outline"), FieldStyle::Outline), (tl("Underline"), FieldStyle::Underline), (tl("Filled"), FieldStyle::Filled)], |c, v| c.password.style = v, cx),
-            self.choice(p, "pw-submit", tl("Sign-in button"), pw.submit, vec![(tl("In the field"), SubmitButton::Inside), (tl("Beside it"), SubmitButton::Beside), (tl("None (Enter)"), SubmitButton::Hidden)], |c, v| c.password.submit = v, cx),
+            self.choice(p, "pw-style", tl("Style"), pw.style, vec![(tl("Glass"), FieldStyle::Glass), (tl("Solid"), FieldStyle::Solid), (tl("Inset"), FieldStyle::Inset), (tl("Outline"), FieldStyle::Outline), (tl("Underline"), FieldStyle::Underline), (tl("Filled"), FieldStyle::Filled), (tl("Terminal"), FieldStyle::Terminal), (tl("Recessed"), FieldStyle::Recessed)], |c, v| c.password.style = v, cx),
+            self.choice(p, "pw-submit", tl("Sign-in button"), pw.submit, vec![(tl("In the field"), SubmitButton::Inside), (tl("Beside it"), SubmitButton::Beside), (tl("None (Enter)"), SubmitButton::Hidden), (tl("A pill below"), SubmitButton::Pill)], |c, v| c.password.submit = v, cx),
             self.choice(p, "pw-mask", tl("Hide typing as"), pw.mask, vec![(tl("Shapes"), PasswordMask::Shapes), (tl("Dots"), PasswordMask::Dots)], |c, v| c.password.mask = v, cx),
             self.toggle(p, "pw-accent", tl("Accent border while focused"), pw.accent_border, |c, v| c.password.accent_border = v, cx),
             self.slider(p, "pw-w", tl("Width"), pw.width, 180.0, 560.0, 1.0, " px", |c, v| c.password.width = v, cx),
@@ -897,48 +908,23 @@ impl GreeterPage {
     /// listed, sessions, language and folders stay).
     fn looks_group(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let current = self.draft.current_look();
+        let fit = super::grid::fit(self.width.get() - 2.0 * SPACE_10_PX, LOOK_GRID).at_most(LOOK_COLUMNS).balanced(LOOKS.len());
+        let thumb_w = (fit.card_w - 2.0 * (SPACE_8_PX + BORDER_2_PX)).max(1.0);
+        let thumb_h = (thumb_w * LOOK_THUMB_ASPECT).floor();
         let mut cards: Vec<AnyElement> = Vec::new();
         for (i, (id, name, summary)) in LOOKS.into_iter().enumerate() {
             let mut probe = self.draft.clone();
             probe.apply_look(id);
+            // Meridian keeps the light colours as they are.
+            if id == "meridian" && current == Some(id) {
+                probe.theme.light = self.draft.theme.light;
+            }
             let pal = mandara_greeter::view::palette_for(&probe);
             let on = current == Some(id);
-            let carded = probe.card.enabled;
-            let scalloped = probe.user.avatar_shape == AvatarShape::Cookie;
-            let thumb = div()
-                .h(px(DIM_96_PX))
-                .rounded(px(RADIUS_10_PX))
-                .bg(mandara_core::oklab_gradient(SWATCH_GRADIENT_DEG, pal.surface_dim, pal.primary.with_lightness(SWATCH_ACCENT_LIGHTNESS)))
-                .row()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap(px(SPACE_4_PX))
-                .child(div().w(px(DIM_30_PX)).h(px(SPACE_6_PX)).rounded_full().bg(pal.on_surface.with_alpha(ALPHA_70).hsla()))
-                .child(
-                    div()
-                        .w(px(DIM_64_PX))
-                        .h(px(DIM_36_PX))
-                        .rounded(px(RADIUS_6_PX))
-                        .when(carded, |el| el.bg(pal.surface_container.hsla()).border_1().border_color(pal.outline.hsla()))
-                        .row()
-                        .flex_col()
-                        .items_center()
-                        .justify_center()
-                        .gap(px(SPACE_3_PX))
-                        .child(if scalloped {
-                            // The scalloped avatar of the Material You look.
-                            gpui::svg().path(mandara_core::avatar_shape::Step::new(0).asset_path()).size(px(DIM_10_PX)).text_color(pal.primary.hsla()).into_any_element()
-                        } else {
-                            div().size(px(DIM_10_PX)).rounded_full().bg(pal.primary.hsla()).into_any_element()
-                        })
-                        .child(div().w(px(DIM_40_PX)).h(px(SPACE_5_PX)).rounded_full().bg(pal.on_surface.with_alpha(ALPHA_50).hsla())),
-                );
             cards.push(
                 div()
                     .id(("look", i))
-                    .flex_1()
-                    .min_w(px(DIM_220_PX))
+                    .h_full()
                     .p(px(SPACE_8_PX))
                     .rounded(px(RADIUS_14_PX))
                     .cursor_pointer()
@@ -952,13 +938,13 @@ impl GreeterPage {
                             c.apply_look(id);
                         })
                     }))
-                    .child(thumb)
+                    .child(look_thumb::thumb(&probe, &pal, thumb_w, thumb_h))
                     .child(div().pt(px(SPACE_8_PX)).row().items_center().gap(px(SPACE_6_PX)).child(div().text_size(px(TEXT_13_PX)).font_weight(gpui::FontWeight::SEMIBOLD).child(tl(name))).when(on, |el| el.child(div().text_size(px(TEXT_11_PX)).text_color(p.primary.hsla()).child(tl("In use")))))
                     .child(div().pt(px(SPACE_3_PX)).text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(tl(summary)))
                     .into_any_element(),
             );
         }
-        let gallery = div().row().flex_wrap().gap(px(SPACE_10_PX)).p(px(SPACE_10_PX)).children(cards);
+        let gallery = div().p(px(SPACE_10_PX)).child(fit.render(cards));
         vec![Self::card(p, tl("Start from a look, then change anything in the other tabs"), vec![gallery.into_any_element()])]
     }
 
@@ -1010,6 +996,7 @@ impl GreeterPage {
         let glass = vec![
             self.font(p, "th-font", tl("Text font"), ui_font, shell_ui, |c, v| c.font = v, cx),
             self.toggle(p, "th-dynamic", tl("Colours from the wallpaper"), t.from_wallpaper, |c, v| c.theme.from_wallpaper = v, cx),
+            self.toggle(p, "th-light", tl("Light colours"), t.light, |c, v| c.theme.light = v, cx),
             self.text(p, "th-accent", tl("Accent color"), t.accent.clone(), tl("#rrggbb (theme primary when empty)"), |c, v| c.theme.accent = v, cx),
             self.slider(p, "th-glass", tl("Glass opacity"), t.glass, 0.0, 0.8, 0.01, "", |c, v| c.theme.glass = v, cx),
             self.slider(p, "th-rim", tl("Specular rim"), t.rim, 0.0, 1.0, 0.01, "", |c, v| c.theme.rim = v, cx),
