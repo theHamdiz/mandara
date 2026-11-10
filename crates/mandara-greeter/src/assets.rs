@@ -25,15 +25,20 @@ fn extra(name: &str) -> Option<&'static str> {
 /// Mandara's single-colour emblem (the login screen's default logo).
 const EMBLEM: &str = include_str!("../../../assets/brand/mandara-symbolic.svg");
 
+/// Chrome Halo's ring arc: a 120° stroke fading out at both ends (an alpha mask
+/// tinted per arc).
+pub const HALO_ARC: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><defs><linearGradient id="fade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.5" stop-color="#000" stop-opacity="1"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient></defs><path d="M 14.7 50.75 A 98.5 98.5 0 0 1 185.3 50.75" fill="none" stroke="url(#fade)" stroke-width="1.1" stroke-linecap="round"/></svg>"##;
 /// A complete SVG for an extra icon.
 fn svg_text(name: &str) -> Option<String> {
-    if name == "emblem" {
-        return Some(EMBLEM.to_string());
+    match name {
+        "emblem" => return Some(EMBLEM.to_string()),
+        "halo-arc" => return Some(HALO_ARC.to_string()),
+        _ => {}
     }
     extra(name).map(|body| format!("{HEAD}{body}</svg>"))
 }
 
-pub const EXTRA_ICONS: [&str; 10] = ["arrow-right", "arrow-left", "chevron-down", "chevron-up", "user", "caps", "eye", "eye-off", "palette", "emblem"];
+pub const EXTRA_ICONS: [&str; 11] = ["arrow-right", "arrow-left", "chevron-down", "chevron-up", "user", "caps", "eye", "eye-off", "palette", "emblem", "halo-arc"];
 
 /// The greeter's extra icons as files (for `svg().external_path`), so the
 /// view also renders where only the shell's asset source is installed

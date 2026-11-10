@@ -36,8 +36,8 @@ use mandara_ui::fonts::{Fonts, tabular_nums};
 use crate::auth::{AuthCommand, AuthEvent, AuthWorker};
 use crate::background::{Background, BackgroundOptions};
 use crate::config::{
-    Anchor, AvatarShape, AvatarSource, BackgroundMode, Element, FieldStyle, GreeterConfig, PasswordMask, PowerStyle, SessionStyle, SubmitButton, UserList,
-    UserSwitcher, VideoMode, apply_playlist, list_images,
+    Anchor, AvatarShape, AvatarSource, BackgroundMode, CardStyle, ClockFace, Element, FieldStyle, GreeterConfig, Overlay, PasswordMask, PowerStyle, SessionStyle,
+    SubmitButton, UserList, UserSwitcher, VideoMode, apply_playlist, list_images,
 };
 use mandara_core::avatar_shape;
 use mandara_ui::components::motion::Feel;
@@ -282,6 +282,11 @@ struct Drag {
     moved: bool,
 }
 
+mod chrome_halo;
+mod ghostline;
+#[cfg(test)]
+mod look_tests;
+mod meridian;
 mod preview_clock;
 
 /// The clock's rolling digits.
@@ -361,6 +366,17 @@ pub struct GreeterView {
     date_text: Option<((chrono::NaiveDate, String, &'static str), SharedString)>,
     /// Keyboard layout label and the (configured, GPUI) ids it came from.
     kb_layout: Option<((String, String), SharedString)>,
+    /// The ruler clock's and the wireframe card's readouts (made only for
+    /// a look that shows them, refreshed once a minute).
+    telemetry: Option<ghostline::Telemetry>,
+    /// Minutes since local midnight (the ruler clock's marker).
+    day_minute: u16,
+    /// Meridian's words in capitals.
+    words: Option<meridian::Words>,
+    /// Where Meridian's caret was drawn (window x, set while painting) and
+    /// last frame's value, which the line brightens around.
+    horizon_caret: Rc<Cell<Option<f32>>>,
+    caret_x: Option<f32>,
     // Motion.
     enter: Vec<SpringValue<f32>>,
     pop: SpringValue<f32>,
@@ -486,8 +502,8 @@ fn background_timing(cfg: &GreeterConfig) -> BackgroundOptions {
 pub fn palette_for(cfg: &GreeterConfig) -> MandaraPalette {
     let p = mandara_theme::catalog::find(&cfg.theme.preset)
         .or_else(|| mandara_theme::catalog::find(mandara_theme::DEFAULT_THEME))
-        .map(|t| t.palette(true))
-        .unwrap_or_else(|| mandara_theme::engine::default_palette(true));
+        .map(|t| t.palette(!cfg.theme.light))
+        .unwrap_or_else(|| mandara_theme::engine::default_palette(!cfg.theme.light));
     with_accent(cfg, p)
 }
 
@@ -496,9 +512,18 @@ pub fn palette_for(cfg: &GreeterConfig) -> MandaraPalette {
 /// from it; otherwise (or with no picture) [`palette_for`].
 pub fn palette_for_seed(cfg: &GreeterConfig, seed: Option<Color>) -> MandaraPalette {
     match seed.filter(|_| cfg.theme.from_wallpaper) {
-        Some(seed) => with_accent(cfg, mandara_theme::material::palette_from_seed(seed, mandara_theme::SchemeVariant::TonalSpot, true)),
+        Some(seed) => with_accent(cfg, mandara_theme::material::palette_from_seed(seed, mandara_theme::SchemeVariant::TonalSpot, !cfg.theme.light)),
         None => palette_for(cfg),
     }
+}
+
+/// Dark text over a light screen (the light colours).
+const LIGHT_INK: (f32, f32, f32) = (0.23, 0.015, 255.0);
+
+/// The colour text and hairlines are drawn in: white, or with the light
+/// colours a deep ink.
+pub fn foreground(cfg: &GreeterConfig) -> Color {
+    if cfg.theme.light { Color::oklch(LIGHT_INK.0, LIGHT_INK.1, LIGHT_INK.2) } else { Color::oklch(1.0, 0.0, 0.0) }
 }
 
 /// `p` with the config's accent override, if any.
@@ -684,6 +709,11 @@ impl GreeterView {
             preview_wake: None,
             date_text: None,
             kb_layout: None,
+            telemetry: None,
+            day_minute: 0,
+            words: None,
+            horizon_caret: Rc::new(Cell::new(None)),
+            caret_x: None,
             enter,
             pop: SpringValue::new(if m.entrance { POP_FROM } else { 1.0 }, spring(m.pop_spring, reduced)),
             wake,
@@ -1132,7 +1162,8 @@ impl GreeterView {
         if self.sessions.len() > 1 && self.visible(Element::Session) {
             f.push(Field::Session);
         }
-        if self.visible(Element::Users) && (self.users.len() > 1 || (!self.demo() && self.config.user.list != UserList::Manual)) {
+        let on_the_line = self.config.card.enabled && self.config.card.style == CardStyle::Horizon;
+        if (self.visible(Element::Users) || on_the_line) && (self.users.len() > 1 || (!self.demo() && self.config.user.list != UserList::Manual)) {
             f.push(Field::User);
         }
         f
@@ -1169,7 +1200,7 @@ impl GreeterView {
                 self.fades.typed(self.dots.len());
                 self.dots.push(Instant::now());
                 self.ripple_at = Some(Instant::now());
-                if self.config.user.avatar_shape == AvatarShape::Cookie {
+                if self.config.user.avatar_shape == AvatarShape::Cookie || self.config.clock.face == ClockFace::Halo {
                     let turn = self.spin.target() + SPIN_PER_KEY;
                     self.spin.set_target(turn);
                 }
@@ -1483,6 +1514,7 @@ struct Frame {
     white: Hsla,
     ui_font: SharedString,
     display_font: SharedString,
+    mono_font: SharedString,
     rtl: bool,
     /// Device pixels per logical pixel.
     scale: f32,
@@ -1495,6 +1527,10 @@ struct Frame {
     t: f32,
     /// Material's tonal roles of this frame's palette.
     tonal: Tonal,
+    /// The keyboard layout's label.
+    keyboard: SharedString,
+    /// Caps Lock is on (the live login screen only).
+    caps: bool,
 }
 
 impl Frame {
@@ -1507,6 +1543,10 @@ impl Frame {
             FieldStyle::Solid => p.surface_container.with_alpha(if focused { 0.96 } else { 0.9 }).hsla(),
             FieldStyle::Inset => p.surface_dim.with_alpha(if focused { 0.98 } else { 0.92 }).hsla(),
             FieldStyle::Filled => self.tonal.surface_highest.with_alpha(if focused { M3_FIELD_ALPHA } else { M3_TONAL_ALPHA }).hsla(),
+            FieldStyle::Terminal => ghostline::field_fill(focused),
+            FieldStyle::Recessed => chrome_halo::field_fill(p, focused),
+            // Frosted white over light colours.
+            _ if cfg.theme.light => gpui::white().opacity((0.5 + cfg.theme.glass + if focused { 0.12 } else { 0.0 }).clamp(0.0, 1.0)),
             _ => self.white.opacity((cfg.theme.glass + if focused { 0.08 } else { 0.0 }).clamp(0.0, 1.0)),
         }
     }
@@ -1556,7 +1596,7 @@ impl GreeterView {
         let idle = 1.0 - self.wake.value().clamp(0.0, 1.0);
         let k = f.u * self.config.placement(Element::Clock).scale;
         let size = snap_size(c.size * k * (1.0 + CLOCK_IDLE_GROWTH * idle));
-        let font = if c.font.trim().is_empty() { f.display_font.clone() } else { SharedString::from(c.font.clone()) };
+        let font = self.clock_font(f);
         // Status lines appear mid-animation (shake + flash on a wrong
         // password), so their glyphs are rasterized up front too.
         let status_k = f.u * self.config.placement(Element::Password).scale;
@@ -1694,6 +1734,13 @@ impl GreeterView {
         let second = local.timestamp();
         if second != self.clock_second {
             self.clock_second = second;
+            use chrono::Timelike as _;
+            self.day_minute = (local.hour() * 60 + local.minute()) as u16;
+            if ghostline::shows_telemetry(&self.config) {
+                ghostline::Telemetry::refresh(&mut self.telemetry, &local);
+            } else {
+                self.telemetry = None;
+            }
             let date_key = (local.date_naive(), self.config.date.format.clone(), mandara_i18n::language().posix());
             if self.date_text.as_ref().is_none_or(|(k, _)| *k != date_key) {
                 let locale = chrono::Locale::try_from(date_key.2).unwrap_or(chrono::Locale::en_US);
@@ -1719,6 +1766,7 @@ impl GreeterView {
             }
             self.roll.text = text;
         }
+        self.refresh_words();
         // Preview simulations end by themselves.
         if let Some(at) = self.sim_reset
             && now >= at
@@ -1746,12 +1794,17 @@ impl GreeterView {
         let y = if self.demo() { clear_demo_chrome(pl.anchor, pl.y) } else { pl.y };
         let mut dx = pl.x * f.u;
         let mut dy = y * f.u + 18.0 * f.u * (1.0 - enter.clamp(0.0, 1.2));
+        // Meridian's line sits at the golden height, whatever the screen.
+        if e == Element::User && self.config.card.enabled && self.config.card.style == CardStyle::Horizon {
+            dy += (meridian::GOLDEN - fy) * f.vh;
+        }
         let mut alpha = enter.clamp(0.0, 1.0);
         if e.wakes() {
             alpha *= wake;
             dy += 30.0 * f.u * (1.0 - wake);
-        } else if fy < 0.25 {
-            // Idle: the clock and date drift toward the middle of the screen.
+        } else if fy < 0.25 && self.config.clock.face == ClockFace::Digits {
+            // Idle: the clock and date drift toward the middle of the screen
+            // (the ruler and halo faces are composed where they stand).
             dy += f.vh * 0.2 * (1.0 - wake);
         }
         alpha *= 1.0 - f.success;
@@ -1818,7 +1871,7 @@ impl GreeterView {
         let idle = 1.0 - self.wake.value().clamp(0.0, 1.0);
         let size = snap_size(c.size * k * (1.0 + CLOCK_IDLE_GROWTH * idle) * (1.0 + CLOCK_SUCCESS_GROWTH * f.success));
         let line = size * if c.stacked { STACKED_LINE } else { 1.08 };
-        let font = if c.font.trim().is_empty() { f.display_font.clone() } else { SharedString::from(c.font.clone()) };
+        let font = self.clock_font(f);
         let progress = self.roll.progress(f.now);
         let rolling = self.roll.moving(f.now);
         // The variable weight follows the idle state in steps (each weight
@@ -1862,6 +1915,17 @@ impl GreeterView {
         }
         lines.push(row);
         div().flex().flex_col().items_center().children(lines).into_any_element()
+    }
+
+    /// The clock's family: the configured one, else monospace for the
+    /// ruler face and the display face for the others.
+    fn clock_font(&self, f: &Frame) -> SharedString {
+        let c = &self.config.clock;
+        match c.font.trim() {
+            "" if c.face == ClockFace::Ruler => f.mono_font.clone(),
+            "" => f.display_font.clone(),
+            family => SharedString::from(family.to_string()),
+        }
     }
 
     fn date_el(&self, f: &Frame, k: f32) -> AnyElement {
@@ -2028,6 +2092,9 @@ impl GreeterView {
 
     #[allow(clippy::too_many_arguments)]
     fn pill(&self, f: &Frame, k: f32, id: &'static str, text: String, secret: bool, placeholder: String, focused: bool, unfold: f32, cx: &mut Context<Self>) -> AnyElement {
+        if self.config.password.style == FieldStyle::Terminal {
+            return self.terminal_field(f, k, id, text, secret, placeholder, focused, unfold, cx);
+        }
         let cfg = &self.config;
         let pc = &cfg.password;
         let p = &self.palette;
@@ -2130,9 +2197,16 @@ impl GreeterView {
         // Shadows: rim, depth, typing glow, keystroke ripple.
         // (The filled field is flat: Material shows state with its
         // indicator line, not glows.)
-        let mut shadows = if pc.style == FieldStyle::Glass { rim(cfg.theme.rim) } else { Vec::new() };
+        let mut shadows = match pc.style {
+            FieldStyle::Glass => rim(cfg.theme.rim),
+            FieldStyle::Recessed => chrome_halo::field_shadows(k),
+            _ => Vec::new(),
+        };
         if !filled {
-            shadows.push(soft_shadow(22.0 * k, 0.24, 6.0 * k));
+            // A recessed field is sunk into its panel: no drop shadow.
+            if pc.style != FieldStyle::Recessed {
+                shadows.push(soft_shadow(22.0 * k, 0.24, 6.0 * k));
+            }
             let g = self.glow.value().clamp(0.0, 1.0);
             if g > 0.01 && is_pw {
                 shadows.push(glow(p.primary.with_alpha(0.5 * g).hsla(), 28.0 * k, 1.0 * k));
@@ -2184,6 +2258,7 @@ impl GreeterView {
             }
             FieldStyle::Outline => pill.rounded(px(radius)).border_1().border_color(edge(white.opacity(if focused { 0.85 } else { 0.5 }))),
             FieldStyle::Inset => pill.rounded(px(radius)).bg(fill).border_1().border_color(edge(p.outline.with_alpha(0.9).hsla())),
+            FieldStyle::Recessed => pill.rounded(px(radius)).bg(fill).border_1().border_color(chrome_halo::field_edge(p, focused, flash)),
             FieldStyle::Filled => {
                 let r = M3_FIELD_RADIUS * k * cfg.theme.roundness;
                 let (ink, t) = m3.edge.unwrap_or((p.on_surface_variant, inputs::EDGE_PX.0));
@@ -2283,6 +2358,8 @@ impl GreeterView {
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)))
                 .child(icon(if f.rtl { "arrow-left" } else { "arrow-right" }, h * 0.42, p.on_primary.hsla()));
             col.child(div().flex().items_center().gap(px(BESIDE_GAP * k)).when(f.rtl, |el| el.flex_row_reverse()).child(field).child(button))
+        } else if cfg.password.submit == SubmitButton::Pill && unfold > 0.6 {
+            col.child(field).child(div().h(px(chrome_halo::PILL_GAP * k))).child(self.pill_submit(f, k, cx))
         } else {
             col.child(field)
         };
@@ -2294,6 +2371,10 @@ impl GreeterView {
             Status::None if self.demo() => Some((None, tl("Demo: any password works — try “wrong” to see a failure"), white.opacity(0.78))),
             Status::None => None,
         };
+        if matches!(cfg.password.style, FieldStyle::Terminal | FieldStyle::Recessed) {
+            let error = matches!(self.status, Status::Error(_));
+            return col.child(ghostline::led_status(f, k, self.field_width(k), status, error, &self.palette)).into_any_element();
+        }
         if cfg.password.style == FieldStyle::Filled {
             // Material's supporting text: under the field, from its start
             // edge, in the error colour or the variant text colour.
@@ -2676,6 +2757,12 @@ impl GreeterView {
 
     /// The card: user, password and (optionally) session on one panel.
     fn card_el(&self, f: &Frame, k: f32, caps: bool, cx: &mut Context<Self>) -> AnyElement {
+        match self.config.card.style {
+            CardStyle::Hud => return self.hud_card(f, k, caps, cx),
+            CardStyle::Bezel => return self.bezel_card(f, k, caps, cx),
+            CardStyle::Horizon => return self.horizon_band(f, k, cx),
+            CardStyle::Plain => {}
+        }
         let c = &self.config.card;
         let p = &self.palette;
         let fill = Color::from_hex(c.fill.trim()).unwrap_or(p.surface_container).with_alpha(c.opacity.clamp(0.0, 1.0));
@@ -2875,6 +2962,8 @@ impl Render for GreeterView {
         let now = Instant::now();
         let dt = self.clock.tick(now);
         let preview = self.is_preview();
+        // Last frame's caret (painting this frame sets it again).
+        self.caret_x = self.horizon_caret.take();
         let (vw, vh) = if preview {
             self.preview_size
         } else {
@@ -2952,20 +3041,21 @@ impl Render for GreeterView {
         let rtl = mandara_i18n::language().is_rtl();
         let a11y = &cfg.accessibility;
         let large = if a11y.large_text { 1.2 } else { 1.0 };
-        let u = if preview { vh / 1080.0 } else { (vh / 1080.0).clamp(0.6, 2.0) } * large;
+        let u = if preview { vh / 1080.0 } else { mandara_config::login_layout::screen_scale(vw, vh) } * large;
         let success = self.success.value().clamp(0.0, 1.0);
         let f = Frame {
             u,
             vw,
             vh,
             now,
-            white: gpui::white(),
+            white: foreground(cfg).hsla(),
             ui_font: match self.config.font.trim() {
                 "" if rtl => fonts.arabic.clone(),
                 "" => fonts.ui.clone(),
                 family => SharedString::from(family.to_string()),
             },
             display_font: fonts.display.clone(),
+            mono_font: fonts.mono.clone(),
             rtl,
             scale: window.scale_factor(),
             success,
@@ -2974,8 +3064,10 @@ impl Render for GreeterView {
             high_contrast: a11y.high_contrast,
             t: now.saturating_duration_since(self.started).as_secs_f32(),
             tonal: Tonal::of(p),
+            keyboard: layout.clone(),
+            caps: !preview && window.capslock().on && self.field != Field::Session,
         };
-        let caps = !preview && window.capslock().on && self.field != Field::Session;
+        let caps = f.caps;
 
         // Backdrop with pointer parallax (moves against the pointer).
         let bgc = &cfg.background;
@@ -3066,6 +3158,12 @@ impl Render for GreeterView {
             let a = 0.28 * self.wake.value().clamp(0.0, 1.0) * (1.0 - success);
             root = root.child(div().absolute().left(px(cxp - r / 2.0)).top(px(cyp - r / 2.0)).size(px(r)).rounded_full().shadow(vec![glow(gpui::black().opacity(a), r * 0.8, 0.0)]));
         }
+        match bgc.overlay {
+            Overlay::None => {}
+            Overlay::Hud => root = root.child(ghostline::hud_overlay(&f, p)),
+            Overlay::Prism => root = root.child(chrome_halo::prism_overlay(&f, p, shift)),
+            Overlay::Horizon => root = root.child(self.horizon_overlay(&f)),
+        }
         if bgc.grain > 0.0 {
             root = root.child(div().absolute().top_0().left_0().size_full().opacity(bgc.grain).child(crate::background::grain(vw, vh)));
         }
@@ -3081,7 +3179,14 @@ impl Render for GreeterView {
         for pl in placements {
             let k = u * pl.scale;
             let content = match pl.element {
-                Element::Clock => self.clock_el(&f, k),
+                Element::Clock => match cfg.clock.face {
+                    ClockFace::Digits => self.clock_el(&f, k),
+                    ClockFace::Ruler => self.ruler_clock(&f, k),
+                    ClockFace::Halo => self.halo_clock(&f, k),
+                    ClockFace::Vast => self.vast_clock(&f, k),
+                },
+                // The ruler and halo faces hold the date.
+                Element::Date if cfg.clock.face != ClockFace::Digits => div().into_any_element(),
                 Element::Date => self.date_el(&f, k),
                 Element::User if cfg.card.enabled => self.card_el(&f, k, caps, cx),
                 Element::User => self.user_el(&f, k, cx),

@@ -38,6 +38,14 @@ pub fn scale(height: f32) -> f32 {
     (height / REFERENCE_H).clamp(SCALE_RANGE.0, SCALE_RANGE.1)
 }
 
+/// The scale for a `width × height` screen: by its short side, so a
+/// portrait screen draws everything at the size the same screen shows
+/// turned landscape (by height alone, a 1080 × 1920 screen would draw
+/// everything 78 % larger than a 1920 × 1080 one).
+pub fn screen_scale(width: f32, height: f32) -> f32 {
+    scale(width.min(height))
+}
+
 /// Height of the user card (avatar, gap, name).
 pub fn card_height(avatar: bool) -> f32 {
     if avatar { AVATAR + NAME_GAP + NAME_LINE } else { NAME_LINE }
@@ -61,5 +69,10 @@ mod tests {
         assert!(card_top > clock_bottom + 120.0, "room between the clock and the card");
         assert!(field_top >= card_bottom + 12.0, "field below the name");
         assert!((scale(864.0) - 0.8).abs() < 1e-6 && scale(100.0) == SCALE_RANGE.0);
+        // Landscape screens scale by their height, portrait ones by their width.
+        assert_eq!(screen_scale(1920.0, 1080.0), 1.0);
+        assert_eq!(screen_scale(1080.0, 1920.0), 1.0);
+        assert_eq!(screen_scale(3840.0, 2160.0), 2.0);
+        assert!((screen_scale(1366.0, 768.0) - 768.0 / REFERENCE_H).abs() < 1e-6);
     }
 }
