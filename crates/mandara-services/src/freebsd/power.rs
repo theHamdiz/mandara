@@ -92,6 +92,10 @@ pub enum LoginStep {
 pub fn login_step(result: &zbus::Result<()>) -> LoginStep {
     match result {
         Ok(()) => LoginStep::Done,
+        // ConsoleKit2 is there but didn't answer (twice, by now): never
+        // the base tools as well, which could run the action a second
+        // time once ConsoleKit2 catches up.
+        Err(e) if timed_out(e) => LoginStep::Refused,
         Err(e) if bus_missing(e) => LoginStep::Direct,
         Err(_) => LoginStep::Refused,
     }
@@ -169,6 +173,8 @@ mod tests {
         assert_eq!(login_step(&Err(method_error("org.freedesktop.DBus.Error.ServiceUnknown", None))), LoginStep::Direct);
         assert_eq!(login_step(&Err(method_error("org.freedesktop.DBus.Error.NameHasNoOwner", None))), LoginStep::Direct);
         assert_eq!(login_step(&Err(zbus::Error::InputOutput(std::sync::Arc::new(std::io::Error::from(std::io::ErrorKind::NotFound))))), LoginStep::Direct);
+        // A ConsoleKit2 that never answered is there: no second path.
+        assert_eq!(login_step(&Err(zbus::Error::InputOutput(std::sync::Arc::new(std::io::Error::from(std::io::ErrorKind::TimedOut))))), LoginStep::Refused);
         let refused = || method_error("org.freedesktop.ConsoleKit.Manager.Error.InsufficientPermission", Some("Not Authorized"));
         assert_eq!(login_step(&Err(refused())), LoginStep::Refused);
         assert_eq!(short_error(&refused()), "Not Authorized");

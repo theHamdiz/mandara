@@ -290,3 +290,20 @@ fn other_systems_need_no_rule() {
     assert!(!plan.changes() && !plan.leave_group && plan.errors.is_empty());
     assert!(plan.describe().contains(STATUS_NOT_NEEDED));
 }
+
+/// A file at the rule's path that can't be read as text (not UTF-8) is
+/// someone else's: never taken for an absent one, never replaced.
+#[test]
+fn an_unreadable_file_at_the_rule_path_is_left_alone() {
+    let f = Fixture::new(GROUP_CLEAN);
+    let p = f.root().path(RULE_PATH);
+    std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+    let theirs = b"// caf\xe9: a Latin-1 comment\npolkit.addRule(function() {});\n";
+    std::fs::write(&p, theirs).unwrap();
+    for action in [Action::Add, Action::Remove] {
+        let plan = f.plan(action);
+        assert!(!plan.changes(), "{action:?}");
+        assert!(plan.errors.iter().any(|e| e.contains("can't be read")), "{:?}", plan.errors);
+    }
+    assert_eq!(std::fs::read(&p).unwrap(), theirs, "untouched");
+}

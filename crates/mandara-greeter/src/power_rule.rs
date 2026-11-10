@@ -146,12 +146,25 @@ pub struct PowerRulePlan {
 impl PowerRulePlan {
     pub fn build(root: &SysRoot, action: Action) -> PowerRulePlan {
         let user = GreetdConfig::read(root).user.unwrap_or_else(|| DEFAULT_GREETER_USER.into());
+        // Absent, unseen (polkit's folder is root's), or unreadable: a
+        // file there that can't be read is never taken for an absent one,
+        // so it is never replaced.
+        let mut unreadable = None;
         let (previous, unseen) = match std::fs::read_to_string(root.path(RULE_PATH)) {
             Ok(text) => (Some(text), false),
-            Err(e) => (None, e.kind() == std::io::ErrorKind::PermissionDenied),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (None, false),
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => (None, true),
+            Err(e) => {
+                unreadable = Some(e);
+                (None, false)
+            }
         };
         let mut plan = PowerRulePlan { action, freebsd: root.freebsd(), user, contents: previous.clone(), previous, leave_group: false, unseen, errors: Vec::new(), warnings: Vec::new() };
         if !plan.freebsd {
+            return plan;
+        }
+        if let Some(e) = unreadable {
+            plan.errors.push(format!("{RULE_PATH} can't be read ({e}): it was left alone."));
             return plan;
         }
         let ours = plan.previous.as_deref().is_none_or(|p| p.starts_with(MARKER));
