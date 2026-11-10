@@ -310,6 +310,15 @@ impl ShellConfig {
         (self.dock_enabled() && self.dock.position == crate::workflow::DockPosition::Bottom).then(|| self.dock.band() + self.dock.margin)
     }
 
+    /// Whether a right-click in the bar's strip, between its pieces, opens
+    /// the main menu (`bar.right_click_gaps`). Only a split bar has gaps:
+    /// a full-width bar (and a side bar, always the edge frame) has none.
+    /// Clicks that pass through empty bar space, or empty bar space that
+    /// opens the desktop's menu itself, leave the gaps to the desktop too.
+    pub fn bar_gaps_open_menu(&self) -> bool {
+        self.bar.right_click_gaps && !self.bar_layout().is_full_width() && !self.bar.click_through && self.bar.right_click == crate::surfaces::BarRightClick::MainMenu
+    }
+
     /// Whether the bar shows on `output`: `[displays.surfaces.bar]`, or the
     /// legacy `bar.monitors` list while the assignment is still at its
     /// default.
@@ -1222,6 +1231,12 @@ pub struct BarConfig {
     /// What right-clicking empty bar space opens (the main menu, or the
     /// desktop's menu).
     pub right_click: crate::surfaces::BarRightClick,
+    /// A right-click in the gaps of a split bar (between and around its
+    /// pills, island or tiles, anywhere in the strip the bar takes along
+    /// its edge) opens the main menu too, instead of the desktop's menu.
+    /// Off (the default), the gaps are the desktop. See
+    /// [`ShellConfig::bar_gaps_open_menu`].
+    pub right_click_gaps: bool,
     /// Keep the bar above fullscreen windows (overlay layer; applies after
     /// a restart).
     pub over_fullscreen: bool,
@@ -1403,6 +1418,7 @@ impl Default for BarConfig {
             auto_hide: crate::desktop::BarAutoHide::default(),
             click_through: false,
             right_click: crate::surfaces::BarRightClick::MainMenu,
+            right_click_gaps: false,
             over_fullscreen: false,
             monitors: String::new(),
             chip_padding: surfaces::defaults::BAR_CHIP_PADDING_PX,
@@ -2139,5 +2155,48 @@ mod plugin_layout_tests {
         assert!(ShellConfig::default_plugin_places("prayer-times").is_empty());
         let d = PluginsConfig::default();
         assert!(!d.enabled.iter().any(|p| p == "prayer-times"));
+    }
+}
+
+#[cfg(test)]
+mod bar_gap_click_tests {
+    use super::*;
+    use crate::surfaces::BarRightClick;
+
+    #[test]
+    fn the_gaps_stay_the_desktop_unless_chosen() {
+        let cfg = ShellConfig::default();
+        assert!(!cfg.bar.right_click_gaps);
+        assert!(!cfg.bar_gaps_open_menu());
+        // A config from before the setting existed keeps today's routing.
+        let old: ShellConfig = toml::from_str("[bar]\nlayout = \"floating-pills\"\nright_click = \"main-menu\"\n").unwrap();
+        assert!(!old.bar.right_click_gaps && !old.bar_gaps_open_menu());
+        let on: ShellConfig = toml::from_str("[bar]\nlayout = \"floating-pills\"\nright_click_gaps = true\n").unwrap();
+        assert!(on.bar_gaps_open_menu());
+    }
+
+    #[test]
+    fn only_a_split_bar_has_gaps_to_route() {
+        let mut cfg = ShellConfig::default();
+        cfg.bar.right_click_gaps = true;
+        for layout in BarLayout::ALL {
+            cfg.bar.layout = layout;
+            assert_eq!(cfg.bar_gaps_open_menu(), !layout.is_full_width(), "{layout:?}");
+        }
+        // A side bar is always the edge frame: no gaps.
+        cfg.bar.layout = BarLayout::FloatingPills;
+        for position in [BarPosition::Left, BarPosition::Right] {
+            cfg.bar.position = position;
+            assert!(!cfg.bar_gaps_open_menu(), "{position:?}");
+        }
+        cfg.bar.position = BarPosition::Bottom;
+        assert!(cfg.bar_gaps_open_menu());
+        // Empty bar space that passes clicks through, or opens the desktop's
+        // menu itself, leaves the gaps to the desktop too.
+        cfg.bar.click_through = true;
+        assert!(!cfg.bar_gaps_open_menu());
+        cfg.bar.click_through = false;
+        cfg.bar.right_click = BarRightClick::DesktopMenu;
+        assert!(!cfg.bar_gaps_open_menu());
     }
 }

@@ -894,15 +894,21 @@ impl ShellView {
             }
             mandara_config::surfaces::BarRightClick::MainMenu => {
                 let along = if self.metrics.vertical { y } else { x };
-                let shell = self.shell.clone();
-                crate::state::on_bar(&self.monitor, cx, |cx| {
-                    shell.update(cx, |s, cx| {
-                        s.panel_anchor = Some(along);
-                        s.toggle_panel(crate::plugins::main_menu::ID, cx);
-                    })
-                })
+                toggle_main_menu(&self.monitor, along, cx);
             }
         }
+    }
+
+    /// Where a right-click at `at` (output px) on this bar's output, `output`
+    /// px big, falls along the bar: `Some` in the strip the bar takes along
+    /// its edge while the bar shows ([`layout::band_hit`], with the metrics
+    /// this frame already resolved), `None` elsewhere or while it is slid
+    /// away.
+    pub(crate) fn gap_hit(&self, output: (f32, f32), at: (f32, f32)) -> Option<f32> {
+        if self.autohide.is_hidden() {
+            return None;
+        }
+        layout::band_hit(&self.metrics, output, at)
     }
 
     /// The main menu's frosted wallpaper, decoded and ready to draw: `None`
@@ -1228,6 +1234,19 @@ impl ShellView {
             });
         }
     }
+}
+
+/// Opens (or closes) the main menu on `monitor`'s bar, `along` px down the
+/// bar: a right-click on empty bar space, or in a split bar's gaps
+/// ([`crate::bar::gaps`]).
+pub(crate) fn toggle_main_menu(monitor: &str, along: f32, cx: &mut App) {
+    let shell = shell(cx);
+    crate::state::on_bar(monitor, cx, |cx| {
+        shell.update(cx, |s, cx| {
+            s.panel_anchor = Some(along);
+            s.toggle_panel(crate::plugins::main_menu::ID, cx);
+        })
+    })
 }
 
 #[derive(Copy, Clone)]
