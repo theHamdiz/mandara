@@ -96,10 +96,18 @@ use mandara_plugins::PluginRegistry;
 
 /// Re-renders `view` whenever `source` notifies — for live data kept outside
 /// the hub (e.g. [`crate::hub::resources_entity`]) so only the views that
-/// show it redraw on each sample.
+/// show it redraw on each sample. The subscription lives as long as `view`
+/// (a dropped sidebar card leaves nothing behind).
 pub fn follow<T: 'static>(view: &AnyView, source: &gpui::Entity<T>, cx: &mut App) {
-    let id = view.entity_id();
-    cx.observe(source, move |_, cx| cx.notify(id)).detach();
+    match view.clone().downcast::<FnView>() {
+        Ok(view) => view.update(cx, |view, cx| view.observe_too(source, cx)),
+        Err(view) => {
+            // Not a closure view (none today): an app-level observer that
+            // lives as long as `source`.
+            let id = view.entity_id();
+            cx.observe(source, move |_, cx| cx.notify(id)).detach();
+        }
+    }
 }
 
 /// Registers every shipped plugin and the core shell commands.

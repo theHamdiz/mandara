@@ -18,27 +18,28 @@ struct Active {
 pub(super) struct Controller {
     active: Option<Active>,
     clock: FrameClock,
+    /// Kept with the controller (a sidebar card's goes when the sidebar closes).
+    _subscriptions: [gpui::Subscription; 2],
 }
 
 impl Controller {
     /// Own one gesture per list and cancel it when its surface or setting changes.
     pub(super) fn new(cx: &mut App) -> Entity<Self> {
         cx.new(|cx| {
-            cx.observe(&crate::state::shell(cx), |this: &mut Self, _, cx| {
+            let shell = cx.observe(&crate::state::shell(cx), |this: &mut Self, _, cx| {
                 if this.clear() {
                     cx.notify();
                 }
-            })
-            .detach();
-            cx.observe(&crate::state::config(cx), |this: &mut Self, cfg, cx| {
+            });
+            let config = cx.observe(&crate::state::config(cx), |this: &mut Self, cfg, cx| {
                 if !cfg.read(cx).get().notifications.history_swipe && this.clear() {
                     cx.notify();
                 }
-            })
-            .detach();
+            });
             Self {
                 active: None,
                 clock: FrameClock::new(),
+                _subscriptions: [shell, config],
             }
         })
     }

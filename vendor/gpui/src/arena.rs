@@ -147,6 +147,18 @@ impl Arena {
         }
     }
 
+    /// Mandara patch: gives back every chunk but the first and the element
+    /// list's spare room, keeping what one ordinary frame needs. Does
+    /// nothing while a draw holds the arena or anything is allocated in it.
+    pub fn shrink(&mut self) {
+        if self.scope_depth != 0 || self.current_chunk_index != 0 || !self.elements.is_empty() {
+            return;
+        }
+        self.chunks.truncate(1);
+        self.chunks.shrink_to_fit();
+        self.elements.shrink_to_fit();
+    }
+
     fn force_clear(&mut self) {
         self.valid.set(false);
         self.valid = Rc::new(Cell::new(true));

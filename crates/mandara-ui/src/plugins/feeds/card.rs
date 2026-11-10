@@ -212,6 +212,16 @@ mod tests {
     }
 
     #[test]
+    fn releasing_the_card_drops_its_rows_and_rejects_a_late_load() {
+        let mut card = CardData { key: Some((3, 7, Rc::from("news"))), items: Rc::from(vec![Headline { url: "u".into(), link: "l".into(), title: "t".into(), feed: "f".into(), color: String::new(), when: 1 }]), unread: 4, loading: true, generation: 9 };
+        let weak = Rc::downgrade(&card.items);
+        card.release();
+        assert!(card.items.is_empty() && card.unread == 0 && card.key.is_none() && !card.loading);
+        assert!(weak.upgrade().is_none(), "nothing else holds the rows");
+        assert_ne!(card.generation, 9, "a load started before the release is ignored");
+    }
+
+    #[test]
     fn disk_rows_are_the_newest_unread_across_feeds_or_one_folder() {
         let dir = tempfile::tempdir().unwrap();
         let cache = Cache::at(dir.path().into());

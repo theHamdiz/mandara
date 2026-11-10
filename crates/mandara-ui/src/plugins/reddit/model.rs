@@ -326,6 +326,8 @@ pub(super) struct Model {
     wait_timer: Option<Task<()>>,
     open: bool,
     release: Option<Task<()>>,
+    /// Lets the session's replies go a while after the sidebar card went.
+    card_release: Option<Task<()>>,
 }
 
 /// Requests that use Reddit's budget. Only the newest waits.
@@ -416,6 +418,8 @@ impl Model {
     /// Ask for the sidebar card's community when it changed or its posts
     /// are older than `every`. Only a shown card calls this.
     pub fn want_card(&mut self, query: Query, want: Want, every: Duration, now: Instant) -> Option<Duration> {
+        // Shown again: the session keeps what it has.
+        self.card_release = None;
         let same = self.card.query.as_ref() == Some(&query);
         if !same {
             self.card = Card { query: Some(query.clone()), ..Card::default() };
@@ -432,11 +436,41 @@ impl Model {
         }
     }
 
-    /// The sidebar hid: its card's posts go (the session keeps the page
-    /// briefly, so showing it again soon costs no request).
+    /// The sidebar hid: its card's posts go and its request is cancelled.
     pub fn drop_card(&mut self) {
         self.card = Card::default();
         self.card_job = None;
+    }
+
+    /// The sidebar closed: the card's posts and request go now
+    /// ([`Self::drop_card`]). With the panel closed as well, the session's
+    /// cached replies and connections go [`RELEASE_AFTER`] later, as when
+    /// the panel closes (showing the card again soon reuses them), off the
+    /// UI thread since a request in flight holds the session.
+    pub fn release_card(shared: &Shared, panel_open: bool, cx: &mut App) {
+        let had = {
+            let mut m = shared.borrow_mut();
+            let had = m.card.query.is_some() || m.card_job.is_some();
+            m.drop_card();
+            had
+        };
+        if !had || panel_open || shared.borrow().open {
+            return;
+        }
+        let weak = Rc::downgrade(shared);
+        let task = cx.spawn(async move |cx| {
+            cx.background_executor().timer(RELEASE_AFTER).await;
+            let Some(shared) = weak.upgrade() else { return };
+            let idle = {
+                let mut m = shared.borrow_mut();
+                m.card_release = None;
+                !m.open && m.card.query.is_none()
+            };
+            if idle {
+                with_session_later(Session::release);
+            }
+        });
+        shared.borrow_mut().card_release = Some(task);
     }
 
     /// Open a post the reader already knows (from the sidebar card).
@@ -862,6 +896,27 @@ mod tests {
         let before = grid.posts.as_ptr();
         grid.sync(&feed, |_| unreachable!("unchanged posts are not filtered again"), false, 3);
         assert_eq!(grid.posts.as_ptr(), before);
+    }
+
+    #[test]
+    fn closing_the_sidebar_drops_the_cards_posts_and_its_request() {
+        let shared: Shared = Rc::default();
+        let now = Instant::now();
+        let every = Duration::from_secs(600);
+        shared.borrow_mut().want_card(query("rust"), WANT, every, now);
+        apply(&mut shared.borrow_mut(), Done::Card(query("rust"), Ok(page(&["a", "b"], None))), 0, 0);
+        assert!(shared.borrow().card.page.is_some());
+        shared.borrow_mut().drop_card();
+        {
+            let m = shared.borrow();
+            assert!(m.card.page.is_none() && m.card.query.is_none() && m.card_job.is_none(), "the hidden card keeps no posts and asks for none");
+        }
+        // A late reply for the dropped card is not kept.
+        apply(&mut shared.borrow_mut(), Done::Card(query("rust"), Ok(page(&["c"], None))), 0, 0);
+        assert!(shared.borrow().card.page.is_none());
+        // Shown again, it asks anew.
+        assert_eq!(shared.borrow_mut().want_card(query("rust"), WANT, every, now), None);
+        assert!(shared.borrow().card_job.is_some());
     }
 
     #[test]

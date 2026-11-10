@@ -484,6 +484,25 @@ fn follow_background(cx: &mut App) {
     hub.borrow_mut().background = Some((every, task));
 }
 
+/// Follows the shell once per process (not once per build: sidebar cards
+/// are built every time the sidebar opens): a closed panel releases its
+/// history after its close animation.
+fn follow_shell(cx: &mut App) {
+    thread_local! { static FOLLOWING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+    if FOLLOWING.with(|f| f.replace(true)) { return; }
+    cx.observe(&crate::state::shell(cx), |shell, cx| {
+        // A floating Feeds panel is open too, though it isn't the shell's panel.
+        if !panel_open(shell.read(cx).panel.as_deref(), crate::floating::is_floating(ID, cx)) { closed(cx); }
+    }).detach();
+}
+
+/// The sidebar closed: the card's rows go (never building a hub for it).
+fn release_card(_: &mut App) {
+    if let Some(hub) = HUB.with(|slot| slot.borrow().clone()) {
+        hub.borrow_mut().card.release();
+    }
+}
+
 /// Whether the Feeds panel shows: as the shell's panel or floating.
 fn panel_open(shell_panel: Option<&str>, floating: bool) -> bool {
     floating || shell_panel == Some(ID)
@@ -658,19 +677,19 @@ fn reload(url: String, cx: &mut App) { persist(url, cx, |cache, url| cache.load(
 pub fn register(registry: &mut PluginRegistry) {
     registry.register(PluginManifest::builtin(ID, tk("Feeds"), tk("A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view"), Some(Zone::Right)).opt_in(), |window, cx, context| {
         follow_background(cx);
+        follow_shell(cx);
+        let sidebar = super::model_view(None, card::render, window, cx);
+        if context.is_card() {
+            return PluginInstance { sidebar: Some(sidebar), ..PluginInstance::empty() };
+        }
         let bar = super::model_view(None, panel::bar, window, cx);
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(PANEL_H))));
         let view = panel::View::new(context.clone(), cx);
         let panel = super::model_view(None, move |palette, window, cx| view.render(palette, window, cx), window, cx);
-        cx.observe(&crate::state::shell(cx), |shell, cx| {
-            // A floating Feeds panel is open too, though it isn't the shell's panel.
-            if !panel_open(shell.read(cx).panel.as_deref(), crate::floating::is_floating(ID, cx)) { closed(cx); }
-            // The card's rows go when the sidebar hides (never building a hub for it).
-            if !shell.read(cx).sidebar_visible() && let Some(hub) = HUB.with(|slot| slot.borrow().clone()) { hub.borrow_mut().card.release(); }
-        }).detach();
-        let sidebar = super::model_view(None, card::render, window, cx);
         PluginInstance { bar: Some(bar), panel: Some(PanelSpec { view: panel, size: size_cell }), sidebar: Some(sidebar), ..PluginInstance::empty() }
     });
+    // The card's rows live in the hub: they go when the sidebar closes.
+    registry.sidebar_card(ID, mandara_plugins::CardRelease::shared(release_card));
     registry.command(ID, CommandSpec::new("feeds list", tk("Your subscriptions with their folders and unread counts"), |_, cx| {
         let counts = hub().borrow().counts.clone();
         let list: Vec<serde_json::Value> = cached_settings(cx).subs.iter().map(|sub| {

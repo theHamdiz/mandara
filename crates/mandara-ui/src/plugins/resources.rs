@@ -1546,9 +1546,82 @@ fn panel_view(p: PanelCx, live: Rc<RefCell<Live>>, size_cell: Rc<Cell<gpui::Size
     }
 }
 
+/// The sidebar card: CPU and memory with their sparklines and the first
+/// disks, from `side_live`.
+fn sidebar_card(side_live: Rc<RefCell<Live>>, window: &mut Window, cx: &mut App) -> gpui::AnyView {
+    fn_view(
+        None,
+        move |palette, window, cx| {
+            let (cpu, mem) = {
+                let s = crate::hub::resources_entity(cx).read(cx);
+                (s.cpu, s.mem)
+            };
+            let units = crate::state::config(cx).read(cx).get().units();
+            let mut guard = side_live.borrow_mut();
+            guard.tuning = Tuning::of(cx);
+            guard.views.track(window);
+            guard.record(cpu, mem);
+            guard.labels(units);
+            let l = &*guard;
+            let [cpu_c, mem_c, _] = colors(palette);
+            let mini = |icon_name: &'static str, label: &'static str, v: f32, h: &History, (a, b): (Color, Color)| {
+                div()
+                    .flex_1()
+                    .min_w(px(0.0))
+                    .flex()
+                    .flex_col()
+                    .gap(px(ROW_GAP_PX))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(ROW_GAP_PX))
+                            .child(icon(icon_name, CARD_ICON_PX, a))
+                            .child(div().flex_1().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(label))
+                            .child(div().font_features(tabular_nums()).text_size(px(text::BODY_S)).font_weight(FontWeight::SEMIBOLD).child(percent_text(v))),
+                    )
+                    .child(sparkline(h, SIDEBAR_SPARK_H_PX, a.with_alpha(SPARK_FROM_ALPHA), b, palette))
+            };
+            let disks = l.labels.as_ref().map_or(&[][..], |labels| &labels.disks[..labels.disks.len().min(SIDEBAR_DISKS)]);
+            card(palette)
+                .flex()
+                .flex_col()
+                .gap(px(tokens::MD))
+                .child(div().flex().gap(px(tokens::MD)).child(mini("cpu", t("CPU"), cpu, &l.cpu, cpu_c)).child(mini("memory", t("Memory"), mem, &l.mem, mem_c)))
+                .when(!disks.is_empty(), |el| el.child(storage(disks, l.tuning, palette)))
+                .into_any_element()
+        },
+        window,
+        cx,
+    )
+}
+
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Resources"), tk("CPU, memory and disk usage"), Some(Zone::Right)), |window, cx, panel_cx| {
         let live = Rc::new(RefCell::new(Live::new()));
+        if panel_cx.is_card() {
+            // A sidebar card: only its disks to prime (no host line,
+            // temperatures or GPUs, which may run `nvidia-smi`).
+            let task = cx.background_executor().spawn(async { read_disks() });
+            let prime = live.clone();
+            cx.spawn(async move |cx| {
+                let disks = task.await;
+                let views = {
+                    let mut l = prime.borrow_mut();
+                    if l.disks_at.is_none() {
+                        l.disks = disks;
+                        l.disks_at = Some(Instant::now());
+                    }
+                    l.generation += 1;
+                    l.views.clone()
+                };
+                views.notify_async(cx);
+            })
+            .detach();
+            let sidebar = sidebar_card(live, window, cx);
+            super::follow(&sidebar, &crate::hub::resources_entity(cx), cx);
+            return PluginInstance { sidebar: Some(sidebar), ..PluginInstance::empty() };
+        }
         // Displayed values spring toward each smoothed sample.
         let shown = Rc::new(RefCell::new((
             Readout::new(CHIP_SPRING, CHIP_SNAP_BELOW, PERCENT_STEP),
@@ -1621,52 +1694,7 @@ pub fn register(r: &mut PluginRegistry) {
             .detach();
         }
         let panel = fn_view(None, panel_view(panel_cx.clone(), live.clone(), size_cell.clone()), window, cx);
-        let side_live = live.clone();
-        let sidebar = fn_view(
-            None,
-            move |palette, window, cx| {
-                let (cpu, mem) = {
-                    let s = crate::hub::resources_entity(cx).read(cx);
-                    (s.cpu, s.mem)
-                };
-                let units = crate::state::config(cx).read(cx).get().units();
-                let mut guard = side_live.borrow_mut();
-                guard.tuning = Tuning::of(cx);
-                guard.views.track(window);
-                guard.record(cpu, mem);
-                guard.labels(units);
-                let l = &*guard;
-                let [cpu_c, mem_c, _] = colors(palette);
-                let mini = |icon_name: &'static str, label: &'static str, v: f32, h: &History, (a, b): (Color, Color)| {
-                    div()
-                        .flex_1()
-                        .min_w(px(0.0))
-                        .flex()
-                        .flex_col()
-                        .gap(px(ROW_GAP_PX))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(ROW_GAP_PX))
-                                .child(icon(icon_name, CARD_ICON_PX, a))
-                                .child(div().flex_1().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(label))
-                                .child(div().font_features(tabular_nums()).text_size(px(text::BODY_S)).font_weight(FontWeight::SEMIBOLD).child(percent_text(v))),
-                        )
-                        .child(sparkline(h, SIDEBAR_SPARK_H_PX, a.with_alpha(SPARK_FROM_ALPHA), b, palette))
-                };
-                let disks = l.labels.as_ref().map_or(&[][..], |labels| &labels.disks[..labels.disks.len().min(SIDEBAR_DISKS)]);
-                card(palette)
-                    .flex()
-                    .flex_col()
-                    .gap(px(tokens::MD))
-                    .child(div().flex().gap(px(tokens::MD)).child(mini("cpu", t("CPU"), cpu, &l.cpu, cpu_c)).child(mini("memory", t("Memory"), mem, &l.mem, mem_c)))
-                    .when(!disks.is_empty(), |el| el.child(storage(disks, l.tuning, palette)))
-                    .into_any_element()
-            },
-            window,
-            cx,
-        );
+        let sidebar = sidebar_card(live.clone(), window, cx);
         let samples = crate::hub::resources_entity(cx);
         for view in [&bar, &panel, &sidebar] {
             super::follow(view, &samples, cx);
@@ -1687,6 +1715,8 @@ pub fn register(r: &mut PluginRegistry) {
             })),
         }
     });
+    // Its history and disks live in its view; samples come from the hub's sampler.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     r.command(ID, CommandSpec::new("system resources", tk("CPU, memory, GPUs, temperatures, disks and uptime"), |_, cx| {
         let units = crate::state::config(cx).read(cx).get().units();
         let mut s = SystemSampler::default();

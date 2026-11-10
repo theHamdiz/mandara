@@ -132,6 +132,8 @@ pub struct Response {
 pub trait Transport: Send {
     fn get(&self, url: &str, bearer: Option<&str>, agent: &str, max: usize) -> Result<Response, String>;
     fn token(&self, url: &str, client_id: &str, agent: &str) -> Result<Response, String>;
+    /// Close idle connections (nothing will ask for a while).
+    fn close_idle(&mut self) {}
 }
 
 pub struct Http { agent: ureq::Agent }
@@ -169,6 +171,12 @@ impl Transport for Http {
         let response = self.agent.post(url).header("User-Agent", agent).header("Authorization", basic.as_str())
             .header("Content-Type", "application/x-www-form-urlencoded").send(form.as_str()).map_err(|error| failed(&error))?;
         Self::read(response, MAX_TOKEN_BYTES)
+    }
+
+    /// A fresh agent: the old one's pooled connections (and their TLS
+    /// buffers) close with it.
+    fn close_idle(&mut self) {
+        *self = Self::default();
     }
 }
 
@@ -283,11 +291,13 @@ impl<T: Transport> Session<T> {
         self.agent = user_agent(username);
     }
 
-    /// Forget cached replies (the reader closed).
+    /// Forget cached replies and close idle connections (the reader
+    /// closed, or the sidebar card went with nothing else reading).
     pub fn release(&mut self) {
         self.pages.clear();
         self.rss_pages.clear();
         self.rss_threads.clear();
+        self.transport.close_idle();
     }
 
     /// Also forget the token (the plugin was switched off).

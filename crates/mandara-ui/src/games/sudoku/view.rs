@@ -124,18 +124,23 @@ pub struct SudokuView {
     settle: Option<gpui::Task<()>>,
     /// The sidebar card's laid-out width.
     measured: std::rc::Rc<std::cell::Cell<f32>>,
+    /// The model, theme (and config) observers and the model's hold on
+    /// this view, dropped with it.
+    _subscriptions: Vec<gpui::Subscription>,
 }
 
 impl SudokuView {
     pub fn new(model: Entity<Sudoku>, surface: Surface, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        cx.observe(&model, |_, _, cx| cx.notify()).detach();
-        cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
+        let mut subscriptions = Vec::with_capacity(4);
+        subscriptions.push(crate::games::join_sudoku(cx));
+        subscriptions.push(cx.observe(&model, |_, _, cx| cx.notify()));
+        subscriptions.push(cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()));
         if matches!(surface, Surface::Desktop { .. }) {
-            cx.observe(&crate::state::config(cx), |_, _, cx| cx.notify()).detach();
+            subscriptions.push(cx.observe(&crate::state::config(cx), |_, _, cx| cx.notify()));
             // The clock runs while the widget has the keyboard.
             // Some compositors take the keyboard away and give it back
             // around a click, so a loss counts once it lasts.
-            cx.observe_window_activation(window, |this: &mut Self, window, cx| {
+            let activation = cx.observe_window_activation(window, |this: &mut Self, window, cx| {
                 if window.is_window_active() {
                     this.settle = None;
                     return;
@@ -149,10 +154,10 @@ impl SudokuView {
                         }
                     });
                 }));
-            })
-            .detach();
+            });
+            subscriptions.push(activation);
         }
-        Self { model, focus: cx.focus_handle(), surface, opened: false, input: None, choosing: false, settle: None, measured: std::rc::Rc::new(std::cell::Cell::new(super::super::SIDEBAR_WIDTH_PX)) }
+        Self { model, focus: cx.focus_handle(), surface, opened: false, input: None, choosing: false, settle: None, measured: std::rc::Rc::new(std::cell::Cell::new(super::super::SIDEBAR_WIDTH_PX)), _subscriptions: subscriptions }
     }
 
     fn desktop(&self) -> Option<&str> {

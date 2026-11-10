@@ -203,10 +203,8 @@ pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, mandara_i18n::tk("Screenshot"), mandara_i18n::tk("Region, window and screen capture, and screen recording"),Some(Zone::Right)), |window, cx, panel_cx| {
         // The recorder's clock wakes only this chip and the panel.
         let watch_clock = |cx: &mut gpui::Context<super::FnView>| {
-            if let Some(r) = crate::recorder::recorder(cx) {
-                let clock = r.read(cx).clock.clone();
-                cx.observe(&clock, |_, _, cx| cx.notify()).detach();
-            }
+            let clock = crate::recorder::recorder(cx)?.read(cx).clock.clone();
+            Some(cx.observe(&clock, |_, _, cx| cx.notify()))
         };
         let bar = fn_view_observing(None, watch_clock, |palette, _, cx| record::bar_chip(palette, cx), window, cx);
         let p = panel_cx.clone();

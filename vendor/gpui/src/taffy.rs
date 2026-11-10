@@ -52,6 +52,12 @@ impl TaffyLayoutEngine {
         }
     }
 
+    /// Mandara patch: a fresh tree without the node storage a large frame
+    /// grew (the tree is rebuilt at the start of every frame anyway).
+    pub fn shrink(&mut self) {
+        *self = Self::new();
+    }
+
     pub fn clear(&mut self) {
         self.taffy.clear();
         self.absolute_layout_bounds.clear();

@@ -1009,9 +1009,9 @@ pub fn register(r: &mut PluginRegistry) {
         let themes = Rc::new(RefCell::new(theme_card::Catalog::default()));
         let clear = themes.clone();
         let panel = fn_view_observing(None, move |cx| {
-            cx.observe(&shell(cx), move |_, state, cx| {
+            Some(cx.observe(&shell(cx), move |_, state, cx| {
                 if state.read(cx).panel.as_deref() != Some(ID) { clear.borrow_mut().clear(); }
-            }).detach();
+            }))
         }, move |palette, window, cx| render(&page, &glow, &themes, &measured, palette, &p, window, cx), window, cx);
         PluginInstance { panel: Some(PanelSpec { view: panel, size: fit }), ..PluginInstance::empty() }
     });

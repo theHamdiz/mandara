@@ -590,11 +590,11 @@ pub fn register(r: &mut PluginRegistry) {
         let picker = Rc::new(RefCell::new(device_picker::State::default()));
         let close_picker = picker.clone();
         let panel = domain_view_observing(Domains::AUDIO.union(Domains::MEDIA), None, move |cx| {
-            cx.observe(&crate::state::shell(cx), move |_, shell, cx| {
+            Some(cx.observe(&crate::state::shell(cx), move |_, shell, cx| {
                 if shell.read(cx).panel.as_deref() != Some(ID) && !crate::floating::is_floating(ID, cx) {
                     close_picker.borrow_mut().close();
                 }
-            }).detach();
+            }))
         }, panel_view(panel_cx.clone(), size_cell.clone(), apps_tap.clone(), picker), window, cx);
         let side_presence = RefCell::new(Presence::default());
         let side_picker = Rc::new(RefCell::new(device_picker::State::default()));
@@ -603,11 +603,11 @@ pub fn register(r: &mut PluginRegistry) {
         let sidebar = domain_view_observing(Domains::AUDIO.union(Domains::MEDIA),
             None,
             move |cx| {
-                cx.observe(&crate::state::shell(cx), move |_, shell, cx| {
+                Some(cx.observe(&crate::state::shell(cx), move |_, shell, cx| {
                     if !shell.read(cx).sidebar_visible_on(&monitor) && !crate::state::config(cx).read(cx).get().sidebar.pinned() {
                         close_side_picker.borrow_mut().close();
                     }
-                }).detach();
+                }))
             },
             move |palette, window, cx| {
                 let snapshot = AppsTap::snapshot(&apps_tap, window, cx);
@@ -668,6 +668,8 @@ pub fn register(r: &mut PluginRegistry) {
             on_secondary_click: Some(Rc::new(|_, cx| send(cx, AudioCommand::ToggleMute))),
         }
     });
+    // Its per-app tap stops ~1.6 s after the card stops drawing; the rest is in its view.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
 
     r.command(ID, CommandSpec::new("audio status", tk("Output / input volume and mute"), |_, cx| Ok(json(&hub(cx).read(cx).audio))));
     // Per-app mixer and device pickers (same calls as Studio → Audio & media).

@@ -246,6 +246,8 @@ pub fn register(r: &mut PluginRegistry) {
         let sidebar = fn_view(None, |palette, _, cx| tiles(palette, cx), window, cx);
         PluginInstance { sidebar: Some(sidebar), ..PluginInstance::empty() }
     });
+    // The tiles read the hub and settings; nothing outside the view.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     r.command(
         ID,
         CommandSpec::new("keep-awake", mandara_i18n::tk("Block idle and sleep (logind inhibitor)"), |a, cx| {

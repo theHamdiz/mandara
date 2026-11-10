@@ -924,6 +924,8 @@ pub fn register(r: &mut PluginRegistry) {
             ..PluginInstance::empty()
         }
     });
+    // Notes live in the productivity model; the card's parsed-note cache and fields are its own.
+    r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     r.command(
         ID,
         CommandSpec::new("notes list", mandara_i18n::tk("Notes (every topic, or one), most recently edited first"), |a, cx| {
