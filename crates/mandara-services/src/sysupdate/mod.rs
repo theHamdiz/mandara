@@ -19,8 +19,12 @@
 //! * [`job`]: the user side. One owned worker thread starts the helper (and
 //!   the rootless Flatpak step), reads its output incrementally into a
 //!   bounded state, and keeps running while the panel is closed;
-//! * [`nixos`]: NixOS generations, flake inputs, closure diffs and clean-up.
+//! * [`nixos`]: NixOS generations, flake inputs, closure diffs and clean-up;
+//! * [`aur`]: the AUR step on Arch, run as you by the installed AUR helper,
+//!   with [`askpass`] answering its `sudo` through Mandara's password dialog.
 
+pub mod askpass;
+pub mod aur;
 pub mod helper;
 pub mod job;
 pub mod nixos;
@@ -210,10 +214,32 @@ pub fn launcher() -> std::sync::Arc<dyn job::Launcher> {
             fn restart_facts(&self) -> (String, PathBuf, PathBuf) {
                 fake_launcher().map_or_else(|| (String::new(), PathBuf::new(), PathBuf::new()), |f| f.restart_facts())
             }
+            fn prompter(&self) -> Option<std::sync::Arc<dyn askpass::Prompter>> {
+                askpass::prompter()
+            }
+            fn aur(&self, step: &plan::Step, session: &askpass::Session, line: &mut dyn FnMut(&str), cancel: &helper::CancelSignal) -> std::io::Result<Option<i32>> {
+                match fake_launcher() {
+                    Some(f) => f.aur(step, session, line, cancel),
+                    None => job::run_aur(step, session, line, cancel),
+                }
+            }
         }
         return std::sync::Arc::new(Shared);
     }
     std::sync::Arc::new(job::PkexecLauncher)
+}
+
+/// The AUR helper the sandbox's fake pretends is installed
+/// (`MANDARA_FAKE_AUR`; `None` outside the sandbox).
+pub fn fake_aur() -> Option<aur::AurHelper> {
+    #[cfg(all(feature = "fake-system-update", debug_assertions))]
+    {
+        fake_launcher().and_then(|f| f.aur)
+    }
+    #[cfg(not(all(feature = "fake-system-update", debug_assertions)))]
+    {
+        None
+    }
 }
 
 /// The NixOS files read for generations (the fake's tree in the sandbox).
@@ -258,6 +284,8 @@ pub enum Phase {
     /// NixOS: deleting generations and collecting garbage.
     Cleaning,
     Flatpak,
+    /// The AUR helper builds packages.
+    AurBuild,
     Finished,
 }
 
@@ -275,6 +303,7 @@ impl Phase {
             Phase::Activating => t("Switching to it"),
             Phase::Cleaning => t("Cleaning up"),
             Phase::Flatpak => t("Updating Flatpak apps"),
+            Phase::AurBuild => t("Building AUR packages"),
             Phase::Finished => t("Finished"),
         }
     }
@@ -298,6 +327,8 @@ pub enum FailureKind {
     NoPrompt,
     /// The admin helper is missing or too old and couldn't be set up.
     Helper,
+    /// An AUR package didn't build.
+    BuildFailed,
     Other,
 }
 
@@ -313,6 +344,7 @@ impl FailureKind {
             FailureKind::NotAuthorized => t("The update needs an administrator's password, and it wasn't given."),
             FailureKind::NoPrompt => t("No password prompt is available: make sure polkit (pkexec) is installed and Mandara's polkit agent is running."),
             FailureKind::Helper => t("Mandara's admin helper isn't set up, so the update can't run as administrator."),
+            FailureKind::BuildFailed => t("An AUR package didn't build. The log shows why; it often needs a fix from its maintainer. Nothing else was changed by this step."),
             FailureKind::Other => t("The update stopped with an error. The log shows what the package manager said."),
         }
     }

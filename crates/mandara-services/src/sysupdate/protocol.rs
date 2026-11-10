@@ -48,7 +48,7 @@ pub enum Outcome {
     Failed(FailureKind),
 }
 
-const FAILURE_IDS: [(FailureKind, &str); 9] = [
+const FAILURE_IDS: [(FailureKind, &str); 10] = [
     (FailureKind::Locked, "locked"),
     (FailureKind::Network, "network"),
     (FailureKind::Conflict, "conflict"),
@@ -57,6 +57,7 @@ const FAILURE_IDS: [(FailureKind, &str); 9] = [
     (FailureKind::NotAuthorized, "not-authorized"),
     (FailureKind::NoPrompt, "no-prompt"),
     (FailureKind::Helper, "helper"),
+    (FailureKind::BuildFailed, "build-failed"),
     (FailureKind::Other, "other"),
 ];
 
