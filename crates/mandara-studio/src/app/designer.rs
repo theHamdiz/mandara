@@ -373,6 +373,11 @@ fn apply_preset_in(c: &mut ShellConfig, p: &Preset, replace_items: bool, known: 
             c.bar.position = p.position;
             c.bar.height = p.height;
             c.bar.capsules = p.capsules;
+            // A capsule on every item hides the zone capsules, so a preset
+            // built on zones turns them off.
+            if p.capsules {
+                c.bar.item_capsules = false;
+            }
         }
     }
     if replace_items {
@@ -987,5 +992,26 @@ mod tests {
         // The Notch keeps its own, with its shadow.
         apply_preset_in(&mut c, named("Notch"), false, &known);
         assert!(c.bar.capsules && c.bar.shadow);
+    }
+
+    #[test]
+    fn zone_capsule_presets_turn_item_capsules_off() {
+        let known: Vec<String> = PRESETS.iter().flat_map(|p| [p.left, p.center, p.right]).flatten().map(|id| (*id).to_string()).collect();
+        let zoned: Vec<&Preset> = PRESETS.iter().filter(|p| p.capsules).collect();
+        assert!(zoned.len() >= 2, "Productive and the Notch use zone capsules");
+        for p in zoned {
+            let mut c = bar();
+            c.bar.style = None;
+            c.bar.item_capsules = true;
+            apply_preset_in(&mut c, p, false, &known);
+            assert!(c.bar.capsules && !c.bar.item_capsules, "{}: its zone capsules show", p.name);
+        }
+        // A preset without zone capsules leaves the item capsules alone.
+        for p in PRESETS.iter().filter(|p| !p.capsules && p.style.is_none()) {
+            let mut c = bar();
+            c.bar.item_capsules = true;
+            apply_preset_in(&mut c, p, false, &known);
+            assert!(c.bar.item_capsules, "{}", p.name);
+        }
     }
 }
