@@ -462,6 +462,7 @@ fn closed(stream: &UnixStream) -> bool {
 }
 
 /// The connecting process and its user (`SO_PEERCRED`).
+#[cfg(target_os = "linux")]
 fn peer(stream: &UnixStream) -> Option<(i32, u32)> {
     use std::os::fd::AsRawFd as _;
     let mut cred = libc::ucred { pid: 0, uid: 0, gid: 0 };
@@ -469,6 +470,13 @@ fn peer(stream: &UnixStream) -> Option<(i32, u32)> {
     // SAFETY: a valid socket, and a ucred-sized buffer with its length.
     let rc = unsafe { libc::getsockopt(stream.as_raw_fd(), libc::SOL_SOCKET, libc::SO_PEERCRED, (&mut cred as *mut libc::ucred).cast(), &mut len) };
     (rc == 0 && cred.pid > 0).then_some((cred.pid, cred.uid))
+}
+
+/// The AUR step exists only on Arch Linux; elsewhere no caller can be
+/// checked, so every request is refused.
+#[cfg(not(target_os = "linux"))]
+fn peer(_: &UnixStream) -> Option<(i32, u32)> {
+    None
 }
 
 /// `pid`'s parent, from `/proc/<pid>/stat` (the field after the command,
