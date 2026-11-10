@@ -271,9 +271,11 @@ fn releasing_forgets_cached_pages_and_closes_idle_connections() {
     session.listing(&query(), None, 0, WANT, now).unwrap();
     let gets = || script.calls.lock().unwrap().iter().filter(|c| c.starts_with("GET")).count();
     assert_eq!(gets(), 1, "the second page came from the cache");
-    // The sidebar card went with nothing else reading.
+    // The sidebar card went with nothing else reading (setting the client
+    // id up already released once).
+    let closed = *script.closed.lock().unwrap();
     session.release();
-    assert_eq!(*script.closed.lock().unwrap(), 1);
+    assert_eq!(*script.closed.lock().unwrap(), closed + 1);
     session.listing(&query(), None, 0, WANT, now).unwrap();
     assert_eq!(gets(), 2, "nothing cached survives a release");
 }
