@@ -1450,13 +1450,15 @@ fn image_host(image: ImageSystem, family: Family, programs: &[&str], lacking: &[
         let reply: String = group
             .iter()
             .map(|p| match (lacking.contains(p), image) {
-                (true, ImageSystem::RpmOstree | ImageSystem::Transactional) => format!("package {p} is not installed\n"),
-                (true, _) => String::new(),
+                (true, ImageSystem::RpmOstree | ImageSystem::Transactional) => format!("no package provides {p}\n"),
+                (true, ImageSystem::SteamOs) => format!("{p}\n"),
+                (true, ImageSystem::Abroot) | (false, ImageSystem::SteamOs) => String::new(),
                 (false, ImageSystem::Abroot) => format!("{p} ii \n"),
-                (false, ImageSystem::SteamOs) => format!("{p} 1.0-1\n"),
-                (false, _) => format!("{p}\n"),
+                (false, _) => format!("{p}-1.0-1.x86_64\n"),
             })
             .collect();
+        // Nothing else provides power-profiles-daemon's role here.
+        let reply = if image.query_argv(&group).iter().any(|a| a == "ppd-service") { format!("{reply}no package provides ppd-service\n") } else { reply };
         host.stdout.insert(image.query_argv(&group).join(" "), reply);
     }
     host

@@ -130,16 +130,32 @@ impl ImageSystem {
     }
 
     /// argv asking which of `packages` the running image has, read by
-    /// [`missing_packages`] (run with `LC_ALL=C`, as the user).
+    /// [`missing_packages`] (run with `LC_ALL=C`, as the user). rpm and
+    /// pacman are asked what *provides* each name, so a replacement the
+    /// image ships under another name counts (Bazzite's `terra-bluez`
+    /// provides `bluez`); layering the original would conflict with it.
+    /// Packages that share a role ask for it too ([`SHARED_ROLES`]).
     pub fn query_argv<S: AsRef<str>>(self, packages: &[S]) -> Vec<String> {
         let prefix: &[&str] = match self {
-            ImageSystem::RpmOstree | ImageSystem::Transactional => &["rpm", "-q", "--qf", "%{NAME}\\n"],
+            ImageSystem::RpmOstree | ImageSystem::Transactional => &["rpm", "-q", "--whatprovides"],
             ImageSystem::Abroot => &["dpkg-query", "-W", "-f", "${Package} ${db:Status-Abbrev}\\n"],
-            ImageSystem::SteamOs => &["pacman", "-Q"],
+            // `-T`: prints the names nothing installed provides.
+            ImageSystem::SteamOs => &["pacman", "-T"],
         };
-        prefix.iter().map(|a| a.to_string()).chain(packages.iter().map(|p| p.as_ref().to_string())).collect()
+        let roles = SHARED_ROLES.iter().filter(|(p, _)| self.is_rpm() && packages.iter().any(|q| q.as_ref() == *p)).map(|(_, role)| role.to_string());
+        prefix.iter().map(|a| a.to_string()).chain(packages.iter().map(|p| p.as_ref().to_string())).chain(roles).collect()
+    }
+
+    fn is_rpm(self) -> bool {
+        matches!(self, ImageSystem::RpmOstree | ImageSystem::Transactional)
     }
 }
+
+/// rpm capabilities several packages provide exclusively, by the package
+/// in Mandara's tables: when something else provides the role, that
+/// package would conflict with it. Fedora's tuned-ppd (Bazzite, and Fedora
+/// 41 and newer) provides `ppd-service`, power-profiles-daemon's D-Bus API.
+pub const SHARED_ROLES: &[(&str, &str)] = &[("power-profiles-daemon", "ppd-service")];
 
 /// The repository query that says which packages an rpm-ostree system can
 /// layer: dnf reads the same repositories (as the user, from its own cache).
@@ -164,25 +180,36 @@ pub fn available_packages(stdout: &str) -> Vec<&str> {
     stdout.lines().map(str::trim).filter(|l| !l.is_empty() && !l.contains(char::is_whitespace)).collect()
 }
 
-/// Which of `wanted` [`ImageSystem::query_argv`]'s output doesn't list as
-/// installed. `rpm -q` prints installed names (and "package X is not
-/// installed" for the others), `dpkg-query` `name ii`, `pacman -Q`
-/// `name version`.
+/// Which of `wanted` [`ImageSystem::query_argv`]'s output says the image
+/// lacks. `rpm -q --whatprovides` prints "no package provides X" for those
+/// (a package whose role something else provides isn't lacking),
+/// `pacman -T` prints their names, and `dpkg-query` lists the installed
+/// ones as `name ii`.
 pub fn missing_packages<'a>(system: ImageSystem, stdout: &str, wanted: &[&'a str]) -> Vec<&'a str> {
-    let installed: Vec<&str> = stdout
-        .lines()
-        .filter_map(|line| {
-            let mut words = line.split_whitespace();
-            let name = words.next()?;
-            match system {
-                ImageSystem::RpmOstree | ImageSystem::Transactional => (name != "package").then_some(name),
-                ImageSystem::Abroot => words.next().is_some_and(|status| status.starts_with("ii")).then_some(name),
-                ImageSystem::SteamOs => Some(name),
-            }
-        })
-        .collect();
-    wanted.iter().copied().filter(|p| !installed.contains(p)).collect()
+    match system {
+        ImageSystem::RpmOstree | ImageSystem::Transactional => {
+            let unprovided: Vec<&str> = stdout.lines().filter_map(|l| l.trim().strip_prefix(RPM_NOTHING_PROVIDES)).map(str::trim).collect();
+            let lacks = |name: &str| unprovided.contains(&name);
+            wanted.iter().copied().filter(|p| lacks(p) && SHARED_ROLES.iter().filter(|(q, _)| q == p).all(|(_, role)| lacks(role))).collect()
+        }
+        ImageSystem::SteamOs => {
+            let unprovided: Vec<&str> = stdout.lines().map(str::trim).collect();
+            wanted.iter().copied().filter(|p| unprovided.contains(p)).collect()
+        }
+        ImageSystem::Abroot => {
+            let installed: Vec<&str> = stdout.lines().filter_map(|line| {
+                let mut words = line.split_whitespace();
+                let name = words.next()?;
+                words.next().is_some_and(|status| status.starts_with("ii")).then_some(name)
+            }).collect();
+            wanted.iter().copied().filter(|p| !installed.contains(p)).collect()
+        }
+    }
 }
+
+/// How `rpm -q --whatprovides` reports a name nothing installed provides
+/// (with `LC_ALL=C`).
+const RPM_NOTHING_PROVIDES: &str = "no package provides ";
 
 /// What `rpm-ostree status --json` says about the next boot.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -286,14 +313,30 @@ mod tests {
     #[test]
     fn missing_packages_from_each_query() {
         let wanted = ["fontconfig", "greetd", "cage"];
-        let rpm = "fontconfig\npackage greetd is not installed\npackage cage is not installed\n";
-        assert_eq!(ImageSystem::RpmOstree.query_argv(&wanted), ["rpm", "-q", "--qf", "%{NAME}\\n", "fontconfig", "greetd", "cage"]);
+        let rpm = "fontconfig-2.18.3-2.fc45.x86_64\nno package provides greetd\nno package provides cage\n";
+        assert_eq!(ImageSystem::RpmOstree.query_argv(&wanted), ["rpm", "-q", "--whatprovides", "fontconfig", "greetd", "cage"]);
         assert_eq!(missing_packages(ImageSystem::RpmOstree, rpm, &wanted), ["greetd", "cage"]);
-        assert_eq!(missing_packages(ImageSystem::Transactional, "fontconfig\ngreetd\ncage\n", &wanted), Vec::<&str>::new());
+        assert_eq!(missing_packages(ImageSystem::Transactional, "fontconfig-1\ngreetd-1\ncage-1\n", &wanted), Vec::<&str>::new());
         // dpkg-query lists removed-but-configured packages as `rc`.
         let dpkg = "fontconfig ii \ngreetd rc \n";
         assert_eq!(missing_packages(ImageSystem::Abroot, dpkg, &wanted), ["greetd", "cage"]);
-        assert_eq!(missing_packages(ImageSystem::SteamOs, "fontconfig 2.15.0-1\n", &wanted), ["greetd", "cage"]);
+        assert_eq!(ImageSystem::SteamOs.query_argv(&wanted), ["pacman", "-T", "fontconfig", "greetd", "cage"]);
+        assert_eq!(missing_packages(ImageSystem::SteamOs, "greetd\ncage\n", &wanted), ["greetd", "cage"]);
+    }
+
+    /// Bazzite, as `rpm -q --whatprovides` answered in its image: terra's
+    /// bluez and wireplumber stand in for Fedora's, and tuned-ppd provides
+    /// power-profiles-daemon's role, so none of the three is layered.
+    #[test]
+    fn replacements_and_shared_roles_count_as_installed() {
+        let wanted = ["bluez", "wireplumber", "power-profiles-daemon", "gnome-keyring"];
+        assert_eq!(ImageSystem::RpmOstree.query_argv(&wanted), ["rpm", "-q", "--whatprovides", "bluez", "wireplumber", "power-profiles-daemon", "gnome-keyring", "ppd-service"]);
+        let bazzite = "terra-bluez-5.87+1.git8750129efca8-2.fc45.x86_64\nterra-wireplumber-0.5.18-2.fc45.x86_64\nno package provides power-profiles-daemon\nno package provides gnome-keyring\ntuned-ppd-2.28.0-1.fc45.noarch\n";
+        assert_eq!(missing_packages(ImageSystem::RpmOstree, bazzite, &wanted), ["gnome-keyring"]);
+        // Silverblue: no tuned-ppd either, so power-profiles-daemon is layered.
+        let silverblue = "bluez-5.84-1.fc44.x86_64\nwireplumber-0.5.12-1.fc44.x86_64\nno package provides power-profiles-daemon\ngnome-keyring-48.0-1.fc44.x86_64\nno package provides ppd-service\n";
+        assert_eq!(missing_packages(ImageSystem::RpmOstree, silverblue, &wanted), ["power-profiles-daemon"]);
+        assert_eq!(ImageSystem::Abroot.query_argv(&["power-profiles-daemon"]).last().unwrap(), "power-profiles-daemon", "dpkg has no rpm roles");
     }
 
     #[test]
