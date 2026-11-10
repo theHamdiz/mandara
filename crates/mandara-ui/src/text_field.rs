@@ -173,6 +173,32 @@ impl TextField {
         self.dirty = false;
     }
 
+    /// The caret's byte offset into [`Self::value`].
+    pub fn caret(&self) -> usize {
+        self.caret
+    }
+
+    /// Moves the caret to byte `caret` (clamped to the text and a
+    /// character boundary), clearing the selection.
+    pub fn set_caret(&mut self, caret: usize) {
+        self.caret = floor_boundary(&self.value, caret);
+        self.anchor = None;
+    }
+
+    /// Whether the text was edited since it was last committed or set.
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    /// Puts back text typed earlier (a kept draft, [`crate::card_drafts`])
+    /// with its caret, and whether it was still uncommitted, so Enter,
+    /// Escape and a click outside act on it as they would have.
+    pub fn restore(&mut self, value: String, caret: usize, dirty: bool) {
+        self.value = value;
+        self.set_caret(caret);
+        self.dirty = dirty;
+    }
+
     /// The caret / selection over the current value (clamped: callers may
     /// replace `value` directly).
     fn edit(&mut self) -> Edit {
@@ -221,7 +247,7 @@ pub struct Edit {
     pub anchor: Option<usize>,
 }
 
-fn floor_boundary(s: &str, mut i: usize) -> usize {
+pub(crate) fn floor_boundary(s: &str, mut i: usize) -> usize {
     i = i.min(s.len());
     while !s.is_char_boundary(i) {
         i -= 1;
