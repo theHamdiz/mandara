@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.25.0 — 2026-11-10
+
 Mandara runs on FreeBSD: every release now has a FreeBSD build, with its
 system readings, updates and installer. On Arch, *Update all* updates your
 AUR packages inside Mandara too. The System monitor widget shows NVIDIA and
