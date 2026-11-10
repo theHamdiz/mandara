@@ -17,6 +17,7 @@ use serde_json::json;
 
 use super::fn_view;
 use crate::bidi::Bidi as _;
+use crate::card_drafts::TextDraft;
 use crate::icons::{any_icon, icon};
 use crate::kit::{card, icon_button, reveal, text, tokens};
 use crate::productivity::{Productivity, Todo, productivity};
@@ -225,13 +226,58 @@ enum Menu {
     Task(u64),
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Naming {
     New,
     Rename(u64),
 }
 
 type Ui = Rc<RefCell<TodoUi>>;
+
+/// What the to-do card was typing when the sidebar let it go
+/// ([`crate::card_drafts`]): the new task, and a list being named with
+/// its name. The shown list is the model's and stays anyway.
+#[derive(Debug, PartialEq, Eq)]
+struct TodoDraft {
+    task: Option<TextDraft>,
+    naming: Option<(Naming, TextDraft)>,
+}
+
+impl TodoDraft {
+    /// `None` when nothing was typed.
+    fn new(task: Option<TextDraft>, naming: Option<Naming>, name: Option<TextDraft>) -> Option<Self> {
+        let naming = naming.zip(name);
+        (task.is_some() || naming.is_some()).then_some(Self { task, naming })
+    }
+
+    /// The list name being typed, unless the list it renames is gone.
+    fn naming(&mut self, book: &TodoBook) -> Option<(Naming, TextDraft)> {
+        self.naming.take().filter(|(naming, _)| match naming {
+            Naming::New => true,
+            Naming::Rename(id) => book.list(*id).is_some(),
+        })
+    }
+}
+
+/// The card's fields, saved into a [`TodoDraft`] as its view is released
+/// and put back into the next card on the same output.
+fn keep_drafts(view: &gpui::AnyView, card: PanelCx, ui: Ui, field: Entity<TextField>, name_field: Entity<TextField>, cx: &mut App) {
+    if let Some(mut draft) = crate::card_drafts::take::<TodoDraft>(card.monitor(), cx) {
+        if let Some(task) = draft.task.take() {
+            field.update(cx, |f, _| task.restore(f));
+        }
+        if let Some((naming, name)) = draft.naming(&productivity(cx).read(cx).book) {
+            name_field.update(cx, |f, _| name.restore(f));
+            ui.borrow_mut().naming = Some(naming);
+        }
+    }
+    crate::card_drafts::on_release(view, cx, move |cx| {
+        let task = field.update(cx, |f, _| TextDraft::take(f));
+        let naming = ui.borrow().naming;
+        let name = naming.and_then(|_| name_field.update(cx, |f, _| TextDraft::take(f)));
+        crate::card_drafts::keep(card.monitor(), TodoDraft::new(task, naming, name), cx);
+    });
+}
 
 /// Re-renders every to-do surface (their UI state lives outside GPUI).
 fn refresh(cx: &mut App) {
@@ -821,12 +867,14 @@ fn name_input(ui: &Ui, cx: &mut App) -> Entity<TextField> {
     })
 }
 
-/// One surface (card or panel) of the to-do list.
-fn surface(rows_key: &'static str, rows_default: i64, ids: &'static Ids, in_card: bool, reveal_cx: Option<PanelCx>, window: &mut Window, cx: &mut App) -> gpui::AnyView {
+/// One surface (card or panel) of the to-do list. A sidebar card's build
+/// (`drafts`: its context) keeps what was typed across the sidebar's close.
+fn surface(rows_key: &'static str, rows_default: i64, ids: &'static Ids, in_card: bool, reveal_cx: Option<PanelCx>, drafts: Option<PanelCx>, window: &mut Window, cx: &mut App) -> gpui::AnyView {
     let ui: Ui = Rc::default();
     let field = task_input(cx);
     let name_field = name_input(&ui, cx);
-    fn_view(
+    let kept = drafts.map(|card| (card, ui.clone(), field.clone(), name_field.clone()));
+    let view = fn_view(
         None,
         move |palette, window, cx| {
             let prefs = prefs(cx, rows_key, rows_default);
@@ -836,7 +884,11 @@ fn surface(rows_key: &'static str, rows_default: i64, ids: &'static Ids, in_card
         },
         window,
         cx,
-    )
+    );
+    if let Some((card, ui, field, name_field)) = kept {
+        keep_drafts(&view, card, ui, field, name_field, cx);
+    }
+    view
 }
 
 /// The list a command names (`a` index `i`), or an error naming the lists.
@@ -896,8 +948,8 @@ pub fn register(r: &mut PluginRegistry) {
             window,
             cx,
         );
-        let panel = surface("panel_rows", DEFAULT_PANEL_ROWS, &PANEL_IDS, false, Some(panel_cx.clone()), window, cx);
-        let sidebar = surface("card_rows", DEFAULT_CARD_ROWS, &CARD_IDS, true, None, window, cx);
+        let panel = surface("panel_rows", DEFAULT_PANEL_ROWS, &PANEL_IDS, false, Some(panel_cx.clone()), None, window, cx);
+        let sidebar = surface("card_rows", DEFAULT_CARD_ROWS, &CARD_IDS, true, None, panel_cx.is_card().then(|| panel_cx.clone()), window, cx);
         PluginInstance {
             bar: Some(bar),
             panel: Some(PanelSpec { view: panel, size: Rc::new(Cell::new(size(px(PANEL_W_PX), px(PANEL_H_PX)))) }),
@@ -905,7 +957,8 @@ pub fn register(r: &mut PluginRegistry) {
             ..PluginInstance::empty()
         }
     });
-    // Lists live in the productivity model; the card's fields and menu state are its own.
+    // Lists live in the productivity model; the card's fields and menu
+    // state are its own, and what was typed in them is kept as a draft.
     r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
     r.command(
         ID,
@@ -1071,4 +1124,49 @@ pub fn register(r: &mut PluginRegistry) {
         .arg(ArgSpec::required("list", ArgKind::String, mandara_i18n::tk("list name or id, or all")))
         .example("todo lists show Work"),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn typed(text: &str) -> Option<TextDraft> {
+        TextDraft::new(text.to_owned(), text.len(), true)
+    }
+
+    #[test]
+    fn a_card_with_nothing_typed_keeps_no_draft() {
+        assert_eq!(TodoDraft::new(None, None, None), None);
+        assert_eq!(TodoDraft::new(None, Some(Naming::New), None), None, "an empty name field is no draft");
+        assert_eq!(TodoDraft::new(None, None, typed("stale")), None, "a name with no list being named is no draft");
+    }
+
+    #[test]
+    fn a_half_typed_task_and_list_name_come_back() {
+        let mut book = TodoBook::new(Vec::new(), Vec::new());
+        let work = book.add_list("Work", None, None).unwrap();
+        let mut d = TodoDraft::new(typed("Buy br"), Some(Naming::Rename(work)), typed("Wor")).unwrap();
+        assert_eq!(d.task.as_ref().map(TextDraft::text), Some("Buy br"));
+        let (naming, name) = d.naming(&book).unwrap();
+        assert_eq!((naming, name.text()), (Naming::Rename(work), "Wor"));
+        assert_eq!(d.naming(&book), None, "taken once");
+    }
+
+    #[test]
+    fn renaming_a_list_deleted_meanwhile_is_dropped() {
+        let book = TodoBook::new(Vec::new(), Vec::new());
+        let mut d = TodoDraft::new(typed("task"), Some(Naming::Rename(77)), typed("Gone")).unwrap();
+        assert_eq!(d.naming(&book), None);
+        let mut d = TodoDraft::new(None, Some(Naming::New), typed("Groceries")).unwrap();
+        assert_eq!(d.naming(&book).map(|(n, t)| (n, t.text().to_owned())), Some((Naming::New, "Groceries".to_owned())));
+    }
+
+    #[test]
+    fn a_typical_draft_is_small() {
+        // One output's slot: its key, the draft and its text.
+        let slot = std::mem::size_of::<(Box<str>, TodoDraft)>();
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(slot, 80);
+        assert!(slot <= 80, "{slot} bytes");
+    }
 }
