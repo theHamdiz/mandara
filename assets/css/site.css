@@ -231,7 +231,7 @@ h1, h2, h3 { text-wrap: balance; }
 }
 .hero-arabic {
   position: absolute; z-index: 0; top: clamp(90px, 9vw, 130px); right: var(--gutter); font-size: clamp(96px, 12.5vw, 210px); line-height: 1; font-weight: 900;
-  color: color-mix(in oklab, var(--muted) 62%, var(--ground)); pointer-events: none; user-select: none; transition: color var(--theme-time) var(--ease);
+  color: color-mix(in oklab, var(--soft) 55%, transparent); pointer-events: none; user-select: none; transition: color var(--theme-time) var(--ease);
 }
 .hero-copy { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 28px; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
@@ -558,23 +558,23 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .nix pre { margin: 0; padding: 14px 18px; border-radius: var(--r-m); background: var(--ground); color: var(--ink); overflow-x: auto; }
 .nix .text-link { color: var(--on-soft); margin-top: auto; }
 .bsd { grid-column: span 4; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 14px; padding: clamp(20px, 3vw, 36px); border-radius: var(--r-xl); background: color-mix(in oklab, var(--second) 22%, var(--tile)); border: 1px solid var(--rim); }
-.bsd-shape { position: absolute; width: 190px; right: -50px; top: -50px; color: color-mix(in oklab, var(--second) 14%, transparent); }
+.bsd-shape { position: absolute; width: 190px; right: -50px; top: -50px; color: color-mix(in oklab, var(--second) 26%, transparent); }
 .bsd-shape use { fill: currentColor; }
-.bsd-kicker { font-size: 14px; font-weight: 600; letter-spacing: .02em; color: color-mix(in oklab, var(--second) 55%, var(--ink)); }
+.bsd-kicker { font-size: 14px; font-weight: 600; letter-spacing: .02em; color: color-mix(in oklab, var(--second) 40%, var(--ink)); }
 .bsd .display-3 { margin-top: -8px; }
 .bsd pre { margin: 0; padding: 14px 18px; border-radius: var(--r-m); background: var(--ground); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; position: relative; }
 .bsd p code, .bsd-facts code { font-size: .88em; padding: 1px 6px; border-radius: 6px; background: var(--ground); }
 .bsd-facts { display: flex; flex-direction: column; gap: 6px; color: color-mix(in oklab, var(--muted) 45%, var(--ink)); font-size: 15px; }
 .bsd-facts li { padding-left: 18px; position: relative; }
 .bsd-facts li::before { content: ""; position: absolute; left: 0; top: .6em; width: 8px; height: 8px; border-radius: 3px; background: var(--second); }
-.bsd .text-link, .imm .text-link { color: color-mix(in oklab, var(--accent) 50%, var(--ink)); }
+.bsd .text-link, .imm .text-link { color: color-mix(in oklab, var(--accent) 40%, var(--ink)); }
 .bsd .text-link { margin-top: auto; }
 .imm { grid-column: span 4; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 14px; padding: clamp(20px, 3vw, 36px); border-radius: var(--r-xl); background: color-mix(in oklab, var(--third) 20%, var(--tile)); border: 1px solid var(--rim); }
-.imm-shape { position: absolute; width: 180px; right: -50px; bottom: -50px; color: color-mix(in oklab, var(--third) 13%, transparent); }
+.imm-shape { position: absolute; width: 180px; right: -50px; bottom: -50px; color: color-mix(in oklab, var(--third) 24%, transparent); }
 .imm-shape use { fill: currentColor; }
 .imm .display-3 em { color: color-mix(in oklab, var(--third) 70%, var(--ink)); }
 .imm p code { font-size: .88em; padding: 1px 6px; border-radius: 6px; background: var(--ground); }
-.imm-facts { display: flex; flex-direction: column; gap: 6px; color: color-mix(in oklab, var(--muted) 35%, var(--ink)); font-size: 15px; }
+.imm-facts { display: flex; flex-direction: column; gap: 6px; color: color-mix(in oklab, var(--muted) 20%, var(--ink)); font-size: 15px; }
 .imm-facts li { padding-left: 18px; position: relative; }
 .imm-facts li::before { content: ""; position: absolute; left: 0; top: .6em; width: 8px; height: 8px; border-radius: 50%; background: var(--third); }
 .imm .text-link { margin-top: auto; }
@@ -617,7 +617,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .sea-sun, .sea-point, .sea-far, .sea-mid, .sea-near { transition: fill var(--theme-time) var(--ease); }
 .foot-word {
   margin: 8px 0 -0.32em; font-size: clamp(120px, 24vw, 380px); line-height: 1; font-weight: 900; text-align: center; letter-spacing: 0;
-  background: linear-gradient(180deg, color-mix(in oklab, var(--muted) 62%, var(--ground)), color-mix(in oklab, var(--muted) 0%, transparent) 88%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  background: linear-gradient(180deg, var(--soft), color-mix(in oklab, var(--soft) 0%, transparent) 88%); -webkit-background-clip: text; background-clip: text; color: transparent;
   user-select: none;
 }
 
