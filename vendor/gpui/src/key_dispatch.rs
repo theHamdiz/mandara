@@ -163,6 +163,16 @@ impl DispatchTree {
         self.nodes.len()
     }
 
+    /// Mandara patch: frees the spare room a larger frame left behind.
+    pub fn shrink_to_fit(&mut self) {
+        self.node_stack.shrink_to_fit();
+        self.context_stack.shrink_to_fit();
+        self.view_stack.shrink_to_fit();
+        self.nodes.shrink_to_fit();
+        self.focusable_node_ids.shrink_to_fit();
+        self.view_node_ids.shrink_to_fit();
+    }
+
     pub fn push_node(&mut self) -> DispatchNodeId {
         let parent = self.node_stack.last().copied();
         let node_id = DispatchNodeId(self.nodes.len());

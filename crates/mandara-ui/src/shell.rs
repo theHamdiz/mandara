@@ -1768,12 +1768,15 @@ impl Render for ShellView {
             self.tabs.on_hidden();
             // Its cards go once it stays closed.
             if self.tabs.is_live() && self.sidebar_release.is_none() {
-                self.sidebar_release = Some(cx.spawn(async move |this, cx| {
+                self.sidebar_release = Some(cx.spawn_in(window, async move |this, cx| {
                     cx.background_executor().timer(crate::sidebar_tabs::RELEASE_AFTER).await;
-                    let _ = this.update(cx, |this, cx| {
+                    let _ = this.update_in(cx, |this, window, cx| {
                         this.sidebar_release = None;
-                        if this.sidebar.value() <= HIDDEN_EPSILON {
-                            this.tabs.release(cx);
+                        // The cards' frames grew this window's frame buffers and
+                        // layout tree (a Sudoku board is thousands of elements):
+                        // give that room back too, before the allocator trim.
+                        if this.sidebar.value() <= HIDDEN_EPSILON && this.tabs.release(cx) {
+                            window.shrink_frame_buffers(cx);
                         }
                     });
                 }));

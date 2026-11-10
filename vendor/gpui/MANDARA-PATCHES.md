@@ -259,6 +259,25 @@ Behaviour is otherwise unchanged: an empty entry and a missing one mean the
 same to every reader of the map. `app::test::notifying_a_dropped_entity_leaves_no_trace`
 covers both.
 
+## 12. Giving back a large frame's room (`window.rs`, `arena.rs`, `taffy.rs`, `scene.rs`, `key_dispatch.rs`, `bounds_tree.rs`)
+
+A window keeps the capacity its largest frame needed: the element arena's
+1 MiB chunks, the layout tree's node storage, the dispatch tree, the scene's
+primitive lists and the frame's listener and hitbox lists are cleared every
+frame but never shrink. That is right while a surface shows (no allocation per
+frame), but after Mandara's sidebar closes the room its cards needed (a Sudoku
+board is thousands of elements) stayed for good, about 1.2 MiB for one card.
+
+`Window::shrink_frame_buffers(cx)` frees that spare room once, at a lifecycle
+boundary the host chooses: both frames shrink to their contents
+(`Frame::shrink_to_fit`, with `DispatchTree`, `Scene` and `BoundsTree`
+helpers), the layout engine starts from a fresh tree (it is rebuilt at the
+start of every frame anyway) and the arena keeps only its first chunk
+(`Arena::shrink`, which does nothing while a draw holds it or anything is
+allocated in it). It does nothing during a draw. Frames are unchanged
+otherwise, and a surface that shows again grows the room back on its first
+frame.
+
 ## Packaging changes
 
 `Cargo.toml` spells out the workspace-inherited fields and dependencies with

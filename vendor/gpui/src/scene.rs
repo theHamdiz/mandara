@@ -72,6 +72,21 @@ impl Scene {
         self.paint_operations.len()
     }
 
+    /// Mandara patch: frees the spare room a larger frame left behind.
+    pub fn shrink_to_fit(&mut self) {
+        self.paint_operations.shrink_to_fit();
+        self.primitive_bounds.shrink_to_fit();
+        self.layer_stack.shrink_to_fit();
+        self.paths.shrink_to_fit();
+        self.shadows.shrink_to_fit();
+        self.quads.shrink_to_fit();
+        self.underlines.shrink_to_fit();
+        self.monochrome_sprites.shrink_to_fit();
+        self.subpixel_sprites.shrink_to_fit();
+        self.polychrome_sprites.shrink_to_fit();
+        self.surfaces.shrink_to_fit();
+    }
+
     pub fn push_layer(&mut self, bounds: Bounds<ScaledPixels>) {
         let order = self.primitive_bounds.insert(bounds);
         self.layer_stack.push(order);

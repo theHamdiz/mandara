@@ -113,6 +113,13 @@ where
         self.search_stack.clear();
     }
 
+    /// Mandara patch: frees the spare room a larger frame left behind.
+    pub fn shrink_to_fit(&mut self) {
+        self.nodes.shrink_to_fit();
+        self.insert_path.shrink_to_fit();
+        self.search_stack.shrink_to_fit();
+    }
+
     /// Inserts bounds into the tree and returns its assigned ordering.
     ///
     /// The ordering is one greater than the maximum ordering of any
