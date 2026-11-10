@@ -841,8 +841,9 @@ empty bar space opens the desktop's menu itself.
 `menu_rail_height = "stretch"` (Bars → Drop-down panels → Main menu →
 *Rail height*) makes the main menu's rail as tall as the panel beside it. Its buttons stay one group at the top with their usual
 spacing, and the rest of the rail is its own surface; with tile patterns
-on (`panels.menu_patterns`) it wears the tiles' wash and a mashrabiya
-ornament in its far corner. Beside a panel no taller than its buttons it
+on (`panels.menu_patterns`) a mashrabiya lattice in the tiles' accent
+rises from its foot over a soft wash and fades out before the buttons.
+Beside a panel no taller than its buttons it
 looks like the hugging rail.
 
 ## Looks

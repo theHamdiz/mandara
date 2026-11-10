@@ -475,8 +475,8 @@ pub enum MenuRailHeight {
     #[default]
     Hug,
     /// As tall as the panel beside it: the buttons stay one tight group at
-    /// the top and the rest of the rail is its own surface, with the tiles'
-    /// ornament in its far corner.
+    /// the top and the rest of the rail is its own surface, with a
+    /// mashrabiya lattice rising from its foot (while tile patterns are on).
     Stretch,
 }
 
