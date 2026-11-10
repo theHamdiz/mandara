@@ -315,7 +315,8 @@ UPower, AccountsService, GeoClue, BSDisks and GNOME Keyring. Then it:
   seat (log in again afterwards);
 - once Mandara Login is set up, adds the login screen's user to
   `operator`, so its Sleep, Restart and Shut Down buttons work without
-  ConsoleKit2;
+  ConsoleKit2 (`operator` can also read raw disks; see
+  [Login screen → FreeBSD](login-manager.md#freebsd) for the trade-off);
 - puts the admin helper in `/usr/local/lib/mandara` (owned by
   `root:wheel`), which Studio and the Updates panel run through pkexec.
 

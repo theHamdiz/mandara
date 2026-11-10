@@ -172,7 +172,9 @@ pub const FREEBSD_SERVICES: &[&str] = &["dbus", "seatd"];
 /// The group seatd hands its socket to (`seatd_args="-g video"`).
 pub const FREEBSD_SEAT_GROUP: &str = "video";
 /// FreeBSD lets this group run `shutdown` and suspend through `/dev/acpi`,
-/// so the login screen's power buttons work without ConsoleKit2.
+/// so the login screen's power buttons work without ConsoleKit2. It can
+/// also read raw disk devices; docs/login-manager.md#freebsd states that
+/// trade-off and how to undo the membership.
 pub const FREEBSD_POWER_GROUP: &str = "operator";
 /// greetd's config on FreeBSD (its `[default_session] user` is the
 /// login screen's user).

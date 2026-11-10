@@ -193,9 +193,11 @@ the same password dialog and progress:
   them after the packages. A patch to the kernel suggests a restart.
   Where ZFS boot environments work, freebsd-update snapshots the running
   system first, so you can boot back into it.
-- **A packaged base** (FreeBSD 15's installer and VM images install the
-  base system as `FreeBSD-*` packages): pkg updates the base system along
-  with everything else, from the `FreeBSD-base` repository, so the panel
+- **A packaged base** (the base system installed as `FreeBSD-*` packages:
+  the default in FreeBSD 15's VM and cloud images, and the installer's
+  *Packages* choice; its *Distribution Sets* choice gives a traditional
+  base, which freebsd-update patches as above): pkg updates the base
+  system along with everything else, from the `FreeBSD-base` repository, so the panel
   counts those updates too and freebsd-update, which refuses such a
   system, never runs. A new kernel (`FreeBSD-kernel-generic`) suggests a
   restart. Mandara tells the two kinds apart the way freebsd-update does:
@@ -211,7 +213,7 @@ with the same warning; plan the upgrade to a supported release
 repository on a packaged base), which Mandara leaves to you. In a
 terminal, the same update is `sudo pkg upgrade` and
 `sudo freebsd-update fetch install` (only `sudo pkg upgrade` on a packaged
-base).
+base; `pkg which /usr/bin/uname` tells you which kind you have).
 
 The admin helper runs these programs only from root's own folders
 (`/usr/local/sbin/pkg`, `/usr/sbin/freebsd-update`), and pkexec comes with
