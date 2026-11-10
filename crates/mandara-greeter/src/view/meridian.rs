@@ -47,7 +47,17 @@ pub(super) const WORD_PX: f32 = 11.0;
 const WORD_ALPHA: f32 = 0.7;
 /// The placeholder's and the status's tone.
 const SOFT_TONE: f32 = 0.68;
-const POWER_GAP: f32 = 24.0;
+pub(super) const POWER_GAP: f32 = 24.0;
+/// A second row of end words sits this many word sizes lower.
+const WORD_ROW: f32 = 1.9;
+
+/// Screens narrower than 3:2 (portrait, 4:3, 5:4) have no room for the
+/// power words above the line's end.
+const NARROW_ASPECT: f32 = 1.5;
+
+pub(super) fn narrow(vw: f32, vh: f32) -> bool {
+    vw < vh * NARROW_ASPECT
+}
 /// The name's weight, its descent below the line (share of its size),
 /// and between it and the typed characters.
 const NAME_WEIGHT: f32 = 300.0;
@@ -194,6 +204,10 @@ impl GreeterView {
         let end = |el: gpui::Div, x: f32| if f.rtl { el.left(px(x)) } else { el.right(px(x)) };
         let above = |el: gpui::Div| el.absolute().bottom(px(half + WORD_GAP * k));
         let below = |el: gpui::Div| el.absolute().top(px(half + WORD_GAP * k));
+        // On a narrow screen the typed line reaches the end words: power
+        // and the date step under the line, one row each.
+        let narrow = narrow(vw, f.vh);
+        let second_row = |el: gpui::Div| el.absolute().top(px(half + (WORD_GAP + WORD_PX * WORD_ROW) * k));
         let mut band = div().relative().w(px(vw)).h(px(2.0 * half));
 
         // The session, at the start, above the line; its list opens upward.
@@ -267,13 +281,14 @@ impl GreeterView {
                 let label = words.map(|w| w.power[i].clone()).unwrap_or_default();
                 row = row.child(div().id(action.method()).cursor_pointer().hover(|st| st.opacity(1.0)).child(word(label).hover(|st| st.text_color(ink))).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.power(action, cx))));
             }
-            band = band.child(end(above(div()), margin).child(row));
+            band = band.child(end(if narrow { below(div()) } else { above(div()) }, margin).child(row));
         }
         // The date at the end, under the line (the vast face leaves it here).
         if cfg.clock.face != ClockFace::Digits && cfg.placement(Element::Date).visible {
             let d = &cfg.date;
             let text = words.map(|w| w.date.1.clone()).unwrap_or_default();
-            band = band.child(end(below(div()), margin).child(word(text).text_size(px(d.size * k)).text_color(tone(cfg, d.opacity))));
+            let place = if narrow && !cfg.placement(Element::Power).visible { second_row(div()) } else { below(div()) };
+            band = band.child(end(place, margin).child(word(text).text_size(px(d.size * k)).text_color(tone(cfg, d.opacity))));
         }
 
         // The name and the typed characters, from the golden point.

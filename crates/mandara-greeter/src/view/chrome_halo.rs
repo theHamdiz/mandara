@@ -29,8 +29,8 @@ use crate::config::{Element, GreeterConfig};
 /// The arcs' and the glows' OKLCH lightness and chroma.
 const ARC_LIGHTNESS: f32 = 0.85;
 const ARC_CHROMA: f32 = 0.13;
-const GLOW_LIGHTNESS: f32 = 0.6;
-const GLOW_CHROMA: f32 = 0.13;
+const GLOW_LIGHTNESS: f32 = 0.52;
+const GLOW_CHROMA: f32 = 0.15;
 /// The deep ink of the core and the field (lightness, chroma; the hue is
 /// the theme surface's).
 const CORE_INK: (f32, f32) = (0.165, 0.03);
@@ -141,10 +141,10 @@ pub(super) fn prism_overlay(f: &Frame, p: &MandaraPalette, shift: (f32, f32)) ->
     let violet = p.secondary.rotate_hue(40.0);
     // Each glow on its own: overlapping complementary light would grey.
     let glows = [
-        (0.20 + 0.03 * wobble(97.0, 0.4), 0.72 + 0.03 * wobble(83.0, 1.2), 0.46, tint(p.primary, 0.26)),
-        (0.88 + 0.02 * wobble(113.0, 2.1), 0.14 + 0.03 * wobble(89.0, 0.7), 0.42, tint(p.secondary, 0.30)),
-        (0.74 + 0.03 * wobble(131.0, 3.9), 0.95 + 0.02 * wobble(101.0, 2.6), 0.38, tint(p.tertiary, 0.22)),
-        (0.40 + 0.03 * wobble(149.0, 5.2), 0.04 + 0.02 * wobble(107.0, 4.4), 0.32, tint(violet, 0.18)),
+        (0.16 + 0.03 * wobble(97.0, 0.4), 0.84 + 0.03 * wobble(83.0, 1.2), 0.40, tint(p.primary, 0.34)),
+        (0.92 + 0.02 * wobble(113.0, 2.1), 0.10 + 0.03 * wobble(89.0, 0.7), 0.48, tint(p.secondary, 0.62)),
+        (0.68 + 0.03 * wobble(131.0, 3.9), 1.0 + 0.02 * wobble(101.0, 2.6), 0.42, tint(p.tertiary, 0.52)),
+        (0.46 + 0.03 * wobble(149.0, 5.2), 0.0 + 0.02 * wobble(107.0, 4.4), 0.38, tint(violet, 0.46)),
     ];
     let hue = surface_hue(p);
     let mut root = div().absolute().top_0().left_0().w(px(vw)).h(px(vh)).bg(oklab_gradient(165.0, Color::oklcha(0.22, 0.05, hue, 0.0), Color::oklcha(0.05, 0.02, hue, 0.55)));
@@ -179,11 +179,14 @@ impl GreeterView {
         let t = if f.still { 0.0 } else { f.t };
         let spin = self.spin.value();
         let core = light(p.primary, p, GLOW_LIGHTNESS, GLOW_CHROMA);
+        // A pale champagne inside the ring (a deep tint at low alpha would
+        // read brown over the ink).
+        let pearl = light(p.primary, p, 0.86, 0.05);
         let centred = |size: f32| div().absolute().left(px((d - size) / 2.0)).top(px((d - size) / 2.0)).size(px(size)).rounded_full();
         let mut root = div().relative().flex_none().size(px(d)).flex().items_center().justify_center();
         // Light gathered behind the digits, stronger while typing.
         let bloom = d * 0.7;
-        root = root.child(centred(bloom).shadow(vec![glow(core.with_alpha(0.14 + 0.1 * typing).hsla(), d * 0.38, 0.0)]));
+        root = root.child(centred(bloom).shadow(vec![glow(pearl.with_alpha(0.07 + 0.07 * typing).hsla(), d * 0.38, 0.0)]));
         // The outer orbit and its satellite.
         let orbit = d * ORBIT_RATIO;
         let a = SATELLITE_START + t * SATELLITE_TURN + spin * 0.5;
@@ -205,7 +208,7 @@ impl GreeterView {
             .child(orbit_edge.absolute().left(px((d - orbit) / 2.0)).top(px((d - orbit) / 2.0)).size(px(orbit)).rounded_full().border_color(gpui::white().opacity(0.07)))
             .child(div().absolute().left(px(sx)).top(px(sy)).size(px(sat)).rounded_full().bg(gpui::white().opacity(0.85)).shadow(vec![glow(core.with_alpha(0.7).hsla(), sat * 3.0, 0.0)]));
         // The ring: a hairline with an inner glow.
-        let inner = core.with_lightness(0.75).with_alpha(0.2 + 0.18 * typing);
+        let inner = pearl.with_alpha(0.16 + 0.16 * typing);
         let inner = if flash > 0.0 { inner.mix(coral.with_alpha(0.5), flash) } else { inner };
         root = root.child(
             ring_edge
@@ -225,7 +228,7 @@ impl GreeterView {
             let tint = light(c, p, ARC_LIGHTNESS, ARC_CHROMA);
             let tint = if flash > 0.0 { tint.mix(coral, flash) } else { tint };
             let angle = (ARC_PHASES[i] + ARC_SPEEDS[i] * t).to_radians() + spin * (1.0 - 0.3 * i as f32);
-            root = root.child(arc().absolute().top_0().left_0().size(px(d)).text_color(tint.with_alpha(0.75 + 0.25 * typing).hsla()).with_transformation(Transformation::rotate(gpui::radians(angle))));
+            root = root.child(arc().absolute().top_0().left_0().size(px(d)).text_color(tint.with_alpha(0.9 + 0.1 * typing).hsla()).with_transformation(Transformation::rotate(gpui::radians(angle))));
         }
         // The time, and the date under it.
         let dc = &cfg.date;

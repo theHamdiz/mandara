@@ -335,12 +335,14 @@ fn led(d: f32, color: Hsla) -> gpui::Div {
 /// (coral for errors, amber for Caps Lock, the accent otherwise) and the
 /// message, from the field's start edge.
 pub(super) fn led_status(f: &Frame, k: f32, width: f32, status: Option<(Option<&'static str>, String, Hsla)>, error: bool, p: &MandaraPalette) -> AnyElement {
+    // The message wraps rather than cut off (the demo's hint is long);
+    // right-to-left text is cut instead, as wrapping it can strand a letter.
     div()
         .mt(px(STATUS_TOP * k))
-        .h(px(STATUS_H * k))
+        .min_h(px(STATUS_H * k))
         .w(px(width))
         .flex()
-        .items_center()
+        .items_start()
         .gap(px(8.0 * k))
         .when(f.rtl, |el| el.flex_row_reverse())
         .text_size(px(12.5 * k))
@@ -352,7 +354,7 @@ pub(super) fn led_status(f: &Frame, k: f32, width: f32, status: Option<(Option<&
             } else {
                 lit(p.primary).hsla()
             };
-            el.child(led(LED * k, light)).child(div().truncate().text_color(color).child(text))
+            el.child(div().h(px(STATUS_H * k * 0.8)).flex().items_center().child(led(LED * k, light))).child(div().flex_1().min_w(px(0.0)).line_height(px(STATUS_H * k * 0.8)).when(f.rtl, |el| el.truncate()).text_color(color).child(text))
         })
         .into_any_element()
 }
@@ -707,7 +709,8 @@ impl GreeterView {
             .font_family(f.mono_font.clone())
             .text_size(px(h * PROMPT_SHARE))
             .text_color(if focused { accent.hsla() } else { white.opacity(LABEL_ALPHA) })
-            .child(SharedString::new_static(if f.rtl { "‹" } else { "›" }));
+            // The shaper mirrors it in right-to-left text (Bidi_Mirrored).
+            .child(SharedString::new_static("›"));
         let shake = if is_pw { self.shake.value() * f.u } else { 0.0 };
         let bar = focused.then(|| {
             let el = div().absolute().top_0().bottom_0().w(px(snap(FOCUS_BAR * k, s).max(hair))).bg(if flash > 0.0 { coral.hsla() } else { accent.hsla() });

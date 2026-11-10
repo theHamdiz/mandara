@@ -1067,7 +1067,7 @@ impl GreeterConfig {
                 self.background.user_wallpaper = false;
                 self.background.orbs = false;
                 self.background.dim = 0.0;
-                self.background.vignette = 0.45;
+                self.background.vignette = 0.3;
                 self.background.grain = 0.6;
                 self.background.parallax = 8.0;
                 self.background.overlay = Overlay::Prism;
@@ -1141,7 +1141,7 @@ impl GreeterConfig {
                 for pl in &mut self.layout {
                     match pl.element {
                         Element::User => (pl.anchor, pl.x, pl.y) = (Anchor::Left, 0.0, 0.0),
-                        Element::Clock => (pl.anchor, pl.x, pl.y) = (Anchor::BottomRight, 40.0, 150.0),
+                        Element::Clock => (pl.anchor, pl.x, pl.y) = (Anchor::BottomRight, 40.0, 70.0),
                         Element::Users | Element::Keyboard | Element::Power => pl.visible = false,
                         Element::Logo => (pl.anchor, pl.x, pl.y) = (Anchor::TopLeft, 56.0, 56.0),
                         _ => {}

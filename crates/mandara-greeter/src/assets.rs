@@ -25,9 +25,9 @@ fn extra(name: &str) -> Option<&'static str> {
 /// Mandara's single-colour emblem (the login screen's default logo).
 const EMBLEM: &str = include_str!("../../../assets/brand/mandara-symbolic.svg");
 
-/// Chrome Halo's ring arc: a 120° stroke fading out at both ends (an alpha mask
-/// tinted per arc).
-pub const HALO_ARC: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><defs><linearGradient id="fade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.5" stop-color="#000" stop-opacity="1"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient></defs><path d="M 14.7 50.75 A 98.5 98.5 0 0 1 185.3 50.75" fill="none" stroke="url(#fade)" stroke-width="1.1" stroke-linecap="round"/></svg>"##;
+/// Chrome Halo's ring arc: a 120° stroke fading out at both ends, a bright
+/// core in a soft wide glow (an alpha mask tinted per arc).
+pub const HALO_ARC: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><defs><linearGradient id="fade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="0.5" stop-color="#000" stop-opacity="1"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient></defs><path d="M 14.7 50.75 A 98.5 98.5 0 0 1 185.3 50.75" fill="none" stroke="url(#fade)" stroke-width="6" stroke-opacity="0.16" stroke-linecap="round"/><path d="M 14.7 50.75 A 98.5 98.5 0 0 1 185.3 50.75" fill="none" stroke="url(#fade)" stroke-width="1.5" stroke-linecap="round"/></svg>"##;
 /// A complete SVG for an extra icon.
 fn svg_text(name: &str) -> Option<String> {
     match name {

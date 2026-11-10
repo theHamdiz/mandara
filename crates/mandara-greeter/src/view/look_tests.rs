@@ -153,6 +153,15 @@ fn meridian_fits_every_screen_on_its_line() {
         let status_end = gx + width(57.0, meridian::STATUS_PX * k) * 0.9;
         let date_start = vw - margin - width(24.0, cfg.date.size * k);
         assert!(status_end < date_start, "{vw}×{vh}: the status ({status_end}) clears the date ({date_start})");
+        let power_start = vw - margin - width(21.0, meridian::WORD_PX * k) - 2.0 * meridian::POWER_GAP * k;
+        if meridian::narrow(vw, vh) {
+            // Under the line, beside the status.
+            assert!(status_end < power_start, "{vw}×{vh}: the status ({status_end}) clears the power words ({power_start})");
+        } else {
+            // Above the line, past the name and up to 24 typed characters.
+            let typed_end = gx + width(14.0, cfg.user.name_size * k) + (26.0 + 24.0 * meridian::RUN_SLOT) * k;
+            assert!(typed_end < power_start, "{vw}×{vh}: the typing ({typed_end}) clears the power words ({power_start})");
+        }
         let logo = rect(&cfg, Element::Logo, (cfg.logo.size, cfg.logo.size), vw, vh);
         assert!(logo.inside(vw, vh, 8.0 * k) && logo.y1 < line - meridian::BAND_HALF * k, "{vw}×{vh}: the logo");
     }

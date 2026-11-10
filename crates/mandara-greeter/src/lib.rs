@@ -55,8 +55,11 @@ pub struct GreeterOptions {
     /// Override the backdrop (`auto`, `video`, `stills`, `aurora`).
     pub background: Option<String>,
     /// Apply a ready-made look first (`mandara`, `midnight-card`,
-    /// `material-you`); the other overrides go on top.
+    /// `material-you`, `ghostline`, `chrome-halo`, `meridian`); the other
+    /// overrides go on top.
     pub look: Option<String>,
+    /// Override the colour scheme (`light`, `dark`).
+    pub scheme: Option<String>,
     /// Demo only: play a scripted wrong-then-right login (for screenshots).
     pub autoplay: bool,
 }
@@ -82,6 +85,13 @@ pub fn run(opts: GreeterOptions) -> Result<()> {
     }
     if let Some(theme) = &opts.theme {
         config.theme.preset = theme.clone();
+    }
+    if let Some(scheme) = &opts.scheme {
+        config.theme.light = match scheme.to_ascii_lowercase().as_str() {
+            "light" => true,
+            "dark" => false,
+            _ => bail!("unknown scheme {scheme:?} (light, dark)"),
+        };
     }
     if let Some(bg) = &opts.background {
         config.background.mode = config::BackgroundMode::parse(bg).with_context(|| format!("unknown background {bg:?} (auto, video, stills, aurora, solid)"))?;
