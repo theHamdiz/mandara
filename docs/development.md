@@ -229,6 +229,17 @@ eval "$(cargo xtask sandbox env)"                 # the sandbox env for manual c
   `MANDARA_REDDIT_API` through, so the Reddit plugin can read a loopback
   stand-in for Reddit's API (token, listings, threads, `morechildren`
   and pictures under `/media/<host>/…`) instead of the real service.
+- **Recorded system updates:** a debug build with
+  `--features fake-system-update` replays package-manager output recorded
+  in clean containers instead of running pkexec. `sandbox up` passes
+  `MANDARA_FAKE_SYSTEM_UPDATE=<backend>[:uptodate|locked|fails]` (`pacman`,
+  `apt`, `nixos`…), `MANDARA_FAKE_SYSTEM_UPDATE_DELAY_MS`,
+  `MANDARA_FAKE_SYSTEM_UPDATE_HOLD=<step>:<line>` (pause there until
+  cancelled, e.g. `aur:100`) and `MANDARA_FAKE_AUR=<helper>[:uptodate|fails]`
+  (`paru` or `yay`) through. With the AUR fake, the Updates panel lists the
+  recordings' packages, and the AUR step asks for its password through the
+  real askpass socket and Mandara's dialog (type `wrong` to see a refused
+  password). Nothing on the system is touched.
 - **Matte:** `matte` cuts out the open surfaces as a transparent PNG. It
   shoots once over a black wallpaper and once over a white one, then
   difference-mattes the pair. Give it a region (physical pixels) that leaves

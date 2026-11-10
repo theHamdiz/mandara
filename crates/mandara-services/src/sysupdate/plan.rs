@@ -45,10 +45,12 @@ pub enum StepKind {
     DeleteGenerations,
     CollectGarbage,
     Bootloader,
+    /// AUR packages, built and installed by the AUR helper as you.
+    Aur,
 }
 
 impl StepKind {
-    pub const ALL: [StepKind; 12] = [
+    pub const ALL: [StepKind; 13] = [
         StepKind::Refresh,
         StepKind::Download,
         StepKind::Install,
@@ -61,6 +63,7 @@ impl StepKind {
         StepKind::DeleteGenerations,
         StepKind::CollectGarbage,
         StepKind::Bootloader,
+        StepKind::Aur,
     ];
 
     pub fn id(self) -> &'static str {
@@ -77,6 +80,7 @@ impl StepKind {
             StepKind::DeleteGenerations => "delete-generations",
             StepKind::CollectGarbage => "collect-garbage",
             StepKind::Bootloader => "bootloader",
+            StepKind::Aur => "aur",
         }
     }
 
@@ -87,9 +91,10 @@ impl StepKind {
     /// Whether stopping now leaves the system as it was: refreshing,
     /// downloading and building only add to caches, and Flatpak deploys
     /// each app atomically. Installing, activating and deleting are never
-    /// interrupted.
+    /// interrupted. The AUR step is stopped only while it builds (the job
+    /// holds a cancel back while the helper's pacman installs).
     pub fn cancellable(self) -> bool {
-        matches!(self, StepKind::Refresh | StepKind::Download | StepKind::FlakeUpdate | StepKind::ChannelUpdate | StepKind::Build | StepKind::Flatpak)
+        matches!(self, StepKind::Refresh | StepKind::Download | StepKind::FlakeUpdate | StepKind::ChannelUpdate | StepKind::Build | StepKind::Flatpak | StepKind::Aur)
     }
 
     /// The phase shown when the step starts (parsers refine it).
@@ -102,6 +107,7 @@ impl StepKind {
             StepKind::Build => Phase::Building,
             StepKind::Activate | StepKind::Bootloader => Phase::Activating,
             StepKind::DeleteGenerations | StepKind::CollectGarbage => Phase::Cleaning,
+            StepKind::Aur => Phase::AurBuild,
         }
     }
 }
@@ -657,7 +663,7 @@ mod tests {
 
     #[test]
     fn only_refresh_download_and_build_are_cancellable() {
-        let yes = [StepKind::Refresh, StepKind::Download, StepKind::FlakeUpdate, StepKind::ChannelUpdate, StepKind::Build, StepKind::Flatpak];
+        let yes = [StepKind::Refresh, StepKind::Download, StepKind::FlakeUpdate, StepKind::ChannelUpdate, StepKind::Build, StepKind::Flatpak, StepKind::Aur];
         for k in StepKind::ALL {
             assert_eq!(k.cancellable(), yes.contains(&k), "{k:?}");
             assert_eq!(StepKind::from_id(k.id()), Some(k));

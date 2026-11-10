@@ -9,7 +9,7 @@ use super::Phase;
 use super::plan::StepKind;
 
 /// Longest current-item label kept.
-const CURRENT_MAX: usize = 120;
+pub(crate) const CURRENT_MAX: usize = 120;
 
 /// The running update's progress, as far as the output tells.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -56,6 +56,10 @@ pub struct Tracker {
     pub nix_copies: u64,
     /// NixOS: space the garbage collection freed (`15.4 KiB`).
     pub freed: String,
+    /// AUR: the package being built (makepkg's `Making package`).
+    pub building: String,
+    /// AUR: the first package that didn't build.
+    pub failed_package: Option<String>,
 }
 
 impl Tracker {
@@ -80,6 +84,18 @@ impl Tracker {
                 self.hooks = 0;
                 self.hooks_total = 0;
                 self.total = 0;
+            }
+            StepKind::Aur => {
+                self.built = 0;
+                self.build_total = 0;
+                self.installed = 0;
+                self.total = 0;
+                self.downloaded = 0;
+                self.download_total = 0;
+                self.hooks = 0;
+                self.hooks_total = 0;
+                self.building.clear();
+                self.failed_package = None;
             }
             StepKind::Build => {
                 self.built = 0;
@@ -124,6 +140,7 @@ impl Tracker {
             Phase::Hooks => (self.hooks, self.hooks_total),
             Phase::Building if self.build_total > 0 => (self.built, self.build_total),
             Phase::Building => (self.downloaded, self.download_total),
+            Phase::AurBuild => (self.built, self.build_total),
             _ => return None,
         };
         (total > 0).then_some((done.min(total), total))

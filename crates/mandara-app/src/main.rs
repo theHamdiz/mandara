@@ -180,6 +180,21 @@ enum Cmd {
 /// Initialize process services and dispatch the shell, Studio or a dedicated CLI worker.
 fn main() -> Result<()> {
     alloc::init();
+    // Started by sudo as the AUR step's askpass, or by an AUR helper as
+    // that step's `sudo -A` wrapper (links in the step's private folder).
+    {
+        use mandara_services::sysupdate::askpass;
+        let mut argv = std::env::args_os();
+        if let Some(argv0) = argv.next() {
+            if askpass::invoked_as_askpass(&argv0) {
+                let prompt = argv.next().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+                std::process::exit(askpass::client_main(&prompt));
+            }
+            if askpass::invoked_as_sudo(&argv0) {
+                std::process::exit(askpass::sudo_main(argv));
+            }
+        }
+    }
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()

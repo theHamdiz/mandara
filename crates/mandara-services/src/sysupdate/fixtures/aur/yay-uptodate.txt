@@ -1,0 +1,3 @@
+@@ASKPASS@@ [sudo] password for builder: 
+:: [1mSearching AUR for updates...[0m
+ there is nothing to do

@@ -99,8 +99,14 @@ impl CancelSignal {
         ok
     }
 
-    fn set_cancellable(&self, yes: bool) {
+    /// Whether a request would be honoured now (a step may hold one back
+    /// while it can't be interrupted safely).
+    pub fn set_cancellable(&self, yes: bool) {
         self.cancellable.store(yes, Ordering::SeqCst);
+    }
+
+    pub fn is_cancellable(&self) -> bool {
+        self.cancellable.load(Ordering::SeqCst)
     }
 }
 
@@ -215,6 +221,13 @@ pub fn git_trust_config(work_tree: &Path, root_git: &Path) -> std::io::Result<St
 /// Reads `child`'s stdout and stderr line by line (one bounded line buffer
 /// per pipe) until it exits.
 pub fn pump(child: &mut std::process::Child, line: &mut dyn FnMut(&str), cancel: &CancelSignal, cancellable: bool) -> std::io::Result<Option<i32>> {
+    pump_with(child, line, cancel, &|| cancellable)
+}
+
+/// [`pump`], signalling a requested cancel only while `may_signal` says so
+/// (a request made earlier waits, e.g. until the AUR helper's pacman has
+/// finished installing).
+pub fn pump_with(child: &mut std::process::Child, line: &mut dyn FnMut(&str), cancel: &CancelSignal, may_signal: &dyn Fn() -> bool) -> std::io::Result<Option<i32>> {
     let (tx, rx) = mpsc::sync_channel::<String>(256);
     let readers: Vec<_> = [child.stdout.take().map(|p| Box::new(p) as Box<dyn std::io::Read + Send>), child.stderr.take().map(|p| Box::new(p) as Box<dyn std::io::Read + Send>)]
         .into_iter()
@@ -232,7 +245,7 @@ pub fn pump(child: &mut std::process::Child, line: &mut dyn FnMut(&str), cancel:
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
-        if cancellable && cancel.requested() {
+        if cancel.requested() && may_signal() {
             let pid = child.id() as i32;
             match signalled {
                 None => {

@@ -10,6 +10,11 @@
 //!
 //! `mandara msg polkit demo` opens the dialog with a fake request (any
 //! password but "wrong" succeeds) so it can be previewed safely.
+//!
+//! The same dialog answers the AUR step's `sudo` during a system update
+//! ([`mandara_services::sysupdate::askpass`]): its requests come through
+//! [`DialogPrompter`] instead of polkit, and the typed password goes back
+//! to the askpass, never through polkit or a file.
 
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
@@ -21,7 +26,7 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 use mandara_core::{FrameClock, LayerSurfaceSpec, SpringConfig, SpringValue, SurfaceRole, ToGpui};
-use mandara_i18n::{t, tk};
+use mandara_i18n::{t, tf, tk};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginRegistry};
 use mandara_services::polkit::{AdminUser, AgentStatus, AuthRequest, Outcome, PolkitAgent, PolkitEvent, PolkitReply};
 use mandara_theme::{Color, MandaraPalette};
@@ -127,6 +132,7 @@ pub fn init(cx: &mut App) {
     let agent = mandara_services::polkit::spawn_polkit_agent(enabled);
     cx.set_global(PolkitUi { _agent: Some(agent.clone()), ..Default::default() });
     pump(agent, cx);
+    init_askpass(cx);
     cx.observe(&crate::state::config(cx), move |store, cx| {
         let want = store.read(cx).get().general.polkit_agent;
         if want != enabled {
@@ -281,15 +287,21 @@ impl PolkitDialog {
                 }
             }
         });
+        // The AUR step's sudo asks with its own prompt, already known; a
+        // second request means the last password was wrong.
+        let askpass = request.cookie.starts_with(ASKPASS_COOKIE);
+        let detail = |key: &str| request.details.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone());
+        let prompt = askpass.then(|| (detail(DETAIL_PROMPT).filter(|p| !p.is_empty()).unwrap_or_else(|| t("Password").to_string()), false));
+        let note = (askpass && detail(DETAIL_RETRY).is_some()).then(|| (t("That didn't work — try again").to_string(), true));
         Self {
             request,
             agent,
             user_ix: 0,
-            prompt: None,
+            prompt,
             input: String::with_capacity(256),
             pending_submit: false,
             busy: false,
-            note: None,
+            note,
             focus,
             appear,
             shake: SpringValue::new(0.0, SHAKE),
@@ -681,6 +693,102 @@ impl Render for PolkitDialog {
             .child(card)
             .into_any_element()
     }
+}
+
+// ─────────────────────────── the AUR step's sudo ───────────────────────────
+
+/// One password request of the AUR step's askpass, opened on the UI
+/// thread.
+struct AskJob {
+    request: AuthRequest,
+    agent: PolkitAgent,
+}
+
+/// Cookies of the askpass's requests (the dialog then starts with sudo's
+/// prompt, kept in the request's details, instead of waiting for one).
+const ASKPASS_COOKIE: &str = "mandara-askpass-";
+const DETAIL_PROMPT: &str = "prompt";
+const DETAIL_RETRY: &str = "retry";
+
+/// Shows the askpass's requests in the polkit dialog. Called on the job's
+/// askpass thread; only the dialog itself is opened on the UI thread.
+struct DialogPrompter {
+    jobs: async_channel::Sender<AskJob>,
+    relay: gpui::BackgroundExecutor,
+}
+
+static ASKPASS_REQUESTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+impl mandara_services::sysupdate::askpass::Prompter for DialogPrompter {
+    fn ask(&self, request: mandara_services::sysupdate::askpass::AskRequest) -> mandara_services::sysupdate::askpass::Pending {
+        use mandara_services::sysupdate::askpass::{Pending, Secret};
+        let n = ASKPASS_REQUESTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let cookie = format!("{ASKPASS_COOKIE}{n}");
+        let (events, erx) = async_channel::unbounded::<PolkitEvent>();
+        let (rtx, replies) = async_channel::unbounded::<PolkitReply>();
+        let (answer, answer_rx) = std::sync::mpsc::channel::<Option<Secret>>();
+        let me = std::env::var("USER").unwrap_or_default();
+        // SAFETY: getuid has no preconditions.
+        let uid = unsafe { libc::getuid() };
+        let auth = AuthRequest {
+            cookie: cookie.clone(),
+            action_id: format!("sudo · {}", request.helper),
+            message: tf("{helper} needs your password for sudo to install the AUR packages it built. sudo asks separately: the system update's approval can't be passed on to it.", &[("helper", &request.helper)]),
+            icon_name: String::new(),
+            details: std::iter::once((DETAIL_PROMPT.to_string(), request.prompt.clone())).chain((request.attempt > 1).then(|| (DETAIL_RETRY.to_string(), String::new()))).collect(),
+            users: vec![AdminUser { uid, name: me.clone(), display: me }],
+        };
+        let job = AskJob { request: auth, agent: PolkitAgent::from_channels(erx, rtx.clone()) };
+        // The dialog's answers go back to the askpass; the password moves
+        // into a Secret (wiped when dropped) without a copy.
+        let relay_cookie = cookie.clone();
+        self.relay
+            .spawn(async move {
+                while let Ok(reply) = replies.recv().await {
+                    let outcome = match reply {
+                        PolkitReply::Answer { text, .. } => {
+                            let _ = answer.send(Some(Secret::from_string(text)));
+                            Outcome::Authorized
+                        }
+                        PolkitReply::Cancel { .. } => {
+                            let _ = answer.send(None);
+                            Outcome::Cancelled
+                        }
+                        PolkitReply::SelectUser { .. } => continue,
+                    };
+                    let _ = events.try_send(PolkitEvent::Close { cookie: relay_cookie.clone(), outcome });
+                    break;
+                }
+            })
+            .detach();
+        if self.jobs.try_send(job).is_err() {
+            tracing::warn!("askpass: the password dialog isn't available");
+        }
+        Pending {
+            answer: answer_rx,
+            close: Box::new(move || {
+                let _ = rtx.try_send(PolkitReply::Cancel { cookie: cookie.clone() });
+            }),
+        }
+    }
+}
+
+/// Registers the dialog as the AUR step's password prompt.
+fn init_askpass(cx: &mut App) {
+    let (jobs, rx) = async_channel::bounded::<AskJob>(4);
+    mandara_services::sysupdate::askpass::set_prompter(std::sync::Arc::new(DialogPrompter { jobs, relay: cx.background_executor().clone() }));
+    cx.spawn(async move |cx| {
+        while let Ok(job) = rx.recv().await {
+            cx.update(|cx| open_askpass(job, cx));
+        }
+    })
+    .detach();
+}
+
+fn open_askpass(job: AskJob, cx: &mut App) {
+    let AskJob { request, agent } = job;
+    pump(agent.clone(), cx);
+    handle_event(PolkitEvent::Begin(request), agent, cx);
 }
 
 // ─────────────────────────────── commands ───────────────────────────────
