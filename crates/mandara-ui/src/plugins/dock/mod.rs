@@ -1123,7 +1123,11 @@ impl Render for DockView {
             let mut ring = None;
             if !still && it.is_app() && !leaving {
                 let desktop = it.desktop.as_ref().map_or(it.key.as_str(), |d| d.id.as_str());
-                let launch = shared_state.and_then(|s| s.launching.get(&it.key)).filter(|_| launch_style != LaunchFeedback::None && allow_bounce && it.windows.is_empty());
+                // Ends with the launch timeout even when no window event
+                // prunes the launch (an app that never maps a window).
+                let launch = shared_state
+                    .and_then(|s| s.launching.get(&it.key))
+                    .filter(|t0| launch_style != LaunchFeedback::None && allow_bounce && it.windows.is_empty() && now.duration_since(**t0) < LAUNCH_TIMEOUT);
                 let landed = shared_state.and_then(|s| s.landing.get(desktop)).map(|t0| now.duration_since(*t0).as_secs_f32() * pace).filter(|t| *t < model::LAUNCH_HOP_S);
                 if let Some(t0) = launch {
                     let t = now.duration_since(*t0).as_secs_f32() * pace;
