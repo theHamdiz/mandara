@@ -29,7 +29,7 @@ running can finish; disabling the plugin prevents a follow-up refresh.
 </tr>
 </table>
 
-The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
+The 82 first-party plugins (46 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -83,6 +83,7 @@ The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
 | **App installer** | Install apps by dropping AppImages, Flatpaks, archives or packages on the dock or Studio | *(opt-in)*
 | **Screen time** | How long you spend in each app, per day, with limits *(opt-in)* |
 | **Cursor themes** | Install, preview and apply cursor themes, live, with size and hiding options *(opt-in)* |
+| **Icon themes** | Install, preview and apply icon themes, live, from a curated gallery or your own files *(opt-in)* |
 | **Shortcuts cheatsheet** | Every keyboard shortcut, Mandara's and your compositor's, in one searchable sheet (`mandara msg keybinds toggle`) *(opt-in)* |
 | **Task progress** | A bar ring that scripts, long builds and AI agents report progress to (`mandara msg progress set build 40%`) *(opt-in)* |
 | **Eye breaks** | Gentle 20-20-20 reminders that count only active time and wait while a fullscreen app has focus *(opt-in)* |
@@ -147,7 +148,7 @@ language, network, Bluetooth, audio, tray, notifications, power, resources,
 quick settings, media, weather, wallpaper, screenshot and clipboard, plus
 the core launcher, session and main menus) and everything else ships
 switched off: the dock, mini stats, screen time, prayer times, the wallpaper
-generator, Wallhaven, cursor themes, containers, services, drives, updates,
+generator, Wallhaven, cursor themes, icon themes, containers, services, drives, updates,
 the process hunter, the authenticator, soundscapes, the radio, world clock, network
 speed, the color picker, Pomodoro, notes, to-do, privacy, the app
 installer, the shortcuts cheatsheet, task progress, eye breaks,
@@ -158,6 +159,46 @@ Turn any of them on in Studio → Plugins or with
 had:** a config written before these defaults keeps every plugin it had on
 (the upgrade writes them into `[plugins] enabled`), Wallhaven stays on if it
 was, and cursor themes stay on if you had picked a cursor.
+
+## Icon themes
+
+An opt-in gallery of the fifty most popular open-source icon themes
+(Studio → Themes → Icons, `mandara studio themes/icons`, or
+`mandara msg plugins enable icon-themes`). While it is off the tab shows
+what it would do and one button to switch it on, and Mandara changes no
+icon setting anywhere.
+
+- **The catalog** ranks themes by their GitHub stars and lists only those
+  that install by copying ready-made folders out of one pinned archive
+  from the project's own repository: Papirus, WhiteSur, La Capitaine, Tela,
+  Flat Remix, Paper, Candy, Colloid, MoreWaita, Arc, Kora, Qogir, Gruvbox
+  Plus, Numix, Zafiro, Obsidian, Pop, Mint-Y and more, each with its
+  author, licence (all allow redistribution), style and light / dark
+  variants. Nothing is bundled: a theme downloads when you pick it, over
+  HTTPS, with a size cap, progress and Cancel, and is kept only when its
+  SHA-256 matches the one pinned in Mandara.
+- **Installing** unpacks only the folders the variant needs (with pure-Rust
+  readers that refuse absolute paths, `..`, devices and links leaving the
+  theme, and cap the size and file count), checks each `index.theme` (a
+  name, icon folders that exist and hold icons, `Inherits=` naming themes),
+  removes executable bits, scripts and repository files, and moves the
+  theme into `~/.local/share/icons`. A variant that links into a sibling
+  (`Papirus-Dark` into `Papirus`) brings it along. Install scripts that come
+  with a theme are never run. `gtk-update-icon-cache` runs when it is
+  installed.
+- **Your own icon sets**: install from an archive or a folder you pick, or
+  from an `https://` link. There is no known checksum for those, so a link
+  is marked *unverified* and Studio asks before downloading it.
+- **Applying** sets Mandara's own icons (launcher, dock, tray) and the
+  desktop's: `gsettings` (`org.gnome.desktop.interface icon-theme`), GTK 3
+  and 4 `settings.ini`, `kdeglobals` and qt5ct / qt6ct when you use them,
+  one key at a time. *Follow your desktop* puts back exactly what was
+  there, unless you changed it since.
+- **Removing** deletes only what Mandara installed (recorded in
+  `~/.local/share/mandara/icon-themes.json`); themes from packages or your
+  own folders are listed under *Also installed* and stay.
+
+`mandara msg icons list|install|apply|remove|import` scripts all of it.
 
 ## Games: Sudoku and 2048
 

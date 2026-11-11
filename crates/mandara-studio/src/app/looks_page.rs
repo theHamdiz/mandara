@@ -1,5 +1,5 @@
 //! Studio → Themes: the live preview, the looks gallery, the theme gallery
-//! (`themes_page.rs`), the cursor gallery and settings (`cursor_page.rs`)
+//! (`themes_page.rs`), the Cursors and Icons tabs (`cursor_page.rs`, `icons_page.rs`)
 //! and the color / style settings, plus the desktop cards / GPU
 //! visualizers.
 //!
@@ -279,23 +279,28 @@ fn restore_look(cx: &mut gpui::App) {
     }
 }
 
-/// The Themes page's tabs: its colours and style, and the components'
-/// designs (one page, two tabs; Studio keeps its pages).
+/// The Themes page's tabs: its colours and style, the components'
+/// designs, and the cursor and icon theme galleries (one page, its tabs;
+/// Studio keeps its pages).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum ThemesTab {
     #[default]
     Colors,
     Components,
+    Cursors,
+    Icons,
 }
 
 impl ThemesTab {
-    pub const ALL: [ThemesTab; 2] = [ThemesTab::Colors, ThemesTab::Components];
+    pub const ALL: [ThemesTab; 4] = [ThemesTab::Colors, ThemesTab::Components, ThemesTab::Cursors, ThemesTab::Icons];
 
     /// Deep-link name (`mandara studio themes/components`).
     pub fn slug(self) -> &'static str {
         match self {
             ThemesTab::Colors => "colors",
             ThemesTab::Components => "components",
+            ThemesTab::Cursors => "cursors",
+            ThemesTab::Icons => "icons",
         }
     }
 
@@ -303,8 +308,10 @@ impl ThemesTab {
     pub fn parse(s: &str) -> Option<Self> {
         let s = s.trim().to_ascii_lowercase();
         Self::ALL.into_iter().find(|t| t.slug() == s).or(match s.as_str() {
-            "colours" | "looks" | "style" | "themes" | "cursor" | "cursors" => Some(ThemesTab::Colors),
+            "colours" | "looks" | "style" | "themes" => Some(ThemesTab::Colors),
             "component" | "designs" | "presets" | "controls" | "sliders" | "buttons" => Some(ThemesTab::Components),
+            "cursor" | "cursor-themes" | "pointer" | "pointers" => Some(ThemesTab::Cursors),
+            "icon" | "icon-themes" | "icon-theme" | "icon-sets" => Some(ThemesTab::Icons),
             _ => None,
         })
     }
@@ -313,6 +320,8 @@ impl ThemesTab {
         match self {
             ThemesTab::Colors => tk("Colors & style"),
             ThemesTab::Components => tk("Components"),
+            ThemesTab::Cursors => tk("Cursors"),
+            ThemesTab::Icons => tk("Icons"),
         }
     }
 }
@@ -324,6 +333,8 @@ impl super::page_tabs::PageTab for ThemesTab {
         match self {
             ThemesTab::Colors => "palette",
             ThemesTab::Components => "grid",
+            ThemesTab::Cursors => "pointer",
+            ThemesTab::Icons => "tiles",
         }
     }
 }
@@ -336,6 +347,7 @@ impl StudioView {
             self.themes_tab = tab;
             // The other tab's previews go: nothing of them stays alive.
             self.components = Default::default();
+            cx.defer(super::theme_galleries::release);
             self.content_scroll.set_offset(gpui::point(gpui::px(0.0), gpui::px(0.0)));
         }
         cx.notify();
@@ -349,13 +361,15 @@ impl StudioView {
         let body = match tab {
             ThemesTab::Colors => self.themes_colors(cfg, p, cx),
             ThemesTab::Components => self.components_section(cfg, p, cx),
+            ThemesTab::Cursors => self.cursor_section(cfg, p, window, cx),
+            ThemesTab::Icons => self.icons_section(cfg, p, window, cx),
         };
         div().row().flex_col().gap(px(SPACE_22_PX)).child(tabs).child(body).into_any_element()
     }
 
     /// Themes → Colors & style: the live preview (with light / dark), looks,
-    /// the designed themes, the wallpaper's colors and schemes, the cursor
-    /// gallery and settings (`cursor_page.rs`), then tuning, style, icons and
+    /// the designed themes, the wallpaper's colors and schemes, then
+    /// tuning, style, icons and
     /// app themes. Rows the galleries already show (light / dark, the
     /// wallpaper scheme) stay out of the list but remain searchable.
     fn themes_colors(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
@@ -366,13 +380,12 @@ impl StudioView {
         let themes = self.fold("Designed themes", head, p, cx, |this, cx| this.designed_themes(cfg, p, cx));
         let wallpaper = self.wallpaper_schemes(cfg, p, cx);
         let apps = self.app_themes_section(cfg, p, cx);
-        let cursor = self.cursor_section(cfg, p, cx);
         let tune_head = section_head(t("Fine-tune"), t("Schedule, tuning, style and icons"), Vec::new(), display, p);
         // Cursor rows sit in the Cursor section, component designs in
         // theirs, app themes in their grid.
         let rows = self.rows(registry::in_section(Section::Themes).filter(|s| !SHOWN_ABOVE.contains(&s.path) && s.group != CURSOR && s.group != APP_THEMES_GROUP && s.group != COMPONENTS), cfg, p, cx);
         let tune = div().row().flex_col().gap(px(SPACE_14_PX)).child(tune_head).child(rows);
-        div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(preview).child(looks).child(themes).child(wallpaper).child(apps).child(cursor).child(tune).into_any_element()
+        div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(preview).child(looks).child(themes).child(wallpaper).child(apps).child(tune).into_any_element()
     }
 
     /// Looks as a compact list (swatch, name in the look's face, its line,

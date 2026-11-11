@@ -142,16 +142,26 @@ const FORMER_SECTIONS: &[(&str, registry::Section)] = &[
     ("looks", registry::Section::Themes),
     ("cursor", registry::Section::Themes),
     ("cursors", registry::Section::Themes),
+    ("icons", registry::Section::Themes),
+    ("icon-themes", registry::Section::Themes),
     // Desktop widgets became Desktop (its Widgets tab).
     ("desktop-widgets", registry::Section::Desktop),
     ("desktop widgets", registry::Section::Desktop),
 ];
 
-/// Whether a command-line target opens Themes at its Cursor section
-/// (`themes/cursor`, or the moved `cursor` / `input/cursor`).
+/// Whether a command-line target opens Themes on its Cursors tab
+/// (`themes/cursors`, the older `themes/cursor`, or the moved `cursor` /
+/// `input/cursor`).
 fn cursor_target(target: &str) -> bool {
     let t = target.to_lowercase();
-    matches!(t.as_str(), "cursor" | "cursors" | "themes/cursor" | "input/cursor" | "appearance/cursor")
+    matches!(t.as_str(), "cursor" | "cursors" | "themes/cursor" | "themes/cursors" | "input/cursor" | "appearance/cursor")
+}
+
+/// Whether a command-line target opens Themes on its Icons tab (`icons`,
+/// `icon-themes`; `themes/icons` is a tab link).
+fn icons_target(target: &str) -> bool {
+    let t = target.to_lowercase();
+    matches!(t.as_str(), "icons" | "icon-themes" | "appearance/icons")
 }
 
 /// The section a command-line name opens: the English title (any case, or
@@ -189,6 +199,7 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
     // `power/<part>` scrolls the Power & idle page to that part.
     let power_part = section.and_then(|t| t.strip_prefix("power/")).map(str::to_string);
     let cursor = section.is_some_and(cursor_target);
+    let icon_themes = section.is_some_and(icons_target);
     // `search/<text>` opens the results for that text.
     let search = section.and_then(|t| t.strip_prefix("search/")).filter(|q| !q.trim().is_empty()).map(str::to_string);
     let section = match (&search, &tab) {
@@ -232,6 +243,9 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
         }
         if cursor {
             view.show_cursor_section(cx);
+        }
+        if icon_themes {
+            view.show_themes_tab(app::looks_page::ThemesTab::Icons, cx);
         }
         if let Some(q) = &search {
             view.show_search(q, cx);
@@ -352,9 +366,14 @@ mod tests {
         for tab in ThemesTab::ALL {
             assert_eq!(ThemesTab::parse(tab.slug()), Some(tab));
         }
-        // The cursor deep link still lands on the tab holding the cursor.
+        // The cursor and icon galleries have their own tabs; older cursor
+        // links land there too.
+        assert_eq!(themes_tab_target("themes/cursors"), Some(ThemesTab::Cursors));
+        assert_eq!(themes_tab_target("themes/cursor"), Some(ThemesTab::Cursors));
+        assert_eq!(themes_tab_target("themes/icons"), Some(ThemesTab::Icons));
+        assert_eq!(themes_tab_target("themes/icon-themes"), Some(ThemesTab::Icons));
         assert!(super::cursor_target("themes/cursor"));
-        assert_eq!(ThemesTab::parse("cursor"), Some(ThemesTab::Colors));
+        assert_eq!(ThemesTab::parse("cursor"), Some(ThemesTab::Cursors));
     }
 
     use super::*;
@@ -513,6 +532,11 @@ mod tests {
         assert_eq!(resolve_section("cursor"), Some(registry::Section::Themes));
         assert_eq!(resolve_section("themes/cursor"), Some(registry::Section::Themes));
         assert!(!cursor_target("themes") && !cursor_target("input"));
+        for target in ["icons", "Icon-Themes"] {
+            assert!(icons_target(target), "{target}");
+            assert_eq!(resolve_section(target), Some(registry::Section::Themes));
+        }
+        assert!(!icons_target("themes"));
     }
 
     #[test]

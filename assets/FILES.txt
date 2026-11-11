@@ -155,6 +155,9 @@ assets/plugins/hadith/icon.svg
 assets/plugins/home-assistant/cover.png
 assets/plugins/home-assistant/icon.png
 assets/plugins/home-assistant/icon.svg
+assets/plugins/icon-themes/cover.png
+assets/plugins/icon-themes/icon.png
+assets/plugins/icon-themes/icon.svg
 assets/plugins/jannah/cover.png
 assets/plugins/jannah/icon.png
 assets/plugins/jannah/icon.svg

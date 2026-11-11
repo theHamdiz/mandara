@@ -8,6 +8,8 @@ About → What's new shows it too.
 
 ### New
 
+- **Icon themes.** Studio → Themes → Icons offers fifty popular open-source icon sets. Each downloads only when you pick it and installs only if its checksum matches. Apply sets your launcher, dock and tray icons and your apps' icons in one go, and *Follow your desktop* puts back what was there.
+- **Install your own cursor and icon themes** from an archive, a folder or a link. A link has no known checksum, so Studio asks before downloading it, and nothing inside a theme is ever run.
 - **Right-click the desktop for a ring menu.** Icons on chromatic glass bloom out around the pointer, and a glowing arc follows it. Add widget opens your widgets by shelf (clocks, music, system, productivity, weather and more), each with its own icon. Hold the right button and flick toward an item to pick it in one motion, even through the shelves, or use the arrow keys. Prefer the old list? Switch back in Studio → Desktop → Context menu.
 - **Studio → Desktop → Context menu**: choose the ring or the classic list, which items show and in which order, add your own programs, and set the ring's size, labels, gesture, glass and animation, with a live preview.
 - **Aqueous joins the supported compositors (#162).** On Aqueous the bar's workspace pills now show each display's workspaces and switch to one when you click it, and the window title, displays, keyboard layout, window moves and the Overview hot corner follow Aqueous too, all over its own IPC socket without ever making the bar wait. Aqueous keeps its settings in its own files, so Mandara writes nothing there; the layout pill can't change Aqueous layouts, because Aqueous has no command for that yet.
@@ -16,6 +18,7 @@ About → What's new shows it too.
 
 ### Improved
 
+- **Cursors and Icons get their own tabs on Themes.** While a plugin is off, its tab shows what it does and one button to turn it on. The cursor gallery gains search, a Dark / Light filter, cards that lift under the pointer, a busy cursor that animates while you hover, and your installed themes as cards.
 - **Side bars and the sidebar are set up in one Sidebars tab.** Studio → Bars no longer has two look-alike tabs: Sidebars shows what each screen edge holds (nothing, a side bar, which is a slim bar of items, or the sidebar, the panel that slides out with tabs and cards) with small previews, and below it only the settings for what you picked. An edge never ends up with both, the sidebar moves when you give it the other edge, and the rail that Expressive and Raml Tram join to the bar points you to its preset. Old links such as `mandara studio bars/side-bars` and `bars/sidebar` still lead there, and sections you opened or closed stay that way.
 - **Studio's Desktop widgets page is now Desktop**, with Widgets, Cards & visualizers and Context menu tabs. Old links still open it.
 - **Counts on bar items sit neatly on round buttons and rails.** Unread notifications, updates and crash reports no longer spill off the item, keep a steady width, and read 99+ past 99 instead of a stuck 99.

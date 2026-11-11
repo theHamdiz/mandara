@@ -159,8 +159,9 @@ names stay as you wrote them.
   *Use my wallpaper's colors* keeps its palette.
   `mandara msg look list|apply|restore` scripts them.
 - **Cursor themes** (opt-in plugin, `cursors`): switched off, Mandara
-  leaves your cursor configuration alone entirely and Studio → Themes shows
-  a one-line card to turn it on. Switched on, Studio → Themes → Cursor shows your cursor drawn from
+  leaves your cursor configuration alone entirely and Studio → Themes →
+  Cursors shows what it does with one button to turn it on. Switched on,
+  that tab shows your cursor drawn from
   its own files at its size, every cursor setting (size with 24 / 32 / 48 /
   64 px chips, hide while typing, hide when idle, the software cursor of
   Hyprland and Umbriel and Hyprland's hide on touch) and a gallery of the
@@ -171,12 +172,27 @@ names stay as you wrote them.
   installs it to `~/.local/share/icons`; Apply changes the cursor live on
   MangoWM, Niri, Hyprland, Umbriel, Sway and River (and X11 apps through `~/.icons/default`);
   Remove only ever deletes what Mandara installed. Nothing is bundled in the
-  binary. `mandara msg cursor list|install|apply|remove` scripts it.
+  binary. Your own cursor themes install from an archive, a folder or a
+  link (a link has no known checksum, so it is marked unverified and Studio
+  asks first), and the themes already on your system are listed with their
+  previews. `mandara msg cursor list|install|apply|remove|import` scripts it.
+- **Icon themes** (opt-in plugin, `icon-themes`): switched off, Mandara
+  changes no icon setting. Switched on, Studio → Themes → Icons offers the
+  fifty most popular open-source icon themes (Papirus, WhiteSur, Tela,
+  Colloid, Flat Remix, Kora, Gruvbox Plus and more) with search, style and
+  light / dark filters and previews drawn from each installed theme's own
+  icons; one click downloads the pinned archive, verifies its SHA-256 and
+  installs it to `~/.local/share/icons` without running any script from
+  it. Apply sets Mandara's launcher, dock and tray icons and the desktop's
+  (`gsettings`, GTK `settings.ini`, `kdeglobals`, qt5ct / qt6ct), and
+  *Follow your desktop* puts back what was there. Your own sets install
+  from an archive, a folder or a link. `mandara msg icons
+  list|install|apply|remove|import` scripts it.
 
 <p align="center">
-  <img src="screenshots/studio-cursors.webp" alt="Studio → Themes → Cursor: the applied cursor drawn at 32 px, the cursor settings and the theme gallery with previews, licences and variants" width="100%"/>
+  <img src="screenshots/studio-cursors.webp" alt="Studio → Themes → Cursors: the applied cursor drawn at 32 px, the cursor settings and the theme gallery with previews, licences and variants" width="100%"/>
   <br/>
-  <sub>Studio → Themes → Cursor: the applied cursor, its settings and the theme gallery.</sub>
+  <sub>Studio → Themes → Cursors: the applied cursor, its settings and the theme gallery.</sub>
 </p>
 
 <table>

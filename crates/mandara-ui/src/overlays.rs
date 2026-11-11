@@ -338,7 +338,7 @@ fn command_entries(c: &mandara_plugins::CommandSpec) -> Vec<Item> {
 pub const STUDIO_SECTIONS: &[(&str, &str, &str, &str)] = &[
     ("home", tk("Home"), "grid", "overview start dashboard status quick settings"),
     // Look & feel
-    ("themes", tk("Themes"), "droplet", "appearance looks colors palette wallpaper colors material you dark light icons roundness app themes"),
+    ("themes", tk("Themes"), "droplet", "appearance looks colors palette wallpaper colors material you dark light icons roundness app themes cursor cursors pointer icon themes icon sets"),
     ("wallpaper", tk("Wallpaper"), "image", "background desktop picture folder picker depth clock"),
     ("desktop", tk("Desktop"), "clock", "desktop widgets clock system monitor decorations visualizer cards now playing calendar arrange edit context menu right-click ring menu"),
     ("typography", tk("Typography"), "text-scan", "fonts text size"),

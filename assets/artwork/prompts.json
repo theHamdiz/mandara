@@ -47,6 +47,12 @@
       "panel": null,
       "store": "Artwork prepared ahead of plugin registration. Represents procedural still and looping wallpaper generation without depicting an unavailable panel."
     },
+    "icon-themes": {
+      "glyph": "A spacious 2-by-2 icon set: a cream rounded square, circle and rounded diamond, plus a small folder with a warm gold inset in the fourth cell. Equal cell widths keep the folder separate from the three app shapes. Shared 28-unit cream strokes with round caps and joins stay readable at 32 px; amber-to-umber tile from #B3813E to #674126 with the shared light, rim and shoreline. Original geometry without project logos, lettering or borrowed theme icons.",
+      "palette": "corniche",
+      "motif": "tiles",
+      "panel": null
+    },
     "ports": {
       "glyph": "Cream network socket with three gold contacts and a short cable; maintenance teal tile with the shared light, rim and shoreline.",
       "palette": "obsidian",

@@ -216,13 +216,13 @@ pub fn read_member(reader: Box<dyn Read + Send>, name: &str, limit: u64) -> Opti
 }
 
 /// Whether `rel` is a plain relative path (no root, no `..`).
-fn safe_relative(rel: &Path) -> bool {
+pub fn safe_relative(rel: &Path) -> bool {
     !rel.as_os_str().is_empty() && rel.components().all(|c| matches!(c, Component::Normal(_) | Component::CurDir))
 }
 
 /// Whether a symlink at `at` (relative to the root) pointing to `target`
 /// stays inside the root.
-fn link_stays_inside(at: &Path, target: &Path) -> bool {
+pub fn link_stays_inside(at: &Path, target: &Path) -> bool {
     if target.is_absolute() {
         return false;
     }
@@ -246,19 +246,46 @@ fn link_stays_inside(at: &Path, target: &Path) -> bool {
 /// Progress of an extraction: bytes written so far.
 pub type OnBytes<'a> = &'a dyn Fn(u64);
 
+/// What an extraction may unpack, and which entries it keeps.
+#[derive(Clone, Copy)]
+pub struct ExtractOptions<'a> {
+    /// Largest total of the entries kept.
+    pub max_bytes: u64,
+    /// Most entries kept.
+    pub max_entries: usize,
+    /// Keeps only entries whose relative path passes (the rest are read
+    /// past, never written). `None` keeps everything.
+    pub keep: Option<&'a dyn Fn(&Path) -> bool>,
+}
+
+impl ExtractOptions<'_> {
+    /// The portable-app limits ([`MAX_EXTRACT_BYTES`], every entry kept).
+    pub const APPS: ExtractOptions<'static> = ExtractOptions { max_bytes: MAX_EXTRACT_BYTES, max_entries: MAX_ENTRIES, keep: None };
+
+    fn keeps(&self, rel: &Path) -> bool {
+        self.keep.is_none_or(|keep| keep(rel))
+    }
+}
+
 struct Limits {
     total: u64,
     entries: usize,
+    max_bytes: u64,
+    max_entries: usize,
 }
 
 impl Limits {
+    fn new(opts: &ExtractOptions<'_>) -> Self {
+        Self { total: 0, entries: 0, max_bytes: opts.max_bytes, max_entries: opts.max_entries }
+    }
+
     fn add(&mut self, bytes: u64) -> Result<(), String> {
-        self.total += bytes;
+        self.total = self.total.saturating_add(bytes);
         self.entries += 1;
-        if self.total > MAX_EXTRACT_BYTES {
+        if self.total > self.max_bytes {
             return Err(t("The archive is too large to install").to_string());
         }
-        if self.entries > MAX_ENTRIES {
+        if self.entries > self.max_entries {
             return Err(t("The archive has too many files").to_string());
         }
         Ok(())
@@ -294,8 +321,13 @@ fn ensure_parent(dest: &Path) -> Result<(), String> {
 
 /// Extracts `path` into the empty folder `dest`. Returns bytes written.
 pub fn extract(path: &Path, format: Format, dest: &Path, cancel: &AtomicBool, on_bytes: OnBytes<'_>) -> Result<u64, String> {
+    extract_with(path, format, dest, &ExtractOptions::APPS, cancel, on_bytes)
+}
+
+/// [`extract`] with its own limits and entry filter.
+pub fn extract_with(path: &Path, format: Format, dest: &Path, opts: &ExtractOptions<'_>, cancel: &AtomicBool, on_bytes: OnBytes<'_>) -> Result<u64, String> {
     std::fs::create_dir_all(dest).map_err(|e| e.to_string())?;
-    let mut limits = Limits { total: 0, entries: 0 };
+    let mut limits = Limits::new(opts);
     let mut written = 0u64;
     let unsafe_path = || t("The archive contains unsafe paths").to_string();
     if format == Format::Zip {
@@ -304,6 +336,12 @@ pub fn extract(path: &Path, format: Format, dest: &Path, cancel: &AtomicBool, on
         for i in 0..zip.len() {
             let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
             let rel = entry.enclosed_name().filter(|p| safe_relative(p)).ok_or_else(unsafe_path)?;
+            if !opts.keeps(&rel) {
+                continue;
+            }
+            if cancel.load(Ordering::Relaxed) {
+                return Err(t("Cancelled").to_string());
+            }
             limits.add(entry.size())?;
             let out = dest.join(&rel);
             let mode = entry.unix_mode().unwrap_or(0o644);
@@ -323,17 +361,23 @@ pub fn extract(path: &Path, format: Format, dest: &Path, cancel: &AtomicBool, on
                 copy_stream(&mut entry, &out, (mode & MODE_MASK) | 0o600, cancel, on_bytes, &mut written)?;
             }
         }
+        set_dir_modes(dest);
         return Ok(written);
     }
-    extract_tar(tar_reader(path, format)?, dest, cancel, on_bytes)
+    extract_tar_with(tar_reader(path, format)?, dest, opts, cancel, on_bytes)
 }
 
 /// Extracts an already-decoded tar stream into `dest` with the same rules
 /// as [`extract`] (formats [`tar_reader`] doesn't know, such as the
 /// `.tar.bz2` cursor themes ship as). Returns bytes written.
 pub fn extract_tar(reader: Box<dyn Read + Send>, dest: &Path, cancel: &AtomicBool, on_bytes: OnBytes<'_>) -> Result<u64, String> {
+    extract_tar_with(reader, dest, &ExtractOptions::APPS, cancel, on_bytes)
+}
+
+/// [`extract_tar`] with its own limits and entry filter.
+pub fn extract_tar_with(reader: Box<dyn Read + Send>, dest: &Path, opts: &ExtractOptions<'_>, cancel: &AtomicBool, on_bytes: OnBytes<'_>) -> Result<u64, String> {
     std::fs::create_dir_all(dest).map_err(|e| e.to_string())?;
-    let mut limits = Limits { total: 0, entries: 0 };
+    let mut limits = Limits::new(opts);
     let mut written = 0u64;
     let unsafe_path = || t("The archive contains unsafe paths").to_string();
     let mut archive = tar::Archive::new(reader);
@@ -350,6 +394,9 @@ pub fn extract_tar(reader: Box<dyn Read + Send>, dest: &Path, cancel: &AtomicBoo
         }
         if !safe_relative(&rel) {
             return Err(unsafe_path());
+        }
+        if !opts.keeps(&rel) {
+            continue;
         }
         limits.add(entry.header().size().unwrap_or(0))?;
         let out = dest.join(&rel);
