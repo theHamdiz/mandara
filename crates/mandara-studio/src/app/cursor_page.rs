@@ -1,43 +1,49 @@
-//! Studio → Themes → Cursor: the cursor theme gallery and every cursor
-//! setting.
+//! Studio → Themes → Cursors: the cursor theme gallery and every cursor
+//! setting (the opt-in *Cursor themes* plugin; while it is off, the tab
+//! shows its gate, `plugin_gate.rs`).
 //!
 //! * **Your cursor** — the applied theme drawn from its own XCursor files
 //!   (pointer, link, text, busy, precision, resize and move) at the chosen
 //!   size, the common sizes as chips, and the cursor rows of the registry
 //!   (size slider, hide while typing / when idle, Hyprland's software
 //!   cursor and hide on touch; rows a compositor ignores say so).
-//! * **Gallery** — the ten catalog themes (`mandara_services::cursors`):
-//!   a preview strip, author, licence, variants as dots, and one action
-//!   that follows the theme's state: Get → Installing (progress, cancel) →
-//!   Apply → Active, Remove for what Mandara installed, errors in place
-//!   with Retry. Downloads and decoding run off the UI thread; previews
-//!   are decoded at the drawn size and dropped when you leave the page.
-//! * **Also installed** — themes from packages or your own folders.
+//! * **Gallery** — the ten catalog themes (`mandara_services::cursors`),
+//!   searchable and filtered by tone: glass cards that lift on hover, a
+//!   preview strip whose busy cursor plays its animation while hovered,
+//!   author, licence, variants as dots, and one action that follows the
+//!   theme's state: Get → Installing (progress, cancel) → Apply → Active,
+//!   Remove for what Mandara installed, errors in place with Retry.
+//! * **Your own cursors** — an archive, a folder or a link
+//!   (`theme_galleries::import_panel`).
+//! * **Also installed** — themes from packages, your own folders or
+//!   imports, as cards with their own previews.
 //!
-//! Cards are keyboard reachable: Tab moves between them, Enter / Space
-//! runs the action, ← / → (mirrored right-to-left) pick a variant and
-//! Delete removes (twice, to confirm).
+//! Downloads and decoding run off the UI thread; previews are decoded at
+//! the drawn size and dropped when you leave the tab. Cards are keyboard
+//! reachable: Tab moves between them, Enter / Space runs the action, ← / →
+//! (mirrored right-to-left) pick a variant and Delete removes (twice, to
+//! confirm).
 
-use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::time::Duration;
+use std::sync::atomic::Ordering;
 
-use gpui::{AnyElement, Bounds, ClickEvent, Context, FontWeight, Global, InteractiveElement, IntoElement, ParentElement, Pixels, RenderImage, SharedString, StatefulInteractiveElement, Styled, StyledImage as _, canvas, div, img, point, prelude::FluentBuilder as _, px};
+use gpui::{AnyElement, ClickEvent, Context, FontWeight, Global, InteractiveElement, IntoElement, ParentElement, RenderImage, SharedString, StatefulInteractiveElement, Styled, StyledImage as _, Window, div, img, prelude::FluentBuilder as _, px};
 use mandara_config::ShellConfig;
 use mandara_config::input;
 use mandara_core::ToGpui;
-use mandara_i18n::{t, tf, tr};
+use mandara_i18n::{t, tf, tk, tr};
 use mandara_services::cursors::catalog::{CATALOG, CursorTheme, CursorVariant};
-use mandara_services::cursors::{self, Role, install};
+use mandara_services::cursors::{self, Role, install, xcursor};
 use mandara_theme::{Color, MandaraPalette};
 use mandara_ui::bidi::Bidi as _;
 use mandara_ui::icons::icon;
 use mandara_ui::state::update_config;
 
 use super::compositor_page::{badge, button, chip, target_name, tip};
+use super::plugin_gate::Gate;
+use super::theme_galleries::{self as g, ImportKind, Job, PERCENT_PER_PERMILLE};
 use super::themes_page::section_head;
 use super::{StudioView, grid};
 use crate::registry::system_settings::{CURSOR, CURSOR_THEME_PATH};
@@ -52,6 +58,8 @@ const STRIP_CURSOR_PX: u32 = 24;
 /// Previews are decoded for screens up to this density (sharp at 1.5× and
 /// 2× without decoding per window scale).
 const PREVIEW_DENSITY: f32 = 2.0;
+/// Most frames of a hovered busy cursor's animation kept (sampled evenly).
+const ANIMATION_FRAMES: usize = 24;
 /// The common sizes offered as chips.
 const SIZE_PRESETS: [u32; 4] = [24, 32, 48, 64];
 /// The size a theme is shown at while the compositor keeps its own.
@@ -77,22 +85,24 @@ const STRIP_TINT: f32 = 0.22;
 const STRIP_MIN_CONTRAST: f32 = 2.2;
 const STRIP_LEAN: f32 = 0.5;
 const DIAGONAL_DEG: f32 = 135.0;
-const HORIZONTAL_DEG: f32 = 90.0;
-/// The install progress bar.
-const PROGRESS_H_PX: f32 = DIM_5_PX;
-/// The bar never draws narrower than this share (it reads as "started").
-const PROGRESS_MIN: f32 = 0.03;
-/// Repaint interval while an install runs (progress moves; stops with it).
-const JOB_REPAINT: Duration = Duration::from_millis(120);
-/// Deep links: frames to wait for the section's anchor, the re-check delay
-/// and the space kept above it.
-const ANCHOR_FRAMES: u8 = 2;
-const ANCHOR_SETTLE: Duration = Duration::from_millis(32);
-const SCROLL_MARGIN_PX: f32 = SPACE_12_PX;
-const PERMILLE: f32 = 1000.0;
-const PERCENT_PER_PERMILLE: u32 = 10;
-/// Stars above this read as "4.2k".
-const THOUSAND: f32 = 1000.0;
+/// A variant whose body is darker than this is a dark cursor (tone filter).
+const DARK_BODY: f32 = 0.5;
+/// Tone filter chips.
+const TONES: [&str; 3] = [tk("All"), tk("Dark"), tk("Light")];
+
+/// What the tab shows while the plugin is off.
+const GATE: Gate = Gate {
+    will: &[
+        tk("Lists ten popular open-source cursor themes and downloads the ones you pick from their authors' GitHub releases, checked against a pinned checksum"),
+        tk("Installs them, or an archive, folder or link of your own, to ~/.local/share/icons"),
+        tk("Sets the cursor and its size live in your compositor and in Mandara's compositor drop-in"),
+    ],
+    wont: &[
+        tk("Change your cursor until you pick one"),
+        tk("Run anything that comes with a theme"),
+        tk("Remove themes it didn't install"),
+    ],
+};
 
 /// A decoded preview: the image and the logical size it is drawn at.
 #[derive(Clone)]
@@ -106,19 +116,13 @@ struct CursorImage {
 /// theme lacks that shape).
 type Previews = Rc<[Option<CursorImage>]>;
 
-/// An install in flight.
-struct Job {
-    /// Permille done.
-    progress: Arc<AtomicU32>,
-    cancel: Arc<AtomicBool>,
-}
-
 #[derive(Default)]
 struct CursorStudio {
     /// Installed theme names (every icon folder), read once per visit.
     installed: Option<Rc<[String]>>,
-    /// The ones Mandara installed (and may remove).
-    ours: Option<Rc<[String]>>,
+    /// The ones Mandara installed (and may remove), with whether each was
+    /// checked against a pinned checksum.
+    ours: Option<Rc<[(String, bool)]>>,
     /// When the lists were read: the manifest's and the user icon folder's
     /// modification times (an install from `mandara msg cursor …` changes
     /// them, so the gallery follows without a revisit).
@@ -131,13 +135,17 @@ struct CursorStudio {
     /// Decoded previews by (theme, logical px).
     previews: HashMap<(String, u32), Previews>,
     loading: HashSet<(String, u32)>,
+    /// The busy cursor's animation per theme (hovered cards only).
+    animations: HashMap<String, Option<CursorImage>>,
+    animating: HashSet<String>,
+    /// The theme whose card the pointer is over.
+    hovered: Option<String>,
+    /// The tone filter ([`TONES`] index).
+    tone: usize,
     /// A remove waiting for its confirming second press.
-    confirm_remove: Option<&'static str>,
+    confirm_remove: Option<String>,
     /// Why X11 apps may not follow the last apply.
     note: Option<String>,
-    /// Where the section was painted, and a pending deep-link scroll.
-    anchor: Rc<Cell<Option<Bounds<Pixels>>>>,
-    pending_scroll: Option<u8>,
 }
 impl Global for CursorStudio {}
 
@@ -161,20 +169,26 @@ fn st(cx: &mut gpui::App) -> &mut CursorStudio {
     cx.default_global::<CursorStudio>()
 }
 
-/// Drops what the page read from disk (on leaving Themes). Running
+/// Drops what the tab read from disk (on leaving it or Themes). Running
 /// installs keep going.
 pub(super) fn release(cx: &mut gpui::App) {
     let s = st(cx);
     s.installed = None;
     s.ours = None;
     let previews = std::mem::take(&mut s.previews);
+    let animations = std::mem::take(&mut s.animations);
     s.loading.clear();
+    s.animating.clear();
+    s.hovered = None;
     s.confirm_remove = None;
     // Their textures go too (Studio calls this outside window updates).
     for set in previews.into_values() {
         for preview in set.iter().flatten() {
             cx.drop_image(preview.image.clone(), None);
         }
+    }
+    for preview in animations.into_values().flatten() {
+        cx.drop_image(preview.image, None);
     }
 }
 
@@ -189,12 +203,6 @@ fn backdrop(p: &MandaraPalette, tint: Option<Color>) -> gpui::Background {
     let Some(tint) = tint else { return base.hsla().into() };
     let bg = if tint.contrast_ratio(base) >= STRIP_MIN_CONTRAST { base } else { base.mix(tint.best_on(p.on_surface, p.surface_base), STRIP_LEAN) };
     mandara_core::oklab_gradient(DIAGONAL_DEG, bg, bg.mix(tint, STRIP_TINT))
-}
-
-/// A GitHub star count in words ("4.2k stars"), no star glyph.
-fn stars(n: u32) -> String {
-    let count = if n as f32 >= THOUSAND { format!("{:.1}k", n as f32 / THOUSAND) } else { n.to_string() };
-    if n == 1 { t("1 star").to_string() } else { tf("{count} stars", &[("count", &count)]) }
 }
 
 /// Makes `theme` the cursor (`None`: your compositor's own), and points X11
@@ -213,6 +221,19 @@ fn set_size(size: Option<u32>, cx: &mut gpui::App) {
     update_config(cx, move |c| c.compositor.input.cursor.size = size);
 }
 
+fn set_tone(i: usize, cx: &mut gpui::App) {
+    st(cx).tone = i;
+}
+
+/// Whether `theme` passes the tone filter.
+fn tone_matches(theme: &CursorTheme, tone: usize) -> bool {
+    match tone {
+        1 => theme.variants.iter().any(|v| swatch(v).lightness() < DARK_BODY),
+        2 => theme.variants.iter().any(|v| swatch(v).lightness() >= DARK_BODY),
+        _ => true,
+    }
+}
+
 /// What a card's action does for the picked variant.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum CardState {
@@ -224,7 +245,7 @@ enum CardState {
 }
 
 impl StudioView {
-    fn cursor_lists(cx: &mut Context<Self>) -> (Rc<[String]>, Rc<[String]>) {
+    fn cursor_lists(cx: &mut Context<Self>) -> (Rc<[String]>, Rc<[(String, bool)]>) {
         let env = install::Env::current();
         let mtime = |p: &std::path::Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
         let stamp = (mtime(&env.manifest), mtime(&env.icons));
@@ -232,12 +253,12 @@ impl StudioView {
         if s.installed.is_none() || s.ours.is_none() || s.stamp != stamp {
             s.stamp = stamp;
             s.installed = Some(input::cursor_themes().into());
-            s.ours = Some(install::installed(&env).into_iter().map(|i| i.theme).collect());
+            s.ours = Some(install::installed(&env).into_iter().map(|i| (i.theme, i.verified)).collect());
         }
         (s.installed.clone().unwrap_or_else(|| Rc::from([])), s.ours.clone().unwrap_or_else(|| Rc::from([])))
     }
 
-    fn cursor_refresh(cx: &mut gpui::App) {
+    pub(super) fn cursor_refresh(cx: &mut gpui::App) {
         let s = st(cx);
         s.installed = None;
         s.ours = None;
@@ -283,32 +304,69 @@ impl StudioView {
         None
     }
 
+    /// The busy cursor of `theme` as an animation at the strip size,
+    /// decoded off the UI thread when its card is first hovered.
+    fn cursor_animation(theme: &str, cx: &mut Context<Self>) -> Option<CursorImage> {
+        if let Some(a) = st(cx).animations.get(theme) {
+            return a.clone();
+        }
+        if !st(cx).animating.insert(theme.to_string()) {
+            return None;
+        }
+        let name = theme.to_string();
+        let task = cx.background_executor().spawn(async move {
+            let dirs = input::icon_dirs();
+            let wanted = (STRIP_CURSOR_PX as f32 * PREVIEW_DENSITY).round() as u32;
+            let path = cursors::find_cursor(&name, Role::Wait, &dirs)?;
+            let frames = xcursor::load_frames(&path, wanted, ANIMATION_FRAMES).ok()?;
+            let first = frames.first()?;
+            let k = STRIP_CURSOR_PX as f32 / first.nominal.max(1) as f32;
+            let (w, h) = (first.width as f32 * k, first.height as f32 * k);
+            let mut out: smallvec::SmallVec<[image::Frame; 1]> = smallvec::SmallVec::with_capacity(frames.len());
+            for f in frames {
+                let delay = image::Delay::from_numer_denom_ms(f.delay_ms.max(1), 1);
+                let mut rgba = f.to_rgba_image()?;
+                for px in rgba.as_chunks_mut::<4>().0 {
+                    px.swap(0, 2);
+                }
+                out.push(image::Frame::from_parts(rgba, 0, 0, delay));
+            }
+            Some(CursorImage { image: Arc::new(RenderImage::new(out)), w, h })
+        });
+        let key = theme.to_string();
+        cx.spawn(async move |this, cx| {
+            let image = task.await;
+            let _ = this.update(cx, |_, cx| {
+                // Left since: the late animation is dropped.
+                if !st(cx).animating.remove(&key) {
+                    if let Some(i) = image {
+                        cx.drop_image(i.image, None);
+                    }
+                    return;
+                }
+                st(cx).animations.insert(key, image);
+                cx.notify();
+            });
+        })
+        .detach();
+        None
+    }
+
     fn cursor_install(&mut self, theme: &'static CursorTheme, variant: &'static CursorVariant, cx: &mut Context<Self>) {
         let name = variant.theme;
         if st(cx).jobs.contains_key(name) {
             return;
         }
-        let progress = Arc::new(AtomicU32::new(0));
-        let cancel = Arc::new(AtomicBool::new(false));
+        let job = Job::new();
+        let (progress, cancel) = (job.progress.clone(), job.cancel.clone());
         let s = st(cx);
         s.errors.remove(name);
-        s.jobs.insert(name, Job { progress: progress.clone(), cancel: cancel.clone() });
+        s.jobs.insert(name, job);
         let task = cx.background_executor().spawn(async move {
             let env = install::Env::current();
-            install::install(theme.id, variant, &env, &|p| progress.store((p.fraction() * PERMILLE) as u32, Ordering::Relaxed), &cancel)
+            install::install(theme.id, variant, &env, &|p| progress.store((p.fraction() * g::PERMILLE) as u32, Ordering::Relaxed), &cancel)
         });
-        // Repaint while it runs so progress moves (stops with the job).
-        cx.spawn(async move |this, cx| loop {
-            cx.background_executor().timer(JOB_REPAINT).await;
-            let running = this.update(cx, |_, cx| {
-                cx.notify();
-                st(cx).jobs.contains_key(name)
-            });
-            if !matches!(running, Ok(true)) {
-                break;
-            }
-        })
-        .detach();
+        Self::repaint_while(cx, move |cx| st(cx).jobs.contains_key(name));
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |_, cx| {
@@ -330,14 +388,15 @@ impl StudioView {
         cx.notify();
     }
 
-    fn cursor_remove(&mut self, name: &'static str, cx: &mut Context<Self>) {
-        if st(cx).confirm_remove != Some(name) {
+    fn cursor_remove(&mut self, name: String, cx: &mut Context<Self>) {
+        if st(cx).confirm_remove.as_deref() != Some(name.as_str()) {
             st(cx).confirm_remove = Some(name);
             cx.notify();
             return;
         }
         st(cx).confirm_remove = None;
-        let task = cx.background_executor().spawn(async move { install::remove(name, &install::Env::current()) });
+        let theme = name.clone();
+        let task = cx.background_executor().spawn(async move { install::remove(&theme, &install::Env::current()) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |_, cx| {
@@ -345,14 +404,14 @@ impl StudioView {
                     Ok(_) => {
                         // A removed theme can't stay the cursor.
                         let active = mandara_ui::state::config(cx).read(cx).get().compositor.input.cursor.theme.clone();
-                        if active.as_deref() == Some(name) {
+                        if active.as_deref() == Some(name.as_str()) {
                             apply_theme(None, cx);
                         }
-                        st(cx).previews.retain(|(t, _), _| t != name);
+                        st(cx).previews.retain(|(t, _), _| *t != name);
                         Self::cursor_refresh(cx);
                     }
                     Err(e) => {
-                        st(cx).errors.insert(name.to_string(), e);
+                        st(cx).errors.insert(name, e);
                     }
                 }
                 cx.notify();
@@ -376,46 +435,21 @@ impl StudioView {
         cx.notify();
     }
 
-    /// Opens Themes scrolled to the Cursor section (`mandara studio
-    /// themes/cursor`, and the Input page's link).
+    /// Opens Themes on its Cursors tab (`mandara studio themes/cursors`,
+    /// the older `themes/cursor` and `cursor` links, and the Input page's
+    /// link).
     pub fn show_cursor_section(&mut self, cx: &mut Context<Self>) {
-        self.show(Section::Themes, cx);
-        st(cx).pending_scroll = Some(0);
-        cx.notify();
+        self.show_themes_tab(super::looks_page::ThemesTab::Cursors, cx);
     }
 
-    fn cursor_scroll(&mut self, cx: &mut Context<Self>) {
-        let Some(frames) = st(cx).pending_scroll else { return };
-        let anchor = st(cx).anchor.get();
-        let viewport = self.content_scroll.bounds();
-        match anchor {
-            Some(b) if frames >= ANCHOR_FRAMES && viewport.size.height > px(0.0) => {
-                let offset = self.content_scroll.offset();
-                let max = self.content_scroll.max_offset();
-                let y = (offset.y - (b.top() - viewport.top()) + px(SCROLL_MARGIN_PX)).min(px(0.0)).max(-max.y);
-                self.content_scroll.set_offset(point(offset.x, y));
-                st(cx).pending_scroll = None;
-                cx.notify();
-            }
-            _ => {
-                st(cx).pending_scroll = Some(frames.saturating_add(1));
-                cx.spawn(async move |this, cx| {
-                    cx.background_executor().timer(ANCHOR_SETTLE).await;
-                    let _ = this.update(cx, |_, cx| cx.notify());
-                })
-                .detach();
-            }
-        }
-    }
-
-    /// The whole Cursor section of the Themes page.
-    pub(super) fn cursor_section(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        // Cursor themes are an opt-in plugin: off, a one-line card offers it
-        // and nothing here reads or writes the cursor.
+    /// The Cursors tab of the Themes page.
+    pub(super) fn cursor_section(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        // Cursor themes are an opt-in plugin: off, the tab offers it and
+        // nothing here reads or writes the cursor.
         if !cfg.cursors_enabled() {
-            return self.plugin_offer(mandara_ui::plugins::cursors::ID, p, cx);
+            return self.plugin_gate(mandara_ui::plugins::cursors::ID, &GATE, p, window, cx);
         }
-        self.cursor_scroll(cx);
+        g::step_lifts(cfg, window, cx);
         let display = mandara_ui::fonts::fonts(cx).display.clone();
         let current = cfg.compositor.input.cursor.theme.clone();
         let reset = chip("cursor-your-config", t("Your config"), current.is_none(), p)
@@ -423,27 +457,21 @@ impl StudioView {
             .on_click(cx.listener(|_, _: &ClickEvent, _, cx| apply_theme(None, cx)))
             .into_any_element();
         let head = section_head(
-            t("Cursor"),
-            tf("{count} popular themes, downloaded on demand from their authors' GitHub releases, checked against a pinned checksum and installed to ~/.local/share/icons", &[("count", &CATALOG.len())]),
+            t("Cursors"),
+            tf("{count} popular themes, downloaded on demand from their authors' GitHub releases, checked against a pinned checksum and installed to ~/.local/share/icons, plus your own from an archive, a folder or a link", &[("count", &CATALOG.len())]),
             vec![reset],
             display,
             p,
         );
         let yours = self.cursor_yours(cfg, p, cx);
+        let search = self.gallery_search(ImportKind::Cursors, t("Search cursor themes…").to_string(), p, cx);
+        let tone = st(cx).tone;
+        let tones = self.filter_chips("cursor-tone", TONES.iter().map(|l| tr(l)).collect(), tone, set_tone, p, cx);
+        let toolbar = div().row().flex_wrap().items_center().gap(px(SPACE_12_PX)).child(tones).child(div().flex_1()).child(search);
         let gallery = self.cursor_gallery(cfg, p, cx);
+        let import = self.import_panel(ImportKind::Cursors, p, cx);
         let others = self.cursor_others(cfg, p, cx);
-        let anchor = st(cx).anchor.clone();
-        div()
-            .relative()
-            .row()
-            .flex_col()
-            .gap(px(SPACE_14_PX))
-            .child(head)
-            .child(yours)
-            .child(gallery)
-            .children(others)
-            .child(canvas(move |bounds, _, _| anchor.set(Some(bounds)), |_, _, _, _| {}).absolute().top_0().left_0().size_full())
-            .into_any_element()
+        div().row().flex_col().gap(px(SPACE_16_PX)).child(head).child(yours).child(toolbar).child(gallery).child(import).children(others).into_any_element()
     }
 
     /// "Your cursor": the applied theme at its size, size chips, and the
@@ -462,35 +490,38 @@ impl StudioView {
         let previews = Self::cursor_previews(&shown, size, cx);
         let tile_bg = backdrop(p, cursors::catalog::by_theme_name(&shown).map(|(_, v)| swatch(v)));
         let tile = (size as f32 + 2.0 * TILE_PAD_PX).max(TILE_MIN_PX);
-        let tiles = Role::ALL.iter().enumerate().map(|(i, role)| {
-            let image = previews.as_ref().and_then(|p| p.get(i).cloned().flatten());
-            div()
-                .flex_1()
-                .min_w(px(tile))
-                .row()
-                .flex_col()
-                .items_center()
-                .gap(px(SPACE_6_PX))
-                .child(
-                    div()
-                        .w_full()
-                        .h(px(tile))
-                        .rounded(px(RADIUS_14_PX))
-                        .bg(tile_bg)
-                        .row()
-                        .items_center()
-                        .justify_center()
-                        .child(match image {
-                            Some(i) => img(i.image).w(px(i.w)).h(px(i.h)).object_fit(gpui::ObjectFit::Fill).into_any_element(),
-                            None => div().size(px(DIM_8_PX)).rounded_full().bg(p.on_surface_variant.with_alpha(ALPHA_30).hsla()).into_any_element(),
-                        }),
-                )
-                .child(div().text_size(px(TEXT_11_PX)).text_color(p.on_surface_variant.hsla()).truncate().child(tr(role.label())))
-                .into_any_element()
-        });
+        let tiles: Vec<AnyElement> = Role::ALL
+            .iter()
+            .enumerate()
+            .map(|(i, role)| {
+                let image = previews.as_ref().and_then(|p| p.get(i).cloned().flatten());
+                div()
+                    .flex_1()
+                    .min_w(px(tile))
+                    .row()
+                    .flex_col()
+                    .items_center()
+                    .gap(px(SPACE_6_PX))
+                    .child(
+                        div()
+                            .w_full()
+                            .h(px(tile))
+                            .rounded(px(RADIUS_14_PX))
+                            .bg(tile_bg)
+                            .row()
+                            .items_center()
+                            .justify_center()
+                            .child(match image {
+                                Some(i) => img(i.image).w(px(i.w)).h(px(i.h)).object_fit(gpui::ObjectFit::Fill).into_any_element(),
+                                None => div().size(px(DIM_8_PX)).rounded_full().bg(p.on_surface_variant.with_alpha(ALPHA_30).hsla()).into_any_element(),
+                            }),
+                    )
+                    .child(div().text_size(px(TEXT_11_PX)).text_color(p.on_surface_variant.hsla()).truncate().child(tr(role.label())))
+                    .into_any_element()
+            })
+            .collect();
         let mut rows_of_tiles = div().row().flex_col().gap(px(SPACE_8_PX));
-        let all: Vec<AnyElement> = tiles.collect();
-        let mut iter = all.into_iter();
+        let mut iter = tiles.into_iter();
         loop {
             let row: Vec<AnyElement> = iter.by_ref().take(TILE_COLUMNS).collect();
             if row.is_empty() {
@@ -519,6 +550,7 @@ impl StudioView {
             .min_w(px(0.0))
             .rounded(px(RADIUS_22_PX))
             .bg(mandara_core::oklab_gradient(DIAGONAL_DEG, p.surface_container, p.surface_container.mix(p.primary_container, ALPHA_35)))
+            .shadow(mandara_core::glass_rim(p.specular_rim_light, p.specular_rim_shadow))
             .p(px(SPACE_16_PX))
             .row()
             .flex_col()
@@ -559,12 +591,56 @@ impl StudioView {
     fn cursor_gallery(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let (installed, ours) = Self::cursor_lists(cx);
         let active = cfg.compositor.input.cursor.theme.clone();
+        let query = Self::gallery_query(ImportKind::Cursors, cx);
+        let tone = st(cx).tone;
+        let shown: Vec<&'static CursorTheme> = CATALOG
+            .iter()
+            .filter(|th| tone_matches(th, tone))
+            .filter(|th| {
+                // No search: nothing to compare (and nothing to format).
+                if query.is_empty() {
+                    return true;
+                }
+                let labels: Vec<String> = th.variants.iter().map(|v| tr(v.label)).collect();
+                let mut fields: Vec<&str> = vec![th.name, th.author, th.license];
+                let desc = tr(th.description);
+                fields.push(&desc);
+                fields.extend(labels.iter().map(String::as_str));
+                fields.extend(th.variants.iter().map(|v| v.theme));
+                g::matches(&query, &fields)
+            })
+            .collect();
+        if shown.is_empty() {
+            return div().px(px(SPACE_4_PX)).text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("No cursor theme matches.")).into_any_element();
+        }
         let fit = grid::fit(self.page.column_w, CURSOR_GRID);
-        let cards: Vec<AnyElement> = CATALOG.iter().map(|theme| self.cursor_card(theme, active.as_deref(), &installed, &ours, p, cx)).collect();
+        let cards: Vec<AnyElement> = shown.into_iter().map(|theme| self.cursor_card(theme, active.as_deref(), &installed, &ours, p, cx)).collect();
         fit.render(cards)
     }
 
-    fn cursor_card(&mut self, theme: &'static CursorTheme, active: Option<&str>, installed: &[String], ours: &[String], p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    /// The preview strip of installed theme `name` (animating the busy
+    /// cursor while `hovered`).
+    fn cursor_strip(name: &str, hovered: bool, p: &MandaraPalette, cx: &mut Context<Self>) -> gpui::Div {
+        let previews = Self::cursor_previews(name, STRIP_CURSOR_PX, cx);
+        let animation = if hovered { Self::cursor_animation(name, cx) } else { None };
+        match previews {
+            Some(images) => div().row().items_center().justify_around().px(px(SPACE_8_PX)).children(Role::STRIP.iter().map(|role| {
+                let still = Role::ALL.iter().position(|r| r == role).and_then(|i| images.get(i).cloned().flatten());
+                let i = if *role == Role::Wait { animation.clone().or(still) } else { still };
+                div()
+                    .id(SharedString::from(format!("cursor-{name}-{role:?}")))
+                    .size(px(DIM_40_PX))
+                    .row()
+                    .items_center()
+                    .justify_center()
+                    .tooltip(tip(tr(role.label()), p))
+                    .children(i.map(|i| img(i.image).w(px(i.w)).h(px(i.h)).object_fit(gpui::ObjectFit::Fill).id(SharedString::from(format!("cursor-img-{name}-{role:?}")))))
+            })),
+            None => div().row().items_center().justify_center().child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("Loading preview…"))),
+        }
+    }
+
+    fn cursor_card(&mut self, theme: &'static CursorTheme, active: Option<&str>, installed: &[String], ours: &[(String, bool)], p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let fonts = mandara_ui::fonts::fonts(cx);
         let is_installed = |v: &CursorVariant| installed.iter().any(|n| n == v.theme);
         // The picked variant: your choice, else the active one, an installed
@@ -578,7 +654,7 @@ impl StudioView {
             .unwrap_or(0)
             .min(theme.variants.len() - 1);
         let variant: &'static CursorVariant = &theme.variants[picked];
-        let job = st(cx).jobs.get(variant.theme).map(|j| j.progress.load(Ordering::Relaxed));
+        let job = st(cx).jobs.get(variant.theme).map(Job::permille);
         let error = st(cx).errors.get(variant.theme).cloned();
         let state = match (job, error.is_some(), is_installed(variant), Some(variant.theme) == active) {
             (Some(pm), ..) => CardState::Installing(pm),
@@ -588,47 +664,27 @@ impl StudioView {
             (None, _, false, _) => CardState::Get,
         };
         let card_active = theme.variants.iter().any(|v| Some(v.theme) == active);
-        let removable = ours.iter().any(|n| n == variant.theme) && is_installed(variant) && job.is_none();
-        let arming = st(cx).confirm_remove == Some(variant.theme);
+        let removable = ours.iter().any(|(n, _)| n == variant.theme) && is_installed(variant) && job.is_none();
+        let arming = st(cx).confirm_remove.as_deref() == Some(variant.theme);
         let tint = swatch(variant);
+        let card_id = SharedString::from(format!("cursor-card-{}", theme.id));
+        let amount = g::lift(&card_id, cx);
+        let hovered = st(cx).hovered.as_deref() == Some(variant.theme);
 
         // The preview strip.
-        let previews = is_installed(variant).then(|| Self::cursor_previews(variant.theme, STRIP_CURSOR_PX, cx)).flatten();
         let strip_bg = if is_installed(variant) { backdrop(p, Some(tint)) } else { backdrop(p, None) };
-        let strip = match (is_installed(variant), previews) {
-            (true, Some(images)) => div().row().items_center().justify_around().px(px(SPACE_8_PX)).children(Role::STRIP.iter().map(|role| {
-                let i = Role::ALL.iter().position(|r| r == role).and_then(|i| images.get(i).cloned().flatten());
-                div().id(SharedString::from(format!("cursor-{}-{role:?}", variant.theme))).size(px(DIM_40_PX)).row().items_center().justify_center().tooltip(tip(tr(role.label()), p)).children(i.map(|i| img(i.image).w(px(i.w)).h(px(i.h)).object_fit(gpui::ObjectFit::Fill)))
-            })),
-            (true, None) => div().row().items_center().justify_center().child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("Loading preview…"))),
-            (false, _) => div()
+        let strip = if is_installed(variant) {
+            Self::cursor_strip(variant.theme, hovered, p, cx)
+        } else {
+            div()
                 .row()
                 .items_center()
                 .justify_center()
                 .gap(px(SPACE_10_PX))
                 .child(div().size(px(DIM_40_PX)).rounded_full().bg(tint.hsla()).border_2().border_color(tint.best_on(p.on_surface, p.surface_base).with_alpha(ALPHA_30).hsla()).row().items_center().justify_center().child(icon("pointer", ICON_17_PX, tint.best_on(Color::from_rgba8(u8::MAX, u8::MAX, u8::MAX, u8::MAX), Color::from_rgba8(0, 0, 0, u8::MAX)))))
-                .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("Preview after download"))),
+                .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("Preview after download")))
         };
-        let strip = div().h(px(STRIP_H_PX)).rounded(px(RADIUS_16_PX)).bg(strip_bg).overflow_hidden().relative().child(strip.size_full()).when(state == CardState::Active, |el| {
-            el.child(
-                div()
-                    .absolute()
-                    .top(px(SPACE_8_PX))
-                    .inset_end(px(SPACE_8_PX))
-                    .px(px(SPACE_8_PX))
-                    .h(px(DIM_20_PX))
-                    .rounded_full()
-                    .row()
-                    .items_center()
-                    .gap(px(SPACE_4_PX))
-                    .bg(p.primary.hsla())
-                    .text_color(p.on_primary.hsla())
-                    .text_size(px(TEXT_10_5_PX))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(icon("check", ICON_11_PX, p.on_primary))
-                    .child(t("Active")),
-            )
-        });
+        let strip = div().h(px(STRIP_H_PX)).rounded(px(RADIUS_16_PX)).bg(strip_bg).overflow_hidden().relative().child(strip.size_full()).when(state == CardState::Active, |el| el.child(active_badge(p)));
 
         // Variant dots.
         let rtl = mandara_i18n::language().is_rtl();
@@ -664,53 +720,17 @@ impl StudioView {
             .when(state == CardState::Active, |el| el.opacity(ALPHA_75).cursor_default())
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.cursor_act(theme, variant, state, cx)));
         let remove = removable.then(|| {
-            let name = variant.theme;
-            div()
-                .id(SharedString::from(format!("cursor-rm-{name}")))
-                .h(px(DIM_34_PX))
-                .px(px(if arming { SPACE_12_PX } else { SPACE_9_PX }))
-                .rounded_full()
-                .row()
-                .items_center()
-                .gap(px(SPACE_6_PX))
-                .flex_none()
-                .cursor_pointer()
-                .bg(if arming { p.urgent_coral.hsla() } else { p.urgent_coral.with_alpha(ALPHA_14).hsla() })
-                .text_color(if arming { p.on_primary.hsla() } else { p.urgent_coral.hsla() })
-                .text_size(px(TEXT_12_5_PX))
-                .font_weight(FontWeight::MEDIUM)
-                .tooltip(tip(t("Remove (only what Mandara installed)"), p))
-                .child(icon("trash", ICON_14_PX, if arming { p.on_primary } else { p.urgent_coral }))
-                .when(arming, |el| el.child(t("Remove?")))
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.cursor_remove(name, cx)))
+            let name = variant.theme.to_string();
+            g::remove_button(SharedString::from(format!("cursor-rm-{name}")), arming, p).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.cursor_remove(name.clone(), cx)))
         });
-        let homepage = div()
-            .id(SharedString::from(format!("cursor-home-{}", theme.id)))
-            .size(px(DIM_34_PX))
-            .rounded_full()
-            .flex_none()
-            .row()
-            .items_center()
-            .justify_center()
-            .cursor_pointer()
-            .hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_8).hsla()))
-            .tooltip(tip(theme.homepage, p))
-            .child(icon("external", ICON_14_PX, p.on_surface_variant))
-            .on_click(move |_: &ClickEvent, _, _| super::open_link(theme.homepage));
-        let progress = job.map(|pm| {
-            div().h(px(PROGRESS_H_PX)).w_full().rounded_full().bg(p.surface_container_high.hsla()).child(div().h_full().w(gpui::relative((pm.min(PERMILLE as u32) as f32 / PERMILLE).max(PROGRESS_MIN))).rounded_full().bg(mandara_core::oklab_gradient(HORIZONTAL_DEG, p.accent_gradient_start, p.accent_gradient_end)))
-        });
-        let error_row = error.map(|e| {
-            div().row().items_start().gap(px(SPACE_6_PX)).child(icon("alert", ICON_13_PX, p.urgent_coral)).child(div().flex_1().min_w(px(0.0)).text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).text_color(p.urgent_coral.hsla()).child(mandara_ui::bidi::paragraph(e)))
-        });
+        let progress = job.map(|pm| g::progress_bar(pm, p));
+        let error_row = error.map(|e| g::error_row(e, p));
         let n = theme.variants.len();
-        div()
-            .id(SharedString::from(format!("cursor-card-{}", theme.id)))
+        let hover_name = variant.theme;
+        g::glass_card(card_id.clone(), tint, amount, p)
             .flex_1()
             .tab_index(0)
             .p(px(SPACE_8_PX))
-            .rounded(px(RADIUS_22_PX))
-            .bg(p.surface_container.hsla())
             .border_2()
             .border_color(if card_active { p.primary.hsla() } else { gpui::transparent_black() })
             .hover(|s| s.border_color(p.primary.with_alpha(ALPHA_35).hsla()))
@@ -731,7 +751,7 @@ impl StudioView {
                             .items_center()
                             .gap(px(SPACE_8_PX))
                             .child(div().flex_1().min_w(px(0.0)).truncate().text_start().font_family(fonts.display.clone()).text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).child(theme.name))
-                            .child(div().text_size(px(TEXT_11_PX)).text_color(p.on_surface_variant.hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(stars(theme.stars))),
+                            .child(div().text_size(px(TEXT_11_PX)).text_color(p.on_surface_variant.hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(g::stars(theme.stars))),
                     )
                     .child(div().row().items_center().gap(px(SPACE_6_PX)).child(div().flex_1().min_w(px(0.0)).truncate().text_start().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(theme.author)).child(badge(theme.license, p.tertiary)))
                     .child(div().row().items_center().gap(px(SPACE_8_PX)).child(dots).child(div().flex_1().min_w(px(0.0)).truncate().text_start().text_size(px(TEXT_12_PX)).font_weight(FontWeight::MEDIUM).child(tr(variant.label))))
@@ -739,7 +759,17 @@ impl StudioView {
                     .children(progress)
                     .children(error_row),
             )
-            .child(div().px(px(SPACE_4_PX)).pb(px(SPACE_4_PX)).row().items_center().gap(px(SPACE_6_PX)).child(primary).child(div().flex_1()).children(remove).child(homepage))
+            .child(div().px(px(SPACE_4_PX)).pb(px(SPACE_4_PX)).row().items_center().gap(px(SPACE_6_PX)).child(primary).child(div().flex_1()).children(remove).child(g::homepage_button(SharedString::from(format!("cursor-home-{}", theme.id)), theme.homepage, p)))
+            .on_hover(cx.listener(move |_, h: &bool, _, cx| {
+                g::set_hover(card_id.clone(), *h, cx);
+                let s = st(cx);
+                if *h {
+                    s.hovered = Some(hover_name.to_string());
+                } else if s.hovered.as_deref() == Some(hover_name) {
+                    s.hovered = None;
+                }
+                cx.notify();
+            }))
             .on_key_down(cx.listener(move |this, e: &gpui::KeyDownEvent, _, cx| {
                 let k = &e.keystroke;
                 if k.modifiers.control || k.modifiers.alt || k.modifiers.platform {
@@ -756,7 +786,7 @@ impl StudioView {
                         st(cx).picked.insert(theme.id, (picked + step(false)) % n);
                         cx.notify();
                     }
-                    "delete" | "backspace" if removable => this.cursor_remove(variant.theme, cx),
+                    "delete" | "backspace" if removable => this.cursor_remove(variant.theme.to_string(), cx),
                     _ => return,
                 }
                 cx.stop_propagation();
@@ -764,32 +794,95 @@ impl StudioView {
             .into_any_element()
     }
 
-    /// Installed themes outside the catalog (packages, your own folders).
+    /// Installed themes outside the catalog (packages, your own folders,
+    /// imports), as cards with their own previews.
     fn cursor_others(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let (installed, _) = Self::cursor_lists(cx);
-        let others: Vec<String> = installed.iter().filter(|n| cursors::catalog::by_theme_name(n).is_none()).cloned().collect();
+        let (installed, ours) = Self::cursor_lists(cx);
+        let query = Self::gallery_query(ImportKind::Cursors, cx);
+        let others: Vec<String> = installed.iter().filter(|n| cursors::catalog::by_theme_name(n).is_none() && g::matches(&query, &[n.as_str()])).cloned().collect();
         if others.is_empty() {
             return None;
         }
+        let display = mandara_ui::fonts::fonts(cx).display.clone();
         let current = cfg.compositor.input.cursor.theme.clone();
-        let chips = others.into_iter().map(|name| {
-            let active = current.as_deref() == Some(name.as_str());
-            let n = name.clone();
-            chip(SharedString::from(format!("cursor-other-{name}")), name, active, p).tab_index(0).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| apply_theme(Some(n.clone()), cx))).into_any_element()
-        });
-        Some(
-            div()
-                .rounded(px(RADIUS_22_PX))
-                .bg(p.surface_container.hsla())
-                .p(px(SPACE_16_PX))
-                .row()
-                .flex_col()
-                .gap(px(SPACE_10_PX))
-                .child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(t("Also installed")))
-                .child(div().row().flex_wrap().gap(px(SPACE_6_PX)).children(chips))
-                .into_any_element(),
-        )
+        let fit = grid::fit(self.page.column_w, CURSOR_GRID);
+        let cards: Vec<AnyElement> = others
+            .into_iter()
+            .map(|name| {
+                let active = current.as_deref() == Some(name.as_str());
+                let mine = ours.iter().find(|(n, _)| *n == name).map(|(_, verified)| *verified);
+                let card_id = SharedString::from(format!("cursor-other-{name}"));
+                let amount = g::lift(&card_id, cx);
+                let hovered = st(cx).hovered.as_deref() == Some(name.as_str());
+                let strip = div().h(px(STRIP_H_PX)).rounded(px(RADIUS_16_PX)).bg(backdrop(p, None)).overflow_hidden().relative().child(Self::cursor_strip(&name, hovered, p, cx).size_full()).when(active, |el| el.child(active_badge(p)));
+                let origin = match mine {
+                    Some(false) => g::tag(t("Imported · unverified"), p.warning_amber),
+                    Some(true) => g::tag(t("Installed by Mandara"), p.primary),
+                    None => g::tag(t("From a package or your folders"), p.on_surface_variant),
+                };
+                let arming = st(cx).confirm_remove.as_deref() == Some(name.as_str());
+                let apply_name = name.clone();
+                let action = button(SharedString::from(format!("cursor-other-act-{name}")), "check", if active { t("Active") } else { t("Apply") }, !active, p)
+                    .when(active, |el| el.opacity(ALPHA_75).cursor_default())
+                    .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                        if !active {
+                            apply_theme(Some(apply_name.clone()), cx);
+                        }
+                    }));
+                let remove = mine.is_some().then(|| {
+                    let n = name.clone();
+                    g::remove_button(SharedString::from(format!("cursor-other-rm-{name}")), arming, p).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.cursor_remove(n.clone(), cx)))
+                });
+                let error = st(cx).errors.get(&name).cloned().map(|e| g::error_row(e, p));
+                let hover_name = name.clone();
+                let hover_id = card_id.clone();
+                g::glass_card(card_id, p.secondary, amount, p)
+                    .flex_1()
+                    .p(px(SPACE_8_PX))
+                    .border_2()
+                    .border_color(if active { p.primary.hsla() } else { gpui::transparent_black() })
+                    .hover(|s| s.border_color(p.primary.with_alpha(ALPHA_35).hsla()))
+                    .row()
+                    .flex_col()
+                    .gap(px(SPACE_10_PX))
+                    .child(strip)
+                    .child(div().px(px(SPACE_6_PX)).row().flex_col().gap(px(SPACE_6_PX)).child(div().truncate().text_start().font_family(display.clone()).text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).child(name.clone())).child(div().row().child(origin)).children(error))
+                    .child(div().px(px(SPACE_4_PX)).pb(px(SPACE_4_PX)).row().items_center().gap(px(SPACE_6_PX)).child(action).child(div().flex_1()).children(remove))
+                    .on_hover(cx.listener(move |_, h: &bool, _, cx| {
+                        g::set_hover(hover_id.clone(), *h, cx);
+                        let s = st(cx);
+                        if *h {
+                            s.hovered = Some(hover_name.clone());
+                        } else if s.hovered.as_deref() == Some(hover_name.as_str()) {
+                            s.hovered = None;
+                        }
+                        cx.notify();
+                    }))
+                    .into_any_element()
+            })
+            .collect();
+        Some(div().row().flex_col().gap(px(SPACE_10_PX)).child(div().px(px(SPACE_4_PX)).text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(t("Also installed"))).child(fit.render(cards)).into_any_element())
     }
+}
+
+/// The "Active" pill over a strip's corner.
+fn active_badge(p: &MandaraPalette) -> gpui::Div {
+    div()
+        .absolute()
+        .top(px(SPACE_8_PX))
+        .inset_end(px(SPACE_8_PX))
+        .px(px(SPACE_8_PX))
+        .h(px(DIM_20_PX))
+        .rounded_full()
+        .row()
+        .items_center()
+        .gap(px(SPACE_4_PX))
+        .bg(p.primary.hsla())
+        .text_color(p.on_primary.hsla())
+        .text_size(px(TEXT_10_5_PX))
+        .font_weight(FontWeight::SEMIBOLD)
+        .child(icon("check", ICON_11_PX, p.on_primary))
+        .child(t("Active"))
 }
 
 /// "Bibata Modern · Ice" for a catalog theme name.
@@ -808,6 +901,7 @@ mod tests {
         assert!(SIZE_PRESETS.iter().all(|s| (CURSOR_SIZE_MIN..=CURSOR_SIZE_MAX).contains(&f64::from(*s))));
         assert!(SIZE_PRESETS.contains(&DEFAULT_SIZE));
         assert!(Role::STRIP.iter().all(|r| Role::ALL.contains(r)));
+        assert!(Role::STRIP.contains(&Role::Wait), "the strip shows the busy cursor it animates");
     }
 
     fn preview_set() -> Vec<Option<CursorImage>> {
@@ -838,23 +932,27 @@ mod tests {
     }
 
     #[test]
-    fn swatches_and_stars_render() {
+    fn swatches_names_and_tones() {
         let v = &CATALOG[0].variants[0];
         assert_eq!(swatch(v).to_rgba8()[3], u8::MAX);
-        assert_eq!(stars(4233), "4.2k stars");
-        assert_eq!(stars(186), "186 stars");
-        assert_eq!(stars(1), "1 star");
         assert_eq!(catalog_name("Bibata-Modern-Ice").as_deref(), Some("Bibata Modern · Ice"));
         assert_eq!(catalog_name("Adwaita"), None);
+        // Every theme passes "All"; the tone chips split the rest.
+        assert!(CATALOG.iter().all(|th| tone_matches(th, 0)));
+        assert!(CATALOG.iter().any(|th| tone_matches(th, 1)) && CATALOG.iter().any(|th| tone_matches(th, 2)));
+        let bibata = cursors::catalog::find("bibata").unwrap();
+        assert!(tone_matches(bibata, 1) && tone_matches(bibata, 2), "Classic is dark, Ice is light");
+        assert_eq!(TONES.len(), 3);
     }
 
     #[test]
-    fn every_cursor_setting_is_on_the_themes_page() {
+    fn every_cursor_setting_is_on_the_cursors_tab() {
         let rows: Vec<_> = registry::in_section(Section::Themes).filter(|s| s.group == CURSOR).map(|s| s.path).collect();
         for p in [CURSOR_THEME_PATH, crate::registry::system_settings::CURSOR_SIZE_PATH, "/compositor/input/cursor/hide_when_typing", "/compositor/input/cursor/hide_after_secs", "/compositor/input/cursor/no_hardware_cursors", "/compositor/input/cursor/hide_on_touch"] {
             assert!(rows.contains(&p), "{p}");
         }
         // Search finds them.
         assert!(registry::settings().iter().any(|s| s.path == CURSOR_THEME_PATH && s.matches("cursor theme")));
+        assert!(GATE.will.len() >= 2 && !GATE.wont.is_empty());
     }
 }

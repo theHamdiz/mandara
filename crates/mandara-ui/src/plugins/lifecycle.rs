@@ -187,6 +187,7 @@ mod tests {
         "git-repos",
         "hadith",
         "home-assistant",
+        "icon-themes",
         "jannah",
         "keybinds",
         "local-ai",

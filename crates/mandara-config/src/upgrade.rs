@@ -98,6 +98,8 @@ pub const OPT_IN_SINCE_V1: &[(&str, &str)] = &[
 pub const WALLHAVEN_ID: &str = "wallhaven";
 /// The cursor themes plugin's id (Studio → Themes → Cursor, `cursor …`).
 pub const CURSORS_ID: &str = "cursors";
+/// The icon themes plugin's id (Studio → Themes → Icons, `icons …`).
+pub const ICONS_ID: &str = "icon-themes";
 
 fn push_unique(list: &mut Vec<String>, id: &str) {
     if !list.iter().any(|x| x == id) {

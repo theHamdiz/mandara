@@ -99,7 +99,7 @@ mandara msg depth place-clock              # move the clock to where the subject
 mandara msg language set ar                 # language list
 mandara msg plugins reload                  # plugins list|enable|disable|remove|restore <id>
 mandara msg plugins remove prayer-times     # built-ins: off + out of bar/sidebar until `plugins restore` (core plugins refuse)
-mandara msg plugins enable wallhaven        # opt-in built-ins: wallhaven, cursors, dock, notes, todo, pomodoro, … ([plugins](plugins.md): "ship switched off")
+mandara msg plugins enable wallhaven        # opt-in built-ins: wallhaven, cursors, icon-themes, dock, notes, todo, pomodoro, … ([plugins](plugins.md): "ship switched off")
 mandara msg config set /integrations/gtk4 true   # theme an app (all off by default); false takes Mandara's changes back
 mandara msg plugins vet ./my-plugin          # the marketplace's compliance check: {"ok":true} or {"ok":false,"class":"broken|malicious|placeholder","reason":…}
 mandara msg config get /bar/height         # config set /bar/height 30, show, reload, export, import, reset
@@ -425,6 +425,12 @@ mandara msg cursor list              # the cursor catalog: variants, licence, st
 mandara msg cursor install bibata/ice   # download the pinned GitHub release, verify SHA-256, install to ~/.local/share/icons
 mandara msg cursor apply bibata/ice 32  # theme (catalog id[/variant] or XCursor name) and optional size, live; `none` = your compositor's
 mandara msg cursor remove bibata     # every variant Mandara installed (or one: bibata/ice); never a package's or your own
+mandara msg cursor import ~/Downloads/Sweet-cursors.tar.xz  # your own: an archive or folder, or an https:// link with --unverified
+mandara msg icons list               # the icon theme catalog: variants, licence, stars, style, installed / by Mandara / active, imports, other installed themes
+mandara msg icons install papirus/dark  # download the pinned GitHub archive, verify SHA-256, install to ~/.local/share/icons (with Papirus, which it links into)
+mandara msg icons apply papirus/dark # Mandara's icons and the desktop's (gsettings, GTK settings.ini, kdeglobals, qt5ct / qt6ct), live; `none` = follow your desktop
+mandara msg icons remove papirus/dark   # only what Mandara installed; folders another installed theme needs stay
+mandara msg icons import https://example.org/Some-icons.tar.xz --unverified  # your own: an archive, a folder, or a link (no checksum: needs --unverified)
 mandara msg calendar add webcal://example.com/holidays.ics Holidays  # calendar [days], sources, remove <n>, refresh
 mandara msg calendar open            # open the shell calendar without a calendar source
 mandara msg calendar goto 2026-12     # open the clock panel's calendar there: today, next, prev, +N / -N days, YYYY-MM, YYYY-MM-DD
@@ -447,7 +453,23 @@ theme folder; it never runs anything from the archive. `cursor apply` checks
 the theme is installed, then writes the compositor drop-in and reloads it
 (Hyprland also gets `setcursor`) and points `~/.icons/default` at it when
 that file is Mandara's. Removing the active theme returns to your
-compositor's cursor.
+compositor's cursor. `cursor import` installs every cursor theme in an
+archive, a folder or an `https://` link after the same checks; a link has
+no checksum to verify, so it needs `--unverified`.
+
+The `icons` commands belong to the opt-in **Icon themes** plugin
+(`mandara msg plugins enable icon-themes`); while it is off they answer that
+the plugin is off and change nothing. `icons install` fetches only the
+catalog's pinned archive from the project's own GitHub repository, keeps it
+only when its size and SHA-256 match, unpacks just the folders the variant
+needs (refusing unsafe paths, dropping links that leave the theme, capping
+size and file count), checks each `index.theme`, strips executable bits and
+scripts, and moves the theme into `~/.local/share/icons`; it never runs
+anything from the archive. `icons apply` sets `appearance.icon_theme` and
+the desktop's icon theme one key at a time, recording what was there in
+`~/.config/mandara/generated/icon-theme.json`; `icons apply none` restores
+each key that still holds Mandara's value. Removing the active theme
+follows your desktop again.
 
 `apps uninstall` uses the app's own package manager, detected at runtime:
 system packages run `pkexec <manager> …` (polkit asks for your password;

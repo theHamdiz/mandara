@@ -156,6 +156,32 @@ pub fn load(path: &Path, wanted: u32) -> std::io::Result<Image> {
     read_frame(&mut f, wanted, 0)
 }
 
+/// Up to `max` animation frames of `path` at the size best suited to
+/// `wanted`, sampled evenly (a still cursor gives one). Each kept frame's
+/// delay covers the frames skipped after it, so the loop keeps its speed.
+pub fn load_frames(path: &Path, wanted: u32, max: usize) -> std::io::Result<Vec<Image>> {
+    let mut f = std::io::BufReader::new(std::fs::File::open(path)?);
+    let toc = read_toc(&mut f)?;
+    let nominal = pick_size(&sizes(&toc), wanted).ok_or_else(|| invalid("no images"))?;
+    let frames: Vec<TocEntry> = toc.into_iter().filter(|e| e.kind == IMAGE_TYPE && e.subtype == nominal).collect();
+    let step = frames.len().div_ceil(max.max(1)).max(1);
+    let mut out = Vec::with_capacity(frames.len().div_ceil(step));
+    for chunk in frames.chunks(step) {
+        let mut image = read_image(&mut f, chunk[0])?;
+        if chunk.len() > 1 {
+            // The skipped frames' time goes to the kept one.
+            let mut total = image.delay_ms;
+            for e in &chunk[1..] {
+                f.seek(SeekFrom::Start(u64::from(e.position) + 32))?;
+                total = total.saturating_add(read_u32s(&mut f, 1)?[0]);
+            }
+            image.delay_ms = total;
+        }
+        out.push(image);
+    }
+    Ok(out)
+}
+
 /// An image to [`encode`]: `(nominal, width, height, xhot, yhot, delay,
 /// premultiplied ARGB pixels)`.
 pub type RawImage = (u32, u32, u32, u32, u32, u32, Vec<u32>);
@@ -205,6 +231,23 @@ mod tests {
         assert_eq!(sizes(&toc), vec![24, 48]);
         assert_eq!(frame_count(&toc, 48), 2);
         assert_eq!(frame_count(&toc, 24), 1);
+    }
+
+    #[test]
+    fn loads_sampled_animation_frames_keeping_the_loop_time() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("wait");
+        let frames: Vec<RawImage> = (0..5).map(|i| (32, 1, 1, 0, 0, 40, vec![0xff00_0000 | i])).collect();
+        std::fs::write(&path, encode(&frames)).unwrap();
+        let all = load_frames(&path, 32, 8).unwrap();
+        assert_eq!(all.len(), 5);
+        assert!(all.iter().all(|f| f.delay_ms == 40));
+        let few = load_frames(&path, 32, 2).unwrap();
+        assert_eq!(few.len(), 2);
+        assert_eq!(few.iter().map(|f| f.delay_ms).sum::<u32>(), 200, "the loop lasts as long");
+        assert_eq!(few[1].rgba[2], 3, "every third frame");
+        std::fs::write(&path, fixture()).unwrap();
+        assert_eq!(load_frames(&path, 24, 8).unwrap().len(), 1);
     }
 
     #[test]

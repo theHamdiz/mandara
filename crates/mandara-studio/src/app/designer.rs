@@ -174,7 +174,7 @@ pub(crate) fn place_in(c: &mut ShellConfig, id: &str, from: Lane, to: Lane, inde
 }
 
 /// Built-ins without a bar item.
-const NO_BAR: &[&str] = &["main-menu", "compositor", "quick-settings", "wallhaven", "cursors", "dock", "app-installer"];
+const NO_BAR: &[&str] = &["main-menu", "compositor", "quick-settings", "wallhaven", "cursors", "icon-themes", "dock", "app-installer"];
 
 /// Desktop-only families and service plugins have no bar view. A missing
 /// default zone alone does not imply that: optional bar items use it too.
