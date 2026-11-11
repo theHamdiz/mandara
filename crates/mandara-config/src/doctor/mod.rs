@@ -39,6 +39,10 @@ mod niri;
 mod river;
 mod kwin;
 mod aqueous;
+mod labwc;
+mod cosmic;
+pub use cosmic::NOTE as COSMIC_NOTE;
+pub use labwc::NOTE as LABWC_NOTE;
 mod sway;
 pub(crate) use sway::has_error as sway_has_error;
 mod umbriel;
@@ -434,6 +438,8 @@ pub fn checker(target: Target) -> &'static dyn CompositorCheck {
         Target::River => &river::River,
         Target::KWin => &kwin::KWin,
         Target::Aqueous => &aqueous::Aqueous,
+        Target::Labwc => &labwc::Labwc,
+        Target::Cosmic => &cosmic::Cosmic,
     }
 }
 
@@ -794,7 +800,7 @@ pub fn explain(d: &Diagnostic, target: Target, version: Option<&str>) -> String 
         DiagKind::BindConflict => tf("This key combination is bound more than once; {compositor} uses only one of the binds.", &[("compositor", &compositor)]),
         DiagKind::MissingInclude => tf("This line includes a file that isn't there, so {compositor} can't load it.", &[("compositor", &compositor)]),
         // Mandara's own findings (River has no checker) explain themselves.
-        DiagKind::Other if matches!(target, Target::River | Target::KWin | Target::Aqueous) => d.message.clone(),
+        DiagKind::Other if matches!(target, Target::River | Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic) => d.message.clone(),
         DiagKind::Other => tf("{compositor} reported a problem here.", &[("compositor", &compositor)]),
     }
 }

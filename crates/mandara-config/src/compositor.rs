@@ -22,8 +22,9 @@
 //!   ([`river_commands`]; `river.conf` keeps a record of them). The one
 //!   line a user adds is the one that starts Mandara from `init`
 //!   ([`river_spawn_line`]).
-//! * KWin and Aqueous — none ([`Target::self_configured`]): their settings
-//!   stay in Plasma System Settings and in Aqueous's own TOML files.
+//! * KWin, Aqueous, labwc and COSMIC — none ([`Target::self_configured`]):
+//!   their settings stay in Plasma System Settings, Aqueous's own TOML
+//!   files, labwc's `rc.xml` and COSMIC Settings.
 //!
 //! Keybinds that collide with binds already in the user's config are
 //! skipped and reported instead of silently overriding them.
@@ -52,13 +53,15 @@ pub enum Target {
     #[serde(rename = "kwin")]
     KWin,
     Aqueous,
+    Labwc,
+    Cosmic,
 }
 
 impl Target {
-    pub const ALL: [Target; 8] = [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway, Target::River, Target::KWin, Target::Aqueous];
+    pub const ALL: [Target; 10] = [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway, Target::River, Target::KWin, Target::Aqueous, Target::Labwc, Target::Cosmic];
 
     /// This compositor's column in the `[MangoWM, Niri, Hyprland, Umbriel,
-    /// Sway, River, KWin, Aqueous]` support tables ([`RULE_OPTIONS`], `input::INPUT_OPTIONS`).
+    /// Sway, River, KWin, Aqueous, labwc, COSMIC]` support tables ([`RULE_OPTIONS`], `input::INPUT_OPTIONS`).
     pub const fn index(self) -> usize {
         match self {
             Target::Mango => 0,
@@ -69,16 +72,20 @@ impl Target {
             Target::River => 5,
             Target::KWin => 6,
             Target::Aqueous => 7,
+            Target::Labwc => 8,
+            Target::Cosmic => 9,
         }
     }
 
     /// Compositors whose settings stay in their own tools, so Mandara
-    /// writes no drop-in for them: KWin (Plasma System Settings) and
+    /// writes no drop-in for them: KWin (Plasma System Settings),
     /// Aqueous (its hot-reloaded TOML files in `~/.config/aqueous`, which
-    /// document no include directive). Mandara drives both over their
-    /// native protocols only.
+    /// document no include directive), labwc (`rc.xml` has no include
+    /// Mandara's drop-in could use safely) and COSMIC (COSMIC Settings,
+    /// stored in its own files under `~/.config/cosmic`). Mandara drives
+    /// them over their native protocols only.
     pub const fn self_configured(self) -> bool {
-        matches!(self, Target::KWin | Target::Aqueous)
+        matches!(self, Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic)
     }
 
     /// Where a [`Target::self_configured`] compositor keeps its settings
@@ -87,6 +94,8 @@ impl Target {
         match self {
             Target::KWin => Some(KWIN_SETTINGS),
             Target::Aqueous => Some(AQUEOUS_SETTINGS),
+            Target::Labwc => Some(LABWC_SETTINGS),
+            Target::Cosmic => Some(COSMIC_SETTINGS),
             _ => None,
         }
     }
@@ -103,6 +112,8 @@ impl Target {
             "river" | "river-classic" => Some(Target::River),
             "kwin" | "kde" | "plasma" => Some(Target::KWin),
             "aqueous" => Some(Target::Aqueous),
+            "labwc" => Some(Target::Labwc),
+            "cosmic" | "cosmic-comp" => Some(Target::Cosmic),
             _ => None,
         }
     }
@@ -118,6 +129,8 @@ impl Target {
             Target::River => "river",
             Target::KWin => "kwin",
             Target::Aqueous => "aqueous",
+            Target::Labwc => "labwc",
+            Target::Cosmic => "cosmic",
         }
     }
 
@@ -132,6 +145,8 @@ impl Target {
             Target::River => "River",
             Target::KWin => "KWin",
             Target::Aqueous => "Aqueous",
+            Target::Labwc => "labwc",
+            Target::Cosmic => "COSMIC",
         }
     }
 
@@ -156,6 +171,8 @@ impl Target {
             Target::KWin => "kwin.conf",
             // Never written: Aqueous reads only its own files.
             Target::Aqueous => "aqueous.conf",
+            Target::Labwc => "labwc.conf",
+            Target::Cosmic => "cosmic.conf",
         })
     }
 
@@ -176,6 +193,12 @@ impl Target {
             // Bindings, actions, workspaces and global policy (next to its
             // outputs, layout, input and rules files).
             Target::Aqueous => config.join("aqueous/wm.toml"),
+            // labwc's main config (next to its autostart, environment and
+            // menu files).
+            Target::Labwc => config.join("labwc/rc.xml"),
+            // COSMIC keeps its compositor settings as one RON file per
+            // value in this directory.
+            Target::Cosmic => config.join("cosmic/com.system76.CosmicComp/v1"),
         }
     }
 
@@ -192,7 +215,7 @@ impl Target {
             Target::Umbriel => format!("[include.optional]\nfiles = [{}]", toml_str(&self.generated_file().display().to_string())),
             Target::Sway => sway_include_line(&self.generated_file().display().to_string()),
             Target::River => river_spawn_line(&paths::self_exe().display().to_string()),
-            Target::KWin | Target::Aqueous => String::new(),
+            Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic => String::new(),
         }
     }
 }
@@ -201,6 +224,10 @@ impl Target {
 pub const KWIN_SETTINGS: &str = mandara_i18n::tk("KWin settings are managed in Plasma System Settings");
 /// [`Target::settings_elsewhere`] for Aqueous.
 pub const AQUEOUS_SETTINGS: &str = mandara_i18n::tk("Aqueous settings stay in its own files in ~/.config/aqueous");
+/// [`Target::settings_elsewhere`] for labwc.
+pub const LABWC_SETTINGS: &str = mandara_i18n::tk("labwc settings stay in ~/.config/labwc (rc.xml, autostart)");
+/// [`Target::settings_elsewhere`] for COSMIC.
+pub const COSMIC_SETTINGS: &str = mandara_i18n::tk("COSMIC settings are managed in COSMIC Settings");
 
 /// The line that starts Mandara from River's `init` (which Mandara never
 /// edits: the user adds it; `riverctl spawn` runs it through `/bin/sh -c`).
@@ -344,6 +371,10 @@ pub fn installed_version(target: Target) -> Option<(u32, u32)> {
         Target::KWin => "kwin_wayland",
         // `aqueous -version` (its `main.zig`): `aqueous 0.4.0 +xwayland`.
         Target::Aqueous => "aqueous",
+        // `labwc 0.20.2 (+xwayland …) wlroots-0.20.2`.
+        Target::Labwc => "labwc",
+        // `cosmic-comp 1.0.0 (git commit …)`.
+        Target::Cosmic => "cosmic-comp",
     };
     let slot = &CACHE[target.index()];
     *slot.get_or_init(|| {
@@ -393,22 +424,22 @@ pub struct TagRule {
 }
 
 /// Window-rule options and the compositors whose drop-in honours them
-/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin, Aqueous]`). Studio greys out the rest.
+/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin, Aqueous, labwc, COSMIC]`). Studio greys out the rest.
 /// Umbriel's `global` is its `default_pinned` (above other windows on every
 /// workspace of the output, like Hyprland's `pin`); Sway's is `sticky` (a
 /// floating window shown on every workspace of its output); River's is a
 /// `tags` rule putting new windows on every tag. Sway and River have no
 /// per-focus opacity, blur or shadows.
 pub const RULE_OPTIONS: &[(&str, [bool; Target::ALL.len()])] = &[
-    ("floating", [true, true, true, true, true, true, false, false]),
-    ("global", [true, false, true, true, true, true, false, false]),
-    ("overlay", [true, false, false, false, false, false, false, false]),
-    ("focused_opacity", [true, true, true, true, false, false, false, false]),
-    ("unfocused_opacity", [true, true, true, true, false, false, false, false]),
-    ("no_blur", [true, false, true, true, false, false, false, false]),
-    ("no_shadow", [true, true, true, true, false, false, false, false]),
-    ("confine_pointer", [true, false, false, true, false, false, false, false]),
-    ("force_tiled_state", [true, false, false, false, false, false, false, false]),
+    ("floating", [true, true, true, true, true, true, false, false, false, false]),
+    ("global", [true, false, true, true, true, true, false, false, false, false]),
+    ("overlay", [true, false, false, false, false, false, false, false, false, false]),
+    ("focused_opacity", [true, true, true, true, false, false, false, false, false, false]),
+    ("unfocused_opacity", [true, true, true, true, false, false, false, false, false, false]),
+    ("no_blur", [true, false, true, true, false, false, false, false, false, false]),
+    ("no_shadow", [true, true, true, true, false, false, false, false, false, false]),
+    ("confine_pointer", [true, false, false, true, false, false, false, false, false, false]),
+    ("force_tiled_state", [true, false, false, false, false, false, false, false, false, false]),
 ];
 
 /// Whether `target`'s emitter writes window-rule option `option`.
@@ -654,21 +685,21 @@ fn normalize_mod(m: &str) -> Option<&'static str> {
 }
 
 /// The modifiers a Studio-captured chord may carry, as each compositor
-/// spells them: `(normalized, [MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin, Aqueous])`.
-/// Aqueous binds stay in its own `wm.toml`, which Mandara never writes: its
-/// column only names the modifiers for display.
+/// spells them: `(normalized, [MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin, Aqueous, labwc, COSMIC])`.
+/// Aqueous, labwc and COSMIC binds stay in their own settings, which
+/// Mandara never writes: their columns only name the modifiers for display.
 /// Umbriel documents Super, Ctrl, Alt and Shift only (its `Mod` follows
 /// `general.mod_key`, so Mandara spells Super out). Sway takes xkb's
 /// modifier names (`Mod4`, `Ctrl`, `Alt`, `Shift`, `Mod3`, `Mod5`) and
 /// rejects `Hyper`; River takes `Super`, `Control`, `Alt`, `Shift`, `Mod3`
 /// and `Mod5` (`riverctl(1)`).
 const MOD_NAMES: &[(&str, [&str; Target::ALL.len()])] = &[
-    ("super", ["SUPER", "Mod", "SUPER", "Super", "Mod4", "Super", "Meta", "Super"]),
-    ("ctrl", ["CTRL", "Ctrl", "CTRL", "Ctrl", "Ctrl", "Control", "Ctrl", "Ctrl"]),
-    ("alt", ["ALT", "Alt", "ALT", "Alt", "Alt", "Alt", "Alt", "Alt"]),
-    ("shift", ["SHIFT", "Shift", "SHIFT", "Shift", "Shift", "Shift", "Shift", "Shift"]),
-    ("hyper", ["HYPER", "Mod3", "MOD3", "", "Mod3", "Mod3", "Hyper", ""]),
-    ("mod5", ["", "ISO_Level3_Shift", "MOD5", "", "Mod5", "Mod5", "Mod5", ""]),
+    ("super", ["SUPER", "Mod", "SUPER", "Super", "Mod4", "Super", "Meta", "Super", "Super", "Super"]),
+    ("ctrl", ["CTRL", "Ctrl", "CTRL", "Ctrl", "Ctrl", "Control", "Ctrl", "Ctrl", "Ctrl", "Ctrl"]),
+    ("alt", ["ALT", "Alt", "ALT", "Alt", "Alt", "Alt", "Alt", "Alt", "Alt", "Alt"]),
+    ("shift", ["SHIFT", "Shift", "SHIFT", "Shift", "Shift", "Shift", "Shift", "Shift", "Shift", "Shift"]),
+    ("hyper", ["HYPER", "Mod3", "MOD3", "", "Mod3", "Mod3", "Hyper", "", "", ""]),
+    ("mod5", ["", "ISO_Level3_Shift", "MOD5", "", "Mod5", "Mod5", "Mod5", "", "", ""]),
 ];
 
 /// A key typed as a character (`,`) or a GPUI key name (`pageup`) → its
@@ -938,8 +969,9 @@ impl ManagedConfig<'_> {
 /// Whether the user's own compositor config already starts Mandara.
 pub fn user_autostarts(target: Target) -> bool {
     if target == Target::KWin { return crate::kwin::autostart_installed(); }
-    // Mandara writes nothing Aqueous reads, so it starts nothing there.
-    if target == Target::Aqueous { return false; }
+    // Mandara writes nothing Aqueous, labwc or COSMIC reads, so it starts
+    // nothing there (users add it to their own startup settings).
+    if matches!(target, Target::Aqueous | Target::Labwc | Target::Cosmic) { return false; }
     // The main file and every file it sources / includes (never Mandara's
     // own drop-in).
     let texts: Vec<String> = crate::conflicts::config_files(target).iter().filter_map(|f| std::fs::read_to_string(f).ok()).collect();
@@ -2159,6 +2191,11 @@ pub fn emit(target: Target, cfg: &ManagedConfig) -> Emitted {
         // be checker-verified: its settings stay in its own TOML files and
         // Mandara only talks to it over `$AQUEOUS_SOCKET`. Never written.
         Target::Aqueous => Emitted { text: "# Aqueous settings remain in its own files in ~/.config/aqueous. Mandara reads its IPC socket and writes nothing for it.\n".into(), skipped: Vec::new() },
+        // labwc's rc.xml has no include Mandara's drop-in could use safely,
+        // and COSMIC keeps its settings in COSMIC Settings: no line could
+        // be checker-verified, so nothing is written for either.
+        Target::Labwc => Emitted { text: "# labwc settings remain in ~/.config/labwc. Mandara reads the ext-workspace protocol and writes nothing for it.\n".into(), skipped: Vec::new() },
+        Target::Cosmic => Emitted { text: "# COSMIC settings remain in COSMIC Settings. Mandara reads the ext-workspace protocol and writes nothing for it.\n".into(), skipped: Vec::new() },
     }
 }
 
@@ -2183,7 +2220,7 @@ pub(crate) fn include_path(target: Target, line: &str) -> Option<String> {
         // [`includes_in`].
         Target::Mango | Target::Umbriel => None,
         // River's init is a program, not a config with includes.
-        Target::River | Target::KWin | Target::Aqueous => None,
+        Target::River | Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic => None,
         // `include <path>`: a shell word (`~`, `$VAR`, globs), expanded by
         // [`included_files`].
         Target::Sway => line.strip_prefix("include").filter(|r| r.starts_with(char::is_whitespace)).map(|r| r.trim().to_string()).filter(|r| !r.is_empty()),
@@ -2579,7 +2616,7 @@ pub fn chords_by_line(target: Target, text: &str) -> Vec<(usize, String)> {
         Target::Umbriel => umbriel_chords(text),
         Target::Sway => sway_binds(text).into_iter().map(|b| (b.line, b.chord)).collect(),
         Target::River => river_binds(text).into_iter().map(|b| (b.line, b.chord)).collect(),
-        Target::KWin | Target::Aqueous => Vec::new(),
+        Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic => Vec::new(),
     }
 }
 
@@ -2931,8 +2968,10 @@ fn lua_concat(expr: &str, vars: &[(String, String)]) -> Option<String> {
 
 /// Writes the generated drop-in atomically; returns its path.
 pub fn write_generated(target: Target, emitted: &Emitted) -> Result<PathBuf> {
-    if target == Target::Aqueous {
-        anyhow::bail!("{}", mandara_i18n::t(AQUEOUS_SETTINGS));
+    // Nothing is written where the compositor keeps its own settings
+    // (KWin's note above is only Mandara's record of that).
+    if let Some(note) = target.settings_elsewhere().filter(|_| target != Target::KWin) {
+        anyhow::bail!("{}", mandara_i18n::t(note));
     }
     let path = target.generated_file();
     // Options the config doctor found this compositor version rejects stay

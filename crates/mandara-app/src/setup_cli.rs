@@ -106,13 +106,21 @@ pub fn setup(o: Options) -> Result<()> {
             }
             continue;
         }
-        if target == Target::Aqueous {
-            // No drop-in, no include line, no startup entry: Aqueous reads
-            // only its own files, and Mandara follows it over its socket.
-            println!("{}", mandara_i18n::t(mandara_config::compositor::AQUEOUS_SETTINGS));
+        if matches!(target, Target::Aqueous | Target::Labwc | Target::Cosmic) {
+            // No drop-in, no include line, no startup entry: these read only
+            // their own settings, and Mandara follows them over their socket
+            // (Aqueous) or standard Wayland protocols (labwc, COSMIC).
+            if let Some(note) = target.settings_elsewhere() {
+                println!("{}", mandara_i18n::t(note));
+            }
             if cfg.compositor.autostart && !o.check {
                 let command = mandara_config::compositor::shell_quote(&mandara_config::paths::self_exe().display().to_string());
-                println!("{}", mandara_i18n::tf("To start Mandara with Aqueous, add {command} to Aqueous's own startup settings.", &[("command", &command)]));
+                let hint = match target {
+                    Target::Labwc => mandara_i18n::tf("To start Mandara with labwc, add the line “{command} &” to ~/.config/labwc/autostart.", &[("command", &command)]),
+                    Target::Cosmic => mandara_i18n::tf("To start Mandara with COSMIC, add {command} in COSMIC Settings → Applications → Startup applications.", &[("command", &command)]),
+                    _ => mandara_i18n::tf("To start Mandara with Aqueous, add {command} to Aqueous's own startup settings.", &[("command", &command)]),
+                };
+                println!("{hint}");
             }
             if o.check {
                 let report = doctor::check(target);

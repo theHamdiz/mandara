@@ -678,7 +678,7 @@ pub fn locked_toggle_click(on: bool) -> Option<bool> {
 /// compositor exposes no supported overview action.
 pub fn choice_hidden(path: &str, raw: &str) -> bool {
     let corner_action = path == "/bar/middle_click/action" || (path.starts_with("/hot_corners/") && path.ends_with("/action"));
-    raw == "overview" && corner_action && matches!(running_compositor(), Some(mandara_config::compositor::Target::Sway | mandara_config::compositor::Target::River | mandara_config::compositor::Target::KWin))
+    raw == "overview" && corner_action && matches!(running_compositor(), Some(mandara_config::compositor::Target::Sway | mandara_config::compositor::Target::River | mandara_config::compositor::Target::KWin | mandara_config::compositor::Target::Labwc | mandara_config::compositor::Target::Cosmic))
 }
 
 /// The compositor Studio runs under, detected once (it can't change while

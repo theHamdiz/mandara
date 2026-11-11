@@ -498,9 +498,9 @@ fn compositors_and_languages_match_the_project() {
     let source = homepage();
     let page = roxmltree::Document::parse(&source).unwrap();
     let names: Vec<_> = page.descendants().filter(|n| has_class(*n, "dep-name")).map(text_of).collect();
-    assert_eq!(names, ["MangoWM", "Niri", "Hyprland", "Umbriel", "Sway", "River Classic", "KWin", "Aqueous"]);
+    assert_eq!(names, ["MangoWM", "Niri", "Hyprland", "Umbriel", "Sway", "River Classic", "KWin", "Aqueous", "labwc", "COSMIC"]);
     let readme = std::fs::read_to_string(crate::root().join("README.md")).unwrap();
-    assert!(readme.contains("**MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin and Aqueous**"));
+    assert!(readme.contains("**MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc and COSMIC**"));
     let rail = page.descendants().find(|n| has_class(*n, "rail-2")).unwrap();
     assert!(text_of(rail).starts_with(&names.len().to_string()));
     let catalogs = std::fs::read_dir(crate::root().join("crates/mandara-i18n/locales")).unwrap()

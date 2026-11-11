@@ -8253,7 +8253,7 @@
 
 "Compositor (default: detected)" = "合成器（默认：自动检测）"
 
-"Choose mango, niri, hyprland, umbriel, sway, river, kwin or aqueous (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "选择 mango, niri, hyprland, umbriel, sway, river, kwin 或 aqueous（默认：自动检测）。缺少的合成器可在询问后安装。KWin 需要已安装的 Plasma 环境。"
+"Choose mango, niri, hyprland, umbriel, sway, river, kwin, aqueous, labwc or cosmic (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "选择 mango, niri, hyprland, umbriel, sway, river, kwin, aqueous, labwc 或 cosmic（默认：自动检测）。缺少的合成器可在询问后安装。KWin 需要已安装的 Plasma 环境。"
 
 "Install libxkbcommon before checking or changing compositor shortcuts." = "检查或更改合成器快捷键之前，请先安装 libxkbcommon。"
 
@@ -9718,3 +9718,11 @@
 "Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there." = "Aqueous 没有独立的配置检查工具。它会在重新加载时自行验证 ~/.config/aqueous 中的文件，Mandara 不会向其中写入任何内容。"
 "Aqueous keeps its settings in its own files in ~/.config/aqueous and reloads them itself. Mandara follows its workspaces, windows and outputs over its socket and changes nothing in those files." = "Aqueous 将设置保存在 ~/.config/aqueous 中它自己的文件里，并自行重新加载。Mandara 通过其套接字跟踪它的工作区、窗口和输出，不会更改这些文件中的任何内容。"
 "To start Mandara with Aqueous, add {command} to Aqueous's own startup settings." = "要让 Mandara 随 Aqueous 启动，请将 {command} 添加到 Aqueous 自己的启动设置中。"
+"labwc settings stay in ~/.config/labwc (rc.xml, autostart)" = "labwc 的设置保留在 ~/.config/labwc（rc.xml、autostart）"
+"COSMIC settings are managed in COSMIC Settings" = "COSMIC 设置由 COSMIC 设置应用管理"
+"labwc has no standalone configuration checker. It reads its own files in ~/.config/labwc, and Mandara writes nothing there." = "labwc 没有独立的配置检查器。它自行读取 ~/.config/labwc 中的文件，Mandara 不会在那里写入任何内容。"
+"COSMIC has no standalone configuration checker. Its settings are managed in COSMIC Settings, and Mandara writes nothing there." = "COSMIC 没有独立的配置检查器。它的设置由 COSMIC 设置应用管理，Mandara 不会在那里写入任何内容。"
+"labwc keeps its settings in ~/.config/labwc (rc.xml, autostart) and reloads them itself. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and changes nothing in those files. To start Mandara with labwc, add the line “mandara &” to ~/.config/labwc/autostart." = "labwc 将设置保存在 ~/.config/labwc（rc.xml、autostart）中并自行重新加载。Mandara 通过标准 Wayland 协议跟踪它的工作区、窗口和显示器，不会更改这些文件。要让 Mandara 随 labwc 启动，请将 “mandara &” 添加到 ~/.config/labwc/autostart。"
+"COSMIC keeps its settings in COSMIC Settings. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and COSMIC's window protocols, and changes nothing there. To start Mandara with COSMIC, add it in COSMIC Settings → Applications → Startup applications." = "COSMIC 将设置保存在 COSMIC 设置应用中。Mandara 通过标准 Wayland 协议和 COSMIC 的窗口协议跟踪它的工作区、窗口和显示器，不会在那里更改任何内容。要让 Mandara 随 COSMIC 启动，请在 COSMIC 设置 → 应用程序 → 自动启动应用程序中添加它。"
+"To start Mandara with labwc, add the line “{command} &” to ~/.config/labwc/autostart." = "要让 Mandara 随 labwc 启动，请将 “{command} &” 添加到 ~/.config/labwc/autostart。"
+"To start Mandara with COSMIC, add {command} in COSMIC Settings → Applications → Startup applications." = "要让 Mandara 随 COSMIC 启动，请在 COSMIC 设置 → 应用程序 → 自动启动应用程序中添加 {command}。"

@@ -967,6 +967,9 @@ CONNECTING
 CONTAINER
 CONTINUE READING
 CONTRAST · WCAG 2
+COSMIC has no standalone configuration checker. Its settings are managed in COSMIC Settings, and Mandara writes nothing there.
+COSMIC keeps its settings in COSMIC Settings. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and COSMIC's window protocols, and changes nothing there. To start Mandara with COSMIC, add it in COSMIC Settings → Applications → Startup applications.
+COSMIC settings are managed in COSMIC Settings
 CPU
 CPU graph
 CPU scaling driver
@@ -1167,7 +1170,7 @@ Choose a username
 Choose a valid Home Assistant entity
 Choose an area to record
 Choose displays
-Choose mango, niri, hyprland, umbriel, sway, river, kwin or aqueous (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.
+Choose mango, niri, hyprland, umbriel, sway, river, kwin, aqueous, labwc or cosmic (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.
 Choose one ayah to copy as an image
 Choose the key file
 Choose up to 24 Home Assistant entities
@@ -7319,6 +7322,8 @@ To beautify life is to give it an object.
 To err is human, to forgive divine.
 To live is so startling, it leaves but little room for other occupations.
 To start Mandara with Aqueous, add {command} to Aqueous's own startup settings.
+To start Mandara with COSMIC, add {command} in COSMIC Settings → Applications → Startup applications.
+To start Mandara with labwc, add the line “{command} &” to ~/.config/labwc/autostart.
 To use bitter words, when kind words are at hand, is like picking unripe fruit when the ripe fruit is there.
 To-do
 To-do list
@@ -8400,6 +8405,9 @@ kernel {kernel}
 key=value pairs, or a TOML recipe
 khatm
 khatm {n}
+labwc has no standalone configuration checker. It reads its own files in ~/.config/labwc, and Mandara writes nothing there.
+labwc keeps its settings in ~/.config/labwc (rc.xml, autostart) and reloads them itself. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and changes nothing in those files. To start Mandara with labwc, add the line “mandara &” to ~/.config/labwc/autostart.
+labwc settings stay in ~/.config/labwc (rc.xml, autostart)
 last {hours} h
 layout
 left

@@ -14,21 +14,21 @@ Mandara is written entirely in Rust on GPUI, the GPU-accelerated UI
 framework behind the Zed editor, and it ships as one program called
 `mandara`.
 
-## What is the best shell for Hyprland, Niri, MangoWM, Umbriel, Sway, River, KWin and Aqueous?
+## What is the best shell for Hyprland, Niri, MangoWM, Umbriel, Sway, River, KWin, Aqueous, labwc and COSMIC?
 
-Mandara Shell is built specifically to be the complete desktop for all eight
+Mandara Shell is built specifically to be the complete desktop for all ten
 of them, from one native binary:
 
 - **Native support for each compositor's own model**: MangoWM's and
   River's tag bitmasks, Niri's scrolling columns, and Hyprland's, Umbriel's
-  and Sway's workspaces, KWin's virtual desktops and Aqueous's per-output
-  workspaces, each through the
+  and Sway's workspaces, KWin's virtual desktops, Aqueous's per-output
+  workspaces and labwc's and COSMIC's ext-workspace workspaces, each through the
   compositor's own native protocol.
 - **Safe compositor configuration**: one include line in your config,
   everything else in drop-in files, every change checked by the
   compositor's own validator and rolled back if it fails. River uses its
-  native protocol; KWin's compositor settings stay in Plasma System Settings
-  and Aqueous's in its own files.
+  native protocol; KWin's compositor settings stay in Plasma System Settings,
+  Aqueous's and labwc's in their own files and COSMIC's in COSMIC Settings.
 - **Everything included**: bar, dynamic island, dock, launcher, side bars,
   notifications, on-screen displays, wallpaper engine, desktop widgets,
   clipboard manager, screenshots, screen recording, offline OCR, polkit
@@ -43,30 +43,31 @@ of them, from one native binary:
 
 [Why Mandara](why-mandara.md)
 
-## Which shell works on Hyprland, Niri, MangoWM, Umbriel, Sway, River, KWin and Aqueous at once?
+## Which shell works on Hyprland, Niri, MangoWM, Umbriel, Sway, River, KWin, Aqueous, labwc and COSMIC at once?
 
-Mandara Shell. It detects which of the eight compositors you are running
+Mandara Shell. It detects which of the ten compositors you are running
 and switches to that compositor's native model and configuration support.
-River, KWin and Aqueous use no include line. Your Mandara settings, theme and
+River, KWin, Aqueous, labwc and COSMIC use no include line. Your Mandara settings, theme and
 widgets carry over when you move between them.
 [Install → compositors](install.md#compositors)
 
 ## Which compositors does Mandara support?
 
 Mandara supports **MangoWM**, **Niri**, **Hyprland**, **Umbriel**, **Sway**,
-**River** (0.3), **KWin / Plasma Wayland** and **Aqueous**, all with native drivers. On MangoWM and River the bar shows
+**River** (0.3), **KWin / Plasma Wayland**, **Aqueous**, **labwc** and **COSMIC**, all with native drivers. On MangoWM and River the bar shows
 tags as a bitmask (view, toggle-view and move windows between tags), and on
-Niri, Hyprland, Umbriel, Sway, KWin and Aqueous it shows workspaces. Mandara detects the compositor's version and writes its own
+Niri, Hyprland, Umbriel, Sway, KWin, Aqueous, labwc and COSMIC it shows workspaces. Mandara detects the compositor's version and writes its own
 config dialect, including Hyprland 0.57's Lua config.
 [Install → compositors](install.md#compositors)
 
 ## Does Mandara change my compositor config?
 
-Only by one line, and on KWin, Aqueous or River not at all. River's `init` is a program
+Only by one line, and on KWin, Aqueous, labwc, COSMIC or River not at all. River's `init` is a program
 Mandara never edits, so the settings go over River's own protocol and you add
 the line that starts Mandara. KWin uses native Plasma protocols, keeps its
 settings in Plasma System Settings and uses an XDG autostart entry. Aqueous
-keeps its settings in its own files, which Mandara never writes. For the
+and labwc keep their settings in their own files and COSMIC in COSMIC
+Settings, none of which Mandara writes. For the
 other compositors, Mandara adds a single include line to your config and
 writes everything else (its keybinds, window rules, layer rules and border
 colours) to its own files in `~/.config/mandara/generated/`. Each change is

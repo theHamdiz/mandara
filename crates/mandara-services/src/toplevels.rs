@@ -1,5 +1,7 @@
 //! Open windows, compositor-neutrally, over `zwlr_foreign_toplevel_manager_v1`
-//! (MangoWM, Hyprland, Niri, Sway…): app id, title, state and outputs of
+//! (MangoWM, Hyprland, Niri, Sway, labwc…), Plasma's window protocol (KWin)
+//! or `ext_foreign_toplevel_list_v1` with COSMIC's toplevel protocols
+//! (COSMIC): app id, title, state and outputs of
 //! every toplevel, kept in most-recently-used order (the order windows were
 //! last activated), plus activate / close / minimize / maximize /
 //! fullscreen requests for the dock and the Alt-Tab switcher.
@@ -19,6 +21,7 @@ use wayland_protocols_wlr::foreign_toplevel::v1::client::{zwlr_foreign_toplevel_
 
 use crate::actor::{Envelope, ServiceHandle, reply};
 
+mod ext;
 mod kwin;
 
 /// Highest protocol versions used.
@@ -284,13 +287,15 @@ fn run(updates: async_channel::Sender<ToplevelsState>, commands: mpsc::Receiver<
     let _manager: manager::ZwlrForeignToplevelManagerV1 = match globals.bind(&qh, 1..=MANAGER_VERSION, ()) {
         Ok(m) => m,
         Err(err) => {
-            let plasma = globals.contents().with_list(|list| list.iter().any(|g| g.interface == "org_kde_plasma_window_management"));
-            if plasma {
+            let has = |name: &str| globals.contents().with_list(|list| list.iter().any(|g| g.interface == name));
+            let plasma = has("org_kde_plasma_window_management");
+            let ext_list = has("ext_foreign_toplevel_list_v1");
+            if plasma || ext_list {
                 drop(seat);
                 drop(globals);
                 drop(queue);
                 drop(conn);
-                return kwin::run(updates, commands, wake);
+                return if plasma { kwin::run(updates, commands, wake) } else { ext::run(updates, commands, wake) };
             }
             let _ = updates.send_blocking(ToplevelsState::default());
             return Err(format!("zwlr_foreign_toplevel_manager_v1: {err}"));

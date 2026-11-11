@@ -124,7 +124,7 @@ one (see [No compositor yet](#no-compositor-yet)).
 | `--no-deps` | Skip system packages; shortcut checks still need libxkbcommon |
 | `--no-autostart` | Don't start Mandara with the compositor |
 | `--no-greeter` | Keep your login screen |
-| `--compositor mango\|niri\|hyprland\|umbriel\|sway\|river\|kwin\|aqueous` | Pick the compositor to integrate with. Missing compositors can be installed from your distribution's repositories after asking (`--yes` accepts); KWin requires an existing Plasma installation. |
+| `--compositor mango\|niri\|hyprland\|umbriel\|sway\|river\|kwin\|aqueous\|labwc\|cosmic` | Pick the compositor to integrate with. Missing compositors can be installed from your distribution's repositories after asking (`--yes` accepts); KWin requires an existing Plasma installation. |
 | `--repo OWNER/NAME` | Releases and sources from another repository |
 | `--dry-run` | Show everything that would happen, change nothing |
 | `--yes` | Don't ask; take every default |
@@ -164,14 +164,14 @@ The setup screen's *Compositor* row covers this in a terminal: leave it on
 back to this numbered list. It still needs an interactive terminal for your
 answer, but it does not need arrow keys or the setup screen.
 
-When none of MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin or Aqueous is
+When none of MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin, Aqueous, labwc or COSMIC is
 installed, the installer
 lists the ones your distribution's own repositories carry and asks which
 to install, with the first one as the recommended default:
 
 ```text
 ==> Installing a compositor
-    No supported compositor is installed (MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin, Aqueous).
+    No supported compositor is installed (MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin, Aqueous, labwc, COSMIC).
       1) MangoWM (recommended) · mangowm
       2) Niri · niri
       3) Hyprland · hyprland
@@ -601,21 +601,23 @@ nothing in the read-only config; it prints the line to add instead.
 
 ## Compositors
 
-Mandara supports **MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin and Aqueous** (River 0.3, `river-classic`; see below).
+Mandara supports **MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc and COSMIC** (River 0.3, `river-classic`; see below).
 `mandara setup` (run by the installer) hooks Mandara into your compositor
 with **one include line** in your own config, writes everything else to
 `~/.config/mandara/generated/`, starts Mandara at login with an absolute
 path, and checks the result with the compositor's own validator
 (`mango -p`, `niri validate`, `Hyprland --verify-config`,
 `umbriel config validate`, `sway --validate`), rolling back if it objects
-(see [Config doctor](#config-doctor)). **River, KWin and Aqueous do not use include lines.** River’s
+(see [Config doctor](#config-doctor)). **River, KWin, Aqueous, labwc and COSMIC do not use include lines.** River’s
 `init` is a program, not a config file, so there is no include line and
 no checker. Mandara never edits `init`; it sends River's settings over
 `river-control` while it runs, and you add the one autostart line
 yourself (the table below shows it). KWin uses the native Plasma protocols
 for workspaces and windows; its settings remain in Plasma System Settings.
 Aqueous is followed over its own IPC socket and keeps its settings in its
-own files ([see below](#aqueous)).
+own files ([see below](#aqueous)). labwc and COSMIC are followed over
+standard Wayland protocols; their settings stay in labwc's own files and in
+COSMIC Settings ([labwc](#labwc), [COSMIC](#cosmic)).
 
 | | Include line in your config | Autostart |
 |---|---|---|
@@ -628,6 +630,8 @@ own files ([see below](#aqueous)).
 | **River** 0.3 | none: Mandara never edits `~/.config/river/init` | the one line you add to `init`: `riverctl spawn /path/to/mandara` |
 | **KWin / Plasma (Wayland)** | none: Mandara leaves `kwinrc` unchanged | its own `org.mandara.shell.desktop` XDG autostart entry, only for KDE |
 | **Aqueous** | none: Mandara writes nothing in `~/.config/aqueous` | add `mandara` to Aqueous's own startup settings yourself |
+| **labwc** 0.8.3+ | none: Mandara writes nothing in `~/.config/labwc` | the line you add to `~/.config/labwc/autostart`: `mandara &` |
+| **COSMIC** | none: COSMIC's settings stay in COSMIC Settings | add `mandara` in COSMIC Settings → Applications → Startup applications |
 
 The setup picker offers KWin only when `kwin_wayland` is installed. A
 failed KWin availability check is reported directly; it does not offer to
@@ -769,6 +773,64 @@ Aqueous, add `mandara` to Aqueous's own startup settings. The bar's layout
 pill can't change Aqueous layouts: its IPC has no layout command. The Config
 doctor reports whether `aqueous` is installed; Aqueous has no standalone
 configuration checker.
+
+### labwc
+
+labwc has no IPC socket. It sets `LABWC_PID` for the programs it starts,
+which is how Mandara recognises it (a compositor nested inside labwc is
+still found by its own variables). Workspaces need labwc 0.8.3 or later,
+which added the standard `ext-workspace-v1` protocol; the installer can
+install labwc from your distribution's repositories.
+
+Mandara follows labwc's workspaces (labwc shows the same set on every
+output) and switches them over `ext-workspace-v1`, and lists windows, the
+focused window and their outputs over the wlr foreign-toplevel protocol. A
+dedicated background thread keeps one Wayland connection, so the bar never
+waits for the compositor. labwc's window protocols don't say which
+workspace a window is on, so workspace pills don't show which ones have
+windows, and the bar can't move a window to another workspace. The layout
+pill, keyboard-layout switching and the Overview hot-corner action aren't
+available on labwc.
+
+labwc keeps its settings in `~/.config/labwc` (`rc.xml`, `autostart`), and
+`rc.xml` has no include Mandara's drop-in could use safely, so Mandara
+writes nothing there and Studio's compositor controls say so. `mandara
+setup --compositor labwc` only reports this; to start Mandara with labwc,
+add this line to `~/.config/labwc/autostart`:
+
+```sh
+mandara &
+```
+
+The Config doctor reports whether `labwc` is installed; labwc has no
+standalone configuration checker.
+
+### COSMIC
+
+COSMIC has no IPC socket either. Its session sets
+`XDG_CURRENT_DESKTOP=COSMIC`, which is how Mandara recognises it (a
+compositor nested inside COSMIC is still found by its own variables).
+COSMIC is a whole desktop session, like Plasma, so the installer supports
+it once it is installed but doesn't offer to install it.
+
+Mandara follows COSMIC's workspaces on every output and switches them over
+the standard `ext-workspace-v1` protocol. Windows come from
+`ext-foreign-toplevel-list-v1` with COSMIC's own toplevel protocols on top:
+the focused window, each window's outputs and workspaces (so workspace
+pills show which ones have windows) and moving a window to another
+workspace. A dedicated background thread keeps one Wayland connection, so
+the bar never waits for the compositor. COSMIC adds and removes workspaces
+as you use them, and the bar follows. The layout pill, keyboard-layout
+switching and the Overview hot-corner action aren't available on COSMIC.
+
+COSMIC keeps its settings in COSMIC Settings, so Mandara writes nothing
+there and Studio's compositor controls say so. `mandara setup --compositor
+cosmic` only reports this; to start Mandara with COSMIC, add `mandara` in
+COSMIC Settings → Applications → Startup applications. To keep only
+Mandara's bar and dock, switch COSMIC's dock off in COSMIC Settings →
+Desktop → Dock, and set COSMIC's panel to hide automatically in Desktop →
+Panel. The Config doctor reports whether `cosmic-comp` is installed;
+COSMIC has no standalone configuration checker.
 
 ## Coming from another setup
 
@@ -921,7 +983,7 @@ From a clone, `cargo xtask build && target/release/mandara install`
 installs that checkout (or `mandara install --from-source` builds it).
 
 **Requirements:** Linux or [FreeBSD](#freebsd) with a Wayland compositor (MangoWM, Niri,
-Hyprland, Sway, River Classic, Umbriel, KWin or Aqueous; the installer can install one), a Vulkan-capable
+Hyprland, Sway, River Classic, Umbriel, KWin, Aqueous, labwc or COSMIC; the installer can install one), a Vulkan-capable
 GPU, and PipeWire or PulseAudio for sound features.
 
 ## Versioning

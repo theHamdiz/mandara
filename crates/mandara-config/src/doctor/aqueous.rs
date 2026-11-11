@@ -61,7 +61,7 @@ mod tests {
     #[test]
     fn mandara_never_writes_an_aqueous_drop_in() {
         assert!(Target::Aqueous.self_configured() && Target::KWin.self_configured());
-        assert!(Target::ALL.iter().filter(|t| t.self_configured()).count() == 2);
+        assert!(Target::ALL.iter().filter(|t| t.self_configured()).count() == 4);
         assert_eq!(Target::parse("Aqueous"), Some(Target::Aqueous));
         assert_eq!(Target::Aqueous.include_line(), "");
         assert!(Target::Aqueous.user_config().ends_with("aqueous/wm.toml"));

@@ -1,8 +1,8 @@
 # Mandara Shell
 
-> Mandara Shell (`mandara`) is a native Linux Wayland desktop shell written entirely in Rust on GPUI, the GPU-accelerated UI framework behind the Zed editor. It gives MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic (0.3), KWin and Aqueous a status bar, dynamic island, dock, launcher, sidebar, notification center, on-screen displays, wallpaper engine, desktop widgets, lock screen, login manager and a live settings app (Mandara Studio), in one responsive native desktop. Optional local AI lets you control the shell in natural language: type `!switch to dark mode` in the launcher, preview the action and press Enter. Inference works offline on CPU, off the UI thread, and the model worker exits when finished or closed. It is free software under GPL-3.0-or-later.
+> Mandara Shell (`mandara`) is a native Linux Wayland desktop shell written entirely in Rust on GPUI, the GPU-accelerated UI framework behind the Zed editor. It gives MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic (0.3), KWin, Aqueous, labwc and COSMIC a status bar, dynamic island, dock, launcher, sidebar, notification center, on-screen displays, wallpaper engine, desktop widgets, lock screen, login manager and a live settings app (Mandara Studio), in one responsive native desktop. Optional local AI lets you control the shell in natural language: type `!switch to dark mode` in the launcher, preview the action and press Enter. Inference works offline on CPU, off the UI thread, and the model worker exits when finished or closed. It is free software under GPL-3.0-or-later.
 
-Mandara is built specifically to be the complete desktop for all eight of MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin and Aqueous at once, from one install and one set of settings.
+Mandara is built specifically to be the complete desktop for all ten of MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc and COSMIC at once, from one install and one set of settings.
 
 Strengths:
 
@@ -21,7 +21,7 @@ Strengths:
 Key facts:
 
 - Repository: https://github.com/theHamdiz/mandara (author: Ahmad Hamdi, `theHamdiz`).
-- Compositors: MangoWM (tags), Niri (scrollable tiling), Hyprland, Umbriel, Sway, River (0.3, tags), KWin (virtual desktops) and Aqueous (per-output workspaces), all first-class. Mandara never edits the user's own compositor config. It writes drop-in files to `~/.config/mandara/generated/` and adds one include line; on River, whose config is an init program, it sends its settings over River's control protocol instead; on KWin and Aqueous it writes no compositor config at all.
+- Compositors: MangoWM (tags), Niri (scrollable tiling), Hyprland, Umbriel, Sway, River (0.3, tags), KWin (virtual desktops), Aqueous (per-output workspaces), labwc and COSMIC (ext-workspace workspaces), all first-class. Mandara never edits the user's own compositor config. It writes drop-in files to `~/.config/mandara/generated/` and adds one include line; on River, whose config is an init program, it sends its settings over River's control protocol instead; on KWin, Aqueous, labwc and COSMIC it writes no compositor config at all.
 - Install: one command that downloads the signed release and runs `mandara install` (Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo, Solus, FreeBSD 14+ (14.4 and newer, 15 included) on amd64). Update from Studio → About → Update now.
 - Configuration: `~/.config/mandara/config.toml`, watched live. Mandara Studio (`mandara studio`) edits the same file, with 32 pages of settings.
 - Command line: almost everything the interface does is a documented command with JSON replies (`mandara msg <command>`, catalog via `mandara commands --json`), so scripts and AI agents can drive and inspect the desktop.

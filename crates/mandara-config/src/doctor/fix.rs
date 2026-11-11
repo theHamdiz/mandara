@@ -228,7 +228,7 @@ pub fn node_range(target: Target, file: &Path, lines: &[&str], idx: usize) -> (u
             let (_, block_end) = balanced(target, lines, idx, &['{'], &['}']);
             (idx, end.max(block_end))
         }
-        Target::Mango | Target::River | Target::KWin | Target::Aqueous => (idx, idx),
+        Target::Mango | Target::River | Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic => (idx, idx),
     }
 }
 

@@ -50,6 +50,12 @@ pub const SUPPORTED: &[Compositor] = &[
     // Only in its own packages (the AUR, a local Fedora build): supported
     // once installed. Mandara writes nothing into its configuration.
     Compositor { id: "aqueous", aliases: &[], label: "Aqueous", programs: &["aqueous"], packages: &[] },
+    // Workspaces need labwc 0.8.3 or later (ext-workspace); Debian 13 has
+    // 0.8.3. Mandara writes nothing into its configuration.
+    Compositor { id: "labwc", aliases: &[], label: "labwc", programs: &["labwc"], packages: &[(Family::Arch, "labwc"), (Family::Debian, "labwc"), (Family::Fedora, "labwc"), (Family::Suse, "labwc"), (Family::Void, "labwc"), (Family::Alpine, "labwc"), (Family::FreeBSD, "labwc")] },
+    // COSMIC is a desktop session, like Plasma: supported where it is
+    // installed, never added as a lone compositor.
+    Compositor { id: "cosmic", aliases: &["cosmic-comp"], label: "COSMIC", programs: &["cosmic-comp"], packages: &[] },
 ];
 
 impl Compositor {
@@ -95,13 +101,13 @@ mod tests {
     #[test]
     fn package_map() {
         let names = |family| SUPPORTED.iter().filter_map(|c| c.package(family).map(|p| (c.id, p))).collect::<Vec<_>>();
-        assert_eq!(names(Family::Arch), [("mango", "mangowm"), ("niri", "niri"), ("hyprland", "hyprland"), ("sway", "sway"), ("river", "river-classic")]);
-        assert_eq!(names(Family::Alpine), [("mango", "mangowm"), ("niri", "niri"), ("hyprland", "hyprland"), ("sway", "sway")]);
-        assert_eq!(names(Family::Debian), [("hyprland", "hyprland"), ("sway", "sway")]);
-        assert_eq!(names(Family::Fedora), [("niri", "niri"), ("sway", "sway")]);
-        assert_eq!(names(Family::Suse), [("niri", "niri"), ("hyprland", "hyprland"), ("sway", "sway")]);
-        assert_eq!(names(Family::Void), [("niri", "niri"), ("sway", "sway")]);
-        assert_eq!(names(Family::FreeBSD), [("niri", "niri"), ("hyprland", "hyprland"), ("sway", "sway"), ("river", "river-classic")]);
+        assert_eq!(names(Family::Arch), [("mango", "mangowm"), ("niri", "niri"), ("hyprland", "hyprland"), ("sway", "sway"), ("river", "river-classic"), ("labwc", "labwc")]);
+        assert_eq!(names(Family::Alpine), [("mango", "mangowm"), ("niri", "niri"), ("hyprland", "hyprland"), ("sway", "sway"), ("labwc", "labwc")]);
+        assert_eq!(names(Family::Debian), [("hyprland", "hyprland"), ("sway", "sway"), ("labwc", "labwc")]);
+        assert_eq!(names(Family::Fedora), [("niri", "niri"), ("sway", "sway"), ("labwc", "labwc")]);
+        assert_eq!(names(Family::Suse), [("niri", "niri"), ("hyprland", "hyprland"), ("sway", "sway"), ("labwc", "labwc")]);
+        assert_eq!(names(Family::Void), [("niri", "niri"), ("sway", "sway"), ("labwc", "labwc")]);
+        assert_eq!(names(Family::FreeBSD), [("niri", "niri"), ("hyprland", "hyprland"), ("sway", "sway"), ("river", "river-classic"), ("labwc", "labwc")]);
         // Overlays and hand-built systems: nothing offered.
         for f in [Family::Gentoo, Family::Solus, Family::NixOS, Family::Unknown] {
             assert!(names(f).is_empty(), "{f}");
@@ -115,6 +121,11 @@ mod tests {
         assert!(any_installed(|p| p == "umbriel"));
         assert!(any_installed(|p| p == "kwin_wayland"));
         assert!(any_installed(|p| p == "aqueous"));
+        assert!(any_installed(|p| p == "labwc"));
+        assert!(any_installed(|p| p == "cosmic-comp"));
+        assert_eq!(by_name("labwc").unwrap().package(Family::Debian), Some("labwc"));
+        assert_eq!(by_name("cosmic-comp").unwrap().id, "cosmic");
+        assert!(by_name("COSMIC").unwrap().package(Family::Arch).is_none(), "a desktop session, not a lone compositor");
         assert!(by_name("Aqueous").unwrap().package(Family::Arch).is_none(), "not in an official repository");
         assert_eq!(by_name("plasma").unwrap().id, "kwin");
         assert!(by_name("hyprland").unwrap().installed(|p| p == "hyprland"));

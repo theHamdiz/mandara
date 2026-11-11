@@ -415,8 +415,9 @@ fn screens_via_compositor(on: bool, cx: &App) {
         CompositorKind::Umbriel => backend.dispatch_raw(if on { "dpms-on" } else { "dpms-off" }, &[]),
         // `output * power on|off` (sway-output(5)).
         CompositorKind::Sway => backend.dispatch_raw("output", &["*", "power", if on { "on" } else { "off" }]),
-        // Aqueous's IPC has no output power action.
-        CompositorKind::MangoWM | CompositorKind::River | CompositorKind::Aqueous => {
+        // Aqueous's IPC has no output power action; labwc and COSMIC have
+        // no IPC (both offer wlr-output-power-management, tried first).
+        CompositorKind::MangoWM | CompositorKind::River | CompositorKind::Aqueous | CompositorKind::Labwc | CompositorKind::Cosmic => {
             tracing::warn!("idle: {:?} without wlr-output-power-management; screens stay on", backend.kind());
             Ok(())
         }

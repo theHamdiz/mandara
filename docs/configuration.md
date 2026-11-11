@@ -251,6 +251,18 @@ writes no drop-in or include line there, and Studio locks the compositor
 settings it cannot apply and explains why. See [Aqueous](install.md#aqueous)
 for setup and what the bar can control.
 
+## labwc and COSMIC integration
+
+labwc and COSMIC have no IPC socket: Mandara follows their workspaces with
+the standard `ext-workspace-v1` Wayland protocol, and their windows with
+the wlr foreign-toplevel protocol (labwc) or `ext-foreign-toplevel-list-v1`
+plus COSMIC's toplevel protocols (COSMIC). labwc keeps its settings in
+`~/.config/labwc` (`rc.xml`, `autostart`) and COSMIC in COSMIC Settings:
+Mandara writes no drop-in or include line for either, and Studio locks the
+compositor settings it cannot apply and explains why. See
+[labwc](install.md#labwc) and [COSMIC](install.md#cosmic) for setup and what
+the bar can control.
+
 ## Desktop widgets
 
 `[desktop.widgets]` lists everything painted on the wallpaper layer
