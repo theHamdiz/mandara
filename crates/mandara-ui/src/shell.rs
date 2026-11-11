@@ -601,8 +601,8 @@ impl ShellView {
     /// of the bar ([`Self::fit_zones`]).
     fn zone_widths(&self) -> [f32; 3] {
         let m = self.metrics;
-        let w = |zone: &[Slot]| layout::zone_width(&zone.iter().map(|s| self.slot_extent(s)).collect::<smallvec::SmallVec<[f32; 16]>>(), &m);
-        [w(&self.zones[0]), w(&self.zones[1]), w(&self.zones[2])]
+        let extents = |zone: &[Slot]| zone.iter().map(|s| self.slot_extent(s)).collect::<smallvec::SmallVec<[f32; 16]>>();
+        [layout::start_zone_width(&extents(&self.zones[0]), &m), layout::zone_width(&extents(&self.zones[1]), &m), layout::zone_width(&extents(&self.zones[2]), &m)]
     }
 
     /// Fits each zone into its share of the bar ([`layout::zone_limits`]),
@@ -617,11 +617,17 @@ impl ShellView {
         if self.metrics.notch() {
             self.metrics.notch_fit = layout::notch_fit(&self.metrics, [&lengths[0], &lengths[1], &lengths[2]]);
         }
+        // The start zone's first item may sit in a joined rail's corner.
+        if self.metrics.corner > 0.0 {
+            self.metrics.corner_item = lengths[0].iter().find(|w| **w >= 1.0).map_or(0.0, |w| self.metrics.corner_length(*w));
+        }
         let m = &self.metrics;
-        let wanted: [f32; 3] = std::array::from_fn(|z| layout::zone_width(&lengths[z], m));
+        let wanted: [f32; 3] = std::array::from_fn(|z| if z == 0 { layout::start_zone_width(&lengths[z], m) } else { layout::zone_width(&lengths[z], m) });
         let limits = layout::zone_limits(m, along, wanted);
         for (z, zone) in self.zones.iter().enumerate() {
-            let fit = layout::fit_slots(&lengths[z], m, limits[z], z == layout::Group::Right.index());
+            // The corner's extra room comes out of the start zone's share.
+            let limit = if z == 0 { (limits[z] - m.corner_gap()).max(0.0) } else { limits[z] };
+            let fit = layout::fit_slots(&lengths[z], m, limit, z == layout::Group::Right.index());
             for (slot, limit) in zone.iter().zip(fit) {
                 slot.limit.set(limit);
             }
@@ -717,6 +723,9 @@ impl ShellView {
             (frame_y + m.chip_inset() + self.bar_shift, m.height - m.chip_inset() * 2.0)
         };
         let mut x = f32::from(g.origin.x) + inset;
+        // The start zone's first item in a joined rail's corner, at its
+        // corner length; the rest start clear of the rail.
+        let mut corner = zone == 0 && m.corner_holds_item();
         self.zones[zone]
             .iter()
             .map(|slot| {
@@ -724,9 +733,10 @@ impl ShellView {
                 if w < 1.0 {
                     return None;
                 }
-                let chip_w = m.chip_length(w);
+                let in_corner = std::mem::take(&mut corner);
+                let chip_w = if in_corner { m.corner_item } else { m.chip_length(w) };
                 let r = Bounds { origin: point(px(x), px(y)), size: size(px(chip_w), px(h)) };
-                x += chip_w + m.chip_gap;
+                x += chip_w + m.chip_gap + if in_corner { m.corner_gap() } else { 0.0 };
                 Some(r)
             })
             .collect()
@@ -2205,7 +2215,9 @@ impl Render for ShellView {
                         self.surface.0,
                         limit.min(self.surface.1),
                     ),
-                    Some(r) => (f32::from(r.origin.x) + lead, f32::from(r.origin.y), limit.min(self.surface.0), f32::from(r.size.height)),
+                    // Centred in its chip (the padding either side is equal;
+                    // the item in a rail's corner may be shorter than usual).
+                    Some(r) => (f32::from(r.origin.x) + (f32::from(r.size.width) - natural.min(limit)).max(0.0) / 2.0, f32::from(r.origin.y), limit.min(self.surface.0), f32::from(r.size.height)),
                     // Hidden/unmeasured (or left out of a full zone): render
                     // offscreen-left at its own size so it can be measured.
                     None => (OFFSCREEN_X_PX, 0.0, self.surface.0, if split(z).is_some() { zm.height } else { bar_h }),

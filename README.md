@@ -232,8 +232,10 @@ around, each one measured or shipped today:
 
 Eight presets reshape the whole bar in one click: pick one in **Studio →
 Bars → Presets**, or run `mandara msg bar style <name>`. Every style shows
-the icon of the app on each workspace and tag button. Each side bar can
-take one of its own (`mandara msg side-bar style right <name>`).
+the icon of the app on each workspace and tag button. The styles with a
+rail run the workspaces down it and seat the launcher in the corner where
+bar and rail meet. Each side bar can take one of its own
+(`mandara msg side-bar style right <name>`).
 
 <table>
 <tr>

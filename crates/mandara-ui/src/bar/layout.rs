@@ -98,6 +98,14 @@ pub struct Metrics {
     /// The screen frame of a flush top or bottom edge frame: the thin
     /// border on the edges the bar doesn't cover (0 = none).
     pub frame_strips: f32,
+    /// The corner where a joined, pinned left rail meets a top or bottom
+    /// bar: a square as wide as the rail (0 = no rail there). The start
+    /// zone's first item (the launcher in every preset) sits in its middle
+    /// when it fits; the start zone's other items begin clear of the rail.
+    pub corner: f32,
+    /// That first item's length along the bar ([`Self::corner_length`]; 0
+    /// until it is measured).
+    pub corner_item: f32,
 }
 
 impl Metrics {
@@ -156,7 +164,59 @@ impl Metrics {
                 0.0
             },
             frame_strips,
+            corner: if !vertical && joined && cfg.side_bar_on(false) && cfg.side_bars.left.pinned { cfg.side_bars.width() } else { 0.0 },
+            corner_item: 0.0,
         }
+    }
+
+    /// How long the start zone's first item is laid out when content
+    /// `content` long sits in the rail's corner: an icon that fits the
+    /// bar's round items is exactly their square (a round button in the
+    /// corner, its padding dropped), other content keeps its padding as far
+    /// as the corner allows. Without a corner, or for content wider than
+    /// it, its usual [`Self::chip_length`].
+    pub fn corner_length(&self, content: f32) -> f32 {
+        let full = self.chip_length(content);
+        if self.corner <= 0.0 || content > self.corner {
+            full
+        } else if self.min_chip > 0.0 && content <= self.min_chip {
+            self.min_chip
+        } else {
+            full.min(self.corner)
+        }
+    }
+
+    /// Whether the start zone's first item sits in the rail's corner: there
+    /// is one and what the item draws fits inside it (an icon drawn as a
+    /// round shape is its square; the padding round it draws nothing).
+    pub fn corner_holds_item(&self) -> bool {
+        let round = self.min_chip > 0.0 && self.corner_item <= self.min_chip * crate::bar::items::ICON_ASPECT;
+        let drawn = if round { self.corner_item.min(self.min_chip) } else { self.corner_item };
+        self.corner > 0.0 && self.corner_item >= 1.0 && drawn <= self.corner + CORNER_SLACK_PX
+    }
+
+    /// Where the start zone begins along the bar (the bar's start edge is
+    /// 0): its first item centred in the rail's corner, clear of the rail
+    /// when that item doesn't fit there, else inside the screen flare.
+    pub fn start_inset(&self, surface_width: f32) -> f32 {
+        if self.corner_holds_item() {
+            (self.corner - self.corner_item) / 2.0
+        } else if self.corner > 0.0 {
+            self.corner + self.chip_inset()
+        } else {
+            edge_inset(self, surface_width)
+        }
+    }
+
+    /// Extra room after the corner's item, so the next item starts clear
+    /// of the rail by the item inset (none when the bar's item gap already
+    /// does).
+    pub fn corner_gap(&self) -> f32 {
+        if !self.corner_holds_item() {
+            return 0.0;
+        }
+        let next = (self.corner + self.corner_item) / 2.0 + self.chip_gap;
+        (self.corner + self.chip_inset() - next).max(0.0)
     }
 
     /// Inset of chips from the bar's edges (smaller in the compact styles).
@@ -234,6 +294,23 @@ impl Metrics {
     pub fn bar_far_edge(&self) -> f32 {
         if self.attached() && !self.floating_frame { self.height } else { self.edge_gap + self.height }
     }
+}
+
+/// Rounding slack when testing whether an item fits the rail's corner, px.
+const CORNER_SLACK_PX: f32 = 0.01;
+
+/// [`zone_width`] of the bar's start zone: with its first item in the
+/// rail's corner, that item at its corner length and the room that keeps
+/// the next one clear of the rail.
+pub fn start_zone_width(slot_widths: &[f32], m: &Metrics) -> f32 {
+    let w = zone_width(slot_widths, m);
+    if !m.corner_holds_item() {
+        return w;
+    }
+    let mut visible = slot_widths.iter().copied().filter(|w| *w >= 1.0);
+    let trim = visible.next().map_or(0.0, |first| m.chip_length(first) - m.corner_item);
+    let gap = if visible.next().is_some() { m.corner_gap() } else { 0.0 };
+    w - trim + gap
 }
 
 /// Width of a zone made of slots with the given content widths (hidden
@@ -336,7 +413,7 @@ pub fn zone_limits(m: &Metrics, surface_width: f32, content: [f32; 3]) -> [f32; 
     match m.layout {
         BarLayout::MinimalEdge | BarLayout::Hairline | BarLayout::Notch => {
             let inset = edge_inset(m, surface_width);
-            spread_limits(m.center, m.notch(), surface_width, (inset, surface_width - inset), content)
+            spread_limits(m.center, m.notch(), surface_width, (m.start_inset(surface_width), surface_width - inset), content)
         }
         BarLayout::FloatingPills => {
             let pad = m.pill_inset() * 2.0;
@@ -449,10 +526,11 @@ pub fn compute(m: &Metrics, surface_width: f32, content: [f32; 3]) -> BarGeometr
             let chip_h = h - inset_y * 2.0;
             let chip_w = |i: usize| content[i];
             let inset = edge_inset(m, surface_width);
+            let start = m.start_inset(surface_width);
             let y = y_of(&frame) + inset_y;
-            let left = rect(inset, y, chip_w(0), chip_h);
+            let left = rect(start, y, chip_w(0), chip_h);
             let right = rect(surface_width - inset - chip_w(2), y, chip_w(2), chip_h);
-            let cx = center_x(m.center, surface_width, inset + chip_w(0), x_of(&right), chip_w(1), m.notch());
+            let cx = center_x(m.center, surface_width, start + chip_w(0), x_of(&right), chip_w(1), m.notch());
             let center = rect(cx, y, chip_w(1), chip_h);
             BarGeometry { pills: [left, center, right], backdrop: frame, separate_pills: false, pill_radius: px(m.radius.min(chip_h / 2.0)) }
         }
@@ -1587,6 +1665,84 @@ mod tests {
         assert_eq!(Metrics::of(&cfg, 1.0).chip_inset(), 9.0);
         cfg.bar.layout = BarLayout::Hairline;
         assert_eq!(Metrics::of(&cfg, 1.0).chip_inset(), COMPACT_CHIP_INSET, "the compact styles keep theirs");
+    }
+
+    #[test]
+    fn the_launcher_sits_in_the_corner_where_the_bar_meets_the_rail() {
+        use mandara_config::bar_styles::BarStyle;
+        const SURFACE_W: f32 = 1707.0;
+        /// The launcher's content: one icon at the bar's icon scale.
+        const ICON_PX: f32 = 16.0;
+        /// The launcher's own mark (its art, larger than an icon).
+        const LOGO_PX: f32 = 24.0;
+        for style in [BarStyle::Expressive, BarStyle::RamlTram] {
+            for position in [BarPosition::Top, BarPosition::Bottom] {
+                // The style's own sizes, a taller bar, a wide rail and one
+                // just wider than the launcher's button.
+                let h = style.height();
+                let tight = styled(style).min_chip + 2.0;
+                for (height, rail) in [(h, None), (h + 4.0, None), (h + 12.0, Some(64.0)), (h, Some(tight))] {
+                    for scale in [1.0, 1.25, 1.5, 2.0] {
+                        let mut cfg = ShellConfig::default();
+                        style.apply(&mut cfg);
+                        cfg.bar.position = position;
+                        cfg.bar.height = height;
+                        if let Some(w) = rail {
+                            cfg.side_bars.width = w;
+                        }
+                        let what = format!("{style:?} {position:?} height {height} rail {rail:?} at {scale}");
+                        let mut m = Metrics::of(&cfg, 1.0);
+                        assert_eq!(m.corner, cfg.side_bars.width(), "{what}: the corner is the rail's width");
+                        // A plain icon and the launcher's larger mark.
+                        for content in [ICON_PX * cfg.bar.icon_scale(), LOGO_PX] {
+                            m.corner_item = m.corner_length(content);
+                            assert!(m.corner_holds_item(), "{what}");
+                            let zone = [content, 40.0, 30.0];
+                            let widths = [start_zone_width(&zone, &m), 80.0, 120.0];
+                            let geo = compute(&m, SURFACE_W, widths);
+                            // The launcher's chip as the shell places it, the
+                            // shape drawn for it, snapped to the output's pixels
+                            // like everything it draws.
+                            let x = x_of(&geo.pills[0]);
+                            let (y, h) = (m.chip_inset(), m.height - m.chip_inset() * 2.0);
+                            let look = crate::bar::items::ItemLook { item: cfg.bar.item_shape, icon: cfg.bar.icon_shape, radius: m.radius, vertical: false };
+                            let drawn = crate::bar::items::tile(&look, rect(x, y, m.corner_item, h), 0, 1).bounds;
+                            assert!(crate::bar::items::tile(&look, drawn, 0, 1).icon, "{what}: the launcher is a round button");
+                            let (x0, y0, w0, h0) = mandara_core::snap_rect(x_of(&drawn), y_of(&drawn), w_of(&drawn), h_of(&drawn), scale);
+                            let rail_w = mandara_core::snap(m.corner, scale);
+                            let one_px = 1.0 / scale + 1e-3;
+                            assert!(((x0 + w0 / 2.0) - rail_w / 2.0).abs() <= one_px, "{what}: centred on the rail's width ({x0} + {w0} in {rail_w})");
+                            assert!(((y0 + h0 / 2.0) - m.height / 2.0).abs() <= one_px, "{what}: centred on the bar's height");
+                            assert!(x0 >= -one_px && x0 + w0 <= rail_w + one_px, "{what}: inside the corner, not nudged into the bar");
+                            // The next item starts clear of the rail.
+                            let next = x + m.corner_item + m.chip_gap + m.corner_gap();
+                            assert!(next >= m.corner + m.chip_inset() - 1e-3, "{what}: the next item at {next}");
+                            // The zone's width counts the corner's item at its
+                            // length and that room, so it still fits.
+                            assert!((widths[0] - (zone_width(&zone, &m) - (m.chip_length(content) - m.corner_item) + m.corner_gap())).abs() < 1e-3);
+                        }
+                    }
+                }
+            }
+        }
+        // An item too wide for the corner: the zone starts clear of the rail.
+        let mut cfg = ShellConfig::default();
+        BarStyle::RamlTram.apply(&mut cfg);
+        let mut m = Metrics::of(&cfg, 1.0);
+        m.corner_item = 200.0;
+        assert!(!m.corner_holds_item() && m.corner_gap() == 0.0);
+        assert_eq!(m.start_inset(SURFACE_W), m.corner + m.chip_inset());
+        // No joined rail, or one that slides away: no corner.
+        assert_eq!(edge().corner, 0.0);
+        cfg.side_bars.left.pinned = false;
+        assert_eq!(Metrics::of(&cfg, 1.0).corner, 0.0);
+        cfg.side_bars.left.pinned = true;
+        cfg.side_bars.joined = false;
+        assert_eq!(Metrics::of(&cfg, 1.0).corner, 0.0);
+        let mut rail = ShellConfig::default();
+        BarStyle::Rail.apply(&mut rail);
+        assert_eq!(Metrics::of(&rail, 1.0).corner, 0.0, "a side bar has no corner");
+        assert_eq!(crate::bar::side::metrics(&cfg, false, 1.0).corner, 0.0);
     }
 
     #[test]
