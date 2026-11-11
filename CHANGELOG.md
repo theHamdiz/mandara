@@ -8,6 +8,7 @@ About → What's new shows it too.
 
 ### New
 
+- **Boot look** (opt-in): restyle the boot menu (GRUB, Limine, rEFInd) and the boot splash (Plymouth) with popular themes or your own SVG or picture, in Studio → Themes → Boot or with `mandara msg boot …`. Every change shows its plan first, asks for approval, is backed up, is checked with the bootloader's own tools, and can be restored in one click.
 - **Icon themes.** Studio → Themes → Icons offers fifty popular open-source icon sets. Each downloads only when you pick it and installs only if its checksum matches. Apply sets your launcher, dock and tray icons and your apps' icons in one go, and *Follow your desktop* puts back what was there.
 - **Install your own cursor and icon themes** from an archive, a folder or a link. A link has no known checksum, so Studio asks before downloading it, and nothing inside a theme is ever run.
 - **Right-click the desktop for a ring menu.** Icons on chromatic glass bloom out around the pointer, and a glowing arc follows it. Add widget opens your widgets by shelf (clocks, music, system, productivity, weather and more), each with its own icon. Hold the right button and flick toward an item to pick it in one motion, even through the shelves, or use the arrow keys. Prefer the old list? Switch back in Studio → Desktop → Context menu.

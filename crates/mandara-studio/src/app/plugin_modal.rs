@@ -312,6 +312,7 @@ const BUILTIN_ACCESS: &[(&str, &[(Access, &str)])] = &[
             (Access::Processes, tk("Runs gsettings and gtk-update-icon-cache when they are installed")),
         ],
     ),
+    ("boot-look", &[(Access::Network, tk("Downloads the boot themes you pick from their authors' GitHub archives, checked against a pinned checksum")), (Access::Files, tk("Prepares themes and your image in Mandara's cache folder")), (Access::Commands, tk("With your approval each time: backs up and changes the boot menu and splash files, then runs the bootloader's and initramfs tools"))]),
     ("workspaces", &[(Access::Compositor, tk("Reads and switches tags or workspaces"))]),
     ("active-window", &[(Access::Compositor, tk("Reads the focused window's title"))]),
     ("keyboard-layout", &[(Access::Compositor, tk("Reads and switches keyboard layouts"))]),

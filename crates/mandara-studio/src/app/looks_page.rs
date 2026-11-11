@@ -280,8 +280,8 @@ fn restore_look(cx: &mut gpui::App) {
 }
 
 /// The Themes page's tabs: its colours and style, the components'
-/// designs, and the cursor and icon theme galleries (one page, its tabs;
-/// Studio keeps its pages).
+/// designs, the cursor and icon theme galleries, and the boot menu and
+/// splash (Boot look; one page, its tabs; Studio keeps its pages).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum ThemesTab {
     #[default]
@@ -289,10 +289,11 @@ pub enum ThemesTab {
     Components,
     Cursors,
     Icons,
+    Boot,
 }
 
 impl ThemesTab {
-    pub const ALL: [ThemesTab; 4] = [ThemesTab::Colors, ThemesTab::Components, ThemesTab::Cursors, ThemesTab::Icons];
+    pub const ALL: [ThemesTab; 5] = [ThemesTab::Colors, ThemesTab::Components, ThemesTab::Cursors, ThemesTab::Icons, ThemesTab::Boot];
 
     /// Deep-link name (`mandara studio themes/components`).
     pub fn slug(self) -> &'static str {
@@ -301,6 +302,7 @@ impl ThemesTab {
             ThemesTab::Components => "components",
             ThemesTab::Cursors => "cursors",
             ThemesTab::Icons => "icons",
+            ThemesTab::Boot => "boot",
         }
     }
 
@@ -312,6 +314,7 @@ impl ThemesTab {
             "component" | "designs" | "presets" | "controls" | "sliders" | "buttons" => Some(ThemesTab::Components),
             "cursor" | "cursor-themes" | "pointer" | "pointers" => Some(ThemesTab::Cursors),
             "icon" | "icon-themes" | "icon-theme" | "icon-sets" => Some(ThemesTab::Icons),
+            "boot-look" | "boot-menu" | "bootloader" | "splash" | "plymouth" | "grub" | "limine" | "refind" => Some(ThemesTab::Boot),
             _ => None,
         })
     }
@@ -322,6 +325,7 @@ impl ThemesTab {
             ThemesTab::Components => tk("Components"),
             ThemesTab::Cursors => tk("Cursors"),
             ThemesTab::Icons => tk("Icons"),
+            ThemesTab::Boot => tk("Boot"),
         }
     }
 }
@@ -335,6 +339,7 @@ impl super::page_tabs::PageTab for ThemesTab {
             ThemesTab::Components => "grid",
             ThemesTab::Cursors => "pointer",
             ThemesTab::Icons => "tiles",
+            ThemesTab::Boot => "power",
         }
     }
 }
@@ -348,6 +353,9 @@ impl StudioView {
             // The other tab's previews go: nothing of them stays alive.
             self.components = Default::default();
             cx.defer(super::theme_galleries::release);
+            if self.themes_tab != ThemesTab::Boot {
+                cx.defer(super::boot_page::release);
+            }
             self.content_scroll.set_offset(gpui::point(gpui::px(0.0), gpui::px(0.0)));
         }
         cx.notify();
@@ -363,6 +371,7 @@ impl StudioView {
             ThemesTab::Components => self.components_section(cfg, p, cx),
             ThemesTab::Cursors => self.cursor_section(cfg, p, window, cx),
             ThemesTab::Icons => self.icons_section(cfg, p, window, cx),
+            ThemesTab::Boot => self.boot_tab(cfg, p, window, cx),
         };
         div().row().flex_col().gap(px(SPACE_22_PX)).child(tabs).child(body).into_any_element()
     }

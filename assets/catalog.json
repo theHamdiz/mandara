@@ -428,6 +428,14 @@
     "panel": null
   },
   {
+    "id": "boot-look",
+    "name": "Boot look",
+    "palette": "obsidian",
+    "motif": "power",
+    "angle": 5,
+    "panel": null
+  },
+  {
     "id": "desktop-clocks",
     "name": "Desktop clocks",
     "palette": "twilight",

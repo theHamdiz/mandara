@@ -263,6 +263,12 @@ eval "$(cargo xtask sandbox env)"                 # the sandbox env for manual c
   recordings' packages, and the AUR step asks for its password through the
   real askpass socket and Mandara's dialog (type `wrong` to see a refused
   password). Nothing on the system is touched.
+- **Boot look on another distribution:** a debug build reads its boot
+  setup from a fixture tree instead of the real system when
+  `MANDARA_BOOT_FIXTURE=/abs/path` is set (`sandbox up` passes it
+  through), so Studio → Themes → Boot can show a GRUB, Limine or rEFInd
+  layout; the root side (`mandara boot-admin`) and release builds always
+  look at the real system.
 - **Matte:** `matte` cuts out the open surfaces as a transparent PNG. It
   shoots once over a black wallpaper and once over a white one, then
   difference-mattes the pair. Give it a region (physical pixels) that leaves

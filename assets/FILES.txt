@@ -71,6 +71,9 @@ assets/plugins/authenticator/icon.svg
 assets/plugins/bluetooth/cover.png
 assets/plugins/bluetooth/icon.png
 assets/plugins/bluetooth/icon.svg
+assets/plugins/boot-look/cover.png
+assets/plugins/boot-look/icon.png
+assets/plugins/boot-look/icon.svg
 assets/plugins/breaks/cover.png
 assets/plugins/breaks/icon.png
 assets/plugins/breaks/icon.svg

@@ -166,7 +166,9 @@ around, each one measured or shipped today:
 8. **Your desktop, your look.** Six bar styles on any edge, side bars that
    join the top bar into one frame, one-click Looks, dozens of desktop
    widgets placed per monitor, and three launcher looks. Attached launchers follow
-   compact bars, with a placement map in Studio.
+   compact bars, with a placement map in Studio. [Boot look](docs/boot-look.md)
+   restyles the boot menu and splash too (GRUB, Limine, rEFInd, Plymouth, or
+   your own image), with a plan first, backups and one-click restore.
 9. **Safe, rich extensions.** 82 plugins built in. Third-party plugins are
    Rust compiled to sandboxed WebAssembly: a crashing plugin is switched
    off and the shell keeps running. Qur’an, Hadith and Jannah can also

@@ -12,6 +12,7 @@ pub mod lifecycle;
 mod settings_cache;
 pub mod compositor;
 pub mod containers;
+pub mod boot_look;
 pub mod cursors;
 pub mod icon_themes;
 pub mod core_commands;
@@ -151,6 +152,7 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     system_admin::register(registry);
     cursors::register(registry);
     icon_themes::register(registry);
+    boot_look::register(registry);
     crate::bt_pairing::register(registry);
     audio::register(registry);
     quick_settings::register(registry);

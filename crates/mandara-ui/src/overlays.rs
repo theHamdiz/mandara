@@ -376,6 +376,10 @@ pub const STUDIO_SECTIONS: &[(&str, &str, &str, &str)] = &[
     ("about", tk("About"), "note", "version info"),
 ];
 
+/// Studio tabs with their own launcher entry (`mandara studio <section>/<tab>`):
+/// `(target, title, icon, search keywords)`.
+pub const STUDIO_TABS: &[(&str, &str, &str, &str)] = &[("themes/boot", tk("Boot look"), "power", "boot menu bootloader grub limine refind plymouth splash startup screen logo")];
+
 /// Everything searchable besides apps, built when the launcher opens.
 /// Words people type for the screenshot tool (Windows' Snipping Tool,
 /// "snip", Print Screen…).
@@ -493,7 +497,7 @@ fn build_index_with(registry: &mandara_plugins::PluginRegistry, cfg: &mandara_co
         }
         out.extend(command_entries(c));
     }
-    for (slug, title, icon, keywords) in STUDIO_SECTIONS {
+    for (slug, title, icon, keywords) in STUDIO_SECTIONS.iter().chain(STUDIO_TABS) {
         out.push(entry(tf("Settings: {title}", &[("title", &tr(title))]), t("Open in Mandara Studio"), icon, tk("Studio"), &format!("settings preferences studio {keywords}"), line(&format!("studio {slug}"))));
     }
     for sc in &cfg.launcher.commands {

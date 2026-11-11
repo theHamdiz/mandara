@@ -29,11 +29,15 @@ const MODEL_REPLY_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 /// Icon and cursor theme downloads can be ~100 MB on a slow link; the
 /// downloader keeps its own connect and body-stall limits.
 const THEME_REPLY_TIMEOUT: Duration = Duration::from_secs(65 * 60);
+/// Boot look downloads themes, waits for your password and rebuilds the
+/// initramfs, which can take minutes.
+const BOOT_REPLY_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
 fn reply_timeout(args: &[String]) -> Duration {
     match (args.first().map(String::as_str), args.get(1).map(String::as_str)) {
         (Some("models"), Some("download")) => MODEL_REPLY_TIMEOUT,
         (Some("icons" | "cursor"), Some("install" | "import")) => THEME_REPLY_TIMEOUT,
+        (Some("boot"), Some("install" | "import" | "apply" | "restore")) => BOOT_REPLY_TIMEOUT,
         (Some("agent"), Some("prepare")) => mandara_services::command_agent::INDEX_SETUP_TIMEOUT + CLIENT_READ_TIMEOUT,
         (Some("agent"), Some("preview")) => mandara_services::command_agent::IDLE_TIMEOUT + CLIENT_READ_TIMEOUT,
         _ => REPLY_TIMEOUT,
@@ -171,6 +175,8 @@ mod tests {
         assert_eq!(reply_timeout(&words("icons install papirus/dark")),THEME_REPLY_TIMEOUT);
         assert_eq!(reply_timeout(&words("cursor import https://example.org/c.tar.xz --unverified")),THEME_REPLY_TIMEOUT);
         assert_eq!(reply_timeout(&words("icons list")),REPLY_TIMEOUT);
+        assert_eq!(reply_timeout(&words("boot apply splash rings")),BOOT_REPLY_TIMEOUT);
+        assert_eq!(reply_timeout(&words("boot status")),REPLY_TIMEOUT);
     }
 
     #[test]

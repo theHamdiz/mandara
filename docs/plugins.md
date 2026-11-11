@@ -84,6 +84,7 @@ The 82 first-party plugins (46 of them ship switched off, marked *opt-in*):
 | **Screen time** | How long you spend in each app, per day, with limits *(opt-in)* |
 | **Cursor themes** | Install, preview and apply cursor themes, live, with size and hiding options *(opt-in)* |
 | **Icon themes** | Install, preview and apply icon themes, live, from a curated gallery or your own files *(opt-in)* |
+| **Boot look** | Restyle the boot menu (GRUB, Limine, rEFInd) and the boot splash (Plymouth) with popular themes or your own SVG or picture: a plan first, your approval, backups, the tools' own checkers and one-step restore ([Boot look](boot-look.md)) *(opt-in)* |
 | **Shortcuts cheatsheet** | Every keyboard shortcut, Mandara's and your compositor's, in one searchable sheet (`mandara msg keybinds toggle`) *(opt-in)* |
 | **Task progress** | A bar ring that scripts, long builds and AI agents report progress to (`mandara msg progress set build 40%`) *(opt-in)* |
 | **Eye breaks** | Gentle 20-20-20 reminders that count only active time and wait while a fullscreen app has focus *(opt-in)* |
@@ -148,7 +149,7 @@ language, network, Bluetooth, audio, tray, notifications, power, resources,
 quick settings, media, weather, wallpaper, screenshot and clipboard, plus
 the core launcher, session and main menus) and everything else ships
 switched off: the dock, mini stats, screen time, prayer times, the wallpaper
-generator, Wallhaven, cursor themes, icon themes, containers, services, drives, updates,
+generator, Wallhaven, cursor themes, icon themes, Boot look, containers, services, drives, updates,
 the process hunter, the authenticator, soundscapes, the radio, world clock, network
 speed, the color picker, Pomodoro, notes, to-do, privacy, the app
 installer, the shortcuts cheatsheet, task progress, eye breaks,
