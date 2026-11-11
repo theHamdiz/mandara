@@ -137,6 +137,128 @@ pub enum DockIndicator {
     None,
 }
 
+/// App launch feedback on the dock icon (`[dock.motion] launch`), while the
+/// app starts and until its first window maps.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LaunchFeedback {
+    /// The icon hops (the classic dock bounce).
+    #[default]
+    Bounce,
+    /// The icon swells and settles, again and again.
+    Pulse,
+    /// Rings spread out from under the icon.
+    Ripple,
+    None,
+}
+
+impl LaunchFeedback {
+    pub const ALL: [Self; 4] = [Self::Bounce, Self::Pulse, Self::Ripple, Self::None];
+}
+
+/// How an icon asks for attention (`[dock.motion] attention`): an urgent
+/// window or a critical notification.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AttentionFeedback {
+    #[default]
+    Bounce,
+    Pulse,
+    /// A quick side-to-side jiggle.
+    Wiggle,
+    None,
+}
+
+impl AttentionFeedback {
+    pub const ALL: [Self; 4] = [Self::Bounce, Self::Pulse, Self::Wiggle, Self::None];
+}
+
+/// How running indicators come and go (`[dock.motion] indicator`).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IndicatorMotion {
+    /// Dots and bars grow in when an app opens and shrink away when it closes.
+    #[default]
+    Spring,
+    /// They fade in and out at full size.
+    Fade,
+    /// They appear and vanish at once.
+    None,
+}
+
+impl IndicatorMotion {
+    pub const ALL: [Self; 3] = [Self::Spring, Self::Fade, Self::None];
+}
+
+/// The app icon's answer when one of its windows minimizes
+/// (`[dock.motion] minimize`). The window's own animation belongs to the
+/// compositor.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MinimizeFeedback {
+    /// The icon squashes into the dock and springs back.
+    #[default]
+    Dip,
+    /// The icon swells once.
+    Pulse,
+    None,
+}
+
+impl MinimizeFeedback {
+    pub const ALL: [Self; 3] = [Self::Dip, Self::Pulse, Self::None];
+}
+
+/// How icons arrive, leave and make room (`[dock.motion] items`).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ItemMotion {
+    /// New icons grow in from nothing, removed ones shrink out, and the
+    /// others slide over on springs (also when you reorder).
+    #[default]
+    Spring,
+    /// Icons fade in and out while the others glide over.
+    Fade,
+    /// Icons appear and vanish at once.
+    None,
+}
+
+impl ItemMotion {
+    pub const ALL: [Self; 3] = [Self::Spring, Self::Fade, Self::None];
+}
+
+/// How the dock shows and hides, auto-hide included (`[dock.motion] reveal`).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockReveal {
+    /// Slides in from its screen edge.
+    #[default]
+    Slide,
+    /// Fades in place.
+    Fade,
+    /// Grows out of its screen edge while fading in.
+    Scale,
+}
+
+impl DockReveal {
+    pub const ALL: [Self; 3] = [Self::Slide, Self::Fade, Self::Scale];
+}
+
+/// The dock's animations (`[dock.motion]`). Each is drawn from the dock's
+/// own springs and clocks; reduced motion turns all of them off and
+/// `motion.surfaces.dock` sets their speed. Older files load the defaults:
+/// the classic bounces and slide, plus animated indicators, minimizing and
+/// icons arriving or leaving.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DockMotion {
+    pub launch: LaunchFeedback,
+    pub attention: AttentionFeedback,
+    pub indicator: IndicatorMotion,
+    pub minimize: MinimizeFeedback,
+    pub items: ItemMotion,
+    pub reveal: DockReveal,
+}
+
 /// Which displays show the dock.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -338,6 +460,10 @@ pub struct DockConfig {
     pub bounce_on_attention: bool,
     /// Limit launch and attention bounces to active media playback.
     pub bounce_only_music: bool,
+    /// How launching, attention, indicators, minimizing, icons and showing /
+    /// hiding animate (`bounce_on_launch` / `bounce_on_attention` still
+    /// switch their feedback off).
+    pub motion: DockMotion,
     /// App names above the icons on hover.
     pub tooltips: bool,
     /// Icons grow under the pointer.
@@ -405,6 +531,7 @@ impl Default for DockConfig {
             bounce_on_launch: true,
             bounce_on_attention: true,
             bounce_only_music: false,
+            motion: DockMotion::default(),
             tooltips: true,
             magnification: true,
             magnify: defaults::DOCK_MAGNIFY,
@@ -438,6 +565,18 @@ impl DockConfig {
     /// padding (also the exclusive zone it reserves), logical px.
     pub fn band(&self) -> f32 {
         self.margin + self.icon_size + self.padding * 2.0
+    }
+
+    /// Launch feedback, or [`LaunchFeedback::None`] while `bounce_on_launch`
+    /// is off.
+    pub fn launch_feedback(&self) -> LaunchFeedback {
+        if self.bounce_on_launch { self.motion.launch } else { LaunchFeedback::None }
+    }
+
+    /// Attention feedback, or [`AttentionFeedback::None`] while
+    /// `bounce_on_attention` is off.
+    pub fn attention_feedback(&self) -> AttentionFeedback {
+        if self.bounce_on_attention { self.motion.attention } else { AttentionFeedback::None }
     }
 
     /// Whether the dock appears on output `name` (`index` in output order).
@@ -788,6 +927,40 @@ mod tests {
         assert!(d.remove_stack("0"));
         assert_eq!(d.stacks[0].path, "~/Documents");
         assert!(d.remove_stack("~/Documents") && d.stacks.is_empty());
+    }
+
+    #[test]
+    fn old_dock_tables_load_the_default_motion() {
+        // A dock table from before `[dock.motion]` existed.
+        let old: DockConfig = toml::from_str("bounce_on_launch = true\nhide_speed = 1.5\n").unwrap();
+        assert_eq!(old.motion, DockMotion::default());
+        assert_eq!(old.launch_feedback(), LaunchFeedback::Bounce, "the classic bounce");
+        assert_eq!(old.attention_feedback(), AttentionFeedback::Bounce);
+        assert_eq!(old.motion.reveal, DockReveal::Slide, "the classic slide");
+        // The old switches still turn their feedback off, whatever the style.
+        let off: DockConfig = toml::from_str("bounce_on_launch = false\nbounce_on_attention = false\n[motion]\nlaunch = \"ripple\"\nattention = \"wiggle\"\n").unwrap();
+        assert_eq!((off.motion.launch, off.motion.attention), (LaunchFeedback::Ripple, AttentionFeedback::Wiggle));
+        assert_eq!(off.launch_feedback(), LaunchFeedback::None);
+        assert_eq!(off.attention_feedback(), AttentionFeedback::None);
+        // A partial table fills the rest from the defaults, and round-trips.
+        let partial: DockConfig = toml::from_str("[motion]\nreveal = \"scale\"\nitems = \"none\"\n").unwrap();
+        assert_eq!(partial.motion, DockMotion { reveal: DockReveal::Scale, items: ItemMotion::None, ..DockMotion::default() });
+        let back: DockConfig = toml::from_str(&toml::to_string(&partial).unwrap()).unwrap();
+        assert_eq!(back, partial);
+        assert_eq!(DockConfig::default().sanitized().motion, DockMotion::default());
+    }
+
+    #[test]
+    fn dock_motion_ids_are_kebab_case_and_complete() {
+        fn ids<T: Serialize>(all: &[T]) -> Vec<String> {
+            all.iter().map(|v| serde_json::to_value(v).unwrap().as_str().unwrap().to_string()).collect()
+        }
+        assert_eq!(ids(&LaunchFeedback::ALL), ["bounce", "pulse", "ripple", "none"]);
+        assert_eq!(ids(&AttentionFeedback::ALL), ["bounce", "pulse", "wiggle", "none"]);
+        assert_eq!(ids(&IndicatorMotion::ALL), ["spring", "fade", "none"]);
+        assert_eq!(ids(&MinimizeFeedback::ALL), ["dip", "pulse", "none"]);
+        assert_eq!(ids(&ItemMotion::ALL), ["spring", "fade", "none"]);
+        assert_eq!(ids(&DockReveal::ALL), ["slide", "fade", "scale"]);
     }
 
     #[test]

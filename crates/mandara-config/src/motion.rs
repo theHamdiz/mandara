@@ -4,6 +4,8 @@
 use mandara_i18n::tk;
 use serde::{Deserialize, Serialize};
 
+use crate::dock::DockMotion;
+
 /// Zero makes a surface transition instant; other values scale its playback.
 pub const SURFACE_SPEED_RANGE: (f32, f32) = (0.0, 3.0);
 /// Motion intensity scales bounce from critically damped to the chosen spring.
@@ -262,6 +264,28 @@ impl Preset {
         }
     }
 
+    /// The dock animations that match the preset's personality, or `None`
+    /// for the classic presets, which leave the dock as it is.
+    pub fn dock(self) -> Option<DockMotion> {
+        use crate::dock::{AttentionFeedback as A, DockReveal as R, IndicatorMotion as I, ItemMotion as It, LaunchFeedback as L, MinimizeFeedback as M};
+        let m = |launch, attention, indicator, minimize, items, reveal| DockMotion { launch, attention, indicator, minimize, items, reveal };
+        match self {
+            Self::Default | Self::Snappy | Self::Smooth | Self::Bouncy | Self::Subtle => None,
+            // A swell: icons breathe, everything rolls in on springs.
+            Self::Tide => Some(m(L::Pulse, A::Pulse, I::Spring, M::Dip, It::Spring, R::Slide)),
+            // A beam: rings of light, things light up and fade.
+            Self::Lighthouse => Some(m(L::Ripple, A::Pulse, I::Fade, M::Pulse, It::Fade, R::Fade)),
+            // A sail: slow fades and a sway for attention.
+            Self::Felucca => Some(m(L::Pulse, A::Wiggle, I::Fade, M::Dip, It::Fade, R::Fade)),
+            // A crisp pull: hops, a tick for attention, a snap into the dock.
+            Self::Magnetic => Some(m(L::Bounce, A::Wiggle, I::Spring, M::Dip, It::Spring, R::Slide)),
+            // Liquid metal: swelling icons and a dock that grows out of its edge.
+            Self::Mercury => Some(m(L::Pulse, A::Pulse, I::Spring, M::Pulse, It::Spring, R::Scale)),
+            // A drop: it lands, bounces and splashes into the dock.
+            Self::Raindrop => Some(m(L::Bounce, A::Bounce, I::Spring, M::Dip, It::Spring, R::Scale)),
+        }
+    }
+
     /// Change only spring tuning and choreography, preserving accessibility
     /// and surface choices.
     pub fn apply(self, motion: &mut MotionConfig) {
@@ -359,6 +383,29 @@ mod tests {
         for p in [Preset::Tide, Preset::Lighthouse, Preset::Felucca, Preset::Magnetic, Preset::Mercury, Preset::Raindrop] {
             assert_ne!(p.values().choreography, Choreography::CLASSIC, "{p:?}");
         }
+    }
+
+    #[test]
+    fn classic_presets_leave_the_dock_and_new_ones_each_bring_their_own() {
+        for p in [Preset::Default, Preset::Snappy, Preset::Smooth, Preset::Bouncy, Preset::Subtle] {
+            assert_eq!(p.dock(), None, "{p:?}");
+        }
+        let new = [Preset::Tide, Preset::Lighthouse, Preset::Felucca, Preset::Magnetic, Preset::Mercury, Preset::Raindrop];
+        for (i, a) in new.iter().enumerate() {
+            let d = a.dock().unwrap_or_else(|| panic!("{a:?} has no dock motion"));
+            assert_ne!(d, DockMotion::default(), "{a:?} only repeats the defaults");
+            // Every preset keeps the dock answering: launches and attention
+            // always show something.
+            assert_ne!(d.launch, crate::dock::LaunchFeedback::None, "{a:?}");
+            assert_ne!(d.attention, crate::dock::AttentionFeedback::None, "{a:?}");
+            for b in &new[i + 1..] {
+                assert_ne!(Some(d), b.dock(), "{a:?} and {b:?} animate the dock alike");
+            }
+        }
+        // `apply` keeps writing only `[motion]`: the dock is untouched.
+        let mut m = MotionConfig::default();
+        Preset::Mercury.apply(&mut m);
+        assert_eq!(m.preset(), Some(Preset::Mercury));
     }
 
     #[test]

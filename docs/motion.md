@@ -75,7 +75,8 @@ panels, sidebar, launcher, dock, notifications and on-screen displays. Zero
 makes that surface's transitions instant; 1 keeps the global speed; 2 doubles
 it. These controls cover surface opening, closing and movement. Plugin content
 keeps its own animation settings and still respects global reduced motion.
-The dock's opening-app animation and attention bounce are under **Dock**;
+The dock's own animations have their styles under **Dock** below, and
+**Studio → Dock** still switches the launch and attention feedback off;
 wallpaper depth is controlled by the **Wallpaper depth** plugin.
 
 Mandara's springs can change target halfway through a transition while keeping
@@ -105,4 +106,46 @@ launcher = 1.5
 entrance = "rise"
 stagger = 0.55
 parallax = 0.4
+```
+
+## Dock
+
+When the dock is on, the **Dock** group on the Motion page picks a style for
+each of its animations. They play at the dock's speed under **Surface
+transitions** (zero makes them instant), stop while the dock is hidden, and
+with reduced motion every one of them is off: changes apply at once. At rest
+the dock always sits exactly where and how it would without them.
+
+| Setting | Styles (default first) | What moves |
+| --- | --- | --- |
+| **Opening apps** | *Bounce*, *Pulse*, *Ripple*, *Off* | A launching app's icon hops, swells and settles, or sends rings out from under it, until its first window appears |
+| **Apps asking for attention** | *Bounce*, *Pulse*, *Wiggle*, *Off* | An app with an urgent window or a critical notification calls you in short bursts with a rest between them |
+| **Running indicators** | *Grow*, *Fade*, *Instant* | The dots (or bar) under an app grow in as it opens windows and shrink away as it closes them |
+| **Minimizing** | *Dip*, *Pulse*, *Off* | The app's icon squashes into the dock and springs back, or swells once, when one of its windows minimizes (the window's own animation is the compositor's) |
+| **Adding and removing** | *Grow*, *Fade*, *Instant* | New icons grow in, removed ones shrink out, and the others slide over, also after you drag one to a new place |
+| **Showing and hiding** | *Slide*, *Fade*, *Zoom* | The dock slides in from its edge, fades in place, or grows out of its edge while fading in, for auto-hide too |
+
+**Animate opening applications** and **Bounce for attention** in **Studio →
+Dock** still turn the first two off, whatever their style. The icons the dock
+shows when it opens appear at once; only icons that come and go afterwards
+are animated.
+
+The six presets from **Corniche tide** on each carry a matching set of dock
+animations: Tide pulses and rolls icons in on springs, Lighthouse sends
+ripples and fades, Felucca fades and sways for attention, Magnetic bounces,
+wiggles and dips, Mercury pulses and zooms the dock out of its edge, and
+Raindrop bounces, dips and zooms. The classic presets leave the dock as it is.
+
+They live under `[dock.motion]`: `launch` (`bounce`, `pulse`, `ripple`,
+`none`), `attention` (`bounce`, `pulse`, `wiggle`, `none`), `indicator`
+(`spring`, `fade`, `none`), `minimize` (`dip`, `pulse`, `none`), `items`
+(`spring`, `fade`, `none`) and `reveal` (`slide`, `fade`, `scale`). Docks
+from before keep their bounces and slide, and gain the indicator, minimize
+and icon animations:
+
+```toml
+[dock.motion]
+launch = "ripple"
+attention = "wiggle"
+reveal = "scale"
 ```
