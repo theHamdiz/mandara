@@ -786,9 +786,11 @@ To run Mandara instead of Pearl, DMS or Noctalia:
 
    ```ini
    [Unit]
-   Description=Mandara desktop shell
+   Description=Mandara desktop shell (Aqueous sessions)
    PartOf=graphical-session.target
    After=graphical-session.target
+   # Only in Aqueous: other sessions start Mandara their own way.
+   ConditionEnvironment=AQUEOUS_SOCKET
 
    [Service]
    ExecStart=%h/.local/bin/mandara
@@ -805,7 +807,8 @@ To run Mandara instead of Pearl, DMS or Noctalia:
    ```
 
 Aqueous passes `AQUEOUS_SOCKET` to the services of its session, so Mandara
-started this way finds it. The session choice takes effect at the next
+started this way finds it, and the `ConditionEnvironment` line keeps the unit
+from starting a second Mandara when you log in to another compositor. The session choice takes effect at the next
 login.
 
 ## Coming from another setup
