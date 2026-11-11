@@ -1,10 +1,8 @@
 //! Shell surfaces follow the lifetime and logical size of each output.
 
-use std::cell::Cell;
-use std::rc::Rc;
 use std::time::Duration;
 
-use gpui::{AnyWindowHandle, App, AppContext as _, DisplayId, px, size};
+use gpui::{AnyWindowHandle, App, AppContext as _, DisplayId, WindowHandle, px, size};
 use mandara_core::{DisplayKey, LayerSurfaceSpec, OutputGeometry};
 use mandara_ui::ShellView;
 
@@ -35,27 +33,79 @@ struct Surfaces {
 
 impl gpui::Global for Surfaces {}
 
+/// The latest output measurement asked for; only its result applies. Kept
+/// apart from [`Surfaces`], which [`reconcile`] takes while it opens windows.
+#[derive(Default)]
+struct Remeasure(u64);
+
+impl gpui::Global for Remeasure {}
+
 pub(super) fn init(outputs: Vec<OutputGeometry>, cx: &mut App) {
     cx.set_global(Surfaces { gpui_wallpapers: !mandara_ui::backdrop::software_enabled(), ..Default::default() });
+    cx.set_global(Remeasure::default());
     reconcile(&outputs, true, cx);
-    let generation = Rc::new(Cell::new(0u64));
-    cx.observe_displays(move |_, cx| {
-        let current = generation.get().wrapping_add(1);
-        generation.set(current);
-        let generation = generation.clone();
-        let displays: Vec<_> = cx.displays().iter().map(|display| DisplayKey::of(display.as_ref())).collect();
-        cx.spawn(async move |cx| {
-            let outputs = cx.background_executor().spawn(async move {
-                query_after_change(&displays, mandara_core::query_outputs, || std::thread::sleep(OUTPUT_RETRY_DELAY))
-            }).await;
-            cx.update(|cx| {
-                if generation.get() != current {
-                    return;
-                }
-                reconcile(&available_geometry(outputs), false, cx);
-            });
-        }).detach();
+    cx.observe_displays(|_, cx| remeasure(cx)).detach();
+}
+
+/// Measures the outputs again off the UI thread, then fits the surfaces to
+/// them. A newer request supersedes one still measuring.
+fn remeasure(cx: &mut App) {
+    let generation = &mut cx.global_mut::<Remeasure>().0;
+    *generation = generation.wrapping_add(1);
+    let current = *generation;
+    let displays: Vec<_> = cx.displays().iter().map(|display| DisplayKey::of(display.as_ref())).collect();
+    cx.spawn(async move |cx| {
+        let outputs = cx.background_executor().spawn(async move {
+            query_after_change(&displays, mandara_core::query_outputs, || std::thread::sleep(OUTPUT_RETRY_DELAY))
+        }).await;
+        cx.update(|cx| {
+            if cx.global::<Remeasure>().0 != current {
+                return;
+            }
+            reconcile(&available_geometry(outputs), false, cx);
+        });
     }).detach();
+}
+
+/// Follows the render scale the compositor gives a shell surface.
+///
+/// An output's logical size is its mode divided by its (fractional) scale,
+/// but GPUI reports a display change only when the display's bounds change,
+/// and it derives those from `wl_output`'s *integer* scale (the fractional
+/// scale rounded up). Going from 1.5 to 1.75 keeps that at 2, so no display
+/// change came, the full-output shell surface kept its old size, and the
+/// compositor centred it on the resized output: past the top edge, with the
+/// bar (or shifted down, on a smaller scale). The compositor does send each
+/// surface its new preferred scale, so a scale change re-measures the
+/// outputs. The first scale a new surface receives re-checks the size it was
+/// opened with (a no-op unless the output changed meanwhile).
+fn follow_scale(handle: WindowHandle<ShellView>, cx: &mut App) {
+    let _ = handle.update(cx, |_, window, cx| {
+        let mut scale = ScaleWatch::new(window.scale_factor());
+        cx.observe_window_bounds(window, move |_, window, cx| {
+            if scale.changed(window.scale_factor()) {
+                remeasure(cx);
+            }
+        })
+        .detach();
+    });
+}
+
+/// The last render scale of a surface; resizes at the same scale don't count.
+#[derive(Clone, Copy, Debug)]
+struct ScaleWatch(f32);
+
+impl ScaleWatch {
+    fn new(scale: f32) -> Self {
+        Self(scale)
+    }
+
+    /// Whether `scale` differs from the last one seen (and remembers it).
+    fn changed(&mut self, scale: f32) -> bool {
+        let changed = scale != self.0;
+        self.0 = scale;
+        changed
+    }
 }
 
 fn available_geometry(outputs: anyhow::Result<Vec<OutputGeometry>>) -> Vec<OutputGeometry> {
@@ -182,7 +232,10 @@ fn open(spec: Spec, wallpaper: bool, cx: &mut App) -> Option<SurfaceSet> {
     }
     let monitor = spec.monitor.clone();
     let shell = match cx.open_window(main.window_options(), move |window, cx| cx.new(|cx| ShellView::new(monitor, (w, h), window, cx))) {
-        Ok(handle) => handle.into(),
+        Ok(handle) => {
+            follow_scale(handle, cx);
+            handle.into()
+        }
         Err(err) => {
             tracing::error!("shell surface on {}: {err:#}", spec.monitor);
             return None;
@@ -214,7 +267,25 @@ fn close(handle: AnyWindowHandle, cx: &mut App) {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+
     use super::*;
+
+    #[test]
+    fn a_fractional_scale_change_remeasures_the_outputs() {
+        // 1.5 -> 1.75 keeps wl_output's integer scale at 2, so GPUI sees no
+        // display change; the surface's own scale must trigger the measure.
+        let mut watch = ScaleWatch::new(1.5);
+        assert!(!watch.changed(1.5), "a resize at the same scale measures nothing");
+        assert!(watch.changed(1.75));
+        assert!(!watch.changed(1.75), "one measurement per change");
+        assert!(watch.changed(1.25));
+        // A new surface starts at GPUI's 1.0 and gets its real scale after
+        // opening: that once re-checks the size it was opened with.
+        let mut fresh = ScaleWatch::new(1.0);
+        assert!(fresh.changed(1.5));
+        assert!(!fresh.changed(1.5));
+    }
 
     fn spec(id: u64, monitor: &str, size: (f32, f32)) -> Spec {
         Spec { display: Some(DisplayId::new(id)), monitor: monitor.into(), size }
