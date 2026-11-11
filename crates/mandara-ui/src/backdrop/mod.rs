@@ -219,6 +219,9 @@ enum Event {
     /// output's logical size as the canvas knows it (the menu covers
     /// exactly that output, even one connected after startup).
     Menu(String, f32, f32, Option<(f32, f32)>),
+    /// The right button that opened the menu, still held, moved (or was
+    /// let go: `true`) at this logical position of that output.
+    MenuDrag(String, f32, f32, bool),
     /// Painted widget geometry (edit mode).
     Boxes(Vec<OutputBoxes>),
     /// A click (or a scroll step) on a widget's clickable area.
@@ -306,9 +309,16 @@ pub fn init_on(layer: CanvasLayer, fallback: impl FnOnce(&mut App) + 'static, cx
                     // In a split bar's gaps it may be the bar's main menu.
                     crate::desktop_text::after_save(cx, move |cx| {
                         if let Err(output) = crate::bar::gaps::route(output, (x, y), size, cx) {
-                            crate::desktop_menu::open_sized(&output, (x, y), size, cx);
+                            crate::desktop_menu::open_pressed(&output, (x, y), size, cx);
                         }
                     });
+                }
+                Event::MenuDrag(output, x, y, released) => {
+                    if released {
+                        crate::desktop_menu::drag_released(&output, (x, y), cx);
+                    } else {
+                        crate::desktop_menu::drag_moved(&output, (x, y), cx);
+                    }
                 }
                 Event::Boxes(boxes) => crate::desktop_edit::on_boxes(boxes, cx),
                 Event::Widget(id, action) => {
@@ -1137,11 +1147,15 @@ fn run(layer: CanvasLayer, rx: mpsc::Receiver<Msg>, waker: Arc<Waker>, events: a
         }
         r.report_boxes(&events);
         r.report_presses(&mut host, &events);
+        r.report_drag(&mut host, &events);
         host.release_idle();
         let deadline = r.next_wake(&host, Instant::now()).map(|d| Instant::now() + d);
-        // Pointer motion over the desktop only moves the stored position:
-        // sleep on until something else happens (or a press arrives).
-        while !host.wait(deadline.map(|d| d.saturating_duration_since(Instant::now())), &waker)? {}
+        // Pointer motion over the desktop only moves the stored position
+        // (and follows a right-drag on the menu): sleep on until something
+        // else happens (or a press arrives).
+        while !host.wait(deadline.map(|d| d.saturating_duration_since(Instant::now())), &waker)? {
+            r.report_drag(&mut host, &events);
+        }
     }
 }
 
@@ -1191,6 +1205,15 @@ impl Renderer {
                 _ => {}
             }
         }
+    }
+
+    /// Follows the right button held since it opened the desktop menu:
+    /// the newest position, or the release (other buttons' drags are not
+    /// the menu's).
+    fn report_drag(&self, host: &mut Host, events: &async_channel::Sender<Event>) {
+        let Some(d) = host.take_drag().filter(|d| d.button == BTN_RIGHT) else { return };
+        let Some(out) = self.outs.iter().find(|o| o.id == d.output && !o.name.is_empty()) else { return };
+        let _ = events.send_blocking(Event::MenuDrag(out.name.clone(), d.x as f32, d.y as f32, d.released));
     }
 
     /// In edit mode, posts where the widgets were painted when it changed.

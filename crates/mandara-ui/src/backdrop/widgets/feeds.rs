@@ -302,10 +302,10 @@ mod tests {
         let says = |c: &Composition, words: &str| shown(c).contains(words);
         // Switched off: a button to the exact widget's settings.
         let c = github(&GithubWidget { user: "octocat".into(), ..Default::default() }, "github-2", &Feed::default(), &l(), 1.0, &mut Fixed);
-        assert_eq!(studio(&c).as_deref(), Some("desktop-widgets/github-2"));
+        assert_eq!(studio(&c).as_deref(), Some("desktop/widgets/github-2"));
         assert!(says(&c, "Allow fetching from GitHub"));
-        assert_eq!(studio(&currency(&CurrencyWidget::default(), "currency-1", &Feed::default(), &l(), 1.0, &mut Fixed)).as_deref(), Some("desktop-widgets/currency-1"));
-        assert_eq!(studio(&ai_usage(&AiUsageWidget::default(), "ai-1", &Feed::default(), &l(), 1.0, &mut Fixed)).as_deref(), Some("desktop-widgets/ai-1"));
+        assert_eq!(studio(&currency(&CurrencyWidget::default(), "currency-1", &Feed::default(), &l(), 1.0, &mut Fixed)).as_deref(), Some("desktop/widgets/currency-1"));
+        assert_eq!(studio(&ai_usage(&AiUsageWidget::default(), "ai-1", &Feed::default(), &l(), 1.0, &mut Fixed)).as_deref(), Some("desktop/widgets/ai-1"));
         // On and waiting: no button; failed: the reason, and a click asks again.
         let on = CurrencyWidget { online: true, ..Default::default() };
         let loading = currency(&on, "c", &Feed { value: None, error: None, loading: true }, &l(), 1.0, &mut Fixed);

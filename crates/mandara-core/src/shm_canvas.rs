@@ -223,6 +223,20 @@ pub struct Press {
     pub button: u32,
 }
 
+/// The pointer while a button pressed on a canvas is still held (the
+/// compositor keeps sending it to that canvas until it is let go): its
+/// latest position, or where the button was released. Only the newest is
+/// kept between two [`Host::take_drag`] calls, except that a release is
+/// never replaced by a later motion.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Drag {
+    pub output: u32,
+    pub x: f64,
+    pub y: f64,
+    pub button: u32,
+    pub released: bool,
+}
+
 /// One seat's pointer and its cursor-shape device.
 struct Seat {
     seat: wl_seat::WlSeat,
@@ -534,6 +548,10 @@ struct State {
     /// The canvas under the pointer (its output global) and the position.
     pointer: Option<(u32, f64, f64)>,
     presses: Vec<Press>,
+    /// The button held since a press on a canvas (its output global and
+    /// code), and the drag to report.
+    held: Option<(u32, u32)>,
+    drag: Option<Drag>,
     /// Vertical scroll not yet turned into steps.
     scroll: f64,
     /// Pointer events dispatched since [`Host::wait`] started (a wake-up
@@ -604,6 +622,8 @@ impl Host {
             pointer: None,
             scroll: 0.0,
             presses: Vec::new(),
+            held: None,
+            drag: None,
             input_events: 0,
         };
         globals.contents().with_list(|list| {
@@ -635,6 +655,13 @@ impl Host {
     /// Button presses on the canvases since the last call, oldest first.
     pub fn take_presses(&mut self) -> Vec<Press> {
         std::mem::take(&mut self.state.presses)
+    }
+
+    /// Where a held button's pointer went (or was let go) since the last
+    /// call. Motion alone never makes [`Host::wait`] return: call this
+    /// after each wait to follow a drag without redrawing.
+    pub fn take_drag(&mut self) -> Option<Drag> {
+        self.state.drag.take()
     }
 
     /// Outputs or canvas geometry changed since the last call.
@@ -1391,12 +1418,29 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 if let Some(p) = state.pointer.as_mut() {
                     (p.1, p.2) = (surface_x, surface_y);
                 }
+                if let Some((output, button)) = state.held
+                    && !state.drag.is_some_and(|d| d.released)
+                {
+                    state.drag = Some(Drag { output, x: surface_x, y: surface_y, button, released: false });
+                }
             }
             wl_pointer::Event::Button { button, state: WEnum::Value(wl_pointer::ButtonState::Pressed), .. } => {
-                if let Some((output, x, y)) = state.pointer
-                    && state.presses.len() < MAX_PRESSES
+                if let Some((output, x, y)) = state.pointer {
+                    if state.presses.len() < MAX_PRESSES {
+                        state.presses.push(Press { output, x, y, button });
+                    }
+                    if state.held.is_none() {
+                        state.held = Some((output, button));
+                    }
+                }
+            }
+            wl_pointer::Event::Button { button, state: WEnum::Value(wl_pointer::ButtonState::Released), .. } => {
+                if let Some((output, held)) = state.held
+                    && held == button
                 {
-                    state.presses.push(Press { output, x, y, button });
+                    state.held = None;
+                    let (x, y) = state.pointer.map_or((0.0, 0.0), |p| (p.1, p.2));
+                    state.drag = Some(Drag { output, x, y, button, released: true });
                 }
             }
             wl_pointer::Event::Axis { axis: WEnum::Value(wl_pointer::Axis::VerticalScroll), value, .. } => {
@@ -1412,6 +1456,12 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 }
             }
             wl_pointer::Event::Leave { .. } => {
+                // A leave ends any grab: the button can't be followed, and
+                // counts as let go where it was last seen.
+                if let Some((output, button)) = state.held.take() {
+                    let (x, y) = state.pointer.map_or((f64::NAN, f64::NAN), |p| (p.1, p.2));
+                    state.drag = Some(Drag { output, x, y, button, released: true });
+                }
                 state.pointer = None;
                 state.scroll = 0.0;
             }

@@ -75,11 +75,26 @@ fn wallpaper_tab_target(target: &str) -> Option<app::wallpaper_page::WallpaperTa
     app::wallpaper_page::WallpaperTab::parse(tab.split('/').next()?)
 }
 
-/// A desktop widget to select: `desktop-widgets/<id>`, as an empty
-/// widget's "Set up in Studio" button asks.
+/// A Desktop tab to show: `desktop/<widgets|cards|context-menu>`.
+fn desktop_tab_target(target: &str) -> Option<app::desktop_page::DesktopTab> {
+    let (section, rest) = target.split_once('/')?;
+    (resolve_section(section) == Some(registry::Section::Desktop)).then_some(())?;
+    app::desktop_page::DesktopTab::parse(rest.split('/').next()?)
+}
+
+/// A desktop widget to select: `desktop/widgets/<id>`, `desktop/<id>` or
+/// the former `desktop-widgets/<id>`, as an empty widget's "Set up in
+/// Studio" button asks.
 fn desktop_widget_target(target: &str) -> Option<String> {
-    let (section, id) = target.split_once('/')?;
-    (resolve_section(section) == Some(registry::Section::DesktopWidgets)).then_some(())?;
+    use app::desktop_page::DesktopTab;
+    let (section, rest) = target.split_once('/')?;
+    (resolve_section(section) == Some(registry::Section::Desktop)).then_some(())?;
+    let id = match rest.split_once('/') {
+        Some((tab, id)) if DesktopTab::parse(tab) == Some(DesktopTab::Widgets) => id,
+        Some(_) => return None,
+        None if DesktopTab::parse(rest).is_some() => return None,
+        None => rest,
+    };
     let id = id.trim();
     (!id.is_empty()).then(|| id.to_string())
 }
@@ -108,7 +123,15 @@ fn bars_tab_target(target: &str) -> Option<registry::bars::BarsTab> {
 
 /// Names of pages merged into another one, still accepted on the command
 /// line (`mandara studio appearance` opens Themes).
-const FORMER_SECTIONS: &[(&str, registry::Section)] = &[("appearance", registry::Section::Themes), ("looks", registry::Section::Themes), ("cursor", registry::Section::Themes), ("cursors", registry::Section::Themes)];
+const FORMER_SECTIONS: &[(&str, registry::Section)] = &[
+    ("appearance", registry::Section::Themes),
+    ("looks", registry::Section::Themes),
+    ("cursor", registry::Section::Themes),
+    ("cursors", registry::Section::Themes),
+    // Desktop widgets became Desktop (its Widgets tab).
+    ("desktop-widgets", registry::Section::Desktop),
+    ("desktop widgets", registry::Section::Desktop),
+];
 
 /// Whether a command-line target opens Themes at its Cursor section
 /// (`themes/cursor`, or the moved `cursor` / `input/cursor`).
@@ -147,6 +170,7 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
     let themes_tab = section.and_then(themes_tab_target);
     let bars_tab = section.and_then(bars_tab_target);
     let desktop_widget = section.and_then(desktop_widget_target);
+    let desktop_tab = section.and_then(desktop_tab_target);
     // `power/<part>` scrolls the Power & idle page to that part.
     let power_part = section.and_then(|t| t.strip_prefix("power/")).map(str::to_string);
     let cursor = section.is_some_and(cursor_target);
@@ -175,6 +199,9 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
         }
         if let Some(tab) = bars_tab {
             view.show_bars_tab(tab, cx);
+        }
+        if let Some(tab) = desktop_tab {
+            view.show_desktop_tab(tab, cx);
         }
         if let Some(id) = &desktop_widget {
             view.show_desktop_widget(id, cx);
@@ -340,11 +367,37 @@ mod tests {
     #[test]
     fn a_desktop_widget_target_selects_that_widget() {
         mandara_i18n::with_language(Some(mandara_i18n::Lang::En), || {
+            // The former page's links keep working.
             assert_eq!(desktop_widget_target("desktop-widgets/github-1").as_deref(), Some("github-1"));
-            assert_eq!(resolve_section("desktop-widgets/github-1"), Some(Section::DesktopWidgets));
+            assert_eq!(resolve_section("desktop-widgets/github-1"), Some(Section::Desktop));
+            assert_eq!(resolve_section("desktop-widgets"), Some(Section::Desktop));
+            assert_eq!(resolve_section("Desktop widgets"), Some(Section::Desktop));
             assert_eq!(desktop_widget_target("desktop-widgets"), None);
             assert_eq!(desktop_widget_target("desktop-widgets/"), None);
             assert_eq!(desktop_widget_target("plugins/github-1"), None);
+            // The new ones.
+            assert_eq!(desktop_widget_target("desktop/widgets/github-1").as_deref(), Some("github-1"));
+            assert_eq!(desktop_widget_target("desktop/clock-2").as_deref(), Some("clock-2"));
+            assert_eq!(desktop_widget_target("desktop/widgets"), None, "a tab, not a widget");
+            assert_eq!(desktop_widget_target("desktop/context-menu"), None);
+            assert_eq!(desktop_widget_target("desktop/cards/x"), None);
+        });
+    }
+
+    #[test]
+    fn desktop_deep_links_open_their_tabs() {
+        use app::desktop_page::DesktopTab;
+        mandara_i18n::with_language(Some(mandara_i18n::Lang::En), || {
+            assert_eq!(resolve_section("desktop"), Some(Section::Desktop));
+            for (link, tab) in [("desktop/widgets", DesktopTab::Widgets), ("desktop/cards", DesktopTab::Cards), ("desktop/context-menu", DesktopTab::ContextMenu), ("Desktop/Context-Menu", DesktopTab::ContextMenu), ("desktop-widgets/cards", DesktopTab::Cards), ("desktop/widgets/clock-1", DesktopTab::Widgets)] {
+                assert_eq!(resolve_section(link), Some(Section::Desktop), "{link}");
+                assert_eq!(desktop_tab_target(link), Some(tab), "{link}");
+            }
+            assert_eq!(desktop_tab_target("desktop"), None, "the page's own default");
+            assert_eq!(desktop_tab_target("desktop/clock-1"), None);
+            assert_eq!(desktop_tab_target("wallpaper/context-menu"), None);
+            // The Desktop group of the sidebar is not a page.
+            assert_ne!(resolve_section("desktop"), Some(Section::Bars));
         });
     }
 

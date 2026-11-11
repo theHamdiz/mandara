@@ -479,7 +479,7 @@ fn run_popup(action: Action, popup: &Popup, cx: &mut App) {
         Action::Duplicate(id) => duplicate(&id, cx),
         Action::Hide(id) => hide(&id, cx),
         Action::ShowOn(id, output) => show_on(&id, output, cx),
-        Action::WidgetSettings => crate::state::open_studio_at(Some("desktop-widgets".into()), cx),
+        Action::WidgetSettings => crate::state::open_studio_at(Some("desktop/widgets".into()), cx),
         _ => {}
     }
 }
@@ -1048,7 +1048,7 @@ impl EditView {
                 this.open_popup(PopupKind::Add(None), at, true, cx);
             })))
             .child(button("edit-undo", "undo", t("Undo"), can_undo).when(can_undo, |el| el.on_click(cx.listener(|_, _, _, cx| undo(cx)))))
-            .child(button("edit-studio", "external", t("Open in Studio"), true).on_click(cx.listener(|_, _, _, cx| crate::state::open_studio_at(Some("desktop-widgets".into()), cx))))
+            .child(button("edit-studio", "external", t("Open in Studio"), true).on_click(cx.listener(|_, _, _, cx| crate::state::open_studio_at(Some("desktop/widgets".into()), cx))))
             .child(
                 div()
                     .id("edit-done")

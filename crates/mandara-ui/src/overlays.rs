@@ -340,7 +340,7 @@ pub const STUDIO_SECTIONS: &[(&str, &str, &str, &str)] = &[
     // Look & feel
     ("themes", tk("Themes"), "droplet", "appearance looks colors palette wallpaper colors material you dark light icons roundness app themes"),
     ("wallpaper", tk("Wallpaper"), "image", "background desktop picture folder picker depth clock"),
-    ("desktop-widgets", tk("Desktop widgets"), "clock", "desktop clock system monitor decorations visualizer cards now playing calendar arrange edit"),
+    ("desktop", tk("Desktop"), "clock", "desktop widgets clock system monitor decorations visualizer cards now playing calendar arrange edit context menu right-click ring menu"),
     ("typography", tk("Typography"), "text-scan", "fonts text size"),
     ("motion", tk("Motion"), "waves", "animation springs speed"),
     // Desktop

@@ -215,9 +215,11 @@ A progress bar, value from 0 to 1
 A public GitHub repository tagged mandara-plugin with a release is all it takes.
 A public repository with this topic (About → Topics).
 A quiet notification when the song changes
+A quote isn't closed
 A random style
 A reader for RSS, Atom and JSON feeds
 A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view
+A ring of icons around the pointer, or the classic list
 A round knob on the end of the fill that stretches into a pill while you hold it
 A rounded field with an accent edge while you type
 A rounded surface around its children
@@ -364,6 +366,7 @@ Add an app: desktop id or name, then Enter
 Add an app: search by name
 Add an entry to a collection
 Add an idle command
+Add an item of your own
 Add any widget to it in Studio → Bars → Sidebar.
 Add app
 Add apps or commands below.
@@ -375,6 +378,7 @@ Add color
 Add command
 Add feeds
 Add include
+Add item
 Add link
 Add one from an otpauth:// link or a QR code
 Add or remove a favourite station
@@ -396,6 +400,7 @@ Add to the slideshow playlist
 Add to {zone}
 Add user
 Add widget
+Add widget opens
 Add widgets
 Add your GitHub user name to see your year
 Add your Home Assistant token in Studio
@@ -407,6 +412,7 @@ Add {count} packages with {tool}? They arrive with the next boot: {packages}
 Added
 Added here
 Added {account}
+Added {name}
 Added {n} accounts from the QR code
 Adding to apps
 Adding to your apps…
@@ -529,6 +535,7 @@ An app needs administrator rights
 An app starts or stops using the microphone, camera or screen
 An app wants access to the keyring “Login”, but it is locked (preview: nothing is unlocked)
 An app wants to create a new keyring called “Mandara”. Choose the password you want to use for it (preview: nothing is created)
+An argument is too long
 An image is already being prepared
 An interactive card — its own settings are with the cards.
 An island per group
@@ -550,6 +557,7 @@ Angle
 Animate opening applications
 Animated current conditions, hourly and 5-day forecast
 Animated sky
+Animation
 Animation presets
 Animation speed
 Animations
@@ -825,6 +833,7 @@ Behind Fit and Center (hex)
 Behind the subject
 Below this, notifications go straight to the history
 Benjamin Franklin
+Beside the ring
 Bessie Head
 Best
 Best {time}
@@ -1041,6 +1050,7 @@ Card radius
 Card spacing
 Card style
 Cards
+Cards & visualizers
 Cards keep clear of the bar's edge automatically.
 Cards show bigger thumbnails and flair, compact fits more posts and the grid puts pictures first; the panel's layout button switches too
 Cards side by side, wrapping onto more rows when they don't fit, or one above the other, wrapping into more columns
@@ -1190,6 +1200,7 @@ City or place name
 Clarice Lispector
 Classic
 Classic analog
+Classic list
 Classic: one surface with the search field and results. Beacon: a centred search bar with results under it once you type
 Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away
 Classical
@@ -1224,6 +1235,7 @@ Click an entry of the loaded tray menu by id
 Click anywhere to capture the whole screen · Ctrl+C copy · {enter}
 Click only while the dock is on
 Click opens the app
+Click or drag
 Click or scroll to set them
 Click the bin again to remove this account
 Click the game on the desktop to play it with the keyboard; click anywhere else to give the keyboard back. Its rules are in Studio → Plugins.
@@ -1386,6 +1398,7 @@ Containers you create with docker or podman appear here
 Content
 Content follows the wheel, like a touchscreen
 Content follows your fingers
+Context menu
 Continue
 Continue at {reference}
 Continue reading
@@ -1671,6 +1684,7 @@ Default
 Default ({font})
 Default apps per category (from mimeapps.list)
 Default column width
+Default items
 Default list
 Default search
 Default source
@@ -1832,6 +1846,7 @@ Display name
 Display settings…
 Displays
 Distance from the edge
+Distance from the middle to the items; it grows on its own when many items need room
 Distance from the screen edge (floating styles and the floating frame)
 Distant coast
 Distro logo
@@ -2400,7 +2415,9 @@ Folders to search
 Folders, comma separated (empty: your home folders)
 Follow Mandara
 Follow Mandara, or a language of its own: its panel, bar item, sidebar card, widgets and the meanings it shows; the rest of Mandara keeps its language
+Follow Motion
 Follow Quick start above: your plugin shows up here, and in Installed, as soon as you copy it in.
+Follow Studio → Motion, or give the menu a speed of its own
 Follow a community to see its top posts here
 Follow sites you like: add their addresses or pick from tested starter feeds in Studio.
 Follow system
@@ -2412,6 +2429,7 @@ Follow the shell
 Follow theme
 Follow units
 Following the Equator
+Follows Studio → Motion
 Follows the desktop's transition (Fit & effects)
 Follows which window has focus
 Follows your desktop
@@ -2425,6 +2443,7 @@ For terminal apps; empty uses your preferred terminal (Applications), then $TERM
 For the Cards style
 For the Custom quality
 For the Model mode
+For the Ring style
 For the things we have to learn before we can do, we learn by doing.
 For windows whose app id doesn't name their app (games, web apps): * matches anything, e.g. steam_app_* → steam.
 For you only needs no password; for everyone, Flatpak asks for it
@@ -2592,6 +2611,7 @@ Give one display its own wallpaper (clear = follow the main one)
 Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look
 Give the bar a style preset's look (your items stay), or none for the plain bar
 Give the file's full path
+Give the item a name
 Give the profile a name
 Give the station a name
 Give time to those who owe you, and let go when you can.
@@ -2762,6 +2782,7 @@ History paused
 History size
 Hold a button
 Hold reminders while a fullscreen window (a game, a video) has focus
+Hold the right button, move toward an item and let go to pick it in one motion
 Hold time
 Hold to confirm
 Hold to sincere faith in the One God; it is the root of every good.
@@ -3002,6 +3023,7 @@ In a terminal
 In front
 In logical pixels; apps and the compositor scale it on HiDPI screens
 In the bar
+In the middle
 In the slideshow playlist: click to remove
 In the store
 In this folder
@@ -3147,6 +3169,7 @@ It plays: {details}
 It poses as Mandara's built-in {plugin} plugin
 It reads Linux's socket tables in /proc/net, which FreeBSD doesn't have; sockstat(1) lists FreeBSD's
 It runs commands without being asked ({command})
+It runs the program directly with its arguments, never through a shell. Quote an argument that holds spaces.
 It shows nothing: its bar item, panel and sidebar card are all empty
 It shows nothing: its bar item, panel, sidebar card and desktop widgets are all empty
 It's Mandara's {example} example, republished unchanged
@@ -3159,7 +3182,9 @@ Item shape
 Item size
 Item spacing
 Item style
+Items
 Its name (optional)
+Its own speed
 Its people
 JPEG
 JPEG quality
@@ -3602,6 +3627,7 @@ Lower is warmer; 6500 K is untinted
 Lower it to let the desktop (or the frosted glass) show through
 Lower it to let the desktop show through (floating or rounded side panels)
 Lower it to let the desktop show through panels
+Lower it to let the desktop show through the ring
 Lower it to let your wallpaper and windows show through the bar
 Lower lets windows show through
 Lower lets windows show through popups
@@ -4004,6 +4030,7 @@ Name in the launcher (empty keeps the app's own)
 Name the app the rule is for
 Name the profile first
 Name, command or PID…
+Name, e.g. Files
 Name, image or project…
 Named routines: each step is a Mandara command, run in order. Find them by name in the launcher or as /name.
 Names
@@ -4021,6 +4048,7 @@ Nearby Wi-Fi networks
 Nearly full at
 Needs Mandara Login (greetd): its PAM file wasn't found.
 Needs Super, Ctrl or Alt
+Needs a terminal (Studio → Applications)
 Needs attention
 Needs no system access beyond drawing its own view
 Needs nvidia-smi
@@ -4700,6 +4728,7 @@ Open video
 Open when the pointer touches the sidebar's edge
 Open windows
 Open windows, most recently used first
+Open with
 Open {community} in Reddit
 Open {folder}
 Open {folder} · {n} more
@@ -4728,6 +4757,7 @@ Opens links from Mandara; empty uses your default
 Opens on the first entry
 Opens on “{entry}”
 Opens the launcher
+Opens the widgets as an outer ring
 Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm
 Opposite the sidebar
 Opt-in
@@ -5014,6 +5044,7 @@ Play or pause
 Play or pause the radio
 Play the adhan now (to hear it; it must be downloaded)
 Playback speed for this surface; zero applies transitions instantly
+Playback speed of the menu; zero opens and closes it at once
 Playback state, levels, preset and sleep timer
 Playful, bright cursors in bold colors
 Playing
@@ -5115,6 +5146,7 @@ Press Enter to close
 Press keys…
 Press play for your usual station
 Press play to listen
+Press, drag and release
 Preview
 Preview after download
 Preview generated file
@@ -5162,6 +5194,7 @@ Profile scope
 Profiles
 Profiles & backup
 Program
+Program and arguments, e.g. nautilus --new-window
 Program file
 Program, e.g. ghostty
 Programming
@@ -5614,6 +5647,7 @@ Right item style
 Right side bar
 Right tile
 Right-click empty bar space
+Right-click empty desktop to open it; changes apply the next time it opens.
 Right-click on empty bar space
 Right-clicking between a split bar's pieces opens the main menu; the rest of the desktop, and Main menu → Apps & tools → Desktop menu, still open the desktop's menu
 Right-clicking empty bar space opens the desktop's menu
@@ -5623,6 +5657,7 @@ Rim light
 Rim width
 Ring
 Ring shows
+Ring size
 Ring starts at
 Ring width
 Ring, ping or change pairing for a device
@@ -6010,7 +6045,6 @@ Set volume to 40
 Sets every component below at once; corner size, shadows, panel edges and the slider handle stay yours
 Sets the cursor in Mandara's compositor drop-in and live
 Setting types
-Setting up Mandara's admin helper first (one more approval, only this once)…
 Settings
 Settings and data this app may have left in your home folder. Only what you tick moves to the Trash; nothing is deleted, and the app's removal doesn't depend on it.
 Settings in Studio
@@ -6087,6 +6121,7 @@ Shortcuts
 Shortcuts cheatsheet
 Shortcuts in your {target_name} config
 Show
+Show / hide desktop widgets
 Show All Windows
 Show a badge on the chip when units have failed
 Show a colour temperature for a few seconds (default 3, at most 10)
@@ -6177,6 +6212,8 @@ Shows the most pressing of: an event soon, the next prayer, a low battery, unrea
 Shows the new recording in your file manager
 Shows the switcher for three seconds without taking the keyboard
 Shows when apps use your microphone, camera or screen
+Shows when the desktop has widgets
+Shows with a slideshow or its folder
 Shows {kelvin} K for a few seconds
 Shuffle
 Shuffle shows every wallpaper once before any repeats
@@ -6217,6 +6254,7 @@ Six
 Size
 Size & placement
 Size badge
+Size of each item's button
 Size of the app icons in the grid
 Size of the capture toolbar and its hints
 Size of the floating card in the middle of the screen
@@ -6537,6 +6575,7 @@ Swirl
 Switch
 Switch automatically
 Switch between light and dark appearance
+Switch items on or off and put them in order: the first sits at the top of the ring, the rest follow clockwise (the other way in right-to-left languages).
 Switch layout
 Switch layouts with
 Switch on release
@@ -6780,7 +6819,6 @@ The adhan is playing
 The adhan isn't downloaded
 The adhan isn't downloaded: turn it on in Studio, or run `prayer adhan download`
 The adhan: whether it is on, downloaded or playing, and where it comes from
-The admin helper couldn't be installed, so nothing was changed.
 The ancient lighthouse: a luminous beam across deep night navy and harbour lights.
 The app and tool tiles wear a Kufic word instead of their geometric pattern
 The app each kind of file or link opens in, for every app that asks the system (mimeapps.list).
@@ -6832,6 +6870,8 @@ The clock now sets itself from internet time servers
 The clock's time zone, network time, and the shared location's time zone
 The collections come from the hadith-api dataset, released into the public domain (the Unlicense). Each one is downloaded when you ask for it, checked, and kept on this computer in ~/.local/share/mandara/hadith.
 The colour its items light up and wash with
+The command has too many arguments
+The command holds a character no program accepts
 The command is empty
 The community store has blocked installs and updates for {repository}.
 The community the sidebar card shows; empty follows your first community
@@ -6948,7 +6988,10 @@ The meaning in your language
 The meaning in your language under the Arabic (English where the collection has none in yours). Off: Arabic only
 The meaning in your language under the Arabic; the Qur'an's is downloaded once from Tanzil (api.alquran.cloud). Off: Arabic only
 The meaning {edition} is incomplete
+The menu a right-click on empty desktop opens: a ring of icons around the pointer, or the classic list.
+The menu has its most custom items
 The name is empty
+The name is too long
 The network name is empty
 The new generation starts at the next boot
 The new release is plugin {new}, not {old}; reinstall it from the marketplace
@@ -7500,6 +7543,7 @@ Type a database password in Mandara's dialog
 Type a natural language shell command…
 Type a word in Arabic or in your language
 Type the PIN for {device} (often 0000 or 1234, or shown on its screen).
+Type the program to run
 Type the six-digit code shown on {device}.
 Type this code on the device
 Type to filter
@@ -7956,14 +8000,17 @@ When I walk along with two others, they may serve me as my teachers.
 When a window covers it
 When a window overlaps
 When an event defines alarms, remind at those times instead
+When clicked
 When idle
 When in doubt, check a hadith with a scholar or a printed edition.
 When in doubt, tell the truth.
 When it overflows
 When nearly empty
+When pointed at
 When the app you copied from quits, its last copy can still be pasted
 When the gh CLI is signed in, use its token for private repositories and higher rate limits (else GITHUB_TOKEN)
 When the monitors of a saved profile are connected, switch to it
+When the outer ring of widgets appears
 When the year becomes cold, then we know how the pine and the cypress are the last to lose their leaves.
 When there is a big tree small ones climb on its back to reach the sun.
 When to change
@@ -7983,6 +8030,7 @@ Where the dock opens: on a screen side, or at the top or bottom center hanging f
 Where the launcher opens: in the middle of the screen or attached to the top / bottom edge at the left, middle or right (no argument: the current one)
 Where the middle group sits
 Where the middle group sits along the edge
+Where the ring names its items
 Whether Mandara's pairing agent is registered with BlueZ
 Whether presentation mode is on, for how long, and what it will restore (JSON)
 Whether the hotspot runs, and its network name
@@ -8216,7 +8264,7 @@ a level for new, a cell (row,column) for select, a digit for digit and note
 a path key from `jannah paths`
 a reference: bukhari 1, muslim 2699a
 a reference: bukhari 1, muslim 2699a, abudawud 4031
-a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, ai-shell-agent, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
+a section (home, themes, wallpaper, desktop, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, ai-shell-agent, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, desktop/<widgets|cards|context-menu>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
 a style id from `wallgen styles`
 a surah (2, al-baqara) or an ayah (2:255), or a range (2:255-257)
 a verse or hadith reference

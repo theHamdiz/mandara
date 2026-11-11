@@ -15,6 +15,7 @@ pub mod desktop;
 pub mod doctor;
 pub mod floating;
 pub mod desktop_widgets;
+pub mod desktop_menu;
 pub mod desktop_cards;
 pub mod dock;
 pub mod input;

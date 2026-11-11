@@ -13,6 +13,7 @@ use mandara_i18n::{t, tf, tk, tr};
 use serde_json::Value;
 
 pub mod alert_settings;
+pub mod context_menu_settings;
 pub mod desktop_settings;
 mod motion_settings;
 #[cfg(test)]
@@ -47,9 +48,9 @@ pub enum Section {
     /// On-screen display kinds and look (W3).
     Osd,
     Wallpaper,
-    /// Clocks, system monitor, decorations, visualizers and cards on the
-    /// desktop: add, arrange and style them.
-    DesktopWidgets,
+    /// The desktop: its widgets (clocks, system monitor, decorations…),
+    /// cards and visualizers, and the right-click menu, on three tabs.
+    Desktop,
     Displays,
     Audio,
     /// Wi-Fi, VPN, hotspot, saved networks, Bluetooth devices (W6).
@@ -94,7 +95,7 @@ impl Section {
         Section::Notifications,
         Section::Osd,
         Section::Wallpaper,
-        Section::DesktopWidgets,
+        Section::Desktop,
         Section::Displays,
         Section::Audio,
         Section::Network,
@@ -133,7 +134,7 @@ impl Section {
             Section::Osd => tk("On-screen displays"),
             Section::Privacy => tk("Privacy"),
             Section::Wallpaper => tk("Wallpaper"),
-            Section::DesktopWidgets => tk("Desktop widgets"),
+            Section::Desktop => tk("Desktop"),
             Section::Displays => tk("Displays"),
             Section::Audio => tk("Audio & media"),
             Section::Network => tk("Network & Bluetooth"),
@@ -170,7 +171,7 @@ impl Section {
             Section::Home => "grid",
             Section::Themes => "droplet",
             Section::Wallpaper => "image",
-            Section::DesktopWidgets => "clock",
+            Section::Desktop => "clock",
             Section::Typography => "text-scan",
             Section::Motion => "waves",
             Section::Bars => "window",
@@ -280,7 +281,7 @@ impl NavGroup {
     pub fn sections(self) -> &'static [Section] {
         use Section::*;
         match self {
-            NavGroup::LookAndFeel => &[Themes, Wallpaper, DesktopWidgets, Typography, Motion],
+            NavGroup::LookAndFeel => &[Themes, Wallpaper, Desktop, Typography, Motion],
             NavGroup::Desktop => &[Bars, Dock, Launcher, WindowSwitcher, Notifications, Osd],
             NavGroup::System => &[Displays, Audio, Network, Power, Input, Shortcuts, DateTime, Applications],
             NavGroup::Security => &[Users, LoginScreen, LockScreen, Privacy],
@@ -572,6 +573,7 @@ pub fn settings() -> &'static [Setting] {
         let mut all = build();
         all.extend(surface_settings::entries());
         all.extend(desktop_settings::entries());
+        all.extend(context_menu_settings::entries());
         all.extend(motion_settings::entries());
         all.extend(alert_settings::entries());
         all.extend(system_settings::entries());
@@ -623,6 +625,7 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Mandara can't set this on Sway")),
         path if running_compositor() == Some(mandara_config::compositor::Target::River) && RIVER_LACKS.contains(&path) => Some(tk("River has no such setting")),
         path if path.starts_with("/wallpaper/slideshow/") => desktop_settings::slideshow_locked(path, cfg),
+        path if path.starts_with("/desktop/menu/") => context_menu_settings::locked(path, cfg),
         "/wallpaper/depth/auto_split" | "/wallpaper/depth/download" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
         "/wallpaper/depth/split" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
         "/wallpaper/depth/split" if cfg.wallpaper.depth.auto_split => Some(tk("Set per wallpaper while the automatic split is on")),
@@ -780,7 +783,7 @@ fn build() -> Vec<Setting> {
         s(Wallpaper, tk("Desktop"), "/wallpaper/enabled", tk("Draw the wallpaper"), tk("Mandara paints the desktop background (replaces swww / awww / swaybg)"), Toggle),
         s(Wallpaper, tk("Desktop"), "/wallpaper/crossfade_ms", tk("Crossfade"), tk("Blend time when the wallpaper changes"), slider(0.0, 2000.0, 50.0, " ms")),
         // The depth clock itself (style, place, date pill, audio ring) is a
-        // desktop widget: Wallpaper → Desktop widgets.
+        // desktop widget: Studio → Desktop → Widgets.
         s(Wallpaper, tk("Depth clock"), "/wallpaper/depth_effect", tk("Depth effect"), tk("Draw the wallpaper's foreground subject over the clock (with the Fill mode)"), Toggle),
         // The wallpaper-depth plugin's own rows (one group, so the page
         // can place them as a unit).
