@@ -22,7 +22,16 @@ A preset writes its values (stiffness, damping, mass, animation speed and the
 choreography below) and nothing else: reduce motion, follow system
 preference, motion intensity and the per-surface speeds stay yours. Editing
 any of its values afterwards shows **Custom**, and your existing tuning is
-preserved on upgrade. From the command line, `mandara msg motion presets`
+preserved on upgrade.
+
+The six choreographed presets reach further when you let them. Under
+**Presets**, *Presets style the dock and wallpaper* (on by default) also sets
+each one's [dock animations](#dock) and wallpaper transition: Corniche tide →
+Tide, Lighthouse sweep → Wipe, Felucca drift → Dissolve, Magnetic → Glitch,
+Mercury → Shatter, Raindrop → Ripple. *Presets style windows too* (off by
+default) also sets the matching [window animations](#windows). The five
+classic presets change only `[motion]`. The two switches are
+`[motion] preset_desktop` and `preset_windows`. From the command line, `mandara msg motion presets`
 lists them (with the one in use) and `mandara msg motion preset tide` applies
 one by its id: `default`, `snappy`, `smooth`, `bouncy`, `subtle`, `tide`,
 `lighthouse`, `felucca`, `magnetic`, `mercury` or `raindrop`.
@@ -107,6 +116,63 @@ entrance = "rise"
 stagger = 0.55
 parallax = 0.4
 ```
+
+## Windows
+
+**Window animations** (the *Windows* group) sets how windows open, close,
+move and switch workspaces: *Your compositor's own* (the default: Mandara
+writes nothing), *Fade*, *Swell* (rise from below), *Beam* (a quick sideways
+sweep), *Drift* (a slow, eased glide), *Snap* (zoom past and back),
+*Liquid* (a springy zoom) or *Drop* (fall in and bounce). **Window animation
+speed** plays the style faster or slower (0.25× to 3×).
+
+These lines go only into Mandara's generated drop-in, never into your own
+config, and only for compositors whose own checker accepted them:
+
+| Compositor | What Mandara writes | Checked with |
+| --- | --- | --- |
+| MangoWM | `animation_type_open/close` (slide, zoom or fade), fades, durations, Bézier curves, zoom ratios, tag direction | `mango -p` |
+| Niri | `window-open` / `window-close` (duration and curve), springs for `window-movement` and `workspace-switch` | `niri validate` (26.04) |
+| Hyprland 0.55+ (Lua config) | `hl.curve` Bézier curves and `hl.animation` for windowsIn/Out/Move, fadeIn/Out and workspaces | `Hyprland --verify-config` (0.57) |
+
+Older Hyprland setups (hyprlang) get none, since no Hyprland that reads that
+format was available to check them; Studio says so. Sway, River and labwc
+have no window animations, COSMIC and Plasma set their own, and Mandara can't
+set them on Umbriel or Aqueous yet: on those the controls stay visible with
+the reason instead. With *Compositor → Effects → Animations* off, nothing is
+written. MangoWM picks the edge a window slides from itself, and Niri has no
+slide or zoom of its own, so it gets each style's timing and springs.
+
+The config is `[compositor.look.windows]` with `style` (`compositor`, `fade`,
+`swell`, `beam`, `drift`, `snap`, `liquid`, `drop`) and `speed`.
+
+## Wallpaper change
+
+The **Wallpaper change** card shows the same settings as *Studio →
+Wallpaper*: the transition, where it starts and its length
+(`wallpaper.transition`, `transition_origin`, `crossfade_ms`).
+
+| Transition | How it looks | Software wallpaper |
+| --- | --- | --- |
+| Fade, Wipe, Grow | As before | Same |
+| Ripple | A circle opens from the pointer or the centre | A rectangle opening from the centre |
+| Tide | A wave rises from the bottom and washes the new image in | A straight edge rising from the bottom |
+| Tear | The old image rips along a jagged seam and both halves peel away | The new image opening outward from the middle |
+| Glitch | Slices shear sideways with a brief red and cyan split, then settle on the new image | Fade |
+| Shatter | The old image breaks into shards that burst from the origin and fall | Fade |
+| Dissolve | The new image arrives tile by tile | Fade |
+| Sketch | See [below](#sketch-wallpaper-transition) | Fade |
+
+The desktop normally uses the software wallpaper, where the compositor crops
+and fades whole planes: it can't move pieces of the old image, so the pieced
+transitions are drawn as the cheaper equivalent in the last column. The GPU
+wallpaper (`MANDARA_WALLPAPER_RENDERER=gpui`) draws every one. Each piece is
+a clip of the old or new image placed by a pure function of the progress,
+with seams, slices and shards from a hash of their index: nothing is stored
+between frames, and every transition ends on the new image exactly in place.
+Glitch moves smoothly and never flashes. With reduced motion every change
+cuts at once (Sketch becomes a plain fade). `transition_origin` is `center`
+or `pointer` (the pointer's place on the desktop, else the centre).
 
 ## Dock
 
