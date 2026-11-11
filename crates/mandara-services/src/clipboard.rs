@@ -725,6 +725,12 @@ pub mod keyboard {
             "backspace" => 14,
             "delete" => 111,
             "print" => 99,
+            "up" => 103,
+            "down" => 108,
+            "left" => 105,
+            "right" => 106,
+            "home" => 102,
+            "end" => 107,
             _ => return None,
         })
     }

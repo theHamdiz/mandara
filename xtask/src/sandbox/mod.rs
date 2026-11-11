@@ -109,7 +109,7 @@ const USAGE: &str = "usage: cargo xtask sandbox <command>
   shot OUT.png
   matte OUT.png [--region X0 Y0 X1 Y1] [--margin PX]
   msg ARGS…
-  pointer move X Y | click X Y [left|right|middle] | drag X1 Y1 X2 Y2 | flyby X Y MS | scroll X Y STEPS
+  pointer move X Y | click X Y [left|right|middle] | drag X1 Y1 X2 Y2 [left|right|middle] | flyby X Y MS | scroll X Y STEPS
   studio [--size WxH] SECTION [ARGS…] | studio stop
   shell restart | stop
   run ARGS… | run stop      (the sandbox's mandara with ARGS as the demo user, e.g. run greeter --demo --layer-shell)

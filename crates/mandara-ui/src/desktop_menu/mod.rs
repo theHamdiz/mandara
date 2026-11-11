@@ -6,6 +6,11 @@
 //! surface (`mandara-desktop-menu`) that exists only while the menu is
 //! shown: a click outside closes it, a right-click elsewhere moves it.
 //!
+//! `[desktop.menu]` picks the look: the ring ([`ring`], the default: icon
+//! buttons round the click, a marking-menu drag, an outer ring for "Add
+//! widget") or the classic list below. Both show the same items, in the
+//! order and with the custom programs set there.
+//!
 //! * Edit desktop · Add widget ▸ · Show / hide desktop widgets
 //! * Change wallpaper… · Next wallpaper (with a slideshow or its folder)
 //! * Themes & looks… · Display settings…
@@ -30,8 +35,9 @@ use gpui::{
 };
 use mandara_config::ShellConfig;
 use mandara_config::compositor::BindAction;
+use mandara_config::desktop_menu::{MenuItem, MenuItemId, MenuStyle};
 use mandara_core::{FrameClock, SpringConfig, SpringValue, SurfaceRole, ToGpui};
-use mandara_i18n::{t, tf};
+use mandara_i18n::{t, tf, tk};
 use mandara_theme::{Color, MandaraPalette};
 
 use crate::bidi::Bidi as _;
@@ -40,6 +46,9 @@ use crate::kit::text;
 use crate::plugins::dock::sheet::Sheet;
 use crate::plugins::panel_fx::{ANGLE_DOWN_DEG, elevation, readable, rim};
 use crate::state::{config, update_config};
+
+pub mod ring;
+pub mod ring_geom;
 
 // ── Metrics ──────────────────────────────────────────────────────────────
 
@@ -123,6 +132,8 @@ pub enum Action {
     EditDesktop,
     /// Opens the "Add widget" flyout.
     AddMenu,
+    /// Opens one shelf of "Add widget" (the ring's next level).
+    AddShelf(AddCategory),
     Add(NewWidget),
     ChangeWallpaper,
     NextWallpaper,
@@ -143,6 +154,8 @@ pub enum Action {
     Readings(String),
     /// Switches one reading of a system monitor on or off.
     ToggleReading(String, mandara_config::desktop_widgets::MonitorRow),
+    /// A custom item: its program and arguments, run directly.
+    Custom(Vec<String>),
 }
 
 /// What sits right-aligned on a row.
@@ -216,50 +229,226 @@ fn mod_label(m: &str) -> String {
     }
 }
 
-/// The desktop menu's rows for a right-click on `output`.
+/// The desktop menu's rows for a right-click on `output`: the items of
+/// `[desktop.menu]` that are on, in their order, each where it applies
+/// ("Show / hide desktop widgets" with widgets to hide, "Next wallpaper"
+/// with a slideshow or its folder).
 pub fn desktop_entries(cfg: &ShellConfig, output: &str) -> Vec<Entry> {
-    let w = &cfg.wallpaper;
-    let widgets = &cfg.desktop.widgets;
-    let count = widgets.items.iter().filter(|i| i.enabled).count();
-    let mut out = vec![
-        entry(0, "pencil", t("Edit desktop"), Action::EditDesktop).hint(keys_for(cfg, "desktop edit")),
-        entry(0, "plus", t("Add widget"), Action::AddMenu).submenu(),
-    ];
-    if count > 0 {
-        let (icon, label) = if widgets.hidden { ("eye", t("Show desktop widgets")) } else { ("eye-off", t("Hide desktop widgets")) };
-        out.push(entry(0, icon, label, Action::ToggleWidgets).hint(Some(Hint::Text(count.to_string().into()))));
+    let items = cfg.desktop.menu.items();
+    let mut out = Vec::with_capacity(items.len());
+    for item in items.iter().filter(|i| i.enabled) {
+        if let Some(e) = item_entry(cfg, output, item) {
+            out.push(e);
+        }
     }
-    out.push(entry(1, "image", t("Change wallpaper…"), Action::ChangeWallpaper).hint(keys_for(cfg, "wallpaper picker")));
-    if w.slideshow.enabled || !w.slideshow.directory.trim().is_empty() {
-        let every = w.slideshow.enabled.then(|| Hint::Text(tf("every {n} min", &[("n", &w.slideshow.interval_minutes)]).into()));
-        out.push(entry(1, "skip", t("Next wallpaper"), Action::NextWallpaper).hint(every));
-    }
-    out.push(entry(2, "droplet", t("Themes & looks…"), Action::Themes).hint(keys_for(cfg, "studio themes")));
-    out.push(entry(2, "monitor", t("Display settings…"), Action::Displays).hint((!output.is_empty()).then(|| Hint::Text(crate::bidi::ltr_isolate(output).into()))));
-    let terminal = cfg.apps.terminal_command();
-    let program = terminal.as_deref().and_then(|c| c.split_whitespace().next());
-    let keys = keys_where(cfg, |a| matches!(a, BindAction::Spawn(cmd) if program.is_some() && cmd.split_whitespace().next() == program));
-    out.push(entry(3, "terminal", t("Open terminal"), Action::Terminal).hint(keys).enabled(terminal.is_some()));
-    out.push(entry(3, "crop", t("Take screenshot"), Action::Screenshot).hint(keys_for(cfg, "screenshot")));
-    out.push(entry(4, "sliders", t("Mandara Studio…"), Action::Studio).hint(keys_where(cfg, |a| matches!(a, BindAction::Mandara(w) if w.trim() == "studio"))));
     out
 }
 
-/// The "Add widget" rows: what paints on the wallpaper, then the cards
-/// (a hairline between the two says it without a word on every row).
-pub fn add_entries(cx: &App) -> Vec<Entry> {
-    let Some(r) = cx.try_global::<mandara_plugins::PluginRegistry>() else { return Vec::new() };
-    let cfg = crate::state::config(cx).read(cx).snapshot();
-    let mut rows: Vec<Entry> = r
-        .enabled_desktop_widgets(&cfg.plugins)
+/// An item's icon and name whatever the desktop's state (Studio's list
+/// of items): the name in the interface language.
+pub fn item_face(item: &MenuItem) -> (&'static str, String) {
+    let (icon, label) = match item.id {
+        MenuItemId::EditDesktop => ("pencil", t("Edit desktop")),
+        MenuItemId::AddWidget => ("plus", t("Add widget")),
+        MenuItemId::ToggleWidgets => ("eye-off", t("Show / hide desktop widgets")),
+        MenuItemId::ChangeWallpaper => ("image", t("Change wallpaper…")),
+        MenuItemId::NextWallpaper => ("skip", t("Next wallpaper")),
+        MenuItemId::Themes => ("droplet", t("Themes & looks…")),
+        MenuItemId::Displays => ("monitor", t("Display settings…")),
+        MenuItemId::Terminal => ("terminal", t("Open terminal")),
+        MenuItemId::Screenshot => ("crop", t("Take screenshot")),
+        MenuItemId::Studio => ("sliders", t("Mandara Studio…")),
+        MenuItemId::Custom => return (icon_named(&item.icon), item.label.trim().to_string()),
+        MenuItemId::Unknown => ("package", ""),
+    };
+    (icon, label.to_string())
+}
+
+/// One `[desktop.menu]` item's row (`None` where it doesn't apply).
+pub fn item_entry(cfg: &ShellConfig, output: &str, item: &MenuItem) -> Option<Entry> {
+    let w = &cfg.wallpaper;
+    let widgets = &cfg.desktop.widgets;
+    Some(match item.id {
+        MenuItemId::EditDesktop => entry(0, "pencil", t("Edit desktop"), Action::EditDesktop).hint(keys_for(cfg, "desktop edit")),
+        MenuItemId::AddWidget => entry(0, "plus", t("Add widget"), Action::AddMenu).submenu(),
+        MenuItemId::ToggleWidgets => {
+            let count = widgets.items.iter().filter(|i| i.enabled).count();
+            if count == 0 {
+                return None;
+            }
+            let (icon, label) = if widgets.hidden { ("eye", t("Show desktop widgets")) } else { ("eye-off", t("Hide desktop widgets")) };
+            entry(0, icon, label, Action::ToggleWidgets).hint(Some(Hint::Text(count.to_string().into())))
+        }
+        MenuItemId::ChangeWallpaper => entry(1, "image", t("Change wallpaper…"), Action::ChangeWallpaper).hint(keys_for(cfg, "wallpaper picker")),
+        MenuItemId::NextWallpaper => {
+            if !w.slideshow.enabled && w.slideshow.directory.trim().is_empty() {
+                return None;
+            }
+            let every = w.slideshow.enabled.then(|| Hint::Text(tf("every {n} min", &[("n", &w.slideshow.interval_minutes)]).into()));
+            entry(1, "skip", t("Next wallpaper"), Action::NextWallpaper).hint(every)
+        }
+        MenuItemId::Themes => entry(2, "droplet", t("Themes & looks…"), Action::Themes).hint(keys_for(cfg, "studio themes")),
+        MenuItemId::Displays => entry(2, "monitor", t("Display settings…"), Action::Displays).hint((!output.is_empty()).then(|| Hint::Text(crate::bidi::ltr_isolate(output).into()))),
+        MenuItemId::Terminal => {
+            let terminal = cfg.apps.terminal_command();
+            let program = terminal.as_deref().and_then(|c| c.split_whitespace().next());
+            let keys = keys_where(cfg, |a| matches!(a, BindAction::Spawn(cmd) if program.is_some() && cmd.split_whitespace().next() == program));
+            entry(3, "terminal", t("Open terminal"), Action::Terminal).hint(keys).enabled(terminal.is_some())
+        }
+        MenuItemId::Screenshot => entry(3, "crop", t("Take screenshot"), Action::Screenshot).hint(keys_for(cfg, "screenshot")),
+        MenuItemId::Studio => entry(4, "sliders", t("Mandara Studio…"), Action::Studio).hint(keys_where(cfg, |a| matches!(a, BindAction::Mandara(w) if w.trim() == "studio"))),
+        MenuItemId::Custom => {
+            let (program, args) = item.argv()?;
+            let mut argv = Vec::with_capacity(args.len() + 1);
+            argv.push(program.to_string());
+            argv.extend(args.iter().cloned());
+            entry(5, icon_named(&item.icon), item.label.trim().to_string(), Action::Custom(argv))
+        }
+        MenuItemId::Unknown => return None,
+    })
+}
+
+/// A shelf of the "Add widget" menu: the widget kinds sorted by what they
+/// are, so a long list reads in a few groups and the ring can open them a
+/// level at a time.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AddCategory {
+    Clocks,
+    Media,
+    System,
+    Productivity,
+    Weather,
+    Decorations,
+    Games,
+    Faith,
+    More,
+}
+
+impl AddCategory {
+    pub const ALL: [AddCategory; 9] = [AddCategory::Clocks, AddCategory::Media, AddCategory::System, AddCategory::Productivity, AddCategory::Weather, AddCategory::Decorations, AddCategory::Games, AddCategory::Faith, AddCategory::More];
+
+    /// The shelf of a plugin's widgets (third-party ones: More).
+    pub fn of(plugin: &str) -> Self {
+        match plugin {
+            "desktop-clocks" | "desktop-world-clock" | "desktop-countdown" | "desktop-calendar" => AddCategory::Clocks,
+            "desktop-now-playing" | "desktop-visualizers" => AddCategory::Media,
+            "desktop-monitor" | "desktop-info" | "desktop-identity" => AddCategory::System,
+            "desktop-productivity" => AddCategory::Productivity,
+            "desktop-weather" | "desktop-sky" => AddCategory::Weather,
+            "desktop-decorations" | "desktop-fun" => AddCategory::Decorations,
+            "sudoku" | "2048" => AddCategory::Games,
+            "jannah" | "hadith" | "quran" | "prayer-times" => AddCategory::Faith,
+            _ => AddCategory::More,
+        }
+    }
+
+    /// English name (`tk` text).
+    pub fn title(self) -> &'static str {
+        match self {
+            AddCategory::Clocks => tk("Clocks & time"),
+            AddCategory::Media => tk("Music & visualizers"),
+            AddCategory::System => tk("System & shortcuts"),
+            AddCategory::Productivity => tk("Productivity"),
+            AddCategory::Weather => tk("Weather & sky"),
+            AddCategory::Decorations => tk("Decorations & fun"),
+            AddCategory::Games => tk("Games"),
+            AddCategory::Faith => tk("Faith"),
+            AddCategory::More => tk("More widgets"),
+        }
+    }
+
+    /// Its icon (each shelf its own).
+    pub fn icon(self) -> &'static str {
+        match self {
+            AddCategory::Clocks => "clock",
+            AddCategory::Media => "music",
+            AddCategory::System => "cpu",
+            AddCategory::Productivity => "list-check",
+            AddCategory::Weather => "cloud-sun",
+            AddCategory::Decorations => "brush",
+            AddCategory::Games => "dice",
+            AddCategory::Faith => "crescent",
+            AddCategory::More => "package",
+        }
+    }
+}
+
+/// The icon a widget kind shows in the menus. A plugin picks one per kind
+/// and several share it (four clocks, two music notes, two gauges); these
+/// keep every built-in kind's icon its own, so the menu reads at a glance.
+pub fn widget_menu_icon(t: &mandara_plugins::DesktopWidgetType) -> &'static str {
+    match (t.plugin.as_str(), t.id.as_str()) {
+        ("desktop-clocks", "minimal") => "clock-digital",
+        ("desktop-now-playing", "vinyl") => "vinyl",
+        ("desktop-monitor", "column") => "cpu",
+        ("desktop-info", "glance") => "info",
+        ("desktop-countdown", "days") => "hourglass",
+        _ => icon_named(&t.icon),
+    }
+}
+
+/// Above this many widget kinds the ring sorts them into shelves (an outer
+/// ring of shelves, each opening its widgets); fewer go on one ring.
+pub const FLAT_ADD_MAX: usize = 10;
+
+/// The "Add widget" kinds that are on, each with its shelf, in shelf order
+/// (registration order within one).
+pub fn add_rows<'a>(kinds: impl Iterator<Item = &'a mandara_plugins::DesktopWidgetType>, name: impl Fn(&mandara_plugins::DesktopWidgetType) -> String) -> Vec<(AddCategory, Entry)> {
+    let mut rows: Vec<(AddCategory, Entry)> = kinds
         .filter(|t| t.menu)
         .map(|t| {
-            let card = (t.make)().iter().any(|w| !w.kind.on_wallpaper_plane());
-            entry(u8::from(card), icon_named(&t.icon), widget_type_name(t, cx), Action::Add(NewWidget(t.key())))
+            let cat = AddCategory::of(&t.plugin);
+            (cat, entry(cat as u8, widget_menu_icon(t), name(t), Action::Add(NewWidget(t.key()))))
         })
         .collect();
-    rows.sort_by_key(|e| e.group);
+    rows.sort_by_key(|(cat, _)| *cat);
     rows
+}
+
+/// The ring's "Add widget" levels from [`add_rows`]: one pearl per shelf
+/// with its widgets (a shelf of one is that widget itself), or every widget
+/// as a pearl when there are only a few.
+pub fn add_levels(rows: Vec<(AddCategory, Entry)>) -> Vec<(Entry, Vec<Entry>)> {
+    if rows.len() <= FLAT_ADD_MAX {
+        return rows.into_iter().map(|(_, e)| (e, Vec::new())).collect();
+    }
+    let mut out: Vec<(Entry, Vec<Entry>)> = Vec::new();
+    let mut shelf: Option<AddCategory> = None;
+    for (cat, e) in rows {
+        if shelf != Some(cat) {
+            shelf = Some(cat);
+            out.push((entry(cat as u8, cat.icon(), t(cat.title()), Action::AddShelf(cat)).submenu(), Vec::new()));
+        }
+        if let Some((_, kids)) = out.last_mut() {
+            kids.push(e);
+        }
+    }
+    for node in &mut out {
+        if node.1.len() == 1
+            && let Some(only) = node.1.pop()
+        {
+            node.0 = only;
+        }
+    }
+    out
+}
+
+/// The kinds of widget the menus can add, from the plugins that are on.
+fn add_kinds(cx: &App) -> Vec<(AddCategory, Entry)> {
+    let Some(r) = cx.try_global::<mandara_plugins::PluginRegistry>() else { return Vec::new() };
+    let cfg = crate::state::config(cx).read(cx).snapshot();
+    add_rows(r.enabled_desktop_widgets(&cfg.plugins), |t| widget_type_name(t, cx))
+}
+
+/// The "Add widget" rows of the lists (the classic menu's flyout, edit
+/// mode's popup): every widget kind, a hairline between shelves.
+pub fn add_entries(cx: &App) -> Vec<Entry> {
+    add_kinds(cx).into_iter().map(|(_, e)| e).collect()
+}
+
+/// The ring's "Add widget" levels ([`add_levels`]).
+pub fn add_tree(cx: &App) -> Vec<(Entry, Vec<Entry>)> {
+    add_levels(add_kinds(cx))
 }
 
 /// Card height of `entries`.
@@ -364,7 +553,7 @@ fn row<V: 'static>(key: &'static str, i: usize, e: &Entry, hovered: bool, palett
     };
     let hot = hovered && e.enabled;
     let tint = glass(palette).mix(if e.danger { palette.urgent_coral } else { accent }, HOVER_TINT).with_alpha(1.0);
-    let hint = e.hint.clone().map(|h| hint_el(h, palette));
+    let hint = e.hint.as_ref().map(|h| hint_el(h, palette));
     div()
         .id((key, i))
         .h(px(ROW_H))
@@ -388,15 +577,15 @@ fn row<V: 'static>(key: &'static str, i: usize, e: &Entry, hovered: bool, palett
         .when(e.submenu, |el| el.child(icon(crate::bidi::dir_icon("chevron-right"), GLYPH, if hot { accent } else { palette.on_surface_variant })))
 }
 
-fn hint_el(h: Hint, palette: &MandaraPalette) -> gpui::AnyElement {
+pub(super) fn hint_el(h: &Hint, palette: &MandaraPalette) -> gpui::AnyElement {
     let dim = palette.on_surface_variant.with_alpha(HINT_ALPHA);
     match h {
-        Hint::Text(s) => div().flex_none().text_size(px(text::LABEL)).text_color(dim.hsla()).font_features(crate::fonts::tabular_nums()).child(s).into_any_element(),
+        Hint::Text(s) => div().flex_none().text_size(px(text::LABEL)).text_color(dim.hsla()).font_features(crate::fonts::tabular_nums()).child(s.clone()).into_any_element(),
         Hint::Keys(keys) => div()
             .flex_none()
             .ltr_row()
             .gap(px(KEY_GAP))
-            .children(keys.into_iter().map(|k| {
+            .children(keys.iter().cloned().map(|k| {
                 div()
                     .h(px(KEY_H))
                     .px(px(KEY_PAD))
@@ -434,6 +623,7 @@ pub fn run(action: &Action, output: &str, at: (f32, f32), size: (f32, f32), cx: 
         Action::Displays => crate::state::open_studio_at(Some("displays".into()), cx),
         Action::Studio => crate::state::open_studio_at(None, cx),
         Action::Terminal => open_terminal(cx),
+        Action::Custom(argv) => spawn_argv(argv),
         Action::Screenshot => {
             cx.spawn(async move |cx| {
                 cx.background_executor().timer(SCREENSHOT_SETTLE).await;
@@ -445,7 +635,22 @@ pub fn run(action: &Action, output: &str, at: (f32, f32), size: (f32, f32), cx: 
             })
             .detach();
         }
-        Action::AddMenu | Action::Remove(_) | Action::Duplicate(_) | Action::Hide(_) | Action::ShowOn(..) | Action::WidgetSettings | Action::Readings(_) | Action::ToggleReading(..) => {}
+        Action::AddMenu | Action::AddShelf(_) | Action::Remove(_) | Action::Duplicate(_) | Action::Hide(_) | Action::ShowOn(..) | Action::WidgetSettings | Action::Readings(_) | Action::ToggleReading(..) => {}
+    }
+}
+
+/// Runs a custom item's program with its arguments, never through a
+/// shell, in the home folder.
+fn spawn_argv(argv: &[String]) {
+    let Some((program, args)) = argv.split_first() else { return };
+    use std::os::unix::process::CommandExt as _;
+    let mut c = std::process::Command::new(program);
+    c.args(args).process_group(0);
+    if let Some(home) = std::env::var_os("HOME") {
+        c.current_dir(home);
+    }
+    if let Err(err) = mandara_services::reaper::spawn(&mut c) {
+        tracing::warn!("desktop menu: starting {program}: {err}");
     }
 }
 
@@ -672,21 +877,31 @@ impl Render for DesktopMenu {
     }
 }
 
+/// The open menu's surface: the ring or the classic list.
+#[derive(Copy, Clone)]
+enum Shown {
+    Classic(WindowHandle<DesktopMenu>),
+    Ring(WindowHandle<ring::RingMenu>),
+}
+
 #[derive(Default)]
-struct Open(Option<WindowHandle<DesktopMenu>>);
+struct Open(Option<Shown>);
 impl Global for Open {}
 
 /// Closes the desktop menu if it is open.
 pub fn close(cx: &mut App) {
-    if let Some(h) = cx.try_global::<Open>().and_then(|m| m.0) {
-        let _ = h.update(cx, |_, window, _| window.remove_window());
+    if let Some(shown) = cx.try_global::<Open>().and_then(|m| m.0) {
+        match shown {
+            Shown::Classic(h) => drop(h.update(cx, |_, window, _| window.remove_window())),
+            Shown::Ring(h) => drop(h.update(cx, |_, window, _| window.remove_window())),
+        }
         cx.set_global(Open(None));
     }
 }
 
 /// Opens the desktop menu at `at` (logical px) on `output`.
 pub fn open(output: &str, at: (f32, f32), cx: &mut App) {
-    open_sized(output, at, None, cx);
+    open_with(output, at, None, false, cx);
 }
 
 /// [`open`] with the output's logical size when the caller knows it (the
@@ -694,6 +909,17 @@ pub fn open(output: &str, at: (f32, f32), cx: &mut App) {
 /// connected later, and a menu surface sized for another output is
 /// centred on this one: the card then opened away from the pointer.
 pub fn open_sized(output: &str, at: (f32, f32), known: Option<(f32, f32)>, cx: &mut App) {
+    open_with(output, at, known, false, cx);
+}
+
+/// [`open_sized`] for a right *press* on the desktop whose button is still
+/// held: the ring follows the drag ([`drag_moved`]) and letting go on an
+/// item picks it ([`drag_released`]).
+pub fn open_pressed(output: &str, at: (f32, f32), known: Option<(f32, f32)>, cx: &mut App) {
+    open_with(output, at, known, true, cx);
+}
+
+fn open_with(output: &str, at: (f32, f32), known: Option<(f32, f32)>, held: bool, cx: &mut App) {
     close(cx);
     if crate::desktop_edit::active(cx) || crate::lock::is_locked() {
         return;
@@ -706,16 +932,49 @@ pub fn open_sized(output: &str, at: (f32, f32), known: Option<(f32, f32)>, cx: &
     // keyboard for the arrows and Esc.
     let options = crate::plugins::dock::layer_options(SurfaceRole::DesktopMenu, Layer::Overlay, Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT, size, Some(IGNORE_ZONES), KeyboardInteractivity::Exclusive, display);
     let output = output.to_string();
-    let handle = cx.open_window(options, move |window, cx| {
-        cx.new(|cx| {
-            let focus = cx.focus_handle();
-            focus.focus(window, cx);
-            DesktopMenu { output, at, size, entries, hover: None, sub: false, sub_hover: None, sub_open: SpringValue::new(0.0, SUB_SPRING), sub_clock: FrameClock::new(), focus, sheet: Sheet::new(OPEN_SPRING) }
+    let shown = if cfg.desktop.menu.style == MenuStyle::Ring {
+        let menu = cfg.desktop.menu.clone();
+        let motion = cfg.motion.surfaces.panels;
+        cx.open_window(options, move |window, cx| cx.new(|cx| ring::RingMenu::new(ring::Opening { output, at, size, entries, menu, follow_speed: motion, held }, window, cx))).map(Shown::Ring)
+    } else {
+        cx.open_window(options, move |window, cx| {
+            cx.new(|cx| {
+                let focus = cx.focus_handle();
+                focus.focus(window, cx);
+                DesktopMenu { output, at, size, entries, hover: None, sub: false, sub_hover: None, sub_open: SpringValue::new(0.0, SUB_SPRING), sub_clock: FrameClock::new(), focus, sheet: Sheet::new(OPEN_SPRING) }
+            })
         })
-    });
-    match handle {
+        .map(Shown::Classic)
+    };
+    match shown {
         Ok(h) => cx.set_global(Open(Some(h))),
         Err(err) => tracing::warn!("desktop menu: {err:#}"),
+    }
+}
+
+/// The right button, still held since it opened the ring, moved to `at`
+/// on `output` (the wallpaper canvas reports it).
+pub fn drag_moved(output: &str, at: (f32, f32), cx: &mut App) {
+    if let Some(Shown::Ring(h)) = cx.try_global::<Open>().and_then(|m| m.0) {
+        let _ = h.update(cx, |menu, window, cx| menu.drag_to(output, at, false, window, cx));
+    }
+}
+
+/// That button was let go at `at`.
+pub fn drag_released(output: &str, at: (f32, f32), cx: &mut App) {
+    if let Some(Shown::Ring(h)) = cx.try_global::<Open>().and_then(|m| m.0) {
+        let _ = h.update(cx, |menu, window, cx| menu.drag_to(output, at, true, window, cx));
+    }
+}
+
+/// Forgets a menu whose surface removed itself (after its outro).
+pub(crate) fn closed(handle: gpui::AnyWindowHandle, cx: &mut App) {
+    let ours = cx.try_global::<Open>().and_then(|m| m.0).is_some_and(|s| match s {
+        Shown::Classic(h) => h.window_id() == handle.window_id(),
+        Shown::Ring(h) => h.window_id() == handle.window_id(),
+    });
+    if ours {
+        cx.set_global(Open(None));
     }
 }
 
@@ -765,6 +1024,61 @@ mod tests {
         let changes = e.windows(2).filter(|w| w[0].group != w[1].group).count();
         assert_eq!(changes, 4);
         assert!(height(&e) > e.len() as f32 * ROW_H);
+    }
+
+    /// Every built-in "Add widget" kind (all plugins on).
+    fn builtin_rows() -> Vec<(AddCategory, Entry)> {
+        let mut r = mandara_plugins::PluginRegistry::default();
+        crate::plugins::register_builtin(&mut r);
+        add_rows(r.desktop_widgets().iter(), |t| t.name.clone())
+    }
+
+    fn distinct(entries: &[&Entry]) -> bool {
+        let mut icons: Vec<&str> = entries.iter().map(|e| e.icon).collect();
+        icons.sort_unstable();
+        let n = icons.len();
+        icons.dedup();
+        icons.len() == n
+    }
+
+    #[test]
+    fn add_widget_sorts_its_kinds_into_shelves_with_icons_of_their_own() {
+        let rows = builtin_rows();
+        assert!(rows.len() > FLAT_ADD_MAX, "enough kinds to need shelves ({})", rows.len());
+        assert!(rows.windows(2).all(|w| w[0].0 <= w[1].0), "in shelf order");
+        assert!(rows.iter().all(|(c, _)| *c != AddCategory::More), "every built-in kind has its shelf");
+        // No two built-in kinds share an icon (the list and any ring).
+        assert!(distinct(&rows.iter().map(|(_, e)| e).collect::<Vec<_>>()), "{:?}", rows.iter().map(|(_, e)| e.icon).collect::<Vec<_>>());
+        let levels = add_levels(rows.clone());
+        assert!(levels.len() <= 12, "{} shelves", levels.len());
+        assert!(distinct(&levels.iter().map(|(e, _)| e).collect::<Vec<_>>()), "the shelves' ring reuses an icon");
+        let mut seen = 0;
+        for (pearl, kids) in &levels {
+            assert!(kids.len() <= 12, "{}: {} widgets", pearl.label, kids.len());
+            assert!(kids.len() != 1, "a shelf of one is the widget itself");
+            assert!(distinct(&kids.iter().collect::<Vec<_>>()), "{} reuses an icon", pearl.label);
+            if kids.is_empty() {
+                assert!(matches!(pearl.action, Action::Add(_)));
+                seen += 1;
+            } else {
+                assert!(matches!(pearl.action, Action::AddShelf(_)) && pearl.submenu);
+                seen += kids.len();
+            }
+        }
+        assert_eq!(seen, rows.len(), "every kind on exactly one ring");
+        // A few kinds stay on one ring.
+        let few: Vec<_> = rows.into_iter().take(FLAT_ADD_MAX).collect();
+        let flat = add_levels(few);
+        assert_eq!(flat.len(), FLAT_ADD_MAX);
+        assert!(flat.iter().all(|(e, kids)| kids.is_empty() && matches!(e.action, Action::Add(_))));
+        // The lists keep every kind, a hairline between shelves.
+        let shelves = AddCategory::ALL.iter().map(|c| c.icon()).collect::<Vec<_>>();
+        let mut unique = shelves.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(unique.len(), shelves.len(), "each shelf its own icon");
+        assert!(shelves.iter().all(|i| crate::icons::ICON_NAMES.contains(i)));
+        assert_eq!(AddCategory::of("someone-elses-plugin"), AddCategory::More);
     }
 
     #[test]

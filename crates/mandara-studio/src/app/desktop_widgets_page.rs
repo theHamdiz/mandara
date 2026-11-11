@@ -1,4 +1,4 @@
-//! Studio → Desktop widgets: add, arrange and style the widgets on the
+//! Studio → Desktop → Widgets: add, arrange and style the widgets on the
 //! desktop (`[desktop.widgets]`).
 //!
 //! * The preview is a scaled display: the wallpaper's thumbnail with every
@@ -124,7 +124,7 @@ struct PageState {
     /// The room the editor's choices get beside their labels and under
     /// them (`None`: unbounded, a line).
     choice_room: Option<(f32, f32)>,
-    /// A deep link to a widget (`desktop-widgets/<id>`) scrolls to its
+    /// A deep link to a widget (`desktop/widgets/<id>`) scrolls to its
     /// settings once laid out: frames waited so far, and where they are.
     scroll_to_editor: Option<u8>,
     editor_anchor: Rc<Cell<Option<Bounds<Pixels>>>>,
@@ -261,11 +261,11 @@ const SIDEWAYS: [(Sideways, &str); 3] = [(Sideways::Auto, tk("Toward the middle"
 type Set<T> = Rc<dyn Fn(&mut DesktopWidget, T)>;
 
 impl StudioView {
-    /// Opens Desktop widgets with the widget `id` selected, its settings
-    /// open (`mandara studio desktop-widgets/<id>`: an empty widget's
-    /// "Set up in Studio" button).
+    /// Opens Desktop → Widgets with the widget `id` selected, its settings
+    /// open (`mandara studio desktop/widgets/<id>`, or the former
+    /// `desktop-widgets/<id>`: an empty widget's "Set up in Studio" button).
     pub fn show_desktop_widget(&mut self, id: &str, cx: &mut Context<Self>) {
-        self.show(crate::registry::Section::DesktopWidgets, cx);
+        self.show_desktop_tab(super::desktop_page::DesktopTab::Widgets, cx);
         if !cx.has_global::<PageState>() {
             cx.set_global(PageState::default());
         }

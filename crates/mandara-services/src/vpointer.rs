@@ -46,7 +46,7 @@ pub const LAYOUT_ENV: &str = "MANDARA_LAYOUT";
 /// Layout size when `MANDARA_LAYOUT` is unset.
 pub const DEFAULT_LAYOUT: (u32, u32) = (2560, 1440);
 /// Command-line usage of the gestures.
-pub const USAGE: &str = "move X Y | click X Y [left|right|middle] | drag X1 Y1 X2 Y2 | flyby X Y MS | scroll X Y STEPS (negative: up)";
+pub const USAGE: &str = "move X Y | click X Y [left|right|middle] | drag X1 Y1 X2 Y2 [left|right|middle] | flyby X Y MS | scroll X Y STEPS (negative: up)";
 
 /// Scroll distance of one wheel notch (wl_pointer axis units).
 const SCROLL_NOTCH: f64 = 15.0;
@@ -94,8 +94,8 @@ impl Button {
 pub enum Action {
     Move,
     Click(Button),
-    /// Press, move to `to`, release.
-    Drag { to: (u32, u32) },
+    /// Press `button`, move to `to`, release.
+    Drag { to: (u32, u32), button: Button },
     /// Rest at the point for `rest`, then leave for the layout's centre.
     Flyby { rest: Duration },
     /// Wheel notches (negative: up).
@@ -118,18 +118,23 @@ impl Gesture {
         let at = (num(1)?, num(2)?);
         let action = match verb {
             "move" => Action::Move,
-            "click" => Action::Click(match args.get(3).map(String::as_str) {
-                None | Some("left") => Button::Left,
-                Some("right") => Button::Right,
-                Some("middle") => Button::Middle,
-                Some(_) => return Err(usage()),
-            }),
-            "drag" => Action::Drag { to: (num(3)?, num(4)?) },
+            "click" => Action::Click(button(args.get(3)).ok_or_else(usage)?),
+            "drag" => Action::Drag { to: (num(3)?, num(4)?), button: button(args.get(5)).ok_or_else(usage)? },
             "flyby" => Action::Flyby { rest: Duration::from_millis(num(3)?.into()) },
             "scroll" => Action::Scroll { steps: args.get(3).ok_or_else(usage)?.parse().with_context(usage)? },
             _ => return Err(usage()),
         };
         Ok(Self { at, action })
+    }
+}
+
+/// A button by name (`left` when none is given).
+fn button(name: Option<&String>) -> Option<Button> {
+    match name.map(String::as_str) {
+        None | Some("left") => Some(Button::Left),
+        Some("right") => Some(Button::Right),
+        Some("middle") => Some(Button::Middle),
+        Some(_) => None,
     }
 }
 
@@ -217,8 +222,8 @@ pub fn perform(conn: &Connection, gesture: &Gesture, opts: &Options) -> Result<(
             pointer.motion_absolute(now_ms(), w / 2, h / 2, w, h);
             flush(&pointer)?;
         }
-        Action::Drag { to: (x2, y2) } => {
-            pointer.button(now_ms(), BTN_LEFT, wl_pointer::ButtonState::Pressed);
+        Action::Drag { to: (x2, y2), button } => {
+            pointer.button(now_ms(), button.code(), wl_pointer::ButtonState::Pressed);
             flush(&pointer)?;
             std::thread::sleep(DRAG_START_PAUSE);
             for step in 1..=opts.drag_steps {
@@ -231,7 +236,7 @@ pub fn perform(conn: &Connection, gesture: &Gesture, opts: &Options) -> Result<(
             if let Some(hold) = opts.drag_hold {
                 std::thread::sleep(hold);
             }
-            pointer.button(now_ms(), BTN_LEFT, wl_pointer::ButtonState::Released);
+            pointer.button(now_ms(), button.code(), wl_pointer::ButtonState::Released);
             flush(&pointer)?;
         }
         Action::Click(button) => {
@@ -275,7 +280,9 @@ mod tests {
     fn parses_gestures() {
         assert_eq!(Gesture::parse(&args("click 10 20")).unwrap(), Gesture { at: (10, 20), action: Action::Click(Button::Left) });
         assert_eq!(Gesture::parse(&args("click 1 2 right")).unwrap().action, Action::Click(Button::Right));
-        assert_eq!(Gesture::parse(&args("drag 1 2 3 4")).unwrap().action, Action::Drag { to: (3, 4) });
+        assert_eq!(Gesture::parse(&args("drag 1 2 3 4")).unwrap().action, Action::Drag { to: (3, 4), button: Button::Left });
+        assert_eq!(Gesture::parse(&args("drag 1 2 3 4 right")).unwrap().action, Action::Drag { to: (3, 4), button: Button::Right });
+        assert!(Gesture::parse(&args("drag 1 2 3 4 thumb")).is_err());
         assert_eq!(Gesture::parse(&args("scroll 1 2 -3")).unwrap().action, Action::Scroll { steps: -3 });
         assert_eq!(Gesture::parse(&args("flyby 1 2 250")).unwrap().action, Action::Flyby { rest: Duration::from_millis(250) });
         assert!(Gesture::parse(&args("click 1")).is_err());

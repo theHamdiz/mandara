@@ -106,9 +106,13 @@ mandara msg config get /bar/height         # config set /bar/height 30, show, re
 mandara msg studio displays                 # open Studio on a page (docs/studio.md)
 mandara msg studio bars/sidebar             # Bars → Sidebar tab and widget editor
 mandara msg studio bars/side-bars           # Bars → Side bars layout and settings
+mandara msg studio desktop/context-menu     # Desktop → Context menu: the right-click ring or list
 ```
 
 The Bars page also accepts `bars/bar`, `bars/panels` and `bars/edges`.
+The Desktop page accepts `desktop/widgets`, `desktop/cards` and
+`desktop/context-menu`, and `desktop/widgets/<id>` opens one widget's
+settings; the former `desktop-widgets` target still opens it.
 `mandara studio bars --tab sidebar` opens the same tab from the CLI.
 The former `bar` and `sidebar` Studio targets remain aliases. Config
 commands still use their original paths, such as `/bar/height` and

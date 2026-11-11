@@ -12,8 +12,8 @@
 //!   Profiles page's undo history covers every step).
 //! * **Desktop cards & visualizers** — the five card kinds of
 //!   `mandara_config::desktop_cards`, each on its own small surface; turn
-//!   one on and pick where it sits (shown on Studio → Desktop widgets under the
-//!   widget list: they are items of the same shared list).
+//!   one on and pick where it sits (shown on Studio → Desktop → Cards &
+//!   visualizers; they are items of the widgets' shared list).
 
 use std::cell::RefCell;
 use std::collections::HashMap;

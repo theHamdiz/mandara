@@ -209,7 +209,7 @@ moon calendar follows the civil month, including leap years, and calculates
 each day's phase. The thermometer uses today's reported range; missing
 weather produces an unavailable state rather than a sample reading.
 
-Add them in **Studio → Desktop widgets → Add a widget**. Clock families
+Add them in **Studio → Desktop → Widgets → Add a widget**. Clock families
 have a **Style** choice; weather and date widgets have a **Layout** choice.
 Their size, colour, font, plate and placement use the same editor as the
 existing widgets. Eligible kinds can also be added to
@@ -279,12 +279,12 @@ existing widgets. Eligible kinds can also be added to
   tape or a polaroid). Any widget can be turned and mirrored. The same
   shapes are offered wherever a widget draws a check box, a cell, a cover
   or a marker, so a widget can look like the original you have in mind or
-  like nothing seen before. Studio → Desktop widgets → Shape and frame.
+  like nothing seen before. Studio → Desktop → Widgets → Shape and frame.
 
 <p align="center">
-  <img src="screenshots/studio-widget-shape.webp" alt="Studio → Desktop widgets: a widget's look with plate, shape (rectangle, circle, squircle, cookie, flower, pentagon, chamfer, slanted, torn paper), outline, hard or soft shadow, chrome and header" width="100%"/>
+  <img src="screenshots/studio-widget-shape.webp" alt="Studio → Desktop → Widgets: a widget's look with plate, shape (rectangle, circle, squircle, cookie, flower, pentagon, chamfer, slanted, torn paper), outline, hard or soft shadow, chrome and header" width="100%"/>
   <br/>
-  <sub>Studio → Desktop widgets: the plate, <b>Shape and frame</b>, outline, shadow, chrome and header of one widget.</sub>
+  <sub>Studio → Desktop → Widgets: the plate, <b>Shape and frame</b>, outline, shadow, chrome and header of one widget.</sub>
 </p>
 - **Each widget, your way:** size, opacity, colour and accent (automatic
   over the wallpaper, the theme's, or your own `#rrggbb` / `oklch(…)`),
@@ -315,7 +315,7 @@ existing widgets. Eligible kinds can also be added to
 - **Games on the desktop:** with the opt-in Sudoku and 2048 plugins on,
   their boards are widgets you play right on the desktop. Click one to give
   it the keyboard and click anywhere else to give it back. Studio →
-  Desktop widgets sets each one's width and style (Glass, Solid or
+  Desktop → Widgets sets each one's width and style (Glass, Solid or
   Minimal). See [Games](plugins.md#games-sudoku-and-2048).
 - **Visualizers:** a glowing wave along a screen edge, framed bars or a
   mirrored strip. They listen only while music plays and drop to zero CPU
@@ -328,7 +328,8 @@ existing widgets. Eligible kinds can also be added to
 </tr>
 </table>
 
-- **Right-click the desktop** for a glass menu: Edit desktop, Add widget ▸
+- **Right-click the desktop** for the ring menu: icon buttons on a ring of
+  chromatic glass that blooms out of the click. Edit desktop, Add widget
   (a few widgets from every desktop widget plugin that's on: clocks, day
   progress, the system monitor or gauges, a decoration, a visualizer, the
   record player, a machine card, a search field, an "at a glance" line, the
@@ -337,18 +338,44 @@ existing widgets. Eligible kinds can also be added to
   focus timer, a quote, a countdown, the now-playing and calendar cards and
   any third-party plugin's widgets; Studio has the rest), show / hide widgets, change or skip the wallpaper, Themes & looks,
   display settings, a terminal, a screenshot and Studio.
+  - **Point, or flick.** A glowing arc follows the pointer round the ring
+    and the middle names the item (with its keybind); click to pick it.
+    Or hold the right button, move toward an item and let go: one motion,
+    no aiming. A plain right-click leaves the ring open. Arrows, Tab and
+    Home / End turn the selection, Enter picks, Esc closes; click the
+    middle or anywhere outside to close, right-click elsewhere to move it.
+  - **Add widget** opens an outer ring of glass pearls next to its item:
+    its shelves (Clocks & time, Music & visualizers, System & shortcuts,
+    Productivity, Weather & sky, Decorations & fun, Games, Faith, More
+    widgets; a shelf of one widget is that widget), and pointing at a shelf
+    opens its widgets as the next ring out, every widget with an icon of
+    its own. With ten widgets or fewer they sit on one ring. Flick through
+    the levels in one motion and let go on a widget; the middle (or Esc)
+    goes back one level. Near a screen edge or corner the rings move in (or
+    turn) so every item stays on screen, on every display and scale,
+    mirrored in right-to-left languages. The classic list keeps one flyout
+    with a hairline between shelves.
+  - It follows Studio → Motion (speed, feel, reduced motion: a short fade
+    instead of the bloom) unless you give it its own speed.
+  - **Studio → Desktop → Context menu** picks the ring or the classic
+    list, which items show and in which order, programs of your own (a
+    name, an icon and a command, run directly, never through a shell),
+    the ring's size, its items' size, where the labels go (in the middle,
+    beside the ring, always), how it opens (click, press-drag-release or
+    both), when Add widget opens, the glass opacity and the animation, with
+    a live preview.
 - **Edit the desktop in place:** every widget gets an outline and its name.
   Drag to move it, pull the corner to resize, and it snaps to the screen's
   edges and centre lines. The × on a widget's name removes it in one click;
   right-click it to duplicate or hide it. With more than one monitor, the
   same menu keeps a widget **Only on this display** (or shows it on every
   display again), and a widget you add goes on the monitor you added it on,
-  so each screen can have its own set. Studio → Desktop widgets → Displays
+  so each screen can have its own set. Studio → Desktop → Widgets → Displays
   picks them too. A floating toolbar has Add widget,
   Undo, Open in Studio and Done. New widgets start in front of the
   wallpaper's subject and on a free spot, so they show the moment you add
   them. Nothing of it stays in memory once you're done. The same widgets
-  are in Studio → Desktop widgets, with a live preview; tiles already on the
+  are in Studio → Desktop → Widgets, with a live preview; tiles already on the
   desktop are ticked, and *Remove duplicates* clears exact copies.
 - A now-playing chip can also ride at the end of the dock.
 

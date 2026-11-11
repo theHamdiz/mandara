@@ -73,6 +73,7 @@ mod launcher_placement;
 mod dock_page;
 mod switcher_page;
 mod desktop_widgets_page;
+pub mod desktop_page;
 mod auth_widgets;
 pub mod looks_page;
 mod app_themes_page;
@@ -194,6 +195,8 @@ pub struct StudioView {
     components: component_designs::Previews,
     /// The Themes page's tab.
     themes_tab: looks_page::ThemesTab,
+    /// The Desktop page's tab (Widgets when entering the page).
+    desktop_tab: desktop_page::DesktopTab,
 }
 
 impl StudioView {
@@ -255,7 +258,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default() }
+        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), desktop_tab: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -265,6 +268,7 @@ impl StudioView {
     pub fn show(&mut self, section: Section, cx: &mut Context<Self>) {
         if section == Section::Bars { self.bars_tab = Default::default(); }
         if section == Section::Themes && self.section != Section::Themes { self.themes_tab = Default::default(); }
+        if section == Section::Desktop && self.section != Section::Desktop { self.desktop_tab = Default::default(); }
         if section == Section::Plugins { self.market_reopen(); }
         if section != self.section {
             self.launcher_data.release();
@@ -297,6 +301,7 @@ impl StudioView {
                         wallpaper_page::release(cx);
                     }
                     Section::About => mandara_ui::plugin_art::release_brand(cx),
+                    Section::Desktop => desktop_page::release(cx),
                     _ => {}
                 }
                 if covers {
@@ -1839,12 +1844,9 @@ impl Render for StudioView {
                     let rows = self.rows(registry::in_section(Section::DateTime), &cfg, &p, cx);
                     div().row().flex_col().gap(px(SPACE_26_PX)).child(clock).child(rows).into_any_element()
                 }
-                Section::DesktopWidgets => {
-                    let widgets = self.desktop_widgets_page(&cfg, &p, window, cx);
-                    // The interactive cards and GPU visualizers (looks_page.rs).
-                    let cards = self.desktop_cards_section(&cfg, &p, fonts.display.clone());
-                    div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(widgets).child(cards).into_any_element()
-                }
+                // Widgets, cards & visualizers, the context menu: three tabs
+                // (desktop_page.rs).
+                Section::Desktop => self.desktop_page(&cfg, &p, window, cx),
                 Section::WindowSwitcher => self.switcher_page(&cfg, &p, cx),
                 // The wallpaper on the desktop first, then tabs
                 // (wallpaper_page.rs).

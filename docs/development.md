@@ -210,7 +210,7 @@ cargo xtask sandbox up --config hero --size 2880x1620 --scale 1.5 --bin target/d
 cargo xtask sandbox up --no-langpacks             # no language packs: the download path
 cargo xtask sandbox shot out.png                  # screenshot of the sandbox output
 cargo xtask sandbox msg panel open media          # any `mandara msg` command
-cargo xtask sandbox pointer click 900 500         # move / click / drag / flyby / scroll, logical px
+cargo xtask sandbox pointer click 900 500         # move / click / drag (any button) / flyby / scroll, logical px
 cargo xtask sandbox studio home                   # open Studio on a page (`studio stop` closes it)
 cargo xtask sandbox studio --size 1124x784 themes # float Studio at another size first
 cargo xtask sandbox audio play                    # sound server + "Corniche Radio" MPRIS player
