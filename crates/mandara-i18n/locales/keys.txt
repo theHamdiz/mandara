@@ -21,6 +21,7 @@
 --collection needs a collection
 --delay [seconds]: count down first (default: the Countdown setting)
 --demo shows the lock screen as a harmless preview
+--empty to delete the items instead of keeping them restorable
 --every 6h, --mode, --keep N, --video, --apply
 --grade needs sahih, hasan or daif
 --index needs a number
@@ -137,6 +138,7 @@ A distinct alert sound
 A dock on the screen edge, a centered grid, or separate cards floating in the middle of the screen
 A dot per window
 A drag continues briefly after lifting the finger
+A drag that reaches a screen edge springs a shelf open there. Each catcher is a hairline along the edge that also takes clicks, so only edges nothing else uses can have one
 A faceted, lit triangle mesh
 A faint wash, the raised tone of cards, or a tint of the accent
 A fan shows this many of the newest files; its top row opens the folder in your file manager
@@ -223,6 +225,7 @@ A profile card, launch tiles for apps, folders and links, quick toggles, volume 
 A progress bar, value from 0 to 1
 A public GitHub repository tagged mandara-plugin with a release is all it takes.
 A public repository with this topic (About → Topics).
+A quick back-and-forth of the pointer, or of something you drag, over the desktop, the bar, panels or a shelf opens a new shelf there. Wayland only lets Mandara see the pointer over its own surfaces, so a shake over an app's window does nothing
 A quiet notification when the song changes
 A quote isn't closed
 A random style
@@ -241,6 +244,7 @@ A side bar always stays on screen
 A side bar holds this edge now; choose Sidebar for an edge under Bars → Sidebars to use the sidebar
 A side bar is a slim bar of items, like the top bar standing on its side. The sidebar is the panel that slides out with tabs and cards. Each edge holds one of them, or nothing.
 A side bar is always an edge frame
+A side bar runs along this edge
 A side bar shares no edge with the launcher: it opens from the bare screen edge, beside the bar.
 A side bar uses Side bar width
 A signature couldn't be verified
@@ -389,6 +393,7 @@ Add checks in Studio → Plugins → Uptime monitor
 Add color
 Add command
 Add feeds
+Add files, a link or text (text:…) to a shelf
 Add include
 Add item
 Add link
@@ -428,6 +433,7 @@ Added {name}
 Added {n} accounts from the QR code
 Adding to apps
 Adding to your apps…
+Adding…
 Address
 Address, e.g. 192.168.1.20/24
 Addresses with a user name or password aren't supported
@@ -935,6 +941,8 @@ Bottom left command
 Bottom middle
 Bottom right
 Bottom right command
+Bottom-left corner
+Bottom-right corner
 Bottom-right corner, or two fingers
 Bounce for attention
 Bounce only while music plays
@@ -1024,6 +1032,7 @@ CPU, memory, GPUs, temperatures, disks and uptime
 CPU, memory, network, temperature and battery as compact numbers
 CSS
 Cache
+Cache limit
 Caches
 Caches & plugins
 Café murmur
@@ -1094,6 +1103,7 @@ Care for an orphan
 Cargo Cult Science
 Carousel
 Carousel: how much bigger the middle wallpaper is
+Catching drags
 Categories
 Category
 Category chips
@@ -1285,6 +1295,7 @@ Click only while the dock is on
 Click opens the app
 Click or drag
 Click or scroll to set them
+Click the Stash bar item, or the shelf's icon in the tray, to bring them back
 Click the bin again to remove this account
 Click the game on the desktop to play it with the keyboard; click anywhere else to give the keyboard back. Its rules are in Studio → Plugins.
 Click through empty space
@@ -1312,9 +1323,11 @@ Clockwise
 Clone or init one in your project folders
 Close
 Close delay
+Close shelves; their items can be restored until the cache limit evicts them (--empty: delete them now)
 Close the screenshot tool
 Close the screenshot tool · Esc
 Close the shortcuts cheatsheet
+Close this shelf?
 Close window
 Closed popups stay in the notification center
 Closing a popup keeps it
@@ -1479,6 +1492,7 @@ Copied {text}
 Copied {value}
 Copies captures
 Copies each window's contents (ext-image-copy-capture); app icons otherwise
+Copies items when you ask
 Copies its appearance and position. Later desktop edits do not change this screen.
 Copies marked secret by password managers are never recorded
 Copy
@@ -1490,6 +1504,8 @@ Copy a topic's notes (or all) into a folder as .md files
 Copy an ayah and its design as a complete PNG image
 Copy as
 Copy as image
+Copy dropped picture files
+Copy everything
 Copy from desktop
 Copy panel image
 Copy path
@@ -1562,12 +1578,15 @@ Couldn't connect to {host}
 Couldn't create {path}: {error}
 Couldn't download {collection}
 Couldn't download {language}: {error}
+Couldn't fetch the picture: {error}
 Couldn't find the server {host}
 Couldn't install
 Couldn't install {app}
 Couldn't install {app}: {error}
+Couldn't keep that drop: {error}
 Couldn't list windows: {error}
 Couldn't load it
+Couldn't load the site's icon: {error}
 Couldn't load this
 Couldn't load: {error}
 Couldn't open a port: {error}
@@ -2010,6 +2029,7 @@ Downloads the icon themes you pick from their projects' GitHub releases, or a li
 Downloads {size} from speed.cloudflare.com
 Dracula
 Drag a history card left or right to remove it
+Drag a shelf's corner to resize it
 Drag around the QR code · Enter scans the whole screen · Esc cancels
 Drag displays to arrange them
 Drag inside the selection to annotate · Ctrl+Z undo · {enter}
@@ -2031,6 +2051,7 @@ Drives and their volumes: filesystem, mount points, usage, encryption (JSON)
 Drizzle
 Drop an app here, or choose a file
 Drop an app on the dock or here to install it.
+Drop anything here
 Drop files on it to trash them; right-click to empty it
 Drop plugins here
 Drop shadows under windows
@@ -2063,6 +2084,7 @@ Each note is a Markdown file, each topic a folder in here — point it at a sync
 Each one is its own small surface, created only while it shows; visualizers listen only while music plays and stop after a moment of silence.
 Each repair is safe: your compositor config only ever gets one include line, with a backup.
 Each sets the launcher's style, layout and placement together; change any setting below afterwards.
+Each shelf's view button switches between them
 Each station remembers its own volume
 Each surface
 Each walk to the mosque, morning or evening, is a welcome being prepared.
@@ -2071,6 +2093,7 @@ Eastern Arabic (١٢٣)
 Eastern Arabic numerals
 Easy
 Edge
+Edge catchers
 Edge dock
 Edge frame
 Edge frame only
@@ -2113,9 +2136,11 @@ Emoji in plain searches
 Emoji prefix
 Emoji, calculator results and clipboard entries are pasted at once
 Empty
+Empty & close
 Empty Trash? {n} items are deleted forever — click again
 Empty Trash…
 Empty bar space clicks through to windows
+Empty the shelf
 Empty uses this computer's name
 Empty uses your wallpaper folder
 Empty: on the Wallpaper tab, hover a wallpaper and press + to add it.
@@ -2339,7 +2364,9 @@ Fetch fresh weather now
 Fetch from GitHub
 Fetch rates
 Fetch the latest articles of every feed
+Fetch the picture
 Fetched {repo}
+Fetches a linked picture or a site's icon only when you click it (HTTPS)
 Fetches forecasts from open-meteo.com
 Fetches synced lyrics from lrclib.net while the panel is open
 Fetching posts…
@@ -2360,6 +2387,7 @@ Files in a fan
 Files in a stack
 Files in plain searches
 Files prefix
+Files, pictures, text and links wait here until you drag them out
 Fill
 Fill color
 Fill mode
@@ -2402,6 +2430,7 @@ Firefox / Zen
 Firefox would start as:
 Fireplace
 Fireside
+Firm
 Firmware
 Firmware setup
 Firmware setup restarts are supported here
@@ -2469,6 +2498,7 @@ Float over windows (smoothest), push them aside while the sidebar is open, or ke
 Float the edge frame
 Floating
 Floating chromatic-glass islands
+Floating shelves you drag anything onto and back out of
 Floating side panels only
 Floating styles and the floating frame
 Floats beside a floating bar; flush joins the edge frame
@@ -2585,7 +2615,9 @@ Frames per second
 Francis Bacon
 Frankenstein
 Frappé
+Free
 Free and open: plugins are GitHub repositories tagged mandara-plugin. They run sandboxed — no files, network or system access unless they ask for commands.
+Free this edge first; the catcher switches on once nothing else uses it.
 Free, on GitHub: no account, no review queue
 FreeBSD can't do this without ConsoleKit2
 FreeBSD has no BlueZ, the Bluetooth service Mandara uses
@@ -2689,6 +2721,7 @@ Generation {n} · NixOS {version} · kernel {kernel}
 Generations
 Generations to keep
 Generator
+Gentle
 Gentle 20-20-20 reminders to rest your eyes
 Geometric set
 George Eliot
@@ -2711,6 +2744,7 @@ Give generously
 Give one display its own wallpaper (clear = follow the main one)
 Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look
 Give the bar a style preset's look (your items stay), or none for the plain bar
+Give the edge to the new setting
 Give the file's full path
 Give the item a name
 Give the profile a name
@@ -3141,6 +3175,7 @@ In use
 In your language, the hadith meanings are AI renderings of the meaning, not published translations.
 In {minutes} min
 In {n} days
+Inactive: this edge is in use
 Inbox
 Include added to {file} (backup kept)
 Include all sub-folders
@@ -3275,6 +3310,7 @@ It crashes or runs past its time budget: {error}
 It draws the wallpaper's subject over the desktop clock; switch the depth effect off in Studio → Wallpaper instead
 It fails to start: {error}
 It holds Mandara Studio, the settings and the session actions
+It holds {count} items. Closed shelves can be brought back with Restore until the cache limit clears them.
 It installs Linux apps (AppImages and portable Linux builds), which FreeBSD can't run without Linux emulation
 It is in general the unexplored that attracts us.
 It is in the character of growth that we should learn from both pleasant and unpleasant experiences.
@@ -3377,6 +3413,7 @@ Keep history
 Keep holding to confirm
 Keep in Dock
 Keep in Dock on / off for an app
+Keep it
 Keep it visible
 Keep low-urgency ones
 Keep my component designs when changing looks
@@ -3384,6 +3421,7 @@ Keep old articles for
 Keep passive (idle) tray icons in the bar; they're always listed in the tray panel
 Keep playing
 Keep split direction
+Keep the catcher
 Keep the computer awake for N minutes (0 stops; no number = until turned off)
 Keep the current frame while running on battery
 Keep the display change being tested
@@ -3408,6 +3446,7 @@ Keeps a history of what you copy
 Keeps daily totals in Mandara's state folder
 Keeps the bar and its panels above fullscreen apps; applies after a shell restart
 Keeps your feeds and saved articles in Mandara's state folder
+Keeps your shelves in Mandara's state folder and what you drop on them in its cache
 Keeps your stations and favourites in Mandara's state folder
 Kept
 Kept awake
@@ -3645,6 +3684,7 @@ Load it now with `sudo modprobe i2c-dev`, and at every boot with `echo i2c-dev |
 Load more
 Load pictures
 Load settings from an exported file (the current ones are backed up first)
+Load the site's icon
 Loaded
 Loaded and initialized in {ms} ms · bar {bar} · panel {panel} · sidebar {sidebar}
 Loaded now
@@ -4019,7 +4059,9 @@ Minimal flat icons with soft pastel colors
 Minimal icons built from simple geometric shapes
 Minimize
 Minimize or restore a window
+Minimize shelves (id, last or all)
 Minimize windows into application icon
+Minimized shelves go to
 Minimized windows
 Minimum brightness
 Minutes before events without their own alarm
@@ -4121,13 +4163,21 @@ Move a task to another list
 Move a topic to a 1-based position
 Move down
 Move it to the Trash
+Move items out (don't keep them)
 Move left
 Move notes to Notes
 Move right
 Move tasks to Inbox
+Move the bar to the bottom
+Move the bar to the top
 Move the branch, the stone, the broken glass: small kindness, great reward.
 Move the desktop clock to where the wallpaper's subject rises into it
 Move the desktop clock to where the wallpaper's subject tucks into it
+Move the dock to the bottom
+Move the dock to the left
+Move the dock to the right
+Move the sidebar to the left
+Move the sidebar to the right
 Move the toolbar to the bottom · M
 Move the toolbar to the top · M
 Move to
@@ -4263,6 +4313,10 @@ New moon
 New name
 New password
 New reminder
+New shelf
+New shelf height
+New shelf view
+New shelf width
 New skill
 New sound from a matching app goes to the chosen device, e.g. calls to a headset and music to the speakers.
 New tab
@@ -4360,6 +4414,7 @@ No city or zone matches “{query}”
 No clipboard collection {id}
 No clipboard collection {name}
 No clipboard entry {id}
+No closed shelf to restore
 No collection {name}
 No collection {name}; see `hadith collections`
 No colors yet
@@ -4507,7 +4562,9 @@ No screenshots in {path} yet
 No sessions yet
 No settings match “{query}”
 No shadow
+No shelf {id}; see `mandara msg stash list`
 No shell sounds over your music or video
+No shelves
 No shortcut matches “{query}”
 No shortcuts found
 No shortcuts found in your compositor config.
@@ -4573,10 +4630,14 @@ Normal
 Normal and critical
 Not a file: {path}
 Not a folder: {path}
+Not a picture ({type})
+Not a picture Mandara can show
 Not a plugin
+Not a shelf: {arg} (use a shelf id from `stash list`, `last` or `all`)
 Not a tar archive
 Not a theme archive (expected .tar, .tar.gz, .tar.xz, .tar.zst, .tar.bz2 or .zip)
 Not a valid unit name: {name}
+Not a web link
 Not an otpauth:// link
 Not authorised: nothing was changed
 Not authorized
@@ -4632,6 +4693,7 @@ Nothing great was ever achieved without enthusiasm.
 Nothing here matches “{query}”
 Nothing here matches “{query}”.
 Nothing here yet
+Nothing in that drop can be kept
 Nothing in this session starts these yet: turn on “Mandara starts these at login”, or start them from your compositor config.
 Nothing in your compositor config fights Mandara
 Nothing installed by Mandara yet
@@ -4655,8 +4717,10 @@ Nothing running · {checked}
 Nothing saved yet
 Nothing scheduled
 Nothing starts at login
+Nothing to add
 Nothing to bookmark
 Nothing to do
+Nothing to keep: the text is empty
 Nothing to pick from yet: download Sahih al-Bukhari or Sahih Muslim (`hadith download`)
 Nothing to read
 Nothing to recite
@@ -4730,6 +4794,7 @@ Off: each minimized window gets its own icon on the right side
 Off: low-urgency notifications vanish when their popup closes
 Off: only windows on the focused display
 Off: picking a look also brings its component designs, which you can change afterwards
+Off: pictures dropped as files are kept by reference, like any file. On: they are copied into the stash, so moving or deleting the original doesn't empty the shelf
 Off: plain searches list apps (and the providers above) only
 Off: stay with the current player until it closes
 Off: the clock keeps its own time
@@ -4759,6 +4824,7 @@ Ollama {version} · nothing loaded
 Ollama {version} · {count} loaded
 Omar Khayyam
 On
+On (Stash is off)
 On Arch-based systems it may also be in the AUR.
 On Benefits, Book II
 On Medicine
@@ -4823,6 +4889,7 @@ Only build it, to see that it works
 Only each app's most recent window
 Only https:// downloads are allowed
 Only https:// links are accepted
+Only https:// links are fetched
 Only in {desktops}
 Only on this display
 Only split bars have gaps: glass pills, island, micro pill and notch
@@ -4854,6 +4921,7 @@ Open Studio to download the required models
 Open a community or a post in the Reddit panel
 Open a copied image in your image editor (`[clipboard] image_command`)
 Open a hadith in the panel's reader and return it
+Open a new shelf (in the middle of the focused output, or at x y)
 Open a terminal running the update command (all sources with updates, or one)
 Open a verse or hadith in the Jannah panel and return it
 Open a volume in the file manager (mounting it first if needed)
@@ -4875,9 +4943,11 @@ Open or close the main menu
 Open or close the shortcuts cheatsheet (bind this to a key yourself)
 Open sea: a full-width glowing wave, a katakana accent and one tiny pill.
 Open settings
+Open shelves hold {size}, over Stash's cache limit. Remove items or raise the limit.
 Open something on your phone, no cable or app needed
 Open tasks the bar item counts: every list, or one list's name
 Open terminal
+Open that setting
 Open the Jannah panel
 Open the Qur'an panel
 Open the annotation editor instead of saving at once
@@ -5166,6 +5236,7 @@ Picture-in-picture floats on every workspace
 Picture: {alt}
 Pictures
 Pictures from a folder, a new one every so often
+Pictures, text and data kept by closed shelves are removed oldest first beyond this; what open shelves hold is never removed without asking
 Pill
 Pill labels
 Pills
@@ -5433,6 +5504,7 @@ Qudsi
 Queried once when the panel opens; must answer with the address as plain text
 Queued
 Queues a Mandara command, the same ones as mandara msg.
+Quick look
 Quick settings
 Quick start
 Quick toggles
@@ -5699,10 +5771,12 @@ Remove an autostart entry Mandara added
 Remove an icon theme Mandara installed (never one from a package or your own folders)
 Remove duplicates ({n})
 Remove every finished task
+Remove every item from shelves (they stay open)
 Remove from Dock
 Remove from Mandara
 Remove from bar
 Remove from bar ({zone})
+Remove from shelf
 Remove from sidebar
 Remove from the playlist
 Remove harm from the road
@@ -5740,6 +5814,7 @@ Renamed to {name}
 Render count and build cost per plugin view since the last reset
 Render the desktop canvas (wallpaper, clock, subject) to a PNG
 Rendering at full size…
+Reopen a closed shelf with its items (the last one closed by default)
 Reopen with what you typed last (selected, so typing replaces it)
 Reorder
 Repair
@@ -5766,6 +5841,7 @@ Rescan the repositories now and update the bar chip
 Reset
 Reset a page
 Reset preview
+Reset to defaults
 Reset today
 Resident {rss} · proportional share {pss} (shared libraries split between the processes using them)
 Resize by dragging borders
@@ -6191,6 +6267,7 @@ Segmented
 Segments
 Select a region to capture
 Select a screen region with a QR code and add the account it holds
+Select all
 Select an area
 Select area
 Selected on open
@@ -6291,6 +6368,7 @@ Shadows
 Shafi'i
 Shah Waliullah's Forty
 Shahnameh
+Shake to open a shelf
 Shape
 Shape and frame
 Shape size
@@ -6328,6 +6406,7 @@ Shell status
 Shell surfaces
 Shell text language
 Shelves
+Shelves and their items (and closed shelves you can restore)
 Shelves shown: news, talk, pop, rock, jazz, classical, electronic, chill, ambient, world, arabic, quran, kids
 Shift
 Shifts every token's lightness
@@ -6372,6 +6451,7 @@ Show indicators for open applications
 Show it now
 Show less
 Show log
+Show minimized shelves (id, last or all)
 Show more
 Show names
 Show names on hover
@@ -6668,6 +6748,14 @@ Starts in {seconds} s
 Starts the apps and commands you pick
 Starts the apps you click
 Startup
+Stash
+Stash is off
+Stash is still loading its shelves; try again in a moment
+Stash settings
+Stash · Shelves
+Stash · Storage
+Stash · Summoning
+Stash's state: shelves, items, shake and edge catchers
 State
 State and unit-file state of one unit
 Station
@@ -7078,12 +7166,14 @@ The bar floats over windows while it auto-hides
 The bar is on the other edge: the launcher opens from the bare screen edge instead of growing out of the bar.
 The bar isn't at the bottom, so the dock rises from the screen edge
 The bar isn't at the top, so the dock hangs from the screen edge
+The bar item
 The bar item goes away while nothing is playing
 The bar item shows the clock while you play
 The bar item shows your score while you play
 The bar item, or none for no bar item.
 The bar item, panel and sidebar card re-render: no restart
 The bar itself stands on this edge, so a side bar can't. The sidebar slides out beside it.
+The bar runs along this edge
 The bar's battery chip breathes coral while the charge is critical
 The bar's battery chip breathes gently while it charges (never with Reduce motion)
 The bar's items
@@ -7147,6 +7237,7 @@ The dock hides until you touch the screen edge.
 The dock hides while a window covers it. Touch the screen edge to bring it back.
 The dock holds the bottom edge; popups there stay cards
 The dock isn't showing
+The dock sits on this edge
 The download did not match the signed release. Nothing was installed; please try again.
 The download didn't finish
 The download didn't finish; open the panel to try again
@@ -7158,7 +7249,9 @@ The download has no icon theme at {folder}
 The download is empty
 The download is larger than allowed
 The download is larger than expected
+The drag ended before its data arrived
 The drive is busy — close files and apps that use it
+The drop had no links
 The edge drawer with quick settings and cards
 The edge opposite the sidebar · MangoWM and Hyprland
 The end of the Qur'an. May Allah accept your reading.
@@ -7215,6 +7308,7 @@ The knowledge of anything, since all things have causes, is not acquired or comp
 The laptop panel and external monitors move together
 The last log lines of a container
 The last one played
+The launcher opens when the pointer rests here
 The left bar's own icon colour, or the bar's
 The left bar's own icon shape, or the shared one
 The left bar's own item shape, or the bar's
@@ -7269,6 +7363,7 @@ The passwords don't match
 The past resembles the future more than water resembles water.
 The paths to Jannah, by group
 The percentage next to level bars
+The picture arrived empty
 The pieces every Mandara bar is built from
 The place name next to the temperature
 The plan with administrator rights
@@ -7278,6 +7373,7 @@ The plugin archive has no plugin.toml
 The plugin archive is too large
 The plugin's own language (a code such as ar or en), or follow to use Mandara's
 The power dock opens from the edge opposite the sidebar.
+The power menu opens from this edge
 The prayer times of another day (days after today, or before it when negative)
 The provider returned no language list
 The provider returned no translation
@@ -7352,6 +7448,7 @@ The shell's folder watcher waits {ms} ms for writes to settle
 The side bars' switches, pins and plugins
 The sidebar card lists the newest unread articles of this folder; empty lists every feed
 The sidebar keeps at least one tab
+The sidebar opens on hover here
 The sidebar's tabs and their widgets
 The signed release has no unique checksum for this archive.
 The slideshow playlist is empty
@@ -7396,6 +7493,7 @@ The top bar and the side bars become one frame with curved corners. The bar is d
 The track that is playing
 The track's title beside the music icon; off shows the icon alone
 The translations available in your language (for Studio's translation setting)
+The tray
 The tray service is not running
 The unit is masked
 The unlock password was incorrect
@@ -7503,6 +7601,7 @@ This device, the exit node in use and every peer (JSON)
 This download can't be verified against a pinned checksum: confirm to import it anyway
 This download is too large
 This driver doesn't report per-process GPU memory.
+This edge has a Stash catcher
 This entity cannot run that action right now
 This entry is no longer available
 This entry is too large to copy as one image
@@ -7536,6 +7635,7 @@ This package is made for a different kind of Linux. The same app may be on Flath
 This pattern {problem}
 This phone does not support that action right now
 This phone is not connected
+This picture can't be shown
 This player doesn't let you change its volume
 This plugin has no published release yet
 This plugin works without settings.
@@ -7664,6 +7764,7 @@ Tonal spot
 Tone
 Tones map to the live theme
 Tonight's moon and how much of it is lit
+Too large to keep (over {mib} MiB)
 Too many arguments; usage: {usage}
 Too many attempts — try again later
 Too weak
@@ -7683,6 +7784,8 @@ Top right
 Top right command
 Top to bottom. Drag to reorder, onto another tab to move, × to take off
 Top {n} by frecency
+Top-left corner
+Top-right corner
 Topic name
 Topics in order, with their folders and note counts
 Torn paper
@@ -7771,6 +7874,7 @@ Turn presentation mode on or off
 Turn presentation mode on: do not disturb, keep awake, hide desktop widgets
 Turn screens off after
 Turn shell sounds on or off
+Turn that off
 Turn the Wi-Fi radio on or off
 Turn the adapter on or off
 Turn the battery charge limit on or off (UPower 1.90+, polkit may ask)
@@ -8548,6 +8652,7 @@ Zoom
 `{key}` worked with your previous version, but {compositor} {version} no longer accepts it: it was probably renamed or removed in this update.
 a Mandara or icon-theme icon name
 a board size 3–6 for new, a direction for move
+a closed shelf's id (see `stash list`)
 a collection id (bukhari, muslim, abudawud, tirmidhi, nasai, ibnmajah, malik, nawawi, qudsi, dehlawi) or all
 a collection id or all
 a cursor theme: import it under Themes → Cursors
@@ -8560,6 +8665,8 @@ a path key from `jannah paths`
 a reference: bukhari 1, muslim 2699a
 a reference: bukhari 1, muslim 2699a, abudawud 4031
 a section (home, themes, wallpaper, desktop, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, ai-shell-agent, general, profiles, performance, maintenance, about), bars/<bar|sidebars|panels|edges>, desktop/<widgets|cards|context-menu>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
+a shelf id (default: the newest shelf)
+a shelf id, last (default) or all
 a style id from `wallgen styles`
 a surah (2, al-baqara) or an ayah (2:255), or a range (2:255-257)
 a verse or hadith reference
@@ -8609,6 +8716,8 @@ catalog id[/variant] or icon theme name
 catalog id[/variant], XCursor theme name, or none
 catalog id[/variant], icon theme name, or none
 center, top-left, top-center, top-right, bottom-left, bottom-center or bottom-right
+centre, logical px from the output's left
+centre, logical px from the output's top
 changes or full (default)
 checked {span} ago
 city name or zone id
@@ -8714,6 +8823,7 @@ healthy
 hex color
 hex color, e.g. #1e88e5
 host::setting(key) returns the value as JSON, or the declared default
+hot corner → {action}
 hot, new, top or rising
 how far to stray, 0–1
 how long
@@ -8879,12 +8989,14 @@ open, close or toggle
 other packages or the system set still need it
 otpauth://totp/Issuer:name?secret=…
 otpauth://totp/…
+output name (default: the focused one)
 p95 interval {ms}
 p95 {p95} · p99 {p99}
 palette source
 part of a name, e.g. cairo
 part of a unit name or description
 path to the profile file
+paths, file:// or https:// links, or text:…
 pause
 paused
 peak {rate}
@@ -8992,6 +9104,7 @@ that backup doesn't parse: {error}
 the check crashed
 the compositor did not report a focused window geometry
 the compositor returned an unexpected frame size
+the compositor's own hot corner
 the count for clean
 the feed's structure is broken
 the file to share
@@ -9134,6 +9247,7 @@ your default
 {compositor}'s checker couldn't run: {error}
 {compositor}'s checker didn't finish in time.
 {cores} cores · {running} running
+{corner}: {what}. Catchers leave a gap there.
 {counter}
 {count} answering slowly
 {count} apps
@@ -9141,6 +9255,7 @@ your default
 {count} areas
 {count} available commands
 {count} changed
+{count} characters
 {count} checks · every {span}
 {count} checks · {uptime}% uptime · every {span}
 {count} comments
@@ -9155,6 +9270,7 @@ your default
 {count} in the last 7 days
 {count} in the last 7 days · {new} new
 {count} in your list
+{count} items
 {count} lines · {errors} on stderr
 {count} listening · {exposed} reachable from the network
 {count} min
@@ -9180,6 +9296,7 @@ your default
 {count} replies hidden
 {count} running · {checked}
 {count} s
+{count} selected
 {count} sessions
 {count} staged
 {count} stars
@@ -9223,6 +9340,8 @@ your default
 {duration} · {size} MB saved to {path}
 {duration} · {width}×{height} · {size} MB saved to {path}
 {d} d {h} h
+{edge}: the edge catcher is paused
+{edge}: {reason}
 {edition} doesn't line up with the Arabic
 {edition} has Arabic for {got} hadith, expected {expected}
 {edition} has {got} entries, expected {expected}
@@ -9415,6 +9534,7 @@ your default
 {program} timed out
 {program} was interrupted
 {read} of {total} read
+{reason}. Choose which one keeps the edge in Studio → Plugins → Stash.
 {reason}. Install it, or choose another recorder in Studio → Plugins → Screenshot
 {recorder} stopped unexpectedly
 {recorder} stopped: {reason}
@@ -9495,6 +9615,7 @@ your default
 “=” calculate
 “Add a task” row
 “Clear all” asks once more
+“{change}” would use an edge where Stash catches drags. Which one keeps the edge?
 “{code}” isn't a currency code
 “{id}” is a built-in plugin id, and built-ins can't be overridden: rename it
 “{name}” is not a valid container name

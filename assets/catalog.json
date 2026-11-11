@@ -744,5 +744,13 @@
     "motif": "slide",
     "angle": 5,
     "panel": null
+  },
+  {
+    "id": "stash",
+    "name": "Stash",
+    "palette": "corniche",
+    "motif": "shelf",
+    "angle": -3,
+    "panel": null
   }
 ]

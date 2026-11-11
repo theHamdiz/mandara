@@ -72,6 +72,11 @@ impl<T: ReceiveData> DataOffer<T> {
         self.mime_types.push(mime_type)
     }
 
+    /// Mandara patch 13: the offered MIME types, for data drops.
+    pub(crate) fn mime_types(&self) -> &[String] {
+        &self.mime_types
+    }
+
     fn has_mime_type(&self, mime_type: &str) -> bool {
         self.mime_types.iter().any(|t| t == mime_type)
     }
@@ -224,6 +229,11 @@ impl Clipboard {
 
         self.cached_primary_read = Some(item.clone());
         Some(item)
+    }
+
+    /// Mandara patch 13: the connection, flushed after a data drop's receive.
+    pub(crate) fn connection(&self) -> &Connection {
+        &self.connection
     }
 
     pub fn send_bytes(&self, fd: OwnedFd, bytes: Vec<u8>) {

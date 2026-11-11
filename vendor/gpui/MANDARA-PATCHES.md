@@ -278,6 +278,36 @@ allocated in it). It does nothing during a draw. Frames are unchanged
 otherwise, and a surface that shows again grows the room back on its first
 frame.
 
+## 13. Data drops, typed drags and moving layer surfaces (`interactive.rs`, `window.rs`, `platform.rs`, `platform/test/window.rs`)
+
+Upstream takes only local files from other programs (`text/uri-list` as
+`ExternalPaths`) and can hand only files to them (`ExternalDragPayload::Files`);
+a layer surface can't move once mapped. Mandara's Stash shelves take anything
+dragged in, give anything back out, and follow the pointer around the screen.
+
+* **Data in.** `ExternalData` is the value of a drag of anything that is not
+  a list of local files (text, HTML, links, pictures, any MIME type), over a
+  window that opted in with `Window::set_accepts_data_drops(true)` (default
+  off, so every other window still refuses such drags). It lists the offered
+  MIME types and `receive(mime)` returns a stream to read off the UI thread;
+  the platform's transfer (`ExternalDataSource`) stays open until the last
+  clone is dropped. `FileDropEvent::DataEntered` becomes an internal drag of
+  `ExternalData` exactly as `Entered` becomes one of `ExternalPaths`, so
+  `.on_drop::<ExternalData>()`, `.drag_over::<ExternalData>()` and
+  `.on_drag_move::<ExternalData>()` work. File drags are unchanged.
+* **Data out.** `ExternalDragPayload::Data(DragData)` offers several MIME types
+  at once (`DragOffer`, the first of a type wins), each from shared bytes or a
+  file streamed when the receiver asks (`DragContent::File`), so a large
+  picture is never held in memory. `FileDropEvent::Delivered` reaches the
+  source window just before `Ended` when the receiver took the drop (the
+  shelf removes items moved out).
+* **Moving layer surfaces.** `Window::set_layer_margin((top, right, bottom,
+  left))` sets a layer surface's margins and commits at once
+  (`PlatformWindow::set_layer_margin`, a no-op elsewhere).
+
+The test window ignores data drags; the platform side is in
+`vendor/gpui_linux` (its patch 2), with tests.
+
 ## Packaging changes
 
 `Cargo.toml` spells out the workspace-inherited fields and dependencies with

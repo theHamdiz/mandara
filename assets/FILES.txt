@@ -263,6 +263,9 @@ assets/plugins/share/icon.svg
 assets/plugins/soundscapes/cover.png
 assets/plugins/soundscapes/icon.png
 assets/plugins/soundscapes/icon.svg
+assets/plugins/stash/cover.png
+assets/plugins/stash/icon.png
+assets/plugins/stash/icon.svg
 assets/plugins/sudoku/cover.png
 assets/plugins/sudoku/icon.png
 assets/plugins/sudoku/icon.svg

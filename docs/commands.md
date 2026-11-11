@@ -339,6 +339,7 @@ mandara msg keybinds toggle          # show, hide, list (every shortcut as JSON)
 mandara msg breaks status            # now [short|long], skip, snooze [minutes], pause [minutes], resume
 mandara msg presentation toggle      # on, off, status
 mandara msg share clipboard          # text <text>, file <path>, screenshot, stop, status
+mandara msg stash new                # a floating shelf; stash (state, edge catchers), new [x y [output]], list, show|hide [id|last|all], close [id|last|all] [--empty], clear [id], restore [id], add [shelf] <path|https://…|text:…>…
 mandara msg jannah today             # the reminder on screen; next (a fresh one), prev (the one before), peek [n], show <ref>, search <query>, paths, step [done|peek [days]], saved, language [code|follow]
 mandara msg quran open                 # open the panel without a verse reference
 mandara msg jannah open                # open the panel without a hadith reference

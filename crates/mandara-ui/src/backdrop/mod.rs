@@ -222,6 +222,9 @@ enum Event {
     /// The right button that opened the menu, still held, moved (or was
     /// let go: `true`) at this logical position of that output.
     MenuDrag(String, f32, f32, bool),
+    /// The pointer (or a drag) was shaken over the desktop at this logical
+    /// position of that output (Stash).
+    Shake(String, f32, f32),
     /// Painted widget geometry (edit mode).
     Boxes(Vec<OutputBoxes>),
     /// A click (or a scroll step) on a widget's clickable area.
@@ -320,6 +323,7 @@ pub fn init_on(layer: CanvasLayer, fallback: impl FnOnce(&mut App) + 'static, cx
                         crate::desktop_menu::drag_moved(&output, (x, y), cx);
                     }
                 }
+                Event::Shake(output, x, y) => crate::plugins::stash::shake_at(&output, (x, y), cx),
                 Event::Boxes(boxes) => crate::desktop_edit::on_boxes(boxes, cx),
                 Event::Widget(id, action) => {
                     crate::desktop_text::after_save(cx, move |cx| crate::desktop_actions::run(&id, action, cx));
@@ -1175,11 +1179,14 @@ impl Renderer {
     /// steps on a widget's clickable area run its action (scrolling over a
     /// level nudges it); other buttons do nothing.
     fn report_presses(&self, host: &mut Host, events: &async_channel::Sender<Event>) {
-        use mandara_core::shm_canvas::{SCALE_DENOMINATOR, SCROLL_DOWN, SCROLL_UP};
+        use mandara_core::shm_canvas::{SCALE_DENOMINATOR, SCROLL_DOWN, SCROLL_UP, SHAKE};
         use widgets::actions::Action;
         for p in host.take_presses() {
             let Some(out) = self.outs.iter().find(|o| o.id == p.output && !o.name.is_empty()) else { continue };
             match p.button {
+                SHAKE => {
+                    let _ = events.send_blocking(Event::Shake(out.name.clone(), p.x as f32, p.y as f32));
+                }
                 BTN_RIGHT => {
                     let size = out.geom.map(|g| (g.logical.0 as f32, g.logical.1 as f32));
                     let _ = events.send_blocking(Event::Menu(out.name.clone(), p.x as f32, p.y as f32, size));

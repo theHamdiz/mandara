@@ -205,8 +205,10 @@ around, each one measured or shipped today:
 - **It does a lot out of the box.** A media island with lyrics, a sound
   mixer per app, screenshots and screen recording, copying text from the
   screen, a launcher with three looks (a list, an icon grid or a centred
-  Spotlight-style search bar), a clipboard that sorts what you copy, a
-  drag-and-drop app installer, night light, and 82 built-in plugins.
+  Spotlight-style search bar), a clipboard that sorts what you copy,
+  [floating shelves](docs/plugins.md#stash-floating-shelves) you drop
+  anything onto and drag back out of, a drag-and-drop app installer, night
+  light, and 82 built-in plugins.
   [Everything else](docs/more-features.md)
 - **It welcomes you in.** A matching lock screen and login screen with
   your own wallpaper, and ready-made looks for both.

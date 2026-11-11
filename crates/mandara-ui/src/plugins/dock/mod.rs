@@ -1453,6 +1453,17 @@ impl Render for DockView {
             .child(tracker)
             .child(background)
             .children(children)
+            // Stash: a shake over the dock opens a shelf (where the dock
+            // surface sits on its output).
+            .when(mandara_core::shake::current_tuning().is_some(), |el| {
+                let out = output_size(&self.monitor, cx);
+                let origin = match self.cfg.position {
+                    DockPosition::Bottom => (0.0, out.1 - surface.1),
+                    DockPosition::Left => (0.0, 0.0),
+                    DockPosition::Right => (out.0 - surface.0, 0.0),
+                };
+                el.children(crate::plugins::stash::shake_hook(&self.monitor, origin))
+            })
     }
 }
 

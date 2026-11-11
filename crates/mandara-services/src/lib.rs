@@ -79,6 +79,7 @@ pub mod screenshot;
 pub mod self_update;
 pub mod session;
 pub mod spectrum;
+pub mod stash_fetch;
 pub mod systemd;
 pub mod theme_pkg;
 pub mod toplevels;

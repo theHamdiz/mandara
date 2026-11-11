@@ -61,6 +61,9 @@ pub enum SurfaceRole {
     /// only while a card floats there), and the one-pixel keyboard bridge
     /// that exists only while you type into one of them.
     Floating,
+    /// Stash's floating shelves and their quick look (Overlay layer, sized
+    /// to the shelf, only while one is shown).
+    Stash,
 }
 
 impl SurfaceRole {
@@ -80,10 +83,11 @@ impl SurfaceRole {
             SurfaceRole::DesktopMenu => "mandara-desktop-menu",
             SurfaceRole::DesktopEdit => "mandara-desktop-edit",
             SurfaceRole::Floating => "mandara-floating",
+            SurfaceRole::Stash => "mandara-stash",
         }
     }
 
-    pub const ALL: [SurfaceRole; 14] = [
+    pub const ALL: [SurfaceRole; 15] = [
         SurfaceRole::Exclusion,
         SurfaceRole::Bar,
         SurfaceRole::Wallpaper,
@@ -98,6 +102,7 @@ impl SurfaceRole {
         SurfaceRole::DesktopMenu,
         SurfaceRole::DesktopEdit,
         SurfaceRole::Floating,
+        SurfaceRole::Stash,
     ];
 }
 

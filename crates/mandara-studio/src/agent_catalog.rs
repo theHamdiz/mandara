@@ -41,7 +41,7 @@ pub fn settings_catalog() -> Vec<mandara_services::command_agent::catalog::Comma
                 | Control::Font { .. }
                 | Control::Device { .. }
                 | Control::Display => {}
-                Control::Command { .. } | Control::DepthModel | Control::List { .. } | Control::RecorderBackends => return None,
+                Control::Command { .. } | Control::DepthModel | Control::List { .. } | Control::RecorderBackends | Control::StashEdges => return None,
             }
             Some(Command { path: format!("config set {}", setting.path), summary: setting.label.into(), args: vec![arg], examples: Vec::new() })
         })

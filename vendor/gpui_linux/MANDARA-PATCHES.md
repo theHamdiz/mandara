@@ -79,7 +79,42 @@ that lands on its track, so the finger drags it instead of scrolling, and
 Studio's title bar ignores a tap as a window move
 (`crates/mandara-studio/src/app.rs`, `begin_move`).
 
+## 2. Data drops, typed drags and layer margins (`wayland/client.rs`, `wayland/window.rs`, `wayland/clipboard.rs`)
+
+The Wayland side of GPUI core's patch 13 (Stash's shelves).
+
+* **Data in.** A window that accepts data drops
+  (`WaylandWindowStatePtr::accepts_data_drops`, set through
+  `PlatformWindow::set_accepts_data_drops`) takes any drag that carries no
+  local files: when the offer has no `text/uri-list` (or its URIs are not
+  `file://` ones) the enter becomes `FileDropEvent::DataEntered` with the
+  offered MIME types (`begin_data_drag`). The offer accepts its first type
+  as a copy only (a drop on a part of the window with no target is still
+  taken, and must never make the source delete what it dragged), leaves the
+  clipboard's rotating offer list (which would otherwise destroy it) and is
+  owned by `WaylandDropData`, behind the drag's `ExternalData`. `receive`
+  pipes a type and flushes; reads wait at most `PIPE_READ_TIMEOUT` per read
+  (`TimedPipe`). `DragState` tracks it (`data`, the `DataDrop` trait):
+  `handle_drop` marks it dropped and hands it to GPUI, `handle_leave` marks
+  it left (receiving then returns `None`), and a stale enter is let go. The
+  offer is finished (after a drop) and destroyed when the last clone of the
+  drag's value goes, after the drop target has read what it needs. Windows
+  that don't accept data drops behave exactly as upstream, and `http(s)`
+  links in a `text/uri-list` are no longer logged as "not a file path".
+* **Data out.** `start_external_drag` offers every type of an
+  `ExternalDragPayload::Data` (`ExternalDragContent`); `Send` writes bytes
+  through the clipboard's writer or streams a file on the background
+  executor. `DndFinished` sends `FileDropEvent::Delivered` before `Ended`. A
+  drag that replaces one that never ended destroys the old source, and the
+  events of a replaced source are ignored.
+* **Margins.** `set_layer_margin` sets the layer surface's margins and
+  commits (`WaylandSurfaceState::set_margin`).
+
 ## Tests
+
+`linux::wayland::client::tests`: a data drag enters and drops without
+finishing its offer itself, one that leaves (or goes stale) lets its transfer
+go, and a typed drag offers each type once.
 
 `linux::wayland::touch::tests` (9 unit tests): a tap starts and ends where
 the finger lifted; motions are coalesced per frame and flushed before `up`;

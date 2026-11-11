@@ -13,6 +13,7 @@
 //! drag   X1 Y1 X2 Y2
 //! flyby  X Y MS      # touch X Y for MS ms, then leave
 //! scroll X Y STEPS   # wheel notches (negative = up)
+//! shake X Y [W] [N]  # N strokes W px wide (Stash shake)
 //! ```
 //!
 //! Coordinates are logical pixels in the output layout (`Options::layout`;
@@ -46,7 +47,7 @@ pub const LAYOUT_ENV: &str = "MANDARA_LAYOUT";
 /// Layout size when `MANDARA_LAYOUT` is unset.
 pub const DEFAULT_LAYOUT: (u32, u32) = (2560, 1440);
 /// Command-line usage of the gestures.
-pub const USAGE: &str = "move X Y | click X Y [left|right|middle] | drag X1 Y1 X2 Y2 [left|right|middle] | flyby X Y MS | scroll X Y STEPS (negative: up)";
+pub const USAGE: &str = "move X Y | click X Y [left|right|middle] | drag X1 Y1 X2 Y2 [left|right|middle] | flyby X Y MS | scroll X Y STEPS (negative: up) | shake X Y [WIDTH] [STROKES]";
 
 /// Scroll distance of one wheel notch (wl_pointer axis units).
 const SCROLL_NOTCH: f64 = 15.0;
@@ -100,6 +101,9 @@ pub enum Action {
     Flyby { rest: Duration },
     /// Wheel notches (negative: up).
     Scroll { steps: i32 },
+    /// A quick back-and-forth: `strokes` horizontal strokes `width` px
+    /// wide around the point, one frame per step (Stash's shake gesture).
+    Shake { width: u32, strokes: u32 },
 }
 
 /// A pointer gesture at a logical point of the output layout.
@@ -122,6 +126,7 @@ impl Gesture {
             "drag" => Action::Drag { to: (num(3)?, num(4)?), button: button(args.get(5)).ok_or_else(usage)? },
             "flyby" => Action::Flyby { rest: Duration::from_millis(num(3)?.into()) },
             "scroll" => Action::Scroll { steps: args.get(3).ok_or_else(usage)?.parse().with_context(usage)? },
+            "shake" => Action::Shake { width: args.get(3).map_or(Ok(120), |a| a.parse().with_context(usage))?, strokes: args.get(4).map_or(Ok(6), |a| a.parse().with_context(usage))? },
             _ => return Err(usage()),
         };
         Ok(Self { at, action })
@@ -238,6 +243,20 @@ pub fn perform(conn: &Connection, gesture: &Gesture, opts: &Options) -> Result<(
             }
             pointer.button(now_ms(), button.code(), wl_pointer::ButtonState::Released);
             flush(&pointer)?;
+        }
+        Action::Shake { width, strokes } => {
+            // Eight samples a stroke, a frame apart.
+            const STEPS: u32 = 8;
+            let half = width as f32 / 2.0;
+            for stroke in 0..strokes {
+                let (from, to) = if stroke % 2 == 0 { (-half, half) } else { (half, -half) };
+                for step in 1..=STEPS {
+                    let dx = from + (to - from) * step as f32 / STEPS as f32;
+                    pointer.motion_absolute(now_ms(), (x as f32 + dx).max(0.0) as u32, y, w, h);
+                    flush(&pointer)?;
+                    std::thread::sleep(FRAME);
+                }
+            }
         }
         Action::Click(button) => {
             pointer.button(now_ms(), button.code(), wl_pointer::ButtonState::Pressed);

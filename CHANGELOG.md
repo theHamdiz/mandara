@@ -8,6 +8,8 @@ About → What's new shows it too.
 
 ### New
 
+- **Stash**: floating shelves you drop anything onto (files, folders, pictures, text, links, any data) and drag back out into any app. Summon one by shaking the pointer over the desktop, bar, dock or a panel, with an edge catcher, the bar item, the tray, a keybind or `mandara msg stash new`. Shelves move to any display, resize, minimize to the bar or tray, and stay until you close them, even across restarts. Opt-in in Studio → Plugins.
+- **Stash's edge catchers** are off by default and only allowed on an edge nothing else uses. Studio names what uses an edge, offers to turn it off or move it, and asks which one keeps an edge when something later wants it.
 - **Boot look** (opt-in): restyle the boot menu (GRUB, Limine, rEFInd) and the boot splash (Plymouth) with popular themes or your own SVG or picture, in Studio → Themes → Boot or with `mandara msg boot …`. Every change shows its plan first, asks for approval, is backed up, is checked with the bootloader's own tools, and can be restored in one click.
 - **Icon themes.** Studio → Themes → Icons offers fifty popular open-source icon sets. Each downloads only when you pick it and installs only if its checksum matches. Apply sets your launcher, dock and tray icons and your apps' icons in one go, and *Follow your desktop* puts back what was there.
 - **Install your own cursor and icon themes** from an archive, a folder or a link. A link has no known checksum, so Studio asks before downloading it, and nothing inside a theme is ever run.

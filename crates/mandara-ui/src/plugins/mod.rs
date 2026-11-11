@@ -83,6 +83,7 @@ pub mod presentation;
 pub mod plugin_lang;
 pub mod feeds;
 pub mod reddit;
+pub mod stash;
 pub mod home_assistant;
 pub mod phone_connect;
 pub mod translator;
@@ -127,6 +128,7 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     workspaces::register(registry);
     feeds::register(registry);
     reddit::register(registry);
+    stash::register(registry);
     home_assistant::register(registry);
     phone_connect::register(registry);
     translator::register(registry);
