@@ -46,6 +46,7 @@ fn configs() -> Vec<(&'static str, CompositorConfig, bool)> {
             active_opacity: Some(1.0),
             inactive_opacity: Some(0.9),
             gaps_follow_bar: false,
+            windows: crate::window_motion::WindowMotion::default(),
         },
         ..Default::default()
     };
@@ -316,5 +317,45 @@ fn umbriel_validates_every_dropin() {
         let main = umbriel_main(dir.path(), &dropin);
         let (ok, log) = run(Command::new("umbriel").arg("config").arg("validate").arg("-c").arg(&main));
         assert!(ok, "umbriel rejected the {name} drop-in:\n{log}\n--- drop-in ---\n{text}");
+    }
+}
+
+/// Every window animation style in the Hyprland format this Hyprland
+/// reads, beside a full config: Hyprland's own `--verify-config` accepts
+/// each (both formats when `MANDARA_HYPR_BOTH` is set and it reads both).
+#[test]
+fn hyprland_validates_every_window_animation() {
+    use crate::window_motion::{WindowMotion, WindowStyle};
+    if !installed("Hyprland", "--version") {
+        return; // Hyprland isn't installed here.
+    }
+    let version = installed_version(Target::Hyprland);
+    let lua = version.is_none_or(hyprland_reads_lua);
+    let dir = tempfile::tempdir().unwrap();
+    for style in WindowStyle::ALL {
+        for speed in [0.25, 1.0, 3.0] {
+            let (_, mut cfg, colors) = configs().pop().unwrap();
+            cfg.look.animations = Some(true);
+            cfg.look.windows = WindowMotion { style, speed };
+            let m = managed(&cfg, colors, version);
+            let (dropin, main, text, main_text) = if lua {
+                let text = emit_hyprland_lua(&m).text;
+                let dropin = dir.path().join("mandara.lua");
+                (dropin.clone(), dir.path().join("hyprland.lua"), text, format!("hl.config({{ general = {{ gaps_in = 4 }} }})\n{}\n", hyprland_lua_include(&dropin.display().to_string())))
+            } else {
+                let text = emit_hyprland_conf(&m).text;
+                let dropin = dir.path().join("mandara.conf");
+                (dropin.clone(), dir.path().join("hyprland.conf"), text, format!("general {{\n    gaps_in = 4\n}}\nsource = {}\n", dropin.display()))
+            };
+            // The animation calls without their `pcall`, so a mistake in
+            // them is an error Hyprland reports, not one `pcall` swallows.
+            let text = text.replace("pcall(hl.curve, ", "hl.curve(").replace("pcall(hl.animation, ", "hl.animation(");
+            assert_eq!(text.contains("windowsIn"), lua && style != WindowStyle::Compositor, "{text}");
+            std::fs::write(&dropin, &text).unwrap();
+            std::fs::write(&main, main_text).unwrap();
+            let (ok, log) = run(Command::new("Hyprland").arg("--verify-config").arg("-c").arg(&main));
+            let clean = ok && !log.to_lowercase().contains("error");
+            assert!(clean, "Hyprland rejected window style {style:?}:\n{log}\n--- drop-in ---\n{text}");
+        }
     }
 }

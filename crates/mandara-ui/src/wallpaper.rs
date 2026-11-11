@@ -635,6 +635,10 @@ pub struct WallpaperView {
     previous_size: (u32, u32),
     fill: mandara_config::desktop::WallpaperFill,
     since: Instant,
+    /// Wallpaper changes so far (varies each transition's seams and
+    /// shards) and where the running one started (Ripple, Shatter).
+    changes: u32,
+    origin: Option<(f32, f32)>,
     input_cleared: bool,
     /// Small copy of the shown wallpaper: picks the clock's ink.
     tone: Option<Arc<image::RgbImage>>,
@@ -699,6 +703,8 @@ impl WallpaperView {
             previous_size: (0, 0),
             fill: mandara_config::desktop::WallpaperFill::default(),
             since: now,
+            changes: 0,
+            origin: None,
             input_cleared: false,
             tone: None,
             masks,
@@ -732,6 +738,8 @@ impl WallpaperView {
                     this.current_size = shown_size;
                     this.tone = tone;
                     this.since = Instant::now();
+                    this.changes = this.changes.wrapping_add(1);
+                    this.origin = None;
                     // The old subject leaves with its wallpaper.
                     let fade = Duration::from_millis(this.config.read(cx).get().wallpaper.crossfade_ms.max(1));
                     this.retire(fade);
@@ -950,14 +958,33 @@ impl Render for WallpaperView {
         let layer = |p: &PathBuf, size: (u32, u32)| crate::wallpaper_fill::layer(p, size, fill, (vw, vh), scale);
         let rtl = cfg.general.locale.is_rtl();
         let transition = cfg.wallpaper.transition;
+        // A Ripple or Shatter starts where the pointer was when it began
+        // (or the centre), fixed for the whole transition.
+        let origin = *self.origin.get_or_insert_with(|| {
+            let pointer = window.mouse_position();
+            let (px_, py_) = (f32::from(pointer.x), f32::from(pointer.y));
+            let inside = (0.0..vw).contains(&px_) && (0.0..vh).contains(&py_);
+            if cfg.wallpaper.transition_origin == mandara_config::desktop::TransitionOrigin::Pointer && inside { (px_, py_) } else { (vw / 2.0, vh / 2.0) }
+        });
+        let seed = self.changes.wrapping_mul(0x9e37_79b9);
         let fill_bg = (fill != mandara_config::desktop::WallpaperFill::Cover && self.current.is_some()).then(|| crate::wallpaper_fill::fill_color(&cfg.wallpaper.fill_color).hsla());
+        let (previous_size, current_size) = (self.previous_size, self.current_size);
+        let wallpaper = match (self.current.as_ref(), self.previous.as_ref()) {
+            (Some(cur), prev) => {
+                let old = prev.map(|p| move || layer(p, previous_size));
+                let new = || layer(cur, current_size);
+                let old: Option<&dyn Fn() -> gpui::AnyElement> = old.as_ref().map(|f| f as &dyn Fn() -> gpui::AnyElement);
+                crate::wallpaper_transitions::compose(old, &new, transition, if crossfading { eased } else { 1.0 }, (vw, vh), rtl, origin, seed)
+            }
+            (None, Some(p)) => vec![layer(p, previous_size)],
+            (None, None) => Vec::new(),
+        };
         div()
             .size_full()
             .relative()
             // 1 · wallpaper (crossfading)
             .when_some(fill_bg, |el, bg| el.bg(bg))
-            .when_some(self.previous.as_ref(), |el, p| el.child(layer(p, self.previous_size)))
-            .when_some(self.current.as_ref(), |el, p| el.child(crate::wallpaper_fill::reveal(layer(p, self.current_size), transition, if crossfading { eased } else { 1.0 }, (vw, vh), rtl)))
+            .children(wallpaper)
             // 2 · clock, date, weather, audio ring
             .when_some(clock_el, |el, c| el.child(c))
             .when_some(pill_below, |el, p| el.child(p))

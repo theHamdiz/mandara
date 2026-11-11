@@ -1381,7 +1381,7 @@ impl Renderer {
         let e = smoothstep(p);
         match t.kind {
             WallpaperTransition::Fade if alpha => host.set_alpha(id, WALLPAPER[to], e),
-            WallpaperTransition::Wipe | WallpaperTransition::Grow => host.set_view(id, WALLPAPER[to], Some(reveal(t.kind, e, geom, t.rtl))),
+            WallpaperTransition::Wipe | WallpaperTransition::Grow | WallpaperTransition::Ripple | WallpaperTransition::Tide | WallpaperTransition::Tear => host.set_view(id, WALLPAPER[to], Some(reveal(t.kind, e, geom, t.rtl))),
             _ => {}
         }
         // No free buffer for the wallpaper's own pixels: the baked desktop
@@ -1668,7 +1668,9 @@ fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: 
     let size_changed = out.current().is_some_and(|s| s.want.size != want.size);
     let incoming = if first { out.cur } else { 1 - out.cur };
     let from = out.cur;
-    let kind = scene.wallpaper.transition;
+    // The software planes crop and fade; pieced transitions become their
+    // cheaper equivalent here (`WallpaperTransition::software`).
+    let kind = scene.wallpaper.transition.software();
     let instant = cut_in || first || size_changed || scene.reduce_motion || kind == WallpaperTransition::None || (kind == WallpaperTransition::Fade && !alpha) || (kind != WallpaperTransition::Fade && !host.supports_viewport());
     let animated = !instant && incoming != from;
     host.hide(id, WALLPAPER[incoming]);
@@ -1761,14 +1763,23 @@ fn finish_transition(host: &mut Host, out: &mut Out, alpha: bool) -> anyhow::Res
 }
 
 /// The incoming wallpaper's crop at eased progress `e` (wipe from the
-/// reading side; grow from the centre).
+/// reading side; grow and ripple from the centre, as a rectangle; tide
+/// from the bottom edge; tear as a band opening from the middle seam).
 fn reveal(kind: WallpaperTransition, e: f32, g: Geom, rtl: bool) -> View {
     let (lw, lh) = (g.logical.0.max(1) as i32, g.logical.1.max(1) as i32);
     let (pw, ph) = (g.physical.0 as f64, g.physical.1 as f64);
     let (x, y, w, h) = match kind {
-        WallpaperTransition::Grow => {
+        WallpaperTransition::Grow | WallpaperTransition::Ripple => {
             let (w, h) = (((lw as f32 * e).round() as i32).max(1), ((lh as f32 * e).round() as i32).max(1));
             ((lw - w) / 2, (lh - h) / 2, w, h)
+        }
+        WallpaperTransition::Tide => {
+            let h = ((lh as f32 * e).round() as i32).max(1);
+            (0, lh - h, lw, h)
+        }
+        WallpaperTransition::Tear => {
+            let w = ((lw as f32 * e).round() as i32).max(1);
+            ((lw - w) / 2, 0, w, lh)
         }
         _ => {
             let w = ((lw as f32 * e).round() as i32).max(1);

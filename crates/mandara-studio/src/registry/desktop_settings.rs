@@ -35,7 +35,20 @@ pub(crate) const CARD_STYLE: &[(&str, &str)] = &[("tonal", tk("Tonal")), ("raise
 /// Themes' group of component designs (its own section on the page).
 pub(crate) const COMPONENTS: &str = tk("Components");
 const FILL: &[(&str, &str)] = &[("cover", tk("Fill")), ("contain", tk("Fit")), ("stretch", tk("Stretch")), ("center", tk("Center")), ("tile", tk("Tile"))];
-const TRANSITION: &[(&str, &str)] = &[("fade", tk("Fade")), ("wipe", tk("Wipe")), ("grow", tk("Grow")), ("none", tk("None"))];
+/// `WallpaperTransition::ALL`'s order, each with how it looks.
+pub(crate) const TRANSITION: &[(&str, &str)] = &[
+    ("fade", tk("Fade")),
+    ("wipe", tk("Wipe")),
+    ("grow", tk("Grow")),
+    ("ripple", tk("Ripple: a circle opens from the pointer or the centre")),
+    ("tide", tk("Tide: a wave rises from the bottom and washes the new image in")),
+    ("tear", tk("Tear: the old image rips along a jagged seam and peels away")),
+    ("glitch", tk("Glitch: slices shear sideways with a colour split, then settle")),
+    ("shatter", tk("Shatter: the old image breaks into shards that fall away")),
+    ("dissolve", tk("Dissolve: the new image arrives tile by tile")),
+    ("none", tk("None")),
+];
+pub(crate) const ORIGINS: &[(&str, &str)] = &[("center", tk("The centre")), ("pointer", tk("The pointer"))];
 const ORDER: &[(&str, &str)] = &[("shuffle", tk("Shuffle")), ("random", tk("Random")), ("alphabetical", tk("By name")), ("newest", tk("Newest first"))];
 const SLIDESHOW_SOURCE: &[(&str, &str)] = &[("folder", tk("A folder")), ("playlist", tk("Playlist"))];
 const SLIDESHOW_TRANSITION: &[(&str, &str)] = &[("desktop", tk("Same as the desktop")), ("fade", tk("Fade")), ("wipe", tk("Wipe")), ("grow", tk("Grow")), ("none", tk("None"))];
@@ -119,6 +132,7 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Wallpaper, tk("Desktop"), "/wallpaper/fill", tk("Fill mode"), tk("How images that don't match the screen are placed"), Choice(FILL)),
         s(Wallpaper, tk("Desktop"), "/wallpaper/fill_color", tk("Fill color"), tk("Behind Fit and Center (hex)"), Text { placeholder: "#000000" }),
         s(Wallpaper, tk("Desktop"), "/wallpaper/transition", tk("Transition"), tk("How a new wallpaper replaces the old one"), Choice(TRANSITION)),
+        s(Wallpaper, tk("Desktop"), "/wallpaper/transition_origin", tk("Transition origin"), tk("Where a Ripple opens and a Shatter bursts from"), Choice(ORIGINS)),
         s(Wallpaper, tk("Desktop"), "/wallpaper/share_with_login", tk("Show on the login screen"), tk("Mandara Login shows your wallpaper when your account is picked (a copy goes to /var/lib/mandara-login)"), Toggle),
         s(Wallpaper, tk("Light & dark"), "/wallpaper/variants/light", tk("Light wallpaper"), tk("Shown while the theme is light; empty uses the main wallpaper"), OptionalText { placeholder: "~/Pictures/Wallpapers/day.jpg" }),
         s(Wallpaper, tk("Light & dark"), "/wallpaper/variants/dark", tk("Dark wallpaper"), tk("Shown while the theme is dark; per-display wallpapers: mandara msg wallpaper output"), OptionalText { placeholder: "~/Pictures/Wallpapers/night.jpg" }),

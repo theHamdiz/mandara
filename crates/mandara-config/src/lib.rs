@@ -36,6 +36,7 @@ pub mod surfaces;
 pub mod upgrade;
 pub mod widget_kinds;
 pub mod widget_style;
+pub mod window_motion;
 pub mod wallgen;
 pub mod workflow;
 

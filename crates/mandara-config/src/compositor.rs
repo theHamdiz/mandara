@@ -926,6 +926,16 @@ pub struct CompositorLook {
     /// Window gaps follow the bar's edge spacing (resolved by
     /// [`crate::ShellConfig::effective_compositor`] before emitting).
     pub gaps_follow_bar: bool,
+    /// Window open / close / move / workspace animations (Studio → Motion;
+    /// only where [`crate::window_motion::supported`]).
+    pub windows: crate::window_motion::WindowMotion,
+}
+
+impl CompositorLook {
+    /// Window animations to write: none while animations are switched off.
+    fn window_motion(&self) -> Option<&crate::window_motion::WindowMotion> {
+        (self.animations != Some(false)).then_some(&self.windows)
+    }
 }
 
 impl CompositorLook {
@@ -1112,6 +1122,12 @@ pub fn emit_mango(cfg: &ManagedConfig) -> Emitted {
         }
         let _ = writeln!(s);
     }
+    if let Some(m) = l.window_motion() {
+        let lines = crate::window_motion::mango(m);
+        if !lines.is_empty() {
+            let _ = writeln!(s, "{lines}");
+        }
+    }
     // The width is its own setting: it applies without colour sync too.
     if let Some(w) = c.border_width {
         let _ = writeln!(s, "# Window border width (Studio → Compositor)\nborder_px={w}\n");
@@ -1287,6 +1303,9 @@ pub fn emit_niri(cfg: &ManagedConfig) -> Emitted {
     // Animations: only `off` exists as a switch (on = leave the user's).
     if l.animations == Some(false) {
         let _ = writeln!(s, "\nanimations {{ off; }}");
+    }
+    if let Some(m) = l.window_motion() {
+        s.push_str(&crate::window_motion::niri(m));
     }
     // Niri's top-left hot corner opens its overview; Mandara's corners
     // replace it (`hot-corners` predates `include`, so any niri that reads
@@ -1487,6 +1506,11 @@ pub fn emit_hyprland_conf(cfg: &ManagedConfig) -> Emitted {
     if let Some(v) = l.animations {
         let _ = writeln!(s, "\nanimations {{\n    enabled = {v}\n}}");
     }
+    // Window animations are written only in the Lua format: no Hyprland
+    // that reads this file was available to check them with.
+    if l.window_motion().is_some_and(|m| m.style != crate::window_motion::WindowStyle::Compositor) {
+        let _ = writeln!(s, "\n# Window animations from Studio need Hyprland 0.55 or newer (Lua config); skipped here.");
+    }
     for r in &c.window_rules {
         let mut matchers = Vec::new();
         if let Some(a) = &r.app_id {
@@ -1636,6 +1660,9 @@ pub fn emit_hyprland_lua(cfg: &ManagedConfig) -> Emitted {
     }
     for line in input_env {
         let _ = writeln!(s, "{line}");
+    }
+    if let Some(m) = l.window_motion() {
+        s.push_str(&crate::window_motion::hyprland_lua(m));
     }
     for ns in SHELL_SURFACES {
         let _ = writeln!(s, "pcall(hl.layer_rule, {{ match = {{ namespace = {} }}, no_anim = true }})", lua_str(&format!("^({ns})$")));
@@ -3217,6 +3244,7 @@ mod look_tests {
                 active_opacity: Some(1.0),
                 inactive_opacity: Some(0.9),
                 gaps_follow_bar: false,
+                windows: crate::window_motion::WindowMotion { style: crate::window_motion::WindowStyle::Snap, speed: 1.0 },
             },
             ..CompositorConfig::default()
         }
@@ -3656,6 +3684,36 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         }
     }
 
+    /// Every window animation style, written beside a full config, passes
+    /// MangoWM's and Niri's own checkers (each skipped when not installed).
+    #[test]
+    fn window_animations_pass_the_compositors_checkers() {
+        use crate::window_motion::{WindowMotion, WindowStyle};
+        let user = "focused_opacity=1.0";
+        let niri_user = "binds {\n    Mod+Space { spawn \"fuzzel\"; }\n}";
+        let existing = parse_chords(Target::Niri, niri_user);
+        let existing: Vec<&str> = existing.iter().map(String::as_str).collect();
+        for style in WindowStyle::ALL {
+            for speed in [0.25, 1.0, 3.0] {
+                let mut cfg = mango_kitchen_sink();
+                cfg.look.windows = WindowMotion { style, speed };
+                let out = emit_mango(&managed(&cfg, &[]));
+                assert_eq!(out.text.contains("animation_type_open="), style != WindowStyle::Compositor);
+                if let Some(problems) = mango_check(user, &out.text) {
+                    assert!(problems.is_empty(), "mango -p complained about {style:?}:\n{}\n--- drop-in ---\n{}", problems.join("\n"), out.text);
+                }
+                let out = emit_niri(&ManagedConfig { version: Some(NIRI_CHECKED), ..managed(&cfg, &existing) });
+                if let Some(errors) = niri_check(niri_user, &out.text) {
+                    assert!(errors.is_empty(), "niri validate failed for {style:?}:\n{errors}\n--- drop-in ---\n{}", out.text);
+                }
+                // Animations switched off: no window animations at all.
+                cfg.look.animations = Some(false);
+                assert!(!emit_mango(&managed(&cfg, &[])).text.contains("animation_type_open="));
+                assert!(!emit_niri(&managed(&cfg, &existing)).text.contains("window-open"));
+            }
+        }
+    }
+
     /// Niri's own check (`niri validate`), like [`mango_check`]: `Some(errors)`
     /// (empty when valid), or `None` when Niri isn't installed.
     fn niri_check(user: &str, generated: &str) -> Option<String> {
@@ -3843,7 +3901,7 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
             autostart: true,
             border_width: Some(3),
             disable_builtin_hot_corners: true,
-            look: CompositorLook { gaps_inner: Some(12), gaps_outer: Some(10), rounding: Some(14), blur: Some(true), shadows: Some(false), animations: Some(false), active_opacity: Some(1.0), inactive_opacity: Some(0.85), gaps_follow_bar: false },
+            look: CompositorLook { gaps_inner: Some(12), gaps_outer: Some(10), rounding: Some(14), blur: Some(true), shadows: Some(false), animations: Some(false), active_opacity: Some(1.0), inactive_opacity: Some(0.85), gaps_follow_bar: false, ..Default::default() },
             keybinds: vec![Keybind::new(&["hyper"], "x", BindAction::Spawn("foot".into()))],
             ..Default::default()
         };
@@ -4043,7 +4101,7 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
             ],
             ..Default::default()
         };
-        cfg.look = CompositorLook { gaps_inner: Some(12), gaps_outer: Some(10), rounding: Some(9), blur: Some(true), shadows: Some(true), animations: Some(false), active_opacity: Some(0.9), inactive_opacity: Some(0.8), gaps_follow_bar: false };
+        cfg.look = CompositorLook { gaps_inner: Some(12), gaps_outer: Some(10), rounding: Some(9), blur: Some(true), shadows: Some(true), animations: Some(false), active_opacity: Some(0.9), inactive_opacity: Some(0.8), gaps_follow_bar: false, ..Default::default() };
         cfg.window_rules = vec![WindowRule { title: Some("Volume \"x\"\nexec rm".into()), floating: Some(true), global: Some(true), no_blur: Some(true), ..Default::default() }];
         let t = emit_sway(&managed(&cfg, &[])).text;
         assert!(t.contains("gaps inner 12\ngaps outer -2\n"), "the outer gap is on top of the inner one: {t}");

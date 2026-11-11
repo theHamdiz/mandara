@@ -1575,6 +1575,8 @@ pub struct WallpaperConfig {
     pub fill_color: String,
     /// How a new wallpaper replaces the old one.
     pub transition: crate::desktop::WallpaperTransition,
+    /// Where a Ripple or Shatter transition starts.
+    pub transition_origin: crate::desktop::TransitionOrigin,
     /// Light / dark and per-output wallpapers.
     pub variants: crate::desktop::WallpaperVariants,
     pub slideshow: crate::desktop::WallpaperSlideshow,
@@ -1614,6 +1616,7 @@ impl Default for WallpaperConfig {
             fill: crate::desktop::WallpaperFill::default(),
             fill_color: "#000000".into(),
             transition: crate::desktop::WallpaperTransition::default(),
+            transition_origin: crate::desktop::TransitionOrigin::default(),
             variants: crate::desktop::WallpaperVariants::default(),
             slideshow: crate::desktop::WallpaperSlideshow::default(),
             video: crate::desktop::WallpaperVideo::default(),

@@ -760,7 +760,9 @@ pub enum WallpaperFill {
     Tile,
 }
 
-/// How one wallpaper replaces another.
+/// How one wallpaper replaces another. The GPU wallpaper draws every one;
+/// the software one ([`Self::software`]) draws Ripple, Tide and Tear as a
+/// cheaper crop and the rest as a fade.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum WallpaperTransition {
@@ -770,8 +772,53 @@ pub enum WallpaperTransition {
     Wipe,
     /// The new image grows out of the centre.
     Grow,
+    /// A circle opens from the pointer or the centre.
+    Ripple,
+    /// A wave rises from the bottom edge and washes the new image in.
+    Tide,
+    /// The old image rips along a jagged seam and both halves peel away.
+    Tear,
+    /// Slices of the old image shear sideways with a brief colour split,
+    /// then settle on the new one.
+    Glitch,
+    /// The old image breaks into shards that fall away.
+    Shatter,
+    /// The new image arrives tile by tile, like settling grain.
+    Dissolve,
     /// Cut without animation.
     None,
+}
+
+impl WallpaperTransition {
+    pub const ALL: [Self; 10] = [Self::Fade, Self::Wipe, Self::Grow, Self::Ripple, Self::Tide, Self::Tear, Self::Glitch, Self::Shatter, Self::Dissolve, Self::None];
+
+    /// What the software wallpaper draws for this transition: Ripple, Tide
+    /// and Tear as a crop of the new image (a square opening, a rising
+    /// edge, a seam opening outward), Glitch, Shatter and Dissolve as a
+    /// fade (the compositor crops and fades one plane; it cannot move
+    /// pieces of the old one).
+    pub fn software(self) -> Self {
+        match self {
+            Self::Glitch | Self::Shatter | Self::Dissolve => Self::Fade,
+            other => other,
+        }
+    }
+
+    /// Whether [`WallpaperTransition::Ripple`] and friends start at
+    /// [`TransitionOrigin`].
+    pub fn has_origin(self) -> bool {
+        matches!(self, Self::Ripple | Self::Shatter)
+    }
+}
+
+/// Where a Ripple opens or a Shatter bursts from.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TransitionOrigin {
+    #[default]
+    Center,
+    /// The pointer's last place on the desktop (the centre when unknown).
+    Pointer,
 }
 
 /// Slideshow order.

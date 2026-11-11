@@ -126,7 +126,11 @@ pub fn fill_color(hex: &str) -> Color {
 pub fn reveal(layer: AnyElement, transition: WallpaperTransition, t: f32, (vw, vh): (f32, f32), rtl: bool) -> AnyElement {
     let t = t.clamp(0.0, 1.0);
     match transition {
-        WallpaperTransition::Fade => div().absolute().inset_0().size_full().opacity(t).child(layer).into_any_element(),
+        // The pieced transitions are drawn by `wallpaper_transitions`;
+        // here (a lone layer) they fade.
+        WallpaperTransition::Fade | WallpaperTransition::Ripple | WallpaperTransition::Tide | WallpaperTransition::Tear | WallpaperTransition::Glitch | WallpaperTransition::Shatter | WallpaperTransition::Dissolve => {
+            div().absolute().inset_0().size_full().opacity(t).child(layer).into_any_element()
+        }
         WallpaperTransition::None => layer,
         WallpaperTransition::Wipe => {
             let w = vw * t;
