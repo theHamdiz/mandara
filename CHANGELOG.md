@@ -8,6 +8,8 @@ About → What's new shows it too.
 
 ### New
 
+- **Sound themes.** Studio → Themes → Sounds installs, previews and applies desktop sound themes (freedesktop, Ocean, Oxygen, Ubuntu, elementary, COSMIC, Deepin, Materia, or your own folder, archive or link), for Mandara's own sounds and, with Apply to apps, GTK and KDE apps. Opt-in; `mandara msg sound …` scripts it.
+- **More shell sounds:** locking and unlocking, drives plugged in or removed, emptying the Trash, brightness ticks and finished installs, each with its own switch. Do not disturb now quiets the ones that come unasked.
 - **Stash**: floating shelves you drop anything onto (files, folders, pictures, text, links, any data) and drag back out into any app. Summon one by shaking the pointer over the desktop, bar, dock or a panel, with an edge catcher, the bar item, the tray, a keybind or `mandara msg stash new`. Shelves move to any display, resize, minimize to the bar or tray, and stay until you close them, even across restarts. Opt-in in Studio → Plugins.
 - **Stash's edge catchers** are off by default and only allowed on an edge nothing else uses. Studio names what uses an edge, offers to turn it off or move it, and asks which one keeps an edge when something later wants it.
 - **Boot look** (opt-in): restyle the boot menu (GRUB, Limine, rEFInd) and the boot splash (Plymouth) with popular themes or your own SVG or picture, in Studio → Themes → Boot or with `mandara msg boot …`. Every change shows its plan first, asks for approval, is backed up, is checked with the bootloader's own tools, and can be restored in one click.

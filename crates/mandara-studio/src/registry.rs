@@ -606,6 +606,8 @@ pub fn required_plugin(path: &str) -> Option<&'static str> {
         Some(mandara_ui::plugins::wallpaper_depth::ID)
     } else if path.starts_with("/compositor/input/cursor/") {
         Some(mandara_config::upgrade::CURSORS_ID)
+    } else if path == "/sounds/desktop_sync" {
+        Some(mandara_config::upgrade::SOUND_THEMES_ID)
     } else {
         None
     }

@@ -28,7 +28,7 @@ so small lettering stays clean.
 
 ## Plugins
 
-The 83 plugins below include 82 built-ins and the Moon phase example. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
+The 86 plugins below include 85 built-ins and the Moon phase example. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
 
 | Preview | Files | Notes |
 | --- | --- | --- |
@@ -80,6 +80,7 @@ The 83 plugins below include 82 built-ins and the Moon phase example. Each SVG h
 | <img src="plugins/cursors/icon.png" width="40" alt="Cursor themes icon"> <img src="plugins/cursors/cover.png" width="128" alt="Cursor themes cover"> | **Cursor themes** · [SVG](plugins/cursors/icon.svg) · [256 PNG](plugins/cursors/icon.png) · [Cover](plugins/cursors/cover.png) | Obsidian · cream pointer with a gold click dot · illustration |
 | <img src="plugins/icon-themes/icon.png" width="40" alt="Icon themes icon"> <img src="plugins/icon-themes/cover.png" width="128" alt="Icon themes cover"> | **Icon themes** · [SVG](plugins/icon-themes/icon.svg) · [256 PNG](plugins/icon-themes/icon.png) · [Cover](plugins/icon-themes/cover.png) | Corniche · cream square, circle, rounded diamond and folder in a 2×2 grid on amber · illustration |
 | <img src="plugins/boot-look/icon.png" width="40" alt="Boot look icon"> <img src="plugins/boot-look/cover.png" width="128" alt="Boot look cover"> | **Boot look** · [SVG](plugins/boot-look/icon.svg) · [256 PNG](plugins/boot-look/icon.png) · [Cover](plugins/boot-look/cover.png) | Obsidian · copper monitor with a boot menu and a rising sun · illustration |
+| <img src="plugins/sound-themes/icon.png" width="40" alt="Sound themes icon"> <img src="plugins/sound-themes/cover.png" width="128" alt="Sound themes cover"> | **Sound themes** · [SVG](plugins/sound-themes/icon.svg) · [256 PNG](plugins/sound-themes/icon.png) · [Cover](plugins/sound-themes/cover.png) | Twilight · cream tuning fork and sand tone dots · illustration |
 | <img src="plugins/desktop-clocks/icon.png" width="40" alt="Desktop clocks icon"> <img src="plugins/desktop-clocks/cover.png" width="128" alt="Desktop clocks cover"> | **Desktop clocks** · [SVG](plugins/desktop-clocks/icon.svg) · [256 PNG](plugins/desktop-clocks/icon.png) · [Cover](plugins/desktop-clocks/cover.png) | Twilight · glass numerals and a dial on the sea · painted scene |
 | <img src="plugins/desktop-monitor/icon.png" width="40" alt="System monitor icon"> <img src="plugins/desktop-monitor/cover.png" width="128" alt="System monitor cover"> | **System monitor** · [SVG](plugins/desktop-monitor/icon.svg) · [256 PNG](plugins/desktop-monitor/icon.png) · [Cover](plugins/desktop-monitor/cover.png) | Obsidian · glowing gauge rings · painted scene |
 | <img src="plugins/desktop-decorations/icon.png" width="40" alt="Desktop decorations icon"> <img src="plugins/desktop-decorations/cover.png" width="128" alt="Desktop decorations cover"> | **Desktop decorations** · [SVG](plugins/desktop-decorations/icon.svg) · [256 PNG](plugins/desktop-decorations/icon.png) · [Cover](plugins/desktop-decorations/cover.png) | Twilight · a glass disc and ribbons over the water · painted scene |
@@ -155,7 +156,7 @@ SVGs store sRGB values for desktop renderer compatibility. Use the OKLCH anchors
 | Navigation | `#103C63` → `#286B91` | Session, Launcher, Workspaces, Active window, Keyboard layout, Language, Main menu, System tray, Dock, CI status, Shortcuts cheatsheet |
 | System | `#124D4B` → `#268878` | Resources, Process hunter, Quick settings, Drives, Power, Privacy, Mini stats, Task progress |
 | Connections | `#125477` → `#329DA7` | Network, Bluetooth, Network speed, Tailscale, Uptime monitor |
-| Media | `#40316F` → `#8666AA` | Media, Audio, Radio, Screenshot, Color picker, Local AI, Share to phone |
+| Media | `#40316F` → `#8666AA` | Media, Audio, Radio, Sound themes, Screenshot, Color picker, Local AI, Share to phone |
 | Productivity | `#843D58` → `#C47268` | Clipboard, Notifications, To-do, Notes, Pomodoro, Authenticator, Screen time |
 | Time | `#765323` → `#B78D47` | Clock, World clock |
 | Sky | `#30265E` → `#7063B5` | Prayer times, Weather, Wallpaper, Moon phase, Soundscapes, Eye breaks, Presentation mode, Jannah |
@@ -212,7 +213,7 @@ The whole pipeline is Rust (`xtask/src/art.rs`): SVGs render with [resvg](https:
 
 `cargo xtask art` turns every built-in plugin's art into the compact set the shell and Studio embed, in [`crates/mandara-ui/assets/plugin-art/<id>/`](../crates/mandara-ui/assets/plugin-art): `icon.webp` (128 px, rendered from the SVG), `icon@2x.webp` (256 px) and `cover.jpg` (960×540, JPEG quality 82; lossless `cover.webp` when the cover has transparency), plus the generated `index.rs` table. The generated files are committed — they are build inputs. Example plugins in `plugins/examples/` ship their own `icon.png` / `cover.png` inside their package instead.
 
-The embedded-art ceiling is **8,200,000 bytes (7.82 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 82-plugin set uses **8,159,814 bytes (7.78 MiB)**, leaving **40,186 bytes (39 KiB)** of headroom: the next new plugin's art needs a smaller set or a raised ceiling.
+The embedded-art ceiling is **8,500,000 bytes (8.11 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 85-plugin set uses **8,442,246 bytes (8.05 MiB)**, leaving **57,754 bytes (56 KiB)** of headroom: the next new plugin\'s art needs a smaller set or a raised ceiling.
 
 ```sh
 cargo xtask art --compose            # render source icons and compose covers (--only ID)

@@ -436,6 +436,14 @@
     "panel": null
   },
   {
+    "id": "sound-themes",
+    "name": "Sound themes",
+    "palette": "twilight",
+    "motif": "sound",
+    "angle": 4,
+    "panel": null
+  },
+  {
     "id": "desktop-clocks",
     "name": "Desktop clocks",
     "palette": "twilight",

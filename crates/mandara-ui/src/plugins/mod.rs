@@ -60,6 +60,7 @@ pub mod net_speed;
 pub mod screen_pick;
 pub mod color_picker;
 pub mod authenticator;
+pub mod sound_themes;
 pub mod soundscapes;
 pub mod hadith;
 pub mod jannah;
@@ -155,6 +156,7 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     cursors::register(registry);
     icon_themes::register(registry);
     boot_look::register(registry);
+    sound_themes::register(registry);
     crate::bt_pairing::register(registry);
     audio::register(registry);
     quick_settings::register(registry);

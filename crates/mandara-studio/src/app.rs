@@ -83,6 +83,7 @@ mod cursor_page;
 mod icons_page;
 mod plugin_gate;
 mod theme_galleries;
+mod sounds_page;
 mod component_designs;
 mod plugin_offer;
 mod swatch_list;
@@ -306,6 +307,7 @@ impl StudioView {
                     Section::Themes => {
                         theme_galleries::release(cx);
                         boot_page::release(cx);
+                        sounds_page::release(cx);
                     }
                     Section::Wallpaper => {
                         wallgen_page::release(cx);

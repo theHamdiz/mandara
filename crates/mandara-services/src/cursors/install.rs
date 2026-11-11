@@ -165,6 +165,12 @@ pub fn download(asset: &Asset, cache: &Path, progress: &dyn Fn(Progress), cancel
     theme_pkg::fetch(asset.url, Some(pin), MAX_DOWNLOAD, cache, &|done, total| progress(Progress { phase: Phase::Download, done, total }), cancel).map(|f| f.path)
 }
 
+/// Unpacks `archive` into `dest` with the shared, capped theme unpacker
+/// (also used for sound themes).
+pub(crate) fn unpack(archive_path: &Path, dest: &Path, cancel: &AtomicBool, on_bytes: crate::app_install::archive::OnBytes<'_>) -> Result<u64, String> {
+    theme_pkg::unpack(archive_path, dest, &crate::app_install::archive::ExtractOptions::APPS, cancel, on_bytes)
+}
+
 /// Whether `dir` is a real cursor theme: an `index.theme` and a `cursors/`
 /// folder whose arrow (or any file) parses as XCursor.
 pub fn is_cursor_theme(dir: &Path) -> bool {

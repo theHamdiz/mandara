@@ -164,6 +164,7 @@ fixed:
 | Wallpaper generator (`wallpaper-generator`) | recipe, size, format, folder, schedule and video loops: see [Wallpaper generator](#wallpaper-generator) | |
 | Wallhaven (`wallhaven`, opt-in) | `wallpaper.wallhaven_query` (default search; empty: the toplist), `wallpaper.wallhaven_sorting` (`toplist`, `date_added`, `views`, `favorites`, `random`) — shown on Studio → Wallpaper while the plugin is on; off, no Wallhaven request is made | empty, toplist |
 | Cursor themes (`cursors`, opt-in) | `compositor.input.cursor.*` — written to the compositor drop-in, `~/.icons/default` and applied live only while the plugin is on | unset |
+| Sound themes (`sound-themes`, opt-in) | `sounds.theme` (the theme Mandara's own sounds play from, set by Apply; used whether or not the plugin is on), `sounds.desktop_sync` (Apply to apps: GTK's `org.gnome.desktop.sound`, existing `settings.ini` files and `kdeglobals`, only while the plugin is on); the event switches `sounds.lock`, `devices`, `trash`, `brightness_change`, `complete` and `sounds.quiet_in_dnd` | your desktop's, on; on, on, on, off, on; on |
 | Task progress (`progress`, opt-in) | `notify` (a notification when a task is done or fails) | on |
 | Eye breaks (`breaks`, opt-in) | `every_min` (active minutes between short breaks), `short_s`, `long_every_min` (0: no long breaks), `long_min`, `style` (`notification`, `overlay`), `skip_fullscreen` | 20 min, 20 s, 60 min, 5 min, notification, on |
 | Presentation mode (`presentation`, opt-in) | `auto_screen_share` (on while an app shares the screen) | off |

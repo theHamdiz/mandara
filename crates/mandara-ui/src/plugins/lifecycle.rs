@@ -216,6 +216,7 @@ mod tests {
         "screen-time",
         "services",
         "share",
+        "sound-themes",
         "soundscapes",
         "stash",
         "sudoku",

@@ -260,6 +260,9 @@ assets/plugins/session/icon.svg
 assets/plugins/share/cover.png
 assets/plugins/share/icon.png
 assets/plugins/share/icon.svg
+assets/plugins/sound-themes/cover.png
+assets/plugins/sound-themes/icon.png
+assets/plugins/sound-themes/icon.svg
 assets/plugins/soundscapes/cover.png
 assets/plugins/soundscapes/icon.png
 assets/plugins/soundscapes/icon.svg

@@ -28,6 +28,7 @@
 --level takes a number from 0 to 100
 --purge-data (leftovers to the Trash), --dry-run, --confirm-default (allow removing a default app)
 --seconds and --fps go with --video
+--unverified (needed for links)
 --unverified, required for a link
 --yes to really empty it
 -1 is slowest, 1 fastest
@@ -139,6 +140,7 @@ A dock on the screen edge, a centered grid, or separate cards floating in the mi
 A dot per window
 A drag continues briefly after lifting the finger
 A drag that reaches a screen edge springs a shelf open there. Each catcher is a hairline along the edge that also takes clicks, so only edges nothing else uses can have one
+A drive plugged in or removed
 A faceted, lit triangle mesh
 A faint wash, the raised tone of cards, or a tint of the accent
 A fan shows this many of the newest files; its top row opens the folder in your file manager
@@ -155,6 +157,7 @@ A folder in /usr/share/sounds; empty follows your GTK setting
 A folder of pictures (empty: ~/Pictures)
 A folder, or the wallpapers you picked into the playlist
 A folding Completed group under each list
+A freedesktop sound theme: a folder with index.theme and stereo/ sounds, or an archive of one. Only sounds, index.theme and licence files are kept; nothing in it runs.
 A full-length slab
 A full-width strip of bars mirrored round its middle
 A fully rounded field with an accent ring while you type
@@ -257,6 +260,7 @@ A slim bar on the left edge; panels open sideways
 A smoothed spectrum along the screen edge, with a soft glow; only while music plays
 A soft shadow under separate side bars
 A soft shadow under the bar
+A soft tick as the brightness moves
 A soft tick as the volume moves
 A strip of key hints under the results
 A tab needs a name
@@ -556,6 +560,7 @@ An app wants access to the keyring “Login”, but it is locked (preview: nothi
 An app wants to create a new keyring called “Mandara”. Choose the password you want to use for it (preview: nothing is created)
 An argument is too long
 An image is already being prepared
+An install finishing without a notification
 An interactive card — its own settings are with the cards.
 An island per group
 An outline that thickens while focused, with the hint floating into it
@@ -638,7 +643,9 @@ Apply a saved display profile
 Apply changes instantly without springs
 Apply profiles automatically
 Apply this profile
+Apply to apps
 Apply {n} changes
+Applying a theme in Themes → Sounds also sets it for GTK, KDE and other apps
 Applying the patch…
 Applying…
 Approve & apply
@@ -954,7 +961,9 @@ Break's over
 Breathes, blinks, sleeps at night, bobs to music, purrs when clicked
 BreezeX cursors recolored in the Rosé Pine palette
 Brevity is the sister of talent.
+Bright and polished, with long login and logout cues
 Brightness
+Brightness changes
 Brightness down
 Brightness keys change every screen
 Brightness over DDC/CI through /dev/i2c-* (needs the i2c group and DDC/CI on in the monitor's menu)
@@ -1168,6 +1177,7 @@ Charge limit off
 Charge limit on
 Charger
 Charger and battery
+Charger unplugged
 Charging
 Charging rate
 Charging — critical action cancelled
@@ -1228,6 +1238,8 @@ Choose a file…
 Choose a password for the new keyring
 Choose a photo…
 Choose a profile photo
+Choose a sound theme archive
+Choose a sound theme folder
 Choose a source and target language
 Choose a username
 Choose a valid Home Assistant entity
@@ -1639,6 +1651,7 @@ Crest sharpness
 Crisp material cursors with a slim outline
 Critical
 Critical alerts break through
+Critical battery
 Critical battery alert
 Critical battery at
 Critical notifications
@@ -1970,6 +1983,7 @@ Download
 Download a catalog boot theme, check its pinned SHA-256 and prepare it in Mandara's cache (nothing on the system changes until you apply it)
 Download a catalog cursor theme from its GitHub release, verify its SHA-256 and install it to ~/.local/share/icons
 Download a catalog icon theme from its project's GitHub release, verify its SHA-256 and install it to ~/.local/share/icons
+Download a catalog sound theme from its upstream release, verify its SHA-256 and install it to ~/.local/share/sounds
 Download a collection (Arabic and the meaning in your language), all of them, or (with none) your chosen ones; returns at once, see `hadith status`
 Download a collection on Home first
 Download a model by id, or all of them
@@ -2137,6 +2151,7 @@ Emoji prefix
 Emoji, calculator results and clipboard entries are pasted at once
 Empty
 Empty & close
+Empty Trash
 Empty Trash? {n} items are deleted forever — click again
 Empty Trash…
 Empty bar space clicks through to windows
@@ -2146,8 +2161,10 @@ Empty uses your wallpaper folder
 Empty: on the Wallpaper tab, hover a wallpaper and press + to add it.
 Empty: the built-in sentence
 Empty: the usual greeting
+Emptying the Trash
 Emptying the Trash deletes {n} items for good; run `mandara msg dock trash empty --yes` to confirm
 Enable
+Enable Sound themes
 Enable a unit at boot / login and reload systemd
 Enable launcher
 Enable local shell commands in Studio
@@ -2217,6 +2234,7 @@ Evening over Stanley Bridge: coral, apricot and lavender over a plum sea.
 Event dots
 Event hooks: every event with its rules (JSON)
 Event reminders
+Events
 Events come from Studio → Calendar.
 Events from your calendars in the clock panel. Add one with mandara msg calendar add <url or .ics> [name]
 Every
@@ -2555,6 +2573,7 @@ Follow theme
 Follow units
 Follow your desktop
 Following the Equator
+Following your desktop ({theme})
 Follows Studio → Motion
 Follows the desktop's transition (Fit & effects)
 Follows which window has focus
@@ -2683,6 +2702,7 @@ GRUB's menu is hidden on this system (GRUB_TIMEOUT_STYLE=hidden or GRUB_TIMEOUT=
 GTK 3 / 4 & libadwaita
 Gabriel García Márquez
 Gabriela Mistral
+Gallery
 Games
 Games and videos keep their true colours
 Games you install in Steam show up here
@@ -2775,6 +2795,7 @@ Good evening
 Good morning
 Good night
 Google Authenticator export codes aren't supported yet; export accounts one by one
+Google's Material Design product sounds as a desktop theme
 Grace period after the pointer leaves
 Graded
 Gradient angle
@@ -3199,7 +3220,10 @@ Install
 Install & use
 Install KDE Connect on your computer and phone, then pair them here.
 Install a cursor theme from an archive or a folder on this computer, or from a link. Every theme found in it is checked (an index.theme and readable cursor files); nothing in it is run.
+Install a folder…
+Install a sound theme from a folder, an archive, or an https:// link (links aren't verified: add --unverified)
 Install all
+Install an archive…
 Install an icon theme from an archive or a folder on this computer, or from a link. Every theme found in it is checked (a valid index.theme and its icons); scripts in it are never run or kept.
 Install and enable power-profiles-daemon to switch profiles
 Install anyway
@@ -3208,6 +3232,7 @@ Install apps by dropping AppImages, Flatpaks, archives or packages on the dock o
 Install apps from files (AppImage, Flatpak, .tar.gz/.zip, .deb/.rpm/…): shows the confirmation on screen unless --yes; --dry-run prints the plan
 Install app…
 Install cursor themes from an archive or folder, or from an https:// link (no checksum exists for those: pass --unverified)
+Install from link
 Install gnome-keyring or KeePassXC (Secret Service) · {error}
 Install icon themes from an archive or folder, or from an https:// link (no checksum exists for those: pass --unverified)
 Install it from Studio → About.
@@ -3225,6 +3250,8 @@ Install your NVIDIA driver's utilities (nvidia-smi) to read this card
 Install {compositor} yourself, then run: {command}
 Install {count} apps
 Install, preview and apply cursor themes, live, with size and hiding options
+Install, preview and apply desktop sound themes for Mandara and your apps
+Install, preview and apply desktop sound themes: the chimes for notifications, warnings, volume, devices and logging in, for Mandara and your apps.
 Install, preview and apply icon themes, live, from a curated gallery or your own files
 Installed
 Installed Ollama models (JSON)
@@ -3260,6 +3287,7 @@ Installs system-wide with {manager}
 Installs them to ~/.local/share/icons
 Installs them to ~/.local/share/icons and sets the icon theme in your GTK, Qt and KDE settings
 Installs them, or an archive, folder or link of your own, to ~/.local/share/icons
+Installs themes you pick into ~/.local/share/sounds, and removes only those.
 Installs to {dir}
 Installs with Flatpak, for everyone
 Installs with Flatpak, for you only
@@ -3387,6 +3415,7 @@ KB
 KDE / Plasma
 KDE Breeze cursors, refined and extended with more shapes
 KDE Connect did not respond in time
+KDE's classic set, warm and rounded, with an orchestral login
 KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings.
 KWin settings are managed in Plasma System Settings
 KWin: startup entry {path}
@@ -3610,6 +3639,7 @@ Light panel
 Light theme folder
 Light theme wallpaper
 Light wallpaper
+Light, natural and pleasant: a few physical sounds over freedesktop
 Lighten a burden, cover a fault, help a brother or sister through.
 Lightness
 Limestone
@@ -3713,6 +3743,7 @@ Location
 Location service (GeoClue)
 Lock
 Lock after
+Lock and unlock
 Lock appearance
 Lock at login
 Lock before sleeping
@@ -3732,6 +3763,7 @@ Locked
 Locked {device}
 Locked · {size}
 Locking
+Locking and unlocking the screen
 Locking in {seconds} s — move the mouse to stay
 Locks, suspends, restarts and powers off through logind
 Log in
@@ -3852,6 +3884,7 @@ Make an accepted Hajj
 Make an app the default for a category (edits only those keys of mimeapps.list)
 Make an installed cursor theme (and optionally a size) the cursor, live; `none` returns to your compositor's own
 Make an installed icon theme Mandara's and the desktop's (GTK, Qt / KDE), live; `none` goes back to the desktop's own
+Make an installed sound theme Mandara's (and, with Apply to apps, your apps'); `none` returns to your desktop's own
 Make it the boot splash
 Make it yours
 Make main display
@@ -3928,6 +3961,7 @@ Mandara's glass, or Material You: colours from your wallpaper, a big stacked clo
 Mandara's launcher, dock and tray use it, and GTK, Qt and KDE apps follow (apps already open may need a restart).
 Mandara's launcher, dock and tray use it.
 Mandara's own look, as it has always been
+Mandara's own sounds are off: switch Shell sounds on below to hear them on events.
 Mandara's password dialog isn't available, so the AUR helper can't ask for your password.
 Mandara's shortcuts and your compositor's appear here
 MangoWM
@@ -3983,6 +4017,7 @@ Matches nothing yet — set an app id or a title
 Matching icons
 Material
 Material 3: outlined toggles, filled fields, tinted choices
+Material Design sounds, packaged for the desktop
 Material You
 Material You seed colors extracted from an image (default: the wallpaper)
 Material You variant used for wallpaper themes
@@ -4102,6 +4137,7 @@ Models loaded in memory with their VRAM share and unload time (JSON)
 Models run offline on your CPU. Closing the launcher, removing !, or 15 seconds without a new query releases the inference worker.
 Moderator
 Modern
+Modern, melodic and airy, with a full set of device and battery cues
 Modes
 Mohamed Siddiq Al-Minshawi
 Mon
@@ -4573,7 +4609,9 @@ No skill name given
 No skill named “{name}”
 No sound device
 No sound for "{event}" in this theme
+No sound for "{event}" in {theme}
 No sound server (PulseAudio / PipeWire) found
+No sound theme found there (no index.theme or stereo folder with sounds)
 No stack named “{name}” (see `mandara msg dock stack list`)
 No station matches
 No station matches {query}
@@ -4600,6 +4638,7 @@ No tasks yet
 No terminal found — choose one in Studio → Applications
 No terminal found — set one in Studio → Plugins → Updates
 No text found in the selection
+No theme matches
 No thing great is created suddenly, any more than a bunch of grapes or a fig.
 No third-party plugins yet
 No timer
@@ -4789,6 +4828,7 @@ Off lets another daemon (mako, swaync, dunst) take over; Mandara releases the na
 Off pauses recording; the history stays
 Off shows AM / PM
 Off while a mouse is plugged in
+Off, it reads and writes nothing.
 Off. Nothing runs in the background until you turn it on.
 Off: each minimized window gets its own icon on the right side
 Off: low-urgency notifications vanish when their popup closes
@@ -4890,8 +4930,10 @@ Only each app's most recent window
 Only https:// downloads are allowed
 Only https:// links are accepted
 Only https:// links are fetched
+Only https:// links can be installed
 Only in {desktops}
 Only on this display
+Only sounds you cause (volume, screenshots) and battery alerts play
 Only split bars have gaps: glass pills, island, micro pill and notch
 Only stations you added can be removed
 Only tags and workspaces with windows (plus the one you are on)
@@ -5292,6 +5334,7 @@ Play a sound for
 Play a station (by id or name), or the usual one
 Play from here
 Play music or video in any MPRIS player
+Play one event's sound from a theme (the active one by default), even while sounds are off; answers with its length and level outline
 Play or pause
 Play or pause the radio
 Play the adhan now (to hear it; it must be downloaded)
@@ -5512,6 +5555,7 @@ Quiet during games, videos and presentations
 Quiet hours
 Quiet hours end
 Quiet hours start
+Quiet in do not disturb
 Quiet while a fullscreen app is focused
 Quiet while an app shares or records your screen (screen-cast portal and Mandara's recorder)
 Quiet while media plays
@@ -5761,6 +5805,7 @@ Remove a cursor theme Mandara installed (never one from a package or your own fo
 Remove a paired device
 Remove a rule by its position (from 1)
 Remove a saved verse or hadith
+Remove a sound theme Mandara installed (never one from a package or your own folders)
 Remove a subscription (its saved history stays until you subscribe again)
 Remove a task from the bar and the panel
 Remove all
@@ -6217,6 +6262,7 @@ Search the downloaded collections: Arabic without diacritics, the meaning or a r
 Search the library
 Search the verses and hadith (Arabic without diacritics, or the meaning)
 Search the whole Qur'an
+Search themes…
 Search this community
 Search to find more languages
 Search units…
@@ -6338,6 +6384,7 @@ Sets every component below at once; corner size, shadows, panel edges and the sl
 Sets the cursor and its size live in your compositor and in Mandara's compositor drop-in
 Sets the cursor in Mandara's compositor drop-in and live
 Sets the icon theme for Mandara's launcher, dock and tray and for GTK, Qt and KDE apps, one setting at a time, and puts back what was there when you follow your desktop again
+Sets the sound theme Mandara's own event sounds play from.
 Setting types
 Settings
 Settings and data this app may have left in your home folder. Only what you tick moves to the Trash; nothing is deleted, and the app's removal doesn't depend on it.
@@ -6413,6 +6460,7 @@ Shifts every token's lightness
 Short break
 Short break length
 Short sounds from your sound theme for the events below
+Short synthesised tones, the only set here with a lock sound
 Shortcuts
 Shortcuts cheatsheet
 Shortcuts in your {target_name} config
@@ -6546,6 +6594,7 @@ Signed in {n} d ago
 Signed in {n} h ago
 Signed in {n} min ago
 Silences every output (speakers, HDMI and virtual devices such as EasyEffects) and every app at once. Switching it off restores your own mutes. Also: middle-click the bar's sound icon, or `mandara msg audio mute-all toggle`.
+Silent in this theme
 Silk flow
 Silk sheen
 Silk threads drifting along a flow field
@@ -6649,6 +6698,8 @@ Sound
 Sound isn't available
 Sound output
 Sound theme
+Sound theme archives
+Sound themes
 Sounds
 Soundscapes
 Source
@@ -7090,6 +7141,7 @@ That isn't an archive Mandara can read (.tar.gz, .tar.xz, .tar.zst, .tar.bz2 or 
 That local time does not exist today
 That made {compositor} report more problems, so it was undone.
 That station isn't in your list
+That theme is already in your sounds folder
 That user no longer exists
 That widget is already on this tab
 That widget is not on this tab
@@ -7106,6 +7158,7 @@ The Arabic and the meanings are shown exactly as the dataset gives them, with it
 The Art of War III
 The Book of Five Rings
 The Book of Tea
+The COSMIC desktop's set, from Pop!_OS
 The Cardinals
 The Dracula emblem with spinning coloured stripes
 The Dracula palette's purple and pink on deep night
@@ -7156,6 +7209,7 @@ The archive contains unsafe paths
 The archive has no {path}
 The archive has too many files
 The archive is too large to install
+The archive unpacks to more than a sound theme should hold
 The article's link
 The audio server is unavailable
 The audio server isn't reachable
@@ -7230,6 +7284,11 @@ The date next to the time
 The date under the clock
 The date, the weather and the one thing worth knowing now
 The day
+The default of GNOME, Fedora, Arch and Ubuntu
+The default of KDE 4 and Plasma 5
+The default of KDE Plasma 6
+The default of deepin
+The default of elementary OS
 The depth effect's mode, model, current mask and last model run
 The desktop's menu
 The displays changed meanwhile; try again
@@ -7246,7 +7305,9 @@ The download doesn't match its pinned checksum, so it wasn't installed
 The download failed: {error} (`quran download` tries again)
 The download has no cursor theme at {folder}
 The download has no icon theme at {folder}
+The download has no sound theme at {folder}
 The download is empty
+The download is larger than a sound theme should be
 The download is larger than allowed
 The download is larger than expected
 The drag ended before its data arrived
@@ -7337,6 +7398,7 @@ The menu has its most custom items
 The name is empty
 The name is too long
 The network name is empty
+The neutral baseline: short chimes and clicks every desktop falls back to
 The new generation starts at the next boot
 The new release is plugin {new}, not {old}; reinstall it from the marketplace
 The new track when music changes
@@ -7455,6 +7517,7 @@ The slideshow playlist is empty
 The slideshow's settings, source size, next change and pause
 The soft overcomes the hard; and the weak the strong.
 The sound server closed the stream
+The sound theme catalog (licence, installed, active), other installed themes, and the active theme's sound for each event
 The speed test server sent no data
 The speed test stopped
 The station answered with error {code}
@@ -7485,6 +7548,7 @@ The text: Tanzil's Uthmani script
 The theme colour the tiles ripen toward
 The theme colour your digits and highlights use
 The theme has too many files
+The theme holds more files than a sound theme should
 The theme is too large
 The thumb stretches as it slides, boxes round into circles as they fill
 The time in other cities on the desktop, with how far ahead or behind they are
@@ -7619,6 +7683,7 @@ This is how the screen fades before locking
 This is not an OPML file
 This is the running configuration
 This isn't NixOS
+This isn't a sound theme (no index.theme with sounds)
 This item changed elsewhere. Your text is still here.
 This item has no menu
 This item was removed. Your text is still here.
@@ -7655,6 +7720,7 @@ This system is image-based: Mandara installs into your home folder, and the inst
 This system is image-based: it updates with {command}, which Mandara leaves to it
 This tab is empty
 This text is too large to send to a phone
+This theme has no sound for that
 This thread is very long; open it on Reddit to read the rest
 This update wasn't checked against Mandara's signature; check for updates again
 This username is already in use
@@ -7721,6 +7787,7 @@ Titles
 Titles on group tabs
 To beautify life is to give it an object.
 To err is human, to forgive divine.
+To get
 To live is so startling, it leaves but little room for other occupations.
 To start Mandara with Aqueous, add {command} to Aqueous's own startup settings.
 To start Mandara with COSMIC, add {command} in COSMIC Settings → Applications → Startup applications.
@@ -7931,6 +7998,8 @@ UPower is not running
 URL or path
 USB controller
 USB drive
+Ubuntu's classic sounds, with a drum-led login
+Ubuntu's default before Yaru
 Ultrawide
 Ultrawide (3440 × 1440)
 Umbriel reads your config.toml after Mandara's file, so a value you set there wins. Each workspace keeps its own layout; the bar's layout pill switches it.
@@ -8352,6 +8421,7 @@ What is open: panel, sidebar, launcher, power menu, wallpaper picker; whether th
 What is shared: link, kind, name, time left and downloads (JSON)
 What it does
 What it is like
+What it touches
 What keeps from it
 What one unit of your currency buys (fetched twice a day once you switch it on)
 What opens when you right-click the bar between and around its items
@@ -8383,6 +8453,7 @@ When it overflows
 When it's on
 When nearly empty
 When pointed at
+When the Trash is emptied
 When the app you copied from quits, its last copy can still be pasted
 When the gh CLI is signed in, use its token for private repositories and higher rate limits (else GITHUB_TOKEN)
 When the monitors of a saved profile are connected, switch to it
@@ -8475,6 +8546,7 @@ WireGuard works out of the box; .ovpn files need networkmanager-openvpn.
 WireGuard works out of the box; OpenVPN uses NetworkManager's plugin.
 Wired and Wi-Fi adapters appear here.
 Wired connection
+With Apply to apps: GTK's sound theme (gsettings and existing settings.ini files) and KDE's kdeglobals. Turning the plugin off puts them back.
 With its chain of narrators
 With my image as the wallpaper
 With the anchor
@@ -8575,6 +8647,7 @@ Your compositor's layouts
 Your config
 Your contribution calendar (fetched from github.com once you switch it on)
 Your cursor
+Your desktop's
 Your desktop's icons
 Your desktop's: {theme}
 Your devices
@@ -8624,6 +8697,7 @@ Your recent notes as tabs on the screen's edge
 Your saved verses and hadith, newest first
 Your session starts these (systemd's xdg-autostart).
 Your session's units
+Your sound theme
 Your status (empty: Online / Do not disturb)
 Your subscriptions with their folders and unread counts
 Your system's location service (GeoClue) couldn't find you. Many Linux systems ship it without a lookup service. Choose IP lookup, or type your city and press Find.
@@ -8657,6 +8731,7 @@ a collection id (bukhari, muslim, abudawud, tirmidhi, nasai, ibnmajah, malik, na
 a collection id or all
 a cursor theme: import it under Themes → Cursors
 a folder (with folder)
+a folder, a .tar.* / .zip archive, or an https:// link
 a folder, or clear
 a fullscreen window is focused
 a generated wallpaper
@@ -8710,6 +8785,8 @@ by {author} · v{version}
 by {author} · {stars} stars
 by {developer}
 cargo build
+catalog id or theme name
+catalog id, theme name, or none
 catalog id[/variant]
 catalog id[/variant] or XCursor theme name
 catalog id[/variant] or icon theme name
@@ -8837,6 +8914,7 @@ how many recent lines
 how to go through the wallpapers
 http(s) stream or playlist address
 https://… a link to a .tar.gz, .tar.xz or .zip
+https://… link to a .tar.gz, .tar.xz or .zip
 https://… stream, .pls or .m3u address
 icon name or image path
 id must be a number (see `clipboard list`)
@@ -8952,6 +9030,7 @@ note id from `notes list`
 note text (rest of the line), optionally starting with #Topic
 nothing to delete
 notification id
+notification, notification-critical, volume-change, device-added, login, lock… or a sound name
 now
 of one core · avg {average}% · {cores} cores
 of the last {count} frames
@@ -9282,6 +9361,7 @@ your default
 {count} of {total} down
 {count} on
 {count} open
+{count} open sound themes, downloaded on demand from their upstream releases, checked against a pinned checksum and installed to ~/.local/share/sounds
 {count} packages changed
 {count} packages changed · closure {size}
 {count} packages from {sources} sources
@@ -9365,6 +9445,7 @@ your default
 {file} is too large for a theme
 {file} is written, but your config doesn't include it yet — Maintenance → Compositor adds the one include line.
 {file} isn't a WebAssembly component (build it for wasm32-wasip2)
+{file} isn't a sound file
 {file} isn't an app Mandara can install (AppImage, Flatpak, archive or package)
 {file} not found: build the plugin and copy the .wasm here
 {file} sources Mandara's drop-in
@@ -9380,6 +9461,7 @@ your default
 {host} didn't answer
 {host} has an invalid security certificate
 {host} has no address
+{host} isn't one of the catalog's pinned releases, so Mandara can't vouch for what it sends. Install it anyway?
 {host} refused the connection
 {hours} h ago
 {hours} h {minutes} min
@@ -9570,6 +9652,7 @@ your default
 {theme} at {size} px
 {theme} has no icons in the folders its index.theme lists
 {theme} is already installed (not by Mandara), so it was left as it is
+{theme} is installed: apply it from the gallery.
 {theme} isn't a Mandara theme (see `mandara themes`)
 {theme} isn't downloaded or imported (see `mandara msg boot list`)
 {theme} isn't downloaded yet (run `mandara msg boot install {spec}`)
@@ -9583,6 +9666,7 @@ your default
 {total} frames drawn since start
 {unit}: {error}
 {url} has no known checksum, so Mandara can't tell whether it is what its author published. Install it only from a source you trust; it is checked like any theme and nothing in it is run.
+{url} isn't pinned to a checksum, so Mandara can't vouch for it. Run the command again with {flag} to install it anyway.
 {used} / {total}
 {used} of {total}
 {value} GiB

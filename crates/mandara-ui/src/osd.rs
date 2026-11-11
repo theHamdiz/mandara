@@ -646,6 +646,7 @@ pub fn init(hub: &Entity<Hub>, cx: &mut App) {
                 remember_backlight(b.level());
                 cx.update(|cx| {
                     show(OsdEvent::brightness(b.level()), cx);
+                    crate::alerts::play_sound(mandara_services::sounds::SoundEvent::BrightnessChange, cx);
                     // The quick settings slider follows the brightness keys.
                     cx.refresh_windows();
                 });

@@ -100,6 +100,8 @@ pub const WALLHAVEN_ID: &str = "wallhaven";
 pub const CURSORS_ID: &str = "cursors";
 /// The icon themes plugin's id (Studio → Themes → Icons, `icons …`).
 pub const ICONS_ID: &str = "icon-themes";
+/// The sound themes plugin's id (Studio → Themes → Sounds, `sound …`).
+pub const SOUND_THEMES_ID: &str = "sound-themes";
 
 fn push_unique(list: &mut Vec<String>, id: &str) {
     if !list.iter().any(|x| x == id) {

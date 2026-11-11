@@ -209,6 +209,12 @@ impl ShellConfig {
         self.plugins.opted_in(crate::upgrade::ICONS_ID)
     }
 
+    /// Whether the opt-in sound themes plugin is on (only then does
+    /// Mandara install sound themes or set the desktop's sound theme).
+    pub fn sound_themes_enabled(&self) -> bool {
+        self.plugins.opted_in(crate::upgrade::SOUND_THEMES_ID)
+    }
+
     /// Whether the opt-in Wallhaven plugin is on (online wallpapers in the
     /// picker; no Wallhaven request is made otherwise).
     pub fn wallhaven_enabled(&self) -> bool {

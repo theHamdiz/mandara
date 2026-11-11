@@ -65,6 +65,7 @@ pub mod privacy;
 pub mod reaper;
 pub mod reddit;
 pub mod sounds;
+pub mod sound_themes;
 pub mod leds;
 pub mod system_events;
 pub mod system_fonts;

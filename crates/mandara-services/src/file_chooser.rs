@@ -45,6 +45,12 @@ pub fn open_files(title: &str, filter_name: &str, mime_types: &[&str], globs: &[
     crate::runtime::block_on(open_file_async(title, vec![(filter_name.to_string(), entries)], start_dir, true, false)).map_err(|e| e.to_string())
 }
 
+/// Picks one folder (portals from version 3 on); `Ok(None)` when the user
+/// cancels.
+pub fn pick_folder(title: &str, start_dir: Option<PathBuf>) -> Result<Option<PathBuf>, String> {
+    crate::runtime::block_on(open_file_async(title, Vec::new(), start_dir, false, true)).map(|v| v.into_iter().next()).map_err(|e| e.to_string())
+}
+
 /// Picks one folder (the portal's `directory` mode); `Ok(None)` when the
 /// user cancels.
 pub fn open_folder(title: &str, start_dir: Option<PathBuf>) -> Result<Option<PathBuf>, String> {

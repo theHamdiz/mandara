@@ -280,8 +280,8 @@ fn restore_look(cx: &mut gpui::App) {
 }
 
 /// The Themes page's tabs: its colours and style, the components'
-/// designs, the cursor and icon theme galleries, and the boot menu and
-/// splash (Boot look; one page, its tabs; Studio keeps its pages).
+/// designs, the cursor, icon and sound theme galleries, and the boot menu
+/// and splash (one page, its tabs; Studio keeps its pages).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum ThemesTab {
     #[default]
@@ -290,10 +290,12 @@ pub enum ThemesTab {
     Cursors,
     Icons,
     Boot,
+    /// The sound themes plugin (`sounds_page.rs`).
+    Sounds,
 }
 
 impl ThemesTab {
-    pub const ALL: [ThemesTab; 5] = [ThemesTab::Colors, ThemesTab::Components, ThemesTab::Cursors, ThemesTab::Icons, ThemesTab::Boot];
+    pub const ALL: [ThemesTab; 6] = [ThemesTab::Colors, ThemesTab::Components, ThemesTab::Cursors, ThemesTab::Icons, ThemesTab::Boot, ThemesTab::Sounds];
 
     /// Deep-link name (`mandara studio themes/components`).
     pub fn slug(self) -> &'static str {
@@ -303,6 +305,7 @@ impl ThemesTab {
             ThemesTab::Cursors => "cursors",
             ThemesTab::Icons => "icons",
             ThemesTab::Boot => "boot",
+            ThemesTab::Sounds => "sounds",
         }
     }
 
@@ -315,6 +318,7 @@ impl ThemesTab {
             "cursor" | "cursor-themes" | "pointer" | "pointers" => Some(ThemesTab::Cursors),
             "icon" | "icon-themes" | "icon-theme" | "icon-sets" => Some(ThemesTab::Icons),
             "boot-look" | "boot-menu" | "bootloader" | "splash" | "plymouth" | "grub" | "limine" | "refind" => Some(ThemesTab::Boot),
+            "sound" | "sound-themes" | "sound-theme" | "audio-theme" => Some(ThemesTab::Sounds),
             _ => None,
         })
     }
@@ -326,6 +330,7 @@ impl ThemesTab {
             ThemesTab::Cursors => tk("Cursors"),
             ThemesTab::Icons => tk("Icons"),
             ThemesTab::Boot => tk("Boot"),
+            ThemesTab::Sounds => tk("Sounds"),
         }
     }
 }
@@ -340,6 +345,7 @@ impl super::page_tabs::PageTab for ThemesTab {
             ThemesTab::Cursors => "pointer",
             ThemesTab::Icons => "tiles",
             ThemesTab::Boot => "power",
+            ThemesTab::Sounds => "volume-high",
         }
     }
 }
@@ -349,6 +355,10 @@ impl StudioView {
     pub fn show_themes_tab(&mut self, tab: ThemesTab, cx: &mut Context<Self>) {
         self.show(Section::Themes, cx);
         if self.themes_tab != tab {
+            // The sound gallery's lists, fields and cover go with its tab.
+            if self.themes_tab == ThemesTab::Sounds {
+                cx.defer(super::sounds_page::release);
+            }
             self.themes_tab = tab;
             // The other tab's previews go: nothing of them stays alive.
             self.components = Default::default();
@@ -372,6 +382,7 @@ impl StudioView {
             ThemesTab::Cursors => self.cursor_section(cfg, p, window, cx),
             ThemesTab::Icons => self.icons_section(cfg, p, window, cx),
             ThemesTab::Boot => self.boot_tab(cfg, p, window, cx),
+            ThemesTab::Sounds => self.sounds_tab(cfg, p, window, cx),
         };
         div().row().flex_col().gap(px(SPACE_22_PX)).child(tabs).child(body).into_any_element()
     }

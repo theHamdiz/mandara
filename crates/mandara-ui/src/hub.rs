@@ -275,6 +275,7 @@ pub fn init_hub(cx: &mut App) -> Entity<Hub> {
     crate::osd::init(&hub, cx);
     // Notification popups, privacy monitor, event sounds, auto-DND.
     crate::alerts::init(cx);
+    crate::plugins::sound_themes::init(cx);
     crate::toasts::init(cx);
     crate::update_watch::init(cx);
     crate::night_light::init(cx);

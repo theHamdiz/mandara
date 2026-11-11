@@ -14,6 +14,8 @@
 //!   (the opt-in `icon-themes` plugin's commands, in `icon_themes.rs`).
 //! * `boot status|list|install|import|apply|restore` — Studio → Themes →
 //!   Boot (the opt-in `boot-look` plugin's commands, in `boot_look.rs`).
+//! * `sound list|install|apply|remove|import|play` — Studio → Themes →
+//!   Sounds (the opt-in `sound-themes` plugin, `plugins::sound_themes`).
 //! * `profile list|save|apply|delete`, `config export|import|reset`.
 
 use gpui::{App, AsyncApp};
@@ -559,6 +561,7 @@ fn register_apps(r: &mut PluginRegistry) {
     register_cursor(r);
     super::icon_themes::register_commands(r);
     super::boot_look::register_commands(r);
+    super::sound_themes::register_commands(r);
     r.command(CORE, CommandSpec::new("input cursor-themes", tk("Installed cursor themes"), |_, _| Ok(json!(mandara_config::input::cursor_themes()))));
     r.command(
         CORE,

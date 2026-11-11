@@ -689,6 +689,9 @@ fn finish(id: u64, result: Result<Outcome, String>, cx: &mut App) {
             Ok(o) => post(t("App installer"), tf("{app} is installed", &[("app", &o.name)]), t("Find it in your apps").to_string(), cx),
             Err(e) => post(t("App installer"), tf("Couldn't install {app}", &[("app", &job.name)]), e.clone(), cx),
         }
+    } else if phase == Phase::Done {
+        // No notification (and so no chime): the "Finished" sound.
+        crate::alerts::play_sound(mandara_services::sounds::SoundEvent::Complete, cx);
     }
     // Finished jobs leave the queue after a while (failed ones on screen
     // wait to be closed).

@@ -377,6 +377,9 @@ mod tests {
         assert_eq!(themes_tab_target("themes/icon-themes"), Some(ThemesTab::Icons));
         assert!(super::cursor_target("themes/cursor"));
         assert_eq!(ThemesTab::parse("cursor"), Some(ThemesTab::Cursors));
+        // The sound themes tab.
+        assert_eq!(themes_tab_target("themes/sounds"), Some(ThemesTab::Sounds));
+        assert_eq!(themes_tab_target("themes/sound-themes"), Some(ThemesTab::Sounds));
     }
 
     use super::*;
