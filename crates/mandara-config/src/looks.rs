@@ -230,6 +230,11 @@ pub struct LookDef {
     /// Hot corners switched on with these actions (top-left, top-right,
     /// bottom-left, bottom-right; `None`: yours stay).
     pub corners: Option<[CornerAction; 4]>,
+    /// Inked surfaces ([`crate::desktop::InkStyle`]; `None`: yours stay).
+    pub ink: Option<crate::desktop::InkStyle>,
+    /// Its desktop widgets drawn as comic panels: a solid plate, an ink
+    /// outline and a hard shadow.
+    pub inked_widgets: bool,
 }
 
 const ZONES_FULL: [&[&str]; 3] = [
@@ -274,13 +279,15 @@ const KEEP: LookDef = LookDef {
     toasts: None,
     auto_hide: None,
     corners: None,
+    ink: None,
+    inked_widgets: false,
 };
 
 const fn plain(layout: BarLayout, position: BarPosition, screen_frame: bool, opacity: f32) -> LookBar {
     LookBar::Plain { layout, position, screen_frame, opacity, capsules: false, height: None }
 }
 
-pub const LOOKS: [LookDef; 18] = [
+pub const LOOKS: [LookDef; 19] = [
     LookDef {
         id: "corniche-dusk",
         name: "Corniche Dusk",
@@ -532,6 +539,26 @@ pub const LOOKS: [LookDef; 18] = [
         ..KEEP
     },
     LookDef {
+        id: "ink-rush",
+        name: "Ink Rush",
+        blurb: "A cel-shaded comic desktop: thick ink outlines, hard shadows, halftone shading, bold colour and bouncy motion.",
+        seed: (0.74, 0.19, 50.0),
+        variant: SchemeVariant::Vibrant,
+        dark: false,
+        bar: plain(BarLayout::FloatingPills, BarPosition::Top, false, 1.0),
+        radius_scale: 0.9,
+        now_playing: Some(Anchor::BottomLeft),
+        calendar: Some(Anchor::TopRight),
+        clock: Some((ClockFace::Headline, Anchor::TopLeft)),
+        components: ComponentPreset::Expressive,
+        dock: LookDock::On { magnification: false },
+        motion: Some(MotionPreset::Bouncy),
+        toasts: Some(ToastPosition::TopRight),
+        ink: Some(crate::desktop::InkStyle { outline: 3.0, shadow: 5.0, texture: crate::desktop::SurfaceTexture::Halftone }),
+        inked_widgets: true,
+        ..KEEP
+    },
+    LookDef {
         id: "zen",
         name: "Zen",
         blurb: "Nothing in the way: one tiny pill that hides until you touch the top edge, hot corners and a word clock.",
@@ -562,7 +589,7 @@ pub const MINI_STATS_ID: &str = "mini-stats";
 pub const OPT_IN_ITEMS: &[&str] = &[MINI_STATS_ID, "net-speed", "processes", "drives", "pomodoro", "todo", "notes", "color-picker", crate::bar_styles::TASKBAR];
 
 /// Paths of the settings a look may set on top ([`SettingUndo`]).
-const EXTRA_PATHS: &[&str] = &["dock", "motion", "launcher.look", "notifications.position", "bar.auto_hide.mode", "hot_corners"];
+const EXTRA_PATHS: &[&str] = &["dock", "motion", "launcher.look", "notifications.position", "bar.auto_hide.mode", "hot_corners", "style.ink"];
 
 /// The toml leaves under `t` (arrays count as one leaf), as dotted paths.
 pub(crate) fn leaves(t: &Table, prefix: &str, out: &mut Vec<(String, Value)>) {
@@ -678,6 +705,9 @@ impl LookDef {
         }
         if let Some(mode) = self.auto_hide {
             c.bar.auto_hide.mode = mode;
+        }
+        if let Some(ink) = self.ink {
+            c.style.ink = ink;
         }
         if let Some([tl, tr, bl, br]) = self.corners {
             let h = &mut c.hot_corners;
@@ -906,12 +936,20 @@ impl LookDef {
             if self.depth {
                 p.scale = DEPTH_CLOCK_SCALE;
             }
-            list.add(DesktopWidget { place: p, kind: WidgetKind::Clock(ClockWidget { face, ..ClockWidget::default() }), ..DesktopWidget::default() });
+            let mut clock = ClockWidget { face, ..ClockWidget::default() };
+            if self.inked_widgets {
+                ink_look(&mut clock.look);
+            }
+            list.add(DesktopWidget { place: p, kind: WidgetKind::Clock(clock), ..DesktopWidget::default() });
         }
         if let Some(anchor) = self.monitor {
             let mut p = place(anchor, LOOK_MARGIN.0, 0.0);
             p.depth = Depth::Front;
-            list.add(DesktopWidget { place: p, kind: WidgetKind::Monitor(MonitorWidget::default()), ..DesktopWidget::default() });
+            let mut monitor = MonitorWidget::default();
+            if self.inked_widgets {
+                ink_look(&mut monitor.look);
+            }
+            list.add(DesktopWidget { place: p, kind: WidgetKind::Monitor(monitor), ..DesktopWidget::default() });
         }
         if let Some(text) = self.decoration {
             let mut p = place(Anchor::Right, -LOOK_MARGIN.0, 0.0);
@@ -941,6 +979,28 @@ impl LookDef {
         list.items
     }
 }
+
+/// A comic panel: a solid plate in an ink outline on a hard ink shadow
+/// (text stays on the plate's own surface colour, so its contrast holds).
+fn ink_look(look: &mut crate::desktop_widgets::Look) {
+    use crate::desktop_widgets::{Plate, Tone};
+    look.plate = Plate::Solid;
+    look.plate_opacity = 1.0;
+    look.outline_width = INK_WIDGET_OUTLINE_PX;
+    look.outline_tone = Tone::Custom;
+    look.outline_color = INK_WIDGET_COLOR.into();
+    look.shadow = crate::desktop_widgets::ShadowKind::Hard;
+    (look.shadow_x, look.shadow_y) = (INK_WIDGET_SHADOW_PX, INK_WIDGET_SHADOW_PX);
+    look.shadow_blur = 0.0;
+    look.shadow_opacity = 1.0;
+    look.shadow_tone = Tone::Custom;
+    look.shadow_color = INK_WIDGET_COLOR.into();
+}
+
+/// An inked widget's outline and shadow (reference px) and ink.
+const INK_WIDGET_OUTLINE_PX: f32 = 4.0;
+const INK_WIDGET_SHADOW_PX: f32 = 7.0;
+const INK_WIDGET_COLOR: &str = "#16131a";
 
 /// Inset of a look's corner / edge widgets (fractions of the display).
 const LOOK_MARGIN: (f32, f32) = (0.04, 0.07);

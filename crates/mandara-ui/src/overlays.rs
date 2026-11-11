@@ -2285,7 +2285,7 @@ impl Render for LauncherView {
                     .h(px(h))
                     .rounded(px(r))
                     .bg(fill)
-                    .border_1()
+                    .border(px(crate::plugins::panel_fx::edge_px()))
                     .border_color(crate::plugins::panel_fx::surface_edge(&palette, cfg.theme.adjustments.rim_intensity).hsla())
                     .shadow(crate::plugins::panel_fx::elevation_scaled(&palette, progress, cfg.panels.shadow_strength))
                     .into_any_element()

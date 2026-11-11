@@ -75,6 +75,7 @@ mod switcher_page;
 mod desktop_widgets_page;
 mod auth_widgets;
 pub mod looks_page;
+mod looks_yours;
 mod app_themes_page;
 mod themes_page;
 mod cursor_page;
@@ -2068,6 +2069,11 @@ fn group_order(section: Section) -> Option<&'static [&'static str]> {
 /// Groups rows in their input order without merging equal titles from
 /// different pages or Bars tabs. Search can display several such groups at
 /// once; their labels alone do not identify their settings or reset scope.
+/// Starts noticing customizations of an applied Look ([`looks_yours`]).
+pub(crate) fn looks_yours_watch(cx: &mut gpui::App) {
+    looks_yours::watch(cx);
+}
+
 pub(crate) fn group_rows<'a>(settings: impl IntoIterator<Item = &'a Setting>) -> Vec<(&'static str, Vec<&'a Setting>)> {
     let mut groups: Vec<(&'static str, Vec<&'a Setting>)> = Vec::new();
     for s in settings {

@@ -639,6 +639,60 @@ pub struct StyleConfig {
     pub progress_design: ProgressDesign,
     pub surface_corners: SurfaceCorners,
     pub card_style: CardStyle,
+    /// Hand-inked surfaces: outlines, a hard offset shadow and a texture
+    /// in the shaded corner (`[style.ink]`); off by default.
+    pub ink: InkStyle,
+}
+
+/// Inked surfaces (`[style.ink]`): bar items, panels, popups, the
+/// launcher, the dock, notifications and cards get a dark outline, a hard
+/// offset shadow instead of the soft one, and a halftone or hatched shade.
+/// Any Look (or you) can use it; every part is off at 0 / none.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct InkStyle {
+    /// Outline width, logical px (0: the usual hairline edges).
+    pub outline: f32,
+    /// Hard shadow offset down and to the end, logical px (0: soft shadows).
+    pub shadow: f32,
+    /// The texture shading a surface's far corner.
+    pub texture: SurfaceTexture,
+}
+
+/// A surface texture ([`InkStyle::texture`]).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SurfaceTexture {
+    #[default]
+    None,
+    /// Comic halftone dots, growing toward the shaded corner.
+    Halftone,
+    /// Diagonal pen hatching, denser toward the shaded corner.
+    Hatch,
+}
+
+impl SurfaceTexture {
+    pub const ALL: [SurfaceTexture; 3] = [SurfaceTexture::None, SurfaceTexture::Halftone, SurfaceTexture::Hatch];
+}
+
+impl InkStyle {
+    /// Outline and shadow ranges, logical px.
+    pub const OUTLINE_MAX_PX: f32 = 6.0;
+    pub const SHADOW_MAX_PX: f32 = 10.0;
+
+    /// The outline width, in range (0: off).
+    pub fn outline(&self) -> f32 {
+        if self.outline.is_finite() { self.outline.clamp(0.0, Self::OUTLINE_MAX_PX) } else { 0.0 }
+    }
+
+    /// The shadow offset, in range (0: off).
+    pub fn shadow(&self) -> f32 {
+        if self.shadow.is_finite() { self.shadow.clamp(0.0, Self::SHADOW_MAX_PX) } else { 0.0 }
+    }
+
+    pub fn is_on(&self) -> bool {
+        self.outline() > 0.0 || self.shadow() > 0.0 || self.texture != SurfaceTexture::None
+    }
 }
 
 impl Default for StyleConfig {
@@ -657,6 +711,7 @@ impl Default for StyleConfig {
             progress_design: ProgressDesign::Classic,
             surface_corners: SurfaceCorners::Rounded,
             card_style: CardStyle::Tonal,
+            ink: InkStyle::default(),
         }
     }
 }

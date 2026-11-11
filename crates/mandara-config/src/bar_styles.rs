@@ -701,21 +701,33 @@ impl BarStyle {
     /// Switches on the plugins of the style's signature items that `placed`
     /// holds, recorded so [`clear`] switches them off again.
     pub fn switch_on_signature(self, cfg: &mut ShellConfig, placed: &[String]) {
-        for id in self.signature().into_iter().flatten() {
-            if !placed.iter().any(|p| p == id) {
-                continue;
-            }
-            if cfg.plugins.disabled.iter().any(|d| d == id) {
-                cfg.plugins.disabled.retain(|d| d != id);
-                cfg.bar.style_items.undisabled.push(id.to_string());
-            }
-            if !cfg.plugins.enabled.iter().any(|e| e == id) {
-                cfg.plugins.enabled.push(id.to_string());
-                cfg.bar.style_items.enabled.push(id.to_string());
-            }
-        }
+        let ids: Vec<&str> = self.signature().into_iter().flatten().copied().filter(|id| placed.iter().any(|p| p == id)).collect();
+        switch_on(cfg, &ids);
     }
 
+    /// Switches on the plugins of every item in `placed` (a preset that
+    /// replaces the items), recorded like [`Self::switch_on_signature`].
+    pub fn switch_on_placed(self, cfg: &mut ShellConfig, placed: &[String]) {
+        let ids: Vec<&str> = placed.iter().map(String::as_str).collect();
+        switch_on(cfg, &ids);
+    }
+}
+
+/// Switches `ids` on for the style, recorded in `bar.style_items`.
+fn switch_on(cfg: &mut ShellConfig, ids: &[&str]) {
+    for id in ids.iter().copied() {
+        if cfg.plugins.disabled.iter().any(|d| d == id) {
+            cfg.plugins.disabled.retain(|d| d != id);
+            cfg.bar.style_items.undisabled.push(id.to_string());
+        }
+        if !cfg.plugins.enabled.iter().any(|e| e == id) {
+            cfg.plugins.enabled.push(id.to_string());
+            cfg.bar.style_items.enabled.push(id.to_string());
+        }
+    }
+}
+
+impl BarStyle {
     /// Whether `cfg`'s bar still looks as this style set it (layout, edge
     /// and item look; sizes may have been tuned since).
     pub fn matches(self, cfg: &ShellConfig) -> bool {

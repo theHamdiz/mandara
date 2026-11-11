@@ -50,6 +50,7 @@ pub mod wallpaper_depth;
 pub mod wallhaven;
 pub mod weather;
 pub mod session;
+pub mod taskbar;
 pub mod window;
 pub mod workspaces;
 pub mod extras;
@@ -129,6 +130,7 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     phone_connect::register(registry);
     translator::register(registry);
     window::register(registry);
+    taskbar::register(registry);
     clock::register(registry);
     crate::calendar::register(registry);
     crate::location::register(registry);

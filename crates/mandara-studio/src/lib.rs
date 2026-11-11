@@ -289,6 +289,8 @@ pub fn run(section: Option<&str>, cx: &mut App) {
         }
     })
     .detach();
+    // Customizing an applied Look keeps it as a look of yours.
+    app::looks_yours_watch(cx);
     open_at(section, cx);
 }
 

@@ -126,6 +126,47 @@ pub fn grain_image() -> Arc<RenderImage> {
         .clone()
 }
 
+/// Side length of the ink texture tiles (drawn once, cached), their dot /
+/// line pitch and their ink alpha.
+const INK_TILE: u32 = 384;
+const INK_PITCH: f32 = 9.0;
+const INK_ALPHA: f32 = 0.22;
+/// Where the shade starts along the tile's diagonal (0 = top-left corner).
+const INK_SHADE_FROM: f32 = 0.45;
+
+/// The ink texture tiles: comic halftone dots that grow toward the
+/// bottom-right corner, or pen hatching that thickens there. Black with
+/// alpha, one shared image each, drawn on first use.
+pub fn ink_texture(hatch: bool) -> Arc<RenderImage> {
+    static HALFTONE: OnceLock<Arc<RenderImage>> = OnceLock::new();
+    static HATCH: OnceLock<Arc<RenderImage>> = OnceLock::new();
+    let cell = if hatch { &HATCH } else { &HALFTONE };
+    cell.get_or_init(|| {
+        let n = INK_TILE as f32;
+        let buffer = image::RgbaImage::from_fn(INK_TILE, INK_TILE, |x, y| {
+            let (fx, fy) = (x as f32, y as f32);
+            // 0 at the shade's start, 1 in the far corner.
+            let shade = (((fx + fy) / (2.0 * n) - INK_SHADE_FROM) / (1.0 - INK_SHADE_FROM)).clamp(0.0, 1.0);
+            let coverage = if hatch {
+                // 45° lines whose width follows the shade.
+                let d = ((fx - fy).rem_euclid(INK_PITCH) - INK_PITCH / 2.0).abs();
+                let half = shade * INK_PITCH * 0.32;
+                (half + 0.5 - d).clamp(0.0, 1.0)
+            } else {
+                // Dots on a 45° grid whose radius follows the shade.
+                let (u, v) = ((fx + fy) / std::f32::consts::SQRT_2, (fx - fy) / std::f32::consts::SQRT_2);
+                let (cu, cv) = ((u / INK_PITCH).round() * INK_PITCH, (v / INK_PITCH).round() * INK_PITCH);
+                let d = ((u - cu).powi(2) + (v - cv).powi(2)).sqrt();
+                let r = shade * INK_PITCH * 0.42;
+                (r + 0.5 - d).clamp(0.0, 1.0)
+            };
+            image::Rgba([0, 0, 0, (coverage * INK_ALPHA * 255.0).round() as u8])
+        });
+        Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(buffer)]))
+    })
+    .clone()
+}
+
 /// Full-bleed grain overlay element.
 pub fn grain_overlay() -> impl IntoElement {
     img(ImageSource::Render(grain_image()))
@@ -149,6 +190,15 @@ mod tests {
         assert!((rgba.a - 1.0).abs() < 1e-6);
         let translucent = c.with_alpha(0.5).hsla();
         assert!((translucent.a - 0.5).abs() < 0.003);
+    }
+
+    #[test]
+    fn ink_textures_are_cached_and_shade_one_corner() {
+        for hatch in [false, true] {
+            let a = ink_texture(hatch);
+            assert!(Arc::ptr_eq(&a, &ink_texture(hatch)), "drawn once");
+        }
+        assert!(!Arc::ptr_eq(&ink_texture(false), &ink_texture(true)));
     }
 
     #[test]

@@ -88,6 +88,11 @@ pub(crate) fn get_path<'a>(t: &'a Table, path: &str) -> Option<&'a Value> {
     Some(cur)
 }
 
+/// [`get_path`] for other crates (a value at a dotted path).
+pub fn get_path_pub<'a>(t: &'a Table, path: &str) -> Option<&'a Value> {
+    get_path(t, path)
+}
+
 pub(crate) fn set_path(t: &mut Table, path: &str, value: Option<Value>) {
     let parts: Vec<&str> = path.split('.').collect();
     let mut cur = t;

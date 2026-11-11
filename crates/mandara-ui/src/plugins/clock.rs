@@ -92,6 +92,10 @@ pub(crate) fn week_start_days(cx: &gpui::App) -> u32 {
     }
 }
 
+/// A stacked bar clock: its lines' height and the date's size.
+const STACKED_LINE: f32 = 1.15;
+const STACKED_DATE_REM: f32 = 0.82;
+
 /// Bar label cache: key `(minute or second stamp, 24 h, seconds)`.
 #[derive(Default)]
 struct BarText {
@@ -139,6 +143,8 @@ pub fn register(r: &mut PluginRegistry) {
                 let show_date = dt.bar_show_date;
                 let date_pattern = dt.bar_date_format.trim().to_string();
                 let clock_24h = cfg.general.clock_24h;
+                // A taskbar stacks the time over the date.
+                let stacked = cfg.bar.style == Some(mandara_config::bar_styles::BarStyle::Taskbar) && show_date;
                 let vertical = crate::bar::vertical(cx);
                 redraw_in(until_next_tick(&now, seconds), window, cx);
                 let mut cache = bar_text.borrow_mut();
@@ -159,6 +165,17 @@ pub fn register(r: &mut PluginRegistry) {
                         .font_features(tabular_nums())
                         .child(div().font_weight(FontWeight::SEMIBOLD).child(hours))
                         .child(div().text_color(palette.on_surface_variant.hsla()).child(now.format("%M").to_string()))
+                        .into_any_element();
+                }
+                if stacked {
+                    return div()
+                        .flex()
+                        .flex_col()
+                        .items_end()
+                        .font_features(tabular_nums())
+                        .line_height(gpui::relative(STACKED_LINE))
+                        .child(div().font_weight(FontWeight::MEDIUM).child(cache.time.clone()))
+                        .child(div().text_size(gpui::rems(STACKED_DATE_REM)).text_color(palette.on_surface_variant.hsla()).child(cache.date.clone()))
                         .into_any_element();
                 }
                 div()

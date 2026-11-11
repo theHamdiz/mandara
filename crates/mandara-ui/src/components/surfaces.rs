@@ -117,6 +117,13 @@ pub trait Surface: Styled + Sized {
 
     /// [`Self::card_elevation`] in `style`.
     fn card_elevation_as(self, style: CardStyle, rim: Vec<BoxShadow>, palette: &MandaraPalette) -> Self {
+        // Inked: every card outlined in ink, on its hard shadow.
+        let ink = crate::plugins::panel_fx::ink_detail_px();
+        if ink > 0.0 {
+            let shadow = if crate::style::ink_shadow() > 0.0 { crate::plugins::panel_fx::elevation_scaled(palette, 1.0, 1.0) } else { Vec::new() };
+            let el = self.border(px(ink)).border_color(crate::plugins::panel_fx::ink(palette).hsla());
+            return if shadow.is_empty() { el } else { el.shadow(shadow) };
+        }
         match style {
             CardStyle::Tonal => if rim.is_empty() { self } else { self.shadow(rim) },
             CardStyle::Raised => {

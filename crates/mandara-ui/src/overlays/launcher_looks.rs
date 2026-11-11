@@ -459,9 +459,10 @@ fn glass(cfg: &mandara_config::ShellConfig, palette: &MandaraPalette, progress: 
     div()
         .rounded(px(radius))
         .bg(frame.with_alpha(frame.alpha() * alpha).hsla())
-        .border_1()
+        .border(px(crate::plugins::panel_fx::edge_px()))
         .border_color(crate::plugins::panel_fx::surface_edge(palette, cfg.theme.adjustments.rim_intensity).hsla())
         .shadow(shadow)
+        .when_some(crate::plugins::panel_fx::ink_texture(palette), |el, t| el.overflow_hidden().child(t))
 }
 
 impl LauncherView {
