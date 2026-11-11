@@ -136,8 +136,9 @@ fn blurb(look: &LookDef) -> String {
 }
 
 thread_local! {
-    /// Each look's palette (dark), generated once from its seed.
-    static PALETTES: RefCell<Vec<MandaraPalette>> = const { RefCell::new(Vec::new()) };
+    /// Each look's palette (dark), generated from its seed the first time
+    /// its card shows.
+    static PALETTES: RefCell<Vec<Option<MandaraPalette>>> = const { RefCell::new(Vec::new()) };
     /// Each look's decoration as the desktop paints it (Arabic joined and
     /// turned, kana upright), keyed by look, fonts and colour; and the
     /// painter that drew them.
@@ -227,13 +228,51 @@ fn user_view(mine: &UserLook, parent: &'static LookDef) -> LookDef {
     view
 }
 
+thread_local! {
+    /// The Look cards that were on screen last frame (by key).
+    static SHOWN: RefCell<std::collections::HashSet<String>> = RefCell::new(std::collections::HashSet::new());
+}
+
+/// Whether the card `key` was on screen last frame.
+fn shown(key: &str) -> bool {
+    SHOWN.with(|s| s.borrow().contains(key))
+}
+
+/// A card's stand-in mock while it is off screen.
+fn placeholder(p: &MandaraPalette) -> AnyElement {
+    div().h(px(THUMB_H_PX)).w_full().rounded(px(RADIUS_14_PX)).bg(p.surface_container_high.hsla()).into_any_element()
+}
+
+/// An empty overlay that notes whether its card is inside the window this
+/// frame, and redraws once when that changes (so a card's mock is drawn
+/// only while it can be seen).
+fn visibility_probe(key: String) -> AnyElement {
+    gpui::canvas(
+        move |bounds, window, _| {
+            let view = window.viewport_size();
+            let on = bounds.bottom() > px(0.0) && bounds.top() < view.height && bounds.right() > px(0.0) && bounds.left() < view.width;
+            let changed = SHOWN.with(|s| {
+                let mut s = s.borrow_mut();
+                if on { s.insert(key.clone()) } else { s.remove(&key) }
+            });
+            if changed {
+                window.refresh();
+            }
+        },
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .inset_0()
+    .into_any_element()
+}
+
 fn look_palette(i: usize) -> MandaraPalette {
     PALETTES.with(|p| {
         let mut p = p.borrow_mut();
         if p.is_empty() {
-            *p = LOOKS.iter().map(|l| mandara_theme::material::palette_from_seed(l.seed_color(), l.variant, l.dark)).collect();
+            p.resize(LOOKS.len(), None);
         }
-        p[i].clone()
+        p[i].get_or_insert_with(|| { let l = &LOOKS[i]; mandara_theme::material::palette_from_seed(l.seed_color(), l.variant, l.dark) }).clone()
     })
 }
 
@@ -498,7 +537,10 @@ impl StudioView {
         let mut tiles = Vec::with_capacity(LOOKS.len() + yours.len());
         for (i, look) in LOOKS.iter().enumerate() {
             let on = look.id == active;
-            let lp = look_palette(i);
+            // Off screen, a card is its frame and words only: its palette,
+            // mock, decoration and display face come when it scrolls in.
+            let key = look.id;
+            let lp = shown(key).then(|| look_palette(i));
             let dot = |c: mandara_theme::Color| div().size(px(LOOK_DOT_PX)).rounded_full().bg(c.hsla());
             // The name in the look's own display face, its palette and, when
             // applied, a badge.
@@ -506,14 +548,15 @@ impl StudioView {
                 .row()
                 .items_center()
                 .gap(px(SPACE_8_PX))
-                .child(div().flex_1().min_w(px(0.0)).truncate().text_start().font_family(look.display_font).font_weight(FontWeight::SEMIBOLD).text_size(px(TEXT_15_PX)).child(look.name))
+                .child(div().flex_1().min_w(px(0.0)).truncate().text_start().when(lp.is_some(), |el| el.font_family(look.display_font)).font_weight(FontWeight::SEMIBOLD).text_size(px(TEXT_15_PX)).child(look.name))
                 .when(on, |el| el.child(badge(t("Active"), p.primary)))
-                .child(div().row().gap(px(SPACE_3_PX)).child(dot(lp.primary)).child(dot(lp.secondary)).child(dot(lp.tertiary)))
+                .when_some(lp.as_ref(), |el, lp| el.child(div().row().gap(px(SPACE_3_PX)).child(dot(lp.primary)).child(dot(lp.secondary)).child(dot(lp.tertiary))))
                 .child(Self::look_actions(look.id, false, p, cx));
             tiles.push(
                 div()
                     .id(("look", i))
                     .flex_1()
+                    .relative()
                     .rounded(px(RADIUS_22_PX))
                     .p(px(SPACE_8_PX))
                     .row()
@@ -524,7 +567,11 @@ impl StudioView {
                     .border_2()
                     .border_color(if on { p.primary.hsla() } else { gpui::transparent_black() })
                     .hover(|s| s.bg(p.primary.with_alpha(ALPHA_8).hsla()))
-                    .child(thumbnail(look, &lp, cfg))
+                    .child(match &lp {
+                        Some(lp) => thumbnail(look, lp, cfg),
+                        None => placeholder(p),
+                    })
+                    .child(visibility_probe(key.to_string()))
                     .child(
                         div()
                             .px(px(SPACE_6_PX))
@@ -548,15 +595,16 @@ impl StudioView {
             let view = user_view(mine, parent);
             let look = &view;
             let on = mine.id == active;
-            let lp = user_palette(mine);
+            let key = format!("yours:{}", mine.id);
+            let lp = shown(&key).then(|| user_palette(mine));
             let dot = |c: mandara_theme::Color| div().size(px(LOOK_DOT_PX)).rounded_full().bg(c.hsla());
             let title = div()
                 .row()
                 .items_center()
                 .gap(px(SPACE_8_PX))
-                .child(div().flex_1().min_w(px(0.0)).truncate().text_start().font_family(look.display_font).font_weight(FontWeight::SEMIBOLD).text_size(px(TEXT_15_PX)).child(mine.name.clone()))
+                .child(div().flex_1().min_w(px(0.0)).truncate().text_start().when(lp.is_some(), |el| el.font_family(look.display_font)).font_weight(FontWeight::SEMIBOLD).text_size(px(TEXT_15_PX)).child(mine.name.clone()))
                 .when(on, |el| el.child(badge(t("Active"), p.primary)))
-                .child(div().row().gap(px(SPACE_3_PX)).child(dot(lp.primary)).child(dot(lp.secondary)).child(dot(lp.tertiary)));
+                .when_some(lp.as_ref(), |el, lp| el.child(div().row().gap(px(SPACE_3_PX)).child(dot(lp.primary)).child(dot(lp.secondary)).child(dot(lp.tertiary))));
             // Its badges, then its actions, on a line of their own (the
             // name keeps the title line).
             let meta = div().row().items_center().gap(px(SPACE_8_PX)).child(div().flex_1().min_w(px(0.0)).child(super::looks_yours::yours_badges(mine, p))).child(Self::look_actions(&mine.id, true, p, cx));
@@ -566,6 +614,7 @@ impl StudioView {
                 div()
                     .id(("look-yours", i))
                     .flex_1()
+                    .relative()
                     .rounded(px(RADIUS_22_PX))
                     .p(px(SPACE_8_PX))
                     .row()
@@ -576,7 +625,11 @@ impl StudioView {
                     .border_2()
                     .border_color(if on { p.primary.hsla() } else { gpui::transparent_black() })
                     .hover(|s| s.bg(p.primary.with_alpha(ALPHA_8).hsla()))
-                    .child(thumbnail(look, &lp, cfg))
+                    .child(match &lp {
+                        Some(lp) => thumbnail(look, lp, cfg),
+                        None => placeholder(p),
+                    })
+                    .child(visibility_probe(key))
                     .child(div().px(px(SPACE_6_PX)).pb(px(SPACE_6_PX)).row().flex_col().gap(px(SPACE_4_PX)).child(title).children(rename).child(meta))
                     .on_click(move |_: &ClickEvent, _, cx| super::looks_yours::apply(&apply, cx))
                     .into_any_element(),
