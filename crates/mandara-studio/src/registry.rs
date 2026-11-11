@@ -337,12 +337,16 @@ pub enum Control {
     Device { input: bool },
     /// A display (output name) from the live list (`""` = the focused one).
     Display,
+    /// Stash's edge catchers: a switch per screen edge that refuses an edge
+    /// another feature uses, naming it and offering to free the edge (its
+    /// values live under `/plugins/settings/stash/edge_*`).
+    StashEdges,
 }
 
 impl Control {
     /// Whether the control edits a value (else it is a button or a status).
     pub fn has_value(&self) -> bool {
-        !matches!(self, Control::Command { .. } | Control::DepthModel | Control::RecorderBackends)
+        !matches!(self, Control::Command { .. } | Control::DepthModel | Control::RecorderBackends | Control::StashEdges)
     }
 }
 

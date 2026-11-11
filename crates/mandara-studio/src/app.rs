@@ -88,6 +88,7 @@ pub mod wallpaper_page;
 pub(crate) mod grid;
 mod choice;
 pub mod plugin_modal;
+mod stash_edges;
 pub mod plugins_local;
 #[cfg(test)]
 mod settings_audit;
@@ -197,6 +198,9 @@ pub struct StudioView {
     themes_tab: looks_page::ThemesTab,
     /// The Desktop page's tab (Widgets when entering the page).
     desktop_tab: desktop_page::DesktopTab,
+    /// Stash's edge catchers: the edge being resolved, and a change waiting
+    /// for you to choose which feature keeps an edge.
+    stash_edges: stash_edges::EdgesUi,
 }
 
 impl StudioView {
@@ -258,7 +262,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), desktop_tab: Default::default() }
+        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -337,7 +341,10 @@ impl StudioView {
         match registry::set(&cfg, setting, value) {
             Ok(next) => {
                 self.error = None;
-                update_config(cx, |c| *c = next);
+                // An edge Stash's catcher holds is never taken silently.
+                if !self.stash_edges.hold_if_colliding(&cfg, next.clone(), setting.label) {
+                    update_config(cx, |c| *c = next);
+                }
             }
             Err(err) => self.error = Some(err),
         }
@@ -353,7 +360,10 @@ impl StudioView {
             }
         }
         self.error = None;
-        update_config(cx, |c| *c = next);
+        let cfg = config(cx).read(cx).snapshot();
+        if !self.stash_edges.hold_if_colliding(&cfg, next.clone(), tk("Reset to defaults")) {
+            update_config(cx, |c| *c = next);
+        }
         cx.notify();
     }
 
@@ -511,6 +521,7 @@ impl StudioView {
                 self.chip_choice(setting, options, &current, room, p, cx)
             }
             Control::RecorderBackends => self.recorder_backends_control(cfg, p, cx),
+            Control::StashEdges => self.stash_edges_control(cfg, p, cx),
             Control::Device { input } => self.recorder_device_control(setting, input, room, cfg, p, cx),
             Control::Display => self.recorder_display_control(setting, room, cfg, p, cx),
             Control::Text { placeholder } | Control::OptionalText { placeholder } => {
@@ -996,6 +1007,7 @@ impl StudioView {
             (tk("Clipboard"), "panel toggle clipboard"),
             (tk("Light / dark"), "theme mode toggle"),
             (tk("Pomodoro"), "pomodoro toggle"),
+            (tk("New shelf"), "stash new"),
             (tk("Studio"), "studio"),
         ];
         let quick = div().row().flex_wrap().gap(px(SPACE_6_PX)).children(QUICK.iter().map(|(label, cmd)| {
@@ -1948,6 +1960,7 @@ impl Render for StudioView {
         let content = div().relative().flex_1().min_h(px(0.0)).flex().flex_col().child(content).child(mandara_ui::scrollbar::overlay_scrollbar(&self.content_scroll, &content_bar, &p).end_inset(edge));
 
         let modal = self.plugin_modal_layer(&cfg, &p, window, cx);
+        let edge_choice = self.stash_collision_layer(&cfg, &p, cx);
         let dock_picker = self.dock_picker_layer(&p, cx);
         // Right-to-left languages mirror everything (`mandara_ui::bidi`):
         // the sidebar sits on the right and text aligns to the right.
@@ -1969,6 +1982,7 @@ impl Render for StudioView {
             .child(nav)
             .child(div().flex_1().min_w(px(0.0)).h_full().row().flex_col().when(crate::client_controls(window.window_decorations(), mandara_compositor::detect_from(|key| std::env::var_os(key))), |body| body.child(titlebar)).child(content))
             .children(modal)
+            .children(edge_choice)
             .children(dock_picker)
             .children(frame_meter::end())
     }

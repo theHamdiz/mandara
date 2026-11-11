@@ -87,6 +87,9 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "maximize" => r#"<rect x="5" y="5" width="14" height="14" rx="3"/>"#.into(),
         // A master–stack tiling layout (Studio → Compositor).
         "tiles" => r#"<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M11 4.5v15M11 12h9.5"/>"#.into(),
+        "stash" => r#"<path d="M3.5 13.5l1.6 5a2 2 0 0 0 1.9 1.5h10a2 2 0 0 0 1.9-1.5l1.6-5"/><path d="M3.5 13.5h17"/><rect x="7" y="7.5" width="5" height="6" rx="1.2"/><path d="M15.5 3.5v6.5M13 7.5l2.5 2.5 2.5-2.5"/>"#.into(),
+        "list" => r#"<path d="M8.5 6.5h12M8.5 12h12M8.5 17.5h12"/><circle cx="4.5" cy="6.5" r="1" fill="black" stroke="none"/><circle cx="4.5" cy="12" r="1" fill="black" stroke="none"/><circle cx="4.5" cy="17.5" r="1" fill="black" stroke="none"/>"#.into(),
+        "layers" => r#"<path d="M12 3.5l8.5 4.5-8.5 4.5-8.5-4.5z"/><path d="M3.5 12.5l8.5 4.5 8.5-4.5"/><path d="M3.5 16.5l8.5 4.5 8.5-4.5"/>"#.into(),
         "image" => r#"<rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 15.5l-4.5-4.5-9 8.5"/>"#.into(),
         "cloud" => r#"<path d="M7 18.5h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 10.1a4.2 4.2 0 0 0 0 8.4z"/>"#.into(),
         "cloud-sun" => r#"<path d="M8 2.8v1.4M2.8 8h1.4M4.3 4.3l1 1M11.7 4.3l-1 1"/><path d="M5.4 10.6A3.4 3.4 0 0 1 11.2 6.8"/><path d="M9 20h8.5a3.5 3.5 0 0 0 .5-6.96A4.8 4.8 0 0 0 9 12.6a3.7 3.7 0 0 0 0 7.4z"/>"#.into(),
@@ -261,6 +264,7 @@ pub const ICON_NAMES: &[&str] = &[
     "hadith", "bookmark", "message", "messages", "radio",
     "sudoku", "game-2048", "redo", "eraser", "lightbulb",
     "clock-digital", "vinyl", "hourglass",
+    "stash", "list", "layers",
 ];
 
 /// An icon element tinted with `color`.

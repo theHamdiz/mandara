@@ -29,7 +29,7 @@ running can finish; disabling the plugin prevents a follow-up refresh.
 </tr>
 </table>
 
-The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
+The 82 first-party plugins (46 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -90,6 +90,7 @@ The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
 | **Translator** | Translate text with DeepL or your own LibreTranslate server; text is sent only when you ask *(opt-in)* |
 | **Phone Connect** | Paired KDE Connect devices: battery, ring, ping and explicitly send clipboard text *(opt-in)* |
 | **Feeds** | A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search, a clean reader view, starter feeds and OPML, and a sidebar card with your newest unread articles *(opt-in)* |
+| **Stash** | Floating shelves you drop anything onto (files, folders, pictures, text, links, any data) and drag back out into any app; summoned by shaking the pointer, an edge catcher, the bar item, a keybind or `mandara msg stash new`; kept across restarts *(opt-in)* |
 | **Reddit** | Browse your communities, posts and comment threads in a panel (cards, compact or grid) and a sidebar card: limited mode on Reddit's public feeds out of the box, full mode with your own installed-app client id; NSFW hidden and spoilers covered by default *(opt-in)* |
 | **Home Assistant** | Your real home states and favourites, with controls for lights, switches, fans, scenes, scripts and buttons *(opt-in)* |
 | **Share to phone** | Clipboard text, a screenshot or a file, served once on your network behind a QR code *(opt-in)* |
@@ -152,12 +153,81 @@ the process hunter, the authenticator, soundscapes, the radio, world clock, netw
 speed, the color picker, Pomodoro, notes, to-do, privacy, the app
 installer, the shortcuts cheatsheet, task progress, eye breaks,
 presentation mode, share to phone, Tailscale, the uptime monitor, local
-AI, listening ports, Git repositories, CI status, crash reports, Reddit, Sudoku, 2048, Jannah, the Qur'an and Hadith.
+AI, listening ports, Git repositories, CI status, crash reports, Reddit, Stash, Sudoku, 2048, Jannah, the Qur'an and Hadith.
 Turn any of them on in Studio → Plugins or with
 `mandara msg plugins enable <id>`. **Upgrading from 0.1 changes nothing you
 had:** a config written before these defaults keeps every plugin it had on
 (the upgrade writes them into `[plugins] enabled`), Wallhaven stays on if it
 was, and cursor themes stay on if you had picked a cursor.
+
+## Stash: floating shelves
+
+**Stash** (opt-in: Studio → Plugins, or `mandara msg plugins enable stash`)
+gives you shelves: small glass cards that float above your windows, wherever
+you summon them, and hold whatever you drop on them until you drag it out
+again. Use one to carry a file between two folders, to gather pictures and
+links for a message, or to park a snippet of text while you switch apps.
+
+- **Anything goes in.** Files and folders are kept by reference (the shelf
+  holds where they are, not a copy). A picture dragged from a browser is
+  saved into the stash; if a page offers only the picture's link, the shelf
+  keeps the link and its menu's *Fetch the picture* downloads it on your
+  click (HTTPS only, at most 32 MiB). Text keeps its formatting as HTML
+  beside it, links keep their titles, and any other data is kept with its
+  type. Switch on *Copy dropped picture files* to copy pictures dropped as
+  files too.
+- **Everything comes back out.** Drag a tile (or a selection, or the count
+  badge for the whole shelf) into any app: files go as files, pictures as
+  pictures and files, text as text and HTML, links as links. A tile's menu
+  opens, shows in its folder, copies, previews (*Quick look*, also Space or
+  holding the pointer still on a tile) and removes. Items stay on the shelf
+  after a drag unless you switch on *Move items out* in its menu.
+- **Shelves stay until you close them.** Drag one by its top edge anywhere,
+  to any display; it settles against an edge it lands near. Resize it from
+  its corner, switch between a grid, a list and a fanned stack, minimize it
+  to the bar item and/or the tray, and close it (closing one that holds
+  items asks first; *Empty & close* deletes what it kept). Shelves and their
+  items come back after a restart, and a closed shelf can be reopened with
+  `mandara msg stash restore` until the cache limit clears it.
+
+**Summoning a shelf.** Wayland shows an app the pointer only while it is
+over that app's own surfaces, and Mandara never reads your input devices,
+so:
+
+- **Shake** the pointer quickly from side to side (with or without
+  something dragged) over the desktop, the bar, the dock, a panel, the
+  sidebar or a shelf: a shelf opens under it. Shaking over another app's
+  window does nothing. Sensitivity (or off) is in the plugin's settings.
+- **Edge catchers** (off by default) are thin strips along the screen edges
+  you choose: a drag that reaches one springs a shelf open there, and the
+  drop lands in it (if the drag goes elsewhere, the empty shelf goes
+  away). A strip also takes clicks, so it is only allowed on an edge that
+  nothing else uses: Studio names what does (the bar, the sidebar's
+  open-on-hover edge, the launcher or power-menu edge, a side bar, the
+  dock) and offers to switch it off or move it first, and later turning on
+  something that wants an edge with a catcher asks which one keeps it.
+  Catchers leave a gap at hot corners and between displays, and step aside
+  for fullscreen windows.
+- **The bar item** (click: show or hide your shelves; right-click: a new
+  shelf; drop on it: into the newest shelf), the tray, a keybind (Studio →
+  Keyboard shortcuts → *New shelf*), and `mandara msg stash new`.
+
+This works the same on every supported compositor, as it uses only layer
+surfaces and the standard drag and drop.
+
+**Commands:** `stash` (state, including each edge catcher and what blocks
+it), `stash new [x y [output]]`, `stash list`, `stash show|hide [id|last|all]`,
+`stash close [id|last|all] [--empty]`, `stash clear`, `stash restore [id]` and
+`stash add [shelf] <path|https://…|text:…>…`.
+
+**Memory.** Nothing runs while Stash is off, and nothing polls while it is
+on: the shake detector reads pointer events Mandara already gets. Tile
+pictures are decoded off the UI thread at the size they are drawn and kept
+in a small cache that a minimized or closed shelf gives back. Files the
+stash keeps live in `~/.cache/mandara/stash/`; the shelves themselves in
+`~/.local/state/mandara/stash.json`. The cache limit (1 GiB by default)
+removes what closed shelves kept, oldest first; it never removes items of
+open shelves without asking.
 
 ## Games: Sudoku and 2048
 

@@ -3160,8 +3160,8 @@ impl Dispatch<zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1, ObjectId>
 }
 
 /// Mandara patch 13: turns a drag over a window that accepts data drops into
-/// an [`ExternalData`] drag: accepts its first MIME type (copy, or move when
-/// that is all the source allows) and hands the offer to the drag's value.
+/// an [`ExternalData`] drag: accepts its first MIME type as a copy and hands
+/// the offer to the drag's value.
 fn begin_data_drag(
     state: &mut WaylandClientState,
     generation: u64,
@@ -3178,7 +3178,9 @@ fn begin_data_drag(
     // The drag's value owns the offer now: the clipboard's offer list must
     // not destroy it when it rotates.
     state.data_offers.retain(|offer| offer.inner != data_offer);
-    data_offer.set_actions(DndAction::Copy | DndAction::Move, DndAction::Copy);
+    // Copy only: a drop on a part of the window with no target is still
+    // taken, and must never make the source delete what it dragged.
+    data_offer.set_actions(DndAction::Copy, DndAction::Copy);
     data_offer.accept(serial, Some(first));
     let data = Rc::new(WaylandDropData {
         offer: data_offer,

@@ -2616,6 +2616,11 @@ impl Render for ShellView {
         // ── Unpinned side bars: edge reveal strips / hover bands (on top) ─
         root = root.children(self.side_triggers(&cfg, cx));
 
+        // ── Stash: edge catchers, the shake gesture, data drops ──────────
+        window.set_accepts_data_drops(crate::plugins::stash::running(cx));
+        root = root.children(crate::plugins::stash::catchers(&self.monitor, self.surface, &self.mask, cx));
+        root = root.children(crate::plugins::stash::shake_hook(&self.monitor, (0.0, 0.0)));
+
         // Popups joined to the bar slide with it.
         if cfg.notifications.joined {
             crate::toasts::publish_bar_slide(&self.monitor, self.bar_shift.abs(), cx);

@@ -19,6 +19,7 @@ mandara-i18n.workspace = true
 tracing.workspace = true
 # The config doctor reads Umbriel's JSON report and keeps its state as JSON.
 serde_json.workspace = true
+smallvec.workspace = true
 
 # MangoWM resolves bind keys to keycodes; conflict checks must too.
 xkbcommon = { workspace = true }

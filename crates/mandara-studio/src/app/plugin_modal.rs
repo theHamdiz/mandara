@@ -274,6 +274,14 @@ const BUILTIN_ACCESS: &[(&str, &[(Access, &str)])] = &[
         ],
     ),
     ("reddit", &[(Access::Network, tk("Reads communities, threads and their pictures from reddit.com"))]),
+    (
+        "stash",
+        &[
+            (Access::Files, tk("Keeps your shelves in Mandara's state folder and what you drop on them in its cache")),
+            (Access::Clipboard, tk("Copies items when you ask")),
+            (Access::Network, tk("Fetches a linked picture or a site's icon only when you click it (HTTPS)")),
+        ],
+    ),
     ("sudoku", &[(Access::Files, tk("Saves your game and best scores in Mandara's state folder"))]),
     ("2048", &[(Access::Files, tk("Saves your game and best scores in Mandara's state folder"))]),
     ("network", &[(Access::DBus, tk("Lists and joins networks through NetworkManager"))]),

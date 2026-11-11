@@ -88,8 +88,9 @@ The Wayland side of GPUI core's patch 13 (Stash's shelves).
   `PlatformWindow::set_accepts_data_drops`) takes any drag that carries no
   local files: when the offer has no `text/uri-list` (or its URIs are not
   `file://` ones) the enter becomes `FileDropEvent::DataEntered` with the
-  offered MIME types (`begin_data_drag`). The offer accepts its first type,
-  offers copy (or move, when that is all the source allows), leaves the
+  offered MIME types (`begin_data_drag`). The offer accepts its first type
+  as a copy only (a drop on a part of the window with no target is still
+  taken, and must never make the source delete what it dragged), leaves the
   clipboard's rotating offer list (which would otherwise destroy it) and is
   owned by `WaylandDropData`, behind the drag's `ExternalData`. `receive`
   pipes a type and flushes; reads wait at most `PIPE_READ_TIMEOUT` per read

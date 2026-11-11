@@ -543,7 +543,9 @@ fn bar_view(palette: &MandaraPalette, window: &mut gpui::Window, cx: &mut App) -
     // Shared state: no per-frame clone of the items (or their pixmaps).
     let state = m.read(cx).state.clone();
     let mut items = state.items.iter().filter(|i| passive || i.status != ItemStatus::Passive).peekable();
-    if items.peek().is_none() {
+    // Minimized Stash shelves (when they go to the tray).
+    let shelves = crate::plugins::stash::tray_cells(palette, CELL, crate::style::bar_icon(ICON), cx);
+    if items.peek().is_none() && shelves.is_empty() {
         return div().into_any_element();
     }
     let selected = if panel_open(cx) && !m.read(cx).stale { m.read(cx).selected.clone() } else { None };
@@ -608,6 +610,7 @@ fn bar_view(palette: &MandaraPalette, window: &mut gpui::Window, cx: &mut App) -
                     }
                 })
         }))
+        .children(shelves)
         .into_any_element()
 }
 
@@ -962,10 +965,13 @@ fn saturate_i32(v: i64) -> i32 {
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("System tray"), tk("Status icons and menus of background apps"), Some(Zone::Right)), |window, cx, panel_cx| {
         let m = model(cx);
+        let stash = super::stash::entity(cx);
         let bar = cx
             .new(|cx| {
                 let v = FnView::new(None, bar_view, window, cx);
                 cx.observe(&m, |_, _, cx| cx.notify()).detach();
+                // Minimized shelves show here too.
+                cx.observe(&stash, |_, _, cx| cx.notify()).detach();
                 v
             })
             .into();
