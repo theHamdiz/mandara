@@ -8,12 +8,15 @@ About → What's new shows it too.
 
 ### New
 
+- **Right-click the desktop for a ring menu.** Icons on chromatic glass bloom out around the pointer, and a glowing arc follows it. Add widget opens your widgets by shelf (clocks, music, system, productivity, weather and more), each with its own icon. Hold the right button and flick toward an item to pick it in one motion, even through the shelves, or use the arrow keys. Prefer the old list? Switch back in Studio → Desktop → Context menu.
+- **Studio → Desktop → Context menu**: choose the ring or the classic list, which items show and in which order, add your own programs, and set the ring's size, labels, gesture, glass and animation, with a live preview.
 - **Aqueous joins the supported compositors (#162).** On Aqueous the bar's workspace pills now show each display's workspaces and switch to one when you click it, and the window title, displays, keyboard layout, window moves and the Overview hot corner follow Aqueous too, all over its own IPC socket without ever making the bar wait. Aqueous keeps its settings in its own files, so Mandara writes nothing there; the layout pill can't change Aqueous layouts, because Aqueous has no command for that yet.
 - **labwc joins the supported compositors.** On labwc 0.8.3 and later, the bar's workspace pills show your workspaces and switch to one when you click it, and the window title, window list and displays follow labwc too, over standard Wayland protocols without ever making the bar wait. labwc keeps its settings in `~/.config/labwc`, so Mandara writes nothing there: add `mandara &` to `~/.config/labwc/autostart` to start it with labwc. labwc doesn't say which workspace a window is on, so the pills can't show which ones have windows, and the layout pill can't change labwc layouts.
 - **COSMIC joins the supported compositors.** In a COSMIC session the bar shows each display's workspaces, switches to one when you click it, marks the ones with windows and can move a window to another workspace, and the dock and window switcher list COSMIC's windows too. COSMIC keeps its settings in COSMIC Settings, so Mandara writes nothing there: add `mandara` in COSMIC Settings → Applications → Startup applications, and switch COSMIC's dock off there if you only want Mandara's.
 
 ### Improved
 
+- **Studio's Desktop widgets page is now Desktop**, with Widgets, Cards & visualizers and Context menu tabs. Old links still open it.
 - **Counts on bar items sit neatly on round buttons and rails.** Unread notifications, updates and crash reports no longer spill off the item, keep a steady width, and read 99+ past 99 instead of a stuck 99.
 
 ### Fixed
