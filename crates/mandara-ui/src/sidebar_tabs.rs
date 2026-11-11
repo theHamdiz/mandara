@@ -1118,7 +1118,7 @@ pub fn empty_tab(palette: &MandaraPalette) -> AnyElement {
         .text_center()
         .child(icon("tiles", EMPTY_ICON_PX, palette.on_surface_variant))
         .child(div().text_size(px(text::BODY)).font_weight(FontWeight::MEDIUM).child(mandara_i18n::t("This tab is empty")))
-        .child(div().text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(mandara_i18n::t("Add any widget to it in Studio → Bars → Sidebar.")))
+        .child(div().text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(mandara_i18n::t("Add any widget to it in Studio → Bars → Sidebars.")))
         .child(
             div()
                 .id("sidebar-empty-studio")
@@ -1133,7 +1133,7 @@ pub fn empty_tab(palette: &MandaraPalette) -> AnyElement {
                 .text_size(px(text::BODY_S))
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(mandara_i18n::t("Add widgets"))
-                .on_click(|_, _, cx| crate::state::open_studio_at(Some("bars/sidebar".into()), cx)),
+                .on_click(|_, _, cx| crate::state::open_studio_at(Some("bars/sidebars/sidebar".into()), cx)),
         )
         .into_any_element()
 }

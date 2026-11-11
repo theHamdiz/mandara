@@ -81,19 +81,19 @@ fn keyboard_fixture_accepts_a_symlinked_temporary_root_and_rejects_escapes() {
 
 #[test]
 #[ignore = "requires a marked two-output desktop, English dark Studio at 1100x680 on HEADLESS-2, grim and wtype"]
-fn tab_arrow_and_enter_reach_the_sidebar_editor() {
+fn tab_arrow_and_enter_reach_the_panels_tab() {
     let fixture = Fixture::new();
     let body = (450, 260, 780, 490);
-    fixture.control(&["msg", "studio", "bars/sidebar"]);
+    fixture.control(&["msg", "studio", "bars/panels"]);
     std::thread::sleep(Duration::from_secs(1));
-    let expected = fixture.capture("sidebar.png", body);
+    let expected = fixture.capture("panels.png", body);
     fixture.control(&["msg", "studio", "bars"]);
     let _keyboard = fixture.keyboard(&["-s", "1000", "-k", "Tab", "-s", "150", "-k", "Right", "-s", "150", "-k", "Tab", "-s", "150", "-k", "Return", "-s", "10000"]);
     // The controller normalizes against the first 1365x769 output; the
     // desktop is 2805x900. This point lands in Studio's search field.
     fixture.control(&["pointer", "click", "801", "162"]);
     std::thread::sleep(Duration::from_secs(2));
-    assert_eq!(fixture.capture("keyboard.png", body), expected, "Tab must enter the tab strip, Right select Side bars, and Tab/Enter open Sidebar");
+    assert_eq!(fixture.capture("keyboard.png", body), expected, "Tab must enter the tab strip, Right select Sidebars, and Tab/Enter open Drop-down panels");
 }
 
 #[test]

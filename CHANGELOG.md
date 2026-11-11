@@ -16,6 +16,7 @@ About → What's new shows it too.
 
 ### Improved
 
+- **Side bars and the sidebar are set up in one Sidebars tab.** Studio → Bars no longer has two look-alike tabs: Sidebars shows what each screen edge holds (nothing, a side bar, which is a slim bar of items, or the sidebar, the panel that slides out with tabs and cards) with small previews, and below it only the settings for what you picked. An edge never ends up with both, the sidebar moves when you give it the other edge, and the rail that Expressive and Raml Tram join to the bar points you to its preset. Old links such as `mandara studio bars/side-bars` and `bars/sidebar` still lead there, and sections you opened or closed stay that way.
 - **Studio's Desktop widgets page is now Desktop**, with Widgets, Cards & visualizers and Context menu tabs. Old links still open it.
 - **Counts on bar items sit neatly on round buttons and rails.** Unread notifications, updates and crash reports no longer spill off the item, keep a steady width, and read 99+ past 99 instead of a stuck 99.
 

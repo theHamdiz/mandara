@@ -1,6 +1,6 @@
-//! Registry entries for the side bars (`[side_bars]`) on Bars → Side bars:
+//! Registry entries for the side bars (`[side_bars]`) on Bars → Sidebars:
 //! the switches, shape, items, material and motion. Which plugins each side
-//! bar holds is arranged in the Side bars tab's layout designer. Slider bounds
+//! bar holds is arranged in that tab's side bar layout designer. Slider bounds
 //! come from `mandara_config::side_bars::ranges`, the spans the shell
 //! clamps to.
 
@@ -10,11 +10,13 @@ use mandara_i18n::tk;
 
 use super::{Control, Section, Setting, s, span};
 
-/// Group names (in the Side bars tab's order).
+/// Group names (in the Sidebars tab's side bar section, in order).
 pub const SIDE_BARS: &str = tk("Side bars");
 pub const SIDE_BAR_SHAPE: &str = tk("Side bar shape");
 pub const SIDE_BAR_ITEMS: &str = tk("Side bar items");
 pub const SIDE_BAR_MATERIAL: &str = tk("Side bar material");
+/// Every side bar group, so a fold can tell which section it is in.
+pub const GROUPS: [&str; 4] = [SIDE_BARS, SIDE_BAR_SHAPE, SIDE_BAR_ITEMS, SIDE_BAR_MATERIAL];
 
 const SHAPES: &[(&str, &str)] = &[("pills", tk("A pill per group")), ("island", tk("One island")), ("slab", tk("A full-length slab"))];
 const CHIPS: &[(&str, &str)] = &[("icons", tk("Bare icons")), ("pills", tk("A pill per item")), ("island", tk("An island per group"))];
@@ -33,7 +35,7 @@ const PILLS_FIRST: &str = tk("Pick pill items first");
 const UNPIN_FIRST: &str = tk("Unpin a side bar first");
 const SIDE_OFF: &str = tk("Turn on this side bar first");
 const JOINED_EDGE_FRAME: &str = tk("Joined side bars draw the bar as the edge frame; your style comes back when they're separate");
-const SIDE_BAR_EDGE: &str = tk("A side bar holds this edge now; turn side bars off (Bar page) to use the sidebar here");
+const SIDE_BAR_EDGE: &str = tk("A side bar holds this edge now; choose Sidebar for an edge under Bars → Sidebars to use the sidebar");
 
 pub fn entries() -> Vec<Setting> {
     use Control::*;

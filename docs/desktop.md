@@ -55,7 +55,7 @@ How Mandara looks and feels, and how much of it you can shape.
   a screen frame round a top or bottom bar too. Panels still pour out of
   the bar and morph back into the item they came from.
   `mandara msg bar style expressive` scripts it. Each side bar can take a
-  style of its own too (Studio → Bars → Side bars, or
+  style of its own too (Studio → Bars → Sidebars, or
   `mandara msg side-bar style right tile-dock`), so a rail of squircle
   tiles can sit beside a bar of connected groups.
 - **Bar items show what you want:** workspace pills with numbers, short
@@ -66,8 +66,8 @@ How Mandara looks and feels, and how much of it you can shape.
   groups never overlap: a group gets the room up to its neighbour, a long
   window title ends in an ellipsis there, and on a very narrow bar the
   items nearest the middle make way first.
-- **Side bars of icons and pills:** turn on a slim bar on the left and
-  right edges (Studio → Bars → Side bars) and fill its top, middle and
+- **Side bars of icons and pills:** choose *Side bar* for the left or
+  right edge (Studio → Bars → Sidebars) and fill its top, middle and
   bottom groups with any plugins; their panels pour out sideways. By
   default the top bar and both side bars join into one frame with curved
   corners; or let them float apart as glass pills, an island or a slab with
@@ -75,7 +75,8 @@ How Mandara looks and feels, and how much of it you can shape.
   each side so windows tile beside it, or let it slide away until your
   pointer rests on its edge. Width, item size, padding, spacing and style,
   corners, curves, the middle group's place and an accent colour per side
-  are all yours. They take over the widget sidebar's edge while they're on.
+  are all yours. Each edge holds a side bar, the sidebar or nothing, and
+  the same tab sets up both.
   [Details](configuration.md#side-bars-side_bars)
 - **Sidebars fit like puzzle pieces:** a flush sidebar takes the bar's
   material and meets it with the same concave curves: it hangs from the

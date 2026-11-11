@@ -126,7 +126,7 @@ widgets themselves are in [Your desktop](desktop.md#desktop-widgets).
 **Sidebar cards** come from Quick settings, Weather, Notifications, Media,
 Audio, Resources, To-do, Notes, Pomodoro, Prayer times, Jannah, the Qur'an,
 Hadith, Radio, Feeds, Reddit, Sudoku and 2048 (and any third-party plugin).
-Every one of them is in Studio → Bars → Sidebar → **Tabs** → *Add a widget*,
+Every one of them is in Studio → Bars → Sidebars → **Tabs** → *Add a widget*,
 under *Add to sidebar* on its page in Studio → Plugins, and in
 `mandara msg sidebar tab widget add <tab> <id>`. Placing a card switches its
 plugin on; switching a plugin off hides its card, which stays on its tab
@@ -165,7 +165,7 @@ Two opt-in games (Studio → Plugins, `mandara msg plugins enable sudoku` /
 `2048`, or type *sudoku*, *2048*, *games* or *puzzle* in the launcher and
 pick **Turn on**). Each has a bar item with a drop-down panel (put it
 in a bar group from its page in Studio → Plugins), a playable sidebar card
-(Studio → Bars → Sidebar, or `mandara msg sidebar tab widget add Overview
+(Studio → Bars → Sidebars, or `mandara msg sidebar tab widget add Overview
 sudoku`) and a desktop widget (Studio → Desktop → Widgets → Add, or
 right-click the desktop → Add widget) that you play right on the desktop:
 click the board to give it the keyboard, click a window or the desktop to
@@ -332,7 +332,7 @@ what plays.
 - **The sidebar card** is a compact player: the station's art, what plays
   with a live dot, a favourite heart, previous / play / next through your
   favourites and the volume in your slider design. Put it on any sidebar tab
-  in Studio → Bars → Sidebar → **Tabs** (or
+  in Studio → Bars → Sidebars → **Tabs** (or
   `mandara msg sidebar tab …`).
 - **The directory** (off until you switch it on) searches
   [radio-browser.info](https://www.radio-browser.info) from the *Stations*

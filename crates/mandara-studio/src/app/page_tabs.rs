@@ -124,9 +124,9 @@ mod tests {
     #[test]
     fn initial_and_changed_selection_are_revealed_without_resetting_manual_scroll() {
         use crate::registry::bars::BarsTab;
-        let tabs = [BarsTab::Bar, BarsTab::SideBars, BarsTab::Sidebar, BarsTab::Panels, BarsTab::Edges];
+        let tabs = BarsTab::ALL;
         let mut state = TabState { scroll: ScrollHandle::new(), focus: Vec::new(), last_focus: None, last_selection: None };
-        assert_eq!(state.selected_target(&tabs, BarsTab::Edges), Some(4));
+        assert_eq!(state.selected_target(&tabs, BarsTab::Edges), Some(3));
         assert_eq!(state.selected_target(&tabs, BarsTab::Edges), None);
         assert_eq!(state.selected_target(&tabs, BarsTab::Bar), Some(0));
         assert_eq!(state.selected_target(&tabs, BarsTab::Bar), None);

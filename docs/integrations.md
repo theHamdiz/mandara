@@ -71,7 +71,7 @@ read (*Mark read when opened*). Keys: ↑ ↓ or J K move, Enter opens,
 Esc goes back, O opens the browser, M toggles read, S saves, C copies the
 link, R refreshes and / searches.
 
-**Sidebar card.** Add Feeds to the sidebar (Studio → Bars → Sidebar) for a
+**Sidebar card.** Add Feeds to the sidebar (Studio → Bars → Sidebars) for a
 card with the newest unread articles, each with its feed's monogram and
 colour, how long ago it came out and an unread dot. *Card folder* limits it
 to one folder. Clicking an article opens it in the panel's reader; the
