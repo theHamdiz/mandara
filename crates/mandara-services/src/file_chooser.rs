@@ -35,14 +35,20 @@ const FILTER_GLOB: u32 = 0;
 /// Shows the portal's file picker; `Ok(None)` when the user cancels.
 pub fn open_file(title: &str, filters: &[Filter<'_>], start_dir: Option<PathBuf>) -> Result<Option<PathBuf>, String> {
     let list = filters.iter().map(|f| (f.name.to_string(), f.mime_types.iter().map(|m| (FILTER_MIME, m.to_string())).collect())).collect();
-    crate::runtime::block_on(open_file_async(title, list, start_dir, false)).map(|v| v.into_iter().next()).map_err(|e| e.to_string())
+    crate::runtime::block_on(open_file_async(title, list, start_dir, false, false)).map(|v| v.into_iter().next()).map_err(|e| e.to_string())
 }
 
 /// Picks one or more files matching MIME types or glob patterns (one
 /// named filter); empty when the user cancels.
 pub fn open_files(title: &str, filter_name: &str, mime_types: &[&str], globs: &[&str], start_dir: Option<PathBuf>) -> Result<Vec<PathBuf>, String> {
     let entries = globs.iter().map(|g| (FILTER_GLOB, g.to_string())).chain(mime_types.iter().map(|m| (FILTER_MIME, m.to_string()))).collect();
-    crate::runtime::block_on(open_file_async(title, vec![(filter_name.to_string(), entries)], start_dir, true)).map_err(|e| e.to_string())
+    crate::runtime::block_on(open_file_async(title, vec![(filter_name.to_string(), entries)], start_dir, true, false)).map_err(|e| e.to_string())
+}
+
+/// Picks one folder (portals from version 3 on); `Ok(None)` when the user
+/// cancels.
+pub fn pick_folder(title: &str, start_dir: Option<PathBuf>) -> Result<Option<PathBuf>, String> {
+    crate::runtime::block_on(open_file_async(title, Vec::new(), start_dir, false, true)).map(|v| v.into_iter().next()).map_err(|e| e.to_string())
 }
 
 /// Picks one image (PNG / JPEG / WebP), starting in ~/Pictures.
@@ -60,7 +66,7 @@ fn request_path(unique_name: &str, token: &str) -> String {
 /// Portal filters: `(name, [(kind, pattern)])`.
 type FilterList = Vec<(String, Vec<(u32, String)>)>;
 
-async fn open_file_async(title: &str, filter_list: FilterList, start_dir: Option<PathBuf>, multiple: bool) -> zbus::Result<Vec<PathBuf>> {
+async fn open_file_async(title: &str, filter_list: FilterList, start_dir: Option<PathBuf>, multiple: bool, directory: bool) -> zbus::Result<Vec<PathBuf>> {
     // Private connection: the response stream lives only for this dialog.
     let conn = crate::runtime::connect(zbus::connection::Builder::session()?).await?;
     let unique = conn.unique_name().map(|n| n.to_string()).unwrap_or_default();
@@ -81,6 +87,9 @@ async fn open_file_async(title: &str, filter_list: FilterList, start_dir: Option
     options.insert("handle_token", Value::from(token.as_str()));
     options.insert("modal", Value::from(true));
     options.insert("multiple", Value::from(multiple));
+    if directory {
+        options.insert("directory", Value::from(true));
+    }
     if !filter_list.is_empty() {
         options.insert("filters", Value::from(filter_list.clone()));
     }

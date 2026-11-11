@@ -442,6 +442,27 @@ mandara msg world-clock add Mecca    # list, remove, search <query>, at <HH:MM>
 mandara msg authenticator code github  # list, copy, add <otpauth://…>, remove <id>, scan, demo on|off
 ```
 
+The `sound` commands belong to the opt-in **Sound themes** plugin
+(`mandara msg plugins enable sound-themes`); while it is off they answer
+that the plugin is off and change nothing.
+
+```bash
+mandara msg sound list                     # catalog, installed themes, the active one, each event's file
+mandara msg sound install ocean            # pinned upstream release, SHA-256 checked, to ~/.local/share/sounds
+mandara msg sound apply ocean              # Mandara's sounds (and, with Apply to apps, GTK and KDE apps)
+mandara msg sound apply none               # back to your desktop's own theme
+mandara msg sound play notification ocean  # one event from a theme; replies with its length and level outline
+mandara msg sound import ~/Downloads/my-sounds.tar.gz
+mandara msg sound import https://example.org/sounds.tar.xz --unverified   # links need --unverified
+mandara msg sound remove ocean             # only what Mandara installed
+```
+
+`sound install` keeps a download only when its size and SHA-256 match the
+catalog and installs just the theme's sounds, `index.theme` and licence
+files; nothing from an archive runs. Removing the active theme returns to
+your desktop's own. The older `sounds play|preview|status|themes|enable`
+commands keep working for Mandara's own event sounds.
+
 The `cursor` commands belong to the opt-in **Cursor themes** plugin
 (`mandara msg plugins enable cursors`); while it is off they answer that the
 plugin is off and change nothing, and Mandara writes no cursor setting at

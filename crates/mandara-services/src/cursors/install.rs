@@ -208,8 +208,9 @@ impl Drop for Scratch {
     }
 }
 
-/// Unpacks `archive` into `dest` with the reader its first bytes call for.
-fn unpack(archive_path: &Path, dest: &Path, cancel: &AtomicBool, on_bytes: archive::OnBytes<'_>) -> Result<u64, String> {
+/// Unpacks `archive` into `dest` with the reader its first bytes call for
+/// (also used for sound themes).
+pub(crate) fn unpack(archive_path: &Path, dest: &Path, cancel: &AtomicBool, on_bytes: archive::OnBytes<'_>) -> Result<u64, String> {
     let mut head = [0u8; 4];
     let n = std::fs::File::open(archive_path).and_then(|mut f| f.read(&mut head)).map_err(|e| e.to_string())?;
     let head = &head[..n];

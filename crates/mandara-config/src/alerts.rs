@@ -443,6 +443,23 @@ pub struct SoundsConfig {
     pub charger: bool,
     pub screenshot: bool,
     pub login: bool,
+    /// Locking and unlocking the screen.
+    pub lock: bool,
+    /// A drive or other device plugged in / removed.
+    pub devices: bool,
+    /// Emptying the Trash.
+    pub trash: bool,
+    /// A soft tick as the screen brightness moves.
+    pub brightness_change: bool,
+    /// Long jobs finishing (a theme or app install).
+    pub complete: bool,
+    /// While do not disturb is on, only sounds you cause (volume, a
+    /// screenshot) and battery alerts play.
+    pub quiet_in_dnd: bool,
+    /// Sound themes plugin: applying a theme also sets it for apps (GTK's
+    /// `org.gnome.desktop.sound`, existing `settings.ini` files, KDE's
+    /// `kdeglobals`).
+    pub desktop_sync: bool,
     /// Your own files per event (`volume-change`, `notification`, …).
     pub files: BTreeMap<String, String>,
 }
@@ -461,6 +478,13 @@ impl Default for SoundsConfig {
             charger: true,
             screenshot: true,
             login: true,
+            lock: true,
+            devices: true,
+            trash: true,
+            brightness_change: false,
+            complete: true,
+            quiet_in_dnd: true,
+            desktop_sync: true,
             files: BTreeMap::new(),
         }
     }

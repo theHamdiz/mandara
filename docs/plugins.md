@@ -29,7 +29,7 @@ running can finish; disabling the plugin prevents a follow-up refresh.
 </tr>
 </table>
 
-The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
+The 82 first-party plugins (46 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -83,6 +83,7 @@ The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
 | **App installer** | Install apps by dropping AppImages, Flatpaks, archives or packages on the dock or Studio | *(opt-in)*
 | **Screen time** | How long you spend in each app, per day, with limits *(opt-in)* |
 | **Cursor themes** | Install, preview and apply cursor themes, live, with size and hiding options *(opt-in)* |
+| **Sound themes** | Install, preview and apply desktop sound themes for Mandara's own sounds and your apps *(opt-in)* |
 | **Shortcuts cheatsheet** | Every keyboard shortcut, Mandara's and your compositor's, in one searchable sheet (`mandara msg keybinds toggle`) *(opt-in)* |
 | **Task progress** | A bar ring that scripts, long builds and AI agents report progress to (`mandara msg progress set build 40%`) *(opt-in)* |
 | **Eye breaks** | Gentle 20-20-20 reminders that count only active time and wait while a fullscreen app has focus *(opt-in)* |
@@ -355,6 +356,54 @@ colours, the level meter and stream details, which shelves appear, and the
 directory. Your favourites and stations live in
 `~/.local/state/mandara/radio.toml`. Commands: `mandara msg radio …`
 ([commands](commands.md)).
+
+## Sound themes
+
+*Opt-in* (`sound-themes`). Studio → Themes → **Sounds**
+(`mandara studio themes/sounds`). Switched off, the tab still shows the
+plugin with what it touches and an *Enable* button, and Mandara installs
+nothing and leaves the desktop's sound settings alone.
+
+- **Your sound theme**: the theme playing now, Mandara's shell-sound
+  settings (on, volume, quiet in do not disturb, quiet while media plays,
+  *Apply to apps*) and every event with its switch, the file the theme
+  plays for it (or *Silent in this theme*) and a test button: notifications
+  (normal, critical, low), volume and brightness ticks, screenshots, the
+  charger and low battery, drives plugged in or removed, emptying the
+  Trash, an install finishing, logging in and locking.
+- **The gallery**: freedesktop, Ocean (Plasma 6), Oxygen, Ubuntu,
+  elementary, COSMIC, Deepin and Materia, plus every theme already
+  installed on the system or by you. Each card shows its origin, author and
+  licence, three sounds to try with a level outline that plays along, and
+  one action: *Get* (the pinned upstream release, checked against its
+  SHA-256) → *Apply* → *Active*; *Remove* deletes only what Mandara
+  installed. Search and the *All / Installed / To get* chips narrow it.
+- **Your own**: install a folder or an archive (`.tar.gz`, `.tar.xz`,
+  `.tar.bz2`, `.tar.zst`, `.zip`) through the desktop's file picker, or an
+  `https://` link. Links aren't pinned, so Studio asks before installing
+  one. Only sounds, `index.theme` and licence files are kept, archives are
+  unpacked with pure-Rust readers that refuse unsafe paths, and nothing in
+  them runs.
+- **Mandara's own sounds** follow the applied theme, with `Inherits=` and
+  the freedesktop fallback. Do not disturb silences the sounds that come
+  unasked (devices, the charger, logging in, locking, installs) and keeps
+  the ones you cause (volume, screenshots, the Trash) and battery alerts.
+  Sounds play from the sound server's sample cache; the worker that plays
+  them keeps the 12 most recent ready and ends 30 s after the last one,
+  taking them out of the server. On FreeBSD without a sound server they go
+  straight to `/dev/dsp`, opened only for each sound.
+- **Apply to apps** (on by default) also sets the theme in GTK's
+  `org.gnome.desktop.sound theme-name` (through `gsettings`), in
+  `~/.config/gtk-3.0` and `gtk-4.0/settings.ini` when they exist, and in
+  `~/.config/kdeglobals` `[Sounds] Theme=` (when it exists or Plasma runs),
+  which KWin and Plasma's notifications play from. Mandara records the
+  values it replaces and puts them back when you pick *Your desktop's*,
+  switch *Apply to apps* off or turn the plugin off. Other compositors play
+  no sounds of their own.
+- Themes install to `~/.local/share/sounds`; system themes are read from
+  `/usr/local/share/sounds` (FreeBSD ports) and `/usr/share/sounds`.
+- Commands: `mandara msg sound list|install|apply|remove|import|play`
+  (see [commands](commands.md)).
 
 ## Wallpaper depth
 

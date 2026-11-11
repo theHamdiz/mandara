@@ -8,6 +8,8 @@
 //! * `apps defaults|default set|autostart …|preferred` — `mimeapps.list`
 //!   and XDG autostart, edited non-destructively (`mandara_config::apps`).
 //! * `input cursor-themes|layouts` — what Studio → Input offers.
+//! * `sound list|install|apply|remove|import|play` — Studio → Themes →
+//!   Sounds (the opt-in `sound-themes` plugin, `plugins::sound_themes`).
 //! * `cursor list|install|apply|remove` — Studio → Themes → Cursor (the
 //!   opt-in `cursors` plugin's commands).
 //! * `profile list|save|apply|delete`, `config export|import|reset`.
@@ -553,6 +555,7 @@ fn register_apps(r: &mut PluginRegistry) {
     );
     register_uninstall(r);
     register_cursor(r);
+    super::sound_themes::register_commands(r);
     r.command(CORE, CommandSpec::new("input cursor-themes", tk("Installed cursor themes"), |_, _| Ok(json!(mandara_config::input::cursor_themes()))));
     r.command(
         CORE,

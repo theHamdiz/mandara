@@ -79,6 +79,7 @@ pub mod looks_page;
 mod app_themes_page;
 mod themes_page;
 mod cursor_page;
+mod sounds_page;
 mod component_designs;
 mod plugin_offer;
 mod swatch_list;
@@ -295,7 +296,10 @@ impl StudioView {
             cx.defer(move |cx| {
                 match leaving {
                     Section::LoginScreen => greeter_page::release(cx),
-                    Section::Themes => cursor_page::release(cx),
+                    Section::Themes => {
+                        cursor_page::release(cx);
+                        sounds_page::release(cx);
+                    }
                     Section::Wallpaper => {
                         wallgen_page::release(cx);
                         wallpaper_page::release(cx);

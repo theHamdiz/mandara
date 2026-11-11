@@ -2,7 +2,8 @@
 //! `[notifications]` / `[audio]` / `[media]` into their actors, runs the
 //! privacy monitor (`[privacy]`) and automatic do not disturb (screen
 //! sharing, fullscreen), and plays shell event sounds (`[sounds]`) for
-//! notifications, volume changes, the charger and the session's login.
+//! notifications, volume changes, the charger, drives, locking and the
+//! session's login (do not disturb silences the ones that come unasked).
 //! Also raises the matching on-screen displays (do not disturb, power
 //! profile, now playing, privacy).
 
@@ -66,14 +67,19 @@ pub fn privacy_summary(st: &PrivacyState) -> String {
     if parts.is_empty() { t("Nothing is using your microphone, camera or screen").to_string() } else { parts.join(" · ") }
 }
 
-/// Plays `event` when sounds and that event are on, staying quiet while
-/// media plays if asked to.
+/// Plays `event` when sounds and that event are on and do not disturb
+/// allows it, staying quiet while media plays if asked to.
 pub fn play_sound(event: SoundEvent, cx: &mut App) {
     let cfg = config(cx).read(cx).get().sounds.clone();
-    if !event.enabled_in(&cfg) {
+    if !event.allowed(&cfg, dnd_on(cx)) {
         return;
     }
     play_unchecked(event, cfg, cx);
+}
+
+/// Whether do not disturb is on (by hand, on a schedule or automatically).
+fn dnd_on(cx: &App) -> bool {
+    hub(cx).read(cx).notifications.quiet()
 }
 
 /// The sound for a notification: an app's own sound (`sound-name` hint)
@@ -115,7 +121,7 @@ fn play_unchecked(event: SoundEvent, mut cfg: mandara_config::alerts::SoundsConf
 pub fn deferred_sound(event: SoundEvent, cx: &App) -> impl FnOnce() + Send + 'static {
     let cfg = config(cx).read(cx).get().sounds.clone();
     let playing = hub(cx).read(cx).media.as_ref().is_some_and(|m| m.status == PlaybackStatus::Playing);
-    let allowed = cfg.enabled && event.enabled_in(&cfg) && !(cfg.mute_while_media && playing);
+    let allowed = event.allowed(&cfg, dnd_on(cx)) && !(cfg.mute_while_media && playing);
     move || {
         if allowed {
             sounds::play(&event, &cfg);
@@ -370,10 +376,20 @@ pub fn init(cx: &mut App) {
         while let Ok(event) = events.recv().await {
             cx.update(|cx| match event {
                 SystemEvent::OnBattery(on_battery) => play_sound(if on_battery { SoundEvent::PowerUnplug } else { SoundEvent::PowerPlug }, cx),
+                SystemEvent::Drive(added) => play_sound(if added { SoundEvent::DeviceAdded } else { SoundEvent::DeviceRemoved }, cx),
                 SystemEvent::PowerProfile(profile) => {
                     osd::show(OsdEvent::power_profile(&profile), cx);
                 }
             });
+        }
+    })
+    .detach();
+
+    // Locking and unlocking the screen.
+    let locks = crate::lock::subscribe();
+    cx.spawn(async move |cx| {
+        while let Ok(locked) = locks.recv().await {
+            cx.update(|cx| play_sound(if locked { SoundEvent::Lock } else { SoundEvent::Unlock }, cx));
         }
     })
     .detach();
@@ -384,7 +400,25 @@ pub fn init(cx: &mut App) {
 // ── Commands ─────────────────────────────────────────────────────────────
 
 /// Event keys `sounds preview` offers.
-const SOUND_EVENTS: &[&str] = &["volume-change", "notification-low", "notification", "notification-critical", "power-plug", "power-unplug", "screenshot", "login", "battery-low", "battery-critical"];
+const SOUND_EVENTS: &[&str] = &[
+    "volume-change",
+    "brightness-change",
+    "notification-low",
+    "notification",
+    "notification-critical",
+    "power-plug",
+    "power-unplug",
+    "screenshot",
+    "login",
+    "lock",
+    "unlock",
+    "device-added",
+    "device-removed",
+    "trash-empty",
+    "complete",
+    "battery-low",
+    "battery-critical",
+];
 
 fn sound_arg(a: &mandara_plugins::Args) -> Result<SoundEvent, String> {
     Ok(SoundEvent::parse(a.str(0)?))
@@ -400,7 +434,7 @@ pub fn register(r: &mut mandara_plugins::PluginRegistry) {
         CommandSpec::new("sounds play", tk("Play a shell sound if sounds and that event are on (or any theme sound name)"), |a, cx| {
             let event = sound_arg(a)?;
             let cfg = config(cx).read(cx).get().sounds.clone();
-            let file = (cfg.enabled && event.enabled_in(&cfg)).then(|| sounds::resolve(&event, &cfg)).flatten();
+            let file = event.allowed(&cfg, dnd_on(cx)).then(|| sounds::resolve(&event, &cfg)).flatten();
             play_sound(event, cx);
             Ok(json!({ "file": file, "enabled": cfg.enabled }))
         })

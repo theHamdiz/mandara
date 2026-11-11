@@ -355,6 +355,9 @@ mod tests {
         // The cursor deep link still lands on the tab holding the cursor.
         assert!(super::cursor_target("themes/cursor"));
         assert_eq!(ThemesTab::parse("cursor"), Some(ThemesTab::Colors));
+        // The sound themes tab.
+        assert_eq!(themes_tab_target("themes/sounds"), Some(ThemesTab::Sounds));
+        assert_eq!(themes_tab_target("themes/sound-themes"), Some(ThemesTab::Sounds));
     }
 
     use super::*;

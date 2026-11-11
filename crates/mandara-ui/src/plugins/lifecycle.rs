@@ -207,6 +207,7 @@ mod tests {
         "screen-time",
         "services",
         "share",
+        "sound-themes",
         "soundscapes",
         "sudoku",
         "tailscale",

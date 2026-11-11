@@ -279,23 +279,26 @@ fn restore_look(cx: &mut gpui::App) {
     }
 }
 
-/// The Themes page's tabs: its colours and style, and the components'
-/// designs (one page, two tabs; Studio keeps its pages).
+/// The Themes page's tabs: its colours and style, the components' designs
+/// and the sound themes (one page, its tabs; Studio keeps its pages).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum ThemesTab {
     #[default]
     Colors,
     Components,
+    /// The sound themes plugin (`sounds_page.rs`).
+    Sounds,
 }
 
 impl ThemesTab {
-    pub const ALL: [ThemesTab; 2] = [ThemesTab::Colors, ThemesTab::Components];
+    pub const ALL: [ThemesTab; 3] = [ThemesTab::Colors, ThemesTab::Components, ThemesTab::Sounds];
 
     /// Deep-link name (`mandara studio themes/components`).
     pub fn slug(self) -> &'static str {
         match self {
             ThemesTab::Colors => "colors",
             ThemesTab::Components => "components",
+            ThemesTab::Sounds => "sounds",
         }
     }
 
@@ -305,6 +308,7 @@ impl ThemesTab {
         Self::ALL.into_iter().find(|t| t.slug() == s).or(match s.as_str() {
             "colours" | "looks" | "style" | "themes" | "cursor" | "cursors" => Some(ThemesTab::Colors),
             "component" | "designs" | "presets" | "controls" | "sliders" | "buttons" => Some(ThemesTab::Components),
+            "sound" | "sound-themes" | "sound-theme" | "audio-theme" => Some(ThemesTab::Sounds),
             _ => None,
         })
     }
@@ -313,6 +317,7 @@ impl ThemesTab {
         match self {
             ThemesTab::Colors => tk("Colors & style"),
             ThemesTab::Components => tk("Components"),
+            ThemesTab::Sounds => tk("Sounds"),
         }
     }
 }
@@ -324,6 +329,7 @@ impl super::page_tabs::PageTab for ThemesTab {
         match self {
             ThemesTab::Colors => "palette",
             ThemesTab::Components => "grid",
+            ThemesTab::Sounds => "volume-high",
         }
     }
 }
@@ -333,6 +339,10 @@ impl StudioView {
     pub fn show_themes_tab(&mut self, tab: ThemesTab, cx: &mut Context<Self>) {
         self.show(Section::Themes, cx);
         if self.themes_tab != tab {
+            // The sound gallery's lists, fields and cover go with its tab.
+            if self.themes_tab == ThemesTab::Sounds {
+                cx.defer(super::sounds_page::release);
+            }
             self.themes_tab = tab;
             // The other tab's previews go: nothing of them stays alive.
             self.components = Default::default();
@@ -349,6 +359,7 @@ impl StudioView {
         let body = match tab {
             ThemesTab::Colors => self.themes_colors(cfg, p, cx),
             ThemesTab::Components => self.components_section(cfg, p, cx),
+            ThemesTab::Sounds => self.sounds_tab(cfg, p, window, cx),
         };
         div().row().flex_col().gap(px(SPACE_22_PX)).child(tabs).child(body).into_any_element()
     }

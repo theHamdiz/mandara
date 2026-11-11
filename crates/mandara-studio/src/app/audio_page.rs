@@ -499,21 +499,10 @@ impl StudioView {
     /// Preview buttons for each shell sound (plays even while sounds are off).
     fn sound_previews(&mut self, p: &MandaraPalette, _cx: &mut Context<Self>) -> AnyElement {
         use mandara_services::sounds::SoundEvent;
-        let label = |e: &SoundEvent| match e {
-            SoundEvent::VolumeChange => mandara_i18n::tk("Volume"),
-            SoundEvent::NotificationLow => mandara_i18n::tk("Low urgency"),
-            SoundEvent::Notification => mandara_i18n::tk("Notification"),
-            SoundEvent::NotificationCritical => mandara_i18n::tk("Critical"),
-            SoundEvent::PowerPlug => mandara_i18n::tk("Charger"),
-            SoundEvent::Screenshot => mandara_i18n::tk("Screenshot"),
-            SoundEvent::Login => mandara_i18n::tk("Login"),
-            SoundEvent::BatteryLow => mandara_i18n::tk("Low battery"),
-            _ => mandara_i18n::tk("Sound"),
-        };
         let mut row = div().row().flex_wrap().gap(px(SPACE_6_PX));
         for (n, e) in SoundEvent::CONFIGURABLE.iter().enumerate() {
             let key = e.key().to_string();
-            row = row.child(super::compositor_page::chip(SharedString::from(format!("sound-try-{n}")), t(label(e)), false, p).child(icon("play", ICON_12_PX, p.primary)).on_click(move |_: &ClickEvent, _, cx| {
+            row = row.child(super::compositor_page::chip(SharedString::from(format!("sound-try-{n}")), t(e.label()), false, p).child(icon("play", ICON_12_PX, p.primary)).on_click(move |_: &ClickEvent, _, cx| {
                 if let Some(ipc) = cx.try_global::<crate::perf::ShellIpc>().cloned() {
                     let words = vec!["sounds".to_string(), "preview".to_string(), key.clone()];
                     std::thread::spawn(move || {
