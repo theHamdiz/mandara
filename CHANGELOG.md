@@ -6,6 +6,12 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.27.0 — 2026-11-11
+
+Aqueous joins the supported compositors (#162). The password dialog no
+longer freezes, and asks once instead of twice. Changing a display's scale
+no longer makes the top bar disappear.
+
 ### New
 
 - **Aqueous joins the supported compositors (#162).** On Aqueous the bar's workspace pills now show each display's workspaces and switch to one when you click it, and the window title, displays, keyboard layout, window moves and the Overview hot corner follow Aqueous too, all over its own IPC socket without ever making the bar wait. Aqueous keeps its settings in its own files, so Mandara writes nothing there; the layout pill can't change Aqueous layouts, because Aqueous has no command for that yet.

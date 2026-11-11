@@ -4054,7 +4054,7 @@ checksum = "fc04a4c58212d57930a24bf47d3fa87485264a3a054e9c10e042eb373573ad3c"
 
 [[package]]
 name = "mandara-app"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4085,7 +4085,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-compositor"
-version = "0.23.1"
+version = "0.24.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4106,7 +4106,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-config"
-version = "0.24.1"
+version = "0.25.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4126,7 +4126,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-core"
-version = "0.9.1"
+version = "0.9.2"
 dependencies = [
  "anyhow",
  "approx",
@@ -4150,7 +4150,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-delta"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "bidiff",
  "bipatch",
@@ -4167,7 +4167,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-greeter"
-version = "0.24.1"
+version = "0.25.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4197,7 +4197,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-i18n"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "mandara-version",
  "memmap2",
@@ -4207,7 +4207,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-install"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "clap",
  "flate2",
@@ -4223,7 +4223,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-media"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "image",
  "libc",
@@ -4236,7 +4236,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-plugins"
-version = "0.23.1"
+version = "0.24.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4256,7 +4256,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-services"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "ab_glyph",
  "aes",
@@ -4345,7 +4345,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-studio"
-version = "0.26.1"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4381,7 +4381,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-theme"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "approx",
@@ -4399,7 +4399,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-ui"
-version = "0.24.1"
+version = "0.25.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4443,7 +4443,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-version"
-version = "0.3.14"
+version = "0.3.15"
 dependencies = [
  "sha2",
  "toml 1.2.0+spec-1.1.0",
@@ -4451,7 +4451,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-wallgen"
-version = "0.23.1"
+version = "0.24.0"
 dependencies = [
  "image",
  "mandara-i18n",
@@ -4466,7 +4466,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-webp"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "image",
 ]
@@ -9459,7 +9459,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "ab_glyph",
  "anyhow",
