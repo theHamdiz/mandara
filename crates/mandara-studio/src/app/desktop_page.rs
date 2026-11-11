@@ -252,7 +252,7 @@ impl StudioView {
         if st(cx).preview.as_ref().is_none_or(|(k, _)| !k.holds(cfg, width)) {
             let key = PreviewKey::of(cfg, width);
             let entries = mandara_ui::desktop_menu::desktop_entries(cfg, "");
-            let outer = mandara_ui::desktop_menu::add_entries(cx);
+            let outer = mandara_ui::desktop_menu::add_tree(cx);
             let preview = Preview::new(&cfg.desktop.menu, entries.clone(), outer, width, mandara_i18n::language().is_rtl());
             let s = st(cx);
             s.rows = entries;
@@ -320,7 +320,7 @@ impl StudioView {
                 let at = (f32::from(e.position.x - b.origin.x), f32::from(e.position.y - b.origin.y));
                 let s = st(cx);
                 let cur = s.sel.unwrap_or(Sel::None);
-                let Some((_, preview)) = s.preview.as_ref() else { return };
+                let Some((_, preview)) = s.preview.as_mut() else { return };
                 let next = preview.hit(at, cur);
                 if next != cur {
                     s.sel = Some(next);

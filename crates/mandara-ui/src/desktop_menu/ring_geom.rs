@@ -172,9 +172,14 @@ pub struct Arc {
 impl Arc {
     /// `n` items outside `ring`, centred on `mid`.
     pub fn new(n: usize, ring: &Ring, mid: f32, rtl: bool) -> Self {
-        let item = (ring.item * SUB_SCALE).round();
+        Self::around(n, ring.outer, (ring.item * SUB_SCALE).round(), mid, rtl)
+    }
+
+    /// `n` items of `item` px outside a circle of `inner` radius (the main
+    /// glass, or the ring before), centred on `mid`.
+    pub fn around(n: usize, inner: f32, item: f32, mid: f32, rtl: bool) -> Self {
         let pitch = item + SUB_ITEM_GAP;
-        let mut radius = ring.outer + SUB_GAP + item / 2.0;
+        let mut radius = inner + SUB_GAP + item / 2.0;
         let mut step = pitch / radius;
         let full = n as f32 * step >= TAU;
         if full {
@@ -199,6 +204,11 @@ impl Arc {
             let (x, y) = self.pos(c, j);
             x - h >= EDGE && y - h >= EDGE && x + h <= screen.0 - EDGE && y + h <= screen.1 - EDGE
         })
+    }
+
+    /// How far its items reach from the centre.
+    pub fn reach(&self) -> f32 {
+        self.radius + self.item / 2.0
     }
 
     /// The item `p` is on (its band, the nearest by angle).
@@ -233,7 +243,19 @@ impl Arc {
 /// item to stay on `screen`, and when no turn is enough, around a centre
 /// moved inward so the whole outer ring fits. Returns it and its centre.
 pub fn place_arc(n: usize, parent: f32, ring: &Ring, c: (f32, f32), screen: (f32, f32), rtl: bool) -> (Arc, (f32, f32)) {
-    let base = Arc::new(n, ring, parent, rtl);
+    place(Arc::new(n, ring, parent, rtl), c, screen)
+}
+
+/// Places the next level out: `n` items outside `prev` (a ring of outer
+/// items on `c`) for its item `parent`, as [`place_arc`] does.
+pub fn place_next(n: usize, prev: &Arc, parent: usize, c: (f32, f32), screen: (f32, f32), rtl: bool) -> (Arc, (f32, f32)) {
+    place(Arc::around(n, prev.reach(), prev.item, prev.angle(parent), rtl), c, screen)
+}
+
+/// `base` turned as little as needed to fit `screen` around `c`, else
+/// around a centre moved inward so the whole ring fits.
+fn place(base: Arc, c: (f32, f32), screen: (f32, f32)) -> (Arc, (f32, f32)) {
+    let parent = base.mid;
     let turned = |c: (f32, f32)| {
         (0..=ROTATE_STEPS).find_map(|k| {
             let d = (k as f32 * ROTATE_STEP_DEG).to_radians();
@@ -243,7 +265,7 @@ pub fn place_arc(n: usize, parent: f32, ring: &Ring, c: (f32, f32), screen: (f32
     if let Some(a) = turned(c) {
         return (a, c);
     }
-    let reach = base.radius + base.item / 2.0;
+    let reach = base.reach();
     let moved = fit_center(c, (reach, reach), screen);
     (turned(moved).unwrap_or(base), moved)
 }
@@ -486,6 +508,43 @@ mod tests {
         assert!(rtl.pos(c, 0).0 > rtl.pos(c, 4).0, "the first item on the right");
         let (ltr, _) = place_arc(5, TOP, &r, c, SCREEN, false);
         assert!(ltr.pos(c, 0).0 < ltr.pos(c, 4).0);
+    }
+
+    #[test]
+    fn a_second_level_opens_outside_the_first_and_stays_on_screen() {
+        let r = ring(10, false);
+        let c = (960.0, 540.0);
+        let (shelves, at) = place_arc(8, r.angle(1), &r, c, SCREEN, false);
+        let (widgets, at2) = place_next(6, &shelves, 2, at, SCREEN, false);
+        assert_eq!(at2, at, "room enough in the open");
+        assert!(widgets.radius - widgets.item / 2.0 >= shelves.reach() + SUB_GAP - 0.01, "outside the shelves");
+        assert!((widgets.mid - shelves.angle(2)).abs() < 1e-4, "centred on its parent");
+        for j in 0..6 {
+            assert_eq!(widgets.hit(at2, widgets.pos(at2, j)), Some(j));
+            assert_eq!(shelves.hit(at2, widgets.pos(at2, j)), None, "the levels don't overlap");
+        }
+        for j in 0..8 {
+            assert_eq!(widgets.hit(at2, shelves.pos(at2, j)), None);
+        }
+        // Near every edge and corner, every shelf and every widget fit.
+        for at in [(10.0, 10.0), (1910.0, 10.0), (10.0, 1070.0), (1910.0, 1070.0), (960.0, 5.0), (5.0, 540.0), (1915.0, 540.0), (960.0, 1075.0)] {
+            let main = fit_center(at, (r.outer, r.outer), SCREEN);
+            for parent in [0, 1, 4, 9] {
+                let (shelves, c1) = place_arc(9, r.angle(parent), &r, main, SCREEN, false);
+                for shelf in 0..9 {
+                    for n in [2, 7, 12] {
+                        let (widgets, c2) = place_next(n, &shelves, shelf, c1, SCREEN, false);
+                        assert!(widgets.fits(c2, SCREEN), "{at:?} {parent}/{shelf}: {n} widgets");
+                        assert!(shelves.fits(c2, SCREEN), "{at:?}: the shelves still fit around the moved centre");
+                        assert!(c2.0 - r.outer >= EDGE - 0.01 && c2.1 - r.outer >= EDGE - 0.01);
+                    }
+                }
+            }
+        }
+        // Right to left mirrors this level too.
+        let (rtl, _) = place_next(5, &shelves, 2, at, SCREEN, true);
+        let (ltr, _) = place_next(5, &shelves, 2, at, SCREEN, false);
+        assert!((rtl.angle(0) - ltr.angle(4)).abs() < 1e-4);
     }
 
     #[test]

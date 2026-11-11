@@ -120,8 +120,9 @@ const HUB_TEXT: f32 = 0.84;
 const HUB_LINE_H: f32 = 16.0;
 const HUB_TEXT_GAP: f32 = 4.0;
 const DISABLED_ALPHA: f32 = 0.42;
-/// The close glyph in the hub.
+/// The close (or back) glyph in the hub, and its alpha at rest.
 const CLOSE_GLYPH: f32 = 16.0;
+const HUB_GLYPH_ALPHA: f32 = 0.7;
 /// A label beside the ring: gap, the box it sits in, height and padding.
 const LABEL_GAP: f32 = 10.0;
 const LABEL_BOX_W: f32 = 260.0;
@@ -150,23 +151,61 @@ impl Item {
     }
 }
 
+/// "Add widget"'s levels as ring items: its pearls (shelves, or widgets
+/// when there are only a few) and each shelf's widgets.
+pub struct Tree {
+    top: Vec<Item>,
+    shelves: Vec<Vec<Item>>,
+}
+
+impl Tree {
+    pub fn new(levels: Vec<(Entry, Vec<Entry>)>) -> Self {
+        let mut top = Vec::with_capacity(levels.len());
+        let mut shelves = Vec::with_capacity(levels.len());
+        for (pearl, kids) in levels {
+            top.push(Item::new(pearl));
+            shelves.push(kids.into_iter().map(Item::new).collect());
+        }
+        Self { top, shelves }
+    }
+
+    /// The top pearls (`None`) or shelf `g`'s widgets.
+    pub fn items(&self, node: Option<usize>) -> &[Item] {
+        match node {
+            None => &self.top,
+            Some(g) => self.shelves.get(g).map_or(&[], Vec::as_slice),
+        }
+    }
+}
+
 /// What is selected.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Sel {
     None,
-    /// The hub: "close".
+    /// The hub: "close", or "back" while an outer ring shows.
     Hub,
     Main(usize),
-    Outer(usize),
+    /// Item `j` of outer level `l` (0: "Add widget"'s shelves or widgets,
+    /// 1: a shelf's widgets).
+    Outer(u8, usize),
 }
 
-/// The outer ring ("Add widget").
+/// Outer levels at most: Add widget's shelves, then a shelf's widgets.
+pub const MAX_LEVELS: usize = 2;
+/// The arc counts as on a ring within this distance of its radius.
+const LEVEL_SNAP: f32 = 40.0;
+
+/// An outer ring ("Add widget", or one of its shelves).
 #[derive(Clone)]
 struct Outer {
     arc: Arc,
     /// The menu's centre while it shows (moved inward near an edge).
     center: (f32, f32),
+    /// Its parent: an item of the main ring (level 0) or of the level
+    /// before.
     parent: usize,
+    /// Its items: the top of the tree, or shelf `Some(g)`'s widgets.
+    node: Option<usize>,
     /// Seconds of its bloom.
     t: f32,
     presence: SpringValue<f32>,
@@ -212,7 +251,9 @@ pub struct Scene {
     pub sel: Sel,
     /// The arc: angle, radius, span, thickness and presence.
     pub arc: (f32, f32, f32, f32, f32),
-    pub outer: Option<OuterScene>,
+    /// The outer levels showing (or folding away), and how many show.
+    pub outers: [Option<OuterScene>; MAX_LEVELS],
+    pub depth: u8,
     pub labels: MenuLabels,
     pub opacity: f32,
 }
@@ -222,6 +263,8 @@ pub struct OuterScene {
     pub arc: Arc,
     pub parent: usize,
     pub parent_angle: f32,
+    /// The radius its items fly out from (their parent's ring).
+    pub from_radius: f32,
     pub t: f32,
     pub presence: f32,
 }
@@ -249,7 +292,7 @@ impl Scene {
         let q = flight(o.t - j as f32 * OUTER_STAGGER_S).min(o.presence.max(0.0) * 1.2);
         let target = o.arc.angle(j);
         let a = o.parent_angle + geom::wrap(target - o.parent_angle) * q;
-        let r = self.ring.radius + (o.arc.radius - self.ring.radius) * q;
+        let r = o.from_radius + (o.arc.radius - o.from_radius) * q;
         (geom::polar(self.center, r, a), q)
     }
 
@@ -268,12 +311,14 @@ impl Scene {
         if self.labels == MenuLabels::Always { CAPTION_LIFT } else { 0.0 }
     }
 
-    /// How much the arc is on the main ring (1) rather than the outer one
-    /// (0): it slides between them.
+    /// How much the arc is on the ring of radius `r` (1) rather than
+    /// another level: it slides between them.
+    fn on_ring(&self, r: f32) -> f32 {
+        (1.0 - (self.arc.1 - r).abs() / LEVEL_SNAP).clamp(0.0, 1.0)
+    }
+
     fn on_main(&self) -> f32 {
-        let Some(o) = &self.outer else { return 1.0 };
-        let gap = (o.arc.radius - self.ring.radius).max(1.0);
-        (1.0 - (self.arc.1 - self.ring.radius).abs() / gap).clamp(0.0, 1.0)
+        self.on_ring(self.ring.radius)
     }
 }
 
@@ -425,8 +470,8 @@ fn paint(s: &Scene, ink: &Ink, shade: &Shade, origin: Point<Pixels>, window: &mu
             window.paint_quad(fill(disc_bounds((p.0 + o.0, p.1 + o.1), r), ink.socket.with_alpha(ink.socket.alpha() * qa).hsla()).corner_radii(px(r)));
         }
     }
-    // 4 · the outer ring's pearls.
-    if let Some(os) = &s.outer {
+    // 4 · the outer rings' pearls.
+    for os in s.outers.iter().flatten() {
         for j in 0..os.arc.n {
             let (p, q) = s.pearl(os, j);
             let pa = s.alpha * q.clamp(0.0, 1.0);
@@ -459,13 +504,17 @@ fn paint(s: &Scene, ink: &Ink, shade: &Shade, origin: Point<Pixels>, window: &mu
     }
     // 6 · the hub.
     let hub = ring.hub * scale;
-    let base = if s.sel == Sel::Hub { ink.hub.mix(ink.close, HUB_CLOSE_TINT) } else { ink.hub };
+    let base = match (s.sel, s.depth) {
+        (Sel::Hub, 0) => ink.hub.mix(ink.close, HUB_CLOSE_TINT),
+        (Sel::Hub, _) => ink.hub.mix(ink.accent, HUB_CLOSE_TINT),
+        _ => ink.hub,
+    };
     glass_disc(window, c, hub, base, &[], &shade.rim, a);
 }
 
 /// The whole ring for `s` as positioned children of a box whose top-left
 /// is the scene's origin.
-fn draw(s: Scene, items: &[Item], outer_items: &[Item], palette: &MandaraPalette, shade: Rc<Shade>, ui_font: SharedString) -> Div {
+fn draw(s: Scene, items: &[Item], outer_items: [&[Item]; MAX_LEVELS], palette: &MandaraPalette, shade: Rc<Shade>, ui_font: SharedString) -> Div {
     let ink = Ink::new(palette, s.opacity);
     let scale = s.scale();
     let a = s.alpha * (s.p * 1.6).clamp(0.0, 1.0);
@@ -493,7 +542,7 @@ fn draw(s: Scene, items: &[Item], outer_items: &[Item], palette: &MandaraPalette
         let ((x, y), q) = s.item(i);
         let k = s.near(s.ring.angle(i), s.ring.step) * s.on_main();
         // The parent of the outer ring keeps a little light while it shows.
-        let k = match &s.outer {
+        let k = match &s.outers[0] {
             Some(o) if o.parent == i => k.max(PARENT_LIT * o.presence.clamp(0.0, 1.0)),
             _ => k,
         };
@@ -520,11 +569,18 @@ fn draw(s: Scene, items: &[Item], outer_items: &[Item], palette: &MandaraPalette
             );
         }
     }
-    if let Some(os) = &s.outer {
+    for (level, os) in s.outers.iter().enumerate() {
+        let Some(os) = os else { continue };
         let g = os.arc.item * GLYPH_RATIO;
-        for (j, it) in outer_items.iter().enumerate().take(os.arc.n) {
+        let child = s.outers.get(level + 1).copied().flatten();
+        for (j, it) in outer_items[level].iter().enumerate().take(os.arc.n) {
             let ((x, y), q) = s.pearl(os, j);
-            let k = s.near(os.arc.angle(j), os.arc.step) * (1.0 - s.on_main());
+            let k = s.near(os.arc.angle(j), os.arc.step) * s.on_ring(os.arc.radius);
+            // A shelf whose widgets show stays lit.
+            let k = match child {
+                Some(c) if c.parent == j => k.max(PARENT_LIT * c.presence.clamp(0.0, 1.0)),
+                _ => k,
+            };
             let tint = ink.dim.mix(ink.accent, k);
             let gs = g * (0.6 + 0.4 * q.min(1.1)) * (1.0 + GLYPH_SWELL * k);
             root = root.child(svg().path(it.path.clone()).absolute().left(px(x - gs / 2.0)).top(px(y - gs / 2.0)).size(px(gs)).text_color(tint.hsla()).opacity(s.alpha * q.clamp(0.0, 1.0)));
@@ -534,7 +590,7 @@ fn draw(s: Scene, items: &[Item], outer_items: &[Item], palette: &MandaraPalette
     // The hub's words, or its close glyph.
     let focused = match s.sel {
         Sel::Main(i) => items.get(i),
-        Sel::Outer(j) => outer_items.get(j),
+        Sel::Outer(l, j) => outer_items.get(l as usize).and_then(|v| v.get(j)),
         _ => None,
     };
     let hub = s.ring.hub * scale;
@@ -554,9 +610,9 @@ fn draw(s: Scene, items: &[Item], outer_items: &[Item], palette: &MandaraPalette
         // Names around the ring: the hub keeps a keybind, else "close".
         Some(it) => match &it.entry.hint {
             Some(h @ super::Hint::Keys(_)) => super::hint_el(h, palette),
-            _ => close_glyph(s.sel, &ink),
+            _ => close_glyph(s.sel, s.depth, &ink),
         },
-        None => close_glyph(s.sel, &ink),
+        None => close_glyph(s.sel, s.depth, &ink),
     };
     let box_w = 2.0 * hub * HUB_TEXT;
     root = root.child(div().absolute().left(px(s.center.0 - box_w / 2.0)).top(px(s.center.1 - box_w / 2.0)).size(px(box_w)).flex().items_center().justify_center().opacity(a).child(content));
@@ -565,9 +621,9 @@ fn draw(s: Scene, items: &[Item], outer_items: &[Item], palette: &MandaraPalette
     if s.labels == MenuLabels::Around
         && let Some(it) = focused
     {
-        let (theta, edge) = match (s.sel, &s.outer) {
-            (Sel::Outer(j), Some(os)) => (os.arc.angle(j), os.arc.radius + os.arc.item / 2.0),
-            (Sel::Main(i), _) => (s.ring.angle(i), s.ring.outer * scale),
+        let (theta, edge) = match s.sel {
+            Sel::Outer(l, j) => s.outers.get(l as usize).copied().flatten().map_or((geom::TOP, s.ring.outer), |os| (os.arc.angle(j), os.arc.reach())),
+            Sel::Main(i) => (s.ring.angle(i), s.ring.outer * scale),
             _ => (geom::TOP, s.ring.outer),
         };
         root = root.child(around_label(s.center, edge, theta, &it.entry, palette, &ink, a));
@@ -575,8 +631,15 @@ fn draw(s: Scene, items: &[Item], outer_items: &[Item], palette: &MandaraPalette
     root
 }
 
-fn close_glyph(sel: Sel, ink: &Ink) -> AnyElement {
-    let c = if sel == Sel::Hub { ink.close } else { ink.dim.with_alpha(0.7) };
+/// The hub's glyph: "close", or "back" while an outer ring shows (the hub
+/// then goes back one level).
+fn close_glyph(sel: Sel, depth: u8, ink: &Ink) -> AnyElement {
+    let hot = sel == Sel::Hub;
+    if depth > 0 {
+        let c = if hot { ink.accent } else { ink.dim.with_alpha(HUB_GLYPH_ALPHA) };
+        return crate::icons::icon(crate::bidi::dir_icon("chevron-left"), CLOSE_GLYPH, c).into_any_element();
+    }
+    let c = if hot { ink.close } else { ink.dim.with_alpha(HUB_GLYPH_ALPHA) };
     crate::icons::icon("close", CLOSE_GLYPH, c).into_any_element()
 }
 
@@ -622,14 +685,16 @@ pub struct RingMenu {
     at: (f32, f32),
     size: (f32, f32),
     items: Vec<Item>,
-    /// "Add widget"'s items, read the first time it opens.
-    outer_items: Option<Vec<Item>>,
+    /// "Add widget"'s tree, read the first time it opens: its pearls
+    /// (shelves or widgets) and each shelf's widgets.
+    tree: Option<Tree>,
     ring: Ring,
     rtl: bool,
     /// Where the ring sits with no outer ring, and where it is now.
     home: (f32, f32),
     center: SpringValue<Point<Pixels>>,
-    outer: Option<Outer>,
+    /// The outer levels: the shown ones first, then any folding away.
+    levels: Vec<Outer>,
     sel: Sel,
     keyboard: bool,
     labels: MenuLabels,
@@ -673,12 +738,12 @@ impl RingMenu {
             at: o.at,
             size: o.size,
             items,
-            outer_items: None,
+            tree: None,
             ring,
             rtl,
             home,
             center: SpringValue::new(point(px(home.0), px(home.1)), CENTER_SPRING),
-            outer: None,
+            levels: Vec::with_capacity(MAX_LEVELS),
             sel: Sel::None,
             keyboard: false,
             labels: m.labels,
@@ -713,7 +778,7 @@ impl RingMenu {
         self.ring = Ring::new(self.items.len(), self.radius_setting, self.ring.item, self.labels == MenuLabels::Always, self.rtl).fit_screen(size);
         self.home = geom::fit_center(at, (self.ring.outer, self.ring.outer), size);
         self.center.snap_to(point(px(self.home.0), px(self.home.1)));
-        self.outer = None;
+        self.levels.clear();
         self.sel = Sel::None;
         self.arc_on.snap_to(0.0);
         if replay {
@@ -755,14 +820,15 @@ impl RingMenu {
             moving |= s.step(dt);
         }
         moving |= self.center.step(dt);
-        if let Some(o) = self.outer.as_mut() {
+        for o in self.levels.iter_mut() {
             o.t += anim;
             moving |= o.presence.step(dt);
             let last = o.arc.n.saturating_sub(1) as f32 * OUTER_STAGGER_S;
             moving |= o.shown && o.t.is_finite() && o.t < last + SETTLE_S;
-            if !o.shown && o.presence.value() <= CLOSED_EPSILON {
-                self.outer = None;
-            }
+        }
+        // Folded-away levels (always the last ones) go.
+        while self.levels.last().is_some_and(|o| !o.shown && o.presence.value() <= CLOSED_EPSILON) {
+            self.levels.pop();
         }
         if self.closing && !self.released {
             self.released = true;
@@ -790,7 +856,14 @@ impl RingMenu {
     fn scene(&self) -> Scene {
         let reduce = Self::reduce() && self.speed > 0.0;
         let c = self.center.value();
-        let outer = self.outer.as_ref().map(|o| OuterScene { arc: o.arc, parent: o.parent, parent_angle: self.ring.angle(o.parent), t: if reduce { f32::INFINITY } else { o.t }, presence: o.presence.value() });
+        let mut outers = [None; MAX_LEVELS];
+        for (l, o) in self.levels.iter().enumerate().take(MAX_LEVELS) {
+            let (parent_angle, from_radius) = match l.checked_sub(1).and_then(|p| self.levels.get(p)) {
+                Some(prev) => (prev.arc.angle(o.parent), prev.arc.radius),
+                None => (self.ring.angle(o.parent), self.ring.radius),
+            };
+            outers[l] = Some(OuterScene { arc: o.arc, parent: o.parent, parent_angle, from_radius, t: if reduce { f32::INFINITY } else { o.t }, presence: o.presence.value() });
+        }
         Scene {
             ring: self.ring,
             center: (f32::from(c.x), f32::from(c.y)),
@@ -800,7 +873,8 @@ impl RingMenu {
             closing: self.closing && !reduce,
             sel: self.sel,
             arc: (self.arc_angle.value(), self.arc_radius.value(), self.arc_span.value(), self.arc_thick.value(), self.arc_on.value()),
-            outer,
+            outers,
+            depth: self.depth() as u8,
             labels: self.labels,
             opacity: self.opacity,
         }
@@ -810,7 +884,18 @@ impl RingMenu {
 
     /// Where hits are tested: the centre the ring is settling on.
     fn hit_center(&self) -> (f32, f32) {
-        self.outer.as_ref().filter(|o| o.shown).map_or(self.home, |o| o.center)
+        self.levels[..self.depth()].last().map_or(self.home, |o| o.center)
+    }
+
+    /// How many outer levels show.
+    fn depth(&self) -> usize {
+        self.levels.iter().take_while(|o| o.shown).count()
+    }
+
+    /// The items of level `l`.
+    fn level_items(&self, l: usize) -> &[Item] {
+        let (Some(tree), Some(o)) = (self.tree.as_ref(), self.levels.get(l)) else { return &[] };
+        tree.items(o.node)
     }
 
     fn add_index(&self) -> Option<usize> {
@@ -821,11 +906,11 @@ impl RingMenu {
         if sel == self.sel {
             return;
         }
-        let was_on = matches!(self.sel, Sel::Main(_) | Sel::Outer(_));
+        let was_on = matches!(self.sel, Sel::Main(_) | Sel::Outer(..));
         self.sel = sel;
         let target = match sel {
             Sel::Main(i) => Some((self.ring.angle(i), self.ring.radius, self.ring.step.abs() * ARC_SPAN, self.ring.item + ARC_PAD)),
-            Sel::Outer(j) => self.outer.as_ref().map(|o| (o.arc.angle(j), o.arc.radius, o.arc.step.abs() * ARC_SPAN, o.arc.item + ARC_PAD)),
+            Sel::Outer(l, j) => self.levels.get(l as usize).map(|o| (o.arc.angle(j), o.arc.radius, o.arc.step.abs() * ARC_SPAN, o.arc.item + ARC_PAD)),
             _ => None,
         };
         match target {
@@ -853,53 +938,85 @@ impl RingMenu {
         cx.notify();
     }
 
-    /// Opens (or keeps) the outer ring of item `parent`.
-    fn open_outer(&mut self, parent: usize, cx: &mut Context<Self>) {
-        if self.outer.as_ref().is_some_and(|o| o.shown && o.parent == parent) {
+    /// Opens (or keeps) outer level `l` for its parent `parent` (an item of
+    /// the main ring for level 0, of level `l - 1` after that).
+    fn open_level(&mut self, l: usize, parent: usize, cx: &mut Context<Self>) {
+        if l >= MAX_LEVELS || l > self.depth() || self.levels.get(l).is_some_and(|o| o.shown && o.parent == parent) {
             return;
         }
-        if self.outer_items.is_none() {
-            self.outer_items = Some(super::add_entries(cx).into_iter().map(Item::new).collect());
+        if self.tree.is_none() {
+            self.tree = Some(Tree::new(super::add_tree(cx)));
         }
-        let n = self.outer_items.as_ref().map_or(0, Vec::len);
+        let Some(tree) = self.tree.as_ref() else { return };
+        let node = (l > 0).then_some(parent);
+        let n = tree.items(node).len();
         if n == 0 {
             return;
         }
-        let (arc, center) = geom::place_arc(n, self.ring.angle(parent), &self.ring, self.home, self.size, self.rtl);
+        // A level replaces any other at its depth and closes the deeper ones.
+        self.levels.truncate(l);
+        let (arc, center) = match l.checked_sub(1).and_then(|p| self.levels.get(p)) {
+            Some(prev) => geom::place_next(n, &prev.arc, parent, prev.center, self.size, self.rtl),
+            None => geom::place_arc(n, self.ring.angle(parent), &self.ring, self.home, self.size, self.rtl),
+        };
+        // A deeper level may move the menu inward: every level follows.
+        for o in self.levels.iter_mut() {
+            o.center = center;
+        }
         let mut presence = SpringValue::new(0.0, OUTER_SPRING);
         presence.set_target(1.0);
-        self.outer = Some(Outer { arc, center, parent, t: 0.0, presence, shown: true });
+        self.levels.push(Outer { arc, center, parent, node, t: 0.0, presence, shown: true });
         self.center.set_target(point(px(center.0), px(center.1)));
         cx.notify();
     }
 
-    fn close_outer(&mut self, cx: &mut Context<Self>) {
-        if let Some(o) = self.outer.as_mut().filter(|o| o.shown) {
+    /// Folds levels `l` and deeper away; the selection goes back to their
+    /// parent.
+    fn close_from(&mut self, l: usize, cx: &mut Context<Self>) {
+        if l >= self.depth() {
+            return;
+        }
+        let parent = self.levels[l].parent;
+        for o in self.levels[l..].iter_mut() {
             o.shown = false;
             o.presence.set_exit_target(0.0);
-            self.center.set_target(point(px(self.home.0), px(self.home.1)));
-            if matches!(self.sel, Sel::Outer(_)) {
-                let parent = o.parent;
-                self.select(Sel::Main(parent), cx);
-            }
-            cx.notify();
         }
+        let back = l.checked_sub(1).map_or(self.home, |p| self.levels[p].center);
+        self.center.set_target(point(px(back.0), px(back.1)));
+        if matches!(self.sel, Sel::Outer(sl, _) if sl as usize >= l) {
+            let to = if l == 0 { Sel::Main(parent) } else { Sel::Outer(l as u8 - 1, parent) };
+            self.select(to, cx);
+        }
+        cx.notify();
+    }
+
+    /// Back one level (the hub's click, Esc).
+    fn back(&mut self, cx: &mut Context<Self>) {
+        if let Some(l) = self.depth().checked_sub(1) {
+            self.close_from(l, cx);
+        }
+    }
+
+    /// Whether item `j` of level `l` opens a level of its own (a shelf).
+    fn opens(&self, l: usize, j: usize) -> bool {
+        l + 1 < MAX_LEVELS && self.levels.get(l).is_some_and(|o| o.node.is_none()) && self.tree.as_ref().is_some_and(|t| !t.items(Some(j)).is_empty())
     }
 
     /// The selection for a pointer resting at `p` (no button held).
     fn hover_target(&self, p: (f32, f32)) -> Sel {
         let c = self.hit_center();
-        if let Some(o) = self.outer.as_ref().filter(|o| o.shown)
-            && let Some(j) = o.arc.hit(c, p)
-        {
-            return Sel::Outer(j);
+        let depth = self.depth();
+        for (l, o) in self.levels[..depth].iter().enumerate().rev() {
+            if let Some(j) = o.arc.hit(c, p) {
+                return Sel::Outer(l as u8, j);
+            }
         }
         match self.ring.hit(c, p) {
             Hit::Hub => Sel::Hub,
             Hit::Item(i) => Sel::Main(i),
             Hit::Outside => {
-                // Travelling from the parent to its outer ring keeps both.
-                let between = self.outer.as_ref().filter(|o| o.shown).is_some_and(|o| geom::dist(c, p) < o.arc.radius + o.arc.item);
+                // Travelling from a parent to its ring keeps both.
+                let between = self.levels[..depth].last().is_some_and(|o| geom::dist(c, p) < o.arc.radius + o.arc.item);
                 if between { self.sel } else { Sel::None }
             }
         }
@@ -908,31 +1025,38 @@ impl RingMenu {
     /// The selection a held drag from `press` to `p` points at.
     fn drag_target(&self, press: (f32, f32), p: (f32, f32)) -> Sel {
         let c = self.hit_center();
-        if let Some(o) = self.outer.as_ref().filter(|o| o.shown) {
+        let depth = self.depth();
+        for (l, o) in self.levels[..depth].iter().enumerate().rev() {
             if let Some(j) = o.arc.hit(c, p) {
-                return Sel::Outer(j);
+                return Sel::Outer(l as u8, j);
             }
-            // Past the main glass, toward the outer ring.
-            if geom::dist(c, p) > self.ring.outer + geom::SUB_GAP / 2.0
+        }
+        // Past a ring's inner edge, toward it: by direction.
+        let d = geom::dist(c, p);
+        for (l, o) in self.levels[..depth].iter().enumerate().rev() {
+            if d > o.arc.radius - o.arc.item / 2.0 - geom::SUB_GAP / 2.0
                 && let Some(j) = o.arc.by_angle(geom::angle(c, p))
             {
-                return Sel::Outer(j);
+                return Sel::Outer(l as u8, j);
             }
         }
         self.ring.drag(c, press, p).map_or(Sel::None, Sel::Main)
     }
 
-    /// Follows a selection with the outer ring (opened on its parent in
-    /// hover mode, closed on any other item).
+    /// Follows a selection with the outer levels: a parent opens its ring
+    /// (in hover mode, or while dragging), any other item closes the rings
+    /// past it.
     fn follow(&mut self, sel: Sel, dragging: bool, cx: &mut Context<Self>) {
         self.select(sel, cx);
-        if let Sel::Main(i) = sel {
-            let parent = Some(i) == self.add_index();
-            if parent && (dragging || self.submenu == MenuSubmenu::Hover) {
-                self.open_outer(i, cx);
-            } else if !parent && (dragging || self.submenu == MenuSubmenu::Hover) {
-                self.close_outer(cx);
-            }
+        if !(dragging || self.submenu == MenuSubmenu::Hover) {
+            return;
+        }
+        match sel {
+            Sel::Main(i) if Some(i) == self.add_index() => self.open_level(0, i, cx),
+            Sel::Main(_) => self.close_from(0, cx),
+            Sel::Outer(l, j) if self.opens(l as usize, j) => self.open_level(l as usize + 1, j, cx),
+            Sel::Outer(l, _) => self.close_from(l as usize + 1, cx),
+            _ => {}
         }
     }
 
@@ -971,9 +1095,11 @@ impl RingMenu {
         let sel = if here { target(self) } else { Sel::None };
         match sel {
             Sel::Main(i) if Some(i) != self.add_index() => self.activate(i, window, cx),
-            Sel::Outer(j) => self.choose_outer(j, window, cx),
-            // Let go on "Add widget": its outer ring stays open to click.
+            // Let go on a parent ("Add widget", a shelf): its ring stays open
+            // to click.
             Sel::Main(_) => {}
+            Sel::Outer(l, j) if self.opens(l as usize, j) => {}
+            Sel::Outer(l, j) => self.choose_outer(l as usize, j, window, cx),
             _ if self.gesture == MenuGesture::Drag => self.close(cx),
             // A plain right-click: the ring stays, for clicks.
             _ => {}
@@ -983,29 +1109,40 @@ impl RingMenu {
     fn activate(&mut self, i: usize, window: &mut Window, cx: &mut Context<Self>) {
         let Some(e) = self.items.get(i).map(|it| &it.entry).filter(|e| e.enabled) else { return };
         if e.action == Action::AddMenu {
-            if self.outer.as_ref().is_some_and(|o| o.shown) && !self.keyboard && self.submenu == MenuSubmenu::Click {
-                self.close_outer(cx);
-            } else {
-                self.open_outer(i, cx);
-                if self.keyboard {
-                    let first = geom::step(None, self.outer_len(), Nav::First, |_| true);
-                    if let Some(j) = first {
-                        self.select(Sel::Outer(j), cx);
-                    }
-                }
-            }
+            self.enter(0, i, cx);
             return;
         }
         let action = e.action.clone();
         self.finish(action, window, cx);
     }
 
-    fn outer_len(&self) -> usize {
-        self.outer.as_ref().filter(|o| o.shown).map_or(0, |o| o.arc.n)
+    /// Opens level `l` for `parent` on a click or Enter (a click on an open
+    /// parent closes it again in click mode); Enter moves the selection in.
+    fn enter(&mut self, l: usize, parent: usize, cx: &mut Context<Self>) {
+        let open = self.levels.get(l).is_some_and(|o| o.shown && o.parent == parent);
+        if open && !self.keyboard && self.submenu == MenuSubmenu::Click {
+            self.close_from(l, cx);
+            return;
+        }
+        self.open_level(l, parent, cx);
+        if self.keyboard
+            && let Some(j) = geom::step(None, self.level_len(l), Nav::First, |_| true)
+        {
+            self.select(Sel::Outer(l as u8, j), cx);
+        }
     }
 
-    fn choose_outer(&mut self, j: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let action = self.outer_items.as_ref().and_then(|v| v.get(j)).map(|it| it.entry.action.clone());
+    /// How many items level `l` has while it shows.
+    fn level_len(&self, l: usize) -> usize {
+        if l < self.depth() { self.levels[l].arc.n } else { 0 }
+    }
+
+    fn choose_outer(&mut self, l: usize, j: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if self.opens(l, j) {
+            self.enter(l + 1, j, cx);
+            return;
+        }
+        let action = self.level_items(l).get(j).map(|it| it.entry.action.clone());
         if let Some(action) = action {
             self.finish(action, window, cx);
         }
@@ -1043,24 +1180,27 @@ impl RingMenu {
         }
         let Some(nav) = geom::nav_for(&e.keystroke.key, e.keystroke.modifiers.shift, self.rtl) else { return };
         self.keyboard = true;
-        let in_outer = matches!(self.sel, Sel::Outer(_)) && self.outer_len() > 0;
+        let depth = self.depth();
+        let in_level = match self.sel {
+            Sel::Outer(l, j) if (l as usize) < depth => Some((l as usize, j)),
+            _ => None,
+        };
         match nav {
-            Nav::Close | Nav::Back if in_outer || self.outer.as_ref().is_some_and(|o| o.shown) => self.close_outer(cx),
+            // Esc and Backspace go back one level, Esc closes at the top.
+            Nav::Close | Nav::Back if depth > 0 => self.back(cx),
             Nav::Close => self.close(cx),
             Nav::Back => {}
             Nav::Choose => match self.sel {
                 Sel::Main(i) => self.activate(i, window, cx),
-                Sel::Outer(j) => self.choose_outer(j, window, cx),
+                Sel::Outer(l, j) => self.choose_outer(l as usize, j, window, cx),
+                Sel::Hub if depth > 0 => self.back(cx),
                 Sel::Hub => self.close(cx),
                 Sel::None => {}
             },
-            nav if in_outer => {
-                let cur = match self.sel {
-                    Sel::Outer(j) => Some(j),
-                    _ => None,
-                };
-                if let Some(j) = geom::step(cur, self.outer_len(), nav, |_| true) {
-                    self.select(Sel::Outer(j), cx);
+            nav if in_level.is_some() => {
+                let Some((l, j)) = in_level else { return };
+                if let Some(j) = geom::step(Some(j), self.level_len(l), nav, |_| true) {
+                    self.follow(Sel::Outer(l as u8, j), false, cx);
                 }
             }
             nav => {
@@ -1100,12 +1240,14 @@ impl RingMenu {
                 self.held = None;
                 match self.hover_target(p) {
                     Sel::Main(i) => self.activate(i, window, cx),
-                    Sel::Outer(j) => self.choose_outer(j, window, cx),
+                    Sel::Outer(l, j) => self.choose_outer(l as usize, j, window, cx),
+                    // The hub goes back one level, then closes.
+                    Sel::Hub if self.depth() > 0 => self.back(cx),
                     _ => self.close(cx),
                 }
             }
             MouseButton::Right => {
-                if let Sel::Main(_) | Sel::Outer(_) = self.hover_target(p) {
+                if let Sel::Main(_) | Sel::Outer(..) = self.hover_target(p) {
                     // A right press on an item: picked when let go on it
                     // (or on another one it was dragged to).
                     self.held = Some(Held { press: p, on_item: true, ours: true });
@@ -1153,11 +1295,11 @@ impl Render for RingMenu {
         let shade = self.shade(&palette);
         let font = crate::fonts::fonts(cx).ui.clone();
         let scene = self.scene();
-        let outer_items: &[Item] = self.outer_items.as_deref().unwrap_or(&[]);
+        let outer_items = [self.level_items(0), self.level_items(1)];
         let ring = draw(scene, &self.items, outer_items, &palette, shade, font);
         let hot = match self.sel {
             Sel::Main(i) => self.items.get(i).is_some_and(|it| it.entry.enabled),
-            Sel::Outer(_) | Sel::Hub => true,
+            Sel::Outer(..) | Sel::Hub => true,
             Sel::None => false,
         };
         div()
@@ -1208,13 +1350,18 @@ const PREVIEW_OUTER_DELAY_S: f32 = 0.12;
 
 /// A still (or replayed) ring for Studio's Context menu tab: the same
 /// layout and painting as the real menu, in a box `width` wide and as
-/// tall as the ring with its outer ring needs.
+/// tall as the ring with its outer levels needs. Pointing at "Add widget"
+/// shows its ring, pointing at a shelf shows its widgets.
 pub struct Preview {
     items: Vec<Item>,
-    outer_items: Vec<Item>,
+    tree: Tree,
     ring: Ring,
     parent: Option<usize>,
-    outer: Option<Arc>,
+    /// Add widget's ring and each shelf's (laid out once).
+    top: Option<Arc>,
+    shelves: Vec<Option<Arc>>,
+    /// The shelf showing its widgets.
+    shelf: Option<usize>,
     center: (f32, f32),
     size: (f32, f32),
     labels: MenuLabels,
@@ -1223,21 +1370,24 @@ pub struct Preview {
 }
 
 impl Preview {
-    /// `entries` on a ring as `menu` lays it out; "Add widget" (when in
-    /// `entries`) shows `outer` round it while pointed at.
-    pub fn new(menu: &DesktopMenuConfig, entries: Vec<Entry>, outer: Vec<Entry>, width: f32, rtl: bool) -> Self {
+    /// `entries` on a ring as `menu` lays it out, with "Add widget" (when
+    /// in `entries`) opening `tree` ([`super::add_levels`]).
+    pub fn new(menu: &DesktopMenuConfig, entries: Vec<Entry>, tree: Vec<(Entry, Vec<Entry>)>, width: f32, rtl: bool) -> Self {
         let items: Vec<Item> = entries.into_iter().map(Item::new).collect();
-        let outer_items: Vec<Item> = outer.into_iter().map(Item::new).collect();
+        let tree = Tree::new(tree);
         let ring = Ring::new(items.len(), menu.radius(), menu.item_size(), menu.labels == MenuLabels::Always, rtl);
-        let parent = items.iter().position(|it| it.entry.action == Action::AddMenu).filter(|_| !outer_items.is_empty());
-        let reach = parent.map_or(ring.outer, |i| {
-            let a = Arc::new(outer_items.len(), &ring, ring.angle(i), rtl);
-            a.radius + a.item / 2.0
+        let parent = items.iter().position(|it| it.entry.action == Action::AddMenu).filter(|_| !tree.top.is_empty());
+        // The box holds the deepest level (a ring's reach doesn't depend on
+        // where it points).
+        let top_reach = parent.map(|i| Arc::new(tree.top.len(), &ring, ring.angle(i), rtl));
+        let reach = top_reach.map_or(ring.outer, |a| {
+            (0..tree.top.len()).map(|g| tree.items(Some(g)).len()).filter(|n| *n > 0).map(|n| Arc::around(n, a.reach(), a.item, 0.0, rtl).reach()).fold(a.reach(), f32::max)
         });
         let size = (width.max(2.0 * (reach + PREVIEW_PAD)), (2.0 * (reach + PREVIEW_PAD)).max(PREVIEW_MIN_H));
         let center = (size.0 / 2.0, size.1 / 2.0);
-        let outer = parent.map(|i| geom::place_arc(outer_items.len(), ring.angle(i), &ring, center, size, rtl).0);
-        Self { items, outer_items, ring, parent, outer, center, size, labels: menu.labels, opacity: menu.opacity(), shade: None }
+        let top = parent.map(|i| geom::place_arc(tree.top.len(), ring.angle(i), &ring, center, size, rtl).0);
+        let shelves: Vec<Option<Arc>> = (0..tree.top.len()).map(|g| top.filter(|_| !tree.items(Some(g)).is_empty()).map(|a| geom::place_next(tree.items(Some(g)).len(), &a, g, center, size, rtl).0)).collect();
+        Self { items, tree, ring, parent, top, shelves, shelf: None, center, size, labels: menu.labels, opacity: menu.opacity(), shade: None }
     }
 
     /// The box's size.
@@ -1253,25 +1403,57 @@ impl Preview {
         self.items.is_empty()
     }
 
-    fn outer_shown(&self, sel: Sel) -> bool {
-        self.outer.is_some() && (matches!(sel, Sel::Outer(_)) || (matches!(sel, Sel::Main(i) if Some(i) == self.parent)))
+    /// How many outer levels `sel` shows.
+    fn depth(&self, sel: Sel) -> usize {
+        if self.top.is_none() {
+            return 0;
+        }
+        match sel {
+            Sel::Main(i) if Some(i) == self.parent => 1,
+            Sel::Outer(0, _) | Sel::Outer(1, _) if self.shelf.is_some() => 2,
+            Sel::Outer(..) => 1,
+            _ => 0,
+        }
+    }
+
+    fn shelf_arc(&self) -> Option<Arc> {
+        self.shelf.and_then(|g| self.shelves.get(g).copied().flatten())
     }
 
     /// What a pointer at `p` (box coordinates) is on, with `sel` lit now
-    /// (the outer ring shows while its parent or one of its items is).
-    pub fn hit(&self, p: (f32, f32), sel: Sel) -> Sel {
-        if self.outer_shown(sel)
-            && let Some(j) = self.outer.and_then(|a| a.hit(self.center, p))
+    /// (a ring shows while its parent or one of its items is lit).
+    pub fn hit(&mut self, p: (f32, f32), sel: Sel) -> Sel {
+        let depth = self.depth(sel);
+        let found = if depth >= 2
+            && let Some(j) = self.shelf_arc().and_then(|a| a.hit(self.center, p))
         {
-            return Sel::Outer(j);
+            Sel::Outer(1, j)
+        } else if depth >= 1
+            && let Some(j) = self.top.and_then(|a| a.hit(self.center, p))
+        {
+            Sel::Outer(0, j)
+        } else {
+            let reach = match depth {
+                2 => self.shelf_arc().map_or(0.0, |a| a.radius + a.item),
+                1 => self.top.map_or(0.0, |a| a.radius + a.item),
+                _ => 0.0,
+            };
+            match self.ring.hit(self.center, p) {
+                Hit::Hub => Sel::Hub,
+                Hit::Item(i) => Sel::Main(i),
+                // Between a parent and its ring: keep what is lit.
+                Hit::Outside if geom::dist(self.center, p) < reach => sel,
+                Hit::Outside => Sel::None,
+            }
+        };
+        // A shelf opens its widgets; another item of its level closes them.
+        match found {
+            Sel::Outer(0, g) => self.shelf = (!self.tree.items(Some(g)).is_empty()).then_some(g),
+            Sel::Outer(1, _) => {}
+            _ if found == sel => {}
+            _ => self.shelf = None,
         }
-        match self.ring.hit(self.center, p) {
-            Hit::Hub => Sel::Hub,
-            Hit::Item(i) => Sel::Main(i),
-            // Between the ring and its outer ring: keep what is lit.
-            Hit::Outside if self.outer_shown(sel) && geom::dist(self.center, p) < self.outer.map_or(0.0, |a| a.radius + a.item) => sel,
-            Hit::Outside => Sel::None,
-        }
+        found
     }
 
     /// The ring at bloom time `t` (seconds; `f32::INFINITY` settled) with
@@ -1285,66 +1467,94 @@ impl Preview {
                 s
             }
         };
+        let depth = self.depth(sel);
         let none = (geom::TOP, self.ring.radius, 0.0, 0.0, 0.0);
+        let lit = |a: Arc, j: usize| (a.angle(j), a.radius, a.step.abs() * ARC_SPAN, a.item + ARC_PAD, 1.0);
         let arc = match sel {
             Sel::Main(i) => (self.ring.angle(i), self.ring.radius, self.ring.step.abs() * ARC_SPAN, self.ring.item + ARC_PAD, 1.0),
-            Sel::Outer(j) => self.outer.map_or(none, |a| (a.angle(j), a.radius, a.step.abs() * ARC_SPAN, a.item + ARC_PAD, 1.0)),
+            Sel::Outer(0, j) => self.top.map_or(none, |a| lit(a, j)),
+            Sel::Outer(_, j) => self.shelf_arc().map_or(none, |a| lit(a, j)),
             _ => none,
         };
-        let outer = self.outer.filter(|_| self.outer_shown(sel)).map(|a| OuterScene {
-            arc: a,
-            parent: self.parent.unwrap_or(0),
-            parent_angle: self.ring.angle(self.parent.unwrap_or(0)),
-            t: if t.is_finite() { (t - PREVIEW_OUTER_DELAY_S).max(0.0) } else { t },
-            presence: 1.0,
-        });
+        let delay = |l: f32| if t.is_finite() { (t - PREVIEW_OUTER_DELAY_S * l).max(0.0) } else { t };
+        let mut outers = [None; MAX_LEVELS];
+        if depth >= 1
+            && let Some(a) = self.top
+        {
+            let parent = self.parent.unwrap_or(0);
+            outers[0] = Some(OuterScene { arc: a, parent, parent_angle: self.ring.angle(parent), from_radius: self.ring.radius, t: delay(1.0), presence: 1.0 });
+            if depth >= 2
+                && let (Some(g), Some(b)) = (self.shelf, self.shelf_arc())
+            {
+                outers[1] = Some(OuterScene { arc: b, parent: g, parent_angle: a.angle(g), from_radius: a.radius, t: delay(2.0), presence: 1.0 });
+            }
+        }
         let p = if t.is_finite() { 1.0 + motion_profile().tune(OPEN_SPRING).solve(-1.0, 0.0, t.max(0.0)).0 } else { 1.0 };
-        let scene = Scene { ring: self.ring, center: self.center, p, alpha: 1.0, t, closing: false, sel, arc, outer, labels: self.labels, opacity: self.opacity };
+        let scene = Scene { ring: self.ring, center: self.center, p, alpha: 1.0, t, closing: false, sel, arc, outers, depth: depth as u8, labels: self.labels, opacity: self.opacity };
         let font = crate::fonts::fonts(cx).ui.clone();
-        draw(scene, &self.items, &self.outer_items, palette, shade, font).into_any_element()
+        let shelf_items = self.shelf.map_or(&[][..], |g| self.tree.items(Some(g)));
+        draw(scene, &self.items, [self.tree.items(None), shelf_items], palette, shade, font).into_any_element()
     }
 
     /// Whether a replay at time `t` still moves.
     pub fn animating(&self, t: f32) -> bool {
-        let n = self.items.len().max(self.outer_items.len()) as f32;
-        t.is_finite() && t < n * STAGGER_S + SETTLE_S + PREVIEW_OUTER_DELAY_S
+        let n = self.items.len().max(self.tree.top.len()) as f32;
+        t.is_finite() && t < n * STAGGER_S + SETTLE_S + PREVIEW_OUTER_DELAY_S * MAX_LEVELS as f32
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::desktop_menu::{Hint, entry};
+    use crate::desktop_menu::{AddCategory, Hint, add_levels, entry};
 
     fn entries(n: usize) -> Vec<Entry> {
         (0..n).map(|i| entry(0, "box", format!("Item {i}"), if i == 1 { Action::AddMenu } else { Action::Studio }).hint((i == 0).then(|| Hint::Text("1".into())))).collect()
     }
 
+    /// Fourteen widgets on four shelves (one of a single widget).
+    fn shelves() -> Vec<(Entry, Vec<Entry>)> {
+        let cats = [AddCategory::Clocks, AddCategory::Clocks, AddCategory::Clocks, AddCategory::Clocks, AddCategory::Media, AddCategory::Media, AddCategory::System, AddCategory::System, AddCategory::System, AddCategory::System, AddCategory::System, AddCategory::Productivity, AddCategory::Productivity, AddCategory::Games];
+        add_levels(cats.iter().enumerate().map(|(i, c)| (*c, entry(*c as u8, "box", format!("W{i}"), Action::Studio))).collect())
+    }
+
     #[test]
-    fn the_preview_box_holds_the_ring_and_its_outer_ring() {
+    fn the_preview_box_holds_every_level_and_hits_each_one() {
         let menu = DesktopMenuConfig::default();
-        let p = Preview::new(&menu, entries(9), entries(14), 300.0, false);
+        let mut p = Preview::new(&menu, entries(9), shelves(), 300.0, false);
         let (w, h) = p.size();
-        let reach = p.outer.map(|a| a.radius + a.item / 2.0).unwrap();
-        assert!(w >= 2.0 * reach && h >= 2.0 * reach, "the box grows for the outer ring");
-        assert!(p.outer.unwrap().fits(p.center, p.size()), "and the outer ring fits it unturned");
-        // The outer ring answers only while its parent (or it) is lit.
-        let a = p.outer.unwrap();
-        let on_outer = a.pos(p.center, 3);
-        assert_eq!(p.hit(on_outer, Sel::None), Sel::None);
-        assert_eq!(p.hit(on_outer, Sel::Main(1)), Sel::Outer(3));
+        let top = p.top.unwrap();
+        assert_eq!(top.n, 5, "four shelves and the lone widget");
+        for a in p.shelves.iter().flatten().chain([&top]) {
+            assert!(w >= 2.0 * a.reach() && h >= 2.0 * a.reach(), "the box holds every level");
+            assert!(a.fits(p.center, p.size()), "unturned");
+        }
+        // Level 0 answers only while Add widget (or it) is lit.
+        let on_top = top.pos(p.center, 0);
+        assert_eq!(p.hit(on_top, Sel::None), Sel::None);
+        assert_eq!(p.hit(on_top, Sel::Main(1)), Sel::Outer(0, 0));
+        // Pointing at the shelf opens it: its widgets answer at level 1.
+        let shelf = p.shelf_arc().unwrap();
+        assert_eq!(shelf.n, 4);
+        let on_widget = shelf.pos(p.center, 2);
+        assert_eq!(p.hit(on_widget, Sel::Outer(0, 0)), Sel::Outer(1, 2));
+        assert_eq!(p.hit(on_top, Sel::Outer(1, 2)), Sel::Outer(0, 0), "back on the shelf");
+        // The lone widget opens nothing.
+        let lone = (0..top.n).find(|&g| p.tree.items(Some(g)).is_empty()).unwrap();
+        assert_eq!(p.hit(top.pos(p.center, lone), Sel::Outer(0, 0)), Sel::Outer(0, lone));
+        assert!(p.shelf.is_none());
         assert_eq!(p.hit(p.ring.pos(p.center, 4), Sel::None), Sel::Main(4));
         assert_eq!(p.hit(p.center, Sel::None), Sel::Hub);
-        // No outer items: no outer ring.
+        // Nothing to add: no outer ring.
         let bare = Preview::new(&menu, entries(9), Vec::new(), 300.0, false);
-        assert!(bare.outer.is_none() && bare.size().1 >= PREVIEW_MIN_H);
+        assert!(bare.top.is_none() && bare.size().1 >= PREVIEW_MIN_H);
         assert!(bare.animating(0.1) && !bare.animating(f32::INFINITY) && !bare.animating(5.0));
     }
 
     #[test]
     fn the_scene_blooms_out_of_the_click_and_settles_on_the_ring() {
         let ring = Ring::new(8, 100.0, 44.0, false, false);
-        let mut s = Scene { ring, center: (300.0, 300.0), p: 0.0, alpha: 1.0, t: 0.0, closing: false, sel: Sel::None, arc: (geom::TOP, 100.0, 0.5, 52.0, 0.0), outer: None, labels: MenuLabels::Hub, opacity: 0.94 };
+        let mut s = Scene { ring, center: (300.0, 300.0), p: 0.0, alpha: 1.0, t: 0.0, closing: false, sel: Sel::None, arc: (geom::TOP, 100.0, 0.5, 52.0, 0.0), outers: [None; MAX_LEVELS], depth: 0, labels: MenuLabels::Hub, opacity: 0.94 };
         // At the click: nothing has left yet, and later items start later.
         assert_eq!(s.item(0).1, 0.0);
         s.t = 0.05;

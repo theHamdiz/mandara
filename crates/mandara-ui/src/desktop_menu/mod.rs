@@ -37,7 +37,7 @@ use mandara_config::ShellConfig;
 use mandara_config::compositor::BindAction;
 use mandara_config::desktop_menu::{MenuItem, MenuItemId, MenuStyle};
 use mandara_core::{FrameClock, SpringConfig, SpringValue, SurfaceRole, ToGpui};
-use mandara_i18n::{t, tf};
+use mandara_i18n::{t, tf, tk};
 use mandara_theme::{Color, MandaraPalette};
 
 use crate::bidi::Bidi as _;
@@ -132,6 +132,8 @@ pub enum Action {
     EditDesktop,
     /// Opens the "Add widget" flyout.
     AddMenu,
+    /// Opens one shelf of "Add widget" (the ring's next level).
+    AddShelf(AddCategory),
     Add(NewWidget),
     ChangeWallpaper,
     NextWallpaper,
@@ -306,21 +308,147 @@ pub fn item_entry(cfg: &ShellConfig, output: &str, item: &MenuItem) -> Option<En
     })
 }
 
-/// The "Add widget" rows: what paints on the wallpaper, then the cards
-/// (a hairline between the two says it without a word on every row).
-pub fn add_entries(cx: &App) -> Vec<Entry> {
-    let Some(r) = cx.try_global::<mandara_plugins::PluginRegistry>() else { return Vec::new() };
-    let cfg = crate::state::config(cx).read(cx).snapshot();
-    let mut rows: Vec<Entry> = r
-        .enabled_desktop_widgets(&cfg.plugins)
+/// A shelf of the "Add widget" menu: the widget kinds sorted by what they
+/// are, so a long list reads in a few groups and the ring can open them a
+/// level at a time.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AddCategory {
+    Clocks,
+    Media,
+    System,
+    Productivity,
+    Weather,
+    Decorations,
+    Games,
+    Faith,
+    More,
+}
+
+impl AddCategory {
+    pub const ALL: [AddCategory; 9] = [AddCategory::Clocks, AddCategory::Media, AddCategory::System, AddCategory::Productivity, AddCategory::Weather, AddCategory::Decorations, AddCategory::Games, AddCategory::Faith, AddCategory::More];
+
+    /// The shelf of a plugin's widgets (third-party ones: More).
+    pub fn of(plugin: &str) -> Self {
+        match plugin {
+            "desktop-clocks" | "desktop-world-clock" | "desktop-countdown" | "desktop-calendar" => AddCategory::Clocks,
+            "desktop-now-playing" | "desktop-visualizers" => AddCategory::Media,
+            "desktop-monitor" | "desktop-info" | "desktop-identity" => AddCategory::System,
+            "desktop-productivity" => AddCategory::Productivity,
+            "desktop-weather" | "desktop-sky" => AddCategory::Weather,
+            "desktop-decorations" | "desktop-fun" => AddCategory::Decorations,
+            "sudoku" | "2048" => AddCategory::Games,
+            "jannah" | "hadith" | "quran" | "prayer-times" => AddCategory::Faith,
+            _ => AddCategory::More,
+        }
+    }
+
+    /// English name (`tk` text).
+    pub fn title(self) -> &'static str {
+        match self {
+            AddCategory::Clocks => tk("Clocks & time"),
+            AddCategory::Media => tk("Music & visualizers"),
+            AddCategory::System => tk("System & shortcuts"),
+            AddCategory::Productivity => tk("Productivity"),
+            AddCategory::Weather => tk("Weather & sky"),
+            AddCategory::Decorations => tk("Decorations & fun"),
+            AddCategory::Games => tk("Games"),
+            AddCategory::Faith => tk("Faith"),
+            AddCategory::More => tk("More widgets"),
+        }
+    }
+
+    /// Its icon (each shelf its own).
+    pub fn icon(self) -> &'static str {
+        match self {
+            AddCategory::Clocks => "clock",
+            AddCategory::Media => "music",
+            AddCategory::System => "cpu",
+            AddCategory::Productivity => "list-check",
+            AddCategory::Weather => "cloud-sun",
+            AddCategory::Decorations => "brush",
+            AddCategory::Games => "dice",
+            AddCategory::Faith => "crescent",
+            AddCategory::More => "package",
+        }
+    }
+}
+
+/// The icon a widget kind shows in the menus. A plugin picks one per kind
+/// and several share it (four clocks, two music notes, two gauges); these
+/// keep every built-in kind's icon its own, so the menu reads at a glance.
+pub fn widget_menu_icon(t: &mandara_plugins::DesktopWidgetType) -> &'static str {
+    match (t.plugin.as_str(), t.id.as_str()) {
+        ("desktop-clocks", "minimal") => "clock-digital",
+        ("desktop-now-playing", "vinyl") => "vinyl",
+        ("desktop-monitor", "column") => "cpu",
+        ("desktop-info", "glance") => "info",
+        ("desktop-countdown", "days") => "hourglass",
+        _ => icon_named(&t.icon),
+    }
+}
+
+/// Above this many widget kinds the ring sorts them into shelves (an outer
+/// ring of shelves, each opening its widgets); fewer go on one ring.
+pub const FLAT_ADD_MAX: usize = 10;
+
+/// The "Add widget" kinds that are on, each with its shelf, in shelf order
+/// (registration order within one).
+pub fn add_rows<'a>(kinds: impl Iterator<Item = &'a mandara_plugins::DesktopWidgetType>, name: impl Fn(&mandara_plugins::DesktopWidgetType) -> String) -> Vec<(AddCategory, Entry)> {
+    let mut rows: Vec<(AddCategory, Entry)> = kinds
         .filter(|t| t.menu)
         .map(|t| {
-            let card = (t.make)().iter().any(|w| !w.kind.on_wallpaper_plane());
-            entry(u8::from(card), icon_named(&t.icon), widget_type_name(t, cx), Action::Add(NewWidget(t.key())))
+            let cat = AddCategory::of(&t.plugin);
+            (cat, entry(cat as u8, widget_menu_icon(t), name(t), Action::Add(NewWidget(t.key()))))
         })
         .collect();
-    rows.sort_by_key(|e| e.group);
+    rows.sort_by_key(|(cat, _)| *cat);
     rows
+}
+
+/// The ring's "Add widget" levels from [`add_rows`]: one pearl per shelf
+/// with its widgets (a shelf of one is that widget itself), or every widget
+/// as a pearl when there are only a few.
+pub fn add_levels(rows: Vec<(AddCategory, Entry)>) -> Vec<(Entry, Vec<Entry>)> {
+    if rows.len() <= FLAT_ADD_MAX {
+        return rows.into_iter().map(|(_, e)| (e, Vec::new())).collect();
+    }
+    let mut out: Vec<(Entry, Vec<Entry>)> = Vec::new();
+    let mut shelf: Option<AddCategory> = None;
+    for (cat, e) in rows {
+        if shelf != Some(cat) {
+            shelf = Some(cat);
+            out.push((entry(cat as u8, cat.icon(), t(cat.title()), Action::AddShelf(cat)).submenu(), Vec::new()));
+        }
+        if let Some((_, kids)) = out.last_mut() {
+            kids.push(e);
+        }
+    }
+    for node in &mut out {
+        if node.1.len() == 1
+            && let Some(only) = node.1.pop()
+        {
+            node.0 = only;
+        }
+    }
+    out
+}
+
+/// The kinds of widget the menus can add, from the plugins that are on.
+fn add_kinds(cx: &App) -> Vec<(AddCategory, Entry)> {
+    let Some(r) = cx.try_global::<mandara_plugins::PluginRegistry>() else { return Vec::new() };
+    let cfg = crate::state::config(cx).read(cx).snapshot();
+    add_rows(r.enabled_desktop_widgets(&cfg.plugins), |t| widget_type_name(t, cx))
+}
+
+/// The "Add widget" rows of the lists (the classic menu's flyout, edit
+/// mode's popup): every widget kind, a hairline between shelves.
+pub fn add_entries(cx: &App) -> Vec<Entry> {
+    add_kinds(cx).into_iter().map(|(_, e)| e).collect()
+}
+
+/// The ring's "Add widget" levels ([`add_levels`]).
+pub fn add_tree(cx: &App) -> Vec<(Entry, Vec<Entry>)> {
+    add_levels(add_kinds(cx))
 }
 
 /// Card height of `entries`.
@@ -507,7 +635,7 @@ pub fn run(action: &Action, output: &str, at: (f32, f32), size: (f32, f32), cx: 
             })
             .detach();
         }
-        Action::AddMenu | Action::Remove(_) | Action::Duplicate(_) | Action::Hide(_) | Action::ShowOn(..) | Action::WidgetSettings | Action::Readings(_) | Action::ToggleReading(..) => {}
+        Action::AddMenu | Action::AddShelf(_) | Action::Remove(_) | Action::Duplicate(_) | Action::Hide(_) | Action::ShowOn(..) | Action::WidgetSettings | Action::Readings(_) | Action::ToggleReading(..) => {}
     }
 }
 
@@ -896,6 +1024,61 @@ mod tests {
         let changes = e.windows(2).filter(|w| w[0].group != w[1].group).count();
         assert_eq!(changes, 4);
         assert!(height(&e) > e.len() as f32 * ROW_H);
+    }
+
+    /// Every built-in "Add widget" kind (all plugins on).
+    fn builtin_rows() -> Vec<(AddCategory, Entry)> {
+        let mut r = mandara_plugins::PluginRegistry::default();
+        crate::plugins::register_builtin(&mut r);
+        add_rows(r.desktop_widgets().iter(), |t| t.name.clone())
+    }
+
+    fn distinct(entries: &[&Entry]) -> bool {
+        let mut icons: Vec<&str> = entries.iter().map(|e| e.icon).collect();
+        icons.sort_unstable();
+        let n = icons.len();
+        icons.dedup();
+        icons.len() == n
+    }
+
+    #[test]
+    fn add_widget_sorts_its_kinds_into_shelves_with_icons_of_their_own() {
+        let rows = builtin_rows();
+        assert!(rows.len() > FLAT_ADD_MAX, "enough kinds to need shelves ({})", rows.len());
+        assert!(rows.windows(2).all(|w| w[0].0 <= w[1].0), "in shelf order");
+        assert!(rows.iter().all(|(c, _)| *c != AddCategory::More), "every built-in kind has its shelf");
+        // No two built-in kinds share an icon (the list and any ring).
+        assert!(distinct(&rows.iter().map(|(_, e)| e).collect::<Vec<_>>()), "{:?}", rows.iter().map(|(_, e)| e.icon).collect::<Vec<_>>());
+        let levels = add_levels(rows.clone());
+        assert!(levels.len() <= 12, "{} shelves", levels.len());
+        assert!(distinct(&levels.iter().map(|(e, _)| e).collect::<Vec<_>>()), "the shelves' ring reuses an icon");
+        let mut seen = 0;
+        for (pearl, kids) in &levels {
+            assert!(kids.len() <= 12, "{}: {} widgets", pearl.label, kids.len());
+            assert!(kids.len() != 1, "a shelf of one is the widget itself");
+            assert!(distinct(&kids.iter().collect::<Vec<_>>()), "{} reuses an icon", pearl.label);
+            if kids.is_empty() {
+                assert!(matches!(pearl.action, Action::Add(_)));
+                seen += 1;
+            } else {
+                assert!(matches!(pearl.action, Action::AddShelf(_)) && pearl.submenu);
+                seen += kids.len();
+            }
+        }
+        assert_eq!(seen, rows.len(), "every kind on exactly one ring");
+        // A few kinds stay on one ring.
+        let few: Vec<_> = rows.into_iter().take(FLAT_ADD_MAX).collect();
+        let flat = add_levels(few);
+        assert_eq!(flat.len(), FLAT_ADD_MAX);
+        assert!(flat.iter().all(|(e, kids)| kids.is_empty() && matches!(e.action, Action::Add(_))));
+        // The lists keep every kind, a hairline between shelves.
+        let shelves = AddCategory::ALL.iter().map(|c| c.icon()).collect::<Vec<_>>();
+        let mut unique = shelves.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(unique.len(), shelves.len(), "each shelf its own icon");
+        assert!(shelves.iter().all(|i| crate::icons::ICON_NAMES.contains(i)));
+        assert_eq!(AddCategory::of("someone-elses-plugin"), AddCategory::More);
     }
 
     #[test]

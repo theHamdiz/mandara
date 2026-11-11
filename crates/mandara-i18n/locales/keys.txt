@@ -1257,6 +1257,7 @@ Clipboard prefix
 Clock
 Clock depth
 Clock style
+Clocks & time
 Clocks, weather, a system monitor, decorations and more on the wallpaper — behind its subject or in front. Each kind comes from a plugin; nothing runs until you add one.
 Clocks, weather, gauges and more, right on your wallpaper
 Clockwise
@@ -1673,6 +1674,7 @@ Decide per wallpaper what stands in front of the clock
 Decimals
 Deck
 Decoration
+Decorations & fun
 Deeds
 Deep focus
 Deep green: a giant stacked clock behind the subject and a dock media chip.
@@ -3937,6 +3939,7 @@ More like this
 More than one API key matches this server; save the key again
 More wait their turn; all of them are in the history
 More wallpapers
+More widgets
 More windows wrap onto further rows
 Morning
 Morning greeting
@@ -3991,6 +3994,7 @@ Muhammad Ayyub
 Muharram
 Muqaddimah
 Murasaki Shikibu
+Music & visualizers
 Music or video playing over MPRIS holds every idle stage back
 Music, screenshots, color and ambient sound
 Muslim
@@ -6611,6 +6615,7 @@ Synced lyrics, the current line lit
 Syntax error
 Synthesized live — no audio files · listed as Mandara Soundscapes
 System
+System & shortcuts
 System access
 System accounts
 System accounts are managed by your distribution
@@ -7929,6 +7934,7 @@ We must have perseverance and above all confidence in ourselves.
 We suffer more often in imagination than in reality.
 Weak
 Weather
+Weather & sky
 Weather and prayer times always follow this location, even when they have their own
 Weather disc
 Weather line

@@ -344,10 +344,17 @@ existing widgets. Eligible kinds can also be added to
     no aiming. A plain right-click leaves the ring open. Arrows, Tab and
     Home / End turn the selection, Enter picks, Esc closes; click the
     middle or anywhere outside to close, right-click elsewhere to move it.
-  - **Add widget** opens an outer ring of glass pearls next to its item;
-    near a screen edge or corner the ring moves in (or turns) so every
-    item stays on screen, on every display and scale, mirrored in
-    right-to-left languages.
+  - **Add widget** opens an outer ring of glass pearls next to its item:
+    its shelves (Clocks & time, Music & visualizers, System & shortcuts,
+    Productivity, Weather & sky, Decorations & fun, Games, Faith, More
+    widgets; a shelf of one widget is that widget), and pointing at a shelf
+    opens its widgets as the next ring out, every widget with an icon of
+    its own. With ten widgets or fewer they sit on one ring. Flick through
+    the levels in one motion and let go on a widget; the middle (or Esc)
+    goes back one level. Near a screen edge or corner the rings move in (or
+    turn) so every item stays on screen, on every display and scale,
+    mirrored in right-to-left languages. The classic list keeps one flyout
+    with a hairline between shelves.
   - It follows Studio → Motion (speed, feel, reduced motion: a short fade
     instead of the bloom) unless you give it its own speed.
   - **Studio → Desktop → Context menu** picks the ring or the classic

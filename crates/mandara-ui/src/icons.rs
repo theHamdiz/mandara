@@ -200,6 +200,12 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "bookmark" => r#"<path d="M7 3.5h10a1.5 1.5 0 0 1 1.5 1.5v15.5L12 16.2l-6.5 4.3V5A1.5 1.5 0 0 1 7 3.5z"/>"#.into(),
         // An "i" in a circle: more about something.
         "info" => r#"<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.6h.01"/>"#.into(),
+        // A digital clock face: "10:0" in segment bars on a rounded screen.
+        "clock-digital" => r#"<rect x="2.5" y="6" width="19" height="12" rx="3"/><path d="M6.5 10v4"/><path d="M9 10h2.5v4H9z"/><path d="M13.75 10.75h.01M13.75 13.25h.01"/><path d="M16 10h2.5v4H16z"/>"#.into(),
+        // A record: the disc, its label and a highlight in the grooves.
+        "vinyl" => r#"<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.5"/><path d="M12 6.5a5.5 5.5 0 0 1 5.5 5.5"/>"#.into(),
+        // An hourglass: time counting down.
+        "hourglass" => r#"<path d="M6.5 3.5h11M6.5 20.5h11"/><path d="M8 3.5v2.2a4 4 0 0 0 1.6 3.2L12 10.8l2.4-1.9A4 4 0 0 0 16 5.7V3.5"/><path d="M8 20.5v-2.2a4 4 0 0 1 1.6-3.2L12 13.2l2.4 1.9a4 4 0 0 1 1.6 3.2v2.2"/>"#.into(),
         _ => return None,
     })
 }
@@ -254,6 +260,7 @@ pub const ICON_NAMES: &[&str] = &[
     "arch", "book", "info",
     "hadith", "bookmark", "message", "messages", "radio",
     "sudoku", "game-2048", "redo", "eraser", "lightbulb",
+    "clock-digital", "vinyl", "hourglass",
 ];
 
 /// An icon element tinted with `color`.
