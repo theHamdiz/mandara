@@ -159,6 +159,13 @@ pub(crate) fn place_in(c: &mut ShellConfig, id: &str, from: Lane, to: Lane, inde
     if let Some(list) = from.list(c) {
         list.retain(|x| x != id);
     }
+    if to == Lane::Tray && matches!(from, Lane::Left | Lane::Center | Lane::Right | Lane::Side(..)) {
+        mandara_config::bar_items::unmark_yours(c, id);
+    }
+    if matches!(to, Lane::Left | Lane::Center | Lane::Right | Lane::Side(..)) {
+        // You placed or moved it: it stays through presets and Looks.
+        mandara_config::bar_items::mark_yours(c, id);
+    }
     if let Some(list) = to.list(c) {
         list.retain(|x| x != id);
         let i = index.unwrap_or(list.len()).min(list.len());
@@ -353,6 +360,7 @@ const PRESETS: &[Preset] = &[
     styled(tk("Stanley Bridge"), tk("Three floating docks of squircle tiles spanning the bottom like a bridge's arches"), BarStyle::StanleyBridge, BarLayout::FloatingPills, BarPosition::Bottom, 48.0),
     styled(tk("Pharos Beam"), tk("A lantern of scalloped accent buttons and tonal tiles hanging from the top edge"), BarStyle::PharosBeam, BarLayout::Notch, BarPosition::Top, 44.0),
     styled(tk("Raml Tram"), tk("One line of flower stops running along the top and down the left edge"), BarStyle::RamlTram, BarLayout::MinimalEdge, BarPosition::Top, 38.0),
+    styled(tk("Taskbar"), tk("A full-width bottom taskbar: the launcher and your apps centred, a stacked clock on the right"), BarStyle::Taskbar, BarLayout::MinimalEdge, BarPosition::Bottom, 48.0),
 ];
 
 /// The bar preset's name for a style (translation key), for notes that
@@ -368,9 +376,12 @@ fn apply_preset(p: &'static Preset, replace_items: bool, cx: &mut App) {
 
 fn apply_preset_in(c: &mut ShellConfig, p: &Preset, replace_items: bool, known: &[String]) {
     let pick = |ids: &[&str]| ids.iter().filter(|i| known.iter().any(|k| k == *i)).map(|s| s.to_string()).collect::<Vec<_>>();
-    let (left, center, right) = (pick(p.left), pick(p.center), pick(p.right));
+    // The items you added yourself, before anything moves: they stay.
+    let (mine, shown_before) = (mandara_config::bar_items::yours(c), mandara_config::bar_items::showing(c));
     match p.style {
-        // A style sets the layout, edge and height with its look.
+        // A style sets the layout, edge and height with its look (and,
+        // keeping the items, fits them to itself).
+        Some(style) if replace_items => style.apply_look(c),
         Some(style) => style.apply(c),
         None => {
             // The last style's look goes; this preset's bar comes.
@@ -387,17 +398,20 @@ fn apply_preset_in(c: &mut ShellConfig, p: &Preset, replace_items: bool, known: 
         }
     }
     if replace_items {
-        c.bar.left.clear();
-        c.bar.center.clear();
-        c.bar.right.clear();
-        for (ids, to) in [(left, Lane::Left), (center, Lane::Center), (right, Lane::Right)] {
-            for id in ids { place_in(c, &id, Lane::Tray, to, None); }
-        }
-        // A style's rail (Expressive, Raml Tram): the left side bar's groups.
-        if let Some(rail) = p.style.and_then(BarStyle::rail) {
-            for (zone, ids) in SideZone::ALL.into_iter().zip(rail) {
-                c.side_bars.left.zone_mut(zone).clear();
-                for id in pick(ids) { place_in(c, &id, Lane::Tray, Lane::Side(false, zone), None); }
+        // The preset's own items replace the last preset's (and, for a
+        // style with a rail, the rail's groups); yours come back after.
+        let layout = mandara_config::bar_items::Layout { bar: [pick(p.left), pick(p.center), pick(p.right)], rail: p.style.and_then(BarStyle::rail).map(|r| r.map(pick)) };
+        let placed = mandara_config::bar_items::lay_out(c, &layout, shown_before, &mine);
+        match p.style {
+            Some(style) => style.switch_on_placed(c, &placed),
+            // Placing a plugin turns it on, as dropping it in does.
+            None => {
+                for id in &placed {
+                    c.plugins.disabled.retain(|x| x != id);
+                    if !c.plugins.enabled.iter().any(|x| x == id) {
+                        c.plugins.enabled.push(id.clone());
+                    }
+                }
             }
         }
     }
@@ -694,8 +708,8 @@ impl StudioView {
             .row()
             .flex_col()
             .gap(px(SPACE_12_PX))
-            .child(header(tk("Presets"), tk("Changes the bar's style, position and height. Your items stay unless you choose to replace them.")))
-            .child(super::compositor_page::chip("bar-preset-replace-items", t("Replace bar items"), replace_items, p).on_click(cx.listener(|this, _, _, cx| {
+            .child(header(tk("Presets"), tk("Changes the bar's style, position and height. With the preset's items on, they replace the last preset's; items you added yourself always stay.")))
+            .child(super::compositor_page::chip("bar-preset-replace-items", t("Use the preset's items"), replace_items, p).on_click(cx.listener(|this, _, _, cx| {
                 this.designer.replace_items = !this.designer.replace_items;
                 cx.notify();
             })))

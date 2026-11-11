@@ -8,6 +8,12 @@ About → What's new shows it too.
 
 ### New
 
+- **Your own Looks.** Change anything after applying a Look and Mandara keeps it as a Look of your own ("Corniche Dusk · Custom", renamable), stored as just what you changed, so it follows improvements to the original. Save, rename, duplicate, delete, export and import Looks in Studio → Themes → Looks or with `mandara msg look …`. Look files are small, carry nothing personal and are checked strictly on import.
+- **Thirteen new Looks**, one on every bar style, plus Redmond (a Windows 11-style taskbar desktop), Cupertino (a macOS-style menu bar and dock), Library Desk, Zen (a hidden pill with hot corners) and Ink Rush, a cel-shaded comic desktop.
+- **The Taskbar bar style:** your pinned and running apps centred next to the launcher, with a stacked clock and date, in Studio → Bars → Presets or `mandara msg bar style taskbar`.
+- **Ink style:** ink outlines, hard shadows and halftone or hatched shading for the bar, panels, launcher, dock, notifications and cards (Studio → Themes → Fine-tune → Ink).
+- **Speech-bubble notifications.** With the ink style, notifications can pop up as comic speech bubbles whose tail points to the notification corner; Ink Rush turns them on.
+- **Comic burst** wallpapers in the wallpaper generator.
 - **Sound themes.** Studio → Themes → Sounds installs, previews and applies desktop sound themes (freedesktop, Ocean, Oxygen, Ubuntu, elementary, COSMIC, Deepin, Materia, or your own folder, archive or link), for Mandara's own sounds and, with Apply to apps, GTK and KDE apps. Opt-in; `mandara msg sound …` scripts it.
 - **More shell sounds:** locking and unlocking, drives plugged in or removed, emptying the Trash, brightness ticks and finished installs, each with its own switch. Do not disturb now quiets the ones that come unasked.
 - **Stash**: floating shelves you drop anything onto (files, folders, pictures, text, links, any data) and drag back out into any app. Summon one by shaking the pointer over the desktop, bar, dock or a panel, with an edge catcher, the bar item, the tray, a keybind or `mandara msg stash new`. Shelves move to any display, resize, minimize to the bar or tray, and stay until you close them, even across restarts. Opt-in in Studio → Plugins.
@@ -23,6 +29,8 @@ About → What's new shows it too.
 
 ### Improved
 
+- **Studio shows previews of Looks and themes by default**, and draws each Look's preview only while it's on screen.
+- **Ink outlines stay strong in dark mode**: a light ink over a dark hard shadow.
 - **Cursors and Icons get their own tabs on Themes.** While a plugin is off, its tab shows what it does and one button to turn it on. The cursor gallery gains search, a Dark / Light filter, cards that lift under the pointer, a busy cursor that animates while you hover, and your installed themes as cards.
 - **Side bars and the sidebar are set up in one Sidebars tab.** Studio → Bars no longer has two look-alike tabs: Sidebars shows what each screen edge holds (nothing, a side bar, which is a slim bar of items, or the sidebar, the panel that slides out with tabs and cards) with small previews, and below it only the settings for what you picked. An edge never ends up with both, the sidebar moves when you give it the other edge, and the rail that Expressive and Raml Tram join to the bar points you to its preset. Old links such as `mandara studio bars/side-bars` and `bars/sidebar` still lead there, and sections you opened or closed stay that way.
 - **Studio's Desktop widgets page is now Desktop**, with Widgets, Cards & visualizers and Context menu tabs. Old links still open it.
@@ -30,6 +38,7 @@ About → What's new shows it too.
 
 ### Fixed
 
+- **Changing a bar preset or a Look no longer removes your desktop widgets or the bar items you added.** Your widgets keep their places and settings, your items stay where you put them, the plugins they need stay on, and *Restore my look* keeps what you added while a Look was on.
 - **Expressive and Raml Tram show the workspaces once, down their rail.** Picking them while keeping your items no longer leaves the workspaces (or the screenshot button) on the bar as well, and setups that already picked them are tidied up on update.
 - **The launcher in Expressive and Raml Tram sits in the corner where the bar meets the rail**, centred, at every bar size and edge, and Studio's preset cards show it there.
 - **System monitor brings its stat blocks, meters and rates, and switches their plugins on**, even when you keep your items, from Studio or `mandara msg bar style system-monitor`; picking another preset takes them away again.

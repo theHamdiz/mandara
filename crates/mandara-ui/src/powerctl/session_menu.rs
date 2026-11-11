@@ -1028,7 +1028,7 @@ impl Render for SessionView {
                         .h(px(rect.h))
                         .rounded(px(radius))
                         .bg(fill)
-                        .border_1()
+                        .border(px(crate::plugins::panel_fx::edge_px()))
                         .border_color(crate::plugins::panel_fx::surface_edge(&palette, cfg.theme.adjustments.rim_intensity).hsla())
                         .shadow(crate::plugins::panel_fx::elevation_scaled(&palette, open, cfg.panels.shadow_strength))
                         .opacity(open)

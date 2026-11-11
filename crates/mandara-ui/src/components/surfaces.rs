@@ -117,6 +117,13 @@ pub trait Surface: Styled + Sized {
 
     /// [`Self::card_elevation`] in `style`.
     fn card_elevation_as(self, style: CardStyle, rim: Vec<BoxShadow>, palette: &MandaraPalette) -> Self {
+        // Inked: every card outlined in ink, on its hard shadow.
+        let ink = crate::plugins::panel_fx::ink_detail_px();
+        if ink > 0.0 {
+            let shadow = if crate::style::ink_shadow() > 0.0 { crate::plugins::panel_fx::elevation_scaled(palette, 1.0, 1.0) } else { Vec::new() };
+            let el = self.border(px(ink)).border_color(crate::plugins::panel_fx::ink(palette).hsla());
+            return if shadow.is_empty() { el } else { el.shadow(shadow) };
+        }
         match style {
             CardStyle::Tonal => if rim.is_empty() { self } else { self.shadow(rim) },
             CardStyle::Raised => {
@@ -172,6 +179,13 @@ pub trait CardSurface: Surface + ParentElement {
             let el = match fill {
                 Fill(c, None) => el.bg(c.hsla()),
                 Fill(top, Some(bottom)) => el.bg(oklab_gradient(crate::plugins::panel_fx::ANGLE_DOWN_DEG, top, bottom)),
+            };
+            // Inked (`[style.ink]`): a clipping card shades its far corner
+            // with the ink texture, under its children.
+            let texture = if clipped { crate::plugins::panel_fx::ink_texture(palette) } else { None };
+            let el = match texture {
+                Some(t) => el.relative().child(t),
+                None => el,
             };
             return el.card_elevation_as(style, rim, palette);
         };

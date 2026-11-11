@@ -18,10 +18,13 @@ pub struct UiState {
     pub collapsed: BTreeSet<String>,
     /// The Applications page's last tab (`installed`, `defaults`, …).
     pub apps_tab: String,
-    /// Themes → Looks and Designed themes as large preview cards instead of
-    /// the compact list.
-    pub looks_previews: bool,
-    pub themes_previews: bool,
+    /// Themes → Looks and Designed themes as the compact list instead of
+    /// the large preview cards (previews are the default). Replaces the
+    /// `looks_previews` / `themes_previews` keys of 0.26, which almost
+    /// every state file saved as off: they are ignored, so everyone starts
+    /// with previews.
+    pub looks_compact: bool,
+    pub themes_compact: bool,
     /// Page sections you opened (`true`) or closed (`false`), by
     /// `Section/group`; others use their default (the first open).
     pub sections: BTreeMap<String, bool>,
@@ -97,6 +100,26 @@ pub fn save(state: &UiState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A state file from 0.26 (previews off) opens with previews on, and
+    /// the compact choice round-trips.
+    #[test]
+    fn previews_are_the_default_even_for_an_old_state_file() {
+        let dir = std::env::temp_dir().join(format!("mandara-ui-state-previews-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("studio-ui.toml");
+        std::fs::write(&file, "looks_previews = false\nthemes_previews = false\napps_tab = \"defaults\"\n").unwrap();
+        let old = load_from(&file);
+        assert!(!old.looks_compact && !old.themes_compact, "previews on");
+        assert_eq!(old.apps_tab, "defaults", "the rest of the file still loads");
+        let mut state = old;
+        state.looks_compact = true;
+        save_to(&file, &state).unwrap();
+        let back = load_from(&file);
+        assert!(back.looks_compact && !back.themes_compact);
+        assert!(!std::fs::read_to_string(&file).unwrap().contains("looks_previews"), "the old key is gone once saved");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn bars_folds_keep_former_pages_distinct_and_new_keys_take_precedence() {

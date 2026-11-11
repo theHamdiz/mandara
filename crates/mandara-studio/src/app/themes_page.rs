@@ -423,10 +423,10 @@ impl StudioView {
         };
         let gallery = self.theme_gallery(dark);
         let count = gallery.themes.len();
-        let previews = self.ui.themes_previews;
+        let previews = !self.ui.themes_compact;
         let toggle = swatch_list::previews_chip("themes-previews", previews, p)
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.ui.themes_previews = !this.ui.themes_previews;
+                this.ui.themes_compact = !this.ui.themes_compact;
                 crate::ui_state::save(&this.ui);
                 cx.notify();
             }))

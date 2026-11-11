@@ -1381,7 +1381,9 @@ impl Render for DockView {
             .h(px(bg.3))
             .rounded(px(crate::style::radius(cfg.radius.min(thickness / 2.0))))
             .bg(fill.hsla())
-            .shadow(shadow)
+            .shadow(if crate::style::ink_shadow() > 0.0 { crate::plugins::panel_fx::elevation(&palette, 1.0) } else { shadow })
+            // Inked (`[style.ink]`): an ink outline.
+            .when(crate::style::ink_outline() > 0.0, |el| el.border(px(crate::style::ink_outline())).border_color(crate::plugins::panel_fx::ink(&palette).hsla()))
             .opacity(shown)
             .on_mouse_down(MouseButton::Right, cx.listener(|this, e: &MouseDownEvent, _, cx| {
                 this.open_menu_for(None, false, (f32::from(e.position.x), f32::from(e.position.y)), cx);

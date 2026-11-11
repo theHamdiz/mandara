@@ -6,6 +6,7 @@
 
 pub mod aurora;
 pub mod bokeh;
+pub mod comic;
 pub mod contours;
 pub mod corniche;
 pub mod dunes;

@@ -192,6 +192,23 @@ pub(super) fn styled(style: BarStyle, palette: &MandaraPalette) -> Div {
             let beam = div().w(px(MOCK_BEAM_W_PX)).h(px(MOCK_BEAM_H_PX)).rounded_b(px(RADIUS_6_PX)).bg(linear_gradient(180.0, linear_color_stop(palette.primary.with_alpha(ALPHA_30).hsla(), 0.0), linear_color_stop(palette.primary.with_alpha(0.0).hsla(), 1.0)));
             div().size_full().flex().flex_col().items_center().child(lantern).child(beam)
         }
+        BarStyle::Taskbar => {
+            // A full-width strip at the bottom: the launcher and app icons
+            // in the middle, the status cluster and a stacked clock right.
+            let clock = div().flex_none().flex().flex_col().gap(px(MOCK_SEGMENT_GAP_PX)).child(block(MOCK_TILE_W_PX / 2.0, MOCK_SEGMENT_GAP_PX * 1.5, RADIUS_1_5_PX, accent)).child(block(MOCK_TILE_W_PX / 2.0, MOCK_SEGMENT_GAP_PX * 1.5, RADIUS_1_5_PX, tile));
+            let apps = div().flex().gap(px(MOCK_SEGMENT_GAP_PX * 2.0)).child(block(MOCK_BUTTON_PX, MOCK_BUTTON_PX, RADIUS_1_5_PX, button)).children((0..MOCK_TASKBAR_APPS).map(|_| block(MOCK_BUTTON_PX, MOCK_BUTTON_PX, RADIUS_1_5_PX, tile)));
+            div().size_full().flex().flex_col().justify_end().child(
+                div()
+                    .h(px(MOCK_BAR_PX))
+                    .bg(bar)
+                    .px(px(MOCK_GAP_PX))
+                    .flex()
+                    .items_center()
+                    .child(div().flex_1().child(dot(MOCK_DOT_PX, tile)))
+                    .child(apps)
+                    .child(div().flex_1().flex().justify_end().items_center().gap(px(MOCK_SEGMENT_GAP_PX * 2.0)).child(dot(MOCK_DOT_PX, tile)).child(dot(MOCK_DOT_PX, tile)).child(clock)),
+            )
+        }
         BarStyle::RamlTram => {
             // One line across the top and down the left edge: tiles along
             // the top, flower stops down the rail.
@@ -250,6 +267,8 @@ const fn corner_mark(rail: f32, bar: f32, mark: f32) -> (f32, f32) {
     ((rail - mark) / 2.0, (bar - mark) / 2.0)
 }
 
+/// App icons in the Taskbar preset's miniature.
+const MOCK_TASKBAR_APPS: usize = 4;
 /// Sizes of the style miniatures.
 const MOCK_FRAME_PX: f32 = 2.0;
 const MOCK_RAIL_PX: f32 = 9.0;

@@ -1297,6 +1297,13 @@ fn capsule_colors(bar: &mandara_config::BarConfig, palette: &MandaraPalette) -> 
     (fill, palette.outline.with_alpha((CAPSULE_OUTLINE_ALPHA * k).min(1.0)))
 }
 
+/// The outline width of a bar item's tile or capsule: the ink's when
+/// inked, else the hairline.
+fn item_edge_px() -> f32 {
+    let ink = crate::plugins::panel_fx::ink_detail_px();
+    if ink > 0.0 { ink } else { CAPSULE_EDGE_PX }
+}
+
 /// One item's tile: a rounded rectangle, a squircle, or a Material 3
 /// Expressive shape painted from SDF circles ([`crate::components::shapes`]),
 /// in `color` over the bar's own `under` colour, with an optional outline.
@@ -1305,9 +1312,9 @@ pub(crate) fn item_tile(placed: &crate::bar::items::Placed, color: Color, under:
     use crate::components::cut::{Corner, Ink};
     use crate::components::surfaces::Surface as _;
     match placed.tile {
-        Tile::Rounded(c) => place(placed.bounds).with_corners(c).bg(color.hsla()).when_some(edge, |el, edge| el.border_1().border_color(edge.hsla())).into_any_element(),
+        Tile::Rounded(c) => place(placed.bounds).with_corners(c).bg(color.hsla()).when_some(edge, |el, edge| el.border(px(item_edge_px())).border_color(edge.hsla())).into_any_element(),
         Tile::Squircle(reach) => {
-            let ink = Ink::solid(Some(color), edge.map(|e| (e, CAPSULE_EDGE_PX)));
+            let ink = Ink::solid(Some(color), edge.map(|e| (e, item_edge_px())));
             place(placed.bounds).child(canvas(|_, _, _| {}, move |b, _, window, _| crate::components::cut::paint_shape(window, b, Corner::Squircle(reach), ink)).size_full()).into_any_element()
         }
         Tile::Shape(shape) => match crate::bar::items::opaque(color, under) {
@@ -1453,7 +1460,10 @@ impl Render for ShellView {
             palette.specular_rim_shadow.with_alpha(RIM_SHADOW_ALPHA * rim_k),
             ranges::BAR_RIM_WIDTH.clamp(cfg.bar.rim_width, mandara_config::surfaces::defaults::BAR_RIM_WIDTH_PX),
         );
-        let bar_shadow = if cfg.bar.shadow { crate::plugins::panel_fx::elevation_scaled(&palette, 1.0, cfg.bar.shadow_strength) } else { Vec::new() };
+        // Inked (`[style.ink]`): the bar's shapes outlined, on a hard shadow.
+        let bar_ink = crate::style::ink_outline();
+        let ink_color = crate::plugins::panel_fx::ink(&palette);
+        let bar_shadow = if cfg.bar.shadow || crate::style::ink_shadow() > 0.0 { crate::plugins::panel_fx::elevation_scaled(&palette, 1.0, cfg.bar.shadow_strength) } else { Vec::new() };
         let bar_depth = |rim: &[gpui::BoxShadow]| -> Vec<gpui::BoxShadow> { bar_shadow.iter().chain(rim).cloned().collect() };
         // Every frame edge sits on the device pixel grid (no AA seams).
         let scale = window.scale_factor();
@@ -1955,9 +1965,11 @@ impl Render for ShellView {
                     // One even hairline edge + soft elevation (the old
                     // top-highlight / bottom-shade rim faded along the
                     // corners and looked patchy over busy wallpapers).
-                    .border_1()
+                    .border(px(crate::plugins::panel_fx::edge_px()))
                     .border_color(crate::plugins::panel_fx::surface_edge(&palette, cfg.theme.adjustments.rim_intensity).hsla())
                     .shadow(crate::plugins::panel_fx::elevation_scaled(&palette, progress, cfg.panels.shadow_strength))
+                    // Inked: the shaded corner's halftone / hatching.
+                    .when_some(crate::plugins::panel_fx::ink_texture(&palette), |el, t| el.overflow_hidden().child(t))
                     .into_any_element()
             };
             // The main menu's glass shows your wallpaper, blurred, not
@@ -1994,6 +2006,7 @@ impl Render for ShellView {
                         .rounded(pill_radius)
                         .bg(bar_fill_h)
                         .shadow(bar_depth(&bar_rim))
+                        .when(bar_ink > 0.0, |el| el.border(px(bar_ink)).border_color(ink_color.hsla()))
                         // Empty space on a pill or the island: the main
                         // menu or desktop edit mode (bar.right_click).
                         .when(!click_through, |el| el.empty_bar_space(cx))
@@ -2017,7 +2030,7 @@ impl Render for ShellView {
             group_capsule: cfg.bar.capsules && attached && !cfg.bar.item_capsules,
             item_capsules: cfg.bar.item_capsules,
             fill: capsule_fill,
-            edge: cfg.bar.capsule_outline.then_some(capsule_edge),
+            edge: if crate::style::ink_outline() > 0.0 { Some(crate::plugins::panel_fx::ink(&palette)) } else { cfg.bar.capsule_outline.then_some(capsule_edge) },
             accent: palette.primary,
             hover: palette.on_surface.with_alpha(hover_k),
             separator: cfg.bar.separator,
@@ -2063,7 +2076,7 @@ impl Render for ShellView {
                         .h(px(px_snap(h)))
                         .rounded(px(chip_radius + CAPSULE_PAD_PX * 0.5))
                         .bg(look.fill.hsla())
-                        .when_some(look.edge, |el, edge| el.border_1().border_color(edge.hsla())),
+                        .when_some(look.edge, |el, edge| el.border(px(item_edge_px())).border_color(edge.hsla())),
                 );
             }
             // `bar.item_capsules` / a pills side bar: every item on a

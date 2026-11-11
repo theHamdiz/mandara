@@ -626,7 +626,7 @@ impl FloatingView {
             .opacity(a)
             .rounded(px(radius))
             .bg(fill.hsla())
-            .border_1()
+            .border(px(crate::plugins::panel_fx::edge_px()))
             .border_color(surface_edge(palette, cfg.theme.adjustments.rim_intensity).hsla())
             .shadow(elevation_scaled(palette, a, cfg.panels.shadow_strength))
             .overflow_hidden()

@@ -335,6 +335,10 @@ const RIM_LIGHT: (f32, f32) = (0.7, 0.06);
 
 /// Subtle 1 px specular rim (top-left light, bottom shade) for cards.
 pub fn rim(palette: &MandaraPalette) -> Vec<BoxShadow> {
+    // Ink outlines replace the glass rim.
+    if crate::style::ink_outline() > 0.0 {
+        return Vec::new();
+    }
     if palette.is_dark {
         glass_rim(palette.specular_rim_light.with_alpha(RIM_DARK.0), palette.specular_rim_shadow.with_alpha(RIM_DARK.1))
     } else {
@@ -353,8 +357,76 @@ const MAX_RIM_INTENSITY: f32 = 2.0;
 /// surface's 1 px border (an SDF quad edge, blended over the fill).
 /// `intensity` is the theme's rim-intensity adjustment.
 pub fn surface_edge(palette: &MandaraPalette, intensity: f32) -> Color {
+    if crate::style::ink_outline() > 0.0 {
+        return ink(palette);
+    }
     let k = if crate::style::borders() { intensity.clamp(0.0, MAX_RIM_INTENSITY) } else { 0.0 };
     palette.on_surface.with_alpha(alpha(SURFACE_EDGE_ALPHA, palette) * k)
+}
+
+/// The ink of inked outlines (`[style.ink]`), a touch of the accent's hue:
+/// near black on light surfaces; on dark ones a light ink, so the comic
+/// edge stays strong (text keeps its own colours, so contrast holds).
+pub fn ink(palette: &MandaraPalette) -> Color {
+    let l = if palette.is_dark { INK_LIGHT_L } else { INK_L };
+    Color::oklch(l, INK_CHROMA, palette.primary.hue())
+}
+
+/// The hard shadow's ink: near black in both schemes (the outline above
+/// it is light in dark mode: a two-tone edge).
+pub fn shadow_ink(palette: &MandaraPalette) -> Color {
+    Color::oklch(INK_SHADOW_L, INK_CHROMA, palette.primary.hue())
+}
+
+/// Lightness and chroma of the ink: dark ink, light ink, shadow ink.
+const INK_L: f32 = 0.16;
+const INK_LIGHT_L: f32 = 0.9;
+const INK_SHADOW_L: f32 = 0.08;
+const INK_CHROMA: f32 = 0.03;
+
+/// The fill a glass card starts from at its top (a speech bubble's tail
+/// continues it).
+pub fn glass_card_top(palette: &MandaraPalette) -> Color {
+    let (top, _) = if palette.is_dark { SHEEN_DARK } else { SHEEN_LIGHT };
+    palette.surface_container.lighten(top)
+}
+
+/// The width of a floating surface's edge ([`surface_edge`]): the ink
+/// outline, else the hairline.
+pub fn edge_px() -> f32 {
+    let ink = crate::style::ink_outline();
+    if ink > 0.0 { ink } else { 1.0 }
+}
+
+/// A card's or item's thinner ink outline (none without ink).
+pub fn ink_detail_px() -> f32 {
+    let ink = crate::style::ink_outline();
+    if ink > 0.0 { (ink * INK_DETAIL_SHARE).max(1.0) } else { 0.0 }
+}
+
+/// Cards and bar items take this share of the surface outline.
+const INK_DETAIL_SHARE: f32 = 0.66;
+
+/// The ink texture over a surface's far corner (`[style.ink] texture`),
+/// filling its parent; `None` without one. One shared image, drawn once.
+pub fn ink_texture(palette: &MandaraPalette) -> Option<gpui::AnyElement> {
+    use gpui::{IntoElement as _, StyledImage as _};
+    let hatch = match crate::style::ink_texture() {
+        mandara_config::desktop::SurfaceTexture::None => return None,
+        mandara_config::desktop::SurfaceTexture::Halftone => false,
+        mandara_config::desktop::SurfaceTexture::Hatch => true,
+    };
+    // Dark ink reads weakly on dark glass: a little stronger there.
+    let alpha = if palette.is_dark { INK_TEXTURE_DARK } else { 1.0 };
+    Some(gpui::img(gpui::ImageSource::Render(mandara_core::material::ink_texture(hatch))).absolute().inset_0().size_full().object_fit(gpui::ObjectFit::Cover).opacity(alpha).into_any_element())
+}
+
+const INK_TEXTURE_DARK: f32 = 0.9;
+
+/// The hard offset shadow of inked surfaces, `progress` fading it in.
+fn ink_shadow(palette: &MandaraPalette, offset: f32, progress: f32) -> Vec<BoxShadow> {
+    let d = offset * if crate::bidi::rtl() { -1.0 } else { 1.0 };
+    vec![BoxShadow { color: shadow_ink(palette).with_alpha(progress.clamp(0.0, 1.0)).hsla(), offset: point(px(d), px(offset)), blur_radius: px(0.0), spread_radius: px(0.0), inset: false }]
 }
 
 /// Lightness of the shadow ink under floating panels.
@@ -386,6 +458,10 @@ pub fn elevation(palette: &MandaraPalette, progress: f32) -> Vec<BoxShadow> {
 /// shadow_strength`, `bar.shadow_strength`); none at 0.
 pub fn elevation_scaled(palette: &MandaraPalette, progress: f32, strength: f32) -> Vec<BoxShadow> {
     let strength = mandara_config::surfaces::ranges::INTENSITY.clamp(strength, 1.0);
+    let hard = crate::style::ink_shadow();
+    if hard > 0.0 {
+        return ink_shadow(palette, hard, progress.max(AMBIENT_BASE));
+    }
     if !crate::style::shadows() || strength <= 0.0 {
         return Vec::new();
     }

@@ -221,6 +221,7 @@ mod tests {
         "stash",
         "sudoku",
         "tailscale",
+        "taskbar",
         "todo",
         "translator",
         "updates",

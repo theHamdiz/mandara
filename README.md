@@ -234,8 +234,10 @@ around, each one measured or shipped today:
 
 ### Bar styles
 
-Eight presets reshape the whole bar in one click: pick one in **Studio →
-Bars → Presets**, or run `mandara msg bar style <name>`. Every style shows
+Nine presets reshape the whole bar in one click: pick one in **Studio →
+Bars → Presets**, or run `mandara msg bar style <name>`; *Taskbar* centres
+the launcher and your apps along the bottom. Your own bar items and
+desktop widgets stay whichever you pick. Every style shows
 the icon of the app on each workspace and tag button. The styles with a
 rail run the workspaces down it and seat the launcher in the corner where
 bar and rail meet. Each side bar can take one of its own
@@ -270,7 +272,7 @@ bar and rail meet. Each side bar can take one of its own
     <img src="docs/screenshots/looks-light.webp" alt="The six Looks, each on a wallpaper of its own: Corniche Dusk (glass pills and a headline clock over a rose sunset), Pharos Ink (a hairline bar over ink contours), Montaza Crimson (an Arabic clock over a red and amber glow), Qaitbay Forest (a giant stacked clock over green hills), Anfushi Wave (a glowing wave over layered sea) and Night Frame (a side bar framing the northern lights), in dark mode or light mode to match your page" width="100%"/>
   </picture>
   <br/>
-  <sub>Six Looks, one click each: the bar, widgets, colours and fonts change together.</sub>
+  <sub>Looks, one click each: the bar, widgets, colours and fonts change together. Nineteen ship (one on every bar style, a Windows 11-style and a macOS-style desktop, a cel-shaded comic one); change one and it is kept as a look of your own, to export and share.</sub>
 </p>
 
 <table>
