@@ -2641,6 +2641,19 @@ impl Window {
         self.platform_window.request_decorations(decorations);
     }
 
+    /// Mandara patch 13: whether drags of data that is not a list of files
+    /// (text, links, pictures…) from other programs enter this window as
+    /// [`crate::ExternalData`]. Off by default: other windows refuse them.
+    pub fn set_accepts_data_drops(&self, accept: bool) {
+        self.platform_window.set_accepts_data_drops(accept);
+    }
+
+    /// Mandara patch 13: moves a layer-shell surface by its margins from the
+    /// anchored edges (top, right, bottom, left), applied at once.
+    pub fn set_layer_margin(&self, margin: (Pixels, Pixels, Pixels, Pixels)) {
+        self.platform_window.set_layer_margin(margin);
+    }
+
     /// Set the exclusive zone for a layer-shell surface: how much screen space it
     /// reserves so other surfaces avoid occluding it (e.g. a panel reserving space).
     /// Positive values reserve that distance from the anchored edge, 0 lets the
@@ -5943,6 +5956,27 @@ impl Window {
                     self.refresh();
                     PlatformInput::FileDrop(FileDropEvent::Ended)
                 }
+                // Mandara patch 13: other programs' data becomes an internal
+                // drag of `ExternalData`, exactly as files become `ExternalPaths`.
+                FileDropEvent::DataEntered { position, data } => {
+                    self.mouse_position = position;
+                    let source_window = self.handle.window_id();
+                    if !cx.restore_platform_drag(source_window) && cx.active_drag.is_none() {
+                        cx.active_drag = Some(AnyDrag {
+                            value: Arc::new(data.clone()),
+                            view: cx.new(|_| data).into(),
+                            cursor_offset: position,
+                            cursor_style: None,
+                            external_payload_source: None,
+                        });
+                    }
+                    PlatformInput::MouseMove(MouseMoveEvent {
+                        position,
+                        pressed_button: Some(MouseButton::Left),
+                        modifiers: Modifiers::default(),
+                    })
+                }
+                FileDropEvent::Delivered => PlatformInput::FileDrop(FileDropEvent::Delivered),
             },
             PlatformInput::Touch(touch) => PlatformInput::Touch(touch),
             PlatformInput::LongPress(long_press) => {

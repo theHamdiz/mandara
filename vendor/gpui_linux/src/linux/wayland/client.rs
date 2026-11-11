@@ -103,8 +103,8 @@ use crate::linux::{
     xdg_desktop_portal::{Event as XDPEvent, XDPEventSource},
 };
 use gpui::{
-    AnyWindowHandle, Bounds, Capslock, CursorStyle, DevicePixels, ExternalDragPayload,
-    FileDragPaths, FileDropEvent, ForegroundExecutor, GraphicalEnvironment, KeyDownEvent,
+    AnyWindowHandle, Bounds, Capslock, CursorStyle, DevicePixels, DragContent, DragData,
+    ExternalData, ExternalDataSource, ExternalDragPayload, FileDragPaths, FileDropEvent, ForegroundExecutor, GraphicalEnvironment, KeyDownEvent,
     KeyUpEvent, Keystroke, Modifiers, ModifiersChangedEvent, MouseButton, MouseDownEvent,
     MouseExitEvent, MouseMoveEvent, MouseUpEvent, NavigationDirection, Pixels, PlatformDisplay,
     PlatformFrameSignal, PlatformInput, PlatformKeyboardLayout, PlatformWindow, Point, ScrollDelta,
@@ -427,14 +427,123 @@ pub(crate) struct WaylandClientState {
     ime_enabled: Option<bool>,
 }
 
-struct DragState<DataOffer = wl_data_offer::WlDataOffer, Window = WaylandWindowStatePtr> {
+struct DragState<
+    DataOffer = wl_data_offer::WlDataOffer,
+    Window = WaylandWindowStatePtr,
+    Data = Rc<WaylandDropData>,
+> {
     data_offer: Option<DataOffer>,
     window: Option<Window>,
     position: Point<Pixels>,
     uri_read_generation: u64,
+    /// Mandara patch 13: the transfer of a data drag (not files) over a
+    /// window that accepts data drops. It owns its offer: the drag's
+    /// `ExternalData` keeps it open after the drop until it is read.
+    data: Option<Data>,
 }
 
-impl<DataOffer, Window> DragState<DataOffer, Window> {
+/// Mandara patch 13: a data drag's transfer as `DragState` drives it.
+trait DataDrop {
+    /// The user dropped it: finish the offer once everything is read.
+    fn dropped(&self);
+    /// It left without a drop: nothing can be received any more.
+    fn left(&self);
+}
+
+/// Mandara patch 13: where a data drag's transfer stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DropPhase {
+    Hovering,
+    Dropped,
+    Left,
+}
+
+/// Mandara patch 13: the `wl_data_offer` behind an [`ExternalData`]. It is
+/// finished (after a drop) and destroyed when the last clone of the drag's
+/// value is dropped, so streams received at the drop can still be read.
+pub(crate) struct WaylandDropData {
+    offer: wl_data_offer::WlDataOffer,
+    connection: Connection,
+    phase: std::cell::Cell<DropPhase>,
+}
+
+impl DataDrop for Rc<WaylandDropData> {
+    fn dropped(&self) {
+        if self.phase.get() == DropPhase::Hovering {
+            self.phase.set(DropPhase::Dropped);
+        }
+    }
+
+    fn left(&self) {
+        if self.phase.get() == DropPhase::Hovering {
+            self.phase.set(DropPhase::Left);
+        }
+    }
+}
+
+impl ExternalDataSource for WaylandDropData {
+    fn receive(&self, mime_type: &str) -> Option<Box<dyn std::io::Read + Send>> {
+        if self.phase.get() == DropPhase::Left {
+            return None;
+        }
+        let pipe = Pipe::new().log_err()?;
+        self.offer.receive(mime_type.to_string(), unsafe {
+            BorrowedFd::borrow_raw(pipe.write.as_raw_fd())
+        });
+        drop(pipe.write);
+        self.connection.flush().log_err();
+        Some(Box::new(TimedPipe::new(pipe.read).log_err()?))
+    }
+}
+
+impl Drop for WaylandDropData {
+    fn drop(&mut self) {
+        if self.phase.get() == DropPhase::Dropped {
+            self.offer.finish();
+        }
+        self.offer.destroy();
+        self.connection.flush().log_err();
+    }
+}
+
+/// Mandara patch 13: the read end of a data drop's pipe; every read waits at
+/// most [`PIPE_READ_TIMEOUT`] for the sender.
+struct TimedPipe(filedescriptor::FileDescriptor);
+
+impl TimedPipe {
+    fn new(mut fd: filedescriptor::FileDescriptor) -> anyhow::Result<Self> {
+        fd.set_non_blocking(true)?;
+        Ok(Self(fd))
+    }
+}
+
+impl std::io::Read for TimedPipe {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        loop {
+            match std::io::Read::read(&mut self.0, buf) {
+                Ok(n) => return Ok(n),
+                Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    let mut poll_fds = [filedescriptor::pollfd {
+                        fd: self.0.as_raw_fd(),
+                        events: filedescriptor::POLLIN,
+                        revents: 0,
+                    }];
+                    match filedescriptor::poll(&mut poll_fds, Some(PIPE_READ_TIMEOUT)) {
+                        Ok(0) => return Err(std::io::ErrorKind::TimedOut.into()),
+                        Ok(_) => {}
+                        Err(filedescriptor::Error::Poll(err))
+                            if err.kind() == std::io::ErrorKind::Interrupted => {}
+                        Err(err) => return Err(std::io::Error::other(err.to_string())),
+                    }
+                }
+                Err(err) => return Err(err),
+            }
+        }
+    }
+}
+
+impl<DataOffer, Window, Data> DragState<DataOffer, Window, Data> {
     fn begin_uri_read(&mut self) -> u64 {
         self.invalidate_uri_read();
         self.uri_read_generation
@@ -464,13 +573,20 @@ impl FileDragDataOffer for wl_data_offer::WlDataOffer {
     }
 }
 
-impl<DataOffer, Window> DragState<DataOffer, Window>
+impl<DataOffer, Window, Data> DragState<DataOffer, Window, Data>
 where
     DataOffer: FileDragDataOffer + Clone,
     Window: Clone,
+    Data: DataDrop,
 {
     fn handle_leave(&mut self) -> Option<(Window, PlatformInput)> {
         self.invalidate_uri_read();
+        // Mandara patch 13: a data drag owns its offer.
+        if let Some(data) = self.data.take() {
+            data.left();
+            let window = self.window.take()?;
+            return Some((window, PlatformInput::FileDrop(FileDropEvent::Exited {})));
+        }
         let window = self.window.clone()?;
         let data_offer = self.data_offer.clone()?;
         data_offer.destroy();
@@ -481,6 +597,18 @@ where
 
     fn handle_drop(&mut self) -> Option<(Window, PlatformInput)> {
         self.invalidate_uri_read();
+        // Mandara patch 13: the drag's value keeps a data offer open until
+        // the drop target has read it.
+        if let Some(data) = self.data.take() {
+            data.dropped();
+            let window = self.window.take()?;
+            return Some((
+                window,
+                PlatformInput::FileDrop(FileDropEvent::Submit {
+                    position: self.position,
+                }),
+            ));
+        }
         let window = self.window.clone()?;
         let data_offer = self.data_offer.clone()?;
         data_offer.finish();
@@ -516,6 +644,32 @@ where
             PlatformInput::FileDrop(FileDropEvent::Entered { position, paths }),
         ))
     }
+
+    /// Mandara patch 13: a data drag (no local files) entered a window that
+    /// accepts data drops. A stale one (the drag left meanwhile) is let go.
+    fn complete_data_enter(
+        &mut self,
+        generation: u64,
+        data: Data,
+        window: Window,
+        position: Point<Pixels>,
+        value: ExternalData,
+    ) -> Option<(Window, PlatformInput)> {
+        if !self.is_uri_read_current(generation) {
+            data.left();
+            return None;
+        }
+        self.data = Some(data);
+        self.window = Some(window.clone());
+        self.position = position;
+        Some((
+            window,
+            PlatformInput::FileDrop(FileDropEvent::DataEntered {
+                position,
+                data: value,
+            }),
+        ))
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -526,8 +680,16 @@ pub(crate) enum DataSourceKind {
 
 pub(crate) struct ExternalDrag {
     source: wl_data_source::WlDataSource,
-    bytes: Vec<u8>,
+    content: ExternalDragContent,
     window: WaylandWindowStatePtr,
+}
+
+/// Mandara patch 13: what an outbound drag sends.
+enum ExternalDragContent {
+    /// Files, as `text/uri-list`.
+    UriList(Vec<u8>),
+    /// Typed data under its own MIME types.
+    Data(DragData),
 }
 
 fn file_uri_list(paths: &FileDragPaths) -> String {
@@ -687,24 +849,42 @@ impl WaylandClientStatePtr {
             return false;
         };
 
-        let ExternalDragPayload::Files(paths) = payload;
-        let uri_list = file_uri_list(paths);
-        if uri_list.is_empty() {
-            return false;
-        }
-
         let serial = state.serial_tracker.get(SerialKind::MousePress);
-        let source =
-            data_device_manager.create_data_source(&state.globals.qh, DataSourceKind::Drag);
-        source.offer(FILE_LIST_MIME_TYPE.to_string());
+        let (source, content) = match payload {
+            ExternalDragPayload::Files(paths) => {
+                let uri_list = file_uri_list(paths);
+                if uri_list.is_empty() {
+                    return false;
+                }
+                let source = data_device_manager
+                    .create_data_source(&state.globals.qh, DataSourceKind::Drag);
+                source.offer(FILE_LIST_MIME_TYPE.to_string());
+                (source, ExternalDragContent::UriList(uri_list.into_bytes()))
+            }
+            // Mandara patch 13: every MIME type of a data drag.
+            ExternalDragPayload::Data(data) => {
+                if data.offers().is_empty() {
+                    return false;
+                }
+                let source = data_device_manager
+                    .create_data_source(&state.globals.qh, DataSourceKind::Drag);
+                for offer in data.offers() {
+                    source.offer(offer.mime_type.to_string());
+                }
+                (source, ExternalDragContent::Data(data.clone()))
+            }
+        };
         source.set_actions(DndAction::Copy | DndAction::Move);
         data_device.start_drag(Some(&source), surface, None, serial.as_raw());
 
-        state.external_drag = Some(ExternalDrag {
+        // Mandara patch 13: a previous drag that never ended leaves no source behind.
+        if let Some(previous) = state.external_drag.replace(ExternalDrag {
             source,
-            bytes: uri_list.into_bytes(),
+            content,
             window,
-        });
+        }) {
+            previous.source.destroy();
+        }
         true
     }
 
@@ -1125,6 +1305,7 @@ impl WaylandConnection {
                 window: None,
                 position: Point::default(),
                 uri_read_generation: 0,
+                data: None,
             },
             external_drag: None,
             click: ClickState {
@@ -2978,6 +3159,41 @@ impl Dispatch<zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1, ObjectId>
     }
 }
 
+/// Mandara patch 13: turns a drag over a window that accepts data drops into
+/// an [`ExternalData`] drag: accepts its first MIME type (copy, or move when
+/// that is all the source allows) and hands the offer to the drag's value.
+fn begin_data_drag(
+    state: &mut WaylandClientState,
+    generation: u64,
+    data_offer: wl_data_offer::WlDataOffer,
+    serial: u32,
+    mime_types: Vec<String>,
+    window: WaylandWindowStatePtr,
+    position: Point<Pixels>,
+) -> Option<(WaylandWindowStatePtr, PlatformInput)> {
+    let Some(first) = mime_types.first().cloned() else {
+        data_offer.destroy();
+        return None;
+    };
+    // The drag's value owns the offer now: the clipboard's offer list must
+    // not destroy it when it rotates.
+    state.data_offers.retain(|offer| offer.inner != data_offer);
+    data_offer.set_actions(DndAction::Copy | DndAction::Move, DndAction::Copy);
+    data_offer.accept(serial, Some(first));
+    let data = Rc::new(WaylandDropData {
+        offer: data_offer,
+        connection: state.clipboard.connection().clone(),
+        phase: std::cell::Cell::new(DropPhase::Hovering),
+    });
+    let value = ExternalData::new(
+        mime_types.into_iter().map(gpui::SharedString::from),
+        data.clone() as Rc<dyn ExternalDataSource>,
+    );
+    state
+        .drag
+        .complete_data_enter(generation, data, window, position, value)
+}
+
 impl Dispatch<wl_data_device::WlDataDevice, ()> for WaylandClientStatePtr {
     fn event(
         this: &mut Self,
@@ -3026,6 +3242,36 @@ impl Dispatch<wl_data_device::WlDataDevice, ()> for WaylandClientStatePtr {
                         return;
                     };
                     let uri_read_generation = state.drag.begin_uri_read();
+                    // Mandara patch 13: what the drag offers, and whether this
+                    // window takes data that is not a list of files.
+                    let accepts_data = drag_window.accepts_data_drops();
+                    let mime_types: Vec<String> = if accepts_data {
+                        state
+                            .data_offers
+                            .iter()
+                            .find(|offer| offer.inner == data_offer)
+                            .map(|offer| offer.mime_types().to_vec())
+                            .unwrap_or_default()
+                    } else {
+                        Vec::new()
+                    };
+                    if accepts_data && !mime_types.iter().any(|m| m == FILE_LIST_MIME_TYPE) {
+                        let position = Point::new(x.into(), y.into());
+                        let input = begin_data_drag(
+                            &mut state,
+                            uri_read_generation,
+                            data_offer,
+                            serial,
+                            mime_types,
+                            drag_window,
+                            position,
+                        );
+                        drop(state);
+                        if let Some((drag_window, input)) = input {
+                            drag_window.handle_input(input);
+                        }
+                        return;
+                    }
 
                     const ACTIONS: DndAction = DndAction::Copy;
                     data_offer.set_actions(ACTIONS, ACTIONS);
@@ -3061,6 +3307,9 @@ impl Dispatch<wl_data_device::WlDataDevice, ()> for WaylandClientStatePtr {
                             let paths: SmallVec<[_; 2]> = file_list
                                 .lines()
                                 .filter_map(|path| Url::parse(path).log_err())
+                                // Mandara patch 13: links are not files (a
+                                // window taking data drops gets them as data).
+                                .filter(|url| url.scheme() == "file")
                                 .filter_map(|url| match url.to_file_path() {
                                     Ok(url) => Some(url),
                                     Err(()) => {
@@ -3071,15 +3320,34 @@ impl Dispatch<wl_data_device::WlDataDevice, ()> for WaylandClientStatePtr {
                                 .collect();
                             let position = Point::new(x.into(), y.into());
 
-                            // Prevent dropping text from other programs.
-                            if paths.is_empty() {
-                                data_offer.destroy();
-                                return;
-                            }
                             let Some(client) = this.0.upgrade() else {
                                 data_offer.destroy();
                                 return;
                             };
+                            // Prevent dropping text from other programs,
+                            // except into windows that take data drops
+                            // (Mandara patch 13): links come as data.
+                            if paths.is_empty() {
+                                if !accepts_data {
+                                    data_offer.destroy();
+                                    return;
+                                }
+                                let mut state = client.borrow_mut();
+                                let input = begin_data_drag(
+                                    &mut state,
+                                    uri_read_generation,
+                                    data_offer,
+                                    serial,
+                                    mime_types,
+                                    drag_window,
+                                    position,
+                                );
+                                drop(state);
+                                if let Some((drag_window, input)) = input {
+                                    drag_window.handle_input(input);
+                                }
+                                return;
+                            }
                             let mut state = client.borrow_mut();
                             let input = state.drag.complete_uri_read(
                                 uri_read_generation,
@@ -3182,21 +3450,69 @@ impl Dispatch<wl_data_source::WlDataSource, DataSourceKind> for WaylandClientSta
             (DataSourceKind::Clipboard, wl_data_source::Event::Cancelled) => {
                 data_source.destroy();
             }
-            (DataSourceKind::Drag, wl_data_source::Event::Send { fd, .. }) => {
+            (DataSourceKind::Drag, wl_data_source::Event::Send { mime_type, fd }) => {
                 let Some(external_drag) = state.external_drag.as_ref() else {
                     return;
                 };
-                let bytes = external_drag.bytes.clone();
-                state.clipboard.send_bytes(fd, bytes);
+                match &external_drag.content {
+                    ExternalDragContent::UriList(bytes) => {
+                        let bytes = bytes.clone();
+                        state.clipboard.send_bytes(fd, bytes);
+                    }
+                    // Mandara patch 13: bytes from memory, files streamed
+                    // off the UI thread.
+                    ExternalDragContent::Data(data) => match data.offer(&mime_type) {
+                        Some(offer) => match &offer.content {
+                            DragContent::Bytes(bytes) => {
+                                let bytes = bytes.to_vec();
+                                state.clipboard.send_bytes(fd, bytes);
+                            }
+                            DragContent::File(path) => {
+                                let path = path.clone();
+                                state
+                                    .common
+                                    .borrow()
+                                    .background_executor
+                                    .spawn(async move {
+                                        let mut file = std::fs::File::open(&path)?;
+                                        let mut out = std::fs::File::from(fd);
+                                        std::io::copy(&mut file, &mut out)?;
+                                        anyhow::Ok(())
+                                    })
+                                    .detach();
+                            }
+                        },
+                        None => drop(fd),
+                    },
+                }
             }
             (
                 DataSourceKind::Drag,
-                wl_data_source::Event::DndFinished | wl_data_source::Event::Cancelled,
+                event @ (wl_data_source::Event::DndFinished | wl_data_source::Event::Cancelled),
             ) => {
+                // Mandara patch 13: a replaced drag's source only goes away.
+                if state
+                    .external_drag
+                    .as_ref()
+                    .is_none_or(|drag| drag.source != *data_source)
+                {
+                    return;
+                }
                 let Some(external_drag) = state.external_drag.take() else {
                     return;
                 };
                 external_drag.source.destroy();
+                // Mandara patch 13: tell the source window the drop was taken.
+                if matches!(event, wl_data_source::Event::DndFinished) {
+                    drop(state);
+                    external_drag
+                        .window
+                        .handle_input(PlatformInput::FileDrop(FileDropEvent::Delivered));
+                    external_drag
+                        .window
+                        .handle_input(PlatformInput::FileDrop(FileDropEvent::Ended));
+                    return;
+                }
 
                 let input = PlatformInput::FileDrop(FileDropEvent::Ended);
                 drop(state);
@@ -3395,12 +3711,97 @@ mod tests {
         }
     }
 
+    /// Mandara patch 13: a data drag's transfer, recording what happened.
+    #[derive(Clone, Default)]
+    struct FakeData {
+        dropped: Rc<Cell<bool>>,
+        left: Rc<Cell<bool>>,
+    }
+
+    impl DataDrop for FakeData {
+        fn dropped(&self) {
+            self.dropped.set(true);
+        }
+
+        fn left(&self) {
+            self.left.set(true);
+        }
+    }
+
+    struct NoSource;
+
+    impl ExternalDataSource for NoSource {
+        fn receive(&self, _: &str) -> Option<Box<dyn std::io::Read + Send>> {
+            None
+        }
+    }
+
+    fn data_drag_state() -> DragState<FakeDataOffer, &'static str, FakeData> {
+        DragState {
+            data_offer: None,
+            window: None,
+            position: Point::default(),
+            uri_read_generation: 0,
+            data: None,
+        }
+    }
+
+    fn value() -> ExternalData {
+        ExternalData::new(["text/plain".into()], Rc::new(NoSource))
+    }
+
+    #[test]
+    fn a_data_drag_enters_and_drops_without_finishing_its_offer_itself() {
+        let mut drag = data_drag_state();
+        let data = FakeData::default();
+        let generation = drag.begin_uri_read();
+        let input = drag.complete_data_enter(generation, data.clone(), "window A", Point::default(), value());
+        assert!(matches!(input, Some(("window A", PlatformInput::FileDrop(FileDropEvent::DataEntered { .. })))));
+        let input = drag.handle_drop();
+        assert!(matches!(input, Some(("window A", PlatformInput::FileDrop(FileDropEvent::Submit { .. })))));
+        // The drag's value finishes the offer once it is read, not the state.
+        assert!(data.dropped.get() && !data.left.get());
+        assert!(drag.data.is_none() && drag.window.is_none());
+    }
+
+    #[test]
+    fn a_data_drag_that_leaves_lets_its_transfer_go() {
+        let mut drag = data_drag_state();
+        let data = FakeData::default();
+        let generation = drag.begin_uri_read();
+        drag.complete_data_enter(generation, data.clone(), "window A", Point::default(), value());
+        let input = drag.handle_leave();
+        assert!(matches!(input, Some(("window A", PlatformInput::FileDrop(FileDropEvent::Exited)))));
+        assert!(data.left.get() && !data.dropped.get());
+        // A stale enter (the drag left before it completed) is let go too.
+        let mut drag = data_drag_state();
+        let stale = FakeData::default();
+        let generation = drag.begin_uri_read();
+        drag.handle_leave();
+        assert!(drag.complete_data_enter(generation, stale.clone(), "window B", Point::default(), value()).is_none());
+        assert!(stale.left.get());
+        assert!(drag.window.is_none());
+    }
+
+    #[test]
+    fn data_drags_offer_each_type_once_and_find_offers() {
+        let data = DragData::new([
+            gpui::DragOffer { mime_type: "text/plain".into(), content: DragContent::Bytes(std::sync::Arc::from(&b"a"[..])) },
+            gpui::DragOffer { mime_type: "text/plain".into(), content: DragContent::Bytes(std::sync::Arc::from(&b"b"[..])) },
+            gpui::DragOffer { mime_type: "image/png".into(), content: DragContent::File("/tmp/a.png".into()) },
+        ]);
+        assert_eq!(data.offers().len(), 2, "the first offer of a type wins");
+        assert!(matches!(data.offer("image/png").map(|o| &o.content), Some(DragContent::File(_))));
+        assert!(data.offer("text/html").is_none());
+    }
+
     fn drag_state() -> DragState<FakeDataOffer, &'static str> {
         DragState {
             data_offer: None,
             window: None,
             position: Point::default(),
             uri_read_generation: 0,
+            data: None,
         }
     }
 
