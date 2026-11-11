@@ -75,11 +75,11 @@ pub fn slug(name: &str) -> String {
     if s.is_empty() { "profile".into() } else { s }
 }
 
-fn to_table(cfg: &ShellConfig) -> Result<Table> {
+pub(crate) fn to_table(cfg: &ShellConfig) -> Result<Table> {
     Table::try_from(cfg).context("serializing the config")
 }
 
-fn get_path<'a>(t: &'a Table, path: &str) -> Option<&'a Value> {
+pub(crate) fn get_path<'a>(t: &'a Table, path: &str) -> Option<&'a Value> {
     let mut parts = path.split('.');
     let mut cur = t.get(parts.next()?)?;
     for p in parts {
@@ -88,7 +88,7 @@ fn get_path<'a>(t: &'a Table, path: &str) -> Option<&'a Value> {
     Some(cur)
 }
 
-fn set_path(t: &mut Table, path: &str, value: Option<Value>) {
+pub(crate) fn set_path(t: &mut Table, path: &str, value: Option<Value>) {
     let parts: Vec<&str> = path.split('.').collect();
     let mut cur = t;
     for p in &parts[..parts.len() - 1] {

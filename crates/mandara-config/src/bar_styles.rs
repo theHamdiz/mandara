@@ -53,6 +53,10 @@ pub enum BarStyle {
     /// A top bar joined to a rail down the left edge (a tram line running
     /// across and down the screen), with flower buttons on both.
     RamlTram,
+    /// A full-width bottom taskbar: the launcher and your pinned and
+    /// running apps centred, the status cluster and a stacked time and
+    /// date on the right, on a soft translucent surface.
+    Taskbar,
 }
 
 /// Plugin ids of a bar's three zones (start, middle, end; top to bottom on
@@ -109,13 +113,30 @@ pub enum ItemZone {
     RailTop,
     RailMiddle,
     RailBottom,
+    /// The right side bar's zones.
+    RightTop,
+    RightMiddle,
+    RightBottom,
 }
 
 impl ItemZone {
-    const BAR: [ItemZone; 3] = [ItemZone::Start, ItemZone::Middle, ItemZone::End];
-    const RAIL: [ItemZone; 3] = [ItemZone::RailTop, ItemZone::RailMiddle, ItemZone::RailBottom];
+    pub const BAR: [ItemZone; 3] = [ItemZone::Start, ItemZone::Middle, ItemZone::End];
+    pub const RAIL: [ItemZone; 3] = [ItemZone::RailTop, ItemZone::RailMiddle, ItemZone::RailBottom];
+    pub const RIGHT: [ItemZone; 3] = [ItemZone::RightTop, ItemZone::RightMiddle, ItemZone::RightBottom];
+    /// Every zone an item can sit in, bar first.
+    pub const ALL: [ItemZone; 9] = [
+        ItemZone::Start,
+        ItemZone::Middle,
+        ItemZone::End,
+        ItemZone::RailTop,
+        ItemZone::RailMiddle,
+        ItemZone::RailBottom,
+        ItemZone::RightTop,
+        ItemZone::RightMiddle,
+        ItemZone::RightBottom,
+    ];
 
-    fn list(self, cfg: &mut ShellConfig) -> &mut Vec<String> {
+    pub fn list(self, cfg: &mut ShellConfig) -> &mut Vec<String> {
         match self {
             ItemZone::Start => &mut cfg.bar.left,
             ItemZone::Middle => &mut cfg.bar.center,
@@ -123,6 +144,43 @@ impl ItemZone {
             ItemZone::RailTop => &mut cfg.side_bars.left.top,
             ItemZone::RailMiddle => &mut cfg.side_bars.left.middle,
             ItemZone::RailBottom => &mut cfg.side_bars.left.bottom,
+            ItemZone::RightTop => &mut cfg.side_bars.right.top,
+            ItemZone::RightMiddle => &mut cfg.side_bars.right.middle,
+            ItemZone::RightBottom => &mut cfg.side_bars.right.bottom,
+        }
+    }
+
+    pub fn get(self, cfg: &ShellConfig) -> &Vec<String> {
+        match self {
+            ItemZone::Start => &cfg.bar.left,
+            ItemZone::Middle => &cfg.bar.center,
+            ItemZone::End => &cfg.bar.right,
+            ItemZone::RailTop => &cfg.side_bars.left.top,
+            ItemZone::RailMiddle => &cfg.side_bars.left.middle,
+            ItemZone::RailBottom => &cfg.side_bars.left.bottom,
+            ItemZone::RightTop => &cfg.side_bars.right.top,
+            ItemZone::RightMiddle => &cfg.side_bars.right.middle,
+            ItemZone::RightBottom => &cfg.side_bars.right.bottom,
+        }
+    }
+
+    /// The bar zone in the same place along its bar (top / start, middle,
+    /// bottom / end): where an item goes when its side bar stops showing.
+    pub fn on_bar(self) -> ItemZone {
+        match self {
+            ItemZone::Start | ItemZone::RailTop | ItemZone::RightTop => ItemZone::Start,
+            ItemZone::Middle | ItemZone::RailMiddle | ItemZone::RightMiddle => ItemZone::Middle,
+            ItemZone::End | ItemZone::RailBottom | ItemZone::RightBottom => ItemZone::End,
+        }
+    }
+
+    /// Whether the zone shows on `cfg` (the bar always does; a side bar's
+    /// zones while that side bar is on).
+    pub fn shows(self, cfg: &ShellConfig) -> bool {
+        match self {
+            ItemZone::Start | ItemZone::Middle | ItemZone::End => true,
+            ItemZone::RailTop | ItemZone::RailMiddle | ItemZone::RailBottom => cfg.side_bar_on(false),
+            ItemZone::RightTop | ItemZone::RightMiddle | ItemZone::RightBottom => cfg.side_bar_on(true),
         }
     }
 }
@@ -163,6 +221,8 @@ impl StyleItems {
 const WORKSPACES: &str = "workspaces";
 /// The launcher, which a style with a rail seats in the corner.
 const LAUNCHER: &str = "launcher";
+/// The taskbar item: pinned and running apps in the bar.
+pub const TASKBAR: &str = "taskbar";
 
 /// Whether `id` is on the bar.
 fn on_bar(cfg: &ShellConfig, id: &str) -> bool {
@@ -175,10 +235,15 @@ fn on_rail(cfg: &ShellConfig, id: &str) -> bool {
 }
 
 /// Whether `id` is still on the bar or a side bar once the style's own
-/// placements are gone: you put it there yourself, so it keeps its plugin.
-/// (A sidebar card doesn't count: it was there, switched off, before.)
+/// placements are gone, or a desktop widget needs its plugin: you put it
+/// there yourself, so it keeps its plugin. (A sidebar card doesn't count:
+/// it was there, switched off, before.)
+pub(crate) fn placed_by_you(cfg: &ShellConfig, id: &str) -> bool {
+    placed(cfg, id)
+}
+
 fn placed(cfg: &ShellConfig, id: &str) -> bool {
-    on_bar(cfg, id) || [&cfg.side_bars.left, &cfg.side_bars.right].into_iter().any(|s| s.zones().into_iter().any(|z| z.iter().any(|x| x == id)))
+    on_bar(cfg, id) || [&cfg.side_bars.left, &cfg.side_bars.right].into_iter().any(|s| s.zones().into_iter().any(|z| z.iter().any(|x| x == id))) || cfg.desktop.widgets.items.iter().any(|w| w.kind.plugin() == id)
 }
 
 /// Puts `id` into `zone` at `index` (at most its end) for the style, its
@@ -265,7 +330,7 @@ pub fn upgrade(cfg: &mut ShellConfig) -> bool {
 }
 
 impl BarStyle {
-    pub const ALL: [BarStyle; 8] = [
+    pub const ALL: [BarStyle; 9] = [
         BarStyle::Expressive,
         BarStyle::TileDock,
         BarStyle::Rail,
@@ -274,6 +339,7 @@ impl BarStyle {
         BarStyle::StanleyBridge,
         BarStyle::PharosBeam,
         BarStyle::RamlTram,
+        BarStyle::Taskbar,
     ];
 
     /// The styles a side bar can take on its own (`side-bar style`, the
@@ -291,6 +357,7 @@ impl BarStyle {
             BarStyle::StanleyBridge => "stanley-bridge",
             BarStyle::PharosBeam => "pharos-beam",
             BarStyle::RamlTram => "raml-tram",
+            BarStyle::Taskbar => "taskbar",
         }
     }
 
@@ -328,6 +395,8 @@ impl BarStyle {
             BarStyle::StanleyBridge => [&["launcher", "workspaces"], &["media", "clock"], &["audio", "network", "bluetooth", "notifications", "session"]],
             BarStyle::PharosBeam => [&["launcher", "workspaces"], &["clock", "media"], &["weather", "audio", "notifications", "session"]],
             BarStyle::RamlTram => [&["launcher", "active-window"], &["clock", "media"], &["weather", "tray", "bluetooth", "notifications"]],
+            // The launcher opens the centred group, your apps follow it.
+            BarStyle::Taskbar => [&["weather"], &["launcher", TASKBAR], &["tray", "network", "audio", "power", "clock", "notifications"]],
         }
     }
 
@@ -349,6 +418,7 @@ impl BarStyle {
     pub const fn signature(self) -> Zones {
         match self {
             BarStyle::SystemMonitor => [&["processes"], &["mini-stats", "resources", "net-speed"], &["drives"]],
+            BarStyle::Taskbar => [&[], &[TASKBAR], &[]],
             _ => [&[], &[], &[]],
         }
     }
@@ -518,6 +588,25 @@ impl BarStyle {
                 notch_width: 0.5,
                 ..plain
             },
+            // A soft translucent strip: hover-light squircles, no rim.
+            BarStyle::Taskbar => Look {
+                layout: BarLayout::MinimalEdge,
+                position: BarPosition::Bottom,
+                height: 48.0,
+                item_shape: BarItemShape::Squircle,
+                capsule_fill: BarCapsuleFill::Soft,
+                capsule_strength: 0.7,
+                item_inset: 6.0,
+                chip_padding: 10.0,
+                chip_spacing: 4.0,
+                corner_radius: 8.0,
+                flare_radius: 8.0,
+                opacity: 0.86,
+                tint: 0.05,
+                rim_intensity: 0.35,
+                icon_scale: 1.15,
+                ..plain
+            },
             // Icon items stay round: their padding keeps them within the
             // icon-sized share of the items' thickness.
             BarStyle::RamlTram => Look {
@@ -545,6 +634,14 @@ impl BarStyle {
     /// items stay; see [`Self::zones`]). A style set before is cleared
     /// first, so nothing of it lingers.
     pub fn apply(self, cfg: &mut ShellConfig) {
+        self.apply_look(cfg);
+        cfg.bar.style_items = self.fit_items(cfg, true);
+    }
+
+    /// Applies the style's look like [`Self::apply`] but leaves the items
+    /// to the caller (a Look, or a preset that replaces the items, lays
+    /// them out itself: [`crate::bar_items::lay_out`]).
+    pub fn apply_look(self, cfg: &mut ShellConfig) {
         clear(cfg);
         let l = self.look();
         let bar = &mut cfg.bar;
@@ -593,7 +690,30 @@ impl BarStyle {
             sb.left.pinned = true;
             sb.right.enabled = false;
         }
-        cfg.bar.style_items = self.fit_items(cfg, true);
+        cfg.bar.style_items = StyleItems { settled: true, ..StyleItems::default() };
+    }
+
+    /// The style's own items as a layout: its bar zones and its rail.
+    pub fn items_layout(self) -> crate::bar_items::Layout {
+        crate::bar_items::Layout::from_ids(self.zones(), self.rail())
+    }
+
+    /// Switches on the plugins of the style's signature items that `placed`
+    /// holds, recorded so [`clear`] switches them off again.
+    pub fn switch_on_signature(self, cfg: &mut ShellConfig, placed: &[String]) {
+        for id in self.signature().into_iter().flatten() {
+            if !placed.iter().any(|p| p == id) {
+                continue;
+            }
+            if cfg.plugins.disabled.iter().any(|d| d == id) {
+                cfg.plugins.disabled.retain(|d| d != id);
+                cfg.bar.style_items.undisabled.push(id.to_string());
+            }
+            if !cfg.plugins.enabled.iter().any(|e| e == id) {
+                cfg.plugins.enabled.push(id.to_string());
+                cfg.bar.style_items.enabled.push(id.to_string());
+            }
+        }
     }
 
     /// Whether `cfg`'s bar still looks as this style set it (layout, edge
@@ -627,6 +747,7 @@ impl BarStyle {
             BarStyle::StanleyBridge => SideLook { item_shape: BarItemShape::Squircle, icon_shape: BarIconShape::Squircle, icon_fill: BarIconFill::Tertiary, item_inset: 3.0 },
             BarStyle::PharosBeam => SideLook { item_shape: BarItemShape::Tile, icon_shape: BarIconShape::Burst, icon_fill: BarIconFill::Accent, item_inset: 4.0 },
             BarStyle::RamlTram => SideLook { item_shape: BarItemShape::Tile, icon_shape: BarIconShape::Flower, icon_fill: BarIconFill::Tertiary, item_inset: 5.0 },
+            BarStyle::Taskbar => SideLook { item_shape: BarItemShape::Squircle, icon_shape: BarIconShape::Match, icon_fill: BarIconFill::Match, item_inset: 4.0 },
         }
     }
 
@@ -687,13 +808,16 @@ fn give_back_items(cfg: &mut ShellConfig) {
             list.insert(t.index.min(list.len()), t.id.clone());
         }
     }
+    // An item a Look or preset laid out goes with it: it doesn't keep the
+    // plugin on (yours do).
+    let kept = |cfg: &ShellConfig, id: &str| placed(cfg, id) && (cfg.bar.yours.iter().any(|y| y == id) || !cfg.bar.layout_items.as_ref().is_some_and(|l| l.iter().any(|p| p.id == id)) || cfg.desktop.widgets.items.iter().any(|w| w.kind.plugin() == id));
     for id in &items.enabled {
-        if !placed(cfg, id) {
+        if !kept(cfg, id) {
             cfg.plugins.enabled.retain(|e| e != id);
         }
     }
     for id in &items.undisabled {
-        if !placed(cfg, id) && !cfg.plugins.enabled.iter().any(|e| e == id) && !cfg.plugins.disabled.iter().any(|d| d == id) {
+        if !kept(cfg, id) && !cfg.plugins.enabled.iter().any(|e| e == id) && !cfg.plugins.disabled.iter().any(|d| d == id) {
             cfg.plugins.disabled.push(id.clone());
         }
     }

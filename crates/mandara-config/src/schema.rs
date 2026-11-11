@@ -1321,6 +1321,20 @@ pub struct BarConfig {
     /// them back.
     #[serde(skip_serializing_if = "crate::bar_styles::StyleItems::is_empty")]
     pub style_items: crate::bar_styles::StyleItems,
+    /// The items the last preset or Look laid out on the bars (`None`:
+    /// nothing recorded yet), so the next one takes exactly those away and
+    /// the items you added stay ([`crate::bar_items`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layout_items: Option<Vec<crate::bar_styles::ItemPlace>>,
+    /// Items you placed or moved yourself (Studio's layout designer):
+    /// they stay through every preset and Look.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub yours: Vec<String>,
+    /// Items that were already on the bars, not yours, when the first
+    /// preset or Look was recorded and that it left in place (a side bar's
+    /// shipped items): never counted as yours, never taken away.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub preset_kept: Vec<String>,
 }
 
 impl BarConfig {
@@ -1459,6 +1473,9 @@ impl Default for BarConfig {
             item_inset: surfaces::defaults::BAR_ITEM_INSET_PX,
             style: None,
             style_items: crate::bar_styles::StyleItems::default(),
+            layout_items: None,
+            yours: Vec::new(),
+            preset_kept: Vec::new(),
         }
     }
 }
