@@ -624,6 +624,7 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Mandara can't set this on Sway")),
         path if running_compositor() == Some(mandara_config::compositor::Target::River) && RIVER_LACKS.contains(&path) => Some(tk("River has no such setting")),
         path if path.starts_with("/wallpaper/slideshow/") => desktop_settings::slideshow_locked(path, cfg),
+        path if path.starts_with("/wallpaper/sketch/") => desktop_settings::sketch_locked(cfg),
         "/wallpaper/depth/auto_split" | "/wallpaper/depth/download" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
         "/wallpaper/depth/split" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
         "/wallpaper/depth/split" if cfg.wallpaper.depth.auto_split => Some(tk("Set per wallpaper while the automatic split is on")),

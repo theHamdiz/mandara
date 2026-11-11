@@ -36,7 +36,19 @@ const PREVIEW_TILE_TRAVEL_PX: f32 = SPACE_18_PX;
 const PREVIEW_INNER_PX: f32 = SPACE_10_PX;
 const PREVIEW_PARALLAX_PX: f32 = SPACE_10_PX;
 /// Wallpaper settings the Motion page shows beside its own.
-pub(super) const WALLPAPER_ROWS: &[&str] = &["/wallpaper/transition", "/wallpaper/transition_origin", "/wallpaper/crossfade_ms"];
+pub(super) const WALLPAPER_ROWS: &[&str] = &[
+    "/wallpaper/transition",
+    "/wallpaper/transition_origin",
+    "/wallpaper/crossfade_ms",
+    // Sketch's own options (shown as not applicable under the others).
+    "/wallpaper/sketch/ink",
+    "/wallpaper/sketch/line_width",
+    "/wallpaper/sketch/glow",
+    "/wallpaper/sketch/draw_order",
+    "/wallpaper/sketch/draw_share",
+    "/wallpaper/sketch/fill_style",
+    "/wallpaper/sketch/keep_outline",
+];
 /// The preset tiles.
 const PRESET_GRID: CardGrid = CardGrid { min_w: 190.0, max_w: 320.0, gap: SPACE_12_PX };
 

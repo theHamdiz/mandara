@@ -149,3 +149,45 @@ launch = "ripple"
 attention = "wiggle"
 reveal = "scale"
 ```
+
+## Sketch wallpaper transition
+
+**Sketch** (the *Transition* choice in the **Wallpaper change** card, and in
+**Studio → Wallpaper → Fit & effects**) draws the new wallpaper's outline
+first, as lines that grow along their length, then fills the image in. When
+Mandara already has a mask of the wallpaper's subject (one you made, or one
+the depth effect found the last time the wallpaper was shown), the subject's
+outline is drawn first; otherwise the lines come from the picture's edges. The
+lines are traced once per wallpaper and screen size in the background, from a
+small copy of the image, and kept for the next change back.
+
+| Setting | Choices (default first) | What it does |
+| --- | --- | --- |
+| **Line colour** | *Theme accent*, *Ink black*, *White*, *The wallpaper's own colour* | Dark lines draw over a paper-light wash, light ones over a dark wash |
+| **Line thickness** | 2 px (0.5 to 6) | How thick the strokes are |
+| **Glow** | on | A soft halo under the lines |
+| **Drawing order** | *Subject first, then the background*, *Top to bottom*, *From the centre*, *From the pointer* | Which lines are drawn first |
+| **Drawing vs filling** | 0.55 (0.2 to 0.85) | The share of **Transition length** spent drawing; the rest fills the image in |
+| **Fill style** | *Watercolour bleed from the lines*, *Fade in*, *Wipe along the strokes* | How the image arrives once its lines are drawn |
+| **Keep the outline** | off | Leaves a faint copy of the lines over the wallpaper afterwards (it does not animate) |
+
+Sketch reads best with a longer **Transition length** (1.5 to 2 s). With
+reduced motion it is a plain fade, and the default software wallpaper
+renderer always draws it as a fade (the lines need the GPU wallpaper,
+`MANDARA_WALLPAPER_RENDERER=gpui`). A tiled wallpaper fades too. The options
+live under `[wallpaper.sketch]`:
+
+```toml
+[wallpaper]
+transition = "sketch"
+crossfade_ms = 1800
+
+[wallpaper.sketch]
+ink = "wallpaper"        # accent, ink, white, wallpaper
+line_width = 2.5
+glow = true
+draw_order = "subject"   # subject, top-down, center, pointer
+draw_share = 0.55
+fill_style = "bleed"     # fade, bleed, wipe
+keep_outline = false
+```

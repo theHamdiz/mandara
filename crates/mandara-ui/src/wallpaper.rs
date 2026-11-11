@@ -642,6 +642,10 @@ pub struct WallpaperView {
     input_cleared: bool,
     /// Small copy of the shown wallpaper: picks the clock's ink.
     tone: Option<Arc<image::RgbImage>>,
+    /// The shown wallpaper's outline while a Sketch transition draws it
+    /// (or keeps it as a faint overlay), and the running one's order.
+    outline: Option<Arc<crate::wallpaper_sketch::Outline>>,
+    sketch_plan: Option<std::rc::Rc<crate::wallpaper_sketch::Plan>>,
     /// Depth layer 3: the subject cut-out over the clock (and the one
     /// fading out).
     masks: Entity<crate::depth::DepthMasks>,
@@ -707,6 +711,8 @@ impl WallpaperView {
             origin: None,
             input_cleared: false,
             tone: None,
+            outline: None,
+            sketch_plan: None,
             masks,
             cutout: None,
             retired: None,
@@ -719,24 +725,34 @@ impl WallpaperView {
         }
     }
 
-    /// Prepares a display-sized copy off the UI thread, then crossfades.
+    /// Prepares a display-sized copy off the UI thread (and, for a Sketch
+    /// transition, the new image's outline from the same decode), then
+    /// crossfades.
     fn load(&mut self, path: PathBuf, size: (u32, u32), fill: mandara_config::desktop::WallpaperFill, cx: &mut Context<Self>) {
         self.fill = fill;
         self.target = Some(path.clone());
+        let sketch = crate::wallpaper_sketch::Want::of(&self.config.read(cx).get().wallpaper);
         let task = cx.background_executor().spawn(async move {
             let (shown, shown_size) = crate::wallpaper_fill::prepare(&path, fill, size.0, size.1)?;
-            let tone = image::open(&shown).ok().map(|i| Arc::new(i.thumbnail(TONE_MAP_PX, TONE_MAP_PX).to_rgb8()));
-            Ok::<_, String>((path, (shown, shown_size), tone))
+            let decoded = image::open(&shown).ok();
+            let tone = decoded.as_ref().map(|i| Arc::new(i.thumbnail(TONE_MAP_PX, TONE_MAP_PX).to_rgb8()));
+            let outline = match (sketch, decoded) {
+                (Some(want), Some(img)) => crate::wallpaper_sketch::for_wallpaper(&want, &path, &shown, img, tone.as_deref()),
+                _ => None,
+            };
+            Ok::<_, String>((path, (shown, shown_size), tone, outline))
         });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| match result {
-                Ok((source, (shown, shown_size), tone)) if this.target.as_ref() == Some(&source) => {
+                Ok((source, (shown, shown_size), tone, outline)) if this.target.as_ref() == Some(&source) => {
                     this.previous = this.current.take();
                     this.previous_size = this.current_size;
                     this.current = Some(shown);
                     this.current_size = shown_size;
                     this.tone = tone;
+                    this.outline = outline;
+                    this.sketch_plan = None;
                     this.since = Instant::now();
                     this.changes = this.changes.wrapping_add(1);
                     this.origin = None;
@@ -869,6 +885,8 @@ impl WallpaperView {
 impl Render for WallpaperView {
     /// Paint the active wallpaper and release stale images before advancing transitions.
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Frame timing (`diagnostics frames`), like the shell's own views.
+        let _frame = crate::plugins::diagnostics::frame(cx.entity_id().as_u64());
         if !self.input_cleared {
             // The desktop background never takes pointer input.
             window.set_input_region(Some(&[]));
@@ -884,6 +902,8 @@ impl Render for WallpaperView {
                 crate::image_cache::evict_path(&shown, window, cx);
             }
             self.clear_cutouts();
+            self.outline = None;
+            self.sketch_plan = None;
             return div().size_full();
         }
         // Per-output and light / dark variants, then the main wallpaper.
@@ -905,9 +925,15 @@ impl Render for WallpaperView {
                 }
             }
         }
-        let instant = cfg.motion.reduced(mandara_core::spring::system_reduced_motion()) || cfg.wallpaper.transition == mandara_config::desktop::WallpaperTransition::None;
+        use mandara_config::desktop::WallpaperTransition;
+        let reduced = cfg.motion.reduced(mandara_core::spring::system_reduced_motion());
+        // Reduced motion: no strokes, a plain fade (every other transition
+        // cuts).
+        let plain_sketch = reduced && cfg.wallpaper.transition == WallpaperTransition::Sketch;
+        let instant = (reduced && !plain_sketch) || cfg.wallpaper.transition == WallpaperTransition::None;
         let fade = Duration::from_millis(if instant { 1 } else { cfg.wallpaper.crossfade_ms.max(1) });
         let t = (self.since.elapsed().as_secs_f32() / fade.as_secs_f32()).clamp(0.0, 1.0);
+        let keep_outline = cfg.wallpaper.transition == WallpaperTransition::Sketch && cfg.wallpaper.sketch.keep_outline && !plain_sketch;
         if t < 1.0 {
             window.request_animation_frame();
         } else if let Some(old) = self.previous.take() {
@@ -916,6 +942,12 @@ impl Render for WallpaperView {
             if self.current.as_ref() != Some(&old) {
                 crate::image_cache::evict_path(&old, window, cx);
             }
+            self.sketch_plan = None;
+        }
+        if t >= 1.0 && !keep_outline {
+            // Only a running Sketch (or the kept overlay) draws the outline.
+            self.outline = None;
+            self.sketch_plan = None;
         }
         let eased = t * t * (3.0 - 2.0 * t);
 
@@ -957,7 +989,7 @@ impl Render for WallpaperView {
         let fill = self.fill;
         let layer = |p: &PathBuf, size: (u32, u32)| crate::wallpaper_fill::layer(p, size, fill, (vw, vh), scale);
         let rtl = cfg.general.locale.is_rtl();
-        let transition = cfg.wallpaper.transition;
+        let transition = if plain_sketch { WallpaperTransition::Fade } else { cfg.wallpaper.transition };
         // A Ripple or Shatter starts where the pointer was when it began
         // (or the centre), fixed for the whole transition.
         let origin = *self.origin.get_or_insert_with(|| {
@@ -969,15 +1001,46 @@ impl Render for WallpaperView {
         let seed = self.changes.wrapping_mul(0x9e37_79b9);
         let fill_bg = (fill != mandara_config::desktop::WallpaperFill::Cover && self.current.is_some()).then(|| crate::wallpaper_fill::fill_color(&cfg.wallpaper.fill_color).hsla());
         let (previous_size, current_size) = (self.previous_size, self.current_size);
-        let wallpaper = match (self.current.as_ref(), self.previous.as_ref()) {
-            (Some(cur), prev) => {
+        // A Sketch draws the outline it was prepared with; without one (a
+        // tiled image, a failed trace) it fades.
+        let sketch = self.outline.clone().filter(|o| transition == WallpaperTransition::Sketch && !o.is_empty() && (crossfading || keep_outline));
+        let sketch = sketch.map(|o| {
+            let sk = &cfg.wallpaper.sketch;
+            let rect = crate::wallpaper_sketch::image_rect(fill, current_size, (vw, vh), scale);
+            let plan = self.sketch_plan.get_or_insert_with(|| {
+                // Center and Pointer start from the screen's middle or the
+                // pointer, as a point of the image.
+                let at = match sk.draw_order {
+                    mandara_config::desktop::SketchOrder::Pointer => {
+                        let p = window.mouse_position();
+                        let (x, y) = (f32::from(p.x), f32::from(p.y));
+                        if (0.0..vw).contains(&x) && (0.0..vh).contains(&y) { (x, y) } else { (vw / 2.0, vh / 2.0) }
+                    }
+                    _ => (vw / 2.0, vh / 2.0),
+                };
+                let focus = [((at.0 - rect.0) / rect.2.max(1.0)).clamp(0.0, 1.0), ((at.1 - rect.1) / rect.3.max(1.0)).clamp(0.0, 1.0)];
+                std::rc::Rc::new(crate::wallpaper_sketch::plan(&o, sk.draw_order, focus))
+            });
+            let plan = plan.clone();
+            let accent = mandara_core::frame_palette(window, cx).primary;
+            let (line, wash) = crate::wallpaper_sketch::colours(sk.ink, accent, &o);
+            (o, plan, rect, line, wash)
+        });
+        let wallpaper = match (self.current.as_ref(), self.previous.as_ref(), sketch.as_ref()) {
+            (Some(cur), prev, Some((o, plan, rect, line, wash))) => {
+                let new = || layer(cur, current_size);
+                let old = || prev.map_or_else(|| div().into_any_element(), |p| layer(p, previous_size));
+                let frame = crate::wallpaper_sketch::Frame { outline: o, plan, options: &cfg.wallpaper.sketch, line: *line, wash: *wash, t: if crossfading { t } else { 1.0 }, rect: *rect, vp: (vw, vh) };
+                crate::wallpaper_sketch::compose(&old, &new, frame)
+            }
+            (Some(cur), prev, None) => {
                 let old = prev.map(|p| move || layer(p, previous_size));
                 let new = || layer(cur, current_size);
                 let old: Option<&dyn Fn() -> gpui::AnyElement> = old.as_ref().map(|f| f as &dyn Fn() -> gpui::AnyElement);
                 crate::wallpaper_transitions::compose(old, &new, transition, if crossfading { eased } else { 1.0 }, (vw, vh), rtl, origin, seed)
             }
-            (None, Some(p)) => vec![layer(p, previous_size)],
-            (None, None) => Vec::new(),
+            (None, Some(p), _) => vec![layer(p, previous_size)],
+            (None, None, _) => Vec::new(),
         };
         div()
             .size_full()

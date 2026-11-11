@@ -2060,7 +2060,7 @@ fn group_order(section: Section) -> Option<&'static [&'static str]> {
         Section::Bars => &["Layout", "Spacing", "Shape", APPEARANCE, "Screen frame", "Behaviour", "Clock", SIDE_BARS, SIDE_BAR_SHAPE, SIDE_BAR_ITEMS, SIDE_BAR_MATERIAL, PANELS, PANEL_MOTION],
         Section::Launcher => &["Size & placement", "Button", "Results", "Grid", "Beacon search bar", "Search providers", "Ranking", "General", "Starting apps", "Pinned & hidden apps"],
         Section::Themes => &["Mode", "Style", "Components", "Tuning", "Accessibility", "Wallpaper colors", "Icons", "Cursor", "App themes"],
-        Section::Wallpaper => &["Desktop", "Light & dark", "Video", "Depth clock", "Picker", "Slideshow", "Source", "When to change", "Slideshow transition", "Displays", "Wallhaven"],
+        Section::Wallpaper => &["Desktop", "Sketch transition", "Light & dark", "Video", "Depth clock", "Picker", "Slideshow", "Source", "When to change", "Slideshow transition", "Displays", "Wallhaven"],
         _ => return None,
     })
 }

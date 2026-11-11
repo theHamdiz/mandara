@@ -57,7 +57,7 @@ fn smooth(t: f32) -> f32 {
 
 /// `layer` clipped to the rect `(x, y, w, h)` of the viewport, the clip
 /// (and the image in it) moved by `(dx, dy)`.
-fn piece(layer: AnyElement, (x, y, w, h): (f32, f32, f32, f32), (dx, dy): (f32, f32), (vw, vh): (f32, f32)) -> gpui::Div {
+pub(crate) fn piece(layer: AnyElement, (x, y, w, h): (f32, f32, f32, f32), (dx, dy): (f32, f32), (vw, vh): (f32, f32)) -> gpui::Div {
     div().absolute().left(px(x + dx)).top(px(y + dy)).w(px(w.max(0.0))).h(px(h.max(0.0))).overflow_hidden().child(div().absolute().left(px(-x)).top(px(-y)).w(px(vw)).h(px(vh)).child(layer))
 }
 
@@ -109,7 +109,8 @@ pub fn compose(old: Option<&dyn Fn() -> AnyElement>, new: &dyn Fn() -> AnyElemen
         return out;
     };
     match kind {
-        WallpaperTransition::Fade | WallpaperTransition::Wipe | WallpaperTransition::Grow | WallpaperTransition::None => {
+        // Sketch is drawn by `wallpaper_sketch`; here (no outline) it fades.
+        WallpaperTransition::Fade | WallpaperTransition::Wipe | WallpaperTransition::Grow | WallpaperTransition::Sketch | WallpaperTransition::None => {
             out.push(old());
             out.push(crate::wallpaper_fill::reveal(new(), kind, t, vp, rtl));
         }

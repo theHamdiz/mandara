@@ -75,6 +75,7 @@ pub mod toasts;
 pub mod slideshow;
 pub mod wallpaper;
 pub mod wallpaper_fill;
+pub mod wallpaper_sketch;
 pub mod wallpaper_transitions;
 pub mod markdown;
 pub mod notes_store;

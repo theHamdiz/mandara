@@ -128,7 +128,7 @@ pub fn reveal(layer: AnyElement, transition: WallpaperTransition, t: f32, (vw, v
     match transition {
         // The pieced transitions are drawn by `wallpaper_transitions`;
         // here (a lone layer) they fade.
-        WallpaperTransition::Fade | WallpaperTransition::Ripple | WallpaperTransition::Tide | WallpaperTransition::Tear | WallpaperTransition::Glitch | WallpaperTransition::Shatter | WallpaperTransition::Dissolve => {
+        WallpaperTransition::Fade | WallpaperTransition::Ripple | WallpaperTransition::Tide | WallpaperTransition::Tear | WallpaperTransition::Glitch | WallpaperTransition::Shatter | WallpaperTransition::Dissolve | WallpaperTransition::Sketch => {
             div().absolute().inset_0().size_full().opacity(t).child(layer).into_any_element()
         }
         WallpaperTransition::None => layer,

@@ -32,6 +32,19 @@ The wallpaper picker and engine, and Mandara's own wallpaper generator.
 </tr>
 </table>
 
+### Sketch transition
+
+Pick **Sketch** as the transition (*Studio → Wallpaper → Fit & effects*, or
+*Studio → Motion → Wallpaper change*) and a new wallpaper's outline is drawn
+first, its subject first when Mandara has a depth mask for it, then the image
+fills in: fading, bleeding outward from the lines like watercolour, or wiping
+along the strokes. Line colour (theme accent, ink black, white or the
+wallpaper's own colour), thickness, glow, drawing order, how long drawing
+takes against filling, and a faint outline left behind afterwards are its
+options; [Motion](motion.md#sketch-wallpaper-transition) lists them. The GPU
+wallpaper renderer draws the lines; the default software renderer, reduced
+motion and tiled wallpapers fade instead.
+
 ## Slideshow
 
 Turn it on in *Studio → Wallpaper → Slideshow* or with
