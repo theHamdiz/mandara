@@ -364,15 +364,32 @@ pub fn surface_edge(palette: &MandaraPalette, intensity: f32) -> Color {
     palette.on_surface.with_alpha(alpha(SURFACE_EDGE_ALPHA, palette) * k)
 }
 
-/// The ink of inked outlines and hard shadows (`[style.ink]`): near
-/// black, a touch of the accent's hue.
+/// The ink of inked outlines (`[style.ink]`), a touch of the accent's hue:
+/// near black on light surfaces; on dark ones a light ink, so the comic
+/// edge stays strong (text keeps its own colours, so contrast holds).
 pub fn ink(palette: &MandaraPalette) -> Color {
-    Color::oklch(INK_L, INK_CHROMA, palette.primary.hue())
+    let l = if palette.is_dark { INK_LIGHT_L } else { INK_L };
+    Color::oklch(l, INK_CHROMA, palette.primary.hue())
 }
 
-/// Lightness and chroma of the ink.
+/// The hard shadow's ink: near black in both schemes (the outline above
+/// it is light in dark mode: a two-tone edge).
+pub fn shadow_ink(palette: &MandaraPalette) -> Color {
+    Color::oklch(INK_SHADOW_L, INK_CHROMA, palette.primary.hue())
+}
+
+/// Lightness and chroma of the ink: dark ink, light ink, shadow ink.
 const INK_L: f32 = 0.16;
+const INK_LIGHT_L: f32 = 0.9;
+const INK_SHADOW_L: f32 = 0.08;
 const INK_CHROMA: f32 = 0.03;
+
+/// The fill a glass card starts from at its top (a speech bubble's tail
+/// continues it).
+pub fn glass_card_top(palette: &MandaraPalette) -> Color {
+    let (top, _) = if palette.is_dark { SHEEN_DARK } else { SHEEN_LIGHT };
+    palette.surface_container.lighten(top)
+}
 
 /// The width of a floating surface's edge ([`surface_edge`]): the ink
 /// outline, else the hairline.
@@ -409,7 +426,7 @@ const INK_TEXTURE_DARK: f32 = 0.9;
 /// The hard offset shadow of inked surfaces, `progress` fading it in.
 fn ink_shadow(palette: &MandaraPalette, offset: f32, progress: f32) -> Vec<BoxShadow> {
     let d = offset * if crate::bidi::rtl() { -1.0 } else { 1.0 };
-    vec![BoxShadow { color: ink(palette).with_alpha(progress.clamp(0.0, 1.0)).hsla(), offset: point(px(d), px(offset)), blur_radius: px(0.0), spread_radius: px(0.0), inset: false }]
+    vec![BoxShadow { color: shadow_ink(palette).with_alpha(progress.clamp(0.0, 1.0)).hsla(), offset: point(px(d), px(offset)), blur_radius: px(0.0), spread_radius: px(0.0), inset: false }]
 }
 
 /// Lightness of the shadow ink under floating panels.

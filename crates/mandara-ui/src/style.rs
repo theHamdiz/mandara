@@ -33,6 +33,7 @@ static BORDERS: AtomicBool = AtomicBool::new(true);
 static INK_OUTLINE: AtomicU32 = AtomicU32::new(0);
 static INK_SHADOW: AtomicU32 = AtomicU32::new(0);
 static INK_TEXTURE: AtomicU8 = AtomicU8::new(0);
+static INK_BUBBLES: AtomicBool = AtomicBool::new(false);
 /// `style.slider_handle` is `line`.
 static SLIDER_HANDLE: AtomicBool = AtomicBool::new(true);
 /// `style.slider_design`, as its index in [`SliderDesign::ALL`].
@@ -142,6 +143,11 @@ pub fn ink_shadow() -> f32 {
     f32::from_bits(INK_SHADOW.load(Ordering::Relaxed))
 }
 
+/// Notifications as comic speech bubbles (`[style.ink] bubbles`).
+pub fn ink_bubbles() -> bool {
+    INK_BUBBLES.load(Ordering::Relaxed)
+}
+
 /// The ink texture of surfaces.
 pub fn ink_texture() -> mandara_config::desktop::SurfaceTexture {
     mandara_config::desktop::SurfaceTexture::ALL.get(usize::from(INK_TEXTURE.load(Ordering::Relaxed))).copied().unwrap_or_default()
@@ -221,6 +227,7 @@ pub fn apply(cfg: &ShellConfig) {
     BORDERS.store(cfg.style.borders, Ordering::Relaxed);
     INK_OUTLINE.store(cfg.style.ink.outline().to_bits(), Ordering::Relaxed);
     INK_SHADOW.store(cfg.style.ink.shadow().to_bits(), Ordering::Relaxed);
+    INK_BUBBLES.store(cfg.style.ink.bubbles, Ordering::Relaxed);
     INK_TEXTURE.store(mandara_config::desktop::SurfaceTexture::ALL.iter().position(|t| *t == cfg.style.ink.texture).unwrap_or(0) as u8, Ordering::Relaxed);
     SLIDER_HANDLE.store(cfg.style.slider_handle == mandara_config::desktop::SliderHandle::Line, Ordering::Relaxed);
     let design = SliderDesign::ALL.iter().position(|d| *d == cfg.style.slider_design).unwrap_or(0);

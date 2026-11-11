@@ -155,6 +155,7 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Themes, tk("Style"), "/style/borders", tk("Panel edges"), tk("A hairline around floating panels"), Toggle),
         s(Themes, tk("Ink"), "/style/ink/outline", tk("Ink outlines"), tk("A dark outline round the bar's items, panels, the launcher, the dock, notifications and cards; 0 keeps the hairline"), slider(0.0, 6.0, 0.5, " px")),
         s(Themes, tk("Ink"), "/style/ink/shadow", tk("Hard shadow"), tk("A crisp offset shadow in ink instead of the soft one; 0 keeps the soft shadows"), slider(0.0, 10.0, 0.5, " px")),
+        s(Themes, tk("Ink"), "/style/ink/bubbles", tk("Speech-bubble notifications"), tk("Notifications pop up as comic speech bubbles, their tail toward the notification corner"), Toggle),
         s(Themes, tk("Ink"), "/style/ink/texture", tk("Shading texture"), tk("Halftone dots or pen hatching in the far corner of panels, the launcher and notifications"), Choice(INK_TEXTURE)),
         s(Themes, tk("Style"), "/style/backdrop_dim", tk("Dim behind panels"), tk("Darkens the desktop while a panel or the sidebar is open"), slider(0.0, 0.6, 0.02, "")),
         s(Themes, COMPONENTS, "/style/slider_design", tk("Slider design"), tk("How the volume, brightness and mixer sliders look; thin sliders keep the classic look"), Choice(SLIDER_DESIGN)),

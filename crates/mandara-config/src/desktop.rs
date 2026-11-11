@@ -657,6 +657,9 @@ pub struct InkStyle {
     pub shadow: f32,
     /// The texture shading a surface's far corner.
     pub texture: SurfaceTexture,
+    /// Notifications pop up as comic speech bubbles, their tail toward the
+    /// notification corner.
+    pub bubbles: bool,
 }
 
 /// A surface texture ([`InkStyle::texture`]).
@@ -691,7 +694,7 @@ impl InkStyle {
     }
 
     pub fn is_on(&self) -> bool {
-        self.outline() > 0.0 || self.shadow() > 0.0 || self.texture != SurfaceTexture::None
+        self.outline() > 0.0 || self.shadow() > 0.0 || self.texture != SurfaceTexture::None || self.bubbles
     }
 }
 

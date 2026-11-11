@@ -1031,10 +1031,20 @@ outline = 3.0          # px, 0–6: an ink outline round bar items, panels, popu
                        #   the launcher, the dock, notifications and cards (0: hairlines)
 shadow = 5.0           # px, 0–10: a hard offset ink shadow instead of the soft one
 texture = "halftone"   # none | halftone (dots) | hatch: shading in the far corner
+bubbles = true         # notifications pop up as comic speech bubbles, the tail
+                       #   toward the notification corner (not inside a drawer
+                       #   joined to the bar)
 ```
 
-The ink is near-black with a touch of the accent's hue; outlines replace
-the glass rim. The textures are one cached image each, drawn once on
+The ink has a touch of the accent's hue: near black on light surfaces and
+a light ink on dark ones, over a near-black hard shadow, so the edge stays
+strong in both schemes; outlines replace the glass rim. A speech bubble's
+tail sits on the bubble's side toward the screen's edge (physical sides,
+like the notification corner, also in right-to-left languages), near its
+top or its foot, and is part of the area that takes clicks; bubbles pop in
+with a little overshoot, and appear at once with reduced motion. Outlines
+stay crisp: a hand-drawn wobble would need every edge drawn as a path
+instead of the GPU's rounded rectangles, at a cost on every frame. The textures are one cached image each, drawn once on
 first use; nothing animates. Text keeps its surface colours, so contrast
 is unchanged.
 ## Launcher placement

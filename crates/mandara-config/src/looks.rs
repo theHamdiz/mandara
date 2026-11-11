@@ -564,7 +564,7 @@ pub const LOOKS: [LookDef; 19] = [
         dock: LookDock::On { magnification: false },
         motion: Some(MotionPreset::Bouncy),
         toasts: Some(ToastPosition::TopRight),
-        ink: Some(crate::desktop::InkStyle { outline: 3.0, shadow: 5.0, texture: crate::desktop::SurfaceTexture::Halftone }),
+        ink: Some(crate::desktop::InkStyle { outline: 3.0, shadow: 5.0, texture: crate::desktop::SurfaceTexture::Halftone, bubbles: true }),
         inked_widgets: true,
         ..KEEP
     },
@@ -994,8 +994,9 @@ fn ink_look(look: &mut crate::desktop_widgets::Look) {
     look.plate = Plate::Solid;
     look.plate_opacity = 1.0;
     look.outline_width = INK_WIDGET_OUTLINE_PX;
-    look.outline_tone = Tone::Custom;
-    look.outline_color = INK_WIDGET_COLOR.into();
+    // The outline in the text's own colour: dark ink on a light plate,
+    // light ink on a dark one, so the edge stays strong in both.
+    look.outline_tone = Tone::OnSurface;
     look.shadow = crate::desktop_widgets::ShadowKind::Hard;
     (look.shadow_x, look.shadow_y) = (INK_WIDGET_SHADOW_PX, INK_WIDGET_SHADOW_PX);
     look.shadow_blur = 0.0;

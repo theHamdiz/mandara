@@ -392,11 +392,13 @@ fn ink_rush_inks_the_desktop_and_the_next_look_takes_it_back() {
     let c = ink.apply(&mine, LookOptions::default());
     assert!(c.style.ink.is_on() && c.style.ink.outline() >= 2.0 && c.style.ink.shadow() > 0.0);
     assert_eq!(c.style.ink.texture, crate::desktop::SurfaceTexture::Halftone);
+    assert!(c.style.ink.bubbles, "notifications are speech bubbles");
     assert!(on(&c, DOCK_ID));
     for w in ink.widgets() {
         if let WidgetKind::Clock(clock) = &w.kind {
             assert_eq!(clock.look.shadow, crate::desktop_widgets::ShadowKind::Hard);
             assert_eq!(clock.look.plate, crate::desktop_widgets::Plate::Solid, "a solid plate keeps the text's contrast");
+            assert_eq!(clock.look.outline_tone, crate::desktop_widgets::Tone::OnSurface, "the outline is light on a dark plate");
         }
     }
     assert_kept(&c, &mine, "ink-rush");

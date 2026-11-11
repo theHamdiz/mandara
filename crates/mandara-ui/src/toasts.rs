@@ -75,6 +75,15 @@ const SIZE_TOLERANCE_PX: f32 = 2.0;
 /// Slack added to expiry wake-ups so the toast is due when we wake.
 const WAKE_SLACK: Duration = Duration::from_millis(30);
 const PRESENCE_SPRING: SpringConfig = SpringConfig::new(320.0, 26.0, 1.0);
+/// A speech bubble pops in with a little overshoot.
+const BUBBLE_PRESENCE_SPRING: SpringConfig = SpringConfig::new(360.0, 17.0, 1.0);
+/// A speech bubble's tail: how far it reaches past the bubble's side, its
+/// base along the side, how far down (or up) the side it starts, and how
+/// far its tip leans toward the corner, before scaling.
+const TAIL_REACH_PX: f32 = 15.0;
+const TAIL_BASE_PX: f32 = 22.0;
+const TAIL_FROM_PX: f32 = 14.0;
+const TAIL_LEAN_PX: f32 = 7.0;
 const SLOT_SPRING: SpringConfig = SpringConfig::new(300.0, 28.0, 1.0);
 /// Swiping a toast away: the pointer travels this far before the toast
 /// follows it, and past this share of its width the toast flies off (hidden,
@@ -405,7 +414,8 @@ struct Item {
 
 impl Item {
     fn new(n: Notification, now: Instant, reduce: bool) -> Self {
-        let mut presence = SpringValue::new(0.0, PRESENCE_SPRING);
+        let spring = if crate::style::ink_bubbles() { BUBBLE_PRESENCE_SPRING } else { PRESENCE_SPRING };
+        let mut presence = SpringValue::new(0.0, spring);
         presence.set_instant(reduce);
         presence.set_target(1.0);
         let mut slot = SpringValue::new(0.0, SLOT_SPRING);
@@ -660,6 +670,17 @@ impl Render for ToastView {
             let move_view = this.clone();
             let swipe = item.swipe.motion.value();
             let swipe_fade = 1.0 - (swipe.abs() / w).min(1.0) * SWIPE_FADE;
+            // A speech bubble (`[style.ink] bubbles`, not inside a joined
+            // drawer): its tail on the side toward the screen's edge (the
+            // left column's left, otherwise the right; physical sides, as
+            // the corner is), near its top or, from the bottom, its foot.
+            let bubble = crate::style::ink_bubbles() && drawer.is_none();
+            let tail = bubble.then(|| {
+                let side = Tail { right: column != -1, bottom, scale };
+                let (tw, th) = side.size();
+                let (x, y) = side.origin(w, h);
+                div().absolute().left(px(x)).top(px(y)).w(px(tw)).h(px(th)).child(side.paint(&palette)).when(!item.leaving, |el| el.child(self.mask.region()))
+            });
             toasts.push(
                 div()
                     .id(("toast", id as usize))
@@ -679,13 +700,18 @@ impl Render for ToastView {
                         });
                     })
                     .occlude()
-                    // The card's hover fill, image and progress bar stay inside the corners.
-                    .clip_rounded()
+                    // The card's hover fill, image and progress bar stay
+                    // inside the corners (a bubble's card clips its own, and
+                    // its tail reaches outside).
+                    .when(!bubble, |el| el.clip_rounded())
                     .rounded(px(crate::style::radius(TOAST_RADIUS_PX * scale)))
                     // Joined, the drawer is the backdrop.
                     .when(drawer.is_none(), |el| {
                         // Inked (`[style.ink]`): the card inside is the comic
                         // panel (its ink outline, hard shadow and texture).
+                        if bubble {
+                            return el;
+                        }
                         if crate::style::ink_outline() > 0.0 || crate::style::ink_shadow() > 0.0 {
                             return el.bg(fill);
                         }
@@ -737,6 +763,7 @@ impl Render for ToastView {
                         })
                     })
                     .child(card)
+                    .children(tail)
                     .when_some(progress, |el, f| {
                         el.child(
                             div()
@@ -859,9 +886,106 @@ impl Render for ToastView {
     }
 }
 
+/// A speech bubble's tail on one side of a toast `w` × `h` (logical px).
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct Tail {
+    /// On the toast's right side (else its left).
+    right: bool,
+    /// Near the toast's foot, leaning down (else near its top, leaning up).
+    bottom: bool,
+    scale: f32,
+}
+
+impl Tail {
+    /// The tail's box: its reach past the side (plus the overlap that
+    /// hides the seam) by its base plus its lean.
+    fn size(self) -> (f32, f32) {
+        ((TAIL_REACH_PX + TAIL_OVERLAP_PX) * self.scale, (TAIL_BASE_PX + TAIL_LEAN_PX) * self.scale)
+    }
+
+    /// The box's top-left corner relative to the toast.
+    fn origin(self, w: f32, h: f32) -> (f32, f32) {
+        let (tw, th) = self.size();
+        let x = if self.right { w - TAIL_OVERLAP_PX * self.scale } else { -(tw - TAIL_OVERLAP_PX * self.scale) };
+        let y = if self.bottom { h - TAIL_FROM_PX * self.scale - th } else { TAIL_FROM_PX * self.scale };
+        (x, y.clamp(0.0, (h - th).max(0.0)))
+    }
+
+    /// The triangle in the box (base on the toast's side, tip out toward
+    /// the corner), grown by `grow` px all round, moved by `shift`.
+    fn points(self, b: gpui::Bounds<gpui::Pixels>, grow: f32, shift: (f32, f32)) -> [gpui::Point<gpui::Pixels>; 3] {
+        let (x0, y0) = (f32::from(b.origin.x) + shift.0, f32::from(b.origin.y) + shift.1);
+        let (bw, bh) = (f32::from(b.size.width), f32::from(b.size.height));
+        let (base, lean) = (TAIL_BASE_PX * self.scale, TAIL_LEAN_PX * self.scale);
+        // Base on the inner edge, inside the card by the overlap.
+        let inner = if self.right { x0 } else { x0 + bw };
+        let tip_x = if self.right { x0 + bw + grow } else { x0 - grow };
+        let (base_a, base_b, tip_y) = if self.bottom { (y0 + bh - lean - base - grow, y0 + bh - lean + grow, y0 + bh + grow) } else { (y0 + lean - grow, y0 + lean + base + grow, y0 - grow) };
+        [gpui::point(px(inner), px(base_a)), gpui::point(px(tip_x), px(tip_y)), gpui::point(px(inner), px(base_b))]
+    }
+
+    /// Paints the tail: its hard shadow, its ink outline and its fill, the
+    /// fill covering the card's outline where the two meet. Three tiny
+    /// paths, built per frame only while a bubble shows.
+    fn paint(self, palette: &mandara_theme::MandaraPalette) -> AnyElement {
+        let outline = crate::style::ink_outline();
+        let shadow = crate::style::ink_shadow();
+        let (ink, shade, fill) = (crate::plugins::panel_fx::ink(palette), crate::plugins::panel_fx::shadow_ink(palette), crate::plugins::panel_fx::glass_card_top(palette));
+        let dir = if crate::bidi::rtl() { -1.0 } else { 1.0 };
+        let tail = self;
+        canvas(|_, _, _| {}, move |b, _, window, _| {
+            let mut fill_path = |pts: [gpui::Point<gpui::Pixels>; 3], color: mandara_theme::Color| {
+                let mut p = gpui::PathBuilder::fill();
+                p.move_to(pts[0]);
+                p.line_to(pts[1]);
+                p.line_to(pts[2]);
+                p.close();
+                if let Ok(path) = p.build() {
+                    window.paint_path(path, color.hsla());
+                }
+            };
+            // The shadow falls away from the start edge: only a tail on the
+            // far side casts one (a near-side tail's falls under its bubble).
+            if shadow > 0.0 && tail.right == (dir > 0.0) {
+                fill_path(tail.points(b, outline, (shadow * dir, shadow)), shade);
+            }
+            if outline > 0.0 {
+                fill_path(tail.points(b, outline, (0.0, 0.0)), ink);
+            }
+            // Its base lies inside the card, over the card's own outline.
+            fill_path(tail.points(b, 0.0, (0.0, 0.0)), fill);
+        })
+        .size_full()
+        .into_any_element()
+    }
+}
+
+/// How far a tail reaches back into its bubble (hiding the outline there).
+const TAIL_OVERLAP_PX: f32 = 6.0;
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A bubble's tail sits on the side toward the corner, near the top or
+    /// the foot, inside the toast's height, and its tip points out.
+    #[test]
+    fn a_speech_bubble_tail_points_toward_the_notification_corner() {
+        let b = |x: f32, y: f32, w: f32, h: f32| gpui::Bounds { origin: gpui::point(px(x), px(y)), size: gpui::size(px(w), px(h)) };
+        for (right, bottom) in [(true, false), (true, true), (false, false), (false, true)] {
+            let t = Tail { right, bottom, scale: 1.0 };
+            let (tw, th) = t.size();
+            let (x, y) = t.origin(360.0, 90.0);
+            assert!(y >= 0.0 && y + th <= 90.0, "{right} {bottom}: within the toast's height");
+            assert_eq!(x > 0.0, right, "on the side toward the corner");
+            let [a, tip, c] = t.points(b(x, y, tw, th), 0.0, (0.0, 0.0));
+            if right { assert!(tip.x > a.x && tip.x > c.x) } else { assert!(tip.x < a.x && tip.x < c.x) }
+            if bottom { assert!(tip.y > a.y.max(c.y)) } else { assert!(tip.y < a.y.min(c.y)) }
+        }
+        // A short toast keeps its tail inside its height.
+        let t = Tail { right: true, bottom: false, scale: 1.0 };
+        assert_eq!(t.origin(360.0, 20.0).1, 0.0);
+    }
 
     #[test]
     fn closing_the_list_before_its_open_echo_queues_both_transitions() {
