@@ -48,8 +48,65 @@ pub use umbriel::UmbrielDriver;
 /// nested inside Aqueous is still found (a nested Niri, which inherits
 /// Aqueous's desktop name too, by its socket naming this display). Aqueous derives from River but
 /// offers none of River's protocols.
+///
+/// A compositor nested inside another inherits the outer one's variables,
+/// and some (Sway, Niri outside a full session) don't rename the desktop,
+/// so two compositors' variables can be equally plausible. Then the
+/// process serving this Wayland display decides (Linux), and the rules
+/// above apply when it can't be told.
 pub fn detect() -> Option<CompositorKind> {
-    detect_from(|name| std::env::var_os(name)).or_else(|| (std::env::var_os("WAYLAND_DISPLAY").is_some() && river::running()).then_some(CompositorKind::River))
+    let env = |name: &str| std::env::var_os(name);
+    detect_with_owner(env, display_owner).or_else(|| (std::env::var_os("WAYLAND_DISPLAY").is_some() && river::running()).then_some(CompositorKind::River))
+}
+
+/// The variables a compositor exports for its own session.
+const OWN_VARIABLES: [&str; 6] = ["MANGO_INSTANCE_SIGNATURE", "NIRI_SOCKET", "HYPRLAND_INSTANCE_SIGNATURE", "UMBRIEL_SOCKET", "SWAYSOCK", "AQUEOUS_SOCKET"];
+
+/// [`detect_from`], except that when several compositors' own variables
+/// are set (one runs nested inside another), `owner` (the compositor
+/// serving this display, asked only then) decides when it is known.
+fn detect_with_owner(var: impl Fn(&str) -> Option<std::ffi::OsString>, owner: impl FnOnce() -> Option<CompositorKind>) -> Option<CompositorKind> {
+    let set = OWN_VARIABLES.iter().filter(|name| var(name).is_some_and(|v| !v.is_empty())).count();
+    if set > 1
+        && let Some(kind) = owner()
+    {
+        return Some(kind);
+    }
+    detect_from(var)
+}
+
+/// The compositor serving this process's Wayland display: the peer of its
+/// socket, by process name. `None` when that can't be told (no display,
+/// an unknown process, or a system without peer process ids).
+#[cfg(target_os = "linux")]
+fn display_owner() -> Option<CompositorKind> {
+    let display = std::path::PathBuf::from(std::env::var_os("WAYLAND_DISPLAY")?);
+    let path = if display.is_absolute() { display } else { std::path::PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR")?).join(display) };
+    let stream = std::os::unix::net::UnixStream::connect(path).ok()?;
+    let pid = rustix::net::sockopt::socket_peercred(&stream).ok()?.pid;
+    let name = std::fs::read_to_string(format!("/proc/{}/comm", pid.as_raw_nonzero())).ok()?;
+    kind_of_process(name.trim())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn display_owner() -> Option<CompositorKind> {
+    None
+}
+
+/// A compositor by its process name (`/proc/<pid>/comm`, at most 15 bytes).
+#[cfg(any(target_os = "linux", test))]
+fn kind_of_process(name: &str) -> Option<CompositorKind> {
+    match name {
+        "mango" => Some(CompositorKind::MangoWM),
+        "niri" => Some(CompositorKind::Niri),
+        "Hyprland" | "hyprland" => Some(CompositorKind::Hyprland),
+        "umbriel" => Some(CompositorKind::Umbriel),
+        "sway" => Some(CompositorKind::Sway),
+        "river" => Some(CompositorKind::River),
+        "kwin_wayland" => Some(CompositorKind::KWin),
+        "aqueous" => Some(CompositorKind::Aqueous),
+        _ => None,
+    }
 }
 
 /// [`detect`], answered once per process: the compositor a process runs
@@ -108,7 +165,7 @@ fn niri_serves(socket: &std::ffi::OsStr, display: &std::ffi::OsStr) -> bool {
 /// over IPC to run its own `moveresize,curmove` grab (released with the
 /// button). Returns `false` where the standard request already works.
 pub fn begin_interactive_move() -> bool {
-    match detect() {
+    match detected() {
         Some(CompositorKind::MangoWM) => mango::MangoDriver::from_env().is_some_and(|c| c.dispatch("moveresize", &["curmove"]).is_ok()),
         _ => false,
     }
@@ -116,7 +173,7 @@ pub fn begin_interactive_move() -> bool {
 
 /// Connects to the running compositor's native IPC.
 pub fn connect() -> Option<Arc<dyn CompositorBackend>> {
-    match detect()? {
+    match detected()? {
         CompositorKind::MangoWM => MangoDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
         CompositorKind::Niri => NiriDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
         CompositorKind::Hyprland => HyprlandDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
@@ -194,6 +251,27 @@ mod tests {
         assert_eq!(detect_with(&near_miss), Some(CompositorKind::Aqueous));
         let absolute = [socket, ("XDG_CURRENT_DESKTOP", "Aqueous"), ("NIRI_SOCKET", "/run/user/1000/niri.wayland-2.1.sock"), ("WAYLAND_DISPLAY", "/run/user/1000/wayland-2")];
         assert_eq!(detect_with(&absolute), Some(CompositorKind::Niri));
+        // Sway nested inside Aqueous and Aqueous nested inside Sway carry
+        // the same variables (Sway doesn't rename the desktop): the process
+        // serving the display decides, both ways round.
+        let both = [socket, ("XDG_CURRENT_DESKTOP", "Aqueous"), ("SWAYSOCK", "/run/user/1000/sway-ipc.1000.42.sock")];
+        let lookup = |name: &str| both.iter().find(|(n, _)| *n == name).map(|(_, v)| std::ffi::OsString::from(v));
+        assert_eq!(detect_with_owner(lookup, || kind_of_process("sway")), Some(CompositorKind::Sway));
+        assert_eq!(detect_with_owner(lookup, || kind_of_process("aqueous")), Some(CompositorKind::Aqueous));
+        // An unknown display owner leaves the variable rules in charge.
+        assert_eq!(detect_with_owner(lookup, || kind_of_process("weston")), Some(CompositorKind::Aqueous));
+        // One compositor's variables alone: the display is never asked.
+        let alone = |name: &str| (name == "SWAYSOCK").then(|| std::ffi::OsString::from("/s"));
+        assert_eq!(detect_with_owner(alone, || panic!("asked without a reason")), Some(CompositorKind::Sway));
+        // Sway nested inside Hyprland (Hyprland's variable comes first).
+        let hypr = |name: &str| match name {
+            "HYPRLAND_INSTANCE_SIGNATURE" => Some(std::ffi::OsString::from("abc")),
+            "SWAYSOCK" => Some("/s".into()),
+            _ => None,
+        };
+        assert_eq!(detect_with_owner(hypr, || kind_of_process("sway")), Some(CompositorKind::Sway));
+        assert_eq!(kind_of_process("Hyprland"), Some(CompositorKind::Hyprland));
+        assert_eq!(kind_of_process("kwin_wayland"), Some(CompositorKind::KWin));
         assert_eq!(detect_with(&[socket, ("XDG_CURRENT_DESKTOP", "river")]), Some(CompositorKind::Aqueous));
     }
 }

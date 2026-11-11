@@ -627,7 +627,7 @@ own files ([see below](#aqueous)).
 | **Sway** | `include …/mandara/generated/sway.conf` at the end of `~/.config/sway/config` (or whichever file sway reads: `~/.sway/config`, `~/.i3/config`…) | `exec` |
 | **River** 0.3 | none: Mandara never edits `~/.config/river/init` | the one line you add to `init`: `riverctl spawn /path/to/mandara` |
 | **KWin / Plasma (Wayland)** | none: Mandara leaves `kwinrc` unchanged | its own `org.mandara.shell.desktop` XDG autostart entry, only for KDE |
-| **Aqueous** | none: Mandara writes nothing in `~/.config/aqueous` | add `mandara` to Aqueous's own startup settings yourself |
+| **Aqueous** | none: Mandara writes nothing in `~/.config/aqueous` | a systemd user unit you add ([see below](#aqueous)) |
 
 The setup picker offers KWin only when `kwin_wayland` is installed. A
 failed KWin availability check is reported directly; it does not offer to
@@ -764,11 +764,49 @@ snapshot.
 Aqueous keeps its settings in its own files in `~/.config/aqueous` (it
 checks and reloads them itself) and documents no include line, so Mandara
 writes nothing there and Studio's compositor controls say so. `mandara
-setup --compositor aqueous` only reports this; to start Mandara with
-Aqueous, add `mandara` to Aqueous's own startup settings. The bar's layout
+setup --compositor aqueous` only reports this. The bar's layout
 pill can't change Aqueous layouts: its IPC has no layout command. The Config
 doctor reports whether `aqueous` is installed; Aqueous has no standalone
 configuration checker.
+
+**Starting Mandara with Aqueous.** Aqueous starts its desktop shell through
+systemd user units and picks which one in `~/.config/aqueous/session.toml`.
+To run Mandara instead of Pearl, DMS or Noctalia:
+
+1. Turn Aqueous's own shell off, so two bars don't start, in
+   `~/.config/aqueous/session.toml`:
+
+   ```toml
+   version = 1
+   shell = "none"
+   ```
+
+2. Add a user unit for Mandara, `~/.config/systemd/user/mandara.service`
+   (use `/usr/bin/mandara` instead if Mandara came from a package):
+
+   ```ini
+   [Unit]
+   Description=Mandara desktop shell
+   PartOf=graphical-session.target
+   After=graphical-session.target
+
+   [Service]
+   ExecStart=%h/.local/bin/mandara
+   Restart=on-failure
+
+   [Install]
+   WantedBy=graphical-session.target
+   ```
+
+3. Turn it on, then log out and back in to Aqueous:
+
+   ```sh
+   systemctl --user enable mandara.service
+   ```
+
+Aqueous passes `AQUEOUS_SOCKET` to the services of its session, so Mandara
+started this way finds it. The session choice takes effect at the next
+login.
 
 ## Coming from another setup
 
