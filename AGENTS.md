@@ -41,9 +41,11 @@ Zed's GPU-accelerated UI framework.
 - **Everything is a plugin.** Bar items, panels and sidebar cards are
   plugins: first-party ones compiled into the shell, and third-party ones
   written in Rust, compiled to WebAssembly and run sandboxed.
-- **Every compositor is first-class.** MangoWM's and River's bitmask tags and
-  Niri's, Hyprland's, Umbriel's and Sway's workspaces are modelled natively, not
-  squeezed into a lowest common denominator.
+- **Every compositor is first-class.** All ten supported compositors are
+  modelled natively, not squeezed into a lowest common denominator: MangoWM's
+  and River's bitmask tags; Niri's, Hyprland's, Umbriel's, Sway's and Aqueous's
+  workspaces; KWin's virtual desktops; and labwc's and COSMIC's workspaces over
+  the standard ext-workspace protocol.
 
 ## Repository map
 
@@ -53,7 +55,7 @@ Zed's GPU-accelerated UI framework.
 | `crates/mandara-core` | GPUI layer-shell surface specs, the analytical spring solver, OKLCH tweening, frame-synced input-region masking, the chromatic-glass material, output geometry and the software (`wl_shm`) canvas. |
 | `crates/mandara-config` | The TOML schema and defaults, the reactive `ConfigStore` with its file watcher, XDG paths, and the non-destructive MangoWM / Niri / Hyprland / Umbriel / Sway / River emitters and conflict scanner. |
 | `crates/mandara-theme` | The color engine: `Color` (OKLCH, gamut mapping, WCAG contrast), `MandaraPalette` tokens, HCT wallpaper quantization, the theme catalog (`themes/*.toml`) and app theme templates. |
-| `crates/mandara-compositor` | The `CompositorBackend` trait, the navigation model, and the MangoWM, Niri, Hyprland, Umbriel, Sway and River drivers (River's control and status protocols generated from `protocols/*.xml`). |
+| `crates/mandara-compositor` | The `CompositorBackend` trait, the navigation model, and the drivers for all ten compositors: MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin, Aqueous, labwc and COSMIC (`ext_workspace/` serves labwc and COSMIC; River's, KWin's (Plasma virtual desktops) and COSMIC's protocols are generated from `protocols/*.xml`). |
 | `crates/mandara-services` | D-Bus and system service actors (MPRIS, notifications, tray, UPower, NetworkManager, polkit, audio, keyrings, …), the marketplace client and the self-updater. |
 | `crates/mandara-plugins` | The plugin runtime: manifests, the registry, `CommandSpec` and the command catalog, plugin lifecycle, the wasmtime host and the WIT contract (`wit/plugin.wit`). |
 | `crates/mandara-ui` | The shell's views: bar, panels, sidebar, launcher, OSDs, lock screen, desktop and backdrop, the UI kit and every first-party plugin (`src/plugins/`). |
