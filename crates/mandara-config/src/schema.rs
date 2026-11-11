@@ -1317,6 +1317,10 @@ pub struct BarConfig {
     /// `bar style`); picking another preset puts back what it changed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub style: Option<crate::bar_styles::BarStyle>,
+    /// What that style did to the items it kept, so the next preset puts
+    /// them back.
+    #[serde(skip_serializing_if = "crate::bar_styles::StyleItems::is_empty")]
+    pub style_items: crate::bar_styles::StyleItems,
 }
 
 impl BarConfig {
@@ -1454,6 +1458,7 @@ impl Default for BarConfig {
             icon_fill: crate::surfaces::BarIconFill::default(),
             item_inset: surfaces::defaults::BAR_ITEM_INSET_PX,
             style: None,
+            style_items: crate::bar_styles::StyleItems::default(),
         }
     }
 }

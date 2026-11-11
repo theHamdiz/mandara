@@ -65,7 +65,7 @@ mandara msg theme mode toggle
 mandara msg look apply corniche-dusk        # look list; look restore brings back your own setup
 mandara msg bar position left               # top|bottom|left|right (left/right = the side bar)
 mandara msg bar layout hairline             # edge-frame|glass-pills|island|hairline|micro|notch|next
-mandara msg bar style expressive            # expressive|tile-dock|rail|segmented|system-monitor|stanley-bridge|pharos-beam|raml-tram: a style preset's look (your items stay); none puts back the plain bar
+mandara msg bar style expressive            # expressive|tile-dock|rail|segmented|system-monitor|stanley-bridge|pharos-beam|raml-tram: a style preset's look (your items stay, fitted to it: a rail takes the workspaces off the bar, System monitor adds its meters); none puts back the plain bar and your items
 mandara msg bar hide                        # put the bar away and free its space until bar show (bar toggle flips it; not saved)
 mandara msg side-bars on                    # the left and right side bars of plugin chips: on|off|toggle; side-bars status
 mandara msg side-bars join off              # one frame with the top bar, or floating apart: on|off|toggle

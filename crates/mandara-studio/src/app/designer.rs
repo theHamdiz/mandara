@@ -892,6 +892,45 @@ mod tests {
         }
     }
 
+    #[test]
+    fn every_preset_shows_each_item_once_and_switched_on() {
+        let mut registry = mandara_plugins::PluginRegistry::default();
+        mandara_ui::plugins::register_builtin(&mut registry);
+        let known: Vec<String> = registry.manifests().map(|m| m.id.clone()).collect();
+        for p in PRESETS {
+            // Replacing your items, and keeping them (Studio's default and
+            // `bar style`), over the shipped bar.
+            for replace in [true, false] {
+                let mut c = ShellConfig::default();
+                apply_preset_in(&mut c, p, replace, &known);
+                let rail = c.side_bar_on(false).then(|| c.side_bars.left.zones()).into_iter().flatten();
+                let shown: Vec<&String> = [&c.bar.left, &c.bar.center, &c.bar.right].into_iter().chain(rail).flatten().collect();
+                for (i, id) in shown.iter().enumerate() {
+                    assert!(!shown[..i].contains(id), "{} (replace {replace}) shows {id} twice", p.name);
+                    assert!(registry.is_enabled(id, &c.plugins), "{} (replace {replace}): {id} is placed but its plugin is off", p.name);
+                }
+                // A style's own items all come: System monitor's meters too.
+                if let Some(style) = p.style {
+                    for id in style.signature().into_iter().flatten() {
+                        assert!(shown.iter().any(|s| s == id), "{} (replace {replace}): {id}", p.name);
+                    }
+                }
+            }
+        }
+        // The rail presets: the workspaces once, on the rail, and the
+        // launcher first on the bar, in the corner.
+        for style in [BarStyle::Expressive, BarStyle::RamlTram] {
+            let p = PRESETS.iter().find(|p| p.style == Some(style)).unwrap();
+            for replace in [true, false] {
+                let mut c = ShellConfig::default();
+                apply_preset_in(&mut c, p, replace, &known);
+                assert!(c.side_bars.left.zones().iter().any(|z| z.iter().any(|id| id == "workspaces")), "{} (replace {replace})", p.name);
+                assert!(![&c.bar.left, &c.bar.center, &c.bar.right].iter().any(|z| z.iter().any(|id| id == "workspaces")), "{} (replace {replace})", p.name);
+                assert_eq!(c.bar.left.first().map(String::as_str), Some("launcher"), "{} (replace {replace})", p.name);
+            }
+        }
+    }
+
     /// What a preset makes the bar look like: its layout, edge and height,
     /// its style, the items' shapes and colour, the bar font and the rail.
     fn visible(c: &ShellConfig) -> (BarLayout, BarPosition, u32, Option<BarStyle>, String) {
