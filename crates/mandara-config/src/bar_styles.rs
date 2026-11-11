@@ -396,7 +396,7 @@ impl BarStyle {
             BarStyle::PharosBeam => [&["launcher", "workspaces"], &["clock", "media"], &["weather", "audio", "notifications", "session"]],
             BarStyle::RamlTram => [&["launcher", "active-window"], &["clock", "media"], &["weather", "tray", "bluetooth", "notifications"]],
             // The launcher opens the centred group, your apps follow it.
-            BarStyle::Taskbar => [&["weather"], &["launcher", TASKBAR], &["tray", "network", "audio", "power", "clock", "notifications"]],
+            BarStyle::Taskbar => [&["workspaces", "weather"], &["launcher", TASKBAR], &["tray", "network", "audio", "power", "clock", "notifications"]],
         }
     }
 

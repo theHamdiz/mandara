@@ -210,6 +210,7 @@ mod tests {
         "soundscapes",
         "sudoku",
         "tailscale",
+        "taskbar",
         "todo",
         "translator",
         "updates",
