@@ -28,7 +28,7 @@ so small lettering stays clean.
 
 ## Plugins
 
-The 82 plugins below include 81 built-ins and the Moon phase example. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
+The 83 plugins below include 82 built-ins and the Moon phase example. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
 
 | Preview | Files | Notes |
 | --- | --- | --- |
@@ -111,6 +111,7 @@ The 82 plugins below include 81 built-ins and the Moon phase example. Each SVG h
 | <img src="plugins/phone-connect/icon.png" width="40" alt="Phone Connect icon"> <img src="plugins/phone-connect/cover.png" width="128" alt="Phone Connect cover"> | **Phone Connect** · [SVG](plugins/phone-connect/icon.svg) · [256 PNG](plugins/phone-connect/icon.png) · [Cover](plugins/phone-connect/cover.png) | Corniche · illustration |
 | <img src="plugins/feeds/icon.png" width="40" alt="Feeds icon"> <img src="plugins/feeds/cover.png" width="128" alt="Feeds cover"> | **Feeds** · [SVG](plugins/feeds/icon.svg) · [256 PNG](plugins/feeds/icon.png) · [Cover](plugins/feeds/cover.png) | Obsidian · illustration |
 | <img src="plugins/reddit/icon.png" width="40" alt="Reddit icon"> <img src="plugins/reddit/cover.png" width="128" alt="Reddit cover"> | **Reddit** · [SVG](plugins/reddit/icon.svg) · [256 PNG](plugins/reddit/icon.png) · [Cover](plugins/reddit/cover.png) | Corniche · threaded conversation with a gold upvote arrow · illustration |
+| <img src="plugins/stash/icon.png" width="40" alt="Stash icon"> <img src="plugins/stash/cover.png" width="128" alt="Stash cover"> | **Stash** · [SVG](plugins/stash/icon.svg) · [256 PNG](plugins/stash/icon.png) · [Cover](plugins/stash/cover.png) | Corniche · a floating tray with a document and a picture, a card dropping in on a gold arc · illustration |
 | <img src="plugins/home-assistant/icon.png" width="40" alt="Home Assistant icon"> <img src="plugins/home-assistant/cover.png" width="128" alt="Home Assistant cover"> | **Home Assistant** · [SVG](plugins/home-assistant/icon.svg) · [256 PNG](plugins/home-assistant/icon.png) · [Cover](plugins/home-assistant/cover.png) | Corniche · illustration |
 | <img src="plugins/sudoku/icon.png" width="40" alt="Sudoku icon"> <img src="plugins/sudoku/cover.png" width="128" alt="Sudoku cover"> | **Sudoku** · [SVG](plugins/sudoku/icon.svg) · [256 PNG](plugins/sudoku/icon.png) · [Cover](plugins/sudoku/cover.png) | Obsidian · cream puzzle lattice and gold selected cell · illustration |
 | <img src="plugins/2048/icon.png" width="40" alt="2048 icon"> <img src="plugins/2048/cover.png" width="128" alt="2048 cover"> | **2048** · [SVG](plugins/2048/icon.svg) · [256 PNG](plugins/2048/icon.png) · [Cover](plugins/2048/cover.png) | Twilight · sliding tiles and a gold merged tile · illustration |
@@ -209,7 +210,7 @@ The whole pipeline is Rust (`xtask/src/art.rs`): SVGs render with [resvg](https:
 
 `cargo xtask art` turns every built-in plugin's art into the compact set the shell and Studio embed, in [`crates/mandara-ui/assets/plugin-art/<id>/`](../crates/mandara-ui/assets/plugin-art): `icon.webp` (128 px, rendered from the SVG), `icon@2x.webp` (256 px) and `cover.jpg` (960×540, JPEG quality 82; lossless `cover.webp` when the cover has transparency), plus the generated `index.rs` table. The generated files are committed — they are build inputs. Example plugins in `plugins/examples/` ship their own `icon.png` / `cover.png` inside their package instead.
 
-The embedded-art ceiling is **8,050,000 bytes (7.68 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 81-plugin set uses **8,046,210 bytes (7.67 MiB)**, leaving **3,790 bytes (3.7 KiB)** of headroom: the next new plugin's art needs a smaller set or a raised ceiling.
+The embedded-art ceiling is **8,200,000 bytes (7.82 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 82-plugin set uses **8,155,912 bytes (7.78 MiB)**, leaving **44,088 bytes (43 KiB)** of headroom: the next new plugin's art needs a smaller set or a raised ceiling.
 
 ```sh
 cargo xtask art --compose            # render source icons and compose covers (--only ID)
