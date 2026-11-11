@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Aqueous joins the supported compositors (#162).** On Aqueous the bar's workspace pills now show each display's workspaces and switch to one when you click it, and the window title, displays, keyboard layout, window moves and the Overview hot corner follow Aqueous too, all over its own IPC socket without ever making the bar wait. Aqueous keeps its settings in its own files, so Mandara writes nothing there; the layout pill can't change Aqueous layouts, because Aqueous has no command for that yet.
+
 ### Fixed
 
 - **The password dialog no longer freezes, and asks once instead of twice.** When two requests came back to back (Studio refreshing its admin helper, then applying your login screen, or the update manager doing the same before updating), the second dialog lost the question polkit had already asked and waited forever, so your password went nowhere until you cancelled and tried again. A request that arrives while the previous dialog is still closing now keeps its prompt, and refreshing the admin helper happens in the same approval as the action itself. A system update on Arch with AUR packages still asks a second time for the AUR step, because that one goes through `sudo`.
