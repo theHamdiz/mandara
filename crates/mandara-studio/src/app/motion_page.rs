@@ -35,6 +35,8 @@ const PREVIEW_TILE_TRAVEL_PX: f32 = SPACE_18_PX;
 /// The tiles' inner dot and how far it trails its tile (parallax).
 const PREVIEW_INNER_PX: f32 = SPACE_10_PX;
 const PREVIEW_PARALLAX_PX: f32 = SPACE_10_PX;
+/// Wallpaper settings the Motion page shows beside its own.
+pub(super) const WALLPAPER_ROWS: &[&str] = &["/wallpaper/transition", "/wallpaper/transition_origin", "/wallpaper/crossfade_ms"];
 /// The preset tiles.
 const PRESET_GRID: CardGrid = CardGrid { min_w: 190.0, max_w: 320.0, gap: SPACE_12_PX };
 
@@ -232,7 +234,7 @@ impl StudioView {
                         cx.notify();
                     });
                 })
-                .on_click(move |_: &ClickEvent, _, cx| update_config(cx, |cfg| preset.apply(&mut cfg.motion)))
+                .on_click(move |_: &ClickEvent, _, cx| update_config(cx, |cfg| preset.apply_to(cfg)))
                 .into_any_element()
         });
         let presets = card(p)
@@ -247,7 +249,12 @@ impl StudioView {
             ))
             .child(grid::fit(inner, PRESET_GRID).render(tiles.collect::<Vec<_>>()));
         let rows = self.rows(registry::in_section(Section::Motion), cfg, p, cx);
-        div().row().flex_col().gap(px(SPACE_18_PX)).child(presets).child(preview).child(rows).into_any_element()
+        // The wallpaper's transition lives on the Wallpaper page too: both
+        // edit the same settings.
+        let wall: Vec<&registry::Setting> = WALLPAPER_ROWS.iter().filter_map(|path| registry::by_path(path)).collect();
+        let wall_rows = self.group_card(&wall, inner, cfg, p, cx);
+        let wallpaper = card(p).child(heading(t("Wallpaper change"), t("How a new wallpaper replaces the old one (also on the Wallpaper page)"), p)).child(wall_rows);
+        div().row().flex_col().gap(px(SPACE_18_PX)).child(presets).child(preview).child(rows).child(wallpaper).into_any_element()
     }
 }
 

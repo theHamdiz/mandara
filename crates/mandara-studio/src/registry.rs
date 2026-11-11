@@ -612,6 +612,7 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     if let Some(reason) = platform_settings::locked(setting.path) { return Some(reason); }
     if let Some(reason) = integration_settings::locked(setting.path, cfg) { return Some(reason); }
     if let Some(reason) = system_settings::native_locked(setting.path, running_compositor()) { return Some(reason); }
+    if let Some(reason) = motion_settings::locked(setting.path, cfg) { return Some(reason); }
     match setting.path {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),
@@ -778,7 +779,7 @@ fn build() -> Vec<Setting> {
         s(Launcher, workflow_settings::GENERAL, "/launcher/enabled", tk("Enable launcher"), tk("Apps, settings, commands, “/” slash commands and skills, “=” calculator; off disables the keybind, edge and menu entry"), Toggle),
         // Wallpaper
         s(Wallpaper, tk("Desktop"), "/wallpaper/enabled", tk("Draw the wallpaper"), tk("Mandara paints the desktop background (replaces swww / awww / swaybg)"), Toggle),
-        s(Wallpaper, tk("Desktop"), "/wallpaper/crossfade_ms", tk("Crossfade"), tk("Blend time when the wallpaper changes"), slider(0.0, 2000.0, 50.0, " ms")),
+        s(Wallpaper, tk("Desktop"), "/wallpaper/crossfade_ms", tk("Transition length"), tk("How long a wallpaper change takes"), slider(0.0, 2000.0, 50.0, " ms")),
         // The depth clock itself (style, place, date pill, audio ring) is a
         // desktop widget: Wallpaper → Desktop widgets.
         s(Wallpaper, tk("Depth clock"), "/wallpaper/depth_effect", tk("Depth effect"), tk("Draw the wallpaper's foreground subject over the clock (with the Fill mode)"), Toggle),

@@ -120,6 +120,11 @@ pub struct MotionConfig {
     pub intensity: f32,
     pub surfaces: SurfaceMotion,
     pub choreography: Choreography,
+    /// Choosing one of the six choreographed presets also sets its dock
+    /// animations and wallpaper transition.
+    pub preset_desktop: bool,
+    /// …and its window animations (written to the compositor drop-in).
+    pub preset_windows: bool,
 }
 
 impl Default for MotionConfig {
@@ -135,6 +140,8 @@ impl Default for MotionConfig {
             intensity: 1.0,
             surfaces: SurfaceMotion::default(),
             choreography: Choreography::CLASSIC,
+            preset_desktop: true,
+            preset_windows: false,
         }
     }
 }
@@ -286,6 +293,57 @@ impl Preset {
         }
     }
 
+    /// The wallpaper transition that matches the preset, or `None` for the
+    /// classic presets.
+    pub fn wallpaper(self) -> Option<crate::desktop::WallpaperTransition> {
+        use crate::desktop::WallpaperTransition as W;
+        match self {
+            Self::Default | Self::Snappy | Self::Smooth | Self::Bouncy | Self::Subtle => None,
+            Self::Tide => Some(W::Tide),
+            Self::Lighthouse => Some(W::Wipe),
+            Self::Felucca => Some(W::Dissolve),
+            Self::Magnetic => Some(W::Glitch),
+            Self::Mercury => Some(W::Shatter),
+            Self::Raindrop => Some(W::Ripple),
+        }
+    }
+
+    /// The window animation style that matches the preset, or `None` for
+    /// the classic presets.
+    pub fn windows(self) -> Option<crate::window_motion::WindowStyle> {
+        use crate::window_motion::WindowStyle as S;
+        match self {
+            Self::Default | Self::Snappy | Self::Smooth | Self::Bouncy | Self::Subtle => None,
+            Self::Tide => Some(S::Swell),
+            Self::Lighthouse => Some(S::Beam),
+            Self::Felucca => Some(S::Drift),
+            Self::Magnetic => Some(S::Snap),
+            Self::Mercury => Some(S::Liquid),
+            Self::Raindrop => Some(S::Drop),
+        }
+    }
+
+    /// [`Self::apply`], plus the preset's dock animations and wallpaper
+    /// transition when `motion.preset_desktop` is on and its window
+    /// animations when `motion.preset_windows` is on. The classic presets
+    /// change only `[motion]`.
+    pub fn apply_to(self, cfg: &mut crate::ShellConfig) {
+        self.apply(&mut cfg.motion);
+        if cfg.motion.preset_desktop {
+            if let Some(d) = self.dock() {
+                cfg.dock.motion = d;
+            }
+            if let Some(w) = self.wallpaper() {
+                cfg.wallpaper.transition = w;
+            }
+        }
+        if cfg.motion.preset_windows
+            && let Some(style) = self.windows()
+        {
+            cfg.compositor.look.windows.style = style;
+        }
+    }
+
     /// Change only spring tuning and choreography, preserving accessibility
     /// and surface choices.
     pub fn apply(self, motion: &mut MotionConfig) {
@@ -420,6 +478,32 @@ mod tests {
         assert_eq!(choreography_amount(f32::NAN), 0.0);
         assert_eq!(choreography_amount(4.0), 1.0);
         assert_eq!(choreography_amount(-1.0), 0.0);
+    }
+
+    #[test]
+    fn presets_reach_the_dock_wallpaper_and_windows_only_when_asked() {
+        let mut cfg = crate::ShellConfig::default();
+        let (dock, wallpaper, windows) = (cfg.dock.motion, cfg.wallpaper.transition, cfg.compositor.look.windows);
+        // Classic presets touch only [motion].
+        Preset::Snappy.apply_to(&mut cfg);
+        assert_eq!((cfg.dock.motion, cfg.wallpaper.transition, cfg.compositor.look.windows), (dock, wallpaper, windows));
+        // Desktop on by default, windows opt-in.
+        Preset::Raindrop.apply_to(&mut cfg);
+        assert_eq!(cfg.motion.preset(), Some(Preset::Raindrop));
+        assert_eq!(Some(cfg.dock.motion), Preset::Raindrop.dock());
+        assert_eq!(cfg.wallpaper.transition, crate::desktop::WallpaperTransition::Ripple);
+        assert_eq!(cfg.compositor.look.windows, windows);
+        cfg.motion.preset_windows = true;
+        cfg.motion.preset_desktop = false;
+        Preset::Tide.apply_to(&mut cfg);
+        assert_eq!(cfg.compositor.look.windows.style, crate::window_motion::WindowStyle::Swell);
+        assert_eq!(cfg.wallpaper.transition, crate::desktop::WallpaperTransition::Ripple, "desktop off: left alone");
+        for p in Preset::ALL {
+            assert_eq!(p.wallpaper().is_some(), p.windows().is_some());
+            assert_eq!(p.dock().is_some(), p.windows().is_some());
+        }
+        let old: MotionConfig = toml::from_str("stiffness = 300.0\n").unwrap();
+        assert!(old.preset_desktop && !old.preset_windows);
     }
 
     #[test]

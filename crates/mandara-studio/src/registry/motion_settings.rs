@@ -19,11 +19,50 @@ const DOCK_MINIMIZE: &[(&str, &str)] = &[("dip", tk("Dip")), ("pulse", tk("Pulse
 const DOCK_ITEMS: &[(&str, &str)] = &[("spring", tk("Grow")), ("fade", tk("Fade")), ("none", tk("Instant"))];
 const DOCK_REVEAL: &[(&str, &str)] = &[("slide", tk("Slide")), ("fade", tk("Fade")), ("scale", tk("Zoom"))];
 
+/// `[compositor.look.windows] style`, in `WindowStyle::ALL`'s order.
+const WINDOW_STYLES: &[(&str, &str)] = &[
+    ("compositor", tk("Your compositor's own")),
+    ("fade", tk("Fade")),
+    ("swell", tk("Swell: rise from below")),
+    ("beam", tk("Beam: a quick sideways sweep")),
+    ("drift", tk("Drift: a slow, eased glide")),
+    ("snap", tk("Snap: zoom past and back")),
+    ("liquid", tk("Liquid: a springy zoom")),
+    ("drop", tk("Drop: fall in and bounce")),
+];
+
+/// Why a window-animation setting can't apply on the running compositor
+/// (`None` where Mandara writes them, or while no compositor is known).
+pub(super) fn locked(path: &str, cfg: &mandara_config::ShellConfig) -> Option<&'static str> {
+    use mandara_config::compositor::Target;
+    if !path.starts_with("/compositor/look/windows/") && path != "/motion/preset_windows" {
+        return None;
+    }
+    if cfg.compositor.look.animations == Some(false) {
+        return Some(tk("Compositor animations are off (Compositor → Effects)"));
+    }
+    match super::running_compositor()? {
+        Target::Hyprland if !Target::hyprland_lua() => Some(tk("Needs Hyprland 0.55 or newer (its Lua config)")),
+        Target::Mango | Target::Niri | Target::Hyprland => None,
+        Target::Sway => Some(tk("Sway has no window animations")),
+        Target::River => Some(tk("River has no window animations")),
+        Target::Labwc => Some(tk("labwc has no window animations to set")),
+        Target::Cosmic => Some(tk("COSMIC sets its own window animations")),
+        Target::KWin => Some(tk("Set window animations in Plasma's System Settings")),
+        Target::Umbriel | Target::Aqueous => Some(tk("Mandara can't set window animations on this compositor yet")),
+    }
+}
+
 /// Declare bounded global and per-surface controls for the shared settings engine.
 pub(super) fn entries() -> Vec<Setting> {
     let range = mandara_config::motion::SURFACE_SPEED_RANGE;
     let intensity = mandara_config::motion::INTENSITY_RANGE;
+    let speed = mandara_config::window_motion::SPEED_RANGE;
     let mut entries = vec![
+        s(Motion, tk("Presets"), "/motion/preset_desktop", tk("Presets style the dock and wallpaper"), tk("Choosing Corniche tide, Lighthouse sweep, Felucca drift, Magnetic, Mercury or Raindrop also sets matching dock animations and wallpaper transition"), Toggle),
+        s(Motion, tk("Presets"), "/motion/preset_windows", tk("Presets style windows too"), tk("Those presets also set matching window animations in your compositor's Mandara drop-in"), Toggle),
+        s(Motion, tk("Windows"), "/compositor/look/windows/style", tk("Window animations"), tk("How windows open, close, move and switch workspaces; written only to Mandara's drop-in, never to your own config"), Choice(WINDOW_STYLES)),
+        s(Motion, tk("Windows"), "/compositor/look/windows/speed", tk("Window animation speed"), tk("Plays the style faster or slower"), slider(speed.0, speed.1, 0.05, "×")),
         s(
             Motion,
             tk("Accessibility"),

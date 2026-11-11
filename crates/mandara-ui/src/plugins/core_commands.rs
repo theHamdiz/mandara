@@ -644,7 +644,7 @@ pub fn register(r: &mut PluginRegistry) {
         CommandSpec::new("motion preset", mandara_i18n::tk("Apply a motion preset: its spring and choreography (accessibility and surface speeds stay yours)"), |a, cx| {
             let id = a.str(0)?;
             let preset = mandara_config::motion::Preset::from_id(id).ok_or_else(|| format!("no motion preset {id:?} (see motion presets)"))?;
-            update_config(cx, move |c| preset.apply(&mut c.motion));
+            update_config(cx, move |c| preset.apply_to(c));
             Ok(json!({ "applied": preset.id() }))
         })
         .arg(ArgSpec::required("preset", ArgKind::Enum, mandara_i18n::tk("motion preset id")).choices(&mandara_config::motion::Preset::IDS))
