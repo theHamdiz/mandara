@@ -1170,7 +1170,7 @@ mod tests {
     const DISTINCT_GLYPH_MAX_OVERLAP: f64 = 0.4;
     /// New tiles use the same outer glass geometry as their siblings.
     const HOUSE_TILE_GEOMETRY: [(&str, &str); 5] = [("x", "16"), ("y", "16"), ("width", "480"), ("height", "480"), ("rx", "108")];
-    const NEW_PLUGIN_IDS: &[&str] = &["privacy", "tray", "dock", "app-installer", "screen-time", "mini-stats", "wallpaper-generator", "wallhaven", "cursors", "sudoku", "2048"];
+    const NEW_PLUGIN_IDS: &[&str] = &["privacy", "tray", "dock", "app-installer", "screen-time", "mini-stats", "wallpaper-generator", "wallhaven", "cursors", "boot-look", "sudoku", "2048"];
     const UTILITY_PLUGIN_IDS: &[&str] = &[
         "ports", "git-repos", "ci", "crashes", "tailscale", "uptime", "local-ai", "share", "keybinds", "progress", "breaks", "presentation",
     ];

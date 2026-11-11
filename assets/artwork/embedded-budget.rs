@@ -1,3 +1,3 @@
-// The 81-plugin set occupies 8,046,210 bytes, leaving about 3.7 KiB of the
+// The 82-plugin set occupies about 8,131,400 bytes, leaving about 18 KiB of the
 // room kept for artwork revisions (rounded to a 50,000-byte boundary).
-8_050_000
+8_150_000
