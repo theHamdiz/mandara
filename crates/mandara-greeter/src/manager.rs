@@ -68,8 +68,6 @@ const GREETD: &str = "greetd";
 const GREETD_UNIT: &str = "greetd.service";
 const CAGE: &str = "cage";
 const UNIT_SUFFIX: &str = ".service";
-/// Read size when comparing the installed greeter with this binary.
-const COMPARE_CHUNK: usize = 64 * 1024;
 /// Marks a plan that only refreshes Mandara Login's installed copy (the
 /// installer looks for it).
 pub const OUTDATED: &str = "out of date";
@@ -859,7 +857,7 @@ impl SwitchPlan {
             greeter_user,
             // An upgrade refreshes an outdated installed copy even when
             // Mandara Login is already the login screen.
-            install_mandara: target.is_mandara() && (!already_active || !same_contents(&exe_path, &root.path(INSTALLED_EXE))),
+            install_mandara: target.is_mandara() && (!already_active || !mandara_config::admin::same_contents(&exe_path, &root.path(INSTALLED_EXE))),
             writes,
             new_unit,
             commands: if already_active { Vec::new() } else { commands },
@@ -1010,26 +1008,6 @@ impl SwitchPlan {
         }
         let _ = write!(s, "Undo: sudo mandara greeter restore {}", backup.id);
         Ok(s)
-    }
-}
-
-/// Byte-for-byte equal files (false when either can't be read).
-fn same_contents(a: &Path, b: &Path) -> bool {
-    use std::io::Read as _;
-    let (Ok(fa), Ok(fb)) = (std::fs::File::open(a), std::fs::File::open(b)) else { return false };
-    if fa.metadata().map(|m| m.len()).ok() != fb.metadata().map(|m| m.len()).ok() {
-        return false;
-    }
-    let (mut ra, mut rb) = (std::io::BufReader::new(fa), std::io::BufReader::new(fb));
-    let (mut ba, mut bb) = ([0u8; COMPARE_CHUNK], [0u8; COMPARE_CHUNK]);
-    loop {
-        let (Ok(na), Ok(nb)) = (ra.read(&mut ba), rb.read(&mut bb)) else { return false };
-        if na != nb || ba[..na] != bb[..nb] {
-            return false;
-        }
-        if na == 0 {
-            return true;
-        }
     }
 }
 

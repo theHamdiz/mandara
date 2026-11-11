@@ -1461,6 +1461,13 @@ pub fn apply_config(from: &Path) -> Result<String, String> {
         .map(|d| d.display().to_string())
         .collect();
     let mut msg = format!("Installed {SYSTEM_CONFIG}; it takes effect at the next login screen.");
+    // The login screen reads it with its own copy, which an update of your
+    // copy leaves behind: an older one can't read what this build wrote.
+    match std::env::current_exe().map_err(|e| e.to_string()).and_then(|exe| crate::install::refresh_installed_exe(Path::new("/"), &exe)) {
+        Ok(true) => msg.push_str(&format!("\nUpdated the login screen's copy of Mandara ({}) to this version.", crate::install::INSTALLED_EXE)),
+        Ok(false) => {}
+        Err(e) => msg.push_str(&format!("\nThe login screen's copy of Mandara wasn't updated ({e}); it may not read this config until `sudo mandara greeter use mandara` runs.")),
+    }
     // Its language's pack, where the login screen's copy reads it.
     match crate::install::install_language_pack(Path::new("/"), cfg.lang()) {
         Ok(Some(line)) => msg.push_str(&format!("\nInstalled the {line}.")),

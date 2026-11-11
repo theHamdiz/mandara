@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- **Applying a login screen from Studio no longer fails with "unknown variant `logo`".** Updating Mandara replaces your own copy without a password, but the root-owned copies it runs as an administrator stayed on the version they were first installed with, and an old one couldn't read the newer config. Studio now refreshes its admin helper when it's older than the Mandara you run (one extra approval, once per update), and applying the login screen also brings the login screen's own copy up to date, so the screen you see at boot reads what you designed.
+
 ## 0.26.0 — 2026-11-10
 
 Mandara Login has three new looks that move the sign-in off the middle of

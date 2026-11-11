@@ -322,6 +322,27 @@ pub(crate) fn under(root: &Path, abs: &str) -> PathBuf {
     root.join(abs.trim_start_matches('/'))
 }
 
+/// Copies `exe` over `dst` atomically, executable by everyone.
+fn put_exe(exe: &Path, dst: &Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt as _;
+    let tmp = dst.with_extension("new");
+    std::fs::copy(exe, &tmp).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(EXE_MODE)).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, dst).map_err(|e| format!("{}: {e}", dst.display()))
+}
+
+/// Replaces the login screen's installed copy under `root` with `exe` when
+/// it is another build. An older copy can't read a config this build
+/// wrote (a newer element fails as an "unknown variant"). Leaves a system
+/// without Mandara Login alone. `Ok(true)` when it was replaced.
+pub fn refresh_installed_exe(root: &Path, exe: &Path) -> Result<bool, String> {
+    let dst = under(root, INSTALLED_EXE);
+    if !dst.is_file() || std::fs::canonicalize(exe).ok() == std::fs::canonicalize(&dst).ok() || mandara_config::admin::same_contents(exe, &dst) {
+        return Ok(false);
+    }
+    put_exe(exe, &dst).map(|()| true)
+}
+
 /// Puts Mandara Login's runtime in place under `root`: the binary at
 /// [`INSTALLED_EXE`], the media folders, the state dir (owned by the
 /// greeter user) and a default system config if there is none. Returns one
@@ -335,10 +356,7 @@ pub fn install_runtime(root: &Path, exe: &Path, greeter_user: &str) -> Result<Ve
     let parent = dst.parent().unwrap_or(root).to_path_buf();
     std::fs::create_dir_all(&parent).map_err(|e| err(&parent, e))?;
     if std::fs::canonicalize(exe).ok() != std::fs::canonicalize(&dst).ok() {
-        let tmp = dst.with_extension("new");
-        std::fs::copy(exe, &tmp).map_err(|e| err(&tmp, e))?;
-        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(EXE_MODE)).map_err(|e| err(&tmp, e))?;
-        std::fs::rename(&tmp, &dst).map_err(|e| err(&dst, e))?;
+        put_exe(exe, &dst)?;
     }
     done.push(format!("installed {INSTALLED_EXE}"));
     // 2. Media folders: in /usr/local/share where /usr is a read-only

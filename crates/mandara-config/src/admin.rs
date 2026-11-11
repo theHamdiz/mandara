@@ -19,6 +19,8 @@ const SHARED_WRITE: u32 = 0o022;
 /// The sticky bit: in such a folder only an entry's owner (or root) can
 /// rename or delete it.
 const STICKY: u32 = 0o1000;
+/// Read size when comparing two copies of Mandara.
+const COMPARE_CHUNK: usize = 64 * 1024;
 
 /// Whether `path` and every folder above it are owned by root and writable
 /// by root alone, so no other account can replace what runs as root. A
@@ -46,6 +48,44 @@ pub fn admin_exe() -> Option<PathBuf> {
 
 fn pick(running: Option<&Path>, trusted: impl Fn(&Path) -> bool) -> Option<PathBuf> {
     running.map(Path::to_path_buf).into_iter().chain([PathBuf::from(ADMIN_EXE), PathBuf::from(GREETER_EXE)]).find(|p| trusted(p))
+}
+
+/// [`admin_exe`] only when it is this very build. An older copy (the
+/// helper from an earlier version, or the login screen's copy) may not
+/// read what this one writes, such as a login screen config with a newer
+/// element, so it gives `None` and [`setup_command`] replaces the helper.
+/// Reads both binaries: call off the UI thread.
+pub fn current_admin_exe() -> Option<PathBuf> {
+    let running = std::env::current_exe().ok()?;
+    admin_exe().filter(|exe| *exe == running || same_contents(exe, &running))
+}
+
+/// Whether [`admin_exe`] may be this build, by size alone (cheap enough
+/// for the UI thread; [`current_admin_exe`] decides).
+pub fn admin_exe_may_be_current() -> bool {
+    let size = |p: &Path| std::fs::metadata(p).ok().map(|m| m.len());
+    let running = std::env::current_exe().ok();
+    admin_exe().is_some_and(|exe| running.is_some_and(|r| size(&exe) == size(&r)))
+}
+
+/// Byte-for-byte equal files (false when either can't be read).
+pub fn same_contents(a: &Path, b: &Path) -> bool {
+    use std::io::Read as _;
+    let (Ok(fa), Ok(fb)) = (std::fs::File::open(a), std::fs::File::open(b)) else { return false };
+    if fa.metadata().map(|m| m.len()).ok() != fb.metadata().map(|m| m.len()).ok() {
+        return false;
+    }
+    let (mut ra, mut rb) = (std::io::BufReader::new(fa), std::io::BufReader::new(fb));
+    let (mut ba, mut bb) = ([0u8; COMPARE_CHUNK], [0u8; COMPARE_CHUNK]);
+    loop {
+        let (Ok(na), Ok(nb)) = (ra.read(&mut ba), rb.read(&mut bb)) else { return false };
+        if na != nb || ba[..na] != bb[..nb] {
+            return false;
+        }
+        if na == 0 {
+            return true;
+        }
+    }
 }
 
 /// `pkexec install -D -o root -g root -m 0755 <from> ADMIN_EXE`: copies
@@ -86,6 +126,27 @@ pub fn pkexec(admin: &Path, args: impl IntoIterator<Item = OsString>) -> (OsStri
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    /// An older copy of Mandara is told apart from this build.
+    #[test]
+    fn same_contents_compares_every_byte() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = |name: &str, body: &[u8]| {
+            let p = dir.path().join(name);
+            std::fs::write(&p, body).unwrap();
+            p
+        };
+        let long = vec![7u8; COMPARE_CHUNK * 2 + 3];
+        let mut late = long.clone();
+        if let Some(b) = late.last_mut() {
+            *b = 8;
+        }
+        let (a, b, c, d) = (file("a", &long), file("b", &long), file("c", &late), file("d", b"short"));
+        assert!(same_contents(&a, &b));
+        assert!(!same_contents(&a, &c), "a difference past the first chunk counts");
+        assert!(!same_contents(&a, &d), "another size");
+        assert!(!same_contents(&a, &dir.path().join("missing")));
+    }
 
     /// Issue #10: only a root-owned binary, in root-owned folders, runs as
     /// root.
