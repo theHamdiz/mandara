@@ -976,8 +976,11 @@ impl StudioView {
         let file = target.map(|t| t.generated_file().file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default()).unwrap_or_default();
         let overlap: Vec<String> = st(cx).user_rules.clone().unwrap_or_default().into_iter().filter(|n| heads.iter().any(|h| &h.name == n)).collect();
         let current: Vec<OutputConfig> = heads.iter().map(outputs::Head::to_config).collect();
-        // River has no output settings to write (nor does Mandara send any).
-        let keep = if target == Some(Target::River) {
+        // River has no output settings to write (nor does Mandara send any),
+        // and KWin and Aqueous keep theirs in their own settings: nothing a
+        // drop-in could hold, so no button that would save nothing.
+        let elsewhere = target.and_then(Target::settings_elsewhere);
+        let keep = if target == Some(Target::River) || elsewhere.is_some() {
             div().into_any_element()
         } else if persisted {
             button("display-unpersist", "close", t("Stop saving"), false, p).on_click(|_, _, cx| update_config(cx, |c| c.compositor.outputs.clear())).into_any_element()
@@ -1001,6 +1004,8 @@ impl StudioView {
                         t("Keep after restart"),
                         if target == Some(Target::River) {
                             t("River keeps no display settings of its own: set them in your init with a tool such as wlr-randr or kanshi").into()
+                        } else if let Some(note) = elsewhere {
+                            mandara_i18n::tr(note)
                         } else if !cfg.compositor.manage {
                             // Nothing is written while the drop-in is off.
                             t("Turn on “Manage compositor drop-in” (Compositor page) first: Mandara writes no drop-in while it's off").into()

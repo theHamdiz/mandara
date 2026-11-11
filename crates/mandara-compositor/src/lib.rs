@@ -45,7 +45,8 @@ pub use umbriel::UmbrielDriver;
 /// `AQUEOUS_SOCKET` to its session (and names itself in
 /// `XDG_CURRENT_DESKTOP`): with both, it wins like sway does; the socket
 /// alone is checked after the other compositors' own variables, so one
-/// nested inside Aqueous is still found. Aqueous derives from River but
+/// nested inside Aqueous is still found (a nested Niri, which inherits
+/// Aqueous's desktop name too, by its socket naming this display). Aqueous derives from River but
 /// offers none of River's protocols.
 pub fn detect() -> Option<CompositorKind> {
     detect_from(|name| std::env::var_os(name)).or_else(|| (std::env::var_os("WAYLAND_DISPLAY").is_some() && river::running()).then_some(CompositorKind::River))
@@ -63,11 +64,15 @@ pub fn detected() -> Option<CompositorKind> {
 pub fn detect_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<CompositorKind> {
     let set = |name: &str| var(name).is_some_and(|v| !v.is_empty());
     let desktop = |name: &str| var("XDG_CURRENT_DESKTOP").is_some_and(|d| d.to_string_lossy().split(':').any(|d| d.eq_ignore_ascii_case(name)));
+    // A Niri nested inside Aqueous inherits Aqueous's socket and desktop
+    // name (Niri names itself only when it runs a whole session), but its
+    // own socket names the Wayland display it serves.
+    let niri_here = var("NIRI_SOCKET").zip(var("WAYLAND_DISPLAY")).is_some_and(|(socket, display)| niri_serves(&socket, &display));
     if desktop("umbriel") {
         Some(CompositorKind::Umbriel)
     } else if desktop("sway") && set("SWAYSOCK") {
         Some(CompositorKind::Sway)
-    } else if desktop("aqueous") && set("AQUEOUS_SOCKET") {
+    } else if desktop("aqueous") && set("AQUEOUS_SOCKET") && !niri_here {
         Some(CompositorKind::Aqueous)
     } else if set("MANGO_INSTANCE_SIGNATURE") || desktop("mango") {
         Some(CompositorKind::MangoWM)
@@ -88,6 +93,14 @@ pub fn detect_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<C
     } else {
         None
     }
+}
+
+/// Whether Niri's IPC socket belongs to the Wayland display `display`:
+/// Niri names it `niri.<display>.<pid>.sock` (`display` may also be a path).
+fn niri_serves(socket: &std::ffi::OsStr, display: &std::ffi::OsStr) -> bool {
+    let name = |p: &std::ffi::OsStr| std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned());
+    let (Some(socket), Some(display)) = (name(socket), name(display)) else { return false };
+    !display.is_empty() && socket.strip_prefix("niri.").and_then(|rest| rest.strip_prefix(display.as_str())).is_some_and(|rest| rest.starts_with('.'))
 }
 
 /// Starts an interactive move of the window under the pointer, for client-
@@ -169,6 +182,18 @@ mod tests {
         assert_eq!(detect_with(&[socket, ("NIRI_SOCKET", "/n")]), Some(CompositorKind::Niri));
         assert_eq!(detect_with(&[socket, ("SWAYSOCK", "/s")]), Some(CompositorKind::Sway));
         assert_eq!(detect_with(&[socket, ("NIRI_SOCKET", "/n"), ("XDG_CURRENT_DESKTOP", "Aqueous")]), Some(CompositorKind::Aqueous));
+        // Niri nested inside Aqueous (Aqueous's markers inherited): Niri's
+        // socket names the display Mandara is on. Aqueous nested inside
+        // Niri: the inherited Niri socket names the outer display.
+        let inner_niri = [socket, ("XDG_CURRENT_DESKTOP", "Aqueous"), ("NIRI_SOCKET", "/run/user/1000/niri.wayland-2.4242.sock"), ("WAYLAND_DISPLAY", "wayland-2")];
+        assert_eq!(detect_with(&inner_niri), Some(CompositorKind::Niri));
+        let inner_aqueous = [socket, ("XDG_CURRENT_DESKTOP", "Aqueous"), ("NIRI_SOCKET", "/run/user/1000/niri.wayland-1.77.sock"), ("WAYLAND_DISPLAY", "wayland-2")];
+        assert_eq!(detect_with(&inner_aqueous), Some(CompositorKind::Aqueous));
+        // `wayland-1` is not `wayland-10`.
+        let near_miss = [socket, ("XDG_CURRENT_DESKTOP", "Aqueous"), ("NIRI_SOCKET", "/run/user/1000/niri.wayland-10.77.sock"), ("WAYLAND_DISPLAY", "wayland-1")];
+        assert_eq!(detect_with(&near_miss), Some(CompositorKind::Aqueous));
+        let absolute = [socket, ("XDG_CURRENT_DESKTOP", "Aqueous"), ("NIRI_SOCKET", "/run/user/1000/niri.wayland-2.1.sock"), ("WAYLAND_DISPLAY", "/run/user/1000/wayland-2")];
+        assert_eq!(detect_with(&absolute), Some(CompositorKind::Niri));
         assert_eq!(detect_with(&[socket, ("XDG_CURRENT_DESKTOP", "river")]), Some(CompositorKind::Aqueous));
     }
 }

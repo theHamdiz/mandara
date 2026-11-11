@@ -271,23 +271,27 @@ fn show_next(cx: &mut App) {
     if open {
         return;
     }
-    let Some(front) = cx.global_mut::<PolkitUi>().queue.front_mut() else { return };
-    let (request, agent, early) = (front.request.clone(), front.agent.clone(), front.early.take());
+    let Some(front) = cx.global::<PolkitUi>().queue.front() else { return };
+    let (request, agent) = (front.request.clone(), front.agent.clone());
     // The focused monitor: its display and size together (issue #8).
     let (display, (w, h)) = crate::outputs::overlay_target(cx);
     let mut spec = LayerSurfaceSpec::overlay(SurfaceRole::Lock, gpui::size(px(w), px(h)), display).with_keyboard(KeyboardInteractivity::Exclusive);
     spec.layer = Layer::Overlay;
     spec.anchor = Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT;
     let handle = cx
-        .open_window(spec.window_options(), move |window, cx| {
-            cx.new(|cx| {
-                let mut dialog = PolkitDialog::new(request, agent, (w, h), window, cx);
-                early.into_iter().flatten().for_each(|e| dialog.on_event(e));
-                dialog
-            })
-        })
+        .open_window(spec.window_options(), move |window, cx| cx.new(|cx| PolkitDialog::new(request, agent, (w, h), window, cx)))
         .map_err(|e| tracing::error!("polkit dialog: {e:#}"))
         .ok();
+    // What the helper already asked moves into the dialog only once it is
+    // open: if opening failed, it stays queued for the next attempt.
+    if let Some(handle) = handle
+        && let Some(early) = cx.global_mut::<PolkitUi>().queue.front_mut().map(|q| q.early.take())
+    {
+        let _ = handle.update(cx, |d, _, cx| {
+            early.into_iter().flatten().for_each(|e| d.on_event(e));
+            cx.notify();
+        });
+    }
     cx.global_mut::<PolkitUi>().window = handle;
 }
 
