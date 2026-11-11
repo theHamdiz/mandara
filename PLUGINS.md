@@ -256,7 +256,7 @@ atomics) is shared between them.
 
 A plugin can also put widgets on the desktop, next to Mandara's own clocks,
 weather and gauges (which are first-party plugins themselves). People find
-your widgets in Studio → Desktop widgets and in the desktop's right-click
+your widgets in Studio → Desktop → Widgets and in the desktop's right-click
 **Add widget** menu, place them anywhere, resize them and choose their
 numerals, calendar and language.
 

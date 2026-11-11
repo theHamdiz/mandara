@@ -96,7 +96,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 |---|---|
 | Themes | **looks** — six one-click looks and *Restore my look* (`looks.*`, see [Looks](#looks)); light / dark / automatic and its schedule (`theme.*`), palette tuning (`theme.adjustments`), theme crossfade (`theme.transition_ms`), icons (`appearance.*`), corner roundness, shadows, borders, backdrop dim; under **Components**, the **slider design** of the thick volume, brightness and mixer sliders (`style.slider_design` = `classic`, the default: the fill, a small gap, an upright handle, another gap and the rest of the track ending in a stop dot; `continuous`: one track with a short grip inside the fill's end; `pill`: a round knob on the fill's end that stretches into a pill while held; `wavy`: the classic layout with a gentle wave along the fill that flows only while you drag; `segmented`: ten rounded steps that fill in turn; thin sliders always keep the classic look); the other **component designs**, each `classic` by default: `style.button_design` (`classic`, `square`, `expressive`, `cut`, `elevated`), `style.toggle_design` (`classic`, `material`, `expressive`, `round`), `style.input_design` (`classic`, `filled`, `outlined`, `pill`), `style.chip_design` (`classic`, `material`, `connected`), `style.progress_design` (`classic`, `material`, `wavy`, `segmented`; bars, meters and progress rings, always at their classic size), `style.surface_corners` (`rounded`, `asymmetric`, `square`, `squircle`, `cut`; `style.radius_scale` still sets the size; squircle and cut cards clip their contents to the rounded rectangle inside their shape) and `style.card_style` (`tonal`, `raised` — no shadow while `style.shadows` is off —, `outlined`); the Components **presets** write these and `style.slider_design` together (`looks.keep_components`: picking a look keeps your designs instead of applying the look's); and the **slider handle** (`style.slider_handle` = `line`: the upright handle between a slider's fill and its track, with a small gap on each side and a stop dot at the track's end, or the grip of the continuous design; `none`: the fill's rounded end alone; the pill and segmented designs ignore it) (`style.*`); the theme; **other apps** — the app theming switches, all off by default (`integrations.*`, see [App theming](#app-theming-integrations)); **cursor** (the opt-in `cursors` plugin) — theme, size, hide while typing / when idle, Hyprland's software cursor and hide on touch (`compositor.input.cursor.theme`, `.size`, `.hide_when_typing`, `.hide_after_secs`, `.no_hardware_cursors`, `.hide_on_touch`; themes Mandara downloaded are listed in `~/.local/share/mandara/cursor-themes.json`) |
 | Wallpaper | folder, picker style / size / focus / names, fill and colour, transitions, crossfade (`wallpaper.crossfade_ms`), light / dark and per-display variants, depth effect (`wallpaper.depth_effect`) and how its subject is found: `wallpaper.depth.mode` (`hand-tuned` or `model`), `auto_split`, `split` (0.05–0.95, model mode) (`wallpaper.*`); video wallpapers: pause behind windows / on battery, frame-rate limit, first frame only (`wallpaper.video.*`, see [Video wallpapers](#video-wallpapers)); the slideshow (`wallpaper.slideshow.*`, see [Wallpaper slideshow](#wallpaper-slideshow)) |
-| Desktop widgets | clocks (24 faces, including depth, analog, word, split-flap, glass-tube and binary), system monitor, gauges, meters and thermals, weather, world clock, countdown, progress, to-do, sticky note, focus timer, quote, notebook tabs, calendars, sun / moon / globe, profile, shortcuts, toggles, sliders, palette, desk cat, bubbles, photo frame, sticker, six media layouts, machine card, screen time, prayer times, search, at a glance, GitHub, exchange rates, AI usage, games, decorations, plane visualizer, per-widget plate shape, outline, shadow, header, frame, rotation and mirror, alignment, font, numerals, calendar and language, show / hide them all (`desktop.widgets.*`, see [Desktop widgets](#desktop-widgets)); desktop cards and visualizers (`cards.*`, `visualizers.*`) |
+| Desktop | clocks (24 faces, including depth, analog, word, split-flap, glass-tube and binary), system monitor, gauges, meters and thermals, weather, world clock, countdown, progress, to-do, sticky note, focus timer, quote, notebook tabs, calendars, sun / moon / globe, profile, shortcuts, toggles, sliders, palette, desk cat, bubbles, photo frame, sticker, six media layouts, machine card, screen time, prayer times, search, at a glance, GitHub, exchange rates, AI usage, games, decorations, plane visualizer, per-widget plate shape, outline, shadow, header, frame, rotation and mirror, alignment, font, numerals, calendar and language, show / hide them all (`desktop.widgets.*`, see [Desktop widgets](#desktop-widgets)); desktop cards and visualizers (`cards.*`, `visualizers.*`); the right-click menu: ring or list, items and their order, custom programs, size, labels, gesture, glass and animation (`desktop.menu.*`, see [Desktop menu](#desktop-menu)) |
 | Typography | interface / display / Arabic / monospace fonts, text scale, weight (`typography.*`) |
 | Motion | stiffness, damping, mass, animation speed, reduce motion (`motion.*`) |
 
@@ -634,6 +634,56 @@ height = 160
 glow = true
 [desktop.widgets.items.place]
 anchor = "bottom"
+```
+
+## Desktop menu
+
+`[desktop.menu]` shapes the desktop's right-click menu (model:
+`crates/mandara-config/src/desktop_menu.rs`; Studio → Desktop → Context
+menu). A file without it gets the ring with every item. The menu's
+surface exists only while it shows; it has no timers and keeps no state
+once closed.
+
+| Key | Values | Default |
+|---|---|---|
+| `style` | `ring` (icon buttons round the click) or `classic` (the glass list) | `ring` |
+| `labels` | `hub` (the middle names the item under the pointer), `around` (a label beside it, outside the ring), `always` (every item named under its icon; the ring grows to fit) | `hub` |
+| `gesture` | `both`, `click` (right-click, then click an item), `drag` (hold the right button, move toward an item, let go; letting go anywhere else closes it) | `both` |
+| `submenu` | when Add widget's outer ring opens: `hover` or `click` | `hover` |
+| `radius` | centre to the items, logical px (80–160; it grows on its own when many items need room) | `100` |
+| `item_size` | an item's button, logical px (36–56) | `44` |
+| `opacity` | the glass (0.6–1) | `0.96` |
+| `animation` | `follow` (Studio → Motion's popup speed, feel and reduced motion) or `own` | `follow` |
+| `speed` | with `animation = "own"`: playback speed (0–3, 0 opens and closes at once); reduced motion still applies | `1` |
+| `items` | the items in menu order (below) | every built-in item |
+
+`[[desktop.menu.items]]` lists the items in order, each with an `id` and
+`enabled`. The built-in ids are `edit-desktop`, `add-widget`,
+`toggle-widgets` (shows only while the desktop has widgets),
+`change-wallpaper`, `next-wallpaper` (with a slideshow or its folder),
+`themes`, `displays`, `terminal`, `screenshot` and `studio`; a built-in
+missing from the list comes back at the end, switched on, and an unknown id
+is skipped. Up to eight `custom` items run a program of your own: `label`
+(up to 40 characters), `icon` (a bundled icon name) and `command`, the
+program and its arguments as a list, started directly in your home folder,
+never through a shell.
+
+```toml
+[desktop.menu]
+style = "ring"
+labels = "hub"
+gesture = "both"
+
+[[desktop.menu.items]]
+id = "edit-desktop"
+enabled = true
+
+[[desktop.menu.items]]
+id = "custom"
+enabled = true
+label = "Files"
+icon = "folder"
+command = ["nautilus", "--new-window"]
 ```
 
 ## Side bar

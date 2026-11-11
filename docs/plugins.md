@@ -118,7 +118,7 @@ The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
 See [Connected plugins](integrations.md) for setup, API keys and privacy.
 
 The desktop widget plugins draw nothing until you place one of their
-widgets (Studio → Desktop widgets, or right-click the desktop → Add
+widgets (Studio → Desktop → Widgets, or right-click the desktop → Add
 widget); switching one off hides its widgets until you switch it back on.
 Each has its own logo and a painted store cover; screenshots of the
 widgets themselves are in [Your desktop](desktop.md#desktop-widgets).
@@ -166,7 +166,7 @@ Two opt-in games (Studio → Plugins, `mandara msg plugins enable sudoku` /
 pick **Turn on**). Each has a bar item with a drop-down panel (put it
 in a bar group from its page in Studio → Plugins), a playable sidebar card
 (Studio → Bars → Sidebar, or `mandara msg sidebar tab widget add Overview
-sudoku`) and a desktop widget (Studio → Desktop widgets → Add, or
+sudoku`) and a desktop widget (Studio → Desktop → Widgets → Add, or
 right-click the desktop → Add widget) that you play right on the desktop:
 click the board to give it the keyboard, click a window or the desktop to
 give it back, and Escape lets go too. One game is shared by the panel, the
