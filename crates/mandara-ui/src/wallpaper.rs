@@ -731,7 +731,11 @@ impl WallpaperView {
     fn load(&mut self, path: PathBuf, size: (u32, u32), fill: mandara_config::desktop::WallpaperFill, cx: &mut Context<Self>) {
         self.fill = fill;
         self.target = Some(path.clone());
-        let sketch = crate::wallpaper_sketch::Want::of(&self.config.read(cx).get().wallpaper);
+        // The outline is wanted only for a change that draws it (a first
+        // wallpaper or reduced motion has none) or to keep it afterwards.
+        let cfg = self.config.read(cx).get();
+        let reduced = cfg.motion.reduced(mandara_core::spring::system_reduced_motion());
+        let sketch = crate::wallpaper_sketch::Want::of(&cfg.wallpaper).filter(|_| !reduced && (self.current.is_some() || cfg.wallpaper.sketch.keep_outline));
         let task = cx.background_executor().spawn(async move {
             let (shown, shown_size) = crate::wallpaper_fill::prepare(&path, fill, size.0, size.1)?;
             let decoded = image::open(&shown).ok();
@@ -756,8 +760,13 @@ impl WallpaperView {
                     this.since = Instant::now();
                     this.changes = this.changes.wrapping_add(1);
                     this.origin = None;
-                    // The old subject leaves with its wallpaper.
-                    let fade = Duration::from_millis(this.config.read(cx).get().wallpaper.crossfade_ms.max(1));
+                    // The old subject leaves with its wallpaper (under a
+                    // Sketch, as the wash covers the old image).
+                    let w = &this.config.read(cx).get().wallpaper;
+                    let mut fade = Duration::from_millis(w.crossfade_ms.max(1));
+                    if this.outline.is_some() {
+                        fade = fade.mul_f32(w.sketch.draw() * crate::wallpaper_sketch::WASH_RISE);
+                    }
                     this.retire(fade);
                     this.cutout_key = None;
                     cx.notify();
@@ -1026,6 +1035,13 @@ impl Render for WallpaperView {
             let (line, wash) = crate::wallpaper_sketch::colours(sk.ink, accent, &o);
             (o, plan, rect, line, wash)
         });
+        // The new subject (layer 3) arrives with its image: under a Sketch,
+        // with the fill, not while the lines are drawn.
+        let subject_in = match (crossfading, sketch.is_some()) {
+            (false, _) => 1.0,
+            (true, false) => eased,
+            (true, true) => crate::wallpaper_sketch::fill_ramp(t, cfg.wallpaper.sketch.draw()),
+        };
         let wallpaper = match (self.current.as_ref(), self.previous.as_ref(), sketch.as_ref()) {
             (Some(cur), prev, Some((o, plan, rect, line, wash))) => {
                 let new = || layer(cur, current_size);
@@ -1053,7 +1069,7 @@ impl Render for WallpaperView {
             .when_some(pill_below, |el, p| el.child(p))
             // 3 · the subject in front of the clock
             .when_some(self.retired.as_ref(), |el, c| el.child(cut(c, (1.0 - c.progress()) * limit(c))))
-            .when_some(self.cutout.as_ref(), |el, c| el.child(cut(c, c.progress() * limit(c) * if crossfading { eased } else { 1.0 })))
+            .when_some(self.cutout.as_ref(), |el, c| el.child(cut(c, c.progress() * limit(c) * subject_in)))
             .when_some(pill_above, |el, p| el.child(p))
     }
 }

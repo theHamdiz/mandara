@@ -25,7 +25,10 @@ pub const GRID: (u32, u32) = (24, 14);
 const MIN_EDGE_PX: f32 = 10.0;
 const MIN_SUBJECT_PX: f32 = 6.0;
 /// Simplification tolerance (sample px).
-const SIMPLIFY_PX: f32 = 0.75;
+const SIMPLIFY_PX: f32 = 0.6;
+/// Passes of a [1 2 1] average over each line's points before it is
+/// simplified: pixel chains are staircases, eight times larger on screen.
+const SMOOTH_PASSES: usize = 3;
 /// Share of the thinned edge pixels that count as strong edges (lines start
 /// only there), and the weak threshold as a share of the strong one.
 const STRONG_SHARE: f32 = 0.12;
@@ -282,6 +285,7 @@ fn trace(map: &mut [u8], w: u32, h: u32, subject: bool, lines: &mut Lines) {
     let mut back: Vec<[u32; 2]> = Vec::new();
     let mut forward: Vec<[u32; 2]> = Vec::new();
     let mut chain: Vec<[f32; 2]> = Vec::new();
+    let mut scratch: Vec<[f32; 2]> = Vec::new();
     for y in 0..h {
         for x in 0..w {
             if map[(y * w + x) as usize] != 2 {
@@ -293,6 +297,7 @@ fn trace(map: &mut [u8], w: u32, h: u32, subject: bool, lines: &mut Lines) {
             chain.clear();
             chain.extend(back.iter().rev().chain(std::iter::once(&[x, y])).chain(forward.iter()).map(|p| [p[0] as f32, p[1] as f32]));
             let start = lines.points.len();
+            relax(&mut chain, &mut scratch);
             simplify(&chain, &mut lines.points);
             let end = lines.points.len();
             if end - start >= 2 {
@@ -333,6 +338,23 @@ fn walk(map: &mut [u8], w: u32, h: u32, from: [u32; 2], out: &mut Vec<[u32; 2]>)
         out.push(p);
         cur = p;
         heading = Some(d);
+    }
+}
+
+/// Smooths `chain` in place ([`SMOOTH_PASSES`] of a [1 2 1] average, its
+/// ends fixed), `scratch` holding the previous pass.
+fn relax(chain: &mut [[f32; 2]], scratch: &mut Vec<[f32; 2]>) {
+    let n = chain.len();
+    if n < 3 {
+        return;
+    }
+    for _ in 0..SMOOTH_PASSES {
+        scratch.clear();
+        scratch.extend_from_slice(chain);
+        for i in 1..n - 1 {
+            let (a, b, c) = (scratch[i - 1], scratch[i], scratch[i + 1]);
+            chain[i] = [(a[0] + 2.0 * b[0] + c[0]) / 4.0, (a[1] + 2.0 * b[1] + c[1]) / 4.0];
+        }
     }
 }
 

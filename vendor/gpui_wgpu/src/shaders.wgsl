@@ -1348,10 +1348,21 @@ fn vs_poly_sprite(@builtin(vertex_index) vertex_id: u32, @builtin(instance_index
     let sprite = load_poly_sprite(instance_id);
 
     var out = PolySpriteVarying();
-    out.position = to_device_position(unit_vertex, sprite.bounds);
-    out.tile_position = to_tile_position(unit_vertex, sprite.tile);
+    // Mandara patch: the quad is clipped to its content mask's rectangle
+    // here, not per fragment, so an image shown through a small clip (a
+    // wallpaper transition's tile, a scrolled thumbnail) rasterizes only
+    // that clip. The texture coordinates follow the clipped corners, so
+    // every remaining fragment samples exactly what it did before; rounded
+    // masks still clip per fragment.
+    let mask = sprite.content_mask.bounds;
+    let lo = max(sprite.bounds.origin, mask.origin);
+    let hi = max(lo, min(sprite.bounds.origin + sprite.bounds.size, mask.origin + mask.size));
+    let position = mix(lo, hi, unit_vertex);
+    let unit = (position - sprite.bounds.origin) / max(sprite.bounds.size, vec2<f32>(1e-6));
+    out.position = to_device_position_impl(position);
+    out.tile_position = to_tile_position(unit, sprite.tile);
     out.sprite_id = instance_id;
-    out.clip_distances = distance_from_clip_rect(unit_vertex, sprite.bounds, sprite.content_mask.bounds);
+    out.clip_distances = distance_from_clip_rect_impl(position, mask);
     return out;
 }
 

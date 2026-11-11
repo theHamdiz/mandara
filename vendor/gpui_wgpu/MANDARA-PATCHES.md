@@ -297,6 +297,19 @@ actual Hindi/Marathi shaping with a Latin primary and no extra loaded faces.
 The font and its license live under `test_data/`; neither enters the release
 binary. Release measurements are required before claiming a memory saving.
 
+## 15. Image quads clipped in the vertex stage (`shaders.wgsl`)
+
+Upstream rasterizes a polychrome sprite (an image) over its whole bounds and
+discards the fragments outside its content mask. An image drawn through a
+small clip still cost a full-size quad: the wallpaper transitions draw the
+same full-screen image through dozens to hundreds of tile clips (Dissolve,
+Shatter, Tide, Tear, Glitch, Sketch's fill), each a full-screen pass, which
+kept a 2560 × 1440 headless frame at ~50 ms. `vs_poly_sprite` now emits the
+intersection of the bounds and the mask's rectangle, with texture
+coordinates interpolated from the same unit position, so each surviving
+fragment samples exactly as before and the per-fragment clip (and rounded
+mask) still applies. No new bindings, buffers or passes.
+
 ## Tests
 
 * New `paths_render_through_bounding_box_textures` (headless renderer): a solid

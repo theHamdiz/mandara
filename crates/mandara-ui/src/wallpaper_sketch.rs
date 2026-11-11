@@ -58,12 +58,15 @@ const BLEED_ALPHA: f32 = 0.22;
 /// The wash over the old image while the lines are drawn: its alpha and
 /// the share of the drawing phase it takes to settle.
 const WASH_ALPHA: f32 = 0.55;
-const WASH_RISE: f32 = 0.3;
+pub const WASH_RISE: f32 = 0.3;
 /// The fill reveals cells this much of its phase apart (nearest the lines
 /// first for the bleed, in drawing order for the wipe); each cell takes
 /// the rest.
-const BLEED_SPREAD: f32 = 0.55;
-const WIPE_SPREAD: f32 = 0.6;
+const BLEED_SPREAD: f32 = 0.45;
+const WIPE_SPREAD: f32 = 0.5;
+/// Under the cells the whole new image rises to this alpha over the fill,
+/// so neighbouring cells differ by little.
+const BASE_SHARE: f32 = 0.5;
 /// Points stroked per path (each path's tessellation is indexed by u16).
 const CHUNK_POINTS: usize = 2048;
 /// Line colours of the Ink and White choices, and the washes under them.
@@ -205,8 +208,37 @@ pub struct Plan {
     span: Box<[f32]>,
     /// Drawn from its last point to its first.
     reverse: Box<[bool]>,
-    /// The wipe's delay per [`GRID`] cell (`0..1`).
+    /// The bleed's and the wipe's delay per [`GRID`] cell (`0..1`),
+    /// softened across neighbours so the cells blend.
+    bleed: Box<[f32]>,
     wipe: Box<[f32]>,
+}
+
+/// `delays` (a [`GRID`]) averaged with their 8 neighbours, then rescaled to
+/// `0..1`.
+fn soften(delays: &[f32]) -> Box<[f32]> {
+    let (gx, gy) = (GRID.0 as i32, GRID.1 as i32);
+    if delays.len() != (gx * gy) as usize {
+        return delays.into();
+    }
+    let mut out: Box<[f32]> = (0..gx * gy)
+        .map(|i| {
+            let (r, c) = (i / gx, i % gx);
+            let (mut sum, mut n) = (0.0, 0.0);
+            for (dr, dc) in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 0), (0, 1), (1, -1), (1, 0), (1, 1)] {
+                let (rr, cc) = (r + dr, c + dc);
+                if (0..gy).contains(&rr) && (0..gx).contains(&cc) {
+                    sum += delays[(rr * gx + cc) as usize];
+                    n += 1.0;
+                }
+            }
+            sum / n
+        })
+        .collect();
+    let (lo, hi) = out.iter().fold((f32::MAX, f32::MIN), |(lo, hi), d| (lo.min(*d), hi.max(*d)));
+    let range = (hi - lo).max(f32::EPSILON);
+    out.iter_mut().for_each(|d| *d = (*d - lo) / range);
+    out
 }
 
 /// The order for `outline` under `order`, `focus` being where Center and
@@ -251,10 +283,9 @@ pub fn plan(o: &Outline, order: SketchOrder, focus: [f32; 2]) -> Plan {
         start[i as usize] = (before / total).min(1.0) * (1.0 - s);
         before += r.length;
     }
-    let mut wipe: Box<[f32]> = o.cells.iter().map(|c| start[c.stroke as usize] + span[c.stroke as usize] * 0.5 + c.dist * 0.25).collect();
-    let far = wipe.iter().copied().fold(f32::EPSILON, f32::max);
-    wipe.iter_mut().for_each(|d| *d /= far);
-    Plan { start, span, reverse, wipe }
+    let wipe: Vec<f32> = o.cells.iter().map(|c| start[c.stroke as usize] + span[c.stroke as usize] * 0.5 + c.dist * 0.25).collect();
+    let bleed: Vec<f32> = o.cells.iter().map(|c| c.dist).collect();
+    Plan { start, span, reverse, bleed: soften(&bleed), wipe: soften(&wipe) }
 }
 
 // ── Frames ───────────────────────────────────────────────────────────────
@@ -275,6 +306,12 @@ pub fn phases(t: f32, draw: f32) -> (f32, f32) {
     let t = t.clamp(0.0, 1.0);
     let draw = draw.clamp(0.05, 0.95);
     ((t / draw).min(1.0), ((t - draw) / (1.0 - draw)).clamp(0.0, 1.0))
+}
+
+/// How far the image has filled in at linear progress `t` (eased `0..1`):
+/// what anything arriving with the new image (its subject layer) follows.
+pub fn fill_ramp(t: f32, draw: f32) -> f32 {
+    smooth(phases(t, draw).1)
 }
 
 /// Share of stroke `i` drawn at drawing progress `u`.
@@ -422,7 +459,7 @@ pub fn compose(old: &dyn Fn() -> AnyElement, new: &dyn Fn() -> AnyElement, f: Fr
     if fill > 0.0 {
         match f.options.fill_style {
             SketchFill::Fade => out.push(div().absolute().inset_0().size_full().opacity(smooth(fill)).child(new()).into_any_element()),
-            SketchFill::Bleed => cells(&mut out, new, f.outline.cells.iter().map(|c| c.dist), BLEED_SPREAD, fill, f.rect, f.vp),
+            SketchFill::Bleed => cells(&mut out, new, f.plan.bleed.iter().copied(), BLEED_SPREAD, fill, f.rect, f.vp),
             SketchFill::Wipe => cells(&mut out, new, f.plan.wipe.iter().copied(), WIPE_SPREAD, fill, f.rect, f.vp),
         }
     }
@@ -449,10 +486,10 @@ pub fn cell_alpha(d: f32, spread: f32, fill: f32) -> f32 {
 
 /// The new image revealed cell by cell over the image's rect: each grid
 /// row's fully open cells merge into one clip, partly open ones are clips
-/// of their own, closed ones are skipped. Late in the fill a whole layer
-/// rises under them so the cells' seams melt.
+/// of their own, closed ones are skipped. A whole layer rises under them
+/// (fully late in the fill) so the cells' seams melt.
 fn cells(out: &mut Vec<AnyElement>, new: &dyn Fn() -> AnyElement, delays: impl Iterator<Item = f32>, spread: f32, fill: f32, (rx, ry, rw, rh): (f32, f32, f32, f32), vp: (f32, f32)) {
-    let base = smooth((fill - 0.5) / 0.5);
+    let base = (BASE_SHARE * smooth(fill)).max(smooth((fill - 0.5) / 0.5));
     if base > 0.0 {
         out.push(div().absolute().inset_0().size_full().opacity(base).child(new()).into_any_element());
     }
@@ -506,7 +543,8 @@ mod tests {
                 assert_eq!(revealed(&p, i, 1.0), 1.0, "{order:?}: stroke {i} finishes");
                 assert!(p.start[i] >= 0.0 && p.start[i] + p.span[i] <= 1.0 + 1e-5);
             }
-            assert!(p.wipe.iter().all(|d| (0.0..=1.0).contains(d)));
+            assert!(p.wipe.iter().chain(p.bleed.iter()).all(|d| (0.0..=1.0).contains(d)));
+            assert_eq!(p.bleed.len(), o.cells.len());
         }
     }
 
