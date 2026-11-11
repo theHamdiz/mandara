@@ -183,7 +183,7 @@ fn squash(s: &str) -> String {
 pub fn bind_text(target: Target, body: &str) -> BindText {
     let body = body.trim();
     match target {
-        Target::KWin => BindText { action: squash(body), description: None },
+        Target::KWin | Target::Aqueous => BindText { action: squash(body), description: None },
         Target::Niri => niri_text(body),
         Target::Umbriel => {
             let value = body.split_once('=').map(|(_, v)| v.trim()).unwrap_or(body);

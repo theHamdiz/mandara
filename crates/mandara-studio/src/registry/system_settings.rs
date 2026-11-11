@@ -45,23 +45,36 @@ pub const CURSOR_SIZE_MAX: f64 = 128.0;
 /// KWin's own compositor and locker are configured by Plasma.
 pub const KWIN_MANAGED: &str = tk("KWin settings are managed in Plasma System Settings");
 
-pub fn kwin_locked(path: &str, running: Option<mandara_config::compositor::Target>) -> Option<&'static str> {
-    if running != Some(mandara_config::compositor::Target::KWin) { return None; }
-    let compositor = path.starts_with("/compositor/") && path != "/compositor/autostart";
-    let locker = matches!(path, "/general/lock_screen" | "/idle/lock_grace_s" | "/typography/lock_font" | "/typography/lock_clock_font");
-    (compositor || locker || path == "/integrations/compositor_borders").then_some(KWIN_MANAGED)
+/// Aqueous keeps its settings in its own files; Mandara writes none of them.
+pub const AQUEOUS_MANAGED: &str = mandara_config::compositor::AQUEOUS_SETTINGS;
+
+/// Why a setting does nothing under a compositor that keeps its settings
+/// itself ([`mandara_config::compositor::Target::self_configured`]): KWin's
+/// compositor and locker belong to Plasma (Mandara still writes KWin's
+/// startup entry); every compositor setting of Aqueous stays in its files.
+pub fn native_locked(path: &str, running: Option<mandara_config::compositor::Target>) -> Option<&'static str> {
+    use mandara_config::compositor::Target;
+    match running? {
+        Target::KWin => {
+            let compositor = path.starts_with("/compositor/") && path != "/compositor/autostart";
+            let locker = matches!(path, "/general/lock_screen" | "/idle/lock_grace_s" | "/typography/lock_font" | "/typography/lock_clock_font");
+            (compositor || locker || path == "/integrations/compositor_borders").then_some(KWIN_MANAGED)
+        }
+        Target::Aqueous => (path.starts_with("/compositor/") || path == "/integrations/compositor_borders").then_some(AQUEOUS_MANAGED),
+        _ => None,
+    }
 }
 
 /// Why a cursor option does nothing under the running compositor
-/// (`running`: MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin), from `INPUT_OPTIONS`.
+/// (`running`: MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin, Aqueous), from `INPUT_OPTIONS`.
 pub fn cursor_locked(path: &str, running: Option<mandara_config::compositor::Target>) -> Option<&'static str> {
     let key = path.strip_prefix("/compositor/input/cursor/").map(|k| format!("cursor.{k}"))?;
     let support = mandara_config::input::INPUT_OPTIONS.iter().find(|(k, _)| *k == key)?.1;
     match support {
         _ if support[running?.index()] => None,
-        [false, false, true, false, false, false, false] => Some(HYPRLAND_ONLY),
-        [false, false, true, true, false, false, false] => Some(HYPRLAND_UMBRIEL_ONLY),
-        [true, true, false, false, false, false, false] => Some(MANGO_NIRI_ONLY),
+        [false, false, true, false, false, false, false, false] => Some(HYPRLAND_ONLY),
+        [false, false, true, true, false, false, false, false] => Some(HYPRLAND_UMBRIEL_ONLY),
+        [true, true, false, false, false, false, false, false] => Some(MANGO_NIRI_ONLY),
         _ => Some(tk("Not supported by this compositor")),
     }
 }
@@ -150,13 +163,26 @@ mod tests {
     fn plasma_owns_kwin_settings_and_locking_but_shell_controls_stay_available() {
         use mandara_config::compositor::Target;
         for path in ["/compositor/look/rounding", "/compositor/input/keyboard/repeat_rate", "/integrations/compositor_borders", "/general/lock_screen", "/idle/lock_grace_s", "/typography/lock_font", "/typography/lock_clock_font"] {
-            assert_eq!(kwin_locked(path, Some(Target::KWin)), Some(KWIN_MANAGED), "{path}");
-            for target in Target::ALL.into_iter().filter(|t| *t != Target::KWin) {
-                assert_eq!(kwin_locked(path, Some(target)), None, "{path}: {target:?}");
+            assert_eq!(native_locked(path, Some(Target::KWin)), Some(KWIN_MANAGED), "{path}");
+            for target in Target::ALL.into_iter().filter(|t| !t.self_configured()) {
+                assert_eq!(native_locked(path, Some(target)), None, "{path}: {target:?}");
             }
         }
         for path in ["/compositor/autostart", "/theme/mode", "/general/locale", "/idle/lock_at_startup"] {
-            assert_eq!(kwin_locked(path, Some(Target::KWin)), None, "{path}");
+            assert_eq!(native_locked(path, Some(Target::KWin)), None, "{path}");
+        }
+        assert_eq!(native_locked("/compositor/look/rounding", None), None);
+    }
+
+    #[test]
+    fn aqueous_keeps_every_compositor_setting_but_shell_controls_stay_available() {
+        use mandara_config::compositor::Target;
+        for path in ["/compositor/look/rounding", "/compositor/input/keyboard/repeat_rate", "/compositor/autostart", "/integrations/compositor_borders"] {
+            assert_eq!(native_locked(path, Some(Target::Aqueous)), Some(AQUEOUS_MANAGED), "{path}");
+        }
+        // Mandara's own lock screen works there.
+        for path in ["/general/lock_screen", "/idle/lock_grace_s", "/theme/mode", "/general/locale"] {
+            assert_eq!(native_locked(path, Some(Target::Aqueous)), None, "{path}");
         }
     }
     /// Every W6 path resolves, round-trips, and its optional sliders accept
@@ -230,8 +256,8 @@ mod tests {
             // River's keyboard-layout needs layouts: a model or options
             // alone wait for them.
             let river_waits = key == "keyboard.layouts" && input.keyboard.layouts.is_empty();
-            let got = [has_settings(&emit_mango(input)), has_settings(&emit_niri(input)), has_settings(&emit_hyprland_conf(input)), has_settings(&emit_umbriel(input)), has_settings(&emit_sway(input)), has_settings(&emit_river(input)) || river_waits, false];
-            assert_eq!(got, support, "{} ({key}): [MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin]", s.path);
+            let got = [has_settings(&emit_mango(input)), has_settings(&emit_niri(input)), has_settings(&emit_hyprland_conf(input)), has_settings(&emit_umbriel(input)), has_settings(&emit_sway(input)), has_settings(&emit_river(input)) || river_waits, false, false];
+            assert_eq!(got, support, "{} ({key}): [MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin, Aqueous]", s.path);
             // The help text tells the truth about partial support: it names
             // exactly the compositors that carry the option.
             // KWin locks the whole input section with its System Settings
@@ -265,7 +291,7 @@ mod tests {
         assert_eq!(cursor_locked(hw, None), None, "no compositor: saved for later, not locked");
         for p in [CURSOR_THEME_PATH, CURSOR_SIZE_PATH, "/compositor/input/cursor/hide_when_typing", "/compositor/input/cursor/hide_after_secs"] {
             for t in Target::ALL {
-                let expected = (t == Target::KWin).then_some(tk("Not supported by this compositor"));
+                let expected = t.self_configured().then_some(tk("Not supported by this compositor"));
                 assert_eq!(cursor_locked(p, Some(t)), expected, "{p}: {t:?}");
             }
         }

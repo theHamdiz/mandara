@@ -40,7 +40,7 @@ fn trusted_with(path: &Path, meta: impl Fn(&Path) -> Option<(u32, u32)>) -> bool
 
 /// The binary to run as root: the running one when it's already root-owned
 /// (a package install), else the admin helper, else the login screen's
-/// copy. `None` until one exists ([`setup_command`] installs the helper).
+/// copy. `None` until one exists ([`setup_and_run`] installs the helper).
 pub fn admin_exe() -> Option<PathBuf> {
     let running = std::env::current_exe().ok();
     pick(running.as_deref(), trusted_root_file)
@@ -53,19 +53,11 @@ fn pick(running: Option<&Path>, trusted: impl Fn(&Path) -> bool) -> Option<PathB
 /// [`admin_exe`] only when it is this very build. An older copy (the
 /// helper from an earlier version, or the login screen's copy) may not
 /// read what this one writes, such as a login screen config with a newer
-/// element, so it gives `None` and [`setup_command`] replaces the helper.
+/// element, so it gives `None` and [`setup_and_run`] replaces the helper.
 /// Reads both binaries: call off the UI thread.
 pub fn current_admin_exe() -> Option<PathBuf> {
     let running = std::env::current_exe().ok()?;
     admin_exe().filter(|exe| *exe == running || same_contents(exe, &running))
-}
-
-/// Whether [`admin_exe`] may be this build, by size alone (cheap enough
-/// for the UI thread; [`current_admin_exe`] decides).
-pub fn admin_exe_may_be_current() -> bool {
-    let size = |p: &Path| std::fs::metadata(p).ok().map(|m| m.len());
-    let running = std::env::current_exe().ok();
-    admin_exe().is_some_and(|exe| running.is_some_and(|r| size(&exe) == size(&r)))
 }
 
 /// Byte-for-byte equal files (false when either can't be read).
@@ -88,33 +80,35 @@ pub fn same_contents(a: &Path, b: &Path) -> bool {
     }
 }
 
-/// `pkexec install -D -o root -g root -m 0755 <from> ADMIN_EXE`: copies
-/// `from` (the running binary) into the root-owned helper. An administrator
-/// approves this once; after that, changing the copy in your home can't
-/// reach root.
+/// Copies `$1` (the running binary) into `$0` ([`ADMIN_EXE`]), root-owned.
 #[cfg(not(target_os = "freebsd"))]
-pub fn setup_command(from: &Path) -> (OsString, Vec<OsString>) {
-    let args = ["install", "-D", "-o", "root", "-g", "root", "-m", "0755"].into_iter().map(OsString::from).chain([from.as_os_str().to_owned(), OsString::from(ADMIN_EXE)]).collect();
-    ("pkexec".into(), args)
+macro_rules! install_script {
+    () => {
+        "install -D -o root -g root -m 0755 \"$1\" \"$0\""
+    };
 }
-
-/// FreeBSD: [`freebsd_setup_command`].
-#[cfg(target_os = "freebsd")]
-pub fn setup_command(from: &Path) -> (OsString, Vec<OsString>) {
-    freebsd_setup_command(from)
-}
-
-/// The FreeBSD script behind [`freebsd_setup_command`]: a constant, with
-/// the source path passed as `$1` (never pasted into it).
-const FREEBSD_SETUP_SCRIPT: &str = "install -d -o root -g wheel -m 0755 \"${0%/*}\" && install -o root -g wheel -m 0755 \"$1\" \"$0\"";
-
 /// FreeBSD's `install` can't create the folder on the way (no GNU `-D`)
-/// and root's group is `wheel`, so one approval runs both steps through
-/// `/bin/sh` with a fixed script: `$0` is [`ADMIN_EXE`], `$1` the running
-/// binary.
-pub fn freebsd_setup_command(from: &Path) -> (OsString, Vec<OsString>) {
-    let args = ["/bin/sh", "-c", FREEBSD_SETUP_SCRIPT, ADMIN_EXE].into_iter().map(OsString::from).chain([from.as_os_str().to_owned()]).collect();
-    ("pkexec".into(), args)
+/// and root's group is `wheel`.
+#[cfg(target_os = "freebsd")]
+macro_rules! install_script {
+    () => {
+        "install -d -o root -g wheel -m 0755 \"${0%/*}\" && install -o root -g wheel -m 0755 \"$1\" \"$0\""
+    };
+}
+
+/// The script behind [`setup_and_run`]: a constant, with every path and
+/// argument passed as `$0`, `$1`, `$@` (never pasted into it). It installs
+/// the helper, then becomes it.
+const SETUP_AND_RUN_SCRIPT: &str = concat!(install_script!(), " && shift && exec \"$0\" \"$@\"");
+
+/// One approval that puts `from` (the running binary) in place as the
+/// admin helper and runs `args` with it: `pkexec /bin/sh -c <script>
+/// ADMIN_EXE <from> <args…>`. Used when no helper exists yet or the one
+/// there is an older version, so refreshing it never costs a second
+/// password prompt.
+pub fn setup_and_run(from: &Path, args: impl IntoIterator<Item = OsString>) -> (OsString, Vec<OsString>) {
+    let argv = ["/bin/sh", "-c", SETUP_AND_RUN_SCRIPT, ADMIN_EXE].into_iter().map(OsString::from).chain([from.as_os_str().to_owned()]).chain(args).collect();
+    ("pkexec".into(), argv)
 }
 
 /// argv running `args` with the admin binary through pkexec.
@@ -211,23 +205,58 @@ mod tests {
         std::fs::metadata("/proc/self").map(|m| m.uid()).unwrap_or(0)
     }
 
-    /// FreeBSD: one approval makes the folder and copies the binary, with
-    /// both paths as arguments of a constant script.
+    /// One approval installs the helper and runs the command with it, with
+    /// every path and argument passed to a constant script.
     #[test]
-    fn freebsd_setup_is_one_fixed_script() {
+    fn setup_and_run_is_one_fixed_script() {
         let from = Path::new("/home/u/my $(evil)/mandara");
-        let (prog, args) = freebsd_setup_command(from);
+        let (prog, args) = setup_and_run(from, ["greeter".into(), "apply-config".into(), "--from".into(), "/home/u/a b.toml".into()]);
         assert_eq!(prog, "pkexec");
-        assert_eq!(args[..3], ["/bin/sh", "-c", FREEBSD_SETUP_SCRIPT].map(OsString::from));
+        assert_eq!(args[..3], ["/bin/sh", "-c", SETUP_AND_RUN_SCRIPT].map(OsString::from));
         assert_eq!(args[3], ADMIN_EXE, "$0: where the helper goes");
         assert_eq!(args[4], from.as_os_str(), "$1: the binary, passed as is");
-        assert_eq!(args.len(), 5);
+        assert_eq!(args[5..], ["greeter", "apply-config", "--from", "/home/u/a b.toml"].map(OsString::from));
         // The script itself never names a caller-chosen path.
-        assert!(!FREEBSD_SETUP_SCRIPT.contains("home"));
+        assert!(!SETUP_AND_RUN_SCRIPT.contains("home"));
         // Its folder is the helper's own.
         if let Ok(o) = std::process::Command::new("/bin/sh").args(["-c", "printf %s \"${0%/*}\"", ADMIN_EXE]).output() {
             assert_eq!(String::from_utf8_lossy(&o.stdout), "/usr/local/lib/mandara");
         }
+    }
+
+    /// The script, run unprivileged with `install` swapped for a stub:
+    /// it copies `$1` to `$0`, then runs `$0` with exactly the remaining
+    /// arguments (spaces and `$(…)` untouched), and stops if the copy fails.
+    #[test]
+    fn setup_and_run_installs_then_becomes_the_helper() {
+        let dir = tempfile::tempdir().unwrap();
+        let stub = dir.path().join("bin");
+        std::fs::create_dir(&stub).unwrap();
+        let fake_install = stub.join("install");
+        // The last two arguments are the source and the destination.
+        let script = "#!/bin/sh\n[ -n \"$FAIL\" ] && exit 1\nfor a; do src=$dst; dst=$a; done\nif [ \"$1\" = -d ]; then mkdir -p \"$dst\"; exit; fi\nmkdir -p \"${dst%/*}\" && cp \"$src\" \"$dst\" && chmod 755 \"$dst\"\n";
+        std::fs::write(&fake_install, script).unwrap();
+        let from = dir.path().join("mandara");
+        std::fs::write(&from, "#!/bin/sh\nprintf '%s|' \"$@\"\n").unwrap();
+        for p in [&fake_install, &from] {
+            std::fs::set_permissions(p, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        }
+        let helper = dir.path().join("lib/mandara-admin");
+        let path = format!("{}:{}", stub.display(), std::env::var("PATH").unwrap_or_default());
+        let run = |fail: bool| {
+            let mut cmd = std::process::Command::new("/bin/sh");
+            cmd.args(["-c", SETUP_AND_RUN_SCRIPT]).arg(&helper).arg(&from).args(["greeter", "a b", "$(id)"]).env("PATH", &path);
+            if fail {
+                cmd.env("FAIL", "1");
+            }
+            cmd.output().unwrap()
+        };
+        let failed = run(true);
+        assert!(!failed.status.success() && !helper.exists(), "nothing runs when the copy fails");
+        let out = run(false);
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "greeter|a b|$(id)|");
+        assert!(same_contents(&from, &helper));
     }
 
     #[test]
@@ -236,11 +265,6 @@ mod tests {
         assert_eq!(pick(Some(Path::new("/usr/bin/mandara")), trusted), Some(PathBuf::from("/usr/bin/mandara")));
         assert_eq!(pick(Some(Path::new("/home/u/.local/bin/mandara")), trusted), Some(PathBuf::from(ADMIN_EXE)));
         assert_eq!(pick(Some(Path::new("/home/u/.local/bin/mandara")), |_| false), None);
-        let (prog, args) = setup_command(Path::new("/home/u/.local/bin/mandara"));
-        assert_eq!(prog, "pkexec");
-        if !cfg!(target_os = "freebsd") {
-            assert_eq!(args.join(std::ffi::OsStr::new(" ")), "install -D -o root -g root -m 0755 /home/u/.local/bin/mandara /usr/local/lib/mandara/mandara-admin");
-        }
         let (_, run) = pkexec(Path::new(ADMIN_EXE), ["greeter".into(), "list".into()]);
         assert_eq!(run, [ADMIN_EXE, "greeter", "list"].map(OsString::from));
     }

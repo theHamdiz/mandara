@@ -58,7 +58,7 @@ pub fn setup(o: Options) -> Result<()> {
     // Without an explicit or running compositor, a restored file can create
     // another target. Check prerequisites before a combined restore/check.
     let uncertain_restore = o.restore.is_some() && o.compositor.is_none() && mandara_compositor::detect().is_none();
-    if !restore_only && (uncertain_restore || targets.iter().any(|target| *target != Target::KWin)) && !mandara_config::mango_keys::is_available() {
+    if !restore_only && (uncertain_restore || targets.iter().any(|target| !target.self_configured())) && !mandara_config::mango_keys::is_available() {
         eprintln!("{}", mandara_i18n::t("Install libxkbcommon before checking or changing compositor shortcuts."));
         std::process::exit(EXIT_PREREQUISITE);
     }
@@ -103,6 +103,21 @@ pub fn setup(o: Options) -> Result<()> {
                 unavailable |= report.errors() > 0 || report.status != CheckerStatus::Ran;
             } else if let Some(path) = mandara_config::kwin::sync_autostart(cfg.compositor.autostart, &mandara_config::paths::self_exe())? {
                 println!("{}", mandara_i18n::tf("KWin: startup entry {path}", &[("path", &path.display())]));
+            }
+            continue;
+        }
+        if target == Target::Aqueous {
+            // No drop-in, no include line, no startup entry: Aqueous reads
+            // only its own files, and Mandara follows it over its socket.
+            println!("{}", mandara_i18n::t(mandara_config::compositor::AQUEOUS_SETTINGS));
+            if cfg.compositor.autostart && !o.check {
+                let command = mandara_config::compositor::shell_quote(&mandara_config::paths::self_exe().display().to_string());
+                println!("{}", mandara_i18n::tf("To start Mandara with Aqueous, add {command} to Aqueous's own startup settings.", &[("command", &command)]));
+            }
+            if o.check {
+                let report = doctor::check(target);
+                print_report(&report);
+                unavailable |= report.errors() > 0 || report.status != CheckerStatus::Ran;
             }
             continue;
         }

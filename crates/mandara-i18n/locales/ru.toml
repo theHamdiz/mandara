@@ -8258,7 +8258,7 @@
 
 "Compositor (default: detected)" = "Композитор (по умолчанию: определяется автоматически)"
 
-"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Выберите mango, niri, hyprland, umbriel, sway, river или kwin (по умолчанию: определяется автоматически). Отсутствующие композиторы можно установить после подтверждения. Для KWin требуется уже установленная Plasma."
+"Choose mango, niri, hyprland, umbriel, sway, river, kwin or aqueous (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Выберите mango, niri, hyprland, umbriel, sway, river, kwin или aqueous (по умолчанию: определяется автоматически). Отсутствующие композиторы можно установить после подтверждения. Для KWin требуется уже установленная Plasma."
 
 "Install libxkbcommon before checking or changing compositor shortcuts." = "Установите libxkbcommon перед проверкой или изменением сочетаний клавиш композитора."
 
@@ -9718,3 +9718,7 @@
 "Restart your computer to start using the new packages. Everything else is ready now." = "Перезагрузите компьютер, чтобы начать пользоваться новыми пакетами. Всё остальное уже готово."
 "Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Пакеты для Mandara Login появятся после следующей загрузки: {packages}. После перезагрузки переключитесь в Studio → Экран входа → Менеджер входа или выполните: {command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "Эта система основана на образах: Mandara устанавливается в домашнюю папку, а установщик добавляет только недостающие системные пакеты."
+"Aqueous settings stay in its own files in ~/.config/aqueous" = "Настройки Aqueous хранятся в его собственных файлах в ~/.config/aqueous"
+"Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there." = "У Aqueous нет отдельной программы проверки конфигурации. Он сам проверяет свои файлы в ~/.config/aqueous при их перезагрузке, а Mandara ничего туда не записывает."
+"Aqueous keeps its settings in its own files in ~/.config/aqueous and reloads them itself. Mandara follows its workspaces, windows and outputs over its socket and changes nothing in those files." = "Aqueous хранит настройки в собственных файлах в ~/.config/aqueous и сам их перезагружает. Mandara следит за его рабочими столами, окнами и мониторами через его сокет и ничего не меняет в этих файлах."
+"To start Mandara with Aqueous, add {command} to Aqueous's own startup settings." = "Чтобы запускать Mandara вместе с Aqueous, добавьте {command} в собственные настройки автозапуска Aqueous."

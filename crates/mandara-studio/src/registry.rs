@@ -611,7 +611,7 @@ pub fn required_plugin(path: &str) -> Option<&'static str> {
 pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     if let Some(reason) = platform_settings::locked(setting.path) { return Some(reason); }
     if let Some(reason) = integration_settings::locked(setting.path, cfg) { return Some(reason); }
-    if let Some(reason) = system_settings::kwin_locked(setting.path, running_compositor()) { return Some(reason); }
+    if let Some(reason) = system_settings::native_locked(setting.path, running_compositor()) { return Some(reason); }
     match setting.path {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),

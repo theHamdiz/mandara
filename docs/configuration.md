@@ -242,6 +242,15 @@ Settings: Studio locks the compositor settings it cannot apply and explains
 why. Autostart uses Mandara’s own XDG desktop entry. See
 [Plasma / KWin](install.md#plasma--kwin) for setup and supported controls.
 
+## Aqueous integration
+
+In an Aqueous session, Mandara's native driver follows workspaces, windows
+and outputs over the IPC socket Aqueous exports as `AQUEOUS_SOCKET`.
+Aqueous's settings stay in its own files in `~/.config/aqueous`: Mandara
+writes no drop-in or include line there, and Studio locks the compositor
+settings it cannot apply and explains why. See [Aqueous](install.md#aqueous)
+for setup and what the bar can control.
+
 ## Desktop widgets
 
 `[desktop.widgets]` lists everything painted on the wallpaper layer

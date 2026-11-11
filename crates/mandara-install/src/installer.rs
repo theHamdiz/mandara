@@ -622,7 +622,7 @@ impl<'a> Installer<'a> {
             return;
         }
         self.say(Level::Step, "Installing a compositor");
-        self.say(Level::Info, mandara_i18n::tf("No supported compositor is installed ({compositors}).", &[("compositors", &"MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin")]));
+        self.say(Level::Info, mandara_i18n::tf("No supported compositor is installed ({compositors}).", &[("compositors", &"MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin, Aqueous")]));
         if self.args.no_deps {
             self.say(Level::Info, "install one with your package manager (--no-deps), then run `mandara setup`");
             return;

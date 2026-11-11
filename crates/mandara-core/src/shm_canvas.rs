@@ -367,9 +367,34 @@ struct Canvas {
     /// (unlike `frame_pending`, never given up on: a compositor withholds
     /// callbacks from a surface nobody can see).
     awaiting_since: Option<Instant>,
+    /// The geometry the planes' positions and viewports were last sent for.
+    placed_for: Option<CanvasGeometry>,
+}
+
+/// What a plane's logical position and viewport are computed from: the
+/// canvas's logical size and its scale. An output's scale can change
+/// without changing its physical size (1.75 to 1.25), so a plane's buffer
+/// and [`Place`] stay the same while its logical destination does not.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct CanvasGeometry {
+    logical: (u32, u32),
+    scale120: u32,
+    buffer_scale: i32,
+}
+
+/// Records `now` and says whether placed planes must be sent their position
+/// and viewport again (the first geometry, or a changed one).
+fn geometry_changed(placed_for: &mut Option<CanvasGeometry>, now: CanvasGeometry) -> bool {
+    let changed = *placed_for != Some(now);
+    *placed_for = Some(now);
+    changed
 }
 
 impl Canvas {
+    fn geometry(&self) -> CanvasGeometry {
+        CanvasGeometry { logical: (self.width, self.height), scale120: self.scale120(), buffer_scale: self.buffer_scale }
+    }
+
     /// Scale ×120 in effect (fractional when available, else integer).
     fn scale120(&self) -> u32 {
         if self.viewport.is_some() && self.scale120 > 0 { self.scale120 } else { self.buffer_scale.max(1) as u32 * SCALE_DENOMINATOR }
@@ -697,6 +722,7 @@ impl Host {
             order_dirty: false,
             frame_pending: None,
             awaiting_since: None,
+            placed_for: None,
         });
         s.changed = true;
     }
@@ -974,6 +1000,16 @@ impl Host {
         if !c.configured {
             return Ok(());
         }
+        // A new logical size or scale moves every placed plane, even one
+        // whose buffer and place are unchanged (else a full-output plane
+        // keeps the old logical size: a bare band, or one cut off).
+        let now = c.geometry();
+        if geometry_changed(&mut c.placed_for, now) {
+            for index in 0..c.planes.len() {
+                self.apply_geometry(id, index);
+            }
+        }
+        let Some(c) = self.state.canvas_mut(id) else { return Ok(()) };
         // Nothing staged: no commit (the compositor would redo its work).
         if !frame && !c.order_dirty && !c.root_dirty && c.root.is_some() && !c.planes.iter().any(|p| p.dirty) {
             return Ok(());
@@ -1426,6 +1462,22 @@ ignore_events!(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_scale_change_at_the_same_physical_size_re_places_full_planes() {
+        // 2560x1440 at 1.75 is 1463x823 logical; at 1.25 it is 2048x1152.
+        // The wallpaper buffer stays 2560x1440 and its place stays `Full`,
+        // but its viewport must follow the new logical size.
+        let at = |logical, scale120| CanvasGeometry { logical, scale120, buffer_scale: 2 };
+        let mut placed = None;
+        assert!(geometry_changed(&mut placed, at((1463, 823), 210)), "the first geometry places the planes");
+        assert!(!geometry_changed(&mut placed, at((1463, 823), 210)), "an unchanged canvas re-sends nothing");
+        assert!(geometry_changed(&mut placed, at((2048, 1152), 150)));
+        assert_eq!(Place::Full.logical_rect((2048, 1152), 150), Rect::new(0, 0, 2048, 1152));
+        assert!(geometry_changed(&mut placed, at((2048, 1152), 180)), "a scale alone moves rect planes");
+        assert!(geometry_changed(&mut placed, CanvasGeometry { buffer_scale: 1, ..at((2048, 1152), 180) }));
+        assert!(!geometry_changed(&mut placed, CanvasGeometry { buffer_scale: 1, ..at((2048, 1152), 180) }));
+    }
 
     fn current_mode(width: i32, height: i32) -> wl_output::Event {
         wl_output::Event::Mode { flags: WEnum::Value(wl_output::Mode::Current), width, height, refresh: 60_000 }

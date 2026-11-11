@@ -8259,7 +8259,7 @@
 
 "Compositor (default: detected)" = "Compositeur (par défaut : détecté)"
 
-"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Choisissez mango, niri, hyprland, umbriel, sway, river ou kwin (par défaut : détecté). Les compositeurs manquants peuvent être installés après confirmation. KWin nécessite une installation existante de Plasma."
+"Choose mango, niri, hyprland, umbriel, sway, river, kwin or aqueous (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Choisissez mango, niri, hyprland, umbriel, sway, river, kwin ou aqueous (par défaut : détecté). Les compositeurs manquants peuvent être installés après confirmation. KWin nécessite une installation existante de Plasma."
 
 "Install libxkbcommon before checking or changing compositor shortcuts." = "Installez libxkbcommon avant de vérifier ou modifier les raccourcis du compositeur."
 
@@ -9719,3 +9719,7 @@
 "Restart your computer to start using the new packages. Everything else is ready now." = "Redémarrez l’ordinateur pour utiliser les nouveaux paquets. Tout le reste est déjà prêt."
 "Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Les paquets de Mandara Login arrivent avec le prochain démarrage : {packages}. Après le redémarrage, activez-le dans Studio → Écran de connexion → Gestionnaire de connexion, ou lancez : {command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "Ce système est basé sur une image : Mandara s’installe dans votre dossier personnel, et l’installateur n’ajoute que les paquets système manquants."
+"Aqueous settings stay in its own files in ~/.config/aqueous" = "Les réglages d'Aqueous restent dans ses propres fichiers, dans ~/.config/aqueous"
+"Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there." = "Aqueous n'a pas de vérificateur de configuration autonome. Il valide ses propres fichiers dans ~/.config/aqueous lorsqu'il les recharge, et Mandara n'y écrit rien."
+"Aqueous keeps its settings in its own files in ~/.config/aqueous and reloads them itself. Mandara follows its workspaces, windows and outputs over its socket and changes nothing in those files." = "Aqueous garde ses réglages dans ses propres fichiers, dans ~/.config/aqueous, et les recharge lui-même. Mandara suit ses espaces de travail, fenêtres et écrans via son socket et ne modifie rien dans ces fichiers."
+"To start Mandara with Aqueous, add {command} to Aqueous's own startup settings." = "Pour lancer Mandara avec Aqueous, ajoutez {command} aux réglages de démarrage d'Aqueous."

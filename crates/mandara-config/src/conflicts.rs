@@ -193,7 +193,7 @@ fn programs_in(command: &str) -> Vec<String> {
 fn autostart_command(target: Target, line: &str) -> Option<String> {
     let t = line.trim();
     match target {
-        Target::KWin => None,
+        Target::KWin | Target::Aqueous => None,
         // MangoWM's keyword is `exec_once`; `exec-once` is kept for older configs.
         Target::Mango => ["exec_once=", "exec-once=", "exec="].iter().find_map(|p| t.strip_prefix(p)).map(str::to_string),
         Target::Hyprland => {
@@ -851,7 +851,7 @@ pub fn validate_file(target: Target, config: &Path) -> Validation {
         Target::Umbriel => ("umbriel", vec!["config".into(), "validate".into(), "-c".into(), config.display().to_string()]),
         Target::Sway => ("sway", vec!["--validate".into(), "--config".into(), config.display().to_string()]),
         // River has no config checker (its config is a program).
-        Target::River | Target::KWin => return Validation::Unchecked,
+        Target::River | Target::KWin | Target::Aqueous => return Validation::Unchecked,
     };
     let (success, report) = if target == Target::Sway {
         // Sway builds its (headless, software) backend before it reads the

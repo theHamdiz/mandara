@@ -47,6 +47,9 @@ pub const SUPPORTED: &[Compositor] = &[
     Compositor { id: "river", aliases: &[], label: "River Classic", programs: &["river"], packages: &[(Family::Arch, "river-classic"), (Family::FreeBSD, "river-classic")] },
     // Not packaged by any distribution yet: supported once installed.
     Compositor { id: "umbriel", aliases: &[], label: "Umbriel", programs: &["umbriel"], packages: &[] },
+    // Only in its own packages (the AUR, a local Fedora build): supported
+    // once installed. Mandara writes nothing into its configuration.
+    Compositor { id: "aqueous", aliases: &[], label: "Aqueous", programs: &["aqueous"], packages: &[] },
 ];
 
 impl Compositor {
@@ -111,6 +114,8 @@ mod tests {
         assert!(any_installed(|p| p == "Hyprland"));
         assert!(any_installed(|p| p == "umbriel"));
         assert!(any_installed(|p| p == "kwin_wayland"));
+        assert!(any_installed(|p| p == "aqueous"));
+        assert!(by_name("Aqueous").unwrap().package(Family::Arch).is_none(), "not in an official repository");
         assert_eq!(by_name("plasma").unwrap().id, "kwin");
         assert!(by_name("hyprland").unwrap().installed(|p| p == "hyprland"));
         assert!(!by_name("niri").unwrap().installed(|p| p == "mango"));

@@ -124,7 +124,7 @@ one (see [No compositor yet](#no-compositor-yet)).
 | `--no-deps` | Skip system packages; shortcut checks still need libxkbcommon |
 | `--no-autostart` | Don't start Mandara with the compositor |
 | `--no-greeter` | Keep your login screen |
-| `--compositor mango\|niri\|hyprland\|umbriel\|sway\|river\|kwin` | Pick the compositor to integrate with. Missing compositors can be installed from your distribution's repositories after asking (`--yes` accepts); KWin requires an existing Plasma installation. |
+| `--compositor mango\|niri\|hyprland\|umbriel\|sway\|river\|kwin\|aqueous` | Pick the compositor to integrate with. Missing compositors can be installed from your distribution's repositories after asking (`--yes` accepts); KWin requires an existing Plasma installation. |
 | `--repo OWNER/NAME` | Releases and sources from another repository |
 | `--dry-run` | Show everything that would happen, change nothing |
 | `--yes` | Don't ask; take every default |
@@ -164,14 +164,14 @@ The setup screen's *Compositor* row covers this in a terminal: leave it on
 back to this numbered list. It still needs an interactive terminal for your
 answer, but it does not need arrow keys or the setup screen.
 
-When none of MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel or KWin is
+When none of MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin or Aqueous is
 installed, the installer
 lists the ones your distribution's own repositories carry and asks which
 to install, with the first one as the recommended default:
 
 ```text
 ==> Installing a compositor
-    No supported compositor is installed (MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin).
+    No supported compositor is installed (MangoWM, Niri, Hyprland, Sway, River Classic, Umbriel, KWin, Aqueous).
       1) MangoWM (recommended) · mangowm
       2) Niri · niri
       3) Hyprland · hyprland
@@ -601,19 +601,21 @@ nothing in the read-only config; it prints the line to add instead.
 
 ## Compositors
 
-Mandara supports **MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic and KWin** (River 0.3, `river-classic`; see below).
+Mandara supports **MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin and Aqueous** (River 0.3, `river-classic`; see below).
 `mandara setup` (run by the installer) hooks Mandara into your compositor
 with **one include line** in your own config, writes everything else to
 `~/.config/mandara/generated/`, starts Mandara at login with an absolute
 path, and checks the result with the compositor's own validator
 (`mango -p`, `niri validate`, `Hyprland --verify-config`,
 `umbriel config validate`, `sway --validate`), rolling back if it objects
-(see [Config doctor](#config-doctor)). **River and KWin do not use include lines.** River’s
+(see [Config doctor](#config-doctor)). **River, KWin and Aqueous do not use include lines.** River’s
 `init` is a program, not a config file, so there is no include line and
 no checker. Mandara never edits `init`; it sends River's settings over
 `river-control` while it runs, and you add the one autostart line
 yourself (the table below shows it). KWin uses the native Plasma protocols
 for workspaces and windows; its settings remain in Plasma System Settings.
+Aqueous is followed over its own IPC socket and keeps its settings in its
+own files ([see below](#aqueous)).
 
 | | Include line in your config | Autostart |
 |---|---|---|
@@ -625,6 +627,7 @@ for workspaces and windows; its settings remain in Plasma System Settings.
 | **Sway** | `include …/mandara/generated/sway.conf` at the end of `~/.config/sway/config` (or whichever file sway reads: `~/.sway/config`, `~/.i3/config`…) | `exec` |
 | **River** 0.3 | none: Mandara never edits `~/.config/river/init` | the one line you add to `init`: `riverctl spawn /path/to/mandara` |
 | **KWin / Plasma (Wayland)** | none: Mandara leaves `kwinrc` unchanged | its own `org.mandara.shell.desktop` XDG autostart entry, only for KDE |
+| **Aqueous** | none: Mandara writes nothing in `~/.config/aqueous` | a systemd user unit you add ([see below](#aqueous)) |
 
 The setup picker offers KWin only when `kwin_wayland` is installed. A
 failed KWin availability check is reported directly; it does not offer to
@@ -739,6 +742,74 @@ lock-screen fonts and the unlock grace period in Plasma System Settings;
 Studio marks Mandara’s own locker controls unavailable on KWin. Plasma’s
 own controls also choose which panels and desktop components to keep;
 Mandara does not remove or disable them automatically.
+
+### Aqueous
+
+Start Mandara inside an Aqueous session. Aqueous exports `AQUEOUS_SOCKET`
+to the programs it starts, and Mandara finds it only there: it never
+guesses or searches for a socket, so start Mandara from that session (a
+new Aqueous instance needs a new Mandara). Aqueous is packaged by its own
+project rather than distribution repositories, so the installer supports
+it once it is installed but doesn't offer to install it.
+
+The native driver follows Aqueous's workspaces on every output, windows,
+the focused window, outputs and the keyboard layout through Aqueous's IPC
+socket: one full snapshot, then acknowledged changes. Clicking a workspace
+pill switches to it, and window moves, keyboard-layout switching and the Overview
+hot-corner action use Aqueous's own commands. Commands run on a background
+thread, so the bar never waits for the compositor. If Aqueous goes away,
+Mandara reconnects with growing pauses and starts again from a fresh
+snapshot.
+
+Aqueous keeps its settings in its own files in `~/.config/aqueous` (it
+checks and reloads them itself) and documents no include line, so Mandara
+writes nothing there and Studio's compositor controls say so. `mandara
+setup --compositor aqueous` only reports this. The bar's layout
+pill can't change Aqueous layouts: its IPC has no layout command. The Config
+doctor reports whether `aqueous` is installed; Aqueous has no standalone
+configuration checker.
+
+**Starting Mandara with Aqueous.** Aqueous starts its desktop shell through
+systemd user units and picks which one in `~/.config/aqueous/session.toml`.
+To run Mandara instead of Pearl, DMS or Noctalia:
+
+1. Turn Aqueous's own shell off, so two bars don't start, in
+   `~/.config/aqueous/session.toml`:
+
+   ```toml
+   version = 1
+   shell = "none"
+   ```
+
+2. Add a user unit for Mandara, `~/.config/systemd/user/mandara.service`
+   (use `/usr/bin/mandara` instead if Mandara came from a package):
+
+   ```ini
+   [Unit]
+   Description=Mandara desktop shell (Aqueous sessions)
+   PartOf=graphical-session.target
+   After=graphical-session.target
+   # Only in Aqueous: other sessions start Mandara their own way.
+   ConditionEnvironment=AQUEOUS_SOCKET
+
+   [Service]
+   ExecStart=%h/.local/bin/mandara
+   Restart=on-failure
+
+   [Install]
+   WantedBy=graphical-session.target
+   ```
+
+3. Turn it on, then log out and back in to Aqueous:
+
+   ```sh
+   systemctl --user enable mandara.service
+   ```
+
+Aqueous passes `AQUEOUS_SOCKET` to the services of its session, so Mandara
+started this way finds it, and the `ConditionEnvironment` line keeps the unit
+from starting a second Mandara when you log in to another compositor. The session choice takes effect at the next
+login.
 
 ## Coming from another setup
 
@@ -891,7 +962,7 @@ From a clone, `cargo xtask build && target/release/mandara install`
 installs that checkout (or `mandara install --from-source` builds it).
 
 **Requirements:** Linux or [FreeBSD](#freebsd) with a Wayland compositor (MangoWM, Niri,
-Hyprland, Sway, River Classic, Umbriel or KWin; the installer can install one), a Vulkan-capable
+Hyprland, Sway, River Classic, Umbriel, KWin or Aqueous; the installer can install one), a Vulkan-capable
 GPU, and PipeWire or PulseAudio for sound features.
 
 ## Versioning

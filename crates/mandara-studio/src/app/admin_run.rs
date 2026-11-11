@@ -2,7 +2,7 @@
 //! keyring unlock), always through a root-owned binary
 //! ([`mandara_config::admin`]): never your own copy, which your account can
 //! change. With none in place yet, or only one from an older version, the
-//! admin helper is installed first, with one more approval.
+//! same approval installs the admin helper first.
 
 use std::ffi::OsString;
 
@@ -22,24 +22,19 @@ pub(super) fn run(prog: OsString, args: Vec<OsString>) -> Result<String, String>
     }
 }
 
-/// The message while waiting: a first run also installs the helper.
+/// The message while waiting for the password.
 pub(super) fn waiting_message() -> String {
-    if admin::admin_exe_may_be_current() { t("Waiting for authorization…") } else { t("Setting up Mandara's admin helper first (one more approval, only this once)…") }.to_string()
+    t("Waiting for authorization…").to_string()
 }
 
 /// `mandara <args>` as root (blocking: call off the UI thread).
 pub(super) fn as_root(args: Vec<OsString>) -> Result<String, String> {
     // An older root-owned copy may not read what this build wrote (a login
-    // screen draft with a newer element): refresh the helper first.
-    let admin = match admin::current_admin_exe() {
-        Some(exe) => exe,
-        None => {
-            let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-            let (prog, setup) = admin::setup_command(&exe);
-            run(prog, setup)?;
-            admin::current_admin_exe().ok_or_else(|| t("The admin helper couldn't be installed, so nothing was changed.").to_string())?
-        }
+    // screen draft with a newer element): refresh the helper first, in the
+    // same approval.
+    let (prog, args) = match admin::current_admin_exe() {
+        Some(exe) => admin::pkexec(&exe, args),
+        None => admin::setup_and_run(&std::env::current_exe().map_err(|e| e.to_string())?, args),
     };
-    let (prog, args) = admin::pkexec(&admin, args);
     run(prog, args)
 }

@@ -8012,7 +8012,7 @@
 
 "Compositor (default: detected)" = "Kompositor (bawaan: terdeteksi)"
 
-"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Pilih mango, niri, hyprland, umbriel, sway, river atau kwin (bawaan: terdeteksi). Kompositor yang belum ada dapat dipasang setelah meminta persetujuan. KWin memerlukan instalasi Plasma yang sudah ada."
+"Choose mango, niri, hyprland, umbriel, sway, river, kwin or aqueous (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "Pilih mango, niri, hyprland, umbriel, sway, river, kwin atau aqueous (bawaan: terdeteksi). Kompositor yang belum ada dapat dipasang setelah meminta persetujuan. KWin memerlukan instalasi Plasma yang sudah ada."
 
 "Install libxkbcommon before checking or changing compositor shortcuts." = "Pasang libxkbcommon sebelum memeriksa atau mengubah pintasan kompositor."
 
@@ -9474,3 +9474,7 @@
 "Restart your computer to start using the new packages. Everything else is ready now." = "Mulai ulang komputer untuk mulai memakai paket baru. Semua yang lain sudah siap sekarang."
 "Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Paket Mandara Login hadir pada boot berikutnya: {packages}. Setelah memulai ulang, beralih melalui Studio → Layar masuk → Pengelola login, atau jalankan: {command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "Sistem ini berbasis image: Mandara dipasang di folder rumah Anda, dan pemasang hanya menambahkan paket sistem yang belum ada."
+"Aqueous settings stay in its own files in ~/.config/aqueous" = "Pengaturan Aqueous tetap berada di berkasnya sendiri di ~/.config/aqueous"
+"Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there." = "Aqueous tidak memiliki pemeriksa konfigurasi tersendiri. Ia memeriksa berkasnya sendiri di ~/.config/aqueous saat memuat ulang, dan Mandara tidak menulis apa pun di sana."
+"Aqueous keeps its settings in its own files in ~/.config/aqueous and reloads them itself. Mandara follows its workspaces, windows and outputs over its socket and changes nothing in those files." = "Aqueous menyimpan pengaturannya di berkasnya sendiri di ~/.config/aqueous dan memuat ulangnya sendiri. Mandara mengikuti ruang kerja, jendela, dan layarnya melalui socket-nya dan tidak mengubah apa pun di berkas tersebut."
+"To start Mandara with Aqueous, add {command} to Aqueous's own startup settings." = "Untuk memulai Mandara bersama Aqueous, tambahkan {command} ke pengaturan mulai milik Aqueous sendiri."

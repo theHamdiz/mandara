@@ -272,8 +272,13 @@ fn backend(cx: &App) -> Result<std::sync::Arc<dyn mandara_compositor::Compositor
 }
 
 fn sync_enabled(manage: bool, kind: mandara_compositor::CompositorKind) -> bool {
-    // KWin writes only Mandara's own startup entry, never compositor settings.
-    manage || kind == mandara_compositor::CompositorKind::KWin
+    // KWin writes only Mandara's own startup entry, never compositor
+    // settings; Mandara writes nothing at all for Aqueous.
+    match kind {
+        mandara_compositor::CompositorKind::KWin => true,
+        mandara_compositor::CompositorKind::Aqueous => false,
+        _ => manage,
+    }
 }
 
 pub fn register(r: &mut PluginRegistry) {
@@ -386,6 +391,7 @@ mod tests {
     fn native_startup_sync_is_independent_of_drop_in_management() {
         use mandara_compositor::CompositorKind;
         assert!(sync_enabled(false, CompositorKind::KWin));
+        assert!(!sync_enabled(true, CompositorKind::Aqueous), "no drop-in for Aqueous, whatever the switch says");
         for kind in [CompositorKind::MangoWM, CompositorKind::Niri, CompositorKind::Hyprland, CompositorKind::Umbriel, CompositorKind::Sway, CompositorKind::River] {
             assert!(!sync_enabled(false, kind));
             assert!(sync_enabled(true, kind));
