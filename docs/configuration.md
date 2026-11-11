@@ -712,8 +712,8 @@ styles.
 (*Expressive*, *Tile dock*, *Rail*, *Segmented*, *System monitor*,
 *Stanley Bridge*, *Pharos Beam*, *Raml Tram*, *Taskbar*) or
 `mandara msg bar style expressive|tile-dock|rail|segmented|system-monitor|stanley-bridge|pharos-beam|raml-tram|taskbar|none`.
-*Taskbar* is a full-width bottom bar with the launcher and the
-**Taskbar** item (`taskbar`: the dock's pinned apps, then every app with a
+*Taskbar* is a full-width bottom bar with the workspaces at its start, the
+launcher and the **Taskbar** item (`taskbar`: the dock's pinned apps, then every app with a
 window, from the window list; on a compositor without one, the
 compositor's own client list marks what runs and a click starts the app)
 centred, and the clock stacked over the date on the right.
