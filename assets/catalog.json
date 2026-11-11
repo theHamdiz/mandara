@@ -420,6 +420,14 @@
     "panel": null
   },
   {
+    "id": "icon-themes",
+    "name": "Icon themes",
+    "palette": "corniche",
+    "motif": "tiles",
+    "angle": 4,
+    "panel": null
+  },
+  {
     "id": "desktop-clocks",
     "name": "Desktop clocks",
     "palette": "twilight",
