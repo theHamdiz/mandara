@@ -901,19 +901,6 @@ pub fn register(r: &mut PluginRegistry) {
     }));
 }
 
-#[cfg(test)]
-mod model_job_tests {
-    use super::*;
-    #[test]
-    fn file_jobs_run_off_the_calling_thread_and_propagate_errors() {
-        let caller=std::thread::current().id();
-        let mandara_plugins::Output::Pending(reply)=model_job(move || {assert_ne!(caller,std::thread::current().id());Ok(json!({"installed":true}))}) else {panic!("file work must be pending")};
-        assert_eq!(reply.recv_blocking().unwrap().unwrap(),r#"{"installed":true}"#);
-        let mandara_plugins::Output::Pending(reply)=model_job(||Err("disk failure".into())) else {panic!("file work must be pending")};
-        assert_eq!(reply.recv_blocking().unwrap(),Err("disk failure".into()));
-    }
-}
-
 /// Where `look export` writes by default: the Downloads folder (or home),
 /// `<id>.mandara-look.toml`, never over an existing file.
 pub fn look_export_path(id: &str) -> std::path::PathBuf {
@@ -957,4 +944,17 @@ pub fn save_current_look(cfg: &mandara_config::ShellConfig, name: Option<&str>) 
     look.id = ul::unique_id(&look.name, &ids);
     ul::save(&look)?;
     Ok(look)
+}
+
+#[cfg(test)]
+mod model_job_tests {
+    use super::*;
+    #[test]
+    fn file_jobs_run_off_the_calling_thread_and_propagate_errors() {
+        let caller=std::thread::current().id();
+        let mandara_plugins::Output::Pending(reply)=model_job(move || {assert_ne!(caller,std::thread::current().id());Ok(json!({"installed":true}))}) else {panic!("file work must be pending")};
+        assert_eq!(reply.recv_blocking().unwrap().unwrap(),r#"{"installed":true}"#);
+        let mandara_plugins::Output::Pending(reply)=model_job(||Err("disk failure".into())) else {panic!("file work must be pending")};
+        assert_eq!(reply.recv_blocking().unwrap(),Err("disk failure".into()));
+    }
 }

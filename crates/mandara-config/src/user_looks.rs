@@ -361,7 +361,7 @@ fn portable_kind(kind: &WidgetKind) -> bool {
 }
 
 fn drop_forbidden(t: &mut Table) {
-    t.retain(|k, _| !FORBIDDEN_KEYS.contains(&k.as_ref()));
+    t.retain(|k, _| !FORBIDDEN_KEYS.contains(&k));
     for (_, v) in t.iter_mut() {
         if let Value::Table(sub) = v {
             drop_forbidden(sub);
@@ -588,7 +588,7 @@ pub fn list_in(dir: &Path) -> Vec<UserLook> {
             }
         })
         .collect();
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out.sort_by_key(|a| a.name.to_lowercase());
     out
 }
 

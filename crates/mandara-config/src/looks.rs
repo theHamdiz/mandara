@@ -421,6 +421,8 @@ pub const LOOKS: [LookDef; 19] = [
         clock: Some((ClockFace::DayBlock, Anchor::TopLeft)),
         components: ComponentPreset::Expressive,
         motion: Some(MotionPreset::Bouncy),
+        // A bottom bar: the dock would sit on it.
+        dock: LookDock::Off,
         ..KEEP
     },
     LookDef {
@@ -464,6 +466,8 @@ pub const LOOKS: [LookDef; 19] = [
         monitor: Some(Anchor::Left),
         components: ComponentPreset::BrutalistSoft,
         motion: Some(MotionPreset::Snappy),
+        // A bottom bar: the dock would sit on it.
+        dock: LookDock::Off,
         ..KEEP
     },
     LookDef {
@@ -490,6 +494,8 @@ pub const LOOKS: [LookDef; 19] = [
         clock: Some((ClockFace::Analog, Anchor::TopRight)),
         components: ComponentPreset::MaterialYou,
         motion: Some(MotionPreset::Smooth),
+        // A bottom bar: the dock would sit on it.
+        dock: LookDock::Off,
         ..KEEP
     },
     LookDef {
@@ -504,6 +510,8 @@ pub const LOOKS: [LookDef; 19] = [
         radius_scale: 1.25,
         clock: Some((ClockFace::Boxes, Anchor::Center)),
         motion: Some(MotionPreset::Bouncy),
+        // A bottom bar: the dock would sit on it.
+        dock: LookDock::Off,
         ..KEEP
     },
     LookDef {
@@ -536,6 +544,8 @@ pub const LOOKS: [LookDef; 19] = [
         clock: Some((ClockFace::Minimal, Anchor::TopLeft)),
         components: ComponentPreset::Minimal,
         motion: Some(MotionPreset::Subtle),
+        // A bottom bar: the dock would sit on it.
+        dock: LookDock::Off,
         ..KEEP
     },
     LookDef {
@@ -909,16 +919,13 @@ fn merge_widgets(c: &mut ShellConfig, prev: &LooksState, target: Vec<DesktopWidg
         !(recorded || legacy_own)
     });
     let mut owned = Vec::new();
-    let mut at = 0;
-    for w in target {
+    for (at, mut w) in target.into_iter().enumerate() {
         if list.items.len() >= crate::desktop_widgets::ranges::MAX_WIDGETS {
             break;
         }
-        let mut w = w;
         w.id = list.next_id(w.kind.id());
         owned.push(OwnedWidget { id: w.id.clone(), print: widget_print(&w) });
         list.items.insert(at, w);
-        at += 1;
     }
     owned
 }

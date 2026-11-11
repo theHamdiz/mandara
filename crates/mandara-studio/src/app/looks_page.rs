@@ -211,6 +211,22 @@ fn user_palette(look: &UserLook) -> MandaraPalette {
     })
 }
 
+/// One of your Looks as its mock draws it: the parent, with your bar
+/// (layout and edge) and theme mode where you changed them.
+fn user_view(mine: &UserLook, parent: &'static LookDef) -> LookDef {
+    let get = |path: &str| mandara_config::profiles::get_path_pub(&mine.settings, path).cloned();
+    let mut view = *parent;
+    let layout = get("bar.layout").and_then(|v| v.try_into::<BarLayout>().ok()).unwrap_or(parent.layout());
+    let position = get("bar.position").and_then(|v| v.try_into::<BarPosition>().ok()).unwrap_or(parent.position());
+    if layout != parent.layout() || position != parent.position() {
+        view.bar = looks::LookBar::Plain { layout, position, screen_frame: parent.screen_frame(), opacity: 1.0, capsules: false, height: None };
+    }
+    if let Some(mode) = get("theme.mode").and_then(|v| v.as_str().map(str::to_owned)) {
+        view.dark = mode != "light";
+    }
+    view
+}
+
 fn look_palette(i: usize) -> MandaraPalette {
     PALETTES.with(|p| {
         let mut p = p.borrow_mut();
@@ -236,6 +252,9 @@ fn thumbnail(look: &LookDef, lp: &MandaraPalette, cfg: &ShellConfig) -> AnyEleme
         .bg(mandara_core::oklab_gradient(DIAGONAL_DEG, lp.surface_dim, lp.surface_dim.mix(lp.primary, SKY_TINT)));
     // The bar.
     let pills = |el: gpui::Div| el.children(THUMB_PILL_W_PX.iter().map(|w| div().w(px(*w)).h(px(THUMB_BAR_PX)).rounded_full().bg(bar_fill)));
+    // A bottom bar sits on the mock's bottom edge.
+    let bottom = look.position() == BarPosition::Bottom;
+    let edge = |el: gpui::Div, off: f32| if bottom { el.bottom(px(off)) } else { el.top(px(off)) };
     root = root.child(match (side, look.layout()) {
         (true, _) => div()
             .absolute()
@@ -251,12 +270,12 @@ fn thumbnail(look: &LookDef, lp: &MandaraPalette, cfg: &ShellConfig) -> AnyEleme
             .py(px(THUMB_INSET_PX))
             .child(div().size(px(THUMB_FRAME_PX * 2.0)).rounded_full().bg(accent))
             .child(div().size(px(THUMB_FRAME_PX * 2.0)).rounded_full().bg(accent)),
-        (_, BarLayout::Hairline) => div().absolute().top_0().left_0().right_0().h(px(THUMB_HAIRLINE_PX)).bg(bar_fill).border_b_1().border_color(accent),
-        (_, BarLayout::Micro) => div().absolute().top(px(THUMB_FRAME_PX * 2.0)).left_0().right_0().row().justify_center().child(div().w(px(THUMB_MICRO_W_PX)).h(px(THUMB_BAR_PX)).rounded_full().bg(bar_fill)),
-        (_, BarLayout::FloatingPills) => pills(div().absolute().top(px(THUMB_FRAME_PX * 2.0)).left(px(THUMB_INSET_PX)).right(px(THUMB_INSET_PX)).ltr_row().justify_between()),
-        (_, BarLayout::ContiguousIsland) => div().absolute().top(px(THUMB_FRAME_PX * 2.0)).left_0().right_0().row().justify_center().child(div().w(px(THUMB_PILL_W_PX[2] * 2.5)).h(px(THUMB_BAR_PX)).rounded_full().bg(bar_fill)),
-        (_, BarLayout::MinimalEdge) => div().absolute().top_0().left_0().right_0().h(px(THUMB_BAR_PX)).bg(bar_fill),
-        (_, BarLayout::Notch) => div().absolute().top_0().left(px(THUMB_INSET_PX * 2.0)).right(px(THUMB_INSET_PX * 2.0)).h(px(THUMB_BAR_PX)).rounded_b(px(THUMB_BAR_PX / 2.0)).bg(bar_fill),
+        (_, BarLayout::Hairline) => edge(div().absolute(), 0.0).left_0().right_0().h(px(THUMB_HAIRLINE_PX)).bg(bar_fill).border_b_1().border_color(accent),
+        (_, BarLayout::Micro) => edge(div().absolute(), THUMB_FRAME_PX * 2.0).left_0().right_0().row().justify_center().child(div().w(px(THUMB_MICRO_W_PX)).h(px(THUMB_BAR_PX)).rounded_full().bg(bar_fill)),
+        (_, BarLayout::FloatingPills) => pills(edge(div().absolute(), THUMB_FRAME_PX * 2.0).left(px(THUMB_INSET_PX)).right(px(THUMB_INSET_PX)).ltr_row().justify_between()),
+        (_, BarLayout::ContiguousIsland) => edge(div().absolute(), THUMB_FRAME_PX * 2.0).left_0().right_0().row().justify_center().child(div().w(px(THUMB_PILL_W_PX[2] * 2.5)).h(px(THUMB_BAR_PX)).rounded_full().bg(bar_fill)),
+        (_, BarLayout::MinimalEdge) => edge(div().absolute(), 0.0).left_0().right_0().h(px(THUMB_BAR_PX)).bg(bar_fill),
+        (_, BarLayout::Notch) => edge(div().absolute(), 0.0).left(px(THUMB_INSET_PX * 2.0)).right(px(THUMB_INSET_PX * 2.0)).h(px(THUMB_BAR_PX)).rounded_b(px(THUMB_BAR_PX / 2.0)).bg(bar_fill),
     });
     if look.screen_frame() && side {
         root = root.child(div().absolute().inset_0().border_t(px(THUMB_FRAME_PX)).border_r(px(THUMB_FRAME_PX)).border_b(px(THUMB_FRAME_PX)).border_color(bar_fill).rounded(px(RADIUS_14_PX)));
@@ -434,13 +453,14 @@ impl StudioView {
         let keep = cfg.looks.keep_components;
         let snapshot = std::sync::Arc::new(cfg.clone());
         let own = yours.iter().enumerate().filter_map(|(i, mine)| {
-            let look = mine.parent()?;
+            let parent = mine.parent()?;
+            let view = user_view(mine, parent);
             let lp = user_palette(mine);
             let (cfg, tip_palette, apply) = (snapshot.clone(), lp.clone(), mine.clone());
-            let line = format!("{} · {}", t("Yours"), tf("From {look}", &[("look", &look.name)]));
+            let line = format!("{} · {}", t("Yours"), tf("From {look}", &[("look", &parent.name)]));
             Some(
-                swatch_list::row(("look-row-yours", i), &lp, mine.name.clone().into(), Some(look.display_font.into()), line, mine.id == active, p)
-                    .tooltip(swatch_list::preview_tip(p, move || div().w(px(swatch_list::TIP_MOCK_W_PX)).child(thumbnail(look, &tip_palette, &cfg)).into_any_element()))
+                swatch_list::row(("look-row-yours", i), &lp, mine.name.clone().into(), Some(parent.display_font.into()), line, mine.id == active, p)
+                    .tooltip(swatch_list::preview_tip(p, move || div().w(px(swatch_list::TIP_MOCK_W_PX)).child(thumbnail(&view, &tip_palette, &cfg)).into_any_element()))
                     .on_click(move |_: &ClickEvent, _, cx| super::looks_yours::apply(&apply, cx))
                     .into_any_element(),
             )
@@ -524,7 +544,9 @@ impl StudioView {
             );
         }
         for (i, mine) in yours.iter().enumerate() {
-            let Some(look) = mine.parent() else { continue };
+            let Some(parent) = mine.parent() else { continue };
+            let view = user_view(mine, parent);
+            let look = &view;
             let on = mine.id == active;
             let lp = user_palette(mine);
             let dot = |c: mandara_theme::Color| div().size(px(LOOK_DOT_PX)).rounded_full().bg(c.hsla());
@@ -534,8 +556,10 @@ impl StudioView {
                 .gap(px(SPACE_8_PX))
                 .child(div().flex_1().min_w(px(0.0)).truncate().text_start().font_family(look.display_font).font_weight(FontWeight::SEMIBOLD).text_size(px(TEXT_15_PX)).child(mine.name.clone()))
                 .when(on, |el| el.child(badge(t("Active"), p.primary)))
-                .child(div().row().gap(px(SPACE_3_PX)).child(dot(lp.primary)).child(dot(lp.secondary)).child(dot(lp.tertiary)))
-                .child(Self::look_actions(&mine.id, true, p, cx));
+                .child(div().row().gap(px(SPACE_3_PX)).child(dot(lp.primary)).child(dot(lp.secondary)).child(dot(lp.tertiary)));
+            // Its badges, then its actions, on a line of their own (the
+            // name keeps the title line).
+            let meta = div().row().items_center().gap(px(SPACE_8_PX)).child(div().flex_1().min_w(px(0.0)).child(super::looks_yours::yours_badges(mine, p))).child(Self::look_actions(&mine.id, true, p, cx));
             let rename = self.look_rename_row(&mine.id, p, cx);
             let apply = mine.clone();
             tiles.push(
@@ -553,7 +577,7 @@ impl StudioView {
                     .border_color(if on { p.primary.hsla() } else { gpui::transparent_black() })
                     .hover(|s| s.bg(p.primary.with_alpha(ALPHA_8).hsla()))
                     .child(thumbnail(look, &lp, cfg))
-                    .child(div().px(px(SPACE_6_PX)).pb(px(SPACE_6_PX)).row().flex_col().gap(px(SPACE_4_PX)).child(title).children(rename).child(super::looks_yours::yours_badges(mine, p)))
+                    .child(div().px(px(SPACE_6_PX)).pb(px(SPACE_6_PX)).row().flex_col().gap(px(SPACE_4_PX)).child(title).children(rename).child(meta))
                     .on_click(move |_: &ClickEvent, _, cx| super::looks_yours::apply(&apply, cx))
                     .into_any_element(),
             );

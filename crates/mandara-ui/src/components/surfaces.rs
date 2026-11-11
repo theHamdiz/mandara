@@ -180,6 +180,13 @@ pub trait CardSurface: Surface + ParentElement {
                 Fill(c, None) => el.bg(c.hsla()),
                 Fill(top, Some(bottom)) => el.bg(oklab_gradient(crate::plugins::panel_fx::ANGLE_DOWN_DEG, top, bottom)),
             };
+            // Inked (`[style.ink]`): a clipping card shades its far corner
+            // with the ink texture, under its children.
+            let texture = if clipped { crate::plugins::panel_fx::ink_texture(palette) } else { None };
+            let el = match texture {
+                Some(t) => el.relative().child(t),
+                None => el,
+            };
             return el.card_elevation_as(style, rim, palette);
         };
         let outline = (style == CardStyle::Outlined).then(|| (palette.outline.with_alpha(OUTLINE_ALPHA), OUTLINE_PX));

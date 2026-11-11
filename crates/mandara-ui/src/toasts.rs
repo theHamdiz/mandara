@@ -684,15 +684,10 @@ impl Render for ToastView {
                     .rounded(px(crate::style::radius(TOAST_RADIUS_PX * scale)))
                     // Joined, the drawer is the backdrop.
                     .when(drawer.is_none(), |el| {
-                        // Inked (`[style.ink]`): a comic panel, outlined in
-                        // ink on its hard shadow, the shade's texture inside.
+                        // Inked (`[style.ink]`): the card inside is the comic
+                        // panel (its ink outline, hard shadow and texture).
                         if crate::style::ink_outline() > 0.0 || crate::style::ink_shadow() > 0.0 {
-                            return el
-                                .bg(fill)
-                                .shadow(crate::plugins::panel_fx::elevation(&palette, 1.0))
-                                .border(px(crate::style::ink_outline()))
-                                .border_color(crate::plugins::panel_fx::ink(&palette).hsla())
-                                .children(crate::plugins::panel_fx::ink_texture(&palette));
+                            return el.bg(fill);
                         }
                         el.bg(fill).shadow(vec![BoxShadow {
                             color: gpui::black().opacity(SHADOW_ALPHA),

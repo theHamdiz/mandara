@@ -33,11 +33,13 @@ pub enum Style {
     Waves,
     /// Frosted glass prisms with refraction and caustics.
     Glass,
+    /// Cel-shaded speed rays, halftone dots and an inked frame.
+    Comic,
 }
 
 impl Style {
     /// Every style, in gallery order.
-    pub const ALL: [Style; 12] = [
+    pub const ALL: [Style; 13] = [
         Style::Mesh,
         Style::Landscape,
         Style::Corniche,
@@ -50,6 +52,7 @@ impl Style {
         Style::Liquid,
         Style::Waves,
         Style::Glass,
+        Style::Comic,
     ];
 
     /// Stable kebab-case id.
@@ -67,6 +70,7 @@ impl Style {
             Style::Liquid => "liquid",
             Style::Waves => "waves",
             Style::Glass => "glass",
+            Style::Comic => "comic",
         }
     }
 
@@ -89,6 +93,7 @@ impl Style {
             Style::Liquid => tk("Liquid"),
             Style::Waves => tk("Waves"),
             Style::Glass => tk("Glass"),
+            Style::Comic => tk("Comic burst"),
         }
     }
 
@@ -107,6 +112,7 @@ impl Style {
             Style::Liquid => tk("Glossy liquid blobs melting together"),
             Style::Waves => tk("Layered glassy waves"),
             Style::Glass => tk("Frosted glass prisms with light caustics"),
+            Style::Comic => tk("Cel-shaded speed rays, halftone dots and an inked frame, like a comic panel"),
         }
     }
 
@@ -125,6 +131,7 @@ impl Style {
             Style::Liquid => LIQUID,
             Style::Waves => WAVES,
             Style::Glass => GLASS,
+            Style::Comic => COMIC,
         }
     }
 
@@ -265,6 +272,14 @@ const WAVES: &[ParamSpec] = &[
     pct("shadow", tk("Shadow"), 50.0, (35.0, 65.0)),
     spec("tilt", tk("Tilt"), -100.0, 100.0, 1.0, 20.0, "%", (-35.0, 35.0)),
     pct("translucency", tk("Translucency"), 35.0, (20.0, 50.0)),
+];
+
+const COMIC: &[ParamSpec] = &[
+    pct("rays", tk("Speed rays"), 45.0, (30.0, 65.0)),
+    pct("core", tk("Burst centre"), 50.0, (30.0, 70.0)),
+    pct("ink", tk("Ink lines"), 60.0, (40.0, 80.0)),
+    pct("halftone", tk("Halftone dots"), 70.0, (50.0, 90.0)),
+    pct("frame", tk("Panel frame"), 50.0, (0.0, 80.0)),
 ];
 
 const GLASS: &[ParamSpec] = &[

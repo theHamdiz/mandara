@@ -394,7 +394,7 @@ fn apply_preset_in(c: &mut ShellConfig, p: &Preset, replace_items: bool, known: 
     if replace_items {
         // The preset's own items replace the last preset's (and, for a
         // style with a rail, the rail's groups); yours come back after.
-        let layout = mandara_config::bar_items::Layout { bar: [pick(p.left), pick(p.center), pick(p.right)], rail: p.style.and_then(BarStyle::rail).map(|r| r.map(|ids| pick(ids))) };
+        let layout = mandara_config::bar_items::Layout { bar: [pick(p.left), pick(p.center), pick(p.right)], rail: p.style.and_then(BarStyle::rail).map(|r| r.map(pick)) };
         let placed = mandara_config::bar_items::lay_out(c, &layout, shown_before, &mine);
         match p.style {
             Some(style) => style.switch_on_placed(c, &placed),

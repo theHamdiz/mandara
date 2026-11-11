@@ -81,6 +81,7 @@ fn favourites(style: Style) -> &'static [&'static str] {
         Style::Liquid => &["montaza-twilight", "rose-pine", "catppuccin-mocha", "mandara-corniche", "rose-gold"],
         Style::Waves => &["mandara-corniche", "ocean", "montaza-twilight", "tokyo-night", "sunset"],
         Style::Glass => &["mandara-obsidian", "montaza-twilight", "pharos-night", "dracula", "rose-pine"],
+        Style::Comic => &["sunset", "stanley-sunset", "rose-gold", "dracula", "catppuccin-mocha"],
     }
 }
 

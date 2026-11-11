@@ -104,7 +104,7 @@ fn remember(look: UserLook, cx: &mut App) {
     let mut list: Vec<UserLook> = s.looks.as_deref().map(<[UserLook]>::to_vec).unwrap_or_default();
     list.retain(|l| l.id != look.id);
     list.push(look);
-    list.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    list.sort_by_key(|a| a.name.to_lowercase());
     s.looks = Some(list.into());
     cx.refresh_windows();
 }
@@ -448,6 +448,8 @@ impl StudioView {
                 cx.stop_propagation();
                 let name = st(cx).looks.as_deref().and_then(|l| l.iter().find(|x| x.id == rid).map(|x| x.name.clone())).unwrap_or_default();
                 st(cx).renaming = Some(rid.clone());
+                // The field exists before it is filled.
+                form::input(RENAME_FIELD, tk("Name"), false, cx);
                 form::fill(RENAME_FIELD, &name, cx);
                 cx.notify();
             })));
@@ -489,11 +491,11 @@ impl StudioView {
             div()
                 .id(SharedString::from(format!("look-rename-row-{id}")))
                 .row()
-                .items_center()
+                .flex_col()
                 .gap(px(SPACE_6_PX))
                 .on_click(|_, _, cx| cx.stop_propagation())
-                .child(div().flex_1().min_w(px(0.0)).child(field))
-                .child(chip(SharedString::from(format!("look-rename-save-{id}")), t("Save"), true, p).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                .child(div().w_full().child(field))
+                .child(div().row().justify_end().gap(px(SPACE_6_PX)).child(chip(SharedString::from(format!("look-rename-save-{id}")), t("Save"), true, p).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
                     cx.stop_propagation();
                     Self::looks_rename(save_id.clone(), cx);
                 })))
@@ -501,7 +503,7 @@ impl StudioView {
                     cx.stop_propagation();
                     st(cx).renaming = None;
                     cx.notify();
-                })))
+                }))))
                 .into_any_element(),
         )
     }

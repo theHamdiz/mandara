@@ -382,3 +382,34 @@ fn the_new_looks_set_what_they_promise() {
         assert!(LOOKS.iter().any(|l| l.bar.style() == Some(style)), "{style:?} has a look");
     }
 }
+
+/// Ink Rush draws everything inked and gives the ink back on leaving; its
+/// widgets are comic panels whose text stays on their plate's colour.
+#[test]
+fn ink_rush_inks_the_desktop_and_the_next_look_takes_it_back() {
+    let mine = yours();
+    let ink = find("ink-rush").unwrap();
+    let c = ink.apply(&mine, LookOptions::default());
+    assert!(c.style.ink.is_on() && c.style.ink.outline() >= 2.0 && c.style.ink.shadow() > 0.0);
+    assert_eq!(c.style.ink.texture, crate::desktop::SurfaceTexture::Halftone);
+    assert!(on(&c, DOCK_ID));
+    for w in ink.widgets() {
+        if let WidgetKind::Clock(clock) = &w.kind {
+            assert_eq!(clock.look.shadow, crate::desktop_widgets::ShadowKind::Hard);
+            assert_eq!(clock.look.plate, crate::desktop_widgets::Plate::Solid, "a solid plate keeps the text's contrast");
+        }
+    }
+    assert_kept(&c, &mine, "ink-rush");
+    let after = find("pharos-ink").unwrap().apply(&c, LookOptions::default());
+    assert_eq!(after.style.ink, mine.style.ink, "the ink goes with its look");
+    // Ink you set yourself afterwards stays yours.
+    let mut tuned = c.clone();
+    tuned.style.ink.outline = 2.0;
+    let after = find("pharos-ink").unwrap().apply(&tuned, LookOptions::default());
+    assert_eq!(after.style.ink.outline, 2.0);
+    // The ink style round-trips and an old config has none.
+    let back: ShellConfig = toml::from_str(&toml::to_string(&c).unwrap()).unwrap();
+    assert_eq!(back.style.ink, c.style.ink);
+    let old: ShellConfig = toml::from_str("[style]\nshadows = true\n").unwrap();
+    assert!(!old.style.ink.is_on());
+}
