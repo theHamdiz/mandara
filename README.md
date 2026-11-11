@@ -36,7 +36,7 @@
   <a href="docs/building.md#build-fingerprint"><img src="https://img.shields.io/badge/100%25-Rust-8B5CF6?logo=rust&logoColor=E9E5FF&labelColor=0B1026" alt="100% Rust"/></a>
   <a href="docs/desktop.md"><img src="https://img.shields.io/badge/Wayland-native-22D3EE?logo=wayland&logoColor=E9E5FF&labelColor=0B1026" alt="Wayland native"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-8B5CF6?labelColor=0B1026" alt="GPU rendered"/></a>
-  <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic%20%C2%B7%20KWin-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin"/></a>
+  <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic%20%C2%B7%20KWin%20%C2%B7%20Aqueous-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous"/></a>
   <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-81%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="81 plugins plus WebAssembly"/></a>
   <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-20%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="20 languages"/></a>
   <br/>
@@ -66,7 +66,7 @@ on [GPUI](https://github.com/zed-industries/zed). It's everything around
 your windows: the bar, a dynamic island, a dock, a launcher, a sidebar,
 notifications, wallpapers, desktop widgets, the lock screen and the login
 screen, plus a settings app that changes all of it live. It runs on
-**MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic and KWin**, and it's one small, fast program
+**MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin and Aqueous**, and it's one small, fast program
 you install with one command.
 
 Maintenance flags missing icon themes and links to the icon settings.
@@ -106,7 +106,7 @@ Write notes and edit tasks directly in their widgets, too.
 | | |
 |---|---|
 | **What** | A complete Wayland desktop shell: bar, island, dock, launcher, sidebar, notifications, OSDs, wallpapers, desktop widgets, lock screen, login manager, settings app |
-| **Compositors** | MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic (0.3) and KWin, with native drivers; your own config gets one include line at most, nothing more |
+| **Compositors** | MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic (0.3), KWin and Aqueous, with native drivers; your own config gets one include line at most, nothing more |
 | **Built with** | 100 % Rust, one binary (`mandara`), GPU-rendered with GPUI and wgpu |
 | **Resources** | [Resource measurements and current limits](docs/performance.md); the 100 MiB startup and operation target remains open |
 | **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`), with [thirteen colour launcher icons](docs/configuration.md#launcher-button-artwork) |
@@ -119,17 +119,19 @@ Write notes and edit tasks directly in their widgets, too.
 ## What sets Mandara apart
 
 Mandara is built for one job: being the complete desktop for **MangoWM,
-Niri, Hyprland, Umbriel, Sway, River Classic and KWin**. These are the strengths it was designed
+Niri, Hyprland, Umbriel, Sway, River Classic, KWin and Aqueous**. These are the strengths it was designed
 around, each one measured or shipped today:
 
-1. **Seven compositors, each first-class.** It speaks every compositor's
+1. **Eight compositors, each first-class.** It speaks every compositor's
    own IPC natively: MangoWM's and River's tag bitmasks (view, toggle-view,
    tag moves), Niri's scrolling columns, Hyprland's, Umbriel's and Sway's
-   workspaces, and KWin's native Plasma window and virtual-desktop protocols. It reads
+   workspaces, KWin's native Plasma window and virtual-desktop protocols, and
+   Aqueous's acknowledged state stream over its own socket. It reads
    each compositor's version and writes its exact config dialect, down to
    Hyprland 0.57's Lua config.
 2. **It never breaks your compositor config.** It adds one include line
-   (none on River or KWin); River settings use its native protocol, while
+   (none on River, KWin or Aqueous); River settings use its native protocol,
+   while Aqueous settings stay in its own files and
    KWin settings stay in Plasma System Settings. For the other compositors,
    everything else goes into its own drop-in files. Every change is
    checked by the compositor's own validator (`mango -p`, `niri validate`,

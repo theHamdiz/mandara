@@ -92,11 +92,20 @@ fn diagnostic_details(report: &Report) -> bool {
 }
 
 fn show_diagnostic(target: Target, diagnostic: &Diagnostic) -> bool {
-    target != Target::KWin || diagnostic.severity != Severity::Info
+    !target.self_configured() || diagnostic.severity != Severity::Info
 }
 
-fn kwin_availability_note(report: &Report) -> bool {
-    report.target == Target::KWin && report.status == CheckerStatus::Ran && report.problems() == 0
+/// A compositor without a checker of its own (KWin, Aqueous): the
+/// availability note shown instead of "All good".
+fn availability_note(report: &Report) -> Option<&'static str> {
+    if report.status != CheckerStatus::Ran || report.problems() != 0 {
+        return None;
+    }
+    match report.target {
+        Target::KWin => Some(t("KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings.")),
+        Target::Aqueous => Some(t("Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there.")),
+        _ => None,
+    }
 }
 
 impl StudioView {
@@ -210,14 +219,15 @@ impl StudioView {
         let compositor = target.name();
         let version = report.as_ref().and_then(|r| r.version.clone()).map(|v| format!("{compositor} {v}")).unwrap_or_else(|| compositor.to_string());
         let problems = report.as_ref().map_or(0, Report::problems);
-        let (status, tone, glyph) = match &report {
-            None => (tf("Checking your {compositor} config…", &[("compositor", &compositor)]), p.on_surface_variant, "refresh"),
-            Some(r) => match &r.status {
+        let note = report.as_ref().and_then(availability_note);
+        let (status, tone, glyph) = match (&report, note) {
+            (None, _) => (tf("Checking your {compositor} config…", &[("compositor", &compositor)]), p.on_surface_variant, "refresh"),
+            (Some(_), Some(note)) => (note.to_string(), p.on_surface_variant, "note"),
+            (Some(r), None) => match &r.status {
                 CheckerStatus::NoConfig => (tf("{compositor} has no config file here yet.", &[("compositor", &compositor)]), p.on_surface_variant, "note"),
                 CheckerStatus::NotInstalled => (tf("{compositor} isn't installed here, so its config can't be checked.", &[("compositor", &compositor)]), p.on_surface_variant, "note"),
                 CheckerStatus::TimedOut => (tf("{compositor}'s checker didn't finish in time.", &[("compositor", &compositor)]), p.warning_amber, "alert"),
                 CheckerStatus::Failed(e) => (tf("{compositor}'s checker couldn't run: {error}", &[("compositor", &compositor), ("error", &e)]), p.warning_amber, "alert"),
-                CheckerStatus::Ran if kwin_availability_note(r) => (t("KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings.").to_string(), p.on_surface_variant, "note"),
                 CheckerStatus::Ran if problems == 0 => (tf("All good — checked {when} with {compositor}", &[("when", &ago(r.checked_at)), ("compositor", &version)]), p.success_emerald, "check"),
                 CheckerStatus::Ran if problems == 1 => (tf("1 problem — checked {when} with {compositor}", &[("when", &ago(r.checked_at)), ("compositor", &version)]), if r.errors() > 0 { p.urgent_coral } else { p.warning_amber }, "alert"),
                 CheckerStatus::Ran => (tf("{count} problems — checked {when} with {compositor}", &[("count", &problems), ("when", &ago(r.checked_at)), ("compositor", &version)]), if r.errors() > 0 { p.urgent_coral } else { p.warning_amber }, "alert"),
@@ -374,7 +384,7 @@ mod tests {
         assert_eq!(report.diagnostics.len(), 1);
         assert_eq!(report.problems(), 0);
         assert!(!diagnostic_details(&report));
-        assert!(kwin_availability_note(&report));
+        assert!(availability_note(&report).is_some());
         let mut other = report;
         other.target = Target::Sway;
         assert!(diagnostic_details(&other), "other compositor notes must remain visible");
@@ -392,7 +402,7 @@ mod tests {
         assert_eq!(report.status, CheckerStatus::Ran);
         assert!(report.errors() > 0);
         assert!(diagnostic_details(&report));
-        assert!(!kwin_availability_note(&report));
+        assert!(availability_note(&report).is_none());
         report.diagnostics.push(Diagnostic::new(Severity::Info, "availability note"));
         assert_eq!(report.diagnostics.iter().filter(|diagnostic| show_diagnostic(Target::KWin, diagnostic)).count(), report.problems());
     }

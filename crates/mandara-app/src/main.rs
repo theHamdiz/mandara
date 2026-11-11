@@ -113,7 +113,7 @@ enum Cmd {
         /// Also start Mandara with the compositor (from the drop-in).
         #[arg(long)]
         autostart: bool,
-        /// mango, niri, hyprland, umbriel, sway, river or kwin (default: the running one, else every
+        /// mango, niri, hyprland, umbriel, sway, river, kwin or aqueous (default: the running one, else every
         /// compositor that has a config file).
         #[arg(long)]
         compositor: Option<String>,

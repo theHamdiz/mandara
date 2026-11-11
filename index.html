@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mandara — a design-first Wayland desktop</title>
-  <meta name="description" content="A design-first Wayland desktop shell in Rust for seven compositors, with Looks, a live design studio, 81 plugins and optional offline AI control in natural language." />
+  <meta name="description" content="A design-first Wayland desktop shell in Rust for eight compositors, with Looks, a live design studio, 81 plugins and optional offline AI control in natural language." />
   <meta name="color-scheme" content="dark light" />
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a1520" />
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f8f8" />
   <meta property="og:title" content="Mandara — your desktop, your rhythm" />
-  <meta property="og:description" content="A design-first Wayland desktop in Rust: Looks, a live design studio, seven compositors and optional local AI control in natural language." />
+  <meta property="og:description" content="A design-first Wayland desktop in Rust: Looks, a live design studio, eight compositors and optional local AI control in natural language." />
   <meta property="og:image" content="https://thehamdiz.github.io/mandara/docs/screenshots/hero.webp" />
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary_large_image" />
@@ -105,7 +105,7 @@
     <section class="facts" aria-label="Mandara in numbers">
       <ul class="fact-row">
         <li class="fact rail-1"><span class="fact-figure">0.1<small>ms</small></span> <span class="fact-label">typical frame build</span></li>
-        <li class="fact rail-2"><span class="fact-figure">7</span> <span class="fact-label">compositors, each in its own language</span></li>
+        <li class="fact rail-2"><span class="fact-figure">8</span> <span class="fact-label">compositors, each in its own language</span></li>
         <li class="fact rail-3"><span class="fact-figure">81</span> <span class="fact-label">plugins, switched on as you need them</span></li>
         <li class="fact rail-4"><span class="fact-figure">20</span> <span class="fact-label">languages, right to left included</span></li>
       </ul>
@@ -462,6 +462,7 @@
         <li class="departure"><span class="dep-name">Sway</span><span class="dep-fact">Workspaces</span><span class="dep-status ok">Checked with <code>sway --validate</code></span><p>Workspaces, the container layout and the binding mode; binds you already have stay yours.</p></li>
         <li class="departure"><span class="dep-name">River Classic</span><span class="dep-fact">Tags</span><span class="dep-status live">Live protocol</span><p>River 0.3’s tags, layout and mode, with settings sent over its own protocol. Your <code>init</code> is never edited; you add one autostart line.</p></li>
         <li class="departure"><span class="dep-name">KWin</span><span class="dep-fact">Virtual desktops</span><span class="dep-status plasma">Plasma keeps it</span><p>Runs inside a Plasma Wayland session through Plasma’s own protocols. Displays, rules and shortcuts stay in Plasma System Settings.</p></li>
+        <li class="departure"><span class="dep-name">Aqueous</span><span class="dep-fact">Workspaces</span><span class="dep-status live">Live protocol</span><p>Each output’s workspaces, windows and outputs over Aqueous’s own socket. Its settings stay in its own files; Mandara writes nothing there.</p></li>
       </ul>
     </section>
 
@@ -741,7 +742,7 @@
       </header>
       <dl class="questions">
         <div class="question"><dt>What does Mandara replace?</dt><dd>The parts around your windows: bar, dock, launcher, notifications, wallpaper, desktop widgets, lock screen, login screen and settings. Your Wayland compositor still manages the windows.</dd></div>
-        <div class="question"><dt>Will it touch my compositor config?</dt><dd>At most one include line. Everything else goes to Mandara’s own drop-in files, checked by your compositor’s validator and rolled back if it objects. River and KWin need no include line. <a href="docs/install.html#compositors">Read the compositor notes.</a></dd></div>
+        <div class="question"><dt>Will it touch my compositor config?</dt><dd>At most one include line. Everything else goes to Mandara’s own drop-in files, checked by your compositor’s validator and rolled back if it objects. River, KWin and Aqueous need no include line. <a href="docs/install.html#compositors">Read the compositor notes.</a></dd></div>
         <div class="question"><dt>How fast is it?</dt><dd>Spring motion and native GPU rendering keep everyday interactions responsive. Historical release samples built frames in about 0.1 ms. Studio runs separately, plugins load data when needed, and local AI inference stays off the UI thread. See the <a href="docs/performance.html">measurements, test setup and current limits</a>.</dd></div>
         <div class="question"><dt>Can I keep my own setup?</dt><dd>Yes. A first install offers configuration, startup and login choices, and updates keep your settings as you left them. <a href="docs/configuration.html">Read about configuration.</a></dd></div>
         <div class="question"><dt>Can I control it in my own words?</dt><dd>Yes, with the optional AI Shell Agent. Type <code>!switch to dark mode</code> in the launcher, check the previewed action, and press Enter. It runs offline on your CPU. <a href="docs/command-agent.html">Meet the AI Shell Agent.</a></dd></div>

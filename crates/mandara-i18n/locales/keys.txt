@@ -633,6 +633,9 @@ Apps you trust, e.g. a voice assistant that always listens. Case-insensitive reg
 Apps you used lately, after the running ones
 Apps, settings, commands
 Apps, settings, commands, “/” slash commands and skills, “=” calculator; off disables the keybind, edge and menu entry
+Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there.
+Aqueous keeps its settings in its own files in ~/.config/aqueous and reloads them itself. Mandara follows its workspaces, windows and outputs over its socket and changes nothing in those files.
+Aqueous settings stay in its own files in ~/.config/aqueous
 Arabic
 Arabic font
 Arabic news
@@ -1164,7 +1167,7 @@ Choose a username
 Choose a valid Home Assistant entity
 Choose an area to record
 Choose displays
-Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.
+Choose mango, niri, hyprland, umbriel, sway, river, kwin or aqueous (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.
 Choose one ayah to copy as an image
 Choose the key file
 Choose up to 24 Home Assistant entities
@@ -7315,6 +7318,7 @@ Titles on group tabs
 To beautify life is to give it an object.
 To err is human, to forgive divine.
 To live is so startling, it leaves but little room for other occupations.
+To start Mandara with Aqueous, add {command} to Aqueous's own startup settings.
 To use bitter words, when kind words are at hand, is like picking unripe fruit when the ripe fruit is there.
 To-do
 To-do list

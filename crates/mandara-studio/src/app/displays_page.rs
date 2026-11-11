@@ -291,6 +291,7 @@ fn running_target() -> Option<Target> {
         d if d.contains("hyprland") => Some(Target::Hyprland),
         d if d.contains("umbriel") => Some(Target::Umbriel),
         d if d.contains("sway") => Some(Target::Sway),
+        d if d.contains("aqueous") => Some(Target::Aqueous),
         d if d.contains("river") => Some(Target::River),
         d if d.contains("kde") || d.contains("plasma") || d.contains("kwin") => Some(Target::KWin),
         _ => None,

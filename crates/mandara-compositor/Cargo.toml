@@ -1,6 +1,6 @@
 [package]
 name = "mandara-compositor"
-description = "First-class MangoWM, Niri, Hyprland, Umbriel, Sway and River (classic) IPC drivers for Mandara Shell"
+description = "First-class MangoWM, Niri, Hyprland, Umbriel, Sway, River (classic), KWin and Aqueous IPC drivers for Mandara Shell"
 version = "0.23.1"
 edition.workspace = true
 license.workspace = true
@@ -24,6 +24,9 @@ wayland-backend.workspace = true
 wayland-protocols = { workspace = true, features = ["staging"] }
 wayland-protocols-wlr.workspace = true
 wayland-protocols-plasma.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

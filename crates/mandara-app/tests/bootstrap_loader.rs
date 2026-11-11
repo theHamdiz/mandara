@@ -22,7 +22,7 @@ fn installer_help_uses_the_terminal_language_pack_before_parsing() {
     let long = "Pilih compositor. KWin membutuhkan Plasma dari paket uji.";
     let bytes = mandara_i18n::pack::build(mandara_i18n::Lang::Id, version, [
         ("Compositor (default: detected)", short),
-        ("Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.", long),
+        ("Choose mango, niri, hyprland, umbriel, sway, river, kwin or aqueous (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.", long),
     ]).unwrap();
     std::fs::write(packs.join("id.mlang"), bytes).unwrap();
     for (flag, expected) in [("-h", short), ("--help", long)] {

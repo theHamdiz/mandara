@@ -104,7 +104,7 @@ fn root_of(target: Target, case: &str) -> String {
         Target::Mango => "conf",
         Target::Niri => "kdl",
         Target::Umbriel => "toml",
-        Target::Hyprland | Target::Sway | Target::River | Target::KWin => "conf",
+        Target::Hyprland | Target::Sway | Target::River | Target::KWin | Target::Aqueous => "conf",
     };
     format!("{}/{case}.{ext}", target.name().to_lowercase().replace("mangowm", "mango"))
 }
@@ -115,7 +115,7 @@ fn table(target: Target) -> &'static [(&'static str, &'static [Expect])] {
         Target::Niri => NIRI,
         Target::Umbriel => UMBRIEL,
         Target::Sway => SWAY,
-        Target::Hyprland | Target::River | Target::KWin => &[],
+        Target::Hyprland | Target::River | Target::KWin | Target::Aqueous => &[],
     }
 }
 

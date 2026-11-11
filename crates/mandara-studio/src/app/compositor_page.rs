@@ -487,8 +487,8 @@ impl StudioView {
                 }))
         }));
         let file = target_file(tab);
-        let status = if tab == Target::KWin {
-            tr(crate::registry::system_settings::KWIN_MANAGED).to_string()
+        let status = if let Some(note) = tab.settings_elsewhere() {
+            tr(note).to_string()
         } else if live == Some(tab) {
             if included[target_index(tab)] {
                 tf("Writing {file} and reloading {compositor} on every change.", &[("file", &file), ("compositor", &target_name(tab))])
@@ -514,6 +514,13 @@ impl StudioView {
         let rules = self.window_rules(cfg, tab, p, cx);
         let specific = match tab {
             Target::KWin => div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("KWin settings are managed in Plasma System Settings")).into_any_element(),
+            // Aqueous reads only its own files: what Mandara does with it.
+            Target::Aqueous => div()
+                .text_size(px(TEXT_12_PX))
+                .line_height(px(LEADING_17_PX))
+                .text_color(p.on_surface_variant.hsla())
+                .child(t("Aqueous keeps its settings in its own files in ~/.config/aqueous and reloads them itself. Mandara follows its workspaces, windows and outputs over its socket and changes nothing in those files."))
+                .into_any_element(),
             Target::Mango => {
                 let head = super::fold::FoldHead { title: t("Tag & layout studio").into(), preview: t("Pick a tag, then its layout, master share and scroller width. Tags without a rule keep MangoWM's default.").to_string(), badge: None, trailing: None, closed: true };
                 let tags = self.fold("Tag & layout studio", head, p, cx, |this, cx| this.tag_studio(cfg, p, cx));
@@ -553,8 +560,8 @@ impl StudioView {
                 .child(tf("River's config is your init program, which Mandara never edits: Mandara sends River its colours, rules, input settings and keys when the shell starts and on every change. To start Mandara with River, add this line to your init: {line}", &[("line", &tab.include_line())]))
                 .into_any_element(),
         };
-        let preview = (tab != Target::KWin).then(|| self.dropin_preview(cfg, tab, p, cx));
-        let presets = (tab != Target::KWin).then(|| self.comp_presets(cfg, p, cx));
+        let preview = (!tab.self_configured()).then(|| self.dropin_preview(cfg, tab, p, cx));
+        let presets = (!tab.self_configured()).then(|| self.comp_presets(cfg, p, cx));
         // The compositor's own verdict on the config comes first.
         let doctor = self.config_doctor(cfg, tab, p, cx);
         div().row().flex_col().gap(px(SPACE_26_PX)).child(header).child(doctor).children(presets).child(specific).child(rules).child(common).children(preview).into_any_element()
@@ -603,8 +610,8 @@ impl StudioView {
     // ── Window rules ────────────────────────────────────────────────────────
 
     fn window_rules(&mut self, cfg: &ShellConfig, tab: Target, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        if tab == Target::KWin {
-            return card(p).child(heading(t("Window rules"), tr(crate::registry::system_settings::KWIN_MANAGED), p)).into_any_element();
+        if let Some(note) = tab.settings_elsewhere() {
+            return card(p).child(heading(t("Window rules"), tr(note), p)).into_any_element();
         }
         let rules = cfg.compositor.window_rules.clone();
         let mut list = div().row().flex_col().gap(px(SPACE_10_PX));

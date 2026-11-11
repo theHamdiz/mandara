@@ -8011,7 +8011,7 @@
 
 "Compositor (default: detected)" = "컴포지터 (기본값: 자동 감지)"
 
-"Choose mango, niri, hyprland, umbriel, sway, river or kwin (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "mango, niri, hyprland, umbriel, sway, river 또는 kwin을 선택하세요 (기본값: 자동 감지). 없는 컴포지터는 확인 후 설치할 수 있습니다. KWin을 사용하려면 Plasma가 이미 설치되어 있어야 합니다."
+"Choose mango, niri, hyprland, umbriel, sway, river, kwin or aqueous (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation." = "mango, niri, hyprland, umbriel, sway, river, kwin 또는 aqueous을 선택하세요 (기본값: 자동 감지). 없는 컴포지터는 확인 후 설치할 수 있습니다. KWin을 사용하려면 Plasma가 이미 설치되어 있어야 합니다."
 
 "Install libxkbcommon before checking or changing compositor shortcuts." = "컴포지터 단축키를 확인하거나 변경하기 전에 libxkbcommon을 설치하세요."
 
@@ -9473,3 +9473,7 @@
 "Restart your computer to start using the new packages. Everything else is ready now." = "새 패키지를 사용하려면 컴퓨터를 다시 시작하세요. 나머지는 모두 준비되었습니다."
 "Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Mandara Login 패키지는 다음 부팅 때 들어옵니다: {packages}. 다시 시작한 뒤 Studio → 로그인 화면 → 로그인 관리자에서 전환하거나 다음을 실행하세요: {command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "이 시스템은 이미지 기반입니다. Mandara는 홈 폴더에 설치되고, 설치 프로그램은 없는 시스템 패키지만 추가합니다."
+"Aqueous settings stay in its own files in ~/.config/aqueous" = "Aqueous 설정은 ~/.config/aqueous에 있는 자체 파일에 그대로 둡니다"
+"Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there." = "Aqueous에는 별도의 설정 검사기가 없습니다. ~/.config/aqueous의 자체 파일을 다시 불러올 때 스스로 검증하며, Mandara는 그곳에 아무것도 쓰지 않습니다."
+"Aqueous keeps its settings in its own files in ~/.config/aqueous and reloads them itself. Mandara follows its workspaces, windows and outputs over its socket and changes nothing in those files." = "Aqueous는 설정을 ~/.config/aqueous의 자체 파일에 보관하고 직접 다시 불러옵니다. Mandara는 소켓을 통해 작업 공간, 창, 출력을 따라가며 해당 파일은 전혀 바꾸지 않습니다."
+"To start Mandara with Aqueous, add {command} to Aqueous's own startup settings." = "Aqueous와 함께 Mandara를 시작하려면 Aqueous의 자체 시작 설정에 {command}을(를) 추가하세요."

@@ -2,9 +2,11 @@
 //! trait: MangoWM (bitmask tags, native socket), Niri (scrollable
 //! workspaces, JSON socket), Hyprland (workspaces, socket/socket2),
 //! Umbriel (per-output workspaces, JSON-lines socket), Sway (per-output
-//! workspaces, i3 IPC), River (bitmask tags, its own Wayland protocols)
-//! and KWin (Plasma window and virtual-desktop Wayland protocols).
+//! workspaces, i3 IPC), River (bitmask tags, its own Wayland protocols),
+//! KWin (Plasma window and virtual-desktop Wayland protocols) and Aqueous
+//! (per-output workspaces, acknowledged JSON state batches).
 
+pub mod aqueous;
 pub mod backend;
 pub mod hyprland;
 pub mod mango;
@@ -17,6 +19,7 @@ pub mod umbriel;
 
 use std::sync::Arc;
 
+pub use aqueous::AqueousDriver;
 pub use backend::CompositorBackend;
 pub use hyprland::HyprlandDriver;
 pub use mango::MangoDriver;
@@ -38,7 +41,12 @@ pub use umbriel::UmbrielDriver;
 /// a session that names it (`XDG_CURRENT_DESKTOP=river`) is River once no
 /// compositor's own variable matched (a compositor nested in River keeps
 /// its own), and when nothing matched at all, the display is asked once
-/// whether it offers River's control and status protocols.
+/// whether it offers River's control and status protocols. Aqueous exports
+/// `AQUEOUS_SOCKET` to its session (and names itself in
+/// `XDG_CURRENT_DESKTOP`): with both, it wins like sway does; the socket
+/// alone is checked after the other compositors' own variables, so one
+/// nested inside Aqueous is still found. Aqueous derives from River but
+/// offers none of River's protocols.
 pub fn detect() -> Option<CompositorKind> {
     detect_from(|name| std::env::var_os(name)).or_else(|| (std::env::var_os("WAYLAND_DISPLAY").is_some() && river::running()).then_some(CompositorKind::River))
 }
@@ -59,6 +67,8 @@ pub fn detect_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<C
         Some(CompositorKind::Umbriel)
     } else if desktop("sway") && set("SWAYSOCK") {
         Some(CompositorKind::Sway)
+    } else if desktop("aqueous") && set("AQUEOUS_SOCKET") {
+        Some(CompositorKind::Aqueous)
     } else if set("MANGO_INSTANCE_SIGNATURE") || desktop("mango") {
         Some(CompositorKind::MangoWM)
     } else if set("NIRI_SOCKET") {
@@ -69,6 +79,8 @@ pub fn detect_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<C
         Some(CompositorKind::Umbriel)
     } else if set("SWAYSOCK") {
         Some(CompositorKind::Sway)
+    } else if set("AQUEOUS_SOCKET") {
+        Some(CompositorKind::Aqueous)
     } else if desktop("KDE") || desktop("plasma") {
         Some(CompositorKind::KWin)
     } else if desktop("river") {
@@ -99,6 +111,7 @@ pub fn connect() -> Option<Arc<dyn CompositorBackend>> {
         CompositorKind::Sway => SwayDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
         CompositorKind::River => RiverDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
         CompositorKind::KWin => KWinDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
+        CompositorKind::Aqueous => AqueousDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
     }
 }
 
@@ -144,5 +157,18 @@ mod tests {
         assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "KDE")]), Some(CompositorKind::KWin));
         assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "Plasma")]), Some(CompositorKind::KWin));
         assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "KDE"), ("NIRI_SOCKET", "/n")]), Some(CompositorKind::Niri));
+        // Aqueous: its socket, never its desktop name alone (and never
+        // River, which it derives from).
+        let socket = ("AQUEOUS_SOCKET", "/run/user/1000/aqueous/0f3c/ipc.sock");
+        assert_eq!(detect_with(&[socket]), Some(CompositorKind::Aqueous));
+        assert_eq!(detect_with(&[socket, ("XDG_CURRENT_DESKTOP", "Aqueous")]), Some(CompositorKind::Aqueous));
+        assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "Aqueous")]), None);
+        assert_eq!(detect_with(&[("AQUEOUS_SOCKET", "")]), None);
+        // A compositor nested in Aqueous inherits its socket: its own
+        // variable wins; Aqueous nested elsewhere names itself.
+        assert_eq!(detect_with(&[socket, ("NIRI_SOCKET", "/n")]), Some(CompositorKind::Niri));
+        assert_eq!(detect_with(&[socket, ("SWAYSOCK", "/s")]), Some(CompositorKind::Sway));
+        assert_eq!(detect_with(&[socket, ("NIRI_SOCKET", "/n"), ("XDG_CURRENT_DESKTOP", "Aqueous")]), Some(CompositorKind::Aqueous));
+        assert_eq!(detect_with(&[socket, ("XDG_CURRENT_DESKTOP", "river")]), Some(CompositorKind::Aqueous));
     }
 }

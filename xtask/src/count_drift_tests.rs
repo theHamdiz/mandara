@@ -2,15 +2,15 @@
 //! compositors it supports. Those numbers drift whenever a plugin lands on
 //! one branch and the docs on another, so they are checked here against the
 //! sources of truth: the plugin catalog (`assets/catalog.json`, minus the
-//! example plugins in `plugins/examples/`) and the seven compositor drivers.
+//! example plugins in `plugins/examples/`) and the eight compositor drivers.
 //!
 //! The website (`index.html`) has its own check in `pages_tests`.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-/// MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic and KWin.
-const COMPOSITORS: usize = 7;
+/// MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin and Aqueous.
+const COMPOSITORS: usize = 8;
 
 /// Phrases that end in a plugin count: the number comes right before them.
 const PLUGIN_COUNT_BEFORE: &[&str] = &[" built-in plugins", " first-party plugins", " plugins built in", " built-ins", "-plugin set", " plugins plus WebAssembly"];

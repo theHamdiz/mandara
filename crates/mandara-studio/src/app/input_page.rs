@@ -72,10 +72,10 @@ impl StudioView {
     pub(super) fn input_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let group = |g: &str| -> Vec<&'static Setting> { registry::in_section(Section::Input).filter(|s| s.group == g).collect() };
         let live = running();
-        let status = match live {
-            Some(mandara_config::compositor::Target::KWin) => tr(crate::registry::system_settings::KWIN_MANAGED).to_string(),
-            Some(t) => tf("Written to Mandara's {compositor} drop-in; “Your config” keeps your own setting.", &[("compositor", &target_name(t))]),
-            None => {
+        let status = match (live, live.and_then(mandara_config::compositor::Target::settings_elsewhere)) {
+            (_, Some(note)) => tr(note).to_string(),
+            (Some(t), None) => tf("Written to Mandara's {compositor} drop-in; “Your config” keeps your own setting.", &[("compositor", &target_name(t))]),
+            (None, _) => {
                 let targets = mandara_config::compositor::Target::ALL.into_iter().filter(|t| mandara_config::input::INPUT_OPTIONS.iter().any(|(_, support)| support[t.index()]));
                 tf("Saved now; applied the next time Mandara runs under a supported compositor ({compositors}).", &[("compositors", &targets.map(mandara_config::compositor::Target::name).collect::<Vec<_>>().join(", "))])
             }
@@ -101,8 +101,8 @@ impl StudioView {
     }
 
     fn input_layouts(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        if running() == Some(mandara_config::compositor::Target::KWin) {
-            return card(p).child(div().text_color(p.on_surface_variant.hsla()).child(tr(crate::registry::system_settings::KWIN_MANAGED))).into_any_element();
+        if let Some(note) = running().and_then(mandara_config::compositor::Target::settings_elsewhere) {
+            return card(p).child(div().text_color(p.on_surface_variant.hsla()).child(tr(note))).into_any_element();
         }
         let kb = cfg.compositor.input.keyboard.clone();
         let catalog = Self::input_catalog(cx);
