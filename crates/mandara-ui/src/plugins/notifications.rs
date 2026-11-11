@@ -156,14 +156,8 @@ const BANNER_GAP_PX: f32 = 10.0;
 const BANNER_FILL_ALPHA: f32 = 0.12;
 const BANNER_ICON_PX: f32 = 15.0;
 
-// Bar item.
+// Bar item (its unread count: `crate::bar::badge`).
 const BAR_ICON_PX: f32 = 15.0;
-const BAR_GAP_PX: f32 = 4.0;
-const BADGE_PX: f32 = 16.0;
-const BADGE_PAD_X_PX: f32 = 4.0;
-const BADGE_TEXT_PX: f32 = 10.0;
-/// Unread counts above this show as this value.
-const BADGE_MAX: usize = 99;
 
 pub fn send(cx: &mut App, command: NotificationCommand) {
     if let Some(s) = hub(cx).read(cx).notification_service.clone() {
@@ -893,30 +887,9 @@ pub fn register(r: &mut PluginRegistry) {
             |palette, _, cx| {
                 let st = &hub(cx).read(cx).notifications;
                 let unread = st.unread();
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(BAR_GAP_PX))
-                    .child(icon(if st.quiet() { "moon" } else { "bell" }, crate::style::bar_icon(BAR_ICON_PX), if unread > 0 { palette.primary } else { palette.on_surface }))
-                    .when(unread > 0, |el| {
-                        el.child(
-                            div()
-                                .min_w(px(BADGE_PX))
-                                .h(px(BADGE_PX))
-                                .px(px(BADGE_PAD_X_PX))
-                                .rounded_full()
-                                .bg(palette.primary.hsla())
-                                .text_color(palette.on_primary.hsla())
-                                .text_size(px(BADGE_TEXT_PX))
-                                .font_weight(FontWeight::BOLD)
-                                .font_features(tabular_nums())
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .child(unread.min(BADGE_MAX).to_string()),
-                        )
-                    })
-                    .into_any_element()
+                let size = crate::style::bar_icon(BAR_ICON_PX);
+                let bell = icon(if st.quiet() { "moon" } else { "bell" }, size, if unread > 0 { palette.primary } else { palette.on_surface });
+                crate::bar::badge::counted(bell, size, unread, crate::bar::badge::Badge { fill: palette.primary, ink: palette.on_primary, glow: None }, ID, palette, cx)
             },
             window,
             cx,

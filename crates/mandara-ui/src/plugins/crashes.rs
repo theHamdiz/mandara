@@ -33,7 +33,7 @@ use serde_json::json;
 
 use super::extras::{Flash, toast};
 use super::model_view as fn_view;
-use super::panel_fx::{ANGLE_DOWN_DEG, HEADER_H, PanelShape, ViewSet, alpha, empty_state, glow, header, pill_button, readable, rim};
+use super::panel_fx::{ANGLE_DOWN_DEG, HEADER_H, PanelShape, ViewSet, alpha, empty_state, header, pill_button, readable, rim};
 use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
 use crate::kit::{reveal, text, tokens};
@@ -92,14 +92,9 @@ const VISIBLE_ROWS: f32 = 6.5;
 const LIST_MAX_H: f32 = VISIBLE_ROWS * (ROW_H + ROW_GAP);
 const LIST_FADE_PX: f32 = 22.0;
 const EMPTY_H: f32 = 180.0;
-/// Bar chip.
+/// Bar chip: its glyph and the glow round its count (`crate::bar::badge`).
 const CHIP_ICON_PX: f32 = 15.0;
-const CHIP_GAP_PX: f32 = 4.0;
-const CHIP_BADGE_PX: f32 = 16.0;
-const CHIP_BADGE_PAD_X_PX: f32 = 4.0;
-const CHIP_BADGE_TEXT_PX: f32 = 10.0;
 const CHIP_GLOW: (f32, f32) = (0.45, 6.0);
-const BADGE_MAX: usize = 99;
 const SIZE_EPSILON_PX: f32 = 0.5;
 /// `ink_on`: fills lighter than this get dark ink.
 const INK_SWITCH_L: f32 = 0.64;
@@ -733,29 +728,9 @@ fn chip(m: &Shared, palette: &MandaraPalette, window: &Window, cx: &mut App) -> 
         return div().into_any_element();
     }
     let coral = palette.urgent_coral;
-    div()
-        .flex()
-        .items_center()
-        .gap(px(CHIP_GAP_PX))
-        .child(icon("bug", crate::style::bar_icon(CHIP_ICON_PX), readable(coral, palette)))
-        .child(
-            div()
-                .min_w(px(CHIP_BADGE_PX))
-                .h(px(CHIP_BADGE_PX))
-                .px(px(CHIP_BADGE_PAD_X_PX))
-                .rounded_full()
-                .bg(coral.hsla())
-                .shadow(vec![glow(coral.with_alpha(CHIP_GLOW.0), CHIP_GLOW.1, 0.0, 0.0)])
-                .text_color(ink_on(coral).hsla())
-                .font_features(tabular_nums())
-                .text_size(px(CHIP_BADGE_TEXT_PX))
-                .font_weight(FontWeight::BOLD)
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(if n > BADGE_MAX { format!("{BADGE_MAX}+") } else { n.to_string() }),
-        )
-        .into_any_element()
+    let size = crate::style::bar_icon(CHIP_ICON_PX);
+    let badge = crate::bar::badge::Badge { fill: coral, ink: ink_on(coral), glow: Some((coral.with_alpha(CHIP_GLOW.0), CHIP_GLOW.1)) };
+    crate::bar::badge::counted(icon("bug", size, readable(coral, palette)), size, n, badge, ID, palette, cx)
 }
 
 // ── Commands ─────────────────────────────────────────────────────────────

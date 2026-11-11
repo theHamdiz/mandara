@@ -40,8 +40,15 @@ How Mandara looks and feels, and how much of it you can shape.
   bottom), **Pharos Beam** (a narrow lantern of tonal tiles and scalloped
   accent buttons hanging from the top edge) and **Raml Tram** (one line of
   flower stops running along the top and down the left edge: a top bar
-  joined to a rail). In every style the workspace and tag buttons take the
-  bar's own shapes and show the icon of the app on each tag. They're built from settings you can keep tuning:
+  joined to a rail). The two styles with a rail run the workspaces down
+  it (never on the bar as well) and seat the launcher in the corner where
+  the bar meets the rail. Picking a style while keeping your items fits
+  them to it, and the next preset gives them back: what the rail shows
+  leaves the bar, and System monitor brings its stat blocks, meters and
+  rates with their plugins switched on. In every style the workspace and
+  tag buttons take the bar's own shapes and show the icon of the app on
+  each tag, and a count (unread notifications, pending updates) rides on
+  its item's shape, reading 99+ past 99. They're built from settings you can keep tuning:
   items as capsules, tiles, squircles or connected groups; icon items as
   circles or Material 3 Expressive cookies, clovers, flowers and bursts in
   the accent or tertiary tone; the items' inset from the bar's edges; and

@@ -105,8 +105,6 @@ const BUTTON_H: f32 = PILL_H_PX;
 const OLD_VERSION_MAX_W: f32 = 150.0;
 /// Height changes smaller than this don't resize the panel.
 const SIZE_EPSILON_PX: f32 = 0.5;
-/// Chip badge counts are capped at this.
-const BADGE_COUNT_MAX: usize = 999;
 
 // Visual tokens of this panel (px unless noted; alpha pairs are
 // `(dark, light)`).
@@ -193,12 +191,9 @@ const LIST_FADE_H_PX: f32 = 22.0;
 /// Rows sit this far inside the card radius, never rounder than the min.
 const ROW_RADIUS_INSET_PX: f32 = 2.0;
 const MIN_ROW_RADIUS_PX: f32 = 10.0;
-/// Chip: glyph, badge (min width / height / padding), dim alphas while a
-/// check runs.
-const CHIP_GAP_PX: f32 = 4.0;
+/// Chip: glyph, dim alphas while a check runs (its count:
+/// `crate::bar::badge`).
 const CHIP_ICON_PX: f32 = 15.0;
-const CHIP_BADGE_PX: f32 = 16.0;
-const CHIP_BADGE_PAD_X_PX: f32 = 4.0;
 const CHIP_CHECKING_ICON_ALPHA: f32 = 0.5;
 const CHIP_CHECKING_BADGE_ALPHA: f32 = 0.55;
 
@@ -1341,37 +1336,18 @@ impl View {
     }
 }
 
-fn chip(m: &Shared, palette: &MandaraPalette, window: &Window) -> AnyElement {
+fn chip(m: &Shared, palette: &MandaraPalette, window: &Window, cx: &App) -> AnyElement {
     let (count, checking) = {
         let mb = m.borrow();
         mb.views.track(window);
         (mb.count, mb.checking)
     };
     let fg = if checking { palette.on_surface.with_alpha(CHIP_CHECKING_ICON_ALPHA) } else if count > 0 { palette.primary } else { palette.on_surface };
-    div()
-        .flex()
-        .items_center()
-        .gap(px(CHIP_GAP_PX))
-        .child(icon("package", crate::style::bar_icon(CHIP_ICON_PX), fg))
-        .when(count > 0, |el| {
-            el.child(
-                div()
-                    .min_w(px(CHIP_BADGE_PX))
-                    .h(px(CHIP_BADGE_PX))
-                    .px(px(CHIP_BADGE_PAD_X_PX))
-                    .rounded_full()
-                    .bg(palette.primary.with_alpha(if checking { CHIP_CHECKING_BADGE_ALPHA } else { 1.0 }).hsla())
-                    .text_color(palette.on_primary.hsla())
-                    .font_features(tabular_nums())
-                    .text_size(px(BADGE_TEXT_PX))
-                    .font_weight(FontWeight::BOLD)
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(count.min(BADGE_COUNT_MAX).to_string()),
-            )
-        })
-        .into_any_element()
+    let size = crate::style::bar_icon(CHIP_ICON_PX);
+    // While checking, the old count stays, faded (over the bar's own colour,
+    // so the badge stays one solid tone on the item's shape).
+    let fill = if checking { palette.primary.with_alpha(CHIP_CHECKING_BADGE_ALPHA).over(crate::shell::frame_color(palette)) } else { palette.primary };
+    crate::bar::badge::counted(icon("package", size, fg), size, count, crate::bar::badge::Badge { fill, ink: palette.on_primary, glow: None }, ID, palette, cx)
 }
 
 // ── Commands ─────────────────────────────────────────────────────────────
@@ -1410,7 +1386,7 @@ pub fn register(r: &mut PluginRegistry) {
         let views = m.borrow().views.clone();
         let field = cx.new(|cx| TextField::new(String::new(), t("Filter packages…"), true, Rc::new(move |_, _, cx| views.notify(cx)), cx));
         let bar_m = m.clone();
-        let bar = fn_view(None, move |palette, window, _| chip(&bar_m, palette, window), window, cx);
+        let bar = fn_view(None, move |palette, window, cx| chip(&bar_m, palette, window, cx), window, cx);
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(EMPTY_H + HEADER_H + PAD * 2.0 + GAP))));
         let secondary_m = m.clone();
         let view = View { p: panel_cx.clone(), m, field, size_cell: size_cell.clone(), watch: CloseWatch::default() };
