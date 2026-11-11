@@ -57,6 +57,10 @@ const MAX_SURFACE_SHARE: f32 = 0.85;
 const FALLBACK_OUTPUT_H: f32 = 1080.0;
 /// Entrance / exit travel from the edge.
 const SLIDE_PX: f32 = 44.0;
+/// A choreography entrance travels this share of the slide; its content
+/// trails the card by up to this many px.
+const TOAST_ENTRANCE_SCALE: f32 = 0.75;
+const TOAST_PARALLAX_PX: f32 = 10.0;
 const TOAST_RADIUS_PX: f32 = 16.0;
 const SHADOW_ALPHA: f32 = 0.22;
 const SHADOW_Y_PX: f32 = 3.0;
@@ -633,19 +637,33 @@ impl Render for ToastView {
         let mut root = popup_root(crate::fonts::fonts(cx));
         let mut toasts: Vec<AnyElement> = Vec::with_capacity(self.items.len());
         let this = cx.entity().downgrade();
-        for item in &self.items {
+        let choreo = mandara_core::choreo::choreography();
+        let rtl = crate::bidi::rtl();
+        for (index, item) in self.items.iter().enumerate() {
             let id = item.n.id;
-            let p = item.presence.value().clamp(0.0, 1.0);
+            // Choreography: toasts arriving together cascade in (one that
+            // already rests stays put: its cascade is 1).
+            let raw = if drawer.is_none() { choreo.cascade(item.presence.value(), index) } else { item.presence.value() };
+            let p = raw.clamp(0.0, 1.0);
             let travel = (1.0 - p) * SLIDE_PX;
             let h = heights.get(&id).copied().unwrap_or(TOAST_GUESS_H_PX * scale);
+            // The edge a free toast slides from.
+            let natural = match column {
+                -1 => (-1.0, 0.0),
+                1 => (1.0, 0.0),
+                _ => (0.0, if bottom { 1.0 } else { -1.0 }),
+            };
             let (left, top) = match drawer {
                 // Inside the drawer: they come out of the bar's edge.
                 Some((_, _, _, _, reach)) => (pad, if bottom { reach - pad - item.slot.value() - h + travel } else { pad + item.slot.value() - travel }),
                 None => {
-                    let (dx, dy) = match column {
-                        -1 => (-travel, 0.0),
-                        1 => (travel, 0.0),
-                        _ => (0.0, if bottom { travel } else { -travel }),
+                    // A choreography's entrance replaces the slide from the
+                    // edge, landing on the spring's overshoot (a Drop
+                    // bounces); classic: the slide, clamped at rest.
+                    let (dx, dy) = if choreo.entrance == mandara_core::choreo::Entrance::Anchor {
+                        (natural.0 * travel, natural.1 * travel)
+                    } else {
+                        choreo.entrance_offset(raw, natural, rtl, SLIDE_PX * TOAST_ENTRANCE_SCALE)
                     };
                     let y = if bottom { sh - EDGE_GAP_PX - item.slot.value() - h } else { EDGE_GAP_PX + item.slot.value() };
                     (x0 + dx, y + dy)
@@ -731,7 +749,11 @@ impl Render for ToastView {
                             });
                         })
                     })
-                    .child(card)
+                    // Choreography parallax: the content trails its card.
+                    .child({
+                        let (dx, dy) = if drawer.is_none() { choreo.parallax_offset(raw, natural, rtl, TOAST_PARALLAX_PX) } else { (0.0, 0.0) };
+                        if dx == 0.0 && dy == 0.0 { card.into_any_element() } else { div().relative().left(px(dx)).top(px(dy)).child(card).into_any_element() }
+                    })
                     .when_some(progress, |el, f| {
                         el.child(
                             div()

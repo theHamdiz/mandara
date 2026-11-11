@@ -63,6 +63,7 @@ mandara msg panel capture media             # copy a visible docked or floating 
 mandara msg theme set mandara-corniche      # theme list, current, next, mode toggle, wallpaper, seeds, export
 mandara msg theme mode toggle
 mandara msg look apply corniche-dusk        # look list; look restore brings back your own setup
+mandara msg motion preset tide              # motion presets lists them all with how each feels and the one in use (docs/motion.md)
 mandara msg bar position left               # top|bottom|left|right (left/right = the side bar)
 mandara msg bar layout hairline             # edge-frame|glass-pills|island|hairline|micro|notch|next
 mandara msg bar style expressive            # expressive|tile-dock|rail|segmented|system-monitor|stanley-bridge|pharos-beam|raml-tram: a style preset's look (your items stay); none puts back the plain bar

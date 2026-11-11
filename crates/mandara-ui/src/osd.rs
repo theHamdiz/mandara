@@ -780,6 +780,14 @@ impl Render for OsdView {
             OsdPosition::Left => (-travel, 0.0),
             OsdPosition::Right => (travel, 0.0),
         };
+        // A choreography's entrance comes from its own direction instead
+        // (within the surface's margin: the overshoot is bounded).
+        let choreo = mandara_core::choreo::choreography();
+        let (dx, dy) = if choreo.entrance == mandara_core::choreo::Entrance::Anchor {
+            (dx, dy)
+        } else {
+            choreo.entrance_offset(p, (0.0, 0.0), crate::bidi::rtl(), ENTER_TRAVEL_PX * g.scale)
+        };
         let vertical = g.position.is_vertical() && event.body() == Body::Level;
         let s = g.scale;
         let (pw, ph) = if vertical { (VPILL_W * s, VPILL_H * s) } else { (PILL_W * s, PILL_H * s) };

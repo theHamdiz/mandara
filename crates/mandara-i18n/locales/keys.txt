@@ -214,6 +214,7 @@ A profile card, launch tiles for apps, folders and links, quick toggles, volume 
 A progress bar, value from 0 to 1
 A public GitHub repository tagged mandara-plugin with a release is all it takes.
 A public repository with this topic (About → Topics).
+A quick beam sweeps across, lighting each row in turn
 A quiet notification when the song changes
 A random style
 A reader for RSS, Atom and JSON feeds
@@ -234,7 +235,6 @@ A side bar uses Side bar width
 A signature couldn't be verified
 A single TOML file you can keep, share or import on another machine. Existing files are never overwritten.
 A single column sits in the middle instead of at the left edge
-A slide and fade using your current spring. Replay after adjusting the controls.
 A slim bar of plugin icons and pills on the left and right edges; panels pour out sideways. They replace the widget sidebar on their edges
 A slim bar on the left edge; panels open sideways
 A smoothed spectrum along the screen edge, with a soft glow; only while music plays
@@ -603,6 +603,7 @@ Applies live on {compositor}; apps started from now on use it too.
 Applies now; reverts after {seconds} s unless you keep it
 Apply
 Apply a look (your setup is saved first so it can be restored)
+Apply a motion preset: its spring and choreography (accessibility and surface speeds stay yours)
 Apply a ready-made launcher look: its layout and style settings change together (no argument: the current one)
 Apply a saved display profile
 Apply changes instantly without springs
@@ -909,6 +910,7 @@ Brightness over DDC/CI through /dev/i2c-* (needs the i2c group and DDC/CI on in 
 Brightness up
 Bring back a bar put away with bar hide
 Bring back a removed Mandara plugin where it was
+Brisk and calm, barely any overshoot
 Broken
 Brown noise
 Browse Reddit communities, posts and comment threads
@@ -1048,6 +1050,7 @@ Care for an orphan
 Cargo Cult Science
 Carousel
 Carousel: how much bigger the middle wallpaper is
+Cascade
 Categories
 Category
 Category chips
@@ -1159,7 +1162,6 @@ Choices between a few options in Studio and in panels, and filter chips
 Choose Qur'an, hadith or both in Studio
 Choose a .conf or .ovpn file first
 Choose a boot entry for this item in Studio → Power & idle
-Choose a feel, then adjust the spring below
 Choose a file to import
 Choose a file…
 Choose a password for the new keyring
@@ -1177,6 +1179,7 @@ Choose up to 24 Home Assistant entities
 Choose what the power menu offers and in which order. Built-in entries can be hidden or renamed; your own commands and boot entries can be removed.
 Choose where the launcher opens. Attached positions follow the bar on that edge.
 Choose…
+Choreography
 Chrome
 Cicero
 Circle
@@ -1386,6 +1389,7 @@ Containers you create with docker or podman appear here
 Content
 Content follows the wheel, like a touchscreen
 Content follows your fingers
+Content trails its surface and settles a beat later
 Continue
 Continue at {reference}
 Continue reading
@@ -1451,6 +1455,7 @@ Corners cut at an angle for a sharper, technical look
 Corners: top-left, top-right, bottom-left, bottom-right
 Corniche
 Corniche night
+Corniche tide
 Corniche waves
 Cosmic neon green and cyan on deep indigo (light variant derived).
 Could not copy the image: {error}
@@ -1942,6 +1947,7 @@ Draw the wallpaper
 Draw the wallpaper's foreground subject over the clock (with the Fill mode)
 Draws the cursor in software: fixes an invisible or flickering cursor on some GPUs (Hyprland, Umbriel)
 Draws the wallpaper's subject over the desktop clock and widgets: hand-tuned, or with a small depth model downloaded on demand
+Drift in on a slant
 Drive
 Drive {n}
 Drives
@@ -1950,11 +1956,13 @@ Drizzle
 Drop an app here, or choose a file
 Drop an app on the dock or here to install it.
 Drop files on it to trash them; right-click to empty it
+Drop from above
 Drop plugins here
 Drop shadows under windows
 Drop to install
 Drop-down panels
 Drop-down panels and plugin cards
+Drops in from above and lands with an elastic bounce
 Drops of water hollow out a stone.
 Dry run
 Dry run (MANDARA_UNINSTALL_DRY_RUN): nothing will be removed or moved.
@@ -1979,6 +1987,7 @@ Each group of bar items sits on a soft capsule of its own
 Each new one replaces the current wallpaper
 Each note is a Markdown file, each topic a folder in here — point it at a synced folder or an Obsidian vault (empty: Mandara's data folder)
 Each one is its own small surface, created only while it shows; visualizers listen only while music plays and stop after a moment of silence.
+Each preset sets the spring and how content enters; adjust either below
 Each repair is safe: your compositor config only ever gets one include line, with a backup.
 Each sets the launcher's style, layout and placement together; change any setting below afterwards.
 Each station remembers its own volume
@@ -2085,6 +2094,7 @@ Enter the passphrase
 Enter the stream's address
 Enter this code on {device}, then press Enter on it.
 Enter unlocks · Esc cancels
+Entrance
 Entries in collections
 Entries kept
 Entries kept (pinned ones don't count)
@@ -2157,6 +2167,7 @@ Everything
 Everything comes in time to him who knows how to wait.
 Everything is up to date
 Everything looks healthy
+Everything rises like a swell, lists rolling in wave after wave
 Everything runs locally on your CPU
 Everything started cleanly
 Everything was already up to date
@@ -2245,6 +2256,7 @@ Feeds · Sidebar card
 Feels
 Feels like {temp}
 Feet, what do I need them for if I have wings to fly.
+Felucca drift
 Ferdowsi
 Fetch
 Fetch every calendar again now
@@ -2487,6 +2499,7 @@ Friday and Saturday
 Friendship is always a sweet responsibility, never an opportunity.
 From
 From api.alquran.cloud: the Tanzil Project's text, copied exactly
+From its button or edge
 From nothing to a plugin in your bar. Run these in a terminal; the last step copies it straight into your development folder.
 From the installer's own records.
 From the language
@@ -2700,6 +2713,7 @@ Health checks
 Heap & buffers
 Heavier springs move more slowly
 Heavy
+Heavy and unhurried: surfaces glide in on a slant, content trailing like a sail
 Height
 Height in the center
 Height on the screen
@@ -3419,6 +3433,7 @@ Light theme folder
 Light theme wallpaper
 Light wallpaper
 Lighten a burden, cover a fault, help a brother or sister through.
+Lighthouse sweep
 Lightness
 Limestone
 Limited mode
@@ -3443,6 +3458,8 @@ Links
 Links it into ~/.config/Kvantum and runs kvantummanager --set Mandara
 Linux & open source
 Liquid
+Liquid metal: shapes stretch as they travel and round off at rest
+Liquid stretch
 Liquid wave
 List
 List a hidden app again
@@ -3454,6 +3471,7 @@ List name
 List plugins with origin and enablement
 List stations, all or of one shelf
 List the configured translation provider's languages
+List the motion presets, how each feels and which one is in use
 List the one-click looks
 List themes (built-in and ~/.config/mandara/themes)
 List time zones, optionally only those containing a word
@@ -3465,6 +3483,7 @@ Lists and joins networks through NetworkManager
 Lists in order, with open / done counts
 Lists running processes and ends the ones you choose
 Lists, focuses and closes windows (foreign-toplevel)
+Lists, tiles and cards arrive one after another instead of all at once
 Little Feet
 Little Women
 Little feet of children, two tiny suffering jewels, how can people pass and not see you!
@@ -3625,6 +3644,7 @@ Madani
 Made by Mandara
 Made by Mandara and built into the shell, so they update with it. Turn on what you want; turn off or remove what you don't (core plugins stay on).
 Maghrib
+Magnetic
 Magnification
 Magnification spread
 Magnified size
@@ -3714,6 +3734,7 @@ Mandara {version} is the latest version
 Mandara {version} isn't signed by Mandara's release key ({reason}), so it won't be installed
 Mandara's KeePassXC dialog is off (Studio → General → Keyrings & passwords)
 Mandara's admin helper isn't set up, so the update can't run as administrator.
+Mandara's balanced spring with a soft landing
 Mandara's drop-in
 Mandara's glass, or Material You: colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar
 Mandara's own look, as it has always been
@@ -3811,6 +3832,7 @@ Mencius
 Mencius IV.2.12
 Menu
 Menu entries
+Mercury
 Mercy
 Merge
 Mesh gradient
@@ -3961,6 +3983,7 @@ Move window {direction}
 Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders.
 Moves with the music
 Moving clouds, rain and stars (off with reduced motion)
+Moving shapes stretch along their travel and round off at rest
 Muhammad Ayyub
 Muharram
 Muqaddimah
@@ -4830,6 +4853,7 @@ Panels wider or narrower than their natural width
 Panels you popped out of the bar come back where they were after a restart
 Panic inside a command (debug builds; tests fault isolation)
 Paper
+Parallax
 Part of Mandara's core, so it is always on. {reason}
 Partly cloudy
 Passed
@@ -5015,6 +5039,7 @@ Play or pause the radio
 Play the adhan now (to hear it; it must be downloaded)
 Playback speed for this surface; zero applies transitions instantly
 Playback state, levels, preset and sleep timer
+Playful springs that swing past and back
 Playful, bright cursors in bold colors
 Playing
 Playlist
@@ -5126,6 +5151,7 @@ Preview the fade shown before locking (move the mouse or wait to end it)
 Preview the lock screen
 Preview the pairing dialog with a fake device (nothing is paired)
 Preview — any password unlocks · Esc closes
+Previewing {preset}: {feel}
 Previews per row
 Previews use sample data.
 Previous
@@ -5185,6 +5211,7 @@ Publilius Syrus
 Publish to the marketplace
 Pudd'nhead Wilson
 Pull one with: ollama pull llama3.2
+Pulled into place with one crisp tick past and back
 Pulse the battery when critical
 Pulse the battery while charging
 Purge agent from RAM now
@@ -5211,6 +5238,7 @@ Qudsi
 Queried once when the panel opens; must answer with the address as plain text
 Queued
 Queues a Mandara command, the same ones as mandara msg.
+Quick and firm, settling almost at once
 Quick settings
 Quick start
 Quick toggles
@@ -5256,6 +5284,7 @@ Rail
 Rail height
 Rain
 Rain today. Don't forget an umbrella.
+Raindrop
 Rainy study
 Raise the screen brightness (percent step, default 5)
 Raise volume
@@ -5626,6 +5655,7 @@ Ring shows
 Ring starts at
 Ring width
 Ring, ping or change pairing for a device
+Rise from below
 Rising
 River has no such setting
 River keeps no display settings of its own: set them in your init with a tool such as wlr-randr or kanshi
@@ -6254,6 +6284,7 @@ Sliders
 Slideshow
 Slideshow transition
 Slow
+Slow and silky, with no bounce
 Slow and steady wins the race.
 Slowest build
 Small
@@ -6531,6 +6562,7 @@ Swap
 Swap the left and right buttons
 Swatch shape
 Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts.
+Sweep from the reading side
 Swipe distance
 Swipe to dismiss
 Swirl
@@ -7970,6 +8002,7 @@ When to change
 When windows cover it
 When your compositor config or the compositor changed, the Config doctor checks it once at start-up and sends one notification about new problems
 Where along the edge
+Where entering content comes from
 Where new notes go while the card shows All (a topic's name; empty: Notes)
 Where new tasks go while the card shows All (a list's name; empty: Inbox)
 Where plugins live
@@ -8139,6 +8172,7 @@ Your compositor's cursor at {size} px
 Your compositor's layouts
 Your config
 Your contribution calendar (fetched from github.com once you switch it on)
+Your current spring and choreography. Point at a preset to preview it; replay after adjusting the controls.
 Your cursor
 Your devices
 Your devices, within reach
@@ -8442,6 +8476,7 @@ minutes, or off
 mode, generation, keep or older-than
 model id
 model id from `models list` (default: all)
+motion preset id
 n/a
 name or language, e.g. arabic
 name, command line or PID

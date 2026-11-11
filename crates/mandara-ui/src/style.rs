@@ -213,12 +213,34 @@ pub fn apply(cfg: &ShellConfig) {
     WEIGHT.store(u32::from(cfg.typography.weight.clamp(MIN_WEIGHT, MAX_WEIGHT)), Ordering::Relaxed);
     mandara_core::spring::set_time_scale(cfg.motion.speed);
     mandara_core::spring::set_motion_profile(motion_profile(cfg));
+    mandara_core::choreo::set_choreography(choreography(&cfg.motion));
     crate::widgets::clock::set_locale_override(&cfg.datetime.time_locale);
+}
+
+/// The choreography of `[motion]`, scaled by its intensity (reduced motion
+/// is applied when it is read: [`mandara_core::choreo::choreography`]).
+pub fn choreography(m: &mandara_config::MotionConfig) -> mandara_core::choreo::Choreography {
+    use mandara_config::motion::Entrance as E;
+    use mandara_core::choreo::Entrance;
+    let c = &m.choreography;
+    let entrance = match c.entrance {
+        E::Anchor => Entrance::Anchor,
+        E::Rise => Entrance::Rise,
+        E::Drop => Entrance::Drop,
+        E::Sweep => Entrance::Sweep,
+        E::Drift => Entrance::Drift,
+    };
+    mandara_core::choreo::Choreography::new(entrance, c.stagger, c.stretch, c.parallax, m.intensity())
 }
 
 /// The spring tuning and reduced motion of `cfg` (`[motion]`).
 pub fn motion_profile(cfg: &ShellConfig) -> mandara_core::spring::MotionProfile {
-    let m = &cfg.motion;
+    motion_profile_of(&cfg.motion)
+}
+
+/// [`motion_profile`] of a `[motion]` table alone (Studio previews a preset
+/// over the current settings with it).
+pub fn motion_profile_of(m: &mandara_config::MotionConfig) -> mandara_core::spring::MotionProfile {
     let mut profile = mandara_core::spring::MotionProfile::new(m.stiffness, m.damping, m.mass, m.reduced(mandara_core::spring::system_reduced_motion()));
     let critical = 2.0 * (profile.feel.stiffness * profile.feel.mass).sqrt();
     profile.feel.damping += (critical - profile.feel.damping).max(0.0) * (1.0 - m.intensity());
