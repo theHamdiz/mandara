@@ -541,7 +541,7 @@ Mandara's built-in plugins are composable: a calm default set is on (the bar
 essentials, quick settings, media, weather, wallpaper, screenshot and
 clipboard) and the rest ship opt-in (`PluginManifest::opt_in`): the dock,
 mini stats, screen time, prayer times, the wallpaper generator, Wallhaven,
-cursor themes, containers, services, drives, updates, the process hunter,
+cursor themes, Boot look, containers, services, drives, updates, the process hunter,
 the authenticator, soundscapes, world clock, network speed, the color
 picker, Pomodoro, notes, to-do, privacy and the app installer. A config
 written before a default changed keeps what it had on: `[plugins]

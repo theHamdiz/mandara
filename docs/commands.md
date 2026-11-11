@@ -437,6 +437,19 @@ mandara msg world-clock add Mecca    # list, remove, search <query>, at <HH:MM>
 mandara msg authenticator code github  # list, copy, add <otpauth://…>, remove <id>, scan, demo on|off
 ```
 
+```bash
+mandara msg boot status                 # bootloader in use (and how it was found), firmware, splash, files, backups
+mandara msg boot list menu              # boot menu catalog: licence, pinned URL + SHA-256, downloaded
+mandara msg boot install vimix/2k       # download, verify and prepare (nothing on the system changes)
+mandara msg boot import ~/Pictures/logo.svg --spinner ring   # splash, GRUB theme and Limine wallpaper from your image
+mandara msg boot apply menu vimix/2k --dry-run               # the exact plan; without --dry-run: approval, backup, apply
+mandara msg boot restore                # undo the last apply (--dry-run lists the files)
+```
+
+The `boot` commands belong to the opt-in **Boot look** plugin
+(`mandara msg plugins enable boot-look`); the safety model, supported
+bootloaders and restore are in [Boot look](boot-look.md).
+
 The `cursor` commands belong to the opt-in **Cursor themes** plugin
 (`mandara msg plugins enable cursors`); while it is off they answer that the
 plugin is off and change nothing, and Mandara writes no cursor setting at
