@@ -93,11 +93,14 @@ enum Cmd {
         /// `marketplace` / `local` still work), Applications (installed,
         /// defaults, startup, launching — `mandara studio applications --tab
         /// startup`) or Wallpaper (wallpaper, slideshow, effects, generator,
-        /// online — `mandara studio wallpaper --tab slideshow`), or Bars (bar, side-bars, sidebar, panels, edges).
+        /// online — `mandara studio wallpaper --tab slideshow`), or Bars (bar,
+        /// sidebars, panels, edges; the older side-bars and sidebar open
+        /// Sidebars at their section).
         #[arg(long, value_name = "TAB", conflicts_with = "plugin")]
         tab: Option<String>,
         /// With `--tab develop`: scroll to a section (folders, format,
-        /// architecture, contract, quick-start, validate).
+        /// architecture, contract, quick-start, validate); with `bars --tab
+        /// sidebars`: side-bar or sidebar.
         #[arg(long, value_name = "SECTION", requires = "tab")]
         scroll: Option<String>,
         /// Demo data instead of the real system (`mandara studio users

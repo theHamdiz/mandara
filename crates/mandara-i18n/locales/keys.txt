@@ -227,7 +227,8 @@ A second, stronger warning
 A sense of humour is a sense of proportion.
 A shutter when a capture is taken
 A side bar always stays on screen
-A side bar holds this edge now; turn side bars off (Bar page) to use the sidebar here
+A side bar holds this edge now; choose Sidebar for an edge under Bars → Sidebars to use the sidebar
+A side bar is a slim bar of items, like the top bar standing on its side. The sidebar is the panel that slides out with tabs and cards. Each edge holds one of them, or nothing.
 A side bar is always an edge frame
 A side bar shares no edge with the launcher: it opens from the bare screen edge, beside the bar.
 A side bar uses Side bar width
@@ -235,6 +236,7 @@ A signature couldn't be verified
 A single TOML file you can keep, share or import on another machine. Existing files are never overwritten.
 A single column sits in the middle instead of at the left edge
 A slide and fade using your current spring. Replay after adjusting the controls.
+A slim bar of items
 A slim bar of plugin icons and pills on the left and right edges; panels pour out sideways. They replace the widget sidebar on their edges
 A slim bar on the left edge; panels open sideways
 A smoothed spectrum along the screen edge, with a soft glow; only while music plays
@@ -364,7 +366,7 @@ Add an app: desktop id or name, then Enter
 Add an app: search by name
 Add an entry to a collection
 Add an idle command
-Add any widget to it in Studio → Bars → Sidebar.
+Add any widget to it in Studio → Bars → Sidebars.
 Add app
 Add apps or commands below.
 Add apps to the Dock
@@ -786,6 +788,8 @@ Bar essentials
 Bar icons relative to their designed size
 Bar items light up softly under the pointer
 Bar label
+Bar position
+Bar presets
 Bar radius
 Bar text relative to the interface text size
 Bar thickness
@@ -3159,6 +3163,7 @@ Item shape
 Item size
 Item spacing
 Item style
+Its items, shape and look. Drag plugins into its groups below.
 Its name (optional)
 Its people
 JPEG
@@ -3353,12 +3358,14 @@ Leave empty for the toplist, e.g. "nature 4k"
 Leave empty to follow the desktop's icon theme
 Leave it
 Leave snipping and keep the toolbar · Esc
+Leave the edge free
 Leave undone whatever you hesitate to do.
 Left
 Left (vertical)
 Left / top
 Left accent
 Left click
+Left edge
 Left icon colour
 Left icon shape
 Left item inset
@@ -3959,6 +3966,7 @@ Move up
 Move window to {place} {n}
 Move window {direction}
 Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders.
+Moves here from the other edge
 Moves with the music
 Moving clouds, rain and stars (off with reduced motion)
 Muhammad Ayyub
@@ -4198,6 +4206,8 @@ No download for this system in the release
 No downloads yet
 No drive matching "{query}"
 No earlier wallpaper
+No edge holds a side bar. Choose Side bar for an edge above to set one up.
+No edge holds the sidebar. The settings below also shape the power dock and the cards in panels.
 No entities to show
 No environment variables or arguments
 No exit node matches {query}
@@ -4987,6 +4997,7 @@ Place clock
 Place in the bar
 Place name
 Place the clock
+Placed by the interface language: left, or right for right-to-left languages.
 Placeholder
 Placeholders: {HH} {mm} {ss} {ampm} {time} {weekday} {wd} {day} {month} {mon} {MM} {year} {greeting} {daypart} {hijri}
 Placement
@@ -5606,6 +5617,7 @@ Right (vertical)
 Right / bottom
 Right accent
 Right click
+Right edge
 Right icon colour
 Right icon shape
 Right item inset
@@ -6186,17 +6198,22 @@ Side
 Side bar
 Side bar items
 Side bar material
+Side bar on the left
+Side bar on the right
 Side bar shape
 Side bar width
 Side bar, edge frame and hairline only
 Side bars
+Side bars on the left and right
 Side by side
 Side inset
 Side pill
 Sidebar
 Sidebar card community
+Sidebar panel
 Sidebar tabs
 Sidebar width
+Sidebars
 Sidebars & hover
 Sideways text
 Sign in without a password when the computer starts.
@@ -6251,6 +6268,9 @@ Slider design
 Slider handle
 Slider with min and max, otherwise a number field
 Sliders
+Slides out from the left edge: its tabs and cards, how it behaves and how it looks.
+Slides out from the right edge: its tabs and cards, how it behaves and how it looks.
+Slides out with tabs and cards
 Slideshow
 Slideshow transition
 Slow
@@ -6804,6 +6824,7 @@ The bar item shows the clock while you play
 The bar item shows your score while you play
 The bar item, or none for no bar item.
 The bar item, panel and sidebar card re-render: no restart
+The bar itself stands on this edge, so a side bar can't. The sidebar slides out beside it.
 The bar's battery chip breathes coral while the charge is critical
 The bar's battery chip breathes gently while it charges (never with Reduce motion)
 The bar's items
@@ -6983,6 +7004,7 @@ The plugin archive contains unsafe paths
 The plugin archive has no plugin.toml
 The plugin archive is too large
 The plugin's own language (a code such as ar or en), or follow to use Mandara's
+The power dock opens from the edge opposite the sidebar.
 The prayer times of another day (days after today, or before it when negative)
 The provider returned no language list
 The provider returned no translation
@@ -7246,6 +7268,7 @@ This request is too large
 This restarts the computer; repeat as `session reboot-to {target} confirm`
 This server sends its stream in a way Mandara can't play yet
 This session
+This side bar is the rail of the {preset} preset. It changes with the preset.
 This sign-in method needs more than a password
 This site offers several feeds:
 This station uses a format Mandara can't play
@@ -7921,6 +7944,7 @@ What changed between two NixOS generations (packages and closure size)
 What changed in each release, in plain words. Run mandara changelog to see it in a terminal.
 What clicking an entry does
 What do we live for, if it is not to make life less difficult to each other?
+What each edge holds
 What each recorder can do on this computer
 What each tag or workspace pill says
 What happens
@@ -8216,7 +8240,7 @@ a level for new, a cell (row,column) for select, a digit for digit and note
 a path key from `jannah paths`
 a reference: bukhari 1, muslim 2699a
 a reference: bukhari 1, muslim 2699a, abudawud 4031
-a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, ai-shell-agent, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
+a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, ai-shell-agent, general, profiles, performance, maintenance, about), bars/<bar|sidebars|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
 a style id from `wallgen styles`
 a surah (2, al-baqara) or an ayah (2:255), or a range (2:255-257)
 a verse or hadith reference

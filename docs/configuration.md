@@ -104,7 +104,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 
 | Page | Settings |
 |---|---|
-| Bars | **Bar**: layout and appearance (`bar.*`); **Side bars**: left/right plugin bars (`side_bars.*`); **Sidebar**: widget tabs, cards and appearance (`sidebar.*`, `sidebar.look.*`); **Drop-down panels**: geometry, material, main menu and animation (`panels.*`, `bar.panel_radius`); **Edges & corners**: hover triggers (`edges.*`, `sidebar.hover_reveal`), hot corners (`hot_corners.*`) and rounded screen corners (`screen_corners.*`) |
+| Bars | **Bar**: layout and appearance (`bar.*`); **Sidebars**: what each side edge holds, then the left/right plugin bars (`side_bars.*`) and the sidebar panel's widget tabs, cards and appearance (`sidebar.*`, `sidebar.look.*`); **Drop-down panels**: geometry, material, main menu and animation (`panels.*`, `bar.panel_radius`); **Edges & corners**: hover triggers (`edges.*`, `sidebar.hover_reveal`), hot corners (`hot_corners.*`) and rounded screen corners (`screen_corners.*`) |
 | Dock | layout (position, size, magnification), behaviour (auto-hide, delays, slide speed, bounces, minimize into icon; window geometry is checked periodically only for Smart hiding), apps (`pinned` order — `"@launcher"` is the launcher button, at any position; it replaces 0.22's `launcher_button` / `launcher_at_end`, which are moved into `pinned` once — running, recent apps, indicators, badges), stacks (`[[dock.stacks]]` path / view / sort / display, `stack_items`, `fan_items`, `stack_names`), the Applications folder (`[dock.applications]` enabled / view / order / icon_size; replaces 0.1's `applications_slot`), Trash, the now-playing chip (`dock.media_chip`), appearance (opacity, tint, radius, padding, spacing, shadow, rim) — every number clamped to `mandara_config::dock::ranges` (`dock.*`) |
 | Launcher | ready-made looks ([Launcher looks](#launcher-looks)), style (classic / beacon), placement (`launcher.look.position`, see [Launcher placement](#launcher-placement)), align to the launcher button, width / height when attached and in the center, layout, grid columns and icon size, category chips, grouped results, keyboard hints, Beacon bar width and height, dim, results (`launcher.max_results`), providers and prefixes, ranking half-life and recent count, launching (`launcher.*`) |
 | Window switcher | style, previews, scope, thumbnail width, columns (`switcher.*`); screen time retention, idle and limits (`screen_time.*`) |
@@ -803,7 +803,7 @@ style = "tile-dock"      # the bar style that set these (see below)
 ```
 
 A **bar style for one side bar** sets those keys at once:
-Studio → Bars → Side bars (the *Style* chips above each bar's groups) or
+Studio → Bars → Sidebars (the *Style* chips above each bar's groups) or
 `mandara msg side-bar style left|right expressive|tile-dock|rail|segmented|none`
 (the four original styles; the newer ones shape the whole bar).
 It shapes that bar alone: the main bar, the other side bar and the shared
@@ -836,9 +836,11 @@ cleared.
   off or that side is switched off. The power dock's hover edge is off on
   an edge with a side bar.
 
-Arrange each group's plugins in Studio → Bars → Side bars. Its layout
-designer shows the left and right bars' top, middle and bottom groups;
-the same tab holds their behavior, shape, items and material.
+Arrange each group's plugins in Studio → Bars → Sidebars. Its picker
+gives each edge a side bar, the sidebar or nothing (an edge holds one of
+them; a preset's rail changes only with its preset); the side bar section
+below shows each side bar's top, middle and bottom groups and their
+behavior, shape, items and material.
 Commands: `mandara msg side-bars on|off|toggle`, `side-bars join
 on|off|toggle`, `side-bar pin left|right [on|off|toggle]`, `side-bar show
 left|right [on|off|toggle]`, `side-bars status`.

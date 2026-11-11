@@ -30,6 +30,7 @@ pub mod preauth;
 pub mod recorder;
 pub mod schema;
 pub mod side_bars;
+pub mod side_edges;
 pub mod sidebar;
 pub mod store;
 pub mod surfaces;

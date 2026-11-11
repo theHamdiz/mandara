@@ -355,6 +355,12 @@ const PRESETS: &[Preset] = &[
     styled(tk("Raml Tram"), tk("One line of flower stops running along the top and down the left edge"), BarStyle::RamlTram, BarLayout::MinimalEdge, BarPosition::Top, 38.0),
 ];
 
+/// The bar preset's name for a style (translation key), for notes that
+/// point to it.
+pub(super) fn preset_name(style: BarStyle) -> Option<&'static str> {
+    PRESETS.iter().find(|p| p.style == Some(style)).map(|p| p.name)
+}
+
 fn apply_preset(p: &'static Preset, replace_items: bool, cx: &mut App) {
     let known: Vec<String> = cx.global::<PluginRegistry>().manifests().map(|m| m.id.clone()).collect();
     update_config(cx, |c| apply_preset_in(c, p, replace_items, &known));
@@ -564,22 +570,24 @@ impl StudioView {
             .into_any_element()
     }
 
-    /// The side bars' layout designer (Studio → Bars → Side bars).
+    /// The side bars' layout designer (Studio → Bars → Sidebars): a column
+    /// of groups for each side bar that shows.
     pub(super) fn side_bars_designer(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        if !cfg.side_bars.enabled { return div().into_any_element(); }
+        let (show_left, show_right) = (cfg.side_bar_on(false), cfg.side_bar_on(true));
+        if !show_left && !show_right { return div().into_any_element(); }
         let scale = window.scale_factor();
         let mut side = |right: bool, title: &'static str| {
             let settings = cfg.side_bars.side(right);
             div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_6_PX))
-                .when(!settings.enabled, |el| el.opacity(ALPHA_60))
                 .child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(tr(title)))
                 .child(side_style_row(cfg, right, p))
                 .child(self.lane(Lane::Side(right, SideZone::Top), tk("Top"), &settings.top, false, scale, p, cx))
                 .child(self.lane(Lane::Side(right, SideZone::Middle), tk("Middle"), &settings.middle, false, scale, p, cx))
                 .child(self.lane(Lane::Side(right, SideZone::Bottom), tk("Bottom"), &settings.bottom, false, scale, p, cx))
         };
-        let (left, right) = (side(false, tk("Left side bar")), side(true, tk("Right side bar")));
-        let lanes = div().ltr_row().when(self.stack_rows, |el| el.flex_col()).gap(px(SPACE_12_PX)).child(left).child(right);
+        let left = show_left.then(|| side(false, tk("Left side bar")));
+        let right = show_right.then(|| side(true, tk("Right side bar")));
+        let lanes = div().ltr_row().when(self.stack_rows, |el| el.flex_col()).gap(px(SPACE_12_PX)).children(left).children(right);
         let pool = self.plugin_pool(cfg, p, window, cx);
         let menu = self.plugin_menu(cfg, p, window, cx);
         div().row().flex_col().gap(px(SPACE_12_PX)).child(lanes).child(pool).children(menu).into_any_element()
