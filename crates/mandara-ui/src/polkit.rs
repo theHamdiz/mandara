@@ -115,8 +115,49 @@ pub struct PolkitUi {
     /// Keeps the live agent handle (the event pump holds a clone too).
     _agent: Option<PolkitAgent>,
     window: Option<WindowHandle<PolkitDialog>>,
-    queue: VecDeque<(AuthRequest, PolkitAgent)>,
+    queue: VecDeque<Queued>,
     pub status: Option<AgentStatus>,
+}
+
+/// A request waiting for (or shown in) the dialog.
+struct Queued {
+    request: AuthRequest,
+    agent: PolkitAgent,
+    early: Early,
+}
+
+/// What the helper said before the request's dialog opened: it asks
+/// right away, often while the previous request's dialog is still fading
+/// out (Studio's "refresh the helper, then apply" asks twice in a row).
+/// Dropping that prompt left the next dialog waiting for one forever.
+#[derive(Default)]
+struct Early {
+    prompt: Option<PolkitEvent>,
+    note: Option<PolkitEvent>,
+}
+
+impl Early {
+    fn keep(&mut self, event: PolkitEvent) {
+        match event {
+            PolkitEvent::Prompt { .. } => self.prompt = Some(event),
+            PolkitEvent::Message { .. } => self.note = Some(event),
+            // A fresh prompt follows a retry; the old one is spent.
+            PolkitEvent::Retry { .. } => self.prompt = None,
+            _ => {}
+        }
+    }
+
+    /// In arrival order: a module's message comes before its prompt.
+    fn take(&mut self) -> [Option<PolkitEvent>; 2] {
+        [self.note.take(), self.prompt.take()]
+    }
+}
+
+/// Keeps `event` for its queued request when no dialog shows it yet.
+fn stash(queue: &mut VecDeque<Queued>, cookie: &str, event: PolkitEvent) {
+    if let Some(q) = queue.iter_mut().find(|q| q.request.cookie == cookie) {
+        q.early.keep(event);
+    }
 }
 
 impl Global for PolkitUi {}
@@ -181,11 +222,11 @@ fn handle_event(event: PolkitEvent, agent: PolkitAgent, cx: &mut App) {
     match event {
         PolkitEvent::Status(status) => cx.global_mut::<PolkitUi>().status = Some(status),
         PolkitEvent::Begin(request) => {
-            cx.global_mut::<PolkitUi>().queue.push_back((request, agent));
+            cx.global_mut::<PolkitUi>().queue.push_back(Queued { request, agent, early: Early::default() });
             show_next(cx);
         }
         PolkitEvent::Close { cookie, outcome } => {
-            cx.global_mut::<PolkitUi>().queue.retain(|(r, _)| r.cookie != cookie);
+            cx.global_mut::<PolkitUi>().queue.retain(|q| q.request.cookie != cookie);
             with_dialog(cx, &cookie, |d, cx| {
                 d.closing = true;
                 d.outcome = Some(outcome);
@@ -198,18 +239,24 @@ fn handle_event(event: PolkitEvent, agent: PolkitAgent, cx: &mut App) {
                 PolkitEvent::Prompt { cookie, .. } | PolkitEvent::Message { cookie, .. } | PolkitEvent::Retry { cookie, .. } => cookie.clone(),
                 _ => return,
             };
-            with_dialog(cx, &cookie, move |d, cx| {
-                d.on_event(other);
+            let mut event = Some(other);
+            with_dialog(cx, &cookie, |d, cx| {
+                if let Some(event) = event.take() {
+                    d.on_event(event);
+                }
                 cx.notify();
             });
+            if let Some(event) = event {
+                stash(&mut cx.global_mut::<PolkitUi>().queue, &cookie, event);
+            }
         }
     }
 }
 
+/// Runs `f` on the dialog when it shows `cookie`'s request.
 fn with_dialog(cx: &mut App, cookie: &str, f: impl FnOnce(&mut PolkitDialog, &mut Context<PolkitDialog>)) {
     let handle = cx.global::<PolkitUi>().window;
     if let Some(handle) = handle {
-        let cookie = cookie.to_string();
         let _ = handle.update(cx, |d, _, cx| {
             if d.request.cookie == cookie {
                 f(d, cx);
@@ -224,14 +271,21 @@ fn show_next(cx: &mut App) {
     if open {
         return;
     }
-    let Some((request, agent)) = cx.global::<PolkitUi>().queue.front().cloned() else { return };
+    let Some(front) = cx.global_mut::<PolkitUi>().queue.front_mut() else { return };
+    let (request, agent, early) = (front.request.clone(), front.agent.clone(), front.early.take());
     // The focused monitor: its display and size together (issue #8).
     let (display, (w, h)) = crate::outputs::overlay_target(cx);
     let mut spec = LayerSurfaceSpec::overlay(SurfaceRole::Lock, gpui::size(px(w), px(h)), display).with_keyboard(KeyboardInteractivity::Exclusive);
     spec.layer = Layer::Overlay;
     spec.anchor = Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT;
     let handle = cx
-        .open_window(spec.window_options(), move |window, cx| cx.new(|cx| PolkitDialog::new(request, agent, (w, h), window, cx)))
+        .open_window(spec.window_options(), move |window, cx| {
+            cx.new(|cx| {
+                let mut dialog = PolkitDialog::new(request, agent, (w, h), window, cx);
+                early.into_iter().flatten().for_each(|e| dialog.on_event(e));
+                dialog
+            })
+        })
         .map_err(|e| tracing::error!("polkit dialog: {e:#}"))
         .ok();
     cx.global_mut::<PolkitUi>().window = handle;
@@ -897,6 +951,28 @@ mod tests {
         let (rtx, rrx) = async_channel::unbounded::<PolkitReply>();
         let request = AuthRequest { cookie: cookie.into(), action_id: String::new(), message: String::new(), icon_name: String::new(), details: Vec::new(), users: Vec::new() };
         (AskJob { request, agent: PolkitAgent::from_channels(erx, rtx.clone()) }, rtx, rrx)
+    }
+
+    /// The second of two back-to-back requests (Studio: refresh the
+    /// helper, then apply) is asked for while the first dialog fades out:
+    /// its prompt waits for its own dialog instead of being dropped.
+    #[test]
+    fn a_prompt_before_its_dialog_opens_is_kept_for_it() {
+        let (first, ..) = job("first");
+        let (second, ..) = job("second");
+        let mut queue: VecDeque<Queued> = [first, second].into_iter().map(|j| Queued { request: j.request, agent: j.agent, early: Early::default() }).collect();
+        let prompt = |cookie: &str| PolkitEvent::Prompt { cookie: cookie.into(), user: "layla".into(), text: "Password: ".into(), echo: false };
+        stash(&mut queue, "second", PolkitEvent::Message { cookie: "second".into(), text: "2 attempts left".into(), error: false });
+        stash(&mut queue, "second", prompt("second"));
+        stash(&mut queue, "gone", prompt("gone"));
+        queue.pop_front();
+        let early = queue.front_mut().map(|q| q.early.take());
+        assert!(matches!(early, Some([Some(PolkitEvent::Message { .. }), Some(PolkitEvent::Prompt { ref cookie, .. })]) if cookie == "second"));
+        assert!(queue.front_mut().is_some_and(|q| matches!(q.early.take(), [None, None])), "replayed once");
+        let mut early = Early::default();
+        early.keep(prompt("x"));
+        early.keep(PolkitEvent::Retry { cookie: "x".into(), message: String::new() });
+        assert!(matches!(early.take(), [None, None]), "a retry spends the old prompt");
     }
 
     #[test]

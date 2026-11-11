@@ -367,18 +367,16 @@ impl Launcher for PkexecLauncher {
             return Ok(exe);
         }
         // No helper yet, or an older one that doesn't know this action:
-        // copy this binary into place (one approval, as Studio does).
-        let me = std::env::current_exe().map_err(|e| Failure { kind: FailureKind::Helper, detail: e.to_string() })?;
-        let (prog, args) = admin::setup_command(&me);
-        let out = Command::new(prog).args(args).stdin(Stdio::null()).output().map_err(|e| Failure { kind: FailureKind::NoPrompt, detail: e.to_string() })?;
-        if !out.status.success() {
-            return Err(helper_failure(out.status.code(), &String::from_utf8_lossy(&out.stderr)));
-        }
-        admin::admin_exe().filter(|exe| helper::helper_speaks_protocol(exe)).ok_or_else(|| Failure { kind: FailureKind::Helper, detail: t("The admin helper couldn't be installed, so nothing was changed.").to_string() })
+        // `root` puts this binary in place first, in the same approval.
+        std::env::current_exe().map_err(|e| Failure { kind: FailureKind::Helper, detail: e.to_string() })
     }
 
     fn root(&self, admin: &Path, args: &[String]) -> std::io::Result<RootProc> {
-        let (prog, argv) = mandara_config::admin::pkexec(admin, std::iter::once("system-update".into()).chain(args.iter().map(Into::into)));
+        use mandara_config::admin;
+        let argv = std::iter::once("system-update".into()).chain(args.iter().map(Into::into));
+        // `prepare` hands back the running binary, which isn't root's, when
+        // the helper must be (re)installed first.
+        let (prog, argv) = if admin::trusted_root_file(admin) { admin::pkexec(admin, argv) } else { admin::setup_and_run(admin, argv) };
         let mut child = Command::new(prog).args(argv).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
         let missing = || std::io::Error::other("pipe");
         let stdout = Box::new(child.stdout.take().ok_or_else(missing)?);
