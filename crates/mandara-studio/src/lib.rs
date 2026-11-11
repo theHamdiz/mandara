@@ -302,6 +302,9 @@ mod tests {
         assert_eq!(themes_tab_target("Themes/presets"), Some(ThemesTab::Components));
         assert_eq!(themes_tab_target("appearance/components"), Some(ThemesTab::Components), "a former page name still leads there");
         assert_eq!(themes_tab_target("themes/colors"), Some(ThemesTab::Colors));
+        assert_eq!(themes_tab_target("themes/boot"), Some(ThemesTab::Boot));
+        assert_eq!(themes_tab_target("themes/plymouth"), Some(ThemesTab::Boot));
+        assert_eq!(themes_tab_target("themes/grub"), Some(ThemesTab::Boot));
         assert_eq!(themes_tab_target("themes"), None, "the page alone keeps its first tab");
         assert_eq!(themes_tab_target("wallpaper/components"), None);
         for tab in ThemesTab::ALL {

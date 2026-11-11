@@ -60,6 +60,14 @@ enum Cmd {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Private: the root side of Boot look (boot menu and splash themes),
+    /// started through pkexec with the root-owned admin helper. Accepts
+    /// only `apply <request.json>` and `restore <latest|ID>`.
+    #[command(hide = true)]
+    BootAdmin {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Start the shell directly, without the restart supervisor.
     Run,
     /// Run a shell command, e.g. `mandara msg audio volume set 40`.
@@ -218,6 +226,7 @@ fn main() -> Result<()> {
         Some(Cmd::AgentWorker) => mandara_services::command_agent::worker_main(mandara_studio::agent_settings_catalog),
         Some(Cmd::PanelCaptureWorker) => mandara_services::screencopy::panel::worker_main(),
         Some(Cmd::SystemUpdate { args }) => std::process::exit(mandara_services::sysupdate::helper::main(&args)),
+        Some(Cmd::BootAdmin { args }) => std::process::exit(mandara_services::boot::helper::main(&args)),
         Some(Cmd::Setup { autostart, compositor, check, fix_conflicts, restore, fix }) => setup_cli::setup(setup_cli::Options { autostart, compositor, check, fix_conflicts, restore, fix }),
         Some(Cmd::Msg { json, args }) => {
             use std::io::Write as _;
@@ -837,6 +846,17 @@ mod tests {
             let argv = ["mandara", "system-update"].into_iter().chain(words.iter().copied());
             let cli = Cli::try_parse_from(argv).unwrap();
             let Some(Cmd::SystemUpdate { args }) = cli.command else { panic!("not system-update") };
+            assert_eq!(args, words);
+        }
+    }
+
+    /// Boot look's root side gets its words untouched too (it accepts only
+    /// its fixed actions itself).
+    #[test]
+    fn boot_admin_passes_its_words_through() {
+        for words in [vec!["apply", "/home/u/.cache/mandara/boot/requests/ab.json"], vec!["restore", "latest"], vec!["--evil"]] {
+            let argv = ["mandara", "boot-admin"].into_iter().chain(words.iter().copied());
+            let Some(Cmd::BootAdmin { args }) = Cli::try_parse_from(argv).unwrap().command else { panic!("not boot-admin") };
             assert_eq!(args, words);
         }
     }

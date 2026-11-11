@@ -23,6 +23,7 @@ pub mod desktop_feeds;
 pub mod feeds;
 #[cfg(any(test, target_os = "freebsd"))]
 pub mod freebsd;
+pub mod boot;
 pub mod cursors;
 pub mod ddc;
 pub mod drives;

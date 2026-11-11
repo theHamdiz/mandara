@@ -10,6 +10,8 @@
 //! * `input cursor-themes|layouts` — what Studio → Input offers.
 //! * `cursor list|install|apply|remove` — Studio → Themes → Cursor (the
 //!   opt-in `cursors` plugin's commands).
+//! * `boot status|list|install|import|apply|restore` — Studio → Themes →
+//!   Boot (the opt-in `boot-look` plugin's commands, in `boot_look.rs`).
 //! * `profile list|save|apply|delete`, `config export|import|reset`.
 
 use gpui::{App, AsyncApp};
@@ -553,6 +555,7 @@ fn register_apps(r: &mut PluginRegistry) {
     );
     register_uninstall(r);
     register_cursor(r);
+    super::boot_look::register_commands(r);
     r.command(CORE, CommandSpec::new("input cursor-themes", tk("Installed cursor themes"), |_, _| Ok(json!(mandara_config::input::cursor_themes()))));
     r.command(
         CORE,

@@ -175,6 +175,7 @@ mod tests {
         "2048",
         "app-installer",
         "authenticator",
+        "boot-look",
         "breaks",
         "ci",
         "color-picker",

@@ -65,6 +65,9 @@ wayland-protocols-wlr.workspace = true
 wayland-protocols-misc.workspace = true
 wl-clipboard-rs.workspace = true
 tiny-skia.workspace = true
+# Boot look: rasterises your SVG for the boot splash (same resvg as GPUI;
+# no text or system fonts, nothing loaded from outside the file).
+resvg = { version = "0.46", default-features = false }
 sha-crypt.workspace = true
 ab_glyph = "0.2"
 # 0.23: the fontdb cosmic-text 0.19 (GPUI's text stack) uses.
