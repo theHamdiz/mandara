@@ -117,6 +117,9 @@ pub const FONTS: &[Font] = &[
     // The Qur'anic Naskh for Jannah's verses and hadith.
     Font { family: "Amiri Quran", file: "AmiriQuran-Regular.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/amiriquran/AmiriQuran-Regular.ttf", size: 136_920 },
     Font { family: "Amiri", file: "Amiri-Regular.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Regular.ttf", size: 431_116 },
+    // Ink Rush's comic display face (SIL Open Font License 1.1, its text in
+    // `assets/fonts/bangers/OFL.txt`).
+    Font { family: "Bangers", file: "Bangers-Regular.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/bangers/Bangers-Regular.ttf", size: 93_148 },
 ];
 
 pub fn fonts_dir() -> PathBuf {

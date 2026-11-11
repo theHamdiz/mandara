@@ -566,6 +566,9 @@ pub const LOOKS: [LookDef; 19] = [
         toasts: Some(ToastPosition::TopRight),
         ink: Some(crate::desktop::InkStyle { outline: 3.0, shadow: 5.0, texture: crate::desktop::SurfaceTexture::Halftone, bubbles: true }),
         inked_widgets: true,
+        // The comic display face (Studio → Maintenance fetches it; until
+        // then the usual display face stands in).
+        display_font: "Bangers",
         ..KEEP
     },
     LookDef {

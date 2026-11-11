@@ -9,7 +9,7 @@ About → What's new shows it too.
 ### New
 
 - **Your own Looks.** Change anything after applying a Look and Mandara keeps it as a Look of your own ("Corniche Dusk · Custom", renamable), stored as just what you changed, so it follows improvements to the original. Save, rename, duplicate, delete, export and import Looks in Studio → Themes → Looks or with `mandara msg look …`. Look files are small, carry nothing personal and are checked strictly on import.
-- **Thirteen new Looks**, one on every bar style, plus Redmond (a Windows 11-style taskbar desktop), Cupertino (a macOS-style menu bar and dock), Library Desk, Zen (a hidden pill with hot corners) and Ink Rush, a cel-shaded comic desktop.
+- **Thirteen new Looks**, one on every bar style, plus Redmond (a Windows 11-style taskbar desktop), Cupertino (a macOS-style menu bar and dock), Library Desk, Zen (a hidden pill with hot corners) and Ink Rush, a cel-shaded comic desktop set in the Bangers comic face (SIL Open Font License; Studio → Maintenance fetches it with Mandara's other fonts).
 - **The Taskbar bar style:** your pinned and running apps centred next to the launcher, with a stacked clock and date, in Studio → Bars → Presets or `mandara msg bar style taskbar`.
 - **Ink style:** ink outlines, hard shadows and halftone or hatched shading for the bar, panels, launcher, dock, notifications and cards (Studio → Themes → Fine-tune → Ink).
 - **Speech-bubble notifications.** With the ink style, notifications can pop up as comic speech bubbles whose tail points to the notification corner; Ink Rush turns them on.
