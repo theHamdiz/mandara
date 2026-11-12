@@ -37,6 +37,9 @@ pub const EXCLUSION_STRIP_THICKNESS_PX: f32 = 1.0;
 pub enum SurfaceRole {
     Bar,
     Wallpaper,
+    /// A wallpaper transition played on the GPU over the software
+    /// wallpaper (background layer, only while it plays).
+    WallpaperTransition,
     Osd,
     Notifications,
     Launcher,
@@ -71,6 +74,7 @@ impl SurfaceRole {
         match self {
             SurfaceRole::Bar => "mandara-bar",
             SurfaceRole::Wallpaper => "mandara-wallpaper",
+            SurfaceRole::WallpaperTransition => "mandara-wallpaper-transition",
             SurfaceRole::Osd => "mandara-osd",
             SurfaceRole::Notifications => "mandara-notifications",
             SurfaceRole::Launcher => "mandara-launcher",
@@ -87,10 +91,11 @@ impl SurfaceRole {
         }
     }
 
-    pub const ALL: [SurfaceRole; 15] = [
+    pub const ALL: [SurfaceRole; 16] = [
         SurfaceRole::Exclusion,
         SurfaceRole::Bar,
         SurfaceRole::Wallpaper,
+        SurfaceRole::WallpaperTransition,
         SurfaceRole::Osd,
         SurfaceRole::Notifications,
         SurfaceRole::Launcher,

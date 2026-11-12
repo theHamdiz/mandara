@@ -488,15 +488,13 @@ fn clock(palette: &MandaraPalette, tc: &TileCx, cx: &App) -> gpui::AnyElement {
 
 /// A reveal that fills what's left of its column.
 fn fill(p: &PanelCx, index: usize, el: impl IntoElement) -> gpui::AnyElement {
-    let r = p.reveal(index);
-    div().relative().top(px(r.offset)).opacity(r.opacity).flex_1().min_h(px(0.0)).flex().flex_col().child(el).into_any_element()
+    crate::kit::reveal_box(p, index).flex_1().min_h(px(0.0)).flex().flex_col().child(el).into_any_element()
 }
 
 /// A reveal that keeps its row's full height and centres its content in
 /// it (the rail: exactly as much space above it as below).
 fn fill_row(p: &PanelCx, index: usize, el: impl IntoElement) -> gpui::AnyElement {
-    let r = p.reveal(index);
-    div().relative().top(px(r.offset)).opacity(r.opacity).flex().flex_col().justify_center().child(el).into_any_element()
+    crate::kit::reveal_box(p, index).flex().flex_col().justify_center().child(el).into_any_element()
 }
 
 fn home(palette: &MandaraPalette, p: &PanelCx, tc: &TileCx, window: &mut Window, cx: &mut App) -> gpui::AnyElement {

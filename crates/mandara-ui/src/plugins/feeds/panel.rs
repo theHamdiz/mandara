@@ -201,7 +201,7 @@ impl View {
             .on_key_down(move |event: &KeyDownEvent, window, cx| keys(event, &focus, &search, window, cx))
             .child(div().flex_none().child(reveal(&self.context, 0, header("rss", accent, t("Feeds"), subtitle, palette, Some(tools.into_any_element())))))
             .child(div().flex_none().h(px(GAP)))
-            .child({ let r = self.context.reveal(1); div().flex_1().min_h(px(0.0)).relative().top(px(r.offset)).opacity(r.opacity).child(div().size_full().child(body)) })
+            .child(crate::kit::reveal_box(&self.context, 1).flex_1().min_h(px(0.0)).child(div().size_full().child(body)))
             .when_some(flash, |el, (ok, message)| el.child(toast(ok, message, PAD, palette)))
             .into_any_element()
     }

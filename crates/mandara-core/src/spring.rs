@@ -31,6 +31,11 @@ impl Drop for MotionScope {
     fn drop(&mut self) { SURFACE_SPEED.with(|s| s.set(self.0)); }
 }
 
+/// The playback speed of the innermost [`MotionScope`] (1 outside any), for
+/// animations drawn from elapsed time rather than a spring. Zero means
+/// the surface's transitions are instant.
+pub fn surface_speed() -> f32 { SURFACE_SPEED.with(std::cell::Cell::get) }
+
 static SYSTEM_REDUCED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Last reduced-motion preference reported by the desktop portal.
@@ -549,6 +554,7 @@ mod tests {
         normal.step_in(0.01, &p);
         {
             let _scope = MotionScope::new(2.0);
+            assert_eq!(surface_speed(), 2.0);
             fast.step_in(0.01, &p);
             assert!(fast.value() > normal.value());
             {

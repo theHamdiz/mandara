@@ -154,6 +154,29 @@ mod tests {
     fn mock(response: Result<Response, String>) -> Mock { Mock { response: RefCell::new(response), etags: RefCell::default() } }
     fn modified(text: &str) -> Result<Response, String> { Ok(Response::Modified { text: text.into(), etag: Some("v1".into()) }) }
 
+    /// Opens the refresh lock as a separate open file description, as another
+    /// Mandara process would.
+    fn open_lock(path: &Path) -> std::fs::File {
+        std::fs::File::options().read(true).write(true).open(path.with_extension("lock")).unwrap()
+    }
+
+    /// Takes `file`'s lock once every earlier holder has released it.
+    ///
+    /// Sibling tests in this binary spawn processes. Until such a child execs,
+    /// it shares this process's descriptors, so an flock dropped here a moment
+    /// ago can still be held through the child's copy. A single `try_lock`
+    /// right after a release is therefore a race; block on the kernel's
+    /// release instead, bounded so a lock that is never released still fails.
+    fn lock_once_released(file: std::fs::File) -> std::fs::File {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let locked = file.lock().map(|()| file);
+            // The receiver is gone only after a timeout already failed the test.
+            let _ = tx.send(locked);
+        });
+        rx.recv_timeout(Duration::from_secs(10)).expect("a released refresh lock stayed held").unwrap()
+    }
+
     #[test]
     fn first_failure_is_closed_and_empty_document_is_valid() {
         let dir = tempfile::tempdir().unwrap();
@@ -210,7 +233,7 @@ mod tests {
         drop(held);
         contender.join().unwrap();
         assert_eq!(result.unwrap().unwrap_err().kind(), std::io::ErrorKind::TimedOut);
-        refresh_lock(&path, Duration::ZERO).unwrap();
+        lock_once_released(open_lock(&path));
     }
 
     #[test]
@@ -219,7 +242,7 @@ mod tests {
         let path = dir.path().join("policy.json");
         load(&path, &mock(modified("[[publishers]]\nlogin = 'alice'")), 100, true).unwrap();
         let before = std::fs::read(&path).unwrap();
-        let held = refresh_lock(&path, Duration::ZERO).unwrap();
+        let held = lock_once_released(open_lock(&path));
         let transport = mock(modified(""));
         let repository = super::super::policy::Repository { id: None, full_name: "alice/weather".into(), owner: super::super::policy::Publisher { id: None, login: "alice".into() } };
         let limit = 100 + MAX_INSTALL_AGE.as_secs();
@@ -241,7 +264,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("policy.json");
         load(&path, &mock(modified("")), 100, true).unwrap();
-        let _held = refresh_lock(&path, Duration::ZERO).unwrap();
+        let _held = lock_once_released(open_lock(&path));
         let limit = 100 + MAX_INSTALL_AGE.as_secs();
         let transport = mock(modified(""));
         assert!(load_with_lock_wait(&path, &transport, limit, true, LOCK_RETRY * 20).is_err());
@@ -312,7 +335,7 @@ mod tests {
         entered_rx.recv_timeout(Duration::from_secs(2)).unwrap();
         // Open independently, rather than cloning the first handle: these
         // are the lock semantics used by separate Mandara processes.
-        let independent = std::fs::File::options().read(true).write(true).open(path.with_extension("lock")).unwrap();
+        let independent = open_lock(&path);
         assert!(matches!(independent.try_lock(), Err(std::fs::TryLockError::WouldBlock)));
 
         let calls = Arc::new(AtomicUsize::new(0));
@@ -332,7 +355,7 @@ mod tests {
         assert_eq!(calls.load(Ordering::Relaxed), 0, "the waiting caller must reread the freshly saved policy");
         let repository = super::super::policy::Repository { id: None, full_name: "alice/weather".into(), owner: super::super::policy::Publisher { id: None, login: "alice".into() } };
         assert!(policy.decision(&repository).denied);
-        independent.try_lock().unwrap();
+        lock_once_released(independent);
     }
 
     #[test]

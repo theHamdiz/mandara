@@ -101,6 +101,8 @@ const POP_DROP_PX: f32 = 8.0;
 /// Each mode button starts sliding out this much later in the open
 /// progress than the one before it.
 const MODE_STAGGER: f32 = 0.08;
+/// Choreography travel of a grid tile cascading in, in px.
+const TILE_CASCADE_PX: f32 = 14.0;
 /// The results card grows with a stiffer spring than the bar pops.
 pub(super) const CARD_SPRING: SpringConfig = SpringConfig::new(560.0, 44.0, 1.0);
 /// Selected-row and hover fills.
@@ -476,12 +478,19 @@ impl LauncherView {
         let accent = readable(palette.primary, &palette);
         let ignore_mouse = self.look.ignore_mouse;
         let mut out = Vec::with_capacity(range.len());
+        let choreo = mandara_core::choreo::choreography();
+        let (opened, origin) = self.cascade;
         for r in range {
             let mut row = div().row().w_full().h(px(g.tile_h));
             for i in r * g.cols..((r + 1) * g.cols).min(self.results.len()) {
                 let item = self.results[i].clone();
                 let prev = self.reflow_from.get(&super::usage_key(&item)).copied();
                 let (dx, dy, opacity) = reflow(prev, i, &g, rtl, t);
+                // Tiles cascade in with the choreography as it opens.
+                let (dx, dy, opacity) = match choreo.item(opened, i, origin, rtl, TILE_CASCADE_PX) {
+                    Some((cx_, cy, alpha)) => (dx + cx_, dy + cy, opacity * alpha),
+                    None => (dx, dy, opacity),
+                };
                 let selected = i == self.selected;
                 let lead = self.lead(&item, g.icon, &palette, cx);
                 let hover = cx.listener(move |this, hovered: &bool, _, cx| {

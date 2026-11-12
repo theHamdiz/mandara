@@ -125,6 +125,38 @@ window again. This avoids a spurious `window not found` error when leaving
 the screenshot overlay. The regression test closes a view during a real
 platform frame callback and checks that no further frame wake is sent.
 
+## 7. Transition primitive (`scene.rs`, `window.rs`)
+
+A wallpaper change used to be drawn as dozens to hundreds of image quads,
+each the same full-screen image through its own clip: seams between the
+pieces, axis-aligned "shards", block-shaped dissolves. The scene now has a
+primitive for a per-pixel transition between two full-size images, and the
+vendored renderer (`gpui_wgpu` patch 16) draws it with one fragment shader.
+
+* `TransitionSprite { order, pad, bounds, content_mask, from, to, aux,
+  params }`: three atlas tiles (outgoing image, incoming image, an optional
+  helper image, `to` again without one) and `TransitionParams`, plain data:
+  kind (`TRANSITION_KIND_*`, fade to sketch), `TRANSITION_FLAG_*` bits
+  (helper bound, subject mask, RTL, glow), linear progress, seconds since
+  the start, origin and focus points (fractions of the bounds), seed, motion
+  intensity, device scale, line width, line / glow / wash colours, Sketch's
+  drawing share, fill style and order, and Shatter's grid
+  (`TRANSITION_MAX_SHARDS` = 128 cells at most).
+* `Scene::transitions`, `Primitive::Transition`, `PrimitiveKind::Transition`
+  and `PrimitiveBatch::Transitions`: one batch per sprite (each binds its
+  own textures). Cleared, shrunk and sorted with the other lists.
+* `Window::paint_transition(bounds, from, to, aux, params) -> Result<bool>`
+  takes each image as a `TransitionImage { id, size, bytes }`: the atlas
+  gets it the first time (`get_or_insert_with`, which since `gpui_wgpu`
+  patch 13 copies to wgpu's staging memory before returning), so the
+  caller frees its pixels after that frame. An image the atlas no longer
+  has and whose bytes are gone (the atlas was cleared after a device loss)
+  returns `Ok(false)` and paints nothing: the caller ends its transition.
+  `Window::drop_transition_image(id)` removes one; a full-size image owns
+  its atlas texture, which goes with it.
+* Other renderers: only the vendored `gpui_wgpu` consumes `PrimitiveBatch`
+  in Mandara's build; upstream's Metal and DirectX renderers are not built.
+
 ## Tests
 
 `elements::div::tests::hover_without_an_id_updates_its_cached_view` (patch 2,

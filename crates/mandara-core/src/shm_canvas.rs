@@ -690,6 +690,13 @@ impl Host {
         self.state.drag.take()
     }
 
+    /// Where the pointer is over a canvas: the output (its `wl_output`
+    /// global) and the surface-local position in logical pixels; `None`
+    /// while it is over something else.
+    pub fn pointer(&self) -> Option<(u32, f64, f64)> {
+        self.state.pointer
+    }
+
     /// Outputs or canvas geometry changed since the last call.
     pub fn take_changed(&mut self) -> bool {
         std::mem::take(&mut self.state.changed)

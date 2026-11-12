@@ -715,7 +715,30 @@ pub fn register(r: &mut PluginRegistry) {
 
     r.command(
         core,
-        CommandSpec::new("config reload", mandara_i18n::tk("Re-read config.toml from disk"), |_, cx| {
+        CommandSpec::new("motion presets", mandara_i18n::tk("List the motion presets, how each feels and which one is in use"), |_, cx| {
+            let current = config(cx).read(cx).get().motion.preset();
+            let presets: Vec<_> = mandara_config::motion::Preset::ALL
+                .iter()
+                .map(|p| json!({ "id": p.id(), "name": mandara_i18n::tr(p.name()), "feel": mandara_i18n::tr(p.feel()), "active": current == Some(*p) }))
+                .collect();
+            Ok(json!({ "presets": presets, "active": current.map_or("custom", |p| p.id()) }))
+        }),
+    );
+    r.command(
+        core,
+        CommandSpec::new("motion preset", mandara_i18n::tk("Apply a motion preset: its spring and choreography (accessibility and surface speeds stay yours)"), |a, cx| {
+            let id = a.str(0)?;
+            let preset = mandara_config::motion::Preset::from_id(id).ok_or_else(|| format!("no motion preset {id:?} (see motion presets)"))?;
+            update_config(cx, move |c| preset.apply_to(c));
+            Ok(json!({ "applied": preset.id() }))
+        })
+        .arg(ArgSpec::required("preset", ArgKind::Enum, mandara_i18n::tk("motion preset id")).choices(&mandara_config::motion::Preset::IDS))
+        .example("motion preset tide"),
+    );
+
+    r.command(
+        core,
+        CommandSpec::new("config reload",mandara_i18n::tk("Re-read config.toml from disk"), |_, cx| {
             let changed = reload_config_from_disk(cx)?;
             Ok(json!({ "changed": changed }))
         }),

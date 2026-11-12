@@ -366,6 +366,47 @@ pub(crate) fn panel_spring(cfg: &ShellConfig) -> (SpringConfig, bool) {
     spring_for(PANEL_SPRING, &cfg.panels.spring)
 }
 
+/// How far a panel's content enters from a choreography's direction, and
+/// how far it trails the morph, in px.
+const PANEL_ENTRANCE_PX: f32 = 18.0;
+const PANEL_PARALLAX_PX: f32 = 22.0;
+
+/// The direction a panel opens from: out of the bar it came from.
+fn panel_origin(vertical: bool, right: bool, bottom: bool) -> (f32, f32) {
+    match (vertical, right, bottom) {
+        (true, true, _) => (1.0, 0.0),
+        (true, false, _) => (-1.0, 0.0),
+        (false, _, true) => (0.0, 1.0),
+        (false, _, false) => (0.0, -1.0),
+    }
+}
+
+/// The choreography's offset of a panel's content at morph `progress`
+/// (zero once open).
+pub(crate) fn panel_content_offset(c: &mandara_core::choreo::Choreography, progress: f32, vertical: bool, right: bool, bottom: bool, rtl: bool) -> (f32, f32) {
+    let natural = panel_origin(vertical, right, bottom);
+    let (ex, ey) = c.entrance_offset(progress, natural, rtl, PANEL_ENTRANCE_PX);
+    let (px_, py_) = c.parallax_offset(progress, natural, rtl, PANEL_PARALLAX_PX);
+    (ex + px_, ey + py_)
+}
+
+/// A panel's drawn shape `(x, y, w, h)` with the choreography's liquid
+/// stretch: it leads along the way it grows, by its length times the
+/// stretch for its speed on that axis (`velocity` of the bounds spring:
+/// x, y, width, height). Unchanged at rest.
+pub(crate) fn pour(c: &mandara_core::choreo::Choreography, (x, y, w, h): (f32, f32, f32, f32), velocity: [f32; 4], vertical: bool, right: bool, bottom: bool) -> (f32, f32, f32, f32) {
+    if c.stretch <= 0.0 {
+        return (x, y, w, h);
+    }
+    if vertical {
+        let extra = w * c.stretch_at(velocity[2]);
+        if right { (x - extra, y, w + extra, h) } else { (x, y, w + extra, h) }
+    } else {
+        let extra = h * c.stretch_at(velocity[3]);
+        if bottom { (x, y - extra, w, h + extra) } else { (x, y, w, h + extra) }
+    }
+}
+
 /// Steps `spring` under the global profile, or — for a custom spring —
 /// under a neutral feel that keeps only reduced motion (and the global
 /// speed, applied inside the step).
@@ -1946,6 +1987,10 @@ impl Render for ShellView {
         if self.panel_visible {
             let b = self.panel.value();
             let (x, y, w, h) = (f32::from(b.origin.x), f32::from(b.origin.y), f32::from(b.size.width), f32::from(b.size.height));
+            // Choreography stretch: while it pours, the shape (only its
+            // fill, never its content box or input region) leads its
+            // travel a little; at rest the stretch is zero.
+            let (x, y, w, h) = pour(&mandara_core::choreo::choreography(), (x, y, w, h), self.panel.velocity(), p_vertical, p_right, p_bottom);
             let drawer_fill = panel_bar_fill.with_alpha(panel_opacity(panel_bar_fill.alpha(), panel_alpha, over_sidebar)).hsla();
             let panel_fill = fill.with_alpha(panel_opacity(fill.alpha(), panel_alpha, over_sidebar)).hsla();
             let drawer = if p_attached && p_vertical {
@@ -1959,7 +2004,7 @@ impl Render for ShellView {
             } else if p_attached {
                 edge_drawer_snapped(Edge::Top, x, y - seam, w, h + seam, panel_radius, pm.flare, drawer_fill, scale)
             } else {
-                place(b)
+                place(Bounds { origin: point(px(x), px(y)), size: size(px(w), px(h)) })
                     .rounded(px(p_pill_radius + (panel_radius - p_pill_radius) * progress))
                     .bg(panel_fill)
                     // One even hairline edge + soft elevation (the old
@@ -2309,6 +2354,10 @@ impl Render for ShellView {
             // bar: its top (top bar), bottom (bottom bar) or side (side bar).
             let content_top = if p_vertical { (b.size.height - content_h) / 2.0 } else if p_bottom { b.size.height - content_h - px(pad) } else { px(pad) };
             let content_left = if !p_vertical { (b.size.width - content_w) / 2.0 } else if p_right { b.size.width - content_w - px(pad) } else { px(pad) };
+            // Choreography: the content enters from its direction and
+            // trails the morph (clipped by the panel; none at rest).
+            let (cdx, cdy) = panel_content_offset(&mandara_core::choreo::choreography(), progress, p_vertical, p_right, p_bottom, crate::bidi::rtl());
+            let (content_top, content_left) = (content_top + px(cdy), content_left + px(cdx));
             root = root.child(
                 place(b)
                     .id("panel")

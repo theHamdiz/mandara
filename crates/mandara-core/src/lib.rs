@@ -3,6 +3,7 @@
 //! chromatic-glass surface material.
 
 pub mod avatar_shape;
+pub mod choreo;
 pub mod frame;
 pub mod input_mask;
 pub mod layer;

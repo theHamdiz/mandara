@@ -8,6 +8,13 @@ About → What's new shows it too.
 
 ### New
 
+- **Six new motion presets with their own choreography:** Corniche tide, Lighthouse sweep, Felucca drift, Magnetic, Mercury and Raindrop. Content can rise like a swell, sweep in row by row, drift in on a slant, snap into place, stretch like liquid metal or drop in with a bounce.
+- **Studio → Motion shows every preset as a tile** with a line on how it feels; point at one to preview it. New Choreography controls (Entrance, Cascade, Liquid stretch, Parallax) shape how panels, sidebar cards, the launcher, notifications and on-screen displays come in. Reduced motion turns them off.
+- **Window animations for MangoWM, Niri and Hyprland 0.55+:** pick Fade, Swell, Beam, Drift, Snap, Liquid or Drop and a speed on the Motion page. They're written only to Mandara's drop-in and checked by each compositor's own checker.
+- **Dock animations you can choose:** launching apps bounce, pulse or send out ripples; apps asking for attention bounce, pulse or wiggle; open-app dots grow in and shrink away; icons dip when a window minimizes; icons grow in, shrink out and slide over when you add, remove or reorder them; and the dock slides, fades or zooms in and out. Pick each in Studio → Motion → Dock.
+- **New wallpaper transitions drawn on the GPU:** Ripple, Tide, Tear, Glitch, Shatter and Dissolve, starting from the centre or the pointer, with their length set on the Motion and Wallpaper pages. They play on the default wallpaper too.
+- **Sketch wallpaper transition:** the new wallpaper's outline is drawn first, its subject first when Mandara has a depth mask for it, then the image fills in with a fade, a watercolour bleed or a wipe along the strokes.
+- **Presets carry their personality further:** the six new ones also set matching dock animations and wallpaper transitions (on by default), and window animations if you switch that on. `mandara msg motion presets` lists them and `mandara msg motion preset <id>` applies one.
 - **Your own Looks.** Change anything after applying a Look and Mandara keeps it as a Look of your own ("Corniche Dusk · Custom", renamable), stored as just what you changed, so it follows improvements to the original. Save, rename, duplicate, delete, export and import Looks in Studio → Themes → Looks or with `mandara msg look …`. Look files are small, carry nothing personal and are checked strictly on import.
 - **Thirteen new Looks**, one on every bar style, plus Redmond (a Windows 11-style taskbar desktop), Cupertino (a macOS-style menu bar and dock), Library Desk, Zen (a hidden pill with hot corners) and Ink Rush, a cel-shaded comic desktop set in the Bangers comic face (SIL Open Font License; Studio → Maintenance fetches it with Mandara's other fonts).
 - **The Taskbar bar style:** your pinned and running apps centred next to the launcher, with a stacked clock and date, in Studio → Bars → Presets or `mandara msg bar style taskbar`.
@@ -38,6 +45,7 @@ About → What's new shows it too.
 
 ### Fixed
 
+- **The dock's attention bounce keeps calling in bursts** instead of stopping after the first, and a launch animation ends on time even when the app never opens a window.
 - **Changing a bar preset or a Look no longer removes your desktop widgets or the bar items you added.** Your widgets keep their places and settings, your items stay where you put them, the plugins they need stay on, and *Restore my look* keeps what you added while a Look was on.
 - **Expressive and Raml Tram show the workspaces once, down their rail.** Picking them while keeping your items no longer leaves the workspaces (or the screenshot button) on the bar as well, and setups that already picked them are tidied up on update.
 - **The launcher in Expressive and Raml Tram sits in the corner where the bar meets the rail**, centred, at every bar size and edge, and Studio's preset cards show it there.

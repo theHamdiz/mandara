@@ -61,6 +61,12 @@ pub mod defaults {
     /// keeps motion smooth at a fraction of a 60 fps clip's decode cost.
     pub const VIDEO_MAX_FPS: u32 = 30;
     pub const VIDEO_FPS_RANGE: (u32, u32) = (1, 60);
+    /// Sketch transition: line thickness (logical px) and its bounds.
+    pub const SKETCH_LINE_PX: f32 = 2.0;
+    pub const SKETCH_LINE_RANGE: (f32, f32) = (0.5, 6.0);
+    /// Sketch transition: share of its length spent drawing, and bounds.
+    pub const SKETCH_DRAW_SHARE: f32 = 0.55;
+    pub const SKETCH_DRAW_RANGE: (f32, f32) = (0.2, 0.85);
 }
 
 // ── Date & time ──────────────────────────────────────────────────────────
@@ -818,7 +824,11 @@ pub enum WallpaperFill {
     Tile,
 }
 
-/// How one wallpaper replaces another.
+/// How one wallpaper replaces another. Every one but Fade, Wipe and None
+/// is drawn per pixel by a GPU shader: by the GPU wallpaper itself, and over
+/// the software wallpaper on a temporary surface that exists only while
+/// the transition plays. Without that surface, the software wallpaper
+/// draws [`Self::software`]'s fallback.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum WallpaperTransition {
@@ -828,8 +838,142 @@ pub enum WallpaperTransition {
     Wipe,
     /// The new image grows out of the centre.
     Grow,
+    /// A circle opens from the pointer or the centre.
+    Ripple,
+    /// A wave rises from the bottom edge and washes the new image in.
+    Tide,
+    /// The old image rips along a jagged seam and both halves peel away.
+    Tear,
+    /// Slices of the old image shear sideways with a brief colour split,
+    /// then settle on the new one.
+    Glitch,
+    /// The old image breaks into shards that fall away.
+    Shatter,
+    /// The old image burns away along a noise edge that glows in the
+    /// theme's accent.
+    Dissolve,
+    /// Line art of the new image (its subject first, when Mandara has a
+    /// mask for it) draws itself, then the image fills in
+    /// ([`SketchOptions`]).
+    Sketch,
     /// Cut without animation.
     None,
+}
+
+impl WallpaperTransition {
+    pub const ALL: [Self; 11] = [Self::Fade, Self::Wipe, Self::Grow, Self::Ripple, Self::Tide, Self::Tear, Self::Glitch, Self::Shatter, Self::Dissolve, Self::Sketch, Self::None];
+
+    /// What the software wallpaper draws for this transition when the GPU
+    /// surface for it can't open: Ripple, Tide and Tear as a crop of the new
+    /// image (a square opening, a rising edge, a seam opening outward),
+    /// Glitch, Shatter, Dissolve and Sketch as a fade (the compositor crops
+    /// and fades one plane; it cannot move pieces of the old one or draw
+    /// lines over it).
+    pub fn software(self) -> Self {
+        match self {
+            Self::Glitch | Self::Shatter | Self::Dissolve | Self::Sketch => Self::Fade,
+            other => other,
+        }
+    }
+
+    /// Whether [`WallpaperTransition::Ripple`] and friends start at
+    /// [`TransitionOrigin`].
+    pub fn has_origin(self) -> bool {
+        matches!(self, Self::Ripple | Self::Shatter)
+    }
+}
+
+/// The colour of a Sketch transition's lines.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SketchInk {
+    /// The theme's accent.
+    #[default]
+    Accent,
+    /// Near-black ink, on a paper-light wash.
+    Ink,
+    White,
+    /// The new wallpaper's own dominant colour.
+    Wallpaper,
+}
+
+/// The order a Sketch transition draws its strokes in.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SketchOrder {
+    /// The subject's outline (when Mandara has a mask for the wallpaper),
+    /// then the background's edges, each top to bottom.
+    #[default]
+    Subject,
+    TopDown,
+    /// Outward from the middle of the screen.
+    Center,
+    /// Outward from the pointer's place on the desktop (the middle when
+    /// it is elsewhere).
+    Pointer,
+}
+
+/// How a Sketch transition fills the image in once its lines are drawn.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SketchFill {
+    /// The whole image fades in.
+    Fade,
+    /// Colour bleeds outward from the lines, like watercolour.
+    #[default]
+    Bleed,
+    /// The image follows the strokes, in the order they were drawn.
+    Wipe,
+}
+
+/// The Sketch transition's look (`[wallpaper.sketch]`). Every field has a
+/// default, so configs from before it load unchanged.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SketchOptions {
+    pub ink: SketchInk,
+    /// Line thickness, logical px ([`defaults::SKETCH_LINE_RANGE`]).
+    pub line_width: f32,
+    /// A soft halo under the lines.
+    pub glow: bool,
+    pub draw_order: SketchOrder,
+    /// Share of the transition spent drawing; the rest fills the image in
+    /// ([`defaults::SKETCH_DRAW_RANGE`]).
+    pub draw_share: f32,
+    pub fill_style: SketchFill,
+    /// Keep a faint copy of the outline over the wallpaper afterwards.
+    pub keep_outline: bool,
+}
+
+impl Default for SketchOptions {
+    fn default() -> Self {
+        Self { ink: SketchInk::default(), line_width: defaults::SKETCH_LINE_PX, glow: true, draw_order: SketchOrder::default(), draw_share: defaults::SKETCH_DRAW_SHARE, fill_style: SketchFill::default(), keep_outline: false }
+    }
+}
+
+impl SketchOptions {
+    /// [`Self::line_width`] within its bounds (a hand-edited value can be
+    /// anything).
+    pub fn line_px(&self) -> f32 {
+        let (lo, hi) = defaults::SKETCH_LINE_RANGE;
+        if self.line_width.is_finite() { self.line_width.clamp(lo, hi) } else { defaults::SKETCH_LINE_PX }
+    }
+
+    /// [`Self::draw_share`] within its bounds.
+    pub fn draw(&self) -> f32 {
+        let (lo, hi) = defaults::SKETCH_DRAW_RANGE;
+        if self.draw_share.is_finite() { self.draw_share.clamp(lo, hi) } else { defaults::SKETCH_DRAW_SHARE }
+    }
+}
+
+/// Where a Ripple opens or a Shatter bursts from.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TransitionOrigin {
+    #[default]
+    Center,
+    /// The pointer's last place on the desktop (the centre when unknown).
+    Pointer,
 }
 
 /// Slideshow order.
@@ -1219,6 +1363,37 @@ mod tests {
         assert!(!saved.screen_corners.corner_enabled(ScreenCorner::BottomLeft));
         assert!(saved.screen_corners.corner_enabled(ScreenCorner::BottomRight));
         assert!(saved.screen_corners.hide_between_displays);
+    }
+
+    #[test]
+    fn sketch_options_default_and_older_configs_load_unchanged() {
+        // A config from before the Sketch transition: no `[wallpaper.sketch]`.
+        let old: crate::ShellConfig = toml::from_str("[wallpaper]\ntransition = \"ripple\"\ncrossfade_ms = 900").unwrap();
+        assert_eq!(old.wallpaper.transition, WallpaperTransition::Ripple);
+        assert_eq!(old.wallpaper.crossfade_ms, 900);
+        assert_eq!(old.wallpaper.sketch, SketchOptions::default());
+        let d = SketchOptions::default();
+        assert_eq!((d.ink, d.draw_order, d.fill_style), (SketchInk::Accent, SketchOrder::Subject, SketchFill::Bleed));
+        assert!(d.glow && !d.keep_outline, "a glow by default, no outline left behind");
+        assert_eq!((d.line_px(), d.draw()), (defaults::SKETCH_LINE_PX, defaults::SKETCH_DRAW_SHARE));
+        // Partial tables keep the other defaults; names are kebab-case.
+        let saved: crate::ShellConfig = toml::from_str("[wallpaper]\ntransition = \"sketch\"\n[wallpaper.sketch]\nink = \"wallpaper\"\ndraw_order = \"top-down\"\nfill_style = \"wipe\"\nkeep_outline = true").unwrap();
+        let s = &saved.wallpaper.sketch;
+        assert_eq!(saved.wallpaper.transition, WallpaperTransition::Sketch);
+        assert_eq!((s.ink, s.draw_order, s.fill_style, s.keep_outline), (SketchInk::Wallpaper, SketchOrder::TopDown, SketchFill::Wipe, true));
+        assert_eq!(s.line_width, defaults::SKETCH_LINE_PX);
+        // A round trip keeps every field.
+        let text = toml::to_string(&saved).unwrap();
+        let back: crate::ShellConfig = toml::from_str(&text).unwrap();
+        assert_eq!(back.wallpaper.sketch, saved.wallpaper.sketch);
+        // Hand-edited values are bounded where they are used.
+        let wild = SketchOptions { line_width: 90.0, draw_share: f32::NAN, ..SketchOptions::default() };
+        assert_eq!(wild.line_px(), defaults::SKETCH_LINE_RANGE.1);
+        assert_eq!(wild.draw(), defaults::SKETCH_DRAW_SHARE);
+        assert_eq!(SketchOptions { line_width: 0.0, draw_share: 0.0, ..SketchOptions::default() }.draw(), defaults::SKETCH_DRAW_RANGE.0);
+        // The software wallpaper fades instead; every transition is listed once.
+        assert_eq!(WallpaperTransition::Sketch.software(), WallpaperTransition::Fade);
+        assert_eq!(WallpaperTransition::ALL.iter().filter(|t| **t == WallpaperTransition::Sketch).count(), 1);
     }
 
     #[test]

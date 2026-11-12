@@ -67,6 +67,7 @@ mandara msg look save "My evening"          # keep what you changed on the activ
 mandara msg look export phosphor            # to ~/Downloads/phosphor.mandara-look.toml (or a file you name)
 mandara msg look import ~/Downloads/x.mandara-look.toml   # checked strictly; nothing in it runs
 mandara msg look rename corniche-dusk-custom Evening      # look duplicate <id>, look delete <id> (yours only)
+mandara msg motion preset tide              # motion presets lists them all with how each feels and the one in use (docs/motion.md)
 mandara msg bar position left               # top|bottom|left|right (left/right = the side bar)
 mandara msg bar layout hairline             # edge-frame|glass-pills|island|hairline|micro|notch|next
 mandara msg bar style expressive            # expressive|tile-dock|rail|segmented|system-monitor|stanley-bridge|pharos-beam|raml-tram|taskbar: a style preset's look (your items stay, fitted to it: a rail takes the workspaces off the bar, System monitor adds its meters); none puts back the plain bar and your items

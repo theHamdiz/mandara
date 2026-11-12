@@ -17,7 +17,14 @@
 - **Dock** (opt-in), modelled on the macOS Dock: pinned, running and recent
   apps on a chromatic-glass strip at the bottom, left or right of each
   display, with spring magnification, open-app dots, notification and
-  progress badges, and launch and attention bounces.
+  progress badges, and launch and attention feedback.
+  - **Animations:** launching apps bounce, pulse or send out ripples until
+    their first window appears; apps asking for attention bounce, pulse or
+    wiggle; open-app dots grow in and shrink away; an icon dips when one of
+    its windows minimizes; icons grow in, shrink out and slide over when
+    you add, remove or reorder them; and the dock slides, fades or zooms
+    in and out. Pick each style (or turn it off) in **Studio → Motion →
+    Dock**; see [Motion](motion.md#dock).
   - **Right-click any icon** for its windows, New Window and the app's own
     actions, **Options ▸ Keep in Dock ✓ · Open at Login ✓ · Show in
     Files**, Show All Windows, Hide and Quit / Force Quit. Unpinning a
