@@ -155,7 +155,7 @@ around, each one measured or shipped today:
 5. **Real motion.** Analytical spring physics that can be interrupted
    mid-flight, and OKLCH colour blending, so every morph, slide and theme
    change stays smooth.
-6. **Every setting live, in a real app.** Mandara Studio has 30 pages; drag
+6. **Every setting live, in a real app.** Mandara Studio has 32 pages; drag
    a slider and the bar follows as you drag. Nothing needs a config file
    unless you want one.
 7. **A colour engine, not a colour picker.** Material You (HCT) palettes

@@ -56,6 +56,13 @@ fn public_counts_follow_studios_presets_and_the_plugin_guide() {
         assert!(text.contains(&format!("{count} built-in plugins")), "{path}: plugin count");
         assert!(text.contains("19 bar presets"), "{path}: Studio's full preset count");
     }
+    let registry = std::fs::read_to_string(crate::root().join("crates/mandara-studio/src/registry.rs")).unwrap();
+    let pages: usize = registry.split("pub const ALL: [Section; ").nth(1).unwrap().split(']').next().unwrap().parse().unwrap();
+    let readme = std::fs::read_to_string(crate::root().join("README.md")).unwrap();
+    let words: Vec<_> = readme.split_whitespace().collect();
+    let claims: Vec<_> = words.windows(2).filter(|pair| pair[1].trim_matches(|c: char| c.is_ascii_punctuation()) == "pages").filter_map(|pair| pair[0].parse::<usize>().ok()).collect();
+    assert!(claims.len() >= 2, "the README describes Studio's pages in both sections");
+    assert!(claims.iter().all(|count| *count == pages), "Studio has {pages} pages: {claims:?}");
 }
 
 /// Opt in with MANDARA_SITE_BROWSER pointing to a Chromium binary. The test
@@ -97,6 +104,10 @@ window.addEventListener('load', () => {
       const filter = value => { search.value = value; search.dispatchEvent(new Event('input')); };
       filter('  SEA glass  ');
       assert(shown().length === 1, 'case-insensitive multi-word search');
+      const reset = document.querySelector('[data-look-reset]');
+      reset.focus();
+      reset.click();
+      assert(active() === 'zen' && document.activeElement === search, 'reset focuses visible search when the checked radio is filtered out');
       next.click();
       assert(active() === 'sea-glass' && preview('sea-glass'), 'select filtered result');
       document.querySelector('[data-scheme="dark"]').click();

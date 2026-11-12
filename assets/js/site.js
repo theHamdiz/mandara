@@ -61,7 +61,9 @@
   }
   reset?.addEventListener("click", () => {
     wear(null);
-    document.querySelector(".look-input:checked")?.focus();
+    const selected = document.querySelector(".look-input:checked");
+    const destination = selected?.closest(".look-choice")?.hidden ? document.querySelector(".looks-search") : selected;
+    destination?.focus();
   });
   lightScheme.addEventListener("change", () => { paint(); showPictures(); });
 
