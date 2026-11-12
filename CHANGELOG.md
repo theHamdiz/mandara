@@ -8,6 +8,10 @@ About → What's new shows it too.
 
 Mandara OS now follows every release.
 
+### Fixed
+
+- **Sound themes play again.** Shell sounds and Studio's previews could play in complete silence when your mixer's "System sounds" level was muted, as many desktops leave it. Mandara's sounds now follow only their own switch and volume, and a sound that really can't play leaves a clear line in the log.
+
 ### Under the hood
 
 - **Every release now builds Mandara OS.** When a new version is published, the Mandara OS image is rebuilt around it automatically.

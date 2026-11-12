@@ -29,15 +29,10 @@ pub const SNDCTL_DSP_SETFMT: u64 = iowr_int(b'P', 5);
 pub const SNDCTL_DSP_CHANNELS: u64 = iowr_int(b'P', 6);
 
 /// Writes `samples` scaled by `volume` (0–1) into `out` as little-endian
-/// bytes. `out` is cleared first and reused between sounds.
+/// bytes. `out` is cleared first and reused between sounds. (The same
+/// scaling the sound-server path bakes into its uploads.)
 pub fn scaled(samples: &[i16], volume: f32, out: &mut Vec<u8>) {
-    let gain = volume.clamp(0.0, 1.0);
-    out.clear();
-    out.reserve(samples.len() * 2);
-    for s in samples {
-        let v = (f32::from(*s) * gain).round() as i16;
-        out.extend_from_slice(&v.to_le_bytes());
-    }
+    crate::sounds::scaled_le(samples, volume, out);
 }
 
 /// Plays interleaved `samples` (`channels`, `rate`) at `volume` on the
