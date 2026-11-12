@@ -37,6 +37,7 @@ assets/css/pages.css
 assets/css/site.css
 assets/fonts/OFL.txt
 assets/fonts/alexandria.woff2
+assets/fonts/bangers/OFL.txt
 assets/fonts/jetbrains-mono.woff2
 assets/js/copy-code.js
 assets/js/site.js

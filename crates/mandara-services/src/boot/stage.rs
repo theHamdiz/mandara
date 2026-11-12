@@ -252,9 +252,14 @@ pub fn import(source: &str, env: &Env, confirmed_unverified: bool, cancel: &Atom
     Ok(Imported { kind, staged: Staged { name, dir, include } })
 }
 
+/// How long an unpinned download may take to connect.
+const UNPINNED_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+/// How long an unpinned download's body may stall.
+const UNPINNED_BODY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
+
 fn download_unpinned(url: &str, to: &Path, cancel: &AtomicBool) -> Result<(), String> {
     use std::io::{Read as _, Write as _};
-    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_connect(Some(std::time::Duration::from_secs(15))).timeout_recv_body(Some(std::time::Duration::from_secs(180))).https_only(true).build().into();
+    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_connect(Some(UNPINNED_CONNECT_TIMEOUT)).timeout_recv_body(Some(UNPINNED_BODY_TIMEOUT)).https_only(true).build().into();
     let mut response = agent.get(url).header("User-Agent", concat!("mandara-shell/", env!("CARGO_PKG_VERSION"))).call().map_err(|e| tf("Download failed: {error}", &[("error", &e)]))?;
     let mut reader = response.body_mut().with_config().limit(MAX_DOWNLOAD + 1).reader();
     let mut out = std::fs::File::create(to).map_err(|e| e.to_string())?;
