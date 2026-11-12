@@ -9,6 +9,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use mandara_theme::{Color, MandaraPalette};
 
+#[path = "pages_picker_tests.rs"]
+mod picker;
+
 #[test]
 fn the_favicon_and_stylesheet_resolve_under_a_project_base_url() {
     let head = std::fs::read_to_string(crate::root().join("_includes/head-custom.html")).unwrap();
@@ -382,9 +385,10 @@ fn every_look_has_a_control_previews_and_its_real_palette() {
         let swatches: Vec<_> = label.descendants().filter(|n| n.has_tag_name("i")).map(|n| n.attribute("style").unwrap().to_string()).collect();
         let expected: Vec<_> = [dark.primary, dark.secondary, dark.primary_container].iter().map(|c| format!("background: {}", c.to_hex())).collect();
         assert_eq!(swatches, expected, "{id}: swatches show the Look's palette");
-        assert!(css.contains(&format!("#{id}:checked ~ .look-stage .{id}")), "{id}: selection shows its preview");
-        assert!(css.contains(&format!("#{id}:checked ~ .looks-list .look-choice[for=\"{id}\"]")), "{id}: the picked Look is marked");
-        assert!(css.contains(&format!("#{id}:focus-visible ~ .looks-list .look-choice[for=\"{id}\"]")), "{id}: keyboard focus shows on its label");
+        assert!(css.contains(&format!(".looks-picker:has(#{id}:checked) .look-stage .{id}")), "{id}: selection shows its preview without scripts");
+        assert_eq!(input.parent(), Some(label), "{id}: native radio focus follows its visible label");
+        assert!(css.contains(".look-choice:has(:checked)"), "the picked Look is marked");
+        assert!(css.contains(".look-choice:has(:focus-visible)"), "keyboard focus shows on its label");
         let figure = page.descendants().find(|node| node.has_tag_name("figure") && has_class(*node, &id)).unwrap();
         let light = figure.descendants().find(|node| node.has_tag_name("source")).unwrap();
         assert_eq!(light.attribute("media"), Some("(prefers-color-scheme: light)"));
@@ -410,7 +414,9 @@ fn every_bar_style_has_a_control_a_shot_and_its_command() {
     let css = site_css();
     let inputs: Vec<_> = page.descendants().filter(|n| n.has_tag_name("input") && n.attribute("name") == Some("bar-style")).collect();
     let ids: Vec<_> = inputs.iter().map(|n| n.attribute("value").unwrap()).collect();
-    assert_eq!(ids, ["expressive", "tile-dock", "rail", "segmented", "system-monitor", "stanley-bridge", "pharos-beam", "raml-tram", "side-bars"]);
+    let styles: Vec<_> = mandara_config::bar_styles::BarStyle::ALL.iter().map(|style| style.id()).collect();
+    assert_eq!(ids.iter().copied().filter(|id| *id != "side-bars").collect::<BTreeSet<_>>(), styles.iter().copied().collect());
+    assert_eq!(ids.len(), styles.len() + 1, "all styles plus the independent side-bar example");
     assert_eq!(inputs.iter().filter(|n| n.has_attribute("checked")).count(), 1);
     assert!(css.contains(".bar-shot { display: none;"), "unpicked shots stay unloaded");
     for id in ids {
@@ -420,12 +426,13 @@ fn every_bar_style_has_a_control_a_shot_and_its_command() {
         assert!(css.contains(&format!("#{class}:focus-visible ~ .bar-tabs label[for=\"{class}\"]")));
         let figure = page.descendants().find(|n| n.has_tag_name("figure") && has_class(*n, &class)).unwrap();
         let img = figure.descendants().find(|n| n.has_tag_name("img")).unwrap();
-        assert_eq!(img.attribute("src"), Some(format!("docs/screenshots/bar-style-{id}.webp").as_str()));
+        let shot = if id == "taskbar" { "look-redmond".to_string() } else { format!("bar-style-{id}") };
+        assert_eq!(img.attribute("src"), Some(format!("docs/screenshots/{shot}.webp").as_str()));
         assert_eq!(img.attribute("loading"), Some("lazy"));
         // Its light twin, for a page in light mode.
         let light = figure.descendants().find(|n| n.has_tag_name("source")).unwrap();
-        assert_eq!(light.attribute("srcset"), Some(format!("docs/screenshots/bar-style-{id}-light.webp").as_str()));
-        assert!(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(format!("docs/screenshots/bar-style-{id}-light.webp")).is_file());
+        assert_eq!(light.attribute("srcset"), Some(format!("docs/screenshots/{shot}-light.webp").as_str()));
+        assert!(crate::root().join(format!("docs/screenshots/{shot}-light.webp")).is_file());
         if id != "side-bars" {
             let command = label.descendants().find(|n| n.has_tag_name("code")).unwrap();
             assert_eq!(text_of(command), format!("mandara msg bar style {id}"));

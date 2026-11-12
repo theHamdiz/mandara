@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mandara — a design-first Wayland desktop</title>
-  <meta name="description" content="A design-first Wayland desktop shell in Rust for ten compositors, with Looks, a live design studio, 85 plugins and optional offline AI control in natural language." />
+  <meta name="description" content="A design-first Wayland desktop shell in Rust for ten compositors, with Looks, a live design studio, 86 plugins and optional offline AI control in natural language." />
   <meta name="color-scheme" content="dark light" />
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a1520" />
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f8f8" />
@@ -20,6 +20,7 @@
   <link rel="preload" as="image" href="docs/screenshots/hero-light.webp" media="(prefers-color-scheme: light)" fetchpriority="high" />
   <link rel="stylesheet" href="assets/css/site.css" />
   <script src="assets/js/site.js" defer="defer"></script>
+  <script src="assets/js/look-picker.js" defer="defer"></script>
   <script src="assets/js/copy-code.js" defer="defer"></script>
 </head>
 <body>
@@ -106,7 +107,7 @@
       <ul class="fact-row">
         <li class="fact rail-1"><span class="fact-figure">0.1<small>ms</small></span> <span class="fact-label">typical frame build</span></li>
         <li class="fact rail-2"><span class="fact-figure">10</span> <span class="fact-label">compositors, each in its own language</span></li>
-        <li class="fact rail-3"><span class="fact-figure">85</span> <span class="fact-label">plugins, switched on as you need them</span></li>
+        <li class="fact rail-3"><span class="fact-figure">86</span> <span class="fact-label">plugins, switched on as you need them</span></li>
         <li class="fact rail-4"><span class="fact-figure">20</span> <span class="fact-label">languages, right to left included</span></li>
       </ul>
       <p class="facts-note">The frame time is a historical figure from release builds: 95% of sampled frames finished inside the 1 ms a 1000 Hz display allows. Your display, driver and widgets change it, and Studio → Performance shows yours live. <a href="docs/performance.html">How it is measured</a></p>
@@ -214,45 +215,38 @@
       </header>
       <fieldset class="looks-picker">
         <legend class="visually-hidden">Looks</legend>
-        <input class="look-input" type="radio" name="look" id="look-corniche-dusk" value="corniche-dusk" checked="checked" />
-        <input class="look-input" type="radio" name="look" id="look-pharos-ink" value="pharos-ink" />
-        <input class="look-input" type="radio" name="look" id="look-montaza-crimson" value="montaza-crimson" />
-        <input class="look-input" type="radio" name="look" id="look-qaitbay-forest" value="qaitbay-forest" />
-        <input class="look-input" type="radio" name="look" id="look-anfushi-wave" value="anfushi-wave" />
-        <input class="look-input" type="radio" name="look" id="look-night-frame" value="night-frame" />
-        <input class="look-input" type="radio" name="look" id="look-redmond" value="redmond" />
-        <input class="look-input" type="radio" name="look" id="look-cupertino" value="cupertino" />
-        <input class="look-input" type="radio" name="look" id="look-corniche-frame" value="corniche-frame" />
-        <input class="look-input" type="radio" name="look" id="look-raml-line" value="raml-line" />
-        <input class="look-input" type="radio" name="look" id="look-lighthouse-rail" value="lighthouse-rail" />
-        <input class="look-input" type="radio" name="look" id="look-phosphor" value="phosphor" />
-        <input class="look-input" type="radio" name="look" id="look-pharos-lantern" value="pharos-lantern" />
-        <input class="look-input" type="radio" name="look" id="look-stanley-arches" value="stanley-arches" />
-        <input class="look-input" type="radio" name="look" id="look-souk-tiles" value="souk-tiles" />
-        <input class="look-input" type="radio" name="look" id="look-sea-glass" value="sea-glass" />
-        <input class="look-input" type="radio" name="look" id="look-library-desk" value="library-desk" />
-        <input class="look-input" type="radio" name="look" id="look-ink-rush" value="ink-rush" />
-        <input class="look-input" type="radio" name="look" id="look-zen" value="zen" />
         <div class="looks-list">
-          <label class="look-choice" for="look-corniche-dusk" data-look="corniche-dusk"><span class="swatches" aria-hidden="true"><i style="background: #ffb2bf"></i><i style="background: #f5b8af"></i><i style="background: #900039"></i></span><span class="look-name">Corniche Dusk</span></label>
-          <label class="look-choice" for="look-pharos-ink" data-look="pharos-ink"><span class="swatches" aria-hidden="true"><i style="background: #ffffff"></i><i style="background: #c6c6c6"></i><i style="background: #d4d4d4"></i></span><span class="look-name">Pharos Ink</span></label>
-          <label class="look-choice" for="look-montaza-crimson" data-look="montaza-crimson"><span class="swatches" aria-hidden="true"><i style="background: #ffb3ae"></i><i style="background: #f5b9a2"></i><i style="background: #930015"></i></span><span class="look-name">Montaza Crimson</span></label>
-          <label class="look-choice" for="look-qaitbay-forest" data-look="qaitbay-forest"><span class="swatches" aria-hidden="true"><i style="background: #9ad4a2"></i><i style="background: #b7ccb7"></i><i style="background: #19512a"></i></span><span class="look-name">Qaitbay Forest</span></label>
-          <label class="look-choice" for="look-anfushi-wave" data-look="anfushi-wave"><span class="swatches" aria-hidden="true"><i style="background: #00d9fc"></i><i style="background: #a8cbe2"></i><i style="background: #004e5c"></i></span><span class="look-name">Anfushi Wave</span></label>
-          <label class="look-choice" for="look-night-frame" data-look="night-frame"><span class="swatches" aria-hidden="true"><i style="background: #c3c0ff"></i><i style="background: #c7c4dd"></i><i style="background: #424078"></i></span><span class="look-name">Night Frame</span></label>
-          <label class="look-choice" for="look-redmond" data-look="redmond"><span class="swatches" aria-hidden="true"><i style="background: #a6c8ff"></i><i style="background: #bdc7dc"></i><i style="background: #234776"></i></span><span class="look-name">Redmond</span></label>
-          <label class="look-choice" for="look-cupertino" data-look="cupertino"><span class="swatches" aria-hidden="true"><i style="background: #93cdf6"></i><i style="background: #b6c9d8"></i><i style="background: #004c6c"></i></span><span class="look-name">Cupertino</span></label>
-          <label class="look-choice" for="look-corniche-frame" data-look="corniche-frame"><span class="swatches" aria-hidden="true"><i style="background: #76d4e7"></i><i style="background: #f5b7b6"></i><i style="background: #004e5a"></i></span><span class="look-name">Corniche Frame</span></label>
-          <label class="look-choice" for="look-raml-line" data-look="raml-line"><span class="swatches" aria-hidden="true"><i style="background: #86d6bf"></i><i style="background: #b2ccc3"></i><i style="background: #005142"></i></span><span class="look-name">Raml Line</span></label>
-          <label class="look-choice" for="look-lighthouse-rail" data-look="lighthouse-rail"><span class="swatches" aria-hidden="true"><i style="background: #ffb4a8"></i><i style="background: #f4ba9e"></i><i style="background: #930300"></i></span><span class="look-name">Lighthouse Rail</span></label>
-          <label class="look-choice" for="look-phosphor" data-look="phosphor"><span class="swatches" aria-hidden="true"><i style="background: #9fd49b"></i><i style="background: #b9ccb4"></i><i style="background: #225025"></i></span><span class="look-name">Phosphor</span></label>
-          <label class="look-choice" for="look-pharos-lantern" data-look="pharos-lantern"><span class="swatches" aria-hidden="true"><i style="background: #ffb94f"></i><i style="background: #e0c38c"></i><i style="background: #624000"></i></span><span class="look-name">Pharos Lantern</span></label>
-          <label class="look-choice" for="look-stanley-arches" data-look="stanley-arches"><span class="swatches" aria-hidden="true"><i style="background: #8ecff2"></i><i style="background: #b5c9d7"></i><i style="background: #004d67"></i></span><span class="look-name">Stanley Arches</span></label>
-          <label class="look-choice" for="look-souk-tiles" data-look="souk-tiles"><span class="swatches" aria-hidden="true"><i style="background: #ffb0cb"></i><i style="background: #ffb0cb"></i><i style="background: #7a294c"></i></span><span class="look-name">Souk Tiles</span></label>
-          <label class="look-choice" for="look-sea-glass" data-look="sea-glass"><span class="swatches" aria-hidden="true"><i style="background: #00dddd"></i><i style="background: #a2ced9"></i><i style="background: #004f50"></i></span><span class="look-name">Sea Glass</span></label>
-          <label class="look-choice" for="look-library-desk" data-look="library-desk"><span class="swatches" aria-hidden="true"><i style="background: #dcc66e"></i><i style="background: #d1c6a1"></i><i style="background: #544600"></i></span><span class="look-name">Library Desk</span></label>
-          <label class="look-choice" for="look-ink-rush" data-look="ink-rush"><span class="swatches" aria-hidden="true"><i style="background: #ffb68c"></i><i style="background: #edbe92"></i><i style="background: #753400"></i></span><span class="look-name">Ink Rush</span></label>
-          <label class="look-choice" for="look-zen" data-look="zen"><span class="swatches" aria-hidden="true"><i style="background: #f7bb71"></i><i style="background: #dfc2a2"></i><i style="background: #653e00"></i></span><span class="look-name">Zen</span></label>
+          <div class="looks-tools" hidden="hidden">
+            <input class="looks-search" type="search" placeholder="Find a Look…" aria-label="Search Looks by name or description" aria-controls="look-options" autocomplete="off" />
+            <div class="looks-nav">
+              <p class="looks-count" role="status" aria-live="polite">19 Looks</p>
+              <button class="look-step" type="button" data-look-step="-1" aria-label="Previous Look">←</button>
+              <button class="look-step" type="button" data-look-step="1" aria-label="Next Look">→</button>
+              <button class="looks-clear" type="button" data-look-clear="true" disabled="disabled">Clear search</button>
+            </div>
+          </div>
+          <div class="look-options" id="look-options">
+            <label class="look-choice" for="look-corniche-dusk" data-look="corniche-dusk"><input class="look-input" type="radio" name="look" id="look-corniche-dusk" value="corniche-dusk" checked="checked" /><span class="swatches" aria-hidden="true"><i style="background: #ffb2bf"></i><i style="background: #f5b8af"></i><i style="background: #900039"></i></span><span class="look-name">Corniche Dusk</span></label>
+            <label class="look-choice" for="look-pharos-ink" data-look="pharos-ink"><input class="look-input" type="radio" name="look" id="look-pharos-ink" value="pharos-ink" /><span class="swatches" aria-hidden="true"><i style="background: #ffffff"></i><i style="background: #c6c6c6"></i><i style="background: #d4d4d4"></i></span><span class="look-name">Pharos Ink</span></label>
+            <label class="look-choice" for="look-montaza-crimson" data-look="montaza-crimson"><input class="look-input" type="radio" name="look" id="look-montaza-crimson" value="montaza-crimson" /><span class="swatches" aria-hidden="true"><i style="background: #ffb3ae"></i><i style="background: #f5b9a2"></i><i style="background: #930015"></i></span><span class="look-name">Montaza Crimson</span></label>
+            <label class="look-choice" for="look-qaitbay-forest" data-look="qaitbay-forest"><input class="look-input" type="radio" name="look" id="look-qaitbay-forest" value="qaitbay-forest" /><span class="swatches" aria-hidden="true"><i style="background: #9ad4a2"></i><i style="background: #b7ccb7"></i><i style="background: #19512a"></i></span><span class="look-name">Qaitbay Forest</span></label>
+            <label class="look-choice" for="look-anfushi-wave" data-look="anfushi-wave"><input class="look-input" type="radio" name="look" id="look-anfushi-wave" value="anfushi-wave" /><span class="swatches" aria-hidden="true"><i style="background: #00d9fc"></i><i style="background: #a8cbe2"></i><i style="background: #004e5c"></i></span><span class="look-name">Anfushi Wave</span></label>
+            <label class="look-choice" for="look-night-frame" data-look="night-frame"><input class="look-input" type="radio" name="look" id="look-night-frame" value="night-frame" /><span class="swatches" aria-hidden="true"><i style="background: #c3c0ff"></i><i style="background: #c7c4dd"></i><i style="background: #424078"></i></span><span class="look-name">Night Frame</span></label>
+            <label class="look-choice" for="look-redmond" data-look="redmond"><input class="look-input" type="radio" name="look" id="look-redmond" value="redmond" /><span class="swatches" aria-hidden="true"><i style="background: #a6c8ff"></i><i style="background: #bdc7dc"></i><i style="background: #234776"></i></span><span class="look-name">Redmond</span></label>
+            <label class="look-choice" for="look-cupertino" data-look="cupertino"><input class="look-input" type="radio" name="look" id="look-cupertino" value="cupertino" /><span class="swatches" aria-hidden="true"><i style="background: #93cdf6"></i><i style="background: #b6c9d8"></i><i style="background: #004c6c"></i></span><span class="look-name">Cupertino</span></label>
+            <label class="look-choice" for="look-corniche-frame" data-look="corniche-frame"><input class="look-input" type="radio" name="look" id="look-corniche-frame" value="corniche-frame" /><span class="swatches" aria-hidden="true"><i style="background: #76d4e7"></i><i style="background: #f5b7b6"></i><i style="background: #004e5a"></i></span><span class="look-name">Corniche Frame</span></label>
+            <label class="look-choice" for="look-raml-line" data-look="raml-line"><input class="look-input" type="radio" name="look" id="look-raml-line" value="raml-line" /><span class="swatches" aria-hidden="true"><i style="background: #86d6bf"></i><i style="background: #b2ccc3"></i><i style="background: #005142"></i></span><span class="look-name">Raml Line</span></label>
+            <label class="look-choice" for="look-lighthouse-rail" data-look="lighthouse-rail"><input class="look-input" type="radio" name="look" id="look-lighthouse-rail" value="lighthouse-rail" /><span class="swatches" aria-hidden="true"><i style="background: #ffb4a8"></i><i style="background: #f4ba9e"></i><i style="background: #930300"></i></span><span class="look-name">Lighthouse Rail</span></label>
+            <label class="look-choice" for="look-phosphor" data-look="phosphor"><input class="look-input" type="radio" name="look" id="look-phosphor" value="phosphor" /><span class="swatches" aria-hidden="true"><i style="background: #9fd49b"></i><i style="background: #b9ccb4"></i><i style="background: #225025"></i></span><span class="look-name">Phosphor</span></label>
+            <label class="look-choice" for="look-pharos-lantern" data-look="pharos-lantern"><input class="look-input" type="radio" name="look" id="look-pharos-lantern" value="pharos-lantern" /><span class="swatches" aria-hidden="true"><i style="background: #ffb94f"></i><i style="background: #e0c38c"></i><i style="background: #624000"></i></span><span class="look-name">Pharos Lantern</span></label>
+            <label class="look-choice" for="look-stanley-arches" data-look="stanley-arches"><input class="look-input" type="radio" name="look" id="look-stanley-arches" value="stanley-arches" /><span class="swatches" aria-hidden="true"><i style="background: #8ecff2"></i><i style="background: #b5c9d7"></i><i style="background: #004d67"></i></span><span class="look-name">Stanley Arches</span></label>
+            <label class="look-choice" for="look-souk-tiles" data-look="souk-tiles"><input class="look-input" type="radio" name="look" id="look-souk-tiles" value="souk-tiles" /><span class="swatches" aria-hidden="true"><i style="background: #ffb0cb"></i><i style="background: #ffb0cb"></i><i style="background: #7a294c"></i></span><span class="look-name">Souk Tiles</span></label>
+            <label class="look-choice" for="look-sea-glass" data-look="sea-glass"><input class="look-input" type="radio" name="look" id="look-sea-glass" value="sea-glass" /><span class="swatches" aria-hidden="true"><i style="background: #00dddd"></i><i style="background: #a2ced9"></i><i style="background: #004f50"></i></span><span class="look-name">Sea Glass</span></label>
+            <label class="look-choice" for="look-library-desk" data-look="library-desk"><input class="look-input" type="radio" name="look" id="look-library-desk" value="library-desk" /><span class="swatches" aria-hidden="true"><i style="background: #dcc66e"></i><i style="background: #d1c6a1"></i><i style="background: #544600"></i></span><span class="look-name">Library Desk</span></label>
+            <label class="look-choice" for="look-ink-rush" data-look="ink-rush"><input class="look-input" type="radio" name="look" id="look-ink-rush" value="ink-rush" /><span class="swatches" aria-hidden="true"><i style="background: #ffb68c"></i><i style="background: #edbe92"></i><i style="background: #753400"></i></span><span class="look-name">Ink Rush</span></label>
+            <label class="look-choice" for="look-zen" data-look="zen"><input class="look-input" type="radio" name="look" id="look-zen" value="zen" /><span class="swatches" aria-hidden="true"><i style="background: #f7bb71"></i><i style="background: #dfc2a2"></i><i style="background: #653e00"></i></span><span class="look-name">Zen</span></label>
+            <p class="looks-empty" hidden="hidden">No Looks match. Try another name or clear your search.</p>
+          </div>
           <div class="looks-note">
             <p>Your own setup is saved before the first Look, so <strong>Restore my look</strong> in Studio brings it back.</p>
             <button class="button button-text" type="button" data-look-reset="true" hidden="hidden">Back to Mandara Corniche</button>
@@ -422,8 +416,8 @@
     <!-- Bar styles: one large stage, the styles beside it. -->
     <section class="section bars" id="bars" aria-labelledby="bars-title">
       <header class="section-head">
-        <h2 id="bars-title" class="display-2"><span class="d-heavy">Eight</span> <em>bars.</em></h2>
-        <p>Pick one in Studio → Bars → Presets or with its command. Panels still grow out of each one, every style shows each workspace's apps on its buttons, and the left and right side bars can each wear a style of their own.</p>
+        <h2 id="bars-title" class="display-2"><span class="d-heavy">Nineteen</span> <em>bar presets.</em></h2>
+        <p>Choose from all 19 presets in Studio → Bars → Bar. Nine styles are previewed here, alongside an example of independently styled side bars. Classic, Notch, Glass pills, Dynamic island, Minimal, Productive, Hairline, Micro pill, Side bar and Dock complete the collection in Studio. Panels still grow out of every bar.</p>
       </header>
       <fieldset class="bars-picker">
         <legend class="visually-hidden">Bar styles</legend>
@@ -435,6 +429,7 @@
         <input class="bar-input" type="radio" name="bar-style" id="bar-stanley-bridge" value="stanley-bridge" />
         <input class="bar-input" type="radio" name="bar-style" id="bar-pharos-beam" value="pharos-beam" />
         <input class="bar-input" type="radio" name="bar-style" id="bar-raml-tram" value="raml-tram" />
+        <input class="bar-input" type="radio" name="bar-style" id="bar-taskbar" value="taskbar" />
         <input class="bar-input" type="radio" name="bar-style" id="bar-side-bars" value="side-bars" />
         <div class="bar-stage">
           <figure class="bar-shot bar-expressive">
@@ -485,6 +480,12 @@
               <img src="docs/screenshots/bar-style-raml-tram.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="The Raml Tram bar: a top bar joined to a rail of flower-shaped buttons down the left edge." />
             </picture>
           </figure>
+          <figure class="bar-shot bar-taskbar">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-redmond-light.webp" />
+              <img src="docs/screenshots/look-redmond.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="The Taskbar preset in the Redmond Look: a full-width bottom bar with the launcher and app icons centred and a stacked clock on the right." />
+            </picture>
+          </figure>
           <figure class="bar-shot bar-side-bars">
             <picture>
               <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/bar-style-side-bars-light.webp" />
@@ -501,6 +502,7 @@
           <label class="bar-tab" for="bar-stanley-bridge"><b>Stanley Bridge</b><span>Three floating docks of squircle tiles spanning the bottom, after Tile dock.</span><code>mandara msg bar style stanley-bridge</code></label>
           <label class="bar-tab" for="bar-pharos-beam"><b>Pharos Beam</b><span>A notch hanging from the top edge: scalloped accent buttons and tonal tiles, after Expressive.</span><code>mandara msg bar style pharos-beam</code></label>
           <label class="bar-tab" for="bar-raml-tram"><b>Raml Tram</b><span>A top bar joined to a left rail of flower buttons, after Rail.</span><code>mandara msg bar style raml-tram</code></label>
+          <label class="bar-tab" for="bar-taskbar"><b>Taskbar</b><span>A full-width bottom taskbar with the launcher and your pinned and running apps centred, and a stacked clock on the right.</span><code>mandara msg bar style taskbar</code></label>
           <label class="bar-tab" for="bar-side-bars"><b>Side bars too</b><span>The left and right side bars can each take a style of their own, apart from the main bar.</span><code>mandara msg side-bar style right tile-dock</code></label>
         </div>
       </fieldset>
@@ -640,13 +642,14 @@
     <!-- The plugins, grouped. -->
     <section class="section shelf-section" id="plugins" aria-labelledby="plugins-title">
       <header class="section-head">
-        <h2 id="plugins-title" class="display-2"><span class="d-heavy">85 plugins,</span> <em>one shelf.</em></h2>
+        <h2 id="plugins-title" class="display-2"><span class="d-heavy">86 plugins,</span> <em>one shelf.</em></h2>
         <p>Switch on what you use. Write your own in Rust, compiled to sandboxed WebAssembly. <a class="text-link" href="docs/plugins.html">See every plugin</a></p>
       </header>
       <ul class="shelf">
-        <li class="shelf-group"><h3 class="shelf-name">Bar<small>10</small></h3><ul class="chips">
+        <li class="shelf-group"><h3 class="shelf-name">Bar<small>11</small></h3><ul class="chips">
           <li><a class="spine chip" href="docs/plugins.html"><span>Workspaces</span><small>Bar</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Launcher</span><small>Bar</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Taskbar</span><small>Bar</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Active window</span><small>Bar</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Clock</span><small>Bar</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Language</span><small>Bar</small></a></li>
@@ -745,7 +748,7 @@
           <li><a class="spine chip" href="docs/plugins.html"><span>Sudoku</span><small>Games</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>2048</span><small>Games</small></a></li>
         </ul></li>
-        <li class="shelf-group shelf-more"><a class="spine spine-more" href="docs/plugins.html"><span>All 85, in the guide</span><small>More</small></a></li>
+        <li class="shelf-group shelf-more"><a class="spine spine-more" href="docs/plugins.html"><span>All 86, in the guide</span><small>More</small></a></li>
       </ul>
     </section>
 

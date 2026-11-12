@@ -1,8 +1,8 @@
 //! The public pages state how many plugins Mandara ships and how many
 //! compositors it supports. Those numbers drift whenever a plugin lands on
 //! one branch and the docs on another, so they are checked here against the
-//! sources of truth: the plugin catalog (`assets/catalog.json`, minus the
-//! example plugins in `plugins/examples/`) and the ten compositor drivers.
+//! sources of truth: the plugin artwork catalog plus built-ins that use app
+//! icons, and the ten compositor drivers.
 //!
 //! The website (`index.html`) has its own check in `pages_tests`.
 
@@ -11,6 +11,10 @@ use std::path::PathBuf;
 
 /// MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc and COSMIC.
 const COMPOSITORS: usize = 10;
+
+/// Taskbar draws the pinned and running applications' icons. It has no
+/// standalone artwork entry in the embedded plugin-art catalog.
+const APP_ICON_PLUGINS: &[&str] = &["taskbar"];
 
 /// Phrases that end in a plugin count: the number comes right before them.
 const PLUGIN_COUNT_BEFORE: &[&str] = &[" built-in plugins", " first-party plugins", " plugins built in", " built-ins", "-plugin set", " plugins plus WebAssembly"];
@@ -42,7 +46,13 @@ fn builtin_ids() -> BTreeSet<String> {
     let examples: BTreeSet<String> = std::fs::read_dir(root.join("plugins/examples")).unwrap().filter_map(|e| e.ok()).filter(|e| e.path().is_dir()).map(|e| e.file_name().to_string_lossy().into_owned()).collect();
     let ids: BTreeSet<String> = catalog.as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap().to_owned()).collect();
     assert!(examples.iter().all(|e| ids.contains(e)), "an example plugin is missing from the catalog");
-    ids.difference(&examples).cloned().collect()
+    let mut builtins: BTreeSet<_> = ids.difference(&examples).cloned().collect();
+    for id in APP_ICON_PLUGINS {
+        assert!(builtins.insert((*id).to_string()), "{id} now has catalog artwork: remove its app-icon exception");
+        let source = std::fs::read_to_string(root.join(format!("crates/mandara-ui/src/plugins/{id}.rs"))).unwrap();
+        assert!(source.contains("PluginManifest::builtin(ID,"), "{id}: the app-icon plugin must still be registered");
+    }
+    builtins
 }
 
 /// The number written right before byte `end` of `text`.
@@ -121,7 +131,7 @@ fn public_pages_state_the_real_plugin_and_compositor_counts() {
     let builtins = builtin_ids().len();
     let art_index = std::fs::read_to_string(crate::root().join("crates/mandara-ui/assets/plugin-art/index.rs")).unwrap();
     let embedded = art_index.lines().filter(|l| l.trim_start().starts_with("(\"")).count();
-    assert_eq!(embedded, builtins, "every built-in plugin in the catalog has embedded art (run `cargo xtask art`)");
+    assert_eq!(embedded + APP_ICON_PLUGINS.len(), builtins, "every catalog plugin has embedded art; app-icon plugins are counted separately");
     let mut wrong = Vec::new();
     let (mut plugin_mentions, mut compositor_mentions, mut language_mentions) = (0, 0, 0);
     let languages = languages();
@@ -131,7 +141,7 @@ fn public_pages_state_the_real_plugin_and_compositor_counts() {
         for n in plugin_counts(&text) {
             plugin_mentions += 1;
             if n != builtins {
-                wrong.push(format!("{name}: {n} plugins, the catalog has {builtins} built in"));
+                wrong.push(format!("{name}: {n} plugins, Mandara has {builtins} built in"));
             }
         }
         for n in compositor_counts(&text) {

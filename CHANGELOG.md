@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Improved
+
+- **An easier Look picker on the website.** Search the collection or step through it beside the desktop preview, with the same colour swatches and live palettes. The website and guides now reflect all 19 bar presets and 86 built-in plugins, including Taskbar.
+
 ## 0.28.3 — 2026-11-12
 
 Mandara runs smoothly in virtual machines with 3D acceleration.

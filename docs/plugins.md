@@ -29,13 +29,14 @@ running can finish; disabling the plugin prevents a follow-up refresh.
 </tr>
 </table>
 
-The 85 first-party plugins (49 of them ship switched off, marked *opt-in*):
+The 86 first-party plugins (50 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
 | **Session** | Power and session menu |
 | **Launcher** | Application launcher (Super+Space) |
 | **Workspaces** | Tags / workspaces with their apps |
+| **Taskbar** | Pinned and running apps in the bar, sharing pins with the dock; click to launch, focus or minimize, or middle-click for a new window *(opt-in)* |
 | **Active window** | Focused window title |
 | **Clock** | Time, date and calendar |
 | **Keyboard layout** | The active keyboard layout; click to switch |

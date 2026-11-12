@@ -37,7 +37,7 @@ of them, from one native binary:
   current limits in the [performance guide](performance.md).
 - **One language for everything**: 100 % Rust on GPUI, the GPU-accelerated
   framework behind the Zed editor; no QML, JavaScript or Python layer.
-- **Extensible and scriptable**: 85 built-in plugins, sandboxed
+- **Extensible and scriptable**: 86 built-in plugins, sandboxed
   WebAssembly plugins, and a JSON command for almost every action.
 - **20 languages**, right-to-left included, and signed in-app updates.
 
@@ -119,7 +119,7 @@ the bar. [Scripting, automation and agents](agent-ready.md)
 
 ## What plugins come with Mandara?
 
-Mandara ships 85 first-party plugins: workspaces, media with lyrics,
+Mandara ships 86 first-party plugins: workspaces, media with lyrics,
 audio, network, Bluetooth, weather, prayer times, a clipboard manager,
 screenshots, containers, services, a process hunter, a shortcuts
 cheatsheet, Tailscale, local AI models, sharing to your phone and more.
