@@ -170,7 +170,8 @@ around, each one measured or shipped today:
    widgets placed per monitor, and three launcher looks. Attached launchers follow
    compact bars, with a placement map in Studio. [Boot look](docs/boot-look.md)
    restyles the boot menu and splash too (GRUB, Limine, rEFInd, Plymouth, or
-   your own image), with a plan first, backups and one-click restore.
+   your own image), with a plan first, backups and one-click restore. Display
+   scale and arrangement changes apply live in Studio, with a keep-or-revert countdown.
 9. **Safe, rich extensions.** 85 plugins built in. Third-party plugins are
    Rust compiled to sandboxed WebAssembly: a crashing plugin is switched
    off and the shell keeps running. Qur’an, Hadith and Jannah can also
