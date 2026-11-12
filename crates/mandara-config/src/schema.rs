@@ -203,6 +203,18 @@ impl ShellConfig {
         self.plugins.opted_in(crate::upgrade::CURSORS_ID)
     }
 
+    /// Whether the opt-in icon themes plugin is on (only then does Mandara
+    /// install icon themes or set the desktop's icon theme).
+    pub fn icons_enabled(&self) -> bool {
+        self.plugins.opted_in(crate::upgrade::ICONS_ID)
+    }
+
+    /// Whether the opt-in sound themes plugin is on (only then does
+    /// Mandara install sound themes or set the desktop's sound theme).
+    pub fn sound_themes_enabled(&self) -> bool {
+        self.plugins.opted_in(crate::upgrade::SOUND_THEMES_ID)
+    }
+
     /// Whether the opt-in Wallhaven plugin is on (online wallpapers in the
     /// picker; no Wallhaven request is made otherwise).
     pub fn wallhaven_enabled(&self) -> bool {
@@ -1317,6 +1329,24 @@ pub struct BarConfig {
     /// `bar style`); picking another preset puts back what it changed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub style: Option<crate::bar_styles::BarStyle>,
+    /// What that style did to the items it kept, so the next preset puts
+    /// them back.
+    #[serde(skip_serializing_if = "crate::bar_styles::StyleItems::is_empty")]
+    pub style_items: crate::bar_styles::StyleItems,
+    /// The items the last preset or Look laid out on the bars (`None`:
+    /// nothing recorded yet), so the next one takes exactly those away and
+    /// the items you added stay ([`crate::bar_items`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layout_items: Option<Vec<crate::bar_styles::ItemPlace>>,
+    /// Items you placed or moved yourself (Studio's layout designer):
+    /// they stay through every preset and Look.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub yours: Vec<String>,
+    /// Items that were already on the bars, not yours, when the first
+    /// preset or Look was recorded and that it left in place (a side bar's
+    /// shipped items): never counted as yours, never taken away.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub preset_kept: Vec<String>,
 }
 
 impl BarConfig {
@@ -1454,6 +1484,10 @@ impl Default for BarConfig {
             icon_fill: crate::surfaces::BarIconFill::default(),
             item_inset: surfaces::defaults::BAR_ITEM_INSET_PX,
             style: None,
+            style_items: crate::bar_styles::StyleItems::default(),
+            layout_items: None,
+            yours: Vec::new(),
+            preset_kept: Vec::new(),
         }
     }
 }
@@ -1575,6 +1609,10 @@ pub struct WallpaperConfig {
     pub fill_color: String,
     /// How a new wallpaper replaces the old one.
     pub transition: crate::desktop::WallpaperTransition,
+    /// Where a Ripple or Shatter transition starts.
+    pub transition_origin: crate::desktop::TransitionOrigin,
+    /// How the Sketch transition draws and fills.
+    pub sketch: crate::desktop::SketchOptions,
     /// Light / dark and per-output wallpapers.
     pub variants: crate::desktop::WallpaperVariants,
     pub slideshow: crate::desktop::WallpaperSlideshow,
@@ -1614,6 +1652,8 @@ impl Default for WallpaperConfig {
             fill: crate::desktop::WallpaperFill::default(),
             fill_color: "#000000".into(),
             transition: crate::desktop::WallpaperTransition::default(),
+            transition_origin: crate::desktop::TransitionOrigin::default(),
+            sketch: crate::desktop::SketchOptions::default(),
             variants: crate::desktop::WallpaperVariants::default(),
             slideshow: crate::desktop::WallpaperSlideshow::default(),
             video: crate::desktop::WallpaperVideo::default(),

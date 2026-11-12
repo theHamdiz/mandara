@@ -118,6 +118,8 @@ pub fn entries() -> Vec<Setting> {
         s(Audio, SOUNDS, "/sounds/theme", tk("Sound theme"), tk("A folder in /usr/share/sounds; empty follows your GTK setting"), Text { placeholder: "freedesktop" }),
         s(Audio, SOUNDS, "/sounds/volume", tk("Volume"), tk("Of shell sounds only"), slider(0.0, 1.0, 0.05, "")),
         s(Audio, SOUNDS, "/sounds/mute_while_media", tk("Quiet while media plays"), tk("No shell sounds over your music or video"), Toggle),
+        s(Audio, SOUNDS, "/sounds/quiet_in_dnd", tk("Quiet in do not disturb"), tk("Only sounds you cause (volume, screenshots) and battery alerts play"), Toggle),
+        s(Audio, SOUNDS, "/sounds/desktop_sync", tk("Apply to apps"), tk("Applying a theme in Themes → Sounds also sets it for GTK, KDE and other apps"), Toggle),
         s(Audio, SOUND_EVENTS, "/sounds/volume_change", tk("Volume changes"), tk("A soft tick as the volume moves"), Toggle),
         s(Audio, SOUND_EVENTS, "/sounds/notification_low", tk("Low-urgency notifications"), tk("Usually silent"), Toggle),
         s(Audio, SOUND_EVENTS, "/sounds/notification", tk("Notifications"), tk("Apps can ask for their own sound"), Toggle),
@@ -125,6 +127,11 @@ pub fn entries() -> Vec<Setting> {
         s(Audio, SOUND_EVENTS, "/sounds/charger", tk("Charger and battery"), tk("Plugging in, unplugging and low-battery alerts"), Toggle),
         s(Audio, SOUND_EVENTS, "/sounds/screenshot", tk("Screenshots"), tk("A shutter when a capture is taken"), Toggle),
         s(Audio, SOUND_EVENTS, "/sounds/login", tk("Logging in"), tk("Once per session"), Toggle),
+        s(Audio, SOUND_EVENTS, "/sounds/lock", tk("Locking"), tk("Locking and unlocking the screen"), Toggle),
+        s(Audio, SOUND_EVENTS, "/sounds/devices", tk("Devices"), tk("A drive plugged in or removed"), Toggle),
+        s(Audio, SOUND_EVENTS, "/sounds/trash", tk("Emptying the Trash"), tk("When the Trash is emptied"), Toggle),
+        s(Audio, SOUND_EVENTS, "/sounds/brightness_change", tk("Brightness changes"), tk("A soft tick as the brightness moves"), Toggle),
+        s(Audio, SOUND_EVENTS, "/sounds/complete", tk("Finished"), tk("An install finishing without a notification"), Toggle),
     ]
 }
 

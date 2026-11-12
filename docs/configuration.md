@@ -96,7 +96,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 |---|---|
 | Themes | **looks** — six one-click looks and *Restore my look* (`looks.*`, see [Looks](#looks)); light / dark / automatic and its schedule (`theme.*`), palette tuning (`theme.adjustments`), theme crossfade (`theme.transition_ms`), icons (`appearance.*`), corner roundness, shadows, borders, backdrop dim; under **Components**, the **slider design** of the thick volume, brightness and mixer sliders (`style.slider_design` = `classic`, the default: the fill, a small gap, an upright handle, another gap and the rest of the track ending in a stop dot; `continuous`: one track with a short grip inside the fill's end; `pill`: a round knob on the fill's end that stretches into a pill while held; `wavy`: the classic layout with a gentle wave along the fill that flows only while you drag; `segmented`: ten rounded steps that fill in turn; thin sliders always keep the classic look); the other **component designs**, each `classic` by default: `style.button_design` (`classic`, `square`, `expressive`, `cut`, `elevated`), `style.toggle_design` (`classic`, `material`, `expressive`, `round`), `style.input_design` (`classic`, `filled`, `outlined`, `pill`), `style.chip_design` (`classic`, `material`, `connected`), `style.progress_design` (`classic`, `material`, `wavy`, `segmented`; bars, meters and progress rings, always at their classic size), `style.surface_corners` (`rounded`, `asymmetric`, `square`, `squircle`, `cut`; `style.radius_scale` still sets the size; squircle and cut cards clip their contents to the rounded rectangle inside their shape) and `style.card_style` (`tonal`, `raised` — no shadow while `style.shadows` is off —, `outlined`); the Components **presets** write these and `style.slider_design` together (`looks.keep_components`: picking a look keeps your designs instead of applying the look's); and the **slider handle** (`style.slider_handle` = `line`: the upright handle between a slider's fill and its track, with a small gap on each side and a stop dot at the track's end, or the grip of the continuous design; `none`: the fill's rounded end alone; the pill and segmented designs ignore it) (`style.*`); the theme; **other apps** — the app theming switches, all off by default (`integrations.*`, see [App theming](#app-theming-integrations)); **cursor** (the opt-in `cursors` plugin) — theme, size, hide while typing / when idle, Hyprland's software cursor and hide on touch (`compositor.input.cursor.theme`, `.size`, `.hide_when_typing`, `.hide_after_secs`, `.no_hardware_cursors`, `.hide_on_touch`; themes Mandara downloaded are listed in `~/.local/share/mandara/cursor-themes.json`) |
 | Wallpaper | folder, picker style / size / focus / names, fill and colour, transitions, crossfade (`wallpaper.crossfade_ms`), light / dark and per-display variants, depth effect (`wallpaper.depth_effect`) and how its subject is found: `wallpaper.depth.mode` (`hand-tuned` or `model`), `auto_split`, `split` (0.05–0.95, model mode) (`wallpaper.*`); video wallpapers: pause behind windows / on battery, frame-rate limit, first frame only (`wallpaper.video.*`, see [Video wallpapers](#video-wallpapers)); the slideshow (`wallpaper.slideshow.*`, see [Wallpaper slideshow](#wallpaper-slideshow)) |
-| Desktop widgets | clocks (24 faces, including depth, analog, word, split-flap, glass-tube and binary), system monitor, gauges, meters and thermals, weather, world clock, countdown, progress, to-do, sticky note, focus timer, quote, notebook tabs, calendars, sun / moon / globe, profile, shortcuts, toggles, sliders, palette, desk cat, bubbles, photo frame, sticker, six media layouts, machine card, screen time, prayer times, search, at a glance, GitHub, exchange rates, AI usage, games, decorations, plane visualizer, per-widget plate shape, outline, shadow, header, frame, rotation and mirror, alignment, font, numerals, calendar and language, show / hide them all (`desktop.widgets.*`, see [Desktop widgets](#desktop-widgets)); desktop cards and visualizers (`cards.*`, `visualizers.*`) |
+| Desktop | clocks (24 faces, including depth, analog, word, split-flap, glass-tube and binary), system monitor, gauges, meters and thermals, weather, world clock, countdown, progress, to-do, sticky note, focus timer, quote, notebook tabs, calendars, sun / moon / globe, profile, shortcuts, toggles, sliders, palette, desk cat, bubbles, photo frame, sticker, six media layouts, machine card, screen time, prayer times, search, at a glance, GitHub, exchange rates, AI usage, games, decorations, plane visualizer, per-widget plate shape, outline, shadow, header, frame, rotation and mirror, alignment, font, numerals, calendar and language, show / hide them all (`desktop.widgets.*`, see [Desktop widgets](#desktop-widgets)); desktop cards and visualizers (`cards.*`, `visualizers.*`); the right-click menu: ring or list, items and their order, custom programs, size, labels, gesture, glass and animation (`desktop.menu.*`, see [Desktop menu](#desktop-menu)) |
 | Typography | interface / display / Arabic / monospace fonts, text scale, weight (`typography.*`) |
 | Motion | stiffness, damping, mass, animation speed, reduce motion (`motion.*`) |
 
@@ -104,7 +104,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 
 | Page | Settings |
 |---|---|
-| Bars | **Bar**: layout and appearance (`bar.*`); **Side bars**: left/right plugin bars (`side_bars.*`); **Sidebar**: widget tabs, cards and appearance (`sidebar.*`, `sidebar.look.*`); **Drop-down panels**: geometry, material, main menu and animation (`panels.*`, `bar.panel_radius`); **Edges & corners**: hover triggers (`edges.*`, `sidebar.hover_reveal`), hot corners (`hot_corners.*`) and rounded screen corners (`screen_corners.*`) |
+| Bars | **Bar**: layout and appearance (`bar.*`); **Sidebars**: what each side edge holds, then the left/right plugin bars (`side_bars.*`) and the sidebar panel's widget tabs, cards and appearance (`sidebar.*`, `sidebar.look.*`); **Drop-down panels**: geometry, material, main menu and animation (`panels.*`, `bar.panel_radius`); **Edges & corners**: hover triggers (`edges.*`, `sidebar.hover_reveal`), hot corners (`hot_corners.*`) and rounded screen corners (`screen_corners.*`) |
 | Dock | layout (position, size, magnification), behaviour (auto-hide, delays, slide speed, bounces, minimize into icon; window geometry is checked periodically only for Smart hiding), apps (`pinned` order — `"@launcher"` is the launcher button, at any position; it replaces 0.22's `launcher_button` / `launcher_at_end`, which are moved into `pinned` once — running, recent apps, indicators, badges), stacks (`[[dock.stacks]]` path / view / sort / display, `stack_items`, `fan_items`, `stack_names`), the Applications folder (`[dock.applications]` enabled / view / order / icon_size; replaces 0.1's `applications_slot`), Trash, the now-playing chip (`dock.media_chip`), appearance (opacity, tint, radius, padding, spacing, shadow, rim) — every number clamped to `mandara_config::dock::ranges` (`dock.*`) |
 | Launcher | ready-made looks ([Launcher looks](#launcher-looks)), style (classic / beacon), placement (`launcher.look.position`, see [Launcher placement](#launcher-placement)), align to the launcher button, width / height when attached and in the center, layout, grid columns and icon size, category chips, grouped results, keyboard hints, Beacon bar width and height, dim, results (`launcher.max_results`), providers and prefixes, ranking half-life and recent count, launching (`launcher.*`) |
 | Window switcher | style, previews, scope, thumbnail width, columns (`switcher.*`); screen time retention, idle and limits (`screen_time.*`) |
@@ -164,6 +164,7 @@ fixed:
 | Wallpaper generator (`wallpaper-generator`) | recipe, size, format, folder, schedule and video loops: see [Wallpaper generator](#wallpaper-generator) | |
 | Wallhaven (`wallhaven`, opt-in) | `wallpaper.wallhaven_query` (default search; empty: the toplist), `wallpaper.wallhaven_sorting` (`toplist`, `date_added`, `views`, `favorites`, `random`) — shown on Studio → Wallpaper while the plugin is on; off, no Wallhaven request is made | empty, toplist |
 | Cursor themes (`cursors`, opt-in) | `compositor.input.cursor.*` — written to the compositor drop-in, `~/.icons/default` and applied live only while the plugin is on | unset |
+| Sound themes (`sound-themes`, opt-in) | `sounds.theme` (the theme Mandara's own sounds play from, set by Apply; used whether or not the plugin is on), `sounds.desktop_sync` (Apply to apps: GTK's `org.gnome.desktop.sound`, existing `settings.ini` files and `kdeglobals`, only while the plugin is on); the event switches `sounds.lock`, `devices`, `trash`, `brightness_change`, `complete` and `sounds.quiet_in_dnd` | your desktop's, on; on, on, on, off, on; on |
 | Task progress (`progress`, opt-in) | `notify` (a notification when a task is done or fails) | on |
 | Eye breaks (`breaks`, opt-in) | `every_min` (active minutes between short breaks), `short_s`, `long_every_min` (0: no long breaks), `long_min`, `style` (`notification`, `overlay`), `skip_fullscreen` | 20 min, 20 s, 60 min, 5 min, notification, on |
 | Presentation mode (`presentation`, opt-in) | `auto_screen_share` (on while an app shares the screen) | off |
@@ -250,6 +251,18 @@ Aqueous's settings stay in its own files in `~/.config/aqueous`: Mandara
 writes no drop-in or include line there, and Studio locks the compositor
 settings it cannot apply and explains why. See [Aqueous](install.md#aqueous)
 for setup and what the bar can control.
+
+## labwc and COSMIC integration
+
+labwc and COSMIC have no IPC socket: Mandara follows their workspaces with
+the standard `ext-workspace-v1` Wayland protocol, and their windows with
+the wlr foreign-toplevel protocol (labwc) or `ext-foreign-toplevel-list-v1`
+plus COSMIC's toplevel protocols (COSMIC). labwc keeps its settings in
+`~/.config/labwc` (`rc.xml`, `autostart`) and COSMIC in COSMIC Settings:
+Mandara writes no drop-in or include line for either, and Studio locks the
+compositor settings it cannot apply and explains why. See
+[labwc](install.md#labwc) and [COSMIC](install.md#cosmic) for setup and what
+the bar can control.
 
 ## Desktop widgets
 
@@ -624,6 +637,56 @@ glow = true
 anchor = "bottom"
 ```
 
+## Desktop menu
+
+`[desktop.menu]` shapes the desktop's right-click menu (model:
+`crates/mandara-config/src/desktop_menu.rs`; Studio → Desktop → Context
+menu). A file without it gets the ring with every item. The menu's
+surface exists only while it shows; it has no timers and keeps no state
+once closed.
+
+| Key | Values | Default |
+|---|---|---|
+| `style` | `ring` (icon buttons round the click) or `classic` (the glass list) | `ring` |
+| `labels` | `hub` (the middle names the item under the pointer), `around` (a label beside it, outside the ring), `always` (every item named under its icon; the ring grows to fit) | `hub` |
+| `gesture` | `both`, `click` (right-click, then click an item), `drag` (hold the right button, move toward an item, let go; letting go anywhere else closes it) | `both` |
+| `submenu` | when Add widget's outer ring opens: `hover` or `click` | `hover` |
+| `radius` | centre to the items, logical px (80–160; it grows on its own when many items need room) | `100` |
+| `item_size` | an item's button, logical px (36–56) | `44` |
+| `opacity` | the glass (0.6–1) | `0.96` |
+| `animation` | `follow` (Studio → Motion's popup speed, feel and reduced motion) or `own` | `follow` |
+| `speed` | with `animation = "own"`: playback speed (0–3, 0 opens and closes at once); reduced motion still applies | `1` |
+| `items` | the items in menu order (below) | every built-in item |
+
+`[[desktop.menu.items]]` lists the items in order, each with an `id` and
+`enabled`. The built-in ids are `edit-desktop`, `add-widget`,
+`toggle-widgets` (shows only while the desktop has widgets),
+`change-wallpaper`, `next-wallpaper` (with a slideshow or its folder),
+`themes`, `displays`, `terminal`, `screenshot` and `studio`; a built-in
+missing from the list comes back at the end, switched on, and an unknown id
+is skipped. Up to eight `custom` items run a program of your own: `label`
+(up to 40 characters), `icon` (a bundled icon name) and `command`, the
+program and its arguments as a list, started directly in your home folder,
+never through a shell.
+
+```toml
+[desktop.menu]
+style = "ring"
+labels = "hub"
+gesture = "both"
+
+[[desktop.menu.items]]
+id = "edit-desktop"
+enabled = true
+
+[[desktop.menu.items]]
+id = "custom"
+enabled = true
+label = "Files"
+icon = "folder"
+command = ["nautilus", "--new-window"]
+```
+
 ## Side bar
 
 `bar.position = "left"` or `"right"` puts a slim vertical bar
@@ -698,8 +761,13 @@ styles.
 
 **Bar styles** set all of this at once: Studio → Bars → Presets
 (*Expressive*, *Tile dock*, *Rail*, *Segmented*, *System monitor*,
-*Stanley Bridge*, *Pharos Beam*, *Raml Tram*) or
-`mandara msg bar style expressive|tile-dock|rail|segmented|system-monitor|stanley-bridge|pharos-beam|raml-tram|none`.
+*Stanley Bridge*, *Pharos Beam*, *Raml Tram*, *Taskbar*) or
+`mandara msg bar style expressive|tile-dock|rail|segmented|system-monitor|stanley-bridge|pharos-beam|raml-tram|taskbar|none`.
+*Taskbar* is a full-width bottom bar with the workspaces at its start, the
+launcher and the **Taskbar** item (`taskbar`: the dock's pinned apps, then every app with a
+window, from the window list; on a compositor without one, the
+compositor's own client list marks what runs and a click starts the app)
+centred, and the clock stacked over the date on the right.
 A style sets the layout, edge and height, the item and icon shapes and
 colours, insets and spacing, the screen frame, the notch's width
 (*Pharos Beam*), the bar font (*System monitor* uses your monospace font,
@@ -708,7 +776,23 @@ to the bar (`[side_bars]`, left side on, right side off: scalloped
 buttons for Expressive, flowers for Raml Tram). The bar remembers it as
 `bar.style`; picking any other preset or a Look, or `bar style none`,
 first puts every field the style changed back to its default. Studio's
-presets can replace your items too; `bar style` never does.
+presets can lay out their own items too (*Use the preset's items*);
+`bar style` never does.
+
+**Your items stay.** Whatever a preset or a Look lays out on the bars is
+recorded (`bar.layout_items`, and `bar.style_items` for what a style adds
+while keeping your items), and the next one takes exactly that away. An
+item is yours when you placed or moved it in Studio's layout designer
+(`bar.yours`) or when no preset put it there; a config from before this
+was recorded counts the shipped bar and side bars, the active Look's and
+the active style's own items as theirs and everything else as yours.
+Your items come back after every switch, never twice: in their zone (in
+the start and middle zones after the layout's own items, in the end zone
+before them, so the session button keeps the far end); an item on a side
+bar that stops showing moves to the bar's zone in the same place (top →
+start, middle → middle, bottom → end). A plugin you removed never comes
+back, and the plugins your items and desktop widgets need stay on.
+Switching back and forth gives the same bar every time.
 
 While a bar draws its items on tiles of their own (every style, and a
 side bar with pill items), the workspace / tag buttons take its shapes
@@ -791,7 +875,7 @@ style = "tile-dock"      # the bar style that set these (see below)
 ```
 
 A **bar style for one side bar** sets those keys at once:
-Studio → Bars → Side bars (the *Style* chips above each bar's groups) or
+Studio → Bars → Sidebars (the *Style* chips above each bar's groups) or
 `mandara msg side-bar style left|right expressive|tile-dock|rail|segmented|none`
 (the four original styles; the newer ones shape the whole bar).
 It shapes that bar alone: the main bar, the other side bar and the shared
@@ -824,9 +908,11 @@ cleared.
   off or that side is switched off. The power dock's hover edge is off on
   an edge with a side bar.
 
-Arrange each group's plugins in Studio → Bars → Side bars. Its layout
-designer shows the left and right bars' top, middle and bottom groups;
-the same tab holds their behavior, shape, items and material.
+Arrange each group's plugins in Studio → Bars → Sidebars. Its picker
+gives each edge a side bar, the sidebar or nothing (an edge holds one of
+them; a preset's rail changes only with its preset); the side bar section
+below shows each side bar's top, middle and bottom groups and their
+behavior, shape, items and material.
 Commands: `mandara msg side-bars on|off|toggle`, `side-bars join
 on|off|toggle`, `side-bar pin left|right [on|off|toggle]`, `side-bar show
 left|right [on|off|toggle]`, `side-bars status`.
@@ -870,17 +956,34 @@ looks like the hugging rail.
 
 ## Looks
 
-`[looks]` remembers which one-click look is applied (`active`, empty = your
-own setup) and `wallpaper_colors` (take the palette from the current
-wallpaper with the look's scheme instead of the look's own seed). A look
-(`crates/mandara-config/src/looks.rs`) sets the bar style, position and
-items, the desktop widget list (clocks, monitor, decorations, cards,
-visualizers), the theme (`theme.source` = an HCT palette from an OKLCH
-seed), fonts, `style.radius_scale`, the bar opacity and its **component
-designs** (one of the Components presets below, written to `style.*`;
-`looks.keep_components = true` keeps yours instead; a design you change
-after picking a look stays until you pick a look or preset again); it never
-changes the wallpaper image. Designed themes (palette presets such as
+`[looks]` remembers which one-click look is applied (`active`: a built-in
+look's id or one of yours, empty = your own setup) and `wallpaper_colors`
+(take the palette from the current wallpaper with the look's scheme
+instead of the look's own seed).
+
+**What a Look owns, and what stays yours.** A look
+(`crates/mandara-config/src/looks.rs`) owns exactly what it writes: the
+palette (`theme.source`, an HCT palette from an OKLCH seed, `theme.mode`
+and `theme.adjustments`); the bar — its layout, edge, frame and opacity,
+or a whole bar style with its height and rail — and the items **it** lays
+out; `typography.ui_font` / `display_font`, `style.radius_scale` and its
+**component designs** (one of the Components presets below, written to
+`style.*`; `looks.keep_components = true` keeps yours instead); the desktop
+widgets **it** adds (`looks.widgets`: their ids and fingerprints); the
+settings it names on top — the dock, the motion feel, the launcher look,
+the notification corner, bar auto-hide, hot corners and the ink style —
+recorded in `looks.settings` so the next look puts back what it changed;
+and the plugins it switched on or off. Everything else is yours and no
+look touches it: the wallpaper image, the desktop widgets you added or
+changed (ids, places, settings — a look's widget you move becomes yours
+and stays), your bar items (see *Your items stay* above), the plugins you
+switched on (only the dock: a look without one — Redmond and the looks
+with a bottom bar — switches it off while it's on, and the next look
+switches it back on), the bar's size unless the look carries a bar style, and
+every other setting. A config written before looks recorded their widgets
+is read safely: widgets equal to the active look's own are its, the rest
+are yours, and *Restore my look* also brings back widgets an older look
+replaced. Designed themes (palette presets such as
 Catppuccin) only set colours and carry no component designs: they combine
 with any components. Applying one from your own setup first saves the
 paths it touches as the look profile **Before looks** in
@@ -897,7 +1000,106 @@ back. `mandara msg look list`, `mandara msg look apply <id>
 | `qaitbay-forest` | green edge frame, giant stacked clock behind the subject, dock now-playing chip | Material You |
 | `anfushi-wave` | ocean micro pill, full-width glowing wave, katakana accent | Expressive |
 | `night-frame` | violet side bar with screen frame, greeting, calendar card, mirrored bars | Brutalist soft |
+| `redmond` | a Windows 11-style desktop: the *Taskbar* style (launcher and apps centred, stacked clock), notifications bottom right, the launcher's drawer from the bottom, no dock, light | Minimal |
+| `cupertino` | a macOS-style desktop: a slim top menu bar (launcher, focused app, status items, clock), the magnifying dock, a Spotlight-style search (Beacon), notifications top right, light | Classic |
+| `corniche-frame` | the *Expressive* style in a framed screen, day-block clock, glowing wave | Expressive |
+| `raml-line` | the *Raml Tram* style, split-flap clock, now-playing card | Material You |
+| `lighthouse-rail` | the *Rail* style only, giant numerals, calendar card | Expressive |
+| `phosphor` | the *System monitor* style in monospace, pixel clock, system monitor column | Brutalist soft |
+| `pharos-lantern` | the *Pharos Beam* style, ring clock | Expressive |
+| `stanley-arches` | the *Stanley Bridge* style, analog clock, mirrored bars | Material You |
+| `souk-tiles` | the *Tile dock* style, a clock of boxes, light | Classic |
+| `sea-glass` | the *Segmented* style (no bar, only islands), orbit clock, music and calendar cards | Expressive |
+| `library-desk` | the *Productive* bar at the bottom (tasks, notes, focus timer), minimal clock, calendar, light | Minimal |
+| `ink-rush` | a cel-shaded comic desktop: `[style.ink]` outlines, hard shadows and halftone, inked widget plates, the dock, bouncy motion, light | Expressive |
+| `zen` | one tiny auto-hiding pill, hot corners (launcher, notifications, overview, session), word clock | Minimal |
 
+The looks that name another app's desktop carry no logos, fonts or
+artwork of theirs: they are arrangements of Mandara's own bar styles,
+icons, fonts and settings.
+
+### Your own Looks
+
+Change anything a look owns after applying it and Studio keeps the result
+as a **child look**: *‹Look› · Custom* (renamable) in
+`~/.config/mandara/looks/<id>.toml`, made once per look per Studio session
+and updated as you go on (a check runs 1.5 s after your last change, off
+the UI thread; Studio does it while it runs, and when it starts for
+changes made meanwhile, from the desktop edit mode or `mandara msg`).
+*Save as new Look* keeps it under a name right away. A built-in look is
+never written. A child records its built-in **parent** and only what you
+changed (a delta): applying it applies the parent and then your changes,
+so a parent improved in a later release passes on everything you didn't
+change. Your looks sit in the gallery beside the built-in ones (badge
+*Yours*, the look they come from) and are applied, renamed, duplicated,
+exported and deleted like them; built-in looks export too.
+
+```toml
+# ~/.config/mandara/looks/corniche-dusk-custom.toml
+format = 1
+id = "corniche-dusk-custom"
+name = "Corniche Dusk · Custom"
+author = ""
+parent = "corniche-dusk"
+created = "2026-11-11"
+wallpaper_colors = false
+unset = []                 # look-owned settings you unset (dotted paths)
+
+[settings.bar]             # what differs from the parent
+position = "bottom"
+
+[settings.typography]
+ui_font = "Cairo"
+
+# [[widgets]] …            # only when the look's own widgets differ from the parent's
+```
+
+**Export and import** (`mandara msg look export <id> [file]`, by default
+`~/Downloads/<id>.mandara-look.toml`; `look import <file>`; Studio's
+*Export* button and *Import a Look…*, the desktop portal's file picker). A
+look file carries no assets and nothing personal: its colours are a seed,
+a built-in theme or the *wallpaper colors* flag (the importer's own
+wallpaper drives it — a wallpaper path is never written); no file paths,
+commands, output names, pinned apps, plugin settings or credentials, and
+only portable desktop widgets (clocks, monitors, decorations, visualizers,
+dates, progress and the built-in cards, on every display). On import a
+file is refused when it is over 64 KiB, malformed, of a newer `format`,
+based on a look this version doesn't have, or holds an unknown key, a
+setting outside what a look owns, a value that doesn't fit, a path-like
+value (`/`, `\`, `..`, `~`), a command, a theme that isn't built in or a
+widget that isn't portable. Nothing in a file is ever run. An imported
+look gets an id of its own (never a built-in's) and a numbered name when
+the name is taken. A config from before this release loads unchanged; if
+you're on a built-in look with tweaks, the first check (when Studio next
+runs) makes the child from what differs.
+
+### Ink style
+
+`[style.ink]` draws surfaces like a comic: any look or you can use it
+(Studio → Themes → Fine-tune → *Ink*).
+
+```toml
+[style.ink]
+outline = 3.0          # px, 0–6: an ink outline round bar items, panels, popups,
+                       #   the launcher, the dock, notifications and cards (0: hairlines)
+shadow = 5.0           # px, 0–10: a hard offset ink shadow instead of the soft one
+texture = "halftone"   # none | halftone (dots) | hatch: shading in the far corner
+bubbles = true         # notifications pop up as comic speech bubbles, the tail
+                       #   toward the notification corner (not inside a drawer
+                       #   joined to the bar)
+```
+
+The ink has a touch of the accent's hue: near black on light surfaces and
+a light ink on dark ones, over a near-black hard shadow, so the edge stays
+strong in both schemes; outlines replace the glass rim. A speech bubble's
+tail sits on the bubble's side toward the screen's edge (physical sides,
+like the notification corner, also in right-to-left languages), near its
+top or its foot, and is part of the area that takes clicks; bubbles pop in
+with a little overshoot, and appear at once with reduced motion. Outlines
+stay crisp: a hand-drawn wobble would need every edge drawn as a path
+instead of the GPU's rounded rectangles, at a cost on every frame. The textures are one cached image each, drawn once on
+first use; nothing animates. Text keeps its surface colours, so contrast
+is unchanged.
 ## Launcher placement
 
 ```toml

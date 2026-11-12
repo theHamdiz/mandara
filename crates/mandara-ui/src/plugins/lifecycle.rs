@@ -109,6 +109,10 @@ thread_local! {
 /// Stops what an off plugin owns outside its views. Runs on every config
 /// change; returns at once unless the plugin switches moved.
 fn sync(cx: &mut App) {
+    // Stash follows its settings (shake level) on every config change.
+    if is_on(super::stash::ID, cx) {
+        super::stash::start(cx);
+    }
     let changed = {
         let store = config(cx);
         let current = store.read(cx);
@@ -130,6 +134,9 @@ fn sync(cx: &mut App) {
     }
     if !is_on(super::feeds::ID, cx) {
         super::feeds::stop(cx);
+    }
+    if !is_on(super::stash::ID, cx) {
+        super::stash::stop(cx);
     }
     if !is_on(super::tray::ID, cx) {
         super::tray::stop(cx);
@@ -175,6 +182,7 @@ mod tests {
         "2048",
         "app-installer",
         "authenticator",
+        "boot-look",
         "breaks",
         "ci",
         "color-picker",
@@ -187,6 +195,7 @@ mod tests {
         "git-repos",
         "hadith",
         "home-assistant",
+        "icon-themes",
         "jannah",
         "keybinds",
         "local-ai",
@@ -207,9 +216,12 @@ mod tests {
         "screen-time",
         "services",
         "share",
+        "sound-themes",
         "soundscapes",
+        "stash",
         "sudoku",
         "tailscale",
+        "taskbar",
         "todo",
         "translator",
         "updates",

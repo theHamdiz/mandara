@@ -646,6 +646,7 @@ pub fn init(hub: &Entity<Hub>, cx: &mut App) {
                 remember_backlight(b.level());
                 cx.update(|cx| {
                     show(OsdEvent::brightness(b.level()), cx);
+                    crate::alerts::play_sound(mandara_services::sounds::SoundEvent::BrightnessChange, cx);
                     // The quick settings slider follows the brightness keys.
                     cx.refresh_windows();
                 });
@@ -779,6 +780,14 @@ impl Render for OsdView {
             OsdPosition::Center => (0.0, travel * CENTER_TRAVEL_FACTOR),
             OsdPosition::Left => (-travel, 0.0),
             OsdPosition::Right => (travel, 0.0),
+        };
+        // A choreography's entrance comes from its own direction instead
+        // (within the surface's margin: the overshoot is bounded).
+        let choreo = mandara_core::choreo::choreography();
+        let (dx, dy) = if choreo.entrance == mandara_core::choreo::Entrance::Anchor {
+            (dx, dy)
+        } else {
+            choreo.entrance_offset(p, (0.0, 0.0), crate::bidi::rtl(), ENTER_TRAVEL_PX * g.scale)
         };
         let vertical = g.position.is_vertical() && event.body() == Body::Level;
         let s = g.scale;
@@ -922,7 +931,7 @@ fn pill(event: &OsdEvent, level: f32, presence: f32, palette: &MandaraPalette, l
         .h(sz(PILL_H))
         .rounded_full()
         .bg(oklab_gradient(TOP_TO_BOTTOM_DEG, top, bottom))
-        .border_1()
+        .border(px(crate::plugins::panel_fx::edge_px()))
         .border_color(surface_edge(palette, look.rim).hsla())
         .shadow(elevation(palette, presence.clamp(0.0, 1.0)))
         .pl(sz(PILL_PAD_START_PX))
@@ -945,7 +954,7 @@ fn vertical_pill(event: &OsdEvent, level: f32, presence: f32, palette: &MandaraP
         .h(px(VPILL_H * s))
         .rounded_full()
         .bg(oklab_gradient(TOP_TO_BOTTOM_DEG, top, bottom))
-        .border_1()
+        .border(px(crate::plugins::panel_fx::edge_px()))
         .border_color(surface_edge(palette, look.rim).hsla())
         .shadow(elevation(palette, presence.clamp(0.0, 1.0)))
         .py(px(VPILL_PAD_PX * s))

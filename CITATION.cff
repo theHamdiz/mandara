@@ -10,7 +10,7 @@ abstract: >-
   closed. Historical release samples built frames in about 0.1 ms; current
   memory use and AI response time depend on the workload and hardware.
   Native drivers support MangoWM, Niri, Hyprland, Umbriel, Sway, River
-  Classic, KWin and Aqueous. Sandboxed WebAssembly plugins and documented commands
+  Classic, KWin, Aqueous, labwc and COSMIC. Sandboxed WebAssembly plugins and documented commands
   with JSON replies extend the desktop.
 url: "https://thehamdiz.github.io/mandara/"
 type: software

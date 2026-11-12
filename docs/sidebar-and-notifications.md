@@ -4,7 +4,7 @@
 
 - **Your own sidebar tabs:** create tabs, name them, pick an icon and put any
   widget (Mandara's or a third-party plugin's) on any of them, the same
-  widget on several if you like. Edit them in Studio → Bars → Sidebar →
+  widget on several if you like. Edit them in Studio → Bars → Sidebars →
   **Tabs**, right-click a tab in the shell, or use
   `mandara msg sidebar tab …`. The sidebar reopens on the tab you used last,
   and Ctrl+Tab / Ctrl+1–9 switch tabs. The **+** button stays pinned while
@@ -15,7 +15,7 @@
   Qur'an, Hadith, Radio (now playing, favourite, previous / play / next and
   volume), Feeds (your newest unread articles), Reddit (a community's top
   posts), and live Sudoku and 2048 boards, plus any third-party plugin's
-  card. Pick them under *Add a widget* in Studio → Bars → Sidebar →
+  card. Pick them under *Add a widget* in Studio → Bars → Sidebars →
   **Tabs**, with *Add to sidebar* on a plugin's page, from an empty tab's
   **Add widgets** button, or with
   `mandara msg sidebar tab widget add Overview feeds`. Placing a card

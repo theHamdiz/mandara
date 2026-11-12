@@ -8,8 +8,14 @@
 //! * `apps defaults|default set|autostart …|preferred` — `mimeapps.list`
 //!   and XDG autostart, edited non-destructively (`mandara_config::apps`).
 //! * `input cursor-themes|layouts` — what Studio → Input offers.
-//! * `cursor list|install|apply|remove` — Studio → Themes → Cursor (the
-//!   opt-in `cursors` plugin's commands).
+//! * `cursor list|install|apply|remove|import` — Studio → Themes → Cursors
+//!   (the opt-in `cursors` plugin's commands).
+//! * `icons list|install|apply|remove|import` — Studio → Themes → Icons
+//!   (the opt-in `icon-themes` plugin's commands, in `icon_themes.rs`).
+//! * `boot status|list|install|import|apply|restore` — Studio → Themes →
+//!   Boot (the opt-in `boot-look` plugin's commands, in `boot_look.rs`).
+//! * `sound list|install|apply|remove|import|play` — Studio → Themes →
+//!   Sounds (the opt-in `sound-themes` plugin, `plugins::sound_themes`).
 //! * `profile list|save|apply|delete`, `config export|import|reset`.
 
 use gpui::{App, AsyncApp};
@@ -553,6 +559,9 @@ fn register_apps(r: &mut PluginRegistry) {
     );
     register_uninstall(r);
     register_cursor(r);
+    super::icon_themes::register_commands(r);
+    super::boot_look::register_commands(r);
+    super::sound_themes::register_commands(r);
     r.command(CORE, CommandSpec::new("input cursor-themes", tk("Installed cursor themes"), |_, _| Ok(json!(mandara_config::input::cursor_themes()))));
     r.command(
         CORE,
@@ -685,6 +694,30 @@ fn register_cursor(r: &mut PluginRegistry) {
         })
         .arg(ArgSpec::required("id", ArgKind::String, tk("catalog id[/variant] or XCursor theme name")))
         .example("cursor remove bibata"),
+    );
+    r.command(
+        CURSORS,
+        CommandSpec::new_output("cursor import", tk("Install cursor themes from an archive or folder, or from an https:// link (no checksum exists for those: pass --unverified)"), |a, _| {
+            let target = a.get(0).ok_or("expected a path or an https:// link")?.to_string();
+            let source = if target.contains("://") {
+                if a.get(1) != Some("--unverified") {
+                    return Err("a link can't be checked against a known checksum: add --unverified to install it anyway".into());
+                }
+                install::ImportSource::Url(target)
+            } else {
+                install::ImportSource::Path(mandara_config::paths::expand_tilde(&target))
+            };
+            let (tx, rx) = async_channel::bounded(1);
+            let _ = std::thread::Builder::new().name("mandara-cursor".into()).spawn(move || {
+                let result = install::import(&source, &install::Env::current(), &|_| {}, &std::sync::atomic::AtomicBool::new(false))
+                    .map(|r| serde_json::to_string_pretty(&json!({ "installed": r.installed.iter().map(|i| &i.theme).collect::<Vec<_>>(), "skipped": r.skipped, "verified": false })).unwrap_or_default());
+                let _ = tx.send_blocking(result);
+            });
+            Ok(Output::Pending(rx))
+        })
+        .arg(ArgSpec::required("source", ArgKind::String, tk("an archive or folder path, or an https:// link")))
+        .arg(ArgSpec::optional("flag", ArgKind::String, tk("--unverified, required for a link")).choices(&["--unverified"]))
+        .example("cursor import ~/Downloads/Sweet-cursors.tar.xz"),
     );
 }
 

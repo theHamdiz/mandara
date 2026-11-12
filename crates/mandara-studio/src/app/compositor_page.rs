@@ -521,6 +521,20 @@ impl StudioView {
                 .text_color(p.on_surface_variant.hsla())
                 .child(t("Aqueous keeps its settings in its own files in ~/.config/aqueous and reloads them itself. Mandara follows its workspaces, windows and outputs over its socket and changes nothing in those files."))
                 .into_any_element(),
+            // Neither has an IPC socket: Mandara speaks standard Wayland
+            // protocols to them and writes nothing they read.
+            Target::Labwc => div()
+                .text_size(px(TEXT_12_PX))
+                .line_height(px(LEADING_17_PX))
+                .text_color(p.on_surface_variant.hsla())
+                .child(t("labwc keeps its settings in ~/.config/labwc (rc.xml, autostart) and reloads them itself. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and changes nothing in those files. To start Mandara with labwc, add the line “mandara &” to ~/.config/labwc/autostart."))
+                .into_any_element(),
+            Target::Cosmic => div()
+                .text_size(px(TEXT_12_PX))
+                .line_height(px(LEADING_17_PX))
+                .text_color(p.on_surface_variant.hsla())
+                .child(t("COSMIC keeps its settings in COSMIC Settings. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and COSMIC's window protocols, and changes nothing there. To start Mandara with COSMIC, add it in COSMIC Settings → Applications → Startup applications."))
+                .into_any_element(),
             Target::Mango => {
                 let head = super::fold::FoldHead { title: t("Tag & layout studio").into(), preview: t("Pick a tag, then its layout, master share and scroller width. Tags without a rule keep MangoWM's default.").to_string(), badge: None, trailing: None, closed: true };
                 let tags = self.fold("Tag & layout studio", head, p, cx, |this, cx| this.tag_studio(cfg, p, cx));

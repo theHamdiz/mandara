@@ -73,11 +73,18 @@ mod launcher_placement;
 mod dock_page;
 mod switcher_page;
 mod desktop_widgets_page;
+pub mod desktop_page;
 mod auth_widgets;
 pub mod looks_page;
+mod looks_yours;
 mod app_themes_page;
 mod themes_page;
+mod boot_page;
 mod cursor_page;
+mod icons_page;
+mod plugin_gate;
+mod theme_galleries;
+mod sounds_page;
 mod component_designs;
 mod plugin_offer;
 mod swatch_list;
@@ -87,6 +94,7 @@ pub mod wallpaper_page;
 pub(crate) mod grid;
 mod choice;
 pub mod plugin_modal;
+mod stash_edges;
 pub mod plugins_local;
 #[cfg(test)]
 mod settings_audit;
@@ -99,7 +107,7 @@ use crate::tokens::*;
 /// Pages that draw built-in plugins' artwork (tiles, the bar designer's
 /// pool); leaving the last of them releases it.
 fn shows_plugin_art(section: Section) -> bool {
-    matches!(section, Section::Plugins | Section::Bars)
+    matches!(section, Section::Plugins | Section::Bars | Section::Themes)
 }
 
 /// Drags the window: the compositor's own grab where the standard
@@ -194,6 +202,11 @@ pub struct StudioView {
     components: component_designs::Previews,
     /// The Themes page's tab.
     themes_tab: looks_page::ThemesTab,
+    /// The Desktop page's tab (Widgets when entering the page).
+    desktop_tab: desktop_page::DesktopTab,
+    /// Stash's edge catchers: the edge being resolved, and a change waiting
+    /// for you to choose which feature keeps an edge.
+    stash_edges: stash_edges::EdgesUi,
 }
 
 impl StudioView {
@@ -255,7 +268,7 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default() }
+        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -265,6 +278,7 @@ impl StudioView {
     pub fn show(&mut self, section: Section, cx: &mut Context<Self>) {
         if section == Section::Bars { self.bars_tab = Default::default(); }
         if section == Section::Themes && self.section != Section::Themes { self.themes_tab = Default::default(); }
+        if section == Section::Desktop && self.section != Section::Desktop { self.desktop_tab = Default::default(); }
         if section == Section::Plugins { self.market_reopen(); }
         if section != self.section {
             self.launcher_data.release();
@@ -291,12 +305,17 @@ impl StudioView {
             cx.defer(move |cx| {
                 match leaving {
                     Section::LoginScreen => greeter_page::release(cx),
-                    Section::Themes => cursor_page::release(cx),
+                    Section::Themes => {
+                        theme_galleries::release(cx);
+                        boot_page::release(cx);
+                        sounds_page::release(cx);
+                    }
                     Section::Wallpaper => {
                         wallgen_page::release(cx);
                         wallpaper_page::release(cx);
                     }
                     Section::About => mandara_ui::plugin_art::release_brand(cx),
+                    Section::Desktop => desktop_page::release(cx),
                     _ => {}
                 }
                 if covers {
@@ -332,7 +351,10 @@ impl StudioView {
         match registry::set(&cfg, setting, value) {
             Ok(next) => {
                 self.error = None;
-                update_config(cx, |c| *c = next);
+                // An edge Stash's catcher holds is never taken silently.
+                if !self.stash_edges.hold_if_colliding(&cfg, next.clone(), setting.label) {
+                    update_config(cx, |c| *c = next);
+                }
             }
             Err(err) => self.error = Some(err),
         }
@@ -348,7 +370,10 @@ impl StudioView {
             }
         }
         self.error = None;
-        update_config(cx, |c| *c = next);
+        let cfg = config(cx).read(cx).snapshot();
+        if !self.stash_edges.hold_if_colliding(&cfg, next.clone(), tk("Reset to defaults")) {
+            update_config(cx, |c| *c = next);
+        }
         cx.notify();
     }
 
@@ -506,6 +531,7 @@ impl StudioView {
                 self.chip_choice(setting, options, &current, room, p, cx)
             }
             Control::RecorderBackends => self.recorder_backends_control(cfg, p, cx),
+            Control::StashEdges => self.stash_edges_control(cfg, p, cx),
             Control::Device { input } => self.recorder_device_control(setting, input, room, cfg, p, cx),
             Control::Display => self.recorder_display_control(setting, room, cfg, p, cx),
             Control::Text { placeholder } | Control::OptionalText { placeholder } => {
@@ -991,6 +1017,7 @@ impl StudioView {
             (tk("Clipboard"), "panel toggle clipboard"),
             (tk("Light / dark"), "theme mode toggle"),
             (tk("Pomodoro"), "pomodoro toggle"),
+            (tk("New shelf"), "stash new"),
             (tk("Studio"), "studio"),
         ];
         let quick = div().row().flex_wrap().gap(px(SPACE_6_PX)).children(QUICK.iter().map(|(label, cmd)| {
@@ -1839,12 +1866,9 @@ impl Render for StudioView {
                     let rows = self.rows(registry::in_section(Section::DateTime), &cfg, &p, cx);
                     div().row().flex_col().gap(px(SPACE_26_PX)).child(clock).child(rows).into_any_element()
                 }
-                Section::DesktopWidgets => {
-                    let widgets = self.desktop_widgets_page(&cfg, &p, window, cx);
-                    // The interactive cards and GPU visualizers (looks_page.rs).
-                    let cards = self.desktop_cards_section(&cfg, &p, fonts.display.clone());
-                    div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(widgets).child(cards).into_any_element()
-                }
+                // Widgets, cards & visualizers, the context menu: three tabs
+                // (desktop_page.rs).
+                Section::Desktop => self.desktop_page(&cfg, &p, window, cx),
                 Section::WindowSwitcher => self.switcher_page(&cfg, &p, cx),
                 // The wallpaper on the desktop first, then tabs
                 // (wallpaper_page.rs).
@@ -1946,6 +1970,7 @@ impl Render for StudioView {
         let content = div().relative().flex_1().min_h(px(0.0)).flex().flex_col().child(content).child(mandara_ui::scrollbar::overlay_scrollbar(&self.content_scroll, &content_bar, &p).end_inset(edge));
 
         let modal = self.plugin_modal_layer(&cfg, &p, window, cx);
+        let edge_choice = self.stash_collision_layer(&cfg, &p, cx);
         let dock_picker = self.dock_picker_layer(&p, cx);
         // Right-to-left languages mirror everything (`mandara_ui::bidi`):
         // the sidebar sits on the right and text aligns to the right.
@@ -1967,6 +1992,7 @@ impl Render for StudioView {
             .child(nav)
             .child(div().flex_1().min_w(px(0.0)).h_full().row().flex_col().when(crate::client_controls(window.window_decorations(), mandara_compositor::detect_from(|key| std::env::var_os(key))), |body| body.child(titlebar)).child(content))
             .children(modal)
+            .children(edge_choice)
             .children(dock_picker)
             .children(frame_meter::end())
     }
@@ -2060,7 +2086,7 @@ fn group_order(section: Section) -> Option<&'static [&'static str]> {
         Section::Bars => &["Layout", "Spacing", "Shape", APPEARANCE, "Screen frame", "Behaviour", "Clock", SIDE_BARS, SIDE_BAR_SHAPE, SIDE_BAR_ITEMS, SIDE_BAR_MATERIAL, PANELS, PANEL_MOTION],
         Section::Launcher => &["Size & placement", "Button", "Results", "Grid", "Beacon search bar", "Search providers", "Ranking", "General", "Starting apps", "Pinned & hidden apps"],
         Section::Themes => &["Mode", "Style", "Components", "Tuning", "Accessibility", "Wallpaper colors", "Icons", "Cursor", "App themes"],
-        Section::Wallpaper => &["Desktop", "Light & dark", "Video", "Depth clock", "Picker", "Slideshow", "Source", "When to change", "Slideshow transition", "Displays", "Wallhaven"],
+        Section::Wallpaper => &["Desktop", "Sketch transition", "Light & dark", "Video", "Depth clock", "Picker", "Slideshow", "Source", "When to change", "Slideshow transition", "Displays", "Wallhaven"],
         _ => return None,
     })
 }
@@ -2068,6 +2094,11 @@ fn group_order(section: Section) -> Option<&'static [&'static str]> {
 /// Groups rows in their input order without merging equal titles from
 /// different pages or Bars tabs. Search can display several such groups at
 /// once; their labels alone do not identify their settings or reset scope.
+/// Starts noticing customizations of an applied Look ([`looks_yours`]).
+pub(crate) fn looks_yours_watch(cx: &mut gpui::App) {
+    looks_yours::watch(cx);
+}
+
 pub(crate) fn group_rows<'a>(settings: impl IntoIterator<Item = &'a Setting>) -> Vec<(&'static str, Vec<&'a Setting>)> {
     let mut groups: Vec<(&'static str, Vec<&'a Setting>)> = Vec::new();
     for s in settings {

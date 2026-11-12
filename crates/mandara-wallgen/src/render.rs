@@ -151,6 +151,7 @@ fn build<'a>(ctx: &'a Ctx<'a>) -> Box<dyn Scene + 'a> {
         Style::Liquid => Box::new(liquid::Liquid::new(ctx)),
         Style::Waves => Box::new(waves::Waves::new(ctx)),
         Style::Glass => Box::new(glass::Glass::new(ctx)),
+        Style::Comic => Box::new(comic::Comic::new(ctx)),
     }
 }
 

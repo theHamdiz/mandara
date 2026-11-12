@@ -15,8 +15,10 @@ The wallpaper picker and engine, and Mandara's own wallpaper generator.
   filter, **Match colors** to theme the whole desktop from the wallpaper, and
   **Wallhaven** browsing (the opt-in `wallhaven` plugin: switched off, the
   picker has no Wallhaven source and Mandara makes no request to it).
-- **Engine**: fill / fit / stretch / center / tile, fade / wipe / grow
-  transitions, separate **light and dark wallpapers** and **per-display
+- **Engine**: fill / fit / stretch / center / tile; fade, wipe, grow,
+  ripple, tide, tear, glitch, shatter, dissolve and sketch transitions,
+  drawn per pixel on the GPU (see [Motion](motion.md#wallpaper-change) for
+  how each looks), separate **light and dark wallpapers** and **per-display
   wallpapers**.
 - **In Studio** (*Studio → Wallpaper*): the page opens on the wallpaper on
   your desktop, large, with its size, folder and colours, then every
@@ -31,6 +33,20 @@ The wallpaper picker and engine, and Mandara's own wallpaper generator.
 <td width="50%" valign="top"><img src="screenshots/studio-slideshow.webp" alt="Studio → Wallpaper → Slideshow: on / off with the next change, previous and next, interval presets, order, and folds for the source, when to change, the transition and displays" width="100%"/><br/><sub><b>Studio</b>: the slideshow</sub></td>
 </tr>
 </table>
+
+### Sketch transition
+
+Pick **Sketch** as the transition (*Studio → Wallpaper → Fit & effects*, or
+*Studio → Motion → Wallpaper change*) and line art of the new wallpaper draws
+itself first, its subject's contour first when Mandara has a depth mask for
+it, then the image fills in: fading, bleeding outward from the lines like
+watercolour, or wiping along the strokes. Line colour (theme accent, ink
+black, white or the wallpaper's own colour), thickness, glow, drawing order,
+how long drawing takes against filling, and a faint outline left behind
+afterwards are its options; [Motion](motion.md#sketch-wallpaper-transition)
+lists them. Like every transition but fade and wipe it plays on the GPU, on
+the default software wallpaper too (through a surface that exists only
+while it plays); reduced motion makes it a fade.
 
 ## Slideshow
 

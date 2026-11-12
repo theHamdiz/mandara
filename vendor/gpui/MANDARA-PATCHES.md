@@ -125,6 +125,38 @@ window again. This avoids a spurious `window not found` error when leaving
 the screenshot overlay. The regression test closes a view during a real
 platform frame callback and checks that no further frame wake is sent.
 
+## 7. Transition primitive (`scene.rs`, `window.rs`)
+
+A wallpaper change used to be drawn as dozens to hundreds of image quads,
+each the same full-screen image through its own clip: seams between the
+pieces, axis-aligned "shards", block-shaped dissolves. The scene now has a
+primitive for a per-pixel transition between two full-size images, and the
+vendored renderer (`gpui_wgpu` patch 16) draws it with one fragment shader.
+
+* `TransitionSprite { order, pad, bounds, content_mask, from, to, aux,
+  params }`: three atlas tiles (outgoing image, incoming image, an optional
+  helper image, `to` again without one) and `TransitionParams`, plain data:
+  kind (`TRANSITION_KIND_*`, fade to sketch), `TRANSITION_FLAG_*` bits
+  (helper bound, subject mask, RTL, glow), linear progress, seconds since
+  the start, origin and focus points (fractions of the bounds), seed, motion
+  intensity, device scale, line width, line / glow / wash colours, Sketch's
+  drawing share, fill style and order, and Shatter's grid
+  (`TRANSITION_MAX_SHARDS` = 128 cells at most).
+* `Scene::transitions`, `Primitive::Transition`, `PrimitiveKind::Transition`
+  and `PrimitiveBatch::Transitions`: one batch per sprite (each binds its
+  own textures). Cleared, shrunk and sorted with the other lists.
+* `Window::paint_transition(bounds, from, to, aux, params) -> Result<bool>`
+  takes each image as a `TransitionImage { id, size, bytes }`: the atlas
+  gets it the first time (`get_or_insert_with`, which since `gpui_wgpu`
+  patch 13 copies to wgpu's staging memory before returning), so the
+  caller frees its pixels after that frame. An image the atlas no longer
+  has and whose bytes are gone (the atlas was cleared after a device loss)
+  returns `Ok(false)` and paints nothing: the caller ends its transition.
+  `Window::drop_transition_image(id)` removes one; a full-size image owns
+  its atlas texture, which goes with it.
+* Other renderers: only the vendored `gpui_wgpu` consumes `PrimitiveBatch`
+  in Mandara's build; upstream's Metal and DirectX renderers are not built.
+
 ## Tests
 
 `elements::div::tests::hover_without_an_id_updates_its_cached_view` (patch 2,
@@ -277,6 +309,36 @@ start of every frame anyway) and the arena keeps only its first chunk
 allocated in it). It does nothing during a draw. Frames are unchanged
 otherwise, and a surface that shows again grows the room back on its first
 frame.
+
+## 13. Data drops, typed drags and moving layer surfaces (`interactive.rs`, `window.rs`, `platform.rs`, `platform/test/window.rs`)
+
+Upstream takes only local files from other programs (`text/uri-list` as
+`ExternalPaths`) and can hand only files to them (`ExternalDragPayload::Files`);
+a layer surface can't move once mapped. Mandara's Stash shelves take anything
+dragged in, give anything back out, and follow the pointer around the screen.
+
+* **Data in.** `ExternalData` is the value of a drag of anything that is not
+  a list of local files (text, HTML, links, pictures, any MIME type), over a
+  window that opted in with `Window::set_accepts_data_drops(true)` (default
+  off, so every other window still refuses such drags). It lists the offered
+  MIME types and `receive(mime)` returns a stream to read off the UI thread;
+  the platform's transfer (`ExternalDataSource`) stays open until the last
+  clone is dropped. `FileDropEvent::DataEntered` becomes an internal drag of
+  `ExternalData` exactly as `Entered` becomes one of `ExternalPaths`, so
+  `.on_drop::<ExternalData>()`, `.drag_over::<ExternalData>()` and
+  `.on_drag_move::<ExternalData>()` work. File drags are unchanged.
+* **Data out.** `ExternalDragPayload::Data(DragData)` offers several MIME types
+  at once (`DragOffer`, the first of a type wins), each from shared bytes or a
+  file streamed when the receiver asks (`DragContent::File`), so a large
+  picture is never held in memory. `FileDropEvent::Delivered` reaches the
+  source window just before `Ended` when the receiver took the drop (the
+  shelf removes items moved out).
+* **Moving layer surfaces.** `Window::set_layer_margin((top, right, bottom,
+  left))` sets a layer surface's margins and commits at once
+  (`PlatformWindow::set_layer_margin`, a no-op elsewhere).
+
+The test window ignores data drags; the platform side is in
+`vendor/gpui_linux` (its patch 2), with tests.
 
 ## Packaging changes
 

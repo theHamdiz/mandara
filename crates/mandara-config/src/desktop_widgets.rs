@@ -162,6 +162,8 @@ pub const WIDGETS_VERSION: u32 = 1;
 #[serde(default)]
 pub struct DesktopConfig {
     pub widgets: DesktopWidgetsConfig,
+    /// `[desktop.menu]`: the right-click menu ([`crate::desktop_menu`]).
+    pub menu: crate::desktop_menu::DesktopMenuConfig,
 }
 
 /// `[desktop.widgets]`.

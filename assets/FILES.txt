@@ -37,6 +37,7 @@ assets/css/pages.css
 assets/css/site.css
 assets/fonts/OFL.txt
 assets/fonts/alexandria.woff2
+assets/fonts/bangers/OFL.txt
 assets/fonts/jetbrains-mono.woff2
 assets/js/copy-code.js
 assets/js/site.js
@@ -71,6 +72,9 @@ assets/plugins/authenticator/icon.svg
 assets/plugins/bluetooth/cover.png
 assets/plugins/bluetooth/icon.png
 assets/plugins/bluetooth/icon.svg
+assets/plugins/boot-look/cover.png
+assets/plugins/boot-look/icon.png
+assets/plugins/boot-look/icon.svg
 assets/plugins/breaks/cover.png
 assets/plugins/breaks/icon.png
 assets/plugins/breaks/icon.svg
@@ -155,6 +159,9 @@ assets/plugins/hadith/icon.svg
 assets/plugins/home-assistant/cover.png
 assets/plugins/home-assistant/icon.png
 assets/plugins/home-assistant/icon.svg
+assets/plugins/icon-themes/cover.png
+assets/plugins/icon-themes/icon.png
+assets/plugins/icon-themes/icon.svg
 assets/plugins/jannah/cover.png
 assets/plugins/jannah/icon.png
 assets/plugins/jannah/icon.svg
@@ -254,9 +261,15 @@ assets/plugins/session/icon.svg
 assets/plugins/share/cover.png
 assets/plugins/share/icon.png
 assets/plugins/share/icon.svg
+assets/plugins/sound-themes/cover.png
+assets/plugins/sound-themes/icon.png
+assets/plugins/sound-themes/icon.svg
 assets/plugins/soundscapes/cover.png
 assets/plugins/soundscapes/icon.png
 assets/plugins/soundscapes/icon.svg
+assets/plugins/stash/cover.png
+assets/plugins/stash/icon.png
+assets/plugins/stash/icon.svg
 assets/plugins/sudoku/cover.png
 assets/plugins/sudoku/icon.png
 assets/plugins/sudoku/icon.svg

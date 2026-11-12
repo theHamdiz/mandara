@@ -3,7 +3,7 @@ use crate::{
     Modifiers, Pixels, Point, Render, TouchDragEvent, Window, point, seal::Sealed,
 };
 use smallvec::SmallVec;
-use std::{any::Any, fmt::Debug, ops::Deref, path::PathBuf};
+use std::{any::Any, fmt::Debug, ops::Deref, path::PathBuf, rc::Rc, sync::Arc};
 
 /// An event from a platform input source.
 pub trait InputEvent: Sealed + 'static {
@@ -727,6 +727,113 @@ impl ExternalPaths {
 pub enum ExternalDragPayload {
     /// Real on-disk paths, handed to the platform as an outbound file drag.
     Files(FileDragPaths),
+    /// Mandara patch 13: typed data (text, images, URLs, file lists) offered
+    /// under several MIME types at once; the receiver picks one.
+    Data(DragData),
+}
+
+/// Mandara patch 13: what an outbound data drag offers, in the order the
+/// receiver should prefer it.
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
+pub struct DragData(SmallVec<[DragOffer; 4]>);
+
+impl DragData {
+    /// A drag offering `offers` (first = most specific). Repeated MIME types
+    /// keep their first entry.
+    pub fn new(offers: impl IntoIterator<Item = DragOffer>) -> Self {
+        let mut data = SmallVec::<[DragOffer; 4]>::new();
+        for offer in offers {
+            if !data.iter().any(|o| o.mime_type == offer.mime_type) {
+                data.push(offer);
+            }
+        }
+        Self(data)
+    }
+
+    /// The offers, most specific first.
+    pub fn offers(&self) -> &[DragOffer] {
+        &self.0
+    }
+
+    /// The offer for `mime_type`, if there is one.
+    pub fn offer(&self, mime_type: &str) -> Option<&DragOffer> {
+        self.0.iter().find(|o| o.mime_type.as_ref() == mime_type)
+    }
+}
+
+/// Mandara patch 13: one MIME type of an outbound data drag.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct DragOffer {
+    /// The MIME type, e.g. `text/plain;charset=utf-8` or `image/png`.
+    pub mime_type: crate::SharedString,
+    /// Where its bytes come from.
+    pub content: DragContent,
+}
+
+/// Mandara patch 13: the bytes of a [`DragOffer`]. A file is streamed to the
+/// receiver off the UI thread, so a large picture is never held in memory.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum DragContent {
+    /// Bytes held by the drag (shared, never copied per request).
+    Bytes(Arc<[u8]>),
+    /// The contents of a file, read when the receiver asks.
+    File(PathBuf),
+}
+
+/// Mandara patch 13: data dragged in from another program that is not a
+/// list of local files: text, HTML, links, pictures or any other MIME type.
+///
+/// It is the drag's value (like [`ExternalPaths`] for files) while it is
+/// over a window that accepts data drops ([`Window::set_accepts_data_drops`]),
+/// so `.on_drop::<ExternalData>(…)` and `.drag_over::<ExternalData>(…)`
+/// work. The platform keeps the transfer open until the last clone is
+/// dropped: keep a clone while [`ExternalData::receive`]d streams are read.
+#[derive(Clone)]
+pub struct ExternalData {
+    mime_types: Rc<[crate::SharedString]>,
+    source: Rc<dyn ExternalDataSource>,
+}
+
+/// Mandara patch 13: the platform side of an [`ExternalData`].
+pub trait ExternalDataSource {
+    /// Asks the dragging program for `mime_type`. The stream ends when it has
+    /// sent everything; a read that waits too long fails. `None` once the
+    /// drag has left without a drop.
+    fn receive(&self, mime_type: &str) -> Option<Box<dyn std::io::Read + Send>>;
+}
+
+impl ExternalData {
+    /// Data offered as `mime_types` (in the dragging program's order).
+    pub fn new(mime_types: impl IntoIterator<Item = crate::SharedString>, source: Rc<dyn ExternalDataSource>) -> Self {
+        Self { mime_types: mime_types.into_iter().collect(), source }
+    }
+
+    /// The offered MIME types, in the dragging program's order.
+    pub fn mime_types(&self) -> &[crate::SharedString] {
+        &self.mime_types
+    }
+
+    /// Whether `mime_type` is offered (ASCII case-insensitive).
+    pub fn offers(&self, mime_type: &str) -> bool {
+        self.mime_types.iter().any(|m| m.eq_ignore_ascii_case(mime_type))
+    }
+
+    /// Starts receiving `mime_type`; read the stream on a background thread.
+    pub fn receive(&self, mime_type: &str) -> Option<Box<dyn std::io::Read + Send>> {
+        self.source.receive(mime_type)
+    }
+}
+
+impl Debug for ExternalData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExternalData").field("mime_types", &self.mime_types).finish_non_exhaustive()
+    }
+}
+
+impl Render for ExternalData {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        Empty
+    }
 }
 
 /// Paths handed to the platform for a native file drag. Directory metadata is
@@ -777,6 +884,17 @@ pub enum FileDropEvent {
     Exited,
     /// The platform-owned drag session has ended.
     Ended,
+    /// Mandara patch 13: data that is not a list of files entered a window
+    /// that accepts data drops ([`Window::set_accepts_data_drops`]).
+    DataEntered {
+        /// The position of the mouse relative to the window.
+        position: Point<Pixels>,
+        /// What is being dragged.
+        data: ExternalData,
+    },
+    /// Mandara patch 13: sent to the window an outbound drag came from, just
+    /// before [`FileDropEvent::Ended`], when the receiver took the drop.
+    Delivered,
 }
 
 impl Sealed for FileDropEvent {}

@@ -6,6 +6,51 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Six new motion presets with their own choreography:** Corniche tide, Lighthouse sweep, Felucca drift, Magnetic, Mercury and Raindrop. Content can rise like a swell, sweep in row by row, drift in on a slant, snap into place, stretch like liquid metal or drop in with a bounce.
+- **Studio → Motion shows every preset as a tile** with a line on how it feels; point at one to preview it. New Choreography controls (Entrance, Cascade, Liquid stretch, Parallax) shape how panels, sidebar cards, the launcher, notifications and on-screen displays come in. Reduced motion turns them off.
+- **Window animations for MangoWM, Niri and Hyprland 0.55+:** pick Fade, Swell, Beam, Drift, Snap, Liquid or Drop and a speed on the Motion page. They're written only to Mandara's drop-in and checked by each compositor's own checker.
+- **Dock animations you can choose:** launching apps bounce, pulse or send out ripples; apps asking for attention bounce, pulse or wiggle; open-app dots grow in and shrink away; icons dip when a window minimizes; icons grow in, shrink out and slide over when you add, remove or reorder them; and the dock slides, fades or zooms in and out. Pick each in Studio → Motion → Dock.
+- **New wallpaper transitions drawn on the GPU:** Ripple, Tide, Tear, Glitch, Shatter and Dissolve, starting from the centre or the pointer, with their length set on the Motion and Wallpaper pages. They play on the default wallpaper too.
+- **Sketch wallpaper transition:** the new wallpaper's outline is drawn first, its subject first when Mandara has a depth mask for it, then the image fills in with a fade, a watercolour bleed or a wipe along the strokes.
+- **Presets carry their personality further:** the six new ones also set matching dock animations and wallpaper transitions (on by default), and window animations if you switch that on. `mandara msg motion presets` lists them and `mandara msg motion preset <id>` applies one.
+- **Your own Looks.** Change anything after applying a Look and Mandara keeps it as a Look of your own ("Corniche Dusk · Custom", renamable), stored as just what you changed, so it follows improvements to the original. Save, rename, duplicate, delete, export and import Looks in Studio → Themes → Looks or with `mandara msg look …`. Look files are small, carry nothing personal and are checked strictly on import.
+- **Thirteen new Looks**, one on every bar style, plus Redmond (a Windows 11-style taskbar desktop), Cupertino (a macOS-style menu bar and dock), Library Desk, Zen (a hidden pill with hot corners) and Ink Rush, a cel-shaded comic desktop set in the Bangers comic face (SIL Open Font License; Studio → Maintenance fetches it with Mandara's other fonts).
+- **The Taskbar bar style:** your pinned and running apps centred next to the launcher, with a stacked clock and date, in Studio → Bars → Presets or `mandara msg bar style taskbar`.
+- **Ink style:** ink outlines, hard shadows and halftone or hatched shading for the bar, panels, launcher, dock, notifications and cards (Studio → Themes → Fine-tune → Ink).
+- **Speech-bubble notifications.** With the ink style, notifications can pop up as comic speech bubbles whose tail points to the notification corner; Ink Rush turns them on.
+- **Comic burst** wallpapers in the wallpaper generator.
+- **Sound themes.** Studio → Themes → Sounds installs, previews and applies desktop sound themes (freedesktop, Ocean, Oxygen, Ubuntu, elementary, COSMIC, Deepin, Materia, or your own folder, archive or link), for Mandara's own sounds and, with Apply to apps, GTK and KDE apps. Opt-in; `mandara msg sound …` scripts it.
+- **More shell sounds:** locking and unlocking, drives plugged in or removed, emptying the Trash, brightness ticks and finished installs, each with its own switch. Do not disturb now quiets the ones that come unasked.
+- **Stash**: floating shelves you drop anything onto (files, folders, pictures, text, links, any data) and drag back out into any app. Summon one by shaking the pointer over the desktop, bar, dock or a panel, with an edge catcher, the bar item, the tray, a keybind or `mandara msg stash new`. Shelves move to any display, resize, minimize to the bar or tray, and stay until you close them, even across restarts. Opt-in in Studio → Plugins.
+- **Stash's edge catchers** are off by default and only allowed on an edge nothing else uses. Studio names what uses an edge, offers to turn it off or move it, and asks which one keeps an edge when something later wants it.
+- **Boot look** (opt-in): restyle the boot menu (GRUB, Limine, rEFInd) and the boot splash (Plymouth) with popular themes or your own SVG or picture, in Studio → Themes → Boot or with `mandara msg boot …`. Every change shows its plan first, asks for approval, is backed up, is checked with the bootloader's own tools, and can be restored in one click.
+- **Icon themes.** Studio → Themes → Icons offers fifty popular open-source icon sets. Each downloads only when you pick it and installs only if its checksum matches. Apply sets your launcher, dock and tray icons and your apps' icons in one go, and *Follow your desktop* puts back what was there.
+- **Install your own cursor and icon themes** from an archive, a folder or a link. A link has no known checksum, so Studio asks before downloading it, and nothing inside a theme is ever run.
+- **Right-click the desktop for a ring menu.** Icons on chromatic glass bloom out around the pointer, and a glowing arc follows it. Add widget opens your widgets by shelf (clocks, music, system, productivity, weather and more), each with its own icon. Hold the right button and flick toward an item to pick it in one motion, even through the shelves, or use the arrow keys. Prefer the old list? Switch back in Studio → Desktop → Context menu.
+- **Studio → Desktop → Context menu**: choose the ring or the classic list, which items show and in which order, add your own programs, and set the ring's size, labels, gesture, glass and animation, with a live preview.
+- **labwc joins the supported compositors.** On labwc 0.8.3 and later, the bar's workspace pills show your workspaces and switch to one when you click it, and the window title, window list and displays follow labwc too, over standard Wayland protocols without ever making the bar wait. labwc keeps its settings in `~/.config/labwc`, so Mandara writes nothing there: add `mandara &` to `~/.config/labwc/autostart` to start it with labwc. labwc doesn't say which workspace a window is on, so the pills can't show which ones have windows, and the layout pill can't change labwc layouts.
+- **COSMIC joins the supported compositors.** In a COSMIC session the bar shows each display's workspaces, switches to one when you click it, marks the ones with windows and can move a window to another workspace, and the dock and window switcher list COSMIC's windows too. COSMIC keeps its settings in COSMIC Settings, so Mandara writes nothing there: add `mandara` in COSMIC Settings → Applications → Startup applications, and switch COSMIC's dock off there if you only want Mandara's.
+
+### Improved
+
+- **Studio shows previews of Looks and themes by default**, and draws each Look's preview only while it's on screen.
+- **Ink outlines stay strong in dark mode**: a light ink over a dark hard shadow.
+- **Cursors and Icons get their own tabs on Themes.** While a plugin is off, its tab shows what it does and one button to turn it on. The cursor gallery gains search, a Dark / Light filter, cards that lift under the pointer, a busy cursor that animates while you hover, and your installed themes as cards.
+- **Side bars and the sidebar are set up in one Sidebars tab.** Studio → Bars no longer has two look-alike tabs: Sidebars shows what each screen edge holds (nothing, a side bar, which is a slim bar of items, or the sidebar, the panel that slides out with tabs and cards) with small previews, and below it only the settings for what you picked. An edge never ends up with both, the sidebar moves when you give it the other edge, and the rail that Expressive and Raml Tram join to the bar points you to its preset. Old links such as `mandara studio bars/side-bars` and `bars/sidebar` still lead there, and sections you opened or closed stay that way.
+- **Studio's Desktop widgets page is now Desktop**, with Widgets, Cards & visualizers and Context menu tabs. Old links still open it.
+- **Counts on bar items sit neatly on round buttons and rails.** Unread notifications, updates and crash reports no longer spill off the item, keep a steady width, and read 99+ past 99 instead of a stuck 99.
+
+### Fixed
+
+- **The dock's attention bounce keeps calling in bursts** instead of stopping after the first, and a launch animation ends on time even when the app never opens a window.
+- **Changing a bar preset or a Look no longer removes your desktop widgets or the bar items you added.** Your widgets keep their places and settings, your items stay where you put them, the plugins they need stay on, and *Restore my look* keeps what you added while a Look was on.
+- **Expressive and Raml Tram show the workspaces once, down their rail.** Picking them while keeping your items no longer leaves the workspaces (or the screenshot button) on the bar as well, and setups that already picked them are tidied up on update.
+- **The launcher in Expressive and Raml Tram sits in the corner where the bar meets the rail**, centred, at every bar size and edge, and Studio's preset cards show it there.
+- **System monitor brings its stat blocks, meters and rates, and switches their plugins on**, even when you keep your items, from Studio or `mandara msg bar style system-monitor`; picking another preset takes them away again.
+- **The window list no longer keeps a CPU core busy after its connection closes.** When the compositor went away or the window service shut down, the background thread behind the dock and window switcher could spin at full speed; it now stops.
+
 ## 0.27.0 — 2026-11-11
 
 Aqueous joins the supported compositors (#162). The password dialog no

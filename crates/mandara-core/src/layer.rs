@@ -37,6 +37,9 @@ pub const EXCLUSION_STRIP_THICKNESS_PX: f32 = 1.0;
 pub enum SurfaceRole {
     Bar,
     Wallpaper,
+    /// A wallpaper transition played on the GPU over the software
+    /// wallpaper (background layer, only while it plays).
+    WallpaperTransition,
     Osd,
     Notifications,
     Launcher,
@@ -61,6 +64,9 @@ pub enum SurfaceRole {
     /// only while a card floats there), and the one-pixel keyboard bridge
     /// that exists only while you type into one of them.
     Floating,
+    /// Stash's floating shelves and their quick look (Overlay layer, sized
+    /// to the shelf, only while one is shown).
+    Stash,
 }
 
 impl SurfaceRole {
@@ -68,6 +74,7 @@ impl SurfaceRole {
         match self {
             SurfaceRole::Bar => "mandara-bar",
             SurfaceRole::Wallpaper => "mandara-wallpaper",
+            SurfaceRole::WallpaperTransition => "mandara-wallpaper-transition",
             SurfaceRole::Osd => "mandara-osd",
             SurfaceRole::Notifications => "mandara-notifications",
             SurfaceRole::Launcher => "mandara-launcher",
@@ -80,13 +87,15 @@ impl SurfaceRole {
             SurfaceRole::DesktopMenu => "mandara-desktop-menu",
             SurfaceRole::DesktopEdit => "mandara-desktop-edit",
             SurfaceRole::Floating => "mandara-floating",
+            SurfaceRole::Stash => "mandara-stash",
         }
     }
 
-    pub const ALL: [SurfaceRole; 14] = [
+    pub const ALL: [SurfaceRole; 16] = [
         SurfaceRole::Exclusion,
         SurfaceRole::Bar,
         SurfaceRole::Wallpaper,
+        SurfaceRole::WallpaperTransition,
         SurfaceRole::Osd,
         SurfaceRole::Notifications,
         SurfaceRole::Launcher,
@@ -98,6 +107,7 @@ impl SurfaceRole {
         SurfaceRole::DesktopMenu,
         SurfaceRole::DesktopEdit,
         SurfaceRole::Floating,
+        SurfaceRole::Stash,
     ];
 }
 

@@ -5,6 +5,7 @@ pub mod items;
 pub mod autohide;
 pub mod gaps;
 pub mod side;
+pub mod badge;
 pub(crate) mod scrim;
 
 use std::cell::Cell;

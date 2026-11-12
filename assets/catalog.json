@@ -420,6 +420,30 @@
     "panel": null
   },
   {
+    "id": "icon-themes",
+    "name": "Icon themes",
+    "palette": "corniche",
+    "motif": "tiles",
+    "angle": 4,
+    "panel": null
+  },
+  {
+    "id": "boot-look",
+    "name": "Boot look",
+    "palette": "obsidian",
+    "motif": "power",
+    "angle": 5,
+    "panel": null
+  },
+  {
+    "id": "sound-themes",
+    "name": "Sound themes",
+    "palette": "twilight",
+    "motif": "sound",
+    "angle": 4,
+    "panel": null
+  },
+  {
     "id": "desktop-clocks",
     "name": "Desktop clocks",
     "palette": "twilight",
@@ -727,6 +751,14 @@
     "palette": "twilight",
     "motif": "slide",
     "angle": 5,
+    "panel": null
+  },
+  {
+    "id": "stash",
+    "name": "Stash",
+    "palette": "corniche",
+    "motif": "shelf",
+    "angle": -3,
     "panel": null
   }
 ]

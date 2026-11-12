@@ -29,7 +29,7 @@ running can finish; disabling the plugin prevents a follow-up refresh.
 </tr>
 </table>
 
-The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
+The 85 first-party plugins (49 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -83,6 +83,9 @@ The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
 | **App installer** | Install apps by dropping AppImages, Flatpaks, archives or packages on the dock or Studio | *(opt-in)*
 | **Screen time** | How long you spend in each app, per day, with limits *(opt-in)* |
 | **Cursor themes** | Install, preview and apply cursor themes, live, with size and hiding options *(opt-in)* |
+| **Icon themes** | Install, preview and apply icon themes, live, from a curated gallery or your own files *(opt-in)* |
+| **Boot look** | Restyle the boot menu (GRUB, Limine, rEFInd) and the boot splash (Plymouth) with popular themes or your own SVG or picture: a plan first, your approval, backups, the tools' own checkers and one-step restore ([Boot look](boot-look.md)) *(opt-in)* |
+| **Sound themes** | Install, preview and apply desktop sound themes for Mandara's own sounds and your apps *(opt-in)* |
 | **Shortcuts cheatsheet** | Every keyboard shortcut, Mandara's and your compositor's, in one searchable sheet (`mandara msg keybinds toggle`) *(opt-in)* |
 | **Task progress** | A bar ring that scripts, long builds and AI agents report progress to (`mandara msg progress set build 40%`) *(opt-in)* |
 | **Eye breaks** | Gentle 20-20-20 reminders that count only active time and wait while a fullscreen app has focus *(opt-in)* |
@@ -90,6 +93,7 @@ The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
 | **Translator** | Translate text with DeepL or your own LibreTranslate server; text is sent only when you ask *(opt-in)* |
 | **Phone Connect** | Paired KDE Connect devices: battery, ring, ping and explicitly send clipboard text *(opt-in)* |
 | **Feeds** | A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search, a clean reader view, starter feeds and OPML, and a sidebar card with your newest unread articles *(opt-in)* |
+| **Stash** | Floating shelves you drop anything onto (files, folders, pictures, text, links, any data) and drag back out into any app; summoned by shaking the pointer, an edge catcher, the bar item, a keybind or `mandara msg stash new`; kept across restarts *(opt-in)* |
 | **Reddit** | Browse your communities, posts and comment threads in a panel (cards, compact or grid) and a sidebar card: limited mode on Reddit's public feeds out of the box, full mode with your own installed-app client id; NSFW hidden and spoilers covered by default *(opt-in)* |
 | **Home Assistant** | Your real home states and favourites, with controls for lights, switches, fans, scenes, scripts and buttons *(opt-in)* |
 | **Share to phone** | Clipboard text, a screenshot or a file, served once on your network behind a QR code *(opt-in)* |
@@ -118,7 +122,7 @@ The 81 first-party plugins (45 of them ship switched off, marked *opt-in*):
 See [Connected plugins](integrations.md) for setup, API keys and privacy.
 
 The desktop widget plugins draw nothing until you place one of their
-widgets (Studio → Desktop widgets, or right-click the desktop → Add
+widgets (Studio → Desktop → Widgets, or right-click the desktop → Add
 widget); switching one off hides its widgets until you switch it back on.
 Each has its own logo and a painted store cover; screenshots of the
 widgets themselves are in [Your desktop](desktop.md#desktop-widgets).
@@ -126,7 +130,7 @@ widgets themselves are in [Your desktop](desktop.md#desktop-widgets).
 **Sidebar cards** come from Quick settings, Weather, Notifications, Media,
 Audio, Resources, To-do, Notes, Pomodoro, Prayer times, Jannah, the Qur'an,
 Hadith, Radio, Feeds, Reddit, Sudoku and 2048 (and any third-party plugin).
-Every one of them is in Studio → Bars → Sidebar → **Tabs** → *Add a widget*,
+Every one of them is in Studio → Bars → Sidebars → **Tabs** → *Add a widget*,
 under *Add to sidebar* on its page in Studio → Plugins, and in
 `mandara msg sidebar tab widget add <tab> <id>`. Placing a card switches its
 plugin on; switching a plugin off hides its card, which stays on its tab
@@ -147,17 +151,126 @@ language, network, Bluetooth, audio, tray, notifications, power, resources,
 quick settings, media, weather, wallpaper, screenshot and clipboard, plus
 the core launcher, session and main menus) and everything else ships
 switched off: the dock, mini stats, screen time, prayer times, the wallpaper
-generator, Wallhaven, cursor themes, containers, services, drives, updates,
+generator, Wallhaven, cursor themes, icon themes, Boot look, containers, services, drives, updates,
 the process hunter, the authenticator, soundscapes, the radio, world clock, network
 speed, the color picker, Pomodoro, notes, to-do, privacy, the app
 installer, the shortcuts cheatsheet, task progress, eye breaks,
 presentation mode, share to phone, Tailscale, the uptime monitor, local
-AI, listening ports, Git repositories, CI status, crash reports, Reddit, Sudoku, 2048, Jannah, the Qur'an and Hadith.
+AI, listening ports, Git repositories, CI status, crash reports, Reddit, Stash, Sudoku, 2048, Jannah, the Qur'an and Hadith.
 Turn any of them on in Studio → Plugins or with
 `mandara msg plugins enable <id>`. **Upgrading from 0.1 changes nothing you
 had:** a config written before these defaults keeps every plugin it had on
 (the upgrade writes them into `[plugins] enabled`), Wallhaven stays on if it
 was, and cursor themes stay on if you had picked a cursor.
+
+## Icon themes
+
+An opt-in gallery of the fifty most popular open-source icon themes
+(Studio → Themes → Icons, `mandara studio themes/icons`, or
+`mandara msg plugins enable icon-themes`). While it is off the tab shows
+what it would do and one button to switch it on, and Mandara changes no
+icon setting anywhere.
+
+- **The catalog** ranks themes by their GitHub stars and lists only those
+  that install by copying ready-made folders out of one pinned archive
+  from the project's own repository: Papirus, WhiteSur, La Capitaine, Tela,
+  Flat Remix, Paper, Candy, Colloid, MoreWaita, Arc, Kora, Qogir, Gruvbox
+  Plus, Numix, Zafiro, Obsidian, Pop, Mint-Y and more, each with its
+  author, licence (all allow redistribution), style and light / dark
+  variants. Nothing is bundled: a theme downloads when you pick it, over
+  HTTPS, with a size cap, progress and Cancel, and is kept only when its
+  SHA-256 matches the one pinned in Mandara.
+- **Installing** unpacks only the folders the variant needs (with pure-Rust
+  readers that refuse absolute paths, `..`, devices and links leaving the
+  theme, and cap the size and file count), checks each `index.theme` (a
+  name, icon folders that exist and hold icons, `Inherits=` naming themes),
+  removes executable bits, scripts and repository files, and moves the
+  theme into `~/.local/share/icons`. A variant that links into a sibling
+  (`Papirus-Dark` into `Papirus`) brings it along. Install scripts that come
+  with a theme are never run. `gtk-update-icon-cache` runs when it is
+  installed.
+- **Your own icon sets**: install from an archive or a folder you pick, or
+  from an `https://` link. There is no known checksum for those, so a link
+  is marked *unverified* and Studio asks before downloading it.
+- **Applying** sets Mandara's own icons (launcher, dock, tray) and the
+  desktop's: `gsettings` (`org.gnome.desktop.interface icon-theme`), GTK 3
+  and 4 `settings.ini`, `kdeglobals` and qt5ct / qt6ct when you use them,
+  one key at a time. *Follow your desktop* puts back exactly what was
+  there, unless you changed it since.
+- **Removing** deletes only what Mandara installed (recorded in
+  `~/.local/share/mandara/icon-themes.json`); themes from packages or your
+  own folders are listed under *Also installed* and stay.
+
+`mandara msg icons list|install|apply|remove|import` scripts all of it.
+
+## Stash: floating shelves
+
+**Stash** (opt-in: Studio → Plugins, or `mandara msg plugins enable stash`)
+gives you shelves: small glass cards that float above your windows, wherever
+you summon them, and hold whatever you drop on them until you drag it out
+again. Use one to carry a file between two folders, to gather pictures and
+links for a message, or to park a snippet of text while you switch apps.
+
+- **Anything goes in.** Files and folders are kept by reference (the shelf
+  holds where they are, not a copy). A picture dragged from a browser is
+  saved into the stash; if a page offers only the picture's link, the shelf
+  keeps the link and its menu's *Fetch the picture* downloads it on your
+  click (HTTPS only, at most 32 MiB). Text keeps its formatting as HTML
+  beside it, links keep their titles, and any other data is kept with its
+  type. Switch on *Copy dropped picture files* to copy pictures dropped as
+  files too.
+- **Everything comes back out.** Drag a tile (or a selection, or the count
+  badge for the whole shelf) into any app: files go as files, pictures as
+  pictures and files, text as text and HTML, links as links. A tile's menu
+  opens, shows in its folder, copies, previews (*Quick look*, also Space or
+  holding the pointer still on a tile) and removes. Items stay on the shelf
+  after a drag unless you switch on *Move items out* in its menu.
+- **Shelves stay until you close them.** Drag one by its top edge anywhere,
+  to any display; it settles against an edge it lands near. Resize it from
+  its corner, switch between a grid, a list and a fanned stack, minimize it
+  to the bar item and/or the tray, and close it (closing one that holds
+  items asks first; *Empty & close* deletes what it kept). Shelves and their
+  items come back after a restart, and a closed shelf can be reopened with
+  `mandara msg stash restore` until the cache limit clears it.
+
+**Summoning a shelf.** Wayland shows an app the pointer only while it is
+over that app's own surfaces, and Mandara never reads your input devices,
+so:
+
+- **Shake** the pointer quickly from side to side (with or without
+  something dragged) over the desktop, the bar, the dock, a panel, the
+  sidebar or a shelf: a shelf opens under it. Shaking over another app's
+  window does nothing. Sensitivity (or off) is in the plugin's settings.
+- **Edge catchers** (off by default) are thin strips along the screen edges
+  you choose: a drag that reaches one springs a shelf open there, and the
+  drop lands in it (if the drag goes elsewhere, the empty shelf goes
+  away). A strip also takes clicks, so it is only allowed on an edge that
+  nothing else uses: Studio names what does (the bar, the sidebar's
+  open-on-hover edge, the launcher or power-menu edge, a side bar, the
+  dock) and offers to switch it off or move it first, and later turning on
+  something that wants an edge with a catcher asks which one keeps it.
+  Catchers leave a gap at hot corners and between displays, and step aside
+  for fullscreen windows.
+- **The bar item** (click: show or hide your shelves; right-click: a new
+  shelf; drop on it: into the newest shelf), the tray, a keybind (Studio →
+  Keyboard shortcuts → *New shelf*), and `mandara msg stash new`.
+
+This works the same on every supported compositor, as it uses only layer
+surfaces and the standard drag and drop.
+
+**Commands:** `stash` (state, including each edge catcher and what blocks
+it), `stash new [x y [output]]`, `stash list`, `stash show|hide [id|last|all]`,
+`stash close [id|last|all] [--empty]`, `stash clear`, `stash restore [id]` and
+`stash add [shelf] <path|https://…|text:…>…`.
+
+**Memory.** Nothing runs while Stash is off, and nothing polls while it is
+on: the shake detector reads pointer events Mandara already gets. Tile
+pictures are decoded off the UI thread at the size they are drawn and kept
+in a small cache that a minimized or closed shelf gives back. Files the
+stash keeps live in `~/.cache/mandara/stash/`; the shelves themselves in
+`~/.local/state/mandara/stash.json`. The cache limit (1 GiB by default)
+removes what closed shelves kept, oldest first; it never removes items of
+open shelves without asking.
 
 ## Games: Sudoku and 2048
 
@@ -165,8 +278,8 @@ Two opt-in games (Studio → Plugins, `mandara msg plugins enable sudoku` /
 `2048`, or type *sudoku*, *2048*, *games* or *puzzle* in the launcher and
 pick **Turn on**). Each has a bar item with a drop-down panel (put it
 in a bar group from its page in Studio → Plugins), a playable sidebar card
-(Studio → Bars → Sidebar, or `mandara msg sidebar tab widget add Overview
-sudoku`) and a desktop widget (Studio → Desktop widgets → Add, or
+(Studio → Bars → Sidebars, or `mandara msg sidebar tab widget add Overview
+sudoku`) and a desktop widget (Studio → Desktop → Widgets → Add, or
 right-click the desktop → Add widget) that you play right on the desktop:
 click the board to give it the keyboard, click a window or the desktop to
 give it back, and Escape lets go too. One game is shared by the panel, the
@@ -332,7 +445,7 @@ what plays.
 - **The sidebar card** is a compact player: the station's art, what plays
   with a live dot, a favourite heart, previous / play / next through your
   favourites and the volume in your slider design. Put it on any sidebar tab
-  in Studio → Bars → Sidebar → **Tabs** (or
+  in Studio → Bars → Sidebars → **Tabs** (or
   `mandara msg sidebar tab …`).
 - **The directory** (off until you switch it on) searches
   [radio-browser.info](https://www.radio-browser.info) from the *Stations*
@@ -355,6 +468,54 @@ colours, the level meter and stream details, which shelves appear, and the
 directory. Your favourites and stations live in
 `~/.local/state/mandara/radio.toml`. Commands: `mandara msg radio …`
 ([commands](commands.md)).
+
+## Sound themes
+
+*Opt-in* (`sound-themes`). Studio → Themes → **Sounds**
+(`mandara studio themes/sounds`). Switched off, the tab still shows the
+plugin with what it touches and an *Enable* button, and Mandara installs
+nothing and leaves the desktop's sound settings alone.
+
+- **Your sound theme**: the theme playing now, Mandara's shell-sound
+  settings (on, volume, quiet in do not disturb, quiet while media plays,
+  *Apply to apps*) and every event with its switch, the file the theme
+  plays for it (or *Silent in this theme*) and a test button: notifications
+  (normal, critical, low), volume and brightness ticks, screenshots, the
+  charger and low battery, drives plugged in or removed, emptying the
+  Trash, an install finishing, logging in and locking.
+- **The gallery**: freedesktop, Ocean (Plasma 6), Oxygen, Ubuntu,
+  elementary, COSMIC, Deepin and Materia, plus every theme already
+  installed on the system or by you. Each card shows its origin, author and
+  licence, three sounds to try with a level outline that plays along, and
+  one action: *Get* (the pinned upstream release, checked against its
+  SHA-256) → *Apply* → *Active*; *Remove* deletes only what Mandara
+  installed. Search and the *All / Installed / To get* chips narrow it.
+- **Your own**: install a folder or an archive (`.tar.gz`, `.tar.xz`,
+  `.tar.bz2`, `.tar.zst`, `.zip`) through the desktop's file picker, or an
+  `https://` link. Links aren't pinned, so Studio asks before installing
+  one. Only sounds, `index.theme` and licence files are kept, archives are
+  unpacked with pure-Rust readers that refuse unsafe paths, and nothing in
+  them runs.
+- **Mandara's own sounds** follow the applied theme, with `Inherits=` and
+  the freedesktop fallback. Do not disturb silences the sounds that come
+  unasked (devices, the charger, logging in, locking, installs) and keeps
+  the ones you cause (volume, screenshots, the Trash) and battery alerts.
+  Sounds play from the sound server's sample cache; the worker that plays
+  them keeps the 12 most recent ready and ends 30 s after the last one,
+  taking them out of the server. On FreeBSD without a sound server they go
+  straight to `/dev/dsp`, opened only for each sound.
+- **Apply to apps** (on by default) also sets the theme in GTK's
+  `org.gnome.desktop.sound theme-name` (through `gsettings`), in
+  `~/.config/gtk-3.0` and `gtk-4.0/settings.ini` when they exist, and in
+  `~/.config/kdeglobals` `[Sounds] Theme=` (when it exists or Plasma runs),
+  which KWin and Plasma's notifications play from. Mandara records the
+  values it replaces and puts them back when you pick *Your desktop's*,
+  switch *Apply to apps* off or turn the plugin off. Other compositors play
+  no sounds of their own.
+- Themes install to `~/.local/share/sounds`; system themes are read from
+  `/usr/local/share/sounds` (FreeBSD ports) and `/usr/share/sounds`.
+- Commands: `mandara msg sound list|install|apply|remove|import|play`
+  (see [commands](commands.md)).
 
 ## Wallpaper depth
 

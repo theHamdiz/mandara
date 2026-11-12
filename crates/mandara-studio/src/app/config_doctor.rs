@@ -95,7 +95,8 @@ fn show_diagnostic(target: Target, diagnostic: &Diagnostic) -> bool {
     !target.self_configured() || diagnostic.severity != Severity::Info
 }
 
-/// A compositor without a checker of its own (KWin, Aqueous): the
+/// A compositor without a checker of its own (KWin, Aqueous, labwc,
+/// COSMIC): the
 /// availability note shown instead of "All good".
 fn availability_note(report: &Report) -> Option<&'static str> {
     if report.status != CheckerStatus::Ran || report.problems() != 0 {
@@ -104,6 +105,8 @@ fn availability_note(report: &Report) -> Option<&'static str> {
     match report.target {
         Target::KWin => Some(t("KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings.")),
         Target::Aqueous => Some(t("Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there.")),
+        Target::Labwc => Some(t(mandara_config::doctor::LABWC_NOTE)),
+        Target::Cosmic => Some(t(mandara_config::doctor::COSMIC_NOTE)),
         _ => None,
     }
 }

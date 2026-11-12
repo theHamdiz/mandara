@@ -1,5 +1,7 @@
 //! Open windows, compositor-neutrally, over `zwlr_foreign_toplevel_manager_v1`
-//! (MangoWM, Hyprland, Niri, Sway…): app id, title, state and outputs of
+//! (MangoWM, Hyprland, Niri, Sway, labwc…), Plasma's window protocol (KWin)
+//! or `ext_foreign_toplevel_list_v1` with COSMIC's toplevel protocols
+//! (COSMIC): app id, title, state and outputs of
 //! every toplevel, kept in most-recently-used order (the order windows were
 //! last activated), plus activate / close / minimize / maximize /
 //! fullscreen requests for the dock and the Alt-Tab switcher.
@@ -19,6 +21,7 @@ use wayland_protocols_wlr::foreign_toplevel::v1::client::{zwlr_foreign_toplevel_
 
 use crate::actor::{Envelope, ServiceHandle, reply};
 
+mod ext;
 mod kwin;
 
 /// Highest protocol versions used.
@@ -284,13 +287,15 @@ fn run(updates: async_channel::Sender<ToplevelsState>, commands: mpsc::Receiver<
     let _manager: manager::ZwlrForeignToplevelManagerV1 = match globals.bind(&qh, 1..=MANAGER_VERSION, ()) {
         Ok(m) => m,
         Err(err) => {
-            let plasma = globals.contents().with_list(|list| list.iter().any(|g| g.interface == "org_kde_plasma_window_management"));
-            if plasma {
+            let has = |name: &str| globals.contents().with_list(|list| list.iter().any(|g| g.interface == name));
+            let plasma = has("org_kde_plasma_window_management");
+            let ext_list = has("ext_foreign_toplevel_list_v1");
+            if plasma || ext_list {
                 drop(seat);
                 drop(globals);
                 drop(queue);
                 drop(conn);
-                return kwin::run(updates, commands, wake);
+                return if plasma { kwin::run(updates, commands, wake) } else { ext::run(updates, commands, wake) };
             }
             let _ = updates.send_blocking(ToplevelsState::default());
             return Err(format!("zwlr_foreign_toplevel_manager_v1: {err}"));
@@ -327,7 +332,13 @@ fn run(updates: async_channel::Sender<ToplevelsState>, commands: mpsc::Receiver<
         let (wl_ready, wake_ready) = {
             let wl_fd = guard.connection_fd();
             let mut fds = [PollFd::new(&wl_fd, PollFlags::IN), PollFd::new(&wake, PollFlags::IN)];
+            let gone = PollFlags::ERR | PollFlags::HUP | PollFlags::NVAL;
             match poll(&mut fds, None) {
+                // A closed descriptor polls ready forever: stop instead of
+                // spinning (the compositor went away, or the service owner
+                // dropped its end of the wake pipe).
+                Ok(_) if fds[0].revents().intersects(gone) && !fds[0].revents().contains(PollFlags::IN) => return Err("the compositor connection closed".into()),
+                Ok(_) if fds[1].revents().intersects(gone) && !fds[1].revents().contains(PollFlags::IN) => return Ok(()),
                 Ok(_) => (fds[0].revents().contains(PollFlags::IN), fds[1].revents().contains(PollFlags::IN)),
                 Err(rustix::io::Errno::INTR) => (false, false),
                 Err(e) => return Err(e.to_string()),
@@ -338,8 +349,8 @@ fn run(updates: async_channel::Sender<ToplevelsState>, commands: mpsc::Receiver<
         } else {
             drop(guard);
         }
-        if wake_ready {
-            let _ = (&wake).read(&mut wake_buf);
+        if wake_ready && matches!((&wake).read(&mut wake_buf), Ok(0)) {
+            return Ok(());
         }
     }
 }

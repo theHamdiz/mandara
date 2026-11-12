@@ -13,6 +13,7 @@ use mandara_i18n::{t, tf, tk, tr};
 use serde_json::Value;
 
 pub mod alert_settings;
+pub mod context_menu_settings;
 pub mod desktop_settings;
 mod motion_settings;
 #[cfg(test)]
@@ -47,9 +48,9 @@ pub enum Section {
     /// On-screen display kinds and look (W3).
     Osd,
     Wallpaper,
-    /// Clocks, system monitor, decorations, visualizers and cards on the
-    /// desktop: add, arrange and style them.
-    DesktopWidgets,
+    /// The desktop: its widgets (clocks, system monitor, decorations…),
+    /// cards and visualizers, and the right-click menu, on three tabs.
+    Desktop,
     Displays,
     Audio,
     /// Wi-Fi, VPN, hotspot, saved networks, Bluetooth devices (W6).
@@ -94,7 +95,7 @@ impl Section {
         Section::Notifications,
         Section::Osd,
         Section::Wallpaper,
-        Section::DesktopWidgets,
+        Section::Desktop,
         Section::Displays,
         Section::Audio,
         Section::Network,
@@ -133,7 +134,7 @@ impl Section {
             Section::Osd => tk("On-screen displays"),
             Section::Privacy => tk("Privacy"),
             Section::Wallpaper => tk("Wallpaper"),
-            Section::DesktopWidgets => tk("Desktop widgets"),
+            Section::Desktop => tk("Desktop"),
             Section::Displays => tk("Displays"),
             Section::Audio => tk("Audio & media"),
             Section::Network => tk("Network & Bluetooth"),
@@ -170,7 +171,7 @@ impl Section {
             Section::Home => "grid",
             Section::Themes => "droplet",
             Section::Wallpaper => "image",
-            Section::DesktopWidgets => "clock",
+            Section::Desktop => "clock",
             Section::Typography => "text-scan",
             Section::Motion => "waves",
             Section::Bars => "window",
@@ -280,7 +281,7 @@ impl NavGroup {
     pub fn sections(self) -> &'static [Section] {
         use Section::*;
         match self {
-            NavGroup::LookAndFeel => &[Themes, Wallpaper, DesktopWidgets, Typography, Motion],
+            NavGroup::LookAndFeel => &[Themes, Wallpaper, Desktop, Typography, Motion],
             NavGroup::Desktop => &[Bars, Dock, Launcher, WindowSwitcher, Notifications, Osd],
             NavGroup::System => &[Displays, Audio, Network, Power, Input, Shortcuts, DateTime, Applications],
             NavGroup::Security => &[Users, LoginScreen, LockScreen, Privacy],
@@ -336,12 +337,16 @@ pub enum Control {
     Device { input: bool },
     /// A display (output name) from the live list (`""` = the focused one).
     Display,
+    /// Stash's edge catchers: a switch per screen edge that refuses an edge
+    /// another feature uses, naming it and offering to free the edge (its
+    /// values live under `/plugins/settings/stash/edge_*`).
+    StashEdges,
 }
 
 impl Control {
     /// Whether the control edits a value (else it is a button or a status).
     pub fn has_value(&self) -> bool {
-        !matches!(self, Control::Command { .. } | Control::DepthModel | Control::RecorderBackends)
+        !matches!(self, Control::Command { .. } | Control::DepthModel | Control::RecorderBackends | Control::StashEdges)
     }
 }
 
@@ -572,6 +577,7 @@ pub fn settings() -> &'static [Setting] {
         let mut all = build();
         all.extend(surface_settings::entries());
         all.extend(desktop_settings::entries());
+        all.extend(context_menu_settings::entries());
         all.extend(motion_settings::entries());
         all.extend(alert_settings::entries());
         all.extend(system_settings::entries());
@@ -600,6 +606,8 @@ pub fn required_plugin(path: &str) -> Option<&'static str> {
         Some(mandara_ui::plugins::wallpaper_depth::ID)
     } else if path.starts_with("/compositor/input/cursor/") {
         Some(mandara_config::upgrade::CURSORS_ID)
+    } else if path == "/sounds/desktop_sync" {
+        Some(mandara_config::upgrade::SOUND_THEMES_ID)
     } else {
         None
     }
@@ -612,6 +620,7 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     if let Some(reason) = platform_settings::locked(setting.path) { return Some(reason); }
     if let Some(reason) = integration_settings::locked(setting.path, cfg) { return Some(reason); }
     if let Some(reason) = system_settings::native_locked(setting.path, running_compositor()) { return Some(reason); }
+    if let Some(reason) = motion_settings::locked(setting.path, cfg) { return Some(reason); }
     match setting.path {
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),
@@ -623,6 +632,8 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         path if running_compositor() == Some(mandara_config::compositor::Target::Sway) && SWAY_LACKS.contains(&path) => Some(tk("Mandara can't set this on Sway")),
         path if running_compositor() == Some(mandara_config::compositor::Target::River) && RIVER_LACKS.contains(&path) => Some(tk("River has no such setting")),
         path if path.starts_with("/wallpaper/slideshow/") => desktop_settings::slideshow_locked(path, cfg),
+        path if path.starts_with("/desktop/menu/") => context_menu_settings::locked(path, cfg),
+        path if path.starts_with("/wallpaper/sketch/") => desktop_settings::sketch_locked(cfg),
         "/wallpaper/depth/auto_split" | "/wallpaper/depth/download" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
         "/wallpaper/depth/split" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
         "/wallpaper/depth/split" if cfg.wallpaper.depth.auto_split => Some(tk("Set per wallpaper while the automatic split is on")),
@@ -678,7 +689,7 @@ pub fn locked_toggle_click(on: bool) -> Option<bool> {
 /// compositor exposes no supported overview action.
 pub fn choice_hidden(path: &str, raw: &str) -> bool {
     let corner_action = path == "/bar/middle_click/action" || (path.starts_with("/hot_corners/") && path.ends_with("/action"));
-    raw == "overview" && corner_action && matches!(running_compositor(), Some(mandara_config::compositor::Target::Sway | mandara_config::compositor::Target::River | mandara_config::compositor::Target::KWin))
+    raw == "overview" && corner_action && matches!(running_compositor(), Some(mandara_config::compositor::Target::Sway | mandara_config::compositor::Target::River | mandara_config::compositor::Target::KWin | mandara_config::compositor::Target::Labwc | mandara_config::compositor::Target::Cosmic))
 }
 
 /// The compositor Studio runs under, detected once (it can't change while
@@ -778,9 +789,9 @@ fn build() -> Vec<Setting> {
         s(Launcher, workflow_settings::GENERAL, "/launcher/enabled", tk("Enable launcher"), tk("Apps, settings, commands, “/” slash commands and skills, “=” calculator; off disables the keybind, edge and menu entry"), Toggle),
         // Wallpaper
         s(Wallpaper, tk("Desktop"), "/wallpaper/enabled", tk("Draw the wallpaper"), tk("Mandara paints the desktop background (replaces swww / awww / swaybg)"), Toggle),
-        s(Wallpaper, tk("Desktop"), "/wallpaper/crossfade_ms", tk("Crossfade"), tk("Blend time when the wallpaper changes"), slider(0.0, 2000.0, 50.0, " ms")),
+        s(Wallpaper, tk("Desktop"), "/wallpaper/crossfade_ms", tk("Transition length"), tk("How long a wallpaper change takes"), slider(0.0, 2000.0, 50.0, " ms")),
         // The depth clock itself (style, place, date pill, audio ring) is a
-        // desktop widget: Wallpaper → Desktop widgets.
+        // desktop widget: Studio → Desktop → Widgets.
         s(Wallpaper, tk("Depth clock"), "/wallpaper/depth_effect", tk("Depth effect"), tk("Draw the wallpaper's foreground subject over the clock (with the Fill mode)"), Toggle),
         // The wallpaper-depth plugin's own rows (one group, so the page
         // can place them as a unit).

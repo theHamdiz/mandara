@@ -3,11 +3,13 @@
 //! workspaces, JSON socket), Hyprland (workspaces, socket/socket2),
 //! Umbriel (per-output workspaces, JSON-lines socket), Sway (per-output
 //! workspaces, i3 IPC), River (bitmask tags, its own Wayland protocols),
-//! KWin (Plasma window and virtual-desktop Wayland protocols) and Aqueous
-//! (per-output workspaces, acknowledged JSON state batches).
+//! KWin (Plasma window and virtual-desktop Wayland protocols), Aqueous
+//! (per-output workspaces, acknowledged JSON state batches), and labwc and
+//! COSMIC (the standard ext-workspace Wayland protocol).
 
 pub mod aqueous;
 pub mod backend;
+pub mod ext_workspace;
 pub mod hyprland;
 pub mod mango;
 pub mod kwin;
@@ -21,6 +23,7 @@ use std::sync::Arc;
 
 pub use aqueous::AqueousDriver;
 pub use backend::CompositorBackend;
+pub use ext_workspace::ExtWorkspaceDriver;
 pub use hyprland::HyprlandDriver;
 pub use mango::MangoDriver;
 pub use kwin::KWinDriver;
@@ -47,7 +50,16 @@ pub use umbriel::UmbrielDriver;
 /// alone is checked after the other compositors' own variables, so one
 /// nested inside Aqueous is still found (a nested Niri, which inherits
 /// Aqueous's desktop name too, by its socket naming this display). Aqueous derives from River but
-/// offers none of River's protocols.
+/// offers none of River's protocols. labwc exports `LABWC_PID` (and
+/// `LABWC_VER`) to everything it starts and leaves an existing
+/// `XDG_CURRENT_DESKTOP` alone (`labwc:wlroots` by default): it is checked
+/// after the other compositors' own variables, so one nested inside labwc
+/// is still found, and before the desktop names (labwc inside a Plasma or
+/// COSMIC session is labwc; inside a Niri session, Niri's inherited socket
+/// names the outer display). COSMIC exports nothing of its own: its session
+/// sets `XDG_CURRENT_DESKTOP=COSMIC`, which counts once no compositor's own
+/// variable matched.
+///
 ///
 /// A compositor nested inside another inherits the outer one's variables,
 /// and some (Sway, Niri outside a full session) don't rename the desktop,
@@ -60,7 +72,7 @@ pub fn detect() -> Option<CompositorKind> {
 }
 
 /// The variables a compositor exports for its own session.
-const OWN_VARIABLES: [&str; 6] = ["MANGO_INSTANCE_SIGNATURE", "NIRI_SOCKET", "HYPRLAND_INSTANCE_SIGNATURE", "UMBRIEL_SOCKET", "SWAYSOCK", "AQUEOUS_SOCKET"];
+const OWN_VARIABLES: [&str; 7] = ["MANGO_INSTANCE_SIGNATURE", "NIRI_SOCKET", "HYPRLAND_INSTANCE_SIGNATURE", "UMBRIEL_SOCKET", "SWAYSOCK", "AQUEOUS_SOCKET", "LABWC_PID"];
 
 /// [`detect_from`], except that when several compositors' own variables
 /// are set (one runs nested inside another), `owner` (the compositor
@@ -105,6 +117,8 @@ fn kind_of_process(name: &str) -> Option<CompositorKind> {
         "river" => Some(CompositorKind::River),
         "kwin_wayland" => Some(CompositorKind::KWin),
         "aqueous" => Some(CompositorKind::Aqueous),
+        "labwc" => Some(CompositorKind::Labwc),
+        "cosmic-comp" => Some(CompositorKind::Cosmic),
         _ => None,
     }
 }
@@ -125,6 +139,9 @@ pub fn detect_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<C
     // name (Niri names itself only when it runs a whole session), but its
     // own socket names the Wayland display it serves.
     let niri_here = var("NIRI_SOCKET").zip(var("WAYLAND_DISPLAY")).is_some_and(|(socket, display)| niri_serves(&socket, &display));
+    // An inherited Niri socket that names another display: Niri is the
+    // outer compositor, not the one Mandara is on.
+    let niri_outer = set("NIRI_SOCKET") && set("WAYLAND_DISPLAY") && !niri_here;
     if desktop("umbriel") {
         Some(CompositorKind::Umbriel)
     } else if desktop("sway") && set("SWAYSOCK") {
@@ -133,6 +150,8 @@ pub fn detect_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<C
         Some(CompositorKind::Aqueous)
     } else if set("MANGO_INSTANCE_SIGNATURE") || desktop("mango") {
         Some(CompositorKind::MangoWM)
+    } else if set("LABWC_PID") && niri_outer {
+        Some(CompositorKind::Labwc)
     } else if set("NIRI_SOCKET") {
         Some(CompositorKind::Niri)
     } else if set("HYPRLAND_INSTANCE_SIGNATURE") {
@@ -141,10 +160,14 @@ pub fn detect_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<C
         Some(CompositorKind::Umbriel)
     } else if set("SWAYSOCK") {
         Some(CompositorKind::Sway)
+    } else if set("LABWC_PID") {
+        Some(CompositorKind::Labwc)
     } else if set("AQUEOUS_SOCKET") {
         Some(CompositorKind::Aqueous)
     } else if desktop("KDE") || desktop("plasma") {
         Some(CompositorKind::KWin)
+    } else if desktop("COSMIC") {
+        Some(CompositorKind::Cosmic)
     } else if desktop("river") {
         Some(CompositorKind::River)
     } else {
@@ -182,6 +205,7 @@ pub fn connect() -> Option<Arc<dyn CompositorBackend>> {
         CompositorKind::River => RiverDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
         CompositorKind::KWin => KWinDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
         CompositorKind::Aqueous => AqueousDriver::from_env().map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
+        kind @ (CompositorKind::Labwc | CompositorKind::Cosmic) => ExtWorkspaceDriver::from_env(kind).map(|d| Arc::new(d) as Arc<dyn CompositorBackend>),
     }
 }
 
@@ -273,5 +297,41 @@ mod tests {
         assert_eq!(kind_of_process("Hyprland"), Some(CompositorKind::Hyprland));
         assert_eq!(kind_of_process("kwin_wayland"), Some(CompositorKind::KWin));
         assert_eq!(detect_with(&[socket, ("XDG_CURRENT_DESKTOP", "river")]), Some(CompositorKind::Aqueous));
+    }
+
+    #[test]
+    fn labwc_and_cosmic_are_found_without_mistaking_nested_compositors() {
+        let labwc = ("LABWC_PID", "4242");
+        let desktop = ("XDG_CURRENT_DESKTOP", "labwc:wlroots");
+        assert_eq!(detect_with(&[labwc]), Some(CompositorKind::Labwc));
+        assert_eq!(detect_with(&[labwc, desktop, ("LABWC_VER", "0.20.2")]), Some(CompositorKind::Labwc));
+        // The desktop name alone isn't a running labwc.
+        assert_eq!(detect_with(&[desktop]), None);
+        assert_eq!(detect_with(&[("LABWC_PID", "")]), None);
+        // Compositors nested in labwc inherit LABWC_PID (and its desktop
+        // name): their own variables win.
+        for own in [("NIRI_SOCKET", "/n"), ("SWAYSOCK", "/s"), ("HYPRLAND_INSTANCE_SIGNATURE", "abc"), ("MANGO_INSTANCE_SIGNATURE", "/m"), ("UMBRIEL_SOCKET", "/u")] {
+            assert_ne!(detect_with(&[labwc, desktop, own]), Some(CompositorKind::Labwc), "{own:?}");
+        }
+        assert_eq!(detect_with(&[labwc, desktop, ("SWAYSOCK", "/s")]), Some(CompositorKind::Sway));
+        let inner_niri = [labwc, desktop, ("NIRI_SOCKET", "/run/user/1000/niri.wayland-2.7.sock"), ("WAYLAND_DISPLAY", "wayland-2")];
+        assert_eq!(detect_with(&inner_niri), Some(CompositorKind::Niri));
+        // labwc nested inside Niri, Plasma or COSMIC keeps its own name.
+        let in_niri = [labwc, ("XDG_CURRENT_DESKTOP", "niri"), ("NIRI_SOCKET", "/run/user/1000/niri.wayland-1.7.sock"), ("WAYLAND_DISPLAY", "wayland-2")];
+        assert_eq!(detect_with(&in_niri), Some(CompositorKind::Labwc));
+        assert_eq!(detect_with(&[labwc, ("XDG_CURRENT_DESKTOP", "KDE")]), Some(CompositorKind::Labwc));
+        assert_eq!(detect_with(&[labwc, ("XDG_CURRENT_DESKTOP", "COSMIC")]), Some(CompositorKind::Labwc));
+
+        let cosmic = ("XDG_CURRENT_DESKTOP", "COSMIC");
+        assert_eq!(detect_with(&[cosmic]), Some(CompositorKind::Cosmic));
+        assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "cosmic")]), Some(CompositorKind::Cosmic));
+        // Compositors nested in COSMIC inherit its desktop name only.
+        assert_eq!(detect_with(&[cosmic, ("NIRI_SOCKET", "/n")]), Some(CompositorKind::Niri));
+        assert_eq!(detect_with(&[cosmic, ("SWAYSOCK", "/s")]), Some(CompositorKind::Sway));
+        assert_eq!(detect_with(&[cosmic, ("HYPRLAND_INSTANCE_SIGNATURE", "abc")]), Some(CompositorKind::Hyprland));
+        assert_eq!(detect_with(&[cosmic, ("AQUEOUS_SOCKET", "/a")]), Some(CompositorKind::Aqueous));
+        // COSMIC is neither Plasma nor River.
+        assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "COSMIC:river")]), Some(CompositorKind::Cosmic));
+        assert_eq!(detect_with(&[("XDG_CURRENT_DESKTOP", "KDE")]), Some(CompositorKind::KWin));
     }
 }

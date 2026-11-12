@@ -43,6 +43,9 @@ pub struct WgpuTextureInfo {
     pub view: wgpu::TextureView,
     /// Distinguishes new textures that reuse an [`AtlasTextureId`].
     pub generation: u64,
+    /// Width and height in texels (Mandara patch 16: transitions address
+    /// their tiles in texture coordinates).
+    pub size: [u32; 2],
 }
 
 impl WgpuAtlas {
@@ -84,6 +87,7 @@ impl WgpuAtlas {
         Some(WgpuTextureInfo {
             view: texture.view.clone(),
             generation: texture.generation,
+            size: [texture.texture.width(), texture.texture.height()],
         })
     }
 

@@ -140,6 +140,8 @@ pub struct WaylandWindowState {
     window_controls: WindowControls,
     client_inset: Option<Pixels>,
     accesskit_adapter: Option<accesskit_unix::Adapter>,
+    /// Mandara patch 13: drags of data other than files enter as `ExternalData`.
+    accepts_data_drops: bool,
 }
 
 pub enum WaylandSurfaceState {
@@ -465,6 +467,24 @@ impl WaylandSurfaceState {
         }
     }
 
+    /// Mandara patch 13: moves a layer surface by its margins.
+    fn set_margin(&self, margin: (Pixels, Pixels, Pixels, Pixels)) -> bool {
+        if let WaylandSurfaceState::LayerShell(WaylandLayerSurfaceState { layer_surface, .. }) =
+            self
+        {
+            let (top, right, bottom, left) = margin;
+            layer_surface.set_margin(
+                f32::from(top) as i32,
+                f32::from(right) as i32,
+                f32::from(bottom) as i32,
+                f32::from(left) as i32,
+            );
+            true
+        } else {
+            false
+        }
+    }
+
     fn set_exclusive_zone(&self, zone: i32) -> bool {
         if let WaylandSurfaceState::LayerShell(WaylandLayerSurfaceState { layer_surface, .. }) =
             self
@@ -640,6 +660,7 @@ impl WaylandWindowState {
             window_controls: WindowControls::default(),
             client_inset: None,
             accesskit_adapter: None,
+            accepts_data_drops: false,
         })
     }
 
@@ -890,6 +911,11 @@ impl WaylandWindow {
 impl WaylandWindowStatePtr {
     pub fn handle(&self) -> AnyWindowHandle {
         self.state.borrow().handle
+    }
+
+    /// Mandara patch 13: whether data drags (not files) enter this window.
+    pub fn accepts_data_drops(&self) -> bool {
+        self.state.borrow().accepts_data_drops
     }
 
     pub fn surface(&self) -> wl_surface::WlSurface {
@@ -2107,6 +2133,20 @@ impl PlatformWindow for WaylandWindow {
                 state.client.get_serial(SerialKind::MousePress).as_raw(),
                 edge.to_xdg(),
             )
+        }
+    }
+
+    // Mandara patch 13.
+    fn set_accepts_data_drops(&self, accept: bool) {
+        self.borrow_mut().accepts_data_drops = accept;
+    }
+
+    // Mandara patch 13.
+    fn set_layer_margin(&self, margin: (Pixels, Pixels, Pixels, Pixels)) {
+        let state = self.borrow();
+        if state.surface_state.set_margin(margin) {
+            // Commit to move it now rather than with the next frame.
+            state.surface.commit();
         }
     }
 

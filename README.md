@@ -36,8 +36,8 @@
   <a href="docs/building.md#build-fingerprint"><img src="https://img.shields.io/badge/100%25-Rust-8B5CF6?logo=rust&logoColor=E9E5FF&labelColor=0B1026" alt="100% Rust"/></a>
   <a href="docs/desktop.md"><img src="https://img.shields.io/badge/Wayland-native-22D3EE?logo=wayland&logoColor=E9E5FF&labelColor=0B1026" alt="Wayland native"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-8B5CF6?labelColor=0B1026" alt="GPU rendered"/></a>
-  <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic%20%C2%B7%20KWin%20%C2%B7%20Aqueous-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous"/></a>
-  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-81%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="81 plugins plus WebAssembly"/></a>
+  <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic%20%C2%B7%20KWin%20%C2%B7%20Aqueous%20%C2%B7%20labwc%20%C2%B7%20COSMIC-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc, COSMIC"/></a>
+  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-85%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="85 plugins plus WebAssembly"/></a>
   <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-20%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="20 languages"/></a>
   <br/>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/resources-measured-2DD4BF?labelColor=0B1026" alt="Resource measurements and current limits"/></a>
@@ -66,7 +66,7 @@ on [GPUI](https://github.com/zed-industries/zed). It's everything around
 your windows: the bar, a dynamic island, a dock, a launcher, a sidebar,
 notifications, wallpapers, desktop widgets, the lock screen and the login
 screen, plus a settings app that changes all of it live. It runs on
-**MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin and Aqueous**, and it's one small, fast program
+**MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc and COSMIC**, and it's one small, fast program
 you install with one command.
 
 Maintenance flags missing icon themes and links to the icon settings.
@@ -106,12 +106,12 @@ Write notes and edit tasks directly in their widgets, too.
 | | |
 |---|---|
 | **What** | A complete Wayland desktop shell: bar, island, dock, launcher, sidebar, notifications, OSDs, wallpapers, desktop widgets, lock screen, login manager, settings app |
-| **Compositors** | MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic (0.3), KWin and Aqueous, with native drivers; your own config gets one include line at most, nothing more |
+| **Compositors** | MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic (0.3), KWin, Aqueous, labwc and COSMIC, with native drivers; your own config gets one include line at most, nothing more |
 | **Built with** | 100 % Rust, one binary (`mandara`), GPU-rendered with GPUI and wgpu |
 | **Resources** | [Resource measurements and current limits](docs/performance.md); the 100 MiB startup and operation target remains open |
 | **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`), with [thirteen colour launcher icons](docs/configuration.md#launcher-button-artwork) |
 | **Automation** | `mandara msg <command>` with JSON replies; `mandara commands --json` lists them all |
-| **Plugins** | 81 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
+| **Plugins** | 85 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
 | **Widgets** | Mechanical, word and binary clocks, calendar cards and weather dials; passive widgets can also decorate Mandara Login and the native lock screen |
 | **Languages** | 20, including right-to-left Arabic, Persian and Urdu |
 | **License** | GPL-3.0-or-later |
@@ -119,20 +119,21 @@ Write notes and edit tasks directly in their widgets, too.
 ## What sets Mandara apart
 
 Mandara is built for one job: being the complete desktop for **MangoWM,
-Niri, Hyprland, Umbriel, Sway, River Classic, KWin and Aqueous**. These are the strengths it was designed
+Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc and COSMIC**. These are the strengths it was designed
 around, each one measured or shipped today:
 
-1. **Eight compositors, each first-class.** It speaks every compositor's
+1. **Ten compositors, each first-class.** It speaks every compositor's
    own IPC natively: MangoWM's and River's tag bitmasks (view, toggle-view,
    tag moves), Niri's scrolling columns, Hyprland's, Umbriel's and Sway's
-   workspaces, KWin's native Plasma window and virtual-desktop protocols, and
-   Aqueous's acknowledged state stream over its own socket. It reads
+   workspaces, KWin's native Plasma window and virtual-desktop protocols,
+   Aqueous's acknowledged state stream over its own socket, and the standard
+   ext-workspace Wayland protocol on labwc and COSMIC. It reads
    each compositor's version and writes its exact config dialect, down to
    Hyprland 0.57's Lua config.
 2. **It never breaks your compositor config.** It adds one include line
-   (none on River, KWin or Aqueous); River settings use its native protocol,
-   while Aqueous settings stay in its own files and
-   KWin settings stay in Plasma System Settings. For the other compositors,
+   (none on River, KWin, Aqueous, labwc or COSMIC); River settings use its
+   native protocol, while Aqueous and labwc settings stay in their own files,
+   COSMIC's in COSMIC Settings and KWin settings in Plasma System Settings. For the other compositors,
    everything else goes into its own drop-in files. Every change is
    checked by the compositor's own validator (`mango -p`, `niri validate`,
    `Hyprland --verify-config`, `umbriel config validate`, `sway --validate`)
@@ -160,13 +161,17 @@ around, each one measured or shipped today:
    from your wallpaper, hand-tuned themes, and opt-in theming of Ghostty,
    GTK 3/4, Qt 5/6, Kvantum, Zed, kitty, foot, Alacritty, btop, Cava,
    tmux, Zellij and Spicetify. [App setup](docs/app-themes.md).
-   [Motion controls](docs/motion.md) include spring presets, a live preview
-   and per-surface speeds, with optional system accessibility preferences.
+   [Motion controls](docs/motion.md) include eleven presets with their own
+   choreography (Corniche tide, Lighthouse sweep, Felucca drift, Magnetic,
+   Mercury, Raindrop and five classic springs), a live preview and
+   per-surface speeds, with optional system accessibility preferences.
 8. **Your desktop, your look.** Six bar styles on any edge, side bars that
    join the top bar into one frame, one-click Looks, dozens of desktop
    widgets placed per monitor, and three launcher looks. Attached launchers follow
-   compact bars, with a placement map in Studio.
-9. **Safe, rich extensions.** 81 plugins built in. Third-party plugins are
+   compact bars, with a placement map in Studio. [Boot look](docs/boot-look.md)
+   restyles the boot menu and splash too (GRUB, Limine, rEFInd, Plymouth, or
+   your own image), with a plan first, backups and one-click restore.
+9. **Safe, rich extensions.** 85 plugins built in. Third-party plugins are
    Rust compiled to sandboxed WebAssembly: a crashing plugin is switched
    off and the shell keeps running. Qur’an, Hadith and Jannah can also
    [copy complete reading cards as images](docs/plugins.md#jannah-quran-hadith-and-prayer-times).
@@ -202,8 +207,10 @@ around, each one measured or shipped today:
 - **It does a lot out of the box.** A media island with lyrics, a sound
   mixer per app, screenshots and screen recording, copying text from the
   screen, a launcher with three looks (a list, an icon grid or a centred
-  Spotlight-style search bar), a clipboard that sorts what you copy, a
-  drag-and-drop app installer, night light, and 81 built-in plugins.
+  Spotlight-style search bar), a clipboard that sorts what you copy,
+  [floating shelves](docs/plugins.md#stash-floating-shelves) you drop
+  anything onto and drag back out of, a drag-and-drop app installer, night
+  light, sound themes, and 85 built-in plugins.
   [Everything else](docs/more-features.md)
 - **It welcomes you in.** A matching lock screen and login screen with
   your own wallpaper, and ready-made looks for both.
@@ -229,10 +236,14 @@ around, each one measured or shipped today:
 
 ### Bar styles
 
-Eight presets reshape the whole bar in one click: pick one in **Studio →
-Bars → Presets**, or run `mandara msg bar style <name>`. Every style shows
-the icon of the app on each workspace and tag button. Each side bar can
-take one of its own (`mandara msg side-bar style right <name>`).
+Nine presets reshape the whole bar in one click: pick one in **Studio →
+Bars → Presets**, or run `mandara msg bar style <name>`; *Taskbar* centres
+the launcher and your apps along the bottom. Your own bar items and
+desktop widgets stay whichever you pick. Every style shows
+the icon of the app on each workspace and tag button. The styles with a
+rail run the workspaces down it and seat the launcher in the corner where
+bar and rail meet. Each side bar can take one of its own
+(`mandara msg side-bar style right <name>`).
 
 <table>
 <tr>
@@ -263,7 +274,7 @@ take one of its own (`mandara msg side-bar style right <name>`).
     <img src="docs/screenshots/looks-light.webp" alt="The six Looks, each on a wallpaper of its own: Corniche Dusk (glass pills and a headline clock over a rose sunset), Pharos Ink (a hairline bar over ink contours), Montaza Crimson (an Arabic clock over a red and amber glow), Qaitbay Forest (a giant stacked clock over green hills), Anfushi Wave (a glowing wave over layered sea) and Night Frame (a side bar framing the northern lights), in dark mode or light mode to match your page" width="100%"/>
   </picture>
   <br/>
-  <sub>Six Looks, one click each: the bar, widgets, colours and fonts change together.</sub>
+  <sub>Looks, one click each: the bar, widgets, colours and fonts change together. Nineteen ship (one on every bar style, a Windows 11-style and a macOS-style desktop, a cel-shaded comic one); change one and it is kept as a look of your own, to export and share.</sub>
 </p>
 
 <table>

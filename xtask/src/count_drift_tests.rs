@@ -2,15 +2,15 @@
 //! compositors it supports. Those numbers drift whenever a plugin lands on
 //! one branch and the docs on another, so they are checked here against the
 //! sources of truth: the plugin catalog (`assets/catalog.json`, minus the
-//! example plugins in `plugins/examples/`) and the eight compositor drivers.
+//! example plugins in `plugins/examples/`) and the ten compositor drivers.
 //!
 //! The website (`index.html`) has its own check in `pages_tests`.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-/// MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin and Aqueous.
-const COMPOSITORS: usize = 8;
+/// MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc and COSMIC.
+const COMPOSITORS: usize = 10;
 
 /// Phrases that end in a plugin count: the number comes right before them.
 const PLUGIN_COUNT_BEFORE: &[&str] = &[" built-in plugins", " first-party plugins", " plugins built in", " built-ins", "-plugin set", " plugins plus WebAssembly"];
@@ -19,13 +19,16 @@ const PLUGIN_COUNT_BEFORE: &[&str] = &[" built-in plugins", " first-party plugin
 const PLUGIN_COUNT_AFTER: &[&str] = &["| **Plugins** | ", "badge/plugins-"];
 
 /// Number words a compositor count may be written in.
-const NUMBER_WORDS: &[(&str, usize)] = &[("two", 2), ("three", 3), ("four", 4), ("five", 5), ("six", 6), ("seven", 7), ("eight", 8), ("nine", 9), ("ten", 10)];
+const NUMBER_WORDS: &[(&str, usize)] = &[
+    ("two", 2), ("three", 3), ("four", 4), ("five", 5), ("six", 6), ("seven", 7), ("eight", 8), ("nine", 9), ("ten", 10),
+    ("eleven", 11), ("twelve", 12), ("eighteen", 18), ("nineteen", 19), ("twenty", 20), ("twenty-one", 21), ("twenty-two", 22),
+];
 
 /// The public text that states the counts: the README, the LLM summaries,
 /// the guides, the artwork notes and the citation.
 fn public_pages() -> Vec<PathBuf> {
     let root = crate::root();
-    let mut pages: Vec<PathBuf> = ["README.md", "llms.txt", "llms-full.txt", "assets/README.md", "CITATION.cff"].iter().map(|p| root.join(p)).filter(|p| p.is_file()).collect();
+    let mut pages: Vec<PathBuf> = ["README.md", "AGENTS.md", "llms.txt", "llms-full.txt", "assets/README.md", "CITATION.cff"].iter().map(|p| root.join(p)).filter(|p| p.is_file()).collect();
     let mut docs: Vec<PathBuf> = std::fs::read_dir(root.join("docs")).unwrap().filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x == "md")).collect();
     docs.sort();
     pages.extend(docs);
@@ -66,14 +69,18 @@ fn plugin_counts(text: &str) -> Vec<usize> {
     found
 }
 
-/// Every compositor count `text` states: a number or number word right
-/// before "compositors" (or "supported compositors").
-fn compositor_counts(text: &str) -> Vec<usize> {
+/// Every count `text` states for `noun`: a number or number word right
+/// before it, skipping one of `between` ("supported compositors",
+/// "interface languages").
+fn counts_before(text: &str, noun: &str, between: &[&str]) -> Vec<usize> {
     let lower = text.to_lowercase();
     let mut found = Vec::new();
-    for (at, _) in lower.match_indices(" compositors") {
-        let before = lower[..at].trim_end_matches(" supported");
-        let word = before.rsplit(|c: char| !c.is_ascii_alphanumeric()).next().unwrap_or_default();
+    for (at, _) in lower.match_indices(noun) {
+        let mut before = &lower[..at];
+        for word in between {
+            before = before.trim_end_matches(word);
+        }
+        let word = before.rsplit(|c: char| !c.is_ascii_alphanumeric() && c != '-').next().unwrap_or_default();
         if let Ok(n) = word.parse() {
             found.push(n);
         } else if let Some((_, n)) = NUMBER_WORDS.iter().find(|(w, _)| *w == word) {
@@ -83,6 +90,22 @@ fn compositor_counts(text: &str) -> Vec<usize> {
     found
 }
 
+/// Every compositor count `text` states.
+fn compositor_counts(text: &str) -> Vec<usize> {
+    counts_before(text, " compositors", &[" supported"])
+}
+
+/// Every interface-language count `text` states.
+fn language_counts(text: &str) -> Vec<usize> {
+    counts_before(text, " languages", &[" interface", " ui"])
+}
+
+/// English plus one catalog per other language.
+fn languages() -> usize {
+    let dir = crate::root().join("crates/mandara-i18n/locales");
+    1 + std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()).filter(|e| e.path().extension().is_some_and(|x| x == "toml")).count()
+}
+
 #[test]
 fn the_scanners_read_every_way_a_count_is_written() {
     let text = "and 81 built-in plugins. | **Plugins** | 81 built in; badge/plugins-81%20built alt=\"81 plugins plus WebAssembly\" The 82 plugins below include 81 built-ins. The 81-plugin set uses";
@@ -90,6 +113,7 @@ fn the_scanners_read_every_way_a_count_is_written() {
     assert!(plugin_counts(text).iter().all(|n| *n == 81));
     assert_eq!(plugin_counts("2048 plugins on, 31 plugin panels"), Vec::<usize>::new());
     assert_eq!(compositor_counts("Seven compositors, all seven compositors, 6 supported compositors, many compositors"), vec![7, 7, 6]);
+    assert_eq!(language_counts("Twenty languages, 20 interface languages, twenty-one UI languages, many languages"), vec![20, 20, 21]);
 }
 
 #[test]
@@ -99,7 +123,8 @@ fn public_pages_state_the_real_plugin_and_compositor_counts() {
     let embedded = art_index.lines().filter(|l| l.trim_start().starts_with("(\"")).count();
     assert_eq!(embedded, builtins, "every built-in plugin in the catalog has embedded art (run `cargo xtask art`)");
     let mut wrong = Vec::new();
-    let (mut plugin_mentions, mut compositor_mentions) = (0, 0);
+    let (mut plugin_mentions, mut compositor_mentions, mut language_mentions) = (0, 0, 0);
+    let languages = languages();
     for page in public_pages() {
         let text = std::fs::read_to_string(&page).unwrap();
         let name = page.strip_prefix(crate::root()).unwrap().display().to_string();
@@ -115,9 +140,15 @@ fn public_pages_state_the_real_plugin_and_compositor_counts() {
                 wrong.push(format!("{name}: {n} compositors, Mandara supports {COMPOSITORS}"));
             }
         }
+        for n in language_counts(&text) {
+            language_mentions += 1;
+            if n != languages {
+                wrong.push(format!("{name}: {n} languages, Mandara ships {languages} (English plus the locale catalogs)"));
+            }
+        }
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
-    assert!(plugin_mentions >= 5 && compositor_mentions >= 2, "the scanners found too little ({plugin_mentions} plugin and {compositor_mentions} compositor counts): did the wording change?");
+    assert!(plugin_mentions >= 5 && compositor_mentions >= 2 && language_mentions >= 3, "the scanners found too little ({plugin_mentions} plugin, {compositor_mentions} compositor and {language_mentions} language counts): did the wording change?");
 }
 
 /// The plugin guide's table lists every built-in plugin once, and the

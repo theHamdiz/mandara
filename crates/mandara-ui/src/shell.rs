@@ -366,6 +366,47 @@ pub(crate) fn panel_spring(cfg: &ShellConfig) -> (SpringConfig, bool) {
     spring_for(PANEL_SPRING, &cfg.panels.spring)
 }
 
+/// How far a panel's content enters from a choreography's direction, and
+/// how far it trails the morph, in px.
+const PANEL_ENTRANCE_PX: f32 = 18.0;
+const PANEL_PARALLAX_PX: f32 = 22.0;
+
+/// The direction a panel opens from: out of the bar it came from.
+fn panel_origin(vertical: bool, right: bool, bottom: bool) -> (f32, f32) {
+    match (vertical, right, bottom) {
+        (true, true, _) => (1.0, 0.0),
+        (true, false, _) => (-1.0, 0.0),
+        (false, _, true) => (0.0, 1.0),
+        (false, _, false) => (0.0, -1.0),
+    }
+}
+
+/// The choreography's offset of a panel's content at morph `progress`
+/// (zero once open).
+pub(crate) fn panel_content_offset(c: &mandara_core::choreo::Choreography, progress: f32, vertical: bool, right: bool, bottom: bool, rtl: bool) -> (f32, f32) {
+    let natural = panel_origin(vertical, right, bottom);
+    let (ex, ey) = c.entrance_offset(progress, natural, rtl, PANEL_ENTRANCE_PX);
+    let (px_, py_) = c.parallax_offset(progress, natural, rtl, PANEL_PARALLAX_PX);
+    (ex + px_, ey + py_)
+}
+
+/// A panel's drawn shape `(x, y, w, h)` with the choreography's liquid
+/// stretch: it leads along the way it grows, by its length times the
+/// stretch for its speed on that axis (`velocity` of the bounds spring:
+/// x, y, width, height). Unchanged at rest.
+pub(crate) fn pour(c: &mandara_core::choreo::Choreography, (x, y, w, h): (f32, f32, f32, f32), velocity: [f32; 4], vertical: bool, right: bool, bottom: bool) -> (f32, f32, f32, f32) {
+    if c.stretch <= 0.0 {
+        return (x, y, w, h);
+    }
+    if vertical {
+        let extra = w * c.stretch_at(velocity[2]);
+        if right { (x - extra, y, w + extra, h) } else { (x, y, w + extra, h) }
+    } else {
+        let extra = h * c.stretch_at(velocity[3]);
+        if bottom { (x, y - extra, w, h + extra) } else { (x, y, w, h + extra) }
+    }
+}
+
 /// Steps `spring` under the global profile, or — for a custom spring —
 /// under a neutral feel that keeps only reduced motion (and the global
 /// speed, applied inside the step).
@@ -601,8 +642,8 @@ impl ShellView {
     /// of the bar ([`Self::fit_zones`]).
     fn zone_widths(&self) -> [f32; 3] {
         let m = self.metrics;
-        let w = |zone: &[Slot]| layout::zone_width(&zone.iter().map(|s| self.slot_extent(s)).collect::<smallvec::SmallVec<[f32; 16]>>(), &m);
-        [w(&self.zones[0]), w(&self.zones[1]), w(&self.zones[2])]
+        let extents = |zone: &[Slot]| zone.iter().map(|s| self.slot_extent(s)).collect::<smallvec::SmallVec<[f32; 16]>>();
+        [layout::start_zone_width(&extents(&self.zones[0]), &m), layout::zone_width(&extents(&self.zones[1]), &m), layout::zone_width(&extents(&self.zones[2]), &m)]
     }
 
     /// Fits each zone into its share of the bar ([`layout::zone_limits`]),
@@ -617,11 +658,17 @@ impl ShellView {
         if self.metrics.notch() {
             self.metrics.notch_fit = layout::notch_fit(&self.metrics, [&lengths[0], &lengths[1], &lengths[2]]);
         }
+        // The start zone's first item may sit in a joined rail's corner.
+        if self.metrics.corner > 0.0 {
+            self.metrics.corner_item = lengths[0].iter().find(|w| **w >= 1.0).map_or(0.0, |w| self.metrics.corner_length(*w));
+        }
         let m = &self.metrics;
-        let wanted: [f32; 3] = std::array::from_fn(|z| layout::zone_width(&lengths[z], m));
+        let wanted: [f32; 3] = std::array::from_fn(|z| if z == 0 { layout::start_zone_width(&lengths[z], m) } else { layout::zone_width(&lengths[z], m) });
         let limits = layout::zone_limits(m, along, wanted);
         for (z, zone) in self.zones.iter().enumerate() {
-            let fit = layout::fit_slots(&lengths[z], m, limits[z], z == layout::Group::Right.index());
+            // The corner's extra room comes out of the start zone's share.
+            let limit = if z == 0 { (limits[z] - m.corner_gap()).max(0.0) } else { limits[z] };
+            let fit = layout::fit_slots(&lengths[z], m, limit, z == layout::Group::Right.index());
             for (slot, limit) in zone.iter().zip(fit) {
                 slot.limit.set(limit);
             }
@@ -717,6 +764,9 @@ impl ShellView {
             (frame_y + m.chip_inset() + self.bar_shift, m.height - m.chip_inset() * 2.0)
         };
         let mut x = f32::from(g.origin.x) + inset;
+        // The start zone's first item in a joined rail's corner, at its
+        // corner length; the rest start clear of the rail.
+        let mut corner = zone == 0 && m.corner_holds_item();
         self.zones[zone]
             .iter()
             .map(|slot| {
@@ -724,9 +774,10 @@ impl ShellView {
                 if w < 1.0 {
                     return None;
                 }
-                let chip_w = m.chip_length(w);
+                let in_corner = std::mem::take(&mut corner);
+                let chip_w = if in_corner { m.corner_item } else { m.chip_length(w) };
                 let r = Bounds { origin: point(px(x), px(y)), size: size(px(chip_w), px(h)) };
-                x += chip_w + m.chip_gap;
+                x += chip_w + m.chip_gap + if in_corner { m.corner_gap() } else { 0.0 };
                 Some(r)
             })
             .collect()
@@ -1287,6 +1338,13 @@ fn capsule_colors(bar: &mandara_config::BarConfig, palette: &MandaraPalette) -> 
     (fill, palette.outline.with_alpha((CAPSULE_OUTLINE_ALPHA * k).min(1.0)))
 }
 
+/// The outline width of a bar item's tile or capsule: the ink's when
+/// inked, else the hairline.
+fn item_edge_px() -> f32 {
+    let ink = crate::plugins::panel_fx::ink_detail_px();
+    if ink > 0.0 { ink } else { CAPSULE_EDGE_PX }
+}
+
 /// One item's tile: a rounded rectangle, a squircle, or a Material 3
 /// Expressive shape painted from SDF circles ([`crate::components::shapes`]),
 /// in `color` over the bar's own `under` colour, with an optional outline.
@@ -1295,9 +1353,9 @@ pub(crate) fn item_tile(placed: &crate::bar::items::Placed, color: Color, under:
     use crate::components::cut::{Corner, Ink};
     use crate::components::surfaces::Surface as _;
     match placed.tile {
-        Tile::Rounded(c) => place(placed.bounds).with_corners(c).bg(color.hsla()).when_some(edge, |el, edge| el.border_1().border_color(edge.hsla())).into_any_element(),
+        Tile::Rounded(c) => place(placed.bounds).with_corners(c).bg(color.hsla()).when_some(edge, |el, edge| el.border(px(item_edge_px())).border_color(edge.hsla())).into_any_element(),
         Tile::Squircle(reach) => {
-            let ink = Ink::solid(Some(color), edge.map(|e| (e, CAPSULE_EDGE_PX)));
+            let ink = Ink::solid(Some(color), edge.map(|e| (e, item_edge_px())));
             place(placed.bounds).child(canvas(|_, _, _| {}, move |b, _, window, _| crate::components::cut::paint_shape(window, b, Corner::Squircle(reach), ink)).size_full()).into_any_element()
         }
         Tile::Shape(shape) => match crate::bar::items::opaque(color, under) {
@@ -1443,7 +1501,10 @@ impl Render for ShellView {
             palette.specular_rim_shadow.with_alpha(RIM_SHADOW_ALPHA * rim_k),
             ranges::BAR_RIM_WIDTH.clamp(cfg.bar.rim_width, mandara_config::surfaces::defaults::BAR_RIM_WIDTH_PX),
         );
-        let bar_shadow = if cfg.bar.shadow { crate::plugins::panel_fx::elevation_scaled(&palette, 1.0, cfg.bar.shadow_strength) } else { Vec::new() };
+        // Inked (`[style.ink]`): the bar's shapes outlined, on a hard shadow.
+        let bar_ink = crate::style::ink_outline();
+        let ink_color = crate::plugins::panel_fx::ink(&palette);
+        let bar_shadow = if cfg.bar.shadow || crate::style::ink_shadow() > 0.0 { crate::plugins::panel_fx::elevation_scaled(&palette, 1.0, cfg.bar.shadow_strength) } else { Vec::new() };
         let bar_depth = |rim: &[gpui::BoxShadow]| -> Vec<gpui::BoxShadow> { bar_shadow.iter().chain(rim).cloned().collect() };
         // Every frame edge sits on the device pixel grid (no AA seams).
         let scale = window.scale_factor();
@@ -1926,6 +1987,10 @@ impl Render for ShellView {
         if self.panel_visible {
             let b = self.panel.value();
             let (x, y, w, h) = (f32::from(b.origin.x), f32::from(b.origin.y), f32::from(b.size.width), f32::from(b.size.height));
+            // Choreography stretch: while it pours, the shape (only its
+            // fill, never its content box or input region) leads its
+            // travel a little; at rest the stretch is zero.
+            let (x, y, w, h) = pour(&mandara_core::choreo::choreography(), (x, y, w, h), self.panel.velocity(), p_vertical, p_right, p_bottom);
             let drawer_fill = panel_bar_fill.with_alpha(panel_opacity(panel_bar_fill.alpha(), panel_alpha, over_sidebar)).hsla();
             let panel_fill = fill.with_alpha(panel_opacity(fill.alpha(), panel_alpha, over_sidebar)).hsla();
             let drawer = if p_attached && p_vertical {
@@ -1939,15 +2004,17 @@ impl Render for ShellView {
             } else if p_attached {
                 edge_drawer_snapped(Edge::Top, x, y - seam, w, h + seam, panel_radius, pm.flare, drawer_fill, scale)
             } else {
-                place(b)
+                place(Bounds { origin: point(px(x), px(y)), size: size(px(w), px(h)) })
                     .rounded(px(p_pill_radius + (panel_radius - p_pill_radius) * progress))
                     .bg(panel_fill)
                     // One even hairline edge + soft elevation (the old
                     // top-highlight / bottom-shade rim faded along the
                     // corners and looked patchy over busy wallpapers).
-                    .border_1()
+                    .border(px(crate::plugins::panel_fx::edge_px()))
                     .border_color(crate::plugins::panel_fx::surface_edge(&palette, cfg.theme.adjustments.rim_intensity).hsla())
                     .shadow(crate::plugins::panel_fx::elevation_scaled(&palette, progress, cfg.panels.shadow_strength))
+                    // Inked: the shaded corner's halftone / hatching.
+                    .when_some(crate::plugins::panel_fx::ink_texture(&palette), |el, t| el.overflow_hidden().child(t))
                     .into_any_element()
             };
             // The main menu's glass shows your wallpaper, blurred, not
@@ -1984,6 +2051,7 @@ impl Render for ShellView {
                         .rounded(pill_radius)
                         .bg(bar_fill_h)
                         .shadow(bar_depth(&bar_rim))
+                        .when(bar_ink > 0.0, |el| el.border(px(bar_ink)).border_color(ink_color.hsla()))
                         // Empty space on a pill or the island: the main
                         // menu or desktop edit mode (bar.right_click).
                         .when(!click_through, |el| el.empty_bar_space(cx))
@@ -2007,7 +2075,7 @@ impl Render for ShellView {
             group_capsule: cfg.bar.capsules && attached && !cfg.bar.item_capsules,
             item_capsules: cfg.bar.item_capsules,
             fill: capsule_fill,
-            edge: cfg.bar.capsule_outline.then_some(capsule_edge),
+            edge: if crate::style::ink_outline() > 0.0 { Some(crate::plugins::panel_fx::ink(&palette)) } else { cfg.bar.capsule_outline.then_some(capsule_edge) },
             accent: palette.primary,
             hover: palette.on_surface.with_alpha(hover_k),
             separator: cfg.bar.separator,
@@ -2053,7 +2121,7 @@ impl Render for ShellView {
                         .h(px(px_snap(h)))
                         .rounded(px(chip_radius + CAPSULE_PAD_PX * 0.5))
                         .bg(look.fill.hsla())
-                        .when_some(look.edge, |el, edge| el.border_1().border_color(edge.hsla())),
+                        .when_some(look.edge, |el, edge| el.border(px(item_edge_px())).border_color(edge.hsla())),
                 );
             }
             // `bar.item_capsules` / a pills side bar: every item on a
@@ -2205,7 +2273,9 @@ impl Render for ShellView {
                         self.surface.0,
                         limit.min(self.surface.1),
                     ),
-                    Some(r) => (f32::from(r.origin.x) + lead, f32::from(r.origin.y), limit.min(self.surface.0), f32::from(r.size.height)),
+                    // Centred in its chip (the padding either side is equal;
+                    // the item in a rail's corner may be shorter than usual).
+                    Some(r) => (f32::from(r.origin.x) + (f32::from(r.size.width) - natural.min(limit)).max(0.0) / 2.0, f32::from(r.origin.y), limit.min(self.surface.0), f32::from(r.size.height)),
                     // Hidden/unmeasured (or left out of a full zone): render
                     // offscreen-left at its own size so it can be measured.
                     None => (OFFSCREEN_X_PX, 0.0, self.surface.0, if split(z).is_some() { zm.height } else { bar_h }),
@@ -2284,6 +2354,10 @@ impl Render for ShellView {
             // bar: its top (top bar), bottom (bottom bar) or side (side bar).
             let content_top = if p_vertical { (b.size.height - content_h) / 2.0 } else if p_bottom { b.size.height - content_h - px(pad) } else { px(pad) };
             let content_left = if !p_vertical { (b.size.width - content_w) / 2.0 } else if p_right { b.size.width - content_w - px(pad) } else { px(pad) };
+            // Choreography: the content enters from its direction and
+            // trails the morph (clipped by the panel; none at rest).
+            let (cdx, cdy) = panel_content_offset(&mandara_core::choreo::choreography(), progress, p_vertical, p_right, p_bottom, crate::bidi::rtl());
+            let (content_top, content_left) = (content_top + px(cdy), content_left + px(cdx));
             root = root.child(
                 place(b)
                     .id("panel")
@@ -2603,6 +2677,11 @@ impl Render for ShellView {
 
         // ── Unpinned side bars: edge reveal strips / hover bands (on top) ─
         root = root.children(self.side_triggers(&cfg, cx));
+
+        // ── Stash: edge catchers, the shake gesture, data drops ──────────
+        window.set_accepts_data_drops(crate::plugins::stash::running(cx));
+        root = root.children(crate::plugins::stash::catchers(&self.monitor, self.surface, &self.mask, cx));
+        root = root.children(crate::plugins::stash::shake_hook(&self.monitor, (0.0, 0.0)));
 
         // Popups joined to the bar slide with it.
         if cfg.notifications.joined {

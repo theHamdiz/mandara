@@ -210,13 +210,14 @@ cargo xtask sandbox up --config hero --size 2880x1620 --scale 1.5 --bin target/d
 cargo xtask sandbox up --no-langpacks             # no language packs: the download path
 cargo xtask sandbox shot out.png                  # screenshot of the sandbox output
 cargo xtask sandbox msg panel open media          # any `mandara msg` command
-cargo xtask sandbox pointer click 900 500         # move / click / drag / flyby / scroll, logical px
+cargo xtask sandbox pointer click 900 500         # move / click / drag (any button) / flyby / scroll / shake, logical px
 cargo xtask sandbox studio home                   # open Studio on a page (`studio stop` closes it)
 cargo xtask sandbox studio --size 1124x784 themes # float Studio at another size first
 cargo xtask sandbox audio play                    # sound server + "Corniche Radio" MPRIS player
 cargo xtask sandbox notify                        # three demo notifications
 cargo xtask sandbox matte studio.png --region 0 70 2560 1320 --margin 40
 cargo xtask sandbox shell restart                 # restart only the shell
+cargo run -p mandara-core --example dnd_probe -- give 150 300 200 120 'text/plain=text:hi'  # a drag source (or `take`: a drop target)
 cargo xtask sandbox down
 eval "$(cargo xtask sandbox env)"                 # the sandbox env for manual commands (fish: `cargo xtask sandbox env --fish | source`)
 ```
@@ -263,6 +264,12 @@ eval "$(cargo xtask sandbox env)"                 # the sandbox env for manual c
   recordings' packages, and the AUR step asks for its password through the
   real askpass socket and Mandara's dialog (type `wrong` to see a refused
   password). Nothing on the system is touched.
+- **Boot look on another distribution:** a debug build reads its boot
+  setup from a fixture tree instead of the real system when
+  `MANDARA_BOOT_FIXTURE=/abs/path` is set (`sandbox up` passes it
+  through), so Studio → Themes → Boot can show a GRUB, Limine or rEFInd
+  layout; the root side (`mandara boot-admin`) and release builds always
+  look at the real system.
 - **Matte:** `matte` cuts out the open surfaces as a transparent PNG. It
   shoots once over a black wallpaper and once over a white one, then
   difference-mattes the pair. Give it a region (physical pixels) that leaves

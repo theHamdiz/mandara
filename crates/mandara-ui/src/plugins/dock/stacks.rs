@@ -392,6 +392,9 @@ pub fn empty_trash_confirmed(confirmed: bool, cx: &mut App) -> Result<Option<usi
     cx.set_global(TrashConfirm(None));
     let n = empty_trash_in(&trash_dir())?;
     cx.default_global::<Cache>().trash = Some(0);
+    if n > 0 {
+        crate::alerts::play_sound(mandara_services::sounds::SoundEvent::TrashEmpty, cx);
+    }
     Ok(Some(n))
 }
 

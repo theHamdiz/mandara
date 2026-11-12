@@ -292,6 +292,8 @@ fn running_target() -> Option<Target> {
         d if d.contains("umbriel") => Some(Target::Umbriel),
         d if d.contains("sway") => Some(Target::Sway),
         d if d.contains("aqueous") => Some(Target::Aqueous),
+        d if d.contains("labwc") => Some(Target::Labwc),
+        d if d.contains("cosmic") => Some(Target::Cosmic),
         d if d.contains("river") => Some(Target::River),
         d if d.contains("kde") || d.contains("plasma") || d.contains("kwin") => Some(Target::KWin),
         _ => None,
@@ -977,8 +979,9 @@ impl StudioView {
         let overlap: Vec<String> = st(cx).user_rules.clone().unwrap_or_default().into_iter().filter(|n| heads.iter().any(|h| &h.name == n)).collect();
         let current: Vec<OutputConfig> = heads.iter().map(outputs::Head::to_config).collect();
         // River has no output settings to write (nor does Mandara send any),
-        // and KWin and Aqueous keep theirs in their own settings: nothing a
-        // drop-in could hold, so no button that would save nothing.
+        // and KWin, Aqueous, labwc and COSMIC keep theirs in their own
+        // settings: nothing a drop-in could hold, so no button that would
+        // save nothing.
         let elsewhere = target.and_then(Target::settings_elsewhere);
         // Outputs saved under another compositor can still be cleared here.
         let keep = if target == Some(Target::River) || (elsewhere.is_some() && !persisted) {

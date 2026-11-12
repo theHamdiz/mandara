@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mandara — a design-first Wayland desktop</title>
-  <meta name="description" content="A design-first Wayland desktop shell in Rust for eight compositors, with Looks, a live design studio, 81 plugins and optional offline AI control in natural language." />
+  <meta name="description" content="A design-first Wayland desktop shell in Rust for ten compositors, with Looks, a live design studio, 85 plugins and optional offline AI control in natural language." />
   <meta name="color-scheme" content="dark light" />
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a1520" />
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f8f8" />
   <meta property="og:title" content="Mandara — your desktop, your rhythm" />
-  <meta property="og:description" content="A design-first Wayland desktop in Rust: Looks, a live design studio, eight compositors and optional local AI control in natural language." />
+  <meta property="og:description" content="A design-first Wayland desktop in Rust: Looks, a live design studio, ten compositors and optional local AI control in natural language." />
   <meta property="og:image" content="https://thehamdiz.github.io/mandara/docs/screenshots/hero.webp" />
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary_large_image" />
@@ -105,8 +105,8 @@
     <section class="facts" aria-label="Mandara in numbers">
       <ul class="fact-row">
         <li class="fact rail-1"><span class="fact-figure">0.1<small>ms</small></span> <span class="fact-label">typical frame build</span></li>
-        <li class="fact rail-2"><span class="fact-figure">8</span> <span class="fact-label">compositors, each in its own language</span></li>
-        <li class="fact rail-3"><span class="fact-figure">81</span> <span class="fact-label">plugins, switched on as you need them</span></li>
+        <li class="fact rail-2"><span class="fact-figure">10</span> <span class="fact-label">compositors, each in its own language</span></li>
+        <li class="fact rail-3"><span class="fact-figure">85</span> <span class="fact-label">plugins, switched on as you need them</span></li>
         <li class="fact rail-4"><span class="fact-figure">20</span> <span class="fact-label">languages, right to left included</span></li>
       </ul>
       <p class="facts-note">The frame time is a historical figure from release builds: 95% of sampled frames finished inside the 1 ms a 1000 Hz display allows. Your display, driver and widgets change it, and Studio → Performance shows yours live. <a href="docs/performance.html">How it is measured</a></p>
@@ -210,7 +210,7 @@
     <section class="section looks" id="looks" aria-labelledby="looks-title">
       <header class="section-head">
         <h2 id="looks-title" class="display-2"><span class="d-heavy">Pick a</span> <em class="wave">Look.</em></h2>
-        <p>Six desktops named for Alexandria’s coast. Each sets the bar, widgets, type and colours in one click. Choose one and this page wears its palette too.</p>
+        <p>Nineteen desktops, most named for Alexandria’s coast. Each sets the bar, its own widgets, type and colours in one click, and your own widgets and bar items stay. Choose one and this page wears its palette too.</p>
       </header>
       <fieldset class="looks-picker">
         <legend class="visually-hidden">Looks</legend>
@@ -220,6 +220,19 @@
         <input class="look-input" type="radio" name="look" id="look-qaitbay-forest" value="qaitbay-forest" />
         <input class="look-input" type="radio" name="look" id="look-anfushi-wave" value="anfushi-wave" />
         <input class="look-input" type="radio" name="look" id="look-night-frame" value="night-frame" />
+        <input class="look-input" type="radio" name="look" id="look-redmond" value="redmond" />
+        <input class="look-input" type="radio" name="look" id="look-cupertino" value="cupertino" />
+        <input class="look-input" type="radio" name="look" id="look-corniche-frame" value="corniche-frame" />
+        <input class="look-input" type="radio" name="look" id="look-raml-line" value="raml-line" />
+        <input class="look-input" type="radio" name="look" id="look-lighthouse-rail" value="lighthouse-rail" />
+        <input class="look-input" type="radio" name="look" id="look-phosphor" value="phosphor" />
+        <input class="look-input" type="radio" name="look" id="look-pharos-lantern" value="pharos-lantern" />
+        <input class="look-input" type="radio" name="look" id="look-stanley-arches" value="stanley-arches" />
+        <input class="look-input" type="radio" name="look" id="look-souk-tiles" value="souk-tiles" />
+        <input class="look-input" type="radio" name="look" id="look-sea-glass" value="sea-glass" />
+        <input class="look-input" type="radio" name="look" id="look-library-desk" value="library-desk" />
+        <input class="look-input" type="radio" name="look" id="look-ink-rush" value="ink-rush" />
+        <input class="look-input" type="radio" name="look" id="look-zen" value="zen" />
         <div class="looks-list">
           <label class="look-choice" for="look-corniche-dusk" data-look="corniche-dusk"><span class="swatches" aria-hidden="true"><i style="background: #ffb2bf"></i><i style="background: #f5b8af"></i><i style="background: #900039"></i></span><span class="look-name">Corniche Dusk</span></label>
           <label class="look-choice" for="look-pharos-ink" data-look="pharos-ink"><span class="swatches" aria-hidden="true"><i style="background: #ffffff"></i><i style="background: #c6c6c6"></i><i style="background: #d4d4d4"></i></span><span class="look-name">Pharos Ink</span></label>
@@ -227,6 +240,19 @@
           <label class="look-choice" for="look-qaitbay-forest" data-look="qaitbay-forest"><span class="swatches" aria-hidden="true"><i style="background: #9ad4a2"></i><i style="background: #b7ccb7"></i><i style="background: #19512a"></i></span><span class="look-name">Qaitbay Forest</span></label>
           <label class="look-choice" for="look-anfushi-wave" data-look="anfushi-wave"><span class="swatches" aria-hidden="true"><i style="background: #00d9fc"></i><i style="background: #a8cbe2"></i><i style="background: #004e5c"></i></span><span class="look-name">Anfushi Wave</span></label>
           <label class="look-choice" for="look-night-frame" data-look="night-frame"><span class="swatches" aria-hidden="true"><i style="background: #c3c0ff"></i><i style="background: #c7c4dd"></i><i style="background: #424078"></i></span><span class="look-name">Night Frame</span></label>
+          <label class="look-choice" for="look-redmond" data-look="redmond"><span class="swatches" aria-hidden="true"><i style="background: #a6c8ff"></i><i style="background: #bdc7dc"></i><i style="background: #234776"></i></span><span class="look-name">Redmond</span></label>
+          <label class="look-choice" for="look-cupertino" data-look="cupertino"><span class="swatches" aria-hidden="true"><i style="background: #93cdf6"></i><i style="background: #b6c9d8"></i><i style="background: #004c6c"></i></span><span class="look-name">Cupertino</span></label>
+          <label class="look-choice" for="look-corniche-frame" data-look="corniche-frame"><span class="swatches" aria-hidden="true"><i style="background: #76d4e7"></i><i style="background: #f5b7b6"></i><i style="background: #004e5a"></i></span><span class="look-name">Corniche Frame</span></label>
+          <label class="look-choice" for="look-raml-line" data-look="raml-line"><span class="swatches" aria-hidden="true"><i style="background: #86d6bf"></i><i style="background: #b2ccc3"></i><i style="background: #005142"></i></span><span class="look-name">Raml Line</span></label>
+          <label class="look-choice" for="look-lighthouse-rail" data-look="lighthouse-rail"><span class="swatches" aria-hidden="true"><i style="background: #ffb4a8"></i><i style="background: #f4ba9e"></i><i style="background: #930300"></i></span><span class="look-name">Lighthouse Rail</span></label>
+          <label class="look-choice" for="look-phosphor" data-look="phosphor"><span class="swatches" aria-hidden="true"><i style="background: #9fd49b"></i><i style="background: #b9ccb4"></i><i style="background: #225025"></i></span><span class="look-name">Phosphor</span></label>
+          <label class="look-choice" for="look-pharos-lantern" data-look="pharos-lantern"><span class="swatches" aria-hidden="true"><i style="background: #ffb94f"></i><i style="background: #e0c38c"></i><i style="background: #624000"></i></span><span class="look-name">Pharos Lantern</span></label>
+          <label class="look-choice" for="look-stanley-arches" data-look="stanley-arches"><span class="swatches" aria-hidden="true"><i style="background: #8ecff2"></i><i style="background: #b5c9d7"></i><i style="background: #004d67"></i></span><span class="look-name">Stanley Arches</span></label>
+          <label class="look-choice" for="look-souk-tiles" data-look="souk-tiles"><span class="swatches" aria-hidden="true"><i style="background: #ffb0cb"></i><i style="background: #ffb0cb"></i><i style="background: #7a294c"></i></span><span class="look-name">Souk Tiles</span></label>
+          <label class="look-choice" for="look-sea-glass" data-look="sea-glass"><span class="swatches" aria-hidden="true"><i style="background: #00dddd"></i><i style="background: #a2ced9"></i><i style="background: #004f50"></i></span><span class="look-name">Sea Glass</span></label>
+          <label class="look-choice" for="look-library-desk" data-look="library-desk"><span class="swatches" aria-hidden="true"><i style="background: #dcc66e"></i><i style="background: #d1c6a1"></i><i style="background: #544600"></i></span><span class="look-name">Library Desk</span></label>
+          <label class="look-choice" for="look-ink-rush" data-look="ink-rush"><span class="swatches" aria-hidden="true"><i style="background: #ffb68c"></i><i style="background: #edbe92"></i><i style="background: #753400"></i></span><span class="look-name">Ink Rush</span></label>
+          <label class="look-choice" for="look-zen" data-look="zen"><span class="swatches" aria-hidden="true"><i style="background: #f7bb71"></i><i style="background: #dfc2a2"></i><i style="background: #653e00"></i></span><span class="look-name">Zen</span></label>
           <div class="looks-note">
             <p>Your own setup is saved before the first Look, so <strong>Restore my look</strong> in Studio brings it back.</p>
             <button class="button button-text" type="button" data-look-reset="true" hidden="hidden">Back to Mandara Corniche</button>
@@ -276,6 +302,97 @@
             </picture>
             <figcaption class="look-caption"><span class="look-blurb">Midnight violet: a side bar framing the screen, a greeting, calendar and bars.</span> <code>mandara msg look apply night-frame</code></figcaption>
           </figure>
+          <figure class="look look-redmond">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-redmond-light.webp" />
+              <img src="docs/screenshots/look-redmond.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Redmond: a light desktop with a full-width taskbar along the bottom, the launcher and app icons centred and a stacked clock on the right." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">A Windows 11-style desktop: a centred taskbar with your apps, a stacked clock, notifications in the corner and no dock.</span> <code>mandara msg look apply redmond</code></figcaption>
+          </figure>
+          <figure class="look look-cupertino">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-cupertino-light.webp" />
+              <img src="docs/screenshots/look-cupertino.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Cupertino: a light desktop with a slim menu bar along the top and the dock centred at the bottom." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">A macOS-style desktop: a slim menu bar on top, a magnifying dock below and a Spotlight-style search.</span> <code>mandara msg look apply cupertino</code></figcaption>
+          </figure>
+          <figure class="look look-corniche-frame">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-corniche-frame-light.webp" />
+              <img src="docs/screenshots/look-corniche-frame.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Corniche Frame: a dusk landscape framed by the Expressive bar and rail, a day-block clock and a glowing wave." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">Expressive: the whole screen framed, round buttons, a scalloped rail and a day-block clock over a glowing wave.</span> <code>mandara msg look apply corniche-frame</code></figcaption>
+          </figure>
+          <figure class="look look-raml-line">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-raml-line-light.webp" />
+              <img src="docs/screenshots/look-raml-line.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Raml Line: a teal desktop with a top bar joined to a left rail of flower buttons, a split-flap clock and a music card." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">A tram line of flower stops along the top and down the left, a split-flap clock and the music card.</span> <code>mandara msg look apply raml-line</code></figcaption>
+          </figure>
+          <figure class="look look-lighthouse-rail">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-lighthouse-rail-light.webp" />
+              <img src="docs/screenshots/look-lighthouse-rail.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Lighthouse Rail: an ember desktop with only a wide left rail, giant numerals and a calendar card." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">Only a wide rail of flower buttons in a coral screen frame, giant numerals and a calendar.</span> <code>mandara msg look apply lighthouse-rail</code></figcaption>
+          </figure>
+          <figure class="look look-phosphor">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-phosphor-light.webp" />
+              <img src="docs/screenshots/look-phosphor.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Phosphor: misty green hills with a monospace status line of stat blocks, a pixel clock and a system monitor column." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">Terminal green: a monospace status line of stat blocks, a pixel clock and a system monitor column.</span> <code>mandara msg look apply phosphor</code></figcaption>
+          </figure>
+          <figure class="look look-pharos-lantern">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-pharos-lantern-light.webp" />
+              <img src="docs/screenshots/look-pharos-lantern.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Pharos Lantern: amber dunes with a lantern-shaped bar hanging from the top and a ring clock." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">Amber light: a lantern of scalloped buttons hanging from the top and a ring clock in the middle.</span> <code>mandara msg look apply pharos-lantern</code></figcaption>
+          </figure>
+          <figure class="look look-stanley-arches">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-stanley-arches-light.webp" />
+              <img src="docs/screenshots/look-stanley-arches.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Stanley Arches: a deep sea-blue desktop with three floating docks along the bottom, an analog clock and mirrored audio bars." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">Three floating docks along the bottom like a bridge's arches, an analog clock and mirrored bars.</span> <code>mandara msg look apply stanley-arches</code></figcaption>
+          </figure>
+          <figure class="look look-souk-tiles">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-souk-tiles-light.webp" />
+              <img src="docs/screenshots/look-souk-tiles.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Souk Tiles: an ember desktop with one island of big squircle tiles at the bottom and a clock of boxes." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">Bright spice colours: one island of big squircle tiles at the bottom and a clock of boxes.</span> <code>mandara msg look apply souk-tiles</code></figcaption>
+          </figure>
+          <figure class="look look-sea-glass">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-sea-glass-light.webp" />
+              <img src="docs/screenshots/look-sea-glass.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Sea Glass: a sea-glass desktop with rows of connected tiles under the top edge, an orbit clock, a music card and a calendar." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">No bar, only islands: rows of connected tiles floating under the top edge, an orbit clock, music and a calendar.</span> <code>mandara msg look apply sea-glass</code></figcaption>
+          </figure>
+          <figure class="look look-library-desk">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-library-desk-light.webp" />
+              <img src="docs/screenshots/look-library-desk.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Library Desk: warm dunes with a work bar along the bottom, a minimal clock and a calendar." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">Paper and ink for focused work: the productive bar at the bottom with tasks, notes and a focus timer.</span> <code>mandara msg look apply library-desk</code></figcaption>
+          </figure>
+          <figure class="look look-ink-rush">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-ink-rush-light.webp" />
+              <img src="docs/screenshots/look-ink-rush.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Ink Rush: a pop-art burst wallpaper with ink-outlined bar pills, dock, clock panel, music card and calendar on hard shadows." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">A cel-shaded comic desktop: thick ink outlines, hard shadows, halftone shading, bold colour and bouncy motion.</span> <code>mandara msg look apply ink-rush</code></figcaption>
+          </figure>
+          <figure class="look look-zen">
+            <picture>
+              <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/look-zen-light.webp" />
+              <img src="docs/screenshots/look-zen.webp" width="1920" height="1080" loading="lazy" decoding="async" alt="Zen: a quiet violet desktop with no bar showing and a clock written in words." />
+            </picture>
+            <figcaption class="look-caption"><span class="look-blurb">Nothing in the way: one tiny pill that hides until you touch the top edge, hot corners and a word clock.</span> <code>mandara msg look apply zen</code></figcaption>
+          </figure>
         </div>
       </fieldset>
       <script type="application/json" id="look-palettes">{"default":"mandara-corniche","palettes":{
@@ -285,7 +402,20 @@
 "montaza-crimson":{"name":"Montaza Crimson","dark":{"ground":"#1e100f","tile":"#2b1c1b","tile-2":"#362625","soft":"#930015","on-soft":"#f8dcda","ink":"#f8dcda","muted":"#dfbfbd","accent":"#ffb3ae","on-accent":"#68000c","second":"#f5b9a2","on-second":"#1e100f","third":"#fcb884","on-third":"#1e100f"},"light":{"ground":"#fff8f7","tile":"#ffe9e7","tile-2":"#fee2df","soft":"#ffdad7","on-soft":"#271817","ink":"#271817","muted":"#58413f","accent":"#c0001f","on-accent":"#ffffff","second":"#815341","on-second":"#fff8f7","third":"#855227","on-third":"#fff8f7"}},
 "qaitbay-forest":{"name":"Qaitbay Forest","dark":{"ground":"#101510","tile":"#1c211c","tile-2":"#262b26","soft":"#19512a","on-soft":"#dfe4dc","ink":"#dfe4dc","muted":"#c1c9be","accent":"#9ad4a2","on-accent":"#003917","second":"#b7ccb7","on-second":"#101510","third":"#a1ced8","on-third":"#101510"},"light":{"ground":"#f6fbf2","tile":"#ebefe7","tile-2":"#e5eae1","soft":"#b5f1bc","on-soft":"#181d18","ink":"#181d18","muted":"#414941","accent":"#336940","on-accent":"#ffffff","second":"#506352","on-second":"#f6fbf2","third":"#39656d","on-third":"#f6fbf2"}},
 "anfushi-wave":{"name":"Anfushi Wave","dark":{"ground":"#091518","tile":"#162125","tile-2":"#202c2f","soft":"#004e5c","on-soft":"#d8e5e9","ink":"#d8e5e9","muted":"#b9c9cf","accent":"#00d9fc","on-accent":"#003640","second":"#a8cbe2","on-second":"#091518","third":"#a4caf5","on-third":"#091518"},"light":{"ground":"#f0fbff","tile":"#e3f0f4","tile-2":"#deeaef","soft":"#abedff","on-soft":"#121d21","ink":"#121d21","muted":"#3a494e","accent":"#006879","on-accent":"#ffffff","second":"#406376","on-second":"#f0fbff","third":"#3b6187","on-third":"#f0fbff"}},
-"night-frame":{"name":"Night Frame","dark":{"ground":"#131318","tile":"#201f25","tile-2":"#2a292f","soft":"#424078","on-soft":"#e5e1e9","ink":"#e5e1e9","muted":"#c8c5d0","accent":"#c3c0ff","on-accent":"#2c2a60","second":"#c7c4dd","on-second":"#131318","third":"#eab9d1","on-third":"#131318"},"light":{"ground":"#fcf8ff","tile":"#f0ecf4","tile-2":"#eae7ef","soft":"#e3dfff","on-soft":"#1c1b21","ink":"#1c1b21","muted":"#47464f","accent":"#5a5891","on-accent":"#ffffff","second":"#5e5c71","on-second":"#fcf8ff","third":"#7a5368","on-third":"#fcf8ff"}}
+"night-frame":{"name":"Night Frame","dark":{"ground":"#131318","tile":"#201f25","tile-2":"#2a292f","soft":"#424078","on-soft":"#e5e1e9","ink":"#e5e1e9","muted":"#c8c5d0","accent":"#c3c0ff","on-accent":"#2c2a60","second":"#c7c4dd","on-second":"#131318","third":"#eab9d1","on-third":"#131318"},"light":{"ground":"#fcf8ff","tile":"#f0ecf4","tile-2":"#eae7ef","soft":"#e3dfff","on-soft":"#1c1b21","ink":"#1c1b21","muted":"#47464f","accent":"#5a5891","on-accent":"#ffffff","second":"#5e5c71","on-second":"#fcf8ff","third":"#7a5368","on-third":"#fcf8ff"}},
+"redmond":{"name":"Redmond","dark":{"ground":"#111318","tile":"#1d2024","tile-2":"#282a2f","soft":"#234776","on-soft":"#e1e2e9","ink":"#e1e2e9","muted":"#c4c6cf","accent":"#a6c8ff","on-accent":"#02315e","second":"#bdc7dc","on-second":"#111318","third":"#dabde2","on-third":"#111318"},"light":{"ground":"#f9f9ff","tile":"#ededf4","tile-2":"#e7e8ee","soft":"#d5e3ff","on-soft":"#191c20","ink":"#191c20","muted":"#43474e","accent":"#3d5f90","on-accent":"#ffffff","second":"#555f71","on-second":"#f9f9ff","third":"#6e5676","on-third":"#f9f9ff"}},
+"cupertino":{"name":"Cupertino","dark":{"ground":"#101417","tile":"#1c2024","tile-2":"#262a2e","soft":"#004c6c","on-soft":"#dfe3e7","ink":"#dfe3e7","muted":"#c1c7ce","accent":"#93cdf6","on-accent":"#00344c","second":"#b6c9d8","on-second":"#101417","third":"#cdc0e9","on-third":"#101417"},"light":{"ground":"#f6fafe","tile":"#ebeef3","tile-2":"#e5e8ed","soft":"#c7e7ff","on-soft":"#181c20","ink":"#181c20","muted":"#41484d","accent":"#226488","on-accent":"#ffffff","second":"#4f616e","on-second":"#f6fafe","third":"#63597c","on-third":"#f6fafe"}},
+"corniche-frame":{"name":"Corniche Frame","dark":{"ground":"#1a1115","tile":"#271d22","tile-2":"#32272c","soft":"#004e5a","on-soft":"#f0dee4","ink":"#f0dee4","muted":"#d9c0ca","accent":"#76d4e7","on-accent":"#00363e","second":"#f5b7b6","on-second":"#1a1115","third":"#dfc578","on-third":"#1a1115"},"light":{"ground":"#fff8f8","tile":"#fce9f0","tile-2":"#f6e3ea","soft":"#a3eeff","on-soft":"#23191e","ink":"#23191e","muted":"#54424a","accent":"#006877","on-accent":"#ffffff","second":"#815252","on-second":"#fff8f8","third":"#705c1a","on-third":"#fff8f8"}},
+"raml-line":{"name":"Raml Line","dark":{"ground":"#0f1513","tile":"#1b211f","tile-2":"#252b29","soft":"#005142","on-soft":"#dee4e0","ink":"#dee4e0","muted":"#bfc9c4","accent":"#86d6bf","on-accent":"#00382d","second":"#b2ccc3","on-second":"#0f1513","third":"#a9cbe3","on-third":"#0f1513"},"light":{"ground":"#f5fbf7","tile":"#e9efeb","tile-2":"#e3eae6","soft":"#a1f2db","on-soft":"#171d1b","ink":"#171d1b","muted":"#3f4945","accent":"#0d6b58","on-accent":"#ffffff","second":"#4b635c","on-second":"#f5fbf7","third":"#426277","on-third":"#f5fbf7"}},
+"lighthouse-rail":{"name":"Lighthouse Rail","dark":{"ground":"#1e100d","tile":"#2b1c19","tile-2":"#372623","soft":"#930300","on-soft":"#f9dcd7","ink":"#f9dcd7","muted":"#dfbfba","accent":"#ffb4a8","on-accent":"#680200","second":"#f4ba9e","on-second":"#1e100d","third":"#f8ba80","on-third":"#1e100d"},"light":{"ground":"#fff8f6","tile":"#ffe9e5","tile-2":"#ffe2dd","soft":"#ffdad4","on-soft":"#271815","ink":"#271815","muted":"#58413e","accent":"#c00500","on-accent":"#ffffff","second":"#80543d","on-second":"#fff8f6","third":"#835423","on-third":"#fff8f6"}},
+"phosphor":{"name":"Phosphor","dark":{"ground":"#10140f","tile":"#1c211b","tile-2":"#272b25","soft":"#225025","on-soft":"#e0e4db","ink":"#e0e4db","muted":"#c2c9bd","accent":"#9fd49b","on-accent":"#073910","second":"#b9ccb4","on-second":"#10140f","third":"#a1ced5","on-third":"#10140f"},"light":{"ground":"#f7fbf1","tile":"#ebefe6","tile-2":"#e6e9e0","soft":"#bbf0b6","on-soft":"#181d17","ink":"#181d17","muted":"#424940","accent":"#3a693b","on-accent":"#ffffff","second":"#52634f","on-second":"#f7fbf1","third":"#39656b","on-third":"#f7fbf1"}},
+"pharos-lantern":{"name":"Pharos Lantern","dark":{"ground":"#1a1206","tile":"#281e11","tile-2":"#33281b","soft":"#624000","on-soft":"#f2e0cb","ink":"#f2e0cb","muted":"#d8c3ab","accent":"#ffb94f","on-accent":"#452b00","second":"#e0c38c","on-second":"#1a1206","third":"#ddc578","on-third":"#1a1206"},"light":{"ground":"#fff8f4","tile":"#feebd6","tile-2":"#f8e5d0","soft":"#ffddb3","on-soft":"#231a0d","ink":"#231a0d","muted":"#534432","accent":"#825500","on-accent":"#ffffff","second":"#715b2e","on-second":"#fff8f4","third":"#6f5d1b","on-third":"#fff8f4"}},
+"stanley-arches":{"name":"Stanley Arches","dark":{"ground":"#0f1417","tile":"#1b2023","tile-2":"#262b2e","soft":"#004d67","on-soft":"#dfe3e7","ink":"#dfe3e7","muted":"#c0c7cd","accent":"#8ecff2","on-accent":"#003548","second":"#b5c9d7","on-second":"#0f1417","third":"#c8c2ea","on-third":"#0f1417"},"light":{"ground":"#f6fafe","tile":"#eaeef2","tile-2":"#e5e9ed","soft":"#c1e8ff","on-soft":"#171c1f","ink":"#171c1f","muted":"#40484d","accent":"#186584","on-accent":"#ffffff","second":"#4d616c","on-second":"#f6fafe","third":"#5f5a7d","on-third":"#f6fafe"}},
+"souk-tiles":{"name":"Souk Tiles","dark":{"ground":"#1d1009","tile":"#2b1c15","tile-2":"#36271e","soft":"#7a294c","on-soft":"#f8ddd0","ink":"#f8ddd0","muted":"#e6beab","accent":"#ffb0cb","on-accent":"#5d1136","second":"#ffb0cb","on-second":"#1d1009","third":"#ffb68e","on-third":"#1d1009"},"light":{"ground":"#fff8f6","tile":"#ffeae0","tile-2":"#fee3d6","soft":"#ffd9e3","on-soft":"#261811","ink":"#261811","muted":"#5c4132","accent":"#974064","on-accent":"#ffffff","second":"#8b4a63","on-second":"#fff8f6","third":"#8c4e29","on-third":"#fff8f6"}},
+"sea-glass":{"name":"Sea Glass","dark":{"ground":"#091515","tile":"#152222","tile-2":"#1f2c2c","soft":"#004f50","on-soft":"#d7e5e5","ink":"#d7e5e5","muted":"#b8cac9","accent":"#00dddd","on-accent":"#003737","second":"#a2ced9","on-second":"#091515","third":"#97ceec","on-third":"#091515"},"light":{"ground":"#eefcfb","tile":"#e2f1f0","tile-2":"#ddebea","soft":"#00fbfc","on-soft":"#111e1e","ink":"#111e1e","muted":"#394a4a","accent":"#006a6a","on-accent":"#ffffff","second":"#3a656e","on-second":"#eefcfb","third":"#2a657f","on-third":"#eefcfb"}},
+"library-desk":{"name":"Library Desk","dark":{"ground":"#15130b","tile":"#221f17","tile-2":"#2d2a21","soft":"#544600","on-soft":"#e9e2d4","ink":"#e9e2d4","muted":"#cdc6b4","accent":"#dcc66e","on-accent":"#3a3000","second":"#d1c6a1","on-second":"#15130b","third":"#aad0b3","on-third":"#15130b"},"light":{"ground":"#fff9ee","tile":"#f4eddf","tile-2":"#eee7da","soft":"#f9e287","on-soft":"#1e1b13","ink":"#1e1b13","muted":"#4b4739","accent":"#6e5e0e","on-accent":"#ffffff","second":"#665e40","on-second":"#fff9ee","third":"#43664e","on-third":"#fff9ee"}},
+"ink-rush":{"name":"Ink Rush","dark":{"ground":"#1d1009","tile":"#2b1c14","tile-2":"#36271e","soft":"#753400","on-soft":"#f8ddd0","ink":"#f8ddd0","muted":"#dec1b1","accent":"#ffb68c","on-accent":"#532200","second":"#edbe92","on-second":"#1d1009","third":"#ecbf78","on-third":"#1d1009"},"light":{"ground":"#fff8f5","tile":"#ffeae0","tile-2":"#fee3d6","soft":"#ffdbc9","on-soft":"#261811","ink":"#261811","muted":"#574237","accent":"#9a4600","on-accent":"#ffffff","second":"#7b5733","on-second":"#fff8f5","third":"#7a581b","on-third":"#fff8f5"}},
+"zen":{"name":"Zen","dark":{"ground":"#18120c","tile":"#251e17","tile-2":"#302921","soft":"#653e00","on-soft":"#eee0d4","ink":"#eee0d4","muted":"#d4c4b5","accent":"#f7bb71","on-accent":"#472a00","second":"#dfc2a2","on-second":"#18120c","third":"#bbcd9e","on-third":"#18120c"},"light":{"ground":"#fff8f4","tile":"#f9ece0","tile-2":"#f3e6da","soft":"#ffddb7","on-soft":"#211a13","ink":"#211a13","muted":"#504539","accent":"#825513","on-accent":"#ffffff","second":"#715a41","on-second":"#fff8f4","third":"#54643d","on-third":"#fff8f4"}}
 }}</script>
     </section>
 
@@ -451,7 +581,7 @@
     <!-- The compositors. -->
     <section class="section compositors" id="compositors" aria-labelledby="compositors-title">
       <header class="section-head">
-        <h2 id="compositors-title" class="display-2"><span class="d-heavy">Eight</span> <em>compositors.</em></h2>
+        <h2 id="compositors-title" class="display-2"><span class="d-heavy">Ten</span> <em>compositors.</em></h2>
         <p>Each driver speaks its compositor’s own language. Your config gets one include line at most, checked by the compositor’s own validator and rolled back if it objects.</p>
       </header>
       <ul class="departures">
@@ -463,6 +593,8 @@
         <li class="departure"><span class="dep-name">River Classic</span><span class="dep-fact">Tags</span><span class="dep-status live">Live protocol</span><p>River 0.3’s tags, layout and mode, with settings sent over its own protocol. Your <code>init</code> is never edited; you add one autostart line.</p></li>
         <li class="departure"><span class="dep-name">KWin</span><span class="dep-fact">Virtual desktops</span><span class="dep-status plasma">Plasma keeps it</span><p>Runs inside a Plasma Wayland session through Plasma’s own protocols. Displays, rules and shortcuts stay in Plasma System Settings.</p></li>
         <li class="departure"><span class="dep-name">Aqueous</span><span class="dep-fact">Workspaces</span><span class="dep-status live">Live protocol</span><p>Each output’s workspaces, windows and outputs over Aqueous’s own socket. Its settings stay in its own files; Mandara writes nothing there.</p></li>
+        <li class="departure"><span class="dep-name">labwc</span><span class="dep-fact">Workspaces</span><span class="dep-status live">Live protocol</span><p>Workspaces over the standard ext-workspace protocol and windows over foreign-toplevel. Its settings stay in <code>rc.xml</code>; you add one autostart line.</p></li>
+        <li class="departure"><span class="dep-name">COSMIC</span><span class="dep-fact">Workspaces</span><span class="dep-status live">Live protocol</span><p>Each output’s workspaces over ext-workspace, and windows with their workspaces over COSMIC’s own protocols. Its settings stay in COSMIC Settings.</p></li>
       </ul>
     </section>
 
@@ -508,7 +640,7 @@
     <!-- The plugins, grouped. -->
     <section class="section shelf-section" id="plugins" aria-labelledby="plugins-title">
       <header class="section-head">
-        <h2 id="plugins-title" class="display-2"><span class="d-heavy">81 plugins,</span> <em>one shelf.</em></h2>
+        <h2 id="plugins-title" class="display-2"><span class="d-heavy">85 plugins,</span> <em>one shelf.</em></h2>
         <p>Switch on what you use. Write your own in Rust, compiled to sandboxed WebAssembly. <a class="text-link" href="docs/plugins.html">See every plugin</a></p>
       </header>
       <ul class="shelf">
@@ -543,6 +675,7 @@
         <li class="shelf-group"><h3 class="shelf-name">Productivity<small>9</small></h3><ul class="chips">
           <li><a class="spine chip" href="docs/plugins.html"><span>To-do</span><small>Productivity</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Notes</span><small>Productivity</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Stash</span><small>Productivity</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Translator</span><small>Productivity</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Pomodoro</span><small>Productivity</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Authenticator</span><small>Productivity</small></a></li>
@@ -566,12 +699,15 @@
           <li><a class="spine chip" href="docs/plugins.html"><span>Share to phone</span><small>Media</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Radio</span><small>Media</small></a></li>
         </ul></li>
-        <li class="shelf-group"><h3 class="shelf-name">Look<small>5</small></h3><ul class="chips">
+        <li class="shelf-group"><h3 class="shelf-name">Look<small>6</small></h3><ul class="chips">
           <li><a class="spine chip" href="docs/plugins.html"><span>Wallpaper</span><small>Look</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Wallpaper depth</span><small>Look</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Wallpaper generator</span><small>Look</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Wallhaven</span><small>Look</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Cursor themes</span><small>Look</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Icon themes</span><small>Look</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Boot look</span><small>Look</small></a></li>
+          <li><a class="spine chip" href="docs/plugins.html"><span>Sound themes</span><small>Look</small></a></li>
         </ul></li>
         <li class="shelf-group"><h3 class="shelf-name">System<small>15</small></h3><ul class="chips">
           <li><a class="spine chip" href="docs/plugins.html"><span>Network</span><small>System</small></a></li>
@@ -609,7 +745,7 @@
           <li><a class="spine chip" href="docs/plugins.html"><span>Sudoku</span><small>Games</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>2048</span><small>Games</small></a></li>
         </ul></li>
-        <li class="shelf-group shelf-more"><a class="spine spine-more" href="docs/plugins.html"><span>All 81, in the guide</span><small>More</small></a></li>
+        <li class="shelf-group shelf-more"><a class="spine spine-more" href="docs/plugins.html"><span>All 85, in the guide</span><small>More</small></a></li>
       </ul>
     </section>
 
@@ -659,7 +795,7 @@
         <li class="bind" data-group="hardware" data-mods="" data-key="XF86AudioPrev" data-command="media previous"><span class="chord"><kbd>Previous key</kbd></span><span class="bind-what"><b>Previous track</b><code>media previous</code></span></li>
         <li class="bind" data-group="hardware" data-mods="" data-key="XF86AudioMicMute" data-command="audio mic mute"><span class="chord"><kbd>Mic mute key</kbd></span><span class="bind-what"><b>Mute the microphone</b><code>audio mic mute</code></span></li>
         </ul>
-        <p class="keys-note">On KWin, keep shortcuts in Plasma System Settings. On Aqueous, Mandara writes no bindings: add the ones you want in Aqueous’s own settings.</p>
+        <p class="keys-note">On KWin, keep shortcuts in Plasma System Settings. On Aqueous, labwc and COSMIC, Mandara writes no bindings: add the ones you want in the compositor’s own settings.</p>
       </div>
     </section>
 
@@ -678,7 +814,7 @@
             <li><b>Download</b><span>The script fetches the release for your CPU and shows its progress.</span></li>
             <li><b>Verify</b><span>It checks the release signature and checksum before running anything.</span></li>
             <li><b>Choose</b><span>The Rust installer asks about your compositor and login screen.</span></li>
-            <li><b>Log in</b><span>Mandara starts with your compositor. On Aqueous, add <code>mandara</code> to its own startup settings (<a href="docs/install.html#aqueous">how</a>).</span></li>
+            <li><b>Log in</b><span>Mandara starts with your compositor. On Aqueous, labwc or COSMIC, add <code>mandara</code> to its own startup settings (<a href="docs/install.html#aqueous">Aqueous</a>, <a href="docs/install.html#labwc">labwc</a>, <a href="docs/install.html#cosmic">COSMIC</a>).</span></li>
           </ol>
         </div>
         <div class="bsd">
@@ -742,7 +878,7 @@
       </header>
       <dl class="questions">
         <div class="question"><dt>What does Mandara replace?</dt><dd>The parts around your windows: bar, dock, launcher, notifications, wallpaper, desktop widgets, lock screen, login screen and settings. Your Wayland compositor still manages the windows.</dd></div>
-        <div class="question"><dt>Will it touch my compositor config?</dt><dd>At most one include line. Everything else goes to Mandara’s own drop-in files, checked by your compositor’s validator and rolled back if it objects. River, KWin and Aqueous need no include line. <a href="docs/install.html#compositors">Read the compositor notes.</a></dd></div>
+        <div class="question"><dt>Will it touch my compositor config?</dt><dd>At most one include line. Everything else goes to Mandara’s own drop-in files, checked by your compositor’s validator and rolled back if it objects. River, KWin, Aqueous, labwc and COSMIC need no include line. <a href="docs/install.html#compositors">Read the compositor notes.</a></dd></div>
         <div class="question"><dt>How fast is it?</dt><dd>Spring motion and native GPU rendering keep everyday interactions responsive. Historical release samples built frames in about 0.1 ms. Studio runs separately, plugins load data when needed, and local AI inference stays off the UI thread. See the <a href="docs/performance.html">measurements, test setup and current limits</a>.</dd></div>
         <div class="question"><dt>Can I keep my own setup?</dt><dd>Yes. A first install offers configuration, startup and login choices, and updates keep your settings as you left them. <a href="docs/configuration.html">Read about configuration.</a></dd></div>
         <div class="question"><dt>Can I control it in my own words?</dt><dd>Yes, with the optional AI Shell Agent. Type <code>!switch to dark mode</code> in the launcher, check the previewed action, and press Enter. It runs offline on your CPU. <a href="docs/command-agent.html">Meet the AI Shell Agent.</a></dd></div>

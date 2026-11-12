@@ -257,7 +257,7 @@ fn wallpaper_controls_choose_what_the_desktop_shows() {
     mandara_config::desktop_widgets::sync_depth_clock(&mut moved);
     let (a, b) = (mandara_ui::desktop::layout(1920.0, 1080.0, &cfg.wallpaper), mandara_ui::desktop::layout(1920.0, 1080.0, &moved.wallpaper));
     assert!((b.center.0 - 0.25 * 1920.0).abs() < 1.0 && b.size > a.size);
-    assert!(by_path("/wallpaper/clock_x").is_none(), "edited in the Desktop widgets gallery");
+    assert!(by_path("/wallpaper/clock_x").is_none(), "edited in the Desktop → Widgets gallery");
 }
 
 #[test]

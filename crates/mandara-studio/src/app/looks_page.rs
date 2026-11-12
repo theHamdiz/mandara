@@ -1,19 +1,21 @@
 //! Studio → Themes: the live preview, the looks gallery, the theme gallery
-//! (`themes_page.rs`), the cursor gallery and settings (`cursor_page.rs`)
+//! (`themes_page.rs`), the Cursors and Icons tabs (`cursor_page.rs`, `icons_page.rs`)
 //! and the color / style settings, plus the desktop cards / GPU
 //! visualizers.
 //!
-//! * **Looks** — six original one-click looks (`mandara_config::looks`):
-//!   bar style, desktop widgets and cards, an HCT palette generated from an
-//!   OKLCH seed, typography and the radius / opacity scale. Each tile is a
-//!   live mock drawn from the look's own palette (a handful of quads, no
-//!   images). Applying one from your own setup first saves that setup as
-//!   the "Before looks" profile; "Restore my look" brings it back (and the
+//! * **Looks** — the built-in one-click looks (`mandara_config::looks`):
+//!   bar or bar style preset, desktop widgets and cards, an HCT palette
+//!   generated from an OKLCH seed, typography and the radius / opacity
+//!   scale; then your own (`looks_yours.rs`). Each tile is a live mock
+//!   drawn from the look's own palette (a handful of quads; only a text
+//!   decoration is painted, once, and cached). Previews are the default.
+//!   Applying one from your own setup first saves that setup as the
+//!   "Before looks" profile; "Restore my look" brings it back (and the
 //!   Profiles page's undo history covers every step).
 //! * **Desktop cards & visualizers** — the five card kinds of
 //!   `mandara_config::desktop_cards`, each on its own small surface; turn
-//!   one on and pick where it sits (shown on Studio → Desktop widgets under the
-//!   widget list: they are items of the same shared list).
+//!   one on and pick where it sits (shown on Studio → Desktop → Cards &
+//!   visualizers; they are items of the widgets' shared list).
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -24,6 +26,8 @@ use gpui::{AnyElement, ClickEvent, Context, FontWeight, InteractiveElement, Into
 use mandara_config::desktop_cards::{self as dc, CALENDAR, FRAMED_BARS, MIRRORED_BARS, NOW_PLAYING, WAVE};
 use mandara_config::desktop_widgets::{Anchor, ClockFace, Placement, WidgetKind, ranges};
 use mandara_config::looks::{self, LOOKS, LookDef, LookOptions, LookVisualizer};
+use mandara_config::user_looks::UserLook;
+use std::rc::Rc;
 use mandara_config::{BarLayout, BarPosition, ShellConfig};
 use mandara_core::ToGpui;
 use mandara_i18n::{t, tf, tk, tr};
@@ -113,14 +117,28 @@ fn blurb(look: &LookDef) -> String {
         "qaitbay-forest" => tk("Deep green: a giant stacked clock behind the subject and a dock media chip."),
         "anfushi-wave" => tk("Open sea: a full-width glowing wave, a katakana accent and one tiny pill."),
         "night-frame" => tk("Midnight violet: a side bar framing the screen, a greeting, calendar and bars."),
+        "redmond" => tk("A Windows 11-style desktop: a centred taskbar with your apps, a stacked clock, notifications in the corner and no dock."),
+        "cupertino" => tk("A macOS-style desktop: a slim menu bar on top, a magnifying dock below and a Spotlight-style search."),
+        "corniche-frame" => tk("Expressive: the whole screen framed, round buttons, a scalloped rail and a day-block clock over a glowing wave."),
+        "raml-line" => tk("A tram line of flower stops along the top and down the left, a split-flap clock and the music card."),
+        "lighthouse-rail" => tk("Only a wide rail of flower buttons in a coral screen frame, giant numerals and a calendar."),
+        "phosphor" => tk("Terminal green: a monospace status line of stat blocks, a pixel clock and a system monitor column."),
+        "pharos-lantern" => tk("Amber light: a lantern of scalloped buttons hanging from the top and a ring clock in the middle."),
+        "stanley-arches" => tk("Three floating docks along the bottom like a bridge's arches, an analog clock and mirrored bars."),
+        "souk-tiles" => tk("Bright spice colours: one island of big squircle tiles at the bottom and a clock of boxes."),
+        "sea-glass" => tk("No bar, only islands: rows of connected tiles floating under the top edge, an orbit clock, music and a calendar."),
+        "library-desk" => tk("Paper and ink for focused work: the productive bar at the bottom with tasks, notes and a focus timer."),
+        "ink-rush" => tk("A cel-shaded comic desktop: thick ink outlines, hard shadows, halftone shading, bold colour and bouncy motion."),
+        "zen" => tk("Nothing in the way: one tiny pill that hides until you touch the top edge, hot corners and a word clock."),
         _ => look.blurb,
     };
     tr(key)
 }
 
 thread_local! {
-    /// Each look's palette (dark), generated once from its seed.
-    static PALETTES: RefCell<Vec<MandaraPalette>> = const { RefCell::new(Vec::new()) };
+    /// Each look's palette (dark), generated from its seed the first time
+    /// its card shows.
+    static PALETTES: RefCell<Vec<Option<MandaraPalette>>> = const { RefCell::new(Vec::new()) };
     /// Each look's decoration as the desktop paints it (Arabic joined and
     /// turned, kana upright), keyed by look, fonts and colour; and the
     /// painter that drew them.
@@ -160,13 +178,101 @@ fn decoration_image(look: &LookDef, lp: &MandaraPalette, cfg: &ShellConfig) -> O
     })
 }
 
+/// One of your Looks' palette: its own colour source when it changed the
+/// parent's (a seed or a built-in theme), else the parent's; cached by Look
+/// and source.
+fn user_palette(look: &UserLook) -> MandaraPalette {
+    thread_local! {
+        static USER_PALETTES: RefCell<HashMap<(String, String), MandaraPalette>> = RefCell::new(HashMap::new());
+    }
+    let parent_index = LOOKS.iter().position(|l| l.id == look.parent).unwrap_or(0);
+    let source = mandara_config::profiles::get_path_pub(&look.settings, "theme.source").map(|v| v.to_string()).unwrap_or_default();
+    if source.is_empty() {
+        return look_palette(parent_index);
+    }
+    let key = (look.id.clone(), source);
+    USER_PALETTES.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(p) = cache.get(&key) {
+            return p.clone();
+        }
+        let parent = &LOOKS[parent_index];
+        let dark = mandara_config::profiles::get_path_pub(&look.settings, "theme.mode").and_then(|v| v.as_str()).map_or(parent.dark, |m| m != "light");
+        let resolved = mandara_config::profiles::get_path_pub(&look.settings, "theme.source").cloned().and_then(|v| v.try_into::<mandara_theme::ThemeSource>().ok());
+        let palette = match resolved {
+            Some(mandara_theme::ThemeSource::Seed { color, variant }) => mandara_theme::material::palette_from_seed(color, variant, dark),
+            Some(mandara_theme::ThemeSource::Preset { preset }) => mandara_theme::catalog::find(&preset).map_or_else(|| look_palette(parent_index), |t| t.palette(dark)),
+            _ => look_palette(parent_index),
+        };
+        if cache.len() >= mandara_config::user_looks::MAX_LOOKS {
+            cache.clear();
+        }
+        cache.insert(key, palette.clone());
+        palette
+    })
+}
+
+/// One of your Looks as its mock draws it: the parent, with your bar
+/// (layout and edge) and theme mode where you changed them.
+fn user_view(mine: &UserLook, parent: &'static LookDef) -> LookDef {
+    let get = |path: &str| mandara_config::profiles::get_path_pub(&mine.settings, path).cloned();
+    let mut view = *parent;
+    let layout = get("bar.layout").and_then(|v| v.try_into::<BarLayout>().ok()).unwrap_or(parent.layout());
+    let position = get("bar.position").and_then(|v| v.try_into::<BarPosition>().ok()).unwrap_or(parent.position());
+    if layout != parent.layout() || position != parent.position() {
+        view.bar = looks::LookBar::Plain { layout, position, screen_frame: parent.screen_frame(), opacity: 1.0, capsules: false, height: None };
+    }
+    if let Some(mode) = get("theme.mode").and_then(|v| v.as_str().map(str::to_owned)) {
+        view.dark = mode != "light";
+    }
+    view
+}
+
+thread_local! {
+    /// The Look cards that were on screen last frame (by key).
+    static SHOWN: RefCell<std::collections::HashSet<String>> = RefCell::new(std::collections::HashSet::new());
+}
+
+/// Whether the card `key` was on screen last frame.
+fn shown(key: &str) -> bool {
+    SHOWN.with(|s| s.borrow().contains(key))
+}
+
+/// A card's stand-in mock while it is off screen.
+fn placeholder(p: &MandaraPalette) -> AnyElement {
+    div().h(px(THUMB_H_PX)).w_full().rounded(px(RADIUS_14_PX)).bg(p.surface_container_high.hsla()).into_any_element()
+}
+
+/// An empty overlay that notes whether its card is inside the window this
+/// frame, and redraws once when that changes (so a card's mock is drawn
+/// only while it can be seen).
+fn visibility_probe(key: String) -> AnyElement {
+    gpui::canvas(
+        move |bounds, window, _| {
+            let view = window.viewport_size();
+            let on = bounds.bottom() > px(0.0) && bounds.top() < view.height && bounds.right() > px(0.0) && bounds.left() < view.width;
+            let changed = SHOWN.with(|s| {
+                let mut s = s.borrow_mut();
+                if on { s.insert(key.clone()) } else { s.remove(&key) }
+            });
+            if changed {
+                window.refresh();
+            }
+        },
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .inset_0()
+    .into_any_element()
+}
+
 fn look_palette(i: usize) -> MandaraPalette {
     PALETTES.with(|p| {
         let mut p = p.borrow_mut();
         if p.is_empty() {
-            *p = LOOKS.iter().map(|l| mandara_theme::material::palette_from_seed(l.seed_color(), l.variant, l.dark)).collect();
+            p.resize(LOOKS.len(), None);
         }
-        p[i].clone()
+        p[i].get_or_insert_with(|| { let l = &LOOKS[i]; mandara_theme::material::palette_from_seed(l.seed_color(), l.variant, l.dark) }).clone()
     })
 }
 
@@ -175,7 +281,7 @@ fn look_palette(i: usize) -> MandaraPalette {
 fn thumbnail(look: &LookDef, lp: &MandaraPalette, cfg: &ShellConfig) -> AnyElement {
     let bar_fill = lp.surface_container_high.hsla();
     let accent = lp.primary.hsla();
-    let side = look.position.is_vertical();
+    let side = look.position().is_vertical();
     let mut root = div()
         .relative()
         .h(px(THUMB_H_PX))
@@ -185,7 +291,10 @@ fn thumbnail(look: &LookDef, lp: &MandaraPalette, cfg: &ShellConfig) -> AnyEleme
         .bg(mandara_core::oklab_gradient(DIAGONAL_DEG, lp.surface_dim, lp.surface_dim.mix(lp.primary, SKY_TINT)));
     // The bar.
     let pills = |el: gpui::Div| el.children(THUMB_PILL_W_PX.iter().map(|w| div().w(px(*w)).h(px(THUMB_BAR_PX)).rounded_full().bg(bar_fill)));
-    root = root.child(match (side, look.layout) {
+    // A bottom bar sits on the mock's bottom edge.
+    let bottom = look.position() == BarPosition::Bottom;
+    let edge = |el: gpui::Div, off: f32| if bottom { el.bottom(px(off)) } else { el.top(px(off)) };
+    root = root.child(match (side, look.layout()) {
         (true, _) => div()
             .absolute()
             .left_0()
@@ -200,14 +309,14 @@ fn thumbnail(look: &LookDef, lp: &MandaraPalette, cfg: &ShellConfig) -> AnyEleme
             .py(px(THUMB_INSET_PX))
             .child(div().size(px(THUMB_FRAME_PX * 2.0)).rounded_full().bg(accent))
             .child(div().size(px(THUMB_FRAME_PX * 2.0)).rounded_full().bg(accent)),
-        (_, BarLayout::Hairline) => div().absolute().top_0().left_0().right_0().h(px(THUMB_HAIRLINE_PX)).bg(bar_fill).border_b_1().border_color(accent),
-        (_, BarLayout::Micro) => div().absolute().top(px(THUMB_FRAME_PX * 2.0)).left_0().right_0().row().justify_center().child(div().w(px(THUMB_MICRO_W_PX)).h(px(THUMB_BAR_PX)).rounded_full().bg(bar_fill)),
-        (_, BarLayout::FloatingPills) => pills(div().absolute().top(px(THUMB_FRAME_PX * 2.0)).left(px(THUMB_INSET_PX)).right(px(THUMB_INSET_PX)).ltr_row().justify_between()),
-        (_, BarLayout::ContiguousIsland) => div().absolute().top(px(THUMB_FRAME_PX * 2.0)).left_0().right_0().row().justify_center().child(div().w(px(THUMB_PILL_W_PX[2] * 2.5)).h(px(THUMB_BAR_PX)).rounded_full().bg(bar_fill)),
-        (_, BarLayout::MinimalEdge) => div().absolute().top_0().left_0().right_0().h(px(THUMB_BAR_PX)).bg(bar_fill),
-        (_, BarLayout::Notch) => div().absolute().top_0().left(px(THUMB_INSET_PX * 2.0)).right(px(THUMB_INSET_PX * 2.0)).h(px(THUMB_BAR_PX)).rounded_b(px(THUMB_BAR_PX / 2.0)).bg(bar_fill),
+        (_, BarLayout::Hairline) => edge(div().absolute(), 0.0).left_0().right_0().h(px(THUMB_HAIRLINE_PX)).bg(bar_fill).border_b_1().border_color(accent),
+        (_, BarLayout::Micro) => edge(div().absolute(), THUMB_FRAME_PX * 2.0).left_0().right_0().row().justify_center().child(div().w(px(THUMB_MICRO_W_PX)).h(px(THUMB_BAR_PX)).rounded_full().bg(bar_fill)),
+        (_, BarLayout::FloatingPills) => pills(edge(div().absolute(), THUMB_FRAME_PX * 2.0).left(px(THUMB_INSET_PX)).right(px(THUMB_INSET_PX)).ltr_row().justify_between()),
+        (_, BarLayout::ContiguousIsland) => edge(div().absolute(), THUMB_FRAME_PX * 2.0).left_0().right_0().row().justify_center().child(div().w(px(THUMB_PILL_W_PX[2] * 2.5)).h(px(THUMB_BAR_PX)).rounded_full().bg(bar_fill)),
+        (_, BarLayout::MinimalEdge) => edge(div().absolute(), 0.0).left_0().right_0().h(px(THUMB_BAR_PX)).bg(bar_fill),
+        (_, BarLayout::Notch) => edge(div().absolute(), 0.0).left(px(THUMB_INSET_PX * 2.0)).right(px(THUMB_INSET_PX * 2.0)).h(px(THUMB_BAR_PX)).rounded_b(px(THUMB_BAR_PX / 2.0)).bg(bar_fill),
     });
-    if look.screen_frame && side {
+    if look.screen_frame() && side {
         root = root.child(div().absolute().inset_0().border_t(px(THUMB_FRAME_PX)).border_r(px(THUMB_FRAME_PX)).border_b(px(THUMB_FRAME_PX)).border_color(bar_fill).rounded(px(RADIUS_14_PX)));
     }
     let left0 = if side { THUMB_SIDE_PX + THUMB_INSET_PX } else { THUMB_INSET_PX };
@@ -279,23 +388,33 @@ fn restore_look(cx: &mut gpui::App) {
     }
 }
 
-/// The Themes page's tabs: its colours and style, and the components'
-/// designs (one page, two tabs; Studio keeps its pages).
+/// The Themes page's tabs: its colours and style, the components'
+/// designs, the cursor, icon and sound theme galleries, and the boot menu
+/// and splash (one page, its tabs; Studio keeps its pages).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum ThemesTab {
     #[default]
     Colors,
     Components,
+    Cursors,
+    Icons,
+    Boot,
+    /// The sound themes plugin (`sounds_page.rs`).
+    Sounds,
 }
 
 impl ThemesTab {
-    pub const ALL: [ThemesTab; 2] = [ThemesTab::Colors, ThemesTab::Components];
+    pub const ALL: [ThemesTab; 6] = [ThemesTab::Colors, ThemesTab::Components, ThemesTab::Cursors, ThemesTab::Icons, ThemesTab::Boot, ThemesTab::Sounds];
 
     /// Deep-link name (`mandara studio themes/components`).
     pub fn slug(self) -> &'static str {
         match self {
             ThemesTab::Colors => "colors",
             ThemesTab::Components => "components",
+            ThemesTab::Cursors => "cursors",
+            ThemesTab::Icons => "icons",
+            ThemesTab::Boot => "boot",
+            ThemesTab::Sounds => "sounds",
         }
     }
 
@@ -303,8 +422,12 @@ impl ThemesTab {
     pub fn parse(s: &str) -> Option<Self> {
         let s = s.trim().to_ascii_lowercase();
         Self::ALL.into_iter().find(|t| t.slug() == s).or(match s.as_str() {
-            "colours" | "looks" | "style" | "themes" | "cursor" | "cursors" => Some(ThemesTab::Colors),
+            "colours" | "looks" | "style" | "themes" => Some(ThemesTab::Colors),
             "component" | "designs" | "presets" | "controls" | "sliders" | "buttons" => Some(ThemesTab::Components),
+            "cursor" | "cursor-themes" | "pointer" | "pointers" => Some(ThemesTab::Cursors),
+            "icon" | "icon-themes" | "icon-theme" | "icon-sets" => Some(ThemesTab::Icons),
+            "boot-look" | "boot-menu" | "bootloader" | "splash" | "plymouth" | "grub" | "limine" | "refind" => Some(ThemesTab::Boot),
+            "sound" | "sound-themes" | "sound-theme" | "audio-theme" => Some(ThemesTab::Sounds),
             _ => None,
         })
     }
@@ -313,6 +436,10 @@ impl ThemesTab {
         match self {
             ThemesTab::Colors => tk("Colors & style"),
             ThemesTab::Components => tk("Components"),
+            ThemesTab::Cursors => tk("Cursors"),
+            ThemesTab::Icons => tk("Icons"),
+            ThemesTab::Boot => tk("Boot"),
+            ThemesTab::Sounds => tk("Sounds"),
         }
     }
 }
@@ -324,6 +451,10 @@ impl super::page_tabs::PageTab for ThemesTab {
         match self {
             ThemesTab::Colors => "palette",
             ThemesTab::Components => "grid",
+            ThemesTab::Cursors => "pointer",
+            ThemesTab::Icons => "tiles",
+            ThemesTab::Boot => "power",
+            ThemesTab::Sounds => "volume-high",
         }
     }
 }
@@ -333,9 +464,17 @@ impl StudioView {
     pub fn show_themes_tab(&mut self, tab: ThemesTab, cx: &mut Context<Self>) {
         self.show(Section::Themes, cx);
         if self.themes_tab != tab {
+            // The sound gallery's lists, fields and cover go with its tab.
+            if self.themes_tab == ThemesTab::Sounds {
+                cx.defer(super::sounds_page::release);
+            }
             self.themes_tab = tab;
             // The other tab's previews go: nothing of them stays alive.
             self.components = Default::default();
+            cx.defer(super::theme_galleries::release);
+            if self.themes_tab != ThemesTab::Boot {
+                cx.defer(super::boot_page::release);
+            }
             self.content_scroll.set_offset(gpui::point(gpui::px(0.0), gpui::px(0.0)));
         }
         cx.notify();
@@ -349,13 +488,17 @@ impl StudioView {
         let body = match tab {
             ThemesTab::Colors => self.themes_colors(cfg, p, cx),
             ThemesTab::Components => self.components_section(cfg, p, cx),
+            ThemesTab::Cursors => self.cursor_section(cfg, p, window, cx),
+            ThemesTab::Icons => self.icons_section(cfg, p, window, cx),
+            ThemesTab::Boot => self.boot_tab(cfg, p, window, cx),
+            ThemesTab::Sounds => self.sounds_tab(cfg, p, window, cx),
         };
         div().row().flex_col().gap(px(SPACE_22_PX)).child(tabs).child(body).into_any_element()
     }
 
     /// Themes → Colors & style: the live preview (with light / dark), looks,
-    /// the designed themes, the wallpaper's colors and schemes, the cursor
-    /// gallery and settings (`cursor_page.rs`), then tuning, style, icons and
+    /// the designed themes, the wallpaper's colors and schemes, then
+    /// tuning, style, icons and
     /// app themes. Rows the galleries already show (light / dark, the
     /// wallpaper scheme) stay out of the list but remain searchable.
     fn themes_colors(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
@@ -366,22 +509,34 @@ impl StudioView {
         let themes = self.fold("Designed themes", head, p, cx, |this, cx| this.designed_themes(cfg, p, cx));
         let wallpaper = self.wallpaper_schemes(cfg, p, cx);
         let apps = self.app_themes_section(cfg, p, cx);
-        let cursor = self.cursor_section(cfg, p, cx);
         let tune_head = section_head(t("Fine-tune"), t("Schedule, tuning, style and icons"), Vec::new(), display, p);
         // Cursor rows sit in the Cursor section, component designs in
         // theirs, app themes in their grid.
         let rows = self.rows(registry::in_section(Section::Themes).filter(|s| !SHOWN_ABOVE.contains(&s.path) && s.group != CURSOR && s.group != APP_THEMES_GROUP && s.group != COMPONENTS), cfg, p, cx);
         let tune = div().row().flex_col().gap(px(SPACE_14_PX)).child(tune_head).child(rows);
-        div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(preview).child(looks).child(themes).child(wallpaper).child(apps).child(cursor).child(tune).into_any_element()
+        div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(preview).child(looks).child(themes).child(wallpaper).child(apps).child(tune).into_any_element()
     }
 
     /// Looks as a compact list (swatch, name in the look's face, its line,
     /// a hover preview of its mock), or with "Show previews" the large
     /// cards.
-    fn looks_list(&self, cfg: &ShellConfig, p: &MandaraPalette) -> AnyElement {
+    fn looks_list(&self, cfg: &ShellConfig, p: &MandaraPalette, yours: &[UserLook]) -> AnyElement {
         let active = cfg.looks.active.as_str();
         let keep = cfg.looks.keep_components;
         let snapshot = std::sync::Arc::new(cfg.clone());
+        let own = yours.iter().enumerate().filter_map(|(i, mine)| {
+            let parent = mine.parent()?;
+            let view = user_view(mine, parent);
+            let lp = user_palette(mine);
+            let (cfg, tip_palette, apply) = (snapshot.clone(), lp.clone(), mine.clone());
+            let line = format!("{} · {}", t("Yours"), tf("From {look}", &[("look", &parent.name)]));
+            Some(
+                swatch_list::row(("look-row-yours", i), &lp, mine.name.clone().into(), Some(parent.display_font.into()), line, mine.id == active, p)
+                    .tooltip(swatch_list::preview_tip(p, move || div().w(px(swatch_list::TIP_MOCK_W_PX)).child(thumbnail(&view, &tip_palette, &cfg)).into_any_element()))
+                    .on_click(move |_: &ClickEvent, _, cx| super::looks_yours::apply(&apply, cx))
+                    .into_any_element(),
+            )
+        });
         let rows = LOOKS.iter().enumerate().map(|(i, look)| {
             let lp = look_palette(i);
             let cfg = snapshot.clone();
@@ -393,28 +548,32 @@ impl StudioView {
                 .on_click(move |_: &ClickEvent, _, cx| apply_look(look, cx))
                 .into_any_element()
         });
-        let rows: Vec<AnyElement> = rows.collect();
+        let rows: Vec<AnyElement> = rows.chain(own).collect();
         super::grid::fit(self.page.column_w, swatch_list::SWATCH_GRID).balanced(rows.len()).render(rows)
     }
 
     fn looks_gallery(&mut self, cfg: &ShellConfig, p: &MandaraPalette, display: SharedString, cx: &mut Context<Self>) -> AnyElement {
-        let previews = self.ui.looks_previews;
+        let previews = !self.ui.looks_compact;
         let toggle = swatch_list::previews_chip("looks-previews", previews, p)
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.ui.looks_previews = !this.ui.looks_previews;
+                this.ui.looks_compact = !this.ui.looks_compact;
                 crate::ui_state::save(&this.ui);
                 cx.notify();
             }))
             .into_any_element();
+        let yours = super::looks_yours::looks(cx).unwrap_or_else(|| Rc::from(Vec::new()));
         if !previews {
-            let list = self.looks_list(cfg, p);
-            return self.looks_section(cfg, p, display, list, toggle);
+            let list = self.looks_list(cfg, p, &yours);
+            return self.looks_section(cfg, p, display, list, toggle, cx);
         }
         let active = cfg.looks.active.as_str();
-        let mut tiles = Vec::with_capacity(LOOKS.len());
+        let mut tiles = Vec::with_capacity(LOOKS.len() + yours.len());
         for (i, look) in LOOKS.iter().enumerate() {
             let on = look.id == active;
-            let lp = look_palette(i);
+            // Off screen, a card is its frame and words only: its palette,
+            // mock, decoration and display face come when it scrolls in.
+            let key = look.id;
+            let lp = shown(key).then(|| look_palette(i));
             let dot = |c: mandara_theme::Color| div().size(px(LOOK_DOT_PX)).rounded_full().bg(c.hsla());
             // The name in the look's own display face, its palette and, when
             // applied, a badge.
@@ -422,13 +581,15 @@ impl StudioView {
                 .row()
                 .items_center()
                 .gap(px(SPACE_8_PX))
-                .child(div().flex_1().min_w(px(0.0)).truncate().text_start().font_family(look.display_font).font_weight(FontWeight::SEMIBOLD).text_size(px(TEXT_15_PX)).child(look.name))
+                .child(div().flex_1().min_w(px(0.0)).truncate().text_start().when(lp.is_some(), |el| el.font_family(look.display_font)).font_weight(FontWeight::SEMIBOLD).text_size(px(TEXT_15_PX)).child(look.name))
                 .when(on, |el| el.child(badge(t("Active"), p.primary)))
-                .child(div().row().gap(px(SPACE_3_PX)).child(dot(lp.primary)).child(dot(lp.secondary)).child(dot(lp.tertiary)));
+                .when_some(lp.as_ref(), |el, lp| el.child(div().row().gap(px(SPACE_3_PX)).child(dot(lp.primary)).child(dot(lp.secondary)).child(dot(lp.tertiary))))
+                .child(Self::look_actions(look.id, false, p, cx));
             tiles.push(
                 div()
                     .id(("look", i))
                     .flex_1()
+                    .relative()
                     .rounded(px(RADIUS_22_PX))
                     .p(px(SPACE_8_PX))
                     .row()
@@ -439,7 +600,11 @@ impl StudioView {
                     .border_2()
                     .border_color(if on { p.primary.hsla() } else { gpui::transparent_black() })
                     .hover(|s| s.bg(p.primary.with_alpha(ALPHA_8).hsla()))
-                    .child(thumbnail(look, &lp, cfg))
+                    .child(match &lp {
+                        Some(lp) => thumbnail(look, lp, cfg),
+                        None => placeholder(p),
+                    })
+                    .child(visibility_probe(key.to_string()))
                     .child(
                         div()
                             .px(px(SPACE_6_PX))
@@ -458,12 +623,57 @@ impl StudioView {
                     .into_any_element(),
             );
         }
+        for (i, mine) in yours.iter().enumerate() {
+            let Some(parent) = mine.parent() else { continue };
+            let view = user_view(mine, parent);
+            let look = &view;
+            let on = mine.id == active;
+            let key = format!("yours:{}", mine.id);
+            let lp = shown(&key).then(|| user_palette(mine));
+            let dot = |c: mandara_theme::Color| div().size(px(LOOK_DOT_PX)).rounded_full().bg(c.hsla());
+            let title = div()
+                .row()
+                .items_center()
+                .gap(px(SPACE_8_PX))
+                .child(div().flex_1().min_w(px(0.0)).truncate().text_start().when(lp.is_some(), |el| el.font_family(look.display_font)).font_weight(FontWeight::SEMIBOLD).text_size(px(TEXT_15_PX)).child(mine.name.clone()))
+                .when(on, |el| el.child(badge(t("Active"), p.primary)))
+                .when_some(lp.as_ref(), |el, lp| el.child(div().row().gap(px(SPACE_3_PX)).child(dot(lp.primary)).child(dot(lp.secondary)).child(dot(lp.tertiary))));
+            // Its badges, then its actions, on a line of their own (the
+            // name keeps the title line).
+            let meta = div().row().items_center().gap(px(SPACE_8_PX)).child(div().flex_1().min_w(px(0.0)).child(super::looks_yours::yours_badges(mine, p))).child(Self::look_actions(&mine.id, true, p, cx));
+            let rename = self.look_rename_row(&mine.id, p, cx);
+            let apply = mine.clone();
+            tiles.push(
+                div()
+                    .id(("look-yours", i))
+                    .flex_1()
+                    .relative()
+                    .rounded(px(RADIUS_22_PX))
+                    .p(px(SPACE_8_PX))
+                    .row()
+                    .flex_col()
+                    .gap(px(SPACE_10_PX))
+                    .cursor_pointer()
+                    .bg(if on { p.primary.with_alpha(ALPHA_12).hsla() } else { p.surface_container.hsla() })
+                    .border_2()
+                    .border_color(if on { p.primary.hsla() } else { gpui::transparent_black() })
+                    .hover(|s| s.bg(p.primary.with_alpha(ALPHA_8).hsla()))
+                    .child(match &lp {
+                        Some(lp) => thumbnail(look, lp, cfg),
+                        None => placeholder(p),
+                    })
+                    .child(visibility_probe(key))
+                    .child(div().px(px(SPACE_6_PX)).pb(px(SPACE_6_PX)).row().flex_col().gap(px(SPACE_4_PX)).child(title).children(rename).child(meta))
+                    .on_click(move |_: &ClickEvent, _, cx| super::looks_yours::apply(&apply, cx))
+                    .into_any_element(),
+            );
+        }
         let grid = super::grid::fit(self.page.column_w, LOOK_GRID).balanced(tiles.len()).render(tiles);
-        self.looks_section(cfg, p, display, grid, toggle)
+        self.looks_section(cfg, p, display, grid, toggle, cx)
     }
 
     /// The Looks heading (options, restore, the previews switch) over `body`.
-    fn looks_section(&self, cfg: &ShellConfig, p: &MandaraPalette, display: SharedString, body: AnyElement, toggle: AnyElement) -> AnyElement {
+    fn looks_section(&self, cfg: &ShellConfig, p: &MandaraPalette, display: SharedString, body: AnyElement, toggle: AnyElement, cx: &mut Context<Self>) -> AnyElement {
         let active = cfg.looks.active.as_str();
         let wallpaper_colors = cfg.looks.wallpaper_colors;
         let has_before = !active.is_empty() && mandara_config::profiles::find(looks::BEFORE_PROFILE).is_some();
@@ -475,9 +685,11 @@ impl StudioView {
             // A chip like its neighbours: one height for the whole row.
             options.push(chip("looks-restore", t("Restore my look"), false, p).child(icon("undo", ICON_12_PX, p.primary)).on_click(|_, _, cx| restore_look(cx)).into_any_element());
         }
+        options.extend(Self::looks_yours_options(cfg, p, cx));
         options.push(toggle);
-        let head = section_head(t("Looks"), t("One click sets the bar, desktop widgets, colors, fonts and roundness together. Your own setup is saved first, so you can always go back. Looks never change your wallpaper."), options, display, p);
-        div().row().flex_col().gap(px(SPACE_14_PX)).child(head).child(body).into_any_element()
+        let head = section_head(t("Looks"), t("One click sets the bar, its own desktop widgets, colors, fonts and roundness together; your own widgets and bar items stay. Change anything and it is kept as a look of your own. Your setup is saved first, so you can always go back. Looks never change your wallpaper."), options, display, p);
+        let note = Self::looks_note(p, cx);
+        div().row().flex_col().gap(px(SPACE_14_PX)).child(head).children(note).child(body).into_any_element()
     }
 
     pub(super) fn desktop_cards_section(&self, cfg: &ShellConfig, p: &MandaraPalette, display: SharedString) -> AnyElement {

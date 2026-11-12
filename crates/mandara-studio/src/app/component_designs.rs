@@ -342,7 +342,7 @@ fn preview_card(family: SurfaceCorners, style: CardStyle, p: &MandaraPalette) ->
 /// A design or preset tile's caption, the same height in every tile so
 /// rows line up whatever the language: the name on one line (ellipsized),
 /// then its line clamped to [`CAPTION_LINES`] lines.
-fn caption(name: String, line: String, on: bool, p: &MandaraPalette) -> [AnyElement; 2] {
+pub(super) fn caption(name: String, line: String, on: bool, p: &MandaraPalette) -> [AnyElement; 2] {
     let title = div()
         .h(px(CAPTION_TITLE_H_PX))
         .px(px(SPACE_4_PX))

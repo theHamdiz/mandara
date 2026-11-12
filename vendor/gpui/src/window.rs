@@ -10,7 +10,7 @@ use crate::{
     Capslock, Context, Corners, CursorHideMode, CursorStyle, Decorations, DevicePixels,
     DispatchActionListener, DispatchNodeId, DispatchTree, DisplayId, Edges, Effect, Entity,
     EntityId, EventEmitter, FileDropEvent, FontId, Global, GlobalElementId, GlyphId, GpuSpecs,
-    Hsla, InputHandler, InputPreference, IsZero, KeyBinding, KeyContext, KeyDownEvent, KeyEvent,
+    Hsla, ImageId, InputHandler, InputPreference, IsZero, KeyBinding, KeyContext, KeyDownEvent, KeyEvent,
     Keystroke, KeystrokeEvent, LayoutId, LineLayoutIndex, Modifiers, ModifiersChangedEvent,
     MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent, Path, Pixels,
     PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
@@ -20,7 +20,7 @@ use crate::{
     StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab,
     SystemWindowTabController, TabStopMap, TaffyLayoutEngine, Task, TextInputConfiguration,
     TextInputStateChange, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
-    TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
+    TransformationMatrix, TransitionParams, TransitionSprite, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
     WindowBounds, WindowControls, WindowDecorations, WindowInsets, WindowOptions, WindowParams,
     WindowTextSystem, WindowVisibility, point, prelude::*, px, rems, size, transparent_black,
 };
@@ -2639,6 +2639,19 @@ impl Window {
     /// request a certain window decoration (Wayland)
     pub fn request_decorations(&self, decorations: WindowDecorations) {
         self.platform_window.request_decorations(decorations);
+    }
+
+    /// Mandara patch 13: whether drags of data that is not a list of files
+    /// (text, links, pictures…) from other programs enter this window as
+    /// [`crate::ExternalData`]. Off by default: other windows refuse them.
+    pub fn set_accepts_data_drops(&self, accept: bool) {
+        self.platform_window.set_accepts_data_drops(accept);
+    }
+
+    /// Mandara patch 13: moves a layer-shell surface by its margins from the
+    /// anchored edges (top, right, bottom, left), applied at once.
+    pub fn set_layer_margin(&self, margin: (Pixels, Pixels, Pixels, Pixels)) {
+        self.platform_window.set_layer_margin(margin);
     }
 
     /// Set the exclusive zone for a layer-shell surface: how much screen space it
@@ -5347,6 +5360,85 @@ impl Window {
         Ok(())
     }
 
+    /// Mandara patch 7: paints a per-pixel transition from image `from` to
+    /// image `to` (and the optional helper image `aux`) over `bounds`; the
+    /// renderer evaluates `params` in one fragment shader.
+    ///
+    /// Each image is uploaded to the sprite atlas the first time it is seen
+    /// (its bytes are needed only then, see [`TransitionImage`]) and stays
+    /// there until [`Self::drop_transition_image`] or the window goes.
+    /// Returns `Ok(false)`, painting nothing, when an image is neither in the
+    /// atlas nor given with its bytes (the atlas was cleared after a device
+    /// loss): the caller then ends its transition.
+    ///
+    /// This method should only be called as part of the paint phase of element drawing.
+    pub fn paint_transition(
+        &mut self,
+        bounds: Bounds<Pixels>,
+        from: TransitionImage<'_>,
+        to: TransitionImage<'_>,
+        aux: Option<TransitionImage<'_>>,
+        mut params: TransitionParams,
+    ) -> Result<bool> {
+        self.invalidator.debug_assert_paint();
+        if bounds.size.width <= Pixels::ZERO || bounds.size.height <= Pixels::ZERO {
+            return Ok(true);
+        }
+        let atlas = self.sprite_atlas.clone();
+        let tile = |image: &TransitionImage<'_>| -> Result<Option<AtlasTile>> {
+            if image.size.width.0 <= 0 || image.size.height.0 <= 0 {
+                return Ok(None);
+            }
+            let key = RenderImageParams {
+                image_id: image.id,
+                frame_index: 0,
+            };
+            atlas.get_or_insert_with(key.into(), &mut || {
+                Ok(image.bytes.map(|bytes| (image.size, Cow::Borrowed(bytes))))
+            })
+        };
+        let (Some(from_tile), Some(to_tile)) = (tile(&from)?, tile(&to)?) else {
+            return Ok(false);
+        };
+        let aux_tile = match &aux {
+            Some(aux) => match tile(aux)? {
+                Some(t) => Some(t),
+                None => return Ok(false),
+            },
+            None => None,
+        };
+        if aux_tile.is_some() {
+            params.flags |= crate::TRANSITION_FLAG_AUX;
+        } else {
+            params.flags &= !(crate::TRANSITION_FLAG_AUX | crate::TRANSITION_FLAG_SUBJECT);
+        }
+        let bounds = self.snap_bounds(bounds);
+        let content_mask = self.snapped_content_mask();
+        self.next_frame.scene.insert_primitive(TransitionSprite {
+            order: 0,
+            pad: 0,
+            bounds,
+            content_mask,
+            from: from_tile,
+            to: to_tile,
+            aux: aux_tile.unwrap_or(to_tile),
+            params,
+        });
+        Ok(true)
+    }
+
+    /// Mandara patch 7: removes an image a transition uploaded from the
+    /// sprite atlas (its GPU texture goes with its last tile).
+    pub fn drop_transition_image(&mut self, id: ImageId) {
+        self.sprite_atlas.remove(
+            &RenderImageParams {
+                image_id: id,
+                frame_index: 0,
+            }
+            .into(),
+        );
+    }
+
     /// Paint a surface into the scene for the next frame at the current z-index.
     ///
     /// This method should only be called as part of the paint phase of element drawing.
@@ -5943,6 +6035,27 @@ impl Window {
                     self.refresh();
                     PlatformInput::FileDrop(FileDropEvent::Ended)
                 }
+                // Mandara patch 13: other programs' data becomes an internal
+                // drag of `ExternalData`, exactly as files become `ExternalPaths`.
+                FileDropEvent::DataEntered { position, data } => {
+                    self.mouse_position = position;
+                    let source_window = self.handle.window_id();
+                    if !cx.restore_platform_drag(source_window) && cx.active_drag.is_none() {
+                        cx.active_drag = Some(AnyDrag {
+                            value: Arc::new(data.clone()),
+                            view: cx.new(|_| data).into(),
+                            cursor_offset: position,
+                            cursor_style: None,
+                            external_payload_source: None,
+                        });
+                    }
+                    PlatformInput::MouseMove(MouseMoveEvent {
+                        position,
+                        pressed_button: Some(MouseButton::Left),
+                        modifiers: Modifiers::default(),
+                    })
+                }
+                FileDropEvent::Delivered => PlatformInput::FileDrop(FileDropEvent::Delivered),
             },
             PlatformInput::Touch(touch) => PlatformInput::Touch(touch),
             PlatformInput::LongPress(long_press) => {
@@ -10445,4 +10558,15 @@ mod mandara_rounded_mask_tests {
         });
         assert!(!mask.is_rounded());
     }
+}
+
+/// Mandara patch 7: one image of [`Window::paint_transition`].
+#[derive(Clone, Copy, Debug)]
+pub struct TransitionImage<'a> {
+    /// Its atlas identity (a [`RenderImage`]'s id: one per image).
+    pub id: ImageId,
+    /// Its size in device pixels.
+    pub size: Size<DevicePixels>,
+    /// Its BGRA pixels, needed only while the atlas does not have it yet.
+    pub bytes: Option<&'a [u8]>,
 }

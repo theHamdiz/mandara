@@ -21,12 +21,15 @@
 --collection needs a collection
 --delay [seconds]: count down first (default: the Countdown setting)
 --demo shows the lock screen as a harmless preview
+--empty to delete the items instead of keeping them restorable
 --every 6h, --mode, --keep N, --video, --apply
 --grade needs sahih, hasan or daif
 --index needs a number
 --level takes a number from 0 to 100
 --purge-data (leftovers to the Trash), --dry-run, --confirm-default (allow removing a default app)
 --seconds and --fps go with --video
+--unverified (needed for links)
+--unverified, required for a link
 --yes to really empty it
 -1 is slowest, 1 fastest
 -999 to 999
@@ -62,6 +65,8 @@
 12-hour clock: 09:05 instead of 9:05
 12:00
 15 minutes
+16-bit pixel art icons
+16-bit style pixel icons in dark and light variants
 1600×900 cover on top of the detail modal
 17:00
 180°
@@ -101,17 +106,23 @@ A NixOS action through Mandara's password dialog: update|rebuild <switch|boot|te
 A Question of Power
 A Room of One's Own
 A Vindication of the Rights of Woman
+A Windows 11-style desktop: a centred taskbar with your apps, a stacked clock, notifications in the corner and no dock.
 A badge on apps with two or more windows (when no notifications are unread)
 A bar chip (the Privacy plugin) and a pill while apps use your microphone, camera or screen
 A bar item and panel with today's time per app and the last seven days. Recorded only on this computer.
 A bar pill that scripts, builds and AI agents report progress to
+A blocky game-style title screen for your boot menu
+A bold abstract wallpaper and a minimal centred menu
 A bottom bar, panels spring upward
 A box of segmented bars, like a hardware spectrum display
 A brief pill when volume, brightness, keyboard layout and more change
+A bright, macOS-inspired desktop look with matching icons
 A bundled Mandara icon by name, such as sun or timer
 A card for the sidebar, or none.
+A cel-shaded comic desktop: thick ink outlines, hard shadows, halftone shading, bold colour and bouncy motion.
 A centred glass search bar in the style of macOS Spotlight; grouped results open under it as you type
 A charger's saddle is an exalted throne, the best companions are books alone.
+A clean blue gradient with rounded selection and coloured OS icons
 A clear night. Look up, the stars are out.
 A clear sky. A good day to be outside.
 A click opens the launcher
@@ -120,7 +131,9 @@ A collection needs a name
 A connection named "{name}" already exists
 A connection's IPv4 method, addresses, gateway and DNS
 A container using this much CPU (percent of one core) is highlighted
+A crisp offset shadow in ink instead of the soft one; 0 keeps the soft shadows
 A daily reminder of the final home
+A dark outline round the bar's items, panels, the launcher, the dock, notifications and cards; 0 keeps the hairline
 A day's events, ISO week and Hijri date as JSON
 A dense status line along the bottom: stat blocks, live meters and rates in monospace
 A design-first Wayland desktop shell, written entirely in Rust.
@@ -130,6 +143,8 @@ A distinct alert sound
 A dock on the screen edge, a centered grid, or separate cards floating in the middle of the screen
 A dot per window
 A drag continues briefly after lifting the finger
+A drag that reaches a screen edge springs a shelf open there. Each catcher is a hairline along the edge that also takes clicks, so only edges nothing else uses can have one
+A drive plugged in or removed
 A faceted, lit triangle mesh
 A faint wash, the raised tone of cards, or a tint of the accent
 A fan shows this many of the newest files; its top row opens the folder in your file manager
@@ -146,7 +161,9 @@ A folder in /usr/share/sounds; empty follows your GTK setting
 A folder of pictures (empty: ~/Pictures)
 A folder, or the wallpapers you picked into the playlist
 A folding Completed group under each list
+A freedesktop sound theme: a folder with index.theme and stereo/ sounds, or an archive of one. Only sounds, index.theme and licence files are kept; nothing in it runs.
 A full-length slab
+A full-width bottom taskbar: the launcher and your apps centred, a stacked clock on the right
 A full-width strip of bars mirrored round its middle
 A fully rounded field with an accent ring while you type
 A gentle daily reminder of Paradise: a verse or hadith, its meaning and one good step for today (opt-in)
@@ -155,6 +172,7 @@ A gentle wave along the fill that flows while you drag
 A glowing gradient switch and each place's own check boxes
 A good head and a good heart are always a formidable combination.
 A grain of poetry suffices to season a century.
+A green retro terminal with a scanline glow
 A hairline around floating panels
 A hairline edge around each capsule
 A hook still running after this is stopped (rules can set their own)
@@ -172,6 +190,7 @@ A little closer to home
 A little player with an LCD and buttons
 A locked account can't sign in until it's unlocked.
 A look ahead: only today's step can be marked done
+A macOS-style desktop: a slim menu bar on top, a magnifying dock below and a Spotlight-style search.
 A macOS-style dock: pinned, running and recent apps, stacks and the Trash, with magnification and auto-hide
 A man does not attain everything that he desires; the winds convey whither the ships do not list.
 A man who dares to waste one hour of time has not discovered the value of life.
@@ -199,6 +218,7 @@ A notification, or a soft dimmed screen with a countdown (it never takes the key
 A package signature couldn't be verified. Update your distribution's keyring, then try again.
 A page of a community's posts as JSON
 A password is set.
+A pastel spinner with a matching password prompt
 A permission this version of Mandara doesn't know; it has no effect
 A picture file (PNG with a transparent background looks best)
 A picture in a white print border, a little crooked
@@ -214,10 +234,14 @@ A profile card, launch tiles for apps, folders and links, quick toggles, volume 
 A progress bar, value from 0 to 1
 A public GitHub repository tagged mandara-plugin with a release is all it takes.
 A public repository with this topic (About → Topics).
+A quick back-and-forth of the pointer, or of something you drag, over the desktop, the bar, panels or a shelf opens a new shelf there. Wayland only lets Mandara see the pointer over its own surfaces, so a shake over an app's window does nothing
+A quick beam sweeps across, lighting each row in turn
 A quiet notification when the song changes
+A quote isn't closed
 A random style
 A reader for RSS, Atom and JSON feeds
 A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view
+A ring of icons around the pointer, or the classic list
 A round knob on the end of the fill that stretches into a pill while you hold it
 A rounded field with an accent edge while you type
 A rounded surface around its children
@@ -227,19 +251,23 @@ A second, stronger warning
 A sense of humour is a sense of proportion.
 A shutter when a capture is taken
 A side bar always stays on screen
-A side bar holds this edge now; turn side bars off (Bar page) to use the sidebar here
+A side bar holds this edge now; choose Sidebar for an edge under Bars → Sidebars to use the sidebar
+A side bar is a slim bar of items, like the top bar standing on its side. The sidebar is the panel that slides out with tabs and cards. Each edge holds one of them, or nothing.
 A side bar is always an edge frame
+A side bar runs along this edge
 A side bar shares no edge with the launcher: it opens from the bare screen edge, beside the bar.
 A side bar uses Side bar width
 A signature couldn't be verified
 A single TOML file you can keep, share or import on another machine. Existing files are never overwritten.
 A single column sits in the middle instead of at the left edge
-A slide and fade using your current spring. Replay after adjusting the controls.
+A slim bar of items
 A slim bar of plugin icons and pills on the left and right edges; panels pour out sideways. They replace the widget sidebar on their edges
 A slim bar on the left edge; panels open sideways
 A smoothed spectrum along the screen edge, with a soft glow; only while music plays
+A soft halo under the lines
 A soft shadow under separate side bars
 A soft shadow under the bar
+A soft tick as the brightness moves
 A soft tick as the volume moves
 A strip of key hints under the results
 A tab needs a name
@@ -256,6 +284,7 @@ A tonal field with an underline that thickens in the accent colour
 A tonal surface with a soft rim of light
 A top hit, then results under headings by kind: Applications, Actions & settings, Files…
 A topographic map with tinted terrain
+A tram line of flower stops along the top and down the left, a split-flap clock and the music card.
 A trap or a timeout stops only that plugin, until it is reloaded
 A variation of my recipe
 A video wallpaper keeps its current frame while windows hide the desktop
@@ -297,6 +326,7 @@ Abyssal Mediterranean blue, sea-glass turquoise and sun-warmed limestone.
 Acceleration
 Accent
 Accent colour
+Accent folders
 Accent line
 Accent tint
 Accent vividness
@@ -345,6 +375,7 @@ Add a hook
 Add a layout to manage them here; the first one is the default.
 Add a layout: search “arabic”, “german”, “dvorak”…
 Add a line
+Add a look from a file (checked strictly; nothing in it is run)
 Add a match
 Add a rule for an app: mute, silent, no-history, allow-dnd, low, critical
 Add a shortcut
@@ -364,7 +395,8 @@ Add an app: desktop id or name, then Enter
 Add an app: search by name
 Add an entry to a collection
 Add an idle command
-Add any widget to it in Studio → Bars → Sidebar.
+Add an item of your own
+Add any widget to it in Studio → Bars → Sidebars.
 Add app
 Add apps or commands below.
 Add apps to the Dock
@@ -374,7 +406,9 @@ Add checks in Studio → Plugins → Uptime monitor
 Add color
 Add command
 Add feeds
+Add files, a link or text (text:…) to a shelf
 Add include
+Add item
 Add link
 Add one from an otpauth:// link or a QR code
 Add or remove a favourite station
@@ -396,6 +430,7 @@ Add to the slideshow playlist
 Add to {zone}
 Add user
 Add widget
+Add widget opens
 Add widgets
 Add your GitHub user name to see your year
 Add your Home Assistant token in Studio
@@ -407,9 +442,12 @@ Add {count} packages with {tool}? They arrive with the next boot: {packages}
 Added
 Added here
 Added {account}
+Added {name}
 Added {n} accounts from the QR code
+Adding and removing
 Adding to apps
 Adding to your apps…
+Adding…
 Address
 Address, e.g. 192.168.1.20/24
 Addresses with a user name or password aren't supported
@@ -421,6 +459,7 @@ Admin helper unavailable
 Administrator
 Administrator rights needed, but no authentication agent answered
 Administrators can install software, change system settings and manage other users.
+Adwaita-style icons with many extra app icons; no longer maintained
 Aeneid, Book V
 Aesop
 After an automatic lock, moving the mouse or pressing a key within this time unlocks without a password (0 = always ask)
@@ -516,6 +555,7 @@ Always clear of the bar; left and right draw a vertical pill
 Always on
 Always open on the first tab
 Amber
+Amber light: a lantern of scalloped buttons hanging from the top and a ring clock in the middle.
 Ambient
 Ambient sea, rain, wind, café, fire and noise — synthesized live
 Amplitude
@@ -529,7 +569,9 @@ An app needs administrator rights
 An app starts or stops using the microphone, camera or screen
 An app wants access to the keyring “Login”, but it is locked (preview: nothing is unlocked)
 An app wants to create a new keyring called “Mandara”. Choose the password you want to use for it (preview: nothing is created)
+An argument is too long
 An image is already being prepared
+An install finishing without a notification
 An interactive card — its own settings are with the cards.
 An island per group
 An outline that thickens while focused, with the hint floating into it
@@ -549,7 +591,9 @@ Anchor
 Angle
 Animate opening applications
 Animated current conditions, hourly and 5-day forecast
+Animated loaders from the most popular Plymouth collection
 Animated sky
+Animation
 Animation presets
 Animation speed
 Animations
@@ -573,6 +617,7 @@ App (desktop id), e.g. steam
 App + title
 App action
 App actions
+App and folder icons drawn with vivid gradients
 App and title
 App data
 App icon shape
@@ -602,20 +647,27 @@ Applies instantly
 Applies live on {compositor}; apps started from now on use it too.
 Applies now; reverts after {seconds} s unless you keep it
 Apply
-Apply a look (your setup is saved first so it can be restored)
+Apply a look, built-in or yours (your setup is saved first so it can be restored)
+Apply a motion preset: its spring and choreography (accessibility and surface speeds stay yours)
+Apply a prepared boot menu theme, splash or Limine look with your approval: backs up every file, checks with the tools' own checkers and can be restored; --dry-run shows the plan only
 Apply a ready-made launcher look: its layout and style settings change together (no argument: the current one)
 Apply a saved display profile
 Apply changes instantly without springs
 Apply profiles automatically
 Apply this profile
+Apply to apps
 Apply {n} changes
+Applying a theme in Themes → Sounds also sets it for GTK, KDE and other apps
 Applying the patch…
 Applying…
+Approve & apply
+Approve & restore
 Apps
 Apps & tools
 Apps (desktop ids) or web addresses, comma separated (empty: your dock's apps)
 Apps and packages
 Apps appear here with their own volume while they play.
+Apps asking for attention
 Apps can ask for their own sound
 Apps listed under TOP APPS
 Apps playing sound, with their own volume and mute
@@ -628,11 +680,13 @@ Apps that support the system tray appear here
 Apps using the microphone, camera or screen right now
 Apps using your microphone, camera or screen show up here
 Apps with a camera open
-Apps with an urgent window or a critical notification bounce
+Apps with an urgent window or a critical notification animate; pick the style on the Motion page
 Apps you trust, e.g. a voice assistant that always listens. Case-insensitive regular expressions.
 Apps you used lately, after the running ones
 Apps, settings, commands
 Apps, settings, commands, “/” slash commands and skills, “=” calculator; off disables the keybind, edge and menu entry
+Aqua
+Aqua folders
 Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there.
 Aqueous keeps its settings in its own files in ~/.config/aqueous and reloads them itself. Mandara follows its workspaces, windows and outputs over its socket and changes nothing in those files.
 Aqueous settings stay in its own files in ~/.config/aqueous
@@ -658,6 +712,8 @@ Architecture
 Archive checksum verified.
 Archive: a portable app unpacked into your home folder. No password needed.
 Archived
+Archives
+Archive…
 Argument #{position} is not a boolean: {value}
 Argument #{position} is not a number
 Argument #{position} is not an integer
@@ -689,6 +745,7 @@ Asking power-profiles-daemon and UPower
 Asking systemd
 Asking the compositor for its windows…
 Asking the shell…
+Asks for your administrator approval each time; nothing else ever runs as root
 Asks for your password
 Asks github.com for your public contribution calendar every few hours, only while the desktop shows. Nothing is sent but the user name.
 Asks open.er-api.com (ExchangeRate-API) twice a day, only while the desktop shows. A click fetches again.
@@ -749,6 +806,7 @@ A–Z
 A–Z, most used first, or grouped by category
 B
 BEGIN YOUR KHATM
+BIOS (legacy)
 BOOKMARKS
 BOOKS
 BREAKS TODAY
@@ -759,6 +817,7 @@ Back to daylight at {time}
 Back to today
 Back to your place
 Back to {name}
+Back up
 Back up now
 Backed up to {folder}
 Background
@@ -767,8 +826,10 @@ Background blur behind translucent windows (MangoWM, Hyprland, Niri 26.04+)
 Background interval
 Background opacity
 Backlight devices and levels
+Backs up every file before changing it, and Restore puts everything back in one step
 Backspace
 Backup restored
+Backup: {id}
 Backups & factory reset
 Backups copy ~/.config/mandara. Factory reset backs up first, then restores every default.
 Bad system call
@@ -786,6 +847,8 @@ Bar essentials
 Bar icons relative to their designed size
 Bar items light up softly under the pointer
 Bar label
+Bar position
+Bar presets
 Bar radius
 Bar text relative to the interface text size
 Bar thickness
@@ -817,6 +880,7 @@ Be the first: publish yours by tagging the repository mandara-plugin (see PLUGIN
 Beacon
 Beacon (centred search bar)
 Beacon search bar
+Beam: a quick sideways sweep
 Before the end group
 Begin
 Begin at the beginning, and go on till you come to the end: then stop.
@@ -825,6 +889,7 @@ Behind Fit and Center (hex)
 Behind the subject
 Below this, notifications go straight to the history
 Benjamin Franklin
+Beside the ring
 Bessie Head
 Best
 Best {time}
@@ -843,12 +908,14 @@ Blade
 Blaise Pascal
 Blank other displays
 Blend size
-Blend time when the wallpaper changes
 Blob size
 Blobs
 Block
 Block idle and sleep (logind inhibitor)
 Blue
+Blue Dark
+Blue Light
+Blue Light, dark panel
 Bluetooth
 Bluetooth adapters and which one Mandara uses
 Bluetooth devices
@@ -874,6 +941,9 @@ Bookmark an ayah
 Bookmark removed
 Bookmarked
 Bookmarks
+Boot
+Boot look
+Boot menu
 Booted
 Booted: {n}
 Border
@@ -891,7 +961,10 @@ Bottom left command
 Bottom middle
 Bottom right
 Bottom right command
+Bottom-left corner
+Bottom-right corner
 Bottom-right corner, or two fingers
+Bounce
 Bounce for attention
 Bounce only while music plays
 Bouncy
@@ -902,13 +975,17 @@ Break's over
 Breathes, blinks, sleeps at night, bobs to music, purrs when clicked
 BreezeX cursors recolored in the Rosé Pine palette
 Brevity is the sister of talent.
+Bright and polished, with long login and logout cues
+Bright spice colours: one island of big squircle tiles at the bottom and a clock of boxes.
 Brightness
+Brightness changes
 Brightness down
 Brightness keys change every screen
 Brightness over DDC/CI through /dev/i2c-* (needs the i2c group and DDC/CI on in the monitor's menu)
 Brightness up
 Bring back a bar put away with bar hide
 Bring back a removed Mandara plugin where it was
+Brisk and calm, barely any overshoot
 Broken
 Brown noise
 Browse Reddit communities, posts and comment threads
@@ -941,9 +1018,11 @@ Built-in
 Built-in encoder
 Built-in encoder width
 Built-in ids can't be overridden: a plugin whose id matches a built-in plugin is skipped.
+Built-in plugin · off
 Bukhari
 Bundled, your distro's logo, any icon from your theme, or your own image
 Burst
+Burst centre
 Bus error
 Busiest apps
 Busy
@@ -967,6 +1046,10 @@ CONNECTING
 CONTAINER
 CONTINUE READING
 CONTRAST · WCAG 2
+COSMIC has no standalone configuration checker. Its settings are managed in COSMIC Settings, and Mandara writes nothing there.
+COSMIC keeps its settings in COSMIC Settings. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and COSMIC's window protocols, and changes nothing there. To start Mandara with COSMIC, add it in COSMIC Settings → Applications → Startup applications.
+COSMIC sets its own window animations
+COSMIC settings are managed in COSMIC Settings
 CPU
 CPU graph
 CPU scaling driver
@@ -976,6 +1059,7 @@ CPU, memory, GPUs, temperatures, disks and uptime
 CPU, memory, network, temperature and battery as compact numbers
 CSS
 Cache
+Cache limit
 Caches
 Caches & plugins
 Café murmur
@@ -1038,6 +1122,7 @@ Card radius
 Card spacing
 Card style
 Cards
+Cards & visualizers
 Cards keep clear of the bar's edge automatically.
 Cards show bigger thumbnails and flair, compact fits more posts and the grid puts pictures first; the panel's layout button switches too
 Cards side by side, wrapping onto more rows when they don't fit, or one above the other, wrapping into more columns
@@ -1045,12 +1130,16 @@ Care for an orphan
 Cargo Cult Science
 Carousel
 Carousel: how much bigger the middle wallpaper is
+Cascade
+Catching drags
 Categories
 Category
 Category chips
 Catppuccin
 Catppuccin Mocha
+Catppuccin's pastel flavours for the rEFInd menu
 Caustics
+Cel-shaded speed rays, halftone dots and an inked frame, like a comic panel
 Cell shape
 Center
 Center a lone column
@@ -1062,6 +1151,8 @@ Center tile
 Centre
 Chamfer
 Change
+Change GRUB settings
+Change Limine's look options
 Change a sidebar tab's icon
 Change folder
 Change icon
@@ -1078,6 +1169,8 @@ Change wallpaper
 Change wallpapers only between the two times below
 Change wallpapers only between two times of day, or always (off)
 Change wallpaper…
+Change your cursor until you pick one
+Change your icons until you pick a theme
 Change your station
 Changed display settings come back unless you press Keep within this time
 Changed plugins get a fresh instance; removed ones are unloaded
@@ -1086,7 +1179,7 @@ Changes apply the next time this network connects.
 Changes are authorized by polkit: you may be asked for an administrator's password.
 Changes are picked up live: add, rebuild or delete a plugin and the shell and this page update within a second.
 Changes start at this time
-Changes the bar's style, position and height. Your items stay unless you choose to replace them.
+Changes the bar's style, position and height. With the preset's items on, they replace the last preset's; items you added yourself always stay.
 Changes volumes and devices (PipeWire / PulseAudio)
 Changing {name} needs membership in the video group
 Channels
@@ -1104,6 +1197,7 @@ Charge limit off
 Charge limit on
 Charger
 Charger and battery
+Charger unplugged
 Charging
 Charging rate
 Charging — critical action cancelled
@@ -1121,6 +1215,7 @@ Check for failed units every
 Check for updates automatically
 Check its address in Studio, or try again in a moment.
 Check now
+Check that GRUB's menu can be rebuilt
 Check that the shell is running
 Check that {device} shows the same code.
 Check the watched repositories now
@@ -1144,6 +1239,7 @@ Checking your installation…
 Checking your {compositor} config…
 Checking…
 Checks
+Checks with GRUB's, Limine's and Plymouth's own tools before anything is replaced, and rolls back if a step fails
 Chemistry
 Cherish your children
 Children side by side, gap apart
@@ -1156,28 +1252,35 @@ Choices between a few options in Studio and in panels, and filter chips
 Choose Qur'an, hadith or both in Studio
 Choose a .conf or .ovpn file first
 Choose a boot entry for this item in Studio → Power & idle
-Choose a feel, then adjust the spring below
 Choose a file to import
 Choose a file…
 Choose a password for the new keyring
 Choose a photo…
 Choose a profile photo
+Choose a sound theme archive
+Choose a sound theme folder
 Choose a source and target language
 Choose a username
 Choose a valid Home Assistant entity
 Choose an area to record
+Choose an image for the boot screen
+Choose an image…
+Choose another…
 Choose displays
-Choose mango, niri, hyprland, umbriel, sway, river, kwin or aqueous (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.
+Choose mango, niri, hyprland, umbriel, sway, river, kwin, aqueous, labwc or cosmic (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.
 Choose one ayah to copy as an image
 Choose the key file
 Choose up to 24 Home Assistant entities
 Choose what the power menu offers and in which order. Built-in entries can be hidden or renamed; your own commands and boot entries can be removed.
 Choose where the launcher opens. Attached positions follow the bar on that edge.
 Choose…
+Choosing Corniche tide, Lighthouse sweep, Felucca drift, Magnetic, Mercury or Raindrop also sets matching dock animations and wallpaper transition
+Choreography
 Chrome
 Cicero
 Circle
 Circles
+Circular app icons with macOS Mojave style folders
 Citation copied
 Cities
 Cities around the world with daylight and a meeting planner
@@ -1187,12 +1290,14 @@ City or place name
 Clarice Lispector
 Classic
 Classic analog
+Classic list
 Classic: one surface with the search field and results. Beacon: a centred search bar with results under it once you type
 Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away
 Classical
 Claude Code today
 Claude Code's tokens today and this week, read from its local logs once you switch it on
 Clean
+Clean flat icons with light-blue folders
 Clean up
 Clean, slightly stylized cursors with a finger-shaped pointer
 Cleaning up
@@ -1214,6 +1319,7 @@ Click a code to copy it · the clipboard clears after {n} s
 Click a plugin to place it, or drag it onto the bar. Drop one here to take it off the bar.
 Click a window to match its app; “App + title” matches that exact title too.
 Click a window to pick it, again to capture · {enter}
+Click again to delete
 Click again to delete the file
 Click again to delete this VPN
 Click again to reset
@@ -1221,7 +1327,9 @@ Click an entry of the loaded tray menu by id
 Click anywhere to capture the whole screen · Ctrl+C copy · {enter}
 Click only while the dock is on
 Click opens the app
+Click or drag
 Click or scroll to set them
+Click the Stash bar item, or the shelf's icon in the tray, to bring them back
 Click the bin again to remove this account
 Click the game on the desktop to play it with the keyboard; click anywhere else to give the keyboard back. Its rules are in Studio → Plugins.
 Click through empty space
@@ -1242,15 +1350,18 @@ Clipboard prefix
 Clock
 Clock depth
 Clock style
+Clocks & time
 Clocks, weather, a system monitor, decorations and more on the wallpaper — behind its subject or in front. Each kind comes from a plugin; nothing runs until you add one.
 Clocks, weather, gauges and more, right on your wallpaper
 Clockwise
 Clone or init one in your project folders
 Close
 Close delay
+Close shelves; their items can be restored until the cache limit evicts them (--empty: delete them now)
 Close the screenshot tool
 Close the screenshot tool · Esc
 Close the shortcuts cheatsheet
+Close this shelf?
 Close window
 Closed popups stay in the notification center
 Closing a popup keeps it
@@ -1276,6 +1387,10 @@ Color picker preview
 Color points
 Color spread
 Color variation
+Colorful
+Colorful icons in a Windows 10 style
+Colorful icons in a Windows 11 style
+Colorful rounded-rectangle app icons
 Colors
 Colors & style
 Colors from your wallpaper
@@ -1289,6 +1404,7 @@ Column
 Columns
 Columns & outputs
 Come, seek, for search is the foundation of fortune: every success depends upon focusing the heart.
+Comic burst
 Coming up
 Comma-separated GitHub repositories as owner/name
 Comma-separated city names (English or Arabic) or time zones like Europe/Lisbon
@@ -1324,6 +1440,7 @@ Components
 Compose project · {detail}
 Compositor
 Compositor (default: detected)
+Compositor animations are off (Compositor → Effects)
 Compositor conflicts
 Compositor drop-in
 Compositor include line
@@ -1383,6 +1500,8 @@ Containers you create with docker or podman appear here
 Content
 Content follows the wheel, like a touchscreen
 Content follows your fingers
+Content trails its surface and settles a beat later
+Context menu
 Continue
 Continue at {reference}
 Continue reading
@@ -1410,6 +1529,7 @@ Copied {text}
 Copied {value}
 Copies captures
 Copies each window's contents (ext-image-copy-capture); app icons otherwise
+Copies items when you ask
 Copies its appearance and position. Later desktop edits do not change this screen.
 Copies marked secret by password managers are never recorded
 Copy
@@ -1421,7 +1541,10 @@ Copy a topic's notes (or all) into a folder as .md files
 Copy an ayah and its design as a complete PNG image
 Copy as
 Copy as image
+Copy dropped picture files
+Copy everything
 Copy from desktop
+Copy one of your looks under a new name
 Copy panel image
 Copy path
 Copy picked colors
@@ -1430,6 +1553,7 @@ Copy text
 Copy text (Ctrl+T) reads this script; Auto reads both
 Copy the first matching account's code (cleared from the clipboard after the timeout)
 Copy the id under the app's name into Studio → Plugins → Reddit → Client id.
+Copy the wallpaper
 Copy to clipboard
 Copy translation
 Copy with meaning
@@ -1448,6 +1572,7 @@ Corners cut at an angle for a sharper, technical look
 Corners: top-left, top-right, bottom-left, bottom-right
 Corniche
 Corniche night
+Corniche tide
 Corniche waves
 Cosmic neon green and cyan on deep indigo (light variant derived).
 Could not copy the image: {error}
@@ -1492,12 +1617,16 @@ Couldn't connect to {host}
 Couldn't create {path}: {error}
 Couldn't download {collection}
 Couldn't download {language}: {error}
+Couldn't fetch the picture: {error}
 Couldn't find the server {host}
+Couldn't import the look: {error}
 Couldn't install
 Couldn't install {app}
 Couldn't install {app}: {error}
+Couldn't keep that drop: {error}
 Couldn't list windows: {error}
 Couldn't load it
+Couldn't load the site's icon: {error}
 Couldn't load this
 Couldn't load: {error}
 Couldn't open a port: {error}
@@ -1550,13 +1679,13 @@ Crest sharpness
 Crisp material cursors with a slim outline
 Critical
 Critical alerts break through
+Critical battery
 Critical battery alert
 Critical battery at
 Critical notifications
 Critical notifications still pop up while do not disturb is on
 Critical only
 Crop shape
-Crossfade
 Ctrl
 Ctrl+Shift
 Ctrl+V pastes
@@ -1574,6 +1703,7 @@ Cursor size
 Cursor theme
 Cursor theme, size and hiding are in Themes → Cursor
 Cursor themes
+Cursors
 Cursors in the cool Nord palette, based on Vimix
 Curtain height
 Curtains
@@ -1608,7 +1738,9 @@ Damping
 Dante Alighieri
 Dark
 Dark appearance
+Dark colorful
 Dark from
+Dark low-poly shards with a calm, readable menu
 Dark theme folder
 Dark theme wallpaper
 Dark wallpaper
@@ -1657,6 +1789,7 @@ Decide per wallpaper what stands in front of the clock
 Decimals
 Deck
 Decoration
+Decorations & fun
 Deeds
 Deep focus
 Deep green: a giant stacked clock behind the subject and a dock media chip.
@@ -1668,6 +1801,7 @@ Default
 Default ({font})
 Default apps per category (from mimeapps.list)
 Default column width
+Default items
 Default list
 Default search
 Default source
@@ -1701,6 +1835,7 @@ Delete completed tasks (every list, or one)
 Delete every downloaded collection from this computer; nothing is downloaded again on its own
 Delete files
 Delete notes too
+Delete one of your looks (built-in looks can't be deleted)
 Delete tab
 Delete task
 Delete tasks too
@@ -1745,6 +1880,7 @@ Desktop
 Desktop cards & visualizers
 Desktop clocks
 Desktop decorations
+Desktop follows
 Desktop fun
 Desktop ids listed first, in this order (Ctrl+P in the launcher pins too)
 Desktop ids never listed
@@ -1758,6 +1894,8 @@ Desktop visualizers
 Desktop weather
 Desktop widgets
 Desktop world clock
+Detailed icons based on the elementary set, extended with many extra icons
+Detailed icons with rounded shapes and soft gradients, made for dark desktops
 Details
 Detect automatically
 Detected compositor and drop-in state
@@ -1795,6 +1933,7 @@ Dim the screen
 Dim unfocused windows
 Dim while selecting
 Dimmed screen
+Dip
 Directory results
 Disable
 Disable a unit and reload systemd
@@ -1828,7 +1967,9 @@ Display manager
 Display name
 Display settings…
 Displays
+Dissolve: the old image burns away along a glowing edge
 Distance from the edge
+Distance from the middle to the items; it grows on its own when many items need room
 Distance from the screen edge (floating styles and the floating frame)
 Distant coast
 Distro logo
@@ -1866,10 +2007,14 @@ Dot
 Dot matrix
 Dot pitch
 Dots
+Dots grow in when an app opens a window and shrink away when it closes one
 Dotted ring
 Down
 Download
+Download a catalog boot theme, check its pinned SHA-256 and prepare it in Mandara's cache (nothing on the system changes until you apply it)
 Download a catalog cursor theme from its GitHub release, verify its SHA-256 and install it to ~/.local/share/icons
+Download a catalog icon theme from its project's GitHub release, verify its SHA-256 and install it to ~/.local/share/icons
+Download a catalog sound theme from its upstream release, verify its SHA-256 and install it to ~/.local/share/sounds
 Download a collection (Arabic and the meaning in your language), all of them, or (with none) your chosen ones; returns at once, see `hadith status`
 Download a collection on Home first
 Download a model by id, or all of them
@@ -1916,15 +2061,20 @@ Downloading {file}: {error}
 Downloading {language}…
 Downloading {language}… {size}
 Downloading {model} ({file}): {error}
+Downloading {percent}% · Cancel
 Downloading {url}: {error}
 Downloading…
 Downloading… {done} of {total} MB
 Downloads
+Downloads only pinned themes from their authors, checked against a checksum; nothing in them is ever run
+Downloads the boot themes you pick from their authors' GitHub archives, checked against a pinned checksum
 Downloads the cursor themes you pick from their GitHub releases
 Downloads the feeds you follow and their pictures
+Downloads the icon themes you pick from their projects' GitHub releases, or a link you paste
 Downloads {size} from speed.cloudflare.com
 Dracula
 Drag a history card left or right to remove it
+Drag a shelf's corner to resize it
 Drag around the QR code · Enter scans the whole screen · Esc cancels
 Drag displays to arrange them
 Drag inside the selection to annotate · Ctrl+Z undo · {enter}
@@ -1937,8 +2087,12 @@ Drag to select · A arrow · B box · C circle · Ctrl+C copy · Ctrl+S save · 
 Draw no drop shadow
 Draw the wallpaper
 Draw the wallpaper's foreground subject over the clock (with the Fill mode)
+Drawing order
+Drawing vs filling
 Draws the cursor in software: fixes an invisible or flickering cursor on some GPUs (Hyprland, Umbriel)
 Draws the wallpaper's subject over the desktop clock and widgets: hand-tuned, or with a small depth model downloaded on demand
+Drift in on a slant
+Drift: a slow, eased glide
 Drive
 Drive {n}
 Drives
@@ -1946,12 +2100,16 @@ Drives and their volumes: filesystem, mount points, usage, encryption (JSON)
 Drizzle
 Drop an app here, or choose a file
 Drop an app on the dock or here to install it.
+Drop anything here
 Drop files on it to trash them; right-click to empty it
+Drop from above
 Drop plugins here
 Drop shadows under windows
 Drop to install
 Drop-down panels
 Drop-down panels and plugin cards
+Drop: fall in and bounce
+Drops in from above and lands with an elastic bounce
 Drops of water hollow out a stone.
 Dry run
 Dry run (MANDARA_UNINSTALL_DRY_RUN): nothing will be removed or moved.
@@ -1976,8 +2134,10 @@ Each group of bar items sits on a soft capsule of its own
 Each new one replaces the current wallpaper
 Each note is a Markdown file, each topic a folder in here — point it at a synced folder or an Obsidian vault (empty: Mandara's data folder)
 Each one is its own small surface, created only while it shows; visualizers listen only while music plays and stop after a moment of silence.
+Each preset sets the spring and how content enters; adjust either below
 Each repair is safe: your compositor config only ever gets one include line, with a backup.
 Each sets the launcher's style, layout and placement together; change any setting below afterwards.
+Each shelf's view button switches between them
 Each station remembers its own volume
 Each surface
 Each walk to the mosque, morning or evening, is a welcome being prepared.
@@ -1986,6 +2146,7 @@ Eastern Arabic (١٢٣)
 Eastern Arabic numerals
 Easy
 Edge
+Edge catchers
 Edge dock
 Edge frame
 Edge frame only
@@ -2028,16 +2189,21 @@ Emoji in plain searches
 Emoji prefix
 Emoji, calculator results and clipboard entries are pasted at once
 Empty
+Empty & close
+Empty Trash
 Empty Trash? {n} items are deleted forever — click again
 Empty Trash…
 Empty bar space clicks through to windows
+Empty the shelf
 Empty uses this computer's name
 Empty uses your wallpaper folder
 Empty: on the Wallpaper tab, hover a wallpaper and press + to add it.
 Empty: the built-in sentence
 Empty: the usual greeting
+Emptying the Trash
 Emptying the Trash deletes {n} items for good; run `mandara msg dock trash empty --yes` to confirm
 Enable
+Enable Sound themes
 Enable a unit at boot / login and reload systemd
 Enable launcher
 Enable local shell commands in Studio
@@ -2067,6 +2233,7 @@ Engine
 Engine unreachable
 English
 Enjoying Mandara?
+Enrol the changed Limine config
 Enter
 Enter / Capture copies the image
 Enter a password, or let the user choose one at first login
@@ -2082,6 +2249,7 @@ Enter the passphrase
 Enter the stream's address
 Enter this code on {device}, then press Enter on it.
 Enter unlocks · Esc cancels
+Entrance
 Entries in collections
 Entries kept
 Entries kept (pinned ones don't count)
@@ -2106,6 +2274,7 @@ Evening over Stanley Bridge: coral, apricot and lavender over a plum sea.
 Event dots
 Event hooks: every event with its rules (JSON)
 Event reminders
+Events
 Events come from Studio → Calendar.
 Events from your calendars in the clock panel. Add one with mandara msg calendar add <url or .ics> [name]
 Every
@@ -2154,6 +2323,7 @@ Everything
 Everything comes in time to him who knows how to wait.
 Everything is up to date
 Everything looks healthy
+Everything rises like a swell, lists rolling in wave after wave
 Everything runs locally on your CPU
 Everything started cleanly
 Everything was already up to date
@@ -2171,6 +2341,7 @@ Expected a color like #1e88e5
 Expected a length in milliseconds
 Expected a local time as HH:MM
 Expected a number
+Expected a theme, e.g. {example}
 Expected a time such as 45, 30m, 2h or 1d
 Expected key=value, got {value}
 Expected left or right, not {value}
@@ -2190,15 +2361,18 @@ Exporting app themes
 Exports
 Exposure
 Expressive
+Expressive: the whole screen framed, round buttons, a scalloped rail and a day-block clock over a glowing wave.
 Extend
 External brightness
 External monitor brightness is off
 External monitor brightness is off (Studio → Displays)
 External monitors answering DDC/CI and their brightness (JSON text)
 External monitors over DDC/CI, and how the brightness keys move them
+Extra app, folder and file icons that extend the Adwaita set
 Extra distance from the left / right edge
 Extra distance from the top / bottom edge (centre: moves it down)
 Extra space between the bar and your windows (the bar keeps it free)
+Extra third-party app icons that extend the elementary set; no longer maintained
 Extracting…
 Eye breaks
 Eye breaks are off
@@ -2207,6 +2381,7 @@ Factory reset
 Fade
 Fade & slide
 Fade before
+Fade in
 Fade the mix out and stop
 Fading out…
 Fading — move the mouse to end it
@@ -2242,6 +2417,7 @@ Feeds · Sidebar card
 Feels
 Feels like {temp}
 Feet, what do I need them for if I have wings to fly.
+Felucca drift
 Ferdowsi
 Fetch
 Fetch every calendar again now
@@ -2250,7 +2426,9 @@ Fetch fresh weather now
 Fetch from GitHub
 Fetch rates
 Fetch the latest articles of every feed
+Fetch the picture
 Fetched {repo}
+Fetches a linked picture or a site's icon only when you click it (HTTPS)
 Fetches forecasts from open-meteo.com
 Fetches synced lyrics from lrclib.net while the panel is open
 Fetching posts…
@@ -2271,10 +2449,13 @@ Files in a fan
 Files in a stack
 Files in plain searches
 Files prefix
+Files, pictures, text and links wait here until you drag them out
 Fill
 Fill color
 Fill mode
 Fill quiet moments with His remembrance; it is a treasure kept for you.
+Fill style
+Fill the screen
 Fill under the curve
 Filled
 Filled dial
@@ -2312,6 +2493,8 @@ Firefox / Zen
 Firefox would start as:
 Fireplace
 Fireside
+Firm
+Firmware
 Firmware setup
 Firmware setup restarts are supported here
 First check after
@@ -2339,8 +2522,27 @@ Fixed times
 Flake · {path}
 Flare radius
 Flat
+Flat colorful icons with blue folders
 Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass
+Flat icons based on Suru, with many app icons and symbolic sets
+Flat icons recolored to the Kanagawa palette
+Flat icons recolored to the Tokyo Night palette
+Flat icons recolored to the four Catppuccin flavours
+Flat icons recolored to the green Everforest palette
+Flat icons recolored to the muted Rosé Pine palette
+Flat icons recolored to the warm Gruvbox palette
+Flat icons with a paper-cut look; no longer maintained
+Flat icons with a range of folder colors, from Linux Mint
+Flat icons with bold colors and long shadows; no longer maintained
+Flat icons with light washed colors
+Flat icons with orange folders; no longer maintained
+Flat icons with orange-accented folders and a light panel option
+Flat icons with subtle shading, in many folder colors and light or dark tones
+Flat icons with teal accents, based on Paper
+Flat icons with very wide app coverage, in light and dark variants
 Flat moves the pointer exactly as far as the mouse
+Flat white OS icons on a quiet dark background
+Flat, colorful icons with blue folders and a clean, modern look
 Flat, softly shadowed cursors from the Qogir icon theme
 Flat, with a fine outline
 Flatpak applies the app's sandbox from its remote
@@ -2359,6 +2561,7 @@ Float over windows (smoothest), push them aside while the sidebar is open, or ke
 Float the edge frame
 Floating
 Floating chromatic-glass islands
+Floating shelves you drag anything onto and back out of
 Floating side panels only
 Floating styles and the floating frame
 Floats beside a floating bar; flush joins the edge frame
@@ -2389,15 +2592,20 @@ Fold the chain of narrators
 Folder
 Folder (empty for none)
 Folder (empty: Generated in your wallpaper folder)
+Folder and file-type icons that pair with the Vertex look; no app icons
 Folder for AppImages and portable apps; empty uses ~/.local/share/mandara/apps
 Folder to put it in
+Folder, file and action icons made to match the Arc look; no longer maintained
 Folders
 Folders on the right side of the dock. Click one for its newest files; drag it along the dock to reorder or away to remove it.
 Folders to search
 Folders, comma separated (empty: your home folders)
+Folder…
 Follow Mandara
 Follow Mandara, or a language of its own: its panel, bar item, sidebar card, widgets and the meanings it shows; the rest of Mandara keeps its language
+Follow Motion
 Follow Quick start above: your plugin shows up here, and in Installed, as soon as you copy it in.
+Follow Studio → Motion, or give the menu a speed of its own
 Follow a community to see its top posts here
 Follow sites you like: add their addresses or pick from tested starter feeds in Studio.
 Follow system
@@ -2408,7 +2616,10 @@ Follow the pointer
 Follow the shell
 Follow theme
 Follow units
+Follow your desktop
 Following the Equator
+Following your desktop ({theme})
+Follows Studio → Motion
 Follows the desktop's transition (Fit & effects)
 Follows which window has focus
 Follows your desktop
@@ -2422,6 +2633,8 @@ For terminal apps; empty uses your preferred terminal (Applications), then $TERM
 For the Cards style
 For the Custom quality
 For the Model mode
+For the Ring style
+For the Sketch transition
 For the things we have to learn before we can do, we learn by doing.
 For windows whose app id doesn't name their app (games, web apps): * matches anything, e.g. steam_app_* → steam.
 For you only needs no password; for everyone, Flatpak asks for it
@@ -2454,6 +2667,7 @@ Formats
 Formats, tonal ramp and WCAG contrast of a color
 Forty Hadith Qudsi
 Found
+Found by: {evidence}
 Four
 Frame
 Frame rate
@@ -2465,13 +2679,17 @@ Framed bars
 Frames per second
 Francis Bacon
 Frankenstein
+Frappé
+Free
 Free and open: plugins are GitHub repositories tagged mandara-plugin. They run sandboxed — no files, network or system access unless they ask for commands.
+Free this edge first; the catcher switches on once nothing else uses it.
 Free, on GitHub: no account, no review queue
 FreeBSD can't do this without ConsoleKit2
 FreeBSD has no BlueZ, the Bluetooth service Mandara uses
 FreeBSD has no power-profiles-daemon; powerd(8) sets the processor's speed there
 FreeBSD has no systemd: its services are rc(8) scripts, which this plugin doesn't manage
 FreeBSD sleeps by suspending to memory (ACPI S3) only
+FreeBSD's loader is out of scope: nothing here changes it.
 Freed {size}
 Freeze a running container's processes
 Frequency
@@ -2483,16 +2701,21 @@ Friday
 Friday and Saturday
 Friendship is always a sweet responsibility, never an opportunity.
 From
+From a package or your folders
 From api.alquran.cloud: the Tanzil Project's text, copied exactly
+From its button or edge
 From nothing to a plugin in your bar. Run these in a terminal; the last step copies it straight into your development folder.
+From the centre
 From the installer's own records.
 From the language
+From the pointer
 From the public-domain hadith-api collection, via jsDelivr
 From your playlist ({count})
 From your system
 From your wallpaper
 From {file}
 From {folder}
+From {look}
 Front pages
 Frost
 Frosted glass
@@ -2525,9 +2748,11 @@ GPU {n}
 GPU {n} power
 GPU {n} temp
 GRAPHICS
+GRUB's menu is hidden on this system (GRUB_TIMEOUT_STYLE=hidden or GRUB_TIMEOUT=0): the theme shows when you hold Shift or press Esc while it starts.
 GTK 3 / 4 & libadwaita
 Gabriel García Márquez
 Gabriela Mistral
+Gallery
 Games
 Games and videos keep their true colours
 Games you install in Steam show up here
@@ -2566,6 +2791,7 @@ Generation {n} · NixOS {version} · kernel {kernel}
 Generations
 Generations to keep
 Generator
+Gentle
 Gentle 20-20-20 reminders to rest your eyes
 Geometric set
 George Eliot
@@ -2588,7 +2814,9 @@ Give generously
 Give one display its own wallpaper (clear = follow the main one)
 Give one side bar a bar style's item look (shapes, colour and inset), or none for the shared side bar look
 Give the bar a style preset's look (your items stay), or none for the plain bar
+Give the edge to the new setting
 Give the file's full path
+Give the item a name
 Give the profile a name
 Give the station a name
 Give time to those who owe you, and let go when you can.
@@ -2600,8 +2828,10 @@ Glass pills
 Glass pills and island: their corners. Edge frame: the hover chips, and the frame's ends when it floats
 Glass rim
 Glass tube clock
+Glitch: slices shear sideways with a colour split, then settle
 Global
 Gloss
+Glossy detailed icons based on Faenza, made for dark themes
 Glossy liquid blobs melting together
 Glow
 Glowing wave
@@ -2616,6 +2846,7 @@ Good evening
 Good morning
 Good night
 Google Authenticator export codes aren't supported yet; export accounts one by one
+Google's Material Design product sounds as a desktop theme
 Grace period after the pointer leaves
 Graded
 Gradient angle
@@ -2627,6 +2858,9 @@ Green
 Greet everyone with peace; love grows from it, and faith with love.
 Greeting
 Gregorian
+Grey
+Grey Dark
+Grey folders
 Grey skies today. Keep something warm close.
 Grid
 Grid columns
@@ -2663,6 +2897,8 @@ Hairlines between apps, recent apps and the right side
 Half past {hour}
 Halftone
 Halftone cover
+Halftone dots
+Halftone dots or pen hatching in the far corner of panels, the launcher and notifications
 Hamlet I.3
 Hamlet II.2
 Hanafi
@@ -2676,6 +2912,7 @@ Hands over numerals
 Hangs from the top edge with curved shoulders
 Hard
 Hard disk
+Hard shadow
 Hasan
 Hatred does not cease by hatred at any time: hatred ceases by love, this is an old rule.
 He who has begun has half done. Dare to be wise; begin!
@@ -2697,6 +2934,7 @@ Health checks
 Heap & buffers
 Heavier springs move more slowly
 Heavy
+Heavy and unhurried: surfaces glide in on a slant, content trailing like a sail
 Height
 Height in the center
 Height on the screen
@@ -2759,6 +2997,7 @@ History paused
 History size
 Hold a button
 Hold reminders while a fullscreen window (a game, a video) has focus
+Hold the right button, move toward an item and let go to pick it in one motion
 Hold time
 Hold to confirm
 Hold to sincere faith in the One God; it is the root of every good.
@@ -2814,8 +3053,10 @@ Hovering never moves the selection
 How Mandara starts apps from the launcher, dock and bar: a prefix such as uwsm app --, a systemd scope per app, and the terminal for terminal apps.
 How a community opens; change it any time in the panel
 How a new wallpaper replaces the old one
+How a new wallpaper replaces the old one (also on the Wallpaper page)
 How a plugin goes from source code to the bar, and what it may do there.
 How a slideshow change replaces the wallpaper
+How an icon calls you when its app has an urgent window or a critical notification
 How app icons are drawn
 How big the hot spot in each corner is
 How cards stand off their panel: tonal, raised on a shadow or outlined
@@ -2834,6 +3075,7 @@ How large the verses and hadith are set
 How long a key is held before it repeats
 How long a panel's result message (stopped, copied, failed…) stays up
 How long a slideshow change takes
+How long a wallpaper change takes
 How long an unpinned side bar waits after the pointer leaves before it slides away
 How long hover-opened panels, the launcher and the session menu wait after the pointer leaves
 How long popups stay
@@ -2886,14 +3128,18 @@ How switches, check boxes and radio buttons look and move
 How text fields and search boxes are drawn
 How the bar item shows unread articles
 How the critical warning appears
+How the dock comes and goes, auto-hide included
+How the image arrives once its lines are drawn
 How the media panel draws the live audio spectrum
 How the shell's controls look. Pick a preset to set them all at once, or a design per component: each preview is the real control, so try it, then click a design to use it
 How the volume, brightness and mixer sliders look; thin sliders keep the classic look
 How the warning appears
+How thick the outline's strokes are
 How to publish a plugin
 How well said the aged farmer to his son, O light of my eyes, thou wilt not reap save that which thou hast sown.
 How wide each item is across the side bar
 How wide each side bar is
+How windows open, close, move and switch workspaces; written only to Mandara's drop-in, never to your own config
 However hard it is, do not be the one who breaks the bond.
 Hue shift
 Humidity
@@ -2934,12 +3180,16 @@ Icon spacing
 Icon theme
 Icon theme {theme} is installed
 Icon theme {theme} is missing; install it or choose another in Themes → Icons
+Icon themes
 Icon-sized items as round buttons: a circle, a Material 3 Expressive shape or a squircle (they become square), or the item shape
 Icon-sized items in the capsule colour, or a solid accent or tertiary tone
 Icons
 Icons and thumbnails
-Icons bounce until the app's first window appears
+Icons animate until the app's first window appears; pick the style on the Motion page
+Icons in the style of Windows XP
+Icons inspired by macOS Mojave
 Icons only
+Icons recolored to the cool Nord palette
 Icons swell as the pointer passes (spring-animated)
 Identity or bus name, e.g. firefox or kdeconnect; the media panel and lock screen never follow them.
 Idle
@@ -2984,12 +3234,16 @@ Imagination is more important than knowledge.
 Imperial
 Imperial (°F, mph)
 Import
+Import a Look
+Import a Look…
 Import a WireGuard (.conf) or OpenVPN (.ovpn) file below — it becomes a NetworkManager connection.
 Import a WireGuard (.conf) or OpenVPN (.ovpn) profile
 Import a profile
 Import and export
 Imported {added} of {total} feeds
+Imported {name}
 Imported {name} — switch it on above
+Imported · unverified
 Imported — the previous settings are in {folder}
 Importing…
 Improved
@@ -2999,6 +3253,7 @@ In a terminal
 In front
 In logical pixels; apps and the compositor scale it on HiDPI screens
 In the bar
+In the middle
 In the slideshow playlist: click to remove
 In the store
 In this folder
@@ -3006,6 +3261,7 @@ In use
 In your language, the hadith meanings are AI renderings of the meaning, not published translations.
 In {minutes} min
 In {n} days
+Inactive: this edge is in use
 Inbox
 Include added to {file} (backup kept)
 Include all sub-folders
@@ -3018,6 +3274,10 @@ Index lines
 Indicators
 Inferno XXVI
 Initial target language code; choose from the provider's language list in the panel
+Ink
+Ink black
+Ink lines
+Ink outlines
 Inner padding
 Input
 Input device
@@ -3028,14 +3288,22 @@ Inspecting…
 Install
 Install & use
 Install KDE Connect on your computer and phone, then pair them here.
+Install a cursor theme from an archive or a folder on this computer, or from a link. Every theme found in it is checked (an index.theme and readable cursor files); nothing in it is run.
+Install a folder…
+Install a sound theme from a folder, an archive, or an https:// link (links aren't verified: add --unverified)
 Install all
+Install an archive…
+Install an icon theme from an archive or a folder on this computer, or from a link. Every theme found in it is checked (a valid index.theme and its icons); scripts in it are never run or kept.
 Install and enable power-profiles-daemon to switch profiles
 Install anyway
 Install apps
 Install apps by dropping AppImages, Flatpaks, archives or packages on the dock or Studio
 Install apps from files (AppImage, Flatpak, .tar.gz/.zip, .deb/.rpm/…): shows the confirmation on screen unless --yes; --dry-run prints the plan
 Install app…
+Install cursor themes from an archive or folder, or from an https:// link (no checksum exists for those: pass --unverified)
+Install from link
 Install gnome-keyring or KeePassXC (Secret Service) · {error}
+Install icon themes from an archive or folder, or from an https:// link (no checksum exists for those: pass --unverified)
 Install it from Studio → About.
 Install it into the development folder
 Install its icon
@@ -3044,12 +3312,16 @@ Install location
 Install one from the marketplace with a click, or drop a plugin folder into your plugin folders. It shows up here within a second.
 Install pacman-contrib to check for updates without touching the system database
 Install the tailscale package, then start tailscaled
+Install the theme
 Install this binary even when its published checksum is unavailable or doesn't match.
 Install this tool and try again:
 Install your NVIDIA driver's utilities (nvidia-smi) to read this card
 Install {compositor} yourself, then run: {command}
 Install {count} apps
 Install, preview and apply cursor themes, live, with size and hiding options
+Install, preview and apply desktop sound themes for Mandara and your apps
+Install, preview and apply desktop sound themes: the chimes for notifications, warnings, volume, devices and logging in, for Mandara and your apps.
+Install, preview and apply icon themes, live, from a curated gallery or your own files
 Installed
 Installed Ollama models (JSON)
 Installed apps with where each came from (package manager, Flatpak, Snap, AppImage, Mandara, local); --by-mandara lists what Mandara's installer installed, with every file it wrote
@@ -3062,11 +3334,14 @@ Installed cursor themes
 Installed folder
 Installed for everyone: Flatpak asks for your password
 Installed for you only: no password needed
+Installed on this system
 Installed recorders
 Installed sound themes
 Installed with {manager} — update through your package manager
 Installed {fonts} into {folder} — restart the shell to use them
 Installed {plugin} {version} — it's live now
+Installed {themes}
+Installed {themes}; skipped {skipped}
 Installed {version}
 Installed, but not unlocked when you log in
 Installing
@@ -3079,9 +3354,13 @@ Installing {percent}% · Cancel
 Installing…
 Installs system-wide with {manager}
 Installs them to ~/.local/share/icons
+Installs them to ~/.local/share/icons and sets the icon theme in your GTK, Qt and KDE settings
+Installs them, or an archive, folder or link of your own, to ~/.local/share/icons
+Installs themes you pick into ~/.local/share/sounds, and removes only those.
 Installs to {dir}
 Installs with Flatpak, for everyone
 Installs with Flatpak, for you only
+Instant
 Instrumental
 Integrated
 Integration
@@ -3129,6 +3408,7 @@ It crashes or runs past its time budget: {error}
 It draws the wallpaper's subject over the desktop clock; switch the depth effect off in Studio → Wallpaper instead
 It fails to start: {error}
 It holds Mandara Studio, the settings and the session actions
+It holds {count} items. Closed shelves can be brought back with Restore until the cache limit clears them.
 It installs Linux apps (AppImages and portable Linux builds), which FreeBSD can't run without Linux emulation
 It is in general the unexplored that attracts us.
 It is in the character of growth that we should learn from both pleasant and unpleasant experiences.
@@ -3139,11 +3419,13 @@ It is the on-screen way to lock, log out, restart and shut down
 It lists crashes from systemd-coredump, which FreeBSD doesn't have; FreeBSD writes core files instead
 It lost its connection to the compositor ({error}). Turn night light off and on again to retry.
 It moves only while the desktop shows, a few frames a second.
+It never
 It opens apps and runs Mandara's commands, including the one that turns plugins back on
 It plays: {details}
 It poses as Mandara's built-in {plugin} plugin
 It reads Linux's socket tables in /proc/net, which FreeBSD doesn't have; sockstat(1) lists FreeBSD's
 It runs commands without being asked ({command})
+It runs the program directly with its arguments, never through a shell. Quote an argument that holds spaces.
 It shows nothing: its bar item, panel and sidebar card are all empty
 It shows nothing: its bar item, panel, sidebar card and desktop widgets are all empty
 It's Mandara's {example} example, republished unchanged
@@ -3156,7 +3438,10 @@ Item shape
 Item size
 Item spacing
 Item style
+Items
+Its items, shape and look. Drag plugins into its groups below.
 Its name (optional)
+Its own speed
 Its people
 JPEG
 JPEG quality
@@ -3200,6 +3485,7 @@ KB
 KDE / Plasma
 KDE Breeze cursors, refined and extended with more shapes
 KDE Connect did not respond in time
+KDE's classic set, warm and rounded, with an orchestral login
 KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings.
 KWin settings are managed in Plasma System Settings
 KWin: startup entry {path}
@@ -3226,6 +3512,7 @@ Keep history
 Keep holding to confirm
 Keep in Dock
 Keep in Dock on / off for an app
+Keep it
 Keep it visible
 Keep low-urgency ones
 Keep my component designs when changing looks
@@ -3233,6 +3520,7 @@ Keep old articles for
 Keep passive (idle) tray icons in the bar; they're always listed in the tray panel
 Keep playing
 Keep split direction
+Keep the catcher
 Keep the computer awake for N minutes (0 stops; no number = until turned off)
 Keep the current frame while running on battery
 Keep the display change being tested
@@ -3241,6 +3529,7 @@ Keep the focused column in the middle of the screen
 Keep the home folder
 Keep the launcher in the Dock
 Keep the newest
+Keep the outline
 Keep the pointer inside the window (games)
 Keep the screen awake
 Keep the unread count current while the panel is closed, at a low interval; off, nothing downloads until you open Feeds
@@ -3257,6 +3546,7 @@ Keeps a history of what you copy
 Keeps daily totals in Mandara's state folder
 Keeps the bar and its panels above fullscreen apps; applies after a shell restart
 Keeps your feeds and saved articles in Mandara's state folder
+Keeps your shelves in Mandara's state folder and what you drop on them in its cache
 Keeps your stations and favourites in Mandara's state folder
 Kept
 Kept awake
@@ -3308,6 +3598,7 @@ Laptop panels use the brightness keys. For external monitors, turn on DDC/CI in 
 Laptops with a lit keyboard
 Large
 Large clocks and headings
+Large icon set in the Gruvbox palette, with dark and light variants
 Large icons, or rows with each app's description
 Large leading top and trailing bottom corners, small ones between
 Larger screens are scaled down to fit; smaller ones keep their size
@@ -3328,6 +3619,7 @@ Latin text recognition
 Latin · English, Español, Français
 Latitude
 Latitude must be within ±90° and longitude within ±180°
+Latte
 Latte Light
 Launch prefix
 Launcher
@@ -3346,16 +3638,19 @@ Leading zero
 Lean on Him rather than charms and omens, and walk on without fear.
 Learning & life
 Learning without thought is labour lost; thought without learning is perilous.
+Leave a faint copy of the lines over the wallpaper afterwards
 Leave empty for the toplist, e.g. "nature 4k"
 Leave empty to follow the desktop's icon theme
 Leave it
 Leave snipping and keep the toolbar · Esc
+Leave the edge free
 Leave undone whatever you hesitate to do.
 Left
 Left (vertical)
 Left / top
 Left accent
 Left click
+Left edge
 Left icon colour
 Left icon shape
 Left item inset
@@ -3412,18 +3707,25 @@ Light appearance
 Light from
 Light intensity
 Light or dark surfaces for every theme
+Light panel
 Light theme folder
 Light theme wallpaper
 Light wallpaper
+Light, natural and pleasant: a few physical sounds over freedesktop
 Lighten a burden, cover a fault, help a brother or sister through.
+Lighthouse sweep
 Lightness
 Limestone
+Limine has no theme folders: it takes colours, a branding line and a wallpaper. Pick a Mandara theme to dress it in.
+Limine in {theme}
 Limited mode
 Limited mode asks Reddit once a minute: next request in {seconds} s
 Limited mode shows comments as one list, without scores or replies' structure
 Line
+Line colour
 Line density
 Line gap
+Line thickness
 Line weight
 Line width
 Line {line}
@@ -3440,7 +3742,10 @@ Links
 Links it into ~/.config/Kvantum and runs kvantummanager --set Mandara
 Linux & open source
 Liquid
+Liquid metal: shapes stretch as they travel and round off at rest
+Liquid stretch
 Liquid wave
+Liquid: a springy zoom
 List
 List a hidden app again
 List desktop actions such as New Private Window
@@ -3451,7 +3756,8 @@ List name
 List plugins with origin and enablement
 List stations, all or of one shelf
 List the configured translation provider's languages
-List the one-click looks
+List the motion presets, how each feels and which one is in use
+List the one-click looks: the built-in ones and yours
 List themes (built-in and ~/.config/mandara/themes)
 List time zones, optionally only those containing a word
 List, add to, remove from or clear the slideshow playlist
@@ -3459,9 +3765,12 @@ Listen
 Listening TCP ports and unconnected UDP sockets with their process, scope and address
 Listening ports
 Lists and joins networks through NetworkManager
+Lists fifty popular open-source icon themes and downloads the ones you pick from their projects' GitHub releases, checked against a pinned checksum
 Lists in order, with open / done counts
 Lists running processes and ends the ones you choose
+Lists ten popular open-source cursor themes and downloads the ones you pick from their authors' GitHub releases, checked against a pinned checksum
 Lists, focuses and closes windows (foreign-toplevel)
+Lists, tiles and cards arrive one after another instead of all at once
 Little Feet
 Little Women
 Little feet of children, two tiny suffering jewels, how can people pass and not see you!
@@ -3485,6 +3794,7 @@ Load it now with `sudo modprobe i2c-dev`, and at every boot with `echo i2c-dev |
 Load more
 Load pictures
 Load settings from an exported file (the current ones are backed up first)
+Load the site's icon
 Loaded
 Loaded and initialized in {ms} ms · bar {bar} · panel {panel} · sidebar {sidebar}
 Loaded now
@@ -3513,6 +3823,7 @@ Location
 Location service (GeoClue)
 Lock
 Lock after
+Lock and unlock
 Lock appearance
 Lock at login
 Lock before sleeping
@@ -3532,6 +3843,7 @@ Locked
 Locked {device}
 Locked · {size}
 Locking
+Locking and unlocking the screen
 Locking in {seconds} s — move the mouse to stay
 Locks, suspends, restarts and powers off through logind
 Log in
@@ -3554,6 +3866,7 @@ Longer titles are cut short with an ellipsis
 Longitude
 Look
 Look & feel
+Look again
 Look at another reminder without changing the one shown (negative: the ones shown before)
 Look at something 6 metres away
 Look at something 6 metres away for {n} seconds
@@ -3569,6 +3882,7 @@ Look up the place name above
 Look up the public IP address (one request to the configured endpoint)
 Look within. Within is the fountain of good, and it will ever bubble up, if thou wilt ever dig.
 Looking at /proc/net
+Looking at how this machine boots…
 Looking for Ollama…
 Looking for generated wallpapers…
 Looking for installed apps…
@@ -3599,6 +3913,7 @@ Lower is warmer; 6500 K is untinted
 Lower it to let the desktop (or the frosted glass) show through
 Lower it to let the desktop show through (floating or rounded side panels)
 Lower it to let the desktop show through panels
+Lower it to let the desktop show through the ring
 Lower it to let your wallpaper and windows show through the bar
 Lower lets windows show through
 Lower lets windows show through popups
@@ -3615,13 +3930,16 @@ MICROPHONE
 MKV survives a crash; MP4 plays everywhere; WebM holds AV1
 MPRIS now playing and controls
 MWL
+Macchiato
 Macchiato Dark
 Machine card
 Machine tiles
 Madani
 Made by Mandara
 Made by Mandara and built into the shell, so they update with it. Turn on what you want; turn off or remove what you don't (core plugins stay on).
+Made into a splash with a proper password prompt, a GRUB theme and a Limine wallpaper, drawn sharp at your screen's size. SVGs that load files or run scripts are refused.
 Maghrib
+Magnetic
 Magnification
 Magnification spread
 Magnified size
@@ -3637,6 +3955,7 @@ Mains
 Mains power
 Maintenance
 Make
+Make a GRUB font from the theme's own font
 Make a device the default input
 Make a device the default output
 Make a list (--color tone|hue:<deg>, --icon name)
@@ -3645,10 +3964,15 @@ Make a window fullscreen or restore it
 Make an accepted Hajj
 Make an app the default for a category (edits only those keys of mimeapps.list)
 Make an installed cursor theme (and optionally a size) the cursor, live; `none` returns to your compositor's own
+Make an installed icon theme Mandara's and the desktop's (GTK, Qt / KDE), live; `none` goes back to the desktop's own
+Make an installed sound theme Mandara's (and, with Apply to apps, your apps'); `none` returns to your desktop's own
+Make it the boot splash
 Make it yours
 Make main display
+Make one with Use my image first
 Make tabs, name them, give them an icon and put any widget on any of them. The open sidebar follows at once.
 Make the current recipe a random one (of one style when given)
+Make the wallpaper first: {command}
 Make your own wallpapers and video loops on this machine: twelve styles, any palette, every detail adjustable, up to 8K. A plugin in the store; turn it on to design here.
 Makki
 Malicious
@@ -3659,6 +3983,7 @@ Mandara
 Mandara Corniche
 Mandara Login shows your wallpaper when your account is picked (a copy goes to /var/lib/mandara-login)
 Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}
+Mandara Looks
 Mandara Obsidian
 Mandara Shell
 Mandara Shell isn't running
@@ -3666,11 +3991,14 @@ Mandara Studio
 Mandara Studio (this window)
 Mandara Studio itself
 Mandara Studio…
+Mandara and your apps follow your desktop's icon theme.
 Mandara answers pairing codes and connection requests (restart the shell to apply)
 Mandara asks for your administrator password, backs up greetd's PAM file and changes only its own marked lines.
 Mandara asks for your keyring password when an app needs a saved secret (gnome-keyring / Secret Service). Skipped while another prompter, such as GNOME Shell, is running
 Mandara asks for your password when an app needs administrator rights (polkit). Skipped if another agent is already running
 Mandara can't set this on Sway
+Mandara can't set window animations on this compositor yet
+Mandara can't tell which bootloader starts this machine ({why}), so the menu can't be changed safely. The splash still can.
 Mandara can't uninstall itself from here
 Mandara can't update this distribution itself yet; use its own package manager
 Mandara command, e.g. launcher toggle
@@ -3711,9 +4039,13 @@ Mandara {version} is the latest version
 Mandara {version} isn't signed by Mandara's release key ({reason}), so it won't be installed
 Mandara's KeePassXC dialog is off (Studio → General → Keyrings & passwords)
 Mandara's admin helper isn't set up, so the update can't run as administrator.
+Mandara's balanced spring with a soft landing
 Mandara's drop-in
 Mandara's glass, or Material You: colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar
+Mandara's launcher, dock and tray use it, and GTK, Qt and KDE apps follow (apps already open may need a restart).
+Mandara's launcher, dock and tray use it.
 Mandara's own look, as it has always been
+Mandara's own sounds are off: switch Shell sounds on below to hear them on events.
 Mandara's password dialog isn't available, so the AUR helper can't ask for your password.
 Mandara's shortcuts and your compositor's appear here
 MangoWM
@@ -3769,6 +4101,7 @@ Matches nothing yet — set an app id or a title
 Matching icons
 Material
 Material 3: outlined toggles, filled fields, tinted choices
+Material Design sounds, packaged for the desktop
 Material You
 Material You seed colors extracted from an image (default: the wallpaper)
 Material You variant used for wallpaper themes
@@ -3808,6 +4141,8 @@ Mencius
 Mencius IV.2.12
 Menu
 Menu entries
+Menu resolution
+Mercury
 Mercy
 Merge
 Mesh gradient
@@ -3840,10 +4175,15 @@ Mighty is he who has knowledge.
 Miguel de Cervantes
 Mini stats
 Minimal
+Minimal flat icons with soft pastel colors
+Minimal icons built from simple geometric shapes
 Minimize
 Minimize or restore a window
+Minimize shelves (id, last or all)
 Minimize windows into application icon
+Minimized shelves go to
 Minimized windows
+Minimizing
 Minimum brightness
 Minutes before events without their own alarm
 Minutes each
@@ -3868,6 +4208,7 @@ Mixes each side bar's accent into its background
 Mixes the theme accent into the bar's background
 Mixes the theme accent into the glass
 Miyamoto Musashi
+Mocha
 Mocha Dark
 Mocha Lavender
 Mocha Light
@@ -3882,6 +4223,7 @@ Models loaded in memory with their VRAM share and unload time (JSON)
 Models run offline on your CPU. Closing the launcher, removing !, or 15 seconds without a new query releases the inference worker.
 Moderator
 Modern
+Modern, melodic and airy, with a full set of device and battery cues
 Modes
 Mohamed Siddiq Al-Minshawi
 Mon
@@ -3889,6 +4231,8 @@ Monday
 Monitor
 Monitor brightness
 Monitor brightness over DDC/CI uses Linux's i2c-dev, which FreeBSD doesn't have
+Mono
+Mono Dark panel
 Monochrome
 Monochrome ink: a hairline bar dense with stats, a greeting and a calendar.
 Monochrome symbolic icons tint with the theme
@@ -3908,6 +4252,7 @@ More like this
 More than one API key matches this server; save the key again
 More wait their turn; all of them are in the history
 More wallpapers
+More widgets
 More windows wrap onto further rows
 Morning
 Morning greeting
@@ -3940,13 +4285,21 @@ Move a task to another list
 Move a topic to a 1-based position
 Move down
 Move it to the Trash
+Move items out (don't keep them)
 Move left
 Move notes to Notes
 Move right
 Move tasks to Inbox
+Move the bar to the bottom
+Move the bar to the top
 Move the branch, the stone, the broken glass: small kindness, great reward.
 Move the desktop clock to where the wallpaper's subject rises into it
 Move the desktop clock to where the wallpaper's subject tucks into it
+Move the dock to the bottom
+Move the dock to the left
+Move the dock to the right
+Move the sidebar to the left
+Move the sidebar to the right
 Move the toolbar to the bottom · M
 Move the toolbar to the top · M
 Move to
@@ -3956,12 +4309,16 @@ Move up
 Move window to {place} {n}
 Move window {direction}
 Move your subscriptions between feed readers as an OPML file. Importing adds feeds you don't follow yet, with their folders.
+Moves here from the other edge
 Moves with the music
 Moving clouds, rain and stars (off with reduced motion)
+Moving shapes stretch along their travel and round off at rest
 Muhammad Ayyub
 Muharram
 Muqaddimah
 Murasaki Shikibu
+Music
+Music & visualizers
 Music or video playing over MPRIS holds every idle stage back
 Music, screenshots, color and ambient sound
 Muslim
@@ -4001,6 +4358,7 @@ Name in the launcher (empty keeps the app's own)
 Name the app the rule is for
 Name the profile first
 Name, command or PID…
+Name, e.g. Files
 Name, image or project…
 Named routines: each step is a Mandara command, run in order. Find them by name in the launcher or as /name.
 Names
@@ -4016,8 +4374,10 @@ Nawawi
 Nearby
 Nearby Wi-Fi networks
 Nearly full at
+Needs Hyprland 0.55 or newer (its Lua config)
 Needs Mandara Login (greetd): its PAM file wasn't found.
 Needs Super, Ctrl or Alt
+Needs a terminal (Studio → Applications)
 Needs attention
 Needs no system access beyond drawing its own view
 Needs nvidia-smi
@@ -4047,6 +4407,7 @@ NetworkManager's OpenVPN plugin isn't installed (networkmanager-openvpn)
 Networking isn't available
 Networks shown
 Networks you join appear here.
+Neutral app icons drawn in one consistent rounded shape
 Never
 Never blur behind this window
 Never cut family ties
@@ -4060,6 +4421,7 @@ Never record from
 Never report
 Never signed in
 Never swear falsely
+Never touches your kernel command line, GRUB itself, shim or any signed file
 New
 New & updated
 New Window
@@ -4069,12 +4431,17 @@ New columns' share of the screen width
 New command
 New game
 New hadith
+New icons grow in, removed ones shrink out and the others slide over, also when you reorder them
 New keyring
 New layout (shuffle the seed)
 New moon
 New name
 New password
 New reminder
+New shelf
+New shelf height
+New shelf view
+New shelf width
 New skill
 New sound from a matching app goes to the chosen device, e.g. calls to a headset and music to the speakers.
 New tab
@@ -4131,6 +4498,7 @@ No Longer at Ease
 No Mandara command given
 No Mandara plugin `{id}`; see `mandara msg plugins list`
 No Mandara release is published yet
+No Plymouth
 No QR code found in that area
 No Steam games found
 No VPN named "{name}"
@@ -4156,10 +4524,12 @@ No apps match “{query}”
 No articles yet
 No audio server
 No bar, just rows of connected tiles under the top edge
+No bar, only islands: rows of connected tiles floating under the top edge, an orbit clock, music and a calendar.
 No battery
 No blur
 No bookmarks yet
 No boot entry chosen
+No boot theme was found in it (a GRUB theme.txt, a Plymouth .plymouth file or a rEFInd theme.conf)
 No calendar “{name}”
 No calendars yet: add one in Studio → Date, time & location
 No changes while the screen is locked or off
@@ -4170,6 +4540,7 @@ No city or zone matches “{query}”
 No clipboard collection {id}
 No clipboard collection {name}
 No clipboard entry {id}
+No closed shelf to restore
 No collection {name}
 No collection {name}; see `hadith collections`
 No colors yet
@@ -4186,6 +4557,8 @@ No core file to debug
 No crash report for PID {pid}
 No crashes in the last 7 days
 No crashes this week
+No cursor theme found there (a folder with a cursors/ folder and an index.theme)
+No cursor theme matches.
 No date
 No desktop widget {id}
 No device matching "{query}"
@@ -4195,6 +4568,8 @@ No download for this system in the release
 No downloads yet
 No drive matching "{query}"
 No earlier wallpaper
+No edge holds a side bar. Choose Side bar for an edge above to set one up.
+No edge holds the sidebar. The settings below also shape the power dock and the cards in panels.
 No entities to show
 No environment variables or arguments
 No exit node matches {query}
@@ -4213,12 +4588,16 @@ No frames yet — the shell only draws while something changes. Open a panel to 
 No graphics card found
 No hadith {reference} in {collection}
 No hotspot has been set up yet
+No icon theme found there (a folder with an index.theme)
 No icon theme is selected; standard fallbacks are in use
+No icon theme is set; apps use their fallback icons.
+No icon theme matches.
 No icons named like “{query}” in your theme
 No idle detection
 No image command set (Studio → Plugins → Clipboard)
 No images in {directory}
 No images in {folder}
+No index.theme
 No input devices
 No input seat is available
 No install job {id}
@@ -4309,7 +4688,9 @@ No screenshots in {path} yet
 No sessions yet
 No settings match “{query}”
 No shadow
+No shelf {id}; see `mandara msg stash list`
 No shell sounds over your music or video
+No shelves
 No shortcut matches “{query}”
 No shortcuts found
 No shortcuts found in your compositor config.
@@ -4318,7 +4699,9 @@ No skill name given
 No skill named “{name}”
 No sound device
 No sound for "{event}" in this theme
+No sound for "{event}" in {theme}
 No sound server (PulseAudio / PipeWire) found
+No sound theme found there (no index.theme or stereo folder with sounds)
 No stack named “{name}” (see `mandara msg dock stack list`)
 No station matches
 No station matches {query}
@@ -4345,6 +4728,7 @@ No tasks yet
 No terminal found — choose one in Studio → Applications
 No terminal found — set one in Studio → Plugins → Updates
 No text found in the selection
+No theme matches
 No thing great is created suddenly, any more than a bunch of grapes or a fig.
 No third-party plugins yet
 No timer
@@ -4375,10 +4759,16 @@ Normal
 Normal and critical
 Not a file: {path}
 Not a folder: {path}
+Not a picture ({type})
+Not a picture Mandara can show
 Not a plugin
+Not a shelf: {arg} (use a shelf id from `stash list`, `last` or `all`)
 Not a tar archive
+Not a theme archive (expected .tar, .tar.gz, .tar.xz, .tar.zst, .tar.bz2 or .zip)
 Not a valid unit name: {name}
+Not a web link
 Not an otpauth:// link
+Not authorised: nothing was changed
 Not authorized
 Not authorized (the administrator password was refused or no authentication agent answered)
 Not authorized to do that
@@ -4408,6 +4798,8 @@ Not scanned yet
 Not set
 Not supported by this compositor
 Not supported by this version
+Not supported on FreeBSD
+Not sure which one
 Not unlocked at login: its PAM module isn't installed (package {package})
 Not warming now
 Not-running opacity
@@ -4430,6 +4822,8 @@ Nothing great was ever achieved without enthusiasm.
 Nothing here matches “{query}”
 Nothing here matches “{query}”.
 Nothing here yet
+Nothing in that drop can be kept
+Nothing in the way: one tiny pill that hides until you touch the top edge, hot corners and a word clock.
 Nothing in this session starts these yet: turn on “Mandara starts these at login”, or start them from your compositor config.
 Nothing in your compositor config fights Mandara
 Nothing installed by Mandara yet
@@ -4453,8 +4847,10 @@ Nothing running · {checked}
 Nothing saved yet
 Nothing scheduled
 Nothing starts at login
+Nothing to add
 Nothing to bookmark
 Nothing to do
+Nothing to keep: the text is empty
 Nothing to pick from yet: download Sahih al-Bukhari or Sahih Muslim (`hadith download`)
 Nothing to read
 Nothing to recite
@@ -4466,6 +4862,7 @@ Nothing to show
 Nothing to watch yet
 Nothing was changed; your files are as they were
 Nothing was installed
+Nothing was installed ({reasons})
 Nothing yet today
 Notification
 Notification + OSD
@@ -4479,6 +4876,7 @@ Notifications from your apps land here
 Notifications in their own tab after yours, instead of a card
 Notifications is a built-in tab after yours (switch it under Behaviour)
 Notifications kept
+Notifications pop up as comic speech bubbles, their tail toward the notification corner
 Notifications tab
 Notify
 Notify about crashes
@@ -4522,11 +4920,13 @@ Off lets another daemon (mako, swaync, dunst) take over; Mandara releases the na
 Off pauses recording; the history stays
 Off shows AM / PM
 Off while a mouse is plugged in
+Off, it reads and writes nothing.
 Off. Nothing runs in the background until you turn it on.
 Off: each minimized window gets its own icon on the right side
 Off: low-urgency notifications vanish when their popup closes
 Off: only windows on the focused display
 Off: picking a look also brings its component designs, which you can change afterwards
+Off: pictures dropped as files are kept by reference, like any file. On: they are copied into the stash, so moving or deleting the original doesn't empty the shelf
 Off: plain searches list apps (and the providers above) only
 Off: stay with the current player until it closes
 Off: the clock keeps its own time
@@ -4556,6 +4956,7 @@ Ollama {version} · nothing loaded
 Ollama {version} · {count} loaded
 Omar Khayyam
 On
+On (Stash is off)
 On Arch-based systems it may also be in the AUR.
 On Benefits, Book II
 On Medicine
@@ -4586,7 +4987,7 @@ Once per session
 One
 One app's screen time over the last seven days
 One centered island that morphs
-One click sets the bar, desktop widgets, colors, fonts and roundness together. Your own setup is saved first, so you can always go back. Looks never change your wallpaper.
+One click sets the bar, its own desktop widgets, colors, fonts and roundness together; your own widgets and bar items stay. Change anything and it is kept as a look of your own. Your setup is saved first, so you can always go back. Looks never change your wallpaper.
 One continuous track with a short grip inside the end of the fill
 One dot
 One entry per app
@@ -4615,11 +5016,17 @@ Only HOTP accounts have a counter
 Only Mandara's own plugins are removed this way; uninstall third-party plugins from their page in Studio → Plugins
 Only Reddit's own images are loaded
 Only a top or bottom bar joins the side bars
+Only a wide rail of flower buttons in a coral screen frame, giant numerals and a calendar.
 Only at certain times
 Only build it, to see that it works
 Only each app's most recent window
+Only https:// downloads are allowed
+Only https:// links are accepted
+Only https:// links are fetched
+Only https:// links can be installed
 Only in {desktops}
 Only on this display
+Only sounds you cause (volume, screenshots) and battery alerts play
 Only split bars have gaps: glass pills, island, micro pill and notch
 Only stations you added can be removed
 Only tags and workspaces with windows (plus the one you are on)
@@ -4649,6 +5056,7 @@ Open Studio to download the required models
 Open a community or a post in the Reddit panel
 Open a copied image in your image editor (`[clipboard] image_command`)
 Open a hadith in the panel's reader and return it
+Open a new shelf (in the middle of the focused output, or at x y)
 Open a terminal running the update command (all sources with updates, or one)
 Open a verse or hadith in the Jannah panel and return it
 Open a volume in the file manager (mounting it first if needed)
@@ -4670,9 +5078,11 @@ Open or close the main menu
 Open or close the shortcuts cheatsheet (bind this to a key yourself)
 Open sea: a full-width glowing wave, a katakana accent and one tiny pill.
 Open settings
+Open shelves hold {size}, over Stash's cache limit. Remove items or raise the limit.
 Open something on your phone, no cable or app needed
 Open tasks the bar item counts: every list, or one list's name
 Open terminal
+Open that setting
 Open the Jannah panel
 Open the Qur'an panel
 Open the annotation editor instead of saving at once
@@ -4697,6 +5107,7 @@ Open video
 Open when the pointer touches the sidebar's edge
 Open windows
 Open windows, most recently used first
+Open with
 Open {community} in Reddit
 Open {folder}
 Open {folder} · {n} more
@@ -4709,6 +5120,7 @@ Open-source cursors in the style of macOS, with the spinning wait wheel
 Opened {path}
 Opened {terminal}: {command}
 Opening an article marks it read; you can always mark it unread again
+Opening apps
 Opening the Qur'an…
 Opening the article…
 Opening the keyring…
@@ -4725,6 +5137,7 @@ Opens links from Mandara; empty uses your default
 Opens on the first entry
 Opens on “{entry}”
 Opens the launcher
+Opens the widgets as an outer ring
 Opens updates that need your decision, and every update when they run in a terminal; empty detects ghostty, kitty, foot, alacritty or wezterm
 Opposite the sidebar
 Opt-in
@@ -4743,6 +5156,7 @@ Options as pills on one soft track
 Opus streams aren't supported yet
 Or right-click the desktop and choose Edit desktop
 Or type a site's address in the launcher and choose Subscribe in Feeds.
+Orange
 Orbit
 Order
 Order inside each list (open tasks stay above done ones)
@@ -4818,6 +5232,7 @@ Palette
 Panel animation
 Panel capture failed: {error}
 Panel edges
+Panel frame
 Panel height
 Panel image copied
 Panel radius
@@ -4827,6 +5242,8 @@ Panels wider or narrower than their natural width
 Panels you popped out of the bar come back where they were after a restart
 Panic inside a command (debug builds; tests fault isolation)
 Paper
+Paper and ink for focused work: the productive bar at the bottom with tasks, notes and a focus timer.
+Parallax
 Part of Mandara's core, so it is always on. {reason}
 Partly cloudy
 Passed
@@ -4885,6 +5302,7 @@ Peek at the coming days' steps
 Peek at the next ayahs
 Peek on workspace switch
 Pen
+Pen hatching
 Pending package updates from pacman, the AUR, APT, DNF, Zypper, XBPS, apk and Flatpak, installed with live progress; NixOS generations
 Pending updates by source (the last check; runs one if there is none)
 Pentagon
@@ -4922,6 +5340,7 @@ Pick
 Pick Command as the action first
 Pick Microphone or Both under Sound first
 Pick System sound or Both under Sound first
+Pick a cursor theme folder or an archive (.tar.gz, .tar.xz, .tar.zst, .tar.bz2 or .zip)
 Pick a level
 Pick a network below
 Pick a picture for the sticker
@@ -4931,11 +5350,14 @@ Pick a random image from your wallpaper folder
 Pick a random image or video from the wallpaper folder
 Pick a station below, or press play
 Pick a tag, then its layout, master share and scroller width. Tags without a rule keep MangoWM's default.
+Pick a theme archive
+Pick a theme folder
 Pick a wallpaper (bar → wallpaper button, or `mandara msg wallpaper picker open`) to theme Mandara from its colors.
 Pick a wallpaper first: wallpaper schemes take their colors from it
 Pick a window
 Pick a window for this rule
 Pick a window to make a rule for
+Pick an icon theme folder or an archive (.tar.gz, .tar.xz, .tar.zst, .tar.bz2 or .zip)
 Pick any pixel on screen
 Pick colors from the screen, with formats, tonal ramps and contrast
 Pick one from your folder below; it fades in on the desktop.
@@ -4954,6 +5376,7 @@ Picture-in-picture floats on every workspace
 Picture: {alt}
 Pictures
 Pictures from a folder, a new one every so often
+Pictures, text and data kept by closed shelves are removed oldest first beyond this; what open shelves hold is never removed without asking
 Pill
 Pill labels
 Pills
@@ -4978,12 +5401,14 @@ Pinned, running and recent apps, stacks and the Trash on a glass strip at the sc
 Pipe each capture (PNG on stdin) to a command, e.g. satty -f -
 PipeWire (pipewire-pulse) or PulseAudio must be running: {error}
 Pixel
+Pixel icons in the style of Windows 98 Second Edition
 Pixel size next to the selection
 Place
 Place clock
 Place in the bar
 Place name
 Place the clock
+Placed by the interface language: left, or right for right-to-left languages.
 Placeholder
 Placeholders: {HH} {mm} {ss} {ampm} {time} {weekday} {wd} {day} {month} {mon} {MM} {year} {greeting} {daypart} {hijri}
 Placement
@@ -5007,11 +5432,14 @@ Play a sound for
 Play a station (by id or name), or the usual one
 Play from here
 Play music or video in any MPRIS player
+Play one event's sound from a theme (the active one by default), even while sounds are off; answers with its length and level outline
 Play or pause
 Play or pause the radio
 Play the adhan now (to hear it; it must be downloaded)
 Playback speed for this surface; zero applies transitions instantly
+Playback speed of the menu; zero opens and closes it at once
 Playback state, levels, preset and sleep timer
+Playful springs that swing past and back
 Playful, bright cursors in bold colors
 Playing
 Playlist
@@ -5019,6 +5447,7 @@ Plays each sound from your theme at the volume above (even while shell sounds ar
 Plays every animation faster or slower with the same feel
 Plays the call to prayer at each of the five prayers, with a notification to stop it; silent during do not disturb and presentations. The recording (about 1.8 MB, public domain, from Wikimedia Commons) is downloaded once when you turn this on
 Plays the stream (PipeWire / PulseAudio)
+Plays the style faster or slower
 Plays until you pause it
 Please confirm
 Plug in a USB drive or SD card to see it here
@@ -5038,7 +5467,11 @@ Plugins (enabled / loaded)
 Plugins and your compositor
 Plugins are Rust compiled to WebAssembly. Drop one into a plugin folder and it shows up here within a second; publish it with one GitHub tag.
 Plugins from the marketplace, your plugin folders or your distribution.
+Plymouth isn't in your initramfs yet (add its hook), so the splash won't show until it is.
+Plymouth · {theme}
+Plymouth, the boot splash, isn't installed. Install it with your package manager to choose a splash here.
 Pocket player
+Point rEFInd at the theme
 Pointer
 Pointer rest on the edge before a hidden dock shows
 Pointer speed
@@ -5098,6 +5531,8 @@ Prayer times list
 Prebuilt releases require Linux on an x86_64 or aarch64 CPU, or FreeBSD on x86_64.
 Precision
 Preferred apps
+Prepare a theme from an archive, a folder or an https link (unverified: add --yes), or make a splash, a GRUB theme and a Limine wallpaper from your SVG or PNG
+Prepares themes and your image in Mandara's cache folder
 Preparing local commands…
 Preparing the complete image…
 Preparing the plan…
@@ -5107,11 +5542,14 @@ Presentation mode
 Presenting
 Preset column widths
 Presets
+Presets style the dock and wallpaper
+Presets style windows too
 Press Check now to look for updates
 Press Enter to close
 Press keys…
 Press play for your usual station
 Press play to listen
+Press, drag and release
 Preview
 Preview after download
 Preview generated file
@@ -5123,6 +5561,7 @@ Preview the fade shown before locking (move the mouse or wait to end it)
 Preview the lock screen
 Preview the pairing dialog with a fake device (nothing is paired)
 Preview — any password unlocks · Esc closes
+Previewing {preset}: {feel}
 Previews per row
 Previews use sample data.
 Previous
@@ -5159,6 +5598,7 @@ Profile scope
 Profiles
 Profiles & backup
 Program
+Program and arguments, e.g. nautilus --new-window
 Program file
 Program, e.g. ghostty
 Programming
@@ -5182,13 +5622,17 @@ Publilius Syrus
 Publish to the marketplace
 Pudd'nhead Wilson
 Pull one with: ollama pull llama3.2
+Pulled into place with one crisp tick past and back
+Pulse
 Pulse the battery when critical
 Pulse the battery while charging
 Purge agent from RAM now
+Purple
 Push
 Pushes text and surfaces apart to WCAG AAA (7:1)
 Put a device in pairing mode, then search
 Put a plugin's card on a tab (turns the plugin on)
+Put back what a Boot look apply changed (default: the latest), with your approval; --dry-run lists the files
 Put before every app's command, e.g. uwsm app -- or app2unit --
 Put one settings section back to its defaults
 Put the bar away and free its space until bar show (touching its edge peeks it out)
@@ -5208,6 +5652,8 @@ Qudsi
 Queried once when the panel opens; must answer with the address as plain text
 Queued
 Queues a Mandara command, the same ones as mandara msg.
+Quick and firm, settling almost at once
+Quick look
 Quick settings
 Quick start
 Quick toggles
@@ -5215,6 +5661,7 @@ Quiet during games, videos and presentations
 Quiet hours
 Quiet hours end
 Quiet hours start
+Quiet in do not disturb
 Quiet while a fullscreen app is focused
 Quiet while an app shares or records your screen (screen-cast portal and Mandara's recorder)
 Quiet while media plays
@@ -5253,6 +5700,7 @@ Rail
 Rail height
 Rain
 Rain today. Don't forget an umbrella.
+Raindrop
 Rainy study
 Raise the screen brightness (percent step, default 5)
 Raise volume
@@ -5339,6 +5787,8 @@ Ready, with a warning
 Ready. Opening Mandara’s installer…
 Real kindness seeks no return; what return can the world make to rain clouds?
 Rebuild
+Rebuild GRUB's menu, checked before it replaces the old one
+Rebuild the initramfs
 Receives notifications as the desktop notification server
 Recent
 Recent apps
@@ -5386,6 +5836,7 @@ Recording sound
 Recording video
 Rectangle
 Red
+Red Light
 Redact personal values
 Reddit
 Reddit asked Mandara to slow down. Trying again in {seconds} s
@@ -5461,6 +5912,7 @@ Remove a cursor theme Mandara installed (never one from a package or your own fo
 Remove a paired device
 Remove a rule by its position (from 1)
 Remove a saved verse or hadith
+Remove a sound theme Mandara installed (never one from a package or your own folders)
 Remove a subscription (its saved history stays until you subscribe again)
 Remove a task from the bar and the panel
 Remove all
@@ -5468,12 +5920,15 @@ Remove an account (by id from `authenticator list`) from the keyring
 Remove an app from the dock
 Remove an article from your saved ones
 Remove an autostart entry Mandara added
+Remove an icon theme Mandara installed (never one from a package or your own folders)
 Remove duplicates ({n})
 Remove every finished task
+Remove every item from shelves (they stay open)
 Remove from Dock
 Remove from Mandara
 Remove from bar
 Remove from bar ({zone})
+Remove from shelf
 Remove from sidebar
 Remove from the playlist
 Remove harm from the road
@@ -5485,6 +5940,8 @@ Remove photo
 Remove the downloaded text, meanings and cached recitations
 Remove the last line
 Remove the text, the meanings and the cached recitations; the panel offers to download them again
+Remove themes it didn't install
+Remove themes it didn't install, or touch your settings while it is off
 Remove this color
 Remove this entry
 Remove?
@@ -5505,10 +5962,12 @@ Rename a list (the Inbox too)
 Rename a sidebar tab
 Rename a topic (and its folder)
 Rename in the launcher
+Rename one of your looks
 Renamed to {name}
 Render count and build cost per plugin view since the last reset
 Render the desktop canvas (wallpaper, clock, subject) to a PNG
 Rendering at full size…
+Reopen a closed shelf with its items (the last one closed by default)
 Reopen with what you typed last (selected, so typing replaces it)
 Reorder
 Repair
@@ -5516,7 +5975,6 @@ Repair all
 Repeat delay
 Repeat rate
 Repeat the password
-Replace bar items
 Replace my settings?
 Replace the live configuration with a full JSON document (used by Studio)
 Replay
@@ -5535,6 +5993,7 @@ Rescan the repositories now and update the bar chip
 Reset
 Reset a page
 Reset preview
+Reset to defaults
 Reset today
 Resident {rss} · proportional share {pss} (shared libraries split between the processes using them)
 Resize by dragging borders
@@ -5568,8 +6027,11 @@ Restarting…
 Restart…
 Resting icon size
 Restore
+Restore before {what}
 Restore my look
+Restore the setup from before {what}
 Restored as it was
+Restyle the boot menu and the boot splash with popular themes or your own image, with a plan preview, backups and one-step restore
 Results
 Results for “{query}”
 Results for “{words}”
@@ -5594,7 +6056,9 @@ Revert after
 Reverted
 Reverted to the previous arrangement
 Review
+Review & apply
 Review each
+Review the plan
 Rich text
 Richard Feynman
 Ridge layers
@@ -5603,6 +6067,7 @@ Right (vertical)
 Right / bottom
 Right accent
 Right click
+Right edge
 Right icon colour
 Right icon shape
 Right item inset
@@ -5611,6 +6076,7 @@ Right item style
 Right side bar
 Right tile
 Right-click empty bar space
+Right-click empty desktop to open it; changes apply the next time it opens.
 Right-click on empty bar space
 Right-clicking between a split bar's pieces opens the main menu; the rest of the desktop, and Main menu → Apps & tools → Desktop menu, still open the desktop's menu
 Right-clicking empty bar space opens the desktop's menu
@@ -5620,11 +6086,16 @@ Rim light
 Rim width
 Ring
 Ring shows
+Ring size
 Ring starts at
 Ring width
 Ring, ping or change pairing for a device
+Ripple
+Ripple: a wave spreads from the pointer or the centre
+Rise from below
 Rising
 River has no such setting
+River has no window animations
 River keeps no display settings of its own: set them in your init with a tool such as wlr-randr or kanshi
 River runs {file} as a program, but it isn't executable, so River starts without it (chmod +x makes it run).
 River {version} runs window management in a separate program and no longer has the river-control and river-status protocols, so Mandara can't show or switch its tags, send its binds or follow its windows. Mandara works with River's classic line (0.3, packaged as river-classic).
@@ -5645,12 +6116,18 @@ Rotation
 Round
 Round at rest; the corners square off while you press and spring back
 Round buttons, tonal tiles and a scalloped rail inside a frame round the screen
+Round flat app icons with long shadows; no longer maintained
+Round flat app icons with soft colors; no longer maintained
 Rounded
+Rounded app icons that blend a Big Sur look with Adwaita
 Rounded screen corners
 Rounded squares with soft corners
 Rounded tile
 Rounded window corners
 Rounded, material-inspired cursors: the most installed theme in ricing setups
+Rounded-square app icons and blue folders in a macOS Big Sur style
+Rounded-square app icons in a macOS Tahoe style
+Rounded-square app icons that keep each app's own colors
 Roundness
 Roundness of the pills, island, slab and items
 Route traffic through a peer, or stop with none
@@ -5673,7 +6150,9 @@ Run a hot corner's action now, as if the pointer rested there
 Run a session-menu action the way the menu would, with its before-hooks (destructive ones need confirm)
 Run again
 Run an event's hooks now with MANDARA_TEST=1 and report the results
+Run any script that comes with a theme
 Run anything after some idle time, and something else when you're back. Commands run directly, without a shell — write sh -c '…' for pipes.
+Run anything that comes with a theme
 Run checks
 Run event hooks
 Run git fetch in one repository (by folder name or path) and return its new state
@@ -5689,10 +6168,12 @@ Running
 Running apps count only windows on the dock's own display
 Running hooks
 Running hot — performance is limited
+Running indicators
 Running processes matching a name, command or PID (CPU order)
 Running · locked
 Running · unlocked
 Runs after a warning when the charge reaches the action level; plugging in cancels
+Runs gsettings and gtk-update-icon-cache when they are installed
 Runs once after loading. Return an error to refuse to load.
 Runs sandboxed: no files, network or devices, with a time limit on every call
 Runs updates and the resource monitor; empty detects one
@@ -5705,6 +6186,7 @@ SLEEP TIMER
 STEP FOR {date}
 STORAGE
 SURAH {n}
+SVG, PNG, JPEG or WebP
 SW
 Saadi
 Safar
@@ -5734,6 +6216,7 @@ Save
 Save a verse or hadith
 Save an article to read it later
 Save articles to read them later; they stay even after they leave their feed.
+Save as new Look
 Save as profile
 Save how things look now — say “Work” and “Night” — and switch with one click or `mandara msg profile apply Night`.
 Save key
@@ -5744,6 +6227,7 @@ Save the current arrangement; when the same monitors connect again the shell swi
 Save the current settings as a profile (look = appearance only)
 Save the screen recording
 Save to disk
+Save what you changed on the active look as a new look of your own
 Save your subscriptions as an OPML file
 Saved
 Saved VPNs and which are connected
@@ -5752,6 +6236,7 @@ Saved Wi-Fi networks with autoconnect and priority
 Saved articles
 Saved articles of one feed or every feed, newest first, with their read and saved flags
 Saved as monitor lines in Mandara's {file} drop-in (your own config isn't touched)
+Saved as {name}
 Saved colors: {n}
 Saved display profiles and which one matches the connected monitors
 Saved files; the clipboard always gets PNG
@@ -5865,6 +6350,7 @@ Search bar width
 Search below to add a city or time zone
 Search by service or account name
 Search cities (English or Arabic) and IANA time zones
+Search cursor themes…
 Search depth
 Search every icon in your theme…
 Search every note
@@ -5872,6 +6358,7 @@ Search field
 Search files
 Search fonts, or type any name
 Search for something: words in Arabic or in your language
+Search icon themes…
 Search installed apps
 Search languages
 Search looks at names, ids and descriptions.
@@ -5890,6 +6377,7 @@ Search the downloaded collections: Arabic without diacritics, the meaning or a r
 Search the library
 Search the verses and hadith (Arabic without diacritics, or the meaning)
 Search the whole Qur'an
+Search themes…
 Search this community
 Search to find more languages
 Search units…
@@ -5922,6 +6410,7 @@ Seconds to wait before a capture
 Seconds without motion before the cursor hides
 Seconds “Capture in” waits so you can open a panel first (toolbar button, T, --delay)
 Secret Service keyring
+Secure Boot is on. Themes are pictures and text, not code, so they don't affect it; Mandara never replaces GRUB, shim or any signed file.
 Secured
 Security
 Security & accounts
@@ -5939,10 +6428,12 @@ Segmented
 Segments
 Select a region to capture
 Select a screen region with a QR code and add the account it holds
+Select all
 Select an area
 Select area
 Selected on open
 Selection outline
+Semi-light
 Semibold
 Send
 Send a floating panel back into the bar (it opens there)
@@ -6004,10 +6495,13 @@ Set up
 Set up full mode
 Set up in Studio
 Set volume to 40
+Set window animations in Plasma's System Settings
 Sets every component below at once; corner size, shadows, panel edges and the slider handle stay yours
+Sets the cursor and its size live in your compositor and in Mandara's compositor drop-in
 Sets the cursor in Mandara's compositor drop-in and live
+Sets the icon theme for Mandara's launcher, dock and tray and for GTK, Qt and KDE apps, one setting at a time, and puts back what was there when you follow your desktop again
+Sets the sound theme Mandara's own event sounds play from.
 Setting types
-Setting up Mandara's admin helper first (one more approval, only this once)…
 Settings
 Settings and data this app may have left in your home folder. Only what you tick moves to the Trash; nothing is deleted, and the app's removal doesn't depend on it.
 Settings in Studio
@@ -6019,6 +6513,7 @@ Sha'ban
 Shade every cell holding the selected cell's digit
 Shade the cells the selected cell sees
 Shaded
+Shading texture
 Shadow
 Shadow across
 Shadow blur
@@ -6037,6 +6532,7 @@ Shadows
 Shafi'i
 Shah Waliullah's Forty
 Shahnameh
+Shake to open a shelf
 Shape
 Shape and frame
 Shape size
@@ -6047,6 +6543,7 @@ Shapes
 Shapes that morph as you press, waves and mixed corners
 Share a piece of text as a page with a copy button
 Share any file from a terminal:
+Share of the transition spent drawing the lines; the rest fills the image in
 Share one file (never a folder)
 Share the newest screenshot
 Share this computer's connection over Wi-Fi
@@ -6058,6 +6555,7 @@ Shared from Mandara
 Shared memory
 Sharing as {name}
 Sharing stopped
+Shatter: the old image breaks into shards that fall away
 Shawwal
 Sheet
 Sheet colour
@@ -6074,16 +6572,19 @@ Shell status
 Shell surfaces
 Shell text language
 Shelves
+Shelves and their items (and closed shelves you can restore)
 Shelves shown: news, talk, pop, rock, jazz, classical, electronic, chill, ambient, world, arabic, quran, kids
 Shift
 Shifts every token's lightness
 Short break
 Short break length
 Short sounds from your sound theme for the events below
+Short synthesised tones, the only set here with a lock sound
 Shortcuts
 Shortcuts cheatsheet
 Shortcuts in your {target_name} config
 Show
+Show / hide desktop widgets
 Show All Windows
 Show a badge on the chip when units have failed
 Show a colour temperature for a few seconds (default 3, at most 10)
@@ -6117,6 +6618,7 @@ Show indicators for open applications
 Show it now
 Show less
 Show log
+Show minimized shelves (id, last or all)
 Show more
 Show names
 Show names on hover
@@ -6158,6 +6660,7 @@ Show the upload rate next to download in the bar chip
 Show the value
 Show the volume display
 Show video wallpapers as a still image: no decoding, no extra power
+Showing and hiding
 Showing the {shown} most-starred of {total} plugins. Search to narrow it down.
 Shown
 Shown in widgets; Find looks its coordinates up (Open-Meteo)
@@ -6170,10 +6673,13 @@ Shows
 Shows it for a few seconds without locking
 Shows on: {displays}
 Shows only while a player is loaded.
+Shows the exact plan first: every file it changes and every command it runs
 Shows the most pressing of: an event soon, the next prayer, a low battery, unread notifications, what plays.
 Shows the new recording in your file manager
 Shows the switcher for three seconds without taking the keyboard
 Shows when apps use your microphone, camera or screen
+Shows when the desktop has widgets
+Shows with a slideshow or its folder
 Shows {kelvin} K for a few seconds
 Shuffle
 Shuffle shows every wallpaper once before any repeats
@@ -6183,17 +6689,22 @@ Side
 Side bar
 Side bar items
 Side bar material
+Side bar on the left
+Side bar on the right
 Side bar shape
 Side bar width
 Side bar, edge frame and hairline only
 Side bars
+Side bars on the left and right
 Side by side
 Side inset
 Side pill
 Sidebar
 Sidebar card community
+Sidebar panel
 Sidebar tabs
 Sidebar width
+Sidebars
 Sidebars & hover
 Sideways text
 Sign in without a password when the computer starts.
@@ -6203,6 +6714,7 @@ Signed in {n} d ago
 Signed in {n} h ago
 Signed in {n} min ago
 Silences every output (speakers, HDMI and virtual devices such as EasyEffects) and every app at once. Switching it off restores your own mutes. Also: middle-click the bar's sound icon, or `mandara msg audio mute-all toggle`.
+Silent in this theme
 Silk flow
 Silk sheen
 Silk threads drifting along a flow field
@@ -6214,10 +6726,13 @@ Six
 Size
 Size & placement
 Size badge
+Size of each item's button
 Size of the app icons in the grid
 Size of the capture toolbar and its hints
 Size of the floating card in the middle of the screen
 Size of the tabs and buttons
+Sketch transition
+Sketch: the outline is drawn first, then the image fills in
 Skill
 Skills
 Skills are acquired only through the repetition of actions.
@@ -6242,15 +6757,20 @@ Sleep timer
 Sleep timer in the bar
 Slices
 Slices: slanted strips around a big preview (Omarchy-style). Carousel: floating cards
+Slide
 Slide and merge the tiles to reach 2048, in the bar and on the desktop
 Slide the bar away; touch its edge to bring it back
 Slider design
 Slider handle
 Slider with min and max, otherwise a number field
 Sliders
+Slides out from the left edge: its tabs and cards, how it behaves and how it looks.
+Slides out from the right edge: its tabs and cards, how it behaves and how it looks.
+Slides out with tabs and cards
 Slideshow
 Slideshow transition
 Slow
+Slow and silky, with no bounce
 Slow and steady wins the race.
 Slowest build
 Small
@@ -6262,8 +6782,10 @@ Smart update unavailable ({reason}); using the full download
 Smart update: {patch} instead of {full}
 Smooth
 Smooth continuous corners that ease into the edges
+Smooth rounded app and folder icons
 Smoothing
 Snap packages install from the Snap Store with snap, not from files.
+Snap: zoom past and back
 Snappy
 Snooze {n} min
 Snow
@@ -6275,6 +6797,7 @@ Soft and round: a big thumb, circular check boxes, filled radio buttons
 Soft color fields blending into one another
 Soft elevation under panels and popups
 Soft elevation under the dock
+Soft glass panels over a violet mountain dusk, with coloured OS icons
 Soft restart
 Soft wash
 Softens the background
@@ -6290,6 +6813,7 @@ Some folders
 Something went wrong while installing. The details say what.
 Somewhere in your config
 Soothing pastel cursors in the Catppuccin flavors and accents
+Soothing pastel flavours, from the dark Mocha to the light Latte
 Sor Juana Inés de la Cruz
 Sort by
 Sort by hot, new, top or rising
@@ -6299,6 +6823,8 @@ Sound
 Sound isn't available
 Sound output
 Sound theme
+Sound theme archives
+Sound themes
 Sounds
 Soundscapes
 Source
@@ -6319,11 +6845,15 @@ Speakers
 Spectrum bars
 Specular rim
 Speech, 1997
+Speech-bubble notifications
 Speed
 Speed and efficiency
+Speed rays
 Speed test cancelled
 Speed test failed
 Speed test size
+Spinner
+Splash
 Split horizontally
 Split toward the pointer
 Split vertically
@@ -6396,6 +6926,14 @@ Starts in {seconds} s
 Starts the apps and commands you pick
 Starts the apps you click
 Startup
+Stash
+Stash is off
+Stash is still loading its shelves; try again in a moment
+Stash settings
+Stash · Shelves
+Stash · Storage
+Stash · Summoning
+Stash's state: shelves, items, shake and edge catchers
 State
 State and unit-file state of one unit
 Station
@@ -6483,6 +7021,7 @@ Studio shows them in your plugin's settings modal
 Study
 Style
 Styles
+Subject first, then the background
 Subscribe in Feeds: {site}
 Subscribe to a feed, or to the feed a website offers (turns Feeds on)
 Subscribe to a site or pick from tested starter feeds
@@ -6527,13 +7066,17 @@ Swahili proverb
 Swap
 Swap the left and right buttons
 Swatch shape
+Sway has no window animations
 Sway reads Mandara's file where your config includes it. Mandara adds that line at the end, so its colours and gaps apply over the settings above it, but not over any you add below it. Mandara sets no rounded corners, opacity, blur, shadows or animations on Sway; the bar's layout pill cycles through the focused container's layouts.
+Sweep from the reading side
+Swell: rise from below
 Swipe distance
 Swipe to dismiss
 Swirl
 Switch
 Switch automatically
 Switch between light and dark appearance
+Switch items on or off and put them in order: the first sits at the top of the ring, the rest follow clockwise (the other way in right-to-left languages).
 Switch layout
 Switch layouts with
 Switch on release
@@ -6569,6 +7112,7 @@ Synced lyrics, the current line lit
 Syntax error
 Synthesized live — no audio files · listed as Mandara Soundscapes
 System
+System & shortcuts
 System access
 System accounts
 System accounts are managed by your distribution
@@ -6649,6 +7193,7 @@ Tape colour
 Taped note
 Target language code
 Task progress
+Taskbar
 Tasks (all lists, or one), open first
 Tasks grouped into lists, for the sidebar and bar
 Tasks in the panel
@@ -6656,6 +7201,8 @@ Tasks in the sidebar card
 Tasks listed at most
 Tasks on lined paper with square boxes
 Tasks, notes, focus timers and sign-in codes
+Teal Dark
+Tear: the old image rips along a jagged seam and peels away
 Technical details
 Technology
 Tell me about config problems
@@ -6672,6 +7219,7 @@ Ten rounded steps that fill one after another
 Ten to {hour}
 Terminal
 Terminal colors follow the theme
+Terminal green: a monospace status line of stat blocks, a pixel clock and a system monitor column.
 Terminals
 Terrain scale
 Tertiary
@@ -6692,6 +7240,7 @@ Text contains (optional)
 Text contrast {ratio}:1
 Text copied
 Text detection
+Text editor
 Text field
 Text field design
 Text fields
@@ -6720,9 +7269,13 @@ That doesn't look like an e-mail address
 That entry is not an image
 That file includes personal values ({keys}); turn on “Redact personal values” before sharing it.
 That hadith isn't in the collection
+That isn't a download link
+That isn't a valid https:// address
+That isn't an archive Mandara can read (.tar.gz, .tar.xz, .tar.zst, .tar.bz2 or .zip)
 That local time does not exist today
 That made {compositor} report more problems, so it was undone.
 That station isn't in your list
+That theme is already in your sounds folder
 That user no longer exists
 That widget is already on this tab
 That widget is not on this tab
@@ -6739,7 +7292,10 @@ The Arabic and the meanings are shown exactly as the dataset gives them, with it
 The Art of War III
 The Book of Five Rings
 The Book of Tea
+The COSMIC desktop's set, from Pop!_OS
 The Cardinals
+The Dracula emblem with spinning coloured stripes
+The Dracula palette's purple and pink on deep night
 The Gardener 45
 The Hare and the Tortoise
 The Inbox can be renamed but not deleted
@@ -6747,6 +7303,7 @@ The Little Prince
 The Mediterranean horizon with waves and sun glitter
 The Narrow Road to the Interior
 The OPML file
+The Plymouth theme's folder and its .plymouth file have different names
 The Pomodoro timer; click to start or pause
 The Prophet
 The Prophet's sayings ﷺ, collection by collection
@@ -6765,6 +7322,7 @@ The Qur'an text is incomplete: {surahs} surahs and {ayahs} ayahs
 The Qur'an was removed; run `quran download`
 The Qur'an's downloads are removed ({size})
 The Qur'an's text is the Tanzil Project's Uthmani text, copied exactly.
+The SVG has no usable size
 The Sum of Our Days
 The Tale of Genji
 The Tanzil text and its meaning, for the Qur'an plugin (api.alquran.cloud)
@@ -6777,15 +7335,16 @@ The adhan is playing
 The adhan isn't downloaded
 The adhan isn't downloaded: turn it on in Studio, or run `prayer adhan download`
 The adhan: whether it is on, downloaded or playing, and where it comes from
-The admin helper couldn't be installed, so nothing was changed.
 The ancient lighthouse: a luminous beam across deep night navy and harbour lights.
 The app and tool tiles wear a Kufic word instead of their geometric pattern
 The app each kind of file or link opens in, for every app that asks the system (mimeapps.list).
+The app's icon answers when one of its windows minimizes
 The app's name, the window's title, or both
 The archive contains unsafe paths
 The archive has no {path}
 The archive has too many files
 The archive is too large to install
+The archive unpacks to more than a sound theme should hold
 The article's link
 The audio server is unavailable
 The audio server isn't reachable
@@ -6796,11 +7355,14 @@ The bar floats over windows while it auto-hides
 The bar is on the other edge: the launcher opens from the bare screen edge instead of growing out of the bar.
 The bar isn't at the bottom, so the dock rises from the screen edge
 The bar isn't at the top, so the dock hangs from the screen edge
+The bar item
 The bar item goes away while nothing is playing
 The bar item shows the clock while you play
 The bar item shows your score while you play
 The bar item, or none for no bar item.
 The bar item, panel and sidebar card re-render: no restart
+The bar itself stands on this edge, so a side bar can't. The sidebar slides out beside it.
+The bar runs along this edge
 The bar's battery chip breathes coral while the charge is critical
 The bar's battery chip breathes gently while it charges (never with Reduce motion)
 The bar's items
@@ -6811,6 +7373,8 @@ The battery reading turns coral at or below this charge
 The battery's percentage beside its icon
 The beginning is the most important part of any work.
 The big clock on the lock screen
+The boot menu and the splash before your desktop: themes from their authors or your own image. Every change shows its plan first, is backed up and can be restored.
+The boot theme catalog (licence, pinned download, downloaded) and the splash themes installed here
 The built-in encoder has quality presets only
 The built-in encoder records AV1 only
 The built-in encoder records at most 60 fps
@@ -6819,6 +7383,7 @@ The built-in encoder scales recordings down to at most this width
 The built-in encoder writes WebM only
 The cards always open in the middle of the screen
 The carousel opened from the bar, the main menu or `mandara msg wallpaper picker toggle`
+The centre
 The checker rejected the config without saying why.
 The clipboard holds a password, so it isn't shared
 The clipboard holds too much to share
@@ -6829,6 +7394,8 @@ The clock now sets itself from internet time servers
 The clock's time zone, network time, and the shared location's time zone
 The collections come from the hadith-api dataset, released into the public domain (the Unlicense). Each one is downloaded when you ask for it, checked, and kept on this computer in ~/.local/share/mandara/hadith.
 The colour its items light up and wash with
+The command has too many arguments
+The command holds a character no program accepts
 The command is empty
 The community store has blocked installs and updates for {repository}.
 The community the sidebar card shows; empty follows your first community
@@ -6853,6 +7420,11 @@ The date next to the time
 The date under the clock
 The date, the weather and the one thing worth knowing now
 The day
+The default of GNOME, Fedora, Arch and Ubuntu
+The default of KDE 4 and Plasma 5
+The default of KDE Plasma 6
+The default of deepin
+The default of elementary OS
 The depth effect's mode, model, current mask and last model run
 The desktop's menu
 The displays changed meanwhile; try again
@@ -6860,6 +7432,7 @@ The dock hides until you touch the screen edge.
 The dock hides while a window covers it. Touch the screen edge to bring it back.
 The dock holds the bottom edge; popups there stay cards
 The dock isn't showing
+The dock sits on this edge
 The download did not match the signed release. Nothing was installed; please try again.
 The download didn't finish
 The download didn't finish; open the panel to try again
@@ -6867,8 +7440,15 @@ The download didn't get through. Check your connection.
 The download doesn't match its pinned checksum, so it wasn't installed
 The download failed: {error} (`quran download` tries again)
 The download has no cursor theme at {folder}
+The download has no icon theme at {folder}
+The download has no sound theme at {folder}
+The download is empty
+The download is larger than a sound theme should be
+The download is larger than allowed
 The download is larger than expected
+The drag ended before its data arrived
 The drive is busy — close files and apps that use it
+The drop had no links
 The edge drawer with quick settings and cards
 The edge opposite the sidebar · MangoWM and Hyprland
 The end of the Qur'an. May Allah accept your reading.
@@ -6906,10 +7486,13 @@ The hotspot's name, password and Wi-Fi QR payload
 The hour
 The i2c-dev kernel module isn't loaded
 The icon on the bar's launcher button
+The icon theme catalog (variants, licence, installed, active), your imports and other installed icon themes
 The icons of the apps on each tag or workspace
 The idle manager is not running
+The image can't be read: {error}
 The image design could not be prepared
 The image is larger than the clipboard limit
+The image is larger than {size}
 The input recorded as the microphone
 The interface between your plugin and Mandara, read from the plugin.wit this build was compiled with.
 The interface language as an ISO 639-1 code; right-to-left for ar.
@@ -6922,6 +7505,7 @@ The knowledge of anything, since all things have causes, is not acquired or comp
 The laptop panel and external monitors move together
 The last log lines of a container
 The last one played
+The launcher opens when the pointer rests here
 The left bar's own icon colour, or the bar's
 The left bar's own icon shape, or the shared one
 The left bar's own item shape, or the bar's
@@ -6945,8 +7529,12 @@ The meaning in your language
 The meaning in your language under the Arabic (English where the collection has none in yours). Off: Arabic only
 The meaning in your language under the Arabic; the Qur'an's is downloaded once from Tanzil (api.alquran.cloud). Off: Arabic only
 The meaning {edition} is incomplete
+The menu a right-click on empty desktop opens: a ring of icons around the pointer, or the classic list.
+The menu has its most custom items
 The name is empty
+The name is too long
 The network name is empty
+The neutral baseline: short chimes and clicks every desktop falls back to
 The new generation starts at the next boot
 The new release is plugin {new}, not {old}; reinstall it from the marketplace
 The new track when music changes
@@ -6973,13 +7561,18 @@ The passwords don't match
 The past resembles the future more than water resembles water.
 The paths to Jannah, by group
 The percentage next to level bars
+The picture arrived empty
 The pieces every Mandara bar is built from
 The place name next to the temperature
+The plan with administrator rights
 The playlist is used instead of a folder
 The plugin archive contains unsafe paths
 The plugin archive has no plugin.toml
 The plugin archive is too large
 The plugin's own language (a code such as ar or en), or follow to use Mandara's
+The pointer
+The power dock opens from the edge opposite the sidebar.
+The power menu opens from this edge
 The prayer times of another day (days after today, or before it when negative)
 The provider returned no language list
 The provider returned no translation
@@ -7054,12 +7647,14 @@ The shell's folder watcher waits {ms} ms for writes to settle
 The side bars' switches, pins and plugins
 The sidebar card lists the newest unread articles of this folder; empty lists every feed
 The sidebar keeps at least one tab
+The sidebar opens on hover here
 The sidebar's tabs and their widgets
 The signed release has no unique checksum for this archive.
 The slideshow playlist is empty
 The slideshow's settings, source size, next change and pause
 The soft overcomes the hard; and the weak the strong.
 The sound server closed the stream
+The sound theme catalog (licence, installed, active), other installed themes, and the active theme's sound for each event
 The speed test server sent no data
 The speed test stopped
 The station answered with error {code}
@@ -7089,6 +7684,9 @@ The text and the meaning in your language, about {size} MB, kept on this compute
 The text: Tanzil's Uthmani script
 The theme colour the tiles ripen toward
 The theme colour your digits and highlights use
+The theme has too many files
+The theme holds more files than a sound theme should
+The theme is too large
 The thumb stretches as it slides, boxes round into circles as they fill
 The time in other cities on the desktop, with how far ahead or behind they are
 The time range of top-rated posts and searches
@@ -7096,6 +7694,7 @@ The top bar and the side bars become one frame with curved corners. The bar is d
 The track that is playing
 The track's title beside the music icon; off shows the icon alone
 The translations available in your language (for Studio's translation setting)
+The tray
 The tray service is not running
 The unit is masked
 The unlock password was incorrect
@@ -7111,6 +7710,7 @@ The visualizer listens through PulseAudio or PipeWire; start one to use it
 The volume beside the speaker icon
 The volume, brightness and mixer sliders in the main menu, panels and the sidebar
 The wallpaper Mandara is drawing
+The wallpaper's own colour
 The weather on the desktop: the temperature, the sky, the place and the days ahead
 The widths Mod+R cycles through (switch-preset-column-width)
 The window is no longer available
@@ -7148,6 +7748,7 @@ There isn't enough free space on this disk.
 Thermals
 Thermometer
 These displays do not support power control
+These files go back to how they were before (files you edited since keep your edits; only Mandara's lines are reverted), and the menu or initramfs is rebuilt.
 These files move to the Trash:
 They can because they think they can.
 They'll be asked to choose a password the first time they sign in.
@@ -7168,6 +7769,7 @@ This AppImage's runtime isn't a valid program
 This Flatpak file doesn't name an app
 This OPML file is too large
 This OPML file lists no feeds
+This SVG loads other files or runs scripts, so it can't be used at boot
 This above all: to thine own self be true.
 This account has no password.
 This address is a web page without a feed; find its RSS or Atom link
@@ -7198,8 +7800,10 @@ This database uses a hardware key (YubiKey challenge-response), which Mandara ca
 This device
 This device is asking to pair. Check the name on your phone before accepting.
 This device, the exit node in use and every peer (JSON)
+This download can't be verified against a pinned checksum: confirm to import it anyway
 This download is too large
 This driver doesn't report per-process GPU memory.
+This edge has a Stash catcher
 This entity cannot run that action right now
 This entry is no longer available
 This entry is too large to copy as one image
@@ -7217,6 +7821,7 @@ This is how the screen fades before locking
 This is not an OPML file
 This is the running configuration
 This isn't NixOS
+This isn't a sound theme (no index.theme with sounds)
 This item changed elsewhere. Your text is still here.
 This item has no menu
 This item was removed. Your text is still here.
@@ -7233,6 +7838,7 @@ This package is made for a different kind of Linux. The same app may be on Flath
 This pattern {problem}
 This phone does not support that action right now
 This phone is not connected
+This picture can't be shown
 This player doesn't let you change its volume
 This plugin has no published release yet
 This plugin works without settings.
@@ -7243,6 +7849,7 @@ This request is too large
 This restarts the computer; repeat as `session reboot-to {target} confirm`
 This server sends its stream in a way Mandara can't play yet
 This session
+This side bar is the rail of the {preset} preset. It changes with the preset.
 This sign-in method needs more than a password
 This site offers several feeds:
 This station uses a format Mandara can't play
@@ -7251,6 +7858,7 @@ This system is image-based: Mandara installs into your home folder, and the inst
 This system is image-based: it updates with {command}, which Mandara leaves to it
 This tab is empty
 This text is too large to send to a phone
+This theme has no sound for that
 This thread is very long; open it on Reddit to read the rest
 This update wasn't checked against Mandara's signature; check for updates again
 This username is already in use
@@ -7259,8 +7867,10 @@ This volume is encrypted. Enter its passphrase to open it.
 This week {used}
 This week {used} of {budget} ({percent}%)
 This workspace only
+Those presets also set matching window animations in your compositor's Mandara drop-in
 Thread fade
 Three
+Three floating docks along the bottom like a bridge's arches, an analog clock and mirrored bars.
 Three floating docks of squircle tiles spanning the bottom like a bridge's arches
 Threshold for peripherals (per-device overrides in config.toml under [power.device_thresholds])
 Through do not disturb
@@ -7270,6 +7880,7 @@ Thumbnails and post pictures, decoded at the size they're shown; off loads text 
 Thunderstorm
 Thunderstorms around. Better stay in.
 Ticks
+Tide: a wave rises from the bottom and washes the new image in
 Tile
 Tile dock
 Tile patterns
@@ -7317,8 +7928,11 @@ Titles
 Titles on group tabs
 To beautify life is to give it an object.
 To err is human, to forgive divine.
+To get
 To live is so startling, it leaves but little room for other occupations.
 To start Mandara with Aqueous, add {command} to Aqueous's own startup settings.
+To start Mandara with COSMIC, add {command} in COSMIC Settings → Applications → Startup applications.
+To start Mandara with labwc, add the line “{command} &” to ~/.config/labwc/autostart.
 To use bitter words, when kind words are at hand, is like picking unripe fruit when the ripe fruit is there.
 To-do
 To-do list
@@ -7358,6 +7972,7 @@ Tonal spot
 Tone
 Tones map to the live theme
 Tonight's moon and how much of it is lit
+Too large to keep (over {mib} MiB)
 Too many arguments; usage: {usage}
 Too many attempts — try again later
 Too weak
@@ -7375,8 +7990,11 @@ Top posts from
 Top rated
 Top right
 Top right command
+Top to bottom
 Top to bottom. Drag to reorder, onto another tab to move, × to take off
 Top {n} by frecency
+Top-left corner
+Top-right corner
 Topic name
 Topics in order, with their folders and note counts
 Torn paper
@@ -7388,6 +8006,8 @@ Trace trap
 Track in the bar
 Tracking is paused
 Transition
+Transition length
+Transition origin
 Translate
 Translate text into a language with your configured provider
 Translate text with your chosen provider
@@ -7457,6 +8077,7 @@ Turn on the depth effect first
 Turn on this side bar first
 Turn on while an app shares your screen, and off again when sharing stops
 Turn on {name}
+Turn on {plugin}
 Turn on “Control external monitors” below.
 Turn on “Manage compositor drop-in” (Compositor page) first: Mandara writes no drop-in while it's off
 Turn presentation mode off and put everything back as it was
@@ -7464,6 +8085,7 @@ Turn presentation mode on or off
 Turn presentation mode on: do not disturb, keep awake, hide desktop widgets
 Turn screens off after
 Turn shell sounds on or off
+Turn that off
 Turn the Wi-Fi radio on or off
 Turn the adapter on or off
 Turn the battery charge limit on or off (UPower 1.90+, polkit may ask)
@@ -7495,6 +8117,7 @@ Type a database password in Mandara's dialog
 Type a natural language shell command…
 Type a word in Arabic or in your language
 Type the PIN for {device} (often 0000 or 1234, or shown on its screen).
+Type the program to run
 Type the six-digit code shown on {device}.
 Type this code on the device
 Type to filter
@@ -7511,12 +8134,16 @@ Typography
 UDP
 UDisks2 is not available
 UDisks2 isn't running — install or start udisks2
+UEFI
+UEFI · Secure Boot on
 UPS
 UPower has no history for this span yet
 UPower is not running
 URL or path
 USB controller
 USB drive
+Ubuntu's classic sounds, with a drum-led login
+Ubuntu's default before Yaru
 Ultrawide
 Ultrawide (3440 × 1440)
 Umbriel reads your config.toml after Mandara's file, so a value you set there wins. Each workspace keeps its own layout; the bar's layout pill switches it.
@@ -7584,6 +8211,7 @@ Unknown sound device {name}
 Unknown source `{source}`
 Unknown state
 Unknown style {style}; see `wallgen styles`
+Unknown target {target}; expected menu, splash or limine
 Unknown toggle {name}
 Unlit dots
 Unload
@@ -7641,6 +8269,7 @@ Unterminated single quote
 Until
 Until the schedule next changes
 Untitled note
+Unverified download
 Up
 Up to 150 %; can distort
 Up to date
@@ -7672,6 +8301,7 @@ Updating Mandara…
 Updating…
 Upload
 Upload in the bar
+Upper third
 Upright
 Upright Latin letters
 Uptime
@@ -7697,8 +8327,11 @@ Use an http:// or https:// server address without a password
 Use an https:// address, or a local IP address, when sending an API key
 Use another adapter (auto = the first)
 Use another folder while the theme is light or dark (clear to remove)
+Use as the splash
 Use for my theme
 Use hour, day, week, month, year or all
+Use in the boot menu
+Use my image
 Use my wallpaper's colors
 Use one location everywhere
 Use only lowercase letters, digits, - and _
@@ -7706,6 +8339,7 @@ Use the Kvantum theme
 Use the events' own alarms
 Use the folder button on an entry to add it here
 Use the gh sign-in
+Use the preset's items
 Use the time an app asks for instead of the values above
 Use this location publicly
 Use this variation
@@ -7726,6 +8360,7 @@ Usernames can be at most 32 characters
 Users
 Users install it
 Uses the coordinates you set — never GPS
+Uses the picture made with Use my image
 Uses your GPU
 Uses your location from Studio → Date, time & location. Nothing is fetched from the network.
 Uses your sound theme (Studio → Audio & media → Sounds)
@@ -7819,6 +8454,7 @@ Wait during fullscreen
 Waiting
 Waiting for Reddit's one-a-minute limit…
 Waiting for admin approval
+Waiting for approval, then applying… Rebuilding an initramfs can take a minute.
 Waiting for authorization…
 Waiting for its hours: next change at {time}
 Waiting for you
@@ -7834,6 +8470,7 @@ Wallhaven returned something that isn't an image
 Wallhaven search failed: {error}
 Wallhaven · {resolution}
 Wallpaper
+Wallpaper change
 Wallpaper colors
 Wallpaper depth
 Wallpaper generator
@@ -7864,6 +8501,7 @@ Wash strength
 Wash with care, then pray two rak'ahs with your whole heart.
 Washi tape
 Watches your sites and services and tells you when one goes down
+Watercolour bleed from the lines
 Wave
 Wave at night, Lotus in daylight.
 Wave detail
@@ -7880,6 +8518,7 @@ We must have perseverance and above all confidence in ourselves.
 We suffer more often in imagination than in reality.
 Weak
 Weather
+Weather & sky
 Weather and prayer times always follow this location, even when they have their own
 Weather disc
 Weather line
@@ -7916,6 +8555,7 @@ What changed between two NixOS generations (packages and closure size)
 What changed in each release, in plain words. Run mandara changelog to see it in a terminal.
 What clicking an entry does
 What do we live for, if it is not to make life less difficult to each other?
+What each edge holds
 What each recorder can do on this computer
 What each tag or workspace pill says
 What happens
@@ -7928,11 +8568,13 @@ What is open: panel, sidebar, launcher, power menu, wallpaper picker; whether th
 What is shared: link, kind, name, time left and downloads (JSON)
 What it does
 What it is like
+What it touches
 What keeps from it
 What one unit of your currency buys (fetched twice a day once you switch it on)
 What opens when you right-click the bar between and around its items
 What plays: station, title, format, buffer, volume
 What scripts can show
+What the Sketch transition draws its lines in
 What the bar item shows while a station plays
 What the bar shows for this layout, e.g. EN or ع
 What the idle stage, the critical battery action and the session menu's Sleep do
@@ -7951,20 +8593,27 @@ When I walk along with two others, they may serve me as my teachers.
 When a window covers it
 When a window overlaps
 When an event defines alarms, remind at those times instead
+When clicked
 When idle
 When in doubt, check a hadith with a scholar or a printed edition.
 When in doubt, tell the truth.
 When it overflows
+When it's on
 When nearly empty
+When pointed at
+When the Trash is emptied
 When the app you copied from quits, its last copy can still be pasted
 When the gh CLI is signed in, use its token for private repositories and higher rate limits (else GITHUB_TOKEN)
 When the monitors of a saved profile are connected, switch to it
+When the outer ring of widgets appears
 When the year becomes cold, then we know how the pine and the cypress are the last to lose their leaves.
 When there is a big tree small ones climb on its back to reach the sun.
 When to change
 When windows cover it
 When your compositor config or the compositor changed, the Config doctor checks it once at start-up and sends one notification about new problems
+Where a Ripple opens and a Shatter bursts from
 Where along the edge
+Where entering content comes from
 Where new notes go while the card shows All (a topic's name; empty: Notes)
 Where new tasks go while the card shows All (a list's name; empty: Inbox)
 Where plugins live
@@ -7978,17 +8627,21 @@ Where the dock opens: on a screen side, or at the top or bottom center hanging f
 Where the launcher opens: in the middle of the screen or attached to the top / bottom edge at the left, middle or right (no argument: the current one)
 Where the middle group sits
 Where the middle group sits along the edge
+Where the ring names its items
 Whether Mandara's pairing agent is registered with BlueZ
 Whether presentation mode is on, for how long, and what it will restore (JSON)
 Whether the hotspot runs, and its network name
 Which AUR helper updates AUR packages, as you; its sudo asks through Mandara's password dialog. Automatic prefers paru, then yay
 Which app has focus, per day; needs the Screen time plugin. Stays on this computer
+Which bootloader and splash this machine uses, where their files are, and the backups Boot look kept
 Which container engine the panel talks to
 Which edge it lives on; the power dock takes the other. Auto follows the locale (right for Arabic)
+Which lines are drawn first
 Which servers listen on which ports, who can reach them, and a quick way to end them
 Which units the panel shows when it opens
 Which windows
 While a fullscreen app is focused
+While an app starts, its icon bounces, pulses or sends out ripples (Dock → Animate opening applications switches it off)
 While one of them is focused, colours stay true (photo and video editing).
 While sharing the screen
 While we are postponing, life speeds by.
@@ -8016,11 +8669,14 @@ Width of the Beacon search bar (its mode buttons sit beside it)
 Width of the administrator-password and keyring-unlock dialogs
 Width of the screen frame's border
 Width when attached
+Wiggle
 William Shakespeare
 Wind
 Wind ripples
 Wind speed
 Window
+Window animation speed
+Window animations
 Window app id, e.g. steam_app_*
 Window border / focus ring thickness
 Window borders follow the theme
@@ -8040,13 +8696,17 @@ Windows prefix
 Windows tile around a dock that never hides
 Windows tracked
 Wipe
+Wipe along the strokes
 Wipes the clipboard if it still holds the code (0 = never)
 WireGuard works out of the box; .ovpn files need networkmanager-openvpn.
 WireGuard works out of the box; OpenVPN uses NetworkManager's plugin.
 Wired and Wi-Fi adapters appear here.
 Wired connection
+With Apply to apps: GTK's sound theme (gsettings and existing settings.ini files) and KDE's kdeglobals. Turning the plugin off puts them back.
 With its chain of narrators
+With my image as the wallpaper
 With the anchor
+With your approval each time: backs up and changes the boot menu and splash files, then runs the bootloader's and initramfs tools
 With your password through Mandara Login (not autologin). Each keyring's password must be your login password.
 Without your own Reddit app, Mandara reads Reddit's public feeds: one request a minute, and no scores, comment counts or reply threads.
 Won't join automatically
@@ -8056,6 +8716,7 @@ Words by a Brushwood Gate
 Work is love made visible.
 Working day ends
 Working day starts
+Working out the plan with your system…
 Working…
 Works and Days
 Works in the background
@@ -8068,6 +8729,8 @@ World news
 Worship
 Worship Him alone
 Would remove {path}
+Write Mandara's GRUB settings file
+Write a look (built-in or yours) to a small portable file
 Write a reply…
 Write in Markdown…
 Write it on your heart that every day is the best day in the year.
@@ -8093,10 +8756,12 @@ Yoshida Kenkō
 You
 You already follow this feed
 You already have this station
+You can switch it off again here or in Plugins at any time.
 You can't delete the account you're signed in with
 You can't lock the account you're signed in with.
 You can't use up creativity. The more you use, the more you have.
 You cannot speak of ocean to a well-frog.
+You changed {files} since Mandara did, so they stay as you set them.
 You copy a new plugin.wasm, plugin.toml or translation into the folder
 You could not step twice into the same river.
 You declare [[settings]] in plugin.toml
@@ -8104,6 +8769,7 @@ You give but little when you give of your possessions. It is when you give of yo
 You have the most stations Mandara keeps; remove one first
 You have {version}
 You made 2048!
+You'll be asked for an administrator password. Every file is backed up first, and Restore on this page puts it back.
 You'll be asked once, by the system, before anything changes
 You're all caught up
 You're logged out
@@ -8112,6 +8778,7 @@ You're presenting
 Your GitHub user name
 Your Home Assistant address, including a reverse proxy path if needed
 Your LibreTranslate server, including a reverse proxy path if needed
+Your Limine config's hash is enrolled, so it is enrolled again after the change.
 Your Reddit user name
 Your River init doesn't start Mandara. Mandara never edits it: add this line to it yourself: {line}
 Your Steam games as covers; a click starts one
@@ -8124,6 +8791,8 @@ Your avatar above the password field
 Your bind wins; Mandara leaves this chord out of its drop-in
 Your bookmarked ayahs, newest first
 Your bookmarked hadith, newest first
+Your boot
+Your boot entries are managed by limine-entry-tool: Mandara changes only the look options above them, and the tool keeps them.
 Your clipboard collections and how many entries each holds
 Your command
 Your communities
@@ -8132,11 +8801,17 @@ Your communities, in order
 Your compositor's cursor
 Your compositor's cursor at {size} px
 Your compositor's layouts
+Your compositor's own
 Your config
 Your contribution calendar (fetched from github.com once you switch it on)
+Your current spring and choreography. Point at a preset to preview it; replay after adjusting the controls.
 Your cursor
+Your desktop's
+Your desktop's icons
+Your desktop's: {theme}
 Your devices
 Your devices, within reach
+Your distribution's colours and emblem on a dark, rounded menu
 Your dock's apps, or any apps and links, as tiles
 Your feeds
 Your first favourite
@@ -8147,14 +8822,20 @@ Your home favourites, sensors and scenes
 Your home folder
 Your home folders; a click opens one
 Your hooks
+Your icons
 Your idle commands
+Your image as the GRUB theme
+Your image as the splash
+Your image in the Limine menu
 Your init maps {chord}, which Mandara binds too: Mandara leaves yours and skips its own.
 Your installed Steam games, the most recently played first.
+Your kernel command line has no splash option, so the splash won't show until you add it. Mandara never edits the kernel command line.
 Your keyring may ask you to unlock it
 Your keys
 Your khatm as a ring, with the surah you're reading and a click to continue
 Your local repositories at a glance: branch, uncommitted changes, unpushed commits
 Your location
+Your logo or picture at boot
 Your machine at a glance, screen time, the next prayer, a search field, your GitHub year, exchange rates, AI usage and your games
 Your marketplace plugins are current
 Your name for this device (empty: its own name)
@@ -8162,17 +8843,21 @@ Your names & icons
 Your news, together
 Your own
 Your own config also sets {outputs}; your line may win over the drop-in
+Your own cursors
+Your own icon sets
 Your own mix of designs. A preset sets every component below at once; corner size, shadows, panel edges and the slider handle stay yours
 Your own plugins while you build them: enabled automatically and reloaded on every change.
 Your package manager couldn't fit this package with what is already installed.
 Your picture is ~/.face or your account picture.
 Your picture, name, user@host, uptime and a status
+Your pinned and running apps in the bar
 Your plugin provides these
 Your quotes: text — author | next one (empty: built-in sayings)
 Your recent notes as tabs on the screen's edge
 Your saved verses and hadith, newest first
 Your session starts these (systemd's xdg-autostart).
 Your session's units
+Your sound theme
 Your status (empty: Online / Do not disturb)
 Your subscriptions with their folders and unread counts
 Your system's location service (GeoClue) couldn't find you. Many Linux systems ship it without a lookup service. Choose IP lookup, or type your city and press Find.
@@ -8199,11 +8884,15 @@ Zoom
 `{command}` hit an internal error (logged); the shell kept running
 `{key}` still works, but {compositor} has deprecated it and a future version may drop it.
 `{key}` worked with your previous version, but {compositor} {version} no longer accepts it: it was probably renamed or removed in this update.
+a .mandara-look.toml file
 a Mandara or icon-theme icon name
 a board size 3–6 for new, a direction for move
+a closed shelf's id (see `stash list`)
 a collection id (bukhari, muslim, abudawud, tirmidhi, nasai, ibnmajah, malik, nawawi, qudsi, dehlawi) or all
 a collection id or all
+a cursor theme: import it under Themes → Cursors
 a folder (with folder)
+a folder, a .tar.* / .zip archive, or an https:// link
 a folder, or clear
 a fullscreen window is focused
 a generated wallpaper
@@ -8211,7 +8900,9 @@ a level for new, a cell (row,column) for select, a digit for digit and note
 a path key from `jannah paths`
 a reference: bukhari 1, muslim 2699a
 a reference: bukhari 1, muslim 2699a, abudawud 4031
-a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, ai-shell-agent, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
+a section (home, themes, wallpaper, desktop, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, ai-shell-agent, general, profiles, performance, maintenance, about), bars/<bar|sidebars|panels|edges>, desktop/<widgets|cards|context-menu>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>
+a shelf id (default: the newest shelf)
+a shelf id, last (default) or all
 a style id from `wallgen styles`
 a surah (2, al-baqara) or an ayah (2:255), or a range (2:255-257)
 a verse or hadith reference
@@ -8230,6 +8921,7 @@ all sahih
 all, pinned, a kind (code, color, …) or a collection id or name
 already recording
 also paste with Ctrl+V
+an archive or folder path, or an https:// link
 an ayah, such as 2:255
 an ayah: 2:255 or al-baqara:255
 an excluded app is focused
@@ -8240,6 +8932,7 @@ app id, e.g. firefox
 app name
 app name (a regular expression)
 appearance
+archive, folder, https link or image, then options: --yes, --background RRGGBB, --accent RRGGBB, --spinner ring|dots|none, --scale 0.1–0.8, --position center|upper, --fill, --screen WxH, --menu WxH
 at {time} · after {prayer} {since}
 auto (DHCP) or manual
 auto or a language code
@@ -8253,9 +8946,16 @@ by {author} · v{version}
 by {author} · {stars} stars
 by {developer}
 cargo build
+catalog id or theme name
+catalog id, theme name, or none
+catalog id[/variant]
 catalog id[/variant] or XCursor theme name
+catalog id[/variant] or icon theme name
 catalog id[/variant], XCursor theme name, or none
+catalog id[/variant], icon theme name, or none
 center, top-left, top-center, top-right, bottom-left, bottom-center or bottom-right
+centre, logical px from the output's left
+centre, logical px from the output's top
 changes or full (default)
 checked {span} ago
 city name or zone id
@@ -8320,6 +9020,7 @@ e.g. 192.168.1.20/24 (- for none)
 e.g. 2560x1440@144, 1.5, 90, 1920,0, on
 e.g. 45, 90m, 2h, 1d
 e.g. Mandara hotspot
+eSuru++
 edited
 enabled
 ends with a lone backslash
@@ -8344,6 +9045,7 @@ folder name or path of the repository
 folder path, name or index
 folder to write into (made if missing)
 follow, or a language code: en, ar, fa, ur, es, fr, de, tr, ru, hi, bn, id, zh, ja, ko
+found twice
 fps
 front
 function / dispatcher / action name, then its arguments
@@ -8359,6 +9061,7 @@ healthy
 hex color
 hex color, e.g. #1e88e5
 host::setting(key) returns the value as JSON, or the declared default
+hot corner → {action}
 hot, new, top or rising
 how far to stray, 0–1
 how long
@@ -8371,6 +9074,8 @@ how many lines (default from Studio)
 how many recent lines
 how to go through the wallpapers
 http(s) stream or playlist address
+https://… a link to a .tar.gz, .tar.xz or .zip
+https://… link to a .tar.gz, .tar.xz or .zip
 https://… stream, .pls or .m3u address
 icon name or image path
 id must be a number (see `clipboard list`)
@@ -8383,6 +9088,13 @@ in {span}
 in {time}
 inactive
 index from `audio streams`
+index.theme has no [Icon Theme] section
+index.theme has no usable Name (it may need the theme's build script)
+index.theme inherits from something that isn't a theme name
+index.theme isn't a regular, small file
+index.theme lists a folder outside the theme
+index.theme lists no icon folders
+index.theme lists too many folders
 installed
 installed model name, e.g. llama3.2:3b
 internal error (logged)
@@ -8392,6 +9104,7 @@ internal error while reading text (logged)
 invalid value for {setting}: {error}
 issuer or account name
 item id, title or key
+its name (default: the parent's name · Custom)
 job id from apps jobs
 journalctl failed
 just now
@@ -8400,7 +9113,12 @@ kernel {kernel}
 key=value pairs, or a TOML recipe
 khatm
 khatm {n}
+labwc has no standalone configuration checker. It reads its own files in ~/.config/labwc, and Mandara writes nothing there.
+labwc has no window animations to set
+labwc keeps its settings in ~/.config/labwc (rc.xml, autostart) and reloads them itself. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and changes nothing in those files. To start Mandara with labwc, add the line “mandara &” to ~/.config/labwc/autostart.
+labwc settings stay in ~/.config/labwc (rc.xml, autostart)
 last {hours} h
+latest (default) or a backup id from `boot status`, then --dry-run
 layout
 left
 left edge, logical px from the output's left
@@ -8422,9 +9140,13 @@ logical px from the top
 look id (see look list)
 lookup failed
 m
+macOS- and Material-inspired icons with soft gradients
 masked
 master or a layer
+may not show
 menu entry id (from `tray menu`)
+menu or splash (default: both)
+menu, splash or limine
 min
 min a day
 minimized
@@ -8434,6 +9156,7 @@ minutes, or off
 mode, generation, keep or older-than
 model id
 model id from `models list` (default: all)
+motion preset id
 n/a
 name or language, e.g. arabic
 name, command line or PID
@@ -8457,10 +9180,12 @@ no outputs
 no outputs to capture
 no patch from your version is published
 no pause
+no readable XCursor files in cursors/
 no sound
 no supported compositor detected
 none
 none found
+not a usable theme name
 not checked yet
 not installed
 not recording
@@ -8469,6 +9194,7 @@ note id from `notes list`
 note text (rest of the line), optionally starting with #Topic
 nothing to delete
 notification id
+notification, notification-critical, volume-change, device-added, login, lock… or a sound name
 now
 of one core · avg {average}% · {cores} cores
 of the last {count} frames
@@ -8506,12 +9232,14 @@ open, close or toggle
 other packages or the system set still need it
 otpauth://totp/Issuer:name?secret=…
 otpauth://totp/…
+output name (default: the focused one)
 p95 interval {ms}
 p95 {p95} · p99 {p99}
 palette source
 part of a name, e.g. cairo
 part of a unit name or description
 path to the profile file
+paths, file:// or https:// links, or text:…
 pause
 paused
 peak {rate}
@@ -8599,6 +9327,7 @@ system sound and microphone
 systemctl soft-reboot failed ({status})
 systemd is not reachable on this bus
 systemd units: failed alerts, start, stop, enable and journal
+systemd-boot has no themes or colours, so only the splash can change.
 systemd-coredump isn't available
 systemd-coredump isn't set as the kernel's core handler
 tab name (one word), id or 1-based position
@@ -8618,6 +9347,7 @@ that backup doesn't parse: {error}
 the check crashed
 the compositor did not report a focused window geometry
 the compositor returned an unexpected frame size
+the compositor's own hot corner
 the count for clean
 the feed's structure is broken
 the file to share
@@ -8630,6 +9360,7 @@ the release doesn't publish the new binary's checksum
 the reply
 the text to share
 the whole config as JSON
+theme (catalog id[/variant], a prepared or installed name, or a Mandara theme for limine), then --dry-run, --gfxmode WxH, --wallpaper image|PATH, --branding TEXT
 theme = "mandara"
 theme id or name (see `theme list`)
 themed by Mandara
@@ -8691,6 +9422,7 @@ what to list
 what went wrong
 where the wallpapers come from
 where to write (never overwritten)
+where to write it (default: your Downloads folder)
 which alert
 which corner
 which demo prompt
@@ -8759,6 +9491,7 @@ your default
 {compositor}'s checker couldn't run: {error}
 {compositor}'s checker didn't finish in time.
 {cores} cores · {running} running
+{corner}: {what}. Catchers leave a gap there.
 {counter}
 {count} answering slowly
 {count} apps
@@ -8766,6 +9499,7 @@ your default
 {count} areas
 {count} available commands
 {count} changed
+{count} characters
 {count} checks · every {span}
 {count} checks · {uptime}% uptime · every {span}
 {count} comments
@@ -8780,6 +9514,7 @@ your default
 {count} in the last 7 days
 {count} in the last 7 days · {new} new
 {count} in your list
+{count} items
 {count} lines · {errors} on stderr
 {count} listening · {exposed} reachable from the network
 {count} min
@@ -8791,19 +9526,22 @@ your default
 {count} of {total} down
 {count} on
 {count} open
+{count} open sound themes, downloaded on demand from their upstream releases, checked against a pinned checksum and installed to ~/.local/share/sounds
 {count} packages changed
 {count} packages changed · closure {size}
 {count} packages from {sources} sources
 {count} pages
 {count} plugin updates
 {count} plugins
-{count} popular themes, downloaded on demand from their authors' GitHub releases, checked against a pinned checksum and installed to ~/.local/share/icons
+{count} popular icon themes, downloaded on demand from their projects' GitHub releases, checked against a pinned checksum and installed to ~/.local/share/icons, plus your own from an archive, a folder or a link
+{count} popular themes, downloaded on demand from their authors' GitHub releases, checked against a pinned checksum and installed to ~/.local/share/icons, plus your own from an archive, a folder or a link
 {count} problems — checked {when} with {compositor}
 {count} processes · PIDs {pids}{more}
 {count} ready to install
 {count} replies hidden
 {count} running · {checked}
 {count} s
+{count} selected
 {count} sessions
 {count} staged
 {count} stars
@@ -8847,6 +9585,8 @@ your default
 {duration} · {size} MB saved to {path}
 {duration} · {width}×{height} · {size} MB saved to {path}
 {d} d {h} h
+{edge}: the edge catcher is paused
+{edge}: {reason}
 {edition} doesn't line up with the Arabic
 {edition} has Arabic for {got} hadith, expected {expected}
 {edition} has {got} entries, expected {expected}
@@ -8867,8 +9607,10 @@ your default
 {file} has no published checksum; not installing it
 {file} is a program, not an app package: move it to ~/.local/bin to use it.
 {file} is missing
+{file} is too large for a theme
 {file} is written, but your config doesn't include it yet — Maintenance → Compositor adds the one include line.
 {file} isn't a WebAssembly component (build it for wasm32-wasip2)
+{file} isn't a sound file
 {file} isn't an app Mandara can install (AppImage, Flatpak, archive or package)
 {file} not found: build the plugin and copy the .wasm here
 {file} sources Mandara's drop-in
@@ -8884,6 +9626,7 @@ your default
 {host} didn't answer
 {host} has an invalid security certificate
 {host} has no address
+{host} isn't one of the catalog's pinned releases, so Mandara can't vouch for what it sends. Install it anyway?
 {host} refused the connection
 {hours} h ago
 {hours} h {minutes} min
@@ -8892,6 +9635,7 @@ your default
 {hour} o'clock
 {h} h {m} min
 {h}h {m}m
+{id} isn't a backup (see `boot status`)
 {id} · not installed
 {images} images · {volumes} volumes
 {kind} · 1 line
@@ -8988,6 +9732,7 @@ your default
 {n}m
 {n}y
 {on} of {total} plugins on
+{option} needs a value
 {outputs} refused the warmer colours: another night-light app may hold them (wlsunset, gammastep, hyprsunset…), or the compositor or display driver doesn't allow it.
 {package} didn't build: {reason}
 {package} is part of your system and can't be removed here
@@ -8998,7 +9743,9 @@ your default
 {path} is a custom autostart entry; Mandara left it unchanged
 {path} is a development build; rebuild it from source (or pass --force-dev)
 {path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}
+{path} isn't a file
 {path} isn't a file (folders are never shared)
+{path} isn't a folder
 {path} isn't writable; re-run `mandara install` to update it
 {path} wasn't made by the wallpaper generator
 {path}: {error}
@@ -9034,6 +9781,7 @@ your default
 {program} timed out
 {program} was interrupted
 {read} of {total} read
+{reason}. Choose which one keeps the edge in Studio → Plugins → Stash.
 {reason}. Install it, or choose another recorder in Studio → Plugins → Screenshot
 {recorder} stopped unexpectedly
 {recorder} stopped: {reason}
@@ -9067,8 +9815,14 @@ your default
 {task} failed
 {task} finished
 {theme} at {size} px
+{theme} has no icons in the folders its index.theme lists
 {theme} is already installed (not by Mandara), so it was left as it is
+{theme} is installed: apply it from the gallery.
+{theme} isn't a Mandara theme (see `mandara themes`)
+{theme} isn't downloaded or imported (see `mandara msg boot list`)
+{theme} isn't downloaded yet (run `mandara msg boot install {spec}`)
 {theme} wasn't installed by Mandara, so it stays
+{theme}: {error}
 {time} left
 {time} today
 {tool} couldn't add the packages. Add them later with: {command}
@@ -9076,11 +9830,18 @@ your default
 {tool} rejected the result, so nothing was changed: {report}
 {total} frames drawn since start
 {unit}: {error}
+{url} has no known checksum, so Mandara can't tell whether it is what its author published. Install it only from a source you trust; it is checked like any theme and nothing in it is run.
+{url} isn't pinned to a checksum, so Mandara can't vouch for it. Run the command again with {flag} to install it anyway.
 {used} / {total}
 {used} of {total}
 {value} GiB
 {value} isn't a color: use hex like #1e1e2e
+{value} isn't a colour like 0b1026
+{value} isn't a number
+{value} isn't a resolution like 1920x1080
 {value} isn't a seed (a number, or hex like 0x1f)
+{value} isn't center or upper
+{value} isn't ring, dots or none
 {vendor} GPU
 {width} × {height} mm
 {width}×{height} captured
@@ -9103,9 +9864,11 @@ your default
 “=” calculate
 “Add a task” row
 “Clear all” asks once more
+“{change}” would use an edge where Stash catches drags. Which one keeps the edge?
 “{code}” isn't a currency code
 “{id}” is a built-in plugin id, and built-ins can't be overridden: rename it
 “{name}” is not a valid container name
+“{name}” isn't a theme folder name Mandara installs
 “{prefix}” actions
 “{prefix}” ask the AI agent
 “{prefix}” clipboard

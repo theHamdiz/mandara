@@ -54,7 +54,7 @@ pub enum Action {
     JannahStep,
     /// Open the Qur'an reader where you left off.
     QuranContinue,
-    /// Open Studio on a page (`desktop-widgets/<id>`, `plugins/<id>`): an
+    /// Open Studio on a page (`desktop/widgets/<id>`, `plugins/<id>`): an
     /// empty widget's "Set up in Studio" button.
     Studio(String),
 }
@@ -170,7 +170,7 @@ mod tests {
             Action::Refresh,
             Action::JannahStep,
             Action::QuranContinue,
-            Action::Studio("desktop-widgets/github-1".into()),
+            Action::Studio("desktop/widgets/github-1".into()),
         ];
         for a in all {
             assert_eq!(a.to_string().parse::<Action>(), Ok(a.clone()), "{a}");

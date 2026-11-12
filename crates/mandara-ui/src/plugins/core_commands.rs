@@ -9,7 +9,7 @@ use crate::state::{config, flush_config, reload_config_from_disk, shell, update_
 
 /// `mandara msg studio <section>`: every slug of the launcher's Studio
 /// entries (`crate::overlays::STUDIO_SECTIONS`, checked by a test).
-pub const STUDIO_SECTION_ARG: &str = mandara_i18n::tk("a section (home, themes, wallpaper, desktop-widgets, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, ai-shell-agent, general, profiles, performance, maintenance, about), bars/<bar|side-bars|sidebar|panels|edges>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>");
+pub const STUDIO_SECTION_ARG: &str = mandara_i18n::tk("a section (home, themes, wallpaper, desktop, typography, motion, bars, dock, launcher, window-switcher, notifications, on-screen-displays, displays, audio, network, power, input, keyboard-shortcuts, date, applications, users, login-screen, lock-appearance, privacy, plugins, compositor, ai-shell-agent, general, profiles, performance, maintenance, about), bars/<bar|sidebars|panels|edges>, desktop/<widgets|cards|context-menu>, power/<part>, plugins/<id>[/settings] or plugins/<installed|marketplace|local>");
 
 /// Lets the `restart` reply reach the client before the process exits.
 const RESTART_FLUSH: std::time::Duration = std::time::Duration::from_millis(150);
@@ -549,7 +549,7 @@ pub fn register(r: &mut PluginRegistry) {
             let cfg = config(cx).read(cx).get().bar.clone();
             Ok(json!({ "style": cfg.style, "layout": cfg.layout, "position": cfg.position, "item_shape": cfg.item_shape, "icon_shape": cfg.icon_shape }))
         })
-        .arg(ArgSpec::required("style", ArgKind::Enum, mandara_i18n::tk("bar style")).choices(&["expressive", "tile-dock", "rail", "segmented", "system-monitor", "stanley-bridge", "pharos-beam", "raml-tram", "none"]))
+        .arg(ArgSpec::required("style", ArgKind::Enum, mandara_i18n::tk("bar style")).choices(&["expressive", "tile-dock", "rail", "segmented", "system-monitor", "stanley-bridge", "pharos-beam", "raml-tram", "taskbar", "none"]))
         .example("bar style expressive"),
     );
 
@@ -593,29 +593,114 @@ pub fn register(r: &mut PluginRegistry) {
 
     r.command(
         core,
-        CommandSpec::new("look list", mandara_i18n::tk("List the one-click looks"), |_, cx| {
+        CommandSpec::new("look list", mandara_i18n::tk("List the one-click looks: the built-in ones and yours"), |_, cx| {
             let active = config(cx).read(cx).get().looks.active.clone();
-            let looks: Vec<_> = mandara_config::looks::LOOKS.iter().map(|l| json!({ "id": l.id, "name": l.name, "active": l.id == active })).collect();
+            let mut looks: Vec<_> = mandara_config::looks::LOOKS.iter().map(|l| json!({ "id": l.id, "name": l.name, "builtin": true, "active": l.id == active })).collect();
+            looks.extend(mandara_config::user_looks::list().iter().map(|l| json!({ "id": l.id, "name": l.name, "builtin": false, "parent": l.parent, "author": l.author, "active": l.id == active })));
             Ok(json!({ "looks": looks, "active": active }))
         }),
     );
     r.command(
         core,
-        CommandSpec::new("look apply", mandara_i18n::tk("Apply a look (your setup is saved first so it can be restored)"), |a, cx| {
+        CommandSpec::new("look apply", mandara_i18n::tk("Apply a look, built-in or yours (your setup is saved first so it can be restored)"), |a, cx| {
             let id = a.str(0)?.to_string();
-            let look = mandara_config::looks::find(&id).ok_or_else(|| format!("no look {id:?}"))?;
             let wallpaper_colors = a.get(1) == Some("wallpaper-colors");
             let cfg = config(cx).read(cx).snapshot();
+            let opts = mandara_config::looks::LookOptions { wallpaper_colors };
+            let next = match mandara_config::looks::find(&id) {
+                Some(look) => look.apply(&cfg, opts),
+                None => mandara_config::user_looks::find(&id).ok_or_else(|| format!("no look {id:?}"))?.apply(&cfg, opts).map_err(|e| format!("{e:#}"))?,
+            };
             if let Some(before) = mandara_config::looks::before_snapshot(&cfg, &chrono::Local::now().format("%Y-%m-%d %H:%M").to_string()) {
                 mandara_config::profiles::save(&before).map_err(|e| format!("saving your setup: {e:#}"))?;
             }
-            let next = look.apply(&cfg, mandara_config::looks::LookOptions { wallpaper_colors });
             update_config(cx, move |c| *c = next);
-            Ok(json!({ "applied": look.id, "restore_profile": mandara_config::looks::BEFORE_PROFILE }))
+            Ok(json!({ "applied": id, "restore_profile": mandara_config::looks::BEFORE_PROFILE }))
         })
         .arg(ArgSpec::required("look", ArgKind::String, mandara_i18n::tk("look id (see look list)")))
         .arg(ArgSpec::optional("colors", ArgKind::Enum, mandara_i18n::tk("palette source")).choices(&["own", "wallpaper-colors"]))
         .example("look apply night-frame"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("look save", mandara_i18n::tk("Save what you changed on the active look as a new look of your own"), |a, cx| {
+            let cfg = config(cx).read(cx).snapshot();
+            let name = a.rest(0);
+            let saved = save_current_look(&cfg, Some(name.as_str()).filter(|n| !n.trim().is_empty())).map_err(|e| format!("{e:#}"))?;
+            let print = mandara_config::user_looks::owned_print(&cfg);
+            let id = saved.id.clone();
+            update_config(cx, move |c| {
+                c.looks.active = id;
+                c.looks.print = print;
+            });
+            Ok(json!({ "saved": saved.id, "name": saved.name, "parent": saved.parent }))
+        })
+        .arg(ArgSpec::optional("name", ArgKind::String, mandara_i18n::tk("its name (default: the parent's name · Custom)")))
+        .example("look save My evening"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("look rename", mandara_i18n::tk("Rename one of your looks"), |a, _| {
+            let look = mandara_config::user_looks::rename_in(&mandara_config::user_looks::looks_dir(), a.str(0)?, &a.rest(1)).map_err(|e| format!("{e:#}"))?;
+            Ok(json!({ "id": look.id, "name": look.name }))
+        })
+        .arg(ArgSpec::required("look", ArgKind::String, mandara_i18n::tk("look id (see look list)")))
+        .arg(ArgSpec::required("name", ArgKind::String, mandara_i18n::tk("the new name")))
+        .example("look rename corniche-dusk-custom Evening"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("look duplicate", mandara_i18n::tk("Copy one of your looks under a new name"), |a, _| {
+            let look = mandara_config::user_looks::duplicate_in(&mandara_config::user_looks::looks_dir(), a.str(0)?).map_err(|e| format!("{e:#}"))?;
+            Ok(json!({ "id": look.id, "name": look.name }))
+        })
+        .arg(ArgSpec::required("look", ArgKind::String, mandara_i18n::tk("look id (see look list)"))),
+    );
+    r.command(
+        core,
+        CommandSpec::new("look delete", mandara_i18n::tk("Delete one of your looks (built-in looks can't be deleted)"), |a, cx| {
+            let id = a.str(0)?.to_string();
+            if mandara_config::looks::find(&id).is_some() {
+                return Err(format!("{id} is a built-in look"));
+            }
+            mandara_config::user_looks::delete(&id).map_err(|e| format!("{e:#}"))?;
+            // Deleting the active look leaves your setup as it is.
+            if config(cx).read(cx).get().looks.active == id {
+                update_config(cx, |c| c.looks.active.clear());
+            }
+            Ok(json!({ "deleted": id }))
+        })
+        .arg(ArgSpec::required("look", ArgKind::String, mandara_i18n::tk("look id (see look list)"))),
+    );
+    r.command(
+        core,
+        CommandSpec::new("look export", mandara_i18n::tk("Write a look (built-in or yours) to a small portable file"), |a, _| {
+            let id = a.str(0)?;
+            let text = mandara_config::user_looks::export_text_in(&mandara_config::user_looks::looks_dir(), id, &chrono::Local::now().format("%Y-%m-%d").to_string()).map_err(|e| format!("{e:#}"))?;
+            let path = match a.get(1) {
+                Some(p) => mandara_config::paths::expand_tilde(p),
+                None => look_export_path(id),
+            };
+            if path.exists() {
+                return Err(format!("{} already exists", path.display()));
+            }
+            mandara_config::write_atomic(&path, text.as_bytes()).map_err(|e| format!("{e:#}"))?;
+            Ok(json!({ "exported": id, "file": path }))
+        })
+        .arg(ArgSpec::required("look", ArgKind::String, mandara_i18n::tk("look id (see look list)")))
+        .arg(ArgSpec::optional("file", ArgKind::String, mandara_i18n::tk("where to write it (default: your Downloads folder)")))
+        .example("look export phosphor ~/phosphor.mandara-look.toml"),
+    );
+    r.command(
+        core,
+        CommandSpec::new("look import", mandara_i18n::tk("Add a look from a file (checked strictly; nothing in it is run)"), |a, _| {
+            let path = mandara_config::paths::expand_tilde(a.str(0)?);
+            let text = read_look_file(&path)?;
+            let look = mandara_config::user_looks::import_in(&mandara_config::user_looks::looks_dir(), &text).map_err(|e| format!("{e:#}"))?;
+            Ok(json!({ "imported": look.id, "name": look.name, "parent": look.parent }))
+        })
+        .arg(ArgSpec::required("file", ArgKind::String, mandara_i18n::tk("a .mandara-look.toml file")))
+        .example("look import ~/Downloads/phosphor.mandara-look.toml"),
     );
     r.command(
         core,
@@ -630,7 +715,30 @@ pub fn register(r: &mut PluginRegistry) {
 
     r.command(
         core,
-        CommandSpec::new("config reload", mandara_i18n::tk("Re-read config.toml from disk"), |_, cx| {
+        CommandSpec::new("motion presets", mandara_i18n::tk("List the motion presets, how each feels and which one is in use"), |_, cx| {
+            let current = config(cx).read(cx).get().motion.preset();
+            let presets: Vec<_> = mandara_config::motion::Preset::ALL
+                .iter()
+                .map(|p| json!({ "id": p.id(), "name": mandara_i18n::tr(p.name()), "feel": mandara_i18n::tr(p.feel()), "active": current == Some(*p) }))
+                .collect();
+            Ok(json!({ "presets": presets, "active": current.map_or("custom", |p| p.id()) }))
+        }),
+    );
+    r.command(
+        core,
+        CommandSpec::new("motion preset", mandara_i18n::tk("Apply a motion preset: its spring and choreography (accessibility and surface speeds stay yours)"), |a, cx| {
+            let id = a.str(0)?;
+            let preset = mandara_config::motion::Preset::from_id(id).ok_or_else(|| format!("no motion preset {id:?} (see motion presets)"))?;
+            update_config(cx, move |c| preset.apply_to(c));
+            Ok(json!({ "applied": preset.id() }))
+        })
+        .arg(ArgSpec::required("preset", ArgKind::Enum, mandara_i18n::tk("motion preset id")).choices(&mandara_config::motion::Preset::IDS))
+        .example("motion preset tide"),
+    );
+
+    r.command(
+        core,
+        CommandSpec::new("config reload",mandara_i18n::tk("Re-read config.toml from disk"), |_, cx| {
             let changed = reload_config_from_disk(cx)?;
             Ok(json!({ "changed": changed }))
         }),
@@ -814,6 +922,51 @@ pub fn register(r: &mut PluginRegistry) {
         cx.quit();
         Ok(json!("bye"))
     }));
+}
+
+/// Where `look export` writes by default: the Downloads folder (or home),
+/// `<id>.mandara-look.toml`, never over an existing file.
+pub fn look_export_path(id: &str) -> std::path::PathBuf {
+    let dir = dirs::download_dir().filter(|d| d.is_dir()).unwrap_or_else(|| mandara_config::paths::expand_tilde("~"));
+    let mut path = dir.join(format!("{id}{}", mandara_config::user_looks::EXPORT_SUFFIX));
+    let mut n = 2;
+    while path.exists() {
+        path = dir.join(format!("{id}-{n}{}", mandara_config::user_looks::EXPORT_SUFFIX));
+        n += 1;
+    }
+    path
+}
+
+/// A look file's text, refusing anything too large before reading it.
+pub fn read_look_file(path: &std::path::Path) -> Result<String, String> {
+    let meta = std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    if !meta.is_file() || meta.len() > mandara_config::user_looks::MAX_FILE_BYTES as u64 {
+        return Err(format!("{} is not a look file", path.display()));
+    }
+    std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Saves what `cfg` changes on its active look as a new look of yours
+/// (named `name`, or after the parent).
+pub fn save_current_look(cfg: &mandara_config::ShellConfig, name: Option<&str>) -> anyhow::Result<mandara_config::user_looks::UserLook> {
+    use mandara_config::user_looks::{self as ul, UserLook};
+    let active = ul::find(&cfg.looks.active);
+    let parent = match &active {
+        Some(l) => l.parent(),
+        None => mandara_config::looks::find(&cfg.looks.active),
+    }
+    .ok_or_else(|| anyhow::anyhow!("apply a look first: a look of yours starts from one"))?;
+    let existing = ul::list();
+    let names: Vec<String> = existing.iter().map(|l| l.name.clone()).collect();
+    let mut look = UserLook::child(parent, ul::delta_over(parent, cfg), &names, &chrono::Local::now().format("%Y-%m-%d").to_string());
+    look.wallpaper_colors = cfg.looks.wallpaper_colors;
+    if let Some(name) = name {
+        look.name = name.trim().chars().take(ul::MAX_NAME_CHARS).collect();
+    }
+    let ids: Vec<String> = existing.iter().map(|l| l.id.clone()).collect();
+    look.id = ul::unique_id(&look.name, &ids);
+    ul::save(&look)?;
+    Ok(look)
 }
 
 #[cfg(test)]

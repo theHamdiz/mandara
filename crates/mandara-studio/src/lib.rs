@@ -75,11 +75,26 @@ fn wallpaper_tab_target(target: &str) -> Option<app::wallpaper_page::WallpaperTa
     app::wallpaper_page::WallpaperTab::parse(tab.split('/').next()?)
 }
 
-/// A desktop widget to select: `desktop-widgets/<id>`, as an empty
-/// widget's "Set up in Studio" button asks.
+/// A Desktop tab to show: `desktop/<widgets|cards|context-menu>`.
+fn desktop_tab_target(target: &str) -> Option<app::desktop_page::DesktopTab> {
+    let (section, rest) = target.split_once('/')?;
+    (resolve_section(section) == Some(registry::Section::Desktop)).then_some(())?;
+    app::desktop_page::DesktopTab::parse(rest.split('/').next()?)
+}
+
+/// A desktop widget to select: `desktop/widgets/<id>`, `desktop/<id>` or
+/// the former `desktop-widgets/<id>`, as an empty widget's "Set up in
+/// Studio" button asks.
 fn desktop_widget_target(target: &str) -> Option<String> {
-    let (section, id) = target.split_once('/')?;
-    (resolve_section(section) == Some(registry::Section::DesktopWidgets)).then_some(())?;
+    use app::desktop_page::DesktopTab;
+    let (section, rest) = target.split_once('/')?;
+    (resolve_section(section) == Some(registry::Section::Desktop)).then_some(())?;
+    let id = match rest.split_once('/') {
+        Some((tab, id)) if DesktopTab::parse(tab) == Some(DesktopTab::Widgets) => id,
+        Some(_) => return None,
+        None if DesktopTab::parse(rest).is_some() => return None,
+        None => rest,
+    };
     let id = id.trim();
     (!id.is_empty()).then(|| id.to_string())
 }
@@ -92,7 +107,7 @@ fn former_bars_tab(name: &str) -> Option<registry::bars::BarsTab> {
     let name = name.trim();
     if name.is_empty() { return None; }
     if "bar".starts_with(name) || name == mandara_i18n::t("Bar").to_lowercase().replace('-', " ") { Some(BarsTab::Bar) }
-    else if "sidebars & hover".starts_with(name) || matches!(name, "sidebar" | "sidebars") || name == mandara_i18n::t("Sidebars & hover").to_lowercase().replace('-', " ") { Some(BarsTab::Sidebar) }
+    else if "sidebars & hover".starts_with(name) || matches!(name, "sidebar" | "sidebars") || name == mandara_i18n::t("Sidebars & hover").to_lowercase().replace('-', " ") { Some(BarsTab::Sidebars) }
     else { None }
 }
 
@@ -106,15 +121,47 @@ fn bars_tab_target(target: &str) -> Option<registry::bars::BarsTab> {
     parts.next().and_then(registry::bars::BarsTab::parse).or_else(|| former_bars_tab(section)).or(Some(Default::default()))
 }
 
+/// The section of Sidebars a route scrolls to: `bars/sidebars/<side-bar|
+/// sidebar>`, a former tab (`bars/side-bars`, `bars/sidebar`, `bars/cards`…)
+/// or the former Sidebar page (`sidebar`), which showed the panel.
+fn bars_part_target(target: &str) -> Option<registry::bars::SidebarsPart> {
+    use registry::bars::{BarsTab, SidebarsPart};
+    (bars_tab_target(target)? == BarsTab::Sidebars).then_some(())?;
+    let mut parts = target.split('/').skip(1);
+    match parts.next().map(str::trim).filter(|tab| !tab.is_empty()) {
+        Some(tab) if BarsTab::parse(tab) == Some(BarsTab::Sidebars) && !tab.eq_ignore_ascii_case(BarsTab::Sidebars.slug()) => SidebarsPart::parse(tab),
+        Some(_) => parts.next().and_then(SidebarsPart::parse),
+        None => Some(SidebarsPart::Panel),
+    }
+}
+
 /// Names of pages merged into another one, still accepted on the command
 /// line (`mandara studio appearance` opens Themes).
-const FORMER_SECTIONS: &[(&str, registry::Section)] = &[("appearance", registry::Section::Themes), ("looks", registry::Section::Themes), ("cursor", registry::Section::Themes), ("cursors", registry::Section::Themes)];
+const FORMER_SECTIONS: &[(&str, registry::Section)] = &[
+    ("appearance", registry::Section::Themes),
+    ("looks", registry::Section::Themes),
+    ("cursor", registry::Section::Themes),
+    ("cursors", registry::Section::Themes),
+    ("icons", registry::Section::Themes),
+    ("icon-themes", registry::Section::Themes),
+    // Desktop widgets became Desktop (its Widgets tab).
+    ("desktop-widgets", registry::Section::Desktop),
+    ("desktop widgets", registry::Section::Desktop),
+];
 
-/// Whether a command-line target opens Themes at its Cursor section
-/// (`themes/cursor`, or the moved `cursor` / `input/cursor`).
+/// Whether a command-line target opens Themes on its Cursors tab
+/// (`themes/cursors`, the older `themes/cursor`, or the moved `cursor` /
+/// `input/cursor`).
 fn cursor_target(target: &str) -> bool {
     let t = target.to_lowercase();
-    matches!(t.as_str(), "cursor" | "cursors" | "themes/cursor" | "input/cursor" | "appearance/cursor")
+    matches!(t.as_str(), "cursor" | "cursors" | "themes/cursor" | "themes/cursors" | "input/cursor" | "appearance/cursor")
+}
+
+/// Whether a command-line target opens Themes on its Icons tab (`icons`,
+/// `icon-themes`; `themes/icons` is a tab link).
+fn icons_target(target: &str) -> bool {
+    let t = target.to_lowercase();
+    matches!(t.as_str(), "icons" | "icon-themes" | "appearance/icons")
 }
 
 /// The section a command-line name opens: the English title (any case, or
@@ -146,10 +193,13 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
     let wallpaper_tab = section.and_then(wallpaper_tab_target);
     let themes_tab = section.and_then(themes_tab_target);
     let bars_tab = section.and_then(bars_tab_target);
+    let bars_part = section.and_then(bars_part_target);
     let desktop_widget = section.and_then(desktop_widget_target);
+    let desktop_tab = section.and_then(desktop_tab_target);
     // `power/<part>` scrolls the Power & idle page to that part.
     let power_part = section.and_then(|t| t.strip_prefix("power/")).map(str::to_string);
     let cursor = section.is_some_and(cursor_target);
+    let icon_themes = section.is_some_and(icons_target);
     // `search/<text>` opens the results for that text.
     let search = section.and_then(|t| t.strip_prefix("search/")).filter(|q| !q.trim().is_empty()).map(str::to_string);
     let section = match (&search, &tab) {
@@ -176,6 +226,12 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
         if let Some(tab) = bars_tab {
             view.show_bars_tab(tab, cx);
         }
+        if let Some(tab) = desktop_tab {
+            view.show_desktop_tab(tab, cx);
+        }
+        if let Some(part) = bars_part {
+            view.show_sidebars_part(part, cx);
+        }
         if let Some(id) = &desktop_widget {
             view.show_desktop_widget(id, cx);
         }
@@ -187,6 +243,9 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
         }
         if cursor {
             view.show_cursor_section(cx);
+        }
+        if icon_themes {
+            view.show_themes_tab(app::looks_page::ThemesTab::Icons, cx);
         }
         if let Some(q) = &search {
             view.show_search(q, cx);
@@ -289,6 +348,8 @@ pub fn run(section: Option<&str>, cx: &mut App) {
         }
     })
     .detach();
+    // Customizing an applied Look keeps it as a look of yours.
+    app::looks_yours_watch(cx);
     open_at(section, cx);
 }
 
@@ -302,14 +363,25 @@ mod tests {
         assert_eq!(themes_tab_target("Themes/presets"), Some(ThemesTab::Components));
         assert_eq!(themes_tab_target("appearance/components"), Some(ThemesTab::Components), "a former page name still leads there");
         assert_eq!(themes_tab_target("themes/colors"), Some(ThemesTab::Colors));
+        assert_eq!(themes_tab_target("themes/boot"), Some(ThemesTab::Boot));
+        assert_eq!(themes_tab_target("themes/plymouth"), Some(ThemesTab::Boot));
+        assert_eq!(themes_tab_target("themes/grub"), Some(ThemesTab::Boot));
         assert_eq!(themes_tab_target("themes"), None, "the page alone keeps its first tab");
         assert_eq!(themes_tab_target("wallpaper/components"), None);
         for tab in ThemesTab::ALL {
             assert_eq!(ThemesTab::parse(tab.slug()), Some(tab));
         }
-        // The cursor deep link still lands on the tab holding the cursor.
+        // The cursor and icon galleries have their own tabs; older cursor
+        // links land there too.
+        assert_eq!(themes_tab_target("themes/cursors"), Some(ThemesTab::Cursors));
+        assert_eq!(themes_tab_target("themes/cursor"), Some(ThemesTab::Cursors));
+        assert_eq!(themes_tab_target("themes/icons"), Some(ThemesTab::Icons));
+        assert_eq!(themes_tab_target("themes/icon-themes"), Some(ThemesTab::Icons));
         assert!(super::cursor_target("themes/cursor"));
-        assert_eq!(ThemesTab::parse("cursor"), Some(ThemesTab::Colors));
+        assert_eq!(ThemesTab::parse("cursor"), Some(ThemesTab::Cursors));
+        // The sound themes tab.
+        assert_eq!(themes_tab_target("themes/sounds"), Some(ThemesTab::Sounds));
+        assert_eq!(themes_tab_target("themes/sound-themes"), Some(ThemesTab::Sounds));
     }
 
     use super::*;
@@ -323,28 +395,84 @@ mod tests {
         }
         assert_eq!(bars_tab_target("bars"), Some(BarsTab::Bar));
         assert_eq!(bars_tab_target("bar"), Some(BarsTab::Bar));
-        assert_eq!(bars_tab_target("sidebar"), Some(BarsTab::Sidebar));
+        assert_eq!(bars_tab_target("sidebar"), Some(BarsTab::Sidebars));
         assert_eq!(bars_tab_target("Sidebar/hover"), Some(BarsTab::Edges));
-        assert_eq!(bars_tab_target("bar/side-bars"), Some(BarsTab::SideBars));
+        assert_eq!(bars_tab_target("bar/side-bars"), Some(BarsTab::Sidebars));
         for tab in BarsTab::ALL { assert_eq!(bars_tab_target(&format!("bars/{}", tab.slug())), Some(tab)); }
         assert_eq!(bars_tab_target("wallpaper/edges"), None);
         for lang in mandara_i18n::Lang::ALL {
             mandara_i18n::with_language(Some(lang), || {
                 let name = mandara_i18n::t("Sidebars & hover");
                 assert_eq!(resolve_section(name), Some(Section::Bars), "{lang:?}: {name}");
-                assert_eq!(bars_tab_target(name), Some(BarsTab::Sidebar));
+                assert_eq!(bars_tab_target(name), Some(BarsTab::Sidebars));
             });
         }
     }
 
     #[test]
+    fn the_former_side_bars_and_sidebar_routes_reach_their_section_of_sidebars() {
+        use registry::bars::{BarsTab, SidebarsPart::{Panel, SideBar}};
+        mandara_i18n::with_language(Some(mandara_i18n::Lang::En), || {
+            for (target, part) in [
+                ("bars/side-bars", Some(SideBar)),
+                ("bars/side_bars", Some(SideBar)),
+                ("Bars/SIDE-BARS", Some(SideBar)),
+                ("bar/side-bars", Some(SideBar)),
+                ("bars/sidebar", Some(Panel)),
+                ("bars/cards", Some(Panel)),
+                ("bars/tabs", Some(Panel)),
+                ("sidebar", Some(Panel)),
+                ("sidebar/", Some(Panel)),
+                ("sidebars", Some(Panel)),
+                ("bars/sidebars/side-bar", Some(SideBar)),
+                ("bars/sidebars/sidebar", Some(Panel)),
+                ("bars/sidebars/panel", Some(Panel)),
+                ("bars/sidebars", None),
+                ("bars/sidebars/unknown", None),
+            ] {
+                assert_eq!(bars_tab_target(target), Some(BarsTab::Sidebars), "{target}");
+                assert_eq!(bars_part_target(target), part, "{target}");
+            }
+            for target in ["bars", "bars/bar", "bars/edges", "Sidebar/hover", "wallpaper/sidebar"] {
+                assert_eq!(bars_part_target(target), None, "{target}");
+            }
+        });
+    }
+
+    #[test]
     fn a_desktop_widget_target_selects_that_widget() {
         mandara_i18n::with_language(Some(mandara_i18n::Lang::En), || {
+            // The former page's links keep working.
             assert_eq!(desktop_widget_target("desktop-widgets/github-1").as_deref(), Some("github-1"));
-            assert_eq!(resolve_section("desktop-widgets/github-1"), Some(Section::DesktopWidgets));
+            assert_eq!(resolve_section("desktop-widgets/github-1"), Some(Section::Desktop));
+            assert_eq!(resolve_section("desktop-widgets"), Some(Section::Desktop));
+            assert_eq!(resolve_section("Desktop widgets"), Some(Section::Desktop));
             assert_eq!(desktop_widget_target("desktop-widgets"), None);
             assert_eq!(desktop_widget_target("desktop-widgets/"), None);
             assert_eq!(desktop_widget_target("plugins/github-1"), None);
+            // The new ones.
+            assert_eq!(desktop_widget_target("desktop/widgets/github-1").as_deref(), Some("github-1"));
+            assert_eq!(desktop_widget_target("desktop/clock-2").as_deref(), Some("clock-2"));
+            assert_eq!(desktop_widget_target("desktop/widgets"), None, "a tab, not a widget");
+            assert_eq!(desktop_widget_target("desktop/context-menu"), None);
+            assert_eq!(desktop_widget_target("desktop/cards/x"), None);
+        });
+    }
+
+    #[test]
+    fn desktop_deep_links_open_their_tabs() {
+        use app::desktop_page::DesktopTab;
+        mandara_i18n::with_language(Some(mandara_i18n::Lang::En), || {
+            assert_eq!(resolve_section("desktop"), Some(Section::Desktop));
+            for (link, tab) in [("desktop/widgets", DesktopTab::Widgets), ("desktop/cards", DesktopTab::Cards), ("desktop/context-menu", DesktopTab::ContextMenu), ("Desktop/Context-Menu", DesktopTab::ContextMenu), ("desktop-widgets/cards", DesktopTab::Cards), ("desktop/widgets/clock-1", DesktopTab::Widgets)] {
+                assert_eq!(resolve_section(link), Some(Section::Desktop), "{link}");
+                assert_eq!(desktop_tab_target(link), Some(tab), "{link}");
+            }
+            assert_eq!(desktop_tab_target("desktop"), None, "the page's own default");
+            assert_eq!(desktop_tab_target("desktop/clock-1"), None);
+            assert_eq!(desktop_tab_target("wallpaper/context-menu"), None);
+            // The Desktop group of the sidebar is not a page.
+            assert_ne!(resolve_section("desktop"), Some(Section::Bars));
         });
     }
 
@@ -358,7 +486,7 @@ mod tests {
             }
             for prefix in ["s", "si", "side", "sidebar", "sidebars & h"] {
                 assert_eq!(resolve_section(prefix), Some(Section::Bars));
-                assert_eq!(bars_tab_target(prefix), Some(BarsTab::Sidebar));
+                assert_eq!(bars_tab_target(prefix), Some(BarsTab::Sidebars));
             }
             assert_eq!(resolve_section("bluetooth"), None);
             assert_eq!(resolve_section("network"), Some(Section::Network));
@@ -412,6 +540,11 @@ mod tests {
         assert_eq!(resolve_section("cursor"), Some(registry::Section::Themes));
         assert_eq!(resolve_section("themes/cursor"), Some(registry::Section::Themes));
         assert!(!cursor_target("themes") && !cursor_target("input"));
+        for target in ["icons", "Icon-Themes"] {
+            assert!(icons_target(target), "{target}");
+            assert_eq!(resolve_section(target), Some(registry::Section::Themes));
+        }
+        assert!(!icons_target("themes"));
     }
 
     #[test]

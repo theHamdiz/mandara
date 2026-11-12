@@ -89,8 +89,9 @@ const STUDIO_RESTART_PAUSE: Duration = Duration::from_millis(800);
 /// How long MangoWM gets to answer an IPC command.
 const MANGO_REPLY_TIMEOUT: Duration = Duration::from_secs(1);
 /// Variables of the real environment passed through (no session data;
-/// `MANDARA_FRAME_STATS` logs Studio's frame pacing for measurements).
-const PASSTHROUGH: [&str; 17] = ["PATH", "LANG", "LC_ALL", "LC_MESSAGES", "TERM", "RUST_LOG", "RUST_BACKTRACE", "WLR_RENDERER", "WLR_RENDER_DRM_DEVICE", "MANDARA_FRAME_STATS", "MANDARA_UPDATE_API", "MANDARA_MOCK_RELEASE_KEYS", "MANDARA_FAKE_SYSTEM_UPDATE", "MANDARA_FAKE_SYSTEM_UPDATE_DELAY_MS", "MANDARA_FAKE_SYSTEM_UPDATE_HOLD", "MANDARA_FAKE_AUR", "MANDARA_REDDIT_API"];
+/// `MANDARA_FRAME_STATS` logs Studio's frame pacing for measurements;
+/// `MANDARA_WALLPAPER_RENDERER=gpui` picks the GPU wallpaper).
+const PASSTHROUGH: [&str; 19] = ["PATH", "LANG", "LC_ALL", "LC_MESSAGES", "TERM", "RUST_LOG", "RUST_BACKTRACE", "WLR_RENDERER", "WLR_RENDER_DRM_DEVICE", "MANDARA_FRAME_STATS", "MANDARA_UPDATE_API", "MANDARA_MOCK_RELEASE_KEYS", "MANDARA_FAKE_SYSTEM_UPDATE", "MANDARA_FAKE_SYSTEM_UPDATE_DELAY_MS", "MANDARA_FAKE_SYSTEM_UPDATE_HOLD", "MANDARA_FAKE_AUR", "MANDARA_REDDIT_API", "MANDARA_BOOT_FIXTURE", "MANDARA_WALLPAPER_RENDERER"];
 /// `PATH` when the real environment has none.
 const FALLBACK_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
 /// Flags that force dry runs of everything that would change the system.
@@ -109,7 +110,7 @@ const USAGE: &str = "usage: cargo xtask sandbox <command>
   shot OUT.png
   matte OUT.png [--region X0 Y0 X1 Y1] [--margin PX]
   msg ARGS…
-  pointer move X Y | click X Y [left|right|middle] | drag X1 Y1 X2 Y2 | flyby X Y MS | scroll X Y STEPS
+  pointer move X Y | click X Y [left|right|middle] | drag X1 Y1 X2 Y2 [left|right|middle] | flyby X Y MS | scroll X Y STEPS | shake X Y [WIDTH] [STROKES]
   studio [--size WxH] SECTION [ARGS…] | studio stop
   shell restart | stop
   run ARGS… | run stop      (the sandbox's mandara with ARGS as the demo user, e.g. run greeter --demo --layer-shell)

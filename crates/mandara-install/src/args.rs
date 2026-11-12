@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use clap::Args;
 
 /// Compositor names `--compositor` accepts (passed on to `mandara setup`).
-pub const COMPOSITORS: &[&str] = &["mango", "mangowm", "niri", "hyprland", "hypr", "umbriel", "sway", "river", "kwin", "kde", "plasma", "aqueous"];
+pub const COMPOSITORS: &[&str] = &["mango", "mangowm", "niri", "hyprland", "hypr", "umbriel", "sway", "river", "kwin", "kde", "plasma", "aqueous", "labwc", "cosmic", "cosmic-comp"];
 
 #[derive(Args, Debug, Clone, Default, PartialEq, Eq)]
 pub struct InstallArgs {
@@ -34,12 +34,12 @@ pub struct InstallArgs {
     /// Keep your login screen (default: switch to Mandara Login, after asking).
     #[arg(long)]
     pub no_greeter: bool,
-    /// mango, niri, hyprland, umbriel, sway, river, kwin or aqueous (default: detected).
+    /// mango, niri, hyprland, umbriel, sway, river, kwin, aqueous, labwc or cosmic (default: detected).
     /// Missing compositors can be installed after asking. KWin requires an
     /// existing Plasma installation.
     #[arg(long, value_name = "NAME", value_parser = clap::builder::PossibleValuesParser::new(COMPOSITORS),
         help = mandara_i18n::t("Compositor (default: detected)"),
-        long_help = mandara_i18n::t("Choose mango, niri, hyprland, umbriel, sway, river, kwin or aqueous (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation."))]
+        long_help = mandara_i18n::t("Choose mango, niri, hyprland, umbriel, sway, river, kwin, aqueous, labwc or cosmic (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation."))]
     pub compositor: Option<String>,
     /// GitHub repository releases and sources come from (default
     /// theHamdiz/mandara, or $MANDARA_REPO). $MANDARA_RELEASE_BASE=<url>
@@ -157,7 +157,7 @@ mod tests {
         let command = cli.find_subcommand("install").unwrap();
         let help = command.get_arguments().find(|argument| argument.get_id() == "compositor").unwrap().get_long_help().unwrap().to_string();
         assert!(help.contains("KWin requires an existing Plasma installation."));
-        for compositor in ["mango", "niri", "hyprland", "umbriel", "sway", "river", "kwin", "aqueous"] {
+        for compositor in ["mango", "niri", "hyprland", "umbriel", "sway", "river", "kwin", "aqueous", "labwc", "cosmic"] {
             assert!(help.contains(compositor));
         }
     }

@@ -55,6 +55,9 @@ pub fn metrics(cfg: &ShellConfig, right: bool, radius_scale: f32) -> Metrics {
             let items = sb.items(right, &cfg.bar);
             if items.chips == mandara_config::side_bars::SideBarChips::Pills && items.icon_shape != mandara_config::surfaces::BarIconShape::Match { items.chip_size } else { 0.0 }
         },
+        // The corner belongs to the main bar.
+        corner: 0.0,
+        corner_item: 0.0,
         ..base
     }
 }

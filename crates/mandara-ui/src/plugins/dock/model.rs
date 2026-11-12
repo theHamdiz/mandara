@@ -3,7 +3,7 @@
 //! recent apps and opening files with an app. No GPUI state here, so all
 //! of it is unit-tested.
 
-use mandara_config::dock::LAUNCHER_PIN;
+use mandara_config::dock::{AttentionFeedback, DockReveal, IndicatorMotion, ItemMotion, LAUNCHER_PIN, LaunchFeedback, MinimizeFeedback};
 use mandara_config::workflow::{DockConfig, DockPosition};
 use mandara_services::notifications::{Notification, Urgency};
 use mandara_services::toplevels::Toplevel;
@@ -296,6 +296,244 @@ pub fn attention_hop(t: f32) -> f32 {
     let burst = ATTENTION_HOPS * LAUNCH_HOP_S;
     let x = t % (burst + ATTENTION_REST_S);
     if x < burst { launch_hop(x) } else { 0.0 }
+}
+
+// ── Dock motion ──────────────────────────────────────────────────────────
+//
+// Every curve is a pure function of elapsed seconds (already scaled by the
+// dock's playback speed) or of a spring's value, bounded, and exactly at
+// rest outside its window, so an icon always settles on its classic
+// geometry.
+
+/// Pulse: one swell lasts this long, seconds, and grows the icon by up to
+/// this share.
+pub const PULSE_S: f32 = 0.7;
+pub const PULSE_AMP: f32 = 0.14;
+/// Ripple: one ring lasts this long and spreads to this many icon sizes,
+/// starting at this opacity.
+pub const RIPPLE_S: f32 = 1.0;
+pub const RIPPLE_REACH: f32 = 1.6;
+pub const RIPPLE_ALPHA: f32 = 0.6;
+/// Wiggle: side-to-side swings per second and their reach (icon sizes).
+pub const WIGGLE_HZ: f32 = 6.0;
+pub const WIGGLE_FRAC: f32 = 0.09;
+/// Minimize feedback: how long the longest style plays, and how deep a
+/// Dip squashes.
+pub const MINIMIZE_S: f32 = PULSE_S;
+pub const DIP_AMP: f32 = 0.3;
+/// A Dip's first squash lasts this long and its rebound decays at this
+/// rate; it ends after three half-swings, exactly at rest.
+const DIP_HALF_S: f32 = 0.22;
+const DIP_DECAY: f32 = 5.0;
+/// A Scale reveal starts this much smaller than the resting dock, and
+/// may overshoot its rest by this share.
+pub const REVEAL_SCALE_DEPTH: f32 = 0.35;
+const REVEAL_SCALE_OVER: f32 = 0.04;
+/// Arriving icons may pop this far past their resting size.
+pub const ARRIVE_OVERSHOOT: f32 = 0.25;
+
+/// How an icon is nudged off its resting place, in icon sizes: `lift`
+/// (share of a full hop, toward the screen's middle), `grow` (extra scale:
+/// growth is centred, shrinking sinks into the dock) and `shift` (along
+/// the dock).
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+pub struct Nudge {
+    pub lift: f32,
+    pub grow: f32,
+    pub shift: f32,
+}
+
+impl Nudge {
+    pub const REST: Self = Self { lift: 0.0, grow: 0.0, shift: 0.0 };
+
+    pub fn at_rest(&self) -> bool {
+        *self == Self::REST
+    }
+}
+
+/// Extra scale (0..=[`PULSE_AMP`]) of an icon pulsing `t` seconds in.
+pub fn pulse(t: f32) -> f32 {
+    let x = (t.max(0.0) / PULSE_S).fract();
+    let s = (std::f32::consts::PI * x).sin();
+    PULSE_AMP * s * s
+}
+
+/// A ring spreading from under a launching icon `t` seconds in: its size
+/// (icon sizes) and opacity. A new ring starts every [`RIPPLE_S`].
+pub fn ripple(t: f32) -> (f32, f32) {
+    let x = (t.max(0.0) / RIPPLE_S).fract();
+    let ease = 1.0 - (1.0 - x).powi(3);
+    // Fades in over the first tenth so a new ring never pops.
+    (1.0 + (RIPPLE_REACH - 1.0) * ease, RIPPLE_ALPHA * (1.0 - x) * (x * 10.0).min(1.0))
+}
+
+/// A launching icon's nudge `t` seconds in (Ripple draws a ring instead,
+/// [`launch_ring`]).
+pub fn launch_nudge(style: LaunchFeedback, t: f32) -> Nudge {
+    match style {
+        LaunchFeedback::Bounce => Nudge { lift: launch_hop(t), ..Nudge::REST },
+        LaunchFeedback::Pulse => Nudge { grow: pulse(t), ..Nudge::REST },
+        LaunchFeedback::Ripple | LaunchFeedback::None => Nudge::REST,
+    }
+}
+
+/// The ring under a launching icon, for [`LaunchFeedback::Ripple`].
+pub fn launch_ring(style: LaunchFeedback, t: f32) -> Option<(f32, f32)> {
+    (style == LaunchFeedback::Ripple).then(|| ripple(t))
+}
+
+/// Seconds until the next attention burst, while `t` is in a rest (no
+/// frames are needed until then), else `None`.
+pub fn attention_rest_left(t: f32) -> Option<f32> {
+    let burst = ATTENTION_HOPS * LAUNCH_HOP_S;
+    let x = t.max(0.0) % (burst + ATTENTION_REST_S);
+    (x >= burst).then_some(burst + ATTENTION_REST_S - x)
+}
+
+/// An icon asking for attention `t` seconds in: bursts of
+/// [`ATTENTION_HOPS`] bounces, pulses or a wiggle, then a rest.
+pub fn attention_nudge(style: AttentionFeedback, t: f32) -> Nudge {
+    let burst = ATTENTION_HOPS * LAUNCH_HOP_S;
+    let x = t.max(0.0) % (burst + ATTENTION_REST_S);
+    if x >= burst {
+        return Nudge::REST;
+    }
+    match style {
+        AttentionFeedback::Bounce => Nudge { lift: launch_hop(x), ..Nudge::REST },
+        AttentionFeedback::Pulse => {
+            let s = (std::f32::consts::PI * x / LAUNCH_HOP_S).sin();
+            Nudge { grow: PULSE_AMP * s * s, ..Nudge::REST }
+        }
+        AttentionFeedback::Wiggle => {
+            // Swings inside a soft envelope, still at both ends of the burst.
+            let envelope = (std::f32::consts::PI * x / burst).sin();
+            Nudge { shift: WIGGLE_FRAC * envelope * (std::f32::consts::TAU * WIGGLE_HZ * x).sin(), ..Nudge::REST }
+        }
+        AttentionFeedback::None => Nudge::REST,
+    }
+}
+
+/// The app icon's answer `t` seconds after one of its windows minimized:
+/// a Dip squashes into the dock and springs back past its size once, a
+/// Pulse swells once.
+pub fn minimize_nudge(style: MinimizeFeedback, t: f32) -> Nudge {
+    if !(0.0..MINIMIZE_S).contains(&t) {
+        return Nudge::REST;
+    }
+    match style {
+        MinimizeFeedback::Dip if t < 3.0 * DIP_HALF_S => {
+            let wave = (std::f32::consts::PI * t / DIP_HALF_S).sin();
+            Nudge { grow: -DIP_AMP * (-DIP_DECAY * t).exp() * wave, ..Nudge::REST }
+        }
+        MinimizeFeedback::Pulse => Nudge { grow: pulse(t), ..Nudge::REST },
+        MinimizeFeedback::Dip => Nudge::REST,
+        MinimizeFeedback::None => Nudge::REST,
+    }
+}
+
+/// An icon arriving or leaving at `presence` (its spring: 0 gone, 1 here):
+/// the share of its slot it takes, its size and its opacity.
+pub fn presence(style: ItemMotion, presence: f32) -> (f32, f32, f32) {
+    let p = presence.clamp(0.0, 1.0 + ARRIVE_OVERSHOOT);
+    match style {
+        ItemMotion::Spring => (p, p, p.min(1.0)),
+        // Glides on a critically damped spring: no overshoot to clamp.
+        ItemMotion::Fade => (p.min(1.0), 1.0, p.min(1.0)),
+        ItemMotion::None => (1.0, 1.0, 1.0),
+    }
+}
+
+/// Indicator mark `k` (0-based) when the indicator spring is at `count`
+/// marks: its size share and opacity (`None` while it is gone).
+pub fn indicator_mark(style: IndicatorMotion, count: f32, k: usize) -> Option<(f32, f32)> {
+    let f = (count - k as f32).clamp(0.0, 1.0);
+    if f <= f32::EPSILON {
+        return None;
+    }
+    Some(match style {
+        // Eases out: quick to appear, gentle to land.
+        IndicatorMotion::Spring => (f * (2.0 - f), 1.0),
+        IndicatorMotion::Fade => (1.0, f),
+        IndicatorMotion::None => (1.0, 1.0),
+    })
+}
+
+/// The whole dock while it shows or hides, from the hide spring (0 shown,
+/// 1 hidden, overshooting either way): how far it slides (share of its
+/// travel), its opacity and its scale about its screen edge.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct RevealFrame {
+    pub slide: f32,
+    pub alpha: f32,
+    pub scale: f32,
+}
+
+pub fn reveal_frame(style: DockReveal, hide: f32) -> RevealFrame {
+    let alpha = 1.0 - hide.clamp(0.0, 1.0);
+    match style {
+        DockReveal::Slide => RevealFrame { slide: hide, alpha, scale: 1.0 },
+        DockReveal::Fade => RevealFrame { slide: 0.0, alpha, scale: 1.0 },
+        DockReveal::Scale => RevealFrame { slide: 0.0, alpha, scale: (1.0 - REVEAL_SCALE_DEPTH * hide).clamp(1.0 - REVEAL_SCALE_DEPTH, 1.0 + REVEAL_SCALE_OVER) },
+    }
+}
+
+/// `r` scaled by `k` about `origin` (a Scale reveal's edge point).
+pub fn zoom(r: (f32, f32, f32, f32), origin: (f32, f32), k: f32) -> (f32, f32, f32, f32) {
+    if k == 1.0 {
+        return r;
+    }
+    (origin.0 + (r.0 - origin.0) * k, origin.1 + (r.1 - origin.1) * k, r.2 * k, r.3 * k)
+}
+
+/// The point on the screen edge a Scale reveal grows out of: the middle of
+/// the dock's edge side.
+pub fn zoom_origin(pos: DockPosition, dock: (f32, f32, f32, f32)) -> (f32, f32) {
+    match pos {
+        DockPosition::Bottom => (dock.0 + dock.2 / 2.0, dock.1 + dock.3),
+        DockPosition::Left => (dock.0, dock.1 + dock.3 / 2.0),
+        DockPosition::Right => (dock.0 + dock.2, dock.1 + dock.3 / 2.0),
+    }
+}
+
+/// The slots to draw: `new`, plus the slots of `old` that left and that
+/// `keep` lets linger, each after the slot it followed. A lingering slot
+/// keeps its icon but no windows or pin, so it is never mistaken for a
+/// live one.
+pub fn with_leaving(old: &[Item], new: Vec<Item>, mut keep: impl FnMut(&Item) -> bool) -> Vec<Item> {
+    let mut gone: Vec<(Option<usize>, Item)> = Vec::new();
+    let mut anchor = None;
+    for o in old {
+        match new.iter().position(|n| n.key == o.key) {
+            Some(i) => anchor = Some(i),
+            None if keep(o) => gone.push((anchor, Item { windows: Vec::new(), pinned: false, recent: false, ..o.clone() })),
+            None => {}
+        }
+    }
+    if gone.is_empty() {
+        return new;
+    }
+    // Stable: slots that followed the same survivor keep their order.
+    gone.sort_by_key(|(a, _)| a.map_or(0, |i| i + 1));
+    let mut out = Vec::with_capacity(new.len() + gone.len());
+    let mut gone = gone.into_iter().peekable();
+    while let Some((_, g)) = gone.next_if(|(a, _)| a.is_none()) {
+        out.push(g);
+    }
+    for (i, n) in new.into_iter().enumerate() {
+        out.push(n);
+        while let Some((_, g)) = gone.next_if(|(a, _)| *a == Some(i)) {
+            out.push(g);
+        }
+    }
+    out
+}
+
+/// Whether the slots both lists show swapped places (a reorder, not just
+/// slots arriving or leaving).
+pub fn reordered(old: &[Item], new: &[Item]) -> bool {
+    let kept_old = old.iter().filter(|o| new.iter().any(|n| n.key == o.key)).map(|i| &i.key);
+    let kept_new = new.iter().filter(|n| old.iter().any(|o| o.key == n.key)).map(|i| &i.key);
+    !kept_old.eq(kept_new)
 }
 
 // ── Geometry ─────────────────────────────────────────────────────────────
@@ -759,6 +997,123 @@ mod tests {
         assert!(launch_hop(LAUNCH_HOP_S * 1.5) > 0.99, "keeps hopping");
         assert!(attention_hop(LAUNCH_HOP_S / 2.0) > 0.99);
         assert_eq!(attention_hop(ATTENTION_HOPS * LAUNCH_HOP_S + ATTENTION_REST_S / 2.0), 0.0, "rests between bursts");
+    }
+
+    /// Samples `f` over `0..until` seconds at 1 ms.
+    fn sample(until: f32, mut f: impl FnMut(f32)) {
+        for i in 0..=(until * 1000.0) as usize {
+            f(i as f32 / 1000.0);
+        }
+    }
+
+    #[test]
+    fn every_feedback_is_bounded_and_starts_and_ends_at_rest() {
+        for style in LaunchFeedback::ALL {
+            assert!(launch_nudge(style, 0.0).at_rest(), "{style:?} starts in place");
+            sample(6.0, |t| {
+                let n = launch_nudge(style, t);
+                assert!((0.0..=1.0).contains(&n.lift) && (0.0..=PULSE_AMP).contains(&n.grow) && n.shift == 0.0, "{style:?} {t}: {n:?}");
+                if let Some((size, alpha)) = launch_ring(style, t) {
+                    assert!((1.0..=RIPPLE_REACH).contains(&size) && (0.0..=RIPPLE_ALPHA).contains(&alpha), "{t}");
+                }
+            });
+        }
+        assert!(launch_nudge(LaunchFeedback::None, 0.3).at_rest() && launch_ring(LaunchFeedback::Bounce, 0.3).is_none());
+        assert!(launch_nudge(LaunchFeedback::Pulse, PULSE_S / 2.0).grow > PULSE_AMP * 0.99, "swells mid-pulse");
+        assert!(launch_ring(LaunchFeedback::Ripple, 0.0).is_some_and(|(_, a)| a == 0.0), "a ring fades in");
+
+        let burst = ATTENTION_HOPS * LAUNCH_HOP_S;
+        for style in AttentionFeedback::ALL {
+            sample(burst + ATTENTION_REST_S, |t| {
+                let n = attention_nudge(style, t);
+                assert!((0.0..=1.0).contains(&n.lift) && (0.0..=PULSE_AMP).contains(&n.grow) && n.shift.abs() <= WIGGLE_FRAC, "{style:?} {t}: {n:?}");
+                if t >= burst {
+                    assert!(n.at_rest(), "{style:?} rests at {t}");
+                }
+            });
+            assert!(attention_nudge(style, 0.0).at_rest(), "{style:?}");
+        }
+        assert!(attention_nudge(AttentionFeedback::Wiggle, burst / 2.0 + 1.0 / (4.0 * WIGGLE_HZ)).shift.abs() > 0.0);
+        assert_eq!(attention_rest_left(0.1), None);
+        let left = attention_rest_left(burst + 0.4).unwrap();
+        assert!((left - (ATTENTION_REST_S - 0.4)).abs() < 1e-4, "{left}");
+
+        for style in MinimizeFeedback::ALL {
+            let mut least = 0.0_f32;
+            sample(MINIMIZE_S + 0.5, |t| {
+                let n = minimize_nudge(style, t);
+                assert!((-DIP_AMP..=PULSE_AMP).contains(&n.grow) && n.lift == 0.0 && n.shift == 0.0, "{style:?} {t}: {n:?}");
+                least = least.min(n.grow);
+                if t >= MINIMIZE_S {
+                    assert!(n.at_rest(), "{style:?} done at {t}");
+                }
+            });
+            assert_eq!(least < -DIP_AMP * 0.5, style == MinimizeFeedback::Dip, "only a Dip squashes ({style:?})");
+        }
+        // A Dip lands exactly at rest: no jump when it ends.
+        assert!(minimize_nudge(MinimizeFeedback::Dip, 3.0 * 0.22 - 1e-4).grow.abs() < 1e-3);
+        assert!(minimize_nudge(MinimizeFeedback::Pulse, MINIMIZE_S - 1e-3).grow < 1e-3);
+    }
+
+    #[test]
+    fn arriving_icons_and_indicators_settle_on_their_classic_size() {
+        for style in ItemMotion::ALL {
+            assert_eq!(presence(style, 1.0), (1.0, 1.0, 1.0), "{style:?} at rest");
+            let (slot, size, alpha) = presence(style, 2.0);
+            assert!(slot <= 1.0 + ARRIVE_OVERSHOOT && size <= 1.0 + ARRIVE_OVERSHOOT && alpha <= 1.0);
+            let (slot, size, alpha) = presence(style, -0.5);
+            assert!(slot >= 0.0 && size >= 0.0 && alpha >= 0.0);
+        }
+        assert_eq!(presence(ItemMotion::Spring, 0.0), (0.0, 0.0, 0.0), "grows from nothing");
+        assert_eq!(presence(ItemMotion::Fade, 0.0), (0.0, 1.0, 0.0), "fades at full size");
+        assert_eq!(presence(ItemMotion::None, 0.0), (1.0, 1.0, 1.0));
+        for style in IndicatorMotion::ALL {
+            assert_eq!(indicator_mark(style, 2.0, 0), Some((1.0, 1.0)), "{style:?}");
+            assert_eq!(indicator_mark(style, 2.0, 1), Some((1.0, 1.0)));
+            assert_eq!(indicator_mark(style, 2.0, 2), None, "a third dot isn't drawn");
+            assert_eq!(indicator_mark(style, 0.0, 0), None);
+        }
+        assert_eq!(indicator_mark(IndicatorMotion::Spring, 1.5, 1), Some((0.75, 1.0)), "half grown");
+        assert_eq!(indicator_mark(IndicatorMotion::Fade, 1.5, 1), Some((1.0, 0.5)), "half faded");
+    }
+
+    #[test]
+    fn every_reveal_rests_where_the_classic_dock_does() {
+        for style in DockReveal::ALL {
+            assert_eq!(reveal_frame(style, 0.0), RevealFrame { slide: 0.0, alpha: 1.0, scale: 1.0 }, "{style:?} shown");
+            let hidden = reveal_frame(style, 1.0);
+            assert_eq!(hidden.alpha, 0.0, "{style:?} hidden");
+            for h in [-0.3, 0.5, 1.2] {
+                let f = reveal_frame(style, h);
+                assert!((0.0..=1.0).contains(&f.alpha) && (1.0 - REVEAL_SCALE_DEPTH..=1.05).contains(&f.scale), "{style:?} {h}: {f:?}");
+            }
+        }
+        assert_eq!(reveal_frame(DockReveal::Slide, 1.0).slide, 1.0, "the classic slide");
+        assert_eq!(reveal_frame(DockReveal::Fade, 1.0).slide, 0.0);
+        assert!(reveal_frame(DockReveal::Scale, 1.0).scale < 1.0 && reveal_frame(DockReveal::Scale, 1.0).slide == 0.0);
+        let r = (100.0, 50.0, 40.0, 40.0);
+        assert_eq!(zoom(r, (0.0, 0.0), 1.0), r);
+        assert_eq!(zoom(r, (100.0, 90.0), 0.5), (100.0, 70.0, 20.0, 20.0), "shrinks toward the edge point");
+        assert_eq!(zoom_origin(DockPosition::Bottom, (10.0, 20.0, 100.0, 60.0)), (60.0, 80.0));
+        assert_eq!(zoom_origin(DockPosition::Left, (10.0, 20.0, 60.0, 100.0)), (10.0, 70.0));
+        assert_eq!(zoom_origin(DockPosition::Right, (10.0, 20.0, 60.0, 100.0)), (70.0, 70.0));
+    }
+
+    #[test]
+    fn leaving_slots_linger_where_they_were_and_reorders_are_noticed() {
+        let mk = |k: &str| Item { key: k.into(), windows: vec![win(1, k)], pinned: true, ..Item::fixed(Kind::App, k) };
+        let old = vec![mk("a"), mk("b"), mk("c"), mk("d")];
+        let new = vec![mk("a"), mk("c")];
+        let list = with_leaving(&old, new.clone(), |_| true);
+        assert_eq!(keys(&list), ["a", "b", "c", "d"], "each after the slot it followed");
+        assert!(!list[1].running() && !list[1].pinned, "a leaving slot is no longer live");
+        assert_eq!(keys(&with_leaving(&old, new.clone(), |o| o.key == "d")), ["a", "c", "d"]);
+        assert_eq!(keys(&with_leaving(&old, vec![mk("c")], |_| true)), ["a", "b", "c", "d"], "leading slots stay first");
+        assert_eq!(keys(&with_leaving(&old, new.clone(), |_| false)), ["a", "c"]);
+        assert!(!reordered(&old, &new), "removals aren't a reorder");
+        assert!(!reordered(&new, &old), "nor are arrivals");
+        assert!(reordered(&old, &[mk("b"), mk("a"), mk("c"), mk("d")]));
+        assert!(!reordered(&old, &old));
     }
 
     #[test]

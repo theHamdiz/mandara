@@ -45,7 +45,7 @@ pub struct Empty {
     /// Catalog keys, written in the widget's language when laid out.
     pub title: &'static str,
     pub hint: Hint,
-    /// The Studio page that fixes it (`desktop-widgets/<id>`,
+    /// The Studio page that fixes it (`desktop/widgets/<id>`,
     /// `plugins/<id>`): a "Set up in Studio" button opens it.
     pub setup: Option<String>,
     /// What a click anywhere on it does (fetch again after an error).
@@ -74,7 +74,7 @@ impl Empty {
 
 /// The Studio target of one desktop widget's settings.
 pub fn widget_settings(id: &str) -> String {
-    format!("desktop-widgets/{id}")
+    format!("desktop/widgets/{id}")
 }
 
 /// Lays out `e` centred, in the widget's `font` and language.
@@ -152,7 +152,7 @@ mod tests {
         let texts: Vec<&str> = c.marks.iter().filter_map(|m| if let MarkKind::Text { text, .. } = &m.kind { Some(text.as_str()) } else { None }).collect();
         assert!(texts.contains(&"GitHub contributions") && texts.contains(&"Set up in Studio"), "{texts:?}");
         assert_eq!(c.hits.len(), 1);
-        assert_eq!(c.hits[0].action, Action::Studio("desktop-widgets/github-1".into()));
+        assert_eq!(c.hits[0].action, Action::Studio("desktop/widgets/github-1".into()));
         // The button sits inside the composition, under the text.
         let (x, y, w, h) = c.hits[0].rect;
         assert!(x >= -0.01 && y > 0.0 && x + w <= c.size.0 + 0.01 && y + h <= c.size.1 + 0.01);

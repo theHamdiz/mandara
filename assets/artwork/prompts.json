@@ -47,6 +47,12 @@
       "panel": null,
       "store": "Artwork prepared ahead of plugin registration. Represents procedural still and looping wallpaper generation without depicting an unavailable panel."
     },
+    "icon-themes": {
+      "glyph": "A spacious 2-by-2 icon set: a cream rounded square, circle and rounded diamond, plus a small folder with a warm gold inset in the fourth cell. Equal cell widths keep the folder separate from the three app shapes. Shared 28-unit cream strokes with round caps and joins stay readable at 32 px; amber-to-umber tile from #B3813E to #674126 with the shared light, rim and shoreline. Original geometry without project logos, lettering or borrowed theme icons.",
+      "palette": "corniche",
+      "motif": "tiles",
+      "panel": null
+    },
     "ports": {
       "glyph": "Cream network socket with three gold contacts and a short cable; maintenance teal tile with the shared light, rim and shoreline.",
       "palette": "obsidian",
@@ -174,6 +180,12 @@
       "motif": "signal",
       "panel": null
     },
+    "sound-themes": {
+      "glyph": "Cream tuning fork beside three sand tone dots; Media violet tile from #8666AA to #40316F with the shared light, rim and shoreline. The open fork and three separate dots suggest a coordinated set of short chimes, with four broad shapes that stay clear at 32 px. Original linework, distinct from Audio's speaker, Radio's receiver and Soundscapes' waves; no lettering or borrowed sound-theme marks.",
+      "palette": "twilight",
+      "motif": "sound",
+      "panel": null
+    },
     "sudoku": {
       "glyph": "Cream three-by-three puzzle lattice with a path-drawn 9 and a gold selected cell; deep emerald-to-onyx tile with the shared light, rim and shoreline. Broad grid lines remain clear at 32 px, distinct from the To-do check and Notes page.",
       "palette": "obsidian",
@@ -184,6 +196,12 @@
       "glyph": "Four rounded tiles in a two-by-two arrangement, with a gold slide arrow and a larger gold merged tile bearing a path-drawn indigo 8; dusk violet-to-indigo tile with a quiet coral inset, shared light, rim and shoreline. Original tile arrangement, distinct from the Pomodoro dial and Jannah doorway.",
       "palette": "twilight",
       "motif": "slide",
+      "panel": null
+    },
+    "stash": {
+      "glyph": "Cream floating tray seen from above holding a document and a mountain-and-sun picture, with a tilted card dropping along a short gold motion arc; Corniche sea-glass tile with the shared light, rim and shoreline. Original hand-authored SVG for temporary desktop shelves; no generated image, trademarked marks, mascot or lettering.",
+      "palette": "corniche",
+      "motif": "shelf",
       "panel": null
     }
   },

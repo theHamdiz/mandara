@@ -87,6 +87,9 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "maximize" => r#"<rect x="5" y="5" width="14" height="14" rx="3"/>"#.into(),
         // A master–stack tiling layout (Studio → Compositor).
         "tiles" => r#"<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M11 4.5v15M11 12h9.5"/>"#.into(),
+        "stash" => r#"<path d="M3.5 13.5l1.6 5a2 2 0 0 0 1.9 1.5h10a2 2 0 0 0 1.9-1.5l1.6-5"/><path d="M3.5 13.5h17"/><rect x="7" y="7.5" width="5" height="6" rx="1.2"/><path d="M15.5 3.5v6.5M13 7.5l2.5 2.5 2.5-2.5"/>"#.into(),
+        "list" => r#"<path d="M8.5 6.5h12M8.5 12h12M8.5 17.5h12"/><circle cx="4.5" cy="6.5" r="1" fill="black" stroke="none"/><circle cx="4.5" cy="12" r="1" fill="black" stroke="none"/><circle cx="4.5" cy="17.5" r="1" fill="black" stroke="none"/>"#.into(),
+        "layers" => r#"<path d="M12 3.5l8.5 4.5-8.5 4.5-8.5-4.5z"/><path d="M3.5 12.5l8.5 4.5 8.5-4.5"/><path d="M3.5 16.5l8.5 4.5 8.5-4.5"/>"#.into(),
         "image" => r#"<rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 15.5l-4.5-4.5-9 8.5"/>"#.into(),
         "cloud" => r#"<path d="M7 18.5h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 10.1a4.2 4.2 0 0 0 0 8.4z"/>"#.into(),
         "cloud-sun" => r#"<path d="M8 2.8v1.4M2.8 8h1.4M4.3 4.3l1 1M11.7 4.3l-1 1"/><path d="M5.4 10.6A3.4 3.4 0 0 1 11.2 6.8"/><path d="M9 20h8.5a3.5 3.5 0 0 0 .5-6.96A4.8 4.8 0 0 0 9 12.6a3.7 3.7 0 0 0 0 7.4z"/>"#.into(),
@@ -200,6 +203,12 @@ fn icon_body(name: &str) -> Option<Cow<'static, str>> {
         "bookmark" => r#"<path d="M7 3.5h10a1.5 1.5 0 0 1 1.5 1.5v15.5L12 16.2l-6.5 4.3V5A1.5 1.5 0 0 1 7 3.5z"/>"#.into(),
         // An "i" in a circle: more about something.
         "info" => r#"<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.6h.01"/>"#.into(),
+        // A digital clock face: "10:0" in segment bars on a rounded screen.
+        "clock-digital" => r#"<rect x="2.5" y="6" width="19" height="12" rx="3"/><path d="M6.5 10v4"/><path d="M9 10h2.5v4H9z"/><path d="M13.75 10.75h.01M13.75 13.25h.01"/><path d="M16 10h2.5v4H16z"/>"#.into(),
+        // A record: the disc, its label and a highlight in the grooves.
+        "vinyl" => r#"<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.5"/><path d="M12 6.5a5.5 5.5 0 0 1 5.5 5.5"/>"#.into(),
+        // An hourglass: time counting down.
+        "hourglass" => r#"<path d="M6.5 3.5h11M6.5 20.5h11"/><path d="M8 3.5v2.2a4 4 0 0 0 1.6 3.2L12 10.8l2.4-1.9A4 4 0 0 0 16 5.7V3.5"/><path d="M8 20.5v-2.2a4 4 0 0 1 1.6-3.2L12 13.2l2.4 1.9a4 4 0 0 1 1.6 3.2v2.2"/>"#.into(),
         _ => return None,
     })
 }
@@ -254,6 +263,8 @@ pub const ICON_NAMES: &[&str] = &[
     "arch", "book", "info",
     "hadith", "bookmark", "message", "messages", "radio",
     "sudoku", "game-2048", "redo", "eraser", "lightbulb",
+    "clock-digital", "vinyl", "hourglass",
+    "stash", "list", "layers",
 ];
 
 /// An icon element tinted with `color`.

@@ -1,3 +1,4 @@
+use crate::transition::{BindKey, TransitionResources, TransitionUniforms};
 use crate::{CompositorGpuHint, DeviceErrorState, WgpuAtlas, WgpuContext, memory_tuning};
 use anyhow::{Context as _, Result};
 use bytemuck::{Pod, Zeroable};
@@ -252,6 +253,9 @@ struct WgpuResources {
     path_intermediate_view: Option<wgpu::TextureView>,
     path_msaa_texture: Option<wgpu::Texture>,
     path_msaa_view: Option<wgpu::TextureView>,
+    /// Mandara patch 16: the transition pipeline and its buffers, only
+    /// while frames draw transitions.
+    transitions: Option<TransitionResources>,
 }
 
 struct CachedTextureBindGroup {
@@ -265,6 +269,7 @@ impl WgpuResources {
         self.path_intermediate_view = None;
         self.path_msaa_texture = None;
         self.path_msaa_view = None;
+        self.transitions = None;
     }
 }
 
@@ -1462,6 +1467,7 @@ impl WgpuRendererCore {
                 path_intermediate_view: None,
                 path_msaa_texture: None,
                 path_msaa_view: None,
+                transitions: None,
             },
             atlas,
             path_texture_usage: PathTextureUsage::default(),
@@ -1647,7 +1653,7 @@ impl WgpuRendererCore {
             bytemuck::bytes_of(&gamma_params),
         );
 
-        self.record_frame(scene, target_view, clear_color)
+        self.record_frame(scene, target_view, clear_color, [size.width.0 as f32, size.height.0 as f32])
             .inspect_err(|_| {
                 // Queue writes are staged before encoding; flush them even if the frame fails.
                 self.resources.queue.submit(std::iter::empty());
@@ -1659,6 +1665,7 @@ impl WgpuRendererCore {
         scene: &Scene,
         frame_view: &wgpu::TextureView,
         clear_color: wgpu::Color,
+        viewport: [f32; 2],
     ) -> Result<wgpu::SubmissionIndex> {
         let mut instance_offset = 0;
         let instance_bindings = self
@@ -1676,6 +1683,7 @@ impl WgpuRendererCore {
                 )
             })?;
         self.prepare_texture_bind_groups(scene);
+        let transition_slots = self.prepare_transitions(scene, viewport);
 
         let mut encoder =
             self.resources()
@@ -1791,6 +1799,9 @@ impl WgpuRendererCore {
                     // Surfaces are macOS-only for video playback and are not
                     // implemented by the WGPU renderer.
                     PrimitiveBatch::Surfaces(_surfaces) => {}
+                    PrimitiveBatch::Transitions(range) => {
+                        self.draw_transitions(range, transition_slots, &mut pass);
+                    }
                 }
             }
         }
@@ -1908,6 +1919,125 @@ impl WgpuRendererCore {
                     bind_group,
                 },
             );
+        }
+    }
+
+    /// Mandara patch 16: writes this frame's transition uniforms and makes
+    /// sure each has a bind group for its textures; returns how many slots
+    /// are ready (`0` skips every transition batch). Builds the pipeline on
+    /// the first transition and releases everything once none has been
+    /// drawn for [`crate::transition::IDLE_RELEASE`].
+    fn prepare_transitions(&mut self, scene: &Scene, viewport: [f32; 2]) -> usize {
+        if scene.transitions.is_empty() {
+            if self
+                .resources
+                .transitions
+                .as_ref()
+                .is_some_and(|t| t.last_used.elapsed() >= crate::transition::IDLE_RELEASE)
+            {
+                self.resources.transitions = None;
+            }
+            return 0;
+        }
+        let target_format = self.target_format;
+        let resources = &mut self.resources;
+        let transitions = resources
+            .transitions
+            .get_or_insert_with(|| TransitionResources::new(&resources.device, &resources.queue, target_format));
+        transitions.last_used = std::time::Instant::now();
+        let mut ready = 0;
+        for (slot, sprite) in scene
+            .transitions
+            .iter()
+            .take(crate::transition::MAX_PER_FRAME)
+            .enumerate()
+        {
+            let infos = [sprite.from, sprite.to, sprite.aux]
+                .map(|tile| self.atlas.get_texture_info(tile.texture_id));
+            let [Some(from), Some(to), Some(aux)] = infos else {
+                // A texture went with a device loss; the view re-uploads or ends.
+                break;
+            };
+            let sizes = [from.size, to.size, aux.size].map(|s| [s[0] as f32, s[1] as f32]);
+            let uniforms = TransitionUniforms::new(sprite, viewport, sizes);
+            resources.queue.write_buffer(
+                &transitions.uniforms,
+                transitions.stride * slot as u64,
+                bytemuck::bytes_of(&uniforms),
+            );
+            let key = BindKey {
+                ids: [sprite.from.texture_id, sprite.to.texture_id, sprite.aux.texture_id],
+                generations: [from.generation, to.generation, aux.generation],
+            };
+            if transitions.bind_groups[slot]
+                .as_ref()
+                .is_none_or(|(cached, _)| *cached != key)
+            {
+                let bind_group = resources.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("transition_bind_group"),
+                    layout: &transitions.layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                                buffer: &transitions.uniforms,
+                                offset: transitions.stride * slot as u64,
+                                size: NonZeroU64::new(std::mem::size_of::<TransitionUniforms>() as u64),
+                            }),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::TextureView(&from.view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::TextureView(&to.view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: wgpu::BindingResource::TextureView(&aux.view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 4,
+                            resource: wgpu::BindingResource::Sampler(&resources.atlas_sampler),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 5,
+                            resource: wgpu::BindingResource::TextureView(&transitions.noise),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 6,
+                            resource: wgpu::BindingResource::Sampler(&transitions.noise_sampler),
+                        },
+                    ],
+                });
+                transitions.bind_groups[slot] = Some((key, bind_group));
+            }
+            ready = slot + 1;
+        }
+        // Slots this frame did not use name textures that may be gone soon.
+        for cached in transitions.bind_groups.iter_mut().skip(ready) {
+            *cached = None;
+        }
+        ready
+    }
+
+    fn draw_transitions(
+        &self,
+        range: Range<usize>,
+        ready: usize,
+        pass: &mut wgpu::RenderPass<'_>,
+    ) {
+        let Some(transitions) = self.resources().transitions.as_ref() else {
+            return;
+        };
+        for slot in range.filter(|slot| *slot < ready) {
+            let Some((_, bind_group)) = transitions.bind_groups[slot].as_ref() else {
+                continue;
+            };
+            pass.set_pipeline(&transitions.pipeline);
+            pass.set_bind_group(0, bind_group, &[]);
+            pass.draw(0..4, 0..1);
         }
     }
 
@@ -3198,6 +3328,235 @@ mod tests {
         // Rejection must leave the renderer usable.
         let image = renderer.render_scene_to_image(&Scene::default(), device_size(4, 4))?;
         assert_eq!(image.dimensions(), (4, 4));
+        Ok(())
+    }
+
+    #[test]
+    fn transition_shader_is_valid_wgsl() {
+        // Mandara patch 16: its own module, uniforms only (WebGL2 can run it).
+        assert!(!crate::transition::TRANSITION_SHADER.contains("var<storage"));
+        validate_wgsl(crate::transition::TRANSITION_SHADER, naga::valid::Capabilities::empty());
+    }
+
+    /// A `w × h` BGRA image of one colour, uploaded as image `id`.
+    #[cfg(target_os = "linux")]
+    fn solid_image(renderer: &mut WgpuHeadlessRenderer, id: usize, (w, h): (i32, i32), bgra: [u8; 4]) -> anyhow::Result<gpui::AtlasTile> {
+        use gpui::{AtlasKey, ImageId, PlatformAtlas, RenderImageParams};
+        let bytes = bgra.repeat((w * h) as usize);
+        let key = AtlasKey::Image(RenderImageParams { image_id: ImageId(id), frame_index: 0 });
+        renderer
+            .core
+            .atlas
+            .get_or_insert_with(key, &mut || Ok(Some((device_size(w, h), std::borrow::Cow::Borrowed(&bytes)))))?
+            .ok_or_else(|| anyhow::anyhow!("no tile"))
+    }
+
+    #[cfg(target_os = "linux")]
+    fn transition(from: gpui::AtlasTile, to: gpui::AtlasTile, kind: u32, progress: f32, (w, h): (f32, f32)) -> gpui::TransitionSprite {
+        let bounds = solid_quad(0.0, 0.0, w, h, gpui::red()).bounds;
+        gpui::TransitionSprite {
+            order: 0,
+            pad: 0,
+            bounds,
+            content_mask: ContentMask::rect(bounds),
+            from,
+            to,
+            aux: to,
+            params: gpui::TransitionParams {
+                kind,
+                progress,
+                time: progress * 2.0,
+                origin: [0.5, 0.5],
+                focus: [0.5, 0.5],
+                seed: 11,
+                intensity: 1.0,
+                scale: 1.0,
+                line_width: 2.0,
+                line: [1.0, 1.0, 1.0, 1.0],
+                glow: [1.0, 0.6, 0.2, 1.0],
+                wash: [0.0, 0.0, 0.0, 0.5],
+                draw_share: 0.5,
+                fill_style: 1,
+                draw_order: 1,
+                grid: [8, 5],
+                ..Default::default()
+            },
+        }
+    }
+
+    /// Mandara patch 16: every kind shows exactly the old image at 0 and the
+    /// new one at 1, mixes them in between, and the transition's GPU
+    /// resources exist only while frames draw one.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn transitions_start_on_the_old_image_and_end_on_the_new_one() -> anyhow::Result<()> {
+        let mut renderer = WgpuHeadlessRenderer::new()?;
+        let size = (96, 54);
+        // BGRA bytes: red and blue.
+        let from = solid_image(&mut renderer, 1, size, [0, 0, 255, 255])?;
+        let to = solid_image(&mut renderer, 2, size, [255, 0, 0, 255])?;
+        assert!(renderer.core.resources.transitions.is_none(), "nothing before the first transition");
+        for kind in gpui::TRANSITION_KIND_FADE..=gpui::TRANSITION_KIND_SKETCH {
+            for (progress, expected) in [(0.0, RED), (1.0, BLUE)] {
+                let mut scene = Scene::default();
+                scene.insert_primitive(transition(from, to, kind, progress, (96.0, 54.0)));
+                scene.finish();
+                let image = renderer.render_scene_to_image(&scene, device_size(size.0, size.1))?;
+                for (x, y) in [(1, 1), (48, 27), (94, 52), (10, 40)] {
+                    let actual = image.get_pixel(x, y).0;
+                    assert!(actual.iter().zip(expected).all(|(a, e)| a.abs_diff(e) <= 3), "kind {kind} at {progress}: pixel ({x}, {y}) was {actual:?}, expected {expected:?}");
+                }
+            }
+            let mut scene = Scene::default();
+            scene.insert_primitive(transition(from, to, kind, 0.7, (96.0, 54.0)));
+            scene.finish();
+            let image = renderer.render_scene_to_image(&scene, device_size(size.0, size.1))?;
+            assert!(image.pixels().all(|p| p.0[3] == 255), "kind {kind}: the output is opaque");
+            let changed = image.pixels().filter(|p| p.0[2] > 40).count();
+            assert!(changed > 0, "kind {kind}: something of the new image shows at 70 %");
+        }
+        assert!(renderer.core.resources.transitions.is_some());
+        // A frame without transitions keeps them for a moment, then frees them.
+        renderer.render_scene_to_image(&Scene::default(), device_size(8, 8))?;
+        assert!(renderer.core.resources.transitions.is_some());
+        if let Some(t) = renderer.core.resources.transitions.as_mut() {
+            t.last_used -= crate::transition::IDLE_RELEASE;
+        }
+        renderer.render_scene_to_image(&Scene::default(), device_size(8, 8))?;
+        assert!(renderer.core.resources.transitions.is_none(), "released after the idle period");
+        Ok(())
+    }
+
+    /// Mandara patch 16: a transition whose texture the atlas no longer has
+    /// is skipped (the frame still renders).
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn transitions_skip_released_textures() -> anyhow::Result<()> {
+        use gpui::{AtlasKey, ImageId, PlatformAtlas, RenderImageParams};
+        let mut renderer = WgpuHeadlessRenderer::new()?;
+        let from = solid_image(&mut renderer, 1, (8, 8), [0, 0, 255, 255])?;
+        let to = solid_image(&mut renderer, 2, (8, 8), [255, 0, 0, 255])?;
+        // Both share one atlas texture: it goes with the second.
+        for id in [1, 2] {
+            renderer.core.atlas.remove(&AtlasKey::Image(RenderImageParams { image_id: ImageId(id), frame_index: 0 }));
+        }
+        let mut scene = Scene::default();
+        scene.insert_primitive(transition(from, to, gpui::TRANSITION_KIND_FADE, 0.5, (8.0, 8.0)));
+        scene.finish();
+        let image = renderer.render_scene_to_image(&scene, device_size(8, 8))?;
+        assert_pixel(&image, 4, 4, BLACK);
+        Ok(())
+    }
+
+    /// Mandara patch 15, re-checked: an image drawn through a small clip
+    /// fills exactly the clip and samples the same texels as unclipped.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn poly_sprites_rasterize_only_their_clip() -> anyhow::Result<()> {
+        use gpui::{AtlasKey, ImageId, PlatformAtlas, RenderImageParams};
+        let mut renderer = WgpuHeadlessRenderer::new()?;
+        // Left half red, right half blue (BGRA).
+        let (w, h) = (16, 8);
+        let mut bytes = Vec::with_capacity((w * h * 4) as usize);
+        for _ in 0..h {
+            for x in 0..w {
+                bytes.extend_from_slice(if x < w / 2 { &[0, 0, 255, 255] } else { &[255, 0, 0, 255] });
+            }
+        }
+        let key = AtlasKey::Image(RenderImageParams { image_id: ImageId(9), frame_index: 0 });
+        let tile = renderer.core.atlas.get_or_insert_with(key, &mut || Ok(Some((device_size(w, h), std::borrow::Cow::Borrowed(&bytes)))))?.unwrap();
+        let bounds = solid_quad(0.0, 0.0, 64.0, 32.0, gpui::red()).bounds;
+        let clip = solid_quad(24.0, 8.0, 24.0, 16.0, gpui::red()).bounds;
+        let mut scene = Scene::default();
+        scene.insert_primitive(PolychromeSprite { order: 0, pad: 0, tile, grayscale: false.into(), opacity: 1.0, bounds, content_mask: ContentMask::rect(clip), corner_radii: Corners::default() });
+        scene.finish();
+        let image = renderer.render_scene_to_image(&scene, device_size(64, 32))?;
+        assert_pixel(&image, 26, 12, RED);
+        assert_pixel(&image, 44, 20, BLUE);
+        for (x, y) in [(2, 2), (23, 12), (48, 12), (30, 7), (30, 24), (60, 30)] {
+            assert_pixel(&image, x, y, BLACK);
+        }
+        Ok(())
+    }
+
+    /// Writes frames of one transition for looking at them:
+    /// `MANDARA_TRANSITION_FRAMES=<out dir>` with `MANDARA_TRANSITION_FROM`,
+    /// `_TO` (PNG files of one size), optional `_AUX`, `_KIND` (0-9).
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "writes images; run by hand"]
+    fn render_transition_frames() -> anyhow::Result<()> {
+        use gpui::{AtlasKey, ImageId, PlatformAtlas, RenderImageParams};
+        let out = std::path::PathBuf::from(std::env::var("MANDARA_TRANSITION_FRAMES")?);
+        let load = |var: &str| -> anyhow::Result<Option<image::RgbaImage>> {
+            Ok(match std::env::var(var) {
+                Ok(path) => Some(image::open(path)?.to_rgba8()),
+                Err(_) => None,
+            })
+        };
+        let from = load("MANDARA_TRANSITION_FROM")?.ok_or_else(|| anyhow::anyhow!("no from"))?;
+        let to = load("MANDARA_TRANSITION_TO")?.ok_or_else(|| anyhow::anyhow!("no to"))?;
+        let aux = load("MANDARA_TRANSITION_AUX")?;
+        let kinds: Vec<u32> = std::env::var("MANDARA_TRANSITION_KIND").unwrap_or_else(|_| "0".into()).split(',').map(|k| k.trim().parse().unwrap_or(0)).collect();
+        let steps: Vec<f32> = std::env::var("MANDARA_TRANSITION_STEPS").unwrap_or_else(|_| "0.25,0.5,0.75".into()).split(',').map(|k| k.trim().parse().unwrap_or(0.5)).collect();
+        let subject = std::env::var("MANDARA_TRANSITION_SUBJECT").is_ok();
+        // `MANDARA_TRANSITION_BENCH=<frames>`: time instead of writing images.
+        let bench: Option<u32> = std::env::var("MANDARA_TRANSITION_BENCH").ok().and_then(|n| n.parse().ok());
+        let (w, h) = from.dimensions();
+        let mut renderer = WgpuHeadlessRenderer::new()?;
+        let upload = |id, img: &image::RgbaImage| -> anyhow::Result<gpui::AtlasTile> {
+            let mut bgra = img.as_raw().clone();
+            for p in bgra.as_chunks_mut::<4>().0 {
+                p.swap(0, 2);
+            }
+            let key = AtlasKey::Image(RenderImageParams { image_id: ImageId(id), frame_index: 0 });
+            let (iw, ih) = img.dimensions();
+            Ok(renderer.core.atlas.get_or_insert_with(key, &mut || Ok(Some((device_size(iw as i32, ih as i32), std::borrow::Cow::Borrowed(&bgra)))))?.unwrap())
+        };
+        let from_tile = upload(1, &from)?;
+        let to_tile = upload(2, &to)?;
+        let aux_tile = aux.as_ref().map(|a| upload(3, a)).transpose()?;
+        let scale: f32 = std::env::var("MANDARA_TRANSITION_SCALE").ok().and_then(|s| s.parse().ok()).unwrap_or(1.5);
+        for kind in kinds {
+            for &progress in &steps {
+                let mut sprite = transition(from_tile, to_tile, kind, progress, (w as f32, h as f32));
+                sprite.params.scale = scale;
+                sprite.params.line_width = 2.0 * scale;
+                sprite.params.line = [0.55, 0.82, 0.86, 1.0];
+                sprite.params.glow = [0.55, 0.82, 0.86, 0.9];
+                sprite.params.wash = [0.04, 0.05, 0.07, 0.55];
+                sprite.params.draw_order = 0;
+                sprite.params.flags = gpui::TRANSITION_FLAG_GLOW;
+                sprite.params.time = progress * 4.0;
+                sprite.params.grid = [13, 7];
+                if kind == gpui::TRANSITION_KIND_DISSOLVE {
+                    sprite.params.glow = [1.0, 0.55, 0.25, 1.0];
+                }
+                if let Some(t) = aux_tile {
+                    sprite.aux = t;
+                    sprite.params.flags |= gpui::TRANSITION_FLAG_AUX;
+                    if subject {
+                        sprite.params.flags |= gpui::TRANSITION_FLAG_SUBJECT;
+                    }
+                }
+                let mut scene = Scene::default();
+                scene.insert_primitive(sprite);
+                scene.finish();
+                if let Some(n) = bench {
+                    // Frames rendered back to back, then one readback to wait for the GPU.
+                    renderer.render_scene_to_image(&scene, device_size(w as i32, h as i32))?;
+                    let started = std::time::Instant::now();
+                    for _ in 0..n {
+                        renderer.render_scene(&scene, device_size(w as i32, h as i32))?;
+                    }
+                    renderer.render_scene_to_image(&scene, device_size(w as i32, h as i32))?;
+                    println!("kind {kind} at {progress}: {:.2} ms/frame", started.elapsed().as_secs_f64() * 1000.0 / (n + 1) as f64);
+                    continue;
+                }
+                let image = renderer.render_scene_to_image(&scene, device_size(w as i32, h as i32))?;
+                image.save(out.join(format!("k{kind}-{:03}.png", (progress * 100.0).round() as u32)))?;
+            }
+        }
         Ok(())
     }
 

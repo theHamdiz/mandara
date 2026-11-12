@@ -22,7 +22,10 @@ Fonts; Apache-2.0 for the PaddleOCR models and for Depth Anything V2 Small,
 the wallpaper depth model, in its `onnx-community/depth-anything-v2-small`
 ONNX export). The Kufic words on the main menu's tiles are glyph outlines
 from Reem Kufi (SIL Open Font License 1.1, its text in
-`crates/mandara-ui/assets/calligraphy/OFL.txt`).
+`crates/mandara-ui/assets/calligraphy/OFL.txt`). Ink Rush's comic display face is
+Bangers by Vernon Adams (SIL Open Font License 1.1, its text in
+`assets/fonts/bangers/OFL.txt`), downloaded on demand like the other Google
+Fonts.
 
 The full license text is in [LICENSE.md](LICENSE.md).
 

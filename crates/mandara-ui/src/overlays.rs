@@ -87,6 +87,22 @@ const HIGHLIGHT_SPRING: SpringConfig = SpringConfig::new(520.0, 38.0, 1.0);
 const CLOSE_STIFFNESS: f32 = 420.0;
 /// Open progress (0–1) resolution: invisible below ~half a pixel of travel.
 const OPEN_REST_EPSILON: f32 = 0.001;
+/// Choreography travel of the launcher's content, its parallax depth and
+/// each cascading row or tile, in px.
+const CONTENT_ENTRANCE_PX: f32 = 16.0;
+const CONTENT_PARALLAX_PX: f32 = 20.0;
+const ROW_CASCADE_PX: f32 = 12.0;
+/// Starts closer than this to its rest count as growing in place.
+const ORIGIN_EPSILON_PX: f32 = 1.0;
+
+/// The unit direction the launcher comes from: from its start (a pill, an
+/// edge sliver) toward its rest, reversed; a card growing in place rises.
+fn launcher_origin(start: crate::launcher_place::Rect, rest: crate::launcher_place::Rect) -> (f32, f32) {
+    let dx = start.x + start.w / 2.0 - (rest.x + rest.w / 2.0);
+    let dy = start.y + start.h / 2.0 - (rest.y + rest.h / 2.0);
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < ORIGIN_EPSILON_PX { (0.0, 1.0) } else { (dx / len, dy / len) }
+}
 /// Gap between the results and the search field.
 const LIST_GAP: f32 = 8.0;
 /// Fewest result rows shown, however low the height is set.
@@ -338,9 +354,9 @@ fn command_entries(c: &mandara_plugins::CommandSpec) -> Vec<Item> {
 pub const STUDIO_SECTIONS: &[(&str, &str, &str, &str)] = &[
     ("home", tk("Home"), "grid", "overview start dashboard status quick settings"),
     // Look & feel
-    ("themes", tk("Themes"), "droplet", "appearance looks colors palette wallpaper colors material you dark light icons roundness app themes"),
+    ("themes", tk("Themes"), "droplet", "appearance looks colors palette wallpaper colors material you dark light icons roundness app themes cursor cursors pointer icon themes icon sets"),
     ("wallpaper", tk("Wallpaper"), "image", "background desktop picture folder picker depth clock"),
-    ("desktop-widgets", tk("Desktop widgets"), "clock", "desktop clock system monitor decorations visualizer cards now playing calendar arrange edit"),
+    ("desktop", tk("Desktop"), "clock", "desktop widgets clock system monitor decorations visualizer cards now playing calendar arrange edit context menu right-click ring menu"),
     ("typography", tk("Typography"), "text-scan", "fonts text size"),
     ("motion", tk("Motion"), "waves", "animation springs speed"),
     // Desktop
@@ -375,6 +391,10 @@ pub const STUDIO_SECTIONS: &[(&str, &str, &str, &str)] = &[
     ("maintenance", tk("Maintenance"), "refresh", "repair heal fix doctor factory reset backup restore download models fonts cache"),
     ("about", tk("About"), "note", "version info"),
 ];
+
+/// Studio tabs with their own launcher entry (`mandara studio <section>/<tab>`):
+/// `(target, title, icon, search keywords)`.
+pub const STUDIO_TABS: &[(&str, &str, &str, &str)] = &[("themes/boot", tk("Boot look"), "power", "boot menu bootloader grub limine refind plymouth splash startup screen logo")];
 
 /// Everything searchable besides apps, built when the launcher opens.
 /// Words people type for the screenshot tool (Windows' Snipping Tool,
@@ -493,7 +513,7 @@ fn build_index_with(registry: &mandara_plugins::PluginRegistry, cfg: &mandara_co
         }
         out.extend(command_entries(c));
     }
-    for (slug, title, icon, keywords) in STUDIO_SECTIONS {
+    for (slug, title, icon, keywords) in STUDIO_SECTIONS.iter().chain(STUDIO_TABS) {
         out.push(entry(tf("Settings: {title}", &[("title", &tr(title))]), t("Open in Mandara Studio"), icon, tk("Studio"), &format!("settings preferences studio {keywords}"), line(&format!("studio {slug}"))));
     }
     for sc in &cfg.launcher.commands {
@@ -667,7 +687,7 @@ const OUTPUT_COMMANDS: &[&str] = &[
     "prayer today", "processes list", "services failed", "services list", "services logs", "services status",
     "soundscapes status", "system resources", "theme current", "theme list", "theme seeds", "todo list", "tray menu",
     "tray status", "updates check", "updates list", "updates news", "updates sources", "wallpaper current", "window list",
-    "launcher usage list", "launcher looks", "launcher emoji", "dock status", "screentime today", "screentime week", "screentime app",
+    "launcher usage list", "launcher looks", "launcher emoji", "motion presets", "dock status", "screentime today", "screentime week", "screentime app",
     "wallpaper list", "wallgen list", "wallgen recipe show", "wallgen status", "weather", "window active", "workspace list", "world-clock at", "world-clock list",
     "world-clock search",
     // Power & idle (powerctl).
@@ -1283,6 +1303,9 @@ pub struct LauncherView {
     categories: Vec<GridFilter>,
     reflow: SpringValue<f32>,
     reflow_from: std::collections::HashMap<String, usize>,
+    /// The open spring as of this frame and where the launcher comes from
+    /// (a unit vector), for the grid tiles' choreography cascade.
+    cascade: (f32, (f32, f32)),
     /// Beacon: the browse mode picked (Ctrl+1–4) and the results card's
     /// height.
     mode: Option<BeaconMode>,
@@ -1423,6 +1446,7 @@ impl LauncherView {
             categories: Vec::new(),
             reflow: SpringValue::new(1.0, launcher_looks::REFLOW_SPRING),
             reflow_from: Default::default(),
+            cascade: (1.0, (0.0, -1.0)),
             mode: None,
             card_h: SpringValue::new(0.0, launcher_looks::CARD_SPRING),
             field_px: text::BODY + 1.0,
@@ -2159,6 +2183,12 @@ impl Render for LauncherView {
         let progress = opened.clamp(0.0, 1.0);
         let (x, y, h) = (cur.x, cur.y, cur.h);
         self.rect = (x, y, cur.w, h);
+        // Choreography: where the launcher comes from, for its content's
+        // entrance, parallax and the rows' cascade.
+        let choreo = mandara_core::choreo::choreography();
+        let rtl = crate::bidi::rtl();
+        let origin = launcher_origin(place.start, rest);
+        self.cascade = (opened, origin);
         let search_top = match look.search_position {
             SearchPosition::Top => true,
             SearchPosition::Bottom => false,
@@ -2182,14 +2212,30 @@ impl Render for LauncherView {
             list.child(grouped_el)
         } else {
             let items: Vec<(usize, Item)> = self.results.iter().enumerate().skip(first_visible).take(shown).map(|(i, it)| (i, it.clone())).collect();
-            let rows_el: Vec<gpui::AnyElement> = items.into_iter().map(|(i, item)| self.list_row(i, &item, row_h, lead_px, &look, false, &palette, cx)).collect();
+            let rows_el: Vec<gpui::AnyElement> = items
+                .into_iter()
+                .enumerate()
+                .map(|(k, (i, item))| {
+                    let row = self.list_row(i, &item, row_h, lead_px, &look, false, &palette, cx);
+                    match choreo.item(opened, k, origin, rtl, ROW_CASCADE_PX) {
+                        Some((dx, dy, alpha)) => div().relative().left(px(dx)).top(px(dy)).opacity(alpha).child(row).into_any_element(),
+                        None => row,
+                    }
+                })
+                .collect();
+            // The highlight stretches as it hops between rows (liquid
+            // choreography), thinning a touch; at rest it is the row.
+            let hl_v = self.highlight.velocity()[0];
+            let (hl_top, hl_h) = choreo.stretch_span(self.highlight.value(), cell_h, hl_v);
+            let hl_w = place.rect.w - PAD * 2.0;
+            let hl_thin = choreo.thinned(hl_w, hl_v);
             list.child(
                 div()
                     .absolute()
-                    .left_0()
-                    .top(px(self.highlight.value()))
-                    .w(px(place.rect.w - PAD * 2.0))
-                    .h(px(cell_h))
+                    .left(px((hl_w - hl_thin) / 2.0))
+                    .top(px(hl_top))
+                    .w(px(hl_thin))
+                    .h(px(hl_h))
                     .rounded(px(crate::style::radius(16.0)))
                     .bg(palette.on_surface.with_alpha(0.08).hsla())
                     .when(self.results.is_empty(), |el| el.opacity(0.0)),
@@ -2244,10 +2290,14 @@ impl Render for LauncherView {
         // The content rests where the launcher rests, pinned to the edge it
         // grows from; the shape reveals it.
         let body_y = if place.edge == Some(LauncherEdge::Bottom) { rest.bottom() - full_h } else { rest.y };
+        // Choreography: the content enters from its direction and trails
+        // the shape (clipped by it; none at rest).
+        let (ex, ey) = choreo.entrance_offset(opened, origin, rtl, CONTENT_ENTRANCE_PX);
+        let (lx, ly) = choreo.parallax_offset(opened, origin, rtl, CONTENT_PARALLAX_PX);
         let body = div()
             .absolute()
-            .left(px(rest.x - x))
-            .top(px(body_y - y))
+            .left(px(rest.x - x + ex + lx))
+            .top(px(body_y - y + ey + ly))
             .w(px(rest.w))
             .h(px(full_h))
             .p(px(PAD))
@@ -2285,7 +2335,7 @@ impl Render for LauncherView {
                     .h(px(h))
                     .rounded(px(r))
                     .bg(fill)
-                    .border_1()
+                    .border(px(crate::plugins::panel_fx::edge_px()))
                     .border_color(crate::plugins::panel_fx::surface_edge(&palette, cfg.theme.adjustments.rim_intensity).hsla())
                     .shadow(crate::plugins::panel_fx::elevation_scaled(&palette, progress, cfg.panels.shadow_strength))
                     .into_any_element()

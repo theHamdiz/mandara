@@ -49,6 +49,14 @@
 //!   table gets the button pinned first, or after the pinned apps when it
 //!   was at the end, and loses the old keys.
 //!
+//! * **`[bar] style_items`** — a bar style picked while keeping your items
+//!   used to leave them as they were: a style with a rail showed the
+//!   workspaces (and anything else the rail holds) on the rail and the bar
+//!   at once, and System monitor came without its meters. A config with a
+//!   style and no `settled` record gets its items fitted the way picking
+//!   the style does now ([`crate::bar_styles::upgrade`]), recorded so
+//!   picking another preset puts them back.
+//!
 //! The upgrade is idempotent and runs in memory; the next write persists it.
 
 use crate::ShellConfig;
@@ -90,6 +98,10 @@ pub const OPT_IN_SINCE_V1: &[(&str, &str)] = &[
 pub const WALLHAVEN_ID: &str = "wallhaven";
 /// The cursor themes plugin's id (Studio → Themes → Cursor, `cursor …`).
 pub const CURSORS_ID: &str = "cursors";
+/// The icon themes plugin's id (Studio → Themes → Icons, `icons …`).
+pub const ICONS_ID: &str = "icon-themes";
+/// The sound themes plugin's id (Studio → Themes → Sounds, `sound …`).
+pub const SOUND_THEMES_ID: &str = "sound-themes";
 
 fn push_unique(list: &mut Vec<String>, id: &str) {
     if !list.iter().any(|x| x == id) {
@@ -107,6 +119,7 @@ pub fn upgrade(cfg: &mut ShellConfig) -> bool {
     changed |= crate::desktop_widgets::upgrade(&mut cfg.desktop.widgets);
     changed |= upgrade_depth_mask(cfg);
     changed |= cfg.dock.upgrade_launcher_button();
+    changed |= crate::bar_styles::upgrade(cfg);
     changed
 }
 

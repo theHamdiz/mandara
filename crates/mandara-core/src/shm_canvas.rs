@@ -27,7 +27,11 @@
 //! position and queues button presses for the app ([`Host::take_presses`]),
 //! so the desktop can open its menu on a right-click. Motion only updates
 //! the stored position: [`Host::wait`] reports wake-ups caused by pointer
-//! input alone, which the app sleeps through without redrawing.
+//! input alone, which the app sleeps through without redrawing. Motion is
+//! also fed to the shake detector ([`crate::shake`], only while a shake
+//! level is set): a shake queues a [`SHAKE`] press at the pointer. The
+//! seat's data device reports drags passing over the desktop the same way
+//! (they are never accepted: nothing can be dropped on the canvas).
 //!
 //! Plane geometry is given in *physical* pixels of the output. Subsurface
 //! positions and viewport destinations are logical integers, so rectangles
@@ -45,8 +49,8 @@ use std::time::{Duration, Instant};
 use anyhow::{Context as _, Result};
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
 use wayland_client::protocol::{
-    wl_buffer, wl_callback, wl_compositor, wl_output, wl_pointer, wl_region, wl_registry, wl_seat, wl_shm, wl_shm_pool, wl_subcompositor,
-    wl_subsurface, wl_surface,
+    wl_buffer, wl_callback, wl_compositor, wl_data_device, wl_data_device_manager, wl_data_offer, wl_output, wl_pointer, wl_region, wl_registry,
+    wl_seat, wl_shm, wl_shm_pool, wl_subcompositor, wl_subsurface, wl_surface,
 };
 use wayland_client::{Connection, Dispatch, EventQueue, Proxy, QueueHandle, WEnum};
 use wayland_protocols::wp::alpha_modifier::v1::client::{wp_alpha_modifier_surface_v1, wp_alpha_modifier_v1};
@@ -77,6 +81,9 @@ const MAX_PRESSES: usize = 16;
 /// every Linux input code).
 pub const SCROLL_UP: u32 = 0x1_0000;
 pub const SCROLL_DOWN: u32 = 0x1_0001;
+/// Pseudo button code of a [`Press`] for a shake of the pointer (or of a
+/// drag) over a canvas.
+pub const SHAKE: u32 = 0x1_0002;
 /// Scroll distance (surface px, as `wl_pointer.axis` reports it) that
 /// makes one step: one wheel notch on common compositors.
 const SCROLL_STEP: f64 = 10.0;
@@ -223,15 +230,36 @@ pub struct Press {
     pub button: u32,
 }
 
+/// The pointer while a button pressed on a canvas is still held (the
+/// compositor keeps sending it to that canvas until it is let go): its
+/// latest position, or where the button was released. Only the newest is
+/// kept between two [`Host::take_drag`] calls, except that a release is
+/// never replaced by a later motion.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Drag {
+    pub output: u32,
+    pub x: f64,
+    pub y: f64,
+    pub button: u32,
+    pub released: bool,
+}
+
 /// One seat's pointer and its cursor-shape device.
 struct Seat {
     seat: wl_seat::WlSeat,
     pointer: Option<wl_pointer::WlPointer>,
     shape: Option<wp_cursor_shape_device_v1::WpCursorShapeDeviceV1>,
+    /// Follows drags over the canvas (for the shake), never accepts them.
+    data_device: Option<wl_data_device::WlDataDevice>,
 }
 
 impl Seat {
     fn release_pointer(&mut self) {
+        if let Some(d) = self.data_device.take()
+            && d.version() >= 2
+        {
+            d.release();
+        }
         if let Some(d) = self.shape.take() {
             d.destroy();
         }
@@ -534,11 +562,22 @@ struct State {
     /// The canvas under the pointer (its output global) and the position.
     pointer: Option<(u32, f64, f64)>,
     presses: Vec<Press>,
+    /// The button held since a press on a canvas (its output global and
+    /// code), and the drag to report.
+    held: Option<(u32, u32)>,
+    drag: Option<Drag>,
     /// Vertical scroll not yet turned into steps.
     scroll: f64,
     /// Pointer events dispatched since [`Host::wait`] started (a wake-up
     /// with nothing else is input only).
     input_events: usize,
+    /// For drags passing over the canvas (shake detection).
+    data_device_manager: Option<wl_data_device_manager::WlDataDeviceManager>,
+    /// The canvas a drag is over (its output global), while it is, and the
+    /// drag's offer (never accepted).
+    drag_over: Option<u32>,
+    drag_offer: Option<wl_data_offer::WlDataOffer>,
+    shake: crate::shake::ShakeDetector,
 }
 
 impl State {
@@ -583,6 +622,7 @@ impl Host {
         // never swallows clicks.
         let input = layer == CanvasLayer::Background;
         let cursor_shape = if input { globals.bind::<wp_cursor_shape_manager_v1::WpCursorShapeManagerV1, _, _>(&qh, 1..=1, ()).ok() } else { None };
+        let data_device_manager = if input { globals.bind::<wl_data_device_manager::WlDataDeviceManager, _, _>(&qh, 1..=3, ()).ok() } else { None };
         let mut state = State {
             qh: qh.clone(),
             compositor,
@@ -604,7 +644,13 @@ impl Host {
             pointer: None,
             scroll: 0.0,
             presses: Vec::new(),
+            held: None,
+            drag: None,
             input_events: 0,
+            data_device_manager,
+            drag_over: None,
+            drag_offer: None,
+            shake: crate::shake::ShakeDetector::new(),
         };
         globals.contents().with_list(|list| {
             for g in list.iter().filter(|g| g.interface == "wl_output") {
@@ -614,7 +660,7 @@ impl Host {
             if input {
                 for g in list.iter().filter(|g| g.interface == "wl_seat") {
                     let seat = globals.registry().bind::<wl_seat::WlSeat, _, _>(g.name, g.version.min(SEAT_VERSION), &qh, g.name);
-                    state.seats.push(Seat { seat, pointer: None, shape: None });
+                    state.seats.push(Seat { seat, pointer: None, shape: None, data_device: None });
                 }
             }
         });
@@ -635,6 +681,20 @@ impl Host {
     /// Button presses on the canvases since the last call, oldest first.
     pub fn take_presses(&mut self) -> Vec<Press> {
         std::mem::take(&mut self.state.presses)
+    }
+
+    /// Where a held button's pointer went (or was let go) since the last
+    /// call. Motion alone never makes [`Host::wait`] return: call this
+    /// after each wait to follow a drag without redrawing.
+    pub fn take_drag(&mut self) -> Option<Drag> {
+        self.state.drag.take()
+    }
+
+    /// Where the pointer is over a canvas: the output (its `wl_output`
+    /// global) and the surface-local position in logical pixels; `None`
+    /// while it is over something else.
+    pub fn pointer(&self) -> Option<(u32, f64, f64)> {
+        self.state.pointer
     }
 
     /// Outputs or canvas geometry changed since the last call.
@@ -1231,7 +1291,7 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
             }
             wl_registry::Event::Global { name, interface, version } if interface == "wl_seat" && state.input => {
                 let seat = registry.bind::<wl_seat::WlSeat, _, _>(name, version.min(SEAT_VERSION), qh, name);
-                state.seats.push(Seat { seat, pointer: None, shape: None });
+                state.seats.push(Seat { seat, pointer: None, shape: None, data_device: None });
             }
             wl_registry::Event::GlobalRemove { name } => {
                 if let Some(i) = state.seats.iter().position(|s| s.seat.data::<u32>() == Some(&name)) {
@@ -1366,6 +1426,7 @@ impl Dispatch<wl_seat::WlSeat, u32> for State {
         if has && entry.pointer.is_none() {
             let pointer = seat.get_pointer(qh, ());
             entry.shape = state.cursor_shape.as_ref().map(|m| m.get_pointer(&pointer, qh, ()));
+            entry.data_device = state.data_device_manager.as_ref().map(|m| m.get_data_device(seat, qh, ()));
             entry.pointer = Some(pointer);
         } else if !has && entry.pointer.is_some() {
             entry.release_pointer();
@@ -1381,6 +1442,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
             wl_pointer::Event::Enter { serial, surface, surface_x, surface_y } => {
                 let output = state.outputs.iter().find(|o| o.canvas.as_ref().is_some_and(|c| c.surface == surface)).map(|o| o.global);
                 state.pointer = output.map(|o| (o, surface_x, surface_y));
+                state.shake.reset();
                 // The plain arrow (else the last window's resize cursor
                 // would stay); without cursor-shape the compositor's stays.
                 if let Some(d) = state.seats.iter().find(|s| s.pointer.as_ref() == Some(pointer)).and_then(|s| s.shape.as_ref()) {
@@ -1391,12 +1453,32 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 if let Some(p) = state.pointer.as_mut() {
                     (p.1, p.2) = (surface_x, surface_y);
                 }
+                if let Some((output, _, _)) = state.pointer {
+                    state.feed_shake(output, surface_x, surface_y);
+                }
+                if let Some((output, button)) = state.held
+                    && !state.drag.is_some_and(|d| d.released)
+                {
+                    state.drag = Some(Drag { output, x: surface_x, y: surface_y, button, released: false });
+                }
             }
             wl_pointer::Event::Button { button, state: WEnum::Value(wl_pointer::ButtonState::Pressed), .. } => {
-                if let Some((output, x, y)) = state.pointer
-                    && state.presses.len() < MAX_PRESSES
+                if let Some((output, x, y)) = state.pointer {
+                    if state.presses.len() < MAX_PRESSES {
+                        state.presses.push(Press { output, x, y, button });
+                    }
+                    if state.held.is_none() {
+                        state.held = Some((output, button));
+                    }
+                }
+            }
+            wl_pointer::Event::Button { button, state: WEnum::Value(wl_pointer::ButtonState::Released), .. } => {
+                if let Some((output, held)) = state.held
+                    && held == button
                 {
-                    state.presses.push(Press { output, x, y, button });
+                    state.held = None;
+                    let (x, y) = state.pointer.map_or((0.0, 0.0), |p| (p.1, p.2));
+                    state.drag = Some(Drag { output, x, y, button, released: true });
                 }
             }
             wl_pointer::Event::Axis { axis: WEnum::Value(wl_pointer::Axis::VerticalScroll), value, .. } => {
@@ -1412,12 +1494,70 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 }
             }
             wl_pointer::Event::Leave { .. } => {
+                // A leave ends any grab: the button can't be followed, and
+                // counts as let go where it was last seen.
+                if let Some((output, button)) = state.held.take() {
+                    let (x, y) = state.pointer.map_or((f64::NAN, f64::NAN), |p| (p.1, p.2));
+                    state.drag = Some(Drag { output, x, y, button, released: true });
+                }
                 state.pointer = None;
                 state.scroll = 0.0;
+                state.shake.reset();
             }
             _ => {}
         }
     }
+}
+
+impl State {
+    /// Feeds one position to the shake detector (only while a shake level
+    /// is set); a shake queues a [`SHAKE`] press there.
+    fn feed_shake(&mut self, output: u32, x: f64, y: f64) {
+        let Some(tuning) = crate::shake::current_tuning() else { return };
+        if self.shake.feed(x as f32, y as f32, Instant::now(), &tuning) && self.presses.len() < MAX_PRESSES {
+            self.presses.push(Press { output, x, y, button: SHAKE });
+        }
+    }
+}
+
+impl Dispatch<wl_data_device::WlDataDevice, ()> for State {
+    fn event(state: &mut Self, _: &wl_data_device::WlDataDevice, event: wl_data_device::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+        state.input_events += 1;
+        match event {
+            wl_data_device::Event::Enter { surface, x, y, id, .. } => {
+                // Never a drop target: the offer is not accepted, and kept
+                // until the drag leaves (destroying a drag's offer while it
+                // is over the canvas breaks the drag on some compositors).
+                if let Some(old) = std::mem::replace(&mut state.drag_offer, id) {
+                    old.destroy();
+                }
+                state.drag_over = state.outputs.iter().find(|o| o.canvas.as_ref().is_some_and(|c| c.surface == surface)).map(|o| o.global);
+                state.shake.reset();
+                if let Some(output) = state.drag_over {
+                    state.feed_shake(output, x, y);
+                }
+            }
+            wl_data_device::Event::Motion { x, y, .. } => {
+                if let Some(output) = state.drag_over {
+                    state.feed_shake(output, x, y);
+                }
+            }
+            wl_data_device::Event::Leave | wl_data_device::Event::Drop => {
+                if let Some(offer) = state.drag_offer.take() {
+                    offer.destroy();
+                }
+                state.drag_over = None;
+                state.shake.reset();
+            }
+            // Selections (the clipboard) are not the canvas's business.
+            wl_data_device::Event::Selection { id: Some(offer) } => offer.destroy(),
+            _ => {}
+        }
+    }
+
+    wayland_client::event_created_child!(State, wl_data_device::WlDataDevice, [
+        wl_data_device::EVT_DATA_OFFER_OPCODE => (wl_data_offer::WlDataOffer, ()),
+    ]);
 }
 
 impl Dispatch<wp_fractional_scale_v1::WpFractionalScaleV1, u32> for State {
@@ -1442,6 +1582,8 @@ macro_rules! ignore_events {
 }
 
 ignore_events!(
+    wl_data_device_manager::WlDataDeviceManager,
+    wl_data_offer::WlDataOffer,
     zxdg_output_manager_v1::ZxdgOutputManagerV1,
     wl_compositor::WlCompositor,
     wl_subcompositor::WlSubcompositor,

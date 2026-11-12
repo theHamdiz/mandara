@@ -22,8 +22,9 @@
 //!   ([`river_commands`]; `river.conf` keeps a record of them). The one
 //!   line a user adds is the one that starts Mandara from `init`
 //!   ([`river_spawn_line`]).
-//! * KWin and Aqueous — none ([`Target::self_configured`]): their settings
-//!   stay in Plasma System Settings and in Aqueous's own TOML files.
+//! * KWin, Aqueous, labwc and COSMIC — none ([`Target::self_configured`]):
+//!   their settings stay in Plasma System Settings, Aqueous's own TOML
+//!   files, labwc's `rc.xml` and COSMIC Settings.
 //!
 //! Keybinds that collide with binds already in the user's config are
 //! skipped and reported instead of silently overriding them.
@@ -52,13 +53,15 @@ pub enum Target {
     #[serde(rename = "kwin")]
     KWin,
     Aqueous,
+    Labwc,
+    Cosmic,
 }
 
 impl Target {
-    pub const ALL: [Target; 8] = [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway, Target::River, Target::KWin, Target::Aqueous];
+    pub const ALL: [Target; 10] = [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway, Target::River, Target::KWin, Target::Aqueous, Target::Labwc, Target::Cosmic];
 
     /// This compositor's column in the `[MangoWM, Niri, Hyprland, Umbriel,
-    /// Sway, River, KWin, Aqueous]` support tables ([`RULE_OPTIONS`], `input::INPUT_OPTIONS`).
+    /// Sway, River, KWin, Aqueous, labwc, COSMIC]` support tables ([`RULE_OPTIONS`], `input::INPUT_OPTIONS`).
     pub const fn index(self) -> usize {
         match self {
             Target::Mango => 0,
@@ -69,16 +72,20 @@ impl Target {
             Target::River => 5,
             Target::KWin => 6,
             Target::Aqueous => 7,
+            Target::Labwc => 8,
+            Target::Cosmic => 9,
         }
     }
 
     /// Compositors whose settings stay in their own tools, so Mandara
-    /// writes no drop-in for them: KWin (Plasma System Settings) and
+    /// writes no drop-in for them: KWin (Plasma System Settings),
     /// Aqueous (its hot-reloaded TOML files in `~/.config/aqueous`, which
-    /// document no include directive). Mandara drives both over their
-    /// native protocols only.
+    /// document no include directive), labwc (`rc.xml` has no include
+    /// Mandara's drop-in could use safely) and COSMIC (COSMIC Settings,
+    /// stored in its own files under `~/.config/cosmic`). Mandara drives
+    /// them over their native protocols only.
     pub const fn self_configured(self) -> bool {
-        matches!(self, Target::KWin | Target::Aqueous)
+        matches!(self, Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic)
     }
 
     /// Where a [`Target::self_configured`] compositor keeps its settings
@@ -87,6 +94,8 @@ impl Target {
         match self {
             Target::KWin => Some(KWIN_SETTINGS),
             Target::Aqueous => Some(AQUEOUS_SETTINGS),
+            Target::Labwc => Some(LABWC_SETTINGS),
+            Target::Cosmic => Some(COSMIC_SETTINGS),
             _ => None,
         }
     }
@@ -103,6 +112,8 @@ impl Target {
             "river" | "river-classic" => Some(Target::River),
             "kwin" | "kde" | "plasma" => Some(Target::KWin),
             "aqueous" => Some(Target::Aqueous),
+            "labwc" => Some(Target::Labwc),
+            "cosmic" | "cosmic-comp" => Some(Target::Cosmic),
             _ => None,
         }
     }
@@ -118,6 +129,8 @@ impl Target {
             Target::River => "river",
             Target::KWin => "kwin",
             Target::Aqueous => "aqueous",
+            Target::Labwc => "labwc",
+            Target::Cosmic => "cosmic",
         }
     }
 
@@ -132,6 +145,8 @@ impl Target {
             Target::River => "River",
             Target::KWin => "KWin",
             Target::Aqueous => "Aqueous",
+            Target::Labwc => "labwc",
+            Target::Cosmic => "COSMIC",
         }
     }
 
@@ -156,6 +171,8 @@ impl Target {
             Target::KWin => "kwin.conf",
             // Never written: Aqueous reads only its own files.
             Target::Aqueous => "aqueous.conf",
+            Target::Labwc => "labwc.conf",
+            Target::Cosmic => "cosmic.conf",
         })
     }
 
@@ -176,6 +193,12 @@ impl Target {
             // Bindings, actions, workspaces and global policy (next to its
             // outputs, layout, input and rules files).
             Target::Aqueous => config.join("aqueous/wm.toml"),
+            // labwc's main config (next to its autostart, environment and
+            // menu files).
+            Target::Labwc => config.join("labwc/rc.xml"),
+            // COSMIC keeps its compositor settings as one RON file per
+            // value in this directory.
+            Target::Cosmic => config.join("cosmic/com.system76.CosmicComp/v1"),
         }
     }
 
@@ -192,7 +215,7 @@ impl Target {
             Target::Umbriel => format!("[include.optional]\nfiles = [{}]", toml_str(&self.generated_file().display().to_string())),
             Target::Sway => sway_include_line(&self.generated_file().display().to_string()),
             Target::River => river_spawn_line(&paths::self_exe().display().to_string()),
-            Target::KWin | Target::Aqueous => String::new(),
+            Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic => String::new(),
         }
     }
 }
@@ -201,6 +224,10 @@ impl Target {
 pub const KWIN_SETTINGS: &str = mandara_i18n::tk("KWin settings are managed in Plasma System Settings");
 /// [`Target::settings_elsewhere`] for Aqueous.
 pub const AQUEOUS_SETTINGS: &str = mandara_i18n::tk("Aqueous settings stay in its own files in ~/.config/aqueous");
+/// [`Target::settings_elsewhere`] for labwc.
+pub const LABWC_SETTINGS: &str = mandara_i18n::tk("labwc settings stay in ~/.config/labwc (rc.xml, autostart)");
+/// [`Target::settings_elsewhere`] for COSMIC.
+pub const COSMIC_SETTINGS: &str = mandara_i18n::tk("COSMIC settings are managed in COSMIC Settings");
 
 /// The line that starts Mandara from River's `init` (which Mandara never
 /// edits: the user adds it; `riverctl spawn` runs it through `/bin/sh -c`).
@@ -344,6 +371,10 @@ pub fn installed_version(target: Target) -> Option<(u32, u32)> {
         Target::KWin => "kwin_wayland",
         // `aqueous -version` (its `main.zig`): `aqueous 0.4.0 +xwayland`.
         Target::Aqueous => "aqueous",
+        // `labwc 0.20.2 (+xwayland …) wlroots-0.20.2`.
+        Target::Labwc => "labwc",
+        // `cosmic-comp 1.0.0 (git commit …)`.
+        Target::Cosmic => "cosmic-comp",
     };
     let slot = &CACHE[target.index()];
     *slot.get_or_init(|| {
@@ -393,22 +424,22 @@ pub struct TagRule {
 }
 
 /// Window-rule options and the compositors whose drop-in honours them
-/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin, Aqueous]`). Studio greys out the rest.
+/// (`[MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin, Aqueous, labwc, COSMIC]`). Studio greys out the rest.
 /// Umbriel's `global` is its `default_pinned` (above other windows on every
 /// workspace of the output, like Hyprland's `pin`); Sway's is `sticky` (a
 /// floating window shown on every workspace of its output); River's is a
 /// `tags` rule putting new windows on every tag. Sway and River have no
 /// per-focus opacity, blur or shadows.
 pub const RULE_OPTIONS: &[(&str, [bool; Target::ALL.len()])] = &[
-    ("floating", [true, true, true, true, true, true, false, false]),
-    ("global", [true, false, true, true, true, true, false, false]),
-    ("overlay", [true, false, false, false, false, false, false, false]),
-    ("focused_opacity", [true, true, true, true, false, false, false, false]),
-    ("unfocused_opacity", [true, true, true, true, false, false, false, false]),
-    ("no_blur", [true, false, true, true, false, false, false, false]),
-    ("no_shadow", [true, true, true, true, false, false, false, false]),
-    ("confine_pointer", [true, false, false, true, false, false, false, false]),
-    ("force_tiled_state", [true, false, false, false, false, false, false, false]),
+    ("floating", [true, true, true, true, true, true, false, false, false, false]),
+    ("global", [true, false, true, true, true, true, false, false, false, false]),
+    ("overlay", [true, false, false, false, false, false, false, false, false, false]),
+    ("focused_opacity", [true, true, true, true, false, false, false, false, false, false]),
+    ("unfocused_opacity", [true, true, true, true, false, false, false, false, false, false]),
+    ("no_blur", [true, false, true, true, false, false, false, false, false, false]),
+    ("no_shadow", [true, true, true, true, false, false, false, false, false, false]),
+    ("confine_pointer", [true, false, false, true, false, false, false, false, false, false]),
+    ("force_tiled_state", [true, false, false, false, false, false, false, false, false, false]),
 ];
 
 /// Whether `target`'s emitter writes window-rule option `option`.
@@ -654,21 +685,21 @@ fn normalize_mod(m: &str) -> Option<&'static str> {
 }
 
 /// The modifiers a Studio-captured chord may carry, as each compositor
-/// spells them: `(normalized, [MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin, Aqueous])`.
-/// Aqueous binds stay in its own `wm.toml`, which Mandara never writes: its
-/// column only names the modifiers for display.
+/// spells them: `(normalized, [MangoWM, Niri, Hyprland, Umbriel, Sway, River, KWin, Aqueous, labwc, COSMIC])`.
+/// Aqueous, labwc and COSMIC binds stay in their own settings, which
+/// Mandara never writes: their columns only name the modifiers for display.
 /// Umbriel documents Super, Ctrl, Alt and Shift only (its `Mod` follows
 /// `general.mod_key`, so Mandara spells Super out). Sway takes xkb's
 /// modifier names (`Mod4`, `Ctrl`, `Alt`, `Shift`, `Mod3`, `Mod5`) and
 /// rejects `Hyper`; River takes `Super`, `Control`, `Alt`, `Shift`, `Mod3`
 /// and `Mod5` (`riverctl(1)`).
 const MOD_NAMES: &[(&str, [&str; Target::ALL.len()])] = &[
-    ("super", ["SUPER", "Mod", "SUPER", "Super", "Mod4", "Super", "Meta", "Super"]),
-    ("ctrl", ["CTRL", "Ctrl", "CTRL", "Ctrl", "Ctrl", "Control", "Ctrl", "Ctrl"]),
-    ("alt", ["ALT", "Alt", "ALT", "Alt", "Alt", "Alt", "Alt", "Alt"]),
-    ("shift", ["SHIFT", "Shift", "SHIFT", "Shift", "Shift", "Shift", "Shift", "Shift"]),
-    ("hyper", ["HYPER", "Mod3", "MOD3", "", "Mod3", "Mod3", "Hyper", ""]),
-    ("mod5", ["", "ISO_Level3_Shift", "MOD5", "", "Mod5", "Mod5", "Mod5", ""]),
+    ("super", ["SUPER", "Mod", "SUPER", "Super", "Mod4", "Super", "Meta", "Super", "Super", "Super"]),
+    ("ctrl", ["CTRL", "Ctrl", "CTRL", "Ctrl", "Ctrl", "Control", "Ctrl", "Ctrl", "Ctrl", "Ctrl"]),
+    ("alt", ["ALT", "Alt", "ALT", "Alt", "Alt", "Alt", "Alt", "Alt", "Alt", "Alt"]),
+    ("shift", ["SHIFT", "Shift", "SHIFT", "Shift", "Shift", "Shift", "Shift", "Shift", "Shift", "Shift"]),
+    ("hyper", ["HYPER", "Mod3", "MOD3", "", "Mod3", "Mod3", "Hyper", "", "", ""]),
+    ("mod5", ["", "ISO_Level3_Shift", "MOD5", "", "Mod5", "Mod5", "Mod5", "", "", ""]),
 ];
 
 /// A key typed as a character (`,`) or a GPUI key name (`pageup`) → its
@@ -895,6 +926,16 @@ pub struct CompositorLook {
     /// Window gaps follow the bar's edge spacing (resolved by
     /// [`crate::ShellConfig::effective_compositor`] before emitting).
     pub gaps_follow_bar: bool,
+    /// Window open / close / move / workspace animations (Studio → Motion;
+    /// only where [`crate::window_motion::supported`]).
+    pub windows: crate::window_motion::WindowMotion,
+}
+
+impl CompositorLook {
+    /// Window animations to write: none while animations are switched off.
+    fn window_motion(&self) -> Option<&crate::window_motion::WindowMotion> {
+        (self.animations != Some(false)).then_some(&self.windows)
+    }
 }
 
 impl CompositorLook {
@@ -938,8 +979,9 @@ impl ManagedConfig<'_> {
 /// Whether the user's own compositor config already starts Mandara.
 pub fn user_autostarts(target: Target) -> bool {
     if target == Target::KWin { return crate::kwin::autostart_installed(); }
-    // Mandara writes nothing Aqueous reads, so it starts nothing there.
-    if target == Target::Aqueous { return false; }
+    // Mandara writes nothing Aqueous, labwc or COSMIC reads, so it starts
+    // nothing there (users add it to their own startup settings).
+    if matches!(target, Target::Aqueous | Target::Labwc | Target::Cosmic) { return false; }
     // The main file and every file it sources / includes (never Mandara's
     // own drop-in).
     let texts: Vec<String> = crate::conflicts::config_files(target).iter().filter_map(|f| std::fs::read_to_string(f).ok()).collect();
@@ -1025,13 +1067,20 @@ pub const SHELL_SURFACES: &[&str] = &["mandara-bar", "mandara-exclusion", "manda
 /// Hyprland's and Umbriel's checkers have accepted them too.
 pub const MANGO_NIRI_SURFACES: &[&str] = &["mandara-floating"];
 
+/// Shell surfaces whose rules only MangoWM's own checker has accepted so
+/// far (`mango_itself_accepts_the_drop_in`): the wallpaper transition's
+/// temporary surface. Without a rule the other compositors at most fade it
+/// in and out, which shows nothing: its first and last frames are exactly
+/// the desktop under it.
+pub const MANGO_SURFACES: &[&str] = &["mandara-wallpaper-transition"];
+
 /// `~/.config/mandara/generated/mango.conf`
 pub fn emit_mango(cfg: &ManagedConfig) -> Emitted {
     let c = cfg.config;
     let mut s = String::new();
     let _ = writeln!(s, "# {HEADER}\n");
     let _ = writeln!(s, "# Shell surfaces: no compositor animation or shadow (Mandara animates itself).");
-    for ns in SHELL_SURFACES.iter().chain(MANGO_NIRI_SURFACES) {
+    for ns in SHELL_SURFACES.iter().chain(MANGO_NIRI_SURFACES).chain(MANGO_SURFACES) {
         let _ = writeln!(s, "layer_rule=no_animation:1,no_shadow:1,no_blur:1,layer_name:{ns}");
     }
     // The lock screen and dialogs on its surface keep the compositor's blur.
@@ -1079,6 +1128,12 @@ pub fn emit_mango(cfg: &ManagedConfig) -> Emitted {
             let _ = writeln!(s, "unfocused_opacity={:.2}", o.clamp(0.1, 1.0));
         }
         let _ = writeln!(s);
+    }
+    if let Some(m) = l.window_motion() {
+        let lines = crate::window_motion::mango(m);
+        if !lines.is_empty() {
+            let _ = writeln!(s, "{lines}");
+        }
     }
     // The width is its own setting: it applies without colour sync too.
     if let Some(w) = c.border_width {
@@ -1255,6 +1310,9 @@ pub fn emit_niri(cfg: &ManagedConfig) -> Emitted {
     // Animations: only `off` exists as a switch (on = leave the user's).
     if l.animations == Some(false) {
         let _ = writeln!(s, "\nanimations {{ off; }}");
+    }
+    if let Some(m) = l.window_motion() {
+        s.push_str(&crate::window_motion::niri(m));
     }
     // Niri's top-left hot corner opens its overview; Mandara's corners
     // replace it (`hot-corners` predates `include`, so any niri that reads
@@ -1455,6 +1513,11 @@ pub fn emit_hyprland_conf(cfg: &ManagedConfig) -> Emitted {
     if let Some(v) = l.animations {
         let _ = writeln!(s, "\nanimations {{\n    enabled = {v}\n}}");
     }
+    // Window animations are written only in the Lua format: no Hyprland
+    // that reads this file was available to check them with.
+    if l.window_motion().is_some_and(|m| m.style != crate::window_motion::WindowStyle::Compositor) {
+        let _ = writeln!(s, "\n# Window animations from Studio need Hyprland 0.55 or newer (Lua config); skipped here.");
+    }
     for r in &c.window_rules {
         let mut matchers = Vec::new();
         if let Some(a) = &r.app_id {
@@ -1604,6 +1667,9 @@ pub fn emit_hyprland_lua(cfg: &ManagedConfig) -> Emitted {
     }
     for line in input_env {
         let _ = writeln!(s, "{line}");
+    }
+    if let Some(m) = l.window_motion() {
+        s.push_str(&crate::window_motion::hyprland_lua(m));
     }
     for ns in SHELL_SURFACES {
         let _ = writeln!(s, "pcall(hl.layer_rule, {{ match = {{ namespace = {} }}, no_anim = true }})", lua_str(&format!("^({ns})$")));
@@ -2159,6 +2225,11 @@ pub fn emit(target: Target, cfg: &ManagedConfig) -> Emitted {
         // be checker-verified: its settings stay in its own TOML files and
         // Mandara only talks to it over `$AQUEOUS_SOCKET`. Never written.
         Target::Aqueous => Emitted { text: "# Aqueous settings remain in its own files in ~/.config/aqueous. Mandara reads its IPC socket and writes nothing for it.\n".into(), skipped: Vec::new() },
+        // labwc's rc.xml has no include Mandara's drop-in could use safely,
+        // and COSMIC keeps its settings in COSMIC Settings: no line could
+        // be checker-verified, so nothing is written for either.
+        Target::Labwc => Emitted { text: "# labwc settings remain in ~/.config/labwc. Mandara reads the ext-workspace protocol and writes nothing for it.\n".into(), skipped: Vec::new() },
+        Target::Cosmic => Emitted { text: "# COSMIC settings remain in COSMIC Settings. Mandara reads the ext-workspace protocol and writes nothing for it.\n".into(), skipped: Vec::new() },
     }
 }
 
@@ -2183,7 +2254,7 @@ pub(crate) fn include_path(target: Target, line: &str) -> Option<String> {
         // [`includes_in`].
         Target::Mango | Target::Umbriel => None,
         // River's init is a program, not a config with includes.
-        Target::River | Target::KWin | Target::Aqueous => None,
+        Target::River | Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic => None,
         // `include <path>`: a shell word (`~`, `$VAR`, globs), expanded by
         // [`included_files`].
         Target::Sway => line.strip_prefix("include").filter(|r| r.starts_with(char::is_whitespace)).map(|r| r.trim().to_string()).filter(|r| !r.is_empty()),
@@ -2579,7 +2650,7 @@ pub fn chords_by_line(target: Target, text: &str) -> Vec<(usize, String)> {
         Target::Umbriel => umbriel_chords(text),
         Target::Sway => sway_binds(text).into_iter().map(|b| (b.line, b.chord)).collect(),
         Target::River => river_binds(text).into_iter().map(|b| (b.line, b.chord)).collect(),
-        Target::KWin | Target::Aqueous => Vec::new(),
+        Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic => Vec::new(),
     }
 }
 
@@ -2931,8 +3002,10 @@ fn lua_concat(expr: &str, vars: &[(String, String)]) -> Option<String> {
 
 /// Writes the generated drop-in atomically; returns its path.
 pub fn write_generated(target: Target, emitted: &Emitted) -> Result<PathBuf> {
-    if target == Target::Aqueous {
-        anyhow::bail!("{}", mandara_i18n::t(AQUEOUS_SETTINGS));
+    // Nothing is written where the compositor keeps its own settings
+    // (KWin's note above is only Mandara's record of that).
+    if let Some(note) = target.settings_elsewhere().filter(|_| target != Target::KWin) {
+        anyhow::bail!("{}", mandara_i18n::t(note));
     }
     let path = target.generated_file();
     // Options the config doctor found this compositor version rejects stay
@@ -3178,6 +3251,7 @@ mod look_tests {
                 active_opacity: Some(1.0),
                 inactive_opacity: Some(0.9),
                 gaps_follow_bar: false,
+                windows: crate::window_motion::WindowMotion { style: crate::window_motion::WindowStyle::Snap, speed: 1.0 },
             },
             ..CompositorConfig::default()
         }
@@ -3532,6 +3606,19 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         assert!(!emit_umbriel(&m).text.contains("mandara-floating"), "not verified with Umbriel's checker");
     }
 
+    /// The wallpaper transition's surface: no animation, shadow or blur on
+    /// MangoWM (its checker accepted it); elsewhere nothing yet.
+    #[test]
+    fn wallpaper_transition_surface_rules_only_where_checked() {
+        let cfg = CompositorConfig::default();
+        let m = managed(&cfg, &[]);
+        assert!(emit_mango(&m).text.contains("layer_rule=no_animation:1,no_shadow:1,no_blur:1,layer_name:mandara-wallpaper-transition"));
+        // `^mandara-wallpaper$` is anchored: the wallpaper's own rules don't match it.
+        assert!(!emit_niri(&m).text.contains("mandara-wallpaper-transition"), "not verified with Niri's checker");
+        assert!(!emit_hyprland(&m).text.contains("mandara-wallpaper-transition"), "not verified with Hyprland's checker");
+        assert!(!emit_umbriel(&m).text.contains("mandara-wallpaper-transition"), "not verified with Umbriel's checker");
+    }
+
     #[test]
     fn mango_output_skips_conflicts_and_uses_real_keys() {
         let cfg = CompositorConfig::default();
@@ -3614,6 +3701,36 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
                 return;
             };
             assert!(problems.is_empty(), "mango -p complained:\n{}\n--- drop-in ---\n{}", problems.join("\n"), out.text);
+        }
+    }
+
+    /// Every window animation style, written beside a full config, passes
+    /// MangoWM's and Niri's own checkers (each skipped when not installed).
+    #[test]
+    fn window_animations_pass_the_compositors_checkers() {
+        use crate::window_motion::{WindowMotion, WindowStyle};
+        let user = "focused_opacity=1.0";
+        let niri_user = "binds {\n    Mod+Space { spawn \"fuzzel\"; }\n}";
+        let existing = parse_chords(Target::Niri, niri_user);
+        let existing: Vec<&str> = existing.iter().map(String::as_str).collect();
+        for style in WindowStyle::ALL {
+            for speed in [0.25, 1.0, 3.0] {
+                let mut cfg = mango_kitchen_sink();
+                cfg.look.windows = WindowMotion { style, speed };
+                let out = emit_mango(&managed(&cfg, &[]));
+                assert_eq!(out.text.contains("animation_type_open="), style != WindowStyle::Compositor);
+                if let Some(problems) = mango_check(user, &out.text) {
+                    assert!(problems.is_empty(), "mango -p complained about {style:?}:\n{}\n--- drop-in ---\n{}", problems.join("\n"), out.text);
+                }
+                let out = emit_niri(&ManagedConfig { version: Some(NIRI_CHECKED), ..managed(&cfg, &existing) });
+                if let Some(errors) = niri_check(niri_user, &out.text) {
+                    assert!(errors.is_empty(), "niri validate failed for {style:?}:\n{errors}\n--- drop-in ---\n{}", out.text);
+                }
+                // Animations switched off: no window animations at all.
+                cfg.look.animations = Some(false);
+                assert!(!emit_mango(&managed(&cfg, &[])).text.contains("animation_type_open="));
+                assert!(!emit_niri(&managed(&cfg, &existing)).text.contains("window-open"));
+            }
         }
     }
 
@@ -3804,7 +3921,7 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
             autostart: true,
             border_width: Some(3),
             disable_builtin_hot_corners: true,
-            look: CompositorLook { gaps_inner: Some(12), gaps_outer: Some(10), rounding: Some(14), blur: Some(true), shadows: Some(false), animations: Some(false), active_opacity: Some(1.0), inactive_opacity: Some(0.85), gaps_follow_bar: false },
+            look: CompositorLook { gaps_inner: Some(12), gaps_outer: Some(10), rounding: Some(14), blur: Some(true), shadows: Some(false), animations: Some(false), active_opacity: Some(1.0), inactive_opacity: Some(0.85), gaps_follow_bar: false, ..Default::default() },
             keybinds: vec![Keybind::new(&["hyper"], "x", BindAction::Spawn("foot".into()))],
             ..Default::default()
         };
@@ -4004,7 +4121,7 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
             ],
             ..Default::default()
         };
-        cfg.look = CompositorLook { gaps_inner: Some(12), gaps_outer: Some(10), rounding: Some(9), blur: Some(true), shadows: Some(true), animations: Some(false), active_opacity: Some(0.9), inactive_opacity: Some(0.8), gaps_follow_bar: false };
+        cfg.look = CompositorLook { gaps_inner: Some(12), gaps_outer: Some(10), rounding: Some(9), blur: Some(true), shadows: Some(true), animations: Some(false), active_opacity: Some(0.9), inactive_opacity: Some(0.8), gaps_follow_bar: false, ..Default::default() };
         cfg.window_rules = vec![WindowRule { title: Some("Volume \"x\"\nexec rm".into()), floating: Some(true), global: Some(true), no_blur: Some(true), ..Default::default() }];
         let t = emit_sway(&managed(&cfg, &[])).text;
         assert!(t.contains("gaps inner 12\ngaps outer -2\n"), "the outer gap is on top of the inner one: {t}");

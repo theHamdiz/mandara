@@ -370,7 +370,7 @@ pub(super) fn changed_value(s: &Setting, current: &Value) -> Option<Value> {
         Control::List { .. } => Some(Value::from(vec!["audit.example"])),
         Control::Time => Some(Value::from(if current.as_str() == Some("06:15") { "06:45" } else { "06:15" })),
         Control::Device { .. } | Control::Display => Some(Value::from(format!("{}-audit", current.as_str().unwrap_or("x")))),
-        Control::Icon | Control::Command { .. } | Control::DepthModel | Control::RecorderBackends => None,
+        Control::Icon | Control::Command { .. } | Control::DepthModel | Control::RecorderBackends | Control::StashEdges => None,
     }
 }
 

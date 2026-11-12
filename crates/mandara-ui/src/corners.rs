@@ -341,7 +341,11 @@ pub fn run(action: CornerAction, command: &str, cx: &mut App) {
                 // On the selected output (the driver fills it in).
                 mandara_compositor::CompositorKind::Aqueous => ("overview.toggle", &[]),
                 // No overview: Studio leaves the choice out there.
-                mandara_compositor::CompositorKind::Sway | mandara_compositor::CompositorKind::River | mandara_compositor::CompositorKind::KWin => {
+                mandara_compositor::CompositorKind::Sway
+                | mandara_compositor::CompositorKind::River
+                | mandara_compositor::CompositorKind::KWin
+                | mandara_compositor::CompositorKind::Labwc
+                | mandara_compositor::CompositorKind::Cosmic => {
                     tracing::info!("overview is unavailable through the {:?} backend", backend.kind());
                     return;
                 }

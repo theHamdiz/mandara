@@ -28,6 +28,12 @@ static CARD_RADIUS: AtomicU32 = AtomicU32::new(surfaces::defaults::CARD_RADIUS_P
 static CARD_PADDING: AtomicU32 = AtomicU32::new(surfaces::defaults::CARD_PADDING_PX.to_bits());
 static SHADOWS: AtomicBool = AtomicBool::new(true);
 static BORDERS: AtomicBool = AtomicBool::new(true);
+/// `[style.ink]`: outline width and shadow offset (f32 bits), texture
+/// (its index in [`SurfaceTexture::ALL`]).
+static INK_OUTLINE: AtomicU32 = AtomicU32::new(0);
+static INK_SHADOW: AtomicU32 = AtomicU32::new(0);
+static INK_TEXTURE: AtomicU8 = AtomicU8::new(0);
+static INK_BUBBLES: AtomicBool = AtomicBool::new(false);
 /// `style.slider_handle` is `line`.
 static SLIDER_HANDLE: AtomicBool = AtomicBool::new(true);
 /// `style.slider_design`, as its index in [`SliderDesign::ALL`].
@@ -127,6 +133,26 @@ pub fn borders() -> bool {
     BORDERS.load(Ordering::Relaxed)
 }
 
+/// Inked outlines' width, logical px (0: off).
+pub fn ink_outline() -> f32 {
+    f32::from_bits(INK_OUTLINE.load(Ordering::Relaxed))
+}
+
+/// Hard shadow offset, logical px (0: soft shadows).
+pub fn ink_shadow() -> f32 {
+    f32::from_bits(INK_SHADOW.load(Ordering::Relaxed))
+}
+
+/// Notifications as comic speech bubbles (`[style.ink] bubbles`).
+pub fn ink_bubbles() -> bool {
+    INK_BUBBLES.load(Ordering::Relaxed)
+}
+
+/// The ink texture of surfaces.
+pub fn ink_texture() -> mandara_config::desktop::SurfaceTexture {
+    mandara_config::desktop::SurfaceTexture::ALL.get(usize::from(INK_TEXTURE.load(Ordering::Relaxed))).copied().unwrap_or_default()
+}
+
 /// The thick sliders draw their handle line (`style.slider_handle`).
 pub fn slider_handle() -> bool {
     SLIDER_HANDLE.load(Ordering::Relaxed)
@@ -199,6 +225,10 @@ pub fn apply(cfg: &ShellConfig) {
     CARD_PADDING.store(surfaces::ranges::CARD_PADDING.clamp(look.card_padding, surfaces::defaults::CARD_PADDING_PX).to_bits(), Ordering::Relaxed);
     SHADOWS.store(cfg.style.shadows, Ordering::Relaxed);
     BORDERS.store(cfg.style.borders, Ordering::Relaxed);
+    INK_OUTLINE.store(cfg.style.ink.outline().to_bits(), Ordering::Relaxed);
+    INK_SHADOW.store(cfg.style.ink.shadow().to_bits(), Ordering::Relaxed);
+    INK_BUBBLES.store(cfg.style.ink.bubbles, Ordering::Relaxed);
+    INK_TEXTURE.store(mandara_config::desktop::SurfaceTexture::ALL.iter().position(|t| *t == cfg.style.ink.texture).unwrap_or(0) as u8, Ordering::Relaxed);
     SLIDER_HANDLE.store(cfg.style.slider_handle == mandara_config::desktop::SliderHandle::Line, Ordering::Relaxed);
     let design = SliderDesign::ALL.iter().position(|d| *d == cfg.style.slider_design).unwrap_or(0);
     SLIDER_DESIGN.store(design as u8, Ordering::Relaxed);
@@ -213,12 +243,34 @@ pub fn apply(cfg: &ShellConfig) {
     WEIGHT.store(u32::from(cfg.typography.weight.clamp(MIN_WEIGHT, MAX_WEIGHT)), Ordering::Relaxed);
     mandara_core::spring::set_time_scale(cfg.motion.speed);
     mandara_core::spring::set_motion_profile(motion_profile(cfg));
+    mandara_core::choreo::set_choreography(choreography(&cfg.motion));
     crate::widgets::clock::set_locale_override(&cfg.datetime.time_locale);
+}
+
+/// The choreography of `[motion]`, scaled by its intensity (reduced motion
+/// is applied when it is read: [`mandara_core::choreo::choreography`]).
+pub fn choreography(m: &mandara_config::MotionConfig) -> mandara_core::choreo::Choreography {
+    use mandara_config::motion::Entrance as E;
+    use mandara_core::choreo::Entrance;
+    let c = &m.choreography;
+    let entrance = match c.entrance {
+        E::Anchor => Entrance::Anchor,
+        E::Rise => Entrance::Rise,
+        E::Drop => Entrance::Drop,
+        E::Sweep => Entrance::Sweep,
+        E::Drift => Entrance::Drift,
+    };
+    mandara_core::choreo::Choreography::new(entrance, c.stagger, c.stretch, c.parallax, m.intensity())
 }
 
 /// The spring tuning and reduced motion of `cfg` (`[motion]`).
 pub fn motion_profile(cfg: &ShellConfig) -> mandara_core::spring::MotionProfile {
-    let m = &cfg.motion;
+    motion_profile_of(&cfg.motion)
+}
+
+/// [`motion_profile`] of a `[motion]` table alone (Studio previews a preset
+/// over the current settings with it).
+pub fn motion_profile_of(m: &mandara_config::MotionConfig) -> mandara_core::spring::MotionProfile {
     let mut profile = mandara_core::spring::MotionProfile::new(m.stiffness, m.damping, m.mass, m.reduced(mandara_core::spring::system_reduced_motion()));
     let critical = 2.0 * (profile.feel.stiffness * profile.feel.mass).sqrt();
     profile.feel.damping += (critical - profile.feel.damping).max(0.0) * (1.0 - m.intensity());

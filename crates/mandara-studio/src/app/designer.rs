@@ -159,6 +159,13 @@ pub(crate) fn place_in(c: &mut ShellConfig, id: &str, from: Lane, to: Lane, inde
     if let Some(list) = from.list(c) {
         list.retain(|x| x != id);
     }
+    if to == Lane::Tray && matches!(from, Lane::Left | Lane::Center | Lane::Right | Lane::Side(..)) {
+        mandara_config::bar_items::unmark_yours(c, id);
+    }
+    if matches!(to, Lane::Left | Lane::Center | Lane::Right | Lane::Side(..)) {
+        // You placed or moved it: it stays through presets and Looks.
+        mandara_config::bar_items::mark_yours(c, id);
+    }
     if let Some(list) = to.list(c) {
         list.retain(|x| x != id);
         let i = index.unwrap_or(list.len()).min(list.len());
@@ -174,7 +181,7 @@ pub(crate) fn place_in(c: &mut ShellConfig, id: &str, from: Lane, to: Lane, inde
 }
 
 /// Built-ins without a bar item.
-const NO_BAR: &[&str] = &["main-menu", "compositor", "quick-settings", "wallhaven", "cursors", "dock", "app-installer"];
+const NO_BAR: &[&str] = &["main-menu", "compositor", "quick-settings", "wallhaven", "cursors", "icon-themes", "dock", "app-installer"];
 
 /// Desktop-only families and service plugins have no bar view. A missing
 /// default zone alone does not imply that: optional bar items use it too.
@@ -353,7 +360,14 @@ const PRESETS: &[Preset] = &[
     styled(tk("Stanley Bridge"), tk("Three floating docks of squircle tiles spanning the bottom like a bridge's arches"), BarStyle::StanleyBridge, BarLayout::FloatingPills, BarPosition::Bottom, 48.0),
     styled(tk("Pharos Beam"), tk("A lantern of scalloped accent buttons and tonal tiles hanging from the top edge"), BarStyle::PharosBeam, BarLayout::Notch, BarPosition::Top, 44.0),
     styled(tk("Raml Tram"), tk("One line of flower stops running along the top and down the left edge"), BarStyle::RamlTram, BarLayout::MinimalEdge, BarPosition::Top, 38.0),
+    styled(tk("Taskbar"), tk("A full-width bottom taskbar: the launcher and your apps centred, a stacked clock on the right"), BarStyle::Taskbar, BarLayout::MinimalEdge, BarPosition::Bottom, 48.0),
 ];
+
+/// The bar preset's name for a style (translation key), for notes that
+/// point to it.
+pub(super) fn preset_name(style: BarStyle) -> Option<&'static str> {
+    PRESETS.iter().find(|p| p.style == Some(style)).map(|p| p.name)
+}
 
 fn apply_preset(p: &'static Preset, replace_items: bool, cx: &mut App) {
     let known: Vec<String> = cx.global::<PluginRegistry>().manifests().map(|m| m.id.clone()).collect();
@@ -362,9 +376,12 @@ fn apply_preset(p: &'static Preset, replace_items: bool, cx: &mut App) {
 
 fn apply_preset_in(c: &mut ShellConfig, p: &Preset, replace_items: bool, known: &[String]) {
     let pick = |ids: &[&str]| ids.iter().filter(|i| known.iter().any(|k| k == *i)).map(|s| s.to_string()).collect::<Vec<_>>();
-    let (left, center, right) = (pick(p.left), pick(p.center), pick(p.right));
+    // The items you added yourself, before anything moves: they stay.
+    let (mine, shown_before) = (mandara_config::bar_items::yours(c), mandara_config::bar_items::showing(c));
     match p.style {
-        // A style sets the layout, edge and height with its look.
+        // A style sets the layout, edge and height with its look (and,
+        // keeping the items, fits them to itself).
+        Some(style) if replace_items => style.apply_look(c),
         Some(style) => style.apply(c),
         None => {
             // The last style's look goes; this preset's bar comes.
@@ -381,17 +398,20 @@ fn apply_preset_in(c: &mut ShellConfig, p: &Preset, replace_items: bool, known: 
         }
     }
     if replace_items {
-        c.bar.left.clear();
-        c.bar.center.clear();
-        c.bar.right.clear();
-        for (ids, to) in [(left, Lane::Left), (center, Lane::Center), (right, Lane::Right)] {
-            for id in ids { place_in(c, &id, Lane::Tray, to, None); }
-        }
-        // A style's rail (Expressive, Raml Tram): the left side bar's groups.
-        if let Some(rail) = p.style.and_then(BarStyle::rail) {
-            for (zone, ids) in SideZone::ALL.into_iter().zip(rail) {
-                c.side_bars.left.zone_mut(zone).clear();
-                for id in pick(ids) { place_in(c, &id, Lane::Tray, Lane::Side(false, zone), None); }
+        // The preset's own items replace the last preset's (and, for a
+        // style with a rail, the rail's groups); yours come back after.
+        let layout = mandara_config::bar_items::Layout { bar: [pick(p.left), pick(p.center), pick(p.right)], rail: p.style.and_then(BarStyle::rail).map(|r| r.map(pick)) };
+        let placed = mandara_config::bar_items::lay_out(c, &layout, shown_before, &mine);
+        match p.style {
+            Some(style) => style.switch_on_placed(c, &placed),
+            // Placing a plugin turns it on, as dropping it in does.
+            None => {
+                for id in &placed {
+                    c.plugins.disabled.retain(|x| x != id);
+                    if !c.plugins.enabled.iter().any(|x| x == id) {
+                        c.plugins.enabled.push(id.clone());
+                    }
+                }
             }
         }
     }
@@ -564,22 +584,24 @@ impl StudioView {
             .into_any_element()
     }
 
-    /// The side bars' layout designer (Studio → Bars → Side bars).
+    /// The side bars' layout designer (Studio → Bars → Sidebars): a column
+    /// of groups for each side bar that shows.
     pub(super) fn side_bars_designer(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        if !cfg.side_bars.enabled { return div().into_any_element(); }
+        let (show_left, show_right) = (cfg.side_bar_on(false), cfg.side_bar_on(true));
+        if !show_left && !show_right { return div().into_any_element(); }
         let scale = window.scale_factor();
         let mut side = |right: bool, title: &'static str| {
             let settings = cfg.side_bars.side(right);
             div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_6_PX))
-                .when(!settings.enabled, |el| el.opacity(ALPHA_60))
                 .child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(tr(title)))
                 .child(side_style_row(cfg, right, p))
                 .child(self.lane(Lane::Side(right, SideZone::Top), tk("Top"), &settings.top, false, scale, p, cx))
                 .child(self.lane(Lane::Side(right, SideZone::Middle), tk("Middle"), &settings.middle, false, scale, p, cx))
                 .child(self.lane(Lane::Side(right, SideZone::Bottom), tk("Bottom"), &settings.bottom, false, scale, p, cx))
         };
-        let (left, right) = (side(false, tk("Left side bar")), side(true, tk("Right side bar")));
-        let lanes = div().ltr_row().when(self.stack_rows, |el| el.flex_col()).gap(px(SPACE_12_PX)).child(left).child(right);
+        let left = show_left.then(|| side(false, tk("Left side bar")));
+        let right = show_right.then(|| side(true, tk("Right side bar")));
+        let lanes = div().ltr_row().when(self.stack_rows, |el| el.flex_col()).gap(px(SPACE_12_PX)).children(left).children(right);
         let pool = self.plugin_pool(cfg, p, window, cx);
         let menu = self.plugin_menu(cfg, p, window, cx);
         div().row().flex_col().gap(px(SPACE_12_PX)).child(lanes).child(pool).children(menu).into_any_element()
@@ -686,8 +708,8 @@ impl StudioView {
             .row()
             .flex_col()
             .gap(px(SPACE_12_PX))
-            .child(header(tk("Presets"), tk("Changes the bar's style, position and height. Your items stay unless you choose to replace them.")))
-            .child(super::compositor_page::chip("bar-preset-replace-items", t("Replace bar items"), replace_items, p).on_click(cx.listener(|this, _, _, cx| {
+            .child(header(tk("Presets"), tk("Changes the bar's style, position and height. With the preset's items on, they replace the last preset's; items you added yourself always stay.")))
+            .child(super::compositor_page::chip("bar-preset-replace-items", t("Use the preset's items"), replace_items, p).on_click(cx.listener(|this, _, _, cx| {
                 this.designer.replace_items = !this.designer.replace_items;
                 cx.notify();
             })))
@@ -889,6 +911,45 @@ mod tests {
             assert_eq!(hand.typography.bar_font, d.typography.bar_font, "{}", p.name);
             assert_eq!((hand.bar.text_scale, hand.bar.show_seconds), (1.15, true), "{}: your own settings stay", p.name);
             assert_eq!((hand.bar.layout, hand.bar.position, hand.bar.height), (classic.layout, classic.position, classic.height));
+        }
+    }
+
+    #[test]
+    fn every_preset_shows_each_item_once_and_switched_on() {
+        let mut registry = mandara_plugins::PluginRegistry::default();
+        mandara_ui::plugins::register_builtin(&mut registry);
+        let known: Vec<String> = registry.manifests().map(|m| m.id.clone()).collect();
+        for p in PRESETS {
+            // Replacing your items, and keeping them (Studio's default and
+            // `bar style`), over the shipped bar.
+            for replace in [true, false] {
+                let mut c = ShellConfig::default();
+                apply_preset_in(&mut c, p, replace, &known);
+                let rail = c.side_bar_on(false).then(|| c.side_bars.left.zones()).into_iter().flatten();
+                let shown: Vec<&String> = [&c.bar.left, &c.bar.center, &c.bar.right].into_iter().chain(rail).flatten().collect();
+                for (i, id) in shown.iter().enumerate() {
+                    assert!(!shown[..i].contains(id), "{} (replace {replace}) shows {id} twice", p.name);
+                    assert!(registry.is_enabled(id, &c.plugins), "{} (replace {replace}): {id} is placed but its plugin is off", p.name);
+                }
+                // A style's own items all come: System monitor's meters too.
+                if let Some(style) = p.style {
+                    for id in style.signature().into_iter().flatten() {
+                        assert!(shown.iter().any(|s| s == id), "{} (replace {replace}): {id}", p.name);
+                    }
+                }
+            }
+        }
+        // The rail presets: the workspaces once, on the rail, and the
+        // launcher first on the bar, in the corner.
+        for style in [BarStyle::Expressive, BarStyle::RamlTram] {
+            let p = PRESETS.iter().find(|p| p.style == Some(style)).unwrap();
+            for replace in [true, false] {
+                let mut c = ShellConfig::default();
+                apply_preset_in(&mut c, p, replace, &known);
+                assert!(c.side_bars.left.zones().iter().any(|z| z.iter().any(|id| id == "workspaces")), "{} (replace {replace})", p.name);
+                assert!(![&c.bar.left, &c.bar.center, &c.bar.right].iter().any(|z| z.iter().any(|id| id == "workspaces")), "{} (replace {replace})", p.name);
+                assert_eq!(c.bar.left.first().map(String::as_str), Some("launcher"), "{} (replace {replace})", p.name);
+            }
         }
     }
 

@@ -87,8 +87,38 @@ pub fn title(text: impl Into<gpui::SharedString>, palette: &MandaraPalette) -> i
 
 /// Applies a staggered entrance to the `index`-th block of a panel.
 pub fn reveal(panel: &PanelCx, index: usize, el: impl IntoElement) -> AnyElement {
-    let r = panel.reveal(index);
-    div().relative().top(px(r.offset)).opacity(r.opacity).child(el).into_any_element()
+    reveal_box(panel, index).child(el).into_any_element()
+}
+
+/// The positioned box of a panel block's staggered entrance ([`reveal`]),
+/// for callers that style the box themselves.
+pub fn reveal_box(panel: &PanelCx, index: usize) -> Div {
+    let (dx, dy, opacity) = block_reveal(panel, index, &mandara_core::choreo::choreography(), crate::bidi::rtl());
+    div().relative().when(dx != 0.0, |el| el.left(px(dx))).top(px(dy)).opacity(opacity)
+}
+
+/// Travel of a panel block entering from a choreography's direction, in px.
+const BLOCK_ENTRANCE_PX: f32 = 14.0;
+
+/// `(dx, dy, opacity)` of a panel block: the panel's own staggered reveal
+/// ([`PanelCx::reveal`]), cascading further apart with the choreography's
+/// stagger and entering from its direction. Neutral: exactly the classic
+/// reveal. Settled (progress 1): always in place and opaque.
+pub fn block_reveal(panel: &PanelCx, index: usize, choreo: &mandara_core::choreo::Choreography, rtl: bool) -> (f32, f32, f32) {
+    let classic = panel.reveal(index);
+    if choreo.stagger <= 0.0 && choreo.entrance == mandara_core::choreo::Entrance::Anchor {
+        return (0.0, classic.offset, classic.opacity);
+    }
+    // The same start window as the classic reveal, then the cascade.
+    let start = (0.3 + index as f32 * 0.05).min(0.7);
+    let t = ((panel.progress() - start) / (1.0 - start)).clamp(0.0, 1.0);
+    let t = choreo.cascade(t, index);
+    let eased = t * t * (3.0 - 2.0 * t);
+    if choreo.entrance == mandara_core::choreo::Entrance::Anchor {
+        return (0.0, (1.0 - eased) * 10.0, eased);
+    }
+    let (dx, dy) = choreo.entrance_offset(eased, (0.0, 1.0), rtl, BLOCK_ENTRANCE_PX);
+    (dx, dy, eased)
 }
 
 /// A rounded quick-toggle tile (icon + label + optional detail).
@@ -257,6 +287,67 @@ pub fn ellipsize(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mandara_config::motion::Preset;
+    use mandara_core::choreo::Choreography;
+
+    fn choreo_of(preset: Preset) -> Choreography {
+        let mut m = mandara_config::MotionConfig::default();
+        preset.apply(&mut m);
+        crate::style::choreography(&m)
+    }
+
+    #[test]
+    fn panel_blocks_keep_the_classic_reveal_without_a_choreography() {
+        let panel = PanelCx::new();
+        for p in [0.0, 0.35, 0.6, 0.9, 1.0] {
+            panel.set_progress(p);
+            for i in 0..10 {
+                let r = panel.reveal(i);
+                assert_eq!(block_reveal(&panel, i, &Choreography::NEUTRAL, false), (0.0, r.offset, r.opacity));
+                // A spring-only choreography (stretch) changes no block.
+                assert_eq!(block_reveal(&panel, i, &choreo_of(Preset::Magnetic), false), (0.0, r.offset, r.opacity));
+            }
+        }
+    }
+
+    #[test]
+    fn every_preset_settles_blocks_panels_and_shapes_at_rest() {
+        for preset in Preset::ALL {
+            let c = choreo_of(preset);
+            let panel = PanelCx::new();
+            panel.set_progress(1.0);
+            for i in 0..12 {
+                assert_eq!(block_reveal(&panel, i, &c, true), (0.0, 0.0, 1.0), "{preset:?} block {i}");
+            }
+            for (vertical, right, bottom) in [(false, false, false), (false, false, true), (true, false, false), (true, true, false)] {
+                assert_eq!(crate::shell::panel_content_offset(&c, 1.0, vertical, right, bottom, false), (0.0, 0.0), "{preset:?}");
+                let rect = (100.0, 30.0, 360.0, 420.0);
+                assert_eq!(crate::shell::pour(&c, rect, [0.0; 4], vertical, right, bottom), rect, "{preset:?} rests unstretched");
+                // Pouring, the shape only grows, along its own axis.
+                let (x, y, w, h) = crate::shell::pour(&c, rect, [0.0, 0.0, 2000.0, 2000.0], vertical, right, bottom);
+                assert!(w >= rect.2 && h >= rect.3 && (vertical || w == rect.2) && (!vertical || h == rect.3));
+                assert!(x <= rect.0 && y <= rect.1);
+            }
+        }
+    }
+
+    #[test]
+    fn choreographed_blocks_cascade_from_their_entrance() {
+        let panel = PanelCx::new();
+        panel.set_progress(0.6);
+        let tide = choreo_of(Preset::Tide);
+        let (_, dy0, a0) = block_reveal(&panel, 0, &tide, false);
+        let (_, dy4, a4) = block_reveal(&panel, 4, &tide, false);
+        assert!(dy0 >= 0.0 && dy4 > dy0 && a4 < a0, "rising, later blocks further behind");
+        let sweep = choreo_of(Preset::Lighthouse);
+        assert!(block_reveal(&panel, 2, &sweep, false).0 < 0.0 && block_reveal(&panel, 2, &sweep, true).0 > 0.0, "sweeps from the reading side");
+        // Intensity scales the choreography; zero turns it off.
+        let mut m = mandara_config::MotionConfig::default();
+        Preset::Tide.apply(&mut m);
+        m.intensity = 0.0;
+        let off = crate::style::choreography(&m);
+        assert_eq!((off.stagger, off.stretch, off.parallax), (0.0, 0.0, 0.0));
+    }
 
     #[test]
     fn durations_and_ellipsis() {

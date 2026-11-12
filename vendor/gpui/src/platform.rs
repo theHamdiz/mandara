@@ -1364,6 +1364,9 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     }
     fn start_window_resize(&self, _edge: ResizeEdge) {}
     fn set_exclusive_zone(&self, _zone: Pixels) {}
+    // Mandara patch 13: data drops and layer-surface moves.
+    fn set_accepts_data_drops(&self, _accept: bool) {}
+    fn set_layer_margin(&self, _margin: (Pixels, Pixels, Pixels, Pixels)) {}
     // Mandara patch 10: and on FreeBSD.
     #[cfg(all(any(target_os = "linux", target_os = "freebsd"), feature = "wayland"))]
     fn set_exclusive_edge(&self, _edge: layer_shell::Anchor) {}

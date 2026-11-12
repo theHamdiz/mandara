@@ -62,10 +62,15 @@ mandara msg panel open media
 mandara msg panel capture media             # copy a visible docked or floating panel as PNG
 mandara msg theme set mandara-corniche      # theme list, current, next, mode toggle, wallpaper, seeds, export
 mandara msg theme mode toggle
-mandara msg look apply corniche-dusk        # look list; look restore brings back your own setup
+mandara msg look apply corniche-dusk        # built-in or yours; look list; look restore brings back your own setup
+mandara msg look save "My evening"          # keep what you changed on the active look as a look of yours
+mandara msg look export phosphor            # to ~/Downloads/phosphor.mandara-look.toml (or a file you name)
+mandara msg look import ~/Downloads/x.mandara-look.toml   # checked strictly; nothing in it runs
+mandara msg look rename corniche-dusk-custom Evening      # look duplicate <id>, look delete <id> (yours only)
+mandara msg motion preset tide              # motion presets lists them all with how each feels and the one in use (docs/motion.md)
 mandara msg bar position left               # top|bottom|left|right (left/right = the side bar)
 mandara msg bar layout hairline             # edge-frame|glass-pills|island|hairline|micro|notch|next
-mandara msg bar style expressive            # expressive|tile-dock|rail|segmented|system-monitor|stanley-bridge|pharos-beam|raml-tram: a style preset's look (your items stay); none puts back the plain bar
+mandara msg bar style expressive            # expressive|tile-dock|rail|segmented|system-monitor|stanley-bridge|pharos-beam|raml-tram|taskbar: a style preset's look (your items stay, fitted to it: a rail takes the workspaces off the bar, System monitor adds its meters); none puts back the plain bar and your items
 mandara msg bar hide                        # put the bar away and free its space until bar show (bar toggle flips it; not saved)
 mandara msg side-bars on                    # the left and right side bars of plugin chips: on|off|toggle; side-bars status
 mandara msg side-bars join off              # one frame with the top bar, or floating apart: on|off|toggle
@@ -99,16 +104,21 @@ mandara msg depth place-clock              # move the clock to where the subject
 mandara msg language set ar                 # language list
 mandara msg plugins reload                  # plugins list|enable|disable|remove|restore <id>
 mandara msg plugins remove prayer-times     # built-ins: off + out of bar/sidebar until `plugins restore` (core plugins refuse)
-mandara msg plugins enable wallhaven        # opt-in built-ins: wallhaven, cursors, dock, notes, todo, pomodoro, … ([plugins](plugins.md): "ship switched off")
+mandara msg plugins enable wallhaven        # opt-in built-ins: wallhaven, cursors, icon-themes, dock, notes, todo, pomodoro, … ([plugins](plugins.md): "ship switched off")
 mandara msg config set /integrations/gtk4 true   # theme an app (all off by default); false takes Mandara's changes back
 mandara msg plugins vet ./my-plugin          # the marketplace's compliance check: {"ok":true} or {"ok":false,"class":"broken|malicious|placeholder","reason":…}
 mandara msg config get /bar/height         # config set /bar/height 30, show, reload, export, import, reset
 mandara msg studio displays                 # open Studio on a page (docs/studio.md)
-mandara msg studio bars/sidebar             # Bars → Sidebar tab and widget editor
-mandara msg studio bars/side-bars           # Bars → Side bars layout and settings
+mandara msg studio bars/sidebars            # Bars → Sidebars: what each edge holds, then its settings
+mandara msg studio bars/sidebars/sidebar    # … scrolled to the sidebar panel's tabs and widgets
+mandara msg studio bars/sidebars/side-bar   # … scrolled to the side bar's layout and settings
+mandara msg studio desktop/context-menu     # Desktop → Context menu: the right-click ring or list
 ```
 
 The Bars page also accepts `bars/bar`, `bars/panels` and `bars/edges`.
+The Desktop page accepts `desktop/widgets`, `desktop/cards` and
+`desktop/context-menu`, and `desktop/widgets/<id>` opens one widget's
+settings; the former `desktop-widgets` target still opens it.
 `mandara studio bars --tab sidebar` opens the same tab from the CLI.
 The former `bar` and `sidebar` Studio targets remain aliases. Config
 commands still use their original paths, such as `/bar/height` and
@@ -334,6 +344,7 @@ mandara msg keybinds toggle          # show, hide, list (every shortcut as JSON)
 mandara msg breaks status            # now [short|long], skip, snooze [minutes], pause [minutes], resume
 mandara msg presentation toggle      # on, off, status
 mandara msg share clipboard          # text <text>, file <path>, screenshot, stop, status
+mandara msg stash new                # a floating shelf; stash (state, edge catchers), new [x y [output]], list, show|hide [id|last|all], close [id|last|all] [--empty], clear [id], restore [id], add [shelf] <path|https://…|text:…>…
 mandara msg jannah today             # the reminder on screen; next (a fresh one), prev (the one before), peek [n], show <ref>, search <query>, paths, step [done|peek [days]], saved, language [code|follow]
 mandara msg quran open                 # open the panel without a verse reference
 mandara msg jannah open                # open the panel without a hadith reference
@@ -425,6 +436,12 @@ mandara msg cursor list              # the cursor catalog: variants, licence, st
 mandara msg cursor install bibata/ice   # download the pinned GitHub release, verify SHA-256, install to ~/.local/share/icons
 mandara msg cursor apply bibata/ice 32  # theme (catalog id[/variant] or XCursor name) and optional size, live; `none` = your compositor's
 mandara msg cursor remove bibata     # every variant Mandara installed (or one: bibata/ice); never a package's or your own
+mandara msg cursor import ~/Downloads/Sweet-cursors.tar.xz  # your own: an archive or folder, or an https:// link with --unverified
+mandara msg icons list               # the icon theme catalog: variants, licence, stars, style, installed / by Mandara / active, imports, other installed themes
+mandara msg icons install papirus/dark  # download the pinned GitHub archive, verify SHA-256, install to ~/.local/share/icons (with Papirus, which it links into)
+mandara msg icons apply papirus/dark # Mandara's icons and the desktop's (gsettings, GTK settings.ini, kdeglobals, qt5ct / qt6ct), live; `none` = follow your desktop
+mandara msg icons remove papirus/dark   # only what Mandara installed; folders another installed theme needs stay
+mandara msg icons import https://example.org/Some-icons.tar.xz --unverified  # your own: an archive, a folder, or a link (no checksum: needs --unverified)
 mandara msg calendar add webcal://example.com/holidays.ics Holidays  # calendar [days], sources, remove <n>, refresh
 mandara msg calendar open            # open the shell calendar without a calendar source
 mandara msg calendar goto 2026-12     # open the clock panel's calendar there: today, next, prev, +N / -N days, YYYY-MM, YYYY-MM-DD
@@ -437,6 +454,40 @@ mandara msg world-clock add Mecca    # list, remove, search <query>, at <HH:MM>
 mandara msg authenticator code github  # list, copy, add <otpauth://…>, remove <id>, scan, demo on|off
 ```
 
+```bash
+mandara msg boot status                 # bootloader in use (and how it was found), firmware, splash, files, backups
+mandara msg boot list menu              # boot menu catalog: licence, pinned URL + SHA-256, downloaded
+mandara msg boot install vimix/2k       # download, verify and prepare (nothing on the system changes)
+mandara msg boot import ~/Pictures/logo.svg --spinner ring   # splash, GRUB theme and Limine wallpaper from your image
+mandara msg boot apply menu vimix/2k --dry-run               # the exact plan; without --dry-run: approval, backup, apply
+mandara msg boot restore                # undo the last apply (--dry-run lists the files)
+```
+
+The `boot` commands belong to the opt-in **Boot look** plugin
+(`mandara msg plugins enable boot-look`); the safety model, supported
+bootloaders and restore are in [Boot look](boot-look.md).
+
+The `sound` commands belong to the opt-in **Sound themes** plugin
+(`mandara msg plugins enable sound-themes`); while it is off they answer
+that the plugin is off and change nothing.
+
+```bash
+mandara msg sound list                     # catalog, installed themes, the active one, each event's file
+mandara msg sound install ocean            # pinned upstream release, SHA-256 checked, to ~/.local/share/sounds
+mandara msg sound apply ocean              # Mandara's sounds (and, with Apply to apps, GTK and KDE apps)
+mandara msg sound apply none               # back to your desktop's own theme
+mandara msg sound play notification ocean  # one event from a theme; replies with its length and level outline
+mandara msg sound import ~/Downloads/my-sounds.tar.gz
+mandara msg sound import https://example.org/sounds.tar.xz --unverified   # links need --unverified
+mandara msg sound remove ocean             # only what Mandara installed
+```
+
+`sound install` keeps a download only when its size and SHA-256 match the
+catalog and installs just the theme's sounds, `index.theme` and licence
+files; nothing from an archive runs. Removing the active theme returns to
+your desktop's own. The older `sounds play|preview|status|themes|enable`
+commands keep working for Mandara's own event sounds.
+
 The `cursor` commands belong to the opt-in **Cursor themes** plugin
 (`mandara msg plugins enable cursors`); while it is off they answer that the
 plugin is off and change nothing, and Mandara writes no cursor setting at
@@ -447,7 +498,23 @@ theme folder; it never runs anything from the archive. `cursor apply` checks
 the theme is installed, then writes the compositor drop-in and reloads it
 (Hyprland also gets `setcursor`) and points `~/.icons/default` at it when
 that file is Mandara's. Removing the active theme returns to your
-compositor's cursor.
+compositor's cursor. `cursor import` installs every cursor theme in an
+archive, a folder or an `https://` link after the same checks; a link has
+no checksum to verify, so it needs `--unverified`.
+
+The `icons` commands belong to the opt-in **Icon themes** plugin
+(`mandara msg plugins enable icon-themes`); while it is off they answer that
+the plugin is off and change nothing. `icons install` fetches only the
+catalog's pinned archive from the project's own GitHub repository, keeps it
+only when its size and SHA-256 match, unpacks just the folders the variant
+needs (refusing unsafe paths, dropping links that leave the theme, capping
+size and file count), checks each `index.theme`, strips executable bits and
+scripts, and moves the theme into `~/.local/share/icons`; it never runs
+anything from the archive. `icons apply` sets `appearance.icon_theme` and
+the desktop's icon theme one key at a time, recording what was there in
+`~/.config/mandara/generated/icon-theme.json`; `icons apply none` restores
+each key that still holds Mandara's value. Removing the active theme
+follows your desktop again.
 
 `apps uninstall` uses the app's own package manager, detected at runtime:
 system packages run `pkexec <manager> …` (polkit asks for your password;
