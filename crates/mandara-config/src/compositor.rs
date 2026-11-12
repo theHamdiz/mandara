@@ -1067,13 +1067,20 @@ pub const SHELL_SURFACES: &[&str] = &["mandara-bar", "mandara-exclusion", "manda
 /// Hyprland's and Umbriel's checkers have accepted them too.
 pub const MANGO_NIRI_SURFACES: &[&str] = &["mandara-floating"];
 
+/// Shell surfaces whose rules only MangoWM's own checker has accepted so
+/// far (`mango_itself_accepts_the_drop_in`): the wallpaper transition's
+/// temporary surface. Without a rule the other compositors at most fade it
+/// in and out, which shows nothing: its first and last frames are exactly
+/// the desktop under it.
+pub const MANGO_SURFACES: &[&str] = &["mandara-wallpaper-transition"];
+
 /// `~/.config/mandara/generated/mango.conf`
 pub fn emit_mango(cfg: &ManagedConfig) -> Emitted {
     let c = cfg.config;
     let mut s = String::new();
     let _ = writeln!(s, "# {HEADER}\n");
     let _ = writeln!(s, "# Shell surfaces: no compositor animation or shadow (Mandara animates itself).");
-    for ns in SHELL_SURFACES.iter().chain(MANGO_NIRI_SURFACES) {
+    for ns in SHELL_SURFACES.iter().chain(MANGO_NIRI_SURFACES).chain(MANGO_SURFACES) {
         let _ = writeln!(s, "layer_rule=no_animation:1,no_shadow:1,no_blur:1,layer_name:{ns}");
     }
     // The lock screen and dialogs on its surface keep the compositor's blur.
@@ -3597,6 +3604,19 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         assert!(emit_niri(&m).text.contains("match namespace=\"^mandara-floating$\""));
         assert!(!emit_hyprland(&m).text.contains("mandara-floating"), "not verified with Hyprland's checker");
         assert!(!emit_umbriel(&m).text.contains("mandara-floating"), "not verified with Umbriel's checker");
+    }
+
+    /// The wallpaper transition's surface: no animation, shadow or blur on
+    /// MangoWM (its checker accepted it); elsewhere nothing yet.
+    #[test]
+    fn wallpaper_transition_surface_rules_only_where_checked() {
+        let cfg = CompositorConfig::default();
+        let m = managed(&cfg, &[]);
+        assert!(emit_mango(&m).text.contains("layer_rule=no_animation:1,no_shadow:1,no_blur:1,layer_name:mandara-wallpaper-transition"));
+        // `^mandara-wallpaper$` is anchored: the wallpaper's own rules don't match it.
+        assert!(!emit_niri(&m).text.contains("mandara-wallpaper-transition"), "not verified with Niri's checker");
+        assert!(!emit_hyprland(&m).text.contains("mandara-wallpaper-transition"), "not verified with Hyprland's checker");
+        assert!(!emit_umbriel(&m).text.contains("mandara-wallpaper-transition"), "not verified with Umbriel's checker");
     }
 
     #[test]

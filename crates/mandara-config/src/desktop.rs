@@ -766,9 +766,11 @@ pub enum WallpaperFill {
     Tile,
 }
 
-/// How one wallpaper replaces another. The GPU wallpaper draws every one;
-/// the software one ([`Self::software`]) draws Ripple, Tide and Tear as a
-/// cheaper crop and the rest (Sketch included) as a fade.
+/// How one wallpaper replaces another. Every one but Fade, Wipe and None
+/// is drawn per pixel by a GPU shader: by the GPU wallpaper itself, and over
+/// the software wallpaper on a temporary surface that exists only while
+/// the transition plays. Without that surface, the software wallpaper
+/// draws [`Self::software`]'s fallback.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum WallpaperTransition {
@@ -789,10 +791,11 @@ pub enum WallpaperTransition {
     Glitch,
     /// The old image breaks into shards that fall away.
     Shatter,
-    /// The new image arrives tile by tile, like settling grain.
+    /// The old image burns away along a noise edge that glows in the
+    /// theme's accent.
     Dissolve,
-    /// The new image's outline (its subject first, when Mandara has a
-    /// mask for it) is drawn as animated strokes, then the image fills in
+    /// Line art of the new image (its subject first, when Mandara has a
+    /// mask for it) draws itself, then the image fills in
     /// ([`SketchOptions`]).
     Sketch,
     /// Cut without animation.
@@ -802,11 +805,12 @@ pub enum WallpaperTransition {
 impl WallpaperTransition {
     pub const ALL: [Self; 11] = [Self::Fade, Self::Wipe, Self::Grow, Self::Ripple, Self::Tide, Self::Tear, Self::Glitch, Self::Shatter, Self::Dissolve, Self::Sketch, Self::None];
 
-    /// What the software wallpaper draws for this transition: Ripple, Tide
-    /// and Tear as a crop of the new image (a square opening, a rising
-    /// edge, a seam opening outward), Glitch, Shatter, Dissolve and Sketch
-    /// as a fade (the compositor crops and fades one plane; it cannot move
-    /// pieces of the old one or draw lines over it).
+    /// What the software wallpaper draws for this transition when the GPU
+    /// surface for it can't open: Ripple, Tide and Tear as a crop of the new
+    /// image (a square opening, a rising edge, a seam opening outward),
+    /// Glitch, Shatter, Dissolve and Sketch as a fade (the compositor crops
+    /// and fades one plane; it cannot move pieces of the old one or draw
+    /// lines over it).
     pub fn software(self) -> Self {
         match self {
             Self::Glitch | Self::Shatter | Self::Dissolve | Self::Sketch => Self::Fade,

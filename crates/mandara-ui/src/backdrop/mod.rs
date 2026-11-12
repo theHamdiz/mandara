@@ -23,7 +23,10 @@
 //! paused whenever the desktop can't be seen.
 //!
 //! Wallpaper crossfades run in the compositor (`wp_alpha_modifier_v1` on the
-//! incoming plane, zero CPU); wipes and grows crop it with `wp_viewporter`.
+//! incoming plane, zero CPU); wipes crop it with `wp_viewporter`. Every
+//! other transition plays on the GPU, through a temporary surface over the
+//! planes that exists only while it plays ([`overlay`]); without one it
+//! falls back to the planes' fade.
 //! The clock layer sits *between* a wallpaper and its depth subject, and no
 //! stack of per-plane alphas fades such a sandwich as one picture. So during
 //! a transition the live planes keep showing the outgoing desktop, and the
@@ -43,6 +46,7 @@
 //! only while [`crate::desktop_edit`] is active, where every widget was
 //! painted ([`OutputBoxes`]), so the edit outlines match the pixels.
 
+pub mod overlay;
 pub mod paint;
 pub mod video;
 pub mod widgets;
@@ -161,6 +165,10 @@ pub struct Scene {
     pub video_play: Vec<String>,
     /// The depth clock's own digits and font.
     pub depth: DepthLook,
+    /// Motion intensity (0..1): a transition's displacement and pieces.
+    pub intensity: f32,
+    /// Transitions may play on a temporary GPU surface ([`overlay`]).
+    pub overlay: bool,
 }
 
 /// How the depth clock writes its time.
@@ -210,6 +218,9 @@ enum Msg {
     Scene(Box<Scene>),
     Edit(String, widgets::actions::Action),
     TextEditing(bool),
+    /// The transition surface of output `.0`'s change `.1` played to its
+    /// end, or could not open.
+    Overlay(u32, u64, overlay::Reply),
 }
 
 enum Event {
@@ -227,6 +238,13 @@ enum Event {
     FinishText,
     /// The renderer could not start; the shell falls back to GPUI.
     Failed(String),
+    /// Play a transition on a GPU surface ([`overlay`]).
+    Overlay(Box<overlay::Request>),
+    /// Output `.0`'s change `.1` was settled without its surface: close it.
+    OverlayCancel(u32, u64),
+    /// The planes show output `.0`'s new desktop of change `.1`: the
+    /// surface may go.
+    OverlaySwapped(u32, u64),
 }
 
 // ── GPUI side ────────────────────────────────────────────────────────────
@@ -240,6 +258,9 @@ struct Driver {
     /// wallpaper needs to know about screens off / battery).
     watching_idle: bool,
     watching_power: bool,
+    /// Transition surfaces that failed in a row (none after
+    /// [`overlay::FAILURES_BEFORE_OFF`]).
+    overlay_failures: u32,
 }
 
 #[derive(Clone)]
@@ -289,7 +310,7 @@ pub fn init_on(layer: CanvasLayer, fallback: impl FnOnce(&mut App) + 'static, cx
         fallback(cx);
         return;
     }
-    let driver = Rc::new(RefCell::new(Driver { tx, waker, outputs: Vec::new(), last: None, watching_idle: false, watching_power: false }));
+    let driver = Rc::new(RefCell::new(Driver { tx, waker, outputs: Vec::new(), last: None, watching_idle: false, watching_power: false, overlay_failures: 0 }));
     cx.set_global(GlobalBackdrop(driver));
 
     let mut fallback = Some(fallback);
@@ -316,6 +337,9 @@ pub fn init_on(layer: CanvasLayer, fallback: impl FnOnce(&mut App) + 'static, cx
                 }
                 Event::Edit(id, action, placement) => crate::desktop_text::open(id, action, placement, cx),
                 Event::FinishText => { crate::desktop_text::finish(cx); }
+                Event::Overlay(req) => overlay::open(*req, overlay_reply, cx),
+                Event::OverlayCancel(out, serial) => overlay::close(out, Some(serial), cx),
+                Event::OverlaySwapped(out, serial) => overlay::swapped(out, serial, cx),
                 Event::Failed(why) => {
                     tracing::warn!("wallpaper: software renderer unavailable ({why}); using GPUI windows");
                     cx.remove_global::<GlobalBackdrop>();
@@ -380,11 +404,30 @@ pub(crate) fn wake(cx: &mut App) {
     refresh(cx);
 }
 
+/// Tells the renderer how a transition surface ended; failures in a row
+/// turn the surface off.
+fn overlay_reply(out: u32, serial: u64, reply: overlay::Reply, cx: &mut App) {
+    let Some(driver) = cx.try_global::<GlobalBackdrop>().map(|g| g.0.clone()) else { return };
+    let off = {
+        let mut d = driver.borrow_mut();
+        d.overlay_failures = if reply == overlay::Reply::Failed { d.overlay_failures + 1 } else { 0 };
+        if d.tx.send(Msg::Overlay(out, serial, reply)).is_ok() {
+            d.waker.wake();
+        }
+        d.overlay_failures >= overlay::FAILURES_BEFORE_OFF
+    };
+    if off {
+        tracing::warn!("wallpaper transitions: GPU surface failed {} times; staying on the planes", overlay::FAILURES_BEFORE_OFF);
+        refresh(cx);
+    }
+}
+
 /// Rebuilds the scene and posts it if it changed.
 pub(crate) fn refresh(cx: &mut App) {
     let Some(driver) = cx.try_global::<GlobalBackdrop>().map(|g| g.0.clone()) else { return };
     let outputs = driver.borrow().outputs.clone();
-    let scene = build_scene(&outputs, cx);
+    let mut scene = build_scene(&outputs, cx);
+    scene.overlay = overlay::allowed_by_env() && driver.borrow().overlay_failures < overlay::FAILURES_BEFORE_OFF;
     if !scene.video_play.is_empty() || scene_has_video(&scene, &outputs) {
         watch_power(&driver, cx);
     }
@@ -552,6 +595,8 @@ fn build_scene(outputs: &[String], cx: &mut App) -> Scene {
         safe_bare: widgets::safe_insets(&cfg, false),
         editing,
         video_play,
+        intensity: cfg.motion.intensity(),
+        overlay: false,
     }
 }
 
@@ -928,7 +973,7 @@ struct Want {
 type CutKey = (PathBuf, u64);
 
 enum Job {
-    Loaded { out: u32, serial: u64, want: Want, result: Result<(paint::Background, Option<(CutSource, CutKey)>), String> },
+    Loaded { out: u32, serial: u64, want: Want, result: Result<(paint::Background, Option<(CutSource, CutKey)>, Option<Box<Prepared>>), String> },
     Cut { out: u32, want: Want, key: CutKey, result: Result<Option<CutSource>, String> },
 }
 
@@ -951,6 +996,51 @@ struct Slot {
     /// them again ([`Self::cut_loading`] then re-cuts the same key).
     cut_refresh: bool,
 }
+
+/// A wallpaper loaded and handed to a transition surface: shown on the
+/// planes when the surface reports its end ([`overlay`]).
+struct Pending {
+    serial: u64,
+    want: Want,
+    bg: paint::Background,
+    cut: Option<(CutSource, CutKey)>,
+    /// Shown without the surface if it hasn't reported by then.
+    deadline: Instant,
+}
+
+/// What [`show`] does with a loaded wallpaper.
+enum Plan {
+    /// The configured transition: on a GPU surface when `Prepared` allows.
+    Auto(Option<Box<Prepared>>),
+    /// Instantly (a transition surface just showed the change).
+    Cut,
+    /// A crossfade on the planes (a transition surface failed).
+    Fade,
+}
+
+/// What the load job prepared for a transition surface.
+struct Prepared {
+    /// The outgoing wallpaper's own pixels and its subject, decoded again
+    /// (the planes keep no copy).
+    old: paint::Background,
+    old_cut: Option<CutSource>,
+    /// Sketch's helper image ([`crate::wallpaper_shader::build_aux`]).
+    aux: Option<crate::wallpaper_shader::Image>,
+    subject: bool,
+}
+
+/// What the load job should prepare for a transition surface.
+#[derive(Clone)]
+struct Prep {
+    old: Want,
+    old_cut: Option<CutKey>,
+    /// Sketch: the incoming wallpaper's subject mask, and the line colour
+    /// to leave a faint outline in (keep the outline), if any.
+    sketch: Option<(Option<PathBuf>, Option<(mandara_config::desktop::SketchInk, Color)>)>,
+}
+
+/// How long past its length a transition surface may take to report.
+const PENDING_SLACK: Duration = Duration::from_secs(3);
 
 struct Trans {
     from: usize,
@@ -998,6 +1088,11 @@ struct Out {
     /// [`LOAD_RETRY`], so a missing file isn't re-read on every pass.
     failed: Option<(Want, Instant)>,
     trans: Option<Trans>,
+    /// A change playing on a transition surface ([`overlay`]).
+    pending: Option<Pending>,
+    /// Report to the shell, after the next commit, that the planes show
+    /// that change's new desktop.
+    swapped: Option<u64>,
     painted: Painted,
     ring: f32,
     ring_at: Instant,
@@ -1018,6 +1113,8 @@ impl Out {
             loading: None,
             failed: None,
             trans: None,
+            pending: None,
+            swapped: None,
             painted: Painted::default(),
             ring: 0.0,
             ring_at: Instant::now(),
@@ -1029,6 +1126,7 @@ impl Out {
     fn reset(&mut self) {
         self.slots = [None, None];
         self.trans = None;
+        self.pending = None;
         self.loading = None;
         self.painted = Painted::default();
         self.ring = 0.0;
@@ -1069,6 +1167,7 @@ struct Renderer {
     /// Playing video wallpapers, and what each output last painted of one.
     videos: video::Videos,
     video_states: HashMap<u32, video::OutVideo>,
+    events: async_channel::Sender<Event>,
 }
 
 fn key(parts: impl std::fmt::Debug) -> u64 {
@@ -1103,6 +1202,7 @@ fn run(layer: CanvasLayer, rx: mpsc::Receiver<Msg>, waker: Arc<Waker>, events: a
         wshared: widgets::Shared::default(),
         videos: video::Videos::default(),
         video_states: HashMap::new(),
+        events: events.clone(),
     };
     loop {
         let mut new_scene = false;
@@ -1118,6 +1218,7 @@ fn run(layer: CanvasLayer, rx: mpsc::Receiver<Msg>, waker: Arc<Waker>, events: a
                     }
                 }
                 Ok(Msg::TextEditing(active)) => r.text_editing = active,
+                Ok(Msg::Overlay(out, serial, reply)) => r.on_overlay(out, serial, reply, &mut host),
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
             }
@@ -1317,16 +1418,27 @@ impl Renderer {
             host.commit(id, false)?;
             return Ok(());
         };
-        // Load what should be shown.
-        let shown = out.current().map(|s| &s.want) == Some(&want);
+        // Load what should be shown (a change playing on a transition
+        // surface counts as shown).
+        let shown = out.current().map(|s| &s.want) == Some(&want) || out.pending.as_ref().is_some_and(|p| p.want == want);
         let pending = out.loading.as_ref().is_some_and(|(_, w)| *w == want);
         let resting = out.failed.as_ref().is_some_and(|(w, at)| *w == want && at.elapsed() < LOAD_RETRY);
         if !shown && !pending && !resting {
             out.serial += 1;
             out.loading = Some((out.serial, want.clone()));
             let mask = mask_for(scene, &want);
-            spawn_load(id, out.serial, want.clone(), mask, self.jobs_tx.clone(), self.waker.clone());
+            let prep = prep_for(scene, out, &want);
+            spawn_load(id, out.serial, want.clone(), mask, prep, self.jobs_tx.clone(), self.waker.clone());
         }
+        // A transition surface that never reported: show its change.
+        if out.pending.as_ref().is_some_and(|p| now >= p.deadline) {
+            tracing::warn!("wallpaper transition on {}: no end reported; showing the new wallpaper", out.name);
+            let ring_bands = Vec::new();
+            let text = text_painter(&mut self.text, &mut self.arabic_font, scene);
+            let mut cx = BakeCx { text, viewport: self.viewport, wshared: &self.wshared, ring_bands: &ring_bands };
+            settle_pending(host, &mut self.outs[i], scene, self.alpha, &mut cx, &self.events)?;
+        }
+        let out = &mut self.outs[i];
         // Depth masks of the shown slots.
         let wanted_cut = out.current().and_then(|s| mask_for(scene, &s.want));
         let cur = out.cur;
@@ -1367,7 +1479,37 @@ impl Renderer {
         let out = &mut self.outs[i];
         let animating = out.trans.is_some() || out.slots.iter().flatten().any(|s| matches!(s.cut_fade, CutFade::In(_) | CutFade::Out(_)));
         host.commit(id, animating)?;
+        if let Some(serial) = out.swapped.take() {
+            let _ = self.events.send_blocking(Event::OverlaySwapped(id, serial));
+        }
         Ok(())
+    }
+
+    /// A transition surface ended (`Done`: the planes take the new desktop
+    /// now) or could not open (`Failed`: the planes fade to it).
+    fn on_overlay(&mut self, out: u32, serial: u64, reply: overlay::Reply, host: &mut Host) {
+        let Some(scene) = self.scene.as_ref() else { return };
+        let Some(o) = self.outs.iter_mut().find(|o| o.id == out) else { return };
+        if o.pending.as_ref().is_none_or(|p| p.serial != serial) {
+            return;
+        }
+        let Some(p) = o.pending.take() else { return };
+        let plan = match reply {
+            overlay::Reply::Done => Plan::Cut,
+            overlay::Reply::Failed => Plan::Fade,
+        };
+        let ring_bands = Vec::new();
+        let text = text_painter(&mut self.text, &mut self.arabic_font, scene);
+        let mut cx = BakeCx { text, viewport: self.viewport, wshared: &self.wshared, ring_bands: &ring_bands };
+        match show(host, o, p.want, p.bg, p.cut, scene, self.alpha, &mut cx, plan, &self.events) {
+            Ok(()) if reply == overlay::Reply::Done => o.swapped = Some(serial),
+            Ok(()) => {}
+            Err(err) => {
+                tracing::warn!("wallpaper on {}: {err:#}", o.name);
+                // The surface must not stay over planes that couldn't change.
+                let _ = self.events.send_blocking(Event::OverlayCancel(out, serial));
+            }
+        }
     }
 
     /// Advances a running wallpaper transition.
@@ -1400,7 +1542,7 @@ impl Renderer {
                     return;
                 }
                 o.loading = None;
-                let (bg, cut) = match result {
+                let (bg, cut, prepared) = match result {
                     Ok(v) => v,
                     Err(err) => {
                         tracing::warn!("wallpaper: {err} (trying again in {} s)", LOAD_RETRY.as_secs());
@@ -1415,7 +1557,7 @@ impl Renderer {
                 let ring_bands = self.tap.as_ref().filter(|t| t.is_active()).map(|t| t.bands().to_vec()).unwrap_or_default();
                 let text = text_painter(&mut self.text, &mut self.arabic_font, scene);
                 let mut cx = BakeCx { text, viewport: self.viewport, wshared: &self.wshared, ring_bands: &ring_bands };
-                if let Err(err) = show(host, o, want, bg, cut, scene, self.alpha, &mut cx) {
+                if let Err(err) = show(host, o, want, bg, cut, scene, self.alpha, &mut cx, Plan::Auto(prepared), &self.events) {
                     tracing::warn!("wallpaper on {}: {err:#}", o.name);
                 }
             }
@@ -1560,6 +1702,9 @@ impl Renderer {
                 // Woken by the frame callback; the timeout covers a hidden desktop.
                 at(if host.frame_ready(out.id) { Duration::ZERO } else { FRAME_TIMEOUT });
             }
+            if let Some(p) = &out.pending {
+                at(p.deadline.saturating_duration_since(now));
+            }
             if out.ring > 0.0 {
                 at(out.ring_painted.map_or(Duration::ZERO, |t| RING_FRAME.saturating_sub(now.saturating_duration_since(t))));
             } else if scene.ring.contains(&out.name) && scene.wallpaper.audio_ring {
@@ -1588,10 +1733,47 @@ fn mask_for(scene: &Scene, want: &Want) -> Option<CutKey> {
     scene.masks.get(&want.path).map(|m| (m.clone(), scene.mask_generation))
 }
 
-fn spawn_load(out: u32, serial: u64, want: Want, mask: Option<CutKey>, tx: mpsc::Sender<Job>, waker: Arc<Waker>) {
+/// What a change from `out`'s shown wallpaper to `want` needs prepared for
+/// a transition surface, if it will play on one.
+fn prep_for(scene: &Scene, out: &Out, want: &Want) -> Option<Prep> {
+    use crate::wallpaper_shader::{effective, existing_mask, uses_shader};
+    let kind = effective(scene.wallpaper.transition, scene.reduce_motion);
+    let shown = out.current()?;
+    if !scene.overlay || !uses_shader(kind) || shown.want.size != want.size || video::is_video(&want.path) || video::is_video(&shown.want.path) {
+        return None;
+    }
+    let sketch = (kind == WallpaperTransition::Sketch).then(|| {
+        let sk = &scene.wallpaper.sketch;
+        let mask = existing_mask(&want.path, crate::depth::Request::of(&scene.wallpaper));
+        (mask, sk.keep_outline.then_some((sk.ink, scene.primary)))
+    });
+    Some(Prep { old: shown.want.clone(), old_cut: shown.cut_key.clone(), sketch })
+}
+
+/// Loads (on the job) what a transition surface shows besides the new
+/// wallpaper: the old one again, its subject, Sketch's helper image.
+fn prepare(bg: &mut paint::Background, prep: Prep) -> Result<Prepared, String> {
+    let size = (bg.pixmap.width(), bg.pixmap.height());
+    let (mut aux, mut subject) = (None, false);
+    if let Some((mask, keep)) = prep.sketch {
+        let mask = mask.and_then(|m| crate::wallpaper_shader::aux_mask(&m, prep.old.fill, size));
+        subject = mask.is_some();
+        let keep = keep.map(|(ink, accent)| {
+            let (line, _) = crate::wallpaper_shader::sketch_colours(ink, accent, crate::wallpaper_shader::dominant(&bg.tone));
+            let [r, g, b, _] = line.to_rgba8();
+            [r, g, b]
+        });
+        aux = Some(crate::wallpaper_shader::build_aux(bg.pixmap.data_mut(), size, mask.as_ref(), keep));
+    }
+    let old = load_background(&prep.old)?;
+    let old_cut = prep.old_cut.and_then(|k| paint::cut_source(&old.pixmap, &k.0).ok().flatten());
+    Ok(Prepared { old, old_cut, aux, subject })
+}
+
+fn spawn_load(out: u32, serial: u64, want: Want, mask: Option<CutKey>, prep: Option<Prep>, tx: mpsc::Sender<Job>, waker: Arc<Waker>) {
     let job = move || {
         let result = (|| {
-            let bg = load_background(&want)?;
+            let mut bg = load_background(&want)?;
             let cut = match &mask {
                 Some(k) => paint::cut_source(&bg.pixmap, &k.0).unwrap_or_else(|e| {
                     tracing::warn!("depth cut-out: {e}");
@@ -1600,7 +1782,9 @@ fn spawn_load(out: u32, serial: u64, want: Want, mask: Option<CutKey>, tx: mpsc:
                 None => None,
             }
             .zip(mask);
-            Ok((bg, cut))
+            // Without them the change plays on the planes.
+            let prepared = prep.and_then(|p| prepare(&mut bg, p).map(Box::new).map_err(|e| tracing::warn!("wallpaper transition: {e}")).ok());
+            Ok((bg, cut, prepared))
         })();
         let _ = tx.send(Job::Loaded { out, serial, want, result });
         waker.wake();
@@ -1652,10 +1836,20 @@ fn text_painter<'a>(text: &'a mut Option<TextPainter>, arabic_font: &mut Option<
     text
 }
 
+/// Shows the change waiting for its transition surface now, and closes
+/// that surface.
+fn settle_pending(host: &mut Host, out: &mut Out, scene: &Scene, alpha: bool, cx: &mut BakeCx<'_>, events: &async_channel::Sender<Event>) -> anyhow::Result<()> {
+    let Some(p) = out.pending.take() else { return Ok(()) };
+    let _ = events.send_blocking(Event::OverlayCancel(out.id, p.serial));
+    show(host, out, p.want, p.bg, p.cut, scene, alpha, cx, Plan::Cut, events)
+}
+
 /// Puts a freshly loaded wallpaper on screen (starting its transition).
 #[allow(clippy::too_many_arguments)]
-fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: Option<(CutSource, CutKey)>, scene: &Scene, alpha: bool, cx: &mut BakeCx<'_>) -> anyhow::Result<()> {
+fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: Option<(CutSource, CutKey)>, scene: &Scene, alpha: bool, cx: &mut BakeCx<'_>, plan: Plan, events: &async_channel::Sender<Event>) -> anyhow::Result<()> {
     let id = out.id;
+    // A change still playing on a transition surface lands first.
+    settle_pending(host, out, scene, alpha, cx, events)?;
     // An interrupted transition ends where it is. If its wallpaper cannot
     // get its own pixels back right now, its plane still holds a baked
     // desktop that must not become the outgoing one: cut to the new one.
@@ -1668,10 +1862,34 @@ fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: 
     let size_changed = out.current().is_some_and(|s| s.want.size != want.size);
     let incoming = if first { out.cur } else { 1 - out.cur };
     let from = out.cur;
-    // The software planes crop and fade; pieced transitions become their
-    // cheaper equivalent here (`WallpaperTransition::software`).
-    let kind = scene.wallpaper.transition.software();
-    let instant = cut_in || first || size_changed || scene.reduce_motion || kind == WallpaperTransition::None || (kind == WallpaperTransition::Fade && !alpha) || (kind != WallpaperTransition::Fade && !host.supports_viewport());
+    // Reduced motion fades. The configured transition plays on a GPU
+    // surface when the job prepared one; otherwise the planes crop and fade
+    // (`WallpaperTransition::software`).
+    let wanted = crate::wallpaper_shader::effective(scene.wallpaper.transition, scene.reduce_motion);
+    let (kind, prepared) = match plan {
+        Plan::Auto(prepared) => (wanted.software(), prepared.filter(|_| !(cut_in || first || size_changed) && crate::wallpaper_shader::uses_shader(wanted))),
+        Plan::Cut => (WallpaperTransition::None, None),
+        Plan::Fade => (WallpaperTransition::Fade, None),
+    };
+    let mut cut = cut;
+    if let Some(prepared) = prepared {
+        // The incoming slot as it will be, for baking its desktop; its
+        // subject comes back out of it afterwards.
+        let shared = cut.map(|(c, k)| (Arc::new(c), k));
+        let slot = Slot { want: want.clone(), tone: bg.tone.clone(), cut: shared.as_ref().map(|(c, _)| c.clone()), cut_key: shared.as_ref().map(|(_, k)| k.clone()), cut_fade: CutFade::Shown, cut_loading: None, cut_refresh: false };
+        let request = overlay_request(host, out, &slot, &bg, *prepared, wanted, scene, cx);
+        drop(slot);
+        cut = shared.and_then(|(c, k)| Arc::try_unwrap(c).ok().map(|c| (c, k)));
+        let serial = out.serial;
+        let deadline = Instant::now() + Duration::from_millis(scene.wallpaper.crossfade_ms.max(MIN_TRANSITION_MS)) + PENDING_SLACK;
+        if let Some(req) = request
+            && events.send_blocking(Event::Overlay(Box::new(req))).is_ok()
+        {
+            out.pending = Some(Pending { serial, want, bg, cut, deadline });
+            return Ok(());
+        }
+    }
+    let instant = cut_in || first || size_changed || kind == WallpaperTransition::None || (kind == WallpaperTransition::Fade && !alpha) || (kind != WallpaperTransition::Fade && !host.supports_viewport());
     let animated = !instant && incoming != from;
     host.hide(id, WALLPAPER[incoming]);
     host.hide(id, CUT[incoming]);
@@ -1721,6 +1939,58 @@ fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: 
     // Umbriel's overview, which mirrors only the root, has no solid tile.
     host.set_base(id, None);
     Ok(())
+}
+
+/// The transition surface's request for a change on `out` to `slot`
+/// (`bg`, its subject in `slot`): the outgoing and incoming desktops baked
+/// whole, as the planes show them, plus the look. `None` without an
+/// output geometry.
+#[allow(clippy::too_many_arguments)]
+fn overlay_request(host: &Host, out: &Out, slot: &Slot, bg: &paint::Background, prepared: Prepared, kind: WallpaperTransition, scene: &Scene, cx: &mut BakeCx<'_>) -> Option<overlay::Request> {
+    use crate::wallpaper_shader::{Frames, Image, Look, dominant, fraction};
+    let geom = out.geom?;
+    let (w, h) = geom.physical;
+    let old_slot = out.current()?;
+    // The outgoing desktop: its wallpaper decoded again and its live planes
+    // (with its subject cut out again: the planes released those pixels).
+    let Prepared { old, old_cut, aux, subject } = prepared;
+    let mut from = old.pixmap.take();
+    let old_slot = Slot { want: old_slot.want.clone(), tone: old_slot.tone.clone(), cut: old_cut.map(Arc::new).or_else(|| old_slot.cut.clone()), cut_key: old_slot.cut_key.clone(), cut_fade: CutFade::Shown, cut_loading: None, cut_refresh: false };
+    if let Some(mut pm) = tiny_skia::PixmapMut::from_bytes(&mut from, w, h) {
+        bake(&mut pm, out, &old_slot, scene, cx);
+    }
+    drop(old_slot);
+    // The incoming desktop, as its planes will show it.
+    let mut to = bg.pixmap.data().to_vec();
+    if let Some(mut pm) = tiny_skia::PixmapMut::from_bytes(&mut to, w, h) {
+        bake(&mut pm, out, slot, scene, cx);
+    }
+    let logical = (geom.logical.0 as f32, geom.logical.1 as f32);
+    let pointer = host.pointer().filter(|p| p.0 == out.id).map(|p| (p.1 as f32, p.2 as f32));
+    let origin = if scene.wallpaper.transition_origin == mandara_config::desktop::TransitionOrigin::Pointer { fraction(pointer, logical) } else { [0.5, 0.5] };
+    let look = Look {
+        kind,
+        origin,
+        focus: fraction(pointer, logical),
+        seed: (out.serial as u32).wrapping_mul(0x9e37_79b9) ^ out.id,
+        intensity: scene.intensity,
+        logical,
+        scale: w as f32 / logical.0.max(1.0),
+        rtl: scene.rtl,
+        accent: scene.primary,
+        dominant: dominant(&slot.tone),
+        sketch: scene.wallpaper.sketch.clone(),
+        subject,
+    };
+    Some(overlay::Request {
+        out: out.id,
+        serial: out.serial,
+        output: out.name.clone(),
+        logical: geom.logical,
+        frames: Frames { from: Image::from_rgba((w, h), from), to: Image::from_rgba((w, h), to), aux },
+        look,
+        duration: Duration::from_millis(scene.wallpaper.crossfade_ms.max(MIN_TRANSITION_MS)),
+    })
 }
 
 /// Ends the running transition: the incoming wallpaper stays alone, with
