@@ -8,6 +8,8 @@ About → What's new shows it too.
 
 ### Improved
 
+- **A friendlier introduction to Mandara.** The README gets shorter, clearer copy while keeping every screenshot, feature list and gallery layout.
+
 - **An easier Look picker on the website.** Search the collection or step through it beside the desktop preview, with the same colour swatches and live palettes. The website and guides now reflect all 19 bar presets and 86 built-in plugins, including Taskbar.
 
 ## 0.28.3 — 2026-11-12

@@ -61,7 +61,7 @@ fn public_counts_follow_studios_presets_and_the_plugin_guide() {
     let readme = std::fs::read_to_string(crate::root().join("README.md")).unwrap();
     let words: Vec<_> = readme.split_whitespace().collect();
     let claims: Vec<_> = words.windows(2).filter(|pair| pair[1].trim_matches(|c: char| c.is_ascii_punctuation()) == "pages").filter_map(|pair| pair[0].parse::<usize>().ok()).collect();
-    assert!(claims.len() >= 2, "the README describes Studio's pages in both sections");
+    assert!(!claims.is_empty(), "the README describes Studio's pages");
     assert!(claims.iter().all(|count| *count == pages), "Studio has {pages} pages: {claims:?}");
 }
 
