@@ -2881,7 +2881,8 @@ fn instance_range(range: Range<usize>) -> Range<u32> {
 /// [`WgpuContext::backend_attempts`] in order (Mandara patch 7): a
 /// Vulkan-only instance first, so a Vulkan machine never initializes EGL and
 /// the Mesa GL driver; a GL instance only when no Vulkan adapter can
-/// configure the surface.
+/// configure the surface. Each backend is tried for a hardware adapter before
+/// any software one is accepted ([`WgpuContext::software_passes`], patch 17).
 #[cfg(not(target_family = "wasm"))]
 fn new_context_and_surface<W>(
     window: &W,
@@ -2893,21 +2894,26 @@ where
     W: HasWindowHandle + HasDisplayHandle + std::fmt::Debug + Send + Sync + Clone + 'static,
 {
     let mut last_error = anyhow::anyhow!("no wgpu backend to try");
-    for backends in WgpuContext::backend_attempts() {
-        let instance = WgpuContext::instance_with_backends(Some(Box::new(window.clone())), backends);
-        let attempt = create_surface(&instance, raw_window_handle).and_then(|surface| {
-            let context = if reject_software {
-                WgpuContext::new_rejecting_software(instance, &surface, compositor_gpu)?
-            } else {
-                WgpuContext::new(instance, &surface, compositor_gpu)?
-            };
-            Ok((context, surface))
-        });
-        match attempt {
-            Ok(created) => return Ok(created),
-            Err(error) => {
-                log::info!("wgpu backends {backends:?} unusable ({error:#}), trying the next");
-                last_error = error;
+    for &refuse_software in WgpuContext::software_passes(reject_software) {
+        for backends in WgpuContext::backend_attempts() {
+            let instance = WgpuContext::instance_with_backends(Some(Box::new(window.clone())), backends);
+            let attempt = create_surface(&instance, raw_window_handle).and_then(|surface| {
+                let context = if refuse_software {
+                    WgpuContext::new_rejecting_software(instance, &surface, compositor_gpu)?
+                } else {
+                    WgpuContext::new(instance, &surface, compositor_gpu)?
+                };
+                Ok((context, surface))
+            });
+            match attempt {
+                Ok(created) => return Ok(created),
+                Err(error) => {
+                    log::info!(
+                        "wgpu backends {backends:?} unusable{} ({error:#}), trying the next",
+                        if refuse_software { " without software rendering" } else { "" }
+                    );
+                    last_error = error;
+                }
             }
         }
     }
