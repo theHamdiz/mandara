@@ -152,11 +152,16 @@ struct BootStudio {
     picked: HashMap<&'static str, usize>,
     jobs: HashMap<&'static str, Job>,
     errors: HashMap<String, String>,
-    previews: HashMap<(Kind, String), Arc<RenderImage>>,
-    loading: HashSet<(Kind, String)>,
+    previews: HashMap<PreviewKey, Arc<RenderImage>>,
+    /// Pictures being decoded, with the generation each load started in.
+    loading: HashMap<PreviewKey, u64>,
     /// Themes whose picture can't be read (an unreadable `/boot`, no
-    /// image): not tried again until the tab is opened again.
-    no_preview: HashSet<(Kind, String)>,
+    /// image): not tried again until their files change or the tab is
+    /// opened again.
+    no_preview: HashSet<PreviewKey>,
+    /// Bumped whenever cached pictures are forgotten: a load started
+    /// before that is stale and its result is dropped.
+    preview_gen: u64,
     image: ImageFlow,
     menu_size: usize,
     limine_image: bool,
@@ -175,8 +180,9 @@ pub(super) fn release(cx: &mut gpui::App) {
     s.det = None;
     s.records = Vec::new();
     s.staged = HashSet::new();
-    s.loading = HashSet::new();
+    s.loading = HashMap::new();
     s.no_preview = HashSet::new();
+    s.preview_gen += 1;
     s.errors = HashMap::new();
     let mut images: Vec<Arc<RenderImage>> = s.previews.drain().map(|(_, i)| i).collect();
     s.previews.shrink_to_fit();
@@ -253,14 +259,64 @@ impl PreviewFrom {
     }
 }
 
-/// Where `(kind, name)`'s picture can come from, if anywhere: staged
-/// themes first (what Apply installs), then the ones on this system.
-fn preview_from(s: &BootStudio, kind: Kind, name: &str) -> Option<PreviewFrom> {
-    if s.staged.contains(&(kind, name.to_string())) {
+/// Which picture of a theme is wanted: a gallery card's (Mandara's staged
+/// copy first, what Apply installs) or the one installed on this system
+/// ("Your boot"). Each has its own cache entry.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+enum PreviewSource {
+    Card,
+    Installed,
+}
+
+type PreviewKey = (PreviewSource, Kind, String);
+
+/// Where `(kind, name)`'s picture for `source` can come from, if anywhere.
+fn preview_from(s: &BootStudio, source: PreviewSource, kind: Kind, name: &str) -> Option<PreviewFrom> {
+    if source == PreviewSource::Card && s.staged.contains(&(kind, name.to_string())) {
         return Some(PreviewFrom::Staged(stage::Env::current().stage(kind).join(name)));
     }
     let det = s.det.as_ref()?;
     mandara_services::boot::theme::on_system(det, kind, name).then(|| PreviewFrom::Installed(det.clone()))
+}
+
+/// Starts loading `key`: the generation to finish it with, `None` when it
+/// is loading already.
+fn begin_load(s: &mut BootStudio, key: &PreviewKey) -> Option<u64> {
+    if s.loading.contains_key(key) {
+        return None;
+    }
+    s.loading.insert(key.clone(), s.preview_gen);
+    Some(s.preview_gen)
+}
+
+/// Lands a load of `key` started in `generation`. A load from before the
+/// pictures were forgotten (or the tab was left) is not cached; its
+/// picture is handed back to be released.
+fn finish_load(s: &mut BootStudio, key: PreviewKey, generation: u64, image: Option<Arc<RenderImage>>) -> Option<Arc<RenderImage>> {
+    if s.loading.get(&key) != Some(&generation) {
+        return image;
+    }
+    s.loading.remove(&key);
+    match image {
+        Some(i) => {
+            s.previews.insert(key, i);
+        }
+        None => {
+            s.no_preview.insert(key);
+        }
+    }
+    None
+}
+
+/// Forgets the pictures of the themes `which` picks, from every source
+/// (their files changed): cached, missing and loading alike. Returns the
+/// pictures to release.
+fn forget_previews(s: &mut BootStudio, which: impl Fn(Kind, &str) -> bool) -> Vec<Arc<RenderImage>> {
+    s.preview_gen += 1;
+    s.no_preview.retain(|(_, k, n)| !which(*k, n));
+    s.loading.retain(|(_, k, n), _| !which(*k, n));
+    let gone: Vec<PreviewKey> = s.previews.keys().filter(|(_, k, n)| which(*k, n)).cloned().collect();
+    gone.into_iter().filter_map(|key| s.previews.remove(&key)).collect()
 }
 
 /// A theme picture decoded to fill a card (in a job).
@@ -309,6 +365,10 @@ impl StudioView {
                 s.det = Some(Arc::new(det));
                 s.records = records;
                 s.staged = staged;
+                for i in forget_previews(st(cx), |_, _| true) {
+                    cx.drop_image(i, None);
+                }
+                let s = st(cx);
                 if let Some((path, src)) = last
                     && s.image.source.is_none()
                 {
@@ -322,37 +382,24 @@ impl StudioView {
         .detach();
     }
 
-    fn boot_preview(kind: Kind, name: &str, cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
-        let key = (kind, name.to_string());
+    fn boot_preview(source: PreviewSource, kind: Kind, name: &str, cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
+        let key = (source, kind, name.to_string());
         if let Some(p) = st(cx).previews.get(&key) {
             return Some(p.clone());
         }
         if st(cx).no_preview.contains(&key) {
             return None;
         }
-        let from = preview_from(st(cx), kind, name)?;
-        if !st(cx).loading.insert(key.clone()) {
-            return None;
-        }
+        let from = preview_from(st(cx), source, kind, name)?;
+        let generation = begin_load(st(cx), &key)?;
         let name = name.to_string();
         let task = cx.background_executor().spawn(async move { decode_preview(kind, from.dir(kind, &name)?) });
         cx.spawn(async move |this, cx| {
             let image = task.await;
             let _ = this.update(cx, |_, cx| {
-                // Left the tab meanwhile: dropped, never cached.
-                if !st(cx).loading.remove(&key) {
-                    if let Some(i) = image {
-                        cx.drop_image(i, None);
-                    }
-                    return;
-                }
-                match image {
-                    Some(i) => {
-                        st(cx).previews.insert(key, i);
-                    }
-                    None => {
-                        st(cx).no_preview.insert(key);
-                    }
+                // Left the tab or forgotten meanwhile: dropped, never cached.
+                if let Some(stale) = finish_load(st(cx), key, generation, image) {
+                    cx.drop_image(stale, None);
                 }
                 cx.notify();
             });
@@ -390,12 +437,11 @@ impl StudioView {
                 s.jobs.remove(name);
                 match result {
                     Ok(staged) => {
-                        let key = (theme.kind, staged.name);
-                        s.no_preview.remove(&key);
-                        if let Some(old) = s.previews.remove(&key) {
+                        let kind = theme.kind;
+                        for old in forget_previews(s, |k, n| k == kind && n == staged.name) {
                             cx.drop_image(old, None);
                         }
-                        st(cx).staged.insert(key);
+                        st(cx).staged.insert((kind, staged.name));
                     }
                     Err(e) => {
                         s.errors.insert(name.to_string(), e);
@@ -596,11 +642,11 @@ impl StudioView {
                 .child(div().truncate().text_size(px(TEXT_11_PX)).text_color(p.on_surface_variant.hsla()).child(label))
         };
         let splash_thumb = now_splash.map(|n| {
-            let image = Self::boot_preview(Kind::Plymouth, &n, cx);
+            let image = Self::boot_preview(PreviewSource::Installed, Kind::Plymouth, &n, cx);
             thumb(format!("{} · {n}", t("Splash")), "sun", image)
         });
         let menu_thumb = now_menu.map(|n| {
-            let image = Self::boot_preview(Kind::Grub, &n, cx);
+            let image = Self::boot_preview(PreviewSource::Installed, Kind::Grub, &n, cx);
             thumb(format!("{} · {n}", t("Boot menu")), "monitor", image)
         });
         let thumbs = (splash_thumb.is_some() || menu_thumb.is_some()).then(|| div().row().flex_wrap().gap(px(SPACE_12_PX)).children(splash_thumb).children(menu_thumb));
@@ -699,7 +745,7 @@ impl StudioView {
     /// its name, Active or Review & apply.
     fn boot_installed_card(&mut self, name: String, current: Option<&str>, pic_w: f32, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let on = current == Some(name.as_str());
-        let preview = Self::boot_preview(Kind::Plymouth, &name, cx);
+        let preview = Self::boot_preview(PreviewSource::Installed, Kind::Plymouth, &name, cx);
         let pic = match preview {
             Some(i) => img(i).size_full().object_fit(gpui::ObjectFit::Cover).into_any_element(),
             None => div().size_full().bg(mandara_core::oklab_gradient(DIAGONAL_DEG, p.surface_dim, p.surface_container_high)).row().items_center().justify_center().child(icon("sun", ICON_22_PX, p.on_surface_variant)).into_any_element(),
@@ -755,7 +801,7 @@ impl StudioView {
             (None, _, false, _) => CardState::Get,
         };
         let tint = swatch(variant.swatch);
-        let preview = if is_staged || on_system { Self::boot_preview(kind, variant.install, cx) } else { None };
+        let preview = if is_staged || on_system { Self::boot_preview(PreviewSource::Card, kind, variant.install, cx) } else { None };
         let pic_h = (pic_w * SCREEN_ASPECT).floor();
         let pic = match preview {
             Some(i) => img(i).size_full().object_fit(gpui::ObjectFit::Cover).into_any_element(),
@@ -1056,6 +1102,10 @@ impl StudioView {
                 st(cx).image.busy = false;
                 match made {
                     Ok(made) => {
+                        let (splash, grub) = (made.splash.name.clone(), made.grub.name.clone());
+                        for old in forget_previews(st(cx), |k, n| (k == Kind::Plymouth && n == splash) || (k == Kind::Grub && (n == grub || n == mandara_services::boot::GRUB_IMAGE_NAME))) {
+                            cx.drop_image(old, None);
+                        }
                         let (title, request) = match (target, limine) {
                             (Kind::Plymouth, _) => (t("Your image as the splash").to_string(), Request::Splash { theme: SplashChoice::Staged(made.splash) }),
                             (_, true) => (t("Your image in the Limine menu").to_string(), Request::LimineStyle { style: LimineStyle::from_palette(&palette, Some(made.wallpaper)) }),
@@ -1336,7 +1386,7 @@ fn state_badge(active: bool, installed: bool, p: &MandaraPalette) -> Option<gpui
 }
 
 fn preview_is_some(s: &BootStudio, kind: Kind, name: &str) -> bool {
-    s.previews.contains_key(&(kind, name.to_string()))
+    s.previews.contains_key(&(PreviewSource::Card, kind, name.to_string()))
 }
 
 #[cfg(test)]
@@ -1364,7 +1414,7 @@ mod tests {
     #[test]
     fn installed_splashes_have_a_preview_source() {
         let mut s = BootStudio::default();
-        assert_eq!(preview_from(&s, Kind::Plymouth, "wolf"), None, "nothing detected yet");
+        assert_eq!(preview_from(&s, PreviewSource::Card, Kind::Plymouth, "wolf"), None, "nothing detected yet");
         let mut det = Detection::unsupported();
         det.plymouth = Some(mandara_services::boot::detect::Plymouth {
             themes_dir: PathBuf::from("/usr/share/plymouth/themes"),
@@ -1377,19 +1427,63 @@ mod tests {
             splash_on_cmdline: true,
         });
         s.det = Some(Arc::new(det));
-        assert!(matches!(preview_from(&s, Kind::Plymouth, "wolf"), Some(PreviewFrom::Installed(_))));
-        assert_eq!(preview_from(&s, Kind::Plymouth, "rings"), None, "neither staged nor installed");
+        assert!(matches!(preview_from(&s, PreviewSource::Card, Kind::Plymouth, "wolf"), Some(PreviewFrom::Installed(_))));
+        assert_eq!(preview_from(&s, PreviewSource::Card, Kind::Plymouth, "rings"), None, "neither staged nor installed");
         s.staged.insert((Kind::Plymouth, "wolf".into()));
-        assert!(matches!(preview_from(&s, Kind::Plymouth, "wolf"), Some(PreviewFrom::Staged(_))), "the staged copy wins");
+        assert!(matches!(preview_from(&s, PreviewSource::Card, Kind::Plymouth, "wolf"), Some(PreviewFrom::Staged(_))), "a card shows the staged copy first");
+        assert!(matches!(preview_from(&s, PreviewSource::Installed, Kind::Plymouth, "wolf"), Some(PreviewFrom::Installed(_))), "\"Your boot\" shows only what is installed");
+        s.staged.insert((Kind::Plymouth, "rings".into()));
+        assert_eq!(preview_from(&s, PreviewSource::Installed, Kind::Plymouth, "rings"), None, "staged but not installed: nothing in use to show");
+        let card: PreviewKey = (PreviewSource::Card, Kind::Plymouth, "wolf".into());
+        let installed: PreviewKey = (PreviewSource::Installed, Kind::Plymouth, "wolf".into());
+        assert_ne!(card, installed, "separate cache entries");
+    }
+
+    fn picture() -> Arc<RenderImage> {
+        let frame = ::image::Frame::new(::image::RgbaImage::new(1, 1));
+        Arc::new(RenderImage::new(smallvec::smallvec![frame]))
+    }
+
+    /// Regenerating a theme under the same name forgets its pictures from
+    /// every source, and a load started before that never lands.
+    #[test]
+    fn regenerated_themes_drop_their_pictures_and_stale_loads() {
+        let mut s = BootStudio::default();
+        let grub = mandara_services::boot::GRUB_IMAGE_NAME;
+        let card: PreviewKey = (PreviewSource::Card, Kind::Grub, grub.into());
+        let installed: PreviewKey = (PreviewSource::Installed, Kind::Grub, grub.into());
+        let other: PreviewKey = (PreviewSource::Card, Kind::Plymouth, "rings".into());
+        let g = begin_load(&mut s, &card).unwrap();
+        assert!(begin_load(&mut s, &card).is_none(), "one load at a time");
+        assert!(finish_load(&mut s, card.clone(), g, Some(picture())).is_none());
+        s.no_preview.insert(installed.clone());
+        let slow = begin_load(&mut s, &other).unwrap();
+        // The old generated theme's load still runs when it is regenerated.
+        let gone = forget_previews(&mut s, |k, n| k == Kind::Grub && n == grub);
+        assert_eq!(gone.len(), 1);
+        assert!(!s.previews.contains_key(&card) && !s.no_preview.contains(&installed), "both caches forget it");
+        // A load from before the regeneration is handed back, not cached.
+        let mut s2 = BootStudio::default();
+        let g1 = begin_load(&mut s2, &card).unwrap();
+        let _ = forget_previews(&mut s2, |_, _| true);
+        assert!(finish_load(&mut s2, card.clone(), g1, Some(picture())).is_some(), "stale result rejected");
+        assert!(!s2.previews.contains_key(&card) && !s2.no_preview.contains(&card));
+        let g2 = begin_load(&mut s2, &card).unwrap();
+        assert_ne!(g1, g2);
+        assert!(finish_load(&mut s2, card.clone(), g2, Some(picture())).is_none());
+        assert!(s2.previews.contains_key(&card), "the fresh load lands");
+        // An unrelated load in flight is untouched by a targeted forget.
+        assert!(finish_load(&mut s, other.clone(), slow, Some(picture())).is_none());
+        assert!(s.previews.contains_key(&other));
     }
 
     #[test]
     fn late_previews_never_refill_a_released_tab() {
         let mut s = BootStudio::default();
-        let key = (Kind::Grub, "mandara-x".to_string());
-        s.loading.insert(key.clone());
+        let key: PreviewKey = (PreviewSource::Card, Kind::Grub, "mandara-x".to_string());
+        let g = begin_load(&mut s, &key).unwrap();
         s.loading.clear();
-        assert!(!s.loading.remove(&key), "a result landing after release is dropped");
+        assert!(finish_load(&mut s, key, g, Some(picture())).is_some(), "a result landing after release is dropped");
         assert!(!preview_is_some(&s, Kind::Grub, "mandara-x"));
     }
 }
