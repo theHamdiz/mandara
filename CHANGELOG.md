@@ -6,6 +6,12 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.28.0 — 2026-11-12
+
+Six new motion presets with their own choreography:. Studio → Motion shows
+every preset as a tile. Window animations for MangoWM, Niri and Hyprland
+0.55+:. Dock animations you can choose:.
+
 ### New
 
 - **Six new motion presets with their own choreography:** Corniche tide, Lighthouse sweep, Felucca drift, Magnetic, Mercury and Raindrop. Content can rise like a swell, sweep in row by row, drift in on a slant, snap into place, stretch like liquid metal or drop in with a bounce.
