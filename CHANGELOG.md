@@ -12,6 +12,7 @@ Mandara OS now follows every release.
 
 - **Sound themes play again.** Shell sounds and Studio's previews could play in complete silence when your mixer's "System sounds" level was muted, as many desktops leave it. Mandara's sounds now follow only their own switch and volume, and a sound that really can't play leaves a clear line in the log.
 - **Sound theme cards keep everything inside.** Play buttons, badges, the level outline and long names no longer spill past a card at any window size; buttons wrap to a second line on narrow cards.
+- **Boot look shows your splash.** The splash in use and the other splashes installed on your system now show their picture, "Your boot" shows the splash and menu you have now, and an installed splash applies without downloading it again. Theme cards got even picture sizes and clear Active and Installed badges.
 
 ### Under the hood
 
