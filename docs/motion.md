@@ -152,27 +152,41 @@ The **Wallpaper change** card shows the same settings as *Studio →
 Wallpaper*: the transition, where it starts and its length
 (`wallpaper.transition`, `transition_origin`, `crossfade_ms`).
 
-| Transition | How it looks | Software wallpaper |
+| Transition | How it looks | Drawn by |
 | --- | --- | --- |
-| Fade, Wipe, Grow | As before | Same |
-| Ripple | A circle opens from the pointer or the centre | A rectangle opening from the centre |
-| Tide | A wave rises from the bottom and washes the new image in | A straight edge rising from the bottom |
-| Tear | The old image rips along a jagged seam and both halves peel away | The new image opening outward from the middle |
-| Glitch | Slices shear sideways with a brief red and cyan split, then settle on the new image | Fade |
-| Shatter | The old image breaks into shards that burst from the origin and fall | Fade |
-| Dissolve | The new image arrives tile by tile | Fade |
-| Sketch | See [below](#sketch-wallpaper-transition) | Fade |
+| Fade | The new wallpaper fades in | Compositor |
+| Wipe | The new wallpaper sweeps in from the reading side | Compositor |
+| Grow | A rounded window opens from the centre while the new image settles from a slight zoom | GPU |
+| Ripple | A wave spreads from the pointer or the centre, refracting both images, with a bright ring on its crest | GPU |
+| Tide | A noise-edged wave rises from the bottom with foam on its crest | GPU |
+| Tear | A jagged rip runs down the old image; both halves bend apart, then slide away and fall, with a paper-white torn edge and a drop shadow | GPU |
+| Glitch | Scan bands shear sideways with a brief red and cyan split, then settle on the new image | GPU |
+| Shatter | The old image cracks into 40 to 120 Voronoi shards (more on bigger screens and at a higher motion intensity) that burst from the origin, spin, catch the light on their edges and fall | GPU |
+| Dissolve | The old image burns away along a noise edge that glows in the theme's accent | GPU |
+| Sketch | See [below](#sketch-wallpaper-transition) | GPU |
 
-The desktop normally uses the software wallpaper, where the compositor crops
-and fades whole planes: it can't move pieces of the old image, so the pieced
-transitions are drawn as the cheaper equivalent in the last column. The GPU
-wallpaper (`MANDARA_WALLPAPER_RENDERER=gpui`) draws every one. Each piece is
-a clip of the old or new image placed by a pure function of the progress,
-with seams, slices and shards from a hash of their index: nothing is stored
-between frames, and every transition ends on the new image exactly in place.
-Glitch moves smoothly and never flashes. With reduced motion every change
-cuts at once (Sketch becomes a plain fade). `transition_origin` is `center`
-or `pointer` (the pointer's place on the desktop, else the centre).
+The GPU transitions are one fragment shader that samples the old and new
+desktops and computes each pixel, so there are no pieces and no seams
+between them. The GPU wallpaper (`MANDARA_WALLPAPER_RENDERER=gpui`) draws
+them itself. The default software wallpaper opens a temporary GPU surface
+(`mandara-wallpaper-transition`, on the background layer just above the
+wallpaper, with no input and no exclusive zone) only while one plays: its
+first frame is exactly the desktop you had (wallpaper, clock, subject and
+widgets) and its last exactly the new one, after which the planes take the
+new desktop in one commit and the surface closes with its textures.
+Nothing of it stays in memory or on the GPU. If that surface can't open,
+the planes draw a cheaper equivalent instead: Ripple, Tide and Tear as a
+crop of the new image, the others as a fade. After three failures in a row
+the shell stops trying until it restarts; `MANDARA_WALLPAPER_OVERLAY=0`
+turns the surface off. On MangoWM the generated config keeps compositor
+animations, shadows and blur off this surface too.
+
+Glitch never flashes: brightness pulses at most three times a second and
+by at most 6 %, and every band switches from the old image to the new one
+once. **Motion intensity** scales how far pieces move and how many shards
+a Shatter makes. With reduced motion every change is a plain fade (None
+still cuts). `transition_origin` is `center` or `pointer` (the pointer's
+place on the desktop, else the centre).
 
 ## Dock
 
@@ -219,13 +233,16 @@ reveal = "scale"
 ## Sketch wallpaper transition
 
 **Sketch** (the *Transition* choice in the **Wallpaper change** card, and in
-**Studio → Wallpaper → Fit & effects**) draws the new wallpaper's outline
-first, as lines that grow along their length, then fills the image in. When
-Mandara already has a mask of the wallpaper's subject (one you made, or one
-the depth effect found the last time the wallpaper was shown), the subject's
-outline is drawn first; otherwise the lines come from the picture's edges. The
-lines are traced once per wallpaper and screen size in the background, from a
-small copy of the image, and kept for the next change back.
+**Studio → Wallpaper → Fit & effects**) draws line art of the new
+wallpaper first, over the old one washed in paper or night, then fills the
+image in. The lines are the picture's edges, found per pixel on the GPU.
+When Mandara already has a mask of the wallpaper's subject (one you made, or
+one the depth effect found the last time the wallpaper was shown), the
+subject's contour is drawn first and stronger, and the rest of the lines
+follow outward from it. A small helper image (the subject mask, the distance
+from it and the distance from the nearest line, at half the screen's
+resolution) is made once per change on the job that loads the wallpaper,
+uploaded with the images and dropped.
 
 | Setting | Choices (default first) | What it does |
 | --- | --- | --- |
@@ -238,10 +255,10 @@ small copy of the image, and kept for the next change back.
 | **Keep the outline** | off | Leaves a faint copy of the lines over the wallpaper afterwards (it does not animate) |
 
 Sketch reads best with a longer **Transition length** (1.5 to 2 s). With
-reduced motion it is a plain fade, and the default software wallpaper
-renderer always draws it as a fade (the lines need the GPU wallpaper,
-`MANDARA_WALLPAPER_RENDERER=gpui`). A tiled wallpaper fades too. The options
-live under `[wallpaper.sketch]`:
+reduced motion it is a plain fade. The subject is drawn first only for
+filled or stretched wallpapers (the mask doesn't line up with a centred,
+fitted or tiled one); those draw their edges top to bottom instead. The
+options live under `[wallpaper.sketch]`:
 
 ```toml
 [wallpaper]

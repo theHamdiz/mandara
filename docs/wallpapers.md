@@ -16,8 +16,9 @@ The wallpaper picker and engine, and Mandara's own wallpaper generator.
   **Wallhaven** browsing (the opt-in `wallhaven` plugin: switched off, the
   picker has no Wallhaven source and Mandara makes no request to it).
 - **Engine**: fill / fit / stretch / center / tile; fade, wipe, grow,
-  ripple, tide, tear, glitch, shatter, dissolve and sketch transitions (see
-  [Motion](motion.md#wallpaper-change) for how each looks), separate **light and dark wallpapers** and **per-display
+  ripple, tide, tear, glitch, shatter, dissolve and sketch transitions,
+  drawn per pixel on the GPU (see [Motion](motion.md#wallpaper-change) for
+  how each looks), separate **light and dark wallpapers** and **per-display
   wallpapers**.
 - **In Studio** (*Studio → Wallpaper*): the page opens on the wallpaper on
   your desktop, large, with its size, folder and colours, then every
@@ -36,15 +37,16 @@ The wallpaper picker and engine, and Mandara's own wallpaper generator.
 ### Sketch transition
 
 Pick **Sketch** as the transition (*Studio → Wallpaper → Fit & effects*, or
-*Studio → Motion → Wallpaper change*) and a new wallpaper's outline is drawn
-first, its subject first when Mandara has a depth mask for it, then the image
-fills in: fading, bleeding outward from the lines like watercolour, or wiping
-along the strokes. Line colour (theme accent, ink black, white or the
-wallpaper's own colour), thickness, glow, drawing order, how long drawing
-takes against filling, and a faint outline left behind afterwards are its
-options; [Motion](motion.md#sketch-wallpaper-transition) lists them. The GPU
-wallpaper renderer draws the lines; the default software renderer, reduced
-motion and tiled wallpapers fade instead.
+*Studio → Motion → Wallpaper change*) and line art of the new wallpaper draws
+itself first, its subject's contour first when Mandara has a depth mask for
+it, then the image fills in: fading, bleeding outward from the lines like
+watercolour, or wiping along the strokes. Line colour (theme accent, ink
+black, white or the wallpaper's own colour), thickness, glow, drawing order,
+how long drawing takes against filling, and a faint outline left behind
+afterwards are its options; [Motion](motion.md#sketch-wallpaper-transition)
+lists them. Like every transition but fade and wipe it plays on the GPU, on
+the default software wallpaper too (through a surface that exists only
+while it plays); reduced motion makes it a fade.
 
 ## Slideshow
 
