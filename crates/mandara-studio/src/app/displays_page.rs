@@ -983,7 +983,8 @@ impl StudioView {
         // settings: nothing a drop-in could hold, so no button that would
         // save nothing.
         let elsewhere = target.and_then(Target::settings_elsewhere);
-        let keep = if target == Some(Target::River) || elsewhere.is_some() {
+        // Outputs saved under another compositor can still be cleared here.
+        let keep = if target == Some(Target::River) || (elsewhere.is_some() && !persisted) {
             div().into_any_element()
         } else if persisted {
             button("display-unpersist", "close", t("Stop saving"), false, p).on_click(|_, _, cx| update_config(cx, |c| c.compositor.outputs.clear())).into_any_element()

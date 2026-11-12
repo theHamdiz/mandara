@@ -30,7 +30,6 @@ About → What's new shows it too.
 - **Install your own cursor and icon themes** from an archive, a folder or a link. A link has no known checksum, so Studio asks before downloading it, and nothing inside a theme is ever run.
 - **Right-click the desktop for a ring menu.** Icons on chromatic glass bloom out around the pointer, and a glowing arc follows it. Add widget opens your widgets by shelf (clocks, music, system, productivity, weather and more), each with its own icon. Hold the right button and flick toward an item to pick it in one motion, even through the shelves, or use the arrow keys. Prefer the old list? Switch back in Studio → Desktop → Context menu.
 - **Studio → Desktop → Context menu**: choose the ring or the classic list, which items show and in which order, add your own programs, and set the ring's size, labels, gesture, glass and animation, with a live preview.
-- **Aqueous joins the supported compositors (#162).** On Aqueous the bar's workspace pills now show each display's workspaces and switch to one when you click it, and the window title, displays, keyboard layout, window moves and the Overview hot corner follow Aqueous too, all over its own IPC socket without ever making the bar wait. Aqueous keeps its settings in its own files, so Mandara writes nothing there; the layout pill can't change Aqueous layouts, because Aqueous has no command for that yet.
 - **labwc joins the supported compositors.** On labwc 0.8.3 and later, the bar's workspace pills show your workspaces and switch to one when you click it, and the window title, window list and displays follow labwc too, over standard Wayland protocols without ever making the bar wait. labwc keeps its settings in `~/.config/labwc`, so Mandara writes nothing there: add `mandara &` to `~/.config/labwc/autostart` to start it with labwc. labwc doesn't say which workspace a window is on, so the pills can't show which ones have windows, and the layout pill can't change labwc layouts.
 - **COSMIC joins the supported compositors.** In a COSMIC session the bar shows each display's workspaces, switches to one when you click it, marks the ones with windows and can move a window to another workspace, and the dock and window switcher list COSMIC's windows too. COSMIC keeps its settings in COSMIC Settings, so Mandara writes nothing there: add `mandara` in COSMIC Settings → Applications → Startup applications, and switch COSMIC's dock off there if you only want Mandara's.
 
@@ -51,6 +50,19 @@ About → What's new shows it too.
 - **The launcher in Expressive and Raml Tram sits in the corner where the bar meets the rail**, centred, at every bar size and edge, and Studio's preset cards show it there.
 - **System monitor brings its stat blocks, meters and rates, and switches their plugins on**, even when you keep your items, from Studio or `mandara msg bar style system-monitor`; picking another preset takes them away again.
 - **The window list no longer keeps a CPU core busy after its connection closes.** When the compositor went away or the window service shut down, the background thread behind the dock and window switcher could spin at full speed; it now stops.
+
+## 0.27.0 — 2026-11-11
+
+Aqueous joins the supported compositors (#162). The password dialog no
+longer freezes, and asks once instead of twice. Changing a display's scale
+no longer makes the top bar disappear.
+
+### New
+
+- **Aqueous joins the supported compositors (#162).** On Aqueous the bar's workspace pills now show each display's workspaces and switch to one when you click it, and the window title, displays, keyboard layout, window moves and the Overview hot corner follow Aqueous too, all over its own IPC socket without ever making the bar wait. Aqueous keeps its settings in its own files, so Mandara writes nothing there; the layout pill can't change Aqueous layouts, because Aqueous has no command for that yet.
+
+### Fixed
+
 - **The password dialog no longer freezes, and asks once instead of twice.** When two requests came back to back (Studio refreshing its admin helper, then applying your login screen, or the update manager doing the same before updating), the second dialog lost the question polkit had already asked and waited forever, so your password went nowhere until you cancelled and tried again. A request that arrives while the previous dialog is still closing now keeps its prompt, and refreshing the admin helper happens in the same approval as the action itself. A system update on Arch with AUR packages still asks a second time for the AUR step, because that one goes through `sudo`.
 - **Changing a display's scale no longer makes the top bar disappear.** Going between fractional scales (for example from 1.5 to 1.75) never resized the shell, so the bar ended up above the top of the screen. The shell now follows each screen's scale, and the wallpaper fills the screen again after you lower it.
 
