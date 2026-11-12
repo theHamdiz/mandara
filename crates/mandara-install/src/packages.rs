@@ -16,6 +16,9 @@
 //!   unlocked at login, also used by Translator and Home Assistant);
 //! * **greeter** — Mandara Login's runtime: greetd and the cage kiosk.
 //!
+//! Graphics packages cover Vulkan and OpenGL. A VM's accelerated OpenGL
+//! driver remains useful when its Vulkan driver renders on the CPU.
+//!
 //! The optional command agent uses the binary's CPU inference engines and
 //! separately downloaded models. It needs no system inference server or GPU
 //! package; installing Mandara never downloads or enables those models.

@@ -143,7 +143,8 @@ around, each one measured or shipped today:
    displays, wallpaper engine, desktop widgets, clipboard manager,
    screenshots, screen recording, offline OCR, polkit agent, lock screen,
    login manager and a settings app: one Rust program, no QML, JavaScript,
-   Python or shell glue.
+   Python or shell glue. It prefers hardware rendering through Vulkan or
+   OpenGL, including in virtual machines with 3D acceleration.
 4. **Measure the whole desktop.** Resource use depends on your display,
    driver and active widgets; the 100 MiB startup and operation target remains open.
    Plugin views reuse clipboard layouts, media gesture state and network

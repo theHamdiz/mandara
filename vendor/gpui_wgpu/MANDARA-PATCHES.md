@@ -379,6 +379,21 @@ the origin outward first, deterministic per seed, grids bounded.
 looking at them (`MANDARA_TRANSITION_FRAMES`, `_FROM`, `_TO`, `_AUX`,
 `_KIND`, `_STEPS`).
 
+## 17. Hardware before software on every backend (`wgpu_context.rs`, `wgpu_renderer.rs`)
+
+Patch 7 tries a Vulkan-only instance first and accepts any Vulkan adapter
+that configures the surface, software ones included. In a virtual machine
+with virgl OpenGL but no virtio Vulkan (GNOME Boxes' QEMU 7.2, for one), the
+only Vulkan adapter is lavapipe, so every frame was drawn on the CPU and the
+desktop, at 3840 × 2160, barely responded, while hardware OpenGL went unused.
+`new_context_and_surface` now makes the passes `WgpuContext::software_passes`
+gives: every backend is tried for a hardware adapter first (Vulkan, then GL),
+and a software adapter is accepted only after that, unless the caller refuses
+software outright (device-loss recovery, as before). A machine with a Vulkan
+GPU takes the same path as before, and a machine with no hardware adapter at
+all still ends on lavapipe or llvmpipe. `WGPU_BACKEND` still replaces the
+backend list.
+
 ## Tests
 
 * New `paths_render_through_bounding_box_textures` (headless renderer): a solid
@@ -390,7 +405,9 @@ looking at them (`MANDARA_TRANSITION_FRAMES`, `_FROM`, `_TO`, `_AUX`,
 * `remove_deallocates_tile_space_for_reuse` sizes its two images relative to
   `INITIAL_ATLAS_EDGE_PX` (upstream hard-coded 64 + 700 px, which assumed the
   1024² first texture).
-* All crate tests pass (64 with patch 16), including naga validation of every shader variant
+* New `hardware_on_any_backend_comes_before_software`: the passes are
+  hardware then software, and recovery keeps refusing software.
+* All crate tests pass (65 with patch 17), including naga validation of every shader variant
   and the updated WebGL record strides and fixed quad decoder.
   The cosmic-text tests `include_bytes!` Zed's `assets/`, so run them from a
   copy laid out like Zed's tree:

@@ -514,6 +514,18 @@ impl WgpuContext {
         }
     }
 
+    /// Whether each pass over [`Self::backend_attempts`] refuses software
+    /// adapters (Mandara patch 17). A hardware adapter on any backend beats
+    /// a software one on an earlier backend: a virtual machine with virgl
+    /// OpenGL but no virtio Vulkan only offers lavapipe on Vulkan, and
+    /// drawing every frame on the CPU there makes the desktop unusable.
+    /// Software is accepted only once every backend has had its chance at
+    /// hardware, unless the caller refuses it outright.
+    #[cfg(not(target_family = "wasm"))]
+    pub fn software_passes(reject_software: bool) -> &'static [bool] {
+        if reject_software { &[true] } else { &[true, false] }
+    }
+
     /// An instance limited to `backends`.
     #[cfg(not(target_family = "wasm"))]
     pub fn instance_with_backends(
@@ -841,6 +853,14 @@ mod tests {
         assert_eq!(attempts, vec![wgpu::Backends::VULKAN, wgpu::Backends::GL]);
         assert!(!attempts[0].contains(wgpu::Backends::GL), "the first instance must not load the GL driver");
         assert_eq!(WgpuContext::backend_attempts_for(Some(wgpu::Backends::GL)), vec![wgpu::Backends::GL]);
+    }
+
+    #[test]
+    fn hardware_on_any_backend_comes_before_software() {
+        // Every backend is tried for hardware first; software is the last resort.
+        assert_eq!(WgpuContext::software_passes(false), &[true, false]);
+        // Device-loss recovery keeps refusing software altogether.
+        assert_eq!(WgpuContext::software_passes(true), &[true]);
     }
 
     #[test]

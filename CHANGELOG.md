@@ -6,6 +6,12 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Mandara runs smoothly in virtual machines with 3D acceleration.
+
+### Fixed
+
+- **Smooth in virtual machines.** In a virtual machine with 3D acceleration but no Vulkan (GNOME Boxes, for one), Mandara picked a Vulkan renderer that runs on the processor and every frame crawled. It now looks for a real graphics card on Vulkan and OpenGL first, and uses OpenGL there.
+
 ## 0.28.2 — 2026-11-12
 
 Changing display scale keeps the shell running.
