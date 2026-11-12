@@ -50,6 +50,8 @@ pub struct Scene {
     pub subpixel_sprites: Vec<SubpixelSprite>,
     pub polychrome_sprites: Vec<PolychromeSprite>,
     pub surfaces: Vec<PaintSurface>,
+    /// Mandara patch 7: full-surface image transitions ([`TransitionSprite`]).
+    pub transitions: Vec<TransitionSprite>,
 }
 
 #[expect(missing_docs)]
@@ -66,6 +68,7 @@ impl Scene {
         self.subpixel_sprites.clear();
         self.polychrome_sprites.clear();
         self.surfaces.clear();
+        self.transitions.clear();
     }
 
     pub fn len(&self) -> usize {
@@ -85,6 +88,7 @@ impl Scene {
         self.subpixel_sprites.shrink_to_fit();
         self.polychrome_sprites.shrink_to_fit();
         self.surfaces.shrink_to_fit();
+        self.transitions.shrink_to_fit();
     }
 
     pub fn push_layer(&mut self, bounds: Bounds<ScaledPixels>) {
@@ -148,6 +152,10 @@ impl Scene {
                 surface.order = order;
                 self.surfaces.push(surface.clone());
             }
+            Primitive::Transition(transition) => {
+                transition.order = order;
+                self.transitions.push(*transition);
+            }
         }
         self.paint_operations
             .push(PaintOperation::Primitive(primitive));
@@ -175,6 +183,7 @@ impl Scene {
         self.polychrome_sprites
             .sort_by_key(|sprite| (sprite.order, sprite.tile.texture_id.index));
         self.surfaces.sort_by_key(|surface| surface.order);
+        self.transitions.sort_by_key(|transition| transition.order);
     }
 
     #[cfg_attr(
@@ -202,6 +211,8 @@ impl Scene {
             polychrome_sprites_iter: self.polychrome_sprites.iter().peekable(),
             surfaces_start: 0,
             surfaces_iter: self.surfaces.iter().peekable(),
+            transitions_start: 0,
+            transitions_iter: self.transitions.iter().peekable(),
         }
     }
 }
@@ -224,6 +235,7 @@ pub(crate) enum PrimitiveKind {
     SubpixelSprite,
     PolychromeSprite,
     Surface,
+    Transition,
 }
 
 pub(crate) enum PaintOperation {
@@ -243,6 +255,7 @@ pub enum Primitive {
     SubpixelSprite(SubpixelSprite),
     PolychromeSprite(PolychromeSprite),
     Surface(PaintSurface),
+    Transition(TransitionSprite),
 }
 
 #[expect(missing_docs)]
@@ -257,6 +270,7 @@ impl Primitive {
             Primitive::SubpixelSprite(sprite) => &sprite.bounds,
             Primitive::PolychromeSprite(sprite) => &sprite.bounds,
             Primitive::Surface(surface) => &surface.bounds,
+            Primitive::Transition(transition) => &transition.bounds,
         }
     }
 
@@ -270,6 +284,7 @@ impl Primitive {
             Primitive::SubpixelSprite(sprite) => &sprite.content_mask,
             Primitive::PolychromeSprite(sprite) => &sprite.content_mask,
             Primitive::Surface(surface) => &surface.content_mask,
+            Primitive::Transition(transition) => &transition.content_mask,
         }
     }
 }
@@ -298,6 +313,8 @@ struct BatchIterator<'a> {
     polychrome_sprites_iter: Peekable<slice::Iter<'a, PolychromeSprite>>,
     surfaces_start: usize,
     surfaces_iter: Peekable<slice::Iter<'a, PaintSurface>>,
+    transitions_start: usize,
+    transitions_iter: Peekable<slice::Iter<'a, TransitionSprite>>,
 }
 
 impl<'a> Iterator for BatchIterator<'a> {
@@ -330,6 +347,10 @@ impl<'a> Iterator for BatchIterator<'a> {
             (
                 self.surfaces_iter.peek().map(|s| s.order),
                 PrimitiveKind::Surface,
+            ),
+            (
+                self.transitions_iter.peek().map(|t| t.order),
+                PrimitiveKind::Transition,
             ),
         ];
         orders_and_kinds.sort_by_key(|(order, kind)| (order.unwrap_or(u32::MAX), *kind));
@@ -476,6 +497,13 @@ impl<'a> Iterator for BatchIterator<'a> {
                 self.surfaces_start = surfaces_end;
                 Some(PrimitiveBatch::Surfaces(surfaces_start..surfaces_end))
             }
+            // Each transition samples its own textures: one per batch.
+            PrimitiveKind::Transition => {
+                let start = self.transitions_start;
+                self.transitions_iter.next();
+                self.transitions_start = start + 1;
+                Some(PrimitiveBatch::Transitions(start..start + 1))
+            }
         }
     }
 }
@@ -508,6 +536,8 @@ pub enum PrimitiveBatch {
         range: Range<usize>,
     },
     Surfaces(Range<usize>),
+    /// Mandara patch 7: always a single [`TransitionSprite`].
+    Transitions(Range<usize>),
 }
 
 impl PrimitiveBatch {
@@ -540,6 +570,7 @@ impl PrimitiveBatch {
                 )
             }
             Self::Surfaces(range) => format!("surfaces ({})", range.len()),
+            Self::Transitions(range) => format!("transitions ({})", range.len()),
         }
     }
 }
@@ -792,6 +823,110 @@ impl From<PaintSurface> for Primitive {
     fn from(surface: PaintSurface) -> Self {
         Primitive::Surface(surface)
     }
+}
+
+/// Mandara patch 7: a per-pixel transition from one full-size image to
+/// another over `bounds` (a wallpaper change). The renderer evaluates
+/// [`TransitionParams::kind`] in one fragment shader that samples `from`,
+/// `to` and the optional `aux` image (subject mask and distance fields), so
+/// nothing is tiled and no seam can open between pieces.
+#[derive(Copy, Clone, Debug)]
+#[repr(C)]
+pub struct TransitionSprite {
+    /// Draw order, set by the scene.
+    pub order: DrawOrder,
+    /// Keeps `bounds` 8-byte aligned, as the shader's struct is.
+    pub pad: u32,
+    /// Where the transition is drawn (the whole surface, usually).
+    pub bounds: Bounds<ScaledPixels>,
+    /// Clip of the primitive.
+    pub content_mask: ContentMask<ScaledPixels>,
+    /// The outgoing image, stretched over `bounds`.
+    pub from: AtlasTile,
+    /// The incoming image, stretched over `bounds`.
+    pub to: AtlasTile,
+    /// Optional helper image (`TRANSITION_FLAG_AUX`); `to` again without one.
+    pub aux: AtlasTile,
+    /// What to draw.
+    pub params: TransitionParams,
+}
+
+impl From<TransitionSprite> for Primitive {
+    fn from(transition: TransitionSprite) -> Self {
+        Primitive::Transition(transition)
+    }
+}
+
+/// [`TransitionParams::kind`]: a crossfade.
+pub const TRANSITION_KIND_FADE: u32 = 0;
+/// A soft edge sweeping across in the reading direction.
+pub const TRANSITION_KIND_WIPE: u32 = 1;
+/// A rounded window opening from the centre.
+pub const TRANSITION_KIND_GROW: u32 = 2;
+/// A radial wave from [`TransitionParams::origin`], refracting both images.
+pub const TRANSITION_KIND_RIPPLE: u32 = 3;
+/// A noise-edged wave front with foam, rising from the bottom.
+pub const TRANSITION_KIND_TIDE: u32 = 4;
+/// The old image rips along a jagged seam; both halves peel away.
+pub const TRANSITION_KIND_TEAR: u32 = 5;
+/// Displaced scan bands and a brief channel split, settling on the new image.
+pub const TRANSITION_KIND_GLITCH: u32 = 6;
+/// Voronoi shards of the old image burst from the origin and fall.
+pub const TRANSITION_KIND_SHATTER: u32 = 7;
+/// A noise-threshold burn with a glowing edge.
+pub const TRANSITION_KIND_DISSOLVE: u32 = 8;
+/// Line art of the new image draws itself, then the image fills in.
+pub const TRANSITION_KIND_SKETCH: u32 = 9;
+/// Most shards a Shatter breaks into (`TransitionParams::grid`).
+pub const TRANSITION_MAX_SHARDS: u32 = 128;
+
+/// The aux image is bound (`TransitionParams::flags`).
+pub const TRANSITION_FLAG_AUX: u32 = 1;
+/// The aux image's red channel is a subject mask.
+pub const TRANSITION_FLAG_SUBJECT: u32 = 1 << 1;
+/// Right-to-left reading direction (wipes start on the right).
+pub const TRANSITION_FLAG_RTL: u32 = 1 << 2;
+/// Sketch: a soft halo under the lines.
+pub const TRANSITION_FLAG_GLOW: u32 = 1 << 3;
+
+/// Mandara patch 7: what a [`TransitionSprite`] draws. Plain data: the
+/// renderer turns it into its shader's uniforms.
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+pub struct TransitionParams {
+    /// Which transition (`TRANSITION_KIND_*`).
+    pub kind: u32,
+    /// `TRANSITION_FLAG_*` bits.
+    pub flags: u32,
+    /// Linear progress, 0 (all `from`) to 1 (all `to`); each kind eases it.
+    pub progress: f32,
+    /// Seconds since the transition started (for stepped effects).
+    pub time: f32,
+    /// Where it starts, as a fraction of `bounds`.
+    pub origin: [f32; 2],
+    /// A second point (the pointer, for a drawing order), fraction of `bounds`.
+    pub focus: [f32; 2],
+    /// Varies seams, cells and noise per transition.
+    pub seed: u32,
+    /// Motion intensity, 0..1: scales displacement and piece counts.
+    pub intensity: f32,
+    /// Device pixels per logical pixel.
+    pub scale: f32,
+    /// Line thickness, device pixels.
+    pub line_width: f32,
+    /// Line colour (sRGB, straight alpha).
+    pub line: [f32; 4],
+    /// Glow / burning edge colour (sRGB, alpha = strength).
+    pub glow: [f32; 4],
+    /// Wash over the old image (sRGB, alpha = strength).
+    pub wash: [f32; 4],
+    /// Sketch: share of the progress spent drawing.
+    pub draw_share: f32,
+    /// Sketch: fill style (0 fade, 1 bleed, 2 along the strokes).
+    pub fill_style: u32,
+    /// Sketch: drawing order (0 subject, 1 top down, 2 centre, 3 focus).
+    pub draw_order: u32,
+    /// Shatter: shard columns and rows (at most [`TRANSITION_MAX_SHARDS`]).
+    pub grid: [u32; 2],
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

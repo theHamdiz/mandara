@@ -310,6 +310,75 @@ coordinates interpolated from the same unit position, so each surviving
 fragment samples exactly as before and the per-fragment clip (and rounded
 mask) still applies. No new bindings, buffers or passes.
 
+Re-checked with patch 16: `storage_buffer_shader_is_valid_wgsl` and
+`webgl_shader_is_valid_wgsl_without_storage_buffers` validate the patched
+`vs_poly_sprite` with naga (both shader variants), and the new headless test
+`poly_sprites_rasterize_only_their_clip` draws a two-colour image through a
+small clip: each half lands on its own pixels inside the clip (the texture
+coordinates follow the clipped corners) and nothing is drawn outside it.
+The wallpaper transitions no longer use tiled image quads (patch 16 replaced
+them), so the patch now serves scrolled thumbnails and clipped images.
+
+## 16. Transition primitive (`transition.rs`, `shaders_transition.wgsl`, `wgpu_renderer.rs`, `wgpu_atlas.rs`)
+
+The GPU half of `vendor/gpui`'s patch 7: `PrimitiveBatch::Transitions`
+draws a `gpui::TransitionSprite` as one quad over its bounds (clipped to its
+content mask in the vertex stage), whose fragment shader samples the
+outgoing, incoming and helper images and evaluates the transition per
+pixel. Every kind returns exactly the outgoing image at progress 0 and
+exactly the incoming one at 1.
+
+* **Its own module and bind group.** `shaders_transition.wgsl` is a
+  separate shader module with one bind group: a uniform block
+  (`TransitionUniforms`, only `vec4`s, std140-compatible and readable by
+  WebGL2 too), the three atlas textures and the atlas sampler. The renderer
+  computes the tiles' texel rectangles and inverse texture sizes, so the
+  shader samples each tile clamped to its texel centres; displaced samples
+  never bleed into a neighbouring tile.
+* **Lazy and released.** Nothing exists until a frame draws a transition:
+  then `TransitionResources` builds the module, pipeline (no blending: the
+  output is opaque and replaces what is under it), a uniform buffer with
+  `MAX_PER_FRAME` = 4 aligned slots and one cached bind group per slot,
+  keyed by the textures' ids and generations. Frames without transitions
+  release all of it after `IDLE_RELEASE` (1.5 s), and device recovery drops
+  it with the other resources. `WgpuTextureInfo` gained the texture's size.
+  A transition whose texture the atlas no longer has is skipped.
+* **Shatter's shards** are moved on the CPU: `transition::shards` computes,
+  per frame, each of up to 128 cells' rest centre (a jittered grid), the
+  inverse of its rotation and scale, its current centre, alpha, depth and
+  how far it has gone, into the uniform block. Each pixel then tests every
+  shard's inverse transform (a squared-distance rejection first) and keeps
+  the frontmost shard whose own Voronoi cell (a 3 × 3 search of rest
+  centres) contains the mapped point. Testing every shard, rather than only
+  a neighbourhood around the pixel, stays exact however far a shard has
+  flown, and the motion is a pure, tested function of the progress.
+* **Kinds.** Fade; Wipe (soft edge, RTL aware); Grow (rounded window,
+  settling zoom); Ripple (radial wave front refracting both images, a
+  light ring on the crest); Tide (fbm-edged wave with foam and a wet band);
+  Tear (an fbm seam with fine fibres runs down the old image, both halves
+  bend apart above the rip's front, then slide out, turn and drop, with a
+  paper-white rim of uneven width and drop shadows); Glitch (bands re-cut
+  12 times a second, displaced, a channel split in the first 30 %, every
+  band switching to the new image once, luminance pulses at most 3 a
+  second and at most 6 %); Shatter (above); Dissolve (an fbm threshold
+  burning with a glowing edge in the given colour, charring ahead of it);
+  Sketch (Sobel edges of the new image at two scales, the subject mask's
+  0.5 contour from the helper image, a drawing front following the helper's
+  distance-from-subject field or a top-down / centre / point order, a wash
+  over the old image, then a fade, a noise-edged watercolour bleed out of
+  the lines, or a wipe along the drawing order).
+
+New tests: `transition_shader_is_valid_wgsl` (naga, no capabilities),
+`transitions_start_on_the_old_image_and_end_on_the_new_one` (headless: all
+ten kinds give the old image at 0 and the new one at 1, mix at 70 %, are
+opaque, and the resources exist only after a transition and go after the
+idle period), `transitions_skip_released_textures`, and in `transition.rs`
+the uniform block's size, shards resting at 0 and gone at 1, leaving from
+the origin outward first, deterministic per seed, grids bounded.
+`render_transition_frames` (ignored) writes frames of real images for
+looking at them (`MANDARA_TRANSITION_FRAMES`, `_FROM`, `_TO`, `_AUX`,
+`_KIND`, `_STEPS`).
+
 ## Tests
 
 * New `paths_render_through_bounding_box_textures` (headless renderer): a solid
@@ -321,7 +390,7 @@ mask) still applies. No new bindings, buffers or passes.
 * `remove_deallocates_tile_space_for_reuse` sizes its two images relative to
   `INITIAL_ATLAS_EDGE_PX` (upstream hard-coded 64 + 700 px, which assumed the
   1024² first texture).
-* All 52 crate tests pass, including naga validation of every shader variant
+* All crate tests pass (64 with patch 16), including naga validation of every shader variant
   and the updated WebGL record strides and fixed quad decoder.
   The cosmic-text tests `include_bytes!` Zed's `assets/`, so run them from a
   copy laid out like Zed's tree:
