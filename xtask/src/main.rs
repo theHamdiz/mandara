@@ -590,3 +590,5 @@ mod package_inputs_tests;
 mod x11_guard_tests;
 #[cfg(test)]
 mod count_drift_tests;
+#[cfg(test)]
+mod readme_tests;

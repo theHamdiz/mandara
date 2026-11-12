@@ -61,37 +61,23 @@
 
 ---
 
-**Mandara Shell** is a native Linux Wayland desktop shell, written in Rust
-on [GPUI](https://github.com/zed-industries/zed). It's everything around
-your windows: the bar, a dynamic island, a dock, a launcher, a sidebar,
-notifications, wallpapers, desktop widgets, the lock screen and the login
-screen, plus a settings app that changes all of it live. It runs on
-**MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc and COSMIC**, and it's one small, fast program
-you install with one command.
+**Mandara Shell** makes the space around your windows feel like yours.
+Pick a Look, let your wallpaper set the colours, and shape your desktop in
+Studio. Panels move with spring physics, and changes appear as you make them.
 
-Maintenance flags missing icon themes and links to the icon settings.
-Studio keeps bar arrangements in their own saved profiles, and screenshots
-can capture every display at once. Native KWin support uses Plasma's own
-window, clipboard and screenshot interfaces. Icons describe each tool’s
-function; sparkle symbols are reserved for AI features.
+Written in Rust on [GPUI](https://github.com/zed-industries/zed), Mandara brings
+the bar, dock, launcher, widgets and everyday desktop tools together in one
+native program. It runs on **MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc and COSMIC**.
 
-It's made to feel good to use. Panels pour out of the bar on real spring
-physics, colours follow your wallpaper and your music, and the whole
-desktop stays responsive throughout your day. With optional local AI control,
-type `!switch to dark mode` in the launcher, review the action and press
-Enter. Your words stay on your computer; inference runs off the UI thread
-and its model worker exits when finished or closed.
-[Meet the AI Shell Agent](docs/command-agent.md).
-
-Every plugin panel also has a camera button: copy what you see to the clipboard
-with a click, including floating and third-party panels. [Panel images](docs/panel-images.md).
+You can ask for changes, too. Enable optional local AI control and type
+`!switch to dark mode` in the launcher. Review the action, then press Enter.
+Your words stay on your computer. [Meet the AI Shell Agent](docs/command-agent.md).
 
 ## One shell, many desktops
 
-Pick a bar style, a wallpaper and a few desktop widgets, and Mandara turns
-into a different desktop. Each of these takes a minute in Studio, and every
-widget can be moved, resized and restyled right on the desktop.
-Write notes and edit tasks directly in their widgets, too.
+A music corner, a quiet night sky or a bright place to work: start with a
+Look, then move, resize and restyle widgets right on your desktop. Edit notes
+and tick off tasks where they sit.
 
 <table>
 <tr>
@@ -105,123 +91,90 @@ Write notes and edit tasks directly in their widgets, too.
 
 | | |
 |---|---|
-| **What** | A complete Wayland desktop shell: bar, island, dock, launcher, sidebar, notifications, OSDs, wallpapers, desktop widgets, lock screen, login manager, settings app |
-| **Compositors** | MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic (0.3), KWin, Aqueous, labwc and COSMIC, with native drivers; your own config gets one include line at most, nothing more |
+| **What** | Bar, dynamic island, dock, launcher, side bars, sidebar, notifications, on-screen displays, wallpapers, widgets, lock screen, login manager and settings app |
+| **Compositors** | Ten native drivers, including River Classic 0.3; your compositor's own tags, workspaces and windows |
 | **Built with** | 100 % Rust, one binary (`mandara`), GPU-rendered with GPUI and wgpu |
-| **Resources** | [Resource measurements and current limits](docs/performance.md); the 100 MiB startup and operation target remains open |
-| **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`), with [thirteen colour launcher icons](docs/configuration.md#launcher-button-artwork) |
-| **Automation** | `mandara msg <command>` with JSON replies; `mandara commands --json` lists them all |
-| **Plugins** | 86 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
-| **Widgets** | Mechanical, word and binary clocks, calendar cards and weather dials; passive widgets can also decorate Mandara Login and the native lock screen |
+| **Resources** | [Measurements and current limits](docs/performance.md); the 100 MiB startup and operation target remains open |
+| **Settings** | Live in Mandara Studio (`mandara studio`), saved to `~/.config/mandara/config.toml`; [thirteen colour launcher icons](docs/configuration.md#launcher-button-artwork) |
+| **Automation** | JSON replies through `mandara msg`; the full catalog in `mandara commands --json` |
+| **Plugins** | 86 built in, plus third-party Rust plugins in sandboxed WebAssembly |
+| **Widgets** | Mechanical, word and binary clocks, calendars and weather dials; passive widgets work on lock and login screens too |
 | **Languages** | 20, including right-to-left Arabic, Persian and Urdu |
 | **License** | GPL-3.0-or-later |
 
 ## What sets Mandara apart
 
-Mandara is built for one job: being the complete desktop for **MangoWM,
-Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc and COSMIC**. These are the strengths it was designed
-around, each one measured or shipped today:
-
-1. **Ten compositors, each first-class.** It speaks every compositor's
-   own IPC natively: MangoWM's and River's tag bitmasks (view, toggle-view,
-   tag moves), Niri's scrolling columns, Hyprland's, Umbriel's and Sway's
-   workspaces, KWin's native Plasma window and virtual-desktop protocols,
-   Aqueous's acknowledged state stream over its own socket, and the standard
-   ext-workspace Wayland protocol on labwc and COSMIC. It reads
-   each compositor's version and writes its exact config dialect, down to
-   Hyprland 0.57's Lua config.
-2. **It never breaks your compositor config.** It adds one include line
-   (none on River, KWin, Aqueous, labwc or COSMIC); River settings use its
-   native protocol, while Aqueous and labwc settings stay in their own files,
-   COSMIC's in COSMIC Settings and KWin settings in Plasma System Settings. For the other compositors,
-   everything else goes into its own drop-in files. Every change is
-   checked by the compositor's own validator (`mango -p`, `niri validate`,
-   `Hyprland --verify-config`, `umbriel config validate`, `sway --validate`)
-   and rolled back if it objects.
-3. **A whole desktop in one native binary.** Bar, dynamic island, dock,
-   launcher, side bars and sidebar, notification center, on-screen
-   displays, wallpaper engine, desktop widgets, clipboard manager,
-   screenshots, screen recording, offline OCR, polkit agent, lock screen,
-   login manager and a settings app: one Rust program, no QML, JavaScript,
-   Python or shell glue. It prefers hardware rendering through Vulkan or
-   OpenGL, including in virtual machines with 3D acceleration.
-4. **Measure the whole desktop.** Resource use depends on your display,
-   driver and active widgets; the 100 MiB startup and operation target remains open.
-   Plugin views reuse clipboard layouts, media gesture state and network
-   history. Image previews decode in bounded workers and release their caches
-   after closing. Earlier frame builds measured around 0.1 ms; historical
-   results and their exact setup are recorded alongside current limitations.
-   [How it's measured](docs/performance.md)
-5. **Real motion.** Analytical spring physics that can be interrupted
-   mid-flight, and OKLCH colour blending, so every morph, slide and theme
-   change stays smooth.
-6. **Every setting live, in a real app.** Mandara Studio has 32 pages; drag
-   a slider and the bar follows as you drag. Nothing needs a config file
-   unless you want one.
-7. **A colour engine, not a colour picker.** Material You (HCT) palettes
-   from your wallpaper, hand-tuned themes, and opt-in theming of Ghostty,
-   GTK 3/4, Qt 5/6, Kvantum, Zed, kitty, foot, Alacritty, btop, Cava,
-   tmux, Zellij and Spicetify. [App setup](docs/app-themes.md).
-   [Motion controls](docs/motion.md) include eleven presets with their own
-   choreography (Corniche tide, Lighthouse sweep, Felucca drift, Magnetic,
-   Mercury, Raindrop and five classic springs), a live preview and
-   per-surface speeds, with optional system accessibility preferences.
-8. **Your desktop, your look.** Six bar styles on any edge, side bars that
-   join the top bar into one frame, one-click Looks, dozens of desktop
-   widgets placed per monitor, and three launcher looks. Attached launchers follow
-   compact bars, with a placement map in Studio. [Boot look](docs/boot-look.md)
-   restyles the boot menu and splash too (GRUB, Limine, rEFInd, Plymouth, or
-   your own image), with a plan first, backups and one-click restore. Display
-   scale and arrangement changes apply live in Studio, with a keep-or-revert countdown.
-9. **Safe, rich extensions.** 86 built-in plugins. Third-party plugins are
-   Rust compiled to sandboxed WebAssembly: a crashing plugin is switched
-   off and the shell keeps running. Qur’an, Hadith and Jannah can also
-   [copy complete reading cards as images](docs/plugins.md#jannah-quran-hadith-and-prayer-times).
-10. **Scriptable end to end.** Almost everything the interface does is a
-    `mandara msg` command with JSON replies, so scripts and AI agents can
-    drive and inspect the whole desktop. [How](docs/agent-ready.md)
-11. **Installs and updates itself, safely.** One command sets it up on Arch,
-    Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus,
-    takes over an existing setup without losing it, and updates arrive as
-    small, signed binary patches from Studio → About → Update now. NixOS
-    gets a flake with NixOS and Home Manager modules, updated through the
-    flake. The Updates panel updates your whole system too, AUR packages
-    included, with live progress and Mandara's own password dialog, and
-    manages NixOS generations. [How](docs/apps-and-updates.md#system-updates)
-12. **Made for everyone.** 20 interface languages, right-to-left Arabic,
-    Persian and Urdu included, and fonts chosen for every script it shows.
+1. **Your compositor, understood.** Native drivers follow MangoWM and River
+   tags, Niri's scrolling columns, Hyprland, Umbriel and Sway workspaces,
+   KWin's Plasma windows, virtual desktops, clipboard and capture,
+   Aqueous's live state stream, and labwc and COSMIC's ext-workspace protocol.
+   Version-aware setup uses
+   the right dialect, including Hyprland 0.57's Lua config.
+2. **Your setup stays yours.** At most one include line; generated settings
+   live in their own drop-ins, with the compositor's validator and rollback.
+   River uses its native protocol instead. KWin, Aqueous, labwc and COSMIC
+   keep configuration in their own files or settings apps.
+3. **Everyday tools, already here.** Clipboard history, screenshots across
+   all displays, screen recording, offline OCR and polkit prompts come built
+   in. Copy any plugin panel to the clipboard with its camera button,
+   including floating and third-party panels. [Panel images](docs/panel-images.md).
+   Vulkan or OpenGL uses your GPU, including in 3D-accelerated virtual machines.
+4. **Performance you can check.** Plugins load when needed; hidden panels
+   stop refreshing, and image previews release their caches after closing.
+   Your display, driver and widgets affect resource use; the performance
+   guide records release measurements and current limits.
+   [See the measurements](docs/performance.md).
+5. **Motion with character.** Interruptible springs and OKLCH colour blends
+   keep transitions smooth. Choose from eleven motion presets, including
+   Corniche tide, Lighthouse sweep, Felucca drift, Magnetic, Mercury,
+   Raindrop and five classic springs, with live previews, per-surface speeds
+   and optional system accessibility preferences. [Motion controls](docs/motion.md).
+6. **Make changes and see them.** Mandara Studio has 32 pages of live
+   settings and previews. Save bar arrangements as profiles; Maintenance
+   spots missing icon themes and takes you to the right settings.
+7. **Colours that belong together.** Choose a hand-tuned theme or a Material
+   You (HCT) palette from your wallpaper. Opt in to matching Ghostty, GTK 3/4,
+   Qt 5/6, Kvantum, Zed, kitty, foot, Alacritty, btop, Cava, tmux, Zellij and
+   Spicetify. [App setup](docs/app-themes.md).
+8. **Room for your own style.** Start with 19 bar presets, six bar layouts
+   on any edge, side bars that join into a frame, one-click Looks and
+   per-monitor widgets. Choose a launcher list, icon grid or centred
+   Spotlight-style search, with attached placement for compact bars and a
+   placement map. [Boot look](docs/boot-look.md)
+   styles GRUB, Limine, rEFInd and Plymouth, or uses your image, with a plan,
+   backups and one-click restore. Display changes have a keep-or-revert countdown.
+9. **Extensions with room to experiment.** Choose from 86 built-in plugins
+   or write your own in Rust. Sandboxed WebAssembly keeps a crashing plugin
+   from taking down your desktop.
+10. **Ready for your routines.** Documented commands with JSON replies let
+    scripts and AI agents drive the desktop and report live progress to the
+    bar. [Automation](docs/agent-ready.md).
+11. **Updates without the guesswork.** Signed binary patches arrive in
+    Studio. The Updates panel also handles system and AUR packages with live
+    progress and Mandara's password dialog, plus NixOS generations.
+    [System updates](docs/apps-and-updates.md#system-updates).
+12. **At home in your language.** Twenty interface languages, fonts chosen
+    for each script, and right-to-left Arabic, Persian and Urdu.
 
 ## Why you'll like it
 
-- **It's light.** Plugins load data when needed, and hidden panels stop
-  their refresh work. [Measurements and setup](docs/performance.md)
-- **It looks the way you want.** Six bar layouts, 19 bar presets that reshape
-  the bar completely (a framed bar with a rail of scalloped buttons, a dock
-  of squircle tiles, a flower rail, rows of connected tiles, a monitoring
-  status line, three floating docks, a notch hanging from the top, a top
-  bar joined to a rail, or a centred taskbar), side bars of
-  icons and pills that join the top bar into one frame, one-click Looks, desktop widgets, a hundred dials for
-  corners, glass and motion, and themes made from your wallpaper.
+- **A calmer desktop.** Open the tools you need and let hidden panels rest.
+  [Resource use](docs/performance.md)
+- **A look that feels like you.** Try glass pills, a flower rail, a taskbar
+  or a full screen frame. Tune the corners, colours, glass and motion.
   [Your desktop](docs/desktop.md)
-- **Everything is a click away in Studio.** 32 pages of settings, all
-  live: drag a slider and the bar follows as you drag.
-  [Mandara Studio](docs/studio.md)
-- **It does a lot out of the box.** A media island with lyrics, a sound
-  mixer per app, screenshots and screen recording, copying text from the
-  screen, a launcher with three looks (a list, an icon grid or a centred
-  Spotlight-style search bar), a clipboard that sorts what you copy,
-  [floating shelves](docs/plugins.md#stash-floating-shelves) you drop
-  anything onto and drag back out of, a drag-and-drop app installer, night
-  light, sound themes, and 86 built-in plugins.
-  [Everything else](docs/more-features.md)
-- **It welcomes you in.** A matching lock screen and login screen with
-  your own wallpaper, and ready-made looks for both.
-  [Lock screen and login](docs/lock-and-login.md)
-- **It speaks your language.** Twenty languages, with Arabic, Persian
-  and Urdu laid out right to left. [Languages](docs/languages.md)
-- **It plays well with scripts and AI agents.** Nearly everything the
-  interface does is also a command with JSON replies.
-  [Automation](docs/agent-ready.md)
+- **Settings you can see.** Preview a change in Studio before making it
+  part of your day. [Mandara Studio](docs/studio.md)
+- **Less app-hopping.** Lyrics, per-app sound, capture tools, a sorted
+  clipboard, night light and sound themes are close by. Drop files onto
+  [floating shelves](docs/plugins.md#stash-floating-shelves), or install an
+  app by dragging its package in. [More features](docs/more-features.md)
+- **A welcome of your own.** Matching lock and login screens, with your
+  wallpaper and ready-made looks. [Lock and login](docs/lock-and-login.md)
+- **Words that feel familiar.** Choose your language and reading direction.
+  [Languages](docs/languages.md)
+- **Easy to make your own tools.** Connect commands to scripts and AI agents.
+  [Scripting guide](docs/agent-ready.md)
 
 ## A look around
 
@@ -238,13 +191,12 @@ around, each one measured or shipped today:
 
 ### Bar styles
 
-Nine presets reshape the whole bar in one click: pick one in **Studio →
-Bars → Presets**, or run `mandara msg bar style <name>`; *Taskbar* centres
-the launcher and your apps along the bottom. Your own bar items and
-desktop widgets stay whichever you pick. Every style shows
-the icon of the app on each workspace and tag button. The styles with a
-rail run the workspaces down it and seat the launcher in the corner where
-bar and rail meet. Each side bar can take one of its own
+Nine named styles sit among Studio's 19 bar presets. Pick one in
+**Studio → Bars → Bar**, or run `mandara msg bar style <name>`.
+Taskbar centres your launcher and apps along the bottom. Every style shows
+app icons on workspace buttons; rails run them down the side, with the
+launcher in the corner. Your own bar items
+and desktop widgets stay. Side bars can wear their own style too
 (`mandara msg side-bar style right <name>`).
 
 <table>
@@ -307,17 +259,17 @@ bar and rail meet. Each side bar can take one of its own
 
 ## Desktop widgets
 
-Dress up your desktop with dozens of widgets: clocks of every
-kind, calendars with your events, the sky, the weather, what's playing, a
-to-do list you tick right there, quick toggles, a desk cat and more. Each
-one can sit on a glass or solid plate, take a shape (a circle, a scalloped
-cookie, a flower, torn paper…) and wear a frame like washi tape or a
-polaroid. Pick Western or Eastern Arabic digits, the Gregorian or Hijri
-calendar and the language of the day names. Widgets come from plugins, so
-you turn on only the ones you want, and plugins can add their own.
-The opt-in [Qur'an reader](docs/plugins.md#jannah-quran-hadith-and-prayer-times)
-also offers Yasser Al-Dossary, Abdulrashid Sufi and Abdul Basit Abdul Samad.
-[Desktop widgets](docs/desktop.md#desktop-widgets)
+Put your day on your desktop with dozens of widgets: clocks, events, weather,
+music, tasks, quick toggles and a desk cat. Give each a glass or solid plate,
+a circle, flower, scalloped or torn-paper shape, and a washi-tape or polaroid
+frame. Choose Western or Eastern Arabic digits, Gregorian or Hijri dates,
+and the language of day names. Switch on only the widget plugins you want,
+or add third-party ones.
+[Browse desktop widgets](docs/desktop.md#desktop-widgets).
+
+The opt-in [Qur'an, Hadith and Jannah readers](docs/plugins.md#jannah-quran-hadith-and-prayer-times)
+can copy complete reading cards as images. Qur'an reciters include Yasser
+Al-Dossary, Abdulrashid Sufi and Abdul Basit Abdul Samad.
 
 <table>
 <tr>
@@ -338,64 +290,50 @@ One command, from any shell:
 sh -c 'f=$(mktemp) && trap "rm -f -- \"\$f\"" 0 && curl --proto =https -fL https://thehamdiz.github.io/mandara/install.sh -o "$f" && sh "$f" "$@"' sh
 ```
 
-The download shows its size and progress, confirms the release signature
-and archive checksum, then opens Mandara's installer with an arrow-key
-setup menu. Compositor,
-login and other options go
-straight to `mandara install`. Append them after the final `sh`, for example
-`--compositor kwin --no-greeter`; see the [installation guide](docs/install.md).
-If the installer adds Mandara to PATH, open a new terminal before using its
-commands. Studio is also available from your application menu.
+The download shows size and progress, verifies the signature and checksum, and opens
+an arrow-key setup menu. The installer adds the packages your distribution
+needs and connects Mandara to your compositor. It can help install a
+compositor, too.
 
-The installer sets up what your distribution
-needs, and hooks into your compositor without touching your own config
-files (no compositor yet? it offers to install one). It works on Arch,
-Debian and Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and Solus. Updates arrive by small binary patch: Studio → About →
-**Update now**.
+Works on **Arch, Debian/Ubuntu, Fedora, openSUSE, Void, Alpine, Gentoo and
+Solus**. Pass installer options after the final `sh`, for example
+`--compositor kwin --no-greeter`. If PATH changes, open a new terminal;
+Studio is always in your application menu.
 
-On **image-based systems** (Bazzite, Silverblue, Kinoite, Bluefin, Aurora,
-Aeon, Kalpa, Vanilla OS), the same command puts Mandara in your home folder
-and adds only the system packages the image lacks, in one `rpm-ostree`,
-`transactional-update` or `abroot` transaction after asking. It says when a
-reboot is needed; after it, Mandara Login is one click away in Studio →
-Login screen. On SteamOS it installs into your home folder only
-([Immutable systems](docs/install.md#immutable-systems)).
+**Image-based systems** — Bazzite, Silverblue, Kinoite, Bluefin, Aurora,
+Aeon, Kalpa and Vanilla OS — use the same command. Mandara goes in your home
+folder; missing system packages use one approved `rpm-ostree`,
+`transactional-update` or `abroot` transaction. Reboot only when prompted,
+then enable Mandara Login in Studio → Login screen. **SteamOS** uses your
+home folder only. [Immutable systems](docs/install.md#immutable-systems).
 
-On **FreeBSD 14+** (14.4 and newer, 15 included; amd64), the same command installs the
-FreeBSD build; without curl, use the base system's `fetch`
-([FreeBSD install](docs/install.md#freebsd)).
+**FreeBSD 14+** (14.4 and newer, including 15; amd64) uses the same command.
+Without curl, use the base system's `fetch`.
+[FreeBSD install](docs/install.md#freebsd).
 
-On **NixOS**, Mandara is a flake: try it with
-`nix run github:theHamdiz/mandara`, or add it to your system with
-`programs.mandara.enable = true;` (a NixOS module and a Home Manager
-module come with it). NixOS users update through their flake, not Studio's
-*Update now*: in your configuration flake directory, run
-`nix flake update mandara`, then `sudo nixos-rebuild switch --flake .` (or
-`home-manager switch --flake .`). Use your input name if it differs from `mandara`.
+**NixOS:** try `nix run github:theHamdiz/mandara`, then add
+`programs.mandara.enable = true;` through the NixOS or Home Manager module.
+Update from your configuration flake directory with
+`nix flake update mandara`, then `sudo nixos-rebuild switch --flake .` or
+`home-manager switch --flake .`. Use your input name if it differs from
+`mandara`; NixOS updates through the flake rather than Studio.
 
-→ **[Install guide](docs/install.md)**: Arch packages, NixOS, FreeBSD, immutable systems, other
-options, coming from another setup.
+→ **[Install guide](docs/install.md)**: packages, setup options and moving
+from an existing desktop.
 
 ## Common questions
 
-**Does Mandara change my compositor config?** Only by one include line.
-Everything else goes to `~/.config/mandara/generated/`, and each change is
-checked by the compositor's own validator and rolled back if it objects.
+**Does Mandara change my compositor config?** At most one include line;
+validated settings live separately in `~/.config/mandara/generated/`.
 
-**How do I update?** Studio → About → **Update now**. Updates are small,
-signed binary patches.
+**How do I update?** Studio → About → **Update now**. NixOS uses your flake.
 
-**Can I script it or let an AI agent drive it?** Yes. Nearly every action
-is a `mandara msg` command with a JSON reply, and scripts can push live
-progress to the bar.
+**Can I script it or use an AI agent?** Yes: `mandara msg` gives you JSON
+replies, and scripts can show progress in the bar.
 
-**Can I write my own plugins?** Yes, in Rust, compiled to a sandboxed
-WebAssembly component. They hot-reload while you work and can be shared
-through the GitHub marketplace. Community listings follow maintained
-[store moderation rules](PLUGINS.md#store-moderation), updated independently
-of Mandara releases. [Writing plugins](PLUGINS.md)
-
-More answers in the **[FAQ](docs/faq.md)**.
+**Can I write plugins?** Yes: Rust to sandboxed WebAssembly, with hot reload
+and a GitHub marketplace. [Start here](PLUGINS.md).
+[Store moderation rules](PLUGINS.md#store-moderation) update independently of releases.
 
 ## Learn more
 
@@ -422,26 +360,23 @@ More answers in the **[FAQ](docs/faq.md)**.
 ## Supporting Mandara
 
 Mandara is free, open source and always will be. If it makes your desktop a
-little nicer and you'd like to say thanks, you can chip in toward the AI
-credits and developer time that go into it:
+little nicer, you can help cover development time and AI credits:
 
 [![Buy me a coffee on Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/thehamdiz)
 
-It's entirely optional. Using Mandara, telling a friend, writing a plugin
-or reporting a bug helps just as much. Thank you!
+Using Mandara, sharing it, writing a plugin or reporting a bug helps too.
+Thank you!
 
 ## Local shell commands
 
-Enable **Studio → AI Shell Agent**, download the required models, then type
-`!dark mode` in any launcher look. Review the exact command and press Enter.
-Inference runs offline on your CPU and unloads after use or cancellation.
-See [the guide](docs/command-agent.md) for setup and model sizes.
+Enable **Studio → AI Shell Agent**, download its models, then type
+`!dark mode` in any launcher look. Review the command and press Enter.
+Inference runs offline on your CPU; its worker exits when finished or closed.
+[Setup and model sizes](docs/command-agent.md).
 
 ## License
 
-Mandara Shell is free software under the **GNU General Public License,
-version 3 or later** ([LICENSE.md](LICENSE.md), notice in
-[COPYRIGHT.md](COPYRIGHT.md)). Vendored code keeps the license in its
-folder, and fonts and models downloaded on demand keep their own: OFL for
-Google Fonts, Apache-2.0 for the PaddleOCR models and the Depth Anything V2
-Small depth model. Optional FunctionGemma weights use the [Gemma terms](https://ai.google.dev/gemma/terms).
+Mandara Shell is **GPL-3.0-or-later** ([license](LICENSE.md),
+[copyright](COPYRIGHT.md)). Vendored code keeps its own license, as do
+optional downloads: OFL fonts, Apache-2.0 PaddleOCR and Depth Anything V2
+Small models, and FunctionGemma under the [Gemma terms](https://ai.google.dev/gemma/terms).
