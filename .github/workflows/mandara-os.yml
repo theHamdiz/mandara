@@ -25,10 +25,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: mandara-os-dispatch
-  cancel-in-progress: false
-
 jobs:
   dispatch:
     name: Ask Mandara OS to build

@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Mandara OS now follows every release.
+
 ### Under the hood
 
 - **Every release now builds Mandara OS.** When a new version is published, the Mandara OS image is rebuilt around it automatically.
