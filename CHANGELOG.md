@@ -12,6 +12,14 @@ Mandara runs smoothly in virtual machines with 3D acceleration.
 
 - **Smooth in virtual machines.** In a virtual machine with 3D acceleration but no Vulkan (GNOME Boxes, for one), Mandara picked a Vulkan renderer that runs on the processor and every frame crawled. It now looks for a real graphics card on Vulkan and OpenGL first, and uses OpenGL there.
 
+## 0.28.2 — 2026-11-12
+
+Changing display scale keeps the shell running.
+
+### Fixed
+
+- **Changing display scale keeps the shell running.** Applying a scale such as 125% after 150% in Studio no longer closes Mandara when its display surfaces are replaced, including when the dock is off. The shell also stays running when every display is temporarily disconnected.
+
 ## 0.28.1 — 2026-11-12
 
 Mandara OS now follows every release.

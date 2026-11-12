@@ -199,6 +199,10 @@ narrow ones; everything mirrors for right-to-left languages.
 
 ### System
 
+Applying a display scale or arrangement replaces the affected shell surfaces
+without stopping Mandara, even with the dock off. The shell keeps running if
+all displays disconnect and restores its surfaces when a display returns.
+
 | Page | What it covers |
 |---|---|
 | **Displays** | **Arrangement**: the canvas, a card per display under it with two or more (also one that's off), Apply / Reset with a keep-or-revert countdown, and the selected display's power, resolution, refresh rate, scale, rotation and adaptive sync in aligned rows; **Shell on each display** (bar, dock, OSDs, launcher & pop-ups, notifications, wallpaper); **Profiles** as same-size cards (Apply, Delete, *Connected*), *Save as profile*, keep after restart and the revert / auto-profile settings; **Monitor brightness** (DDC/CI); **Night light**. |

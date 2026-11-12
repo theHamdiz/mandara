@@ -151,6 +151,19 @@ final link.
 For a focused edit, start with the affected crate and its callers, for
 example `cargo test -p mandara-install --locked`. Before a pull request,
 run the full workspace tests and clippy; CI keeps both checks.
+
+The display-lifetime regression uses a private headless MangoWM session with
+no dock or other windows to keep the shell alive. Stop any sandbox in this
+checkout before running it; it uses the checkout's `target/sandbox` files.
+It checks repeated 150% ↔ 125% scale changes and an explicit quit:
+
+```bash
+cargo build -p xtask
+MANDARA_TEST_XTASK="$PWD/target/debug/xtask" cargo test -p mandara-app --test display_lifetime -- --ignored
+```
+
+When using `CARGO_TARGET_DIR`, point `MANDARA_TEST_XTASK` at its `debug/xtask`.
+
 Its initial workspace build uses `--profile test`, so the following tests
 reuse those dependencies and the installer dry run uses the tested binary.
 

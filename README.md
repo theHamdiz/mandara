@@ -143,7 +143,8 @@ around, each one measured or shipped today:
    displays, wallpaper engine, desktop widgets, clipboard manager,
    screenshots, screen recording, offline OCR, polkit agent, lock screen,
    login manager and a settings app: one Rust program, no QML, JavaScript,
-   Python or shell glue.
+   Python or shell glue. It prefers hardware rendering through Vulkan or
+   OpenGL, including in virtual machines with 3D acceleration.
 4. **Measure the whole desktop.** Resource use depends on your display,
    driver and active widgets; the 100 MiB startup and operation target remains open.
    Plugin views reuse clipboard layouts, media gesture state and network
@@ -170,7 +171,8 @@ around, each one measured or shipped today:
    widgets placed per monitor, and three launcher looks. Attached launchers follow
    compact bars, with a placement map in Studio. [Boot look](docs/boot-look.md)
    restyles the boot menu and splash too (GRUB, Limine, rEFInd, Plymouth, or
-   your own image), with a plan first, backups and one-click restore.
+   your own image), with a plan first, backups and one-click restore. Display
+   scale and arrangement changes apply live in Studio, with a keep-or-revert countdown.
 9. **Safe, rich extensions.** 85 plugins built in. Third-party plugins are
    Rust compiled to sandboxed WebAssembly: a crashing plugin is switched
    off and the shell keeps running. Qur’an, Hadith and Jannah can also

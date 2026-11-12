@@ -584,7 +584,9 @@ fn run_shell() -> Result<()> {
         }
     };
 
-    application().with_assets(MandaraAssets).run(move |cx: &mut App| {
+    // Output changes can briefly leave no windows while surfaces are replaced.
+    // Only an explicit quit should end the shell and its restart supervisor.
+    application().with_quit_mode(gpui::QuitMode::Explicit).with_assets(MandaraAssets).run(move |cx: &mut App| {
         mandara_core::set_build_info(cx, build_info());
         let cfg = store.snapshot();
         cx.set_global(Fonts::resolve(&cfg.typography, cx));
