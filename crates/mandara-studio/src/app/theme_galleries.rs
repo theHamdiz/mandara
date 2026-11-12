@@ -126,18 +126,25 @@ pub(super) fn step_lifts(cfg: &mandara_config::ShellConfig, window: &mut Window,
     let s = st(cx);
     let clock = s.clock.get_or_insert_with(FrameClock::new);
     let dt = clock.tick(Instant::now());
-    let mut moving = false;
-    for (hovered, value) in s.lifts.values_mut() {
-        value.set_target(if *hovered { 1.0 } else { 0.0 });
-        moving |= value.step_in(dt, &profile);
-    }
-    // Settled cards at rest need no entry.
-    s.lifts.retain(|_, (hovered, value)| *hovered || value.value() > 0.0);
-    if moving {
+    if step_springs(&mut s.lifts, dt, &profile) {
         window.request_animation_frame();
     } else if let Some(c) = s.clock.as_mut() {
         c.idle();
     }
+}
+
+/// Moves every card spring toward its hover state by `dt`; whether one
+/// still moves. Settled cards at rest need no entry; one still swinging
+/// back (its overshoot dips below rest) keeps its spring until it settles,
+/// so the card never jumps.
+fn step_springs(lifts: &mut HashMap<SharedString, (bool, SpringValue<f32>)>, dt: f32, profile: &MotionProfile) -> bool {
+    let mut moving = false;
+    for (hovered, value) in lifts.values_mut() {
+        value.set_target(if *hovered { 1.0 } else { 0.0 });
+        moving |= value.step_in(dt, profile);
+    }
+    lifts.retain(|_, (hovered, value)| *hovered || value.is_animating());
+    moving
 }
 
 /// How far card `id` is lifted (0 at rest, 1 hovered).
@@ -151,8 +158,20 @@ pub(super) fn set_hover(id: SharedString, hovered: bool, cx: &mut App) {
     entry.0 = hovered;
 }
 
+/// The group a lifting card's hover styles follow: its [`lift_frame`].
+pub(super) const CARD_GROUP: &str = "gallery-card";
+
+/// The still frame a lifting card sits in. The frame, not the card, takes
+/// the pointer: a card that rises from under the pointer at its lower edge
+/// would otherwise lose its own hover, drop back, be hovered again and
+/// flicker. Give the card `.flex_1()` (it fills the frame) and style its
+/// hover with `group_hover(CARD_GROUP, …)`.
+pub(super) fn lift_frame(id: &SharedString) -> gpui::Stateful<gpui::Div> {
+    div().id(gpui::ElementId::NamedInteger(id.clone(), 0)).group(CARD_GROUP).flex_1().min_w(px(0.0)).row().flex_col()
+}
+
 /// The glass card material: a surface tinted toward `tint`, the specular
-/// rim, raised by `amount` of the hover lift.
+/// rim, raised by `amount` of the hover lift (inside a [`lift_frame`]).
 pub(super) fn glass_card(id: impl Into<SharedString>, tint: Color, amount: f32, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id.into())
@@ -563,24 +582,37 @@ mod tests {
         let mut lifts: HashMap<SharedString, (bool, SpringValue<f32>)> = HashMap::new();
         lifts.insert("a".into(), (true, SpringValue::new(0.0, LIFT_SPRING)));
         let profile = MotionProfile::default();
-        let step = |lifts: &mut HashMap<SharedString, (bool, SpringValue<f32>)>| {
-            let mut moving = false;
-            for (h, v) in lifts.values_mut() {
-                v.set_target(if *h { 1.0 } else { 0.0 });
-                moving |= v.step_in(1.0 / 60.0, &profile);
-            }
-            lifts.retain(|_, (h, v)| *h || v.value() > 0.0);
-            moving
-        };
+        let dt = 1.0 / 60.0;
         for _ in 0..300 {
-            step(&mut lifts);
+            step_springs(&mut lifts, dt, &profile);
         }
         assert_eq!(lifts["a"].1.value(), 1.0);
-        assert!(!step(&mut lifts), "at rest: no frames");
+        assert!(!step_springs(&mut lifts, dt, &profile), "at rest: no frames");
         lifts.get_mut("a").unwrap().0 = false;
+        // Falling back it swings past rest; the spring is kept (no jump)
+        // until it really settles.
+        let mut last = 1.0_f32;
+        let mut dipped = false;
         for _ in 0..300 {
-            step(&mut lifts);
+            step_springs(&mut lifts, dt, &profile);
+            let Some((_, v)) = lifts.get("a") else { break };
+            assert!((v.value() - last).abs() < 0.2, "moves smoothly: {last} -> {}", v.value());
+            dipped |= v.value() < 0.0;
+            last = v.value();
         }
+        assert!(dipped, "the lift spring overshoots rest once");
         assert!(lifts.is_empty(), "a settled, unhovered card leaves no entry");
+    }
+
+    /// The card lifts inside a frame that stays put: the pointer is tested
+    /// against the frame, so the lift can't move the card from under it.
+    #[test]
+    fn the_hover_frame_never_moves_with_the_lift() {
+        let p = mandara_theme::engine::default_palette(true);
+        let id = SharedString::from("card");
+        let mut frame = lift_frame(&id);
+        assert_eq!(frame.style().inset.top, None, "the frame isn't offset");
+        let mut card = glass_card(id, p.primary, 1.0, &p);
+        assert_eq!(card.style().inset.top, Some(px(-LIFT_PX).into()), "the card lifts");
     }
 }

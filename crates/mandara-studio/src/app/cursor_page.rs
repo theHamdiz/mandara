@@ -727,13 +727,26 @@ impl StudioView {
         let error_row = error.map(|e| g::error_row(e, p));
         let n = theme.variants.len();
         let hover_name = variant.theme;
-        g::glass_card(card_id.clone(), tint, amount, p)
+        let frame = g::lift_frame(&card_id).on_hover(cx.listener({
+            let id = card_id.clone();
+            move |_, h: &bool, _, cx| {
+                g::set_hover(id.clone(), *h, cx);
+                let s = st(cx);
+                if *h {
+                    s.hovered = Some(hover_name.to_string());
+                } else if s.hovered.as_deref() == Some(hover_name) {
+                    s.hovered = None;
+                }
+                cx.notify();
+            }
+        }));
+        let card = g::glass_card(card_id, tint, amount, p)
             .flex_1()
             .tab_index(0)
             .p(px(SPACE_8_PX))
             .border_2()
             .border_color(if card_active { p.primary.hsla() } else { gpui::transparent_black() })
-            .hover(|s| s.border_color(p.primary.with_alpha(ALPHA_35).hsla()))
+            .group_hover(g::CARD_GROUP, |s| s.border_color(p.primary.with_alpha(ALPHA_35).hsla()))
             .focus_visible(|s| s.border_color(p.primary.with_alpha(ALPHA_80).hsla()))
             .row()
             .flex_col()
@@ -760,16 +773,6 @@ impl StudioView {
                     .children(error_row),
             )
             .child(div().px(px(SPACE_4_PX)).pb(px(SPACE_4_PX)).row().items_center().gap(px(SPACE_6_PX)).child(primary).child(div().flex_1()).children(remove).child(g::homepage_button(SharedString::from(format!("cursor-home-{}", theme.id)), theme.homepage, p)))
-            .on_hover(cx.listener(move |_, h: &bool, _, cx| {
-                g::set_hover(card_id.clone(), *h, cx);
-                let s = st(cx);
-                if *h {
-                    s.hovered = Some(hover_name.to_string());
-                } else if s.hovered.as_deref() == Some(hover_name) {
-                    s.hovered = None;
-                }
-                cx.notify();
-            }))
             .on_key_down(cx.listener(move |this, e: &gpui::KeyDownEvent, _, cx| {
                 let k = &e.keystroke;
                 if k.modifiers.control || k.modifiers.alt || k.modifiers.platform {
@@ -790,8 +793,8 @@ impl StudioView {
                     _ => return,
                 }
                 cx.stop_propagation();
-            }))
-            .into_any_element()
+            }));
+        frame.child(card).into_any_element()
     }
 
     /// Installed themes outside the catalog (packages, your own folders,
@@ -836,29 +839,29 @@ impl StudioView {
                 let error = st(cx).errors.get(&name).cloned().map(|e| g::error_row(e, p));
                 let hover_name = name.clone();
                 let hover_id = card_id.clone();
-                g::glass_card(card_id, p.secondary, amount, p)
+                let frame = g::lift_frame(&card_id).on_hover(cx.listener(move |_, h: &bool, _, cx| {
+                    g::set_hover(hover_id.clone(), *h, cx);
+                    let s = st(cx);
+                    if *h {
+                        s.hovered = Some(hover_name.clone());
+                    } else if s.hovered.as_deref() == Some(hover_name.as_str()) {
+                        s.hovered = None;
+                    }
+                    cx.notify();
+                }));
+                let card = g::glass_card(card_id, p.secondary, amount, p)
                     .flex_1()
                     .p(px(SPACE_8_PX))
                     .border_2()
                     .border_color(if active { p.primary.hsla() } else { gpui::transparent_black() })
-                    .hover(|s| s.border_color(p.primary.with_alpha(ALPHA_35).hsla()))
+                    .group_hover(g::CARD_GROUP, |s| s.border_color(p.primary.with_alpha(ALPHA_35).hsla()))
                     .row()
                     .flex_col()
                     .gap(px(SPACE_10_PX))
                     .child(strip)
                     .child(div().px(px(SPACE_6_PX)).row().flex_col().gap(px(SPACE_6_PX)).child(div().truncate().text_start().font_family(display.clone()).text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).child(name.clone())).child(div().row().child(origin)).children(error))
-                    .child(div().px(px(SPACE_4_PX)).pb(px(SPACE_4_PX)).row().items_center().gap(px(SPACE_6_PX)).child(action).child(div().flex_1()).children(remove))
-                    .on_hover(cx.listener(move |_, h: &bool, _, cx| {
-                        g::set_hover(hover_id.clone(), *h, cx);
-                        let s = st(cx);
-                        if *h {
-                            s.hovered = Some(hover_name.clone());
-                        } else if s.hovered.as_deref() == Some(hover_name.as_str()) {
-                            s.hovered = None;
-                        }
-                        cx.notify();
-                    }))
-                    .into_any_element()
+                    .child(div().px(px(SPACE_4_PX)).pb(px(SPACE_4_PX)).row().items_center().gap(px(SPACE_6_PX)).child(action).child(div().flex_1()).children(remove));
+                frame.child(card).into_any_element()
             })
             .collect();
         Some(div().row().flex_col().gap(px(SPACE_10_PX)).child(div().px(px(SPACE_4_PX)).text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(t("Also installed"))).child(fit.render(cards)).into_any_element())

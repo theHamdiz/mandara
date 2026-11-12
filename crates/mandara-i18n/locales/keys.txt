@@ -5560,6 +5560,7 @@ Preview the fade
 Preview the fade shown before locking (move the mouse or wait to end it)
 Preview the lock screen
 Preview the pairing dialog with a fake device (nothing is paired)
+Preview unavailable
 Preview — any password unlocks · Esc closes
 Previewing {preset}: {feel}
 Previews per row

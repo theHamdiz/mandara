@@ -52,7 +52,14 @@ pub const PEAKS: usize = 24;
 /// Upload chunk size, bytes.
 const UPLOAD_CHUNK: usize = 64 * 1024;
 /// PulseAudio's 100 % volume.
-const VOLUME_NORM: f32 = 0x10000 as f32;
+const VOLUME_NORM: u32 = 0x10000;
+/// Every `media.role=event` stream shares one stored level on the server
+/// (the mixer's "System sounds", WirePlumber's `media.role:Notification`).
+/// When that is muted, as desktops and mixers often leave it, every shell
+/// sound played silently. Mandara's sounds have their own switch and
+/// volume, so the server is asked not to restore that shared level onto
+/// them.
+const NO_RESTORE: (&std::ffi::CStr, &std::ffi::CStr) = (c"state.restore-props", c"false");
 /// Theme every lookup falls back to.
 pub const FALLBACK_THEME: &str = "freedesktop";
 pub const EXTENSIONS: [&str; 3] = ["oga", "ogg", "wav"];
@@ -645,11 +652,13 @@ fn worker() -> &'static Mutex<Option<std::sync::mpsc::SyncSender<Job>>> {
     WORKER.get_or_init(|| Mutex::new(None))
 }
 
-/// A cache name that changes when the file does.
-fn sample_name(path: &Path) -> String {
+/// A cache name that changes when the file or the volume baked into it
+/// does.
+fn sample_name(path: &Path, volume: f32) -> String {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     path.hash(&mut h);
+    volume_permille(volume).hash(&mut h);
     if let Ok(meta) = std::fs::metadata(path) {
         meta.len().hash(&mut h);
         meta.modified().ok().hash(&mut h);
@@ -657,8 +666,26 @@ fn sample_name(path: &Path) -> String {
     format!("mandara-{:016x}", h.finish())
 }
 
-/// Uploads `clip` into the server's sample cache as `name`.
-fn upload(p: &mut Pulse, name: &str, clip: &Clip) -> Result<(), String> {
+/// `volume` (0–1) in thousandths: the cache tells volumes apart this finely.
+fn volume_permille(volume: f32) -> u16 {
+    (volume.clamp(0.0, 1.0) * 1000.0).round() as u16
+}
+
+/// Writes `samples` scaled by `volume` (0–1) into `out` as little-endian
+/// bytes; `out` is cleared first and reused.
+pub(crate) fn scaled_le(samples: &[i16], volume: f32, out: &mut Vec<u8>) {
+    let gain = volume.clamp(0.0, 1.0);
+    out.clear();
+    out.reserve(std::mem::size_of_val(samples));
+    for s in samples {
+        let v = (f32::from(*s) * gain).round() as i16;
+        out.extend_from_slice(&v.to_le_bytes());
+    }
+}
+
+/// Uploads `clip` at `volume` (0–1, baked into the samples) into the
+/// server's sample cache as `name`.
+fn upload(p: &mut Pulse, name: &str, clip: &Clip, volume: f32) -> Result<(), String> {
     let length = u32::try_from(clip.bytes()).map_err(|_| "sound too long".to_string())?;
     let mut props = protocol::Props::new();
     props.set(protocol::Prop::MediaRole, CString::from(c"event"));
@@ -675,25 +702,36 @@ fn upload(p: &mut Pulse, name: &str, clip: &Clip) -> Result<(), String> {
         props,
     };
     let reply: protocol::CreateUploadStreamReply = p.request(Command::CreateUploadStream(params)).map_err(|e| format!("create upload: {e}"))?;
-    // Converted chunk by chunk: no second full-size copy of the clip.
+    // Converted (and scaled, as on the OSS path) chunk by chunk: no second
+    // full-size copy of the clip.
     let mut chunk = Vec::with_capacity(UPLOAD_CHUNK);
     for samples in clip.samples.chunks(UPLOAD_CHUNK / std::mem::size_of::<i16>()) {
-        chunk.clear();
-        chunk.extend(samples.iter().flat_map(|s| s.to_le_bytes()));
+        scaled_le(samples, volume, &mut chunk);
         p.write_data(reply.channel, &chunk)?;
     }
     p.ack(Command::FinishUploadStream(reply.channel)).map_err(|e| format!("finish upload: {e}"))
 }
 
-fn play_sample(p: &mut Pulse, name: &str, volume: f32, event: &str) -> Result<(), String> {
+/// The properties of one play: an event sound from Mandara that keeps its
+/// own level (see [`NO_RESTORE`]).
+fn play_props(event: &str) -> Result<protocol::Props, String> {
     let mut props = protocol::Props::new();
     props.set(protocol::Prop::MediaRole, CString::from(c"event"));
     props.set(protocol::Prop::EventId, CString::new(event).map_err(|e| e.to_string())?);
     props.set(protocol::Prop::ApplicationName, CString::from(c"Mandara Shell"));
+    let (key, value) = NO_RESTORE;
+    props.set_bytes(key, value.to_bytes_with_nul());
+    Ok(props)
+}
+
+/// Plays cached sample `name` at full level (its volume is in its samples:
+/// PipeWire ignores the request's volume, PulseAudio would apply it twice).
+fn play_sample(p: &mut Pulse, name: &str, event: &str) -> Result<(), String> {
+    let props = play_props(event)?;
     let params = protocol::PlaySampleParams {
         sink_index: None,
         sink_name: None,
-        volume: (volume.clamp(0.0, 1.0) * VOLUME_NORM).round() as u32,
+        volume: VOLUME_NORM,
         name: CString::new(name).map_err(|e| e.to_string())?,
         props,
     };
@@ -751,7 +789,7 @@ impl Worker {
         if self.failed.contains(path) {
             return Err(format!("{}: can't be played", path.display()));
         }
-        let name = sample_name(path);
+        let name = sample_name(path, volume);
         // One retry with a fresh connection (the server may have restarted,
         // which also empties its sample cache).
         let mut last = String::new();
@@ -770,7 +808,7 @@ impl Worker {
                     let bytes = clip.bytes();
                     let ready = match self.output()? {
                         Output::Pulse(p) => {
-                            if let Err(err) = upload(p, &name, &clip) {
+                            if let Err(err) = upload(p, &name, &clip, volume) {
                                 last = err;
                                 self.out = None;
                                 continue;
@@ -795,7 +833,7 @@ impl Worker {
                 }
             };
             let result = match self.output()? {
-                Output::Pulse(p) => play_sample(p, &name, volume, event),
+                Output::Pulse(p) => play_sample(p, &name, event),
                 #[cfg(target_os = "freebsd")]
                 Output::Oss => match self.ready.get(&name).and_then(|r| r.pcm.as_ref()) {
                     Some(clip) => crate::freebsd::dsp::play(&clip.samples, clip.channels, clip.rate, volume, &mut self.scratch),
@@ -863,7 +901,8 @@ fn run_job(w: &mut Worker, job: Job) {
         Job::Play { path, volume, event, reply } => {
             let result = w.play(&path, volume, &event);
             if let Err(err) = &result {
-                tracing::debug!("sounds: {err}");
+                // Sounds are rare; a failed one is worth a line in the log.
+                tracing::warn!("sounds: {event} can't play ({}): {err}", path.display());
             }
             if let Some(reply) = reply {
                 reply(result);
@@ -915,7 +954,8 @@ fn send(job: Job) -> Result<(), Job> {
             std::sync::mpsc::TrySendError::Full(j) | std::sync::mpsc::TrySendError::Disconnected(j) => j,
         });
     }
-    if std::thread::Builder::new().name("mandara-sounds".into()).spawn(move || run_worker(rx)).is_err() {
+    if let Err(err) = std::thread::Builder::new().name("mandara-sounds".into()).spawn(move || run_worker(rx)) {
+        tracing::warn!("sounds: no sound worker: {err}");
         return Ok(());
     }
     *w = Some(tx);
@@ -1031,6 +1071,58 @@ mod tests {
         assert!(SoundEvent::NotificationCritical.enabled_in(&cfg));
     }
 
+    /// The volume is baked into a cached sound, so another volume is another
+    /// cache entry (PipeWire ignores the volume of a play request).
+    #[test]
+    fn cached_sounds_differ_by_volume() {
+        let p = Path::new("/nonexistent/bell.oga");
+        assert_eq!(sample_name(p, 0.5), sample_name(p, 0.5));
+        assert_ne!(sample_name(p, 0.5), sample_name(p, 0.3));
+        assert_eq!(sample_name(p, 1.0), sample_name(p, 7.0), "clamped");
+        let mut chunk = Vec::new();
+        scaled_le(&[1000, -1000], 0.3, &mut chunk);
+        assert_eq!(chunk, [300i16.to_le_bytes(), (-300i16).to_le_bytes()].concat());
+    }
+
+    /// A muted "System sounds" level on the server silenced every shell
+    /// sound: plays ask the server not to restore it.
+    #[test]
+    fn plays_keep_their_own_level() {
+        let props = play_props("notification").unwrap();
+        assert_eq!(props.get_bytes(c"state.restore-props"), Some(&b"false\0"[..]));
+        assert_eq!(props.get(protocol::Prop::MediaRole), Some(&b"event\0"[..]), "still an event sound for routing");
+        assert_eq!(props.get(protocol::Prop::EventId), Some(&b"notification\0"[..]));
+    }
+
+    /// The decode → PCM path yields audible samples (not silence) and a
+    /// level outline that follows them.
+    #[test]
+    fn a_tone_decodes_to_audible_pcm() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("tone.wav");
+        let rate = 48_000u32;
+        let spec = hound::WavSpec { channels: 2, sample_rate: rate, bits_per_sample: 16, sample_format: hound::SampleFormat::Int };
+        let mut w = hound::WavWriter::create(&path, spec).unwrap();
+        // 0.25 s of 440 Hz at half scale, fading out.
+        let n = rate / 4;
+        for i in 0..n {
+            let t = i as f32 / rate as f32;
+            let fade = 1.0 - i as f32 / n as f32;
+            let s = (t * 440.0 * std::f32::consts::TAU).sin() * 0.5 * fade * f32::from(i16::MAX);
+            w.write_sample(s as i16).unwrap();
+            w.write_sample(s as i16).unwrap();
+        }
+        w.finalize().unwrap();
+        let clip = decode(&path).unwrap();
+        assert_eq!((clip.channels, clip.rate), (2, rate));
+        let rms = (clip.samples.iter().map(|s| f64::from(*s).powi(2)).sum::<f64>() / clip.samples.len() as f64).sqrt();
+        assert!(rms > 3000.0, "audible, rms {rms}");
+        let played = Played::of(&clip);
+        assert_eq!(played.duration_ms, 250);
+        assert_eq!(played.peaks[0], u8::MAX, "loudest at the start");
+        assert!(played.peaks[PEAKS - 1] < played.peaks[0] / 4, "fades out: {:?}", played.peaks);
+    }
+
     #[test]
     fn wav_decodes_and_downmixes() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1059,8 +1151,9 @@ mod tests {
         let clip = decode(path).unwrap();
         let mut p = Pulse::connect("Mandara sounds test").unwrap();
         let name = "mandara-test-sample";
-        upload(&mut p, name, &clip).unwrap();
-        play_sample(&mut p, name, 0.0, "test").unwrap();
+        // Volume 0: silent samples.
+        upload(&mut p, name, &clip, 0.0).unwrap();
+        play_sample(&mut p, name, "test").unwrap();
         p.ack(Command::RemoveSample(CString::new(name).unwrap())).unwrap();
     }
 

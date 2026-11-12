@@ -191,22 +191,76 @@ pub fn check_refind(dir: &Path, name: &str, include: &str) -> Result<(), String>
     Ok(())
 }
 
-/// The picture a theme card previews: GRUB's desktop image, rEFInd's
-/// banner, a Plymouth theme's watermark or middle animation frame.
-pub fn preview_file(kind: Kind, dir: &Path) -> Option<PathBuf> {
+/// The picture a theme card previews and how it is drawn.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Preview {
+    pub file: PathBuf,
+    /// A picture of the whole screen (a screenshot, a menu background):
+    /// drawn to fill. Otherwise a splash element (a logo, an animation
+    /// frame) drawn small on the dark boot screen.
+    pub screen: bool,
+}
+
+/// Pictures some themes ship of themselves (Plymouth packages, many GRUB
+/// themes).
+const SCREENSHOTS: [&str; 2] = ["preview.png", "screenshot.png"];
+
+/// The picture a theme card previews: a screenshot the theme ships, else
+/// GRUB's desktop image, rEFInd's banner, a Plymouth theme's background,
+/// watermark or middle animation frame.
+pub fn preview(kind: Kind, dir: &Path) -> Option<Preview> {
     let files = super::archive::files(dir);
     let image = |f: &PathBuf| f.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg"));
+    let named = |n: &str| files.iter().filter(|f| f.file_name().is_some_and(|x| x.eq_ignore_ascii_case(n))).min_by_key(|f| f.components().count()).map(|f| dir.join(f));
+    let screen = |file: PathBuf| Preview { file, screen: true };
+    let element = |file: PathBuf| Preview { file, screen: false };
+    let shot = || SCREENSHOTS.iter().find_map(|n| named(n)).map(screen);
     match kind {
-        Kind::Grub => check_grub(dir).ok()?.desktop_image.map(|d| dir.join(d)).or_else(|| files.iter().find(|f| f.to_string_lossy().contains("background") && image(f)).map(|f| dir.join(f))),
-        Kind::Refind => files.iter().find(|f| f.file_stem().is_some_and(|s| s.to_string_lossy().contains("background")) && image(f)).map(|f| dir.join(f)),
-        Kind::Plymouth => {
-            let named = |n: &str| files.iter().find(|f| f.file_name().is_some_and(|x| x == n)).map(|f| dir.join(f));
-            named("watermark.png").or_else(|| named("logo.png")).or_else(|| named("background.png")).or_else(|| {
-                let frames: Vec<&PathBuf> = files.iter().filter(|f| image(f) && f.file_stem().is_some_and(|s| s.to_string_lossy().chars().any(|c| c.is_ascii_digit()))).collect();
-                frames.get(frames.len() / 2).map(|f| dir.join(f))
-            })
-        }
+        Kind::Grub => check_grub(dir).ok().and_then(|t| t.desktop_image).map(|d| dir.join(d)).filter(|p| p.is_file()).map(screen).or_else(shot).or_else(|| files.iter().find(|f| f.to_string_lossy().contains("background") && image(f)).map(|f| screen(dir.join(f)))),
+        Kind::Refind => shot().or_else(|| files.iter().find(|f| f.file_stem().is_some_and(|s| s.to_string_lossy().contains("background")) && image(f)).map(|f| screen(dir.join(f)))),
+        Kind::Plymouth => shot().or_else(|| named("background.png").map(screen)).or_else(|| named("watermark.png").or_else(|| named("logo.png")).map(element)).or_else(|| {
+            let frames: Vec<&PathBuf> = files.iter().filter(|f| image(f) && f.file_stem().is_some_and(|s| s.to_string_lossy().chars().any(|c| c.is_ascii_digit()))).collect();
+            frames.get(frames.len() / 2).map(|f| element(dir.join(f)))
+        }),
     }
+}
+
+/// [`preview`]'s file.
+pub fn preview_file(kind: Kind, dir: &Path) -> Option<PathBuf> {
+    preview(kind, dir).map(|p| p.file)
+}
+
+/// Whether `name` is installed on this system as far as `det` tells,
+/// without touching the disk: a Plymouth theme in its folder, the GRUB
+/// theme in use.
+pub fn on_system(det: &super::detect::Detection, kind: Kind, name: &str) -> bool {
+    match kind {
+        Kind::Plymouth => det.plymouth.as_ref().is_some_and(|p| p.installed.iter().any(|n| n == name)),
+        Kind::Grub => grub_theme_in_use(det).is_some_and(|(n, _)| n == name),
+        Kind::Refind => false,
+    }
+}
+
+/// The GRUB theme in use: its folder's name and the folder (`GRUB_THEME`
+/// names its `theme.txt`).
+pub fn grub_theme_in_use(det: &super::detect::Detection) -> Option<(&str, &Path)> {
+    let dir = Path::new(det.grub.as_ref()?.current.theme.as_deref()?).parent()?;
+    Some((dir.file_name()?.to_str()?, dir))
+}
+
+/// The folder `name` is installed in on this system (not Mandara's staged
+/// copy), when it can be read: Plymouth's themes folder, or the folder of
+/// the GRUB theme in use. Touches the disk: call it off the UI thread.
+pub fn installed_dir(det: &super::detect::Detection, kind: Kind, name: &str) -> Option<PathBuf> {
+    if !on_system(det, kind, name) || name.contains('/') || name.starts_with('.') {
+        return None;
+    }
+    let dir = match kind {
+        Kind::Plymouth => det.plymouth.as_ref()?.themes_dir.join(name),
+        Kind::Grub => grub_theme_in_use(det)?.1.to_path_buf(),
+        Kind::Refind => return None,
+    };
+    std::fs::read_dir(&dir).is_ok().then_some(dir)
 }
 
 #[cfg(test)]
@@ -256,6 +310,59 @@ mod tests {
         assert!(check_plymouth(d.path(), "rings", None).is_err(), "another theme's folder");
         write(d.path(), &[("rings.plymouth", "[Plymouth Theme]\nModuleName=evil\n")]);
         assert!(check_plymouth(d.path(), "rings", None).is_err());
+    }
+
+    #[test]
+    fn previews_prefer_a_screenshot_and_know_how_to_draw() {
+        let d = tempfile::tempdir().unwrap();
+        // An installed Plymouth package: a screenshot and frames in a subfolder.
+        write(d.path(), &[("wolf.plymouth", "x"), ("resources/animation-00.png", "p"), ("resources/animation-01.png", "p"), ("resources/animation-02.png", "p")]);
+        assert_eq!(preview(Kind::Plymouth, d.path()), Some(Preview { file: d.path().join("resources/animation-01.png"), screen: false }), "a frame, drawn small");
+        write(d.path(), &[("watermark.png", "p")]);
+        assert_eq!(preview(Kind::Plymouth, d.path()).unwrap(), Preview { file: d.path().join("watermark.png"), screen: false });
+        write(d.path(), &[("background.png", "p")]);
+        assert_eq!(preview(Kind::Plymouth, d.path()).unwrap(), Preview { file: d.path().join("background.png"), screen: true });
+        write(d.path(), &[("Screenshot.png", "p")]);
+        assert_eq!(preview(Kind::Plymouth, d.path()).unwrap(), Preview { file: d.path().join("Screenshot.png"), screen: true }, "the theme's own picture wins");
+    }
+
+    #[test]
+    fn installed_themes_are_found_from_detection() {
+        let d = tempfile::tempdir().unwrap();
+        write(d.path(), &[("plymouth/wolf/wolf.plymouth", "x"), ("grub/themes/vimix/theme.txt", "desktop-image: \"bg.png\"\n"), ("grub/themes/vimix/bg.png", "p")]);
+        let mut det = super::super::detect::Detection::unsupported();
+        det.plymouth = Some(super::super::detect::Plymouth {
+            themes_dir: d.path().join("plymouth"),
+            set_default: PathBuf::new(),
+            current: Some("wolf".into()),
+            installed: vec!["wolf".into(), "gone".into()],
+            modules: Vec::new(),
+            initramfs: None,
+            in_initramfs: None,
+            splash_on_cmdline: true,
+        });
+        assert!(on_system(&det, Kind::Plymouth, "wolf"));
+        assert_eq!(installed_dir(&det, Kind::Plymouth, "wolf"), Some(d.path().join("plymouth/wolf")));
+        assert_eq!(installed_dir(&det, Kind::Plymouth, "gone"), None, "listed but unreadable");
+        assert_eq!(installed_dir(&det, Kind::Plymouth, "spinner"), None, "not installed");
+        assert_eq!(installed_dir(&det, Kind::Plymouth, "../wolf"), None);
+        assert_eq!(installed_dir(&det, Kind::Grub, "vimix"), None, "no GRUB here");
+        let theme = d.path().join("grub/themes/vimix/theme.txt");
+        det.grub = Some(super::super::detect::Grub {
+            dir: d.path().join("grub"),
+            cfg: PathBuf::new(),
+            defaults: PathBuf::new(),
+            dropin_dir: None,
+            mkconfig: PathBuf::new(),
+            script_check: None,
+            mkfont: None,
+            efi_full_config: None,
+            readable: true,
+            current: super::super::detect::GrubSettings { theme: Some(theme.display().to_string()), ..Default::default() },
+        });
+        assert_eq!(grub_theme_in_use(&det).map(|(n, _)| n), Some("vimix"));
+        let dir = installed_dir(&det, Kind::Grub, "vimix").unwrap();
+        assert_eq!(preview(Kind::Grub, &dir), Some(Preview { file: dir.join("bg.png"), screen: true }));
     }
 
     #[test]

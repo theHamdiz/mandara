@@ -78,6 +78,10 @@ const DIALOG_SHADOW_Y_PX: f32 = 18.0;
 const DIALOG_SHADOW_BLUR_PX: f32 = 48.0;
 /// Above this many variants, a card's dots wrap on a row of their own.
 const MANY_VARIANTS: usize = 6;
+/// "Your boot": the pictures of the splash and menu in use.
+const NOW_THUMB_W_PX: f32 = 176.0;
+/// A badge over a picture never covers more than this share of it.
+const BADGE_MAX_SHARE: f32 = 0.6;
 /// The mock menu drawn over a theme's picture.
 const MOCK_ENTRIES: usize = 3;
 const MOCK_LINE_H_PX: f32 = DIM_6_PX;
@@ -148,8 +152,16 @@ struct BootStudio {
     picked: HashMap<&'static str, usize>,
     jobs: HashMap<&'static str, Job>,
     errors: HashMap<String, String>,
-    previews: HashMap<(Kind, String), Arc<RenderImage>>,
-    loading: HashSet<(Kind, String)>,
+    previews: HashMap<PreviewKey, Arc<RenderImage>>,
+    /// Pictures being decoded, with the generation each load started in.
+    loading: HashMap<PreviewKey, u64>,
+    /// Themes whose picture can't be read (an unreadable `/boot`, no
+    /// image): not tried again until their files change or the tab is
+    /// opened again.
+    no_preview: HashSet<PreviewKey>,
+    /// Bumped whenever cached pictures are forgotten: a load started
+    /// before that is stale and its result is dropped.
+    preview_gen: u64,
     image: ImageFlow,
     menu_size: usize,
     limine_image: bool,
@@ -168,7 +180,9 @@ pub(super) fn release(cx: &mut gpui::App) {
     s.det = None;
     s.records = Vec::new();
     s.staged = HashSet::new();
-    s.loading = HashSet::new();
+    s.loading = HashMap::new();
+    s.no_preview = HashSet::new();
+    s.preview_gen += 1;
     s.errors = HashMap::new();
     let mut images: Vec<Arc<RenderImage>> = s.previews.drain().map(|(_, i)| i).collect();
     s.previews.shrink_to_fit();
@@ -227,25 +241,103 @@ fn read_staged() -> HashSet<(Kind, String)> {
     out
 }
 
+/// Where a theme's files are read from for its picture: Mandara's staged
+/// copy, else where it is installed on this system.
+#[derive(Clone, Debug, PartialEq)]
+enum PreviewFrom {
+    Staged(PathBuf),
+    Installed(Arc<Detection>),
+}
+
+impl PreviewFrom {
+    /// The folder (touches the disk: in a job).
+    fn dir(&self, kind: Kind, name: &str) -> Option<PathBuf> {
+        match self {
+            PreviewFrom::Staged(dir) => Some(dir.clone()),
+            PreviewFrom::Installed(det) => mandara_services::boot::theme::installed_dir(det, kind, name),
+        }
+    }
+}
+
+/// Which picture of a theme is wanted: a gallery card's (Mandara's staged
+/// copy first, what Apply installs) or the one installed on this system
+/// ("Your boot"). Each has its own cache entry.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+enum PreviewSource {
+    Card,
+    Installed,
+}
+
+type PreviewKey = (PreviewSource, Kind, String);
+
+/// Where `(kind, name)`'s picture for `source` can come from, if anywhere.
+fn preview_from(s: &BootStudio, source: PreviewSource, kind: Kind, name: &str) -> Option<PreviewFrom> {
+    if source == PreviewSource::Card && s.staged.contains(&(kind, name.to_string())) {
+        return Some(PreviewFrom::Staged(stage::Env::current().stage(kind).join(name)));
+    }
+    let det = s.det.as_ref()?;
+    mandara_services::boot::theme::on_system(det, kind, name).then(|| PreviewFrom::Installed(det.clone()))
+}
+
+/// Starts loading `key`: the generation to finish it with, `None` when it
+/// is loading already.
+fn begin_load(s: &mut BootStudio, key: &PreviewKey) -> Option<u64> {
+    if s.loading.contains_key(key) {
+        return None;
+    }
+    s.loading.insert(key.clone(), s.preview_gen);
+    Some(s.preview_gen)
+}
+
+/// Lands a load of `key` started in `generation`. A load from before the
+/// pictures were forgotten (or the tab was left) is not cached; its
+/// picture is handed back to be released.
+fn finish_load(s: &mut BootStudio, key: PreviewKey, generation: u64, image: Option<Arc<RenderImage>>) -> Option<Arc<RenderImage>> {
+    if s.loading.get(&key) != Some(&generation) {
+        return image;
+    }
+    s.loading.remove(&key);
+    match image {
+        Some(i) => {
+            s.previews.insert(key, i);
+        }
+        None => {
+            s.no_preview.insert(key);
+        }
+    }
+    None
+}
+
+/// Forgets the pictures of the themes `which` picks, from every source
+/// (their files changed): cached, missing and loading alike. Returns the
+/// pictures to release.
+fn forget_previews(s: &mut BootStudio, which: impl Fn(Kind, &str) -> bool) -> Vec<Arc<RenderImage>> {
+    s.preview_gen += 1;
+    s.no_preview.retain(|(_, k, n)| !which(*k, n));
+    s.loading.retain(|(_, k, n), _| !which(*k, n));
+    let gone: Vec<PreviewKey> = s.previews.keys().filter(|(_, k, n)| which(*k, n)).cloned().collect();
+    gone.into_iter().filter_map(|key| s.previews.remove(&key)).collect()
+}
+
 /// A theme picture decoded to fill a card (in a job).
 fn decode_preview(kind: Kind, dir: PathBuf) -> Option<Arc<RenderImage>> {
-    let file = mandara_services::boot::theme::preview_file(kind, &dir)?;
-    let mut reader = ::image::ImageReader::open(&file).ok()?.with_guessed_format().ok()?;
+    let pick = mandara_services::boot::theme::preview(kind, &dir)?;
+    let mut reader = ::image::ImageReader::open(&pick.file).ok()?.with_guessed_format().ok()?;
     let mut limits = ::image::Limits::default();
     limits.max_alloc = Some(256 << 20);
     reader.limits(limits);
     let picture = reader.decode().ok()?.into_rgba8();
     let src = image::Source::Raster(picture);
     let (w, h) = PREVIEW_DECODE;
-    let out = match kind {
-        // A splash frame sits on the dark screen it is drawn on.
-        Kind::Plymouth => {
+    let out = match pick.screen {
+        // A splash element sits on the dark screen it is drawn on.
+        false => {
             let mut canvas = ::image::RgbaImage::from_pixel(w, h, ::image::Rgba([0, 0, 0, u8::MAX]));
             let frame = src.fit(w as f32 * 0.6, h as f32 * 0.6);
             ::image::imageops::overlay(&mut canvas, &frame, (i64::from(w) - i64::from(frame.width())) / 2, (i64::from(h) - i64::from(frame.height())) / 2);
             canvas
         }
-        _ => src.cover(w, h),
+        true => src.cover(w, h),
     };
     drop(src);
     Some(mandara_ui::backdrop::widgets::render_image(out))
@@ -273,6 +365,10 @@ impl StudioView {
                 s.det = Some(Arc::new(det));
                 s.records = records;
                 s.staged = staged;
+                for i in forget_previews(st(cx), |_, _| true) {
+                    cx.drop_image(i, None);
+                }
+                let s = st(cx);
                 if let Some((path, src)) = last
                     && s.image.source.is_none()
                 {
@@ -286,28 +382,24 @@ impl StudioView {
         .detach();
     }
 
-    fn boot_preview(kind: Kind, name: &str, cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
-        let key = (kind, name.to_string());
+    fn boot_preview(source: PreviewSource, kind: Kind, name: &str, cx: &mut Context<Self>) -> Option<Arc<RenderImage>> {
+        let key = (source, kind, name.to_string());
         if let Some(p) = st(cx).previews.get(&key) {
             return Some(p.clone());
         }
-        if !st(cx).staged.contains(&key) || !st(cx).loading.insert(key.clone()) {
+        if st(cx).no_preview.contains(&key) {
             return None;
         }
-        let dir = stage::Env::current().stage(kind).join(name);
-        let task = cx.background_executor().spawn(async move { decode_preview(kind, dir) });
+        let from = preview_from(st(cx), source, kind, name)?;
+        let generation = begin_load(st(cx), &key)?;
+        let name = name.to_string();
+        let task = cx.background_executor().spawn(async move { decode_preview(kind, from.dir(kind, &name)?) });
         cx.spawn(async move |this, cx| {
             let image = task.await;
             let _ = this.update(cx, |_, cx| {
-                // Left the tab meanwhile: dropped, never cached.
-                if !st(cx).loading.remove(&key) {
-                    if let Some(i) = image {
-                        cx.drop_image(i, None);
-                    }
-                    return;
-                }
-                if let Some(i) = image {
-                    st(cx).previews.insert(key, i);
+                // Left the tab or forgotten meanwhile: dropped, never cached.
+                if let Some(stale) = finish_load(st(cx), key, generation, image) {
+                    cx.drop_image(stale, None);
                 }
                 cx.notify();
             });
@@ -345,11 +437,11 @@ impl StudioView {
                 s.jobs.remove(name);
                 match result {
                     Ok(staged) => {
-                        let key = (theme.kind, staged.name);
-                        if let Some(old) = s.previews.remove(&key) {
+                        let kind = theme.kind;
+                        for old in forget_previews(s, |k, n| k == kind && n == staged.name) {
                             cx.drop_image(old, None);
                         }
-                        st(cx).staged.insert(key);
+                        st(cx).staged.insert((kind, staged.name));
                     }
                     Err(e) => {
                         s.errors.insert(name.to_string(), e);
@@ -532,6 +624,32 @@ impl StudioView {
             (true, Some(Loader::SystemdBoot)) => Some(t("systemd-boot has no themes or colours, so only the splash can change.").to_string()),
             _ => None,
         };
+        // What shows now: the splash in effect and the menu's picture.
+        let now_splash = det.plymouth.as_ref().and_then(|pl| pl.current.clone());
+        let now_menu = mandara_services::boot::theme::grub_theme_in_use(det).map(|(n, _)| n.to_string());
+        let thumb = |label: String, glyph: &'static str, image: Option<Arc<RenderImage>>| {
+            let pic = match image {
+                Some(i) => img(i).size_full().object_fit(gpui::ObjectFit::Cover).into_any_element(),
+                None => div().size_full().bg(mandara_core::oklab_gradient(DIAGONAL_DEG, p.surface_dim, p.surface_container_high)).row().items_center().justify_center().child(icon(glyph, ICON_17_PX, p.on_surface_variant)).into_any_element(),
+            };
+            div()
+                .w(px(NOW_THUMB_W_PX))
+                .flex_none()
+                .row()
+                .flex_col()
+                .gap(px(SPACE_4_PX))
+                .child(div().w_full().h(px((NOW_THUMB_W_PX * SCREEN_ASPECT).floor())).rounded(px(RADIUS_12_PX)).overflow_hidden().border_1().border_color(p.specular_rim_light.with_alpha(ALPHA_12).hsla()).child(pic))
+                .child(div().truncate().text_size(px(TEXT_11_PX)).text_color(p.on_surface_variant.hsla()).child(label))
+        };
+        let splash_thumb = now_splash.map(|n| {
+            let image = Self::boot_preview(PreviewSource::Installed, Kind::Plymouth, &n, cx);
+            thumb(format!("{} · {n}", t("Splash")), "sun", image)
+        });
+        let menu_thumb = now_menu.map(|n| {
+            let image = Self::boot_preview(PreviewSource::Installed, Kind::Grub, &n, cx);
+            thumb(format!("{} · {n}", t("Boot menu")), "monitor", image)
+        });
+        let thumbs = (splash_thumb.is_some() || menu_thumb.is_some()).then(|| div().row().flex_wrap().gap(px(SPACE_12_PX)).children(splash_thumb).children(menu_thumb));
         div()
             .rounded(px(RADIUS_22_PX))
             .p(px(SPACE_16_PX))
@@ -559,6 +677,7 @@ impl StudioView {
                     .child(row("shield", t("Firmware").to_string(), firmware, p.secondary))
                     .child(row("sun", t("Splash").to_string(), splash, p.tertiary)),
             )
+            .children(thumbs)
             .child(div().text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).text_color(p.on_surface_variant.hsla()).child(tf("Found by: {evidence}", &[("evidence", &det.evidence)])))
             .children(warn.map(|w| div().row().items_start().gap(px(SPACE_8_PX)).child(icon("alert", ICON_13_PX, p.warning_amber)).child(div().flex_1().text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.warning_amber.hsla()).child(mandara_ui::bidi::paragraph(w)))))
             .into_any_element()
@@ -606,28 +725,60 @@ impl StudioView {
             let others: Vec<String> = pl.installed.iter().filter(|n| catalog::by_install(n).is_none()).cloned().collect();
             if !others.is_empty() {
                 let current = pl.current.clone();
+                let look = super::grid::fit(self.page.column_w, LOOK_GRID);
+                let look_w = (look.card_w - 2.0 * (SPACE_6_PX + BORDER_2_PX)).max(0.0).floor();
+                let cards: Vec<AnyElement> = others.into_iter().map(|name| self.boot_installed_card(name, current.as_deref(), look_w, p, cx)).collect();
                 out = out.child(
                     div()
-                        .rounded(px(RADIUS_22_PX))
-                        .bg(p.surface_container.hsla())
-                        .p(px(SPACE_16_PX))
                         .row()
                         .flex_col()
                         .gap(px(SPACE_10_PX))
-                        .child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(t("Installed on this system")))
-                        .child(div().row().flex_wrap().gap(px(SPACE_6_PX)).children(others.into_iter().map(|name| {
-                            let on = current.as_deref() == Some(name.as_str());
-                            let n = name.clone();
-                            chip(SharedString::from(format!("boot-installed-{name}")), name, on, p).tab_index(0).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                if !on {
-                                    this.boot_review(n.clone(), Request::Splash { theme: SplashChoice::Installed { name: n.clone() } }, cx);
-                                }
-                            }))
-                        }))),
+                        .child(div().px(px(SPACE_4_PX)).text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(t("Installed on this system")))
+                        .child(look.render(cards)),
                 );
             }
         }
         out.into_any_element()
+    }
+
+    /// A splash installed on this system outside the catalog: its picture,
+    /// its name, Active or Review & apply.
+    fn boot_installed_card(&mut self, name: String, current: Option<&str>, pic_w: f32, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let on = current == Some(name.as_str());
+        let preview = Self::boot_preview(PreviewSource::Installed, Kind::Plymouth, &name, cx);
+        let pic = match preview {
+            Some(i) => img(i).size_full().object_fit(gpui::ObjectFit::Cover).into_any_element(),
+            None => div().size_full().bg(mandara_core::oklab_gradient(DIAGONAL_DEG, p.surface_dim, p.surface_container_high)).row().items_center().justify_center().child(icon("sun", ICON_22_PX, p.on_surface_variant)).into_any_element(),
+        };
+        let strip = div().w_full().h(px((pic_w * SCREEN_ASPECT).floor())).flex_none().rounded(px(RADIUS_14_PX)).overflow_hidden().relative().child(pic).children(state_badge(on, false, p));
+        let (label, glyph) = if on { (t("Active"), "check") } else { (t("Review & apply"), "check") };
+        let n = name.clone();
+        let action = button(SharedString::from(format!("boot-installed-act-{name}")), glyph, label, !on, p)
+            .tab_index(0)
+            .when(on, |el| el.opacity(ALPHA_75).cursor_default())
+            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                if !on {
+                    this.boot_review(n.clone(), Request::Splash { theme: SplashChoice::Installed { name: n.clone() } }, cx);
+                }
+            }));
+        div()
+            .id(SharedString::from(format!("boot-installed-{name}")))
+            .flex_1()
+            .min_w(px(0.0))
+            .overflow_hidden()
+            .p(px(SPACE_6_PX))
+            .rounded(px(RADIUS_20_PX))
+            .bg(p.surface_container.hsla())
+            .border_2()
+            .border_color(if on { p.primary.hsla() } else { gpui::transparent_black() })
+            .hover(|s| s.border_color(p.primary.with_alpha(ALPHA_35).hsla()))
+            .row()
+            .flex_col()
+            .gap(px(SPACE_8_PX))
+            .child(strip)
+            .child(div().px(px(SPACE_6_PX)).min_w(px(0.0)).truncate().text_start().text_size(px(TEXT_13_5_PX)).font_weight(FontWeight::SEMIBOLD).child(name))
+            .child(div().mt_auto().px(px(SPACE_4_PX)).pb(px(SPACE_4_PX)).row().items_center().child(action))
+            .into_any_element()
     }
 
     fn boot_card(&mut self, theme: &'static BootTheme, det: &Detection, pic_w: f32, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
@@ -639,7 +790,10 @@ impl StudioView {
         let job = st(cx).jobs.get(variant.install).map(|j| j.progress.load(Ordering::Relaxed));
         let error = st(cx).errors.get(variant.install).cloned();
         let is_staged = staged(st(cx), variant);
-        let state = match (job, error.is_some(), is_staged, active(det, kind, variant.install)) {
+        // A splash already on this system applies without a download.
+        let on_system = mandara_services::boot::theme::on_system(det, kind, variant.install);
+        let ready = is_staged || (kind == Kind::Plymouth && on_system);
+        let state = match (job, error.is_some(), ready, active(det, kind, variant.install)) {
             (Some(pm), ..) => CardState::Downloading(pm),
             (None, _, _, true) => CardState::Active,
             (None, true, false, _) => CardState::Failed,
@@ -647,10 +801,11 @@ impl StudioView {
             (None, _, false, _) => CardState::Get,
         };
         let tint = swatch(variant.swatch);
-        let preview = if is_staged { Self::boot_preview(kind, variant.install, cx) } else { None };
+        let preview = if is_staged || on_system { Self::boot_preview(PreviewSource::Card, kind, variant.install, cx) } else { None };
         let pic_h = (pic_w * SCREEN_ASPECT).floor();
+        let placeholder = t(placeholder_text(st(cx), kind, variant.install, is_staged || on_system));
         let pic = match preview {
-            Some(i) => img(i).w(px(pic_w)).h(px(pic_h)).object_fit(gpui::ObjectFit::Cover).into_any_element(),
+            Some(i) => img(i).size_full().object_fit(gpui::ObjectFit::Cover).into_any_element(),
             None => div()
                 .size_full()
                 .bg(mandara_core::oklab_gradient(DIAGONAL_DEG, tint.mix(p.surface_dim, ALPHA_60), tint.mix(p.surface_dim, ALPHA_85)))
@@ -660,7 +815,7 @@ impl StudioView {
                 .justify_center()
                 .gap(px(SPACE_6_PX))
                 .child(icon(if kind == Kind::Plymouth { "sun" } else { "monitor" }, ICON_22_PX, tint.best_on(Color::from_rgba8(u8::MAX, u8::MAX, u8::MAX, u8::MAX), Color::from_rgba8(0, 0, 0, u8::MAX))))
-                .child(div().text_size(px(TEXT_11_5_PX)).text_color(Color::from_rgba8(u8::MAX, u8::MAX, u8::MAX, u8::MAX).with_alpha(ALPHA_80).hsla()).child(t("Preview after download")))
+                .child(div().text_size(px(TEXT_11_5_PX)).text_color(Color::from_rgba8(u8::MAX, u8::MAX, u8::MAX, u8::MAX).with_alpha(ALPHA_80).hsla()).child(placeholder))
                 .into_any_element(),
         };
         // A boot menu card shows where the menu sits on the picture.
@@ -679,16 +834,15 @@ impl StudioView {
                 .children((0..MOCK_ENTRIES).map(|i| div().h(px(MOCK_LINE_H_PX)).w(gpui::relative(if i == 0 { 0.9 } else { 0.7 })).rounded_full().bg(if i == 0 { tint.hsla() } else { gpui::white().opacity(ALPHA_55) })))
         });
         let strip = div()
-            .w(px(pic_w))
+            .w_full()
             .h(px(pic_h))
+            .flex_none()
             .rounded(px(RADIUS_16_PX))
             .overflow_hidden()
             .relative()
             .child(pic)
             .children(mock)
-            .when(state == CardState::Active, |el| {
-                el.child(div().absolute().top(px(SPACE_8_PX)).inset_end(px(SPACE_8_PX)).px(px(SPACE_8_PX)).h(px(DIM_20_PX)).rounded_full().row().items_center().gap(px(SPACE_4_PX)).bg(p.primary.hsla()).text_color(p.on_primary.hsla()).text_size(px(TEXT_10_5_PX)).font_weight(FontWeight::SEMIBOLD).child(icon("check", ICON_11_PX, p.on_primary)).child(t("Active")))
-            });
+            .children(state_badge(state == CardState::Active, on_system || is_staged, p));
         let named = theme.variants.windows(2).all(|w| w[0].swatch == w[1].swatch);
         let dots = div().row().items_center().gap(px(SPACE_6_PX)).when(theme.variants.len() > 1 && named, |el| {
             el.children(theme.variants.iter().enumerate().map(|(i, v)| {
@@ -734,9 +888,11 @@ impl StudioView {
             }
             CardState::Apply => {
                 let dir = stage::Env::current().stage(kind).join(variant.install);
+                let staged_here = st(cx).staged.contains(&(kind, variant.install.to_string()));
                 let staged = Staged { name: variant.install.to_string(), dir, include: variant.include.map(str::to_string) };
                 let title = format!("{} · {}", theme.name, tr(variant.label));
                 let request = match kind {
+                    Kind::Plymouth if !staged_here => Request::Splash { theme: SplashChoice::Installed { name: variant.install.to_string() } },
                     Kind::Plymouth => Request::Splash { theme: SplashChoice::Staged(staged) },
                     Kind::Refind => Request::MenuTheme { theme: staged, gfxmode: None },
                     // grub2-themes are made for one size; others take the chosen one.
@@ -764,6 +920,8 @@ impl StudioView {
         div()
             .id(SharedString::from(format!("boot-card-{}", theme.id)))
             .flex_1()
+            .min_w(px(0.0))
+            .overflow_hidden()
             .p(px(SPACE_8_PX))
             .rounded(px(RADIUS_22_PX))
             .bg(p.surface_container.hsla())
@@ -777,6 +935,7 @@ impl StudioView {
             .child(
                 div()
                     .px(px(SPACE_6_PX))
+                    .min_w(px(0.0))
                     .row()
                     .flex_col()
                     .gap(px(SPACE_6_PX))
@@ -788,14 +947,14 @@ impl StudioView {
                         if theme.variants.len() > MANY_VARIANTS {
                             el.child(dots.flex_wrap()).child(div().row().items_center().gap(px(SPACE_8_PX)).children(label).when(named, |r| r.child(div().flex_1())).child(author))
                         } else {
-                            el.child(div().row().items_center().gap(px(SPACE_8_PX)).child(dots).children(label).when(named && theme.variants.len() > 1, |r| r.child(div().flex_1())).child(author))
+                            el.child(div().row().flex_wrap().items_center().gap(px(SPACE_8_PX)).child(dots).children(label).when(named && theme.variants.len() > 1, |r| r.child(div().flex_1())).child(author))
                         }
                     })
-                    .child(div().h(px(DIM_32_PX)).text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).text_color(p.on_surface_variant.hsla()).line_clamp(2).child(mandara_ui::bidi::paragraph(tr(theme.description))))
+                    .child(div().h(px(DIM_32_PX)).overflow_hidden().text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).text_color(p.on_surface_variant.hsla()).line_clamp(2).child(mandara_ui::bidi::paragraph(tr(theme.description))))
                     .children(progress)
                     .children(error_row),
             )
-            .child(div().px(px(SPACE_4_PX)).pb(px(SPACE_4_PX)).row().items_center().gap(px(SPACE_6_PX)).child(primary).child(div().flex_1()).child(homepage))
+            .child(div().mt_auto().px(px(SPACE_4_PX)).pb(px(SPACE_4_PX)).row().flex_wrap().items_center().gap(px(SPACE_6_PX)).child(primary).child(div().flex_1()).child(homepage))
             .into_any_element()
     }
 
@@ -944,6 +1103,10 @@ impl StudioView {
                 st(cx).image.busy = false;
                 match made {
                     Ok(made) => {
+                        let (splash, grub) = (made.splash.name.clone(), made.grub.name.clone());
+                        for old in forget_previews(st(cx), |k, n| (k == Kind::Plymouth && n == splash) || (k == Kind::Grub && (n == grub || n == mandara_services::boot::GRUB_IMAGE_NAME))) {
+                            cx.drop_image(old, None);
+                        }
                         let (title, request) = match (target, limine) {
                             (Kind::Plymouth, _) => (t("Your image as the splash").to_string(), Request::Splash { theme: SplashChoice::Staged(made.splash) }),
                             (_, true) => (t("Your image in the Limine menu").to_string(), Request::LimineStyle { style: LimineStyle::from_palette(&palette, Some(made.wallpaper)) }),
@@ -1196,13 +1359,62 @@ impl StudioView {
     }
 }
 
+/// The pill over a picture's corner: Active, else Installed (on this
+/// system or downloaded), else nothing.
+fn state_badge(active: bool, installed: bool, p: &MandaraPalette) -> Option<gpui::Div> {
+    if !active && !installed {
+        return None;
+    }
+    let (bg, fg, label) = if active { (p.primary, p.on_primary, t("Active")) } else { (p.surface_container_high.with_alpha(ALPHA_88), p.on_surface, t("Installed")) };
+    Some(div()
+        .absolute()
+        .top(px(SPACE_8_PX))
+        .inset_end(px(SPACE_8_PX))
+        .max_w(gpui::relative(BADGE_MAX_SHARE))
+        .overflow_hidden()
+        .px(px(SPACE_8_PX))
+        .h(px(DIM_20_PX))
+        .rounded_full()
+        .row()
+        .items_center()
+        .gap(px(SPACE_4_PX))
+        .bg(bg.hsla())
+        .text_color(fg.hsla())
+        .text_size(px(TEXT_10_5_PX))
+        .font_weight(FontWeight::SEMIBOLD)
+        .when(active, |el| el.child(icon("check", ICON_11_PX, fg)))
+        .child(div().truncate().child(label)))
+}
+
+/// What a card without a picture says: a theme not here yet offers its
+/// download; one that is here is loading its picture, or has none.
+fn placeholder_text(s: &BootStudio, kind: Kind, name: &str, here: bool) -> &'static str {
+    if !here {
+        tk("Preview after download")
+    } else if s.no_preview.contains(&(PreviewSource::Card, kind, name.to_string())) {
+        tk("Preview unavailable")
+    } else {
+        tk("Loading…")
+    }
+}
+
 fn preview_is_some(s: &BootStudio, kind: Kind, name: &str) -> bool {
-    s.previews.contains_key(&(kind, name.to_string()))
+    s.previews.contains_key(&(PreviewSource::Card, kind, name.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An installed theme without a picture never asks for a download.
+    #[test]
+    fn placeholders_match_what_the_card_offers() {
+        let mut s = BootStudio::default();
+        assert_eq!(placeholder_text(&s, Kind::Plymouth, "rings", false), "Preview after download");
+        assert_eq!(placeholder_text(&s, Kind::Plymouth, "rings", true), "Loading…");
+        s.no_preview.insert((PreviewSource::Card, Kind::Plymouth, "rings".into()));
+        assert_eq!(placeholder_text(&s, Kind::Plymouth, "rings", true), "Preview unavailable");
+    }
 
     #[test]
     fn the_gate_says_what_it_will_and_wont_do() {
@@ -1220,13 +1432,81 @@ mod tests {
         assert!(MENU_SIZES.iter().all(|(w, h)| plan::resolution_ok(&format!("{w}x{h}"))));
     }
 
+    /// The splash in effect is previewed from where it is installed when
+    /// Mandara has no staged copy (it used to show nothing).
+    #[test]
+    fn installed_splashes_have_a_preview_source() {
+        let mut s = BootStudio::default();
+        assert_eq!(preview_from(&s, PreviewSource::Card, Kind::Plymouth, "wolf"), None, "nothing detected yet");
+        let mut det = Detection::unsupported();
+        det.plymouth = Some(mandara_services::boot::detect::Plymouth {
+            themes_dir: PathBuf::from("/usr/share/plymouth/themes"),
+            set_default: PathBuf::new(),
+            current: Some("wolf".into()),
+            installed: vec!["wolf".into(), "spinner".into()],
+            modules: Vec::new(),
+            initramfs: None,
+            in_initramfs: None,
+            splash_on_cmdline: true,
+        });
+        s.det = Some(Arc::new(det));
+        assert!(matches!(preview_from(&s, PreviewSource::Card, Kind::Plymouth, "wolf"), Some(PreviewFrom::Installed(_))));
+        assert_eq!(preview_from(&s, PreviewSource::Card, Kind::Plymouth, "rings"), None, "neither staged nor installed");
+        s.staged.insert((Kind::Plymouth, "wolf".into()));
+        assert!(matches!(preview_from(&s, PreviewSource::Card, Kind::Plymouth, "wolf"), Some(PreviewFrom::Staged(_))), "a card shows the staged copy first");
+        assert!(matches!(preview_from(&s, PreviewSource::Installed, Kind::Plymouth, "wolf"), Some(PreviewFrom::Installed(_))), "\"Your boot\" shows only what is installed");
+        s.staged.insert((Kind::Plymouth, "rings".into()));
+        assert_eq!(preview_from(&s, PreviewSource::Installed, Kind::Plymouth, "rings"), None, "staged but not installed: nothing in use to show");
+        let card: PreviewKey = (PreviewSource::Card, Kind::Plymouth, "wolf".into());
+        let installed: PreviewKey = (PreviewSource::Installed, Kind::Plymouth, "wolf".into());
+        assert_ne!(card, installed, "separate cache entries");
+    }
+
+    fn picture() -> Arc<RenderImage> {
+        let frame = ::image::Frame::new(::image::RgbaImage::new(1, 1));
+        Arc::new(RenderImage::new(smallvec::smallvec![frame]))
+    }
+
+    /// Regenerating a theme under the same name forgets its pictures from
+    /// every source, and a load started before that never lands.
+    #[test]
+    fn regenerated_themes_drop_their_pictures_and_stale_loads() {
+        let mut s = BootStudio::default();
+        let grub = mandara_services::boot::GRUB_IMAGE_NAME;
+        let card: PreviewKey = (PreviewSource::Card, Kind::Grub, grub.into());
+        let installed: PreviewKey = (PreviewSource::Installed, Kind::Grub, grub.into());
+        let other: PreviewKey = (PreviewSource::Card, Kind::Plymouth, "rings".into());
+        let g = begin_load(&mut s, &card).unwrap();
+        assert!(begin_load(&mut s, &card).is_none(), "one load at a time");
+        assert!(finish_load(&mut s, card.clone(), g, Some(picture())).is_none());
+        s.no_preview.insert(installed.clone());
+        let slow = begin_load(&mut s, &other).unwrap();
+        // The old generated theme's load still runs when it is regenerated.
+        let gone = forget_previews(&mut s, |k, n| k == Kind::Grub && n == grub);
+        assert_eq!(gone.len(), 1);
+        assert!(!s.previews.contains_key(&card) && !s.no_preview.contains(&installed), "both caches forget it");
+        // A load from before the regeneration is handed back, not cached.
+        let mut s2 = BootStudio::default();
+        let g1 = begin_load(&mut s2, &card).unwrap();
+        let _ = forget_previews(&mut s2, |_, _| true);
+        assert!(finish_load(&mut s2, card.clone(), g1, Some(picture())).is_some(), "stale result rejected");
+        assert!(!s2.previews.contains_key(&card) && !s2.no_preview.contains(&card));
+        let g2 = begin_load(&mut s2, &card).unwrap();
+        assert_ne!(g1, g2);
+        assert!(finish_load(&mut s2, card.clone(), g2, Some(picture())).is_none());
+        assert!(s2.previews.contains_key(&card), "the fresh load lands");
+        // An unrelated load in flight is untouched by a targeted forget.
+        assert!(finish_load(&mut s, other.clone(), slow, Some(picture())).is_none());
+        assert!(s.previews.contains_key(&other));
+    }
+
     #[test]
     fn late_previews_never_refill_a_released_tab() {
         let mut s = BootStudio::default();
-        let key = (Kind::Grub, "mandara-x".to_string());
-        s.loading.insert(key.clone());
+        let key: PreviewKey = (PreviewSource::Card, Kind::Grub, "mandara-x".to_string());
+        let g = begin_load(&mut s, &key).unwrap();
         s.loading.clear();
-        assert!(!s.loading.remove(&key), "a result landing after release is dropped");
+        assert!(finish_load(&mut s, key, g, Some(picture())).is_some(), "a result landing after release is dropped");
         assert!(!preview_is_some(&s, Kind::Grub, "mandara-x"));
     }
 }
