@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.28.1 — 2026-11-12
+
 Mandara OS now follows every release.
 
 ### Fixed
