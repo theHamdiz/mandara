@@ -1,0 +1,86 @@
+# Mandara OS (theHamdiz/mandara-os) builds its bootable image around each
+# Mandara release, and only when this workflow asks it to.
+#
+# It runs when the Release workflow finishes and sends a
+# `mandara-shell-updated` repository_dispatch with the version, but only if
+# that run published a release (a run that bumped nothing sends nothing).
+# Run it by hand to rebuild the OS around an existing release.
+#
+# Needs the OS_TRIGGER_PAT secret: a fine-grained token for
+# theHamdiz/mandara-os with "Contents: Read and write". Without it the run
+# warns and sends nothing.
+name: Mandara OS
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Mandara version to build the OS around (e.g. 0.28.0); empty: the latest release"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mandara-os-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    name: Ask Mandara OS to build
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Find the release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          RUN_STARTED: ${{ github.event.workflow_run.run_started_at }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = workflow_dispatch ] && [ -n "$INPUT_VERSION" ]; then
+            tag="v${INPUT_VERSION#v}"
+            gh release view "$tag" --repo "$REPO" --json tagName >/dev/null
+          else
+            tag=$(gh release view --repo "$REPO" --json tagName -q .tagName)
+            published=$(gh release view "$tag" --repo "$REPO" --json publishedAt -q .publishedAt)
+            # A release published before this Release run started is not its own.
+            if [ "$EVENT" = workflow_run ] && [[ "$published" < "$RUN_STARTED" ]]; then
+              echo "The Release run published nothing new (latest is $tag from $published)."
+              exit 0
+            fi
+          fi
+          version="${tag#v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::unexpected release tag $tag"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "### Mandara OS: build around Mandara $version" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Send repository_dispatch
+        if: steps.release.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ secrets.OS_TRIGGER_PAT }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::OS_TRIGGER_PAT is not set, so Mandara OS was not asked to build $VERSION."
+            exit 0
+          fi
+          gh api --method POST repos/theHamdiz/mandara-os/dispatches \
+            -f event_type=mandara-shell-updated \
+            -f "client_payload[version]=$VERSION"
+          echo "Asked theHamdiz/mandara-os to build around Mandara $VERSION."

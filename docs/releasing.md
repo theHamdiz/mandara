@@ -194,6 +194,17 @@ runs on. macOS and Windows have no Wayland compositors to host it.
 To re-publish artifacts for the current version without a code change, run
 the Release workflow manually with **rebuild** enabled.
 
+### Mandara OS (`.github/workflows/mandara-os.yml`)
+
+When a Release run finishes and it published a release, this workflow asks
+[Mandara OS](https://github.com/theHamdiz/mandara-os) to build its bootable
+image around that version (a `mandara-shell-updated` repository dispatch
+carrying the version). Mandara OS builds only on that signal. Runs that
+publish nothing send nothing. Run the workflow by hand, with an optional
+version, to rebuild the OS around an existing release. It needs the
+`OS_TRIGGER_PAT` secret: a fine-grained token for `theHamdiz/mandara-os`
+with **Contents: Read and write**; without it the run only warns.
+
 ## Changelog
 
 `CHANGELOG.md` is the release notes, written for the people who use
