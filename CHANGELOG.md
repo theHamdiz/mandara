@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.28.2 — 2026-11-12
+
+Changing display scale keeps the shell running.
+
 ### Fixed
 
 - **Changing display scale keeps the shell running.** Applying a scale such as 125% after 150% in Studio no longer closes Mandara when its display surfaces are replaced, including when the dock is off. The shell also stays running when every display is temporarily disconnected.
