@@ -6,6 +6,12 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Mandara OS now follows every release.
+
+### Under the hood
+
+- **Every release now builds Mandara OS.** When a new version is published, the Mandara OS image is rebuilt around it automatically.
+
 ## 0.28.0 — 2026-11-12
 
 Six new motion presets with their own choreography:. Studio → Motion shows
