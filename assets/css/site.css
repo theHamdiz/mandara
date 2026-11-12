@@ -287,9 +287,23 @@ h1, h2, h3 { text-wrap: balance; }
 
 /* Looks: the list on one side, the desktop on the other. */
 .looks-picker { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 16px; align-items: start; }
-.looks-list { display: flex; flex-direction: column; gap: 8px; }
+.looks-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.looks-tools { display: flex; flex-direction: column; gap: 8px; padding: 4px; }
+.looks-search { width: 100%; min-width: 0; min-height: 52px; padding: 12px 18px; border: 1px solid var(--rim); border-radius: var(--r-m); background: var(--tile); }
+.looks-search::placeholder { color: var(--muted); opacity: 1; }
+.looks-nav { display: flex; align-items: center; gap: 6px; }
+.looks-count { flex: 1; font-size: 14px; color: var(--muted); }
+.look-step, .looks-clear { min-height: 44px; border: 0; border-radius: 999px; background: var(--soft); color: var(--on-soft); cursor: pointer; }
+.look-step { width: 44px; flex: none; font-size: 22px; }
+.looks-clear { padding: 0 12px; font-size: 13px; }
+.look-step:hover, .looks-clear:hover { border-radius: var(--r-s); }
+.look-step:disabled, .looks-clear:disabled { opacity: .5; cursor: default; }
+.look-options {
+  position: relative; display: flex; flex-direction: column; gap: 8px; height: 360px; max-height: 360px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--soft) transparent; padding: 4px;
+}
+.looks-empty { grid-column: 1 / -1; padding: 16px 20px; color: var(--muted); }
 .look-choice {
-  display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 10px 20px 10px 12px; border-radius: var(--r-m);
+  position: relative; flex-shrink: 0; display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 10px 20px 10px 12px; border-radius: var(--r-m);
   background: var(--tile); border: 1px solid var(--rim); cursor: pointer; font-size: 18px; font-weight: 500;
   transition: background-color 240ms var(--ease), color 240ms var(--ease), border-radius 320ms var(--spring), transform 200ms var(--ease);
 }
@@ -306,63 +320,27 @@ h1, h2, h3 { text-wrap: balance; }
 .look img { width: 100%; border-radius: var(--r-xl); border: 1px solid var(--rim); box-shadow: var(--lift); }
 .look-caption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; padding: 18px 8px 0; color: var(--muted); font-size: 15px; }
 .look-caption code { color: var(--ink); font-size: 13px; }
-#look-corniche-dusk:checked ~ .look-stage .look-corniche-dusk,
-#look-pharos-ink:checked ~ .look-stage .look-pharos-ink,
-#look-montaza-crimson:checked ~ .look-stage .look-montaza-crimson,
-#look-qaitbay-forest:checked ~ .look-stage .look-qaitbay-forest,
-#look-anfushi-wave:checked ~ .look-stage .look-anfushi-wave,
-#look-night-frame:checked ~ .look-stage .look-night-frame { display: block; }
-#look-redmond:checked ~ .look-stage .look-redmond { display: block; }
-#look-cupertino:checked ~ .look-stage .look-cupertino { display: block; }
-#look-corniche-frame:checked ~ .look-stage .look-corniche-frame { display: block; }
-#look-raml-line:checked ~ .look-stage .look-raml-line { display: block; }
-#look-lighthouse-rail:checked ~ .look-stage .look-lighthouse-rail { display: block; }
-#look-phosphor:checked ~ .look-stage .look-phosphor { display: block; }
-#look-pharos-lantern:checked ~ .look-stage .look-pharos-lantern { display: block; }
-#look-stanley-arches:checked ~ .look-stage .look-stanley-arches { display: block; }
-#look-souk-tiles:checked ~ .look-stage .look-souk-tiles { display: block; }
-#look-sea-glass:checked ~ .look-stage .look-sea-glass { display: block; }
-#look-library-desk:checked ~ .look-stage .look-library-desk { display: block; }
-#look-ink-rush:checked ~ .look-stage .look-ink-rush { display: block; }
-#look-zen:checked ~ .look-stage .look-zen { display: block; }
-#look-corniche-dusk:checked ~ .looks-list .look-choice[for="look-corniche-dusk"],
-#look-pharos-ink:checked ~ .looks-list .look-choice[for="look-pharos-ink"],
-#look-montaza-crimson:checked ~ .looks-list .look-choice[for="look-montaza-crimson"],
-#look-qaitbay-forest:checked ~ .looks-list .look-choice[for="look-qaitbay-forest"],
-#look-anfushi-wave:checked ~ .looks-list .look-choice[for="look-anfushi-wave"],
-#look-night-frame:checked ~ .looks-list .look-choice[for="look-night-frame"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-#look-redmond:checked ~ .looks-list .look-choice[for="look-redmond"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-#look-cupertino:checked ~ .looks-list .look-choice[for="look-cupertino"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-#look-corniche-frame:checked ~ .looks-list .look-choice[for="look-corniche-frame"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-#look-raml-line:checked ~ .looks-list .look-choice[for="look-raml-line"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-#look-lighthouse-rail:checked ~ .looks-list .look-choice[for="look-lighthouse-rail"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-#look-phosphor:checked ~ .looks-list .look-choice[for="look-phosphor"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-#look-pharos-lantern:checked ~ .looks-list .look-choice[for="look-pharos-lantern"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-#look-stanley-arches:checked ~ .looks-list .look-choice[for="look-stanley-arches"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-#look-souk-tiles:checked ~ .looks-list .look-choice[for="look-souk-tiles"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-#look-sea-glass:checked ~ .looks-list .look-choice[for="look-sea-glass"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-#look-library-desk:checked ~ .looks-list .look-choice[for="look-library-desk"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-#look-ink-rush:checked ~ .looks-list .look-choice[for="look-ink-rush"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-#look-zen:checked ~ .looks-list .look-choice[for="look-zen"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-#look-corniche-dusk:focus-visible ~ .looks-list .look-choice[for="look-corniche-dusk"],
-#look-pharos-ink:focus-visible ~ .looks-list .look-choice[for="look-pharos-ink"],
-#look-montaza-crimson:focus-visible ~ .looks-list .look-choice[for="look-montaza-crimson"],
-#look-qaitbay-forest:focus-visible ~ .looks-list .look-choice[for="look-qaitbay-forest"],
-#look-anfushi-wave:focus-visible ~ .looks-list .look-choice[for="look-anfushi-wave"],
-#look-night-frame:focus-visible ~ .looks-list .look-choice[for="look-night-frame"] { outline: 3px solid var(--ink); outline-offset: 3px; }
-#look-redmond:focus-visible ~ .looks-list .look-choice[for="look-redmond"] { outline: 3px solid var(--ink); outline-offset: 3px; }
-#look-cupertino:focus-visible ~ .looks-list .look-choice[for="look-cupertino"] { outline: 3px solid var(--ink); outline-offset: 3px; }
-#look-corniche-frame:focus-visible ~ .looks-list .look-choice[for="look-corniche-frame"] { outline: 3px solid var(--ink); outline-offset: 3px; }
-#look-raml-line:focus-visible ~ .looks-list .look-choice[for="look-raml-line"] { outline: 3px solid var(--ink); outline-offset: 3px; }
-#look-lighthouse-rail:focus-visible ~ .looks-list .look-choice[for="look-lighthouse-rail"] { outline: 3px solid var(--ink); outline-offset: 3px; }
-#look-phosphor:focus-visible ~ .looks-list .look-choice[for="look-phosphor"] { outline: 3px solid var(--ink); outline-offset: 3px; }
-#look-pharos-lantern:focus-visible ~ .looks-list .look-choice[for="look-pharos-lantern"] { outline: 3px solid var(--ink); outline-offset: 3px; }
-#look-stanley-arches:focus-visible ~ .looks-list .look-choice[for="look-stanley-arches"] { outline: 3px solid var(--ink); outline-offset: 3px; }
-#look-souk-tiles:focus-visible ~ .looks-list .look-choice[for="look-souk-tiles"] { outline: 3px solid var(--ink); outline-offset: 3px; }
-#look-sea-glass:focus-visible ~ .looks-list .look-choice[for="look-sea-glass"] { outline: 3px solid var(--ink); outline-offset: 3px; }
-#look-library-desk:focus-visible ~ .looks-list .look-choice[for="look-library-desk"] { outline: 3px solid var(--ink); outline-offset: 3px; }
-#look-ink-rush:focus-visible ~ .looks-list .look-choice[for="look-ink-rush"] { outline: 3px solid var(--ink); outline-offset: 3px; }
-#look-zen:focus-visible ~ .looks-list .look-choice[for="look-zen"] { outline: 3px solid var(--ink); outline-offset: 3px; }
+.looks-picker:has(#look-corniche-dusk:checked) .look-stage .look-corniche-dusk,
+.looks-picker:has(#look-pharos-ink:checked) .look-stage .look-pharos-ink,
+.looks-picker:has(#look-montaza-crimson:checked) .look-stage .look-montaza-crimson,
+.looks-picker:has(#look-qaitbay-forest:checked) .look-stage .look-qaitbay-forest,
+.looks-picker:has(#look-anfushi-wave:checked) .look-stage .look-anfushi-wave,
+.looks-picker:has(#look-night-frame:checked) .look-stage .look-night-frame,
+.looks-picker:has(#look-redmond:checked) .look-stage .look-redmond,
+.looks-picker:has(#look-cupertino:checked) .look-stage .look-cupertino,
+.looks-picker:has(#look-corniche-frame:checked) .look-stage .look-corniche-frame,
+.looks-picker:has(#look-raml-line:checked) .look-stage .look-raml-line,
+.looks-picker:has(#look-lighthouse-rail:checked) .look-stage .look-lighthouse-rail,
+.looks-picker:has(#look-phosphor:checked) .look-stage .look-phosphor,
+.looks-picker:has(#look-pharos-lantern:checked) .look-stage .look-pharos-lantern,
+.looks-picker:has(#look-stanley-arches:checked) .look-stage .look-stanley-arches,
+.looks-picker:has(#look-souk-tiles:checked) .look-stage .look-souk-tiles,
+.looks-picker:has(#look-sea-glass:checked) .look-stage .look-sea-glass,
+.looks-picker:has(#look-library-desk:checked) .look-stage .look-library-desk,
+.looks-picker:has(#look-ink-rush:checked) .look-stage .look-ink-rush,
+.looks-picker:has(#look-zen:checked) .look-stage .look-zen { display: block; }
+.look-choice:has(:checked) { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
+.look-choice:has(:focus-visible) { outline: 3px solid var(--ink); outline-offset: 1px; }
 
 /* Bar styles: the stage and its tabs. */
 .bars-picker { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); gap: 16px; align-items: start; }
@@ -387,6 +365,7 @@ h1, h2, h3 { text-wrap: balance; }
 #bar-stanley-bridge:checked ~ .bar-stage .bar-stanley-bridge,
 #bar-pharos-beam:checked ~ .bar-stage .bar-pharos-beam,
 #bar-raml-tram:checked ~ .bar-stage .bar-raml-tram,
+#bar-taskbar:checked ~ .bar-stage .bar-taskbar,
 #bar-side-bars:checked ~ .bar-stage .bar-side-bars { display: block; }
 #bar-expressive:checked ~ .bar-tabs label[for="bar-expressive"],
 #bar-tile-dock:checked ~ .bar-tabs label[for="bar-tile-dock"],
@@ -396,6 +375,7 @@ h1, h2, h3 { text-wrap: balance; }
 #bar-stanley-bridge:checked ~ .bar-tabs label[for="bar-stanley-bridge"],
 #bar-pharos-beam:checked ~ .bar-tabs label[for="bar-pharos-beam"],
 #bar-raml-tram:checked ~ .bar-tabs label[for="bar-raml-tram"],
+#bar-taskbar:checked ~ .bar-tabs label[for="bar-taskbar"],
 #bar-side-bars:checked ~ .bar-tabs label[for="bar-side-bars"] { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 30px; }
 #bar-expressive:checked ~ .bar-tabs label[for="bar-expressive"] :is(span, b, code),
 #bar-tile-dock:checked ~ .bar-tabs label[for="bar-tile-dock"] :is(span, b, code),
@@ -405,6 +385,7 @@ h1, h2, h3 { text-wrap: balance; }
 #bar-stanley-bridge:checked ~ .bar-tabs label[for="bar-stanley-bridge"] :is(span, b, code),
 #bar-pharos-beam:checked ~ .bar-tabs label[for="bar-pharos-beam"] :is(span, b, code),
 #bar-raml-tram:checked ~ .bar-tabs label[for="bar-raml-tram"] :is(span, b, code),
+#bar-taskbar:checked ~ .bar-tabs label[for="bar-taskbar"] :is(span, b, code),
 #bar-side-bars:checked ~ .bar-tabs label[for="bar-side-bars"] :is(span, b, code) { color: var(--on-accent); display: block; }
 #bar-expressive:focus-visible ~ .bar-tabs label[for="bar-expressive"],
 #bar-tile-dock:focus-visible ~ .bar-tabs label[for="bar-tile-dock"],
@@ -414,6 +395,7 @@ h1, h2, h3 { text-wrap: balance; }
 #bar-stanley-bridge:focus-visible ~ .bar-tabs label[for="bar-stanley-bridge"],
 #bar-pharos-beam:focus-visible ~ .bar-tabs label[for="bar-pharos-beam"],
 #bar-raml-tram:focus-visible ~ .bar-tabs label[for="bar-raml-tram"],
+#bar-taskbar:focus-visible ~ .bar-tabs label[for="bar-taskbar"],
 #bar-side-bars:focus-visible ~ .bar-tabs label[for="bar-side-bars"] { outline: 3px solid var(--ink); outline-offset: 3px; }
 
 /* Pieces: a bento of real parts, each on its own tonal surface. */
@@ -692,7 +674,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
   .looks-picker, .bars-picker, .studio-grid, .languages-grid { grid-template-columns: minmax(0, 1fr); }
   .bar-stage, .bar-tabs { grid-column: 1; grid-row: auto; }
   .look-stage { position: static; grid-row: 1; }
-  .looks-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .look-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; height: 240px; max-height: 240px; }
   .looks-note { grid-column: 1 / -1; }
   .bar-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .piece-slider, .piece-shapes, .piece-toast { grid-column: span 12; }
@@ -748,7 +730,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 @media (max-width: 560px) {
   body { font-size: 16px; }
   .scheme button { padding: 0 9px; }
-  .looks-list, .bar-tabs { grid-template-columns: minmax(0, 1fr); }
+  .look-options, .bar-tabs { grid-template-columns: minmax(0, 1fr); }
   .piece-clock, .piece-toggle { grid-column: span 12; }
   .fact-row { grid-template-columns: minmax(0, 1fr); }
   .fact, .fact + .fact { padding-left: 0; border-left: 0; }

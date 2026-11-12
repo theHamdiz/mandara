@@ -40,6 +40,7 @@ assets/fonts/alexandria.woff2
 assets/fonts/bangers/OFL.txt
 assets/fonts/jetbrains-mono.woff2
 assets/js/copy-code.js
+assets/js/look-picker.js
 assets/js/site.js
 assets/launcher-icons/amethyst-medallion.svg
 assets/launcher-icons/blue-whorl.svg

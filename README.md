@@ -37,7 +37,7 @@
   <a href="docs/desktop.md"><img src="https://img.shields.io/badge/Wayland-native-22D3EE?logo=wayland&logoColor=E9E5FF&labelColor=0B1026" alt="Wayland native"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-8B5CF6?labelColor=0B1026" alt="GPU rendered"/></a>
   <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic%20%C2%B7%20KWin%20%C2%B7%20Aqueous%20%C2%B7%20labwc%20%C2%B7%20COSMIC-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc, COSMIC"/></a>
-  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-85%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="85 plugins plus WebAssembly"/></a>
+  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-86%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="86 built-in plugins plus WebAssembly"/></a>
   <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-20%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="20 languages"/></a>
   <br/>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/resources-measured-2DD4BF?labelColor=0B1026" alt="Resource measurements and current limits"/></a>
@@ -111,7 +111,7 @@ Write notes and edit tasks directly in their widgets, too.
 | **Resources** | [Resource measurements and current limits](docs/performance.md); the 100 MiB startup and operation target remains open |
 | **Settings** | `~/.config/mandara/config.toml`, edited live by Mandara Studio (`mandara studio`), with [thirteen colour launcher icons](docs/configuration.md#launcher-button-artwork) |
 | **Automation** | `mandara msg <command>` with JSON replies; `mandara commands --json` lists them all |
-| **Plugins** | 85 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
+| **Plugins** | 86 built in; third-party plugins in Rust, compiled to sandboxed WebAssembly |
 | **Widgets** | Mechanical, word and binary clocks, calendar cards and weather dials; passive widgets can also decorate Mandara Login and the native lock screen |
 | **Languages** | 20, including right-to-left Arabic, Persian and Urdu |
 | **License** | GPL-3.0-or-later |
@@ -155,7 +155,7 @@ around, each one measured or shipped today:
 5. **Real motion.** Analytical spring physics that can be interrupted
    mid-flight, and OKLCH colour blending, so every morph, slide and theme
    change stays smooth.
-6. **Every setting live, in a real app.** Mandara Studio has 30 pages; drag
+6. **Every setting live, in a real app.** Mandara Studio has 32 pages; drag
    a slider and the bar follows as you drag. Nothing needs a config file
    unless you want one.
 7. **A colour engine, not a colour picker.** Material You (HCT) palettes
@@ -173,7 +173,7 @@ around, each one measured or shipped today:
    restyles the boot menu and splash too (GRUB, Limine, rEFInd, Plymouth, or
    your own image), with a plan first, backups and one-click restore. Display
    scale and arrangement changes apply live in Studio, with a keep-or-revert countdown.
-9. **Safe, rich extensions.** 85 plugins built in. Third-party plugins are
+9. **Safe, rich extensions.** 86 built-in plugins. Third-party plugins are
    Rust compiled to sandboxed WebAssembly: a crashing plugin is switched
    off and the shell keeps running. Qur’an, Hadith and Jannah can also
    [copy complete reading cards as images](docs/plugins.md#jannah-quran-hadith-and-prayer-times).
@@ -195,15 +195,15 @@ around, each one measured or shipped today:
 
 - **It's light.** Plugins load data when needed, and hidden panels stop
   their refresh work. [Measurements and setup](docs/performance.md)
-- **It looks the way you want.** Six bar styles, eight presets that reshape
+- **It looks the way you want.** Six bar layouts, 19 bar presets that reshape
   the bar completely (a framed bar with a rail of scalloped buttons, a dock
   of squircle tiles, a flower rail, rows of connected tiles, a monitoring
   status line, three floating docks, a notch hanging from the top, a top
-  bar joined to a rail), side bars of
+  bar joined to a rail, or a centred taskbar), side bars of
   icons and pills that join the top bar into one frame, one-click Looks, desktop widgets, a hundred dials for
   corners, glass and motion, and themes made from your wallpaper.
   [Your desktop](docs/desktop.md)
-- **Everything is a click away in Studio.** 30 pages of settings, all
+- **Everything is a click away in Studio.** 32 pages of settings, all
   live: drag a slider and the bar follows as you drag.
   [Mandara Studio](docs/studio.md)
 - **It does a lot out of the box.** A media island with lyrics, a sound
@@ -212,7 +212,7 @@ around, each one measured or shipped today:
   Spotlight-style search bar), a clipboard that sorts what you copy,
   [floating shelves](docs/plugins.md#stash-floating-shelves) you drop
   anything onto and drag back out of, a drag-and-drop app installer, night
-  light, sound themes, and 85 built-in plugins.
+  light, sound themes, and 86 built-in plugins.
   [Everything else](docs/more-features.md)
 - **It welcomes you in.** A matching lock screen and login screen with
   your own wallpaper, and ready-made looks for both.

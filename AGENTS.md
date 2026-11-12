@@ -22,7 +22,8 @@ write a third-party plugin, [PLUGINS.md](PLUGINS.md) is all you need.
 
 ## What Mandara is
 
-Mandara is a Wayland desktop shell for **MangoWM, Niri, Hyprland, Umbriel, Sway and River**: the
+Mandara is a Wayland desktop shell for **MangoWM, Niri, Hyprland, Umbriel, Sway,
+River Classic, KWin, Aqueous, labwc and COSMIC**: the
 bar, panels, sidebar, dock, launcher, notifications, on-screen displays,
 wallpaper engine, lock screen, login manager and more, shipped as **one
 native Rust binary** (`mandara`) built on [GPUI](https://github.com/zed-industries/zed),
@@ -39,8 +40,10 @@ Zed's GPU-accelerated UI framework.
   previews live, and Studio's CPU and memory never count against the
   shell's.
 - **Everything is a plugin.** Bar items, panels and sidebar cards are
-  plugins: first-party ones compiled into the shell, and third-party ones
+  plugins: 86 built-in plugins compiled into the shell, and third-party ones
   written in Rust, compiled to WebAssembly and run sandboxed.
+- **Ready-made desktops.** Studio offers 19 bar presets and 19 Looks, with
+  light and dark palettes and live settings across 32 pages.
 - **Every compositor is first-class.** All ten supported compositors are
   modelled natively, not squeezed into a lowest common denominator: MangoWM's
   and River's bitmask tags; Niri's, Hyprland's, Umbriel's, Sway's and Aqueous's

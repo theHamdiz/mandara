@@ -26,8 +26,8 @@ How Mandara looks and feels, and how much of it you can shape.
   bar space do (main menu or desktop menu; any hot-corner action;
   workspaces or volume). `mandara msg bar hide` / `show` / `toggle` puts
   the bar away until you want it back.
-- **Bars that look nothing alike.** Eight style presets in Studio → Bars
-  reshape the whole bar: **Expressive** (a tall bottom bar inside a frame
+- **Bars that look nothing alike.** Studio → Bars → Bar offers 19 bar presets,
+  including nine named styles that reshape the whole bar: **Expressive** (a tall bottom bar inside a frame
   round the screen, joined to a rail on the left: round accent buttons,
   tonal tiles for the widgets and scalloped badges down the rail),
   **Tile dock** (one floating island of large squircle tiles at the
@@ -40,7 +40,11 @@ How Mandara looks and feels, and how much of it you can shape.
   bottom), **Pharos Beam** (a narrow lantern of tonal tiles and scalloped
   accent buttons hanging from the top edge) and **Raml Tram** (one line of
   flower stops running along the top and down the left edge: a top bar
-  joined to a rail). The two styles with a rail run the workspaces down
+  joined to a rail), plus **Taskbar** (a full-width bottom bar with the
+  launcher and pinned and running apps centred, and a stacked clock on the
+  right). The other ten presets are Classic, Notch, Glass pills, Dynamic
+  island, Minimal, Productive, Hairline, Micro pill, Side bar and Dock.
+  The two styles with a rail run the workspaces down
   it (never on the bar as well) and seat the launcher in the corner where
   the bar meets the rail. Picking a style while keeping your items fits
   them to it, and the next preset gives them back: what the rail shows
