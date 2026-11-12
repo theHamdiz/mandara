@@ -25,6 +25,8 @@ fn looks_have_a_bounded_native_browser_and_optional_search() {
     let options_rule = css.split("\n.look-options {").nth(1).unwrap().split('}').next().unwrap();
     assert!(options_rule.contains("max-height:") && options_rule.contains("overflow-y: auto;"));
     assert!(css.contains(".look-choice {\n  position: relative;"));
+    let focus = css.split(".look-choice:has(:focus-visible) {").nth(1).unwrap().split('}').next().unwrap();
+    assert!(focus.contains("outline-offset: 1px;"), "focus is drawn against the page ground, outside the selected accent fill");
     assert!(page.descendants().any(|node| node.attribute("src") == Some("assets/js/look-picker.js") && node.has_attribute("defer")));
 }
 

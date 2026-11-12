@@ -340,7 +340,7 @@ h1, h2, h3 { text-wrap: balance; }
 .looks-picker:has(#look-ink-rush:checked) .look-stage .look-ink-rush,
 .looks-picker:has(#look-zen:checked) .look-stage .look-zen { display: block; }
 .look-choice:has(:checked) { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 32px; }
-.look-choice:has(:focus-visible) { outline: 3px solid var(--ink); outline-offset: -3px; }
+.look-choice:has(:focus-visible) { outline: 3px solid var(--ink); outline-offset: 1px; }
 
 /* Bar styles: the stage and its tabs. */
 .bars-picker { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); gap: 16px; align-items: start; }
