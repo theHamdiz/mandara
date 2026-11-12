@@ -803,6 +803,7 @@ impl StudioView {
         let tint = swatch(variant.swatch);
         let preview = if is_staged || on_system { Self::boot_preview(PreviewSource::Card, kind, variant.install, cx) } else { None };
         let pic_h = (pic_w * SCREEN_ASPECT).floor();
+        let placeholder = t(placeholder_text(st(cx), kind, variant.install, is_staged || on_system));
         let pic = match preview {
             Some(i) => img(i).size_full().object_fit(gpui::ObjectFit::Cover).into_any_element(),
             None => div()
@@ -814,7 +815,7 @@ impl StudioView {
                 .justify_center()
                 .gap(px(SPACE_6_PX))
                 .child(icon(if kind == Kind::Plymouth { "sun" } else { "monitor" }, ICON_22_PX, tint.best_on(Color::from_rgba8(u8::MAX, u8::MAX, u8::MAX, u8::MAX), Color::from_rgba8(0, 0, 0, u8::MAX))))
-                .child(div().text_size(px(TEXT_11_5_PX)).text_color(Color::from_rgba8(u8::MAX, u8::MAX, u8::MAX, u8::MAX).with_alpha(ALPHA_80).hsla()).child(t("Preview after download")))
+                .child(div().text_size(px(TEXT_11_5_PX)).text_color(Color::from_rgba8(u8::MAX, u8::MAX, u8::MAX, u8::MAX).with_alpha(ALPHA_80).hsla()).child(placeholder))
                 .into_any_element(),
         };
         // A boot menu card shows where the menu sits on the picture.
@@ -1385,6 +1386,18 @@ fn state_badge(active: bool, installed: bool, p: &MandaraPalette) -> Option<gpui
         .child(div().truncate().child(label)))
 }
 
+/// What a card without a picture says: a theme not here yet offers its
+/// download; one that is here is loading its picture, or has none.
+fn placeholder_text(s: &BootStudio, kind: Kind, name: &str, here: bool) -> &'static str {
+    if !here {
+        tk("Preview after download")
+    } else if s.no_preview.contains(&(PreviewSource::Card, kind, name.to_string())) {
+        tk("Preview unavailable")
+    } else {
+        tk("Loading…")
+    }
+}
+
 fn preview_is_some(s: &BootStudio, kind: Kind, name: &str) -> bool {
     s.previews.contains_key(&(PreviewSource::Card, kind, name.to_string()))
 }
@@ -1392,6 +1405,16 @@ fn preview_is_some(s: &BootStudio, kind: Kind, name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An installed theme without a picture never asks for a download.
+    #[test]
+    fn placeholders_match_what_the_card_offers() {
+        let mut s = BootStudio::default();
+        assert_eq!(placeholder_text(&s, Kind::Plymouth, "rings", false), "Preview after download");
+        assert_eq!(placeholder_text(&s, Kind::Plymouth, "rings", true), "Loading…");
+        s.no_preview.insert((PreviewSource::Card, Kind::Plymouth, "rings".into()));
+        assert_eq!(placeholder_text(&s, Kind::Plymouth, "rings", true), "Preview unavailable");
+    }
 
     #[test]
     fn the_gate_says_what_it_will_and_wont_do() {
