@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.28.3 — 2026-11-12
+
 Mandara runs smoothly in virtual machines with 3D acceleration.
 
 ### Fixed
