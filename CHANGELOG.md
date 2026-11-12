@@ -11,6 +11,7 @@ Mandara OS now follows every release.
 ### Fixed
 
 - **Sound themes play again.** Shell sounds and Studio's previews could play in complete silence when your mixer's "System sounds" level was muted, as many desktops leave it. Mandara's sounds now follow only their own switch and volume, and a sound that really can't play leaves a clear line in the log.
+- **Sound theme cards keep everything inside.** Play buttons, badges, the level outline and long names no longer spill past a card at any window size; buttons wrap to a second line on narrow cards.
 
 ### Under the hood
 

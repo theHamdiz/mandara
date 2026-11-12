@@ -55,6 +55,10 @@ const SOUND_GRID: CardGrid = CardGrid { min_w: 260.0, max_w: 400.0, gap: SPACE_1
 /// A card's level outline.
 const WAVE_H_PX: f32 = DIM_60_PX;
 const WAVE_BAR_W_PX: f32 = 4.0;
+/// The least room between two bars (they thin before they touch).
+const WAVE_BAR_GAP_PX: f32 = 1.0;
+/// A badge over a card's outline never covers more than this share of it.
+const BADGE_MAX_SHARE: f32 = 0.6;
 /// Bars never shrink below this share (silence still reads as a line).
 const WAVE_FLOOR: f32 = 0.08;
 /// How much a theme's colour tints its outline's backdrop.
@@ -656,7 +660,7 @@ impl StudioView {
         let peaks = playing.as_ref().map(|(pk, ..)| *pk).unwrap_or_else(|| idle_peaks(&shown));
         let wave = wave_strip(&peaks, playing.as_ref().map(|(_, pr, _)| *pr), playing.is_some(), tint, p);
         let off = (!cfg.sounds.enabled).then(|| div().text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).text_color(p.warning_amber.hsla()).child(mandara_ui::bidi::paragraph(t("Mandara's own sounds are off: switch Shell sounds on below to hear them on events."))));
-        let rows = self.rows_plain(registry::in_section(registry::Section::Audio).filter(|s| s.group == registry::alert_settings::SOUNDS && s.path != "/sounds/theme"), self.panel_w(), cfg, p, cx);
+        let rows = self.rows_plain(registry::in_section(registry::Section::Audio).filter(|s| s.group == registry::alert_settings::SOUNDS && s.path != "/sounds/theme"), self.panel_w() - 2.0 * SPACE_16_PX, cfg, p, cx);
         let panel = div()
             .flex_1()
             .min_w(px(0.0))
@@ -860,6 +864,9 @@ impl StudioView {
         let peaks = playing.as_ref().map(|(pk, ..)| *pk).unwrap_or_else(|| idle_peaks(&name));
         let strip = div()
             .relative()
+            .w_full()
+            .rounded(px(RADIUS_16_PX))
+            .overflow_hidden()
             .child(wave_strip(&peaks, playing.as_ref().map(|(_, pr, _)| *pr), playing.is_some(), tint, p))
             .when(state == CardState::Active, |el| {
                 el.child(
@@ -867,6 +874,8 @@ impl StudioView {
                         .absolute()
                         .top(px(SPACE_8_PX))
                         .inset_end(px(SPACE_8_PX))
+                        .max_w(gpui::relative(BADGE_MAX_SHARE))
+                        .overflow_hidden()
                         .px(px(SPACE_8_PX))
                         .h(px(DIM_20_PX))
                         .rounded_full()
@@ -883,12 +892,12 @@ impl StudioView {
             })
             .when(have && state != CardState::Active, |el| {
                 let label = if info.is_some_and(|i| i.user) { t("Installed") } else { t("System") };
-                el.child(div().absolute().top(px(SPACE_8_PX)).inset_end(px(SPACE_8_PX)).child(badge(label, p.secondary)))
+                el.child(div().absolute().top(px(SPACE_8_PX)).inset_end(px(SPACE_8_PX)).max_w(gpui::relative(BADGE_MAX_SHARE)).overflow_hidden().child(badge(label, p.secondary)))
             });
 
         // Try it: the signature sounds.
         let waiting = st(cx).waiting.clone();
-        let tries = div().row().items_center().gap(px(SPACE_6_PX)).children(SIGNATURE.iter().enumerate().map(|(i, e)| {
+        let tries = div().row().flex_wrap().items_center().gap(px(SPACE_6_PX)).children(SIGNATURE.iter().enumerate().map(|(i, e)| {
             let on = playing.as_ref().is_some_and(|(_, _, pe)| pe == e) || waiting.as_ref().is_some_and(|(t, w)| *t == name && w == e);
             let (ev, theme) = (e.clone(), name.clone());
             chip(SharedString::from(format!("sound-try-{name}-{i}")), tr(e.label()), on, p)
@@ -980,6 +989,8 @@ impl StudioView {
         div()
             .id(SharedString::from(format!("sound-card-{name}")))
             .flex_1()
+            .min_w(px(0.0))
+            .overflow_hidden()
             .tab_index(0)
             .p(px(SPACE_8_PX))
             .rounded(px(RADIUS_22_PX))
@@ -995,6 +1006,7 @@ impl StudioView {
             .child(
                 div()
                     .px(px(SPACE_6_PX))
+                    .min_w(px(0.0))
                     .row()
                     .flex_col()
                     .gap(px(SPACE_6_PX))
@@ -1003,12 +1015,12 @@ impl StudioView {
                         Some(a) => format!("{line} · {a}"),
                         None => line,
                     }))
-                    .child(div().h(px(DIM_32_PX)).text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).text_color(p.on_surface_variant.hsla()).line_clamp(2).child(mandara_ui::bidi::paragraph(description)))
+                    .child(div().h(px(DIM_32_PX)).overflow_hidden().text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).text_color(p.on_surface_variant.hsla()).line_clamp(2).child(mandara_ui::bidi::paragraph(description)))
                     .child(tries)
                     .children(progress)
                     .children(error_row),
             )
-            .child(div().px(px(SPACE_4_PX)).pb(px(SPACE_4_PX)).row().items_center().gap(px(SPACE_6_PX)).child(primary).child(div().flex_1()).children(remove).children(homepage))
+            .child(div().px(px(SPACE_4_PX)).pb(px(SPACE_4_PX)).row().flex_wrap().items_center().gap(px(SPACE_6_PX)).child(primary).child(div().flex_1()).children(remove).children(homepage))
             .on_key_down(cx.listener(move |this, e: &gpui::KeyDownEvent, _, cx| {
                 let k = &e.keystroke;
                 if k.modifiers.control || k.modifiers.alt || k.modifiers.platform {
@@ -1129,14 +1141,25 @@ fn wave_strip(peaks: &[u8; PEAKS], progress: Option<f32>, live: bool, tint: Colo
         } else {
             tint.with_alpha(ALPHA_25)
         };
-        div().w(px(WAVE_BAR_W_PX)).h(px((WAVE_H_PX - 2.0 * SPACE_12_PX) * level)).rounded_full().bg(color.hsla())
+        div().w(px(WAVE_BAR_W_PX)).flex_shrink(1.0).min_w(px(1.0)).h(px((WAVE_H_PX - 2.0 * SPACE_12_PX) * level)).rounded_full().bg(color.hsla())
     });
-    div().h(px(WAVE_H_PX)).rounded(px(RADIUS_16_PX)).bg(bg).px(px(SPACE_14_PX)).row().items_center().justify_between().children(bars).into_any_element()
+    div().w_full().min_w(px(0.0)).h(px(WAVE_H_PX)).flex_none().overflow_hidden().rounded(px(RADIUS_16_PX)).bg(bg).px(px(SPACE_14_PX)).row().items_center().justify_between().gap(px(WAVE_BAR_GAP_PX)).children(bars).into_any_element()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The level outline fits the narrowest card with full-width bars, and
+    /// even a far narrower box with thinned ones (it is clipped past that).
+    #[test]
+    fn the_outline_fits_inside_every_card() {
+        let inner = |card_w: f32| card_w - 2.0 * (SPACE_8_PX + BORDER_2_PX) - 2.0 * SPACE_14_PX;
+        let full = PEAKS as f32 * WAVE_BAR_W_PX + (PEAKS - 1) as f32 * WAVE_BAR_GAP_PX;
+        assert!(full <= inner(SOUND_GRID.min_w), "{full} > {}", inner(SOUND_GRID.min_w));
+        let thinnest = PEAKS as f32 + (PEAKS - 1) as f32 * WAVE_BAR_GAP_PX;
+        assert!(thinnest <= inner(SOUND_GRID.min_w * 0.6));
+    }
 
     #[test]
     fn idle_outlines_are_stable_and_in_range() {
