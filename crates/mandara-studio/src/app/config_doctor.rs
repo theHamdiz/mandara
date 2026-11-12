@@ -379,11 +379,22 @@ mod tests {
     #[test]
     fn kwin_availability_stays_a_single_status_note_without_reminders() {
         let dir = tempfile::tempdir().unwrap();
-        let report = doctor::check_with(Target::KWin, &dir.path().join("kwinrc"), &doctor::CheckEnv {
-            argv: Some(vec!["printf".into(), "kwin 6.8.2".into()]),
+        let root = dir.path().join("kwinrc");
+        let output = doctor::Output { stdout: "kwin 6.8.2".into(), stderr: String::new(), success: true };
+        // This tests presentation; the config crate covers isolated checker runs.
+        let report = Report {
+            target: Target::KWin,
+            checker: "kwin_wayland --version".into(),
             version: Some("6.8.2".into()),
-            ..Default::default()
-        });
+            status: CheckerStatus::Ran,
+            verified_parser: true,
+            diagnostics: doctor::checker(Target::KWin).parse(&output, &doctor::ParseContext::new(Target::KWin, &root)),
+            root,
+            files: Vec::new(),
+            checked_at: 0,
+            duration_ms: 0,
+            raw: output.stdout,
+        };
         assert_eq!(report.diagnostics.len(), 1);
         assert_eq!(report.problems(), 0);
         assert!(!diagnostic_details(&report));
