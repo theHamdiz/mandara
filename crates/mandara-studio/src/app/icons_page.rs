@@ -603,14 +603,20 @@ impl StudioView {
             .when(theme.tone.has_light(), |el| el.child(g::tag(t("Light"), p.on_surface_variant)))
             .when(theme.tone.has_dark(), |el| el.child(g::tag(t("Dark"), p.on_surface_variant)));
         let n = theme.variants.len();
-        let hover_id = card_id.clone();
-        g::glass_card(card_id, tint, amount, p)
+        let frame = g::lift_frame(&card_id).on_hover(cx.listener({
+            let id = card_id.clone();
+            move |_, h: &bool, _, cx| {
+                g::set_hover(id.clone(), *h, cx);
+                cx.notify();
+            }
+        }));
+        let card = g::glass_card(card_id, tint, amount, p)
             .flex_1()
             .tab_index(0)
             .p(px(SPACE_8_PX))
             .border_2()
             .border_color(if card_active { p.primary.hsla() } else { gpui::transparent_black() })
-            .hover(|s| s.border_color(p.primary.with_alpha(ALPHA_35).hsla()))
+            .group_hover(g::CARD_GROUP, |s| s.border_color(p.primary.with_alpha(ALPHA_35).hsla()))
             .focus_visible(|s| s.border_color(p.primary.with_alpha(ALPHA_80).hsla()))
             .row()
             .flex_col()
@@ -638,10 +644,6 @@ impl StudioView {
                     .children(error.map(|e| g::error_row(e, p))),
             )
             .child(div().px(px(SPACE_4_PX)).pb(px(SPACE_4_PX)).row().items_center().gap(px(SPACE_6_PX)).child(primary).child(div().flex_1()).children(remove).child(g::homepage_button(SharedString::from(format!("icons-home-{}", theme.id)), theme.homepage, p)))
-            .on_hover(cx.listener(move |_, h: &bool, _, cx| {
-                g::set_hover(hover_id.clone(), *h, cx);
-                cx.notify();
-            }))
             .on_key_down(cx.listener(move |this, e: &gpui::KeyDownEvent, _, cx| {
                 let k = &e.keystroke;
                 if k.modifiers.control || k.modifiers.alt || k.modifiers.platform {
@@ -662,8 +664,8 @@ impl StudioView {
                     _ => return,
                 }
                 cx.stop_propagation();
-            }))
-            .into_any_element()
+            }));
+        frame.child(card).into_any_element()
     }
 
     /// Installed themes outside the catalog (packages, your own folders,
@@ -709,22 +711,25 @@ impl StudioView {
             let subtitle = (found.title != name).then(|| div().truncate().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(found.title.clone()));
             let hover_id = card_id.clone();
             cards.push(
+                g::lift_frame(&card_id)
+                    .on_hover(cx.listener(move |_, h: &bool, _, cx| {
+                        g::set_hover(hover_id.clone(), *h, cx);
+                        cx.notify();
+                    }))
+                    .child(
                 g::glass_card(card_id, p.secondary, amount, p)
                     .flex_1()
                     .p(px(SPACE_8_PX))
                     .border_2()
                     .border_color(if active { p.primary.hsla() } else { gpui::transparent_black() })
-                    .hover(|s| s.border_color(p.primary.with_alpha(ALPHA_35).hsla()))
+                    .group_hover(g::CARD_GROUP, |s| s.border_color(p.primary.with_alpha(ALPHA_35).hsla()))
                     .row()
                     .flex_col()
                     .gap(px(SPACE_10_PX))
                     .child(strip)
                     .child(div().px(px(SPACE_6_PX)).row().flex_col().gap(px(SPACE_6_PX)).child(div().truncate().text_start().font_family(display.clone()).text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).child(name.clone())).children(subtitle).child(div().row().child(origin)).children(error))
-                    .child(div().px(px(SPACE_4_PX)).pb(px(SPACE_4_PX)).row().items_center().gap(px(SPACE_6_PX)).child(action).child(div().flex_1()).children(remove))
-                    .on_hover(cx.listener(move |_, h: &bool, _, cx| {
-                        g::set_hover(hover_id.clone(), *h, cx);
-                        cx.notify();
-                    }))
+                    .child(div().px(px(SPACE_4_PX)).pb(px(SPACE_4_PX)).row().items_center().gap(px(SPACE_6_PX)).child(action).child(div().flex_1()).children(remove)),
+                    )
                     .into_any_element(),
             );
         }
