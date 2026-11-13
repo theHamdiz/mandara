@@ -9,48 +9,52 @@ pub(super) struct Niri;
 
 impl ShortcutFormat for Niri {
     fn parse(&self, source: &str) -> Result<Vec<Binding>> {
-        let doc = kdl::KdlDocument::parse(source)?;
-        let mut result = Vec::new();
-        for group in doc
-            .nodes()
-            .iter()
-            .filter(|node| node.name().value() == "binds")
-        {
-            let Some(binds) = group.children() else {
-                continue;
-            };
-            for bind in binds.nodes() {
-                let span = bind.name().span();
-                let mut fields = vec![field(
-                    tk("Shortcut"),
-                    bind.name().value(),
-                    span.offset()..span.offset() + span.len(),
-                    Encoding::KdlName,
-                )];
-                entries(source, bind, &mut fields);
-                if let Some(actions) = bind.children() {
-                    for action in actions.nodes() {
-                        let span = action.name().span();
-                        fields.push(field(
-                            tk("Action"),
-                            action.name().value(),
-                            span.offset()..span.offset() + span.len(),
-                            Encoding::KdlName,
-                        ));
-                        entries(source, action, &mut fields);
-                    }
-                }
-                result.push(Binding {
-                    line: line(source, span.offset()),
-                    scope: "binds".into(),
-                    chord: normalize(bind.name().value()),
-                    fields,
-                    read_only: None,
-                });
-            }
-        }
-        Ok(result)
+        let doc = kdl::KdlDocument::parse_v1(source)?;
+        Ok(from_document(source, &doc))
     }
+}
+
+pub(in crate::keybinds) fn from_document(source: &str, doc: &kdl::KdlDocument) -> Vec<Binding> {
+    let mut result = Vec::new();
+    for group in doc
+        .nodes()
+        .iter()
+        .filter(|node| node.name().value() == "binds")
+    {
+        let Some(binds) = group.children() else {
+            continue;
+        };
+        for bind in binds.nodes() {
+            let span = bind.name().span();
+            let mut fields = vec![field(
+                tk("Shortcut"),
+                bind.name().value(),
+                span.offset()..span.offset() + span.len(),
+                Encoding::KdlName,
+            )];
+            entries(source, bind, &mut fields);
+            if let Some(actions) = bind.children() {
+                for action in actions.nodes() {
+                    let span = action.name().span();
+                    fields.push(field(
+                        tk("Action"),
+                        action.name().value(),
+                        span.offset()..span.offset() + span.len(),
+                        Encoding::KdlName,
+                    ));
+                    entries(source, action, &mut fields);
+                }
+            }
+            result.push(Binding {
+                line: line(source, span.offset()),
+                scope: "binds".into(),
+                chord: normalize(bind.name().value()),
+                fields,
+                read_only: None,
+            });
+        }
+    }
+    result
 }
 
 fn entries(source: &str, node: &kdl::KdlNode, fields: &mut Vec<crate::keybinds::Field>) {
@@ -89,6 +93,27 @@ fn entries(source: &str, node: &kdl::KdlNode, fields: &mut Vec<crate::keybinds::
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_boolean_properties_keep_kdl_v1_spans_and_encoding() {
+        let text = "binds { Super+Q allow-inhibiting=true { quit skip-confirmation=false; }; }\n";
+        let row = Niri.parse(text).unwrap().remove(0);
+        let mut values: Vec<_> = row.fields.iter().map(|field| field.value.clone()).collect();
+        let index = row
+            .fields
+            .iter()
+            .position(|field| field.name.as_deref() == Some("allow-inhibiting"))
+            .unwrap();
+        values[index] = "false".into();
+        let next = crate::keybinds::patch(text, &row, &values).unwrap();
+        assert_eq!(
+            next,
+            text.replacen("allow-inhibiting=true", "allow-inhibiting=false", 1)
+        );
+        assert_eq!(Niri.parse(&next).unwrap().len(), 1);
+        values[index] = "#true".into();
+        assert!(crate::keybinds::patch(text, &row, &values).is_err());
+    }
 
     #[test]
     fn niri_edits_one_argument_and_preserves_properties_comments_and_sibling_binds() {

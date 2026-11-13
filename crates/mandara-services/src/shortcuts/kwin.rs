@@ -191,13 +191,14 @@ impl ServiceEditor for Change<'_> {
         self.api.set(next)
     }
     fn equivalent(&self, body: &str, after: bool) -> Result<bool> {
-        keybinds::kwin_same_settings(
+        keybinds::kwin_same_shortcut_settings(
             body,
             if after {
                 self.edit.body()
             } else {
                 &self.edit.original
             },
+            &self.edit.old_binding.scope,
         )
     }
 }

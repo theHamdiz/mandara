@@ -10470,3 +10470,5 @@
 "Your compositor draws Studio's title bar." = "اسٹوڈیو کا ٹائٹل بار آپ کا کمپوزیٹر دکھاتا ہے۔"
 "labwc keeps its settings in ~/.config/labwc. Mandara follows its workspaces, windows and outputs over Wayland protocols. Edit native bindings in Keyboard shortcuts → Compositor. To start Mandara with labwc, add “mandara &” to ~/.config/labwc/autostart." = "labwc اپنی سیٹنگز کو ~/.config/labwc میں رکھتا ہے۔ Mandara اپنے ورک اسپیس، ونڈوز اور آؤٹ پٹس کو Wayland پروٹوکول پر فالو کرتا ہے۔ کی بورڈ شارٹ کٹس → کمپوزیٹر میں مقامی پابندیوں میں ترمیم کریں۔ Mandara کو labwc کے ساتھ شروع کرنے کے لیے، \"mandara &\" کو ~/.config/labwc/autostart میں شامل کریں۔"
 "{file}, line {line}" = "{file}، لائن {line}"
+
+"This configuration is read-only. Edit its source or create a writable user override." = "یہ ترتیب صرف پڑھنے کے لیے ہے۔ اس کے ماخذ میں ترمیم کریں یا لکھنے کے قابل ذاتی ترتیب بنائیں۔"

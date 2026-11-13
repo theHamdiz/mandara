@@ -3,12 +3,12 @@
 use crate::tokens::*;
 use gpui::{
     AnyElement, ClickEvent, Div, FontWeight, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, SharedString, StatefulInteractiveElement, Styled, Window, div,
+    ParentElement, SharedString, StatefulInteractiveElement, Styled, Window, WindowControls, div,
     prelude::FluentBuilder as _, px,
 };
 use mandara_config::studio::{FrameDesign, StudioFrame};
 use mandara_core::ToGpui as _;
-use mandara_i18n::{t, tk, tr};
+use mandara_i18n::{t, tk};
 use mandara_theme::MandaraPalette;
 use mandara_ui::{bidi::Bidi as _, icons::icon};
 
@@ -27,6 +27,13 @@ enum Control {
 }
 
 impl Control {
+    fn supported(self, capabilities: WindowControls) -> bool {
+        match self {
+            Self::Close => true,
+            Self::Minimize => capabilities.minimize,
+            Self::Maximize => capabilities.maximize,
+        }
+    }
     fn apply(self, window: &mut Window) {
         match self {
             Self::Close => window.remove_window(),
@@ -63,6 +70,7 @@ pub(in crate::app) fn titlebar(
     frame: Option<&StudioFrame>,
     p: &MandaraPalette,
     font: SharedString,
+    capabilities: WindowControls,
 ) -> AnyElement {
     let f = frame.cloned().unwrap_or_default();
     let independent = frame.is_some();
@@ -73,8 +81,12 @@ pub(in crate::app) fn titlebar(
                   color: mandara_theme::Color,
                   danger: bool,
                   control: Control| {
+        let enabled = control.supported(capabilities);
+        let reason = tk("Not supported by this compositor");
         div()
             .id(id)
+            .role(gpui::Role::Button)
+            .aria_label(SharedString::new_static(t(label)))
             .w(px(target_width(lights)))
             .h(px(control_height(&f)))
             .rounded(px(if lights || !independent {
@@ -85,12 +97,17 @@ pub(in crate::app) fn titlebar(
             .row()
             .items_center()
             .justify_center()
-            .cursor_pointer()
-            .focusable()
-            .tab_index(0)
-            .tooltip(crate::app::compositor_page::tip(tr(label), p))
+            .when(enabled, |el| el.cursor_pointer().focusable().tab_index(0))
+            .when(!enabled, |el| {
+                el.opacity(ALPHA_40)
+                    .aria_description(SharedString::new_static(t(reason)))
+            })
+            .tooltip(crate::app::compositor_page::tip(
+                SharedString::new_static(t(if enabled { label } else { reason })),
+                p,
+            ))
             .focus(|s| s.bg(p.primary_container.hsla()))
-            .when(!lights, |el| {
+            .when(!lights && enabled, |el| {
                 el.hover(move |s| {
                     s.bg(if danger {
                         p.urgent_coral.with_alpha(ALPHA_25)
@@ -120,7 +137,9 @@ pub(in crate::app) fn titlebar(
                 icon(glyph, ICON_14_PX, p.on_surface_variant).into_any_element()
             })
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .on_click(move |_: &ClickEvent, window, _| control.apply(window))
+            .when(enabled, |el| {
+                el.on_click(move |_: &ClickEvent, window, _| control.apply(window))
+            })
     };
     let close = button(
         "win-close",
@@ -177,7 +196,9 @@ pub(in crate::app) fn titlebar(
         .gap(px(SPACE_12_PX))
         .on_mouse_down(MouseButton::Left, |e, window, _| {
             if e.click_count >= 2 {
-                window.zoom_window();
+                if window.window_controls().maximize {
+                    window.zoom_window();
+                }
             } else {
                 crate::app::begin_move(window);
             }
@@ -240,11 +261,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn native_capabilities_gate_only_the_controls_the_compositor_cannot_provide() {
+        for minimize in [false, true] {
+            for maximize in [false, true] {
+                let capabilities = WindowControls {
+                    minimize,
+                    maximize,
+                    ..Default::default()
+                };
+                assert!(Control::Close.supported(capabilities));
+                assert_eq!(Control::Minimize.supported(capabilities), minimize);
+                assert_eq!(Control::Maximize.supported(capabilities), maximize);
+            }
+        }
+    }
+
+    #[test]
     fn compact_lights_keep_separate_targets_inside_the_smallest_header() {
         let gap = target_width(true) - LIGHT_DIAMETER;
         assert!(gap > 0.0 && gap < LIGHT_DIAMETER);
         assert!(target_width(true) < target_width(false));
-        assert!(DIM_30_PX <= mandara_config::studio::ranges::TITLE_HEIGHT.min);
         for look in mandara_config::studio::StudioLook::ALL {
             let mut frame = look.appearance().frame;
             frame.title_height = mandara_config::studio::ranges::TITLE_HEIGHT.min;

@@ -164,7 +164,7 @@ fn lua_sample(row: &Binding) -> Result<String> {
     );
     let fields = &row.fields;
     let chord = fields[0].encoding.encode(&fields[0].value)?;
-    let action = Encoding::Identifier.encode(&fields[1].value)?;
+    let action = fields[1].encoding.encode(&fields[1].value)?;
     let mut arguments = Vec::new();
     let mut options = Vec::new();
     for field in &fields[2..] {

@@ -10470,3 +10470,5 @@
 "Your compositor draws Studio's title bar." = "Kompositor menggambar bilah judul Studio."
 "labwc keeps its settings in ~/.config/labwc. Mandara follows its workspaces, windows and outputs over Wayland protocols. Edit native bindings in Keyboard shortcuts → Compositor. To start Mandara with labwc, add “mandara &” to ~/.config/labwc/autostart." = "labwc menyimpan pengaturannya di ~/.config/labwc. Mandara mengikuti ruang kerja, jendela, dan keluarannya melalui protokol Wayland. Edit pengikatan asli di Pintasan keyboard → Kompositor. Untuk memulai Mandara dengan labwc, tambahkan “mandara &” ke ~/.config/labwc/autostart."
 "{file}, line {line}" = "{file}, jalur {line}"
+
+"This configuration is read-only. Edit its source or create a writable user override." = "Konfigurasi ini hanya dapat dibaca. Edit sumbernya atau buat pengaturan pribadi yang dapat ditulis."

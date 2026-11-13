@@ -10707,3 +10707,5 @@
 "Your compositor draws Studio's title bar." = "El compositor dibuja la barra de título de Studio."
 "labwc keeps its settings in ~/.config/labwc. Mandara follows its workspaces, windows and outputs over Wayland protocols. Edit native bindings in Keyboard shortcuts → Compositor. To start Mandara with labwc, add “mandara &” to ~/.config/labwc/autostart." = "labwc mantiene su configuración en ~/.config/labwc. Mandara sigue sus espacios de trabajo, ventanas y salidas sobre protocolos Wayland. Edite enlaces nativos en Atajos de teclado → Compositor. Para iniciar Mandara con labwc, agregue “mandara &” a ~/.config/labwc/autostart."
 "{file}, line {line}" = "{file}, línea {line}"
+
+"This configuration is read-only. Edit its source or create a writable user override." = "Esta configuración es de solo lectura. Edita su origen o crea una configuración personal que puedas modificar."

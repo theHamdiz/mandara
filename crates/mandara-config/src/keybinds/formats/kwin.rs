@@ -26,25 +26,23 @@ impl ShortcutFormat for KWin {
             } else if (group == "[kwin]" || group.starts_with("[kwin]["))
                 && !group.contains("[$")
                 && !trimmed.starts_with(['#', ';'])
+                && let Some((name, value)) = text.split_once('=')
+                && !name.trim().starts_with("_k_")
             {
-                if let Some((name, value)) = text.split_once('=')
-                    && !name.trim().starts_with("_k_")
-                {
-                    let value_start = text.len() - value.len();
-                    let fields = alternatives(value, offset + value_start)?;
-                    let combo = (fields.len() == 1 && !fields[0].value.contains(','))
-                        .then(|| fields[0].value.replace("Meta+", "Super+"));
-                    result.push(Binding {
-                        line: line + 1,
-                        scope: format!("{group}/{}", name.trim()),
-                        chord: combo
-                            .as_deref()
-                            .filter(|key| *key != "none")
-                            .and_then(normalize),
-                        fields,
-                        read_only: None,
-                    });
-                }
+                let value_start = text.len() - value.len();
+                let fields = alternatives(value, offset + value_start)?;
+                let combo = (fields.len() == 1 && !fields[0].value.contains(','))
+                    .then(|| fields[0].value.replace("Meta+", "Super+"));
+                result.push(Binding {
+                    line: line + 1,
+                    scope: format!("{group}/{}", name.trim()),
+                    chord: combo
+                        .as_deref()
+                        .filter(|key| *key != "none")
+                        .and_then(normalize),
+                    fields,
+                    read_only: None,
+                });
             }
             offset += raw.len();
         }

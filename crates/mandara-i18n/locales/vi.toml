@@ -10371,3 +10371,5 @@
 "Your compositor draws Studio's title bar." = "Trình tổng hợp vẽ thanh tiêu đề của Studio."
 "labwc keeps its settings in ~/.config/labwc. Mandara follows its workspaces, windows and outputs over Wayland protocols. Edit native bindings in Keyboard shortcuts → Compositor. To start Mandara with labwc, add “mandara &” to ~/.config/labwc/autostart." = "labwc giữ các cài đặt của nó trong ~/.config/labwc. Mandara tuân theo không gian làm việc, cửa sổ và đầu ra của nó qua giao thức Wayland. Chỉnh sửa các liên kết gốc trong Phím tắt → Trình tổng hợp. Để khởi động Mandara với labwc, hãy thêm “mandara &” vào ~/.config/labwc/autostart."
 "{file}, line {line}" = "{file}, dòng {line}"
+
+"This configuration is read-only. Edit its source or create a writable user override." = "Cấu hình này chỉ có thể đọc. Hãy sửa nguồn hoặc tạo cấu hình người dùng có quyền ghi để ghi đè."

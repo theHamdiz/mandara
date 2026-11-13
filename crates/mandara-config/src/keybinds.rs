@@ -8,6 +8,7 @@ mod identity;
 mod kwin_settings;
 mod qt_keys;
 mod qt_sequence;
+mod qt_xkb;
 mod scan;
 mod text_undo;
 
@@ -21,8 +22,12 @@ pub use encoding::Encoding;
 pub use formats::aqueous::normalized as aqueous_chord;
 pub use formats::labwc_keyboard;
 pub use kwin_settings::same_settings as kwin_same_settings;
+pub use kwin_settings::same_shortcut_settings as kwin_same_shortcut_settings;
+pub use qt_sequence::keybind as qt_keybind;
 pub use qt_sequence::sequence as qt_sequence;
-pub use scan::{Scan, Source, default_root, scan, scan_from};
+pub use scan::{
+    Scan, Source, default_root, default_root_in, resolve_niri_mod, scan, scan_from, scan_roots,
+};
 pub use text_undo::TextUndo;
 
 /// Bound one config file before parsing it or retaining its field values.
@@ -83,6 +88,11 @@ pub fn parse(
         mandara_i18n::t("The shortcut configuration is too large to edit.")
     );
     let bindings = formats::format(target, file, source).parse(source)?;
+    validate_bindings(&bindings)?;
+    Ok(bindings)
+}
+
+fn validate_bindings(bindings: &[Binding]) -> Result<()> {
     ensure!(
         bindings.len() <= MAX_BINDINGS,
         "{}",
@@ -97,7 +107,7 @@ pub fn parse(
         "{}",
         mandara_i18n::t("A shortcut has too many arguments or an oversized value.")
     );
-    Ok(bindings)
+    Ok(())
 }
 
 /// Patch only the selected values. Surrounding comments and formatting stay exact.

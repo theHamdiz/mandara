@@ -1970,7 +1970,7 @@ impl Render for StudioView {
         };
 
         let titlebar = client_controls
-            .then(|| studio_frame::titlebar(studio_frame.as_ref(), &p, fonts.studio.clone()));
+            .then(|| studio_frame::titlebar(studio_frame.as_ref(), &p, fonts.studio.clone(), window.window_controls()));
         // `MANDARA_STUDIO_SCROLL=<px>` opens the page scrolled down, once
         // (screenshots of long pages without driving the pointer).
         static SCROLLED: std::sync::Once = std::sync::Once::new();

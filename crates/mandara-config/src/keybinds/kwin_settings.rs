@@ -70,6 +70,50 @@ pub fn same_settings(left: &str, right: &str) -> Result<bool> {
     Ok(entries(left)? == entries(right)?)
 }
 
+/// KGlobalAccel may reorder only the selected action's live alternatives.
+pub fn same_shortcut_settings(left: &str, right: &str, scope: &str) -> Result<bool> {
+    let (group, action) = scope
+        .split_once('/')
+        .ok_or_else(|| anyhow::anyhow!("invalid KWin shortcut identity"))?;
+    let key = (unescape(group)?, unescape(action)?);
+    let mut left_entries = entries(left)?;
+    let mut right_entries = entries(right)?;
+    ensure!(
+        left_entries.remove(&key).is_some() && right_entries.remove(&key).is_some(),
+        "KWin shortcut disappeared"
+    );
+    if left_entries != right_entries {
+        return Ok(false);
+    }
+    fn selected(source: &str, scope: &str) -> Result<(Vec<[i32; 4]>, String)> {
+        let binding = super::parse(
+            crate::compositor::Target::KWin,
+            std::path::Path::new("kglobalshortcutsrc"),
+            source,
+        )?
+        .into_iter()
+        .find(|row| row.scope == scope)
+        .ok_or_else(|| anyhow::anyhow!("KWin shortcut disappeared"))?;
+        let mut alternatives = binding
+            .fields
+            .iter()
+            .map(|field| super::qt_sequence(&field.value))
+            .collect::<Result<Vec<_>>>()?;
+        alternatives.retain(|keys| *keys != [0; 4]);
+        alternatives.sort_unstable();
+        alternatives.dedup();
+        let end = binding
+            .fields
+            .last()
+            .ok_or_else(|| anyhow::anyhow!("KWin shortcut has no fields"))?
+            .range
+            .end;
+        let suffix = source[end..].lines().next().unwrap_or_default().trim();
+        Ok((alternatives, unescape(suffix)?))
+    }
+    Ok(selected(left, scope)? == selected(right, scope)?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -81,5 +125,44 @@ mod tests {
         assert!(!same_settings(before, &canonical.replace("keep", "new")).unwrap());
         assert!(!same_settings(before, &(canonical.to_owned() + "extra=value\n")).unwrap());
         assert!(same_settings(before, "[app]\nKey=a\nKey=b").is_err());
+    }
+
+    #[test]
+    fn only_selected_live_alternatives_can_be_reordered_or_deduplicated() {
+        let before = "# personal\n[kwin]\nAction=Meta+Q\\tAlt+F4,Alt+F4,Keep label\nOther=Meta+X\\tMeta+Y,none,Other label\n";
+        let reordered = before.replace("Meta+Q\\tAlt+F4", "Alt+F4\\tMeta+Q\\tMeta+Q");
+        assert!(same_shortcut_settings(before, &reordered, "[kwin]/Action").unwrap());
+        assert!(
+            !same_shortcut_settings(
+                before,
+                &reordered.replace("Meta+X\\tMeta+Y", "Meta+Y\\tMeta+X"),
+                "[kwin]/Action"
+            )
+            .unwrap()
+        );
+        assert!(
+            !same_shortcut_settings(
+                before,
+                &reordered.replace("Keep label", "New label"),
+                "[kwin]/Action"
+            )
+            .unwrap()
+        );
+        assert!(
+            !same_shortcut_settings(
+                before,
+                &reordered.replace(",Alt+F4,Keep", ",Meta+Q,Keep"),
+                "[kwin]/Action"
+            )
+            .unwrap()
+        );
+        assert!(
+            !same_shortcut_settings(
+                before,
+                &reordered.replace("Meta+Q\\tMeta+Q", "Meta+W"),
+                "[kwin]/Action"
+            )
+            .unwrap()
+        );
     }
 }

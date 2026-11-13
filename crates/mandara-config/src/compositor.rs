@@ -39,9 +39,11 @@ use serde::{Deserialize, Serialize};
 use crate::{mango_keys, paths};
 
 mod sway_read;
+mod read_budget;
 mod glob;
 pub mod shortcuts;
 pub(crate) use sway_read::binds as sway_config_binds;
+pub(crate) use sway_read::shortcut_sources as sway_shortcut_sources;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -181,14 +183,20 @@ impl Target {
     /// The user's primary config file.
     pub fn user_config(self) -> PathBuf {
         let config = dirs::config_dir().unwrap_or_else(|| PathBuf::from("~/.config"));
+        self.user_config_in(&config, &paths::home())
+    }
+
+    /// Resolve native defaults in the compositor's home, which can differ from Studio's.
+    pub fn user_config_in(self, config: &Path, home: &Path) -> PathBuf {
         match self {
             Target::Mango => config.join("mango/config.conf"),
             Target::Niri => config.join("niri/config.kdl"),
-            Target::Hyprland if Self::hyprland_lua() => config.join("hypr/hyprland.lua"),
+            Target::Hyprland if installed_version(Self::Hyprland).is_some_and(hyprland_reads_lua)
+                || config.join("hypr/hyprland.lua").exists() => config.join("hypr/hyprland.lua"),
             Target::Hyprland => config.join("hypr/hyprland.conf"),
             // Umbriel reads `$XDG_CONFIG_HOME/umbriel/config.toml` first.
             Target::Umbriel => config.join("umbriel/config.toml"),
-            Target::Sway => sway_user_config(&config, &paths::home()),
+            Target::Sway => sway_user_config(config, home),
             // River runs `$XDG_CONFIG_HOME/river/init` at start-up.
             Target::River => config.join("river/init"),
             Target::KWin => config.join("kwinrc"),
@@ -745,7 +753,7 @@ pub fn keysym_for(key: &str) -> String {
         "pause" => "Pause",
         "menu" => "Menu",
         k if is_function_key(k) => return k.to_uppercase(),
-        k if k.len() > 4 && k[..4].eq_ignore_ascii_case("xf86") => return k.to_string(),
+        k if k.get(..4).is_some_and(|prefix| prefix.eq_ignore_ascii_case("xf86")) => return k.to_string(),
         k if k.chars().count() == 1 => return k.to_lowercase(),
         k => return k.to_string(),
     };
@@ -753,7 +761,7 @@ pub fn keysym_for(key: &str) -> String {
 }
 
 fn is_function_key(k: &str) -> bool {
-    k.len() > 1 && k[..1].eq_ignore_ascii_case("f") && k[1..].chars().all(|c| c.is_ascii_digit())
+    k.strip_prefix(['f', 'F']).is_some_and(|number| !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()))
 }
 
 /// Keys that may be bound without Super / Ctrl / Alt: function keys,
@@ -761,7 +769,7 @@ fn is_function_key(k: &str) -> bool {
 /// bare (or with only Shift) would stop that key typing in every app.
 pub fn bare_key_allowed(key: &str) -> bool {
     let k = key.trim();
-    is_function_key(k) || k.eq_ignore_ascii_case("print") || k.eq_ignore_ascii_case("pause") || (k.len() > 4 && k[..4].eq_ignore_ascii_case("xf86"))
+    is_function_key(k) || k.eq_ignore_ascii_case("print") || k.eq_ignore_ascii_case("pause") || k.get(..4).is_some_and(|prefix| prefix.eq_ignore_ascii_case("xf86"))
 }
 
 pub fn chord<'a>(mods: impl Iterator<Item = &'a str>, key: &str) -> String {
@@ -2413,6 +2421,20 @@ fn sway_include_files(base: &Path, raw: &str) -> Vec<PathBuf> {
         .collect()
 }
 
+fn sway_include_files_bounded(base: &Path, raw: &str, limit: usize) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for word in sway_include_words(raw) {
+        let path = resolve_include(base, &expand_env(&word));
+        if has_glob(&path.to_string_lossy()) {
+            files.extend(glob_path_bounded(&path, limit.saturating_sub(files.len()))?);
+        } else {
+            anyhow::ensure!(files.len() < limit, "too many included shortcut files");
+            files.push(PathBuf::from(unescape_glob(&path.to_string_lossy())));
+        }
+    }
+    Ok(files)
+}
+
 /// Shell words with escaped wildcard occurrences retained for glob matching.
 fn sway_include_words(raw: &str) -> Vec<String> {
     // Sway's own argument handling first: an argument that starts with a
@@ -2621,6 +2643,24 @@ pub fn existing_chords_at(target: Target, root: &Path) -> BTreeSet<String> {
     out
 }
 
+/// Saving a native shortcut must fail visibly when conflict discovery is incomplete.
+pub fn existing_chords_checked(target: Target, root: &Path) -> Result<BTreeSet<String>> {
+    if target == Target::Sway { return sway_read::checked(root); }
+    let mut budget = read_budget::ReadBudget::default();
+    if target == Target::Mango {
+        return mango_keys::with_user_keys(|keys| mango_chords_from(root, keys, crate::keybinds::MAX_BINDINGS, &mut |path| budget.read(path)));
+    }
+    let mut out = BTreeSet::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(file) = stack.pop() {
+        let Some(text) = budget.read(&file)? else { continue; };
+        out.extend(parse_chords(target, &text));
+        anyhow::ensure!(out.len() <= crate::keybinds::MAX_BINDINGS, "too many compositor shortcuts");
+        stack.extend(included_files_bounded(target, &file, &text, budget.remaining_files().saturating_sub(stack.len()))?);
+    }
+    Ok(out)
+}
+
 /// Sway reads `include`d files in place, and a `set $mod Mod4` in the main
 /// config holds in every file included after it (the usual
 /// `include /etc/sway/config.d/*` binds `$mod+…`): the user's binds are
@@ -2634,17 +2674,25 @@ fn sway_existing_chords(root: &Path) -> BTreeSet<String> {
 /// the key mode in force where its drop-in is sourced (`default` when it
 /// isn't sourced yet); only user binds that can meet that mode count.
 fn mango_existing_chords(root: &Path, keys: &mango_keys::MangoKeys) -> BTreeSet<String> {
-    struct Walk<'k> {
+    // Historical setup scans skip unreadable sources; editor saves use the
+    // checked reader and propagate every failure before publishing a binding.
+    mango_chords_from(root, keys, usize::MAX, &mut |file| Ok(std::fs::read_to_string(file).ok())).unwrap_or_default()
+}
+
+fn mango_chords_from(root: &Path, keys: &mango_keys::MangoKeys, limit: usize, read: &mut dyn FnMut(&Path) -> Result<Option<String>>) -> Result<BTreeSet<String>> {
+    struct Walk<'k, 'r> {
         keys: &'k mango_keys::MangoKeys,
+        read: &'r mut dyn FnMut(&Path) -> Result<Option<String>>,
+        limit: usize,
         visited: BTreeSet<PathBuf>,
         binds: Vec<(String, String)>,
         ours: Option<String>,
     }
-    fn walk(w: &mut Walk, file: &Path, mode: String) -> String {
+    fn walk(w: &mut Walk, file: &Path, mode: String) -> Result<String> {
         if !w.visited.insert(file.to_path_buf()) {
-            return mode;
+            return Ok(mode);
         }
-        let Ok(text) = std::fs::read_to_string(file) else { return mode;
+        let Some(text) = (w.read)(file)? else { return Ok(mode);
         };
         let mut mode = mode;
         // Split the file at its `source=` lines so each part starts in the
@@ -2654,12 +2702,12 @@ fn mango_existing_chords(root: &Path, keys: &mango_keys::MangoKeys) -> BTreeSet<
             let sourced = (!line.trim_start().starts_with('#')).then(|| include_path(Target::Mango, line)).flatten();
             match sourced {
                 Some(path) => {
-                    mode = flush(w, &mut chunk, mode);
+                    mode = flush(w, &mut chunk, mode)?;
                     let path = resolve_include(file, &path);
-                    if path == Target::Mango.generated_file() || is_generated(&path) {
+                    if path == Target::Mango.generated_file() || is_generated(&path) || std::fs::canonicalize(&path).is_ok_and(|path| is_generated(&path)) {
                         w.ours.get_or_insert_with(|| mode.clone());
-                    } else {
-                        mode = walk(w, &path, mode);
+                    } else if path.exists() || !line.trim_start().starts_with("source_optional") {
+                        mode = walk(w, &path, mode)?;
                     }
                 }
                 None => {
@@ -2670,16 +2718,17 @@ fn mango_existing_chords(root: &Path, keys: &mango_keys::MangoKeys) -> BTreeSet<
         }
         flush(w, &mut chunk, mode)
     }
-    fn flush(w: &mut Walk, chunk: &mut String, mode: String) -> String {
+    fn flush(w: &mut Walk, chunk: &mut String, mode: String) -> Result<String> {
         let (binds, mode) = mango_binds(chunk, &mode, w.keys);
         w.binds.extend(binds.into_iter().map(|b| (b.chord, b.mode)));
+        anyhow::ensure!(w.binds.len() <= w.limit, "too many compositor shortcuts");
         chunk.clear();
-        mode
+        Ok(mode)
     }
-    let mut w = Walk { keys, visited: BTreeSet::new(), binds: Vec::new(), ours: None };
-    walk(&mut w, root, mango_keys::DEFAULT_MODE.to_string());
+    let mut w = Walk { keys, read, limit, visited: BTreeSet::new(), binds: Vec::new(), ours: None };
+    walk(&mut w, root, mango_keys::DEFAULT_MODE.to_string())?;
     let ours = w.ours.unwrap_or_else(|| mango_keys::DEFAULT_MODE.to_string());
-    w.binds.into_iter().filter(|(_, mode)| mango_keys::modes_meet(mode, &ours)).map(|(chord, _)| chord).collect()
+    Ok(w.binds.into_iter().filter(|(_, mode)| mango_keys::modes_meet(mode, &ours)).map(|(chord, _)| chord).collect())
 }
 
 /// A file Mandara generates (`…/mandara/generated/…`).
@@ -3665,6 +3714,36 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         assert_eq!(chord(["SUPER", "SHIFT"].into_iter(), "S"), "shift+super+s");
         assert_eq!(chord(["Mod"].into_iter(), "Space"), "super+space");
         assert_eq!(chord(["NONE"].into_iter(), "Print"), "print");
+    }
+
+    #[test]
+    fn non_latin_shortcut_keys_never_slice_inside_utf8_characters() {
+        for key in ["أ", "ش", "漢", "漢字", "🙂", "É"] {
+            assert!(!is_function_key(key));
+            assert!(!bare_key_allowed(key));
+            assert_eq!(keysym_for(key), key.to_lowercase());
+        }
+        assert!(is_function_key("F12"));
+        assert!(!is_function_key("F"));
+    }
+
+    #[test]
+    fn checked_conflict_reads_keep_mango_modes_and_bound_every_native_source() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config.conf");
+        let child = directory.path().join("keys.conf");
+        std::fs::write(&root, "key_mode=resize\nsource=keys.conf\nkey_mode=default\nbind=SUPER,W,killclient\nsource_optional=missing.conf\n").unwrap();
+        std::fs::write(&child, "source=config.conf\nbind=SUPER,Q,killclient\n").unwrap();
+        assert_eq!(existing_chords_checked(Target::Mango, &root).unwrap(), BTreeSet::from(["super+w".into()]));
+        for target in [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway] {
+            std::fs::write(&root, vec![b'x'; crate::keybinds::MAX_FILE_BYTES + 1]).unwrap();
+            assert!(existing_chords_checked(target, &root).is_err(), "{target:?}");
+        }
+        std::fs::write(&root, "include *.keys\n").unwrap();
+        for index in 0..crate::keybinds::MAX_FILES {
+            std::fs::write(directory.path().join(format!("{index}.keys")), "").unwrap();
+        }
+        assert!(existing_chords_checked(Target::Sway, &root).is_err());
     }
 
     #[test]

@@ -236,9 +236,23 @@ impl NiriDriver {
         Ok(serde_json::from_value(unwrap_reply(&self.request(json!("Windows"))?, "Windows")?)?)
     }
 
+    /// Winit's synthetic output identifies the nested backend used for Mod.
+    pub fn is_nested(&self) -> Result<bool> {
+        let outputs = unwrap_reply(&self.request(json!("Outputs"))?, "Outputs")?;
+        Ok(nested_output(&outputs))
+    }
+
     fn action(&self, action: Value) -> Result<()> {
         unwrap_reply(&self.request(json!({ "Action": action }))?, "Handled").map(|_| ())
     }
+}
+
+fn nested_output(outputs: &Value) -> bool {
+    outputs.as_object().is_some_and(|outputs| outputs.values().any(|output| {
+        output.get("name").and_then(Value::as_str) == Some("winit")
+            && output.get("make").and_then(Value::as_str) == Some("Smithay")
+            && output.get("model").and_then(Value::as_str) == Some("Winit")
+    }))
 }
 
 /// A `WorkspaceReferenceArg` for the bar's per-output index `idx` on
@@ -375,6 +389,13 @@ impl CompositorBackend for NiriDriver {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_the_synthetic_winit_output_selects_the_nested_modifier() {
+        assert!(nested_output(&json!({"winit":{"name":"winit","make":"Smithay","model":"Winit"}})));
+        assert!(!nested_output(&json!({"DP-1":{"name":"DP-1","make":"Smithay","model":"Winit"}})));
+        assert!(!nested_output(&json!({})));
+    }
 
     #[test]
     fn only_the_focused_output_is_active() {

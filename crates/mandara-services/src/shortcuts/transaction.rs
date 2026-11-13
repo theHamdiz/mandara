@@ -151,14 +151,21 @@ pub(super) fn apply(
             return Ok(None);
         }
         guard.fresh()?;
-        let current = keybinds::scan_from(session.target, &session.root);
+        let mut current = keybinds::scan_from(session.target, &session.root);
+        if let Some(modifiers) = &session.scan.niri {
+            keybinds::resolve_niri_mod(&mut current, modifiers.nested_session);
+        }
         ensure!(
             current.errors.is_empty(),
             "{}",
             t("Resolve the shortcut configuration errors before saving.")
         );
         let mut managed = managed.clone();
-        managed.existing_chords = compositor::existing_chords_at(session.target, &session.root);
+        managed.existing_chords = if session.target == compositor::Target::Niri {
+            Default::default()
+        } else {
+            compositor::existing_chords_checked(session.target, &session.root)?
+        };
         // TOML and self-managed dialects also expose literal alternatives through
         // the field parser; unresolved expressions remain with the native checker.
         managed.existing_chords.extend(

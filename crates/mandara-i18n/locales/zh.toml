@@ -10708,3 +10708,5 @@
 "Your compositor draws Studio's title bar." = "Studio 的标题栏由合成器绘制。"
 "labwc keeps its settings in ~/.config/labwc. Mandara follows its workspaces, windows and outputs over Wayland protocols. Edit native bindings in Keyboard shortcuts → Compositor. To start Mandara with labwc, add “mandara &” to ~/.config/labwc/autostart." = "labwc 将其设置保留在 ~/.config/labwc 中。 Mandara 通过 Wayland 协议遵循其工作区、窗口和输出。编辑 键盘快捷键 → 合成器 中的本机绑定。要使用 labwc 启动 Mandara，请将“mandara &”添加到 ~/.config/labwc/autostart。"
 "{file}, line {line}" = "{file}，线路 {line}"
+
+"This configuration is read-only. Edit its source or create a writable user override." = "此配置为只读。请编辑其源文件，或创建可写的用户配置来覆盖它。"

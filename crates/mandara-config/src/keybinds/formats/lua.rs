@@ -53,6 +53,13 @@ pub(crate) fn validate_value(value: &str, string: bool) -> Result<()> {
 
 fn scalar(expression: &Expression) -> bool {
     match expression {
+        Expression::String(_) => true,
+        Expression::TableConstructor(table) => table.fields().iter().all(|field| match field {
+            full_moon::ast::Field::NameKey { value, .. } => scalar(value),
+            full_moon::ast::Field::ExpressionKey { key, value, .. } => scalar(key) && scalar(value),
+            full_moon::ast::Field::NoKey(value) => scalar(value),
+            _ => false,
+        }),
         Expression::Number(_) => true,
         Expression::Symbol(token) => matches!(
             token.token_type(),
@@ -122,6 +129,46 @@ fn call<'a>(
     Some(arguments)
 }
 
+fn dispatcher(
+    node: &FunctionCall,
+) -> Option<(
+    Range<usize>,
+    &full_moon::ast::punctuated::Punctuated<Expression>,
+)> {
+    if !matches!(node.prefix(), Prefix::Name(prefix) if prefix.token().to_string() == "hl") {
+        return None;
+    }
+    let mut suffixes = node.suffixes();
+    if !matches!(suffixes.next()?, Suffix::Index(Index::Dot { name, .. }) if name.token().to_string() == "dsp")
+    {
+        return None;
+    }
+    let mut range: Option<Range<usize>> = None;
+    while let Some(suffix) = suffixes.next() {
+        match suffix {
+            Suffix::Index(Index::Dot { name, .. }) => {
+                let next = span(name)?;
+                if let Some(range) = &mut range {
+                    range.end = next.end;
+                } else {
+                    range = Some(next);
+                }
+            }
+            Suffix::Call(Call::AnonymousCall(args)) => {
+                if suffixes.next().is_some() {
+                    return None;
+                }
+                let FunctionArgs::Parentheses { arguments, .. } = args.as_ref() else {
+                    return None;
+                };
+                return Some((range?, arguments));
+            }
+            _ => return None,
+        }
+    }
+    None
+}
+
 impl Visitor for Bindings<'_> {
     fn visit_numeric_for(&mut self, _: &full_moon::ast::NumericFor) {
         self.loops += 1;
@@ -166,24 +213,12 @@ impl Visitor for Bindings<'_> {
         };
         if let Some(Expression::FunctionCall(action)) = arguments.iter().nth(1) {
             // A dispatcher name and each literal argument are independently editable.
-            let suffixes: Vec<_> = action.suffixes().collect();
-            if let [
-                Suffix::Index(Index::Dot {
-                    name: namespace, ..
-                }),
-                Suffix::Index(Index::Dot { name, .. }),
-                Suffix::Call(Call::AnonymousCall(args)),
-            ] = suffixes.as_slice()
-                && matches!(action.prefix(), Prefix::Name(prefix) if prefix.token().to_string() == "hl")
-                && namespace.token().to_string() == "dsp"
-                && let FunctionArgs::Parentheses { arguments, .. } = args.as_ref()
-                && let Some(range) = span(name)
-            {
+            if let Some((range, arguments)) = dispatcher(action) {
                 row.fields.push(field(
                     tk("Action"),
                     &self.source[range.clone()],
                     range,
-                    Encoding::Identifier,
+                    Encoding::LuaPath,
                 ));
                 for argument in arguments.iter() {
                     if let Some(range) = span(argument) {
@@ -246,6 +281,28 @@ impl Visitor for Bindings<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nested_native_dispatchers_and_literal_option_tables_are_editable_without_execution() {
+        let text = "os.execute('never run')\nhl.bind('SUPER + Q', hl.dsp.window.close())\nhl.bind('SUPER + V', hl.dsp.window.float({ action = 'toggle' }))\n";
+        let rows = Lua.parse(text).unwrap();
+        assert!(rows.iter().all(|row| row.read_only.is_none()));
+        assert_eq!(rows[0].fields[1].value, "window.close");
+        let mut values: Vec<_> = rows[1]
+            .fields
+            .iter()
+            .map(|field| field.value.clone())
+            .collect();
+        values[2] = "{ action = 'on' }".into();
+        assert_eq!(
+            crate::keybinds::patch(text, &rows[1], &values).unwrap(),
+            text.replace("'toggle'", "'on'")
+        );
+        values[2] = "{ action = os.execute('never run') }".into();
+        assert!(crate::keybinds::patch(text, &rows[1], &values).is_err());
+        values[1] = "window.close(); os.execute('never run')".into();
+        assert!(crate::keybinds::patch(text, &rows[1], &values).is_err());
+    }
 
     #[test]
     fn multiline_lua_binds_are_read_without_running_any_lua() {

@@ -18,6 +18,7 @@ pub enum Encoding {
     XmlText,
     LuaLiteral,
     LuaScalar,
+    LuaPath,
     RonValue,
     KConfig,
 }
@@ -74,7 +75,7 @@ impl Encoding {
                 entry.to_string().trim().to_owned()
             }
             Self::KdlValue => {
-                let document = kdl::KdlDocument::parse(&format!("value {value}\n"))?;
+                let document = kdl::KdlDocument::parse_v1(&format!("value {value}\n"))?;
                 ensure!(
                     document.nodes().len() == 1
                         && document.nodes()[0].entries().len() == 1
@@ -97,6 +98,12 @@ impl Encoding {
             }
             Self::LuaScalar => {
                 super::formats::lua::validate_value(value, false)?;
+                value.to_owned()
+            }
+            Self::LuaPath => {
+                for part in value.split('.') {
+                    Self::Identifier.encode(part.trim())?;
+                }
                 value.to_owned()
             }
             Self::RonValue => {

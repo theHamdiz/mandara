@@ -1,5 +1,6 @@
 //! Sway reads included files at the include's position, sharing variables and blocks.
 
+use anyhow::{Result, ensure};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -7,8 +8,44 @@ use super::{SwayBind, Target, include_path, is_generated, sway_binds_in, sway_in
 
 pub(crate) fn binds(files: &[PathBuf]) -> Vec<(PathBuf, SwayBind)> {
     let mut reader = Reader::default();
-    for file in files { reader.read(file); }
+    for file in files {
+        let _ = reader.read(file);
+    }
     reader.binds
+}
+
+pub(super) fn checked(root: &Path) -> Result<BTreeSet<String>> {
+    let mut reader = Reader {
+        budget: Some(Default::default()),
+        ..Default::default()
+    };
+    reader.read(root)?;
+    Ok(reader
+        .binds
+        .into_iter()
+        .map(|(_, binding)| binding.chord)
+        .collect())
+}
+
+#[derive(Default)]
+pub(crate) struct ShortcutSources {
+    pub files: Vec<(PathBuf, String)>,
+    pub generated: Vec<PathBuf>,
+    pub bindings: Vec<(PathBuf, SwayBind)>,
+}
+
+pub(crate) fn shortcut_sources(files: &[PathBuf]) -> Result<ShortcutSources> {
+    let mut reader = Reader {
+        budget: Some(Default::default()),
+        sources: Some(Default::default()),
+        ..Default::default()
+    };
+    for file in files {
+        reader.read(file)?;
+    }
+    let mut sources = reader.sources.expect("source collection is enabled");
+    sources.bindings = reader.binds;
+    Ok(sources)
 }
 
 #[derive(Default)]
@@ -17,35 +54,83 @@ struct Reader {
     blocks: Vec<String>,
     visited: BTreeSet<PathBuf>,
     binds: Vec<(PathBuf, SwayBind)>,
+    budget: Option<super::read_budget::ReadBudget>,
+    sources: Option<ShortcutSources>,
 }
 
 impl Reader {
-    fn chunk(&mut self, file: &Path, text: &str, offset: usize) {
-        self.binds.extend(sway_binds_in(text, &mut self.vars, &mut self.blocks).into_iter().map(|mut bind| {
-            bind.line += offset;
-            (file.to_path_buf(), bind)
-        }));
+    fn chunk(&mut self, file: &Path, text: &str, offset: usize) -> Result<()> {
+        self.binds.extend(
+            sway_binds_in(text, &mut self.vars, &mut self.blocks)
+                .into_iter()
+                .map(|mut bind| {
+                    bind.line += offset;
+                    (file.to_path_buf(), bind)
+                }),
+        );
+        ensure!(
+            self.budget.is_none() || self.binds.len() <= crate::keybinds::MAX_BINDINGS,
+            "too many compositor shortcuts"
+        );
+        Ok(())
     }
 
-    fn read(&mut self, file: &Path) {
+    fn read(&mut self, file: &Path) -> Result<()> {
         let key = std::fs::canonicalize(file).unwrap_or_else(|_| file.to_path_buf());
-        if file == Target::Sway.generated_file() || is_generated(file) || !self.visited.insert(key) { return; }
-        let Ok(text) = std::fs::read_to_string(file) else { return };
+        if file == Target::Sway.generated_file() || is_generated(file) || is_generated(&key) {
+            if let Some(sources) = &mut self.sources
+                && !sources.generated.iter().any(|path| path == file)
+            {
+                sources.generated.push(file.into());
+            }
+            return Ok(());
+        }
+        if !self.visited.insert(key) {
+            return Ok(());
+        }
+        let text = match &mut self.budget {
+            Some(budget) => budget.read(file)?,
+            None => std::fs::read_to_string(file).ok(),
+        };
+        let Some(text) = text else {
+            return Ok(());
+        };
+        let source_index = self.sources.as_mut().map(|sources| {
+            let index = sources.files.len();
+            sources.files.push((file.into(), String::new()));
+            index
+        });
         let (mut chunk, mut start) = (String::new(), 0);
         for (line_number, line) in text.lines().enumerate() {
-            let included = (!line.trim_start().starts_with('#')).then(|| include_path(Target::Sway, line)).flatten();
+            let included = (!line.trim_start().starts_with('#'))
+                .then(|| include_path(Target::Sway, line))
+                .flatten();
             if let Some(raw) = included {
-                self.chunk(file, &chunk, start);
+                self.chunk(file, &chunk, start)?;
                 chunk.clear();
                 start = line_number + 1;
-                let raw = self.vars.iter().fold(raw, |value, (name, replacement)| value.replace(name, replacement));
-                for child in sway_include_files(file, &raw) { self.read(&child); }
+                let raw = self.vars.iter().fold(raw, |value, (name, replacement)| {
+                    value.replace(name, replacement)
+                });
+                let files = match &self.budget {
+                    Some(budget) => {
+                        super::sway_include_files_bounded(file, &raw, budget.remaining_files())?
+                    }
+                    None => sway_include_files(file, &raw),
+                };
+                for child in files {
+                    self.read(&child)?;
+                }
             } else {
                 chunk.push_str(line);
                 chunk.push('\n');
             }
         }
-        self.chunk(file, &chunk, start);
+        self.chunk(file, &chunk, start)?;
+        if let (Some(sources), Some(index)) = (&mut self.sources, source_index) {
+            sources.files[index].1 = text;
+        }
+        Ok(())
     }
 }
 
@@ -72,10 +157,35 @@ mod tests {
     fn an_include_inside_a_mode_does_not_become_a_default_mode_bind() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("config");
-        std::fs::write(&root, "mode resize {\ninclude mode.conf\n}\nbindsym Mod4+x exec foot\n").unwrap();
+        std::fs::write(
+            &root,
+            "mode resize {\ninclude mode.conf\n}\nbindsym Mod4+x exec foot\n",
+        )
+        .unwrap();
         std::fs::write(dir.path().join("mode.conf"), "bindsym Mod4+r exec resize\n").unwrap();
         let found = binds(&[root]);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].1.chord, "super+x");
+    }
+
+    #[test]
+    fn checked_includes_keep_variables_and_reject_oversized_or_missing_sources() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config");
+        let child = directory.path().join("keys");
+        std::fs::write(
+            &root,
+            "set $mod Mod4\nset $keys keys\ninclude $keys\nbindsym Mod1+q kill\n",
+        )
+        .unwrap();
+        std::fs::write(&child, "include config\nbindsym $mod+q kill\n").unwrap();
+        assert_eq!(
+            checked(&root).unwrap(),
+            BTreeSet::from(["alt+q".into(), "super+q".into()])
+        );
+        std::fs::write(&child, vec![b'x'; crate::keybinds::MAX_FILE_BYTES + 1]).unwrap();
+        assert!(checked(&root).is_err());
+        std::fs::remove_file(&child).unwrap();
+        assert!(checked(&root).is_err());
     }
 }

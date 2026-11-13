@@ -610,8 +610,10 @@ mod tests {
 
     #[test]
     fn resetting_themes_restores_shell_following_without_touching_other_pages() {
-        let mut cfg = ShellConfig::default();
-        cfg.studio = Some(Box::new(mandara_config::studio::StudioLook::Arcade.appearance()));
+        let mut cfg = ShellConfig {
+            studio: Some(Box::new(mandara_config::studio::StudioLook::Arcade.appearance())),
+            ..Default::default()
+        };
         cfg.bar.height = 26.0;
         let counts = changed_per_section(&cfg);
         assert!(counts.get(&Section::Themes).copied().unwrap_or_default() > 0);

@@ -1,6 +1,8 @@
 //! Each native dialect keeps its own check and live-application semantics.
 
 mod private;
+#[cfg(test)]
+mod tests;
 
 use anyhow::{Context as _, Result, ensure};
 use mandara_config::{

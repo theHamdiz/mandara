@@ -10712,3 +10712,5 @@
 "Your compositor draws Studio's title bar." = "Birleştiriciniz Studio başlık çubuğunu çizer."
 "labwc keeps its settings in ~/.config/labwc. Mandara follows its workspaces, windows and outputs over Wayland protocols. Edit native bindings in Keyboard shortcuts → Compositor. To start Mandara with labwc, add “mandara &” to ~/.config/labwc/autostart." = "labwc, ayarlarını ~/.config/labwc'de tutar. Mandara çalışma alanlarını, pencerelerini ve çıkışlarını Wayland protokolleri üzerinden takip eder. Klavye kısayolları → Birleştirici'deki yerel bağlamaları düzenleyin. Mandara'yi labwc ile başlatmak için ~/.config/labwc/autostart'ye \"mandara &\" ekleyin."
 "{file}, line {line}" = "{file}, {line} satırı"
+
+"This configuration is read-only. Edit its source or create a writable user override." = "Bu yapılandırma salt okunurdur. Kaynağını düzenleyin veya yazılabilir bir kişisel ayar oluşturun."

@@ -52,6 +52,7 @@ pub(super) fn load(root: PathBuf) -> Session {
             scan.sources.push(source);
         }
     }
+    super::permissions::mark(&mut scan, Some(&root));
     Session {
         target: Target::Cosmic,
         root,
@@ -85,13 +86,19 @@ fn defaults_path(custom: &Path) -> Option<PathBuf> {
     if local.exists() {
         return Some(local);
     }
-    let relative = "cosmic/com.system76.CosmicSettings.Shortcuts/v1/defaults";
     let home = dirs::data_dir().into_iter();
     let directories =
         std::env::var_os("XDG_DATA_DIRS").unwrap_or_else(|| "/usr/local/share:/usr/share".into());
-    home.chain(std::env::split_paths(&directories))
-        .map(|path| path.join(relative))
-        .find(|path| path.exists())
+    catalog_directory(home.chain(std::env::split_paths(&directories)))
+        .map(|path| path.join("defaults"))
+        .filter(|path| path.is_file())
+}
+
+fn catalog_directory(directories: impl IntoIterator<Item = PathBuf>) -> Option<PathBuf> {
+    directories
+        .into_iter()
+        .map(|path| path.join("cosmic/com.system76.CosmicSettings.Shortcuts/v1"))
+        .find(|path| path.is_dir())
 }
 
 pub(super) fn save(
@@ -214,6 +221,19 @@ fn publish(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn installed_catalog_priority_is_chosen_by_directory_before_entry_lookup() {
+        let directory = tempfile::tempdir().unwrap();
+        let first = directory.path().join("first");
+        let second = directory.path().join("second");
+        let suffix = "cosmic/com.system76.CosmicSettings.Shortcuts/v1";
+        std::fs::create_dir_all(first.join(suffix)).unwrap();
+        std::fs::create_dir_all(second.join(suffix)).unwrap();
+        std::fs::write(second.join(suffix).join("defaults"), "{}").unwrap();
+        let selected = catalog_directory([first.clone(), second]).unwrap();
+        assert_eq!(selected, first.join(suffix));
+        assert!(!selected.join("defaults").exists());
+    }
     #[test]
     fn user_defaults_load_without_a_custom_file_and_shadowed_defaults_stay_visible() {
         let directory = tempfile::tempdir().unwrap();

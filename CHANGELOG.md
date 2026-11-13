@@ -13,7 +13,11 @@ About → What's new shows it too.
 
 ### Improved
 
-- **Quieter Studio windows.** The name appears once, traffic-light buttons sit closer together, and preset previews keep their own colours, controls and surface details.
+- **Quieter Studio windows.** The name appears once, traffic-light buttons sit closer together, and preset previews keep their own colours, controls and surface details. Window buttons respect the compositor's supported actions.
+
+### Fixed
+
+- **Non-Latin shortcut keys no longer crash the editor.** Arabic and other Unicode keys can be inspected safely.
 
 ## 0.29.0 — 2026-11-13
 

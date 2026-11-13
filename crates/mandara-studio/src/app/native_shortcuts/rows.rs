@@ -17,40 +17,65 @@ pub(super) struct Row {
     search: String,
 }
 
-fn chords(target: Target, row: &Binding, primary_mod_is_alt: bool) -> Vec<String> {
+fn clashes(
+    target: Target,
+    row: &Binding,
+    primary_mod_is_alt: bool,
+    own: &[String],
+    qt: &[i32],
+) -> bool {
+    if target == Target::Sway {
+        return row
+            .chord
+            .as_ref()
+            .is_some_and(|chord| own.binary_search(chord).is_ok());
+    }
+    if target == Target::KWin {
+        return row
+            .fields
+            .iter()
+            .filter(|field| field.label == "Shortcut")
+            .filter_map(|field| keybinds::qt_sequence(&field.value).ok())
+            .any(|keys| keys[0] != 0 && qt.binary_search(&keys[0]).is_ok());
+    }
     if target == Target::Aqueous {
         return row
             .fields
             .iter()
             .filter(|field| field.label == "Shortcut")
             .filter_map(|field| keybinds::aqueous_chord(&field.value, primary_mod_is_alt))
-            .collect();
+            .any(|chord| own.binary_search(&chord).is_ok());
     }
     if let Some(chord) = &row.chord {
-        return vec![chord.clone()];
+        return own.binary_search(chord).is_ok();
     }
     row.fields
         .iter()
         .filter(|field| field.label == "Shortcut")
         .filter_map(|field| {
-            let value = if target == Target::KWin {
-                field.value.replace("Meta+", "Super+")
-            } else {
-                field.value.clone()
-            };
+            let value = &field.value;
             if value == "none" || value.contains([',', '\'', '"']) {
                 return None;
             }
-            keybinds::normalize(&value)
+            keybinds::normalize(value)
         })
-        .collect()
+        .any(|chord| own.binary_search(&chord).is_ok())
 }
 
 pub(super) fn build(session: &Session, bindings: &[Keybind]) -> Vec<Row> {
-    let own: Vec<_> = bindings
+    let mut own: Vec<_> = bindings
         .iter()
         .map(|bind| compositor::target_chord(session.target, bind))
         .collect();
+    own.sort_unstable();
+    own.dedup();
+    let mut qt: Vec<_> = if session.target == Target::KWin {
+        bindings.iter().filter_map(keybinds::qt_keybind).collect()
+    } else {
+        Vec::new()
+    };
+    qt.sort_unstable();
+    qt.dedup();
     session
         .scan
         .sources
@@ -58,6 +83,7 @@ pub(super) fn build(session: &Session, bindings: &[Keybind]) -> Vec<Row> {
         .enumerate()
         .flat_map(|(source_index, source)| {
             let own = &own;
+            let qt = &qt;
             source
                 .bindings
                 .iter()
@@ -71,14 +97,13 @@ pub(super) fn build(session: &Session, bindings: &[Keybind]) -> Vec<Row> {
                         .or_else(|| row.chord.clone())
                         .unwrap_or_default()
                         .into();
-                    let action: SharedString = row
-                        .fields
-                        .iter()
-                        .filter(|field| field.label == "Action")
-                        .map(|field| field.value.as_str())
-                        .collect::<Vec<_>>()
-                        .join("; ")
-                        .into();
+                    let mut action = String::new();
+                    for field in row.fields.iter().filter(|field| field.label == "Action") {
+                        if !action.is_empty() {
+                            action.push_str("; ");
+                        }
+                        action.push_str(&field.value);
+                    }
                     let location: SharedString = format!(
                         "{}:{} · {}",
                         source
@@ -100,11 +125,9 @@ pub(super) fn build(session: &Session, bindings: &[Keybind]) -> Vec<Row> {
                         source: source_index,
                         binding,
                         chord,
-                        action,
+                        action: action.into(),
                         location,
-                        clashes: chords(session.target, row, session.primary_mod_is_alt)
-                            .iter()
-                            .any(|chord| own.contains(chord)),
+                        clashes: clashes(session.target, row, session.primary_mod_is_alt, own, qt),
                         search,
                     }
                 })
@@ -125,6 +148,67 @@ pub(super) fn filter(rows: &[Row], query: &str) -> Vec<usize> {
 mod tests {
     use super::*;
     use mandara_config::compositor::BindAction;
+
+    #[test]
+    fn qt_alternatives_and_sequence_prefixes_compare_with_large_shell_binding_lists() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("kglobalshortcutsrc");
+        let mut body = String::from("[kwin]\n");
+        for (index, value) in [
+            "Ctrl+,",
+            "Ctrl++",
+            "Ctrl+K, Ctrl+C",
+            "Meta+Page Up",
+            "Volume Up",
+            "Meta+Z",
+        ]
+        .iter()
+        .enumerate()
+        {
+            body.push_str(&format!(
+                "Action{index}={},none,Keep label\n",
+                keybinds::Encoding::KConfig.encode(value).unwrap()
+            ));
+        }
+        std::fs::write(&file, body).unwrap();
+        let session = Session {
+            target: Target::KWin,
+            root: file.clone(),
+            scan: keybinds::scan_from(Target::KWin, &file),
+            primary_mod_is_alt: false,
+        };
+        let mut bindings =
+            vec![Keybind::new(&["alt"], "F12", BindAction::Spawn("true".into())); 2048];
+        for (mods, key) in [
+            (&["ctrl"][..], ","),
+            (&["ctrl"][..], "+"),
+            (&["ctrl"][..], "K"),
+            (&["super"][..], "Prior"),
+            (&[][..], "XF86AudioRaiseVolume"),
+        ] {
+            bindings.push(Keybind::new(mods, key, BindAction::Spawn("true".into())));
+        }
+        let rows = build(&session, &bindings);
+        assert_eq!(rows.len(), 6);
+        assert!(rows[..5].iter().all(|row| row.clashes));
+        assert!(!rows[5].clashes);
+    }
+
+    #[test]
+    fn multiple_actions_keep_their_order_and_remain_searchable() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("rc.xml");
+        std::fs::write(&file, "<labwc_config><keyboard><keybind key=\"W-q\"><action name=\"Focus\"/><action name=\"Raise\"/></keybind></keyboard></labwc_config>").unwrap();
+        let session = Session {
+            target: Target::Labwc,
+            root: file.clone(),
+            scan: keybinds::scan_from(Target::Labwc, &file),
+            primary_mod_is_alt: false,
+        };
+        let rows = build(&session, &[]);
+        assert_eq!(rows[0].action.as_ref(), "Focus; Raise");
+        assert_eq!(filter(&rows, "raise focus"), [0]);
+    }
 
     #[test]
     fn search_keeps_duplicate_rows_and_alternate_chords_report_shell_conflicts() {

@@ -14,6 +14,51 @@ const MODIFIERS: [(&str, i32); 5] = [
     ("Num", 0x20000000),
 ];
 
+/// Compare native Qt sequences with shell bindings using Qt's XKB mapping.
+pub fn keybind(binding: &crate::compositor::Keybind) -> Option<i32> {
+    use xkbcommon::xkb;
+    let name = binding.keysym();
+    let symbol = xkb::keysym_from_name(&name, xkb::KEYSYM_CASE_INSENSITIVE);
+    let canonical = xkb::keysym_get_name(symbol);
+    let named = super::qt_xkb::KEYS
+        .iter()
+        .find(|(name, _)| canonical == *name)
+        .map(|(_, key)| *key);
+    let function = canonical
+        .strip_prefix('F')
+        .and_then(|number| number.parse::<i32>().ok())
+        .filter(|number| (1..=35).contains(number))
+        .map(|number| F1 + number - 1);
+    let character = || {
+        let mut typed = binding.key.trim().chars();
+        let character = match (typed.next(), typed.next()) {
+            (Some(character), None) => character,
+            _ => char::from_u32(xkb::keysym_to_utf32(symbol))?,
+        };
+        if character.is_control() {
+            return None;
+        }
+        let mut upper = character.to_uppercase();
+        let key = upper.next()?;
+        Some(if upper.next().is_none() {
+            key
+        } else {
+            character
+        } as i32)
+    };
+    let mut key = named.or(function).or_else(character)?;
+    for modifier in &binding.mods {
+        key |= match crate::compositor::normalize_mod(modifier)? {
+            "shift" => MODIFIERS[0].1,
+            "ctrl" => MODIFIERS[1].1,
+            "alt" => MODIFIERS[2].1,
+            "super" => MODIFIERS[3].1,
+            _ => return None,
+        };
+    }
+    Some(key)
+}
+
 pub fn sequence(value: &str) -> Result<[i32; STROKES]> {
     let mut result = [0; STROKES];
     let mut rest = value.trim();
@@ -102,6 +147,26 @@ fn stroke(value: &str) -> Result<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn shell_keys_match_qt_punctuation_aliases_media_and_sequence_prefixes() {
+        use crate::compositor::{BindAction, Keybind};
+        for (native, shell, mods) in [
+            ("Ctrl+,", ",", &["ctrl"][..]),
+            ("Ctrl++", "+", &["ctrl"][..]),
+            ("Meta+Page Up", "Page_Up", &["super"][..]),
+            ("Ctrl+K, Ctrl+C", "k", &["ctrl"][..]),
+            ("Volume Up", "XF86AudioRaiseVolume", &[][..]),
+            ("Meta+F35", "F35", &["super"][..]),
+            ("Meta+أ", "أ", &["super"][..]),
+        ] {
+            let binding = Keybind::new(mods, shell, BindAction::Spawn("true".into()));
+            assert_eq!(
+                keybind(&binding),
+                Some(sequence(native).unwrap()[0]),
+                "{native}"
+            );
+        }
+    }
     #[test]
     fn portable_sequences_cover_punctuation_alternatives_media_and_native_limits() {
         assert_eq!(sequence("Meta+Q").unwrap(), [0x10000051, 0, 0, 0]);

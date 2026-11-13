@@ -10469,3 +10469,5 @@
 "Your compositor draws Studio's title bar." = "Studio의 제목 표시줄은 컴포지터가 그립니다."
 "labwc keeps its settings in ~/.config/labwc. Mandara follows its workspaces, windows and outputs over Wayland protocols. Edit native bindings in Keyboard shortcuts → Compositor. To start Mandara with labwc, add “mandara &” to ~/.config/labwc/autostart." = "labwc는 ~/.config/labwc의 설정을 유지합니다. Mandara는 Wayland 프로토콜을 통해 작업 공간, 창 및 출력을 따릅니다. 단축키 → 컴포지터에서 기본 바인딩을 편집합니다. labwc로 Mandara를 시작하려면 ~/.config/labwc/autostart에 “mandara &”를 추가하세요."
 "{file}, line {line}" = "{file}, 라인 {line}"
+
+"This configuration is read-only. Edit its source or create a writable user override." = "이 설정은 읽기 전용입니다. 원본을 편집하거나 쓰기 가능한 사용자 설정으로 덮어쓰세요."

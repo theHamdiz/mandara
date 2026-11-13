@@ -11,6 +11,8 @@ use anyhow::{Context as _, Result, ensure};
 
 use super::{Binding, MAX_BINDINGS, MAX_FILE_BYTES, MAX_FILES, MAX_TOTAL_BYTES};
 use crate::compositor::{Target, included_files_bounded, is_generated};
+mod niri;
+pub use niri::{NiriModifiers, resolve_mod as resolve_niri_mod};
 
 #[derive(Debug, serde::Serialize)]
 pub struct Source {
@@ -43,6 +45,7 @@ pub struct Scan {
     pub sources: Vec<Source>,
     pub generated: Vec<PathBuf>,
     pub errors: Vec<(PathBuf, String)>,
+    pub niri: Option<Box<NiriModifiers>>,
 }
 
 pub(crate) fn fingerprint(text: &str) -> u64 {
@@ -52,6 +55,10 @@ pub(crate) fn fingerprint(text: &str) -> u64 {
 }
 
 pub(crate) fn read(path: &Path) -> Result<String> {
+    ensure!(
+        std::fs::metadata(path)?.is_file(),
+        "configuration is not a regular file"
+    );
     let file = std::fs::File::open(path).with_context(|| path.display().to_string())?;
     ensure!(
         file.metadata()?.is_file(),
@@ -74,22 +81,46 @@ pub fn scan(target: Target) -> Scan {
 
 pub fn default_root(target: Target) -> PathBuf {
     let config = dirs::config_dir().unwrap_or_else(|| PathBuf::from("~/.config"));
+    default_root_in(target, &config, &crate::paths::home())
+}
+
+pub fn default_root_in(target: Target, config: &Path, home: &Path) -> PathBuf {
     match target {
         Target::KWin => config.join("kglobalshortcutsrc"),
         Target::Cosmic => config.join("cosmic/com.system76.CosmicSettings.Shortcuts/v1/custom"),
         Target::Mango
-            if !target.user_config().exists() && config.join("mango/config.toml").exists() =>
+            if !target.user_config_in(config, home).exists()
+                && config.join("mango/config.toml").exists() =>
         {
             config.join("mango/config.toml")
         }
-        _ => target.user_config(),
+        _ => target.user_config_in(config, home),
     }
 }
 
 pub fn scan_from(target: Target, root: &Path) -> Scan {
+    scan_roots(target, [root.to_path_buf()])
+}
+
+/// A merged native config shares the same file, byte and binding budgets.
+pub fn scan_roots(target: Target, roots: impl IntoIterator<Item = PathBuf>) -> Scan {
     let mut scan = Scan::default();
     let mut seen = BTreeSet::new();
-    let mut queue = vec![root.to_path_buf()];
+    let mut queue: Vec<_> = roots.into_iter().take(MAX_FILES + 1).collect();
+    if queue.len() > MAX_FILES {
+        scan.errors.push((
+            PathBuf::new(),
+            "too many shortcut configuration files".into(),
+        ));
+        return scan;
+    }
+    if target == Target::Sway {
+        return scan_sway(&queue);
+    }
+    if target == Target::Niri {
+        return niri::scan(&queue);
+    }
+    queue.reverse();
     let mut total_bytes = 0;
     let mut total_bindings = 0;
     while let Some(file) = queue.pop() {
@@ -162,6 +193,54 @@ pub fn scan_from(target: Target, root: &Path) -> Scan {
     scan
 }
 
+fn scan_sway(roots: &[PathBuf]) -> Scan {
+    let result = (|| -> Result<Scan> {
+        let mut native = crate::compositor::sway_shortcut_sources(roots)?;
+        native
+            .bindings
+            .sort_unstable_by(|(path, binding), (other, next)| {
+                (path, binding.line).cmp(&(other, next.line))
+            });
+        let mut scan = Scan {
+            generated: native.generated,
+            ..Default::default()
+        };
+        let mut count = 0;
+        for (file, text) in native.files {
+            let target = std::fs::canonicalize(&file)?;
+            let mut bindings = super::parse(Target::Sway, &target, &text)?;
+            count += bindings.len();
+            ensure!(
+                count <= MAX_BINDINGS,
+                "too many shortcuts in included files"
+            );
+            for binding in &mut bindings {
+                binding.chord = native
+                    .bindings
+                    .binary_search_by(|(path, resolved)| {
+                        (path, resolved.line).cmp(&(&file, binding.line - 1))
+                    })
+                    .ok()
+                    .map(|index| native.bindings[index].1.chord.clone());
+            }
+            scan.sources.push(Source {
+                file,
+                target,
+                fingerprint: fingerprint(&text),
+                bindings,
+            });
+        }
+        Ok(scan)
+    })();
+    result.unwrap_or_else(|error| Scan {
+        errors: vec![(
+            roots.first().cloned().unwrap_or_default(),
+            format!("{error:#}"),
+        )],
+        ..Default::default()
+    })
+}
+
 fn mango_includes(file: &Path, source: &str) -> Result<Vec<PathBuf>> {
     let document: toml::Value = toml::from_str(source)?;
     let mut paths = Vec::new();
@@ -189,6 +268,56 @@ fn mango_includes(file: &Path, source: &str) -> Result<Vec<PathBuf>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sway_scan_uses_in_place_variables_and_only_resolves_default_mode_conflicts() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config");
+        let child = directory.path().join("keys");
+        let mode = directory.path().join("mode");
+        std::fs::write(&root, "set $mod Mod4\nset $keys keys\ninclude $keys\nmode resize {\ninclude mode\n}\nbindsym $mod+w kill\n").unwrap();
+        std::fs::write(&child, "bindsym $mod+q kill\n").unwrap();
+        std::fs::write(&mode, "bindsym Mod4+e mode default\n").unwrap();
+        let scan = scan_from(Target::Sway, &root);
+        assert!(scan.errors.is_empty(), "{:?}", scan.errors);
+        assert_eq!(scan.sources.len(), 3);
+        for source in &scan.sources {
+            assert!(source.unchanged().unwrap());
+            assert_eq!(source.bindings.len(), 1);
+            let expected = if source.file == root {
+                Some("super+w")
+            } else if source.file == child {
+                Some("super+q")
+            } else {
+                None
+            };
+            assert_eq!(source.bindings[0].chord.as_deref(), expected);
+        }
+    }
+
+    #[test]
+    fn merged_roots_share_limits_and_canonical_source_identity() {
+        let directory = tempfile::tempdir().unwrap();
+        let one = directory.path().join("one.xml");
+        let two = directory.path().join("two.xml");
+        let body = "<labwc_config><keyboard><keybind key=\"W-q\"><action name=\"Close\"/></keybind></keyboard></labwc_config>";
+        std::fs::write(&one, body).unwrap();
+        std::fs::write(&two, body).unwrap();
+        let scan = scan_roots(Target::Labwc, [one.clone(), two.clone(), one.clone()]);
+        assert!(scan.errors.is_empty());
+        assert_eq!(
+            scan.sources
+                .iter()
+                .map(|source| &source.file)
+                .collect::<Vec<_>>(),
+            [&one, &two]
+        );
+        assert!(
+            !scan_roots(Target::Labwc, std::iter::repeat_n(one, MAX_FILES + 1))
+                .errors
+                .is_empty()
+        );
+    }
 
     #[test]
     fn scanning_follows_includes_deduplicates_symlinks_and_rejects_oversized_files() {

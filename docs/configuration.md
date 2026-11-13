@@ -74,6 +74,16 @@ the edit and offers **Undo**. Files changed since the scan must be refreshed
 before saving. Bindings built by executable code stay read-only; scanning
 never runs your configuration scripts. See [Studio's shortcut editor](studio.md#system).
 
+Discovery follows the compositor's launch arguments and environment, including
+Niri's `NIRI_CONFIG`, Sway's reported active file and labwc's merged config
+directories. Read-only sources remain visible with an explanation. KWin
+conflicts include alternative shortcuts, punctuation and the first key of a
+multi-key sequence. Sway includes share their variables and binding modes.
+Niri's `Mod` follows the merged input settings and its native nested-session
+behaviour; boolean options retain Niri's KDL v1 syntax.
+Window controls also follow the compositor's advertised capabilities; an
+unavailable action stays dimmed with a reason.
+
 ### Studio appearance
 
 **Themes → Studio** stores its own appearance in `[studio]`: the selected

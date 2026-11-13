@@ -7,7 +7,7 @@ mod labwc;
 pub use labwc::keyboard as labwc_keyboard;
 mod lines;
 pub(crate) mod lua;
-mod niri;
+pub(crate) mod niri;
 mod toml;
 
 use std::path::Path;

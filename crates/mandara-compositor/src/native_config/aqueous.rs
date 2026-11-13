@@ -1,18 +1,12 @@
 //! Read only Aqueous's path and modifier overrides from its own environment.
 
 use super::NativeConfig;
+use super::environment::value;
 use std::{
     ffi::OsStr,
     os::unix::ffi::OsStrExt as _,
     path::{Path, PathBuf},
 };
-
-fn value<'a>(environment: &'a [u8], key: &[u8]) -> Option<&'a OsStr> {
-    environment.split(|byte| *byte == 0).find_map(|entry| {
-        let at = entry.iter().position(|byte| *byte == b'=')?;
-        (entry[..at] == *key && at + 1 < entry.len()).then(|| OsStr::from_bytes(&entry[at + 1..]))
-    })
-}
 
 pub(super) fn inspect(
     environment: &[u8],
@@ -48,6 +42,7 @@ pub(super) fn inspect(
         file,
         primary_mod_is_alt: value(environment, b"AQUEOUS_MOD")
             .is_some_and(|value| value.as_bytes().eq_ignore_ascii_case(b"alt")),
+        ..Default::default()
     }
 }
 

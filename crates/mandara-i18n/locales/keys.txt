@@ -7942,6 +7942,7 @@ This compositor manages shortcuts in its own settings.
 This computer
 This computer installs software with {manager}, which can't install it.
 This computer runs on mains power
+This configuration is read-only. Edit its source or create a writable user override.
 This container hasn't written anything to stdout or stderr
 This database uses a hardware key (YubiKey challenge-response), which Mandara can't pass to KeePassXC. Unlock it in KeePassXC's window.
 This device

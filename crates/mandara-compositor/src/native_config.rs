@@ -9,10 +9,13 @@ use mandara_i18n::t;
 use std::path::PathBuf;
 #[cfg(any(target_os = "linux", test))]
 mod aqueous;
+#[cfg(any(target_os = "linux", test))]
+mod environment;
 
 #[derive(Default)]
 pub struct NativeConfig {
     pub file: Option<PathBuf>,
+    pub additional_files: Vec<PathBuf>,
     pub primary_mod_is_alt: bool,
 }
 #[cfg(any(target_os = "linux", test))]
@@ -29,6 +32,14 @@ const MAX_LAUNCH_BYTES: usize = 8 * 1024 * 1024;
 
 #[cfg(target_os = "linux")]
 pub fn running(target: Target) -> Result<NativeConfig> {
+    if target == Target::Sway
+        && let Some(driver) = crate::sway::SwayDriver::from_env()
+    {
+        return Ok(NativeConfig {
+            file: Some(driver.config_file()?),
+            ..Default::default()
+        });
+    }
     let Some(pid) = super::display_server_pid() else {
         return Ok(NativeConfig::default());
     };
@@ -44,19 +55,16 @@ pub fn running(target: Target) -> Result<NativeConfig> {
         .map(|arg| OsString::from_vec(arg.to_vec()))
         .collect();
     let cwd = std::fs::read_link(format!("/proc/{pid}/cwd"))?;
+    let environment = std::fs::read(format!("/proc/{pid}/environ"))?;
+    ensure!(
+        environment.len() <= MAX_LAUNCH_BYTES,
+        "{}",
+        t("The compositor's environment is too large to inspect.")
+    );
     if target == Target::Aqueous {
-        let environment = std::fs::read(format!("/proc/{pid}/environ"))?;
-        ensure!(
-            environment.len() <= MAX_LAUNCH_BYTES,
-            "{}",
-            t("The compositor's environment is too large to inspect.")
-        );
         return Ok(aqueous::inspect(&environment, &cwd, Path::exists));
     }
-    Ok(NativeConfig {
-        file: from_arguments(target, &arguments, &cwd)?,
-        ..Default::default()
-    })
+    environment::inspect(target, &arguments, &environment, &cwd)
 }
 
 #[cfg(not(target_os = "linux"))]
