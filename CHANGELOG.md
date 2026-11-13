@@ -6,6 +6,12 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.29.0 — 2026-11-13
+
+More apps can follow your colours. Desktop changes stay put. Display
+settings survive a new Look and a fresh start. More widget controls do
+what they say.
+
 ### New
 
 - **More apps can follow your colours.** Browse app-template catalogs in Studio → Themes → Other apps, install only what you need, or write your own template. Installed templates follow every Mandara palette offline, with light/dark colours, custom colours, setup commands, browser integration and KDE schemes. Setup commands are optional; errors and managed-file restoration are visible in Studio. (#123)
