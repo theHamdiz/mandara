@@ -3,7 +3,7 @@
 use anyhow::{Result, ensure};
 use std::path::{Path, PathBuf};
 
-use super::{IncludeEnvironment, Target, glob_path_bounded_from, include_path, sway_vars};
+use super::{IncludeEnvironment, glob_path_bounded_from, sway_vars};
 use crate::keybinds::{MAX_BINDINGS, MAX_FILES, MAX_TOTAL_BYTES, read_source};
 
 /// Only variables, submaps and the selected binding reach the native checker.
@@ -73,32 +73,40 @@ pub(crate) fn visit_sources(
 pub(crate) fn chord(line: &str) -> Option<String> {
     let (_, fields) = line.split_once('=')?;
     let mut fields = fields.split(',');
-    crate::keybinds::normalize(&format!(
-        "{}+{}",
-        fields.next()?.trim().replace(' ', "+"),
-        fields.next()?.trim()
-    ))
+    let modifiers = fields.next()?.trim();
+    let key = fields.next()?.trim();
+    if modifiers.contains('$') {
+        return None;
+    }
+    crate::keybinds::normalize(&format!("{}+{key}", super::hypr_mods(modifiers).join("+")))
 }
 
 pub(crate) fn chords(
     root: &Path,
     environment: &IncludeEnvironment,
 ) -> Result<std::collections::BTreeSet<String>> {
-    struct Chords(std::collections::BTreeSet<String>);
+    #[derive(Default)]
+    struct Chords {
+        values: std::collections::BTreeSet<String>,
+        generated: std::collections::BTreeSet<PathBuf>,
+    }
     impl Visitor for Chords {
-        fn source(&mut self, _: &Path, _: &Path, _: &str) -> Result<()> {
+        fn source(&mut self, file: &Path, target: &Path, _: &str) -> Result<()> {
+            if super::is_generated(file) || super::is_generated(target) {
+                self.generated.insert(target.into());
+            }
             Ok(())
         }
         fn binding(&mut self, target: &Path, _: usize, scope: &str, expanded: &str) -> Result<()> {
-            if scope == "default" && !super::is_generated(target) {
-                self.0.extend(chord(expanded));
+            if scope == "default" && !self.generated.contains(target) {
+                self.values.extend(chord(expanded));
             }
             Ok(())
         }
     }
-    let mut chords = Chords(Default::default());
+    let mut chords = Chords::default();
     visit_sources(&[root.into()], environment, &mut chords)?;
-    Ok(chords.0)
+    Ok(chords.values)
 }
 
 struct Probe<'a> {
@@ -236,8 +244,12 @@ impl Probe<'_> {
                     }
                 }
             }
-            if let Some(include) = include_path(Target::Hyprland, line) {
-                let expanded = self.expand(&include)?;
+            if let Some(include) = line
+                .split_once('=')
+                .filter(|(name, _)| name.trim() == "source")
+                .map(|(_, value)| value.trim())
+            {
+                let expanded = self.expand(include)?;
                 let path = self.environment.resolve(
                     file,
                     &self.environment.expand(expanded.trim().trim_matches('"'))?,
@@ -337,6 +349,40 @@ mod tests {
                 &IncludeEnvironment::default()
             )
             .is_err()
+        );
+    }
+    #[test]
+    fn native_modifier_spellings_and_unresolved_keys_keep_their_conflict_meaning() {
+        assert_eq!(
+            chord("bind = SUPER_SHIFT, Q, exec, foot").as_deref(),
+            Some("shift+super+q")
+        );
+        assert_eq!(
+            chord("bind = CTRLALT, Q, exec, foot").as_deref(),
+            Some("alt+ctrl+q")
+        );
+        assert!(chord("bind = $unknown, Q, exec, foot").is_none());
+        assert!(chord("bind = SUPER, code:24, exec, foot").is_none());
+    }
+    #[test]
+    fn legacy_sources_are_distinct_from_lua_words_inside_commands_and_paths() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("hyprland.conf");
+        let child = directory.path().join("requires.conf");
+        std::fs::write(&file, "exec-once = lua dofile('/never-read-this')\nsource = requires.conf\nbind = $mod, Q, exec, foot\n").unwrap();
+        std::fs::write(&child, "$mod = SUPER\n").unwrap();
+        let body = shortcut_probe(
+            &file,
+            &file,
+            3,
+            "bind = $mod, W, exec, foot",
+            &IncludeEnvironment::default(),
+        )
+        .unwrap();
+        assert_eq!(body, "$mod = SUPER\nbind = $mod, W, exec, foot\n");
+        assert_eq!(
+            chords(&file, &IncludeEnvironment::default()).unwrap(),
+            std::collections::BTreeSet::from(["super+q".into()])
         );
     }
 }

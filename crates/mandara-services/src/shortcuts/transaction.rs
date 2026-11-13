@@ -204,11 +204,24 @@ fn companion(session: &Session) -> Result<Option<std::path::PathBuf>> {
     let mut found = None;
     for alias in &session.scan.generated {
         let file = std::fs::canonicalize(alias)?;
-        let name = file.file_name();
-        if name == expected.file_name()
-            || session.target == compositor::Target::Hyprland
-                && name.is_some_and(|name| name == "hyprland.lua" || name == "hyprland.conf")
-        {
+        let managed = |path: &Path| {
+            let name = path.file_name();
+            compositor::is_generated(path)
+                && (name == expected.file_name()
+                    || session.target == compositor::Target::Hyprland
+                        && name
+                            .is_some_and(|name| name == "hyprland.lua" || name == "hyprland.conf"))
+        };
+        if managed(alias) || managed(&file) {
+            ensure!(
+                session
+                    .scan
+                    .sources
+                    .iter()
+                    .all(|source| source.target != file),
+                "{}",
+                t("Resolve the shortcut configuration errors before saving.")
+            );
             ensure!(
                 found.as_ref().is_none_or(|(_, previous)| *previous == file),
                 "{}",
@@ -249,6 +262,39 @@ mod tests {
         fn version(&self) -> Option<(u32, u32)> {
             panic!("version lookup must follow bounded reads")
         }
+    }
+
+    #[test]
+    fn logical_companion_aliases_keep_their_role_without_claiming_native_sources() {
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("mandara/generated");
+        fs::create_dir_all(&generated).unwrap();
+        let file = directory.path().join("outside.conf");
+        fs::write(&file, "").unwrap();
+        let alias = generated.join("hyprland.conf");
+        symlink(&file, &alias).unwrap();
+        let mut session = Session {
+            target: Target::Hyprland,
+            root: directory.path().join("config.conf"),
+            scan: Default::default(),
+            environment: Default::default(),
+            primary_mod_is_alt: false,
+        };
+        session.scan.generated.push(alias.clone());
+        assert_eq!(companion(&session).unwrap(), Some(alias));
+        session.scan.sources.push(keybinds::Source {
+            file: file.clone(),
+            target: file,
+            fingerprint: 0,
+            bindings: Vec::new(),
+        });
+        assert!(companion(&session).is_err());
+        let native = directory.path().join("hyprland.conf");
+        fs::write(&native, "").unwrap();
+        let colors = generated.join("app-theme-hyprland.conf");
+        symlink(&native, &colors).unwrap();
+        session.scan.generated = vec![colors];
+        assert!(companion(&session).unwrap().is_none());
     }
 
     #[test]

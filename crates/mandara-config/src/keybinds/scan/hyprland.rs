@@ -91,7 +91,10 @@ mod tests {
         let child = directory.path().join("keys.conf");
         std::fs::write(&root, "$dir = .\n$keys = $dir/keys.conf\n$mod = SUPER\nsubmap = resize\nsource = $keys\nsubmap = reset\nbind = $mod, W, exec, foot\n").unwrap();
         std::fs::write(&child, "bind = $mod, Q, exec, foot\n$mod = ALT\n").unwrap();
-        let found = scan(std::slice::from_ref(&root), &IncludeEnvironment::captured([]));
+        let found = scan(
+            std::slice::from_ref(&root),
+            &IncludeEnvironment::captured([]),
+        );
         assert!(found.errors.is_empty(), "{:?}", found.errors);
         let selected = found
             .sources
@@ -104,7 +107,9 @@ mod tests {
         assert!(selected.unchanged().unwrap());
         let generated = directory.path().join("mandara/generated/hyprland.conf");
         std::fs::create_dir_all(generated.parent().unwrap()).unwrap();
-        std::fs::write(&generated, "bind = SUPER, E, exec, mandara\n").unwrap();
+        let managed = directory.path().join("managed.conf");
+        std::fs::write(&managed, "bind = SUPER, E, exec, mandara\n").unwrap();
+        std::os::unix::fs::symlink(&managed, &generated).unwrap();
         let body = std::fs::read_to_string(&root).unwrap();
         std::fs::write(
             &root,
