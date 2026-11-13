@@ -2,7 +2,7 @@
 
 mod scroll;
 
-use super::{Job, StudioView, button};
+use super::{Job, StudioView, button, layout};
 use crate::tokens::*;
 use gpui::{
     AnyElement, ClickEvent, Context, InteractiveElement as _, IntoElement as _, ParentElement as _,
@@ -75,7 +75,7 @@ impl StudioView {
         let mut panel = div().id("app-template-review").on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
             if event.keystroke.key == "escape" { this.app_templates.review = None; cx.stop_propagation(); cx.notify(); }
         })).flex().flex_col().gap(px(SPACE_12_PX)).p(px(SPACE_16_PX)).rounded(px(RADIUS_16_PX)).bg(palette.surface_container.hsla())
-            .child(div().flex().gap(px(SPACE_8_PX)).text_size(px(TEXT_13_5_PX)).child(t("Review")).child(review.id.clone()))
+            .child(layout::controls_row().text_size(px(TEXT_13_5_PX)).child(t("Review")).child(review.id.clone()))
             .child(div().text_size(px(TEXT_12_PX)).child(t("Review files and commands before enabling this template. Commands can change other files too. Updates need a new review.")));
         if review.shared_palette {
             panel = panel.child(div().text_size(px(TEXT_12_PX)).text_color(warning_ink(palette).hsla()).child(t("Review and approve the shared browser palette first. Other Pywal apps will read these colors too.")));
@@ -126,15 +126,14 @@ impl StudioView {
             palette,
         ));
         if pages > 1 {
+            let [previous_icon, next_icon] = layout::paging_icons();
             panel = panel.child(
-                div()
-                    .flex()
+                layout::controls_row()
                     .items_center()
-                    .gap(px(SPACE_8_PX))
                     .child(
                         button(
                             "app-template-review-previous",
-                            "chevron-left",
+                            previous_icon,
                             t("Previous"),
                             false,
                             palette,
@@ -159,7 +158,7 @@ impl StudioView {
                     .child(
                         button(
                             "app-template-review-next",
-                            "chevron-right",
+                            next_icon,
                             t("Next"),
                             false,
                             palette,
@@ -181,9 +180,7 @@ impl StudioView {
         }
         panel
             .child(
-                div()
-                    .flex()
-                    .gap(px(SPACE_8_PX))
+                layout::controls_row()
                     .child(
                         button(
                             "app-template-review-enable",

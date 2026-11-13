@@ -1,6 +1,7 @@
 //! Imported app templates and the user's own template document.
 
 mod review;
+mod layout;
 
 use std::rc::Rc;
 use std::sync::{
@@ -86,10 +87,8 @@ impl StudioView {
         let mut content = div().flex().flex_col().gap(px(SPACE_12_PX));
         let open = self.app_templates.open;
         content = content.child(
-            div()
-                .flex()
+            layout::controls_row()
                 .flex_wrap()
-                .gap(px(SPACE_8_PX))
                 .child(
                     button(
                         "app-templates-browse",
@@ -185,9 +184,7 @@ impl StudioView {
                 }));
             }
             content = content.child(
-                div()
-                    .flex()
-                    .gap(px(SPACE_8_PX))
+                layout::controls_row()
                     .child(
                         div()
                             .flex_1()
@@ -314,15 +311,14 @@ impl StudioView {
                 .collect();
             content = content.child(fit.render(cards));
             if pages > 1 {
+                let [previous_icon, next_icon] = layout::paging_icons();
                 content = content.child(
-                    div()
-                        .flex()
+                    layout::controls_row()
                         .items_center()
-                        .gap(px(SPACE_8_PX))
                         .child(
                             button(
                                 "app-templates-previous",
-                                "chevron-left",
+                                previous_icon,
                                 t("Previous"),
                                 false,
                                 p,
@@ -339,7 +335,7 @@ impl StudioView {
                             &[("page", &(page + 1)), ("pages", &pages)],
                         )))
                         .child(
-                            button("app-templates-next", "chevron-right", t("Next"), false, p)
+                            button("app-templates-next", next_icon, t("Next"), false, p)
                                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                                     this.app_templates.page = (page + 1).min(pages - 1);
                                     cx.notify();
