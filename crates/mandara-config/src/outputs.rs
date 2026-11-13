@@ -286,10 +286,17 @@ pub fn identity(name: &str, make: &str, model: &str, serial: &str) -> String {
 /// one. An EDID match moves its saved settings to its current connector.
 pub fn remember(saved: &mut Vec<OutputConfig>, current: impl IntoIterator<Item = OutputConfig>) {
     for mut output in current {
-        if let Some(previous) = saved.iter().find(|old| {
-            old.name == output.name
-                || (!output.serial.is_empty() && old.identity() == output.identity())
-        }) {
+        let stable = |output: &OutputConfig| !output.make.trim().is_empty() && !output.serial.trim().is_empty();
+        let same_monitor = |old: &OutputConfig| {
+            if stable(old) && stable(&output) {
+                old.identity() == output.identity()
+            } else {
+                old.name == output.name
+            }
+        };
+        let previous = saved.iter().find(|old| stable(old) && stable(&output) && old.identity() == output.identity())
+            .or_else(|| saved.iter().find(|old| same_monitor(old)));
+        if let Some(previous) = previous {
             if !output.enabled {
                 output.width = output.width.or(previous.width);
                 output.height = output.height.or(previous.height);
@@ -306,9 +313,14 @@ pub fn remember(saved: &mut Vec<OutputConfig>, current: impl IntoIterator<Item =
                 output.vrr = previous.vrr;
             }
         }
+        let output_identity = output.identity();
+        let output_stable = stable(&output);
         saved.retain(|old| {
-            old.name != output.name
-                && (output.serial.is_empty() || old.identity() != output.identity())
+            if stable(old) && output_stable {
+                old.identity() != output_identity
+            } else {
+                old.name != output.name
+            }
         });
         saved.push(output);
     }
@@ -317,6 +329,43 @@ pub fn remember(saved: &mut Vec<OutputConfig>, current: impl IntoIterator<Item =
 #[cfg(test)]
 mod persistence_tests {
     use super::*;
+
+    #[test]
+    fn reused_connectors_keep_edid_preferences_and_inherit_the_matching_monitor() {
+        let monitor = |serial: &str, name: &str, scale: f32| OutputConfig {
+            name: name.into(), make: "Demo".into(), model: "Display".into(), serial: serial.into(),
+            scale: Some(scale), ..Default::default()
+        };
+        let a = monitor("A", "DP-1", 1.25);
+        let b = monitor("B", "DP-2", 2.0);
+        let mut saved = vec![b.clone(), a.clone()];
+        remember(&mut saved, [OutputConfig { name: "DP-2".into(), enabled: false, scale: None, ..a.clone() }]);
+        assert_eq!(saved.len(), 2);
+        assert_eq!(saved.last().unwrap().scale, a.scale);
+        assert!(saved.contains(&b));
+        remember(&mut saved, [monitor("C", "DP-1", 1.5)]);
+        assert_eq!(saved.len(), 3);
+        remember(&mut saved, [OutputConfig { name: "DP-3".into(), enabled: false, scale: None, ..a }]);
+        assert_eq!(saved.len(), 3);
+        assert_eq!(saved.last().unwrap().scale, Some(1.25));
+        for target in [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway] {
+            let text = emit_outputs(target, &saved, false);
+            assert_eq!(text.matches("DP-2").count(), 1, "{target:?}: {text}");
+        }
+    }
+
+    #[test]
+    fn profile_ids_survive_legacy_reads_and_do_not_follow_reused_names() {
+        let old: DisplayProfile = serde_json::from_str(r#"{"name":"Desk","outputs":[]}"#).unwrap();
+        assert_eq!(old.id, "legacy:Desk");
+        let mut renamed = old.clone();
+        renamed.name = "Work".into();
+        let saved: DisplayProfile = serde_json::from_value(serde_json::to_value(&renamed).unwrap()).unwrap();
+        assert_eq!(saved.id, old.id);
+        let replacement = DisplayProfile::new("Desk".into(), Vec::new());
+        assert_ne!(replacement.id, old.id);
+        assert_ne!(replacement.id, DisplayProfile::new("Desk".into(), Vec::new()).id);
+    }
 
     #[test]
     fn snapshots_keep_disabled_monitor_preferences_and_fullscreen_vrr_policy() {
@@ -396,14 +445,40 @@ mod persistence_tests {
 
 /// A saved arrangement, applied automatically when exactly its monitors
 /// are connected.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct DisplayProfile {
+    /// Stable across renames and concurrent arrangement edits.
+    pub id: String,
     pub name: String,
     pub outputs: Vec<OutputConfig>,
 }
 
+impl<'de> Deserialize<'de> for DisplayProfile {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Default, Deserialize)]
+        #[serde(default)]
+        struct Saved {
+            id: String,
+            name: String,
+            outputs: Vec<OutputConfig>,
+        }
+        let saved = Saved::deserialize(deserializer)?;
+        // Old files have unique profile names. Persist the derived identity on
+        // the next normal save, without changing the user's arrangement.
+        let id = if saved.id.is_empty() { format!("legacy:{}", saved.name) } else { saved.id };
+        Ok(Self { id, name: saved.name, outputs: saved.outputs })
+    }
+}
+
 impl DisplayProfile {
+    pub fn new(name: String, outputs: Vec<OutputConfig>) -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+        let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
+        Self { id: format!("profile:{time:x}:{:x}:{sequence:x}", std::process::id()), name, outputs }
+    }
+
     /// The set of monitor identities this profile was saved with.
     pub fn identities(&self) -> BTreeSet<String> {
         self.outputs.iter().map(OutputConfig::identity).collect()
@@ -641,11 +716,19 @@ fn regex_exact(s: &str) -> String {
     out
 }
 
+/// A reused connector belongs to the most recently observed monitor. Keep
+/// older EDID preferences in the saved list for its next connection.
+fn current_connectors(outputs: &[OutputConfig]) -> impl Iterator<Item = &OutputConfig> {
+    outputs.iter().enumerate().filter_map(|(index, output)| {
+        (!outputs[index + 1..].iter().any(|newer| newer.name.trim() == output.name.trim())).then_some(output)
+    })
+}
+
 /// MangoWM `monitor_rule=` lines (0.18 key:value syntax, checked with
 /// `mango -p`).
 pub fn mango_lines(outputs: &[OutputConfig]) -> String {
     let mut s = String::new();
-    for o in outputs.iter().filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
+    for o in current_connectors(outputs).filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
         let mut props = vec![format!("name:{}", regex_exact(o.name.trim()))];
         if !o.enabled {
             props.push("disable:1".into());
@@ -684,7 +767,7 @@ fn kdl_str(s: &str) -> String {
 /// Niri `output "NAME" { … }` blocks (KDL v1).
 pub fn niri_blocks(outputs: &[OutputConfig]) -> String {
     let mut s = String::new();
-    for o in outputs.iter().filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
+    for o in current_connectors(outputs).filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
         let mut body = String::new();
         if !o.enabled {
             let _ = writeln!(body, "    off");
@@ -719,7 +802,7 @@ pub fn niri_blocks(outputs: &[OutputConfig]) -> String {
 /// Hyprland (hyprlang) `monitor =` lines.
 pub fn hyprland_conf_lines(outputs: &[OutputConfig]) -> String {
     let mut s = String::new();
-    for o in outputs.iter().filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
+    for o in current_connectors(outputs).filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
         let name = o.name.trim();
         if !o.enabled {
             let _ = writeln!(s, "monitor = {name}, disable");
@@ -751,7 +834,7 @@ fn lua_str(s: &str) -> String {
 /// never breaks the user's config.
 pub fn hyprland_lua_lines(outputs: &[OutputConfig]) -> String {
     let mut s = String::new();
-    for o in outputs.iter().filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
+    for o in current_connectors(outputs).filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
         let mut fields = vec![format!("output = {}", lua_str(o.name.trim()))];
         if !o.enabled {
             fields.push("disabled = true".into());
@@ -791,7 +874,7 @@ fn umbriel_vrr(v: VrrMode) -> &'static str {
 /// Umbriel `[output."NAME"]` tables (by connector, as the other drop-ins).
 pub fn umbriel_tables(outputs: &[OutputConfig]) -> String {
     let mut s = String::new();
-    for o in outputs.iter().filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
+    for o in current_connectors(outputs).filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
         let mut body = String::new();
         if !o.enabled {
             let _ = writeln!(body, "enabled = false");
@@ -821,7 +904,7 @@ pub fn umbriel_tables(outputs: &[OutputConfig]) -> String {
 /// fullscreen-only adaptive sync: that choice turns it on, as on MangoWM.
 pub fn sway_lines(outputs: &[OutputConfig]) -> String {
     let mut s = String::new();
-    for o in outputs.iter().filter(|o| {
+    for o in current_connectors(outputs).filter(|o| {
         !o.name.trim().is_empty() && !o.name.contains(char::is_whitespace) && o.has_settings()
     }) {
         let name = o.name.trim();
@@ -875,7 +958,7 @@ pub fn emit_outputs(target: Target, outputs: &[OutputConfig], hyprland_lua: bool
     if body.trim().is_empty() {
         return String::new();
     }
-    format!("\n{comment} Displays (Studio → Displays)\n{body}")
+    format!("\n{comment} Displays (Studio → Displays)\n{body}{comment} End Displays (Studio → Displays)\n")
 }
 
 /// Output names that the user's own compositor config (and the files it
@@ -986,7 +1069,7 @@ mod tests {
 
     #[test]
     fn profiles_match_exact_monitor_sets() {
-        let p = DisplayProfile { name: "Desk".into(), outputs: vec![dell(), laptop_off()] };
+        let p = DisplayProfile::new("Desk".into(), vec![dell(), laptop_off()]);
         let both: BTreeSet<String> = ["Dell Inc. U2720Q ABC123".to_string(), "eDP-1".to_string()].into();
         assert!(p.matches(&both));
         let laptop: BTreeSet<String> = ["eDP-1".to_string()].into();

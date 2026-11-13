@@ -10555,3 +10555,9 @@
 "This clock face only shows the time." = "Dieses Zifferblatt zeigt nur die Uhrzeit an."
 
 "A continuous wave has no gaps between bars." = "Eine durchgehende Welle hat keine Lücken zwischen Balken."
+
+"The compositor configuration changed while its theme was being checked. Try again." = "Die Compositor-Konfiguration wurde während der Theme-Prüfung geändert. Bitte erneut versuchen."
+
+"The compositor configuration is not a regular file." = "Die Compositor-Konfiguration ist keine reguläre Datei."
+
+"The compositor rejected the theme; previous settings were kept." = "Der Compositor hat das Theme abgelehnt; die bisherigen Einstellungen wurden beibehalten."

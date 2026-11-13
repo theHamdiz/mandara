@@ -10215,3 +10215,9 @@
 "This clock face only shows the time." = "Muundo huu wa saa huonyesha wakati pekee."
 
 "A continuous wave has no gaps between bars." = "Wimbi endelevu halina nafasi kati ya pau."
+
+"The compositor configuration changed while its theme was being checked. Try again." = "Usanidi wa komposita ulibadilika wakati mandhari yalipokuwa yakikaguliwa. Jaribu tena."
+
+"The compositor configuration is not a regular file." = "Usanidi wa komposita si faili ya kawaida."
+
+"The compositor rejected the theme; previous settings were kept." = "Komposita ilikataa mandhari; mipangilio ya awali imehifadhiwa."

@@ -1,5 +1,7 @@
 //! Imported compositor colors live beside the managed drop-in.
 
+mod inline_displays;
+
 use crate::compositor::{self, Target};
 use std::path::{Path, PathBuf};
 
@@ -81,6 +83,11 @@ fn umbriel_remove_include(body: &str,path: &str) -> anyhow::Result<String> {
 /// Regeneration keeps this include while its color file exists. Disabling
 /// removes just this block; the rest of the generated settings stay intact.
 pub fn compose(target: Target, kind: Kind, body: &str, path: &Path, enabled: bool) -> anyhow::Result<String> {
+    let inline;
+    let body = if enabled && kind == Kind::Displays {
+        inline = inline_displays::remove(target, body, path)?;
+        inline.as_str()
+    } else { body };
     if target == Target::Umbriel {
         let path = path.to_string_lossy();
         return if enabled { Ok(compositor::umbriel_add_include(body,&path)?.unwrap_or_else(||body.into())) } else { umbriel_remove_include(body,&path) };

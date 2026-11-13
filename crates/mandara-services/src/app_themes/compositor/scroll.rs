@@ -49,7 +49,7 @@ pub(super) fn apply(owner: &str,body: &str,locations: &Locations,ledger: &mut Le
     crate::outputs::reload_preserving(&[],true,crate::outputs::current_revision(),|| {
         if next != original {
             doctor::fix::backup_files(Target::Sway,std::slice::from_ref(&primary),&doctor::fix::backups_root()).map_err(|error|format!("{error:#}"))?;
-            doctor::theme::guarded_write(&primary,&next,&validator).map_err(|error|format!("{error:#}"))?;
+            doctor::theme::guarded_write(&primary,&original,&next,&validator).map_err(|error|format!("{error:#}"))?;
         }
         let lines = block(&generated);
         ledger.put_block(owner,&primary,&lines.iter().map(String::as_str).collect::<Vec<_>>(),Placement::End).map_err(|error|format!("{error:#}"))?;
@@ -68,7 +68,7 @@ pub(super) fn undo(_owner: &str,locations: &Locations) -> Result<()> {
     let next = next.lines().filter(|line|line.trim() != include).fold(String::with_capacity(next.len()),|mut body,line| { body.push_str(line);body.push('\n');body });
     crate::outputs::reload_preserving(&[],true,crate::outputs::current_revision(),|| {
         if next != original {
-            doctor::theme::guarded_write(&primary,&next,&Native { primary:&primary,home:&locations.home }).map_err(|error|format!("{error:#}"))?;
+            doctor::theme::guarded_write(&primary,&original,&next,&Native { primary:&primary,home:&locations.home }).map_err(|error|format!("{error:#}"))?;
         }
         reload().map_err(|error|format!("{error:#}"))
     }).map_err(anyhow::Error::msg)

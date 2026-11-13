@@ -1,6 +1,7 @@
 //! Checked, independent fragments for app colors and saved display preferences.
 
 mod snapshot;
+pub mod persistence;
 
 use anyhow::{Context as _,Result, ensure};
 use snapshot::Snapshot;

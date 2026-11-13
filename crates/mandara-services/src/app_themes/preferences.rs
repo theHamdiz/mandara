@@ -23,9 +23,41 @@ struct Change {
     created: bool,
 }
 
+#[derive(Serialize, Deserialize)]
+struct Pending {
+    owner: String,
+    path: PathBuf,
+    before: Vec<Change>,
+    format: Format,
+}
+
 #[derive(Default, Serialize, Deserialize)]
 struct Record {
     owners: BTreeMap<String, Vec<Change>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pending: Option<Pending>,
+}
+
+impl Record {
+    fn recover(&mut self) -> Result<bool> {
+        let Some(pending) = self.pending.as_ref() else { return Ok(false) };
+        let current = pending.format.parse(&text(&pending.path)?)?;
+        let changes = self.owners.entry(pending.owner.clone()).or_default();
+        // Atomic writers leave either version. Compare individual values so a
+        // later unrelated user edit does not make recovery forget ownership.
+        for before in &pending.before {
+            if before.path != pending.path { continue; }
+            if current.get(&before.section, &before.key)?.as_deref() == Some(&before.after) {
+                if let Some(change) = changes.iter_mut().find(|change| change.path == before.path && change.section == before.section && change.key == before.key) {
+                    *change = before.clone();
+                } else {
+                    changes.push(before.clone());
+                }
+            }
+        }
+        self.pending = None;
+        Ok(true)
+    }
 }
 
 fn record_path(locations: &Locations) -> PathBuf {
@@ -35,7 +67,11 @@ fn record_path(locations: &Locations) -> PathBuf {
 }
 fn load(path: &Path) -> Result<Record> {
     match super::apply::read_text(path) {
-        Ok(text) => Ok(serde_json::from_str(&text)?),
+        Ok(text) => {
+            let mut record: Record = serde_json::from_str(&text)?;
+            if record.recover()? { store(path, &record)?; }
+            Ok(record)
+        },
         Err(error)
             if error
                 .downcast_ref::<std::io::Error>()
@@ -120,6 +156,7 @@ pub fn set_with(
 ) -> Result<()> {
     let record_path = record_path(locations);
     let mut record = load(&record_path)?;
+    let previous = record.owners.get(owner).cloned().unwrap_or_default();
     let created = !path.exists();
     let original = text(path)?;
     let mut next = format.parse(&original)?;
@@ -194,8 +231,15 @@ pub fn set_with(
     if !created && !known_file {
         std::fs::copy(path, mandara_theme::templates::backup_path(path))?;
     }
+    record.pending = Some(Pending { owner: owner.into(), path: path.into(), before: previous, format });
     store(&record_path, &record)?;
-    write(path,&original,&next)?;
+    if let Err(error) = write(path,&original,&next) {
+        // Keep the journal if recovery itself fails; another sync can retry.
+        load(&record_path).map_err(|recovery| anyhow::anyhow!("{error:#}; recovering theme ownership: {recovery:#}"))?;
+        return Err(error);
+    }
+    record.pending = None;
+    store(&record_path, &record)?;
     Ok(())
 }
 
@@ -251,6 +295,37 @@ pub fn undo_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failed_replacements_and_interrupted_writes_keep_the_original_undo_value() {
+        for committed in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let locations = Locations { home:root.path().into(), config:root.path().join("config"), cache:root.path().join("cache"), data:root.path().join("data"), state:root.path().join("state") };
+            let path = root.path().join("preferences");
+            std::fs::write(&path, "[Theme]\nColor=Original\n").unwrap();
+            let keys = |value: &str| ini_keys(&format!("[Theme]\nColor={value}\n")).unwrap();
+            set("app", &path, &keys("A"), &locations).unwrap();
+            assert!(set_with("app", &path, &keys("B"), Format::Ini, &locations, &|_,_,_| anyhow::bail!("write failed")).is_err());
+            let record = load(&record_path(&locations)).unwrap();
+            assert_eq!(record.owners["app"][0].after, "A");
+            assert_eq!(record.owners["app"][0].before.as_deref(), Some("Original"));
+            let interrupted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _ = set_with("app", &path, &keys("B"), Format::Ini, &locations, &|path,_,next| {
+                    if committed { mandara_config::store::write_atomic(path, next.as_bytes())?; }
+                    panic!("interrupted after journaling");
+                });
+            }));
+            assert!(interrupted.is_err());
+            // Recovery may run after an unrelated edit in the same file.
+            use std::io::Write as _;
+            writeln!(std::fs::OpenOptions::new().append(true).open(&path).unwrap(), "Unrelated=keep").unwrap();
+            set("app", &path, &keys("C"), &locations).unwrap();
+            undo("app", &locations).unwrap();
+            let restored = std::fs::read_to_string(&path).unwrap();
+            assert_eq!(ini_get(&restored, "Theme", "Color").as_deref(), Some("Original"));
+            assert_eq!(ini_get(&restored, "Theme", "Unrelated").as_deref(), Some("keep"));
+        }
+    }
 
     #[test]
     fn theme_key_edits_preserve_symlinks_comments_and_later_user_color_changes() {

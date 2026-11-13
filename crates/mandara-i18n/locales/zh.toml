@@ -10552,3 +10552,9 @@
 "This clock face only shows the time." = "此时钟样式仅显示时间。"
 
 "A continuous wave has no gaps between bars." = "连续波形没有柱条间隙。"
+
+"The compositor configuration changed while its theme was being checked. Try again." = "检查主题时合成器配置发生了变化。请重试。"
+
+"The compositor configuration is not a regular file." = "合成器配置不是普通文件。"
+
+"The compositor rejected the theme; previous settings were kept." = "合成器拒绝了主题；已保留原有设置。"

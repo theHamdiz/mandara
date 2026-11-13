@@ -10558,3 +10558,9 @@
 "This clock face only shows the time." = "この時計のデザインは時刻のみを表示します。"
 
 "A continuous wave has no gaps between bars." = "連続した波にはバー間の隙間がありません。"
+
+"The compositor configuration changed while its theme was being checked. Try again." = "テーマの検証中にコンポジターの設定が変更されました。もう一度お試しください。"
+
+"The compositor configuration is not a regular file." = "コンポジターの設定は通常のファイルではありません。"
+
+"The compositor rejected the theme; previous settings were kept." = "コンポジターがテーマを拒否したため、以前の設定を保持しました。"

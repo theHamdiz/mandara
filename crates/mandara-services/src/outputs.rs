@@ -149,11 +149,13 @@ pub enum PlannedMode {
     Preferred(Option<usize>),
 }
 
-/// The config entry for `head`: by connector name, else by identity.
+/// Prefer EDID identity; only anonymous monitors fall back to a connector.
 fn config_for<'a>(head: &Head, configs: &'a [OutputConfig]) -> Option<&'a OutputConfig> {
-    configs.iter().find(|c| c.name == head.name).or_else(|| {
-        configs.iter().find(|c| !c.serial.is_empty() && c.identity() == head.identity())
-    })
+    let stable = !head.make.trim().is_empty() && !head.serial.trim().is_empty();
+    configs.iter().rev().find(|config| stable && !config.make.trim().is_empty() && !config.serial.trim().is_empty()
+        && config.make.trim() == head.make.trim() && config.model.trim() == head.model.trim() && config.serial.trim() == head.serial.trim())
+        .or_else(|| configs.iter().rev().find(|config| config.name == head.name
+            && (!stable || config.make.trim().is_empty() || config.serial.trim().is_empty())))
 }
 
 /// The best mode index for a requested size / refresh.
@@ -486,11 +488,9 @@ pub struct Applied {
 pub fn apply_and_snapshot(configs: &[OutputConfig]) -> Result<Applied, String> {
     let revision = Revision(revision().fetch_add(1, Ordering::SeqCst) + 1);
     let _operation = operation().lock();
-    apply_unlocked(configs, false)?;
-    Ok(Applied {
-        revision,
-        heads: heads()?,
-    })
+    let before = apply_unlocked(configs, false)?;
+    let heads = accepted_snapshot(&before, heads, |outputs| apply_unlocked(outputs, false).map(|_| ()))?;
+    Ok(Applied { revision, heads })
 }
 
 /// An automatic profile waiting behind a slow reload must yield to a newer
@@ -505,11 +505,28 @@ pub fn apply_if_active(
         return Ok(None);
     }
     let revision = Revision(revision().fetch_add(1, Ordering::SeqCst) + 1);
-    apply_unlocked(configs, false)?;
-    Ok(Some(Applied {
-        revision,
-        heads: heads()?,
-    }))
+    let before = apply_unlocked(configs, false)?;
+    let heads = accepted_snapshot(&before, heads, |outputs| apply_unlocked(outputs, false).map(|_| ()))?;
+    Ok(Some(Applied { revision, heads }))
+}
+
+/// An apply without a readable accepted snapshot cannot be persisted safely.
+/// Roll it back while the operation lock still excludes newer arrangements.
+fn accepted_snapshot<T>(
+    before: &[Head],
+    snapshot: impl FnOnce() -> Result<T, String>,
+    restore: impl FnOnce(&[OutputConfig]) -> Result<(), String>,
+) -> Result<T, String> {
+    match snapshot() {
+        Ok(snapshot) => Ok(snapshot),
+        Err(error) => {
+            let previous = before.iter().map(Head::to_config).collect::<Vec<_>>();
+            match restore(&previous) {
+                Ok(()) => Err(format!("reading the accepted displays failed; the previous arrangement was restored: {error}")),
+                Err(restore) => Err(format!("reading the accepted displays failed: {error}; restoring the previous arrangement also failed: {restore}")),
+            }
+        }
+    }
 }
 
 fn apply_unlocked(configs: &[OutputConfig], test_only: bool) -> Result<Vec<Head>, String> {
@@ -691,35 +708,23 @@ fn apply_with_revert_unlocked(configs: &[OutputConfig], secs: u32) -> Result<u32
         });
     }
     crate::runtime::spawn("display-revert", async move {
-        if matches!(
-            futures::future::select(
-                Box::pin(cancelled.recv()),
-                Box::pin(crate::runtime::sleep(wait))
-            )
-            .await,
-            futures::future::Either::Left(_)
-        ) {
-            return;
-        }
-        if GENERATION.load(Ordering::SeqCst) != generation {
-            return;
-        }
-        crate::runtime::unblock(move || {
-            let _operation = operation().lock();
-        let restore = {
-            let mut p = pending().lock();
-            if p.as_ref().is_some_and(|r| r.generation == generation) { p.take()
-                } else { None }
-        };
-        if let Some(restore) = restore {
-            tracing::info!("displays: change not kept, reverting");
-            if let Err(err) = apply_unlocked(&restore.before, false) {
-                tracing::warn!("displays: revert failed: {err}");
-                    *pending().lock() = Some(restore);
+        let mut delay = wait;
+        loop {
+            if matches!(futures::future::select(
+                Box::pin(cancelled.recv()), Box::pin(crate::runtime::sleep(delay))
+            ).await, futures::future::Either::Left(_)) { return; }
+            let finished = crate::runtime::unblock(move || {
+                let _operation = operation().lock();
+                if GENERATION.load(Ordering::SeqCst) != generation { return true; }
+                let mut pending = pending().lock();
+                match try_revert(&mut pending, generation, |before| apply_unlocked(before, false).map(|_| ())) {
+                    Ok(_) => true,
+                    Err(error) => { tracing::warn!("displays: revert failed, retrying: {error}"); false }
                 }
+            }).await;
+            if finished { return; }
+            delay = std::time::Duration::from_secs(REVERT_RETRY_SECONDS);
         }
-        })
-        .await;
     });
     Ok(secs)
 }
@@ -781,15 +786,27 @@ pub fn reload_preserving<T>(
 pub fn revert_now() -> Result<bool, String> {
     revision().fetch_add(1, Ordering::SeqCst);
     let _operation = operation().lock();
+    let mut pending = pending().lock();
+    let Some(generation) = pending.as_ref().map(|pending| pending.generation) else { return Ok(false) };
+    let restored = try_revert(&mut pending, generation, |before| apply_unlocked(before, false).map(|_| ()))?;
     GENERATION.fetch_add(1, Ordering::SeqCst);
-    let Some(p) = pending().lock().take() else { return Ok(false);
-    };
-    match apply_unlocked(&p.before, false) {
-        Ok(_) => Ok(true),
-        Err(error) => {
-            *pending().lock() = Some(p);
-            Err(error)
-        }
+    Ok(restored)
+}
+
+/// Retry only a failed, still-pending display test; no work remains after
+/// confirmation, a successful revert, or replacement by another test.
+const REVERT_RETRY_SECONDS: u64 = 1;
+
+fn try_revert(
+    pending: &mut Option<PendingRevert>,
+    generation: u64,
+    restore: impl FnOnce(&[OutputConfig]) -> Result<(), String>,
+) -> Result<bool, String> {
+    if !pending.as_ref().is_some_and(|pending| pending.generation == generation) { return Ok(false); }
+    let Some(previous) = pending.take() else { return Ok(false) };
+    match restore(&previous.before) {
+        Ok(()) => Ok(true),
+        Err(error) => { *pending = Some(previous); Err(error) }
     }
 }
 
@@ -892,6 +909,44 @@ mod tests {
             scale: 1.5,
             adaptive_sync: Some(false),
         }
+    }
+
+    #[test]
+    fn unreadable_accepted_snapshots_restore_before_reporting_failure() {
+        let before = [head("DP-1")];
+        let restored = std::cell::Cell::new(false);
+        let result: Result<(), String> = accepted_snapshot(&before, || Err("timeout".into()), |outputs| {
+            assert_eq!(outputs, &[before[0].to_config()]); restored.set(true); Ok(())
+        });
+        assert!(restored.get());
+        assert!(result.unwrap_err().contains("previous arrangement was restored"));
+        let result: Result<(), String> = accepted_snapshot(&before, || Err("timeout".into()), |_| Err("offline".into()));
+        let error = result.unwrap_err();
+        assert!(error.contains("timeout") && error.contains("offline"));
+        assert_eq!(accepted_snapshot(&before, || Ok(42), |_| panic!("successful snapshot needs no rollback")).unwrap(), 42);
+    }
+
+    #[test]
+    fn failed_reverts_keep_the_same_cancellable_test_for_retry() {
+        let (cancel, cancelled) = async_channel::bounded(1);
+        let mut pending = Some(PendingRevert { before: vec![head("DP-1").to_config()], deadline: std::time::Instant::now(), generation: 7, _cancel: cancel });
+        assert!(try_revert(&mut pending, 7, |_| Err("temporarily offline".into())).is_err());
+        assert_eq!(pending.as_ref().unwrap().generation, 7);
+        assert!(!cancelled.is_closed());
+        assert!(!try_revert(&mut pending, 6, |_| panic!("stale timer")).unwrap());
+        assert!(try_revert(&mut pending, 7, |outputs| { assert_eq!(outputs[0].name, "DP-1"); Ok(()) }).unwrap());
+        assert!(pending.is_none());
+        assert!(cancelled.is_closed());
+    }
+
+    #[test]
+    fn a_saved_edid_does_not_configure_an_unrelated_monitor_on_its_old_connector() {
+        let mut actual = head("DP-2");
+        actual.serial = "A".into();
+        let mut a = actual.to_config(); a.name = "DP-1".into(); a.scale = Some(1.25);
+        let mut b = actual.to_config(); b.serial = "B".into(); b.scale = Some(2.0);
+        assert_eq!(config_for(&actual, &[b.clone(), a]).unwrap().scale, Some(1.25));
+        assert!(config_for(&actual, &[b]).is_none());
     }
 
     #[test]

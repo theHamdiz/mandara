@@ -51,12 +51,20 @@ run in the background with a deadline and bounded output; failures appear on
 this page and in `theme apps status`. Managed file writes preserve symlinks,
 back up existing files and undo only changes still owned by the template.
 External setup commands follow the imported package's own undo instructions.
+If commands are switched off before a template is disabled, its cleanup stays
+pending and is retried when you allow commands again. Built-in integrations and
+custom templates share an ownership record, so a whole-file template cannot
+replace a file that contains managed imports.
 
 Imported KDE schemes merge their colour keys into `kdeglobals`, preserving
 unrelated settings. The browser integration can install an owned native-messaging
 host on Linux, deliver the palette to the browser extension, and manage its
 optional CSS across profiles. An existing host from another installation is
-preserved. Browser extensions and apps are never installed automatically.
+preserved. When you turn the template off, Mandara restores its files and
+notifies connected extensions that its palette is unavailable. Use the browser
+extension’s **Disable theme** control to reset its active browser colours;
+its native messaging protocol does not provide a remote reset command.
+Browser extensions and apps are never installed automatically.
 
 Compositor templates use native validation and reversible changes. MangoWM,
 Niri, Hyprland, Umbriel, Sway and Scroll read generated colour includes. Jay and
@@ -67,6 +75,8 @@ scripts never replace a compositor's primary config. DriftWM's older catalog
 keys are mapped to its current decoration settings. Jay follows its existing
 reload policy; if automatic reloading is off, reload its TOML config to see the
 new colours.
+If you edit or retarget the config file while its native check runs, Mandara
+keeps your edit and asks you to apply the theme again.
 
 ### Author a template
 

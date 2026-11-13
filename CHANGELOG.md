@@ -11,6 +11,7 @@ About → What's new shows it too.
 - **More apps can follow your colours.** Browse app-template catalogs in Studio → Themes → Other apps, install only what you need, or write your own template. Installed templates follow every Mandara palette offline, with light/dark colours, custom colours, setup commands, browser integration and KDE schemes. Setup commands are optional; errors and managed-file restoration are visible in Studio. (#123)
 
 ### Fixed
+- Saved display profiles keep their identity when renamed, and reconnecting a monitor on a reused port keeps each monitor’s own preferences. Failed saves and display reverts can be retried without losing undo history.
 
 - **Desktop changes stay put.** Late saves from Studio no longer bring back removed widgets or discard unrelated edits. System-monitor titles, text alignment and visualizer appearance controls now reach their rendered layouts; controls that need a header explain why. Calendar and measurement-unit changes refresh cached widget layouts immediately, and an explicitly chosen font also reaches fixed digit and caption layouts. “No date” removes the full caption on mechanical clocks; the word clock explains its time-only layout.
 - **Display settings survive a new Look and a fresh start.** Studio and shell commands share one Keep/Revert countdown, preserve unrelated display edits and remember kept arrangements independently of compositor keybind or layout management.
@@ -24,6 +25,7 @@ About → What's new shows it too.
 
 ### Under the hood
 
+- Compositor theming preserves edits and symlink changes made while its native checker runs.
 - Hidden desktop widgets stop scheduling clock ticks, and cached widget paints avoid temporary settings and font copies.
 - Build cleanup keeps libraries used by running tests and doctests, even after Cargo releases its build lock.
 

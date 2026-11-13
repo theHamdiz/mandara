@@ -59,6 +59,20 @@ fn matches(row: &Row, terms: &[String]) -> bool {
     terms.iter().all(|term| row.search.contains(term))
 }
 
+fn editor_document(cfg: mandara_config::app_themes::AppThemesConfig) -> anyhow::Result<String> {
+    let mut document = Manifest {
+        templates: cfg.user,
+        config: mandara_services::app_themes::manifest::Options {
+            custom_colors: cfg.custom_colors,
+        },
+        ..Default::default()
+    };
+    if document.templates.is_empty() {
+        document.templates = Manifest::parse_user("[templates.example]\nenabled = false\noutput_path = '~/.config/example/colors.css'\ncontent = '''\n:root { --accent: {{ colors.primary.default.hex }}; }\n'''\n")?.templates;
+    }
+    Ok(toml::to_string_pretty(&document)?)
+}
+
 impl StudioView {
     pub(super) fn app_templates(
         &mut self,
@@ -607,17 +621,12 @@ impl StudioView {
             .integrations
             .app_themes
             .clone();
-        let document = if cfg.user.is_empty() {
-            "[templates.example]\nenabled = false\noutput_path = '~/.config/example/colors.css'\ncontent = '''\n:root { --accent: {{ colors.primary.default.hex }}; }\n'''\n".into()
-        } else {
-            toml::to_string_pretty(&Manifest {
-                templates: cfg.user,
-                config: mandara_services::app_themes::manifest::Options {
-                    custom_colors: cfg.custom_colors,
-                },
-                ..Default::default()
-            })
-            .unwrap_or_default()
+        let document = match editor_document(cfg) {
+            Ok(document) => document,
+            Err(error) => {
+                self.app_templates.error = Some(error.to_string());
+                return;
+            }
         };
         let view = cx.entity().downgrade();
         self.app_templates.editor = Some(cx.new(|cx| {
@@ -672,6 +681,20 @@ impl StudioView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_example_document_keeps_existing_custom_colours_when_saved() {
+        let mut config = mandara_config::app_themes::AppThemesConfig::default();
+        config.custom_colors.insert(
+            "warning".into(),
+            mandara_theme::templates::custom::CustomColor::Hex("#ff8800".into()),
+        );
+        let expected = config.custom_colors.clone();
+        let saved = Manifest::parse_user(&editor_document(config).unwrap()).unwrap();
+        assert_eq!(saved.config.custom_colors, expected);
+        assert!(!saved.templates["example"].enabled);
+        assert!(saved.templates["example"].content.is_some());
+    }
 
     #[test]
     fn catalog_search_matches_all_terms_without_changing_app_identity() {

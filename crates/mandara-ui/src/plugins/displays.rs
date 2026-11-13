@@ -117,7 +117,7 @@ fn head_json(h: &outputs::Head) -> serde_json::Value {
 /// Saves the current arrangement as a profile named `name` (replacing one
 /// with that name).
 pub fn save_profile(name: &str, heads: &[outputs::Head], cx: &mut App) {
-    let profile = DisplayProfile { name: name.to_string(), outputs: heads.iter().map(outputs::Head::to_config).collect() };
+    let profile = DisplayProfile::new(name.to_string(), heads.iter().map(outputs::Head::to_config).collect());
     update_config(cx, move |c| {
         c.displays.profiles.retain(|p| p.name != profile.name);
         c.displays.profiles.push(profile);
@@ -127,13 +127,14 @@ pub fn save_profile(name: &str, heads: &[outputs::Head], cx: &mut App) {
 
 /// Writes the current arrangement to the compositor drop-in (survives
 /// restarts; the compositor sync regenerates the file).
-pub fn persist(heads: &[outputs::Head], cx: &mut App) {
+pub fn persist(heads: &[outputs::Head], cx: &mut App) -> Option<async_channel::Receiver<Result<(), String>>> {
     update_config(cx, |c| {
         mandara_config::outputs::remember(
             &mut c.compositor.outputs,
             heads.iter().map(outputs::Head::to_config),
         )
     });
+    queue_output_preferences(cx, true)
 }
 
 /// Keep the tested arrangement and save the live state, including changes
@@ -143,7 +144,9 @@ pub fn keep(cx: &mut App) -> gpui::Task<Result<bool, String>> {
         let Some(heads) = outputs::jobs::run(outputs::confirm_and_snapshot).await? else {
             return Ok(false);
         };
-        cx.update(|cx| persist(&heads, cx));
+        if let Some(saved) = cx.update(|cx| persist(&heads, cx)) {
+            saved.recv().await.map_err(|error| error.to_string())??;
+        }
         Ok(true)
     })
 }
@@ -327,53 +330,22 @@ pub fn init(cx: &mut App) {
 }
 
 /// One active writer and one newest snapshot; no resident blocking thread.
-struct OutputPreferences {
-    last: Vec<OutputConfig>,
-    sender: async_channel::Sender<Vec<OutputConfig>>,
-}
+struct OutputPreferences(mandara_services::compositor_config::persistence::Writer);
 impl Global for OutputPreferences {}
 
 fn persist_output_preferences(cx: &mut App) {
+    queue_output_preferences(cx, false);
+}
+
+fn queue_output_preferences(cx: &mut App, wait: bool) -> Option<async_channel::Receiver<Result<(), String>>> {
     use mandara_config::compositor_theme;
-    let Some(backend) = crate::hub::hub(cx).read(cx).compositor.clone() else {
-        return;
-    };
+    let backend = crate::hub::hub(cx).read(cx).compositor.clone()?;
     let target = backend.target();
-    if !compositor_theme::supported(target) {
-        return;
-    }
-    let outputs = &config(cx).read(cx).get().compositor.outputs;
-    if cx
-        .try_global::<OutputPreferences>()
-        .is_some_and(|writer| writer.last == *outputs)
-    {
-        return;
-    }
+    if !compositor_theme::supported(target) { return None; }
     if cx.try_global::<OutputPreferences>().is_none() {
-        let (sender, receiver) = async_channel::bounded::<Vec<OutputConfig>>(1);
-        mandara_services::runtime::spawn("display-preferences", async move {
-            while let Ok(mut outputs) = receiver.recv().await {
-                while let Ok(newer) = receiver.try_recv() {
-                    outputs = newer;
-                }
-                let result = mandara_services::runtime::unblock(move || {
-                    mandara_services::compositor_config::persist_outputs(target, &outputs)
-                })
-                .await;
-                if let Err(error) = result {
-                    tracing::warn!("saving display preferences: {error:#}");
-                }
-            }
-        });
-        cx.set_global(OutputPreferences {
-            last: Vec::new(),
-            sender,
-        });
+        cx.set_global(OutputPreferences(mandara_services::compositor_config::persistence::Writer::new(target)));
     }
-    let outputs = config(cx).read(cx).get().compositor.outputs.clone();
-    let writer = cx.global_mut::<OutputPreferences>();
-    writer.last.clone_from(&outputs);
-    let _ = writer.sender.force_send(outputs);
+    cx.global::<OutputPreferences>().0.submit(&config(cx).read(cx).get().compositor.outputs, wait)
 }
 
 pub fn register(r: &mut PluginRegistry) {
@@ -440,10 +412,13 @@ pub fn register(r: &mut PluginRegistry) {
         CommandSpec::new_output("display persist", tk("Write the current display arrangement to the compositor drop-in so it survives restarts"), |_, cx| {
             let (tx,rx) = async_channel::bounded(1);
             cx.spawn(async move |cx| {
-                let result = outputs::jobs::run(outputs::heads).await.map(|heads| {
-                    cx.update(|cx| persist(&heads, cx));
-                    json!({ "persisted": heads.iter().map(|head| &head.name).collect::<Vec<_>>() }).to_string()
-                });
+                let result = async {
+                    let heads = outputs::jobs::run(outputs::heads).await?;
+                    if let Some(saved) = cx.update(|cx| persist(&heads, cx)) {
+                        saved.recv().await.map_err(|error| error.to_string())??;
+                    }
+                    Ok(json!({ "persisted": heads.iter().map(|head| &head.name).collect::<Vec<_>>() }).to_string())
+                }.await;
                 let _ = tx.send(result).await;
             }).detach();
             Ok(Output::Pending(rx))

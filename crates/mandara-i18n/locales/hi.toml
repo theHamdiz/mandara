@@ -10559,3 +10559,9 @@
 "This clock face only shows the time." = "घड़ी का यह डिज़ाइन केवल समय दिखाता है।"
 
 "A continuous wave has no gaps between bars." = "लगातार लहर में पट्टियों के बीच अंतराल नहीं होता।"
+
+"The compositor configuration changed while its theme was being checked. Try again." = "थीम की जाँच के दौरान कंपोज़िटर का कॉन्फ़िगरेशन बदल गया। फिर कोशिश करें।"
+
+"The compositor configuration is not a regular file." = "कंपोज़िटर का कॉन्फ़िगरेशन सामान्य फ़ाइल नहीं है।"
+
+"The compositor rejected the theme; previous settings were kept." = "कंपोज़िटर ने थीम स्वीकार नहीं की; पिछली सेटिंग्स रखी गई हैं।"

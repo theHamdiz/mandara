@@ -10556,3 +10556,9 @@
 "This clock face only shows the time." = "Bu saat kadranı yalnızca saati gösterir."
 
 "A continuous wave has no gaps between bars." = "Kesintisiz bir dalgada çubuklar arasında boşluk olmaz."
+
+"The compositor configuration changed while its theme was being checked. Try again." = "Tema denetlenirken birleştirici yapılandırması değişti. Yeniden deneyin."
+
+"The compositor configuration is not a regular file." = "Birleştirici yapılandırması normal bir dosya değil."
+
+"The compositor rejected the theme; previous settings were kept." = "Birleştirici temayı reddetti; önceki ayarlar korundu."

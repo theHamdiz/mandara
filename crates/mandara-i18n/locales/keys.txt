@@ -7432,9 +7432,12 @@ The command is empty
 The community store has blocked installs and updates for {repository}.
 The community the sidebar card shows; empty follows your first community
 The compiled WebAssembly component (manifest `entry`)
+The compositor configuration changed while its theme was being checked. Try again.
+The compositor configuration is not a regular file.
 The compositor connection closed
 The compositor did not answer
 The compositor did not respond in time
+The compositor rejected the theme; previous settings were kept.
 The compositor rejected this display configuration
 The connection to the station dropped
 The contract (WIT)

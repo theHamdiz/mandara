@@ -10215,3 +10215,9 @@
 "This clock face only shows the time." = "Mặt đồng hồ này chỉ hiển thị giờ."
 
 "A continuous wave has no gaps between bars." = "Dạng sóng liên tục không có khoảng cách giữa các thanh."
+
+"The compositor configuration changed while its theme was being checked. Try again." = "Cấu hình trình tổng hợp đã thay đổi trong khi kiểm tra giao diện. Hãy thử lại."
+
+"The compositor configuration is not a regular file." = "Cấu hình trình tổng hợp không phải là tệp thông thường."
+
+"The compositor rejected the theme; previous settings were kept." = "Trình tổng hợp đã từ chối giao diện; các thiết lập trước đó được giữ nguyên."

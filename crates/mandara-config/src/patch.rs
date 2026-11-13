@@ -248,6 +248,22 @@ mod tests {
     use crate::desktop_widgets::{DesktopWidget, MonitorWidget, WidgetKind};
 
     #[test]
+    fn renaming_a_profile_preserves_concurrent_output_edits() {
+        let mut base = ShellConfig::default();
+        base.displays.profiles.push(crate::outputs::DisplayProfile::new("Desk".into(), vec![crate::outputs::OutputConfig {
+            name: "DP-1".into(), scale: Some(1.0), ..Default::default()
+        }]));
+        let mut studio = base.clone();
+        studio.displays.profiles[0].name = "Work".into();
+        let mut shell = base.clone();
+        shell.displays.profiles[0].outputs[0].scale = Some(1.25);
+        let merged = ConfigPatch::between(&base, &studio).unwrap().apply(&shell).unwrap();
+        assert_eq!(merged.displays.profiles.len(), 1);
+        assert_eq!(merged.displays.profiles[0].name, "Work");
+        assert_eq!(merged.displays.profiles[0].outputs[0].scale, Some(1.25));
+    }
+
+    #[test]
     fn stale_widget_edits_do_not_resurrect_removed_widgets_or_edit_a_different_index() {
         let mut base = ShellConfig::default();
         base.desktop.widgets.items = ["clock-one", "clock-two"]

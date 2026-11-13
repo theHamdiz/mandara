@@ -10315,3 +10315,9 @@
 "This clock face only shows the time." = "এই ঘড়ির নকশায় শুধু সময় দেখানো হয়।"
 
 "A continuous wave has no gaps between bars." = "একটানা তরঙ্গে বারগুলোর মাঝে ফাঁক থাকে না।"
+
+"The compositor configuration changed while its theme was being checked. Try again." = "থিম যাচাই করার সময় কম্পোজিটরের কনফিগারেশন বদলেছে। আবার চেষ্টা করুন।"
+
+"The compositor configuration is not a regular file." = "কম্পোজিটরের কনফিগারেশন একটি সাধারণ ফাইল নয়।"
+
+"The compositor rejected the theme; previous settings were kept." = "কম্পোজিটর থিমটি গ্রহণ করেনি; আগের সেটিংস রাখা হয়েছে।"

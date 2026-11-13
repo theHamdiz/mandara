@@ -19,11 +19,16 @@ pub const TIMEOUT: Duration = Duration::from_secs(TIMEOUT_SECONDS);
 const WAIT_MILLIS: u64 = 20;
 const WAIT: Duration = Duration::from_millis(WAIT_MILLIS);
 
-struct Group(Child);
+struct Group {
+    child: Child,
+    exited: bool,
+}
 impl Drop for Group {
     fn drop(&mut self) {
-        super::super::hooks::kill_group(self.0.id(), libc::SIGKILL);
-        let _ = self.0.wait();
+        if !self.exited {
+            super::super::hooks::kill_group(self.child.id(), libc::SIGKILL);
+        }
+        let _ = self.child.wait();
     }
 }
 
@@ -54,24 +59,41 @@ pub fn run(
     timeout: Duration,
 ) -> Result<String> {
     let mut process = Command::new("sh");
-    process.args(["-c", &command.shell])
+    process
+        .args(["-c", &command.shell])
         .current_dir(directory)
-        .envs(environment.iter().map(|(key,value)|(key,value)))
-        .envs(command.environment.iter().map(|(key,value)|(key,value)));
-    native(process,cancel,timeout).map(|output|output.0)
+        .envs(environment.iter().map(|(key, value)| (key, value)))
+        .envs(command.environment.iter().map(|(key, value)| (key, value)));
+    native(process, cancel, timeout).map(|output| output.0)
 }
 
 /// Run a native checker with the same output, cancellation and child-process bounds.
-pub(super) fn native(mut command: Command,cancel: &AtomicBool,timeout: Duration) -> Result<(String,String)> {
-    ensure!(!cancel.load(Ordering::Acquire),"template command was cancelled");
-    let mut child = Group(command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).process_group(0).spawn().context("starting app theme command")?);
-    let mut stdout = child
-        .0
+pub(super) fn native(
+    mut command: Command,
+    cancel: &AtomicBool,
+    timeout: Duration,
+) -> Result<(String, String)> {
+    ensure!(
+        !cancel.load(Ordering::Acquire),
+        "template command was cancelled"
+    );
+    let mut group = Group {
+        child: command
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .process_group(0)
+            .spawn()
+            .context("starting app theme command")?,
+        exited: false,
+    };
+    let mut stdout = group
+        .child
         .stdout
         .take()
         .context("template stdout is unavailable")?;
-    let mut stderr = child
-        .0
+    let mut stderr = group
+        .child
         .stderr
         .take()
         .context("template stderr is unavailable")?;
@@ -83,15 +105,19 @@ pub(super) fn native(mut command: Command,cancel: &AtomicBool,timeout: Duration)
     loop {
         read_available(&mut stdout, &mut output)?;
         read_available(&mut stderr, &mut diagnostic)?;
-        if let Some(status) = child.0.try_wait()? {
+        if let Some(status) = group.child.try_wait()? {
             read_available(&mut stdout, &mut output)?;
             read_available(&mut stderr, &mut diagnostic)?;
+            group.exited = true;
             ensure!(
                 status.success(),
                 "template command exited {status}: {}",
                 String::from_utf8_lossy(&diagnostic).trim()
             );
-            return Ok((String::from_utf8(output).context("template command returned non-UTF-8 paths")?,String::from_utf8_lossy(&diagnostic).into_owned()));
+            return Ok((
+                String::from_utf8(output).context("template command returned non-UTF-8 paths")?,
+                String::from_utf8_lossy(&diagnostic).into_owned(),
+            ));
         }
         if cancel.load(Ordering::Acquire) {
             bail!("template command was cancelled");
@@ -112,6 +138,36 @@ mod tests {
             shell: shell.into(),
             environment: Vec::new(),
         }
+    }
+
+    #[test]
+    fn a_successful_reload_can_leave_its_application_running() {
+        struct Cleanup(i32);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                crate::hooks::kill_group(self.0 as u32, libc::SIGKILL);
+            }
+        }
+        let root = tempfile::tempdir().unwrap();
+        let output = run(
+            &command("sleep 30 >/dev/null 2>&1 & printf '%s %s' \"$$\" \"$!\""),
+            root.path(),
+            &[],
+            &AtomicBool::new(false),
+            TIMEOUT,
+        )
+        .unwrap();
+        let pids = output
+            .split_whitespace()
+            .map(|pid| pid.parse::<i32>().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(pids.len(), 2);
+        let _cleanup = Cleanup(pids[0]);
+        assert_eq!(
+            unsafe { libc::kill(pids[1], 0) },
+            0,
+            "the application outlives its reload command"
+        );
     }
 
     #[test]

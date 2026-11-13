@@ -82,7 +82,7 @@ pub(super) fn apply(extra: Extra,owner: &str,body: &str,locations: &Locations,le
     let primary = extra.primary(locations);
     let validator = Native(extra);
     crate::outputs::reload_preserving(&[],true,crate::outputs::current_revision(),|| {
-        preferences::set_with(owner,&primary,&keys,extra.format(),locations,&|path,_,next|mandara_config::doctor::theme::guarded_write(path,next,&validator)).map_err(|error|format!("{error:#}"))?;
+        preferences::set_with(owner,&primary,&keys,extra.format(),locations,&|path,original,next|mandara_config::doctor::theme::guarded_write(path,original,next,&validator)).map_err(|error|format!("{error:#}"))?;
         reload(extra).map_err(|error|format!("{error:#}"))
     }).map_err(anyhow::Error::msg)?;
     let generated = extra.generated(locations);
@@ -93,7 +93,7 @@ pub(super) fn apply(extra: Extra,owner: &str,body: &str,locations: &Locations,le
 pub(super) fn undo(extra: Extra,owner: &str,locations: &Locations) -> Result<()> {
     let validator = Native(extra);
     crate::outputs::reload_preserving(&[],true,crate::outputs::current_revision(),|| {
-        preferences::undo_with(owner,locations,&|path,_,next|mandara_config::doctor::theme::guarded_write(path,next,&validator)).map_err(|error|format!("{error:#}"))?;
+        preferences::undo_with(owner,locations,&|path,original,next|mandara_config::doctor::theme::guarded_write(path,original,next,&validator)).map_err(|error|format!("{error:#}"))?;
         reload(extra).map_err(|error|format!("{error:#}"))
     }).map_err(anyhow::Error::msg)
 }

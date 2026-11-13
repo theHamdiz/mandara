@@ -20,13 +20,13 @@ tracing.workspace = true
 # The config doctor reads Umbriel's JSON report and keeps its state as JSON.
 serde_json.workspace = true
 smallvec.workspace = true
+# Retire legacy Niri output nodes when the checked Displays include takes over.
+kdl.workspace = true
 
 # MangoWM resolves bind keys to keycodes; conflict checks must too.
 xkbcommon = { workspace = true }
 
 [dev-dependencies]
-# The niri emitters write KDL as text; the tests parse it back to check it.
-kdl.workspace = true
 tempfile.workspace = true
 
 [lints]

@@ -58,6 +58,7 @@ pub fn host() -> Result<()> {
     }
 }
 
+#[cfg(any(target_os = "linux", test))]
 pub(super) fn settings(locations: &Locations) -> Result<Settings> {
     let mut settings: Settings =
         serde_json::from_str(&super::apply::read_text(&settings_path(locations))?)?;

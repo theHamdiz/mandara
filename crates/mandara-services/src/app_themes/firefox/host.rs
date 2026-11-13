@@ -31,6 +31,21 @@ fn palette(settings: Option<&Settings>) -> Value {
         )
 }
 
+fn changed(
+    protocol: &mut Protocol,
+    settings: Option<&Settings>,
+    mut send: impl FnMut(Value) -> Result<()>,
+) -> Result<()> {
+    let reply = palette(settings);
+    let success = reply["success"] == true;
+    send(reply)?;
+    protocol.mode_sent = success;
+    if success && let Some(settings) = settings {
+        send(mode(settings))?;
+    }
+    Ok(())
+}
+
 fn handle(
     protocol: &mut Protocol,
     message: &Value,
@@ -191,10 +206,9 @@ pub(super) fn run(locations: &Locations) -> Result<()> {
             }
             if relevant {
                 current = super::settings(locations).ok();
-                if let Some(settings) = &current {
-                    wire::write(&mut output, &palette(Some(settings)))?;
-                    wire::write(&mut output, &mode(settings))?;
-                }
+                changed(&mut protocol, current.as_ref(), |value| {
+                    wire::write(&mut output, &value)
+                })?;
             }
         }
     }
@@ -203,6 +217,27 @@ pub(super) fn run(locations: &Locations) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn removing_theme_settings_notifies_connected_extensions_and_resets_mode_delivery() {
+        let mut protocol = Protocol { mode_sent: true };
+        let mut replies = Vec::new();
+        changed(&mut protocol, None, |reply| {
+            replies.push(reply);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(replies.len(), 1);
+        assert_eq!(replies[0]["action"], "action:colors");
+        assert_eq!(replies[0]["success"], false);
+        assert!(
+            replies[0]["error"]
+                .as_str()
+                .unwrap()
+                .contains("no browser app theme")
+        );
+        assert!(!protocol.mode_sent);
+    }
 
     #[test]
     fn font_size_replies_return_the_applied_number_for_extension_controls() {

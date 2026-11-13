@@ -10561,3 +10561,9 @@
 "This clock face only shows the time." = "يعرض تصميم الساعة هذا الوقت فقط."
 
 "A continuous wave has no gaps between bars." = "الموجة المتصلة لا تحتوي على فجوات بين الأعمدة."
+
+"The compositor configuration changed while its theme was being checked. Try again." = "تغيّرت إعدادات مدير النوافذ أثناء التحقق من سمتها. حاول مجددًا."
+
+"The compositor configuration is not a regular file." = "ملف إعدادات مدير النوافذ ليس ملفًا عاديًا."
+
+"The compositor rejected the theme; previous settings were kept." = "رفض مدير النوافذ السمة؛ تم الاحتفاظ بالإعدادات السابقة."

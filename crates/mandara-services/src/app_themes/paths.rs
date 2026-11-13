@@ -32,7 +32,7 @@ impl Locations {
         self.state.join("mandara/app-templates")
     }
     pub fn ledger(&self) -> PathBuf {
-        self.config.join("mandara/generated/custom-app-themes.toml")
+        self.config.join("mandara/generated/app-themes.toml")
     }
     pub fn applied(&self) -> PathBuf {
         self.config.join("mandara/generated/custom-app-themes.json")

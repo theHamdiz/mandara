@@ -10216,3 +10216,9 @@
 "This clock face only shows the time." = "ఈ గడియారం రూపం సమయాన్ని మాత్రమే చూపిస్తుంది."
 
 "A continuous wave has no gaps between bars." = "నిరంతర తరంగంలో పట్టీల మధ్య ఖాళీలు ఉండవు."
+
+"The compositor configuration changed while its theme was being checked. Try again." = "థీమ్‌ను తనిఖీ చేస్తున్నప్పుడు కంపోజిటర్ కాన్ఫిగరేషన్ మారింది. మళ్లీ ప్రయత్నించండి."
+
+"The compositor configuration is not a regular file." = "కంపోజిటర్ కాన్ఫిగరేషన్ సాధారణ ఫైల్ కాదు."
+
+"The compositor rejected the theme; previous settings were kept." = "కంపోజిటర్ థీమ్‌ను తిరస్కరించింది; మునుపటి సెట్టింగ్‌లు అలాగే ఉంచబడ్డాయి."

@@ -1049,7 +1049,7 @@ impl StudioView {
                 }
             }).collect::<Vec<_>>().join(" + ");
         let save = button("profile-save", "plus", t("Save as profile"), false, p).on_click(move |_, _, cx| {
-            let profile = DisplayProfile { name: default_name.clone(), outputs: snapshot.clone() };
+            let profile = DisplayProfile::new(default_name.clone(), snapshot.clone());
             update_config(cx, move |c| {
                 c.displays.profiles.retain(|p| p.name != profile.name);
                 c.displays.profiles.push(profile);

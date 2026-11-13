@@ -10556,3 +10556,9 @@
 "This clock face only shows the time." = "Этот циферблат показывает только время."
 
 "A continuous wave has no gaps between bars." = "У непрерывной волны нет промежутков между столбиками."
+
+"The compositor configuration changed while its theme was being checked. Try again." = "Конфигурация композитора изменилась во время проверки темы. Повторите попытку."
+
+"The compositor configuration is not a regular file." = "Конфигурация композитора не является обычным файлом."
+
+"The compositor rejected the theme; previous settings were kept." = "Композитор отклонил тему; прежние настройки сохранены."

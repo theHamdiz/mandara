@@ -420,11 +420,17 @@ impl ApplyContext<'_, '_> {
                 report.errors.insert(id, format!("undo: {error:#}"));
                 continue;
             }
-            report.files.extend(ledger.take_back(&id));
+            let restored = ledger.take_back_checked(&id);
+            report.files.extend(restored.files);
+            report.errors.extend(restored.errors);
             if ledger.has(&id) {
                 report
                     .errors
                     .insert(id, "some app theme files could not be restored".into());
+                continue;
+            }
+            if !*hooks && undo.command.is_some() {
+                report.errors.insert(id, "undo command is pending while template commands are disabled".into());
                 continue;
             }
             applied.entries.remove(&id);
@@ -609,7 +615,9 @@ impl ApplyContext<'_, '_> {
                 run(&spec.post_hook, render, base, &environment, cancel)?;
             }
         }
-        report.files.extend(ledger.take_back_except(owner, &keep));
+        let retired = ledger.take_back_except_checked(owner, &keep);
+        report.files.extend(retired.files);
+        ensure!(retired.errors.is_empty(), "old app theme destinations could not be restored: {:?}", retired.errors);
         Ok(true)
     }
 }
@@ -635,6 +643,48 @@ mod tests {
             font_family: "Test font".into(),
             image: "/images/a 'b' $(false).png".into(),
         }
+    }
+
+    #[test]
+    fn a_failed_retirement_is_reported_and_keeps_its_undo_record() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = locations(root.path());
+        let path = locations.home.join("old.css");
+        std::fs::write(&path, "personal").unwrap();
+        let mut config = AppThemesConfig { user: [("editor".into(), Template { enabled: true,
+            content: Some("themed".into()), output_path: Paths::One(path.clone()), ..Default::default()
+        })].into(), ..Default::default() };
+        let cancel = AtomicBool::new(false);
+        assert!(sync(&config, &theme(), &locations, &cancel, &||false).unwrap().errors.is_empty());
+        let ledger = Ledger::read(&locations.ledger()).unwrap();
+        let backup = ledger.files.values().next().unwrap().backup.as_ref().unwrap();
+        std::fs::remove_file(backup).unwrap();
+        config.user.get_mut("editor").unwrap().output_path = Paths::One(locations.home.join("new.css"));
+        let report = sync(&config, &theme(), &locations, &cancel, &||false).unwrap();
+        assert!(report.errors["user/editor"].contains("old app theme destinations"));
+        assert!(Ledger::read(&locations.ledger()).unwrap().files.contains_key(path.to_str().unwrap()));
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "themed");
+    }
+
+    #[test]
+    fn disabled_commands_keep_pending_hook_only_cleanup_for_a_later_retry() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = locations(root.path());
+        let mut config = AppThemesConfig { user: [("hook".into(), Template {
+            enabled: true, post_hook: "printf applied > \"$HOME/hook\"".into(), undo_hook: "rm \"$HOME/hook\"".into(), ..Default::default()
+        })].into(), ..Default::default() };
+        let cancel = AtomicBool::new(false);
+        assert!(sync(&config, &theme(), &locations, &cancel, &||false).unwrap().errors.is_empty());
+        config.user.clear();
+        config.run_hooks = false;
+        let report = sync(&config, &theme(), &locations, &cancel, &||false).unwrap();
+        assert!(!report.errors.is_empty());
+        assert!(locations.home.join("hook").exists());
+        let applied: Applied = serde_json::from_str(&read_text(&locations.applied()).unwrap()).unwrap();
+        assert!(applied.entries.contains_key("user/hook"));
+        config.run_hooks = true;
+        assert!(sync(&config, &theme(), &locations, &cancel, &||false).unwrap().errors.is_empty());
+        assert!(!locations.home.join("hook").exists());
     }
 
     #[test]

@@ -1975,8 +1975,8 @@ fn straight(canvas: Pixmap) -> Option<image::RgbaImage> {
     for p in img.pixels_mut() {
         let a = p.0[3] as u32;
         if a > 0 && a < 255 {
-            for c in 0..3 {
-                p.0[c] = ((p.0[c] as u32 * 255 + a / 2) / a).min(255) as u8;
+            for channel in &mut p.0[..3] {
+                *channel = ((u32::from(*channel) * 255 + a / 2) / a).min(255) as u8;
             }
         }
     }
@@ -2021,6 +2021,13 @@ mod tests {
 
     fn monitor_on(displays: &[&str]) -> DesktopWidget {
         DesktopWidget { id: "monitor-1".into(), place: Placement { displays: displays.iter().map(|d| d.to_string()).collect(), ..Default::default() }, kind: WidgetKind::Monitor(MonitorWidget { interval_s: 3, ..Default::default() }), ..Default::default() }
+    }
+
+    #[test]
+    fn preview_pixels_keep_alpha_and_unpremultiply_each_color_channel() {
+        let mut canvas = Pixmap::new(2, 1).unwrap();
+        canvas.data_mut().copy_from_slice(&[64, 32, 16, 128, 0, 0, 0, 0]);
+        assert_eq!(straight(canvas).unwrap().as_raw(), &[128, 64, 32, 128, 0, 0, 0, 0]);
     }
 
     #[test]

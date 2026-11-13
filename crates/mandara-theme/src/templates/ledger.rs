@@ -163,7 +163,7 @@ impl Ledger {
         const MAX_LEDGER_BYTES: u64 = 8 * 1024 * 1024;
         let file = match std::fs::File::open(path) {
             Ok(file) => file,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && std::fs::symlink_metadata(path).is_err() => {
                 return Ok(Self::default());
             }
             Err(error) => return Err(error),
@@ -212,7 +212,22 @@ impl Ledger {
     /// Writes `body` to `path` for `app`, backing up a file there that isn't
     /// Mandara's first.
     pub fn put_file(&mut self, app: &str, path: &Path, body: &str) -> std::io::Result<()> {
-        let k = key(path);
+        let slot = super::destination::slot(path)?;
+        let identity = super::destination::identity(path)?;
+        let mut k = key(&slot);
+        for known in self.files.keys() {
+            if super::destination::identity(Path::new(known))? == identity {
+                k = known.clone();
+                break;
+            }
+        }
+        for (key, block) in &self.blocks {
+            if super::destination::identity(block.path.as_deref().unwrap_or_else(|| Path::new(key)))? == identity {
+                return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "a whole-file theme cannot replace managed import lines"));
+            }
+        }
+        let owned_path = PathBuf::from(&k);
+        let path = owned_path.as_path();
         if self.files.get(&k).is_some_and(|entry| entry.app != app) {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::AlreadyExists,
@@ -262,6 +277,13 @@ impl Ledger {
 
     /// Ensures `block` in `config` for `app` (see [`super::ensure_block`]).
     pub fn put_block(&mut self, app: &str, config: &Path, block: &[&str], placement: super::Placement) -> std::io::Result<bool> {
+        let identity = super::destination::identity(config)?;
+        for known in self.files.keys() {
+            if super::destination::identity(Path::new(known))? == identity {
+                return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "managed import lines cannot edit a whole-file theme"));
+            }
+        }
+        let config = identity.as_path();
         let created = !exists(config);
         let dirs = if created { missing_dirs(config) } else { Vec::new() };
         let previous = self
@@ -333,7 +355,15 @@ impl Ledger {
 
     pub fn take_back_except_checked(&mut self, app: &str, keep: &[PathBuf]) -> SyncReport {
         let mut changed = SyncReport::default();
-        let files: Vec<String> = self.files.iter().filter(|(k, e)| e.app == app && !keep.iter().any(|path| key(path) == **k)).map(|(k, _)| k.clone()).collect();
+        let mut resolved = Vec::with_capacity(keep.len());
+        for path in keep {
+            match super::destination::identity(path) {
+                Ok(path) => resolved.push(path),
+                Err(error) => { changed.failed(path, error); return changed; }
+            }
+        }
+        let kept = |path: &Path| super::destination::identity(path).is_ok_and(|path| resolved.contains(&path));
+        let files: Vec<String> = self.files.iter().filter(|(k, e)| e.app == app && !kept(Path::new(k))).map(|(k, _)| k.clone()).collect();
         for k in files {
             let Some(entry) = self.files.remove(&k) else { continue;
             };
@@ -372,9 +402,7 @@ impl Ledger {
         }
         let blocks: Vec<String> = self.blocks.iter().filter(|(k, e)| {
                 e.app == app
-                    && !keep
-                        .iter()
-                        .any(|path| path == e.path.as_deref().unwrap_or_else(|| Path::new(k)))
+                    && !kept(e.path.as_deref().unwrap_or_else(|| Path::new(k)))
             }).map(|(k, _)| k.clone()).collect();
         for k in blocks {
             let Some(entry) = self.blocks.remove(&k) else { continue;
@@ -467,6 +495,59 @@ impl Ledger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dangling_record_links_are_rejected_without_replacing_ownership() {
+        let root = tempfile::tempdir().unwrap();
+        let record = root.path().join("ledger");
+        let target = root.path().join("missing");
+        std::os::unix::fs::symlink(&target, &record).unwrap();
+        assert!(Ledger::read(&record).is_err());
+        assert_eq!(std::fs::read_link(&record).unwrap(), target);
+    }
+
+    #[test]
+    fn whole_files_and_import_blocks_cannot_take_each_others_destinations() {
+        for file_first in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let path = root.path().join("gtk.css");
+            std::fs::write(&path, "original\n").unwrap();
+            let mut ledger = Ledger::default();
+            if file_first {
+                ledger.put_file("custom", &path, "themed").unwrap();
+                assert!(ledger.put_block("gtk", &path, &["@import 'theme';"], super::super::Placement::AfterImports).is_err());
+                ledger.take_back_checked("custom");
+            } else {
+                ledger.put_block("gtk", &path, &["@import 'theme';"], super::super::Placement::AfterImports).unwrap();
+                assert!(ledger.put_file("custom", &path, "themed").is_err());
+                ledger.take_back_checked("gtk");
+            }
+            assert_eq!(std::fs::read_to_string(path).unwrap(), "original\n");
+        }
+    }
+
+    #[test]
+    fn directory_and_file_aliases_share_ownership_and_keep_lists() {
+        let root = tempfile::tempdir().unwrap();
+        let app = root.path().join("app");
+        let path = app.join("colors");
+        let alias = root.path().join("alias");
+        let mut ledger = Ledger::default();
+        ledger.put_file("one", &path, "first").unwrap();
+        std::os::unix::fs::symlink(&app, &alias).unwrap();
+        let link = root.path().join("link");
+        std::os::unix::fs::symlink(&path, &link).unwrap();
+        for other in [alias.join("colors"), app.join("missing/../colors"), link] {
+            assert!(ledger.put_file("two", &other, "second").is_err());
+            assert!(!ledger.put_block("two", &other, &["import"], super::super::Placement::AfterImports).unwrap_or(false));
+        }
+        ledger.put_file("one", &alias.join("colors"), "updated").unwrap();
+        assert_eq!(ledger.files.len(), 1);
+        assert!(ledger.take_back_except_checked("one", &[alias.join("colors")]).errors.is_empty());
+        assert!(path.exists());
+        assert!(ledger.take_back_checked("one").errors.is_empty());
+        assert!(!path.exists());
+    }
 
     #[test]
     fn a_missing_original_backup_does_not_delete_the_only_remaining_copy() {

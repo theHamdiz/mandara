@@ -10216,3 +10216,9 @@
 "This clock face only shows the time." = "घड्याळाची ही रचना फक्त वेळ दाखवते."
 
 "A continuous wave has no gaps between bars." = "अखंड लहरीमध्ये पट्ट्यांदरम्यान अंतर नसते."
+
+"The compositor configuration changed while its theme was being checked. Try again." = "थीम तपासताना कंपोझिटरचे कॉन्फिगरेशन बदलले. पुन्हा प्रयत्न करा."
+
+"The compositor configuration is not a regular file." = "कंपोझिटरचे कॉन्फिगरेशन ही सामान्य फाइल नाही."
+
+"The compositor rejected the theme; previous settings were kept." = "कंपोझिटरने थीम नाकारली; आधीची सेटिंग्ज कायम ठेवली आहेत."

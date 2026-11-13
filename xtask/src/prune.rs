@@ -127,10 +127,18 @@ fn prune_once(roots: &[PathBuf], max_gib: f64, cargo_cache: bool, dry_run: bool)
             println!("skip {} (a build is running)", c.path.display());
             continue;
         }
-        if c.lock_dir.as_ref().is_some_and(|profile|profile_in_use(profile,Path::new("/proc"))) {
-            println!("skip {} (a running test or compiler is using it)",c.path.display());
-            continue;
-        }
+        // Held for the whole deletion: cargo blocks on it instead of
+        // building into a half-deleted directory.
+        let _guard = match &c.lock_dir {
+            Some(dir) => match idle_profile_lock(dir,|profile|profile_in_use(profile,Path::new("/proc"))) {
+                Some(guard) => Some(guard),
+                None => {
+                    println!("skip {} (a build is using it)", c.path.display());
+                    continue;
+                }
+            },
+            None => None,
+        };
         let size = disk_usage(&c.path);
         if dry_run {
             let counted: u64 = dry_deleted.iter().filter(|(p, _)| p.starts_with(&c.path)).map(|(_, s)| s).sum();
@@ -140,18 +148,6 @@ fn prune_once(roots: &[PathBuf], max_gib: f64, cargo_cache: bool, dry_run: bool)
             dry_deleted.push((c.path, size));
             continue;
         }
-        // Held for the whole deletion: cargo blocks on it instead of
-        // building into a half-deleted directory.
-        let _guard = match &c.lock_dir {
-            Some(dir) => match try_lock(dir) {
-                Some(guard) => Some(guard),
-                None => {
-                    println!("skip {} (a build is using it)", c.path.display());
-                    continue;
-                }
-            },
-            None => None,
-        };
         match std::fs::remove_dir_all(&c.path) {
             Ok(()) => {
                 println!("deleted {} ({})", c.path.display(), gib(size));
@@ -218,6 +214,12 @@ impl Drop for ProfileLock {
 fn try_lock(profile: &Path) -> Option<ProfileLock> {
     let lock = File::options().read(true).write(true).open(profile.join(CARGO_LOCK)).ok()?;
     lock.try_lock().ok().map(|()| ProfileLock(lock))
+}
+
+fn idle_profile_lock(profile: &Path,in_use: impl FnOnce(&Path) -> bool) -> Option<ProfileLock> {
+    let lock = try_lock(profile)?;
+    if in_use(profile) { return None; }
+    Some(lock)
 }
 
 /// Cargo releases a profile lock before some doctest runs. Those processes
@@ -356,6 +358,20 @@ mod tests {
         let debug = profile(&t.join("debug"), 1000);
         prune_once(std::slice::from_ref(&t), DEFAULT_MAX_GIB, false, false).unwrap();
         assert!(debug.join(INCREMENTAL).exists());
+    }
+
+    #[test]
+    fn process_inspection_holds_the_profile_lock_until_deletion() {
+        let target = scratch("inspection-lock").join("target");
+        let directory = profile(&target.join("debug"),1000);
+        let held = idle_profile_lock(&directory,|path| {
+            assert!(try_lock(path).is_none(),"Cargo cannot pass its lock while processes are inspected");
+            false
+        }).unwrap();
+        assert!(try_lock(&directory).is_none());
+        drop(held);
+        assert!(idle_profile_lock(&directory,|_|true).is_none());
+        assert!(try_lock(&directory).is_some(),"an active process releases the pruning attempt's lock");
     }
 
     #[test]

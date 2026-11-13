@@ -14,6 +14,7 @@ mod terminal_apps;
 pub use terminal_apps::{cava, spicetify, spicetify_css, tmux, zellij};
 pub mod custom;
 mod file_io;
+pub mod destination;
 mod ledger;
 mod report;
 pub use report::SyncReport;

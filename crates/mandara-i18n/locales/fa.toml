@@ -10314,3 +10314,9 @@
 "This clock face only shows the time." = "این طرح ساعت فقط زمان را نشان می‌دهد."
 
 "A continuous wave has no gaps between bars." = "موج پیوسته بین میله‌ها فاصله ندارد."
+
+"The compositor configuration changed while its theme was being checked. Try again." = "پیکربندی کامپوزیتور هنگام بررسی پوسته تغییر کرد. دوباره تلاش کنید."
+
+"The compositor configuration is not a regular file." = "پیکربندی کامپوزیتور یک فایل عادی نیست."
+
+"The compositor rejected the theme; previous settings were kept." = "کامپوزیتور پوسته را نپذیرفت؛ تنظیمات قبلی حفظ شد."

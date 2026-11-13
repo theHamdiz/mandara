@@ -834,9 +834,10 @@ pill, keyboard-layout switching and the Overview hot-corner action aren't
 available on labwc.
 
 labwc keeps its settings in `~/.config/labwc` (`rc.xml`, `autostart`), and
-`rc.xml` has no include Mandara's drop-in could use safely, so Mandara
-writes nothing there and Studio's compositor controls say so. `mandara
-setup --compositor labwc` only reports this; to start Mandara with labwc,
+`rc.xml` has no include Mandara's drop-in could use safely, so Studio leaves
+labwc's shell settings unmanaged. Opt-in app templates can apply colours to
+`themerc-override`, with backups, native validation and undo. `mandara
+setup --compositor labwc` only reports the unmanaged shell settings; to start Mandara with labwc,
 add this line to `~/.config/labwc/autostart`:
 
 ```sh

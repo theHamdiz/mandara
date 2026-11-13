@@ -10314,3 +10314,9 @@
 "This clock face only shows the time." = "Desain jam ini hanya menampilkan waktu."
 
 "A continuous wave has no gaps between bars." = "Gelombang kontinu tidak memiliki celah antarbatang."
+
+"The compositor configuration changed while its theme was being checked. Try again." = "Konfigurasi kompositor berubah saat tema diperiksa. Coba lagi."
+
+"The compositor configuration is not a regular file." = "Konfigurasi kompositor bukan berkas biasa."
+
+"The compositor rejected the theme; previous settings were kept." = "Kompositor menolak tema; pengaturan sebelumnya dipertahankan."

@@ -275,11 +275,10 @@ fn export_at(
     superseded: &dyn Fn() -> bool,
 ) -> anyhow::Result<Report> {
     let generated = locations.config.join("mandara/generated");
-    let ledger_path = generated.join("app-themes.toml");
+    let ledger_path = locations.ledger();
     let (targets, apps) = targets(&inputs.integrations);
     if !inputs.integrations.any_app()
         && !ledger_path.try_exists()?
-        && !locations.ledger().try_exists()?
         && !locations.applied().try_exists()?
     {
         return Ok(Report::default());
@@ -391,6 +390,31 @@ mod tests {
             cache: root.join("cache"),
             data: root.join("data"),
             state: root.join("state"),
+        }
+    }
+
+    #[test]
+    fn built_in_imports_and_custom_whole_files_share_one_ownership_record() {
+        use mandara_theme::templates::custom::{Paths, Template};
+        for custom_first in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let locations = locations(root.path());
+            let css = locations.config.join("gtk-4.0/gtk.css");
+            std::fs::create_dir_all(css.parent().unwrap()).unwrap();
+            std::fs::write(&css, "/* personal */\n").unwrap();
+            let mut inputs = inputs();
+            let custom = Template { enabled: true, content: Some("/* custom */\n".into()), output_path: Paths::One(css.clone()), ..Default::default() };
+            if custom_first { inputs.integrations.app_themes.user.insert("gtk-file".into(), custom.clone()); }
+            else { inputs.integrations.gtk4 = true; }
+            let cancel = AtomicBool::new(false);
+            assert!(export_at(&inputs, &locations, &cancel, &||false).unwrap().errors.is_empty());
+            if custom_first { inputs.integrations.gtk4 = true; }
+            else { inputs.integrations.app_themes.user.insert("gtk-file".into(), custom); }
+            assert!(!export_at(&inputs, &locations, &cancel, &||false).unwrap().errors.is_empty());
+            inputs.integrations.gtk4 = false;
+            inputs.integrations.app_themes.user.clear();
+            assert!(export_at(&inputs, &locations, &cancel, &||false).unwrap().errors.is_empty());
+            assert_eq!(std::fs::read_to_string(css).unwrap(), "/* personal */\n");
         }
     }
 

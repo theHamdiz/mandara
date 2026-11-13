@@ -10313,3 +10313,9 @@
 "This clock face only shows the time." = "이 시계 디자인은 시간만 표시합니다."
 
 "A continuous wave has no gaps between bars." = "연속 파형에는 막대 사이의 간격이 없습니다."
+
+"The compositor configuration changed while its theme was being checked. Try again." = "테마를 확인하는 동안 컴포지터 설정이 변경되었습니다. 다시 시도하세요."
+
+"The compositor configuration is not a regular file." = "컴포지터 설정이 일반 파일이 아닙니다."
+
+"The compositor rejected the theme; previous settings were kept." = "컴포지터가 테마를 거부하여 이전 설정을 유지했습니다."

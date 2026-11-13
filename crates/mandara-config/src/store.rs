@@ -355,7 +355,7 @@ pub fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
 
 /// The file a chain of symlinks at `path` ends at (even when it doesn't
 /// exist yet); `path` itself when it isn't a link.
-fn symlink_target(path: &Path) -> std::path::PathBuf {
+pub(crate) fn symlink_target(path: &Path) -> std::path::PathBuf {
     let mut current = path.to_path_buf();
     // A cycle never ends: give up after as many hops as Linux allows.
     for _ in 0..MAX_SYMLINK_HOPS {
