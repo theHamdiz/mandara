@@ -343,14 +343,13 @@ fn computed_shell_word(word: &str) -> bool {
             continue;
         }
         if ch == '\\' {
-            if quote.is_none()
+            if (quote.is_none()
                 || chars
                     .peek()
-                    .is_some_and(|(_, next)| matches!(*next, '$' | '`' | '"' | '\\' | '\n'))
+                    .is_some_and(|(_, next)| matches!(*next, '$' | '`' | '"' | '\\' | '\n')))
+                && chars.next().is_none()
             {
-                if chars.next().is_none() {
-                    return true;
-                }
+                return true;
             }
             continue;
         }

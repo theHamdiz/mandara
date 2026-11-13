@@ -96,29 +96,29 @@ impl ShortcutFormat for Labwc {
                         .named(attribute.name()),
                     );
                 }
-                if value.children().all(|n| n.is_text() || n.is_comment()) {
-                    if value.children().any(|child| child.is_text()) {
-                        let label = match (value.parent(), value.tag_name().name()) {
-                            (Some(parent), "key") if parent == node => tk("Shortcut"),
-                            (Some(parent), "name") if parent.has_tag_name("action") => tk("Action"),
-                            _ => tk("Argument"),
-                        };
-                        let mut entry = field(
-                            label,
-                            value
-                                .children()
-                                .filter(|child| child.is_text())
-                                .filter_map(|child| child.text())
-                                .collect::<String>(),
-                            leaf_span(source, value)?,
-                            Encoding::XmlText,
-                        )
-                        .named(value.tag_name().name());
-                        if value.children().any(|child| child.is_comment()) {
-                            entry.read_only = Some(crate::keybinds::SOURCE_ONLY);
-                        }
-                        fields.push(entry);
+                if value.children().all(|n| n.is_text() || n.is_comment())
+                    && value.children().any(|child| child.is_text())
+                {
+                    let label = match (value.parent(), value.tag_name().name()) {
+                        (Some(parent), "key") if parent == node => tk("Shortcut"),
+                        (Some(parent), "name") if parent.has_tag_name("action") => tk("Action"),
+                        _ => tk("Argument"),
+                    };
+                    let mut entry = field(
+                        label,
+                        value
+                            .children()
+                            .filter(|child| child.is_text())
+                            .filter_map(|child| child.text())
+                            .collect::<String>(),
+                        leaf_span(source, value)?,
+                        Encoding::XmlText,
+                    )
+                    .named(value.tag_name().name());
+                    if value.children().any(|child| child.is_comment()) {
+                        entry.read_only = Some(crate::keybinds::SOURCE_ONLY);
                     }
+                    fields.push(entry);
                 }
             }
             ensure!(

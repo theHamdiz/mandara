@@ -118,7 +118,7 @@ fn with_river<T>(mode: &str, action: impl FnOnce(&Probe, &Path) -> Result<T>) ->
 pub(super) fn river(row: &Binding) -> Result<()> {
     with_river(&row.scope, |probe, display| {
         let mut map = probe.command("riverctl");
-        map.env("WAYLAND_DISPLAY", &display)
+        map.env("WAYLAND_DISPLAY", display)
             .args(super::river::words(row, false)?);
         let (output, diagnostic) = probe.run(map)?;
         ensure!(

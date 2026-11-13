@@ -177,7 +177,7 @@ mod tests {
         )
         .unwrap();
         std::fs::write(&root, "include \"mods.kdl\"; input { mod-key \"Alt\"; }; include \"mods.kdl\"; binds { Mod+Q { close-window; }; }\n").unwrap();
-        let result = scan(&[root.clone()], &IncludeEnvironment::default());
+        let result = scan(std::slice::from_ref(&root), &IncludeEnvironment::default());
         assert!(result.errors.is_empty(), "{:?}", result.errors);
         assert_eq!(result.sources.len(), 2);
         assert_eq!(
