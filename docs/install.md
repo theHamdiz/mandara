@@ -630,7 +630,7 @@ COSMIC Settings ([labwc](#labwc), [COSMIC](#cosmic)).
 | **River** 0.3 | none: Mandara never edits `~/.config/river/init` | the one line you add to `init`: `riverctl spawn /path/to/mandara` |
 | **KWin / Plasma (Wayland)** | none: Mandara leaves `kwinrc` unchanged | its own `org.mandara.shell.desktop` XDG autostart entry, only for KDE |
 | **Aqueous** | none: Mandara writes nothing in `~/.config/aqueous` | a systemd user unit you add ([see below](#aqueous)) |
-| **labwc** 0.8.3+ | none: Mandara writes nothing in `~/.config/labwc` | the line you add to `~/.config/labwc/autostart`: `mandara &` |
+| **labwc** 0.8.3+ | none for shell settings; imported app colours can use `themerc-override` | the line you add to `~/.config/labwc/autostart`: `mandara &` |
 | **COSMIC** | none: COSMIC's settings stay in COSMIC Settings | add `mandara` in COSMIC Settings → Applications → Startup applications |
 
 The setup picker offers KWin only when `kwin_wayland` is installed. A
@@ -834,9 +834,10 @@ pill, keyboard-layout switching and the Overview hot-corner action aren't
 available on labwc.
 
 labwc keeps its settings in `~/.config/labwc` (`rc.xml`, `autostart`), and
-`rc.xml` has no include Mandara's drop-in could use safely, so Mandara
-writes nothing there and Studio's compositor controls say so. `mandara
-setup --compositor labwc` only reports this; to start Mandara with labwc,
+`rc.xml` has no include Mandara's drop-in could use safely, so Studio leaves
+labwc's shell settings unmanaged. Opt-in app templates can apply colours to
+`themerc-override`, with backups, native validation and undo. `mandara
+setup --compositor labwc` only reports the unmanaged shell settings; to start Mandara with labwc,
 add this line to `~/.config/labwc/autostart`:
 
 ```sh

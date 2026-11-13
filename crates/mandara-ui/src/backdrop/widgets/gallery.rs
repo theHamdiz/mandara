@@ -99,38 +99,72 @@ pub fn thumbnail(widget: &DesktopWidget, size: (u32, u32), fonts: &FontNames, pa
     let names: [&str; 0] = [];
     let output = OutputCx { id: 0, names: &names, logical: (size.0 as f32, size.1 as f32), physical: size, scale120: mandara_core::shm_canvas::SCALE_DENOMINATOR, tone: Some(&tone), primary: palette.primary, fonts, depth: false, subject: None, safe: Default::default() };
     let now = Local::now();
-    let bounds = if let WidgetKind::Visualizer(v) = &widget.kind {
-        super::visualizer::Geometry::new(v, output.k(1.0)).size
-    } else {
-        let laid = visible_layout(super::lay_out(&widget, &output, &scene, None, &now, text)?);
-        (laid.outer.2, laid.outer.3)
+    let fitted_layout = |laid| {
+        if matches!(widget.kind, WidgetKind::Visualizer(_)) {
+            laid
+        } else {
+            visible_layout(laid)
+        }
     };
+    let laid = fitted_layout(super::lay_out(&widget, &output, &scene, None, &now, text)?);
+    let bounds = (laid.outer.2, laid.outer.3);
     let fit = scale_for(size, bounds)?;
     let mut canvas = Pixmap::new(size.0, size.1)?;
-    if let WidgetKind::Visualizer(v) = &widget.kind {
-        let geometry = super::visualizer::Geometry::new(v, output.k(1.0) * fit);
-        let mut pixels = Pixmap::new(geometry.size.0.ceil().max(1.0) as u32, geometry.size.1.ceil().max(1.0) as u32)?;
-        let rect = mandara_core::shm_canvas::Rect::new((size.0 as i32 - pixels.width() as i32) / 2, (size.1 as i32 - pixels.height() as i32) / 2, pixels.width(), pixels.height());
-        let inks = super::inks_for(&widget, &output, &scene, rect);
-        super::visualizer::Painter::default().frame(&mut pixels.as_mut(), &geometry, &super::preview_bands(), inks.accent, widget.place.opacity());
-        crate::backdrop::paint::compose(&mut canvas.as_mut(), &pixels, rect, 1.0);
-    } else {
-        // This virtual height changes vector/text scale only; it allocates no
+
+    // This virtual height changes vector/text scale only; it allocates no
         // full-display bitmap. The actual image remains exactly `size`.
         let fitted = OutputCx { physical: (size.0, (size.1 as f32 * fit).ceil().max(1.0) as u32), ..output };
-        let mut laid = visible_layout(super::lay_out(&widget, &fitted, &scene, None, &now, text)?);
+        let mut laid = fitted_layout(super::lay_out(&widget, &fitted, &scene, None, &now, text)?);
         let (x, y) = ((size.0 as f32 - laid.outer.2) / 2.0, (size.1 as f32 - laid.outer.3) / 2.0);
         laid.origin = (x + (laid.outer.2 - laid.comp.size.0) / 2.0, y + (laid.outer.3 - laid.comp.size.1) / 2.0);
         laid.outer.0 = x;
         laid.outer.1 = y;
-        super::compose_laid(&mut canvas.as_mut(), &widget, &output, &scene, &laid, text);
-    }
+        super::compose_laid(&mut canvas.as_mut(), &widget, &output, &scene, &laid, text,
+        &super::preview_bands(),
+    );
     super::straight(canvas)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn visualizer_gallery_pictures_include_the_shared_frame() {
+        use mandara_config::desktop_widgets::{Chrome, Look, PlaneVisualizer, Plate};
+        let mut text = TextPainter::new();
+        let mut widget = DesktopWidget {
+            kind: WidgetKind::Visualizer(PlaneVisualizer::default()),
+            ..Default::default()
+        };
+        let palette = mandara_theme::engine::default_palette(true);
+        let plain = thumbnail(
+            &widget,
+            (264, 198),
+            &FontNames::default(),
+            &palette,
+            &mut text,
+        )
+        .unwrap();
+        if let Some(look) = widget.kind.look_mut() {
+            *look = Look {
+                header: "Spectrum".into(),
+                plate: Plate::Glass,
+                chrome: Chrome::Window,
+                ..Default::default()
+            };
+        }
+        let framed = thumbnail(
+            &widget,
+            (264, 198),
+            &FontNames::default(),
+            &palette,
+            &mut text,
+        )
+        .unwrap();
+        assert_ne!(plain.as_raw(), framed.as_raw());
+        assert!(framed.pixels().any(|pixel| pixel[3] > 0));
+    }
 
     #[test]
     fn fitting_keeps_both_dimensions_in_view_and_rejects_empty_content() {
@@ -142,7 +176,9 @@ mod tests {
     #[test]
     fn transparent_redraw_reservations_do_not_shrink_the_visible_preview() {
         use super::super::layout::{Composition, InkRole, Mark, MarkKind};
-        let rect = |w, h| Mark::new(MarkKind::Rect { x: 0.0, y: 0.0, w, h, radius: 0.0, width: 0.0 }, InkRole::Fg);
+        let rect = |w, h| {
+            Mark::new(MarkKind::Rect { x: 0.0, y: 0.0, w, h, radius: 0.0, width: 0.0 }, InkRole::Fg)
+        };
         let comp = Composition::of(vec![rect(1000.0, 500.0).dim(0.0), rect(50.0, 30.0)]);
         let laid = super::super::Laid { comp, origin: (0.0, 0.0), k: 1.0, rotation: 0.0, flip: (false, false), outer: (0.0, 0.0, 1000.0, 500.0), margin: 0.0 };
         let visible = visible_layout(laid);
@@ -181,8 +217,8 @@ mod tests {
 
     #[test]
     fn palette_examples_keep_all_theme_roles_and_the_widgets_own_language() {
-        use mandara_config::desktop_widgets::{PaletteWidget, TextOptions};
         use super::super::layout::{MarkKind, tests::Fixed};
+        use mandara_config::desktop_widgets::{PaletteWidget, TextOptions};
         let palette = mandara_theme::engine::default_palette(true);
         let options = PaletteWidget { locale: TextOptions { language: "ar".into(), ..Default::default() }, ..Default::default() };
         let widget = DesktopWidget { kind: WidgetKind::Palette(options.clone()), ..Default::default() };

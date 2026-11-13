@@ -9721,7 +9721,7 @@
 "To start Mandara with Aqueous, add {command} to Aqueous's own startup settings." = "Aqueous と一緒に Mandara を起動するには、Aqueous 自身の起動設定に {command} を追加してください。"
 "labwc settings stay in ~/.config/labwc (rc.xml, autostart)" = "labwc の設定は ~/.config/labwc（rc.xml、autostart）に残ります"
 "COSMIC settings are managed in COSMIC Settings" = "COSMIC の設定は COSMIC 設定で管理します"
-"labwc has no standalone configuration checker. It reads its own files in ~/.config/labwc, and Mandara writes nothing there." = "labwc には単体の設定チェッカーがありません。~/.config/labwc にある自身のファイルを読み込み、Mandara はそこに何も書き込みません。"
+"labwc has no standalone configuration checker. Theme colours use a private headless check." = "labwc には独立した設定チェッカーがありません。テーマの色は専用のヘッドレスセッションで検証されます。"
 "COSMIC has no standalone configuration checker. Its settings are managed in COSMIC Settings, and Mandara writes nothing there." = "COSMIC には単体の設定チェッカーがありません。設定は COSMIC 設定で管理され、Mandara はそこに何も書き込みません。"
 "labwc keeps its settings in ~/.config/labwc (rc.xml, autostart) and reloads them itself. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and changes nothing in those files. To start Mandara with labwc, add the line “mandara &” to ~/.config/labwc/autostart." = "labwc は設定を ~/.config/labwc（rc.xml、autostart）に保存し、自分で再読み込みします。Mandara は標準の Wayland プロトコルでワークスペース・ウィンドウ・ディスプレイを追跡し、これらのファイルは一切変更しません。labwc と一緒に Mandara を起動するには、~/.config/labwc/autostart に “mandara &” を追加してください。"
 "COSMIC keeps its settings in COSMIC Settings. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and COSMIC's window protocols, and changes nothing there. To start Mandara with COSMIC, add it in COSMIC Settings → Applications → Startup applications." = "COSMIC は設定を COSMIC 設定に保存します。Mandara は標準の Wayland プロトコルと COSMIC のウィンドウプロトコルでワークスペース・ウィンドウ・ディスプレイを追跡し、そこは一切変更しません。COSMIC と一緒に Mandara を起動するには、COSMIC 設定 → アプリケーション → スタートアップアプリケーションで追加してください。"
@@ -10508,3 +10508,73 @@
 "Your compositor's own" = "コンポジター独自のもの"
 "labwc has no window animations to set" = "labwc には設定できるウィンドウアニメーションがありません"
 "Preview unavailable" = "プレビューはありません"
+
+# App templates and desktop preferences
+"Add a header to use text settings with this layout." = "このレイアウトで文字設定を使うには見出しを追加してください。"
+"Alignment applies to the header in this layout." = "このレイアウトでは配置設定が見出しに適用されます。"
+"Apply app themes now" = "アプリのテーマを今すぐ適用"
+"Apply preference edits without replacing unrelated settings" = "関係のない設定を置き換えずに変更を適用"
+"Argument <{name}> must be {kind}, got {value}" = "引数 <{name}> は {kind} である必要があります。受信値：{value}"
+"Browse app templates" = "アプリのテンプレートを探す"
+"Browse available app templates; pass refresh to update the catalog" = "利用可能なアプリテンプレートを表示。refresh を渡すとカタログを更新"
+"Catalog sources" = "カタログの取得元"
+"Catalog sources use HTTPS. Edit their names and URLs, then save with Ctrl+Enter." = "カタログの取得元は HTTPS を使います。名前と URL を編集し、Ctrl+Enter で保存してください。"
+"Choose the apps that follow your palette. Managed files are backed up and restored when you switch them off; imported setup commands follow their own undo instructions." = "配色に合わせるアプリを選びます。管理対象のファイルはバックアップされ、無効にすると復元されます。インポートした設定コマンドは、それぞれの取り消し手順に従います。"
+"Could not install app template: {error}" = "アプリテンプレートをインストールできませんでした：{error}"
+"Could not save app templates: {error}" = "アプリテンプレートを保存できませんでした：{error}"
+"Disable an app template and undo its managed changes" = "アプリテンプレートを無効にし、管理対象の変更を元に戻す"
+"Display controls are busy; try again in a moment" = "ディスプレイの制御中です。少し待ってから再試行してください"
+"Get & enable" = "取得して有効化"
+"Hide app templates" = "アプリテンプレートを隠す"
+"Import a local app-template document without enabling new entries" = "新しい項目を有効にせず、ローカルのテンプレート文書をインポート"
+"Imported templates can run app setup commands. Check their instructions before switching them on. Theme changes use installed files without downloading again." = "インポートしたテンプレートはアプリの設定コマンドを実行できます。有効にする前に手順を確認してください。テーマの変更にはインストール済みのファイルを使い、再ダウンロードはしません。"
+"In use: terminal {terminal} · file manager {files} · browser {browser}" = "使用中：端末 {terminal} · ファイルマネージャー {files} · ブラウザー {browser}"
+"Install and enable an app template by its source:app id" = "source:app ID でアプリテンプレートをインストールして有効化"
+"Instructions" = "手順"
+"Keep at least one level on, or switch off the widget." = "少なくとも1つのレベルを有効にするか、ウィジェットを無効にしてください。"
+"Mandara is free and always will be. If it makes your desktop a little nicer and you'd like to say thanks, you can chip in toward the AI credits and developer time behind it. Completely optional: using it, sharing it and reporting bugs help just as much." = "Mandara は無料で、今後も変わりません。デスクトップが少し心地よくなり、感謝を伝えたいと思ったら、AI クレジットや開発時間の費用を支援できます。完全に任意です。使うこと、共有すること、不具合を報告することも同じくらい助けになります。"
+"Mandara writes these to its own drop-in for {target_name} (never your config) and reloads it. Chords your own config already uses are skipped and marked “taken”. Click a shortcut, then press the keys; Esc cancels." = "Mandara は {target_name} 用の専用追加ファイルに書き込んで再読み込みし、利用者の設定には書き込みません。使用済みのキーの組み合わせはスキップし、「使用中」と表示します。ショートカットをクリックしてキーを押してください。Esc でキャンセルします。"
+"Page {page} of {pages}" = "{page} / {pages} ページ"
+"Run template setup commands" = "テンプレートの設定コマンドを実行"
+"Search app templates" = "アプリテンプレートを検索"
+"Show the last app-theme export and any setup errors" = "前回のアプリテーマ出力と設定エラーを表示"
+"Template document" = "テンプレート文書"
+"Template sources" = "テンプレートの取得元"
+"Test a display arrangement from JSON, keeping unrelated changes made since the draft" = "下書き後の無関係な変更を保持し、JSON の画面配置をテスト"
+"Text recognition models aren't installed yet ({models}) — download them in Studio → Maintenance" = "文字認識モデルは未インストールです（{models}）。Studio → メンテナンスでダウンロードしてください"
+"This layout fixes its text positions. Add a header to align it separately." = "このレイアウトでは文字位置が固定です。見出しを追加すると個別に配置できます。"
+"Update template" = "テンプレートを更新"
+"Write or paste a template document. Use content for an inline template, or input_path for a file. Set enabled = true to apply it. Save with Ctrl+Enter." = "テンプレート文書を入力または貼り付けます。直接記述する場合は content、ファイルの場合は input_path を使います。適用するには enabled = true に設定してください。Ctrl+Enter で保存します。"
+"Your templates" = "自分のテンプレート"
+"display draft as JSON" = "JSON 形式のディスプレイ下書き"
+"local template document" = "ローカルのテンプレート文書"
+"refresh installed catalog metadata" = "インストール済みカタログのメタデータを更新"
+"source:app template id" = "source:app テンプレート ID"
+"{model} ({file}) failed its checksum: got {got}, expected {expected}" = "{model}（{file}）のチェックサムが不一致：受信 {got}、期待値 {expected}"
+"{model} ({file}) is {got} bytes, expected {expected}" = "{model}（{file}）は {got} バイトです。期待値は {expected} です"
+
+"Mandara restores this arrangement when the shell starts." = "シェルの起動時に Mandara がこの配置を復元します。"
+
+"This clock face only shows the time." = "この時計のデザインは時刻のみを表示します。"
+
+"A continuous wave has no gaps between bars." = "連続した波にはバー間の隙間がありません。"
+
+"The compositor configuration changed while its theme was being checked. Try again." = "テーマの検証中にコンポジターの設定が変更されました。もう一度お試しください。"
+
+"The compositor configuration is not a regular file." = "コンポジターの設定は通常のファイルではありません。"
+
+"The compositor rejected the theme; previous settings were kept." = "コンポジターがテーマを拒否したため、以前の設定を保持しました。"
+
+"Review an app template; pass its approval token to enable it" = "アプリのテンプレートを確認し、有効にするには承認トークンを渡してください"
+
+"approval token returned by the review" = "確認後に返される承認トークン"
+
+"Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "このテンプレートを有効にする前に、ファイルとコマンドを確認してください。コマンドは他のファイルも変更できます。更新時には再確認が必要です。"
+
+"Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "最初にブラウザーの共有パレットを確認して承認してください。他の Pywal アプリもこの配色を使用します。"
+
+"Apply the color scheme to KDE apps and notify running apps." = "KDE アプリに配色を適用し、実行中のアプリに通知します。"
+
+"Enable browser theming and publish the shared app palette." = "ブラウザーのテーマを有効にし、アプリ共通のパレットを公開します。"
+
+"Browser CSS exceeds the nesting limit" = "ブラウザーの CSS が入れ子の上限を超えています"

@@ -15,7 +15,10 @@
 //! locked): the system monitor samples only then, the visualizer listens
 //! only while music plays and stops after its silence timeout.
 
+mod cache_key;
 pub mod actions;
+pub mod clock_cards;
+pub mod date_cards;
 pub mod datecal;
 pub mod draw;
 pub mod empty;
@@ -23,29 +26,27 @@ pub mod faces;
 pub mod feeds;
 pub mod frame;
 pub mod fun;
+pub mod gallery;
+pub mod hadith;
 pub mod identity;
 pub mod info;
-pub mod hadith;
 pub mod jannah;
-pub mod quran;
 pub mod layout;
 pub mod lingo;
 pub mod media_view;
 pub mod monitor_more;
+pub mod passive;
 pub mod productive;
 pub mod progress;
-pub mod passive;
-pub mod gallery;
+pub mod quran;
 pub mod sayings;
 pub mod sky;
 pub mod skyview;
 pub mod sysmon;
 pub mod texts;
 pub mod visualizer;
-pub mod weather_more;
-pub mod clock_cards;
-pub mod date_cards;
 pub mod weather_cards;
+pub mod weather_more;
 
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
@@ -113,8 +114,7 @@ pub struct WidgetScene {
     pub on_surface: Color,
     /// `(icon, temperature)` of the current weather, when known.
     pub weather: Option<(&'static str, String)>,
-    /// Outputs where the desktop is visible (live widgets run only there);
-    /// filled only while a live widget exists.
+    /// Outputs where the desktop is visible; hidden widgets never schedule ticks.
     pub visible: Vec<String>,
     /// A player is playing (filled only while a visualizer exists).
     pub music: bool,
@@ -184,9 +184,13 @@ pub struct WidgetData {
     pub quran: Option<QuranInfo>,
     pub glance: Option<GlanceInfo>,
     /// Each GitHub, exchange rate and AI usage widget's feed, by widget id.
-    pub github: std::collections::BTreeMap<String, Feed<Vec<mandara_services::desktop_feeds::ContributionDay>>>,
+    pub github: std::collections::BTreeMap<String, Feed<Vec<mandara_services::desktop_feeds::ContributionDay>>,
+    >,
     pub rates: std::collections::BTreeMap<String, Feed<mandara_services::desktop_feeds::Rates>>,
-    pub ai_usage: std::collections::BTreeMap<String, Feed<std::collections::BTreeMap<chrono::NaiveDate, mandara_services::desktop_feeds::DayTokens>>>,
+    pub ai_usage: std::collections::BTreeMap<String, Feed<std::collections::BTreeMap<chrono::NaiveDate, mandara_services::desktop_feeds::DayTokens,
+            >,
+        >,
+    >,
     pub games: Feed<Vec<GameItem>>,
 }
 
@@ -482,8 +486,12 @@ impl Forecast {
             icon: crate::plugins::weather::condition_icon(w.condition, w.is_day),
             temp: w.temp, feels_like: w.feels_like, humidity: w.humidity, wind: w.wind,
             condition: mandara_i18n::untranslate(w.condition.label()), place: place.into(),
-            days: w.days.iter().filter_map(|d| Some((chrono::NaiveDate::parse_from_str(&d.date, "%Y-%m-%d").ok()?, crate::plugins::weather::condition_icon(d.condition, true), d.min, d.max))).collect(),
-            hours: w.hours.iter().map(|h| (h.hour, crate::plugins::weather::condition_icon(h.condition, h.is_day), h.temp)).collect(),
+            days: w.days.iter().filter_map(|d| {
+                    Some((chrono::NaiveDate::parse_from_str(&d.date, "%Y-%m-%d").ok()?, crate::plugins::weather::condition_icon(d.condition, true), d.min, d.max))
+                }).collect(),
+            hours: w.hours.iter().map(|h| {
+                    (h.hour, crate::plugins::weather::condition_icon(h.condition, h.is_day), h.temp)
+                }).collect(),
             kind: w.condition as usize, is_day: w.is_day, timezone: w.timezone.parse().ok(),
         }
     }
@@ -516,13 +524,16 @@ impl Default for WidgetScene {
 /// text alignment), and so does the way vertical text turns (it follows
 /// the side of the screen).
 pub fn content_key(w: &DesktopWidget) -> u64 {
-    let mut c = w.clone();
-    c.place.x = 0.0;
-    c.place.y = 0.0;
-    c.place.displays.clear();
-    c.place.depth = Depth::Behind;
-    let turns = matches!(&w.kind, WidgetKind::Decoration(d) if d.vertical && d.sideways.clockwise(&w.place));
-    key((format!("{c:?}"), turns))
+    let place = &w.place;
+    let turns = match &w.kind {
+        WidgetKind::Decoration(decoration) => decoration.vertical && decoration.sideways.clockwise(place),
+        WidgetKind::Notebook(_) => mandara_config::desktop_widgets::Sideways::Auto.clockwise(place),
+        _ => false,
+    };
+    key((
+        (&w.id,w.enabled,cache_key::debug(&w.kind),cache_key::debug(&place.anchor)),
+        (place.scale.to_bits(),place.opacity.to_bits(),place.rotation.to_bits(),place.flip_x,place.flip_y,turns),
+    ))
 }
 
 /// Physical px a placed box may drift from where it was painted before it
@@ -576,21 +587,15 @@ impl WidgetScene {
         self.items.iter().any(|w| w.place.depth == Depth::Behind)
     }
 
-    /// Any widget whose content changes between minutes.
-    pub fn any_live(&self) -> bool {
-        self.items.iter().any(|w| is_live(&w.kind))
+    pub fn set_visibility(&mut self, outputs: &[String], screens_off: bool, locked: bool, visible: impl Fn(&str) -> bool) {
+        self.visible.clear();
+        if !screens_off && !locked {
+            self.visible.extend(outputs.iter().filter(|output| visible(output)).cloned());
+        }
     }
 
     pub fn any_visualizer(&self) -> bool {
         self.items.iter().any(|w| matches!(w.kind, WidgetKind::Visualizer(_)))
-    }
-}
-
-fn is_live(k: &WidgetKind) -> bool {
-    match k {
-        WidgetKind::Clock(c) => ticks_seconds(c),
-        WidgetKind::Monitor(_) | WidgetKind::Visualizer(_) | WidgetKind::Pomodoro(_) | WidgetKind::Pet(_) | WidgetKind::Bubbles(_) | WidgetKind::Media(_) => true,
-        _ => false,
     }
 }
 
@@ -599,7 +604,10 @@ fn animation_fps(w: &DesktopWidget, scene: &WidgetScene, now: &DateTime<Local>) 
     match &w.kind {
         WidgetKind::Pet(_) => Some(if fun::asleep(now) && !scene.data.poked.contains_key(&w.id) { fun::PET_SLEEP_FPS } else { fun::PET_FPS }),
         WidgetKind::Bubbles(_) => Some(fun::BUBBLES_FPS),
-        WidgetKind::Media(mw) if mw.layout == mandara_config::desktop_widgets::MediaLayout::Vinyl && mw.spin && scene.data.media.as_ref().is_some_and(|m| m.playing) => Some(media_view::VINYL_FPS),
+        WidgetKind::Media(mw) if mw.layout == mandara_config::desktop_widgets::MediaLayout::Vinyl && mw.spin && scene.data.media.as_ref().is_some_and(|m| m.playing) =>
+        {
+            Some(media_view::VINYL_FPS)
+        }
         _ => None,
     }
 }
@@ -613,33 +621,35 @@ pub fn toggle_ids(w: &mandara_config::desktop_widgets::TogglesWidget) -> Vec<Str
 /// What else `w` shows from the scene (the forecast, the cities), hashed.
 fn data_key(w: &DesktopWidget, scene: &WidgetScene) -> u64 {
     match &w.kind {
-        WidgetKind::Weather(_) => key(format!("{:?}", scene.forecast)),
+        WidgetKind::Weather(_) => cache_key::debug(&scene.forecast),
         WidgetKind::WorldClock(_) => key(&scene.world_cities),
-        WidgetKind::Todo(_) => key(format!("{:?}{:?}", scene.data.todos, scene.data.lists)),
-        WidgetKind::Note(_) | WidgetKind::Notebook(_) => key(format!("{:?}", scene.data.notes)),
-        WidgetKind::Pomodoro(_) => key(format!("{:?}", scene.data.pomodoro)),
+        WidgetKind::Todo(_) => cache_key::debug(&(&scene.data.todos,&scene.data.lists)),
+        WidgetKind::Note(_) | WidgetKind::Notebook(_) => cache_key::debug(&scene.data.notes),
+        WidgetKind::Pomodoro(_) => cache_key::debug(&scene.data.pomodoro),
         WidgetKind::Quote(_) => key(scene.data.turns.get(&w.id)),
-        WidgetKind::Date(_) => key(format!("{:?}", scene.data.events)),
-        WidgetKind::Sky(_) => key(format!("{:?}", scene.data.place)),
-        WidgetKind::Profile(_) => key(format!("{:?}", scene.data.me)),
-        WidgetKind::Shortcuts(_) => key(format!("{:?}", scene.data.tiles.get(&w.id))),
-        WidgetKind::Toggles(_) => key(format!("{:?}", scene.data.toggles)),
-        WidgetKind::Sliders(_) => key(format!("{:?}", scene.data.levels)),
-        WidgetKind::Palette(_) => key(format!("{:?}", scene.data.palette)),
-        WidgetKind::Photo(_) | WidgetKind::Sticker(_) => key(format!("{:?}", scene.data.pictures.get(&w.id))),
-        WidgetKind::Fetch(_) => key(format!("{:?}{:?}", scene.data.fetch, scene.data.palette)),
-        WidgetKind::ScreenTime(_) => key(format!("{:?}", scene.data.screen)),
-        WidgetKind::Prayer(_) => key(format!("{:?}", scene.data.prayer)),
-        WidgetKind::Jannah(_) => key(format!("{:?}", scene.data.jannah)),
-        WidgetKind::Hadith(_) => key(format!("{:?}", scene.data.hadith)),
-        WidgetKind::Quran(_) => key(format!("{:?}", scene.data.quran)),
-        WidgetKind::Glance(_) => key(format!("{:?}{:?}", scene.data.glance, scene.weather)),
-        WidgetKind::Github(_) => key(format!("{:?}", scene.data.github.get(&w.id))),
-        WidgetKind::Currency(_) => key(format!("{:?}", scene.data.rates.get(&w.id))),
-        WidgetKind::AiUsage(_) => key(format!("{:?}", scene.data.ai_usage.get(&w.id))),
-        WidgetKind::Games(_) => key(format!("{:?}", scene.data.games)),
+        WidgetKind::Date(_) => cache_key::debug(&scene.data.events),
+        WidgetKind::Sky(_) => cache_key::debug(&scene.data.place),
+        WidgetKind::Profile(_) => cache_key::debug(&scene.data.me),
+        WidgetKind::Shortcuts(_) => cache_key::debug(&scene.data.tiles.get(&w.id)),
+        WidgetKind::Toggles(_) => cache_key::debug(&scene.data.toggles),
+        WidgetKind::Sliders(_) => cache_key::debug(&scene.data.levels),
+        WidgetKind::Palette(_) => cache_key::debug(&scene.data.palette),
+        WidgetKind::Photo(_) | WidgetKind::Sticker(_) => {
+            cache_key::debug(&scene.data.pictures.get(&w.id))
+        }
+        WidgetKind::Fetch(_) => cache_key::debug(&(&scene.data.fetch,&scene.data.palette)),
+        WidgetKind::ScreenTime(_) => cache_key::debug(&scene.data.screen),
+        WidgetKind::Prayer(_) => cache_key::debug(&scene.data.prayer),
+        WidgetKind::Jannah(_) => cache_key::debug(&scene.data.jannah),
+        WidgetKind::Hadith(_) => cache_key::debug(&scene.data.hadith),
+        WidgetKind::Quran(_) => cache_key::debug(&scene.data.quran),
+        WidgetKind::Glance(_) => cache_key::debug(&(&scene.data.glance,&scene.weather)),
+        WidgetKind::Github(_) => cache_key::debug(&scene.data.github.get(&w.id)),
+        WidgetKind::Currency(_) => cache_key::debug(&scene.data.rates.get(&w.id)),
+        WidgetKind::AiUsage(_) => cache_key::debug(&scene.data.ai_usage.get(&w.id)),
+        WidgetKind::Games(_) => cache_key::debug(&scene.data.games),
         // The track, the art and the lyrics; not the moving position.
-        WidgetKind::Media(_) => key(format!("{:?}", scene.data.media.as_ref().map(|m| (&m.title, &m.artist, m.playing, &m.art, &m.lyrics, m.lyrics_loading, m.length_ms, m.live)))),
+        WidgetKind::Media(_) => cache_key::debug(&scene.data.media.as_ref().map(|m| (&m.title, &m.artist, m.playing, &m.art, &m.lyrics, m.lyrics_loading, m.length_ms, m.live))),
         _ => 0,
     }
 }
@@ -670,7 +680,7 @@ struct State {
     /// The box [`mandara_config::desktop_widgets::Placement::origin_in`]
     /// placed (physical `x, y, w, h`): edit mode moves it.
     outer: (f32, f32, f32, f32),
-    vis: Option<(visualizer::Geometry, visualizer::Painter)>,
+    vis: Option<(visualizer::Geometry, visualizer::Painter, f32)>,
     frame_at: Option<Instant>,
     inks: Option<Inks>,
     /// Where a click does something, as last painted.
@@ -707,7 +717,7 @@ pub struct OutWidgets {
 
 impl OutWidgets {
     pub fn clear(&mut self) {
-        self.states.clear();
+        self.states = Vec::new();
     }
 
     /// The current painted bounds, without building an edit-mode inventory.
@@ -736,7 +746,7 @@ impl OutWidgets {
     /// and forgets the widgets.
     pub fn remove_all(&mut self, host: &mut impl Planes, id: u32) {
         remove_unused(host, id, &Layers::default());
-        self.states.clear();
+        self.states = Vec::new();
     }
 }
 
@@ -910,7 +920,9 @@ pub fn clock_strings(now: &DateTime<Local>, c: &ClockWidget, h24: bool, weather:
         minute: m,
         second: s,
         hour_numbers: ANALOG_NUMBERS.map(|n| l.digits(n)),
-        all_hours: std::array::from_fn(|i| l.digits(if i == 0 { HALF_DAY } else { i as u32 }.to_string())),
+        all_hours: std::array::from_fn(|i| {
+            l.digits(if i == 0 { HALF_DAY } else { i as u32 }.to_string())
+        }),
         meridiem_pair: [l.word(tk("AM")), l.word(tk("PM"))],
         year: l.digits(date.year().to_string()),
         month_short: l.date(&date, "%b"),
@@ -1010,14 +1022,20 @@ pub fn monitor_lines(w: &MonitorWidget, s: Option<&sysmon::Sampler>, units: Unit
             MonitorRow::Cpu => line(tk("CPU"), r.and_then(|r| r.cpu).map(percent), Some(r.and_then(|r| r.cpu).unwrap_or(0.0))),
             MonitorRow::Memory => {
                 let mem = r.and_then(|r| r.memory);
-                line(tk("Memory"), mem.map(|(u, tot)| if gauges { percent(share(u, tot)) } else { pair_bytes(u, tot) }), Some(mem.map(|(u, tot)| share(u, tot)).unwrap_or(0.0))).map(|mut ln| {
+                line(tk("Memory"), mem.map(|(u, tot)| {
+                        if gauges { percent(share(u, tot)) } else { pair_bytes(u, tot)
+                        }
+                    }), Some(mem.map(|(u, tot)| share(u, tot)).unwrap_or(0.0))).map(|mut ln| {
                     ln.short = Some(l.word(tk("RAM")));
                     ln
                 })
             }
             MonitorRow::Swap => {
                 let swap = r.and_then(|r| r.swap);
-                line(tk("Swap"), swap.map(|(u, tot)| if gauges { percent(share(u, tot)) } else { pair_bytes(u, tot) }), Some(swap.map(|(u, tot)| share(u, tot)).unwrap_or(0.0)))
+                line(tk("Swap"), swap.map(|(u, tot)| {
+                        if gauges { percent(share(u, tot)) } else { pair_bytes(u, tot)
+                        }
+                    }), Some(swap.map(|(u, tot)| share(u, tot)).unwrap_or(0.0)))
             }
             MonitorRow::CpuTemp => line(tk("CPU temp"), r.and_then(|r| r.cpu_temp).map(|c| units.format_degrees(c)), None).map(|mut ln| {
                 ln.level = r.and_then(|r| r.cpu_temp).map(|c| c / TEMP_SCALE_C);
@@ -1036,7 +1054,10 @@ pub fn monitor_lines(w: &MonitorWidget, s: Option<&sysmon::Sampler>, units: Unit
             }),
             MonitorRow::Disk => {
                 let disk = r.and_then(|r| r.disk);
-                line(tk("Disk"), disk.map(|(u, tot)| if gauges { percent(share(u, tot)) } else { pair_bytes(u, tot) }), Some(disk.map(|(u, tot)| share(u, tot)).unwrap_or(0.0))).map(|mut ln| {
+                line(tk("Disk"), disk.map(|(u, tot)| {
+                        if gauges { percent(share(u, tot)) } else { pair_bytes(u, tot)
+                        }
+                    }), Some(disk.map(|(u, tot)| share(u, tot)).unwrap_or(0.0))).map(|mut ln| {
                     ln.bar = (!gauges).then(|| disk.map(|(u, tot)| share(u, tot)).unwrap_or(0.0));
                     ln
                 })
@@ -1082,7 +1103,10 @@ fn gpu_line(row: MonitorRow, g: &sysmon::GpuReading, n: Option<usize>, l: &Lingo
     let share = |(u, t): (u64, u64)| u as f32 / t.max(1) as f32;
     let (label, value, share, level, short) = match row {
         MonitorRow::Gpu => (named(tk("GPU"), tk("GPU {n}")), g.load.map(percent), Some(g.load.unwrap_or(0.0)), None, None),
-        MonitorRow::Vram => (named(tk("VRAM"), tk("VRAM {n}")), g.vram.map(|v| if gauges { percent(share(v)) } else { pair_bytes(v.0, v.1) }), Some(g.vram.map(share).unwrap_or(0.0)), None, None),
+        MonitorRow::Vram => (named(tk("VRAM"), tk("VRAM {n}")), g.vram.map(|v| {
+                if gauges { percent(share(v)) } else { pair_bytes(v.0, v.1)
+                }
+            }), Some(g.vram.map(share).unwrap_or(0.0)), None, None),
         MonitorRow::GpuTemp => (named(tk("GPU temp"), tk("GPU {n} temp")), g.temp.map(|c| units.format_degrees(c)), None, g.temp.map(|c| c / TEMP_SCALE_C), Some(named(tk("GPU"), tk("GPU {n}")))),
         MonitorRow::GpuPower => (named(tk("GPU power"), tk("GPU {n} power")), g.power_w.map(|w| format!("{w:.0} W")), None, None, None),
         _ => return None,
@@ -1111,7 +1135,7 @@ pub struct Laid {
     pub margin: f32,
 }
 
-/// Lays out `w` at `now` (`None` for visualizers, which have no marks).
+/// Lays out content and its shared frame at `now`.
 pub fn lay_out(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler: Option<&sysmon::Sampler>, now: &DateTime<Local>, text: &mut TextPainter) -> Option<Laid> {
     let k = o.k(w.place.scale());
     let look = w.kind.look();
@@ -1124,7 +1148,11 @@ pub fn lay_out(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler
         WidgetKind::Quran(_) => scene.data.quran.as_ref().and_then(|q| q.lang),
         _ => None,
     };
-    let rtl_of = |opts: Option<&mandara_config::desktop_widgets::TextOptions>| opts.map_or(scene.rtl, |opts| Lingo::of_plugin(opts, scene.rtl, plugin).rtl);
+    let rtl_of = |opts: Option<&mandara_config::desktop_widgets::TextOptions>| {
+        opts.map_or(scene.rtl, |opts| {
+            Lingo::of_plugin(opts, scene.rtl, plugin).rtl
+        })
+    };
     let rtl = rtl_of(w.kind.locale());
     let align = look.map_or(mandara_config::desktop_widgets::Align::Auto, |l| l.align).fraction(w.place.anchor.fraction().0, rtl);
     let mut m = Measurer { text, fonts: &fonts };
@@ -1227,7 +1255,28 @@ pub fn lay_out(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler
         WidgetKind::AiUsage(aw) => (feeds::ai_usage(aw, &w.id, scene.data.ai_usage.get(&w.id).unwrap_or(&Feed::default()), &Lingo::of(&aw.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Games(gw) => (feeds::games(gw, &scene.data.games, &Lingo::of(&gw.locale, scene.rtl, None), k, &mut m), 0.0),
         WidgetKind::Notebook(n) => (productive::notebook(n, &scene.data.notes, &Lingo::of(&n.locale, scene.rtl, None), mandara_config::desktop_widgets::Sideways::Auto.clockwise(&w.place), k, &mut m), 0.0),
-        WidgetKind::Visualizer(_) | WidgetKind::Card(_) => return None,
+        WidgetKind::Visualizer(v) => {
+            let geometry = visualizer::Geometry::new(v, k);
+            (
+                Composition::of(vec![
+                    layout::Mark::new(
+                        layout::MarkKind::Rect {
+                            x: 0.0,
+                            y: 0.0,
+                            w: geometry.size.0,
+                            h: geometry.size.1,
+                            radius: 0.0,
+                            width: 0.0,
+                        },
+                        layout::InkRole::Accent,
+                    )
+                    .dim(0.0)
+                    .live(),
+                ]),
+                0.0,
+            )
+        }
+        WidgetKind::Card(_) => return None,
     };
     let comp = match look {
         Some(l) => layout::with_plate(comp, l, k, align, &mut m),
@@ -1249,7 +1298,7 @@ fn look_of(k: &WidgetKind) -> Option<&mandara_config::desktop_widgets::Look> {
 }
 
 /// How `w`'s planes are painted: its fonts, colours, effect and shadow.
-fn style_for(w: &DesktopWidget, fonts: &FontNames, inks: Inks, opacity: f32, k: f32) -> Style {
+fn style_for<'a>(w: &'a DesktopWidget, fonts: &'a FontNames, inks: Inks, opacity: f32, k: f32) -> Style<'a> {
     let look = look_of(&w.kind);
     Style {
         fonts: fonts.for_look(look),
@@ -1295,7 +1344,8 @@ impl Laid {
         }
         let margin = self.margin;
         let (w, h) = ((self.comp.size.0 + 2.0 * margin).ceil() as u32, (self.comp.size.1 + 2.0 * margin).ceil() as u32);
-        let Some(mut tmp) = Pixmap::new(w.max(1), h.max(1)) else { return };
+        let Some(mut tmp) = Pixmap::new(w.max(1), h.max(1)) else { return;
+        };
         draw::paint(&mut tmp.as_mut(), text, &self.comp, None, (-margin, -margin), st);
         let c = (self.origin.0 + self.comp.size.0 / 2.0 - rect.x as f32, self.origin.1 + self.comp.size.1 / 2.0 - rect.y as f32);
         draw::draw_turned(pm, &tmp, self.rotation, self.flip, c, 1.0);
@@ -1344,12 +1394,19 @@ fn inks_for(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, rect: Rect
 #[allow(clippy::too_many_arguments)]
 pub fn step_static(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>, scene: &WidgetScene, shared: &Shared, text: &mut TextPainter, now: DateTime<Local>, wallpaper_key: u64) -> anyhow::Result<Layers> {
     let mut layers = Layers::default();
-    let shown: Vec<(usize, &DesktopWidget)> = scene.items.iter().enumerate().take(ranges::MAX_WIDGETS).filter(|(_, w)| shows(w, o)).collect();
+    let visible = o
+        .names
+        .iter()
+        .any(|name| scene.visible.iter().any(|visible| visible == name));
+    let mut released_scratch = false;
     // Forget widgets that went away or moved index (their planes are
     // removed at the end, with every other plane no shown widget stacks).
-    let used: Vec<usize> = shown.iter().map(|(i, _)| *i).collect();
     for (i, st) in ws.states.iter_mut().enumerate() {
-        if !used.contains(&i) {
+        if scene.items.get(i).is_none_or(|widget|!shows(widget,o)) {
+            released_scratch |= st
+                .vis
+                .as_ref()
+                .is_some_and(|(_, painter, _)| painter.cached_bytes() > 0);
             *st = State::default();
         }
     }
@@ -1357,33 +1414,27 @@ pub fn step_static(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>
     let output = o.output_rect();
     let minute = crate::widgets::clock::local_stamp(&now, false);
     let avail = shared.sampler.as_ref().map(|s| availability(&s.reading, s.samples));
-    for (i, w) in shown {
+    for (i, w) in scene.items.iter().enumerate().take(ranges::MAX_WIDGETS).filter(|(_,widget)|shows(widget,o)) {
         let (p_static, p_live) = planes(i);
         let st = &mut ws.states[i];
         let cfg = content_key(w);
         if st.id != w.id || st.cfg != cfg {
+            released_scratch |= st
+                .vis
+                .as_ref()
+                .is_some_and(|(_, painter, _)| painter.cached_bytes() > 0);
             *st = State { id: w.id.clone(), cfg, ..State::default() };
         }
         let moving = scene.moving.as_deref() == Some(w.id.as_str());
         let opacity = w.place.opacity();
-        if let WidgetKind::Visualizer(v) = &w.kind {
-            let k = o.k(w.place.scale());
-            let g = visualizer::Geometry::new(v, k);
-            let (x, y) = w.place.origin_in((o.physical.0 as f32, o.physical.1 as f32), g.size, o.safe);
-            let rect = snap(Rect::from_edges(x, y, x + g.size.0, y + g.size.1), o.scale120).intersect(&output);
-            st.outer = (x, y, g.size.0, g.size.1);
-            // Same size elsewhere: the last frame moves along (a silent
-            // visualizer keeps showing it where it now is).
-            let moved = st.vis.is_some() && st.live_rect.w == rect.w && st.live_rect.h == rect.h && (st.live_rect == rect || host.move_plane(o.id, p_live, rect));
-            if !moved {
-                st.vis = Some((g, visualizer::Painter::default()));
-                st.live_key = None;
-                st.inks = Some(inks_for(w, o, scene, rect));
-            }
-            st.live_rect = rect;
-            st.envelope = st.envelope.union(&rect);
-            st.behind = behind_subject(w, o, &st.envelope);
-            push_layers(&mut layers, st, None, Some(p_live));
+        if matches!(w.kind, WidgetKind::Visualizer(_)) && !visible {
+            released_scratch |= st.vis.as_ref()
+                .is_some_and(|(_, painter, _)| painter.cached_bytes() > 0);
+                st.vis = None;
+                st.static_key = None;
+            push_layers(&mut layers, st,
+                (!st.rect.is_empty()).then_some(p_static),
+                (!st.live_rect.is_empty()).then_some(p_live));
             continue;
         }
         let tick = match &w.kind {
@@ -1394,6 +1445,7 @@ pub fn step_static(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>
             (cfg, tick, o.physical, o.scale120, wallpaper_key),
             (scene.on_surface.to_rgba8(), scene.surface.to_rgba8(), o.primary.to_rgba8(), o.fonts, &scene.weather, &scene.hijri),
             (scene.h24, scene.rtl, mandara_i18n::language(), if matches!(w.kind, WidgetKind::Monitor(_)) { avail } else { None }),
+            (cache_key::debug(&scene.units),scene.week_start),
             data_key(w, scene),
         ));
         if st.static_key == Some(skey) {
@@ -1417,7 +1469,8 @@ pub fn step_static(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>
             }
         }
         if st.static_key != Some(skey) {
-            let Some(laid) = lay_out(w, o, scene, shared.sampler.as_ref(), &now, text) else { continue };
+            let Some(laid) = lay_out(w, o, scene, shared.sampler.as_ref(), &now, text) else { continue;
+            };
             let rect = laid.rect(false, o.scale120, output);
             let live_rect = laid.rect(true, o.scale120, output);
             st.outer = laid.outer;
@@ -1426,10 +1479,22 @@ pub fn step_static(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>
             st.painted_rects = (rect, live_rect);
             let inks = inks_for(w, o, scene, rect.union(&live_rect));
             let style = style_for(w, o.fonts, inks, opacity, laid.k);
+            if let WidgetKind::Visualizer(v) = &w.kind {
+                let geometry = visualizer::Geometry::new(v, laid.k).placed(&laid, live_rect);
+                let mut painter = visualizer::Painter::default();
+                painter.prepare(&laid, live_rect, text, &style);
+                st.vis = Some((
+                    geometry,
+                    painter,
+                    laid.k,
+                ));
+            }
             if rect.is_empty() {
                 host.hide(o.id, p_static);
                 st.static_key = Some(skey);
-            } else if host.paint(o.id, p_static, Place::Rect(rect), None, false, true, |pm| laid.paint(pm, text, false, rect, &style))? {
+            } else if host.paint(o.id, p_static, Place::Rect(rect), None, false, true, |pm| {
+                laid.paint(pm, text, false, rect, &style)
+            })? {
                 st.static_key = Some(skey);
             }
             st.rect = rect;
@@ -1438,7 +1503,9 @@ pub fn step_static(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>
             st.live_key = None;
             st.live_rect = live_rect;
             st.inks = Some(inks);
-            if live_rect.is_empty() {
+            let waiting_for_audio = matches!(w.kind, WidgetKind::Visualizer(_))
+                && !(laid.transformed() && laid.comp.marks.iter().any(|mark| mark.opacity > 0.0));
+            if live_rect.is_empty() || waiting_for_audio {
                 host.hide(o.id, p_live);
             } else if st.live_key.is_none() {
                 // Paint the live part now (the live pass keeps it current).
@@ -1453,6 +1520,9 @@ pub fn step_static(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>
         push_layers(&mut layers, st, (!st.rect.is_empty()).then_some(p_static), live);
     }
     remove_unused(host, o.id, &layers);
+    if released_scratch {
+        mandara_services::memory::request_trim();
+    }
     Ok(layers)
 }
 
@@ -1488,7 +1558,9 @@ fn availability(r: &sysmon::Reading, samples: u64) -> u64 {
     let bits = [r.cpu.is_some(), r.memory.is_some(), r.swap.is_some(), r.disk.is_some(), r.cpu_temp.is_some(), r.fan_rpm.is_some(), r.battery.is_some(), r.down.is_some(), samples >= 2, r.gpus_probed];
     let flags = bits.iter().enumerate().fold(0, |acc, (i, b)| acc | ((*b as u64) << i));
     // Each GPU's four readings (the lines and their labels), and how many.
-    let gpus = r.gpus.iter().take(KEYED_GPUS).enumerate().fold(0u64, |acc, (i, g)| acc | (u64::from(g.mask()) << (GPU_MASK_BITS * i)));
+    let gpus = r.gpus.iter().take(KEYED_GPUS).enumerate().fold(0u64, |acc, (i, g)| {
+            acc | (u64::from(g.mask()) << (GPU_MASK_BITS * i))
+        });
     flags | (gpus << bits.len()) | ((r.gpus.len().min(GPU_COUNT_MAX) as u64) << GPU_COUNT_SHIFT)
 }
 
@@ -1497,13 +1569,15 @@ fn live_tick_key(w: &DesktopWidget, scene: &WidgetScene, shared: &Shared, now: &
     match &w.kind {
         WidgetKind::Monitor(_) => key(("sample", shared.sampler.as_ref().map(|s| s.generation))),
         // A paused timer doesn't change between scenes.
-        WidgetKind::Pomodoro(_) if !scene.data.pomodoro.as_ref().is_some_and(|p| p.running) => key(("paused", format!("{:?}", scene.data.pomodoro))),
+        WidgetKind::Pomodoro(_) if !scene.data.pomodoro.as_ref().is_some_and(|p| p.running) => {
+            key(("paused", cache_key::debug(&scene.data.pomodoro)))
+        }
         WidgetKind::Pet(_) | WidgetKind::Bubbles(_) | WidgetKind::Media(_) if animation_fps(w, scene, now).is_some() => {
             let fps = i64::from(animation_fps(w, scene, now).unwrap_or(1).max(1));
             key(("frame", now.timestamp_millis() * fps / MS_PER_SECOND))
         }
         // Paused: the position stays.
-        WidgetKind::Media(_) if !scene.data.media.as_ref().is_some_and(|m| m.playing) => key(("paused", format!("{:?}", scene.data.media.as_ref().map(|m| m.position_ms)))),
+        WidgetKind::Media(_) if !scene.data.media.as_ref().is_some_and(|m| m.playing) => key(("paused", scene.data.media.as_ref().map(|m| m.position_ms))),
         _ => key(("second", now.timestamp())),
     }
 }
@@ -1516,8 +1590,11 @@ pub fn sampler_wanted(scene: &WidgetScene, outputs: &[Vec<&str>]) -> Option<(sys
     let mut wants = sysmon::Wants::default();
     let mut every: Option<u32> = None;
     for w in &scene.items {
-        let WidgetKind::Monitor(m) = &w.kind else { continue };
-        let on_visible = outputs.iter().any(|names| w.place.shows_on(names) && names.iter().any(|n| scene.visible.iter().any(|v| v == n)));
+        let WidgetKind::Monitor(m) = &w.kind else { continue;
+        };
+        let on_visible = outputs.iter().any(|names| {
+            w.place.shows_on(names) && names.iter().any(|n| scene.visible.iter().any(|v| v == n))
+        });
         if on_visible {
             wants.add(&m.rows);
             every = Some(every.map_or(m.interval_s(), |e| e.min(m.interval_s())));
@@ -1531,7 +1608,11 @@ pub fn sampler_wanted(scene: &WidgetScene, outputs: &[Vec<&str>]) -> Option<(sys
 pub fn should_listen(scene: &WidgetScene, outputs: &[Vec<&str>], silenced: bool) -> bool {
     scene.music
         && !silenced
-        && scene.items.iter().any(|w| matches!(w.kind, WidgetKind::Visualizer(_)) && outputs.iter().any(|names| w.place.shows_on(names) && names.iter().any(|n| scene.visible.iter().any(|v| v == n))))
+        && scene.items.iter().any(|w| {
+            matches!(w.kind, WidgetKind::Visualizer(_)) && outputs.iter().any(|names| {
+                    w.place.shows_on(names) && names.iter().any(|n| scene.visible.iter().any(|v| v == n))
+                })
+        })
 }
 
 /// Shortest silence timeout of the visualizers.
@@ -1592,7 +1673,8 @@ pub fn step_live(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>, 
     let mut painted = false;
     let bands = shared.tap.as_ref().filter(|t| t.is_active()).map(|t| t.bands());
     for (i, w) in scene.items.iter().enumerate().take(ranges::MAX_WIDGETS) {
-        let Some(st) = ws.states.get_mut(i) else { break };
+        let Some(st) = ws.states.get_mut(i) else { break;
+        };
         if st.id != w.id || st.live_rect.is_empty() || !shows(w, o) {
             continue;
         }
@@ -1601,15 +1683,20 @@ pub fn step_live(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>, 
         let opacity = w.place.opacity();
         match &w.kind {
             WidgetKind::Visualizer(v) => {
-                let Some(bands) = bands.as_ref() else { continue };
+                let Some(bands) = bands.as_ref() else { continue;
+                };
                 let period = Duration::from_secs_f32(1.0 / v.fps() as f32);
                 if st.frame_at.is_some_and(|t| at.saturating_duration_since(t) + TICK_SLACK < period) || !host.frame_ready(o.id) {
                     continue;
                 }
-                let accent = st.inks.map(|i| i.accent).unwrap_or(o.primary);
-                let Some((g, painter)) = st.vis.as_mut() else { continue };
+                let Some(inks) = st.inks else { continue };
+                let Some((g, painter, k)) = st.vis.as_mut() else { continue;
+                };
+                let style = style_for(w, o.fonts, inks, opacity, *k);
                 let g = *g;
-                if host.paint(o.id, p_live, Place::Rect(rect), None, true, true, |pm| painter.frame(pm, &g, bands, accent, opacity))? {
+                if host.paint(o.id, p_live, Place::Rect(rect), None, true, true, |pm| {
+                    painter.styled_frame(pm, &g, bands, &style)
+                })? {
                     st.frame_at = Some(at);
                     painted = true;
                 }
@@ -1623,10 +1710,13 @@ pub fn step_live(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>, 
                 if animation_fps(w, scene, &now).is_some() && !host.frame_ready(o.id) {
                     continue;
                 }
-                let Some(laid) = lay_out(w, o, scene, shared.sampler.as_ref(), &now, text) else { continue };
+                let Some(laid) = lay_out(w, o, scene, shared.sampler.as_ref(), &now, text) else { continue;
+                };
                 let Some(inks) = st.inks else { continue };
                 let style = style_for(w, o.fonts, inks, opacity, laid.k);
-                if host.paint(o.id, p_live, Place::Rect(rect), None, true, true, |pm| laid.paint(pm, text, true, rect, &style))? {
+                if host.paint(o.id, p_live, Place::Rect(rect), None, true, true, |pm| {
+                    laid.paint(pm, text, true, rect, &style)
+                })? {
                     st.live_key = Some(k);
                     painted = true;
                 }
@@ -1639,13 +1729,18 @@ pub fn step_live(host: &mut impl Planes, ws: &mut OutWidgets, o: &OutputCx<'_>, 
 
 /// When the widgets of an output next need the renderer.
 pub fn next_wake(ws: &OutWidgets, o_names: &[&str], scene: &WidgetScene, shared: &Shared, now: DateTime<Local>, at: Instant) -> Option<Duration> {
+    if !o_names.iter().any(|name|scene.visible.iter().any(|visible|visible == name)) {
+        return None;
+    }
     let mut wake: Option<Duration> = None;
     let mut soon = |d: Duration| wake = Some(wake.map_or(d, |w| w.min(d)));
     let ms = now.timestamp_millis();
-    let until = |period: i64| Duration::from_millis((period - ms.rem_euclid(period)).unsigned_abs()) + TICK_SLACK;
+    let until = |period: i64| {
+        Duration::from_millis((period - ms.rem_euclid(period)).unsigned_abs()) + TICK_SLACK
+    };
     let visible = o_names.iter().any(|n| scene.visible.iter().any(|v| v == n));
     for (i, w) in scene.items.iter().enumerate().take(ranges::MAX_WIDGETS) {
-        if !w.place.shows_on(o_names) {
+        if !w.enabled || !w.place.shows_on(o_names) {
             continue;
         }
         match &w.kind {
@@ -1658,21 +1753,31 @@ pub fn next_wake(ws: &OutWidgets, o_names: &[&str], scene: &WidgetScene, shared:
             WidgetKind::Weather(_) if w.enabled && visible => soon(until(MS_PER_MINUTE)),
             // Their times and the day count change with the minute.
             WidgetKind::WorldClock(_) | WidgetKind::Countdown(_) | WidgetKind::Progress(_) | WidgetKind::Quote(_) | WidgetKind::Date(_) | WidgetKind::Sky(_) | WidgetKind::Prayer(_) | WidgetKind::Glance(_) => soon(until(MS_PER_MINUTE)),
-            WidgetKind::Pomodoro(_) if visible && scene.data.pomodoro.as_ref().is_some_and(|p| p.running) => soon(until(MS_PER_SECOND)),
+            WidgetKind::Pomodoro(_) if visible && scene.data.pomodoro.as_ref().is_some_and(|p| p.running) =>
+            {
+                soon(until(MS_PER_SECOND))
+            }
             WidgetKind::Pet(_) | WidgetKind::Bubbles(_) | WidgetKind::Media(_) if visible && animation_fps(w, scene, &now).is_some() => {
                 let fps = i64::from(animation_fps(w, scene, &now).unwrap_or(1).max(1));
                 soon(until(MS_PER_SECOND / fps));
             }
-            WidgetKind::Media(_) if visible && scene.data.media.as_ref().is_some_and(|m| m.playing) => soon(until(MS_PER_SECOND)),
+            WidgetKind::Media(_) if visible && scene.data.media.as_ref().is_some_and(|m| m.playing) =>
+            {
+                soon(until(MS_PER_SECOND))
+            }
             WidgetKind::Monitor(m) if visible => {
                 let every = Duration::from_secs(u64::from(m.interval_s()));
-                soon(shared.sampler.as_ref().and_then(|s| s.sampled_at).map_or(Duration::ZERO, |t| every.saturating_sub(at.saturating_duration_since(t))));
+                soon(shared.sampler.as_ref().and_then(|s| s.sampled_at).map_or(Duration::ZERO, |t| {
+                            every.saturating_sub(at.saturating_duration_since(t))
+                        }));
             }
             WidgetKind::Visualizer(v) if visible && scene.music && !shared.silenced => {
                 if shared.tap.as_ref().is_some_and(|t| t.is_active()) {
                     let period = Duration::from_secs_f32(1.0 / v.fps() as f32);
                     let last = ws.states.get(i).and_then(|s| s.frame_at);
-                    soon(last.map_or(Duration::ZERO, |t| period.saturating_sub(at.saturating_duration_since(t))));
+                    soon(last.map_or(Duration::ZERO, |t| {
+                        period.saturating_sub(at.saturating_duration_since(t))
+                    }));
                 } else {
                     // Waiting for sound (or the silence timeout).
                     soon(VIS_POLL);
@@ -1690,24 +1795,15 @@ pub fn next_wake(ws: &OutWidgets, o_names: &[&str], scene: &WidgetScene, shared:
 /// `o.physical`), as the live canvas would show it.
 #[allow(clippy::too_many_arguments)]
 pub fn compose(canvas: &mut tiny_skia::PixmapMut<'_>, w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, sampler: Option<&sysmon::Sampler>, text: &mut TextPainter, now: &DateTime<Local>, bands: &[f32]) {
-    let output = o.output_rect();
-    let opacity = w.place.opacity();
-    if let WidgetKind::Visualizer(v) = &w.kind {
-        let g = visualizer::Geometry::new(v, o.k(w.place.scale()));
-        let (x, y) = w.place.origin_in((o.physical.0 as f32, o.physical.1 as f32), g.size, o.safe);
-        let rect = snap(Rect::from_edges(x, y, x + g.size.0, y + g.size.1), o.scale120).intersect(&output);
-        let Some(mut pm) = Pixmap::new(rect.w.max(1), rect.h.max(1)) else { return };
-        let inks = inks_for(w, o, scene, rect);
-        visualizer::Painter::default().frame(&mut pm.as_mut(), &g, bands, inks.accent, opacity);
-        crate::backdrop::paint::compose(canvas, &pm, rect, 1.0);
-        return;
-    }
-    let Some(laid) = lay_out(w, o, scene, sampler, now, text) else { return };
-    compose_laid(canvas, w, o, scene, &laid, text);
+    let Some(laid) = lay_out(w, o, scene, sampler, now, text) else { return;
+    };
+    compose_laid(canvas, w, o, scene, &laid, text, bands);
 }
 
 /// Paint a laid-out widget into its fitted preview canvas.
-fn compose_laid(canvas: &mut tiny_skia::PixmapMut<'_>, w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, laid: &Laid, text: &mut TextPainter) {
+fn compose_laid(canvas: &mut tiny_skia::PixmapMut<'_>, w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, laid: &Laid, text: &mut TextPainter,
+    bands: &[f32],
+) {
     let output = o.output_rect();
     let opacity = w.place.opacity();
     let (rect, live) = (laid.rect(false, o.scale120, output), laid.rect(true, o.scale120, output));
@@ -1717,9 +1813,32 @@ fn compose_laid(canvas: &mut tiny_skia::PixmapMut<'_>, w: &DesktopWidget, o: &Ou
         if r.is_empty() {
             continue;
         }
-        let Some(mut pm) = Pixmap::new(r.w, r.h) else { continue };
-        laid.paint(&mut pm.as_mut(), text, is_live, r, &style);
+        let Some(mut pm) = Pixmap::new(r.w, r.h) else { continue;
+        };
+        paint_preview(&mut pm, w, laid, text, is_live, r, &style, bands);
         crate::backdrop::paint::compose(canvas, &pm, r, 1.0);
+    }
+}
+
+/// The same framed spectrum in Studio, transitions and the live desktop.
+#[allow(clippy::too_many_arguments)]
+fn paint_preview(
+    pm: &mut Pixmap,
+    widget: &DesktopWidget,
+    laid: &Laid,
+    text: &mut TextPainter,
+    live: bool,
+    rect: Rect,
+    style: &Style,
+    bands: &[f32],
+) {
+    if live && let WidgetKind::Visualizer(visualizer) = &widget.kind {
+        let geometry = visualizer::Geometry::new(visualizer, laid.k).placed(laid, rect);
+        let mut painter = visualizer::Painter::default();
+        painter.prepare(laid, rect, text, style);
+        painter.styled_frame(&mut pm.as_mut(), &geometry, bands, style);
+    } else {
+        laid.paint(&mut pm.as_mut(), text, live, rect, style);
     }
 }
 
@@ -1732,15 +1851,14 @@ pub fn compose_side(canvas: &mut tiny_skia::PixmapMut<'_>, o: &OutputCx<'_>, sce
     let bands = shared.tap.as_ref().filter(|t| t.is_active()).map(|t| t.bands().to_vec());
     let mut reach = Rect::default();
     for w in scene.items.iter().take(ranges::MAX_WIDGETS).filter(|w| shows(w, o)) {
-        let Some(area) = widget_rect(w, o, scene, text, now) else { continue };
+        let Some(area) = widget_rect(w, o, scene, text, now) else { continue;
+        };
         if behind_subject(w, o, &area) != behind {
             continue;
         }
         // A silent visualizer paints no frame on the live canvas either.
-        match (&w.kind, &bands) {
-            (WidgetKind::Visualizer(_), None) => {}
-            (_, b) => compose(canvas, w, o, scene, shared.sampler.as_ref(), text, now, b.as_deref().unwrap_or_default()),
-        }
+        compose(canvas, w, o, scene, shared.sampler.as_ref(), text, now,
+            bands.as_deref().unwrap_or_default());
         if behind {
             reach = reach.union(&area);
         }
@@ -1751,11 +1869,6 @@ pub fn compose_side(canvas: &mut tiny_skia::PixmapMut<'_>, o: &OutputCx<'_>, sce
 /// Where `w` draws on output `o` (physical px), for Studio's drag boxes.
 pub fn widget_rect(w: &DesktopWidget, o: &OutputCx<'_>, scene: &WidgetScene, text: &mut TextPainter, now: &DateTime<Local>) -> Option<Rect> {
     let output = o.output_rect();
-    if let WidgetKind::Visualizer(v) = &w.kind {
-        let g = visualizer::Geometry::new(v, o.k(w.place.scale()));
-        let (x, y) = w.place.origin_in((o.physical.0 as f32, o.physical.1 as f32), g.size, o.safe);
-        return Some(Rect::from_edges(x, y, x + g.size.0, y + g.size.1).intersect(&output));
-    }
     let laid = lay_out(w, o, scene, None, now, text)?;
     Some(laid.rect(false, o.scale120, output).union(&laid.rect(true, o.scale120, output)))
 }
@@ -1791,15 +1904,7 @@ pub fn preview_layer(w: &DesktopWidget, size: (u32, u32), fonts: &FontNames, pri
     let now = Local::now();
     let output = o.output_rect();
     let opacity = w.place.opacity();
-    let (union, outer, parts): (Rect, (f32, f32, f32, f32), Vec<(Rect, Pixmap)>) = if let WidgetKind::Visualizer(v) = &w.kind {
-        let g = visualizer::Geometry::new(v, o.k(w.place.scale()));
-        let (x, y) = w.place.origin_in((size.0 as f32, size.1 as f32), g.size, o.safe);
-        let rect = snap(Rect::from_edges(x, y, x + g.size.0, y + g.size.1), o.scale120).intersect(&output);
-        let mut pm = Pixmap::new(rect.w.max(1), rect.h.max(1))?;
-        let inks = inks_for(w, &o, &scene, rect);
-        visualizer::Painter::default().frame(&mut pm.as_mut(), &g, &preview_bands(), inks.accent, opacity);
-        (rect, (x, y, g.size.0, g.size.1), vec![(rect, pm)])
-    } else {
+    let (union, outer, parts): (Rect, (f32, f32, f32, f32), Vec<(Rect, Pixmap)>) = {
         let laid = lay_out(w, &o, &scene, None, &now, text)?;
         let (rect, live) = (laid.rect(false, o.scale120, output), laid.rect(true, o.scale120, output));
         let inks = inks_for(w, &o, &scene, rect.union(&live));
@@ -1810,7 +1915,11 @@ pub fn preview_layer(w: &DesktopWidget, size: (u32, u32), fonts: &FontNames, pri
                 continue;
             }
             let mut pm = Pixmap::new(r.w, r.h)?;
-            laid.paint(&mut pm.as_mut(), text, is_live, r, &style);
+            paint_preview(&mut pm,
+                w,
+                &laid, text, is_live, r, &style,
+                &preview_bands(),
+            );
             parts.push((r, pm));
         }
         (rect.union(&live), laid.outer, parts)
@@ -1859,8 +1968,8 @@ fn straight(canvas: Pixmap) -> Option<image::RgbaImage> {
     for p in img.pixels_mut() {
         let a = p.0[3] as u32;
         if a > 0 && a < 255 {
-            for c in 0..3 {
-                p.0[c] = ((p.0[c] as u32 * 255 + a / 2) / a).min(255) as u8;
+            for channel in &mut p.0[..3] {
+                *channel = ((u32::from(*channel) * 255 + a / 2) / a).min(255) as u8;
             }
         }
     }
@@ -1905,6 +2014,50 @@ mod tests {
 
     fn monitor_on(displays: &[&str]) -> DesktopWidget {
         DesktopWidget { id: "monitor-1".into(), place: Placement { displays: displays.iter().map(|d| d.to_string()).collect(), ..Default::default() }, kind: WidgetKind::Monitor(MonitorWidget { interval_s: 3, ..Default::default() }), ..Default::default() }
+    }
+
+    #[test]
+    fn preview_pixels_keep_alpha_and_unpremultiply_each_color_channel() {
+        let mut canvas = Pixmap::new(2, 1).unwrap();
+        canvas.data_mut().copy_from_slice(&[64, 32, 16, 128, 0, 0, 0, 0]);
+        assert_eq!(straight(canvas).unwrap().as_raw(), &[128, 64, 32, 128, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn covered_desktops_and_disabled_clocks_do_not_schedule_widget_timers() {
+        let mut scene = scene(vec![DesktopWidget::default(),DesktopWidget { kind:WidgetKind::Date(Default::default()),..Default::default() }]);
+        let widgets = OutWidgets::default();let shared = Shared::default();
+        let now = Local::now();let at = Instant::now();
+        assert!(next_wake(&widgets,&["DP-1"],&scene,&shared,now,at).is_some());
+        scene.visible.clear();
+        assert!(next_wake(&widgets,&["DP-1"],&scene,&shared,now,at).is_none());
+        scene.visible.push("DP-1".into());
+        for widget in &mut scene.items { widget.enabled = false; }
+        assert!(next_wake(&widgets,&["DP-1"],&scene,&shared,now,at).is_none());
+    }
+
+    #[test]
+    fn shared_calendar_and_unit_settings_invalidate_cached_widget_planes_immediately() {
+        let fonts = FontNames::default();
+        let names = ["DP-1"];
+        let output = OutputCx { id:1,names:&names,logical:(1920.0,1080.0),physical:(1920,1080),scale120:120,tone:None,primary:Color::hex("#0088ff"),fonts:&fonts,depth:false,subject:None,safe:Insets::default() };
+        let mut scene = scene(vec![DesktopWidget { id:"date".into(),kind:WidgetKind::Date(Default::default()),..Default::default() }]);
+        let mut host = Recorder::default();
+        let mut widgets = OutWidgets::default();
+        let mut text = TextPainter::new();
+        let shared = Shared::default();
+        let now = Local::now();
+        step_static(&mut host,&mut widgets,&output,&scene,&shared,&mut text,now,0).unwrap();
+        let first = host.paints;
+        step_static(&mut host,&mut widgets,&output,&scene,&shared,&mut text,now,0).unwrap();
+        assert_eq!(host.paints,first);
+        scene.week_start = 6;
+        step_static(&mut host,&mut widgets,&output,&scene,&shared,&mut text,now,0).unwrap();
+        assert!(host.paints > first);
+        let second = host.paints;
+        scene.units = Units::Imperial;
+        step_static(&mut host,&mut widgets,&output,&scene,&shared,&mut text,now,0).unwrap();
+        assert!(host.paints > second);
     }
 
     #[test]
@@ -2019,7 +2172,9 @@ mod tests {
         let s = sampled(vec![nvidia()]);
         let lines = monitor_lines(&all, Some(&s), Units::Metric, false);
         assert_eq!(rows_of(&lines), MonitorRow::ALL, "one line per reading, in order");
-        let label = |r: MonitorRow| lines.iter().find(|l| l.row == Some(r)).map(|l| (l.label.as_str(), l.value.as_str()));
+        let label = |r: MonitorRow| {
+            lines.iter().find(|l| l.row == Some(r)).map(|l| (l.label.as_str(), l.value.as_str()))
+        };
         assert_eq!(label(MonitorRow::Gpu), Some(("GPU", "42%")));
         assert!(label(MonitorRow::Vram).is_some_and(|(_, v)| v.contains('/')));
         assert_eq!(label(MonitorRow::GpuPower), Some(("GPU power", "140 W")));
@@ -2204,6 +2359,88 @@ mod tests {
     }
 
     #[test]
+    fn hidden_visualizers_release_frame_scratch_and_rebuild_on_show() {
+        use mandara_config::desktop_widgets::{Chrome, Look, Plate};
+        let fonts = FontNames::default();
+        let names = ["DP-1"];
+        let output = OutputCx {
+            id: 1,
+            names: &names,
+            logical: (1920.0, 1080.0),
+            physical: (1920, 1080),
+            scale120: 120,
+            tone: None,
+            primary: Color::hex("#0088ff"),
+            fonts: &fonts,
+            depth: false,
+            subject: None,
+            safe: Default::default(),
+        };
+        let widget = DesktopWidget {
+            kind: WidgetKind::Visualizer(PlaneVisualizer {
+                look: Look {
+                    plate: Plate::Glass,
+                    chrome: Chrome::Window,
+                    header: "Spectrum".into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            place: Placement {
+                rotation: 20.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut scene = scene(vec![widget]);
+        let mut widgets = OutWidgets::default();
+        let mut host = Recorder::default();
+        let mut text = TextPainter::new();
+        let now = Local::now();
+        step_static(
+            &mut host,
+            &mut widgets,
+            &output,
+            &scene,
+            &Shared::default(),
+            &mut text,
+            now,
+            0,
+        )
+        .unwrap();
+        assert!(widgets.states[0].vis.as_ref().unwrap().1.cached_bytes() > 0);
+        let painted = host.paints;
+        scene.visible.clear();
+        step_static(
+            &mut host,
+            &mut widgets,
+            &output,
+            &scene,
+            &Shared::default(),
+            &mut text,
+            now,
+            0,
+        )
+        .unwrap();
+        assert!(widgets.states[0].vis.is_none());
+        assert_eq!(host.paints, painted);
+        scene.visible.push("DP-1".into());
+        step_static(
+            &mut host,
+            &mut widgets,
+            &output,
+            &scene,
+            &Shared::default(),
+            &mut text,
+            now,
+            0,
+        )
+        .unwrap();
+        assert!(widgets.states[0].vis.is_some());
+        assert!(host.paints > painted);
+    }
+
+    #[test]
     fn plane_set_matches_the_enabled_widgets_after_every_change() {
         use mandara_config::desktop_widgets::{Anchor, DecorShape, DesktopWidgetsConfig};
         let fonts = FontNames::default();
@@ -2276,4 +2513,16 @@ mod tests {
         assert!(host.exists.is_empty() && host.bytes.values().sum::<u64>() == 0, "{:?}", host.exists);
         assert!(ws.states.is_empty());
     }
+    #[test]
+    fn a_minute_only_clock_schedules_updates_only_on_an_unlocked_visible_desktop() {
+        let clock = DesktopWidget { kind: WidgetKind::Clock(Default::default()), ..Default::default() };
+        let mut scene = scene(vec![clock]);
+        let outputs = ["DP-1".to_string()];
+        let now = chrono::Local::now(); let at = Instant::now();
+        for (off, locked, visible, ticks) in [(false, false, true, true), (true, false, true, false), (false, true, true, false), (false, false, false, false)] {
+            scene.set_visibility(&outputs, off, locked, |_| visible);
+            assert_eq!(next_wake(&OutWidgets::default(), &["DP-1"], &scene, &Shared::default(), now, at).is_some(), ticks);
+        }
+    }
+
 }

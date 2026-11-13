@@ -62,7 +62,8 @@ pub fn ring(c: (f32, f32), r: f32, width: f32, start: f32, sweep: f32, style: Ri
         return (0..=n)
             .map(|i| {
                 let a = start + sweep * i as f32 / n as f32;
-                Mark::new(MarkKind::Disc { c: (c.0 + r * a.cos(), c.1 + r * a.sin()), r: width / 2.0 }, ink)
+                let radius = if style.wavy { r + width * WAVE_AMP * (a * WAVES_PER_TURN).sin() } else { r };
+                Mark::new(MarkKind::Disc { c: (c.0 + radius * a.cos(), c.1 + radius * a.sin()), r: width / 2.0 }, ink)
             })
             .collect();
     }
@@ -189,7 +190,7 @@ pub fn meters(w: &MonitorWidget, lines: &[MonitorLine], k: f32, rtl: bool, m: &m
         y += px(METER_H) + px(ROW_GAP);
     }
     rest(w, others, k, rtl, y, &mut marks, m);
-    Composition::of(marks)
+    super::layout::monitor_title(Composition::of(marks), w, k, rtl, m)
 }
 
 /// Tall bars side by side, the value over each and the label under. Each
@@ -235,7 +236,7 @@ pub fn bars(w: &MonitorWidget, lines: &[MonitorLine], k: f32, rtl: bool, m: &mut
         marks.push(Mark::new(MarkKind::Rect { x: 0.0, y: 0.0, w: pitch * n as f32, h: bottom, radius: 0.0, width: 0.0 }, InkRole::Fg).dim(0.0));
     }
     rest(w, others, k, rtl, if n > 0 { bottom + px(ROW_GAP) } else { 0.0 }, &mut marks, m);
-    Composition::of(marks)
+    super::layout::monitor_title(Composition::of(marks), w, k, rtl, m)
 }
 
 /// The distance between bar centres: `width` shared by `n` bars, never
@@ -248,7 +249,9 @@ pub fn bar_pitch(width: f32, n: usize, least: f32) -> f32 {
 /// usual range), the other readings as the column.
 pub fn thermals(w: &MonitorWidget, lines: &[MonitorLine], k: f32, rtl: bool, m: &mut dyn Measure) -> Composition {
     let px = |v: f32| v * k;
-    let heat = |l: &&MonitorLine| matches!(l.row, Some(MonitorRow::CpuTemp | MonitorRow::GpuTemp | MonitorRow::Fan)) && l.level.is_some();
+    let heat = |l: &&MonitorLine| {
+        matches!(l.row, Some(MonitorRow::CpuTemp | MonitorRow::GpuTemp | MonitorRow::Fan)) && l.level.is_some()
+    };
     let (arcs, others): (Vec<&MonitorLine>, Vec<&MonitorLine>) = lines.iter().partition(heat);
     let (r, aw) = (px(ARC_R), px(ARC_W));
     let cell = 2.0 * r + px(BAR_GAP);
@@ -283,7 +286,7 @@ pub fn thermals(w: &MonitorWidget, lines: &[MonitorLine], k: f32, rtl: bool, m: 
         bottom = bottom.max(ly + lh);
     }
     rest(w, others, k, rtl, if n > 0 { bottom + px(ROW_GAP) } else { 0.0 }, &mut marks, m);
-    Composition::of(marks)
+    super::layout::monitor_title(Composition::of(marks), w, k, rtl, m)
 }
 
 #[cfg(test)]
@@ -307,6 +310,45 @@ mod tests {
             assert!(c.size.0 > 50.0 && c.size.1 > 50.0, "{:?}", c.size);
         }
         assert_eq!(ring((0.0, 0.0), 10.0, 2.0, 0.0, TAU, RingStyle { wavy: false, dotted: true }, InkRole::Fg).len(), DOTS_PER_TURN as usize + 1);
+    }
+
+    #[test]
+    fn dotted_gauges_keep_the_wavy_ring_setting() {
+        let radii = |wavy| ring((0.0,0.0),50.0,6.0,0.0,TAU,RingStyle { wavy,dotted:true },InkRole::Fg)
+            .into_iter().map(|mark|match mark.kind { MarkKind::Disc { c,.. } => c.0.hypot(c.1),_ => panic!("dotted rings contain dots") }).collect::<Vec<_>>();
+        assert!(radii(false).into_iter().all(|radius|(radius-50.0).abs()<0.001));
+        let wave = radii(true);
+        assert!(wave.iter().any(|radius|*radius>51.0));
+        assert!(wave.iter().any(|radius|*radius<49.0));
+    }
+
+    #[test]
+    fn every_monitor_style_keeps_its_title_out_of_the_live_plane() {
+        use super::super::layout::{monitor, monitor_gauges};
+        type Layout =
+            fn(&MonitorWidget, &[MonitorLine], f32, bool, &mut dyn Measure) -> Composition;
+        let layouts: [Layout; 5] = [monitor, monitor_gauges, meters, bars, thermals];
+        for layout in layouts {
+            for rtl in [false, true] {
+                let mut widget = MonitorWidget {
+                    title: "My readings".into(),
+                    ..Default::default()
+                };
+                let comp = layout(&widget, &lines(), 1.0, rtl, &mut Fixed);
+                let titles: Vec<_> = comp
+                    .marks
+                    .iter()
+                    .filter(
+                        |m| matches!(&m.kind, MarkKind::Text { text, .. } if text == "MY READINGS"),
+                    )
+                    .collect();
+                assert_eq!(titles.len(), 1);
+                assert!(!titles[0].live);
+                widget.title.clear();
+                let untitled = layout(&widget, &lines(), 1.0, rtl, &mut Fixed);
+                assert!(comp.size.1 > untitled.size.1);
+            }
+        }
     }
 
     #[test]

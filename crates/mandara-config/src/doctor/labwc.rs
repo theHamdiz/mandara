@@ -1,7 +1,6 @@
 //! labwc reads `~/.config/labwc/rc.xml` itself and has no standalone
-//! configuration checker. Mandara writes nothing it reads, so the doctor
-//! only reports whether it is installed (`labwc --version` prints its
-//! version and exits before touching a display).
+//! configuration checker. The doctor reports availability; imported theme
+//! colors have their own private headless validation before a key edit.
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -12,7 +11,7 @@ use crate::compositor::Target;
 pub struct Labwc;
 
 /// The availability note shown instead of "All good".
-pub const NOTE: &str = mandara_i18n::tk("labwc has no standalone configuration checker. It reads its own files in ~/.config/labwc, and Mandara writes nothing there.");
+pub const NOTE: &str = mandara_i18n::tk("labwc has no standalone configuration checker. Theme colours use a private headless check.");
 
 impl CompositorCheck for Labwc {
     fn target(&self) -> Target { Target::Labwc }

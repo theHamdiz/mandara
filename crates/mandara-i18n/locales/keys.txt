@@ -131,6 +131,7 @@ A collection needs a name
 A connection named "{name}" already exists
 A connection's IPv4 method, addresses, gateway and DNS
 A container using this much CPU (percent of one core) is highlighted
+A continuous wave has no gaps between bars.
 A crisp offset shadow in ink instead of the soft one; 0 keeps the soft shadows
 A daily reminder of the final home
 A dark outline round the bar's items, panels, the launcher, the dock, notifications and cards; 0 keeps the hairline
@@ -371,6 +372,7 @@ Add a community to your list
 Add a community, like r/linux
 Add a feed
 Add a folder, e.g. ~/Documents — Enter
+Add a header to use text settings with this layout.
 Add a hook
 Add a layout to manage them here; the first one is the default.
 Add a layout: search “arabic”, “german”, “dvorak”…
@@ -487,6 +489,7 @@ Ali Al-Hudhaify
 Alice's Adventures in Wonderland
 Align to the launcher button
 Alignment
+Alignment applies to the header in this layout.
 All
 All articles
 All caught up
@@ -652,8 +655,11 @@ Apply a motion preset: its spring and choreography (accessibility and surface sp
 Apply a prepared boot menu theme, splash or Limine look with your approval: backs up every file, checks with the tools' own checkers and can be restored; --dry-run shows the plan only
 Apply a ready-made launcher look: its layout and style settings change together (no argument: the current one)
 Apply a saved display profile
+Apply app themes now
 Apply changes instantly without springs
+Apply preference edits without replacing unrelated settings
 Apply profiles automatically
+Apply the color scheme to KDE apps and notify running apps.
 Apply this profile
 Apply to apps
 Apply {n} changes
@@ -719,6 +725,7 @@ Argument #{position} is not a number
 Argument #{position} is not an integer
 Argument <{name}> must be between {minimum} and {maximum}
 Argument <{name}> must be one of: {choices}
+Argument <{name}> must be {kind}, got {value}
 Aristotle
 Arithmetic error
 Arrangement
@@ -989,11 +996,14 @@ Brisk and calm, barely any overshoot
 Broken
 Brown noise
 Browse Reddit communities, posts and comment threads
+Browse app templates
+Browse available app templates; pass refresh to update the catalog
 Browse in the picker
 Browse settings
 Browse the coming days' times
 Browse the marketplace
 Browser
+Browser CSS exceeds the nesting limit
 Brutalist soft
 Bubble
 Bubbles
@@ -1131,6 +1141,8 @@ Cargo Cult Science
 Carousel
 Carousel: how much bigger the middle wallpaper is
 Cascade
+Catalog sources
+Catalog sources use HTTPS. Edit their names and URLs, then save with Ctrl+Enter.
 Catching drags
 Categories
 Category
@@ -1269,6 +1281,7 @@ Choose another…
 Choose displays
 Choose mango, niri, hyprland, umbriel, sway, river, kwin, aqueous, labwc or cosmic (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.
 Choose one ayah to copy as an image
+Choose the apps that follow your palette. Managed files are backed up and restored when you switch them off; imported setup commands follow their own undo instructions.
 Choose the key file
 Choose up to 24 Home Assistant entities
 Choose what the power menu offers and in which order. Built-in entries can be hidden or renamed; your own commands and boot entries can be removed.
@@ -1581,6 +1594,7 @@ Could not create {path}: {error}
 Could not download it: {error}
 Could not download the signed release. Nothing was installed. Check your connection and try again.
 Could not encode the wallpaper: {error}
+Could not install app template: {error}
 Could not keep the screen awake: {error}
 Could not load the OCR models: {error}
 Could not load {module}; check that the installed kernel includes it
@@ -1600,6 +1614,7 @@ Could not remove {path}: {error}
 Could not restart into the firmware setup: {error}
 Could not run journalctl: {error}
 Could not run {program}: {error}
+Could not save app templates: {error}
 Could not save or read feed history: {error}
 Could not set the clipboard: {error}
 Could not signal PID {pid}: {error}
@@ -1937,6 +1952,7 @@ Dip
 Directory results
 Disable
 Disable a unit and reload systemd
+Disable an app template and undo its managed changes
 Disable while typing
 Disabled {unit}
 Disabling…
@@ -1962,6 +1978,7 @@ Dismiss one notification by id
 Display
 Display as
 Display configuration isn't available
+Display controls are busy; try again in a moment
 Display font
 Display manager
 Display name
@@ -2205,6 +2222,7 @@ Emptying the Trash deletes {n} items for good; run `mandara msg dock trash empty
 Enable
 Enable Sound themes
 Enable a unit at boot / login and reload systemd
+Enable browser theming and publish the shared app palette.
 Enable launcher
 Enable local shell commands in Studio
 Enable natural language shell control
@@ -2951,6 +2969,7 @@ Hidden by default. Blurred shows them covered until you choose to see one
 Hidden docks come back when the pointer touches their screen edge
 Hide
 Hide and show speed
+Hide app templates
 Hide code
 Hide corners between displays
 Hide delay
@@ -3238,8 +3257,10 @@ Import a Look
 Import a Look…
 Import a WireGuard (.conf) or OpenVPN (.ovpn) file below — it becomes a NetworkManager connection.
 Import a WireGuard (.conf) or OpenVPN (.ovpn) profile
+Import a local app-template document without enabling new entries
 Import a profile
 Import and export
+Imported templates can run app setup commands. Check their instructions before switching them on. Theme changes use installed files without downloading again.
 Imported {added} of {total} feeds
 Imported {name}
 Imported {name} — switch it on above
@@ -3258,6 +3279,7 @@ In the slideshow playlist: click to remove
 In the store
 In this folder
 In use
+In use: terminal {terminal} · file manager {files} · browser {browser}
 In your language, the hadith meanings are AI renderings of the meaning, not published translations.
 In {minutes} min
 In {n} days
@@ -3361,6 +3383,7 @@ Installs to {dir}
 Installs with Flatpak, for everyone
 Installs with Flatpak, for you only
 Instant
+Instructions
 Instrumental
 Integrated
 Integration
@@ -3502,6 +3525,7 @@ Keep a history
 Keep a translation under 5,000 characters
 Keep after restart
 Keep an app in the dock (desktop id or name)
+Keep at least one level on, or switch off the widget.
 Keep awake
 Keep awake for an hour
 Keep away from
@@ -4008,6 +4032,7 @@ Mandara handles idle
 Mandara handles notifications
 Mandara host
 Mandara installs native packages only with your system's own package manager: it never converts them or runs them in a container.
+Mandara is free and always will be. If it makes your desktop a little nicer and you'd like to say thanks, you can chip in toward the AI credits and developer time behind it. Completely optional: using it, sharing it and reporting bugs help just as much.
 Mandara is installed.
 Mandara isn't drawing the wallpaper (Fit & effects)
 Mandara isn't running, so its dialog can't open.
@@ -4023,12 +4048,13 @@ Mandara presets
 Mandara provides these
 Mandara reads {compositor}'s checker from its documented output; tell us on GitHub if a problem shows up wrong.
 Mandara replaces this tool: retire the line in Maintenance to take the key over
+Mandara restores this arrangement when the shell starts.
 Mandara shows what it is and what will happen before anything is installed.
 Mandara starts the enabled entries at your next login.
 Mandara starts these at login
 Mandara updates
 Mandara uses native Plasma protocols; KWin’s configuration stays unchanged
-Mandara writes nothing to other apps until you switch them on. Switching one off takes back exactly what Mandara changed, and any file it replaced comes back from its backup.
+Mandara writes these to its own drop-in for {target_name} (never your config) and reloads it. Chords your own config already uses are skipped and marked “taken”. Click a shortcut, then press the keys; Esc cancels.
 Mandara wrote `{key}`, which {compositor} {version} doesn't support. Regenerating stops Mandara from writing it for this version.
 Mandara {version} has no language packs to download
 Mandara {version} has no published release to download languages from
@@ -5212,6 +5238,7 @@ Package: {package}
 Packages for the next boot
 Packaging badges
 Padding
+Page {page} of {pages}
 Pages
 Paint the mouse pointer into captures
 Painted on the desktop, with your events
@@ -6058,7 +6085,10 @@ Reverted
 Reverted to the previous arrangement
 Review
 Review & apply
+Review an app template; pass its approval token to enable it
+Review and approve the shared browser palette first. Other Pywal apps will read these colors too.
 Review each
+Review files and commands before enabling this template. Commands can change other files too. Updates need a new review.
 Review the plan
 Rich text
 Richard Feynman
@@ -6097,7 +6127,6 @@ Rise from below
 Rising
 River has no such setting
 River has no window animations
-River keeps no display settings of its own: set them in your init with a tool such as wlr-randr or kanshi
 River runs {file} as a program, but it isn't executable, so River starts without it (chmod +x makes it run).
 River {version} runs window management in a separate program and no longer has the river-control and river-status protocols, so Mandara can't show or switch its tags, send its binds or follow its windows. Mandara works with River's classic line (0.3, packaged as river-classic).
 River's config is your init program, which Mandara never edits: Mandara sends River its colours, rules, input settings and keys when the shell starts and on every change. To start Mandara with River, add this line to your init: {line}
@@ -6158,6 +6187,7 @@ Run checks
 Run event hooks
 Run git fetch in one repository (by folder name or path) and return its new state
 Run it from a terminal by that name
+Run template setup commands
 Run test
 Run the marketplace's compliance check on a plugin folder: ok, or broken / malicious / placeholder with the reason
 Run these shell actions
@@ -6236,7 +6266,6 @@ Saved Wi-Fi networks
 Saved Wi-Fi networks with autoconnect and priority
 Saved articles
 Saved articles of one feed or every feed, newest first, with their read and saved flags
-Saved as monitor lines in Mandara's {file} drop-in (your own config isn't touched)
 Saved as {name}
 Saved colors: {n}
 Saved display profiles and which one matches the connected monitors
@@ -6343,6 +6372,7 @@ Search Wallhaven
 Search accounts…
 Search actions and settings
 Search and download wallpapers from wallhaven.cc right in the wallpaper picker
+Search app templates
 Search apps
 Search apps by name or id
 Search apps, files and more
@@ -6648,6 +6678,7 @@ Show the confirmation card for AppImages, Flatpaks and portable apps too (native
 Show the date
 Show the dock
 Show the hidden bar briefly when you change workspace or tag
+Show the last app-theme export and any setup errors
 Show the meaning
 Show the minutes left next to the playing indicator
 Show the next slideshow wallpaper now
@@ -7213,6 +7244,8 @@ Tell the app it is tiled, even when floating
 Temperature
 Temperatures and wind speed in weather and system panels
 Temperatures shown
+Template document
+Template sources
 Ten
 Ten past {hour}
 Ten rounded steps
@@ -7225,6 +7258,7 @@ Terminals
 Terrain scale
 Tertiary
 Test
+Test a display arrangement from JSON, keeping unrelated changes made since the draft
 Test a stream address and add it as your station
 Test and add
 Test and save
@@ -7251,6 +7285,7 @@ Text is sent only when you press Translate.
 Text lines
 Text recognition
 Text recognition failed: {error}
+Text recognition models aren't installed yet ({models}) — download them in Studio → Maintenance
 Text scale
 Text size
 Text size of the note editor
@@ -7401,9 +7436,11 @@ The command is empty
 The community store has blocked installs and updates for {repository}.
 The community the sidebar card shows; empty follows your first community
 The compiled WebAssembly component (manifest `entry`)
+The compositor configuration changed while its theme was being checked. Try again.
 The compositor connection closed
 The compositor did not answer
 The compositor did not respond in time
+The compositor rejected the theme; previous settings were kept.
 The compositor rejected this display configuration
 The connection to the station dropped
 The contract (WIT)
@@ -7782,6 +7819,7 @@ This app is gone
 This article has no web address
 This article is no longer in the feed
 This battery's charge limit can't be changed from here
+This clock face only shows the time.
 This collection is empty
 This command is too long
 This command needs OpenSSL 3 or newer.
@@ -7828,6 +7866,7 @@ This item has no menu
 This item was removed. Your text is still here.
 This key combination is bound more than once; {compositor} uses only one of the binds.
 This keyboard has no backlight
+This layout fixes its text positions. Add a header to align it separately.
 This line includes a file that isn't there, so {compositor} can't load it.
 This machine can't restart into the firmware setup
 This machine has no backlight
@@ -8080,7 +8119,6 @@ Turn on while an app shares your screen, and off again when sharing stops
 Turn on {name}
 Turn on {plugin}
 Turn on “Control external monitors” below.
-Turn on “Manage compositor drop-in” (Compositor page) first: Mandara writes no drop-in while it's off
 Turn presentation mode off and put everything back as it was
 Turn presentation mode on or off
 Turn presentation mode on: do not disturb, keep awake, hide desktop widgets
@@ -8286,6 +8324,7 @@ Update cancelled
 Update installed
 Update it from Studio → Plugins.
 Update now
+Update template
 Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)
 Update to v{version}
 Update to v{version} · {size}
@@ -8659,7 +8698,6 @@ Wi-Fi is off
 Wi-Fi, Bluetooth, do not disturb and more; shapes that change when on
 Widget kinds come from plugins: switch them on or off in Studio → Plugins (Desktop widgets).
 Widgets
-Widgets font
 Widgets on the desktop (a widget's own font wins)
 Widgets on “{tab}”
 Width
@@ -8735,6 +8773,7 @@ Write a look (built-in or yours) to a small portable file
 Write a reply…
 Write in Markdown…
 Write it on your heart that every day is the best day in the year.
+Write or paste a template document. Use content for an inline template, or input_path for a file. Set enabled = true to apply it. Save with Ctrl+Enter.
 Write rules, binds and colors to ~/.config/mandara/generated
 Write the current display arrangement to the compositor drop-in so it survives restarts
 Write the current palette to Ghostty, GTK, Qt, Zed, Fuzzel and btop theme files
@@ -8864,6 +8903,7 @@ Your subscriptions with their folders and unread counts
 Your system's location service (GeoClue) couldn't find you. Many Linux systems ship it without a lookup service. Choose IP lookup, or type your city and press Find.
 Your tailnet: this device, exit node and peers with their paths
 Your tasks; click one to tick it
+Your templates
 Your text (“ / ” starts a new line or column)
 Your theme's colours; a click copies one
 Your time in each app shows up here as you use them
@@ -8933,6 +8973,7 @@ app id, e.g. firefox
 app name
 app name (a regular expression)
 appearance
+approval token returned by the review
 archive, folder, https link or image, then options: --yes, --background RRGGBB, --accent RRGGBB, --spinner ring|dots|none, --scale 0.1–0.8, --position center|upper, --fill, --screen WxH, --menu WxH
 at {time} · after {prayer} {since}
 auto (DHCP) or manual
@@ -9010,6 +9051,7 @@ device name or MAC address (quote names with spaces)
 device node (/dev/sdb1 or sdb1), label or UUID
 direct
 disabled
+display draft as JSON
 down
 download failed: {error}
 download size in MB (default from settings)
@@ -9114,7 +9156,7 @@ kernel {kernel}
 key=value pairs, or a TOML recipe
 khatm
 khatm {n}
-labwc has no standalone configuration checker. It reads its own files in ~/.config/labwc, and Mandara writes nothing there.
+labwc has no standalone configuration checker. Theme colours use a private headless check.
 labwc has no window animations to set
 labwc keeps its settings in ~/.config/labwc (rc.xml, autostart) and reloads them itself. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and changes nothing in those files. To start Mandara with labwc, add the line “mandara &” to ~/.config/labwc/autostart.
 labwc settings stay in ~/.config/labwc (rc.xml, autostart)
@@ -9135,6 +9177,7 @@ list, add, remove, open or close
 load {load}
 loaded model name, or all
 loading…
+local template document
 local time, HH:MM
 logical px from the left
 logical px from the top
@@ -9276,6 +9319,7 @@ quoted in Bahgory (2008)
 r/name, a community address or a post address
 recorder not initialised
 redact replaces locations, keys and accounts
+refresh installed catalog metadata
 relay · {region}
 reloading
 removing
@@ -9306,6 +9350,7 @@ session action
 settings
 short or long (default: the one due, else short)
 slash command /{trigger}: unknown action {action} (use url:, mandara: or exec:)
+source:app template id
 start at boot or login
 start: screen, region or window; screen: a display name; mic: on, off or toggle
 starting
@@ -9657,6 +9702,8 @@ your default
 {minutes} min left
 {minutes}m
 {min} min {sec} s
+{model} ({file}) failed its checksum: got {got}, expected {expected}
+{model} ({file}) is {got} bytes, expected {expected}
 {model} installed
 {model} is ready
 {model} matches several models: {names}
@@ -9761,6 +9808,7 @@ your default
 {percent}% · charging
 {percent}% — you can unplug the charger
 {phase} · {manager}
+{place} is in {zone} ({offset}), but your clock uses {system} ({system_offset})
 {plugin} can't run on this system: {reason}
 {plugin} failed to start
 {plugin} has no panel
@@ -9792,6 +9840,7 @@ your default
 {seconds}s timer
 {setting} must be a number
 {size} MB
+{size} in {secs} s · first byte {ms} ms
 {size} volume
 {size}/s
 {sort} · {count} posts

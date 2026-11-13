@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use mandara_theme::{PaletteAdjustments, ThemeSource};
 use serde::{Deserialize, Serialize};
 
-use crate::surfaces;
 pub use crate::motion::MotionConfig;
+use crate::surfaces;
 
 
 /// °F per °C and °F at 0 °C.
@@ -160,7 +160,9 @@ impl ShellConfig {
         // (Side bars from `[side_bars]` hold their edges too.)
         let taken = match d.position {
             DockPosition::Left => self.bar.position == BarPosition::Left || self.side_bar_on(false),
-            DockPosition::Right => self.bar.position == BarPosition::Right || self.side_bar_on(true),
+            DockPosition::Right => {
+                self.bar.position == BarPosition::Right || self.side_bar_on(true)
+            }
             _ => false,
         };
         if taken {
@@ -264,7 +266,9 @@ impl ShellConfig {
         let bar = LayoutLane::ALL
             .iter()
             .filter(|&&lane| lane != LayoutLane::Sidebar)
-            .filter_map(|&lane| self.layout_lane(lane).iter().position(|p| p == id).map(|index| LayoutSlot::new(lane, index)));
+            .filter_map(|&lane| {
+                self.layout_lane(lane).iter().position(|p| p == id).map(|index| LayoutSlot::new(lane, index))
+            });
         let tabs = self.sidebar.tabs.iter().enumerate().filter_map(|(tab, t)| {
             t.cards.iter().position(|p| p == id).map(|index| LayoutSlot { tab, ..LayoutSlot::new(LayoutLane::Sidebar, index) })
         });
@@ -427,7 +431,9 @@ impl ShellConfig {
     /// still at its default that legacy flag is honoured as Imperial.
     pub fn units(&self) -> Units {
         match self.general.units {
-            Units::Metric if self.plugins.setting("weather", "fahrenheit", false) => Units::Imperial,
+            Units::Metric if self.plugins.setting("weather", "fahrenheit", false) => {
+                Units::Imperial
+            }
             units => units,
         }
     }
@@ -530,7 +536,9 @@ impl SidebarConfig {
                 self.unpinned_mode = self.mode;
                 self.mode = SidebarMode::Pinned;
             }
-            (false, true) => self.mode = if self.unpinned_mode == SidebarMode::Pinned { SidebarMode::Float } else { self.unpinned_mode },
+            (false, true) => {
+                self.mode = if self.unpinned_mode == SidebarMode::Pinned { SidebarMode::Float } else { self.unpinned_mode }
+            }
             _ => {}
         }
     }
@@ -1725,7 +1733,9 @@ impl Default for WallpaperDepth {
 impl WallpaperDepth {
     /// The manual split clamped to its range, or `None` when automatic.
     pub fn manual_split(&self) -> Option<f32> {
-        (!self.auto_split).then(|| self.split.clamp(defaults::DEPTH_SPLIT_RANGE.0, defaults::DEPTH_SPLIT_RANGE.1))
+        (!self.auto_split).then(|| {
+            self.split.clamp(defaults::DEPTH_SPLIT_RANGE.0, defaults::DEPTH_SPLIT_RANGE.1)
+        })
     }
 }
 
@@ -1846,6 +1856,7 @@ pub struct Skill {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct IntegrationsConfig {
+    pub app_themes: crate::app_themes::AppThemesConfig,
     /// The defaults this table was written for (see [`crate::upgrade`]).
     /// Missing in a file written before the field existed (0.1, when most
     /// apps were themed by default); a fresh config carries the current
@@ -1895,6 +1906,7 @@ impl IntegrationsConfig {
     /// Every integration on or off (the current defaults version).
     pub fn all(on: bool) -> Self {
         Self {
+            app_themes: crate::app_themes::AppThemesConfig::default(),
             version: crate::upgrade::INTEGRATIONS_VERSION,
             cava: on, tmux: on, zellij: on, spicetify: on,
             ghostty: on,
@@ -1921,8 +1933,11 @@ impl IntegrationsConfig {
     /// Whether any app outside Mandara is themed (compositor borders live in
     /// Mandara's own drop-in, so they don't count).
     pub fn any_app(&self) -> bool {
-        let &Self { version: _, compositor_borders: _, cava, tmux, zellij, spicetify, ghostty, gtk4, qt6, zed, fuzzel, btop, kvantum, kvantum_apply, kitty, foot, alacritty, wezterm, helix, neovim, firefox, vesktop, kde } = self;
-        [cava, tmux, zellij, spicetify, ghostty, gtk4, qt6, zed, fuzzel, btop, kvantum, kvantum_apply, kitty, foot, alacritty, wezterm, helix, neovim, firefox, vesktop, kde].into_iter().any(|on| on)
+        let Self {
+            app_themes,
+            version: _, compositor_borders: _, cava, tmux, zellij, spicetify, ghostty, gtk4, qt6, zed, fuzzel, btop, kvantum, kvantum_apply, kitty, foot, alacritty, wezterm, helix, neovim, firefox, vesktop, kde } = self;
+        app_themes.any_enabled()
+            || [cava, tmux, zellij, spicetify, ghostty, gtk4, qt6, zed, fuzzel, btop, kvantum, kvantum_apply, kitty, foot, alacritty, wezterm, helix, neovim, firefox, vesktop, kde].into_iter().any(|on| *on)
     }
 }
 

@@ -6,11 +6,38 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **More apps can follow your colours.** Browse app-template catalogs in Studio → Themes → Other apps, install only what you need, or write your own template. Installed templates follow every Mandara palette offline, with light/dark colours, custom colours, setup commands, browser integration and KDE schemes. Setup commands are optional; errors and managed-file restoration are visible in Studio. (#123)
+
+### Fixed
+- Save retries keep pending changes across background reloads, and interrupted app-import cleanup keeps its recovery records until removal is saved.
+- Display edits made during Apply stay in your draft. Browser font changes handle comments and quoted CSS values, and failed configuration syncs stay retryable.
+- Minute-based desktop widgets keep updating when shown on their own. Display drafts preserve edits made by other apps, and identical monitors keep their separate settings.
+- App-template entry controls work from the keyboard, native actions appear in the approval review, and browser font changes preserve surrounding CSS.
+- Updated app imports preserve personal lines, and recovered changes are saved before their recovery records are cleared.
+- Failed compositor rollback keeps the original check error and points to any recovery copy.
+- App-theme read and undo failures keep their recovery records for retry, including restored symlinks.
+- App-template controls and paging arrows follow right-to-left languages.
+- App-style changes can recover after an interruption, and a queued browser request cannot turn styling back on after you switch it off.
+- Saved display profiles keep their identity when renamed, and reconnecting a monitor on a reused port keeps each monitor’s own preferences. Failed saves and display reverts can be retried without losing undo history.
+
+- **Desktop changes stay put.** Late saves from Studio no longer bring back removed widgets or discard unrelated edits. System-monitor titles, text alignment and visualizer appearance controls now reach their rendered layouts; controls that need a header explain why. Calendar and measurement-unit changes refresh cached widget layouts immediately, and an explicitly chosen font also reaches fixed digit and caption layouts. “No date” removes the full caption on mechanical clocks; the word clock explains its time-only layout.
+- **Display settings survive a new Look and a fresh start.** Studio and shell commands share one Keep/Revert countdown, preserve unrelated display edits and remember kept arrangements independently of compositor keybind or layout management.
+- **More widget controls do what they say.** Notes use your chosen text colour on paper sheets, dotted monitor gauges can also be wavy, and a continuous audio wave explains why its gap control is locked.
+
 ### Improved
+- App templates show their file destinations and commands before you enable them, with a keyboard-accessible review list. Updates ask for another review, and sharing a browser palette with other apps requires your explicit approval.
 
 - **A friendlier introduction to Mandara.** The README gets shorter, clearer copy while keeping every screenshot, feature list and gallery layout.
 
 - **An easier Look picker on the website.** Search the collection or step through it beside the desktop preview, with the same colour swatches and live palettes. The website and guides now reflect all 19 bar presets and 86 built-in plugins, including Taskbar.
+
+### Under the hood
+
+- Compositor theming preserves edits and symlink changes made while its native checker runs.
+- Hidden desktop widgets stop scheduling clock ticks, and cached widget paints avoid temporary settings and font copies.
+- Build cleanup keeps libraries used by running tests and doctests, even after Cargo releases its build lock.
 
 ## 0.28.3 — 2026-11-12
 

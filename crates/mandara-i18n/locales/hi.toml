@@ -9722,7 +9722,7 @@
 "To start Mandara with Aqueous, add {command} to Aqueous's own startup settings." = "Mandara को Aqueous के साथ शुरू करने के लिए {command} को Aqueous की अपनी स्टार्टअप सेटिंग्स में जोड़ें।"
 "labwc settings stay in ~/.config/labwc (rc.xml, autostart)" = "labwc की सेटिंग ~/.config/labwc में ही रहती हैं (rc.xml, autostart)"
 "COSMIC settings are managed in COSMIC Settings" = "COSMIC की सेटिंग COSMIC सेटिंग में प्रबंधित होती हैं"
-"labwc has no standalone configuration checker. It reads its own files in ~/.config/labwc, and Mandara writes nothing there." = "labwc के पास अलग से कॉन्फ़िगरेशन जाँचने वाला कोई टूल नहीं है। यह ~/.config/labwc में अपनी फ़ाइलें खुद पढ़ता है, और Mandara वहाँ कुछ नहीं लिखता।"
+"labwc has no standalone configuration checker. Theme colours use a private headless check." = "labwc में अलग कॉन्फ़िगरेशन जाँचकर्ता नहीं है। थीम के रंगों की जाँच एक निजी, बिना डिस्प्ले वाले सत्र में होती है।"
 "COSMIC has no standalone configuration checker. Its settings are managed in COSMIC Settings, and Mandara writes nothing there." = "COSMIC के पास अलग से कॉन्फ़िगरेशन जाँचने वाला कोई टूल नहीं है। इसकी सेटिंग COSMIC सेटिंग में प्रबंधित होती हैं, और Mandara वहाँ कुछ नहीं लिखता।"
 "labwc keeps its settings in ~/.config/labwc (rc.xml, autostart) and reloads them itself. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and changes nothing in those files. To start Mandara with labwc, add the line “mandara &” to ~/.config/labwc/autostart." = "labwc अपनी सेटिंग ~/.config/labwc (rc.xml, autostart) में रखता है और उन्हें खुद दोबारा लोड करता है। Mandara मानक Wayland प्रोटोकॉल के ज़रिए इसके वर्कस्पेस, विंडो और डिस्प्ले पर नज़र रखता है और उन फ़ाइलों में कुछ नहीं बदलता। labwc के साथ Mandara शुरू करने के लिए ~/.config/labwc/autostart में “mandara &” जोड़ें।"
 "COSMIC keeps its settings in COSMIC Settings. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and COSMIC's window protocols, and changes nothing there. To start Mandara with COSMIC, add it in COSMIC Settings → Applications → Startup applications." = "COSMIC अपनी सेटिंग COSMIC सेटिंग में रखता है। Mandara मानक Wayland प्रोटोकॉल और COSMIC के विंडो प्रोटोकॉल के ज़रिए इसके वर्कस्पेस, विंडो और डिस्प्ले पर नज़र रखता है और वहाँ कुछ नहीं बदलता। COSMIC के साथ Mandara शुरू करने के लिए इसे COSMIC सेटिंग → ऐप्लिकेशन → स्टार्टप ऐप्लिकेशन में जोड़ें।"
@@ -10509,3 +10509,73 @@
 "Your compositor's own" = "आपके कंपोज़िटर के अपने"
 "labwc has no window animations to set" = "labwc में सेट करने लायक विंडो एनिमेशन नहीं हैं"
 "Preview unavailable" = "पूर्वावलोकन उपलब्ध नहीं"
+
+# App templates and desktop preferences
+"Add a header to use text settings with this layout." = "इस लेआउट में टेक्स्ट सेटिंग इस्तेमाल करने के लिए शीर्षक जोड़ें।"
+"Alignment applies to the header in this layout." = "इस लेआउट में संरेखण शीर्षक पर लागू होता है।"
+"Apply app themes now" = "ऐप थीम अभी लागू करें"
+"Apply preference edits without replacing unrelated settings" = "असंबंधित सेटिंग बदले बिना प्राथमिकताओं के बदलाव लागू करें"
+"Argument <{name}> must be {kind}, got {value}" = "आर्ग्युमेंट <{name}> का प्रकार {kind} होना चाहिए, मिला {value}"
+"Browse app templates" = "ऐप टेम्पलेट देखें"
+"Browse available app templates; pass refresh to update the catalog" = "उपलब्ध ऐप टेम्पलेट देखें; कैटलॉग अपडेट करने के लिए refresh दें"
+"Catalog sources" = "कैटलॉग स्रोत"
+"Catalog sources use HTTPS. Edit their names and URLs, then save with Ctrl+Enter." = "कैटलॉग स्रोत HTTPS इस्तेमाल करते हैं। नाम और URL बदलें, फिर Ctrl+Enter से सहेजें।"
+"Choose the apps that follow your palette. Managed files are backed up and restored when you switch them off; imported setup commands follow their own undo instructions." = "वे ऐप चुनें जो आपके रंग अपनाएँगे। प्रबंधित फ़ाइलों का बैकअप बनता है और बंद करने पर वे बहाल होती हैं; आयातित सेटअप कमांड अपने बदलाव पूर्ववत करने के निर्देश अपनाते हैं।"
+"Could not install app template: {error}" = "ऐप टेम्पलेट इंस्टॉल नहीं हो सका: {error}"
+"Could not save app templates: {error}" = "ऐप टेम्पलेट सहेजे नहीं जा सके: {error}"
+"Disable an app template and undo its managed changes" = "ऐप टेम्पलेट बंद करें और उसके प्रबंधित बदलाव पूर्ववत करें"
+"Display controls are busy; try again in a moment" = "डिस्प्ले नियंत्रण व्यस्त हैं; थोड़ी देर में फिर कोशिश करें"
+"Get & enable" = "पाएँ और चालू करें"
+"Hide app templates" = "ऐप टेम्पलेट छिपाएँ"
+"Import a local app-template document without enabling new entries" = "नई प्रविष्टियाँ चालू किए बिना स्थानीय टेम्पलेट दस्तावेज़ आयात करें"
+"Imported templates can run app setup commands. Check their instructions before switching them on. Theme changes use installed files without downloading again." = "आयातित टेम्पलेट ऐप सेटअप कमांड चला सकते हैं। चालू करने से पहले उनके निर्देश देखें। थीम बदलने पर इंस्टॉल की गई फ़ाइलें दोबारा डाउनलोड किए बिना इस्तेमाल होती हैं।"
+"In use: terminal {terminal} · file manager {files} · browser {browser}" = "इस्तेमाल में: टर्मिनल {terminal} · फ़ाइल प्रबंधक {files} · ब्राउज़र {browser}"
+"Install and enable an app template by its source:app id" = "source:app आईडी से ऐप टेम्पलेट इंस्टॉल और चालू करें"
+"Instructions" = "निर्देश"
+"Keep at least one level on, or switch off the widget." = "कम से कम एक स्तर चालू रखें या विजेट बंद करें।"
+"Mandara is free and always will be. If it makes your desktop a little nicer and you'd like to say thanks, you can chip in toward the AI credits and developer time behind it. Completely optional: using it, sharing it and reporting bugs help just as much." = "Mandara मुफ़्त है और हमेशा रहेगा। अगर यह आपका डेस्कटॉप बेहतर बनाता है और आप धन्यवाद देना चाहें, तो AI क्रेडिट और विकास में लगने वाले समय के खर्च में योगदान दे सकते हैं। यह पूरी तरह वैकल्पिक है: इस्तेमाल करना, साझा करना और त्रुटियाँ बताना भी उतनी ही मदद करता है।"
+"Mandara writes these to its own drop-in for {target_name} (never your config) and reloads it. Chords your own config already uses are skipped and marked “taken”. Click a shortcut, then press the keys; Esc cancels." = "Mandara इन्हें {target_name} के लिए अपनी अलग फ़ाइल में लिखकर फिर लोड करता है, आपकी कॉन्फ़िग में नहीं। आपकी कॉन्फ़िग में इस्तेमाल होने वाले शॉर्टकट छोड़कर “व्यस्त” चिह्नित किए जाते हैं। शॉर्टकट पर क्लिक करें और कुंजियाँ दबाएँ; Esc से रद्द करें।"
+"Page {page} of {pages}" = "पृष्ठ {page}, कुल {pages}"
+"Run template setup commands" = "टेम्पलेट सेटअप कमांड चलाएँ"
+"Search app templates" = "ऐप टेम्पलेट खोजें"
+"Show the last app-theme export and any setup errors" = "ऐप थीम का पिछला निर्यात और सेटअप त्रुटियाँ दिखाएँ"
+"Template document" = "टेम्पलेट दस्तावेज़"
+"Template sources" = "टेम्पलेट स्रोत"
+"Test a display arrangement from JSON, keeping unrelated changes made since the draft" = "मसौदे के बाद के असंबंधित बदलाव रखते हुए JSON से डिस्प्ले व्यवस्था जाँचें"
+"Text recognition models aren't installed yet ({models}) — download them in Studio → Maintenance" = "टेक्स्ट पहचान मॉडल अभी इंस्टॉल नहीं हैं ({models}) — Studio → रखरखाव से डाउनलोड करें"
+"This layout fixes its text positions. Add a header to align it separately." = "इस लेआउट में टेक्स्ट की जगह तय है। अलग से संरेखित करने के लिए शीर्षक जोड़ें।"
+"Update template" = "टेम्पलेट अपडेट करें"
+"Write or paste a template document. Use content for an inline template, or input_path for a file. Set enabled = true to apply it. Save with Ctrl+Enter." = "टेम्पलेट दस्तावेज़ लिखें या चिपकाएँ। इनलाइन टेम्पलेट के लिए content या फ़ाइल के लिए input_path इस्तेमाल करें। लागू करने के लिए enabled = true रखें। Ctrl+Enter से सहेजें।"
+"Your templates" = "आपके टेम्पलेट"
+"display draft as JSON" = "JSON में डिस्प्ले मसौदा"
+"local template document" = "स्थानीय टेम्पलेट दस्तावेज़"
+"refresh installed catalog metadata" = "इंस्टॉल किए कैटलॉग का मेटाडेटा ताज़ा करें"
+"source:app template id" = "source:app टेम्पलेट आईडी"
+"{model} ({file}) failed its checksum: got {got}, expected {expected}" = "{model} ({file}) का चेकसम गलत है: मिला {got}, अपेक्षित {expected}"
+"{model} ({file}) is {got} bytes, expected {expected}" = "{model} ({file}) का आकार {got} बाइट है, अपेक्षित {expected}"
+
+"Mandara restores this arrangement when the shell starts." = "शेल शुरू होने पर Mandara यह व्यवस्था बहाल करता है।"
+
+"This clock face only shows the time." = "घड़ी का यह डिज़ाइन केवल समय दिखाता है।"
+
+"A continuous wave has no gaps between bars." = "लगातार लहर में पट्टियों के बीच अंतराल नहीं होता।"
+
+"The compositor configuration changed while its theme was being checked. Try again." = "थीम की जाँच के दौरान कंपोज़िटर का कॉन्फ़िगरेशन बदल गया। फिर कोशिश करें।"
+
+"The compositor configuration is not a regular file." = "कंपोज़िटर का कॉन्फ़िगरेशन सामान्य फ़ाइल नहीं है।"
+
+"The compositor rejected the theme; previous settings were kept." = "कंपोज़िटर ने थीम स्वीकार नहीं की; पिछली सेटिंग्स रखी गई हैं।"
+
+"Review an app template; pass its approval token to enable it" = "ऐप टेम्पलेट की समीक्षा करें; चालू करने के लिए उसका स्वीकृति टोकन दें"
+
+"approval token returned by the review" = "समीक्षा से मिला स्वीकृति टोकन"
+
+"Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "इस टेम्पलेट को चालू करने से पहले फ़ाइलों और कमांड की समीक्षा करें। कमांड दूसरी फ़ाइलें भी बदल सकते हैं। अपडेट के लिए नई समीक्षा ज़रूरी है।"
+
+"Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "पहले ब्राउज़र के साझा रंग पैलेट की समीक्षा करके स्वीकृति दें। दूसरे Pywal ऐप भी इन रंगों का उपयोग करेंगे।"
+
+"Apply the color scheme to KDE apps and notify running apps." = "KDE ऐप पर रंग योजना लागू करें और चल रहे ऐप को सूचित करें।"
+
+"Enable browser theming and publish the shared app palette." = "ब्राउज़र थीम चालू करें और ऐप का साझा रंग पैलेट प्रकाशित करें।"
+
+"Browser CSS exceeds the nesting limit" = "ब्राउज़र CSS ने नेस्टिंग सीमा पार कर दी है"

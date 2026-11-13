@@ -399,7 +399,9 @@ impl StudioView {
             let visit = g.visit.clone();
             form::job(cx, || mandara_core::query_outputs().map_err(|e| e.to_string()), move |_, res, cx| {
                 if !current_visit(cx, &visit) { return; }
-                st(cx).display = res.ok().and_then(|o| o.first().map(|g| (g.width.max(1) as u32, g.height.max(1) as u32)));
+                st(cx).display = res.ok().and_then(|o| {
+                        o.first().map(|g| (g.width.max(1) as u32, g.height.max(1) as u32))
+                    });
             });
         }
         let dir = s.output_dir(&mandara_config::paths::wallpaper_dir(&cfg.wallpaper.directory));
@@ -426,7 +428,8 @@ impl StudioView {
         }
         match g.queue.poll(now) {
             Next::Render(key) => {
-                let Some((_, recipe)) = g.wanted.clone().filter(|(k, _)| *k == key) else { return };
+                let Some((_, recipe)) = g.wanted.clone().filter(|(k, _)| *k == key) else { return;
+                };
                 g.busy = true;
                 let visit = g.visit.clone();
                 form::job(cx, move || Ok(mandara_wallgen::preview(&recipe, MAIN_W, MAIN_H)), move |view, res: Result<image::RgbImage, String>, cx| {
@@ -516,7 +519,8 @@ impl StudioView {
 
     fn wallgen_load_recent(&mut self, cx: &mut Context<Self>) {
         if self.section != crate::registry::Section::Wallpaper || !self.query.is_empty() || !super::wallpaper_page::generator_visible(cx) { return; }
-        let Some(dir) = st(cx).recent_dir.clone() else { return };
+        let Some(dir) = st(cx).recent_dir.clone() else { return;
+        };
         st(cx).recent_loading = true;
         let visit = st(cx).visit.clone();
         form::job(cx, move || Ok(model::library(&dir, RECENT_MAX)), move |view, res, cx| {
@@ -535,7 +539,10 @@ impl StudioView {
         if !g.thumbs_loading.is_empty() {
             return;
         }
-        let Some(path) = g.recent.as_ref().and_then(|list| list.iter().find(|e| !g.recent_thumbs.contains_key(&e.path)).map(|e| e.path.clone())) else { return };
+        let Some(path) = g.recent.as_ref().and_then(|list| {
+            list.iter().find(|e| !g.recent_thumbs.contains_key(&e.path)).map(|e| e.path.clone())
+        }) else { return;
+        };
         g.thumbs_loading.insert(path.clone());
         let p2 = path.clone();
         let visit = g.visit.clone();
@@ -566,12 +573,13 @@ impl StudioView {
             cx,
             move || {
                 // The exact recipe on screen, then the job.
-                (query.0)(vec!["wallgen".into(), "recipe".into(), "set".into(), toml])?;
+                (query.0)(vec!["wallgen".into(), "recipe".into(), "set".into(), toml])
+                    .map_err(|error| error.to_string())?;
                 let mut args: Vec<String> = ["wallgen", "generate", "recipe", "--detach"].map(String::from).to_vec();
                 if video {
                     args.push("--video".into());
                 }
-                (query.0)(args)
+                (query.0)(args).map_err(|error| error.to_string())
             },
             |view, res, cx| match res.map(|v| v["id"].as_u64()) {
                 Ok(Some(id)) => {
@@ -600,7 +608,8 @@ impl StudioView {
         let task = cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(POLL).await;
-                let Ok(Some(query)) = this.update(cx, |_, cx| crate::perf::query(&["wallgen", "status"], cx)) else { break };
+                let Ok(Some(query)) = this.update(cx, |_, cx| crate::perf::query(&["wallgen", "status"], cx)) else { break;
+                };
                 let status = query.await;
                 let finished = this.update(cx, |view, cx| {
                     let g = st(cx);
@@ -729,7 +738,9 @@ impl StudioView {
                     edit(dark, cx, |_, r| r.seed = model::fresh_seed());
                 }
             }))
-            .child(icon_button("wallgen-lock", if locked { "lock" } else { "lock-open" }, tk("Lock the layout: shuffles and variations keep this seed"), locked, p).on_click(|_: &ClickEvent, _, cx| wg::update_settings(cx, |s| s.seed_locked = !s.seed_locked)))
+            .child(icon_button("wallgen-lock", if locked { "lock" } else { "lock-open" }, tk("Lock the layout: shuffles and variations keep this seed"), locked, p).on_click(|_: &ClickEvent, _, cx| {
+                    wg::update_settings(cx, |s| s.seed_locked = !s.seed_locked)
+                }))
             .child(div().flex_1())
             .child(pill("wallgen-surprise", "dice", t("Surprise me"), false, p).on_click(move |_: &ClickEvent, _, cx| {
                 edit(dark, cx, |s, r| {
@@ -828,7 +839,9 @@ impl StudioView {
         // Light / dark.
         let tones = [(WallgenTone::Theme, tk("Follow theme")), (WallgenTone::Dark, tk("Dark")), (WallgenTone::Light, tk("Light"))];
         let tone_row = div().row().flex_wrap().gap(px(SPACE_6_PX)).children(tones.map(|(tone, name)| {
-            chip(SharedString::from(format!("wallgen-tone-{}", tone.id())), tr(name), s.tone == tone, p).on_click(move |_: &ClickEvent, _, cx| wg::update_settings(cx, move |s| s.tone = tone))
+            chip(SharedString::from(format!("wallgen-tone-{}", tone.id())), tr(name), s.tone == tone, p).on_click(move |_: &ClickEvent, _, cx| {
+                    wg::update_settings(cx, move |s| s.tone = tone)
+                })
         }));
 
         // Size.
@@ -847,7 +860,9 @@ impl StudioView {
             let (w, h) = model::resolution(size, (s.custom_width, s.custom_height), display).size();
             chip(SharedString::from(format!("wallgen-size-{}", size.id())), tr(name), s.size == size, p)
                 .tooltip(super::compositor_page::tip(format!("{w} × {h}"), p))
-                .on_click(move |_: &ClickEvent, _, cx| wg::update_settings(cx, move |s| s.size = size))
+                .on_click(move |_: &ClickEvent, _, cx| {
+                    wg::update_settings(cx, move |s| s.size = size)
+                })
         }));
 
         // Format, with the expected size.
@@ -888,7 +903,9 @@ impl StudioView {
                 .child(div().text_size(px(TEXT_12_5_PX)).font_weight(FontWeight::SEMIBOLD).text_color(if active { p.primary.hsla() } else { p.on_surface.hsla() }).child(tr(name)))
                 .child(div().truncate().text_size(px(TEXT_11_PX)).text_color(p.on_surface_variant.hsla()).child(tr(detail)))
                 .child(div().text_size(px(TEXT_11_PX)).font_features(mandara_ui::fonts::tabular_nums()).text_color(p.on_surface.hsla()).child(estimate.unwrap_or_else(|| "…".into())))
-                .on_click(move |_: &ClickEvent, _, cx| wg::update_settings(cx, move |s| s.format = format))
+                .on_click(move |_: &ClickEvent, _, cx| {
+                            wg::update_settings(cx, move |s| s.format = format)
+                        })
         }));
 
         // Actions, progress and result.
@@ -908,21 +925,29 @@ impl StudioView {
             .text_color(if running { p.on_surface_variant.hsla() } else { p.on_primary.hsla() })
             .text_size(px(TEXT_14_PX))
             .font_weight(FontWeight::SEMIBOLD)
-            .when(!running, |el| el.shadow(vec![gpui::BoxShadow { color: p.primary.with_alpha(ALPHA_30).hsla(), offset: gpui::point(px(0.0), px(SPACE_4_PX)), blur_radius: px(SPACE_14_PX), spread_radius: px(0.0), inset: false }]))
+            .when(!running, |el| {
+                el.shadow(vec![gpui::BoxShadow { color: p.primary.with_alpha(ALPHA_30).hsla(), offset: gpui::point(px(0.0), px(SPACE_4_PX)), blur_radius: px(SPACE_14_PX), spread_radius: px(0.0), inset: false }])
+            })
             .hover(|st| st.opacity(ALPHA_90))
             .active(|st| st.opacity(ALPHA_75))
             .child(icon("brush", ICON_17_PX, if running { p.on_surface_variant } else { p.on_primary }))
             .child(t("Generate wallpaper"))
-            .when(!running, |el| el.on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+            .when(!running, |el| {
+                el.on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
                 let p = mandara_core::frame_palette(window, cx);
                 this.wallgen_generate(false, &p, cx);
-            })));
+            }))
+            });
         let seconds_choice = logic::SECONDS_CHOICES.map(|sec| {
             let on = (s.video.seconds - sec).abs() < f32::EPSILON;
-            chip(SharedString::from(format!("wallgen-secs-{sec}")), format!("{sec:.0} {}", t("s")), on, p).on_click(move |_: &ClickEvent, _, cx| wg::update_settings(cx, move |s| s.video.seconds = sec))
+            chip(SharedString::from(format!("wallgen-secs-{sec}")), format!("{sec:.0} {}", t("s")), on, p).on_click(move |_: &ClickEvent, _, cx| {
+                wg::update_settings(cx, move |s| s.video.seconds = sec)
+            })
         });
         let fps_choice = logic::FPS_CHOICES.map(|fps| {
-            chip(SharedString::from(format!("wallgen-fps-{fps}")), format!("{fps} {}", t("fps")), s.video.fps == fps, p).on_click(move |_: &ClickEvent, _, cx| wg::update_settings(cx, move |s| s.video.fps = fps))
+            chip(SharedString::from(format!("wallgen-fps-{fps}")), format!("{fps} {}", t("fps")), s.video.fps == fps, p).on_click(move |_: &ClickEvent, _, cx| {
+                wg::update_settings(cx, move |s| s.video.fps = fps)
+            })
         });
         let (vw, vh) = model::video_resolution(s, display).size();
         let video_row = div()
@@ -939,10 +964,12 @@ impl StudioView {
                     .gap(px(SPACE_8_PX))
                     .child(icon("play", ICON_14_PX, p.tertiary))
                     .child(div().flex_1().min_w_0().row().flex_col().child(div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::MEDIUM).child(t("Video loop"))).child(div().truncate().text_size(px(TEXT_11_PX)).text_color(p.on_surface_variant.hsla()).child(tf("Seamless AV1 loop at {size}", &[("size", &mandara_ui::bidi::ltr_isolate(&format!("{vw} × {vh}")))]))))
-                    .when(!running, |el| el.child(pill("wallgen-video", "play", t("Generate loop"), false, p).on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                    .when(!running, |el| {
+                        el.child(pill("wallgen-video", "play", t("Generate loop"), false, p).on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
                         let p = mandara_core::frame_palette(window, cx);
                         this.wallgen_generate(true, &p, cx);
-                    })))),
+                    })))
+                    }),
             )
             .child(
                 div()
@@ -987,7 +1014,9 @@ impl StudioView {
                     .cursor_pointer()
                     .child(div().flex_1().text_size(px(TEXT_12_5_PX)).child(t("Set as wallpaper when it's done")))
                     .child(form::switch(apply, p))
-                    .on_click(|_: &ClickEvent, _, cx| wg::update_settings(cx, |s| s.apply = !s.apply)),
+                    .on_click(|_: &ClickEvent, _, cx| {
+                        wg::update_settings(cx, |s| s.apply = !s.apply)
+                    }),
             );
 
         let right = div()
@@ -1054,7 +1083,9 @@ impl StudioView {
                     .gap(px(SPACE_8_PX))
                     .child(div().flex_1().text_size(px(TEXT_12_5_PX)).font_features(mandara_ui::fonts::tabular_nums()).child(text))
                     .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(format!("{:.0} {}", job.seconds, t("s"))))
-                    .when(!job.cancelling, |el| el.child(pill("wallgen-cancel", "close", t("Cancel"), false, p).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.wallgen_cancel(cx))))),
+                    .when(!job.cancelling, |el| {
+                        el.child(pill("wallgen-cancel", "close", t("Cancel"), false, p).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.wallgen_cancel(cx))))
+                    }),
             )
             .child(
                 div()
@@ -1163,7 +1194,9 @@ impl StudioView {
                                     .items_center()
                                     .gap(px(SPACE_6_PX))
                                     .child(div().flex_1().truncate().font_family(fonts.display.clone()).text_size(px(TEXT_13_5_PX)).font_weight(FontWeight::SEMIBOLD).text_color(if active { p.primary.hsla() } else { p.on_surface.hsla() }).child(tr(style.label())))
-                                    .when(active, |el| el.child(icon("check", ICON_13_PX, p.primary))),
+                                    .when(active, |el| {
+                                        el.child(icon("check", ICON_13_PX, p.primary))
+                                    }),
                             )
                             .child(div().h(px(DIM_32_PX)).text_size(px(TEXT_11_PX)).line_height(px(LEADING_16_PX)).text_color(p.on_surface_variant.hsla()).line_clamp(2).child(mandara_ui::bidi::paragraph(tr(style.description())))),
                     )
@@ -1171,7 +1204,9 @@ impl StudioView {
                         // A new style keeps the palette, seed and the common
                         // parameters; its own start from their defaults.
                         edit(dark, cx, move |_, r| {
-                            let common: std::collections::BTreeMap<String, f32> = r.params.iter().filter(|(k, _)| mandara_wallgen::COMMON_PARAMS.iter().any(|s| s.key == k.as_str())).map(|(k, v)| (k.clone(), *v)).collect();
+                            let common: std::collections::BTreeMap<String, f32> = r.params.iter().filter(|(k, _)| {
+                                    mandara_wallgen::COMMON_PARAMS.iter().any(|s| s.key == k.as_str())
+                                }).map(|(k, v)| (k.clone(), *v)).collect();
                             r.style = style;
                             r.params = common;
                         });
@@ -1226,7 +1261,11 @@ impl StudioView {
             let active = r.palette == PaletteSpec::Named(np.id.into());
             let colors: Vec<Color> = np.colors.iter().filter_map(|h| Color::from_hex(h).ok()).collect();
             let id = np.id;
-            tiles.push(tile(SharedString::from(format!("wallgen-palette-{id}")), tr(np.label), colors, active).on_click(move |_: &ClickEvent, _, cx| edit(dark, cx, move |_, r| r.palette = PaletteSpec::Named(id.into()))).into_any_element());
+            tiles.push(tile(SharedString::from(format!("wallgen-palette-{id}")), tr(np.label), colors, active).on_click(move |_: &ClickEvent, _, cx| {
+                    edit(dark, cx, move |_, r| {
+                        r.palette = PaletteSpec::Named(id.into())
+                    })
+                }).into_any_element());
         }
         let custom_active = matches!(r.palette, PaletteSpec::Custom(_));
         let custom_colors = if custom_active { hex_colors(&r.palette) } else { hex_colors(&r.palette).into_iter().rev().collect() };
@@ -1402,7 +1441,9 @@ impl StudioView {
                                         .child(t("Reset"))
                                         .on_click(move |_: &ClickEvent, _, cx| {
                                             let specs = reset_specs.clone();
-                                            edit(dark, cx, move |_, r| *r = logic::reset(r, &specs));
+                                            edit(dark, cx, move |_, r| {
+                                                *r = logic::reset(r, &specs)
+                                            });
                                         }),
                                 )
                             }),
@@ -1458,7 +1499,9 @@ impl StudioView {
                                 Some(t) => img(t).size_full().object_fit(gpui::ObjectFit::Cover).into_any_element(),
                                 None => div().size_full().row().items_center().justify_center().child(icon("image", ICON_22_PX, p.on_surface_variant.with_alpha(ALPHA_50))).into_any_element(),
                             })
-                            .when(e.video, |el| el.child(glass_tag("play", t("Video"), p).absolute().top(px(SPACE_8_PX)).inset_start(px(SPACE_8_PX))))
+                            .when(e.video, |el| {
+                                el.child(glass_tag("play", t("Video"), p).absolute().top(px(SPACE_8_PX)).inset_start(px(SPACE_8_PX)))
+                            })
                             // The actions float on the picture in a glass pill.
                             .child(
                                 div()
@@ -1473,7 +1516,9 @@ impl StudioView {
                                     .bg(p.surface_base.with_alpha(ALPHA_80).hsla())
                                     .child(icon_button(SharedString::from(format!("wallgen-recent-remix-{slug}")), "sliders", tk("Remix: load its recipe"), false, p).on_click(move |_: &ClickEvent, _, cx| {
                                 let recipe = remix.clone();
-                                wg::update_settings(cx, move |s| model::store_recipe(s, &recipe));
+                                wg::update_settings(cx, move |s| {
+                                                    model::store_recipe(s, &recipe)
+                                                });
                             }))
                             .child(icon_button(SharedString::from(format!("wallgen-recent-set-{slug}")), "image", tk("Set as wallpaper"), false, p).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
                                 form::shell(vec!["wallpaper".into(), "set".into(), set.display().to_string()], cx, |_, _, _| {});
@@ -1592,21 +1637,33 @@ impl StudioView {
                     .child(div().text_size(px(TEXT_12_PX)).text_color(if on { p.primary.hsla() } else { p.on_surface_variant.hsla() }).font_features(mandara_ui::fonts::tabular_nums()).child(status)),
             )
             .child(form::switch(on, p))
-            .on_click(|_: &ClickEvent, _, cx| wg::update_settings(cx, |s| s.schedule.enabled = !s.schedule.enabled));
+            .on_click(|_: &ClickEvent, _, cx| {
+                wg::update_settings(cx, |s| s.schedule.enabled = !s.schedule.enabled)
+            });
 
         let every = logic::EVERY_CHOICES.map(|m| {
-            chip(SharedString::from(format!("wallgen-every-{m}")), schedule::every_label(m), s.schedule.every_minutes == m, p).on_click(move |_: &ClickEvent, _, cx| wg::update_settings(cx, move |s| s.schedule.every_minutes = m))
+            chip(SharedString::from(format!("wallgen-every-{m}")), schedule::every_label(m), s.schedule.every_minutes == m, p).on_click(move |_: &ClickEvent, _, cx| {
+                wg::update_settings(cx, move |s| s.schedule.every_minutes = m)
+            })
         });
         let modes = [(ScheduleMode::Random, tk("A random style")), (ScheduleMode::Variation, tk("A variation of my recipe")), (ScheduleMode::Reseed, tk("My recipe, new layout"))];
-        let mode_row = modes.map(|(mode, name)| chip(SharedString::from(format!("wallgen-mode-{}", mode.id())), tr(name), s.schedule.mode == mode, p).on_click(move |_: &ClickEvent, _, cx| wg::update_settings(cx, move |s| s.schedule.mode = mode)));
+        let mode_row = modes.map(|(mode, name)| {
+            chip(SharedString::from(format!("wallgen-mode-{}", mode.id())), tr(name), s.schedule.mode == mode, p).on_click(move |_: &ClickEvent, _, cx| {
+                wg::update_settings(cx, move |s| s.schedule.mode = mode)
+            })
+        });
         let kinds = [(WallgenKind::Still, tk("Still image")), (WallgenKind::Video, tk("Video loop"))];
         let kind_row = kinds.map(|(kind, name)| {
             let id = if kind == WallgenKind::Video { "video" } else { "still" };
-            chip(SharedString::from(format!("wallgen-kind-{id}")), tr(name), s.schedule.kind == kind, p).on_click(move |_: &ClickEvent, _, cx| wg::update_settings(cx, move |s| s.schedule.kind = kind))
+            chip(SharedString::from(format!("wallgen-kind-{id}")), tr(name), s.schedule.kind == kind, p).on_click(move |_: &ClickEvent, _, cx| {
+                wg::update_settings(cx, move |s| s.schedule.kind = kind)
+            })
         });
         let keep = logic::KEEP_CHOICES.map(|n| {
             let text = if n == 0 { t("All").to_string() } else { n.to_string() };
-            chip(SharedString::from(format!("wallgen-keep-{n}")), text, s.schedule.keep == n, p).on_click(move |_: &ClickEvent, _, cx| wg::update_settings(cx, move |s| s.schedule.keep = n))
+            chip(SharedString::from(format!("wallgen-keep-{n}")), text, s.schedule.keep == n, p).on_click(move |_: &ClickEvent, _, cx| {
+                wg::update_settings(cx, move |s| s.schedule.keep = n)
+            })
         });
         let line = |title: &'static str, controls: AnyElement| {
             div()
@@ -1632,7 +1689,9 @@ impl StudioView {
             .child(line(tk("Keep the newest"), div().row().flex_wrap().gap(px(SPACE_6_PX)).children(keep).into_any_element()))
             .child(line(
                 tk("Set as wallpaper"),
-                div().id("wallgen-schedule-apply").row().items_center().gap(px(SPACE_10_PX)).cursor_pointer().child(form::switch(apply, p)).child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("Each new one replaces the current wallpaper"))).on_click(|_: &ClickEvent, _, cx| wg::update_settings(cx, |s| s.schedule.apply = !s.schedule.apply)).into_any_element(),
+                div().id("wallgen-schedule-apply").row().items_center().gap(px(SPACE_10_PX)).cursor_pointer().child(form::switch(apply, p)).child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("Each new one replaces the current wallpaper"))).on_click(|_: &ClickEvent, _, cx| {
+                        wg::update_settings(cx, |s| s.schedule.apply = !s.schedule.apply)
+                    }).into_any_element(),
             ));
         div()
             .row()

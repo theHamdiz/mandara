@@ -49,6 +49,8 @@ pub struct Geometry {
     /// Plane size and the shape's centre in it.
     pub size: (f32, f32),
     pub center: (f32, f32),
+    /// Shared placement transform, including the framed content's offset.
+    mapping: [f32; 6],
 }
 
 impl Geometry {
@@ -76,6 +78,7 @@ impl Geometry {
             angle,
             size,
             center: (size.0 / 2.0, size.1 / 2.0),
+            mapping: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         }
     }
 
@@ -84,7 +87,39 @@ impl Geometry {
     fn place(&self, (x, y): (f32, f32)) -> (f32, f32) {
         let a = self.angle.to_radians();
         let (s, c) = a.sin_cos();
-        (self.center.0 + x * c - y * s, self.center.1 + x * s + y * c)
+        let (x, y) = (self.center.0 + x * c - y * s, self.center.1 + x * s + y * c);
+        let [a, b, c, d, tx, ty] = self.mapping;
+        (a * x + c * y + tx, b * x + d * y + ty)
+    }
+
+    pub fn placed(mut self, laid: &super::Laid, rect: mandara_core::shm_canvas::Rect) -> Self {
+        let bounds = laid.comp.bounds(true).unwrap_or_default();
+        let center = (
+            laid.origin.0 + laid.comp.size.0 / 2.0,
+            laid.origin.1 + laid.comp.size.1 / 2.0,
+        );
+        let place = |x: f32, y: f32| {
+            let mut point = (laid.origin.0 + bounds.0 + x, laid.origin.1 + bounds.1 + y);
+            if laid.flip.0 {
+                point.0 = 2.0 * center.0 - point.0;
+            }
+            if laid.flip.1 {
+                point.1 = 2.0 * center.1 - point.1;
+            }
+            let point = mandara_core::shape::rotate(point, center, laid.rotation);
+            (point.0 - rect.x as f32, point.1 - rect.y as f32)
+        };
+        let (origin, x, y) = (place(0.0, 0.0), place(1.0, 0.0), place(0.0, 1.0));
+        self.mapping = [
+            x.0 - origin.0,
+            x.1 - origin.1,
+            y.0 - origin.0,
+            y.1 - origin.1,
+            origin.0,
+            origin.1,
+        ];
+        self.size = (rect.w as f32, rect.h as f32);
+        self
     }
 
     /// The quads of `levels` (one per bar, `0..=1`) as corner lists, in
@@ -126,11 +161,11 @@ impl Geometry {
                 let r = self.length / 2.0;
                 let slot = TAU / n as f32;
                 let half = slot * (1.0 - self.gap) / 2.0;
-                let rot = self.angle.to_radians() - FRAC_PI_2;
+                let rot = - FRAC_PI_2;
                 for (i, lv) in levels.iter().enumerate() {
                     let a = rot + i as f32 * slot;
                     let outer = r + self.height * lv.clamp(MIN_LEVEL, 1.0);
-                    let p = |rad: f32, ang: f32| (self.center.0 + rad * ang.cos(), self.center.1 + rad * ang.sin());
+                    let p = |rad: f32, ang: f32| self.place((rad * ang.cos(), rad * ang.sin()));
                     out([p(r, a - half), p(outer, a - half), p(outer, a + half), p(r, a + half)]);
                 }
             }
@@ -192,9 +227,58 @@ pub struct Painter {
     builder: Option<PathBuilder>,
     levels: Vec<f32>,
     paint: Option<(u64, Paint<'static>)>,
+    frame: Option<tiny_skia::Pixmap>,
+    effects: super::draw::RasterEffects,
 }
 
 impl Painter {
+    pub(super) fn cached_bytes(&self) -> usize {
+        self.frame.as_ref().map_or(0, |image| image.data().len()) + self.effects.cached_bytes()
+    }
+    pub fn prepare(
+        &mut self,
+        laid: &super::Laid,
+        rect: mandara_core::shm_canvas::Rect,
+        text: &mut super::TextPainter,
+        style: &super::Style,
+    ) {
+        self.frame = None;
+        if laid.transformed()
+            && laid.comp.marks.iter().any(|mark| mark.opacity > 0.0)
+            && let Some(mut frame) = tiny_skia::Pixmap::new(rect.w.max(1), rect.h.max(1))
+        {
+            laid.paint(&mut frame.as_mut(), text, true, rect, style);
+            self.frame = Some(frame);
+        }
+    }
+
+    pub fn styled_frame(
+        &mut self,
+        pm: &mut PixmapMut<'_>,
+        g: &Geometry,
+        bands: &[f32],
+        style: &super::Style,
+    ) {
+        if let Some(frame) = &self.frame {
+            pm.draw_pixmap(
+                0,
+                0,
+                frame.as_ref(),
+                &tiny_skia::PixmapPaint::default(),
+                Transform::identity(),
+                None,
+            );
+        }
+        if bands.is_empty() {
+            return;
+        }
+        let mut effects = std::mem::take(&mut self.effects);
+        effects.paint(pm, style, |target| {
+            self.frame(target, g, bands, style.inks.accent, style.opacity)
+        });
+        self.effects = effects;
+    }
+
     /// Paints one frame of `bands` into `pm` (already cleared).
     pub fn frame(&mut self, pm: &mut PixmapMut<'_>, g: &Geometry, bands: &[f32], accent: Color, opacity: f32) {
         self.levels.resize(g.bars, 0.0);
@@ -208,7 +292,10 @@ impl Painter {
         } else {
             resample(bands, &mut self.levels);
         }
-        let key = super::key((g.size.0 as u32, g.size.1 as u32, g.angle.to_bits(), g.shape, accent.to_rgba8(), opacity.to_bits()));
+        let key = super::key((g.size.0.to_bits(), g.size.1.to_bits(),
+            g.length.to_bits(),
+            g.height.to_bits(), g.angle.to_bits(),
+            g.mapping.map(f32::to_bits), g.shape, accent.to_rgba8(), opacity.to_bits()));
         if self.paint.as_ref().is_none_or(|(k, _)| *k != key) {
             self.paint = Some((key, gradient(g, accent, opacity)));
         }
@@ -281,7 +368,10 @@ fn gradient(g: &Geometry, accent: Color, opacity: f32) -> Paint<'static> {
         .collect();
     let (a, b) = match g.shape {
         // Radial: inner to outer edge reads best as a vertical sweep.
-        VisualizerShape::Radial => ((g.center.0, 0.0), (g.center.0, g.size.1)),
+        VisualizerShape::Radial => {
+            let radius = g.length / 2.0 + g.height;
+            (g.place((0.0, -radius)), g.place((0.0, radius)))
+        }
         _ => (g.place((-g.length / 2.0, 0.0)), g.place((g.length / 2.0, 0.0))),
     };
     let shader = LinearGradient::new(Point::from_xy(a.0, a.1), Point::from_xy(b.0, b.1), stops, SpreadMode::Pad, Transform::identity());
@@ -303,7 +393,9 @@ mod tests {
 
     fn all_inside(g: &Geometry, levels: &[f32]) -> bool {
         let mut ok = true;
-        let mut check = |p: (f32, f32)| ok &= p.0 >= -0.01 && p.1 >= -0.01 && p.0 <= g.size.0 + 0.01 && p.1 <= g.size.1 + 0.01;
+        let mut check = |p: (f32, f32)| {
+            ok &= p.0 >= -0.01 && p.1 >= -0.01 && p.0 <= g.size.0 + 0.01 && p.1 <= g.size.1 + 0.01
+        };
         g.quads(levels, |q| q.iter().for_each(|p| check(*p)));
         g.wave_points(levels, &mut check);
         ok
@@ -322,6 +414,21 @@ mod tests {
         assert!(flat.size.0 < 400.0 + 10.0 && flat.size.1 < 100.0 + 10.0, "tight: {:?}", flat.size);
         let diag = geom(VisualizerShape::Bars, 45.0);
         assert!(diag.size.0 > 300.0 && diag.size.1 > 300.0, "a diagonal line needs a square-ish plane");
+    }
+
+    #[test]
+    fn gaps_change_separate_bars_while_the_wave_stays_continuous() {
+        let points = |shape,gap| {
+            let geometry = Geometry::new(&PlaneVisualizer { shape,gap,bars:10,..Default::default() },1.0);
+            let mut points = Vec::new();
+            if shape == VisualizerShape::Wave { geometry.wave_points(&[0.5;10],|point|points.push(point)); }
+            else { geometry.quads(&[0.5;10],|quad|points.extend(quad)); }
+            points
+        };
+        assert_eq!(points(VisualizerShape::Wave,0.1),points(VisualizerShape::Wave,0.8));
+        for shape in [VisualizerShape::Bars,VisualizerShape::Mirrored,VisualizerShape::Radial,VisualizerShape::Led] {
+            assert_ne!(points(shape,0.1),points(shape,0.8),"{shape:?}");
+        }
     }
 
     #[test]
@@ -362,6 +469,82 @@ mod tests {
         assert_eq!(out, [0.0, 0.25, 0.5, 0.75, 1.0]);
         resample(&[], &mut out);
         assert!(out.iter().all(|v| *v == 0.0));
+    }
+
+    #[test]
+    fn shared_frames_and_placement_transforms_keep_every_shape_in_its_plane() {
+        use super::super::layout::{Composition, InkRole, Mark, MarkKind, tests::Fixed};
+        use mandara_config::desktop_widgets::{Chrome, Look, Plate, PlateShape};
+        use mandara_core::shm_canvas::Rect;
+        for shape in [
+            VisualizerShape::Bars,
+            VisualizerShape::Mirrored,
+            VisualizerShape::Wave,
+            VisualizerShape::Radial,
+            VisualizerShape::Led,
+        ] {
+            let geometry = geom(shape, 25.0);
+            for chrome in [Chrome::None, Chrome::Window, Chrome::Tape, Chrome::Polaroid] {
+                let content = Composition::of(vec![
+                    Mark::new(
+                        MarkKind::Rect {
+                            x: 0.0,
+                            y: 0.0,
+                            w: geometry.size.0,
+                            h: geometry.size.1,
+                            radius: 0.0,
+                            width: 0.0,
+                        },
+                        InkRole::Accent,
+                    )
+                    .dim(0.0)
+                    .live(),
+                ]);
+                let look = Look {
+                    header: "Spectrum".into(),
+                    plate: Plate::Glass,
+                    plate_shape: PlateShape::Circle,
+                    chrome,
+                    ..Default::default()
+                };
+                let comp = super::super::frame::frame(content, &look, 1.0, 0.5, &mut Fixed);
+                assert!(comp.marks.iter().any(|mark| mark.opacity > 0.0));
+                for rotation in [0.0, -30.0, 90.0] {
+                    for flip in [(false, false), (true, false), (false, true), (true, true)] {
+                        let laid = super::super::Laid {
+                            comp: comp.clone(),
+                            origin: (800.0, 800.0),
+                            k: 1.0,
+                            rotation,
+                            flip,
+                            outer: (0.0, 0.0, 0.0, 0.0),
+                            margin: 4.0,
+                        };
+                        let rect = laid.rect(
+                            true,
+                            120,
+                            Rect {
+                                x: 0,
+                                y: 0,
+                                w: 3000,
+                                h: 3000,
+                            },
+                        );
+                        let placed = geometry.placed(&laid, rect);
+                        assert!(
+                            all_inside(&placed, &[1.0; 10]),
+                            "{shape:?} {chrome:?} {rotation} {flip:?}"
+                        );
+                        let original = geometry.place((0.0, -geometry.height / 2.0));
+                        let changed = placed.place((0.0, -geometry.height / 2.0));
+                        assert_ne!(
+                            original, changed,
+                            "the shared content offset participates in placement"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     #[test]

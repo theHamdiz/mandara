@@ -9474,7 +9474,7 @@
 "To start Mandara with Aqueous, add {command} to Aqueous's own startup settings." = "Aqueous와 함께 Mandara를 시작하려면 Aqueous의 자체 시작 설정에 {command}을(를) 추가하세요."
 "labwc settings stay in ~/.config/labwc (rc.xml, autostart)" = "labwc 설정은 ~/.config/labwc(rc.xml, autostart)에 그대로 둡니다"
 "COSMIC settings are managed in COSMIC Settings" = "COSMIC 설정은 COSMIC 설정 앱에서 관리합니다"
-"labwc has no standalone configuration checker. It reads its own files in ~/.config/labwc, and Mandara writes nothing there." = "labwc에는 별도의 설정 검사 도구가 없습니다. ~/.config/labwc에 있는 자체 파일을 읽으며, Mandara는 그곳에 아무것도 쓰지 않습니다."
+"labwc has no standalone configuration checker. Theme colours use a private headless check." = "labwc에는 독립적인 설정 검사기가 없습니다. 테마 색상은 별도의 비공개 헤드리스 세션에서 검사합니다."
 "COSMIC has no standalone configuration checker. Its settings are managed in COSMIC Settings, and Mandara writes nothing there." = "COSMIC에는 별도의 설정 검사 도구가 없습니다. 설정은 COSMIC 설정 앱에서 관리되며, Mandara는 그곳에 아무것도 쓰지 않습니다."
 "labwc keeps its settings in ~/.config/labwc (rc.xml, autostart) and reloads them itself. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and changes nothing in those files. To start Mandara with labwc, add the line “mandara &” to ~/.config/labwc/autostart." = "labwc는 설정을 ~/.config/labwc(rc.xml, autostart)에 저장하고 직접 다시 불러옵니다. Mandara는 표준 Wayland 프로토콜로 작업 공간, 창, 디스플레이를 따라가며 그 파일들은 전혀 바꾸지 않습니다. labwc와 함께 Mandara를 시작하려면 ~/.config/labwc/autostart에 “mandara &”를 추가하세요."
 "COSMIC keeps its settings in COSMIC Settings. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and COSMIC's window protocols, and changes nothing there. To start Mandara with COSMIC, add it in COSMIC Settings → Applications → Startup applications." = "COSMIC은 설정을 COSMIC 설정 앱에 저장합니다. Mandara는 표준 Wayland 프로토콜과 COSMIC의 창 프로토콜로 작업 공간, 창, 디스플레이를 따라가며 그곳은 전혀 바꾸지 않습니다. COSMIC과 함께 Mandara를 시작하려면 COSMIC 설정 → 앱 → 시작 앱에서 추가하세요."
@@ -10261,3 +10261,75 @@
 "Your compositor's own" = "컴포지터 자체 애니메이션"
 "labwc has no window animations to set" = "labwc에는 설정할 수 있는 창 애니메이션이 없습니다"
 "Preview unavailable" = "미리보기를 사용할 수 없음"
+
+# App templates and desktop preferences
+"Add a header to use text settings with this layout." = "이 레이아웃에서 텍스트 설정을 사용하려면 제목을 추가하세요."
+"Alignment applies to the header in this layout." = "이 레이아웃의 정렬은 제목에 적용됩니다."
+"Apply app themes now" = "지금 앱 테마 적용"
+"Apply preference edits without replacing unrelated settings" = "관련 없는 설정을 바꾸지 않고 환경설정 변경 적용"
+"Argument <{name}> must be {kind}, got {value}" = "인수 <{name}>은(는) {kind}이어야 합니다. 받은 값: {value}"
+"Browse app templates" = "앱 템플릿 찾아보기"
+"Browse available app templates; pass refresh to update the catalog" = "사용 가능한 앱 템플릿을 표시합니다. refresh를 전달하면 카탈로그가 갱신됩니다"
+"Catalog sources" = "카탈로그 소스"
+"Catalog sources use HTTPS. Edit their names and URLs, then save with Ctrl+Enter." = "카탈로그 소스는 HTTPS를 사용합니다. 이름과 URL을 편집한 뒤 Ctrl+Enter로 저장하세요."
+"Choose the apps that follow your palette. Managed files are backed up and restored when you switch them off; imported setup commands follow their own undo instructions." = "팔레트를 따를 앱을 선택하세요. 관리되는 파일은 백업되며 끄면 복원됩니다. 가져온 설정 명령은 자체 실행 취소 지침을 따릅니다."
+"Could not install app template: {error}" = "앱 템플릿을 설치할 수 없습니다: {error}"
+"Could not save app templates: {error}" = "앱 템플릿을 저장할 수 없습니다: {error}"
+"Disable an app template and undo its managed changes" = "앱 템플릿을 끄고 관리되는 변경 사항 실행 취소"
+"Display controls are busy; try again in a moment" = "디스플레이 제어가 사용 중입니다. 잠시 후 다시 시도하세요"
+"Get & enable" = "받아서 활성화"
+"Hide app templates" = "앱 템플릿 숨기기"
+"Import a local app-template document without enabling new entries" = "새 항목을 활성화하지 않고 로컬 템플릿 문서 가져오기"
+"Imported templates can run app setup commands. Check their instructions before switching them on. Theme changes use installed files without downloading again." = "가져온 템플릿은 앱 설정 명령을 실행할 수 있습니다. 켜기 전에 지침을 확인하세요. 테마 변경에는 설치된 파일을 사용하며 다시 다운로드하지 않습니다."
+"In use: terminal {terminal} · file manager {files} · browser {browser}" = "사용 중: 터미널 {terminal} · 파일 관리자 {files} · 브라우저 {browser}"
+"Install and enable an app template by its source:app id" = "source:app ID로 앱 템플릿 설치 및 활성화"
+"Instructions" = "안내"
+"Keep at least one level on, or switch off the widget." = "최소 하나의 수준을 켜거나 위젯을 끄세요."
+"Mandara is free and always will be. If it makes your desktop a little nicer and you'd like to say thanks, you can chip in toward the AI credits and developer time behind it. Completely optional: using it, sharing it and reporting bugs help just as much." = "Mandara는 무료이며 앞으로도 그렇습니다. 데스크톱이 더 좋아졌고 감사를 전하고 싶다면 AI 크레딧과 개발 시간 비용을 후원할 수 있습니다. 전적으로 선택 사항이며, 사용하고 공유하고 버그를 알려주는 것도 똑같이 도움이 됩니다."
+"Mandara writes these to its own drop-in for {target_name} (never your config) and reloads it. Chords your own config already uses are skipped and marked “taken”. Click a shortcut, then press the keys; Esc cancels." = "Mandara는 사용자 설정 대신 {target_name}용 자체 추가 파일에 기록하고 다시 불러옵니다. 이미 쓰는 단축키는 건너뛰고 “사용 중”으로 표시합니다. 단축키를 클릭한 뒤 키를 누르세요. Esc로 취소합니다."
+"Page {page} of {pages}" = "{page} / {pages} 페이지"
+"Run template setup commands" = "템플릿 설정 명령 실행"
+"Search app templates" = "앱 템플릿 검색"
+"Show the last app-theme export and any setup errors" = "마지막 앱 테마 내보내기와 설정 오류 표시"
+"Template document" = "템플릿 문서"
+"Template sources" = "템플릿 소스"
+"Test a display arrangement from JSON, keeping unrelated changes made since the draft" = "초안 이후의 관련 없는 변경을 유지하며 JSON 디스플레이 배치 테스트"
+"Text recognition models aren't installed yet ({models}) — download them in Studio → Maintenance" = "텍스트 인식 모델이 아직 설치되지 않았습니다({models}). Studio → 유지보수에서 다운로드하세요"
+"This layout fixes its text positions. Add a header to align it separately." = "이 레이아웃은 텍스트 위치가 고정됩니다. 별도로 정렬하려면 제목을 추가하세요."
+"Update template" = "템플릿 업데이트"
+"Write or paste a template document. Use content for an inline template, or input_path for a file. Set enabled = true to apply it. Save with Ctrl+Enter." = "템플릿 문서를 작성하거나 붙여 넣으세요. 인라인 템플릿에는 content, 파일에는 input_path를 사용하세요. 적용하려면 enabled = true로 설정하세요. Ctrl+Enter로 저장합니다."
+"Your templates" = "내 템플릿"
+"display draft as JSON" = "JSON 디스플레이 초안"
+"local template document" = "로컬 템플릿 문서"
+"refresh installed catalog metadata" = "설치된 카탈로그 메타데이터 새로 고침"
+"source:app template id" = "source:app 템플릿 ID"
+"{model} ({file}) failed its checksum: got {got}, expected {expected}" = "{model}({file}) 체크섬 불일치: 받은 값 {got}, 예상 값 {expected}"
+"{model} ({file}) is {got} bytes, expected {expected}" = "{model}({file})은(는) {got}바이트입니다. 예상 값은 {expected}입니다"
+"{place} is in {zone} ({offset}), but your clock uses {system} ({system_offset})" = "{place}은(는) {zone}({offset})에 있지만 시계는 {system}({system_offset})을(를) 사용합니다"
+"{size} in {secs} s · first byte {ms} ms" = "{secs}초에 {size} · 첫 바이트 {ms}ms"
+
+"Mandara restores this arrangement when the shell starts." = "셸이 시작되면 Mandara가 이 배치를 복원합니다."
+
+"This clock face only shows the time." = "이 시계 디자인은 시간만 표시합니다."
+
+"A continuous wave has no gaps between bars." = "연속 파형에는 막대 사이의 간격이 없습니다."
+
+"The compositor configuration changed while its theme was being checked. Try again." = "테마를 확인하는 동안 컴포지터 설정이 변경되었습니다. 다시 시도하세요."
+
+"The compositor configuration is not a regular file." = "컴포지터 설정이 일반 파일이 아닙니다."
+
+"The compositor rejected the theme; previous settings were kept." = "컴포지터가 테마를 거부하여 이전 설정을 유지했습니다."
+
+"Review an app template; pass its approval token to enable it" = "앱 템플릿을 검토한 뒤 승인 토큰을 전달하여 활성화하세요"
+
+"approval token returned by the review" = "검토 후 반환된 승인 토큰"
+
+"Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "이 템플릿을 활성화하기 전에 파일과 명령을 검토하세요. 명령은 다른 파일도 변경할 수 있습니다. 업데이트할 때는 다시 검토해야 합니다."
+
+"Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "먼저 브라우저의 공유 팔레트를 검토하고 승인하세요. 다른 Pywal 앱도 이 색상을 사용합니다."
+
+"Apply the color scheme to KDE apps and notify running apps." = "KDE 앱에 색 구성표를 적용하고 실행 중인 앱에 알립니다."
+
+"Enable browser theming and publish the shared app palette." = "브라우저 테마를 활성화하고 앱 공용 팔레트를 게시합니다."
+
+"Browser CSS exceeds the nesting limit" = "브라우저 CSS가 중첩 제한을 초과합니다"

@@ -824,3 +824,14 @@ offsets, scale, opacity and a separate public-weather location choice.
 Copies stay independent of the desktop; login changes still need **Apply
 to login screen**. KWin shows a reason because Plasma owns its secure
 locker. [Details](lock-and-login.md#widgets-on-login-and-lock-screens).
+
+App styling lives in **Themes → Other apps**. Browse searchable catalogs,
+install or update individual templates, edit sources and write your own TOML
+in **Your templates**. Setup commands are a separate opt-in. Results and errors
+appear on the page; [App themes](app-themes.md) explains setup and restoration.
+
+**Displays** shares its Keep/Revert countdown with shell commands. Applying a
+draft keeps unrelated changes made while the page was open. Kept arrangements
+survive theme and Look changes, restarts and updates. Widget settings explain
+when a layout fixes text positions or needs a header, rather than presenting
+controls that appear to do nothing.

@@ -162,6 +162,7 @@ pub fn note(w: &NoteWidget, notes: &[NoteItem], l: &Lingo, k: f32, m: &mut dyn M
         NoteSheet::Paper => (Some(InkRole::Paper), InkRole::OnPaper),
         NoteSheet::Custom => (Some(super::draw::parse_color(&w.sheet_color).map_or(InkRole::Pastel(0), |c| InkRole::Rgb(rgb(c)))), InkRole::OnPaper),
     };
+    let ink = if w.look.tone == mandara_config::desktop_widgets::Tone::Auto { ink } else { InkRole::Fg };
     let inner = width - 2.0 * pad;
     let hs = style(w.look.font, size * TITLE_SCALE, face::BOLD);
     let bs = style(w.look.font, size, face::REGULAR);
@@ -411,6 +412,21 @@ mod tests {
     use chrono::TimeZone as _;
     use mandara_config::desktop_widgets::TextOptions;
 
+    #[test]
+    fn notes_keep_automatic_paper_ink_but_honour_an_explicit_text_colour() {
+        use mandara_config::desktop_widgets::Tone;
+        for sheet in [NoteSheet::Pastel,NoteSheet::Paper,NoteSheet::Custom] {
+            let mut widget = NoteWidget { sheet,..Default::default() };
+            let text_inks = |widget: &NoteWidget| note(widget,&[],&lingo_in("en"),1.0,&mut Fixed).marks.into_iter()
+                .filter(|mark|matches!(mark.kind,MarkKind::Text { .. })).map(|mark|mark.ink).collect::<Vec<_>>();
+            let automatic = text_inks(&widget);
+            assert!(!automatic.is_empty());
+            assert!(automatic.iter().all(|ink|*ink == InkRole::OnPaper));
+            widget.look.tone = Tone::Custom;
+            widget.look.custom_color = "#553311".into();
+            assert!(text_inks(&widget).iter().all(|ink|*ink == InkRole::Fg));
+        }
+    }
     fn lingo() -> Lingo {
         Lingo::of(&Default::default(), false, None)
     }

@@ -294,10 +294,18 @@ impl FontNames {
     }
 
     /// These names for a widget with `look`: its own family filled in.
-    pub fn for_look(&self, look: Option<&mandara_config::desktop_widgets::Look>) -> Self {
+    pub fn for_look<'a>(&'a self, look: Option<&'a mandara_config::desktop_widgets::Look>) -> WidgetFonts<'a> {
         let custom = look.map(|l| l.font_family.trim()).filter(|f| !f.is_empty()).unwrap_or(&self.widgets);
-        Self { custom: custom.to_string(), ..self.clone() }
+        WidgetFonts { names:self, role_override:look.map_or(Default::default(),|look|look.font), custom }
     }
+}
+
+/// Font selection for one paint pass, borrowing the scene and widget settings.
+#[derive(Clone, Copy)]
+pub struct WidgetFonts<'a> {
+    pub(crate) names: &'a FontNames,
+    pub(crate) role_override: mandara_config::desktop_widgets::FontRole,
+    pub(crate) custom: &'a str,
 }
 
 /// What the clock layer shows on one output.

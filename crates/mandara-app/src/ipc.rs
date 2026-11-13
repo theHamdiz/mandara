@@ -24,6 +24,8 @@ use serde_json::Value;
 const CLIENT_READ_TIMEOUT: Duration = Duration::from_secs(5);
 /// How long a client waits for the shell's answer.
 const REPLY_TIMEOUT: Duration = Duration::from_secs(15);
+/// Display discovery, apply and confirmation each have a bounded protocol wait.
+const DISPLAY_REPLY_TIMEOUT: Duration = Duration::from_secs(30);
 /// Model transfers may be large; body-stall limits remain in the downloader.
 const MODEL_REPLY_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 /// Icon and cursor theme downloads can be ~100 MB on a slow link; the
@@ -36,10 +38,16 @@ const BOOT_REPLY_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 fn reply_timeout(args: &[String]) -> Duration {
     match (args.first().map(String::as_str), args.get(1).map(String::as_str)) {
         (Some("models"), Some("download")) => MODEL_REPLY_TIMEOUT,
+        (Some("theme"), Some("apps" | "export")) => THEME_REPLY_TIMEOUT,
+        (Some("display"), _) => DISPLAY_REPLY_TIMEOUT,
         (Some("icons" | "cursor"), Some("install" | "import")) => THEME_REPLY_TIMEOUT,
         (Some("boot"), Some("install" | "import" | "apply" | "restore")) => BOOT_REPLY_TIMEOUT,
-        (Some("agent"), Some("prepare")) => mandara_services::command_agent::INDEX_SETUP_TIMEOUT + CLIENT_READ_TIMEOUT,
-        (Some("agent"), Some("preview")) => mandara_services::command_agent::IDLE_TIMEOUT + CLIENT_READ_TIMEOUT,
+        (Some("agent"), Some("prepare")) => {
+            mandara_services::command_agent::INDEX_SETUP_TIMEOUT + CLIENT_READ_TIMEOUT
+        }
+        (Some("agent"), Some("preview")) => {
+            mandara_services::command_agent::IDLE_TIMEOUT + CLIENT_READ_TIMEOUT
+        }
         _ => REPLY_TIMEOUT,
     }
 }
@@ -149,7 +157,9 @@ fn handle_client(stream: UnixStream, tx: &async_channel::Sender<Request>) -> Res
 /// Client side: sends `args`, returns the decoded response.
 pub fn send(path: &Path, args: &[String]) -> Result<WireResponse> {
     let mut stream =
-        UnixStream::connect(path).with_context(|| format!("is Mandara running? could not connect to {}", path.display()))?;
+        UnixStream::connect(path).with_context(|| {
+        format!("is Mandara running? could not connect to {}", path.display())
+    })?;
     stream.set_read_timeout(Some(reply_timeout(args)))?;
     let mut request = serde_json::to_vec(&WireRequestRef { args })?;
     request.push(b'\n');
@@ -175,6 +185,15 @@ mod tests {
         assert_eq!(reply_timeout(&words("icons install papirus/dark")),THEME_REPLY_TIMEOUT);
         assert_eq!(reply_timeout(&words("cursor import https://example.org/c.tar.xz --unverified")),THEME_REPLY_TIMEOUT);
         assert_eq!(reply_timeout(&words("icons list")),REPLY_TIMEOUT);
+        assert_eq!(
+            reply_timeout(&words("theme apps enable community:rofi")),
+            THEME_REPLY_TIMEOUT
+        );
+        assert_eq!(reply_timeout(&words("theme export")), THEME_REPLY_TIMEOUT);
+        assert_eq!(
+            reply_timeout(&words("display confirm")),
+            DISPLAY_REPLY_TIMEOUT
+        );
         assert_eq!(reply_timeout(&words("boot apply splash rings")),BOOT_REPLY_TIMEOUT);
         assert_eq!(reply_timeout(&words("boot status")),REPLY_TIMEOUT);
     }

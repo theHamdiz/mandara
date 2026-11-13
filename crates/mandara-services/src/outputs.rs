@@ -10,9 +10,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use mandara_config::outputs::{OutputConfig, Transform, VrrMode, identity};
-use serde::Serialize;
-use wayland_client::globals::{GlobalListContents, registry_queue_init};
-use wayland_client::protocol::wl_registry;
+use serde::{Deserialize, Serialize};
+use wayland_client::protocol::{wl_callback, wl_registry};
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle, WEnum, event_created_child};
 use wayland_protocols_wlr::output_management::v1::client::{
     zwlr_output_configuration_head_v1 as cfg_head, zwlr_output_configuration_v1 as configuration, zwlr_output_head_v1 as head, zwlr_output_manager_v1 as manager,
@@ -25,11 +24,11 @@ const MANAGER_VERSION: u32 = 4;
 const ADAPTIVE_SYNC_SINCE: u32 = 4;
 /// Two refresh rates closer than this are the same mode, millihertz.
 const REFRESH_TOLERANCE_MHZ: i64 = 500;
-/// Roundtrips to wait for the compositor's verdict before giving up.
-const MAX_VERDICT_ROUNDTRIPS: usize = 50;
+mod io;
+pub mod jobs;
 
 /// One display mode.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Mode {
     pub width: i32,
     pub height: i32,
@@ -39,7 +38,7 @@ pub struct Mode {
 }
 
 /// One connected (or disconnected-but-listed) monitor.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Head {
     pub name: String,
     pub description: String,
@@ -79,7 +78,7 @@ impl Head {
 
     /// The head's present state as a full [`OutputConfig`].
     pub fn to_config(&self) -> OutputConfig {
-        let m = self.current();
+        let m = self.enabled.then(|| self.current()).flatten();
         OutputConfig {
             name: self.name.clone(),
             make: self.make.clone(),
@@ -89,11 +88,15 @@ impl Head {
             width: m.map(|m| m.width.max(0) as u32),
             height: m.map(|m| m.height.max(0) as u32),
             refresh_mhz: m.map(|m| m.refresh_mhz.max(0) as u32).filter(|r| *r > 0),
-            scale: Some(self.scale as f32),
-            transform: Some(self.transform),
-            x: Some(self.x),
-            y: Some(self.y),
-            vrr: self.adaptive_sync.map(|on| if on { VrrMode::On } else { VrrMode::Off }),
+            scale: (self.enabled && self.scale.is_finite() && self.scale > 0.0)
+                .then_some(self.scale as f32),
+            transform: self.enabled.then_some(self.transform),
+            x: self.enabled.then_some(self.x),
+            y: self.enabled.then_some(self.y),
+            vrr: self.enabled
+                .then_some(self.adaptive_sync)
+                .flatten()
+                .map(|on| if on { VrrMode::On } else { VrrMode::Off }),
         }
     }
 
@@ -146,9 +149,18 @@ pub enum PlannedMode {
     Preferred(Option<usize>),
 }
 
-/// The config entry for `head`: by connector name, else by identity.
+/// Prefer EDID identity; only anonymous monitors fall back to a connector.
 fn config_for<'a>(head: &Head, configs: &'a [OutputConfig]) -> Option<&'a OutputConfig> {
-    configs.iter().find(|c| c.name == head.name).or_else(|| configs.iter().find(|c| !c.serial.is_empty() && c.identity() == head.identity()))
+    let stable = !head.make.trim().is_empty() && !head.serial.trim().is_empty();
+    let matches = |config: &&OutputConfig| stable && !config.make.trim().is_empty() && !config.serial.trim().is_empty()
+        && config.make.trim() == head.make.trim() && config.model.trim() == head.model.trim() && config.serial.trim() == head.serial.trim();
+    let mut candidates = configs.iter().rev().filter(matches);
+    let first = candidates.next();
+    first.and_then(|first| {
+        if let Some(exact) = configs.iter().rev().filter(matches).find(|config| config.name == head.name) { Some(exact) }
+        else if candidates.next().is_none() { Some(first) } else { None }
+    }).or_else(|| configs.iter().rev().find(|config| config.name == head.name
+            && (config.make.trim().is_empty() || config.serial.trim().is_empty())))
 }
 
 /// The best mode index for a requested size / refresh.
@@ -156,16 +168,46 @@ fn pick_mode(head: &Head, width: i32, height: i32, refresh: Option<i32>) -> Opti
     let same: Vec<(usize, &Mode)> = head.modes.iter().enumerate().filter(|(_, m)| m.width == width && m.height == height).collect();
     match refresh {
         Some(r) => same.iter().min_by_key(|(_, m)| (m.refresh_mhz as i64 - r as i64).abs()).filter(|(_, m)| (m.refresh_mhz as i64 - r as i64).abs() <= REFRESH_TOLERANCE_MHZ).map(|(i, _)| *i),
-        None => head.current_mode.filter(|i| same.iter().any(|(j, _)| j == i)).or_else(|| same.iter().max_by_key(|(_, m)| m.refresh_mhz).map(|(i, _)| *i)),
+        None => head.current_mode.filter(|i| same.iter().any(|(j, _)| j == i)).or_else(|| {
+                same.iter().max_by_key(|(_, m)| m.refresh_mhz).map(|(i, _)| *i)
+            }),
     }
 }
 
 /// Plans a configuration: heads without an entry keep their state; unset
 /// fields keep the head's value. Refuses to disable every output.
 pub fn plan(heads: &[Head], configs: &[OutputConfig]) -> Result<Vec<Planned>, String> {
+    for config in configs {
+        let bad = |property: &str, value: String| {
+            mandara_i18n::tf(
+                "Invalid value {value} for {property}",
+                &[
+                    ("value", &value),
+                    ("property", &format!("{}.{property}", config.name)),
+                ],
+            )
+        };
+        if let Some(scale) = config.scale
+            && (!scale.is_finite()
+                || !(mandara_config::outputs::MIN_SCALE..=mandara_config::outputs::MAX_SCALE)
+                    .contains(&scale))
+        {
+            return Err(bad("scale", scale.to_string()));
+        }
+        if let Some((width, height)) = config.width.zip(config.height)
+            && (width == 0 || height == 0 || width > i32::MAX as u32 || height > i32::MAX as u32)
+        {
+            return Err(bad("mode", format!("{width}x{height}")));
+        }
+        if let Some(refresh) = config.refresh_mhz
+            && (refresh == 0 || refresh > i32::MAX as u32)
+        {
+            return Err(bad("refresh", refresh.to_string()));
+        }
+    }
     let mut out = Vec::with_capacity(heads.len());
     for h in heads {
-        let c = config_for(h, configs);
+        let c = config_for(h, configs).filter(|config| config.name == h.name || heads.iter().filter(|other| other.make.trim() == h.make.trim() && other.model.trim() == h.model.trim() && other.serial.trim() == h.serial.trim()).count() == 1);
         let enabled = c.map(|c| c.enabled).unwrap_or(h.enabled);
         if !enabled {
             out.push(Planned::Disable);
@@ -213,6 +255,8 @@ enum Verdict {
 
 #[derive(Default)]
 struct State {
+    manager: Option<manager::ZwlrOutputManagerV1>,
+    callback_done: bool,
     heads: Vec<HeadState>,
     serial: Option<u32>,
     /// `done` events received.
@@ -231,8 +275,35 @@ impl State {
     }
 }
 
-impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
-    fn event(_: &mut Self, _: &wl_registry::WlRegistry, _: wl_registry::Event, _: &GlobalListContents, _: &Connection, _: &QueueHandle<Self>) {}
+impl Dispatch<wl_registry::WlRegistry, ()> for State {
+    fn event(
+        state: &mut Self,
+        registry: &wl_registry::WlRegistry,
+        event: wl_registry::Event, _: &(),
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+    ) {
+        if let wl_registry::Event::Global {
+            name,
+            interface,
+            version,
+        } = event
+            && interface == manager::ZwlrOutputManagerV1::interface().name
+            && state.manager.is_none()
+        {
+            state.manager = Some(registry.bind(name, version.min(MANAGER_VERSION), qh, ()));
+        }
+    }
+}
+
+impl Dispatch<wl_callback::WlCallback, ()> for State {
+    fn event(
+        state: &mut Self,
+        _: &wl_callback::WlCallback,
+        _: wl_callback::Event,
+        _: &(), _: &Connection, _: &QueueHandle<Self>) {
+        state.callback_done = true;
+    }
 }
 
 impl Dispatch<manager::ZwlrOutputManagerV1, ()> for State {
@@ -281,7 +352,8 @@ impl Dispatch<head::ZwlrOutputHeadV1, ()> for State {
             }
             return;
         }
-        let Some(h) = state.head_mut(proxy) else { return };
+        let Some(h) = state.head_mut(proxy) else { return;
+        };
         let i = &mut h.info;
         match event {
             head::Event::Name { name } => i.name = name,
@@ -292,14 +364,18 @@ impl Dispatch<head::ZwlrOutputHeadV1, ()> for State {
                 i.modes.push(Mode { width: 0, height: 0, refresh_mhz: 0, preferred: false });
             }
             head::Event::Enabled { enabled } => i.enabled = enabled != 0,
-            head::Event::CurrentMode { mode } => i.current_mode = h.modes.iter().position(|m| m == &mode),
+            head::Event::CurrentMode { mode } => {
+                i.current_mode = h.modes.iter().position(|m| m == &mode)
+            }
             head::Event::Position { x, y } => (i.x, i.y) = (x, y),
             head::Event::Transform { transform: WEnum::Value(t) } => i.transform = Transform::from_wl(t as u32),
             head::Event::Scale { scale } => i.scale = scale,
             head::Event::Make { make } => i.make = make,
             head::Event::Model { model } => i.model = model,
             head::Event::SerialNumber { serial_number } => i.serial = serial_number,
-            head::Event::AdaptiveSync { state: s } => i.adaptive_sync = Some(matches!(s, WEnum::Value(head::AdaptiveSyncState::Enabled))),
+            head::Event::AdaptiveSync { state: s } => {
+                i.adaptive_sync = Some(matches!(s, WEnum::Value(head::AdaptiveSyncState::Enabled)))
+            }
             _ => {}
         }
     }
@@ -312,7 +388,8 @@ impl Dispatch<head::ZwlrOutputHeadV1, ()> for State {
 impl Dispatch<mode::ZwlrOutputModeV1, ()> for State {
     fn event(state: &mut Self, proxy: &mode::ZwlrOutputModeV1, event: mode::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
         for h in &mut state.heads {
-            let Some(idx) = h.modes.iter().position(|m| m == proxy) else { continue };
+            let Some(idx) = h.modes.iter().position(|m| m == proxy) else { continue;
+            };
             let m = &mut h.info.modes[idx];
             match event {
                 mode::Event::Size { width, height } => (m.width, m.height) = (width, height),
@@ -358,16 +435,23 @@ fn unsupported() -> String {
 }
 
 fn connect() -> Result<Session, String> {
+    connect_until_stopped(None)
+}
+
+fn connect_until_stopped(stop: Option<&std::io::PipeReader>) -> Result<Session, String> {
     let conn = Connection::connect_to_env().map_err(|e| e.to_string())?;
-    let (globals, mut queue) = registry_queue_init::<State>(&conn).map_err(|e| e.to_string())?;
+    let mut queue = conn.new_event_queue();
     let qh = queue.handle();
-    let manager: manager::ZwlrOutputManagerV1 = globals.bind(&qh, 1..=MANAGER_VERSION, ()).map_err(|_| unsupported())?;
     let mut state = State::default();
+    let _registry = conn.display().get_registry(&qh, ());
+    io::roundtrip(&conn, &mut queue, &mut state, stop)?;
+    let manager = state.manager.clone().ok_or_else(unsupported)?;
+    let deadline = std::time::Instant::now() + io::QUERY_TIMEOUT;
     while state.serial.is_none() && !state.finished {
-        queue.roundtrip(&mut state).map_err(|e| e.to_string())?;
+        io::dispatch(&mut queue, &mut state, Some(deadline), stop)?;
     }
     // Child objects' first events may land one roundtrip later.
-    queue.roundtrip(&mut state).map_err(|e| e.to_string())?;
+    io::roundtrip(&conn, &mut queue, &mut state, stop)?;
     Ok(Session { queue, state, manager })
 }
 
@@ -378,16 +462,79 @@ pub fn supported() -> bool {
 
 /// Every head the compositor reports, with modes.
 pub fn heads() -> Result<Vec<Head>, String> {
-    let mut s = connect()?;
+    let s = connect()?;
     let heads = s.state.snapshot();
     s.manager.stop();
-    let _ = s.queue.roundtrip(&mut s.state);
+    let _ = s.queue.flush();
     Ok(heads)
 }
 
 /// Tests (`test_only`) or applies `configs` on top of the current state.
 /// Returns the state *before* the change, for reverting.
 pub fn apply(configs: &[OutputConfig], test_only: bool) -> Result<Vec<Head>, String> {
+    revision().fetch_add(1, Ordering::SeqCst);
+    let _operation = operation().lock();
+    apply_unlocked(configs, test_only)
+}
+
+/// Studio sends field edits to the shell, which owns the revert countdown.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct TestRequest {
+    pub before: Option<Vec<OutputConfig>>,
+    pub outputs: Vec<OutputConfig>,
+}
+
+pub struct Applied {
+    pub revision: Revision,
+    pub heads: Vec<Head>,
+}
+
+/// Snapshot the accepted arrangement while no other display operation can begin.
+pub fn apply_and_snapshot(configs: &[OutputConfig]) -> Result<Applied, String> {
+    let revision = Revision(revision().fetch_add(1, Ordering::SeqCst) + 1);
+    let _operation = operation().lock();
+    let before = apply_unlocked(configs, false)?;
+    let heads = accepted_snapshot(&before, heads, |outputs| apply_unlocked(outputs, false).map(|_| ()))?;
+    Ok(Applied { revision, heads })
+}
+
+/// An automatic profile waiting behind a slow reload must yield to a newer
+/// explicit change, or a subscription that has since been switched off.
+pub fn apply_if_active(
+    configs: &[OutputConfig],
+    expected: Revision,
+    stop: &AtomicBool,
+) -> Result<Option<Applied>, String> {
+    let _operation = operation().lock();
+    if stop.load(Ordering::Acquire) || current_revision() != expected {
+        return Ok(None);
+    }
+    let revision = Revision(revision().fetch_add(1, Ordering::SeqCst) + 1);
+    let before = apply_unlocked(configs, false)?;
+    let heads = accepted_snapshot(&before, heads, |outputs| apply_unlocked(outputs, false).map(|_| ()))?;
+    Ok(Some(Applied { revision, heads }))
+}
+
+/// An apply without a readable accepted snapshot cannot be persisted safely.
+/// Roll it back while the operation lock still excludes newer arrangements.
+fn accepted_snapshot<T>(
+    before: &[Head],
+    snapshot: impl FnOnce() -> Result<T, String>,
+    restore: impl FnOnce(&[OutputConfig]) -> Result<(), String>,
+) -> Result<T, String> {
+    match snapshot() {
+        Ok(snapshot) => Ok(snapshot),
+        Err(error) => {
+            let previous = before.iter().map(Head::to_config).collect::<Vec<_>>();
+            match restore(&previous) {
+                Ok(()) => Err(format!("reading the accepted displays failed; the previous arrangement was restored: {error}")),
+                Err(restore) => Err(format!("reading the accepted displays failed: {error}; restoring the previous arrangement also failed: {restore}")),
+            }
+        }
+    }
+}
+
+fn apply_unlocked(configs: &[OutputConfig], test_only: bool) -> Result<Vec<Head>, String> {
     let mut s = connect()?;
     let before = s.state.snapshot();
     let planned = plan(&before, configs)?;
@@ -427,19 +574,21 @@ pub fn apply(configs: &[OutputConfig], test_only: bool) -> Result<Vec<Head>, Str
     } else {
         config.apply();
     }
-    for _ in 0..MAX_VERDICT_ROUNDTRIPS {
-        if s.state.verdict.is_some() {
-            break;
-        }
-        s.queue.blocking_dispatch(&mut s.state).map_err(|e| e.to_string())?;
+    let deadline = std::time::Instant::now() + io::QUERY_TIMEOUT;
+    while s.state.verdict.is_none() {
+        io::dispatch(&mut s.queue, &mut s.state, Some(deadline), None)?;
     }
     config.destroy();
     s.manager.stop();
-    let _ = s.queue.roundtrip(&mut s.state);
+    let _ = s.queue.flush();
     match s.state.verdict {
         Some(Verdict::Succeeded) => Ok(before),
-        Some(Verdict::Failed) => Err(mandara_i18n::t("The compositor rejected this display configuration").into()),
-        Some(Verdict::Cancelled) => Err(mandara_i18n::t("The displays changed meanwhile; try again").into()),
+        Some(Verdict::Failed) => {
+            Err(mandara_i18n::t("The compositor rejected this display configuration").into())
+        }
+        Some(Verdict::Cancelled) => {
+            Err(mandara_i18n::t("The displays changed meanwhile; try again").into())
+        }
         None => Err(mandara_i18n::t("The compositor did not answer").into()),
     }
 }
@@ -453,11 +602,51 @@ struct PendingRevert {
     /// Bumped by every new test / confirm / revert, so a stale timer thread
     /// never restores over a newer change.
     generation: u64,
+    _cancel: async_channel::Sender<()>,
 }
 
 fn pending() -> &'static parking_lot::Mutex<Option<PendingRevert>> {
     static PENDING: std::sync::OnceLock<parking_lot::Mutex<Option<PendingRevert>>> = std::sync::OnceLock::new();
     PENDING.get_or_init(Default::default)
+}
+
+/// A test, its confirmation and a compositor reload must not interleave.
+fn operation() -> &'static parking_lot::Mutex<()> {
+    static OPERATION: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+    &OPERATION
+}
+
+/// Identifies the arrangement before a background startup or reload job begins.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Revision(u64);
+
+fn revision() -> &'static std::sync::atomic::AtomicU64 {
+    static REVISION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    &REVISION
+}
+
+pub fn current_revision() -> Revision {
+    Revision(revision().load(Ordering::SeqCst))
+}
+
+/// Restore once at startup, unless a newer explicit change has begun.
+/// A matching automatic profile takes precedence over the saved arrangement.
+pub fn restore(
+    saved: &[OutputConfig],
+    profiles: Option<&mandara_config::outputs::DisplaysConfig>,
+    expected: Revision,
+) -> Result<(), String> {
+    let _operation = operation().lock();
+    if current_revision() != expected {
+        return Ok(());
+    }
+    let heads = heads()?;
+    let profile = profiles.and_then(|profiles| profiles.matching_profile(&identities(&heads)));
+    let saved = profile.map_or(saved, |profile| profile.outputs.as_slice());
+    if current_revision() == expected && !saved.is_empty() {
+        apply_unlocked(saved, false)?;
+    }
+    Ok(())
 }
 
 static GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -467,29 +656,85 @@ static GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::
 /// never leaves the user stranded. A pending test's original state is kept
 /// when tests are chained. Blocks for the apply; the countdown runs on its
 /// own thread.
+/// Merge only the fields edited in a Studio draft onto the current arrangement.
+/// A change on another output, or an unrelated external change, stays intact.
+pub fn apply_edits_with_revert(
+    before: &[OutputConfig],
+    draft: &[OutputConfig],
+    secs: u32,
+) -> Result<u32, String> {
+    revision().fetch_add(1, Ordering::SeqCst);
+    let _operation = operation().lock();
+    let current = heads()?.iter().map(Head::to_config).collect::<Vec<_>>();
+    let edits = merge_edits(before, draft, &current)?;
+    apply_with_revert_unlocked(&edits, secs)
+}
+
+fn merge_edits(
+    before: &[OutputConfig],
+    draft: &[OutputConfig],
+    current: &[OutputConfig],
+) -> Result<Vec<OutputConfig>, String> {
+    let mut old = mandara_config::ShellConfig::default();
+    old.compositor.outputs = before.to_vec();
+    let mut edited = old.clone();
+    edited.compositor.outputs = draft.to_vec();
+    let mut live = mandara_config::ShellConfig::default();
+    live.compositor.outputs = current.to_vec();
+    mandara_config::patch::ConfigPatch::between(&old, &edited)
+        .and_then(|patch| patch.apply(&live))
+        .map(|config| config.compositor.outputs)
+        .map_err(|error| error.to_string())
+}
+
 pub fn apply_with_revert(configs: &[OutputConfig], secs: u32) -> Result<u32, String> {
-    let before = apply(configs, false)?;
+    revision().fetch_add(1, Ordering::SeqCst);
+    let _operation = operation().lock();
+    apply_with_revert_unlocked(configs, secs)
+}
+
+fn apply_with_revert_unlocked(configs: &[OutputConfig], secs: u32) -> Result<u32, String> {
+    let secs = secs.clamp(
+        mandara_config::outputs::defaults::MIN_REVERT_SECONDS,
+        mandara_config::outputs::defaults::MAX_REVERT_SECONDS,
+    );
+    let before = apply_unlocked(configs, false)?;
     let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     let wait = std::time::Duration::from_secs(secs as u64);
+    let (cancel, cancelled) = async_channel::bounded::<()>(1);
     {
         let mut p = pending().lock();
         let before = match p.take() {
             Some(old) => old.before,
             None => before.iter().map(Head::to_config).collect(),
         };
-        *p = Some(PendingRevert { before, deadline: std::time::Instant::now() + wait, generation });
+        *p = Some(PendingRevert { before, deadline: std::time::Instant::now() + wait, generation,
+            _cancel: cancel,
+        });
     }
-    let _ = std::thread::Builder::new().name("mandara-display-revert".into()).spawn(move || {
-        std::thread::sleep(wait);
-        let restore = {
-            let mut p = pending().lock();
-            if p.as_ref().is_some_and(|r| r.generation == generation) { p.take().map(|r| r.before) } else { None }
-        };
-        if let Some(before) = restore {
-            tracing::info!("displays: change not kept, reverting");
-            if let Err(err) = apply(&before, false) {
-                tracing::warn!("displays: revert failed: {err}");
-            }
+    crate::runtime::spawn("display-revert", async move {
+        let mut delay = wait;
+        let mut attempts = 0;
+        loop {
+            if matches!(futures::future::select(
+                Box::pin(cancelled.recv()), Box::pin(crate::runtime::sleep(delay))
+            ).await, futures::future::Either::Left(_)) { return; }
+            let finished = crate::runtime::unblock(move || {
+                let _operation = operation().lock();
+                if GENERATION.load(Ordering::SeqCst) != generation { return true; }
+                let mut pending = pending().lock();
+                match try_revert(&mut pending, generation, |before| apply_unlocked(before, false).map(|_| ())) {
+                    Ok(_) => true,
+                    Err(error) => {
+                        if attempts + 1 == MAX_REVERT_ATTEMPTS { tracing::warn!("displays: automatic revert failed; manual retry is still available: {error}"); }
+                        false
+                    }
+                }
+            }).await;
+            if finished { return; }
+            attempts += 1;
+            let Some(next) = revert_retry_delay(attempts) else { return };
+            delay = next;
         }
     });
     Ok(secs)
@@ -497,32 +742,143 @@ pub fn apply_with_revert(configs: &[OutputConfig], secs: u32) -> Result<u32, Str
 
 /// Keeps a tested change. Returns whether one was pending.
 pub fn confirm() -> bool {
+    revision().fetch_add(1, Ordering::SeqCst);
+    let _operation = operation().lock();
     GENERATION.fetch_add(1, Ordering::SeqCst);
     pending().lock().take().is_some()
 }
 
+/// Capture exactly the tested arrangement before another test can start.
+/// A failed read leaves the countdown active rather than saving a draft.
+pub fn confirm_and_snapshot() -> Result<Option<Vec<Head>>, String> {
+    revision().fetch_add(1, Ordering::SeqCst);
+    let _operation = operation().lock();
+    if pending().lock().is_none() {
+        return Ok(None);
+    }
+    let heads = heads()?;
+    if heads.is_empty() {
+        return Err(mandara_i18n::t("The displays changed meanwhile; try again").into());
+    }
+    GENERATION.fetch_add(1, Ordering::SeqCst);
+    pending().lock().take();
+    Ok(Some(heads))
+}
+
+/// A palette or border reload must keep a live display test intact. At
+/// startup (or after an intentional output-config edit), restore the saved
+/// outputs instead. Compositors without this protocol own their settings.
+pub fn reload_preserving<T>(
+    saved: &[OutputConfig],
+    preserve_current: bool,
+    expected: Revision,
+    reload: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    let _operation = operation().lock();
+    let live = heads().ok();
+    let current;
+    let restore =
+        if (preserve_current || current_revision() != expected || pending().lock().is_some())
+            && let Some(heads) = &live
+        {
+            current = heads.iter().map(Head::to_config).collect::<Vec<_>>();
+            current.as_slice()
+        } else {
+            saved
+        };
+    let result = reload()?;
+    if live.is_some() && !restore.is_empty() {
+        apply_unlocked(restore, false)?;
+    }
+    Ok(result)
+}
+
 /// Restores the arrangement from before a pending test right away.
 pub fn revert_now() -> Result<bool, String> {
+    revision().fetch_add(1, Ordering::SeqCst);
+    let _operation = operation().lock();
+    let mut pending = pending().lock();
+    let Some(generation) = pending.as_ref().map(|pending| pending.generation) else { return Ok(false) };
+    let restored = try_revert(&mut pending, generation, |before| apply_unlocked(before, false).map(|_| ()))?;
     GENERATION.fetch_add(1, Ordering::SeqCst);
-    let Some(p) = pending().lock().take() else { return Ok(false) };
-    apply(&p.before, false).map(|_| true)
+    Ok(restored)
+}
+
+/// Retry only a failed, still-pending display test; no work remains after
+/// confirmation, a successful revert, or replacement by another test.
+const REVERT_RETRY_SECONDS: u64 = 1;
+/// Four attempts cover short compositor reloads without leaving an idle job.
+const MAX_REVERT_ATTEMPTS: usize = 4;
+fn revert_retry_delay(attempts: usize) -> Option<std::time::Duration> {
+    (attempts < MAX_REVERT_ATTEMPTS).then(|| std::time::Duration::from_secs(REVERT_RETRY_SECONDS << attempts.saturating_sub(1)))
+}
+
+
+fn try_revert(
+    pending: &mut Option<PendingRevert>,
+    generation: u64,
+    restore: impl FnOnce(&[OutputConfig]) -> Result<(), String>,
+) -> Result<bool, String> {
+    if !pending.as_ref().is_some_and(|pending| pending.generation == generation) { return Ok(false); }
+    let Some(previous) = pending.take() else { return Ok(false) };
+    match restore(&previous.before) {
+        Ok(()) => Ok(true),
+        Err(error) => { *pending = Some(previous); Err(error) }
+    }
 }
 
 /// Seconds left before a pending test reverts.
 pub fn revert_remaining() -> Option<std::time::Duration> {
-    pending().lock().as_ref().map(|p| p.deadline.saturating_duration_since(std::time::Instant::now()))
+    pending().lock().as_ref().map(|p| {
+        p.deadline.saturating_duration_since(std::time::Instant::now())
+    })
 }
 
-/// Follows hotplug: calls `on_change` with the heads after every change
-/// (not for the initial state) until `stop` is set or the compositor goes
-/// away. Runs on its own thread.
-pub fn watch(stop: Arc<AtomicBool>, mut on_change: impl FnMut(Vec<Head>) + Send + 'static) {
-    let _ = std::thread::Builder::new().name("mandara-outputs".into()).spawn(move || {
-        let Ok(mut s) = connect() else { return };
+/// Dropping the subscription wakes its worker, including while discovery is waiting.
+pub struct Watch {
+    stop: Arc<AtomicBool>,
+    alive: Arc<AtomicBool>,
+    _wake: std::io::PipeWriter,
+}
+
+impl Watch {
+    pub fn is_alive(&self) -> bool {
+        self.alive.load(Ordering::Acquire)
+    }
+    pub fn stopped(&self) -> Arc<AtomicBool> {
+        self.stop.clone()
+    }
+}
+
+impl Drop for Watch {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+    }
+}
+
+struct WatchAlive(Arc<AtomicBool>);
+impl Drop for WatchAlive {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+/// Follows connection changes on an owned, interruptible Wayland connection.
+pub fn watch(mut on_change: impl FnMut(Vec<Head>) + Send + 'static) -> Result<Watch, String> {
+    let (reader, writer) = std::io::pipe().map_err(|error| error.to_string())?;
+    let stop = Arc::new(AtomicBool::new(false));
+    let alive = Arc::new(AtomicBool::new(true));
+    let (cancel, running) = (stop.clone(), alive.clone());
+    std::thread::Builder::new().name("mandara-outputs".into()).spawn(move || {
+        let _alive = WatchAlive(running);
+            let Ok(mut s) = connect_until_stopped(Some(&reader)) else { return;
+            };
         let mut seen = s.state.dones;
-        let mut last = identities(&s.state.snapshot());
-        while !stop.load(Ordering::Relaxed) && !s.state.finished {
-            if s.queue.blocking_dispatch(&mut s.state).is_err() {
+        let initial = s.state.snapshot();
+            let mut last = identities(&initial);
+            on_change(initial);
+        while !cancel.load(Ordering::Acquire) && !s.state.finished {
+            if io::dispatch(&mut s.queue, &mut s.state, None, Some(&reader)).is_err() {
                 return;
             }
             if s.state.dones != seen {
@@ -536,7 +892,13 @@ pub fn watch(stop: Arc<AtomicBool>, mut on_change: impl FnMut(Vec<Head>) + Send 
                 }
             }
         }
-    });
+    })
+        .map_err(|error| error.to_string())?;
+    Ok(Watch {
+        stop,
+        alive,
+        _wake: writer,
+    })
 }
 
 #[cfg(test)]
@@ -564,6 +926,122 @@ mod tests {
             scale: 1.5,
             adaptive_sync: Some(false),
         }
+    }
+
+    #[test]
+    fn permanent_revert_failures_stop_automatically_but_remain_manually_retryable() {
+        let (cancel, _) = async_channel::bounded(1);
+        let mut pending = Some(PendingRevert { before: vec![head("DP-1").to_config()], deadline: std::time::Instant::now(), generation: 7, _cancel: cancel });
+        let mut attempts = 0;
+        loop {
+            attempts += 1;
+            assert!(try_revert(&mut pending, 7, |_| Err("mode unavailable".into())).is_err());
+            if revert_retry_delay(attempts).is_none() { break; }
+        }
+        assert_eq!(attempts, MAX_REVERT_ATTEMPTS);
+        assert!(pending.is_some());
+        assert!(try_revert(&mut pending, 7, |_| Ok(())).unwrap());
+        assert!(pending.is_none());
+    }
+
+    #[test]
+    fn an_anonymous_head_does_not_restore_an_unrelated_saved_edid() {
+        let mut actual = head("DP-1");
+        let saved = actual.to_config();
+        actual.make.clear(); actual.serial.clear();
+        assert!(config_for(&actual, &[saved]).is_none());
+    }
+
+    #[test]
+    fn unreadable_accepted_snapshots_restore_before_reporting_failure() {
+        let before = [head("DP-1")];
+        let restored = std::cell::Cell::new(false);
+        let result: Result<(), String> = accepted_snapshot(&before, || Err("timeout".into()), |outputs| {
+            assert_eq!(outputs, &[before[0].to_config()]); restored.set(true); Ok(())
+        });
+        assert!(restored.get());
+        assert!(result.unwrap_err().contains("previous arrangement was restored"));
+        let result: Result<(), String> = accepted_snapshot(&before, || Err("timeout".into()), |_| Err("offline".into()));
+        let error = result.unwrap_err();
+        assert!(error.contains("timeout") && error.contains("offline"));
+        assert_eq!(accepted_snapshot(&before, || Ok(42), |_| panic!("successful snapshot needs no rollback")).unwrap(), 42);
+    }
+
+    #[test]
+    fn failed_reverts_keep_the_same_cancellable_test_for_retry() {
+        let (cancel, cancelled) = async_channel::bounded(1);
+        let mut pending = Some(PendingRevert { before: vec![head("DP-1").to_config()], deadline: std::time::Instant::now(), generation: 7, _cancel: cancel });
+        assert!(try_revert(&mut pending, 7, |_| Err("temporarily offline".into())).is_err());
+        assert_eq!(pending.as_ref().unwrap().generation, 7);
+        assert!(!cancelled.is_closed());
+        assert!(!try_revert(&mut pending, 6, |_| panic!("stale timer")).unwrap());
+        assert!(try_revert(&mut pending, 7, |outputs| { assert_eq!(outputs[0].name, "DP-1"); Ok(()) }).unwrap());
+        assert!(pending.is_none());
+        assert!(cancelled.is_closed());
+    }
+
+    #[test]
+    fn a_saved_edid_does_not_configure_an_unrelated_monitor_on_its_old_connector() {
+        let mut actual = head("DP-2");
+        actual.serial = "A".into();
+        let mut a = actual.to_config(); a.name = "DP-1".into(); a.scale = Some(1.25);
+        let mut b = actual.to_config(); b.serial = "B".into(); b.scale = Some(2.0);
+        assert_eq!(config_for(&actual, &[b.clone(), a]).unwrap().scale, Some(1.25));
+        assert!(config_for(&actual, &[b]).is_none());
+    }
+
+    #[test]
+    fn stale_draft_changes_only_edited_fields_and_never_recreates_disconnected_heads() {
+        let before = vec![head("DP-1").to_config(), head("DP-2").to_config()];
+        let mut draft = before.clone();
+        draft[0].scale = Some(2.0);
+        let mut live = before.clone();
+        live[0].x = Some(400);
+        live[1].scale = Some(1.0);
+        let merged = merge_edits(&before, &draft, &live).unwrap();
+        assert_eq!(
+            (merged[0].scale, merged[0].x, merged[1].scale),
+            (Some(2.0), Some(400), Some(1.0))
+        );
+        live.remove(0);
+        assert_eq!(merge_edits(&before, &draft, &live).unwrap(), live);
+    }
+
+    #[test]
+    fn studio_wire_snapshots_round_trip_and_invalid_modes_are_rejected_before_sending() {
+        let output = head("DP-1");
+        let decoded: Head = serde_json::from_value(serde_json::to_value(&output).unwrap()).unwrap();
+        assert_eq!(output, decoded);
+        for scale in [
+            f32::INFINITY,
+            f32::NAN,
+            0.0,
+            mandara_config::outputs::MAX_SCALE + 1.0,
+        ] {
+            assert!(
+                plan(
+                    std::slice::from_ref(&output),
+                    &[OutputConfig {
+                        name: "DP-1".into(),
+                        scale: Some(scale),
+                        ..Default::default()
+                    }]
+                )
+                .is_err()
+            );
+        }
+        assert!(
+            plan(
+                &[output],
+                &[OutputConfig {
+                    name: "DP-1".into(),
+                    width: Some(0),
+                    height: Some(1440),
+                    ..Default::default()
+                }]
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -599,4 +1077,20 @@ mod tests {
         let off = OutputConfig { name: "DP-1".into(), enabled: false, ..Default::default() };
         assert!(plan(&heads, &[off]).is_err());
     }
+    #[test]
+    fn identical_edids_keep_connector_specific_settings_and_ambiguous_moves_keep_live_state() {
+        let a = head("DP-1"); let mut b = a.clone(); b.name = "DP-2".into();
+        let mut ca = a.to_config(); ca.scale = Some(1.25); ca.x = Some(0);
+        let mut cb = b.to_config(); cb.scale = Some(2.0); cb.x = Some(2000);
+        let saved = [ca, cb];
+        let configured = plan(&[a.clone(), b.clone()], &saved).unwrap();
+        assert!(matches!(configured[0], Planned::Enable { scale: 1.25, x: 0, .. }));
+        assert!(matches!(configured[1], Planned::Enable { scale: 2.0, x: 2000, .. }));
+        let mut moved_a = a.clone(); moved_a.name = "DP-3".into();
+        let mut moved_b = b.clone(); moved_b.name = "DP-4".into();
+        assert!(config_for(&moved_a, &saved).is_none());
+        let actual = plan(&[moved_a, moved_b], &saved[..1]).unwrap();
+        assert!(actual.iter().all(|output| matches!(output, Planned::Enable { scale: 1.5, .. })));
+    }
+
 }

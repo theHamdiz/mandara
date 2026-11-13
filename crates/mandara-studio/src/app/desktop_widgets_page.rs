@@ -28,32 +28,34 @@ use gpui::{
 };
 use mandara_config::ShellConfig;
 use mandara_config::desktop_cards::{self as dc, PluginCardOptions};
-use mandara_config::widget_kinds::ranges as kr;
-use mandara_config::widget_style::ranges as style;
 use mandara_config::desktop_widgets::{
-    self as dw, Align, Anchor, Chrome, PlateShape, ShadowKind, Calendar, ClockFace, DecorShape, Decoration, Depth, DesktopWidget, DesktopWidgetsConfig, Effect, FontRole, MonitorRow, MonitorStyle, Numerals, Placement, Plate, PlaneVisualizer,
-    RingProgress, Sideways, TextOptions, Tone, VisualizerShape, WeatherLayout, WidgetKind, ranges,
+    self as dw, Align, Anchor, Calendar, Chrome, ClockFace, DecorShape, Decoration, Depth, DesktopWidget, DesktopWidgetsConfig, Effect, FontRole, MonitorRow, MonitorStyle, Numerals, Placement, PlaneVisualizer, Plate, PlateShape,
+    RingProgress, ShadowKind, Sideways, TextOptions, Tone, VisualizerShape, WeatherLayout, WidgetKind, ranges,
 };
+use mandara_config::widget_kinds::ranges as kr;
+use mandara_config::widget_settings::{Alignment, TextControls as _};
+use mandara_config::widget_style::ranges as style;
 use mandara_core::ToGpui;
 use mandara_i18n::{Lang, t, tf, tk, tr};
 use mandara_plugins::{DesktopWidgetType, PluginRegistry};
 use mandara_theme::MandaraPalette;
 use mandara_ui::backdrop::paint::FontNames;
 use mandara_ui::backdrop::widgets::{PreviewLayer, render_image};
-use mandara_ui::widgets::gpu_feed::GpuCaps;
 use mandara_ui::bidi::Bidi as _;
 use mandara_ui::desktop_plugins::{self as dp, face_label, vis_label};
 use mandara_ui::lock::paint::TextPainter;
 use mandara_ui::state::update_config;
 
+use mandara_ui::widgets::gpu_feed::GpuCaps;
+
 use super::StudioView;
+use super::choice::{ChoiceItem, WIDGET_CHOICE, placed};
 use super::compositor_page::{button, card, tip};
+use super::font_picker::FontSelect;
 use super::launcher_page::page_section;
 use super::themes_page::section_head;
-use mandara_ui::style::ClipRounded as _;
-use super::font_picker::FontSelect;
-use super::choice::{ChoiceItem, WIDGET_CHOICE, placed};
 use crate::tokens::*;
+use mandara_ui::style::ClipRounded as _;
 
 /// Deep links to a widget: frames to wait for its settings' place, the
 /// re-check delay, when to stop waiting and the space kept above them.
@@ -224,7 +226,7 @@ fn widget_label(w: &DesktopWidget, cx: &gpui::App) -> String {
 const ANCHOR_GLYPHS: [&str; 9] = ["↖", "↑", "↗", "←", "•", "→", "↙", "↓", "↘"];
 const TONES: [(Tone, &str); 4] = [(Tone::Auto, tk("Automatic")), (Tone::OnSurface, tk("Text colour")), (Tone::Accent, tk("Accent")), (Tone::Custom, tk("Custom"))];
 const FONTS: [(FontRole, &str); 6] =
-    [(FontRole::Widgets, tk("Widgets font")), (FontRole::Display, tk("Display")), (FontRole::Ui, tk("Interface")), (FontRole::Arabic, tk("Arabic")), (FontRole::Mono, tk("Monospace")), (FontRole::Custom, tk("Choose…"))];
+    [(FontRole::Widgets, tk("Automatic")), (FontRole::Display, tk("Display")), (FontRole::Ui, tk("Interface")), (FontRole::Arabic, tk("Arabic")), (FontRole::Mono, tk("Monospace")), (FontRole::Custom, tk("Choose…"))];
 const EFFECTS: [(Effect, &str); 3] = [(Effect::None, tk("None")), (Effect::Shadow, tk("Shadow")), (Effect::Glow, tk("Glow"))];
 const ALIGNS: [(Align, &str); 4] = [(Align::Auto, tk("With the anchor")), (Align::Start, tk("Start")), (Align::Center, tk("Centre")), (Align::End, tk("End"))];
 const PLATES: [(Plate, &str); 3] = [(Plate::None, tk("None")), (Plate::Glass, tk("Glass")), (Plate::Solid, tk("Solid"))];
@@ -279,7 +281,8 @@ impl StudioView {
     /// Scrolls a deep-linked widget's settings into view once they have
     /// been laid out (a few frames after the page opens).
     fn editor_scroll(&mut self, cx: &mut Context<Self>) {
-        let Some(frames) = cx.global::<PageState>().scroll_to_editor else { return };
+        let Some(frames) = cx.global::<PageState>().scroll_to_editor else { return;
+        };
         let anchor = cx.global::<PageState>().editor_anchor.get();
         let viewport = self.content_scroll.bounds();
         match anchor {
@@ -292,7 +295,9 @@ impl StudioView {
                 cx.notify();
             }
             // Give up if the widget never shows (removed meanwhile).
-            _ if frames >= EDITOR_ANCHOR_GIVE_UP => cx.global_mut::<PageState>().scroll_to_editor = None,
+            _ if frames >= EDITOR_ANCHOR_GIVE_UP => {
+                cx.global_mut::<PageState>().scroll_to_editor = None
+            }
             _ => {
                 cx.global_mut::<PageState>().scroll_to_editor = Some(frames.saturating_add(1));
                 cx.spawn(async move |this, cx| {
@@ -425,7 +430,8 @@ impl StudioView {
         let mut pictures = Vec::new();
         let mut boxes = Vec::new();
         for w in &painted {
-            let Some(layer) = s.layers.get(&w.id) else { continue };
+            let Some(layer) = s.layers.get(&w.id) else { continue;
+            };
             // A dragged widget is drawn where the pointer has it.
             let place = drag.as_ref().filter(|d| d.id == w.id).map_or(&w.place, |d| &d.place);
             let (x, y) = layer.geom.at(place, frame_f);
@@ -482,7 +488,8 @@ impl StudioView {
             .children(boxes)
             .on_mouse_move(cx.listener(move |_, e: &MouseMoveEvent, _, cx| {
                 // Only the picture moves: nothing is painted or written.
-                let Some(mut d) = cx.global::<PageState>().drag.clone() else { return };
+                let Some(mut d) = cx.global::<PageState>().drag.clone() else { return;
+                };
                 let b = cx.global::<PageState>().bounds.get();
                 let left = f32::from(e.position.x - b.origin.x) - d.grab.0;
                 let top = f32::from(e.position.y - b.origin.y) - d.grab.1;
@@ -505,7 +512,9 @@ impl StudioView {
         let size = tile_pixels(picture, cx.global::<PageState>().density);
         let fonts = fonts(cx);
         // Tiles that tell the time are painted again with the minute.
-        let timed = widgets.iter().any(|w| matches!(w.kind, WidgetKind::Clock(_) | WidgetKind::WorldClock(_) | WidgetKind::Countdown(_) | WidgetKind::Progress(_) | WidgetKind::Date(_) | WidgetKind::Sky(_)));
+        let timed = widgets.iter().any(|w| {
+            matches!(w.kind, WidgetKind::Clock(_) | WidgetKind::WorldClock(_) | WidgetKind::Countdown(_) | WidgetKind::Progress(_) | WidgetKind::Date(_) | WidgetKind::Sky(_))
+        });
         let minute = timed.then(|| chrono::Local::now().timestamp().div_euclid(SECS_PER_MINUTE));
         let k = key((tile, size, primary.to_rgba8(), p.on_primary.to_rgba8(), p.on_surface.to_rgba8(), p.surface_dim.to_rgba8(), p.surface_container.to_rgba8(), &fonts, mandara_i18n::language(), minute));
         if let Some((_, img)) = cx.global::<PageState>().tiles.get(tile).filter(|(old, _)| *old == k) {
@@ -559,7 +568,9 @@ impl StudioView {
             };
             let on_desktop = existing.is_some();
             // Pictures painted from sample data say so.
-            let example = widgets.iter().any(|widget| matches!(widget.kind, WidgetKind::Jannah(_) | WidgetKind::Hadith(_) | WidgetKind::Quran(_)) || mandara_ui::backdrop::widgets::gallery::info::has_sample(&widget.kind));
+            let example = widgets.iter().any(|widget| {
+                matches!(widget.kind, WidgetKind::Jannah(_) | WidgetKind::Hadith(_) | WidgetKind::Quran(_)) || mandara_ui::backdrop::widgets::gallery::info::has_sample(&widget.kind)
+            });
             let glyph = mandara_ui::desktop_menu::icon_named(&t.icon);
             let el = div()
                 .id(SharedString::from(format!("dw-add-{}", t.key())))
@@ -593,7 +604,9 @@ impl StudioView {
                             el.child(img(t).absolute().top_0().left_0().w(px(pic_w)).h(px(pic_h)).object_fit(gpui::ObjectFit::Contain))
                         })
                         // Cards are live views: their tile shows their icon.
-                        .when(tile.is_none(), |el| el.child(mandara_ui::icons::icon(glyph, ICON_26_PX, p.primary)))
+                        .when(tile.is_none(), |el| {
+                            el.child(mandara_ui::icons::icon(glyph, ICON_26_PX, p.primary))
+                        })
                         .when(on_desktop, |el| {
                             el.child(
                                 div()
@@ -624,10 +637,12 @@ impl StudioView {
                             .line_clamp(TILE_LABEL_LINES)
                             .text_color(if on_desktop { p.primary.hsla() } else { p.on_surface.hsla() })
                             .child(mandara_ui::bidi::paragraph(if on_desktop { tf("{name} · on the desktop", &[("name", &label)]) } else { label })))
-                        .when(example, |el| el.child(div().flex_none()
+                        .when(example, |el| {
+                            el.child(div().flex_none()
                             .px(px(SPACE_4_PX)).rounded_full().bg(p.surface_dim.hsla())
                             .text_color(p.on_surface.hsla()).text_size(px(TEXT_10_PX))
-                            .line_height(px(LEADING_16_PX)).child(mandara_i18n::t("Preview")))),
+                            .line_height(px(LEADING_16_PX)).child(mandara_i18n::t("Preview")))
+                        }),
                 )
                 .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
                     let id = match &existing {
@@ -704,7 +719,9 @@ impl StudioView {
                     .bg(if on { p.primary.with_alpha(ALPHA_14).hsla() } else { p.surface_container_high.with_alpha(ALPHA_60).hsla() })
                     .border_1()
                     .border_color(if on { p.primary.with_alpha(ALPHA_55).hsla() } else { gpui::transparent_black() })
-                    .when(!on, |el| el.hover(|s| s.bg(p.surface_container_high.hsla())))
+                    .when(!on, |el| {
+                        el.hover(|s| s.bg(p.surface_container_high.hsla()))
+                    })
                     .when(!enabled || plugin_off, |el| el.opacity(DISABLED_OPACITY))
                     .child(
                         div()
@@ -716,8 +733,12 @@ impl StudioView {
                             })),
                     )
                     .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(TEXT_13_PX)).when(on, |el| el.font_weight(FontWeight::MEDIUM)).child(name))
-                    .when(w.place.depth == Depth::Front, |el| el.child(div().text_size(px(TEXT_10_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("front"))))
-                    .when(plugin_off, |el| el.child(div().text_size(px(TEXT_10_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("plugin off"))))
+                    .when(w.place.depth == Depth::Front, |el| {
+                        el.child(div().text_size(px(TEXT_10_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("front")))
+                    })
+                    .when(plugin_off, |el| {
+                        el.child(div().text_size(px(TEXT_10_5_PX)).text_color(p.on_surface_variant.hsla()).child(t("plugin off")))
+                    })
                     .child(
                         div()
                             .id(SharedString::from(format!("dw-del-{}", w.id)))
@@ -797,8 +818,10 @@ impl StudioView {
         let content = self.content_rows(w, p, cx);
         let text = w.kind.locale().map(|l| text_rows(&id, &w.kind, l, p, cx)).unwrap_or_default();
         let look = match &w.kind {
-            WidgetKind::Clock(c) if c.face.depth_style().is_some() => self.font_rows(&id, &c.look, cfg, p, cx),
-            k => k.look().map(|l| self.look_rows(&id, l, cfg, p, cx)).unwrap_or_default(),
+            WidgetKind::Clock(c) if c.face.depth_style().is_some() => {
+                self.font_rows(&id, &c.look, cfg, p, cx)
+            }
+            k => k.look().map(|_| self.look_rows(w, cfg, p, cx)).unwrap_or_default(),
         };
         let shape = match &w.kind {
             WidgetKind::Clock(c) if c.face.depth_style().is_some() => Vec::new(),
@@ -820,7 +843,9 @@ impl StudioView {
         // Wide pages: the cards in two columns, balanced by their rows.
         let body = if self.page.column_w >= TWO_COLUMNS_FROM_PX && cards.len() > 1 {
             let sides = super::grid::two_columns(&cards.iter().map(|(n, _)| *n).collect::<Vec<_>>());
-            let column = || div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_14_PX));
+            let column = || {
+                div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_14_PX))
+            };
             let (mut a, mut b) = (column(), column());
             for ((_, card), side) in cards.into_iter().zip(sides) {
                 if side == 0 {
@@ -881,7 +906,9 @@ impl StudioView {
                         div()
                             .text_size(px(TEXT_11_5_PX))
                             .truncate()
-                            .when(active, |el| el.text_color(p.primary.hsla()).font_weight(FontWeight::MEDIUM))
+                            .when(active, |el| {
+                                el.text_color(p.primary.hsla()).font_weight(FontWeight::MEDIUM)
+                            })
                             .when(!active, |el| el.text_color(p.on_surface_variant.hsla()))
                             .child(label),
                     )
@@ -946,7 +973,9 @@ impl StudioView {
                 rows.push(row(p, t("First line beside the rest"), toggle(id, "divider", f.divider, face_set(|f, v| f.divider = v), p, cx)));
                 rows.push(hint(t("Placeholders: {HH} {mm} {ss} {ampm} {time} {weekday} {wd} {day} {month} {mon} {MM} {year} {greeting} {daypart} {hijri}"), p));
                 for (i, l) in c.lines.iter().enumerate() {
-                    let field = self.list_field(format!("dw-line-{id}-{i}"), &l.text, tk("Text with placeholders"), Rc::new(edit_field(id, move |w, v| if let WidgetKind::Clock(c) = &mut w.kind && let Some(l) = c.lines.get_mut(i) { l.text = v })), cx);
+                    let field = self.list_field(format!("dw-line-{id}-{i}"), &l.text, tk("Text with placeholders"), Rc::new(edit_field(id, move |w, v| {
+                            if let WidgetKind::Clock(c) = &mut w.kind && let Some(l) = c.lines.get_mut(i) { l.text = v }
+                        })), cx);
                     rows.push(row(p, &tf("Line {n}", &[("n", &(i + 1))]), div().w(px(TRACK_W_PX)).child(field).into_any_element()));
                     rows.push(row(p, t("Size"), slider(&format!("{id}-{i}"), "lsize", l.size, LINE_SIZE_PX, 1.0, " px", line_set(i, |l, v| l.size = v), p)));
                     rows.push(choice_row(t("Weight"), &format!("{id}-{i}"), "lweight", l.weight, &LINE_WEIGHTS, line_set(i, |l, v| l.weight = v), p, cx));
@@ -996,7 +1025,9 @@ impl StudioView {
                     })), cx);
                     rows.push(row(p, &tr(label), div().w(px(TRACK_W_PX)).child(field).into_any_element()));
                 }
-                let field = self.list_field(format!("dw-subtitle-{id}"), &c.subtitle, tk("A line under the greeting (optional)"), Rc::new(edit_field(id, |w, v| if let WidgetKind::Clock(c) = &mut w.kind { c.subtitle = v })), cx);
+                let field = self.list_field(format!("dw-subtitle-{id}"), &c.subtitle, tk("A line under the greeting (optional)"), Rc::new(edit_field(id, |w, v| {
+                        if let WidgetKind::Clock(c) = &mut w.kind { c.subtitle = v }
+                    })), cx);
                 rows.push(row(p, t("Second line"), div().w(px(TRACK_W_PX)).child(field).into_any_element()));
             }
             _ => {}
@@ -1030,7 +1061,9 @@ impl StudioView {
         if look.outline_width() > 0.0 {
             rows.push(choice_row(t("Outline colour"), id, "otone", look.outline_tone, &TONES, look_set(|l, v| l.outline_tone = v), p, cx));
             if look.outline_tone == Tone::Custom {
-                let f = self.list_field(format!("dw-ocolor-{id}"), &look.outline_color, "#1e1a17", Rc::new(edit_field(id, |w, v| if let Some(l) = w.kind.look_mut() { l.outline_color = v })), cx);
+                let f = self.list_field(format!("dw-ocolor-{id}"), &look.outline_color, "#1e1a17", Rc::new(edit_field(id, |w, v| {
+                        if let Some(l) = w.kind.look_mut() { l.outline_color = v }
+                    })), cx);
                 rows.push(row(p, t("Custom outline"), div().w(px(TRACK_W_PX)).child(f).into_any_element()));
             }
         }
@@ -1044,7 +1077,9 @@ impl StudioView {
             rows.push(row(p, t("Shadow opacity"), slider(id, "sop", look.shadow_opacity, (style::SHADOW_OPACITY.min, style::SHADOW_OPACITY.max), style::SHADOW_OPACITY.step, "", look_f32(|l, v| l.shadow_opacity = v), p)));
             rows.push(choice_row(t("Shadow colour"), id, "stone", look.shadow_tone, &TONES, look_set(|l, v| l.shadow_tone = v), p, cx));
             if look.shadow_tone == Tone::Custom {
-                let f = self.list_field(format!("dw-scolor-{id}"), &look.shadow_color, "#1f6bff", Rc::new(edit_field(id, |w, v| if let Some(l) = w.kind.look_mut() { l.shadow_color = v })), cx);
+                let f = self.list_field(format!("dw-scolor-{id}"), &look.shadow_color, "#1f6bff", Rc::new(edit_field(id, |w, v| {
+                        if let Some(l) = w.kind.look_mut() { l.shadow_color = v }
+                    })), cx);
                 rows.push(row(p, t("Custom shadow"), div().w(px(TRACK_W_PX)).child(f).into_any_element()));
             }
         }
@@ -1052,7 +1087,9 @@ impl StudioView {
         if look.chrome == Chrome::Tape {
             rows.push(choice_row(t("Tape colour"), id, "ctone", look.chrome_tone, &TONES, look_set(|l, v| l.chrome_tone = v), p, cx));
             if look.chrome_tone == Tone::Custom {
-                let f = self.list_field(format!("dw-ccolor-{id}"), &look.chrome_color, "#ffe08a", Rc::new(edit_field(id, |w, v| if let Some(l) = w.kind.look_mut() { l.chrome_color = v })), cx);
+                let f = self.list_field(format!("dw-ccolor-{id}"), &look.chrome_color, "#ffe08a", Rc::new(edit_field(id, |w, v| {
+                        if let Some(l) = w.kind.look_mut() { l.chrome_color = v }
+                    })), cx);
                 rows.push(row(p, t("Custom tape"), div().w(px(TRACK_W_PX)).child(f).into_any_element()));
             }
             rows.push(row(p, t("Tape angle"), slider(id, "tape", look.tape_angle, (style::TAPE_ANGLE_DEG.min, style::TAPE_ANGLE_DEG.max), style::TAPE_ANGLE_DEG.step, "°", look_f32(|l, v| l.tape_angle = v), p)));
@@ -1062,7 +1099,9 @@ impl StudioView {
             Chrome::Polaroid => tk("Caption"),
             _ => tk("Header"),
         };
-        let header = self.list_field(format!("dw-header-{id}"), &look.header, tk("Optional, e.g. SYS.CLOCK // الساعة"), Rc::new(edit_field(id, |w, v| if let Some(l) = w.kind.look_mut() { l.header = v })), cx);
+        let header = self.list_field(format!("dw-header-{id}"), &look.header, tk("Optional, e.g. SYS.CLOCK // الساعة"), Rc::new(edit_field(id, |w, v| {
+                if let Some(l) = w.kind.look_mut() { l.header = v }
+            })), cx);
         rows.push(row(p, &tr(header_label), div().w(px(TRACK_W_PX)).child(header).into_any_element()));
         if !look.header.trim().is_empty() && matches!(look.chrome, Chrome::None | Chrome::Tape) {
             rows.push(row(p, t("Header size"), slider(id, "hsize", look.header_size, (style::HEADER_SIZE_PX.min, style::HEADER_SIZE_PX.max), style::HEADER_SIZE_PX.step, " px", look_f32(|l, v| l.header_size = v), p)));
@@ -1110,7 +1149,9 @@ impl StudioView {
                 rows.push(row(p, t("Text under it"), toggle(&id, "plabel", pw.label, progress_set(|w, v| w.label = v), p, cx)));
             }
             WidgetKind::Todo(x) => {
-                let list = self.list_field(format!("dw-tlist-{id}"), &x.list, tk("A list's name (empty: every list)"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Todo(x) = &mut w.kind { x.list = v })), cx);
+                let list = self.list_field(format!("dw-tlist-{id}"), &x.list, tk("A list's name (empty: every list)"), Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Todo(x) = &mut w.kind { x.list = v }
+                    })), cx);
                 rows.push(row(p, t("List"), div().w(px(TRACK_W_PX)).child(list).into_any_element()));
                 rows.push(row(p, t("Rows"), slider(&id, "trows", x.rows as f32, rng(kr::ROWS), 1.0, "", todo_set(|x, v: f32| x.rows = as_count(v)), p)));
                 rows.push(row(p, t("Width"), slider(&id, "twidth", x.width, kr::WIDTH_PX, 4.0, " px", todo_set(|x, v| x.width = v), p)));
@@ -1122,11 +1163,15 @@ impl StudioView {
                 rows.push(row(p, t("“Add a task” row"), toggle(&id, "tadd", x.add_row, todo_set(|x, v| x.add_row = v), p, cx)));
             }
             WidgetKind::Note(x) => {
-                let note = self.list_field(format!("dw-note-{id}"), &x.note, tk("A note's title (empty: the latest)"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Note(x) = &mut w.kind { x.note = v })), cx);
+                let note = self.list_field(format!("dw-note-{id}"), &x.note, tk("A note's title (empty: the latest)"), Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Note(x) = &mut w.kind { x.note = v }
+                    })), cx);
                 rows.push(row(p, t("Note"), div().w(px(TRACK_W_PX)).child(note).into_any_element()));
                 rows.push(choice_row(t("Sheet"), &id, "nsheet", x.sheet, &[(dw::NoteSheet::Theme, tk("Plate")), (dw::NoteSheet::Pastel, tk("Pastel")), (dw::NoteSheet::Paper, tk("Paper")), (dw::NoteSheet::Custom, tk("Custom"))], note_set(|x, v| x.sheet = v), p, cx));
                 if x.sheet == dw::NoteSheet::Custom {
-                    let f = self.list_field(format!("dw-nsheet-{id}"), &x.sheet_color, "#ffe08a", Rc::new(edit_field(&id, |w, v| if let WidgetKind::Note(x) = &mut w.kind { x.sheet_color = v })), cx);
+                    let f = self.list_field(format!("dw-nsheet-{id}"), &x.sheet_color, "#ffe08a", Rc::new(edit_field(&id, |w, v| {
+                            if let WidgetKind::Note(x) = &mut w.kind { x.sheet_color = v }
+                        })), cx);
                     rows.push(row(p, t("Sheet colour"), div().w(px(TRACK_W_PX)).child(f).into_any_element()));
                 }
                 rows.push(choice_row(t("Lines"), &id, "nruling", x.ruling, &[(dw::NoteRuling::Plain, tk("Plain")), (dw::NoteRuling::Ruled, tk("Ruled")), (dw::NoteRuling::Grid, tk("Grid")), (dw::NoteRuling::Dots, tk("Dots"))], note_set(|x, v| x.ruling = v), p, cx));
@@ -1142,7 +1187,9 @@ impl StudioView {
                 rows.push(hint(t("Focus and break lengths are the Pomodoro plugin's settings."), p));
             }
             WidgetKind::Quote(x) => {
-                let quotes = self.list_field(format!("dw-quotes-{id}"), &x.quotes.join(" | "), tk("Your quotes: text — author | next one (empty: built-in sayings)"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Quote(x) = &mut w.kind { x.quotes = v.split('|').map(str::trim).filter(|q| !q.is_empty()).map(String::from).collect() })), cx);
+                let quotes = self.list_field(format!("dw-quotes-{id}"), &x.quotes.join(" | "), tk("Your quotes: text — author | next one (empty: built-in sayings)"), Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Quote(x) = &mut w.kind { x.quotes = v.split('|').map(str::trim).filter(|q| !q.is_empty()).map(String::from).collect() }
+                    })), cx);
                 rows.push(row(p, t("Quotes"), div().w(px(TRACK_W_PX)).child(quotes).into_any_element()));
                 rows.push(choice_row(t("Changes"), &id, "qevery", x.every, &[(dw::QuoteEvery::Day, tk("Every day")), (dw::QuoteEvery::Hour, tk("Every hour")), (dw::QuoteEvery::Click, tk("On a click"))], quote_set(|x, v| x.every = v), p, cx));
                 rows.push(row(p, t("Quotation mark"), toggle(&id, "qmark", x.mark, quote_set(|x, v| x.mark = v), p, cx)));
@@ -1250,7 +1297,9 @@ impl StudioView {
             WidgetKind::Search(x) => {
                 rows.push(row(p, t("Width"), slider(&id, "swidth", x.width, kr::WIDTH_PX, 4.0, " px", search_set(|x, v| x.width = v), p)));
                 rows.push(choice_row(t("Shape"), &id, "sshape", x.shape, &SHAPES, search_set(|x, v| x.shape = v), p, cx));
-                let f = self.list_field(format!("dw-sph-{id}"), &x.placeholder, tk("Your words in the field (optional)"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Search(x) = &mut w.kind { x.placeholder = v })), cx);
+                let f = self.list_field(format!("dw-sph-{id}"), &x.placeholder, tk("Your words in the field (optional)"), Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Search(x) = &mut w.kind { x.placeholder = v }
+                    })), cx);
                 rows.push(row(p, t("Placeholder"), div().w(px(TRACK_W_PX)).child(f).into_any_element()));
             }
             WidgetKind::Glance(x) => {
@@ -1258,7 +1307,9 @@ impl StudioView {
                 rows.push(hint(t("Shows the most pressing of: an event soon, the next prayer, a low battery, unread notifications, what plays."), p));
             }
             WidgetKind::Github(x) => {
-                let f = self.list_field(format!("dw-ghuser-{id}"), &x.user, tk("Your GitHub user name"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Github(x) = &mut w.kind { x.user = v.trim().to_string() })), cx);
+                let f = self.list_field(format!("dw-ghuser-{id}"), &x.user, tk("Your GitHub user name"), Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Github(x) = &mut w.kind { x.user = v.trim().to_string() }
+                    })), cx);
                 rows.push(row(p, t("User"), div().w(px(TRACK_W_PX)).child(f).into_any_element()));
                 rows.push(row(p, t("Fetch from GitHub"), toggle(&id, "ghonline", x.online, github_set(|x, v| x.online = v), p, cx)));
                 rows.push(hint(t("Asks github.com for your public contribution calendar every few hours, only while the desktop shows. Nothing is sent but the user name."), p));
@@ -1267,9 +1318,13 @@ impl StudioView {
                 rows.push(row(p, t("Total and streak"), toggle(&id, "ghsum", x.summary, github_set(|x, v| x.summary = v), p, cx)));
             }
             WidgetKind::Currency(x) => {
-                let base = self.list_field(format!("dw-cbase-{id}"), &x.base, "USD", Rc::new(edit_field(&id, |w, v| if let WidgetKind::Currency(x) = &mut w.kind { x.base = v.trim().to_ascii_uppercase() })), cx);
+                let base = self.list_field(format!("dw-cbase-{id}"), &x.base, "USD", Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Currency(x) = &mut w.kind { x.base = v.trim().to_ascii_uppercase() }
+                    })), cx);
                 rows.push(row(p, t("Base currency"), div().w(px(TRACK_W_PX)).child(base).into_any_element()));
-                let pairs = self.list_field(format!("dw-cpairs-{id}"), &x.pairs.join(", "), "EUR, GBP, EGP", Rc::new(edit_field(&id, |w, v| if let WidgetKind::Currency(x) = &mut w.kind { x.pairs = v.split([',', ' ']).map(str::trim).filter(|c| !c.is_empty()).map(str::to_ascii_uppercase).collect() })), cx);
+                let pairs = self.list_field(format!("dw-cpairs-{id}"), &x.pairs.join(", "), "EUR, GBP, EGP", Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Currency(x) = &mut w.kind { x.pairs = v.split([',', ' ']).map(str::trim).filter(|c| !c.is_empty()).map(str::to_ascii_uppercase).collect() }
+                    })), cx);
                 rows.push(row(p, t("Currencies"), div().w(px(TRACK_W_PX)).child(pairs).into_any_element()));
                 rows.push(row(p, t("Decimals"), slider(&id, "cdec", x.decimals as f32, rng(kr::DECIMALS), 1.0, "", currency_set(|x, v: f32| x.decimals = as_count(v)), p)));
                 rows.push(row(p, t("Fetch rates"), toggle(&id, "conline", x.online, currency_set(|x, v| x.online = v), p, cx)));
@@ -1293,14 +1348,18 @@ impl StudioView {
                 rows.push(row(p, t("Uptime"), toggle(&id, "puptime", x.uptime, profile_set(|x, v| x.uptime = v), p, cx)));
                 rows.push(row(p, t("Status"), toggle(&id, "pstatus", x.show_status, profile_set(|x, v| x.show_status = v), p, cx)));
                 if x.show_status {
-                    let f = self.list_field(format!("dw-pstatus-{id}"), &x.status, tk("Your status (empty: Online / Do not disturb)"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Profile(x) = &mut w.kind { x.status = v })), cx);
+                    let f = self.list_field(format!("dw-pstatus-{id}"), &x.status, tk("Your status (empty: Online / Do not disturb)"), Rc::new(edit_field(&id, |w, v| {
+                            if let WidgetKind::Profile(x) = &mut w.kind { x.status = v }
+                        })), cx);
                     rows.push(row(p, t("Status text"), div().w(px(TRACK_W_PX)).child(f).into_any_element()));
                 }
                 rows.push(hint(t("Your picture is ~/.face or your account picture."), p));
             }
             WidgetKind::Shortcuts(x) => {
                 let placeholder = if x.folders { tk("Folders, comma separated (empty: your home folders)") } else { tk("Apps (desktop ids) or web addresses, comma separated (empty: your dock's apps)") };
-                let f = self.list_field(format!("dw-tiles-{id}"), &x.items.join(", "), placeholder, Rc::new(edit_field(&id, |w, v| if let WidgetKind::Shortcuts(x) = &mut w.kind { x.items = v.split(',').map(str::trim).filter(|s| !s.is_empty()).map(String::from).collect() })), cx);
+                let f = self.list_field(format!("dw-tiles-{id}"), &x.items.join(", "), placeholder, Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Shortcuts(x) = &mut w.kind { x.items = v.split(',').map(str::trim).filter(|s| !s.is_empty()).map(String::from).collect() }
+                    })), cx);
                 rows.push(row(p, if x.folders { t("Folders") } else { t("Shortcuts") }, div().w(px(TRACK_W_PX)).child(f).into_any_element()));
                 rows.push(row(p, t("Folders"), toggle(&id, "tfolders", x.folders, tiles_set(|x, v| x.folders = v), p, cx)));
                 rows.push(choice_row(t("Layout"), &id, "tlayout", x.layout, &[(dw::TileLayout::Grid, tk("Grid")), (dw::TileLayout::List, tk("List"))], tiles_set(|x, v| x.layout = v), p, cx));
@@ -1312,7 +1371,9 @@ impl StudioView {
                 rows.push(row(p, t("Colourful tiles"), toggle(&id, "tcolor", x.colorful, tiles_set(|x, v| x.colorful = v), p, cx)));
             }
             WidgetKind::Toggles(x) => {
-                let f = self.list_field(format!("dw-toggles-{id}"), &x.toggles.join(", "), tk("wifi, bluetooth, dnd, night-light, keep-awake, dark, mute"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Toggles(x) = &mut w.kind { x.toggles = v.split(',').map(str::trim).filter(|s| mandara_ui::desktop_actions::TOGGLES.contains(s)).map(String::from).collect() })), cx);
+                let f = self.list_field(format!("dw-toggles-{id}"), &x.toggles.join(", "), tk("wifi, bluetooth, dnd, night-light, keep-awake, dark, mute"), Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Toggles(x) = &mut w.kind { x.toggles = v.split(',').map(str::trim).filter(|s| mandara_ui::desktop_actions::TOGGLES.contains(s)).map(String::from).collect() }
+                    })), cx);
                 rows.push(row(p, t("Toggles"), div().w(px(TRACK_W_PX)).child(f).into_any_element()));
                 rows.push(choice_row(t("Shape when off"), &id, "toff", x.shape_off, &SHAPES, toggles_set(|x, v| x.shape_off = v), p, cx));
                 rows.push(choice_row(t("Shape when on"), &id, "ton", x.shape_on, &SHAPES, toggles_set(|x, v| x.shape_on = v), p, cx));
@@ -1323,8 +1384,26 @@ impl StudioView {
                 rows.push(row(p, t("Upright"), toggle(&id, "svert", x.vertical, sliders_set(|x, v| x.vertical = v), p, cx)));
                 rows.push(row(p, t("Length"), slider(&id, "slen", x.length, kr::SLIDER_LENGTH_PX, 2.0, " px", sliders_set(|x, v| x.length = v), p)));
                 rows.push(row(p, t("Thickness"), slider(&id, "sthick", x.thickness, kr::SLIDER_THICKNESS_PX, 1.0, " px", sliders_set(|x, v| x.thickness = v), p)));
-                rows.push(row(p, t("Volume"), toggle(&id, "svol", x.levels.is_empty() || x.levels.iter().any(|l| l == "volume"), sliders_set(|x, v| set_level_list(&mut x.levels, "volume", v)), p, cx)));
-                rows.push(row(p, t("Brightness"), toggle(&id, "sbright", x.levels.is_empty() || x.levels.iter().any(|l| l == "brightness"), sliders_set(|x, v| set_level_list(&mut x.levels, "brightness", v)), p, cx)));
+                for (level, label, control) in [
+                    ("volume", t("Volume"), "svol"),
+                    ("brightness", t("Brightness"), "sbright"),
+                ] {
+                    if level_locked(&x.levels, level) {
+                        rows.push(locked_control(
+                            label,
+                            t("Keep at least one level on, or switch off the widget."),
+                            p,
+                        ));
+                    } else {
+                        let on = x.levels.is_empty() || x.levels.iter().any(|entry| entry == level);
+                        let set: Set<bool> = Rc::new(move |widget, value| {
+                            if let WidgetKind::Sliders(sliders) = &mut widget.kind {
+                                set_level_list(&mut sliders.levels, level, value)
+                            }
+                        });
+                rows.push(row(p, label, toggle(&id, control, on, set, p, cx)));
+                    }
+                }
             }
             WidgetKind::Palette(x) => {
                 rows.push(choice_row(t("Swatch shape"), &id, "pswatch", x.swatch, &SHAPES, palette_set(|x, v| x.swatch = v), p, cx));
@@ -1332,7 +1411,9 @@ impl StudioView {
                 rows.push(row(p, t("Names and codes"), toggle(&id, "plabels", x.labels, palette_set(|x, v| x.labels = v), p, cx)));
             }
             WidgetKind::Pet(x) => {
-                let f = self.list_field(format!("dw-petname-{id}"), &x.name, tk("Its name (optional)"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Pet(x) = &mut w.kind { x.name = v })), cx);
+                let f = self.list_field(format!("dw-petname-{id}"), &x.name, tk("Its name (optional)"), Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Pet(x) = &mut w.kind { x.name = v }
+                    })), cx);
                 rows.push(row(p, t("Name"), div().w(px(TRACK_W_PX)).child(f).into_any_element()));
                 rows.push(row(p, t("Size"), slider(&id, "petsize", x.size, kr::PET_SIZE_PX, 2.0, " px", pet_set(|x, v| x.size = v), p)));
                 rows.push(hint(t("It moves only while the desktop shows, a few frames a second."), p));
@@ -1346,7 +1427,9 @@ impl StudioView {
                 rows.push(row(p, t("Height"), slider(&id, "bh", x.height, kr::AREA_PX, 4.0, " px", bubbles_set(|x, v| x.height = v), p)));
             }
             WidgetKind::Photo(x) => {
-                let f = self.list_field(format!("dw-pfolder-{id}"), &x.folder, tk("A folder of pictures (empty: ~/Pictures)"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Photo(x) = &mut w.kind { x.folder = v })), cx);
+                let f = self.list_field(format!("dw-pfolder-{id}"), &x.folder, tk("A folder of pictures (empty: ~/Pictures)"), Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Photo(x) = &mut w.kind { x.folder = v }
+                    })), cx);
                 rows.push(row(p, t("Folder"), div().w(px(TRACK_W_PX)).child(f).into_any_element()));
                 rows.push(row(p, t("Minutes each"), slider(&id, "pmin", x.minutes as f32, rng(kr::PHOTO_MINUTES), 1.0, " min", photo_set(|x, v: f32| x.minutes = as_count(v)), p)));
                 rows.push(choice_row(t("Crop shape"), &id, "pcrop", x.crop, &SHAPES, photo_set(|x, v| x.crop = v), p, cx));
@@ -1354,13 +1437,18 @@ impl StudioView {
                 rows.push(row(p, t("Height"), slider(&id, "ph2", x.height, kr::AREA_PX, 4.0, " px", photo_set(|x, v| x.height = v), p)));
             }
             WidgetKind::Sticker(x) => {
-                let f = self.list_field(format!("dw-simage-{id}"), &x.image, tk("A picture file (PNG with a transparent background looks best)"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Sticker(x) = &mut w.kind { x.image = v })), cx);
+                let f = self.list_field(format!("dw-simage-{id}"), &x.image, tk("A picture file (PNG with a transparent background looks best)"), Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Sticker(x) = &mut w.kind { x.image = v }
+                    })), cx);
                 rows.push(row(p, t("Picture"), div().w(px(TRACK_W_PX)).child(f).into_any_element()));
                 rows.push(row(p, t("Size"), slider(&id, "ssz", x.size, kr::AREA_PX, 4.0, " px", sticker_set(|x, v| x.size = v), p)));
                 rows.push(row(p, t("Border"), slider(&id, "sbord", x.border, kr::STICKER_BORDER_PX, 0.5, " px", sticker_set(|x, v| x.border = v), p)));
             }
             WidgetKind::Monitor(m) => {
-                let set = |f: fn(&mut mandara_config::desktop_widgets::MonitorWidget, f32)| -> Set<f32> { Rc::new(move |w, v| if let WidgetKind::Monitor(m) = &mut w.kind { f(m, v) }) };
+                let set = |f: fn(&mut mandara_config::desktop_widgets::MonitorWidget, f32)| -> Set<f32> { Rc::new(move |w, v| {
+                            if let WidgetKind::Monitor(m) = &mut w.kind { f(m, v)
+                            }
+                        }) };
                 if m.style == MonitorStyle::Gauges {
                     rows.push(row(p, t("Ring width"), slider(&id, "mring", m.ring_width, ranges::RING_WIDTH_PX, 0.5, " px", monitor_set(|m, v| m.ring_width = v), p)));
                     rows.push(row(p, t("Wavy ring"), toggle(&id, "mwavy", m.wavy, monitor_set(|m, v| m.wavy = v), p, cx)));
@@ -1373,20 +1461,35 @@ impl StudioView {
                 rows.push(row(p, t("Readings"), monitor_rows(&id, &m.rows, p, cx)));
                 rows.push(row(p, t("Refresh"), slider(&id, "interval", m.interval_s as f32, (ranges::MONITOR_INTERVAL_S.0 as f32, ranges::MONITOR_INTERVAL_S.1 as f32), 1.0, " s", set(|m, v| m.interval_s = v as u32), p)));
                 rows.push(row(p, t("Width"), slider(&id, "width", m.width, ranges::MONITOR_WIDTH_PX, 2.0, " px", set(|m, v| m.width = v), p)));
-                let title = self.list_field(format!("dw-title-{id}"), &m.title, tk("Title (optional)"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Monitor(m) = &mut w.kind { m.title = v })), cx);
+                let title = self.list_field(format!("dw-title-{id}"), &m.title, tk("Title (optional)"), Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Monitor(m) = &mut w.kind { m.title = v }
+                    })), cx);
                 rows.push(row(p, t("Title"), div().w(px(TRACK_W_PX)).child(title).into_any_element()));
             }
             WidgetKind::Decoration(d) => {
                 let shapes: Vec<(DecorShape, &'static str)> = [DecorShape::Text, DecorShape::Disc, DecorShape::Circle, DecorShape::Stripes, DecorShape::Waves, DecorShape::Rule, DecorShape::Frame, DecorShape::Tape].iter().map(|s| (*s, shape_label(*s))).collect();
-                rows.push(choice_row(t("Shape"), &id, "shape", d.shape, &shapes, Rc::new(|w, v| if let WidgetKind::Decoration(d) = &mut w.kind { d.shape = v }), p, cx));
-                let set = |f: fn(&mut Decoration, f32)| -> Set<f32> { Rc::new(move |w, v| if let WidgetKind::Decoration(d) = &mut w.kind { f(d, v) }) };
+                rows.push(choice_row(t("Shape"), &id, "shape", d.shape, &shapes, Rc::new(|w, v| {
+                        if let WidgetKind::Decoration(d) = &mut w.kind { d.shape = v }
+                    }), p, cx));
+                let set = |f: fn(&mut Decoration, f32)| -> Set<f32> { Rc::new(move |w, v| {
+                        if let WidgetKind::Decoration(d) = &mut w.kind { f(d, v)
+                        }
+                    }) };
                 if d.shape == DecorShape::Text {
-                    let text = self.list_field(format!("dw-text-{id}"), &d.text.replace('\n', " / "), tk("Your text (“ / ” starts a new line or column)"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Decoration(d) = &mut w.kind { d.text = v.split(" / ").collect::<Vec<_>>().join("\n") })), cx);
+                    let text = self.list_field(format!("dw-text-{id}"), &d.text.replace('\n', " / "), tk("Your text (“ / ” starts a new line or column)"), Rc::new(edit_field(&id, |w, v| {
+                            if let WidgetKind::Decoration(d) = &mut w.kind { d.text = v.split(" / ").collect::<Vec<_>>().join("\n") }
+                        })), cx);
                     rows.push(row(p, t("Text"), div().w(px(DIM_320_PX)).child(text).into_any_element()));
-                    rows.push(row(p, t("Vertical"), toggle(&id, "vertical", d.vertical, Rc::new(|w, v| if let WidgetKind::Decoration(d) = &mut w.kind { d.vertical = v }), p, cx)));
+                    rows.push(row(p, t("Vertical"), toggle(&id, "vertical", d.vertical, Rc::new(|w, v| {
+                                if let WidgetKind::Decoration(d) = &mut w.kind { d.vertical = v }
+                            }), p, cx)));
                     if d.vertical {
-                        rows.push(choice_row(t("Sideways text"), &id, "sideways", d.sideways, &SIDEWAYS, Rc::new(|w, v| if let WidgetKind::Decoration(d) = &mut w.kind { d.sideways = v }), p, cx));
-                        rows.push(row(p, t("Upright Latin letters"), toggle(&id, "upright-latin", d.upright_latin, Rc::new(|w, v| if let WidgetKind::Decoration(d) = &mut w.kind { d.upright_latin = v }), p, cx)));
+                        rows.push(choice_row(t("Sideways text"), &id, "sideways", d.sideways, &SIDEWAYS, Rc::new(|w, v| {
+                                if let WidgetKind::Decoration(d) = &mut w.kind { d.sideways = v }
+                            }), p, cx));
+                        rows.push(row(p, t("Upright Latin letters"), toggle(&id, "upright-latin", d.upright_latin, Rc::new(|w, v| {
+                                    if let WidgetKind::Decoration(d) = &mut w.kind { d.upright_latin = v }
+                                }), p, cx)));
                     }
                     rows.push(row(p, t("Text size"), slider(&id, "size", d.size, ranges::TEXT_SIZE_PX, 1.0, " px", set(|d, v| d.size = v), p)));
                     rows.push(row(p, t("Weight"), slider(&id, "weight", d.weight as f32, (ranges::WEIGHT.0 as f32, ranges::WEIGHT.1 as f32), 100.0, "", set(|d, v| d.weight = v as u16), p)));
@@ -1407,18 +1510,29 @@ impl StudioView {
             }
             WidgetKind::Visualizer(v) => {
                 let shapes: Vec<(VisualizerShape, &'static str)> = [VisualizerShape::Bars, VisualizerShape::Mirrored, VisualizerShape::Wave, VisualizerShape::Radial, VisualizerShape::Led].iter().map(|s| (*s, vis_label(*s))).collect();
-                rows.push(choice_row(t("Shape"), &id, "vshape", v.shape, &shapes, Rc::new(|w, x| if let WidgetKind::Visualizer(v) = &mut w.kind { v.shape = x }), p, cx));
-                let set = |f: fn(&mut PlaneVisualizer, f32)| -> Set<f32> { Rc::new(move |w, x| if let WidgetKind::Visualizer(v) = &mut w.kind { f(v, x) }) };
+                rows.push(choice_row(t("Shape"), &id, "vshape", v.shape, &shapes, Rc::new(|w, x| {
+                        if let WidgetKind::Visualizer(v) = &mut w.kind { v.shape = x }
+                    }), p, cx));
+                let set = |f: fn(&mut PlaneVisualizer, f32)| -> Set<f32> { Rc::new(move |w, x| {
+                        if let WidgetKind::Visualizer(v) = &mut w.kind { f(v, x)
+                        }
+                    }) };
                 rows.push(row(p, t("Number of bars"), slider(&id, "bars", v.bars as f32, (ranges::VISUALIZER_BARS.0 as f32, ranges::VISUALIZER_BARS.1 as f32), 1.0, "", set(|v, x| v.bars = x as u32), p)));
                 rows.push(row(p, if v.shape == VisualizerShape::Radial { t("Diameter") } else { t("Length") }, slider(&id, "len", v.length, ranges::VISUALIZER_LENGTH_PX, 2.0, " px", set(|v, x| v.length = x), p)));
                 rows.push(row(p, t("Height"), slider(&id, "vh", v.height, ranges::VISUALIZER_HEIGHT_PX, 1.0, " px", set(|v, x| v.height = x), p)));
                 rows.push(row(p, t("Angle"), slider(&id, "angle", v.angle, ranges::ANGLE_DEG, 1.0, "°", set(|v, x| v.angle = x), p)));
-                rows.push(row(p, t("Gap"), slider(&id, "gap", v.gap, ranges::VISUALIZER_GAP, 0.05, "", set(|v, x| v.gap = x), p)));
+                if v.shape == VisualizerShape::Wave {
+                    rows.push(locked_control(t("Gap"),t("A continuous wave has no gaps between bars."),p));
+                } else {
+                    rows.push(row(p, t("Gap"), slider(&id, "gap", v.gap, ranges::VISUALIZER_GAP, 0.05, "", set(|v, x| v.gap = x), p)));
+                }
                 rows.push(row(p, t("Frame rate"), slider(&id, "fps", v.fps as f32, (ranges::VISUALIZER_FPS.0 as f32, ranges::VISUALIZER_FPS.1 as f32), 1.0, " fps", set(|v, x| v.fps = x as u32), p)));
                 rows.push(row(p, t("Stop after silence"), slider(&id, "silence", v.silence_s as f32, (ranges::VISUALIZER_SILENCE_S.0 as f32, ranges::VISUALIZER_SILENCE_S.1 as f32), 1.0, " s", set(|v, x| v.silence_s = x as u32), p)));
             }
             WidgetKind::Weather(ww) => {
-                rows.push(choice_row(t("Layout"), &id, "wlayout", ww.layout, &[(WeatherLayout::Hero, tk("Large")), (WeatherLayout::Compact, tk("One line")), (WeatherLayout::Sentence, tk("Sentence")), (WeatherLayout::Disc, tk("Disc")), (WeatherLayout::Hourly, tk("Hourly curve")), (WeatherLayout::Ribbon, tk("Weather ribbon")), (WeatherLayout::Thermometer, tk("Thermometer")), (WeatherLayout::HumidityRose, tk("Humidity rose"))], Rc::new(|w, v| if let WidgetKind::Weather(x) = &mut w.kind { x.layout = v }), p, cx));
+                rows.push(choice_row(t("Layout"), &id, "wlayout", ww.layout, &[(WeatherLayout::Hero, tk("Large")), (WeatherLayout::Compact, tk("One line")), (WeatherLayout::Sentence, tk("Sentence")), (WeatherLayout::Disc, tk("Disc")), (WeatherLayout::Hourly, tk("Hourly curve")), (WeatherLayout::Ribbon, tk("Weather ribbon")), (WeatherLayout::Thermometer, tk("Thermometer")), (WeatherLayout::HumidityRose, tk("Humidity rose"))], Rc::new(|w, v| {
+                        if let WidgetKind::Weather(x) = &mut w.kind { x.layout = v }
+                    }), p, cx));
                 match ww.layout {
                     WeatherLayout::Hero => {
                         rows.push(row(p, t("Place name"), toggle(&id, "wplace", ww.location, weather_set(|x, v| x.location = v), p, cx)));
@@ -1489,18 +1603,32 @@ impl StudioView {
                 rows.push(hint(t("Uses your location from Studio → Date, time & location. Nothing is fetched from the network."), p));
             }
             WidgetKind::WorldClock(wc) => {
-                let cities = self.list_field(format!("dw-cities-{id}"), &wc.cities.join(", "), tk("Cities, comma separated (empty: your World clock cities)"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::WorldClock(x) = &mut w.kind { x.cities = v.split(',').map(str::trim).filter(|s| !s.is_empty()).map(String::from).collect() })), cx);
+                let cities = self.list_field(format!("dw-cities-{id}"), &wc.cities.join(", "), tk("Cities, comma separated (empty: your World clock cities)"), Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::WorldClock(x) = &mut w.kind { x.cities = v.split(',').map(str::trim).filter(|s| !s.is_empty()).map(String::from).collect() }
+                    })), cx);
                 rows.push(row(p, t("Cities"), div().w(px(DIM_320_PX)).child(cities).into_any_element()));
-                rows.push(row(p, t("Hours ahead or behind"), toggle(&id, "woffsets", wc.offsets, Rc::new(|w, v| if let WidgetKind::WorldClock(x) = &mut w.kind { x.offsets = v }), p, cx)));
-                rows.push(row(p, t("Side by side"), toggle(&id, "wrow", wc.horizontal, Rc::new(|w, v| if let WidgetKind::WorldClock(x) = &mut w.kind { x.horizontal = v }), p, cx)));
+                rows.push(row(p, t("Hours ahead or behind"), toggle(&id, "woffsets", wc.offsets, Rc::new(|w, v| {
+                            if let WidgetKind::WorldClock(x) = &mut w.kind { x.offsets = v }
+                        }), p, cx)));
+                rows.push(row(p, t("Side by side"), toggle(&id, "wrow", wc.horizontal, Rc::new(|w, v| {
+                            if let WidgetKind::WorldClock(x) = &mut w.kind { x.horizontal = v }
+                        }), p, cx)));
             }
             WidgetKind::Countdown(c) => {
-                let title = self.list_field(format!("dw-ctitle-{id}"), &c.title, tk("What is coming (empty: New Year)"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Countdown(x) = &mut w.kind { x.title = v })), cx);
+                let title = self.list_field(format!("dw-ctitle-{id}"), &c.title, tk("What is coming (empty: New Year)"), Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Countdown(x) = &mut w.kind { x.title = v }
+                    })), cx);
                 rows.push(row(p, t("Title"), div().w(px(TRACK_W_PX)).child(title).into_any_element()));
-                let date = self.list_field(format!("dw-cdate-{id}"), &c.date, tk("YYYY-MM-DD (empty: next New Year)"), Rc::new(edit_field(&id, |w, v| if let WidgetKind::Countdown(x) = &mut w.kind { x.date = v.trim().to_string() })), cx);
+                let date = self.list_field(format!("dw-cdate-{id}"), &c.date, tk("YYYY-MM-DD (empty: next New Year)"), Rc::new(edit_field(&id, |w, v| {
+                        if let WidgetKind::Countdown(x) = &mut w.kind { x.date = v.trim().to_string() }
+                    })), cx);
                 rows.push(row(p, t("Date"), div().w(px(TRACK_W_PX)).child(date).into_any_element()));
-                rows.push(row(p, t("Show the date"), toggle(&id, "cshow", c.show_date, Rc::new(|w, v| if let WidgetKind::Countdown(x) = &mut w.kind { x.show_date = v }), p, cx)));
-                rows.push(row(p, t("Count the days since"), toggle(&id, "cup", c.count_up, Rc::new(|w, v| if let WidgetKind::Countdown(x) = &mut w.kind { x.count_up = v }), p, cx)));
+                rows.push(row(p, t("Show the date"), toggle(&id, "cshow", c.show_date, Rc::new(|w, v| {
+                            if let WidgetKind::Countdown(x) = &mut w.kind { x.show_date = v }
+                        }), p, cx)));
+                rows.push(row(p, t("Count the days since"), toggle(&id, "cup", c.count_up, Rc::new(|w, v| {
+                            if let WidgetKind::Countdown(x) = &mut w.kind { x.count_up = v }
+                        }), p, cx)));
             }
             WidgetKind::Card(c) if dc::parse_plugin_card(&c.card).is_some() => {
                 let opts: PluginCardOptions = dc::options(c);
@@ -1557,19 +1685,64 @@ impl StudioView {
         f
     }
 
-    fn look_rows(&mut self, id: &str, look: &dw::Look, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let mut rows = self.font_rows(id, look, cfg, p, cx);
-        rows.push(choice_row(t("Colour"), id, "tone", look.tone, &TONES, look_set(|l, v| l.tone = v), p, cx));
-        if look.tone == Tone::Custom {
-            let f = self.list_field(format!("dw-color-{id}"), &look.custom_color, "#e8d9b0 / oklch(0.85 0.06 85)", Rc::new(edit_field(id, |w, v| if let Some(l) = w.kind.look_mut() { l.custom_color = v })), cx);
+    fn look_rows(&mut self,
+        widget: &DesktopWidget, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let (id, kind) = (widget.id.as_str(), &widget.kind);
+        let Some(look) = kind.look() else {
+            return Vec::new();
+        };
+        let mut rows = if kind.has_text() {
+            self.font_rows(id, look, cfg, p, cx)
+        } else {
+            vec![locked_control(
+                t("Font"),
+                t("Add a header to use text settings with this layout."),
+                p,
+            )]
+        };
+        if kind.has_foreground() {
+            rows.push(choice_row(t("Colour"), id, "tone", look.tone, &TONES, look_set(|l, v| l.tone = v), p, cx));
+        } else {
+            rows.push(locked_control(t("Colour"),t("Add a header to use text settings with this layout."),p));
+        }
+        if kind.has_foreground() && look.tone == Tone::Custom {
+            let f = self.list_field(format!("dw-color-{id}"), &look.custom_color, "#e8d9b0 / oklch(0.85 0.06 85)", Rc::new(edit_field(id, |w, v| {
+                    if let Some(l) = w.kind.look_mut() { l.custom_color = v }
+                })), cx);
             rows.push(row(p, t("Custom colour"), div().w(px(TRACK_W_PX)).child(f).into_any_element()));
         }
         rows.push(choice_row(t("Accent"), id, "accent", look.accent, &TONES, look_set(|l, v| l.accent = v), p, cx));
         if look.accent == Tone::Custom {
-            let f = self.list_field(format!("dw-accent-{id}"), &look.custom_accent, "#4fd1c5 / oklch(0.78 0.12 190)", Rc::new(edit_field(id, |w, v| if let Some(l) = w.kind.look_mut() { l.custom_accent = v })), cx);
+            let f = self.list_field(format!("dw-accent-{id}"), &look.custom_accent, "#4fd1c5 / oklch(0.78 0.12 190)", Rc::new(edit_field(id, |w, v| {
+                    if let Some(l) = w.kind.look_mut() { l.custom_accent = v }
+                })), cx);
             rows.push(row(p, t("Custom accent"), div().w(px(TRACK_W_PX)).child(f).into_any_element()));
         }
-        rows.push(choice_row(t("Alignment"), id, "align", look.align, &ALIGNS, look_set(|l, v| l.align = v), p, cx));
+        match kind.alignment() {
+            Alignment::Content => rows.push(choice_row(t("Alignment"), id, "align", look.align, &ALIGNS, look_set(|look, value| look.align = value), p, cx,
+            )),
+            Alignment::Header => {
+                rows.push(choice_row(
+                    t("Alignment"),
+                    id,
+                    "align",
+                    look.align,
+                    &ALIGNS,
+                    look_set(|look, value| look.align = value),
+                    p,
+                    cx,
+                ));
+                rows.push(hint(
+                    t("Alignment applies to the header in this layout."),
+                    p,
+                ));
+            }
+            Alignment::Fixed => rows.push(locked_control(
+                t("Alignment"),
+                t("This layout fixes its text positions. Add a header to align it separately."),
+                p,
+            )),
+        }
         rows.push(choice_row(t("Effect"), id, "effect", look.effect, &EFFECTS, look_set(|l, v| l.effect = v), p, cx));
         if look.effect != Effect::None {
             rows.push(row(p, t("Effect strength"), slider(id, "strength", look.effect_strength, ranges::EFFECT_STRENGTH, 0.05, "×", look_f32(|l, v| l.effect_strength = v), p)));
@@ -1592,8 +1765,35 @@ fn section(title: &str, rows: Vec<AnyElement>, p: &MandaraPalette) -> AnyElement
     card(p)
         .gap_0()
         .child(div().pb(px(SPACE_8_PX)).text_size(px(TEXT_14_PX)).font_weight(FontWeight::SEMIBOLD).child(title.to_string()))
-        .children(rows.into_iter().map(|r| div().py(px(SPACE_10_PX)).border_t_1().border_color(p.on_surface.with_alpha(ALPHA_6).hsla()).child(r)))
+        .children(rows.into_iter().map(|r| {
+            div().py(px(SPACE_10_PX)).border_t_1().border_color(p.on_surface.with_alpha(ALPHA_6).hsla()).child(r)
+        }))
         .into_any_element()
+}
+
+fn locked_control(label: &str, reason: &str, p: &MandaraPalette) -> AnyElement {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(SPACE_6_PX))
+        .child(
+            div()
+                .row()
+                .items_center()
+                .gap(px(SPACE_8_PX))
+                .child(mandara_ui::icons::icon(
+                    "lock",
+                    ICON_12_PX,
+                    p.on_surface_variant,
+                ))
+                .child(div().text_size(px(TEXT_12_PX)).child(label.to_string())),
+        )
+        .child(hint(reason, p))
+        .into_any_element()
+}
+
+fn level_locked(levels: &[String], level: &str) -> bool {
+    levels.len() == 1 && levels[0] == level
 }
 
 fn hint(text: &str, p: &MandaraPalette) -> AnyElement {
@@ -1734,11 +1934,13 @@ fn languages() -> Vec<(String, String)> {
 fn text_rows(id: &str, kind: &WidgetKind, l: &TextOptions, p: &MandaraPalette, cx: &mut Context<StudioView>) -> Vec<AnyElement> {
     let mut rows = vec![choice_row(t("Numerals"), id, "numerals", l.numerals, &NUMERALS, locale_set(|l, v| l.numerals = v), p, cx)];
     // Dates: the clocks and the countdown.
-    if matches!(kind, WidgetKind::Clock(_) | WidgetKind::Countdown(_)) {
+    if kind.has_calendar() {
         rows.push(choice_row(t("Calendar"), id, "calendar", l.calendar, &CALENDARS, locale_set(|l, v| l.calendar = v), p, cx));
         if l.calendar.hijri() {
             rows.push(row(p, t("Hijri date in Arabic"), toggle(id, "hijri-ar", l.hijri_in_arabic, locale_set(|l, v| l.hijri_in_arabic = v), p, cx)));
         }
+    } else if matches!(kind,WidgetKind::Clock(_)) {
+        rows.push(locked_control(t("Calendar"),t("This clock face only shows the time."),p));
     }
     rows.push(language_row(t("Language"), id, &l.language, locale_set(|l, v: String| l.language = v), p, cx));
     rows
@@ -1793,12 +1995,16 @@ fn choice_row_of(p: &MandaraPalette, label: &str, items: Vec<ChoiceItem>, cx: &C
 /// Ends a drag: the widget re-anchors to the anchor nearest its centre,
 /// keeps its place, and the config is written (once).
 fn drop_drag(pw: f32, ph: f32, cx: &mut Context<StudioView>) {
-    let Some(d) = cx.global_mut::<PageState>().drag.take() else { return };
+    let Some(d) = cx.global_mut::<PageState>().drag.take() else { return;
+    };
     let place = d.place.clone();
     edit(cx, &d.id, move |w| {
         let (left, top) = place.origin((pw, ph), d.size);
         let (cx_f, cy_f) = ((left + d.size.0 / 2.0) / pw, (top + d.size.1 / 2.0) / ph);
-        let pick = |f: f32| if f < 1.0 / 3.0 { 0 } else if f > 2.0 / 3.0 { 2 } else { 1 };
+        let pick = |f: f32| {
+            if f < 1.0 / 3.0 { 0 } else if f > 2.0 / 3.0 { 2 } else { 1
+            }
+        };
         w.place.anchor = Anchor::ALL[pick(cy_f) * 3 + pick(cx_f)];
         let (x, y) = w.place.offset_for((pw, ph), d.size, (left, top));
         w.place.x = x;
@@ -1855,7 +2061,10 @@ fn slider(id: &str, what: &str, value: f32, (min, max): (f32, f32), step: f32, u
     let snap = move |f: f32| ((min + (max - min) * f) / step).round() * step;
     let text = {
         let unit = unit.to_string();
-        move |v: f32| if step >= 1.0 { format!("{v:.0}{unit}") } else if step >= 0.05 { format!("{v:.2}{unit}") } else { format!("{v:.3}{unit}") }
+        move |v: f32| {
+            if step >= 1.0 { format!("{v:.0}{unit}") } else if step >= 0.05 { format!("{v:.2}{unit}") } else { format!("{v:.3}{unit}")
+            }
+        }
     };
     let shown = text(mandara_ui::slider_model::held(&gpui::ElementId::Name(slider_id.clone())).map_or(value, snap));
     div()
@@ -1894,13 +2103,15 @@ fn choice_row<T: Copy + PartialEq + 'static>(label: &str, id: &str, what: &str, 
 
 fn anchors(id: &str, current: Anchor, p: &MandaraPalette) -> AnyElement {
     let widget_id = id.to_string();
-    anchor_grid(id, current, p, Rc::new(move |anchor, cx| edit(cx, &widget_id, move |w| {
+    anchor_grid(id, current, p, Rc::new(move |anchor, cx| {
+            edit(cx, &widget_id, move |w| {
         let (fx, fy) = w.place.anchor.fraction();
         let (nx, ny) = anchor.fraction();
         w.place.x += fx - nx;
         w.place.y += fy - ny;
         w.place.anchor = anchor;
-    })))
+    })
+        }))
 }
 
 pub(super) fn anchor_grid(id: &str, current: Anchor, p: &MandaraPalette, callback: Rc<dyn Fn(Anchor, &mut gpui::App)>) -> AnyElement {
@@ -1917,8 +2128,12 @@ pub(super) fn anchor_grid(id: &str, current: Anchor, p: &MandaraPalette, callbac
             .justify_center()
             .cursor_pointer()
             .text_size(px(TEXT_12_PX))
-            .when(on, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()))
-            .when(!on, |el| el.bg(p.surface_container_high.hsla()).text_color(p.on_surface_variant.hsla()))
+            .when(on, |el| {
+                    el.bg(p.primary.hsla()).text_color(p.on_primary.hsla())
+                })
+            .when(!on, |el| {
+                    el.bg(p.surface_container_high.hsla()).text_color(p.on_surface_variant.hsla())
+                })
             .child(glyph)
             .on_click(move |_, _, cx| callback(a, cx))
     });
@@ -1945,8 +2160,12 @@ fn displays(id: &str, current: &[String], cfg: &ShellConfig, p: &MandaraPalette,
             .items_center()
             .cursor_pointer()
             .text_size(px(TEXT_12_PX))
-            .when(on, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()))
-            .when(!on, |el| el.bg(p.surface_container_high.hsla()).text_color(p.on_surface_variant.hsla()))
+            .when(on, |el| {
+                el.bg(p.primary.hsla()).text_color(p.on_primary.hsla())
+            })
+            .when(!on, |el| {
+                el.bg(p.surface_container_high.hsla()).text_color(p.on_surface_variant.hsla())
+            })
             .child(label)
             .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
                 let f = f.clone();
@@ -2018,9 +2237,15 @@ fn monitor_rows(id: &str, rows: &[MonitorRow], p: &MandaraPalette, cx: &mut Cont
                 .items_center()
                 .gap(px(SPACE_4_PX))
                 .text_size(px(TEXT_12_PX))
-                .when(on, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()))
-                .when(!on, |el| el.bg(p.surface_container_high.hsla()).text_color(p.on_surface_variant.hsla()))
-                .when(locked, |el| el.opacity(LOCKED_ALPHA).child(mandara_ui::icons::icon("lock", ICON_12_PX, p.on_surface_variant)))
+                .when(on, |el| {
+                    el.bg(p.primary.hsla()).text_color(p.on_primary.hsla())
+                })
+                .when(!on, |el| {
+                    el.bg(p.surface_container_high.hsla()).text_color(p.on_surface_variant.hsla())
+                })
+                .when(locked, |el| {
+                    el.opacity(LOCKED_ALPHA).child(mandara_ui::icons::icon("lock", ICON_12_PX, p.on_surface_variant))
+                })
                 .child(tr(row_label(r)).to_string())
                 .when(!locked, |el| {
                     el.cursor_pointer().on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
@@ -2055,5 +2280,15 @@ mod preview_tests {
         assert_eq!(tile_pixels((180.0, 135.0), 3.0), (540, 405));
         assert_eq!(tile_pixels((180.0, 135.0), 8.0), (720, 540));
         assert_eq!(tile_pixels((180.0, 135.0), f32::NAN), (360, 270));
+    }
+}
+
+#[cfg(test)]
+mod controls_tests {
+    #[test]
+    fn the_last_slider_level_is_locked_instead_of_silently_ignoring_its_toggle() {
+        assert!(!super::level_locked(&[], "volume"));
+        assert!(super::level_locked(&["volume".into()], "volume"));
+        assert!(!super::level_locked(&["volume".into()], "brightness"));
     }
 }

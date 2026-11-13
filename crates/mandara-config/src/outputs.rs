@@ -282,16 +282,238 @@ pub fn identity(name: &str, make: &str, model: &str, serial: &str) -> String {
     if serial.trim().is_empty() || make.trim().is_empty() { name.to_string() } else { format!("{} {} {}", make.trim(), model.trim(), serial.trim()) }
 }
 
+/// Remember connected monitors without losing the settings of an unplugged
+/// one. An EDID match moves its saved settings to its current connector.
+pub fn remember(saved: &mut Vec<OutputConfig>, current: impl IntoIterator<Item = OutputConfig>) {
+    let current: Vec<_> = current.into_iter().collect();
+    for mut output in current.iter().cloned() {
+        let stable = |output: &OutputConfig| !output.make.trim().is_empty() && !output.serial.trim().is_empty();
+        let output_stable = stable(&output);
+        let (make, model, serial, name) = (&output.make, &output.model, &output.serial, &output.name);
+        let same_monitor = |old: &OutputConfig| {
+            if stable(old) && output_stable {
+                old.make.trim() == make.trim() && old.model.trim() == model.trim() && old.serial.trim() == serial.trim()
+            } else {
+                !stable(old) && !output_stable && old.name == *name
+            }
+        };
+        let unique = current.iter().filter(|other| same_monitor(other)).count() == 1
+            && saved.iter().filter(|old| same_monitor(old)).count() <= 1;
+        let previous = saved.iter().find(|old| old.name == output.name && same_monitor(old))
+            .or_else(|| unique.then(|| saved.iter().find(|old| same_monitor(old))).flatten());
+        if let Some(previous) = previous {
+            if !output.enabled {
+                output.width = output.width.or(previous.width);
+                output.height = output.height.or(previous.height);
+                output.refresh_mhz = output.refresh_mhz.or(previous.refresh_mhz);
+                output.scale = output.scale.or(previous.scale);
+                output.transform = output.transform.or(previous.transform);
+                output.x = output.x.or(previous.x);
+                output.y = output.y.or(previous.y);
+                output.vrr = output.vrr.or(previous.vrr);
+            }
+            // The output protocol reports only on/off, so a snapshot cannot
+            // distinguish a compositor's fullscreen-only policy from on.
+            if previous.vrr == Some(VrrMode::Fullscreen) && output.vrr == Some(VrrMode::On) {
+                output.vrr = previous.vrr;
+            }
+        }
+        saved.retain(|old| {
+            if stable(old) && output_stable {
+                !same_monitor(old) || (!unique && old.name != output.name)
+            } else {
+                stable(old) || output_stable || old.name != output.name
+            }
+        });
+        saved.push(output);
+    }
+}
+
+#[cfg(test)]
+mod persistence_tests {
+    use super::*;
+
+    #[test]
+    fn remembering_duplicate_edids_retains_both_connector_entries() {
+        let a = OutputConfig { name: "DP-1".into(), make: "Demo".into(), model: "Panel".into(), serial: "same".into(), scale: Some(1.25), ..Default::default() };
+        let b = OutputConfig { name: "DP-2".into(), scale: Some(2.0), ..a.clone() };
+        let mut saved = vec![a.clone(), b.clone()];
+        remember(&mut saved, [a.clone(), b.clone()]);
+        assert_eq!(saved, [a, b]);
+    }
+
+    #[test]
+    fn anonymous_monitors_do_not_inherit_or_delete_saved_edid_preferences() {
+        let old = OutputConfig { name: "DP-1".into(), make: "Demo".into(), serial: "A".into(), scale: Some(1.5), ..Default::default() };
+        let anonymous = OutputConfig { name: "DP-1".into(), enabled: false, ..Default::default() };
+        let mut saved = vec![old.clone()];
+        remember(&mut saved, [anonymous.clone()]);
+        assert_eq!(saved, [old.clone(), anonymous.clone()]);
+        remember(&mut saved, [anonymous.clone()]);
+        assert_eq!(saved, [old, anonymous]);
+    }
+
+    #[test]
+    fn stable_monitors_do_not_inherit_or_delete_anonymous_preferences() {
+        let projector = OutputConfig { name: "DP-1".into(), scale: Some(2.0), ..Default::default() };
+        let monitor = OutputConfig { name: "DP-1".into(), make: "Demo".into(), serial: "A".into(), enabled: false, ..Default::default() };
+        let mut saved = vec![projector.clone()]; remember(&mut saved, [monitor.clone()]);
+        assert_eq!(saved, [projector.clone(), monitor.clone()]);
+        remember(&mut saved, [monitor.clone()]); assert_eq!(saved, [projector.clone(), monitor]);
+        remember(&mut saved, [OutputConfig { scale: None, enabled: false, ..projector }]);
+        assert_eq!(saved.last().unwrap().scale, Some(2.0));
+        assert_eq!(current_connectors(&saved).count(), 1);
+    }
+
+    #[test]
+    fn reused_connectors_keep_edid_preferences_and_inherit_the_matching_monitor() {
+        let monitor = |serial: &str, name: &str, scale: f32| OutputConfig {
+            name: name.into(), make: "Demo".into(), model: "Display".into(), serial: serial.into(),
+            scale: Some(scale), ..Default::default()
+        };
+        let a = monitor("A", "DP-1", 1.25);
+        let b = monitor("B", "DP-2", 2.0);
+        let mut saved = vec![b.clone(), a.clone()];
+        remember(&mut saved, [OutputConfig { name: "DP-2".into(), enabled: false, scale: None, ..a.clone() }]);
+        assert_eq!(saved.len(), 2);
+        assert_eq!(saved.last().unwrap().scale, a.scale);
+        assert!(saved.contains(&b));
+        remember(&mut saved, [monitor("C", "DP-1", 1.5)]);
+        assert_eq!(saved.len(), 3);
+        remember(&mut saved, [OutputConfig { name: "DP-3".into(), enabled: false, scale: None, ..a }]);
+        assert_eq!(saved.len(), 3);
+        assert_eq!(saved.last().unwrap().scale, Some(1.25));
+        for target in [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway] {
+            let text = emit_outputs(target, &saved, false);
+            assert_eq!(text.matches("DP-2").count(), 1, "{target:?}: {text}");
+        }
+    }
+
+    #[test]
+    fn profile_ids_survive_legacy_reads_and_do_not_follow_reused_names() {
+        let old: DisplayProfile = serde_json::from_str(r#"{"name":"Desk","outputs":[]}"#).unwrap();
+        assert_eq!(old.id, "legacy:Desk");
+        let mut renamed = old.clone();
+        renamed.name = "Work".into();
+        let saved: DisplayProfile = serde_json::from_value(serde_json::to_value(&renamed).unwrap()).unwrap();
+        assert_eq!(saved.id, old.id);
+        let replacement = DisplayProfile::new("Desk".into(), Vec::new());
+        assert_ne!(replacement.id, old.id);
+        assert_ne!(replacement.id, DisplayProfile::new("Desk".into(), Vec::new()).id);
+    }
+
+    #[test]
+    fn snapshots_keep_disabled_monitor_preferences_and_fullscreen_vrr_policy() {
+        let before = OutputConfig {
+            name: "DP-1".into(),
+            width: Some(2560),
+            height: Some(1440),
+            scale: Some(1.5),
+            transform: Some(Transform::Rotate90),
+            x: Some(-1440),
+            y: Some(120),
+            vrr: Some(VrrMode::Fullscreen),
+            ..Default::default()
+        };
+        let mut saved = vec![before.clone()];
+        remember(
+            &mut saved,
+            [OutputConfig {
+                name: "DP-1".into(),
+                enabled: false,
+                ..Default::default()
+            }],
+        );
+        assert_eq!(
+            saved,
+            [OutputConfig {
+                enabled: false,
+                ..before.clone()
+            }]
+        );
+        remember(
+            &mut saved,
+            [OutputConfig {
+                vrr: Some(VrrMode::On),
+                ..before.clone()
+            }],
+        );
+        assert_eq!(saved[0].vrr, Some(VrrMode::Fullscreen));
+        remember(
+            &mut saved,
+            [OutputConfig {
+                vrr: Some(VrrMode::Off),
+                ..before
+            }],
+        );
+        assert_eq!(saved[0].vrr, Some(VrrMode::Off));
+    }
+
+    #[test]
+    fn saving_keeps_unplugged_monitors_and_updates_changed_connectors() {
+        let old = OutputConfig {
+            name: "DP-1".into(),
+            make: "Demo".into(),
+            model: "Display".into(),
+            serial: "42".into(),
+            scale: Some(1.5),
+            ..Default::default()
+        };
+        let laptop = OutputConfig {
+            name: "eDP-1".into(),
+            scale: Some(2.0),
+            ..Default::default()
+        };
+        let mut saved = vec![old.clone(), laptop.clone()];
+        let moved = OutputConfig {
+            name: "DP-2".into(),
+            scale: Some(1.25),
+            transform: Some(Transform::Rotate90),
+            x: Some(-1080),
+            y: Some(0),
+            ..old
+        };
+        remember(&mut saved, [moved.clone()]);
+        assert_eq!(saved, [laptop, moved]);
+    }
+}
+
 /// A saved arrangement, applied automatically when exactly its monitors
 /// are connected.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct DisplayProfile {
+    /// Stable across renames and concurrent arrangement edits.
+    pub id: String,
     pub name: String,
     pub outputs: Vec<OutputConfig>,
 }
 
+impl<'de> Deserialize<'de> for DisplayProfile {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Default, Deserialize)]
+        #[serde(default)]
+        struct Saved {
+            id: String,
+            name: String,
+            outputs: Vec<OutputConfig>,
+        }
+        let saved = Saved::deserialize(deserializer)?;
+        // Old files have unique profile names. Persist the derived identity on
+        // the next normal save, without changing the user's arrangement.
+        let id = if saved.id.is_empty() { format!("legacy:{}", saved.name) } else { saved.id };
+        Ok(Self { id, name: saved.name, outputs: saved.outputs })
+    }
+}
+
 impl DisplayProfile {
+    pub fn new(name: String, outputs: Vec<OutputConfig>) -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+        let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
+        Self { id: format!("profile:{time:x}:{:x}:{sequence:x}", std::process::id()), name, outputs }
+    }
+
     /// The set of monitor identities this profile was saved with.
     pub fn identities(&self) -> BTreeSet<String> {
         self.outputs.iter().map(OutputConfig::identity).collect()
@@ -489,7 +711,9 @@ pub fn assignment(cfg: &DisplaysConfig, kind: SurfaceKind, output: &str) -> bool
     match set.show_on {
         ScreenChoice::All => true,
         ScreenChoice::Primary => cfg.primary.as_deref().filter(|p| !p.trim().is_empty()).is_none_or(|p| same_output(p, output)),
-        ScreenChoice::Selected => set.outputs.is_empty() || set.outputs.iter().any(|o| same_output(o, output)),
+        ScreenChoice::Selected => {
+            set.outputs.is_empty() || set.outputs.iter().any(|o| same_output(o, output))
+        }
     }
 }
 
@@ -527,21 +751,28 @@ fn regex_exact(s: &str) -> String {
     out
 }
 
+/// A reused connector belongs to the most recently observed monitor. Keep
+/// older EDID preferences in the saved list for its next connection.
+fn current_connectors(outputs: &[OutputConfig]) -> impl Iterator<Item = &OutputConfig> {
+    outputs.iter().enumerate().filter_map(|(index, output)| {
+        (!outputs[index + 1..].iter().any(|newer| newer.name.trim() == output.name.trim())).then_some(output)
+    })
+}
+
 /// MangoWM `monitor_rule=` lines (0.18 key:value syntax, checked with
 /// `mango -p`).
 pub fn mango_lines(outputs: &[OutputConfig]) -> String {
     let mut s = String::new();
-    for o in outputs.iter().filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
+    for o in current_connectors(outputs).filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
         let mut props = vec![format!("name:{}", regex_exact(o.name.trim()))];
         if !o.enabled {
             props.push("disable:1".into());
         } else {
-            if let (Some(w), Some(h)) = (o.width, o.height) {
+            // Mango requires a complete mode; partial modes leave its current mode in place.
+            if let (Some(w), Some(h), Some(r)) = (o.width, o.height, o.refresh_mhz.filter(|r| *r > 0)) {
                 props.push(format!("width:{w}"));
                 props.push(format!("height:{h}"));
-                if let Some(r) = o.refresh_mhz.filter(|r| *r > 0) {
-                    props.push(format!("refresh:{}", hz(r)));
-                }
+                props.push(format!("refresh:{}", hz(r)));
             }
             if let (Some(x), Some(y)) = (o.x, o.y) {
                 props.push(format!("x:{x}"));
@@ -557,7 +788,9 @@ pub fn mango_lines(outputs: &[OutputConfig]) -> String {
                 props.push(format!("vrr:{}", u8::from(v != VrrMode::Off)));
             }
         }
-        let _ = writeln!(s, "monitor_rule={}", props.join(","));
+        if props.len() > 1 {
+            let _ = writeln!(s, "monitor_rule={}", props.join(","));
+        }
     }
     s
 }
@@ -569,7 +802,7 @@ fn kdl_str(s: &str) -> String {
 /// Niri `output "NAME" { … }` blocks (KDL v1).
 pub fn niri_blocks(outputs: &[OutputConfig]) -> String {
     let mut s = String::new();
-    for o in outputs.iter().filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
+    for o in current_connectors(outputs).filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
         let mut body = String::new();
         if !o.enabled {
             let _ = writeln!(body, "    off");
@@ -604,7 +837,7 @@ pub fn niri_blocks(outputs: &[OutputConfig]) -> String {
 /// Hyprland (hyprlang) `monitor =` lines.
 pub fn hyprland_conf_lines(outputs: &[OutputConfig]) -> String {
     let mut s = String::new();
-    for o in outputs.iter().filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
+    for o in current_connectors(outputs).filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
         let name = o.name.trim();
         if !o.enabled {
             let _ = writeln!(s, "monitor = {name}, disable");
@@ -636,7 +869,7 @@ fn lua_str(s: &str) -> String {
 /// never breaks the user's config.
 pub fn hyprland_lua_lines(outputs: &[OutputConfig]) -> String {
     let mut s = String::new();
-    for o in outputs.iter().filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
+    for o in current_connectors(outputs).filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
         let mut fields = vec![format!("output = {}", lua_str(o.name.trim()))];
         if !o.enabled {
             fields.push("disabled = true".into());
@@ -676,7 +909,7 @@ fn umbriel_vrr(v: VrrMode) -> &'static str {
 /// Umbriel `[output."NAME"]` tables (by connector, as the other drop-ins).
 pub fn umbriel_tables(outputs: &[OutputConfig]) -> String {
     let mut s = String::new();
-    for o in outputs.iter().filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
+    for o in current_connectors(outputs).filter(|o| !o.name.trim().is_empty() && o.has_settings()) {
         let mut body = String::new();
         if !o.enabled {
             let _ = writeln!(body, "enabled = false");
@@ -706,7 +939,9 @@ pub fn umbriel_tables(outputs: &[OutputConfig]) -> String {
 /// fullscreen-only adaptive sync: that choice turns it on, as on MangoWM.
 pub fn sway_lines(outputs: &[OutputConfig]) -> String {
     let mut s = String::new();
-    for o in outputs.iter().filter(|o| !o.name.trim().is_empty() && !o.name.contains(char::is_whitespace) && o.has_settings()) {
+    for o in current_connectors(outputs).filter(|o| {
+        !o.name.trim().is_empty() && !o.name.contains(char::is_whitespace) && o.has_settings()
+    }) {
         let name = o.name.trim();
         if !o.enabled {
             let _ = writeln!(s, "output {name} disable");
@@ -751,12 +986,14 @@ pub fn emit_outputs(target: Target, outputs: &[OutputConfig], hyprland_lua: bool
         Target::Sway => ("#", sway_lines(outputs)),
         // River has no output settings (outputs are set with
         // wlr-output-management tools; Studio → Displays applies them live).
-        Target::River | Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic => ("#", String::new()),
+        Target::River | Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic => {
+            ("#", String::new())
+        }
     };
     if body.trim().is_empty() {
         return String::new();
     }
-    format!("\n{comment} Displays (Studio → Displays)\n{body}")
+    format!("\n{comment} Displays (Studio → Displays)\n{body}{comment} End Displays (Studio → Displays)\n")
 }
 
 /// Output names that the user's own compositor config (and the files it
@@ -770,7 +1007,8 @@ pub fn user_output_rules(target: Target) -> BTreeSet<String> {
         if !visited.insert(file.clone()) || is_generated(&file) {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(&file) else { continue };
+        let Ok(text) = std::fs::read_to_string(&file) else { continue;
+        };
         out.extend(parse_output_rules(target, &text));
         stack.extend(included_files(target, &file, &text));
     }
@@ -782,7 +1020,8 @@ pub fn parse_output_rules(target: Target, text: &str) -> Vec<String> {
     if target == Target::Umbriel {
         // `[output.NAME]` / `[output."NAME"]` tables (sub-tables such as
         // `[output.DP-1.layout.scrolling]` name the same output).
-        let Ok(doc) = text.parse::<toml::Table>() else { return Vec::new() };
+        let Ok(doc) = text.parse::<toml::Table>() else { return Vec::new();
+        };
         return doc.get("output").and_then(toml::Value::as_table).map(|t| t.keys().cloned().collect()).unwrap_or_default();
     }
     let mut out = Vec::new();
@@ -791,8 +1030,12 @@ pub fn parse_output_rules(target: Target, text: &str) -> Vec<String> {
             Target::Mango => line
                 .strip_prefix("monitor_rule=")
                 .or_else(|| line.strip_prefix("monitorrule="))
-                .and_then(|rest| rest.split(',').find_map(|p| p.trim().strip_prefix("name:")).or_else(|| rest.split(',').next()))
-                .map(|n| n.trim_start_matches('^').trim_end_matches('$').replace('\\', "")),
+                .and_then(|rest| {
+                    rest.split(',').find_map(|p| p.trim().strip_prefix("name:")).or_else(|| rest.split(',').next())
+                })
+                .map(|n| {
+                    n.trim_start_matches('^').trim_end_matches('$').replace('\\', "")
+                }),
             Target::Hyprland => line.strip_prefix("monitor").and_then(|r| r.trim_start().strip_prefix('=')).and_then(|r| r.split(',').next()).map(|n| n.trim().to_string()),
             Target::Niri => line.strip_prefix("output ").and_then(|r| r.trim().strip_prefix('"')).and_then(|r| r.split('"').next()).map(str::to_string),
             // Read whole-file above.
@@ -861,7 +1104,7 @@ mod tests {
 
     #[test]
     fn profiles_match_exact_monitor_sets() {
-        let p = DisplayProfile { name: "Desk".into(), outputs: vec![dell(), laptop_off()] };
+        let p = DisplayProfile::new("Desk".into(), vec![dell(), laptop_off()]);
         let both: BTreeSet<String> = ["Dell Inc. U2720Q ABC123".to_string(), "eDP-1".to_string()].into();
         assert!(p.matches(&both));
         let laptop: BTreeSet<String> = ["eDP-1".to_string()].into();
@@ -909,6 +1152,15 @@ mod tests {
         assert!(text.contains("monitor_rule=name:^DP-1$,width:3840,height:2160,refresh:59.997,x:2560,y:0,scale:1.50,rr:1,vrr:1"), "{text}");
         assert!(text.contains("monitor_rule=name:^eDP-1$,disable:1"));
         assert!(!text.contains("HDMI-A-2"), "nothing set, nothing written");
+    }
+
+    #[test]
+    fn mango_partial_modes_keep_independent_scale_and_position_settings() {
+        let output = OutputConfig { name: "DP-1".into(), width: Some(2560), height: Some(1440), scale: Some(1.25), ..Default::default() };
+        let text = mango_lines(&[output]);
+        assert!(!text.contains("width:") && !text.contains("height:") && !text.contains("refresh:"));
+        assert!(text.contains("scale:1.25"));
+        assert!(mango_lines(&[OutputConfig { name:"DP-1".into(),width:Some(2560),height:Some(1440),..Default::default() }]).is_empty());
     }
 
     /// MangoWM's own checker accepts the monitor rules.

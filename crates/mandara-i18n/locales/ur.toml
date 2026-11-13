@@ -9475,7 +9475,7 @@
 "To start Mandara with Aqueous, add {command} to Aqueous's own startup settings." = "Mandara کو Aqueous کے ساتھ شروع کرنے کے لیے {command} کو Aqueous کی اپنی آغاز کی ترتیبات میں شامل کریں۔"
 "labwc settings stay in ~/.config/labwc (rc.xml, autostart)" = "labwc کی ترتیبات ~/.config/labwc میں ہی رہتی ہیں (rc.xml، autostart)"
 "COSMIC settings are managed in COSMIC Settings" = "COSMIC کی ترتیبات COSMIC کی ترتیبات میں منظم ہوتی ہیں"
-"labwc has no standalone configuration checker. It reads its own files in ~/.config/labwc, and Mandara writes nothing there." = "labwc کے پاس ترتیب جانچنے کا کوئی الگ آلہ نہیں ہے۔ یہ ~/.config/labwc میں اپنی فائلیں خود پڑھتا ہے، اور Mandara وہاں کچھ نہیں لکھتا۔"
+"labwc has no standalone configuration checker. Theme colours use a private headless check." = "labwc میں ترتیب کی جانچ کا الگ آلہ نہیں ہے۔ تھیم کے رنگ ایک نجی، بغیر ڈسپلے والے سیشن میں جانچے جاتے ہیں۔"
 "COSMIC has no standalone configuration checker. Its settings are managed in COSMIC Settings, and Mandara writes nothing there." = "COSMIC کے پاس ترتیب جانچنے کا کوئی الگ آلہ نہیں ہے۔ اس کی ترتیبات COSMIC کی ترتیبات میں منظم ہوتی ہیں، اور Mandara وہاں کچھ نہیں لکھتا۔"
 "labwc keeps its settings in ~/.config/labwc (rc.xml, autostart) and reloads them itself. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and changes nothing in those files. To start Mandara with labwc, add the line “mandara &” to ~/.config/labwc/autostart." = "labwc اپنی ترتیبات ~/.config/labwc (rc.xml، autostart) میں رکھتا ہے اور انہیں خود دوبارہ لوڈ کرتا ہے۔ Mandara معیاری Wayland پروٹوکولز کے ذریعے اس کی ورک اسپیسز، ونڈوز اور ڈسپلے پر نظر رکھتا ہے اور ان فائلوں میں کچھ نہیں بدلتا۔ labwc کے ساتھ Mandara شروع کرنے کے لیے ~/.config/labwc/autostart میں “mandara &” شامل کریں۔"
 "COSMIC keeps its settings in COSMIC Settings. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and COSMIC's window protocols, and changes nothing there. To start Mandara with COSMIC, add it in COSMIC Settings → Applications → Startup applications." = "COSMIC اپنی ترتیبات COSMIC کی ترتیبات میں رکھتا ہے۔ Mandara معیاری Wayland پروٹوکولز اور COSMIC کے ونڈو پروٹوکولز کے ذریعے اس کی ورک اسپیسز، ونڈوز اور ڈسپلے پر نظر رکھتا ہے اور وہاں کچھ نہیں بدلتا۔ COSMIC کے ساتھ Mandara شروع کرنے کے لیے اسے COSMIC کی ترتیبات → ایپلیکیشنز → اسٹارٹ اپ ایپلیکیشنز میں شامل کریں۔"
@@ -10262,3 +10262,75 @@
 "Your compositor's own" = "آپ کے کمپوزیٹر کی اپنی"
 "labwc has no window animations to set" = "labwc میں سیٹ کرنے لائق ونڈو اینیمیشن نہیں"
 "Preview unavailable" = "پیش نظارہ دستیاب نہیں"
+
+# App templates and desktop preferences
+"Add a header to use text settings with this layout." = "اس ترتیب میں متن کی ترتیبات استعمال کرنے کے لیے سرخی شامل کریں۔"
+"Alignment applies to the header in this layout." = "اس ترتیب میں سیدھ سرخی پر لاگو ہوتی ہے۔"
+"Apply app themes now" = "ایپس کی تھیمز ابھی لاگو کریں"
+"Apply preference edits without replacing unrelated settings" = "غیر متعلق ترتیبات بدلے بغیر ترجیحات کی ترامیم لاگو کریں"
+"Argument <{name}> must be {kind}, got {value}" = "آرگومنٹ <{name}> کی قسم {kind} ہونی چاہیے، موصولہ قدر {value} ہے"
+"Browse app templates" = "ایپس کے سانچے دیکھیں"
+"Browse available app templates; pass refresh to update the catalog" = "دستیاب ایپ سانچے دیکھیں؛ فہرست تازہ کرنے کے لیے refresh دیں"
+"Catalog sources" = "فہرست کے ذرائع"
+"Catalog sources use HTTPS. Edit their names and URLs, then save with Ctrl+Enter." = "فہرست کے ذرائع HTTPS استعمال کرتے ہیں۔ نام اور پتے تبدیل کریں، پھر Ctrl+Enter سے محفوظ کریں۔"
+"Choose the apps that follow your palette. Managed files are backed up and restored when you switch them off; imported setup commands follow their own undo instructions." = "وہ ایپس منتخب کریں جو آپ کے رنگ اپنائیں۔ زیر انتظام فائلوں کا بیک اپ بنتا ہے اور بند کرنے پر بحال ہوتی ہیں؛ درآمد شدہ سیٹ اپ کمانڈز اپنی واپسی کی ہدایات استعمال کرتی ہیں۔"
+"Could not install app template: {error}" = "ایپ کا سانچہ نصب نہیں ہو سکا: {error}"
+"Could not save app templates: {error}" = "ایپس کے سانچے محفوظ نہیں ہو سکے: {error}"
+"Disable an app template and undo its managed changes" = "ایپ کا سانچہ بند کریں اور اس کی زیر انتظام تبدیلیاں واپس کریں"
+"Display controls are busy; try again in a moment" = "ڈسپلے کنٹرول مصروف ہیں؛ کچھ دیر بعد دوبارہ کوشش کریں"
+"Get & enable" = "حاصل اور فعال کریں"
+"Hide app templates" = "ایپس کے سانچے چھپائیں"
+"Import a local app-template document without enabling new entries" = "نئے اندراجات فعال کیے بغیر مقامی سانچوں کی دستاویز درآمد کریں"
+"Imported templates can run app setup commands. Check their instructions before switching them on. Theme changes use installed files without downloading again." = "درآمد شدہ سانچے ایپس کی سیٹ اپ کمانڈز چلا سکتے ہیں۔ فعال کرنے سے پہلے ان کی ہدایات دیکھیں۔ تھیم بدلنے پر نصب فائلیں دوبارہ ڈاؤن لوڈ کیے بغیر استعمال ہوتی ہیں۔"
+"In use: terminal {terminal} · file manager {files} · browser {browser}" = "زیر استعمال: ٹرمینل {terminal} · فائل مینیجر {files} · براؤزر {browser}"
+"Install and enable an app template by its source:app id" = "source:app شناخت سے ایپ کا سانچہ نصب اور فعال کریں"
+"Instructions" = "ہدایات"
+"Keep at least one level on, or switch off the widget." = "کم از کم ایک سطح فعال رکھیں، یا ویجٹ بند کریں۔"
+"Mandara is free and always will be. If it makes your desktop a little nicer and you'd like to say thanks, you can chip in toward the AI credits and developer time behind it. Completely optional: using it, sharing it and reporting bugs help just as much." = "مندارا مفت ہے اور ہمیشہ رہے گا۔ اگر اس نے آپ کا ڈیسک ٹاپ بہتر بنایا ہے اور آپ شکریہ ادا کرنا چاہتے ہیں تو آپ AI کریڈٹس اور ترقیاتی وقت کے اخراجات میں حصہ ڈال سکتے ہیں۔ یہ بالکل اختیاری ہے؛ اسے استعمال کرنا، بانٹنا اور خرابیوں کی اطلاع دینا بھی اتنا ہی مددگار ہے۔"
+"Mandara writes these to its own drop-in for {target_name} (never your config) and reloads it. Chords your own config already uses are skipped and marked “taken”. Click a shortcut, then press the keys; Esc cancels." = "مندارا یہ ترتیبات {target_name} کے لیے اپنی الگ فائل میں لکھتا اور دوبارہ لوڈ کرتا ہے، آپ کی فائل میں نہیں۔ آپ کی ترتیبات میں پہلے سے موجود شارٹ کٹس چھوڑ دیے جاتے اور «مصروف» نشان لگتا ہے۔ شارٹ کٹ پر کلک کرکے چابیاں دبائیں؛ Esc منسوخ کرتا ہے۔"
+"Page {page} of {pages}" = "صفحہ {page} از {pages}"
+"Run template setup commands" = "سانچوں کی سیٹ اپ کمانڈز چلائیں"
+"Search app templates" = "ایپس کے سانچے تلاش کریں"
+"Show the last app-theme export and any setup errors" = "ایپس کی تھیمز کی آخری برآمد اور سیٹ اپ کی خرابیاں دکھائیں"
+"Template document" = "سانچوں کی دستاویز"
+"Template sources" = "سانچوں کے ذرائع"
+"Test a display arrangement from JSON, keeping unrelated changes made since the draft" = "مسودے کے بعد کی غیر متعلق تبدیلیاں برقرار رکھتے ہوئے JSON سے ڈسپلے ترتیب آزمائیں"
+"Text recognition models aren't installed yet ({models}) — download them in Studio → Maintenance" = "متن شناخت کے ماڈلز ابھی نصب نہیں ({models}) — اسٹوڈیو ← دیکھ بھال سے ڈاؤن لوڈ کریں"
+"This layout fixes its text positions. Add a header to align it separately." = "اس ترتیب میں متن کی جگہ مقرر ہے۔ الگ سیدھ کے لیے سرخی شامل کریں۔"
+"Update template" = "سانچہ تازہ کریں"
+"Write or paste a template document. Use content for an inline template, or input_path for a file. Set enabled = true to apply it. Save with Ctrl+Enter." = "سانچوں کی دستاویز لکھیں یا چسپاں کریں۔ اندرونی سانچے کے لیے content یا فائل کے لیے input_path استعمال کریں۔ لاگو کرنے کے لیے enabled = true رکھیں۔ Ctrl+Enter سے محفوظ کریں۔"
+"Your templates" = "آپ کے سانچے"
+"display draft as JSON" = "ڈسپلے کا مسودہ بطور JSON"
+"local template document" = "مقامی سانچوں کی دستاویز"
+"refresh installed catalog metadata" = "نصب فہرست کا میٹاڈیٹا تازہ کریں"
+"source:app template id" = "source:app سانچے کی شناخت"
+"{model} ({file}) failed its checksum: got {got}, expected {expected}" = "{model} ({file}) کی پڑتال ناکام: {got} موصول ہوا، متوقع {expected} تھا"
+"{model} ({file}) is {got} bytes, expected {expected}" = "{model} ({file}) کا حجم {got} بائٹس ہے، متوقع {expected} تھا"
+"{place} is in {zone} ({offset}), but your clock uses {system} ({system_offset})" = "{place}، {zone} ({offset}) میں ہے، مگر آپ کی گھڑی {system} ({system_offset}) استعمال کرتی ہے"
+"{size} in {secs} s · first byte {ms} ms" = "{secs} سیکنڈ میں {size} · پہلا بائٹ {ms} ملی سیکنڈ میں"
+
+"Mandara restores this arrangement when the shell starts." = "شیل شروع ہونے پر Mandara یہ ترتیب بحال کرتا ہے۔"
+
+"This clock face only shows the time." = "گھڑی کا یہ انداز صرف وقت دکھاتا ہے۔"
+
+"A continuous wave has no gaps between bars." = "مسلسل لہر میں سلاخوں کے درمیان وقفے نہیں ہوتے۔"
+
+"The compositor configuration changed while its theme was being checked. Try again." = "تھیم کی جانچ کے دوران کمپوزیٹر کی ترتیب بدل گئی۔ دوبارہ کوشش کریں۔"
+
+"The compositor configuration is not a regular file." = "کمپوزیٹر کی ترتیب عام فائل نہیں ہے۔"
+
+"The compositor rejected the theme; previous settings were kept." = "کمپوزیٹر نے تھیم مسترد کر دی؛ پچھلی ترتیبات برقرار رکھی گئی ہیں۔"
+
+"Review an app template; pass its approval token to enable it" = "ایپ کے سانچے کا جائزہ لیں؛ فعال کرنے کے لیے اس کا منظوری ٹوکن دیں"
+
+"approval token returned by the review" = "جائزے کے بعد ملنے والا منظوری ٹوکن"
+
+"Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "اس سانچے کو فعال کرنے سے پہلے فائلوں اور کمانڈز کا جائزہ لیں۔ کمانڈز دوسری فائلیں بھی بدل سکتی ہیں۔ اپ ڈیٹس کے لیے نیا جائزہ ضروری ہے۔"
+
+"Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "پہلے براؤزر کے مشترکہ رنگوں کے پیلیٹ کا جائزہ لے کر منظوری دیں۔ دوسری Pywal ایپس بھی یہی رنگ استعمال کریں گی۔"
+
+"Apply the color scheme to KDE apps and notify running apps." = "KDE ایپس پر رنگوں کی اسکیم لاگو کریں اور چلتی ایپس کو مطلع کریں۔"
+
+"Enable browser theming and publish the shared app palette." = "براؤزر کی تھیم فعال کریں اور ایپس کا مشترکہ رنگ پیلیٹ شائع کریں۔"
+
+"Browser CSS exceeds the nesting limit" = "براؤزر CSS نے اندرونی تہوں کی حد پار کر دی ہے"

@@ -275,7 +275,11 @@ pub fn open_studio_at(section: Option<String>, cx: &mut App) {
 /// Acknowledges actual delivery; a failed or closed reply falls back to a
 /// local save. `None` means the other process is already known to be offline.
 #[derive(Clone)]
-pub struct ConfigMirror(pub std::rc::Rc<dyn Fn(&ShellConfig) -> Option<async_channel::Receiver<bool>>>);
+pub struct ConfigMirror(pub std::rc::Rc<dyn Fn(
+            std::sync::Arc<ShellConfig>,
+            std::sync::Arc<ShellConfig>,
+        ) -> Option<async_channel::Receiver<bool>>,
+    >);
 impl Global for ConfigMirror {}
 
 #[derive(Clone)]
@@ -297,9 +301,42 @@ pub fn config(cx: &App) -> Entity<ConfigStore> {
 /// Debounce for persisting in-memory config edits to disk.
 const FLUSH_DEBOUNCE: Duration = Duration::from_millis(400);
 
+struct ConfigWriter(mandara_services::config_save::Writer);
+impl Global for ConfigWriter {}
+
+fn queue_save(
+    cx: &mut App,
+) -> Option<async_channel::Receiver<Result<mandara_config::store::Saved, String>>> {
+    let save = config(cx).read(cx).save_request()?;
+    if cx.try_global::<ConfigWriter>().is_none() {
+        cx.set_global(ConfigWriter(Default::default()));
+    }
+    Some(cx.global::<ConfigWriter>().0.submit(save))
+}
+
+fn finish_save(saved: mandara_config::store::Saved, cx: &mut App) -> Result<(), String> {
+    let changed = config(cx).update(cx, |store, cx| {
+        let changed = store
+            .finish_save(saved)
+            .map_err(|error| format!("merging saved configuration: {error:#}"))?;
+        if changed {
+            cx.notify();
+        }
+        Ok::<_, String>(changed)
+    })?;
+    if changed {
+        sync_theme_from_config(cx);
+    }
+    Ok(())
+}
+
 /// Saves pending preferences before handing over to another shell process.
 pub fn flush_config(cx: &mut App) -> Result<(), String> {
-    config(cx).update(cx, |store, _| store.flush().map_err(|err| format!("saving configuration: {err:#}")))
+    let Some(reply) = queue_save(cx) else {
+        return Ok(());
+    };
+    let saved = reply.recv_blocking().map_err(|error| error.to_string())??;
+    finish_save(saved, cx)
 }
 
 /// Mutates the shared config in memory (instantly visible to every surface)
@@ -307,6 +344,7 @@ pub fn flush_config(cx: &mut App) -> Result<(), String> {
 /// are forwarded to the theme engine immediately.
 pub fn update_config(cx: &mut App, f: impl FnOnce(&mut ShellConfig)) {
     let config = config(cx);
+    let before = config.read(cx).snapshot();
     let changed = config.update(cx, |store, cx| {
         let changed = store.update(f);
         if changed {
@@ -318,47 +356,73 @@ pub fn update_config(cx: &mut App, f: impl FnOnce(&mut ShellConfig)) {
         return;
     }
     sync_theme_from_config(cx);
-    let delivery = cx.try_global::<ConfigMirror>().cloned().and_then(|mirror| (mirror.0)(&config.read(cx).snapshot()));
+    let delivery = cx.try_global::<ConfigMirror>().cloned().and_then(|mirror| (mirror.0)(before, config.read(cx).snapshot()));
+    if let Some(delivery) = delivery {
+        // Delivery is independent of the save debounce. A later successful
+        // edit must not discard an earlier failed delivery's local save.
+        // The mirror closes superseded pending replies, keeping at most
+        // one in-flight and one pending delivery waiter.
+        cx.spawn(async move |cx| {
+            if delivery.recv().await == Ok(false) {
+                cx.update(schedule_flush);
+            }
+        })
+        .detach();
+    } else {
+        schedule_flush(cx);
+    }
+}
+
+fn schedule_flush(cx: &mut App) {
     let shell = shell(cx);
     shell.update(cx, |state, cx| {
         state.flush_task = Some(cx.spawn(async move |_, cx| {
-            if let Some(delivery) = delivery
-                && delivery.recv().await == Ok(true)
-            {
-                return;
-            }
             cx.background_executor().timer(FLUSH_DEBOUNCE).await;
-            config.update(cx, |store, _| {
-                if let Err(err) = store.flush() {
-                    tracing::error!("failed to persist config: {err:#}");
+            if let Some(reply) = cx.update(queue_save) {
+                match reply.recv().await {
+                    Ok(Ok(saved)) => {
+                if let Err(error) = cx.update(|cx| finish_save(saved, cx)) {
+                    tracing::error!("failed to persist config: {error}");
                 }
-            });
+            }
+                    Ok(Err(error)) => tracing::error!("failed to persist config: {error}"),
+                    // A newer pending save replaced this one.
+                    Err(_) => {}
+                }
+            }
         }));
     });
 }
 
 /// Re-reads the config file after an external edit and applies it.
-pub fn reload_config_from_disk(cx: &mut App) -> Result<bool, String> {
-    let config = config(cx);
-    let outcome = config.update(cx, |store, cx| {
-        let outcome = store.reload_from_disk();
-        if matches!(outcome, Ok(ReloadOutcome::Changed)) {
+pub fn reload_config_from_disk(cx: &mut App) -> gpui::Task<Result<bool, String>> {
+    let request = config(cx).read(cx).reload_request();
+    cx.spawn(async move |cx| {
+        let result = mandara_services::runtime::unblock(move || request.read()).await;
+    let outcome = result.and_then(|loaded| {
+            cx.update(|cx| {
+                config(cx).update(cx, |store, cx| {
+        let result = store.finish_reload(loaded);
+        if matches!(result, Ok(ReloadOutcome::Changed)) {
             cx.notify();
         }
-        outcome
-    });
+                    result
+                })
+            })
+        });
     match outcome {
         Ok(ReloadOutcome::Changed) => {
             tracing::info!("config reloaded from disk");
-            sync_theme_from_config(cx);
+                cx.update(sync_theme_from_config);
             Ok(true)
         }
         Ok(ReloadOutcome::Unchanged) => Ok(false),
-        Err(err) => {
-            tracing::warn!("ignoring invalid config edit: {err:#}");
-            Err(format!("{err:#}"))
+        Err(error) => {
+            tracing::warn!("ignoring invalid config edit: {error:#}");
+            Err(format!("{error:#}"))
         }
     }
+    })
 }
 
 /// How long a palette change crossfades: `theme.transition_ms`, or
@@ -426,81 +490,16 @@ pub fn init_state(config_store: ConfigStore, cx: &mut App) -> (Entity<ConfigStor
     (config, shell)
 }
 
-/// The app-theme targets `[integrations]` enables.
-pub fn app_theme_targets(i: &mandara_config::IntegrationsConfig) -> (mandara_theme::templates::Targets, mandara_theme::templates::AppTargets) {
-    let targets = mandara_theme::templates::Targets { ghostty: i.ghostty, gtk: i.gtk4, qt6: i.qt6, zed: i.zed, fuzzel: i.fuzzel, btop: i.btop, kvantum: i.kvantum, kvantum_apply: i.kvantum_apply };
-    let apps = mandara_theme::templates::AppTargets {
-        cava: i.cava, tmux: i.tmux, zellij: i.zellij, spicetify: i.spicetify,
-        kitty: i.kitty,
-        foot: i.foot,
-        alacritty: i.alacritty,
-        wezterm: i.wezterm,
-        helix: i.helix,
-        neovim: i.neovim,
-        firefox: i.firefox,
-        vesktop: i.vesktop,
-        kde: i.kde,
+mod app_themes;
+pub use app_themes::{
+    app_theme_status, app_theme_targets, export_app_themes, export_app_themes_report,
+    init_app_theme_sync,
     };
-    (targets, apps)
-}
 
-/// Writes the cross-app theme files (Ghostty, GTK, Qt, Zed, Fuzzel, btop…)
-/// for `palette`, honouring `[integrations]`; runs off the UI thread.
-pub fn export_app_themes(palette: mandara_theme::MandaraPalette, cx: &mut App) -> gpui::Task<Vec<std::path::PathBuf>> {
-    let (targets, apps) = app_theme_targets(&config(cx).read(cx).get().integrations);
-    cx.background_executor().spawn(async move {
-        let config_dir = dirs::config_dir().unwrap_or_default();
-        let data_dir = dirs::data_dir().unwrap_or_default();
-        let cache = mandara_config::paths::themes_cache_dir();
-        let ledger_path = mandara_config::paths::app_themes_ledger();
-        let mut ledger = mandara_theme::templates::Ledger::load(&ledger_path);
-        let mut files = mandara_theme::templates::sync(&palette, targets, &cache, &config_dir, &mut ledger);
-        files.extend(mandara_theme::templates::sync_apps(&palette, apps, &cache, &config_dir, &data_dir, &mut ledger));
-        if let Err(err) = ledger.store(&ledger_path) {
-            tracing::warn!("app themes: {}: {err}", ledger_path.display());
-        }
-        files
-    })
-}
-
-/// Waits this long after the last palette or `[integrations]` change before
-/// writing app themes (a theme crossfade or slider drag writes once).
-const APP_THEME_SETTLE: Duration = Duration::from_millis(600);
-
-/// What decides the app-theme files: the palette's identity and the
-/// enabled integrations. A new key means the files must be rewritten.
-fn app_theme_key(palette: &mandara_theme::MandaraPalette, integrations: &mandara_config::IntegrationsConfig) -> (String, mandara_config::IntegrationsConfig) {
-    (format!("{}{}{}{}", palette.name, palette.primary.to_hex(), palette.surface_base.to_hex(), palette.is_dark), integrations.clone())
-}
-
-/// Re-exports app themes shortly after the palette settles or an app is
-/// switched on / off in `[integrations]` (shell process).
-pub fn init_app_theme_sync(cx: &mut App) {
-    let theme = mandara_core::theme_entity(cx);
-    let mut last: Option<(String, mandara_config::IntegrationsConfig)> = None;
-    let pending: std::rc::Rc<std::cell::RefCell<Option<Task<()>>>> = Default::default();
-    let on_change = std::rc::Rc::new(std::cell::RefCell::new(move |cx: &mut App| {
-        let palette = mandara_core::theme_entity(cx).read(cx).target().clone();
-        let key = app_theme_key(&palette, &config(cx).read(cx).get().integrations);
-        if last.as_ref() == Some(&key) {
-            return;
-        }
-        last = Some(key);
-        let slot = pending.clone();
-        *pending.borrow_mut() = Some(cx.spawn(async move |cx| {
-            cx.background_executor().timer(APP_THEME_SETTLE).await;
-            let task = cx.update(|cx| export_app_themes(palette, cx));
-            let files = task.await;
-            tracing::info!("app themes updated ({} files)", files.len());
-            cx.update(|cx| crate::powerctl::hooks::templates_rendered(&files, cx));
-            slot.borrow_mut().take();
-        }));
-    }));
-    (on_change.borrow_mut())(cx);
-    let on_theme = on_change.clone();
-    cx.observe(&theme, move |_, cx| (on_theme.borrow_mut())(cx)).detach();
-    let store = config(cx);
-    cx.observe(&store, move |_, cx| (on_change.borrow_mut())(cx)).detach();
+#[cfg(test)]
+fn app_theme_key(palette: &mandara_theme::MandaraPalette, integrations: &mandara_config::IntegrationsConfig) -> (
+    mandara_theme::MandaraPalette, mandara_config::IntegrationsConfig) {
+    (palette.clone(), integrations.clone())
 }
 
 /// Keeps the interface language in step with `general.locale` (shell and
@@ -586,6 +585,7 @@ mod tests {
             firefox: false,
             vesktop: false,
             kde: false,
+            app_themes: Default::default(),
         };
         let (t, a) = app_theme_targets(&all_off);
         assert_eq!(a, mandara_theme::templates::AppTargets::default());

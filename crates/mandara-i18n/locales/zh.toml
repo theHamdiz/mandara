@@ -9715,7 +9715,7 @@
 "To start Mandara with Aqueous, add {command} to Aqueous's own startup settings." = "要让 Mandara 随 Aqueous 启动，请将 {command} 添加到 Aqueous 自己的启动设置中。"
 "labwc settings stay in ~/.config/labwc (rc.xml, autostart)" = "labwc 的设置保留在 ~/.config/labwc（rc.xml、autostart）"
 "COSMIC settings are managed in COSMIC Settings" = "COSMIC 设置由 COSMIC 设置应用管理"
-"labwc has no standalone configuration checker. It reads its own files in ~/.config/labwc, and Mandara writes nothing there." = "labwc 没有独立的配置检查器。它自行读取 ~/.config/labwc 中的文件，Mandara 不会在那里写入任何内容。"
+"labwc has no standalone configuration checker. Theme colours use a private headless check." = "labwc 没有独立的配置检查器。主题颜色会在独立的无头会话中检查。"
 "COSMIC has no standalone configuration checker. Its settings are managed in COSMIC Settings, and Mandara writes nothing there." = "COSMIC 没有独立的配置检查器。它的设置由 COSMIC 设置应用管理，Mandara 不会在那里写入任何内容。"
 "labwc keeps its settings in ~/.config/labwc (rc.xml, autostart) and reloads them itself. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and changes nothing in those files. To start Mandara with labwc, add the line “mandara &” to ~/.config/labwc/autostart." = "labwc 将设置保存在 ~/.config/labwc（rc.xml、autostart）中并自行重新加载。Mandara 通过标准 Wayland 协议跟踪它的工作区、窗口和显示器，不会更改这些文件。要让 Mandara 随 labwc 启动，请将 “mandara &” 添加到 ~/.config/labwc/autostart。"
 "COSMIC keeps its settings in COSMIC Settings. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and COSMIC's window protocols, and changes nothing there. To start Mandara with COSMIC, add it in COSMIC Settings → Applications → Startup applications." = "COSMIC 将设置保存在 COSMIC 设置应用中。Mandara 通过标准 Wayland 协议和 COSMIC 的窗口协议跟踪它的工作区、窗口和显示器，不会在那里更改任何内容。要让 Mandara 随 COSMIC 启动，请在 COSMIC 设置 → 应用程序 → 自动启动应用程序中添加它。"
@@ -10502,3 +10502,73 @@
 "Your compositor's own" = "合成器自带"
 "labwc has no window animations to set" = "labwc 没有可设置的窗口动画"
 "Preview unavailable" = "无法预览"
+
+# App templates and desktop preferences
+"Add a header to use text settings with this layout." = "添加标题后即可在此布局中使用文字设置。"
+"Alignment applies to the header in this layout." = "此布局的对齐设置应用于标题。"
+"Apply app themes now" = "立即应用应用主题"
+"Apply preference edits without replacing unrelated settings" = "应用偏好更改，保留其他设置"
+"Argument <{name}> must be {kind}, got {value}" = "参数 <{name}> 必须为 {kind}，收到 {value}"
+"Browse app templates" = "浏览应用模板"
+"Browse available app templates; pass refresh to update the catalog" = "浏览可用的应用模板；传入 refresh 可更新目录"
+"Catalog sources" = "目录来源"
+"Catalog sources use HTTPS. Edit their names and URLs, then save with Ctrl+Enter." = "目录来源使用 HTTPS。编辑名称和网址后，按 Ctrl+Enter 保存。"
+"Choose the apps that follow your palette. Managed files are backed up and restored when you switch them off; imported setup commands follow their own undo instructions." = "选择跟随配色的应用。受管理的文件会先备份，关闭时恢复；导入的设置命令使用其自身的撤销说明。"
+"Could not install app template: {error}" = "无法安装应用模板：{error}"
+"Could not save app templates: {error}" = "无法保存应用模板：{error}"
+"Disable an app template and undo its managed changes" = "禁用应用模板并撤销其受管理的更改"
+"Display controls are busy; try again in a moment" = "显示控制正忙，请稍后重试"
+"Get & enable" = "获取并启用"
+"Hide app templates" = "隐藏应用模板"
+"Import a local app-template document without enabling new entries" = "导入本地模板文档，不启用新条目"
+"Imported templates can run app setup commands. Check their instructions before switching them on. Theme changes use installed files without downloading again." = "导入的模板可以运行应用设置命令。启用前请阅读说明。切换主题使用已安装的文件，无需重新下载。"
+"In use: terminal {terminal} · file manager {files} · browser {browser}" = "正在使用：终端 {terminal} · 文件管理器 {files} · 浏览器 {browser}"
+"Install and enable an app template by its source:app id" = "通过 source:app 标识安装并启用应用模板"
+"Instructions" = "说明"
+"Keep at least one level on, or switch off the widget." = "请至少启用一个级别，或关闭小组件。"
+"Mandara is free and always will be. If it makes your desktop a little nicer and you'd like to say thanks, you can chip in toward the AI credits and developer time behind it. Completely optional: using it, sharing it and reporting bugs help just as much." = "Mandara 现在免费，也将一直免费。如果它让你的桌面更美观，而你想表达感谢，可以为 AI 额度和开发时间提供支持。完全自愿：使用、分享和反馈问题同样有帮助。"
+"Mandara writes these to its own drop-in for {target_name} (never your config) and reloads it. Chords your own config already uses are skipped and marked “taken”. Click a shortcut, then press the keys; Esc cancels." = "Mandara 将这些设置写入自己的 {target_name} 附加文件并重新加载，不会写入你的配置。已使用的快捷键会被跳过并标记为“已占用”。点击快捷键后按下按键；Esc 取消。"
+"Page {page} of {pages}" = "第 {page} 页，共 {pages} 页"
+"Run template setup commands" = "运行模板设置命令"
+"Search app templates" = "搜索应用模板"
+"Show the last app-theme export and any setup errors" = "显示最近一次应用主题导出及设置错误"
+"Template document" = "模板文档"
+"Template sources" = "模板来源"
+"Test a display arrangement from JSON, keeping unrelated changes made since the draft" = "测试 JSON 显示布局，保留草稿之后的其他更改"
+"Text recognition models aren't installed yet ({models}) — download them in Studio → Maintenance" = "尚未安装文字识别模型（{models}）— 请在 Studio → 维护中下载"
+"This layout fixes its text positions. Add a header to align it separately." = "此布局固定文字位置。添加标题可单独对齐。"
+"Update template" = "更新模板"
+"Write or paste a template document. Use content for an inline template, or input_path for a file. Set enabled = true to apply it. Save with Ctrl+Enter." = "编写或粘贴模板文档。内联模板使用 content，文件使用 input_path。设置 enabled = true 可应用。按 Ctrl+Enter 保存。"
+"Your templates" = "你的模板"
+"display draft as JSON" = "JSON 格式的显示草稿"
+"local template document" = "本地模板文档"
+"refresh installed catalog metadata" = "刷新已安装的目录元数据"
+"source:app template id" = "source:app 模板标识"
+"{model} ({file}) failed its checksum: got {got}, expected {expected}" = "{model}（{file}）校验和不符：收到 {got}，应为 {expected}"
+"{model} ({file}) is {got} bytes, expected {expected}" = "{model}（{file}）为 {got} 字节，应为 {expected}"
+
+"Mandara restores this arrangement when the shell starts." = "Mandara 会在桌面外壳启动时恢复此排列。"
+
+"This clock face only shows the time." = "此时钟样式仅显示时间。"
+
+"A continuous wave has no gaps between bars." = "连续波形没有柱条间隙。"
+
+"The compositor configuration changed while its theme was being checked. Try again." = "检查主题时合成器配置发生了变化。请重试。"
+
+"The compositor configuration is not a regular file." = "合成器配置不是普通文件。"
+
+"The compositor rejected the theme; previous settings were kept." = "合成器拒绝了主题；已保留原有设置。"
+
+"Review an app template; pass its approval token to enable it" = "查看应用模板；传入审核确认码以启用"
+
+"approval token returned by the review" = "审核后返回的确认码"
+
+"Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "启用此模板前，请检查文件和命令。命令也可能更改其他文件。更新后需要重新审核。"
+
+"Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "请先检查并批准浏览器的共享配色。其他 Pywal 应用也会使用这些颜色。"
+
+"Apply the color scheme to KDE apps and notify running apps." = "将配色方案应用于 KDE 应用，并通知正在运行的应用。"
+
+"Enable browser theming and publish the shared app palette." = "启用浏览器主题并发布应用共享调色板。"
+
+"Browser CSS exceeds the nesting limit" = "浏览器 CSS 超出嵌套限制"

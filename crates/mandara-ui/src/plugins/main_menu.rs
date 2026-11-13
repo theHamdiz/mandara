@@ -17,9 +17,9 @@
 //! and the cards on it are solid. Every action tile wears its own faint
 //! ornament in its own accent (`panels.menu_patterns`, see [`ornament`]).
 
+mod card_decoration;
 pub(crate) mod ornament;
 mod theme_card;
-mod card_decoration;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -27,12 +27,13 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Instant;
 
-use gpui::{App, FontWeight, ImageSource, InteractiveElement, IntoElement, ObjectFit, ParentElement, StatefulInteractiveElement, Styled, StyledImage as _, Window, div, img, prelude::FluentBuilder as _, px, size};
+use gpui::{App, FontWeight, ImageSource, InteractiveElement, IntoElement, ObjectFit, ParentElement, StatefulInteractiveElement, Styled, StyledImage as _, Window, div, img, prelude::FluentBuilder as _, px, size,
+};
+use mandara_config::surfaces::{MenuRail, MenuRailHeight};
 use mandara_core::{FrameClock, SpringConfig, SpringValue, ToGpui};
 use mandara_i18n::{t, tf, tk, tr};
 use mandara_plugins::{CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry};
 use mandara_services::MediaCommand;
-use mandara_config::surfaces::{MenuRail, MenuRailHeight};
 use mandara_theme::{MandaraPalette, ThemeSource, catalog};
 use serde_json::json;
 
@@ -269,7 +270,7 @@ const APPS: &[Action] = &[
     } },
     Action { icon: "refresh", label: tk("Reload config"), ornament: Ornament::motif(Motif::Pharos, 90.0), hint: "", run: |cx| {
         close(cx);
-        let _ = crate::state::reload_config_from_disk(cx);
+            crate::state::reload_config_from_disk(cx).detach();
     } },
     // Last: shown only while the bar's gaps open this menu ([`apps`]).
     Action { icon: "pointer", label: tk("Desktop menu"), ornament: Ornament::motif(Motif::Zellige, -96.0), hint: tk("wallpaper & widgets"), run: crate::bar::gaps::open_desktop_menu },
@@ -378,14 +379,18 @@ fn profile(palette: &MandaraPalette, tc: &TileCx, cx: &App) -> gpui::AnyElement 
         .min_w(px(0.0))
         .child(div().text_size(px(text::TITLE)).font_weight(FontWeight::SEMIBOLD).text_color(white).truncate().child(me.name))
         .child(div().text_size(px(text::BODY_S)).text_color(white.opacity(SOFT_TEXT)).truncate().child(format!("{}@{}", me.login, me.host)))
-        .when_some(uptime(), |el, up| el.child(div().text_size(px(text::BODY_S)).text_color(white.opacity(SOFT_TEXT)).child(tf("Up {time}", &[("time", &up)]))))
+        .when_some(uptime(), |el, up| {
+            el.child(div().text_size(px(text::BODY_S)).text_color(white.opacity(SOFT_TEXT)).child(tf("Up {time}", &[("time", &up)])))
+        })
         .child(div().text_size(px(text::LABEL)).text_color(white.opacity(SOFT_TEXT)).child(format!("Mandara {}", mandara_services::self_update::running_version())));
     card_decoration::plain(div().id("menu-home-profile"), palette, tc)
         .relative()
         .h(px(PROFILE_H))
         .rounded(px(crate::style::card_radius()))
         .overflow_hidden()
-        .when_some(wall, |el, w| el.child(img(ImageSource::from(w)).absolute().top_0().left_0().size_full().object_fit(ObjectFit::Cover)))
+        .when_some(wall, |el, w| {
+            el.child(img(ImageSource::from(w)).absolute().top_0().left_0().size_full().object_fit(ObjectFit::Cover))
+        })
         .child(div().absolute().top_0().left_0().size_full().bg(mandara_core::oklab_gradient(90.0, mandara_theme::Color::oklcha(0.12, 0.0, 0.0, SHADE.0), mandara_theme::Color::oklcha(0.12, 0.0, 0.0, SHADE.1))))
         .child(
             div().absolute().top_0().left_0().size_full().px(px(tokens::LG)).flex().items_center().child(
@@ -431,7 +436,9 @@ fn media(palette: &MandaraPalette, tc: &TileCx, cx: &App) -> Option<gpui::AnyEle
         Some(p) => img(p.clone()).size(px(ART)).rounded(px(tokens::MD)).object_fit(ObjectFit::Cover).into_any_element(),
         None => div().size(px(ART)).rounded(px(tokens::MD)).bg(palette.surface_container_high.hsla()).flex().items_center().justify_center().child(icon("music", ART * 0.4, palette.on_surface_variant)).into_any_element(),
     };
-    let transport = |id: &'static str, glyph: &'static str, command: MediaCommand| icon_button(id, glyph, TRANSPORT, palette.on_surface, None, move |_, cx| super::media::send(cx, command.clone()));
+    let transport = |id: &'static str, glyph: &'static str, command: MediaCommand| {
+        icon_button(id, glyph, TRANSPORT, palette.on_surface, None, move |_, cx| super::media::send(cx, command.clone()))
+    };
     Some(
         home_card("menu-home-media", Ornament::motif(Motif::Rings, 24.0), palette, tc)
             .flex_1()
@@ -468,7 +475,9 @@ fn clock(palette: &MandaraPalette, tc: &TileCx, cx: &App) -> gpui::AnyElement {
     let now = chrono::Local::now();
     let time = now.format(if cfg.general.clock_24h { "%H:%M" } else { "%-I:%M" }).to_string();
     let date = crate::widgets::clock::localized(&now, t("%A, %-d %B"));
-    let weather = crate::hub::hub(cx).read(cx).weather.weather.as_ref().map(|w| format!("{} · {}", cfg.units().format_temperature(w.temp), tr(w.condition.label())));
+    let weather = crate::hub::hub(cx).read(cx).weather.weather.as_ref().map(|w| {
+            format!("{} · {}", cfg.units().format_temperature(w.temp), tr(w.condition.label()))
+        });
     home_card("menu-home-clock", Ornament::motif(Motif::Shamsa, 0.0), palette, tc)
         .flex_1()
         .flex()
@@ -481,7 +490,9 @@ fn clock(palette: &MandaraPalette, tc: &TileCx, cx: &App) -> gpui::AnyElement {
                 .flex_col()
                 .min_w(px(0.0))
                 .child(div().text_size(px(text::BODY)).font_weight(FontWeight::MEDIUM).child(date))
-                .when_some(weather, |el, w| el.child(div().text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).truncate().child(w))),
+                .when_some(weather, |el, w| {
+                el.child(div().text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).truncate().child(w))
+            }),
         )
         .into_any_element()
 }
@@ -717,7 +728,9 @@ fn tiles(actions: &[Action], palette: &MandaraPalette, p: &PanelCx, tc: &TileCx,
                             .flex_col()
                             .gap(px(LINE_GAP))
                             .child(div().truncate().text_size(px(text::BODY)).font_weight(FontWeight::MEDIUM).child(crate::bidi::paragraph(tr(a.label))))
-                            .when(!a.hint.is_empty(), |el| el.child(div().truncate().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(crate::bidi::paragraph(tr(a.hint))))),
+                            .when(!a.hint.is_empty(), |el| {
+                            el.child(div().truncate().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(crate::bidi::paragraph(tr(a.hint))))
+                        }),
                     )
                     .on_click(move |_, _, cx| run(cx)),
             );
@@ -785,13 +798,21 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, themes: &Rc<RefCell<t
             .text_size(px(text::BODY_S))
             .font_weight(FontWeight::MEDIUM)
             .when(compact, |el| el.w(px(RAIL_BUTTON)).justify_center())
-            .when(!compact, |el| el.w_full().px(px(tokens::SM)).gap(px(tokens::SM)))
+            .when(!compact, |el| {
+                    el.w_full().px(px(tokens::SM)).gap(px(tokens::SM))
+                })
             // Full fills the open page like the sidebar's tabs; compact keeps
             // the rail's original light tint.
-            .when(on && !compact, |el| el.bg(palette.primary.hsla()).text_color(palette.on_primary.hsla()).font_weight(FontWeight::SEMIBOLD))
-            .when(on && compact, |el| el.bg(palette.primary.with_alpha(RAIL_ON_TINT).hsla()))
+            .when(on && !compact, |el| {
+                    el.bg(palette.primary.hsla()).text_color(palette.on_primary.hsla()).font_weight(FontWeight::SEMIBOLD)
+                })
+            .when(on && compact, |el| {
+                    el.bg(palette.primary.with_alpha(RAIL_ON_TINT).hsla())
+                })
             .when(!on, |el| el.text_color(palette.on_surface_variant.hsla()))
-            .when(!on || compact, |el| el.hover(|s| s.bg(palette.surface_container_high.hsla())))
+            .when(!on || compact, |el| {
+                    el.hover(|s| s.bg(palette.surface_container_high.hsla()))
+                })
             .child(icon(
                 glyph,
                 if compact { RAIL_COMPACT_ICON } else { RAIL_ICON },
@@ -869,7 +890,9 @@ fn render(page: &Rc<Cell<Page>>, glow: &Rc<RefCell<Glow>>, themes: &Rc<RefCell<t
         )
     });
     for (i, (glyph, id, name)) in SHORTCUTS.into_iter().enumerate() {
-        rail = rail.child(slot(rail_button(("menu-shortcut", i), glyph, name, false).on_click(move |_, _, cx| shell(cx).update(cx, |s, cx| s.set_panel(Some(id.into()), cx)))));
+        rail = rail.child(slot(rail_button(("menu-shortcut", i), glyph, name, false).on_click(move |_, _, cx| {
+                shell(cx).update(cx, |s, cx| s.set_panel(Some(id.into()), cx))
+            })));
     }
     let header = div()
         .h(px(HEADER_H))
@@ -1030,7 +1053,9 @@ pub fn register(r: &mut PluginRegistry) {
             Some(cx.observe(&shell(cx), move |_, state, cx| {
                 if state.read(cx).panel.as_deref() != Some(ID) { clear.borrow_mut().clear(); }
             }))
-        }, move |palette, window, cx| render(&page, &glow, &themes, &measured, palette, &p, window, cx), window, cx);
+        }, move |palette, window, cx| {
+                    render(&page, &glow, &themes, &measured, palette, &p, window, cx)
+                }, window, cx);
         PluginInstance { panel: Some(PanelSpec { view: panel, size: fit }), ..PluginInstance::empty() }
     });
     r.command(ID, CommandSpec::new("menu", mandara_i18n::tk("Open or close the main menu"), |_, cx| {

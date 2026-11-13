@@ -106,6 +106,12 @@ mandara msg plugins reload                  # plugins list|enable|disable|remove
 mandara msg plugins remove prayer-times     # built-ins: off + out of bar/sidebar until `plugins restore` (core plugins refuse)
 mandara msg plugins enable wallhaven        # opt-in built-ins: wallhaven, cursors, icon-themes, dock, notes, todo, pomodoro, … ([plugins](plugins.md): "ship switched off")
 mandara msg config set /integrations/gtk4 true   # theme an app (all off by default); false takes Mandara's changes back
+mandara msg theme apps catalog              # browse catalogs; add refresh to fetch metadata again
+mandara msg theme apps enable community:rofi # download and review files and commands
+mandara msg theme apps enable community:rofi "$APPROVAL_TOKEN" # set APPROVAL_TOKEN to the token returned by the review
+mandara msg theme apps disable community:rofi # undo its managed changes
+mandara msg theme apps import ~/Themes/apps.toml # import new entries switched off
+mandara msg theme apps status               # last export and setup errors
 mandara msg plugins vet ./my-plugin          # the marketplace's compliance check: {"ok":true} or {"ok":false,"class":"broken|malicious|placeholder","reason":…}
 mandara msg config get /bar/height         # config set /bar/height 30, show, reload, export, import, reset
 mandara msg studio displays                 # open Studio on a page (docs/studio.md)
@@ -232,6 +238,7 @@ mandara msg radio stations jazz                 # list (a shelf); favourite <sta
 ```bash
 mandara msg display list               # set <output> mode|scale|transform|position|vrr|enabled <value>, confirm, revert
 mandara msg display profile save Desk  # profile list|apply|delete <name>; persist / unpersist to the compositor drop-in
+mandara msg display test '{"before":null,"outputs":[{"name":"DP-1","scale":1.5}]}' # test JSON; confirm or revert
 mandara msg display brightness all 60  # DDC/CI external monitors; display brightness status
 mandara msg brightness up 10           # down, set, status (laptop backlight through logind)
 mandara msg nightlight toggle          # on|off|auto, status, temperature <K>, schedule sun|fixed|always, preview <K> [s]

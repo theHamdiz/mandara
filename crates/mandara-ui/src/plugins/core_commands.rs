@@ -1,11 +1,13 @@
 //! Shell-level commands: panels, sidebar, themes, layout, config, plugins.
 
 use mandara_config::{BarLayout, ThemeMode};
-use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginRegistry};
+use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, Output, PluginRegistry};
 use mandara_theme::{SchemeVariant, ThemeSource, catalog};
 use serde_json::json;
 
 use crate::state::{config, flush_config, reload_config_from_disk, shell, update_config};
+
+mod app_themes;
 
 /// `mandara msg studio <section>`: every slug of the launcher's Studio
 /// entries (`crate::overlays::STUDIO_SECTIONS`, checked by a test).
@@ -94,8 +96,12 @@ fn side_bars_state(cfg: &mandara_config::ShellConfig) -> serde_json::Value {
 /// `side-bars …` / `side-bar …`: the side bars of plugin chips.
 fn side_bar_commands(r: &mut PluginRegistry) {
     let core = "core";
-    let state_arg = || ArgSpec::optional("state", ArgKind::Enum, mandara_i18n::tk("on, off or toggle (default)")).choices(&["on", "off", "toggle"]);
-    let side = || ArgSpec::required("side", ArgKind::Enum, mandara_i18n::tk("which side bar")).choices(&["left", "right"]);
+    let state_arg = || {
+        ArgSpec::optional("state", ArgKind::Enum, mandara_i18n::tk("on, off or toggle (default)")).choices(&["on", "off", "toggle"])
+    };
+    let side = || {
+        ArgSpec::required("side", ArgKind::Enum, mandara_i18n::tk("which side bar")).choices(&["left", "right"])
+    };
     r.command(
         core,
         CommandSpec::new("side-bars", mandara_i18n::tk("Turn the left and right side bars of plugin chips on or off (they replace the widget sidebar on their edges)"), |a, cx| {
@@ -169,6 +175,7 @@ fn side_bar_commands(r: &mut PluginRegistry) {
 
 /// Register shell controls and delegate long model operations to background work.
 pub fn register(r: &mut PluginRegistry) {
+    app_themes::register(r);
     crate::agent_commands::register(r);
     let core = "core";
     // Debug builds only: proves a panicking plugin command is isolated.
@@ -259,9 +266,8 @@ pub fn register(r: &mut PluginRegistry) {
         .example("panel close")
         .example("panel close weather"),
     );
-    r.command(core, CommandSpec::new_output("panel capture", mandara_i18n::tk("Copy panel image"), |args, cx| {
-        Ok(crate::floating::capture(args.str(0)?, cx)?.into())
-    }).arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id, e.g. clock, media, network"))).example("panel capture clock"));
+    r.command(core, CommandSpec::new_output("panel capture", mandara_i18n::tk("Copy panel image"), |args, cx| Ok(crate::floating::capture(args.str(0)?, cx)?.into()),
+        ).arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id, e.g. clock, media, network"))).example("panel capture clock"));
     r.command(
         core,
         CommandSpec::new(
@@ -471,11 +477,11 @@ pub fn register(r: &mut PluginRegistry) {
         core,
         CommandSpec::new_output("theme export", mandara_i18n::tk("Write the current palette to Ghostty, GTK, Qt, Zed, Fuzzel and btop theme files"), |_, cx| {
             let palette = mandara_core::theme_entity(cx).read(cx).target().clone();
-            let task = crate::state::export_app_themes(palette, cx);
+            let task = crate::state::export_app_themes_report(palette, cx);
             let (tx, rx) = async_channel::bounded(1);
             cx.spawn(async move |_| {
-                let files = task.await;
-                let _ = tx.send(Ok(files.iter().map(|f| f.display().to_string()).collect::<Vec<_>>().join("\n"))).await;
+                let report = task.await;
+                let _ = tx.send(serde_json::to_string(&report).map_err(|error| error.to_string())).await;
             })
             .detach();
             Ok(mandara_plugins::Output::Pending(rx))
@@ -738,16 +744,25 @@ pub fn register(r: &mut PluginRegistry) {
 
     r.command(
         core,
-        CommandSpec::new("config reload",mandara_i18n::tk("Re-read config.toml from disk"), |_, cx| {
-            let changed = reload_config_from_disk(cx)?;
-            Ok(json!({ "changed": changed }))
+        CommandSpec::new_output("config reload",mandara_i18n::tk("Re-read config.toml from disk"), |_, cx| {
+            let task = reload_config_from_disk(cx);
+                let (sender, receiver) = async_channel::bounded(1);
+                cx.spawn(async move |_| {
+                    let _ = sender
+                        .send(
+                            task.await
+                                .map(|changed| json!({ "changed": changed }).to_string()),
+                        )
+                        .await;
+                })
+                .detach();
+                Ok(Output::Pending(receiver))
         }),
     );
     r.command(
         core,
-        CommandSpec::new("config show", mandara_i18n::tk("Print the live configuration"), |_, cx| {
-            Ok(serde_json::to_value(&*config(cx).read(cx).snapshot()).unwrap_or_default())
-        }),
+        CommandSpec::new("config show", mandara_i18n::tk("Print the live configuration"), |_, cx| Ok(serde_json::to_value(&*config(cx).read(cx).snapshot()).unwrap_or_default()),
+        ),
     );
 
     r.command(
@@ -771,7 +786,11 @@ pub fn register(r: &mut PluginRegistry) {
             let mut value = serde_json::to_value(&*config(cx).read(cx).snapshot()).map_err(|e| e.to_string())?;
             set_pointer(&mut value, &ptr, new.clone())?;
             let next: mandara_config::ShellConfig = serde_json::from_value(value).map_err(|e| format!("invalid value for {ptr}: {e}"))?;
-            update_config(cx, |c| *c = next);
+                next.integrations
+                    .app_themes
+                    .validate()
+                    .map_err(|error| error.to_string())?;
+                update_config(cx, |c| *c = next);
             Ok(json!({ "path": ptr, "value": new }))
         })
         .arg(ArgSpec::required("pointer", ArgKind::String, mandara_i18n::tk("JSON pointer, e.g. /bar/height")))
@@ -783,10 +802,36 @@ pub fn register(r: &mut PluginRegistry) {
         core,
         CommandSpec::new("config apply", mandara_i18n::tk("Replace the live configuration with a full JSON document (used by Studio)"), |a, cx| {
             let next: mandara_config::ShellConfig = serde_json::from_str(&a.rest(0)).map_err(|e| format!("invalid config: {e}"))?;
-            update_config(cx, |c| *c = next);
+                next.integrations
+                    .app_themes
+                    .validate()
+                    .map_err(|error| error.to_string())?;
+                update_config(cx, |c| *c = next);
             Ok(json!({ "applied": true }))
         })
-        .arg(ArgSpec::required("json", ArgKind::String, mandara_i18n::tk("the whole config as JSON"))),
+        .arg(ArgSpec::required("json", ArgKind::String, mandara_i18n::tk("the whole config as JSON"),
+        )),
+    );
+    r.command(
+        core,
+        CommandSpec::new(
+            "config patch",
+            mandara_i18n::tk("Apply preference edits without replacing unrelated settings"),
+            |a, cx| {
+                let patch: mandara_config::patch::ConfigPatch = serde_json::from_str(&a.rest(0))
+                    .map_err(|e| format!("invalid preference edits: {e}"))?;
+                let next = patch
+                    .apply(&config(cx).read(cx).snapshot())
+                    .map_err(|e| e.to_string())?;
+                update_config(cx, |c| *c = next);
+                Ok(json!({ "applied": true }))
+            },
+        )
+        .arg(ArgSpec::required(
+            "json",
+            ArgKind::String,
+            mandara_i18n::tk("JSON value"),
+        )),
     );
     r.command(core, CommandSpec::new_output("models list", mandara_i18n::tk("Downloadable models (OCR, wallpaper depth) and whether they're installed"), |_, _| Ok(model_job(||Ok(json!(mandara_services::models::status()))))));
     r.command(
@@ -828,9 +873,8 @@ pub fn register(r: &mut PluginRegistry) {
 
     r.command(
         core,
-        CommandSpec::new("plugins reload", mandara_i18n::tk("Hot-reload plugins from the plugin folders (also happens automatically)"), |_, cx| {
-            Ok(json!(crate::plugins::external::sync(cx)))
-        }),
+        CommandSpec::new("plugins reload", mandara_i18n::tk("Hot-reload plugins from the plugin folders (also happens automatically)"), |_, cx| Ok(json!(crate::plugins::external::sync(cx))),
+        ),
     );
     r.command(
         core,
