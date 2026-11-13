@@ -22,7 +22,7 @@ About → What's new shows it too.
 
 ### Under the hood
 
-- Keep native shortcut checks and release manifests clean on current Rust and FreeBSD builds.
+- Keep native shortcut checks and release manifests clean on current Rust and FreeBSD builds. Lock checks handle concurrent process launches reliably.
 
 ## 0.29.0 — 2026-11-13
 

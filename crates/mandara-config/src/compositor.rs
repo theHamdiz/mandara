@@ -43,7 +43,7 @@ mod include_env;
 mod read_budget;
 mod sway_read;
 mod sway_vars;
-mod hyprland_probe;
+pub(crate) mod hyprland_probe;
 pub use hyprland_probe::shortcut_probe as hyprland_shortcut_probe;
 pub use include_env::IncludeEnvironment;
 pub mod shortcuts;
@@ -2743,6 +2743,13 @@ pub fn existing_chords_checked_in(
     if target == Target::Sway {
         return sway_read::checked_in(root, environment);
     }
+    if target == Target::Hyprland {
+        let real = std::fs::canonicalize(root)?;
+        let source = crate::keybinds::read_source(root)?;
+        if !crate::keybinds::hyprland_lua(&real, &source) {
+            return hyprland_probe::chords(root, environment);
+        }
+    }
     let mut budget = read_budget::ReadBudget::default();
     if target == Target::Mango {
         return mango_keys::with_user_keys(|keys| {
@@ -2759,7 +2766,11 @@ pub fn existing_chords_checked_in(
     let mut stack = vec![root.to_path_buf()];
     while let Some(file) = stack.pop() {
         let Some(text) = budget.read(&file)? else { continue; };
-        out.extend(parse_chords(target, &text));
+        if target == Target::Hyprland {
+            out.extend(hyprland_chords_checked(&text)?.into_iter().map(|(_, chord)| chord));
+        } else {
+            out.extend(parse_chords(target, &text));
+        }
         anyhow::ensure!(
             out.len() <= crate::keybinds::MAX_BINDINGS,
             "too many compositor shortcuts"
@@ -2971,7 +2982,7 @@ pub fn sway_binds(text: &str) -> Vec<SwayBind> {
 }
 
 pub(crate) fn sway_binds_checked(text: &str) -> Result<Vec<SwayBind>> {
-    sway_binds_in(text, &mut Vec::new(), &mut Vec::new())
+    sway_binds_in(text, &mut Vec::new(), &mut Vec::new(), &mut 0)
 }
 
 /// Sets `$name` in `vars`: a second `set $mod …` replaces the first (sway
@@ -2991,7 +3002,7 @@ fn set_var_owned(vars: &mut Vec<(String, String)>, name: &str, value: String) {
     }
 }
 
-fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<String>) -> Result<Vec<SwayBind>> {
+fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<String>, retained: &mut usize) -> Result<Vec<SwayBind>> {
     let mut out = Vec::new();
     for (i, raw) in text.lines().enumerate() {
         let line = raw.trim();
@@ -3030,10 +3041,18 @@ fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<
         let Some(combo) = words.next() else { continue };
         let mut parts: Vec<&str> = combo.split('+').filter(|p| !p.is_empty()).collect();
         let Some(key) = parts.pop() else { continue };
+        let command_bytes = words.clone().map(str::len).sum::<usize>() + words.clone().count().saturating_sub(1);
+        let expanded_bytes = body.len() + if in_bind_block { "bindsym ".len() } else { 0 };
+        let bytes = command_bytes.checked_add(expanded_bytes).and_then(|bytes| retained.checked_add(bytes))
+            .filter(|&bytes| bytes <= crate::keybinds::MAX_TOTAL_BYTES)
+            .ok_or_else(|| anyhow::anyhow!("expanded shortcuts exceed the scan budget"))?;
+        let resolved = chord(parts.into_iter(), &keysym_for(key));
+        *retained = bytes.checked_add(resolved.len()).filter(|&bytes| bytes <= crate::keybinds::MAX_TOTAL_BYTES)
+            .ok_or_else(|| anyhow::anyhow!("expanded shortcuts exceed the scan budget"))?;
         let command = words.collect::<Vec<_>>().join(" ");
         let expanded = if in_bind_block { format!("bindsym {body}") } else { body.to_string() };
         anyhow::ensure!(out.len() < crate::keybinds::MAX_BINDINGS, "too many compositor shortcuts");
-        out.push(SwayBind { line: i, chord: chord(parts.into_iter(), &keysym_for(key)), command, expanded });
+        out.push(SwayBind { line: i, chord: resolved, command, expanded });
     }
     Ok(out)
 }
@@ -3193,21 +3212,27 @@ fn niri_chords(text: &str) -> Vec<(usize, String)> {
 }
 
 fn hyprland_chords(text: &str) -> Vec<(usize, String)> {
+    hyprland_chords_checked(text).unwrap_or_default()
+}
+
+fn hyprland_chords_checked(text: &str) -> Result<Vec<(usize, String)>> {
     let mut out = Vec::new();
+    let mut retained = 0usize;
     // `$mainMod = SUPER` (hyprlang) and `local mainMod = "SUPER"` (Lua).
     let mut vars: Vec<(String, String)> = Vec::new();
     for (i, raw) in text.lines().enumerate() {
         let lua_line = raw.trim_start().starts_with("local ") || raw.contains("hl.");
         let line = if lua_line { raw.split("--").next().unwrap_or_default().trim() } else { raw.split('#').next().unwrap_or_default().trim() };
         if let Some((name, value)) = line.strip_prefix('$').and_then(|r| r.split_once('=')) {
-            vars.push((format!("${}", name.trim()), value.trim().to_string()));
-            // Longest first, so `$mod` never eats `$modShift`.
-            vars.sort_by_key(|(n, _)| std::cmp::Reverse(n.len()));
+            let name = format!("${}", name.trim());
+            sway_vars::check_assignment(&vars, &name, value.trim())?;
+            set_var(&mut vars, &name, value.trim());
             continue;
         }
         if let Some((name, value)) = line.strip_prefix("local ").and_then(|r| r.split_once('=')) {
-            if let Some(v) = lua_concat(value.trim(), &vars) {
-                vars.push((name.trim().to_string(), v));
+            if let Some(v) = lua_concat(value.trim(), &vars)? {
+                sway_vars::check_assignment(&vars, name.trim(), &v)?;
+                set_var_owned(&mut vars, name.trim(), v);
             }
             continue;
         }
@@ -3215,25 +3240,32 @@ fn hyprland_chords(text: &str) -> Vec<(usize, String)> {
             let args = &line[at + "hl.bind(".len()..];
             let Some(first) = lua_first_arg(args) else { continue;
             };
-            let Some(combo) = lua_concat(first, &vars) else { continue;
+            let Some(combo) = lua_concat(first, &vars)? else { continue;
             };
             let mut parts: Vec<&str> = combo.split('+').map(str::trim).filter(|p| !p.is_empty()).collect();
             let Some(key) = parts.pop() else { continue };
-            out.push((i, chord(hypr_mods(&parts.join(" ")).into_iter(), &keysym_for(key))));
+            let chord = chord(hypr_mods(&parts.join(" ")).into_iter(), &keysym_for(key));
+            retain_hyprland_chord(&mut out, &mut retained, i, chord)?;
             continue;
         }
         let Some(rest) = line.strip_prefix("bind").and_then(|r| r.split_once('=')).map(|(_, r)| r) else { continue;
         };
-        let mut rest = rest.to_string();
-        for (name, value) in vars.iter().filter(|(n, _)| n.starts_with('$')) {
-            rest = rest.replace(name.as_str(), value);
-        }
+        let rest = sway_vars::expand(rest, &vars)?;
         let mut parts = rest.splitn(3, ',');
         if let (Some(mods), Some(key)) = (parts.next(), parts.next()) {
-            out.push((i, chord(hypr_mods(mods).into_iter(), &keysym_for(key.trim()))));
+            let chord = chord(hypr_mods(mods).into_iter(), &keysym_for(key.trim()));
+            retain_hyprland_chord(&mut out, &mut retained, i, chord)?;
         }
     }
-    out
+    Ok(out)
+}
+
+fn retain_hyprland_chord(out: &mut Vec<(usize, String)>, retained: &mut usize, line: usize, chord: String) -> Result<()> {
+    *retained = retained.checked_add(chord.len()).filter(|&bytes| bytes <= crate::keybinds::MAX_TOTAL_BYTES)
+        .ok_or_else(|| anyhow::anyhow!("expanded shortcuts exceed the scan budget"))?;
+    anyhow::ensure!(out.len() < crate::keybinds::MAX_BINDINGS, "too many compositor shortcuts");
+    out.push((line, chord));
+    Ok(())
 }
 
 /// The first argument of a Lua call (up to its top-level comma or `)`).
@@ -3256,17 +3288,21 @@ fn lua_first_arg(args: &str) -> Option<&str> {
 
 /// Value of a Lua expression made of string literals and known variables
 /// joined with `..` (`mainMod .. " + Q"`); `None` for anything else.
-fn lua_concat(expr: &str, vars: &[(String, String)]) -> Option<String> {
+fn lua_concat(expr: &str, vars: &[(String, String)]) -> Result<Option<String>> {
     let mut out = String::new();
     for piece in expr.split("..").map(str::trim) {
         let quoted = piece.len() >= 2 && ((piece.starts_with('"') && piece.ends_with('"')) || (piece.starts_with('\'') && piece.ends_with('\'')));
-        if quoted {
-            out.push_str(&piece[1..piece.len() - 1]);
+        let value = if quoted {
+            &piece[1..piece.len() - 1]
+        } else if let Some((_, value)) = vars.iter().find(|(n, _)| n == piece) {
+            value
         } else {
-            out.push_str(&vars.iter().find(|(n, _)| n == piece)?.1);
-        }
+            return Ok(None);
+        };
+        anyhow::ensure!(out.len().checked_add(value.len()).is_some_and(|bytes| bytes <= crate::keybinds::MAX_FILE_BYTES), "configuration variable expansion exceeds the scan budget");
+        out.push_str(value);
     }
-    Some(out)
+    Ok(Some(out))
 }
 
 /// Writes the generated drop-in atomically; returns its path.
@@ -4698,4 +4734,15 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
             assert!(problems.is_empty(), "sway --validate complained:\n{}\n--- drop-in ---\n{}", problems.join("\n"), out.text);
         }
     }
+    #[test]
+    fn hyprland_legacy_and_lua_conflict_expansions_are_bounded() {
+        let mut lua = format!("local v0 = \"{}\"\n", "x".repeat(128 * 1024));
+        for index in 1..16 { lua.push_str(&format!("local v{index} = v{} .. v{}\n", index - 1, index - 1)); }
+        lua.push_str("hl.bind(v15, hl.dsp.window.close())\n");
+        assert!(hyprland_chords_checked(&lua).is_err());
+        let mut legacy = format!("$key = {}\n", "x".repeat(128 * 1024));
+        for _ in 0..128 { legacy.push_str("bind = SUPER, $key, exec, foot\n"); }
+        assert!(hyprland_chords_checked(&legacy).is_err());
+    }
+
 }

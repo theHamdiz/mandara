@@ -22,23 +22,7 @@ pub(super) fn format(target: Target, file: &Path, source: &str) -> &'static dyn 
         }
         Target::Mango => &lines::Lines(Target::Mango),
         Target::Niri => &niri::Niri,
-        Target::Hyprland
-            if file.extension().is_some_and(|ext| ext == "lua")
-                || source.lines().map(str::trim_start).any(|line| {
-                    [
-                        "hl.",
-                        "local ",
-                        "require(",
-                        "dofile(",
-                        "pcall(",
-                        "function ",
-                    ]
-                    .iter()
-                    .any(|prefix| line.starts_with(prefix))
-                }) =>
-        {
-            &lua::Lua
-        }
+        Target::Hyprland if hyprland_lua(file, source) => &lua::Lua,
         Target::Hyprland => &lines::Lines(Target::Hyprland),
         Target::Umbriel => &toml::Toml(Target::Umbriel),
         Target::Sway => &lines::Lines(Target::Sway),
@@ -48,4 +32,20 @@ pub(super) fn format(target: Target, file: &Path, source: &str) -> &'static dyn 
         Target::Labwc => &labwc::Labwc,
         Target::Cosmic => &cosmic::Cosmic,
     }
+}
+
+pub(crate) fn hyprland_lua(file: &Path, source: &str) -> bool {
+    file.extension().is_some_and(|ext| ext == "lua")
+        || source.lines().map(str::trim_start).any(|line| {
+            [
+                "hl.",
+                "local ",
+                "require(",
+                "dofile(",
+                "pcall(",
+                "function ",
+            ]
+            .iter()
+            .any(|prefix| line.starts_with(prefix))
+        })
 }

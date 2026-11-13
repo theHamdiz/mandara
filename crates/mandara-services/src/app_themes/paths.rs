@@ -162,7 +162,12 @@ mod tests {
         let contender = std::fs::OpenOptions::new().read(true).write(true).open(locations.config.join("mandara/generated/app-themes.lock")).unwrap();
         assert!(matches!(contender.try_lock(), Err(std::fs::TryLockError::WouldBlock)));
         drop(owner);
-        contender.try_lock().unwrap();
+        // Concurrent process launches can retain a forked descriptor until exec.
+        // Verify eventual acquisition rather than depending on that scheduling.
+        let (send, receive) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || send.send(contender.lock()).unwrap());
+        receive.recv_timeout(mandara_config::doctor::CHECK_TIMEOUT).unwrap().unwrap();
+        worker.join().unwrap();
     }
 
 }

@@ -65,6 +65,7 @@ struct Reader<'a> {
     blocks: Vec<String>,
     visited: BTreeSet<PathBuf>,
     binds: Vec<(PathBuf, SwayBind)>,
+    retained: usize,
     budget: Option<super::read_budget::ReadBudget>,
     sources: Option<ShortcutSources>,
     environment: Option<&'a IncludeEnvironment>,
@@ -73,7 +74,7 @@ struct Reader<'a> {
 impl Reader<'_> {
     fn chunk(&mut self, file: &Path, text: &str, offset: usize) -> Result<()> {
         self.binds.extend(
-            sway_binds_in(text, &mut self.vars, &mut self.blocks)?
+            sway_binds_in(text, &mut self.vars, &mut self.blocks, &mut self.retained)?
                 .into_iter()
                 .map(|mut bind| {
                     bind.line += offset;
@@ -165,6 +166,32 @@ impl Reader<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn expanded_commands_share_a_retained_budget_across_bindings_and_includes() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config");
+        let child = directory.path().join("keys");
+        let mut body = format!("set $command {}\n", "x".repeat(128 * 1024));
+        for _ in 0..crate::keybinds::MAX_BINDINGS {
+            body.push_str("bindsym Mod4+q exec $command\n");
+        }
+        std::fs::write(&root, &body).unwrap();
+        assert!(body.len() < crate::keybinds::MAX_FILE_BYTES);
+        assert!(
+            shortcut_sources_in(std::slice::from_ref(&root), &IncludeEnvironment::default())
+                .is_err()
+        );
+        assert!(crate::keybinds::parse(Target::Sway, &root, &body).is_err());
+        body = format!("set $command {}\n", "x".repeat(128 * 1024));
+        for _ in 0..20 {
+            body.push_str("bindsym Mod4+q exec $command\n");
+        }
+        std::fs::write(&child, body.lines().skip(1).collect::<Vec<_>>().join("\n")).unwrap();
+        body.push_str("include keys\n");
+        std::fs::write(&root, body).unwrap();
+        assert!(shortcut_sources_in(&[root], &IncludeEnvironment::default()).is_err());
+    }
 
     #[test]
     fn exponentially_expanded_variables_fail_before_their_output_is_allocated() {

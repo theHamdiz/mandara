@@ -26,6 +26,24 @@ fn native_checkers_validate_shortcuts_without_running_configuration_hooks() {
     let check = |source: &str| -> Result<()> {
         std::fs::write(&file, source)?;
         let rows = keybinds::parse(target, &file, source)?;
+        if target == Target::River && rows[0].read_only.is_some() {
+            ensure!(
+                rows.iter().all(|row| row.read_only.is_some()),
+                "incomplete River programs must stay read-only"
+            );
+            ensure!(
+                private::river(&rows[0]).is_err(),
+                "the native checker must reject an incomplete source"
+            );
+            // Validate the standalone literal as well; the full program above
+            // remains blocked before any native mutation.
+            let literal = source
+                .lines()
+                .find(|line| line.starts_with("riverctl map"))
+                .context("missing literal mapping")?;
+            let rows = keybinds::parse(target, &file, literal)?;
+            return private::river(&rows[0]);
+        }
         match target {
             Target::Hyprland => {
                 let session = Session {

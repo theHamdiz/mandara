@@ -11,6 +11,7 @@ use anyhow::{Context as _, Result, ensure};
 
 use super::{Binding, MAX_BINDINGS, MAX_FILE_BYTES, MAX_FILES, MAX_TOTAL_BYTES};
 use crate::compositor::{IncludeEnvironment, Target, included_files_bounded_in, is_generated};
+mod hyprland;
 mod niri;
 pub use niri::{NiriModifiers, resolve_mod as resolve_niri_mod};
 
@@ -122,6 +123,20 @@ pub fn scan_roots_in(
     }
     if target == Target::Niri {
         return niri::scan(&queue, environment);
+    }
+    if target == Target::Hyprland
+        && queue.iter().all(|file| {
+            std::fs::canonicalize(file)
+                .ok()
+                .and_then(|real| {
+                    read(file)
+                        .ok()
+                        .map(|text| !super::formats::hyprland_lua(&real, &text))
+                })
+                .unwrap_or(true)
+        })
+    {
+        return hyprland::scan(&queue, environment);
     }
     queue.reverse();
     let mut total_bytes = 0;
@@ -490,5 +505,29 @@ mod tests {
                 .len(),
             1
         );
+    }
+    #[test]
+    fn a_legacy_source_alias_cannot_change_the_editing_dialect() {
+        use std::os::unix::fs::symlink;
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("bindings.conf");
+        let alias = directory.path().join("alias.lua");
+        let original = "bind = SUPER, Q, exec, foot # keep\n";
+        std::fs::write(&file, original).unwrap();
+        symlink(&file, &alias).unwrap();
+        let scan = scan_from(Target::Hyprland, &alias);
+        assert!(scan.errors.is_empty(), "{:?}", scan.errors);
+        let source = &scan.sources[0];
+        let id = source.binding_id(0).unwrap();
+        let mut values: Vec<_> = source.bindings[0]
+            .fields
+            .iter()
+            .map(|field| field.value.clone())
+            .collect();
+        values[2] = "W".into();
+        let edit = super::super::prepare(Target::Hyprland, &id, &values).unwrap();
+        assert_eq!(edit.body(), original.replace(", Q,", ", W,"));
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
+        assert!(alias.is_symlink());
     }
 }

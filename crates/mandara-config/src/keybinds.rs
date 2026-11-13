@@ -21,15 +21,16 @@ use mandara_i18n::tk;
 pub use edit::{PreparedEdit, UndoEdit, prepare};
 pub use encoding::Encoding;
 pub use formats::aqueous::normalized as aqueous_chord;
+pub(crate) use formats::hyprland_lua;
 pub use formats::labwc_keyboard;
 pub use kwin_settings::same_settings as kwin_same_settings;
-pub use kwin_settings::validate_settings as kwin_validate_settings;
 pub use kwin_settings::same_shortcut_settings as kwin_same_shortcut_settings;
+pub use kwin_settings::validate_settings as kwin_validate_settings;
 pub use qt_sequence::keybind as qt_keybind;
 pub use qt_sequence::sequence as qt_sequence;
 pub use scan::{
-    Scan, Source, default_root, default_root_in, resolve_niri_mod, scan, scan_from, scan_roots,
-    scan_roots_in, read_source,
+    Scan, Source, default_root, default_root_in, read_source, resolve_niri_mod, scan, scan_from,
+    scan_roots, scan_roots_in,
 };
 pub use text_undo::TextUndo;
 

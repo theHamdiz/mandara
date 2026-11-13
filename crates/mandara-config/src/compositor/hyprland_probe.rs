@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use super::{IncludeEnvironment, Target, glob_path_bounded_from, include_path, sway_vars};
 use crate::keybinds::{MAX_BINDINGS, MAX_FILES, MAX_TOTAL_BYTES, read_source};
 
-/// Only variable declarations and the selected binding reach the native checker.
+/// Only variables, submaps and the selected binding reach the native checker.
 /// Repeated includes retain their separate variable contexts; no user script runs.
 pub fn shortcut_probe(
     root: &Path,
@@ -16,7 +16,7 @@ pub fn shortcut_probe(
     environment: &IncludeEnvironment,
 ) -> Result<String> {
     let mut probe = Probe {
-        selected: std::fs::canonicalize(selected)?,
+        selected: Some(std::fs::canonicalize(selected)?),
         line,
         binding,
         environment,
@@ -26,6 +26,9 @@ pub fn shortcut_probe(
         visits: 0,
         bytes: 0,
         matches: 0,
+        visitor: None,
+        scope: "default".into(),
+        expanded_bytes: 0,
     };
     probe.visit(root)?;
     ensure!(
@@ -35,8 +38,71 @@ pub fn shortcut_probe(
     Ok(probe.body)
 }
 
+/// Discovery and native validation share the same ordered traversal.
+pub(crate) trait Visitor {
+    fn source(&mut self, file: &Path, target: &Path, source: &str) -> Result<()>;
+    fn binding(&mut self, target: &Path, line: usize, scope: &str, expanded: &str) -> Result<()>;
+}
+
+pub(crate) fn visit_sources(
+    roots: &[PathBuf],
+    environment: &IncludeEnvironment,
+    visitor: &mut dyn Visitor,
+) -> Result<()> {
+    let mut reader = Probe {
+        selected: None,
+        line: 0,
+        binding: "",
+        environment,
+        stack: Vec::new(),
+        variables: Vec::new(),
+        body: String::new(),
+        visits: 0,
+        bytes: 0,
+        matches: 0,
+        visitor: Some(visitor),
+        scope: "default".into(),
+        expanded_bytes: 0,
+    };
+    for root in roots {
+        reader.visit(root)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn chord(line: &str) -> Option<String> {
+    let (_, fields) = line.split_once('=')?;
+    let mut fields = fields.split(',');
+    crate::keybinds::normalize(&format!(
+        "{}+{}",
+        fields.next()?.trim().replace(' ', "+"),
+        fields.next()?.trim()
+    ))
+}
+
+pub(crate) fn chords(
+    root: &Path,
+    environment: &IncludeEnvironment,
+) -> Result<std::collections::BTreeSet<String>> {
+    struct Chords(std::collections::BTreeSet<String>);
+    impl Visitor for Chords {
+        fn source(&mut self, _: &Path, _: &Path, _: &str) -> Result<()> {
+            Ok(())
+        }
+        fn binding(&mut self, target: &Path, _: usize, scope: &str, expanded: &str) -> Result<()> {
+            if scope == "default" && !super::is_generated(target) {
+                self.0.extend(chord(expanded));
+            }
+            Ok(())
+        }
+    }
+    let mut chords = Chords(Default::default());
+    visit_sources(&[root.into()], environment, &mut chords)?;
+    Ok(chords.0)
+}
+
 struct Probe<'a> {
-    selected: PathBuf,
+    selected: Option<PathBuf>,
     line: usize,
     binding: &'a str,
     environment: &'a IncludeEnvironment,
@@ -46,10 +112,16 @@ struct Probe<'a> {
     visits: usize,
     bytes: usize,
     matches: usize,
+    visitor: Option<&'a mut dyn Visitor>,
+    scope: String,
+    expanded_bytes: usize,
 }
 
 impl Probe<'_> {
     fn append(&mut self, line: &str) -> Result<()> {
+        if self.selected.is_none() {
+            return Ok(());
+        }
         ensure!(
             self.body
                 .len()
@@ -76,6 +148,16 @@ impl Probe<'_> {
         anyhow::bail!("shortcut variables exceed the expansion limit")
     }
 
+    fn binding_expansion(&mut self, line: &str) -> Result<String> {
+        let expanded = self.expand(line)?;
+        self.expanded_bytes += expanded.len();
+        ensure!(
+            self.expanded_bytes <= MAX_TOTAL_BYTES,
+            "expanded shortcuts exceed the scan budget"
+        );
+        Ok(expanded)
+    }
+
     fn visit(&mut self, file: &Path) -> Result<()> {
         let real = std::fs::canonicalize(file)?;
         ensure!(
@@ -93,11 +175,15 @@ impl Probe<'_> {
             "shortcut configuration exceeds the scan budget"
         );
         self.stack.push(real.clone());
+        if let Some(visitor) = &mut self.visitor {
+            visitor.source(file, &real, &source)?;
+        }
         for (index, raw) in source.lines().enumerate() {
             let line = uncomment(raw);
             let line = line.trim();
-            if real == self.selected && index + 1 == self.line {
+            if self.selected.as_ref() == Some(&real) && index + 1 == self.line {
                 self.matches += 1;
+                self.binding_expansion(self.binding)?;
                 self.append(self.binding.trim_end())?;
                 continue;
             }
@@ -127,6 +213,27 @@ impl Probe<'_> {
                     // Native parsing preserves expressions and comment escaping.
                     self.append(raw.trim())?;
                     continue;
+                }
+            }
+            if let Some((name, value)) = line.split_once('=') {
+                let name = name.trim();
+                if name == "submap" {
+                    self.scope = self.expand(value.trim())?;
+                    if self.scope == "reset" {
+                        self.scope = "default".into();
+                    }
+                    self.append(raw.trim())?;
+                    continue;
+                }
+                if name.starts_with("bind")
+                    && name["bind".len()..]
+                        .chars()
+                        .all(|ch| ch.is_ascii_alphabetic())
+                {
+                    let expanded = self.binding_expansion(line)?;
+                    if let Some(visitor) = &mut self.visitor {
+                        visitor.binding(&real, index + 1, &self.scope, &expanded)?;
+                    }
                 }
             }
             if let Some(include) = include_path(Target::Hyprland, line) {

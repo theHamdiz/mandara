@@ -87,13 +87,17 @@ validation never execute the program; live changes use `riverctl`. General
 compositor setup continues to leave `init` alone.
 If a River mapping's mode, modifiers or key cannot be resolved, other edits
 are locked too: the editor cannot safely displace an unknown live mapping.
+Shell control flow, sourced scripts and startup programs can hide further
+mappings, so their River configurations stay read-only.
 Repeated literal mappings on the same chord are also locked so moving an
 earlier entry cannot remove the later active mapping.
 Native scans bound bindings, stored variables and expanded values; an
 over-budget source reports an error instead of silently omitting shortcuts.
 Managed companion files use the same bounded, regular-file reads. Legacy
 Hyprland validation preserves variable assignments and includes in their
-native order, including repeated includes, without running startup commands.
+native order, including repeated includes and inherited submaps, without
+running startup commands. Sway limits the total retained expansion data as
+well as each individual value.
 If Linux restricts the compositor's environment, discovery falls back to the
 current user's configuration environment. Absolute launch overrides and
 Sway's reported config retain precedence; a relative override is refused

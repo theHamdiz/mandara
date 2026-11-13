@@ -174,11 +174,6 @@ fn hyprland_sample(
         t("Computed shortcuts must be edited in their source configuration.")
     );
     let mut body = String::new();
-    if row.scope != "default" {
-        body.push_str("submap = ");
-        body.push_str(&Encoding::Word.encode(&row.scope)?);
-        body.push('\n');
-    }
     body.push_str(&Encoding::Word.encode(&row.fields[0].value)?);
     body.push_str(" = ");
     for (index, field) in row.fields[1..].iter().enumerate() {
@@ -188,7 +183,6 @@ fn hyprland_sample(
         body.push_str(&field.encoding.encode(&field.value)?);
     }
     body.push('\n');
-    body.push_str("submap = reset\n");
     Ok((
         "conf",
         mandara_config::compositor::hyprland_shortcut_probe(
@@ -332,7 +326,7 @@ mod tests {
         assert_eq!(extension, "conf");
         assert_eq!(
             body,
-            "$mainMod = SUPER\nsubmap = resize\nbind = $mainMod, Q, exec, foot\nsubmap = reset\n"
+            "$mainMod = SUPER\nsubmap = resize\nbind = $mainMod, Q, exec, foot\n"
         );
     }
 }

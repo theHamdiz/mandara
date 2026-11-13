@@ -52,7 +52,11 @@ impl<'a> Native<'a> {
 
     fn check_body(&self, path: &Path, body: &str) -> Result<()> {
         let dialect = if path == self.edit.id.file || path == self.edit.id.target {
-            &self.edit.id.file
+            if self.session.target == Target::Hyprland {
+                &self.edit.id.target
+            } else {
+                &self.edit.id.file
+            }
         } else {
             path
         };

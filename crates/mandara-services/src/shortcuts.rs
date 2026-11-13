@@ -231,6 +231,49 @@ mod tests {
     use super::*;
 
     #[test]
+    fn river_programs_with_unaccounted_mappings_lock_every_editable_row() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("init");
+        let literal = "riverctl map normal Super Q close\n";
+        for program in [
+            "if true; then riverctl map normal Super W spawn foot; fi\n",
+            "riverctl map normal Super W close; riverctl map normal Super E close\n",
+            ". ./keys\n",
+            "./keys\n",
+            "eval \"$keys\"\n",
+            "riverctl spawn ./keys\n",
+            "riverctl map normal Super W spawn \"$(riverctl map normal Super E close)\"\n",
+        ] {
+            std::fs::write(&file, format!("{literal}{program}")).unwrap();
+            let scan = keybinds::scan_from(Target::River, &file);
+            assert!(scan.errors.is_empty(), "{program}: {:?}", scan.errors);
+            assert!(
+                scan.sources[0]
+                    .bindings
+                    .iter()
+                    .all(|row| row.read_only == Some(keybinds::river::UNRESOLVED)),
+                "{program}"
+            );
+            let id = scan.sources[0].binding_id(0).unwrap();
+            let values: Vec<_> = scan.sources[0].bindings[0]
+                .fields
+                .iter()
+                .map(|field| {
+                    if field.label == "Key" {
+                        "W".into()
+                    } else {
+                        field.value.clone()
+                    }
+                })
+                .collect();
+            assert!(keybinds::prepare(Target::River, &id, &values).is_err());
+        }
+        std::fs::write(&file, format!("#!/bin/sh\n# map setup\nterminal=foot\nexport XDG_CURRENT_DESKTOP=river\nriverctl border-width 2\n{literal}")).unwrap();
+        let scan = keybinds::scan_from(Target::River, &file);
+        assert!(scan.sources[0].bindings[0].read_only.is_none());
+    }
+
+    #[test]
     fn shadowed_river_sources_cannot_unmap_the_active_later_binding() {
         let directory = tempfile::tempdir().unwrap();
         let file = directory.path().join("init");

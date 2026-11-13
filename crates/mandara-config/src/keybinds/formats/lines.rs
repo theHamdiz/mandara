@@ -25,7 +25,7 @@ impl ShortcutFormat for Lines {
         let mut sway_block = None;
         let mut continued = false;
         let resolved = match self.0 {
-            Target::River => Vec::new(),
+            Target::River | Target::Hyprland => Vec::new(),
             Target::Sway => crate::compositor::sway_binds_checked(source)?
                 .into_iter()
                 .map(|bind| (bind.line, bind.chord))
@@ -109,6 +109,11 @@ impl ShortcutFormat for Lines {
             }
             result.extend(binding);
             offset += raw.len();
+        }
+        if self.0 == Target::River && !river_source_complete(source, &result) {
+            for row in &mut result {
+                row.read_only = Some(crate::keybinds::river::UNRESOLVED);
+            }
         }
         Ok(result)
     }
@@ -352,6 +357,10 @@ fn river(text: &str, offset: usize) -> Option<Binding> {
 }
 
 fn computed_shell_word(word: &str) -> bool {
+    dynamic_shell_word(word, true)
+}
+
+fn dynamic_shell_word(word: &str, parameters: bool) -> bool {
     let mut quote = None;
     let mut chars = word.char_indices().peekable();
     while let Some((at, ch)) = chars.next() {
@@ -376,7 +385,8 @@ fn computed_shell_word(word: &str) -> bool {
             quote = if quote.is_some() { None } else { Some(ch) };
         } else if ch == '\'' && quote.is_none() {
             quote = Some(ch);
-        } else if matches!(ch, '$' | '`')
+        } else if ch == '`'
+            || ch == '$' && (parameters || chars.peek().is_some_and(|(_, next)| *next == '('))
             || (quote.is_none()
                 && (matches!(
                     ch,
@@ -387,6 +397,71 @@ fn computed_shell_word(word: &str) -> bool {
         }
     }
     quote.is_some()
+}
+
+/// A native edit cannot account for mappings hidden in shell control flow or scripts.
+fn river_source_complete(source: &str, bindings: &[Binding]) -> bool {
+    let mut bindings = bindings.iter().peekable();
+    for (index, line) in source.lines().enumerate() {
+        let text = line.trim();
+        if text.is_empty() || text.starts_with('#') {
+            continue;
+        }
+        let spans = words(text);
+        let Some(end) = spans.last().map(|span| span.end) else {
+            continue;
+        };
+        let native = crate::compositor::shell_words(&text[..end]);
+        if native.len() != spans.len()
+            || spans
+                .iter()
+                .any(|span| dynamic_shell_word(&text[span.clone()], false))
+        {
+            return false;
+        }
+        if bindings.next_if(|row| row.line == index + 1).is_some() {
+            continue;
+        }
+        if spans
+            .iter()
+            .any(|span| computed_shell_word(&text[span.clone()]))
+        {
+            return false;
+        }
+        let Some(command) = native.first() else {
+            return false;
+        };
+        if command.rsplit('/').next() == Some("riverctl") {
+            // Spawned programs can install bindings of their own. Unmap changes
+            // the effective source identity just as an unparsed map would.
+            if native
+                .get(1)
+                .is_some_and(|verb| !matches!(verb.as_str(), "map" | "unmap" | "spawn"))
+            {
+                continue;
+            }
+            return false;
+        }
+        let assignments = if command == "export" {
+            &native[1..]
+        } else {
+            &native[..]
+        };
+        if !assignments.is_empty()
+            && assignments.iter().all(|word| {
+                word.split_once('=').is_some_and(|(name, _)| {
+                    !name.is_empty()
+                        && name
+                            .chars()
+                            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+                })
+            })
+        {
+            continue;
+        }
+        return false;
+    }
+    true
 }
 
 pub(super) fn trim(text: &str, span: Range<usize>) -> Range<usize> {
