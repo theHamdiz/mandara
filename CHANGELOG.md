@@ -20,6 +20,7 @@ and edit compositor shortcuts with backups and Undo.
 
 ### Fixed
 
+- Large shortcut configurations respect the retained-memory budget, sparse includes keep their valid files, and unrelated Niri edits preserve native shortcut conflicts.
 - **Non-Latin shortcut keys no longer crash the editor.** Arabic and other Unicode keys can be inspected safely.
 - **Shortcut edits stay with the selected binding.** Labwc lists the bindings it recognizes and preserves unsupported nested chains. Oversized or ambiguous configurations explain why editing is unavailable. Hyprland checks use the variables active at each binding. Included files and continued blocks keep their shortcuts.
 

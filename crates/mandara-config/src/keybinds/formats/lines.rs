@@ -17,9 +17,34 @@ struct SwayBlock {
     flags: Vec<crate::keybinds::Field>,
 }
 
+fn retain(bytes: &mut usize, additional: usize) -> Result<()> {
+    *bytes = bytes
+        .checked_add(additional)
+        .filter(|bytes| *bytes <= crate::keybinds::MAX_TOTAL_BYTES)
+        .ok_or_else(|| {
+            anyhow::anyhow!(mandara_i18n::t(
+                "The shortcut configuration is too large to edit."
+            ))
+        })?;
+    Ok(())
+}
+
+fn retain_fields(bytes: &mut usize, count: usize) -> Result<()> {
+    ensure!(
+        count <= crate::keybinds::MAX_FIELDS,
+        "{}",
+        mandara_i18n::t("A shortcut has too many arguments or an oversized value.")
+    );
+    retain(
+        bytes,
+        std::mem::size_of::<Binding>() + std::mem::size_of::<crate::keybinds::Field>() * count,
+    )
+}
+
 impl ShortcutFormat for Lines {
     fn parse(&self, source: &str) -> Result<Vec<Binding>> {
         let mut result = Vec::new();
+        let mut retained = 0_usize;
         let mut scope = String::from("default");
         let mut sway_block = None;
         let resolved = match self.0 {
@@ -65,6 +90,11 @@ impl ShortcutFormat for Lines {
                         if key.starts_with("bind")
                             && key["bind".len()..].chars().all(|c| c.is_ascii_alphabetic())
                         {
+                            // CSV has at most six fields; charge the source and
+                            // inherited scope before constructing their copies.
+                            retain_fields(&mut retained, 6)?;
+                            retain(&mut retained, text.len())?;
+                            retain(&mut retained, scope.len())?;
                             csv(self.0, text, origin, key, &scope)
                         } else {
                             None
@@ -88,14 +118,24 @@ impl ShortcutFormat for Lines {
                             scope = "default".into();
                         }
                     }
-                    if let Some(header) = sway_header(text, origin, next_brace) {
+                    if let Some(header) = sway_header(text, origin, next_brace)? {
                         sway_block = Some(header);
                         None
                     } else {
-                        sway(text, origin, &scope, sway_block.as_ref())
+                        sway(text, origin, &scope, sway_block.as_ref(), &mut retained)?
                     }
                 }
-                Target::River => river(text, origin),
+                Target::River => {
+                    let tokens = words(text);
+                    if tokens.first().is_some_and(|span| {
+                        text[span.clone()].rsplit('/').next() == Some("riverctl")
+                    }) {
+                        retain_fields(&mut retained, tokens.len().saturating_sub(2))?;
+                        retain(&mut retained, text.len())?;
+                        retain(&mut retained, text.len())?;
+                    }
+                    river(text, origin, tokens)
+                }
                 _ => None,
             };
             if let Some(bind) = &mut binding {
@@ -110,6 +150,7 @@ impl ShortcutFormat for Lines {
                 }
                 while resolved.next_if(|(line, _)| *line < index).is_some() {}
                 if let Some((_, chord)) = resolved.peek().filter(|(line, _)| *line == index) {
+                    retain(&mut retained, chord.len())?;
                     bind.chord = Some(chord.clone());
                 }
             }
@@ -220,21 +261,35 @@ fn csv(target: Target, text: &str, offset: usize, directive: &str, scope: &str) 
     })
 }
 
-fn sway_header(text: &str, offset: usize, next_brace: bool) -> Option<SwayBlock> {
+fn sway_header(text: &str, offset: usize, next_brace: bool) -> Result<Option<SwayBlock>> {
     if !text.ends_with('{') && !next_brace {
-        return None;
+        return Ok(None);
     }
     let tokens = words(text);
-    let directive = &text[tokens.first()?.clone()];
+    let Some(first) = tokens.first() else {
+        return Ok(None);
+    };
+    let directive = &text[first.clone()];
     if !matches!(directive, "bindsym" | "bindcode") {
-        return None;
+        return Ok(None);
     }
-    let end = tokens.len() - usize::from(text[tokens.last()?.clone()] == *"{");
+    let end =
+        tokens.len() - usize::from(tokens.last().is_some_and(|span| text[span.clone()] == *"{"));
+    ensure!(
+        end.saturating_sub(1) <= crate::keybinds::MAX_FIELDS - 2,
+        "{}",
+        mandara_i18n::t("A shortcut has too many arguments or an oversized value.")
+    );
     let mut flags = Vec::new();
     for span in &tokens[1..end] {
         if !text[span.clone()].starts_with("--") {
-            return None;
+            return Ok(None);
         }
+        ensure!(
+            span.len() <= crate::keybinds::MAX_FIELD_BYTES,
+            "{}",
+            mandara_i18n::t("A shortcut has too many arguments or an oversized value.")
+        );
         let mut flag = field(
             tk("Flags"),
             &text[span.clone()],
@@ -244,36 +299,56 @@ fn sway_header(text: &str, offset: usize, next_brace: bool) -> Option<SwayBlock>
         flag.read_only = Some(crate::keybinds::SOURCE_ONLY);
         flags.push(flag);
     }
-    Some(SwayBlock {
+    Ok(Some(SwayBlock {
         keycodes: directive == "bindcode",
         flags,
-    })
+    }))
 }
 
-fn sway(text: &str, offset: usize, scope: &str, block: Option<&SwayBlock>) -> Option<Binding> {
+fn sway(
+    text: &str,
+    offset: usize,
+    scope: &str,
+    block: Option<&SwayBlock>,
+    retained: &mut usize,
+) -> Result<Option<Binding>> {
     let tokens = words(text);
-    let first = tokens.first()?;
+    let Some(first) = tokens.first() else {
+        return Ok(None);
+    };
     let directive = &text[first.clone()];
-    let mut at = if matches!(directive, "bindsym" | "bindcode") {
+    let start = if matches!(directive, "bindsym" | "bindcode") {
         1
     } else if block.is_some() {
         0
     } else {
-        return None;
+        return Ok(None);
     };
-    let mut fields = block.map_or_else(Vec::new, |block| block.flags.clone());
-    while let Some(span) = tokens.get(at)
-        && text[span.clone()].starts_with("--")
-    {
+    let at = start
+        + tokens[start..]
+            .iter()
+            .take_while(|span| text[(*span).clone()].starts_with("--"))
+            .count();
+    let (Some(key), Some(action), Some(last)) = (tokens.get(at), tokens.get(at + 1), tokens.last())
+    else {
+        return Ok(None);
+    };
+    let inherited = block.map_or(&[][..], |block| block.flags.as_slice());
+    retain_fields(retained, inherited.len() + at - start + 2)?;
+    retain(retained, scope.len())?;
+    retain(retained, text.len())?;
+    for flag in inherited {
+        retain(retained, flag.value.len())?;
+    }
+    let mut fields = inherited.to_vec();
+    for span in &tokens[start..at] {
         fields.push(field(
             tk("Flags"),
             &text[span.clone()],
             offset + span.start..offset + span.end,
             Encoding::Word,
         ));
-        at += 1;
     }
-    let key = tokens.get(at)?;
     fields.insert(
         0,
         field(
@@ -283,15 +358,14 @@ fn sway(text: &str, offset: usize, scope: &str, block: Option<&SwayBlock>) -> Op
             Encoding::Word,
         ),
     );
-    let action = tokens.get(at + 1)?;
-    let tail = trim(text, action.start..tokens.last()?.end);
+    let tail = trim(text, action.start..last.end);
     fields.push(field(
         tk("Action"),
         &text[tail.clone()],
         offset + tail.start..offset + tail.end,
         Encoding::Plain,
     ));
-    Some(Binding {
+    Ok(Some(Binding {
         line: 0,
         scope: scope.to_owned(),
         chord: if directive == "bindcode" || block.is_some_and(|block| block.keycodes) {
@@ -301,11 +375,10 @@ fn sway(text: &str, offset: usize, scope: &str, block: Option<&SwayBlock>) -> Op
         },
         fields,
         read_only: None,
-    })
+    }))
 }
 
-fn river(text: &str, offset: usize) -> Option<Binding> {
-    let tokens = words(text);
+fn river(text: &str, offset: usize, tokens: Vec<Range<usize>>) -> Option<Binding> {
     let mut native = crate::compositor::shell_words(&text[..tokens.last()?.end]);
     if native.len() != tokens.len()
         || native.first()?.rsplit('/').next()? != "riverctl"

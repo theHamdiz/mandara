@@ -163,7 +163,12 @@ pub(super) fn apply(
         );
         let mut managed = managed.clone();
         managed.existing_chords = if session.target == compositor::Target::Niri {
-            Default::default()
+            current
+                .sources
+                .iter()
+                .flat_map(|source| &source.bindings)
+                .filter_map(|row| row.chord.clone())
+                .collect()
         } else {
             compositor::existing_chords_checked_in(
                 session.target,
@@ -291,8 +296,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn generated_bindings_preserve_non_overlapping_mango_modes() {
+    fn isolated_transaction(test: &str) {
         let directory = tempfile::tempdir().unwrap();
         fs::write(
             directory.path().join(".mandara-shortcut-test"),
@@ -316,18 +320,27 @@ mod tests {
                 "unix:path=/nonexistent/mandara-test",
             )
             .env("MANDARA_ISOLATED_SHORTCUT_TEST", directory.path())
-            .args([
-                "shortcuts::transaction::tests::mango_mode_transaction_runs_in_private_environment",
-                "--ignored",
-                "--exact",
-                "--nocapture",
-            ]);
+            .args([test, "--ignored", "--exact", "--nocapture"]);
         crate::app_themes::process::native(
             command,
             &std::sync::atomic::AtomicBool::new(false),
             mandara_config::doctor::CHECK_TIMEOUT,
         )
         .unwrap();
+    }
+
+    #[test]
+    fn generated_bindings_preserve_non_overlapping_mango_modes() {
+        isolated_transaction(
+            "shortcuts::transaction::tests::mango_mode_transaction_runs_in_private_environment",
+        );
+    }
+
+    #[test]
+    fn native_niri_bindings_survive_unrelated_shortcut_edits() {
+        isolated_transaction(
+            "shortcuts::transaction::tests::niri_conflict_transaction_runs_in_private_environment",
+        );
     }
 
     #[test]
@@ -414,6 +427,123 @@ mod tests {
             compositor::parse_chords(Target::Mango, &fs::read_to_string(&generated).unwrap())
                 .contains(&compositor::target_chord(Target::Mango, &bind))
         );
+    }
+
+    #[test]
+    #[ignore = "launched by the parent test with private paths and no display"]
+    fn niri_conflict_transaction_runs_in_private_environment() {
+        let root = std::path::PathBuf::from(
+            std::env::var_os("MANDARA_ISOLATED_SHORTCUT_TEST")
+                .expect("run through the isolated parent"),
+        );
+        assert_eq!(
+            fs::read_to_string(root.join(".mandara-shortcut-test")).unwrap(),
+            "isolated shortcut transaction\n"
+        );
+        assert!(std::env::var_os("WAYLAND_DISPLAY").is_none());
+        assert_eq!(std::env::var_os("HOME").unwrap(), root.as_os_str());
+        for (nested, modifier) in [(false, "alt"), (true, "mod5")] {
+            let directory = root.join(if nested { "nested" } else { "normal" });
+            fs::create_dir(&directory).unwrap();
+            let generated = root.join("config/mandara/generated/niri.kdl");
+            fs::create_dir_all(generated.parent().unwrap()).unwrap();
+            fs::write(&generated, "").unwrap();
+            fs::write(
+                directory.join("input.kdl"),
+                "input {\n mod-key \"Alt\"\n mod-key-nested \"Mod5\"\n}\n",
+            )
+            .unwrap();
+            let file = directory.join("config.kdl");
+            let original = format!(
+                "include \"input.kdl\"\nbinds {{\n Mod+Space {{ close-window; }}\n Mod+Q {{ close-window; }}\n}}\ninclude {:?}\n",
+                generated.to_string_lossy()
+            );
+            fs::write(&file, &original).unwrap();
+            let mut scan = keybinds::scan_from(Target::Niri, &file);
+            keybinds::resolve_niri_mod(&mut scan, nested);
+            assert!(scan.errors.is_empty(), "{:?}", scan.errors);
+            let bind = compositor::Keybind::new(
+                &[modifier],
+                "space",
+                compositor::BindAction::Mandara("launcher toggle".into()),
+            );
+            let config = CompositorConfig {
+                autostart: false,
+                keybinds: vec![bind],
+                ..Default::default()
+            };
+            let managed = ManagedConfig {
+                config: &config,
+                borders: None,
+                existing_chords: scan
+                    .sources
+                    .iter()
+                    .flat_map(|source| &source.bindings)
+                    .filter_map(|row| row.chord.clone())
+                    .collect(),
+                mandara_bin: "mandara".into(),
+                version: None,
+                user_autostarts: true,
+            };
+            fs::write(&generated, compositor::emit(Target::Niri, &managed).text).unwrap();
+            let initial = Preferences {
+                target: Target::Niri,
+                manage: true,
+                keybinds: config.keybinds.clone(),
+            };
+            let session = Session {
+                target: Target::Niri,
+                root: file.clone(),
+                scan,
+                environment: Default::default(),
+                primary_mod_is_alt: modifier == "alt",
+            };
+            let source = session
+                .scan
+                .sources
+                .iter()
+                .find(|source| source.file == file)
+                .unwrap();
+            let row = source
+                .bindings
+                .iter()
+                .position(|row| {
+                    row.fields
+                        .iter()
+                        .any(|field| field.label == "Shortcut" && field.value == "Mod+Q")
+                })
+                .unwrap();
+            let values = source.bindings[row]
+                .fields
+                .iter()
+                .map(|field| {
+                    if field.label == "Shortcut" {
+                        "Mod+W".into()
+                    } else {
+                        field.value.clone()
+                    }
+                })
+                .collect::<Vec<_>>();
+            let edit =
+                keybinds::prepare(Target::Niri, &source.binding_id(row).unwrap(), &values).unwrap();
+            apply(
+                &session,
+                &edit,
+                &initial,
+                &|| Ok(initial.clone()),
+                &NoopBackend,
+            )
+            .unwrap();
+            assert_eq!(
+                fs::read_to_string(file).unwrap(),
+                original.replace("Mod+Q", "Mod+W")
+            );
+            assert!(
+                !compositor::parse_chords(Target::Niri, &fs::read_to_string(generated).unwrap())
+                    .contains(&compositor::target_chord(Target::Niri, &config.keybinds[0])),
+                "the companion must not replace the native Mod+Space binding"
+            );
+        }
     }
 
     #[test]

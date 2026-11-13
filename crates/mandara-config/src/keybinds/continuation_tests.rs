@@ -5,6 +5,43 @@ use crate::compositor::Target;
 use std::path::Path;
 
 #[test]
+fn long_sway_mode_names_cannot_expand_into_unbounded_row_storage() {
+    let source = format!(
+        "mode \"{}\" {{\n{}\n}}\n",
+        "m".repeat(MAX_FIELD_BYTES),
+        "bindcode 24 kill\n".repeat(MAX_TOTAL_BYTES / MAX_FIELD_BYTES + 1)
+    );
+    assert!(source.len() < MAX_FILE_BYTES);
+    assert!(parse(Target::Sway, Path::new("config"), &source).is_err());
+}
+
+#[test]
+fn sway_block_flags_are_bounded_before_building_inherited_rows() {
+    let source = format!(
+        "bindcode {}{{\n{}\n}}\n",
+        "--locked ".repeat(MAX_FIELDS + 1),
+        "24 kill\n".repeat(8)
+    );
+    assert!(source.len() < MAX_FILE_BYTES);
+    assert!(
+        super::formats::format(Target::Sway, Path::new("config"), &source)
+            .parse(&source)
+            .is_err()
+    );
+}
+
+#[test]
+fn expanded_sway_headers_share_the_binding_storage_budget() {
+    let source = format!(
+        "set $header {}\n{}",
+        "x".repeat(MAX_FIELD_BYTES),
+        "bindsym $header {\n".repeat(MAX_TOTAL_BYTES / MAX_FIELD_BYTES + 1)
+    );
+    assert!(source.len() < MAX_FILE_BYTES);
+    assert!(crate::compositor::sway_binds_checked(&source).is_err());
+}
+
+#[test]
 fn missing_argument_separators_are_inserted_only_when_a_value_is_added() {
     for (target, source, values, expected) in [
         (

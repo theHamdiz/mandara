@@ -2639,14 +2639,21 @@ fn glob_path_bounded_from(directory: &Path, pattern: &Path, limit: usize) -> Res
     for part in pattern.components() {
         let name = part.as_os_str().to_string_lossy();
         if !has_glob(&name) {
+            let extra = unescape_glob_path(Path::new(part.as_os_str()));
+            let mut bytes = 0_usize;
             for p in &mut found {
-                p.push(unescape_glob_path(Path::new(part.as_os_str())));
+                bytes = bytes.checked_add(p.as_os_str().len())
+                    .and_then(|bytes| bytes.checked_add(extra.as_os_str().len() + 1))
+                    .filter(|bytes| *bytes <= crate::keybinds::MAX_TOTAL_BYTES)
+                    .context("include glob exceeds the directory scan budget")?;
+                p.push(&extra);
             }
             continue;
         }
         anyhow::ensure!(part.as_os_str().to_str().is_some(), "include glob is not valid UTF-8");
         let matcher = glob::Pattern::new(&name);
         let mut next = Vec::new();
+        let mut bytes = 0_usize;
         for dir in &found {
             let entries = match std::fs::read_dir(dir) {
                 Ok(entries) => entries,
@@ -2667,7 +2674,10 @@ fn glob_path_bounded_from(directory: &Path, pattern: &Path, limit: usize) -> Res
                 let name = entry.file_name();
                 let name = name.to_str().context("include glob has a non-UTF-8 filename")?;
                 if matcher.matches(name) {
-                    anyhow::ensure!(next.len() < limit, "too many included shortcut files");
+                    bytes = bytes.checked_add(dir.as_os_str().len())
+                        .and_then(|bytes| bytes.checked_add(name.len() + 1))
+                        .filter(|bytes| *bytes <= crate::keybinds::MAX_TOTAL_BYTES)
+                        .context("include glob exceeds the directory scan budget")?;
                     next.push(entry.path());
                 }
             }
@@ -2681,6 +2691,7 @@ fn glob_path_bounded_from(directory: &Path, pattern: &Path, limit: usize) -> Res
             Err(error) => return Err(error).with_context(|| found[index].display().to_string()),
         }
     }
+    anyhow::ensure!(found.len() <= limit, "too many included shortcut files");
     found.sort();
     Ok(found)
 }
@@ -3009,7 +3020,12 @@ fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<
         let body = line.trim_end_matches('{').trim_end();
         let in_bind_block = blocks.last().is_some_and(|b| b.split_whitespace().next() == Some("bindsym")) && blocks.len() == 1;
         if opens_block {
-            blocks.push(if body.split_whitespace().next() == Some("bindsym") { body.to_owned() } else { body.split_whitespace().next().unwrap_or_default().to_owned() });
+            let header = if body.split_whitespace().next() == Some("bindsym") { body } else { body.split_whitespace().next().unwrap_or_default() };
+            *retained = retained.checked_add(header.len())
+                .and_then(|bytes| bytes.checked_add(std::mem::size_of::<String>()))
+                .filter(|bytes| *bytes <= crate::keybinds::MAX_TOTAL_BYTES)
+                .ok_or_else(|| anyhow::anyhow!("expanded shortcuts exceed the scan budget"))?;
+            blocks.push(header.to_owned());
             continue;
         }
         let words: Vec<&str> = if in_bind_block {
@@ -3816,6 +3832,22 @@ mod look_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sparse_globs_limit_final_sources_instead_of_parent_directories() {
+        let directory = tempfile::tempdir().unwrap();
+        for name in ["one", "two", "three"] {
+            std::fs::create_dir(directory.path().join(name)).unwrap();
+        }
+        let one = directory.path().join("one/keys.conf");
+        std::fs::write(&one, "").unwrap();
+        assert_eq!(glob_path_bounded_from(directory.path(), Path::new("*/keys.conf"), 2).unwrap(), [one]);
+        for name in ["two", "three"] {
+            std::fs::write(directory.path().join(name).join("keys.conf"), "").unwrap();
+        }
+        assert!(glob_path_bounded_from(directory.path(), Path::new("*/keys.conf"), 2).is_err());
+    }
+
 
     #[test]
     fn exec_keybind_alias_keeps_the_program_and_writes_canonical_spawn() {

@@ -18,6 +18,7 @@ pub(super) fn scan(roots: &[PathBuf], environment: &IncludeEnvironment) -> Scan 
 struct Collector {
     scan: Scan,
     bindings: usize,
+    scope_bytes: usize,
     contexts: BTreeSet<(usize, usize)>,
 }
 
@@ -43,6 +44,11 @@ impl Visitor for Collector {
             self.bindings <= MAX_BINDINGS,
             "too many shortcuts in included files"
         );
+        for row in &bindings {
+            self.scope_bytes = self.scope_bytes.checked_add(row.scope.len())
+                .filter(|bytes| *bytes <= MAX_TOTAL_BYTES)
+                .context("expanded shortcuts exceed the scan budget")?;
+        }
         self.scan.sources.push(Source {
             file: file.into(),
             target: target.into(),
@@ -71,6 +77,12 @@ impl Visitor for Collector {
         let row = &mut source.bindings[index];
         let chord = hyprland_probe::chord(expanded);
         if self.contexts.insert((source_index, index)) {
+            self.scope_bytes = self
+                .scope_bytes
+                .checked_sub(row.scope.len())
+                .and_then(|bytes| bytes.checked_add(scope.len()))
+                .filter(|bytes| *bytes <= MAX_TOTAL_BYTES)
+                .context("expanded shortcuts exceed the scan budget")?;
             row.scope = scope.into();
             row.chord = chord;
         } else if row.scope != scope || row.chord != chord {
@@ -84,6 +96,30 @@ impl Visitor for Collector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::keybinds::MAX_FIELD_BYTES;
+    #[test]
+    fn expanded_submap_copies_share_a_retained_byte_budget() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("hyprland.conf");
+        let source = format!(
+            "$mode = {}\nsubmap = $mode\n{}",
+            "m".repeat(MAX_FIELD_BYTES),
+            "bind = SUPER, Q, exec, foot\n".repeat(MAX_TOTAL_BYTES / MAX_FIELD_BYTES + 1)
+        );
+        assert!(source.len() < MAX_FILE_BYTES);
+        std::fs::write(&file, source).unwrap();
+        let found = scan(&[file], &IncludeEnvironment::captured([]));
+        assert!(!found.errors.is_empty());
+        assert!(
+            found
+                .sources
+                .iter()
+                .flat_map(|source| &source.bindings)
+                .map(|row| row.scope.len())
+                .sum::<usize>()
+                <= MAX_TOTAL_BYTES
+        );
+    }
     #[test]
     fn config_variables_and_inherited_submaps_follow_includes_and_reassignments() {
         let directory = tempfile::tempdir().unwrap();
