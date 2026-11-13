@@ -10562,3 +10562,11 @@
 "The compositor configuration is not a regular file." = "Birleştirici yapılandırması normal bir dosya değil."
 
 "The compositor rejected the theme; previous settings were kept." = "Birleştirici temayı reddetti; önceki ayarlar korundu."
+
+"Review an app template; pass its approval token to enable it" = "Uygulama şablonunu inceleyin; etkinleştirmek için onay kodunu iletin"
+
+"approval token returned by the review" = "inceleme sonucunda verilen onay kodu"
+
+"Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "Bu şablonu etkinleştirmeden önce dosyaları ve komutları inceleyin. Komutlar başka dosyaları da değiştirebilir. Güncellemeler yeniden incelenmelidir."
+
+"Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "Önce tarayıcının paylaşılan renk paletini inceleyip onaylayın. Diğer Pywal uygulamaları da bu renkleri kullanacak."

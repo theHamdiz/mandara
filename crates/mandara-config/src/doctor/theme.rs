@@ -1,18 +1,62 @@
 //! Reversible theme-key edits for compositors without generated includes.
 
+use super::comparison::CheckResult;
 use anyhow::{Context as _, Result, ensure};
 use mandara_i18n::t;
+use mandara_theme::templates::{FileStamp, WriteLock};
 use std::fs;
-use std::io::Read as _;
-use std::os::unix::fs::MetadataExt as _;
-use std::path::{Path, PathBuf};
+use std::io::{Read as _, Write as _};
+use std::path::Path;
 
-/// Compare a config in small chunks without allocating another copy of it.
-const COMPARE_BYTES: usize = 4096;
+/// Full doctor reports preserve warning/error counts; theme-only parsers have
+/// a single pass/fail result. Both follow the same regression comparison.
+pub struct LiveCheck {
+    ran: bool,
+    errors: usize,
+    warnings: usize,
+    result: Result<()>,
+}
+impl From<Result<()>> for LiveCheck {
+    fn from(result: Result<()>) -> Self {
+        Self {
+            ran: true,
+            errors: usize::from(result.is_err()),
+            warnings: 0,
+            result,
+        }
+    }
+}
+impl From<super::Report> for LiveCheck {
+    fn from(report: super::Report) -> Self {
+        let (errors, warnings) = report.counts();
+        Self {
+            ran: report.ran(),
+            errors,
+            warnings,
+            result: if report.ran() && report.problems() == 0 {
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("{}", report.raw))
+            },
+        }
+    }
+}
+impl CheckResult for LiveCheck {
+    fn ran(&self) -> bool {
+        self.ran
+    }
+    fn counts(&self) -> (usize, usize) {
+        (self.errors, self.warnings)
+    }
+}
 
 pub trait Validator {
     /// Check the edited theme with its compositor in an isolated process.
     fn validate(&self, body: &str) -> Result<()>;
+
+    fn check_live(&self, path: &Path) -> LiveCheck {
+        self.validate_live(path).into()
+    }
 
     /// Check the actual file after writing as well as its private candidate.
     /// Implementations may inspect live includes, but must never execute user
@@ -35,104 +79,84 @@ pub trait Validator {
     }
 }
 
-fn destination(path: &Path) -> Result<PathBuf> {
-    let target = crate::store::symlink_target(path);
-    for parent in target.ancestors() {
-        if let Ok(base) = parent.canonicalize() {
-            let suffix = target.strip_prefix(parent)?;
-            return Ok(if suffix.as_os_str().is_empty() {
-                base
-            } else {
-                base.join(suffix)
-            });
-        }
-    }
-    Ok(target)
-}
-
 fn changed() -> String {
     t("The compositor configuration changed while its theme was being checked. Try again.").into()
 }
 
-/// The inode and modification time also detect replacement with identical text.
-type Identity = (u64, u64, i64, i64);
-
-fn unchanged(path: &Path, expected: &[u8]) -> Result<Option<Identity>> {
-    let metadata = match fs::metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            ensure!(expected.is_empty(), changed());
-            return Ok(None);
-        }
-        Err(error) => return Err(error.into()),
-    };
-    ensure!(
-        metadata.is_file(),
-        t("The compositor configuration is not a regular file.")
-    );
-    let mut file = fs::File::open(path)?;
-    let metadata = file.metadata()?;
-    let mut buffer = [0; COMPARE_BYTES];
-    let mut offset = 0;
-    loop {
-        let count = match file.read(&mut buffer) {
-            Ok(count) => count,
-            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
-            Err(error) => return Err(error.into()),
-        };
-        if count == 0 {
-            break;
-        }
-        ensure!(
-            expected.get(offset..offset + count) == Some(&buffer[..count]),
-            changed()
-        );
-        offset += count;
+/// Keep each pre-edit version, including later palette changes and undo. The
+/// file stays a symlink; the backup stores its target's bytes and permissions.
+fn backup(lock: &WriteLock, expected: Option<FileStamp>) -> Result<()> {
+    lock.check_stamp(expected)?;
+    if expected.is_none() {
+        return Ok(());
     }
-    ensure!(offset == expected.len(), changed());
-    Ok(Some((
-        metadata.dev(),
-        metadata.ino(),
-        metadata.mtime(),
-        metadata.mtime_nsec(),
-    )))
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?;
+    let path = lock.path();
+    let name = path
+        .file_name()
+        .context("configuration has no filename")?
+        .to_string_lossy();
+    let backup = path.with_file_name(format!(
+        "{name}.mandara-backup-{}-{:09}-{}",
+        now.as_secs(),
+        now.subsec_nanos(),
+        std::process::id()
+    ));
+    let mut source = fs::File::open(lock.target())?;
+    let mut saved = fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&backup)?;
+    saved.set_permissions(source.metadata()?.permissions())?;
+    std::io::copy(&mut source, &mut saved)?;
+    saved.flush()?;
+    saved.sync_all()?;
+    lock.check_stamp(expected)?;
+    Ok(())
 }
 
-/// The caller records ownership and backs up the original before this write.
+/// The caller records ownership; this guard backs up each actual edit.
 pub fn guarded_write(
     path: &Path,
     expected: &str,
     next: &str,
     validator: &dyn Validator,
 ) -> Result<()> {
-    let target = destination(path)?;
-    let before = unchanged(&target, expected.as_bytes())?;
-    let _baseline = validator.validate_live(path);
-    // A compositor's file watcher must never see a rejected edit.
+    let lock = WriteLock::new(path)?;
+    guarded_write_locked(&lock, expected, next, validator)
+}
+
+/// Reuse the preference writer's lock through journaling and native validation.
+pub fn guarded_write_locked(
+    lock: &WriteLock,
+    expected: &str,
+    next: &str,
+    validator: &dyn Validator,
+) -> Result<()> {
+    let path = lock.path();
+    let before = lock.check(expected.as_bytes()).context(changed())?;
+    let baseline = validator.check_live(path);
     validator.validate(next).context(t(
         "The compositor rejected the theme; previous settings were kept.",
     ))?;
-    ensure!(destination(path)? == target, changed());
-    ensure!(
-        unchanged(&target, expected.as_bytes())? == before,
-        changed()
-    );
-    crate::store::write_atomic(&target, next.as_bytes())?;
-    let written = unchanged(&target, next.as_bytes())?;
-    let live = validator.validate_live(path);
-    ensure!(destination(path)? == target, changed());
-    ensure!(unchanged(&target, next.as_bytes())? == written, changed());
-    if let Err(error) = live {
-        // A live include can change after candidate validation. Restore only
-        // our own write, preserving an editor's concurrent replacement.
-        ensure!(destination(path)? == target, changed());
-        unchanged(&target, next.as_bytes())?;
+    lock.check_stamp(before).context(changed())?;
+    if expected == next {
+        return Ok(());
+    }
+    backup(lock, before)?;
+    let written = crate::store::write_atomic_checked(lock, before, next.as_bytes())?;
+    let live = validator.check_live(path);
+    lock.check_stamp(Some(written)).context(changed())?;
+    if super::comparison::is_worse(&baseline, &live) {
+        // Rollback is another conditional write, with its own recoverable copy.
+        backup(lock, Some(written))?;
         if before.is_some() {
-            crate::store::write_atomic(&target, expected.as_bytes())?;
+            crate::store::write_atomic_checked(lock, Some(written), expected.as_bytes())?;
         } else {
-            fs::remove_file(&target)?;
+            lock.check_stamp(Some(written))?;
+            fs::remove_file(lock.target())?;
         }
-        return Err(error).context(t(
+        return live.result.context(t(
             "The compositor rejected the theme; previous settings were kept.",
         ));
     }
@@ -147,6 +171,94 @@ mod tests {
         fn validate(&self, _: &str) -> Result<()> {
             (self.0)()
         }
+    }
+
+    #[test]
+    fn existing_live_problems_do_not_block_a_theme_but_new_ones_roll_it_back() {
+        struct Counts {
+            calls: std::cell::Cell<usize>,
+            after: usize,
+        }
+        impl Validator for Counts {
+            fn validate(&self, _: &str) -> Result<()> {
+                Ok(())
+            }
+            fn check_live(&self, _: &Path) -> LiveCheck {
+                let calls = self.calls.get();
+                self.calls.set(calls + 1);
+                LiveCheck {
+                    ran: true,
+                    errors: if calls == 0 { 1 } else { self.after },
+                    warnings: 0,
+                    result: Err(anyhow::anyhow!("unrelated invalid setting")),
+                }
+            }
+        }
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("config");
+        fs::write(&path, "personal").unwrap();
+        guarded_write(
+            &path,
+            "personal",
+            "palette A",
+            &Counts {
+                calls: 0.into(),
+                after: 1,
+            },
+        )
+        .unwrap();
+        assert!(
+            guarded_write(
+                &path,
+                "palette A",
+                "palette B",
+                &Counts {
+                    calls: 0.into(),
+                    after: 2
+                }
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), "palette A");
+        guarded_write(&path, "palette A", "personal", &Check(|| Ok(()))).unwrap();
+        let backups: Vec<_> = fs::read_dir(root.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                path.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .contains("mandara-backup-")
+            })
+            .collect();
+        assert_eq!(backups.len(), 4);
+        assert!(
+            backups
+                .iter()
+                .any(|path| fs::read_to_string(path).unwrap() == "palette B")
+        );
+    }
+
+    #[test]
+    fn a_new_edit_during_the_live_check_is_preserved_instead_of_rolled_back() {
+        struct Edit<'a>(&'a Path);
+        impl Validator for Edit<'_> {
+            fn validate(&self, _: &str) -> Result<()> {
+                Ok(())
+            }
+            fn validate_live(&self, _: &Path) -> Result<()> {
+                if fs::read_to_string(self.0)? == "theme" {
+                    fs::write(self.0, "editor's newer value")?;
+                    anyhow::bail!("live include failed");
+                }
+                Ok(())
+            }
+        }
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("config");
+        fs::write(&path, "personal").unwrap();
+        assert!(guarded_write(&path, "personal", "theme", &Edit(&path)).is_err());
+        assert_eq!(fs::read_to_string(path).unwrap(), "editor's newer value");
     }
 
     #[test]

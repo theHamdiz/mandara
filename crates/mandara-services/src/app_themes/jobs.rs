@@ -92,6 +92,26 @@ pub async fn install(
     root: PathBuf,
     cancel: Arc<AtomicBool>,
 ) -> anyhow::Result<Installed> {
+    install_and(source, entry, root, cancel, Ok).await
+}
+
+pub async fn install_review(
+    source: CatalogSource,
+    entry: Entry,
+    locations: super::paths::Locations,
+    cancel: Arc<AtomicBool>,
+) -> anyhow::Result<super::approval::Review> {
+    let id = entry.qualified_id();
+    install_and(source, entry, locations.catalogs(), cancel, move |installed| super::approval::Review::new(&id, &installed, &locations)).await
+}
+
+async fn install_and<T: Send + 'static>(
+    source: CatalogSource,
+    entry: Entry,
+    root: PathBuf,
+    cancel: Arc<AtomicBool>,
+    finish: impl FnOnce(Installed) -> anyhow::Result<T> + Send + 'static,
+) -> anyhow::Result<T> {
     let admission = Admission::acquire(&REQUESTS)
         .ok_or_else(|| anyhow::anyhow!("app template downloads are busy; try again in a moment"))?;
     let lease = NETWORK.lock().await;
@@ -104,12 +124,13 @@ pub async fn install(
             &root,
             &Fetch {
                 http: Http::default(),
-                cancel,
+                cancel: cancel.clone(),
             },
         )?;
         let protected = super::apply::protected_revisions(&super::paths::Locations::current()?)?;
         catalog::prune(&root, &entry.qualified_id(), &protected)?;
-        Ok(installed)
+        anyhow::ensure!(!cancel.load(Ordering::Acquire), "catalog request was cancelled");
+        finish(installed)
     })
     .await
 }

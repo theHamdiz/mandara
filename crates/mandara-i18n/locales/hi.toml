@@ -10565,3 +10565,11 @@
 "The compositor configuration is not a regular file." = "कंपोज़िटर का कॉन्फ़िगरेशन सामान्य फ़ाइल नहीं है।"
 
 "The compositor rejected the theme; previous settings were kept." = "कंपोज़िटर ने थीम स्वीकार नहीं की; पिछली सेटिंग्स रखी गई हैं।"
+
+"Review an app template; pass its approval token to enable it" = "ऐप टेम्पलेट की समीक्षा करें; चालू करने के लिए उसका स्वीकृति टोकन दें"
+
+"approval token returned by the review" = "समीक्षा से मिला स्वीकृति टोकन"
+
+"Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "इस टेम्पलेट को चालू करने से पहले फ़ाइलों और कमांड की समीक्षा करें। कमांड दूसरी फ़ाइलें भी बदल सकते हैं। अपडेट के लिए नई समीक्षा ज़रूरी है।"
+
+"Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "पहले ब्राउज़र के साझा रंग पैलेट की समीक्षा करके स्वीकृति दें। दूसरे Pywal ऐप भी इन रंगों का उपयोग करेंगे।"

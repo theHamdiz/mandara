@@ -10562,3 +10562,11 @@
 "The compositor configuration is not a regular file." = "Конфигурация композитора не является обычным файлом."
 
 "The compositor rejected the theme; previous settings were kept." = "Композитор отклонил тему; прежние настройки сохранены."
+
+"Review an app template; pass its approval token to enable it" = "Проверьте шаблон приложения; для включения передайте код подтверждения"
+
+"approval token returned by the review" = "код подтверждения, полученный после проверки"
+
+"Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "Проверьте файлы и команды перед включением этого шаблона. Команды могут изменять и другие файлы. После обновления нужна новая проверка."
+
+"Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "Сначала проверьте и подтвердите общую палитру браузера. Другие приложения Pywal тоже будут использовать эти цвета."

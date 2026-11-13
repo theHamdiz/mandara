@@ -88,6 +88,15 @@ pub(super) fn colors(settings: &Settings) -> Result<serde_json::Value> {
     )
 }
 
+fn shared_palette(owner: &str, output: &Path, locations: &Locations, ledger: &mut Ledger, approved: bool) -> Result<Vec<PathBuf>> {
+    let standard = locations.cache.join("wal/colors.json");
+    let same = mandara_theme::templates::destination::slot(&standard)? == mandara_theme::templates::destination::slot(output)?;
+    anyhow::ensure!(approved || same, mandara_i18n::t("Review and approve the shared browser palette first. Other Pywal apps will read these colors too."));
+    if same { return Ok(Vec::new()); }
+    ledger.put_file(owner, &standard, &super::apply::read_text(output)?)?;
+    Ok(vec![standard])
+}
+
 pub fn apply(
     owner: &str,
     output: &Path,
@@ -95,6 +104,7 @@ pub fn apply(
     mode: &str,
     locations: &Locations,
     ledger: &mut Ledger,
+    shared_palette_approved: bool,
 ) -> Result<Vec<PathBuf>> {
     let settings = Settings {
         colors: output.into(),
@@ -117,8 +127,9 @@ pub fn apply(
         foreign || cfg!(target_os = "linux"),
         "the built-in browser host requires Linux; install an external Pywalfox host on this platform"
     );
+    let mut written = if foreign { shared_palette(owner, output, locations, ledger, shared_palette_approved)? } else { Vec::new() };
     ledger.put_file(owner, &path, &serde_json::to_string(&settings)?)?;
-    let mut written = vec![path];
+    written.push(path);
     if !foreign {
         let body = json!({"name":"pywalfox","description":DESCRIPTION,"path":mandara_config::paths::self_exe(),"type":"stdio","allowed_extensions":[EXTENSION_ID]});
         ledger.put_file(owner, &manifest, &serde_json::to_string_pretty(&body)?)?;
@@ -127,25 +138,23 @@ pub fn apply(
     // An existing host remains the browser's choice. Its established socket
     // receives updates without replacing the manifest or starting another host.
     if foreign {
-        let standard = locations.cache.join("wal/colors.json");
-        if standard != output {
-            ledger.put_file(owner, &standard, &super::apply::read_text(output)?)?;
-            written.push(standard);
-        }
-        let socket = std::os::unix::net::UnixDatagram::unbound()?;
-        socket.set_write_timeout(Some(super::process::TIMEOUT))?;
-        if socket
-            .connect(std::env::temp_dir().join(format!(
-                "pywalfox_socket_{}",
-                rustix::process::getuid().as_raw()
-            )))
-            .is_ok()
-        {
+        notify_legacy(mode, &std::env::temp_dir().join(format!("pywalfox_socket_{}", rustix::process::getuid().as_raw())))?;
+    }
+    Ok(written)
+}
+
+fn notify_legacy(mode: &str, path: &Path) -> Result<()> {
+    let socket = std::os::unix::net::UnixDatagram::unbound()?;
+    socket.set_write_timeout(Some(super::process::TIMEOUT))?;
+    match socket.connect(path) {
+        Ok(()) => {
             socket.send(format!("theme:mode:{mode}").as_bytes())?;
             socket.send(b"action:update")?;
         }
+        Err(error) if matches!(error.kind(), std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused) => {},
+        Err(error) => return Err(error.into()),
     }
-    Ok(written)
+    Ok(())
 }
 
 pub(super) fn undo(owner: &str, locations: &Locations) -> Result<Vec<PathBuf>> {
@@ -161,6 +170,37 @@ pub(super) fn undo(owner: &str, locations: &Locations) -> Result<Vec<PathBuf>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_browser_updates_use_the_private_socket_and_report_unexpected_failures() {
+        let root = tempfile::tempdir().unwrap(); let path = root.path().join("socket");
+        let socket = std::os::unix::net::UnixDatagram::bind(&path).unwrap();
+        socket.set_read_timeout(Some(super::super::process::TIMEOUT)).unwrap();
+        notify_legacy("light", &path).unwrap();
+        let mut bytes = [0; 64];
+        let count = socket.recv(&mut bytes).unwrap(); assert_eq!(&bytes[..count], b"theme:mode:light");
+        let count = socket.recv(&mut bytes).unwrap(); assert_eq!(&bytes[..count], b"action:update");
+        notify_legacy("dark", &root.path().join("not-running")).unwrap();
+        assert!(notify_legacy("dark", &root.path().join("x".repeat(256))).is_err());
+    }
+
+    #[test]
+    fn shared_browser_palettes_require_review_and_restore_the_original() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = Locations { home: root.path().into(), config: root.path().join("config"), data: root.path().join("data"), cache: root.path().join("cache"), state: root.path().join("state") };
+        let standard = locations.cache.join("wal/colors.json");
+        std::fs::create_dir_all(standard.parent().unwrap()).unwrap();
+        std::fs::write(&standard, "personal palette").unwrap();
+        let output = root.path().join("browser.json"); std::fs::write(&output, "reviewed palette").unwrap();
+        let mut ledger = Ledger::default();
+        assert!(shared_palette("browser", &output, &locations, &mut ledger, false).is_err());
+        assert_eq!(std::fs::read_to_string(&standard).unwrap(), "personal palette");
+        assert!(ledger.is_empty());
+        assert_eq!(shared_palette("browser", &output, &locations, &mut ledger, true).unwrap().as_slice(), std::slice::from_ref(&standard));
+        assert_eq!(std::fs::read_to_string(&standard).unwrap(), "reviewed palette");
+        assert!(ledger.take_back_checked("browser").errors.is_empty());
+        assert_eq!(std::fs::read_to_string(standard).unwrap(), "personal palette");
+    }
 
     #[test]
     fn browser_launch_arguments_are_checked_before_normal_cli_parsing() {
@@ -235,6 +275,7 @@ mod tests {
             "dark",
             &locations,
             &mut ledger,
+            false,
         )
         .unwrap();
         assert_eq!(files.len(), 2);

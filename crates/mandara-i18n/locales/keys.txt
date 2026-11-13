@@ -2811,7 +2811,6 @@ Gentle 20-20-20 reminders to rest your eyes
 Geometric set
 George Eliot
 Get
-Get & enable
 Get · {size}
 Getting it ready…
 Getting the Qur'an ready…
@@ -3314,7 +3313,6 @@ Install a sound theme from a folder, an archive, or an https:// link (links aren
 Install all
 Install an archive…
 Install an icon theme from an archive or a folder on this computer, or from a link. Every theme found in it is checked (a valid index.theme and its icons); scripts in it are never run or kept.
-Install and enable an app template by its source:app id
 Install and enable power-profiles-daemon to switch profiles
 Install anyway
 Install apps
@@ -6084,7 +6082,10 @@ Reverted
 Reverted to the previous arrangement
 Review
 Review & apply
+Review an app template; pass its approval token to enable it
+Review and approve the shared browser palette first. Other Pywal apps will read these colors too.
 Review each
+Review files and commands before enabling this template. Commands can change other files too. Updates need a new review.
 Review the plan
 Rich text
 Richard Feynman
@@ -8970,6 +8971,7 @@ app id, e.g. firefox
 app name
 app name (a regular expression)
 appearance
+approval token returned by the review
 archive, folder, https link or image, then options: --yes, --background RRGGBB, --accent RRGGBB, --spinner ring|dots|none, --scale 0.1–0.8, --position center|upper, --fill, --screen WxH, --menu WxH
 at {time} · after {prayer} {since}
 auto (DHCP) or manual

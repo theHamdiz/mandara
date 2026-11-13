@@ -176,14 +176,7 @@ fn settle(before: &Report, id: &str, fix: Fix, env: &CheckEnv, backup: PathBuf) 
     Outcome { fix, backup: Some(backup), rolled_back: worse, resolved, after }
 }
 
-/// More errors, or as many errors and more warnings, or a checker that
-/// stopped working.
-pub fn is_worse(before: &Report, after: &Report) -> bool {
-    if before.status == CheckerStatus::Ran && after.status != CheckerStatus::Ran {
-        return true;
-    }
-    (after.errors(), after.warnings()) > (before.errors(), before.warnings())
-}
+pub use super::comparison::is_worse;
 
 /// Comment syntax per dialect.
 pub fn comment_prefix(target: Target, file: &Path) -> &'static str {
@@ -374,8 +367,10 @@ pub fn guarded_write_in(before: &Report, env: &CheckEnv, write: &dyn Fn() -> Res
         return Ok(Guarded { after: before.clone(), left_out: Vec::new(), rolled_back: false });
     }
     let target = before.target;
+    let lock = mandara_theme::templates::WriteLock::new(generated)?;
     let previous = std::fs::read(generated).ok();
     write()?;
+    let mut written = mandara_theme::templates::FileStamp::at(lock.target())?;
     let mut after = check_with(target, &before.root, env);
     let mut left_out = Vec::new();
     for _ in 0..MAX_HEAL_ROUNDS {
@@ -386,11 +381,14 @@ pub fn guarded_write_in(before: &Report, env: &CheckEnv, write: &dyn Fn() -> Res
             break;
         }
         left_out.extend(learned);
+        lock.check_stamp(written)?;
         write()?;
+        written = mandara_theme::templates::FileStamp::at(lock.target())?;
         after = check_with(target, &before.root, env);
     }
     let rolled_back = is_worse(before, &after);
     if rolled_back {
+        lock.check_stamp(written)?;
         match &previous {
             Some(bytes) => crate::store::write_atomic(generated, bytes)?,
             None => std::fs::remove_file(generated).with_context(|| format!("removing {}", generated.display()))?,

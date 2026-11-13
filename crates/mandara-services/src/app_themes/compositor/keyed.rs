@@ -79,14 +79,14 @@ fn reload(extra: Extra) -> Result<()> {
 
 pub(super) fn apply(extra: Extra,owner: &str,body: &str,locations: &Locations,ledger: &mut Ledger) -> Result<Vec<PathBuf>> {
     let keys = keys(extra,body)?;
+    let generated = extra.generated(locations);
+    ledger.put_file(owner,&generated,body)?;
     let primary = extra.primary(locations);
     let validator = Native(extra);
     crate::outputs::reload_preserving(&[],true,crate::outputs::current_revision(),|| {
         preferences::set_with(owner,&primary,&keys,extra.format(),locations,&|path,original,next|mandara_config::doctor::theme::guarded_write(path,original,next,&validator)).map_err(|error|format!("{error:#}"))?;
         reload(extra).map_err(|error|format!("{error:#}"))
     }).map_err(anyhow::Error::msg)?;
-    let generated = extra.generated(locations);
-    ledger.put_file(owner,&generated,body)?;
     Ok(vec![generated,primary])
 }
 
@@ -101,6 +101,19 @@ pub(super) fn undo(extra: Extra,owner: &str,locations: &Locations) -> Result<()>
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_generated_file_conflict_is_reported_before_any_primary_preference_edit() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = Locations { home: root.path().into(), config: root.path().join("config"), data: root.path().join("data"), cache: root.path().join("cache"), state: root.path().join("state") };
+        let extra = Extra::Labwc; let primary = extra.primary(&locations);
+        std::fs::create_dir_all(primary.parent().unwrap()).unwrap();
+        std::fs::write(&primary, "window.active.border.color: #123456\n").unwrap();
+        let mut ledger = Ledger::default();
+        ledger.put_file("another", &extra.generated(&locations), "existing").unwrap();
+        assert!(apply(extra, "new", "window.active.border.color: #abcdef\n", &locations, &mut ledger).is_err());
+        assert_eq!(std::fs::read_to_string(primary).unwrap(), "window.active.border.color: #123456\n");
+    }
+
     #[test]
     fn imports_can_only_change_known_theme_keys() {
         assert!(keys(Extra::Jay,"[theme]\nborder-color='#123456'\n").is_ok());

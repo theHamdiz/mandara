@@ -10221,3 +10221,11 @@
 "The compositor configuration is not a regular file." = "Usanidi wa komposita si faili ya kawaida."
 
 "The compositor rejected the theme; previous settings were kept." = "Komposita ilikataa mandhari; mipangilio ya awali imehifadhiwa."
+
+"Review an app template; pass its approval token to enable it" = "Kagua kiolezo cha programu; toa tokeni ya idhini ili kukiwasha"
+
+"approval token returned by the review" = "tokeni ya idhini iliyotolewa baada ya ukaguzi"
+
+"Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "Kagua faili na amri kabla ya kuwasha kiolezo hiki. Amri zinaweza kubadilisha faili nyingine pia. Masasisho yanahitaji ukaguzi mpya."
+
+"Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "Kagua na uidhinishe kwanza rangi zinazoshirikiwa za kivinjari. Programu nyingine za Pywal zitatumia rangi hizi pia."

@@ -14,6 +14,9 @@ mod terminal_apps;
 pub use terminal_apps::{cava, spicetify, spicetify_css, tmux, zellij};
 pub mod custom;
 mod file_io;
+mod kvantum_selection;
+mod write_lock;
+pub use write_lock::{FileStamp, WriteLock};
 pub mod destination;
 mod ledger;
 mod report;
@@ -501,6 +504,7 @@ pub fn ensure_line(config: &Path, line: &str, placement: Placement) -> std::io::
 /// Like [`ensure_line`] for a block of lines (each removed wherever it was,
 /// then the block inserted together).
 pub fn ensure_block(config: &Path, block: &[&str], placement: Placement) -> std::io::Result<bool> {
+    let lock = WriteLock::new(config)?;
     let current = file_io::read(config)?;
     let mut lines = strip_block(&current, block);
     // Drop blank lines a previous block left dangling at the end.
@@ -528,6 +532,7 @@ pub fn ensure_block(config: &Path, block: &[&str], placement: Placement) -> std:
     if let Some(dir) = config.parent() {
         std::fs::create_dir_all(dir)?;
     }
+    lock.check(current.as_bytes())?;
     file_io::write(config, &next)?;
     Ok(true)
 }
@@ -556,6 +561,8 @@ fn strip_block<'a>(current: &'a str, block: &[&str]) -> Vec<&'a str> {
 /// A missing file, or one without the block, is not touched. Returns `true`
 /// if the file changed.
 pub fn remove_block(config: &Path, block: &[&str]) -> std::io::Result<bool> {
+    if !config.try_exists()? { return Ok(false); }
+    let lock = WriteLock::new(config)?;
     let current = file_io::read(config)?;
     let mut lines = strip_block(&current, block);
     if lines.len() == current.lines().count() {
@@ -572,6 +579,7 @@ pub fn remove_block(config: &Path, block: &[&str]) -> std::io::Result<bool> {
     if next == current {
         return Ok(false);
     }
+    lock.check(current.as_bytes())?;
     file_io::write(config, &next)?;
     Ok(true)
 }
@@ -658,6 +666,7 @@ pub fn sync_checked(p: &MandaraPalette, targets: Targets, cache_dir: &Path, conf
     } else {
         out.errors.extend(ledger.take_back_kvantum_checked(&kvantum_config_file(config_dir), KVANTUM_THEME).errors);
     }
+    out.errors.extend(ledger.take_errors());
     out
 }
 
@@ -720,6 +729,7 @@ pub fn sync_apps_checked(p: &MandaraPalette, targets: AppTargets, cache_dir: &Pa
             Err(err) => out.failed(&path, err),
         }
     }
+    out.errors.extend(ledger.take_errors());
     out
 }
 
@@ -740,10 +750,9 @@ fn kvantum_config_file(config_dir: &Path) -> PathBuf {
 /// whether the theme had to be selected.
 pub fn kvantum_apply(theme_dir: &Path, config_dir: &Path, ledger: &mut Ledger) -> std::io::Result<bool> {
     kvantum_apply_with(theme_dir, config_dir, ledger, || {
-        let status = std::process::Command::new("kvantummanager").args(["--set", KVANTUM_THEME]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status()?;
-        if !status.success() {
-            return Err(std::io::Error::other(format!("kvantummanager --set {KVANTUM_THEME} failed ({status})")));
-        }
+        let mut command = std::process::Command::new("kvantummanager");
+        command.args(["--set", KVANTUM_THEME]);
+        kvantum_selection::select(command, kvantum_selection::TIMEOUT)?;
         Ok(())
     })
 }
@@ -754,32 +763,34 @@ fn kvantum_apply_with(theme_dir: &Path, config_dir: &Path, ledger: &mut Ledger, 
     let kv = config_dir.join("Kvantum");
     let link = kv.join(KVANTUM_THEME);
     let kvconfig = kvantum_config_file(config_dir);
+    let selected = file_io::read(&kvconfig)?.lines().any(|line|line.trim().replace(' ', "") == format!("theme={KVANTUM_THEME}"));
     match std::fs::symlink_metadata(&link) {
         Ok(meta) if meta.file_type().is_symlink() => {
             let target = std::fs::read_link(&link)?;
-            if target != theme_dir {
-                // Only a link into a Mandara theme cache is ours to repoint.
-                if !target.to_string_lossy().contains("/mandara/") {
+            let same = target == theme_dir || link.canonicalize().ok().zip(theme_dir.canonicalize().ok()).is_some_and(|(actual, requested)| actual == requested);
+            if !same {
+                if !ledger.kvantum.as_ref().is_some_and(|entry|entry.link_created && entry.link == link && entry.target == target) {
                     return Err(std::io::Error::other(format!("{} links elsewhere and is not Mandara's", link.display())));
                 }
-                std::fs::remove_file(&link)?;
-                std::os::unix::fs::symlink(theme_dir, &link)?;
+                let temporary = tempfile::Builder::new().prefix(".mandara-link-").tempfile_in(&kv)?.into_temp_path();
+                std::fs::remove_file(&temporary)?;
+                std::os::unix::fs::symlink(theme_dir, &temporary)?;
+                std::fs::rename(&temporary, &link)?;
             }
-            ledger.record_kvantum(&link, theme_dir, &kvconfig)?;
+            if same && selected && ledger.kvantum.is_none() { return Ok(false); }
+            ledger.record_kvantum_link(&link, theme_dir, &kvconfig, false)?;
         }
         // A real folder of the same name is the user's: leave it alone.
         Ok(_) => {
             return Err(std::io::Error::other(format!("{} exists and is not Mandara's link", link.display())));
         }
-        Err(_) => {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             ledger.record_kvantum(&link, theme_dir, &kvconfig)?;
             std::fs::create_dir_all(&kv)?;
             std::os::unix::fs::symlink(theme_dir, &link)?;
         }
+        Err(error) => return Err(error),
     }
-    let selected = std::fs::read_to_string(&kvconfig).is_ok_and(|t| {
-        t.lines().any(|l| l.trim().replace(' ', "") == format!("theme={KVANTUM_THEME}"))
-    });
     if selected {
         return Ok(false);
     }
@@ -800,6 +811,22 @@ mod tests {
 
     fn palette() -> MandaraPalette {
         crate::engine::default_palette(true)
+    }
+
+    #[test]
+    fn disabling_kvantum_keeps_a_preexisting_link_including_relative_links() {
+        for original in ["Personal", "Mandara"] {
+            let root = tempfile::tempdir().unwrap(); let cache = root.path().join("cache"); let config = root.path().join("config");
+            let theme = kvantum_dir(&cache); std::fs::create_dir_all(&theme).unwrap();
+            let directory = config.join("Kvantum"); std::fs::create_dir_all(&directory).unwrap();
+            let link = directory.join("Mandara"); let relative = Path::new("../../cache/kvantum/Mandara"); std::os::unix::fs::symlink(relative, &link).unwrap();
+            let kvconfig = directory.join("kvantum.kvconfig"); let before = format!("[General]\ntheme={original}\n"); std::fs::write(&kvconfig, &before).unwrap();
+            let mut ledger = Ledger::default();
+            kvantum_apply_with(&theme, &config, &mut ledger, || std::fs::write(&kvconfig, "[General]\ntheme=Mandara\n")).unwrap();
+            kvantum_take_back(&config, &mut ledger);
+            assert_eq!(std::fs::read_link(&link).unwrap(), relative);
+            assert_eq!(std::fs::read_to_string(&kvconfig).unwrap(), before);
+        }
     }
 
     #[test]

@@ -20,6 +20,10 @@ pub fn valid_id(id: &str) -> bool {
         })
 }
 
+pub fn valid_approval(fingerprint: &str) -> bool {
+    fingerprint.len() == 64 && fingerprint.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 /// A catalog is fetched when opened; palette changes use installed files.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CatalogSource {
@@ -45,6 +49,8 @@ pub struct AppThemesConfig {
     pub sources: Vec<CatalogSource>,
     /// Catalog ids are qualified by source (`community:bat`).
     pub enabled: Vec<String>,
+    /// Consent is bound to the installed revision and its reviewed destinations.
+    pub approved: BTreeMap<String, String>,
     pub user: BTreeMap<String, Template>,
     pub custom_colors: BTreeMap<String, CustomColor>,
     /// Template setup commands run only for an explicitly enabled entry.
@@ -73,6 +79,7 @@ impl Default for AppThemesConfig {
                 },
             ],
             enabled: Vec::new(),
+            approved: BTreeMap::new(),
             user: BTreeMap::new(),
             custom_colors: BTreeMap::new(),
             run_hooks: true,
@@ -81,6 +88,21 @@ impl Default for AppThemesConfig {
 }
 
 impl AppThemesConfig {
+    /// Record an explicit activation before any background work can finish.
+    pub fn approve(&mut self, id: &str, fingerprint: &str) -> anyhow::Result<()> {
+        anyhow::ensure!(id.split_once(':').is_some_and(|(source, app)| valid_id(source) && source != "user" && valid_id(app)) && valid_approval(fingerprint), "invalid app-template approval");
+        anyhow::ensure!((self.approved.contains_key(id) || self.approved.len() < MAX_TEMPLATES)
+            && (self.enabled.iter().any(|enabled| enabled == id) || self.enabled.len() < MAX_TEMPLATES), "too many app templates");
+        self.approved.insert(id.into(), fingerprint.into());
+        if !self.enabled.iter().any(|enabled| enabled == id) { self.enabled.push(id.into()); }
+        Ok(())
+    }
+
+    pub fn disable_catalog(&mut self, id: &str) {
+        self.enabled.retain(|enabled| enabled != id);
+        self.approved.remove(id);
+    }
+
     pub fn validate(&self) -> anyhow::Result<()> {
         anyhow::ensure!(
             self.sources.len() <= MAX_SOURCES,
@@ -115,6 +137,10 @@ impl AppThemesConfig {
                     .is_some_and(|(source, app)| valid_id(source) && valid_id(app))),
             "enabled app-template ids must be valid and unique"
         );
+        anyhow::ensure!(self.approved.len() <= MAX_TEMPLATES && self.approved.iter().all(|(id, fingerprint)| {
+            id.split_once(':').is_some_and(|(source, app)| valid_id(source) && valid_id(app))
+                && valid_approval(fingerprint)
+        }), "invalid app-template approval");
         for source in &self.sources {
             anyhow::ensure!(
                 source.name.len() <= 256
@@ -154,6 +180,23 @@ impl AppThemesConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn explicit_approvals_activate_once_and_disabling_revokes_the_token() {
+        let mut config = AppThemesConfig::default();
+        let token = "a".repeat(64);
+        for invalid in ["", "../outside:app", "user:app", "source:"] { assert!(config.approve(invalid, &token).is_err()); }
+        assert!(config.approve("community:app", "bad token").is_err());
+        assert!(!config.any_enabled() && config.approved.is_empty());
+        config.approve("community:app", &token).unwrap();
+        config.approve("community:app", &token).unwrap();
+        assert_eq!(config.enabled, ["community:app"]);
+        assert_eq!(config.approved["community:app"], token);
+        config.validate().unwrap();
+        config.disable_catalog("community:app");
+        assert!(!config.any_enabled() && config.approved.is_empty());
+        config.validate().unwrap();
+    }
 
     #[test]
     fn catalogs_are_available_without_enabling_any_app_or_hook() {

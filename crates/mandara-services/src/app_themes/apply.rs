@@ -1,7 +1,6 @@
 //! Ordered template application and the information needed to undo it later.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -47,23 +46,10 @@ pub struct Report {
     pub skipped: Vec<String>,
 }
 
-pub(crate) fn read_text(path: &Path) -> Result<String> {
-    ensure!(std::fs::metadata(path)?.is_file(),"template input is not a regular file");
-    let mut file =
-        std::fs::File::open(path).with_context(|| format!("reading {}", path.display()))?;
-    let mut text = String::new();
-    file.by_ref()
-        .take(MAX_TEMPLATE_BYTES as u64 + 1)
-        .read_to_string(&mut text)?;
-    ensure!(
-        text.len() <= MAX_TEMPLATE_BYTES,
-        "template input is too large"
-    );
-    Ok(text)
-}
+pub(crate) use super::file_io::read_text;
 
 pub(super) fn protected_revisions(locations: &Locations) -> Result<Vec<PathBuf>> {
-    if !locations.applied().exists() {
+    if !super::file_io::present(&locations.applied())? {
         return Ok(Vec::new());
     }
     let applied: Applied = serde_json::from_str(&read_text(&locations.applied())?)?;
@@ -175,7 +161,7 @@ pub fn sync(
 ) -> Result<Report> {
     config.validate()?;
     // With every imported entry off, startup has nothing to load or write.
-    if !config.any_enabled() && !locations.applied().exists() {
+    if !config.any_enabled() && !super::file_io::present(&locations.applied())? {
         return Ok(Report::default());
     }
     let mut report = Report::default();
@@ -183,10 +169,7 @@ pub fn sync(
     let mut ledger = Ledger::read(&locations.ledger())?;
     let mut applied: Applied = match read_text(&locations.applied()) {
         Ok(text) => serde_json::from_str(&text).context("reading applied app themes")?,
-        Err(error)
-            if error
-                .downcast_ref::<std::io::Error>()
-                .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
+        Err(error) if super::file_io::absent(&locations.applied(), &error) =>
         {
             Applied::default()
         }
@@ -237,11 +220,12 @@ pub fn sync(
             }
         } else {
             match catalog::installed(&locations.catalogs(), package_id) {
-                Ok(package) => Package {
-                    root: package.root,
-                    manifest: package.manifest,
-                    category: package.category,
-                    _lease: package.lease,
+                Ok(package) => {
+                    if let Err(error) = super::approval::Review::new(package_id, &package, locations).and_then(|review| review.check(config)) {
+                        report.errors.insert(package_id.into(), format!("{error:#}"));
+                        continue;
+                    }
+                    Package { root: package.root, manifest: package.manifest, category: package.category, _lease: package.lease }
                 },
                 Err(error) => {
                     report.errors.insert(package_id.into(), error.to_string());
@@ -308,6 +292,7 @@ pub fn sync(
                         &package.category,
                         gated,
                         package._lease.clone(),
+                        package_id != "user",
                     )
                 });
             ledger.store(&locations.ledger())?;
@@ -323,6 +308,7 @@ pub fn sync(
     post_hooks.barrier(&mut report);
     ledger.store(&locations.ledger())?;
     store_applied(&locations.applied(), &applied)?;
+    report.errors.extend(ledger.take_errors());
     report.files.sort();
     report.files.dedup();
     Ok(report)
@@ -446,6 +432,7 @@ impl ApplyContext<'_, '_> {
         category: &str,
         gated: bool,
         lease: Option<std::sync::Arc<std::fs::File>>,
+        reviewed: bool,
     ) -> Result<bool> {
         let Self {
             locations,
@@ -598,7 +585,7 @@ impl ApplyContext<'_, '_> {
                 outputs.len() == 1,
                 "browser theme action needs one output file"
             );
-            let files = super::firefox::apply(owner, &outputs[0], base, &mode, locations, ledger)?;
+            let files = super::firefox::apply(owner, &outputs[0], base, &mode, locations, ledger, reviewed)?;
             // The host manifest and settings remain managed alongside the
             // palette output until this entry is switched off.
             keep.extend(files.iter().cloned());
@@ -643,6 +630,18 @@ mod tests {
             font_family: "Test font".into(),
             image: "/images/a 'b' $(false).png".into(),
         }
+    }
+
+    #[test]
+    fn dangling_applied_records_block_exports_and_cache_pruning() {
+        let root = tempfile::tempdir().unwrap(); let locations = locations(root.path());
+        std::fs::create_dir_all(locations.applied().parent().unwrap()).unwrap();
+        let target = root.path().join("missing-ownership");
+        std::os::unix::fs::symlink(&target, locations.applied()).unwrap();
+        assert!(protected_revisions(&locations).is_err());
+        assert!(sync(&AppThemesConfig::default(), &theme(), &locations, &AtomicBool::new(false), &||false).is_err());
+        assert_eq!(std::fs::read_link(locations.applied()).unwrap(), target);
+        assert!(!target.exists());
     }
 
     #[test]

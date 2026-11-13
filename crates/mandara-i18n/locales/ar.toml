@@ -10567,3 +10567,11 @@
 "The compositor configuration is not a regular file." = "ملف إعدادات مدير النوافذ ليس ملفًا عاديًا."
 
 "The compositor rejected the theme; previous settings were kept." = "رفض مدير النوافذ السمة؛ تم الاحتفاظ بالإعدادات السابقة."
+
+"Review an app template; pass its approval token to enable it" = "راجع قالب التطبيق، ثم مرّر رمز الموافقة لتفعيله"
+
+"approval token returned by the review" = "رمز الموافقة الناتج عن المراجعة"
+
+"Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "راجع الملفات والأوامر قبل تفعيل هذا القالب. يمكن للأوامر تغيير ملفات أخرى أيضًا. تحتاج التحديثات إلى مراجعة جديدة."
+
+"Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "راجع لوحة ألوان المتصفح المشتركة ووافق عليها أولًا. ستستخدم تطبيقات Pywal الأخرى هذه الألوان أيضًا."

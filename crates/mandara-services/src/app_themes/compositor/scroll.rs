@@ -9,6 +9,14 @@ use std::path::{Path,PathBuf};
 
 struct Native<'a> { primary: &'a Path,home: &'a Path }
 impl doctor::theme::Validator for Native<'_> {
+    fn check_live(&self, path: &Path) -> doctor::theme::LiveCheck {
+        doctor::check_with(Target::Sway, path, &CheckEnv {
+            home: Some(self.home.into()),
+            argv: Some(["scroll", "--validate", "--verbose", "--config", doctor::CONFIG_PLACEHOLDER].map(Into::into).into()),
+            ..Default::default()
+        }).into()
+    }
+
     fn validate(&self,body: &str) -> Result<()> {
         let directory = self.primary.parent().ok_or_else(||anyhow::anyhow!("compositor configuration has no directory"))?;
         let file = tempfile::Builder::new().prefix(".mandara-check-").suffix(".conf").tempfile_in(directory)?;

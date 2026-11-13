@@ -256,6 +256,7 @@ impl ConfigStore {
         if let Some(parent) = target.parent() {
             fs::create_dir_all(parent)?;
         }
+        let _directory = mandara_theme::templates::WriteLock::new(&target)?;
         let lock = fs::OpenOptions::new()
             .create(true)
             .truncate(false)
@@ -335,22 +336,42 @@ fn parse(bytes: &[u8]) -> Result<ShellConfig> {
 /// file's permissions are kept (`mimeapps.list` at 0600 stays 0600).
 pub fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
     let target = symlink_target(path);
-    let path = target.as_path();
-    let permissions = fs::metadata(path).ok().map(|m| m.permissions());
+    let lock = mandara_theme::templates::WriteLock::new(&target)?;
+    write_atomic_locked(&lock, contents).map(|_| ())
+}
+
+/// Publish under an existing read-modify-write lock and return the written inode.
+/// The receipt comes from the temporary file, before another writer can replace it.
+pub fn write_atomic_locked(lock: &mandara_theme::templates::WriteLock, contents: &[u8]) -> Result<mandara_theme::templates::FileStamp> {
+    let before = mandara_theme::templates::FileStamp::at(lock.target())?;
+    write_atomic_checked(lock, before, contents)
+}
+
+/// Refuse a stale merge, including replacement with identical bytes.
+pub fn write_atomic_checked(lock: &mandara_theme::templates::WriteLock, before: Option<mandara_theme::templates::FileStamp>, contents: &[u8]) -> Result<mandara_theme::templates::FileStamp> {
+    lock.check_stamp(before)?;
+    let path = lock.target();
+    let permissions = fs::metadata(path).ok().map(|metadata| metadata.permissions());
     let dir = path.parent().context("config path has no parent directory")?;
-    fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
-    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("config");
-    let tmp = dir.join(format!(".{file_name}.{}.tmp", std::process::id()));
-    {
-        let mut f = fs::File::create(&tmp).with_context(|| format!("creating {}", tmp.display()))?;
-        f.write_all(contents)?;
-        f.sync_all()?;
-    }
-    if let Some(p) = permissions {
-        fs::set_permissions(&tmp, p).with_context(|| format!("copying permissions to {}", tmp.display()))?;
-    }
-    fs::rename(&tmp, path).with_context(|| format!("renaming into {}", path.display()))?;
-    Ok(())
+    let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or("config");
+    static NEXT_WRITE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let revision = NEXT_WRITE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos();
+    let tmp = dir.join(format!(".{file_name}.{}.{stamp}.{revision}.tmp", std::process::id()));
+    let mut temporary_created = false;
+    let result = (|| {
+        let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&tmp).with_context(|| format!("creating {}", tmp.display()))?;
+        temporary_created = true;
+        file.write_all(contents)?;
+        if let Some(permissions) = permissions { file.set_permissions(permissions)?; }
+        file.sync_all()?;
+        let written = mandara_theme::templates::FileStamp::of(&file)?;
+        lock.check_stamp(before)?;
+        fs::rename(&tmp, path).with_context(|| format!("renaming into {}", path.display()))?;
+        Ok(written)
+    })();
+    if result.is_err() && temporary_created { fs::remove_file(&tmp).with_context(|| format!("removing incomplete write {}", tmp.display()))?; }
+    result
 }
 
 /// The file a chain of symlinks at `path` ends at (even when it doesn't

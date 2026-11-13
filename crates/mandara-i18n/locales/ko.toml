@@ -10319,3 +10319,11 @@
 "The compositor configuration is not a regular file." = "컴포지터 설정이 일반 파일이 아닙니다."
 
 "The compositor rejected the theme; previous settings were kept." = "컴포지터가 테마를 거부하여 이전 설정을 유지했습니다."
+
+"Review an app template; pass its approval token to enable it" = "앱 템플릿을 검토한 뒤 승인 토큰을 전달하여 활성화하세요"
+
+"approval token returned by the review" = "검토 후 반환된 승인 토큰"
+
+"Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "이 템플릿을 활성화하기 전에 파일과 명령을 검토하세요. 명령은 다른 파일도 변경할 수 있습니다. 업데이트할 때는 다시 검토해야 합니다."
+
+"Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "먼저 브라우저의 공유 팔레트를 검토하고 승인하세요. 다른 Pywal 앱도 이 색상을 사용합니다."

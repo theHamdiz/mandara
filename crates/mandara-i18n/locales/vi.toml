@@ -10221,3 +10221,11 @@
 "The compositor configuration is not a regular file." = "Cấu hình trình tổng hợp không phải là tệp thông thường."
 
 "The compositor rejected the theme; previous settings were kept." = "Trình tổng hợp đã từ chối giao diện; các thiết lập trước đó được giữ nguyên."
+
+"Review an app template; pass its approval token to enable it" = "Xem xét mẫu ứng dụng; cung cấp mã chấp thuận để bật mẫu"
+
+"approval token returned by the review" = "mã chấp thuận nhận được sau khi xem xét"
+
+"Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "Xem xét các tệp và lệnh trước khi bật mẫu này. Lệnh cũng có thể thay đổi những tệp khác. Bản cập nhật cần được xem xét lại."
+
+"Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "Trước hết, hãy xem xét và chấp thuận bảng màu dùng chung của trình duyệt. Các ứng dụng Pywal khác cũng sẽ dùng những màu này."

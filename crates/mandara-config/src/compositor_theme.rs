@@ -226,12 +226,17 @@ mod native_tests {
             let main = dir.path().join(format!("main.{extension}"));
             std::fs::write(&colors,render.render(&source).unwrap()).unwrap();
             std::fs::write(&displays,crate::outputs::emit_outputs(target,&outputs,target == Target::Hyprland && Target::hyprland_lua())).unwrap();
-            let body = compose(target,Kind::AppColors,"",&colors,true).unwrap();
-            let body = compose(target,Kind::Displays,&body,&displays,true).unwrap();
-            std::fs::write(&main,body).unwrap();
-            let report = doctor::check_with(target,&main,&CheckEnv { home:Some(dir.path().into()),..Default::default() });
-            assert_eq!(report.status,CheckerStatus::Ran,"{}",report.raw);
-            assert_eq!(report.problems(),0,"{target:?}, dark={dark}: {}",report.raw);
+            let inline = crate::outputs::emit_outputs(target,&outputs,target == Target::Hyprland && Target::hyprland_lua());
+            let mut legacy = inline.lines().filter(|line|!line.contains("End Displays")).map(|line|format!("{line}\n")).collect::<String>();
+            if target == Target::Niri { legacy.push_str("output \"UNPLUGGED\" { scale 2; }\n"); }
+            for original in [String::new(),inline,legacy] {
+                let body = compose(target,Kind::AppColors,&original,&colors,true).unwrap();
+                let body = compose(target,Kind::Displays,&body,&displays,true).unwrap();
+                std::fs::write(&main,body).unwrap();
+                let report = doctor::check_with(target,&main,&CheckEnv { home:Some(dir.path().into()),..Default::default() });
+                assert_eq!(report.status,CheckerStatus::Ran,"{}",report.raw);
+                assert_eq!(report.problems(),0,"{target:?}, dark={dark}: {}",report.raw);
+            }
         }
     }
 }

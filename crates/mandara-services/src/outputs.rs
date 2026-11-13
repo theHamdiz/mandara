@@ -155,7 +155,7 @@ fn config_for<'a>(head: &Head, configs: &'a [OutputConfig]) -> Option<&'a Output
     configs.iter().rev().find(|config| stable && !config.make.trim().is_empty() && !config.serial.trim().is_empty()
         && config.make.trim() == head.make.trim() && config.model.trim() == head.model.trim() && config.serial.trim() == head.serial.trim())
         .or_else(|| configs.iter().rev().find(|config| config.name == head.name
-            && (!stable || config.make.trim().is_empty() || config.serial.trim().is_empty())))
+            && (config.make.trim().is_empty() || config.serial.trim().is_empty())))
 }
 
 /// The best mode index for a requested size / refresh.
@@ -709,6 +709,7 @@ fn apply_with_revert_unlocked(configs: &[OutputConfig], secs: u32) -> Result<u32
     }
     crate::runtime::spawn("display-revert", async move {
         let mut delay = wait;
+        let mut attempts = 0;
         loop {
             if matches!(futures::future::select(
                 Box::pin(cancelled.recv()), Box::pin(crate::runtime::sleep(delay))
@@ -719,11 +720,16 @@ fn apply_with_revert_unlocked(configs: &[OutputConfig], secs: u32) -> Result<u32
                 let mut pending = pending().lock();
                 match try_revert(&mut pending, generation, |before| apply_unlocked(before, false).map(|_| ())) {
                     Ok(_) => true,
-                    Err(error) => { tracing::warn!("displays: revert failed, retrying: {error}"); false }
+                    Err(error) => {
+                        if attempts + 1 == MAX_REVERT_ATTEMPTS { tracing::warn!("displays: automatic revert failed; manual retry is still available: {error}"); }
+                        false
+                    }
                 }
             }).await;
             if finished { return; }
-            delay = std::time::Duration::from_secs(REVERT_RETRY_SECONDS);
+            attempts += 1;
+            let Some(next) = revert_retry_delay(attempts) else { return };
+            delay = next;
         }
     });
     Ok(secs)
@@ -796,6 +802,12 @@ pub fn revert_now() -> Result<bool, String> {
 /// Retry only a failed, still-pending display test; no work remains after
 /// confirmation, a successful revert, or replacement by another test.
 const REVERT_RETRY_SECONDS: u64 = 1;
+/// Four attempts cover short compositor reloads without leaving an idle job.
+const MAX_REVERT_ATTEMPTS: usize = 4;
+fn revert_retry_delay(attempts: usize) -> Option<std::time::Duration> {
+    (attempts < MAX_REVERT_ATTEMPTS).then(|| std::time::Duration::from_secs(REVERT_RETRY_SECONDS << attempts.saturating_sub(1)))
+}
+
 
 fn try_revert(
     pending: &mut Option<PendingRevert>,
@@ -909,6 +921,30 @@ mod tests {
             scale: 1.5,
             adaptive_sync: Some(false),
         }
+    }
+
+    #[test]
+    fn permanent_revert_failures_stop_automatically_but_remain_manually_retryable() {
+        let (cancel, _) = async_channel::bounded(1);
+        let mut pending = Some(PendingRevert { before: vec![head("DP-1").to_config()], deadline: std::time::Instant::now(), generation: 7, _cancel: cancel });
+        let mut attempts = 0;
+        loop {
+            attempts += 1;
+            assert!(try_revert(&mut pending, 7, |_| Err("mode unavailable".into())).is_err());
+            if revert_retry_delay(attempts).is_none() { break; }
+        }
+        assert_eq!(attempts, MAX_REVERT_ATTEMPTS);
+        assert!(pending.is_some());
+        assert!(try_revert(&mut pending, 7, |_| Ok(())).unwrap());
+        assert!(pending.is_none());
+    }
+
+    #[test]
+    fn an_anonymous_head_does_not_restore_an_unrelated_saved_edid() {
+        let mut actual = head("DP-1");
+        let saved = actual.to_config();
+        actual.make.clear(); actual.serial.clear();
+        assert!(config_for(&actual, &[saved]).is_none());
     }
 
     #[test]

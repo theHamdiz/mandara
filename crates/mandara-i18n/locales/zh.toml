@@ -10558,3 +10558,11 @@
 "The compositor configuration is not a regular file." = "合成器配置不是普通文件。"
 
 "The compositor rejected the theme; previous settings were kept." = "合成器拒绝了主题；已保留原有设置。"
+
+"Review an app template; pass its approval token to enable it" = "查看应用模板；传入审核确认码以启用"
+
+"approval token returned by the review" = "审核后返回的确认码"
+
+"Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "启用此模板前，请检查文件和命令。命令也可能更改其他文件。更新后需要重新审核。"
+
+"Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "请先检查并批准浏览器的共享配色。其他 Pywal 应用也会使用这些颜色。"

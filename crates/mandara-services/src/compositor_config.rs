@@ -4,7 +4,8 @@ mod snapshot;
 pub mod persistence;
 
 use anyhow::{Context as _,Result, ensure};
-use snapshot::Snapshot;
+use snapshot::{Snapshot, Written};
+use mandara_theme::templates::WriteLock;
 use mandara_config::{
     compositor::{self, Target},
     compositor_theme::{self, Kind},
@@ -67,11 +68,16 @@ fn set_unlocked(
         before.status == CheckerStatus::Ran,
         "the compositor's configuration must be readable before enabling the fragment"
     );
+    let _fragment_lock = WriteLock::new(&path)?;
+    let _generated_lock = WriteLock::new(&generated)?;
     let previous = Snapshot::capture(&path)?;
     let previous_generated = Snapshot::capture(&generated)?;
     let mut primary_backup = None;
+    let mut written_fragment = None;
+    let written_generated = std::cell::RefCell::new(None);
     let result = (|| {
         write(&path)?;
+        written_fragment = Some(Written::capture(&path, body)?);
         let old = if generated.exists() {
             read(&generated)?
         } else {
@@ -79,8 +85,11 @@ fn set_unlocked(
         };
         let outcome = fix::guarded_write(&before, &env, &|| {
             let body = compositor_theme::compose(target, kind, &old, &path, true)?;
-            mandara_config::store::write_atomic(&generated, body.as_bytes())
+            let lock = WriteLock::new(&generated)?;
+            *written_generated.borrow_mut() = Some(Written::atomic(&lock, body.as_bytes())?);
+            Ok(())
         })?;
+        if outcome.rolled_back { *written_generated.borrow_mut() = None; }
         ensure!(
             !outcome.rolled_back,
             "the compositor rejected the fragment include; previous settings were restored"
@@ -106,8 +115,8 @@ fn set_unlocked(
     })();
     if let Err(error) = result {
         if let Some(backup) = primary_backup { fix::restore(&backup).context("restoring the primary compositor include")?; }
-        previous_generated.restore(&generated).context("restoring the managed compositor include")?;
-        previous.restore(&path).context("restoring the previous compositor fragment")?;
+        previous_generated.restore(&generated, written_generated.borrow().as_ref()).context("restoring the managed compositor include")?;
+        previous.restore(&path, written_fragment.as_ref()).context("restoring the previous compositor fragment")?;
         reload(target).context("reloading the restored compositor configuration")?;
         return Err(error);
     }

@@ -30,6 +30,7 @@
 //! reach a running compositor), no Wayland or X display, standard input
 //! closed, a [`CHECK_TIMEOUT`] and no other environment than it needs.
 
+pub mod comparison;
 pub mod fix;
 pub mod state;
 pub mod theme;

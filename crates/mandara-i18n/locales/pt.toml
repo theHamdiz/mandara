@@ -10220,3 +10220,11 @@
 "The compositor configuration is not a regular file." = "A configuração do compositor não é um arquivo comum."
 
 "The compositor rejected the theme; previous settings were kept." = "O compositor rejeitou o tema; as configurações anteriores foram mantidas."
+
+"Review an app template; pass its approval token to enable it" = "Revise um modelo de aplicativo e informe o código de aprovação para ativá-lo"
+
+"approval token returned by the review" = "código de aprovação retornado pela revisão"
+
+"Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "Revise os arquivos e comandos antes de ativar este modelo. Os comandos também podem alterar outros arquivos. As atualizações exigem uma nova revisão."
+
+"Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "Revise e aprove primeiro a paleta compartilhada do navegador. Outros aplicativos Pywal também usarão essas cores."

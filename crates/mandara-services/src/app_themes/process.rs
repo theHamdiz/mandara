@@ -21,11 +21,11 @@ const WAIT: Duration = Duration::from_millis(WAIT_MILLIS);
 
 struct Group {
     child: Child,
-    exited: bool,
+    completed: bool,
 }
 impl Drop for Group {
     fn drop(&mut self) {
-        if !self.exited {
+        if !self.completed {
             super::super::hooks::kill_group(self.child.id(), libc::SIGKILL);
         }
         let _ = self.child.wait();
@@ -85,7 +85,7 @@ pub(super) fn native(
             .process_group(0)
             .spawn()
             .context("starting app theme command")?,
-        exited: false,
+        completed: false,
     };
     let mut stdout = group
         .child
@@ -108,16 +108,16 @@ pub(super) fn native(
         if let Some(status) = group.child.try_wait()? {
             read_available(&mut stdout, &mut output)?;
             read_available(&mut stderr, &mut diagnostic)?;
-            group.exited = true;
             ensure!(
                 status.success(),
                 "template command exited {status}: {}",
                 String::from_utf8_lossy(&diagnostic).trim()
             );
-            return Ok((
-                String::from_utf8(output).context("template command returned non-UTF-8 paths")?,
-                String::from_utf8_lossy(&diagnostic).into_owned(),
-            ));
+            let output =
+                String::from_utf8(output).context("template command returned non-UTF-8 paths")?;
+            let diagnostic = String::from_utf8_lossy(&diagnostic).into_owned();
+            group.completed = true;
+            return Ok((output, diagnostic));
         }
         if cancel.load(Ordering::Acquire) {
             bail!("template command was cancelled");
@@ -133,6 +133,13 @@ pub(super) fn native(
 mod tests {
     use super::*;
 
+    struct Cleanup(i32);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            crate::hooks::kill_group(self.0 as u32, libc::SIGKILL);
+        }
+    }
+
     fn command(shell: &str) -> RenderedCommand {
         RenderedCommand {
             shell: shell.into(),
@@ -140,14 +147,44 @@ mod tests {
         }
     }
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn failed_reload_commands_do_not_leave_their_background_children_running() {
+        let root = tempfile::tempdir().unwrap();
+        assert!(
+            run(
+                &command("sleep 30 >/dev/null 2>&1 & printf '%s %s' \"$$\" \"$!\" > pids; exit 1"),
+                root.path(),
+                &[],
+                &AtomicBool::new(false),
+                TIMEOUT
+            )
+            .is_err()
+        );
+        let pids = std::fs::read_to_string(root.path().join("pids"))
+            .unwrap()
+            .split_whitespace()
+            .map(|pid| pid.parse::<i32>().unwrap())
+            .collect::<Vec<_>>();
+        let _cleanup = Cleanup(pids[0]);
+        for _ in 0..100 {
+            let stopped = match std::fs::read_to_string(format!("/proc/{}/stat", pids[1])) {
+                Ok(stat) => stat
+                    .rsplit_once(") ")
+                    .is_some_and(|(_, fields)| fields.starts_with(['Z', 'X'])),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+                Err(error) => panic!("reading the test child's state: {error}"),
+            };
+            if stopped {
+                return;
+            }
+            std::thread::sleep(WAIT);
+        }
+        panic!("the failed command left its child running");
+    }
+
     #[test]
     fn a_successful_reload_can_leave_its_application_running() {
-        struct Cleanup(i32);
-        impl Drop for Cleanup {
-            fn drop(&mut self) {
-                crate::hooks::kill_group(self.0 as u32, libc::SIGKILL);
-            }
-        }
         let root = tempfile::tempdir().unwrap();
         let output = run(
             &command("sleep 30 >/dev/null 2>&1 & printf '%s %s' \"$$\" \"$!\""),

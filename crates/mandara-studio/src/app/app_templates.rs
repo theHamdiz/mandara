@@ -1,5 +1,7 @@
 //! Imported app templates and the user's own template document.
 
+mod review;
+
 use std::rc::Rc;
 use std::sync::{
     Arc,
@@ -8,7 +10,7 @@ use std::sync::{
 
 use gpui::{
     AnyElement, AppContext as _, ClickEvent, Context, Entity, IntoElement, ParentElement,
-    SharedString, StatefulInteractiveElement as _, Styled, Task, div, prelude::FluentBuilder, px,
+    SharedString, InteractiveElement as _, StatefulInteractiveElement as _, Styled, Task, div, prelude::FluentBuilder, px,
 };
 use mandara_config::ShellConfig;
 use mandara_core::ToGpui as _;
@@ -53,6 +55,7 @@ pub(super) struct Templates {
     job: Option<Job>,
     busy: bool,
     error: Option<String>,
+    review: Option<review::Pending>,
 }
 
 fn matches(row: &Row, terms: &[String]) -> bool {
@@ -203,6 +206,7 @@ impl StudioView {
             if self.app_templates.busy {
                 content = content.child(div().text_size(px(TEXT_12_PX)).child(t("Loading…")));
             }
+            if self.app_templates.review.is_some() { content = content.child(self.template_review(p, cx)); }
             let rows = self.app_templates.rows.clone();
             let fit = super::grid::fit(
                 self.page.column_w,
@@ -280,24 +284,16 @@ impl StudioView {
                             button(
                                 SharedString::from(format!("app-template-{id}")),
                                 if on { "check" } else { "plus" },
-                                if on { t("On") } else { t("Get & enable") },
+                                if on { t("On") } else { t("Review") },
                                 on,
                                 p,
                             )
+                            .focusable().tab_index(0).focus(|style| style.opacity(ALPHA_88))
                             .on_click(cx.listener(
                                 move |this, _: &ClickEvent, _, cx| {
-                                    if busy {
-                                        return;
-                                    }
                                     if on {
-                                        update_config(cx, |config| {
-                                            config
-                                                .integrations
-                                                .app_themes
-                                                .enabled
-                                                .retain(|enabled| enabled != &id)
-                                        });
-                                    } else {
+                                        update_config(cx, |config| config.integrations.app_themes.disable_catalog(&id));
+                                    } else if !busy {
                                         this.install_app_template(entry.clone(), cx);
                                     }
                                 },
@@ -500,56 +496,23 @@ impl StudioView {
                 return;
             }
         };
-        let id = entry.qualified_id();
         let cancel = Arc::new(AtomicBool::new(false));
         let token = cancel.clone();
         self.app_templates.busy = true;
+        self.app_templates.error = None;
+        self.app_templates.review = None;
         let task = cx.spawn(async move |view, cx| {
-            let result = jobs::install(source, entry, locations.catalogs(), token).await;
-            let report = match result {
-                Ok(_) => view
-                    .update(cx, |_, cx| {
-                        update_config(cx, |config| {
-                            if !config.integrations.app_themes.enabled.contains(&id) {
-                                config.integrations.app_themes.enabled.push(id);
-                            }
-                        });
-                        let palette = mandara_core::theme_entity(cx).read(cx).target().clone();
-                        mandara_ui::state::export_app_themes_report(palette, cx)
-                    })
-                    .ok(),
-                Err(error) => {
-                    let _ = view.update(cx, |this, cx| {
-                        this.app_templates.error = Some(tf(
-                            "Could not install app template: {error}",
-                            &[("error", &format!("{error:#}"))],
-                        ));
-                        this.app_templates.busy = false;
-                        cx.notify();
-                    });
-                    None
+            let result = jobs::install_review(source, entry, locations, token).await;
+            let _ = view.update(cx, |this, cx| {
+                match result {
+                    Ok(review) => this.app_templates.review = Some(review.into()),
+                    Err(error) => this.app_templates.error = Some(tf("Could not install app template: {error}", &[("error", &format!("{error:#}"))])),
                 }
-            };
-            if let Some(report) = report {
-                let report = report.await;
-                let _ = view.update(cx, |this, cx| {
-                    this.app_templates.error = (!report.errors.is_empty()).then(|| {
-                        report
-                            .errors
-                            .iter()
-                            .map(|(id, error)| format!("{id}: {error}"))
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    });
-                    this.app_templates.busy = false;
-                    cx.notify();
-                });
-            }
+                this.app_templates.busy = false;
+                cx.notify();
+            });
         });
-        self.app_templates.job = Some(Job {
-            cancel,
-            _task: task,
-        });
+        self.app_templates.job = Some(Job { cancel, _task: task });
         cx.notify();
     }
 

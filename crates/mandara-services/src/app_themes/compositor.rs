@@ -21,6 +21,14 @@ pub(super) fn target(owner: &str) -> Result<Driver> {
     target.map(Driver::Native).or_else(||Extra::parse(id).map(Driver::Other)).ok_or_else(||anyhow::anyhow!("this compositor has no native app-theme adapter"))
 }
 
+pub(super) fn destinations(owner: &str, locations: &Locations) -> Result<Vec<PathBuf>> {
+    Ok(match target(owner)? {
+        Driver::Other(Extra::Scroll) => vec![locations.config.join("scroll/config")],
+        Driver::Other(extra) => vec![extra.primary(locations)],
+        Driver::Native(target) => vec![target.generated_file(), target.user_config()],
+    })
+}
+
 pub(super) fn prepare(owner: &str, spec: &Template,locations: &Locations) -> Result<Template> {
     let target = target(owner)?;
     let mut spec = spec.clone();

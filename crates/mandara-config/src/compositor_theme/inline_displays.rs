@@ -24,19 +24,27 @@ pub(super) fn remove(target: Target, body: &str, fragment: &Path) -> Result<Stri
                 body
             }));
     }
-    // Upgrade generated files written before the explicit end marker existed.
-    // Only the older Niri-specific list can contain additional output settings.
+    // Older generated files lack an end marker. Leave all preceding text and
+    // unrelated connectors intact; only migrate selectors in the saved fragment.
+    use std::io::Read as _;
+    const MAX_FRAGMENT_BYTES: u64 = 8 * 1024 * 1024;
+    let file = std::fs::File::open(fragment)?;
+    anyhow::ensure!(
+        file.metadata()?.is_file(),
+        "display fragment is not a regular file"
+    );
+    let mut fragment_body = String::new();
+    file.take(MAX_FRAGMENT_BYTES + 1)
+        .read_to_string(&mut fragment_body)?;
+    anyhow::ensure!(
+        fragment_body.len() as u64 <= MAX_FRAGMENT_BYTES,
+        "display fragment is too large"
+    );
+    let offset: usize = body.split_inclusive('\n').take(start).map(str::len).sum();
+    let (prefix, suffix) = body.split_at(offset);
+    let mut result = String::with_capacity(body.len());
+    result.push_str(prefix);
     if target == Target::Niri {
-        use std::io::Read as _;
-        const MAX_FRAGMENT_BYTES: u64 = 8 * 1024 * 1024;
-        let mut fragment_body = String::new();
-        std::fs::File::open(fragment)?
-            .take(MAX_FRAGMENT_BYTES + 1)
-            .read_to_string(&mut fragment_body)?;
-        anyhow::ensure!(
-            fragment_body.len() as u64 <= MAX_FRAGMENT_BYTES,
-            "display fragment is too large"
-        );
         let outputs = kdl::KdlDocument::parse_v1(&fragment_body)?;
         let names: Vec<_> = outputs
             .nodes()
@@ -44,7 +52,7 @@ pub(super) fn remove(target: Target, body: &str, fragment: &Path) -> Result<Stri
             .filter(|node| node.name().value() == "output")
             .filter_map(|node| node.get(0)?.as_string())
             .collect();
-        let mut document = kdl::KdlDocument::parse_v1(body)?;
+        let mut document = kdl::KdlDocument::parse_v1(suffix)?;
         document.nodes_mut().retain(|node| {
             node.name().value() != "output"
                 || !node
@@ -53,37 +61,142 @@ pub(super) fn remove(target: Target, body: &str, fragment: &Path) -> Result<Stri
                     .is_some_and(|name| names.contains(&name))
         });
         document.ensure_v1();
-        return Ok(document.to_string());
-    }
-    if target == Target::Umbriel {
-        let mut document: toml_edit::DocumentMut = body.parse()?;
-        document.remove("output");
-        return Ok(document.to_string());
-    }
-    Ok(body
-        .lines()
-        .filter(|line| {
-            let line = line.trim_start();
-            !match target {
-                Target::Mango => line.starts_with("monitor_rule="),
-                Target::Hyprland => {
-                    line.starts_with("monitor = ") || line.starts_with("pcall(hl.monitor,")
-                }
-                Target::Sway => line.starts_with("output "),
-                _ => false,
+        result.push_str(&document.to_string());
+    } else if target == Target::Umbriel {
+        let names = crate::outputs::parse_output_rules(target, &fragment_body);
+        let mut document: toml_edit::DocumentMut = suffix.parse()?;
+        if let Some(outputs) = document
+            .get_mut("output")
+            .and_then(toml_edit::Item::as_table_like_mut)
+        {
+            for name in names {
+                outputs.remove(&name);
             }
-        })
-        .fold(String::with_capacity(body.len()), |mut body, line| {
-            body.push_str(line);
-            body.push('\n');
-            body
-        }))
+            if outputs.is_empty() {
+                document.remove("output");
+            }
+        }
+        result.push_str(&document.to_string());
+    } else {
+        let names = selectors(target, &fragment_body);
+        for line in suffix.lines() {
+            let matches = selectors(target, line)
+                .iter()
+                .any(|name| names.contains(name));
+            // Wallpaper and other output rules were never emitted by Displays.
+            let user_sway_rule = target == Target::Sway
+                && line.split_whitespace().skip(2).any(|word| {
+                    matches!(
+                        word,
+                        "bg" | "background" | "color_profile" | "max_render_time"
+                    )
+                });
+            if matches && !user_sway_rule {
+                continue;
+            }
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+    Ok(result)
+}
+
+fn selectors(target: Target, body: &str) -> Vec<String> {
+    if target == Target::Hyprland
+        && body
+            .lines()
+            .any(|line| line.trim_start().starts_with("pcall(hl.monitor,"))
+    {
+        body.lines()
+            .filter_map(|line| {
+                let value = line
+                    .trim_start()
+                    .strip_prefix("pcall(hl.monitor,")?
+                    .split_once("output = ")?
+                    .1;
+                // Generated Lua uses JSON-compatible quoted connector names.
+                serde_json::Deserializer::from_str(value)
+                    .into_iter::<String>()
+                    .next()?
+                    .ok()
+            })
+            .collect()
+    } else {
+        crate::outputs::parse_output_rules(target, body)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::outputs::{OutputConfig, emit_outputs};
+    #[test]
+    fn legacy_migration_preserves_rules_before_the_heading_and_unrelated_outputs() {
+        let root = tempfile::tempdir().unwrap();
+        for (target, lua, before, unrelated) in [
+            (
+                Target::Mango,
+                false,
+                "monitor_rule=name:^DP-1$,scale:2\n",
+                "monitor_rule=name:^HDMI-A-1$,scale:2\n",
+            ),
+            (
+                Target::Hyprland,
+                false,
+                "monitor = DP-1, preferred, auto, 2\n",
+                "monitor = HDMI-A-1, preferred, auto, 2\n",
+            ),
+            (
+                Target::Hyprland,
+                true,
+                "pcall(hl.monitor, { output = \"DP-1\", scale = 2 })\n",
+                "pcall(hl.monitor, { output = \"HDMI-A-1\", scale = 2 })\n",
+            ),
+            (
+                Target::Sway,
+                false,
+                "output DP-1 scale 2\n",
+                "output * bg /tmp/image fill\noutput HDMI-A-1 scale 2\noutput DP-1 bg /tmp/image fill\n",
+            ),
+            (
+                Target::Niri,
+                false,
+                "output \"DP-1\" { scale 2; }\n",
+                "output \"HDMI-A-1\" { scale 2; }\n",
+            ),
+            (
+                Target::Umbriel,
+                false,
+                "# keep this prefix\n",
+                "[output.\"HDMI-A-1\"]\nscale = 2\n",
+            ),
+        ] {
+            let output = OutputConfig {
+                name: "DP-1".into(),
+                scale: Some(1.25),
+                ..Default::default()
+            };
+            let fragment = emit_outputs(target, &[output], lua);
+            let file = root.path().join("fragment");
+            std::fs::write(&file, &fragment).unwrap();
+            let legacy = fragment
+                .lines()
+                .filter(|line| !line.contains("End Displays"))
+                .fold(String::new(), |mut body, line| {
+                    body.push_str(line);
+                    body.push('\n');
+                    body
+                });
+            let result = remove(target, &format!("{before}{legacy}{unrelated}"), &file).unwrap();
+            assert!(result.starts_with(before), "{target:?}: {result}");
+            assert!(result.contains(unrelated.trim()), "{target:?}: {result}");
+            assert!(
+                !result[before.len()..].contains("1.25"),
+                "{target:?}: {result}"
+            );
+        }
+    }
+
     #[test]
     fn fragments_replace_inline_settings_and_preserve_other_generated_settings() {
         let output = OutputConfig {

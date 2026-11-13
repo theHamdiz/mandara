@@ -278,8 +278,8 @@ fn export_at(
     let ledger_path = locations.ledger();
     let (targets, apps) = targets(&inputs.integrations);
     if !inputs.integrations.any_app()
-        && !ledger_path.try_exists()?
-        && !locations.applied().try_exists()?
+        && !super::file_io::present(&ledger_path)?
+        && !super::file_io::present(&locations.applied())?
     {
         return Ok(Report::default());
     }

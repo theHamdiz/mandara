@@ -23,8 +23,10 @@ pub fn identity(path: &Path) -> io::Result<PathBuf> {
                 match result.canonicalize() {
                     Ok(resolved) => result = resolved,
                     Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                        if std::fs::symlink_metadata(&result).is_ok() {
-                            return Err(error);
+                        match std::fs::symlink_metadata(&result) {
+                            Ok(_) => return Err(error),
+                            Err(missing) if missing.kind() == io::ErrorKind::NotFound => {}
+                            Err(error) => return Err(error),
                         }
                     }
                     Err(error) => return Err(error),
@@ -37,7 +39,7 @@ pub fn identity(path: &Path) -> io::Result<PathBuf> {
 
 /// Whole-file ownership backs up the final symlink itself; parent directory
 /// aliases still address the same slot.
-pub(super) fn slot(path: &Path) -> io::Result<PathBuf> {
+pub fn slot(path: &Path) -> io::Result<PathBuf> {
     let name = path.file_name().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidInput,

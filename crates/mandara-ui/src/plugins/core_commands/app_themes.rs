@@ -73,7 +73,7 @@ pub(super) fn register(registry: &mut PluginRegistry) {
     );
     registry.command(
         "core",
-        CommandSpec::new_output("theme apps enable", tk("Install and enable an app template by its source:app id"), |arguments, cx| {
+        CommandSpec::new_output("theme apps enable", tk("Review an app template; pass its approval token to enable it"), |arguments, cx| {
             let (source, app) = id(&arguments.0)?;
             if source == "user" {
                 if !config(cx).read(cx).get().integrations.app_themes.user.contains_key(app) {
@@ -93,43 +93,39 @@ pub(super) fn register(registry: &mut PluginRegistry) {
                 });
                 return Ok(pending(task, cx));
             }
-            let source = config(cx)
-                .read(cx)
-                .get()
-                .integrations
-                .app_themes
-                .sources
-                .iter()
-                .find(|entry| entry.id == source)
-                .cloned()
-                .ok_or("unknown app template source")?;
-            let app = app.to_string();
+            let source = config(cx).read(cx).get().integrations.app_themes.sources.iter()
+                .find(|entry| entry.id == source).cloned().ok_or("unknown app template source")?;
             let qualified = arguments.0[0].clone();
-            let root = Locations::current().map_err(|error| error.to_string())?.catalogs();
-            let task = cx.spawn(async move |cx| {
+            if let Some(approval) = arguments.0.get(1) {
+                if !mandara_config::app_themes::valid_approval(approval) {
+                    return Err("invalid app-template approval token".into());
+                }
+                // Record the user's intent now. The export worker checks the
+                // token before writing; no later completion enables the app.
+                let mut next = config(cx).read(cx).get().integrations.app_themes.clone();
+                next.approve(&qualified, approval).map_err(|error| error.to_string())?;
+                update_config(cx, |config| config.integrations.app_themes = next);
+                let task = cx.spawn(async move |cx| {
+                    let report = cx.update(|cx| crate::state::export_app_themes_report(mandara_core::theme_entity(cx).read(cx).target().clone(), cx)).await;
+                    Ok(json!({"id":qualified,"result":report}))
+                });
+                return Ok(pending(task, cx));
+            }
+            let app = app.to_string();
+            let locations = Locations::current().map_err(|error| error.to_string())?;
+            let root = locations.catalogs();
+            let task = cx.spawn(async move |_| {
                 let cancel = Arc::new(AtomicBool::new(false));
                 let listing = jobs::discover(vec![source.clone()], root.clone(), false, cancel.clone()).await;
-                let entry = listing
-                    .entries
-                    .into_iter()
-                    .find(|entry| entry.id == app)
+                let entry = listing.entries.into_iter().find(|entry| entry.id == app)
                     .ok_or_else(|| format!("app template not found: {app}; {}", listing.errors.join("; ")))?;
-                let installed = jobs::install(source, entry, root, cancel).await.map_err(|error| format!("{error:#}"))?;
-                cx.update(|cx| {
-                    update_config(cx, |config| {
-                        if !config.integrations.app_themes.enabled.contains(&qualified) {
-                            config.integrations.app_themes.enabled.push(qualified.clone());
-                        }
-                    })
-                });
-                let report = cx
-                    .update(|cx| crate::state::export_app_themes_report(mandara_core::theme_entity(cx).read(cx).target().clone(), cx))
-                    .await;
-                Ok(json!({"id":qualified,"enabled":true,"templates":installed.manifest.templates,"result":report}))
+                let review = jobs::install_review(source, entry, locations, cancel).await.map_err(|error| format!("{error:#}"))?;
+                Ok(json!({"review_required":true,"enable_args":[review.id,review.fingerprint],"review":review}))
             });
             Ok(pending(task, cx))
         })
         .arg(ArgSpec::required("id", ArgKind::String, tk("source:app template id")))
+        .arg(ArgSpec::optional("approval", ArgKind::String, tk("approval token returned by the review")))
         .example("theme apps enable community:bat"),
     );
     registry.command(
@@ -145,11 +141,7 @@ pub(super) fn register(registry: &mut PluginRegistry) {
                             entry.enabled = false;
                         }
                     } else {
-                        config
-                            .integrations
-                            .app_themes
-                            .enabled
-                            .retain(|id| id != &arguments.0[0]);
+                        config.integrations.app_themes.disable_catalog(&arguments.0[0]);
                     }
                 });
                 let qualified = arguments.0[0].clone();

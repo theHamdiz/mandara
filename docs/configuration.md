@@ -1302,7 +1302,9 @@ A swipe sends the same dismiss action as the card's close button.
 ### Imported app themes
 
 `integrations.app_themes` holds opt-in `enabled` catalog IDs, `sources`,
-user-authored `user` templates, `custom_colors` and `run_hooks`. All applications
+user-authored `user` templates, `custom_colors` and `run_hooks`. Its `approved`
+map records the reviewed revision and destinations for catalog entries; revision,
+command or destination changes require another review. All applications
 start disabled; `run_hooks` controls commands for entries you explicitly enable.
 Installed templates follow palette and font changes without network access.
 See [App themes](app-themes.md#more-apps-and-your-own-templates) for the document

@@ -86,6 +86,9 @@ pub struct KvantumEntry {
     /// Mandara's symlink and the theme folder it points at.
     pub link: PathBuf,
     pub target: PathBuf,
+    /// Older records only tracked links Mandara created.
+    #[serde(default = "legacy_owned_link")]
+    pub link_created: bool,
     /// The user's `kvantum.kvconfig` before Mandara selected its theme.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kvconfig_backup: Option<PathBuf>,
@@ -93,6 +96,8 @@ pub struct KvantumEntry {
     #[serde(default)]
     pub kvconfig_created: bool,
 }
+
+fn legacy_owned_link() -> bool { true }
 
 /// What the theme sync changed outside Mandara's own folders.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -106,10 +111,23 @@ pub struct Ledger {
     /// Changed since loaded.
     #[serde(skip)]
     dirty: bool,
+    #[serde(skip)]
+    errors: BTreeMap<String, String>,
 }
 
 fn key(path: &Path) -> String {
     path.to_string_lossy().into_owned()
+}
+
+fn recorded_identity(path: &Path, errors: &mut BTreeMap<String, String>) -> std::io::Result<Option<PathBuf>> {
+    match super::destination::identity(path) {
+        Ok(path) => Ok(Some(path)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            errors.insert(path.display().to_string(), format!("app theme ownership destination is unreadable: {error}"));
+            Ok(None)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 fn exists(path: &Path) -> bool {
@@ -200,6 +218,10 @@ impl Ledger {
         Ok(())
     }
 
+    pub fn take_errors(&mut self) -> BTreeMap<String, String> {
+        std::mem::take(&mut self.errors)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.files.is_empty() && self.blocks.is_empty() && self.kvantum.is_none()
     }
@@ -212,17 +234,23 @@ impl Ledger {
     /// Writes `body` to `path` for `app`, backing up a file there that isn't
     /// Mandara's first.
     pub fn put_file(&mut self, app: &str, path: &Path, body: &str) -> std::io::Result<()> {
+        self.put_file_with(app, path, body, super::write)
+    }
+
+    fn put_file_with(&mut self, app: &str, path: &Path, body: &str, write: impl FnOnce(&Path, &str) -> std::io::Result<()>) -> std::io::Result<()> {
+        let new_dirs = missing_dirs(path);
+        let _lock = super::WriteLock::new(path)?;
         let slot = super::destination::slot(path)?;
         let identity = super::destination::identity(path)?;
         let mut k = key(&slot);
         for known in self.files.keys() {
-            if super::destination::identity(Path::new(known))? == identity {
+            if recorded_identity(Path::new(known), &mut self.errors)?.as_ref() == Some(&identity) {
                 k = known.clone();
                 break;
             }
         }
         for (key, block) in &self.blocks {
-            if super::destination::identity(block.path.as_deref().unwrap_or_else(|| Path::new(key)))? == identity {
+            if recorded_identity(block.path.as_deref().unwrap_or_else(|| Path::new(key)), &mut self.errors)?.as_ref() == Some(&identity) {
                 return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "a whole-file theme cannot replace managed import lines"));
             }
         }
@@ -248,6 +276,7 @@ impl Ledger {
         let is_link = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink());
         let mut entry = self.files.get(&k).cloned().unwrap_or_else(|| FileEntry { app: app.to_string(), ..Default::default() });
         let known = self.files.contains_key(&k);
+        let mut moved = None;
         if exists(path) {
             let ours_now = !is_link && current.as_deref().is_some_and(|c| {
                     if known { hash_hex(c) == entry.hash } else { String::from_utf8_lossy(c).contains(MARKER)
@@ -259,33 +288,41 @@ impl Ledger {
                 // The first backup is the user's original; later ones (their
                 // edits of Mandara's file) are kept beside it.
                 if entry.backup.is_none() {
-                    entry.backup = Some(backup);
+                    entry.backup = Some(backup.clone());
                 }
+                moved = Some(backup);
             }
         } else if !known {
-            entry.created_dirs = missing_dirs(path);
+            entry.created_dirs = new_dirs;
         }
         entry.app = app.to_string();
         entry.hash = hash_hex(body.as_bytes());
+        if let Err(error) = write(path, body) {
+            if let Some(backup) = moved && let Err(restore) = std::fs::rename(&backup, path) {
+                return Err(std::io::Error::other(format!("{error}; restoring {} failed: {restore}; the previous file is preserved at {}", path.display(), backup.display())));
+            }
+            return Err(error);
+        }
         if self.files.get(&k) != Some(&entry) {
             self.files.insert(k, entry);
             self.dirty = true;
         }
-        super::write(path, body)?;
         Ok(())
     }
 
     /// Ensures `block` in `config` for `app` (see [`super::ensure_block`]).
     pub fn put_block(&mut self, app: &str, config: &Path, block: &[&str], placement: super::Placement) -> std::io::Result<bool> {
+        let new_dirs = missing_dirs(config);
+        let _lock = super::WriteLock::new(config)?;
         let identity = super::destination::identity(config)?;
         for known in self.files.keys() {
-            if super::destination::identity(Path::new(known))? == identity {
+            if recorded_identity(Path::new(known), &mut self.errors)?.as_ref() == Some(&identity) {
                 return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "managed import lines cannot edit a whole-file theme"));
             }
         }
         let config = identity.as_path();
         let created = !exists(config);
-        let dirs = if created { missing_dirs(config) } else { Vec::new() };
+        let dirs = if created { new_dirs } else { Vec::new() };
         let previous = self
             .blocks
             .iter()
@@ -441,7 +478,12 @@ impl Ledger {
     /// Records Kvantum activation before it happens (once): the link and a
     /// backup of `kvconfig`.
     pub fn record_kvantum(&mut self, link: &Path, target: &Path, kvconfig: &Path) -> std::io::Result<()> {
-        if self.kvantum.is_some() {
+        self.record_kvantum_link(link, target, kvconfig, true)
+    }
+
+    pub(super) fn record_kvantum_link(&mut self, link: &Path, target: &Path, kvconfig: &Path, link_created: bool) -> std::io::Result<()> {
+        if let Some(entry) = &mut self.kvantum {
+            if entry.link_created && entry.target != target { entry.target = target.into(); self.dirty = true; }
             return Ok(());
         }
         let (kvconfig_backup, kvconfig_created) = if exists(kvconfig) {
@@ -451,7 +493,7 @@ impl Ledger {
         } else {
             (None, true)
         };
-        self.kvantum = Some(KvantumEntry { link: link.to_path_buf(), target: target.to_path_buf(), kvconfig_backup, kvconfig_created });
+        self.kvantum = Some(KvantumEntry { link: link.to_path_buf(), target: target.to_path_buf(), link_created, kvconfig_backup, kvconfig_created });
         self.dirty = true;
         Ok(())
     }
@@ -466,25 +508,15 @@ impl Ledger {
         let Some(entry) = self.kvantum.take() else { return SyncReport::default(); };
         self.dirty = true;
         let mut changed = SyncReport::default();
-        if std::fs::read_link(&entry.link).is_ok_and(|target| target == entry.target) {
+        if entry.link_created && std::fs::read_link(&entry.link).is_ok_and(|target| target == entry.target) {
             match std::fs::remove_file(&entry.link) {
                 Ok(()) => changed.files.push(entry.link.clone()),
                 Err(error) => changed.failed(&entry.link, error),
             }
         }
-        match super::file_io::read(kvconfig) {
-            Ok(body) if body.lines().any(|line| line.trim().replace(' ', "") == format!("theme={theme}")) => {
-                let restored = match &entry.kvconfig_backup {
-                    Some(backup) => std::fs::rename(backup, kvconfig),
-                    None if entry.kvconfig_created => std::fs::remove_file(kvconfig),
-                    None => Ok(()),
-                };
-                match restored {
-                    Ok(()) => changed.files.push(kvconfig.into()),
-                    Err(error) => changed.failed(kvconfig, error),
-                }
-            }
-            Ok(_) => {}
+        match super::kvantum_selection::restore(kvconfig, entry.kvconfig_backup.as_deref(), entry.kvconfig_created, theme) {
+            Ok(true) => changed.files.push(kvconfig.into()),
+            Ok(false) => {},
             Err(error) => changed.failed(kvconfig, error),
         }
         if !changed.errors.is_empty() { self.kvantum = Some(entry); }
@@ -495,6 +527,39 @@ impl Ledger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_damaged_destination_does_not_block_unrelated_file_or_import_writes() {
+        let root = tempfile::tempdir().unwrap(); let broken = root.path().join("a-broken");
+        let mut ledger = Ledger::default(); ledger.put_file("old", &broken, "theme").unwrap();
+        std::fs::remove_file(&broken).unwrap(); std::os::unix::fs::symlink(root.path().join("missing"), &broken).unwrap();
+        let valid = root.path().join("z-valid"); ledger.put_file("new", &valid, "new theme").unwrap();
+        let imports = root.path().join("z-imports"); ledger.put_block("imports", &imports, &["import colors"], super::super::Placement::AfterImports).unwrap();
+        assert_eq!(std::fs::read_to_string(valid).unwrap(), "new theme");
+        assert!(std::fs::read_to_string(imports).unwrap().contains("import colors"));
+        assert!(ledger.take_errors().contains_key(broken.to_str().unwrap()));
+        assert!(ledger.has("old"));
+    }
+
+    #[test]
+    fn failed_file_writes_keep_committed_ownership_and_return_moved_user_files() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("colors");
+        std::fs::write(&path, "original").unwrap();
+        let mut ledger = Ledger::default();
+        let fail = |_: &Path, _: &str| Err(std::io::Error::other("failed write"));
+        assert!(ledger.put_file_with("app", &path, "A", fail).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "original");
+        assert!(ledger.is_empty());
+        ledger.put_file("app", &path, "A").unwrap();
+        let committed = ledger.files.clone();
+        assert!(ledger.put_file_with("app", &path, "B", fail).is_err());
+        assert_eq!(ledger.files, committed);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "A");
+        ledger.put_file("app", &path, "B").unwrap();
+        assert!(ledger.take_back_checked("app").errors.is_empty());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "original");
+    }
 
     #[test]
     fn dangling_record_links_are_rejected_without_replacing_ownership() {

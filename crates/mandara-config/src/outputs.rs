@@ -291,7 +291,7 @@ pub fn remember(saved: &mut Vec<OutputConfig>, current: impl IntoIterator<Item =
             if stable(old) && stable(&output) {
                 old.identity() == output.identity()
             } else {
-                old.name == output.name
+                !stable(old) && old.name == output.name
             }
         };
         let previous = saved.iter().find(|old| stable(old) && stable(&output) && old.identity() == output.identity())
@@ -319,7 +319,7 @@ pub fn remember(saved: &mut Vec<OutputConfig>, current: impl IntoIterator<Item =
             if stable(old) && output_stable {
                 old.identity() != output_identity
             } else {
-                old.name != output.name
+                stable(old) || old.name != output.name
             }
         });
         saved.push(output);
@@ -329,6 +329,17 @@ pub fn remember(saved: &mut Vec<OutputConfig>, current: impl IntoIterator<Item =
 #[cfg(test)]
 mod persistence_tests {
     use super::*;
+
+    #[test]
+    fn anonymous_monitors_do_not_inherit_or_delete_saved_edid_preferences() {
+        let old = OutputConfig { name: "DP-1".into(), make: "Demo".into(), serial: "A".into(), scale: Some(1.5), ..Default::default() };
+        let anonymous = OutputConfig { name: "DP-1".into(), enabled: false, ..Default::default() };
+        let mut saved = vec![old.clone()];
+        remember(&mut saved, [anonymous.clone()]);
+        assert_eq!(saved, [old.clone(), anonymous.clone()]);
+        remember(&mut saved, [anonymous.clone()]);
+        assert_eq!(saved, [old, anonymous]);
+    }
 
     #[test]
     fn reused_connectors_keep_edid_preferences_and_inherit_the_matching_monitor() {

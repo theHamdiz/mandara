@@ -31,9 +31,10 @@ drop-in, keeping your own compositor settings intact.
 ## More apps and your own templates
 
 In **Studio → Themes → Other apps**, choose **Browse app templates** to search
-available catalogs. **Get & enable** downloads just that app and applies the
-current palette; **Update template** explicitly fetches a newer revision.
-Changing a theme, a Look or light/dark mode uses installed files and works
+available catalogs. **Review** downloads just that app and lists the files and
+commands it uses. Read the list, then choose **Enable** to apply your
+palette. **Update template** fetches a newer revision for another review.
+Approved revisions keep working offline. Changing a theme, a Look or light/dark mode uses installed files and works
 offline. Templates use Mandara's palette, so they work with built-in themes,
 wallpaper colours and your own themes without a separate theme for each app.
 
@@ -60,7 +61,12 @@ Imported KDE schemes merge their colour keys into `kdeglobals`, preserving
 unrelated settings. The browser integration can install an owned native-messaging
 host on Linux, deliver the palette to the browser extension, and manage its
 optional CSS across profiles. An existing host from another installation is
-preserved. When you turn the template off, Mandara restores its files and
+preserved. If that host requires the shared `~/.cache/wal/colors.json` palette,
+it appears in the review with a warning: other Pywal apps will read those
+colours too. The shared file is never replaced without that approval. In a
+user-authored browser template, choose this output explicitly if you want to
+share it with an existing host.
+When you turn the template off, Mandara restores its files and
 notifies connected extensions that its palette is unavailable. Use the browser
 extension’s **Disable theme** control to reset its active browser colours;
 its native messaging protocol does not provide a remote reset command.
@@ -129,7 +135,9 @@ Useful commands:
 
 ```bash
 mandara msg theme apps catalog          # cached discovery; add refresh to fetch again
-mandara msg theme apps enable community:rofi
+mandara msg theme apps enable community:rofi  # download and review; does not activate
+# After reading the returned file and command list, pass its approval token:
+mandara msg theme apps enable community:rofi <approval-token>
 mandara msg theme apps disable community:rofi
 mandara msg theme apps status
 mandara msg theme export                # files, skipped entries and errors as JSON

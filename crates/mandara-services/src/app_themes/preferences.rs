@@ -8,6 +8,7 @@ use document::Document as _;
 use crate::icons::apply::ini_get;
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
+use mandara_theme::templates::{FileStamp, WriteLock};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -43,6 +44,16 @@ impl Record {
         let Some(pending) = self.pending.as_ref() else { return Ok(false) };
         let current = pending.format.parse(&text(&pending.path)?)?;
         let changes = self.owners.entry(pending.owner.clone()).or_default();
+        for index in (0..changes.len()).rev() {
+            let change = &changes[index];
+            if change.path != pending.path { continue; }
+            if current.get(&change.section, &change.key)?.as_deref() != Some(&change.after) {
+                if let Some(before) = pending.before.iter().find(|before| before.path == change.path && before.section == change.section && before.key == change.key)
+                    && current.get(&before.section, &before.key)?.as_deref() == Some(&before.after) {
+                    changes[index] = before.clone();
+                } else { changes.remove(index); }
+            }
+        }
         // Atomic writers leave either version. Compare individual values so a
         // later unrelated user edit does not make recovery forget ownership.
         for before in &pending.before {
@@ -55,6 +66,7 @@ impl Record {
                 }
             }
         }
+        if changes.is_empty() { self.owners.remove(&pending.owner); }
         self.pending = None;
         Ok(true)
     }
@@ -72,10 +84,7 @@ fn load(path: &Path) -> Result<Record> {
             if record.recover()? { store(path, &record)?; }
             Ok(record)
         },
-        Err(error)
-            if error
-                .downcast_ref::<std::io::Error>()
-                .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
+        Err(error) if super::file_io::absent(path, &error) =>
         {
             Ok(Record::default())
         }
@@ -85,10 +94,7 @@ fn load(path: &Path) -> Result<Record> {
 fn text(path: &Path) -> Result<String> {
     match super::apply::read_text(path) {
         Ok(text) => Ok(text),
-        Err(error)
-            if error
-                .downcast_ref::<std::io::Error>()
-                .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
+        Err(error) if super::file_io::absent(path, &error) =>
         {
             Ok(String::new())
         }
@@ -141,9 +147,15 @@ fn settings(keys: &Sections) -> impl Iterator<Item = (&String, &String, &String)
         .flat_map(|(section, group)| group.iter().map(move |(key, value)| (section, key, value)))
 }
 
+fn write_checked(path: &Path, original: &str, next: &str) -> Result<()> {
+    let lock = WriteLock::new(path)?;
+    let before = lock.check(original.as_bytes())?;
+    mandara_config::store::write_atomic_checked(&lock, before, next.as_bytes()).map(|_| ())
+}
+
 /// The write-ahead record survives a failed application or a shell restart.
 pub fn set(owner: &str, path: &Path, keys: &Sections, locations: &Locations) -> Result<()> {
-    set_with(owner,path,keys,Format::Ini,locations,&|path,_,next|mandara_config::store::write_atomic(path,next.as_bytes()))
+    set_with(owner,path,keys,Format::Ini,locations,&write_checked)
 }
 
 pub fn set_with(
@@ -154,6 +166,8 @@ pub fn set_with(
     locations: &Locations,
     write: &dyn Fn(&Path,&str,&str) -> Result<()>,
 ) -> Result<()> {
+    let lock = WriteLock::new(path)?;
+    let before = FileStamp::at(lock.target())?;
     let record_path = record_path(locations);
     let mut record = load(&record_path)?;
     let previous = record.owners.get(owner).cloned().unwrap_or_default();
@@ -233,7 +247,8 @@ pub fn set_with(
     }
     record.pending = Some(Pending { owner: owner.into(), path: path.into(), before: previous, format });
     store(&record_path, &record)?;
-    if let Err(error) = write(path,&original,&next) {
+    let result = lock.check_stamp(before).map_err(anyhow::Error::from).and_then(|()| write(path,&original,&next));
+    if let Err(error) = result {
         // Keep the journal if recovery itself fails; another sync can retry.
         load(&record_path).map_err(|recovery| anyhow::anyhow!("{error:#}; recovering theme ownership: {recovery:#}"))?;
         return Err(error);
@@ -244,7 +259,7 @@ pub fn set_with(
 }
 
 pub fn undo(owner: &str, locations: &Locations) -> Result<Vec<PathBuf>> {
-    undo_with(owner,locations,&|path,_,next|mandara_config::store::write_atomic(path,next.as_bytes()))
+    undo_with(owner,locations,&write_checked)
 }
 
 pub fn undo_with(
@@ -263,6 +278,8 @@ pub fn undo_with(
     }
     let mut changed = Vec::new();
     for (path, changes) in files {
+        let lock = WriteLock::new(path)?;
+        let before = FileStamp::at(lock.target())?;
         let original = text(path)?;
         let format = changes[0].format;
         ensure!(changes.iter().all(|change|change.format == format),"theme preference formats disagree");
@@ -274,6 +291,7 @@ pub fn undo_with(
         }
         let next = next.finish();
         if next != original {
+            lock.check_stamp(before)?;
             if changes.iter().all(|change| change.created)
                 && next
                     .lines()
@@ -295,6 +313,50 @@ pub fn undo_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_editor_change_before_commit_is_kept_and_can_be_merged_on_retry() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = Locations { home: root.path().into(), config: root.path().join("config"), data: root.path().join("data"), cache: root.path().join("cache"), state: root.path().join("state") };
+        let path = root.path().join("app.ini");
+        std::fs::write(&path, "[Theme]\nColor=Personal\nOther=Old\n").unwrap();
+        let keys = ini_keys("[Theme]\nColor=Themed\n").unwrap();
+        assert!(set_with("app", &path, &keys, Format::Ini, &locations, &|path, original, next| {
+            std::fs::write(path, "[Theme]\nColor=Personal\nOther=New\n")?;
+            write_checked(path, original, next)
+        }).is_err());
+        assert!(std::fs::read_to_string(&path).unwrap().contains("Other=New"));
+        assert!(!load(&record_path(&locations)).unwrap().owners.contains_key("app"));
+        set("app", &path, &keys, &locations).unwrap(); undo("app", &locations).unwrap();
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "[Theme]\nColor=Personal\nOther=New\n");
+    }
+
+    #[test]
+    fn interrupted_first_applications_release_keys_that_were_never_written() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = Locations { home: root.path().into(), config: root.path().join("config"), data: root.path().join("data"), cache: root.path().join("cache"), state: root.path().join("state") };
+        let path = root.path().join("app.ini"); std::fs::write(&path, "[Theme]\nColor=Personal\n").unwrap();
+        let keys = ini_keys("[Theme]\nColor=Themed\n").unwrap();
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = set_with("first", &path, &keys, Format::Ini, &locations, &|_,_,_| panic!("stopped before writing"));
+        })).is_err());
+        assert!(!load(&record_path(&locations)).unwrap().owners.contains_key("first"));
+        set("second", &path, &keys, &locations).unwrap();
+        undo("second", &locations).unwrap();
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "[Theme]\nColor=Personal\n");
+    }
+
+    #[test]
+    fn dangling_preference_records_do_not_allow_untracked_writes() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = Locations { home: root.path().into(), config: root.path().join("config"), data: root.path().join("data"), cache: root.path().join("cache"), state: root.path().join("state") };
+        let record = record_path(&locations); std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        let missing = root.path().join("missing-record"); std::os::unix::fs::symlink(&missing, &record).unwrap();
+        let path = root.path().join("app.ini"); std::fs::write(&path, "[Theme]\nColor=Personal\n").unwrap();
+        assert!(set("app", &path, &ini_keys("[Theme]\nColor=Themed\n").unwrap(), &locations).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "[Theme]\nColor=Personal\n");
+        assert!(!missing.exists());
+    }
 
     #[test]
     fn failed_replacements_and_interrupted_writes_keep_the_original_undo_value() {

@@ -228,6 +228,7 @@ fn profile_in_use(profile: &Path,processes: &Path) -> bool {
     let profile = std::fs::canonicalize(profile).unwrap_or_else(|_|profile.to_path_buf());
     let Ok(entries) = std::fs::read_dir(processes) else { return true };
     entries.flatten().any(|entry| {
+        if entry.file_name().to_str().and_then(|pid| pid.parse::<u32>().ok()) == Some(std::process::id()) { return false; }
         let process = entry.path();
         if std::fs::read_link(process.join("exe")).is_ok_and(|path|path.starts_with(&profile)) { return true; }
         if !std::fs::read_to_string(process.join("comm")).is_ok_and(|name|BUILD_PROCESSES.contains(&name.trim())) { return false; }
@@ -293,6 +294,18 @@ mod tests {
         std::fs::write(dir.join(INCREMENTAL).join("cache"), vec![1u8; bytes]).unwrap();
         std::fs::write(dir.join("deps").join("lib.rlib"), vec![2u8; bytes]).unwrap();
         dir.to_path_buf()
+    }
+
+    #[test]
+    fn the_pruner_does_not_protect_itself_but_other_profile_processes_still_do() {
+        let root = tempfile::tempdir().unwrap(); let profile = root.path().join("debug");
+        std::fs::create_dir(&profile).unwrap(); let processes = root.path().join("proc");
+        let own = processes.join(std::process::id().to_string()); std::fs::create_dir_all(&own).unwrap();
+        std::os::unix::fs::symlink(profile.join("xtask"), own.join("exe")).unwrap();
+        assert!(!profile_in_use(&profile, &processes));
+        let other = processes.join(std::process::id().wrapping_add(1).to_string()); std::fs::create_dir_all(&other).unwrap();
+        std::os::unix::fs::symlink(profile.join("doctest"), other.join("exe")).unwrap();
+        assert!(profile_in_use(&profile, &processes));
     }
 
     #[test]
