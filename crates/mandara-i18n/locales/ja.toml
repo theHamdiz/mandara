@@ -10716,3 +10716,8 @@
 "{file}, line {line}" = "{file}、行 {line}"
 
 "This configuration is read-only. Edit its source or create a writable user override." = "この設定は読み取り専用です。元の設定を編集するか、書き込み可能なユーザー設定で上書きしてください。"
+
+"Edit this value in its source configuration to preserve its formatting." = "書式を保つため、この値は元の設定ファイルで編集してください。"
+"This shortcut is locked by the compositor configuration." = "このショートカットはコンポジターの設定によってロックされています。"
+
+"Save or cancel this edit before using Undo." = "元に戻す前に、この編集を保存するかキャンセルしてください。"

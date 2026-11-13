@@ -6,6 +6,13 @@ fn existing_configs_follow_the_shell_until_a_studio_look_is_selected() {
     assert!(config.studio.is_none());
     assert!(std::ptr::eq(config.studio_typography(), &config.typography));
     assert!(!toml::to_string(&config).unwrap().contains("[studio"));
+    let snapshot: ShellConfig = toml::from_str("[studio]\n").unwrap();
+    assert_eq!(snapshot.studio.unwrap().frame.title_height, 44.0);
+    let partial: ShellConfig = toml::from_str("[studio.frame]\nradius=12\n").unwrap();
+    let frame = partial.studio.unwrap().frame;
+    assert_eq!(frame.radius, 12.0);
+    assert_eq!(frame.title_height, 46.0);
+    assert_eq!(frame.sidebar_width, 252.0);
 }
 
 #[test]

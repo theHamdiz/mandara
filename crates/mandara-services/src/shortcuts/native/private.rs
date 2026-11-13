@@ -76,26 +76,7 @@ impl Drop for Running {
     }
 }
 
-fn river_words(row: &Binding, unmap: bool) -> Result<Vec<String>> {
-    ensure!(
-        row.read_only.is_none(),
-        "{}",
-        t("Computed shortcuts must be edited in their source configuration.")
-    );
-    let mut words = vec![if unmap { "unmap" } else { "map" }.into()];
-    for field in &row.fields {
-        if unmap && field.label == "Action" {
-            break;
-        }
-        if unmap && field.value == "-repeat" && field.label == "Flags" {
-            continue;
-        }
-        words.push(field.value.clone());
-    }
-    Ok(words)
-}
-
-pub(super) fn river(row: &Binding) -> Result<()> {
+fn with_river<T>(mode: &str, action: impl FnOnce(&Probe, &Path) -> Result<T>) -> Result<T> {
     let probe = Probe::new()?;
     let mut server = probe.command("river");
     let mut running = Running(
@@ -129,31 +110,24 @@ pub(super) fn river(row: &Binding) -> Result<()> {
     let mut declare = probe.command("riverctl");
     declare
         .env("WAYLAND_DISPLAY", &display)
-        .args(["declare-mode", &row.scope]);
+        .args(["declare-mode", mode]);
     probe.run(declare)?;
-    let mut map = probe.command("riverctl");
-    map.env("WAYLAND_DISPLAY", &display)
-        .args(river_words(row, false)?);
-    let (output, diagnostic) = probe.run(map)?;
-    ensure!(
-        output.trim().is_empty() && diagnostic.trim().is_empty(),
-        "{}: {output}{diagnostic}",
-        t("The compositor rejected these shortcuts.")
-    );
-    Ok(())
+    action(&probe, &display)
 }
 
-pub(super) fn river_replace(before: &Binding, after: &Binding) -> Result<()> {
-    let unmap = river_words(before, true)?;
-    let map = river_words(after, false)?;
-    let run = |words: &[String]| {
-        let mut command = Command::new("riverctl");
-        command.args(words);
-        crate::app_themes::process::native(command, &AtomicBool::new(false), doctor::CHECK_TIMEOUT)
-            .map(|_| ())
-    };
-    run(&unmap)?;
-    run(&map)
+pub(super) fn river(row: &Binding) -> Result<()> {
+    with_river(&row.scope, |probe, display| {
+        let mut map = probe.command("riverctl");
+        map.env("WAYLAND_DISPLAY", &display)
+            .args(super::river::words(row, false)?);
+        let (output, diagnostic) = probe.run(map)?;
+        ensure!(
+            output.trim().is_empty() && diagnostic.trim().is_empty(),
+            "{}: {output}{diagnostic}",
+            t("The compositor rejected these shortcuts.")
+        );
+        Ok(())
+    })
 }
 
 fn lua_sample(row: &Binding) -> Result<String> {
@@ -295,32 +269,28 @@ mod tests {
     use mandara_config::compositor::Target;
 
     #[test]
-    fn river_undo_preserves_mode_release_and_layout_without_executing_commands() {
-        let rows = mandara_config::keybinds::parse(
-            Target::River,
-            Path::new("init"),
-            "riverctl map -release -repeat -layout 2 resize Super Q spawn 'touch /never-run'\n",
-        )
+    #[ignore = "requires River and riverctl"]
+    fn river_layout_pinned_save_and_undo_run_in_a_private_server() {
+        let rows = mandara_config::keybinds::parse(Target::River, Path::new("init"), "riverctl map -release -layout 2 normal Super Q close\nriverctl map -release -layout 2 normal Super W close\n").unwrap();
+        with_river("normal", |probe, display| {
+            let run = |words: &[String]| {
+                let mut command = probe.command("riverctl");
+                command.env("WAYLAND_DISPLAY", display).args(words);
+                let (output, diagnostic) = probe.run(command)?;
+                ensure!(
+                    output.trim().is_empty() && diagnostic.trim().is_empty(),
+                    "{output}{diagnostic}"
+                );
+                Ok(())
+            };
+            run(&super::super::river::words(&rows[0], false)?)?;
+            let edit = super::super::river::Edit::default();
+            edit.apply_with(&rows[0], &rows[1], &run)?;
+            edit.restore_with(&rows[0], &rows[1], &run)?;
+            run(&super::super::river::words(&rows[0], true)?)?;
+            Ok(())
+        })
         .unwrap();
-        assert_eq!(
-            river_words(&rows[0], false).unwrap(),
-            [
-                "map",
-                "-release",
-                "-repeat",
-                "-layout",
-                "2",
-                "resize",
-                "Super",
-                "Q",
-                "spawn",
-                "touch /never-run"
-            ]
-        );
-        assert_eq!(
-            river_words(&rows[0], true).unwrap(),
-            ["unmap", "-release", "-layout", "2", "resize", "Super", "Q"]
-        );
     }
 
     #[test]
@@ -343,6 +313,7 @@ mod tests {
         std::fs::write(&file, source).unwrap();
         let rows = mandara_config::keybinds::parse(Target::Hyprland, &file, source).unwrap();
         let session = super::super::Session {
+            environment: Default::default(),
             primary_mod_is_alt: false,
             target: Target::Hyprland,
             root: file.clone(),

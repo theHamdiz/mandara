@@ -29,6 +29,7 @@ fn native_checkers_validate_shortcuts_without_running_configuration_hooks() {
         match target {
             Target::Hyprland => {
                 let session = Session {
+                    environment: Default::default(),
                     target,
                     root: file.clone(),
                     scan: keybinds::scan_from(target, &file),

@@ -33,6 +33,7 @@ pub mod power;
 pub mod preauth;
 pub mod profiles;
 pub mod recorder;
+mod regular;
 pub mod schema;
 pub mod side_bars;
 pub mod side_edges;

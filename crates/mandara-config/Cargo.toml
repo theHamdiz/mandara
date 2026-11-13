@@ -25,6 +25,7 @@ kdl = { workspace = true, features = ["span"] }
 roxmltree.workspace = true
 ron.workspace = true
 full_moon.workspace = true
+rustix.workspace = true
 
 # MangoWM resolves bind keys to keycodes; conflict checks must too.
 xkbcommon = { workspace = true }

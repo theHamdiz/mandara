@@ -30,15 +30,7 @@ impl ReadBudget {
             self.seen.len() <= crate::keybinds::MAX_FILES,
             "too many shortcut configuration files"
         );
-        ensure!(
-            std::fs::metadata(file)?.is_file(),
-            "configuration is not a regular file"
-        );
-        let input = std::fs::File::open(file)?;
-        ensure!(
-            input.metadata()?.is_file(),
-            "configuration is not a regular file"
-        );
+        let input = crate::regular::open(file)?;
         let mut text = String::new();
         input
             .take(crate::keybinds::MAX_FILE_BYTES as u64 + 1)

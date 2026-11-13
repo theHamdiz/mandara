@@ -1,6 +1,7 @@
 //! Each native dialect keeps its own check and live-application semantics.
 
 mod private;
+mod river;
 #[cfg(test)]
 mod tests;
 
@@ -19,6 +20,7 @@ pub(super) struct Native<'a> {
     session: &'a Session,
     edit: &'a PreparedEdit,
     driver: Arc<dyn mandara_compositor::CompositorBackend>,
+    river: river::Edit,
 }
 
 impl<'a> Native<'a> {
@@ -32,6 +34,7 @@ impl<'a> Native<'a> {
             session,
             edit,
             driver,
+            river: Default::default(),
         })
     }
 
@@ -48,8 +51,8 @@ impl<'a> Native<'a> {
     }
 
     fn check_body(&self, path: &Path, body: &str) -> Result<()> {
-        let dialect = if path == self.edit.id.file {
-            &self.edit.id.target
+        let dialect = if path == self.edit.id.file || path == self.edit.id.target {
+            &self.edit.id.file
         } else {
             path
         };
@@ -71,7 +74,7 @@ impl<'a> Native<'a> {
 
     fn reload(&self, before: &Binding, after: &Binding) -> Result<()> {
         match self.session.target {
-            Target::River => private::river_replace(before, after),
+            Target::River => self.river.apply(before, after),
             Target::Labwc => private::labwc_reload(),
             // Both compositors watch their own settings; their drivers need no
             // restart or second write to apply a changed native setting.
@@ -110,7 +113,12 @@ impl Backend for Native<'_> {
         self.reload(&self.edit.old_binding, self.edit.binding())
     }
     fn restore(&self) -> Result<()> {
-        self.reload(self.edit.binding(), &self.edit.old_binding)
+        if self.session.target == Target::River {
+            self.river
+                .restore(&self.edit.old_binding, self.edit.binding())
+        } else {
+            self.reload(self.edit.binding(), &self.edit.old_binding)
+        }
     }
     fn version(&self) -> Option<(u32, u32)> {
         self.driver.version()

@@ -10710,3 +10710,8 @@
 "{file}, line {line}" = "{file}，线路 {line}"
 
 "This configuration is read-only. Edit its source or create a writable user override." = "此配置为只读。请编辑其源文件，或创建可写的用户配置来覆盖它。"
+
+"Edit this value in its source configuration to preserve its formatting." = "请在源配置文件中编辑此值，以保留其格式。"
+"This shortcut is locked by the compositor configuration." = "此快捷键已被合成器配置锁定。"
+
+"Save or cancel this edit before using Undo." = "使用撤销前，请先保存或取消此次编辑。"

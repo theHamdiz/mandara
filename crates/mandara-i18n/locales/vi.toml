@@ -10373,3 +10373,8 @@
 "{file}, line {line}" = "{file}, dòng {line}"
 
 "This configuration is read-only. Edit its source or create a writable user override." = "Cấu hình này chỉ có thể đọc. Hãy sửa nguồn hoặc tạo cấu hình người dùng có quyền ghi để ghi đè."
+
+"Edit this value in its source configuration to preserve its formatting." = "Chỉnh sửa giá trị này trong tệp cấu hình gốc để giữ nguyên định dạng."
+"This shortcut is locked by the compositor configuration." = "Phím tắt này bị khóa bởi cấu hình trình tổng hợp."
+
+"Save or cancel this edit before using Undo." = "Lưu hoặc hủy chỉnh sửa này trước khi dùng Hoàn tác."

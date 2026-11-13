@@ -133,7 +133,7 @@ fn kind_of_process(name: &str) -> Option<CompositorKind> {
         "umbriel" => Some(CompositorKind::Umbriel),
         "sway" => Some(CompositorKind::Sway),
         "river" => Some(CompositorKind::River),
-        "kwin_wayland" => Some(CompositorKind::KWin),
+        "kwin_wayland" | "kwin_wayland_wr" => Some(CompositorKind::KWin),
         "aqueous" => Some(CompositorKind::Aqueous),
         "labwc" => Some(CompositorKind::Labwc),
         "cosmic-comp" => Some(CompositorKind::Cosmic),
@@ -325,7 +325,18 @@ mod tests {
         assert_eq!(detect_with_owner(hypr, || kind_of_process("sway")), Some(CompositorKind::Sway));
         assert_eq!(kind_of_process("Hyprland"), Some(CompositorKind::Hyprland));
         assert_eq!(kind_of_process("kwin_wayland"), Some(CompositorKind::KWin));
-        assert_eq!(detect_with(&[socket, ("XDG_CURRENT_DESKTOP", "river")]), Some(CompositorKind::Aqueous));
+        assert_eq!(
+            kind_of_process("kwin_wayland_wr"),
+            Some(CompositorKind::KWin)
+        );
+        assert_eq!(
+            detect_with_owner(alone, || kind_of_process("kwin_wayland_wr")),
+            Some(CompositorKind::KWin)
+        );
+        assert_eq!(
+            detect_with(&[socket, ("XDG_CURRENT_DESKTOP", "river")]),
+            Some(CompositorKind::Aqueous)
+        );
     }
 
     #[test]

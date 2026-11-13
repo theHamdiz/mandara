@@ -10,7 +10,7 @@ use std::{
 use anyhow::{Context as _, Result, ensure};
 
 use super::{Binding, MAX_BINDINGS, MAX_FILE_BYTES, MAX_FILES, MAX_TOTAL_BYTES};
-use crate::compositor::{Target, included_files_bounded, is_generated};
+use crate::compositor::{IncludeEnvironment, Target, included_files_bounded_in, is_generated};
 mod niri;
 pub use niri::{NiriModifiers, resolve_mod as resolve_niri_mod};
 
@@ -55,15 +55,7 @@ pub(crate) fn fingerprint(text: &str) -> u64 {
 }
 
 pub(crate) fn read(path: &Path) -> Result<String> {
-    ensure!(
-        std::fs::metadata(path)?.is_file(),
-        "configuration is not a regular file"
-    );
-    let file = std::fs::File::open(path).with_context(|| path.display().to_string())?;
-    ensure!(
-        file.metadata()?.is_file(),
-        "configuration is not a regular file"
-    );
+    let file = crate::regular::open(path).with_context(|| path.display().to_string())?;
     let mut text = String::new();
     file.take(MAX_FILE_BYTES as u64 + 1)
         .read_to_string(&mut text)?;
@@ -104,6 +96,14 @@ pub fn scan_from(target: Target, root: &Path) -> Scan {
 
 /// A merged native config shares the same file, byte and binding budgets.
 pub fn scan_roots(target: Target, roots: impl IntoIterator<Item = PathBuf>) -> Scan {
+    scan_roots_in(target, roots, &IncludeEnvironment::default())
+}
+
+pub fn scan_roots_in(
+    target: Target,
+    roots: impl IntoIterator<Item = PathBuf>,
+    environment: &IncludeEnvironment,
+) -> Scan {
     let mut scan = Scan::default();
     let mut seen = BTreeSet::new();
     let mut queue: Vec<_> = roots.into_iter().take(MAX_FILES + 1).collect();
@@ -115,10 +115,10 @@ pub fn scan_roots(target: Target, roots: impl IntoIterator<Item = PathBuf>) -> S
         return scan;
     }
     if target == Target::Sway {
-        return scan_sway(&queue);
+        return scan_sway(&queue, environment);
     }
     if target == Target::Niri {
-        return niri::scan(&queue);
+        return niri::scan(&queue, environment);
     }
     queue.reverse();
     let mut total_bytes = 0;
@@ -151,7 +151,7 @@ pub fn scan_roots(target: Target, roots: impl IntoIterator<Item = PathBuf>) -> S
                 total_bytes <= MAX_TOTAL_BYTES,
                 "shortcut configuration exceeds the scan budget"
             );
-            let bindings = super::parse(target, &real, &source)?;
+            let bindings = super::parse(target, &file, &source)?;
             total_bindings += bindings.len();
             ensure!(
                 total_bindings <= MAX_BINDINGS,
@@ -159,13 +159,14 @@ pub fn scan_roots(target: Target, roots: impl IntoIterator<Item = PathBuf>) -> S
             );
             let mut children =
                 if target == Target::Mango && file.extension().is_some_and(|ext| ext == "toml") {
-                    mango_includes(&file, &source)?
+                    mango_includes(&file, &source, environment)?
                 } else {
-                    included_files_bounded(
+                    included_files_bounded_in(
                         target,
                         &file,
                         &source,
                         MAX_FILES.saturating_sub(seen.len() + queue.len()),
+                        environment,
                     )?
                 };
             ensure!(
@@ -193,9 +194,9 @@ pub fn scan_roots(target: Target, roots: impl IntoIterator<Item = PathBuf>) -> S
     scan
 }
 
-fn scan_sway(roots: &[PathBuf]) -> Scan {
+fn scan_sway(roots: &[PathBuf], environment: &IncludeEnvironment) -> Scan {
     let result = (|| -> Result<Scan> {
-        let mut native = crate::compositor::sway_shortcut_sources(roots)?;
+        let mut native = crate::compositor::sway_shortcut_sources_in(roots, environment)?;
         native
             .bindings
             .sort_unstable_by(|(path, binding), (other, next)| {
@@ -241,7 +242,11 @@ fn scan_sway(roots: &[PathBuf]) -> Scan {
     })
 }
 
-fn mango_includes(file: &Path, source: &str) -> Result<Vec<PathBuf>> {
+fn mango_includes(
+    file: &Path,
+    source: &str,
+    environment: &IncludeEnvironment,
+) -> Result<Vec<PathBuf>> {
     let document: toml::Value = toml::from_str(source)?;
     let mut paths = Vec::new();
     if let Some(global) = document.get("global") {
@@ -252,7 +257,7 @@ fn mango_includes(file: &Path, source: &str) -> Result<Vec<PathBuf>> {
                     .map_or_else(|| vec![value], |values| values.iter().collect());
                 for entry in entries {
                     if let Some(path) = entry.as_str() {
-                        let path = crate::compositor::resolve_include(file, path);
+                        let path = environment.resolve(file, &environment.expand(path)?)?;
                         if key != "source_optional" || path.exists() {
                             paths.push(path);
                         }
@@ -268,6 +273,79 @@ fn mango_includes(file: &Path, source: &str) -> Result<Vec<PathBuf>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_environment_drives_all_include_paths_and_optional_sources_stay_optional() {
+        let directory = tempfile::tempdir().unwrap();
+        let server = directory.path().join("server");
+        std::fs::create_dir(&server).unwrap();
+        let environment = IncludeEnvironment::captured([
+            ("HOME".into(), server.clone().into_os_string()),
+            ("KEY_DIR".into(), server.clone().into_os_string()),
+        ]);
+        for (target, name, root_text, child_name, child_text) in [
+            (
+                Target::Mango,
+                "mango.conf",
+                "source_optional=~/missing\nsource=$KEY_DIR/child.conf\n",
+                "child.conf",
+                "bind=SUPER,Q,killclient\n",
+            ),
+            (
+                Target::Mango,
+                "mango.toml",
+                "[global]\nsource=['$KEY_DIR/child.conf']\nsource_optional=['~/missing']\n",
+                "child.conf",
+                "bind=SUPER,Q,killclient\n",
+            ),
+            (
+                Target::Umbriel,
+                "umbriel.toml",
+                "[include]\nfiles=['${KEY_DIR}/child.toml']\n[include.optional]\nfiles=['~/missing']\n",
+                "child.toml",
+                "[keybinds]\n'Super+Q'='close'\n",
+            ),
+            (
+                Target::Sway,
+                "sway",
+                "include $KEY_DIR/child.sway\n",
+                "child.sway",
+                "bindsym Mod4+q kill\n",
+            ),
+            (
+                Target::Niri,
+                "niri.kdl",
+                "include \"~/child.kdl\"\n",
+                "child.kdl",
+                "binds { Super+Q { close-window; }; }\n",
+            ),
+        ] {
+            let root = directory.path().join(name);
+            let child = server.join(child_name);
+            std::fs::write(&root, root_text).unwrap();
+            std::fs::write(&child, child_text).unwrap();
+            let scan = scan_roots_in(target, [root.clone()], &environment);
+            assert!(scan.errors.is_empty(), "{name}: {:?}", scan.errors);
+            assert!(scan.sources.iter().any(|source| source.file == child));
+            if name != "mango.toml" && target != Target::Niri {
+                assert!(crate::compositor::existing_chords_checked_in(target, &root, &environment).unwrap().contains("super+q"), "{name}: checked conflicts use the native environment");
+            }
+            assert!(
+                scan.sources
+                    .iter()
+                    .flat_map(|source| &source.bindings)
+                    .any(|row| row.chord.as_deref() == Some("super+q")),
+                "{name}"
+            );
+            std::fs::remove_file(child).unwrap();
+            assert!(
+                !scan_roots_in(target, [root], &environment)
+                    .errors
+                    .is_empty(),
+                "{name}: missing required source"
+            );
+        }
+    }
 
     #[test]
     fn sway_scan_uses_in_place_variables_and_only_resolves_default_mode_conflicts() {
@@ -350,11 +428,26 @@ mod tests {
             std::fs::write(dir.path().join(format!("{index}.conf")), "").unwrap();
         }
         let root = dir.path().join("config");
-        assert!(included_files_bounded(Target::Sway, &root, "include *.conf", 4).is_err());
+        assert!(
+            included_files_bounded_in(
+                Target::Sway,
+                &root,
+                "include *.conf",
+                4,
+                &IncludeEnvironment::default()
+            )
+            .is_err()
+        );
         assert_eq!(
-            included_files_bounded(Target::Sway, &root, "include *.conf", 10)
-                .unwrap()
-                .len(),
+            included_files_bounded_in(
+                Target::Sway,
+                &root,
+                "include *.conf",
+                10,
+                &IncludeEnvironment::default()
+            )
+            .unwrap()
+            .len(),
             10
         );
     }

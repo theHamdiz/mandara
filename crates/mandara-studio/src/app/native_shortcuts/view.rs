@@ -41,7 +41,15 @@ impl StudioView {
             .child(div().w_full().min_w(px(0.0)).row().flex_wrap().items_center().gap(px(SPACE_10_PX))
                 .child(div().flex_1().min_w(px(DIM_200_PX)).child(state.search.as_ref().unwrap().clone()))
                 .child(button("native-refresh", "refresh", t("Refresh"), false, p).on_click(cx.listener(|view, _, _, cx| { if !view.native_shortcuts.busy { view.native_shortcuts.requests.refresh(); let cfg = mandara_ui::state::config(cx).read(cx).snapshot(); view.native_scan(&cfg, cx); cx.notify(); } })))
-                .when(state.undo.is_some(), |el| el.child(button("native-undo", "undo", t("Undo"), false, p).on_click(cx.listener(|view, _, _, cx| view.native_save(true, cx))))));
+                .when(state.undo.is_some(), |el| {
+                    let enabled = state.available_undo().is_some();
+                    let reason = if state.draft.is_some() { t("Save or cancel this edit before using Undo.") } else { t("Saving shortcuts…") };
+                    el.child(button("native-undo", "undo", t("Undo"), false, p)
+                        .tab_stop(enabled)
+                        .when(!enabled, |button| button.opacity(ALPHA_40).aria_description(reason))
+                        .tooltip(compositor_page::tip(if enabled { t("Undo") } else { reason }, p))
+                        .on_click(cx.listener(|view, _, _, cx| view.native_save(true, cx))))
+                }));
         if let Some((success, message)) = &state.message {
             content = content.child(
                 div()
@@ -96,6 +104,8 @@ impl StudioView {
                 content = content.child(
                     div()
                         .id("native-shortcut-list")
+                        .w_full()
+                        .min_w(px(0.0))
                         .track_focus(&group_focus)
                         .tab_index(0)
                         .focus(|style| style.border_1().border_color(p.primary.hsla()))
@@ -141,6 +151,7 @@ impl StudioView {
                                         let p = &palette;
                                         div()
                                             .id(("native-row", index))
+                                            .w_full()
                                             .h(px(DIM_64_PX))
                                             .p(px(SPACE_10_PX))
                                             .rounded(px(RADIUS_10_PX))
@@ -227,6 +238,7 @@ impl StudioView {
                                     })
                                     .collect::<Vec<_>>()
                             })
+                            .w_full()
                             .with_sizing_behavior(ListSizingBehavior::Infer)
                             .track_scroll(&state.scroll)
                             .max_h(px(LIST_HEIGHT)),

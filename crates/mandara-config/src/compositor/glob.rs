@@ -1,10 +1,13 @@
 //! Compile an include component once; matching never recurses or allocates.
 
-#[derive(Clone, Copy)]
 enum Token {
     Literal(char),
     Any,
     Star,
+    Class {
+        negated: bool,
+        ranges: Vec<(char, char)>,
+    },
 }
 
 pub(super) struct Pattern(Vec<Token>);
@@ -23,6 +26,13 @@ impl Pattern {
                     }
                     Token::Star
                 }
+                '[' => match character_class(chars.clone()) {
+                    Some((token, remaining)) => {
+                        chars = remaining;
+                        token
+                    }
+                    None => Token::Literal(ch),
+                },
                 ch => Token::Literal(ch),
             });
         }
@@ -39,6 +49,8 @@ impl Pattern {
             match self.0.get(token) {
                 Some(Token::Any) => {}
                 Some(Token::Literal(expected)) if *expected == ch => {}
+                Some(Token::Class { negated, ranges })
+                    if ranges.iter().any(|&(start, end)| start <= ch && ch <= end) != *negated => {}
                 Some(Token::Star) => {
                     token += 1;
                     star = Some((token, byte));
@@ -66,6 +78,34 @@ impl Pattern {
     }
 }
 
+fn character_class(mut chars: std::str::Chars<'_>) -> Option<(Token, std::str::Chars<'_>)> {
+    let negated = chars.as_str().starts_with(['!', '^']);
+    if negated {
+        chars.next();
+    }
+    let mut ranges = Vec::new();
+    loop {
+        let mut start = chars.next()?;
+        if start == ']' && !ranges.is_empty() {
+            return Some((Token::Class { negated, ranges }, chars));
+        }
+        if start == '\\' {
+            start = chars.next()?;
+        }
+        let end = if chars.as_str().starts_with('-') && !chars.as_str().starts_with("-]") {
+            chars.next();
+            let mut end = chars.next()?;
+            if end == '\\' {
+                end = chars.next()?;
+            }
+            end
+        } else {
+            start
+        };
+        ranges.push((start, end));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -83,6 +123,14 @@ mod tests {
             ("a*bc?d", "a界bcbcd", false),
             ("*", "", true),
             ("?", "", false),
+            ("[0-9][!a-c].conf", "4z.conf", true),
+            ("[0-9][^a-c].conf", "4b.conf", false),
+            ("[abc]", "b", true),
+            ("[]-]", "]", true),
+            ("[]-]", "-", true),
+            ("[ab", "[ab", true),
+            ("\\[ab\\]", "[ab]", true),
+            ("[.]*", ".hidden", false),
         ] {
             assert_eq!(
                 Pattern::new(pattern).matches(name),

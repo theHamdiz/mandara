@@ -36,7 +36,7 @@ pub fn prepare(target: Target, id: &BindingId, values: &[String]) -> Result<Prep
     );
     let original = read(&id.file)?;
     ensure!(fingerprint(&original) == id.fingerprint, "{}", stale());
-    let rows = super::parse(target, &id.target, &original)?;
+    let rows = super::parse(target, &id.file, &original)?;
     let count = rows.len();
     let old_binding = rows.into_iter().nth(id.index).context(stale())?;
     let next = match super::patch(&original, &old_binding, values)? {
@@ -44,7 +44,7 @@ pub fn prepare(target: Target, id: &BindingId, values: &[String]) -> Result<Prep
         std::borrow::Cow::Owned(next) => Some(next),
     };
     let new_binding = if let Some(next) = next.as_deref() {
-        let rows = super::parse(target, &id.target, next)?;
+        let rows = super::parse(target, &id.file, next)?;
         ensure!(
             rows.len() == count,
             "{}",
@@ -71,7 +71,7 @@ pub fn prepare(target: Target, id: &BindingId, values: &[String]) -> Result<Prep
                 t("The compositor did not read these shortcut values as intended.")
             );
         }
-        super::formats::format(target, &id.target, next).validate_edit(&old_binding, &row)?;
+        super::formats::format(target, &id.file, next).validate_edit(&old_binding, &row)?;
         Some(row)
     } else {
         None
@@ -117,6 +117,24 @@ impl PreparedEdit {
 mod tests {
     use super::*;
     use std::{fs, os::unix::fs::symlink};
+
+    #[test]
+    fn toml_aliases_keep_their_format_while_canonical_identity_still_guards_edits() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("dotfile");
+        let alias = directory.path().join("config.toml");
+        let body = "# keep\n[bind]\n'Super+Q' = 'killclient'\n";
+        fs::write(&target, body).unwrap();
+        symlink(&target, &alias).unwrap();
+        let scan = super::super::scan_from(Target::Mango, &alias);
+        assert!(scan.errors.is_empty(), "{:?}", scan.errors);
+        let id = scan.sources[0].binding_id(0).unwrap();
+        assert_eq!(id.target, target);
+        let edit = prepare(Target::Mango, &id, &["Super+W".into(), "killclient".into()]).unwrap();
+        assert_eq!(edit.body(), body.replace("'Super+Q'", "\"Super+W\""));
+        assert!(alias.is_symlink());
+        assert_eq!(fs::read_to_string(&target).unwrap(), body);
+    }
 
     #[test]
     fn edited_cosmic_actions_are_validated_while_unchanged_future_actions_survive() {

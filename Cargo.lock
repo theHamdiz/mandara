@@ -4228,6 +4228,7 @@ dependencies = [
  "notify",
  "ron",
  "roxmltree 0.21.2",
+ "rustix",
  "serde",
  "serde_json",
  "smallvec",

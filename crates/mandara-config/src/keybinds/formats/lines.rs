@@ -12,15 +12,27 @@ use crate::{
 
 pub(super) struct Lines(pub Target);
 
+struct SwayBlock {
+    keycodes: bool,
+    flags: Vec<crate::keybinds::Field>,
+}
+
 impl ShortcutFormat for Lines {
     fn parse(&self, source: &str) -> Result<Vec<Binding>> {
         let mut result = Vec::new();
         let mut offset = 0;
         let mut scope = String::from("default");
-        let mut sway_block = false;
+        let mut sway_block = None;
+        let mut continued = false;
         let resolved = crate::compositor::chords_by_line(self.0, source);
         for (index, raw) in source.split_inclusive('\n').enumerate() {
             let code = raw.trim_end_matches(['\n', '\r']);
+            let continuation = continued;
+            continued = self.0 == Target::Sway && code.ends_with('\\');
+            if continuation {
+                offset += raw.len();
+                continue;
+            }
             let start = code.len() - code.trim_start().len();
             let text = &code[start..];
             if text.starts_with('#') || text.is_empty() {
@@ -51,17 +63,17 @@ impl ShortcutFormat for Lines {
                         scope = text[5..text.len() - 1].trim().trim_matches('"').to_owned();
                     }
                     if text == "}" {
-                        if sway_block {
-                            sway_block = false;
+                        if sway_block.is_some() {
+                            sway_block = None;
                         } else {
                             scope = "default".into();
                         }
                     }
-                    if text == "bindsym {" || text == "bindcode {" {
-                        sway_block = true;
+                    if let Some(header) = sway_header(text, origin) {
+                        sway_block = Some(header);
                         None
                     } else {
-                        sway(text, origin, &scope, sway_block)
+                        sway(text, origin, &scope, sway_block.as_ref())
                     }
                 }
                 Target::River => river(text, origin),
@@ -69,6 +81,9 @@ impl ShortcutFormat for Lines {
             };
             if let Some(bind) = &mut binding {
                 bind.line = index + 1;
+                if continued {
+                    bind.read_only = Some(crate::keybinds::SOURCE_ONLY);
+                }
                 if let Some((_, chord)) = resolved.iter().find(|(line, _)| *line == index) {
                     bind.chord = Some(chord.clone());
                 }
@@ -80,10 +95,11 @@ impl ShortcutFormat for Lines {
     }
 }
 
-fn comment_start(text: &str) -> usize {
+fn comment_start(text: &str, doubled_hash: bool) -> usize {
     let mut quote = None;
     let mut escaped = false;
-    for (at, ch) in text.char_indices() {
+    let mut chars = text.char_indices().peekable();
+    while let Some((at, ch)) = chars.next() {
         if escaped {
             escaped = false;
             continue;
@@ -99,6 +115,10 @@ fn comment_start(text: &str) -> usize {
         } else if matches!(ch, '\'' | '"') {
             quote = Some(ch);
         } else if ch == '#' {
+            if doubled_hash && chars.peek().is_some_and(|(_, next)| *next == '#') {
+                chars.next();
+                continue;
+            }
             return at;
         }
     }
@@ -112,7 +132,7 @@ fn csv(target: Target, text: &str, offset: usize, directive: &str, scope: &str) 
     let head_count = if description { 4 } else { 3 };
     let mut spans = Vec::new();
     let mut from = equal + 1;
-    let end = comment_start(text);
+    let end = comment_start(text, target == Target::Hyprland);
     for index in 0..head_count {
         if let Some(comma) = text[from..end].find(',').map(|at| at + from) {
             spans.push(trim(text, from..comma));
@@ -167,18 +187,47 @@ fn csv(target: Target, text: &str, offset: usize, directive: &str, scope: &str) 
     })
 }
 
-fn sway(text: &str, offset: usize, scope: &str, block: bool) -> Option<Binding> {
+fn sway_header(text: &str, offset: usize) -> Option<SwayBlock> {
+    if !text.ends_with('{') {
+        return None;
+    }
+    let tokens = words(text);
+    let directive = &text[tokens.first()?.clone()];
+    if !matches!(directive, "bindsym" | "bindcode") || text[tokens.last()?.clone()] != *"{" {
+        return None;
+    }
+    let mut flags = Vec::new();
+    for span in &tokens[1..tokens.len() - 1] {
+        if !text[span.clone()].starts_with("--") {
+            return None;
+        }
+        let mut flag = field(
+            tk("Flags"),
+            &text[span.clone()],
+            offset + span.start..offset + span.end,
+            Encoding::Word,
+        );
+        flag.read_only = Some(crate::keybinds::SOURCE_ONLY);
+        flags.push(flag);
+    }
+    Some(SwayBlock {
+        keycodes: directive == "bindcode",
+        flags,
+    })
+}
+
+fn sway(text: &str, offset: usize, scope: &str, block: Option<&SwayBlock>) -> Option<Binding> {
     let tokens = words(text);
     let first = tokens.first()?;
     let directive = &text[first.clone()];
     let mut at = if matches!(directive, "bindsym" | "bindcode") {
         1
-    } else if block {
+    } else if block.is_some() {
         0
     } else {
         return None;
     };
-    let mut fields = Vec::new();
+    let mut fields = block.map_or_else(Vec::new, |block| block.flags.clone());
     while let Some(span) = tokens.get(at)
         && text[span.clone()].starts_with("--")
     {
@@ -211,7 +260,7 @@ fn sway(text: &str, offset: usize, scope: &str, block: bool) -> Option<Binding> 
     Some(Binding {
         line: 0,
         scope: scope.to_owned(),
-        chord: if directive == "bindcode" {
+        chord: if directive == "bindcode" || block.is_some_and(|block| block.keycodes) {
             None
         } else {
             normalize(&text[key.clone()])
@@ -223,79 +272,103 @@ fn sway(text: &str, offset: usize, scope: &str, block: bool) -> Option<Binding> 
 
 fn river(text: &str, offset: usize) -> Option<Binding> {
     let tokens = words(text);
-    let executable = &text[tokens.first()?.clone()];
-    if executable.rsplit('/').next()? != "riverctl" || text[tokens.get(1)?.clone()] != *"map" {
+    let mut native = crate::compositor::shell_words(&text[..tokens.last()?.end]);
+    if native.len() != tokens.len()
+        || native.first()?.rsplit('/').next()? != "riverctl"
+        || native.get(1)? != "map"
+    {
         return None;
     }
     let mut at = 2;
     let mut fields = Vec::new();
-    while let Some(span) = tokens.get(at)
-        && text[span.clone()].starts_with('-')
-    {
+    while native.get(at).is_some_and(|word| word.starts_with('-')) {
+        let takes_value = native[at] == "-layout";
+        let span = tokens.get(at)?;
         fields.push(field(
             tk("Flags"),
-            &text[span.clone()],
+            std::mem::take(&mut native[at]),
             offset + span.start..offset + span.end,
-            Encoding::Word,
+            Encoding::ShellWord,
         ));
-        let takes_value = &text[span.clone()] == "-layout";
         at += 1;
         if takes_value {
             let span = tokens.get(at)?;
             fields.push(field(
                 tk("Layout"),
-                &text[span.clone()],
+                std::mem::take(&mut native[at]),
                 offset + span.start..offset + span.end,
-                Encoding::Word,
+                Encoding::ShellWord,
             ));
             at += 1;
         }
     }
-    let mode = tokens.get(at)?;
-    let mods = tokens.get(at + 1)?;
-    let key = tokens.get(at + 2)?;
-    let action = tokens.get(at + 3)?;
-    fields.push(field(
-        tk("Mode"),
-        &text[mode.clone()],
-        offset + mode.start..offset + mode.end,
-        Encoding::Word,
-    ));
-    fields.push(field(
-        tk("Modifiers"),
-        &text[mods.clone()],
-        offset + mods.start..offset + mods.end,
-        Encoding::Word,
-    ));
-    fields.push(field(
-        tk("Key"),
-        &text[key.clone()],
-        offset + key.start..offset + key.end,
-        Encoding::Word,
-    ));
-    for (index, span) in tokens.iter().enumerate().skip(at + 3) {
-        let native = crate::compositor::shell_words(&text[span.clone()]);
-        let value = native.first().cloned().unwrap_or_default();
+    let scope = native.get(at)?.clone();
+    let combo = format!("{}+{}", native.get(at + 1)?, native.get(at + 2)?);
+    native.get(at + 3)?;
+    for (index, span) in tokens.iter().enumerate().skip(at) {
+        let label = match index - at {
+            0 => tk("Mode"),
+            1 => tk("Modifiers"),
+            2 => tk("Key"),
+            3 => tk("Action"),
+            _ => tk("Argument"),
+        };
         fields.push(field(
-            if index == at + 3 {
-                tk("Action")
-            } else {
-                tk("Argument")
-            },
-            value,
+            label,
+            std::mem::take(&mut native[index]),
             offset + span.start..offset + span.end,
             Encoding::ShellWord,
         ));
     }
-    let dynamic = text[..action.end].contains(['$', '`', ';', '|', '&']) || text.ends_with('\\');
-    let combo = format!("{}+{}", &text[mods.clone()], &text[key.clone()]);
+    let dynamic = tokens
+        .iter()
+        .any(|span| computed_shell_word(&text[span.clone()]));
     Some(Binding {
         line: 0,
-        scope: text[mode.clone()].to_owned(),
+        scope,
         chord: normalize(&combo),
         fields,
         read_only: dynamic.then_some(DYNAMIC),
     })
+}
+
+fn computed_shell_word(word: &str) -> bool {
+    let mut quote = None;
+    let mut chars = word.char_indices().peekable();
+    while let Some((at, ch)) = chars.next() {
+        if quote == Some('\'') {
+            if ch == '\'' {
+                quote = None;
+            }
+            continue;
+        }
+        if ch == '\\' {
+            if quote.is_none()
+                || chars
+                    .peek()
+                    .is_some_and(|(_, next)| matches!(*next, '$' | '`' | '"' | '\\' | '\n'))
+            {
+                if chars.next().is_none() {
+                    return true;
+                }
+            }
+            continue;
+        }
+        if ch == '"' {
+            quote = if quote.is_some() { None } else { Some(ch) };
+        } else if ch == '\'' && quote.is_none() {
+            quote = Some(ch);
+        } else if matches!(ch, '$' | '`')
+            || (quote.is_none()
+                && (matches!(
+                    ch,
+                    ';' | '|' | '&' | '<' | '>' | '(' | ')' | '*' | '?' | '[' | '{'
+                ) || ch == '~' && at == 0))
+        {
+            return true;
+        }
+    }
+    quote.is_some()
 }
 
 pub(super) fn trim(text: &str, span: Range<usize>) -> Range<usize> {
@@ -349,6 +422,63 @@ pub(super) fn words(text: &str) -> Vec<Range<usize>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn river_arguments_keep_literal_quotes_but_expanded_values_are_read_only() {
+        for (argument, computed) in [
+            ("\"$terminal\"", true),
+            ("$(printf foot)", true),
+            ("'$terminal'", false),
+            (r#""\$terminal""#, false),
+            ("'foot; keep|literal'", false),
+            ("*.sh", true),
+        ] {
+            let source = format!("riverctl map 'normal' Super 'Q' spawn {argument}\n");
+            let row = Lines(Target::River).parse(&source).unwrap().remove(0);
+            assert_eq!(row.scope, "normal");
+            assert_eq!(row.read_only.is_some(), computed, "{source}");
+        }
+        assert_eq!(
+            crate::compositor::shell_words(r#""foot\path" "\$literal""#),
+            [r"foot\path", "$literal"]
+        );
+    }
+
+    #[test]
+    fn sway_blocks_keep_shared_flags_locked_and_continuations_stay_in_the_source() {
+        let source = "bindsym --locked {\n Mod4+q kill\n}\nbindsym Mod4+w exec \\\n foot\nbindsym Mod4+e kill\n";
+        let rows = Lines(Target::Sway).parse(source).unwrap();
+        assert_eq!(rows.len(), 3);
+        assert!(
+            rows[0]
+                .fields
+                .iter()
+                .any(|field| field.value == "--locked" && field.read_only.is_some())
+        );
+        assert_eq!(rows[1].read_only, Some(crate::keybinds::SOURCE_ONLY));
+        assert!(rows[2].read_only.is_none());
+        let mut values: Vec<_> = rows[0]
+            .fields
+            .iter()
+            .map(|field| field.value.clone())
+            .collect();
+        values[0] = "Mod4+a".into();
+        let next = crate::keybinds::patch(source, &rows[0], &values).unwrap();
+        assert!(next.starts_with("bindsym --locked {\n Mod4+a kill"));
+    }
+
+    #[test]
+    fn hyprland_doubled_hashes_remain_inside_the_replaced_argument_span() {
+        let source = "bind = SUPER, T, exec, kitty --title=##work # keep\n";
+        let row = Lines(Target::Hyprland).parse(source).unwrap().remove(0);
+        assert_eq!(row.fields.last().unwrap().value, "kitty --title=##work");
+        let mut values: Vec<_> = row.fields.iter().map(|field| field.value.clone()).collect();
+        *values.last_mut().unwrap() = "foot".into();
+        assert_eq!(
+            crate::keybinds::patch(source, &row, &values).unwrap(),
+            "bind = SUPER, T, exec, foot # keep\n"
+        );
+    }
 
     #[test]
     fn line_formats_preserve_modes_flags_and_other_bindings() {

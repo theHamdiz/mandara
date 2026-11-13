@@ -99,6 +99,13 @@ pub(super) struct Editor {
     scroll: gpui::UniformListScrollHandle,
 }
 impl Editor {
+    fn available_undo(&self) -> Option<&Undo> {
+        if self.busy || self.draft.is_some() {
+            None
+        } else {
+            self.undo.as_ref()
+        }
+    }
     /// User drafts and the compact undo token survive hiding. Scan rows do not.
     pub fn release(&mut self) {
         self.visible = false;
@@ -288,7 +295,7 @@ impl StudioView {
     }
 
     fn native_save(&mut self, undo: bool, cx: &mut Context<Self>) {
-        if self.native_shortcuts.busy {
+        if self.native_shortcuts.busy || undo && self.native_shortcuts.available_undo().is_none() {
             return;
         }
         let Some(query) = cx.try_global::<ShellQuery>().cloned() else {
@@ -300,7 +307,7 @@ impl StudioView {
             return;
         };
         let request = if undo {
-            let Some(edit) = &self.native_shortcuts.undo else {
+            let Some(edit) = self.native_shortcuts.available_undo() else {
                 return;
             };
             SaveRequest::Undo(edit.clone())
@@ -414,6 +421,7 @@ mod tests {
         let path = dir.path().join("wm.toml");
         std::fs::write(&path, "[keybinds]\nspawn_terminal='Super+T'\n").unwrap();
         let session = Session {
+            environment: Default::default(),
             primary_mod_is_alt: false,
             target: mandara_config::compositor::Target::Aqueous,
             root: path.clone(),
@@ -444,7 +452,15 @@ mod tests {
         editor.release();
         assert!(editor.data.is_none() && editor.filtered.is_empty() && !editor.visible);
         assert!(editor.draft.is_some() && editor.undo.is_some() && editor.busy);
+        assert!(editor.available_undo().is_none());
         assert!(!editor.requests.finish(reply));
         assert!(editor.requests.begin().is_none());
+        editor.busy = false;
+        assert!(editor.available_undo().is_none());
+        assert!(editor.draft.is_some());
+        editor.draft = None;
+        assert!(editor.available_undo().is_some());
+        editor.busy = true;
+        assert!(editor.available_undo().is_none());
     }
 }

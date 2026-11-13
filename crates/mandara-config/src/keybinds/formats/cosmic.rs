@@ -123,8 +123,7 @@ impl ShortcutFormat for Cosmic {
             let key = raw.key.map(|key| key.into_rust::<String>()).transpose()?;
             if let Some(key) = key.as_deref() {
                 ensure!(
-                    xkbcommon::xkb::keysym_from_name(key, xkbcommon::xkb::KEYSYM_NO_FLAGS).raw()
-                        != 0,
+                    crate::keybinds::cosmic::keysym(key) != 0,
                     "invalid COSMIC key: {key}"
                 );
             }

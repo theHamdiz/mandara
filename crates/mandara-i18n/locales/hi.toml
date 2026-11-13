@@ -10717,3 +10717,8 @@
 "{file}, line {line}" = "{file}, लाइन {line}"
 
 "This configuration is read-only. Edit its source or create a writable user override." = "यह कॉन्फ़िगरेशन केवल पढ़ने के लिए है। इसका स्रोत बदलें या लिखने योग्य निजी ओवरराइड बनाएँ।"
+
+"Edit this value in its source configuration to preserve its formatting." = "स्वरूप बनाए रखने के लिए इस मान को उसकी मूल कॉन्फ़िगरेशन फ़ाइल में संपादित करें।"
+"This shortcut is locked by the compositor configuration." = "यह शॉर्टकट कंपोज़िटर की कॉन्फ़िगरेशन द्वारा लॉक किया गया है।"
+
+"Save or cancel this edit before using Undo." = "पूर्ववत करें का उपयोग करने से पहले यह संपादन सहेजें या रद्द करें।"

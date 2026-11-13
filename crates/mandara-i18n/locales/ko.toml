@@ -10471,3 +10471,8 @@
 "{file}, line {line}" = "{file}, 라인 {line}"
 
 "This configuration is read-only. Edit its source or create a writable user override." = "이 설정은 읽기 전용입니다. 원본을 편집하거나 쓰기 가능한 사용자 설정으로 덮어쓰세요."
+
+"Edit this value in its source configuration to preserve its formatting." = "서식을 유지하려면 이 값을 원본 설정 파일에서 편집하세요."
+"This shortcut is locked by the compositor configuration." = "이 단축키는 컴포지터 설정에 의해 잠겨 있습니다."
+
+"Save or cancel this edit before using Undo." = "실행 취소를 사용하기 전에 이 편집을 저장하거나 취소하세요."

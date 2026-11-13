@@ -1,8 +1,8 @@
 //! Native Studio chrome checks against an explicitly selected private sandbox.
 
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::{Read as _, Seek as _, SeekFrom};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
@@ -18,12 +18,45 @@ const MAX_CROP_BYTES: usize = 1024 * 1024;
 const FIRST_CONTROL_CENTER: f64 = 22.0;
 /// Below the lights, so a changed crop proves more than their hover glyphs.
 const TOOLTIP_REGION: (i64, i64, u32, u32) = (0, 10, 120, 35);
+/// Sample navigation labels away from the overlay scrollbar and rounded edges.
+const NAV_CROP: (f64, f64) = (120.0, 180.0);
+/// Enough wheel steps to reach either end of the complete navigation list.
+const NAV_SCROLL_STEPS: &str = "120";
+const NAV_SCROLL_BACK: &str = "-120";
+/// Let hover fills and scrolling settle before comparing the same crop.
+const NAV_SETTLE: Duration = Duration::from_millis(300);
 
 struct Sandbox {
     xtask: PathBuf,
     runtime: PathBuf,
     log: PathBuf,
     studio: Option<Value>,
+    _lock: File,
+}
+
+fn lock_sandbox(runtime: &Path) -> File {
+    let lock = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(runtime.join("studio-chrome-test.lock"))
+        .unwrap();
+    lock.try_lock()
+        .expect("another Studio chrome test is using this sandbox");
+    lock
+}
+
+#[test]
+fn sandbox_lock_excludes_another_test_until_the_guard_is_dropped() {
+    let directory = tempfile::tempdir().unwrap();
+    let guard = lock_sandbox(directory.path());
+    let contender = OpenOptions::new()
+        .write(true)
+        .open(directory.path().join("studio-chrome-test.lock"))
+        .unwrap();
+    assert!(contender.try_lock().is_err());
+    drop(guard);
+    assert!(contender.try_lock().is_ok());
 }
 
 impl Sandbox {
@@ -151,11 +184,13 @@ fn window_control_tooltip_uses_the_studio_font_and_close_removes_the_window() {
     );
     let xtask =
         PathBuf::from(std::env::var_os("MANDARA_TEST_XTASK").expect("set MANDARA_TEST_XTASK"));
+    let lock = lock_sandbox(&runtime);
     let mut sandbox = Sandbox {
         xtask,
         runtime,
         log: repo.join("target/sandbox/logs/shell.log"),
         studio: None,
+        _lock: lock,
     };
     sandbox.studio = Some(sandbox.json(&["config", "get", "/studio"]));
     let environment = sandbox.run(&["env"]);
@@ -192,24 +227,53 @@ fn window_control_tooltip_uses_the_studio_font_and_close_removes_the_window() {
         TOOLTIP_REGION.3
     );
     let scratch = tempfile::tempdir().unwrap();
-    let capture = |name: &str| {
+    let capture = |region: &str, name: &str| {
         let path = scratch.path().join(name);
         let output = Command::new("grim")
             .env("XDG_RUNTIME_DIR", &sandbox.runtime)
             .env("WAYLAND_DISPLAY", display)
             .env("DBUS_SYSTEM_BUS_ADDRESS", "unix:path=/nonexistent")
-            .args(["-g", &region])
+            .args(["-g", region])
             .arg(&path)
             .output()
             .expect("capture tooltip region");
-        successful(&["grim", "-g", &region], &output);
+        successful(&["grim", "-g", region], &output);
         assert!(fs::metadata(&path).unwrap().len() <= MAX_CROP_BYTES as u64);
         fs::read(path).unwrap()
     };
-    let before = capture("before.png");
+    let nav_x =
+        geometry[0].as_f64().unwrap() + inset + frame["sidebar_width"].as_f64().unwrap() / 2.0;
+    let nav_y = geometry[1].as_f64().unwrap() + geometry[3].as_f64().unwrap() / 2.0;
+    let nav_region = format!(
+        "{},{} {}x{}",
+        (nav_x - NAV_CROP.0 / 2.0).round(),
+        (nav_y - NAV_CROP.1 / 2.0).round(),
+        NAV_CROP.0,
+        NAV_CROP.1
+    );
+    let away_x = (geometry[0].as_f64().unwrap() + geometry[2].as_f64().unwrap() / 2.0)
+        .round()
+        .to_string();
+    let nav_x = nav_x.round().to_string();
+    let nav_y = nav_y.round().to_string();
+    sandbox.run(&["pointer", "move", &away_x, &nav_y]);
+    std::thread::sleep(NAV_SETTLE);
+    let nav_before = capture(&nav_region, "nav-before.png");
+    sandbox.run(&["pointer", "scroll", &nav_x, &nav_y, NAV_SCROLL_STEPS]);
+    sandbox.run(&["pointer", "move", &away_x, &nav_y]);
+    std::thread::sleep(NAV_SETTLE);
+    assert!(
+        nav_before != capture(&nav_region, "nav-scrolled.png"),
+        "the sidebar must scroll within the window"
+    );
+    sandbox.run(&["pointer", "scroll", &nav_x, &nav_y, NAV_SCROLL_BACK]);
+    sandbox.run(&["pointer", "move", &away_x, &nav_y]);
+    std::thread::sleep(NAV_SETTLE);
+    assert!(nav_before == capture(&nav_region, "nav-restored.png"));
+    let before = capture(&region, "before.png");
     assert_eq!(
         before,
-        capture("stable.png"),
+        capture(&region, "stable.png"),
         "the tooltip region must be still before hovering"
     );
     let log_start = fs::metadata(&sandbox.log).unwrap().len();
@@ -219,7 +283,7 @@ fn window_control_tooltip_uses_the_studio_font_and_close_removes_the_window() {
         .spawn()
         .unwrap();
     std::thread::sleep(TOOLTIP_SETTLE);
-    let shown = capture("tooltip.png");
+    let shown = capture(&region, "tooltip.png");
     assert!(hover.wait().unwrap().success());
     assert_ne!(before, shown, "the tooltip must actually be visible");
     let mut log = File::open(&sandbox.log).unwrap();

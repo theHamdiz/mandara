@@ -5,9 +5,21 @@ use anyhow::{Result, ensure};
 use mandara_config::{compositor::Target, keybinds};
 use std::{
     ffi::{OsStr, OsString},
-    os::unix::ffi::OsStrExt as _,
+    os::unix::ffi::{OsStrExt as _, OsStringExt as _},
     path::{Path, PathBuf},
 };
+
+pub(super) fn capture(environment: &[u8]) -> mandara_config::compositor::IncludeEnvironment {
+    mandara_config::compositor::IncludeEnvironment::captured(
+        environment.split(|byte| *byte == 0).filter_map(|entry| {
+            let at = entry.iter().position(|byte| *byte == b'=')?;
+            Some((
+                OsString::from_vec(entry[..at].to_vec()),
+                OsString::from_vec(entry[at + 1..].to_vec()),
+            ))
+        }),
+    )
+}
 
 pub(super) fn value<'a>(environment: &'a [u8], key: &[u8]) -> Option<&'a OsStr> {
     environment.split(|byte| *byte == 0).find_map(|entry| {
@@ -106,7 +118,6 @@ pub(super) fn inspect(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::ffi::OsStringExt as _;
 
     #[test]
     fn server_home_xdg_and_niri_overrides_keep_native_precedence_and_non_utf8_paths() {

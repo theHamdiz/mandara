@@ -10714,3 +10714,8 @@
 "{file}, line {line}" = "{file}, {line} satırı"
 
 "This configuration is read-only. Edit its source or create a writable user override." = "Bu yapılandırma salt okunurdur. Kaynağını düzenleyin veya yazılabilir bir kişisel ayar oluşturun."
+
+"Edit this value in its source configuration to preserve its formatting." = "Biçimlendirmeyi korumak için bu değeri kaynak yapılandırma dosyasında düzenleyin."
+"This shortcut is locked by the compositor configuration." = "Bu kısayol, birleştirici yapılandırması tarafından kilitlenmiştir."
+
+"Save or cancel this edit before using Undo." = "Geri Al seçeneğini kullanmadan önce bu düzenlemeyi kaydedin veya iptal edin."

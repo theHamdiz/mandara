@@ -10,32 +10,34 @@ use super::{ManagedConfig, Target};
 fn region(target: Target, lua: bool, text: &str) -> Option<Range<usize>> {
     let mut offset = 0;
     let mut begin = None;
+    let mut legacy_end = None;
     for raw in text.split_inclusive('\n') {
         let line = raw.trim();
+        let comment = line.starts_with('#') || line.starts_with("//") || line.starts_with("--");
         if begin.is_none()
-            && (line.ends_with(" Mandara keybinds")
+            && ((comment && line.ends_with(" Mandara keybinds"))
                 || (target == Target::Niri && line == "binds {")
                 || (target == Target::Hyprland && !lua && line.starts_with("bind = "))
                 || (target == Target::Hyprland && lua && line.starts_with("pcall(hl.bind,")))
         {
             begin = Some(offset);
         } else if let Some(begin) = begin {
-            if line.ends_with(" End Mandara keybinds") {
+            if comment && line.ends_with(" End Mandara keybinds") {
                 return Some(begin..offset + raw.len());
             }
             // Pre-marker releases put includes after the binding tail. Umbriel
             // also puts layer/window rules after its [keybinds] table.
-            if line.contains(" Mandara Shell ")
+            if (comment && line.contains(" Mandara Shell "))
                 || (target == Target::Umbriel
                     && (line.starts_with("# Shell surfaces") || line.starts_with('[')))
                     && line != "[keybinds]"
             {
-                return Some(begin..offset);
+                legacy_end.get_or_insert(offset);
             }
         }
         offset += raw.len();
     }
-    begin.map(|start| start..text.len())
+    begin.map(|start| start..legacy_end.unwrap_or(text.len()))
 }
 
 pub fn replace(
@@ -81,6 +83,17 @@ mod tests {
     use crate::compositor::{BindAction, CompositorConfig, Keybind};
 
     #[test]
+    fn explicit_end_markers_take_precedence_over_comments_and_command_text() {
+        let text = "# Mandara keybinds\nbind=SUPER,Q,spawn,notify-send ' Mandara Shell ready'\n# Mandara Shell note\nbind=SUPER,W,spawn,foot\n# End Mandara keybinds\n# keep\n";
+        let span = region(Target::Mango, false, text).unwrap();
+        assert_eq!(&text[span.end..], "# keep\n");
+        assert!(text[span].contains("spawn,foot"));
+        let legacy = text.replace("# End Mandara keybinds\n", "");
+        let span = region(Target::Mango, false, &legacy).unwrap();
+        assert!(legacy[span].contains("notify-send"));
+    }
+
+    #[test]
     fn swapping_bindings_keeps_every_other_byte_and_attached_fragment() {
         for (target, file) in [
             (Target::Mango, "mango.conf"),
@@ -94,7 +107,7 @@ mod tests {
                 keybinds: vec![Keybind::new(
                     &["super"],
                     "Q",
-                    BindAction::Spawn("foot".into()),
+                    BindAction::Spawn("notify-send ' Mandara Shell ready'".into()),
                 )],
                 ..Default::default()
             };
@@ -139,7 +152,16 @@ mod tests {
                 &updated[updated_range.end..],
                 "{target:?}"
             );
-            assert!(!updated[updated_range.clone()].contains("spawn foot"));
+            assert!(
+                !updated[updated_range.clone()].lines().any(|line| {
+                    let line = line.trim();
+                    !line.starts_with('#')
+                        && !line.starts_with("//")
+                        && !line.starts_with("--")
+                        && line.contains("notify-send")
+                }),
+                "{target:?}: {updated}"
+            );
             assert!(updated.ends_with(suffix));
             managed.existing_chords.clear();
             assert_eq!(replace(target, file, &updated, &managed).unwrap(), original);

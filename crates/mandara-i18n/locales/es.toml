@@ -10709,3 +10709,8 @@
 "{file}, line {line}" = "{file}, línea {line}"
 
 "This configuration is read-only. Edit its source or create a writable user override." = "Esta configuración es de solo lectura. Edita su origen o crea una configuración personal que puedas modificar."
+
+"Edit this value in its source configuration to preserve its formatting." = "Edita este valor en su archivo de configuración para conservar su formato."
+"This shortcut is locked by the compositor configuration." = "Este atajo está bloqueado por la configuración del compositor."
+
+"Save or cancel this edit before using Undo." = "Guarda o cancela esta edición antes de usar Deshacer."

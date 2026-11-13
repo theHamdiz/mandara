@@ -10473,3 +10473,8 @@
 "{file}, line {line}" = "{file}, লাইন {line}"
 
 "This configuration is read-only. Edit its source or create a writable user override." = "এই কনফিগারেশন শুধু পড়ার জন্য। এর উৎস সম্পাদনা করুন অথবা লেখার উপযোগী ব্যক্তিগত ওভাররাইড তৈরি করুন।"
+
+"Edit this value in its source configuration to preserve its formatting." = "বিন্যাস বজায় রাখতে এই মানটি এর মূল কনফিগারেশনে সম্পাদনা করুন।"
+"This shortcut is locked by the compositor configuration." = "কম্পোজিটরের কনফিগারেশন এই শর্টকাটটি লক করেছে।"
+
+"Save or cancel this edit before using Undo." = "পূর্বাবস্থায় ফেরানোর আগে এই সম্পাদনাটি সংরক্ষণ করুন বা বাতিল করুন।"

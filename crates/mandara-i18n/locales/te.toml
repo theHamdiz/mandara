@@ -10374,3 +10374,8 @@
 "{file}, line {line}" = "{file}, లైన్ {line}"
 
 "This configuration is read-only. Edit its source or create a writable user override." = "ఈ కాన్ఫిగరేషన్ చదవడానికి మాత్రమే. దీని మూలాన్ని సవరించండి లేదా రాయగలిగే వ్యక్తిగత ఓవర్‌రైడ్‌ను సృష్టించండి."
+
+"Edit this value in its source configuration to preserve its formatting." = "ఆకృతిని కాపాడటానికి ఈ విలువను దాని మూల కాన్ఫిగరేషన్ ఫైల్‌లో సవరించండి."
+"This shortcut is locked by the compositor configuration." = "ఈ సత్వరమార్గం కంపోజిటర్ కాన్ఫిగరేషన్ ద్వారా లాక్ చేయబడింది."
+
+"Save or cancel this edit before using Undo." = "అన్డు ఉపయోగించే ముందు ఈ సవరణను సేవ్ చేయండి లేదా రద్దు చేయండి."

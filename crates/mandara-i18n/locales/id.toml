@@ -10472,3 +10472,8 @@
 "{file}, line {line}" = "{file}, jalur {line}"
 
 "This configuration is read-only. Edit its source or create a writable user override." = "Konfigurasi ini hanya dapat dibaca. Edit sumbernya atau buat pengaturan pribadi yang dapat ditulis."
+
+"Edit this value in its source configuration to preserve its formatting." = "Edit nilai ini di berkas konfigurasi sumbernya agar formatnya tetap terjaga."
+"This shortcut is locked by the compositor configuration." = "Pintasan ini dikunci oleh konfigurasi kompositor."
+
+"Save or cancel this edit before using Undo." = "Simpan atau batalkan perubahan ini sebelum menggunakan Urungkan."

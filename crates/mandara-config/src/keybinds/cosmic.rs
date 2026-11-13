@@ -7,6 +7,16 @@ use mandara_i18n::t;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Identity(u8, u32);
 
+pub(crate) fn keysym(name: &str) -> u32 {
+    use xkbcommon::xkb;
+    let exact = xkb::keysym_from_name(name, xkb::KEYSYM_NO_FLAGS).raw();
+    if exact == 0 {
+        xkb::keysym_from_name(name, xkb::KEYSYM_CASE_INSENSITIVE).raw()
+    } else {
+        exact
+    }
+}
+
 /// COSMIC compares modifiers and keysym; descriptions and keycodes do not
 /// participate in Binding's native equality implementation.
 pub fn identity(row: &Binding) -> Result<Identity> {
@@ -26,9 +36,7 @@ pub fn identity(row: &Binding) -> Result<Identity> {
         .find(|field| field.label == "Key")
         .map(|field| ron::from_str::<String>(&field.value))
         .transpose()?;
-    let symbol = key.map_or(0, |key| {
-        xkbcommon::xkb::keysym_from_name(&key, xkbcommon::xkb::KEYSYM_NO_FLAGS).raw()
-    });
+    let symbol = key.as_deref().map_or(0, keysym);
     Ok(Identity(mask, symbol))
 }
 
@@ -89,8 +97,11 @@ pub fn override_default(custom: &str, before: &Binding, after: &Binding) -> Resu
     // trailing comments and whitespace remain byte-for-byte intact.
     let close = map_end(custom)?;
     let mut added = String::new();
-    if !rows.is_empty() && !custom[..close].trim_end().ends_with(',') {
-        added.push(',');
+    if let Some(last) = rows.last().and_then(|row| row.fields.last()) {
+        let tail = ron::Deserializer::from_str(&custom[last.range.end..close])?;
+        if !tail.remainder().starts_with(',') {
+            added.push(',');
+        }
     }
     added.push('\n');
     if old != new {
@@ -132,6 +143,53 @@ fn map_end(source: &str) -> Result<usize> {
 mod tests {
     use super::*;
     use crate::compositor::Target;
+
+    #[test]
+    fn native_key_resolution_preserves_exact_case_and_retries_unknown_spellings() {
+        assert_eq!(keysym("return"), keysym("Return"));
+        assert_ne!(keysym("a"), keysym("A"));
+        assert_eq!(keysym("not-a-keysym"), 0);
+        let parse = |key| {
+            super::super::parse(
+                Target::Cosmic,
+                std::path::Path::new("custom"),
+                &format!("{{(modifiers:[Super],key:\"{key}\"): Close}}"),
+            )
+        };
+        assert_eq!(
+            identity(&parse("return").unwrap()[0]).unwrap(),
+            identity(&parse("Return").unwrap()[0]).unwrap()
+        );
+        assert!(parse("not-a-keysym").is_err());
+    }
+
+    #[test]
+    fn default_overrides_preserve_trailing_comments_and_separators() {
+        let row = super::super::parse(
+            Target::Cosmic,
+            std::path::Path::new("defaults"),
+            "{(modifiers:[Super],key:\"q\"): Close}",
+        )
+        .unwrap()
+        .remove(0);
+        for tail in [
+            ", // keep\n",
+            ", /* keep */",
+            " /* before */ , // after\n",
+            " // keep\n",
+            " /* keep */",
+        ] {
+            let custom = format!("{{(modifiers:[Alt],key:\"F12\"): Close{tail}}}");
+            let next = override_default(&custom, &row, &row).unwrap();
+            assert!(next.starts_with(&custom[..custom.len() - 1]));
+            assert_eq!(
+                super::super::parse(Target::Cosmic, std::path::Path::new("custom"), &next)
+                    .unwrap()
+                    .len(),
+                2
+            );
+        }
+    }
 
     #[test]
     fn moved_defaults_are_disabled_and_overridden_without_copying_the_catalog() {

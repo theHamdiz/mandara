@@ -61,10 +61,70 @@ pointers (for example `/plugins/settings/resources/refresh_ms`).
 
 ### Custom keyboard shortcuts
 
-Open **Studio → Keyboard shortcuts**, add a starting action under **Add a
+Open **Studio → Keyboard shortcuts → Mandara**, add a starting action under **Add a
 shortcut**, capture the keys, and switch the row to **Program** for a custom
 command. Chords already owned by your compositor are shown as taken and
 are left alone.
+
+The **Compositor** tab edits existing native bindings from the compositor
+running this session, including supported included files. Select a row and
+edit its individual values; changes wait for **Save**. Mandara preserves the
+rest of the file, comments and symlinks, takes a timestamped backup, checks
+the edit and offers **Undo**. Files changed since the scan must be refreshed
+before saving. Bindings built by executable code stay read-only; scanning
+never runs your configuration scripts. See [Studio's shortcut editor](studio.md#system).
+
+Discovery follows the compositor's launch arguments and environment, including
+Niri's `NIRI_CONFIG`, Sway's reported active file and labwc's merged config
+directories. Read-only sources remain visible with an explanation. KWin
+conflicts include alternative shortcuts, punctuation and the first key of a
+multi-key sequence. Sway includes share their variables and binding modes.
+Niri's `Mod` follows the merged input settings and its native nested-session
+behaviour; boolean options retain Niri's KDL v1 syntax.
+Window controls also follow the compositor's advertised capabilities; an
+unavailable action stays dimmed with a reason.
+
+### Studio appearance
+
+**Themes → Studio** stores its own appearance in `[studio]`: the selected
+`look`, palette (`theme`), component designs (`style`), `typography`,
+`motion` and window geometry (`frame`). Desktop Looks and wallpaper changes
+leave this snapshot intact. Existing configurations without `[studio]`
+keep following the shell; **Follow the shell** returns to that behaviour.
+Choose a preset first, then open **Studio design** in **Themes → Components**
+to refine its controls, fonts, colours and frame. See [Studio Looks](studio.md#studios-own-look).
+
+An independent snapshot starts with the Mandara preset. `look` accepts
+`mandara`, `cupertino-glass`, `yaru`, `gtk`, `arcade`, `comic`, `paper`,
+`telemetry` or `terminal`; changing this label alone does not apply a preset.
+Use the Studio picker or `studio look apply` to save its complete recipe.
+`theme` starts dark, with a coastal seed, `tonal-spot`, neutral adjustments
+and a 450 ms transition. `style` starts with Classic components;
+`typography` uses Inter, Alexandria, Cairo and JetBrains Mono at weight 400;
+`motion` starts at stiffness 280, damping 24 and mass 1, with reduced motion
+off. These tables reuse the shell's named choices and control ranges.
+
+Frame measurements are logical pixels. Studio clamps hand-edited values to
+these ranges:
+
+| `studio.frame` key | Mandara preset | Range / choices |
+|---|---|---|
+| `design` | `classic` | `classic`, `glass`, `header`, `chassis`, `console`, `comic`, `editorial`, `terminal` |
+| `header_accent`, `controls_at_start` | `false` | Boolean |
+| `opacity` | 1 | 0.5–1 |
+| `inset`, `sidebar_inset` | 0 | 0–28 |
+| `radius` | 18 | 0–48 |
+| `border` | 1 | 0–6 |
+| `title_height` | 44 | 32–80 |
+| `sidebar_width` | 232 | 180–340 |
+| `nav_height` | 38 | 28–56 |
+| `nav_radius` | 9 | 0–48 |
+| `card_radius` | 18 | 0–32 |
+| `card_padding` | 18 | 4–28 |
+
+Other presets save their own values. A manually supplied partial
+`[studio.frame]` table defaults its missing title height and sidebar width
+to 46 and 252; the remaining defaults match the table above.
 
 In TOML, a program action uses `kind = "spawn"` (`"exec"` is also accepted
 when reading an existing config). For Hyprland 0.57 or newer, custom

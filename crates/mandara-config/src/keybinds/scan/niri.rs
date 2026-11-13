@@ -50,7 +50,7 @@ pub fn resolve_mod(scan: &mut Scan, nested: bool) {
     }
 }
 
-pub(super) fn scan(roots: &[PathBuf]) -> Scan {
+pub(super) fn scan(roots: &[PathBuf], environment: &IncludeEnvironment) -> Scan {
     let mut scan = Scan {
         niri: Some(Box::default()),
         ..Default::default()
@@ -58,8 +58,17 @@ pub(super) fn scan(roots: &[PathBuf]) -> Scan {
     let mut visited = BTreeSet::new();
     let mut bytes = 0;
     let mut count = 0;
+    let mut visits = 0;
     for root in roots {
-        if let Err(error) = walk(root, &mut scan, &mut visited, &mut bytes, &mut count) {
+        if let Err(error) = walk(
+            root,
+            &mut scan,
+            &mut visited,
+            &mut bytes,
+            &mut count,
+            &mut visits,
+            environment,
+        ) {
             scan.errors.push((root.clone(), format!("{error:#}")));
             break;
         }
@@ -74,7 +83,11 @@ fn walk(
     visited: &mut BTreeSet<PathBuf>,
     bytes: &mut usize,
     count: &mut usize,
+    visits: &mut usize,
+    environment: &IncludeEnvironment,
 ) -> Result<()> {
+    *visits += 1;
+    ensure!(*visits <= MAX_BINDINGS, "too many shortcut include visits");
     let real = std::fs::canonicalize(file)?;
     if is_generated(file) || is_generated(&real) {
         if !scan.generated.iter().any(|path| path == file) {
@@ -82,9 +95,7 @@ fn walk(
         }
         return Ok(());
     }
-    if !visited.insert(real.clone()) {
-        return Ok(());
-    }
+    ensure!(visited.insert(real.clone()), "recursive shortcut include");
     ensure!(
         visited.len() <= MAX_FILES,
         "too many shortcut configuration files"
@@ -96,19 +107,25 @@ fn walk(
         "shortcut configuration exceeds the scan budget"
     );
     let document = kdl::KdlDocument::parse_v1(&text)?;
-    let bindings = super::super::formats::niri::from_document(&text, &document);
-    super::super::validate_bindings(&bindings)?;
-    *count += bindings.len();
-    ensure!(
-        *count <= MAX_BINDINGS,
-        "too many shortcuts in included files"
-    );
-    scan.sources.push(Source {
-        file: file.into(),
-        target: real,
-        fingerprint: fingerprint(&text),
-        bindings,
-    });
+    if !scan.sources.iter().any(|source| source.target == real) {
+        ensure!(
+            scan.sources.len() < MAX_FILES,
+            "too many shortcut configuration files"
+        );
+        let bindings = super::super::formats::niri::from_document(&text, &document);
+        super::super::validate_bindings(&bindings)?;
+        *count += bindings.len();
+        ensure!(
+            *count <= MAX_BINDINGS,
+            "too many shortcuts in included files"
+        );
+        scan.sources.push(Source {
+            file: file.into(),
+            target: real.clone(),
+            fingerprint: fingerprint(&text),
+            bindings,
+        });
+    }
     for node in document.nodes() {
         match node.name().value() {
             "include" => {
@@ -116,13 +133,13 @@ fn walk(
                     .get(0)
                     .and_then(kdl::KdlValue::as_string)
                     .ok_or_else(|| anyhow::anyhow!("Niri include has no literal path"))?;
-                let path = crate::compositor::resolve_include(file, path);
+                let path = environment.resolve(file, std::ffi::OsStr::new(path))?;
                 let optional = node
                     .get("optional")
                     .and_then(kdl::KdlValue::as_bool)
                     .unwrap_or(false);
-                if path.exists() || !optional {
-                    walk(&path, scan, visited, bytes, count)?;
+                if path.try_exists()? || !optional {
+                    walk(&path, scan, visited, bytes, count, visits, environment)?;
                 }
             }
             "input" => {
@@ -143,12 +160,38 @@ fn walk(
             _ => {}
         }
     }
+    visited.remove(&real);
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn repeated_includes_reapply_settings_and_recursive_includes_fail() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config.kdl");
+        std::fs::write(
+            directory.path().join("mods.kdl"),
+            "input { mod-key \"Super\"; }\n",
+        )
+        .unwrap();
+        std::fs::write(&root, "include \"mods.kdl\"; input { mod-key \"Alt\"; }; include \"mods.kdl\"; binds { Mod+Q { close-window; }; }\n").unwrap();
+        let result = scan(&[root.clone()], &IncludeEnvironment::default());
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        assert_eq!(result.sources.len(), 2);
+        assert_eq!(
+            result.sources[0].bindings[0].chord.as_deref(),
+            Some("super+q")
+        );
+        std::fs::write(
+            directory.path().join("mods.kdl"),
+            "include \"config.kdl\"\n",
+        )
+        .unwrap();
+        let result = scan(&[root], &IncludeEnvironment::default());
+        assert!(result.errors[0].1.contains("recursive"));
+    }
     #[test]
     fn inline_includes_merge_modifiers_in_place_and_nested_defaults_follow_niri() {
         let directory = tempfile::tempdir().unwrap();
@@ -160,7 +203,7 @@ mod tests {
             "input { mod-key \"Super\"; }; binds { Mod+Q { close-window; }; }\n",
         )
         .unwrap();
-        let mut scan = scan(&[root]);
+        let mut scan = scan(&[root], &IncludeEnvironment::default());
         assert!(scan.errors.is_empty(), "{:?}", scan.errors);
         let row = |scan: &Scan| scan.sources[1].bindings[0].chord.clone();
         assert_eq!(row(&scan).as_deref(), Some("alt+q"));

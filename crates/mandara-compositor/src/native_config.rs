@@ -17,6 +17,7 @@ pub struct NativeConfig {
     pub file: Option<PathBuf>,
     pub additional_files: Vec<PathBuf>,
     pub primary_mod_is_alt: bool,
+    pub environment: Option<mandara_config::compositor::IncludeEnvironment>,
 }
 #[cfg(any(target_os = "linux", test))]
 use std::{
@@ -32,16 +33,18 @@ const MAX_LAUNCH_BYTES: usize = 8 * 1024 * 1024;
 
 #[cfg(target_os = "linux")]
 pub fn running(target: Target) -> Result<NativeConfig> {
-    if target == Target::Sway
-        && let Some(driver) = crate::sway::SwayDriver::from_env()
-    {
+    let sway_file = if target == Target::Sway {
+        crate::sway::SwayDriver::from_env()
+            .map(|driver| driver.config_file())
+            .transpose()?
+    } else {
+        None
+    };
+    let Some(pid) = super::display_server_pid() else {
         return Ok(NativeConfig {
-            file: Some(driver.config_file()?),
+            file: sway_file,
             ..Default::default()
         });
-    }
-    let Some(pid) = super::display_server_pid() else {
-        return Ok(NativeConfig::default());
     };
     let bytes = std::fs::read(format!("/proc/{pid}/cmdline"))?;
     ensure!(
@@ -61,10 +64,16 @@ pub fn running(target: Target) -> Result<NativeConfig> {
         "{}",
         t("The compositor's environment is too large to inspect.")
     );
-    if target == Target::Aqueous {
-        return Ok(aqueous::inspect(&environment, &cwd, Path::exists));
+    let mut config = if target == Target::Aqueous {
+        aqueous::inspect(&environment, &cwd, Path::exists)
+    } else {
+        environment::inspect(target, &arguments, &environment, &cwd)?
+    };
+    if let Some(file) = sway_file {
+        config.file = Some(file);
     }
-    environment::inspect(target, &arguments, &environment, &cwd)
+    config.environment = Some(environment::capture(&environment));
+    Ok(config)
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -95,6 +104,8 @@ fn from_arguments(target: Target, arguments: &[OsString], cwd: &Path) -> Result<
             && let Some(value) = bytes.strip_prefix(b"--config-dir=")
         {
             Some((true, Some(OsStr::from_bytes(value))))
+        } else if target == Target::Labwc && bytes.starts_with(b"-C") && bytes.len() > 2 {
+            Some((true, Some(OsStr::from_bytes(&bytes[2..]))))
         } else if bytes.starts_with(b"-c") && bytes.len() > 2 {
             Some((false, Some(OsStr::from_bytes(&bytes[2..]))))
         } else {
@@ -164,6 +175,15 @@ mod tests {
             from_arguments(
                 Target::Labwc,
                 &arguments(&["labwc", "-C", "/custom"]),
+                Path::new("/")
+            )
+            .unwrap(),
+            Some("/custom/rc.xml".into())
+        );
+        assert_eq!(
+            from_arguments(
+                Target::Labwc,
+                &arguments(&["labwc", "-C/custom"]),
                 Path::new("/")
             )
             .unwrap(),

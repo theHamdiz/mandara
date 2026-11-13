@@ -10472,3 +10472,8 @@
 "{file}, line {line}" = "{file}، لائن {line}"
 
 "This configuration is read-only. Edit its source or create a writable user override." = "یہ ترتیب صرف پڑھنے کے لیے ہے۔ اس کے ماخذ میں ترمیم کریں یا لکھنے کے قابل ذاتی ترتیب بنائیں۔"
+
+"Edit this value in its source configuration to preserve its formatting." = "ترتیب برقرار رکھنے کے لیے اس قدر کو اس کی اصل کنفیگریشن فائل میں تبدیل کریں۔"
+"This shortcut is locked by the compositor configuration." = "یہ شارٹ کٹ کمپوزٹر کی کنفیگریشن سے مقفل ہے۔"
+
+"Save or cancel this edit before using Undo." = "واپس کریں استعمال کرنے سے پہلے اس ترمیم کو محفوظ یا منسوخ کریں۔"

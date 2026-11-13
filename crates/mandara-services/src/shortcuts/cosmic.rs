@@ -54,6 +54,7 @@ pub(super) fn load(root: PathBuf) -> Session {
     }
     super::permissions::mark(&mut scan, Some(&root));
     Session {
+        environment: Default::default(),
         target: Target::Cosmic,
         root,
         scan,

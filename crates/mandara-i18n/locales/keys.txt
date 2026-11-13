@@ -1482,6 +1482,7 @@ Compositor animations are off (Compositor → Effects)
 Compositor conflicts
 Compositor drop-in
 Compositor include line
+Compositor shortcuts: Keyboard shortcuts → Compositor
 Compositor window animations
 Computed shortcuts must be edited in their source configuration.
 Computes times offline from the coordinates you set
@@ -2216,6 +2217,7 @@ Edit desktop
 Edit individual values in your compositor's shortcuts. Save keeps a backup, checks the configuration and applies the change. Computed bindings stay read-only.
 Edit on desktop
 Edit the desktop: move, resize, add and remove desktop widgets on the desktop itself (off / toggle leave)
+Edit this value in its source configuration to preserve its formatting.
 Edit user
 Edit window and screen captures
 Editor font
@@ -6321,6 +6323,7 @@ Save as profile
 Save how things look now — say “Work” and “Night” — and switch with one click or `mandara msg profile apply Night`.
 Save key
 Save or cancel this edit before selecting another shortcut.
+Save or cancel this edit before using Undo.
 Save photo
 Save profile
 Save the current arrangement as a profile (applied automatically when the same monitors connect)
@@ -7124,6 +7127,7 @@ Stripes
 Strong
 Studio
 Studio design
+Studio design: Themes → Studio
 Studio isn't connected to the shell
 Studio isn't running inside a Wayland session.
 Studio look id (see studio look list)
@@ -7998,6 +8002,7 @@ This server sends its stream in a way Mandara can't play yet
 This session
 This shortcut field cannot contain a comma.
 This shortcut is computed by the compositor configuration. Edit its source expression in your editor.
+This shortcut is locked by the compositor configuration.
 This shortcut uses an unsupported configuration escape.
 This shortcut value must be one word.
 This side bar is the rail of the {preset} preset. It changes with the preset.

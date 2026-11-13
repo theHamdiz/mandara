@@ -10373,3 +10373,8 @@
 "{file}, line {line}" = "{file}, mstari {line}"
 
 "This configuration is read-only. Edit its source or create a writable user override." = "Usanidi huu ni wa kusoma tu. Hariri chanzo chake au unda mipangilio binafsi inayoweza kuandikwa."
+
+"Edit this value in its source configuration to preserve its formatting." = "Hariri thamani hii katika faili yake ya usanidi ili kuhifadhi mpangilio wake."
+"This shortcut is locked by the compositor configuration." = "Njia hii ya mkato imefungwa na usanidi wa komposita."
+
+"Save or cancel this edit before using Undo." = "Hifadhi au ghairi mabadiliko haya kabla ya kutumia Tendua."

@@ -8,7 +8,7 @@ mod transaction;
 
 use std::path::PathBuf;
 
-use anyhow::{Result, ensure};
+use anyhow::{Context as _, Result, ensure};
 use mandara_config::{
     compositor::{Keybind, Target},
     keybinds::{self, BindingId, Scan, TextUndo, UndoEdit},
@@ -29,6 +29,8 @@ pub struct Session {
     pub root: PathBuf,
     pub scan: Scan,
     pub primary_mod_is_alt: bool,
+    #[serde(skip)]
+    pub environment: mandara_config::compositor::IncludeEnvironment,
 }
 
 impl Session {
@@ -66,13 +68,17 @@ pub fn load() -> Result<Session> {
     if target == Target::Cosmic {
         return Ok(cosmic::load(root));
     }
-    let mut scan = keybinds::scan_roots(
+    let environment = native.environment.unwrap_or_default();
+    let mut scan = keybinds::scan_roots_in(
         target,
         std::iter::once(root.clone()).chain(native.additional_files),
+        &environment,
     );
     if target == Target::Niri {
         let nested = mandara_compositor::niri::NiriDriver::from_env()
-            .ok_or_else(|| anyhow::anyhow!("Niri's IPC connection is unavailable"))?
+            .context(t(
+                "The compositor connection is unavailable. No files were changed.",
+            ))?
             .is_nested()?;
         keybinds::resolve_niri_mod(&mut scan, nested);
     }
@@ -82,6 +88,7 @@ pub fn load() -> Result<Session> {
         root,
         scan,
         primary_mod_is_alt: native.primary_mod_is_alt,
+        environment,
     })
 }
 
@@ -104,6 +111,7 @@ pub fn save(
     if !edit.changed() {
         return Ok(Saved { undo: None });
     }
+    check_destination(&session, &edit)?;
     let preferences_before = preferences()?;
     ensure!(
         preferences_before.target == session.target,
@@ -121,6 +129,28 @@ pub fn save(
     Ok(Saved {
         undo: edit.undo().map(Undo::Native),
     })
+}
+
+fn check_destination(session: &Session, edit: &keybinds::PreparedEdit) -> Result<()> {
+    if session.target != Target::River {
+        return Ok(());
+    }
+    let destination = keybinds::river::identity(edit.binding());
+    for source in &session.scan.sources {
+        for (index, row) in source.bindings.iter().enumerate() {
+            if source.target == edit.id.target && index == edit.id.index {
+                continue;
+            }
+            ensure!(
+                destination.is_none() || destination != keybinds::river::identity(row),
+                "{}",
+                t(
+                    "Another compositor shortcut already uses this key. Edit that shortcut or choose a different key."
+                )
+            );
+        }
+    }
+    Ok(())
 }
 
 pub fn undo(edit: &Undo, preferences: &dyn Fn() -> Result<Preferences>) -> Result<Saved> {
@@ -150,17 +180,64 @@ mod tests {
     use super::*;
 
     #[test]
+    fn river_rejects_destination_conflicts_before_any_file_or_live_write() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("init");
+        let original = "riverctl map -layout 2 normal Super Q close\nriverctl map -repeat normal Super W close\n";
+        std::fs::write(&file, original).unwrap();
+        let session = Session {
+            target: Target::River,
+            root: file.clone(),
+            scan: keybinds::scan_from(Target::River, &file),
+            primary_mod_is_alt: false,
+            environment: Default::default(),
+        };
+        let source = &session.scan.sources[0];
+        let mut values: Vec<_> = source.bindings[0]
+            .fields
+            .iter()
+            .map(|field| field.value.clone())
+            .collect();
+        let key = source.bindings[0]
+            .fields
+            .iter()
+            .position(|field| field.label == "Key")
+            .unwrap();
+        values[key] = "w".into();
+        let edit =
+            keybinds::prepare(Target::River, &source.binding_id(0).unwrap(), &values).unwrap();
+        assert!(
+            check_destination(&session, &edit)
+                .unwrap_err()
+                .to_string()
+                .contains("already uses")
+        );
+        assert_eq!(std::fs::read_to_string(file).unwrap(), original);
+    }
+
+    #[test]
     fn stale_identity_precedes_lock_reasons_and_current_locks_explain_the_real_cause() {
         let directory = tempfile::tempdir().unwrap();
         let file = directory.path().join("config.conf");
         std::fs::write(&file, "bind=SUPER,Q,killclient\n").unwrap();
         let mut session = Session {
+            environment: Default::default(),
             target: Target::Mango,
             root: file.clone(),
             scan: keybinds::scan_from(Target::Mango, &file),
             primary_mod_is_alt: false,
         };
         let id = session.scan.sources[0].binding_id(0).unwrap();
+        session.environment = mandara_config::compositor::IncludeEnvironment::captured([(
+            "TOKEN".into(),
+            "private-environment-value".into(),
+        )]);
+        assert!(
+            !serde_json::to_string(&session)
+                .unwrap()
+                .contains("private-environment-value")
+        );
+        assert!(!format!("{:?}", session.environment).contains("private-environment-value"));
         assert!(session.selected(&id).is_ok());
         let reason = mandara_i18n::tk("Not supported by this compositor");
         session.scan.sources[0].bindings[0].read_only = Some(reason);

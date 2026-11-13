@@ -172,6 +172,7 @@ mod tests {
         }
         std::fs::write(&file, body).unwrap();
         let session = Session {
+            environment: Default::default(),
             target: Target::KWin,
             root: file.clone(),
             scan: keybinds::scan_from(Target::KWin, &file),
@@ -200,6 +201,7 @@ mod tests {
         let file = directory.path().join("rc.xml");
         std::fs::write(&file, "<labwc_config><keyboard><keybind key=\"W-q\"><action name=\"Focus\"/><action name=\"Raise\"/></keybind></keyboard></labwc_config>").unwrap();
         let session = Session {
+            environment: Default::default(),
             target: Target::Labwc,
             root: file.clone(),
             scan: keybinds::scan_from(Target::Labwc, &file),
@@ -216,6 +218,7 @@ mod tests {
         let file = dir.path().join("wm.toml");
         std::fs::write(&file, "[keybinds]\ncycle_focus=['Super+Tab','Alt+Tab']\n[keybinds.custom]\n'Super+Q'='close'\n").unwrap();
         let session = Session {
+            environment: Default::default(),
             primary_mod_is_alt: false,
             target: Target::Aqueous,
             root: file.clone(),

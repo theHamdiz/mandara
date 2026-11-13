@@ -15,6 +15,9 @@ const PERSIST_TIMEOUT: Duration = Duration::from_secs(3);
 const MAX_BYTES: u64 = 1024 * 1024;
 
 pub trait ServiceEditor {
+    fn persist_timeout(&self) -> Duration {
+        PERSIST_TIMEOUT
+    }
     fn preflight(&self) -> Result<()> {
         self.verify(false)
     }
@@ -24,6 +27,7 @@ pub trait ServiceEditor {
     fn owns(&self, after: bool) -> Result<()> {
         self.verify(after)
     }
+    /// Acknowledged requests must supersede pending serialization of older values.
     fn apply(&self, after: bool) -> Result<()>;
     /// A service may reorder or escape settings, but must not change other keys.
     fn equivalent(&self, body: &str, after: bool) -> Result<bool>;
@@ -31,11 +35,7 @@ pub trait ServiceEditor {
 
 fn read(lock: &WriteLock) -> Result<(String, FileStamp)> {
     lock.check_target()?;
-    let file = std::fs::File::open(lock.target())?;
-    ensure!(
-        file.metadata()?.is_file(),
-        "shortcut settings are not a regular file"
-    );
+    let file = crate::regular::open(lock.target())?;
     let stamp = FileStamp::of(&file)?;
     let mut body = String::new();
     file.take(MAX_BYTES + 1).read_to_string(&mut body)?;
@@ -52,11 +52,12 @@ fn persisted(
     previous: FileStamp,
     after: bool,
     editor: &dyn ServiceEditor,
+    accept_current: bool,
 ) -> Result<FileStamp> {
-    let deadline = Instant::now() + PERSIST_TIMEOUT;
+    let deadline = Instant::now() + editor.persist_timeout();
     loop {
         let (body, stamp) = read(lock)?;
-        if stamp != previous && editor.equivalent(&body, after)? {
+        if (accept_current || stamp != previous) && editor.equivalent(&body, after)? {
             editor.owns(after)?;
             return Ok(stamp);
         }
@@ -92,7 +93,7 @@ pub fn guarded_service_write(
     let result: Result<()> = (|| {
         editor.apply(true)?;
         editor.verify(true)?;
-        let native = persisted(lock, initial, true, editor)?;
+        let native = persisted(lock, initial, true, editor, false)?;
         editor.verify(true)?;
         crate::store::write_atomic_checked(lock, Some(native), after.as_bytes())?;
         editor.verify(true)?;
@@ -111,13 +112,15 @@ pub fn guarded_service_write(
         }
         editor.owns(true)?;
         ensure!(
-            editor.equivalent(&body, true)?,
+            editor.equivalent(&body, true)? || editor.equivalent(&body, false)?,
             "shortcut settings changed outside this save"
         );
         editor.apply(false)?;
         editor.owns(false)?;
-        let native = persisted(lock, stamp, false, editor)?;
-        crate::store::write_atomic_checked(lock, Some(native), before.as_bytes())?;
+        let native = persisted(lock, stamp, false, editor, true)?;
+        if lock.check(before.as_bytes()).is_err() {
+            crate::store::write_atomic_checked(lock, Some(native), before.as_bytes())?;
+        }
         Ok(())
     })();
     if let Err(recovery) = recovery {
@@ -139,6 +142,55 @@ pub fn guarded_service_write(
 mod tests {
     use super::*;
     use std::{cell::Cell, fs, path::PathBuf};
+
+    struct Deferred {
+        state: Cell<bool>,
+        queued: Cell<Option<bool>>,
+    }
+    impl ServiceEditor for Deferred {
+        fn persist_timeout(&self) -> Duration {
+            Duration::ZERO
+        }
+        fn verify(&self, after: bool) -> Result<()> {
+            ensure!(self.state.get() == after, "live state changed");
+            Ok(())
+        }
+        fn apply(&self, after: bool) -> Result<()> {
+            self.state.set(after);
+            self.queued.set(Some(after));
+            Ok(())
+        }
+        fn equivalent(&self, body: &str, after: bool) -> Result<bool> {
+            Ok(body == if after { "value=new\n" } else { "value=old\n" })
+        }
+    }
+
+    #[test]
+    fn stalled_persistence_restores_live_values_and_supersedes_the_delayed_write() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("rc");
+        fs::write(&file, "value=old\n").unwrap();
+        let lock = WriteLock::new(&file).unwrap();
+        let before = lock.check(b"value=old\n").unwrap();
+        let service = Deferred {
+            state: Cell::new(false),
+            queued: Cell::new(None),
+        };
+        assert!(guarded_service_write(&lock, "value=old\n", "value=new\n", &service).is_err());
+        assert!(!service.state.get());
+        assert_eq!(service.queued.get(), Some(false));
+        assert_eq!(lock.check(b"value=old\n").unwrap(), before);
+        fs::write(
+            &file,
+            if service.queued.take().unwrap() {
+                "value=new\n"
+            } else {
+                "value=old\n"
+            },
+        )
+        .unwrap();
+        assert_eq!(fs::read_to_string(file).unwrap(), "value=old\n");
+    }
 
     struct Service {
         file: PathBuf,

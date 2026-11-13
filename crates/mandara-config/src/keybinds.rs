@@ -9,6 +9,7 @@ mod kwin_settings;
 mod qt_keys;
 mod qt_sequence;
 mod qt_xkb;
+pub mod river;
 mod scan;
 mod text_undo;
 
@@ -27,6 +28,7 @@ pub use qt_sequence::keybind as qt_keybind;
 pub use qt_sequence::sequence as qt_sequence;
 pub use scan::{
     Scan, Source, default_root, default_root_in, resolve_niri_mod, scan, scan_from, scan_roots,
+    scan_roots_in,
 };
 pub use text_undo::TextUndo;
 
@@ -229,6 +231,8 @@ pub fn normalize(combo: &str) -> Option<String> {
 pub(crate) const DYNAMIC: &str = tk(
     "This shortcut is computed by the compositor configuration. Edit its source expression in your editor.",
 );
+pub(crate) const SOURCE_ONLY: &str =
+    tk("Edit this value in its source configuration to preserve its formatting.");
 
 #[cfg(test)]
 mod tests {

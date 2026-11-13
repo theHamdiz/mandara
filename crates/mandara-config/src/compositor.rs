@@ -38,12 +38,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::{mango_keys, paths};
 
-mod sway_read;
-mod read_budget;
 mod glob;
+mod include_env;
+mod read_budget;
+mod sway_read;
+pub use include_env::IncludeEnvironment;
 pub mod shortcuts;
 pub(crate) use sway_read::binds as sway_config_binds;
-pub(crate) use sway_read::shortcut_sources as sway_shortcut_sources;
+pub(crate) use sway_read::shortcut_sources_in as sway_shortcut_sources_in;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -278,12 +280,24 @@ pub fn shell_words(line: &str) -> Vec<String> {
                 while let Some(c) = chars.next() {
                     match c {
                         '"' => break,
-                        '\\' => w.extend(chars.next()),
+                        '\\' => match chars.next() {
+                            Some('\n') => {}
+                            Some(next @ ('"' | '\\' | '$' | '`')) => w.push(next),
+                            Some(next) => {
+                                w.push('\\');
+                                w.push(next);
+                            }
+                            None => w.push('\\'),
+                        },
                         c => w.push(c),
                     }
                 }
             }
-            '\\' => word.get_or_insert_with(String::new).extend(chars.next()),
+            '\\' => {
+                if let Some(next) = chars.next().filter(|next| *next != '\n') {
+                    word.get_or_insert_with(String::new).push(next);
+                }
+            }
             '#' if word.is_none() => break,
             c if c.is_whitespace() => out.extend(word.take()),
             c => word.get_or_insert_with(String::new).push(c),
@@ -2317,21 +2331,64 @@ pub(crate) fn includes_in(target: Target, text: &str) -> Vec<String> {
     if target == Target::Umbriel {
         return umbriel_includes(text);
     }
-    text.lines().filter(|l| !l.trim_start().starts_with(['#', '/']) && !l.trim_start().starts_with("--")).filter_map(|l| include_path(target, l)).collect()
+    include_specs(target, text)
+        .into_iter()
+        .map(|(path, _)| path)
+        .collect()
+}
+
+fn include_specs(target: Target, text: &str) -> Vec<(String, bool)> {
+    if target == Target::Umbriel {
+        let Ok(document) = text.parse::<toml::Table>() else {
+            return Vec::new();
+        };
+        let Some(include) = document.get("include").and_then(toml::Value::as_table) else {
+            return Vec::new();
+        };
+        let mut result = Vec::new();
+        for (table, optional) in [
+            (Some(include), false),
+            (
+                include.get("optional").and_then(toml::Value::as_table),
+                true,
+            ),
+        ] {
+            if let Some(paths) = table
+                .and_then(|table| table.get("files"))
+                .and_then(toml::Value::as_array)
+            {
+                result.extend(
+                    paths
+                        .iter()
+                        .filter_map(toml::Value::as_str)
+                        .map(|path| (path.to_owned(), optional)),
+                );
+            }
+        }
+        return result;
+    }
+    text.lines()
+        .filter(|line| {
+            let line = line.trim_start();
+            !line.starts_with(['#', '/']) && !line.starts_with("--")
+        })
+        .filter_map(|line| {
+            include_path(target, line).map(|path| {
+                let optional = target == Target::Mango
+                    && line.trim_start().starts_with("source_optional")
+                    || target == Target::Hyprland && line.trim_start().starts_with("pcall(");
+                (path, optional)
+            })
+        })
+        .collect()
 }
 
 /// Umbriel `[include] files` then `[include.optional] files`.
 pub fn umbriel_includes(text: &str) -> Vec<String> {
-    let Ok(doc) = text.parse::<toml::Table>() else { return Vec::new();
-    };
-    let Some(include) = doc.get("include").and_then(toml::Value::as_table) else { return Vec::new();
-    };
-    let files = |t: Option<&toml::Table>| -> Vec<String> { t.and_then(|t| t.get("files")).and_then(toml::Value::as_array).map(|a| {
-                a.iter().filter_map(|v| v.as_str()).map(expand_env).collect()
-            }).unwrap_or_default() };
-    let mut out = files(Some(include));
-    out.extend(files(include.get("optional").and_then(toml::Value::as_table)));
-    out
+    include_specs(Target::Umbriel, text)
+        .into_iter()
+        .map(|(path, _)| expand_env(&path))
+        .collect()
 }
 
 /// `$VAR` and `${VAR}` replaced from the environment (unset: empty), the
@@ -2384,21 +2441,31 @@ pub(crate) fn included_files(target: Target, file: &Path, text: &str) -> Vec<Pat
 }
 
 /// Shortcut scans fail visibly rather than retaining an unbounded include glob.
-pub(crate) fn included_files_bounded(target: Target, file: &Path, text: &str, limit: usize) -> Result<Vec<PathBuf>> {
+pub(crate) fn included_files_bounded_in(
+    target: Target,
+    file: &Path,
+    text: &str,
+    limit: usize,
+    environment: &IncludeEnvironment,
+) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
-    for raw in includes_in(target, text) {
-        let words = if target == Target::Sway { sway_include_words(&raw) } else { vec![raw] };
-        for word in words {
-            let path = resolve_include(file, &expand_env(&word));
-            // Linux's pathname limit also bounds matching work on a hand-edited glob.
-            anyhow::ensure!(path.as_os_str().len() <= 4096, "include path is too long");
-            let remaining = limit.saturating_sub(files.len());
-            let matches = if target == Target::Sway && has_glob(&path.to_string_lossy()) {
-                glob_path_bounded(&path, remaining)?
-            } else { vec![path] };
-            anyhow::ensure!(matches.len() <= remaining, "too many included shortcut files");
-            files.extend(matches);
+    for (raw, optional) in include_specs(target, text) {
+        if target == Target::Sway {
+            files.extend(sway_include_files_bounded_in(file, &raw, limit.saturating_sub(files.len()), environment)?);
+            continue;
         }
+            let path =
+                environment.resolve(file, &environment.expand(raw.trim().trim_matches('"'))?)?;
+            if optional && !path.try_exists()? {
+                continue;
+            }
+            // Linux's pathname limit also bounds matching work on a hand-edited glob.
+            anyhow::ensure!(
+                path.as_os_str().len() <= include_env::MAX_PATH_BYTES,
+                "include path is too long"
+            );
+            anyhow::ensure!(files.len() < limit, "too many included shortcut files");
+            files.push(path);
     }
     Ok(files)
 }
@@ -2422,9 +2489,18 @@ fn sway_include_files(base: &Path, raw: &str) -> Vec<PathBuf> {
 }
 
 fn sway_include_files_bounded(base: &Path, raw: &str, limit: usize) -> Result<Vec<PathBuf>> {
+    sway_include_files_bounded_in(base, raw, limit, &IncludeEnvironment::default())
+}
+
+fn sway_include_files_bounded_in(
+    base: &Path,
+    raw: &str,
+    limit: usize,
+    environment: &IncludeEnvironment,
+) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     for word in sway_include_words(raw) {
-        let path = resolve_include(base, &expand_env(&word));
+        let path = environment.resolve(base, &environment.expand(&word)?)?;
         if has_glob(&path.to_string_lossy()) {
             files.extend(glob_path_bounded(&path, limit.saturating_sub(files.len()))?);
         } else {
@@ -2478,7 +2554,9 @@ fn sway_include_words(raw: &str) -> Vec<String> {
                 None => word.push('\\'),
             },
             (Some(_), c) => {
-                if matches!(c, '*' | '?' | '\\') { word.push('\\'); }
+                if matches!(c, '*' | '?' | '[' | ']' | '\\') {
+                    word.push('\\');
+                }
                 word.push(c);
             }
             (None, '\'' | '"') => {
@@ -2487,7 +2565,9 @@ fn sway_include_words(raw: &str) -> Vec<String> {
             }
             (None, '\\') => {
                 if let Some(n) = chars.next() {
-                    if matches!(n, '*' | '?' | '\\') { word.push('\\'); }
+                    if matches!(n, '*' | '?' | '[' | ']' | '\\') {
+                        word.push('\\');
+                    }
                     word.push(n);
                     started = true;
                 }
@@ -2541,8 +2621,10 @@ fn has_glob(pattern: &str) -> bool {
     let mut chars = pattern.chars();
     while let Some(c) = chars.next() {
         match c {
-            '\\' => { chars.next(); }
-            '*' | '?' => return true,
+            '\\' => {
+                chars.next();
+            }
+            '*' | '?' | '[' => return true,
             _ => {}
         }
     }
@@ -2582,7 +2664,14 @@ fn glob_path_bounded(pattern: &Path, limit: usize) -> Result<Vec<PathBuf>> {
         for dir in &found {
             let entries = match std::fs::read_dir(dir) {
                 Ok(entries) => entries,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+                    ) =>
+                {
+                    continue;
+                }
                 Err(error) => return Err(error).with_context(|| dir.display().to_string()),
             };
             for entry in entries {
@@ -2645,18 +2734,45 @@ pub fn existing_chords_at(target: Target, root: &Path) -> BTreeSet<String> {
 
 /// Saving a native shortcut must fail visibly when conflict discovery is incomplete.
 pub fn existing_chords_checked(target: Target, root: &Path) -> Result<BTreeSet<String>> {
-    if target == Target::Sway { return sway_read::checked(root); }
+    existing_chords_checked_in(target, root, &IncludeEnvironment::default())
+}
+
+pub fn existing_chords_checked_in(
+    target: Target,
+    root: &Path,
+    environment: &IncludeEnvironment,
+) -> Result<BTreeSet<String>> {
+    if target == Target::Sway {
+        return sway_read::checked_in(root, environment);
+    }
     let mut budget = read_budget::ReadBudget::default();
     if target == Target::Mango {
-        return mango_keys::with_user_keys(|keys| mango_chords_from(root, keys, crate::keybinds::MAX_BINDINGS, &mut |path| budget.read(path)));
+        return mango_keys::with_user_keys(|keys| {
+            mango_chords_from(
+                root,
+                keys,
+                crate::keybinds::MAX_BINDINGS,
+                &mut |path| budget.read(path),
+                environment,
+            )
+        });
     }
     let mut out = BTreeSet::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(file) = stack.pop() {
         let Some(text) = budget.read(&file)? else { continue; };
         out.extend(parse_chords(target, &text));
-        anyhow::ensure!(out.len() <= crate::keybinds::MAX_BINDINGS, "too many compositor shortcuts");
-        stack.extend(included_files_bounded(target, &file, &text, budget.remaining_files().saturating_sub(stack.len()))?);
+        anyhow::ensure!(
+            out.len() <= crate::keybinds::MAX_BINDINGS,
+            "too many compositor shortcuts"
+        );
+        stack.extend(included_files_bounded_in(
+            target,
+            &file,
+            &text,
+            budget.remaining_files().saturating_sub(stack.len()),
+            environment,
+        )?);
     }
     Ok(out)
 }
@@ -2676,17 +2792,31 @@ fn sway_existing_chords(root: &Path) -> BTreeSet<String> {
 fn mango_existing_chords(root: &Path, keys: &mango_keys::MangoKeys) -> BTreeSet<String> {
     // Historical setup scans skip unreadable sources; editor saves use the
     // checked reader and propagate every failure before publishing a binding.
-    mango_chords_from(root, keys, usize::MAX, &mut |file| Ok(std::fs::read_to_string(file).ok())).unwrap_or_default()
+    mango_chords_from(
+        root,
+        keys,
+        usize::MAX,
+        &mut |file| Ok(std::fs::read_to_string(file).ok()),
+        &IncludeEnvironment::default(),
+    )
+    .unwrap_or_default()
 }
 
-fn mango_chords_from(root: &Path, keys: &mango_keys::MangoKeys, limit: usize, read: &mut dyn FnMut(&Path) -> Result<Option<String>>) -> Result<BTreeSet<String>> {
-    struct Walk<'k, 'r> {
+fn mango_chords_from(
+    root: &Path,
+    keys: &mango_keys::MangoKeys,
+    limit: usize,
+    read: &mut dyn FnMut(&Path) -> Result<Option<String>>,
+    environment: &IncludeEnvironment,
+) -> Result<BTreeSet<String>> {
+    struct Walk<'k, 'r, 'e> {
         keys: &'k mango_keys::MangoKeys,
         read: &'r mut dyn FnMut(&Path) -> Result<Option<String>>,
         limit: usize,
         visited: BTreeSet<PathBuf>,
         binds: Vec<(String, String)>,
         ours: Option<String>,
+        environment: &'e IncludeEnvironment,
     }
     fn walk(w: &mut Walk, file: &Path, mode: String) -> Result<String> {
         if !w.visited.insert(file.to_path_buf()) {
@@ -2703,8 +2833,13 @@ fn mango_chords_from(root: &Path, keys: &mango_keys::MangoKeys, limit: usize, re
             match sourced {
                 Some(path) => {
                     mode = flush(w, &mut chunk, mode)?;
-                    let path = resolve_include(file, &path);
-                    if path == Target::Mango.generated_file() || is_generated(&path) || std::fs::canonicalize(&path).is_ok_and(|path| is_generated(&path)) {
+                    let path = w
+                        .environment
+                        .resolve(file, &w.environment.expand(path.trim().trim_matches('"'))?)?;
+                    if path == Target::Mango.generated_file()
+                        || is_generated(&path)
+                        || std::fs::canonicalize(&path).is_ok_and(|path| is_generated(&path))
+                    {
                         w.ours.get_or_insert_with(|| mode.clone());
                     } else if path.exists() || !line.trim_start().starts_with("source_optional") {
                         mode = walk(w, &path, mode)?;
@@ -2725,7 +2860,15 @@ fn mango_chords_from(root: &Path, keys: &mango_keys::MangoKeys, limit: usize, re
         chunk.clear();
         Ok(mode)
     }
-    let mut w = Walk { keys, read, limit, visited: BTreeSet::new(), binds: Vec::new(), ours: None };
+    let mut w = Walk {
+        keys,
+        read,
+        limit,
+        visited: BTreeSet::new(),
+        binds: Vec::new(),
+        ours: None,
+        environment,
+    };
     walk(&mut w, root, mango_keys::DEFAULT_MODE.to_string())?;
     let ours = w.ours.unwrap_or_else(|| mango_keys::DEFAULT_MODE.to_string());
     Ok(w.binds.into_iter().filter(|(_, mode)| mango_keys::modes_meet(mode, &ours)).map(|(chord, _)| chord).collect())
@@ -4345,6 +4488,47 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         let files = included_files(Target::Sway, &main, text);
         assert_eq!(files, vec![d.join("config.d/10-b.conf"), d.join("config.d/50-a.conf"), d.join("with space/x.conf")], "globs sorted, hidden files skipped, escapes undone");
         assert!(glob_match("*.conf", "a.conf") && glob_match("a?c", "abc") && !glob_match("*.conf", "a.kdl"));
+    }
+
+    #[test]
+    fn include_globs_skip_regular_file_branches_and_keep_bracket_escapes() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        std::fs::create_dir_all(root.join("conf.d/keys")).unwrap();
+        for name in [
+            "conf.d/README",
+            "conf.d/keys/10.conf",
+            "conf.d/keys/20.conf",
+            "conf.d/keys/[a].conf",
+        ] {
+            std::fs::write(root.join(name), "").unwrap();
+        }
+        let main = root.join("config");
+        assert_eq!(
+            included_files_bounded_in(
+                Target::Sway,
+                &main,
+                "include conf.d/*/[12]0.conf\n",
+                8,
+                &IncludeEnvironment::default()
+            )
+            .unwrap(),
+            vec![
+                root.join("conf.d/keys/10.conf"),
+                root.join("conf.d/keys/20.conf")
+            ]
+        );
+        assert_eq!(
+            included_files_bounded_in(
+                Target::Sway,
+                &main,
+                "include conf.d/keys/\\[a\\].conf\n",
+                8,
+                &IncludeEnvironment::default()
+            )
+            .unwrap(),
+            vec![root.join("conf.d/keys/[a].conf")]
+        );
     }
 
     #[test]

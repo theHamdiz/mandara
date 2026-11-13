@@ -10714,3 +10714,8 @@
 "{file}, line {line}" = "{file}, строка {line}"
 
 "This configuration is read-only. Edit its source or create a writable user override." = "Эта конфигурация доступна только для чтения. Измените её источник или создайте доступное для записи пользовательское переопределение."
+
+"Edit this value in its source configuration to preserve its formatting." = "Измените это значение в исходном файле настроек, чтобы сохранить форматирование."
+"This shortcut is locked by the compositor configuration." = "Это сочетание клавиш заблокировано настройками композитора."
+
+"Save or cancel this edit before using Undo." = "Сохраните или отмените это изменение, прежде чем использовать отмену действия."

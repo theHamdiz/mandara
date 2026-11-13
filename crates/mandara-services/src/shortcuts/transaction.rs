@@ -151,7 +151,8 @@ pub(super) fn apply(
             return Ok(None);
         }
         guard.fresh()?;
-        let mut current = keybinds::scan_from(session.target, &session.root);
+        let mut current =
+            keybinds::scan_roots_in(session.target, [session.root.clone()], &session.environment);
         if let Some(modifiers) = &session.scan.niri {
             keybinds::resolve_niri_mod(&mut current, modifiers.nested_session);
         }
@@ -164,7 +165,11 @@ pub(super) fn apply(
         managed.existing_chords = if session.target == compositor::Target::Niri {
             Default::default()
         } else {
-            compositor::existing_chords_checked(session.target, &session.root)?
+            compositor::existing_chords_checked_in(
+                session.target,
+                &session.root,
+                &session.environment,
+            )?
         };
         // TOML and self-managed dialects also expose literal alternatives through
         // the field parser; unresolved expressions remain with the native checker.
@@ -239,6 +244,7 @@ mod tests {
         fs::write(&colors, "").unwrap();
         symlink(&file, &alias).unwrap();
         let mut session = Session {
+            environment: Default::default(),
             primary_mod_is_alt: false,
             target: Target::Hyprland,
             root: root.path().join("custom.lua"),

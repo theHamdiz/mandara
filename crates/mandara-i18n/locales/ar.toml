@@ -10719,3 +10719,8 @@
 "{file}, line {line}" = "{file}، السطر {line}"
 
 "This configuration is read-only. Edit its source or create a writable user override." = "هذا الإعداد للقراءة فقط. عدّل مصدره أو أنشئ إعدادًا شخصيًا قابلًا للكتابة."
+
+"Edit this value in its source configuration to preserve its formatting." = "عدّل هذه القيمة في ملف إعداداتها للحفاظ على تنسيقها."
+"This shortcut is locked by the compositor configuration." = "هذا الاختصار مقفل بواسطة إعدادات مدير النوافذ."
+
+"Save or cancel this edit before using Undo." = "احفظ هذا التعديل أو ألغِه قبل استخدام التراجع."
