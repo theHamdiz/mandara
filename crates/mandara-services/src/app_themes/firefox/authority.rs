@@ -12,13 +12,7 @@ pub(super) fn apply(
     locations: &Locations,
 ) -> Result<()> {
     let expected = expected.ok_or_else(|| anyhow::anyhow!("no browser app theme is enabled"))?;
-    let lock = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(locations.config.join("mandara/generated/app-themes.lock"))?;
-    lock.lock()?;
+    let _lock = locations.lock()?;
     let current = super::settings(locations)?;
     ensure!(
         current.owner == expected.owner

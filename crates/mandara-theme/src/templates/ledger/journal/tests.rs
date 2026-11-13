@@ -221,3 +221,66 @@ fn recovery_keeps_the_previous_fingerprint_when_a_read_fails() {
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "personal");
     assert!(recovered.is_empty());
 }
+
+#[test]
+fn recovered_backup_sync_must_succeed_before_ownership_is_committed() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let root = tempfile::tempdir().unwrap();
+    let record = root.path().join("ledger.toml");
+    let path = root.path().join("theme");
+    let backup = root.path().join("theme.backup");
+    std::fs::write(&path, "personal").unwrap();
+    let mut ledger = Ledger::read(&record).unwrap();
+    let next = FileEntry {
+        app: "user/example".into(),
+        hash: hash_hex(b"palette"),
+        backup: Some(backup.clone()),
+        created_dirs: Vec::new(),
+    };
+    ledger
+        .begin_file(path.to_str().unwrap(), &next, Some(&backup))
+        .unwrap();
+    std::fs::rename(&path, &backup).unwrap();
+    std::fs::write(&path, "palette").unwrap();
+    let permissions = std::fs::metadata(&backup).unwrap().permissions();
+    std::fs::set_permissions(&backup, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::File::open(&backup).is_ok() {
+        std::fs::set_permissions(&backup, permissions).unwrap();
+        return;
+    }
+    drop(ledger);
+    assert!(Ledger::read(&record).is_err());
+    assert!(
+        std::fs::read_to_string(&record)
+            .unwrap()
+            .contains("pending")
+    );
+    std::fs::set_permissions(&backup, permissions).unwrap();
+    let mut recovered = Ledger::read(&record).unwrap();
+    assert!(
+        recovered
+            .take_back_checked("user/example")
+            .errors
+            .is_empty()
+    );
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "personal");
+}
+
+#[test]
+fn restored_originals_can_be_edited_in_place_before_recovery_finishes() {
+    let root = tempfile::tempdir().unwrap();
+    let record = root.path().join("ledger.toml");
+    let path = root.path().join("theme");
+    std::fs::write(&path, "personal").unwrap();
+    let mut ledger = Ledger::read(&record).unwrap();
+    ledger.put_file("user/example", &path, "palette").unwrap();
+    let entry = ledger.files[path.to_str().unwrap()].clone();
+    ledger.begin_restore(&path, &entry).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    crate::templates::restore::no_clobber(entry.backup.as_ref().unwrap(), &path).unwrap();
+    std::fs::write(&path, "newer personal edit with a different length").unwrap();
+    drop(ledger);
+    let recovered = Ledger::read(&record).unwrap();
+    assert!(recovered.is_empty());
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "newer personal edit with a different length");
+}

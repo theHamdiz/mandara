@@ -284,13 +284,7 @@ fn export_at(
         return Ok(Report::default());
     }
     std::fs::create_dir_all(&generated)?;
-    let lock = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(generated.join("app-themes.lock"))?;
-    lock.lock()?;
+    let _lock = locations.lock()?;
     if superseded() || cancel.load(Ordering::Acquire) {
         return Ok(Report::default());
     }

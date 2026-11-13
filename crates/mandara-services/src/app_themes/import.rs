@@ -20,8 +20,19 @@ pub fn document(path: &Path) -> Result<Manifest> {
     );
     let mut manifest = Manifest::parse_user(&text)?;
     for entry in manifest.templates.values_mut() {
-        if entry.directory.is_none() {
-            entry.directory = path.parent().map(Path::to_path_buf);
+        if let Some(parent) = path.parent() {
+            entry.directory = Some(match entry.directory.take() {
+                Some(directory)
+                    if directory.is_relative()
+                        && directory
+                            .to_str()
+                            .is_none_or(|path| !path.starts_with(['~', '$'])) =>
+                {
+                    parent.join(directory)
+                }
+                Some(directory) => directory,
+                None => parent.to_path_buf(),
+            });
         }
     }
     Ok(manifest)
@@ -94,5 +105,40 @@ mod tests {
         );
         assert_eq!(entry.input_path, Path::new("colors.css"));
         assert!(!entry.enabled);
+    }
+    #[test]
+    fn explicit_relative_and_absolute_directories_keep_their_document_base() {
+        let root = tempfile::tempdir().unwrap();
+        let absolute = root.path().join("absolute");
+        let path = root.path().join("themes.toml");
+        let source = format!(
+            "[templates.relative]\ndirectory = 'inputs'\ncontent = 'value'\noutput_path = '~/relative'\n[templates.absolute]\ndirectory = '{}'\ncontent = 'value'\noutput_path = '~/absolute'\n",
+            absolute.display()
+        );
+        std::fs::write(&path, source).unwrap();
+        let imported = document(&path).unwrap();
+        assert_eq!(
+            imported.templates["relative"].directory.as_deref(),
+            Some(root.path().join("inputs").as_path())
+        );
+        assert_eq!(
+            imported.templates["absolute"].directory.as_deref(),
+            Some(absolute.as_path())
+        );
+    }
+
+    #[test]
+    fn explicit_home_and_environment_directories_keep_their_path_expansion() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("themes.toml");
+        for directory in ["~/styles", "$XDG_CONFIG_HOME/styles", "${HOME}/styles"] {
+            std::fs::write(&path, format!("[templates.example]\ndirectory = '{directory}'\ncontent = 'value'\noutput_path = '~/output'\n")).unwrap();
+            assert_eq!(
+                document(&path).unwrap().templates["example"]
+                    .directory
+                    .as_deref(),
+                Some(Path::new(directory))
+            );
+        }
     }
 }

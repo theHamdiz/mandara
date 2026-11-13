@@ -10571,3 +10571,7 @@
 "Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "Examinez les fichiers et les commandes avant d’activer ce modèle. Les commandes peuvent aussi modifier d’autres fichiers. Les mises à jour nécessitent un nouvel examen."
 
 "Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "Examinez et approuvez d’abord la palette partagée du navigateur. Les autres applications Pywal utiliseront aussi ces couleurs."
+
+"Apply the color scheme to KDE apps and notify running apps." = "Appliquer les couleurs aux applications KDE et prévenir celles en cours d’exécution."
+
+"Enable browser theming and publish the shared app palette." = "Activer le thème du navigateur et publier la palette commune aux applications."

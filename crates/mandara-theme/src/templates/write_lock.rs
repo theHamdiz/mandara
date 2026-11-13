@@ -149,12 +149,18 @@ impl WriteLock {
     }
     /// Check the expected bytes in chunks rather than allocating another config.
     pub fn check(&self, expected: &[u8]) -> io::Result<Option<FileStamp>> {
+        self.check_with(expected, |path| File::open(path))
+    }
+    fn check_with(&self, expected: &[u8], open: impl FnOnce(&Path) -> io::Result<File>) -> io::Result<Option<FileStamp>> {
         self.check_target()?;
         let initial = FileStamp::at(&self.target)?;
-        let mut file = match File::open(&self.target) {
+        let mut file = match open(&self.target) {
             Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound && expected.is_empty() => {
-                return FileStamp::at(&self.target);
+                return match FileStamp::at(&self.target)? {
+                    None => Ok(None),
+                    Some(_) => Err(conflict()),
+                };
             }
             Err(error) => return Err(error),
         };
@@ -237,4 +243,18 @@ mod tests {
         fs::write(&path, "new preference").unwrap();
         assert!(lock.check(b"personal").is_err());
     }
+    #[test]
+    fn a_file_appearing_after_a_missing_open_is_never_accepted_as_empty() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("config");
+        let lock = WriteLock::new(&path).unwrap();
+        assert!(lock.check(b"").unwrap().is_none());
+        let result = lock.check_with(b"", |target| {
+            fs::write(target, "personal edit")?;
+            Err(io::ErrorKind::NotFound.into())
+        });
+        assert!(result.is_err());
+        assert_eq!(fs::read_to_string(path).unwrap(), "personal edit");
+    }
+
 }

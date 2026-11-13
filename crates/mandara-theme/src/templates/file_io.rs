@@ -51,6 +51,18 @@ pub(super) fn sync_parent(path: &Path) -> std::io::Result<()> {
 }
 
 
+/// Persist a visible recovered file or link before finalizing its ownership.
+pub(super) fn sync_recovered(path: &Path) -> std::io::Result<()> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_file() => std::fs::File::open(path)?.sync_all()?,
+        Ok(metadata) if metadata.file_type().is_symlink() => {}
+        Ok(_) => return Err(std::io::ErrorKind::InvalidInput.into()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    sync_existing_parent(path)
+}
+
 /// Recovery can finish after a created directory was already removed.
 pub(super) fn sync_existing_parent(path: &Path) -> std::io::Result<()> {
     let mut parent = path.parent();
@@ -108,6 +120,20 @@ mod tests {
         std::fs::write(&file, "personal").unwrap();
         assert!(sync_existing_parent(&file.join("theme")).is_err());
         assert_eq!(std::fs::read_to_string(file).unwrap(), "personal");
+    }
+
+    #[test]
+    fn recovery_sync_handles_files_missing_paths_and_unfollowed_links() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("theme");
+        std::fs::write(&path, "palette").unwrap();
+        sync_recovered(&path).unwrap();
+        let link = root.path().join("link");
+        std::os::unix::fs::symlink("missing-personal-target", &link).unwrap();
+        sync_recovered(&link).unwrap();
+        assert_eq!(std::fs::read_link(&link).unwrap(), Path::new("missing-personal-target"));
+        sync_recovered(&root.path().join("missing/nested/theme")).unwrap();
+        assert!(sync_recovered(root.path()).is_err());
     }
 
 }

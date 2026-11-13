@@ -399,10 +399,11 @@ pub fn register(r: &mut PluginRegistry) {
         CommandSpec::new_output("compositor install-include", mandara_i18n::tk("Append the single include line to your compositor config (backup kept)"), |a, cx| {
             let target = target_arg(a.get(0), cx)?;
             let inputs = sync_inputs(cx);
+            let output_revision = mandara_services::outputs::current_revision();
             Ok(pending(move || {
                 let added = install_include(target).map_err(|e| format!("{e:#}"))?;
                 let report = match (added, inputs) {
-                    (true, Ok((backend, cfg, borders))) => sync_with(backend.as_ref(), &cfg, borders, false, mandara_services::outputs::current_revision()).unwrap_or(Value::Null),
+                    (true, Ok((backend, cfg, borders))) => sync_with(backend.as_ref(), &cfg, borders, false, output_revision).unwrap_or(Value::Null),
                     _ => Value::Null,
                 };
                 Ok(json!({ "file": target.user_config(), "added": added, "line": target.include_line(), "sync": report }))

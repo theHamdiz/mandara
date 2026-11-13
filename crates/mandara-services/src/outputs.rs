@@ -152,9 +152,14 @@ pub enum PlannedMode {
 /// Prefer EDID identity; only anonymous monitors fall back to a connector.
 fn config_for<'a>(head: &Head, configs: &'a [OutputConfig]) -> Option<&'a OutputConfig> {
     let stable = !head.make.trim().is_empty() && !head.serial.trim().is_empty();
-    configs.iter().rev().find(|config| stable && !config.make.trim().is_empty() && !config.serial.trim().is_empty()
-        && config.make.trim() == head.make.trim() && config.model.trim() == head.model.trim() && config.serial.trim() == head.serial.trim())
-        .or_else(|| configs.iter().rev().find(|config| config.name == head.name
+    let matches = |config: &&OutputConfig| stable && !config.make.trim().is_empty() && !config.serial.trim().is_empty()
+        && config.make.trim() == head.make.trim() && config.model.trim() == head.model.trim() && config.serial.trim() == head.serial.trim();
+    let mut candidates = configs.iter().rev().filter(matches);
+    let first = candidates.next();
+    first.and_then(|first| {
+        if let Some(exact) = configs.iter().rev().filter(matches).find(|config| config.name == head.name) { Some(exact) }
+        else if candidates.next().is_none() { Some(first) } else { None }
+    }).or_else(|| configs.iter().rev().find(|config| config.name == head.name
             && (config.make.trim().is_empty() || config.serial.trim().is_empty())))
 }
 
@@ -202,7 +207,7 @@ pub fn plan(heads: &[Head], configs: &[OutputConfig]) -> Result<Vec<Planned>, St
     }
     let mut out = Vec::with_capacity(heads.len());
     for h in heads {
-        let c = config_for(h, configs);
+        let c = config_for(h, configs).filter(|config| config.name == h.name || heads.iter().filter(|other| other.make.trim() == h.make.trim() && other.model.trim() == h.model.trim() && other.serial.trim() == h.serial.trim()).count() == 1);
         let enabled = c.map(|c| c.enabled).unwrap_or(h.enabled);
         if !enabled {
             out.push(Planned::Disable);
@@ -1072,4 +1077,20 @@ mod tests {
         let off = OutputConfig { name: "DP-1".into(), enabled: false, ..Default::default() };
         assert!(plan(&heads, &[off]).is_err());
     }
+    #[test]
+    fn identical_edids_keep_connector_specific_settings_and_ambiguous_moves_keep_live_state() {
+        let a = head("DP-1"); let mut b = a.clone(); b.name = "DP-2".into();
+        let mut ca = a.to_config(); ca.scale = Some(1.25); ca.x = Some(0);
+        let mut cb = b.to_config(); cb.scale = Some(2.0); cb.x = Some(2000);
+        let saved = [ca, cb];
+        let configured = plan(&[a.clone(), b.clone()], &saved).unwrap();
+        assert!(matches!(configured[0], Planned::Enable { scale: 1.25, x: 0, .. }));
+        assert!(matches!(configured[1], Planned::Enable { scale: 2.0, x: 2000, .. }));
+        let mut moved_a = a.clone(); moved_a.name = "DP-3".into();
+        let mut moved_b = b.clone(); moved_b.name = "DP-4".into();
+        assert!(config_for(&moved_a, &saved).is_none());
+        let actual = plan(&[moved_a, moved_b], &saved[..1]).unwrap();
+        assert!(actual.iter().all(|output| matches!(output, Planned::Enable { scale: 1.5, .. })));
+    }
+
 }

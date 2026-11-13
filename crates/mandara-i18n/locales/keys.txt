@@ -659,6 +659,7 @@ Apply app themes now
 Apply changes instantly without springs
 Apply preference edits without replacing unrelated settings
 Apply profiles automatically
+Apply the color scheme to KDE apps and notify running apps.
 Apply this profile
 Apply to apps
 Apply {n} changes
@@ -2220,6 +2221,7 @@ Emptying the Trash deletes {n} items for good; run `mandara msg dock trash empty
 Enable
 Enable Sound themes
 Enable a unit at boot / login and reload systemd
+Enable browser theming and publish the shared app palette.
 Enable launcher
 Enable local shell commands in Studio
 Enable natural language shell control
@@ -7434,7 +7436,6 @@ The community store has blocked installs and updates for {repository}.
 The community the sidebar card shows; empty follows your first community
 The compiled WebAssembly component (manifest `entry`)
 The compositor configuration changed while its theme was being checked. Try again.
-The compositor configuration is not a regular file.
 The compositor connection closed
 The compositor did not answer
 The compositor did not respond in time

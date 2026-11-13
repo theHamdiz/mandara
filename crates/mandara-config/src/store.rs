@@ -488,6 +488,10 @@ impl ConfigWatcher {
 
     /// Follow retargeted dotfile links as well as atomic writes to their targets.
     pub fn refresh(&mut self) -> Result<()> {
+        self.refresh_with(|watcher, path| watcher.unwatch(path).map_err(Into::into))
+    }
+
+    fn refresh_with(&mut self, mut unwatch: impl FnMut(&mut notify::RecommendedWatcher, &Path) -> Result<()>) -> Result<()> {
         let mut paths = Vec::new();
         let mut path = self.target.clone();
         for _ in 0..MAX_SYMLINK_HOPS {
@@ -518,8 +522,10 @@ impl ConfigWatcher {
             }
         }
         for path in &self.watched {
-            if !parents.contains(path) {
-                self.watcher.unwatch(path)?;
+            if !parents.contains(path)
+                && let Err(error) = unwatch(&mut self.watcher, path)
+            {
+                tracing::debug!("unwatching {}: {error:#}", path.display());
             }
         }
         *self.names.lock().unwrap_or_else(|error| error.into_inner()) = paths;
@@ -868,4 +874,35 @@ mod tests {
         });
         assert!(got, "watcher did not fire");
     }
+    #[test]
+    fn failed_unwatch_does_not_leave_retargeted_configuration_names_stale() {
+        let root = tempfile::tempdir().unwrap();
+        let old = root.path().join("old");
+        let next = root.path().join("next");
+        fs::create_dir(&old).unwrap();
+        fs::create_dir(&next).unwrap();
+        let link = root.path().join("config");
+        let original = old.join("config");
+        let replacement = next.join("config");
+        fs::write(&original, "personal").unwrap();
+        fs::write(&replacement, "next").unwrap();
+        std::os::unix::fs::symlink(&original, &link).unwrap();
+        let mut watcher = ConfigWatcher::new(&link, Duration::ZERO).unwrap();
+        fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&replacement, &link).unwrap();
+        fs::remove_file(&original).unwrap();
+        fs::remove_dir(&old).unwrap();
+        let mut attempted = false;
+        watcher.refresh_with(|_, path| {
+            assert_eq!(path, old);
+            attempted = true;
+            anyhow::bail!("injected stale-watch failure")
+        }).unwrap();
+        assert!(attempted);
+        assert!(watcher.watched.contains(&next));
+        assert!(!watcher.watched.contains(&old));
+        assert!(watcher.names.lock().unwrap().contains(&replacement));
+        watcher.refresh().unwrap();
+    }
+
 }

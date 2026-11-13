@@ -9,15 +9,17 @@ use gpui::{
     SharedString, StatefulInteractiveElement as _, Styled as _, div, px,
 };
 use mandara_core::ToGpui as _;
-use mandara_i18n::{t, tf};
+use mandara_i18n::{t, tf, tk, tr};
 use mandara_services::app_themes::approval::Review;
 use mandara_theme::MandaraPalette;
 use std::sync::{Arc, atomic::AtomicBool};
 
 /// Keep long multi-client manifests bounded during each view build.
 const ROWS_PER_PAGE: usize = 16;
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kind { File, Command, Action }
 struct Line {
-    command: bool,
+    kind: Kind,
     text: SharedString,
 }
 pub(super) struct Pending {
@@ -31,14 +33,22 @@ pub(super) struct Pending {
 }
 impl From<Review> for Pending {
     fn from(review: Review) -> Self {
-        let mut lines = Vec::with_capacity(review.files.len() + review.commands.len());
+        let mut lines = Vec::with_capacity(review.files.len() + review.commands.len() + review.actions.len());
         lines.extend(review.files.into_iter().map(|path| Line {
-            command: false,
+            kind: Kind::File,
             text: path.to_string_lossy().into_owned().into(),
         }));
         lines.extend(review.commands.into_iter().map(|command| Line {
-            command: true,
+            kind: Kind::Command,
             text: command.into(),
+        }));
+        lines.extend(review.actions.into_iter().map(|action| Line {
+            kind: Kind::Action,
+            text: match action.as_str() {
+                "kde-color-scheme" => tk("Apply the color scheme to KDE apps and notify running apps.").into(),
+                "firefox-theme" => tk("Enable browser theming and publish the shared app palette.").into(),
+                _ => action.into(),
+            },
         }));
         Self {
             id: review.id.into(),
@@ -110,13 +120,13 @@ impl StudioView {
                         div()
                             .text_size(px(TEXT_11_5_PX))
                             .text_color(palette.on_surface_variant.hsla())
-                            .child(if line.command {
-                                t("Commands")
-                            } else {
-                                t("Files")
+                            .child(match line.kind {
+                                Kind::Command => t("Commands"),
+                                Kind::File => t("Files"),
+                                Kind::Action => t("Actions"),
                             }),
                     )
-                    .child(div().text_size(px(TEXT_12_PX)).child(line.text.clone())),
+                    .child(div().text_size(px(TEXT_12_PX)).child(if line.kind == Kind::Action { SharedString::from(tr(&line.text)) } else { line.text.clone() })),
             );
         }
         panel = panel.child(mandara_ui::scrollbar::with_scrollbar(
@@ -138,9 +148,6 @@ impl StudioView {
                             false,
                             palette,
                         )
-                        .focusable()
-                        .tab_index(0)
-                        .focus(|style| style.opacity(ALPHA_88))
                         .on_click(cx.listener(
                             |this, _: &ClickEvent, _, cx| {
                                 if let Some(review) = &mut this.app_templates.review {
@@ -163,9 +170,6 @@ impl StudioView {
                             false,
                             palette,
                         )
-                        .focusable()
-                        .tab_index(0)
-                        .focus(|style| style.opacity(ALPHA_88))
                         .on_click(cx.listener(
                             move |this, _: &ClickEvent, _, cx| {
                                 if let Some(review) = &mut this.app_templates.review {
@@ -189,9 +193,6 @@ impl StudioView {
                             true,
                             palette,
                         )
-                        .focusable()
-                        .tab_index(0)
-                        .focus(|style| style.opacity(ALPHA_88))
                         .on_click(
                             cx.listener(|this, _: &ClickEvent, _, cx| {
                                 this.approve_app_template(cx)
@@ -206,9 +207,6 @@ impl StudioView {
                             false,
                             palette,
                         )
-                        .focusable()
-                        .tab_index(0)
-                        .focus(|style| style.opacity(ALPHA_88))
                         .on_click(cx.listener(
                             |this, _: &ClickEvent, _, cx| {
                                 this.app_templates.review = None;
@@ -293,4 +291,16 @@ mod tests {
         assert_eq!(page_range(usize::MAX, count), count - 1..count);
         assert_eq!(page_range(0, 0), 0..0);
     }
+    #[test]
+    fn native_actions_remain_visible_when_no_setup_commands_are_present() {
+        let pending = Pending::from(Review {
+            id: "community:kde".into(), revision: "test".into(), files: Vec::new(), commands: Vec::new(),
+            actions: vec!["kde-color-scheme".into(), "firefox-theme".into()], fingerprint: "review".into(), shared_palette: true,
+        });
+        assert_eq!(pending.lines.len(), 2);
+        assert!(pending.lines.iter().all(|line| line.kind == Kind::Action));
+        assert!(pending.lines[0].text.contains("KDE"));
+        assert!(pending.lines[1].text.contains("shared app palette"));
+    }
+
 }

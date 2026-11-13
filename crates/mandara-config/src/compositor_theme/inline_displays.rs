@@ -10,6 +10,22 @@ pub(super) fn remove(
     fragment: &Path,
     previous: Option<&str>,
 ) -> Result<String> {
+    if target == Target::Niri {
+        let mut names = selectors(target, &read_fragment(fragment)?);
+        if let Some(previous) = previous {
+            names.extend(selectors(target, previous));
+        }
+        let mut document = kdl::KdlDocument::parse_v1(body)?;
+        document.nodes_mut().retain(|node| {
+            node.name().value() != "output"
+                || !node
+                    .get(0)
+                    .and_then(|v| v.as_string())
+                    .is_some_and(|name| names.iter().any(|owned| owned == name))
+        });
+        document.ensure_v1();
+        return Ok(document.to_string());
+    }
     let heading = "Displays (Studio → Displays)";
     let ending = "End Displays (Studio → Displays)";
     let Some(start) = body
@@ -31,20 +47,7 @@ pub(super) fn remove(
     }
     // Older generated files lack an end marker. Leave all preceding text and
     // unrelated connectors intact; only migrate selectors in the saved fragment.
-    use std::io::Read as _;
-    const MAX_FRAGMENT_BYTES: u64 = 8 * 1024 * 1024;
-    let file = std::fs::File::open(fragment)?;
-    anyhow::ensure!(
-        file.metadata()?.is_file(),
-        "display fragment is not a regular file"
-    );
-    let mut fragment_body = String::new();
-    file.take(MAX_FRAGMENT_BYTES + 1)
-        .read_to_string(&mut fragment_body)?;
-    anyhow::ensure!(
-        fragment_body.len() as u64 <= MAX_FRAGMENT_BYTES,
-        "display fragment is too large"
-    );
+    let fragment_body = read_fragment(fragment)?;
     let offset: usize = body.split_inclusive('\n').take(start).map(str::len).sum();
     let (prefix, suffix) = body.split_at(offset);
     let mut names = selectors(target, &fragment_body);
@@ -55,18 +58,7 @@ pub(super) fn remove(
     names.dedup();
     let mut result = String::with_capacity(body.len());
     result.push_str(prefix);
-    if target == Target::Niri {
-        let mut document = kdl::KdlDocument::parse_v1(suffix)?;
-        document.nodes_mut().retain(|node| {
-            node.name().value() != "output"
-                || !node
-                    .get(0)
-                    .and_then(|value| value.as_string())
-                    .is_some_and(|name| names.iter().any(|owned| owned == name))
-        });
-        document.ensure_v1();
-        result.push_str(&document.to_string());
-    } else if target == Target::Umbriel {
+    if target == Target::Umbriel {
         let mut document: toml_edit::DocumentMut = suffix.parse()?;
         if let Some(outputs) = document
             .get_mut("output")
@@ -101,6 +93,25 @@ pub(super) fn remove(
         }
     }
     Ok(result)
+}
+
+fn read_fragment(fragment: &Path) -> Result<String> {
+    use std::io::Read as _;
+    // Match the bounded display-fragment limit used during migration.
+    const MAX_FRAGMENT_BYTES: u64 = 8 * 1024 * 1024;
+    let file = std::fs::File::open(fragment)?;
+    anyhow::ensure!(
+        file.metadata()?.is_file(),
+        "display fragment is not a regular file"
+    );
+    let mut body = String::new();
+    file.take(MAX_FRAGMENT_BYTES + 1)
+        .read_to_string(&mut body)?;
+    anyhow::ensure!(
+        body.len() as u64 <= MAX_FRAGMENT_BYTES,
+        "display fragment is too large"
+    );
+    Ok(body)
 }
 
 fn selectors(target: Target, body: &str) -> Vec<String> {
@@ -235,12 +246,11 @@ mod tests {
                 });
             let result =
                 remove(target, &format!("{before}{legacy}{unrelated}"), &file, None).unwrap();
-            assert!(result.starts_with(before), "{target:?}: {result}");
+            if target != Target::Niri {
+                assert!(result.starts_with(before), "{target:?}: {result}");
+            }
             assert!(result.contains(unrelated.trim()), "{target:?}: {result}");
-            assert!(
-                !result[before.len()..].contains("1.25"),
-                "{target:?}: {result}"
-            );
+            assert!(!result.contains("1.25"), "{target:?}: {result}");
         }
     }
 
@@ -290,6 +300,19 @@ mod tests {
                 stripped.contains(unrelated.trim()),
                 "{target:?}: {stripped}"
             );
+        }
+    }
+    #[test]
+    fn saved_niri_fragment_owns_legacy_outputs_outside_the_displays_heading() {
+        let fragment = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(fragment.path(), "output \"DP-1\" { scale 1.25; }\n").unwrap();
+        for body in [
+            "output \"DP-1\" { scale 2; }\noutput \"HDMI-A-1\" { scale 1; }\n",
+            "output \"DP-1\" { scale 2; }\n// Displays (Studio → Displays)\n// End Displays (Studio → Displays)\noutput \"HDMI-A-1\" { scale 1; }\n",
+        ] {
+            let result = remove(Target::Niri, body, fragment.path(), None).unwrap();
+            assert!(!result.contains("DP-1"));
+            assert!(result.contains("HDMI-A-1"));
         }
     }
 }

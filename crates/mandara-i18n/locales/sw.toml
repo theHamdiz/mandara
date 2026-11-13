@@ -10229,3 +10229,7 @@
 "Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "Kagua faili na amri kabla ya kuwasha kiolezo hiki. Amri zinaweza kubadilisha faili nyingine pia. Masasisho yanahitaji ukaguzi mpya."
 
 "Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "Kagua na uidhinishe kwanza rangi zinazoshirikiwa za kivinjari. Programu nyingine za Pywal zitatumia rangi hizi pia."
+
+"Apply the color scheme to KDE apps and notify running apps." = "Tumia mpangilio wa rangi kwenye programu za KDE na ujulishe programu zinazoendelea."
+
+"Enable browser theming and publish the shared app palette." = "Washa mandhari ya kivinjari na uchapishe paleti ya rangi inayoshirikiwa na programu."

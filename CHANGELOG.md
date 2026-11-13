@@ -11,6 +11,10 @@ About → What's new shows it too.
 - **More apps can follow your colours.** Browse app-template catalogs in Studio → Themes → Other apps, install only what you need, or write your own template. Installed templates follow every Mandara palette offline, with light/dark colours, custom colours, setup commands, browser integration and KDE schemes. Setup commands are optional; errors and managed-file restoration are visible in Studio. (#123)
 
 ### Fixed
+- Minute-based desktop widgets keep updating when shown on their own. Display drafts preserve edits made by other apps, and identical monitors keep their separate settings.
+- App-template entry controls work from the keyboard, native actions appear in the approval review, and browser font changes preserve surrounding CSS.
+- Updated app imports preserve personal lines, and recovered changes are saved before their recovery records are cleared.
+- Failed compositor rollback keeps the original check error and points to any recovery copy.
 - App-theme read and undo failures keep their recovery records for retry, including restored symlinks.
 - App-template controls and paging arrows follow right-to-left languages.
 - App-style changes can recover after an interruption, and a queued browser request cannot turn styling back on after you switch it off.

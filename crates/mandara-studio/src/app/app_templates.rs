@@ -20,8 +20,16 @@ use mandara_services::app_themes::{catalog::Entry, jobs, manifest::Manifest, pat
 use mandara_theme::MandaraPalette;
 use mandara_ui::state::update_config;
 
-use super::{StudioView, compositor_page::button};
+use super::StudioView;
 use crate::{text_field::TextField, tokens::*};
+
+fn button(id: impl Into<SharedString>, icon: &'static str, label: impl Into<SharedString>, filled: bool, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
+    let focus = if filled { p.on_primary } else { p.primary }.hsla();
+    super::compositor_page::button(id, icon, label, filled, p)
+        .focusable()
+        .tab_index(0)
+        .focus(move |style| style.border_2().border_color(focus))
+}
 
 struct Job {
     cancel: Arc<AtomicBool>,
@@ -285,7 +293,6 @@ impl StudioView {
                                 on,
                                 p,
                             )
-                            .focusable().tab_index(0).focus(|style| style.opacity(ALPHA_88))
                             .on_click(cx.listener(
                                 move |this, _: &ClickEvent, _, cx| {
                                     if on {

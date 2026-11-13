@@ -10230,3 +10230,7 @@
 "Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "ఈ టెంప్లేట్‌ను ప్రారంభించే ముందు ఫైళ్లు, ఆదేశాలను సమీక్షించండి. ఆదేశాలు ఇతర ఫైళ్లను కూడా మార్చగలవు. నవీకరణలకు మళ్లీ సమీక్ష అవసరం."
 
 "Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "ముందుగా బ్రౌజర్ భాగస్వామ్య రంగుల పాలెట్‌ను సమీక్షించి ఆమోదించండి. ఇతర Pywal యాప్‌లు కూడా ఈ రంగులను ఉపయోగిస్తాయి."
+
+"Apply the color scheme to KDE apps and notify running apps." = "KDE యాప్‌లకు రంగుల పథకాన్ని వర్తింపజేసి, నడుస్తున్న యాప్‌లకు తెలియజేయండి."
+
+"Enable browser theming and publish the shared app palette." = "బ్రౌజర్ థీమ్‌ను ప్రారంభించి, యాప్‌ల ఉమ్మడి రంగుల పాలెట్‌ను ప్రచురించండి."

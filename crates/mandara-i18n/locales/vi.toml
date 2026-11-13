@@ -10229,3 +10229,7 @@
 "Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "Xem xét các tệp và lệnh trước khi bật mẫu này. Lệnh cũng có thể thay đổi những tệp khác. Bản cập nhật cần được xem xét lại."
 
 "Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "Trước hết, hãy xem xét và chấp thuận bảng màu dùng chung của trình duyệt. Các ứng dụng Pywal khác cũng sẽ dùng những màu này."
+
+"Apply the color scheme to KDE apps and notify running apps." = "Áp dụng bảng màu cho ứng dụng KDE và thông báo cho các ứng dụng đang chạy."
+
+"Enable browser theming and publish the shared app palette." = "Bật chủ đề trình duyệt và công bố bảng màu dùng chung cho ứng dụng."

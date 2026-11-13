@@ -26,6 +26,7 @@
 
 mod journal;
 mod undo_file;
+mod ownership;
 
 use std::collections::BTreeMap;
 use super::SyncReport;
@@ -200,6 +201,13 @@ impl Ledger {
         ledger.record = Some(path.into());
         ledger.settle()?;
         Ok(ledger)
+    }
+
+    /// Restore an earlier ownership record after its files were rolled back.
+    /// Persist even a clean clone: a failed operation may have checkpointed newer hashes.
+    pub fn restore_checkpoint(&mut self) -> std::io::Result<()> {
+        self.dirty = true;
+        self.checkpoint()
     }
 
     /// Writes the ledger if it changed (removing the file once empty).
@@ -395,6 +403,12 @@ impl Ledger {
             && super::block_body(&before, block, placement) == before
         {
             return Ok(false);
+        }
+        if ownership::conflicts(&before, previous.as_ref(), block) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!("{} already contains a personal import line", config.display()),
+            ));
         }
         let lines: Vec<String> = block.iter().map(|line| (*line).to_owned()).collect();
         drop(before);
@@ -755,4 +769,20 @@ mod tests {
         assert!(ledger.put_file("two", &path, "second").is_err());
         assert_eq!(std::fs::read_to_string(path).unwrap(), "first");
     }
+    #[test]
+    fn restoring_a_clean_snapshot_replaces_a_checkpointed_failed_update() {
+        let root = tempfile::tempdir().unwrap(); let record = root.path().join("ledger.toml"); let path = root.path().join("theme");
+        std::fs::write(&path, "personal").unwrap();
+        let mut ledger = Ledger::read(&record).unwrap();
+        ledger.put_file("app", &path, "A").unwrap(); ledger.store(&record).unwrap();
+        let mut original = ledger.clone();
+        ledger.put_file("app", &path, "B").unwrap(); ledger.store(&record).unwrap();
+        crate::templates::file_io::write(&path, "A").unwrap();
+        original.restore_checkpoint().unwrap();
+        let mut recovered = Ledger::read(&record).unwrap();
+        recovered.take_back("app"); recovered.store(&record).unwrap();
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "personal");
+        assert!(recovered.is_empty());
+    }
+
 }

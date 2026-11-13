@@ -1,5 +1,7 @@
 //! Browser-requested CSS changes stay within the selected profile's chrome folder.
 
+mod font;
+
 use crate::app_themes::paths::Locations;
 use crate::icons::apply::ini_get;
 use anyhow::{Result, ensure};
@@ -45,6 +47,10 @@ fn profile(locations: &Locations) -> Result<PathBuf> {
     Ok(path)
 }
 
+fn destination(target: &str, locations: &Locations) -> Result<PathBuf> {
+    Ok(profile(locations)?.join("chrome").join(format!("{target}.css")))
+}
+
 pub(super) fn apply(
     action: &str,
     target: &str,
@@ -57,9 +63,6 @@ pub(super) fn apply(
         ["userChrome", "userContent"].contains(&target),
         "unknown browser CSS target"
     );
-    let destination = profile(locations)?
-        .join("chrome")
-        .join(format!("{target}.css"));
     let record = locations.config.join("mandara/generated/firefox-css.toml");
     let mut ledger = Ledger::read(&record)?;
     let result = (|| {
@@ -69,6 +72,7 @@ pub(super) fn apply(
                 ensure!(!ledger.has(target),"browser CSS could not be restored");
             }
             "css:enable" => {
+                let destination = destination(target, locations)?;
                 ledger.put_file(
                     target,
                     &destination,
@@ -76,26 +80,14 @@ pub(super) fn apply(
                 )?;
             }
             "css:font:size" => {
+                let destination = destination(target, locations)?;
                 let size = size.ok_or_else(|| anyhow::anyhow!("missing browser font size"))?;
                 ensure!(
                     (6..=96).contains(&size),
                     "browser font size must be between 6 and 96"
                 );
                 let source = super::super::apply::read_text(&destination)?;
-                ensure!(
-                    source.contains("--pywalfox-font-size:"),
-                    "browser CSS has no font size setting"
-                );
-                let mut result = String::with_capacity(source.len());
-                for line in source.lines() {
-                    if line.contains("--pywalfox-font-size:") {
-                        use std::fmt::Write as _;
-                        writeln!(&mut result, "  --pywalfox-font-size: {size}px;")?;
-                    } else {
-                        result.push_str(line);
-                        result.push('\n');
-                    }
-                }
+                let result = font::resize(&source, size)?;
                 ledger.put_file(target, &destination, &result)?;
             }
             _ => anyhow::bail!("unknown browser CSS action"),
@@ -153,6 +145,8 @@ mod tests {
         apply("css:enable", "userChrome", None, &styles, &locations).unwrap();
         apply("css:font:size", "userChrome", Some(18), &styles, &locations).unwrap();
         assert!(std::fs::read_to_string(&target).unwrap().contains("18px"));
+        std::fs::remove_file(firefox.join("profiles.ini")).unwrap();
+        apply("css:disable", "userChrome", None, &styles, &locations).unwrap();
         undo(&locations).unwrap();
         assert_eq!(std::fs::read_to_string(target).unwrap(), "original CSS");
     }

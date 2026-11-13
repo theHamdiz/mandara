@@ -285,17 +285,22 @@ pub fn identity(name: &str, make: &str, model: &str, serial: &str) -> String {
 /// Remember connected monitors without losing the settings of an unplugged
 /// one. An EDID match moves its saved settings to its current connector.
 pub fn remember(saved: &mut Vec<OutputConfig>, current: impl IntoIterator<Item = OutputConfig>) {
-    for mut output in current {
+    let current: Vec<_> = current.into_iter().collect();
+    for mut output in current.iter().cloned() {
         let stable = |output: &OutputConfig| !output.make.trim().is_empty() && !output.serial.trim().is_empty();
+        let output_stable = stable(&output);
+        let (make, model, serial, name) = (&output.make, &output.model, &output.serial, &output.name);
         let same_monitor = |old: &OutputConfig| {
-            if stable(old) && stable(&output) {
-                old.identity() == output.identity()
+            if stable(old) && output_stable {
+                old.make.trim() == make.trim() && old.model.trim() == model.trim() && old.serial.trim() == serial.trim()
             } else {
-                !stable(old) && !stable(&output) && old.name == output.name
+                !stable(old) && !output_stable && old.name == *name
             }
         };
-        let previous = saved.iter().find(|old| stable(old) && stable(&output) && old.identity() == output.identity())
-            .or_else(|| saved.iter().find(|old| same_monitor(old)));
+        let unique = current.iter().filter(|other| same_monitor(other)).count() == 1
+            && saved.iter().filter(|old| same_monitor(old)).count() <= 1;
+        let previous = saved.iter().find(|old| old.name == output.name && same_monitor(old))
+            .or_else(|| unique.then(|| saved.iter().find(|old| same_monitor(old))).flatten());
         if let Some(previous) = previous {
             if !output.enabled {
                 output.width = output.width.or(previous.width);
@@ -313,11 +318,9 @@ pub fn remember(saved: &mut Vec<OutputConfig>, current: impl IntoIterator<Item =
                 output.vrr = previous.vrr;
             }
         }
-        let output_identity = output.identity();
-        let output_stable = stable(&output);
         saved.retain(|old| {
             if stable(old) && output_stable {
-                old.identity() != output_identity
+                !same_monitor(old) || (!unique && old.name != output.name)
             } else {
                 stable(old) || output_stable || old.name != output.name
             }
@@ -329,6 +332,15 @@ pub fn remember(saved: &mut Vec<OutputConfig>, current: impl IntoIterator<Item =
 #[cfg(test)]
 mod persistence_tests {
     use super::*;
+
+    #[test]
+    fn remembering_duplicate_edids_retains_both_connector_entries() {
+        let a = OutputConfig { name: "DP-1".into(), make: "Demo".into(), model: "Panel".into(), serial: "same".into(), scale: Some(1.25), ..Default::default() };
+        let b = OutputConfig { name: "DP-2".into(), scale: Some(2.0), ..a.clone() };
+        let mut saved = vec![a.clone(), b.clone()];
+        remember(&mut saved, [a.clone(), b.clone()]);
+        assert_eq!(saved, [a, b]);
+    }
 
     #[test]
     fn anonymous_monitors_do_not_inherit_or_delete_saved_edid_preferences() {

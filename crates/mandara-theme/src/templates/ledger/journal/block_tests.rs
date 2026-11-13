@@ -101,3 +101,80 @@ fn unchanged_owned_imports_do_not_rewrite_the_config_or_the_ownership_record() {
         crate::templates::FileStamp::at(&record).unwrap()
     );
 }
+
+#[test]
+fn changed_imports_never_claim_a_matching_personal_line() {
+    for wrapped in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let record = root.path().join("ledger.toml");
+        let path = root.path().join("app.conf");
+        let personal = "[main]\n  include new\npersonal = true\n";
+        std::fs::write(&path, personal).unwrap();
+        let mut ledger = Ledger::read(&record).unwrap();
+        let old = if wrapped {
+            vec!["# owned import", "[main]", "include old"]
+        } else {
+            vec!["include old"]
+        };
+        let next = if wrapped {
+            vec!["# owned import", "[main]", "include new"]
+        } else {
+            vec!["include new"]
+        };
+        ledger
+            .put_block(
+                "user/example",
+                &path,
+                &old,
+                crate::templates::Placement::End,
+            )
+            .unwrap();
+        let before = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            ledger
+                .put_block(
+                    "user/example",
+                    &path,
+                    &next,
+                    crate::templates::Placement::End
+                )
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+        assert!(ledger.pending.is_none());
+        drop(ledger);
+        let mut recovered = Ledger::read(&record).unwrap();
+        assert!(
+            recovered
+                .take_back_checked("user/example")
+                .errors
+                .is_empty()
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), personal);
+    }
+}
+
+#[test]
+fn initial_imports_do_not_claim_part_of_a_personal_block() {
+    let root = tempfile::tempdir().unwrap();
+    let record = root.path().join("ledger.toml");
+    let path = root.path().join("app.conf");
+    let personal = "[main]\ninclude palette\npersonal = true\n";
+    std::fs::write(&path, personal).unwrap();
+    let mut ledger = Ledger::read(&record).unwrap();
+    assert!(
+        ledger
+            .put_block(
+                "user/example",
+                &path,
+                &["# owned import", "[main]", "include palette"],
+                crate::templates::Placement::End
+            )
+            .is_err()
+    );
+    assert!(ledger.is_empty());
+    assert!(!record.exists());
+    assert_eq!(std::fs::read_to_string(path).unwrap(), personal);
+}

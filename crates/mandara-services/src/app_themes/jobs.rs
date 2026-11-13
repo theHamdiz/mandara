@@ -127,8 +127,12 @@ async fn install_and<T: Send + 'static>(
                 cancel: cancel.clone(),
             },
         )?;
-        let protected = super::apply::protected_revisions(&super::paths::Locations::current()?)?;
-        catalog::prune(&root, &entry.qualified_id(), &protected)?;
+        {
+            let locations = super::paths::Locations::current()?;
+            let _lock = locations.lock()?;
+            let protected = super::apply::protected_revisions(&locations)?;
+            catalog::prune(&root, &entry.qualified_id(), &protected)?;
+        }
         anyhow::ensure!(!cancel.load(Ordering::Acquire), "catalog request was cancelled");
         finish(installed)
     })

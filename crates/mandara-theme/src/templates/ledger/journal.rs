@@ -16,6 +16,9 @@ pub(super) struct SlotStamp {
     nanos: i64,
 }
 impl SlotStamp {
+    fn same_file(&self, other: &Self) -> bool {
+        self.device == other.device && self.inode == other.inode
+    }
     fn at(path: &Path) -> io::Result<Option<Self>> {
         match std::fs::symlink_metadata(path) {
             Ok(metadata) => Ok(Some(Self {
@@ -207,6 +210,7 @@ impl Ledger {
             {
                 entry = None;
             }
+            super::super::file_io::sync_recovered(path)?;
             let key = key.clone();
             if let Some(entry) = entry {
                 self.blocks.insert(key, entry);
@@ -244,6 +248,12 @@ impl Ledger {
                     }
                     None => Some(next.clone()),
                 };
+                if let Some(backup) = moved
+                    && exists(backup)
+                {
+                    super::super::file_io::sync_recovered(backup)?;
+                }
+                super::super::file_io::sync_recovered(path)?;
                 (path.clone(), entry)
             }
             Pending::Block { .. } => unreachable!("block recovery returned above"),
@@ -254,7 +264,7 @@ impl Ledger {
             } => {
                 let current = SlotStamp::at(path)?;
                 let restored = match &entry.backup {
-                    Some(_) if backup_stamp.is_some() && &current == backup_stamp => true,
+                    Some(_) if backup_stamp.as_ref().zip(current.as_ref()).is_some_and(|(backup, current)| backup.same_file(current)) => true,
                     Some(backup) if exists(backup) => false,
                     Some(_) => {
                         return Err(io::Error::other(

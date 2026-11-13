@@ -10328,3 +10328,7 @@
 "Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "Tinjau berkas dan perintah sebelum mengaktifkan templat ini. Perintah juga dapat mengubah berkas lain. Pembaruan perlu ditinjau kembali."
 
 "Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "Tinjau dan setujui palet bersama peramban terlebih dahulu. Aplikasi Pywal lain juga akan memakai warna ini."
+
+"Apply the color scheme to KDE apps and notify running apps." = "Terapkan skema warna ke aplikasi KDE dan beri tahu aplikasi yang sedang berjalan."
+
+"Enable browser theming and publish the shared app palette." = "Aktifkan tema peramban dan terbitkan palet warna bersama untuk aplikasi."

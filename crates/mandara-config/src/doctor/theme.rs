@@ -1,12 +1,14 @@
 //! Reversible theme-key edits for compositors without generated includes.
 
+mod rollback;
+
 use super::comparison::CheckResult;
 use anyhow::{Context as _, Result, ensure};
 use mandara_i18n::t;
 use mandara_theme::templates::{FileStamp, WriteLock};
 use std::fs;
 use std::io::{Read as _, Write as _};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Full doctor reports preserve warning/error counts; theme-only parsers have
 /// a single pass/fail result. Both follow the same regression comparison.
@@ -85,10 +87,17 @@ fn changed() -> String {
 
 /// Keep each pre-edit version, including later palette changes and undo. The
 /// file stays a symlink; the backup stores its target's bytes and permissions.
-fn backup(lock: &WriteLock, expected: Option<FileStamp>) -> Result<()> {
+fn backup(lock: &WriteLock, expected: Option<FileStamp>) -> Result<Option<PathBuf>> {
+    backup_with(lock, expected, |path| {
+        fs::File::open(path.parent().context("backup has no parent directory")?)?.sync_all()?;
+        Ok(())
+    })
+}
+
+fn backup_with(lock: &WriteLock, expected: Option<FileStamp>, sync_parent: impl FnOnce(&Path) -> Result<()>) -> Result<Option<PathBuf>> {
     lock.check_stamp(expected)?;
     if expected.is_none() {
-        return Ok(());
+        return Ok(None);
     }
     super::theme_backups::retain(lock.path(), super::theme_backups::MAX_BACKUPS - 1)?;
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?;
@@ -112,8 +121,9 @@ fn backup(lock: &WriteLock, expected: Option<FileStamp>) -> Result<()> {
     std::io::copy(&mut source, &mut saved)?;
     saved.flush()?;
     saved.sync_all()?;
+    sync_parent(&backup)?;
     lock.check_stamp(expected)?;
-    Ok(())
+    Ok(Some(backup))
 }
 
 /// The caller records ownership; this guard backs up each actual edit.
@@ -144,14 +154,14 @@ pub fn guarded_write_locked(
     if expected == next {
         return Ok(());
     }
-    backup(lock, before)?;
+    let recovery = backup(lock, before)?;
     let written = match crate::store::write_atomic_checked(lock, before, next.as_bytes()) {
         Ok(written) => written,
         Err(error) => {
             if let Some(written) = crate::store::published_stamp(&error)
                 && let Err(restore) = restore_written(lock, before, written, expected)
             {
-                return Err(error.context(format!("restoring the published theme failed: {restore:#}")));
+                return Err(rollback::failed(error, restore, recovery.as_deref()));
             }
             return Err(error);
         }
@@ -159,10 +169,15 @@ pub fn guarded_write_locked(
     let live = validator.check_live(path);
     lock.check_stamp(Some(written)).context(changed())?;
     if super::comparison::is_worse(&baseline, &live) {
-        restore_written(lock, before, written, expected)?;
-        return live.result.context(t(
+        let primary = live.result.err().unwrap_or_else(|| {
+            std::io::Error::from(std::io::ErrorKind::InvalidData).into()
+        });
+        if let Err(restore) = restore_written(lock, before, written, expected) {
+            return Err(rollback::failed(primary, restore, recovery.as_deref()));
+        }
+        return Err(primary.context(t(
             "The compositor rejected the theme; previous settings were kept.",
-        ));
+        )));
     }
     Ok(())
 }
@@ -170,7 +185,7 @@ pub fn guarded_write_locked(
 fn restore_written(lock: &WriteLock, before: Option<mandara_theme::templates::FileStamp>, written: mandara_theme::templates::FileStamp, expected: &str) -> Result<()> {
     // Rollback is another conditional write, with its own recoverable copy.
     lock.check_stamp(Some(written)).context(changed())?;
-    backup(lock, Some(written))?;
+    let _ = backup(lock, Some(written))?;
     if before.is_some() {
         crate::store::write_atomic_checked(lock, Some(written), expected.as_bytes())?;
     } else {
@@ -418,4 +433,66 @@ mod tests {
         assert!(guarded_write(&path, "personal", "theme", &replace).is_err());
         assert_eq!(fs::read_to_string(&path).unwrap(), "personal");
     }
+    #[test]
+    fn failed_rollback_reports_the_live_diagnostic_and_pre_edit_backup() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let root = tempfile::tempdir().unwrap();
+        let permissions = fs::metadata(root.path()).unwrap().permissions();
+        fs::set_permissions(root.path(), fs::Permissions::from_mode(0o555)).unwrap();
+        let privileged = fs::File::create(root.path().join("permission-probe")).is_ok();
+        fs::set_permissions(root.path(), permissions.clone()).unwrap();
+        if privileged {
+            return;
+        }
+        struct Rejected;
+        impl Validator for Rejected {
+            fn validate(&self, _: &str) -> Result<()> { Ok(()) }
+            fn validate_live(&self, path: &Path) -> Result<()> {
+                if fs::read_to_string(path)? == "theme" {
+                    fs::set_permissions(path.parent().unwrap(), fs::Permissions::from_mode(0o555))?;
+                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "native compositor diagnostic").into());
+                }
+                Ok(())
+            }
+        }
+        let path = root.path().join("config");
+        fs::write(&path, "personal").unwrap();
+        let result = guarded_write(&path, "personal", "theme", &Rejected);
+        fs::set_permissions(root.path(), permissions).unwrap();
+        let error = result.unwrap_err();
+        let recovery = fs::read_dir(root.path()).unwrap().map(|entry| entry.unwrap().path())
+            .find(|path| path.file_name().unwrap().to_string_lossy().contains("mandara-backup-")).unwrap();
+        assert_eq!(fs::read_to_string(&recovery).unwrap(), "personal");
+        let message = format!("{error:#}");
+        assert!(message.contains("native compositor diagnostic"), "{message}");
+        assert!(message.contains("restoring the previous theme failed"), "{message}");
+        assert!(message.contains(recovery.to_str().unwrap()), "{message}");
+        assert_eq!(error.root_cause().downcast_ref::<std::io::Error>().unwrap().kind(), std::io::ErrorKind::InvalidData);
+        assert_eq!(fs::read_to_string(path).unwrap(), "theme");
+    }
+
+    #[test]
+    fn backup_sync_uses_the_links_directory_and_precedes_any_config_edit() {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("links");
+        let target = root.path().join("targets");
+        fs::create_dir(&source).unwrap();
+        fs::create_dir(&target).unwrap();
+        let real = target.join("config");
+        let link = source.join("config");
+        fs::write(&real, "personal").unwrap();
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let lock = WriteLock::new(&link).unwrap();
+        let before = FileStamp::at(&real).unwrap();
+        let result = backup_with(&lock, before, |copy| {
+            assert_eq!(copy.parent(), Some(source.as_path()));
+            assert_eq!(fs::read_to_string(copy).unwrap(), "personal");
+            Err(std::io::Error::other("injected backup directory sync failure").into())
+        });
+        assert!(result.is_err());
+        assert_eq!(FileStamp::at(&real).unwrap(), before);
+        assert_eq!(fs::read_to_string(&real).unwrap(), "personal");
+        assert_eq!(fs::read_link(&link).unwrap(), real);
+    }
+
 }

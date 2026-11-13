@@ -10329,3 +10329,7 @@
 "Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "এই টেমপ্লেট চালু করার আগে ফাইল ও কমান্ড পর্যালোচনা করুন। কমান্ড অন্য ফাইলও বদলাতে পারে। আপডেটের জন্য নতুন পর্যালোচনা দরকার।"
 
 "Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "আগে ব্রাউজারের ভাগ করা রঙের প্যালেট পর্যালোচনা করে অনুমোদন দিন। অন্য Pywal অ্যাপও এই রংগুলো ব্যবহার করবে।"
+
+"Apply the color scheme to KDE apps and notify running apps." = "KDE অ্যাপে রঙের স্কিম প্রয়োগ করুন এবং চলমান অ্যাপকে জানান।"
+
+"Enable browser theming and publish the shared app palette." = "ব্রাউজারের থিম চালু করুন এবং অ্যাপের যৌথ রঙের প্যালেট প্রকাশ করুন।"

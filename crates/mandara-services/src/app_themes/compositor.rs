@@ -64,8 +64,10 @@ pub(super) fn apply(owner: &str, body: &str, locations: &Locations,ledger: &mut 
             ledger.put_file(owner, path, body)?;
             Ok(())
         });
-    if result.is_err() {
+    if let Err(error) = result {
         *ledger = original;
+        if let Err(restore) = ledger.restore_checkpoint() { return Err(error.context(format!("restoring app theme ownership: {restore}"))); }
+        return Err(error);
     }
     result
 }

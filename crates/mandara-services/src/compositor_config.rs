@@ -250,11 +250,13 @@ mod tests {
             for unrelated in ["exec ", "bindsym", "borderpx", "input {", "keybind"] {
                 assert!(!body.contains(unrelated), "{target:?}: {body}");
             }
+            let fragment = tempfile::NamedTempFile::new().unwrap();
+            std::fs::write(fragment.path(), &body).unwrap();
             let included = compositor_theme::compose(
                 target,
                 Kind::Displays,
                 &body,
-                Path::new("/tmp/outputs.conf"),
+                fragment.path(),
                 true,
             ).unwrap();
             let both = compositor_theme::compose(

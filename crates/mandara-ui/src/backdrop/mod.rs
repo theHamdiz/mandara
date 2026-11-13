@@ -645,12 +645,8 @@ fn widget_scene(cfg: &mandara_config::ShellConfig, outputs: &[String], cx: &mut 
         ws.world_cities = crate::plugins::world_clock::city_entries(cfg);
     }
     ws.data = widget_data(&ws.items, cfg, outputs, cx);
-    if ws.any_live() {
-        let screens_off = crate::powerctl::idle::manager(cx).is_some_and(|m| m.read(cx).screens_off());
-        if !screens_off && !crate::lock::is_locked() {
-            ws.visible = outputs.iter().filter(|o| crate::wallpaper::desktop_visible(o, cx)).cloned().collect();
-        }
-    }
+    let screens_off = crate::powerctl::idle::manager(cx).is_some_and(|m| m.read(cx).screens_off());
+    ws.set_visibility(outputs, screens_off, crate::lock::is_locked(), |output| crate::wallpaper::desktop_visible(output, cx));
     if ws.any_visualizer() || ws.items.iter().any(|w| matches!(w.kind, WidgetKind::Pet(_))) {
         ws.music = crate::wallpaper::music_playing(cx);
     }

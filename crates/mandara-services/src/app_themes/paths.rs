@@ -28,6 +28,15 @@ impl Locations {
         })
     }
 
+    /// Serialize ownership changes and catalog pruning across shell and Studio.
+    pub(super) fn lock(&self) -> Result<std::fs::File> {
+        let generated = self.config.join("mandara/generated");
+        std::fs::create_dir_all(&generated)?;
+        let lock = std::fs::OpenOptions::new().create(true).truncate(false).read(true).write(true).open(generated.join("app-themes.lock"))?;
+        lock.lock()?;
+        Ok(lock)
+    }
+
     pub fn catalogs(&self) -> PathBuf {
         self.state.join("mandara/app-templates")
     }
@@ -145,4 +154,15 @@ mod tests {
             Some("/demo/config/editor".into())
         );
     }
+    #[test]
+    fn pruning_and_exports_use_the_same_exclusive_ownership_lock() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = Locations { home: root.path().into(), config: root.path().join("config"), data: root.path().join("data"), cache: root.path().join("cache"), state: root.path().join("state") };
+        let owner = locations.lock().unwrap();
+        let contender = std::fs::OpenOptions::new().read(true).write(true).open(locations.config.join("mandara/generated/app-themes.lock")).unwrap();
+        assert!(matches!(contender.try_lock(), Err(std::fs::TryLockError::WouldBlock)));
+        drop(owner);
+        contender.try_lock().unwrap();
+    }
+
 }

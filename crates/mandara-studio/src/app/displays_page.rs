@@ -102,6 +102,8 @@ struct DisplaysStudio {
     heads_at: Option<Instant>,
     /// Edited arrangement (one entry per head, same order).
     draft: Vec<OutputConfig>,
+    baseline: Vec<OutputConfig>,
+    generation: u64,
     selected: usize,
     /// Dragging output `index` from pointer `start` (window px) and its
     /// logical position then.
@@ -121,6 +123,31 @@ struct DisplaysStudio {
     /// The page loop runs.
     alive: bool,
 }
+impl DisplaysStudio {
+    fn begin_change(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.busy = true;
+    }
+    fn finish_change(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.busy = false;
+    }
+    fn accepts(&self, generation: u64) -> bool {
+        !self.busy && self.drag.is_none() && self.generation == generation
+    }
+    fn refresh_draft(&mut self, fresh: Vec<OutputConfig>) {
+        let same_set = self
+            .draft
+            .iter()
+            .map(|c| &c.name)
+            .eq(fresh.iter().map(|c| &c.name));
+        if !same_set || self.draft == self.baseline || self.draft == fresh {
+            self.baseline = fresh.clone();
+            self.draft = fresh;
+        }
+    }
+}
+
 impl Global for DisplaysStudio {}
 
 fn st(cx: &mut gpui::App) -> &mut DisplaysStudio {
@@ -322,6 +349,7 @@ impl StudioView {
     /// Re-reads the heads (and resets the draft) off the UI thread.
     fn load_heads(cx: &mut Context<Self>) {
         st(cx).heads_at = Some(Instant::now());
+        let generation = st(cx).generation;
         let task = super::display_control::heads(cx);
         cx.spawn(async move |this, cx| {
             let snapshot = task.await;
@@ -338,19 +366,12 @@ impl StudioView {
                 let names = shell_output_names(&result, &fallback);
             let _ = this.update(cx, |_, cx| {
                 let s = st(cx);
-                if s.drag.is_some() || s.busy {
+                if !s.accepts(generation) {
                     return;
                 }
                 if let Ok(heads) = &result {
                     let fresh: Vec<OutputConfig> = heads.iter().map(outputs::Head::to_config).collect();
-                    // Keep unapplied edits unless the monitors changed.
-                    let same_set = s.draft.iter().map(|c| c.name.clone()).collect::<Vec<_>>() == fresh.iter().map(|c| c.name.clone()).collect::<Vec<_>>();
-                    let untouched = s.heads.as_ref().and_then(|h| h.as_ref().ok()).is_none_or(|old| {
-                                old.iter().map(outputs::Head::to_config).collect::<Vec<_>>() == s.draft
-                            });
-                    if !same_set || untouched {
-                        s.draft = fresh;
-                    }
+                    s.refresh_draft(fresh);
                     s.selected = s.selected.min(heads.len().saturating_sub(1));
                 }
                 s.revert_at = remaining.map(|remaining| Instant::now() + remaining);
@@ -465,6 +486,7 @@ impl StudioView {
                 let s = st(cx);
                 if s.revert_at.is_some_and(|at| Instant::now() >= at) {
                     s.revert_at = None;
+                    s.generation = s.generation.wrapping_add(1);
                     s.message = Some((t("Reverted to the previous arrangement").into(), false));
                     s.heads_at = None;
                 }
@@ -533,7 +555,7 @@ impl StudioView {
         let s = st(cx);
         let draft = s.draft.clone();
         let selected = s.selected.min(draft.len().saturating_sub(1));
-        let dirty = heads.iter().map(outputs::Head::to_config).collect::<Vec<_>>() != draft;
+        let dirty = s.baseline != draft;
         let (busy, message, revert_at) = (s.busy, s.message.clone(), s.revert_at);
 
         // Canvas.
@@ -645,13 +667,13 @@ impl StudioView {
                             if st(cx).busy {
                                 return;
                             }
-                            st(cx).busy = true;
+                            st(cx).begin_change();
                             let keep = super::display_control::keep(cx);
                             cx.spawn(async move |this, cx| {
                                 let result = keep.await;
                                 let _ = this.update(cx, |_, cx| {
                                     let s = st(cx);
-                    s.busy = false;
+                    s.finish_change();
                                     s.heads_at = None;
                     s.message = Some(match result {
                                         Ok(true) => {
@@ -671,12 +693,15 @@ impl StudioView {
                             cx.notify();
                 })))
                 .child(button("display-revert", "undo", t("Revert"), false, p).on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
+                    if st(cx).busy { return; }
+                    st(cx).begin_change();
                     st(cx).revert_at = None;
                             let task = super::display_control::revert(cx);
                             cx.spawn(async move |this, cx| {
                         let r = task.await;
                         let _ = this.update(cx, |_, cx| {
                             let s = st(cx);
+                            s.finish_change();
                             s.message = Some(match r {
                                 Ok(_) => (t("Reverted").into(), false),
                                 Err(e) => (e, true),
@@ -703,28 +728,19 @@ impl StudioView {
                             if s.busy || !dirty {
                                 return;
                             }
-                            s.busy = true;
+                            s.begin_change();
                             s.message = None;
                             let draft = s.draft.clone();
-                        let before = s
-                            .heads
-                            .as_ref()
-                            .and_then(|heads| heads.as_ref().ok())
-                            .map(|heads| {
-                                heads
-                                    .iter()
-                                    .map(outputs::Head::to_config)
-                                    .collect::<Vec<_>>()
-                            })
-                            .unwrap_or_default();
+                        let before = s.baseline.clone();
                         let task = super::display_control::test(Some(before), draft, secs, cx);
                         cx.spawn(async move |this, cx| {
                                 let r = task.await;
                                 let _ = this.update(cx, |_, cx| {
                                     let s = st(cx);
-                                    s.busy = false;
+                                    s.finish_change();
                                     match r {
                                         Ok(secs) => {
+                                        s.baseline = s.draft.clone();
                                         s.revert_at = Some(Instant::now() + Duration::from_secs(secs as u64))
                                     }
                                     Err(e) => s.message = Some((e, true)),
@@ -740,6 +756,7 @@ impl StudioView {
                     let s = st(cx);
                     if let Some(Ok(h)) = &s.heads {
                         s.draft = h.iter().map(outputs::Head::to_config).collect();
+                        s.baseline = s.draft.clone();
                     }
                     s.message = None;
                     cx.notify();
@@ -986,9 +1003,10 @@ impl StudioView {
                             .items_center()
                             .gap(px(SPACE_8_PX))
                             .child(button(SharedString::from(format!("profile-apply-{n}")), "check", t("Apply"), false, p).tooltip(tip(t("Apply this profile"), p)).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                                if st(cx).busy { return; }
                                 let profile = apply_p.clone();
                                 let secs = mandara_ui::state::config(cx).read(cx).get().displays.revert_secs();
-                                st(cx).busy = true;
+                                st(cx).begin_change();
                                         let task = super::display_control::test(
                                             None,
                                             profile.outputs.clone(),
@@ -999,10 +1017,11 @@ impl StudioView {
                                     let r = task.await;
                                     let _ = this.update(cx, |_, cx| {
                                         let s = st(cx);
-                                        s.busy = false;
+                                        s.finish_change();
                                         match r {
                                             Ok(secs) => {
-                                                        s.revert_at = Some(Instant::now() + Duration::from_secs(secs as u64))
+                                                        s.baseline = s.draft.clone();
+                                        s.revert_at = Some(Instant::now() + Duration::from_secs(secs as u64))
                                                     }
                                                     Err(e) => s.message = Some((e, true)),
                                         }
@@ -1423,6 +1442,7 @@ mod tests {
 
 #[cfg(test)]
 mod persistence_tests {
+    use super::{DisplaysStudio, OutputConfig, ShellConfig};
     #[test]
     fn saved_arrangements_do_not_require_compositor_management() {
         let mut config = mandara_config::ShellConfig::default();
@@ -1435,4 +1455,34 @@ mod persistence_tests {
         config.compositor.outputs.clear();
         assert_eq!(super::persistence_help(&config),off);
     }
+    #[test]
+    fn live_refresh_retains_the_original_baseline_for_only_the_users_edits() {
+        let before = vec![OutputConfig { name: "DP-1".into(), scale: Some(1.0), x: Some(0), ..Default::default() }];
+        let mut state = DisplaysStudio::default(); state.refresh_draft(before.clone());
+        state.draft[0].scale = Some(1.25);
+        let mut live = before.clone(); live[0].x = Some(100);
+        state.refresh_draft(live.clone());
+        assert_eq!(state.baseline, before);
+        assert_eq!(state.draft[0].x, Some(0));
+        let mut old = ShellConfig::default(); old.compositor.outputs = state.baseline;
+        let mut draft = old.clone(); draft.compositor.outputs = state.draft;
+        let mut current = old.clone(); current.compositor.outputs = live;
+        let merged = mandara_config::patch::ConfigPatch::between(&old, &draft).unwrap().apply(&current).unwrap();
+        assert_eq!(merged.compositor.outputs[0].x, Some(100));
+        assert_eq!(merged.compositor.outputs[0].scale, Some(1.25));
+    }
+
+    #[test]
+    fn a_delayed_countdown_probe_cannot_restore_a_completed_transaction() {
+        let mut state = DisplaysStudio::default();
+        let pending_probe = state.generation;
+        state.begin_change();
+        assert!(!state.accepts(pending_probe));
+        let busy_probe = state.generation;
+        state.finish_change();
+        assert!(!state.accepts(pending_probe));
+        assert!(!state.accepts(busy_probe));
+        assert!(state.accepts(state.generation));
+    }
+
 }

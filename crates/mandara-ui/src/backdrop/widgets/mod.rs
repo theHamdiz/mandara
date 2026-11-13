@@ -114,8 +114,7 @@ pub struct WidgetScene {
     pub on_surface: Color,
     /// `(icon, temperature)` of the current weather, when known.
     pub weather: Option<(&'static str, String)>,
-    /// Outputs where the desktop is visible (live widgets run only there);
-    /// filled only while a live widget exists.
+    /// Outputs where the desktop is visible; hidden widgets never schedule ticks.
     pub visible: Vec<String>,
     /// A player is playing (filled only while a visualizer exists).
     pub music: bool,
@@ -588,21 +587,15 @@ impl WidgetScene {
         self.items.iter().any(|w| w.place.depth == Depth::Behind)
     }
 
-    /// Any widget whose content changes between minutes.
-    pub fn any_live(&self) -> bool {
-        self.items.iter().any(|w| is_live(&w.kind))
+    pub fn set_visibility(&mut self, outputs: &[String], screens_off: bool, locked: bool, visible: impl Fn(&str) -> bool) {
+        self.visible.clear();
+        if !screens_off && !locked {
+            self.visible.extend(outputs.iter().filter(|output| visible(output)).cloned());
+        }
     }
 
     pub fn any_visualizer(&self) -> bool {
         self.items.iter().any(|w| matches!(w.kind, WidgetKind::Visualizer(_)))
-    }
-}
-
-fn is_live(k: &WidgetKind) -> bool {
-    match k {
-        WidgetKind::Clock(c) => ticks_seconds(c),
-        WidgetKind::Monitor(_) | WidgetKind::Visualizer(_) | WidgetKind::Pomodoro(_) | WidgetKind::Pet(_) | WidgetKind::Bubbles(_) | WidgetKind::Media(_) => true,
-        _ => false,
     }
 }
 
@@ -2520,4 +2513,16 @@ mod tests {
         assert!(host.exists.is_empty() && host.bytes.values().sum::<u64>() == 0, "{:?}", host.exists);
         assert!(ws.states.is_empty());
     }
+    #[test]
+    fn a_minute_only_clock_schedules_updates_only_on_an_unlocked_visible_desktop() {
+        let clock = DesktopWidget { kind: WidgetKind::Clock(Default::default()), ..Default::default() };
+        let mut scene = scene(vec![clock]);
+        let outputs = ["DP-1".to_string()];
+        let now = chrono::Local::now(); let at = Instant::now();
+        for (off, locked, visible, ticks) in [(false, false, true, true), (true, false, true, false), (false, true, true, false), (false, false, false, false)] {
+            scene.set_visibility(&outputs, off, locked, |_| visible);
+            assert_eq!(next_wake(&OutWidgets::default(), &["DP-1"], &scene, &Shared::default(), now, at).is_some(), ticks);
+        }
+    }
+
 }

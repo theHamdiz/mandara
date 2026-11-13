@@ -219,11 +219,15 @@ fn at<'a>(mut value: &'a mut Value, path: &[Part]) -> Result<Option<&'a mut Valu
     for part in path {
         match part {
             Part::Key(key) => {
-                value = value
-                    .as_object_mut()
-                    .ok_or_else(|| anyhow::anyhow!("preference parent is not an object"))?
-                    .entry(key)
-                    .or_insert_with(|| Value::Object(Default::default()));
+                if value.is_null() {
+                    return Ok(None);
+                }
+                let object = value.as_object_mut()
+                    .ok_or_else(|| anyhow::anyhow!("preference parent is not an object"))?;
+                let Some(next) = object.get_mut(key) else {
+                    return Ok(None);
+                };
+                value = next;
             }
             Part::Item { field, id } => {
                 let array = value
@@ -355,4 +359,28 @@ mod tests {
         patch.extend(ConfigPatch::between(&b, &c).unwrap());
         assert_eq!(patch.apply(&a).unwrap(), c);
     }
+    #[test]
+    fn nested_edits_do_not_recreate_removed_map_entries_or_cleared_options() {
+        for current in [serde_json::json!({"settings": {}}), serde_json::json!({"settings": {"notes": null}})] {
+            let mut current = current;
+            assert!(at(&mut current, &[Part::Key("settings".into()), Part::Key("notes".into()), Part::Key("content".into())]).unwrap().is_none());
+            assert!(current["settings"].get("notes").is_none_or(Value::is_null));
+        }
+        let mut base = ShellConfig::default();
+        base.plugins.settings.insert("notes".into(), toml::Table::from_iter([("text".into(), toml::Value::String("old".into())), ("other".into(), toml::Value::Boolean(true))]));
+        let mut studio = base.clone();
+        studio.plugins.settings.get_mut("notes").unwrap()["text"] = toml::Value::String("edited".into());
+        let patch = ConfigPatch::between(&base, &studio).unwrap();
+        base.plugins.settings.remove("notes");
+        assert!(!patch.apply(&base).unwrap().plugins.settings.contains_key("notes"));
+    }
+
+    #[test]
+    fn adding_a_whole_map_entry_still_works() {
+        let base = ShellConfig::default();
+        let mut next = base.clone();
+        next.plugins.settings.insert("example".into(), toml::Table::from_iter([("enabled".into(), toml::Value::Boolean(true))]));
+        assert_eq!(ConfigPatch::between(&base,&next).unwrap().apply(&base).unwrap().plugins.settings["example"], next.plugins.settings["example"]);
+    }
+
 }

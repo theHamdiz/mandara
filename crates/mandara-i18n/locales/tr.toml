@@ -10570,3 +10570,7 @@
 "Review files and commands before enabling this template. Commands can change other files too. Updates need a new review." = "Bu şablonu etkinleştirmeden önce dosyaları ve komutları inceleyin. Komutlar başka dosyaları da değiştirebilir. Güncellemeler yeniden incelenmelidir."
 
 "Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "Önce tarayıcının paylaşılan renk paletini inceleyip onaylayın. Diğer Pywal uygulamaları da bu renkleri kullanacak."
+
+"Apply the color scheme to KDE apps and notify running apps." = "Renk şemasını KDE uygulamalarına uygula ve çalışan uygulamalara bildir."
+
+"Enable browser theming and publish the shared app palette." = "Tarayıcı temasını etkinleştir ve ortak uygulama paletini yayımla."
