@@ -10569,3 +10569,5 @@
 "Apply the color scheme to KDE apps and notify running apps." = "Aplicar el esquema de colores a las aplicaciones KDE y avisar a las que estén abiertas."
 
 "Enable browser theming and publish the shared app palette." = "Activar el tema del navegador y publicar la paleta compartida de las aplicaciones."
+
+"Browser CSS exceeds the nesting limit" = "El CSS del navegador supera el límite de anidamiento"

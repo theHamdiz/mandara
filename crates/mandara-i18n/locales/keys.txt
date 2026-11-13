@@ -1003,6 +1003,7 @@ Browse settings
 Browse the coming days' times
 Browse the marketplace
 Browser
+Browser CSS exceeds the nesting limit
 Brutalist soft
 Bubble
 Bubbles

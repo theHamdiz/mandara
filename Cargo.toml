@@ -175,6 +175,9 @@ parking_lot = "0.12"
 # Time
 chrono = { version = "0.4", default-features = false, features = ["clock", "std", "unstable-locales"] }
 
+# Browser CSS declarations; color parsing and serialization are not used.
+cssparser = { version = "0.38", default-features = false, features = ["fast_match_byte"] }
+
 # CLI & logging
 clap = { version = "4.6.7", features = ["derive"] }
 # No `attributes`: Mandara has no `#[instrument]` spans.

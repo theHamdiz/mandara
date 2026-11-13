@@ -245,6 +245,10 @@ impl ConfigStore {
     pub fn flush(&mut self) -> Result<()> { self.flush_with(|| Ok(())) }
 
     fn flush_with(&mut self, before_publish: impl FnOnce() -> Result<()>) -> Result<()> {
+        self.flush_using(before_publish, publication::sync_directory)
+    }
+
+    fn flush_using(&mut self, before_publish: impl FnOnce() -> Result<()>, mut sync_directory: impl FnMut(&Path) -> std::io::Result<()>) -> Result<()> {
         if !self.dirty {
             return Ok(());
         }
@@ -274,7 +278,7 @@ impl ConfigStore {
         // Merge before writing so Studio cannot undo a shell-side change.
         if target.exists() {
             let bytes = fs::read(&target).with_context(||format!("reading {}",target.display()))?;
-            self.reload_bytes(&bytes)?;
+            self.reload_bytes(&bytes, |_| publication::confirm(&directory, &bytes, &mut sync_directory))?;
         }
         if !self.dirty {
             return Ok(());
@@ -282,7 +286,7 @@ impl ConfigStore {
         let body = toml::to_string_pretty(&*self.current).context("serializing config")?;
         let contents = format!("{HEADER}{body}");
         before_publish()?;
-        write_atomic_checked(&directory, before, contents.as_bytes())?;
+        write_atomic_checked_using(&directory, before, contents.as_bytes(), sync_directory)?;
         self.disk_hash = Some(hash_bytes(contents.as_bytes()));
         self.saved = self.current.clone();
         self.dirty = false;
@@ -292,11 +296,18 @@ impl ConfigStore {
     /// Re-reads the file. Our own writes (same hash) are reported as
     /// unchanged. Parse errors leave the current config in place.
     pub fn reload_from_disk(&mut self) -> Result<ReloadOutcome> {
-        let bytes = fs::read(&self.path).with_context(|| format!("reading {}", self.path.display()))?;
-        self.reload_bytes(&bytes)
+        self.reload_using(publication::sync_directory)
     }
 
-    fn reload_bytes(&mut self,bytes: &[u8]) -> Result<ReloadOutcome> {
+    fn reload_using(&mut self, sync_directory: impl FnOnce(&Path) -> std::io::Result<()>) -> Result<ReloadOutcome> {
+        let bytes = fs::read(&self.path).with_context(|| format!("reading {}", self.path.display()))?;
+        self.reload_bytes(&bytes, |path| {
+            let lock = mandara_theme::templates::WriteLock::new(path)?;
+            publication::confirm(&lock, &bytes, sync_directory)
+        })
+    }
+
+    fn reload_bytes(&mut self,bytes: &[u8], confirm_saved: impl FnOnce(&Path) -> Result<()>) -> Result<ReloadOutcome> {
         let hash = hash_bytes(bytes);
         if Some(hash) == self.disk_hash {
             return Ok(ReloadOutcome::Unchanged);
@@ -307,6 +318,8 @@ impl ConfigStore {
         } else {
             cfg.clone()
         };
+        // A previous rename may have published these edits before its sync failed.
+        if self.dirty && next == cfg { confirm_saved(&self.path)?; }
         self.load_error = None;
         self.disk_hash = Some(hash);
         self.dirty = next != cfg;
@@ -356,7 +369,7 @@ pub fn write_atomic_locked(lock: &mandara_theme::templates::WriteLock, contents:
 
 /// Refuse a stale merge, including replacement with identical bytes.
 pub fn write_atomic_checked(lock: &mandara_theme::templates::WriteLock, before: Option<mandara_theme::templates::FileStamp>, contents: &[u8]) -> Result<mandara_theme::templates::FileStamp> {
-    write_atomic_checked_using(lock, before, contents, |directory| fs::File::open(directory)?.sync_all())
+    write_atomic_checked_using(lock, before, contents, publication::sync_directory)
 }
 
 fn write_atomic_checked_using(lock: &mandara_theme::templates::WriteLock, before: Option<mandara_theme::templates::FileStamp>, contents: &[u8], sync_directory: impl FnOnce(&Path) -> std::io::Result<()>) -> Result<mandara_theme::templates::FileStamp> {

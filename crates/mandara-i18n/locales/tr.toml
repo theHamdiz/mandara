@@ -10574,3 +10574,5 @@
 "Apply the color scheme to KDE apps and notify running apps." = "Renk şemasını KDE uygulamalarına uygula ve çalışan uygulamalara bildir."
 
 "Enable browser theming and publish the shared app palette." = "Tarayıcı temasını etkinleştir ve ortak uygulama paletini yayımla."
+
+"Browser CSS exceeds the nesting limit" = "Tarayıcı CSS dosyası iç içe geçme sınırını aşıyor"

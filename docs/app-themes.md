@@ -60,7 +60,7 @@ replace a file that contains managed imports.
 Imported KDE schemes merge their colour keys into `kdeglobals`, preserving
 unrelated settings. The browser integration can install an owned native-messaging
 host on Linux, deliver the palette to the browser extension, and manage its
-optional CSS across profiles. An existing host from another installation is
+optional CSS across profiles. Font-size edits preserve unrelated CSS; excessive nesting is reported before a write. An existing host from another installation is
 preserved. If that host requires the shared `~/.cache/wal/colors.json` palette,
 it appears in the review with a warning: other Pywal apps will read those
 colours too. The shared file is never replaced without that approval. In a

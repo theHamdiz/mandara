@@ -146,6 +146,10 @@ impl DisplaysStudio {
             self.draft = fresh;
         }
     }
+    fn applied(&mut self, submitted: Vec<OutputConfig>, seconds: u32) {
+        self.baseline = submitted;
+        self.revert_at = Some(Instant::now() + Duration::from_secs(seconds.into()));
+    }
 }
 
 impl Global for DisplaysStudio {}
@@ -732,7 +736,7 @@ impl StudioView {
                             s.message = None;
                             let draft = s.draft.clone();
                         let before = s.baseline.clone();
-                        let task = super::display_control::test(Some(before), draft, secs, cx);
+                        let task = super::display_control::test(Some(before), draft.clone(), secs, cx);
                         cx.spawn(async move |this, cx| {
                                 let r = task.await;
                                 let _ = this.update(cx, |_, cx| {
@@ -740,8 +744,7 @@ impl StudioView {
                                     s.finish_change();
                                     match r {
                                         Ok(secs) => {
-                                        s.baseline = s.draft.clone();
-                                        s.revert_at = Some(Instant::now() + Duration::from_secs(secs as u64))
+                                        s.applied(draft, secs);
                                     }
                                     Err(e) => s.message = Some((e, true)),
                                     }
@@ -1007,6 +1010,7 @@ impl StudioView {
                                 let profile = apply_p.clone();
                                 let secs = mandara_ui::state::config(cx).read(cx).get().displays.revert_secs();
                                 st(cx).begin_change();
+                                let draft = st(cx).draft.clone();
                                         let task = super::display_control::test(
                                             None,
                                             profile.outputs.clone(),
@@ -1020,8 +1024,7 @@ impl StudioView {
                                         s.finish_change();
                                         match r {
                                             Ok(secs) => {
-                                                        s.baseline = s.draft.clone();
-                                        s.revert_at = Some(Instant::now() + Duration::from_secs(secs as u64))
+                                                        s.applied(draft, secs);
                                                     }
                                                     Err(e) => s.message = Some((e, true)),
                                         }
@@ -1483,6 +1486,23 @@ mod persistence_tests {
         assert!(!state.accepts(pending_probe));
         assert!(!state.accepts(busy_probe));
         assert!(state.accepts(state.generation));
+    }
+
+    #[test]
+    fn edits_during_apply_remain_unsubmitted_after_success_and_refresh() {
+        let original = vec![OutputConfig { name: "DP-1".into(), scale: Some(1.0), x: Some(0), ..Default::default() }];
+        let mut state = DisplaysStudio::default();
+        state.refresh_draft(original);
+        state.draft[0].scale = Some(1.25);
+        let submitted = state.draft.clone();
+        state.begin_change();
+        state.draft[0].scale = Some(1.75);
+        state.finish_change();
+        state.applied(submitted.clone(), mandara_config::outputs::defaults::REVERT_SECONDS);
+        state.refresh_draft(submitted.clone());
+        assert_eq!(state.baseline, submitted);
+        assert_eq!(state.draft[0].scale, Some(1.75));
+        assert_ne!(state.draft, state.baseline);
     }
 
 }

@@ -10331,3 +10331,5 @@
 "Apply the color scheme to KDE apps and notify running apps." = "KDE 앱에 색 구성표를 적용하고 실행 중인 앱에 알립니다."
 
 "Enable browser theming and publish the shared app palette." = "브라우저 테마를 활성화하고 앱 공용 팔레트를 게시합니다."
+
+"Browser CSS exceeds the nesting limit" = "브라우저 CSS가 중첩 제한을 초과합니다"

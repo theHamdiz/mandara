@@ -10233,3 +10233,5 @@
 "Apply the color scheme to KDE apps and notify running apps." = "Tumia mpangilio wa rangi kwenye programu za KDE na ujulishe programu zinazoendelea."
 
 "Enable browser theming and publish the shared app palette." = "Washa mandhari ya kivinjari na uchapishe paleti ya rangi inayoshirikiwa na programu."
+
+"Browser CSS exceeds the nesting limit" = "CSS ya kivinjari imezidi kikomo cha viwango vilivyopachikwa"

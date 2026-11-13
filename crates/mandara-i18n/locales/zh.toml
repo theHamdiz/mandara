@@ -10570,3 +10570,5 @@
 "Apply the color scheme to KDE apps and notify running apps." = "将配色方案应用于 KDE 应用，并通知正在运行的应用。"
 
 "Enable browser theming and publish the shared app palette." = "启用浏览器主题并发布应用共享调色板。"
+
+"Browser CSS exceeds the nesting limit" = "浏览器 CSS 超出嵌套限制"
