@@ -1,5 +1,7 @@
 //! COSMIC's RON map preserves native actions and every untouched source byte.
 
+mod action;
+
 use std::{fmt, ops::Range};
 
 use anyhow::{Result, ensure};
@@ -90,6 +92,20 @@ fn span(source: &str, raw: &RawValue) -> Result<Range<usize>> {
 }
 
 impl ShortcutFormat for Cosmic {
+    fn validate_edit(&self, before: &Binding, after: &Binding) -> Result<()> {
+        if let Some(value) = before
+            .fields
+            .iter()
+            .zip(&after.fields)
+            .find_map(|(old, new)| {
+                (new.label == "Action" && old.value != new.value).then_some(&new.value)
+            })
+        {
+            action::validate(value)?;
+        }
+        Ok(())
+    }
+
     fn parse(&self, source: &str) -> Result<Vec<Binding>> {
         let Pairs(pairs) = ron::from_str::<Pairs<'_>>(source)?;
         let mut result = Vec::with_capacity(pairs.len());

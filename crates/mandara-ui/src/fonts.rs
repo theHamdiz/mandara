@@ -54,9 +54,15 @@ fn pick(installed: &[String], wanted: &str, fallbacks: &[&str]) -> SharedString 
     std::iter::once(wanted)
         .chain(fallbacks.iter().copied())
         .find(|name| installed.iter().any(|f| f.eq_ignore_ascii_case(name)))
+        .or_else(|| installed.first().map(String::as_str))
         .unwrap_or(wanted)
         .to_string()
         .into()
+}
+
+/// Resolve a display face for a preview without changing global font fallbacks.
+pub fn display_family(installed: &[String], wanted: &str) -> SharedString {
+    pick(installed, wanted, &["Alexandria", "Inter Display", "Inter", "Cairo", "Noto Sans", "DejaVu Sans"])
 }
 
 /// Arabic-capable families, best first, after the configured Arabic font.
@@ -199,7 +205,7 @@ impl Fonts {
         const UI_FALLBACKS: [&str; 5] = ["Inter", "Inter Display", "Cantarell", "Noto Sans", "DejaVu Sans"];
         let ui = pick(&installed, &cfg.ui_font, &UI_FALLBACKS);
         let surface = |family: &str| if family.trim().is_empty() { ui.clone() } else { pick(&installed, family.trim(), &UI_FALLBACKS) };
-        let display = pick(&installed, &cfg.display_font, &["Alexandria", "Inter Display", "Inter", "Cairo", "Noto Sans"]);
+        let display = display_family(&installed, &cfg.display_font);
         let arabic = pick(&installed, &cfg.arabic_font, &["Cairo", "Alexandria", "Noto Sans Arabic", "Noto Naskh Arabic"]);
         Self {
             bar: surface(&cfg.bar_font),
@@ -234,6 +240,14 @@ mod tests {
     use super::*;
     use gpui::{FontRun, FontWeight, PlatformTextSystem, px};
     use gpui_wgpu::CosmicTextSystem;
+
+    #[test]
+    fn unavailable_preview_fonts_resolve_to_an_installed_face_without_global_changes() {
+        let installed = vec!["Inter".into(), "Cairo".into()];
+        assert_eq!(display_family(&installed, "Bangers").as_ref(), "Inter");
+        assert_eq!(display_family(&installed, "Cairo").as_ref(), "Cairo");
+        assert_eq!(display_family(&["Liberation Sans".into()], "Missing").as_ref(), "Liberation Sans");
+    }
 
     /// Section headings and nav rows that rendered in Reem Kufi at 600.
     const ARABIC_SAMPLE: &str = "الساعة المظهر والإحساس سطح المكتب";

@@ -1,6 +1,8 @@
 //! Reversible theme-key edits for compositors without generated includes.
 
 mod rollback;
+mod transaction;
+pub use transaction::{BatchValidator, FileEdit, guarded_batch, guarded_batch_finalizing};
 
 use super::comparison::CheckResult;
 use anyhow::{Context as _, Result, ensure};

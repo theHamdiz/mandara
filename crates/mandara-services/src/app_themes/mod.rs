@@ -14,5 +14,5 @@ pub mod paths;
 mod post_action;
 mod post_hooks;
 mod preferences;
-mod process;
+pub(crate) mod process;
 pub mod worker;

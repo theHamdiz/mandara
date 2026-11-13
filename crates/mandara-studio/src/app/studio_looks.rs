@@ -4,12 +4,11 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, div, px,
+    SharedString, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _, px,
 };
 use mandara_config::{
     ShellConfig, ThemeMode,
-    desktop::StyleConfig,
-    studio::{StudioFrame, StudioLook},
+    studio::{StudioAppearance, StudioLook},
 };
 use mandara_core::ToGpui as _;
 use mandara_i18n::{t, tr};
@@ -38,8 +37,8 @@ const PREVIEW_CONTENT_PADDING: f32 = 12.0;
 
 struct Preview {
     look: StudioLook,
-    frame: StudioFrame,
-    style: StyleConfig,
+    appearance: StudioAppearance,
+    display_font: SharedString,
     palette: MandaraPalette,
 }
 
@@ -58,7 +57,7 @@ impl Gallery {
     }
 }
 
-fn resolve_previews() -> anyhow::Result<Vec<Preview>> {
+fn resolve_previews(installed: &[String]) -> anyhow::Result<Vec<Preview>> {
     StudioLook::ALL
         .into_iter()
         .map(|look| {
@@ -70,8 +69,11 @@ fn resolve_previews() -> anyhow::Result<Vec<Preview>> {
                 .palette;
             Ok(Preview {
                 look,
-                frame: appearance.frame.bounded(),
-                style: appearance.style,
+                appearance,
+                display_font: mandara_ui::fonts::display_family(
+                    installed,
+                    look.definition().display_font,
+                ),
                 palette,
             })
         })
@@ -85,7 +87,10 @@ impl StudioView {
             return;
         };
         // Resolve one small fixed catalog in sequence, outside GPUI's thread.
-        let job = cx.background_executor().spawn(async { resolve_previews() });
+        let installed = cx.text_system().all_font_names();
+        let job = cx
+            .background_executor()
+            .spawn(async move { resolve_previews(&installed) });
         cx.spawn(async move |this, cx| {
             let result = job.await;
             let _ = this.update(cx, |this, cx| {
@@ -175,6 +180,7 @@ impl StudioView {
                     let def = preview.look.definition();
                     let look = preview.look;
                     let active = current == Some(look);
+                    let customized = customized(config.studio.as_deref(), preview);
                     div()
                         .flex_1()
                         .min_w(px(0.0))
@@ -184,11 +190,19 @@ impl StudioView {
                         .child(miniature(preview, index))
                         .child(
                             div()
-                                .font_family(SharedString::new_static(def.display_font))
+                                .font_family(preview.display_font.clone())
                                 .text_size(px(TEXT_18_PX))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .child(tr(def.name)),
                         )
+                        .when(customized, |el| {
+                            el.child(
+                                div()
+                                    .text_size(px(TEXT_12_PX))
+                                    .text_color(p.warning_amber.hsla())
+                                    .child(t("Customized")),
+                            )
+                        })
                         .child(
                             div()
                                 .flex_1()
@@ -199,14 +213,29 @@ impl StudioView {
                         .child(
                             button(
                                 SharedString::from(format!("studio-look-{index}")),
-                                if active { "check" } else { "palette" },
-                                if active { t("Selected") } else { t("Apply") },
+                                if customized {
+                                    "refresh"
+                                } else if active {
+                                    "check"
+                                } else {
+                                    "palette"
+                                },
+                                if customized {
+                                    t("Reapply preset")
+                                } else if active {
+                                    t("Selected")
+                                } else {
+                                    t("Apply")
+                                },
                                 active,
                                 p,
                             )
                             .tab_index(0)
-                            .focus(|s| s.bg(p.primary_container.hsla()))
+                            .focus(|s| s.border_2().border_color(p.primary.hsla()))
                             .on_click(move |_: &ClickEvent, _, cx| {
+                                if active && !customized {
+                                    return;
+                                }
                                 update_config(cx, |c| c.studio = Some(Box::new(look.appearance())))
                             }),
                         )
@@ -224,9 +253,13 @@ impl StudioView {
     }
 }
 
+fn customized(current: Option<&StudioAppearance>, preview: &Preview) -> bool {
+    current.is_some_and(|selected| selected.look == preview.look && selected != &preview.appearance)
+}
+
 fn miniature(preview: &Preview, index: usize) -> AnyElement {
     let p = &preview.palette;
-    let mut frame = preview.frame.clone();
+    let mut frame = preview.appearance.frame.clone();
     frame.title_height = PREVIEW_TITLE_HEIGHT;
     frame.inset = SPACE_6_PX;
     frame.sidebar_inset = SPACE_6_PX;
@@ -277,10 +310,14 @@ fn miniature(preview: &Preview, index: usize) -> AnyElement {
                         .rounded_full()
                         .bg(p.on_surface.with_alpha(ALPHA_12).hsla()),
                 )
-                .child(toggles::switch(true, preview.style.toggle_design, p)),
+                .child(toggles::switch(
+                    true,
+                    preview.appearance.style.toggle_design,
+                    p,
+                )),
         )
         .child(button_as(
-            preview.style.button_design,
+            preview.appearance.style.button_design,
             SharedString::from(format!("studio-preview-button-{index}")),
             "check",
             t("Apply"),
@@ -332,11 +369,12 @@ mod tests {
 
     #[test]
     fn every_studio_look_resolves_and_release_discards_preview_storage() {
-        let previews: Rc<[Preview]> = resolve_previews().unwrap().into();
+        let previews: Rc<[Preview]> = resolve_previews(&["Inter".into()]).unwrap().into();
         assert_eq!(previews.len(), StudioLook::ALL.len());
         for (preview, look) in previews.iter().zip(StudioLook::ALL) {
             assert_eq!(preview.look, look);
             assert_eq!(preview.palette.is_dark, look.definition().dark);
+            assert_eq!(preview.display_font.as_ref(), "Inter");
         }
         let weak = Rc::downgrade(&previews);
         let mut gallery = Gallery {
@@ -345,5 +383,17 @@ mod tests {
         };
         gallery.release();
         assert!(weak.upgrade().is_none());
+    }
+
+    #[test]
+    fn fine_tuning_a_preset_is_visible_before_reapplying_its_defaults() {
+        let previews = resolve_previews(&["Inter".into()]).unwrap();
+        let preview = &previews[0];
+        let mut selected = preview.appearance.clone();
+        assert!(!customized(Some(&selected), preview));
+        selected.frame.sidebar_width += 1.0;
+        assert!(customized(Some(&selected), preview));
+        assert!(!customized(Some(&selected), &previews[1]));
+        assert!(!customized(None, preview));
     }
 }

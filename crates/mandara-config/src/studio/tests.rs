@@ -9,6 +9,16 @@ fn existing_configs_follow_the_shell_until_a_studio_look_is_selected() {
 }
 
 #[test]
+fn command_names_match_persisted_ids_and_reject_unknown_looks() {
+    for look in StudioLook::ALL {
+        assert_eq!(StudioLook::parse(look.slug()), Some(look));
+        assert_eq!(StudioLook::parse(&look.slug().to_uppercase()), Some(look));
+        assert_eq!(serde_json::to_value(look).unwrap(), look.slug());
+    }
+    assert!(StudioLook::parse("uninstalled-look").is_none());
+}
+
+#[test]
 fn every_studio_look_survives_shell_look_changes_and_serialization() {
     for preset in StudioLook::ALL {
         let mut config = ShellConfig {

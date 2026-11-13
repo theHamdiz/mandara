@@ -58,6 +58,11 @@ fn read_table(
             key_span.clone(),
             Encoding::TomlString,
         )];
+        if target == Target::Aqueous && !custom_aqueous {
+            fields[0].read_only = Some(tk(
+                "The compositor defines this action. Change its shortcut here.",
+            ));
+        }
         let mut chords = Vec::new();
         let values: Vec<&Value> = value
             .as_array()

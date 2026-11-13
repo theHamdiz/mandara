@@ -24,6 +24,10 @@ impl<T> Default for Latest<T> {
 }
 
 impl<T: Clone + PartialEq> Latest<T> {
+    pub fn desired(&self) -> Option<&T> {
+        self.desired.as_ref()
+    }
+
     pub fn set(&mut self, desired: Option<T>) {
         if self.desired != desired {
             self.desired = desired;

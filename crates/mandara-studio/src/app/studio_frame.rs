@@ -52,7 +52,9 @@ pub(super) fn sidebar(mut el: Div, frame: Option<&StudioFrame>, p: &MandaraPalet
         .rounded(px(f.nav_radius))
         .bg(match f.design {
             FrameDesign::Glass => p.surface_container_high.with_alpha(ALPHA_70),
-            FrameDesign::Chassis | FrameDesign::Terminal => p.surface_container_low,
+            FrameDesign::Chassis | FrameDesign::Console | FrameDesign::Terminal => {
+                p.surface_container_low
+            }
             FrameDesign::Comic => p.primary_container,
             FrameDesign::Editorial => p.surface_base,
             FrameDesign::Classic | FrameDesign::Header => p.surface_container_low,
@@ -62,6 +64,14 @@ pub(super) fn sidebar(mut el: Div, frame: Option<&StudioFrame>, p: &MandaraPalet
         FrameDesign::Chassis => {
             el.border_b(px(f.border))
                 .border_color(p.primary.hsla())
+                .rounded_br(px((f.radius * CHASSIS_RADIUS_SCALE)
+                    .min(mandara_config::studio::ranges::RADIUS.max)))
+        }
+        FrameDesign::Console => {
+            el.border(px(f.border))
+                .border_color(p.primary.hsla())
+                .rounded_tl(px((f.radius * CHASSIS_RADIUS_SCALE)
+                    .min(mandara_config::studio::ranges::RADIUS.max)))
                 .rounded_br(px((f.radius * CHASSIS_RADIUS_SCALE)
                     .min(mandara_config::studio::ranges::RADIUS.max)))
         }
@@ -98,6 +108,7 @@ pub(super) fn titlebar(
             .items_center()
             .justify_center()
             .cursor_pointer()
+            .focusable()
             .tab_index(0)
             .tooltip(super::compositor_page::tip(tr(label), p))
             .focus(|s| s.bg(p.primary_container.hsla()))
@@ -165,13 +176,21 @@ pub(super) fn titlebar(
         .when(
             matches!(
                 f.design,
-                FrameDesign::Header | FrameDesign::Chassis | FrameDesign::Terminal
+                FrameDesign::Header
+                    | FrameDesign::Chassis
+                    | FrameDesign::Console
+                    | FrameDesign::Terminal
             ),
             |el| {
-                el.bg(p.surface_container.hsla())
+                el.bg(if f.header_accent {
+                    p.primary_container
+                } else {
+                    p.surface_container
+                }
+                .hsla())
                     .border_b(px(f.border))
                     .border_color(
-                        if f.design == FrameDesign::Chassis {
+                        if matches!(f.design, FrameDesign::Chassis | FrameDesign::Console) {
                             p.primary
                         } else {
                             p.outline
@@ -185,6 +204,7 @@ pub(super) fn titlebar(
                 .border_b(px(f.border))
                 .border_color(p.on_surface.hsla())
         })
+        .when(f.header_accent, |el| el.bg(p.primary_container.hsla()))
         .on_mouse_down(MouseButton::Left, |e, window, _| {
             if e.click_count >= 2 {
                 window.zoom_window();
@@ -224,10 +244,10 @@ pub(super) fn window(
                     .child(content),
             );
     };
-    let family = if f.design == FrameDesign::Chassis {
-        SurfaceCorners::Cut
-    } else {
-        SurfaceCorners::Rounded
+    let family = match f.design {
+        FrameDesign::Chassis => SurfaceCorners::Cut,
+        FrameDesign::Console => SurfaceCorners::Asymmetric,
+        _ => SurfaceCorners::Rounded,
     };
     let radius = if f.design == FrameDesign::Chassis {
         (f.radius * CHASSIS_RADIUS_SCALE).min(mandara_config::studio::ranges::RADIUS.max)
@@ -244,15 +264,30 @@ pub(super) fn window(
             family,
             CardStyle::Tonal,
             radius,
-            Fill(p.surface_base, None),
-            Vec::new(),
+            if f.design == FrameDesign::Glass {
+                Fill(
+                    p.surface_base.with_alpha(f.opacity),
+                    Some(p.surface_container_low.with_alpha(f.opacity)),
+                )
+            } else {
+                Fill(p.surface_base.with_alpha(f.opacity), None)
+            },
+            if f.design == FrameDesign::Glass {
+                mandara_core::material::glass_rim_width(
+                    p.specular_rim_light,
+                    p.specular_rim_shadow,
+                    f.border,
+                )
+            } else {
+                Vec::new()
+            },
             p,
         )
         .border(px(f.border))
         .border_color(
             match f.design {
                 FrameDesign::Comic | FrameDesign::Terminal => p.on_surface,
-                FrameDesign::Chassis => p.primary,
+                FrameDesign::Chassis | FrameDesign::Console => p.primary,
                 _ => p.outline.with_alpha(ALPHA_35),
             }
             .hsla(),
@@ -267,20 +302,23 @@ pub(super) fn window(
             })
             .clip_rounded();
     }
-    surface = surface.children(title).child(
-        div()
-            .flex_1()
-            .min_h(px(0.0))
-            .row()
-            .child(nav)
-            .child(content),
-    );
+    let body = div().flex_1().min_h(px(0.0)).row();
+    let body = if nav_at_end(f) {
+        body.child(content).child(nav)
+    } else {
+        body.child(nav).child(content)
+    };
+    surface = surface.children(title).child(body);
     div()
         .size_full()
         .p(px(f.inset))
         .row()
         .flex_col()
         .child(surface)
+}
+
+fn nav_at_end(frame: &StudioFrame) -> bool {
+    frame.design == FrameDesign::Console
 }
 
 #[cfg(test)]
@@ -307,5 +345,11 @@ mod tests {
             );
         }
         assert!(frame(&ShellConfig::default()).is_none());
+        assert!(nav_at_end(&StudioLook::Telemetry.appearance().frame));
+        assert!(!nav_at_end(&StudioLook::Arcade.appearance().frame));
+        assert_ne!(
+            StudioLook::Telemetry.appearance().frame.design,
+            StudioLook::Arcade.appearance().frame.design
+        );
     }
 }

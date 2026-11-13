@@ -7,6 +7,34 @@ use crate::keybinds::{Binding, Encoding, ShortcutFormat, field, line, normalize}
 
 pub(super) struct Labwc;
 
+/// Preserve keyboard XML and its namespaces without copying startup/window hooks.
+pub fn keyboard(source: &str) -> Result<String> {
+    let options = roxmltree::ParsingOptions {
+        allow_dtd: false,
+        nodes_limit: crate::keybinds::MAX_BINDINGS as u32 * 32,
+        ..Default::default()
+    };
+    let doc = roxmltree::Document::parse_with_options(source, options)?;
+    let root = doc.root_element();
+    let mut result = String::from("<labwc_config");
+    for namespace in root.namespaces() {
+        result.push_str(" xmlns");
+        if let Some(name) = namespace.name() {
+            result.push(':');
+            result.push_str(name);
+        }
+        result.push_str("=\"");
+        result.push_str(&Encoding::XmlAttribute.encode(namespace.uri())?);
+        result.push('"');
+    }
+    result.push('>');
+    for node in root.children().filter(|node| node.has_tag_name("keyboard")) {
+        result.push_str(&source[node.range()]);
+    }
+    result.push_str("</labwc_config>\n");
+    Ok(result)
+}
+
 impl ShortcutFormat for Labwc {
     fn parse(&self, source: &str) -> Result<Vec<Binding>> {
         let options = roxmltree::ParsingOptions {
@@ -117,6 +145,23 @@ fn xml_chord(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_private_check_keeps_keyboard_namespaces_and_omits_other_hooks() {
+        let source = "<labwc_config xmlns='urn:test' xmlns:x='urn:keys'><windowRules><windowRule><action name='Execute' command='never-run'/></windowRule></windowRules><keyboard><!-- keep --><keybind key='W-q'><action name='Close'/></keybind></keyboard></labwc_config>";
+        let sample = keyboard(source).unwrap();
+        assert!(!sample.contains("never-run") && sample.contains("<!-- keep -->"));
+        let original = Labwc.parse(source).unwrap();
+        let parsed = Labwc.parse(&sample).unwrap();
+        assert_eq!(original[0].fields.len(), parsed[0].fields.len());
+        for (before, after) in original[0].fields.iter().zip(&parsed[0].fields) {
+            assert_eq!(
+                (&before.label, &before.name, &before.value, before.encoding),
+                (&after.label, &after.name, &after.value, after.encoding)
+            );
+        }
+        assert!(roxmltree::Document::parse(&sample).is_ok());
+    }
 
     #[test]
     fn labwc_keeps_comments_namespaces_chains_and_unrelated_settings() {

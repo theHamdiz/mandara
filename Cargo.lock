@@ -4198,6 +4198,7 @@ version = "0.25.1"
 dependencies = [
  "anyhow",
  "async-channel",
+ "libc",
  "mandara-config",
  "mandara-i18n",
  "rustix",

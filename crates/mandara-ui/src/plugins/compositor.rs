@@ -332,6 +332,12 @@ fn sync_enabled(manage: bool, kind: mandara_compositor::CompositorKind) -> bool 
 }
 
 pub fn register(r: &mut PluginRegistry) {
+    r.command(ID, CommandSpec::new("compositor shortcuts state", mandara_i18n::tk("Current Mandara shortcut preferences for the native editor"), |_, cx| {
+        let target = backend(cx)?.target();
+        let config = config(cx).read(cx).snapshot();
+        let effective = config.effective_compositor();
+        serde_json::to_value(mandara_services::shortcuts::Preferences { target, manage: effective.manage, keybinds: effective.keybinds.clone() }).map_err(|error| error.to_string())
+    }).example("compositor shortcuts state"));
     r.command(ID, CommandSpec::new("compositor status", mandara_i18n::tk("Detected compositor and drop-in state"), |_, cx| {
         let b = backend(cx)?;
         let target = b.target();

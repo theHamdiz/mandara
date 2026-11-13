@@ -39,6 +39,7 @@ use serde::{Deserialize, Serialize};
 use crate::{mango_keys, paths};
 
 mod sway_read;
+pub mod shortcuts;
 pub(crate) use sway_read::binds as sway_config_binds;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -1206,9 +1207,7 @@ pub fn emit_mango(cfg: &ManagedConfig) -> Emitted {
     }
     s.push_str(&crate::outputs::emit_outputs(Target::Mango, &c.outputs, false));
     let (binds, skipped) = split_binds(cfg, Target::Mango);
-    if !binds.is_empty() {
-        let _ = writeln!(s, "\n# Mandara keybinds");
-    }
+    let _ = writeln!(s, "\n# Mandara keybinds");
     for k in binds {
         let mods = if k.mods.is_empty() { "NONE".to_string() } else { k.mods.join("+") };
         let _ = writeln!(s, "bind={mods},{},spawn_shell,{}", k.key, k.bind.action.shell_command_with(&cfg.mandara_bin));
@@ -1216,6 +1215,7 @@ pub fn emit_mango(cfg: &ManagedConfig) -> Emitted {
     for note in &skipped {
         let _ = writeln!(s, "# {note}");
     }
+    let _ = writeln!(s, "# End Mandara keybinds");
     Emitted { text: s, skipped }
 }
 
@@ -1398,6 +1398,7 @@ pub fn emit_niri(cfg: &ManagedConfig) -> Emitted {
         }
     }
     let (binds, skipped) = split_binds(cfg, Target::Niri);
+    let _ = writeln!(s, "\n// Mandara keybinds");
     if !binds.is_empty() {
         let _ = writeln!(s, "\nbinds {{");
         for k in binds {
@@ -1416,6 +1417,7 @@ pub fn emit_niri(cfg: &ManagedConfig) -> Emitted {
     for note in &skipped {
         let _ = writeln!(s, "// {note}");
     }
+    let _ = writeln!(s, "// End Mandara keybinds");
     Emitted { text: s, skipped }
 }
 
@@ -1560,15 +1562,14 @@ pub fn emit_hyprland_conf(cfg: &ManagedConfig) -> Emitted {
     }
     s.push_str(&crate::outputs::emit_outputs(Target::Hyprland, &c.outputs, false));
     let (binds, skipped) = split_binds(cfg, Target::Hyprland);
-    if !binds.is_empty() {
-        let _ = writeln!(s);
-    }
+    let _ = writeln!(s, "\n# Mandara keybinds");
     for k in binds {
         let _ = writeln!(s, "bind = {}, {}, exec, {}", k.mods.join(" "), k.key, k.bind.action.shell_command_with(&cfg.mandara_bin));
     }
     for note in &skipped {
         let _ = writeln!(s, "# {note}");
     }
+    let _ = writeln!(s, "# End Mandara keybinds");
     Emitted { text: s, skipped }
 }
 
@@ -1720,9 +1721,7 @@ pub fn emit_hyprland_lua(cfg: &ManagedConfig) -> Emitted {
     }
     s.push_str(&crate::outputs::emit_outputs(Target::Hyprland, &c.outputs, true));
     let (binds, skipped) = split_binds(cfg, Target::Hyprland);
-    if !binds.is_empty() {
-        let _ = writeln!(s);
-    }
+    let _ = writeln!(s, "\n-- Mandara keybinds");
     for k in binds {
         let chord = k.mods.iter().copied().chain(std::iter::once(k.key.as_str())).collect::<Vec<_>>().join(" + ");
         let _ = writeln!(s, "pcall(hl.bind, {}, hl.dsp.exec_cmd({}))", lua_str(&chord), lua_str(&k.bind.action.shell_command_with(&cfg.mandara_bin)));
@@ -1730,6 +1729,7 @@ pub fn emit_hyprland_lua(cfg: &ManagedConfig) -> Emitted {
     for note in &skipped {
         let _ = writeln!(s, "-- {note}");
     }
+    let _ = writeln!(s, "-- End Mandara keybinds");
     Emitted { text: s, skipped }
 }
 
@@ -1843,13 +1843,15 @@ pub fn emit_umbriel(cfg: &ManagedConfig) -> Emitted {
     s.push_str(&crate::input::emit_umbriel(&c.input));
     s.push_str(&crate::outputs::emit_outputs(Target::Umbriel, &c.outputs, false));
     let (binds, skipped) = split_binds(cfg, Target::Umbriel);
+    let _ = writeln!(s, "\n# Mandara keybinds");
     if !binds.is_empty() {
-        let _ = writeln!(s, "\n# Mandara keybinds\n[keybinds]");
+        let _ = writeln!(s, "[keybinds]");
     }
     for k in binds {
         let chord = k.mods.iter().copied().chain(std::iter::once(k.key.as_str())).collect::<Vec<_>>().join("+");
         let _ = writeln!(s, "{} = {}", toml_str(&chord), toml_str(&format!("spawn {}", k.bind.action.shell_command_with(&cfg.mandara_bin))));
     }
+    let _ = writeln!(s, "# End Mandara keybinds");
     // Shell surfaces: Mandara draws its own glass (layer blur is off by
     // default; this states it). The lock surface keeps the compositor's blur.
     let namespaces: Vec<String> = SHELL_SURFACES.iter().map(|ns| toml_str(&format!("^{ns}$"))).collect();
@@ -2028,9 +2030,7 @@ pub fn emit_sway(cfg: &ManagedConfig) -> Emitted {
     }
     s.push_str(&crate::outputs::emit_outputs(Target::Sway, &c.outputs, false));
     let (binds, mut skipped) = split_binds(cfg, Target::Sway);
-    if !binds.is_empty() {
-        let _ = writeln!(s, "\n# Mandara keybinds");
-    }
+    let _ = writeln!(s, "\n# Mandara keybinds");
     for k in binds {
         let combo = k.mods.iter().copied().chain(std::iter::once(k.key.as_str())).collect::<Vec<_>>().join("+");
         let command = k.bind.action.shell_command_with(&cfg.mandara_bin);
@@ -2044,6 +2044,7 @@ pub fn emit_sway(cfg: &ManagedConfig) -> Emitted {
     for note in &skipped {
         let _ = writeln!(s, "# {note}");
     }
+    let _ = writeln!(s, "# End Mandara keybinds");
     Emitted { text: s, skipped }
 }
 
@@ -2587,16 +2588,21 @@ fn glob_match(pattern: &str, name: &str) -> bool {
 /// Chords bound in the user's own config, following `source=` / `include`
 /// (but never Mandara's generated file).
 pub fn existing_chords(target: Target) -> BTreeSet<String> {
+    existing_chords_at(target, &target.user_config())
+}
+
+/// Native editors use the running compositor's config, including custom paths.
+pub fn existing_chords_at(target: Target, root: &Path) -> BTreeSet<String> {
     if target == Target::Mango {
         return mango_keys::with_user_keys(|keys| {
-            mango_existing_chords(&target.user_config(), keys)
+            mango_existing_chords(root, keys)
         });
     }
     if target == Target::Sway {
-        return sway_existing_chords(&target.user_config());
+        return sway_existing_chords(root);
     }
     let mut out = BTreeSet::new();
-    let mut stack = vec![target.user_config()];
+    let mut stack = vec![root.to_path_buf()];
     let mut visited = BTreeSet::new();
     let generated = target.generated_file();
     while let Some(file) = stack.pop() {

@@ -104,6 +104,45 @@ pub struct WriteLock {
     _directories: [Option<Rc<Directory>>; 2],
 }
 impl WriteLock {
+    /// Lock a native config and its generated companion in one global directory order.
+    /// Resolving both destinations first prevents opposite symlink layouts deadlocking.
+    pub fn pair(first: &Path, second: Option<&Path>) -> io::Result<(Self, Option<Self>)> {
+        let mut plans = Vec::with_capacity(2);
+        let mut parents = std::collections::BTreeSet::new();
+        for path in [Some(first), second].into_iter().flatten() {
+            let slot = super::destination::slot(path)?;
+            let target = super::destination::identity(path)?;
+            let source_parent = slot.parent().ok_or_else(|| io::Error::other("configuration has no parent"))?;
+            let target_parent = target.parent().ok_or_else(|| io::Error::other("configuration has no parent"))?;
+            fs::create_dir_all(source_parent)?;
+            fs::create_dir_all(target_parent)?;
+            let source_parent = source_parent.canonicalize()?;
+            let target_parent = target_parent.canonicalize()?;
+            parents.insert(source_parent.clone());
+            parents.insert(target_parent.clone());
+            plans.push((path.to_path_buf(), target, source_parent, target_parent));
+        }
+        if plans.len() == 2 && plans[0].1 == plans[1].1 {
+            return Err(io::Error::other("both configuration edits refer to the same file"));
+        }
+        let held: BTreeMap<_, _> = parents.into_iter().map(|path| directory(&path).map(|lock| (path, lock))).collect::<io::Result<_>>()?;
+        let mut guards = plans.into_iter().map(|(source, target, source_parent, target_parent)| -> io::Result<Self> {
+            let guard = Self {
+                source,
+                target,
+                _directories: [
+                    held.get(&source_parent).cloned(),
+                    if source_parent != target_parent { held.get(&target_parent).cloned() } else { None },
+                ],
+            };
+            guard.check_target()?;
+            Ok(guard)
+        });
+        let first = guards.next().ok_or_else(|| io::Error::other("missing configuration edit"))??;
+        let second = guards.next().transpose()?;
+        Ok((first, second))
+    }
+
     pub fn new(path: &Path) -> io::Result<Self> {
         let slot = super::destination::slot(path)?;
         let target = super::destination::identity(path)?;
@@ -205,6 +244,26 @@ fn conflict() -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn paired_writers_share_locks_keep_symlinks_and_reject_duplicate_targets() {
+        use std::os::unix::fs::symlink;
+        let root = tempfile::tempdir().unwrap();
+        for directory in ["a", "b", "c"] { fs::create_dir(root.path().join(directory)).unwrap(); }
+        let first = root.path().join("a/config");
+        let target = root.path().join("c/config");
+        let second = root.path().join("b/generated");
+        fs::write(&target, "native").unwrap();
+        fs::write(&second, "generated").unwrap();
+        symlink(&target, &first).unwrap();
+        let (native, generated) = WriteLock::pair(&first, Some(&second)).unwrap();
+        assert_eq!(native.target(), target);
+        assert!(native.check(b"native").is_ok());
+        assert!(generated.unwrap().check(b"generated").is_ok());
+        assert!(fs::symlink_metadata(&first).unwrap().file_type().is_symlink());
+        assert!(WriteLock::pair(&first, Some(&target)).is_err());
+        drop(native);
+    }
     #[test]
     fn nested_writers_share_a_directory_lock_and_release_it_for_other_threads() {
         let root = tempfile::tempdir().unwrap();

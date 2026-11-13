@@ -1,6 +1,6 @@
 //! KGlobalAccel stores the live alternatives before defaults and the action label.
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use mandara_i18n::tk;
 
 use crate::keybinds::{Binding, Encoding, ShortcutFormat, field, normalize};
@@ -25,34 +25,9 @@ impl ShortcutFormat for KWin {
                     && !name.trim().starts_with("_k_")
                 {
                     let value_start = text.len() - value.len();
-                    let mut escaped = false;
-                    let mut comma = value.len();
-                    for (at, ch) in value.char_indices() {
-                        if escaped {
-                            escaped = false;
-                            continue;
-                        }
-                        if ch == '\\' {
-                            escaped = true;
-                        } else if ch == ',' {
-                            comma = at;
-                            break;
-                        }
-                    }
-                    let live = &value[..comma];
-                    let mut fields = Vec::new();
-                    let mut from = 0;
-                    for key in live.split("\\t") {
-                        let start = offset + value_start + from;
-                        fields.push(field(
-                            tk("Shortcut"),
-                            key,
-                            start..start + key.len(),
-                            Encoding::KConfig,
-                        ));
-                        from += key.len() + 2;
-                    }
-                    let combo = (fields.len() == 1).then(|| live.replace("Meta+", "Super+"));
+                    let fields = alternatives(value, offset + value_start)?;
+                    let combo = (fields.len() == 1 && !fields[0].value.contains(','))
+                        .then(|| fields[0].value.replace("Meta+", "Super+"));
                     result.push(Binding {
                         line: line + 1,
                         scope: format!("{group}/{}", name.trim()),
@@ -71,6 +46,65 @@ impl ShortcutFormat for KWin {
     }
 }
 
+/// INI escapes wrap QStringList escapes; split alternatives only after both.
+fn alternatives(value: &str, base: usize) -> Result<Vec<crate::keybinds::Field>> {
+    let mut chars = value.char_indices();
+    let mut fields = Vec::new();
+    let mut text = String::new();
+    let mut start = 0;
+    let mut end = 0;
+    let mut quoted = false;
+    while let Some((at, mut ch)) = chars.next() {
+        end = at + ch.len_utf8();
+        if ch == '\\' {
+            let Some((next, escape)) = chars.next() else {
+                bail!(
+                    "{}",
+                    mandara_i18n::t("The shortcut has an incomplete escape.")
+                );
+            };
+            end = next + escape.len_utf8();
+            ch = match escape {
+                't' => '\t',
+                's' => ' ',
+                'n' => '\n',
+                'r' => '\r',
+                '\\' => '\\',
+                _ => bail!(
+                    "{}",
+                    mandara_i18n::t("This shortcut uses an unsupported configuration escape.")
+                ),
+            };
+        }
+        if quoted {
+            text.push(ch);
+            quoted = false;
+        } else if ch == '\\' {
+            quoted = true;
+        } else if ch == ',' {
+            end = at;
+            break;
+        } else if ch == '\t' {
+            fields.push(field(
+                tk("Shortcut"),
+                std::mem::take(&mut text),
+                base + start..base + at,
+                Encoding::KConfig,
+            ));
+            start = end;
+        } else {
+            text.push(ch);
+        }
+    }
+    fields.push(field(
+        tk("Shortcut"),
+        text,
+        base + start..base + end,
+        Encoding::KConfig,
+    ));
+    Ok(fields)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -84,5 +118,18 @@ mod tests {
         let next =
             crate::keybinds::patch(text, &binds[0], &["Meta+W".into(), "Alt+F4".into()]).unwrap();
         assert_eq!(next, text.replace("Meta+Q", "Meta+W"));
+    }
+
+    #[test]
+    fn two_escape_layers_preserve_commas_backslashes_tabs_and_multistroke_sequences() {
+        let source = "[kwin]\nAction=Meta+Q,Meta+Q,Keep this label\n";
+        let binding = KWin.parse(source).unwrap().remove(0);
+        for value in ["Meta+,", "Ctrl+K, Ctrl+C", "Meta+\\", "Meta+\\t"] {
+            let next = crate::keybinds::patch(source, &binding, &[value.into()]).unwrap();
+            let parsed = KWin.parse(&next).unwrap();
+            assert_eq!(parsed[0].fields.len(), 1, "{next}");
+            assert_eq!(parsed[0].fields[0].value, value, "{next}");
+            assert!(next.ends_with(",Meta+Q,Keep this label\n"));
+        }
     }
 }

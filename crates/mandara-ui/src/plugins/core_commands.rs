@@ -8,6 +8,7 @@ use serde_json::json;
 use crate::state::{config, flush_config, reload_config_from_disk, shell, update_config};
 
 mod app_themes;
+mod studio_looks;
 
 /// `mandara msg studio <section>`: every slug of the launcher's Studio
 /// entries (`crate::overlays::STUDIO_SECTIONS`, checked by a test).
@@ -175,6 +176,7 @@ fn side_bar_commands(r: &mut PluginRegistry) {
 
 /// Register shell controls and delegate long model operations to background work.
 pub fn register(r: &mut PluginRegistry) {
+    studio_looks::register(r);
     app_themes::register(r);
     crate::agent_commands::register(r);
     let core = "core";

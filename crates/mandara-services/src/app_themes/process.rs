@@ -68,7 +68,7 @@ pub fn run(
 }
 
 /// Run a native checker with the same output, cancellation and child-process bounds.
-pub(super) fn native(
+pub(crate) fn native(
     mut command: Command,
     cancel: &AtomicBool,
     timeout: Duration,

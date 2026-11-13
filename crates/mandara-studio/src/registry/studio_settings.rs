@@ -104,12 +104,19 @@ pub(super) fn entries(shell: &[Setting]) -> Vec<Setting> {
                         ("glass", tk("Glass")),
                         ("header", tk("Header bar")),
                         ("chassis", tk("Chassis")),
+                        ("console", tk("Control desk")),
                         ("comic", tk("Comic")),
                         ("editorial", tk("Paper")),
                         ("terminal", tk("Terminal")),
                     ]
                 },
             ),
+        ),
+        entry("/studio/frame/header_accent", tk("Tint the header"), Toggle),
+        entry(
+            "/studio/frame/opacity",
+            tk("Window opacity"),
+            span(ranges::OPACITY, ""),
         ),
         entry(
             "/studio/frame/controls_at_start",

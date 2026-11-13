@@ -14,6 +14,8 @@ anyhow.workspace = true
 tracing.workspace = true
 mandara-config.workspace = true
 mandara-i18n.workspace = true
+# Raw peer credentials can contain PID zero across a PID namespace.
+libc.workspace = true
 # poll(2): one thread multiplexes every Mango watch stream.
 rustix = { workspace = true, features = ["event", "net"] }
 # River: its control and status protocols (generated from protocols/*.xml),

@@ -1,10 +1,13 @@
 //! Parse Lua without executing a user's configuration or imported modules.
 
+mod limits;
+
 use std::ops::Range;
 
 use anyhow::{Result, ensure};
 use full_moon::{
-    ast::{Call, Expression, FunctionArgs, FunctionCall, Index, LastStmt, Prefix, Suffix},
+    ast::{Call, Expression, FunctionArgs, FunctionCall, Index, LastStmt, Prefix, Suffix, UnOp},
+    tokenizer::{Symbol, TokenType},
     visitors::Visitor,
 };
 use mandara_i18n::tk;
@@ -14,6 +17,7 @@ use crate::keybinds::{Binding, DYNAMIC, Encoding, ShortcutFormat, field, line, n
 pub(super) struct Lua;
 
 fn parse_ast(source: &str) -> Result<full_moon::ast::Ast> {
+    limits::check(source)?;
     full_moon::parse(source).map_err(|errors| {
         anyhow::anyhow!(
             "{}",
@@ -35,13 +39,33 @@ pub(crate) fn validate_value(value: &str, string: bool) -> Result<()> {
         ast.nodes().stmts().next().is_none()
             && result.returns().iter().count() == 1
             && result.returns().iter().next().is_some_and(|expression| {
-                if string { matches!(expression, Expression::String(_)) }
-                else { matches!(expression, Expression::Number(_) | Expression::Symbol(_)) || (value.trim_start().starts_with('-') && matches!(expression, Expression::UnaryOperator { expression, .. } if matches!(expression.as_ref(), Expression::Number(_)))) }
+                if string {
+                    matches!(expression, Expression::String(_))
+                } else {
+                    scalar(expression)
+                }
             }),
         "{}",
         mandara_i18n::t("Enter one literal Lua value for this shortcut field.")
     );
     Ok(())
+}
+
+fn scalar(expression: &Expression) -> bool {
+    match expression {
+        Expression::Number(_) => true,
+        Expression::Symbol(token) => matches!(
+            token.token_type(),
+            TokenType::Symbol {
+                symbol: Symbol::True | Symbol::False | Symbol::Nil
+            }
+        ),
+        Expression::UnaryOperator {
+            unop: UnOp::Minus(_),
+            expression,
+        } => matches!(expression.as_ref(), Expression::Number(_)),
+        _ => false,
+    }
 }
 
 impl ShortcutFormat for Lua {
@@ -174,9 +198,7 @@ impl Visitor for Bindings<'_> {
                                 Encoding::LuaScalar
                             },
                         ));
-                        if !literal
-                            && !matches!(argument, Expression::Number(_) | Expression::Symbol(_))
-                        {
+                        if !literal && !scalar(argument) {
                             row.read_only = Some(DYNAMIC);
                         }
                     }
@@ -193,12 +215,7 @@ impl Visitor for Bindings<'_> {
                     && let Some(range) = span(value.as_ref())
                 {
                     let string = matches!(value.as_ref(), Expression::String(_));
-                    if string
-                        || matches!(
-                            value.as_ref(),
-                            Expression::Number(_) | Expression::Symbol(_)
-                        )
-                    {
+                    if string || scalar(value) {
                         row.fields.push(
                             field(
                                 tk("Option"),
@@ -248,8 +265,25 @@ mod tests {
     fn lua_fields_cannot_turn_into_calls_or_extra_statements() {
         assert!(validate_value("'hello'", true).is_ok());
         assert!(validate_value("true", false).is_ok());
+        assert!(validate_value("-1.5", false).is_ok());
+        assert!(validate_value("...", false).is_err());
         assert!(validate_value("load('bad')", false).is_err());
         assert!(validate_value("os.execute('bad')", true).is_err());
         assert!(validate_value("'a'; os.execute('bad')", true).is_err());
+    }
+
+    #[test]
+    fn negative_literal_arguments_are_editable_and_varargs_stay_read_only() {
+        assert!(
+            Lua.parse("hl.bind('SUPER + Q', hl.dsp.focus(-1))").unwrap()[0]
+                .read_only
+                .is_none()
+        );
+        assert!(
+            Lua.parse("hl.bind('SUPER + Q', hl.dsp.focus(...))")
+                .unwrap()[0]
+                .read_only
+                .is_some()
+        );
     }
 }

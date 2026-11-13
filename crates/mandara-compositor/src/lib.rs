@@ -14,6 +14,7 @@ pub mod hyprland;
 pub mod mango;
 pub mod kwin;
 pub mod model;
+pub mod native_config;
 pub mod niri;
 pub mod river;
 pub mod sway;
@@ -63,7 +64,7 @@ pub use umbriel::UmbrielDriver;
 ///
 /// A compositor nested inside another inherits the outer one's variables,
 /// and some (Sway, Niri outside a full session) don't rename the desktop,
-/// so two compositors' variables can be equally plausible. Then the
+/// so inherited variables can name a different session. The
 /// process serving this Wayland display decides (Linux), and the rules
 /// above apply when it can't be told.
 pub fn detect() -> Option<CompositorKind> {
@@ -71,20 +72,9 @@ pub fn detect() -> Option<CompositorKind> {
     detect_with_owner(env, display_owner).or_else(|| (std::env::var_os("WAYLAND_DISPLAY").is_some() && river::running()).then_some(CompositorKind::River))
 }
 
-/// The variables a compositor exports for its own session.
-const OWN_VARIABLES: [&str; 7] = ["MANGO_INSTANCE_SIGNATURE", "NIRI_SOCKET", "HYPRLAND_INSTANCE_SIGNATURE", "UMBRIEL_SOCKET", "SWAYSOCK", "AQUEOUS_SOCKET", "LABWC_PID"];
-
-/// [`detect_from`], except that when several compositors' own variables
-/// are set (one runs nested inside another), `owner` (the compositor
-/// serving this display, asked only then) decides when it is known.
+/// Prefer the display's actual server, even with just one stale socket variable.
 fn detect_with_owner(var: impl Fn(&str) -> Option<std::ffi::OsString>, owner: impl FnOnce() -> Option<CompositorKind>) -> Option<CompositorKind> {
-    let set = OWN_VARIABLES.iter().filter(|name| var(name).is_some_and(|v| !v.is_empty())).count();
-    if set > 1
-        && let Some(kind) = owner()
-    {
-        return Some(kind);
-    }
-    detect_from(var)
+    owner().or_else(|| detect_from(var))
 }
 
 /// The compositor serving this process's Wayland display: the peer of its
@@ -92,13 +82,41 @@ fn detect_with_owner(var: impl Fn(&str) -> Option<std::ffi::OsString>, owner: im
 /// an unknown process, or a system without peer process ids).
 #[cfg(target_os = "linux")]
 fn display_owner() -> Option<CompositorKind> {
+    let pid = display_server_pid()?;
+    let name = std::fs::read_to_string(format!("/proc/{pid}/comm")).ok()?;
+    kind_of_process(name.trim())
+}
+
+/// The peer process of this Wayland display, for targeted native reloads.
+#[cfg(target_os = "linux")]
+pub fn display_server_pid() -> Option<u32> {
     let display = std::path::PathBuf::from(std::env::var_os("WAYLAND_DISPLAY")?);
     let path = if display.is_absolute() { display } else { std::path::PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR")?).join(display) };
     let stream = std::os::unix::net::UnixStream::connect(path).ok()?;
-    let pid = rustix::net::sockopt::socket_peercred(&stream).ok()?.pid;
-    let name = std::fs::read_to_string(format!("/proc/{}/comm", pid.as_raw_nonzero())).ok()?;
-    kind_of_process(name.trim())
+    peer_pid(&stream)
 }
+
+#[cfg(target_os = "linux")]
+fn peer_pid(stream: &std::os::unix::net::UnixStream) -> Option<u32> {
+    use std::os::fd::AsRawFd as _;
+    let mut credentials = std::mem::MaybeUninit::<libc::ucred>::uninit();
+    let expected = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
+    let mut length = expected;
+    // SAFETY: the connected socket is live, and the kernel receives an aligned
+    // writable ucred buffer and its exact size. Its PID remains a raw integer:
+    // zero is a valid response when the peer is outside our PID namespace.
+    let result = unsafe { libc::getsockopt(stream.as_raw_fd(), libc::SOL_SOCKET, libc::SO_PEERCRED, credentials.as_mut_ptr().cast(), &mut length) };
+    if result != 0 || length != expected { return None; }
+    // SAFETY: successful SO_PEERCRED initialized the complete ucred above.
+    let credentials = unsafe { credentials.assume_init() };
+    visible_pid(credentials.pid)
+}
+
+#[cfg(target_os = "linux")]
+fn visible_pid(pid: libc::pid_t) -> Option<u32> { u32::try_from(pid).ok().filter(|pid| *pid != 0) }
+
+#[cfg(not(target_os = "linux"))]
+pub fn display_server_pid() -> Option<u32> { None }
 
 #[cfg(not(target_os = "linux"))]
 fn display_owner() -> Option<CompositorKind> {
@@ -219,6 +237,15 @@ pub(crate) const RECONNECT_DELAY: std::time::Duration = std::time::Duration::fro
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn peer_credentials_accept_visible_processes_and_handle_namespace_zero() {
+        let (socket, _peer) = std::os::unix::net::UnixStream::pair().unwrap();
+        assert_eq!(super::peer_pid(&socket), Some(std::process::id()));
+        assert_eq!(super::visible_pid(0), None);
+        assert_eq!(super::visible_pid(-1), None);
+    }
+
     use super::*;
 
     fn detect_with(vars: &[(&str, &str)]) -> Option<CompositorKind> {
@@ -284,9 +311,11 @@ mod tests {
         assert_eq!(detect_with_owner(lookup, || kind_of_process("aqueous")), Some(CompositorKind::Aqueous));
         // An unknown display owner leaves the variable rules in charge.
         assert_eq!(detect_with_owner(lookup, || kind_of_process("weston")), Some(CompositorKind::Aqueous));
-        // One compositor's variables alone: the display is never asked.
+        // One inherited socket is still weaker evidence than the display server.
         let alone = |name: &str| (name == "SWAYSOCK").then(|| std::ffi::OsString::from("/s"));
-        assert_eq!(detect_with_owner(alone, || panic!("asked without a reason")), Some(CompositorKind::Sway));
+        assert_eq!(detect_with_owner(alone, || kind_of_process("kwin_wayland")), Some(CompositorKind::KWin));
+        assert_eq!(detect_with_owner(alone, || None), Some(CompositorKind::Sway));
+        assert_eq!(detect_with_owner(|_| None, || kind_of_process("cosmic-comp")), Some(CompositorKind::Cosmic));
         // Sway nested inside Hyprland (Hyprland's variable comes first).
         let hypr = |name: &str| match name {
             "HYPRLAND_INSTANCE_SIGNATURE" => Some(std::ffi::OsString::from("abc")),

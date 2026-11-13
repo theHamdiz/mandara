@@ -90,6 +90,7 @@ pub mod screenshot;
 pub mod self_update;
 pub mod session;
 pub mod share;
+pub mod shortcuts;
 pub mod sleep;
 pub mod sound_themes;
 pub mod sounds;

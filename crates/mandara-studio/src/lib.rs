@@ -84,6 +84,12 @@ fn desktop_tab_target(target: &str) -> Option<app::desktop_page::DesktopTab> {
     app::desktop_page::DesktopTab::parse(rest.split('/').next()?)
 }
 
+fn shortcuts_tab_target(target: &str) -> Option<app::ShortcutsTab> {
+    let (section, tab) = target.split_once('/')?;
+    (resolve_section(section) == Some(registry::Section::Shortcuts)).then_some(())?;
+    app::ShortcutsTab::parse(tab.split('/').next()?)
+}
+
 /// A desktop widget to select: `desktop/widgets/<id>`, `desktop/<id>` or
 /// the former `desktop-widgets/<id>`, as an empty widget's "Set up in
 /// Studio" button asks.
@@ -143,6 +149,7 @@ fn bars_part_target(target: &str) -> Option<registry::bars::SidebarsPart> {
 /// Names of pages merged into another one, still accepted on the command
 /// line (`mandara studio appearance` opens Themes).
 const FORMER_SECTIONS: &[(&str, registry::Section)] = &[
+    ("shortcuts", registry::Section::Shortcuts),
     ("appearance", registry::Section::Themes),
     ("looks", registry::Section::Themes),
     ("cursor", registry::Section::Themes),
@@ -205,6 +212,7 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
     let bars_part = section.and_then(bars_part_target);
     let desktop_widget = section.and_then(desktop_widget_target);
     let desktop_tab = section.and_then(desktop_tab_target);
+    let shortcuts_tab = section.and_then(shortcuts_tab_target);
     // `power/<part>` scrolls the Power & idle page to that part.
     let power_part = section.and_then(|t| t.strip_prefix("power/")).map(str::to_string);
     let cursor = section.is_some_and(cursor_target);
@@ -238,6 +246,7 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
         if let Some(tab) = desktop_tab {
             view.show_desktop_tab(tab, cx);
         }
+        if let Some(tab) = shortcuts_tab { view.show_shortcuts_tab(tab, cx); }
         if let Some(part) = bars_part {
             view.show_sidebars_part(part, cx);
         }
@@ -339,7 +348,7 @@ fn open_window(cx: &mut App) -> Option<WindowHandle<StudioView>> {
 /// Opens the Studio window and quits the process once it closes.
 pub fn run(section: Option<&str>, cx: &mut App) {
     cx.set_global(StudioWindow::default());
-    mandara_ui::state::init_language(cx);
+    mandara_ui::state::init_studio_language(cx);
     // Studio's own cards, corners and springs follow the Look & feel
     // settings live, like the shell's.
     mandara_ui::style::init_studio(cx);
@@ -368,6 +377,17 @@ pub fn run(section: Option<&str>, cx: &mut App) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn shortcut_links_select_only_the_shortcuts_page_tabs() {
+        use crate::app::ShortcutsTab;
+        assert_eq!(super::shortcuts_tab_target("shortcuts/compositor"), Some(ShortcutsTab::Compositor));
+        assert_eq!(super::shortcuts_tab_target("keyboard-shortcuts/compositor"), Some(ShortcutsTab::Compositor));
+        assert_eq!(super::shortcuts_tab_target("shortcuts/mandara"), Some(ShortcutsTab::Mandara));
+        assert_eq!(super::shortcuts_tab_target("shortcuts/shell"), Some(ShortcutsTab::Mandara));
+        assert_eq!(super::shortcuts_tab_target("themes/compositor"), None);
+        assert_eq!(super::shortcuts_tab_target("shortcuts/unknown"), None);
+    }
+
     #[test]
     fn themes_deep_links_open_their_tab() {
         use super::app::looks_page::ThemesTab;

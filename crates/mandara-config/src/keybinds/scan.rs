@@ -12,17 +12,36 @@ use anyhow::{Context as _, Result, ensure};
 use super::{Binding, MAX_BINDINGS, MAX_FILE_BYTES, MAX_FILES, MAX_TOTAL_BYTES};
 use crate::compositor::{Target, included_files_bounded, is_generated};
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct Source {
     pub file: PathBuf,
     pub target: PathBuf,
+    #[serde(with = "super::identity")]
     pub fingerprint: u64,
     pub bindings: Vec<Binding>,
 }
 
-#[derive(Default, Debug)]
+impl Source {
+    pub fn unchanged(&self) -> Result<bool> {
+        Ok(std::fs::canonicalize(&self.file)? == self.target
+            && fingerprint(&read(&self.file)?) == self.fingerprint)
+    }
+
+    pub fn binding_id(&self, index: usize) -> Option<super::BindingId> {
+        self.bindings.get(index)?;
+        Some(super::BindingId {
+            file: self.file.clone(),
+            target: self.target.clone(),
+            fingerprint: self.fingerprint,
+            index,
+        })
+    }
+}
+
+#[derive(Default, Debug, serde::Serialize)]
 pub struct Scan {
     pub sources: Vec<Source>,
+    pub generated: Vec<PathBuf>,
     pub errors: Vec<(PathBuf, String)>,
 }
 
@@ -50,8 +69,12 @@ pub(crate) fn read(path: &Path) -> Result<String> {
 }
 
 pub fn scan(target: Target) -> Scan {
+    scan_from(target, &default_root(target))
+}
+
+pub fn default_root(target: Target) -> PathBuf {
     let config = dirs::config_dir().unwrap_or_else(|| PathBuf::from("~/.config"));
-    let root = match target {
+    match target {
         Target::KWin => config.join("kglobalshortcutsrc"),
         Target::Cosmic => config.join("cosmic/com.system76.CosmicSettings.Shortcuts/v1/custom"),
         Target::Mango
@@ -60,8 +83,7 @@ pub fn scan(target: Target) -> Scan {
             config.join("mango/config.toml")
         }
         _ => target.user_config(),
-    };
-    scan_from(target, &root)
+    }
 }
 
 pub fn scan_from(target: Target, root: &Path) -> Scan {
@@ -72,11 +94,20 @@ pub fn scan_from(target: Target, root: &Path) -> Scan {
     let mut total_bindings = 0;
     while let Some(file) = queue.pop() {
         if is_generated(&file) {
+            if !scan.generated.contains(&file) {
+                scan.generated.push(file);
+            }
             continue;
         }
         let result = (|| -> Result<()> {
             let real = std::fs::canonicalize(&file)?;
-            if is_generated(&real) || !seen.insert(real.clone()) {
+            if is_generated(&real) {
+                if !scan.generated.contains(&file) {
+                    scan.generated.push(file.clone());
+                }
+                return Ok(());
+            }
+            if !seen.insert(real.clone()) {
                 return Ok(());
             }
             ensure!(

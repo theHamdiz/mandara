@@ -74,6 +74,7 @@ pub enum FrameDesign {
     Glass,
     Header,
     Chassis,
+    Console,
     Comic,
     Editorial,
     Terminal,
@@ -84,6 +85,8 @@ pub enum FrameDesign {
 #[serde(default)]
 pub struct StudioFrame {
     pub design: FrameDesign,
+    pub header_accent: bool,
+    pub opacity: f32,
     pub controls_at_start: bool,
     pub inset: f32,
     pub radius: f32,
@@ -101,6 +104,8 @@ impl Default for StudioFrame {
     fn default() -> Self {
         Self {
             design: FrameDesign::Classic,
+            header_accent: false,
+            opacity: 1.0,
             controls_at_start: false,
             inset: 0.0,
             radius: 18.0,
@@ -122,6 +127,7 @@ pub mod ranges {
     pub const INSET: Span = Span::new(0.0, 28.0, 1.0);
     pub const RADIUS: Span = Span::new(0.0, 48.0, 1.0);
     pub const BORDER: Span = Span::new(0.0, 6.0, 0.5);
+    pub const OPACITY: Span = Span::new(0.5, 1.0, 0.01);
     pub const TITLE_HEIGHT: Span = Span::new(32.0, 80.0, 1.0);
     pub const SIDEBAR_WIDTH: Span = Span::new(180.0, 340.0, 1.0);
     pub const NAV_HEIGHT: Span = Span::new(28.0, 56.0, 1.0);
@@ -134,6 +140,7 @@ impl StudioFrame {
             inset: ranges::INSET.clamp(self.inset, d.inset),
             radius: ranges::RADIUS.clamp(self.radius, d.radius),
             border: ranges::BORDER.clamp(self.border, d.border),
+            opacity: ranges::OPACITY.clamp(self.opacity, d.opacity),
             title_height: ranges::TITLE_HEIGHT.clamp(self.title_height, d.title_height),
             sidebar_width: ranges::SIDEBAR_WIDTH.clamp(self.sidebar_width, d.sidebar_width),
             sidebar_inset: ranges::INSET.clamp(self.sidebar_inset, d.sidebar_inset),

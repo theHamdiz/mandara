@@ -306,7 +306,7 @@ impl StudioView {
             .track_focus(&self.nav_focus)
             .track_scroll(&self.nav_scroll)
             .w(px(super::studio_frame::sidebar_width(frame, rail)))
-            .flex_1()
+            .flex_none()
             .min_h(px(0.0))
             .overflow_y_scroll()
             .px(px(SPACE_12_PX))

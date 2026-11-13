@@ -2,7 +2,8 @@
 
 use anyhow::{Result, ensure};
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Encoding {
     Plain,
     Word,
@@ -104,13 +105,15 @@ impl Encoding {
             }
             Self::KConfig => {
                 ensure!(
-                    !value.contains(['\n', '\r', '\t', '\\']),
+                    !value.contains(['\n', '\r', '\t']),
                     "{}",
-                    mandara_i18n::t(
-                        "Enter one shortcut alternative without a line break or escape."
-                    )
+                    mandara_i18n::t("Enter one shortcut alternative without a line break or tab.")
                 );
-                value.replace(',', "\\,")
+                // KConfig's QStringList escaping is inside the INI escaping.
+                value
+                    .replace('\\', "\\\\")
+                    .replace(',', "\\,")
+                    .replace('\\', "\\\\")
             }
         })
     }

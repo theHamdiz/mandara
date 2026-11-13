@@ -1738,7 +1738,7 @@ impl Render for UsersPage {
             Load::Ready => {
                 let users = self.users.clone();
                 let cards: Vec<AnyElement> = users.iter().map(|u| self.user_card(u, &p, cx)).collect();
-                page = page.child(super::grid::fit(super::grid::PageMetrics::of(window).column_w, USER_GRID).balanced(cards.len()).render(cards));
+                page = page.child(super::grid::fit(super::grid::PageMetrics::of(window, cx).column_w, USER_GRID).balanced(cards.len()).render(cards));
             }
         }
         if self.show_system && !self.system.is_empty() {

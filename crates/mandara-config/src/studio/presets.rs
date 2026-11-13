@@ -64,7 +64,7 @@ const LOOKS: [StudioLookDef; 9] = [
     StudioLookDef {
         id: StudioLook::Yaru,
         name: tk("Yaru"),
-        description: tk("A warm header bar, aubergine surfaces and orange accents."),
+        description: tk("A warm header bar, soft surfaces and orange accents."),
         seed: (0.65, 0.20, 38.0),
         dark: false,
         components: ComponentPreset::Minimal,
@@ -119,11 +119,13 @@ const LOOKS: [StudioLookDef; 9] = [
     StudioLookDef {
         id: StudioLook::Telemetry,
         name: tk("Telemetry"),
-        description: tk("An asymmetric control desk with cyan highlights and stepped meters."),
+        description: tk(
+            "A control desk with end-side navigation, cyan highlights and squared controls.",
+        ),
         seed: (0.72, 0.13, 195.0),
         dark: true,
         components: ComponentPreset::BrutalistSoft,
-        frame: FrameDesign::Chassis,
+        frame: FrameDesign::Console,
         ui_font: "Inter",
         display_font: "JetBrains Mono",
     },
@@ -160,6 +162,26 @@ impl StudioLook {
             .unwrap_or_default()]
     }
 
+    pub fn slug(self) -> &'static str {
+        match self {
+            Self::Mandara => "mandara",
+            Self::CupertinoGlass => "cupertino-glass",
+            Self::Yaru => "yaru",
+            Self::Gtk => "gtk",
+            Self::Arcade => "arcade",
+            Self::Comic => "comic",
+            Self::Paper => "paper",
+            Self::Telemetry => "telemetry",
+            Self::Terminal => "terminal",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|look| look.slug().eq_ignore_ascii_case(text))
+    }
+
     pub fn appearance(self) -> StudioAppearance {
         let def = self.definition();
         // Color settings persist as sRGB bytes; use that representation from the start.
@@ -173,6 +195,7 @@ impl StudioLook {
         };
         match self {
             Self::CupertinoGlass => {
+                frame.opacity = 0.95;
                 frame.controls_at_start = true;
                 frame.inset = 10.0;
                 frame.radius = 28.0;
@@ -183,6 +206,7 @@ impl StudioLook {
                 style.card_style = crate::desktop::CardStyle::Raised;
             }
             Self::Yaru => {
+                frame.header_accent = true;
                 frame.radius = 12.0;
                 frame.nav_radius = 6.0;
                 frame.nav_height = 40.0;
