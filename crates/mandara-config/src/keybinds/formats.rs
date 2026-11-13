@@ -3,6 +3,7 @@
 pub(crate) mod aqueous;
 pub(crate) mod cosmic;
 mod kwin;
+pub(super) use kwin::shortcut_group as kwin_shortcut_group;
 mod labwc;
 pub use labwc::keyboard as labwc_keyboard;
 mod lines;

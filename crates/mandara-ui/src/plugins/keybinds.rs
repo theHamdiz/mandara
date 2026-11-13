@@ -94,7 +94,7 @@ const BAR_ICON_PX: f32 = 15.0;
 
 /// The running compositor.
 fn compositor(cx: &App) -> Option<CompositorKind> {
-    crate::hub::hub(cx).read(cx).compositor.as_ref().map(|b| b.kind()).or_else(mandara_compositor::detect)
+    crate::hub::hub(cx).read(cx).compositor.as_ref().map(|b| b.kind()).or_else(mandara_compositor::detected)
 }
 
 /// Mandara's own binds, described by the commands they run (only the ones

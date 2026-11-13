@@ -81,6 +81,14 @@ conflicts include alternative shortcuts, punctuation and the first key of a
 multi-key sequence. Sway includes share their variables and binding modes.
 Niri's `Mod` follows the merged input settings and its native nested-session
 behaviour; boolean options retain Niri's KDL v1 syntax.
+For River, this editor may change selected literal `riverctl map` fields
+in `init`, with backups and Undo. Other statements stay intact. Scanning and
+validation never execute the program; live changes use `riverctl`. General
+compositor setup continues to leave `init` alone.
+If Linux restricts the compositor's environment, discovery falls back to the
+current user's configuration environment. Absolute launch overrides and
+Sway's reported config retain precedence; a relative override is refused
+when the compositor's working directory cannot be read safely.
 Window controls also follow the compositor's advertised capabilities; an
 unavailable action stays dimmed with a reason.
 

@@ -2479,13 +2479,7 @@ pub(crate) fn included_files_bounded_in(
 /// sorted, like `wordexp` returns them, and a pattern that matches nothing
 /// is skipped.
 fn sway_include_files(base: &Path, raw: &str) -> Vec<PathBuf> {
-    sway_include_words(raw)
-        .into_iter()
-        .flat_map(|word| {
-            let path = resolve_include(base, &expand_env(&word));
-            if has_glob(&path.to_string_lossy()) { glob_path(&path) } else { vec![PathBuf::from(unescape_glob(&path.to_string_lossy()))] }
-        })
-        .collect()
+    sway_include_files_bounded(base, raw, usize::MAX).unwrap_or_default()
 }
 
 fn sway_include_files_bounded(base: &Path, raw: &str, limit: usize) -> Result<Vec<PathBuf>> {
@@ -2500,12 +2494,13 @@ fn sway_include_files_bounded_in(
 ) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     for word in sway_include_words(raw) {
-        let path = environment.resolve(base, &environment.expand(&word)?)?;
+        let path = environment.resolve(Path::new(""), &environment.expand(&word)?)?;
+        let directory = base.parent().unwrap_or(Path::new("."));
         if has_glob(&path.to_string_lossy()) {
-            files.extend(glob_path_bounded(&path, limit.saturating_sub(files.len()))?);
+            files.extend(glob_path_bounded_from(directory, &path, limit.saturating_sub(files.len()))?);
         } else {
             anyhow::ensure!(files.len() < limit, "too many included shortcut files");
-            files.push(PathBuf::from(unescape_glob(&path.to_string_lossy())));
+            files.push(directory.join(unescape_glob_path(&path)));
         }
     }
     Ok(files)
@@ -2631,34 +2626,22 @@ fn has_glob(pattern: &str) -> bool {
     false
 }
 
-fn unescape_glob(pattern: &str) -> String {
-    let mut chars = pattern.chars();
-    let mut out = String::new();
-    while let Some(c) = chars.next() {
-        out.push(if c == '\\' { chars.next().unwrap_or(c) } else { c });
-    }
-    out
-}
-
 /// The existing paths an absolute glob names (`*`, `?` in any component),
 /// sorted.
-fn glob_path(pattern: &Path) -> Vec<PathBuf> {
-    glob_path_bounded(pattern, usize::MAX).unwrap_or_default()
-}
-
-fn glob_path_bounded(pattern: &Path, limit: usize) -> Result<Vec<PathBuf>> {
+fn glob_path_bounded_from(directory: &Path, pattern: &Path, limit: usize) -> Result<Vec<PathBuf>> {
     // Include scans must finish even when a glob matches nothing in a huge tree.
     const MAX_ENTRIES: usize = 65_536;
     let mut examined = 0;
-    let mut found = vec![PathBuf::new()];
+    let mut found = vec![directory.to_path_buf()];
     for part in pattern.components() {
         let name = part.as_os_str().to_string_lossy();
         if !has_glob(&name) {
             for p in &mut found {
-                p.push(unescape_glob(&name));
+                p.push(unescape_glob_path(Path::new(part.as_os_str())));
             }
             continue;
         }
+        anyhow::ensure!(part.as_os_str().to_str().is_some(), "include glob is not valid UTF-8");
         let matcher = glob::Pattern::new(&name);
         let mut next = Vec::new();
         for dir in &found {
@@ -2678,7 +2661,9 @@ fn glob_path_bounded(pattern: &Path, limit: usize) -> Result<Vec<PathBuf>> {
                 examined += 1;
                 anyhow::ensure!(examined <= MAX_ENTRIES, "include glob exceeds the directory scan budget");
                 let entry = entry?;
-                if matcher.matches(&entry.file_name().to_string_lossy()) {
+                let name = entry.file_name();
+                let name = name.to_str().context("include glob has a non-UTF-8 filename")?;
+                if matcher.matches(name) {
                     anyhow::ensure!(next.len() < limit, "too many included shortcut files");
                     next.push(entry.path());
                 }
@@ -2689,6 +2674,16 @@ fn glob_path_bounded(pattern: &Path, limit: usize) -> Result<Vec<PathBuf>> {
     found.retain(|p| p.exists());
     found.sort();
     Ok(found)
+}
+
+fn unescape_glob_path(path: &Path) -> PathBuf {
+    use std::os::unix::ffi::{OsStrExt as _, OsStringExt as _};
+    let mut bytes = path.as_os_str().as_bytes().iter().copied();
+    let mut result = Vec::with_capacity(path.as_os_str().len());
+    while let Some(byte) = bytes.next() {
+        result.push(if byte == b'\\' { bytes.next().unwrap_or(byte) } else { byte });
+    }
+    std::ffi::OsString::from_vec(result).into()
 }
 
 /// Shell glob match of one path component (`*` and `?`; hidden files only
@@ -4529,6 +4524,23 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
             .unwrap(),
             vec![root.join("conf.d/keys/[a].conf")]
         );
+    }
+
+    #[test]
+    fn include_patterns_do_not_expand_the_literal_parent_directory() {
+        use std::os::unix::ffi::OsStringExt as _;
+        let directory = tempfile::tempdir().unwrap();
+        let base = directory.path().join(std::ffi::OsString::from_vec(b"[backup]*?\xff".to_vec()));
+        std::fs::create_dir_all(base.join("config.d")).unwrap();
+        for name in ["keys.conf", "config.d/10.conf"] { std::fs::write(base.join(name), "bindsym Mod4+q kill\n").unwrap(); }
+        let root = base.join("config");
+        let body = "include keys.conf\ninclude config.d/*.conf\n";
+        std::fs::write(&root, body).unwrap();
+        let files = included_files_bounded_in(Target::Sway, &root, body, 4, &IncludeEnvironment::default()).unwrap();
+        assert_eq!(files, [base.join("keys.conf"), base.join("config.d/10.conf")]);
+        assert!(existing_chords_checked_in(Target::Sway, &root, &IncludeEnvironment::default()).unwrap().contains("super+q"));
+        std::fs::write(base.join("config.d").join(std::ffi::OsString::from_vec(b"\xff.conf".to_vec())), "").unwrap();
+        assert!(included_files_bounded_in(Target::Sway, &root, body, 4, &IncludeEnvironment::default()).is_err());
     }
 
     #[test]

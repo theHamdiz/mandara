@@ -1,7 +1,7 @@
 //! Compare native KConfig writes without accepting changes to unrelated entries.
 
-use anyhow::{Result, ensure};
-use std::collections::BTreeMap;
+use anyhow::{Context as _, Result, ensure};
+use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 
 fn unescape(value: &str) -> Result<String> {
     let mut bytes = Vec::with_capacity(value.len());
@@ -38,7 +38,18 @@ fn unescape(value: &str) -> Result<String> {
     Ok(String::from_utf8(bytes)?)
 }
 
-fn entries(source: &str) -> Result<BTreeMap<(String, String), String>> {
+#[derive(PartialEq, Eq)]
+enum Value {
+    Literal(String),
+    Inverse(String),
+    Shortcut {
+        live: Vec<[i32; 4]>,
+        defaults: Vec<[i32; 4]>,
+        label: String,
+    },
+}
+
+fn entries(source: &str) -> Result<BTreeMap<(String, String), Value>> {
     let mut result = BTreeMap::new();
     let mut group = String::new();
     for raw in source.lines() {
@@ -53,70 +64,165 @@ fn entries(source: &str) -> Result<BTreeMap<(String, String), String>> {
         let (key, value) = line
             .split_once('=')
             .ok_or_else(|| anyhow::anyhow!("invalid KConfig entry"))?;
+        let mut key = unescape(key.trim())?;
+        let value = unescape(value.trim())?;
+        if group.ends_with("[$InverseAction]") {
+            let mut inverse = list(&value, 1)
+                .filter(|values| values.len() == 1 && !values[0].is_empty())
+                .and_then(|mut values| values.pop())
+                .context("invalid inverse action list")?;
+            // KGlobalAccel writes either direction of an undirected pair.
+            // Both forms assign the same inverse action to each endpoint.
+            if key > inverse {
+                std::mem::swap(&mut key, &mut inverse);
+            }
+            match result.entry((group.clone(), key)) {
+                Entry::Vacant(entry) => {
+                    entry.insert(Value::Inverse(inverse));
+                }
+                Entry::Occupied(entry) => {
+                    ensure!(
+                        matches!(entry.get(), Value::Inverse(previous) if previous == &inverse),
+                        "conflicting inverse actions"
+                    )
+                }
+            }
+            continue;
+        }
+        let value = if super::formats::kwin_shortcut_group(&group) && !key.starts_with("_k_") {
+            match list(&value, 3).and_then(|values| <[String; 3]>::try_from(values).ok()) {
+                Some([live, defaults, label]) => Value::Shortcut {
+                    live: keys(&live)?,
+                    defaults: keys(&defaults)?,
+                    label,
+                },
+                None => Value::Literal(value),
+            }
+        } else {
+            Value::Literal(value)
+        };
         ensure!(
-            result
-                .insert(
-                    (group.clone(), unescape(key.trim())?),
-                    unescape(value.trim())?
-                )
-                .is_none(),
+            result.insert((group.clone(), key), value).is_none(),
             "duplicate KConfig entry"
         );
     }
+    let mut endpoints = BTreeSet::new();
+    for ((group, key), value) in &result {
+        if let Value::Inverse(inverse) = value {
+            ensure!(
+                endpoints.insert((group, key))
+                    && (key == inverse || endpoints.insert((group, inverse))),
+                "conflicting inverse actions"
+            );
+        }
+    }
     Ok(result)
+}
+
+fn list(value: &str, limit: usize) -> Option<Vec<String>> {
+    if value.is_empty() {
+        return Some(Vec::new());
+    }
+    if value == "\\0" {
+        return Some(vec![String::new()]);
+    }
+    let mut result = Vec::with_capacity(limit);
+    let mut word = String::new();
+    let mut chars = value.chars();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\\' => match chars.next() {
+                Some(ch) => word.push(ch),
+                None => break,
+            },
+            ',' => {
+                if result.len() + 1 >= limit {
+                    return None;
+                }
+                result.push(std::mem::take(&mut word));
+            }
+            ch => word.push(ch),
+        }
+    }
+    result.push(word);
+    Some(result)
+}
+
+fn keys(value: &str) -> Result<Vec<[i32; 4]>> {
+    let mut keys = Vec::new();
+    for (index, value) in value.split('\t').enumerate() {
+        ensure!(
+            index < super::MAX_FIELDS,
+            "too many KWin shortcut alternatives"
+        );
+        let key = super::qt_sequence(value)?;
+        if key != [0; 4] {
+            keys.push(key);
+        }
+    }
+    keys.sort_unstable();
+    keys.dedup();
+    Ok(keys)
 }
 
 pub fn same_settings(left: &str, right: &str) -> Result<bool> {
     Ok(entries(left)? == entries(right)?)
 }
 
-/// KGlobalAccel may reorder only the selected action's live alternatives.
+/// Reject ambiguous metadata before asking the shortcut service to write.
+pub fn validate_settings(source: &str) -> Result<()> {
+    entries(source).map(|_| ())
+}
+
+/// Compare native sets of alternatives while retaining action and label identity.
 pub fn same_shortcut_settings(left: &str, right: &str, scope: &str) -> Result<bool> {
     let (group, action) = scope
         .split_once('/')
         .ok_or_else(|| anyhow::anyhow!("invalid KWin shortcut identity"))?;
     let key = (unescape(group)?, unescape(action)?);
-    let mut left_entries = entries(left)?;
-    let mut right_entries = entries(right)?;
+    let left_entries = entries(left)?;
+    let right_entries = entries(right)?;
     ensure!(
-        left_entries.remove(&key).is_some() && right_entries.remove(&key).is_some(),
+        left_entries.contains_key(&key) && right_entries.contains_key(&key),
         "KWin shortcut disappeared"
     );
-    if left_entries != right_entries {
-        return Ok(false);
-    }
-    fn selected(source: &str, scope: &str) -> Result<(Vec<[i32; 4]>, String)> {
-        let binding = super::parse(
-            crate::compositor::Target::KWin,
-            std::path::Path::new("kglobalshortcutsrc"),
-            source,
-        )?
-        .into_iter()
-        .find(|row| row.scope == scope)
-        .ok_or_else(|| anyhow::anyhow!("KWin shortcut disappeared"))?;
-        let mut alternatives = binding
-            .fields
-            .iter()
-            .map(|field| super::qt_sequence(&field.value))
-            .collect::<Result<Vec<_>>>()?;
-        alternatives.retain(|keys| *keys != [0; 4]);
-        alternatives.sort_unstable();
-        alternatives.dedup();
-        let end = binding
-            .fields
-            .last()
-            .ok_or_else(|| anyhow::anyhow!("KWin shortcut has no fields"))?
-            .range
-            .end;
-        let suffix = source[end..].lines().next().unwrap_or_default().trim();
-        Ok((alternatives, unescape(suffix)?))
-    }
-    Ok(selected(left, scope)? == selected(right, scope)?)
+    Ok(left_entries == right_entries)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_inverse_pair_direction_preserves_settings_but_changed_endpoints_do_not() {
+        let before = "[kwin]\nAction=Meta+Q,none,Keep label\n[kwin][$InverseAction]\nWindow Grow Horizontal=Window Shrink Horizontal\n[app]\nPersonal=keep\n";
+        let reversed = before.replace(
+            "Window Grow Horizontal=Window Shrink Horizontal",
+            "Window Shrink Horizontal=Window Grow Horizontal",
+        );
+        assert!(same_settings(before, &reversed).unwrap());
+        assert!(same_shortcut_settings(before, &reversed, "[kwin]/Action").unwrap());
+        assert!(
+            !same_settings(
+                before,
+                &reversed.replace("Window Grow Horizontal", "Window Grow Vertical")
+            )
+            .unwrap()
+        );
+        assert!(
+            !same_settings(
+                before,
+                &reversed.replace("Personal=keep", "Personal=changed")
+            )
+            .unwrap()
+        );
+        let escaped = "[kwin][$InverseAction]\nGrow, horizontal=Shrink\\\\, horizontal\n";
+        let opposite = "[kwin][$InverseAction]\nShrink, horizontal=Grow\\\\, horizontal\n";
+        assert!(same_settings(escaped, opposite).unwrap());
+        assert!(validate_settings("[kwin][$InverseAction]\na=b\nc=b\n").is_err());
+        assert!(validate_settings("[kwin][$InverseAction]\na=b,c\n").is_err());
+        assert!(validate_settings("[kwin][$InverseAction]\na=\\\\0\n").is_err());
+        assert!(validate_settings("[kwin][$InverseAction]\na=a\n").is_ok());
+    }
     #[test]
     fn ordering_trivia_and_native_escaping_do_not_hide_foreign_setting_changes() {
         let before = "# personal\n[kwin]\nAction=Meta+Q,Meta+Q,My label\n[app]\nKey=\\skeep\\s\n";
@@ -128,14 +234,27 @@ mod tests {
     }
 
     #[test]
-    fn only_selected_live_alternatives_can_be_reordered_or_deduplicated() {
+    fn native_set_order_keeps_foreign_chords_defaults_and_labels_intact() {
         let before = "# personal\n[kwin]\nAction=Meta+Q\\tAlt+F4,Alt+F4,Keep label\nOther=Meta+X\\tMeta+Y,none,Other label\n";
         let reordered = before.replace("Meta+Q\\tAlt+F4", "Alt+F4\\tMeta+Q\\tMeta+Q");
         assert!(same_shortcut_settings(before, &reordered, "[kwin]/Action").unwrap());
         assert!(
-            !same_shortcut_settings(
+            same_shortcut_settings(
                 before,
                 &reordered.replace("Meta+X\\tMeta+Y", "Meta+Y\\tMeta+X"),
+                "[kwin]/Action"
+            )
+            .unwrap()
+        );
+        assert!(
+            !same_shortcut_settings(before, &before.replace("Meta+X", "Meta+Z"), "[kwin]/Action")
+                .unwrap()
+        );
+        let defaults = before.replace(",Alt+F4,Keep", ",Meta+Q\\tAlt+F4,Keep");
+        assert!(
+            same_shortcut_settings(
+                &defaults,
+                &defaults.replace(",Meta+Q\\tAlt+F4,Keep", ",Alt+F4\\tMeta+Q,Keep"),
                 "[kwin]/Action"
             )
             .unwrap()

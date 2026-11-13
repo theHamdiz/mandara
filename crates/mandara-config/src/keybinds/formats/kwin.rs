@@ -24,8 +24,8 @@ impl ShortcutFormat for KWin {
             .map(str::trim)
             .filter(|line| line.starts_with('['))
             .filter_map(|line| {
-                let (group, flags) = options(line);
-                (!group.is_empty() && flags.contains('i')).then_some(group)
+                let (group, immutable) = group_options(line);
+                (!group.is_empty() && immutable).then_some(group)
             })
             .collect();
         let mut immutable_group = false;
@@ -33,12 +33,12 @@ impl ShortcutFormat for KWin {
             let text = raw.trim_end_matches(['\n', '\r']);
             let trimmed = text.trim();
             if trimmed.starts_with('[') {
-                group = options(trimmed).0;
+                group = group_options(trimmed).0;
                 immutable_group = immutable_groups.contains(group)
                     || group
                         .match_indices("][")
                         .any(|(at, _)| immutable_groups.contains(&group[..at + 1]));
-            } else if (group == "[kwin]" || group.starts_with("[kwin]["))
+            } else if shortcut_group(group)
                 && !trimmed.starts_with(['#', ';'])
                 && let Some((name, value)) = text.split_once('=')
                 && !name.trim().starts_with("_k_")
@@ -71,6 +71,21 @@ impl ShortcutFormat for KWin {
         }
         Ok(result)
     }
+}
+
+fn group_options(value: &str) -> (&str, bool) {
+    // KConfig recognizes only an exact trailing [$i] on group headers.
+    value
+        .strip_suffix("[$i]")
+        .map_or((value, false), |group| (group, true))
+}
+
+pub(in crate::keybinds) fn shortcut_group(group: &str) -> bool {
+    group == "[kwin]"
+        || group
+            .strip_prefix("[kwin][")
+            .and_then(|context| context.strip_suffix(']'))
+            .is_some_and(|context| !context.starts_with('$') && !context.contains("]["))
 }
 
 fn options(value: &str) -> (&str, &str) {
@@ -141,6 +156,20 @@ fn alternatives(value: &str, base: usize) -> Result<Vec<crate::keybinds::Field>>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reserved_metadata_groups_neither_lock_actions_nor_appear_as_shortcuts() {
+        let text = "[kwin]\nWindow Close=Alt+F4\\tMeta+Ctrl+Alt+F11,Alt+F4,Close Window\n[kwin][$InverseAction]\nDecrease Opacity=Increase Opacity\n[kwin][$Trigger]\nAction=metadata\n[kwin][resize]\nGrow=Meta+Right,none,Grow\n[kwin][resize][$InverseAction]\nGrow=Shrink\n[kwin][locked][$i]\nAction=Meta+X,none,Locked\n";
+        let rows = KWin.parse(text).unwrap();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].scope, "[kwin]/Window Close");
+        assert_eq!(rows[0].fields.len(), 2);
+        assert!(rows[0].read_only.is_none());
+        assert_eq!(rows[1].scope, "[kwin][resize]/Grow");
+        assert!(rows[1].read_only.is_none());
+        assert_eq!(rows[2].scope, "[kwin][locked]/Action");
+        assert!(rows[2].read_only.is_some());
+    }
 
     #[test]
     fn immutable_file_group_and_entry_flags_keep_real_action_ids_readable() {

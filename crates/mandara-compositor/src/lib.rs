@@ -146,7 +146,11 @@ fn kind_of_process(name: &str) -> Option<CompositorKind> {
 /// reads several environment variables, and may probe for River).
 pub fn detected() -> Option<CompositorKind> {
     static KIND: std::sync::OnceLock<Option<CompositorKind>> = std::sync::OnceLock::new();
-    *KIND.get_or_init(detect)
+    detected_with(&KIND, detect)
+}
+
+fn detected_with(cache: &std::sync::OnceLock<Option<CompositorKind>>, detect: impl FnOnce() -> Option<CompositorKind>) -> Option<CompositorKind> {
+    *cache.get_or_init(detect)
 }
 
 /// [`detect`] over any environment.
@@ -237,6 +241,17 @@ pub(crate) const RECONNECT_DELAY: std::time::Duration = std::time::Duration::fro
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn rendering_fallback_caches_available_and_unavailable_detection() {
+        for expected in [None, Some(super::CompositorKind::KWin)] {
+            let cache = std::sync::OnceLock::new();
+            let calls = std::cell::Cell::new(0);
+            for _ in 0..3 {
+                assert_eq!(super::detected_with(&cache, || { calls.set(calls.get() + 1); expected }), expected);
+            }
+            assert_eq!(calls.get(), 1);
+        }
+    }
     #[cfg(target_os = "linux")]
     #[test]
     fn peer_credentials_accept_visible_processes_and_handle_namespace_zero() {

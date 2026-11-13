@@ -11,6 +11,8 @@ use std::path::PathBuf;
 mod aqueous;
 #[cfg(any(target_os = "linux", test))]
 mod environment;
+#[cfg(target_os = "linux")]
+mod context;
 
 #[derive(Default)]
 pub struct NativeConfig {
@@ -46,7 +48,7 @@ pub fn running(target: Target) -> Result<NativeConfig> {
             ..Default::default()
         });
     };
-    let bytes = std::fs::read(format!("/proc/{pid}/cmdline"))?;
+    let bytes = std::fs::read(format!("/proc/{pid}/cmdline")).with_context(|| format!("/proc/{pid}/cmdline"))?;
     ensure!(
         bytes.len() <= MAX_LAUNCH_BYTES,
         "{}",
@@ -57,23 +59,9 @@ pub fn running(target: Target) -> Result<NativeConfig> {
         .filter(|arg| !arg.is_empty())
         .map(|arg| OsString::from_vec(arg.to_vec()))
         .collect();
-    let cwd = std::fs::read_link(format!("/proc/{pid}/cwd"))?;
-    let environment = std::fs::read(format!("/proc/{pid}/environ"))?;
-    ensure!(
-        environment.len() <= MAX_LAUNCH_BYTES,
-        "{}",
-        t("The compositor's environment is too large to inspect.")
-    );
-    let mut config = if target == Target::Aqueous {
-        aqueous::inspect(&environment, &cwd, Path::exists)
-    } else {
-        environment::inspect(target, &arguments, &environment, &cwd)?
-    };
-    if let Some(file) = sway_file {
-        config.file = Some(file);
-    }
-    config.environment = Some(environment::capture(&environment));
-    Ok(config)
+    context::inspect(pid, target, &arguments, sway_file,
+        std::fs::read_link(format!("/proc/{pid}/cwd")),
+        std::fs::read(format!("/proc/{pid}/environ")), context::current_environment)
 }
 
 #[cfg(not(target_os = "linux"))]

@@ -210,6 +210,7 @@ pub(super) fn save(
     preferences: &dyn Fn() -> Result<Preferences>,
     backend: &dyn transaction::Backend,
 ) -> Result<Saved> {
+    keybinds::kwin_validate_settings(&edit.original)?;
     let lock = WriteLock::new(&edit.id.file)?;
     ensure!(
         lock.target() == edit.id.target,
@@ -279,6 +280,7 @@ mod tests {
         let session = super::super::load().unwrap();
         assert_eq!(session.target, mandara_config::compositor::Target::KWin);
         assert!(session.scan.errors.is_empty(), "{:?}", session.scan.errors);
+        assert!(session.scan.sources.iter().flat_map(|source| &source.bindings).all(|row| !row.scope.contains("[$")), "KWin metadata must not appear as shortcuts");
         let original = fs::read_to_string(&session.root).unwrap();
         let target = session.root.with_file_name("shortcut-target");
         let before = format!(
