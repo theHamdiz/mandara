@@ -20,23 +20,23 @@ pub(super) trait Backend {
     fn version(&self) -> Option<(u32, u32)>;
 }
 
-struct Guard<'a> {
-    session: &'a Session,
-    edit: &'a PreparedEdit,
-    backend: &'a dyn Backend,
-    initial: &'a Preferences,
-    preferences: &'a dyn Fn() -> Result<Preferences>,
+pub(super) struct DocumentGuard<'a> {
+    pub session: &'a Session,
+    pub destination: &'a Path,
+    pub backend: &'a dyn Backend,
+    pub initial: &'a Preferences,
+    pub preferences: &'a dyn Fn() -> Result<Preferences>,
 }
 
-impl Guard<'_> {
-    fn fresh(&self) -> Result<()> {
+impl DocumentGuard<'_> {
+    pub fn fresh(&self) -> Result<()> {
         ensure!(
             (self.preferences)()? == *self.initial,
             "{}",
             t("Mandara's shortcuts changed while saving. Refresh the list and try again.")
         );
         for source in &self.session.scan.sources {
-            if source.target != self.edit.id.target {
+            if source.target != self.destination {
                 ensure!(
                     source.unchanged()?,
                     "{}",
@@ -50,7 +50,7 @@ impl Guard<'_> {
     }
 }
 
-impl BatchValidator for Guard<'_> {
+impl BatchValidator for DocumentGuard<'_> {
     fn validate(&self, path: &Path, body: &str) -> Result<()> {
         self.backend.validate(path, body)
     }
@@ -79,6 +79,9 @@ pub(super) fn apply(
     let generated = companion(session)?.unwrap_or_default();
     let companion = (!generated.as_os_str().is_empty()).then_some(generated.as_path());
     let (native, generated_lock) = WriteLock::pair(&edit.id.file, companion)?;
+    let dialect = generated_lock
+        .as_ref()
+        .map_or(generated.as_path(), |lock| lock.target());
     ensure!(
         native.target() == edit.id.target,
         "{}",
@@ -118,11 +121,11 @@ pub(super) fn apply(
     );
     let bridge = previous
         .as_deref()
-        .map(|body| compositor::shortcuts::replace(session.target, &generated, body, &managed))
+        .map(|body| compositor::shortcuts::replace(session.target, dialect, body, &managed))
         .transpose()?;
-    let guard = Guard {
+    let guard = DocumentGuard {
         session,
-        edit,
+        destination: &edit.id.target,
         backend,
         initial,
         preferences,
@@ -167,7 +170,7 @@ pub(super) fn apply(
         );
         previous
             .as_deref()
-            .map(|body| compositor::shortcuts::replace(session.target, &generated, body, &managed))
+            .map(|body| compositor::shortcuts::replace(session.target, dialect, body, &managed))
             .transpose()
     };
     crate::outputs::reload_preserving(&[], true, crate::outputs::current_revision(), || {
@@ -187,26 +190,28 @@ fn companion(session: &Session) -> Result<Option<std::path::PathBuf>> {
     }
     let expected = session.target.generated_file();
     let mut found = None;
-    for file in &session.scan.generated {
-        let Ok(file) = std::fs::canonicalize(file) else {
-            continue;
-        };
+    for alias in &session.scan.generated {
+        let file = std::fs::canonicalize(alias)?;
         let name = file.file_name();
         if name == expected.file_name()
             || session.target == compositor::Target::Hyprland
                 && name.is_some_and(|name| name == "hyprland.lua" || name == "hyprland.conf")
         {
             ensure!(
-                found.as_ref().is_none_or(|previous| *previous == file),
+                found.as_ref().is_none_or(|(_, previous)| *previous == file),
                 "{}",
                 t(
                     "More than one managed shortcut file is included. Run Config doctor before editing shortcuts."
                 )
             );
-            found = Some(file);
+            // Lock the include's original path, so retargeting any symlink in
+            // that path invalidates the transaction as well as its destination.
+            if found.is_none() {
+                found = Some((alias.clone(), file));
+            }
         }
     }
-    Ok(found)
+    Ok(found.map(|(alias, _)| alias))
 }
 
 #[cfg(test)]
@@ -231,8 +236,14 @@ mod tests {
             root: root.path().join("custom.lua"),
             scan: Default::default(),
         };
-        session.scan.generated = vec![colors, alias.clone(), file.clone()];
-        assert_eq!(companion(&session).unwrap(), Some(file.clone()));
+        session.scan.generated = vec![colors.clone(), alias.clone(), file.clone()];
+        assert_eq!(companion(&session).unwrap(), Some(alias.clone()));
+        let selected = companion(&session).unwrap().unwrap();
+        let lock = WriteLock::new(&selected).unwrap();
+        fs::remove_file(&alias).unwrap();
+        symlink(&colors, &alias).unwrap();
+        assert!(lock.check_target().is_err());
+        drop(lock);
         let other = directory.join("hyprland.conf");
         fs::write(&other, "").unwrap();
         session.scan.generated.push(other);

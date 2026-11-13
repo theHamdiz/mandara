@@ -120,7 +120,7 @@ pub fn scan_from(target: Target, root: &Path) -> Scan {
                 total_bytes <= MAX_TOTAL_BYTES,
                 "shortcut configuration exceeds the scan budget"
             );
-            let bindings = super::parse(target, &file, &source)?;
+            let bindings = super::parse(target, &real, &source)?;
             total_bindings += bindings.len();
             ensure!(
                 total_bindings <= MAX_BINDINGS,
@@ -227,6 +227,38 @@ mod tests {
                 .unwrap()
                 .len(),
             10
+        );
+    }
+
+    #[test]
+    fn lua_aliases_and_custom_names_keep_the_native_literal_parser() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("bindings.lua");
+        let alias = dir.path().join("custom.conf");
+        let body = "os.execute('touch /never-run')\nhl.bind('SUPER + Q', hl.dsp.kill_active())\n";
+        std::fs::write(&file, body).unwrap();
+        symlink(&file, &alias).unwrap();
+        for root in [&alias, &file] {
+            let scan = scan_from(Target::Hyprland, root);
+            assert!(scan.errors.is_empty(), "{:?}", scan.errors);
+            assert_eq!(scan.sources[0].bindings.len(), 1);
+            let id = scan.sources[0].binding_id(0).unwrap();
+            assert!(
+                super::super::prepare(
+                    Target::Hyprland,
+                    &id,
+                    &["'SUPER + W'".into(), "kill_active".into()]
+                )
+                .unwrap()
+                .changed()
+            );
+        }
+        assert_eq!(
+            super::super::parse(Target::Hyprland, Path::new("custom"), body)
+                .unwrap()
+                .len(),
+            1
         );
     }
 }

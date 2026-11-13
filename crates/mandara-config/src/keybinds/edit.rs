@@ -36,7 +36,7 @@ pub fn prepare(target: Target, id: &BindingId, values: &[String]) -> Result<Prep
     );
     let original = read(&id.file)?;
     ensure!(fingerprint(&original) == id.fingerprint, "{}", stale());
-    let rows = super::parse(target, &id.file, &original)?;
+    let rows = super::parse(target, &id.target, &original)?;
     let count = rows.len();
     let old_binding = rows.into_iter().nth(id.index).context(stale())?;
     let next = match super::patch(&original, &old_binding, values)? {
@@ -44,7 +44,7 @@ pub fn prepare(target: Target, id: &BindingId, values: &[String]) -> Result<Prep
         std::borrow::Cow::Owned(next) => Some(next),
     };
     let new_binding = if let Some(next) = next.as_deref() {
-        let rows = super::parse(target, &id.file, next)?;
+        let rows = super::parse(target, &id.target, next)?;
         ensure!(
             rows.len() == count,
             "{}",
@@ -71,7 +71,7 @@ pub fn prepare(target: Target, id: &BindingId, values: &[String]) -> Result<Prep
                 t("The compositor did not read these shortcut values as intended.")
             );
         }
-        super::formats::format(target, &id.file).validate_edit(&old_binding, &row)?;
+        super::formats::format(target, &id.target, next).validate_edit(&old_binding, &row)?;
         Some(row)
     } else {
         None

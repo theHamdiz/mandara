@@ -1,10 +1,15 @@
 //! Lossless, field-by-field editing of native compositor shortcuts.
 
+pub mod cosmic;
 mod edit;
 mod encoding;
 mod formats;
 mod identity;
+mod qt_keys;
+mod qt_sequence;
+mod kwin_settings;
 mod scan;
+mod text_undo;
 
 use std::{ops::Range, path::PathBuf};
 
@@ -14,7 +19,10 @@ use mandara_i18n::tk;
 pub use edit::{PreparedEdit, UndoEdit, prepare};
 pub use encoding::Encoding;
 pub use formats::labwc_keyboard;
+pub use qt_sequence::sequence as qt_sequence;
+pub use kwin_settings::same_settings as kwin_same_settings;
 pub use scan::{Scan, Source, default_root, scan, scan_from};
+pub use text_undo::TextUndo;
 
 /// Bound one config file before parsing it or retaining its field values.
 pub const MAX_FILE_BYTES: usize = 1024 * 1024;
@@ -73,7 +81,7 @@ pub fn parse(
         "{}",
         mandara_i18n::t("The shortcut configuration is too large to edit.")
     );
-    let bindings = formats::format(target, file).parse(source)?;
+    let bindings = formats::format(target, file, source).parse(source)?;
     ensure!(
         bindings.len() <= MAX_BINDINGS,
         "{}",

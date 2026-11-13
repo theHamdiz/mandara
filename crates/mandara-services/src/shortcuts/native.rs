@@ -36,19 +36,25 @@ impl<'a> Native<'a> {
     fn private(&self) -> bool {
         matches!(
             self.session.target,
-            Target::River | Target::Labwc | Target::Aqueous | Target::Cosmic | Target::KWin
-        ) || self.session.target == Target::Hyprland
-            && self
-                .session
-                .root
-                .extension()
-                .is_some_and(|ext| ext == "lua")
+            Target::Hyprland
+                | Target::River
+                | Target::Labwc
+                | Target::Aqueous
+                | Target::Cosmic
+                | Target::KWin
+        )
     }
 
     fn check_body(&self, path: &Path, body: &str) -> Result<()> {
-        let rows = keybinds::parse(self.session.target, path, body)?;
+        let dialect = if path == self.edit.id.file {
+            &self.edit.id.target
+        } else {
+            path
+        };
+        let rows = keybinds::parse(self.session.target, dialect, body)?;
         match self.session.target {
-            Target::Hyprland if self.private() && path == self.edit.id.file => private::lua(
+            Target::Hyprland if path == self.edit.id.file => private::hyprland(
+                self.session,
                 rows.get(self.edit.id.index)
                     .context(t("The shortcut is no longer available."))?,
             ),

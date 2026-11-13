@@ -182,10 +182,60 @@ fn lua_sample(row: &Binding) -> Result<String> {
     ))
 }
 
-pub(super) fn lua(row: &Binding) -> Result<()> {
+fn hyprland_sample(session: &super::Session, row: &Binding) -> Result<(&'static str, String)> {
+    if row
+        .fields
+        .first()
+        .is_some_and(|field| field.encoding == Encoding::LuaLiteral)
+    {
+        return Ok(("lua", lua_sample(row)?));
+    }
+    ensure!(
+        row.read_only.is_none() && row.fields.len() >= 5,
+        "{}",
+        t("Computed shortcuts must be edited in their source configuration.")
+    );
+    let mut body = String::new();
+    // Copy only literal variable declarations, never source/exec directives.
+    // They retain the same include traversal order as the scanned bindings.
+    for source in &session.scan.sources {
+        let text = crate::app_themes::apply::read_text(&source.file)?;
+        for line in text.lines() {
+            let line = line.trim();
+            if let Some((name, _)) = line.split_once('=')
+                && let Some(name) = name.trim().strip_prefix('$')
+                && !name.is_empty()
+                && name
+                    .chars()
+                    .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+            {
+                body.push_str(line);
+                body.push('\n');
+            }
+        }
+    }
+    if row.scope != "default" {
+        body.push_str("submap = ");
+        body.push_str(&Encoding::Word.encode(&row.scope)?);
+        body.push('\n');
+    }
+    body.push_str(&Encoding::Word.encode(&row.fields[0].value)?);
+    body.push_str(" = ");
+    for (index, field) in row.fields[1..].iter().enumerate() {
+        if index != 0 {
+            body.push_str(", ");
+        }
+        body.push_str(&field.encoding.encode(&field.value)?);
+    }
+    body.push('\n');
+    Ok(("conf", body))
+}
+
+pub(super) fn hyprland(session: &super::Session, row: &Binding) -> Result<()> {
     let probe = Probe::new()?;
-    let path = probe.path().join("config/hyprland.lua");
-    std::fs::write(&path, lua_sample(row)?)?;
+    let (extension, body) = hyprland_sample(session, row)?;
+    let path = probe.path().join(format!("config/hyprland.{extension}"));
+    std::fs::write(&path, body)?;
     let report = doctor::check_with(
         mandara_config::compositor::Target::Hyprland,
         &path,
@@ -282,6 +332,34 @@ mod tests {
         assert_eq!(
             lua_sample(&rows[0]).unwrap(),
             "hl.bind('SUPER + Q', hl.dsp.exec_cmd('foot'), { repeatable = true })\n"
+        );
+    }
+
+    #[test]
+    fn legacy_hyprland_probe_copies_bindings_and_variables_without_sources_or_startup() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("custom.conf");
+        let source = "$mainMod = SUPER\nsource = dangerous.lua\nexec-once = touch /never-run\nsubmap = resize\nbind = $mainMod, Q, exec, foot\n";
+        std::fs::write(&file, source).unwrap();
+        let rows = mandara_config::keybinds::parse(Target::Hyprland, &file, source).unwrap();
+        let session = super::super::Session {
+            target: Target::Hyprland,
+            root: file.clone(),
+            scan: mandara_config::keybinds::Scan {
+                sources: vec![mandara_config::keybinds::Source {
+                    file: file.clone(),
+                    target: file,
+                    fingerprint: 0,
+                    bindings: Vec::new(),
+                }],
+                ..Default::default()
+            },
+        };
+        let (extension, body) = hyprland_sample(&session, &rows[0]).unwrap();
+        assert_eq!(extension, "conf");
+        assert_eq!(
+            body,
+            "$mainMod = SUPER\nsubmap = resize\nbind = $mainMod, Q, exec, foot\n"
         );
     }
 }

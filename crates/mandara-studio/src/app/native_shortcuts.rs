@@ -15,11 +15,11 @@ use gpui::{
 use mandara_config::{
     ShellConfig,
     compositor::Keybind,
-    keybinds::{Binding, BindingId, UndoEdit},
+    keybinds::{Binding, BindingId},
 };
 use mandara_core::ToGpui as _;
 use mandara_i18n::{t, tf, tr};
-use mandara_services::shortcuts::{self, Session};
+use mandara_services::shortcuts::{self, Session, Undo};
 use mandara_theme::MandaraPalette;
 use mandara_ui::{bidi::Bidi as _, icons::icon};
 use std::rc::Rc;
@@ -75,6 +75,11 @@ struct Draft {
     fields: Vec<Option<Entity<TextField>>>,
 }
 
+enum SaveRequest {
+    Values(BindingId, Vec<String>),
+    Undo(Undo),
+}
+
 #[derive(Default)]
 pub(super) struct Editor {
     requests: Latest<Vec<Keybind>>,
@@ -83,7 +88,7 @@ pub(super) struct Editor {
     query: String,
     search: Option<Entity<TextField>>,
     draft: Option<Draft>,
-    undo: Option<UndoEdit>,
+    undo: Option<Undo>,
     busy: bool,
     loading: bool,
     message: Option<(bool, String)>,
@@ -291,7 +296,7 @@ impl StudioView {
             let Some(edit) = &self.native_shortcuts.undo else {
                 return;
             };
-            (edit.id.clone(), edit.values.clone())
+            SaveRequest::Undo(edit.clone())
         } else {
             let Some(draft) = &self.native_shortcuts.draft else {
                 return;
@@ -299,7 +304,7 @@ impl StudioView {
             if draft.binding.read_only.is_some() {
                 return;
             }
-            (
+            SaveRequest::Values(
                 draft.id.clone(),
                 draft
                     .fields
@@ -318,7 +323,7 @@ impl StudioView {
         self.native_shortcuts.message = None;
         cx.spawn(async move |view, cx| {
             let result = mandara_services::runtime::unblock(move || {
-                shortcuts::save(&request.0, &request.1, &|| {
+                let preferences = || {
                     let value = (query.0)(vec![
                         "compositor".into(),
                         "shortcuts".into(),
@@ -326,7 +331,11 @@ impl StudioView {
                     ])
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                     serde_json::from_value(value).map_err(Into::into)
-                })
+                };
+                match request {
+                    SaveRequest::Values(id, values) => shortcuts::save(&id, &values, &preferences),
+                    SaveRequest::Undo(edit) => shortcuts::undo(&edit, &preferences),
+                }
                 .map_err(|error| format!("{error:#}"))
             })
             .await;
@@ -727,10 +736,10 @@ mod tests {
                 binding,
                 fields: vec![None, None],
             }),
-            undo: Some(UndoEdit {
+            undo: Some(Undo::Native(mandara_config::keybinds::UndoEdit {
                 id,
                 values: vec!["spawn_terminal".into(), "Super+T".into()],
-            }),
+            })),
             busy: true,
             visible: true,
             ..Default::default()

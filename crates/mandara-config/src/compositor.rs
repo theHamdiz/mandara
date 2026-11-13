@@ -39,6 +39,7 @@ use serde::{Deserialize, Serialize};
 use crate::{mango_keys, paths};
 
 mod sway_read;
+mod glob;
 pub mod shortcuts;
 pub(crate) use sway_read::binds as sway_config_binds;
 
@@ -2542,6 +2543,9 @@ fn glob_path(pattern: &Path) -> Vec<PathBuf> {
 }
 
 fn glob_path_bounded(pattern: &Path, limit: usize) -> Result<Vec<PathBuf>> {
+    // Include scans must finish even when a glob matches nothing in a huge tree.
+    const MAX_ENTRIES: usize = 65_536;
+    let mut examined = 0;
     let mut found = vec![PathBuf::new()];
     for part in pattern.components() {
         let name = part.as_os_str().to_string_lossy();
@@ -2551,12 +2555,25 @@ fn glob_path_bounded(pattern: &Path, limit: usize) -> Result<Vec<PathBuf>> {
             }
             continue;
         }
-        found = found
-            .iter()
-            .flat_map(|dir| std::fs::read_dir(dir).into_iter().flatten().flatten().filter(|e| glob_match(&name, &e.file_name().to_string_lossy())).map(|e| e.path()))
-            .take(limit.saturating_add(1))
-            .collect();
-        anyhow::ensure!(found.len() <= limit, "too many included shortcut files");
+        let matcher = glob::Pattern::new(&name);
+        let mut next = Vec::new();
+        for dir in &found {
+            let entries = match std::fs::read_dir(dir) {
+                Ok(entries) => entries,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error).with_context(|| dir.display().to_string()),
+            };
+            for entry in entries {
+                examined += 1;
+                anyhow::ensure!(examined <= MAX_ENTRIES, "include glob exceeds the directory scan budget");
+                let entry = entry?;
+                if matcher.matches(&entry.file_name().to_string_lossy()) {
+                    anyhow::ensure!(next.len() < limit, "too many included shortcut files");
+                    next.push(entry.path());
+                }
+            }
+        }
+        found = next;
     }
     found.retain(|p| p.exists());
     found.sort();
@@ -2565,24 +2582,9 @@ fn glob_path_bounded(pattern: &Path, limit: usize) -> Result<Vec<PathBuf>> {
 
 /// Shell glob match of one path component (`*` and `?`; hidden files only
 /// match a pattern that starts with `.`).
+#[cfg(test)]
 fn glob_match(pattern: &str, name: &str) -> bool {
-    if name.starts_with('.') && !pattern.starts_with('.') {
-        return false;
-    }
-    fn go(p: &[char], n: &[char]) -> bool {
-        match (p.first(), n.first()) {
-            (None, None) => true,
-            (Some('\\'), _) => match (p.get(1), n.first()) {
-                (Some(a), Some(b)) if a == b => go(&p[2..], &n[1..]),
-                _ => false,
-            },
-            (Some('*'), _) => go(&p[1..], n) || (!n.is_empty() && go(p, &n[1..])),
-            (Some('?'), Some(_)) => go(&p[1..], &n[1..]),
-            (Some(a), Some(b)) if a == b => go(&p[1..], &n[1..]),
-            _ => false,
-        }
-    }
-    go(&pattern.chars().collect::<Vec<_>>(), &name.chars().collect::<Vec<_>>())
+    glob::Pattern::new(pattern).matches(name)
 }
 
 /// Chords bound in the user's own config, following `source=` / `include`

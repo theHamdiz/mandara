@@ -17,13 +17,21 @@ use crate::keybinds::{Binding, Encoding, ShortcutFormat, field, line, normalize}
 pub(super) struct Cosmic;
 
 #[derive(Deserialize)]
-enum Modifier {
+pub(crate) enum Modifier {
     Super,
     Ctrl,
     Alt,
     Shift,
 }
 impl Modifier {
+    pub(crate) fn mask(&self) -> u8 {
+        match self {
+            Self::Super => 1,
+            Self::Ctrl => 2,
+            Self::Alt => 4,
+            Self::Shift => 8,
+        }
+    }
     fn name(&self) -> &'static str {
         match self {
             Self::Super => "super",

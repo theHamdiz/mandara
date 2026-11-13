@@ -1,5 +1,7 @@
 //! Short-lived native shortcut scans and reversible, field-scoped saves.
 
+mod cosmic;
+mod kwin;
 mod native;
 mod transaction;
 
@@ -8,7 +10,7 @@ use std::path::PathBuf;
 use anyhow::{Result, ensure};
 use mandara_config::{
     compositor::{Keybind, Target},
-    keybinds::{self, BindingId, Scan, UndoEdit},
+    keybinds::{self, BindingId, Scan, TextUndo, UndoEdit},
 };
 use mandara_i18n::t;
 
@@ -29,14 +31,24 @@ pub struct Session {
 
 #[derive(serde::Serialize)]
 pub struct Saved {
-    pub undo: Option<UndoEdit>,
+    pub undo: Option<Undo>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum Undo {
+    Native(UndoEdit),
+    Cosmic(TextUndo),
 }
 
 pub fn load() -> Result<Session> {
     let target = mandara_compositor::detected()
         .map(mandara_compositor::CompositorKind::target)
         .ok_or_else(|| anyhow::anyhow!("{}", t("No supported compositor is running.")))?;
-    let root = mandara_compositor::native_config::running(target)?.unwrap_or_else(|| keybinds::default_root(target));
+    let root = mandara_compositor::native_config::running(target)?
+        .unwrap_or_else(|| keybinds::default_root(target));
+    if target == Target::Cosmic {
+        return Ok(cosmic::load(root));
+    }
     let scan = keybinds::scan_from(target, &root);
     Ok(Session { target, root, scan })
 }
@@ -60,6 +72,17 @@ pub fn save(
             .scan
             .sources
             .iter()
+            .find(|source| source.file == id.file)
+            .and_then(|source| source.bindings.get(id.index))
+            .is_some_and(|row| row.read_only.is_none()),
+        "{}",
+        t("Computed shortcuts must be edited in their source configuration.")
+    );
+    ensure!(
+        session
+            .scan
+            .sources
+            .iter()
             .any(|source| source.binding_id(id.index).as_ref() == Some(id)),
         "{}",
         t(
@@ -77,10 +100,36 @@ pub fn save(
         t("The running compositor changed. Refresh the list and try again.")
     );
     let backend = native::Native::new(&session, &edit)?;
+    if session.target == Target::KWin {
+        return kwin::save(&session, &edit, &preferences_before, preferences, &backend);
+    }
+    if session.target == Target::Cosmic && edit.id.file != session.root {
+        return cosmic::save(&session, &edit, &preferences_before, preferences, &backend);
+    }
     transaction::apply(&session, &edit, &preferences_before, preferences, &backend)?;
-    Ok(Saved { undo: edit.undo() })
+    Ok(Saved {
+        undo: edit.undo().map(Undo::Native),
+    })
 }
 
-pub fn undo(edit: &UndoEdit, preferences: &dyn Fn() -> Result<Preferences>) -> Result<Saved> {
-    save(&edit.id, &edit.values, preferences)
+pub fn undo(edit: &Undo, preferences: &dyn Fn() -> Result<Preferences>) -> Result<Saved> {
+    match edit {
+        Undo::Native(edit) => save(&edit.id, &edit.values, preferences),
+        Undo::Cosmic(edit) => {
+            let _lock = mandara_config::compositor_theme::lock()?;
+            let session = load()?;
+            let initial = preferences()?;
+            ensure!(
+                session.target == Target::Cosmic && initial.target == Target::Cosmic,
+                "{}",
+                t("The running compositor changed. Refresh the list and try again.")
+            );
+            ensure!(
+                session.scan.errors.is_empty(),
+                "{}",
+                t("Resolve the shortcut configuration errors before saving.")
+            );
+            cosmic::undo(&session, edit, &initial, preferences, &cosmic::Checker)
+        }
+    }
 }
