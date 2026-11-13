@@ -61,38 +61,10 @@ pointers (for example `/plugins/settings/resources/refresh_ms`).
 
 ### Custom keyboard shortcuts
 
-Open **Studio → Keyboard shortcuts → Mandara**, add a starting action under **Add a
+Open **Studio → Keyboard shortcuts**, add a starting action under **Add a
 shortcut**, capture the keys, and switch the row to **Program** for a custom
 command. Chords already owned by your compositor are shown as taken and
 are left alone.
-
-The **Compositor** tab edits existing native bindings from the compositor
-running this session, including supported included files. Select a row and
-edit its individual values; changes wait for **Save**. Mandara preserves the
-rest of the file, comments and symlinks, takes a timestamped backup, checks
-the edit and offers **Undo**. Files changed since the scan must be refreshed
-before saving. Bindings built by executable code stay read-only; scanning
-never runs your configuration scripts. See [Studio's shortcut editor](studio.md#system).
-
-Discovery follows the compositor's launch arguments and environment, including
-Niri's `NIRI_CONFIG`, Sway's reported active file and labwc's merged config
-directories. Read-only sources remain visible with an explanation. KWin
-conflicts include alternative shortcuts, punctuation and the first key of a
-multi-key sequence. Sway includes share their variables and binding modes.
-Niri's `Mod` follows the merged input settings and its native nested-session
-behaviour; boolean options retain Niri's KDL v1 syntax.
-Window controls also follow the compositor's advertised capabilities; an
-unavailable action stays dimmed with a reason.
-
-### Studio appearance
-
-**Themes → Studio** stores its own appearance in `[studio]`: the selected
-`look`, palette (`theme`), component designs (`style`), `typography`,
-`motion` and window geometry (`frame`). Desktop Looks and wallpaper changes
-leave this snapshot intact. Existing configurations without `[studio]`
-keep following the shell; **Follow the shell** returns to that behaviour.
-Choose a preset first, then open **Studio design** in **Themes → Components**
-to refine its controls, fonts, colours and frame. See [Studio Looks](studio.md#studios-own-look).
 
 In TOML, a program action uses `kind = "spawn"` (`"exec"` is also accepted
 when reading an existing config). For Hyprland 0.57 or newer, custom

@@ -63,9 +63,6 @@ mandara msg panel capture media             # copy a visible docked or floating 
 mandara msg theme set mandara-corniche      # theme list, current, next, mode toggle, wallpaper, seeds, export
 mandara msg theme mode toggle
 mandara msg look apply corniche-dusk        # built-in or yours; look list; look restore brings back your own setup
-mandara msg studio look list               # Studio's independent window designs
-mandara msg studio look apply cupertino-glass # changes Studio only
-mandara msg studio look follow-shell       # let Studio follow the desktop's appearance again
 mandara msg look save "My evening"          # keep what you changed on the active look as a look of yours
 mandara msg look export phosphor            # to ~/Downloads/phosphor.mandara-look.toml (or a file you name)
 mandara msg look import ~/Downloads/x.mandara-look.toml   # checked strictly; nothing in it runs

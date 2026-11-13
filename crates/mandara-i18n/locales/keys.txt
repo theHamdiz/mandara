@@ -1482,7 +1482,6 @@ Compositor animations are off (Compositor → Effects)
 Compositor conflicts
 Compositor drop-in
 Compositor include line
-Compositor shortcuts: Keyboard shortcuts → Compositor
 Compositor window animations
 Computed shortcuts must be edited in their source configuration.
 Computes times offline from the coordinates you set
@@ -7125,7 +7124,6 @@ Stripes
 Strong
 Studio
 Studio design
-Studio design: Themes → Studio
 Studio isn't connected to the shell
 Studio isn't running inside a Wayland session.
 Studio look id (see studio look list)
