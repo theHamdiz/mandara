@@ -10477,3 +10477,5 @@
 "This shortcut is locked by the compositor configuration." = "این میان‌بر توسط تنظیمات کامپوزیتور قفل شده است."
 
 "Save or cancel this edit before using Undo." = "پیش از استفاده از واگرد، این ویرایش را ذخیره یا لغو کنید."
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "تعیین امن برخی میان‌برهای مدیر پنجره ممکن نیست. ابتدا آن‌ها را در پروندهٔ تنظیمات اصلی ویرایش کنید."

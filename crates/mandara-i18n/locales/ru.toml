@@ -10719,3 +10719,5 @@
 "This shortcut is locked by the compositor configuration." = "Это сочетание клавиш заблокировано настройками композитора."
 
 "Save or cancel this edit before using Undo." = "Сохраните или отмените это изменение, прежде чем использовать отмену действия."
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "Некоторые сочетания клавиш композитора нельзя определить однозначно. Сначала измените их в исходном файле настроек."

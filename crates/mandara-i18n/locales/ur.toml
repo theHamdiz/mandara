@@ -10477,3 +10477,5 @@
 "This shortcut is locked by the compositor configuration." = "یہ شارٹ کٹ کمپوزٹر کی کنفیگریشن سے مقفل ہے۔"
 
 "Save or cancel this edit before using Undo." = "واپس کریں استعمال کرنے سے پہلے اس ترمیم کو محفوظ یا منسوخ کریں۔"
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "کمپوزیٹر کے کچھ شارٹ کٹس کی محفوظ طور پر شناخت نہیں ہو سکتی۔ پہلے ان کی اصل ترتیبات کی فائل میں انہیں تبدیل کریں۔"

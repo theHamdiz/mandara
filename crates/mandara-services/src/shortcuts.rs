@@ -83,6 +83,7 @@ pub fn load() -> Result<Session> {
         keybinds::resolve_niri_mod(&mut scan, nested);
     }
     permissions::mark(&mut scan, None);
+    lock_ambiguous_river(target, &mut scan);
     Ok(Session {
         target,
         root,
@@ -136,13 +137,21 @@ fn check_destination(session: &Session, edit: &keybinds::PreparedEdit) -> Result
         return Ok(());
     }
     let destination = keybinds::river::identity(edit.binding());
+    let original = keybinds::river::identity(&edit.old_binding);
+    ensure!(destination.is_some(), "{}", t(keybinds::river::UNRESOLVED));
     for source in &session.scan.sources {
         for (index, row) in source.bindings.iter().enumerate() {
             if source.target == edit.id.target && index == edit.id.index {
                 continue;
             }
             ensure!(
-                destination.is_none() || destination != keybinds::river::identity(row),
+                keybinds::river::identity(row).is_some(),
+                "{}",
+                t(keybinds::river::UNRESOLVED)
+            );
+            ensure!(
+                destination != keybinds::river::identity(row)
+                    && original != keybinds::river::identity(row),
                 "{}",
                 t(
                     "Another compositor shortcut already uses this key. Edit that shortcut or choose a different key."
@@ -151,6 +160,48 @@ fn check_destination(session: &Session, edit: &keybinds::PreparedEdit) -> Result
         }
     }
     Ok(())
+}
+
+fn lock_ambiguous_river(target: Target, scan: &mut Scan) {
+    if target != Target::River {
+        return;
+    }
+    if target == Target::River
+        && scan
+            .sources
+            .iter()
+            .flat_map(|source| &source.bindings)
+            .any(|row| keybinds::river::identity(row).is_none())
+    {
+        for row in scan
+            .sources
+            .iter_mut()
+            .flat_map(|source| &mut source.bindings)
+        {
+            row.read_only.get_or_insert(keybinds::river::UNRESOLVED);
+        }
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    let mut duplicates = std::collections::BTreeSet::new();
+    for identity in scan
+        .sources
+        .iter()
+        .flat_map(|source| &source.bindings)
+        .filter_map(keybinds::river::identity)
+    {
+        if !seen.insert(identity.clone()) {
+            duplicates.insert(identity);
+        }
+    }
+    for row in scan
+        .sources
+        .iter_mut()
+        .flat_map(|source| &mut source.bindings)
+    {
+        if keybinds::river::identity(row).is_some_and(|identity| duplicates.contains(&identity)) {
+            row.read_only.get_or_insert(keybinds::river::UNRESOLVED);
+        }
+    }
 }
 
 pub fn undo(edit: &Undo, preferences: &dyn Fn() -> Result<Preferences>) -> Result<Saved> {
@@ -178,6 +229,92 @@ pub fn undo(edit: &Undo, preferences: &dyn Fn() -> Result<Preferences>) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shadowed_river_sources_cannot_unmap_the_active_later_binding() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("init");
+        let original =
+            "riverctl map normal Super Q close\nriverctl map normal Super Q spawn foot\n";
+        std::fs::write(&file, original).unwrap();
+        let mut session = Session {
+            target: Target::River,
+            root: file.clone(),
+            scan: keybinds::scan_from(Target::River, &file),
+            primary_mod_is_alt: false,
+            environment: Default::default(),
+        };
+        let source = &session.scan.sources[0];
+        for index in 0..source.bindings.len() {
+            let row = &source.bindings[index];
+            let mut values: Vec<_> = row.fields.iter().map(|field| field.value.clone()).collect();
+            values[row
+                .fields
+                .iter()
+                .position(|field| field.label == "Key")
+                .unwrap()] = "W".into();
+            let edit =
+                keybinds::prepare(Target::River, &source.binding_id(index).unwrap(), &values)
+                    .unwrap();
+            assert!(check_destination(&session, &edit).is_err());
+        }
+        lock_ambiguous_river(Target::River, &mut session.scan);
+        assert!(
+            session.scan.sources[0]
+                .bindings
+                .iter()
+                .all(|row| row.read_only == Some(keybinds::river::UNRESOLVED))
+        );
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
+    }
+
+    #[test]
+    fn unresolved_river_headers_lock_literal_edits_before_live_mapping_changes() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("init");
+        let original =
+            "riverctl map normal Super Q close\nriverctl map normal \"$mod\" W spawn foot\n";
+        std::fs::write(&file, original).unwrap();
+        let mut session = Session {
+            target: Target::River,
+            root: file.clone(),
+            scan: keybinds::scan_from(Target::River, &file),
+            primary_mod_is_alt: false,
+            environment: Default::default(),
+        };
+        let source = &session.scan.sources[0];
+        let mut values: Vec<_> = source.bindings[0]
+            .fields
+            .iter()
+            .map(|field| field.value.clone())
+            .collect();
+        let key = source.bindings[0]
+            .fields
+            .iter()
+            .position(|field| field.label == "Key")
+            .unwrap();
+        values[key] = "W".into();
+        let edit =
+            keybinds::prepare(Target::River, &source.binding_id(0).unwrap(), &values).unwrap();
+        assert!(check_destination(&session, &edit).is_err());
+        lock_ambiguous_river(Target::River, &mut session.scan);
+        assert_eq!(
+            session.scan.sources[0].bindings[0].read_only,
+            Some(keybinds::river::UNRESOLVED)
+        );
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
+        std::fs::write(
+            &file,
+            "riverctl map normal Super Q close\nriverctl map normal Super W spawn \"$terminal\"\n",
+        )
+        .unwrap();
+        let mut scan = keybinds::scan_from(Target::River, &file);
+        lock_ambiguous_river(Target::River, &mut scan);
+        assert!(
+            scan.sources[0].bindings[0].read_only.is_none(),
+            "computed command arguments do not hide the mapping's identity"
+        );
+    }
 
     #[test]
     fn river_rejects_destination_conflicts_before_any_file_or_live_write() {

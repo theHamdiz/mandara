@@ -73,7 +73,7 @@ struct Reader<'a> {
 impl Reader<'_> {
     fn chunk(&mut self, file: &Path, text: &str, offset: usize) -> Result<()> {
         self.binds.extend(
-            sway_binds_in(text, &mut self.vars, &mut self.blocks)
+            sway_binds_in(text, &mut self.vars, &mut self.blocks)?
                 .into_iter()
                 .map(|mut bind| {
                     bind.line += offset;
@@ -126,9 +126,7 @@ impl Reader<'_> {
                 self.chunk(file, &chunk, start)?;
                 chunk.clear();
                 start = line_number + 1;
-                let raw = self.vars.iter().fold(raw, |value, (name, replacement)| {
-                    value.replace(name, replacement)
-                });
+                let raw = super::sway_vars::expand(&raw, &self.vars)?;
                 let files = match &self.budget {
                     Some(budget) => {
                         if let Some(environment) = self.environment {
@@ -167,6 +165,28 @@ impl Reader<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exponentially_expanded_variables_fail_before_their_output_is_allocated() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config");
+        let mut body = String::from("set $v0 x\n");
+        for index in 1..32 {
+            body.push_str(&format!("set $v{index} $v{}$v{}\n", index - 1, index - 1));
+        }
+        body.push_str("bindsym Mod4+q exec $v31\n");
+        std::fs::write(&root, &body).unwrap();
+        assert!(body.len() < crate::keybinds::MAX_FILE_BYTES);
+        assert!(
+            shortcut_sources_in(std::slice::from_ref(&root), &IncludeEnvironment::default())
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("budget")
+        );
+        assert!(checked_in(&root, &IncludeEnvironment::default()).is_err());
+        assert!(crate::keybinds::parse(Target::Sway, &root, &body).is_err());
+    }
 
     #[test]
     fn included_aliases_resolve_children_beside_the_canonical_source() {

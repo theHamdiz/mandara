@@ -10720,3 +10720,5 @@
 "This shortcut is locked by the compositor configuration." = "Ce raccourci est verrouillé par la configuration du compositeur."
 
 "Save or cancel this edit before using Undo." = "Enregistrez ou annulez cette modification avant d’utiliser Annuler."
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "Certains raccourcis du compositeur ne peuvent pas être déterminés avec certitude. Modifiez-les d’abord dans leur fichier de configuration."

@@ -10719,3 +10719,5 @@
 "This shortcut is locked by the compositor configuration." = "Bu kısayol, birleştirici yapılandırması tarafından kilitlenmiştir."
 
 "Save or cancel this edit before using Undo." = "Geri Al seçeneğini kullanmadan önce bu düzenlemeyi kaydedin veya iptal edin."
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "Bazı birleştirici kısayolları güvenle çözümlenemiyor. Önce bunları kaynak yapılandırma dosyasında düzenleyin."

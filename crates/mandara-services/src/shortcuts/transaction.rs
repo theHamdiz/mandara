@@ -89,7 +89,7 @@ pub(super) fn apply(
             "The compositor shortcuts changed while they were being checked. Refresh the list and try again."
         )
     );
-    let previous = companion.map(std::fs::read_to_string).transpose()?;
+    let previous = companion.map(keybinds::read_source).transpose()?;
     let mut config = CompositorConfig {
         autostart: false,
         keybinds: initial.keybinds.clone(),
@@ -231,6 +231,98 @@ mod tests {
     use super::*;
     use mandara_config::compositor::Target;
     use std::{fs, os::unix::fs::symlink};
+
+    struct UnusedBackend;
+    impl Backend for UnusedBackend {
+        fn validate(&self, _: &Path, _: &str) -> Result<()> {
+            panic!("validation must follow bounded reads")
+        }
+        fn check(&self) -> LiveCheck {
+            panic!("no live check before bounded reads")
+        }
+        fn apply(&self) -> Result<()> {
+            panic!("no live write before bounded reads")
+        }
+        fn restore(&self) -> Result<()> {
+            panic!("no live write before bounded reads")
+        }
+        fn version(&self) -> Option<(u32, u32)> {
+            panic!("version lookup must follow bounded reads")
+        }
+    }
+
+    #[test]
+    fn oversized_and_fifo_companions_fail_before_native_or_live_mutation() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("config.conf");
+        let original = "bind=SUPER,Q,killclient\n";
+        fs::write(&file, original).unwrap();
+        let directory = root.path().join("mandara/generated");
+        fs::create_dir_all(&directory).unwrap();
+        let companion = directory.join("mango.conf");
+        let mut session = Session {
+            target: Target::Mango,
+            root: file.clone(),
+            scan: keybinds::scan_from(Target::Mango, &file),
+            environment: Default::default(),
+            primary_mod_is_alt: false,
+        };
+        session.scan.generated.push(companion.clone());
+        let source = &session.scan.sources[0];
+        let mut values: Vec<_> = source.bindings[0]
+            .fields
+            .iter()
+            .map(|field| field.value.clone())
+            .collect();
+        values[1] = "W".into();
+        let edit =
+            keybinds::prepare(Target::Mango, &source.binding_id(0).unwrap(), &values).unwrap();
+        let initial = Preferences {
+            target: Target::Mango,
+            manage: false,
+            keybinds: Vec::new(),
+        };
+        fs::write(&companion, vec![b'x'; keybinds::MAX_FILE_BYTES + 1]).unwrap();
+        assert!(
+            apply(
+                &session,
+                &edit,
+                &initial,
+                &|| Ok(initial.clone()),
+                &UnusedBackend
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read_to_string(&file).unwrap(), original);
+        fs::remove_file(&companion).unwrap();
+        rustix::fs::mkfifoat(
+            rustix::fs::CWD,
+            &companion,
+            rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
+        )
+        .unwrap();
+        let (send, receive) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            send.send(
+                apply(
+                    &session,
+                    &edit,
+                    &initial,
+                    &|| Ok(initial.clone()),
+                    &UnusedBackend,
+                )
+                .is_err(),
+            )
+            .unwrap();
+        });
+        assert!(
+            receive
+                .recv_timeout(mandara_config::doctor::CHECK_TIMEOUT)
+                .unwrap()
+        );
+        worker.join().unwrap();
+        assert_eq!(fs::read_to_string(&file).unwrap(), original);
+    }
 
     #[test]
     fn the_companion_is_the_actual_included_file_including_aliases_and_lua() {

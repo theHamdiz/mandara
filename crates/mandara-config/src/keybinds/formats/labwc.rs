@@ -78,6 +78,7 @@ impl ShortcutFormat for Labwc {
             }
             for value in node.descendants().skip(1).filter(|n| {
                 n.is_element()
+                    && !n.has_tag_name("keybind")
                     && n.ancestors().skip(1).find(|p| p.has_tag_name("keybind")) == Some(node)
             }) {
                 for attribute in value.attributes() {
@@ -265,6 +266,12 @@ mod tests {
         assert_eq!(binds.len(), 3);
         assert_eq!(binds[0].chord.as_deref(), Some("super+return"));
         assert_eq!(binds[2].scope, "keyboard/W-x");
+        assert_eq!(binds[1].fields.len(), 1);
+        assert_eq!(binds[1].fields[0].label, "Shortcut");
+        assert_eq!(binds[1].fields[0].value, "W-x");
+        let renamed = crate::keybinds::patch(text, &binds[1], &["W-z".into()]).unwrap();
+        assert_eq!(renamed, text.replace("key='W-x'", "key='W-z'"));
+        assert_eq!(Labwc.parse(&renamed).unwrap()[2].fields[0].value, "q");
         let mut values: Vec<_> = binds[0].fields.iter().map(|f| f.value.clone()).collect();
         let at = binds[0]
             .fields

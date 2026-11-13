@@ -10714,3 +10714,5 @@
 "This shortcut is locked by the compositor configuration." = "Este atajo está bloqueado por la configuración del compositor."
 
 "Save or cancel this edit before using Undo." = "Guarda o cancela esta edición antes de usar Deshacer."
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "No se pueden resolver con seguridad algunos atajos del compositor. Edítalos primero en su archivo de configuración original."

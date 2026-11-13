@@ -10478,3 +10478,5 @@
 "This shortcut is locked by the compositor configuration." = "কম্পোজিটরের কনফিগারেশন এই শর্টকাটটি লক করেছে।"
 
 "Save or cancel this edit before using Undo." = "পূর্বাবস্থায় ফেরানোর আগে এই সম্পাদনাটি সংরক্ষণ করুন বা বাতিল করুন।"
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "কম্পোজিটরের কিছু শর্টকাট নিরাপদভাবে নির্ধারণ করা যাচ্ছে না। আগে তাদের মূল কনফিগারেশন ফাইলে সম্পাদনা করুন।"

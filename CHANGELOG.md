@@ -18,6 +18,7 @@ About → What's new shows it too.
 ### Fixed
 
 - **Non-Latin shortcut keys no longer crash the editor.** Arabic and other Unicode keys can be inspected safely.
+- **Shortcut edits stay with the selected binding.** Nested key chains keep their own fields; oversized or ambiguous configurations explain why editing is unavailable. Hyprland checks use the variables active at each binding.
 
 ### Under the hood
 

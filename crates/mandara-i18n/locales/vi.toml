@@ -10378,3 +10378,5 @@
 "This shortcut is locked by the compositor configuration." = "Phím tắt này bị khóa bởi cấu hình trình tổng hợp."
 
 "Save or cancel this edit before using Undo." = "Lưu hoặc hủy chỉnh sửa này trước khi dùng Hoàn tác."
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "Không thể xác định an toàn một số phím tắt của trình tổng hợp. Hãy sửa chúng trong tệp cấu hình gốc trước."

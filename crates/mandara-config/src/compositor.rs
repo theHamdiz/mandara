@@ -42,6 +42,9 @@ mod glob;
 mod include_env;
 mod read_budget;
 mod sway_read;
+mod sway_vars;
+mod hyprland_probe;
+pub use hyprland_probe::shortcut_probe as hyprland_shortcut_probe;
 pub use include_env::IncludeEnvironment;
 pub mod shortcuts;
 pub(crate) use sway_read::binds as sway_config_binds;
@@ -2964,29 +2967,31 @@ pub struct SwayBind {
 /// (they only act in that mode). `bindcode` binds name raw keycodes and
 /// are left out too.
 pub fn sway_binds(text: &str) -> Vec<SwayBind> {
-    sway_binds_with(text, &mut Vec::new())
+    sway_binds_checked(text).unwrap_or_default()
+}
+
+pub(crate) fn sway_binds_checked(text: &str) -> Result<Vec<SwayBind>> {
+    sway_binds_in(text, &mut Vec::new(), &mut Vec::new())
 }
 
 /// Sets `$name` in `vars`: a second `set $mod …` replaces the first (sway
 /// uses the latest value from there on), and names stay longest first, so
 /// `$mod` never eats `$modShift`.
 pub(crate) fn set_var(vars: &mut Vec<(String, String)>, name: &str, value: &str) {
+    set_var_owned(vars, name, value.to_owned());
+}
+
+fn set_var_owned(vars: &mut Vec<(String, String)>, name: &str, value: String) {
     match vars.iter_mut().find(|(n, _)| n == name) {
-        Some((_, v)) => *v = value.to_string(),
+        Some((_, v)) => *v = value,
         None => {
-            vars.push((name.to_string(), value.to_string()));
+            vars.push((name.to_string(), value));
             vars.sort_by_key(|(n, _)| std::cmp::Reverse(n.len()));
         }
     }
 }
 
-/// [`sway_binds`] with the variables already set before `text` (and
-/// those it sets added).
-fn sway_binds_with(text: &str, vars: &mut Vec<(String, String)>) -> Vec<SwayBind> {
-    sway_binds_in(text, vars, &mut Vec::new())
-}
-
-fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<String>) -> Vec<SwayBind> {
+fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<String>) -> Result<Vec<SwayBind>> {
     let mut out = Vec::new();
     for (i, raw) in text.lines().enumerate() {
         let line = raw.trim();
@@ -2997,20 +3002,16 @@ fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<
             blocks.pop();
             continue;
         }
-        let mut line = line.to_string();
         if let Some(rest) = line.strip_prefix("set ")
             && let Some((name, value)) = rest.trim().split_once(char::is_whitespace)
             && name.starts_with('$')
         {
-            let value = vars.iter().fold(value.trim().to_string(), |value, (name, replacement)| {
-                    value.replace(name, replacement)
-                });
-            set_var(vars, name, &value);
+            let value = sway_vars::expand(value.trim(), vars)?;
+            sway_vars::check_assignment(vars, name, &value)?;
+            set_var_owned(vars, name, value.into_owned());
             continue;
         }
-        for (name, value) in vars.iter() {
-            line = line.replace(name.as_str(), value);
-        }
+        let line = sway_vars::expand(line, vars)?;
         let opens_block = line.ends_with('{');
         let body = line.trim_end_matches('{').trim_end();
         let in_bind_block = blocks.last().is_some_and(|b| b == "bindsym") && blocks.len() == 1;
@@ -3031,9 +3032,10 @@ fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<
         let Some(key) = parts.pop() else { continue };
         let command = words.collect::<Vec<_>>().join(" ");
         let expanded = if in_bind_block { format!("bindsym {body}") } else { body.to_string() };
+        anyhow::ensure!(out.len() < crate::keybinds::MAX_BINDINGS, "too many compositor shortcuts");
         out.push(SwayBind { line: i, chord: chord(parts.into_iter(), &keysym_for(key)), command, expanded });
     }
-    out
+    Ok(out)
 }
 
 /// The table a TOML header line opens (`[keybinds]` → `keybinds`,

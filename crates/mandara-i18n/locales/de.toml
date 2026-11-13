@@ -10718,3 +10718,5 @@
 "This shortcut is locked by the compositor configuration." = "Diese Tastenkombination ist durch die Compositor-Konfiguration gesperrt."
 
 "Save or cancel this edit before using Undo." = "Speichere oder verwirf diese Änderung, bevor du sie rückgängig machst."
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "Einige Compositor-Kurzbefehle lassen sich nicht sicher auflösen. Bearbeite sie zuerst in ihrer ursprünglichen Konfigurationsdatei."

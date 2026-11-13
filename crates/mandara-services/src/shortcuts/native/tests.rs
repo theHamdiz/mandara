@@ -35,7 +35,7 @@ fn native_checkers_validate_shortcuts_without_running_configuration_hooks() {
                     scan: keybinds::scan_from(target, &file),
                     primary_mod_is_alt: false,
                 };
-                private::hyprland(&session, &rows[0])
+                private::hyprland(&session, &file, &rows[0])
             }
             Target::River => private::river(&rows[0]),
             Target::Labwc => private::labwc(source),

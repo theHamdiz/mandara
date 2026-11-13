@@ -10721,3 +10721,5 @@
 "This shortcut is locked by the compositor configuration." = "このショートカットはコンポジターの設定によってロックされています。"
 
 "Save or cancel this edit before using Undo." = "元に戻す前に、この編集を保存するかキャンセルしてください。"
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "一部のコンポジターのショートカットを安全に解決できません。先に元の設定ファイルで編集してください。"

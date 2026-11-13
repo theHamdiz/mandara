@@ -10724,3 +10724,5 @@
 "This shortcut is locked by the compositor configuration." = "هذا الاختصار مقفل بواسطة إعدادات مدير النوافذ."
 
 "Save or cancel this edit before using Undo." = "احفظ هذا التعديل أو ألغِه قبل استخدام التراجع."
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "يتعذّر تحديد بعض اختصارات مدير النوافذ بأمان. عدّلها في ملف إعداداتها أولًا."

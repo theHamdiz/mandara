@@ -60,6 +60,7 @@ impl<'a> Native<'a> {
         match self.session.target {
             Target::Hyprland if path == self.edit.id.file => private::hyprland(
                 self.session,
+                &self.edit.id.file,
                 rows.get(self.edit.id.index)
                     .context(t("The shortcut is no longer available."))?,
             ),
@@ -91,7 +92,7 @@ impl Backend for Native<'_> {
     fn check(&self) -> LiveCheck {
         if self.private() {
             (|| {
-                let body = crate::app_themes::apply::read_text(&self.edit.id.file)?;
+                let body = keybinds::read_source(&self.edit.id.file)?;
                 self.check_body(&self.edit.id.file, &body)
             })()
             .into()

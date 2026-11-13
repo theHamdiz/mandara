@@ -156,7 +156,11 @@ fn lua_sample(row: &Binding) -> Result<String> {
     ))
 }
 
-fn hyprland_sample(session: &super::Session, row: &Binding) -> Result<(&'static str, String)> {
+fn hyprland_sample(
+    session: &super::Session,
+    file: &Path,
+    row: &Binding,
+) -> Result<(&'static str, String)> {
     if row
         .fields
         .first()
@@ -170,24 +174,6 @@ fn hyprland_sample(session: &super::Session, row: &Binding) -> Result<(&'static 
         t("Computed shortcuts must be edited in their source configuration.")
     );
     let mut body = String::new();
-    // Copy only literal variable declarations, never source/exec directives.
-    // They retain the same include traversal order as the scanned bindings.
-    for source in &session.scan.sources {
-        let text = crate::app_themes::apply::read_text(&source.file)?;
-        for line in text.lines() {
-            let line = line.trim();
-            if let Some((name, _)) = line.split_once('=')
-                && let Some(name) = name.trim().strip_prefix('$')
-                && !name.is_empty()
-                && name
-                    .chars()
-                    .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
-            {
-                body.push_str(line);
-                body.push('\n');
-            }
-        }
-    }
     if row.scope != "default" {
         body.push_str("submap = ");
         body.push_str(&Encoding::Word.encode(&row.scope)?);
@@ -202,12 +188,22 @@ fn hyprland_sample(session: &super::Session, row: &Binding) -> Result<(&'static 
         body.push_str(&field.encoding.encode(&field.value)?);
     }
     body.push('\n');
-    Ok(("conf", body))
+    body.push_str("submap = reset\n");
+    Ok((
+        "conf",
+        mandara_config::compositor::hyprland_shortcut_probe(
+            &session.root,
+            file,
+            row.line,
+            &body,
+            &session.environment,
+        )?,
+    ))
 }
 
-pub(super) fn hyprland(session: &super::Session, row: &Binding) -> Result<()> {
+pub(super) fn hyprland(session: &super::Session, file: &Path, row: &Binding) -> Result<()> {
     let probe = Probe::new()?;
-    let (extension, body) = hyprland_sample(session, row)?;
+    let (extension, body) = hyprland_sample(session, file, row)?;
     let path = probe.path().join(format!("config/hyprland.{extension}"));
     std::fs::write(&path, body)?;
     let report = doctor::check_with(
@@ -309,8 +305,13 @@ mod tests {
     fn legacy_hyprland_probe_copies_bindings_and_variables_without_sources_or_startup() {
         let directory = tempfile::tempdir().unwrap();
         let file = directory.path().join("custom.conf");
-        let source = "$mainMod = SUPER\nsource = dangerous.lua\nexec-once = touch /never-run\nsubmap = resize\nbind = $mainMod, Q, exec, foot\n";
+        let source = "$mainMod = SUPER\nsource = safe.conf\nexec-once = touch /never-run\nsubmap = resize\nbind = $mainMod, Q, exec, foot\n";
         std::fs::write(&file, source).unwrap();
+        std::fs::write(
+            directory.path().join("safe.conf"),
+            "exec-once = touch /never-run\n",
+        )
+        .unwrap();
         let rows = mandara_config::keybinds::parse(Target::Hyprland, &file, source).unwrap();
         let session = super::super::Session {
             environment: Default::default(),
@@ -320,18 +321,18 @@ mod tests {
             scan: mandara_config::keybinds::Scan {
                 sources: vec![mandara_config::keybinds::Source {
                     file: file.clone(),
-                    target: file,
+                    target: file.clone(),
                     fingerprint: 0,
                     bindings: Vec::new(),
                 }],
                 ..Default::default()
             },
         };
-        let (extension, body) = hyprland_sample(&session, &rows[0]).unwrap();
+        let (extension, body) = hyprland_sample(&session, &file, &rows[0]).unwrap();
         assert_eq!(extension, "conf");
         assert_eq!(
             body,
-            "$mainMod = SUPER\nsubmap = resize\nbind = $mainMod, Q, exec, foot\n"
+            "$mainMod = SUPER\nsubmap = resize\nbind = $mainMod, Q, exec, foot\nsubmap = reset\n"
         );
     }
 }

@@ -10722,3 +10722,5 @@
 "This shortcut is locked by the compositor configuration." = "यह शॉर्टकट कंपोज़िटर की कॉन्फ़िगरेशन द्वारा लॉक किया गया है।"
 
 "Save or cancel this edit before using Undo." = "पूर्ववत करें का उपयोग करने से पहले यह संपादन सहेजें या रद्द करें।"
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "कंपोज़िटर के कुछ शॉर्टकट सुरक्षित रूप से निर्धारित नहीं किए जा सकते। पहले उन्हें उनकी मूल कॉन्फ़िगरेशन फ़ाइल में संपादित करें।"

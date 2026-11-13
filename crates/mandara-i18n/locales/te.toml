@@ -10379,3 +10379,5 @@
 "This shortcut is locked by the compositor configuration." = "ఈ సత్వరమార్గం కంపోజిటర్ కాన్ఫిగరేషన్ ద్వారా లాక్ చేయబడింది."
 
 "Save or cancel this edit before using Undo." = "అన్డు ఉపయోగించే ముందు ఈ సవరణను సేవ్ చేయండి లేదా రద్దు చేయండి."
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "కంపోజిటర్‌లోని కొన్ని సత్వరమార్గాలను సురక్షితంగా గుర్తించలేము. ముందుగా వాటి అసలు కాన్ఫిగరేషన్ ఫైల్‌లో సవరించండి."

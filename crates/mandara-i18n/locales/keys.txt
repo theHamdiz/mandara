@@ -6921,6 +6921,7 @@ Solid-state drive
 Solved in {time}
 Solved!
 Some clouds, some sun. Easy weather.
+Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first.
 Some folders
 Something went wrong while installing. The details say what.
 Somewhere in your config

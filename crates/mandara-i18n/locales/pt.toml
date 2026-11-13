@@ -10377,3 +10377,5 @@
 "This shortcut is locked by the compositor configuration." = "Este atalho está bloqueado pela configuração do compositor."
 
 "Save or cancel this edit before using Undo." = "Salve ou cancele esta edição antes de usar Desfazer."
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "Alguns atalhos do compositor não podem ser determinados com segurança. Edite-os primeiro no arquivo de configuração original."

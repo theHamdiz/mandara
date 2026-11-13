@@ -29,7 +29,7 @@ pub use qt_sequence::keybind as qt_keybind;
 pub use qt_sequence::sequence as qt_sequence;
 pub use scan::{
     Scan, Source, default_root, default_root_in, resolve_niri_mod, scan, scan_from, scan_roots,
-    scan_roots_in,
+    scan_roots_in, read_source,
 };
 pub use text_undo::TextUndo;
 

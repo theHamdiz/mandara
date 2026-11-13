@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use anyhow::Result;
+use anyhow::{Result, ensure};
 use mandara_i18n::tk;
 
 use crate::{
@@ -24,7 +24,20 @@ impl ShortcutFormat for Lines {
         let mut scope = String::from("default");
         let mut sway_block = None;
         let mut continued = false;
-        let resolved = crate::compositor::chords_by_line(self.0, source);
+        let resolved = match self.0 {
+            Target::River => Vec::new(),
+            Target::Sway => crate::compositor::sway_binds_checked(source)?
+                .into_iter()
+                .map(|bind| (bind.line, bind.chord))
+                .collect(),
+            _ => crate::compositor::chords_by_line(self.0, source),
+        };
+        ensure!(
+            resolved.len() <= crate::keybinds::MAX_BINDINGS,
+            "{}",
+            mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
+        );
+        let mut resolved = resolved.into_iter().peekable();
         for (index, raw) in source.split_inclusive('\n').enumerate() {
             let code = raw.trim_end_matches(['\n', '\r']);
             let continuation = continued;
@@ -80,11 +93,17 @@ impl ShortcutFormat for Lines {
                 _ => None,
             };
             if let Some(bind) = &mut binding {
+                ensure!(
+                    result.len() < crate::keybinds::MAX_BINDINGS,
+                    "{}",
+                    mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
+                );
                 bind.line = index + 1;
                 if continued {
                     bind.read_only = Some(crate::keybinds::SOURCE_ONLY);
                 }
-                if let Some((_, chord)) = resolved.iter().find(|(line, _)| *line == index) {
+                while resolved.next_if(|(line, _)| *line < index).is_some() {}
+                if let Some((_, chord)) = resolved.peek().filter(|(line, _)| *line == index) {
                     bind.chord = Some(chord.clone());
                 }
             }
@@ -421,6 +440,19 @@ pub(super) fn words(text: &str) -> Vec<Range<usize>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn oversized_line_binding_lists_stop_at_the_parser_budget() {
+        for (target, line) in [
+            (Target::River, "riverctl map normal Super Q close\n"),
+            (Target::Mango, "bind=SUPER,Q,killclient\n"),
+            (Target::Hyprland, "bind=SUPER,Q,exec,foot\n"),
+            (Target::Sway, "bindsym Mod4+q kill\n"),
+        ] {
+            let source = line.repeat(30_000);
+            assert!(Lines(target).parse(&source).is_err(), "{target:?}");
+        }
+    }
 
     #[test]
     fn river_arguments_keep_literal_quotes_but_expanded_values_are_read_only() {

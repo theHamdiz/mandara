@@ -54,7 +54,8 @@ pub(crate) fn fingerprint(text: &str) -> u64 {
     hash.finish()
 }
 
-pub(crate) fn read(path: &Path) -> Result<String> {
+/// Open only regular files and reject oversized input before parsing or retaining it.
+pub fn read_source(path: &Path) -> Result<String> {
     let file = crate::regular::open(path).with_context(|| path.display().to_string())?;
     let mut text = String::new();
     file.take(MAX_FILE_BYTES as u64 + 1)
@@ -66,6 +67,8 @@ pub(crate) fn read(path: &Path) -> Result<String> {
     );
     Ok(text)
 }
+
+pub(crate) use read_source as read;
 
 pub fn scan(target: Target) -> Scan {
     scan_from(target, &default_root(target))
@@ -328,7 +331,12 @@ mod tests {
             assert!(scan.errors.is_empty(), "{name}: {:?}", scan.errors);
             assert!(scan.sources.iter().any(|source| source.file == child));
             if name != "mango.toml" && target != Target::Niri {
-                assert!(crate::compositor::existing_chords_checked_in(target, &root, &environment).unwrap().contains("super+q"), "{name}: checked conflicts use the native environment");
+                assert!(
+                    crate::compositor::existing_chords_checked_in(target, &root, &environment)
+                        .unwrap()
+                        .contains("super+q"),
+                    "{name}: checked conflicts use the native environment"
+                );
             }
             assert!(
                 scan.sources

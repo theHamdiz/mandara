@@ -10715,3 +10715,5 @@
 "This shortcut is locked by the compositor configuration." = "此快捷键已被合成器配置锁定。"
 
 "Save or cancel this edit before using Undo." = "使用撤销前，请先保存或取消此次编辑。"
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "无法安全确定部分合成器快捷键。请先在原始配置文件中编辑它们。"

@@ -10477,3 +10477,5 @@
 "This shortcut is locked by the compositor configuration." = "Pintasan ini dikunci oleh konfigurasi kompositor."
 
 "Save or cancel this edit before using Undo." = "Simpan atau batalkan perubahan ini sebelum menggunakan Urungkan."
+
+"Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first." = "Beberapa pintasan kompositor tidak dapat ditentukan dengan aman. Edit dahulu di berkas konfigurasi sumbernya."
