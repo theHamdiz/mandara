@@ -17,8 +17,8 @@ Qt, Kvantum, KDE, terminal and editor integrations are described in
 | Zellij | `zellij/themes/mandara.kdl` | Set `theme "mandara"` in `zellij/config.kdl`. Theme files are reloaded live. |
 | Spicetify | `spicetify/Themes/Mandara/color.ini` and `user.css` | After installing and setting up Spicetify, select `current_theme Mandara` and `color_scheme Mandara` with its `config` command, then run `spicetify apply`. Use `spicetify refresh` after palette changes. |
 
-Mandara writes only the generated files. It does not edit those apps' main
-configs, run Spicetify or signal other processes. Switching an integration
+These built-in switches write only generated files. They do not edit apps' main
+configs, run Spicetify or signal other processes. Switching a built-in integration
 off removes its unchanged generated files and restores a file it backed up.
 If you edited a generated file, your changes are preserved instead. Remove
 your own include or theme selection when you stop using an integration.
@@ -27,6 +27,103 @@ Firefox's export stays under Mandara's cache and leaves `~/.cache/wal` alone.
 Compositor borders use **Studio → Compositor → Integration → Sync border
 colors**, where the backend supports it. They use Mandara's validated generated
 drop-in, keeping your own compositor settings intact.
+
+## More apps and your own templates
+
+In **Studio → Themes → Other apps**, choose **Browse app templates** to search
+available catalogs. **Get & enable** downloads just that app and applies the
+current palette; **Update template** explicitly fetches a newer revision.
+Changing a theme, a Look or light/dark mode uses installed files and works
+offline. Templates use Mandara's palette, so they work with built-in themes,
+wallpaper colours and your own themes without a separate theme for each app.
+
+The catalog is searched as a whole and displayed a page at a time. Use
+**Instructions** for each app's requirements and activation steps. Apps and
+their helper programs remain separate installations. The installer offers Bash
+for imported scripts; app-specific helpers are listed in each package’s instructions. **Template sources** lets
+you edit the HTTPS catalogs in TOML; save with Ctrl+Enter. Nothing in a catalog
+is downloaded or enabled merely by starting the shell.
+
+**Run template setup commands** controls the selected templates' setup and
+reload commands. Read each app's instructions before enabling its template.
+Switch commands off to render files without running imported setup steps. They
+run in the background with a deadline and bounded output; failures appear on
+this page and in `theme apps status`. Managed file writes preserve symlinks,
+back up existing files and undo only changes still owned by the template.
+External setup commands follow the imported package's own undo instructions.
+
+Imported KDE schemes merge their colour keys into `kdeglobals`, preserving
+unrelated settings. The browser integration can install an owned native-messaging
+host on Linux, deliver the palette to the browser extension, and manage its
+optional CSS across profiles. An existing host from another installation is
+preserved. Browser extensions and apps are never installed automatically.
+
+Compositor templates use native validation and reversible changes. MangoWM,
+Niri, Hyprland, Umbriel, Sway and Scroll read generated colour includes. Jay and
+DriftWM receive edits to their colour keys; labwc uses `themerc-override`.
+Mandara backs up existing files, preserves unrelated settings and symlinks, and
+restores only the values it still owns when you disable the template. Imported
+scripts never replace a compositor's primary config. DriftWM's older catalog
+keys are mapped to its current decoration settings. Jay follows its existing
+reload policy; if automatic reloading is off, reload its TOML config to see the
+new colours.
+
+### Author a template
+
+Open **Your templates** for a TOML editor, or import a local document:
+
+```bash
+mandara msg theme apps import ~/Themes/apps.toml
+```
+
+Importing adds entries without enabling new ones. Reusing an existing template
+ID or custom-colour name is rejected so an import cannot replace your settings.
+In Studio, edit your document and save with Ctrl+Enter:
+
+```toml
+[templates.example]
+enabled = true
+output_path = '~/.config/example/colors.css'
+content = '''
+:root {
+    --background: {{ colors.surface.default.hex }};
+    --accent: {{ colors.primary.default.hex }};
+}
+'''
+```
+
+Use `input_path` instead of `content` for a template file; relative paths resolve
+beside the imported document. `output_path` also accepts an array. Paths support
+`~`, `$HOME` and the XDG directories. `input_path_modes` can select separate
+`dark` and `light` files, and `requires_path` skips clients not installed yet.
+
+The renderer exposes `colors.<role>.default`, `.dark` and `.light`, Material
+colour roles, Mandara's semantic and terminal colours, tonal `palettes`, `mode`,
+`image`, `config_dir`, `config_file` and `config.shell.font_family`. Formats
+include `hex`, `hex_stripped`, `rgb`, `rgb_csv`, `rgba`, `hsl` and `hsla`.
+Filters support channel changes, alpha, hue rotation, contrast and colour
+blending. Conditions and loops use `<* ... *>` blocks.
+Loops expose `loop.index` starting at zero, plus `loop.first` and `loop.last`.
+
+Documents can declare `[config.custom_colors]`, including different light/dark
+sources and optional harmonisation. Advanced entries support `index` ordering,
+`compare_to` and `colors_to_compare`, GTK extensions, dynamic input/output paths,
+and `pre_hook`, `post_hook` and `undo_hook`. Post hooks run with bounded
+concurrency; `hook_async = false` waits for earlier hooks before running.
+Commands require the setup-command
+switch. Input and output sizes, render work and command runtimes are bounded;
+invalid templates report an error without silently falling back to another
+colour or replacing unrelated configuration.
+
+Useful commands:
+
+```bash
+mandara msg theme apps catalog          # cached discovery; add refresh to fetch again
+mandara msg theme apps enable community:rofi
+mandara msg theme apps disable community:rofi
+mandara msg theme apps status
+mandara msg theme export                # files, skipped entries and errors as JSON
+```
 
 Format references: [Cava](https://github.com/karlstav/cava#configuration),
 [tmux](https://man.openbsd.org/tmux#STYLES),

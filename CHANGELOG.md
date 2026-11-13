@@ -6,11 +6,26 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **More apps can follow your colours.** Browse app-template catalogs in Studio → Themes → Other apps, install only what you need, or write your own template. Installed templates follow every Mandara palette offline, with light/dark colours, custom colours, setup commands, browser integration and KDE schemes. Setup commands are optional; errors and managed-file restoration are visible in Studio. (#123)
+
+### Fixed
+
+- **Desktop changes stay put.** Late saves from Studio no longer bring back removed widgets or discard unrelated edits. System-monitor titles, text alignment and visualizer appearance controls now reach their rendered layouts; controls that need a header explain why. Calendar and measurement-unit changes refresh cached widget layouts immediately, and an explicitly chosen font also reaches fixed digit and caption layouts. “No date” removes the full caption on mechanical clocks; the word clock explains its time-only layout.
+- **Display settings survive a new Look and a fresh start.** Studio and shell commands share one Keep/Revert countdown, preserve unrelated display edits and remember kept arrangements independently of compositor keybind or layout management.
+- **More widget controls do what they say.** Notes use your chosen text colour on paper sheets, dotted monitor gauges can also be wavy, and a continuous audio wave explains why its gap control is locked.
+
 ### Improved
 
 - **A friendlier introduction to Mandara.** The README gets shorter, clearer copy while keeping every screenshot, feature list and gallery layout.
 
 - **An easier Look picker on the website.** Search the collection or step through it beside the desktop preview, with the same colour swatches and live palettes. The website and guides now reflect all 19 bar presets and 86 built-in plugins, including Taskbar.
+
+### Under the hood
+
+- Hidden desktop widgets stop scheduling clock ticks, and cached widget paints avoid temporary settings and font copies.
+- Build cleanup keeps libraries used by running tests and doctests, even after Cargo releases its build lock.
 
 ## 0.28.3 — 2026-11-12
 

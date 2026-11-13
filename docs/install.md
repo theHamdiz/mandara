@@ -630,7 +630,7 @@ COSMIC Settings ([labwc](#labwc), [COSMIC](#cosmic)).
 | **River** 0.3 | none: Mandara never edits `~/.config/river/init` | the one line you add to `init`: `riverctl spawn /path/to/mandara` |
 | **KWin / Plasma (Wayland)** | none: Mandara leaves `kwinrc` unchanged | its own `org.mandara.shell.desktop` XDG autostart entry, only for KDE |
 | **Aqueous** | none: Mandara writes nothing in `~/.config/aqueous` | a systemd user unit you add ([see below](#aqueous)) |
-| **labwc** 0.8.3+ | none: Mandara writes nothing in `~/.config/labwc` | the line you add to `~/.config/labwc/autostart`: `mandara &` |
+| **labwc** 0.8.3+ | none for shell settings; imported app colours can use `themerc-override` | the line you add to `~/.config/labwc/autostart`: `mandara &` |
 | **COSMIC** | none: COSMIC's settings stay in COSMIC Settings | add `mandara` in COSMIC Settings → Applications → Startup applications |
 
 The setup picker offers KWin only when `kwin_wayland` is installed. A

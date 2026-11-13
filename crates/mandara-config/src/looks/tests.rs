@@ -2,6 +2,63 @@
 use super::*;
 
 #[test]
+fn every_look_and_restore_keep_display_preferences_through_startup_migrations() {
+    use crate::outputs::{OutputConfig, Transform, VrrMode};
+    let root = tempfile::tempdir().unwrap();
+    let mut original = ShellConfig::default();
+    original.compositor.outputs = vec![
+        OutputConfig {
+            name: "DP-1".into(),
+            make: "Demo".into(),
+            model: "Panel".into(),
+            serial: "42".into(),
+            width: Some(2560),
+            height: Some(1440),
+            refresh_mhz: Some(144_000),
+            scale: Some(1.25),
+            transform: Some(Transform::Rotate90),
+            x: Some(-1080),
+            y: Some(120),
+            vrr: Some(VrrMode::On),
+            ..Default::default()
+        },
+        OutputConfig {
+            name: "DP-2".into(),
+            enabled: false,
+            scale: Some(2.0),
+            ..Default::default()
+        },
+    ];
+    let before = before_snapshot(&original, "2026-11-13").unwrap();
+    for look in LOOKS {
+        let mut styled = look.apply(&original, LookOptions::default());
+        styled.theme.mode = crate::ThemeMode::Light;
+        assert_eq!(
+            styled.compositor.outputs, original.compositor.outputs,
+            "{}",
+            look.id
+        );
+        let mut store =
+            crate::ConfigStore::open(root.path().join(format!("{}.toml", look.id))).unwrap();
+        store.replace(styled);
+        store.flush().unwrap();
+        let reopened = crate::ConfigStore::open(store.path()).unwrap();
+        assert_eq!(
+            reopened.get().compositor.outputs,
+            original.compositor.outputs,
+            "{} after reopening",
+            look.id
+        );
+        let restored = restore(reopened.get(), &before).unwrap();
+        assert_eq!(
+            restored.compositor.outputs, original.compositor.outputs,
+            "{} after restore",
+            look.id
+        );
+    }
+}
+
+#[test]
 fn every_look_has_a_unique_id() {
     let mut ids: Vec<&str> = LOOKS.iter().map(|l| l.id).collect();
     ids.sort();

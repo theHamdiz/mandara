@@ -132,9 +132,13 @@ impl Mark {
     /// Axis-aligned bounds `(x0, y0, x1, y1)` including stroke widths.
     pub fn bounds(&self) -> (f32, f32, f32, f32) {
         match &self.kind {
-            MarkKind::Text { x, y, w, h, .. } | MarkKind::SideText { x, y, w, h, .. } => (*x, *y, x + w, y + h),
+            MarkKind::Text { x, y, w, h, .. } | MarkKind::SideText { x, y, w, h, .. } => {
+                (*x, *y, x + w, y + h)
+            }
             MarkKind::SlantText { x, y, w, h, slant, .. } => (x + (h * slant).min(0.0), *y, x + w + (h * slant).max(0.0), y + h),
-            MarkKind::Poly { pts } => pts.iter().fold((f32::MAX, f32::MAX, f32::MIN, f32::MIN), |b, p| (b.0.min(p.0), b.1.min(p.1), b.2.max(p.0), b.3.max(p.1))),
+            MarkKind::Poly { pts } => pts.iter().fold((f32::MAX, f32::MAX, f32::MIN, f32::MIN), |b, p| {
+                    (b.0.min(p.0), b.1.min(p.1), b.2.max(p.0), b.3.max(p.1))
+                }),
             MarkKind::Line { a, b, width } => {
                 let h = width / 2.0;
                 (a.0.min(b.0) - h, a.1.min(b.1) - h, a.0.max(b.0) + h, a.1.max(b.1) + h)
@@ -151,7 +155,9 @@ impl Mark {
             MarkKind::Plate { x, y, w, h, .. } | MarkKind::Image { x, y, w, h, .. } | MarkKind::Mask { x, y, w, h, .. } => (*x, *y, x + w, y + h),
             MarkKind::Shaped { x, y, w, h, width, .. } => (x - width / 2.0, y - width / 2.0, x + w + width / 2.0, y + h + width / 2.0),
             MarkKind::Polyline { pts, width } => {
-                let b = pts.iter().fold((f32::MAX, f32::MAX, f32::MIN, f32::MIN), |b, p| (b.0.min(p.0), b.1.min(p.1), b.2.max(p.0), b.3.max(p.1)));
+                let b = pts.iter().fold((f32::MAX, f32::MAX, f32::MIN, f32::MIN), |b, p| {
+                        (b.0.min(p.0), b.1.min(p.1), b.2.max(p.0), b.3.max(p.1))
+                    });
                 (b.0 - width / 2.0, b.1 - width / 2.0, b.2 + width / 2.0, b.3 + width / 2.0)
             }
         }
@@ -275,7 +281,9 @@ impl Composition {
     /// The action under `(x, y)` (composition px), the last one drawn
     /// winning.
     pub fn hit(&self, (x, y): (f32, f32)) -> Option<&super::actions::Action> {
-        self.hits.iter().rev().find(|h| x >= h.rect.0 && y >= h.rect.1 && x < h.rect.0 + h.rect.2 && y < h.rect.1 + h.rect.3).map(|h| &h.action)
+        self.hits.iter().rev().find(|h| {
+                x >= h.rect.0 && y >= h.rect.1 && x < h.rect.0 + h.rect.2 && y < h.rect.1 + h.rect.3
+            }).map(|h| &h.action)
     }
 }
 
@@ -598,13 +606,16 @@ pub fn clock(c: &ClockWidget, s: &ClockStrings, k: f32, align: f32, rtl: bool, m
     match c.face {
         ClockFace::Superscript | ClockFace::Stacked | ClockFace::Classic | ClockFace::Arabic => {
             let digits = style(role, px(SUPER_DIGITS), HEAVY);
-            let (h_marks, (hw, hh)) = line(vec![run(&s.hours, digits.clone(), InkRole::Fg)], 0.0, 0.0, false, m);
+            let (mut h_marks, (hw, hh)) = line(vec![run(&s.hours, digits.clone(), InkRole::Fg)], 0.0, 0.0, false, m);
             let (mut m_marks, (mw, _)) = line(vec![run(&s.minutes, digits, InkRole::Fg)], 0.0, 0.0, false, m);
             let top = hh * SUPER_LINE;
-            for mk in &mut m_marks {
-                mk.shift(0.0, top);
-            }
             let block_w = hw.max(mw);
+            for mark in &mut h_marks {
+                mark.shift((block_w - hw) * align, 0.0);
+            }
+            for mark in &mut m_marks {
+                mark.shift((block_w - mw) * align, top);
+            }
             let small = style(role, px(SUPER_SMALL), SEMIBOLD);
             // Seconds (live) or the AM/PM marker beside the hours.
             let sup = if c.seconds { Some((s.seconds.clone(), true)) } else { s.meridiem.clone().map(|t| (t, false)) };
@@ -687,6 +698,11 @@ pub fn clock(c: &ClockWidget, s: &ClockStrings, k: f32, align: f32, rtl: bool, m
             marks.extend(ring_face(s, k, role, (r + w, r + w), r, w, c.ring_progress, m));
         }
         ClockFace::Greeting => {
+            let align = if c.look.align == mandara_config::desktop_widgets::Align::Auto {
+                0.5
+            } else {
+                align
+            };
             let small = tracked(style(role, px(GREET_SMALL), SEMIBOLD), GREET_TRACKING);
             let lines: Vec<_> = [
                 line(vec![run(caps(&s.greeting), small.clone(), InkRole::Accent)], 0.0, 0.0, rtl, m),
@@ -700,7 +716,7 @@ pub fn clock(c: &ClockWidget, s: &ClockStrings, k: f32, align: f32, rtl: bool, m
             .collect();
             let col_w = lines.iter().map(|(_, s)| s.0).fold(0.0, f32::max);
             let col_h: f32 = lines.iter().map(|(_, s)| s.1).sum::<f32>() + px(GREET_GAP) * (lines.len() as f32 - 1.0);
-            let mut col = stack(lines, px(GREET_GAP), 0.5);
+            let mut col = stack(lines, px(GREET_GAP), align);
             let rule_x = px(GREET_RULE_GAP);
             for mk in &mut col {
                 mk.shift(rule_x, 0.0);
@@ -712,17 +728,22 @@ pub fn clock(c: &ClockWidget, s: &ClockStrings, k: f32, align: f32, rtl: bool, m
             marks.extend(col);
         }
         ClockFace::DayNumeral => {
+            let align = if c.look.align == mandara_config::desktop_widgets::Align::Auto {
+                0.5
+            } else {
+                align
+            };
             let big = style(role, px(NUMERAL), BLACK);
             let (nw, nh) = m.measure(&s.day, &big);
             let ms = tracked(style(role, px(NUMERAL_MONTH), LIGHT), NUMERAL_TRACKING);
             let month = caps(&s.month);
             let (mw, mh) = m.measure(&month, &ms);
             let w = nw.max(mw);
-            marks.push(Mark::new(MarkKind::Text { text: s.day.clone(), style: big, x: (w - nw) / 2.0, y: 0.0, w: nw, h: nh }, InkRole::Fg).dim(NUMERAL_ALPHA));
-            marks.push(Mark::new(MarkKind::Text { text: month, style: ms, x: (w - mw) / 2.0, y: nh * NUMERAL_MONTH_AT - mh / 2.0, w: mw, h: mh }, InkRole::Accent));
+            marks.push(Mark::new(MarkKind::Text { text: s.day.clone(), style: big, x: (w - nw) * align, y: 0.0, w: nw, h: nh }, InkRole::Fg).dim(NUMERAL_ALPHA));
+            marks.push(Mark::new(MarkKind::Text { text: month, style: ms, x: (w - mw) * align, y: nh * NUMERAL_MONTH_AT - mh / 2.0, w: mw, h: mh }, InkRole::Accent));
             let ts = tracked(style(role, px(NUMERAL_TIME), MEDIUM), NUMERAL_TRACKING / 2.0);
             let (tw, th) = m.measure(&s.time, &ts);
-            marks.push(Mark::new(MarkKind::Text { text: s.time.clone(), style: ts, x: (w - tw) / 2.0, y: nh, w: tw, h: th }, InkRole::Fg).dim(DIM));
+            marks.push(Mark::new(MarkKind::Text { text: s.time.clone(), style: ts, x: (w - tw) * align, y: nh, w: tw, h: th }, InkRole::Fg).dim(DIM));
         }
         ClockFace::Minimal => {
             let time = line(vec![run(&s.time, style(role, px(MIN_TIME), LIGHT), InkRole::Fg)], 0.0, 0.0, rtl, m);
@@ -744,7 +765,9 @@ pub fn clock(c: &ClockWidget, s: &ClockStrings, k: f32, align: f32, rtl: bool, m
         ClockFace::Template => marks.extend(super::faces::template_face(c, s, k, align, rtl, m)),
         ClockFace::Numerals => marks.extend(super::faces::numerals_face(c, s, k, m)),
         ClockFace::Orbit => marks.extend(super::faces::orbit_face(c, s, k, m)),
-        ClockFace::Word | ClockFace::SplitFlap | ClockFace::Nixie | ClockFace::Binary => marks.extend(super::clock_cards::clock(c, s, k, m)),
+        ClockFace::Word | ClockFace::SplitFlap | ClockFace::Nixie | ClockFace::Binary => {
+            marks.extend(super::clock_cards::clock(c, s, k, m))
+        }
     }
     let mut comp = Composition { marks, ..Composition::default() };
     comp.normalize();
@@ -829,13 +852,6 @@ pub fn monitor(w: &MonitorWidget, lines: &[MonitorLine], k: f32, rtl: bool, m: &
     let text = tracked(style(role, px(TEXT), WEIGHT), TRACKING);
     let mut marks = Vec::new();
     let mut y = 0.0;
-    if !w.title.trim().is_empty() {
-        let ts = tracked(style(role, px(TITLE), face::BOLD), TITLE_TRACKING);
-        let t = caps(w.title.trim());
-        let (tw, th) = m.measure(&t, &ts);
-        marks.push(Mark::new(MarkKind::Text { text: t, style: ts, x: if rtl { width - tw } else { 0.0 }, y, w: tw, h: th }, InkRole::Accent));
-        y += th + px(TITLE_GAP);
-    }
     let (_, line_h) = m.measure("0", &text);
     for l in lines {
         if let Some((a, b)) = &l.graph {
@@ -869,6 +885,46 @@ pub fn monitor(w: &MonitorWidget, lines: &[MonitorLine], k: f32, rtl: bool, m: &
     // A fixed box: the full width, whatever the values measure.
     marks.push(Mark::new(MarkKind::Rect { x: 0.0, y: 0.0, w: width, h: (y - px(ROW_GAP)).max(0.0), radius: 0.0, width: 0.0 }, InkRole::Fg).dim(0.0));
     let mut comp = Composition { marks, ..Composition::default() };
+    comp.normalize();
+    monitor_title(comp, w, k, rtl, m)
+}
+
+/// The same title above every monitor layout, outside its live readings.
+pub(super) fn monitor_title(
+    mut comp: Composition,
+    w: &MonitorWidget,
+    k: f32,
+    rtl: bool,
+    m: &mut dyn Measure,
+) -> Composition {
+    if w.title.trim().is_empty() {
+        return comp;
+    }
+    let ts = tracked(
+        style(w.look.font, monitor::TITLE * k, face::BOLD),
+        monitor::TITLE_TRACKING,
+    );
+    let title = caps(w.title.trim());
+    let (tw, th) = m.measure(&title, &ts);
+    let width = comp.size.0.max(
+        w.width.clamp(
+            mandara_config::desktop_widgets::ranges::MONITOR_WIDTH_PX.0,
+            mandara_config::desktop_widgets::ranges::MONITOR_WIDTH_PX.1,
+        ) * k,
+    );
+    comp.shift(0.0, th + monitor::TITLE_GAP * k);
+    let align = w.look.align.fraction(if rtl { 1.0 } else { 0.0 }, rtl);
+    comp.marks.push(Mark::new(
+        MarkKind::Text {
+            text: title,
+            style: ts,
+            x: (width - tw) * align,
+            y: 0.0,
+            w: tw,
+            h: th,
+        },
+        InkRole::Accent,
+    ));
     comp.normalize();
     comp
 }
@@ -1150,7 +1206,7 @@ pub fn monitor_gauges(w: &MonitorWidget, lines: &[MonitorLine], k: f32, rtl: boo
     }
     let mut comp = Composition { marks, ..Composition::default() };
     comp.normalize();
-    comp
+    monitor_title(comp, w, k, rtl, m)
 }
 
 // ── Weather ──────────────────────────────────────────────────────────────
@@ -1332,7 +1388,9 @@ pub fn world_clock(w: &mandara_config::desktop_widgets::WorldClockWidget, cities
             x += cw + px(COL_GAP);
         }
     } else {
-        let rows: Vec<(f32, f32, f32)> = cities.iter().map(|c| (m.measure(&c.name, &ns).0, m.measure(&c.time, &ts).0, m.measure(&c.note, &es).0)).collect();
+        let rows: Vec<(f32, f32, f32)> = cities.iter().map(|c| {
+                (m.measure(&c.name, &ns).0, m.measure(&c.time, &ts).0, m.measure(&c.note, &es).0)
+            }).collect();
         let name_w = rows.iter().map(|r| r.0.max(r.2)).fold(0.0, f32::max) + px(DOT) * 2.0 + px(DOT_GAP);
         let time_w = rows.iter().map(|r| r.1).fold(0.0, f32::max);
         let width = name_w + px(NAME_GAP) + time_w;
@@ -1342,7 +1400,10 @@ pub fn world_clock(w: &mandara_config::desktop_widgets::WorldClockWidget, cities
             let (_, nh) = m.measure(&c.name, &ns);
             let (_, eh) = m.measure(&c.note, &es);
             let dot_x = if rtl { width - px(DOT) } else { px(DOT) };
-            let text_x = |w: f32| if rtl { width - 2.0 * px(DOT) - px(DOT_GAP) - w } else { 2.0 * px(DOT) + px(DOT_GAP) };
+            let text_x = |w: f32| {
+                if rtl { width - 2.0 * px(DOT) - px(DOT_GAP) - w } else { 2.0 * px(DOT) + px(DOT_GAP)
+                }
+            };
             let time_x = if rtl { 0.0 } else { width - tw };
             let name_y = if c.note.is_empty() { y + (th - nh) / 2.0 } else { y };
             marks.push(Mark::new(MarkKind::Disc { c: (dot_x, name_y + nh / 2.0), r: px(DOT) }, InkRole::Accent).dim(if c.night { NIGHT_ALPHA } else { 1.0 }));
@@ -1466,6 +1527,25 @@ pub(crate) mod tests {
             let b = m.bounds();
             b.0 >= -0.01 && b.1 >= -0.01 && b.2 <= c.size.0 + 0.01 && b.3 <= c.size.1 + 0.01
         })
+    }
+
+    #[test]
+    fn greeting_and_day_numeral_follow_explicit_alignment_and_keep_their_auto_layout() {
+        use mandara_config::desktop_widgets::Align;
+        for face in [ClockFace::Greeting, ClockFace::DayNumeral] {
+            let mut widget = widget(face);
+            let auto = clock(&widget, &strings(), 1.0, 0.0, false, &mut Fixed);
+            assert_eq!(
+                auto,
+                clock(&widget, &strings(), 1.0, 1.0, false, &mut Fixed)
+            );
+            widget.look.align = Align::Start;
+            let start = clock(&widget, &strings(), 1.0, 0.0, false, &mut Fixed);
+            widget.look.align = Align::End;
+            let end = clock(&widget, &strings(), 1.0, 1.0, false, &mut Fixed);
+            assert_ne!(start, end, "{face:?}");
+            assert!(inside(&start) && inside(&end));
+        }
     }
 
     #[test]

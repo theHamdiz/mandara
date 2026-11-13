@@ -135,7 +135,8 @@ and tick off tasks where they sit.
 7. **Colours that belong together.** Choose a hand-tuned theme or a Material
    You (HCT) palette from your wallpaper. Opt in to matching Ghostty, GTK 3/4,
    Qt 5/6, Kvantum, Zed, kitty, foot, Alacritty, btop, Cava, tmux, Zellij and
-   Spicetify. [App setup](docs/app-themes.md).
+   Spicetify. Browse community app templates or write your own; enabled apps
+   follow every Mandara theme. [App setup](docs/app-themes.md).
 8. **Room for your own style.** Start with 19 bar presets, six bar layouts
    on any edge, side bars that join into a frame, one-click Looks and
    per-monitor widgets. Choose a launcher list, icon grid or centred

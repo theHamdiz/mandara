@@ -191,6 +191,9 @@ enum Cmd {
 /// Initialize process services and dispatch the shell, Studio or a dedicated CLI worker.
 fn main() -> Result<()> {
     alloc::init();
+    if mandara_services::app_themes::firefox::launched(std::env::args().skip(1)) {
+        return mandara_services::app_themes::firefox::host();
+    }
     // Started by sudo as the AUR step's askpass, or by an AUR helper as
     // that step's `sudo -A` wrapper (links in the step's private folder).
     {
@@ -226,10 +229,16 @@ fn main() -> Result<()> {
     let matches = <Cli as clap::CommandFactory>::command().version(mandara_version::version()).long_version(long).get_matches();
     let cli = <Cli as clap::FromArgMatches>::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     match cli.command {
-        Some(Cmd::AgentWorker) => mandara_services::command_agent::worker_main(mandara_studio::agent_settings_catalog),
+        Some(Cmd::AgentWorker) => {
+            mandara_services::command_agent::worker_main(mandara_studio::agent_settings_catalog)
+        }
         Some(Cmd::PanelCaptureWorker) => mandara_services::screencopy::panel::worker_main(),
-        Some(Cmd::SystemUpdate { args }) => std::process::exit(mandara_services::sysupdate::helper::main(&args)),
-        Some(Cmd::BootAdmin { args }) => std::process::exit(mandara_services::boot::helper::main(&args)),
+        Some(Cmd::SystemUpdate { args }) => {
+            std::process::exit(mandara_services::sysupdate::helper::main(&args))
+        }
+        Some(Cmd::BootAdmin { args }) => {
+            std::process::exit(mandara_services::boot::helper::main(&args))
+        }
         Some(Cmd::Setup { autostart, compositor, check, fix_conflicts, restore, fix }) => setup_cli::setup(setup_cli::Options { autostart, compositor, check, fix_conflicts, restore, fix }),
         Some(Cmd::Msg { json, args }) => {
             use std::io::Write as _;
@@ -313,8 +322,12 @@ fn main() -> Result<()> {
         Some(Cmd::Lock { demo, timeout }) => mandara_ui::lock::run(mandara_ui::lock::LockOptions { demo, timeout: timeout.map(Duration::from_secs) }),
         Some(Cmd::Update(args)) => update_cli::main(args),
         Some(Cmd::Changelog(args)) => changelog_cli::main(args),
-        Some(Cmd::Install(args)) => mandara_install::install(args, &mandara_greeter::install_probe::InstallerProbe).map_err(anyhow::Error::msg),
-        Some(Cmd::Uninstall(args)) => mandara_install::uninstall(args, &mandara_greeter::install_probe::InstallerProbe).map_err(anyhow::Error::msg),
+        Some(Cmd::Install(args)) => {
+            mandara_install::install(args, &mandara_greeter::install_probe::InstallerProbe).map_err(anyhow::Error::msg)
+        }
+        Some(Cmd::Uninstall(args)) => {
+            mandara_install::uninstall(args, &mandara_greeter::install_probe::InstallerProbe).map_err(anyhow::Error::msg)
+        }
         Some(Cmd::Run) => run_shell(),
         Some(Cmd::DepthWorker { model, image, out }) => std::process::exit(mandara_services::depth_model::worker_main(&model, &image, &out)),
         None => supervise(),
@@ -562,7 +575,8 @@ fn run_shell() -> Result<()> {
     alloc::start_upkeep();
     // A new Studio icon reaches installs the updater only swapped the binary of.
     let _ = std::thread::Builder::new().name("mandara-icon".into()).spawn(|| {
-        let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) else { return };
+        let Some(home) = std::env::var_os("HOME").map(std::path::PathBuf::from) else { return;
+            };
         let icon = mandara_install::files::Paths::new(None, &home, |k| std::env::var(k).ok()).icon();
         match mandara_install::files::refresh_installed_icon(&icon) {
             Ok(true) => tracing::info!("updated the Studio icon at {}", icon.display()),
@@ -640,11 +654,17 @@ fn run_shell() -> Result<()> {
         // External config edits → live reload.
         let changes = watcher.receiver();
         cx.spawn(async move |cx| {
-            let _watcher = watcher;
+            let mut watcher = watcher;
             while changes.recv().await.is_ok() {
-                cx.update(|cx| {
-                    let _ = mandara_ui::reload_config_from_disk(cx);
-                });
+                    watcher = mandara_services::runtime::unblock(move || {
+                        if let Err(error) = watcher.refresh() {
+                            tracing::warn!("watching config links: {error:#}");
+                        }
+                        watcher
+                    })
+                    .await;
+                    let task = cx.update(mandara_ui::reload_config_from_disk);
+                    let _ = task.await;
             }
         })
         .detach();
@@ -770,7 +790,7 @@ fn run_studio(section: Option<String>) -> Result<()> {
         .detach();
 
         // Every edit goes to the shell; when it's down, Studio saves itself.
-        cx.set_global(mandara_ui::state::ConfigMirror(std::rc::Rc::new(move |cfg| mirror.queue(cfg))));
+        cx.set_global(mandara_ui::state::ConfigMirror(std::rc::Rc::new(move |before, after| mirror.queue(before, after))));
         let pid_sock = shell_sock.clone();
         let pid_alive = shell_alive.clone();
         cx.set_global(mandara_studio::ShellLink(Arc::new(move || {
@@ -788,25 +808,51 @@ fn run_studio(section: Option<String>) -> Result<()> {
         let query_sock = shell_sock.clone();
         cx.set_global(mandara_studio::ShellQuery(Arc::new(move |args| match ipc::send(&query_sock, &args) {
             Ok(r) if r.ok => Ok(r.data.unwrap_or(serde_json::Value::Null)),
-            Ok(r) => Err(r.error.unwrap_or_default()),
-            Err(e) => Err(format!("{e:#}")),
-        })));
+            Ok(r) => Err(mandara_studio::QueryError::Failed(
+                        r.error.unwrap_or_default(),
+                    )),
+            Err(error) => {
+                        let unavailable =
+                            error.downcast_ref::<std::io::Error>().is_some_and(|error| {
+                                matches!(
+                                    error.kind(),
+                                    std::io::ErrorKind::NotFound
+                                        | std::io::ErrorKind::ConnectionRefused
+                                )
+                            });
+                        let message = format!("{error:#}");
+                        Err(if unavailable {
+                            mandara_studio::QueryError::Unavailable(message)
+                        } else {
+                            mandara_studio::QueryError::Failed(message)
+                        })
+                    }
+                },
+            )));
 
         mandara_studio::run(section.as_deref(), cx);
 
         let changes = watcher.receiver();
         cx.spawn(async move |cx| {
-            let _watcher = watcher;
+            let mut watcher = watcher;
             while changes.recv().await.is_ok() {
-                cx.update(|cx| {
-                    let _ = mandara_ui::reload_config_from_disk(cx);
-                });
+                    watcher = mandara_services::runtime::unblock(move || {
+                        if let Err(error) = watcher.refresh() {
+                            tracing::warn!("watching config links: {error:#}");
+                        }
+                        watcher
+                    })
+                    .await;
+                    let task = cx.update(mandara_ui::reload_config_from_disk);
+                    let _ = task.await;
             }
         })
         .detach();
         cx.spawn(async move |cx| {
             while let Ok(section) = show_rx.recv().await {
-                cx.update(|cx| mandara_studio::open_at((!section.is_empty()).then_some(section.as_str()), cx));
+                cx.update(|cx| {
+                        mandara_studio::open_at((!section.is_empty()).then_some(section.as_str()), cx)
+                    });
             }
         })
         .detach();

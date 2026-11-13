@@ -100,6 +100,7 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 # Config & serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+minijinja = { version = "3.1.0", default-features = false, features = ["builtins", "debug", "serde", "fuel"] }
 # Read + serde everywhere; crates that also write TOML add `display`.
 toml = { version = "1.2", default-features = false, features = ["std", "parse", "serde"] }
 # Format-preserving edits of a user's TOML config (Umbriel's include line).
@@ -108,6 +109,8 @@ toml_edit = "0.25.18"
 # and cranelift / wasmtime-environ link: sha2 0.11 would add a second
 # digest / block-buffer / sha2 stack.
 sha2 = "0.10"
+# Legacy catalog checksums detect mixed download revisions; SHA-256 names the installed package.
+md-5 = { version = "0.10", default-features = false }
 # SHA-512 crypt ($6$) password hashes for AccountsService.SetPassword.
 # 0.5: 0.6 is on sha2 0.11 (see sha2 above).
 sha-crypt = { version = "0.5", default-features = false }

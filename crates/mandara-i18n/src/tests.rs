@@ -63,13 +63,14 @@ fn literal(s: &str) -> Option<String> {
 /// Keys used through `t("…")`, `tf("…"`, `tr("…")` and `tk("…")`.
 fn keys_in(source: &str) -> Vec<String> {
     let mut keys = Vec::new();
-    for marker in ["t(\"", "tf(\"", "tr(\"", "tk(\""] {
+    for marker in ["t(", "tf(", "tr(", "tk("] {
         let mut from = 0;
         while let Some(pos) = source[from..].find(marker) {
             let at = from + pos;
             let prev = source[..at].chars().next_back();
             let ident_before = prev.is_some_and(|c| c.is_alphanumeric() || c == '_');
-            if !ident_before && let Some(k) = literal(&source[at + marker.len()..]) {
+            let argument = source[at + marker.len()..].trim_start();
+            if !ident_before && let Some(k) = argument.strip_prefix('"').and_then(literal) {
                 keys.push(k);
             }
             from = at + marker.len();
@@ -79,7 +80,8 @@ fn keys_in(source: &str) -> Vec<String> {
 }
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else { return;
+    };
     for e in entries.flatten() {
         let p = e.path();
         if p.is_dir() {
@@ -96,7 +98,9 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
 /// Built-in names and descriptions are runtime keys supplied by theme TOML.
 fn theme_metadata_keys(source: &str) -> Option<[String; 2]> {
     let table = source.parse::<toml::Table>().ok()?;
-    let field = |key| table.get(key)?.as_str().filter(|value| !value.trim().is_empty()).map(str::to_owned);
+    let field = |key| {
+        table.get(key)?.as_str().filter(|value| !value.trim().is_empty()).map(str::to_owned)
+    };
     Some([field("name")?, field("description")?])
 }
 
@@ -104,7 +108,9 @@ fn theme_metadata_keys(source: &str) -> Option<[String; 2]> {
 fn builtin_theme_metadata() -> Vec<[String; 2]> {
     std::fs::read_dir(workspace().join("crates/mandara-theme/themes")).expect("built-in theme directory")
         .map(|entry| entry.expect("built-in theme entry").path())
-        .filter(|path| path.extension().is_some_and(|extension| extension == "toml"))
+        .filter(|path| {
+            path.extension().is_some_and(|extension| extension == "toml")
+        })
         .map(|path| {
             let source = std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
             theme_metadata_keys(&source).unwrap_or_else(|| panic!("{}: invalid theme metadata", path.display()))
@@ -147,7 +153,9 @@ fn builtin_theme_metadata_is_translated_in_every_catalog() {
         let catalog = source_catalog(lang);
         for [name, description] in &metadata {
             assert!(catalog.get(name).is_some(), "{}: missing theme name {name:?}", lang.code());
-            let translated = catalog.get(description).unwrap_or_else(|| panic!("{}: missing theme description {description:?}", lang.code()));
+            let translated = catalog.get(description).unwrap_or_else(|| {
+                panic!("{}: missing theme description {description:?}", lang.code())
+            });
             assert!(!translated.trim().is_empty());
             assert_ne!(translated, description.as_str(), "{}: untranslated theme description {description:?}", lang.code());
         }
@@ -157,7 +165,18 @@ fn builtin_theme_metadata_is_translated_in_every_catalog() {
 #[test]
 fn scanner_reads_literals() {
     let src = r#"a(t("Hello")); tf("{n} items", &[]); format(t("Line\nTwo")); not_t("x"); tk("Mark")"#;
-    assert_eq!(keys_in(src), vec!["Hello".to_string(), "Line\nTwo".to_string(), "{n} items".to_string(), "Mark".to_string()]);
+    assert_eq!(keys_in(src), vec!["Hello".to_string(), "Line\nTwo".to_string(), "{n} items".to_string(), "Mark".to_string()
+        ]
+    );
+}
+
+#[test]
+fn scanner_keeps_translation_coverage_after_multiline_formatting() {
+    assert_eq!(
+        keys_in(
+            "mandara_i18n::t(\n  \"A long help sentence\",\n); tf( \"{n} apps\", &[]); not_t(\n\"ignored\");"
+        ),
+        vec!["A long help sentence", "{n} apps"]);
 }
 
 #[test]
@@ -294,6 +313,10 @@ fn lookups_and_untranslate_go_through_the_pack() {
     assert_eq!(lookup(Lang::En, "Settings"), None);
     assert_eq!(tr_in(Lang::Ar, "Not a key at all"), "Not a key at all");
     // Several keys may share a translation; any of them translates back.
-    with_language(Some(Lang::Ar), || assert_eq!(tr_in(Lang::Ar, &untranslate("الإعدادات")), "الإعدادات"));
-    with_language(Some(Lang::Ar), || assert_eq!(untranslate("unknown"), "unknown"));
+    with_language(Some(Lang::Ar), || {
+        assert_eq!(tr_in(Lang::Ar, &untranslate("الإعدادات")), "الإعدادات")
+    });
+    with_language(Some(Lang::Ar), || {
+        assert_eq!(untranslate("unknown"), "unknown")
+    });
 }

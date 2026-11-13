@@ -17,7 +17,7 @@ use gpui::{App, AppContext as _, Bounds, TitlebarOptions, WindowBounds, WindowHa
 
 pub use agent_catalog::settings_catalog as agent_settings_catalog;
 pub use app::StudioView;
-pub use perf::{ShellIpc, ShellLink, ShellQuery};
+pub use perf::{QueryError, ShellIpc, ShellLink, ShellQuery};
 
 #[derive(Default)]
 struct StudioWindow(Option<WindowHandle<StudioView>>);
@@ -129,7 +129,10 @@ fn bars_part_target(target: &str) -> Option<registry::bars::SidebarsPart> {
     (bars_tab_target(target)? == BarsTab::Sidebars).then_some(())?;
     let mut parts = target.split('/').skip(1);
     match parts.next().map(str::trim).filter(|tab| !tab.is_empty()) {
-        Some(tab) if BarsTab::parse(tab) == Some(BarsTab::Sidebars) && !tab.eq_ignore_ascii_case(BarsTab::Sidebars.slug()) => SidebarsPart::parse(tab),
+        Some(tab) if BarsTab::parse(tab) == Some(BarsTab::Sidebars) && !tab.eq_ignore_ascii_case(BarsTab::Sidebars.slug()) =>
+        {
+            SidebarsPart::parse(tab)
+        }
         Some(_) => parts.next().and_then(SidebarsPart::parse),
         None => Some(SidebarsPart::Panel),
     }
@@ -179,8 +182,12 @@ pub fn resolve_section(target: &str) -> Option<registry::Section> {
     if former_bars_tab(&name).is_some() { return Some(registry::Section::Bars); }
     let all = registry::Section::ALL;
     all.into_iter()
-        .find(|s| s.title().to_lowercase() == name || s.title().to_lowercase().replace(' ', "-") == name || s.label().to_lowercase() == name)
-        .or_else(|| all.into_iter().find(|s| s.title().to_lowercase().starts_with(&name)))
+        .find(|s| {
+            s.title().to_lowercase() == name || s.title().to_lowercase().replace(' ', "-") == name || s.label().to_lowercase() == name
+        })
+        .or_else(|| {
+            all.into_iter().find(|s| s.title().to_lowercase().starts_with(&name))
+        })
 }
 
 /// Opens Studio on a section (by English title, case-insensitive, or its
@@ -282,7 +289,9 @@ const MIN_H_PX: f32 = 420.0;
 fn initial_size() -> gpui::Size<gpui::Pixels> {
     std::env::var("MANDARA_STUDIO_SIZE")
         .ok()
-        .and_then(|v| v.split_once('x').and_then(|(w, h)| Some((w.parse::<f32>().ok()?, h.parse::<f32>().ok()?))))
+        .and_then(|v| {
+            v.split_once('x').and_then(|(w, h)| Some((w.parse::<f32>().ok()?, h.parse::<f32>().ok()?)))
+        })
         .map(|(w, h)| size(px(w.max(MIN_W_PX)), px(h.max(MIN_H_PX))))
         .unwrap_or(size(px(DEFAULT_W_PX), px(DEFAULT_H_PX)))
 }

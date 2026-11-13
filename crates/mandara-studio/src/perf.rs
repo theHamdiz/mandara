@@ -46,7 +46,20 @@ impl Global for ShellIpc {}
 /// (`["compositor", "clients"]`, `["diagnostics", "frames"]`); installed by
 /// the app. Called off the UI thread.
 #[derive(Clone)]
-pub struct ShellQuery(pub Arc<dyn Fn(Vec<String>) -> Result<serde_json::Value, String> + Send + Sync>);
+pub struct ShellQuery(pub Arc<dyn Fn(Vec<String>) -> Result<serde_json::Value, QueryError> + Send + Sync>);
+
+#[derive(Debug)]
+pub enum QueryError {
+    Unavailable(String),
+    Failed(String),
+}
+impl std::fmt::Display for QueryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unavailable(message) | Self::Failed(message) => f.write_str(message),
+        }
+    }
+}
 impl Global for ShellQuery {}
 
 /// Queries the shell off the UI thread; `None` when Studio runs without the
@@ -54,7 +67,10 @@ impl Global for ShellQuery {}
 pub fn query(args: &[&str], cx: &App) -> Option<gpui::Task<Result<serde_json::Value, String>>> {
     let q = cx.try_global::<ShellQuery>()?.clone();
     let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
-    Some(cx.background_executor().spawn(async move { (q.0)(args) }))
+    Some(cx.spawn(async move |_| {
+        mandara_services::runtime::unblock(move || (q.0)(args).map_err(|error| error.to_string()))
+            .await
+    }))
 }
 
 /// One process reading.
@@ -160,7 +176,9 @@ const VRAM_KEYS: &[&str] = &["drm-memory-vram", "drm-total-local0"];
 /// `(client id, KiB)` from one fdinfo file, if it is a DRM client that
 /// reports device memory.
 fn parse_fdinfo(text: &str) -> Option<(String, u64)> {
-    let field = |key: &str| text.lines().find_map(|l| l.strip_prefix(key)?.strip_prefix(':').map(str::trim));
+    let field = |key: &str| {
+        text.lines().find_map(|l| l.strip_prefix(key)?.strip_prefix(':').map(str::trim))
+    };
     let client = field("drm-client-id")?.to_string();
     let value = VRAM_KEYS.iter().find_map(|k| field(k))?;
     let mut parts = value.split_whitespace();

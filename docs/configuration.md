@@ -316,6 +316,13 @@ text remains public on the login or lock screen. See the
 | `locale.language` | a language code for names and words (`ar`, `de`, …; empty = the interface's); it also sets the reading direction |
 | `locale.hijri_in_arabic` | write the Hijri date in Arabic with its own digits (default `true`) |
 
+On split-flap, Nixie and binary clocks, **No date** removes the whole date
+caption. The word clock shows only time, so Studio locks its calendar control
+with an explanation.
+Notes keep their paper's automatic ink until you choose a text colour. Monitor
+gauges combine dotted and wavy rings; continuous audio waves lock the gap
+control because they have no separate bars.
+
 `[desktop.widgets] version` records the defaults a list was written for:
 a list from before version 1 (no numerals, calendar or widgets font yet)
 is upgraded once to show exactly what it showed (Western digits unless
@@ -1291,3 +1298,22 @@ A swipe sends the same dismiss action as the card's close button.
 
 [App themes](app-themes.md) documents the opt-in `cava`, `tmux`, `zellij` and
 `spicetify` switches under `[integrations]`; all default to `false`.
+
+### Imported app themes
+
+`integrations.app_themes` holds opt-in `enabled` catalog IDs, `sources`,
+user-authored `user` templates, `custom_colors` and `run_hooks`. All applications
+start disabled; `run_hooks` controls commands for entries you explicitly enable.
+Installed templates follow palette and font changes without network access.
+See [App themes](app-themes.md#more-apps-and-your-own-templates) for the document
+format and setup controls.
+
+Studio and the shell merge changed fields when saving. A late edit to one
+widget does not restore another widget that was removed; reordering preserves
+concurrent additions. Unrelated display and app preferences remain intact.
+Display edits made in Studio and through commands share one Keep/Revert
+transaction. Kept arrangements are remembered across shell restarts and
+updates, and their separate compositor fragment does not enable management of
+keybinds, input or layout.
+MangoWM requires `width`, `height` and `refresh_mhz` together when saving a
+resolution; scale, position and rotation can be saved independently.

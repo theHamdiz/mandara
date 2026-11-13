@@ -35,9 +35,9 @@ use super::StudioView;
 use super::compositor_page::{badge, button, card, chip, heading, tip};
 use super::launcher_page::page_section;
 use super::themes_page::section_head;
-use mandara_ui::style::ClipRounded as _;
 use crate::registry::{self, Section};
 use crate::tokens::*;
+use mandara_ui::style::ClipRounded as _;
 
 // ── Page constants ──────────────────────────────────────────────────────────
 
@@ -144,7 +144,9 @@ pub(crate) fn fit_canvas(rects: &[(f32, f32, f32, f32)], w: f32, h: f32, pad: f3
         return (1.0, 0.0, 0.0);
     }
     let (min_x, min_y) = rects.iter().fold((f32::MAX, f32::MAX), |(a, b), r| (a.min(r.0), b.min(r.1)));
-    let (max_x, max_y) = rects.iter().fold((f32::MIN, f32::MIN), |(a, b), r| (a.max(r.0 + r.2), b.max(r.1 + r.3)));
+    let (max_x, max_y) = rects.iter().fold((f32::MIN, f32::MIN), |(a, b), r| {
+        (a.max(r.0 + r.2), b.max(r.1 + r.3))
+    });
     let (span_w, span_h) = ((max_x - min_x).max(1.0), (max_y - min_y).max(1.0));
     let scale = ((w - 2.0 * pad) / span_w).min((h - 2.0 * pad) / span_h).max(f32::EPSILON);
     // Centre the arrangement.
@@ -166,7 +168,8 @@ pub(crate) fn snap(x: f32, y: f32, w: f32, h: f32, others: &[(f32, f32, f32, f32
 /// Shifts the arrangement so its top-left corner is at 0,0.
 pub(crate) fn normalize(draft: &mut [OutputConfig]) {
     let on: Vec<&OutputConfig> = draft.iter().filter(|c| c.enabled).collect();
-    let (Some(min_x), Some(min_y)) = (on.iter().filter_map(|c| c.x).min(), on.iter().filter_map(|c| c.y).min()) else { return };
+    let (Some(min_x), Some(min_y)) = (on.iter().filter_map(|c| c.x).min(), on.iter().filter_map(|c| c.y).min()) else { return;
+    };
     for c in draft.iter_mut().filter(|c| c.enabled) {
         c.x = c.x.map(|x| x - min_x);
         c.y = c.y.map(|y| y - min_y);
@@ -280,6 +283,14 @@ impl StudioView {
     }
 }
 
+fn persistence_help(cfg: &ShellConfig) -> &'static str {
+    if cfg.compositor.outputs.is_empty() {
+        tk("Off: the compositor's own config decides at the next start")
+    } else {
+        tk("Mandara restores this arrangement when the shell starts.")
+    }
+}
+
 fn running_target() -> Option<Target> {
     // Sway leaves XDG_CURRENT_DESKTOP to the session: its socket says it.
     if let Some(kind) = mandara_compositor::detected() {
@@ -311,13 +322,20 @@ impl StudioView {
     /// Re-reads the heads (and resets the draft) off the UI thread.
     fn load_heads(cx: &mut Context<Self>) {
         st(cx).heads_at = Some(Instant::now());
+        let task = super::display_control::heads(cx);
         cx.spawn(async move |this, cx| {
-            let (result, names) = cx.background_executor().spawn(async {
-                let result = outputs::heads();
-                let fallback = if result.is_err() { mandara_core::query_outputs().unwrap_or_default() } else { Vec::new() };
+            let snapshot = task.await;
+            let remaining = snapshot
+                .as_ref().ok()
+                .and_then(|snapshot| snapshot.remaining);
+            let result = snapshot.map(|snapshot| snapshot.heads);
+                let fallback = if result.is_err() {
+                mandara_services::runtime::unblock(|| {
+                    mandara_core::query_outputs().unwrap_or_default()
+                })
+                .await
+            } else { Vec::new() };
                 let names = shell_output_names(&result, &fallback);
-                (result, names)
-            }).await;
             let _ = this.update(cx, |_, cx| {
                 let s = st(cx);
                 if s.drag.is_some() || s.busy {
@@ -327,12 +345,15 @@ impl StudioView {
                     let fresh: Vec<OutputConfig> = heads.iter().map(outputs::Head::to_config).collect();
                     // Keep unapplied edits unless the monitors changed.
                     let same_set = s.draft.iter().map(|c| c.name.clone()).collect::<Vec<_>>() == fresh.iter().map(|c| c.name.clone()).collect::<Vec<_>>();
-                    let untouched = s.heads.as_ref().and_then(|h| h.as_ref().ok()).is_none_or(|old| old.iter().map(outputs::Head::to_config).collect::<Vec<_>>() == s.draft);
+                    let untouched = s.heads.as_ref().and_then(|h| h.as_ref().ok()).is_none_or(|old| {
+                                old.iter().map(outputs::Head::to_config).collect::<Vec<_>>() == s.draft
+                            });
                     if !same_set || untouched {
                         s.draft = fresh;
                     }
                     s.selected = s.selected.min(heads.len().saturating_sub(1));
                 }
+                s.revert_at = remaining.map(|remaining| Instant::now() + remaining);
                 s.heads = Some(result);
                 s.output_names = names;
                 cx.notify();
@@ -387,7 +408,9 @@ impl StudioView {
             s.clients = Some(Vec::new());
             if let Some(task) = crate::perf::query(&["compositor", "clients"], cx) {
                 cx.spawn(async move |this, cx| {
-                    let list = task.await.and_then(|v| serde_json::from_value::<Vec<ClientInfo>>(v).map_err(|e| e.to_string())).unwrap_or_default();
+                    let list = task.await.and_then(|v| {
+                            serde_json::from_value::<Vec<ClientInfo>>(v).map_err(|e| e.to_string())
+                        }).unwrap_or_default();
                     let _ = this.update(cx, |_, cx| {
                         let mut ids: Vec<String> = list.into_iter().map(|c| c.app_id).filter(|a| !a.is_empty() && a != mandara_core::STUDIO_APP_ID).collect();
                         ids.sort();
@@ -403,7 +426,8 @@ impl StudioView {
 
     fn load_night(cx: &mut Context<Self>) {
         st(cx).night_at = Some(Instant::now());
-        let Some(task) = crate::perf::query(&["nightlight", "status"], cx) else { return };
+        let Some(task) = crate::perf::query(&["nightlight", "status"], cx) else { return;
+        };
         cx.spawn(async move |this, cx| {
             let v = task.await.ok();
             let _ = this.update(cx, |_, cx| {
@@ -420,9 +444,12 @@ impl StudioView {
             return;
         }
         st(cx).alive = true;
-        cx.spawn(async move |this, cx| loop {
+        cx.spawn(async move |this, cx| {
+            loop {
             cx.background_executor().timer(TICK).await;
-            let on_page = this.update(cx, |v, _| v.section == Section::Displays && v.query.is_empty()).unwrap_or(false);
+            let on_page = this.update(cx, |v, _| {
+                        v.section == Section::Displays && v.query.is_empty()
+                    }).unwrap_or(false);
             if !on_page {
                 let _ = this.update(cx, |_, cx| {
                     let s = st(cx);
@@ -452,6 +479,7 @@ impl StudioView {
                     cx.notify();
                 }
             });
+        }
         })
         .detach();
     }
@@ -489,9 +517,13 @@ impl StudioView {
     // ── Arrangement ─────────────────────────────────────────────────────────
 
     fn arrangement(&mut self, cfg: &ShellConfig, p: &MandaraPalette, display: &SharedString, cx: &mut Context<Self>) -> AnyElement {
-        let head = || section_head(t("Arrangement"), t("Edges snap together. Changes apply only when you press Apply, and come back on their own unless you keep them."), vec![], display.clone(), p);
+        let head = || {
+            section_head(t("Arrangement"), t("Edges snap together. Changes apply only when you press Apply, and come back on their own unless you keep them."), vec![], display.clone(), p)
+        };
         let heads = match st(cx).heads.clone() {
-            None => return page_section(head(), [card(p).child(div().text_color(p.on_surface_variant.hsla()).child(t("Reading displays…"))).into_any_element()]),
+            None => {
+                return page_section(head(), [card(p).child(div().text_color(p.on_surface_variant.hsla()).child(t("Reading displays…"))).into_any_element()]);
+            }
             Some(Err(e)) => {
                 let detail = if running_target() == Some(Target::KWin) { t("Change resolution, scale and display arrangement in Plasma System Settings. Shell placement below still applies.").to_string() } else { e };
                 return page_section(head(), [card(p).child(heading(t("Display configuration isn't available"), detail, p)).into_any_element()]);
@@ -520,7 +552,8 @@ impl StudioView {
             .overflow_hidden()
             .on_mouse_move(cx.listener(move |_, e: &MouseMoveEvent, _, cx| {
                 let s = st(cx);
-                let Some((i, start, (x0, y0))) = s.drag else { return };
+                let Some((i, start, (x0, y0))) = s.drag else { return;
+                };
                 let dx = f32::from(e.position.x - start.x) / scale;
                 let dy = f32::from(e.position.y - start.y) / scale;
                 let Some(c) = s.draft.get(i) else { return };
@@ -577,7 +610,9 @@ impl StudioView {
                             .justify_center()
                             .gap(px(SPACE_3_PX))
                             .overflow_hidden()
-                            .child(div().row().items_center().gap(px(SPACE_5_PX)).when(is_primary, |el| el.child(icon("pin", ICON_11_PX, p.primary))).child(div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::SEMIBOLD).child(c.name.clone())))
+                            .child(div().row().items_center().gap(px(SPACE_5_PX)).when(is_primary, |el| {
+                                        el.child(icon("pin", ICON_11_PX, p.primary))
+                                    }).child(div().text_size(px(TEXT_13_PX)).font_weight(FontWeight::SEMIBOLD).child(c.name.clone())))
                             .child(div().text_size(px(TEXT_11_PX)).font_features(mandara_ui::fonts::tabular_nums()).text_color(p.on_surface_variant.hsla()).child(mode)),
                     )
                     .on_mouse_down(
@@ -607,33 +642,39 @@ impl StudioView {
                 .child(icon("timer", ICON_16_PX, p.warning_amber))
                 .child(div().flex_1().min_w(px(DIM_200_PX)).font_weight(FontWeight::MEDIUM).font_features(mandara_ui::fonts::tabular_nums()).child(mandara_ui::bidi::paragraph(tf("Keep these display settings? Reverting in {seconds} s", &[("seconds", &left)]))))
                 .child(button("display-keep", "check", t("Keep"), true, p).on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
-                    outputs::confirm();
-                    let persisted = !mandara_ui::state::config(cx).read(cx).get().compositor.outputs.is_empty();
-                    let s = st(cx);
-                    s.revert_at = None;
-                    s.message = Some((t("Kept").into(), false));
-                    s.heads_at = None;
-                    if persisted {
-                        // Keep the drop-in in step with what's on screen: the
-                        // live heads, not the draft (after a profile apply or
-                        // with unapplied edits the draft is something else).
-                        let fallback = s.draft.clone();
-                        cx.spawn(async move |_, cx| {
-                            let live = cx.background_executor().spawn(async { outputs::heads() }).await;
-                            let kept = match live {
-                                Ok(heads) if !heads.is_empty() => heads.iter().map(outputs::Head::to_config).collect(),
-                                _ => fallback,
-                            };
-                            cx.update(|cx| update_config(cx, move |c| c.compositor.outputs = kept));
+                            if st(cx).busy {
+                                return;
+                            }
+                            st(cx).busy = true;
+                            let keep = super::display_control::keep(cx);
+                            cx.spawn(async move |this, cx| {
+                                let result = keep.await;
+                                let _ = this.update(cx, |_, cx| {
+                                    let s = st(cx);
+                    s.busy = false;
+                                    s.heads_at = None;
+                    s.message = Some(match result {
+                                        Ok(true) => {
+                                            s.revert_at = None;
+                                            (t("Kept").into(), false)
+                                        }
+                                        Ok(false) => {
+                                            s.revert_at = None;
+                                            (t("Reverted").into(), false)
+                                        }
+                                        Err(err) => (err, true),
+                                    });
+                        cx.notify();
+                                });
                         })
                         .detach();
-                    }
-                    cx.notify();
+                            cx.notify();
                 })))
                 .child(button("display-revert", "undo", t("Revert"), false, p).on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
                     st(cx).revert_at = None;
-                    cx.spawn(async move |this, cx| {
-                        let r = cx.background_executor().spawn(async { outputs::revert_now() }).await;
+                            let task = super::display_control::revert(cx);
+                            cx.spawn(async move |this, cx| {
+                        let r = task.await;
                         let _ = this.update(cx, |_, cx| {
                             let s = st(cx);
                             s.message = Some(match r {
@@ -665,14 +706,28 @@ impl StudioView {
                             s.busy = true;
                             s.message = None;
                             let draft = s.draft.clone();
-                            cx.spawn(async move |this, cx| {
-                                let r = cx.background_executor().spawn(async move { outputs::apply_with_revert(&draft, secs) }).await;
+                        let before = s
+                            .heads
+                            .as_ref()
+                            .and_then(|heads| heads.as_ref().ok())
+                            .map(|heads| {
+                                heads
+                                    .iter()
+                                    .map(outputs::Head::to_config)
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default();
+                        let task = super::display_control::test(Some(before), draft, secs, cx);
+                        cx.spawn(async move |this, cx| {
+                                let r = task.await;
                                 let _ = this.update(cx, |_, cx| {
                                     let s = st(cx);
                                     s.busy = false;
                                     match r {
-                                        Ok(secs) => s.revert_at = Some(Instant::now() + Duration::from_secs(secs as u64)),
-                                        Err(e) => s.message = Some((e, true)),
+                                        Ok(secs) => {
+                                        s.revert_at = Some(Instant::now() + Duration::from_secs(secs as u64))
+                                    }
+                                    Err(e) => s.message = Some((e, true)),
                                     }
                                     s.heads_at = None;
                                     cx.notify();
@@ -690,7 +745,9 @@ impl StudioView {
                     cx.notify();
                 })))
                 .child(div().flex_1())
-                .when_some(message, |el, (text, error)| el.child(badge(text, if error { p.urgent_coral } else { p.success_emerald })))
+                .when_some(message, |el, (text, error)| {
+                    el.child(badge(text, if error { p.urgent_coral } else { p.success_emerald }))
+                })
         };
 
         // A card per display under the canvas: picks the one edited below
@@ -717,7 +774,9 @@ impl StudioView {
                         .bg(if on { p.primary.with_alpha(ALPHA_12).hsla() } else { p.surface_container_high.with_alpha(ALPHA_60).hsla() })
                         .border_2()
                         .border_color(if on { p.primary.hsla() } else { gpui::transparent_black() })
-                        .when(!on, |el| el.hover(|s| s.bg(p.primary.with_alpha(ALPHA_8).hsla())))
+                        .when(!on, |el| {
+                            el.hover(|s| s.bg(p.primary.with_alpha(ALPHA_8).hsla()))
+                        })
                         .child(div().flex_none().size(px(DIM_32_PX)).rounded(px(RADIUS_10_PX)).bg(if on { p.primary.with_alpha(ALPHA_16).hsla() } else { p.surface_container.hsla() }).row().items_center().justify_center().child(icon("monitor", ICON_15_PX, if c.enabled { p.primary } else { p.on_surface_variant })))
                         .child(
                             div()
@@ -729,7 +788,9 @@ impl StudioView {
                                 .child(div().truncate().text_size(px(TEXT_13_PX)).font_weight(FontWeight::SEMIBOLD).child(c.name.clone()))
                                 .child(div().truncate().text_size(px(TEXT_11_PX)).font_features(mandara_ui::fonts::tabular_nums()).text_color(p.on_surface_variant.hsla()).child(detail)),
                         )
-                        .when(is_primary, |el| el.child(icon("pin", ICON_13_PX, p.primary)))
+                        .when(is_primary, |el| {
+                            el.child(icon("pin", ICON_13_PX, p.primary))
+                        })
                         .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
                             st(cx).selected = i;
                             cx.notify();
@@ -776,7 +837,9 @@ impl StudioView {
 
         let power = chips()
             .child(chip(SharedString::from(format!("d{i}-on")), t("On"), c.enabled, p).on_click(Self::edit(i, |c| c.enabled = true)))
-            .child(chip(SharedString::from(format!("d{i}-off")), t("Off"), !c.enabled, p).when(c.enabled && enabled_count <= 1, |el| el.opacity(ALPHA_50).tooltip(tip(t("At least one display must stay on"), p))).on_click({
+            .child(chip(SharedString::from(format!("d{i}-off")), t("Off"), !c.enabled, p).when(c.enabled && enabled_count <= 1, |el| {
+                    el.opacity(ALPHA_50).tooltip(tip(t("At least one display must stay on"), p))
+                }).on_click({
                 let last = c.enabled && enabled_count <= 1;
                 let set = Self::edit(i, |c| c.enabled = false);
                 move |e, w, cx| {
@@ -798,7 +861,9 @@ impl StudioView {
         if let (Some(w), Some(hgt)) = (c.width, c.height) {
             let offered = h.refresh_rates(w as i32, hgt as i32);
             // The offered rate closest to the chosen one is the active chip.
-            let closest = c.refresh_mhz.and_then(|cur| offered.iter().copied().min_by_key(|r| (*r as i64 - cur as i64).abs()));
+            let closest = c.refresh_mhz.and_then(|cur| {
+                offered.iter().copied().min_by_key(|r| (*r as i64 - cur as i64).abs())
+            });
             for (n, r) in offered.into_iter().take(MAX_RATES).enumerate() {
                 let active = closest == Some(r);
                 rates = rates.child(chip(SharedString::from(format!("d{i}-hz-{n}")), rate_label(r as u32), active, p).font_features(mandara_ui::fonts::tabular_nums()).on_click(Self::edit(i, move |c| c.refresh_mhz = Some(r as u32))));
@@ -833,7 +898,9 @@ impl StudioView {
             update_config(cx, move |c| c.displays.primary = Some(name));
         });
         let title = if h.make.is_empty() && h.model.is_empty() { h.description.clone() } else { format!("{} {}", h.make, h.model).trim().to_string() };
-        let mm = (h.physical_mm.0 > 0).then(|| tf("{width} × {height} mm", &[("width", &h.physical_mm.0), ("height", &h.physical_mm.1)]));
+        let mm = (h.physical_mm.0 > 0).then(|| {
+            tf("{width} × {height} mm", &[("width", &h.physical_mm.0), ("height", &h.physical_mm.1)])
+        });
         card(p)
             .gap_0()
             .child(
@@ -853,7 +920,9 @@ impl StudioView {
                     .child(row(tk("Refresh rate"), rates.into_any_element()))
                     .child(row(tk("Scale"), scale_row.into_any_element()))
                     .child(row(tk("Rotation"), rot.into_any_element()))
-                    .when_some(vrr, |el, v| el.child(row(tk("Adaptive sync"), v.into_any_element())))
+                    .when_some(vrr, |el, v| {
+                        el.child(row(tk("Adaptive sync"), v.into_any_element()))
+                    })
             })
             .into_any_element()
     }
@@ -904,7 +973,9 @@ impl StudioView {
                             .gap(px(SPACE_10_PX))
                             .child(div().flex_none().size(px(DIM_36_PX)).rounded(px(RADIUS_12_PX)).bg(if matches { p.primary.with_alpha(ALPHA_16).hsla() } else { p.surface_container_high.hsla() }).row().items_center().justify_center().child(icon("monitor", ICON_16_PX, if matches { p.primary } else { p.on_surface_variant })))
                             .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(TEXT_14_PX)).font_weight(FontWeight::SEMIBOLD).child(prof.name.clone()))
-                            .when(matches, |el| el.child(badge(t("Connected"), p.success_emerald))),
+                            .when(matches, |el| {
+                                el.child(badge(t("Connected"), p.success_emerald))
+                            }),
                     )
                     .child(div().flex_none().h(px(LEADING_16_PX)).truncate().text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).font_features(mandara_ui::fonts::tabular_nums()).text_color(p.on_surface_variant.hsla()).child(summary))
                     .child(
@@ -918,14 +989,22 @@ impl StudioView {
                                 let profile = apply_p.clone();
                                 let secs = mandara_ui::state::config(cx).read(cx).get().displays.revert_secs();
                                 st(cx).busy = true;
-                                cx.spawn(async move |this, cx| {
-                                    let r = cx.background_executor().spawn(async move { outputs::apply_with_revert(&profile.outputs, secs) }).await;
+                                        let task = super::display_control::test(
+                                            None,
+                                            profile.outputs.clone(),
+                                            secs,
+                                            cx,
+                                        );
+                                        cx.spawn(async move |this, cx| {
+                                    let r = task.await;
                                     let _ = this.update(cx, |_, cx| {
                                         let s = st(cx);
                                         s.busy = false;
                                         match r {
-                                            Ok(secs) => s.revert_at = Some(Instant::now() + Duration::from_secs(secs as u64)),
-                                            Err(e) => s.message = Some((e, true)),
+                                            Ok(secs) => {
+                                                        s.revert_at = Some(Instant::now() + Duration::from_secs(secs as u64))
+                                                    }
+                                                    Err(e) => s.message = Some((e, true)),
                                         }
                                         s.heads_at = None;
                                         cx.notify();
@@ -949,7 +1028,9 @@ impl StudioView {
                                     .child(icon("trash", ICON_14_PX, p.on_surface_variant))
                                     .on_click(move |_, _, cx| {
                                         let name = del_name.clone();
-                                        update_config(cx, move |c| c.displays.profiles.retain(|p| p.name != name));
+                                        update_config(cx, move |c| {
+                                            c.displays.profiles.retain(|p| p.name != name)
+                                        });
                                     }),
                             ),
                     )
@@ -963,7 +1044,10 @@ impl StudioView {
             super::grid::fit(self.page.column_w, PROFILE_GRID).balanced(n).render(cards)
         };
         let snapshot: Vec<OutputConfig> = heads.iter().map(outputs::Head::to_config).collect();
-        let default_name = heads.iter().filter(|h| h.enabled).map(|h| if h.model.is_empty() { h.name.clone() } else { h.model.clone() }).collect::<Vec<_>>().join(" + ");
+        let default_name = heads.iter().filter(|h| h.enabled).map(|h| {
+                if h.model.is_empty() { h.name.clone() } else { h.model.clone()
+                }
+            }).collect::<Vec<_>>().join(" + ");
         let save = button("profile-save", "plus", t("Save as profile"), false, p).on_click(move |_, _, cx| {
             let profile = DisplayProfile { name: default_name.clone(), outputs: snapshot.clone() };
             update_config(cx, move |c| {
@@ -974,25 +1058,18 @@ impl StudioView {
 
         // Persistence to the compositor drop-in.
         let persisted = !cfg.compositor.outputs.is_empty();
-        let target = running_target();
-        let file = target.map(|t| t.generated_file().file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default()).unwrap_or_default();
         let overlap: Vec<String> = st(cx).user_rules.clone().unwrap_or_default().into_iter().filter(|n| heads.iter().any(|h| &h.name == n)).collect();
         let current: Vec<OutputConfig> = heads.iter().map(outputs::Head::to_config).collect();
-        // River has no output settings to write (nor does Mandara send any),
-        // and KWin, Aqueous, labwc and COSMIC keep theirs in their own
-        // settings: nothing a drop-in could hold, so no button that would
-        // save nothing.
-        let elsewhere = target.and_then(Target::settings_elsewhere);
-        // Outputs saved under another compositor can still be cleared here.
-        let keep = if target == Some(Target::River) || (elsewhere.is_some() && !persisted) {
-            div().into_any_element()
-        } else if persisted {
+        // The shell also restores saved arrangements on compositors without a drop-in.
+        let keep = if persisted {
             button("display-unpersist", "close", t("Stop saving"), false, p).on_click(|_, _, cx| update_config(cx, |c| c.compositor.outputs.clear())).into_any_element()
         } else {
             button("display-persist", "download", t("Keep after restart"), true, p)
                 .on_click(move |_, _, cx| {
                     let list = current.clone();
-                    update_config(cx, move |c| c.compositor.outputs = list);
+                    update_config(cx, move |c| {
+                    mandara_config::outputs::remember(&mut c.compositor.outputs, list)
+                });
                 })
                 .into_any_element()
         };
@@ -1006,18 +1083,7 @@ impl StudioView {
                     .child(div().flex_none().size(px(DIM_36_PX)).rounded(px(RADIUS_12_PX)).bg(if persisted { p.success_emerald.with_alpha(ALPHA_16).hsla() } else { p.surface_container_high.hsla() }).row().items_center().justify_center().child(icon("download", ICON_16_PX, if persisted { p.success_emerald } else { p.on_surface_variant })))
                     .child(div().flex_1().min_w(px(DIM_240_PX)).child(heading(
                         t("Keep after restart"),
-                        if target == Some(Target::River) {
-                            t("River keeps no display settings of its own: set them in your init with a tool such as wlr-randr or kanshi").into()
-                        } else if let Some(note) = elsewhere {
-                            mandara_i18n::tr(note)
-                        } else if !cfg.compositor.manage {
-                            // Nothing is written while the drop-in is off.
-                            t("Turn on “Manage compositor drop-in” (Compositor page) first: Mandara writes no drop-in while it's off").into()
-                        } else if persisted {
-                            tf("Saved as monitor lines in Mandara's {file} drop-in (your own config isn't touched)", &[("file", &file)])
-                        } else {
-                            t("Off: the compositor's own config decides at the next start").into()
-                        },
+                        mandara_i18n::tr(persistence_help(cfg)),
                         p,
                     )))
                     .child(keep),
@@ -1049,8 +1115,16 @@ impl StudioView {
             let set = cfg.displays.surfaces.get(kind).clone();
             let mut chips = div().row().flex_wrap().gap(px(SPACE_6_PX));
             chips = chips
-                .child(chip(SharedString::from(format!("show-{}-all", kind.id())), t("All"), set.show_on == ScreenChoice::All, p).on_click(move |_, _, cx| update_config(cx, move |c| c.displays.surfaces.get_mut(kind).show_on = ScreenChoice::All)))
-                .child(chip(SharedString::from(format!("show-{}-main", kind.id())), t("Main display"), set.show_on == ScreenChoice::Primary, p).on_click(move |_, _, cx| update_config(cx, move |c| c.displays.surfaces.get_mut(kind).show_on = ScreenChoice::Primary)));
+                .child(chip(SharedString::from(format!("show-{}-all", kind.id())), t("All"), set.show_on == ScreenChoice::All, p).on_click(move |_, _, cx| {
+                        update_config(cx, move |c| {
+                            c.displays.surfaces.get_mut(kind).show_on = ScreenChoice::All
+                        })
+                    }))
+                .child(chip(SharedString::from(format!("show-{}-main", kind.id())), t("Main display"), set.show_on == ScreenChoice::Primary, p).on_click(move |_, _, cx| {
+                        update_config(cx, move |c| {
+                            c.displays.surfaces.get_mut(kind).show_on = ScreenChoice::Primary
+                        })
+                    }));
             for (n, name) in names.iter().enumerate() {
                 let on = set.show_on == ScreenChoice::Selected && set.outputs.iter().any(|o| o == name);
                 let name = name.clone();
@@ -1076,7 +1150,9 @@ impl StudioView {
                     .when(stack, |el| el.flex_col().cross_start().gap(px(SPACE_10_PX)))
                     .when(!stack, |el| el.items_center().gap(px(SPACE_18_PX)))
                     .py(px(SPACE_12_PX))
-                    .when(k > 0, |el| el.border_t_1().border_color(p.on_surface.with_alpha(ALPHA_6).hsla()))
+                    .when(k > 0, |el| {
+                        el.border_t_1().border_color(p.on_surface.with_alpha(ALPHA_6).hsla())
+                    })
                     .child(
                         div()
                             .flex_none()
@@ -1185,7 +1261,9 @@ impl StudioView {
                 let at = next.get("at").and_then(|v| v.as_str()).unwrap_or_default().to_string();
                 if next.get("to_night").and_then(|v| v.as_bool()).unwrap_or(false) { tf("Warms at {time}", &[("time", &at)]) } else { tf("Back to daylight at {time}", &[("time", &at)]) }
             }
-            (None, None) if !n.enabled => t("Turn it on below, or toggle it from quick settings").into(),
+            (None, None) if !n.enabled => {
+                t("Turn it on below, or toggle it from quick settings").into()
+            }
             _ => String::new(),
         };
         let night_k = n.night_temperature.to_string();
@@ -1238,8 +1316,10 @@ impl StudioView {
         let rows = self.rows(
             registry::in_section(Section::Displays).filter(|s| s.path.starts_with("/night_light/")).filter(|s| match s.path {
                 "/night_light/start" | "/night_light/end" => n.schedule == NightSchedule::Fixed,
-                "/night_light/latitude" | "/night_light/longitude" => n.schedule == NightSchedule::Sun,
-                _ => true,
+                "/night_light/latitude" | "/night_light/longitude" => {
+                        n.schedule == NightSchedule::Sun
+                    }
+                    _ => true,
             }),
             cfg,
             p,
@@ -1338,5 +1418,21 @@ mod tests {
         for t in Transform::ALL {
             assert!(!transform_label(t).is_empty());
         }
+    }
+}
+
+#[cfg(test)]
+mod persistence_tests {
+    #[test]
+    fn saved_arrangements_do_not_require_compositor_management() {
+        let mut config = mandara_config::ShellConfig::default();
+        let off = super::persistence_help(&config);
+        config.compositor.outputs.push(mandara_config::outputs::OutputConfig { name:"DP-1".into(),scale:Some(1.25),..Default::default() });
+        let saved = super::persistence_help(&config);
+        assert_ne!(saved,off);
+        config.compositor.manage = false;
+        assert_eq!(super::persistence_help(&config),saved);
+        config.compositor.outputs.clear();
+        assert_eq!(super::persistence_help(&config),off);
     }
 }

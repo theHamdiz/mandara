@@ -20,84 +20,86 @@ use mandara_ui::icons::icon;
 use mandara_ui::state::{config, update_config};
 use serde_json::Value;
 
-mod maint_page;
 mod agent_page;
-mod motion_page;
 mod depth_model_row;
-mod recorder_row;
-mod nav;
+mod maint_page;
 mod market_page;
+mod motion_page;
+mod nav;
+mod recorder_row;
 mod store_page;
 pub(crate) use store_page::{HIDDEN_PLUGINS, PLUGIN_CATEGORIES, plugin_art_cache_clear, plugin_icon, plugin_tile};
-mod plugin_updates;
-mod updates_card;
 mod about_links;
-mod plugin_credentials;
-mod feeds_editor;
-mod whats_new;
-mod designer;
-mod bars_page;
-mod page_tabs;
-mod plugin_pool;
-mod sidebar_tabs_page;
-mod greeter_page;
-mod keyrings_card;
 mod admin_run;
+mod bars_page;
+mod designer;
+mod feeds_editor;
 mod fold;
 mod font_picker;
+mod greeter_page;
+mod keyrings_card;
+mod page_tabs;
+mod plugin_credentials;
+mod plugin_pool;
+mod plugin_updates;
 mod popover;
+mod sidebar_tabs_page;
 mod time_card;
+mod updates_card;
 mod users_page;
+mod whats_new;
 pub use time_card::set_demo as set_time_demo;
 pub use users_page::set_demo as set_users_demo;
-mod compositor_page;
-mod config_doctor;
-mod keybind_conflicts;
-mod audio_page;
-mod notifications_page;
-pub(crate) mod power_page;
-mod displays_page;
-mod diagnostics_page;
-mod frame_meter;
 mod activity;
-mod page_visit;
-mod form;
-mod network_page;
-mod compositor_presets;
-mod input_page;
+mod app_templates;
+mod app_themes_page;
 pub mod apps_page;
-mod profiles_page;
-mod launcher_page;
-mod launcher_data;
-mod launcher_placement;
-mod dock_page;
-mod switcher_page;
-mod desktop_widgets_page;
-pub mod desktop_page;
+mod audio_page;
 mod auth_widgets;
+mod boot_page;
+mod choice;
+mod component_designs;
+mod compositor_page;
+mod compositor_presets;
+mod config_doctor;
+mod cursor_page;
+pub mod desktop_page;
+mod desktop_widgets_page;
+mod diagnostics_page;
+mod display_control;
+mod displays_page;
+mod dock_page;
+mod form;
+mod frame_meter;
+pub(crate) mod grid;
+mod icons_page;
+mod input_page;
+mod keybind_conflicts;
+mod launcher_data;
+mod launcher_page;
+mod launcher_placement;
 pub mod looks_page;
 mod looks_yours;
-mod app_themes_page;
-mod themes_page;
-mod boot_page;
-mod cursor_page;
-mod icons_page;
+mod network_page;
+mod notifications_page;
+mod page_visit;
 mod plugin_gate;
-mod theme_galleries;
-mod sounds_page;
-mod component_designs;
+pub mod plugin_modal;
 mod plugin_offer;
+pub mod plugins_local;
+pub(crate) mod power_page;
+mod profiles_page;
+#[cfg(test)]
+mod settings_audit;
+mod sounds_page;
+mod stash_edges;
 mod swatch_list;
+mod switcher_page;
+mod theme_galleries;
+mod themes_page;
 mod wallgen_logic;
 mod wallgen_page;
 pub mod wallpaper_page;
-pub(crate) mod grid;
-mod choice;
-pub mod plugin_modal;
-mod stash_edges;
-pub mod plugins_local;
-#[cfg(test)]
-mod settings_audit;
 
 use crate::perf::{self, PerfMonitor};
 use crate::registry::{self, Control, Section, Setting};
@@ -148,6 +150,7 @@ pub struct StudioView {
     /// Themes page: every theme with its palette for the current mode, read
     /// once per visit (user themes are TOML files on disk).
     themes: Option<themes_page::ThemeGallery>,
+    app_templates: app_templates::Templates,
     /// Icon picker: the query and the theme icons matching it.
     icon_matches: Option<(String, Rc<[String]>)>,
     /// File-backed Launcher labels and ranking, owned only by its visible visit.
@@ -268,7 +271,9 @@ impl StudioView {
             )
             .clear_on_commit()
         });
-        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None, icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
+        Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None,
+            app_templates: Default::default(),
+            icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -287,6 +292,7 @@ impl StudioView {
             if section == Section::Maintenance { self.maint.invalidate(); }
             self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
             self.themes = None;
+            self.app_templates = Default::default();
             self.icon_matches = None;
             // The Components previews' text fields go with the page.
             self.components = Default::default();
@@ -485,7 +491,12 @@ impl StudioView {
                     .gap(px(SPACE_8_PX))
                     .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(reason))))
                     .child(div().opacity(LOCKED_OPACITY).child(mandara_ui::plugins::network::switch(on, p)))
-                    .when_some(next, |el, next| el.cursor_pointer().on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.apply(&setting, Value::from(next), cx))))
+                    .when_some(next, |el, next| {
+                        el.cursor_pointer().on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                this.apply(&setting, Value::from(next), cx)
+                            },
+                        ))
+                    })
                     .into_any_element()
             }
             Control::Toggle => {
@@ -495,7 +506,9 @@ impl StudioView {
                     .id(SharedString::from(format!("t{}", setting.path)))
                     .cursor_pointer()
                     .child(mandara_ui::plugins::network::switch(on, p))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.apply(&setting, Value::from(!on), cx)))
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.apply(&setting, Value::from(!on), cx)
+                    }))
                     .into_any_element()
             }
             Control::Slider { min, max, step, unit } => {
@@ -509,9 +522,13 @@ impl StudioView {
                     .row()
                     .items_center()
                     .gap(px(SPACE_12_PX))
-                    .child(div().w(px(DIM_220_PX)).child(mandara_ui::kit::slider_with_label(id, frac, p, move |f| slider_text(snap_slider(f, (min, max, step)), step, unit).into(), move |f, window, cx| {
+                    .child(div().w(px(DIM_220_PX)).child(mandara_ui::kit::slider_with_label(id, frac, p, move |f| {
+                                    slider_text(snap_slider(f, (min, max, step)), step, unit).into()
+                                }, move |f, window, cx| {
                         let setting = setting2.clone();
-                        let _ = this.update(cx, |studio, cx| studio.apply(&setting, Value::from(snap_slider(f, (min, max, step))), cx));
+                        let _ = this.update(cx, |studio, cx| {
+                                        studio.apply(&setting, Value::from(snap_slider(f, (min, max, step))), cx)
+                                    });
                         // At most one value a frame reaches the config.
                         mandara_ui::slider_model::next_frame(window)
                     })))
@@ -532,7 +549,9 @@ impl StudioView {
             }
             Control::RecorderBackends => self.recorder_backends_control(cfg, p, cx),
             Control::StashEdges => self.stash_edges_control(cfg, p, cx),
-            Control::Device { input } => self.recorder_device_control(setting, input, room, cfg, p, cx),
+            Control::Device { input } => {
+                self.recorder_device_control(setting, input, room, cfg, p, cx)
+            }
             Control::Display => self.recorder_display_control(setting, room, cfg, p, cx),
             Control::Text { placeholder } | Control::OptionalText { placeholder } => {
                 let current = value.as_str().unwrap_or_default().to_string();
@@ -543,7 +562,9 @@ impl StudioView {
                 self.field(setting, current, "", cx).into_any_element()
             }
             Control::List { placeholder } => {
-                let current = value.as_array().map(|a| a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", ")).unwrap_or_default();
+                let current = value.as_array().map(|a| {
+                        a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(", ")
+                    }).unwrap_or_default();
                 self.field(setting, current, placeholder, cx).into_any_element()
             }
             Control::OptionalSlider { min, max, step, unit, default } => {
@@ -568,7 +589,9 @@ impl StudioView {
                                 .text_color(p.primary.hsla())
                                 .text_size(px(TEXT_12_5_PX))
                                 .child(t("Override"))
-                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.apply(&setting2, Value::from(default), cx))),
+                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                    this.apply(&setting2, Value::from(default), cx)
+                                })),
                         )
                         .into_any_element(),
                     Some(v) => {
@@ -581,9 +604,13 @@ impl StudioView {
                             .row()
                             .items_center()
                             .gap(px(SPACE_12_PX))
-                            .child(div().w(px(DIM_200_PX)).child(mandara_ui::kit::slider_with_label(id, frac, p, move |f| slider_text(snap_slider(f, (min, max, step)), step, unit).into(), move |f, window, cx| {
+                            .child(div().w(px(DIM_200_PX)).child(mandara_ui::kit::slider_with_label(id, frac, p, move |f| {
+                                        slider_text(snap_slider(f, (min, max, step)), step, unit).into()
+                                    }, move |f, window, cx| {
                                 let setting = slide.clone();
-                                let _ = this.update(cx, |studio, cx| studio.apply(&setting, Value::from(snap_slider(f, (min, max, step))), cx));
+                                let _ = this.update(cx, |studio, cx| {
+                                            studio.apply(&setting, Value::from(snap_slider(f, (min, max, step))), cx)
+                                        });
                                 mandara_ui::slider_model::next_frame(window)
                             })))
                             .child(div().w(px(DIM_56_PX)).text_end().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(if step >= 1.0 { format!("{v:.0}{unit}") } else { format!("{v:.2}{unit}") }))
@@ -600,7 +627,9 @@ impl StudioView {
                                     .text_color(p.on_surface_variant.hsla())
                                     .hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_6).hsla()))
                                     .child(t("Reset"))
-                                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.apply(&setting2, Value::Null, cx))),
+                                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                        this.apply(&setting2, Value::Null, cx)
+                                    })),
                             )
                             .into_any_element()
                     }
@@ -633,15 +662,21 @@ impl StudioView {
                 })
                 .into_any_element(),
             Control::Font { follows } => {
-                let fallback = follows.map(|path| registry::by_path(path).map(|s| registry::get(cfg, s)).and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default());
+                let fallback = follows.map(|path| {
+                    registry::by_path(path).map(|s| registry::get(cfg, s)).and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
+                });
                 let current = value.as_str().unwrap_or_default().to_string();
                 let picker = self.font_selects.entry(setting.path).or_insert_with(|| {
                     let s = setting.clone();
                     let studio = cx.entity().downgrade();
-                    cx.new(|_| font_picker::FontSelect::new(format!("font-{}", s.path), Rc::new(move |family, _, cx| {
+                    cx.new(|_| {
+                            font_picker::FontSelect::new(format!("font-{}", s.path), Rc::new(move |family, _, cx| {
                         let s = s.clone();
-                        let _ = studio.update(cx, |this, cx| this.apply(&s, Value::from(family), cx));
-                    })))
+                        let _ = studio.update(cx, |this, cx| {
+                                        this.apply(&s, Value::from(family), cx)
+                                    });
+                    }))
+                        })
                 }).clone();
                 picker.update(cx, |f, _| f.sync(&current, fallback.as_deref()));
                 picker.into_any_element()
@@ -665,11 +700,15 @@ impl StudioView {
     /// plugin that is off stay out: its store card offers it instead).
     fn visible_groups<'a>(&self, settings: impl IntoIterator<Item = &'a Setting>, cfg: &ShellConfig, cx: &mut Context<Self>) -> Vec<(&'static str, Vec<&'a Setting>)> {
         let registry = cx.try_global::<mandara_plugins::PluginRegistry>();
-        let shown = |s: &&Setting| registry::required_plugin(s.path).is_none_or(|id| registry.is_some_and(|r| r.is_enabled(id, &cfg.plugins)));
+        let shown = |s: &&Setting| {
+            registry::required_plugin(s.path).is_none_or(|id| registry.is_some_and(|r| r.is_enabled(id, &cfg.plugins)))
+        };
         let mut groups = group_rows(settings.into_iter().filter(shown).collect::<Vec<_>>());
         // Related groups next to each other, the everyday ones first.
         if let Some(order) = groups.first().and_then(|(_, list)| list.first()).and_then(|s| group_order(s.section)) {
-            groups.sort_by_key(|(title, _)| order.iter().position(|g| g == title).unwrap_or(order.len()));
+            groups.sort_by_key(|(title, _)| {
+                order.iter().position(|g| g == title).unwrap_or(order.len())
+            });
         }
         groups
     }
@@ -742,7 +781,9 @@ impl StudioView {
                 // design pickers with their previews.
                 let stack = self.stack_rows
                     || component_designs::by_path(s.path).is_some()
-                    || (locked.is_none() && self.choice_labels(s, cfg, cx).is_some_and(|labels| !choice::fits_line(&labels, beside, &choice::SETTING_CHOICE)));
+                    || (locked.is_none() && self.choice_labels(s, cfg, cx).is_some_and(|labels| {
+                        !choice::fits_line(&labels, beside, &choice::SETTING_CHOICE)
+                    }));
                 let room = if stack { choice::Room::under(under) } else { choice::Room::beside(beside) };
                 // A control that does nothing in the current setup shows why
                 // instead (toggles render their own locked state).
@@ -767,7 +808,9 @@ impl StudioView {
                         .when(stack, |el| el.flex_col().cross_start().gap(px(SPACE_10_PX)))
                         // The control sits at the end; the label keeps a
                         // readable measure on wide windows.
-                        .when(!stack, |el| el.items_center().justify_between().gap(px(SPACE_24_PX)))
+                        .when(!stack, |el| {
+                        el.items_center().justify_between().gap(px(SPACE_24_PX))
+                    })
                         .hover(|el| el.bg(p.on_surface.with_alpha(ALPHA_3_5).hsla()))
                         .child(
                             div()
@@ -781,7 +824,9 @@ impl StudioView {
                                 .flex_col()
                                 .gap(px(SPACE_3_PX))
                                 .child(div().text_size(px(TEXT_13_5_PX)).font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(tr(s.label))))
-                                .when(!help.is_empty(), |el| el.child(div().text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(help))))),
+                                .when(!help.is_empty(), |el| {
+                                el.child(div().text_size(px(TEXT_12_PX)).line_height(px(LEADING_17_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tr(help))))
+                            }),
                         )
                         .child(control),
                 );
@@ -804,7 +849,9 @@ impl StudioView {
         let sides = grid::two_columns(&groups.iter().map(|(_, l)| l.len()).collect::<Vec<_>>());
         let mut cols = [div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_12_PX)), div().flex_1().min_w(px(0.0)).row().flex_col().gap(px(SPACE_12_PX))];
         for (n, (title, list)) in groups.into_iter().enumerate() {
-            let changed = list.iter().filter(|s| s.control.has_value() && registry::get(cfg, s) != registry::default_value(s)).count();
+            let changed = list.iter().filter(|s| {
+                    s.control.has_value() && registry::get(cfg, s) != registry::default_value(s)
+                }).count();
             let preview = fold::preview_of(list.iter().map(|s| s.label));
             let badge = Some(if changed > 0 { tf("{changed} of {count} changed", &[("changed", &changed), ("count", &list.len())]) } else { list.len().to_string() });
             // The Reset button lives in the header, so it works while closed.
@@ -961,7 +1008,9 @@ impl StudioView {
                                     .items_center()
                                     .cursor_pointer()
                                     .text_size(px(TEXT_12_PX))
-                                    .when(active, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()))
+                                    .when(active, |el| {
+                                            el.bg(p.primary.hsla()).text_color(p.on_primary.hsla())
+                                        })
                                     .child(mandara_ui::bidi::paragraph(tr(label)))
                                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                                         this.list_fields.remove(&format!("bind-{i}-action"));
@@ -1040,7 +1089,9 @@ impl StudioView {
                     let cmd = cmd.clone();
                     this.list_fields.clear();
                     let index = config(cx).read(cx).get().compositor.keybinds.len();
-                    update_config(cx, |c| c.compositor.keybinds.push(Keybind { mods: Vec::new(), key: String::new(), action: BindAction::Mandara(cmd) }));
+                    update_config(cx, |c| {
+                            c.compositor.keybinds.push(Keybind { mods: Vec::new(), key: String::new(), action: BindAction::Mandara(cmd) })
+                        });
                     // Straight into chord capture for the new row.
                     this.capturing = Some(index);
                     this.focus.focus(window, cx);
@@ -1174,9 +1225,15 @@ impl StudioView {
         // Slash commands.
         let mut cmds = div().row().flex_col().gap(px(SPACE_8_PX));
         for (i, c) in cfg.launcher.commands.iter().enumerate() {
-            let trigger = self.list_field(format!("cmd-{i}-trigger"), &c.trigger, t("trigger"), Rc::new(move |cfg, v| if let Some(c) = cfg.launcher.commands.get_mut(i) { c.trigger = v.trim().trim_start_matches('/').to_string() }), cx);
-            let title = self.list_field(format!("cmd-{i}-title"), &c.title, t("Title"), Rc::new(move |cfg, v| if let Some(c) = cfg.launcher.commands.get_mut(i) { c.title = v }), cx);
-            let action = self.list_field(format!("cmd-{i}-action"), &c.action, "url:https://…{query}", Rc::new(move |cfg, v| if let Some(c) = cfg.launcher.commands.get_mut(i) { c.action = v.trim().to_string() }), cx);
+            let trigger = self.list_field(format!("cmd-{i}-trigger"), &c.trigger, t("trigger"), Rc::new(move |cfg, v| {
+                    if let Some(c) = cfg.launcher.commands.get_mut(i) { c.trigger = v.trim().trim_start_matches('/').to_string() }
+                }), cx);
+            let title = self.list_field(format!("cmd-{i}-title"), &c.title, t("Title"), Rc::new(move |cfg, v| {
+                    if let Some(c) = cfg.launcher.commands.get_mut(i) { c.title = v }
+                }), cx);
+            let action = self.list_field(format!("cmd-{i}-action"), &c.action, "url:https://…{query}", Rc::new(move |cfg, v| {
+                    if let Some(c) = cfg.launcher.commands.get_mut(i) { c.action = v.trim().to_string() }
+                }), cx);
             cmds = cmds.child(
                 div()
                     .p(px(SPACE_10_PX))
@@ -1211,8 +1268,12 @@ impl StudioView {
         // Skills.
         let mut skills = div().row().flex_col().gap(px(SPACE_8_PX));
         for (i, sk) in cfg.launcher.skills.iter().enumerate() {
-            let name = self.list_field(format!("skill-{i}-name"), &sk.name, t("Name"), Rc::new(move |cfg, v| if let Some(s) = cfg.launcher.skills.get_mut(i) { s.name = v }), cx);
-            let desc = self.list_field(format!("skill-{i}-desc"), &sk.description, t("What it does"), Rc::new(move |cfg, v| if let Some(s) = cfg.launcher.skills.get_mut(i) { s.description = v }), cx);
+            let name = self.list_field(format!("skill-{i}-name"), &sk.name, t("Name"), Rc::new(move |cfg, v| {
+                    if let Some(s) = cfg.launcher.skills.get_mut(i) { s.name = v }
+                }), cx);
+            let desc = self.list_field(format!("skill-{i}-desc"), &sk.description, t("What it does"), Rc::new(move |cfg, v| {
+                    if let Some(s) = cfg.launcher.skills.get_mut(i) { s.description = v }
+                }), cx);
             let steps = self.list_field(
                 format!("skill-{i}-steps"),
                 &sk.steps.join("; "),
@@ -1285,7 +1346,9 @@ impl StudioView {
             Some((q, names)) if *q == query => names.clone(),
             _ => {
                 let names: Rc<[String]> = if query.is_empty() {
-                    SUGGESTED.iter().filter(|n| **n == "distro" || mandara_ui::icon_theme::resolve(n, None, false).is_some()).map(|n| n.to_string()).collect()
+                    SUGGESTED.iter().filter(|n| {
+                            **n == "distro" || mandara_ui::icon_theme::resolve(n, None, false).is_some()
+                        }).map(|n| n.to_string()).collect()
                 } else {
                     mandara_ui::icon_theme::all_names().into_iter().filter(|n| n.to_lowercase().contains(&query)).take(ICON_MATCHES_MAX).collect()
                 };
@@ -1316,16 +1379,24 @@ impl StudioView {
                         .hover(|s| s.bg(p.primary.with_alpha(ALPHA_10).hsla()))
                         .child(mandara_ui::icons::any_icon(&spec, ICON_22_PX, if active { p.primary } else { p.on_surface })),
                 )
-                .when_some(label, |el, l| el.child(div().w_full().text_center().truncate().text_size(px(TEXT_10_5_PX)).text_color(p.on_surface_variant.hsla()).child(l)))
+                .when_some(label, |el, l| {
+                        el.child(div().w_full().text_center().truncate().text_size(px(TEXT_10_5_PX)).text_color(p.on_surface_variant.hsla()).child(l))
+                    })
                 .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
                     let v = value.clone();
                     update_config(cx, |c| c.appearance.launcher_icon = v);
                 }))
         };
-        let section_title = |t: &'static str, p: &MandaraPalette| div().pt(px(SPACE_6_PX)).text_size(px(TEXT_11_5_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface_variant.hsla()).child(t);
+        let section_title = |t: &'static str, p: &MandaraPalette| {
+            div().pt(px(SPACE_6_PX)).text_size(px(TEXT_11_5_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface_variant.hsla()).child(t)
+        };
         let mut bundled: Vec<_> = BUNDLED.iter().map(|n| tile(n.to_string(), None, p, cx)).collect();
-        bundled.extend(mandara_ui::launcher_art::ICONS.iter().map(|icon| tile(icon.spec.to_string(), Some(icon.name.replace('-', " ")), p, cx)));
-        let themed: Vec<_> = theme_names.iter().map(|n| tile(n.clone(), Some(if n == "distro" { t("Distro logo").into() } else { n.trim_end_matches("-symbolic").to_string() }), p, cx)).collect();
+        bundled.extend(mandara_ui::launcher_art::ICONS.iter().map(|icon| {
+            tile(icon.spec.to_string(), Some(icon.name.replace('-', " ")), p, cx)
+        }));
+        let themed: Vec<_> = theme_names.iter().map(|n| {
+                tile(n.clone(), Some(if n == "distro" { t("Distro logo").into() } else { n.trim_end_matches("-symbolic").to_string() }), p, cx)
+            }).collect();
         let empty = themed.is_empty();
         // Inside the settings card (its padding + the picker row's) and the picker's own padding.
         let fit = grid::fit(self.page.column_w - 2.0 * (SPACE_6_PX + SPACE_18_PX + SPACE_14_PX), ICON_TILE_GRID);
@@ -1466,14 +1537,18 @@ impl StudioView {
         let handle = window.window_handle();
         perf::poll_while(&self.perf, move |cx| {
             let visible = cx.update_window(handle, |_, window, _| window.is_visible()).unwrap_or(false);
-            this.read_with(cx, |view, _| activity::visible_page(view.section, &activity::PROCESS_PAGES, !view.query.is_empty(), visible)).unwrap_or(false)
+            this.read_with(cx, |view, _| {
+                    activity::visible_page(view.section, &activity::PROCESS_PAGES, !view.query.is_empty(), visible)
+                }).unwrap_or(false)
         }, cx);
     }
 
     fn performance(&self, p: &MandaraPalette, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         self.poll_performance(window, cx);
         let m = self.perf.read(cx);
-        let card = || div().rounded(px(RADIUS_18_PX)).bg(p.surface_container.hsla()).p(px(SPACE_20_PX)).row().flex_col().gap(px(SPACE_14_PX));
+        let card = || {
+            div().rounded(px(RADIUS_18_PX)).bg(p.surface_container.hsla()).p(px(SPACE_20_PX)).row().flex_col().gap(px(SPACE_14_PX))
+        };
         let Some(now) = m.latest() else {
             return card()
                 .child(div().font_weight(FontWeight::MEDIUM).child(t("The shell isn't running")))
@@ -1540,7 +1615,11 @@ impl StudioView {
                     ),
                     tile(t("Memory"), "memory", format!("{:.0} MB", now.rss_mib), tf("resident · peak {peak} MB", &[("peak", &format!("{:.0}", m.peak_rss()))]), &mem_hist, 1.0, p.tertiary)]
                 .into_iter()
-                .chain(now.vram_mib.map(|v| tile(t("Video memory"), "monitor", format!("{v:.0} MB"), tf("on the GPU · peak {peak} MB", &[("peak", &format!("{:.0}", m.peak_vram()))]), &vram_hist, 1.0, p.secondary)))),
+                .chain(now.vram_mib.map(|v| {
+                            tile(t("Video memory"), "monitor", format!("{v:.0} MB"), tf("on the GPU · peak {peak} MB", &[("peak", &format!("{:.0}", m.peak_vram()))]), &vram_hist, 1.0, p.secondary,
+                            )
+                        })),
+                    ),
             );
         let studio = card().child(
             div()
@@ -1596,7 +1675,9 @@ impl StudioView {
         let build = mandara_core::build_info(cx);
         let registry = cx.global::<PluginRegistry>();
         let commands = registry.commands.all().len();
-        let first_party = registry.manifests().filter(|m| m.origin == PluginOrigin::Builtin && !HIDDEN_PLUGINS.contains(&m.id.as_str())).count();
+        let first_party = registry.manifests().filter(|m| {
+                m.origin == PluginOrigin::Builtin && !HIDDEN_PLUGINS.contains(&m.id.as_str())
+            }).count();
         let compositor = mandara_compositor::detected().map(|k| format!("{k:?}")).unwrap_or_else(|| t("none").into());
         let fonts = mandara_ui::fonts::fonts(cx);
         let link = |id: &'static str, glyph: &'static str, label: SharedString, url: &'static str| {
@@ -1692,7 +1773,9 @@ impl StudioView {
                 .py(px(SPACE_10_PX))
                 .child(div().flex_none().text_color(p.on_surface_variant.hsla()).child(k))
                 // Long values (the config path) ellipsize instead of overflowing a narrow window.
-                .child(div().min_w(px(0.0)).truncate().font_weight(FontWeight::MEDIUM).when(mono, |el| el.font_family(fonts.mono.clone()).text_size(px(TEXT_12_5_PX))).child(v))
+                .child(div().min_w(px(0.0)).truncate().font_weight(FontWeight::MEDIUM).when(mono, |el| {
+                            el.font_family(fonts.mono.clone()).text_size(px(TEXT_12_5_PX))
+                        }).child(v))
         };
         let details = div()
             .rounded(px(RADIUS_18_PX))
@@ -1781,6 +1864,7 @@ impl Render for StudioView {
         if !self.query.is_empty() || !window.is_visible() {
             self.agent_page = None;
             self.motion_preview = None;
+            self.app_templates = Default::default();
         }
         let fonts = mandara_ui::fonts::fonts(cx);
         // Choices measure their labels in Studio's font this frame.
@@ -1841,7 +1925,9 @@ impl Render for StudioView {
                     let widgets = if registry::running_compositor() == Some(mandara_config::compositor::Target::KWin) {
                         compositor_page::card(&p).p(px(SPACE_16_PX)).child(compositor_page::heading(t("Widgets"), t("Plasma's secure locker controls this screen. Custom lock widgets are available with Mandara's native locker on supported compositors."), &p)).into_any_element()
                     } else {
-                        auth_widgets::panel("lock", &cfg.lock.widgets, Rc::new(|edit, cx| update_config(cx, |cfg| edit.apply(&mut cfg.lock.widgets))), &p, cx)
+                        auth_widgets::panel("lock", &cfg.lock.widgets, Rc::new(|edit, cx| {
+                                update_config(cx, |cfg| edit.apply(&mut cfg.lock.widgets))
+                            }), &p, cx)
                     };
                     div().row().flex_col().gap(px(SPACE_26_PX)).child(rows).child(widgets).into_any_element()
                 }
@@ -1873,9 +1959,7 @@ impl Render for StudioView {
                 // The wallpaper on the desktop first, then tabs
                 // (wallpaper_page.rs).
                 Section::Wallpaper => self.wallpaper_page(&cfg, &p, window, cx),
-                section => {
-                    self.rows(registry::in_section(section), &cfg, &p, cx)
-                }
+                section => self.rows(registry::in_section(section), &cfg, &p, cx),
             };
             (self.section.label(), body)
         };
@@ -1891,7 +1975,9 @@ impl Render for StudioView {
                 .items_center()
                 .justify_center()
                 .cursor_pointer()
-                .hover(move |s| s.bg(if danger { p.urgent_coral.with_alpha(ALPHA_90).hsla() } else { p.on_surface.with_alpha(ALPHA_8).hsla() }))
+                .hover(move |s| {
+                    s.bg(if danger { p.urgent_coral.with_alpha(ALPHA_90).hsla() } else { p.on_surface.with_alpha(ALPHA_8).hsla() })
+                })
                 .child(icon(icon_name, ICON_14_PX, p.on_surface_variant))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         };
@@ -1923,7 +2009,9 @@ impl Render for StudioView {
             const SCROLL_SETTLE: std::time::Duration = std::time::Duration::from_secs(3);
             let handle = self.content_scroll.clone();
             if OPENED.get_or_init(std::time::Instant::now).elapsed() >= SCROLL_SETTLE {
-                SCROLLED.call_once(|| handle.set_offset(gpui::point(px(0.0), -px(y).min(handle.max_offset().y))));
+                SCROLLED.call_once(|| {
+                    handle.set_offset(gpui::point(px(0.0), -px(y).min(handle.max_offset().y)))
+                });
             } else if !SCROLLED.is_completed() {
                 window.request_animation_frame();
             }
@@ -2102,7 +2190,11 @@ pub(crate) fn looks_yours_watch(cx: &mut gpui::App) {
 pub(crate) fn group_rows<'a>(settings: impl IntoIterator<Item = &'a Setting>) -> Vec<(&'static str, Vec<&'a Setting>)> {
     let mut groups: Vec<(&'static str, Vec<&'a Setting>)> = Vec::new();
     for s in settings {
-        match groups.iter_mut().find(|(g, list)| *g == s.group && list.first().is_some_and(|f| f.section == s.section && (s.section != Section::Bars || registry::bars::BarsTab::for_path(f.path) == registry::bars::BarsTab::for_path(s.path)))) {
+        match groups.iter_mut().find(|(g, list)| {
+            *g == s.group && list.first().is_some_and(|f| {
+                    f.section == s.section && (s.section != Section::Bars || registry::bars::BarsTab::for_path(f.path) == registry::bars::BarsTab::for_path(s.path))
+                })
+        }) {
             Some((_, list)) => list.push(s),
             None => groups.push((s.group, vec![s])),
         }
@@ -2152,7 +2244,9 @@ fn language_downloads(p: &MandaraPalette, _cx: &mut Context<StudioView>) -> Opti
             )
         })
         .collect();
-    (!rows.is_empty()).then(|| div().row().flex_col().gap(px(SPACE_8_PX)).children(rows).into_any_element())
+    (!rows.is_empty()).then(|| {
+        div().row().flex_col().gap(px(SPACE_8_PX)).children(rows).into_any_element()
+    })
 }
 
 /// Opens a web link in the default browser, off the UI thread.
@@ -2210,7 +2304,9 @@ mod group_order_tests {
         }
         // Bar: spacing and the frame split out of a 15-setting Layout.
         let bar = group_rows(registry::in_section(Section::Bars));
-        let size = |name: &str| bar.iter().find(|(g, _)| *g == name).map_or(0, |(_, l)| l.len());
+        let size = |name: &str| {
+            bar.iter().find(|(g, _)| *g == name).map_or(0, |(_, l)| l.len())
+        };
         assert!(size("Layout") <= 7 && size("Spacing") >= 4 && size("Screen frame") == 3, "{:?}", bar.iter().map(|(g, l)| (*g, l.len())).collect::<Vec<_>>());
     }
 }

@@ -4300,6 +4300,7 @@ dependencies = [
  "mandara-install",
  "mandara-theme",
  "mandara-version",
+ "md-5",
  "memmap2",
  "num-bigint-dig",
  "oo7",
@@ -4329,6 +4330,7 @@ dependencies = [
  "tokenizers 0.21.4",
  "toktrie_hf_tokenizers",
  "toml 1.2.0+spec-1.1.0",
+ "toml_edit 0.25.18+spec-1.1.0",
  "tracing",
  "tract-onnx",
  "ureq",
@@ -4391,9 +4393,11 @@ dependencies = [
  "image",
  "mandara-media",
  "material-colors",
+ "minijinja",
  "palette",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "toml 1.2.0+spec-1.1.0",
  "tracing",
@@ -4626,9 +4630,9 @@ dependencies = [
 
 [[package]]
 name = "minijinja"
-version = "3.0.5"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00f5a04892e86ddb4fc254e9160835370b63a0d44042d3ab4725bc2dbcbab136"
+checksum = "509eeb2603a84eccabb4d75f6ec8ba23b46bbf441aaeb863d6b83a5887fd51e4"
 dependencies = [
  "serde",
 ]

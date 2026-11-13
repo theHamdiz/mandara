@@ -105,11 +105,25 @@ impl StudioView {
     /// The "Other apps" section: a header and the tile groups.
     pub(super) fn app_themes_section(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let fonts = mandara_ui::fonts::fonts(cx);
-        let on_count = GROUPS.iter().flat_map(|(_, tiles)| tiles.iter()).filter(|tile| registry::by_path(tile.path).is_some_and(|s| registry::get(cfg, s).as_bool() == Some(true))).count();
-        let badge = (on_count > 0).then(|| super::compositor_page::badge(mandara_i18n::tf("{count} on", &[("count", &on_count)]), p.primary).into_any_element());
+        let on_count = GROUPS.iter().flat_map(|(_, tiles)| tiles.iter()).filter(|tile| {
+                registry::by_path(tile.path).is_some_and(|s| registry::get(cfg, s).as_bool() == Some(true))
+            })
+            .count()
+            + cfg.integrations.app_themes.enabled.len()
+            + cfg
+                .integrations
+                .app_themes
+                .user
+                .values()
+                .filter(|entry| entry.enabled).count();
+        let badge = (on_count > 0).then(|| {
+            super::compositor_page::badge(mandara_i18n::tf("{count} on", &[("count", &on_count)]), p.primary).into_any_element()
+        });
         let head = section_head(
             t("Other apps"),
-            t("Mandara writes nothing to other apps until you switch them on. Switching one off takes back exactly what Mandara changed, and any file it replaced comes back from its backup."),
+            t(
+                "Choose the apps that follow your palette. Managed files are backed up and restored when you switch them off; imported setup commands follow their own undo instructions.",
+            ),
             badge.into_iter().collect(),
             fonts.display.clone(),
             p,
@@ -122,7 +136,7 @@ impl StudioView {
             // tiles, so the grid itself stays one even line of tiles.
             col = col.child(div().row().flex_col().gap(px(SPACE_8_PX)).child(group_title(tr(title), p)).child(fit.render(items)).children(details.into_iter().flatten()));
         }
-        col.into_any_element()
+        col.child(self.app_templates(cfg, p, cx)).into_any_element()
     }
 
     /// One app: glyph, name, disclosure chevron and switch; and, when
@@ -140,7 +154,9 @@ impl StudioView {
                 .cursor_pointer()
                 .flex_none()
                 .child(mandara_ui::plugins::network::switch(on, p))
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.apply(&setting, Value::from(!on), cx)))
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    this.apply(&setting, Value::from(!on), cx)
+                }))
         };
         let chevron = div()
             .id(SharedString::from(format!("app-theme-more-{path}")))
@@ -203,7 +219,9 @@ impl StudioView {
                                 .flex_none()
                                 .when(!on, |el| el.opacity(ALPHA_45))
                                 .child(mandara_ui::plugins::network::switch(applied, p))
-                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.apply(&apply, Value::from(!applied), cx))),
+                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                    this.apply(&apply, Value::from(!applied), cx)
+                                })),
                         ),
                 );
             }

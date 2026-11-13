@@ -8,9 +8,14 @@ use mandara_theme::Color;
 use tiny_skia::{FillRule, LineCap, LineJoin, Paint, PathBuilder, Pixmap, PixmapMut, PixmapPaint, Stroke, Transform};
 
 use super::layout::{Composition, InkRole, Mark, MarkKind, Measure, TextStyle};
-use crate::backdrop::paint::{FontNames, icon_pixmap};
+use crate::backdrop::paint::{WidgetFonts, icon_pixmap};
+#[cfg(test)]
+use crate::backdrop::paint::FontNames;
 use crate::desktop::Ink;
 use crate::lock::paint::{self as lp, Font, TextPainter};
+
+mod raster;
+pub use raster::RasterEffects;
 
 /// Shadow / glow: blur radius and shadow drop, reference px; their opacity.
 const EFFECT_BLUR_PX: f32 = 7.0;
@@ -78,7 +83,9 @@ impl Inks {
             InkRole::Paper => paper(),
             InkRole::OnPaper => Color::oklch(ON_PAPER_L, ON_PAPER_C, PAPER_HUE),
             InkRole::OnPlate => self.on_plate,
-            InkRole::Pastel(turn) => Color::oklch(PASTEL_L, PASTEL_C, self.accent.hue() + f32::from(turn)),
+            InkRole::Pastel(turn) => {
+                Color::oklch(PASTEL_L, PASTEL_C, self.accent.hue() + f32::from(turn))
+            }
             InkRole::Rgb(v) => Color::from_rgba8((v >> 16) as u8, (v >> 8) as u8, v as u8, u8::MAX),
         }
     }
@@ -136,29 +143,30 @@ pub fn inks(look: &Look, auto: &Ink, on_surface: Color, surface: Color) -> Inks 
 }
 
 /// The font family of a role (`fonts.custom` holds the widget's own).
-pub fn family(fonts: &FontNames, role: FontRole) -> &str {
+pub fn family<'a>(fonts: &WidgetFonts<'a>, role: FontRole) -> &'a str {
+    let role = if fonts.role_override == FontRole::Widgets { role } else { fonts.role_override };
     match role {
-        FontRole::Widgets => &fonts.widgets,
-        FontRole::Display => &fonts.display,
-        FontRole::Ui => &fonts.ui,
-        FontRole::Arabic => &fonts.arabic,
-        FontRole::Mono => &fonts.mono,
-        FontRole::Scripture if fonts.scripture.is_empty() => &fonts.arabic,
-        FontRole::Scripture => &fonts.scripture,
-        FontRole::Hadith if fonts.hadith.is_empty() => &fonts.arabic,
-        FontRole::Hadith => &fonts.hadith,
-        FontRole::Custom if fonts.custom.is_empty() => &fonts.widgets,
-        FontRole::Custom => &fonts.custom,
+        FontRole::Widgets => &fonts.names.widgets,
+        FontRole::Display => &fonts.names.display,
+        FontRole::Ui => &fonts.names.ui,
+        FontRole::Arabic => &fonts.names.arabic,
+        FontRole::Mono => &fonts.names.mono,
+        FontRole::Scripture if fonts.names.scripture.is_empty() => &fonts.names.arabic,
+        FontRole::Scripture => &fonts.names.scripture,
+        FontRole::Hadith if fonts.names.hadith.is_empty() => &fonts.names.arabic,
+        FontRole::Hadith => &fonts.names.hadith,
+        FontRole::Custom if fonts.custom.is_empty() => &fonts.names.widgets,
+        FontRole::Custom => fonts.custom,
     }
 }
 
 /// [`Measure`] with the real fonts.
-pub struct Measurer<'a> {
+pub struct Measurer<'a, 'fonts> {
     pub text: &'a mut TextPainter,
-    pub fonts: &'a FontNames,
+    pub fonts: &'a WidgetFonts<'fonts>,
 }
 
-impl Measure for Measurer<'_> {
+impl Measure for Measurer<'_, '_> {
     fn measure(&mut self, text: &str, s: &TextStyle) -> (f32, f32) {
         let font = Font { family: family(self.fonts, s.role), size: s.size, weight: s.weight, tabular: true, tracking: s.tracking };
         self.text.measure(text, &font)
@@ -187,9 +195,9 @@ impl Drop {
 }
 
 /// How a plane is painted.
-pub struct Style {
-    /// The widget's families ([`FontNames::for_look`]).
-    pub fonts: FontNames,
+pub struct Style<'a> {
+    /// The widget's families ([`crate::backdrop::paint::FontNames::for_look`]).
+    pub fonts: WidgetFonts<'a>,
     pub inks: Inks,
     pub opacity: f32,
     pub effect: Effect,
@@ -205,7 +213,9 @@ pub struct Style {
 pub fn effect_margin(effect: Effect, k: f32) -> f32 {
     match effect {
         Effect::None => AA_MARGIN_PX * k,
-        Effect::Shadow | Effect::Glow => (EFFECT_BLUR_PX * BLUR_PASSES as f32 + SHADOW_DROP_PX + AA_MARGIN_PX) * k,
+        Effect::Shadow | Effect::Glow => {
+            (EFFECT_BLUR_PX * BLUR_PASSES as f32 + SHADOW_DROP_PX + AA_MARGIN_PX) * k
+        }
     }
 }
 
@@ -213,13 +223,15 @@ pub fn effect_margin(effect: Effect, k: f32) -> f32 {
 /// physical px.
 pub fn look_margin(look: Option<&Look>, k: f32) -> f32 {
     let effect = effect_margin(look.map(|l| l.effect).unwrap_or_default(), k);
-    let drop = look.and_then(|l| Drop::of(l, k)).map_or(0.0, |d| d.offset.0.abs().max(d.offset.1.abs()) + d.blur + AA_MARGIN_PX * k);
+    let drop = look.and_then(|l| Drop::of(l, k)).map_or(0.0, |d| {
+        d.offset.0.abs().max(d.offset.1.abs()) + d.blur + AA_MARGIN_PX * k
+    });
     effect.max(drop)
 }
 
 /// Paints the marks with `live == live` (every mark for `None`) into
 /// `pm`, whose top-left is at `origin` in the composition's coordinates.
-pub fn paint(pm: &mut PixmapMut<'_>, text: &mut TextPainter, comp: &Composition, live: Option<bool>, origin: (f32, f32), st: &Style) {
+pub fn paint(pm: &mut PixmapMut<'_>, text: &mut TextPainter, comp: &Composition, live: Option<bool>, origin: (f32, f32), st: &Style<'_>) {
     let marks: Vec<&Mark> = comp.marks.iter().filter(|m| live.is_none_or(|l| m.live == l) && m.opacity > 0.0).collect();
     if marks.is_empty() {
         return;
@@ -227,7 +239,9 @@ pub fn paint(pm: &mut PixmapMut<'_>, text: &mut TextPainter, comp: &Composition,
     let shift = (-origin.0, -origin.1);
     // Shapes on paper or a plate don't cast their own shadow: only what
     // stands on the desktop does.
-    let casts = |m: &Mark| !matches!(m.ink, InkRole::OnAccent | InkRole::OnPaper | InkRole::OnPlate);
+    let casts = |m: &Mark| {
+        !matches!(m.ink, InkRole::OnAccent | InkRole::OnPaper | InkRole::OnPlate)
+    };
     let drops = |m: &&&Mark| casts(m) && m.casts;
     if let Some(d) = st.drop {
         let flat = Inks::flat(st.inks.drop, st.inks.drop);
@@ -295,7 +309,7 @@ fn polyline(pts: impl Iterator<Item = (f32, f32)>, close: bool) -> Option<tiny_s
     pb.finish()
 }
 
-fn draw(pm: &mut PixmapMut<'_>, text: &mut TextPainter, m: &Mark, (dx, dy): (f32, f32), inks: &Inks, fonts: &FontNames, opacity: f32) {
+fn draw(pm: &mut PixmapMut<'_>, text: &mut TextPainter, m: &Mark, (dx, dy): (f32, f32), inks: &Inks, fonts: &WidgetFonts<'_>, opacity: f32) {
     let color = inks.of(m.ink);
     let alpha = (m.opacity * opacity).clamp(0.0, 1.0);
     let t = Transform::identity();
@@ -307,7 +321,8 @@ fn draw(pm: &mut PixmapMut<'_>, text: &mut TextPainter, m: &Mark, (dx, dy): (f32
         MarkKind::SlantText { text: s, style, x, y, w, h, slant } => {
             // Shaped upright into a scratch line, then sheared into place.
             let font = Font { family: family(fonts, style.role), size: style.size, weight: style.weight, tabular: true, tracking: style.tracking };
-            let Some(mut line) = Pixmap::new(w.ceil().max(1.0) as u32, h.ceil().max(1.0) as u32) else { return };
+            let Some(mut line) = Pixmap::new(w.ceil().max(1.0) as u32, h.ceil().max(1.0) as u32) else { return;
+            };
             text.draw(&mut line.as_mut(), s, &font, 0.0, 0.0, color, 1.0);
             // Leaning right means the top moves right: x' = x − slant·(y − h).
             let t = Transform::from_row(1.0, 0.0, -slant, 1.0, x + dx + slant * h, y + dy);
@@ -317,7 +332,8 @@ fn draw(pm: &mut PixmapMut<'_>, text: &mut TextPainter, m: &Mark, (dx, dy): (f32
         MarkKind::SideText { text: s, style, x, y, w, h, clockwise } => {
             // Shaped upright into a scratch line, then turned into place.
             let font = Font { family: family(fonts, style.role), size: style.size, weight: style.weight, tabular: true, tracking: style.tracking };
-            let Some(mut line) = Pixmap::new(h.ceil().max(1.0) as u32, w.ceil().max(1.0) as u32) else { return };
+            let Some(mut line) = Pixmap::new(h.ceil().max(1.0) as u32, w.ceil().max(1.0) as u32) else { return;
+            };
             // Opaque first, faded as a whole: joined glyphs overlap, and
             // fading each would brighten the joins.
             text.draw(&mut line.as_mut(), s, &font, 0.0, 0.0, color, 1.0);
@@ -349,7 +365,9 @@ fn draw(pm: &mut PixmapMut<'_>, text: &mut TextPainter, m: &Mark, (dx, dy): (f32
         MarkKind::Plate { x, y, w, h, radius, rim, shape } => {
             // A rounded rectangle keeps its exact arcs (as plates always
             // were); any other shape is the shared outline.
-            let path = |x: f32, y: f32, w: f32, h: f32, r: f32| if shape.is_rect() { lp::rounded_rect(x, y, w, h, r) } else { shape.skia_path(x, y, w, h) };
+            let path = |x: f32, y: f32, w: f32, h: f32, r: f32| {
+                if shape.is_rect() { lp::rounded_rect(x, y, w, h, r) } else { shape.skia_path(x, y, w, h) }
+            };
             lp::fill(pm, &path(x + dx, y + dy, *w, *h, *radius), &solid(color, alpha));
             // (Not in the flat shadow / glow pass, where every ink is one.)
             if *rim > 0.0 && inks.fg != inks.plate {
@@ -373,7 +391,8 @@ fn draw(pm: &mut PixmapMut<'_>, text: &mut TextPainter, m: &Mark, (dx, dy): (f32
         MarkKind::Image { x, y, w, h, pic, shape, turn } => draw_image(pm, &pic.pixmap, (x + dx, y + dy, *w, *h), *shape, *turn, alpha),
         MarkKind::Mask { x, y, w, h, mask } => {
             let src = &mask.pixmap;
-            let Some(mut tinted) = Pixmap::new(src.width(), src.height()) else { return };
+            let Some(mut tinted) = Pixmap::new(src.width(), src.height()) else { return;
+            };
             let [r, g, b, _] = color.to_rgba8();
             for (out, m) in tinted.pixels_mut().iter_mut().zip(src.pixels()) {
                 let a = m.alpha();
@@ -410,7 +429,9 @@ fn draw(pm: &mut PixmapMut<'_>, text: &mut TextPainter, m: &Mark, (dx, dy): (f32
                 return;
             }
             let n = values.len() - 1;
-            let pt = |i: usize, v: f32| (x + dx + w * i as f32 / n as f32, y + dy + h * (1.0 - v.clamp(0.0, 1.0)));
+            let pt = |i: usize, v: f32| {
+                (x + dx + w * i as f32 / n as f32, y + dy + h * (1.0 - v.clamp(0.0, 1.0)))
+            };
             let line = values.iter().enumerate().map(|(i, v)| pt(i, *v));
             let area = line.clone().chain([(x + dx + w, y + dy + h), (x + dx, y + dy + h)]);
             if let Some(p) = polyline(area, true) {
@@ -448,34 +469,40 @@ fn draw_image(pm: &mut PixmapMut<'_>, image: &Pixmap, (x, y, w, h): (f32, f32, f
 
 /// In-place separable box blur of a premultiplied plane, `passes` times.
 pub fn box_blur(pm: &mut PixmapMut<'_>, radius: usize) {
+    box_blur_with(pm, radius, &mut Vec::new());
+}
+
+fn box_blur_with(pm: &mut PixmapMut<'_>, radius: usize, line: &mut Vec<[u32; 4]>) {
     let (w, h) = (pm.width() as usize, pm.height() as usize);
     if w == 0 || h == 0 || radius == 0 {
         return;
     }
     let data = pm.data_mut();
-    let mut line: Vec<[u32; 4]> = vec![[0; 4]; w.max(h)];
+    line.resize(w.max(h), [0; 4]);
     let win = (2 * radius + 1) as u32;
     let mut blur_1d = |data: &mut [u8], start: usize, stride: usize, len: usize| {
         for (i, px) in line.iter_mut().take(len).enumerate() {
             let o = (start + i * stride) * 4;
             *px = [data[o] as u32, data[o + 1] as u32, data[o + 2] as u32, data[o + 3] as u32];
         }
-        let at = |i: isize, line: &[[u32; 4]]| if i < 0 || i as usize >= len { [0; 4] } else { line[i as usize] };
+        let at = |i: isize, line: &[[u32; 4]]| {
+            if i < 0 || i as usize >= len { [0; 4] } else { line[i as usize]
+            }
+        };
         let mut sum = [0u32; 4];
         for i in -(radius as isize)..=(radius as isize) {
-            let p = at(i, &line);
+            let p = at(i, line);
             for c in 0..4 {
                 sum[c] += p[c];
             }
         }
-        let src: Vec<[u32; 4]> = line[..len].to_vec();
         for i in 0..len {
             let o = (start + i * stride) * 4;
             for c in 0..4 {
                 data[o + c] = (sum[c] / win) as u8;
             }
-            let add = at(i as isize + radius as isize + 1, &src);
-            let sub = at(i as isize - radius as isize, &src);
+            let add = at(i as isize + radius as isize + 1, line);
+            let sub = at(i as isize - radius as isize, line);
             for c in 0..4 {
                 sum[c] = sum[c] + add[c] - sub[c];
             }
@@ -520,6 +547,20 @@ pub fn rotated_size((w, h): (f32, f32), degrees: f32) -> (f32, f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn explicit_widget_fonts_override_fixed_digit_and_caption_roles() {
+        let fonts = FontNames::new("Interface","Display","Arabic","Monospace");
+        let look = Look::default();
+        let automatic = fonts.for_look(Some(&look));
+        assert_eq!(family(&automatic,FontRole::Mono),"Monospace");
+        assert_eq!(family(&automatic,FontRole::Widgets),"Display");
+        for (selected,expected) in [(FontRole::Ui,"Interface"),(FontRole::Display,"Display"),(FontRole::Arabic,"Arabic"),(FontRole::Mono,"Monospace"),(FontRole::Custom,"Personal font")] {
+            let look = Look { font:selected,font_family:"Personal font".into(),..Default::default() };
+            let resolved = fonts.for_look(Some(&look));
+            for role in [FontRole::Mono,FontRole::Widgets,FontRole::Ui,FontRole::Display,FontRole::Custom] { assert_eq!(family(&resolved,role),expected); }
+        }
+    }
 
     #[test]
     fn parses_custom_colours() {

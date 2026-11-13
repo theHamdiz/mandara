@@ -81,7 +81,9 @@ pub fn clock(c: &ClockWidget, s: &ClockStrings, k: f32, m: &mut dyn Measure) -> 
         }
     }
     let y = if c.face == ClockFace::Binary { (BIT_PITCH * BIT_WEIGHTS.len() as f32 + CAPTION + CAPTION_GAP) * k } else { (DIGIT_H + CAPTION_GAP) * k };
-    text(&mut marks, &format!("{} · {}", s.weekday_short, s.day_month), c.look.font, CAPTION * k, width / 2.0, y, InkRole::Fg, m);
+    if !s.day_month.is_empty() {
+        text(&mut marks, &format!("{} · {}", s.weekday_short, s.day_month), c.look.font, CAPTION * k, width / 2.0, y, InkRole::Fg, m);
+    }
     marks
 }
 
@@ -89,6 +91,19 @@ pub fn clock(c: &ClockWidget, s: &ClockStrings, k: f32, m: &mut dyn Measure) -> 
 mod tests {
     use super::*;
     use super::super::layout::tests::{Fixed, strings};
+
+    #[test]
+    fn no_date_omits_the_entire_caption_on_mechanical_faces() {
+        for face in [ClockFace::SplitFlap, ClockFace::Nixie, ClockFace::Binary] {
+            let widget = ClockWidget { face, ..Default::default() };
+            let mut value = strings();
+            let caption = format!("{} · {}",value.weekday_short,value.day_month);
+            let contains_caption = |marks: &[Mark]| marks.iter().any(|mark|matches!(&mark.kind,MarkKind::Text { text,.. } if text == &caption));
+            assert!(contains_caption(&clock(&widget,&value,1.0,&mut Fixed)));
+            value.day_month.clear();
+            assert!(!clock(&widget,&value,1.0,&mut Fixed).iter().any(|mark|matches!(&mark.kind,MarkKind::Text { text,.. } if text.contains(&value.weekday_short))));
+        }
+    }
 
     #[test]
     fn phrases_roll_over_at_the_hour_and_midnight() {

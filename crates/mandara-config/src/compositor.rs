@@ -208,7 +208,9 @@ impl Target {
             Target::Mango => "source_optional=~/.config/mandara/generated/mango.conf".into(),
             // An absolute path works from niri 25.11 (`~/` needs 26.04).
             Target::Niri => niri_include_line(&self.generated_file().display().to_string(), installed_version(Target::Niri)),
-            Target::Hyprland if Self::hyprland_lua() => hyprland_lua_include(&self.generated_file().display().to_string()),
+            Target::Hyprland if Self::hyprland_lua() => {
+                hyprland_lua_include(&self.generated_file().display().to_string())
+            }
             Target::Hyprland => "source = ~/.config/mandara/generated/hyprland.conf".into(),
             // A table rather than a line: shown as the two lines to add when
             // the config has no `[include.optional]` yet.
@@ -824,8 +826,7 @@ impl Default for CompositorConfig {
         Self {
             manage: true,
             window_rules: vec![
-                WindowRule { app_id: Some("^org\\.mandara\\.studio$".into()), floating: Some(true), ..Default::default() },
-            ],
+                WindowRule { app_id: Some("^org\\.mandara\\.studio$".into()), floating: Some(true), ..Default::default() }],
             tag_rules: Vec::new(),
             keybinds: default_keybinds(),
             keybinds_version: crate::upgrade::KEYBIND_DEFAULTS_VERSION,
@@ -991,7 +992,11 @@ pub fn user_autostarts(target: Target) -> bool {
     if target == Target::Umbriel {
         // `general.autostart` entries (an array, possibly over several
         // lines) rather than keyword lines.
-        return texts.iter().any(|t| crate::conflicts::umbriel_autostarts(t).iter().any(|(_, cmd)| cmd.split_whitespace().any(|w| w == "mandara" || w.ends_with("/mandara"))));
+        return texts.iter().any(|t| {
+            crate::conflicts::umbriel_autostarts(t).iter().any(|(_, cmd)| {
+                    cmd.split_whitespace().any(|w| w == "mandara" || w.ends_with("/mandara"))
+                })
+        });
     }
     starts_mandara(&texts.join("\n"))
 }
@@ -1001,7 +1006,9 @@ pub fn user_autostarts(target: Target) -> bool {
 pub fn starts_mandara(text: &str) -> bool {
     text.lines().map(str::trim).filter(|l| !l.starts_with('#') && !l.starts_with("//") && !l.starts_with("--")).any(|l| {
         let starter = l.starts_with("exec-once") || l.starts_with("exec_once") || l.starts_with("spawn-at-startup") || l.starts_with("spawn-sh-at-startup") || l.contains("hl.exec_cmd(") || l.starts_with("exec=") || l.starts_with("exec ") || l.starts_with("exec_always ");
-        starter && l.split(|c: char| c.is_whitespace() || c == '"' || c == '\'' || c == '=' || c == ',' || c == '(').any(|w| w == "mandara" || w.ends_with("/mandara"))
+        starter && l.split(|c: char| {
+                    c.is_whitespace() || c == '"' || c == '\'' || c == '=' || c == ',' || c == '('
+                }).any(|w| w == "mandara" || w.ends_with("/mandara"))
     })
 }
 
@@ -1345,7 +1352,9 @@ pub fn emit_niri(cfg: &ManagedConfig) -> Emitted {
     // Studio → Displays supersedes the older Niri-only output list (Niri
     // rejects two blocks for one output).
     let displays = crate::outputs::emit_outputs(Target::Niri, &c.outputs, false);
-    let superseded = |name: &str| c.outputs.iter().any(|d| d.has_settings() && d.name.trim() == name.trim());
+    let superseded = |name: &str| {
+        c.outputs.iter().any(|d| d.has_settings() && d.name.trim() == name.trim())
+    };
     s.push_str(&displays);
     for o in n.outputs.iter().filter(|o| !o.name.trim().is_empty() && !superseded(&o.name)) {
         let mut body = String::new();
@@ -1397,9 +1406,7 @@ pub fn emit_niri(cfg: &ManagedConfig) -> Emitted {
             // A bare identifier unless KDL needs quotes (a lone digit key).
             let chord = if chord.starts_with(|c: char| c.is_ascii_digit()) { kdl_str(&chord) } else { chord };
             let argv: Vec<String> = match &k.bind.action {
-                BindAction::Mandara(words) => {
-                    [cfg.mandara_bin.as_str(), "msg"].iter().map(|w| kdl_str(w)).chain(words.split_whitespace().map(kdl_str)).collect()
-                }
+                BindAction::Mandara(words) => [cfg.mandara_bin.as_str(), "msg"].iter().map(|w| kdl_str(w)).chain(words.split_whitespace().map(kdl_str)).collect(),
                 BindAction::Spawn(cmd) => vec![kdl_str("sh"), kdl_str("-c"), kdl_str(cmd)],
             };
             let _ = writeln!(s, "    {chord} {{ spawn {}; }}", argv.join(" "));
@@ -1612,8 +1619,12 @@ pub fn emit_hyprland_lua(cfg: &ManagedConfig) -> Emitted {
         ));
     }
     let layout = c.hyprland.layout_entries();
-    let lua_value = |v: &str| if v == "true" || v == "false" || v.parse::<f64>().is_ok() { v.to_string() } else { lua_str(v) };
-    let lua_fields = |section: &str| layout.iter().filter(|(sec, ..)| *sec == section).map(|(_, k, v)| format!("{k} = {}", lua_value(v))).collect::<Vec<_>>();
+    let lua_value = |v: &str| {
+        if v == "true" || v == "false" || v.parse::<f64>().is_ok() { v.to_string() } else { lua_str(v) }
+    };
+    let lua_fields = |section: &str| {
+        layout.iter().filter(|(sec, ..)| *sec == section).map(|(_, k, v)| format!("{k} = {}", lua_value(v))).collect::<Vec<_>>()
+    };
     general.extend(lua_fields("general"));
     let mut decoration: Vec<String> = Vec::new();
     if let Some(r) = l.rounding {
@@ -1910,7 +1921,8 @@ fn sway_color(hex: &str) -> String {
 /// border colours).
 fn sway_text_on(background: &str) -> &'static str {
     use mandara_theme::Color;
-    let Ok(bg) = Color::from_hex(background) else { return SWAY_TEXT_LIGHT };
+    let Ok(bg) = Color::from_hex(background) else { return SWAY_TEXT_LIGHT;
+    };
     let (dark, light) = (Color::hex(SWAY_TEXT_DARK), Color::hex(SWAY_TEXT_LIGHT));
     if bg.contrast_ratio(dark) >= bg.contrast_ratio(light) { SWAY_TEXT_DARK } else { SWAY_TEXT_LIGHT }
 }
@@ -1978,7 +1990,9 @@ pub fn emit_sway(cfg: &ManagedConfig) -> Emitted {
     if let Some(bc) = &cfg.borders {
         // `client.<class> <border> <background> <text> <indicator> <child_border>`.
         let _ = writeln!(s, "\n# Live border colors from the active Mandara palette");
-        let line = |class: &str, main: &str, indicator: &str| format!("client.{class} {m} {m} {} {} {m}", sway_text_on(main), sway_color(indicator), m = sway_color(main));
+        let line = |class: &str, main: &str, indicator: &str| {
+            format!("client.{class} {m} {m} {} {} {m}", sway_text_on(main), sway_color(indicator), m = sway_color(main))
+        };
         let _ = writeln!(s, "{}", line("focused", &bc.active, &bc.active_end));
         let _ = writeln!(s, "{}", line("focused_inactive", &bc.inactive, &bc.inactive));
         let _ = writeln!(s, "{}", line("unfocused", &bc.inactive, &bc.inactive));
@@ -2038,10 +2052,16 @@ pub fn emit_sway(cfg: &ManagedConfig) -> Emitted {
 /// `mandara msg …`.
 pub fn river_starts_mandara(init: &str) -> bool {
     init.lines().map(shell_words).any(|w| {
-        let is_mandara = |s: &str| s.split_whitespace().next().is_some_and(|p| p == "mandara" || p.ends_with("/mandara")) && !s.split_whitespace().any(|a| a == "msg");
+        let is_mandara = |s: &str| {
+            s.split_whitespace().next().is_some_and(|p| p == "mandara" || p.ends_with("/mandara")) && !s.split_whitespace().any(|a| a == "msg")
+        };
         match w.as_slice() {
-            [ctl, spawn, cmd, ..] if ctl.ends_with("riverctl") && spawn == "spawn" => is_mandara(cmd),
-            [first, ..] => (first == "mandara" || first.ends_with("/mandara")) && !w.iter().any(|a| a == "msg"),
+            [ctl, spawn, cmd, ..] if ctl.ends_with("riverctl") && spawn == "spawn" => {
+                is_mandara(cmd)
+            }
+            [first, ..] => {
+                (first == "mandara" || first.ends_with("/mandara")) && !w.iter().any(|a| a == "msg")
+            }
             [] => false,
         }
     })
@@ -2075,7 +2095,9 @@ pub fn river_glob(regex: &str) -> Option<String> {
     while let Some(c) = chars.next() {
         match c {
             '\\' => out.push(chars.next().filter(|c| !c.is_alphanumeric())?),
-            '.' | '*' | '+' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '|' | '^' | '$' => return None,
+            '.' | '*' | '+' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '|' | '^' | '$' => {
+                return None;
+            }
             c if c.is_control() => return None,
             c => out.push(c),
         }
@@ -2290,9 +2312,13 @@ pub(crate) fn includes_in(target: Target, text: &str) -> Vec<String> {
 
 /// Umbriel `[include] files` then `[include.optional] files`.
 pub fn umbriel_includes(text: &str) -> Vec<String> {
-    let Ok(doc) = text.parse::<toml::Table>() else { return Vec::new() };
-    let Some(include) = doc.get("include").and_then(toml::Value::as_table) else { return Vec::new() };
-    let files = |t: Option<&toml::Table>| -> Vec<String> { t.and_then(|t| t.get("files")).and_then(toml::Value::as_array).map(|a| a.iter().filter_map(|v| v.as_str()).map(expand_env).collect()).unwrap_or_default() };
+    let Ok(doc) = text.parse::<toml::Table>() else { return Vec::new();
+    };
+    let Some(include) = doc.get("include").and_then(toml::Value::as_table) else { return Vec::new();
+    };
+    let files = |t: Option<&toml::Table>| -> Vec<String> { t.and_then(|t| t.get("files")).and_then(toml::Value::as_array).map(|a| {
+                a.iter().filter_map(|v| v.as_str()).map(expand_env).collect()
+            }).unwrap_or_default() };
     let mut out = files(Some(include));
     out.extend(files(include.get("optional").and_then(toml::Value::as_table)));
     out
@@ -2502,7 +2528,9 @@ fn glob_path(pattern: &Path) -> Vec<PathBuf> {
         }
         found = found
             .iter()
-            .flat_map(|dir| std::fs::read_dir(dir).into_iter().flatten().flatten().filter(|e| glob_match(&name, &e.file_name().to_string_lossy())).map(|e| e.path()))
+            .flat_map(|dir| {
+                std::fs::read_dir(dir).into_iter().flatten().flatten().filter(|e| glob_match(&name, &e.file_name().to_string_lossy())).map(|e| e.path())
+            })
             .collect();
     }
     found.retain(|p| p.exists());
@@ -2536,7 +2564,9 @@ fn glob_match(pattern: &str, name: &str) -> bool {
 /// (but never Mandara's generated file).
 pub fn existing_chords(target: Target) -> BTreeSet<String> {
     if target == Target::Mango {
-        return mango_keys::with_user_keys(|keys| mango_existing_chords(&target.user_config(), keys));
+        return mango_keys::with_user_keys(|keys| {
+            mango_existing_chords(&target.user_config(), keys)
+        });
     }
     if target == Target::Sway {
         return sway_existing_chords(&target.user_config());
@@ -2551,7 +2581,8 @@ pub fn existing_chords(target: Target) -> BTreeSet<String> {
         if !visited.insert(file.clone()) || file == generated || is_generated(&file) {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(&file) else { continue };
+        let Ok(text) = std::fs::read_to_string(&file) else { continue;
+        };
         out.extend(parse_chords(target, &text));
         stack.extend(included_files(target, &file, &text));
     }
@@ -2581,7 +2612,8 @@ fn mango_existing_chords(root: &Path, keys: &mango_keys::MangoKeys) -> BTreeSet<
         if !w.visited.insert(file.to_path_buf()) {
             return mode;
         }
-        let Ok(text) = std::fs::read_to_string(file) else { return mode };
+        let Ok(text) = std::fs::read_to_string(file) else { return mode;
+        };
         let mut mode = mode;
         // Split the file at its `source=` lines so each part starts in the
         // mode the previous part (or sourced file) left.
@@ -2669,7 +2701,8 @@ pub fn river_binds(text: &str) -> Vec<RiverBind> {
     let mut out = Vec::new();
     for (i, line) in text.lines().enumerate() {
         let words = shell_words(line);
-        let Some(at) = words.iter().position(|w| w == "riverctl" || w.ends_with("/riverctl")) else { continue };
+        let Some(at) = words.iter().position(|w| w == "riverctl" || w.ends_with("/riverctl")) else { continue;
+        };
         let mut rest = words[at + 1..].iter().map(String::as_str);
         if rest.next() != Some("map") {
             continue;
@@ -2685,7 +2718,8 @@ pub fn river_binds(text: &str) -> Vec<RiverBind> {
                 w => args.push(w),
             }
         }
-        let [mode, mods, key, command @ ..] = args.as_slice() else { continue };
+        let [mode, mods, key, command @ ..] = args.as_slice() else { continue;
+        };
         if *mode != "normal" || mods.contains('$') || key.contains('$') {
             continue;
         }
@@ -2749,7 +2783,9 @@ fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<
             && let Some((name, value)) = rest.trim().split_once(char::is_whitespace)
             && name.starts_with('$')
         {
-            let value = vars.iter().fold(value.trim().to_string(), |value, (name, replacement)| value.replace(name, replacement));
+            let value = vars.iter().fold(value.trim().to_string(), |value, (name, replacement)| {
+                    value.replace(name, replacement)
+                });
             set_var(vars, name, &value);
             continue;
         }
@@ -2833,7 +2869,8 @@ fn umbriel_chords(text: &str) -> Vec<(usize, String)> {
             in_binds = header == "keybinds";
             continue;
         }
-        let Some(key) = toml_line_key(line).filter(|_| in_binds) else { continue };
+        let Some(key) = toml_line_key(line).filter(|_| in_binds) else { continue;
+        };
         if key.starts_with("submap[") {
             continue;
         }
@@ -2845,7 +2882,9 @@ fn umbriel_chords(text: &str) -> Vec<(usize, String)> {
 }
 
 fn mango_chords(text: &str) -> Vec<(usize, String)> {
-    crate::mango_keys::with_user_keys(|keys| mango_binds(text, mango_keys::DEFAULT_MODE, keys).0.into_iter().filter(|b| mango_keys::modes_meet(&b.mode, mango_keys::DEFAULT_MODE)).map(|b| (b.line, b.chord)).collect())
+    crate::mango_keys::with_user_keys(|keys| {
+        mango_binds(text, mango_keys::DEFAULT_MODE, keys).0.into_iter().filter(|b| mango_keys::modes_meet(&b.mode, mango_keys::DEFAULT_MODE)).map(|b| (b.line, b.chord)).collect()
+    })
 }
 
 /// One MangoWM key bind: its 0-based line, its chord with the key as
@@ -2867,13 +2906,15 @@ pub(crate) fn mango_binds(text: &str, mode: &str, keys: &mango_keys::MangoKeys) 
         if line.starts_with('#') {
             continue;
         }
-        let Some((key, value)) = line.split_once('=') else { continue };
+        let Some((key, value)) = line.split_once('=') else { continue;
+        };
         let key = key.trim();
         if key == mango_keys::KEY_MODE_KEY {
             mode = value.trim().to_string();
             continue;
         }
-        let Some(flags) = mango_keys::bind_flags(key) else { continue };
+        let Some(flags) = mango_keys::bind_flags(key) else { continue;
+        };
         let mut parts = value.splitn(3, ',');
         if let (Some(mods), Some(name)) = (parts.next(), parts.next()) {
             out.push(MangoBind { line: i, chord: mango_chord(mods.split('+'), keys.canonical(name, mango_keys::keysym_only(flags))), mode: mode.clone() });
@@ -2885,7 +2926,9 @@ pub(crate) fn mango_binds(text: &str, mode: &str, keys: &mango_keys::MangoKeys) 
 /// A MangoWM chord: modifiers as MangoWM reads them (`super_l` is Super,
 /// `none` is nothing) and an already-resolved key.
 fn mango_chord<'a>(mods: impl Iterator<Item = &'a str>, key: String) -> String {
-    let mods: Vec<String> = mods.map(|m| m.trim().to_ascii_lowercase()).map(|m| mango_keys::modifier_code(&m).map_or_else(|| m.trim_end_matches("_l").trim_end_matches("_r").to_string(), str::to_string)).collect();
+    let mods: Vec<String> = mods.map(|m| m.trim().to_ascii_lowercase()).map(|m| {
+            mango_keys::modifier_code(&m).map_or_else(|| m.trim_end_matches("_l").trim_end_matches("_r").to_string(), str::to_string)
+        }).collect();
     chord(mods.iter().map(String::as_str), &key)
 }
 
@@ -2893,7 +2936,9 @@ fn mango_chord<'a>(mods: impl Iterator<Item = &'a str>, key: String) -> String {
 /// plain `bind`, so its key resolves like the user's own binds do.
 pub fn target_chord(target: Target, bind: &Keybind) -> String {
     match target {
-        Target::Mango => crate::mango_keys::with_user_keys(|keys| mango_chord(bind.mods.iter().map(String::as_str), keys.canonical(&bind.keysym(), false))),
+        Target::Mango => crate::mango_keys::with_user_keys(|keys| {
+            mango_chord(bind.mods.iter().map(String::as_str), keys.canonical(&bind.keysym(), false))
+        }),
         _ => bind.chord(),
     }
 }
@@ -2947,14 +2992,17 @@ fn hyprland_chords(text: &str) -> Vec<(usize, String)> {
         }
         if let Some(at) = line.find("hl.bind(") {
             let args = &line[at + "hl.bind(".len()..];
-            let Some(first) = lua_first_arg(args) else { continue };
-            let Some(combo) = lua_concat(first, &vars) else { continue };
+            let Some(first) = lua_first_arg(args) else { continue;
+            };
+            let Some(combo) = lua_concat(first, &vars) else { continue;
+            };
             let mut parts: Vec<&str> = combo.split('+').map(str::trim).filter(|p| !p.is_empty()).collect();
             let Some(key) = parts.pop() else { continue };
             out.push((i, chord(hypr_mods(&parts.join(" ")).into_iter(), &keysym_for(key))));
             continue;
         }
-        let Some(rest) = line.strip_prefix("bind").and_then(|r| r.split_once('=')).map(|(_, r)| r) else { continue };
+        let Some(rest) = line.strip_prefix("bind").and_then(|r| r.split_once('=')).map(|(_, r)| r) else { continue;
+        };
         let mut rest = rest.to_string();
         for (name, value) in vars.iter().filter(|(n, _)| n.starts_with('$')) {
             rest = rest.replace(name.as_str(), value);
@@ -3011,6 +3059,14 @@ pub fn write_generated(target: Target, emitted: &Emitted) -> Result<PathBuf> {
     // Options the config doctor found this compositor version rejects stay
     // out (commented, with the reason).
     let text = crate::doctor::state::apply_unsupported(target, &path, &emitted.text);
+    let mut text = text;
+    for kind in [
+        crate::compositor_theme::Kind::AppColors,
+        crate::compositor_theme::Kind::Displays,
+    ] {
+        let fragment = crate::compositor_theme::file(target, kind);
+        text = crate::compositor_theme::compose(target, kind, &text, &fragment, fragment.is_file())?;
+    }
     crate::store::write_atomic(&path, text.as_bytes())?;
     Ok(path)
 }
@@ -3030,7 +3086,11 @@ fn include_installed_at(target: Target, config: &Path) -> bool {
     let needle = target.generated_file();
     let needle_name = needle.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
     std::fs::read_to_string(config)
-        .map(|t| t.lines().any(|l| !l.trim_start().starts_with(['#', '/']) && !l.trim_start().starts_with("--") && l.contains("mandara/generated/") && l.contains(&needle_name)))
+        .map(|t| {
+            t.lines().any(|l| {
+                !l.trim_start().starts_with(['#', '/']) && !l.trim_start().starts_with("--") && l.contains("mandara/generated/") && l.contains(&needle_name)
+            })
+        })
         .unwrap_or(false)
 }
 
@@ -3093,7 +3153,9 @@ fn install_include_at(target: Target, path: &Path) -> Result<bool> {
     std::fs::write(&backup, &original).with_context(|| format!("writing backup {}", backup.display()))?;
     let comment = match target {
         Target::Niri => "// Mandara Shell (generated rules, binds and colors)",
-        Target::Hyprland if Target::hyprland_lua() => "-- Mandara Shell (generated rules, binds and colors)",
+        Target::Hyprland if Target::hyprland_lua() => {
+            "-- Mandara Shell (generated rules, binds and colors)"
+        }
         _ => INCLUDE_COMMENT,
     };
     let updated = match umbriel {
@@ -3123,7 +3185,9 @@ pub fn seed_sway_user_config() -> Result<bool> {
 /// theirs starts as a copy of it (sway's documented first step), so adding
 /// the include changes nothing else. Never overwrites an existing file.
 fn seed_sway_config(path: &Path, system: &Path) -> Result<()> {
-    let text = std::fs::read_to_string(system).with_context(|| format!("no sway config at {} and no {} to start one from", path.display(), system.display()))?;
+    let text = std::fs::read_to_string(system).with_context(|| {
+        format!("no sway config at {} and no {} to start one from", path.display(), system.display())
+    })?;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     }
@@ -3143,7 +3207,9 @@ const INCLUDE_COMMENT: &str = "# Mandara Shell (generated rules, binds and color
 pub fn umbriel_add_include(text: &str, path: &str) -> Result<Option<String>> {
     use toml_edit::{Array, DocumentMut, InlineTable, Item, Table, Value};
     let mut doc: DocumentMut = text.parse().context("not valid TOML")?;
-    let listed = |files: Option<&Item>| files.and_then(Item::as_array).is_some_and(|a| a.iter().any(|v| v.as_str() == Some(path)));
+    let listed = |files: Option<&Item>| {
+        files.and_then(Item::as_array).is_some_and(|a| a.iter().any(|v| v.as_str() == Some(path)))
+    };
     if let Some(include) = doc.get("include").and_then(Item::as_table_like)
         && (listed(include.get("files")) || include.get("optional").and_then(Item::as_table_like).is_some_and(|o| listed(o.get("files"))))
     {
@@ -3423,7 +3489,9 @@ mod look_tests {
     #[test]
     fn hyprland_lua_rules_match_the_support_table() {
         let base = WindowRule { app_id: Some("^probe$".into()), ..Default::default() };
-        let render = |rule: WindowRule| emit_hyprland_lua(&managed(&CompositorConfig { window_rules: vec![rule], keybinds: Vec::new(), ..Default::default() })).text;
+        let render = |rule: WindowRule| {
+            emit_hyprland_lua(&managed(&CompositorConfig { window_rules: vec![rule], keybinds: Vec::new(), ..Default::default() })).text
+        };
         let plain = render(base.clone());
         for (name, support) in RULE_OPTIONS {
             let mut r = base.clone();
@@ -3653,7 +3721,10 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         std::fs::write(&root, format!("{user}\nsource_optional={}\n", gen_path.display())).unwrap();
         let out = std::process::Command::new("mango").arg("-p").arg("-c").arg(&root).env_clear().env("HOME", dir.path()).env("XDG_RUNTIME_DIR", dir.path()).env("PATH", std::env::var_os("PATH").unwrap_or_default()).output().unwrap();
         let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
-        let plain: String = text.split('\u{1b}').enumerate().map(|(i, part)| if i == 0 { part } else { part.split_once('m').map_or(part, |(_, rest)| rest) }).collect();
+        let plain: String = text.split('\u{1b}').enumerate().map(|(i, part)| {
+                if i == 0 { part } else { part.split_once('m').map_or(part, |(_, rest)| rest)
+                }
+            }).collect();
         Some(plain.lines().filter(|l| l.contains("WARN") || l.contains("ERROR")).map(|l| l.to_string()).chain(plain.lines().filter(|l| l.trim_start().starts_with("File")).map(|l| l.to_string())).collect())
     }
 
@@ -3801,7 +3872,9 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         let pause = Keybind::new(&[], "XF86AudioPause", BindAction::Mandara("media play-pause".into()));
         let alt_q = Keybind::new(&["alt"], "q", BindAction::Mandara("x".into()));
         let super_r = Keybind::new(&["super"], "r", BindAction::Mandara("x".into()));
-        let ours = |b: &Keybind| mango_chord(b.mods.iter().map(String::as_str), keys.canonical(&b.keysym(), false));
+        let ours = |b: &Keybind| {
+            mango_chord(b.mods.iter().map(String::as_str), keys.canonical(&b.keysym(), false))
+        };
         assert!(chords.contains(&ours(&pause)), "Pause lands on the Play key: {chords:?}");
         assert!(chords.contains(&ours(&alt_q)), "code:64 is Alt and code:24 is q");
         assert!(!chords.contains(&ours(&super_r)), "a resize-mode bind can't clash with a default-mode one");
@@ -3844,7 +3917,9 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
     /// out-of-order or aliased modifiers.
     #[test]
     fn unusable_binds_are_skipped_and_punctuation_is_spelled_out() {
-        let spawn = |mods: &[&str], key: &str| Keybind::new(mods, key, BindAction::Spawn("notify-send hi".into()));
+        let spawn = |mods: &[&str], key: &str| {
+            Keybind::new(mods, key, BindAction::Spawn("notify-send hi".into()))
+        };
         let cfg = CompositorConfig { keybinds: vec![spawn(&["super"], ""), spawn(&[], "q"), spawn(&["shift", "win"], ","), spawn(&["super"], "1"), spawn(&[], "F9")], ..Default::default() };
         let mango = emit_mango(&managed(&cfg, &[]));
         assert!(mango.text.contains("bind=SUPER+SHIFT,comma,spawn_shell,notify-send hi"), "{}", mango.text);
@@ -3941,11 +4016,17 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         let rules = doc["window_rule"].as_array().unwrap();
         // Blur is opt-in per window: the look's blur adds a rule for all.
         assert!(rules.iter().any(|r| r.get("match").is_none() && r["blur"].as_bool() == Some(true)));
-        assert!(rules.iter().any(|r| r.get("match").and_then(|m| m.get("is_focused")).and_then(toml::Value::as_bool) == Some(false) && r["opacity"].as_float() == Some(0.85)));
-        let mpv = rules.iter().find(|r| r.get("match").and_then(|m| m.get("app_id")).is_some_and(|a| a.as_str() == Some("^mpv$")) && r.get("default_pinned").is_some()).unwrap();
+        assert!(rules.iter().any(|r| {
+            r.get("match").and_then(|m| m.get("is_focused")).and_then(toml::Value::as_bool) == Some(false) && r["opacity"].as_float() == Some(0.85)
+        }));
+        let mpv = rules.iter().find(|r| {
+                r.get("match").and_then(|m| m.get("app_id")).is_some_and(|a| a.as_str() == Some("^mpv$")) && r.get("default_pinned").is_some()
+            }).unwrap();
         assert_eq!(mpv["match"]["title"].as_str(), Some("a \"quoted\"\ttitle"));
         assert_eq!((mpv["default_floating"].as_bool(), mpv["blur"].as_bool(), mpv["shadow"].as_bool(), mpv["confine_pointer"].as_bool()), (Some(false), Some(false), Some(false), Some(true)));
-        assert!(rules.iter().any(|r| r.get("match").and_then(|m| m.get("is_focused")).and_then(toml::Value::as_bool) == Some(true) && r["match"].get("app_id").is_some() && r["opacity"].as_float() == Some(0.9)));
+        assert!(rules.iter().any(|r| {
+            r.get("match").and_then(|m| m.get("is_focused")).and_then(toml::Value::as_bool) == Some(true) && r["match"].get("app_id").is_some() && r["opacity"].as_float() == Some(0.9)
+        }));
         // Umbriel binds Super, Ctrl, Alt and Shift only.
         assert!(out.skipped.iter().any(|n| n.contains("modifier this compositor can't bind")), "{:?}", out.skipped);
     }
@@ -4284,7 +4365,8 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
             all.extend(river_undo(&commands));
             all.extend(commands);
         }
-        let Some(failures) = crate::river_check::run_commands_with_init(RIVER_INIT, &all) else { return };
+        let Some(failures) = crate::river_check::run_commands_with_init(RIVER_INIT, &all) else { return;
+        };
         assert!(failures.is_empty(), "River rejected Mandara's commands:\n{}", failures.join("\n"));
     }
 

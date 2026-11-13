@@ -41,7 +41,28 @@ fn sync_inputs(cx: &App) -> Result<SyncInputs, String> {
 /// Config doctor, rolled back if the compositor rejects it) and reloads it
 /// when the user's config includes it. Blocking: always run off the UI
 /// thread.
-fn sync_with(backend: &dyn mandara_compositor::CompositorBackend, cfg: &mandara_config::ShellConfig, borders: Option<BorderColors>) -> Result<Value, String> {
+fn sync_with(backend: &dyn mandara_compositor::CompositorBackend, cfg: &mandara_config::ShellConfig, borders: Option<BorderColors>,
+    preserve_outputs: bool,
+    output_revision: mandara_services::outputs::Revision,
+) -> Result<Value, String> {
+    let _file_lock = mandara_config::compositor_theme::lock().map_err(|error| error.to_string())?;
+    if include_installed(backend.target()) {
+        mandara_services::outputs::reload_preserving(
+            &cfg.compositor.outputs,
+            preserve_outputs,
+            output_revision,
+            || sync_with_inner(backend, cfg, borders),
+        )
+    } else {
+        sync_with_inner(backend, cfg, borders)
+    }
+}
+
+fn sync_with_inner(
+    backend: &dyn mandara_compositor::CompositorBackend,
+    cfg: &mandara_config::ShellConfig,
+    borders: Option<BorderColors>,
+) -> Result<Value, String> {
     let target = backend.target();
     let compositor = cfg.effective_compositor();
     // The config as the compositor reads it now (the stored report unless
@@ -100,13 +121,20 @@ pub fn init(cx: &mut App) {
     // turning "Manage the compositor" on later syncs without a restart.
     let manage = config(cx).read(cx).get().compositor.manage;
     let inputs = sync_inputs(cx);
+    let output_revision = mandara_services::outputs::current_revision();
+    let generation = SYNC_STARTED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
     // Off the UI thread: the sync checks the config with the compositor's
     // own checker, then the Config doctor announces new problems once.
     cx.spawn(async move |cx| {
-        let task = cx.background_executor().spawn(async move {
+        let task = mandara_services::runtime::unblock(move || {
             let (backend, cfg, borders) = inputs.ok()?;
+            let mut applied = SYNC_APPLIED.lock().unwrap_or_else(|e| e.into_inner());
+            if generation < *applied {
+                return None;
+            }
+            *applied = generation;
             if sync_enabled(manage, backend.kind()) {
-                initial_sync(backend.as_ref(), &cfg, borders);
+                initial_sync(backend.as_ref(), &cfg, borders, output_revision);
             }
             Some(dstate::check_cached(backend.target()).0)
         });
@@ -118,8 +146,10 @@ pub fn init(cx: &mut App) {
     watch(cx);
 }
 
-fn initial_sync(backend: &dyn mandara_compositor::CompositorBackend, cfg: &mandara_config::ShellConfig, borders: Option<BorderColors>) {
-    match sync_with(backend, cfg, borders) {
+fn initial_sync(backend: &dyn mandara_compositor::CompositorBackend, cfg: &mandara_config::ShellConfig, borders: Option<BorderColors>,
+    output_revision: mandara_services::outputs::Revision,
+) {
+    match sync_with(backend, cfg, borders, false, output_revision) {
         Ok(report) => {
             if let Some(hint) = report.get("hint").and_then(Value::as_str) {
                 tracing::warn!("compositor drop-in written but not included yet: {hint}");
@@ -169,7 +199,9 @@ const COMPOSITOR_NAMES: [&str; Target::ALL.len()] = {
 /// The compositor a command names (`mango`, `niri`…), else the running one.
 fn target_arg(name: Option<&str>, cx: &App) -> Result<Target, String> {
     match name {
-        Some(name) => Target::parse(name).ok_or_else(|| format!("unknown compositor {name:?} ({})", COMPOSITOR_NAMES.join(", "))),
+        Some(name) => Target::parse(name).ok_or_else(|| {
+            format!("unknown compositor {name:?} ({})", COMPOSITOR_NAMES.join(", "))
+        }),
         None => Ok(backend(cx)?.target()),
     }
 }
@@ -199,12 +231,13 @@ fn sync_key(cfg: &mandara_config::ShellConfig) -> String {
 const SYNC_SETTLE: std::time::Duration = std::time::Duration::from_millis(300);
 
 /// Writes the drop-in for the current config in the background.
-fn start_sync(cx: &mut App) {
+fn start_sync(cx: &mut App, preserve_outputs: bool) {
+    let output_revision = mandara_services::outputs::current_revision();
     match sync_inputs(cx) {
         Ok((backend, cfg, borders)) => {
             let generation = SYNC_STARTED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-            cx.background_executor()
-                .spawn(async move {
+            cx.spawn(async move |_| {
+                mandara_services::runtime::unblock(move || {
                     // Background syncs may finish out of order: an older one
                     // never overwrites a newer drop-in.
                     let mut applied = SYNC_APPLIED.lock().unwrap_or_else(|e| e.into_inner());
@@ -212,10 +245,15 @@ fn start_sync(cx: &mut App) {
                         return;
                     }
                     *applied = generation;
-                    if let Err(err) = sync_with(backend.as_ref(), &cfg, borders) {
+                    if let Err(err) = sync_with(backend.as_ref(), &cfg, borders,
+                        preserve_outputs,
+                        output_revision,
+                    ) {
                         tracing::warn!("compositor sync: {err}");
                     }
                 })
+                .await;
+            })
                 .detach();
         }
         Err(err) => tracing::warn!("compositor sync: {err}"),
@@ -235,29 +273,41 @@ fn watch(cx: &mut App) {
     // serialize-and-compare: the theme entity notifies on every frame of a
     // palette tween.
     let key = |cx: &App| {
-        let generation = std::sync::Arc::as_ptr(&config(cx).read(cx).snapshot()) as usize;
+        let generation = config(cx).read(cx).snapshot();
         let p = mandara_core::theme_entity(cx).read(cx).target();
         (generation, [p.primary, p.accent_gradient_end, p.surface_container_high, p.urgent_coral])
     };
-    let last_key = RefCell::new(key(cx));
+    let initial = key(cx);
+    let last_key = RefCell::new((std::sync::Arc::downgrade(&initial.0), initial.1));
+    let previous_outputs = RefCell::new(config(cx).read(cx).get().compositor.outputs.clone());
+    let outputs_changed = Rc::new(std::cell::Cell::new(false));
     let on_change = move |cx: &mut App| {
         let now_key = key(cx);
-        if *last_key.borrow() == now_key {
+        if last_key.borrow()
+            .0
+            .upgrade()
+            .is_some_and(|previous| std::sync::Arc::ptr_eq(&previous, &now_key.0))
+            && last_key.borrow().1 == now_key.1
+        {
             return;
         }
-        *last_key.borrow_mut() = now_key;
+        *last_key.borrow_mut() = (std::sync::Arc::downgrade(&now_key.0), now_key.1);
         if !backend(cx).is_ok_and(|b| sync_enabled(config(cx).read(cx).get().compositor.manage, b.kind())) {
             return;
         }
         let now = snapshot(cx);
         if *last.borrow() != now {
             *last.borrow_mut() = now;
+            let outputs = config(cx).read(cx).get().compositor.outputs.clone();
+            outputs_changed.set(outputs_changed.get() || *previous_outputs.borrow() != outputs);
+            *previous_outputs.borrow_mut() = outputs;
             // Committed once the edits rest: a dragged Studio slider (gaps,
             // borders) rewrites and reloads the drop-in once, not per step.
             // A newer edit drops the waiting one.
+            let outputs_changed = outputs_changed.clone();
             *pending.borrow_mut() = Some(cx.spawn(async move |cx| {
                 cx.background_executor().timer(SYNC_SETTLE).await;
-                cx.update(start_sync);
+                cx.update(|cx| start_sync(cx, !outputs_changed.replace(false)));
             }));
         }
     };
@@ -296,7 +346,10 @@ pub fn register(r: &mut PluginRegistry) {
     }));
     r.command(ID, CommandSpec::new_output("compositor sync", mandara_i18n::tk("Regenerate the drop-in (rules, binds, border colors) and reload"), |_, cx| {
         let (backend, cfg, borders) = sync_inputs(cx)?;
-        Ok(pending(move || sync_with(backend.as_ref(), &cfg, borders)))
+                let output_revision = mandara_services::outputs::current_revision();
+                Ok(pending(move || {
+                    sync_with(backend.as_ref(), &cfg, borders, true, output_revision)
+                }))
     }));
     r.command(
         ID,
@@ -349,7 +402,7 @@ pub fn register(r: &mut PluginRegistry) {
             Ok(pending(move || {
                 let added = install_include(target).map_err(|e| format!("{e:#}"))?;
                 let report = match (added, inputs) {
-                    (true, Ok((backend, cfg, borders))) => sync_with(backend.as_ref(), &cfg, borders).unwrap_or(Value::Null),
+                    (true, Ok((backend, cfg, borders))) => sync_with(backend.as_ref(), &cfg, borders, false, mandara_services::outputs::current_revision()).unwrap_or(Value::Null),
                     _ => Value::Null,
                 };
                 Ok(json!({ "file": target.user_config(), "added": added, "line": target.include_line(), "sync": report }))
@@ -384,7 +437,7 @@ pub fn register(r: &mut PluginRegistry) {
 
 #[cfg(test)]
 mod tests {
-    use super::{sync_key, sync_enabled};
+    use super::{sync_enabled, sync_key};
     use mandara_config::ShellConfig;
 
     #[test]

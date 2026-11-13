@@ -27,20 +27,20 @@ use mandara_config::desktop_cards::{self as dc, CALENDAR, FRAMED_BARS, MIRRORED_
 use mandara_config::desktop_widgets::{Anchor, ClockFace, Placement, WidgetKind, ranges};
 use mandara_config::looks::{self, LOOKS, LookDef, LookOptions, LookVisualizer};
 use mandara_config::user_looks::UserLook;
-use std::rc::Rc;
 use mandara_config::{BarLayout, BarPosition, ShellConfig};
 use mandara_core::ToGpui;
 use mandara_i18n::{t, tf, tk, tr};
 use mandara_theme::MandaraPalette;
 use mandara_ui::backdrop::paint::FontNames;
 use mandara_ui::bidi::Bidi as _;
-use mandara_ui::lock::paint::TextPainter;
 use mandara_ui::icons::icon;
+use mandara_ui::lock::paint::TextPainter;
 use mandara_ui::state::update_config;
 
-use super::{StudioView, swatch_list};
+use std::rc::Rc;
 use super::compositor_page::{badge, card, chip, heading};
 use super::themes_page::section_head;
+use super::{StudioView, swatch_list};
 use crate::registry::desktop_settings::COMPONENTS;
 use crate::registry::system_settings::CURSOR;
 use crate::registry::{self, Section};
@@ -111,12 +111,24 @@ fn components_line(look: &LookDef) -> String {
 
 fn blurb(look: &LookDef) -> String {
     let key = match look.id {
-        "corniche-dusk" => tk("Rose evening glass: headline clock, system monitor, media card and glass pills."),
-        "pharos-ink" => tk("Monochrome ink: a hairline bar dense with stats, a greeting and a calendar."),
-        "montaza-crimson" => tk("Bold palace red: a framed spectrum box, an Arabic clock and calligraphy."),
-        "qaitbay-forest" => tk("Deep green: a giant stacked clock behind the subject and a dock media chip."),
-        "anfushi-wave" => tk("Open sea: a full-width glowing wave, a katakana accent and one tiny pill."),
-        "night-frame" => tk("Midnight violet: a side bar framing the screen, a greeting, calendar and bars."),
+        "corniche-dusk" => {
+            tk("Rose evening glass: headline clock, system monitor, media card and glass pills.")
+        }
+        "pharos-ink" => {
+            tk("Monochrome ink: a hairline bar dense with stats, a greeting and a calendar.")
+        }
+        "montaza-crimson" => {
+            tk("Bold palace red: a framed spectrum box, an Arabic clock and calligraphy.")
+        }
+        "qaitbay-forest" => {
+            tk("Deep green: a giant stacked clock behind the subject and a dock media chip.")
+        }
+        "anfushi-wave" => {
+            tk("Open sea: a full-width glowing wave, a katakana accent and one tiny pill.")
+        }
+        "night-frame" => {
+            tk("Midnight violet: a side bar framing the screen, a greeting, calendar and bars.")
+        }
         "redmond" => tk("A Windows 11-style desktop: a centred taskbar with your apps, a stacked clock, notifications in the corner and no dock."),
         "cupertino" => tk("A macOS-style desktop: a slim menu bar on top, a magnifying dock below and a Spotlight-style search."),
         "corniche-frame" => tk("Expressive: the whole screen framed, round buttons, a scalloped rail and a day-block clock over a glowing wave."),
@@ -152,7 +164,8 @@ type DecorationCache = (Option<TextPainter>, HashMap<u64, Arc<RenderImage>>);
 /// the tile's end-edge strip.
 fn decoration_image(look: &LookDef, lp: &MandaraPalette, cfg: &ShellConfig) -> Option<Arc<RenderImage>> {
     let mut w = look.widgets().into_iter().find(|w| matches!(w.kind, WidgetKind::Decoration(_)))?;
-    let WidgetKind::Decoration(d) = &w.kind else { return None };
+    let WidgetKind::Decoration(d) = &w.kind else { return None;
+    };
     let size = ((THUMB_DECOR_STRIP_W_PX * THUMB_DECOR_DENSITY) as u32, (THUMB_H_PX * THUMB_DECOR_DENSITY) as u32);
     // The tile's text size on a frame `size.1` tall.
     let scale = THUMB_DECOR_PX * THUMB_DECOR_DENSITY / (d.size.max(1.0) * size.1 as f32 / ranges::REFERENCE_HEIGHT_PX);
@@ -200,8 +213,12 @@ fn user_palette(look: &UserLook) -> MandaraPalette {
         let dark = mandara_config::profiles::get_path_pub(&look.settings, "theme.mode").and_then(|v| v.as_str()).map_or(parent.dark, |m| m != "light");
         let resolved = mandara_config::profiles::get_path_pub(&look.settings, "theme.source").cloned().and_then(|v| v.try_into::<mandara_theme::ThemeSource>().ok());
         let palette = match resolved {
-            Some(mandara_theme::ThemeSource::Seed { color, variant }) => mandara_theme::material::palette_from_seed(color, variant, dark),
-            Some(mandara_theme::ThemeSource::Preset { preset }) => mandara_theme::catalog::find(&preset).map_or_else(|| look_palette(parent_index), |t| t.palette(dark)),
+            Some(mandara_theme::ThemeSource::Seed { color, variant }) => {
+                mandara_theme::material::palette_from_seed(color, variant, dark)
+            }
+            Some(mandara_theme::ThemeSource::Preset { preset }) => {
+                mandara_theme::catalog::find(&preset).map_or_else(|| look_palette(parent_index), |t| t.palette(dark))
+            }
             _ => look_palette(parent_index),
         };
         if cache.len() >= mandara_config::user_looks::MAX_LOOKS {
@@ -290,10 +307,17 @@ fn thumbnail(look: &LookDef, lp: &MandaraPalette, cfg: &ShellConfig) -> AnyEleme
         .overflow_hidden()
         .bg(mandara_core::oklab_gradient(DIAGONAL_DEG, lp.surface_dim, lp.surface_dim.mix(lp.primary, SKY_TINT)));
     // The bar.
-    let pills = |el: gpui::Div| el.children(THUMB_PILL_W_PX.iter().map(|w| div().w(px(*w)).h(px(THUMB_BAR_PX)).rounded_full().bg(bar_fill)));
+    let pills = |el: gpui::Div| {
+        el.children(THUMB_PILL_W_PX.iter().map(|w| {
+            div().w(px(*w)).h(px(THUMB_BAR_PX)).rounded_full().bg(bar_fill)
+        }))
+    };
     // A bottom bar sits on the mock's bottom edge.
     let bottom = look.position() == BarPosition::Bottom;
-    let edge = |el: gpui::Div, off: f32| if bottom { el.bottom(px(off)) } else { el.top(px(off)) };
+    let edge = |el: gpui::Div, off: f32| {
+        if bottom { el.bottom(px(off)) } else { el.top(px(off))
+        }
+    };
     root = root.child(match (side, look.layout()) {
         (true, _) => div()
             .absolute()
@@ -343,7 +367,9 @@ fn thumbnail(look: &LookDef, lp: &MandaraPalette, cfg: &ShellConfig) -> AnyEleme
                 .row()
                 .flex_col()
                 .gap(px(THUMB_MONITOR.1))
-                .children((0..4).map(|i| div().w(px(THUMB_MONITOR.0 - i as f32 * 4.0)).h(px(THUMB_MONITOR.1)).rounded_full().bg(lp.on_surface.with_alpha(ALPHA_50).hsla()))),
+                .children((0..4).map(|i| {
+                    div().w(px(THUMB_MONITOR.0 - i as f32 * 4.0)).h(px(THUMB_MONITOR.1)).rounded_full().bg(lp.on_surface.with_alpha(ALPHA_50).hsla())
+                })),
         );
     }
     if let Some(image) = decoration_image(look, lp, cfg) {
@@ -358,7 +384,9 @@ fn thumbnail(look: &LookDef, lp: &MandaraPalette, cfg: &ShellConfig) -> AnyEleme
     let bars = |n: usize, h: f32| (0..n).map(move |i| WAVE_SHAPE[i % WAVE_SHAPE.len()] * h);
     root = match look.visualizer {
         LookVisualizer::None => root,
-        LookVisualizer::Wave => root.child(div().absolute().left_0().right_0().bottom_0().h(px(THUMB_WAVE_H_PX)).ltr_row().items_end().children(bars(THUMB_WAVE_BARS, THUMB_WAVE_H_PX).map(|h| div().flex_1().h(px(h)).bg(lp.primary.with_alpha(ALPHA_75).hsla())))),
+        LookVisualizer::Wave => root.child(div().absolute().left_0().right_0().bottom_0().h(px(THUMB_WAVE_H_PX)).ltr_row().items_end().children(bars(THUMB_WAVE_BARS, THUMB_WAVE_H_PX).map(|h| {
+                    div().flex_1().h(px(h)).bg(lp.primary.with_alpha(ALPHA_75).hsla())
+                }))),
         LookVisualizer::Mirrored => root.child(div().absolute().left(px(left0)).right(px(THUMB_FRAME_PX * 2.0)).bottom(px(THUMB_FRAME_PX * 2.0)).h(px(THUMB_WAVE_H_PX)).ltr_row().items_center().gap(px(1.0)).children(bars(THUMB_WAVE_BARS, THUMB_WAVE_H_PX).map(|h| div().flex_1().h(px(h)).rounded_full().bg(accent)))),
         LookVisualizer::Framed => root.child(
             div().absolute().left(px(left0)).bottom(px(THUMB_INSET_PX)).w(px(THUMB_BOX.0)).h(px(THUMB_BOX.1)).rounded(px(RADIUS_4_PX)).border_1().border_color(lp.on_surface.with_alpha(ALPHA_30).hsla()).p(px(SPACE_3_PX)).ltr_row().items_end().gap(px(1.0)).children(bars(8, THUMB_BOX.1 - SPACE_3_PX * 2.0).map(|h| div().flex_1().h(px(h)).bg(accent))),
@@ -380,7 +408,8 @@ fn apply_look(look: &'static LookDef, cx: &mut gpui::App) {
 }
 
 fn restore_look(cx: &mut gpui::App) {
-    let Some(before) = mandara_config::profiles::find(looks::BEFORE_PROFILE) else { return };
+    let Some(before) = mandara_config::profiles::find(looks::BEFORE_PROFILE) else { return;
+    };
     let cfg = mandara_ui::state::config(cx).read(cx).snapshot();
     match looks::restore(&cfg, &before) {
         Ok(next) => update_config(cx, move |c| *c = next),
@@ -423,8 +452,10 @@ impl ThemesTab {
         let s = s.trim().to_ascii_lowercase();
         Self::ALL.into_iter().find(|t| t.slug() == s).or(match s.as_str() {
             "colours" | "looks" | "style" | "themes" => Some(ThemesTab::Colors),
-            "component" | "designs" | "presets" | "controls" | "sliders" | "buttons" => Some(ThemesTab::Components),
-            "cursor" | "cursor-themes" | "pointer" | "pointers" => Some(ThemesTab::Cursors),
+            "component" | "designs" | "presets" | "controls" | "sliders" | "buttons" => {
+                    Some(ThemesTab::Components)
+                }
+                "cursor" | "cursor-themes" | "pointer" | "pointers" => Some(ThemesTab::Cursors),
             "icon" | "icon-themes" | "icon-theme" | "icon-sets" => Some(ThemesTab::Icons),
             "boot-look" | "boot-menu" | "bootloader" | "splash" | "plymouth" | "grub" | "limine" | "refind" => Some(ThemesTab::Boot),
             "sound" | "sound-themes" | "sound-theme" | "audio-theme" => Some(ThemesTab::Sounds),
@@ -469,6 +500,7 @@ impl StudioView {
                 cx.defer(super::sounds_page::release);
             }
             self.themes_tab = tab;
+            self.app_templates = Default::default();
             // The other tab's previews go: nothing of them stays alive.
             self.components = Default::default();
             cx.defer(super::theme_galleries::release);
@@ -506,13 +538,17 @@ impl StudioView {
         let preview = self.theme_preview(cfg, p, cx);
         let looks = self.looks_gallery(cfg, p, display.clone(), cx);
         let head = super::fold::FoldHead { title: t("Designed themes").into(), preview: t("Hand-made palettes, Mandara's own and community favourites").to_string(), badge: None, trailing: None, closed: true };
-        let themes = self.fold("Designed themes", head, p, cx, |this, cx| this.designed_themes(cfg, p, cx));
+        let themes = self.fold("Designed themes", head, p, cx, |this, cx| {
+            this.designed_themes(cfg, p, cx)
+        });
         let wallpaper = self.wallpaper_schemes(cfg, p, cx);
         let apps = self.app_themes_section(cfg, p, cx);
         let tune_head = section_head(t("Fine-tune"), t("Schedule, tuning, style and icons"), Vec::new(), display, p);
         // Cursor rows sit in the Cursor section, component designs in
         // theirs, app themes in their grid.
-        let rows = self.rows(registry::in_section(Section::Themes).filter(|s| !SHOWN_ABOVE.contains(&s.path) && s.group != CURSOR && s.group != APP_THEMES_GROUP && s.group != COMPONENTS), cfg, p, cx);
+        let rows = self.rows(registry::in_section(Section::Themes).filter(|s| {
+                !SHOWN_ABOVE.contains(&s.path) && s.group != CURSOR && s.group != APP_THEMES_GROUP && s.group != COMPONENTS
+            }), cfg, p, cx);
         let tune = div().row().flex_col().gap(px(SPACE_14_PX)).child(tune_head).child(rows);
         div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(preview).child(looks).child(themes).child(wallpaper).child(apps).child(tune).into_any_element()
     }
@@ -532,7 +568,9 @@ impl StudioView {
             let line = format!("{} · {}", t("Yours"), tf("From {look}", &[("look", &parent.name)]));
             Some(
                 swatch_list::row(("look-row-yours", i), &lp, mine.name.clone().into(), Some(parent.display_font.into()), line, mine.id == active, p)
-                    .tooltip(swatch_list::preview_tip(p, move || div().w(px(swatch_list::TIP_MOCK_W_PX)).child(thumbnail(&view, &tip_palette, &cfg)).into_any_element()))
+                    .tooltip(swatch_list::preview_tip(p, move || {
+                    div().w(px(swatch_list::TIP_MOCK_W_PX)).child(thumbnail(&view, &tip_palette, &cfg)).into_any_element()
+                }))
                     .on_click(move |_: &ClickEvent, _, cx| super::looks_yours::apply(&apply, cx))
                     .into_any_element(),
             )
@@ -544,7 +582,9 @@ impl StudioView {
             // Its line says which component designs it brings along.
             let line = if keep { blurb(look) } else { format!("{} · {}", components_line(look), blurb(look)) };
             swatch_list::row(("look-row", i), &lp, look.name.into(), Some(look.display_font.into()), line, look.id == active, p)
-                .tooltip(swatch_list::preview_tip(p, move || div().w(px(swatch_list::TIP_MOCK_W_PX)).child(thumbnail(look, &tip_palette, &cfg)).into_any_element()))
+                .tooltip(swatch_list::preview_tip(p, move || {
+                div().w(px(swatch_list::TIP_MOCK_W_PX)).child(thumbnail(look, &tip_palette, &cfg)).into_any_element()
+            }))
                 .on_click(move |_: &ClickEvent, _, cx| apply_look(look, cx))
                 .into_any_element()
         });
@@ -583,7 +623,9 @@ impl StudioView {
                 .gap(px(SPACE_8_PX))
                 .child(div().flex_1().min_w(px(0.0)).truncate().text_start().when(lp.is_some(), |el| el.font_family(look.display_font)).font_weight(FontWeight::SEMIBOLD).text_size(px(TEXT_15_PX)).child(look.name))
                 .when(on, |el| el.child(badge(t("Active"), p.primary)))
-                .when_some(lp.as_ref(), |el, lp| el.child(div().row().gap(px(SPACE_3_PX)).child(dot(lp.primary)).child(dot(lp.secondary)).child(dot(lp.tertiary))))
+                .when_some(lp.as_ref(), |el, lp| {
+                    el.child(div().row().gap(px(SPACE_3_PX)).child(dot(lp.primary)).child(dot(lp.secondary)).child(dot(lp.tertiary)))
+                })
                 .child(Self::look_actions(look.id, false, p, cx));
             tiles.push(
                 div()
@@ -624,7 +666,8 @@ impl StudioView {
             );
         }
         for (i, mine) in yours.iter().enumerate() {
-            let Some(parent) = mine.parent() else { continue };
+            let Some(parent) = mine.parent() else { continue;
+            };
             let view = user_view(mine, parent);
             let look = &view;
             let on = mine.id == active;
@@ -637,7 +680,9 @@ impl StudioView {
                 .gap(px(SPACE_8_PX))
                 .child(div().flex_1().min_w(px(0.0)).truncate().text_start().when(lp.is_some(), |el| el.font_family(look.display_font)).font_weight(FontWeight::SEMIBOLD).text_size(px(TEXT_15_PX)).child(mine.name.clone()))
                 .when(on, |el| el.child(badge(t("Active"), p.primary)))
-                .when_some(lp.as_ref(), |el, lp| el.child(div().row().gap(px(SPACE_3_PX)).child(dot(lp.primary)).child(dot(lp.secondary)).child(dot(lp.tertiary))));
+                .when_some(lp.as_ref(), |el, lp| {
+                    el.child(div().row().gap(px(SPACE_3_PX)).child(dot(lp.primary)).child(dot(lp.secondary)).child(dot(lp.tertiary)))
+                });
             // Its badges, then its actions, on a line of their own (the
             // name keeps the title line).
             let meta = div().row().items_center().gap(px(SPACE_8_PX)).child(div().flex_1().min_w(px(0.0)).child(super::looks_yours::yours_badges(mine, p))).child(Self::look_actions(&mine.id, true, p, cx));
@@ -679,7 +724,9 @@ impl StudioView {
         let has_before = !active.is_empty() && mandara_config::profiles::find(looks::BEFORE_PROFILE).is_some();
         let mut options = vec![chip("looks-wallpaper-colors", t("Use my wallpaper's colors"), wallpaper_colors, p)
             .child(icon(if wallpaper_colors { "check" } else { "image" }, ICON_12_PX, if wallpaper_colors { p.on_primary } else { p.primary }))
-            .on_click(move |_, _, cx| update_config(cx, move |c| c.looks.wallpaper_colors = !wallpaper_colors))
+            .on_click(move |_, _, cx| {
+                update_config(cx, move |c| c.looks.wallpaper_colors = !wallpaper_colors)
+            })
             .into_any_element()];
         if has_before {
             // A chip like its neighbours: one height for the whole row.
@@ -706,13 +753,17 @@ impl StudioView {
             };
             let anchors: &[(Anchor, &str)] = if strip { &STRIP_ANCHORS } else { &CARD_ANCHORS };
             let toggle = chip(SharedString::from(format!("card-{card_id}")), if on { t("On") } else { t("Off") }, on, p).on_click(move |_, _, cx| {
-                update_config(cx, move |c| dc::set_card(&mut c.desktop.widgets, card_id, (!on).then_some(anchor.unwrap_or(default_anchor))));
+                update_config(cx, move |c| {
+                    dc::set_card(&mut c.desktop.widgets, card_id, (!on).then_some(anchor.unwrap_or(default_anchor)))
+                });
             });
             let mut chips = div().row().flex_wrap().gap(px(SPACE_6_PX));
             if on {
                 for (a, label) in anchors.iter().copied() {
                     chips = chips.child(chip(SharedString::from(format!("card-{card_id}-{a:?}")), tr(label), anchor == Some(a), p).on_click(move |_, _, cx| {
-                        update_config(cx, move |c| dc::set_card(&mut c.desktop.widgets, card_id, Some(a)));
+                        update_config(cx, move |c| {
+                                dc::set_card(&mut c.desktop.widgets, card_id, Some(a))
+                            });
                     }));
                 }
             }

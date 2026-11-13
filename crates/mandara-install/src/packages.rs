@@ -5,7 +5,7 @@
 //! * **opt** — fonts (every interface language's script: Arabic, Persian
 //!   and Urdu, CJK, Devanagari, Bengali and Telugu; distributions that split Noto
 //!   by script list each one), desktop portals, extra Vulkan drivers,
-//!   colour emoji, icons and `xdg-utils`;
+//!   colour emoji, icons, `xdg-utils` and Bash for opt-in imported app setup commands;
 //! * **svc** — the system services Studio and the plugins talk to, the same
 //!   set on every family: AccountsService (Users), GeoClue (location), the
 //!   freedesktop sound theme (event sounds), UDisks2 (drives), UPower +
@@ -65,7 +65,7 @@ const GREETD_CAGE: &[&str] = &["greetd", "cage"];
 const ARCH: PackageSet = PackageSet {
     run: &["libxkbcommon", "wayland", "vulkan-icd-loader", "mesa", "fontconfig", "freetype2"],
     build: &["base-devel", "git", "curl", "pkgconf", "cmake"],
-    opt: &["xdg-desktop-portal", "xdg-desktop-portal-gtk", "noto-fonts", "noto-fonts-cjk", "inter-font", "ttf-jetbrains-mono", "pipewire-pulse", "pacman-contrib", "noto-fonts-emoji", "papirus-icon-theme", "xdg-utils"],
+    opt: &["bash", "xdg-desktop-portal", "xdg-desktop-portal-gtk", "noto-fonts", "noto-fonts-cjk", "inter-font", "ttf-jetbrains-mono", "pipewire-pulse", "pacman-contrib", "noto-fonts-emoji", "papirus-icon-theme", "xdg-utils"],
     svc: &["accountsservice", "geoclue", "sound-theme-freedesktop", "udisks2", "upower", "power-profiles-daemon", "i2c-tools", "networkmanager-openvpn", "pipewire", "wireplumber", "networkmanager", "bluez", "bluez-utils", "polkit", "gnome-keyring"],
     greeter: GREETD_CAGE,
 };
@@ -73,7 +73,7 @@ const ARCH: PackageSet = PackageSet {
 const DEBIAN: PackageSet = PackageSet {
     run: &["libxkbcommon0", "libwayland-client0", "libvulkan1", "mesa-vulkan-drivers", "libfontconfig1", "libfreetype6", "ca-certificates"],
     build: &["build-essential", "git", "curl", "pkg-config", "cmake", "libxkbcommon-dev", "libwayland-dev", "libfontconfig-dev", "libfreetype-dev"],
-    opt: &["xdg-desktop-portal", "xdg-desktop-portal-gtk", "fonts-noto-core", "fonts-noto-cjk", "fonts-inter", "fonts-jetbrains-mono", "pipewire-pulse", "fonts-noto-color-emoji", "papirus-icon-theme", "xdg-utils"],
+    opt: &["bash", "xdg-desktop-portal", "xdg-desktop-portal-gtk", "fonts-noto-core", "fonts-noto-cjk", "fonts-inter", "fonts-jetbrains-mono", "pipewire-pulse", "fonts-noto-color-emoji", "papirus-icon-theme", "xdg-utils"],
     svc: &["accountsservice", "geoclue-2.0", "sound-theme-freedesktop", "udisks2", "upower", "power-profiles-daemon", "i2c-tools", "network-manager-openvpn", "pipewire", "wireplumber", "network-manager", "bluez", "polkitd", "pkexec", "gnome-keyring", "libpam-gnome-keyring"],
     greeter: GREETD_CAGE,
 };
@@ -81,7 +81,7 @@ const DEBIAN: PackageSet = PackageSet {
 const FEDORA: PackageSet = PackageSet {
     run: &["libxkbcommon", "libwayland-client", "vulkan-loader", "mesa-vulkan-drivers", "fontconfig", "freetype"],
     build: &["gcc", "gcc-c++", "make", "git", "curl", "pkgconf-pkg-config", "cmake", "libxkbcommon-devel", "wayland-devel", "fontconfig-devel", "freetype-devel"],
-    opt: &["xdg-desktop-portal", "xdg-desktop-portal-gtk", "google-noto-sans-fonts", "google-noto-sans-arabic-fonts", "google-noto-sans-devanagari-fonts", "google-noto-sans-bengali-fonts", "google-noto-sans-telugu-fonts", "google-noto-sans-cjk-fonts", "rsms-inter-fonts", "jetbrains-mono-fonts", "pipewire-pulseaudio", "google-noto-color-emoji-fonts", "papirus-icon-theme", "xdg-utils"],
+    opt: &["bash", "xdg-desktop-portal", "xdg-desktop-portal-gtk", "google-noto-sans-fonts", "google-noto-sans-arabic-fonts", "google-noto-sans-devanagari-fonts", "google-noto-sans-bengali-fonts", "google-noto-sans-telugu-fonts", "google-noto-sans-cjk-fonts", "rsms-inter-fonts", "jetbrains-mono-fonts", "pipewire-pulseaudio", "google-noto-color-emoji-fonts", "papirus-icon-theme", "xdg-utils"],
     svc: &["accountsservice", "geoclue2", "sound-theme-freedesktop", "udisks2", "upower", "power-profiles-daemon", "i2c-tools", "NetworkManager-openvpn", "pipewire", "wireplumber", "NetworkManager", "bluez", "polkit", "gnome-keyring", "gnome-keyring-pam"],
     greeter: GREETD_CAGE,
 };
@@ -89,7 +89,7 @@ const FEDORA: PackageSet = PackageSet {
 const SUSE: PackageSet = PackageSet {
     run: &["libxkbcommon0", "libwayland-client0", "libvulkan1", "Mesa-vulkan-device-select", "fontconfig", "libfreetype6"],
     build: &["gcc", "gcc-c++", "make", "git", "curl", "pkgconf", "cmake", "libxkbcommon-devel", "wayland-devel", "fontconfig-devel", "freetype2-devel"],
-    opt: &["xdg-desktop-portal", "xdg-desktop-portal-gtk", "google-noto-sans-fonts", "noto-sans-arabic-fonts", "noto-sans-devanagari-fonts", "noto-sans-bengali-fonts", "noto-sans-telugu-fonts", "noto-sans-cjk-fonts", "inter-fonts", "jetbrains-mono-fonts", "pipewire-pulseaudio", "libvulkan_radeon", "libvulkan_intel", "noto-coloremoji-fonts", "papirus-icon-theme", "xdg-utils"],
+    opt: &["bash", "xdg-desktop-portal", "xdg-desktop-portal-gtk", "google-noto-sans-fonts", "noto-sans-arabic-fonts", "noto-sans-devanagari-fonts", "noto-sans-bengali-fonts", "noto-sans-telugu-fonts", "noto-sans-cjk-fonts", "inter-fonts", "jetbrains-mono-fonts", "pipewire-pulseaudio", "libvulkan_radeon", "libvulkan_intel", "noto-coloremoji-fonts", "papirus-icon-theme", "xdg-utils"],
     svc: &["accountsservice", "geoclue2", "sound-theme-freedesktop", "udisks2", "upower", "power-profiles-daemon", "i2c-tools", "NetworkManager-openvpn", "pipewire", "wireplumber", "NetworkManager", "bluez", "polkit", "gnome-keyring", "gnome-keyring-pam"],
     greeter: GREETD_CAGE,
 };
@@ -98,7 +98,7 @@ const SUSE: PackageSet = PackageSet {
 const VOID: PackageSet = PackageSet {
     run: &["libxkbcommon", "wayland", "vulkan-loader", "mesa-dri", "fontconfig", "freetype"],
     build: &["base-devel", "git", "curl", "pkg-config", "cmake", "libxkbcommon-devel", "wayland-devel", "fontconfig-devel", "freetype-devel"],
-    opt: &["xdg-desktop-portal", "xdg-desktop-portal-gtk", "noto-fonts-ttf", "noto-fonts-cjk", "font-inter", "font-jetbrains-mono", "mesa-vulkan-radeon", "mesa-vulkan-intel", "noto-fonts-emoji", "papirus-icon-theme", "xdg-utils"],
+    opt: &["bash", "xdg-desktop-portal", "xdg-desktop-portal-gtk", "noto-fonts-ttf", "noto-fonts-cjk", "font-inter", "font-jetbrains-mono", "mesa-vulkan-radeon", "mesa-vulkan-intel", "noto-fonts-emoji", "papirus-icon-theme", "xdg-utils"],
     svc: &["accountsservice", "geoclue2", "sound-theme-freedesktop", "udisks2", "upower", "power-profiles-daemon", "i2c-tools", "NetworkManager-openvpn", "pipewire", "wireplumber", "NetworkManager", "bluez", "polkit", "gnome-keyring"],
     greeter: GREETD_CAGE,
 };
@@ -106,7 +106,7 @@ const VOID: PackageSet = PackageSet {
 const ALPINE: PackageSet = PackageSet {
     run: &["libxkbcommon", "wayland-libs-client", "vulkan-loader", "mesa-dri-gallium", "fontconfig", "freetype"],
     build: &["build-base", "git", "curl", "pkgconf", "cmake", "libxkbcommon-dev", "wayland-dev", "fontconfig-dev", "freetype-dev"],
-    opt: &["xdg-desktop-portal", "xdg-desktop-portal-gtk", "font-noto", "font-noto-arabic", "font-noto-devanagari", "font-noto-bengali", "font-noto-telugu", "font-noto-cjk", "font-inter", "font-jetbrains-mono", "mesa-vulkan-ati", "mesa-vulkan-intel", "pipewire-pulse", "font-noto-emoji", "papirus-icon-theme", "xdg-utils"],
+    opt: &["bash", "xdg-desktop-portal", "xdg-desktop-portal-gtk", "font-noto", "font-noto-arabic", "font-noto-devanagari", "font-noto-bengali", "font-noto-telugu", "font-noto-cjk", "font-inter", "font-jetbrains-mono", "mesa-vulkan-ati", "mesa-vulkan-intel", "pipewire-pulse", "font-noto-emoji", "papirus-icon-theme", "xdg-utils"],
     svc: &["accountsservice", "geoclue", "sound-theme-freedesktop", "udisks2", "upower", "power-profiles-daemon", "i2c-tools", "networkmanager-openvpn", "pipewire", "wireplumber", "networkmanager", "bluez", "polkit", "gnome-keyring"],
     greeter: GREETD_CAGE,
 };
@@ -114,7 +114,7 @@ const ALPINE: PackageSet = PackageSet {
 const GENTOO: PackageSet = PackageSet {
     run: &["x11-libs/libxkbcommon", "dev-libs/wayland", "media-libs/vulkan-loader", "media-libs/mesa", "media-libs/fontconfig", "media-libs/freetype"],
     build: &["dev-vcs/git", "net-misc/curl", "virtual/pkgconfig", "dev-build/cmake"],
-    opt: &["sys-apps/xdg-desktop-portal", "sys-apps/xdg-desktop-portal-gtk", "media-fonts/noto", "media-fonts/noto-cjk", "media-fonts/inter", "media-fonts/jetbrains-mono", "media-fonts/noto-emoji", "x11-themes/papirus-icon-theme", "x11-misc/xdg-utils"],
+    opt: &["app-shells/bash", "sys-apps/xdg-desktop-portal", "sys-apps/xdg-desktop-portal-gtk", "media-fonts/noto", "media-fonts/noto-cjk", "media-fonts/inter", "media-fonts/jetbrains-mono", "media-fonts/noto-emoji", "x11-themes/papirus-icon-theme", "x11-misc/xdg-utils"],
     svc: &[
         "sys-apps/accountsservice",
         "app-misc/geoclue",
@@ -138,7 +138,7 @@ const GENTOO: PackageSet = PackageSet {
 const SOLUS: PackageSet = PackageSet {
     run: &["libxkbcommon", "wayland", "vulkan", "mesalib", "fontconfig", "freetype2"],
     build: &["git", "curl", "pkgconf", "cmake", "libxkbcommon-devel", "wayland-devel", "fontconfig-devel", "freetype2-devel"],
-    opt: &["xdg-desktop-portal", "xdg-desktop-portal-gtk", "noto-sans-ttf", "inter", "jetbrains-mono", "noto-emoji", "papirus-icon-theme", "xdg-utils"],
+    opt: &["bash", "xdg-desktop-portal", "xdg-desktop-portal-gtk", "noto-sans-ttf", "inter", "jetbrains-mono", "noto-emoji", "papirus-icon-theme", "xdg-utils"],
     svc: &["accountsservice", "geoclue", "sound-theme-freedesktop", "udisks2", "upower", "power-profiles-daemon", "i2c-tools", "networkmanager-openvpn", "pipewire", "wireplumber", "networkmanager", "bluez", "polkit", "gnome-keyring"],
     greeter: &[],
 };
@@ -147,6 +147,7 @@ const FREEBSD: PackageSet = PackageSet {
     run: &["libxkbcommon", "wayland", "vulkan-loader", "mesa-libs", "mesa-dri", "fontconfig", "freetype2", "ca_root_nss"],
     build: &["git", "curl", "pkgconf", "cmake", "gmake"],
     opt: &[
+        "bash",
         "xdg-desktop-portal",
         "xdg-desktop-portal-gtk",
         "noto-basic",
@@ -263,6 +264,18 @@ mod tests {
             assert!(!s.svc.is_empty(), "{f}: no service packages");
             assert!(!s.build.is_empty(), "{f}: no build packages");
             assert!(!s.opt.is_empty(), "{f}: no optional packages");
+        }
+    }
+
+    #[test]
+    fn imported_app_setup_has_an_optional_shell_without_installing_target_apps() {
+        for (family, packages) in sets() {
+            let bash = if family == Family::Gentoo { "app-shells/bash" } else { "bash" };
+            assert!(packages.opt.contains(&bash), "{family}: no optional Bash");
+            assert!(!packages.run.contains(&bash), "{family}: template setup is optional");
+            for app in ["rofi", "spicetify", "firefox"] {
+                assert!(!packages.groups().iter().any(|(_,group)|group.contains(&app)), "{family}: installing a catalog must not install its apps");
+            }
         }
     }
 

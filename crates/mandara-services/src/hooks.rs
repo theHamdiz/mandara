@@ -23,8 +23,8 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime};
 
-use mandara_config::power::{HookEvent, HooksConfig};
 use mandara_config::Skill;
+use mandara_config::power::{HookEvent, HooksConfig};
 use parking_lot::Mutex;
 use serde::Serialize;
 
@@ -141,7 +141,10 @@ pub fn parse_action(command: &str) -> Result<HookAction, String> {
 pub fn env_name(key: &str) -> String {
     let mut out = String::with_capacity(ENV_PREFIX.len() + key.len());
     out.push_str(ENV_PREFIX);
-    out.extend(key.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' }));
+    out.extend(key.chars().map(|c| {
+        if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_'
+        }
+    }));
     out
 }
 
@@ -175,7 +178,9 @@ pub fn configure(config: &HooksConfig, skills: &[Skill]) {
             r.config = config.clone();
             r.skills = skills.to_vec();
         }
-        None => *reg = Some(Registry { config: config.clone(), skills: skills.to_vec(), history: VecDeque::new() }),
+        None => {
+            *reg = Some(Registry { config: config.clone(), skills: skills.to_vec(), history: VecDeque::new() })
+        }
     }
 }
 
@@ -223,14 +228,17 @@ fn argvs_for(command: &str, skills: &[Skill]) -> Result<Vec<Vec<String>>, String
         HookAction::Skill(name) => skills
             .iter()
             .find(|s| s.name.eq_ignore_ascii_case(&name))
-            .map(|s| s.steps.iter().filter_map(|step| split_words(step).ok()).filter(|w| !w.is_empty()).map(mandara_argv).collect())
+            .map(|s| {
+                s.steps.iter().filter_map(|step| split_words(step).ok()).filter(|w| !w.is_empty()).map(mandara_argv).collect()
+            })
             .ok_or_else(|| mandara_i18n::tf("No skill named “{name}”", &[("name", &name)])),
     }
 }
 
 fn plan(event: HookEvent) -> Vec<Job> {
     let reg = REGISTRY.lock();
-    let Some(reg) = reg.as_ref() else { return Vec::new() };
+    let Some(reg) = reg.as_ref() else { return Vec::new();
+    };
     reg.config
         .for_event(event)
         .map(|rule| {
@@ -265,7 +273,7 @@ fn now_unix() -> u64 {
 }
 
 /// Sends `signal` to the process group led by `pid`.
-fn kill_group(pid: u32, signal: libc::c_int) {
+pub(crate) fn kill_group(pid: u32, signal: libc::c_int) {
     if let Ok(pid) = libc::pid_t::try_from(pid) {
         // SAFETY: kill(2) on a process group we created (the child called
         // setpgid(0, 0) through `process_group(0)`).
@@ -276,7 +284,8 @@ fn kill_group(pid: u32, signal: libc::c_int) {
 /// Runs one program to completion or until `deadline`.
 fn run_argv(argv: &[String], vars: &[(String, String)], deadline: Instant) -> (Option<i32>, bool, Option<String>) {
     use std::os::unix::process::CommandExt as _;
-    let Some((program, args)) = argv.split_first() else { return (None, false, Some(mandara_i18n::t("The command is empty").into())) };
+    let Some((program, args)) = argv.split_first() else { return (None, false, Some(mandara_i18n::t("The command is empty").into()));
+    };
     let mut cmd = Command::new(mandara_config::paths::expand_tilde(program));
     cmd.args(args).stdin(Stdio::null()).process_group(0);
     for (k, v) in vars {

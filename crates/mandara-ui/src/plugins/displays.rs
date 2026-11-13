@@ -3,9 +3,6 @@
 //! enabled), persistence to the compositor drop-ins, and external-monitor
 //! brightness over DDC/CI.
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-
 use gpui::{App, Global};
 use mandara_config::outputs::{DisplayProfile, OutputConfig, Transform, VrrMode};
 use mandara_i18n::{t, tf, tk};
@@ -24,11 +21,18 @@ const MHZ_PER_HZ: f64 = 1000.0;
 /// Parses `WIDTHxHEIGHT[@HZ]`.
 fn parse_mode(s: &str) -> Option<(u32, u32, Option<u32>)> {
     let (size, hz) = match s.split_once('@') {
-        Some((size, hz)) => (size, Some(hz.trim_end_matches("Hz").trim_end_matches("hz").parse::<f64>().ok()?)),
+        Some((size, hz)) => (size, Some(hz.trim_end_matches("Hz").trim_end_matches("hz").parse::<f64>().ok()
+                    .filter(|rate| {
+                        rate.is_finite() && *rate > 0.0 && *rate <= i32::MAX as f64 / MHZ_PER_HZ
+                    })?)),
         None => (s, None),
     };
     let (w, h) = size.split_once('x')?;
-    Some((w.trim().parse().ok()?, h.trim().parse().ok()?, hz.map(|hz| (hz * MHZ_PER_HZ).round() as u32)))
+    let width = w.trim().parse::<u32>().ok()
+        .filter(|value| *value > 0 && *value <= i32::MAX as u32)?;
+    let height = h.trim().parse::<u32>().ok()
+        .filter(|value| *value > 0 && *value <= i32::MAX as u32)?;
+    Some((width, height, hz.map(|hz| (hz * MHZ_PER_HZ).round() as u32)))
 }
 
 fn parse_bool(s: &str) -> Option<bool> {
@@ -41,13 +45,22 @@ fn parse_bool(s: &str) -> Option<bool> {
 
 /// Applies one property to `base` (the head's present state).
 pub fn set_property(base: &mut OutputConfig, property: &str, value: &str) -> Result<(), String> {
-    let bad = || tf("Invalid value {value} for {property}", &[("value", &value), ("property", &property)]);
+    let bad = || {
+        tf("Invalid value {value} for {property}", &[("value", &value), ("property", &property)])
+    };
     match property {
         "mode" => {
             let (w, h, r) = parse_mode(value).ok_or_else(bad)?;
             (base.width, base.height, base.refresh_mhz) = (Some(w), Some(h), r);
         }
-        "scale" => base.scale = Some(value.parse::<f32>().ok().filter(|s| *s > 0.0).ok_or_else(bad)?),
+        "scale" => {
+            base.scale = Some(value.parse::<f32>().ok().filter(|s| {
+                        s.is_finite()
+                            && (mandara_config::outputs::MIN_SCALE
+                                ..=mandara_config::outputs::MAX_SCALE)
+                                .contains(s)
+                    }).ok_or_else(bad)?)
+        }
         "transform" => base.transform = Some(Transform::parse(value).ok_or_else(bad)?),
         "position" => {
             let (x, y) = value.split_once([',', 'x']).ok_or_else(bad)?;
@@ -71,11 +84,12 @@ pub fn set_property(base: &mut OutputConfig, property: &str, value: &str) -> Res
     Ok(())
 }
 
-/// Runs `f` on a thread and hands its JSON (as text) back to the caller.
+/// Queues one hardware operation and returns its JSON reply asynchronously.
 fn pending(f: impl FnOnce() -> Result<serde_json::Value, String> + Send + 'static) -> Output {
     let (tx, rx) = async_channel::bounded(1);
-    std::thread::spawn(move || {
-        let _ = tx.send_blocking(f().map(|v| v.to_string()));
+    mandara_services::runtime::spawn("display-command", async move {
+        let _ = tx.send(outputs::jobs::run(f).await.map(|v| v.to_string()))
+            .await;
     });
     Output::Pending(rx)
 }
@@ -114,8 +128,24 @@ pub fn save_profile(name: &str, heads: &[outputs::Head], cx: &mut App) {
 /// Writes the current arrangement to the compositor drop-in (survives
 /// restarts; the compositor sync regenerates the file).
 pub fn persist(heads: &[outputs::Head], cx: &mut App) {
-    let list: Vec<OutputConfig> = heads.iter().map(outputs::Head::to_config).collect();
-    update_config(cx, move |c| c.compositor.outputs = list);
+    update_config(cx, |c| {
+        mandara_config::outputs::remember(
+            &mut c.compositor.outputs,
+            heads.iter().map(outputs::Head::to_config),
+        )
+    });
+}
+
+/// Keep the tested arrangement and save the live state, including changes
+/// made through profiles. Never persist an unapplied Studio draft.
+pub fn keep(cx: &mut App) -> gpui::Task<Result<bool, String>> {
+    cx.spawn(async move |cx| {
+        let Some(heads) = outputs::jobs::run(outputs::confirm_and_snapshot).await? else {
+            return Ok(false);
+        };
+        cx.update(|cx| persist(&heads, cx));
+        Ok(true)
+    })
 }
 
 // ── Brightness keys on external monitors ────────────────────────────────────
@@ -168,9 +198,7 @@ fn prime_ddc_level(cx: &mut App) {
         return;
     }
     cx.spawn(async move |cx| {
-        let level = cx
-            .background_executor()
-            .spawn(async { (ddc::access() == ddc::Access::Ready).then(ddc::monitors).and_then(|m| m.first().map(|m| m.percent() as f32 / PERCENT)) })
+        let level = mandara_services::runtime::unblock(|| { (ddc::access() == ddc::Access::Ready).then(ddc::monitors).and_then(|m| m.first().map(|m| m.percent() as f32 / PERCENT)) })
             .await;
         cx.update(|cx| cx.default_global::<DdcLevel>().0 = level);
     })
@@ -180,7 +208,7 @@ fn prime_ddc_level(cx: &mut App) {
 // ── Profile auto-apply on hotplug ───────────────────────────────────────────
 
 #[derive(Default)]
-struct Hotplug(Option<Arc<AtomicBool>>);
+struct Hotplug(Option<outputs::Watch>);
 impl Global for Hotplug {}
 
 /// Starts (or stops) the hotplug watcher to match `displays.auto_profiles`
@@ -188,35 +216,68 @@ impl Global for Hotplug {}
 pub fn ensure_hotplug(cx: &mut App) {
     let cfg = config(cx).read(cx).snapshot();
     let want = cfg.displays.auto_profiles && !cfg.displays.profiles.is_empty();
-    let running = cx.try_global::<Hotplug>().is_some_and(|h| h.0.is_some());
+    let running = cx.try_global::<Hotplug>().is_some_and(|h| h.0.as_ref().is_some_and(outputs::Watch::is_alive));
     if want == running {
         return;
     }
     if !want {
-        if let Some(stop) = cx.default_global::<Hotplug>().0.take() {
-            stop.store(true, Ordering::Relaxed);
-        }
+        drop(cx.default_global::<Hotplug>().0.take());
         return;
     }
-    let stop = Arc::new(AtomicBool::new(false));
-    cx.default_global::<Hotplug>().0 = Some(stop.clone());
-    let (tx, rx) = async_channel::unbounded::<Vec<outputs::Head>>();
-    outputs::watch(stop, move |heads| {
-        let _ = tx.send_blocking(heads);
-    });
+    let (tx, rx) = async_channel::bounded::<Vec<outputs::Head>>(1);
+    let watch = match outputs::watch(move |heads| {
+        let _ = tx.force_send(heads);
+    }) {
+        Ok(watch) => watch,
+        Err(error) => {
+            tracing::warn!("display hotplug watcher: {error}");
+            return;
+        }
+    };
+    let stop = watch.stopped();
+    cx.default_global::<Hotplug>().0 = Some(watch);
     cx.spawn(async move |cx| {
-        while let Ok(heads) = rx.recv().await {
+        while let Ok(mut heads) = rx.recv().await {
+            while let Ok(newer) = rx.try_recv() {
+                heads = newer;
+            }
             let profile = cx.update(|cx| {
                 let cfg = config(cx).read(cx).snapshot();
-                cfg.displays.auto_profiles.then(|| cfg.displays.matching_profile(&outputs::identities(&heads)).cloned()).flatten()
+                cfg.displays.auto_profiles.then(|| {
+                        cfg.displays.matching_profile(&outputs::identities(&heads)).cloned()
+                    }).flatten()
             });
             if let Some(profile) = profile {
                 tracing::info!("displays: applying profile {:?}", profile.name);
-                std::thread::spawn(move || {
-                    if let Err(err) = outputs::apply(&profile.outputs, false) {
-                        tracing::warn!("displays: profile {:?}: {err}", profile.name);
+                let cancellation = stop.clone();
+                let expected = outputs::current_revision();
+                let preferences = profile.outputs.clone();
+                let result = outputs::jobs::run(move || {
+                    outputs::apply_if_active(&profile.outputs, expected, &cancellation)
+                })
+                .await;
+                match result {
+                    Ok(Some(applied))
+                        if !stop.load(std::sync::atomic::Ordering::Acquire)
+                            && outputs::current_revision() == applied.revision =>
+                    {
+                        cx.update(|cx| {
+                            let mut saved = preferences;
+                            mandara_config::outputs::remember(
+                                &mut saved,
+                                applied.heads.iter().map(outputs::Head::to_config),
+                            );
+                            update_config(cx, |config| {
+                                mandara_config::outputs::remember(
+                                    &mut config.compositor.outputs,
+                                    saved,
+                                )
+                            });
+                        });
                     }
-                });
+                    Ok(_) => {}
+                    Err(error) => tracing::warn!("applying automatic display profile: {error}"),
+                }
             }
         }
     })
@@ -226,7 +287,28 @@ pub fn ensure_hotplug(cx: &mut App) {
 /// Starts the hotplug watcher when needed and follows config changes.
 pub fn init(cx: &mut App) {
     ensure_hotplug(cx);
+    persist_output_preferences(cx);
     prime_ddc_level(cx);
+    let cfg = config(cx).read(cx).snapshot();
+    let output_revision = outputs::current_revision();
+    // The hotplug watcher handles an enabled profile, including its first snapshot.
+    if !cfg.compositor.outputs.is_empty() {
+        cx.spawn(async move |_| {
+            mandara_services::runtime::unblock(move || {
+                if outputs::supported()
+                    && let Err(err) = outputs::restore(
+                        &cfg.compositor.outputs,
+                        cfg.displays.auto_profiles.then_some(&cfg.displays),
+                        output_revision,
+                    )
+                {
+                    tracing::warn!("displays: restoring the saved arrangement: {err}");
+                }
+            })
+            .await;
+        })
+        .detach();
+    }
     let store = config(cx);
     // Turning "Control external monitors" on live reads the monitors'
     // level again, so the next brightness key starts from it (it was only
@@ -234,6 +316,7 @@ pub fn init(cx: &mut App) {
     let mut ddc_on = store.read(cx).get().displays.brightness.ddc;
     cx.observe(&store, move |store, cx| {
         ensure_hotplug(cx);
+        persist_output_preferences(cx);
         let now = store.read(cx).get().displays.brightness.ddc;
         if now && !ddc_on {
             prime_ddc_level(cx);
@@ -243,14 +326,77 @@ pub fn init(cx: &mut App) {
     .detach();
 }
 
+/// One active writer and one newest snapshot; no resident blocking thread.
+struct OutputPreferences {
+    last: Vec<OutputConfig>,
+    sender: async_channel::Sender<Vec<OutputConfig>>,
+}
+impl Global for OutputPreferences {}
+
+fn persist_output_preferences(cx: &mut App) {
+    use mandara_config::compositor_theme;
+    let Some(backend) = crate::hub::hub(cx).read(cx).compositor.clone() else {
+        return;
+    };
+    let target = backend.target();
+    if !compositor_theme::supported(target) {
+        return;
+    }
+    let outputs = &config(cx).read(cx).get().compositor.outputs;
+    if cx
+        .try_global::<OutputPreferences>()
+        .is_some_and(|writer| writer.last == *outputs)
+    {
+        return;
+    }
+    if cx.try_global::<OutputPreferences>().is_none() {
+        let (sender, receiver) = async_channel::bounded::<Vec<OutputConfig>>(1);
+        mandara_services::runtime::spawn("display-preferences", async move {
+            while let Ok(mut outputs) = receiver.recv().await {
+                while let Ok(newer) = receiver.try_recv() {
+                    outputs = newer;
+                }
+                let result = mandara_services::runtime::unblock(move || {
+                    mandara_services::compositor_config::persist_outputs(target, &outputs)
+                })
+                .await;
+                if let Err(error) = result {
+                    tracing::warn!("saving display preferences: {error:#}");
+                }
+            }
+        });
+        cx.set_global(OutputPreferences {
+            last: Vec::new(),
+            sender,
+        });
+    }
+    let outputs = config(cx).read(cx).get().compositor.outputs.clone();
+    let writer = cx.global_mut::<OutputPreferences>();
+    writer.last.clone_from(&outputs);
+    let _ = writer.sender.force_send(outputs);
+}
+
 pub fn register(r: &mut PluginRegistry) {
     r.command(
         OWNER,
-        CommandSpec::new("display list", tk("Connected displays with modes, position, scale and rotation (wlr-output-management)"), |_, _| {
+        CommandSpec::new_output("display list", tk("Connected displays with modes, position, scale and rotation (wlr-output-management)"), |_, _| {
+            Ok(pending(|| {
             let heads = outputs::heads()?;
-            Ok(json!({ "outputs": heads.iter().map(head_json).collect::<Vec<_>>(), "revert_pending_secs": outputs::revert_remaining().map(|d| d.as_secs()) }))
+            Ok(json!({ "outputs": heads.iter().map(head_json).collect::<Vec<_>>(), "heads":heads, "revert_pending_secs": outputs::revert_remaining().map(|d| d.as_secs()) }))
+        }))
         }),
     );
+    r.command(OWNER,CommandSpec::new_output("display test",tk("Test a display arrangement from JSON, keeping unrelated changes made since the draft"),|arguments,cx| {
+        let request: outputs::TestRequest = serde_json::from_str(&arguments.rest(0)).map_err(|error|error.to_string())?;
+        let seconds = config(cx).read(cx).get().displays.revert_secs();
+        Ok(pending(move || {
+            let seconds = match request.before {
+                Some(before) => outputs::apply_edits_with_revert(&before,&request.outputs,seconds)?,
+                None => outputs::apply_with_revert(&request.outputs,seconds)?,
+            };
+            Ok(json!({"reverts_in_secs":seconds}))
+        }))
+    }).arg(ArgSpec::required("json",ArgKind::String,tk("display draft as JSON"))));
     r.command(
         OWNER,
         CommandSpec::new_output("display set", tk("Change one display property; it reverts after the countdown unless `display confirm` keeps it"), |a, cx| {
@@ -270,17 +416,37 @@ pub fn register(r: &mut PluginRegistry) {
         .arg(ArgSpec::required("value", ArgKind::String, tk("e.g. 2560x1440@144, 1.5, 90, 1920,0, on")))
         .example("display set DP-1 mode 2560x1440@144"),
     );
-    r.command(OWNER, CommandSpec::new("display confirm", tk("Keep the display change being tested"), |_, _| Ok(json!({ "kept": outputs::confirm() }))));
-    r.command(
-        OWNER,
-        CommandSpec::new_output("display revert", tk("Undo the display change being tested right away"), |_, _| Ok(pending(|| outputs::revert_now().map(|r| json!({ "reverted": r }))))),
+    r.command(OWNER, CommandSpec::new_output("display confirm", tk("Keep the display change being tested"), |_, cx| {
+                let task = keep(cx);
+                let (tx, rx) = async_channel::bounded(1);
+                cx.spawn(async move |_| {
+                    let result = task.await.map(|kept| json!({ "kept": kept }).to_string());
+                    let _ = tx.send(result).await;
+                })
+                .detach();
+                Ok(Output::Pending(rx)) }),
     );
     r.command(
         OWNER,
-        CommandSpec::new("display persist", tk("Write the current display arrangement to the compositor drop-in so it survives restarts"), |_, cx| {
-            let heads = outputs::heads()?;
-            persist(&heads, cx);
-            Ok(json!({ "persisted": heads.iter().map(|h| h.name.clone()).collect::<Vec<_>>() }))
+        CommandSpec::new_output("display revert", tk("Undo the display change being tested right away"), |_, _| {
+                Ok(pending(|| {
+                    outputs::revert_now().map(|r| json!({ "reverted": r }))
+                }))
+            },
+        ),
+    );
+    r.command(
+        OWNER,
+        CommandSpec::new_output("display persist", tk("Write the current display arrangement to the compositor drop-in so it survives restarts"), |_, cx| {
+            let (tx,rx) = async_channel::bounded(1);
+            cx.spawn(async move |cx| {
+                let result = outputs::jobs::run(outputs::heads).await.map(|heads| {
+                    cx.update(|cx| persist(&heads, cx));
+                    json!({ "persisted": heads.iter().map(|head| &head.name).collect::<Vec<_>>() }).to_string()
+                });
+                let _ = tx.send(result).await;
+            }).detach();
+            Ok(Output::Pending(rx))
         }),
     );
     r.command(
@@ -292,23 +458,32 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         OWNER,
-        CommandSpec::new("display profile list", tk("Saved display profiles and which one matches the connected monitors"), |_, cx| {
+        CommandSpec::new_output("display profile list", tk("Saved display profiles and which one matches the connected monitors"), |_, cx| {
             let cfg = config(cx).read(cx).snapshot();
-            let connected = outputs::heads().map(|h| outputs::identities(&h)).unwrap_or_default();
+            Ok(pending(move || {
+                let connected = outputs::identities(&outputs::heads()?);
             let list: Vec<_> = cfg.displays.profiles.iter().map(|p| json!({ "name": p.name, "monitors": p.identities(), "matches": p.matches(&connected) })).collect();
             Ok(json!({ "profiles": list, "auto_apply": cfg.displays.auto_profiles }))
+        }))
         }),
     );
     r.command(
         OWNER,
-        CommandSpec::new("display profile save", tk("Save the current arrangement as a profile (applied automatically when the same monitors connect)"), |a, cx| {
+        CommandSpec::new_output("display profile save", tk("Save the current arrangement as a profile (applied automatically when the same monitors connect)"), |a, cx| {
             let name = a.rest(0);
             if name.trim().is_empty() {
                 return Err(t("Give the profile a name").into());
             }
-            let heads = outputs::heads()?;
-            save_profile(name.trim(), &heads, cx);
-            Ok(json!({ "saved": name.trim(), "monitors": outputs::identities(&heads) }))
+            let name = name.trim().to_string();
+            let (tx,rx) = async_channel::bounded(1);
+            cx.spawn(async move |cx| {
+                let result = outputs::jobs::run(outputs::heads).await.map(|heads| {
+                    cx.update(|cx| save_profile(&name, &heads, cx));
+                    json!({ "saved": name, "monitors": outputs::identities(&heads) }).to_string()
+                });
+                let _ = tx.send(result).await;
+            }).detach();
+            Ok(Output::Pending(rx))
         })
         .arg(ArgSpec::required("name", ArgKind::String, tk("profile name")))
         .example("display profile save Desk"),
@@ -318,7 +493,34 @@ pub fn register(r: &mut PluginRegistry) {
         CommandSpec::new_output("display profile apply", tk("Apply a saved display profile"), |a, cx| {
             let name = a.rest(0);
             let profile = config(cx).read(cx).get().displays.profiles.iter().find(|p| p.name == name.trim()).cloned().ok_or_else(|| tf("No profile named {name}", &[("name", &name)]))?;
-            Ok(pending(move || outputs::apply(&profile.outputs, false).map(|_| json!({ "applied": profile.name }))))
+                let (sender, receiver) = async_channel::bounded(1);
+                cx.spawn(async move |cx| {
+                    let preferences = profile.outputs.clone();
+                    let result =
+                        outputs::jobs::run(move || outputs::apply_and_snapshot(&profile.outputs))
+                            .await
+                            .map(|applied| {
+                                if outputs::current_revision() == applied.revision {
+                                    cx.update(|cx| {
+                                        let mut saved = preferences;
+                                        mandara_config::outputs::remember(
+                                            &mut saved,
+                                            applied.heads.iter().map(outputs::Head::to_config),
+                                        );
+                                        update_config(cx, |config| {
+                                            mandara_config::outputs::remember(
+                                                &mut config.compositor.outputs,
+                                                saved,
+                                            )
+                                        });
+                                    });
+                                }
+                                json!({ "applied": profile.name }).to_string()
+                            });
+                    let _ = sender.send(result).await;
+                })
+                .detach();
+                Ok(Output::Pending(receiver))
         })
         .arg(ArgSpec::required("name", ArgKind::String, tk("profile name"))),
     );
@@ -393,7 +595,11 @@ mod tests {
         assert_eq!(o.vrr, Some(VrrMode::Fullscreen));
         set_property(&mut o, "enabled", "off").unwrap();
         assert!(!o.enabled);
-        for (p, v) in [("scale", "-1"), ("mode", "big"), ("position", "1"), ("vrr", "maybe"), ("nope", "1")] {
+        for (p, v) in [("scale", "-1"), ("scale", "inf"),
+            ("scale", "NaN"),
+            ("mode", "0x1080"),
+            ("mode", "1920x1080@NaN"),
+            ("mode", "big"), ("position", "1"), ("vrr", "maybe"), ("nope", "1")] {
             assert!(set_property(&mut o, p, v).is_err(), "{p}={v}");
         }
         assert!(PROPERTIES.iter().all(|p| *p != "nope"));

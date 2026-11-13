@@ -832,7 +832,7 @@ pub enum Tone {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum FontRole {
-    /// Typography → Desktop widgets (the display face until one is set).
+    /// The layout's font roles; ordinary text follows Typography → Desktop widgets.
     #[default]
     Widgets,
     /// Display face (Alexandria by default).

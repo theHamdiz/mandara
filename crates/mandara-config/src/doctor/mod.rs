@@ -32,6 +32,7 @@
 
 pub mod fix;
 pub mod state;
+pub mod theme;
 
 mod hyprland;
 mod mango;

@@ -57,8 +57,8 @@ const PROTECTED: &[&str] = &["sandbox"];
 /// (`target/<profile>`, `target/<triple>/<profile>`, `target/<tool>/<profile>`,
 /// `target/<tool>/<triple>/<profile>`).
 const PROFILE_SEARCH_DEPTH: usize = 3;
-/// Process names that mean a build is running (`--cargo-cache`).
-const BUILD_PROCESSES: &[&str] = &["cargo", "rustc"];
+/// Compiler and Cargo processes whose arguments can refer to build artifacts.
+const BUILD_PROCESSES: &[&str] = &["cargo", "rustc", "rustdoc"];
 
 /// What one pruning step deletes.
 #[derive(Clone, Debug, PartialEq)]
@@ -125,6 +125,10 @@ fn prune_once(roots: &[PathBuf], max_gib: f64, cargo_cache: bool, dry_run: bool)
         }
         if c.lock_dir.is_none() && builds_running() {
             println!("skip {} (a build is running)", c.path.display());
+            continue;
+        }
+        if c.lock_dir.as_ref().is_some_and(|profile|profile_in_use(profile,Path::new("/proc"))) {
+            println!("skip {} (a running test or compiler is using it)",c.path.display());
             continue;
         }
         let size = disk_usage(&c.path);
@@ -216,6 +220,23 @@ fn try_lock(profile: &Path) -> Option<ProfileLock> {
     lock.try_lock().ok().map(|()| ProfileLock(lock))
 }
 
+/// Cargo releases a profile lock before some doctest runs. Those processes
+/// still need the profile's libraries even though another process can lock it.
+fn profile_in_use(profile: &Path,processes: &Path) -> bool {
+    let profile = std::fs::canonicalize(profile).unwrap_or_else(|_|profile.to_path_buf());
+    let Ok(entries) = std::fs::read_dir(processes) else { return true };
+    entries.flatten().any(|entry| {
+        let process = entry.path();
+        if std::fs::read_link(process.join("exe")).is_ok_and(|path|path.starts_with(&profile)) { return true; }
+        if !std::fs::read_to_string(process.join("comm")).is_ok_and(|name|BUILD_PROCESSES.contains(&name.trim())) { return false; }
+        std::fs::read(process.join("cmdline")).is_ok_and(|arguments| arguments.split(|byte|*byte == 0).any(|argument| {
+            use std::os::unix::ffi::OsStrExt as _;
+            Path::new(std::ffi::OsStr::from_bytes(argument)).starts_with(&profile)
+                || argument.iter().enumerate().filter(|(_,byte)|**byte == b'=').any(|(index,_)|Path::new(std::ffi::OsStr::from_bytes(&argument[index+1..])).starts_with(&profile))
+        }))
+    })
+}
+
 /// The unpacked registry sources (`$CARGO_HOME/registry/src/<index>`).
 fn cargo_registry_src() -> Vec<PathBuf> {
     let home = std::env::var_os("CARGO_HOME").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cargo")));
@@ -270,6 +291,24 @@ mod tests {
         std::fs::write(dir.join(INCREMENTAL).join("cache"), vec![1u8; bytes]).unwrap();
         std::fs::write(dir.join("deps").join("lib.rlib"), vec![2u8; bytes]).unwrap();
         dir.to_path_buf()
+    }
+
+    #[test]
+    fn doctests_keep_their_profile_alive_after_cargo_releases_the_build_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let profile = dir.path().join("target/debug");
+        let proc = dir.path().join("proc/123");
+        std::fs::create_dir_all(&profile).unwrap();
+        std::fs::create_dir_all(&proc).unwrap();
+        std::fs::write(proc.join("comm"),"rustdoc\n").unwrap();
+        std::fs::write(proc.join("cmdline"),format!("rustdoc\0--extern\0library={}/deps/library.rlib\0",profile.display())).unwrap();
+        assert!(profile_in_use(&profile,&dir.path().join("proc")));
+        let unrelated = profile.with_file_name("debug-other");
+        assert!(!profile_in_use(&unrelated,&dir.path().join("proc")));
+        std::fs::write(proc.join("comm"),"tests\n").unwrap();
+        std::fs::write(proc.join("cmdline"),b"tests\0").unwrap();
+        std::os::unix::fs::symlink(profile.join("deps/tests"),proc.join("exe")).unwrap();
+        assert!(profile_in_use(&profile,&dir.path().join("proc")));
     }
 
     #[test]

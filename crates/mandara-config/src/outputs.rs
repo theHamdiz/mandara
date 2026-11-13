@@ -282,6 +282,118 @@ pub fn identity(name: &str, make: &str, model: &str, serial: &str) -> String {
     if serial.trim().is_empty() || make.trim().is_empty() { name.to_string() } else { format!("{} {} {}", make.trim(), model.trim(), serial.trim()) }
 }
 
+/// Remember connected monitors without losing the settings of an unplugged
+/// one. An EDID match moves its saved settings to its current connector.
+pub fn remember(saved: &mut Vec<OutputConfig>, current: impl IntoIterator<Item = OutputConfig>) {
+    for mut output in current {
+        if let Some(previous) = saved.iter().find(|old| {
+            old.name == output.name
+                || (!output.serial.is_empty() && old.identity() == output.identity())
+        }) {
+            if !output.enabled {
+                output.width = output.width.or(previous.width);
+                output.height = output.height.or(previous.height);
+                output.refresh_mhz = output.refresh_mhz.or(previous.refresh_mhz);
+                output.scale = output.scale.or(previous.scale);
+                output.transform = output.transform.or(previous.transform);
+                output.x = output.x.or(previous.x);
+                output.y = output.y.or(previous.y);
+                output.vrr = output.vrr.or(previous.vrr);
+            }
+            // The output protocol reports only on/off, so a snapshot cannot
+            // distinguish a compositor's fullscreen-only policy from on.
+            if previous.vrr == Some(VrrMode::Fullscreen) && output.vrr == Some(VrrMode::On) {
+                output.vrr = previous.vrr;
+            }
+        }
+        saved.retain(|old| {
+            old.name != output.name
+                && (output.serial.is_empty() || old.identity() != output.identity())
+        });
+        saved.push(output);
+    }
+}
+
+#[cfg(test)]
+mod persistence_tests {
+    use super::*;
+
+    #[test]
+    fn snapshots_keep_disabled_monitor_preferences_and_fullscreen_vrr_policy() {
+        let before = OutputConfig {
+            name: "DP-1".into(),
+            width: Some(2560),
+            height: Some(1440),
+            scale: Some(1.5),
+            transform: Some(Transform::Rotate90),
+            x: Some(-1440),
+            y: Some(120),
+            vrr: Some(VrrMode::Fullscreen),
+            ..Default::default()
+        };
+        let mut saved = vec![before.clone()];
+        remember(
+            &mut saved,
+            [OutputConfig {
+                name: "DP-1".into(),
+                enabled: false,
+                ..Default::default()
+            }],
+        );
+        assert_eq!(
+            saved,
+            [OutputConfig {
+                enabled: false,
+                ..before.clone()
+            }]
+        );
+        remember(
+            &mut saved,
+            [OutputConfig {
+                vrr: Some(VrrMode::On),
+                ..before.clone()
+            }],
+        );
+        assert_eq!(saved[0].vrr, Some(VrrMode::Fullscreen));
+        remember(
+            &mut saved,
+            [OutputConfig {
+                vrr: Some(VrrMode::Off),
+                ..before
+            }],
+        );
+        assert_eq!(saved[0].vrr, Some(VrrMode::Off));
+    }
+
+    #[test]
+    fn saving_keeps_unplugged_monitors_and_updates_changed_connectors() {
+        let old = OutputConfig {
+            name: "DP-1".into(),
+            make: "Demo".into(),
+            model: "Display".into(),
+            serial: "42".into(),
+            scale: Some(1.5),
+            ..Default::default()
+        };
+        let laptop = OutputConfig {
+            name: "eDP-1".into(),
+            scale: Some(2.0),
+            ..Default::default()
+        };
+        let mut saved = vec![old.clone(), laptop.clone()];
+        let moved = OutputConfig {
+            name: "DP-2".into(),
+            scale: Some(1.25),
+            transform: Some(Transform::Rotate90),
+            x: Some(-1080),
+            y: Some(0),
+            ..old
+        };
+        remember(&mut saved, [moved.clone()]);
+        assert_eq!(saved, [laptop, moved]);
+    }
+}
+
 /// A saved arrangement, applied automatically when exactly its monitors
 /// are connected.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -489,7 +601,9 @@ pub fn assignment(cfg: &DisplaysConfig, kind: SurfaceKind, output: &str) -> bool
     match set.show_on {
         ScreenChoice::All => true,
         ScreenChoice::Primary => cfg.primary.as_deref().filter(|p| !p.trim().is_empty()).is_none_or(|p| same_output(p, output)),
-        ScreenChoice::Selected => set.outputs.is_empty() || set.outputs.iter().any(|o| same_output(o, output)),
+        ScreenChoice::Selected => {
+            set.outputs.is_empty() || set.outputs.iter().any(|o| same_output(o, output))
+        }
     }
 }
 
@@ -536,12 +650,11 @@ pub fn mango_lines(outputs: &[OutputConfig]) -> String {
         if !o.enabled {
             props.push("disable:1".into());
         } else {
-            if let (Some(w), Some(h)) = (o.width, o.height) {
+            // Mango requires a complete mode; partial modes leave its current mode in place.
+            if let (Some(w), Some(h), Some(r)) = (o.width, o.height, o.refresh_mhz.filter(|r| *r > 0)) {
                 props.push(format!("width:{w}"));
                 props.push(format!("height:{h}"));
-                if let Some(r) = o.refresh_mhz.filter(|r| *r > 0) {
-                    props.push(format!("refresh:{}", hz(r)));
-                }
+                props.push(format!("refresh:{}", hz(r)));
             }
             if let (Some(x), Some(y)) = (o.x, o.y) {
                 props.push(format!("x:{x}"));
@@ -557,7 +670,9 @@ pub fn mango_lines(outputs: &[OutputConfig]) -> String {
                 props.push(format!("vrr:{}", u8::from(v != VrrMode::Off)));
             }
         }
-        let _ = writeln!(s, "monitor_rule={}", props.join(","));
+        if props.len() > 1 {
+            let _ = writeln!(s, "monitor_rule={}", props.join(","));
+        }
     }
     s
 }
@@ -706,7 +821,9 @@ pub fn umbriel_tables(outputs: &[OutputConfig]) -> String {
 /// fullscreen-only adaptive sync: that choice turns it on, as on MangoWM.
 pub fn sway_lines(outputs: &[OutputConfig]) -> String {
     let mut s = String::new();
-    for o in outputs.iter().filter(|o| !o.name.trim().is_empty() && !o.name.contains(char::is_whitespace) && o.has_settings()) {
+    for o in outputs.iter().filter(|o| {
+        !o.name.trim().is_empty() && !o.name.contains(char::is_whitespace) && o.has_settings()
+    }) {
         let name = o.name.trim();
         if !o.enabled {
             let _ = writeln!(s, "output {name} disable");
@@ -751,7 +868,9 @@ pub fn emit_outputs(target: Target, outputs: &[OutputConfig], hyprland_lua: bool
         Target::Sway => ("#", sway_lines(outputs)),
         // River has no output settings (outputs are set with
         // wlr-output-management tools; Studio → Displays applies them live).
-        Target::River | Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic => ("#", String::new()),
+        Target::River | Target::KWin | Target::Aqueous | Target::Labwc | Target::Cosmic => {
+            ("#", String::new())
+        }
     };
     if body.trim().is_empty() {
         return String::new();
@@ -770,7 +889,8 @@ pub fn user_output_rules(target: Target) -> BTreeSet<String> {
         if !visited.insert(file.clone()) || is_generated(&file) {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(&file) else { continue };
+        let Ok(text) = std::fs::read_to_string(&file) else { continue;
+        };
         out.extend(parse_output_rules(target, &text));
         stack.extend(included_files(target, &file, &text));
     }
@@ -782,7 +902,8 @@ pub fn parse_output_rules(target: Target, text: &str) -> Vec<String> {
     if target == Target::Umbriel {
         // `[output.NAME]` / `[output."NAME"]` tables (sub-tables such as
         // `[output.DP-1.layout.scrolling]` name the same output).
-        let Ok(doc) = text.parse::<toml::Table>() else { return Vec::new() };
+        let Ok(doc) = text.parse::<toml::Table>() else { return Vec::new();
+        };
         return doc.get("output").and_then(toml::Value::as_table).map(|t| t.keys().cloned().collect()).unwrap_or_default();
     }
     let mut out = Vec::new();
@@ -791,8 +912,12 @@ pub fn parse_output_rules(target: Target, text: &str) -> Vec<String> {
             Target::Mango => line
                 .strip_prefix("monitor_rule=")
                 .or_else(|| line.strip_prefix("monitorrule="))
-                .and_then(|rest| rest.split(',').find_map(|p| p.trim().strip_prefix("name:")).or_else(|| rest.split(',').next()))
-                .map(|n| n.trim_start_matches('^').trim_end_matches('$').replace('\\', "")),
+                .and_then(|rest| {
+                    rest.split(',').find_map(|p| p.trim().strip_prefix("name:")).or_else(|| rest.split(',').next())
+                })
+                .map(|n| {
+                    n.trim_start_matches('^').trim_end_matches('$').replace('\\', "")
+                }),
             Target::Hyprland => line.strip_prefix("monitor").and_then(|r| r.trim_start().strip_prefix('=')).and_then(|r| r.split(',').next()).map(|n| n.trim().to_string()),
             Target::Niri => line.strip_prefix("output ").and_then(|r| r.trim().strip_prefix('"')).and_then(|r| r.split('"').next()).map(str::to_string),
             // Read whole-file above.
@@ -909,6 +1034,15 @@ mod tests {
         assert!(text.contains("monitor_rule=name:^DP-1$,width:3840,height:2160,refresh:59.997,x:2560,y:0,scale:1.50,rr:1,vrr:1"), "{text}");
         assert!(text.contains("monitor_rule=name:^eDP-1$,disable:1"));
         assert!(!text.contains("HDMI-A-2"), "nothing set, nothing written");
+    }
+
+    #[test]
+    fn mango_partial_modes_keep_independent_scale_and_position_settings() {
+        let output = OutputConfig { name: "DP-1".into(), width: Some(2560), height: Some(1440), scale: Some(1.25), ..Default::default() };
+        let text = mango_lines(&[output]);
+        assert!(!text.contains("width:") && !text.contains("height:") && !text.contains("refresh:"));
+        assert!(text.contains("scale:1.25"));
+        assert!(mango_lines(&[OutputConfig { name:"DP-1".into(),width:Some(2560),height:Some(1440),..Default::default() }]).is_empty());
     }
 
     /// MangoWM's own checker accepts the monitor rules.
