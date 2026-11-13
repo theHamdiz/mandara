@@ -173,13 +173,21 @@ pub(super) fn apply(
         };
         // TOML and self-managed dialects also expose literal alternatives through
         // the field parser; unresolved expressions remain with the native checker.
-        managed.existing_chords.extend(
-            current
-                .sources
-                .iter()
-                .flat_map(|source| &source.bindings)
-                .filter_map(|row| row.chord.clone()),
-        );
+        if !matches!(
+            session.target,
+            compositor::Target::Mango
+                | compositor::Target::Sway
+                | compositor::Target::Hyprland
+                | compositor::Target::Niri
+        ) {
+            managed.existing_chords.extend(
+                current
+                    .sources
+                    .iter()
+                    .flat_map(|source| &source.bindings)
+                    .filter_map(|row| row.chord.clone()),
+            );
+        }
         previous
             .as_deref()
             .map(|body| compositor::shortcuts::replace(session.target, dialect, body, &managed))
@@ -262,6 +270,150 @@ mod tests {
         fn version(&self) -> Option<(u32, u32)> {
             panic!("version lookup must follow bounded reads")
         }
+    }
+
+    struct NoopBackend;
+    impl Backend for NoopBackend {
+        fn validate(&self, _: &Path, _: &str) -> Result<()> {
+            Ok(())
+        }
+        fn check(&self) -> LiveCheck {
+            Ok(()).into()
+        }
+        fn apply(&self) -> Result<()> {
+            Ok(())
+        }
+        fn restore(&self) -> Result<()> {
+            Ok(())
+        }
+        fn version(&self) -> Option<(u32, u32)> {
+            None
+        }
+    }
+
+    #[test]
+    fn generated_bindings_preserve_non_overlapping_mango_modes() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join(".mandara-shortcut-test"),
+            "isolated shortcut transaction\n",
+        )
+        .unwrap();
+        let runtime = directory.path().join("runtime");
+        fs::create_dir(&runtime).unwrap();
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        command
+            .env_clear()
+            .env("HOME", directory.path())
+            .env("XDG_RUNTIME_DIR", runtime)
+            .env("XDG_CONFIG_HOME", directory.path().join("config"))
+            .env(
+                "DBUS_SESSION_BUS_ADDRESS",
+                "unix:path=/nonexistent/mandara-test",
+            )
+            .env(
+                "DBUS_SYSTEM_BUS_ADDRESS",
+                "unix:path=/nonexistent/mandara-test",
+            )
+            .env("MANDARA_ISOLATED_SHORTCUT_TEST", directory.path())
+            .args([
+                "shortcuts::transaction::tests::mango_mode_transaction_runs_in_private_environment",
+                "--ignored",
+                "--exact",
+                "--nocapture",
+            ]);
+        crate::app_themes::process::native(
+            command,
+            &std::sync::atomic::AtomicBool::new(false),
+            mandara_config::doctor::CHECK_TIMEOUT,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    #[ignore = "launched by the parent test with private paths and no display"]
+    fn mango_mode_transaction_runs_in_private_environment() {
+        let root = std::path::PathBuf::from(
+            std::env::var_os("MANDARA_ISOLATED_SHORTCUT_TEST")
+                .expect("run through the isolated parent"),
+        );
+        assert_eq!(
+            fs::read_to_string(root.join(".mandara-shortcut-test")).unwrap(),
+            "isolated shortcut transaction\n"
+        );
+        assert!(std::env::var_os("WAYLAND_DISPLAY").is_none());
+        assert_eq!(std::env::var_os("HOME").unwrap(), root.as_os_str());
+        let generated = root.join("config/mandara/generated/mango.conf");
+        fs::create_dir_all(generated.parent().unwrap()).unwrap();
+        let file = root.join("config.conf");
+        let original = format!(
+            "key_mode=resize\nbind=SUPER,space,spawn,foot\nkey_mode=default\nsource={}\nbind=SUPER,Q,killclient\n",
+            generated.display()
+        );
+        fs::write(&file, &original).unwrap();
+        let bind = compositor::Keybind::new(
+            &["super"],
+            "space",
+            compositor::BindAction::Mandara("launcher toggle".into()),
+        );
+        let config = CompositorConfig {
+            autostart: false,
+            keybinds: vec![bind.clone()],
+            ..Default::default()
+        };
+        let managed = ManagedConfig {
+            config: &config,
+            borders: None,
+            existing_chords: Default::default(),
+            mandara_bin: "mandara".into(),
+            version: None,
+            user_autostarts: true,
+        };
+        fs::write(&generated, compositor::emit(Target::Mango, &managed).text).unwrap();
+        let initial = Preferences {
+            target: Target::Mango,
+            manage: true,
+            keybinds: config.keybinds.clone(),
+        };
+        let session = Session {
+            target: Target::Mango,
+            root: file.clone(),
+            scan: keybinds::scan_from(Target::Mango, &file),
+            environment: Default::default(),
+            primary_mod_is_alt: false,
+        };
+        assert!(session.scan.errors.is_empty(), "{:?}", session.scan.errors);
+        let source = &session.scan.sources[0];
+        let row = &source.bindings[1];
+        let values = row
+            .fields
+            .iter()
+            .map(|field| {
+                if field.label == "Key" {
+                    "W".into()
+                } else {
+                    field.value.clone()
+                }
+            })
+            .collect::<Vec<_>>();
+        let edit =
+            keybinds::prepare(Target::Mango, &source.binding_id(1).unwrap(), &values).unwrap();
+        apply(
+            &session,
+            &edit,
+            &initial,
+            &|| Ok(initial.clone()),
+            &NoopBackend,
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read_to_string(&file).unwrap(),
+            original.replace("SUPER,Q", "SUPER,W")
+        );
+        assert!(
+            compositor::parse_chords(Target::Mango, &fs::read_to_string(&generated).unwrap())
+                .contains(&compositor::target_chord(Target::Mango, &bind))
+        );
     }
 
     #[test]

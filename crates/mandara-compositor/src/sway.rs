@@ -402,15 +402,45 @@ impl SwayDriver {
 
     /// Sway reports the file it actually loaded, including a runtime reload.
     pub fn config_file(&self) -> Result<PathBuf> {
-        let reply = self.request(msg::GET_VERSION, "")?;
-        let file = reply.get("loaded_config_file_name").and_then(Value::as_str)
-            .filter(|path| !path.is_empty()).context("sway did not report its loaded configuration")?;
+        Self::reported_config(self.request(msg::GET_VERSION, "")?)
+    }
+
+    /// Accept a loaded configuration only from the compositor serving this display.
+    #[cfg(target_os = "linux")]
+    pub fn config_file_for(&self, pid: u32) -> Result<PathBuf> {
+        Self::reported_config(self.request_checked(msg::GET_VERSION, "", |stream| {
+            anyhow::ensure!(
+                crate::peer_pid(stream) == Some(pid),
+                "{}",
+                mandara_i18n::t("The running compositor changed. Refresh the list and try again.")
+            );
+            Ok(())
+        })?)
+    }
+
+    fn reported_config(reply: Value) -> Result<PathBuf> {
+        let file = reply
+            .get("loaded_config_file_name")
+            .and_then(Value::as_str)
+            .filter(|path| !path.is_empty())
+            .context("sway did not report its loaded configuration")?;
         Ok(PathBuf::from(file))
     }
 
     /// One request on its own connection.
     fn request(&self, kind: u32, payload: &str) -> Result<Value> {
-        let mut stream = UnixStream::connect(&self.socket).with_context(|| format!("connecting {}", self.socket.display()))?;
+        self.request_checked(kind, payload, |_| Ok(()))
+    }
+
+    fn request_checked(
+        &self,
+        kind: u32,
+        payload: &str,
+        verify: impl FnOnce(&UnixStream) -> Result<()>,
+    ) -> Result<Value> {
+        let mut stream = UnixStream::connect(&self.socket)
+            .with_context(|| format!("connecting {}", self.socket.display()))?;
+        verify(&stream)?;
         stream.set_read_timeout(Some(crate::REQUEST_TIMEOUT))?;
         stream.write_all(&encode(kind, payload.as_bytes()))?;
         let (reply_kind, body) = read_message(&mut stream)?;
@@ -612,6 +642,42 @@ mod tests {
             stream.write_all(&encode(msg::GET_VERSION, br#"{"major":1,"minor":12,"loaded_config_file_name":"/custom/current config"}"#)).unwrap();
         });
         assert_eq!(SwayDriver::with_socket(socket).config_file().unwrap(), PathBuf::from("/custom/current config"));
+        server.join().unwrap();
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn config_lookup_rejects_another_servers_socket_before_sending_a_request() {
+        use std::os::unix::net::UnixListener;
+        let directory = tempfile::tempdir().unwrap();
+        let socket = directory.path().join("ipc");
+        let listener = UnixListener::bind(&socket).unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            assert_eq!(
+                read_message(&mut stream).unwrap(),
+                (msg::GET_VERSION, Vec::new())
+            );
+            stream
+                .write_all(&encode(
+                    msg::GET_VERSION,
+                    br#"{"loaded_config_file_name":"/correct/config"}"#,
+                ))
+                .unwrap();
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut byte = [0];
+            assert_eq!(std::io::Read::read(&mut stream, &mut byte).unwrap(), 0);
+        });
+        let driver = SwayDriver::with_socket(socket);
+        assert_eq!(
+            driver.config_file_for(std::process::id()).unwrap(),
+            PathBuf::from("/correct/config")
+        );
+        assert!(
+            driver
+                .config_file_for(std::process::id().wrapping_add(1))
+                .is_err()
+        );
         server.join().unwrap();
     }
 

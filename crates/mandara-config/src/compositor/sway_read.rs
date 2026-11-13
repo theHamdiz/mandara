@@ -9,12 +9,12 @@ use super::{
     sway_include_files,
 };
 
-pub(crate) fn binds(files: &[PathBuf]) -> Vec<(PathBuf, SwayBind)> {
+pub(crate) fn binds(files: &[PathBuf]) -> Result<Vec<(PathBuf, SwayBind)>> {
     let mut reader = Reader::default();
     for file in files {
-        let _ = reader.read(file);
+        reader.read(file)?;
     }
-    reader.binds
+    Ok(reader.binds)
 }
 
 pub(super) fn checked_in(
@@ -119,14 +119,19 @@ impl Reader<'_> {
         });
         let (mut chunk, mut start) = (String::new(), 0);
         let containing = if main { file } else { key.as_path() };
-        for (line_number, line) in text.lines().enumerate() {
+        for logical in crate::keybinds::logical_lines::LogicalLines::new(
+            &text,
+            crate::keybinds::logical_lines::Continuation::Sway,
+        ) {
+            let logical = logical?;
+            let line = logical.text.as_ref();
             let included = (!line.trim_start().starts_with('#'))
                 .then(|| include_path(Target::Sway, line))
                 .flatten();
             if let Some(raw) = included {
                 self.chunk(file, &chunk, start)?;
                 chunk.clear();
-                start = line_number + 1;
+                start = logical.last;
                 let raw = super::sway_vars::expand(&raw, &self.vars)?;
                 let files = match &self.budget {
                     Some(budget) => {
@@ -151,8 +156,7 @@ impl Reader<'_> {
                     self.read_file(&child, false)?;
                 }
             } else {
-                chunk.push_str(line);
-                chunk.push('\n');
+                chunk.push_str(&text[logical.offset..logical.end]);
             }
         }
         self.chunk(file, &chunk, start)?;
@@ -166,6 +170,21 @@ impl Reader<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_later_failed_read_cannot_authorize_partial_conflict_discovery() {
+        let directory = tempfile::tempdir().unwrap();
+        let valid = directory.path().join("valid");
+        let invalid = directory.path().join("invalid");
+        std::fs::write(&valid, "bindsym Mod4+q kill\n").unwrap();
+        let mut body = format!("set $command {}\n", "x".repeat(128 * 1024));
+        for _ in 0..128 {
+            body.push_str("bindsym Mod4+w exec $command\n");
+        }
+        std::fs::write(&invalid, body).unwrap();
+        assert!(binds(&[valid, invalid.clone()]).is_err());
+        assert!(crate::compositor::existing_chords_at(Target::Sway, &invalid).is_err());
+    }
 
     #[test]
     fn expanded_commands_share_a_retained_budget_across_bindings_and_includes() {
@@ -259,7 +278,7 @@ mod tests {
         let child = dir.path().join("keys.conf");
         std::fs::write(&root, "set $mod Mod4\nset $menu wofi\nset $keys keys.conf\ninclude $keys\nset $menu mandara\nbindsym $mod+x exec $menu\nmode resize {\ninclude keys.conf\n}\n").unwrap();
         std::fs::write(&child, "bindsym $mod+space exec $menu\n").unwrap();
-        let found = binds(&[root.clone(), child.clone()]);
+        let found = binds(&[root.clone(), child.clone()]).unwrap();
         assert_eq!(found.len(), 2);
         assert_eq!(found[0].0, child);
         assert_eq!(found[0].1.command, "exec wofi");
@@ -277,7 +296,7 @@ mod tests {
         )
         .unwrap();
         std::fs::write(dir.path().join("mode.conf"), "bindsym Mod4+r exec resize\n").unwrap();
-        let found = binds(&[root]);
+        let found = binds(&[root]).unwrap();
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].1.chord, "super+x");
     }
@@ -301,5 +320,51 @@ mod tests {
         assert!(checked_in(&root, &IncludeEnvironment::default()).is_err());
         std::fs::remove_file(&child).unwrap();
         assert!(checked_in(&root, &IncludeEnvironment::default()).is_err());
+    }
+    #[test]
+    fn continued_sources_keep_inherited_variables_and_physical_binding_locations() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config");
+        let child = directory.path().join("keys");
+        let body = concat!(
+            "set $mod Mod4\ninclude ",
+            "\\",
+            "\nkeys\nbindsym ",
+            "\\",
+            "\n$mod+w kill\nbindsym Mod4+e kill\n"
+        );
+        std::fs::write(&root, body).unwrap();
+        std::fs::write(&child, "bindsym $mod+q kill\n").unwrap();
+        let scan = crate::keybinds::scan_from(Target::Sway, &root);
+        assert!(scan.errors.is_empty(), "{:?}", scan.errors);
+        let source = scan
+            .sources
+            .iter()
+            .find(|source| source.file == root)
+            .unwrap();
+        assert_eq!(source.bindings.len(), 2);
+        assert_eq!(source.bindings[0].line, 4);
+        assert_eq!(source.bindings[0].chord.as_deref(), Some("super+w"));
+        assert!(source.bindings[0].read_only.is_some());
+        assert_eq!(source.bindings[1].line, 6);
+        assert_eq!(source.bindings[1].chord.as_deref(), Some("super+e"));
+        let id = source.binding_id(1).unwrap();
+        let values = source.bindings[1]
+            .fields
+            .iter()
+            .map(|field| {
+                if field.label == "Shortcut" {
+                    "Mod4+r".into()
+                } else {
+                    field.value.clone()
+                }
+            })
+            .collect::<Vec<_>>();
+        let edit = crate::keybinds::prepare(Target::Sway, &id, &values).unwrap();
+        assert_eq!(edit.body(), body.replace("Mod4+e", "Mod4+r"));
+        let report = crate::doctor::check_with(Target::Sway, &root, &crate::doctor::CheckEnv::default());
+        if report.status == crate::doctor::CheckerStatus::Ran {
+            assert_eq!(report.problems(), 0, "{}", report.raw);
+        }
     }
 }

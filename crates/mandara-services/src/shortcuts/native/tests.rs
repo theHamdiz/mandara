@@ -17,7 +17,7 @@ fn native_checkers_validate_shortcuts_without_running_configuration_hooks() {
         Target::Niri => ("config.kdl", format!("spawn-at-startup \"touch\" \"{}\"\nbinds {{ Super+Q {{ close-window; }}; }}\n", sentinel.display()), "binds { Super+ThisKeyDoesNotExist { close-window; }; }\n".into()),
         Target::Hyprland => ("hyprland.lua", format!("os.execute('{touch}')\nhl.bind('SUPER + Q', hl.dsp.window.close())\n"), "hl.bind('SUPER + ThisKeyDoesNotExist', hl.dsp.window.close())\n".into()),
         Target::Umbriel => ("config.toml", format!("[general]\nautostart=[\"{touch}\"]\n[keybinds]\n\"Super+Q\"=\"window-close\"\n"), "[keybinds]\n\"Super+Q\"=\"this-action-does-not-exist\"\n".into()),
-        Target::Sway => ("config", format!("exec {touch}\nbindsym Mod4+q kill\n"), "bindsym Mod4+ThisKeyDoesNotExist kill\n".into()),
+        Target::Sway => ("config", format!("exec {touch}\nbindsym --locked\n{{\nMod4+q kill\n}}\n"), "bindsym Mod4+ThisKeyDoesNotExist kill\n".into()),
         Target::River => ("init", format!("{touch}\nriverctl map normal Super Q close\n"), "riverctl map normal Super ThisKeyDoesNotExist close\n".into()),
         Target::Labwc => ("rc.xml", format!("<labwc_config><keyboard><keybind key=\"W-q\"><action name=\"Execute\"><command>{touch}</command></action></keybind></keyboard></labwc_config>"), "<labwc_config><keyboard><keybind key=\"W-ThisKeyDoesNotExist\"><action name=\"Close\"/></keybind></keyboard></labwc_config>".into()),
         _ => panic!("this compositor uses its typed settings parser or live shortcut service"),
@@ -71,6 +71,28 @@ fn native_checkers_validate_shortcuts_without_running_configuration_hooks() {
     };
     check(&valid)
         .unwrap_or_else(|error| panic!("valid {target:?} shortcut was rejected: {error:#}"));
+    if target == Target::Mango {
+        let rows = keybinds::parse(target, &file, &valid).unwrap();
+        let values = rows[0]
+            .fields
+            .iter()
+            .map(|field| match field.label {
+                "Action" => "spawn".to_owned(),
+                "Arguments" => "foot".to_owned(),
+                _ => field.value.clone(),
+            })
+            .collect::<Vec<_>>();
+        let changed = keybinds::patch(&valid, &rows[0], &values).unwrap();
+        check(&changed).unwrap();
+        let rows_after = keybinds::parse(target, &file, &changed).unwrap();
+        let original = rows[0]
+            .fields
+            .iter()
+            .map(|field| field.value.clone())
+            .collect::<Vec<_>>();
+        let restored = keybinds::patch(&changed, &rows_after[0], &original).unwrap();
+        check(&restored).unwrap();
+    }
     assert!(
         !sentinel.exists(),
         "configuration startup code ran during validation"

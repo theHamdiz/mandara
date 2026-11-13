@@ -6,6 +6,9 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Studio gets a look of its own. Shape its window and controls independently,
+and edit compositor shortcuts with backups and Undo.
+
 ### New
 
 - **Give Studio a look of its own.** Themes → Studio brings nine window designs, from quiet glass and paper to cut corners and bold ink. Refine its sidebar, controls, colours and fonts independently; desktop Look changes leave it as you chose it.
@@ -18,7 +21,7 @@ About → What's new shows it too.
 ### Fixed
 
 - **Non-Latin shortcut keys no longer crash the editor.** Arabic and other Unicode keys can be inspected safely.
-- **Shortcut edits stay with the selected binding.** Nested key chains keep their own fields; oversized or ambiguous configurations explain why editing is unavailable. Hyprland checks use the variables active at each binding.
+- **Shortcut edits stay with the selected binding.** Nested key chains keep their own fields; oversized or ambiguous configurations explain why editing is unavailable. Hyprland checks use the variables active at each binding. Included files and continued blocks keep their shortcuts.
 
 ### Under the hood
 

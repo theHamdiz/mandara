@@ -9,10 +9,10 @@ use mandara_i18n::t;
 use std::path::PathBuf;
 #[cfg(any(target_os = "linux", test))]
 mod aqueous;
-#[cfg(any(target_os = "linux", test))]
-mod environment;
 #[cfg(target_os = "linux")]
 mod context;
+#[cfg(any(target_os = "linux", test))]
+mod environment;
 
 #[derive(Default)]
 pub struct NativeConfig {
@@ -35,20 +35,23 @@ const MAX_LAUNCH_BYTES: usize = 8 * 1024 * 1024;
 
 #[cfg(target_os = "linux")]
 pub fn running(target: Target) -> Result<NativeConfig> {
+    let pid = super::display_server_pid();
     let sway_file = if target == Target::Sway {
+        let pid = pid.context(t("The running compositor could not be identified safely."))?;
         crate::sway::SwayDriver::from_env()
-            .map(|driver| driver.config_file())
+            .map(|driver| driver.config_file_for(pid))
             .transpose()?
     } else {
         None
     };
-    let Some(pid) = super::display_server_pid() else {
+    let Some(pid) = pid else {
         return Ok(NativeConfig {
             file: sway_file,
             ..Default::default()
         });
     };
-    let bytes = std::fs::read(format!("/proc/{pid}/cmdline")).with_context(|| format!("/proc/{pid}/cmdline"))?;
+    let bytes = std::fs::read(format!("/proc/{pid}/cmdline"))
+        .with_context(|| format!("/proc/{pid}/cmdline"))?;
     ensure!(
         bytes.len() <= MAX_LAUNCH_BYTES,
         "{}",
@@ -59,9 +62,15 @@ pub fn running(target: Target) -> Result<NativeConfig> {
         .filter(|arg| !arg.is_empty())
         .map(|arg| OsString::from_vec(arg.to_vec()))
         .collect();
-    context::inspect(pid, target, &arguments, sway_file,
+    context::inspect(
+        pid,
+        target,
+        &arguments,
+        sway_file,
         std::fs::read_link(format!("/proc/{pid}/cwd")),
-        std::fs::read(format!("/proc/{pid}/environ")), context::current_environment)
+        std::fs::read(format!("/proc/{pid}/environ")),
+        context::current_environment,
+    )
 }
 
 #[cfg(not(target_os = "linux"))]

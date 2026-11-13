@@ -97,13 +97,34 @@ Managed companion files use the same bounded, regular-file reads. Legacy
 Hyprland validation preserves variable assignments and includes in their
 native order, including repeated includes and inherited submaps, without
 running startup commands. Sway limits the total retained expansion data as
-well as each individual value.
+well as each individual value. Continued includes are resolved; continued
+bindings remain visible and read-only so their formatting stays intact.
 If Linux restricts the compositor's environment, discovery falls back to the
 current user's configuration environment. Absolute launch overrides and
 Sway's reported config retain precedence; a relative override is refused
 when the compositor's working directory cannot be read safely.
 Window controls also follow the compositor's advertised capabilities; an
 unavailable action stays dimmed with a reason.
+
+In TOML, a program action uses `kind = "spawn"` (`"exec"` is also accepted
+when reading an existing config). For Hyprland 0.57 or newer, custom
+`hyprctl` commands must use its Lua dispatchers. For example:
+
+```toml
+[[compositor.keybinds]]
+mods = ["super"]
+key = "h"
+[compositor.keybinds.action]
+kind = "spawn"
+value = "hyprctl dispatch 'hl.dsp.focus({ direction = \"l\" })'"
+```
+
+For moving a window, use `hl.dsp.window.move({ direction = "l" })`; for a
+workspace, use `hl.dsp.focus({ workspace = 2 })`. Split direction uses
+`hl.dsp.layout("togglesplit")`. Mandara preserves a program command exactly
+as entered, so update old `hyprctl dispatch
+movefocus l` commands to Hyprland's current syntax. See the official
+[Hyprland dispatcher reference](https://wiki.hypr.land/configuring/core/dispatchers/).
 
 ### Studio appearance
 
@@ -146,26 +167,6 @@ these ranges:
 Other presets save their own values. A manually supplied partial
 `[studio.frame]` table defaults its missing title height and sidebar width
 to 46 and 252; the remaining defaults match the table above.
-
-In TOML, a program action uses `kind = "spawn"` (`"exec"` is also accepted
-when reading an existing config). For Hyprland 0.57 or newer, custom
-`hyprctl` commands must use its Lua dispatchers. For example:
-
-```toml
-[[compositor.keybinds]]
-mods = ["super"]
-key = "h"
-[compositor.keybinds.action]
-kind = "spawn"
-value = "hyprctl dispatch 'hl.dsp.focus({ direction = \"l\" })'"
-```
-
-For moving a window, use `hl.dsp.window.move({ direction = "l" })`; for a
-workspace, use `hl.dsp.focus({ workspace = 2 })`. Split direction uses
-`hl.dsp.layout("togglesplit")`. Mandara preserves a program command exactly
-as entered, so update old `hyprctl dispatch
-movefocus l` commands to Hyprland's current syntax. See the official
-[Hyprland dispatcher reference](https://wiki.hypr.land/configuring/core/dispatchers/).
 
 ## What's configurable
 

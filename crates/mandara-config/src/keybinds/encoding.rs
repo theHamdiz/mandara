@@ -9,6 +9,7 @@ pub enum Encoding {
     Word,
     Identifier,
     Csv,
+    CsvTail,
     ShellWord,
     TomlString,
     KdlName,
@@ -31,7 +32,7 @@ impl Encoding {
             mandara_i18n::t("A shortcut value cannot contain a null character.")
         );
         Ok(match self {
-            Self::Plain | Self::Word | Self::Csv => {
+            Self::Plain | Self::Word | Self::Csv | Self::CsvTail => {
                 ensure!(
                     !value.contains(['\n', '\r', '#']),
                     "{}",
@@ -51,7 +52,11 @@ impl Encoding {
                         mandara_i18n::t("This shortcut field cannot contain a comma.")
                     );
                 }
-                value.to_owned()
+                if self == Self::CsvTail && !value.trim().is_empty() {
+                    format!(",{value}")
+                } else {
+                    value.to_owned()
+                }
             }
             Self::ShellWord => crate::compositor::shell_quote(value),
             Self::Identifier => {

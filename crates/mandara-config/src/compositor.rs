@@ -2674,7 +2674,13 @@ fn glob_path_bounded_from(directory: &Path, pattern: &Path, limit: usize) -> Res
         }
         found = next;
     }
-    found.retain(|p| p.exists());
+    for index in (0..found.len()).rev() {
+        match std::fs::symlink_metadata(&found[index]) {
+            Ok(_) => {}
+            Err(error) if matches!(error.kind(), std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory) => { found.swap_remove(index); }
+            Err(error) => return Err(error).with_context(|| found[index].display().to_string()),
+        }
+    }
     found.sort();
     Ok(found)
 }
@@ -2698,36 +2704,15 @@ fn glob_match(pattern: &str, name: &str) -> bool {
 
 /// Chords bound in the user's own config, following `source=` / `include`
 /// (but never Mandara's generated file).
-pub fn existing_chords(target: Target) -> BTreeSet<String> {
+pub fn existing_chords(target: Target) -> Result<BTreeSet<String>> {
     existing_chords_at(target, &target.user_config())
 }
 
 /// Native editors use the running compositor's config, including custom paths.
-pub fn existing_chords_at(target: Target, root: &Path) -> BTreeSet<String> {
-    if target == Target::Mango {
-        return mango_keys::with_user_keys(|keys| {
-            mango_existing_chords(root, keys)
-        });
-    }
-    if target == Target::Sway {
-        return sway_existing_chords(root);
-    }
-    let mut out = BTreeSet::new();
-    let mut stack = vec![root.to_path_buf()];
-    let mut visited = BTreeSet::new();
-    let generated = target.generated_file();
-    while let Some(file) = stack.pop() {
-        // Never count a Mandara drop-in (ours, or another copy's) as the
-        // user's own binds.
-        if !visited.insert(file.clone()) || file == generated || is_generated(&file) {
-            continue;
-        }
-        let Ok(text) = std::fs::read_to_string(&file) else { continue;
-        };
-        out.extend(parse_chords(target, &text));
-        stack.extend(included_files(target, &file, &text));
-    }
-    out
+/// A missing primary file is a new installation; incomplete existing files fail.
+pub fn existing_chords_at(target: Target, root: &Path) -> Result<BTreeSet<String>> {
+    if !root.try_exists()? { return Ok(BTreeSet::new()); }
+    existing_chords_checked(target, root)
 }
 
 /// Saving a native shortcut must fail visibly when conflict discovery is incomplete.
@@ -2786,18 +2771,11 @@ pub fn existing_chords_checked_in(
     Ok(out)
 }
 
-/// Sway reads `include`d files in place, and a `set $mod Mod4` in the main
-/// config holds in every file included after it (the usual
-/// `include /etc/sway/config.d/*` binds `$mod+…`): the user's binds are
-/// walked in order with the variables known at each point.
-fn sway_existing_chords(root: &Path) -> BTreeSet<String> {
-    sway_config_binds(&[root.to_path_buf()]).into_iter().map(|(_, bind)| bind.chord).collect()
-}
-
 /// MangoWM reads `source=` files in place and keeps one key mode across
 /// them, so the user's binds are walked in order. Mandara's binds live in
 /// the key mode in force where its drop-in is sourced (`default` when it
 /// isn't sourced yet); only user binds that can meet that mode count.
+#[cfg(test)]
 fn mango_existing_chords(root: &Path, keys: &mango_keys::MangoKeys) -> BTreeSet<String> {
     // Historical setup scans skip unreadable sources; editor saves use the
     // checked reader and propagate every failure before publishing a binding.
@@ -3004,11 +2982,15 @@ fn set_var_owned(vars: &mut Vec<(String, String)>, name: &str, value: String) {
 
 fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<String>, retained: &mut usize) -> Result<Vec<SwayBind>> {
     let mut out = Vec::new();
-    for (i, raw) in text.lines().enumerate() {
+    for logical in crate::keybinds::logical_lines::LogicalLines::new(text, crate::keybinds::logical_lines::Continuation::Sway) {
+        let logical = logical?;
+        let i = logical.number - 1;
+        let raw = logical.text.as_ref();
         let line = raw.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
+        if line == "{" { continue; }
         if line == "}" {
             blocks.pop();
             continue;
@@ -3023,11 +3005,11 @@ fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<
             continue;
         }
         let line = sway_vars::expand(line, vars)?;
-        let opens_block = line.ends_with('{');
+        let opens_block = line.ends_with('{') || crate::keybinds::logical_lines::followed_by_brace(text, logical.end);
         let body = line.trim_end_matches('{').trim_end();
-        let in_bind_block = blocks.last().is_some_and(|b| b == "bindsym") && blocks.len() == 1;
+        let in_bind_block = blocks.last().is_some_and(|b| b.split_whitespace().next() == Some("bindsym")) && blocks.len() == 1;
         if opens_block {
-            blocks.push(body.split_whitespace().next().unwrap_or_default().to_string());
+            blocks.push(if body.split_whitespace().next() == Some("bindsym") { body.to_owned() } else { body.split_whitespace().next().unwrap_or_default().to_owned() });
             continue;
         }
         let words: Vec<&str> = if in_bind_block {
@@ -3042,7 +3024,7 @@ fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<
         let mut parts: Vec<&str> = combo.split('+').filter(|p| !p.is_empty()).collect();
         let Some(key) = parts.pop() else { continue };
         let command_bytes = words.clone().map(str::len).sum::<usize>() + words.clone().count().saturating_sub(1);
-        let expanded_bytes = body.len() + if in_bind_block { "bindsym ".len() } else { 0 };
+        let expanded_bytes = body.len() + if in_bind_block { blocks.last().map_or(0, |header| header.len() + 1) } else { 0 };
         let bytes = command_bytes.checked_add(expanded_bytes).and_then(|bytes| retained.checked_add(bytes))
             .filter(|&bytes| bytes <= crate::keybinds::MAX_TOTAL_BYTES)
             .ok_or_else(|| anyhow::anyhow!("expanded shortcuts exceed the scan budget"))?;
@@ -3050,7 +3032,7 @@ fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<
         *retained = bytes.checked_add(resolved.len()).filter(|&bytes| bytes <= crate::keybinds::MAX_TOTAL_BYTES)
             .ok_or_else(|| anyhow::anyhow!("expanded shortcuts exceed the scan budget"))?;
         let command = words.collect::<Vec<_>>().join(" ");
-        let expanded = if in_bind_block { format!("bindsym {body}") } else { body.to_string() };
+        let expanded = if in_bind_block { format!("{} {body}", blocks.last().expect("binding block has a header")) } else { body.to_string() };
         anyhow::ensure!(out.len() < crate::keybinds::MAX_BINDINGS, "too many compositor shortcuts");
         out.push(SwayBind { line: i, chord: resolved, command, expanded });
     }
@@ -4415,7 +4397,7 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         std::fs::create_dir_all(d.join("config.d")).unwrap();
         std::fs::write(d.join("config"), "set $mod Mod4\nbindsym $mod+Return exec foot\ninclude config.d/*\n").unwrap();
         std::fs::write(d.join("config.d/50-menu.conf"), "set $menu wofi\nbindsym $mod+space exec $menu\nbindsym $mod+Shift+s exec grim\n").unwrap();
-        let chords = sway_existing_chords(&d.join("config"));
+        let chords = existing_chords_at(Target::Sway, &d.join("config")).unwrap();
         assert_eq!(chords.into_iter().collect::<Vec<_>>(), ["shift+super+s", "super+return", "super+space"]);
     }
 

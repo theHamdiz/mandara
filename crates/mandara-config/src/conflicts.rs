@@ -581,7 +581,7 @@ fn binds_in_after(target: Target, file: &Path, text: &str, earlier: &str) -> Vec
 }
 
 fn sway_user_binds(files: &[PathBuf]) -> Vec<UserBind> {
-    crate::compositor::sway_config_binds(files).into_iter().map(|(file, bind)| {
+    crate::compositor::sway_config_binds(files).unwrap_or_default().into_iter().map(|(file, bind)| {
         let text = std::fs::read_to_string(&file).ok().and_then(|text| text.lines().nth(bind.line).map(|line| line.trim().to_string())).unwrap_or_default();
         UserBind { chord: bind.chord, file, line: bind.line + 1, text, body: bind.expanded, replaces: None }
     }).collect()

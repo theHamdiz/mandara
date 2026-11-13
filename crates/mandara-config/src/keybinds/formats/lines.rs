@@ -20,10 +20,8 @@ struct SwayBlock {
 impl ShortcutFormat for Lines {
     fn parse(&self, source: &str) -> Result<Vec<Binding>> {
         let mut result = Vec::new();
-        let mut offset = 0;
         let mut scope = String::from("default");
         let mut sway_block = None;
-        let mut continued = false;
         let resolved = match self.0 {
             Target::River | Target::Hyprland => Vec::new(),
             Target::Sway => crate::compositor::sway_binds_checked(source)?
@@ -38,20 +36,24 @@ impl ShortcutFormat for Lines {
             mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
         );
         let mut resolved = resolved.into_iter().peekable();
-        for (index, raw) in source.split_inclusive('\n').enumerate() {
+        let continuation = match self.0 {
+            Target::Hyprland => crate::keybinds::logical_lines::Continuation::Hyprland,
+            Target::Sway => crate::keybinds::logical_lines::Continuation::Sway,
+            _ => crate::keybinds::logical_lines::Continuation::None,
+        };
+        for logical in crate::keybinds::logical_lines::LogicalLines::new(source, continuation) {
+            let logical = logical?;
+            let index = logical.number - 1;
+            let offset = logical.offset;
+            let raw = logical.text.as_ref();
             let code = raw.trim_end_matches(['\n', '\r']);
-            let continuation = continued;
-            continued = self.0 == Target::Sway && code.ends_with('\\');
-            if continuation {
-                offset += raw.len();
-                continue;
-            }
             let start = code.len() - code.trim_start().len();
             let text = &code[start..];
             if text.starts_with('#') || text.is_empty() {
-                offset += raw.len();
                 continue;
             }
+            let next_brace = self.0 == Target::Sway
+                && crate::keybinds::logical_lines::followed_by_brace(source, logical.end);
             let origin = offset + start;
             let mut binding = match self.0 {
                 Target::Mango | Target::Hyprland => {
@@ -72,8 +74,12 @@ impl ShortcutFormat for Lines {
                     }
                 }
                 Target::Sway => {
-                    if text.starts_with("mode ") && text.ends_with('{') {
-                        scope = text[5..text.len() - 1].trim().trim_matches('"').to_owned();
+                    if text.starts_with("mode ") && (text.ends_with('{') || next_brace) {
+                        scope = text[5..]
+                            .trim_end_matches('{')
+                            .trim()
+                            .trim_matches('"')
+                            .to_owned();
                     }
                     if text == "}" {
                         if sway_block.is_some() {
@@ -82,7 +88,7 @@ impl ShortcutFormat for Lines {
                             scope = "default".into();
                         }
                     }
-                    if let Some(header) = sway_header(text, origin) {
+                    if let Some(header) = sway_header(text, origin, next_brace) {
                         sway_block = Some(header);
                         None
                     } else {
@@ -99,7 +105,7 @@ impl ShortcutFormat for Lines {
                     mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
                 );
                 bind.line = index + 1;
-                if continued {
+                if logical.continued {
                     bind.read_only = Some(crate::keybinds::SOURCE_ONLY);
                 }
                 while resolved.next_if(|(line, _)| *line < index).is_some() {}
@@ -108,7 +114,6 @@ impl ShortcutFormat for Lines {
                 }
             }
             result.extend(binding);
-            offset += raw.len();
         }
         if self.0 == Target::River && !river_source_complete(source, &result) {
             for row in &mut result {
@@ -156,12 +161,14 @@ fn csv(target: Target, text: &str, offset: usize, directive: &str, scope: &str) 
     let head_count = if description { 4 } else { 3 };
     let mut spans = Vec::new();
     let mut from = equal + 1;
+    let mut missing_separator = false;
     let end = comment_start(text, target == Target::Hyprland);
     for index in 0..head_count {
         if let Some(comma) = text[from..end].find(',').map(|at| at + from) {
             spans.push(trim(text, from..comma));
             from = comma + 1;
         } else if index == head_count - 1 {
+            missing_separator = true;
             spans.push(trim(text, from..end));
             from = end;
         } else {
@@ -185,7 +192,9 @@ fn csv(target: Target, text: &str, offset: usize, directive: &str, scope: &str) 
             at if at == head_count - 1 => tk("Action"),
             _ => tk("Arguments"),
         };
-        let encoding = if at == head_count {
+        let encoding = if at == head_count && missing_separator {
+            Encoding::CsvTail
+        } else if at == head_count {
             Encoding::Plain
         } else {
             Encoding::Csv
@@ -211,17 +220,18 @@ fn csv(target: Target, text: &str, offset: usize, directive: &str, scope: &str) 
     })
 }
 
-fn sway_header(text: &str, offset: usize) -> Option<SwayBlock> {
-    if !text.ends_with('{') {
+fn sway_header(text: &str, offset: usize, next_brace: bool) -> Option<SwayBlock> {
+    if !text.ends_with('{') && !next_brace {
         return None;
     }
     let tokens = words(text);
     let directive = &text[tokens.first()?.clone()];
-    if !matches!(directive, "bindsym" | "bindcode") || text[tokens.last()?.clone()] != *"{" {
+    if !matches!(directive, "bindsym" | "bindcode") {
         return None;
     }
+    let end = tokens.len() - usize::from(text[tokens.last()?.clone()] == *"{");
     let mut flags = Vec::new();
-    for span in &tokens[1..tokens.len() - 1] {
+    for span in &tokens[1..end] {
         if !text[span.clone()].starts_with("--") {
             return None;
         }

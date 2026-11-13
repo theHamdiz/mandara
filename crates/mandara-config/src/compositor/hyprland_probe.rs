@@ -186,10 +186,15 @@ impl Probe<'_> {
         if let Some(visitor) = &mut self.visitor {
             visitor.source(file, &real, &source)?;
         }
-        for (index, raw) in source.lines().enumerate() {
+        for logical in crate::keybinds::logical_lines::LogicalLines::new(
+            &source,
+            crate::keybinds::logical_lines::Continuation::Hyprland,
+        ) {
+            let logical = logical?;
+            let raw = logical.text.as_ref();
             let line = uncomment(raw);
             let line = line.trim();
-            if self.selected.as_ref() == Some(&real) && index + 1 == self.line {
+            if self.selected.as_ref() == Some(&real) && logical.number == self.line {
                 self.matches += 1;
                 self.binding_expansion(self.binding)?;
                 self.append(self.binding.trim_end())?;
@@ -240,7 +245,7 @@ impl Probe<'_> {
                 {
                     let expanded = self.binding_expansion(line)?;
                     if let Some(visitor) = &mut self.visitor {
-                        visitor.binding(&real, index + 1, &self.scope, &expanded)?;
+                        visitor.binding(&real, logical.number, &self.scope, &expanded)?;
                     }
                 }
             }
@@ -264,7 +269,9 @@ impl Probe<'_> {
                     "included shortcut configuration is missing"
                 );
                 for path in paths {
-                    self.visit(&path)?;
+                    if std::fs::metadata(&path)?.is_file() {
+                        self.visit(&path)?;
+                    }
                 }
             }
         }
@@ -384,5 +391,37 @@ mod tests {
             chords(&file, &IncludeEnvironment::default()).unwrap(),
             std::collections::BTreeSet::from(["super+q".into()])
         );
+    }
+    #[test]
+    fn continued_includes_and_non_regular_glob_matches_keep_the_native_file_order() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("hyprland.conf");
+        let sources = directory.path().join("conf.d");
+        std::fs::create_dir_all(sources.join("nested")).unwrap();
+        std::fs::write(sources.join("keys.conf"), "$mod = SUPER\n").unwrap();
+        rustix::fs::mkfifoat(
+            rustix::fs::CWD,
+            sources.join("fifo"),
+            rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
+        )
+        .unwrap();
+        std::fs::write(&root, "source = \\\nconf.d/*\nbind = $mod, Q, exec, foot\n").unwrap();
+        assert_eq!(
+            chords(&root, &IncludeEnvironment::default()).unwrap(),
+            std::collections::BTreeSet::from(["super+q".into()])
+        );
+        assert_eq!(
+            shortcut_probe(
+                &root,
+                &root,
+                3,
+                "bind = $mod, W, exec, foot",
+                &IncludeEnvironment::default()
+            )
+            .unwrap(),
+            "$mod = SUPER\nbind = $mod, W, exec, foot\n"
+        );
+        std::os::unix::fs::symlink("missing", sources.join("broken.conf")).unwrap();
+        assert!(chords(&root, &IncludeEnvironment::default()).is_err());
     }
 }

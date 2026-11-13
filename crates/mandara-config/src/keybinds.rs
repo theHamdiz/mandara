@@ -1,11 +1,14 @@
 //! Lossless, field-by-field editing of native compositor shortcuts.
 
 pub mod cosmic;
+#[cfg(test)]
+mod continuation_tests;
 mod edit;
 mod encoding;
 mod formats;
 mod identity;
 mod kwin_settings;
+pub(crate) mod logical_lines;
 mod qt_keys;
 mod qt_sequence;
 mod qt_xkb;
