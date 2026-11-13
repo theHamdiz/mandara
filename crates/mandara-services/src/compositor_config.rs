@@ -3,7 +3,7 @@
 mod snapshot;
 pub mod persistence;
 
-use anyhow::{Context as _,Result, ensure};
+use anyhow::{Result, ensure};
 use snapshot::{Snapshot, Written};
 use mandara_theme::templates::WriteLock;
 use mandara_config::{
@@ -84,7 +84,7 @@ fn set_unlocked(
             String::new()
         };
         let outcome = fix::guarded_write(&before, &env, &|| {
-            let body = compositor_theme::compose(target, kind, &old, &path, true)?;
+            let body = compositor_theme::compose_with_previous(target, kind, &old, &path, true, previous.text())?;
             let lock = WriteLock::new(&generated)?;
             *written_generated.borrow_mut() = Some(Written::atomic(&lock, body.as_bytes())?);
             Ok(())
@@ -114,13 +114,21 @@ fn set_unlocked(
         Ok(vec![path.clone(), generated.clone()])
     })();
     if let Err(error) = result {
-        if let Some(backup) = primary_backup { fix::restore(&backup).context("restoring the primary compositor include")?; }
-        previous_generated.restore(&generated, written_generated.borrow().as_ref()).context("restoring the managed compositor include")?;
-        previous.restore(&path, written_fragment.as_ref()).context("restoring the previous compositor fragment")?;
-        reload(target).context("reloading the restored compositor configuration")?;
-        return Err(error);
+        return Err(rollback(error, [
+            ("restoring the primary compositor include", match primary_backup { Some(backup) => fix::restore(&backup).map(|_| ()), None => Ok(()) }),
+            ("restoring the managed compositor include", previous_generated.restore(&generated, written_generated.borrow().as_ref())),
+            ("restoring the previous compositor fragment", previous.restore(&path, written_fragment.as_ref())),
+            ("reloading the restored compositor configuration", reload(target)),
+        ]));
     }
     result
+}
+
+// Each operation is evaluated before collecting failures, so a conflict in
+// one file cannot skip another restore or hide the original application error.
+fn rollback(mut error: anyhow::Error, steps: [(&str, Result<()>); 4]) -> anyhow::Error {
+    for (step, result) in steps { if let Err(failure) = result { error = error.context(format!("{step}: {failure:#}")); } }
+    error
 }
 
 pub fn detach(target: Target, kind: Kind) -> Result<()> {
@@ -198,6 +206,22 @@ pub fn persist_outputs(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rollback_runs_all_steps_and_keeps_the_original_and_restore_failures() {
+        let root = tempfile::tempdir().unwrap(); let path = root.path().join("fragment"); let reloaded = std::cell::Cell::new(false);
+        std::fs::write(&path, "original").unwrap(); let original = Snapshot::capture(&path).unwrap();
+        mandara_config::store::write_atomic(&path, b"rejected").unwrap(); let written = Written::capture(&path, "rejected").unwrap();
+        let error = rollback(anyhow::anyhow!("original rejection"), [
+            ("primary", Err(anyhow::anyhow!("primary conflict"))),
+            ("managed", Err(anyhow::anyhow!("managed conflict"))),
+            ("fragment", original.restore(&path, Some(&written))),
+            ("reload", { reloaded.set(true); Ok(()) }),
+        ]);
+        let message = format!("{error:#}");
+        assert!(message.contains("original rejection") && message.contains("primary conflict") && message.contains("managed conflict"));
+        assert!(reloaded.get()); assert_eq!(std::fs::read_to_string(path).unwrap(), "original");
+    }
+
     #[test]
     fn display_fragments_contain_no_unrelated_compositor_preferences() {
         let output = mandara_config::outputs::OutputConfig {

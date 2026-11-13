@@ -28,6 +28,10 @@ impl Snapshot {
             Err(error) => Err(error.into()),
         }
     }
+    pub fn text(&self) -> Option<&str> {
+        match self { Self::Absent => None, Self::File(bytes) | Self::Link { bytes, .. } => std::str::from_utf8(bytes).ok() }
+    }
+
     pub fn restore(&self, path: &Path, written: Option<&Written>) -> Result<()> {
         let Some(written) = written else {
             return Ok(());

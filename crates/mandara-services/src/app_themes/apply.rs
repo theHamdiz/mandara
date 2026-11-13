@@ -520,7 +520,7 @@ impl ApplyContext<'_, '_> {
         .transpose()?;
         if hooks && let Some(previous) = applied.entries.get(owner) {
             let changed = previous.directory != base
-                || previous.command.as_ref().map(|command|command.shell.as_str()) != command.as_ref().map(|command|command.shell.as_str());
+                || previous.command != command;
             if changed && let Some(command) = &previous.command {
                 post_hooks.barrier(report);
                 process::run(command,&previous.directory,&previous.environment,cancel,process::TIMEOUT)
@@ -684,6 +684,20 @@ mod tests {
         config.run_hooks = true;
         assert!(sync(&config, &theme(), &locations, &cancel, &||false).unwrap().errors.is_empty());
         assert!(!locations.home.join("hook").exists());
+    }
+
+    #[test]
+    fn changed_interpolated_undo_values_retire_the_previous_setup() {
+        let dir = tempfile::tempdir().unwrap(); let locations = locations(dir.path());
+        std::fs::create_dir_all(locations.config.join("mandara")).unwrap();
+        let mut config = AppThemesConfig { user: BTreeMap::from([("setup".into(), Template { enabled: true, post_hook: "touch {{ 'old-setup' }}".into(), undo_hook: "rm -f {{ 'old-setup' }}".into(), ..Default::default() })]), ..Default::default() };
+        let cancel = AtomicBool::new(false); let palette = theme();
+        assert!(sync(&config, &palette, &locations, &cancel, &||false).unwrap().errors.is_empty());
+        let base = locations.config.join("mandara"); assert!(base.join("old-setup").exists());
+        let setup = config.user.get_mut("setup").unwrap(); setup.post_hook = "touch {{ 'new-setup' }}".into(); setup.undo_hook = "rm -f {{ 'new-setup' }}".into();
+        assert!(sync(&config, &palette, &locations, &cancel, &||false).unwrap().errors.is_empty());
+        assert!(!base.join("old-setup").exists()); assert!(base.join("new-setup").exists());
+        config.user.clear(); assert!(sync(&config, &palette, &locations, &cancel, &||false).unwrap().errors.is_empty()); assert!(!base.join("new-setup").exists());
     }
 
     #[test]

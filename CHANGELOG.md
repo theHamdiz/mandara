@@ -18,7 +18,7 @@ About → What's new shows it too.
 - **More widget controls do what they say.** Notes use your chosen text colour on paper sheets, dotted monitor gauges can also be wavy, and a continuous audio wave explains why its gap control is locked.
 
 ### Improved
-- App templates show their file destinations and commands before you enable them. Updates ask for another review, and sharing a browser palette with other apps requires your explicit approval.
+- App templates show their file destinations and commands before you enable them, with a keyboard-accessible review list. Updates ask for another review, and sharing a browser palette with other apps requires your explicit approval.
 
 - **A friendlier introduction to Mandara.** The README gets shorter, clearer copy while keeping every screenshot, feature list and gallery layout.
 

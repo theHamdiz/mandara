@@ -12,7 +12,7 @@ use super::{Limited, MAX_RENDER_BYTES, MAX_TEMPLATE_BYTES, syntax};
 const MAX_VALUES: usize = 1024;
 const MARKER: char = '\u{1f}';
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Command {
     pub shell: String,
     pub environment: Vec<(String, String)>,

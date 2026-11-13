@@ -38,11 +38,7 @@ pub const BACKUP_SUFFIX: &str = "mandara-backup";
 
 /// 64-bit FNV-1a of `bytes`: enough to tell whether a file is still what
 /// Mandara wrote (not a security boundary).
-pub fn fnv1a(bytes: &[u8]) -> u64 {
-    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-    const PRIME: u64 = 0x0000_0100_0000_01b3;
-    bytes.iter().fold(OFFSET, |h, b| (h ^ u64::from(*b)).wrapping_mul(PRIME))
-}
+pub use super::fingerprint::fnv1a;
 
 fn hash_hex(bytes: &[u8]) -> String {
     format!("{:016x}", fnv1a(bytes))
@@ -272,16 +268,18 @@ impl Ledger {
                 format!("{} is not a regular file", path.display()),
             ));
         }
-        let current = std::fs::read(path).ok();
         let is_link = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink());
         let mut entry = self.files.get(&k).cloned().unwrap_or_else(|| FileEntry { app: app.to_string(), ..Default::default() });
         let known = self.files.contains_key(&k);
         let mut moved = None;
         if exists(path) {
-            let ours_now = !is_link && current.as_deref().is_some_and(|c| {
-                    if known { hash_hex(c) == entry.hash } else { String::from_utf8_lossy(c).contains(MARKER)
-                    }
-                });
+            let ours_now = !is_link && if known {
+                super::fingerprint::matches(path, &entry.hash).unwrap_or(false)
+            } else {
+                // Imported and user-authored templates never claim an original
+                // merely because its contents happen to mention Mandara.
+                !app.contains([':', '/']) && super::file_io::read(path).is_ok_and(|body| body.contains(MARKER))
+            };
             if !ours_now {
                 let backup = backup_path(path);
                 std::fs::rename(path, &backup)?;
@@ -298,7 +296,7 @@ impl Ledger {
         entry.app = app.to_string();
         entry.hash = hash_hex(body.as_bytes());
         if let Err(error) = write(path, body) {
-            if let Some(backup) = moved && let Err(restore) = std::fs::rename(&backup, path) {
+            if let Some(backup) = moved && let Err(restore) = super::restore::no_clobber(&backup, path) {
                 return Err(std::io::Error::other(format!("{error}; restoring {} failed: {restore}; the previous file is preserved at {}", path.display(), backup.display())));
             }
             return Err(error);
@@ -406,7 +404,7 @@ impl Ledger {
             };
             self.dirty = true;
             let path = PathBuf::from(&k);
-            let unchanged = !std::fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_symlink()) && std::fs::read(&path).is_ok_and(|c| hash_hex(&c) == entry.hash);
+            let unchanged = !std::fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_symlink()) && super::fingerprint::matches(&path, &entry.hash).unwrap_or(false);
             if entry.backup.as_ref().is_some_and(|backup|!exists(backup)) {
                 changed.failed(&path, "original backup is missing");
                 self.files.insert(k,entry);
@@ -465,7 +463,7 @@ impl Ledger {
                 other.created = true;
                 other.created_dirs.clone_from(&entry.created_dirs);
             }
-            if entry.created && std::fs::read_to_string(&path).is_ok_and(|t| t.trim().is_empty()) {
+            if entry.created && super::file_io::read(&path).is_ok_and(|t| t.trim().is_empty()) {
                 match std::fs::remove_file(&path) {
                     Ok(()) => remove_empty(&entry.created_dirs),
                     Err(error) => { changed.failed(&path, error);self.blocks.insert(k,entry); }
@@ -508,16 +506,16 @@ impl Ledger {
         let Some(entry) = self.kvantum.take() else { return SyncReport::default(); };
         self.dirty = true;
         let mut changed = SyncReport::default();
-        if entry.link_created && std::fs::read_link(&entry.link).is_ok_and(|target| target == entry.target) {
-            match std::fs::remove_file(&entry.link) {
-                Ok(()) => changed.files.push(entry.link.clone()),
-                Err(error) => changed.failed(&entry.link, error),
-            }
-        }
         match super::kvantum_selection::restore(kvconfig, entry.kvconfig_backup.as_deref(), entry.kvconfig_created, theme) {
             Ok(true) => changed.files.push(kvconfig.into()),
             Ok(false) => {},
             Err(error) => changed.failed(kvconfig, error),
+        }
+        if changed.errors.is_empty() && entry.link_created && std::fs::read_link(&entry.link).is_ok_and(|target| target == entry.target) {
+            match std::fs::remove_file(&entry.link) {
+                Ok(()) => changed.files.push(entry.link.clone()),
+                Err(error) => changed.failed(&entry.link, error),
+            }
         }
         if !changed.errors.is_empty() { self.kvantum = Some(entry); }
         changed
@@ -527,6 +525,34 @@ impl Ledger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn catalog_destinations_with_a_brand_mention_still_keep_the_original() {
+        let root = tempfile::tempdir().unwrap(); let path = root.path().join("profile");
+        let original = "My settings mention Mandara Shell but belong to me\n"; std::fs::write(&path, original).unwrap();
+        let mut ledger = Ledger::default(); ledger.put_file("community:example/main", &path, "generated").unwrap();
+        assert!(ledger.take_back_checked("community:example/main").errors.is_empty()); assert_eq!(std::fs::read_to_string(path).unwrap(), original);
+    }
+
+    #[test]
+    fn missing_kvantum_backups_keep_the_active_theme_link_for_retry() {
+        let root = tempfile::tempdir().unwrap(); let link = root.path().join("Mandara"); let target = root.path().join("theme"); let config = root.path().join("kvantum.kvconfig");
+        std::fs::create_dir(&target).unwrap(); std::fs::write(&config, "[General]\ntheme=Personal\n").unwrap();
+        let mut ledger = Ledger::default(); ledger.record_kvantum(&link, &target, &config).unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap(); std::fs::write(&config, "[General]\ntheme=Mandara\n").unwrap();
+        std::fs::remove_file(ledger.kvantum.as_ref().unwrap().kvconfig_backup.as_ref().unwrap()).unwrap();
+        assert!(!ledger.take_back_kvantum_checked(&config, "Mandara").errors.is_empty());
+        assert_eq!(std::fs::read_link(link).unwrap(), target); assert!(ledger.kvantum.is_some());
+    }
+
+    #[test]
+    fn failed_first_writes_keep_an_edit_that_reappears_at_the_destination() {
+        let root = tempfile::tempdir().unwrap(); let path = root.path().join("theme"); std::fs::write(&path, "original").unwrap();
+        let mut ledger = Ledger::default();
+        let error = ledger.put_file_with("app", &path, "theme", |path, _| { std::fs::write(path, "newer edit")?; Err(std::io::Error::other("write conflict")) }).unwrap_err();
+        assert!(error.to_string().contains("previous file is preserved")); assert_eq!(std::fs::read_to_string(&path).unwrap(), "newer edit");
+        assert_eq!(std::fs::read_to_string(path.with_file_name("theme.mandara-backup")).unwrap(), "original");
+    }
 
     #[test]
     fn a_damaged_destination_does_not_block_unrelated_file_or_import_writes() {

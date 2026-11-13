@@ -34,6 +34,7 @@ pub mod comparison;
 pub mod fix;
 pub mod state;
 pub mod theme;
+mod theme_backups;
 
 mod hyprland;
 mod mango;

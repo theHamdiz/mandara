@@ -14,6 +14,8 @@ mod terminal_apps;
 pub use terminal_apps::{cava, spicetify, spicetify_css, tmux, zellij};
 pub mod custom;
 mod file_io;
+mod fingerprint;
+mod restore;
 mod kvantum_selection;
 mod write_lock;
 pub use write_lock::{FileStamp, WriteLock};

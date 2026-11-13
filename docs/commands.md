@@ -108,7 +108,7 @@ mandara msg plugins enable wallhaven        # opt-in built-ins: wallhaven, curso
 mandara msg config set /integrations/gtk4 true   # theme an app (all off by default); false takes Mandara's changes back
 mandara msg theme apps catalog              # browse catalogs; add refresh to fetch metadata again
 mandara msg theme apps enable community:rofi # download and review files and commands
-mandara msg theme apps enable community:rofi <approval-token> # enable the reviewed revision
+mandara msg theme apps enable community:rofi "$APPROVAL_TOKEN" # set APPROVAL_TOKEN to the token returned by the review
 mandara msg theme apps disable community:rofi # undo its managed changes
 mandara msg theme apps import ~/Themes/apps.toml # import new entries switched off
 mandara msg theme apps status               # last export and setup errors

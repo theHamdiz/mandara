@@ -239,7 +239,9 @@ impl ConfigStore {
 
     /// Atomically persists the config if it is dirty (write to a temp file in
     /// the same directory, fsync, rename).
-    pub fn flush(&mut self) -> Result<()> {
+    pub fn flush(&mut self) -> Result<()> { self.flush_with(|| Ok(())) }
+
+    fn flush_with(&mut self, before_publish: impl FnOnce() -> Result<()>) -> Result<()> {
         if !self.dirty {
             return Ok(());
         }
@@ -256,7 +258,7 @@ impl ConfigStore {
         if let Some(parent) = target.parent() {
             fs::create_dir_all(parent)?;
         }
-        let _directory = mandara_theme::templates::WriteLock::new(&target)?;
+        let directory = mandara_theme::templates::WriteLock::new(&target)?;
         let lock = fs::OpenOptions::new()
             .create(true)
             .truncate(false)
@@ -264,6 +266,7 @@ impl ConfigStore {
             .write(true)
             .open(target.with_extension("toml.lock"))?;
         lock.lock().context("locking configuration")?;
+        let before = mandara_theme::templates::FileStamp::at(directory.target())?;
         // Another process may have saved since the watcher's last event.
         // Merge before writing so Studio cannot undo a shell-side change.
         if target.exists() {
@@ -275,7 +278,8 @@ impl ConfigStore {
         }
         let body = toml::to_string_pretty(&*self.current).context("serializing config")?;
         let contents = format!("{HEADER}{body}");
-        write_atomic(&target, contents.as_bytes())?;
+        before_publish()?;
+        write_atomic_checked(&directory, before, contents.as_bytes())?;
         self.disk_hash = Some(hash_bytes(contents.as_bytes()));
         self.saved = self.current.clone();
         self.dirty = false;
@@ -368,6 +372,8 @@ pub fn write_atomic_checked(lock: &mandara_theme::templates::WriteLock, before: 
         let written = mandara_theme::templates::FileStamp::of(&file)?;
         lock.check_stamp(before)?;
         fs::rename(&tmp, path).with_context(|| format!("renaming into {}", path.display()))?;
+        temporary_created = false;
+        fs::File::open(dir)?.sync_all().with_context(|| format!("syncing {}", dir.display()))?;
         Ok(written)
     })();
     if result.is_err() && temporary_created { fs::remove_file(&tmp).with_context(|| format!("removing incomplete write {}", tmp.display()))?; }
@@ -521,6 +527,22 @@ impl ConfigWatcher {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_file_changed_after_merging_is_kept_then_merged_on_retry() {
+        let root = tempfile::tempdir().unwrap(); let path = root.path().join("config.toml");
+        let mut store = ConfigStore::open(&path).unwrap();
+        store.update(|config| config.bar.height = 30.0); store.flush().unwrap();
+        store.update(|config| config.bar.height = 32.0);
+        let mut edited = store.get().clone(); edited.bar.height = 34.0; edited.compositor.manage = !edited.compositor.manage;
+        let bytes = toml::to_string_pretty(&edited).unwrap();
+        assert!(store.flush_with(|| fs::write(&path, &bytes).map_err(Into::into)).is_err());
+        assert_eq!(ConfigStore::open(&path).unwrap().get().bar.height, 34.0);
+        assert!(store.is_dirty()); store.flush().unwrap();
+        let saved = ConfigStore::open(&path).unwrap();
+        assert_eq!(saved.get().bar.height, 32.0);
+        assert_eq!(saved.get().compositor.manage, edited.compositor.manage);
+    }
+
     use super::*;
     use crate::schema::BarLayout;
     use mandara_theme::ThemeSource;

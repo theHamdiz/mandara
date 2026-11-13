@@ -229,4 +229,11 @@ mod tests {
             assert!(id(&[value.into()]).is_err());
         }
     }
+    #[test]
+    fn the_documented_approval_command_parses_in_a_shell() {
+        for docs in [include_str!("../../../../../docs/commands.md"), include_str!("../../../../../docs/app-themes.md")] {
+            let example = docs.lines().find(|line| line.starts_with("mandara msg theme apps enable") && line.contains("APPROVAL_TOKEN")).unwrap();
+            assert!(std::process::Command::new("sh").args(["-n", "-c", example]).status().unwrap().success());
+        }
+    }
 }

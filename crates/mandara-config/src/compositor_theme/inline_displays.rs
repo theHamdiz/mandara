@@ -4,7 +4,12 @@ use crate::compositor::Target;
 use anyhow::Result;
 use std::path::Path;
 
-pub(super) fn remove(target: Target, body: &str, fragment: &Path) -> Result<String> {
+pub(super) fn remove(
+    target: Target,
+    body: &str,
+    fragment: &Path,
+    previous: Option<&str>,
+) -> Result<String> {
     let heading = "Displays (Studio → Displays)";
     let ending = "End Displays (Studio → Displays)";
     let Some(start) = body
@@ -42,28 +47,26 @@ pub(super) fn remove(target: Target, body: &str, fragment: &Path) -> Result<Stri
     );
     let offset: usize = body.split_inclusive('\n').take(start).map(str::len).sum();
     let (prefix, suffix) = body.split_at(offset);
+    let mut names = selectors(target, &fragment_body);
+    if let Some(previous) = previous {
+        names.extend(selectors(target, previous));
+    }
+    names.sort();
+    names.dedup();
     let mut result = String::with_capacity(body.len());
     result.push_str(prefix);
     if target == Target::Niri {
-        let outputs = kdl::KdlDocument::parse_v1(&fragment_body)?;
-        let names: Vec<_> = outputs
-            .nodes()
-            .iter()
-            .filter(|node| node.name().value() == "output")
-            .filter_map(|node| node.get(0)?.as_string())
-            .collect();
         let mut document = kdl::KdlDocument::parse_v1(suffix)?;
         document.nodes_mut().retain(|node| {
             node.name().value() != "output"
                 || !node
                     .get(0)
                     .and_then(|value| value.as_string())
-                    .is_some_and(|name| names.contains(&name))
+                    .is_some_and(|name| names.iter().any(|owned| owned == name))
         });
         document.ensure_v1();
         result.push_str(&document.to_string());
     } else if target == Target::Umbriel {
-        let names = crate::outputs::parse_output_rules(target, &fragment_body);
         let mut document: toml_edit::DocumentMut = suffix.parse()?;
         if let Some(outputs) = document
             .get_mut("output")
@@ -78,7 +81,6 @@ pub(super) fn remove(target: Target, body: &str, fragment: &Path) -> Result<Stri
         }
         result.push_str(&document.to_string());
     } else {
-        let names = selectors(target, &fragment_body);
         for line in suffix.lines() {
             let matches = selectors(target, line)
                 .iter()
@@ -130,6 +132,50 @@ fn selectors(target: Target, body: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::outputs::{OutputConfig, emit_outputs};
+    #[test]
+    fn previous_ownership_migrates_old_connectors_after_a_new_fragment_replaces_them() {
+        let root = tempfile::tempdir().unwrap();
+        for (target, lua) in [
+            (Target::Mango, false),
+            (Target::Niri, false),
+            (Target::Hyprland, false),
+            (Target::Hyprland, true),
+            (Target::Umbriel, false),
+            (Target::Sway, false),
+        ] {
+            let old = emit_outputs(
+                target,
+                &[OutputConfig {
+                    name: "DP-1".into(),
+                    enabled: false,
+                    ..Default::default()
+                }],
+                lua,
+            );
+            let legacy = old
+                .lines()
+                .filter(|line| !line.contains("End Displays"))
+                .fold(String::new(), |mut body, line| {
+                    body.push_str(line);
+                    body.push('\n');
+                    body
+                });
+            let next = emit_outputs(
+                target,
+                &[OutputConfig {
+                    name: "DP-2".into(),
+                    scale: Some(1.25),
+                    ..Default::default()
+                }],
+                lua,
+            );
+            let file = root.path().join("fragment");
+            std::fs::write(&file, next).unwrap();
+            let migrated = remove(target, &legacy, &file, Some(&old)).unwrap();
+            assert!(!migrated.contains("DP-1"), "{target:?}: {migrated}");
+        }
+    }
+
     #[test]
     fn legacy_migration_preserves_rules_before_the_heading_and_unrelated_outputs() {
         let root = tempfile::tempdir().unwrap();
@@ -187,7 +233,8 @@ mod tests {
                     body.push('\n');
                     body
                 });
-            let result = remove(target, &format!("{before}{legacy}{unrelated}"), &file).unwrap();
+            let result =
+                remove(target, &format!("{before}{legacy}{unrelated}"), &file, None).unwrap();
             assert!(result.starts_with(before), "{target:?}: {result}");
             assert!(result.contains(unrelated.trim()), "{target:?}: {result}");
             assert!(
@@ -216,7 +263,7 @@ mod tests {
             let file = tempfile::NamedTempFile::new().unwrap();
             std::fs::write(file.path(), &fragment).unwrap();
             let body = format!("{fragment}\n{unrelated}");
-            let stripped = remove(target, &body, file.path()).unwrap();
+            let stripped = remove(target, &body, file.path(), None).unwrap();
             assert!(
                 !stripped.contains("output \"DP-1\" ")
                     && !stripped.contains("name:^DP-1$")
@@ -232,7 +279,7 @@ mod tests {
                 .filter(|line| !line.contains("End Displays"))
                 .collect::<Vec<_>>()
                 .join("\n");
-            let stripped = remove(target, &legacy, file.path()).unwrap();
+            let stripped = remove(target, &legacy, file.path(), None).unwrap();
             assert!(
                 !stripped.contains("\"DP-1\"")
                     && !stripped.contains("name:^DP-1$")

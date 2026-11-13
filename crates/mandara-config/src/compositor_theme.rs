@@ -83,9 +83,14 @@ fn umbriel_remove_include(body: &str,path: &str) -> anyhow::Result<String> {
 /// Regeneration keeps this include while its color file exists. Disabling
 /// removes just this block; the rest of the generated settings stay intact.
 pub fn compose(target: Target, kind: Kind, body: &str, path: &Path, enabled: bool) -> anyhow::Result<String> {
+    compose_with_previous(target, kind, body, path, enabled, None)
+}
+
+/// The prior fragment identifies legacy rules after the new file is published.
+pub fn compose_with_previous(target: Target, kind: Kind, body: &str, path: &Path, enabled: bool, previous_displays: Option<&str>) -> anyhow::Result<String> {
     let inline;
     let body = if enabled && kind == Kind::Displays {
-        inline = inline_displays::remove(target, body, path)?;
+        inline = inline_displays::remove(target, body, path, previous_displays)?;
         inline.as_str()
     } else { body };
     if target == Target::Umbriel {
@@ -229,9 +234,11 @@ mod native_tests {
             let inline = crate::outputs::emit_outputs(target,&outputs,target == Target::Hyprland && Target::hyprland_lua());
             let mut legacy = inline.lines().filter(|line|!line.contains("End Displays")).map(|line|format!("{line}\n")).collect::<String>();
             if target == Target::Niri { legacy.push_str("output \"UNPLUGGED\" { scale 2; }\n"); }
-            for original in [String::new(),inline,legacy] {
+            let previous = crate::outputs::emit_outputs(target, &[OutputConfig { name: "DP-1".into(), enabled: false, ..Default::default() }], target == Target::Hyprland && Target::hyprland_lua());
+            let moved = previous.lines().filter(|line| !line.contains("End Displays")).fold(String::new(), |mut body, line| { body.push_str(line); body.push('\n'); body });
+            for original in [String::new(),inline,legacy,moved] {
                 let body = compose(target,Kind::AppColors,&original,&colors,true).unwrap();
-                let body = compose(target,Kind::Displays,&body,&displays,true).unwrap();
+                let body = compose_with_previous(target,Kind::Displays,&body,&displays,true,Some(&previous)).unwrap();
                 std::fs::write(&main,body).unwrap();
                 let report = doctor::check_with(target,&main,&CheckEnv { home:Some(dir.path().into()),..Default::default() });
                 assert_eq!(report.status,CheckerStatus::Ran,"{}",report.raw);

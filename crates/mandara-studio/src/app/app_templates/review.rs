@@ -1,5 +1,7 @@
 //! Review catalog writes before recording the user's activation request.
 
+mod scroll;
+
 use super::{Job, StudioView, button};
 use crate::tokens::*;
 use gpui::{
@@ -19,11 +21,13 @@ struct Line {
     text: SharedString,
 }
 pub(super) struct Pending {
-    id: String,
+    id: SharedString,
     fingerprint: String,
     lines: Arc<[Line]>,
     shared_palette: bool,
     page: usize,
+    scroll: gpui::ScrollHandle,
+    scrollbar: std::rc::Rc<mandara_ui::scrollbar::ScrollbarState>,
 }
 impl From<Review> for Pending {
     fn from(review: Review) -> Self {
@@ -37,14 +41,21 @@ impl From<Review> for Pending {
             text: command.into(),
         }));
         Self {
-            id: review.id,
+            id: review.id.into(),
             fingerprint: review.fingerprint,
             lines: lines.into(),
             shared_palette: review.shared_palette,
             page: 0,
+            scroll: gpui::ScrollHandle::new(),
+            scrollbar: mandara_ui::scrollbar::ScrollbarState::new(),
         }
     }
 }
+// The warning is normal-sized text; the accent role is too faint in light mode.
+fn warning_ink(palette: &MandaraPalette) -> mandara_theme::Color {
+    palette.on_surface
+}
+
 fn page_range(page: usize, len: usize) -> std::ops::Range<usize> {
     let page = page.min(len.div_ceil(ROWS_PER_PAGE).max(1) - 1);
     let start = page * ROWS_PER_PAGE;
@@ -64,13 +75,26 @@ impl StudioView {
         let mut panel = div().id("app-template-review").on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
             if event.keystroke.key == "escape" { this.app_templates.review = None; cx.stop_propagation(); cx.notify(); }
         })).flex().flex_col().gap(px(SPACE_12_PX)).p(px(SPACE_16_PX)).rounded(px(RADIUS_16_PX)).bg(palette.surface_container.hsla())
-            .child(div().text_size(px(TEXT_13_5_PX)).child(t("Review")))
+            .child(div().flex().gap(px(SPACE_8_PX)).text_size(px(TEXT_13_5_PX)).child(t("Review")).child(review.id.clone()))
             .child(div().text_size(px(TEXT_12_PX)).child(t("Review files and commands before enabling this template. Commands can change other files too. Updates need a new review.")));
         if review.shared_palette {
-            panel = panel.child(div().text_size(px(TEXT_12_PX)).text_color(palette.warning_amber.hsla()).child(t("Review and approve the shared browser palette first. Other Pywal apps will read these colors too.")));
+            panel = panel.child(div().text_size(px(TEXT_12_PX)).text_color(warning_ink(palette).hsla()).child(t("Review and approve the shared browser palette first. Other Pywal apps will read these colors too.")));
         }
+        let focused = palette.surface_container_high.hsla();
         let mut rows = div()
             .id("app-template-review-lines")
+            .focusable()
+            .tab_index(0)
+            .focus(move |style| style.bg(focused))
+            .track_scroll(&review.scroll)
+            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
+                if let Some(review) = &this.app_templates.review
+                    && scroll::key(&review.scroll, &event.keystroke)
+                {
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }))
             .flex()
             .flex_col()
             .gap(px(SPACE_8_PX))
@@ -95,7 +119,12 @@ impl StudioView {
                     .child(div().text_size(px(TEXT_12_PX)).child(line.text.clone())),
             );
         }
-        panel = panel.child(rows);
+        panel = panel.child(mandara_ui::scrollbar::with_scrollbar(
+            rows,
+            &review.scroll,
+            &review.scrollbar,
+            palette,
+        ));
         if pages > 1 {
             panel = panel.child(
                 div()
@@ -117,6 +146,7 @@ impl StudioView {
                             |this, _: &ClickEvent, _, cx| {
                                 if let Some(review) = &mut this.app_templates.review {
                                     review.page = review.page.saturating_sub(1);
+                                    review.scroll.set_offset(gpui::Point::default());
                                 }
                                 cx.notify();
                             },
@@ -141,6 +171,7 @@ impl StudioView {
                             move |this, _: &ClickEvent, _, cx| {
                                 if let Some(review) = &mut this.app_templates.review {
                                     review.page = (review.page + 1).min(pages - 1);
+                                    review.scroll.set_offset(gpui::Point::default());
                                 }
                                 cx.notify();
                             },
@@ -243,6 +274,18 @@ impl StudioView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn shared_palette_warning_meets_normal_text_contrast_in_both_modes() {
+        // WCAG AA requires at least 4.5:1 for this text size.
+        const MIN_CONTRAST: f32 = 4.5;
+        for dark in [false, true] {
+            let palette = mandara_theme::engine::default_palette(dark);
+            assert!(
+                warning_ink(&palette).contrast_ratio(palette.surface_container) >= MIN_CONTRAST
+            );
+        }
+    }
+
     #[test]
     fn every_destination_and_command_is_reachable_on_bounded_review_pages() {
         let count = ROWS_PER_PAGE * 2 + 1;

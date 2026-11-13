@@ -291,7 +291,7 @@ pub fn remember(saved: &mut Vec<OutputConfig>, current: impl IntoIterator<Item =
             if stable(old) && stable(&output) {
                 old.identity() == output.identity()
             } else {
-                !stable(old) && old.name == output.name
+                !stable(old) && !stable(&output) && old.name == output.name
             }
         };
         let previous = saved.iter().find(|old| stable(old) && stable(&output) && old.identity() == output.identity())
@@ -319,7 +319,7 @@ pub fn remember(saved: &mut Vec<OutputConfig>, current: impl IntoIterator<Item =
             if stable(old) && output_stable {
                 old.identity() != output_identity
             } else {
-                stable(old) || old.name != output.name
+                stable(old) || output_stable || old.name != output.name
             }
         });
         saved.push(output);
@@ -339,6 +339,18 @@ mod persistence_tests {
         assert_eq!(saved, [old.clone(), anonymous.clone()]);
         remember(&mut saved, [anonymous.clone()]);
         assert_eq!(saved, [old, anonymous]);
+    }
+
+    #[test]
+    fn stable_monitors_do_not_inherit_or_delete_anonymous_preferences() {
+        let projector = OutputConfig { name: "DP-1".into(), scale: Some(2.0), ..Default::default() };
+        let monitor = OutputConfig { name: "DP-1".into(), make: "Demo".into(), serial: "A".into(), enabled: false, ..Default::default() };
+        let mut saved = vec![projector.clone()]; remember(&mut saved, [monitor.clone()]);
+        assert_eq!(saved, [projector.clone(), monitor.clone()]);
+        remember(&mut saved, [monitor.clone()]); assert_eq!(saved, [projector.clone(), monitor]);
+        remember(&mut saved, [OutputConfig { scale: None, enabled: false, ..projector }]);
+        assert_eq!(saved.last().unwrap().scale, Some(2.0));
+        assert_eq!(current_connectors(&saved).count(), 1);
     }
 
     #[test]

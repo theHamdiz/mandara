@@ -90,6 +90,7 @@ fn backup(lock: &WriteLock, expected: Option<FileStamp>) -> Result<()> {
     if expected.is_none() {
         return Ok(());
     }
+    super::theme_backups::retain(lock.path(), super::theme_backups::MAX_BACKUPS - 1)?;
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?;
     let path = lock.path();
     let name = path
@@ -171,6 +172,34 @@ mod tests {
         fn validate(&self, _: &str) -> Result<()> {
             (self.0)()
         }
+    }
+
+    #[test]
+    fn repeated_native_edits_bound_recovery_copies_and_keep_the_original() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("config");
+        fs::write(&path, "personal").unwrap();
+        fs::write(
+            root.path().join("config.mandara-backup"),
+            "original undo copy",
+        )
+        .unwrap();
+        let mut before = String::from("personal");
+        for index in 0..super::super::theme_backups::MAX_BACKUPS + 4 {
+            let next = format!("palette {index}");
+            guarded_write(&path, &before, &next, &Check(|| Ok(()))).unwrap();
+            before = next;
+        }
+        let count = fs::read_dir(root.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .filter(|name| name.to_string_lossy().starts_with("config.mandara-backup-"))
+            .count();
+        assert_eq!(count, super::super::theme_backups::MAX_BACKUPS);
+        assert_eq!(
+            fs::read_to_string(root.path().join("config.mandara-backup")).unwrap(),
+            "original undo copy"
+        );
     }
 
     #[test]

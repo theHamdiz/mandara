@@ -136,8 +136,8 @@ Useful commands:
 ```bash
 mandara msg theme apps catalog          # cached discovery; add refresh to fetch again
 mandara msg theme apps enable community:rofi  # download and review; does not activate
-# After reading the returned file and command list, pass its approval token:
-mandara msg theme apps enable community:rofi <approval-token>
+# Set APPROVAL_TOKEN to the token returned by the review after reading its file and command list.
+mandara msg theme apps enable community:rofi "$APPROVAL_TOKEN"
 mandara msg theme apps disable community:rofi
 mandara msg theme apps status
 mandara msg theme export                # files, skipped entries and errors as JSON
@@ -147,3 +147,9 @@ Format references: [Cava](https://github.com/karlstav/cava#configuration),
 [tmux](https://man.openbsd.org/tmux#STYLES),
 [Zellij](https://zellij.dev/documentation/themes.html), and
 [Spicetify](https://github.com/spicetify/cli/blob/main/Themes/SpicetifyDefault/color.ini).
+
+The review names the selected package. Focus its file list with Tab, then use
+the arrow keys, Page Up/Down or Home/End. Escape closes the review.
+
+Native compositor theme edits keep the 20 newest timestamped recovery copies
+per file. The original backup used by managed-file undo is kept separately.
