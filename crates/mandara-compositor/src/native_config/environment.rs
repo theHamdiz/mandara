@@ -9,6 +9,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[cfg(target_os = "linux")]
 pub(super) fn capture(environment: &[u8]) -> mandara_config::compositor::IncludeEnvironment {
     mandara_config::compositor::IncludeEnvironment::captured(
         environment.split(|byte| *byte == 0).filter_map(|entry| {
@@ -118,6 +119,28 @@ pub(super) fn inspect(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn captured_includes_preserve_server_paths_and_keep_values_private() {
+        let directory = tempfile::tempdir().unwrap();
+        let server = directory
+            .path()
+            .join(OsString::from_vec(b"keys=\xff".to_vec()));
+        std::fs::create_dir(&server).unwrap();
+        let root = directory.path().join("config.conf");
+        let child = server.join("child.conf");
+        std::fs::write(&root, "source=$KEYS/child.conf\n").unwrap();
+        std::fs::write(&child, "bind=SUPER,Q,killclient\n").unwrap();
+        let mut bytes = b"malformed\0KEYS=".to_vec();
+        bytes.extend_from_slice(server.as_os_str().as_bytes());
+        bytes.extend_from_slice(b"\0TOKEN=private-value\0");
+        let environment = capture(&bytes);
+        let scan = keybinds::scan_roots_in(Target::Mango, [root], &environment);
+        assert!(scan.errors.is_empty(), "{:?}", scan.errors);
+        assert!(scan.sources.iter().any(|source| source.file == child));
+        assert!(!format!("{environment:?}").contains("private-value"));
+    }
 
     #[test]
     fn server_home_xdg_and_niri_overrides_keep_native_precedence_and_non_utf8_paths() {

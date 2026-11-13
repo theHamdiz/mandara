@@ -66,6 +66,8 @@ mod sandbox;
 mod bootstrap_tests;
 #[cfg(test)]
 mod pages_tests;
+#[cfg(test)]
+mod workspace_manifest_tests;
 
 use std::collections::BTreeMap;
 use std::io::Write as _;
@@ -243,10 +245,6 @@ fn bump(args: &[String]) -> Result<()> {
         println!("(dry run — nothing written)");
         return Ok(());
     }
-    // Keep the shell's version as the workspace version too.
-    if let Some(app) = record.get("mandara-app") {
-        set_workspace_version(&app.version)?;
-    }
     if !bumped.is_empty() || init {
         // Refresh Cargo.lock for the new workspace versions (offline).
         refresh_lock(None)?;
@@ -361,24 +359,6 @@ fn changelog(args: &[String]) -> Result<()> {
     }
     println!("{}", release.to_markdown());
     Ok(())
-}
-
-fn set_workspace_version(version: &str) -> Result<()> {
-    let path = root().join("Cargo.toml");
-    let text = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let mut section = String::new();
-    let mut out = Vec::new();
-    for line in text.lines() {
-        if line.trim_start().starts_with('[') {
-            section = line.trim().to_string();
-        }
-        if section == "[workspace.package]" && line.trim_start().starts_with("version =") {
-            out.push(format!("version = \"{version}\""));
-        } else {
-            out.push(line.to_string());
-        }
-    }
-    std::fs::write(&path, out.join("\n") + "\n").map_err(|e| e.to_string())
 }
 
 fn verify() -> Result<()> {

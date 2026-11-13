@@ -19,6 +19,10 @@ About → What's new shows it too.
 
 - **Non-Latin shortcut keys no longer crash the editor.** Arabic and other Unicode keys can be inspected safely.
 
+### Under the hood
+
+- Keep native shortcut checks and release manifests clean on current Rust and FreeBSD builds.
+
 ## 0.29.0 — 2026-11-13
 
 More apps can follow your colours. Desktop changes stay put. Display
