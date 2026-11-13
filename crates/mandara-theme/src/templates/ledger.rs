@@ -26,7 +26,10 @@
 
 mod journal;
 mod undo_file;
+mod undo_block;
 mod ownership;
+#[cfg(test)]
+mod checkpoint_tests;
 
 use std::collections::BTreeMap;
 use super::SyncReport;
@@ -218,13 +221,19 @@ impl Ledger {
     }
 
     fn checkpoint(&mut self) -> std::io::Result<()> {
+        self.checkpoint_with(super::file_io::sync_existing_parent)
+    }
+
+    fn checkpoint_with(&mut self, sync_deleted: impl FnOnce(&Path) -> std::io::Result<()>) -> std::io::Result<()> {
         let Some(path) = &self.record else { return Ok(()); };
         if !self.dirty { return Ok(()); }
         if self.is_empty() {
-            if exists(path) {
-                std::fs::remove_file(path)?;
-                super::file_io::sync_parent(path)?;
+            match std::fs::remove_file(path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
             }
+            sync_deleted(path)?;
         } else {
             let body = toml::to_string_pretty(self).map_err(std::io::Error::other)?;
             if body.len() as u64 > MAX_LEDGER_BYTES {
@@ -473,37 +482,7 @@ impl Ledger {
                     && !kept(e.path.as_deref().unwrap_or_else(|| Path::new(k)))
             }).map(|(k, _)| k.clone()).collect();
         for k in blocks {
-            let Some(entry) = self.blocks.remove(&k) else { continue;
-            };
-            self.dirty = true;
-            let path = entry.path.clone().unwrap_or_else(|| PathBuf::from(&k));
-            let lines: Vec<&str> = entry.lines.iter().map(String::as_str).collect();
-            match super::remove_block(&path, &lines) {
-                Ok(true) => changed.files.push(path.clone()),
-                Ok(false) => {}
-                Err(err) => {
-                    changed.failed(&path, err);
-                    self.blocks.insert(k, entry);
-                    continue;
-                }
-            }
-            if entry.created
-                && let Some(other) = self.blocks.iter_mut().find_map(|(key, other)| {
-                    (other.path.as_deref().unwrap_or_else(|| Path::new(key)) == path)
-                        .then_some(other)
-                })
-            {
-                other.created = true;
-                other.created_dirs.clone_from(&entry.created_dirs);
-            }
-            if entry.created && !exists(&path) {
-                remove_empty(&entry.created_dirs);
-            } else if entry.created && super::file_io::read(&path).is_ok_and(|t| t.trim().is_empty()) {
-                match std::fs::remove_file(&path) {
-                    Ok(()) => remove_empty(&entry.created_dirs),
-                    Err(error) => { changed.failed(&path, error);self.blocks.insert(k,entry); }
-                }
-            }
+            self.restore_block(k, &mut changed);
         }
         changed
     }

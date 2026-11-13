@@ -154,7 +154,7 @@ the arrow keys, Page Up/Down or Home/End. Escape closes the review.
 Native compositor theme edits keep the 20 newest timestamped recovery copies
 per file. The original backup used by managed-file undo is kept separately.
 
-Owned files and import lines record their recovery information before they change. Interrupted apply or undo resumes at the next sync. Read or save failures keep that information for another try; recovered files and backups are synchronized before the record is cleared. Restored originals keep their file identity, including symlinks.
+Owned files and import lines record their recovery information before they change. Interrupted apply or undo resumes at the next sync. Read or save failures keep that information for another try; recovered files, backups and removals are synchronized before the record is cleared. Failed record deletions also retry their directory sync. Restored originals keep their file identity, including symlinks.
 
 Conflicts preserve personal edits, and import updates refuse to claim an existing personal line. A missing original backup is reported for repair. If a compositor check and its rollback both fail, the error keeps the original diagnostic and points to the pre-edit backup when one exists.
 

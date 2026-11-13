@@ -141,4 +141,61 @@ mod tests {
         assert_eq!(reader.get().bar.height, 41.0);
         assert!(!reader.is_dirty());
     }
+
+    #[test]
+    fn a_clean_reload_queued_before_a_failed_save_cannot_acknowledge_it() {
+        use super::super::ConfigStore;
+        use std::os::unix::fs::MetadataExt as _;
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("config.toml");
+        let mut store = ConfigStore::open(&path).unwrap();
+        let reload = store.reload_request();
+        store.update(|config| config.bar.height = 41.0);
+        let mut failed = store.save_request().unwrap();
+        assert!(failed.store.flush_using(|| Ok(()), fail_sync).is_err());
+        drop(failed);
+        let inode = std::fs::metadata(&path).unwrap().ino();
+        store.finish_reload(reload.read().unwrap()).unwrap();
+        assert_eq!(store.get().bar.height, 41.0);
+        assert!(store.is_dirty());
+        let mut retry = store
+            .save_request()
+            .expect("the save still needs acknowledgement");
+        assert!(
+            retry
+                .store
+                .flush_using(|| panic!("do not republish"), fail_sync)
+                .is_err()
+        );
+        assert!(retry.store.is_dirty());
+        let saved = store.save_request().unwrap().write().unwrap();
+        store.finish_save(saved).unwrap();
+        assert!(!store.is_dirty());
+        assert_eq!(std::fs::metadata(&path).unwrap().ino(), inode);
+    }
+
+    #[test]
+    fn even_a_confirmed_reload_does_not_acknowledge_a_later_failed_publication() {
+        use super::super::ConfigStore;
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("config.toml");
+        let mut store = ConfigStore::open(&path).unwrap();
+        store.update(|config| config.bar.height = 41.0);
+        let mut failed = store.save_request().unwrap();
+        assert!(failed.store.flush_using(|| Ok(()), fail_sync).is_err());
+        let reloaded = store.reload_request().read().unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        let lock = mandara_theme::templates::WriteLock::new(&path).unwrap();
+        let before = FileStamp::at(&path).unwrap();
+        assert!(
+            super::super::write_atomic_checked_using(&lock, before, &bytes, fail_sync).is_err()
+        );
+        assert_ne!(FileStamp::at(&path).unwrap(), before);
+        drop(lock);
+        store.finish_reload(reloaded).unwrap();
+        assert!(store.is_dirty());
+        let saved = store.save_request().unwrap().write().unwrap();
+        store.finish_save(saved).unwrap();
+        assert!(!store.is_dirty());
+    }
 }

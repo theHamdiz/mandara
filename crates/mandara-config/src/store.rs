@@ -186,7 +186,9 @@ impl ConfigStore {
         };
         self.disk_hash = loaded.store.disk_hash;
         self.load_error = loaded.store.load_error;
-        self.dirty = self.current != self.saved;
+        // A reload can predate a save whose rename succeeded but whose sync failed.
+        // Only a completed save acknowledges local writes.
+        self.dirty = self.dirty || self.current != self.saved;
         Ok(if changed {
             ReloadOutcome::Changed
         } else {
@@ -310,6 +312,10 @@ impl ConfigStore {
     fn reload_bytes(&mut self,bytes: &[u8], confirm_saved: impl FnOnce(&Path) -> Result<()>) -> Result<ReloadOutcome> {
         let hash = hash_bytes(bytes);
         if Some(hash) == self.disk_hash {
+            if self.dirty && self.current == self.saved {
+                confirm_saved(&self.path)?;
+                self.dirty = false;
+            }
             return Ok(ReloadOutcome::Unchanged);
         }
         let cfg = Arc::new(parse(bytes)?);
