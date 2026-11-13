@@ -15,6 +15,8 @@ pub use terminal_apps::{cava, spicetify, spicetify_css, tmux, zellij};
 pub mod custom;
 mod file_io;
 mod fingerprint;
+mod publication;
+pub use publication::{PublishedWrite, PublishedWriteError, published_write};
 mod restore;
 mod kvantum_selection;
 mod write_lock;
@@ -508,20 +510,7 @@ pub fn ensure_line(config: &Path, line: &str, placement: Placement) -> std::io::
 pub fn ensure_block(config: &Path, block: &[&str], placement: Placement) -> std::io::Result<bool> {
     let lock = WriteLock::new(config)?;
     let current = file_io::read(config)?;
-    let mut lines = strip_block(&current, block);
-    // Drop blank lines a previous block left dangling at the end.
-    while placement == Placement::End && lines.last().is_some_and(|l| l.trim().is_empty()) {
-        lines.pop();
-    }
-    let at = match placement {
-        Placement::AfterImports => lines.iter().rposition(|l| l.trim_start().starts_with("@import")).map(|i| i + 1).unwrap_or(0),
-        Placement::End => lines.len(),
-    };
-    for (i, l) in block.iter().enumerate() {
-        lines.insert(at + i, l);
-    }
-    let mut next = lines.join("\n");
-    next.push('\n');
+    let next = block_body(&current, block, placement);
     if next == current {
         return Ok(false);
     }
@@ -537,6 +526,25 @@ pub fn ensure_block(config: &Path, block: &[&str], placement: Placement) -> std:
     lock.check(current.as_bytes())?;
     file_io::write(config, &next)?;
     Ok(true)
+}
+
+/// Render the shared import placement without touching the filesystem.
+fn block_body(current: &str, block: &[&str], placement: Placement) -> String {
+    let mut lines = strip_block(current, block);
+    // Drop blank lines a previous block left dangling at the end.
+    while placement == Placement::End && lines.last().is_some_and(|l| l.trim().is_empty()) {
+        lines.pop();
+    }
+    let at = match placement {
+        Placement::AfterImports => lines.iter().rposition(|l| l.trim_start().starts_with("@import")).map(|i| i + 1).unwrap_or(0),
+        Placement::End => lines.len(),
+    };
+    for (i, l) in block.iter().enumerate() {
+        lines.insert(at + i, l);
+    }
+    let mut next = lines.join("\n");
+    next.push('\n');
+    next
 }
 
 /// `current`'s lines without any copy of `block`, nor stray copies of its

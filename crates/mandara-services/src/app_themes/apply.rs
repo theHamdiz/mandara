@@ -407,9 +407,10 @@ impl ApplyContext<'_, '_> {
                 continue;
             }
             let restored = ledger.take_back_checked(&id);
+            let failed = !restored.errors.is_empty();
             report.files.extend(restored.files);
             report.errors.extend(restored.errors);
-            if ledger.has(&id) {
+            if failed || ledger.has(&id) {
                 report
                     .errors
                     .insert(id, "some app theme files could not be restored".into());
@@ -614,7 +615,7 @@ mod tests {
     use super::*;
     use mandara_theme::templates::custom::Paths;
 
-    fn locations(root: &Path) -> Locations {
+    pub(super) fn locations(root: &Path) -> Locations {
         Locations {
             home: root.into(),
             config: root.join("config"),
@@ -842,5 +843,31 @@ mod tests {
         );
         assert!(!dir.path().join("hook").exists() && !dir.path().join("dynamic.css").exists());
         assert!(!locations.config.join("gtk-3.0/gtk.css").exists());
+    }
+}
+
+#[cfg(test)]
+mod retirement_tests {
+    use super::*;
+    #[test]
+    fn a_shared_recovery_failure_keeps_the_applied_undo_record() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = super::tests::locations(root.path());
+        let path = root.path().join("pending-theme");
+        std::fs::write(&path, "newer personal edit").unwrap();
+        let mut ledger: Ledger = serde_json::from_value(serde_json::json!({"pending":{
+            "operation":"Apply", "path":path, "next":{"app":"unrelated","hash":"0000000000000000"},
+            "previous":null,"original":{"device":0,"inode":0,"length":0,"seconds":0,"nanos":0},"moved":root.path().join("missing-backup")
+        }})).unwrap();
+        let owner = "user/example";
+        let mut applied = Applied::default();
+        applied.entries.insert(owner.into(), Undo { directory: root.path().into(), command:None, compositor:None,browser:false,environment:Vec::new() });
+        let mut report = Report::default();
+        let cancel = AtomicBool::new(false);
+        let mut post_hooks = super::super::post_hooks::Hooks::new(&cancel);
+        ApplyContext { locations:&locations,hooks:false,cancel:&cancel,ledger:&mut ledger,report:&mut report,applied:&mut applied,post_hooks:&mut post_hooks }.retire(vec![owner.into()], &|| false);
+        assert!(!report.errors.is_empty());
+        assert!(applied.entries.contains_key(owner));
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "newer personal edit");
     }
 }

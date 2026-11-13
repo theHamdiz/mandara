@@ -6,6 +6,9 @@
 //! edits are picked up through [`ConfigStore::watch`]; our own writes are
 //! recognised by content hash and ignored.
 
+mod publication;
+pub use publication::{PublishedWriteError, published_stamp};
+
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};
@@ -353,6 +356,10 @@ pub fn write_atomic_locked(lock: &mandara_theme::templates::WriteLock, contents:
 
 /// Refuse a stale merge, including replacement with identical bytes.
 pub fn write_atomic_checked(lock: &mandara_theme::templates::WriteLock, before: Option<mandara_theme::templates::FileStamp>, contents: &[u8]) -> Result<mandara_theme::templates::FileStamp> {
+    write_atomic_checked_using(lock, before, contents, |directory| fs::File::open(directory)?.sync_all())
+}
+
+fn write_atomic_checked_using(lock: &mandara_theme::templates::WriteLock, before: Option<mandara_theme::templates::FileStamp>, contents: &[u8], sync_directory: impl FnOnce(&Path) -> std::io::Result<()>) -> Result<mandara_theme::templates::FileStamp> {
     lock.check_stamp(before)?;
     let path = lock.target();
     let permissions = fs::metadata(path).ok().map(|metadata| metadata.permissions());
@@ -373,7 +380,7 @@ pub fn write_atomic_checked(lock: &mandara_theme::templates::WriteLock, before: 
         lock.check_stamp(before)?;
         fs::rename(&tmp, path).with_context(|| format!("renaming into {}", path.display()))?;
         temporary_created = false;
-        fs::File::open(dir)?.sync_all().with_context(|| format!("syncing {}", dir.display()))?;
+        sync_directory(dir).map_err(|error| PublishedWriteError::new(path, written, error)).with_context(|| format!("syncing {}", dir.display()))?;
         Ok(written)
     })();
     if result.is_err() && temporary_created { fs::remove_file(&tmp).with_context(|| format!("removing incomplete write {}", tmp.display()))?; }

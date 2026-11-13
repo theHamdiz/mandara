@@ -145,21 +145,38 @@ pub fn guarded_write_locked(
         return Ok(());
     }
     backup(lock, before)?;
-    let written = crate::store::write_atomic_checked(lock, before, next.as_bytes())?;
+    let written = match crate::store::write_atomic_checked(lock, before, next.as_bytes()) {
+        Ok(written) => written,
+        Err(error) => {
+            if let Some(written) = crate::store::published_stamp(&error)
+                && let Err(restore) = restore_written(lock, before, written, expected)
+            {
+                return Err(error.context(format!("restoring the published theme failed: {restore:#}")));
+            }
+            return Err(error);
+        }
+    };
     let live = validator.check_live(path);
     lock.check_stamp(Some(written)).context(changed())?;
     if super::comparison::is_worse(&baseline, &live) {
-        // Rollback is another conditional write, with its own recoverable copy.
-        backup(lock, Some(written))?;
-        if before.is_some() {
-            crate::store::write_atomic_checked(lock, Some(written), expected.as_bytes())?;
-        } else {
-            lock.check_stamp(Some(written))?;
-            fs::remove_file(lock.target())?;
-        }
+        restore_written(lock, before, written, expected)?;
         return live.result.context(t(
             "The compositor rejected the theme; previous settings were kept.",
         ));
+    }
+    Ok(())
+}
+
+fn restore_written(lock: &WriteLock, before: Option<mandara_theme::templates::FileStamp>, written: mandara_theme::templates::FileStamp, expected: &str) -> Result<()> {
+    // Rollback is another conditional write, with its own recoverable copy.
+    lock.check_stamp(Some(written)).context(changed())?;
+    backup(lock, Some(written))?;
+    if before.is_some() {
+        crate::store::write_atomic_checked(lock, Some(written), expected.as_bytes())?;
+    } else {
+        lock.check_stamp(Some(written))?;
+        fs::remove_file(lock.target())?;
+        if let Some(parent) = lock.target().parent() { fs::File::open(parent)?.sync_all()?; }
     }
     Ok(())
 }

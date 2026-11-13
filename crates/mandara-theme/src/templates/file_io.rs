@@ -19,19 +19,35 @@ pub(super) fn read(path: &Path) -> std::io::Result<String> {
     Ok(body)
 }
 
-pub(super) fn write(path: &Path,body: &str) -> std::io::Result<()> {
+pub(super) fn write(path: &Path, body: &str) -> std::io::Result<()> {
+    write_recorded(path, body).map(|_| ())
+}
+
+pub(super) fn write_recorded(path: &Path,body: &str) -> std::io::Result<Option<super::PublishedWrite>> {
     let lock = super::WriteLock::new(path)?;
     let before = super::FileStamp::at(lock.target())?;
     let target = if std::fs::symlink_metadata(path).is_ok_and(|meta|meta.file_type().is_symlink()) { std::fs::canonicalize(path)? } else { path.into() };
-    if target.exists() && read(&target)? == body { return Ok(()); }
+    if target.exists() && read(&target)? == body {
+        std::fs::File::open(&target)?.sync_all()?;
+        sync_parent(&target)?;
+        return Ok(None);
+    }
     let parent = target.parent().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput,"app theme target has no parent"))?;
     std::fs::create_dir_all(parent)?;
     let mut temporary = tempfile::Builder::new().prefix(".mandara-theme-").tempfile_in(parent)?;
     if let Ok(metadata) = std::fs::metadata(&target) { temporary.as_file().set_permissions(metadata.permissions())?; }
     temporary.write_all(body.as_bytes())?;
+    temporary.as_file().sync_all()?;
+    let stamp = super::FileStamp::of(temporary.as_file())?;
     lock.check_stamp(before)?;
-    temporary.persist(target).map_err(|error|error.error)?;
-    Ok(())
+    temporary.persist(&target).map_err(|error|error.error)?;
+    sync_parent(&target).map_err(|error| std::io::Error::other(super::PublishedWriteError::new(&target, stamp, error)))?;
+    Ok(Some(super::PublishedWrite { target, stamp }))
+}
+
+pub(super) fn sync_parent(path: &Path) -> std::io::Result<()> {
+    let parent = path.parent().ok_or_else(|| std::io::Error::other("app theme target has no parent"))?;
+    std::fs::File::open(parent)?.sync_all()
 }
 
 #[cfg(test)]

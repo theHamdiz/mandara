@@ -76,7 +76,10 @@ fn set_unlocked(
     let mut written_fragment = None;
     let written_generated = std::cell::RefCell::new(None);
     let result = (|| {
-        write(&path)?;
+        if let Err(error) = write(&path) {
+            written_fragment = Written::failed(&_fragment_lock, &error);
+            return Err(error);
+        }
         written_fragment = Some(Written::capture(&path, body)?);
         let old = if generated.exists() {
             read(&generated)?
@@ -86,7 +89,7 @@ fn set_unlocked(
         let outcome = fix::guarded_write(&before, &env, &|| {
             let body = compositor_theme::compose_with_previous(target, kind, &old, &path, true, previous.text())?;
             let lock = WriteLock::new(&generated)?;
-            *written_generated.borrow_mut() = Some(Written::atomic(&lock, body.as_bytes())?);
+            Written::atomic(&lock, body.as_bytes(), &mut written_generated.borrow_mut())?;
             Ok(())
         })?;
         if outcome.rolled_back { *written_generated.borrow_mut() = None; }

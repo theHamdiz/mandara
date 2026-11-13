@@ -89,14 +89,25 @@ impl Written {
             stamp,
         })
     }
-    pub fn atomic(lock: &WriteLock, bytes: &[u8]) -> Result<Self> {
-        let stamp = mandara_config::store::write_atomic_locked(lock, bytes)?;
-        Ok(Self {
-            target: lock.target().into(),
-            link: std::fs::read_link(lock.path()).ok(),
-            stamp,
+    pub fn failed(lock: &WriteLock, error: &anyhow::Error) -> Option<Self> {
+        mandara_theme::templates::published_write(error.as_ref()).filter(|receipt| receipt.target == lock.target()).map(|receipt| Self {
+            target: receipt.target.clone(), link: std::fs::read_link(lock.path()).ok(), stamp: receipt.stamp,
         })
     }
+    pub fn atomic(lock: &WriteLock, bytes: &[u8], written: &mut Option<Self>) -> Result<()> {
+        Self::record_result(lock, mandara_config::store::write_atomic_locked(lock, bytes), written)
+    }
+    fn record_result(lock: &WriteLock, result: Result<FileStamp>, written: &mut Option<Self>) -> Result<()> {
+        let stamp = match &result {
+            Ok(stamp) => Some(*stamp),
+            Err(error) => mandara_theme::templates::published_write(error.as_ref()).filter(|receipt| receipt.target == lock.target()).map(|receipt| receipt.stamp),
+        };
+        if let Some(stamp) = stamp {
+            *written = Some(Self { target: lock.target().into(), link: std::fs::read_link(lock.path()).ok(), stamp });
+        }
+        result.map(|_| ())
+    }
+
 }
 
 #[cfg(test)]
@@ -167,5 +178,37 @@ mod tests {
         original.restore(&path, Some(&written)).unwrap();
         assert_eq!(std::fs::read_link(&path).unwrap(), target);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "newer target edit");
+    }
+}
+
+#[cfg(test)]
+mod persistence_tests {
+    use super::*;
+    #[test]
+    fn post_publish_errors_retain_a_receipt_for_safe_rollback() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("fragment");
+        for edited in [false, true] {
+            std::fs::write(&path, "original").unwrap();
+            let snapshot = Snapshot::capture(&path).unwrap();
+            let lock = WriteLock::new(&path).unwrap();
+            let stamp = mandara_config::store::write_atomic_locked(&lock, b"rejected").unwrap();
+            let error = anyhow::Error::new(mandara_theme::templates::PublishedWriteError::new(lock.target(), stamp, std::io::Error::other("directory sync failed")));
+            let mut written = None;
+            assert!(Written::record_result(&lock, Err(error), &mut written).is_err());
+            assert!(written.is_some());
+            if edited { std::fs::write(&path, "newer personal edit").unwrap(); }
+            let result = snapshot.restore(&path, written.as_ref());
+            if edited {
+                assert!(result.is_err());
+                assert_eq!(std::fs::read_to_string(&path).unwrap(), "newer personal edit");
+            } else {
+                result.unwrap();
+                assert_eq!(std::fs::read_to_string(&path).unwrap(), "original");
+            }
+            let other = root.path().join("ownership.toml");
+            let unrelated = anyhow::Error::new(mandara_theme::templates::PublishedWriteError::new(&other, stamp, std::io::Error::other("metadata sync failed")));
+            assert!(Written::failed(&lock, &unrelated).is_none());
+        }
     }
 }

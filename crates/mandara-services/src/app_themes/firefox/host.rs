@@ -1,6 +1,6 @@
 //! A browser-owned host sleeps on stdin and file events, and exits on disconnect.
 
-use super::{Settings, css, wire};
+use super::{Settings, wire};
 use crate::app_themes::paths::Locations;
 use anyhow::Result;
 use rustix::event::{PollFd, PollFlags, poll};
@@ -89,18 +89,7 @@ fn handle(
             } else {
                 json!(target)
             };
-            let result = (|| {
-                let settings =
-                    settings.ok_or_else(|| anyhow::anyhow!("no browser app theme is enabled"))?;
-                let lock = std::fs::OpenOptions::new()
-                    .create(true)
-                    .truncate(false)
-                    .read(true)
-                    .write(true)
-                    .open(locations.config.join("mandara/generated/app-themes.lock"))?;
-                lock.lock()?;
-                css::apply(action, target, size, &settings.styles, locations)
-            })();
+            let result = super::authority::apply(action, target, size, settings, locations);
             send(match result {
                 Ok(()) => {
                     json!({"action":action,"success":true,"data":data,"message":mandara_i18n::t("Done")})
@@ -270,6 +259,7 @@ mod tests {
             owner: "browser".into(),
             _lease: None,
         };
+        std::fs::write(super::super::settings_path(&locations), serde_json::to_vec(&settings).unwrap()).unwrap();
         let mut replies = Vec::new();
         handle(
             &mut Protocol::default(),

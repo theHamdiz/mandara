@@ -3,6 +3,8 @@
 #[cfg(any(target_os = "linux", test))]
 mod css;
 #[cfg(target_os = "linux")]
+mod authority;
+#[cfg(target_os = "linux")]
 mod host;
 #[cfg(target_os = "linux")]
 mod watch;
