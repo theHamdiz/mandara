@@ -305,7 +305,7 @@ impl Ledger {
         let mut moved = None;
         if exists(path) {
             let ours_now = !is_link && if known {
-                super::fingerprint::matches(path, &entry.hash).unwrap_or(false)
+                super::fingerprint::matches(path, &entry.hash)?
             } else {
                 // Imported and user-authored templates never claim an original
                 // merely because its contents happen to mention Mandara.

@@ -234,9 +234,11 @@ impl Ledger {
                         ));
                     }
                     None if untouched && original.is_some() => previous.clone(),
-                    None if previous.as_ref().is_some_and(|entry| {
-                        super::super::fingerprint::matches(path, &entry.hash).unwrap_or(false)
-                    }) =>
+                    None if previous
+                        .as_ref()
+                        .map(|entry| super::super::fingerprint::matches(path, &entry.hash))
+                        .transpose()?
+                        .unwrap_or(false) =>
                     {
                         previous.clone()
                     }
@@ -261,6 +263,10 @@ impl Ledger {
                     }
                     None => current.is_none(),
                 };
+                if restored {
+                    super::super::file_io::sync_existing_parent(path)?;
+                    super::remove_empty(&entry.created_dirs);
+                }
                 (path.clone(), (!restored).then(|| entry.clone()))
             }
         };

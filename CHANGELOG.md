@@ -11,6 +11,7 @@ About → What's new shows it too.
 - **More apps can follow your colours.** Browse app-template catalogs in Studio → Themes → Other apps, install only what you need, or write your own template. Installed templates follow every Mandara palette offline, with light/dark colours, custom colours, setup commands, browser integration and KDE schemes. Setup commands are optional; errors and managed-file restoration are visible in Studio. (#123)
 
 ### Fixed
+- App-theme read and undo failures keep their recovery records for retry, including restored symlinks.
 - App-template controls and paging arrows follow right-to-left languages.
 - App-style changes can recover after an interruption, and a queued browser request cannot turn styling back on after you switch it off.
 - Saved display profiles keep their identity when renamed, and reconnecting a monitor on a reused port keeps each monitor’s own preferences. Failed saves and display reverts can be retried without losing undo history.

@@ -157,3 +157,5 @@ per file. The original backup used by managed-file undo is kept separately.
 Owned files and import lines record their recovery information before they change. If Mandara stops during an apply or undo, the next sync resumes from that record. Detected conflicts preserve personal edits, and a missing original backup is reported for repair. Browser CSS requests recheck the active integration after waiting for the theme worker, so a queued request cannot re-enable styling after it has been switched off.
 
 Catalog and review controls follow the interface’s reading direction.
+
+A read or directory-sync failure during undo keeps recovery information for a retry. Restored originals retain their file identity, including symlinks.

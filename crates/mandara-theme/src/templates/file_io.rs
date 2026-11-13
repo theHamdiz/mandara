@@ -50,6 +50,27 @@ pub(super) fn sync_parent(path: &Path) -> std::io::Result<()> {
     std::fs::File::open(parent)?.sync_all()
 }
 
+
+/// Recovery can finish after a created directory was already removed.
+pub(super) fn sync_existing_parent(path: &Path) -> std::io::Result<()> {
+    let mut parent = path.parent();
+    while let Some(directory) = parent {
+        match std::fs::File::open(directory) {
+            Ok(file) => {
+                if !file.metadata()?.is_dir() {
+                    return Err(std::io::ErrorKind::NotADirectory.into());
+                }
+                return file.sync_all();
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                parent = directory.parent();
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(std::io::ErrorKind::NotFound.into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -76,4 +97,17 @@ mod tests {
         assert!(write(&broken,"new").is_err());
         assert!(std::fs::symlink_metadata(broken).unwrap().file_type().is_symlink());
     }
+    #[test]
+    fn recovery_sync_accepts_removed_directories_but_rejects_invalid_parents() {
+        let root = tempfile::tempdir().unwrap();
+        sync_existing_parent(&root.path().join("removed/nested/theme")).unwrap();
+        let directory = root.path().join("app");
+        std::fs::create_dir(&directory).unwrap();
+        sync_existing_parent(&directory.join("theme")).unwrap();
+        let file = root.path().join("file");
+        std::fs::write(&file, "personal").unwrap();
+        assert!(sync_existing_parent(&file.join("theme")).is_err());
+        assert_eq!(std::fs::read_to_string(file).unwrap(), "personal");
+    }
+
 }
