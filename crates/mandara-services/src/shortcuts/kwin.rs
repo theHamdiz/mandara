@@ -94,12 +94,14 @@ impl Api {
                 "org.kde.KGlobalAccel",
             )
             .await?;
-            let actions: Vec<Vec<String>> = proxy
-                .call(
-                    "allActionsForComponent",
-                    &([component.as_str(), "", "", ""],),
-                )
-                .await?;
+            let action_id = vec![
+                component.clone(),
+                String::new(),
+                String::new(),
+                String::new(),
+            ];
+            let actions: Vec<Vec<String>> =
+                proxy.call("allActionsForComponent", &(action_id,)).await?;
             ensure!(
                 actions.len() <= keybinds::MAX_BINDINGS,
                 "too many KWin actions"
@@ -163,24 +165,30 @@ struct Change<'a> {
 impl ServiceEditor for Change<'_> {
     fn verify(&self, after: bool) -> Result<()> {
         self.guard.fresh()?;
+        self.owns(after)
+    }
+    fn owns(&self, after: bool) -> Result<()> {
         ensure!(
             self.api.get()? == if after { &self.after } else { &self.before }.as_slice(),
             "{}",
             t("KWin's active shortcuts changed. Refresh the list and try again.")
         );
-        if !after {
-            let added: Vec<_> = self
-                .after
-                .iter()
-                .filter(|key| !self.before.contains(key))
-                .copied()
-                .collect();
-            self.api.available(&added)?;
-        }
         Ok(())
     }
     fn apply(&self, after: bool) -> Result<()> {
-        self.api.set(if after { &self.after } else { &self.before })
+        self.owns(!after)?;
+        let (next, previous) = if after {
+            (&self.after, &self.before)
+        } else {
+            (&self.before, &self.after)
+        };
+        let added: Vec<_> = next
+            .iter()
+            .filter(|key| !previous.contains(key))
+            .copied()
+            .collect();
+        self.api.available(&added)?;
+        self.api.set(next)
     }
     fn equivalent(&self, body: &str, after: bool) -> Result<bool> {
         keybinds::kwin_same_settings(
@@ -245,5 +253,87 @@ mod tests {
             [[0x08000073, 0, 0, 0], [0x10000051, 0, 0, 0]]
         );
         assert!(normalized(vec![(vec![1; 5],)]).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires the marked isolated KWin session and its private bus"]
+    fn native_kwin_save_undo_and_stale_guards_preserve_the_config_and_symlink() {
+        use std::{fs, os::unix::fs::symlink, path::PathBuf};
+        let fixture = PathBuf::from(
+            std::env::var_os("MANDARA_NATIVE_SHORTCUT_FIXTURE").expect("private fixture"),
+        );
+        assert_eq!(
+            fs::read_to_string(fixture.join(".mandara-native-shortcuts")).unwrap(),
+            "mandara isolated shortcuts\n"
+        );
+        assert_eq!(std::env::var_os("HOME").unwrap(), fixture.join("home"));
+        assert_eq!(
+            std::env::var_os("XDG_RUNTIME_DIR").unwrap(),
+            fixture.join("runtime")
+        );
+        assert_eq!(
+            std::env::var("DBUS_SYSTEM_BUS_ADDRESS").unwrap(),
+            "unix:path=/nonexistent"
+        );
+        let session = super::super::load().unwrap();
+        assert_eq!(session.target, mandara_config::compositor::Target::KWin);
+        assert!(session.scan.errors.is_empty(), "{:?}", session.scan.errors);
+        let original = fs::read_to_string(&session.root).unwrap();
+        let target = session.root.with_file_name("shortcut-target");
+        let before = format!(
+            "# preserve the shortcut fixture\n{original}\n[unrelated-fixture]\nkey=personal\\svalue\n"
+        );
+        fs::write(&target, &before).unwrap();
+        fs::remove_file(&session.root).unwrap();
+        symlink(&target, &session.root).unwrap();
+        let session = super::super::load().unwrap();
+        let source = session
+            .scan
+            .sources
+            .iter()
+            .find(|source| source.file == session.root)
+            .unwrap();
+        let index = source
+            .bindings
+            .iter()
+            .position(|row| row.scope == "[kwin]/Window Close")
+            .expect("registered close action");
+        let id = source.binding_id(index).unwrap();
+        let mut values: Vec<_> = source.bindings[index]
+            .fields
+            .iter()
+            .map(|field| field.value.clone())
+            .collect();
+        values[0] = "Meta+Ctrl+Alt+F12".into();
+        let preferences = || {
+            Ok(Preferences {
+                target: session.target,
+                manage: false,
+                keybinds: Vec::new(),
+            })
+        };
+        let saved = super::super::save(&id, &values, &preferences).unwrap();
+        let api = Api::open(&source.bindings[index]).unwrap();
+        assert!(
+            api.get()
+                .unwrap()
+                .contains(&keybinds::qt_sequence(&values[0]).unwrap())
+        );
+        assert!(session.root.is_symlink());
+        let edited = fs::read_to_string(&session.root).unwrap();
+        assert!(edited.starts_with("# preserve the shortcut fixture\n"));
+        assert!(edited.ends_with("[unrelated-fixture]\nkey=personal\\svalue\n"));
+        assert!(super::super::save(&id, &values, &preferences).is_err());
+        let undo = saved.undo.unwrap();
+        super::super::undo(&undo, &preferences).unwrap();
+        assert_eq!(fs::read_to_string(&session.root).unwrap(), before);
+        assert!(session.root.is_symlink());
+        fs::write(&session.root, format!("{before}# another editor\n")).unwrap();
+        assert!(super::super::undo(&undo, &preferences).is_err());
+        assert!(
+            fs::read_to_string(&session.root)
+                .unwrap()
+                .ends_with("# another editor\n")
+        );
     }
 }

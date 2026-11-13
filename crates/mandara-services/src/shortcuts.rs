@@ -27,6 +27,7 @@ pub struct Session {
     pub target: Target,
     pub root: PathBuf,
     pub scan: Scan,
+    pub primary_mod_is_alt: bool,
 }
 
 #[derive(serde::Serialize)]
@@ -44,13 +45,20 @@ pub fn load() -> Result<Session> {
     let target = mandara_compositor::detected()
         .map(mandara_compositor::CompositorKind::target)
         .ok_or_else(|| anyhow::anyhow!("{}", t("No supported compositor is running.")))?;
-    let root = mandara_compositor::native_config::running(target)?
+    let native = mandara_compositor::native_config::running(target)?;
+    let root = native
+        .file
         .unwrap_or_else(|| keybinds::default_root(target));
     if target == Target::Cosmic {
         return Ok(cosmic::load(root));
     }
     let scan = keybinds::scan_from(target, &root);
-    Ok(Session { target, root, scan })
+    Ok(Session {
+        target,
+        root,
+        scan,
+        primary_mod_is_alt: native.primary_mod_is_alt,
+    })
 }
 
 /// Called on one blocking worker. A caller keeps only one mutation in flight.

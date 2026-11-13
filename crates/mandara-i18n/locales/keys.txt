@@ -132,7 +132,11 @@ A connection named "{name}" already exists
 A connection's IPv4 method, addresses, gateway and DNS
 A container using this much CPU (percent of one core) is highlighted
 A continuous wave has no gaps between bars.
+A control desk with end-side navigation, cyan highlights and squared controls.
 A crisp offset shadow in ink instead of the soft one; 0 keeps the soft shadows
+A custom shortcut already uses this key. Edit that shortcut instead.
+A custom shortcut overrides this default. Edit the custom shortcut instead.
+A cut-corner chassis, bright edges and compact controls.
 A daily reminder of the final home
 A dark outline round the bar's items, panels, the launcher, the dock, notifications and cards; 0 keeps the hairline
 A day's events, ISO week and Hijri date as JSON
@@ -191,6 +195,7 @@ A little closer to home
 A little player with an LCD and buttons
 A locked account can't sign in until it's unlocked.
 A look ahead: only today's step can be marked done
+A look for Studio
 A macOS-style desktop: a slim menu bar on top, a magnifying dock below and a Spotlight-style search.
 A macOS-style dock: pinned, running and recent apps, stacks and the Trash, with magnification and auto-hide
 A man does not attain everything that he desires; the winds convey whither the ships do not list.
@@ -227,6 +232,7 @@ A pilgrimage done well and sincerely has a reward beyond measure.
 A pill per group
 A pill per item
 A pill with a label that sends its action
+A plain header, boxed settings and restrained controls.
 A plugin is a folder with a manifest and a WebAssembly component. This example contains every field and every setting type.
 A popup under the pointer doesn't time out
 A post and its comments as JSON
@@ -238,6 +244,7 @@ A public repository with this topic (About → Topics).
 A quick back-and-forth of the pointer, or of something you drag, over the desktop, the bar, panels or a shelf opens a new shelf there. Wayland only lets Mandara see the pointer over its own surfaces, so a shake over an app's window does nothing
 A quick beam sweeps across, lighting each row in turn
 A quiet notification when the song changes
+A quiet writing desk with generous margins and mixed corners.
 A quote isn't closed
 A random style
 A reader for RSS, Atom and JSON feeds
@@ -250,6 +257,9 @@ A rounded track with the fill over it
 A saying that changes every day, or your own
 A second, stronger warning
 A sense of humour is a sense of proportion.
+A shortcut has too many arguments or an oversized value.
+A shortcut sequence can contain at most four keys.
+A shortcut value cannot contain a null character.
 A shutter when a capture is taken
 A side bar always stays on screen
 A side bar holds this edge now; choose Sidebar for an edge under Bars → Sidebars to use the sidebar
@@ -292,6 +302,8 @@ A video wallpaper keeps its current frame while windows hide the desktop
 A view is a list of nodes; nodes[root] is the top one and children are indices. Mandara draws them natively.
 A volume this full turns its ring amber
 A wallpaper is already being generated
+A warm header bar, soft surfaces and orange accents.
+A warning marks a shortcut also used by Mandara. Check its mode and flags before changing it.
 A website or feed address
 A wide rail of flower buttons and tiles inside a screen frame
 A work desk along the bottom: focus timer in the middle, tasks, notes and system load in zones of their own
@@ -326,6 +338,7 @@ Abu Dawud
 Abyssal Mediterranean blue, sea-glass turquoise and sun-warmed limestone.
 Acceleration
 Accent
+Accent color
 Accent colour
 Accent folders
 Accent line
@@ -603,6 +616,8 @@ Animations
 Anne Frank
 Announce new drives
 Anonymous: public repositories, 60 requests an hour
+Another application already uses this shortcut. Choose a different key.
+Another compositor shortcut already uses this key. Edit that shortcut or choose a different key.
 Another notification daemon (e.g. mako) is running. Mandara takes over app notifications as soon as it exits.
 Another program is using the package manager. Wait for it to finish (or close it), then try again.
 Another translation in your language, by its identifier (`mandara msg quran editions` lists them); empty uses the default. Arabic shows no translation
@@ -650,6 +665,7 @@ Applies instantly
 Applies live on {compositor}; apps started from now on use it too.
 Applies now; reverts after {seconds} s unless you keep it
 Apply
+Apply a Studio window design without changing the desktop Look
 Apply a look, built-in or yours (your setup is saved first so it can be restored)
 Apply a motion preset: its spring and choreography (accessibility and surface speeds stay yours)
 Apply a prepared boot menu theme, splash or Limine look with your approval: backs up every file, checks with the tools' own checkers and can be restored; --dry-run shows the plan only
@@ -694,7 +710,7 @@ Apps, settings, commands, “/” slash commands and skills, “=” calculator;
 Aqua
 Aqua folders
 Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there.
-Aqueous keeps its settings in its own files in ~/.config/aqueous and reloads them itself. Mandara follows its workspaces, windows and outputs over its socket and changes nothing in those files.
+Aqueous reloads its settings from ~/.config/aqueous. Mandara follows its workspaces, windows and outputs over its socket. Edit native bindings in Keyboard shortcuts → Compositor, with backups and Undo.
 Aqueous settings stay in its own files in ~/.config/aqueous
 Arabic
 Arabic font
@@ -708,6 +724,7 @@ Arabic with or without diacritics, words of the meaning, or a reference like buk
 Arabic without diacritics, words of the meaning, or 2:255
 Arc gauges for the temperatures and the fan
 Arc height
+Arcade
 Arch Linux news
 Arch Linux news · {date}
 Arch and today's step
@@ -720,12 +737,14 @@ Archive: a portable app unpacked into your home folder. No password needed.
 Archived
 Archives
 Archive…
+Argument
 Argument #{position} is not a boolean: {value}
 Argument #{position} is not a number
 Argument #{position} is not an integer
 Argument <{name}> must be between {minimum} and {maximum}
 Argument <{name}> must be one of: {choices}
 Argument <{name}> must be {kind}, got {value}
+Arguments
 Aristotle
 Arithmetic error
 Arrangement
@@ -938,6 +957,7 @@ Blur size
 Board size
 Bokeh
 Bold
+Bold ink, paper panels and playful rounded controls.
 Bold palace red: a framed spectrum box, an Arabic clock and calligraphy.
 Bold, italic and links in notification text
 Book {book}, hadith {n}
@@ -1057,7 +1077,6 @@ CONTAINER
 CONTINUE READING
 CONTRAST · WCAG 2
 COSMIC has no standalone configuration checker. Its settings are managed in COSMIC Settings, and Mandara writes nothing there.
-COSMIC keeps its settings in COSMIC Settings. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and COSMIC's window protocols, and changes nothing there. To start Mandara with COSMIC, add it in COSMIC Settings → Applications → Startup applications.
 COSMIC sets its own window animations
 COSMIC settings are managed in COSMIC Settings
 CPU
@@ -1176,6 +1195,7 @@ Change resolution, scale and display arrangement in Plasma System Settings. Shel
 Change the current recipe: key=value pairs (style, seed, palette, light or any parameter) or a whole TOML recipe
 Change the wallpaper on a timer
 Change theme
+Change this window, its sidebar and every control. Your desktop Look stays separate.
 Change volume
 Change wallpaper
 Change wallpapers only between the two times below
@@ -1187,6 +1207,7 @@ Change your station
 Changed display settings come back unless you press Keep within this time
 Changed plugins get a fresh instance; removed ones are unloaded
 Changes
+Changes Studio only. Desktop Looks keep their own settings.
 Changes apply the next time this network connects.
 Changes are authorized by polkit: you may be asked for an administrator's password.
 Changes are picked up live: add, rebuild or delete a plugin and the shell and this page update within a second.
@@ -1216,6 +1237,7 @@ Charging — critical action cancelled
 Charles Darwin
 Charles Dickens
 Charlotte Brontë
+Chassis
 Check KDE Connect while the phone panel is open
 Check again
 Check box
@@ -1263,6 +1285,7 @@ Chips for text, links, Markdown, code, CSS, colors, images and files above the l
 Choices between a few options in Studio and in panels, and filter chips
 Choose Qur'an, hadith or both in Studio
 Choose a .conf or .ovpn file first
+Choose a Studio Look in Themes → Studio first.
 Choose a boot entry for this item in Studio → Power & idle
 Choose a file to import
 Choose a file…
@@ -1382,6 +1405,7 @@ Closing the lid, the session menu or systemctl suspend lock the screen first; th
 Clouds
 Cloudy
 Clover
+Coastal glass, soft cards and a spacious sidebar.
 Code
 Code and numbers
 Code copied
@@ -1417,6 +1441,7 @@ Column
 Columns
 Columns & outputs
 Come, seek, for search is the foundation of fortune: every success depends upon focusing the heart.
+Comic
 Comic burst
 Coming up
 Comma-separated GitHub repositories as owner/name
@@ -1457,7 +1482,9 @@ Compositor animations are off (Compositor → Effects)
 Compositor conflicts
 Compositor drop-in
 Compositor include line
+Compositor shortcuts: Keyboard shortcuts → Compositor
 Compositor window animations
+Computed shortcuts must be edited in their source configuration.
 Computes times offline from the coordinates you set
 Concave curve where the edge frame or the notch meets the screen, panels and the sidebar
 Config
@@ -1489,6 +1516,7 @@ Connect a device by name or address
 Connect every trusted device in range
 Connect to a hidden network
 Connect to a network (saved profile, or with a password)
+Connect to the running shell before saving shortcuts.
 Connect to the tailnet (answers with a login link when the device must log in)
 Connect your Reddit app
 Connect your home in Studio
@@ -1524,6 +1552,7 @@ Continuous
 Contour lines
 Contours
 Contrast
+Control desk
 Control external monitors
 Control the focus timer
 Controller
@@ -1612,6 +1641,8 @@ Could not read {path}: {error}. Left it unchanged.
 Could not refresh {feeds}; trying again later
 Could not remove {path}: {error}
 Could not restart into the firmware setup: {error}
+Could not restore the shortcut service: {error}
+Could not restore {file}: {error}. Backup: {backup}
 Could not run journalctl: {error}
 Could not run {program}: {error}
 Could not save app templates: {error}
@@ -1704,9 +1735,11 @@ Crop shape
 Ctrl
 Ctrl+Shift
 Ctrl+V pastes
+Cupertino Glass
 Curated sets, your theme's colors, or your own. Every blend happens in OKLab, so gradients stay clean.
 Currencies
 Current
+Current Mandara shortcut preferences for the native editor
 Current codes of accounts matching a query
 Current conditions and forecast as JSON
 Current conditions under the date
@@ -1735,6 +1768,7 @@ Custom shadow
 Custom spring
 Custom tape
 Custom: {time}
+Customized
 Customized: your own mix of the settings below. Pick a look to start over from it.
 Custom…
 Cut
@@ -1882,6 +1916,7 @@ Depth · Arabic
 Depth · classic
 Depth · stacked
 Describe the active theme
+Description
 Desert
 Design
 Design & art
@@ -1957,6 +1992,7 @@ Disable while typing
 Disabled {unit}
 Disabling…
 Disc
+Discard and refresh
 Disconnect
 Disconnect Wi-Fi
 Disconnect a VPN (every connected VPN when no name is given)
@@ -2178,6 +2214,7 @@ Edges & corners
 Edges snap together. Changes apply only when you press Apply, and come back on their own unless you keep them.
 Edit button on images; {path} is the image, e.g. swappy -f {path}
 Edit desktop
+Edit individual values in your compositor's shortcuts. Save keeps a backup, checks the configuration and applies the change. Computed bindings stay read-only.
 Edit on desktop
 Edit the desktop: move, resize, add and remove desktop widgets on the desktop itself (off / toggle leave)
 Edit user
@@ -2254,10 +2291,16 @@ Enjoying Mandara?
 Enrol the changed Limine config
 Enter
 Enter / Capture copies the image
+Enter a complete shortcut sequence.
+Enter a key combination supported by Aqueous.
+Enter a native action name using letters, digits or underscores.
 Enter a password, or let the user choose one at first login
 Enter a prompt to inspect retrieval and the exact payload. Tests never execute commands.
 Enter copy
 Enter copy + save
+Enter one literal Lua value for this shortcut field.
+Enter one native value for this shortcut field.
+Enter one shortcut alternative without a line break or tab.
 Enter password
 Enter save
 Enter some text to translate
@@ -2324,7 +2367,6 @@ Every output and app is silent
 Every output and app is silent; your own mutes are kept
 Every page of Studio, by group
 Every prayer time today, the next one lit
-Every setting, live
 Every shortcut: chord, keys, action, description, group and source file (JSON)
 Every step you take toward learning is a step on an easy road.
 Every system package Mandara needs is already part of this system.
@@ -2503,6 +2545,7 @@ Finding the latest release…
 Finds lines of text in screenshots (PP-OCRv5 mobile)
 Finds what is near and far in a wallpaper for the depth clock (Depth Anything V2 Small)
 Fine-tune
+Fine-tune your Studio Look
 Finger count
 Finish logging in in your browser
 Finished
@@ -2537,6 +2580,7 @@ Fixed
 Fixed schedule: end of the night
 Fixed schedule: start of the night
 Fixed times
+Flags
 Flake · {path}
 Flare radius
 Flat
@@ -2579,6 +2623,7 @@ Float over windows (smoothest), push them aside while the sidebar is open, or ke
 Float the edge frame
 Floating
 Floating chromatic-glass islands
+Floating glass, a quiet sidebar and compact window controls.
 Floating shelves you drag anything onto and back out of
 Floating side panels only
 Floating styles and the floating frame
@@ -2767,6 +2812,7 @@ GPU {n} power
 GPU {n} temp
 GRAPHICS
 GRUB's menu is hidden on this system (GRUB_TIMEOUT_STYLE=hidden or GRUB_TIMEOUT=0): the theme shows when you hold Shift or press Esc while it starts.
+GTK
 GTK 3 / 4 & libadwaita
 Gabriel García Márquez
 Gabriela Mistral
@@ -2939,6 +2985,7 @@ He who knows other men is discerning; he who knows himself is intelligent.
 He who overcomes others is strong; he who overcomes himself is mighty.
 He who receives a benefit with gratitude, repays the first installment of it.
 Header
+Header bar
 Header position
 Header size
 Headline
@@ -3511,6 +3558,8 @@ KDE Connect did not respond in time
 KDE's classic set, warm and rounded, with an orchestral login
 KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings.
 KWin settings are managed in Plasma System Settings
+KWin shortcuts must be saved through its shortcut service.
+KWin's active shortcuts changed. Refresh the list and try again.
 KWin: startup entry {path}
 Kahlil Gibran
 Kanagawa
@@ -3560,6 +3609,7 @@ Keep the unread count current while the panel is closed, at a low interval; off,
 Keep the wallpaper while a fullscreen app is open
 Keep the wallpaper while running on battery
 Keep these display settings? Reverting in {seconds} s
+Keep this shortcut value on one line without a comment.
 Keep ticked tasks
 Keep ties of kinship
 Keep up to {count} communities
@@ -3578,6 +3628,7 @@ Kept awake for an hour
 Kept custom startup entry {path}
 Kept in the Dock
 Kernel
+Key
 Key file…
 Key {code}
 Keyboard
@@ -3594,6 +3645,7 @@ Keyboard model
 Keyboard only
 Keyboard shortcut
 Keyboard shortcuts
+Keycode
 Keypad {key}
 Keyring
 Keyring prompter status; demo previews the unlock dialog; close cancels it
@@ -3686,6 +3738,7 @@ Left-handed
 Length
 Length of a focus session
 Leo Tolstoy
+Let Studio follow the shell's appearance again
 Let apps choose
 Let go of pride
 Let right deeds be thy motive, not the fruit which comes from them.
@@ -3771,6 +3824,7 @@ Liquid stretch
 Liquid wave
 Liquid: a springy zoom
 List
+List Studio's independent window designs
 List a hidden app again
 List desktop actions such as New Private Window
 List exited and created containers below the running ones
@@ -3828,6 +3882,7 @@ Loading comments…
 Loading logs…
 Loading menu…
 Loading more posts…
+Loading previews…
 Loading preview…
 Loading the meaning…
 Loading units…
@@ -4002,7 +4057,9 @@ Makki
 Malicious
 Malik
 Manage
+Manage KWin in Plasma System Settings. Its window shortcuts are also editable in Keyboard shortcuts → Compositor.
 Manage compositor drop-in
+Manage the desktop in COSMIC Settings, or edit its native bindings in Keyboard shortcuts → Compositor. Default bindings become personal overrides; packaged defaults stay intact. To start Mandara with COSMIC, add it in COSMIC Settings → Applications → Startup applications.
 Mandara
 Mandara Corniche
 Mandara Login shows your wallpaper when your account is picked (a copy goes to /var/lib/mandara-login)
@@ -4074,6 +4131,7 @@ Mandara's own look, as it has always been
 Mandara's own sounds are off: switch Shell sounds on below to hear them on events.
 Mandara's password dialog isn't available, so the AUR helper can't ask for your password.
 Mandara's shortcuts and your compositor's appear here
+Mandara's shortcuts changed while saving. Refresh the list and try again.
 MangoWM
 MangoWM and Niri only
 MangoWM, Niri, Hyprland, Sway, River
@@ -4251,6 +4309,7 @@ Moderator
 Modern
 Modern, melodic and airy, with a full set of device and battery cues
 Modes
+Modifiers
 Mohamed Siddiq Al-Minshawi
 Mon
 Monday
@@ -4265,6 +4324,7 @@ Monochrome symbolic icons tint with the theme
 Monocle
 Monospace
 Monospace font
+Monospace labels, crisp frames and phosphor-green accents.
 Montaza Twilight
 Montaza twilight
 Month
@@ -4276,6 +4336,7 @@ Moon phase
 More
 More like this
 More than one API key matches this server; save the key again
+More than one managed shortcut file is included. Run Config doctor before editing shortcuts.
 More wait their turn; all of them are in the history
 More wallpapers
 More widgets
@@ -4396,6 +4457,8 @@ Nasa'i
 Native
 Native views
 Natural scrolling
+Navigation corners
+Navigation row height
 Nawawi
 Nearby
 Nearby Wi-Fi networks
@@ -4527,6 +4590,7 @@ No Mandara release is published yet
 No Plymouth
 No QR code found in that area
 No Steam games found
+No Studio look named {name}.
 No VPN named "{name}"
 No VPNs yet
 No Wallhaven results
@@ -4744,6 +4808,7 @@ No such unit
 No supported compositor detected
 No supported compositor detected ({compositors})
 No supported compositor is installed ({compositors}).
+No supported compositor is running.
 No surah matches
 No surah or ayah {reference}
 No surah or ayah {reference} (try 2, 2:255, 2:255-260 or al-baqara)
@@ -5172,6 +5237,7 @@ Optical drive
 Optimism
 Optimism is the faith that leads to achievement; nothing can be done without hope.
 Optimized blur
+Option
 Optional
 Optional, e.g. SYS.CLOCK // الساعة
 Optional. Reddit asks apps to name their developer in requests; Mandara never signs in as you
@@ -5772,6 +5838,7 @@ Reading IP settings…
 Reading VPNs…
 Reading accounts…
 Reading audio devices…
+Reading compositor shortcuts…
 Reading desktop entries and where each one came from.
 Reading displays…
 Reading drives…
@@ -5814,6 +5881,7 @@ Ready to present
 Ready, with a warning
 Ready. Opening Mandara’s installer…
 Real kindness seeks no return; what return can the world make to rain clouds?
+Reapply preset
 Rebuild
 Rebuild GRUB's menu, checked before it replaces the old one
 Rebuild the initramfs
@@ -6029,6 +6097,7 @@ Resize diagonally
 Resize horizontally
 Resize vertically
 Resolution
+Resolve the shortcut configuration errors before saving.
 Resources
 Respect the desktop's reduced-motion preference
 Rest the pointer in a screen corner to run an action; replaces your compositor's own hot corner
@@ -6128,6 +6197,7 @@ Rising
 River has no such setting
 River has no window animations
 River runs {file} as a program, but it isn't executable, so River starts without it (chmod +x makes it run).
+River was started with a configuration command. Its computed shortcuts must be edited in that command's source.
 River {version} runs window management in a separate program and no longer has the river-control and river-status protocols, so Mandara can't show or switch its tags, send its binds or follow its windows. Mandara works with River's classic line (0.3, packaged as river-classic).
 River's config is your init program, which Mandara never edits: Mandara sends River its colours, rules, input settings and keys when the shell starts and on every change. To start Mandara with River, add this line to your init: {line}
 River's init controls startup; add or remove Mandara there
@@ -6251,6 +6321,7 @@ Save as new Look
 Save as profile
 Save how things look now — say “Work” and “Night” — and switch with one click or `mandara msg profile apply Night`.
 Save key
+Save or cancel this edit before selecting another shortcut.
 Save photo
 Save profile
 Save the current arrangement as a profile (applied automatically when the same monitors connect)
@@ -6286,6 +6357,7 @@ Saves the wallpapers you pick in Mandara's data folder
 Saves your game and best scores in Mandara's state folder
 Saves your notes in Mandara's data folder
 Saves your tasks in Mandara's data folder
+Saving shortcuts…
 Saving…
 Scale
 Scale and position per monitor. Only what you add here is written; other outputs keep your config.
@@ -6399,6 +6471,7 @@ Search providers
 Search radio-browser.info for “{q}”
 Search radio-browser.info from the panel; nothing is sent until you search
 Search settings
+Search shortcuts
 Search shortcuts…
 Search stations, shelves, countries…
 Search text, kinds, collections…
@@ -6462,6 +6535,7 @@ Select a screen region with a QR code and add the account it holds
 Select all
 Select an area
 Select area
+Selected
 Selected on open
 Selection outline
 Semi-light
@@ -6611,9 +6685,12 @@ Short break
 Short break length
 Short sounds from your sound theme for the events below
 Short synthesised tones, the only set here with a lock sound
+Shortcut
+Shortcut backup: {file}
 Shortcuts
 Shortcuts cheatsheet
-Shortcuts in your {target_name} config
+Shortcuts restored.
+Shortcuts saved.
 Show
 Show / hide desktop widgets
 Show All Windows
@@ -6733,6 +6810,7 @@ Side inset
 Side pill
 Sidebar
 Sidebar card community
+Sidebar inset
 Sidebar panel
 Sidebar tabs
 Sidebar width
@@ -7046,8 +7124,11 @@ Stretch
 Stripes
 Strong
 Studio
+Studio design
+Studio design: Themes → Studio
 Studio isn't connected to the shell
 Studio isn't running inside a Wayland session.
+Studio look id (see studio look list)
 Studio runs as its own process, so its usage is measured separately and never counted in the shell figures above.
 Studio shows them in your plugin's settings modal
 Study
@@ -7237,6 +7318,7 @@ Teal Dark
 Tear: the old image rips along a jagged seam and peels away
 Technical details
 Technology
+Telemetry
 Tell me about config problems
 Tell me what company thou keepest, and I'll tell thee what thou art.
 Tell me when charged
@@ -7336,6 +7418,7 @@ The Gardener 45
 The Hare and the Tortoise
 The Inbox can be renamed but not deleted
 The Little Prince
+The Lua configuration has a tokenization error.
 The Mediterranean horizon with waves and sun glitter
 The Narrow Road to the Interior
 The OPML file
@@ -7438,10 +7521,20 @@ The community the sidebar card shows; empty follows your first community
 The compiled WebAssembly component (manifest `entry`)
 The compositor configuration changed while its theme was being checked. Try again.
 The compositor connection closed
+The compositor connection is unavailable. No files were changed.
+The compositor defines this action. Change its shortcut here.
 The compositor did not answer
+The compositor did not read these shortcut values as intended.
 The compositor did not respond in time
+The compositor has too many shortcuts to edit at once.
 The compositor rejected the theme; previous settings were kept.
+The compositor rejected these shortcuts.
 The compositor rejected this display configuration
+The compositor shortcuts changed while they were being checked. Refresh the list and try again.
+The compositor's configuration path is missing.
+The compositor's environment is too large to inspect.
+The compositor's launch arguments are too large to inspect.
+The compositor's shortcut checker could not run. No files were changed.
 The connection to the station dropped
 The contract (WIT)
 The corner family of cards in panels, the sidebar and Studio; Corner roundness still sets their size
@@ -7499,6 +7592,7 @@ The feed belongs to another address
 The feed server returned no content
 The file chooser failed: {error}
 The file is larger than this location allows.
+The files were restored, but the compositor could not reload them: {error}
 The fill drawn as a gentle wave, flat when nearly empty or full
 The fill, a small gap, an upright handle, then the rest of the track ending in a dot
 The fill, a small gap, then the track ending in a dot
@@ -7562,6 +7656,7 @@ The lock screen's text
 The login screen isn't allowed to do this ({error}). See {doc}
 The main menu is see-through glass with solid cards on it
 The main menu opens from the bar only
+The managed compositor file has changed. Run Config doctor before editing shortcuts.
 The meaning couldn't be loaded
 The meaning in your language
 The meaning in your language under the Arabic (English where the collection has none in yours). Off: Arabic only
@@ -7612,6 +7707,7 @@ The pointer
 The power dock opens from the edge opposite the sidebar.
 The power menu opens from this edge
 The prayer times of another day (days after today, or before it when negative)
+The private compositor shortcut checker could not start.
 The provider returned no language list
 The provider returned no translation
 The public IP endpoint must be an http(s) URL
@@ -7641,6 +7737,8 @@ The right bar's own item shape, or the bar's
 The right bar's own items: bare icons, pills or islands, or the shared item style
 The roots below the earth claim no rewards for making the branches fruitful.
 The roots of education are bitter, but the fruit is sweet.
+The running compositor changed. Refresh the list and try again.
+The running compositor could not be identified safely.
 The running job (progress, time), the last result and the schedule
 The running kernel was replaced
 The running or last system update: phase, progress, recent log lines and summary
@@ -7682,6 +7780,12 @@ The shell didn't answer: {error}
 The shell isn't running
 The shell restarts on the new version. Reopen Studio to use it here too.
 The shell's folder watcher waits {ms} ms for writes to settle
+The shortcut configuration is too large to edit.
+The shortcut has an incomplete escape.
+The shortcut is no longer available.
+The shortcut is no longer registered with KWin. Refresh the list and try again.
+The shortcut service changed other settings while saving. The backup was kept.
+The shortcut service did not finish saving in time.
 The side bars' switches, pins and plugins
 The sidebar card lists the newest unread articles of this folder; empty lists every feed
 The sidebar keeps at least one tab
@@ -7788,6 +7892,7 @@ Thermometer
 These displays do not support power control
 These files go back to how they were before (files you edited since keep your edits; only Mandara's lines are reverted), and the menu or initramfs is rebuilt.
 These files move to the Trash:
+These values would change the structure of the shortcut configuration.
 They can because they think they can.
 They'll be asked to choose a password the first time they sign in.
 They'll choose a new password at their next login.
@@ -7804,7 +7909,9 @@ Third-party
 Third-party plugins
 Thiruvalluvar
 This AppImage's runtime isn't a valid program
+This Aqueous entry needs to be edited in its source configuration.
 This Flatpak file doesn't name an app
+This Lua configuration is too complex to inspect safely. Edit its shortcuts in your text editor.
 This OPML file is too large
 This OPML file lists no feeds
 This SVG loads other files or runs scripts, so it can't be used at boot
@@ -7831,6 +7938,7 @@ This compositor can't change screen colours
 This compositor doesn't support display configuration (wlr-output-management)
 This compositor has no gamma control (wlr-gamma-control); Niri, GNOME and KDE can't do Mandara's night light
 This compositor has no wlr-screencopy, and KWin's ScreenShot2 could not be used
+This compositor manages shortcuts in its own settings.
 This computer
 This computer installs software with {manager}, which can't install it.
 This computer runs on mains power
@@ -7889,6 +7997,10 @@ This request is too large
 This restarts the computer; repeat as `session reboot-to {target} confirm`
 This server sends its stream in a way Mandara can't play yet
 This session
+This shortcut field cannot contain a comma.
+This shortcut is computed by the compositor configuration. Edit its source expression in your editor.
+This shortcut uses an unsupported configuration escape.
+This shortcut value must be one word.
 This side bar is the rail of the {preset} preset. It changes with the preset.
 This sign-in method needs more than a password
 This site offers several feeds:
@@ -7956,11 +8068,13 @@ Time, date and calendar
 Time-synced lyrics from lrclib.net in the media panel (fetched only while it is open)
 Timeouts
 Timer
+Tint the header
 Tirmidhi
 Tirukkural 100
 Tirukkural 211
 Title
 Title (optional)
+Title bar height
 Title contains (optional)
 Title width
 Title, e.g. Picture-in-Picture
@@ -8217,7 +8331,9 @@ Uninstalling…
 Uninstall…
 Units
 Unknown
+Unknown COSMIC shortcut action: {action}
 Unknown OSD "{name}"
+Unknown Qt shortcut key
 Unknown author
 Unknown boot entry “{id}”
 Unknown category
@@ -8353,12 +8469,14 @@ Usage tracking is off
 Use
 Use 8 or more characters; a few words make a strong password
 Use Material You colors from the wallpaper (optionally choosing style and seed)
+Use Qt shortcut names such as Meta, Ctrl, Alt, Shift and Num.
 Use `osd show {kind} …` for this one
 Use `wallgen generate --palette theme` for the live theme colors
 Use a community name like r/linux
 Use a community name like r/linux, or a Reddit post address
 Use a post id or a Reddit post address
 Use a server address without a password, query or fragment
+Use a supported Aqueous action: spawn, launch, set_layout or builtin, followed by a colon and its value.
 Use a sweet tongue, courtesy, and gentleness, and thou mayst manage to guide an elephant with a hair.
 Use an API key
 Use an absolute path: {path}
@@ -8379,6 +8497,7 @@ Use the Kvantum theme
 Use the events' own alarms
 Use the folder button on an entry to add it here
 Use the gh sign-in
+Use the named key Comma in an Aqueous shortcut list.
 Use the preset's items
 Use the time an app asks for instead of the values above
 Use this location publicly
@@ -8422,6 +8541,7 @@ Valid. The shell isn't running, so its load state is unknown.
 Valid. Turn it on in Installed to load it.
 Validate
 Valley mist
+Value
 Values are saved in [plugins.settings.<id>] in config.toml
 Variations
 Verify / resume
@@ -8717,12 +8837,18 @@ Window
 Window animation speed
 Window animations
 Window app id, e.g. steam_app_*
+Window border
 Window border / focus ring thickness
 Window borders follow the theme
+Window buttons at start
+Window corners
 Window count
+Window design
 Window gaps match the bar's side spacing and update with it
 Window icons
+Window inset
 Window look
+Window opacity
 Window rules
 Window switcher
 Window title
@@ -8785,6 +8911,7 @@ Written to Mandara's {compositor} drop-in; “Your config” keeps your own sett
 Wrong passphrase
 Wrong password
 YYYY-MM-DD (empty: next New Year)
+Yaru
 Yasser Al-Dossary
 Ye were not made to live like unto brutes, but for pursuit of virtue and of knowledge.
 Year
@@ -8838,6 +8965,7 @@ Your command
 Your communities
 Your communities in order, separated by spaces; add, remove and reorder them in the panel's Discover page too
 Your communities, in order
+Your compositor draws Studio's title bar.
 Your compositor's cursor
 Your compositor's cursor at {size} px
 Your compositor's layouts
@@ -9158,7 +9286,7 @@ khatm
 khatm {n}
 labwc has no standalone configuration checker. Theme colours use a private headless check.
 labwc has no window animations to set
-labwc keeps its settings in ~/.config/labwc (rc.xml, autostart) and reloads them itself. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and changes nothing in those files. To start Mandara with labwc, add the line “mandara &” to ~/.config/labwc/autostart.
+labwc keeps its settings in ~/.config/labwc. Mandara follows its workspaces, windows and outputs over Wayland protocols. Edit native bindings in Keyboard shortcuts → Compositor. To start Mandara with labwc, add “mandara &” to ~/.config/labwc/autostart.
 labwc settings stay in ~/.config/labwc (rc.xml, autostart)
 last {hours} h
 latest (default) or a backup id from `boot status`, then --dry-run
@@ -9660,6 +9788,7 @@ your default
 {file} isn't an app Mandara can install (AppImage, Flatpak, archive or package)
 {file} not found: build the plugin and copy the .wasm here
 {file} sources Mandara's drop-in
+{file}, line {line}
 {first} and {second}
 {flag} needs a number, got {value}
 {flag} needs a value

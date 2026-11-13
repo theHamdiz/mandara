@@ -326,10 +326,10 @@ fn window_options() -> WindowOptions {
     }
 }
 
-pub(crate) fn client_controls(decorations: gpui::Decorations, compositor: Option<mandara_compositor::CompositorKind>) -> bool {
+pub(crate) fn client_controls(decorations: gpui::Decorations, compositor: Option<mandara_config::compositor::Target>) -> bool {
     // Tiling compositors can negotiate server decorations for borders
     // alone. KWin's server decoration also supplies window buttons.
-    !matches!((decorations, compositor), (gpui::Decorations::Server, Some(mandara_compositor::CompositorKind::KWin)))
+    !matches!((decorations, compositor), (gpui::Decorations::Server, Some(mandara_config::compositor::Target::KWin)))
 }
 
 fn open_window(cx: &mut App) -> Option<WindowHandle<StudioView>> {
@@ -530,10 +530,10 @@ mod tests {
     #[test]
     fn studio_requests_its_own_titlebar_and_honors_server_decorations() {
         assert_eq!(window_options().window_decorations, Some(gpui::WindowDecorations::Client));
-        use mandara_compositor::CompositorKind::{KWin, MangoWM};
+        use mandara_config::compositor::Target::{KWin, Mango};
         assert!(client_controls(gpui::Decorations::Client { tiling: Default::default() }, Some(KWin)));
         assert!(!client_controls(gpui::Decorations::Server, Some(KWin)));
-        assert!(client_controls(gpui::Decorations::Server, Some(MangoWM)));
+        assert!(client_controls(gpui::Decorations::Server, Some(Mango)));
         assert!(client_controls(gpui::Decorations::Server, None));
     }
 

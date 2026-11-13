@@ -87,7 +87,7 @@ const LOOKS: [StudioLookDef; 9] = [
         id: StudioLook::Arcade,
         name: tk("Arcade"),
         description: tk("A cut-corner chassis, bright edges and compact controls."),
-        seed: (0.66, 0.22, 24.0),
+        seed: (0.72, 0.17, 145.0),
         dark: true,
         components: ComponentPreset::BrutalistSoft,
         frame: FrameDesign::Chassis,
@@ -114,7 +114,7 @@ const LOOKS: [StudioLookDef; 9] = [
         components: ComponentPreset::Minimal,
         frame: FrameDesign::Editorial,
         ui_font: "Inter",
-        display_font: "Alexandria",
+        display_font: "DejaVu Serif",
     },
     StudioLookDef {
         id: StudioLook::Telemetry,
@@ -124,7 +124,7 @@ const LOOKS: [StudioLookDef; 9] = [
         ),
         seed: (0.72, 0.13, 195.0),
         dark: true,
-        components: ComponentPreset::BrutalistSoft,
+        components: ComponentPreset::Minimal,
         frame: FrameDesign::Console,
         ui_font: "Inter",
         display_font: "JetBrains Mono",
@@ -191,22 +191,22 @@ impl StudioLook {
         def.components.apply(&mut style);
         let mut frame = StudioFrame {
             design: def.frame,
+            title_height: 44.0,
+            sidebar_width: 232.0,
             ..Default::default()
         };
         match self {
             Self::CupertinoGlass => {
-                frame.opacity = 0.95;
+                frame.opacity = 0.98;
                 frame.controls_at_start = true;
                 frame.inset = 10.0;
-                frame.radius = 28.0;
-                frame.sidebar_inset = 10.0;
-                frame.nav_radius = 12.0;
-                frame.card_radius = 16.0;
-                style.radius_scale = 1.15;
-                style.card_style = crate::desktop::CardStyle::Raised;
+                frame.radius = 20.0;
+                frame.sidebar_inset = 8.0;
+                frame.nav_radius = 8.0;
+                frame.card_radius = 12.0;
+                style.radius_scale = 1.0;
             }
             Self::Yaru => {
-                frame.header_accent = true;
                 frame.radius = 12.0;
                 frame.nav_radius = 6.0;
                 frame.nav_height = 40.0;
@@ -220,8 +220,8 @@ impl StudioLook {
             Self::Arcade | Self::Telemetry => {
                 frame.inset = 10.0;
                 frame.radius = 4.0;
-                frame.border = 2.0;
-                frame.title_height = 56.0;
+                frame.border = 1.0;
+                frame.title_height = 42.0;
                 frame.sidebar_inset = 8.0;
                 frame.nav_radius = 2.0;
                 frame.card_radius = 8.0;
@@ -230,23 +230,22 @@ impl StudioLook {
             }
             Self::Comic => {
                 frame.inset = 10.0;
-                frame.radius = 24.0;
-                frame.border = 3.0;
-                frame.sidebar_inset = 12.0;
-                frame.nav_height = 42.0;
-                frame.nav_radius = 18.0;
+                frame.radius = 18.0;
+                frame.border = 2.0;
+                frame.sidebar_inset = 8.0;
+                frame.nav_height = 38.0;
+                frame.nav_radius = 12.0;
                 style.ink = InkStyle {
-                    outline: 3.0,
-                    shadow: 5.0,
-                    texture: SurfaceTexture::Halftone,
+                    outline: 2.0,
+                    shadow: 3.0,
+                    texture: SurfaceTexture::None,
                     bubbles: true,
                 };
             }
             Self::Paper => {
-                frame.inset = 16.0;
-                frame.radius = 24.0;
-                frame.title_height = 56.0;
-                frame.sidebar_inset = 12.0;
+                frame.inset = 12.0;
+                frame.radius = 20.0;
+                frame.sidebar_inset = 8.0;
                 frame.card_radius = 12.0;
                 style.surface_corners = crate::desktop::SurfaceCorners::Asymmetric;
                 style.shadows = false;
@@ -271,7 +270,11 @@ impl StudioLook {
                     ThemeMode::Light
                 },
                 color,
-                variant: SchemeVariant::TonalSpot,
+                variant: match self {
+                    Self::Yaru | Self::Arcade => SchemeVariant::Vibrant,
+                    Self::Paper => SchemeVariant::Fidelity,
+                    _ => SchemeVariant::TonalSpot,
+                },
                 ..Default::default()
             },
             style,

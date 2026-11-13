@@ -15,8 +15,15 @@ const PERSIST_TIMEOUT: Duration = Duration::from_secs(3);
 const MAX_BYTES: u64 = 1024 * 1024;
 
 pub trait ServiceEditor {
+    fn preflight(&self) -> Result<()> {
+        self.verify(false)
+    }
     /// Check live values, availability, source revisions and caller preferences.
     fn verify(&self, after: bool) -> Result<()>;
+    /// Recovery checks ownership independently of later preference edits.
+    fn owns(&self, after: bool) -> Result<()> {
+        self.verify(after)
+    }
     fn apply(&self, after: bool) -> Result<()>;
     /// A service may reorder or escape settings, but must not change other keys.
     fn equivalent(&self, body: &str, after: bool) -> Result<bool>;
@@ -50,7 +57,7 @@ fn persisted(
     loop {
         let (body, stamp) = read(lock)?;
         if stamp != previous && editor.equivalent(&body, after)? {
-            editor.verify(after)?;
+            editor.owns(after)?;
             return Ok(stamp);
         }
         ensure!(
@@ -79,13 +86,14 @@ pub fn guarded_service_write(
     let initial = lock
         .check(before.as_bytes())?
         .context("shortcut settings disappeared")?;
-    editor.verify(false)?;
+    editor.preflight()?;
     let backup = super::backup(lock, Some(initial))?;
     lock.check_stamp(Some(initial))?;
     let result: Result<()> = (|| {
         editor.apply(true)?;
         editor.verify(true)?;
         let native = persisted(lock, initial, true, editor)?;
+        editor.verify(true)?;
         crate::store::write_atomic_checked(lock, Some(native), after.as_bytes())?;
         editor.verify(true)?;
         lock.check(after.as_bytes())?;
@@ -98,16 +106,16 @@ pub fn guarded_service_write(
     // to the same action, another key or a symlink must survive the failure.
     let recovery = (|| -> Result<()> {
         let (body, stamp) = read(lock)?;
-        if editor.verify(false).is_ok() && body == before {
+        if editor.owns(false).is_ok() && body == before {
             return Ok(());
         }
-        editor.verify(true)?;
+        editor.owns(true)?;
         ensure!(
             editor.equivalent(&body, true)?,
             "shortcut settings changed outside this save"
         );
         editor.apply(false)?;
-        editor.verify(false)?;
+        editor.owns(false)?;
         let native = persisted(lock, stamp, false, editor)?;
         crate::store::write_atomic_checked(lock, Some(native), before.as_bytes())?;
         Ok(())
@@ -136,9 +144,14 @@ mod tests {
         file: PathBuf,
         state: Cell<bool>,
         fail: bool,
+        stale: bool,
     }
     impl ServiceEditor for Service {
         fn verify(&self, after: bool) -> Result<()> {
+            ensure!(!(after && self.stale), "preferences changed");
+            self.owns(after)
+        }
+        fn owns(&self, after: bool) -> Result<()> {
             ensure!(self.state.get() == after, "live state changed");
             Ok(())
         }
@@ -174,6 +187,7 @@ mod tests {
             file: file.clone(),
             state: Cell::new(false),
             fail: false,
+            stale: false,
         };
         guarded_service_write(
             &lock,
@@ -206,6 +220,25 @@ mod tests {
             file: file.clone(),
             state: Cell::new(false),
             fail: true,
+            stale: false,
+        };
+        let lock = WriteLock::new(&file).unwrap();
+        assert!(guarded_service_write(&lock, before, "# personal\nvalue=new\n", &service).is_err());
+        assert!(!service.state.get());
+        assert_eq!(fs::read_to_string(file).unwrap(), before);
+    }
+
+    #[test]
+    fn changed_preferences_do_not_prevent_restoring_values_owned_by_a_failed_save() {
+        let directory = tempfile::tempdir().unwrap();
+        let file = directory.path().join("rc");
+        let before = "# personal\nvalue=old\n";
+        fs::write(&file, before).unwrap();
+        let service = Service {
+            file: file.clone(),
+            state: Cell::new(false),
+            fail: false,
+            stale: true,
         };
         let lock = WriteLock::new(&file).unwrap();
         assert!(guarded_service_write(&lock, before, "# personal\nvalue=new\n", &service).is_err());

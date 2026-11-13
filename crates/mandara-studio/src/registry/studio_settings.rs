@@ -7,6 +7,28 @@ use super::{Control, Section, Setting, s, span};
 
 pub(crate) const GROUP: &str = tk("Studio design");
 
+thread_local! {
+    static CLIENT_CONTROLS: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+pub(super) fn set_client_controls(client: bool) {
+    CLIENT_CONTROLS.with(|value| value.set(client));
+}
+
+pub(super) fn locked(path: &str) -> Option<&'static str> {
+    if matches!(
+        path,
+        "/studio/frame/header_accent"
+            | "/studio/frame/title_height"
+            | "/studio/frame/controls_at_start"
+    ) && !CLIENT_CONTROLS.with(std::cell::Cell::get)
+    {
+        Some(tk("Your compositor draws Studio's title bar."))
+    } else {
+        None
+    }
+}
+
 /// Only settings used inside Studio are mirrored; desktop-only controls stay out.
 const MIRRORS: &[(&str, &str)] = &[
     ("/style/radius_scale", "/studio/style/radius_scale"),
@@ -211,5 +233,26 @@ mod tests {
             assert_eq!(base.theme, next.theme);
             assert_eq!(base.typography, next.typography);
         }
+    }
+
+    #[test]
+    fn native_window_chrome_locks_only_the_controls_the_compositor_owns() {
+        set_client_controls(false);
+        for path in [
+            "/studio/frame/header_accent",
+            "/studio/frame/title_height",
+            "/studio/frame/controls_at_start",
+        ] {
+            assert!(locked(path).is_some(), "{path}");
+        }
+        for path in [
+            "/studio/frame/design",
+            "/studio/frame/sidebar_width",
+            "/studio/style/button_design",
+        ] {
+            assert!(locked(path).is_none(), "{path}");
+        }
+        set_client_controls(true);
+        assert!(locked("/studio/frame/title_height").is_none());
     }
 }

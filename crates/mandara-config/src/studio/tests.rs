@@ -57,6 +57,22 @@ fn preset_measurements_fit_the_frame_bounds() {
 }
 
 #[test]
+fn bold_studio_looks_keep_the_reading_surface_clear() {
+    let comic = StudioLook::Comic.appearance();
+    assert_eq!(
+        comic.style.ink.texture,
+        crate::desktop::SurfaceTexture::None
+    );
+    assert!(comic.style.ink.outline <= comic.frame.border);
+    assert!(comic.style.ink.shadow < comic.frame.nav_radius);
+    for look in [StudioLook::Arcade, StudioLook::Telemetry] {
+        let frame = look.appearance().frame;
+        assert!(frame.border < comic.frame.border);
+        assert!(frame.title_height < comic.frame.title_height);
+    }
+}
+
+#[test]
 fn invalid_frame_measurements_cannot_break_layout() {
     let frame = StudioFrame {
         inset: f32::NAN,

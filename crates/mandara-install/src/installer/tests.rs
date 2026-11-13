@@ -579,6 +579,8 @@ fn real_install_puts_files_in_place_and_runs_setup_and_greeter() {
     assert!(host.ran[setup].env.contains(&("RUST_LOG".into(), "warn".into())));
     let text = host.text();
     assert!(text.contains("Mandara is installed.") && text.contains("Studio → About → Update now"));
+    assert!(text.contains("Studio design: Themes → Studio"));
+    assert!(text.contains("Compositor shortcuts: Keyboard shortcuts → Compositor"));
     assert!(text.contains("is not on your PATH"));
     // `--yes` takes the default: the folder goes on PATH, once.
     let profile = std::fs::read_to_string(f.home().join(".profile")).unwrap();

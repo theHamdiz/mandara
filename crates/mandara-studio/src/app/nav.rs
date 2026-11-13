@@ -23,7 +23,7 @@ use std::collections::HashMap;
 
 use chrono::Timelike as _;
 use gpui::{
-    AnyElement, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, SharedString, StatefulInteractiveElement, Styled,
+    AnyElement, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, SharedString, StatefulInteractiveElement, Styled,
     StyledImage as _, Window, div, img, prelude::FluentBuilder as _, px,
 };
 use mandara_config::{ShellConfig, ThemeMode};
@@ -36,7 +36,7 @@ use mandara_ui::state::update_config;
 
 use super::compositor_page::{badge, button, card};
 use super::themes_page::{apply_theme, section_head, shell_mock};
-use super::{StudioView, begin_move, grid};
+use super::{StudioView, grid};
 use crate::registry::{self, Control, NavGroup, Section, Setting};
 use crate::tokens::*;
 
@@ -135,10 +135,10 @@ impl StudioView {
     }
 
     /// Index of `section`'s row among the scroller's children (for
-    /// scroll-into-view): the title block, the search, Home, then a header
+    /// scroll-into-view): the spacer, the search, Home, then a header
     /// per group followed by its visible rows.
     fn nav_row_index(&self, section: Section) -> usize {
-        // Title block, search field, Home.
+        // Top spacer, search field, Home.
         const LEADING_ROWS: usize = 3;
         let mut i = LEADING_ROWS;
         if section == Section::Home {
@@ -293,11 +293,8 @@ impl StudioView {
             .into_any_element()
     }
 
-    /// The whole sidebar: title (drags the window), search, Home and the
-    /// groups.
+    /// Search, Home and page groups. Branding belongs to the window title bar.
     pub(super) fn nav(&mut self, rail: bool, frame: Option<&mandara_config::studio::StudioFrame>, window: &mut Window, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        let fonts = mandara_ui::fonts::fonts(cx);
-        let rtl = mandara_i18n::language().is_rtl();
         let focused = self.nav_focus.is_focused(window);
         let searching = !self.query.is_empty();
         let hits = searching.then(|| search_hits(&self.query));
@@ -315,23 +312,8 @@ impl StudioView {
             .flex_col()
             .when(rail, |el| el.items_center())
             .gap(px(NAV_ITEM_GAP_PX))
-            .child(
-                div()
-                    .id("studio-drag")
-                    .flex_none()
-                    .when(!rail, |el| el.px(px(SPACE_8_PX)))
-                    .pt(px(SPACE_6_PX))
-                    .pb(px(SPACE_14_PX))
-                    .row()
-                    .flex_col()
-                    .when(rtl, |el| el.items_end())
-                    .on_mouse_down(MouseButton::Left, |e, window, _| if e.click_count >= 2 { window.zoom_window() } else { begin_move(window) })
-                    .when(rail, |el| el.child(icon("grid", ICON_22_PX, p.primary)))
-                    .when(!rail, |el| {
-                        el.child(div().font_family(fonts.display.clone()).text_size(px(TEXT_20_PX)).font_weight(FontWeight::SEMIBOLD).child(t("Mandara Studio")))
-                            .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("Every setting, live")))
-                    }),
-            )
+            // Preserve row indices used by scroll-into-view as the rail changes.
+            .child(div().h(px(SPACE_4_PX)).flex_none())
             // The rail moves the search into the page header; keep the
             // child count stable for scroll-into-view.
             .child(div().flex_none().when(!rail, |el| el.pb(px(SPACE_10_PX)).child(self.search.clone())))

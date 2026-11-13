@@ -76,7 +76,13 @@ fn stroke(value: &str) -> Result<i32> {
         .next()
         .ok_or_else(|| anyhow::anyhow!("{}", t("Enter a complete shortcut sequence.")))?;
     let key = if chars.next().is_none() && first.len_utf16() == 1 {
-        first.to_uppercase().next().unwrap_or(first) as i32
+        let mut upper = first.to_uppercase();
+        let key = upper.next().unwrap_or(first);
+        if upper.next().is_none() {
+            key as i32
+        } else {
+            first as i32
+        }
     } else if let Some(number) = rest
         .strip_prefix(['f', 'F'])
         .and_then(|value| value.parse::<i32>().ok())
@@ -109,6 +115,7 @@ mod tests {
         );
         assert_eq!(sequence("Alt+Num+F35").unwrap()[0], 0x29000052);
         assert_eq!(sequence("none").unwrap(), [0; 4]);
+        assert_eq!(sequence("ß").unwrap(), [0xdf, 0, 0, 0]);
         for (name, key) in super::super::qt_keys::NAMES {
             assert_eq!(sequence(name).unwrap()[0], *key, "{name}");
         }

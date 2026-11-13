@@ -12,6 +12,12 @@ use crate::{
 pub(super) struct Toml(pub Target);
 
 impl ShortcutFormat for Toml {
+    fn validate_edit(&self, before: &Binding, after: &Binding) -> Result<()> {
+        if self.0 == Target::Aqueous {
+            super::aqueous::validate(before, after)?;
+        }
+        Ok(())
+    }
     fn parse(&self, source: &str) -> Result<Vec<Binding>> {
         let document = Document::parse(source)?;
         let mut bindings = Vec::new();
@@ -64,10 +70,11 @@ fn read_table(
             ));
         }
         let mut chords = Vec::new();
+        let array = value.is_array();
         let values: Vec<&Value> = value
             .as_array()
             .map_or_else(|| vec![value], |array| array.iter().collect());
-        for value in values {
+        for (index, value) in values.into_iter().enumerate() {
             if let Some(text) = value.as_str() {
                 let span = value.span().context("shortcut value has no source span")?;
                 fields.push(field(
@@ -80,6 +87,10 @@ fn read_table(
                     span,
                     Encoding::TomlString,
                 ));
+                if target == Target::Aqueous && array {
+                    fields.last_mut().expect("a field was just pushed").name =
+                        Some(index.to_string());
+                }
                 if !key_is_chord {
                     chords.push(text);
                 }
@@ -100,7 +111,17 @@ fn read_table(
             scope: scope.to_owned(),
             chord,
             fields,
-            read_only: None,
+            read_only: if target == Target::Aqueous
+                && (scope != "keybinds" && !custom_aqueous
+                    || !custom_aqueous && !super::aqueous::builtin(key)
+                    || custom_aqueous && array)
+            {
+                Some(tk(
+                    "This Aqueous entry needs to be edited in its source configuration.",
+                ))
+            } else {
+                None
+            },
         });
     }
     Ok(())
@@ -136,5 +157,13 @@ mod tests {
         assert_eq!(binds.len(), 2);
         assert_eq!(binds[0].fields[1].value, "Super+Tab");
         assert_eq!(binds[1].chord.as_deref(), Some("super+t"));
+    }
+
+    #[test]
+    fn ignored_aqueous_tables_and_unknown_actions_are_visible_and_locked() {
+        let source = "[keybinds]\ninvented='Super+Q'\n[keybinds.custom]\n'Super+T'=['spawn:foot']\n[keybinds.ignored]\ncustom='Super+W'\n";
+        let rows = Toml(Target::Aqueous).parse(source).unwrap();
+        assert_eq!(rows.len(), 3);
+        assert!(rows.iter().all(|row| row.read_only.is_some()));
     }
 }

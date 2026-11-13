@@ -4,7 +4,7 @@ use super::{Binding, Encoding};
 use anyhow::{Result, ensure};
 use mandara_i18n::t;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Identity(u8, u32);
 
 /// COSMIC compares modifiers and keysym; descriptions and keycodes do not

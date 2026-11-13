@@ -103,35 +103,47 @@ pub fn switch(on: bool, design: ToggleDesign, palette: &MandaraPalette) -> Div {
     let p = palette.clone();
     let track = div().w(px(SWITCH_W_PX)).h(px(SWITCH_H_PX)).relative().rounded_full();
     let feel = if design == ToggleDesign::Expressive { Feel::FastSpatial } else { Feel::DefaultSpatial };
-    let drawn = motion::spring(track, SWITCH_KEY, if on { 1.0 } else { 0.0 }, feel, move |el, t| {
-        let s = t.clamp(0.0, 1.0);
-        let (off_track, on_track) = match design {
-            ToggleDesign::Round => (crate::plugins::panel_fx::wash(crate::plugins::panel_fx::WASH_STRONG, &p), p.primary),
-            _ => (p.surface_container_high, p.primary),
-        };
-        let (off_thumb, on_thumb) = match design {
-            ToggleDesign::Round => (p.on_surface_variant, p.on_primary),
-            _ => (p.outline, p.on_primary),
-        };
-        let th = thumb(design, t);
-        let ring = (design != ToggleDesign::Round && s < 1.0).then(|| div().absolute().top_0().left_0().size_full().rounded_full().border(px(TRACK_OUTLINE_PX)).border_color(p.outline.with_alpha(1.0 - s).hsla()));
-        let icon = (design != ToggleDesign::Round && s > 0.5).then(|| crate::icons::icon("check", th.h * THUMB_ICON_SHARE, p.primary.with_alpha((s - 0.5) * 2.0)));
-        let knob = div()
-            .absolute()
-            .top(px(th.y))
-            .inset_start(px(th.x))
-            .w(px(th.w))
-            .h(px(th.h))
-            .rounded_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .bg(off_thumb.mix(on_thumb, s).hsla())
-            .when(design == ToggleDesign::Round, |el| el.shadow(vec![crate::plugins::panel_fx::glow(p.surface_dim.with_alpha(ROUND_SHADOW.0), ROUND_SHADOW.1, 0.0, 1.0)]))
-            .children(icon);
-        el.bg(off_track.mix(on_track, s).hsla()).children(ring).child(knob)
-    });
+    let drawn = motion::spring(track, SWITCH_KEY, if on { 1.0 } else { 0.0 }, feel,
+        move |el, t| switch_at(el, t, design, &p));
     div().flex_none().child(drawn)
+}
+
+/// A still preview keeps no spring state and uses the same control geometry.
+pub fn switch_still(on: bool, design: ToggleDesign, palette: &MandaraPalette) -> Div {
+    if design == ToggleDesign::Classic {
+        return crate::plugins::panel_fx::switch_as(design, on, palette);
+    }
+    let track = div().w(px(SWITCH_W_PX)).h(px(SWITCH_H_PX)).relative().rounded_full().flex_none();
+    switch_at(track, if on { 1.0 } else { 0.0 }, design, palette)
+}
+
+fn switch_at(el: Div, t: f32, design: ToggleDesign, p: &MandaraPalette) -> Div {
+    let s = t.clamp(0.0, 1.0);
+    let (off_track, on_track) = match design {
+        ToggleDesign::Round => (crate::plugins::panel_fx::wash(crate::plugins::panel_fx::WASH_STRONG, p), p.primary),
+        _ => (p.surface_container_high, p.primary),
+    };
+    let (off_thumb, on_thumb) = match design {
+        ToggleDesign::Round => (p.on_surface_variant, p.on_primary),
+        _ => (p.outline, p.on_primary),
+    };
+    let th = thumb(design, t);
+    let ring = (design != ToggleDesign::Round && s < 1.0).then(|| div().absolute().top_0().left_0().size_full().rounded_full().border(px(TRACK_OUTLINE_PX)).border_color(p.outline.with_alpha(1.0 - s).hsla()));
+    let icon = (design != ToggleDesign::Round && s > 0.5).then(|| crate::icons::icon("check", th.h * THUMB_ICON_SHARE, p.primary.with_alpha((s - 0.5) * 2.0)));
+    let knob = div()
+        .absolute()
+        .top(px(th.y))
+        .inset_start(px(th.x))
+        .w(px(th.w))
+        .h(px(th.h))
+        .rounded_full()
+        .flex()
+        .items_center()
+        .justify_center()
+        .bg(off_thumb.mix(on_thumb, s).hsla())
+        .when(design == ToggleDesign::Round, |el| el.shadow(vec![crate::plugins::panel_fx::glow(p.surface_dim.with_alpha(ROUND_SHADOW.0), ROUND_SHADOW.1, 0.0, 1.0)]))
+        .children(icon);
+    el.bg(off_track.mix(on_track, s).hsla()).children(ring).child(knob)
 }
 
 /// Corner radius of a check box `side` wide in `design`, `t` of the way
@@ -237,6 +249,16 @@ mod tests {
         let (rest, mid) = (thumb(ToggleDesign::Expressive, 0.0), thumb(ToggleDesign::Expressive, 0.5));
         assert_eq!(rest.w, rest.h);
         assert!(mid.w > rest.w && mid.h < rest.h);
+    }
+
+    #[test]
+    fn preview_switches_build_without_a_window_or_animation_state() {
+        let palette = mandara_theme::ThemeSource::default().resolve(false).unwrap().palette;
+        for design in [ToggleDesign::Classic, ToggleDesign::Material, ToggleDesign::Expressive, ToggleDesign::Round] {
+            for on in [false, true] {
+                let _: Div = switch_still(on, design, &palette);
+            }
+        }
     }
 
     #[test]

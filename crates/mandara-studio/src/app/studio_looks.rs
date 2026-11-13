@@ -4,11 +4,11 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _, px,
+    SharedString, StatefulInteractiveElement, Styled, canvas, div, prelude::FluentBuilder as _, px,
 };
 use mandara_config::{
     ShellConfig, ThemeMode,
-    studio::{StudioAppearance, StudioLook},
+    studio::{FrameDesign, StudioAppearance, StudioLook},
 };
 use mandara_core::ToGpui as _;
 use mandara_i18n::{t, tr};
@@ -17,7 +17,7 @@ use mandara_ui::{bidi::Bidi as _, components::toggles, state::update_config};
 
 use super::{
     StudioView,
-    compositor_page::{button, button_as, heading},
+    compositor_page::{button, heading},
     grid, studio_frame,
 };
 use crate::{latest::Latest, tokens::*};
@@ -39,6 +39,7 @@ struct Preview {
     look: StudioLook,
     appearance: StudioAppearance,
     display_font: SharedString,
+    ui_font: SharedString,
     palette: MandaraPalette,
 }
 
@@ -74,6 +75,7 @@ fn resolve_previews(installed: &[String]) -> anyhow::Result<Vec<Preview>> {
                     installed,
                     look.definition().display_font,
                 ),
+                ui_font: mandara_ui::fonts::display_family(installed, look.definition().ui_font),
                 palette,
             })
         })
@@ -187,7 +189,7 @@ impl StudioView {
                         .row()
                         .flex_col()
                         .gap(px(SPACE_12_PX))
-                        .child(miniature(preview, index))
+                        .child(miniature(preview))
                         .child(
                             div()
                                 .font_family(preview.display_font.clone())
@@ -257,7 +259,7 @@ fn customized(current: Option<&StudioAppearance>, preview: &Preview) -> bool {
     current.is_some_and(|selected| selected.look == preview.look && selected != &preview.appearance)
 }
 
-fn miniature(preview: &Preview, index: usize) -> AnyElement {
+fn miniature(preview: &Preview) -> AnyElement {
     let p = &preview.palette;
     let mut frame = preview.appearance.frame.clone();
     frame.title_height = PREVIEW_TITLE_HEIGHT;
@@ -292,6 +294,7 @@ fn miniature(preview: &Preview, index: usize) -> AnyElement {
             div()
                 .text_size(px(TEXT_12_PX))
                 .font_weight(FontWeight::SEMIBOLD)
+                .font_family(preview.display_font.clone())
                 .child(t("Appearance")),
         )
         .child(
@@ -310,57 +313,129 @@ fn miniature(preview: &Preview, index: usize) -> AnyElement {
                         .rounded_full()
                         .bg(p.on_surface.with_alpha(ALPHA_12).hsla()),
                 )
-                .child(toggles::switch(
+                .child(toggles::switch_still(
                     true,
                     preview.appearance.style.toggle_design,
                     p,
                 )),
         )
-        .child(button_as(
-            preview.appearance.style.button_design,
-            SharedString::from(format!("studio-preview-button-{index}")),
-            "check",
-            t("Apply"),
-            true,
-            p,
-        ));
-    let title = div()
+        .child(button_preview(preview));
+    let lights = frame.design == FrameDesign::Glass;
+    let control_icons = if frame.controls_at_start {
+        [
+            ("close", p.urgent_coral),
+            ("minus", p.warning_amber),
+            ("maximize", p.success_emerald),
+        ]
+    } else {
+        [
+            ("minus", p.warning_amber),
+            ("maximize", p.success_emerald),
+            ("close", p.urgent_coral),
+        ]
+    };
+    let controls =
+        div()
+            .ltr_row()
+            .items_center()
+            .gap(px(SPACE_4_PX))
+            .children(control_icons.into_iter().map(|(glyph, color)| {
+                if lights {
+                    div()
+                        .size(px(SPACE_6_PX))
+                        .rounded_full()
+                        .bg(color.hsla())
+                        .into_any_element()
+                } else {
+                    mandara_ui::icons::icon(glyph, ICON_10_PX, p.on_surface_variant)
+                        .into_any_element()
+                }
+            }));
+    let caption = div()
+        .flex_1()
+        .row()
+        .when(lights, |el| el.justify_center())
+        .child(
+            div()
+                .w(px(DIM_48_PX))
+                .h(px(SPACE_4_PX))
+                .rounded_full()
+                .bg(p.on_surface.with_alpha(ALPHA_12).hsla()),
+        );
+    let title = studio_frame::title_surface(div(), &frame, p)
         .h(px(PREVIEW_TITLE_HEIGHT))
+        .flex_none()
         .px(px(SPACE_8_PX))
         .row()
         .items_center()
-        .gap(px(SPACE_4_PX))
-        .child(
-            div()
-                .size(px(SPACE_6_PX))
-                .rounded_full()
-                .bg(p.urgent_coral.hsla()),
-        )
-        .child(
-            div()
-                .size(px(SPACE_6_PX))
-                .rounded_full()
-                .bg(p.warning_amber.hsla()),
-        )
-        .child(
-            div()
-                .size(px(SPACE_6_PX))
-                .rounded_full()
-                .bg(p.success_emerald.hsla()),
-        );
+        .gap(px(SPACE_8_PX));
+    let title = if frame.controls_at_start {
+        title.child(controls).child(caption)
+    } else {
+        title.child(caption).child(controls)
+    };
     div()
         .h(px(PREVIEW_HEIGHT))
+        .font_family(preview.ui_font.clone())
         .text_color(p.on_surface.hsla())
         .bg(p.surface_container_low.hsla())
         .rounded(px(RADIUS_12_PX))
-        .child(studio_frame::window(
-            Some(&frame),
+        .child(studio_frame::preview(
+            &frame,
             nav.into_any_element(),
             content.into_any_element(),
-            Some(title.into_any_element()),
+            title.into_any_element(),
             p,
+            preview.appearance.style.ink,
         ))
         .into_any_element()
+}
+
+/// A still control uses the component geometry without tracking presses or
+/// inheriting the active window's radius, motion and shadow settings.
+fn button_preview(preview: &Preview) -> gpui::Div {
+    use mandara_ui::components::{ButtonDesign, buttons, cut};
+    let p = &preview.palette;
+    let style = &preview.appearance.style;
+    let button = div()
+        .h(px(DIM_34_PX))
+        .px(px(SPACE_14_PX))
+        .row()
+        .items_center()
+        .gap(px(SPACE_7_PX))
+        .text_color(p.on_primary.hsla())
+        .text_size(px(TEXT_12_5_PX))
+        .font_weight(FontWeight::MEDIUM);
+    let button = if style.button_design == ButtonDesign::Cut {
+        let color = p.primary;
+        button.relative().child(
+            canvas(
+                |_, _, _| {},
+                move |bounds, _, window, _| {
+                    cut::paint(
+                        window,
+                        bounds,
+                        buttons::cut(DIM_34_PX),
+                        cut::Ink::solid(Some(color), None),
+                    );
+                },
+            )
+            .absolute()
+            .inset_0(),
+        )
+    } else {
+        button
+            .rounded(px(buttons::radius_at_scale(
+                style.button_design,
+                DIM_34_PX,
+                0.0,
+                style.radius_scale,
+            )))
+            .bg(p.primary.hsla())
+    };
+    button
+        .child(mandara_ui::icons::icon("check", ICON_14_PX, p.on_primary))
+        .child(t("Apply"))
 }
 
 #[cfg(test)]
@@ -375,6 +450,7 @@ mod tests {
             assert_eq!(preview.look, look);
             assert_eq!(preview.palette.is_dark, look.definition().dark);
             assert_eq!(preview.display_font.as_ref(), "Inter");
+            assert_eq!(preview.ui_font.as_ref(), "Inter");
         }
         let weak = Rc::downgrade(&previews);
         let mut gallery = Gallery {

@@ -1,6 +1,6 @@
 //! Inherited bindings stay in the installed catalog; edits create user overrides.
 
-use super::{Preferences, Saved, Session, Undo, native::Native, transaction};
+use super::{Preferences, Saved, Session, Undo, transaction};
 use anyhow::{Result, ensure};
 use mandara_config::{
     compositor::Target,
@@ -17,23 +17,37 @@ pub(super) fn load(root: PathBuf) -> Session {
         Default::default()
     };
     if let Some(defaults) = defaults_path(&root) {
+        let custom: std::collections::BTreeSet<_> = scan
+            .sources
+            .iter()
+            .flat_map(|source| &source.bindings)
+            .filter_map(|row| keybinds::cosmic::identity(row).ok())
+            .collect();
         let inherited = keybinds::scan_from(Target::Cosmic, &defaults);
         scan.errors.extend(inherited.errors);
         for mut source in inherited.sources {
             for row in &mut source.bindings {
                 row.scope = "defaults".into();
-                if keybinds::cosmic::identity(row).is_ok_and(|key| {
-                    scan.sources
-                        .iter()
-                        .flat_map(|source| &source.bindings)
-                        .any(|custom| {
-                            keybinds::cosmic::identity(custom).is_ok_and(|custom| custom == key)
-                        })
-                }) {
+                if keybinds::cosmic::identity(row).is_ok_and(|key| custom.contains(&key)) {
                     row.read_only = Some(mandara_i18n::tk(
                         "A custom shortcut overrides this default. Edit the custom shortcut instead.",
                     ));
                 }
+            }
+            if scan
+                .sources
+                .iter()
+                .map(|source| source.bindings.len())
+                .sum::<usize>()
+                + source.bindings.len()
+                > keybinds::MAX_BINDINGS
+            {
+                scan.errors.push((
+                    source.file,
+                    mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
+                        .into(),
+                ));
+                break;
             }
             scan.sources.push(source);
         }
@@ -42,6 +56,7 @@ pub(super) fn load(root: PathBuf) -> Session {
         target: Target::Cosmic,
         root,
         scan,
+        primary_mod_is_alt: false,
     }
 }
 
@@ -84,9 +99,23 @@ pub(super) fn save(
     edit: &keybinds::PreparedEdit,
     initial: &Preferences,
     preferences: &dyn Fn() -> Result<Preferences>,
-    backend: &Native<'_>,
+    backend: &dyn transaction::Backend,
 ) -> Result<Saved> {
     let path = &session.root;
+    let new = keybinds::cosmic::identity(edit.binding())?;
+    for source in &session.scan.sources {
+        for (index, row) in source.bindings.iter().enumerate() {
+            ensure!(
+                source.file == edit.id.file && index == edit.id.index
+                    || row.read_only.is_some()
+                    || keybinds::cosmic::identity(row)? != new,
+                "{}",
+                mandara_i18n::t(
+                    "Another compositor shortcut already uses this key. Edit that shortcut or choose a different key."
+                )
+            );
+        }
+    }
     let original = if path.exists() {
         crate::app_themes::apply::read_text(path)?
     } else {
@@ -202,5 +231,68 @@ mod tests {
         let session = load(custom);
         assert_eq!(session.scan.sources.len(), 2);
         assert!(session.scan.sources[1].bindings[0].read_only.is_some());
+    }
+
+    #[test]
+    fn default_edits_and_compact_undo_touch_only_user_overrides() {
+        let directory = tempfile::tempdir().unwrap();
+        let custom = directory.path().join("custom");
+        let defaults = custom.with_file_name("defaults");
+        let catalog = "{(modifiers:[Super],key:\"q\"):Close,(modifiers:[Alt],key:\"F4\"):Close}";
+        let personal =
+            "// personal\n{ (modifiers:[Alt],key:\"F12\"): Spawn(\"foot\") } // trailing }\n";
+        std::fs::write(&defaults, catalog).unwrap();
+        std::fs::write(&custom, personal).unwrap();
+        let session = load(custom.clone());
+        let source = session
+            .scan
+            .sources
+            .iter()
+            .find(|source| source.file == defaults)
+            .unwrap();
+        let id = source.binding_id(0).unwrap();
+        let edit = keybinds::prepare(
+            Target::Cosmic,
+            &id,
+            &["[Super]".into(), "\"w\"".into(), "Close".into()],
+        )
+        .unwrap();
+        let initial = Preferences {
+            target: Target::Cosmic,
+            manage: false,
+            keybinds: Vec::new(),
+        };
+        let preferences = || Ok(initial.clone());
+        let saved = save(&session, &edit, &initial, &preferences, &Checker).unwrap();
+        let Undo::Cosmic(inverse) = saved.undo.unwrap() else {
+            panic!("default edit has a document undo")
+        };
+        assert!(serde_json::to_vec(&inverse).unwrap().len() < 1024);
+        assert_eq!(std::fs::read_to_string(&defaults).unwrap(), catalog);
+        assert_eq!(
+            keybinds::scan_from(Target::Cosmic, &custom).sources[0]
+                .bindings
+                .len(),
+            3
+        );
+        let session = load(custom.clone());
+        undo(&session, &inverse, &initial, &preferences, &Checker).unwrap();
+        assert_eq!(std::fs::read_to_string(&custom).unwrap(), personal);
+        std::fs::write(&custom, format!("{personal}// later edit\n")).unwrap();
+        assert!(
+            undo(
+                &load(custom.clone()),
+                &inverse,
+                &initial,
+                &preferences,
+                &Checker
+            )
+            .is_err()
+        );
+        assert!(
+            std::fs::read_to_string(custom)
+                .unwrap()
+                .ends_with("// later edit\n")
+        );
     }
 }

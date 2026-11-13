@@ -5,9 +5,9 @@ mod edit;
 mod encoding;
 mod formats;
 mod identity;
+mod kwin_settings;
 mod qt_keys;
 mod qt_sequence;
-mod kwin_settings;
 mod scan;
 mod text_undo;
 
@@ -18,9 +18,10 @@ use mandara_i18n::tk;
 
 pub use edit::{PreparedEdit, UndoEdit, prepare};
 pub use encoding::Encoding;
+pub use formats::aqueous::normalized as aqueous_chord;
 pub use formats::labwc_keyboard;
-pub use qt_sequence::sequence as qt_sequence;
 pub use kwin_settings::same_settings as kwin_same_settings;
+pub use qt_sequence::sequence as qt_sequence;
 pub use scan::{Scan, Source, default_root, scan, scan_from};
 pub use text_undo::TextUndo;
 

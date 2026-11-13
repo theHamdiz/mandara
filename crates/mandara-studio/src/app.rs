@@ -1858,6 +1858,8 @@ impl Render for StudioView {
         frame_meter::begin();
         let p = mandara_core::frame_palette(window, cx);
         let cfg = config(cx).read(cx).snapshot();
+        let client_controls = crate::client_controls(window.window_decorations(), registry::running_compositor());
+        registry::set_client_controls(client_controls);
         registry::prime(&cfg);
         self.launcher_follow(&cfg, window, cx);
         if !self.query.is_empty() || !window.is_visible() {
@@ -1967,8 +1969,8 @@ impl Render for StudioView {
             (self.section.label(), body)
         };
 
-        let titlebar = crate::client_controls(window.window_decorations(), mandara_compositor::detect_from(|key| std::env::var_os(key)))
-            .then(|| studio_frame::titlebar(studio_frame.as_ref(), &p, fonts.display.clone()));
+        let titlebar = client_controls
+            .then(|| studio_frame::titlebar(studio_frame.as_ref(), &p, fonts.studio.clone()));
         // `MANDARA_STUDIO_SCROLL=<px>` opens the page scrolled down, once
         // (screenshots of long pages without driving the pointer).
         static SCROLLED: std::sync::Once = std::sync::Once::new();
@@ -1990,6 +1992,7 @@ impl Render for StudioView {
         let content = div()
             .id("studio-content")
             .flex_1()
+            .min_w(px(0.0))
             .min_h(px(0.0))
             .overflow_y_scroll()
             .track_scroll(&self.content_scroll)
@@ -2024,7 +2027,7 @@ impl Render for StudioView {
         // The page's overlay scroll bar (it fills the content's place).
         // Left to right, the page's end edge is the window's border.
         let edge = if mandara_i18n::language().is_rtl() { px(0.0) } else { px(mandara_ui::scrollbar::WINDOW_EDGE_CLEARANCE_PX) };
-        let content = div().relative().flex_1().min_h(px(0.0)).flex().flex_col().child(content).child(mandara_ui::scrollbar::overlay_scrollbar(&self.content_scroll, &content_bar, &p).end_inset(edge));
+        let content = div().relative().flex_1().min_w(px(0.0)).min_h(px(0.0)).flex().flex_col().child(content).child(mandara_ui::scrollbar::overlay_scrollbar(&self.content_scroll, &content_bar, &p).end_inset(edge));
 
         let modal = self.plugin_modal_layer(&cfg, &p, window, cx);
         let edge_choice = self.stash_collision_layer(&cfg, &p, cx);

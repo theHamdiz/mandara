@@ -8,6 +8,9 @@ About → What's new shows it too.
 
 ### New
 
+- **Give Studio a look of its own.** Themes → Studio brings nine window designs, from quiet glass and paper to cut corners and bold ink. Refine its sidebar, controls, colours and fonts independently; desktop Look changes leave it as you chose it.
+- **Edit your compositor's shortcuts in Studio.** Keyboard shortcuts → Compositor finds the running compositor and its native bindings. Edit individual values, see clashes with Mandara's shortcuts, and save with backups, validation and Undo. Computed bindings stay read-only with a reason.
+
 - **More apps can follow your colours.** Browse app-template catalogs in Studio → Themes → Other apps, install only what you need, or write your own template. Installed templates follow every Mandara palette offline, with light/dark colours, custom colours, setup commands, browser integration and KDE schemes. Setup commands are optional; errors and managed-file restoration are visible in Studio. (#123)
 
 ### Fixed
@@ -32,6 +35,8 @@ About → What's new shows it too.
 - **A friendlier introduction to Mandara.** The README gets shorter, clearer copy while keeping every screenshot, feature list and gallery layout.
 
 - **An easier Look picker on the website.** Search the collection or step through it beside the desktop preview, with the same colour swatches and live palettes. The website and guides now reflect all 19 bar presets and 86 built-in plugins, including Taskbar.
+
+- **Quieter Studio windows.** The name appears once, traffic-light buttons sit closer together, and preset previews keep their own colours, controls and surface details.
 
 ### Under the hood
 

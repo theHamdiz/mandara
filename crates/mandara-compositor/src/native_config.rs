@@ -8,6 +8,14 @@ use mandara_config::compositor::Target;
 use mandara_i18n::t;
 use std::path::PathBuf;
 #[cfg(any(target_os = "linux", test))]
+mod aqueous;
+
+#[derive(Default)]
+pub struct NativeConfig {
+    pub file: Option<PathBuf>,
+    pub primary_mod_is_alt: bool,
+}
+#[cfg(any(target_os = "linux", test))]
 use std::{
     ffi::{OsStr, OsString},
     os::unix::ffi::{OsStrExt as _, OsStringExt as _},
@@ -20,9 +28,9 @@ use std::{
 const MAX_LAUNCH_BYTES: usize = 8 * 1024 * 1024;
 
 #[cfg(target_os = "linux")]
-pub fn running(target: Target) -> Result<Option<PathBuf>> {
+pub fn running(target: Target) -> Result<NativeConfig> {
     let Some(pid) = super::display_server_pid() else {
-        return Ok(None);
+        return Ok(NativeConfig::default());
     };
     let bytes = std::fs::read(format!("/proc/{pid}/cmdline"))?;
     ensure!(
@@ -36,12 +44,24 @@ pub fn running(target: Target) -> Result<Option<PathBuf>> {
         .map(|arg| OsString::from_vec(arg.to_vec()))
         .collect();
     let cwd = std::fs::read_link(format!("/proc/{pid}/cwd"))?;
-    from_arguments(target, &arguments, &cwd)
+    if target == Target::Aqueous {
+        let environment = std::fs::read(format!("/proc/{pid}/environ"))?;
+        ensure!(
+            environment.len() <= MAX_LAUNCH_BYTES,
+            "{}",
+            t("The compositor's environment is too large to inspect.")
+        );
+        return Ok(aqueous::inspect(&environment, &cwd, Path::exists));
+    }
+    Ok(NativeConfig {
+        file: from_arguments(target, &arguments, &cwd)?,
+        ..Default::default()
+    })
 }
 
 #[cfg(not(target_os = "linux"))]
-pub fn running(_: Target) -> Result<Option<PathBuf>> {
-    Ok(None)
+pub fn running(_: Target) -> Result<NativeConfig> {
+    Ok(NativeConfig::default())
 }
 
 #[cfg(any(target_os = "linux", test))]

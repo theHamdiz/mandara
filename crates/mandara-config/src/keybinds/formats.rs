@@ -1,5 +1,6 @@
 //! Each compositor supplies its own parser behind the shared editing contract.
 
+pub(crate) mod aqueous;
 pub(crate) mod cosmic;
 mod kwin;
 mod labwc;

@@ -1,24 +1,21 @@
 //! Window chrome and navigation geometry for independent Studio Looks.
 
-use gpui::{
-    AnyElement, ClickEvent, Div, FontWeight, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, SharedString, StatefulInteractiveElement, Styled, div,
-    prelude::FluentBuilder as _, px,
-};
+mod titlebar;
+pub(super) use titlebar::{title_surface, titlebar};
+
+use gpui::{AnyElement, Div, ParentElement, Styled, canvas, div, px};
 use mandara_config::{
     ShellConfig,
     studio::{FrameDesign, StudioFrame},
 };
 use mandara_core::ToGpui as _;
-use mandara_i18n::{t, tk, tr};
 use mandara_theme::MandaraPalette;
 use mandara_ui::{
     bidi::Bidi as _,
     components::{
-        CardStyle, SurfaceCorners,
-        surfaces::{CardSurface as _, Fill, Surface as _},
+        CardStyle, SurfaceCorners, cut,
+        surfaces::{CardSurface as _, Fill, Surface as _, shaped},
     },
-    icons::icon,
     style::ClipRounded as _,
 };
 
@@ -26,8 +23,6 @@ use crate::tokens::*;
 
 /// The chassis's corner reach and title accent use the existing card geometry.
 const CHASSIS_RADIUS_SCALE: f32 = 6.0;
-/// Traffic lights sit inside full-sized, keyboard-accessible window buttons.
-const LIGHT_DIAMETER: f32 = 12.0;
 /// A paper window alternates generous and tight corners.
 const PAPER_SMALL_CORNER: f32 = 6.0;
 
@@ -55,168 +50,61 @@ pub(super) fn sidebar(mut el: Div, frame: Option<&StudioFrame>, p: &MandaraPalet
             FrameDesign::Chassis | FrameDesign::Console | FrameDesign::Terminal => {
                 p.surface_container_low
             }
-            FrameDesign::Comic => p.primary_container,
+            FrameDesign::Comic => p.surface_container_low,
             FrameDesign::Editorial => p.surface_base,
             FrameDesign::Classic | FrameDesign::Header => p.surface_container_low,
         }
         .hsla());
     match f.design {
-        FrameDesign::Chassis => {
-            el.border_b(px(f.border))
-                .border_color(p.primary.hsla())
-                .rounded_br(px((f.radius * CHASSIS_RADIUS_SCALE)
-                    .min(mandara_config::studio::ranges::RADIUS.max)))
-        }
-        FrameDesign::Console => {
-            el.border(px(f.border))
-                .border_color(p.primary.hsla())
-                .rounded_tl(px((f.radius * CHASSIS_RADIUS_SCALE)
-                    .min(mandara_config::studio::ranges::RADIUS.max)))
-                .rounded_br(px((f.radius * CHASSIS_RADIUS_SCALE)
-                    .min(mandara_config::studio::ranges::RADIUS.max)))
-        }
-        FrameDesign::Comic | FrameDesign::Terminal => {
-            el.border(px(f.border)).border_color(p.on_surface.hsla())
+        FrameDesign::Chassis => el
+            .border_b(px(f.border))
+            .border_color(p.primary.with_alpha(ALPHA_35).hsla())
+            .with_corners(sidebar_corners(f, mandara_ui::bidi::rtl())),
+        FrameDesign::Console => el
+            .border(px(f.border))
+            .border_color(p.primary.with_alpha(ALPHA_35).hsla())
+            .with_corners(sidebar_corners(f, mandara_ui::bidi::rtl())),
+        FrameDesign::Comic => el.border(px(f.border)).border_color(p.on_surface.hsla()),
+        FrameDesign::Terminal => {
+            let el = if mandara_ui::bidi::rtl() {
+                el.border_l(px(f.border))
+            } else {
+                el.border_r(px(f.border))
+            };
+            el.border_color(p.outline.hsla())
         }
         FrameDesign::Editorial => el.border_b(px(f.border)).border_color(p.outline.hsla()),
         _ => el,
     }
 }
 
-pub(super) fn titlebar(
-    frame: Option<&StudioFrame>,
-    p: &MandaraPalette,
-    font: SharedString,
-) -> AnyElement {
-    let f = frame.cloned().unwrap_or_default();
-    let independent = frame.is_some();
-    let lights = f.design == FrameDesign::Glass;
-    let button = |id: &'static str,
-                  glyph: &'static str,
-                  label: &'static str,
-                  color: mandara_theme::Color,
-                  danger: bool| {
-        div()
-            .id(id)
-            .size(px(DIM_30_PX))
-            .rounded(px(if lights || !independent {
-                RADIUS_15_PX
-            } else {
-                f.nav_radius
-            }))
-            .row()
-            .items_center()
-            .justify_center()
-            .cursor_pointer()
-            .focusable()
-            .tab_index(0)
-            .tooltip(super::compositor_page::tip(tr(label), p))
-            .focus(|s| s.bg(p.primary_container.hsla()))
-            .hover(move |s| {
-                s.bg(if danger {
-                    p.urgent_coral.with_alpha(ALPHA_25)
-                } else {
-                    p.on_surface.with_alpha(ALPHA_8)
-                }
-                .hsla())
-            })
-            .child(if lights {
-                div()
-                    .size(px(LIGHT_DIAMETER))
-                    .rounded_full()
-                    .bg(color.hsla())
-                    .child(icon(
-                        glyph,
-                        LIGHT_DIAMETER,
-                        p.on_surface.with_alpha(ALPHA_70),
-                    ))
-                    .into_any_element()
-            } else {
-                icon(glyph, ICON_14_PX, p.on_surface_variant).into_any_element()
-            })
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-    };
-    let close = button("win-close", "close", tk("Close"), p.urgent_coral, true)
-        .on_click(|_: &ClickEvent, window, _| window.remove_window());
-    let min = button("win-min", "minus", tk("Minimize"), p.warning_amber, false)
-        .on_click(|_, window, _| window.minimize_window());
-    let max = button(
-        "win-max",
-        "maximize",
-        tk("Maximize"),
-        p.success_emerald,
-        false,
-    )
-    .on_click(|_, window, _| window.zoom_window());
-    let mut controls = div()
-        .ltr_row()
-        .gap(px(SPACE_4_PX))
-        .items_center()
-        .flex_none();
-    controls = if f.controls_at_start {
-        controls.child(close).child(min).child(max)
+fn alternating_corners(large: f32, small: f32, rtl: bool) -> gpui::Corners<gpui::Pixels> {
+    let (start, end) = if rtl {
+        (px(small), px(large))
     } else {
-        controls.child(min).child(max).child(close)
+        (px(large), px(small))
     };
-    let caption = div()
-        .flex_1()
-        .min_w(px(0.0))
-        .truncate()
-        .font_family(font)
-        .font_weight(FontWeight::SEMIBOLD)
-        .when(independent, |el| el.child(t("Mandara Studio")));
-    let bar = div()
-        .id("studio-titlebar")
-        .h(px(f.title_height))
-        .flex_none()
-        .px(px(SPACE_12_PX))
-        .row()
-        .items_center()
-        .gap(px(SPACE_12_PX))
-        .when(
-            matches!(
-                f.design,
-                FrameDesign::Header
-                    | FrameDesign::Chassis
-                    | FrameDesign::Console
-                    | FrameDesign::Terminal
-            ),
-            |el| {
-                el.bg(if f.header_accent {
-                    p.primary_container
-                } else {
-                    p.surface_container
-                }
-                .hsla())
-                    .border_b(px(f.border))
-                    .border_color(
-                        if matches!(f.design, FrameDesign::Chassis | FrameDesign::Console) {
-                            p.primary
-                        } else {
-                            p.outline
-                        }
-                        .hsla(),
-                    )
-            },
-        )
-        .when(f.design == FrameDesign::Comic, |el| {
-            el.bg(p.primary_container.hsla())
-                .border_b(px(f.border))
-                .border_color(p.on_surface.hsla())
-        })
-        .when(f.header_accent, |el| el.bg(p.primary_container.hsla()))
-        .on_mouse_down(MouseButton::Left, |e, window, _| {
-            if e.click_count >= 2 {
-                window.zoom_window();
-            } else {
-                super::begin_move(window);
-            }
-        });
-    if f.controls_at_start {
-        bar.child(controls).child(caption).into_any_element()
-    } else {
-        bar.child(caption).child(controls).into_any_element()
+    gpui::Corners {
+        top_left: start,
+        top_right: end,
+        bottom_left: end,
+        bottom_right: start,
     }
+}
+
+fn sidebar_corners(frame: &StudioFrame, rtl: bool) -> gpui::Corners<gpui::Pixels> {
+    let reach =
+        (frame.radius * CHASSIS_RADIUS_SCALE).min(mandara_config::studio::ranges::RADIUS.max);
+    if frame.design == FrameDesign::Console {
+        return alternating_corners(reach, frame.nav_radius, rtl);
+    }
+    let mut corners = gpui::Corners::all(px(frame.nav_radius));
+    if rtl {
+        corners.bottom_left = px(reach);
+    } else {
+        corners.bottom_right = px(reach);
+    }
+    corners
 }
 
 /// The default keeps the original window; selected Looks own the entire frame.
@@ -226,6 +114,28 @@ pub(super) fn window(
     content: AnyElement,
     title: Option<AnyElement>,
     p: &MandaraPalette,
+) -> Div {
+    window_with(frame, nav, content, title, p, None)
+}
+
+pub(super) fn preview(
+    frame: &StudioFrame,
+    nav: AnyElement,
+    content: AnyElement,
+    title: AnyElement,
+    p: &MandaraPalette,
+    ink: mandara_config::desktop::InkStyle,
+) -> Div {
+    window_with(Some(frame), nav, content, Some(title), p, Some(ink))
+}
+
+fn window_with(
+    frame: Option<&StudioFrame>,
+    nav: AnyElement,
+    content: AnyElement,
+    title: Option<AnyElement>,
+    p: &MandaraPalette,
+    ink: Option<mandara_config::desktop::InkStyle>,
 ) -> Div {
     let Some(f) = frame else {
         return div()
@@ -254,52 +164,73 @@ pub(super) fn window(
     } else {
         f.radius
     };
-    let mut surface = div()
+    let surface = div()
         .flex_1()
         .min_h(px(0.0))
         .min_w(px(0.0))
         .row()
-        .flex_col()
-        .clipped_card_surface_as(
-            family,
-            CardStyle::Tonal,
-            radius,
-            if f.design == FrameDesign::Glass {
-                Fill(
-                    p.surface_base.with_alpha(f.opacity),
-                    Some(p.surface_container_low.with_alpha(f.opacity)),
-                )
-            } else {
-                Fill(p.surface_base.with_alpha(f.opacity), None)
-            },
-            if f.design == FrameDesign::Glass {
-                mandara_core::material::glass_rim_width(
-                    p.specular_rim_light,
-                    p.specular_rim_shadow,
-                    f.border,
-                )
-            } else {
-                Vec::new()
-            },
-            p,
+        .flex_col();
+    let fill = if f.design == FrameDesign::Glass {
+        Fill(
+            p.surface_base.with_alpha(f.opacity),
+            Some(p.surface_container_low.with_alpha(f.opacity)),
         )
-        .border(px(f.border))
-        .border_color(
-            match f.design {
-                FrameDesign::Comic | FrameDesign::Terminal => p.on_surface,
-                FrameDesign::Chassis | FrameDesign::Console => p.primary,
-                _ => p.outline.with_alpha(ALPHA_35),
-            }
-            .hsla(),
+    } else {
+        Fill(p.surface_base.with_alpha(f.opacity), None)
+    };
+    let rim = if f.design == FrameDesign::Glass {
+        mandara_core::material::glass_rim_width(
+            p.specular_rim_light,
+            p.specular_rim_shadow,
+            f.border,
+        )
+    } else {
+        Vec::new()
+    };
+    let mut surface = if let Some(ink) = ink {
+        let mut surface = surface.clipped_card_geometry_as(family, radius, fill, rim, p);
+        if let Some(texture) = mandara_ui::plugins::panel_fx::ink_texture_as(ink.texture, p) {
+            surface = surface.relative().child(texture);
+        }
+        if ink.shadow > 0.0 {
+            surface = surface.shadow(mandara_ui::plugins::panel_fx::ink_shadow(
+                p, ink.shadow, 1.0,
+            ));
+        }
+        surface
+    } else {
+        surface.clipped_card_surface_as(family, CardStyle::Tonal, radius, fill, rim, p)
+    };
+    let outline = match f.design {
+        FrameDesign::Comic => p.on_surface,
+        FrameDesign::Chassis | FrameDesign::Console => p.primary.with_alpha(ALPHA_35),
+        _ => p.outline.with_alpha(ALPHA_35),
+    };
+    if let Some(corner) = shaped(family, radius) {
+        let ink = cut::Ink::solid(None, Some((outline, f.border)));
+        // The outline follows the chassis silhouette, outside its child mask.
+        surface = surface.p(px(f.border)).relative().child(
+            canvas(
+                |_, _, _| {},
+                move |bounds, _, window, _| {
+                    window.with_outer_content_mask(|window| {
+                        cut::paint_shape(window, bounds, corner, ink)
+                    });
+                },
+            )
+            .absolute()
+            .inset_0(),
         );
+    } else {
+        surface = surface.border(px(f.border)).border_color(outline.hsla());
+    }
     if f.design == FrameDesign::Editorial {
         surface = surface
-            .with_corners(gpui::Corners {
-                top_left: px(f.radius),
-                top_right: px(PAPER_SMALL_CORNER),
-                bottom_left: px(PAPER_SMALL_CORNER),
-                bottom_right: px(f.radius),
-            })
+            .with_corners(alternating_corners(
+                f.radius,
+                PAPER_SMALL_CORNER,
+                mandara_ui::bidi::rtl(),
+            ))
             .clip_rounded();
     }
     let body = div().flex_1().min_h(px(0.0)).row();
@@ -325,6 +256,25 @@ fn nav_at_end(frame: &StudioFrame) -> bool {
 mod tests {
     use super::*;
     use mandara_config::studio::StudioLook;
+
+    #[test]
+    fn asymmetric_frames_and_navigation_mirror_without_changing_their_size() {
+        for look in [StudioLook::Arcade, StudioLook::Telemetry] {
+            let frame = look.appearance().frame;
+            let ltr = sidebar_corners(&frame, false);
+            let rtl = sidebar_corners(&frame, true);
+            assert_eq!(ltr.top_left, rtl.top_right);
+            assert_eq!(ltr.top_right, rtl.top_left);
+            assert_eq!(ltr.bottom_left, rtl.bottom_right);
+            assert_eq!(ltr.bottom_right, rtl.bottom_left);
+        }
+        let radius = StudioLook::Paper.appearance().frame.radius;
+        let ltr = alternating_corners(radius, PAPER_SMALL_CORNER, false);
+        let rtl = alternating_corners(radius, PAPER_SMALL_CORNER, true);
+        assert_eq!(ltr.top_left, rtl.top_right);
+        assert_eq!(ltr.bottom_right, rtl.bottom_left);
+        assert_ne!(ltr.top_left, ltr.top_right);
+    }
 
     #[test]
     fn frame_geometry_is_independent_of_desktop_looks_and_uses_the_rail() {

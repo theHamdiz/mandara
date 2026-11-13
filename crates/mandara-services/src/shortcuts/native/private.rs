@@ -343,6 +343,7 @@ mod tests {
         std::fs::write(&file, source).unwrap();
         let rows = mandara_config::keybinds::parse(Target::Hyprland, &file, source).unwrap();
         let session = super::super::Session {
+            primary_mod_is_alt: false,
             target: Target::Hyprland,
             root: file.clone(),
             scan: mandara_config::keybinds::Scan {

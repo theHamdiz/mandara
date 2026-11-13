@@ -300,4 +300,21 @@ mod tests {
         let metrics = PageMetrics::with_frame(1200.0, Some(&frame));
         assert_eq!(metrics.column_w, 1200.0 - 2.0 * (frame.inset + frame.border + frame.sidebar_inset) - frame.sidebar_width - 2.0 * metrics.gutter);
     }
+
+    #[test]
+    fn every_studio_frame_keeps_grids_inside_narrow_and_wide_windows() {
+        for look in mandara_config::studio::StudioLook::ALL {
+            let frame = look.appearance().frame;
+            for width in [600.0, 780.0, 1200.0, 2560.0] {
+                let page = PageMetrics::with_frame(width, Some(&frame));
+                let occupied = 2.0 * (frame.inset + frame.border + frame.sidebar_inset + page.gutter)
+                    + super::super::studio_frame::sidebar_width(Some(&frame), page.rail)
+                    + page.column_w;
+                assert!(occupied <= width, "{look:?} at {width}: {occupied}");
+                for spec in [THEME_GRID, ICON_TILE_GRID, CHIP_GRID] {
+                    assert!(fit(page.column_w, spec).balanced(9).width <= page.column_w);
+                }
+            }
+        }
+    }
 }

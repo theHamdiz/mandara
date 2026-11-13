@@ -620,6 +620,7 @@ pub fn required_plugin(path: &str) -> Option<&'static str> {
 /// owns the bottom edge (`ShellConfig::launcher_hover_enabled`).
 pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     if setting.path.starts_with("/studio/") && cfg.studio.is_none() { return Some(tk("Choose a Studio Look in Themes → Studio first.")); }
+    if let Some(reason) = studio_settings::locked(setting.path) { return Some(reason); }
     if let Some(reason) = platform_settings::locked(setting.path) { return Some(reason); }
     if let Some(reason) = integration_settings::locked(setting.path, cfg) { return Some(reason); }
     if let Some(reason) = system_settings::native_locked(setting.path, running_compositor()) { return Some(reason); }
@@ -646,6 +647,9 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         path => side_bar_settings::locked(path, cfg).or_else(|| surface_settings::locked(path, cfg)),
     }
 }
+
+/// Negotiated window decorations can change; prime this before drawing controls.
+pub(crate) fn set_client_controls(client: bool) { studio_settings::set_client_controls(client); }
 
 /// A line shown in place of `setting`'s help while only part of it applies
 /// under `cfg` (`tk` text): the slider handle while the thick sliders' design

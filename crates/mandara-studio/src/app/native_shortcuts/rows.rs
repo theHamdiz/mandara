@@ -17,7 +17,15 @@ pub(super) struct Row {
     search: String,
 }
 
-fn chords(target: Target, row: &Binding) -> Vec<String> {
+fn chords(target: Target, row: &Binding, primary_mod_is_alt: bool) -> Vec<String> {
+    if target == Target::Aqueous {
+        return row
+            .fields
+            .iter()
+            .filter(|field| field.label == "Shortcut")
+            .filter_map(|field| keybinds::aqueous_chord(&field.value, primary_mod_is_alt))
+            .collect();
+    }
     if let Some(chord) = &row.chord {
         return vec![chord.clone()];
     }
@@ -94,7 +102,7 @@ pub(super) fn build(session: &Session, bindings: &[Keybind]) -> Vec<Row> {
                         chord,
                         action,
                         location,
-                        clashes: chords(session.target, row)
+                        clashes: chords(session.target, row, session.primary_mod_is_alt)
                             .iter()
                             .any(|chord| own.contains(chord)),
                         search,
@@ -124,6 +132,7 @@ mod tests {
         let file = dir.path().join("wm.toml");
         std::fs::write(&file, "[keybinds]\ncycle_focus=['Super+Tab','Alt+Tab']\n[keybinds.custom]\n'Super+Q'='close'\n").unwrap();
         let session = Session {
+            primary_mod_is_alt: false,
             target: Target::Aqueous,
             root: file.clone(),
             scan: keybinds::scan_from(Target::Aqueous, &file),
@@ -141,5 +150,16 @@ mod tests {
         assert_eq!(filter(&rows, "WM.toml CYCLE"), [0]);
         assert_eq!(filter(&rows, "close"), [1]);
         assert_eq!(filter(&rows, ""), [0, 1]);
+        let mut session = session;
+        session.primary_mod_is_alt = true;
+        let rows = build(
+            &session,
+            &[Keybind::new(
+                &["alt"],
+                "Tab",
+                BindAction::Spawn("true".into()),
+            )],
+        );
+        assert!(rows[0].clashes);
     }
 }

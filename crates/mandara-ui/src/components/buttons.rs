@@ -58,12 +58,17 @@ pub struct Ink {
 /// Corner radius of a button `h` tall in `design`, `press` of the way to
 /// held (`0` resting, `1` held, a little past while springing).
 pub fn radius(design: ButtonDesign, h: f32, press: f32) -> f32 {
+    radius_at_scale(design, h, press, crate::style::radius_scale())
+}
+
+/// The same geometry for an explicit Look, independent of the active window.
+pub fn radius_at_scale(design: ButtonDesign, h: f32, press: f32, scale: f32) -> f32 {
     let full = h / 2.0;
     match design {
         ButtonDesign::Classic | ButtonDesign::Elevated => full,
-        ButtonDesign::Square => crate::style::radius(SQUARE_RADIUS_PX).min(full),
+        ButtonDesign::Square => (SQUARE_RADIUS_PX * scale.max(0.0)).min(full),
         ButtonDesign::Expressive => {
-            let held = crate::style::radius(PRESSED_RADIUS_PX).min(full);
+            let held = (PRESSED_RADIUS_PX * scale.max(0.0)).min(full);
             (full + (held - full) * press).clamp(0.0, full)
         }
         ButtonDesign::Cut => 0.0,
@@ -173,6 +178,9 @@ mod tests {
                     let (r, ir) = (radius(design, h, press), icon_radius(design, h, press));
                     assert!((0.0..=h / 2.0).contains(&r), "{design:?} {h} {press}: {r}");
                     assert!((0.0..=h / 2.0).contains(&ir), "{design:?} icon {h} {press}: {ir}");
+                    for scale in [0.0, 0.5, 1.0, 2.0] {
+                        assert!((0.0..=h / 2.0).contains(&radius_at_scale(design, h, press, scale)), "{design:?} {scale}");
+                    }
                 }
                 assert!(cut(h) > 0.0 && cut(h) <= super::super::cut::clamp_cut(cut(h), h, h) + 1e-4, "{h}: the cut fits");
             }

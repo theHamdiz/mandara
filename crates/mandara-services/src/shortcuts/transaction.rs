@@ -232,6 +232,7 @@ mod tests {
         fs::write(&colors, "").unwrap();
         symlink(&file, &alias).unwrap();
         let mut session = Session {
+            primary_mod_is_alt: false,
             target: Target::Hyprland,
             root: root.path().join("custom.lua"),
             scan: Default::default(),

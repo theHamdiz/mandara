@@ -9,7 +9,9 @@ pub(super) struct KWin;
 
 impl ShortcutFormat for KWin {
     fn validate_edit(&self, _before: &Binding, after: &Binding) -> Result<()> {
-        for field in &after.fields { crate::keybinds::qt_sequence(&field.value)?; }
+        for field in &after.fields {
+            crate::keybinds::qt_sequence(&field.value)?;
+        }
         Ok(())
     }
     fn parse(&self, source: &str) -> Result<Vec<Binding>> {
