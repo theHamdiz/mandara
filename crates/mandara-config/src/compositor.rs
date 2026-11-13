@@ -672,7 +672,7 @@ fn capitalize(s: &str) -> String {
     c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default()
 }
 
-fn normalize_mod(m: &str) -> Option<&'static str> {
+pub(crate) fn normalize_mod(m: &str) -> Option<&'static str> {
     match m.trim().to_ascii_lowercase().as_str() {
         "super" | "mod4" | "logo" | "mod" | "win" => Some("super"),
         "ctrl" | "control" => Some("ctrl"),
@@ -2373,6 +2373,26 @@ pub(crate) fn included_files(target: Target, file: &Path, text: &str) -> Vec<Pat
         .collect()
 }
 
+/// Shortcut scans fail visibly rather than retaining an unbounded include glob.
+pub(crate) fn included_files_bounded(target: Target, file: &Path, text: &str, limit: usize) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for raw in includes_in(target, text) {
+        let words = if target == Target::Sway { sway_include_words(&raw) } else { vec![raw] };
+        for word in words {
+            let path = resolve_include(file, &expand_env(&word));
+            // Linux's pathname limit also bounds matching work on a hand-edited glob.
+            anyhow::ensure!(path.as_os_str().len() <= 4096, "include path is too long");
+            let remaining = limit.saturating_sub(files.len());
+            let matches = if target == Target::Sway && has_glob(&path.to_string_lossy()) {
+                glob_path_bounded(&path, remaining)?
+            } else { vec![path] };
+            anyhow::ensure!(matches.len() <= remaining, "too many included shortcut files");
+            files.extend(matches);
+        }
+    }
+    Ok(files)
+}
+
 /// Sway include line → files, as sway 1.12 reads it: the rest of the line
 /// with an argument's quotes removed, then split into shell words
 /// (`wordexp`): `include a.conf b.conf` and `include "a.conf b.conf"` both
@@ -2517,6 +2537,10 @@ fn unescape_glob(pattern: &str) -> String {
 /// The existing paths an absolute glob names (`*`, `?` in any component),
 /// sorted.
 fn glob_path(pattern: &Path) -> Vec<PathBuf> {
+    glob_path_bounded(pattern, usize::MAX).unwrap_or_default()
+}
+
+fn glob_path_bounded(pattern: &Path, limit: usize) -> Result<Vec<PathBuf>> {
     let mut found = vec![PathBuf::new()];
     for part in pattern.components() {
         let name = part.as_os_str().to_string_lossy();
@@ -2528,14 +2552,14 @@ fn glob_path(pattern: &Path) -> Vec<PathBuf> {
         }
         found = found
             .iter()
-            .flat_map(|dir| {
-                std::fs::read_dir(dir).into_iter().flatten().flatten().filter(|e| glob_match(&name, &e.file_name().to_string_lossy())).map(|e| e.path())
-            })
+            .flat_map(|dir| std::fs::read_dir(dir).into_iter().flatten().flatten().filter(|e| glob_match(&name, &e.file_name().to_string_lossy())).map(|e| e.path()))
+            .take(limit.saturating_add(1))
             .collect();
+        anyhow::ensure!(found.len() <= limit, "too many included shortcut files");
     }
     found.retain(|p| p.exists());
     found.sort();
-    found
+    Ok(found)
 }
 
 /// Shell glob match of one path component (`*` and `?`; hidden files only

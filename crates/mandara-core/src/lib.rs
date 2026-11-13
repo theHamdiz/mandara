@@ -26,7 +26,7 @@ pub use material::{ToGpui, glass_fill, glass_rim, glass_rim_width, grain_overlay
 pub use motion::FrameClock;
 pub use outputs::{DisplayKey, OutputGeometry, output_uuid, pair_displays, query_outputs};
 pub use spring::{SpringConfig, SpringValue, Springable};
-pub use theme::{GlobalTheme, frame_palette, init_theme, theme_entity};
+pub use theme::{GlobalTheme, frame_palette, init_theme, set_presentation_theme, theme_entity};
 
 /// The running build's identity, set once by the binary (from
 /// `mandara-version`) so UI crates can show it without depending on a

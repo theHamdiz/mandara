@@ -9,6 +9,11 @@ use gpui::{App, FontWeight};
 use mandara_config::ShellConfig;
 use mandara_config::desktop::{ButtonDesign, CardStyle, ChipDesign, InputDesign, ProgressDesign, SliderDesign, SurfaceCorners, ToggleDesign};
 use mandara_config::surfaces;
+mod source;
+use source::{Desktop, Studio, StyleSource};
+
+struct ActiveStyleSource(fn(&ShellConfig));
+impl gpui::Global for ActiveStyleSource {}
 
 /// Corner-radius multiplier bounds.
 const MIN_RADIUS_SCALE: f32 = 0.0;
@@ -217,22 +222,35 @@ pub fn body_weight() -> FontWeight {
 
 /// Copies the style settings of `cfg` into the globals.
 pub fn apply(cfg: &ShellConfig) {
-    let scale = if cfg.style.radius_scale.is_finite() { cfg.style.radius_scale.clamp(MIN_RADIUS_SCALE, MAX_RADIUS_SCALE) } else { 1.0 };
+    apply_from::<Desktop>(cfg);
+}
+
+static INDEPENDENT_STUDIO: AtomicBool = AtomicBool::new(false);
+
+/// Selected Studio Looks provide their own card measurements.
+pub fn studio_card_metrics() -> Option<(f32, f32)> {
+    INDEPENDENT_STUDIO.load(Ordering::Relaxed).then(|| (card_radius(), card_padding()))
+}
+
+fn apply_from<S: StyleSource>(cfg: &ShellConfig) {
+    INDEPENDENT_STUDIO.store(S::independent_studio(cfg), Ordering::Relaxed);
+    let st = S::style(cfg);
+    let motion = S::motion(cfg);
+    let (card_radius, card_padding) = S::cards(cfg);
+    let scale = if st.radius_scale.is_finite() { st.radius_scale.clamp(MIN_RADIUS_SCALE, MAX_RADIUS_SCALE) } else { 1.0 };
     RADIUS_SCALE.store(scale.to_bits(), Ordering::Relaxed);
-    BAR_ICON_SCALE.store(cfg.bar.icon_scale().to_bits(), Ordering::Relaxed);
-    let look = &cfg.sidebar.look;
-    CARD_RADIUS.store(surfaces::ranges::CARD_RADIUS.clamp(look.card_radius, surfaces::defaults::CARD_RADIUS_PX).to_bits(), Ordering::Relaxed);
-    CARD_PADDING.store(surfaces::ranges::CARD_PADDING.clamp(look.card_padding, surfaces::defaults::CARD_PADDING_PX).to_bits(), Ordering::Relaxed);
-    SHADOWS.store(cfg.style.shadows, Ordering::Relaxed);
-    BORDERS.store(cfg.style.borders, Ordering::Relaxed);
-    INK_OUTLINE.store(cfg.style.ink.outline().to_bits(), Ordering::Relaxed);
-    INK_SHADOW.store(cfg.style.ink.shadow().to_bits(), Ordering::Relaxed);
-    INK_BUBBLES.store(cfg.style.ink.bubbles, Ordering::Relaxed);
-    INK_TEXTURE.store(mandara_config::desktop::SurfaceTexture::ALL.iter().position(|t| *t == cfg.style.ink.texture).unwrap_or(0) as u8, Ordering::Relaxed);
-    SLIDER_HANDLE.store(cfg.style.slider_handle == mandara_config::desktop::SliderHandle::Line, Ordering::Relaxed);
-    let design = SliderDesign::ALL.iter().position(|d| *d == cfg.style.slider_design).unwrap_or(0);
+    BAR_ICON_SCALE.store(S::icon_scale(cfg).to_bits(), Ordering::Relaxed);
+    CARD_RADIUS.store(surfaces::ranges::CARD_RADIUS.clamp(card_radius, surfaces::defaults::CARD_RADIUS_PX).to_bits(), Ordering::Relaxed);
+    CARD_PADDING.store(surfaces::ranges::CARD_PADDING.clamp(card_padding, surfaces::defaults::CARD_PADDING_PX).to_bits(), Ordering::Relaxed);
+    SHADOWS.store(st.shadows, Ordering::Relaxed);
+    BORDERS.store(st.borders, Ordering::Relaxed);
+    INK_OUTLINE.store(st.ink.outline().to_bits(), Ordering::Relaxed);
+    INK_SHADOW.store(st.ink.shadow().to_bits(), Ordering::Relaxed);
+    INK_BUBBLES.store(st.ink.bubbles, Ordering::Relaxed);
+    INK_TEXTURE.store(mandara_config::desktop::SurfaceTexture::ALL.iter().position(|t| *t == st.ink.texture).unwrap_or(0) as u8, Ordering::Relaxed);
+    SLIDER_HANDLE.store(st.slider_handle == mandara_config::desktop::SliderHandle::Line, Ordering::Relaxed);
+    let design = SliderDesign::ALL.iter().position(|d| *d == st.slider_design).unwrap_or(0);
     SLIDER_DESIGN.store(design as u8, Ordering::Relaxed);
-    let st = &cfg.style;
     store_design(&BUTTON_DESIGN, &ButtonDesign::ALL, &st.button_design);
     store_design(&TOGGLE_DESIGN, &ToggleDesign::ALL, &st.toggle_design);
     store_design(&INPUT_DESIGN, &InputDesign::ALL, &st.input_design);
@@ -240,10 +258,10 @@ pub fn apply(cfg: &ShellConfig) {
     store_design(&PROGRESS_DESIGN, &ProgressDesign::ALL, &st.progress_design);
     store_design(&SURFACE_CORNERS, &SurfaceCorners::ALL, &st.surface_corners);
     store_design(&CARD_STYLE, &CardStyle::ALL, &st.card_style);
-    WEIGHT.store(u32::from(cfg.typography.weight.clamp(MIN_WEIGHT, MAX_WEIGHT)), Ordering::Relaxed);
-    mandara_core::spring::set_time_scale(cfg.motion.speed);
-    mandara_core::spring::set_motion_profile(motion_profile(cfg));
-    mandara_core::choreo::set_choreography(choreography(&cfg.motion));
+    WEIGHT.store(u32::from(S::typography(cfg).weight.clamp(MIN_WEIGHT, MAX_WEIGHT)), Ordering::Relaxed);
+    mandara_core::spring::set_time_scale(motion.speed);
+    mandara_core::spring::set_motion_profile(motion_profile_of(&motion));
+    mandara_core::choreo::set_choreography(choreography(&motion));
     crate::widgets::clock::set_locale_override(&cfg.datetime.time_locale);
 }
 
@@ -280,6 +298,7 @@ pub fn motion_profile_of(m: &mandara_config::MotionConfig) -> mandara_core::spri
 /// Apply a portal preference to runtime state, including cached and open views.
 pub fn system_motion_changed(reduced: bool, cx: &mut gpui::App) {
     mandara_core::spring::set_system_reduced_motion(reduced);
+    let apply = cx.try_global::<ActiveStyleSource>().map_or(apply as fn(&ShellConfig), |source| source.0);
     apply(crate::state::config(cx).read(cx).get());
     crate::state::config(cx).update(cx, |_, cx| cx.notify());
     crate::state::sync_theme_from_config(cx);
@@ -337,17 +356,32 @@ impl LookKey {
 /// Applies the style now and on every config change (shell process), and
 /// redraws every window (cached views included) when the look changed.
 pub fn init(cx: &mut App) {
+    init_from::<Desktop>(cx);
+}
+
+/// Studio selects its own component and motion recipe without changing shell config.
+pub fn init_studio(cx: &mut App) {
+    init_from::<Studio>(cx);
+}
+
+/// Studio's own motion settings with shared accessibility preferences applied.
+pub fn studio_motion(config: &ShellConfig) -> mandara_config::MotionConfig {
+    Studio::motion(config)
+}
+
+fn init_from<S: StyleSource + 'static>(cx: &mut App) {
     let store = crate::state::config(cx);
-    apply(&store.read(cx).snapshot());
-    let mut last = LookKey::of(&store.read(cx).snapshot());
+    cx.set_global(ActiveStyleSource(apply_from::<S>));
+    apply_from::<S>(&store.read(cx).snapshot());
+    let mut last = S::key(&store.read(cx).snapshot());
     cx.observe(&store, move |store, cx| {
         let cfg = store.read(cx).snapshot();
-        let next = LookKey::of(&cfg);
+        let next = S::key(&cfg);
         if next != last {
-            if next.appearance.icon_theme != last.appearance.icon_theme {
+            if S::icons_changed(&last, &next) {
                 crate::plugins::workspaces::clear_icon_cache();
             }
-            apply(&cfg);
+            apply_from::<S>(&cfg);
             last = next;
             cx.refresh_windows();
         }

@@ -14,6 +14,8 @@ pub mod tokens;
 pub mod ui_state;
 
 use gpui::{App, AppContext as _, Bounds, TitlebarOptions, WindowBounds, WindowHandle, WindowKind, WindowOptions, point, px, size};
+mod appearance;
+mod latest;
 
 pub use agent_catalog::settings_catalog as agent_settings_catalog;
 pub use app::StudioView;
@@ -306,6 +308,7 @@ fn window_options() -> WindowOptions {
         app_id: Some(mandara_core::STUDIO_APP_ID.to_string()),
         window_min_size: Some(size(px(MIN_W_PX), px(MIN_H_PX))),
         window_decorations: Some(gpui::WindowDecorations::Client),
+        window_background: gpui::WindowBackgroundAppearance::Transparent,
         // Full frame rate while unfocused too: the live previews (login
         // screen, springs) are often watched beside another window. Studio
         // only redraws while something animates, so idle cost is unchanged.
@@ -339,7 +342,8 @@ pub fn run(section: Option<&str>, cx: &mut App) {
     mandara_ui::state::init_language(cx);
     // Studio's own cards, corners and springs follow the Look & feel
     // settings live, like the shell's.
-    mandara_ui::style::init(cx);
+    mandara_ui::style::init_studio(cx);
+    appearance::init(cx);
     mandara_ui::style::follow_system_motion(cx);
     // Links Studio opens (plugin pages, docs) use the browser picked in
     // Applications, like the shell's.

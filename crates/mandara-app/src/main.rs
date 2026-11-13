@@ -773,14 +773,14 @@ fn run_studio(section: Option<String>) -> Result<()> {
     application().with_assets(MandaraAssets).run(move |cx: &mut App| {
         mandara_core::set_build_info(cx, build_info());
         let cfg = store.snapshot();
-        cx.set_global(Fonts::resolve(&cfg.typography, cx));
+        cx.set_global(Fonts::resolve(cfg.studio_typography(), cx));
         cx.set_global(build_registry());
         let (config, _shell) = mandara_ui::init_state(store, cx);
         mandara_ui::icon_theme::set_theme_override(cfg.appearance.icon_theme.clone());
-        let mut typography = cfg.typography.clone();
+        let mut typography = cfg.studio_typography().clone();
         cx.observe(&config, move |config, cx| {
             mandara_ui::icon_theme::set_theme_override(config.read(cx).get().appearance.icon_theme.clone());
-            let next = config.read(cx).get().typography.clone();
+            let next = config.read(cx).get().studio_typography().clone();
             if next != typography {
                 cx.set_global(Fonts::resolve(&next, cx));
                 typography = next;

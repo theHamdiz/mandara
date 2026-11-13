@@ -105,6 +105,9 @@ minijinja = { version = "3.1.0", default-features = false, features = ["builtins
 toml = { version = "1.2", default-features = false, features = ["std", "parse", "serde"] }
 # Format-preserving edits of a user's TOML config (Umbriel's include line).
 toml_edit = "0.25.18"
+roxmltree = "0.21.2"
+ron = { version = "0.12.3", default-features = false }
+full_moon = { version = "3.0.0", default-features = false, features = ["lua54"] }
 # The RustCrypto 0.10 generation (digest 0.10) that GPUI's oo7 keyring client
 # and cranelift / wasmtime-environ link: sha2 0.11 would add a second
 # digest / block-buffer / sha2 stack.

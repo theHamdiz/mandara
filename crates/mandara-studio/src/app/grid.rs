@@ -34,8 +34,14 @@ pub struct PageMetrics {
 
 impl PageMetrics {
     pub fn for_width(window_w: f32) -> Self {
+        Self::with_frame(window_w, None)
+    }
+
+    pub fn with_frame(window_w: f32, frame: Option<&mandara_config::studio::StudioFrame>) -> Self {
+        let inset = frame.map_or(0.0, |f| f.inset * 2.0 + f.border * 2.0);
+        let window_w = (window_w - inset).max(0.0);
         let rail = window_w < RAIL_BELOW_PX;
-        let content_w = (window_w - if rail { RAIL_W_PX } else { NAV_W_PX }).max(0.0);
+        let content_w = (window_w - super::studio_frame::sidebar_width(frame, rail) + frame.map_or(0.0, |f| f.sidebar_inset * 2.0)).max(0.0);
         let gutter = if content_w < GUTTER_SMALL_BELOW_PX {
             GUTTER_SMALL_PX
         } else if content_w < GUTTER_MEDIUM_BELOW_PX {

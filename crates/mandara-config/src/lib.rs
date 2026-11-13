@@ -39,6 +39,8 @@ pub mod side_edges;
 pub mod sidebar;
 pub mod stash;
 pub mod store;
+pub mod studio;
+pub mod keybinds;
 pub mod surfaces;
 pub mod upgrade;
 pub mod user_looks;

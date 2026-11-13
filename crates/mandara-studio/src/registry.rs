@@ -26,6 +26,7 @@ pub mod recorder_settings;
 mod tuning_settings;
 mod integration_settings;
 mod platform_settings;
+pub(crate) mod studio_settings;
 pub mod workflow_settings;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -586,6 +587,7 @@ pub fn settings() -> &'static [Setting] {
         all.extend(tuning_settings::entries());
         all.extend(integration_settings::entries());
         all.extend(side_bar_settings::entries());
+        all.extend(studio_settings::entries(&all));
         all
     })
 }
@@ -617,6 +619,7 @@ pub fn required_plugin(path: &str) -> Option<&'static str> {
 /// place of its control), e.g. the launcher's hover edge while the dock
 /// owns the bottom edge (`ShellConfig::launcher_hover_enabled`).
 pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
+    if setting.path.starts_with("/studio/") && cfg.studio.is_none() { return Some(tk("Choose a Studio Look in Themes → Studio first.")); }
     if let Some(reason) = platform_settings::locked(setting.path) { return Some(reason); }
     if let Some(reason) = integration_settings::locked(setting.path, cfg) { return Some(reason); }
     if let Some(reason) = system_settings::native_locked(setting.path, running_compositor()) { return Some(reason); }
@@ -1231,7 +1234,7 @@ pub fn set(cfg: &ShellConfig, setting: &Setting, value: Value) -> Result<ShellCo
     if setting.path == WALLPAPER_SCHEME_PATH && !value.is_null() {
         use_wallpaper_colors(&mut root)?;
     }
-    if HEX_COLOR_PATHS.contains(&setting.path)
+    if (HEX_COLOR_PATHS.contains(&setting.path) || setting.path == "/studio/theme/color")
         && let Some(text) = value.as_str()
         && mandara_theme::Color::from_hex(text.trim()).is_err()
     {

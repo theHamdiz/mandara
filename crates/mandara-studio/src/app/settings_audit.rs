@@ -15,9 +15,10 @@ use serde_json::Value;
 
 use crate::registry::{self, Control, Section, Setting};
 
-/// Crates whose code reads settings (Studio itself only writes them).
+/// Crates whose code reads settings, including Studio’s independent appearance.
 const CONSUMER_CRATES: &[&str] = &[
     "mandara-ui/src",
+    "mandara-studio/src",
     "mandara-services/src",
     "mandara-app/src",
     "mandara-config/src",

@@ -211,18 +211,20 @@ impl StudioView {
         true
     }
 
-    fn nav_item(&self, section: Section, rail: bool, hits: Option<&HashMap<Section, usize>>, focused: bool, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    fn nav_item(&self, section: Section, rail: bool, frame: Option<&mandara_config::studio::StudioFrame>, hits: Option<&HashMap<Section, usize>>, focused: bool, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let item_h = frame.map_or(NAV_ITEM_H_PX, |f| f.nav_height);
+        let item_radius = frame.map_or(RADIUS_9_PX, |f| f.nav_radius);
         let active = section == self.section && self.query.is_empty();
         let rtl = mandara_i18n::language().is_rtl();
         let count = hits.map(|h| h.get(&section).copied().unwrap_or(0));
         div()
             .id(("nav", section as usize))
             .relative()
-            .h(px(NAV_ITEM_H_PX))
+            .h(px(item_h))
             .flex_none()
             .when(rail, |el| el.w(px(DIM_44_PX)).justify_center())
             .when(!rail, |el| el.px(px(SPACE_10_PX)))
-            .rounded(px(RADIUS_9_PX))
+            .rounded(px(item_radius))
             .row()
             .items_center()
             .gap(px(SPACE_10_PX))
@@ -235,7 +237,7 @@ impl StudioView {
                 el.child(
                     div()
                         .absolute()
-                        .top(px((NAV_ITEM_H_PX - FOCUS_BAR_H_PX) / 2.0))
+                        .top(px((item_h - FOCUS_BAR_H_PX) / 2.0))
                         .when(rtl, |el| el.right_0())
                         .when(!rtl, |el| el.left_0())
                         .w(px(FOCUS_BAR_W_PX))
@@ -293,21 +295,20 @@ impl StudioView {
 
     /// The whole sidebar: title (drags the window), search, Home and the
     /// groups.
-    pub(super) fn nav(&mut self, rail: bool, window: &mut Window, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn nav(&mut self, rail: bool, frame: Option<&mandara_config::studio::StudioFrame>, window: &mut Window, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let fonts = mandara_ui::fonts::fonts(cx);
         let rtl = mandara_i18n::language().is_rtl();
         let focused = self.nav_focus.is_focused(window);
         let searching = !self.query.is_empty();
         let hits = searching.then(|| search_hits(&self.query));
-        let mut nav = div()
+        let mut nav = super::studio_frame::sidebar(div(), frame, p)
             .id("studio-nav")
             .track_focus(&self.nav_focus)
             .track_scroll(&self.nav_scroll)
-            .w(px(if rail { RAIL_W_PX } else { NAV_W_PX }))
-            .h_full()
-            .flex_none()
+            .w(px(super::studio_frame::sidebar_width(frame, rail)))
+            .flex_1()
+            .min_h(px(0.0))
             .overflow_y_scroll()
-            .bg(p.surface_container_low.hsla())
             .px(px(SPACE_12_PX))
             .py(px(SPACE_14_PX))
             .row()
@@ -334,20 +335,20 @@ impl StudioView {
             // The rail moves the search into the page header; keep the
             // child count stable for scroll-into-view.
             .child(div().flex_none().when(!rail, |el| el.pb(px(SPACE_10_PX)).child(self.search.clone())))
-            .child(self.nav_item(Section::Home, rail, hits.as_ref(), focused, p, cx));
+            .child(self.nav_item(Section::Home, rail, frame, hits.as_ref(), focused, p, cx));
         for group in NavGroup::ALL {
             let open = searching || rail || !self.ui.is_collapsed(group);
             nav = nav.child(if rail { div().h(px(NAV_GROUP_GAP_PX)).flex_none().into_any_element() } else { self.nav_header(group, open, searching, p, cx) });
             for section in group.sections().iter().copied() {
                 // A collapsed group still shows the page you're on.
                 if open || section == self.section {
-                    nav = nav.child(self.nav_item(section, rail, hits.as_ref(), focused, p, cx));
+                    nav = nav.child(self.nav_item(section, rail, frame, hits.as_ref(), focused, p, cx));
                 }
             }
         }
         // The sidebar's overlay scroll bar (the wrapper takes its place).
         let bar = mandara_ui::scrollbar::keyed_state("studio-nav");
-        mandara_ui::scrollbar::with_scrollbar(nav, &self.nav_scroll, &bar, p).h_full().flex_none().into_any_element()
+        mandara_ui::scrollbar::with_scrollbar(nav, &self.nav_scroll, &bar, p).h_full().flex_none().row().flex_col().into_any_element()
     }
 
     // ── Home ────────────────────────────────────────────────────────────
