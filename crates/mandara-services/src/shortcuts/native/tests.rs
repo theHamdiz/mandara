@@ -19,7 +19,7 @@ fn native_checkers_validate_shortcuts_without_running_configuration_hooks() {
         Target::Umbriel => ("config.toml", format!("[general]\nautostart=[\"{touch}\"]\n[keybinds]\n\"Super+Q\"=\"window-close\"\n"), "[keybinds]\n\"Super+Q\"=\"this-action-does-not-exist\"\n".into()),
         Target::Sway => ("config", format!("exec {touch}\nbindsym --locked\n{{\nMod4+q kill\n}}\n"), "bindsym Mod4+ThisKeyDoesNotExist kill\n".into()),
         Target::River => ("init", format!("{touch}\nriverctl map normal Super Q close\n"), "riverctl map normal Super ThisKeyDoesNotExist close\n".into()),
-        Target::Labwc => ("rc.xml", format!("<labwc_config><keyboard><keybind key=\"W-q\"><action name=\"Execute\"><command>{touch}</command></action></keybind></keyboard></labwc_config>"), "<labwc_config><keyboard><keybind key=\"W-ThisKeyDoesNotExist\"><action name=\"Close\"/></keybind></keyboard></labwc_config>".into()),
+        Target::Labwc => ("rc.xml", format!("<labwc_config><keyboard><keybind key=\"W-q\"><action name=\"Execute\"><command>{touch}</command></action><keybind key=\"W-ThisKeyDoesNotExist\"><action name=\"Close\"/></keybind><action name=\"Raise\"/></keybind></keyboard></labwc_config>"), "<labwc_config><keyboard><keybind key=\"W-ThisKeyDoesNotExist\"><action name=\"Close\"/></keybind></keyboard></labwc_config>".into()),
         _ => panic!("this compositor uses its typed settings parser or live shortcut service"),
     };
     let file = directory.path().join(name);
@@ -56,7 +56,16 @@ fn native_checkers_validate_shortcuts_without_running_configuration_hooks() {
                 private::hyprland(&session, &file, &rows[0])
             }
             Target::River => private::river(&rows[0]),
-            Target::Labwc => private::labwc(source),
+            Target::Labwc => {
+                ensure!(rows.len() == 1, "nested Labwc keybinds must be ignored");
+                if source == valid {
+                    ensure!(
+                        rows[0].fields.iter().all(|field| field.value != "Close"),
+                        "nested Labwc actions must not become parent fields"
+                    );
+                }
+                private::labwc(source)
+            }
             _ => {
                 let report = doctor::check_with(target, &file, &CheckEnv::default());
                 ensure!(

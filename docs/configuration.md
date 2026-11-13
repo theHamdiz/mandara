@@ -79,6 +79,8 @@ Niri's `NIRI_CONFIG`, Sway's reported active file and labwc's merged config
 directories. Read-only sources remain visible with an explanation. KWin
 conflicts include alternative shortcuts, punctuation and the first key of a
 multi-key sequence. Sway includes share their variables and binding modes.
+Labwc lists direct keyboard bindings; unsupported nested key chains stay
+untouched and do not become editable shortcuts.
 Niri's `Mod` follows the merged input settings and its native nested-session
 behaviour; boolean options retain Niri's KDL v1 syntax.
 For River, this editor may change selected literal `riverctl map` fields

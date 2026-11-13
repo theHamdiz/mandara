@@ -44,21 +44,13 @@ impl ShortcutFormat for Labwc {
         };
         let doc = roxmltree::Document::parse_with_options(source, options)?;
         let mut result = Vec::new();
-        for node in doc.descendants().filter(|n| {
-            n.has_tag_name("keybind") && n.ancestors().any(|a| a.has_tag_name("keyboard"))
-        }) {
-            // Chained keybinds retain their parent as an explicit scope.
-            let mut scope = String::from("keyboard");
-            for parent in node
-                .ancestors()
-                .skip(1)
-                .filter(|p| p.has_tag_name("keybind"))
-            {
-                if let Some(key) = key(parent) {
-                    scope.push('/');
-                    scope.push_str(&key);
-                }
-            }
+        for node in doc
+            .root_element()
+            .children()
+            .filter(|node| node.has_tag_name("keyboard"))
+            .flat_map(|keyboard| keyboard.children())
+            .filter(|node| node.has_tag_name("keybind"))
+        {
             let mut fields = Vec::new();
             for attribute in node.attributes() {
                 let label = if attribute.name() == "key" {
@@ -76,11 +68,7 @@ impl ShortcutFormat for Labwc {
                     .named(attribute.name()),
                 );
             }
-            for value in node.descendants().skip(1).filter(|n| {
-                n.is_element()
-                    && !n.has_tag_name("keybind")
-                    && n.ancestors().skip(1).find(|p| p.has_tag_name("keybind")) == Some(node)
-            }) {
+            for value in binding_values(node) {
                 for attribute in value.attributes() {
                     let label = if value.has_tag_name("action") && attribute.name() == "name" {
                         tk("Action")
@@ -133,7 +121,7 @@ impl ShortcutFormat for Labwc {
                 .map(|field| xml_chord(&field.value));
             result.push(Binding {
                 line: line(source, node.range().start),
-                scope,
+                scope: "keyboard".into(),
                 chord: combo.as_deref().and_then(normalize),
                 fields,
                 read_only: None,
@@ -143,21 +131,29 @@ impl ShortcutFormat for Labwc {
     }
 }
 
-fn key<'a, 'input>(node: roxmltree::Node<'a, 'input>) -> Option<std::borrow::Cow<'a, str>> {
-    if let Some(child) = node
-        .children()
-        .rev()
-        .find(|child| child.has_tag_name("key"))
-    {
-        return Some(std::borrow::Cow::Owned(
-            child
-                .children()
-                .filter(|child| child.is_text())
-                .filter_map(|child| child.text())
-                .collect(),
-        ));
-    }
-    node.attribute("key").map(std::borrow::Cow::Borrowed)
+/// Labwc reads each keyboard binding once; nested keybind subtrees are ignored.
+fn binding_values<'a, 'input>(
+    node: roxmltree::Node<'a, 'input>,
+) -> impl Iterator<Item = roxmltree::Node<'a, 'input>> {
+    std::iter::successors(node.first_element_child(), move |value| {
+        if !value.has_tag_name("keybind")
+            && let Some(child) = value.first_element_child()
+        {
+            return Some(child);
+        }
+        let mut current = *value;
+        loop {
+            if let Some(sibling) = current.next_sibling_element() {
+                return Some(sibling);
+            }
+            let parent = current.parent_element()?;
+            if parent == node {
+                return None;
+            }
+            current = parent;
+        }
+    })
+    .filter(|value| !value.has_tag_name("keybind"))
 }
 
 fn leaf_span(source: &str, node: roxmltree::Node<'_, '_>) -> Result<std::ops::Range<usize>> {
@@ -260,18 +256,18 @@ mod tests {
     }
 
     #[test]
-    fn labwc_keeps_comments_namespaces_chains_and_unrelated_settings() {
+    fn labwc_keeps_comments_namespaces_and_unrecognized_chains_unchanged() {
         let text = "<labwc_config xmlns='urn:test'><theme><name>Mine</name></theme><!-- keep --><keyboard><keybind key='W-Return' onRelease='yes'><action name='Execute'><command>foot &amp; safe</command></action></keybind><keybind key='W-x'><keybind key='q'><action name='Close'/></keybind></keybind></keyboard></labwc_config>";
         let binds = Labwc.parse(text).unwrap();
-        assert_eq!(binds.len(), 3);
+        assert_eq!(binds.len(), 2);
         assert_eq!(binds[0].chord.as_deref(), Some("super+return"));
-        assert_eq!(binds[2].scope, "keyboard/W-x");
+        assert_eq!(binds[1].scope, "keyboard");
         assert_eq!(binds[1].fields.len(), 1);
         assert_eq!(binds[1].fields[0].label, "Shortcut");
         assert_eq!(binds[1].fields[0].value, "W-x");
         let renamed = crate::keybinds::patch(text, &binds[1], &["W-z".into()]).unwrap();
         assert_eq!(renamed, text.replace("key='W-x'", "key='W-z'"));
-        assert_eq!(Labwc.parse(&renamed).unwrap()[2].fields[0].value, "q");
+        assert!(renamed.contains("<keybind key='q'><action name='Close'/></keybind>"));
         let mut values: Vec<_> = binds[0].fields.iter().map(|f| f.value.clone()).collect();
         let at = binds[0]
             .fields
@@ -284,7 +280,55 @@ mod tests {
             next,
             text.replace("foot &amp; safe", "kitty --title=&apos;Studio&apos;")
         );
-        assert_eq!(Labwc.parse(&next).unwrap().len(), 3);
+        assert_eq!(Labwc.parse(&next).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn nested_keybinds_never_supply_rows_chords_or_parent_action_fields() {
+        let text = "<labwc_config><keyboard><keybind key='W-q'><action name='Execute'><command>foot</command></action><keybind key='W-w'><action name='Close'/></keybind><action name='Raise'/></keybind></keyboard></labwc_config>";
+        let bindings = Labwc.parse(text).unwrap();
+        assert_eq!(bindings.len(), 1);
+        let binding = &bindings[0];
+        assert_eq!(binding.chord.as_deref(), Some("super+q"));
+        assert_eq!(
+            binding
+                .fields
+                .iter()
+                .map(|field| field.value.as_str())
+                .collect::<Vec<_>>(),
+            ["W-q", "Execute", "foot", "Raise"]
+        );
+        let next = crate::keybinds::patch(
+            text,
+            binding,
+            &[
+                "W-e".into(),
+                "Execute".into(),
+                "kitty".into(),
+                "Raise".into(),
+            ],
+        )
+        .unwrap();
+        assert_eq!(next, text.replace("W-q", "W-e").replace("foot", "kitty"));
+    }
+
+    #[test]
+    fn deeply_nested_keybinds_retain_only_the_native_outer_binding() {
+        let mut source = String::from("<labwc_config><keyboard>");
+        let opening = format!("<keybind key='{}'>", "a".repeat(64));
+        for _ in 0..4096 {
+            source.push_str(&opening);
+        }
+        for _ in 0..4096 {
+            source.push_str("</keybind>");
+        }
+        source.push_str("</keyboard></labwc_config>");
+        assert!(source.len() < crate::keybinds::MAX_FILE_BYTES);
+        let bindings = Labwc.parse(&source).unwrap();
+        assert_eq!(bindings.len(), 1);
+        assert_eq!(bindings[0].scope, "keyboard");
+        assert_eq!(bindings[0].fields.len(), 1);
+        assert_eq!(bindings[0].fields[0].value.len(), 64);
     }
 
     #[test]

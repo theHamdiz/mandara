@@ -21,11 +21,11 @@ and edit compositor shortcuts with backups and Undo.
 ### Fixed
 
 - **Non-Latin shortcut keys no longer crash the editor.** Arabic and other Unicode keys can be inspected safely.
-- **Shortcut edits stay with the selected binding.** Nested key chains keep their own fields; oversized or ambiguous configurations explain why editing is unavailable. Hyprland checks use the variables active at each binding. Included files and continued blocks keep their shortcuts.
+- **Shortcut edits stay with the selected binding.** Labwc lists the bindings it recognizes and preserves unsupported nested chains. Oversized or ambiguous configurations explain why editing is unavailable. Hyprland checks use the variables active at each binding. Included files and continued blocks keep their shortcuts.
 
 ### Under the hood
 
-- Keep native shortcut checks and release manifests clean on current Rust and FreeBSD builds. Lock checks handle concurrent process launches reliably.
+- Keep native shortcut checks and release manifests clean on current Rust and FreeBSD builds. Lock and file-watch checks handle concurrent process launches and directory replacement reliably.
 
 ## 0.29.0 — 2026-11-13
 
