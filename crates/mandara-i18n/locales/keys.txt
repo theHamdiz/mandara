@@ -133,6 +133,7 @@ A collection needs a name
 A connection named "{name}" already exists
 A connection's IPv4 method, addresses, gateway and DNS
 A container using this much CPU (percent of one core) is highlighted
+A continued shortcut ends before its next line.
 A continuous wave has no gaps between bars.
 A control desk with end-side navigation, cyan highlights and squared controls.
 A crisp offset shadow in ink instead of the soft one; 0 keeps the soft shadows
@@ -606,6 +607,7 @@ An explicit filesystem grant
 An explicit shared-resource grant
 An explicit socket grant
 An image is already being prepared
+An include path is too long.
 An install finishing without a notification
 An interactive card — its own settings are with the cards.
 An island per group
@@ -4584,6 +4586,7 @@ Names in Arabic
 Narrated by {narrator}
 Nasa'i
 Native
+Native filesystem maintenance is available on Linux.
 Native permission details
 Native permission group
 Native views
@@ -7829,6 +7832,7 @@ The files were restored, but the compositor could not reload them: {error}
 The filesystem contains too many snapshots to display.
 The filesystem mount changed. Refresh before continuing.
 The filesystem mount moved. Refresh before continuing.
+The filesystem mount table is invalid or too large.
 The filesystem request is too large.
 The filesystem tool reported: {details}
 The filesystem tool returned invalid UTF-8 text.
@@ -8024,6 +8028,8 @@ The shell didn't answer: {error}
 The shell isn't running
 The shell restarts on the new version. Reopen Studio to use it here too.
 The shell's folder watcher waits {ms} ms for writes to settle
+The shortcut configuration contains an include cycle.
+The shortcut configuration includes too many files.
 The shortcut configuration is too large to edit.
 The shortcut has an incomplete escape.
 The shortcut is no longer available.

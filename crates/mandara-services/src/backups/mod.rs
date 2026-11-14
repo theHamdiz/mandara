@@ -14,6 +14,11 @@ pub use restic::Restic;
 
 use anyhow::Result;
 use std::sync::atomic::AtomicBool;
+use std::time::Duration;
+
+/// Explicit storage jobs may run overnight; their IPC callers share the same deadline.
+const OPERATION_SECONDS: u64 = 24 * 60 * 60;
+pub const OPERATION_TIMEOUT: Duration = Duration::from_secs(OPERATION_SECONDS);
 
 /// Storage implementations keep their protocol and process handling out of views.
 pub trait Backend {

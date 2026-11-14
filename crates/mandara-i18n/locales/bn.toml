@@ -10781,3 +10781,15 @@
 "Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "স্ন্যাপশটের নামে সর্বোচ্চ 128টি অক্ষর, সংখ্যা, হাইফেন বা আন্ডারস্কোর ব্যবহার করুন।"
 
 "The Flatpak permission data is invalid or too large." = "Flatpak অনুমতির তথ্য অবৈধ বা অত্যন্ত বড়।"
+
+"The shortcut configuration includes too many files." = "শর্টকাট কনফিগারেশনে অনেক বেশি ফাইল অন্তর্ভুক্ত আছে।"
+
+"An include path is too long." = "অন্তর্ভুক্ত ফাইলের একটি পথ খুব দীর্ঘ।"
+
+"The shortcut configuration contains an include cycle." = "শর্টকাট কনফিগারেশনে অন্তর্ভুক্তির একটি চক্র আছে।"
+
+"A continued shortcut ends before its next line." = "বহু লাইনের শর্টকাটটি তার পরের লাইনের আগেই শেষ হয়েছে।"
+
+"The filesystem mount table is invalid or too large." = "ফাইলসিস্টেম মাউন্ট তালিকা অবৈধ বা খুব বড়।"
+
+"Native filesystem maintenance is available on Linux." = "নেটিভ ফাইলসিস্টেম রক্ষণাবেক্ষণ Linux-এ উপলব্ধ।"

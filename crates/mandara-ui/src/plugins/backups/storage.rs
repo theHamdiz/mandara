@@ -41,10 +41,15 @@ impl Default for State {
     }
 }
 impl State {
+    fn empty_message(&self, data: &integration::Data<(), Vec<Mount>>) -> Option<&'static str> {
+        (self.opened && data.error.is_none()).then(|| if data.busy() { t("Reading filesystems…") } else { t("No supported filesystems found") })
+    }
     fn complete(&mut self, selected: &Mount, reply: Reply, inspect: bool) -> bool {
         self.preview = None;
-        if !self.opened || self.selected.as_ref() != Some(selected) { return false; }
+        if self.selected.as_ref() != Some(selected) { return false; }
         if inspect {
+            self.opened = true;
+            self.native.borrow_mut().error = None;
             self.elevated = Some((selected.clone(), reply));
             false
         } else {
@@ -67,6 +72,7 @@ impl State {
         self.mount_page = 0;
     }
     pub fn cancel_reads(&mut self) {
+        self.opened = false;
         self.cancel.store(true, Ordering::Release);
         self.mounts.borrow_mut().invalidate();
         self.native.borrow_mut().invalidate();
@@ -77,6 +83,7 @@ fn refresh(model: &Shared, cx: &mut App) {
     let mut state = model.borrow_mut();
     if state.active.is_some() { return; }
     state.storage.cancel_reads();
+    state.storage.opened = true;
     state.storage.cancel = Arc::new(AtomicBool::new(false));
     state.storage.elevated = None;
     state.storage.preview = None;
@@ -163,7 +170,7 @@ fn preview(request: &Request, model: &Shared, p: &MandaraPalette) -> AnyElement 
 pub(super) fn render(model: &Shared, maintenance: bool, p: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
     model.borrow().storage.mounts.borrow().views.track(window);
     model.borrow().storage.native.borrow().views.track(window);
-    if !model.borrow().storage.opened { model.borrow_mut().storage.opened = true; refresh(model, cx); }
+    if !model.borrow().storage.opened && model.borrow().active.is_none() { refresh(model, cx); }
     let state = model.borrow();
     let storage = &state.storage;
     let mut body = div().flex_1().min_h_0().row().flex_col().gap(px(tokens::MD));
@@ -257,7 +264,7 @@ pub(super) fn render(model: &Shared, maintenance: bool, p: &MandaraPalette, wind
                 shared.borrow_mut().storage.selected = Some(selected.clone()); refresh(&shared, cx); shared.borrow().views.notify(cx);
             })).child(div().text_size(px(text::LABEL)).text_color(p.on_surface_variant.hsla()).child(mount.target.display().to_string()));
         }
-        if count == 0 { list = list.child(if mounts.busy() { t("Reading filesystems…") } else { t("No supported filesystems found") }); }
+        if count == 0 && let Some(message) = storage.empty_message(&mounts) { list = list.child(message); }
         if count > ROWS_PER_PAGE {
             let previous = model.clone(); let next = model.clone();
             let mut pages = div().row().gap(px(tokens::SM));
@@ -300,5 +307,26 @@ mod tests {
         assert!(state.selected.is_none());
         assert!(state.notice.is_none());
         assert!(!state.native.borrow().busy());
+    }
+
+    #[test]
+    fn cancelled_reads_defer_reopening_and_successful_admin_reads_clear_old_errors() {
+        let mount = mount();
+        let mut state = State { opened: true, selected: Some(mount.clone()), ..State::default() };
+        state.native.borrow_mut().error = Some("permission denied".into());
+        state.cancel_reads();
+        assert!(!state.opened, "the completion redraw must retry a cancelled read");
+        assert!(state.empty_message(&state.mounts.borrow()).is_none());
+        assert!(!state.complete(&mount, Reply::default(), true));
+        assert!(state.opened, "a successful privileged reply needs no unprivileged reload");
+        assert!(state.elevated.is_some());
+        assert!(state.native.borrow().error.is_none());
+        assert_eq!(state.empty_message(&state.mounts.borrow()), Some(t("No supported filesystems found")));
+        state.mounts.borrow_mut().error = Some("unreadable mount table".into());
+        assert!(state.empty_message(&state.mounts.borrow()).is_none());
+        state.clear();
+        assert!(!state.complete(&mount, Reply::default(), true));
+        assert!(!state.opened);
+        assert!(state.elevated.is_none());
     }
 }

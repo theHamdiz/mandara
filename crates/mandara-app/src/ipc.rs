@@ -37,6 +37,16 @@ const BOOT_REPLY_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
 fn reply_timeout(args: &[String]) -> Duration {
     match (args.first().map(String::as_str), args.get(1).map(String::as_str)) {
+        (Some("backups"), Some(command)) if command != "cancel" => {
+            mandara_services::backups::OPERATION_TIMEOUT + CLIENT_READ_TIMEOUT
+        }
+        (Some("ai"), Some("chat")) if args.get(2).is_some_and(|command| command == "send") => {
+            mandara_services::local_ai::chat::CHAT_TIMEOUT + CLIENT_READ_TIMEOUT
+        }
+        (Some("ai"), Some("models")) => {
+            mandara_services::local_ai::chat::CHAT_TIMEOUT + CLIENT_READ_TIMEOUT
+        }
+        (Some("ai"), Some("load" | "unload")) => MODEL_REPLY_TIMEOUT,
         (Some("models"), Some("download")) => MODEL_REPLY_TIMEOUT,
         (Some("theme"), Some("apps" | "export")) => THEME_REPLY_TIMEOUT,
         (Some("display"), _) => DISPLAY_REPLY_TIMEOUT,
@@ -196,6 +206,23 @@ mod tests {
         );
         assert_eq!(reply_timeout(&words("boot apply splash rings")),BOOT_REPLY_TIMEOUT);
         assert_eq!(reply_timeout(&words("boot status")),REPLY_TIMEOUT);
+    }
+
+    #[test]
+    fn explicit_storage_and_chat_jobs_keep_their_backend_reply_budgets() {
+        let words = |value: &str| value.split_whitespace().map(String::from).collect::<Vec<_>>();
+        for command in ["backups start", "backups check", "backups init", "backups restore id /copies", "backups list", "backups storage confirm", "backups cleanup confirm"] {
+            assert_eq!(reply_timeout(&words(command)), mandara_services::backups::OPERATION_TIMEOUT + CLIENT_READ_TIMEOUT);
+        }
+        for command in ["ai chat send hello", "ai models"] {
+            assert_eq!(reply_timeout(&words(command)), mandara_services::local_ai::chat::CHAT_TIMEOUT + CLIENT_READ_TIMEOUT);
+        }
+        for command in ["ai load model", "ai unload all"] {
+            assert_eq!(reply_timeout(&words(command)), MODEL_REPLY_TIMEOUT);
+        }
+        for command in ["backups cancel", "ai chat stop", "ai chat new", "ai loaded", "ping"] {
+            assert_eq!(reply_timeout(&words(command)), REPLY_TIMEOUT);
+        }
     }
 
     #[test]

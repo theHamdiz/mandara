@@ -26,6 +26,9 @@ and rejects a file that changed since it was read. **Undo** restores the last
 change only while Mandara's published file is still current. The footer names
 the app that the saved Undo belongs to. A persistence error keeps its warning
 and Undo receipt rather than hiding a change that already reached disk.
+Before saving, Mandara checks the app's effective grants again. A changed
+installation or global override can lock a previously editable control; refresh
+the panel to review the new permissions.
 
 Personal overrides apply to the app across all its installations. Restart the
 app after editing or using Undo so the new sandbox is used. App permissions

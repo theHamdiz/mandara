@@ -93,11 +93,12 @@ pub(super) fn merge(before: &str, generated: &str, key: &str) -> Result<String> 
     Ok(result)
 }
 
-pub(super) fn apply(session: &Session, capability: &Capability, allowed: bool, cancel: &AtomicBool) -> Result<Undo> {
+pub(super) fn apply(session: &Session, capability: &Capability, allowed: bool, cancel: &AtomicBool, revalidate: impl FnOnce() -> Result<()>) -> Result<Undo> {
     let lock = WriteLock::new(&session.path)?;
     ensure!(lock.target() == session.target, "{}", t("The app override moved. Refresh before saving."));
     lock.check_stamp(session.stamp)?;
     ensure!(read(lock.target())? == session.before, "{}", t("The app permissions changed. Refresh before saving."));
+    revalidate()?;
     let scratch = tempfile::tempdir()?;
     let overrides = scratch.path().join("flatpak/overrides");
     std::fs::create_dir_all(&overrides)?;
@@ -133,6 +134,25 @@ fn finish(session: &Session, backup: Option<PathBuf>, result: Result<FileStamp>)
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_failed_effective_permission_check_cannot_publish_an_override() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("override");
+        let before = "[Context]\nshared=network;\n";
+        std::fs::write(&path, before).unwrap();
+        let permissions = crate::app_install::flatpak::parse_context(before).unwrap();
+        let session = Session { app: super::super::App { id: "org.example.Test".into(), name: "Test".into(), installation: "user".into() }, capabilities: super::super::model::capabilities(&permissions, &permissions), permissions, metadata: before.into(), path: path.clone(), target: path.clone(), before: before.into(), stamp: FileStamp::at(&path).unwrap() };
+        let capability = session.capabilities.iter().find(|row| row.value == "network").unwrap();
+        let called = std::cell::Cell::new(false);
+        let result = apply(&session, capability, false, &AtomicBool::new(false), || {
+            called.set(true);
+            anyhow::bail!("injected effective-grant change")
+        });
+        assert!(called.get());
+        assert!(result.is_err());
+        assert_eq!(std::fs::read_to_string(path).unwrap(), before);
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().filter_map(Result::ok).filter(|entry| entry.file_name().to_string_lossy().ends_with(".bak")).count(), 0);
+    }
     #[test]
     fn published_but_unsynced_permissions_keep_a_warning_and_a_working_undo() {
         let root = tempfile::tempdir().unwrap();

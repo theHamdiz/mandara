@@ -10780,3 +10780,15 @@
 "Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "برای نام نماگرفت حداکثر 128 حرف، رقم، خط تیره یا زیرخط استفاده کنید."
 
 "The Flatpak permission data is invalid or too large." = "داده‌های مجوز Flatpak نامعتبر یا بیش از حد بزرگ است."
+
+"The shortcut configuration includes too many files." = "پیکربندی میان‌برها فایل‌های زیادی را شامل می‌شود."
+
+"An include path is too long." = "مسیر یکی از فایل‌های واردشده بیش از حد طولانی است."
+
+"The shortcut configuration contains an include cycle." = "پیکربندی میان‌برها دارای چرخهٔ وارد کردن فایل است."
+
+"A continued shortcut ends before its next line." = "یک میان‌بر چندخطی پیش از خط بعدی خود پایان یافته است."
+
+"The filesystem mount table is invalid or too large." = "جدول اتصال سامانه‌های پرونده نامعتبر یا بیش از حد بزرگ است."
+
+"Native filesystem maintenance is available on Linux." = "نگهداری بومی سامانهٔ پرونده در Linux در دسترس است."

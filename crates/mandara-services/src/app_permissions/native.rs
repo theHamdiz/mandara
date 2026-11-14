@@ -117,8 +117,19 @@ impl Backend for Flatpak {
 
     fn set(&self, session: &Session, capability: &Capability, allowed: bool, cancel: &AtomicBool) -> Result<Undo> {
         ensure!(capability.editable && session.capabilities.contains(capability), "{}", t("Refresh the app permissions before changing this grant."));
-        super::transaction::apply(session, capability, allowed, cancel)
+        super::transaction::apply(session, capability, allowed, cancel, || {
+            let current = self.inspect(&session.app, cancel)?;
+            validate_current(session, capability, &current)
+        })
     }
+}
+
+pub(super) fn validate_current(session: &Session, capability: &Capability, current: &Session) -> Result<()> {
+    ensure!(session.path == current.path && session.target == current.target && session.stamp == current.stamp && session.before == current.before,
+        "{}", t("The app permissions changed. Refresh before saving."));
+    ensure!(current.capabilities.contains(capability) && capability.editable,
+        "{}", t("Refresh the app permissions before changing this grant."));
+    Ok(())
 }
 
 #[cfg(test)]

@@ -43,6 +43,32 @@ fn mount_tables_decode_paths_and_keep_read_only_and_subvolume_identity() {
 }
 
 #[test]
+fn namespace_mounts_retain_their_target_without_becoming_storage_actions() {
+    let record = "6510 6500 0:7 net:[4026531833] /run/docker/netns/default rw,nosuid master:1956 - nsfs nsfs rw\n";
+    let rows = mounts::parse(record).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].root, std::path::Path::new("net:[4026531833]"));
+    assert_eq!(rows[0].target, std::path::Path::new("/run/docker/netns/default"));
+    assert!(!rows[0].supports_trim() && !rows[0].supports_snapshots());
+    assert!(mounts::parse(&record.replace(" - nsfs ", " - ext4 ")).is_err());
+    assert!(mounts::parse(&record.replace("/run/docker", "run/docker")).is_err());
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn namespace_overmounts_still_prevent_snapshot_creation_through_that_path() {
+    let root = tempfile::tempdir().unwrap();
+    let base = mount(root.path());
+    let source = root.path().join("source");
+    std::fs::create_dir(&source).unwrap();
+    let nested = Mount { id: base.id + 1, device: "0:7".into(), root: "net:[4026531833]".into(), target: source.clone(), filesystem: "nsfs".into(), read_only: false, subvolume_id: None };
+    let request = Request::Create { mount: base.clone(), source, directory: root.path().into(), name: "copy".into() };
+    let runner = Recorder::default();
+    assert!(btrfs::apply(&runner, &request, &[base, nested], &AtomicBool::new(false)).is_err());
+    assert!(runner.calls.borrow().is_empty());
+}
+
+#[test]
 fn default_and_mounted_snapshots_are_protected_and_listing_paths_are_not_executed() {
     let root = tempfile::tempdir().unwrap();
     let base = mount(root.path());

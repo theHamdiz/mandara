@@ -57,7 +57,7 @@ impl<'a> Iterator for LogicalLines<'a> {
                     break;
                 }
                 return Some(Err(anyhow::anyhow!(
-                    "continued shortcut configuration ends before its next line"
+                    mandara_i18n::t("A continued shortcut ends before its next line.")
                 )));
             };
             continued = true;
@@ -76,7 +76,7 @@ impl<'a> Iterator for LogicalLines<'a> {
                 .is_some_and(|size| size <= super::MAX_FILE_BYTES)
             {
                 return Some(Err(anyhow::anyhow!(
-                    "logical shortcut line exceeds the scan budget"
+                    mandara_i18n::t("The shortcut configuration is too large to edit.")
                 )));
             }
             let buffer = text.to_mut();

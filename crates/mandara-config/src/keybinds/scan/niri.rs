@@ -87,7 +87,7 @@ fn walk(
     environment: &IncludeEnvironment,
 ) -> Result<()> {
     *visits += 1;
-    ensure!(*visits <= MAX_BINDINGS, "too many shortcut include visits");
+    ensure!(*visits <= MAX_BINDINGS, mandara_i18n::t("The shortcut configuration includes too many files."));
     let real = std::fs::canonicalize(file)?;
     if is_generated(file) || is_generated(&real) {
         if !scan.generated.iter().any(|path| path == file) {
@@ -95,29 +95,29 @@ fn walk(
         }
         return Ok(());
     }
-    ensure!(visited.insert(real.clone()), "recursive shortcut include");
+    ensure!(visited.insert(real.clone()), mandara_i18n::t("The shortcut configuration contains an include cycle."));
     ensure!(
         visited.len() <= MAX_FILES,
-        "too many shortcut configuration files"
+        mandara_i18n::t("The shortcut configuration includes too many files.")
     );
     let text = read(file)?;
     *bytes += text.len();
     ensure!(
         *bytes <= MAX_TOTAL_BYTES,
-        "shortcut configuration exceeds the scan budget"
+        mandara_i18n::t("The shortcut configuration is too large to edit.")
     );
     let document = kdl::KdlDocument::parse_v1(&text)?;
     if !scan.sources.iter().any(|source| source.target == real) {
         ensure!(
             scan.sources.len() < MAX_FILES,
-            "too many shortcut configuration files"
+            mandara_i18n::t("The shortcut configuration includes too many files.")
         );
         let bindings = super::super::formats::niri::from_document(&text, &document);
         super::super::validate_bindings(&bindings)?;
         *count += bindings.len();
         ensure!(
             *count <= MAX_BINDINGS,
-            "too many shortcuts in included files"
+            mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
         );
         scan.sources.push(Source {
             file: file.into(),
@@ -129,15 +129,9 @@ fn walk(
     for node in document.nodes() {
         match node.name().value() {
             "include" => {
-                let path = node
-                    .get(0)
-                    .and_then(kdl::KdlValue::as_string)
-                    .ok_or_else(|| anyhow::anyhow!("Niri include has no literal path"))?;
+                let (path, optional) = crate::compositor::niri_include(node)
+                    .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("Computed shortcuts must be edited in their source configuration.")))?;
                 let path = environment.resolve(file, std::ffi::OsStr::new(path))?;
-                let optional = node
-                    .get("optional")
-                    .and_then(kdl::KdlValue::as_bool)
-                    .unwrap_or(false);
                 if path.try_exists()? || !optional {
                     walk(&path, scan, visited, bytes, count, visits, environment)?;
                 }
@@ -190,7 +184,7 @@ mod tests {
         )
         .unwrap();
         let result = scan(&[root], &IncludeEnvironment::default());
-        assert!(result.errors[0].1.contains("recursive"));
+        assert!(result.errors[0].1.contains(mandara_i18n::t("The shortcut configuration contains an include cycle.")));
     }
     #[test]
     fn inline_includes_merge_modifiers_in_place_and_nested_defaults_follow_niri() {

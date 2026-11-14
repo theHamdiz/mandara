@@ -10780,3 +10780,15 @@
 "Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "Gunakan hingga 128 huruf, angka, tanda hubung, atau garis bawah untuk nama snapshot."
 
 "The Flatpak permission data is invalid or too large." = "Data izin Flatpak tidak valid atau terlalu besar."
+
+"The shortcut configuration includes too many files." = "Konfigurasi pintasan menyertakan terlalu banyak berkas."
+
+"An include path is too long." = "Jalur berkas yang disertakan terlalu panjang."
+
+"The shortcut configuration contains an include cycle." = "Konfigurasi pintasan berisi siklus penyertaan berkas."
+
+"A continued shortcut ends before its next line." = "Pintasan yang dilanjutkan berakhir sebelum baris berikutnya."
+
+"The filesystem mount table is invalid or too large." = "Tabel kait sistem berkas tidak valid atau terlalu besar."
+
+"Native filesystem maintenance is available on Linux." = "Pemeliharaan sistem berkas bawaan tersedia di Linux."

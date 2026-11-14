@@ -38,6 +38,9 @@ and more apps can follow your colours.
 - The keyboard-layout badge now shows Niri and Hyprland's current layout at startup and follows switches immediately, including on NixOS.
 - Source builds on NixOS now include the compression library needed by the Rust dependencies. Thanks to Abdellah Azarfane for the report and workaround (#173).
 - Large shortcut configurations respect the retained-memory budget, sparse includes keep their valid files, and unrelated Niri edits preserve native shortcut conflicts.
+- Container network mounts no longer prevent Backups from listing storage, and Snapshots waits for its first read before showing an empty list.
+- Backup, model-loading and Local AI chat commands wait for their real operation deadlines instead of giving up after fifteen seconds.
+- Optional Niri includes and MangoWM TOML modes keep their native shortcut conflicts. Scan-limit messages follow your language. App permissions rechecks effective grants before saving, and backup tabs retry cancelled reads without leaving an empty review or an outdated permission warning.
 - **Non-Latin shortcut keys no longer crash the editor.** Arabic and other Unicode keys can be inspected safely.
 - **Shortcut edits stay with the selected binding.** Labwc lists the bindings it recognizes and preserves unsupported nested chains. Oversized or ambiguous configurations explain why editing is unavailable. Hyprland checks use the variables active at each binding. Included files and continued blocks keep their shortcuts.
 

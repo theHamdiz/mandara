@@ -11018,3 +11018,15 @@
 "Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "快照名称最多可使用 128 个字母、数字、连字符或下划线。"
 
 "The Flatpak permission data is invalid or too large." = "Flatpak 权限数据无效或过大。"
+
+"The shortcut configuration includes too many files." = "快捷键配置包含的文件过多。"
+
+"An include path is too long." = "包含文件的路径过长。"
+
+"The shortcut configuration contains an include cycle." = "快捷键配置存在循环包含。"
+
+"A continued shortcut ends before its next line." = "跨行快捷键在下一行之前就结束了。"
+
+"The filesystem mount table is invalid or too large." = "文件系统挂载表无效或过大。"
+
+"Native filesystem maintenance is available on Linux." = "原生文件系统维护功能可在 Linux 上使用。"

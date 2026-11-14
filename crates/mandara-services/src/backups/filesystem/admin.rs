@@ -4,14 +4,12 @@ use std::ffi::OsString;
 use std::process::Command;
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::io::Read as _;
-use std::time::Duration;
 use anyhow::{Context as _, Result, ensure};
 use super::{Reply, Request};
+use crate::backups::OPERATION_TIMEOUT;
 
 /// Requests contain one mount and at most two paths, never a script or arbitrary argv.
 pub const MAX_REQUEST_BYTES: usize = 16 * 1024;
-const ADMIN_SECONDS: u64 = 24 * 60 * 60;
-const ADMIN_TIMEOUT: Duration = Duration::from_secs(ADMIN_SECONDS);
 /// Snapshot history and diagnostic output, including JSON escaping.
 const MAX_REPLY_BYTES: usize = 8 * 1024 * 1024;
 
@@ -26,7 +24,7 @@ pub(super) fn run(request: &Request, cancel: &AtomicBool) -> Result<Reply> {
     let mut command = Command::new(program);
     command.args(args);
     let mut output = Vec::new();
-    crate::app_themes::process::stream_native_controlled(command, cancel, ADMIN_TIMEOUT, &mut |bytes| {
+    crate::app_themes::process::stream_native_controlled(command, cancel, OPERATION_TIMEOUT, &mut |bytes| {
         ensure!(bytes.len() <= MAX_REPLY_BYTES.saturating_sub(output.len()), "filesystem reply is too large");
         output.extend_from_slice(bytes);
         Ok(())

@@ -11022,3 +11022,15 @@
 "Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "Anlık görüntü adı için en fazla 128 harf, rakam, kısa çizgi veya alt çizgi kullanın."
 
 "The Flatpak permission data is invalid or too large." = "Flatpak izin verileri geçersiz veya çok büyük."
+
+"The shortcut configuration includes too many files." = "Kısayol yapılandırması çok fazla dosya içeriyor."
+
+"An include path is too long." = "Bir ekleme yolu çok uzun."
+
+"The shortcut configuration contains an include cycle." = "Kısayol yapılandırması bir dosya ekleme döngüsü içeriyor."
+
+"A continued shortcut ends before its next line." = "Devam ettirilen bir kısayol sonraki satırından önce bitiyor."
+
+"The filesystem mount table is invalid or too large." = "Dosya sistemi bağlama tablosu geçersiz veya çok büyük."
+
+"Native filesystem maintenance is available on Linux." = "Yerel dosya sistemi bakımı Linux üzerinde kullanılabilir."

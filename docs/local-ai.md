@@ -64,3 +64,7 @@ the panel share the same request limit.
 Provider documentation: [llama.cpp server](https://github.com/ggml-org/llama.cpp/tree/master/tools/server),
 [Jan Local API Server](https://docs.jan.ai/desktop/api-server),
 [AnythingLLM API](https://docs.anythingllm.com/features/api).
+
+Chat commands wait for the server request’s five-minute limit rather than the
+normal short command timeout. `ai chat stop` remains available while a reply
+is running. Model loading and unloading also have a longer command wait.

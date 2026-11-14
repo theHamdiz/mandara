@@ -10779,3 +10779,15 @@
 "Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "스냅샷 이름에는 최대 128자의 영문자, 숫자, 하이픈 또는 밑줄을 사용하세요."
 
 "The Flatpak permission data is invalid or too large." = "Flatpak 권한 데이터가 잘못되었거나 너무 큽니다."
+
+"The shortcut configuration includes too many files." = "단축키 설정에 포함된 파일이 너무 많습니다."
+
+"An include path is too long." = "포함할 파일의 경로가 너무 깁니다."
+
+"The shortcut configuration contains an include cycle." = "단축키 설정에 순환 파일 포함이 있습니다."
+
+"A continued shortcut ends before its next line." = "여러 줄 단축키가 다음 줄 전에 끝납니다."
+
+"The filesystem mount table is invalid or too large." = "파일 시스템 마운트 테이블이 잘못되었거나 너무 큽니다."
+
+"Native filesystem maintenance is available on Linux." = "기본 파일 시스템 유지 관리는 Linux에서 사용할 수 있습니다."

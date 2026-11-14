@@ -10682,3 +10682,15 @@
 "Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "స్నాప్‌షాట్ పేరు కోసం గరిష్ఠంగా 128 అక్షరాలు, అంకెలు, హైఫన్‌లు లేదా అండర్‌స్కోర్‌లను వాడండి."
 
 "The Flatpak permission data is invalid or too large." = "Flatpak అనుమతి డేటా చెల్లదు లేదా చాలా పెద్దది."
+
+"The shortcut configuration includes too many files." = "సత్వరమార్గాల కాన్ఫిగరేషన్‌లో చాలా ఎక్కువ ఫైళ్లు చేర్చబడ్డాయి."
+
+"An include path is too long." = "చేర్చే ఫైల్ మార్గం చాలా పొడవుగా ఉంది."
+
+"The shortcut configuration contains an include cycle." = "సత్వరమార్గాల కాన్ఫిగరేషన్‌లో ఫైళ్లను చేర్చే చక్రం ఉంది."
+
+"A continued shortcut ends before its next line." = "బహుళ పంక్తుల సత్వరమార్గం దాని తదుపరి పంక్తికి ముందే ముగుస్తుంది."
+
+"The filesystem mount table is invalid or too large." = "ఫైల్‌సిస్టమ్ మౌంట్ పట్టిక చెల్లదు లేదా చాలా పెద్దది."
+
+"Native filesystem maintenance is available on Linux." = "స్థానిక ఫైల్‌సిస్టమ్ నిర్వహణ Linuxలో అందుబాటులో ఉంది."

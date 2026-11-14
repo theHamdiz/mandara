@@ -72,7 +72,7 @@ impl<'de> Deserialize<'de> for Pairs<'de> {
                 let mut pairs = Vec::new();
                 while let Some(pair) = access.next_entry::<&RawValue, &RawValue>()? {
                     if pairs.len() >= crate::keybinds::MAX_BINDINGS {
-                        return Err(serde::de::Error::custom("too many shortcuts"));
+                        return Err(serde::de::Error::custom(mandara_i18n::t("The compositor has too many shortcuts to edit at once.")));
                     }
                     pairs.push(pair);
                 }

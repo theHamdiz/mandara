@@ -10681,3 +10681,15 @@
 "Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "Dùng tối đa 128 chữ cái, chữ số, dấu gạch nối hoặc gạch dưới cho tên ảnh chụp."
 
 "The Flatpak permission data is invalid or too large." = "Dữ liệu quyền Flatpak không hợp lệ hoặc quá lớn."
+
+"The shortcut configuration includes too many files." = "Cấu hình phím tắt bao gồm quá nhiều tệp."
+
+"An include path is too long." = "Một đường dẫn tệp được bao gồm quá dài."
+
+"The shortcut configuration contains an include cycle." = "Cấu hình phím tắt chứa vòng lặp bao gồm tệp."
+
+"A continued shortcut ends before its next line." = "Một phím tắt nhiều dòng kết thúc trước dòng tiếp theo."
+
+"The filesystem mount table is invalid or too large." = "Bảng gắn hệ thống tệp không hợp lệ hoặc quá lớn."
+
+"Native filesystem maintenance is available on Linux." = "Bảo trì hệ thống tệp gốc có sẵn trên Linux."

@@ -7,7 +7,7 @@ pub(super) fn expand<'a>(input: &'a str, variables: &[(String, String)]) -> Resu
     let mut output = Cow::Borrowed(input);
     ensure!(
         output.len() <= crate::keybinds::MAX_FILE_BYTES,
-        "configuration variable expansion exceeds the scan budget"
+        mandara_i18n::t("The shortcut configuration is too large to edit.")
     );
     for (name, value) in variables {
         let count = output.matches(name).count();
@@ -24,7 +24,7 @@ pub(super) fn expand<'a>(input: &'a str, variables: &[(String, String)]) -> Resu
             })
             .filter(|&size| size <= crate::keybinds::MAX_FILE_BYTES)
             .ok_or_else(|| {
-                anyhow::anyhow!("configuration variable expansion exceeds the scan budget")
+                anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit."))
             })?;
         let mut next = String::with_capacity(size);
         let mut start = 0;
@@ -47,22 +47,22 @@ pub(super) fn check_assignment(
     let replacing = variables.iter().any(|(key, _)| key == name);
     ensure!(
         replacing || variables.len() < crate::keybinds::MAX_BINDINGS,
-        "too many configuration variables"
+        mandara_i18n::t("The shortcut configuration is too large to edit.")
     );
     let mut bytes = name
         .len()
         .checked_add(value.len())
-        .ok_or_else(|| anyhow::anyhow!("configuration variables exceed the scan budget"))?;
+        .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit.")))?;
     for (key, value) in variables.iter().filter(|(key, _)| key != name) {
         bytes = bytes
             .checked_add(key.len())
             .and_then(|bytes| bytes.checked_add(value.len()))
             .filter(|&bytes| bytes <= crate::keybinds::MAX_TOTAL_BYTES)
-            .ok_or_else(|| anyhow::anyhow!("configuration variables exceed the scan budget"))?;
+            .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit.")))?;
     }
     ensure!(
         bytes <= crate::keybinds::MAX_TOTAL_BYTES,
-        "configuration variables exceed the scan budget"
+        mandara_i18n::t("The shortcut configuration is too large to edit.")
     );
     Ok(())
 }

@@ -31,6 +31,7 @@ pub use kwin_settings::same_shortcut_settings as kwin_same_shortcut_settings;
 pub use kwin_settings::validate_settings as kwin_validate_settings;
 pub use qt_sequence::keybind as qt_keybind;
 pub use qt_sequence::sequence as qt_sequence;
+pub(crate) use scan::mango_includes;
 pub use scan::{
     Scan, Source, default_root, default_root_in, read_source, resolve_niri_mod, scan, scan_from,
     scan_roots, scan_roots_in,

@@ -28,7 +28,7 @@ impl ReadBudget {
         }
         ensure!(
             self.seen.len() <= crate::keybinds::MAX_FILES,
-            "too many shortcut configuration files"
+            mandara_i18n::t("The shortcut configuration includes too many files.")
         );
         let input = crate::regular::open(file)?;
         let mut text = String::new();
@@ -37,12 +37,12 @@ impl ReadBudget {
             .read_to_string(&mut text)?;
         ensure!(
             text.len() <= crate::keybinds::MAX_FILE_BYTES,
-            "shortcut configuration is too large"
+            mandara_i18n::t("The shortcut configuration is too large to edit.")
         );
         self.bytes += text.len();
         ensure!(
             self.bytes <= crate::keybinds::MAX_TOTAL_BYTES,
-            "shortcut configuration exceeds the scan budget"
+            mandara_i18n::t("The shortcut configuration is too large to edit.")
         );
         Ok(Some(text))
     }

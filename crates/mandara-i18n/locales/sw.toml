@@ -10681,3 +10681,15 @@
 "Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "Tumia hadi herufi, nambari, vistari au mistari ya chini 128 kwa jina la taswira."
 
 "The Flatpak permission data is invalid or too large." = "Data ya ruhusa za Flatpak si halali au ni kubwa mno."
+
+"The shortcut configuration includes too many files." = "Usanidi wa mikato unajumuisha faili nyingi mno."
+
+"An include path is too long." = "Njia ya faili inayojumuishwa ni ndefu mno."
+
+"The shortcut configuration contains an include cycle." = "Usanidi wa mikato una mzunguko wa kujumuisha faili."
+
+"A continued shortcut ends before its next line." = "Mkato unaoendelea unaisha kabla ya mstari wake unaofuata."
+
+"The filesystem mount table is invalid or too large." = "Jedwali la viunganishi vya mifumo ya faili si halali au ni kubwa mno."
+
+"Native filesystem maintenance is available on Linux." = "Matengenezo asilia ya mifumo ya faili yanapatikana kwenye Linux."

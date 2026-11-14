@@ -83,7 +83,7 @@ impl Reader<'_> {
         );
         ensure!(
             self.budget.is_none() || self.binds.len() <= crate::keybinds::MAX_BINDINGS,
-            "too many compositor shortcuts"
+            mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
         );
         Ok(())
     }
@@ -228,7 +228,7 @@ mod tests {
                 .err()
                 .unwrap()
                 .to_string()
-                .contains("budget")
+                .contains(mandara_i18n::t("The shortcut configuration is too large to edit."))
         );
         assert!(checked_in(&root, &IncludeEnvironment::default()).is_err());
         assert!(crate::keybinds::parse(Target::Sway, &root, &body).is_err());

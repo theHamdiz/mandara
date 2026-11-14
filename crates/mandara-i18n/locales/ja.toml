@@ -11024,3 +11024,15 @@
 "Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "スナップショット名には128文字以内の英数字、ハイフン、アンダースコアを使ってください。"
 
 "The Flatpak permission data is invalid or too large." = "Flatpakの権限データが無効か大きすぎます。"
+
+"The shortcut configuration includes too many files." = "ショートカット設定に含まれるファイルが多すぎます。"
+
+"An include path is too long." = "インクルード先のパスが長すぎます。"
+
+"The shortcut configuration contains an include cycle." = "ショートカット設定に循環するインクルードがあります。"
+
+"A continued shortcut ends before its next line." = "複数行のショートカットが次の行の前で終わっています。"
+
+"The filesystem mount table is invalid or too large." = "ファイルシステムのマウントテーブルが無効か、大きすぎます。"
+
+"Native filesystem maintenance is available on Linux." = "ネイティブのファイルシステム保守は Linux で利用できます。"

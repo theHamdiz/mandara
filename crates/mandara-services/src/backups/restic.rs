@@ -11,16 +11,13 @@ use std::time::Duration;
 use anyhow::{Context as _, Result, ensure};
 use mandara_i18n::t;
 
-use super::{Backend, Operation, Progress, Settings, Snapshot, Summary};
+use super::{Backend, Operation, Progress, Settings, Snapshot, Summary, OPERATION_TIMEOUT};
 
 /// A bounded recent history keeps very old repositories cheap to open.
 const SNAPSHOTS: usize = 64;
 const MAX_JSON_BYTES: usize = 2 * 1024 * 1024;
 /// Each streamed progress record is discarded after updating the readout.
 const MAX_EVENT_BYTES: usize = 256 * 1024;
-/// Large user-started backups may run overnight; cancellation remains immediate.
-const OPERATION_SECONDS: u64 = 24 * 60 * 60;
-const OPERATION_TIMEOUT: Duration = Duration::from_secs(OPERATION_SECONDS);
 const LIST_SECONDS: u64 = 60;
 const LIST_TIMEOUT: Duration = Duration::from_secs(LIST_SECONDS);
 

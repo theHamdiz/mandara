@@ -82,7 +82,11 @@ multi-key sequence. Sway includes share their variables and binding modes.
 Labwc lists direct keyboard bindings; unsupported nested key chains stay
 untouched and do not become editable shortcuts.
 Niri's `Mod` follows the merged input settings and its native nested-session
-behaviour; boolean options retain Niri's KDL v1 syntax.
+behaviour; boolean options retain Niri's KDL v1 syntax. Missing Niri includes
+marked `optional=true` are skipped; other read errors still stop a save.
+Inline and multiline bindings use the same native KDL reader.
+MangoWM conflict checks follow both legacy and TOML sources, keeping bindings
+in their native modes rather than treating every mode as active together.
 For River, this editor applies selected mappings live through `riverctl map`
 and `riverctl unmap`, with Undo. It leaves `init` unchanged. Scanning and
 validation never execute the program.

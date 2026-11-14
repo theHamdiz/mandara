@@ -11022,3 +11022,15 @@
 "Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "Имя снимка может содержать до 128 букв, цифр, дефисов или подчёркиваний."
 
 "The Flatpak permission data is invalid or too large." = "Данные разрешений Flatpak неверны или слишком велики."
+
+"The shortcut configuration includes too many files." = "Конфигурация сочетаний клавиш включает слишком много файлов."
+
+"An include path is too long." = "Путь к подключаемому файлу слишком длинный."
+
+"The shortcut configuration contains an include cycle." = "Конфигурация сочетаний клавиш содержит цикл подключений."
+
+"A continued shortcut ends before its next line." = "Многострочное сочетание клавиш заканчивается до следующей строки."
+
+"The filesystem mount table is invalid or too large." = "Таблица монтирования файловых систем недопустима или слишком велика."
+
+"Native filesystem maintenance is available on Linux." = "Встроенное обслуживание файловых систем доступно в Linux."

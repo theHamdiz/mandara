@@ -41,6 +41,7 @@ use crate::{mango_keys, paths};
 mod glob;
 mod include_env;
 mod read_budget;
+mod mango_read;
 mod sway_read;
 mod sway_vars;
 pub(crate) mod hyprland_probe;
@@ -2341,6 +2342,10 @@ pub(crate) fn includes_in(target: Target, text: &str) -> Vec<String> {
 }
 
 fn include_specs(target: Target, text: &str) -> Vec<(String, bool)> {
+    if target == Target::Niri {
+        return kdl::KdlDocument::parse_v1(text).map(|document| document.nodes().iter()
+            .filter_map(niri_include).map(|(path, optional)| (path.to_owned(), optional)).collect()).unwrap_or_default();
+    }
     if target == Target::Umbriel {
         let Ok(document) = text.parse::<toml::Table>() else {
             return Vec::new();
@@ -2384,6 +2389,13 @@ fn include_specs(target: Target, text: &str) -> Vec<(String, bool)> {
             })
         })
         .collect()
+}
+
+pub(crate) fn niri_include(node: &kdl::KdlNode) -> Option<(&str, bool)> {
+    if node.name().value() != "include" { return None; }
+    let path = node.get(0).and_then(kdl::KdlValue::as_string)?;
+    let optional = node.get("optional").and_then(kdl::KdlValue::as_bool).unwrap_or(false);
+    Some((path, optional))
 }
 
 /// Umbriel `[include] files` then `[include.optional] files`.
@@ -2457,17 +2469,20 @@ pub(crate) fn included_files_bounded_in(
             files.extend(sway_include_files_bounded_in(file, &raw, limit.saturating_sub(files.len()), environment)?);
             continue;
         }
-            let path =
-                environment.resolve(file, &environment.expand(raw.trim().trim_matches('"'))?)?;
+            let path = if target == Target::Niri {
+                environment.resolve(file, std::ffi::OsStr::new(&raw))?
+            } else {
+                environment.resolve(file, &environment.expand(raw.trim().trim_matches('"'))?)?
+            };
             if optional && !path.try_exists()? {
                 continue;
             }
             // Linux's pathname limit also bounds matching work on a hand-edited glob.
             anyhow::ensure!(
                 path.as_os_str().len() <= include_env::MAX_PATH_BYTES,
-                "include path is too long"
+                mandara_i18n::t("An include path is too long.")
             );
-            anyhow::ensure!(files.len() < limit, "too many included shortcut files");
+            anyhow::ensure!(files.len() < limit, mandara_i18n::t("The shortcut configuration includes too many files."));
             files.push(path);
     }
     Ok(files)
@@ -2502,7 +2517,7 @@ fn sway_include_files_bounded_in(
         if has_glob(&path.to_string_lossy()) {
             files.extend(glob_path_bounded_from(directory, &path, limit.saturating_sub(files.len()))?);
         } else {
-            anyhow::ensure!(files.len() < limit, "too many included shortcut files");
+            anyhow::ensure!(files.len() < limit, mandara_i18n::t("The shortcut configuration includes too many files."));
             files.push(directory.join(unescape_glob_path(&path)));
         }
     }
@@ -2645,7 +2660,7 @@ fn glob_path_bounded_from(directory: &Path, pattern: &Path, limit: usize) -> Res
                 bytes = bytes.checked_add(p.as_os_str().len())
                     .and_then(|bytes| bytes.checked_add(extra.as_os_str().len() + 1))
                     .filter(|bytes| *bytes <= crate::keybinds::MAX_TOTAL_BYTES)
-                    .context("include glob exceeds the directory scan budget")?;
+                    .context(mandara_i18n::t("The shortcut configuration is too large to edit."))?;
                 p.push(&extra);
             }
             continue;
@@ -2669,7 +2684,7 @@ fn glob_path_bounded_from(directory: &Path, pattern: &Path, limit: usize) -> Res
             };
             for entry in entries {
                 examined += 1;
-                anyhow::ensure!(examined <= MAX_ENTRIES, "include glob exceeds the directory scan budget");
+                anyhow::ensure!(examined <= MAX_ENTRIES, mandara_i18n::t("The shortcut configuration is too large to edit."));
                 let entry = entry?;
                 let name = entry.file_name();
                 let name = name.to_str().context("include glob has a non-UTF-8 filename")?;
@@ -2677,7 +2692,7 @@ fn glob_path_bounded_from(directory: &Path, pattern: &Path, limit: usize) -> Res
                     bytes = bytes.checked_add(dir.as_os_str().len())
                         .and_then(|bytes| bytes.checked_add(name.len() + 1))
                         .filter(|bytes| *bytes <= crate::keybinds::MAX_TOTAL_BYTES)
-                        .context("include glob exceeds the directory scan budget")?;
+                        .context(mandara_i18n::t("The shortcut configuration is too large to edit."))?;
                     next.push(entry.path());
                 }
             }
@@ -2691,7 +2706,7 @@ fn glob_path_bounded_from(directory: &Path, pattern: &Path, limit: usize) -> Res
             Err(error) => return Err(error).with_context(|| found[index].display().to_string()),
         }
     }
-    anyhow::ensure!(found.len() <= limit, "too many included shortcut files");
+    anyhow::ensure!(found.len() <= limit, mandara_i18n::t("The shortcut configuration includes too many files."));
     found.sort();
     Ok(found)
 }
@@ -2736,6 +2751,12 @@ pub fn existing_chords_checked_in(
     root: &Path,
     environment: &IncludeEnvironment,
 ) -> Result<BTreeSet<String>> {
+    if target == Target::Niri {
+        let scan = crate::keybinds::scan_roots_in(target, [root.to_path_buf()], environment);
+        if let Some((_, error)) = scan.errors.first() { anyhow::bail!(error.clone()); }
+        return Ok(scan.sources.into_iter().flat_map(|source| source.bindings)
+            .filter_map(|binding| binding.chord).collect());
+    }
     if target == Target::Sway {
         return sway_read::checked_in(root, environment);
     }
@@ -2749,7 +2770,7 @@ pub fn existing_chords_checked_in(
     let mut budget = read_budget::ReadBudget::default();
     if target == Target::Mango {
         return mango_keys::with_user_keys(|keys| {
-            mango_chords_from(
+            mango_read::chords_from(
                 root,
                 keys,
                 crate::keybinds::MAX_BINDINGS,
@@ -2769,7 +2790,7 @@ pub fn existing_chords_checked_in(
         }
         anyhow::ensure!(
             out.len() <= crate::keybinds::MAX_BINDINGS,
-            "too many compositor shortcuts"
+            mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
         );
         stack.extend(included_files_bounded_in(
             target,
@@ -2790,7 +2811,7 @@ pub fn existing_chords_checked_in(
 fn mango_existing_chords(root: &Path, keys: &mango_keys::MangoKeys) -> BTreeSet<String> {
     // Historical setup scans skip unreadable sources; editor saves use the
     // checked reader and propagate every failure before publishing a binding.
-    mango_chords_from(
+    mango_read::chords_from(
         root,
         keys,
         usize::MAX,
@@ -2798,78 +2819,6 @@ fn mango_existing_chords(root: &Path, keys: &mango_keys::MangoKeys) -> BTreeSet<
         &IncludeEnvironment::default(),
     )
     .unwrap_or_default()
-}
-
-fn mango_chords_from(
-    root: &Path,
-    keys: &mango_keys::MangoKeys,
-    limit: usize,
-    read: &mut dyn FnMut(&Path) -> Result<Option<String>>,
-    environment: &IncludeEnvironment,
-) -> Result<BTreeSet<String>> {
-    struct Walk<'k, 'r, 'e> {
-        keys: &'k mango_keys::MangoKeys,
-        read: &'r mut dyn FnMut(&Path) -> Result<Option<String>>,
-        limit: usize,
-        visited: BTreeSet<PathBuf>,
-        binds: Vec<(String, String)>,
-        ours: Option<String>,
-        environment: &'e IncludeEnvironment,
-    }
-    fn walk(w: &mut Walk, file: &Path, mode: String) -> Result<String> {
-        if !w.visited.insert(file.to_path_buf()) {
-            return Ok(mode);
-        }
-        let Some(text) = (w.read)(file)? else { return Ok(mode);
-        };
-        let mut mode = mode;
-        // Split the file at its `source=` lines so each part starts in the
-        // mode the previous part (or sourced file) left.
-        let mut chunk = String::new();
-        for line in text.lines() {
-            let sourced = (!line.trim_start().starts_with('#')).then(|| include_path(Target::Mango, line)).flatten();
-            match sourced {
-                Some(path) => {
-                    mode = flush(w, &mut chunk, mode)?;
-                    let path = w
-                        .environment
-                        .resolve(file, &w.environment.expand(path.trim().trim_matches('"'))?)?;
-                    if path == Target::Mango.generated_file()
-                        || is_generated(&path)
-                        || std::fs::canonicalize(&path).is_ok_and(|path| is_generated(&path))
-                    {
-                        w.ours.get_or_insert_with(|| mode.clone());
-                    } else if path.exists() || !line.trim_start().starts_with("source_optional") {
-                        mode = walk(w, &path, mode)?;
-                    }
-                }
-                None => {
-                    chunk.push_str(line);
-                    chunk.push('\n');
-                }
-            }
-        }
-        flush(w, &mut chunk, mode)
-    }
-    fn flush(w: &mut Walk, chunk: &mut String, mode: String) -> Result<String> {
-        let (binds, mode) = mango_binds(chunk, &mode, w.keys);
-        w.binds.extend(binds.into_iter().map(|b| (b.chord, b.mode)));
-        anyhow::ensure!(w.binds.len() <= w.limit, "too many compositor shortcuts");
-        chunk.clear();
-        Ok(mode)
-    }
-    let mut w = Walk {
-        keys,
-        read,
-        limit,
-        visited: BTreeSet::new(),
-        binds: Vec::new(),
-        ours: None,
-        environment,
-    };
-    walk(&mut w, root, mango_keys::DEFAULT_MODE.to_string())?;
-    let ours = w.ours.unwrap_or_else(|| mango_keys::DEFAULT_MODE.to_string());
-    Ok(w.binds.into_iter().filter(|(_, mode)| mango_keys::modes_meet(mode, &ours)).map(|(chord, _)| chord).collect())
 }
 
 /// A file Mandara generates (`…/mandara/generated/…`).
@@ -3024,7 +2973,7 @@ fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<
             *retained = retained.checked_add(header.len())
                 .and_then(|bytes| bytes.checked_add(std::mem::size_of::<String>()))
                 .filter(|bytes| *bytes <= crate::keybinds::MAX_TOTAL_BYTES)
-                .ok_or_else(|| anyhow::anyhow!("expanded shortcuts exceed the scan budget"))?;
+                .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit.")))?;
             blocks.push(header.to_owned());
             continue;
         }
@@ -3043,13 +2992,13 @@ fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<
         let expanded_bytes = body.len() + if in_bind_block { blocks.last().map_or(0, |header| header.len() + 1) } else { 0 };
         let bytes = command_bytes.checked_add(expanded_bytes).and_then(|bytes| retained.checked_add(bytes))
             .filter(|&bytes| bytes <= crate::keybinds::MAX_TOTAL_BYTES)
-            .ok_or_else(|| anyhow::anyhow!("expanded shortcuts exceed the scan budget"))?;
+            .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit.")))?;
         let resolved = chord(parts.into_iter(), &keysym_for(key));
         *retained = bytes.checked_add(resolved.len()).filter(|&bytes| bytes <= crate::keybinds::MAX_TOTAL_BYTES)
-            .ok_or_else(|| anyhow::anyhow!("expanded shortcuts exceed the scan budget"))?;
+            .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit.")))?;
         let command = words.collect::<Vec<_>>().join(" ");
         let expanded = if in_bind_block { format!("{} {body}", blocks.last().expect("binding block has a header")) } else { body.to_string() };
-        anyhow::ensure!(out.len() < crate::keybinds::MAX_BINDINGS, "too many compositor shortcuts");
+        anyhow::ensure!(out.len() < crate::keybinds::MAX_BINDINGS, mandara_i18n::t("The compositor has too many shortcuts to edit at once."));
         out.push(SwayBind { line: i, chord: resolved, command, expanded });
     }
     Ok(out)
@@ -3182,31 +3131,16 @@ pub fn target_chord(target: Target, bind: &Keybind) -> String {
 }
 
 fn niri_chords(text: &str) -> Vec<(usize, String)> {
-    let mut out = Vec::new();
-    let mut depth = 0i32;
-    let mut in_binds = false;
-    for (i, line) in text.lines().enumerate() {
-        let line = line.trim();
-        if line.starts_with("//") {
-            continue;
-        }
-        if depth == 0 && line.starts_with("binds") {
-            in_binds = true;
-        } else if in_binds
-            && depth == 1
-            && let Some(first) = line.split_whitespace().next().filter(|w| !w.starts_with('}'))
-        {
-            let mut pieces: Vec<&str> = first.trim_matches('"').split('+').collect();
-            let key = pieces.pop().unwrap_or_default();
-            out.push((i, chord(pieces.into_iter(), &keysym_for(key))));
-        }
-        depth += line.matches('{').count() as i32 - line.matches('}').count() as i32;
-        if depth <= 0 {
-            in_binds = false;
-            depth = 0;
-        }
-    }
-    out
+    let Ok(document) = kdl::KdlDocument::parse_v1(text) else { return Vec::new(); };
+    document.nodes().iter().filter(|node| node.name().value() == "binds")
+        .filter_map(kdl::KdlNode::children).flat_map(|group| group.nodes())
+        .map(|binding| {
+            let mut parts = binding.name().value().rsplitn(2, '+');
+            let key = parts.next().unwrap_or_default();
+            let modifiers = parts.next().unwrap_or_default();
+            (crate::keybinds::line(text, binding.name().span().offset()) - 1,
+                chord(modifiers.split('+'), &keysym_for(key)))
+        }).collect()
 }
 
 fn hyprland_chords(text: &str) -> Vec<(usize, String)> {
@@ -3260,8 +3194,8 @@ fn hyprland_chords_checked(text: &str) -> Result<Vec<(usize, String)>> {
 
 fn retain_hyprland_chord(out: &mut Vec<(usize, String)>, retained: &mut usize, line: usize, chord: String) -> Result<()> {
     *retained = retained.checked_add(chord.len()).filter(|&bytes| bytes <= crate::keybinds::MAX_TOTAL_BYTES)
-        .ok_or_else(|| anyhow::anyhow!("expanded shortcuts exceed the scan budget"))?;
-    anyhow::ensure!(out.len() < crate::keybinds::MAX_BINDINGS, "too many compositor shortcuts");
+        .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit.")))?;
+    anyhow::ensure!(out.len() < crate::keybinds::MAX_BINDINGS, mandara_i18n::t("The compositor has too many shortcuts to edit at once."));
     out.push((line, chord));
     Ok(())
 }
@@ -3297,7 +3231,7 @@ fn lua_concat(expr: &str, vars: &[(String, String)]) -> Result<Option<String>> {
         } else {
             return Ok(None);
         };
-        anyhow::ensure!(out.len().checked_add(value.len()).is_some_and(|bytes| bytes <= crate::keybinds::MAX_FILE_BYTES), "configuration variable expansion exceeds the scan budget");
+        anyhow::ensure!(out.len().checked_add(value.len()).is_some_and(|bytes| bytes <= crate::keybinds::MAX_FILE_BYTES), mandara_i18n::t("The shortcut configuration is too large to edit."));
         out.push_str(value);
     }
     Ok(Some(out))
@@ -3915,6 +3849,57 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         }
         assert!(is_function_key("F12"));
         assert!(!is_function_key("F"));
+    }
+
+    #[test]
+    fn niri_inline_bindings_keep_source_lines_and_ignore_commented_nodes() {
+        let source = "// binds { Super+W { quit; }; }\nbinds { Super+Q { spawn \"{text}\"; }; Super+E { quit; }; }\n/- binds { Super+R { quit; }; }\n";
+        assert_eq!(chords_by_line(Target::Niri, source), [(1, "super+q".into()), (1, "super+e".into())]);
+    }
+
+    #[test]
+    fn checked_niri_includes_keep_optional_properties_and_literal_paths() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config.kdl");
+        let child = directory.path().join(" $literal.kdl ");
+        std::fs::write(&child, "binds { Super+Q { close-window; }; }\n").unwrap();
+        let body = "include optional=true \"absent.kdl\"; include \" $literal.kdl \"\n";
+        std::fs::write(&root, body).unwrap();
+        let environment = IncludeEnvironment::captured([]);
+        let files = included_files_bounded_in(Target::Niri, &root, body, 8, &environment).unwrap();
+        assert_eq!(files, [child]);
+        assert!(existing_chords_checked_in(Target::Niri, &root, &environment).unwrap().contains("super+q"));
+        std::fs::write(&root, "include optional=false \"absent.kdl\"\n").unwrap();
+        assert!(existing_chords_checked_in(Target::Niri, &root, &environment).is_err());
+        let invalid = directory.path().join("not-regular.kdl");
+        std::fs::create_dir(&invalid).unwrap();
+        std::fs::write(&root, "include optional=true \"not-regular.kdl\"\n").unwrap();
+        assert!(existing_chords_checked_in(Target::Niri, &root, &environment).is_err(), "optional includes suppress absence, not other read errors");
+    }
+
+    #[test]
+    fn mango_toml_conflicts_keep_native_modes_and_generated_include_context() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config.toml");
+        let keys = mango_keys::MangoKeys::us();
+        let read = |root: &Path| {
+            let mut budget = read_budget::ReadBudget::default();
+            mango_read::chords_from(root, &keys, crate::keybinds::MAX_BINDINGS, &mut |path| budget.read(path), &IncludeEnvironment::captured([])).unwrap()
+        };
+        std::fs::write(&root, "[bind]\n'Super+Space'='spawn foot'\n[bind.resize.release]\n'Super+Q'='killclient'\n[bind.common]\n'Super+W'='spawn foot'\n").unwrap();
+        assert_eq!(read(&root), BTreeSet::from(["super+space".into(), "super+w".into()]));
+        std::fs::write(&root, "[global]\nkey_mode='resize'\nsource_optional=['mandara/generated/mango.conf']\n[bind.resize]\n'Super+Q'='killclient'\n[bind.\"other.mode\"]\n'Super+E'='spawn foot'\n[bind.common]\n'Super+W'='spawn foot'\n").unwrap();
+        assert_eq!(read(&root), BTreeSet::from(["super+q".into(), "super+w".into()]));
+        let legacy = directory.path().join("config.conf");
+        std::fs::write(&root, "[bind]\n'Super+Space'='spawn foot'\n[bind.resize]\n'Super+Q'='killclient'\n").unwrap();
+        std::fs::write(&legacy, "source=config.toml\nbind=SUPER,W,killclient\n").unwrap();
+        assert_eq!(read(&legacy), BTreeSet::from(["super+space".into(), "super+w".into()]));
+        std::os::unix::fs::symlink("cycle.conf", directory.path().join("cycle.conf")).unwrap();
+        std::fs::write(&legacy, "source_optional=cycle.conf\n").unwrap();
+        let mut budget = read_budget::ReadBudget::default();
+        assert!(mango_read::chords_from(&legacy, &keys, crate::keybinds::MAX_BINDINGS,
+            &mut |path| budget.read(path), &IncludeEnvironment::captured([])).is_err(),
+            "optional sources suppress absence, not symlink errors");
     }
 
     #[test]

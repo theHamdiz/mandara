@@ -629,6 +629,9 @@ mandara msg permissions set <app-id> <installation> <group> <grant> <true-or-fal
 mandara msg permissions undo
 ```
 
+Backup commands wait for the backend’s operation deadline, including long backups
+and administrator approval. `backups cancel` remains available while they run.
+
 The `backups storage inspect` command takes a JSON `inspect` request containing
 a current mount returned by `backups storage mounts`. It can request
 administrator approval to read protected snapshot metadata. For a change,

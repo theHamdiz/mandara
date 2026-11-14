@@ -47,6 +47,10 @@ identities before removing anything. A changed mount or snapshot requires a
 fresh review. Successful snapshot and maintenance actions refresh the selected
 filesystem; a privileged list may need administrator approval again. Removing a snapshot does not guarantee an equal increase in free
 space: other snapshots may still reference the same blocks.
+Successful administrator reads replace the earlier permission warning. If you
+open this tab during another backup job, its first read waits until that job
+finishes. Container namespace mounts stay in the safety checks without appearing
+as disks or blocking the filesystem list.
 
 ## Reviewed cleanup
 
@@ -62,6 +66,8 @@ other mounted filesystems, recovery folders and protected personal-data
 locations stay untouched. Trash recovery information stays until its payload
 is gone. Sizes describe the selected files, not a promise about reclaimed disk
 space on filesystems with shared blocks or snapshots.
+Starting another job cancels an unfinished preview and returns to the cleanup
+items, ready for a new review.
 
 ## Filesystem maintenance
 

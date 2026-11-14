@@ -49,6 +49,13 @@ impl State {
         self.cancel.store(true, Ordering::Release);
         self.candidates.borrow_mut().invalidate();
         self.preview.borrow_mut().invalidate();
+        self.opened = false;
+        let missing = self.command_preview.is_none() && self.preview.borrow().value.is_none();
+        if missing {
+            self.selected = None;
+            self.paths_page = 0;
+            self.preview.borrow_mut().clear();
+        }
     }
     pub fn clear(&mut self) {
         self.invalidate_review();
@@ -100,8 +107,8 @@ fn remove_output(model: &Shared, preview: Arc<Preview>, cx: &mut App) -> Result<
         state.cleanup.preview.borrow_mut().clear();
         if state.cleanup.command_preview.take().is_some() { mandara_services::memory::request_trim(); }
         state.cleanup.selected = None;
-        state.cleanup.report = state.opened.then_some(report);
-        let opened = state.opened;
+        let opened = state.opened && state.page == Page::Cleanup;
+        state.cleanup.report = opened.then_some(report);
         drop(state);
         if opened { load(model, cx); }
     }, cx)
@@ -117,7 +124,7 @@ pub(super) fn cancel_review(model: &Shared) { model.borrow_mut().cleanup.clear()
 pub(super) fn render(model: &Shared, p: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
     model.borrow().cleanup.candidates.borrow().views.track(window);
     model.borrow().cleanup.preview.borrow().views.track(window);
-    if !model.borrow().cleanup.opened { model.borrow_mut().cleanup.opened = true; load(model, cx); }
+    if !model.borrow().cleanup.opened && model.borrow().active.is_none() { model.borrow_mut().cleanup.opened = true; load(model, cx); }
     let state = model.borrow();
     let cleanup = &state.cleanup;
     let candidates = cleanup.candidates.borrow();
@@ -192,4 +199,40 @@ pub(super) fn render(model: &Shared, p: &MandaraPalette, window: &mut Window, cx
     body.child(div().row().gap(px(tokens::SM))
         .child(action("cleanup-refresh", t("Refresh"), "refresh", p, move |_, cx| { if refresh.borrow().active.is_none() { refresh.borrow_mut().cleanup.clear(); load(&refresh, cx); refresh.borrow().views.notify(cx); } }))
         .child(action("cleanup-maintenance", t("Filesystem maintenance"), "disk", p, move |_, cx| { maintenance.borrow_mut().select_page(Page::Maintenance); maintenance.borrow().views.notify(cx); }))).into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cancelling_initial_cleanup_reads_allows_a_visible_page_to_retry() {
+        let mut state = State { opened: true, paths_page: 4, ..State::default() };
+        state.preview.borrow_mut().error = Some("interrupted preview".into());
+        state.cancel_reads();
+        assert!(!state.opened);
+        assert!(state.selected.is_none());
+        assert_eq!(state.paths_page, 0);
+        assert!(state.preview.borrow().error.is_none());
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    #[ignore = "opt-in cleanup lifecycle test; requires a marked private native home"]
+    fn native_cleanup_cancellation_releases_an_unfinished_selection() {
+        let home = std::path::PathBuf::from(std::env::var_os("MANDARA_BACKUP_TEST_HOME").expect("private native home required"));
+        assert_eq!(std::env::var_os("HOME").unwrap(), home.as_os_str());
+        assert_eq!(std::fs::read_to_string(home.join(".mandara-backup-test")).unwrap(), "mandara restic fixture\n");
+        let cache = std::path::PathBuf::from(std::env::var_os("XDG_CACHE_HOME").unwrap());
+        assert!(cache.starts_with(&home));
+        let directory = cache.join("mandara-test-cache");
+        std::fs::create_dir_all(&directory).unwrap();
+        let candidate = api::candidates().unwrap().into_iter().find(|candidate| candidate.path == directory).unwrap();
+        let mut state = State { opened: true, selected: Some(candidate), ..State::default() };
+        state.cancel_reads();
+        assert!(state.selected.is_none());
+        assert!(!state.opened);
+        assert!(state.command_preview.is_none());
+        assert!(!state.preview.borrow().busy());
+    }
 }

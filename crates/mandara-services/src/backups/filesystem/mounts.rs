@@ -4,6 +4,7 @@ use std::io::Read as _;
 use std::path::PathBuf;
 use anyhow::{Context as _, Result, ensure};
 use serde::{Deserialize, Serialize};
+use mandara_i18n::t;
 
 /// Bound the mount table without interpreting a truncated prefix as complete.
 const MAX_MOUNT_BYTES: u64 = 4 * 1024 * 1024;
@@ -30,30 +31,31 @@ impl Mount {
 pub(super) fn parse(text: &str) -> Result<Vec<Mount>> {
     let mut mounts = Vec::new();
     for line in text.lines() {
-        ensure!(mounts.len() < MAX_MOUNTS, "too many filesystem mounts");
-        let (left, right) = line.split_once(" - ").context("invalid mount table record")?;
+        ensure!(mounts.len() < MAX_MOUNTS, t("The filesystem mount table is invalid or too large."));
+        let (left, right) = line.split_once(" - ").context(t("The filesystem mount table is invalid or too large."))?;
         let mut fields = left.split_whitespace();
-        let id = fields.next().context("missing mount id")?.parse()?;
-        let _parent = fields.next().context("missing parent mount id")?;
-        let device = fields.next().context("missing mount device")?.to_owned();
-        let root = PathBuf::from(crate::boot::detect::unescape_mount(fields.next().context("missing mount root")?));
-        let target = PathBuf::from(crate::boot::detect::unescape_mount(fields.next().context("missing mount target")?));
-        let options = fields.next().context("missing mount options")?;
+        let id = fields.next().context(t("The filesystem mount table is invalid or too large."))?.parse()?;
+        let _parent = fields.next().context(t("The filesystem mount table is invalid or too large."))?;
+        let device = fields.next().context(t("The filesystem mount table is invalid or too large."))?.to_owned();
+        let root = PathBuf::from(crate::boot::detect::unescape_mount(fields.next().context(t("The filesystem mount table is invalid or too large."))?));
+        let target = PathBuf::from(crate::boot::detect::unescape_mount(fields.next().context(t("The filesystem mount table is invalid or too large."))?));
+        let options = fields.next().context(t("The filesystem mount table is invalid or too large."))?;
         let mut trailing = right.split_whitespace();
-        let filesystem = trailing.next().context("missing filesystem type")?.to_owned();
-        let _source = trailing.next().context("missing mount source")?;
-        let super_options = trailing.next().context("missing filesystem options")?;
+        let filesystem = trailing.next().context(t("The filesystem mount table is invalid or too large."))?.to_owned();
+        let _source = trailing.next().context(t("The filesystem mount table is invalid or too large."))?;
+        let super_options = trailing.next().context(t("The filesystem mount table is invalid or too large."))?;
         let subvolume_id = super_options.split(',').find_map(|option| option.strip_prefix("subvolid=")).map(str::parse).transpose()?;
-        ensure!(root.is_absolute() && target.is_absolute(), "invalid mount path");
+        // nsfs names its anonymous root `net:[inode]`; retain the mount as an overlap guard.
+        ensure!((root.is_absolute() || filesystem == "nsfs") && target.is_absolute(), t("The filesystem mount table is invalid or too large."));
         mounts.push(Mount { id, device, root, target, filesystem, read_only: options.split(',').any(|option| option == "ro"), subvolume_id });
     }
     Ok(mounts)
 }
 
 pub fn mounted() -> Result<Vec<Mount>> {
-    ensure!(cfg!(target_os = "linux"), "native filesystem maintenance is available on Linux");
+    ensure!(cfg!(target_os = "linux"), t("Native filesystem maintenance is available on Linux."));
     let mut text = String::new();
     std::fs::File::open("/proc/self/mountinfo")?.take(MAX_MOUNT_BYTES + 1).read_to_string(&mut text)?;
-    ensure!(text.len() as u64 <= MAX_MOUNT_BYTES, "filesystem mount table is too large");
+    ensure!(text.len() as u64 <= MAX_MOUNT_BYTES, t("The filesystem mount table is invalid or too large."));
     parse(&text)
 }

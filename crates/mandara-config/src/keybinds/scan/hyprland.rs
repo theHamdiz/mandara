@@ -42,12 +42,12 @@ impl Visitor for Collector {
         self.bindings += bindings.len();
         ensure!(
             self.bindings <= MAX_BINDINGS,
-            "too many shortcuts in included files"
+            mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
         );
         for row in &bindings {
             self.scope_bytes = self.scope_bytes.checked_add(row.scope.len())
                 .filter(|bytes| *bytes <= MAX_TOTAL_BYTES)
-                .context("expanded shortcuts exceed the scan budget")?;
+                .context(mandara_i18n::t("The shortcut configuration is too large to edit."))?;
         }
         self.scan.sources.push(Source {
             file: file.into(),
@@ -82,7 +82,7 @@ impl Visitor for Collector {
                 .checked_sub(row.scope.len())
                 .and_then(|bytes| bytes.checked_add(scope.len()))
                 .filter(|bytes| *bytes <= MAX_TOTAL_BYTES)
-                .context("expanded shortcuts exceed the scan budget")?;
+                .context(mandara_i18n::t("The shortcut configuration is too large to edit."))?;
             row.scope = scope.into();
             row.chord = chord;
         } else if row.scope != scope || row.chord != chord {

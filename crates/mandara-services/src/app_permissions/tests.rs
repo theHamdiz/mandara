@@ -85,14 +85,14 @@ fn native_override_preserves_symlinks_and_stale_undo_never_erases_personal_edits
     let permissions = crate::app_install::flatpak::parse_context(before).unwrap();
     let session = Session { app: App { id: "org.example.MandaraTest".into(), name: "Test".into(), installation: "user".into() }, capabilities: model::capabilities(&permissions, &permissions), permissions, metadata: before.into(), path: path.clone(), target: target.clone(), before: before.into(), stamp: FileStamp::at(&target).unwrap() };
     let network = session.capabilities.iter().find(|row| row.value == "network").unwrap();
-    let undo = Flatpak { data: root.path().into() }.set(&session, network, false, &AtomicBool::new(false)).unwrap();
+    let undo = transaction::apply(&session, network, false, &AtomicBool::new(false), || Ok(())).unwrap();
     assert!(std::fs::read_to_string(&target).unwrap().contains("!network"));
     assert_eq!(std::fs::read_link(&path).unwrap(), target);
     assert_eq!(std::fs::read_to_string(undo.backup.as_ref().unwrap()).unwrap(), before);
     undo.restore().unwrap();
     assert_eq!(std::fs::read_to_string(&target).unwrap(), before);
     assert!(undo.restore().is_err(), "Undo only owns its original publication");
-    assert!(Flatpak { data: root.path().into() }.set(&session, network, false, &AtomicBool::new(false)).is_err(), "same-byte replacement still makes an old session stale");
+    assert!(transaction::apply(&session, network, false, &AtomicBool::new(false), || Ok(())).is_err(), "same-byte replacement still makes an old session stale");
 }
 
 #[test]
@@ -147,4 +147,48 @@ fn full_root_grants_lock_narrower_filesystem_controls_without_locking_a_revoked_
         assert!(row.editable);
         assert!(!row.allowed);
     }
+}
+
+#[test]
+fn effective_permission_changes_and_override_changes_invalidate_cached_controls() {
+    let root = tempfile::tempdir().unwrap();
+    let make = |metadata: &str| {
+        let permissions = crate::app_install::flatpak::parse_context(metadata).unwrap();
+        Session { app: App { id: "org.example.Test".into(), name: "Test".into(), installation: "user".into() }, capabilities: model::capabilities(&permissions, &permissions), permissions, metadata: metadata.into(), path: root.path().join("override"), target: root.path().join("override"), before: "unchanged".into(), stamp: None }
+    };
+    let session = make("[Context]\ndevices=dri;\n");
+    let dri = session.capabilities.iter().find(|row| row.value == "dri").unwrap();
+    assert!(native::validate_current(&session, dri, &session).is_ok());
+    assert!(native::validate_current(&session, dri, &make("[Context]\ndevices=all;dri;\n")).is_err());
+    let mut changed = make("[Context]\ndevices=dri;\n");
+    changed.before = "edited elsewhere".into();
+    assert!(native::validate_current(&session, dri, &changed).is_err());
+    changed.before = session.before.clone();
+    changed.target = root.path().join("other");
+    assert!(native::validate_current(&session, dri, &changed).is_err());
+}
+
+#[test]
+#[ignore = "opt-in native Flatpak inspection; requires a marked private home and an installed fixture app"]
+fn native_effective_grants_are_rechecked_without_changing_the_personal_override() {
+    let home = std::path::PathBuf::from(std::env::var_os("MANDARA_BACKUP_TEST_HOME").expect("private native home required"));
+    assert_eq!(std::env::var_os("HOME").unwrap(), home.as_os_str());
+    assert_eq!(std::fs::read_to_string(home.join(".mandara-backup-test")).unwrap(), "mandara restic fixture\n");
+    let backend = Flatpak::default();
+    assert!(backend.data.starts_with(&home));
+    let app = App { id: std::env::var("MANDARA_FLATPAK_TEST_APP").expect("installed fixture app required"), name: "Fixture".into(), installation: "system".into() };
+    let overrides = backend.data.join("overrides");
+    std::fs::create_dir_all(&overrides).unwrap();
+    let path = overrides.join(&app.id);
+    let before = "[Context]\ndevices=dri;\n";
+    std::fs::write(&path, before).unwrap();
+    let cancel = AtomicBool::new(false);
+    let session = backend.inspect(&app, &cancel).unwrap();
+    let dri = session.capabilities.iter().find(|row| row.value == "dri").unwrap();
+    assert!(dri.allowed && dri.editable);
+    std::fs::write(overrides.join("global"), "[Context]\ndevices=all;\n").unwrap();
+    let current = backend.inspect(&app, &cancel).unwrap();
+    assert!(current.capabilities.iter().any(|row| row.value == "dri" && row.constraint == Some(Constraint::Broader)));
+    assert!(backend.set(&session, dri, false, &cancel).is_err());
+    assert_eq!(std::fs::read_to_string(path).unwrap(), before);
 }

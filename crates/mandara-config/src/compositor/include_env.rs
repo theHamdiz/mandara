@@ -42,7 +42,7 @@ impl IncludeEnvironment {
     }
 
     pub(crate) fn expand(&self, raw: &str) -> Result<OsString> {
-        ensure!(raw.len() <= MAX_PATH_BYTES, "include path is too long");
+        ensure!(raw.len() <= MAX_PATH_BYTES, mandara_i18n::t("An include path is too long."));
         let mut result = OsString::new();
         let mut rest = raw;
         while let Some(at) = rest.find('$') {
@@ -72,7 +72,7 @@ impl IncludeEnvironment {
     /// Niri expands only a leading home component; variable expansion is a
     /// separate step for the dialects that support it.
     pub(crate) fn resolve(&self, including: &Path, raw: &OsStr) -> Result<PathBuf> {
-        ensure!(raw.len() <= MAX_PATH_BYTES, "include path is too long");
+        ensure!(raw.len() <= MAX_PATH_BYTES, mandara_i18n::t("An include path is too long."));
         let path = Path::new(raw);
         let path = if let Ok(rest) = path.strip_prefix("~") {
             let home = self.value("HOME").context(mandara_i18n::t(
@@ -82,7 +82,7 @@ impl IncludeEnvironment {
                 home.len()
                     .checked_add(rest.as_os_str().len())
                     .is_some_and(|bytes| bytes < MAX_PATH_BYTES),
-                "include path is too long"
+                mandara_i18n::t("An include path is too long.")
             );
             PathBuf::from(&*home).join(rest)
         } else {
@@ -95,7 +95,7 @@ impl IncludeEnvironment {
         };
         ensure!(
             path.as_os_str().len() <= MAX_PATH_BYTES,
-            "include path is too long"
+            mandara_i18n::t("An include path is too long.")
         );
         Ok(path)
     }
@@ -106,7 +106,7 @@ fn append(out: &mut OsString, value: &OsStr) -> Result<()> {
         out.len()
             .checked_add(value.len())
             .is_some_and(|bytes| bytes <= MAX_PATH_BYTES),
-        "include path is too long"
+        mandara_i18n::t("An include path is too long.")
     );
     out.push(value);
     Ok(())

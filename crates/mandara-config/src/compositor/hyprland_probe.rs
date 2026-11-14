@@ -33,7 +33,7 @@ pub fn shortcut_probe(
     probe.visit(root)?;
     ensure!(
         probe.matches > 0,
-        "selected shortcut was not found in its include context"
+        mandara_i18n::t("The compositor shortcuts changed while they were being checked. Refresh the list and try again.")
     );
     Ok(probe.body)
 }
@@ -136,7 +136,7 @@ impl Probe<'_> {
                 .checked_add(line.len())
                 .and_then(|size| size.checked_add(1))
                 .is_some_and(|size| size <= MAX_TOTAL_BYTES),
-            "shortcut probe exceeds the scan budget"
+            mandara_i18n::t("The shortcut configuration is too large to edit.")
         );
         self.body.push_str(line);
         self.body.push('\n');
@@ -153,7 +153,7 @@ impl Probe<'_> {
             }
             value = sway_vars::expand(&value, &self.variables)?.into_owned();
         }
-        anyhow::bail!("shortcut variables exceed the expansion limit")
+        anyhow::bail!(mandara_i18n::t("The shortcut configuration is too large to edit."))
     }
 
     fn binding_expansion(&mut self, line: &str) -> Result<String> {
@@ -161,7 +161,7 @@ impl Probe<'_> {
         self.expanded_bytes += expanded.len();
         ensure!(
             self.expanded_bytes <= MAX_TOTAL_BYTES,
-            "expanded shortcuts exceed the scan budget"
+            mandara_i18n::t("The shortcut configuration is too large to edit.")
         );
         Ok(expanded)
     }
@@ -173,14 +173,14 @@ impl Probe<'_> {
             "{}",
             mandara_i18n::t("Computed shortcuts must be edited in their source configuration.")
         );
-        ensure!(!self.stack.contains(&real), "cyclic shortcut includes");
+        ensure!(!self.stack.contains(&real), mandara_i18n::t("The shortcut configuration contains an include cycle."));
         self.visits += 1;
-        ensure!(self.visits <= MAX_FILES, "too many included shortcut files");
+        ensure!(self.visits <= MAX_FILES, mandara_i18n::t("The shortcut configuration includes too many files."));
         let source = read_source(file)?;
         self.bytes += source.len();
         ensure!(
             self.bytes <= MAX_TOTAL_BYTES,
-            "shortcut configuration exceeds the scan budget"
+            mandara_i18n::t("The shortcut configuration is too large to edit.")
         );
         self.stack.push(real.clone());
         if let Some(visitor) = &mut self.visitor {
@@ -217,7 +217,7 @@ impl Probe<'_> {
                     } else {
                         ensure!(
                             self.variables.len() < MAX_BINDINGS,
-                            "too many shortcut variables"
+                            mandara_i18n::t("The shortcut configuration is too large to edit.")
                         );
                         self.variables.push((name.into(), value));
                         self.variables

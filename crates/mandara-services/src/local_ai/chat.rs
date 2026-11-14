@@ -26,7 +26,7 @@ pub const CONTEXT_RANGE: std::ops::RangeInclusive<usize> = 16 * 1024..=32 * 1024
 pub const DEFAULT_REPLY_TOKENS: u32 = 1024;
 pub const TOKEN_RANGE: std::ops::RangeInclusive<u32> = 128..=4096;
 /// Local models may need to load, but no request runs indefinitely.
-const CHAT_TIMEOUT: Duration = Duration::from_secs(300);
+pub const CHAT_TIMEOUT: Duration = Duration::from_secs(300);
 /// DNS and TCP establishment remain bounded if cancellation arrives before a socket exists.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 /// Model catalogs are labels, not files or complete model metadata.

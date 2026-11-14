@@ -114,7 +114,7 @@ pub fn scan_roots_in(
     if queue.len() > MAX_FILES {
         scan.errors.push((
             PathBuf::new(),
-            "too many shortcut configuration files".into(),
+            mandara_i18n::t("The shortcut configuration includes too many files.").into(),
         ));
         return scan;
     }
@@ -161,19 +161,19 @@ pub fn scan_roots_in(
             }
             ensure!(
                 seen.len() <= MAX_FILES,
-                "too many shortcut configuration files"
+                mandara_i18n::t("The shortcut configuration includes too many files.")
             );
             let source = read(&file)?;
             total_bytes += source.len();
             ensure!(
                 total_bytes <= MAX_TOTAL_BYTES,
-                "shortcut configuration exceeds the scan budget"
+                mandara_i18n::t("The shortcut configuration is too large to edit.")
             );
             let bindings = super::parse(target, &file, &source)?;
             total_bindings += bindings.len();
             ensure!(
                 total_bindings <= MAX_BINDINGS,
-                "too many shortcuts in included files"
+                mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
             );
             let mut children =
                 if target == Target::Mango && file.extension().is_some_and(|ext| ext == "toml") {
@@ -189,7 +189,7 @@ pub fn scan_roots_in(
                 };
             ensure!(
                 seen.len() + queue.len() + children.len() <= MAX_FILES,
-                "too many included shortcut files"
+                mandara_i18n::t("The shortcut configuration includes too many files.")
             );
             children.reverse();
             queue.extend(children);
@@ -231,7 +231,7 @@ fn scan_sway(roots: &[PathBuf], environment: &IncludeEnvironment) -> Scan {
             count += bindings.len();
             ensure!(
                 count <= MAX_BINDINGS,
-                "too many shortcuts in included files"
+                mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
             );
             for binding in &mut bindings {
                 binding.chord = native
@@ -260,7 +260,7 @@ fn scan_sway(roots: &[PathBuf], environment: &IncludeEnvironment) -> Scan {
     })
 }
 
-fn mango_includes(
+pub(crate) fn mango_includes(
     file: &Path,
     source: &str,
     environment: &IncludeEnvironment,
@@ -276,7 +276,7 @@ fn mango_includes(
                 for entry in entries {
                     if let Some(path) = entry.as_str() {
                         let path = environment.resolve(file, &environment.expand(path)?)?;
-                        if key != "source_optional" || path.exists() {
+                        if key != "source_optional" || is_generated(&path) || path.try_exists()? {
                             paths.push(path);
                         }
                     }
@@ -284,7 +284,7 @@ fn mango_includes(
             }
         }
     }
-    ensure!(paths.len() <= MAX_FILES, "too many included shortcut files");
+    ensure!(paths.len() <= MAX_FILES, mandara_i18n::t("The shortcut configuration includes too many files."));
     Ok(paths)
 }
 

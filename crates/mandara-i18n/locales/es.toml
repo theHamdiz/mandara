@@ -11017,3 +11017,15 @@
 "Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "Usa hasta 128 letras, números, guiones o guiones bajos para el nombre de la instantánea."
 
 "The Flatpak permission data is invalid or too large." = "Los datos de permisos de Flatpak no son válidos o son demasiado grandes."
+
+"The shortcut configuration includes too many files." = "La configuración de atajos incluye demasiados archivos."
+
+"An include path is too long." = "Una ruta de inclusión es demasiado larga."
+
+"The shortcut configuration contains an include cycle." = "La configuración de atajos contiene un ciclo de inclusiones."
+
+"A continued shortcut ends before its next line." = "Un atajo continuado termina antes de su siguiente línea."
+
+"The filesystem mount table is invalid or too large." = "La tabla de montajes de sistemas de archivos no es válida o es demasiado grande."
+
+"Native filesystem maintenance is available on Linux." = "El mantenimiento nativo de sistemas de archivos está disponible en Linux."
