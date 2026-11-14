@@ -373,7 +373,8 @@ impl StudioView {
         for component in COMPONENTS {
             section = section.child(self.component_card(component, cfg, p, cx));
         }
-        section.into_any_element()
+        let head = super::fold::FoldHead { title: t("Studio design").into(), preview: t("Fine-tune your Studio Look").to_string(), badge: None, trailing: None, closed: true };
+        section.child(self.fold("Studio design", head, p, cx, |this, cx| this.rows(registry::settings().iter().filter(|s| s.group == registry::studio_settings::GROUP), cfg, p, cx))).into_any_element()
     }
 
     /// The presets: one tile each, its name, line and a strip of its

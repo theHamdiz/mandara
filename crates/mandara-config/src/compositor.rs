@@ -38,8 +38,21 @@ use serde::{Deserialize, Serialize};
 
 use crate::{mango_keys, paths};
 
+mod glob;
+mod include_env;
+mod read_budget;
+mod mango_read;
 mod sway_read;
+mod sway_escape;
+mod sway_vars;
+mod sway_words;
+pub(crate) mod hyprland_probe;
+mod hyprland_vars;
+pub use hyprland_probe::shortcut_probe as hyprland_shortcut_probe;
+pub use include_env::IncludeEnvironment;
+pub mod shortcuts;
 pub(crate) use sway_read::binds as sway_config_binds;
+pub(crate) use sway_read::shortcut_sources_in as sway_shortcut_sources_in;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -179,14 +192,20 @@ impl Target {
     /// The user's primary config file.
     pub fn user_config(self) -> PathBuf {
         let config = dirs::config_dir().unwrap_or_else(|| PathBuf::from("~/.config"));
+        self.user_config_in(&config, &paths::home())
+    }
+
+    /// Resolve native defaults in the compositor's home, which can differ from Studio's.
+    pub fn user_config_in(self, config: &Path, home: &Path) -> PathBuf {
         match self {
             Target::Mango => config.join("mango/config.conf"),
             Target::Niri => config.join("niri/config.kdl"),
-            Target::Hyprland if Self::hyprland_lua() => config.join("hypr/hyprland.lua"),
+            Target::Hyprland if installed_version(Self::Hyprland).is_some_and(hyprland_reads_lua)
+                || config.join("hypr/hyprland.lua").exists() => config.join("hypr/hyprland.lua"),
             Target::Hyprland => config.join("hypr/hyprland.conf"),
             // Umbriel reads `$XDG_CONFIG_HOME/umbriel/config.toml` first.
             Target::Umbriel => config.join("umbriel/config.toml"),
-            Target::Sway => sway_user_config(&config, &paths::home()),
+            Target::Sway => sway_user_config(config, home),
             // River runs `$XDG_CONFIG_HOME/river/init` at start-up.
             Target::River => config.join("river/init"),
             Target::KWin => config.join("kwinrc"),
@@ -268,12 +287,24 @@ pub fn shell_words(line: &str) -> Vec<String> {
                 while let Some(c) = chars.next() {
                     match c {
                         '"' => break,
-                        '\\' => w.extend(chars.next()),
+                        '\\' => match chars.next() {
+                            Some('\n') => {}
+                            Some(next @ ('"' | '\\' | '$' | '`')) => w.push(next),
+                            Some(next) => {
+                                w.push('\\');
+                                w.push(next);
+                            }
+                            None => w.push('\\'),
+                        },
                         c => w.push(c),
                     }
                 }
             }
-            '\\' => word.get_or_insert_with(String::new).extend(chars.next()),
+            '\\' => {
+                if let Some(next) = chars.next().filter(|next| *next != '\n') {
+                    word.get_or_insert_with(String::new).push(next);
+                }
+            }
             '#' if word.is_none() => break,
             c if c.is_whitespace() => out.extend(word.take()),
             c => word.get_or_insert_with(String::new).push(c),
@@ -672,7 +703,7 @@ fn capitalize(s: &str) -> String {
     c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default()
 }
 
-fn normalize_mod(m: &str) -> Option<&'static str> {
+pub(crate) fn normalize_mod(m: &str) -> Option<&'static str> {
     match m.trim().to_ascii_lowercase().as_str() {
         "super" | "mod4" | "logo" | "mod" | "win" => Some("super"),
         "ctrl" | "control" => Some("ctrl"),
@@ -743,7 +774,7 @@ pub fn keysym_for(key: &str) -> String {
         "pause" => "Pause",
         "menu" => "Menu",
         k if is_function_key(k) => return k.to_uppercase(),
-        k if k.len() > 4 && k[..4].eq_ignore_ascii_case("xf86") => return k.to_string(),
+        k if k.get(..4).is_some_and(|prefix| prefix.eq_ignore_ascii_case("xf86")) => return k.to_string(),
         k if k.chars().count() == 1 => return k.to_lowercase(),
         k => return k.to_string(),
     };
@@ -751,7 +782,7 @@ pub fn keysym_for(key: &str) -> String {
 }
 
 fn is_function_key(k: &str) -> bool {
-    k.len() > 1 && k[..1].eq_ignore_ascii_case("f") && k[1..].chars().all(|c| c.is_ascii_digit())
+    k.strip_prefix(['f', 'F']).is_some_and(|number| !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()))
 }
 
 /// Keys that may be bound without Super / Ctrl / Alt: function keys,
@@ -759,7 +790,7 @@ fn is_function_key(k: &str) -> bool {
 /// bare (or with only Shift) would stop that key typing in every app.
 pub fn bare_key_allowed(key: &str) -> bool {
     let k = key.trim();
-    is_function_key(k) || k.eq_ignore_ascii_case("print") || k.eq_ignore_ascii_case("pause") || (k.len() > 4 && k[..4].eq_ignore_ascii_case("xf86"))
+    is_function_key(k) || k.eq_ignore_ascii_case("print") || k.eq_ignore_ascii_case("pause") || k.get(..4).is_some_and(|prefix| prefix.eq_ignore_ascii_case("xf86"))
 }
 
 pub fn chord<'a>(mods: impl Iterator<Item = &'a str>, key: &str) -> String {
@@ -1206,9 +1237,7 @@ pub fn emit_mango(cfg: &ManagedConfig) -> Emitted {
     }
     s.push_str(&crate::outputs::emit_outputs(Target::Mango, &c.outputs, false));
     let (binds, skipped) = split_binds(cfg, Target::Mango);
-    if !binds.is_empty() {
-        let _ = writeln!(s, "\n# Mandara keybinds");
-    }
+    let _ = writeln!(s, "\n# Mandara keybinds");
     for k in binds {
         let mods = if k.mods.is_empty() { "NONE".to_string() } else { k.mods.join("+") };
         let _ = writeln!(s, "bind={mods},{},spawn_shell,{}", k.key, k.bind.action.shell_command_with(&cfg.mandara_bin));
@@ -1216,6 +1245,7 @@ pub fn emit_mango(cfg: &ManagedConfig) -> Emitted {
     for note in &skipped {
         let _ = writeln!(s, "# {note}");
     }
+    let _ = writeln!(s, "# End Mandara keybinds");
     Emitted { text: s, skipped }
 }
 
@@ -1398,6 +1428,7 @@ pub fn emit_niri(cfg: &ManagedConfig) -> Emitted {
         }
     }
     let (binds, skipped) = split_binds(cfg, Target::Niri);
+    let _ = writeln!(s, "\n// Mandara keybinds");
     if !binds.is_empty() {
         let _ = writeln!(s, "\nbinds {{");
         for k in binds {
@@ -1416,6 +1447,7 @@ pub fn emit_niri(cfg: &ManagedConfig) -> Emitted {
     for note in &skipped {
         let _ = writeln!(s, "// {note}");
     }
+    let _ = writeln!(s, "// End Mandara keybinds");
     Emitted { text: s, skipped }
 }
 
@@ -1560,15 +1592,14 @@ pub fn emit_hyprland_conf(cfg: &ManagedConfig) -> Emitted {
     }
     s.push_str(&crate::outputs::emit_outputs(Target::Hyprland, &c.outputs, false));
     let (binds, skipped) = split_binds(cfg, Target::Hyprland);
-    if !binds.is_empty() {
-        let _ = writeln!(s);
-    }
+    let _ = writeln!(s, "\n# Mandara keybinds");
     for k in binds {
         let _ = writeln!(s, "bind = {}, {}, exec, {}", k.mods.join(" "), k.key, k.bind.action.shell_command_with(&cfg.mandara_bin));
     }
     for note in &skipped {
         let _ = writeln!(s, "# {note}");
     }
+    let _ = writeln!(s, "# End Mandara keybinds");
     Emitted { text: s, skipped }
 }
 
@@ -1720,9 +1751,7 @@ pub fn emit_hyprland_lua(cfg: &ManagedConfig) -> Emitted {
     }
     s.push_str(&crate::outputs::emit_outputs(Target::Hyprland, &c.outputs, true));
     let (binds, skipped) = split_binds(cfg, Target::Hyprland);
-    if !binds.is_empty() {
-        let _ = writeln!(s);
-    }
+    let _ = writeln!(s, "\n-- Mandara keybinds");
     for k in binds {
         let chord = k.mods.iter().copied().chain(std::iter::once(k.key.as_str())).collect::<Vec<_>>().join(" + ");
         let _ = writeln!(s, "pcall(hl.bind, {}, hl.dsp.exec_cmd({}))", lua_str(&chord), lua_str(&k.bind.action.shell_command_with(&cfg.mandara_bin)));
@@ -1730,6 +1759,7 @@ pub fn emit_hyprland_lua(cfg: &ManagedConfig) -> Emitted {
     for note in &skipped {
         let _ = writeln!(s, "-- {note}");
     }
+    let _ = writeln!(s, "-- End Mandara keybinds");
     Emitted { text: s, skipped }
 }
 
@@ -1843,13 +1873,15 @@ pub fn emit_umbriel(cfg: &ManagedConfig) -> Emitted {
     s.push_str(&crate::input::emit_umbriel(&c.input));
     s.push_str(&crate::outputs::emit_outputs(Target::Umbriel, &c.outputs, false));
     let (binds, skipped) = split_binds(cfg, Target::Umbriel);
+    let _ = writeln!(s, "\n# Mandara keybinds");
     if !binds.is_empty() {
-        let _ = writeln!(s, "\n# Mandara keybinds\n[keybinds]");
+        let _ = writeln!(s, "[keybinds]");
     }
     for k in binds {
         let chord = k.mods.iter().copied().chain(std::iter::once(k.key.as_str())).collect::<Vec<_>>().join("+");
         let _ = writeln!(s, "{} = {}", toml_str(&chord), toml_str(&format!("spawn {}", k.bind.action.shell_command_with(&cfg.mandara_bin))));
     }
+    let _ = writeln!(s, "# End Mandara keybinds");
     // Shell surfaces: Mandara draws its own glass (layer blur is off by
     // default; this states it). The lock surface keeps the compositor's blur.
     let namespaces: Vec<String> = SHELL_SURFACES.iter().map(|ns| toml_str(&format!("^{ns}$"))).collect();
@@ -2028,9 +2060,7 @@ pub fn emit_sway(cfg: &ManagedConfig) -> Emitted {
     }
     s.push_str(&crate::outputs::emit_outputs(Target::Sway, &c.outputs, false));
     let (binds, mut skipped) = split_binds(cfg, Target::Sway);
-    if !binds.is_empty() {
-        let _ = writeln!(s, "\n# Mandara keybinds");
-    }
+    let _ = writeln!(s, "\n# Mandara keybinds");
     for k in binds {
         let combo = k.mods.iter().copied().chain(std::iter::once(k.key.as_str())).collect::<Vec<_>>().join("+");
         let command = k.bind.action.shell_command_with(&cfg.mandara_bin);
@@ -2044,6 +2074,7 @@ pub fn emit_sway(cfg: &ManagedConfig) -> Emitted {
     for note in &skipped {
         let _ = writeln!(s, "# {note}");
     }
+    let _ = writeln!(s, "# End Mandara keybinds");
     Emitted { text: s, skipped }
 }
 
@@ -2269,7 +2300,7 @@ pub(crate) fn include_path(target: Target, line: &str) -> Option<String> {
             let start = rest[..end].rfind('"')?;
             Some(rest[start + 1..end].replace("\\\\", "\\").replace("\\\"", "\""))
         }
-        Target::Mango | Target::Hyprland if !line.contains("hl.") && !line.contains("require") && !line.contains("dofile") => {
+        Target::Mango | Target::Hyprland if target == Target::Mango || !line.contains("hl.") && !line.contains("require") && !line.contains("dofile") => {
             line.strip_prefix("source_optional").or_else(|| line.strip_prefix("source")).and_then(|r| r.trim_start().strip_prefix('=')).map(|p| p.trim().to_string())
         }
         // Umbriel's includes are TOML arrays, read whole-file by
@@ -2307,21 +2338,75 @@ pub(crate) fn includes_in(target: Target, text: &str) -> Vec<String> {
     if target == Target::Umbriel {
         return umbriel_includes(text);
     }
-    text.lines().filter(|l| !l.trim_start().starts_with(['#', '/']) && !l.trim_start().starts_with("--")).filter_map(|l| include_path(target, l)).collect()
+    include_specs(target, text)
+        .into_iter()
+        .map(|(path, _)| path)
+        .collect()
+}
+
+fn include_specs(target: Target, text: &str) -> Vec<(String, bool)> {
+    if target == Target::Niri {
+        return kdl::KdlDocument::parse_v1(text).map(|document| document.nodes().iter()
+            .filter_map(niri_include).map(|(path, optional)| (path.to_owned(), optional)).collect()).unwrap_or_default();
+    }
+    if target == Target::Umbriel {
+        let Ok(document) = text.parse::<toml::Table>() else {
+            return Vec::new();
+        };
+        let Some(include) = document.get("include").and_then(toml::Value::as_table) else {
+            return Vec::new();
+        };
+        let mut result = Vec::new();
+        for (table, optional) in [
+            (Some(include), false),
+            (
+                include.get("optional").and_then(toml::Value::as_table),
+                true,
+            ),
+        ] {
+            if let Some(paths) = table
+                .and_then(|table| table.get("files"))
+                .and_then(toml::Value::as_array)
+            {
+                result.extend(
+                    paths
+                        .iter()
+                        .filter_map(toml::Value::as_str)
+                        .map(|path| (path.to_owned(), optional)),
+                );
+            }
+        }
+        return result;
+    }
+    text.lines()
+        .filter(|line| {
+            let line = line.trim_start();
+            !line.starts_with(['#', '/']) && !line.starts_with("--")
+        })
+        .filter_map(|line| {
+            include_path(target, line).map(|path| {
+                let optional = target == Target::Mango
+                    && line.trim_start().starts_with("source_optional")
+                    || target == Target::Hyprland && line.trim_start().starts_with("pcall(");
+                (path, optional)
+            })
+        })
+        .collect()
+}
+
+pub(crate) fn niri_include(node: &kdl::KdlNode) -> Option<(&str, bool)> {
+    if node.name().value() != "include" { return None; }
+    let path = node.get(0).and_then(kdl::KdlValue::as_string)?;
+    let optional = node.get("optional").and_then(kdl::KdlValue::as_bool).unwrap_or(false);
+    Some((path, optional))
 }
 
 /// Umbriel `[include] files` then `[include.optional] files`.
 pub fn umbriel_includes(text: &str) -> Vec<String> {
-    let Ok(doc) = text.parse::<toml::Table>() else { return Vec::new();
-    };
-    let Some(include) = doc.get("include").and_then(toml::Value::as_table) else { return Vec::new();
-    };
-    let files = |t: Option<&toml::Table>| -> Vec<String> { t.and_then(|t| t.get("files")).and_then(toml::Value::as_array).map(|a| {
-                a.iter().filter_map(|v| v.as_str()).map(expand_env).collect()
-            }).unwrap_or_default() };
-    let mut out = files(Some(include));
-    out.extend(files(include.get("optional").and_then(toml::Value::as_table)));
-    out
+    include_specs(Target::Umbriel, text)
+        .into_iter()
+        .map(|(path, _)| expand_env(&path))
+        .collect()
 }
 
 /// `$VAR` and `${VAR}` replaced from the environment (unset: empty), the
@@ -2373,6 +2458,39 @@ pub(crate) fn included_files(target: Target, file: &Path, text: &str) -> Vec<Pat
         .collect()
 }
 
+/// Shortcut scans fail visibly rather than retaining an unbounded include glob.
+pub(crate) fn included_files_bounded_in(
+    target: Target,
+    file: &Path,
+    text: &str,
+    limit: usize,
+    environment: &IncludeEnvironment,
+) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for (raw, optional) in include_specs(target, text) {
+        if target == Target::Sway {
+            files.extend(sway_include_files_bounded_in(file, &raw, limit.saturating_sub(files.len()), environment)?);
+            continue;
+        }
+            let path = if target == Target::Niri {
+                environment.resolve(file, std::ffi::OsStr::new(&raw))?
+            } else {
+                environment.resolve(file, &environment.expand(raw.trim().trim_matches('"'))?)?
+            };
+            if optional && !path.try_exists()? {
+                continue;
+            }
+            // Linux's pathname limit also bounds matching work on a hand-edited glob.
+            anyhow::ensure!(
+                path.as_os_str().len() <= include_env::MAX_PATH_BYTES,
+                mandara_i18n::t("An include path is too long.")
+            );
+            anyhow::ensure!(files.len() < limit, mandara_i18n::t("The shortcut configuration includes too many files."));
+            files.push(path);
+    }
+    Ok(files)
+}
+
 /// Sway include line → files, as sway 1.12 reads it: the rest of the line
 /// with an argument's quotes removed, then split into shell words
 /// (`wordexp`): `include a.conf b.conf` and `include "a.conf b.conf"` both
@@ -2382,114 +2500,31 @@ pub(crate) fn included_files(target: Target, file: &Path, text: &str) -> Vec<Pat
 /// sorted, like `wordexp` returns them, and a pattern that matches nothing
 /// is skipped.
 fn sway_include_files(base: &Path, raw: &str) -> Vec<PathBuf> {
-    sway_include_words(raw)
-        .into_iter()
-        .flat_map(|word| {
-            let path = resolve_include(base, &expand_env(&word));
-            if has_glob(&path.to_string_lossy()) { glob_path(&path) } else { vec![PathBuf::from(unescape_glob(&path.to_string_lossy()))] }
-        })
-        .collect()
+    sway_include_files_bounded(base, raw, usize::MAX).unwrap_or_default()
 }
 
-/// Shell words with escaped wildcard occurrences retained for glob matching.
-fn sway_include_words(raw: &str) -> Vec<String> {
-    // Sway's own argument handling first: an argument that starts with a
-    // quote loses its (unescaped) quotes, backslashes stay for `wordexp`.
-    let mut line = String::new();
-    for arg in sway_args(raw.trim()) {
-        if !line.is_empty() {
-            line.push(' ');
-        }
-        if arg.starts_with(['"', '\'']) {
-            let mut escaped = false;
-            for c in arg.chars() {
-                match c {
-                    '"' | '\'' if !escaped => {}
-                    '\\' => {
-                        escaped = !escaped;
-                        line.push(c);
-                        continue;
-                    }
-                    c => line.push(c),
-                }
-                escaped = false;
-            }
+fn sway_include_files_bounded(base: &Path, raw: &str, limit: usize) -> Result<Vec<PathBuf>> {
+    sway_include_files_bounded_in(base, raw, limit, &IncludeEnvironment::default())
+}
+
+fn sway_include_files_bounded_in(
+    base: &Path,
+    raw: &str,
+    limit: usize,
+    environment: &IncludeEnvironment,
+) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for word in sway_words::expand(raw, environment, limit)? {
+        let path = PathBuf::from(word);
+        let directory = base.parent().unwrap_or(Path::new("."));
+        if has_glob(&path.to_string_lossy()) {
+            files.extend(glob_path_bounded_from(directory, &path, limit.saturating_sub(files.len()))?);
         } else {
-            line.push_str(&arg);
+            anyhow::ensure!(files.len() < limit, mandara_i18n::t("The shortcut configuration includes too many files."));
+            files.push(directory.join(unescape_glob_path(&path)));
         }
     }
-    // Then shell words: blanks split, quotes group, `\` escapes.
-    let (mut words, mut word, mut started) = (Vec::new(), String::new(), false);
-    let mut chars = line.chars();
-    let mut quote: Option<char> = None;
-    while let Some(c) = chars.next() {
-        match (quote, c) {
-            (Some(q), c) if c == q => quote = None,
-            (Some('"'), '\\') => match chars.next() {
-                Some(n @ ('"' | '\\' | '$' | '`')) => word.push(n),
-                Some(n) => {
-                    word.push('\\');
-                    word.push(n);
-                }
-                None => word.push('\\'),
-            },
-            (Some(_), c) => {
-                if matches!(c, '*' | '?' | '\\') { word.push('\\'); }
-                word.push(c);
-            }
-            (None, '\'' | '"') => {
-                quote = Some(c);
-                started = true;
-            }
-            (None, '\\') => {
-                if let Some(n) = chars.next() {
-                    if matches!(n, '*' | '?' | '\\') { word.push('\\'); }
-                    word.push(n);
-                    started = true;
-                }
-            }
-            (None, c) if c.is_whitespace() => {
-                if started || !word.is_empty() {
-                    words.push(std::mem::take(&mut word));
-                }
-                started = false;
-            }
-            (None, c) => word.push(c),
-        }
-    }
-    if started || !word.is_empty() {
-        words.push(word);
-    }
-    words
-}
-
-/// Sway's split of a command line into arguments: blanks outside quotes
-/// separate them; quotes and backslashes are kept.
-fn sway_args(line: &str) -> Vec<String> {
-    let (mut args, mut arg, mut quote, mut escaped) = (Vec::new(), String::new(), None, false);
-    for c in line.chars() {
-        if escaped {
-            escaped = false;
-        } else if c == '\\' {
-            escaped = true;
-        } else if let Some(q) = quote {
-            if c == q {
-                quote = None;
-            }
-        } else if c == '"' || c == '\'' {
-            quote = Some(c);
-        } else if c.is_whitespace() {
-            if !arg.is_empty() {
-                args.push(std::mem::take(&mut arg));
-            }
-            continue;
-        }
-        arg.push(c);
-    }
-    if !arg.is_empty() {
-        args.push(arg);
-    }
-    args
+    Ok(files)
 }
 
 /// Whether the pattern contains an unescaped wildcard.
@@ -2497,157 +2532,194 @@ fn has_glob(pattern: &str) -> bool {
     let mut chars = pattern.chars();
     while let Some(c) = chars.next() {
         match c {
-            '\\' => { chars.next(); }
-            '*' | '?' => return true,
+            '\\' => {
+                chars.next();
+            }
+            '*' | '?' | '[' => return true,
             _ => {}
         }
     }
     false
 }
 
-fn unescape_glob(pattern: &str) -> String {
-    let mut chars = pattern.chars();
-    let mut out = String::new();
-    while let Some(c) = chars.next() {
-        out.push(if c == '\\' { chars.next().unwrap_or(c) } else { c });
-    }
-    out
-}
-
 /// The existing paths an absolute glob names (`*`, `?` in any component),
 /// sorted.
-fn glob_path(pattern: &Path) -> Vec<PathBuf> {
-    let mut found = vec![PathBuf::new()];
+fn glob_path_bounded_from(directory: &Path, pattern: &Path, limit: usize) -> Result<Vec<PathBuf>> {
+    // Include scans must finish even when a glob matches nothing in a huge tree.
+    const MAX_ENTRIES: usize = 65_536;
+    let mut examined = 0;
+    let mut found = vec![directory.to_path_buf()];
     for part in pattern.components() {
         let name = part.as_os_str().to_string_lossy();
         if !has_glob(&name) {
+            let extra = unescape_glob_path(Path::new(part.as_os_str()));
+            let mut bytes = 0_usize;
             for p in &mut found {
-                p.push(unescape_glob(&name));
+                bytes = bytes.checked_add(p.as_os_str().len())
+                    .and_then(|bytes| bytes.checked_add(extra.as_os_str().len() + 1))
+                    .filter(|bytes| *bytes <= crate::keybinds::MAX_TOTAL_BYTES)
+                    .context(mandara_i18n::t("The shortcut configuration is too large to edit."))?;
+                p.push(&extra);
             }
             continue;
         }
-        found = found
-            .iter()
-            .flat_map(|dir| {
-                std::fs::read_dir(dir).into_iter().flatten().flatten().filter(|e| glob_match(&name, &e.file_name().to_string_lossy())).map(|e| e.path())
-            })
-            .collect();
+        anyhow::ensure!(part.as_os_str().to_str().is_some(), mandara_i18n::t("Computed shortcuts must be edited in their source configuration."));
+        let matcher = glob::Pattern::new(&name);
+        let mut next = Vec::new();
+        let mut bytes = 0_usize;
+        for dir in &found {
+            let entries = match std::fs::read_dir(dir) {
+                Ok(entries) => entries,
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+                    ) =>
+                {
+                    continue;
+                }
+                Err(error) => return Err(error).with_context(|| dir.display().to_string()),
+            };
+            for entry in entries {
+                examined += 1;
+                anyhow::ensure!(examined <= MAX_ENTRIES, mandara_i18n::t("The shortcut configuration is too large to edit."));
+                let entry = entry?;
+                let name = entry.file_name();
+                let name = name.to_str().context(mandara_i18n::t("Computed shortcuts must be edited in their source configuration."))?;
+                if matcher.matches(name) {
+                    bytes = bytes.checked_add(dir.as_os_str().len())
+                        .and_then(|bytes| bytes.checked_add(name.len() + 1))
+                        .filter(|bytes| *bytes <= crate::keybinds::MAX_TOTAL_BYTES)
+                        .context(mandara_i18n::t("The shortcut configuration is too large to edit."))?;
+                    next.push(entry.path());
+                }
+            }
+        }
+        found = next;
     }
-    found.retain(|p| p.exists());
+    for index in (0..found.len()).rev() {
+        match std::fs::symlink_metadata(&found[index]) {
+            Ok(_) => {}
+            Err(error) if matches!(error.kind(), std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory) => { found.swap_remove(index); }
+            Err(error) => return Err(error).with_context(|| found[index].display().to_string()),
+        }
+    }
+    anyhow::ensure!(found.len() <= limit, mandara_i18n::t("The shortcut configuration includes too many files."));
     found.sort();
-    found
+    Ok(found)
+}
+
+fn unescape_glob_path(path: &Path) -> PathBuf {
+    use std::os::unix::ffi::{OsStrExt as _, OsStringExt as _};
+    let mut bytes = path.as_os_str().as_bytes().iter().copied();
+    let mut result = Vec::with_capacity(path.as_os_str().len());
+    while let Some(byte) = bytes.next() {
+        result.push(if byte == b'\\' { bytes.next().unwrap_or(byte) } else { byte });
+    }
+    std::ffi::OsString::from_vec(result).into()
 }
 
 /// Shell glob match of one path component (`*` and `?`; hidden files only
 /// match a pattern that starts with `.`).
+#[cfg(test)]
 fn glob_match(pattern: &str, name: &str) -> bool {
-    if name.starts_with('.') && !pattern.starts_with('.') {
-        return false;
-    }
-    fn go(p: &[char], n: &[char]) -> bool {
-        match (p.first(), n.first()) {
-            (None, None) => true,
-            (Some('\\'), _) => match (p.get(1), n.first()) {
-                (Some(a), Some(b)) if a == b => go(&p[2..], &n[1..]),
-                _ => false,
-            },
-            (Some('*'), _) => go(&p[1..], n) || (!n.is_empty() && go(p, &n[1..])),
-            (Some('?'), Some(_)) => go(&p[1..], &n[1..]),
-            (Some(a), Some(b)) if a == b => go(&p[1..], &n[1..]),
-            _ => false,
-        }
-    }
-    go(&pattern.chars().collect::<Vec<_>>(), &name.chars().collect::<Vec<_>>())
+    glob::Pattern::new(pattern).matches(name)
 }
 
 /// Chords bound in the user's own config, following `source=` / `include`
 /// (but never Mandara's generated file).
-pub fn existing_chords(target: Target) -> BTreeSet<String> {
-    if target == Target::Mango {
-        return mango_keys::with_user_keys(|keys| {
-            mango_existing_chords(&target.user_config(), keys)
-        });
-    }
-    if target == Target::Sway {
-        return sway_existing_chords(&target.user_config());
-    }
-    let mut out = BTreeSet::new();
-    let mut stack = vec![target.user_config()];
-    let mut visited = BTreeSet::new();
-    let generated = target.generated_file();
-    while let Some(file) = stack.pop() {
-        // Never count a Mandara drop-in (ours, or another copy's) as the
-        // user's own binds.
-        if !visited.insert(file.clone()) || file == generated || is_generated(&file) {
-            continue;
-        }
-        let Ok(text) = std::fs::read_to_string(&file) else { continue;
-        };
-        out.extend(parse_chords(target, &text));
-        stack.extend(included_files(target, &file, &text));
-    }
-    out
+pub fn existing_chords(target: Target) -> Result<BTreeSet<String>> {
+    existing_chords_at(target, &target.user_config())
 }
 
-/// Sway reads `include`d files in place, and a `set $mod Mod4` in the main
-/// config holds in every file included after it (the usual
-/// `include /etc/sway/config.d/*` binds `$mod+…`): the user's binds are
-/// walked in order with the variables known at each point.
-fn sway_existing_chords(root: &Path) -> BTreeSet<String> {
-    sway_config_binds(&[root.to_path_buf()]).into_iter().map(|(_, bind)| bind.chord).collect()
+/// Native editors use the running compositor's config, including custom paths.
+/// A missing primary file is a new installation; incomplete existing files fail.
+pub fn existing_chords_at(target: Target, root: &Path) -> Result<BTreeSet<String>> {
+    if !root.try_exists()? { return Ok(BTreeSet::new()); }
+    existing_chords_checked(target, root)
+}
+
+/// Saving a native shortcut must fail visibly when conflict discovery is incomplete.
+pub fn existing_chords_checked(target: Target, root: &Path) -> Result<BTreeSet<String>> {
+    existing_chords_checked_in(target, root, &IncludeEnvironment::default())
+}
+
+pub fn existing_chords_checked_in(
+    target: Target,
+    root: &Path,
+    environment: &IncludeEnvironment,
+) -> Result<BTreeSet<String>> {
+    if target == Target::Niri {
+        let scan = crate::keybinds::scan_roots_in(target, [root.to_path_buf()], environment);
+        if let Some((_, error)) = scan.errors.first() { anyhow::bail!(error.clone()); }
+        return Ok(scan.sources.into_iter().flat_map(|source| source.bindings)
+            .filter_map(|binding| binding.chord).collect());
+    }
+    if target == Target::Sway {
+        return sway_read::checked_in(root, environment);
+    }
+    if target == Target::Hyprland {
+        let real = std::fs::canonicalize(root)?;
+        let source = crate::keybinds::read_source(root)?;
+        if !crate::keybinds::hyprland_lua(&real, &source) {
+            return hyprland_probe::chords(root, environment);
+        }
+    }
+    let mut budget = read_budget::ReadBudget::default();
+    if target == Target::Mango {
+        return mango_keys::with_user_keys(|keys| {
+            mango_read::chords_from(
+                root,
+                keys,
+                crate::keybinds::MAX_BINDINGS,
+                &mut |path| budget.read(path),
+                environment,
+            )
+        });
+    }
+    let mut out = BTreeSet::new();
+    let mut stack = vec![root.to_path_buf()];
+    let mut visited = BTreeSet::new();
+    while let Some(file) = stack.pop() {
+        if is_generated(&file) { continue; }
+        if !visited.insert(std::fs::canonicalize(&file)?) { continue; }
+        let Some(text) = budget.read(&file)? else { continue; };
+        if target == Target::Hyprland {
+            out.extend(hyprland_chords_checked(&text)?.into_iter().map(|(_, chord)| chord));
+        } else {
+            out.extend(parse_chords(target, &text));
+        }
+        anyhow::ensure!(
+            out.len() <= crate::keybinds::MAX_BINDINGS,
+            mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
+        );
+        stack.extend(included_files_bounded_in(
+            target,
+            &file,
+            &text,
+            budget.remaining_files().saturating_sub(stack.len()),
+            environment,
+        )?);
+    }
+    Ok(out)
 }
 
 /// MangoWM reads `source=` files in place and keeps one key mode across
 /// them, so the user's binds are walked in order. Mandara's binds live in
 /// the key mode in force where its drop-in is sourced (`default` when it
 /// isn't sourced yet); only user binds that can meet that mode count.
+#[cfg(test)]
 fn mango_existing_chords(root: &Path, keys: &mango_keys::MangoKeys) -> BTreeSet<String> {
-    struct Walk<'k> {
-        keys: &'k mango_keys::MangoKeys,
-        visited: BTreeSet<PathBuf>,
-        binds: Vec<(String, String)>,
-        ours: Option<String>,
-    }
-    fn walk(w: &mut Walk, file: &Path, mode: String) -> String {
-        if !w.visited.insert(file.to_path_buf()) {
-            return mode;
-        }
-        let Ok(text) = std::fs::read_to_string(file) else { return mode;
-        };
-        let mut mode = mode;
-        // Split the file at its `source=` lines so each part starts in the
-        // mode the previous part (or sourced file) left.
-        let mut chunk = String::new();
-        for line in text.lines() {
-            let sourced = (!line.trim_start().starts_with('#')).then(|| include_path(Target::Mango, line)).flatten();
-            match sourced {
-                Some(path) => {
-                    mode = flush(w, &mut chunk, mode);
-                    let path = resolve_include(file, &path);
-                    if path == Target::Mango.generated_file() || is_generated(&path) {
-                        w.ours.get_or_insert_with(|| mode.clone());
-                    } else {
-                        mode = walk(w, &path, mode);
-                    }
-                }
-                None => {
-                    chunk.push_str(line);
-                    chunk.push('\n');
-                }
-            }
-        }
-        flush(w, &mut chunk, mode)
-    }
-    fn flush(w: &mut Walk, chunk: &mut String, mode: String) -> String {
-        let (binds, mode) = mango_binds(chunk, &mode, w.keys);
-        w.binds.extend(binds.into_iter().map(|b| (b.chord, b.mode)));
-        chunk.clear();
-        mode
-    }
-    let mut w = Walk { keys, visited: BTreeSet::new(), binds: Vec::new(), ours: None };
-    walk(&mut w, root, mango_keys::DEFAULT_MODE.to_string());
-    let ours = w.ours.unwrap_or_else(|| mango_keys::DEFAULT_MODE.to_string());
-    w.binds.into_iter().filter(|(_, mode)| mango_keys::modes_meet(mode, &ours)).map(|(chord, _)| chord).collect()
+    // Historical setup scans skip unreadable sources; editor saves use the
+    // checked reader and propagate every failure before publishing a binding.
+    mango_read::chords_from(
+        root,
+        keys,
+        usize::MAX,
+        &mut |file| Ok(std::fs::read_to_string(file).ok()),
+        &IncludeEnvironment::default(),
+    )
+    .unwrap_or_default()
 }
 
 /// A file Mandara generates (`…/mandara/generated/…`).
@@ -2745,58 +2817,68 @@ pub struct SwayBind {
 /// (they only act in that mode). `bindcode` binds name raw keycodes and
 /// are left out too.
 pub fn sway_binds(text: &str) -> Vec<SwayBind> {
-    sway_binds_with(text, &mut Vec::new())
+    sway_binds_checked(text).unwrap_or_default()
+}
+
+pub(crate) fn sway_binds_checked(text: &str) -> Result<Vec<SwayBind>> {
+    sway_binds_in(text, &mut Vec::new(), &mut Vec::new(), &mut 0)
 }
 
 /// Sets `$name` in `vars`: a second `set $mod …` replaces the first (sway
 /// uses the latest value from there on), and names stay longest first, so
 /// `$mod` never eats `$modShift`.
 pub(crate) fn set_var(vars: &mut Vec<(String, String)>, name: &str, value: &str) {
+    set_var_owned(vars, name, value.to_owned());
+}
+
+fn set_var_owned(vars: &mut Vec<(String, String)>, name: &str, value: String) {
     match vars.iter_mut().find(|(n, _)| n == name) {
-        Some((_, v)) => *v = value.to_string(),
+        Some((_, v)) => *v = value,
         None => {
-            vars.push((name.to_string(), value.to_string()));
+            vars.push((name.to_string(), value));
             vars.sort_by_key(|(n, _)| std::cmp::Reverse(n.len()));
         }
     }
 }
 
-/// [`sway_binds`] with the variables already set before `text` (and
-/// those it sets added).
-fn sway_binds_with(text: &str, vars: &mut Vec<(String, String)>) -> Vec<SwayBind> {
-    sway_binds_in(text, vars, &mut Vec::new())
-}
-
-fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<String>) -> Vec<SwayBind> {
+fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<String>, retained: &mut usize) -> Result<Vec<SwayBind>> {
     let mut out = Vec::new();
-    for (i, raw) in text.lines().enumerate() {
+    for logical in crate::keybinds::logical_lines::LogicalLines::new(text, crate::keybinds::logical_lines::Continuation::Sway) {
+        let logical = logical?;
+        let i = logical.number - 1;
+        let raw = logical.text.as_ref();
         let line = raw.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
+        if line == "{" { continue; }
         if line == "}" {
             blocks.pop();
             continue;
         }
-        let mut line = line.to_string();
+        let command = sway_vars::command(line, vars)?;
+        let line = command.as_ref();
         if let Some(rest) = line.strip_prefix("set ")
             && let Some((name, value)) = rest.trim().split_once(char::is_whitespace)
             && name.starts_with('$')
         {
-            let value = vars.iter().fold(value.trim().to_string(), |value, (name, replacement)| {
-                    value.replace(name, replacement)
-                });
-            set_var(vars, name, &value);
+            let value = sway_vars::expand(value.trim(), vars)?;
+            let value = sway_escape::assignment(&value)?;
+            sway_vars::check_assignment(vars, name, &value)?;
+            set_var_owned(vars, name, value);
             continue;
         }
-        for (name, value) in vars.iter() {
-            line = line.replace(name.as_str(), value);
-        }
-        let opens_block = line.ends_with('{');
+        let line = sway_vars::expand(line, vars)?;
+        let opens_block = line.ends_with('{') || crate::keybinds::logical_lines::followed_by_brace(text, logical.end);
         let body = line.trim_end_matches('{').trim_end();
-        let in_bind_block = blocks.last().is_some_and(|b| b == "bindsym") && blocks.len() == 1;
+        let in_bind_block = blocks.last().is_some_and(|b| b.split_whitespace().next() == Some("bindsym")) && blocks.len() == 1;
         if opens_block {
-            blocks.push(body.split_whitespace().next().unwrap_or_default().to_string());
+            let header = if body.split_whitespace().next() == Some("bindsym") { body } else { body.split_whitespace().next().unwrap_or_default() };
+            *retained = retained.checked_add(header.len())
+                .and_then(|bytes| bytes.checked_add(std::mem::size_of::<String>()))
+                .filter(|bytes| *bytes <= crate::keybinds::MAX_TOTAL_BYTES)
+                .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit.")))?;
+            blocks.push(header.to_owned());
             continue;
         }
         let words: Vec<&str> = if in_bind_block {
@@ -2810,11 +2892,20 @@ fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<
         let Some(combo) = words.next() else { continue };
         let mut parts: Vec<&str> = combo.split('+').filter(|p| !p.is_empty()).collect();
         let Some(key) = parts.pop() else { continue };
+        let command_bytes = words.clone().map(str::len).sum::<usize>() + words.clone().count().saturating_sub(1);
+        let expanded_bytes = body.len() + if in_bind_block { blocks.last().map_or(0, |header| header.len() + 1) } else { 0 };
+        let bytes = command_bytes.checked_add(expanded_bytes).and_then(|bytes| retained.checked_add(bytes))
+            .filter(|&bytes| bytes <= crate::keybinds::MAX_TOTAL_BYTES)
+            .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit.")))?;
+        let resolved = chord(parts.into_iter(), &keysym_for(key));
+        *retained = bytes.checked_add(resolved.len()).filter(|&bytes| bytes <= crate::keybinds::MAX_TOTAL_BYTES)
+            .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit.")))?;
         let command = words.collect::<Vec<_>>().join(" ");
-        let expanded = if in_bind_block { format!("bindsym {body}") } else { body.to_string() };
-        out.push(SwayBind { line: i, chord: chord(parts.into_iter(), &keysym_for(key)), command, expanded });
+        let expanded = if in_bind_block { format!("{} {body}", blocks.last().expect("binding block has a header")) } else { body.to_string() };
+        anyhow::ensure!(out.len() < crate::keybinds::MAX_BINDINGS, mandara_i18n::t("The compositor has too many shortcuts to edit at once."));
+        out.push(SwayBind { line: i, chord: resolved, command, expanded });
     }
-    out
+    Ok(out)
 }
 
 /// The table a TOML header line opens (`[keybinds]` → `keybinds`,
@@ -2899,28 +2990,46 @@ pub(crate) struct MangoBind {
 /// the key mode in force at the end of the file (a sourced file carries
 /// it on).
 pub(crate) fn mango_binds(text: &str, mode: &str, keys: &mango_keys::MangoKeys) -> (Vec<MangoBind>, String) {
-    let mut mode = mode.to_string();
+    mango_binds_checked(text, mode, keys, &mut 0, crate::keybinds::MAX_BINDINGS)
+        .unwrap_or_else(|_| (Vec::new(), mode.to_owned()))
+}
+
+fn retain_mango_binding(retained: &mut usize, chord: &str, mode: &str) -> Result<()> {
+    anyhow::ensure!(mode.len() <= crate::keybinds::MAX_FIELD_BYTES, mandara_i18n::t("The shortcut configuration is too large to edit."));
+    *retained = retained.checked_add(std::mem::size_of::<MangoBind>())
+        .and_then(|bytes| bytes.checked_add(chord.len()))
+        .and_then(|bytes| bytes.checked_add(mode.len()))
+        .filter(|bytes| *bytes <= crate::keybinds::MAX_TOTAL_BYTES)
+        .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit.")))?;
+    Ok(())
+}
+
+fn mango_binds_checked(text: &str, mode: &str, keys: &mango_keys::MangoKeys, retained: &mut usize, limit: usize) -> Result<(Vec<MangoBind>, String)> {
+    anyhow::ensure!(mode.len() <= crate::keybinds::MAX_FIELD_BYTES, mandara_i18n::t("The shortcut configuration is too large to edit."));
+    let mut mode = mode.to_owned();
     let mut out = Vec::new();
     for (i, line) in text.lines().enumerate() {
         let line = line.trim();
-        if line.starts_with('#') {
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else { continue;
-        };
+        if line.starts_with('#') { continue; }
+        let Some((key, value)) = line.split_once('=') else { continue; };
         let key = key.trim();
         if key == mango_keys::KEY_MODE_KEY {
-            mode = value.trim().to_string();
+            let value = value.trim();
+            anyhow::ensure!(value.len() <= crate::keybinds::MAX_FIELD_BYTES, mandara_i18n::t("The shortcut configuration is too large to edit."));
+            mode = value.to_owned();
             continue;
         }
-        let Some(flags) = mango_keys::bind_flags(key) else { continue;
-        };
+        let Some(flags) = mango_keys::bind_flags(key) else { continue; };
         let mut parts = value.splitn(3, ',');
         if let (Some(mods), Some(name)) = (parts.next(), parts.next()) {
-            out.push(MangoBind { line: i, chord: mango_chord(mods.split('+'), keys.canonical(name, mango_keys::keysym_only(flags))), mode: mode.clone() });
+            anyhow::ensure!(out.len() < limit, mandara_i18n::t("The compositor has too many shortcuts to edit at once."));
+            anyhow::ensure!(mods.len() <= crate::keybinds::MAX_FIELD_BYTES && name.len() <= crate::keybinds::MAX_FIELD_BYTES, mandara_i18n::t("The shortcut configuration is too large to edit."));
+            let chord = mango_chord(mods.split('+'), keys.canonical(name, mango_keys::keysym_only(flags)));
+            retain_mango_binding(retained, &chord, &mode)?;
+            out.push(MangoBind { line: i, chord, mode: mode.clone() });
         }
     }
-    (out, mode)
+    Ok((out, mode))
 }
 
 /// A MangoWM chord: modifiers as MangoWM reads them (`super_l` is Super,
@@ -2944,49 +3053,40 @@ pub fn target_chord(target: Target, bind: &Keybind) -> String {
 }
 
 fn niri_chords(text: &str) -> Vec<(usize, String)> {
-    let mut out = Vec::new();
-    let mut depth = 0i32;
-    let mut in_binds = false;
-    for (i, line) in text.lines().enumerate() {
-        let line = line.trim();
-        if line.starts_with("//") {
-            continue;
-        }
-        if depth == 0 && line.starts_with("binds") {
-            in_binds = true;
-        } else if in_binds
-            && depth == 1
-            && let Some(first) = line.split_whitespace().next().filter(|w| !w.starts_with('}'))
-        {
-            let mut pieces: Vec<&str> = first.trim_matches('"').split('+').collect();
-            let key = pieces.pop().unwrap_or_default();
-            out.push((i, chord(pieces.into_iter(), &keysym_for(key))));
-        }
-        depth += line.matches('{').count() as i32 - line.matches('}').count() as i32;
-        if depth <= 0 {
-            in_binds = false;
-            depth = 0;
-        }
-    }
-    out
+    let Ok(document) = kdl::KdlDocument::parse_v1(text) else { return Vec::new(); };
+    document.nodes().iter().filter(|node| node.name().value() == "binds")
+        .filter_map(kdl::KdlNode::children).flat_map(|group| group.nodes())
+        .map(|binding| {
+            let mut parts = binding.name().value().rsplitn(2, '+');
+            let key = parts.next().unwrap_or_default();
+            let modifiers = parts.next().unwrap_or_default();
+            (crate::keybinds::line(text, binding.name().span().offset()) - 1,
+                chord(modifiers.split('+'), &keysym_for(key)))
+        }).collect()
 }
 
 fn hyprland_chords(text: &str) -> Vec<(usize, String)> {
+    hyprland_chords_checked(text).unwrap_or_default()
+}
+
+fn hyprland_chords_checked(text: &str) -> Result<Vec<(usize, String)>> {
     let mut out = Vec::new();
+    let mut retained = 0usize;
     // `$mainMod = SUPER` (hyprlang) and `local mainMod = "SUPER"` (Lua).
     let mut vars: Vec<(String, String)> = Vec::new();
     for (i, raw) in text.lines().enumerate() {
         let lua_line = raw.trim_start().starts_with("local ") || raw.contains("hl.");
         let line = if lua_line { raw.split("--").next().unwrap_or_default().trim() } else { raw.split('#').next().unwrap_or_default().trim() };
         if let Some((name, value)) = line.strip_prefix('$').and_then(|r| r.split_once('=')) {
-            vars.push((format!("${}", name.trim()), value.trim().to_string()));
-            // Longest first, so `$mod` never eats `$modShift`.
-            vars.sort_by_key(|(n, _)| std::cmp::Reverse(n.len()));
+            let name = format!("${}", name.trim());
+            sway_vars::check_assignment(&vars, &name, value.trim())?;
+            set_var(&mut vars, &name, value.trim());
             continue;
         }
         if let Some((name, value)) = line.strip_prefix("local ").and_then(|r| r.split_once('=')) {
-            if let Some(v) = lua_concat(value.trim(), &vars) {
-                vars.push((name.trim().to_string(), v));
+            if let Some(v) = lua_concat(value.trim(), &vars)? {
+                sway_vars::check_assignment(&vars, name.trim(), &v)?;
+                set_var_owned(&mut vars, name.trim(), v);
             }
             continue;
         }
@@ -2994,25 +3094,32 @@ fn hyprland_chords(text: &str) -> Vec<(usize, String)> {
             let args = &line[at + "hl.bind(".len()..];
             let Some(first) = lua_first_arg(args) else { continue;
             };
-            let Some(combo) = lua_concat(first, &vars) else { continue;
+            let Some(combo) = lua_concat(first, &vars)? else { continue;
             };
             let mut parts: Vec<&str> = combo.split('+').map(str::trim).filter(|p| !p.is_empty()).collect();
             let Some(key) = parts.pop() else { continue };
-            out.push((i, chord(hypr_mods(&parts.join(" ")).into_iter(), &keysym_for(key))));
+            let chord = chord(hypr_mods(&parts.join(" ")).into_iter(), &keysym_for(key));
+            retain_hyprland_chord(&mut out, &mut retained, i, chord)?;
             continue;
         }
         let Some(rest) = line.strip_prefix("bind").and_then(|r| r.split_once('=')).map(|(_, r)| r) else { continue;
         };
-        let mut rest = rest.to_string();
-        for (name, value) in vars.iter().filter(|(n, _)| n.starts_with('$')) {
-            rest = rest.replace(name.as_str(), value);
-        }
+        let rest = sway_vars::expand(rest, &vars)?;
         let mut parts = rest.splitn(3, ',');
         if let (Some(mods), Some(key)) = (parts.next(), parts.next()) {
-            out.push((i, chord(hypr_mods(mods).into_iter(), &keysym_for(key.trim()))));
+            let chord = chord(hypr_mods(mods).into_iter(), &keysym_for(key.trim()));
+            retain_hyprland_chord(&mut out, &mut retained, i, chord)?;
         }
     }
-    out
+    Ok(out)
+}
+
+fn retain_hyprland_chord(out: &mut Vec<(usize, String)>, retained: &mut usize, line: usize, chord: String) -> Result<()> {
+    *retained = retained.checked_add(chord.len()).filter(|&bytes| bytes <= crate::keybinds::MAX_TOTAL_BYTES)
+        .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit.")))?;
+    anyhow::ensure!(out.len() < crate::keybinds::MAX_BINDINGS, mandara_i18n::t("The compositor has too many shortcuts to edit at once."));
+    out.push((line, chord));
+    Ok(())
 }
 
 /// The first argument of a Lua call (up to its top-level comma or `)`).
@@ -3035,17 +3142,21 @@ fn lua_first_arg(args: &str) -> Option<&str> {
 
 /// Value of a Lua expression made of string literals and known variables
 /// joined with `..` (`mainMod .. " + Q"`); `None` for anything else.
-fn lua_concat(expr: &str, vars: &[(String, String)]) -> Option<String> {
+fn lua_concat(expr: &str, vars: &[(String, String)]) -> Result<Option<String>> {
     let mut out = String::new();
     for piece in expr.split("..").map(str::trim) {
         let quoted = piece.len() >= 2 && ((piece.starts_with('"') && piece.ends_with('"')) || (piece.starts_with('\'') && piece.ends_with('\'')));
-        if quoted {
-            out.push_str(&piece[1..piece.len() - 1]);
+        let value = if quoted {
+            &piece[1..piece.len() - 1]
+        } else if let Some((_, value)) = vars.iter().find(|(n, _)| n == piece) {
+            value
         } else {
-            out.push_str(&vars.iter().find(|(n, _)| n == piece)?.1);
-        }
+            return Ok(None);
+        };
+        anyhow::ensure!(out.len().checked_add(value.len()).is_some_and(|bytes| bytes <= crate::keybinds::MAX_FILE_BYTES), mandara_i18n::t("The shortcut configuration is too large to edit."));
+        out.push_str(value);
     }
-    Some(out)
+    Ok(Some(out))
 }
 
 /// Writes the generated drop-in atomically; returns its path.
@@ -3579,6 +3690,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn sparse_globs_limit_final_sources_instead_of_parent_directories() {
+        let directory = tempfile::tempdir().unwrap();
+        for name in ["one", "two", "three"] {
+            std::fs::create_dir(directory.path().join(name)).unwrap();
+        }
+        let one = directory.path().join("one/keys.conf");
+        std::fs::write(&one, "").unwrap();
+        assert_eq!(glob_path_bounded_from(directory.path(), Path::new("*/keys.conf"), 2).unwrap(), [one]);
+        for name in ["two", "three"] {
+            std::fs::write(directory.path().join(name).join("keys.conf"), "").unwrap();
+        }
+        assert!(glob_path_bounded_from(directory.path(), Path::new("*/keys.conf"), 2).is_err());
+    }
+
+
+    #[test]
     fn exec_keybind_alias_keeps_the_program_and_writes_canonical_spawn() {
         let bind: Keybind = toml::from_str(
             r#"mods = ["super"]
@@ -3633,6 +3760,142 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         assert_eq!(chord(["SUPER", "SHIFT"].into_iter(), "S"), "shift+super+s");
         assert_eq!(chord(["Mod"].into_iter(), "Space"), "super+space");
         assert_eq!(chord(["NONE"].into_iter(), "Print"), "print");
+    }
+
+    #[test]
+    fn non_latin_shortcut_keys_never_slice_inside_utf8_characters() {
+        for key in ["أ", "ش", "漢", "漢字", "🙂", "É"] {
+            assert!(!is_function_key(key));
+            assert!(!bare_key_allowed(key));
+            assert_eq!(keysym_for(key), key.to_lowercase());
+        }
+        assert!(is_function_key("F12"));
+        assert!(!is_function_key("F"));
+    }
+
+    #[test]
+    fn niri_inline_bindings_keep_source_lines_and_ignore_commented_nodes() {
+        let source = "// binds { Super+W { quit; }; }\nbinds { Super+Q { spawn \"{text}\"; }; Super+E { quit; }; }\n/- binds { Super+R { quit; }; }\n";
+        assert_eq!(chords_by_line(Target::Niri, source), [(1, "super+q".into()), (1, "super+e".into())]);
+    }
+
+    #[test]
+    fn mango_mode_storage_is_bounded_before_each_binding_is_copied() {
+        let keys = mango_keys::MangoKeys::us();
+        let oversized = format!("key_mode={}\n{}", "m".repeat(512 * 1024), "bind=SUPER,Q,killclient\n".repeat(4096));
+        assert!(oversized.len() < crate::keybinds::MAX_FILE_BYTES);
+        assert!(mango_binds_checked(&oversized, "default", &keys, &mut 0, crate::keybinds::MAX_BINDINGS).is_err());
+        let accumulated = format!("key_mode={}\n{}", "m".repeat(crate::keybinds::MAX_FIELD_BYTES), "bind=SUPER,Q,killclient\n".repeat(256));
+        let mut retained = 0;
+        assert!(mango_binds_checked(&accumulated, "default", &keys, &mut retained, crate::keybinds::MAX_BINDINGS).is_err());
+        assert!(retained <= crate::keybinds::MAX_TOTAL_BYTES);
+        let mut retained = crate::keybinds::MAX_TOTAL_BYTES - 1;
+        assert!(mango_binds_checked("bind=SUPER,Q,killclient\n", "default", &keys, &mut retained, crate::keybinds::MAX_BINDINGS).is_err());
+    }
+
+    #[test]
+    fn mango_include_names_are_not_classified_as_lua_calls() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config.conf");
+        for name in ["requires.conf", "dofile.conf", "hl.conf"] {
+            std::fs::write(directory.path().join(name), "bind=SUPER,Space,spawn,foot\n").unwrap();
+            std::fs::write(&root, format!("source={name}\n")).unwrap();
+            assert!(existing_chords_checked_in(Target::Mango, &root, &IncludeEnvironment::captured([])).unwrap().contains("super+space"));
+        }
+    }
+
+    #[test]
+    fn checked_niri_includes_keep_optional_properties_and_literal_paths() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config.kdl");
+        let child = directory.path().join(" $literal.kdl ");
+        std::fs::write(&child, "binds { Super+Q { close-window; }; }\n").unwrap();
+        let body = "include optional=true \"absent.kdl\"; include \" $literal.kdl \"\n";
+        std::fs::write(&root, body).unwrap();
+        let environment = IncludeEnvironment::captured([]);
+        let files = included_files_bounded_in(Target::Niri, &root, body, 8, &environment).unwrap();
+        assert_eq!(files, [child]);
+        assert!(existing_chords_checked_in(Target::Niri, &root, &environment).unwrap().contains("super+q"));
+        std::fs::write(&root, "include optional=false \"absent.kdl\"\n").unwrap();
+        assert!(existing_chords_checked_in(Target::Niri, &root, &environment).is_err());
+        let invalid = directory.path().join("not-regular.kdl");
+        std::fs::create_dir(&invalid).unwrap();
+        std::fs::write(&root, "include optional=true \"not-regular.kdl\"\n").unwrap();
+        assert!(existing_chords_checked_in(Target::Niri, &root, &environment).is_err(), "optional includes suppress absence, not other read errors");
+    }
+
+    #[test]
+    fn mango_replays_completed_includes_in_the_current_mode_and_rejects_recursion() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config.conf");
+        let child = directory.path().join("keys.conf");
+        std::fs::write(&child, "bind=SUPER,Space,spawn,foot\n").unwrap();
+        std::fs::write(&root, "key_mode=resize\nsource=keys.conf\nkey_mode=default\nsource=keys.conf\nsource_optional=mandara/generated/mango.conf\n").unwrap();
+        assert!(existing_chords_checked_in(Target::Mango, &root, &IncludeEnvironment::captured([])).unwrap().contains("super+space"));
+        std::fs::write(&child, "source=config.conf\n").unwrap();
+        assert!(existing_chords_checked_in(Target::Mango, &root, &IncludeEnvironment::captured([])).unwrap_err().to_string().contains(mandara_i18n::t("The shortcut configuration contains an include cycle.")));
+        let text = format!("# {}\n", "x".repeat(crate::keybinds::MAX_FILE_BYTES / 2));
+        std::fs::write(&child, &text).unwrap();
+        std::fs::write(&root, "source=keys.conf\n".repeat(crate::keybinds::MAX_TOTAL_BYTES / text.len() + 1)).unwrap();
+        assert!(existing_chords_checked_in(Target::Mango, &root, &IncludeEnvironment::captured([])).is_err());
+    }
+
+    #[test]
+    fn mango_toml_conflicts_keep_native_modes_and_generated_include_context() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config.toml");
+        let keys = mango_keys::MangoKeys::us();
+        let read = |root: &Path| {
+            let mut budget = read_budget::ReadBudget::default();
+            mango_read::chords_from(root, &keys, crate::keybinds::MAX_BINDINGS, &mut |path| budget.read(path), &IncludeEnvironment::captured([])).unwrap()
+        };
+        std::fs::write(&root, "[bind]\n'Super+Space'='spawn foot'\n[bind.resize.release]\n'Super+Q'='killclient'\n[bind.common]\n'Super+W'='spawn foot'\n").unwrap();
+        assert_eq!(read(&root), BTreeSet::from(["super+space".into(), "super+w".into()]));
+        std::fs::write(&root, "[global]\nkey_mode='resize'\nsource_optional=['mandara/generated/mango.conf']\n[bind.resize]\n'Super+Q'='killclient'\n[bind.\"other.mode\"]\n'Super+E'='spawn foot'\n[bind.common]\n'Super+W'='spawn foot'\n").unwrap();
+        assert_eq!(read(&root), BTreeSet::from(["super+q".into(), "super+w".into()]));
+        let legacy = directory.path().join("config.conf");
+        std::fs::write(&root, "[bind]\n'Super+Space'='spawn foot'\n[bind.resize]\n'Super+Q'='killclient'\n").unwrap();
+        std::fs::write(&legacy, "source=config.toml\nbind=SUPER,W,killclient\n").unwrap();
+        assert_eq!(read(&legacy), BTreeSet::from(["super+space".into(), "super+w".into()]));
+        std::os::unix::fs::symlink("cycle.conf", directory.path().join("cycle.conf")).unwrap();
+        std::fs::write(&legacy, "source_optional=cycle.conf\n").unwrap();
+        let mut budget = read_budget::ReadBudget::default();
+        assert!(mango_read::chords_from(&legacy, &keys, crate::keybinds::MAX_BINDINGS,
+            &mut |path| budget.read(path), &IncludeEnvironment::captured([])).is_err(),
+            "optional sources suppress absence, not symlink errors");
+    }
+
+    #[test]
+    fn mango_conflicts_cover_every_managed_include_mode_in_both_dialects() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("config.conf");
+        std::fs::write(&file, "key_mode=default\nbind=SUPER,Q,killclient\nsource_optional=mandara/generated/mango.conf\nkey_mode=resize\nbind=SUPER,Space,killclient\nsource_optional=mandara/generated/mango.conf\n").unwrap();
+        let expected = BTreeSet::from(["super+q".into(), "super+space".into()]);
+        let environment = IncludeEnvironment::captured([]);
+        assert_eq!(existing_chords_checked_in(Target::Mango, &file, &environment).unwrap(), expected);
+        let file = root.path().join("config.toml");
+        std::fs::write(&file, "[global]\nkey_mode='default'\nsource_optional=['mandara/generated/mango.conf', 'resize.toml']\n[bind]\n'Super+Q'='killclient'\n").unwrap();
+        std::fs::write(root.path().join("resize.toml"), "[global]\nkey_mode='resize'\nsource_optional=['mandara/generated/mango.conf']\n[bind.resize]\n'Super+Space'='killclient'\n").unwrap();
+        assert_eq!(existing_chords_checked_in(Target::Mango, &file, &environment).unwrap(), expected);
+    }
+
+    #[test]
+    fn checked_conflict_reads_keep_mango_modes_and_bound_every_native_source() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config.conf");
+        let child = directory.path().join("keys.conf");
+        std::fs::write(&root, "key_mode=resize\nsource=keys.conf\nkey_mode=default\nbind=SUPER,W,killclient\nsource_optional=missing.conf\n").unwrap();
+        std::fs::write(&child, "bind=SUPER,Q,killclient\n").unwrap();
+        assert_eq!(existing_chords_checked(Target::Mango, &root).unwrap(), BTreeSet::from(["super+w".into()]));
+        for target in [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway] {
+            std::fs::write(&root, vec![b'x'; crate::keybinds::MAX_FILE_BYTES + 1]).unwrap();
+            assert!(existing_chords_checked(target, &root).is_err(), "{target:?}");
+        }
+        std::fs::write(&root, "include *.keys\n").unwrap();
+        for index in 0..crate::keybinds::MAX_FILES {
+            std::fs::write(directory.path().join(format!("{index}.keys")), "").unwrap();
+        }
+        assert!(existing_chords_checked(Target::Sway, &root).is_err());
     }
 
     #[test]
@@ -4128,7 +4391,7 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         std::fs::create_dir_all(d.join("config.d")).unwrap();
         std::fs::write(d.join("config"), "set $mod Mod4\nbindsym $mod+Return exec foot\ninclude config.d/*\n").unwrap();
         std::fs::write(d.join("config.d/50-menu.conf"), "set $menu wofi\nbindsym $mod+space exec $menu\nbindsym $mod+Shift+s exec grim\n").unwrap();
-        let chords = sway_existing_chords(&d.join("config"));
+        let chords = existing_chords_at(Target::Sway, &d.join("config")).unwrap();
         assert_eq!(chords.into_iter().collect::<Vec<_>>(), ["shift+super+s", "super+return", "super+space"]);
     }
 
@@ -4234,6 +4497,64 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         let files = included_files(Target::Sway, &main, text);
         assert_eq!(files, vec![d.join("config.d/10-b.conf"), d.join("config.d/50-a.conf"), d.join("with space/x.conf")], "globs sorted, hidden files skipped, escapes undone");
         assert!(glob_match("*.conf", "a.conf") && glob_match("a?c", "abc") && !glob_match("*.conf", "a.kdl"));
+    }
+
+    #[test]
+    fn include_globs_skip_regular_file_branches_and_keep_bracket_escapes() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        std::fs::create_dir_all(root.join("conf.d/keys")).unwrap();
+        for name in [
+            "conf.d/README",
+            "conf.d/keys/10.conf",
+            "conf.d/keys/20.conf",
+            "conf.d/keys/[a].conf",
+        ] {
+            std::fs::write(root.join(name), "").unwrap();
+        }
+        let main = root.join("config");
+        assert_eq!(
+            included_files_bounded_in(
+                Target::Sway,
+                &main,
+                "include conf.d/*/[12]0.conf\n",
+                8,
+                &IncludeEnvironment::default()
+            )
+            .unwrap(),
+            vec![
+                root.join("conf.d/keys/10.conf"),
+                root.join("conf.d/keys/20.conf")
+            ]
+        );
+        assert_eq!(
+            included_files_bounded_in(
+                Target::Sway,
+                &main,
+                "include conf.d/keys/\\[a\\].conf\n",
+                8,
+                &IncludeEnvironment::default()
+            )
+            .unwrap(),
+            vec![root.join("conf.d/keys/[a].conf")]
+        );
+    }
+
+    #[test]
+    fn include_patterns_do_not_expand_the_literal_parent_directory() {
+        use std::os::unix::ffi::OsStringExt as _;
+        let directory = tempfile::tempdir().unwrap();
+        let base = directory.path().join(std::ffi::OsString::from_vec(b"[backup]*?\xff".to_vec()));
+        std::fs::create_dir_all(base.join("config.d")).unwrap();
+        for name in ["keys.conf", "config.d/10.conf"] { std::fs::write(base.join(name), "bindsym Mod4+q kill\n").unwrap(); }
+        let root = base.join("config");
+        let body = "include keys.conf\ninclude config.d/*.conf\n";
+        std::fs::write(&root, body).unwrap();
+        let files = included_files_bounded_in(Target::Sway, &root, body, 4, &IncludeEnvironment::default()).unwrap();
+        assert_eq!(files, [base.join("keys.conf"), base.join("config.d/10.conf")]);
+        assert!(existing_chords_checked_in(Target::Sway, &root, &IncludeEnvironment::default()).unwrap().contains("super+q"));
+        std::fs::write(base.join("config.d").join(std::ffi::OsString::from_vec(b"\xff.conf".to_vec())), "").unwrap();
+        assert!(included_files_bounded_in(Target::Sway, &root, body, 4, &IncludeEnvironment::default()).is_err());
     }
 
     #[test]
@@ -4389,4 +4710,15 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
             assert!(problems.is_empty(), "sway --validate complained:\n{}\n--- drop-in ---\n{}", problems.join("\n"), out.text);
         }
     }
+    #[test]
+    fn hyprland_legacy_and_lua_conflict_expansions_are_bounded() {
+        let mut lua = format!("local v0 = \"{}\"\n", "x".repeat(128 * 1024));
+        for index in 1..16 { lua.push_str(&format!("local v{index} = v{} .. v{}\n", index - 1, index - 1)); }
+        lua.push_str("hl.bind(v15, hl.dsp.window.close())\n");
+        assert!(hyprland_chords_checked(&lua).is_err());
+        let mut legacy = format!("$key = {}\n", "x".repeat(128 * 1024));
+        for _ in 0..128 { legacy.push_str("bind = SUPER, $key, exec, foot\n"); }
+        assert!(hyprland_chords_checked(&legacy).is_err());
+    }
+
 }

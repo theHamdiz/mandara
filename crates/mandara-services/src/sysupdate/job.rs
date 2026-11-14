@@ -69,7 +69,13 @@ impl Request {
     }
 
     fn flatpak(&self) -> bool {
-        matches!(self, Request::System { flatpak: true } | Request::SystemAur { flatpak: true, .. } | Request::Aur { flatpak: true, .. } | Request::Flatpak)
+        matches!(
+            self,
+            Request::System { flatpak: true }
+                | Request::SystemAur { flatpak: true, .. }
+                | Request::Aur { flatpak: true, .. }
+                | Request::Flatpak
+        )
     }
 
     /// The AUR helper this request runs, if any.
@@ -177,8 +183,15 @@ impl JobState {
     /// Whether a cancel can be offered right now.
     pub fn cancellable(&self) -> bool {
         // The AUR helper's pacman installing what it built isn't stopped.
-        let installing_aur = self.step_kind == Some(StepKind::Aur) && matches!(self.tracker.phase, Phase::Installing | Phase::Hooks | Phase::Verifying);
-        self.finished.is_none() && !self.cancel_requested && self.step_kind.is_some_and(StepKind::cancellable) && !installing_aur
+        let installing_aur = self.step_kind == Some(StepKind::Aur)
+            && matches!(
+                self.tracker.phase,
+                Phase::Installing | Phase::Hooks | Phase::Verifying
+            );
+        self.finished.is_none()
+            && !self.cancel_requested
+            && self.step_kind.is_some_and(StepKind::cancellable)
+            && !installing_aur
     }
 
     /// The program the current step runs, as the card names it (`paru`
@@ -202,7 +215,11 @@ impl JobState {
     }
 
     pub fn phase(&self) -> Phase {
-        if self.finished.is_some() { Phase::Finished } else { self.tracker.phase }
+        if self.finished.is_some() {
+            Phase::Finished
+        } else {
+            self.tracker.phase
+        }
     }
 }
 
@@ -241,7 +258,12 @@ impl Job {
             s.revision += 1;
             if s.in_user_step {
                 self.user_cancel.request();
-            } else if let Some(tx) = self.cancel.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            } else if let Some(tx) = self
+                .cancel
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .as_ref()
+            {
                 let _ = tx.send(());
             }
         }
@@ -260,6 +282,10 @@ pub struct RootProc {
 /// Starts the privileged helper and the rootless steps (the real one uses
 /// pkexec; tests and the sandbox replay recorded output).
 pub trait Launcher: Send + Sync {
+    /// Validate before updating a user-owned flake or requesting authorization.
+    fn check_nix(&self, _action: NixAction, _cancel: &CancelSignal) -> Result<(), String> {
+        Ok(())
+    }
     /// Makes sure a root-owned helper that speaks this protocol exists
     /// (installing or refreshing it costs one approval). Returns it.
     fn prepare(&self) -> Result<PathBuf, Failure>;
@@ -277,7 +303,11 @@ pub trait Launcher: Send + Sync {
     /// Facts for the restart check: `(kernel release, modules folder,
     /// reboot-required flag)`.
     fn restart_facts(&self) -> (String, PathBuf, PathBuf) {
-        (super::kernel_release(), PathBuf::from(MODULES), PathBuf::from(REBOOT_REQUIRED))
+        (
+            super::kernel_release(),
+            PathBuf::from(MODULES),
+            PathBuf::from(REBOOT_REQUIRED),
+        )
     }
     /// The password dialog the AUR step's `sudo` asks through (the shell's).
     fn prompter(&self) -> Option<Arc<dyn askpass::Prompter>> {
@@ -285,10 +315,19 @@ pub trait Launcher: Send + Sync {
     }
     /// Where the AUR step's askpass folder goes (your runtime folder).
     fn askpass_parent(&self) -> PathBuf {
-        std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).filter(|p| p.is_dir()).unwrap_or_else(std::env::temp_dir)
+        std::env::var_os("XDG_RUNTIME_DIR")
+            .map(PathBuf::from)
+            .filter(|p| p.is_dir())
+            .unwrap_or_else(std::env::temp_dir)
     }
     /// Runs the AUR helper's `step` as you, with `session`'s askpass.
-    fn aur(&self, step: &Step, session: &askpass::Session, line: &mut dyn FnMut(&str), cancel: &CancelSignal) -> std::io::Result<Option<i32>> {
+    fn aur(
+        &self,
+        step: &Step,
+        session: &askpass::Session,
+        line: &mut dyn FnMut(&str),
+        cancel: &CancelSignal,
+    ) -> std::io::Result<Option<i32>> {
         run_aur(step, session, line, cancel)
     }
 }
@@ -296,15 +335,39 @@ pub trait Launcher: Send + Sync {
 /// Runs an AUR helper as you: no terminal (its own session, so `sudo`
 /// can't read one and a cancel reaches the whole build), standard input
 /// closed, `LANG=C`, and the askpass folder first on `PATH`.
-pub fn run_aur(step: &Step, session: &askpass::Session, line: &mut dyn FnMut(&str), cancel: &CancelSignal) -> std::io::Result<Option<i32>> {
+pub fn run_aur(
+    step: &Step,
+    session: &askpass::Session,
+    line: &mut dyn FnMut(&str),
+    cancel: &CancelSignal,
+) -> std::io::Result<Option<i32>> {
     use std::os::unix::process::CommandExt as _;
-    let program = crate::updates::find_program(step.program).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, format!("{} is not installed", step.program)))?;
+    let program = crate::updates::find_program(step.program).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("{} is not installed", step.program),
+        )
+    })?;
     let mut cmd = Command::new(program);
-    cmd.args(&step.args).env("LANG", "C").env("LC_ALL", "C").envs(step.env.iter().copied()).envs(session.env()).env("PATH", session.path()).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.args(&step.args)
+        .env("LANG", "C")
+        .env("LC_ALL", "C")
+        .envs(step.env.iter().copied())
+        .envs(session.env())
+        .env("PATH", session.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     // SAFETY: setsid is async-signal-safe and allocates nothing; it runs
     // in the forked child before exec.
     unsafe {
-        cmd.pre_exec(|| if libc::setsid() == -1 { Err(std::io::Error::last_os_error()) } else { Ok(()) });
+        cmd.pre_exec(|| {
+            if libc::setsid() == -1 {
+                Err(std::io::Error::last_os_error())
+            } else {
+                Ok(())
+            }
+        });
     }
     let mut child = cmd.spawn()?;
     session.set_root(child.id());
@@ -317,9 +380,19 @@ pub fn run_aur(step: &Step, session: &askpass::Session, line: &mut dyn FnMut(&st
 pub struct UserRunner;
 
 impl Runner for UserRunner {
-    fn run(&self, step: &Step, line: &mut dyn FnMut(&str), cancel: &CancelSignal) -> std::io::Result<Option<i32>> {
+    fn run(
+        &self,
+        step: &Step,
+        line: &mut dyn FnMut(&str),
+        cancel: &CancelSignal,
+    ) -> std::io::Result<Option<i32>> {
         use std::os::unix::process::CommandExt as _;
-        let program = crate::updates::find_program(step.program).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, format!("{} is not installed", step.program)))?;
+        let program = crate::updates::find_program(step.program).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("{} is not installed", step.program),
+            )
+        })?;
         let mut child = Command::new(program)
             .args(&step.args)
             .env("LANG", "C")
@@ -344,22 +417,35 @@ fn helper_failure(code: Option<i32>, stderr: &str) -> Failure {
         Some(PKEXEC_FAILED) => FailureKind::NotAuthorized,
         _ => FailureKind::Helper,
     };
-    Failure { kind, detail: last_line(stderr).to_string() }
+    Failure {
+        kind,
+        detail: last_line(stderr).to_string(),
+    }
 }
 
 fn no_agent(stderr: &str) -> bool {
-    plan::contains_ci(stderr, "no authentication agent") || plan::contains_ci(stderr, "cannot run program") && plan::contains_ci(stderr, "polkit")
+    plan::contains_ci(stderr, "no authentication agent")
+        || plan::contains_ci(stderr, "cannot run program") && plan::contains_ci(stderr, "polkit")
 }
 
 fn last_line(text: &str) -> &str {
-    text.lines().map(str::trim).rfind(|l| !l.is_empty()).unwrap_or_default()
+    text.lines()
+        .map(str::trim)
+        .rfind(|l| !l.is_empty())
+        .unwrap_or_default()
 }
 
 impl Launcher for PkexecLauncher {
+    fn check_nix(&self, action: NixAction, cancel: &CancelSignal) -> Result<(), String> {
+        nixos::availability::check(&self.nix_paths(), action, cancel.flag())
+    }
     fn prepare(&self) -> Result<PathBuf, Failure> {
         use mandara_config::admin;
         if crate::updates::find_program("pkexec").is_none() {
-            return Err(Failure { kind: FailureKind::NoPrompt, detail: t("pkexec is not installed").to_string() });
+            return Err(Failure {
+                kind: FailureKind::NoPrompt,
+                detail: t("pkexec is not installed").to_string(),
+            });
         }
         if let Some(exe) = admin::admin_exe()
             && helper::helper_speaks_protocol(&exe)
@@ -368,7 +454,10 @@ impl Launcher for PkexecLauncher {
         }
         // No helper yet, or an older one that doesn't know this action:
         // `root` puts this binary in place first, in the same approval.
-        std::env::current_exe().map_err(|e| Failure { kind: FailureKind::Helper, detail: e.to_string() })
+        std::env::current_exe().map_err(|e| Failure {
+            kind: FailureKind::Helper,
+            detail: e.to_string(),
+        })
     }
 
     fn root(&self, admin: &Path, args: &[String]) -> std::io::Result<RootProc> {
@@ -376,13 +465,27 @@ impl Launcher for PkexecLauncher {
         let argv = std::iter::once("system-update".into()).chain(args.iter().map(Into::into));
         // `prepare` hands back the running binary, which isn't root's, when
         // the helper must be (re)installed first.
-        let (prog, argv) = if admin::trusted_root_file(admin) { admin::pkexec(admin, argv) } else { admin::setup_and_run(admin, argv) };
-        let mut child = Command::new(prog).args(argv).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+        let (prog, argv) = if admin::trusted_root_file(admin) {
+            admin::pkexec(admin, argv)
+        } else {
+            admin::setup_and_run(admin, argv)
+        };
+        let mut child = Command::new(prog)
+            .args(argv)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
         let missing = || std::io::Error::other("pipe");
         let stdout = Box::new(child.stdout.take().ok_or_else(missing)?);
         let stderr = Box::new(child.stderr.take().ok_or_else(missing)?);
         let stdin = Box::new(child.stdin.take().ok_or_else(missing)?);
-        Ok(RootProc { stdout, stderr, stdin, wait: Box::new(move || Ok(child.wait()?.code())) })
+        Ok(RootProc {
+            stdout,
+            stderr,
+            stdin,
+            wait: Box::new(move || Ok(child.wait()?.code())),
+        })
     }
 
     fn user(&self) -> &dyn Runner {
@@ -397,26 +500,58 @@ pub fn log_path() -> PathBuf {
 
 /// Starts `request` on its own worker thread; `changed` is called (from
 /// that thread) after state changes, and should only schedule a redraw.
-pub fn start(request: Request, launcher: Arc<dyn Launcher>, changed: Arc<dyn Fn() + Send + Sync>) -> Job {
+pub fn start(
+    request: Request,
+    launcher: Arc<dyn Launcher>,
+    changed: Arc<dyn Fn() + Send + Sync>,
+) -> Job {
     let state = Arc::new(Mutex::new(JobState::new(request.clone())));
     let (tx, rx) = std::sync::mpsc::channel();
-    let job = Job { state: state.clone(), cancel: Arc::new(Mutex::new(Some(tx))), user_cancel: CancelSignal::default() };
+    let job = Job {
+        state: state.clone(),
+        cancel: Arc::new(Mutex::new(Some(tx))),
+        user_cancel: CancelSignal::default(),
+    };
     let worker = job.clone();
-    let spawned = std::thread::Builder::new().name("mandara-sysupdate".into()).spawn(move || {
-        let started = Instant::now();
-        let log_file = std::fs::File::create(log_path()).ok().map(std::io::BufWriter::new);
-        let mut w = Worker { job: &worker, changed: &changed, log_file, stderr_tail: VecDeque::with_capacity(STDERR_LINES) };
-        let finished = w.run(&request, &*launcher, rx, started);
-        if let Some(f) = w.log_file.as_mut() {
-            let _ = f.flush();
-        }
-        // The cancel channel goes with the worker.
-        worker.cancel.lock().unwrap_or_else(|e| e.into_inner()).take();
-        w.update(|s| s.finished = Some(finished));
-    });
+    let spawned = std::thread::Builder::new()
+        .name("mandara-sysupdate".into())
+        .spawn(move || {
+            let started = Instant::now();
+            let log_file = std::fs::File::create(log_path())
+                .ok()
+                .map(std::io::BufWriter::new);
+            let mut w = Worker {
+                job: &worker,
+                changed: &changed,
+                log_file,
+                stderr_tail: VecDeque::with_capacity(STDERR_LINES),
+            };
+            let finished = w.run(&request, &*launcher, rx, started);
+            if let Some(f) = w.log_file.as_mut() {
+                let _ = f.flush();
+            }
+            // The cancel channel goes with the worker.
+            worker
+                .cancel
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take();
+            w.update(|s| s.finished = Some(finished));
+        });
     if let Err(e) = spawned {
         let mut s = state.lock().unwrap_or_else(|e| e.into_inner());
-        s.finished = Some(Finished { outcome: JobOutcome::Failed(Failure { kind: FailureKind::Other, detail: e.to_string() }), elapsed_secs: 0, changed: 0, restart: None, freed: None, inputs: Vec::new(), warnings: 0 });
+        s.finished = Some(Finished {
+            outcome: JobOutcome::Failed(Failure {
+                kind: FailureKind::Other,
+                detail: e.to_string(),
+            }),
+            elapsed_secs: 0,
+            changed: 0,
+            restart: None,
+            freed: None,
+            inputs: Vec::new(),
+            warnings: 0,
+        });
     }
     job
 }
@@ -445,23 +580,59 @@ impl Worker<'_> {
         }
     }
 
-    fn run(&mut self, request: &Request, launcher: &dyn Launcher, cancel_rx: std::sync::mpsc::Receiver<()>, started: Instant) -> Finished {
-        let mut finished = Finished { outcome: JobOutcome::Done { nothing_to_do: true }, elapsed_secs: 0, changed: 0, restart: None, freed: None, inputs: Vec::new(), warnings: 0 };
+    fn run(
+        &mut self,
+        request: &Request,
+        launcher: &dyn Launcher,
+        cancel_rx: std::sync::mpsc::Receiver<()>,
+        started: Instant,
+    ) -> Finished {
+        let mut finished = Finished {
+            outcome: JobOutcome::Done {
+                nothing_to_do: true,
+            },
+            elapsed_secs: 0,
+            changed: 0,
+            restart: None,
+            freed: None,
+            inputs: Vec::new(),
+            warnings: 0,
+        };
         let nix_paths = launcher.nix_paths();
+        if let Request::Nix { action } = request
+            && let Err(detail) = launcher.check_nix(*action, &self.job.user_cancel)
+        {
+            finished.outcome = JobOutcome::Failed(Failure {
+                kind: FailureKind::Other,
+                detail,
+            });
+            return self.finish(finished, started, launcher);
+        }
         // A NixOS update: the flake's inputs before, a user-owned flake
         // updated as its owner first.
         let mut lock_before = None;
         let mut user_flake: Option<PathBuf> = None;
-        if let Request::Nix { action: NixAction::Update(_) } = request
-            && let Setup::Flake { dir, root_owned, .. } = nixos::setup(&nix_paths)
+        if let Request::Nix {
+            action: NixAction::Update(_),
+        } = request
+            && let Setup::Flake {
+                dir, root_owned, ..
+            } = nixos::setup(&nix_paths)
         {
-            lock_before = Some((dir.join("flake.lock"), std::fs::read_to_string(dir.join("flake.lock")).map(|t| nixos::locked_inputs(&t)).unwrap_or_default()));
+            lock_before = Some((
+                dir.join("flake.lock"),
+                std::fs::read_to_string(dir.join("flake.lock"))
+                    .map(|t| nixos::locked_inputs(&t))
+                    .unwrap_or_default(),
+            ));
             if !root_owned {
                 user_flake = Some(dir);
             }
         }
         let root_args = request.root_args();
-        let extra_steps = u32::from(request.flatpak()) + u32::from(user_flake.is_some()) + u32::from(request.aur().is_some());
+        let extra_steps = u32::from(request.flatpak())
+            + u32::from(user_flake.is_some())
+            + u32::from(request.aur().is_some());
         self.update(|s| s.steps = extra_steps);
 
         if let Some(dir) = user_flake {
@@ -508,26 +679,47 @@ impl Worker<'_> {
         }
 
         if let Some((lock, before)) = lock_before {
-            let after = std::fs::read_to_string(lock).map(|t| nixos::locked_inputs(&t)).unwrap_or_default();
+            let after = std::fs::read_to_string(lock)
+                .map(|t| nixos::locked_inputs(&t))
+                .unwrap_or_default();
             finished.inputs = nixos::input_changes(&before, &after);
         }
         // A NixOS action always does something (switching is not counted
         // in packages).
-        let nothing = self.job.with(|s| s.tracker.changed == 0 && s.tracker.built == 0) && !matches!(request, Request::Nix { .. });
-        finished.outcome = JobOutcome::Done { nothing_to_do: nothing && finished.inputs.is_empty() };
+        let nothing = self
+            .job
+            .with(|s| s.tracker.changed == 0 && s.tracker.built == 0)
+            && !matches!(request, Request::Nix { .. });
+        finished.outcome = JobOutcome::Done {
+            nothing_to_do: nothing && finished.inputs.is_empty(),
+        };
         self.finish(finished, started, launcher)
     }
 
     fn finish(&mut self, mut f: Finished, started: Instant, launcher: &dyn Launcher) -> Finished {
         f.elapsed_secs = started.elapsed().as_secs();
         let (kernel, modules, flag) = launcher.restart_facts();
-        let (changed, restart, freed, warnings, reboot) = self.job.with(|s| (s.tracker.changed, s.tracker.restart_package.clone(), s.tracker.freed.clone(), s.tracker.warnings, s.tracker.reboot));
+        let (changed, restart, freed, warnings, reboot) = self.job.with(|s| {
+            (
+                s.tracker.changed,
+                s.tracker.restart_package.clone(),
+                s.tracker.freed.clone(),
+                s.tracker.warnings,
+                s.tracker.reboot,
+            )
+        });
         f.changed = changed;
         f.warnings = warnings;
         f.freed = Some(freed).filter(|s| !s.is_empty());
-        f.restart = restart.or_else(|| (reboot || flag.exists()).then(|| t("The package manager asks for a restart").to_string())).or_else(|| {
-            (changed > 0 && super::kernel_modules_missing(&kernel, &modules)).then(|| t("The running kernel was replaced").to_string())
-        });
+        f.restart = restart
+            .or_else(|| {
+                (reboot || flag.exists())
+                    .then(|| t("The package manager asks for a restart").to_string())
+            })
+            .or_else(|| {
+                (changed > 0 && super::kernel_modules_missing(&kernel, &modules))
+                    .then(|| t("The running kernel was replaced").to_string())
+            });
         if matches!(f.outcome, JobOutcome::Cancelled | JobOutcome::Failed(_)) && f.changed == 0 {
             f.restart = None;
         }
@@ -587,9 +779,18 @@ impl Worker<'_> {
             Ok(code) => {
                 let lines: Vec<&str> = tail.iter().map(String::as_str).collect();
                 let kind = plan::classify_with(&[], &lines);
-                Err(JobOutcome::Failed(Failure { kind, detail: lines.iter().rfind(|l| !l.trim().is_empty()).map_or_else(|| format!("exit {code:?}"), |l| l.to_string()) }))
+                Err(JobOutcome::Failed(Failure {
+                    kind,
+                    detail: lines
+                        .iter()
+                        .rfind(|l| !l.trim().is_empty())
+                        .map_or_else(|| format!("exit {code:?}"), |l| l.to_string()),
+                }))
             }
-            Err(e) => Err(JobOutcome::Failed(Failure { kind: FailureKind::Other, detail: e.to_string() })),
+            Err(e) => Err(JobOutcome::Failed(Failure {
+                kind: FailureKind::Other,
+                detail: e.to_string(),
+            })),
         }
     }
 
@@ -636,7 +837,14 @@ impl Worker<'_> {
             changed();
         });
         let give_up = cancel.clone();
-        let session = match askpass::Session::open(&launcher.askpass_parent(), &mandara_config::paths::self_exe(), prompter, helper.label(), on_ask, Box::new(move || give_up.request())) {
+        let session = match askpass::Session::open(
+            &launcher.askpass_parent(),
+            &mandara_config::paths::self_exe(),
+            prompter,
+            helper.label(),
+            on_ask,
+            Box::new(move || give_up.request()),
+        ) {
             Ok(s) => s,
             Err(e) => {
                 self.update(|s| s.step_kind = None);
@@ -657,7 +865,10 @@ impl Worker<'_> {
                     let mut s = job.state.lock().unwrap_or_else(|e| e.into_inner());
                     aur::parse_line(&line, &mut s.tracker);
                     // A cancel waits while pacman installs what was built.
-                    gate.set_cancellable(!matches!(s.tracker.phase, Phase::Installing | Phase::Hooks | Phase::Verifying));
+                    gate.set_cancellable(!matches!(
+                        s.tracker.phase,
+                        Phase::Installing | Phase::Hooks | Phase::Verifying
+                    ));
                     if !line.is_empty() {
                         s.push_log(&line);
                     }
@@ -686,14 +897,36 @@ impl Worker<'_> {
             Ok(Some(0)) if package.is_none() => Ok(()),
             // You cancelled the password dialog (or it kept failing):
             // the helper was stopped for it.
-            _ if gave_up => fail(self, FailureKind::NotAuthorized, if refused_all { t("The password dialog was cancelled, so the AUR packages weren't installed.").to_string() } else { t("sudo didn't accept the password.").to_string() }),
+            _ if gave_up => fail(
+                self,
+                FailureKind::NotAuthorized,
+                if refused_all {
+                    t("The password dialog was cancelled, so the AUR packages weren't installed.")
+                        .to_string()
+                } else {
+                    t("sudo didn't accept the password.").to_string()
+                },
+            ),
             _ if cancel.requested() => Err(JobOutcome::Cancelled),
             Ok(code) => {
                 let lines: Vec<&str> = tail.iter().map(String::as_str).collect();
-                let kind = if package.is_some() { FailureKind::BuildFailed } else { aur::classify(&lines) };
-                let last = lines.iter().rfind(|l| !l.trim().is_empty()).map_or_else(|| format!("exit {code:?}"), |l| l.to_string());
+                let kind = if package.is_some() {
+                    FailureKind::BuildFailed
+                } else {
+                    aur::classify(&lines)
+                };
+                let last = lines
+                    .iter()
+                    .rfind(|l| !l.trim().is_empty())
+                    .map_or_else(|| format!("exit {code:?}"), |l| l.to_string());
                 let detail = match &package {
-                    Some(p) => mandara_i18n::tf("{package} didn't build: {reason}", &[("package", p), ("reason", &build_reason(&lines).unwrap_or(last.as_str()))]),
+                    Some(p) => mandara_i18n::tf(
+                        "{package} didn't build: {reason}",
+                        &[
+                            ("package", p),
+                            ("reason", &build_reason(&lines).unwrap_or(last.as_str())),
+                        ],
+                    ),
                     None => last,
                 };
                 fail(self, kind, detail)
@@ -703,19 +936,42 @@ impl Worker<'_> {
     }
 
     /// Runs the root helper and follows its output.
-    fn root_part(&mut self, launcher: &dyn Launcher, admin: &Path, args: &[String], cancel_rx: std::sync::mpsc::Receiver<()>) -> Result<(), JobOutcome> {
-        let proc = launcher.root(admin, args).map_err(|e| JobOutcome::Failed(Failure { kind: FailureKind::NoPrompt, detail: e.to_string() }))?;
-        let RootProc { stdout, stderr, mut stdin, wait } = proc;
+    fn root_part(
+        &mut self,
+        launcher: &dyn Launcher,
+        admin: &Path,
+        args: &[String],
+        cancel_rx: std::sync::mpsc::Receiver<()>,
+    ) -> Result<(), JobOutcome> {
+        let proc = launcher.root(admin, args).map_err(|e| {
+            JobOutcome::Failed(Failure {
+                kind: FailureKind::NoPrompt,
+                detail: e.to_string(),
+            })
+        })?;
+        let RootProc {
+            stdout,
+            stderr,
+            mut stdin,
+            wait,
+        } = proc;
         // Cancel requests go to the helper's standard input.
-        let cancel_thread = std::thread::Builder::new().name("mandara-sysupdate-cancel".into()).spawn(move || {
-            while cancel_rx.recv().is_ok() {
-                if writeln!(stdin, "{}", protocol::CANCEL).and_then(|_| stdin.flush()).is_err() {
-                    break;
+        let cancel_thread = std::thread::Builder::new()
+            .name("mandara-sysupdate-cancel".into())
+            .spawn(move || {
+                while cancel_rx.recv().is_ok() {
+                    if writeln!(stdin, "{}", protocol::CANCEL)
+                        .and_then(|_| stdin.flush())
+                        .is_err()
+                    {
+                        break;
+                    }
                 }
-            }
-        });
+            });
         let (err_tx, err_rx) = std::sync::mpsc::sync_channel::<String>(64);
-        let err_thread = std::thread::spawn(move || helper::read_lines(stderr, &mut |l| err_tx.send(l.to_string()).is_ok()));
+        let err_thread = std::thread::spawn(move || {
+            helper::read_lines(stderr, &mut |l| err_tx.send(l.to_string()).is_ok())
+        });
         let base_steps = self.job.with(|s| s.steps);
         let mut done: Option<Outcome> = None;
         let user_cancel = self.job.user_cancel.clone();
@@ -800,12 +1056,24 @@ impl Worker<'_> {
         // The worker's sender is dropped when the job ends; the cancel
         // thread then stops on its own.
         drop(cancel_thread);
-        let stderr: String = self.stderr_tail.iter().map(String::as_str).collect::<Vec<_>>().join("\n");
+        let stderr: String = self
+            .stderr_tail
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join("\n");
         match done {
             Some(Outcome::Ok) => Ok(()),
             Some(Outcome::Cancelled) => Err(JobOutcome::Cancelled),
             Some(Outcome::Failed(kind)) => {
-                let detail = self.job.with(|s| s.log.iter().rev().find(|l| !l.trim().is_empty()).cloned().unwrap_or_default());
+                let detail = self.job.with(|s| {
+                    s.log
+                        .iter()
+                        .rev()
+                        .find(|l| !l.trim().is_empty())
+                        .cloned()
+                        .unwrap_or_default()
+                });
                 Err(JobOutcome::Failed(Failure { kind, detail }))
             }
             // No answer from the helper: pkexec itself stopped it.
@@ -828,8 +1096,14 @@ impl Worker<'_> {
 /// before makepkg's `==> ERROR: A failure occurred in …` (`PKGBUILD: line
 /// 19: make: command not found`), else that line itself.
 fn build_reason<'a>(lines: &[&'a str]) -> Option<&'a str> {
-    let at = lines.iter().position(|l| l.trim_start().starts_with("==> ERROR:"))?;
-    let before = lines[..at].iter().rev().map(|l| l.trim()).find(|l| !l.is_empty() && !l.starts_with("==>") && !l.starts_with("->"));
+    let at = lines
+        .iter()
+        .position(|l| l.trim_start().starts_with("==> ERROR:"))?;
+    let before = lines[..at]
+        .iter()
+        .rev()
+        .map(|l| l.trim())
+        .find(|l| !l.is_empty() && !l.starts_with("==>") && !l.starts_with("->"));
     let line = before.unwrap_or_else(|| lines[at].trim());
     // A clone folder's path says nothing to you.
     Some(line.rfind("/PKGBUILD: ").map_or(line, |i| &line[i + 1..]))
@@ -839,7 +1113,9 @@ fn build_reason<'a>(lines: &[&'a str]) -> Option<&'a str> {
 /// apt's status lines and nix's progress numbers).
 fn display(backend: Option<BackendId>, line: &str) -> Option<std::borrow::Cow<'_, str>> {
     match backend {
-        Some(BackendId::Apt) if line.starts_with("dlstatus:") || line.starts_with("pmstatus:") => None,
+        Some(BackendId::Apt) if line.starts_with("dlstatus:") || line.starts_with("pmstatus:") => {
+            None
+        }
         Some(BackendId::Nix) => {
             let mut scratch = Tracker::default();
             match nixos::nix_line(line, &mut scratch) {

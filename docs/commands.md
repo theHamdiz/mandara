@@ -63,6 +63,9 @@ mandara msg panel capture media             # copy a visible docked or floating 
 mandara msg theme set mandara-corniche      # theme list, current, next, mode toggle, wallpaper, seeds, export
 mandara msg theme mode toggle
 mandara msg look apply corniche-dusk        # built-in or yours; look list; look restore brings back your own setup
+mandara msg studio look list               # Studio's independent window designs
+mandara msg studio look apply cupertino-glass # changes Studio only
+mandara msg studio look follow-shell       # let Studio follow the desktop's appearance again
 mandara msg look save "My evening"          # keep what you changed on the active look as a look of yours
 mandara msg look export phosphor            # to ~/Downloads/phosphor.mandara-look.toml (or a file you name)
 mandara msg look import ~/Downloads/x.mandara-look.toml   # checked strictly; nothing in it runs
@@ -342,7 +345,14 @@ mandara msg ports list               # kill <port>
 mandara msg git list                 # fetch <repo>, refresh
 mandara msg ci status                # refresh
 mandara msg ai loaded                # models, load <model>, unload <model|all>
+mandara msg ai chat send Explain this idea
+mandara msg ai chat stop
+mandara msg ai chat new
 ```
+
+[Local AI](local-ai.md) uses the provider configured in Studio. `ai models`
+lists models or AnythingLLM workspaces; loaded-memory and load/unload controls
+apply to Ollama. IPC and the chat panel share one active reply.
 
 ## Everyday helpers
 
@@ -592,3 +602,47 @@ After installing the models, `agent prepare` builds the semantic command index.
 `agent preview <request>` returns retrieved candidates and a compiled JSON
 preview without running its actions. `agent purge` cancels the shell's active
 requests. See [Local shell commands](command-agent.md).
+
+
+## Backups, storage and app permissions
+
+Enable the optional plugins in **Studio → Plugins** first. Configure the
+backup locations in the plugin's Settings. These commands return the actual
+job result; the IPC call stays pending while the work runs in the background.
+
+```bash
+mandara msg backups list
+mandara msg backups init
+mandara msg backups start
+mandara msg backups check
+mandara msg backups restore <full-snapshot-id> <absolute-parent-folder>
+mandara msg backups cancel
+mandara msg backups storage mounts
+mandara msg backups cleanup locations
+mandara msg backups cleanup preview /home/me/.cache/example
+mandara msg backups cleanup review
+mandara msg backups cleanup review 12
+mandara msg backups cleanup confirm
+mandara msg permissions apps
+mandara msg permissions inspect <app-id> <installation>
+mandara msg permissions set <app-id> <installation> <group> <grant> <true-or-false>
+mandara msg permissions undo
+```
+
+Backup commands wait for the backend’s operation deadline, including long backups
+and administrator approval. `backups cancel` remains available while they run.
+
+The `backups storage inspect` command takes a JSON `inspect` request containing
+a current mount returned by `backups storage mounts`. It can request
+administrator approval to read protected snapshot metadata. For a change,
+`backups storage preview` takes a typed `create`, `delete` or `maintain` request
+and returns it for review. A separate `backups storage confirm` runs that
+reviewed action; `backups cancel` discards the review. The helper independently
+rechecks identities and protections. Use `mandara commands --json` for the
+argument descriptions and [Backups and storage](backups.md) for the UI flow.
+
+For permissions, use the exact installation returned by `permissions apps`.
+Groups are `shared`, `sockets`, `devices` or `filesystems`; choose an editable
+native grant from `permissions inspect`. Conditional and scoped grants stay
+read-only. Restart the app after a change or Undo. See
+[App permissions](app-permissions.md).

@@ -9,7 +9,7 @@ use mandara_config::app_themes::AppThemesConfig;
 use mandara_theme::templates::custom::{
     Command, CustomColor, MAX_TEMPLATE_BYTES, Renderer, Template,
 };
-use mandara_theme::templates::{Ledger, Placement};
+use mandara_theme::templates::{Ledger, install_gtk_stylesheet};
 use mandara_theme::{Color, MandaraPalette};
 use serde::{Deserialize, Serialize};
 
@@ -559,21 +559,13 @@ impl ApplyContext<'_, '_> {
                 _ => anyhow::bail!("unknown GTK extension"),
             };
             let safe = owner.replace([':', '/'], "-");
-            let path = locations
-                .config
-                .join(version)
-                .join(format!("mandara-{safe}.css"));
-            let import = locations.config.join(version).join("gtk.css");
-            let line = format!(
-                "@import url(\"{}\"); /* Mandara Shell: {safe} */",
-                path.to_string_lossy()
-                    .replace('\\', "\\\\")
-                    .replace('"', "\\\"")
-            );
-            ledger.put_file(owner, &path, &body)?;
-            ledger.put_block(owner, &import, &[&line], Placement::AfterImports)?;
-            report.files.extend([path.clone(), import.clone()]);
-            keep.extend([path, import]);
+            let flatpaks = mandara_theme::templates::gtk_flatpak_directories(&locations.home, version)?;
+            let filename = format!("mandara-{safe}.css");
+            for directory in std::iter::once(locations.config.join(version)).chain(flatpaks) {
+                let paths = install_gtk_stylesheet(ledger, owner, &directory, &filename, &body)?;
+                report.files.extend(paths.iter().cloned());
+                keep.extend(paths);
+            }
         } else {
             for path in &outputs {
                 ledger.put_file(owner, path, &body)?;

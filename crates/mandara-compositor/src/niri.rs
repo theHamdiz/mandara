@@ -18,6 +18,8 @@ use serde_json::{Value, json};
 use crate::backend::CompositorBackend;
 use crate::model::{ClientInfo, CompositorEvent, CompositorKind, MonitorInfo, NavigationModel, WorkspaceStatus};
 
+mod keyboard;
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct NiriWorkspace {
     pub id: u64,
@@ -129,6 +131,7 @@ pub fn unwrap_reply(reply: &Value, kind: &str) -> Result<Value> {
 pub struct NiriState {
     pub workspaces: Vec<NiriWorkspace>,
     pub windows: Vec<NiriWindow>,
+    keyboard: keyboard::Layouts,
 }
 
 impl NiriState {
@@ -137,6 +140,9 @@ impl NiriState {
     /// whenever windows or workspaces change, the focused window when focus
     /// or its title changes.
     pub fn apply(&mut self, mut event: Value) -> Result<Vec<CompositorEvent>> {
+        if let Some(layout) = self.keyboard.apply(&mut event)? {
+            return Ok(vec![CompositorEvent::KeyboardLayout(layout)]);
+        }
         let mut nav = false;
         let mut focus = false;
         if let Some(ws) = event.pointer_mut("/WorkspacesChanged/workspaces") {
@@ -236,9 +242,23 @@ impl NiriDriver {
         Ok(serde_json::from_value(unwrap_reply(&self.request(json!("Windows"))?, "Windows")?)?)
     }
 
+    /// Winit's synthetic output identifies the nested backend used for Mod.
+    pub fn is_nested(&self) -> Result<bool> {
+        let outputs = unwrap_reply(&self.request(json!("Outputs"))?, "Outputs")?;
+        Ok(nested_output(&outputs))
+    }
+
     fn action(&self, action: Value) -> Result<()> {
         unwrap_reply(&self.request(json!({ "Action": action }))?, "Handled").map(|_| ())
     }
+}
+
+fn nested_output(outputs: &Value) -> bool {
+    outputs.as_object().is_some_and(|outputs| outputs.values().any(|output| {
+        output.get("name").and_then(Value::as_str) == Some("winit")
+            && output.get("make").and_then(Value::as_str) == Some("Smithay")
+            && output.get("model").and_then(Value::as_str) == Some("Winit")
+    }))
 }
 
 /// A `WorkspaceReferenceArg` for the bar's per-output index `idx` on
@@ -377,6 +397,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn only_the_synthetic_winit_output_selects_the_nested_modifier() {
+        assert!(nested_output(&json!({"winit":{"name":"winit","make":"Smithay","model":"Winit"}})));
+        assert!(!nested_output(&json!({"DP-1":{"name":"DP-1","make":"Smithay","model":"Winit"}})));
+        assert!(!nested_output(&json!({})));
+    }
+
+    #[test]
     fn only_the_focused_output_is_active() {
         // Issue #18: every output read as active, so overlays opened on
         // whichever output niri listed first. Shapes as niri 26.04 replies.
@@ -458,8 +485,21 @@ mod tests {
         let out = st.apply(ev(r#"{"WorkspaceActiveWindowChanged":{"workspace_id":5,"active_window_id":null}}"#)).unwrap();
         let Some(CompositorEvent::Navigation { model: NavigationModel::Workspaces { workspaces }, .. }) = out.iter().find(|e| matches!(e, CompositorEvent::Navigation { .. })) else { panic!("{out:?}") };
         assert!(workspaces[1].active && !workspaces[0].active && workspaces[0].urgent && workspaces[0].occupied);
-        // Unrelated events change nothing.
+        // A switch without an initial layout list cannot resolve a name.
         assert!(st.apply(ev(r#"{"KeyboardLayoutSwitched":{"idx":1}}"#)).unwrap().is_empty());
+    }
+
+    #[test]
+    fn keyboard_layout_snapshot_switch_reload_and_empty_state_reach_the_shell() {
+        let mut state = NiriState::default();
+        let mut apply = |event| state.apply(event).unwrap();
+        let snapshot = |names: Value, current_idx| json!({"KeyboardLayoutsChanged":{"keyboard_layouts":{"names":names,"current_idx":current_idx}}});
+        assert_eq!(apply(snapshot(json!(["English (US)", "Arabic"]), 1)), [CompositorEvent::KeyboardLayout("Arabic".into())]);
+        assert_eq!(apply(json!({"KeyboardLayoutSwitched":{"idx":0}})), [CompositorEvent::KeyboardLayout("English (US)".into())]);
+        assert!(apply(json!({"KeyboardLayoutSwitched":{"idx":9}})).is_empty());
+        assert_eq!(apply(snapshot(json!(["French"]), 0)), [CompositorEvent::KeyboardLayout("French".into())]);
+        assert_eq!(apply(snapshot(json!([]), 0)), [CompositorEvent::KeyboardLayout(String::new())]);
+        assert!(apply(json!({"KeyboardLayoutSwitched":{"idx":0}})).is_empty());
     }
 
     #[test]

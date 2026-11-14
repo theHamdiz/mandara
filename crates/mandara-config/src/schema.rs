@@ -113,6 +113,9 @@ pub struct ShellConfig {
     pub screen_corners: crate::desktop::ScreenCornersConfig,
     /// Interface style: radii, shadows, borders.
     pub style: crate::desktop::StyleConfig,
+    /// A selected Studio Look; absent means the existing shell-following style.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub studio: Option<Box<crate::studio::StudioAppearance>>,
     /// Notification popups, history, rules and quiet modes (`crate::alerts`).
     pub notifications: crate::alerts::NotificationsConfig,
     /// On-screen display kinds and look.

@@ -23,7 +23,7 @@ use std::collections::HashMap;
 
 use chrono::Timelike as _;
 use gpui::{
-    AnyElement, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, SharedString, StatefulInteractiveElement, Styled,
+    AnyElement, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, SharedString, StatefulInteractiveElement, Styled,
     StyledImage as _, Window, div, img, prelude::FluentBuilder as _, px,
 };
 use mandara_config::{ShellConfig, ThemeMode};
@@ -36,7 +36,7 @@ use mandara_ui::state::update_config;
 
 use super::compositor_page::{badge, button, card};
 use super::themes_page::{apply_theme, section_head, shell_mock};
-use super::{StudioView, begin_move, grid};
+use super::{StudioView, grid};
 use crate::registry::{self, Control, NavGroup, Section, Setting};
 use crate::tokens::*;
 
@@ -135,10 +135,10 @@ impl StudioView {
     }
 
     /// Index of `section`'s row among the scroller's children (for
-    /// scroll-into-view): the title block, the search, Home, then a header
+    /// scroll-into-view): the spacer, the search, Home, then a header
     /// per group followed by its visible rows.
     fn nav_row_index(&self, section: Section) -> usize {
-        // Title block, search field, Home.
+        // Top spacer, search field, Home.
         const LEADING_ROWS: usize = 3;
         let mut i = LEADING_ROWS;
         if section == Section::Home {
@@ -211,18 +211,20 @@ impl StudioView {
         true
     }
 
-    fn nav_item(&self, section: Section, rail: bool, hits: Option<&HashMap<Section, usize>>, focused: bool, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    fn nav_item(&self, section: Section, rail: bool, frame: Option<&mandara_config::studio::StudioFrame>, hits: Option<&HashMap<Section, usize>>, focused: bool, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        let item_h = frame.map_or(NAV_ITEM_H_PX, |f| f.nav_height);
+        let item_radius = frame.map_or(RADIUS_9_PX, |f| f.nav_radius);
         let active = section == self.section && self.query.is_empty();
         let rtl = mandara_i18n::language().is_rtl();
         let count = hits.map(|h| h.get(&section).copied().unwrap_or(0));
         div()
             .id(("nav", section as usize))
             .relative()
-            .h(px(NAV_ITEM_H_PX))
+            .h(px(item_h))
             .flex_none()
             .when(rail, |el| el.w(px(DIM_44_PX)).justify_center())
             .when(!rail, |el| el.px(px(SPACE_10_PX)))
-            .rounded(px(RADIUS_9_PX))
+            .rounded(px(item_radius))
             .row()
             .items_center()
             .gap(px(SPACE_10_PX))
@@ -235,7 +237,7 @@ impl StudioView {
                 el.child(
                     div()
                         .absolute()
-                        .top(px((NAV_ITEM_H_PX - FOCUS_BAR_H_PX) / 2.0))
+                        .top(px((item_h - FOCUS_BAR_H_PX) / 2.0))
                         .when(rtl, |el| el.right_0())
                         .when(!rtl, |el| el.left_0())
                         .w(px(FOCUS_BAR_W_PX))
@@ -291,63 +293,44 @@ impl StudioView {
             .into_any_element()
     }
 
-    /// The whole sidebar: title (drags the window), search, Home and the
-    /// groups.
-    pub(super) fn nav(&mut self, rail: bool, window: &mut Window, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        let fonts = mandara_ui::fonts::fonts(cx);
-        let rtl = mandara_i18n::language().is_rtl();
+    /// Search, Home and page groups. Branding belongs to the window title bar.
+    pub(super) fn nav(&mut self, rail: bool, frame: Option<&mandara_config::studio::StudioFrame>, window: &mut Window, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let focused = self.nav_focus.is_focused(window);
         let searching = !self.query.is_empty();
         let hits = searching.then(|| search_hits(&self.query));
-        let mut nav = div()
+        let mut nav = super::studio_frame::sidebar(div(), frame, p)
             .id("studio-nav")
             .track_focus(&self.nav_focus)
             .track_scroll(&self.nav_scroll)
-            .w(px(if rail { RAIL_W_PX } else { NAV_W_PX }))
-            .h_full()
-            .flex_none()
+            .w(px(super::studio_frame::sidebar_width(frame, rail)))
+            .flex_1()
+            .min_h(px(0.0))
             .overflow_y_scroll()
-            .bg(p.surface_container_low.hsla())
             .px(px(SPACE_12_PX))
             .py(px(SPACE_14_PX))
             .row()
             .flex_col()
             .when(rail, |el| el.items_center())
             .gap(px(NAV_ITEM_GAP_PX))
-            .child(
-                div()
-                    .id("studio-drag")
-                    .flex_none()
-                    .when(!rail, |el| el.px(px(SPACE_8_PX)))
-                    .pt(px(SPACE_6_PX))
-                    .pb(px(SPACE_14_PX))
-                    .row()
-                    .flex_col()
-                    .when(rtl, |el| el.items_end())
-                    .on_mouse_down(MouseButton::Left, |e, window, _| if e.click_count >= 2 { window.zoom_window() } else { begin_move(window) })
-                    .when(rail, |el| el.child(icon("grid", ICON_22_PX, p.primary)))
-                    .when(!rail, |el| {
-                        el.child(div().font_family(fonts.display.clone()).text_size(px(TEXT_20_PX)).font_weight(FontWeight::SEMIBOLD).child(t("Mandara Studio")))
-                            .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("Every setting, live")))
-                    }),
-            )
+            // Preserve row indices used by scroll-into-view as the rail changes.
+            .child(div().h(px(SPACE_4_PX)).flex_none())
             // The rail moves the search into the page header; keep the
             // child count stable for scroll-into-view.
             .child(div().flex_none().when(!rail, |el| el.pb(px(SPACE_10_PX)).child(self.search.clone())))
-            .child(self.nav_item(Section::Home, rail, hits.as_ref(), focused, p, cx));
+            .child(self.nav_item(Section::Home, rail, frame, hits.as_ref(), focused, p, cx));
         for group in NavGroup::ALL {
             let open = searching || rail || !self.ui.is_collapsed(group);
             nav = nav.child(if rail { div().h(px(NAV_GROUP_GAP_PX)).flex_none().into_any_element() } else { self.nav_header(group, open, searching, p, cx) });
             for section in group.sections().iter().copied() {
                 // A collapsed group still shows the page you're on.
                 if open || section == self.section {
-                    nav = nav.child(self.nav_item(section, rail, hits.as_ref(), focused, p, cx));
+                    nav = nav.child(self.nav_item(section, rail, frame, hits.as_ref(), focused, p, cx));
                 }
             }
         }
         // The sidebar's overlay scroll bar (the wrapper takes its place).
         let bar = mandara_ui::scrollbar::keyed_state("studio-nav");
-        mandara_ui::scrollbar::with_scrollbar(nav, &self.nav_scroll, &bar, p).h_full().flex_none().into_any_element()
+        mandara_ui::scrollbar::with_scrollbar(nav, &self.nav_scroll, &bar, p).h_full().flex_none().row().flex_col().into_any_element()
     }
 
     // ── Home ────────────────────────────────────────────────────────────

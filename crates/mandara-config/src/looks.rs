@@ -68,7 +68,16 @@ pub const SNAPSHOT_PATHS: &[&str] = &[
     "side_bars.chip_size",
     "side_bars.chip_spacing",
     "side_bars.chip_fill",
+    // Hidden rails temporarily lend their items to the main bar. Restore
+    // their original groups before merging items added while a Look was on.
+    "side_bars.left.enabled",
+    "side_bars.left.top",
+    "side_bars.left.middle",
+    "side_bars.left.bottom",
     "side_bars.right.enabled",
+    "side_bars.right.top",
+    "side_bars.right.middle",
+    "side_bars.right.bottom",
     "typography",
     "style",
     "desktop",
@@ -1035,7 +1044,7 @@ pub fn before_snapshot(cfg: &ShellConfig, saved: &str) -> Option<crate::profiles
 /// look was applied stay on, and so do your widgets and bar items. The
 /// settings the look set on top go back to what they were.
 pub fn restore(cfg: &ShellConfig, before: &crate::profiles::Profile) -> anyhow::Result<ShellConfig> {
-    let (mine, shown_before) = (bar_items::yours(cfg), bar_items::showing(cfg));
+    let (mut mine, shown_before) = (bar_items::yours(cfg), bar_items::showing(cfg));
     let mut look_off = cfg.clone();
     revert_settings(&mut look_off, &cfg.looks.settings);
     let mut c = crate::profiles::apply(&look_off, before)?;
@@ -1061,6 +1070,9 @@ pub fn restore(cfg: &ShellConfig, before: &crate::profiles::Profile) -> anyhow::
     }
     c.desktop.widgets.items = yours_now;
     crate::desktop_widgets::sync_depth_clock(&mut c);
+    // Snapshot positions win even for a hidden rail. Only items added
+    // since the snapshot need their current placement merged back in.
+    mine.retain(|item| !crate::bar_styles::ItemZone::ALL.iter().any(|zone| zone.get(&c).contains(&item.id)));
     bar_items::bring_back(&mut c, &mine, shown_before);
     // Keeping your component designs is your choice, not the look's.
     c.looks = LooksState { keep_components: cfg.looks.keep_components, ..LooksState::default() };

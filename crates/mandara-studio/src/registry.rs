@@ -16,6 +16,7 @@ pub mod alert_settings;
 pub mod context_menu_settings;
 pub mod desktop_settings;
 mod motion_settings;
+mod local_ai_settings;
 #[cfg(test)]
 mod look_tests;
 pub mod surface_settings;
@@ -25,7 +26,9 @@ pub mod bars;
 pub mod recorder_settings;
 mod tuning_settings;
 mod integration_settings;
+mod storage_settings;
 mod platform_settings;
+pub(crate) mod studio_settings;
 pub mod workflow_settings;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -585,7 +588,10 @@ pub fn settings() -> &'static [Setting] {
         all.extend(recorder_settings::entries());
         all.extend(tuning_settings::entries());
         all.extend(integration_settings::entries());
+        all.extend(storage_settings::entries());
+        all.extend(local_ai_settings::entries());
         all.extend(side_bar_settings::entries());
+        all.extend(studio_settings::entries(&all));
         all
     })
 }
@@ -617,6 +623,8 @@ pub fn required_plugin(path: &str) -> Option<&'static str> {
 /// place of its control), e.g. the launcher's hover edge while the dock
 /// owns the bottom edge (`ShellConfig::launcher_hover_enabled`).
 pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
+    if setting.path.starts_with("/studio/") && cfg.studio.is_none() { return Some(tk("Choose a Studio Look in Themes → Studio first.")); }
+    if let Some(reason) = studio_settings::locked(setting.path) { return Some(reason); }
     if let Some(reason) = platform_settings::locked(setting.path) { return Some(reason); }
     if let Some(reason) = integration_settings::locked(setting.path, cfg) { return Some(reason); }
     if let Some(reason) = system_settings::native_locked(setting.path, running_compositor()) { return Some(reason); }
@@ -643,6 +651,9 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         path => side_bar_settings::locked(path, cfg).or_else(|| surface_settings::locked(path, cfg)),
     }
 }
+
+/// Negotiated window decorations can change; prime this before drawing controls.
+pub(crate) fn set_client_controls(client: bool) { studio_settings::set_client_controls(client); }
 
 /// A line shown in place of `setting`'s help while only part of it applies
 /// under `cfg` (`tk` text): the slider handle while the thick sliders' design
@@ -1108,7 +1119,6 @@ fn build() -> Vec<Setting> {
         sd(Plugins, tk("Uptime monitor"), "/plugins/settings/uptime/checks", tk("Checks"), tk("Comma-separated https:// or http:// addresses, or host:port for a TCP check; name one with Name=target"), Text { placeholder: "Home NAS=nas.local:22, Blog=https://example.com" }, Value::from("")),
         sd(Plugins, tk("Uptime monitor"), "/plugins/settings/uptime/interval_s", tk("Check every"), tk("How often every check runs in the background"), slider(10.0, 3600.0, 10.0, " s"), Value::from(60)),
         sd(Plugins, tk("Uptime monitor"), "/plugins/settings/uptime/notify", tk("Notify on changes"), tk("Send a notification when a check goes down or comes back up"), Toggle, Value::from(true)),
-        sd(Plugins, tk("Local AI"), "/plugins/settings/local-ai/url", tk("Ollama address"), tk("Where the Ollama server listens"), Text { placeholder: "http://127.0.0.1:11434" }, Value::from("http://127.0.0.1:11434")),
         sd(Plugins, tk("Share to phone"), "/plugins/settings/share/minutes", tk("Stop sharing after"), tk("The link stops working after this long"), slider(1.0, 120.0, 1.0, " min"), Value::from(10)),
         sd(Plugins, tk("Share to phone"), "/plugins/settings/share/once", tk("Stop after the first download"), tk("The link stops working once your phone has downloaded the item"), Toggle, Value::from(true)),
         sd(Plugins, tk("Task progress"), "/plugins/settings/progress/notify", tk("Notify when tasks finish"), tk("Post a notification when a task is done or fails"), Toggle, Value::from(true)),
@@ -1155,7 +1165,7 @@ fn build() -> Vec<Setting> {
         sd(Audio, tk("Visualizer"), "/plugins/settings/media/visualizer_smoothing", tk("Smoothing"), tk("Higher values fall back more slowly for a calmer motion"), slider(0.0, 0.95, 0.05, ""), Value::from(0.35)),
         // App themes (cross-app sync)
         s(Themes, tk("App themes"), "/integrations/ghostty", "Ghostty", tk("Terminal colors follow the theme"), Toggle),
-        s(Themes, tk("App themes"), "/integrations/gtk4", tk("GTK 3 / 4 & libadwaita"), tk("Adds one import line to gtk.css (backed up first)"), Toggle),
+        s(Themes, tk("App themes"), "/integrations/gtk4", tk("GTK 3 / 4 & libadwaita"), tk("Local GTK styles also reach Celluloid and Rufin Flatpaks. In Rufin, choose System for both theme and accent. Personal CSS is backed up and restored."), Toggle),
         s(Themes, tk("App themes"), "/integrations/qt6", tk("Qt 5 / 6 (qt6ct, qt5ct)"), tk("A “mandara” color scheme for qt6ct / qt5ct"), Toggle),
         s(Themes, tk("App themes"), "/integrations/kvantum", "Kvantum", tk("A “Mandara” Kvantum theme in ~/.cache/mandara/themes/kvantum"), Toggle),
         s(Themes, tk("App themes"), "/integrations/kvantum_apply", tk("Use the Kvantum theme"), tk("Links it into ~/.config/Kvantum and runs kvantummanager --set Mandara"), Toggle),
@@ -1231,7 +1241,7 @@ pub fn set(cfg: &ShellConfig, setting: &Setting, value: Value) -> Result<ShellCo
     if setting.path == WALLPAPER_SCHEME_PATH && !value.is_null() {
         use_wallpaper_colors(&mut root)?;
     }
-    if HEX_COLOR_PATHS.contains(&setting.path)
+    if (HEX_COLOR_PATHS.contains(&setting.path) || setting.path == "/studio/theme/color")
         && let Some(text) = value.as_str()
         && mandara_theme::Color::from_hex(text.trim()).is_err()
     {

@@ -6,6 +6,53 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Give Studio its own look, take control of app permissions and keep a way
+back with backups and snapshots. Compositor shortcuts can be edited safely,
+and more apps can follow your colours.
+
+### New
+
+- **Chat with your own AI server.** Local AI connects to Ollama, llama.cpp, Jan, LM Studio, AnythingLLM workspaces and compatible servers, with streaming replies, Stop, Copy and a chat that clears when closed. Existing Ollama memory controls remain available.
+- **Keep a way back.** Backups brings encrypted backup history, restore-to-copy, native Btrfs snapshots and reviewed disk cleanup into one optional plugin.
+- **See what each app can reach.** App permissions shows Flatpak sandbox grants and lets you change personal overrides with backups and Undo. Both new plugins ship switched off.
+- **Give Studio a look of its own.** Themes → Studio brings nine window designs, from quiet glass and paper to cut corners and bold ink. Refine its sidebar, controls, colours and fonts independently; desktop Look changes leave it as you chose it.
+- **Edit your compositor's shortcuts in Studio.** Keyboard shortcuts → Compositor finds the running compositor and its native bindings. Edit individual values, see clashes with Mandara's shortcuts, and save with backups, validation and Undo. Computed bindings stay read-only with a reason.
+
+### Improved
+
+- Local AI gets a quieter toolbar, a searchable model drawer, lighter conversation styling and one composer with clear Send and Stop states.
+
+- The Nix flake defaults to stable NixOS and downloads Nixpkgs from the official channel archives. Stable, unstable and the older 25.11 configuration are checked separately.
+- **Find Helium by name.** Its shared browser theme is searchable in Other apps. GTK colours also reach Celluloid and Rufin Flatpaks; Rufin follows them with its theme and accent set to System.
+- **Quieter Studio windows.** The name appears once, traffic-light buttons sit closer together, and preset previews keep their own colours, controls and surface details. Window buttons respect the compositor's supported actions.
+
+### Fixed
+
+- Storage reviews stay visible until you choose Continue or Cancel. App permissions preserves spaces in folder names and explains disabled XDG folders; shortcut discovery follows variable-defined Sway includes and every mode that loads MangoWM's managed settings.
+- Shortcut scans preserve repeated MangoWM includes, escaped Sway variables, nested quotes and numeric filename escapes. Snapshot paging stops at the last page, escaped folder names remain readable in App permissions, and Undo preserves files replaced by another editor.
+- Backups keeps completed restore locations across tabs and unrelated disk jobs, refreshes snapshot lists after changes and handles checks and restores with older distribution packages. Cancelled cleanup previews stay dismissed, and revoked app permissions remain available to turn back on. Broad host, full-root and equivalent folder grants lock overlapping permission controls.
+- Stash summoned by a drag or shake shows only its drop zone until something lands in it. Standalone shelves keep their usual controls, and long shelf-menu options wrap within their rows.
+- Stopping Local AI keeps any partial reply without displaying a false error, including while it connects or waits for the model.
+- Backup histories keep the newest entries across source groups, literal repository names stay excluded, and cleanup previews leave shared files untouched. Conditional app permissions stay locked together so switching one off cannot expose another route.
+- Long labels and shortcuts in the desktop's circular menu now wrap or shorten inside the centre circle, with padding that also holds at smaller sizes and in Arabic.
+- Restoring your Look puts plugins back in their original top and vertical bar groups, including Raml Tram's middle rail. Hidden groups no longer create duplicate placements.
+- NixOS Updates checks the default configuration before offering a rebuild or changing flake inputs. Supported actions stay available, unavailable ones explain why, and rollback uses an existing generation without needing the original build configuration. Flatpak updates remain available independently.
+- The keyboard-layout badge now shows Niri and Hyprland's current layout at startup and follows switches immediately, including on NixOS.
+- Source builds on NixOS now include the compression library needed by the Rust dependencies. Thanks to Abdellah Azarfane for the report and workaround (#173).
+- Large shortcut configurations respect the retained-memory budget, sparse includes keep their valid files, and unrelated Niri edits preserve native shortcut conflicts. Sway environment include lists, named Hyprland submaps and linked Lua drop-ins retain their native behavior.
+- Container network mounts no longer prevent Backups from listing storage, and Snapshots waits for its first read before showing an empty list.
+- Backup, app-permission, model-loading and Local AI chat commands wait for their real operation deadlines instead of giving up after fifteen seconds.
+- Optional Niri includes and MangoWM TOML modes keep their native shortcut conflicts. Scan-limit messages follow your language. App permissions rechecks effective grants before saving, and backup tabs retry cancelled reads without leaving an empty review or an outdated permission warning.
+- **Non-Latin shortcut keys no longer crash the editor.** Arabic and other Unicode keys can be inspected safely.
+- **Shortcut edits stay with the selected binding.** Labwc lists the bindings it recognizes and preserves unsupported nested chains. Oversized or ambiguous configurations explain why editing is unavailable. Hyprland checks use the variables active at each binding. Included files and continued blocks keep their shortcuts.
+
+### Under the hood
+
+- Backup safety checks cover parallel operations as well as interrupted cleanup.
+- Nix CI gives optimized linking bounded swap space and limits competing builders, preserving the same release optimization settings.
+- Discarded panel hosts no longer keep close watchers alive. Shared backup and permission views release their data after the last visible panel closes.
+- Keep native shortcut checks and release manifests clean on current Rust and FreeBSD builds. Lock and file-watch checks handle concurrent process launches and directory replacement reliably.
+
 ## 0.29.0 — 2026-11-13
 
 More apps can follow your colours. Desktop changes stay put. Display

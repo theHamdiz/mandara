@@ -58,6 +58,9 @@ pub(super) fn entries() -> Vec<Setting> {
 
 /// Explain controls that do not apply to the selected integration provider.
 pub(super) fn locked(path: &str, cfg: &mandara_config::ShellConfig) -> Option<&'static str> {
+    if path == "/plugins/settings/local-ai/reply_tokens" && mandara_ui::plugins::local_ai::settings(cfg).provider == mandara_services::local_ai::chat::Provider::AnythingLlm {
+        return Some(tk("AnythingLLM manages the token limit in its workspace settings"));
+    }
     if path == "/plugins/settings/feeds/background_minutes" && feeds::settings(cfg).background.is_none() {
         return Some(tk("Turn on Refresh in the background first"));
     }
@@ -73,6 +76,10 @@ mod tests {
     #[test]
     fn provider_specific_controls_explain_when_they_do_not_apply() {
         let mut cfg = mandara_config::ShellConfig::default();
+        cfg.plugins.settings.entry("local-ai".into()).or_default().insert("provider".into(), "anything-llm".into());
+        assert!(locked("/plugins/settings/local-ai/reply_tokens", &cfg).is_some());
+        cfg.plugins.settings.get_mut("local-ai").unwrap().insert("provider".into(), "jan".into());
+        assert!(locked("/plugins/settings/local-ai/reply_tokens", &cfg).is_none());
         assert!(locked("/plugins/settings/translator/server", &cfg).is_some());
         assert!(locked("/plugins/settings/translator/provider", &cfg).is_none());
         cfg.plugins.settings.entry("translator".into()).or_default().insert("provider".into(), "libretranslate".into());

@@ -40,7 +40,7 @@ Zed's GPU-accelerated UI framework.
   previews live, and Studio's CPU and memory never count against the
   shell's.
 - **Everything is a plugin.** Bar items, panels and sidebar cards are
-  plugins: 86 built-in plugins compiled into the shell, and third-party ones
+  plugins: 88 built-in plugins compiled into the shell, and third-party ones
   written in Rust, compiled to WebAssembly and run sandboxed.
 - **Ready-made desktops.** Studio offers 19 bar presets and 19 Looks, with
   light and dark palettes and live settings across 32 pages.

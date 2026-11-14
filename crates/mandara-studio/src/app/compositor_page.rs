@@ -48,8 +48,8 @@ pub(super) struct Tip {
 }
 
 impl gpui::Render for Tip {
-    fn render(&mut self, _: &mut gpui::Window, _: &mut Context<Self>) -> impl IntoElement {
-        div().max_w(px(DIM_420_PX)).px(px(SPACE_10_PX)).py(px(SPACE_6_PX)).rounded(px(RADIUS_9_PX)).bg(self.bg).text_color(self.fg).text_size(px(TEXT_12_PX)).child(self.text.clone())
+    fn render(&mut self, _: &mut gpui::Window, cx: &mut Context<Self>) -> impl IntoElement {
+        div().font_family(mandara_ui::fonts::fonts(cx).studio).max_w(px(DIM_420_PX)).px(px(SPACE_10_PX)).py(px(SPACE_6_PX)).rounded(px(RADIUS_9_PX)).bg(self.bg).text_color(self.fg).text_size(px(TEXT_12_PX)).child(self.text.clone())
     }
 }
 
@@ -64,7 +64,8 @@ pub(super) fn tip(text: impl Into<SharedString>, p: &MandaraPalette) -> impl Fn(
 pub(super) fn card(p: &MandaraPalette) -> Div {
     // Shaped and lifted in the card designs of Themes → Components.
     use mandara_ui::components::surfaces::{CardSurface as _, Fill};
-    div().clipped_card_surface(RADIUS_20_PX, Fill(p.surface_container, None), Vec::new(), p).p(px(SPACE_18_PX)).row().flex_col().gap(px(SPACE_12_PX))
+    let (radius, padding) = mandara_ui::style::studio_card_metrics().unwrap_or((RADIUS_20_PX, SPACE_18_PX));
+    div().clipped_card_surface(radius, Fill(p.surface_container, None), Vec::new(), p).p(px(padding)).row().flex_col().gap(px(SPACE_12_PX))
 }
 
 pub(super) fn group_title(text: impl Into<SharedString>, p: &MandaraPalette) -> Div {
@@ -513,27 +514,26 @@ impl StudioView {
         };
         let rules = self.window_rules(cfg, tab, p, cx);
         let specific = match tab {
-            Target::KWin => div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("KWin settings are managed in Plasma System Settings")).into_any_element(),
+            Target::KWin => div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("Manage KWin in Plasma System Settings. Its window shortcuts are also editable in Keyboard shortcuts → Compositor.")).into_any_element(),
             // Aqueous reads only its own files: what Mandara does with it.
             Target::Aqueous => div()
                 .text_size(px(TEXT_12_PX))
                 .line_height(px(LEADING_17_PX))
                 .text_color(p.on_surface_variant.hsla())
-                .child(t("Aqueous keeps its settings in its own files in ~/.config/aqueous and reloads them itself. Mandara follows its workspaces, windows and outputs over its socket and changes nothing in those files."))
+                .child(t("Aqueous reloads its settings from ~/.config/aqueous. Mandara follows its workspaces, windows and outputs over its socket. Edit native bindings in Keyboard shortcuts → Compositor, with backups and Undo."))
                 .into_any_element(),
-            // Neither has an IPC socket: Mandara speaks standard Wayland
-            // protocols to them and writes nothing they read.
+            // These backends expose navigation through Wayland protocols.
             Target::Labwc => div()
                 .text_size(px(TEXT_12_PX))
                 .line_height(px(LEADING_17_PX))
                 .text_color(p.on_surface_variant.hsla())
-                .child(t("labwc keeps its settings in ~/.config/labwc (rc.xml, autostart) and reloads them itself. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and changes nothing in those files. To start Mandara with labwc, add the line “mandara &” to ~/.config/labwc/autostart."))
+                .child(t("labwc keeps its settings in ~/.config/labwc. Mandara follows its workspaces, windows and outputs over Wayland protocols. Edit native bindings in Keyboard shortcuts → Compositor. To start Mandara with labwc, add “mandara &” to ~/.config/labwc/autostart."))
                 .into_any_element(),
             Target::Cosmic => div()
                 .text_size(px(TEXT_12_PX))
                 .line_height(px(LEADING_17_PX))
                 .text_color(p.on_surface_variant.hsla())
-                .child(t("COSMIC keeps its settings in COSMIC Settings. Mandara follows its workspaces, windows and outputs over standard Wayland protocols and COSMIC's window protocols, and changes nothing there. To start Mandara with COSMIC, add it in COSMIC Settings → Applications → Startup applications."))
+                .child(t("Manage the desktop in COSMIC Settings, or edit its native bindings in Keyboard shortcuts → Compositor. Default bindings become personal overrides; packaged defaults stay intact. To start Mandara with COSMIC, add it in COSMIC Settings → Applications → Startup applications."))
                 .into_any_element(),
             Target::Mango => {
                 let head = super::fold::FoldHead { title: t("Tag & layout studio").into(), preview: t("Pick a tag, then its layout, master share and scroller width. Tags without a rule keep MangoWM's default.").to_string(), badge: None, trailing: None, closed: true };

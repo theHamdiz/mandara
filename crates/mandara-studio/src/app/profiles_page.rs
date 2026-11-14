@@ -50,6 +50,7 @@ const RESET_GRID: CardGrid = CardGrid { min_w: 170.0, max_w: 300.0, gap: SPACE_8
 /// Lists edited by page-specific designers, outside the scalar registry.
 /// Counts and reset use the same paths so a changed arrangement is resettable.
 const EXTRA_RESET_PATHS: &[(Section, &[&str])] = &[
+    (Section::Themes, &["/studio"]),
     (Section::Bars, &["/bar/left", "/bar/center", "/bar/right", "/side_bars/left/top", "/side_bars/left/middle", "/side_bars/left/bottom", "/side_bars/right/top", "/side_bars/right/middle", "/side_bars/right/bottom", "/sidebar/tabs"]),
     (Section::Dock, &["/dock/pinned", "/dock/stacks"]),
 ];
@@ -141,13 +142,15 @@ fn undo_to(i: usize, cx: &mut App) {
 /// defaults respect removed plugins; unrelated pages keep their current values.
 pub(super) fn reset_section(cfg: &ShellConfig, section: Section) -> ShellConfig {
     let mut next = cfg.clone();
-    for s in registry::in_section(section) {
+    for s in registry::in_section(section).filter(|s| !s.path.starts_with("/studio/")) {
         let v = registry::default_value(s);
         if let Ok(c) = registry::set(&next, s, v) {
             next = c;
         }
     }
-    if let Some((_, paths)) = EXTRA_RESET_PATHS.iter().find(|(s, _)| *s == section) {
+    if section == Section::Themes {
+        next.studio = None;
+    } else if let Some((_, paths)) = EXTRA_RESET_PATHS.iter().find(|(s, _)| *s == section) {
         let dotted: Vec<String> = paths.iter().map(|path| path.trim_start_matches('/').replace('/', ".")).collect();
         let paths: Vec<&str> = dotted.iter().map(String::as_str).collect();
         match profiles::snapshot_paths(&registry::layout_defaults(cfg), "", "", &paths, "").and_then(|defaults| profiles::apply(&next, &defaults)) {
@@ -605,6 +608,21 @@ mod tests {
         assert!(changed_per_section(&ShellConfig::default()).is_empty(), "defaults change nothing");
     }
 
+    #[test]
+    fn resetting_themes_restores_shell_following_without_touching_other_pages() {
+        let mut cfg = ShellConfig {
+            studio: Some(Box::new(mandara_config::studio::StudioLook::Arcade.appearance())),
+            ..Default::default()
+        };
+        cfg.bar.height = 26.0;
+        let counts = changed_per_section(&cfg);
+        assert!(counts.get(&Section::Themes).copied().unwrap_or_default() > 0);
+        let reset = reset_section(&cfg, Section::Themes);
+        assert!(reset.studio.is_none());
+        assert_eq!(reset.bar, cfg.bar);
+        assert_eq!(reset.compositor, cfg.compositor);
+    }
+
     /// Two configs differ exactly where a per-setting comparison says so.
     #[test]
     fn differing_matches_get() {
@@ -628,10 +646,12 @@ mod tests {
         assert_eq!(reset.dock, cfg.dock);
         assert!(!changed_per_section(&reset).contains_key(&Section::Bars));
         assert_eq!(reset_section(&cfg, Section::Dock).dock.pinned, defaults.dock.pinned);
+        let with_studio = ShellConfig { studio: Some(Box::default()), ..defaults };
+        let root = serde_json::to_value(&with_studio).unwrap();
         for (_, paths) in EXTRA_RESET_PATHS {
             for path in *paths {
                 assert!(registry::by_path(path).is_none(), "{path} is already counted by the registry");
-                assert!(serde_json::to_value(&defaults).unwrap().pointer(path).is_some(), "{path} is not a real config path");
+                assert!(root.pointer(path).is_some(), "{path} is not a real config path");
             }
         }
     }

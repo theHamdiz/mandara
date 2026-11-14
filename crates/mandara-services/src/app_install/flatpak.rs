@@ -3,6 +3,10 @@
 //! `flatpak install --user --noninteractive` (rootless; `--system` only
 //! when the user prefers it — Flatpak asks polkit itself then).
 
+mod context;
+pub use context::parse_context;
+pub(crate) use context::context_domain;
+
 use std::io::Read as _;
 use std::path::Path;
 
@@ -68,32 +72,6 @@ const PNG_MAGIC: &[u8] = b"\x89PNG\r\n\x1a\n";
 const PNG_IEND: &[u8] = b"IEND";
 /// The chunk-length / type / CRC framing around `IEND`.
 const PNG_CHUNK_TAIL: usize = 8;
-
-/// Parses a metadata key file's `[Context]` group.
-pub fn parse_context(text: &str) -> Option<Permissions> {
-    let mut on = false;
-    let mut p = Permissions::default();
-    let mut seen = false;
-    for line in text.lines() {
-        let l = line.trim();
-        if l.starts_with('[') {
-            on = l == "[Context]";
-            seen |= on;
-            continue;
-        }
-        let Some((k, v)) = l.split_once('=').filter(|_| on) else { continue };
-        // `!x` revokes: not a permission.
-        let list = || v.split(';').map(str::trim).filter(|x| !x.is_empty() && !x.starts_with('!')).map(String::from).collect::<Vec<_>>();
-        match k.trim() {
-            "shared" => p.shared = list(),
-            "sockets" => p.sockets = list(),
-            "devices" => p.devices = list(),
-            "filesystems" => p.filesystems = list(),
-            _ => {}
-        }
-    }
-    seen.then_some(p)
-}
 
 /// The metadata key file's `[Context]` in a bundle's bytes.
 fn bundle_context(bytes: &[u8]) -> Option<Permissions> {

@@ -168,6 +168,11 @@ impl ThemeEngine {
             tracing::warn!("theme source failed to resolve ({err:#}); falling back to Mandara Corniche");
             ResolvedTheme { palette: default_palette(dark), seeds: Vec::new() }
         });
+        Self::from_resolved(source, dark, adjustments, resolved)
+    }
+
+    /// Construct from background-resolved colours without repeating extraction.
+    pub fn from_resolved(source: ThemeSource, dark: bool, adjustments: PaletteAdjustments, resolved: ResolvedTheme) -> Self {
         let to = resolved.palette.adjusted(&adjustments);
         Self {
             source,
@@ -350,5 +355,20 @@ mod tests {
         assert!(source.resolve(true).is_err());
         let engine = ThemeEngine::new(source, true, PaletteAdjustments::default());
         assert_eq!(engine.target().name.as_ref(), "Mandara Corniche");
+    }
+
+    #[test]
+    fn background_resolved_palettes_match_direct_construction_in_both_modes() {
+        let source = ThemeSource::Seed { color: Color::oklch(0.7, 0.1, 220.0), variant: SchemeVariant::TonalSpot };
+        let adjustments = PaletteAdjustments { hue_shift: 12.0, ..Default::default() };
+        for dark in [false, true] {
+            let direct = ThemeEngine::new(source.clone(), dark, adjustments);
+            let resolved = ThemeEngine::from_resolved(source.clone(), dark, adjustments, source.resolve(dark).unwrap());
+            assert_eq!(direct.target(), resolved.target());
+            assert_eq!(direct.source(), resolved.source());
+            assert_eq!(direct.is_dark(), resolved.is_dark());
+            assert_eq!(direct.adjustments(), resolved.adjustments());
+            assert_eq!(direct.seeds().len(), resolved.seeds().len());
+        }
     }
 }

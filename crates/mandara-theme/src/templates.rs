@@ -10,6 +10,8 @@ use crate::color::Color;
 use crate::palette::MandaraPalette;
 
 mod apps;
+mod gtk_integration;
+pub use gtk_integration::{gtk_flatpak_directories, install_gtk_stylesheet};
 mod terminal_apps;
 pub use terminal_apps::{cava, spicetify, spicetify_css, tmux, zellij};
 pub mod custom;
@@ -595,6 +597,7 @@ pub fn remove_block(config: &Path, block: &[&str]) -> std::io::Result<bool> {
 }
 
 /// The GTK import line for the generated stylesheet in `cache_dir`.
+#[cfg(test)]
 fn gtk_import(cache_dir: &Path) -> String {
     format!("@import url(\"file://{}\");", cache_dir.join("gtk.css").display())
 }
@@ -620,9 +623,6 @@ pub fn sync_checked(p: &MandaraPalette, targets: Targets, cache_dir: &Path, conf
         Ok(()) => out.files.push(path),
         Err(err) => out.failed(&path, err),
     };
-    if targets.gtk {
-        put(cache_dir.join("gtk.css"), gtk(p));
-    }
     if targets.fuzzel {
         put(cache_dir.join("fuzzel.ini"), fuzzel(p));
     }
@@ -647,12 +647,19 @@ pub fn sync_checked(p: &MandaraPalette, targets: Targets, cache_dir: &Path, conf
     owned(ledger, targets.qt6, "qt", if targets.qt6 { vec![(config_dir.join("qt6ct/colors/mandara.conf"), qt(p)), (config_dir.join("qt5ct/colors/mandara.conf"), qt(p))] } else { Vec::new() });
     owned(ledger, targets.zed, "zed", if targets.zed { vec![(config_dir.join("zed/themes/mandara.json"), zed(p))] } else { Vec::new() });
     owned(ledger, targets.btop, "btop", if targets.btop { vec![(config_dir.join("btop/themes/mandara.theme"), btop(p))] } else { Vec::new() });
-    // GTK: one import line in each version's gtk.css.
+    // Keep the stylesheet inside the GTK config exposed to sandboxed apps.
     if targets.gtk {
-        let import = gtk_import(cache_dir);
-        for v in GTK_VERSIONS {
-            if let Err(err) = ledger.put_block("gtk", &config_dir.join(v).join("gtk.css"), &[import.as_str()], Placement::AfterImports) {
-                out.failed(&config_dir.join(v).join("gtk.css"), err);
+        let body = gtk(p);
+        let cache = cache_dir.join("gtk.css");
+        match write(&cache, &body) {
+            Ok(()) => out.files.push(cache),
+            Err(err) => out.failed(&cache, err),
+        }
+        for version in GTK_VERSIONS {
+            let directory = config_dir.join(version);
+            match install_gtk_stylesheet(ledger, "gtk", &directory, "mandara-colors.css", &body) {
+                Ok(paths) => out.files.extend(paths),
+                Err(err) => out.failed(&directory.join("gtk.css"), err),
             }
         }
     } else {
@@ -1202,9 +1209,10 @@ mod tests {
         let on = Targets { gtk: true, fuzzel: true, ..NO_TARGETS };
         let mut ledger = Ledger::default();
         sync(&palette(), on, &cache, &config, &mut ledger);
-        let import = gtk_import(&cache);
+        let import = format!("@import url(\"{}\");", config.join("gtk-4.0/mandara-colors.css").display());
         assert!(std::fs::read_to_string(&css).unwrap().contains(&import));
-        assert!(std::fs::read_to_string(config.join("gtk-3.0/gtk.css")).unwrap().contains(&import), "GTK 3 gets the line too");
+        let gtk3 = config.join("gtk-3.0/mandara-colors.css");
+        assert!(std::fs::read_to_string(config.join("gtk-3.0/gtk.css")).unwrap().contains(gtk3.to_str().unwrap()), "GTK 3 gets its local stylesheet too");
         assert!(std::fs::read_to_string(&ini).unwrap().ends_with(&format!("include={}\n", cache.join("fuzzel.ini").display())));
         assert!(cache.join("gtk.css").is_file() && cache.join("fuzzel.ini").is_file());
         // Off: the files are the user's again, byte for byte.

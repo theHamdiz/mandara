@@ -37,7 +37,7 @@
   <a href="docs/desktop.md"><img src="https://img.shields.io/badge/Wayland-native-22D3EE?logo=wayland&logoColor=E9E5FF&labelColor=0B1026" alt="Wayland native"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-8B5CF6?labelColor=0B1026" alt="GPU rendered"/></a>
   <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic%20%C2%B7%20KWin%20%C2%B7%20Aqueous%20%C2%B7%20labwc%20%C2%B7%20COSMIC-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc, COSMIC"/></a>
-  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-86%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="86 built-in plugins plus WebAssembly"/></a>
+  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-88%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="88 built-in plugins plus WebAssembly"/></a>
   <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-20%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="20 languages"/></a>
   <br/>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/resources-measured-2DD4BF?labelColor=0B1026" alt="Resource measurements and current limits"/></a>
@@ -73,6 +73,9 @@ You can ask for changes, too. Enable optional local AI control and type
 `!switch to dark mode` in the launcher. Review the action, then press Enter.
 Your words stay on your computer. [Meet the AI Shell Agent](docs/command-agent.md).
 
+For a conversation, [Local AI](docs/local-ai.md) connects to Ollama,
+llama.cpp, Jan, LM Studio, AnythingLLM or your own compatible server.
+
 ## One shell, many desktops
 
 A music corner, a quiet night sky or a bright place to work: start with a
@@ -97,7 +100,7 @@ and tick off tasks where they sit.
 | **Resources** | [Measurements and current limits](docs/performance.md); the 100 MiB startup and operation target remains open |
 | **Settings** | Live in Mandara Studio (`mandara studio`), saved to `~/.config/mandara/config.toml`; [thirteen colour launcher icons](docs/configuration.md#launcher-button-artwork) |
 | **Automation** | JSON replies through `mandara msg`; the full catalog in `mandara commands --json` |
-| **Plugins** | 86 built in, plus third-party Rust plugins in sandboxed WebAssembly |
+| **Plugins** | 88 built in, plus third-party Rust plugins in sandboxed WebAssembly |
 | **Widgets** | Mechanical, word and binary clocks, calendars and weather dials; passive widgets work on lock and login screens too |
 | **Languages** | 20, including right-to-left Arabic, Persian and Urdu |
 | **License** | GPL-3.0-or-later |
@@ -130,13 +133,15 @@ and tick off tasks where they sit.
    Raindrop and five classic springs, with live previews, per-surface speeds
    and optional system accessibility preferences. [Motion controls](docs/motion.md).
 6. **Make changes and see them.** Mandara Studio has 32 pages of live
-   settings and previews. Save bar arrangements as profiles; Maintenance
-   spots missing icon themes and takes you to the right settings.
+   settings and previews. Give Studio its own look, or edit your compositor's
+   shortcuts with conflict checks and Undo. Save bar arrangements as profiles;
+   Maintenance spots missing icon themes and takes you to the right settings.
 7. **Colours that belong together.** Choose a hand-tuned theme or a Material
    You (HCT) palette from your wallpaper. Opt in to matching Ghostty, GTK 3/4,
    Qt 5/6, Kvantum, Zed, kitty, foot, Alacritty, btop, Cava, tmux, Zellij and
    Spicetify. Review community app templates or write your own; enabled apps
-   follow every Mandara theme. [App setup](docs/app-themes.md).
+   follow every Mandara theme, including Helium; GTK covers Celluloid and
+   Rufin with its System appearance. [App setup](docs/app-themes.md).
 8. **Room for your own style.** Start with 19 bar presets, six bar layouts
    on any edge, side bars that join into a frame, one-click Looks and
    per-monitor widgets. Choose a launcher list, icon grid or centred
@@ -144,9 +149,11 @@ and tick off tasks where they sit.
    placement map. [Boot look](docs/boot-look.md)
    styles GRUB, Limine, rEFInd and Plymouth, or uses your image, with a plan,
    backups and one-click restore. Display changes have a keep-or-revert countdown.
-9. **Extensions with room to experiment.** Choose from 86 built-in plugins
+9. **Extensions with room to experiment.** Choose from 88 built-in plugins
    or write your own in Rust. Sandboxed WebAssembly keeps a crashing plugin
-   from taking down your desktop.
+   from taking down your desktop. Optional [backups](docs/backups.md) bring
+   encrypted backups, private restore copies, Btrfs snapshots and reviewed cleanup;
+   [app permissions](docs/app-permissions.md) puts Flatpak controls and clear access limits within reach.
 10. **Ready for your routines.** Documented commands with JSON replies let
     scripts and AI agents drive the desktop and report live progress to the
     bar. [Automation](docs/agent-ready.md).
@@ -155,7 +162,8 @@ and tick off tasks where they sit.
     progress and Mandara's password dialog, plus NixOS generations.
     [System updates](docs/apps-and-updates.md#system-updates).
 12. **At home in your language.** Twenty interface languages, fonts chosen
-    for each script, and right-to-left Arabic, Persian and Urdu.
+    for each script, right-to-left Arabic, Persian and Urdu, and a live
+    keyboard-layout badge.
 
 ## Why you'll like it
 
@@ -168,8 +176,8 @@ and tick off tasks where they sit.
   part of your day. [Mandara Studio](docs/studio.md)
 - **Less app-hopping.** Lyrics, per-app sound, capture tools, a sorted
   clipboard, night light and sound themes are close by. Drop files onto
-  [floating shelves](docs/plugins.md#stash-floating-shelves), or install an
-  app by dragging its package in. [More features](docs/more-features.md)
+  [floating shelves](docs/plugins.md#stash-floating-shelves), summon a drop zone
+  with a shake, or install an app by dragging its package in. [More features](docs/more-features.md)
 - **A welcome of your own.** Matching lock and login screens, with your
   wallpaper and ready-made looks. [Lock and login](docs/lock-and-login.md)
 - **Words that feel familiar.** Choose your language and reading direction.
@@ -314,6 +322,7 @@ Without curl, use the base system's `fetch`.
 
 **NixOS:** try `nix run github:theHamdiz/mandara`, then add
 `programs.mandara.enable = true;` through the NixOS or Home Manager module.
+Stable is the default; your system can stay on stable or unstable.
 Update from your configuration flake directory with
 `nix flake update mandara`, then `sudo nixos-rebuild switch --flake .` or
 `home-manager switch --flake .`. Use your input name if it differs from

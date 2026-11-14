@@ -1104,7 +1104,7 @@ impl Render for GreeterPage {
         let p = mandara_core::frame_palette(window, cx);
         // The page column's width, known from the window this frame (the
         // canvas below confirms it after layout).
-        self.width.set(super::grid::PageMetrics::of(window).column_w);
+        self.width.set(super::grid::PageMetrics::of(window, cx).column_w);
         // Preview size: the page's width (less the column beside it), 16:9,
         // at most 40 % of the window's height.
         let vh = f32::from(window.viewport_size().height);

@@ -547,7 +547,7 @@ fn status(cx: &App) -> Result<serde_json::Value, String> {
 pub fn bind_alt_tab(cx: &mut App) -> Result<Vec<String>, String> {
     use mandara_config::compositor::{BindAction, Keybind, existing_chords};
     let target = crate::hub::hub(cx).read(cx).compositor.as_ref().map(|b| b.target()).ok_or_else(|| t("No supported compositor detected").to_string())?;
-    let taken = existing_chords(target);
+    let taken = existing_chords(target).map_err(|error| format!("{error:#}"))?;
     let wanted = [Keybind::new(&["alt"], "Tab", BindAction::Mandara("switcher next".into())), Keybind::new(&["alt", "shift"], "Tab", BindAction::Mandara("switcher prev".into()))];
     let mut added = Vec::new();
     let mut skipped = Vec::new();

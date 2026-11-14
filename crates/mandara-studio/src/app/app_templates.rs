@@ -44,6 +44,15 @@ impl Drop for Job {
 struct Row {
     entry: Entry,
     search: String,
+    aliases: SharedString,
+}
+
+impl Row {
+    fn new(entry: Entry) -> Self {
+        let aliases = entry.aliases.join(" · ");
+        let search = format!("{} {} {} {} {aliases}", entry.name, entry.id, entry.source, entry.category).to_lowercase();
+        Self { entry, search, aliases: aliases.into() }
+    }
 }
 
 /// Bound card construction per frame while search still covers the whole catalog.
@@ -249,6 +258,7 @@ impl StudioView {
                         .flex_col()
                         .gap(px(SPACE_8_PX))
                         .child(div().text_size(px(TEXT_13_5_PX)).child(entry.name.clone()))
+                        .when(!row.aliases.is_empty(), |card| card.child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(row.aliases.clone())))
                         .child(
                             div()
                                 .text_size(px(TEXT_11_5_PX))
@@ -459,14 +469,7 @@ impl StudioView {
                 this.app_templates.rows = result
                     .entries
                     .into_iter()
-                    .map(|entry| Row {
-                        search: format!(
-                            "{} {} {} {}",
-                            entry.name, entry.id, entry.source, entry.category
-                        )
-                        .to_lowercase(),
-                        entry,
-                    })
+                    .map(Row::new)
                     .collect();
                 this.app_templates.error =
                     (!result.errors.is_empty()).then(|| result.errors.join("\n"));
@@ -664,21 +667,21 @@ mod tests {
 
     #[test]
     fn catalog_search_matches_all_terms_without_changing_app_identity() {
-        let row = Row {
-            entry: Entry {
+        let row = Row::new(Entry {
                 id: "editor".into(),
                 source: "community".into(),
                 name: "Example Editor".into(),
+                aliases: vec!["Helium".into()],
                 category: "editor".into(),
                 documentation_url: String::new(),
                 files: Vec::new(),
                 manifest: None,
                 folder: "editor".into(),
-            },
-            search: "example editor community".into(),
-        };
+            });
         assert!(matches(&row, &["editor".into(), "community".into()]));
         assert!(!matches(&row, &["terminal".into()]));
+        assert!(matches(&row, &["helium".into()]));
+        assert_eq!(row.aliases.as_ref(), "Helium");
         assert_eq!(row.entry.qualified_id(), "community:editor");
         assert!(!Templates::default().open);
         assert!(

@@ -16,6 +16,27 @@ pub const BAND_PAD: f32 = 10.0;
 pub const HUB_GAP: f32 = 6.0;
 /// Smallest hub radius (it names the item under the pointer).
 pub const HUB_MIN: f32 = 34.0;
+/// Radial clearance between the hub's text box and its circular edge.
+pub const HUB_TEXT_PAD: f32 = 8.0;
+/// Two label rows leave room for a shortcut on an ordinary-size hub.
+const HUB_LABEL_LINES: u8 = 2;
+
+/// An inscribed text square fits every corner inside the padded circle.
+#[derive(Clone, Copy, Debug)]
+pub struct HubText {
+    pub side: f32,
+    pub lines: u8,
+    pub hint: bool,
+}
+
+impl HubText {
+    pub fn new(radius: f32, line_height: f32, hint_height: f32, gap: f32, has_hint: bool) -> Self {
+        let side = if radius.is_finite() { (radius - HUB_TEXT_PAD).max(0.0) * std::f32::consts::SQRT_2 } else { 0.0 };
+        let hint = has_hint && side >= line_height + hint_height + gap;
+        let room = side - if hint { hint_height + gap } else { 0.0 };
+        Self { side, lines: ((room / line_height).floor() as u8).min(HUB_LABEL_LINES), hint }
+    }
+}
 /// Least space between two neighbouring buttons along the ring.
 pub const ITEM_GAP: f32 = 14.0;
 /// Captions under the icons ("always" labels): width and height.
@@ -595,5 +616,39 @@ mod tests {
             assert!(w > -PI - 1e-5 && w <= PI + 1e-5, "{a} → {w}");
             assert!(close(w.sin(), a.sin()) && close(w.cos(), a.cos()));
         }
+    }
+}
+
+#[cfg(test)]
+mod hub_text_tests {
+    use super::*;
+
+    #[test]
+    fn every_text_box_corner_stays_inside_the_circle_with_radial_padding() {
+        assert_eq!(std::mem::size_of::<HubText>(), 8);
+        for radius in 0..=200 {
+            for hint in [false, true] {
+                let layout = HubText::new(radius as f32, 16.0, 18.0, 4.0, hint);
+                let corner = (layout.side / 2.0).hypot(layout.side / 2.0);
+                assert!(corner <= (radius as f32 - HUB_TEXT_PAD).max(0.0) + 0.001);
+                let used = layout.lines as f32 * 16.0 + if layout.hint { 22.0 } else { 0.0 };
+                assert!(used <= layout.side + 0.001, "radius {radius}, hint {hint}");
+                assert!(layout.lines <= HUB_LABEL_LINES);
+            }
+        }
+    }
+
+    #[test]
+    fn small_hubs_prioritize_readable_labels_over_hints() {
+        let small = HubText::new(34.0, 16.0, 18.0, 4.0, true);
+        assert_eq!(small.lines, 2);
+        assert!(!small.hint);
+        let medium = HubText::new(42.0, 16.0, 18.0, 4.0, true);
+        assert_eq!(medium.lines, 1);
+        assert!(medium.hint);
+        let ordinary = HubText::new(62.0, 16.0, 18.0, 4.0, true);
+        assert_eq!(ordinary.lines, 2);
+        assert!(ordinary.hint);
+        assert_eq!(HubText::new(f32::NAN, 16.0, 18.0, 4.0, true).side, 0.0);
     }
 }

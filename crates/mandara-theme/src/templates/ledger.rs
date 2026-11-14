@@ -168,9 +168,7 @@ fn missing_dirs(path: &Path) -> Vec<PathBuf> {
 /// Removes folders Mandara created (deepest first) while they are empty.
 fn remove_empty(dirs: &[PathBuf]) {
     for dir in dirs {
-        if std::fs::remove_dir(dir).is_err() {
-            break;
-        }
+        let _ = std::fs::remove_dir(dir);
     }
 }
 
@@ -470,6 +468,14 @@ impl Ledger {
             }
         }
         let kept = |path: &Path| super::destination::identity(path).is_ok_and(|path| resolved.contains(&path));
+        // An owned stylesheet can create a directory that still contains its
+        // import when the stylesheet is retired. Retry only recorded empty
+        // directories after both kinds of owned entries have been restored.
+        let mut directories: Vec<PathBuf> = self.files.values().filter(|entry| entry.app == app)
+            .flat_map(|entry| entry.created_dirs.iter().cloned())
+            .chain(self.blocks.values().filter(|entry| entry.app == app).flat_map(|entry| entry.created_dirs.iter().cloned())).collect();
+        directories.sort_unstable_by_key(|path| std::cmp::Reverse(path.components().count()));
+        directories.dedup();
         let files: Vec<String> = self.files.iter().filter(|(k, e)| e.app == app && !kept(Path::new(k))).map(|(k, _)| k.clone()).collect();
         for k in files {
             if let Err(error) = self.restore_file(&k, &mut changed) {
@@ -484,6 +490,7 @@ impl Ledger {
         for k in blocks {
             self.restore_block(k, &mut changed);
         }
+        remove_empty(&directories);
         changed
     }
 
@@ -541,6 +548,19 @@ impl Ledger {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn empty_directory_cleanup_continues_after_missing_and_personal_directories() {
+        let root = tempfile::tempdir().unwrap();
+        let personal = root.path().join("personal");
+        let empty = root.path().join("empty");
+        std::fs::create_dir(&personal).unwrap();
+        std::fs::create_dir(&empty).unwrap();
+        std::fs::write(personal.join("keep"), "personal").unwrap();
+        super::remove_empty(&[root.path().join("missing"), personal.clone(), empty.clone()]);
+        assert!(!empty.exists());
+        assert_eq!(std::fs::read_to_string(personal.join("keep")).unwrap(), "personal");
+    }
+
     use super::*;
 
     #[test]

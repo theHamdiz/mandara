@@ -11,6 +11,9 @@ pub const MAX_TEMPLATES: usize = 128;
 const MAX_ID_BYTES: usize = 128;
 const MAX_SOURCES: usize = 16;
 const MAX_INLINE_BYTES: usize = 2 * mandara_theme::templates::custom::MAX_TEMPLATE_BYTES;
+/// Canonical community endpoints also identify the apps covered by shared templates.
+pub const COMMUNITY_INDEX_URL: &str = "https://api.noctalia.dev/templates";
+pub const COMMUNITY_FILES_URL: &str = "https://api.noctalia.dev/templates/{app}/{file}";
 
 pub fn valid_id(id: &str) -> bool {
     !id.is_empty()
@@ -65,8 +68,8 @@ impl Default for AppThemesConfig {
                     id: "community".into(),
                     name: "Community templates".into(),
                     kind: CatalogKind::Index,
-                    index_url: "https://api.noctalia.dev/templates".into(),
-                    files_url: "https://api.noctalia.dev/templates/{app}/{file}".into(),
+                    index_url: COMMUNITY_INDEX_URL.into(),
+                    files_url: COMMUNITY_FILES_URL.into(),
                     directory_url: String::new(),
                 },
                 CatalogSource {

@@ -117,8 +117,13 @@ pub trait Surface: Styled + Sized {
 
     /// [`Self::card_elevation`] in `style`.
     fn card_elevation_as(self, style: CardStyle, rim: Vec<BoxShadow>, palette: &MandaraPalette) -> Self {
+        self.card_elevation_with(style, rim, palette, true)
+    }
+
+    #[doc(hidden)]
+    fn card_elevation_with(self, style: CardStyle, rim: Vec<BoxShadow>, palette: &MandaraPalette, ornament: bool) -> Self {
         // Inked: every card outlined in ink, on its hard shadow.
-        let ink = crate::plugins::panel_fx::ink_detail_px();
+        let ink = if ornament { crate::plugins::panel_fx::ink_detail_px() } else { 0.0 };
         if ink > 0.0 {
             let shadow = if crate::style::ink_shadow() > 0.0 { crate::plugins::panel_fx::elevation_scaled(palette, 1.0, 1.0) } else { Vec::new() };
             let el = self.border(px(ink)).border_color(crate::plugins::panel_fx::ink(palette).hsla());
@@ -153,7 +158,7 @@ pub trait CardSurface: Surface + ParentElement {
 
     /// [`Self::card_surface`] in `family` and `style`.
     fn card_surface_as(self, family: SurfaceCorners, style: CardStyle, r: f32, fill: Fill, rim: Vec<BoxShadow>, palette: &MandaraPalette) -> Self {
-        self.card_surface_with(family, style, r, fill, rim, palette, false)
+        self.card_surface_with(family, style, r, fill, rim, palette, false, true)
     }
 
     /// [`Self::card_surface`] for a card that clips its children to its
@@ -167,13 +172,19 @@ pub trait CardSurface: Surface + ParentElement {
 
     /// [`Self::clipped_card_surface`] in `family` and `style`.
     fn clipped_card_surface_as(self, family: SurfaceCorners, style: CardStyle, r: f32, fill: Fill, rim: Vec<BoxShadow>, palette: &MandaraPalette) -> Self {
-        crate::style::ClipRounded::clip_rounded(self.card_surface_with(family, style, r, fill, rim, palette, true))
+        crate::style::ClipRounded::clip_rounded(self.card_surface_with(family, style, r, fill, rim, palette, true, true))
+    }
+
+    /// Clip the same card geometry without inheriting the current ink finish.
+    /// Catalog previews add their own snapshot's texture and shadow afterward.
+    fn clipped_card_geometry_as(self, family: SurfaceCorners, r: f32, fill: Fill, rim: Vec<BoxShadow>, palette: &MandaraPalette) -> Self {
+        crate::style::ClipRounded::clip_rounded(self.card_surface_with(family, CardStyle::Tonal, r, fill, rim, palette, true, false))
     }
 
     /// The card surface; `clipped`: the card clips its children, and its
     /// drawn shape escapes that clip ([`gpui::Window::with_outer_content_mask`]).
     #[doc(hidden)]
-    fn card_surface_with(self, family: SurfaceCorners, style: CardStyle, r: f32, fill: Fill, rim: Vec<BoxShadow>, palette: &MandaraPalette, clipped: bool) -> Self {
+    fn card_surface_with(self, family: SurfaceCorners, style: CardStyle, r: f32, fill: Fill, rim: Vec<BoxShadow>, palette: &MandaraPalette, clipped: bool, ornament: bool) -> Self {
         let Some(corner) = shaped(family, r) else {
             let el = self.surface_corners_as(family, r);
             let el = match fill {
@@ -182,12 +193,12 @@ pub trait CardSurface: Surface + ParentElement {
             };
             // Inked (`[style.ink]`): a clipping card shades its far corner
             // with the ink texture, under its children.
-            let texture = if clipped { crate::plugins::panel_fx::ink_texture(palette) } else { None };
+            let texture = if clipped && ornament { crate::plugins::panel_fx::ink_texture(palette) } else { None };
             let el = match texture {
                 Some(t) => el.relative().child(t),
                 None => el,
             };
-            return el.card_elevation_as(style, rim, palette);
+            return el.card_elevation_with(style, rim, palette, ornament);
         };
         let outline = (style == CardStyle::Outlined).then(|| (palette.outline.with_alpha(OUTLINE_ALPHA), OUTLINE_PX));
         let ink = super::cut::Ink { fill: Some(fill.0), fill_end: fill.1, outline };
@@ -252,6 +263,9 @@ mod tests {
             let corner = shaped(family, 18.0).unwrap();
             let mut card = gpui::div().clipped_card_surface_as(family, CardStyle::Tonal, 18.0, Fill(palette.surface_container, None), Vec::new(), &palette);
             let style = card.style();
+            let mut geometry = gpui::div().clipped_card_geometry_as(family, 18.0, Fill(palette.surface_container, None), Vec::new(), &palette);
+            assert_eq!(geometry.style().corner_radii, style.corner_radii);
+            assert_eq!(geometry.style().overflow, style.overflow);
             assert_eq!((style.overflow.x, style.overflow.y), (Some(gpui::Overflow::Clip), Some(gpui::Overflow::Clip)), "{family:?}: children are clipped");
             assert_eq!(style.corner_radii.top_left, Some(px(corner.inscribed_radius()).into()), "{family:?}: to the rounded rectangle inside the shape");
             // A panel rounded at 24 px, the card flush with its top-left corner.

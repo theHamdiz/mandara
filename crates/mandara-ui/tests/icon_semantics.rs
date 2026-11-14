@@ -38,7 +38,9 @@ fn sparkle_icons_only_represent_ai() {
                     line.trim_start().starts_with("\"sparkles\" =>")
                         || line.contains("\"pencil\", \"sparkles\", \"brush\"")
                 }
-                "crates/mandara-ui/src/plugins/local_ai.rs" => true,
+                "crates/mandara-ui/src/plugins/local_ai.rs"
+                | "crates/mandara-ui/src/plugins/local_ai/chat.rs"
+                | "crates/mandara-ui/src/plugins/local_ai/chat/view.rs" => true,
                 "crates/mandara-ui/src/desktop_plugins.rs" => line.contains("WidgetKind::AiUsage"),
                 // The AI usage widget's empty state.
                 "crates/mandara-ui/src/backdrop/widgets/feeds.rs" => line.contains("tk(\"AI usage\")"),

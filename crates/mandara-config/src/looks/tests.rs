@@ -472,3 +472,49 @@ fn ink_rush_inks_the_desktop_and_the_next_look_takes_it_back() {
     let old: ShellConfig = toml::from_str("[style]\nshadows = true\n").unwrap();
     assert!(!old.style.ink.is_on());
 }
+
+#[test]
+fn every_look_restores_custom_items_to_their_original_vertical_bar_groups() {
+    use crate::bar_styles::{BarStyle, ItemZone};
+    let mut original = ShellConfig::default();
+    BarStyle::RamlTram.apply(&mut original);
+    let custom = ["my-chat", "my-backups", "my-notes"];
+    original.side_bars.left.middle = custom.iter().map(|id| (*id).into()).collect();
+    for id in custom { crate::bar_items::mark_yours(&mut original, id); }
+    let before = before_snapshot(&original, "2026-11-14 00:00").unwrap();
+    for look in &LOOKS {
+        let changed = look.apply(&original, LookOptions::default());
+        let restored = restore(&changed, &before).unwrap();
+        assert_eq!(restored.side_bars.left.middle, original.side_bars.left.middle, "{}: the vertical middle group must return", look.id);
+        for id in custom {
+            let placements: Vec<_> = ItemZone::ALL.into_iter().filter(|zone| zone.get(&restored).iter().any(|item| item == id)).collect();
+            assert_eq!(placements, [ItemZone::RailMiddle], "{}: {id} must appear only on the vertical bar", look.id);
+        }
+    }
+}
+
+#[test]
+fn every_bar_style_restores_all_nine_plugin_zones_after_each_look_and_reload() {
+    use crate::bar_styles::{BarStyle, ItemZone};
+    for style in BarStyle::ALL {
+        let mut original = ShellConfig::default();
+        style.apply(&mut original);
+        original.side_bars.enabled = true;
+        original.side_bars.left.enabled = true;
+        original.side_bars.right.enabled = true;
+        for (index, zone) in ItemZone::ALL.into_iter().enumerate() {
+            let id = format!("my-zone-{index}");
+            zone.list(&mut original).push(id.clone());
+            crate::bar_items::mark_yours(&mut original, &id);
+        }
+        let before = before_snapshot(&original, "2026-11-14 00:00").unwrap();
+        for look in &LOOKS {
+            let changed = look.apply(&original, LookOptions::default());
+            let changed: ShellConfig = toml::from_str(&toml::to_string(&changed).unwrap()).unwrap();
+            let restored = restore(&changed, &before).unwrap();
+            for zone in ItemZone::ALL {
+                assert_eq!(zone.get(&restored), zone.get(&original), "{style:?} → {} → restore: {zone:?}", look.id);
+            }
+        }
+    }
+}

@@ -2,6 +2,8 @@
 //! item / panel / sidebar card, and its documented commands.
 
 pub mod app_installer;
+pub mod app_permissions;
+pub mod backups;
 pub mod audio;
 pub mod bluetooth;
 pub mod clipboard;
@@ -167,6 +169,8 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     main_menu::register(registry);
     notifications::register(registry);
     privacy::register(registry);
+    app_permissions::register(registry);
+    backups::register(registry);
     crate::alerts::register(registry);
     todo::register(registry);
     notes::register(registry);

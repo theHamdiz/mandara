@@ -61,10 +61,67 @@ pointers (for example `/plugins/settings/resources/refresh_ms`).
 
 ### Custom keyboard shortcuts
 
-Open **Studio → Keyboard shortcuts**, add a starting action under **Add a
+Open **Studio → Keyboard shortcuts → Mandara**, add a starting action under **Add a
 shortcut**, capture the keys, and switch the row to **Program** for a custom
 command. Chords already owned by your compositor are shown as taken and
 are left alone.
+
+The **Compositor** tab edits existing native bindings from the compositor
+running this session, including supported included files. Select a row and
+edit its individual values; changes wait for **Save**. Mandara preserves the
+rest of the file, comments and symlinks, takes a timestamped backup, checks
+the edit and offers **Undo**. Files changed since the scan must be refreshed
+before saving. Bindings built by executable code stay read-only; scanning
+never runs your configuration scripts. See [Studio's shortcut editor](studio.md#system).
+
+Discovery follows the compositor's launch arguments and environment, including
+Niri's `NIRI_CONFIG`, Sway's reported active file and labwc's merged config
+directories. Read-only sources remain visible with an explanation. KWin
+conflicts include alternative shortcuts, punctuation and the first key of a
+multi-key sequence. Sway includes share their variables and binding modes.
+Environment variables containing several include paths follow Sway's native
+word splitting and quoting, without executing command substitutions.
+Escaped dollar references remain available to environment expansion, and nested
+quotes preserve filenames containing spaces.
+Sway commands stored in variables can include other files too; their bindings
+take part in the same conflict checks. Numeric filename escapes preserve Sway's
+native handling of the remaining path.
+Labwc lists direct keyboard bindings; unsupported nested key chains stay
+untouched and do not become editable shortcuts.
+Niri's `Mod` follows the merged input settings and its native nested-session
+behaviour; boolean options retain Niri's KDL v1 syntax. Missing Niri includes
+marked `optional=true` are skipped; other read errors still stop a save.
+Inline and multiline bindings use the same native KDL reader.
+MangoWM conflict checks follow both legacy and TOML sources, keeping bindings
+in their native modes rather than treating every mode as active together.
+Repeated MangoWM includes are read in their current mode; recursive includes
+stop the save with an explanation.
+When several modes load Mandara's managed file, conflicts in each mode are kept.
+For River, this editor applies selected mappings live through `riverctl map`
+and `riverctl unmap`, with Undo. It leaves `init` unchanged. Scanning and
+validation never execute the program.
+If a River mapping's mode, modifiers or key cannot be resolved, other edits
+are locked too: the editor cannot safely displace an unknown live mapping.
+Shell control flow, sourced scripts and startup programs can hide further
+mappings, so their River configurations stay read-only.
+Repeated literal mappings on the same chord are also locked so moving an
+earlier entry cannot remove the later active mapping.
+Native scans bound bindings, stored variables and expanded values; an
+over-budget source reports an error instead of silently omitting shortcuts.
+Managed companion files use the same bounded, regular-file reads. Legacy
+Hyprland validation preserves variable assignments and includes in their
+native order, including repeated includes and inherited submaps, without
+running startup commands. A submap named `default` remains separate from the
+default binding scope. Linked Lua companion files keep their Lua syntax even
+when their destination has no extension. Sway limits the total retained expansion data as
+well as each individual value. Continued includes are resolved; continued
+bindings remain visible and read-only so their formatting stays intact.
+If Linux restricts the compositor's environment, discovery falls back to the
+current user's configuration environment. Absolute launch overrides and
+Sway's reported config retain precedence; a relative override is refused
+when the compositor's working directory cannot be read safely.
+Window controls also follow the compositor's advertised capabilities; an
+unavailable action stays dimmed with a reason.
 
 In TOML, a program action uses `kind = "spawn"` (`"exec"` is also accepted
 when reading an existing config). For Hyprland 0.57 or newer, custom
@@ -85,6 +142,48 @@ workspace, use `hl.dsp.focus({ workspace = 2 })`. Split direction uses
 as entered, so update old `hyprctl dispatch
 movefocus l` commands to Hyprland's current syntax. See the official
 [Hyprland dispatcher reference](https://wiki.hypr.land/configuring/core/dispatchers/).
+
+### Studio appearance
+
+**Themes → Studio** stores its own appearance in `[studio]`: the selected
+`look`, palette (`theme`), component designs (`style`), `typography`,
+`motion` and window geometry (`frame`). Desktop Looks and wallpaper changes
+leave this snapshot intact. Existing configurations without `[studio]`
+keep following the shell; **Follow the shell** returns to that behaviour.
+Choose a preset first, then open **Studio design** in **Themes → Components**
+to refine its controls, fonts, colours and frame. See [Studio Looks](studio.md#studios-own-look).
+
+An independent snapshot starts with the Mandara preset. `look` accepts
+`mandara`, `cupertino-glass`, `yaru`, `gtk`, `arcade`, `comic`, `paper`,
+`telemetry` or `terminal`; changing this label alone does not apply a preset.
+Use the Studio picker or `studio look apply` to save its complete recipe.
+`theme` starts dark, with a coastal seed, `tonal-spot`, neutral adjustments
+and a 450 ms transition. `style` starts with Classic components;
+`typography` uses Inter, Alexandria, Cairo and JetBrains Mono at weight 400;
+`motion` starts at stiffness 280, damping 24 and mass 1, with reduced motion
+off. These tables reuse the shell's named choices and control ranges.
+
+Frame measurements are logical pixels. Studio clamps hand-edited values to
+these ranges:
+
+| `studio.frame` key | Mandara preset | Range / choices |
+|---|---|---|
+| `design` | `classic` | `classic`, `glass`, `header`, `chassis`, `console`, `comic`, `editorial`, `terminal` |
+| `header_accent`, `controls_at_start` | `false` | Boolean |
+| `opacity` | 1 | 0.5–1 |
+| `inset`, `sidebar_inset` | 0 | 0–28 |
+| `radius` | 18 | 0–48 |
+| `border` | 1 | 0–6 |
+| `title_height` | 44 | 32–80 |
+| `sidebar_width` | 232 | 180–340 |
+| `nav_height` | 38 | 28–56 |
+| `nav_radius` | 9 | 0–48 |
+| `card_radius` | 18 | 0–32 |
+| `card_padding` | 18 | 4–28 |
+
+Other presets save their own values. A manually supplied partial
+`[studio.frame]` table defaults its missing title height and sidebar width
+to 46 and 252; the remaining defaults match the table above.
 
 ## What's configurable
 
@@ -170,7 +269,7 @@ fixed:
 | Presentation mode (`presentation`, opt-in) | `auto_screen_share` (on while an app shares the screen) | off |
 | Share to phone (`share`, opt-in) | `minutes` (the link stops after this long, 1–120), `once` (stop after the first download) | 10 min, on |
 | Uptime monitor (`uptime`, opt-in) | `checks` (`https://…`, `http://…` or `host:port`, optionally `Name=target`, comma-separated), `interval_s` (10–3600), `notify` | empty, 60 s, on |
-| Local AI (`local-ai`, opt-in) | `url` (the Ollama server) | `http://127.0.0.1:11434` |
+| Local AI (`local-ai`, opt-in) | `provider`, `server`, `model`, `use_api_key`, `reply_tokens`, `context_bytes` | Ollama, provider's local address, no model selected, no optional key, 1024 tokens, 16384 bytes; an existing Ollama `url` is preserved ([guide](local-ai.md)) |
 | Git repositories (`git-repos`, opt-in) | `roots` (folders to look in, comma-separated), `depth` (1–6) | `~/projects, ~/Projects, ~/code, ~/src, ~/dev, ~/git`, 3 |
 | CI status (`ci`, opt-in) | `repos` (`owner/name`, comma-separated), `use_gh_token` (the `gh` CLI's login for private repos and higher limits; else `GITHUB_TOKEN`), `notify` | empty, on, on |
 | Crash reports (`crashes`, opt-in) | `notify` (a notification for a new crash) | on |
@@ -652,6 +751,10 @@ menu). A file without it gets the ring with every item. The menu's
 surface exists only while it shows; it has no timers and keeps no state
 once closed.
 
+Labels in the middle wrap to two lines, then shorten with an ellipsis.
+Text and shortcuts stay inside the circle with padding; smaller circles
+prioritize the label when a shortcut would crowd it.
+
 | Key | Values | Default |
 |---|---|---|
 | `style` | `ring` (icon buttons round the click) or `classic` (the glass list) | `ring` |
@@ -999,6 +1102,11 @@ snapshot, and *Restore my look* / `mandara msg look restore` applies it
 back. `mandara msg look list`, `mandara msg look apply <id>
 [wallpaper-colors]`.
 
+New snapshots include all nine plugin groups across the main and vertical
+bars. Restoring keeps their original positions, including hidden groups,
+while retaining plugins added during a Look. Older snapshots cannot recover
+vertical positions that were never recorded.
+
 | id | Look | Components |
 |---|---|---|
 | `corniche-dusk` | rose glass pills, headline clock, system monitor, now-playing card | Classic |
@@ -1319,3 +1427,23 @@ updates, and their separate compositor fragment does not enable management of
 keybinds, input or layout.
 MangoWM requires `width`, `height` and `refresh_mhz` together when saving a
 resolution; scale, position and rotation can be saved independently.
+
+
+### Backups (`backups`)
+
+The opt-in plugin's Settings stores these keys under `[plugins.settings.backups]`.
+Locations start empty; Mandara never selects personal folders automatically.
+
+| Key | Meaning | Default |
+| --- | --- | --- |
+| `repository` | Absolute local restic repository path | empty |
+| `password_file` | Path to an existing private password file owned by you (`0600`); its contents are not stored in config | empty |
+| `sources` | Up to 32 absolute source-folder paths | empty list |
+| `snapshot_source` | Existing Btrfs subvolume on the selected mount | empty |
+| `snapshot_directory` | Existing destination folder on that mount | empty |
+| `cleanup_age_days` | Minimum cache-file age, 1–3650 days; separate from Trash previews | 30 |
+
+See [Backups and storage](backups.md) for the review, restore and maintenance
+flows. [App permissions](app-permissions.md) uses Flatpak's personal override
+files directly; it does not put passwords or application grants in Mandara's
+TOML config.

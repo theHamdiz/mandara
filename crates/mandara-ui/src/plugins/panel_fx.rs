@@ -8,6 +8,8 @@
 
 mod redraw;
 pub use redraw::redraw_in;
+pub(super) mod controls;
+pub(super) mod visibility;
 
 use crate::bidi::Bidi as _;
 use std::cell::RefCell;
@@ -410,8 +412,13 @@ const INK_DETAIL_SHARE: f32 = 0.66;
 /// The ink texture over a surface's far corner (`[style.ink] texture`),
 /// filling its parent; `None` without one. One shared image, drawn once.
 pub fn ink_texture(palette: &MandaraPalette) -> Option<gpui::AnyElement> {
+    ink_texture_as(crate::style::ink_texture(), palette)
+}
+
+/// The same shared texture from an explicit appearance snapshot.
+pub fn ink_texture_as(texture: mandara_config::desktop::SurfaceTexture, palette: &MandaraPalette) -> Option<gpui::AnyElement> {
     use gpui::{IntoElement as _, StyledImage as _};
-    let hatch = match crate::style::ink_texture() {
+    let hatch = match texture {
         mandara_config::desktop::SurfaceTexture::None => return None,
         mandara_config::desktop::SurfaceTexture::Halftone => false,
         mandara_config::desktop::SurfaceTexture::Hatch => true,
@@ -424,7 +431,7 @@ pub fn ink_texture(palette: &MandaraPalette) -> Option<gpui::AnyElement> {
 const INK_TEXTURE_DARK: f32 = 0.9;
 
 /// The hard offset shadow of inked surfaces, `progress` fading it in.
-fn ink_shadow(palette: &MandaraPalette, offset: f32, progress: f32) -> Vec<BoxShadow> {
+pub fn ink_shadow(palette: &MandaraPalette, offset: f32, progress: f32) -> Vec<BoxShadow> {
     let d = offset * if crate::bidi::rtl() { -1.0 } else { 1.0 };
     vec![BoxShadow { color: shadow_ink(palette).with_alpha(progress.clamp(0.0, 1.0)).hsla(), offset: point(px(d), px(offset)), blur_radius: px(0.0), spread_radius: px(0.0), inset: false }]
 }

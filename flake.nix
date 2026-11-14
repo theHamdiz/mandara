@@ -1,7 +1,7 @@
 {
   description = "Mandara Shell: a design-first Wayland desktop shell for MangoWM, Niri, Hyprland, Sway, River Classic and Umbriel";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.nixpkgs.url = "https://channels.nixos.org/nixos-26.05/nixexprs.tar.zst";
   inputs.rust-overlay = {
     url = "github:oxalica/rust-overlay";
     inputs.nixpkgs.follows = "nixpkgs";
@@ -142,6 +142,14 @@
         in
         {
           nixos-module = nixos.config.system.build.toplevel;
+          compression-library =
+            assert lib.assertMsg (
+              lib.any (input: input.drvPath == pkgs.zstd.drvPath) self.packages.${system}.mandara.buildInputs
+            ) "Mandara's compression backend requires zstd in buildInputs";
+            pkgs.testers.hasPkgConfigModules {
+              package = pkgs.zstd;
+              moduleNames = [ "libzstd" ];
+            };
           rust-intrinsics =
             pkgs.runCommand "mandara-rust-intrinsics"
               {

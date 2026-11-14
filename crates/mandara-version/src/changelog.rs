@@ -464,4 +464,13 @@ mod tests {
         }
         assert!(release(&all, "0.1.0").is_some());
     }
+    #[test]
+    fn pending_release_notes_have_a_summary_before_their_sections() {
+        let releases = parse(include_str!("../../../CHANGELOG.md"));
+        let Some(pending) = release(&releases, UNRELEASED) else { return; };
+        if pending.sections.iter().any(|section| !section.items.is_empty()) {
+            assert!(!pending.summary.trim().is_empty(), "write the release summary before its sections");
+        }
+    }
+
 }

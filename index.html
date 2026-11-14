@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mandara — a design-first Wayland desktop</title>
-  <meta name="description" content="A design-first Wayland desktop shell in Rust for ten compositors, with Looks, a live design studio, 86 plugins and optional offline AI control in natural language." />
+  <meta name="description" content="A design-first Wayland desktop shell in Rust for ten compositors, with Looks, a live design studio, 88 plugins and optional offline AI control in natural language." />
   <meta name="color-scheme" content="dark light" />
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a1520" />
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3f8f8" />
@@ -107,7 +107,7 @@
       <ul class="fact-row">
         <li class="fact rail-1"><span class="fact-figure">0.1<small>ms</small></span> <span class="fact-label">typical frame build</span></li>
         <li class="fact rail-2"><span class="fact-figure">10</span> <span class="fact-label">compositors, each in its own language</span></li>
-        <li class="fact rail-3"><span class="fact-figure">86</span> <span class="fact-label">plugins, switched on as you need them</span></li>
+        <li class="fact rail-3"><span class="fact-figure">88</span> <span class="fact-label">plugins, switched on as you need them</span></li>
         <li class="fact rail-4"><span class="fact-figure">20</span> <span class="fact-label">languages, right to left included</span></li>
       </ul>
       <p class="facts-note">The frame time is a historical figure from release builds: 95% of sampled frames finished inside the 1 ms a 1000 Hz display allows. Your display, driver and widgets change it, and Studio → Performance shows yours live. <a href="docs/performance.html">How it is measured</a></p>
@@ -642,7 +642,7 @@
     <!-- The plugins, grouped. -->
     <section class="section shelf-section" id="plugins" aria-labelledby="plugins-title">
       <header class="section-head">
-        <h2 id="plugins-title" class="display-2"><span class="d-heavy">86 plugins,</span> <em>one shelf.</em></h2>
+        <h2 id="plugins-title" class="display-2"><span class="d-heavy">88 plugins,</span> <em>one shelf.</em></h2>
         <p>Switch on what you use. Write your own in Rust, compiled to sandboxed WebAssembly. <a class="text-link" href="docs/plugins.html">See every plugin</a></p>
       </header>
       <ul class="shelf">
@@ -675,7 +675,7 @@
           <li><a class="spine chip" href="docs/plugins.html"><span>Desktop fun</span><small>Desktop</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Desktop info</span><small>Desktop</small></a></li>
         </ul></li>
-        <li class="shelf-group"><h3 class="shelf-name">Productivity<small>9</small></h3><ul class="chips">
+        <li class="shelf-group"><h3 class="shelf-name">Productivity<small>10</small></h3><ul class="chips">
           <li><a class="spine chip" href="docs/plugins.html"><span>To-do</span><small>Productivity</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Notes</span><small>Productivity</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Stash</span><small>Productivity</small></a></li>
@@ -702,7 +702,7 @@
           <li><a class="spine chip" href="docs/plugins.html"><span>Share to phone</span><small>Media</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Radio</span><small>Media</small></a></li>
         </ul></li>
-        <li class="shelf-group"><h3 class="shelf-name">Look<small>6</small></h3><ul class="chips">
+        <li class="shelf-group"><h3 class="shelf-name">Look<small>8</small></h3><ul class="chips">
           <li><a class="spine chip" href="docs/plugins.html"><span>Wallpaper</span><small>Look</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Wallpaper depth</span><small>Look</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Wallpaper generator</span><small>Look</small></a></li>
@@ -729,11 +729,13 @@
           <li><a class="spine chip" href="docs/plugins.html"><span>Power</span><small>System</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Privacy</span><small>System</small></a></li>
         </ul></li>
-        <li class="shelf-group"><h3 class="shelf-name">Upkeep<small>6</small></h3><ul class="chips">
+        <li class="shelf-group"><h3 class="shelf-name">Upkeep<small>8</small></h3><ul class="chips">
           <li><a class="spine chip" href="docs/plugins.html"><span>Updates</span><small>Upkeep</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Services</span><small>Upkeep</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Containers</span><small>Upkeep</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>App installer</span><small>Upkeep</small></a></li>
+          <li><a class="spine chip" href="docs/backups.html"><span>Backups</span><small>Upkeep</small></a></li>
+          <li><a class="spine chip" href="docs/app-permissions.html"><span>App permissions</span><small>Upkeep</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Uptime monitor</span><small>Upkeep</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>Crash reports</span><small>Upkeep</small></a></li>
         </ul></li>
@@ -748,7 +750,7 @@
           <li><a class="spine chip" href="docs/plugins.html"><span>Sudoku</span><small>Games</small></a></li>
           <li><a class="spine chip" href="docs/plugins.html"><span>2048</span><small>Games</small></a></li>
         </ul></li>
-        <li class="shelf-group shelf-more"><a class="spine spine-more" href="docs/plugins.html"><span>All 86, in the guide</span><small>More</small></a></li>
+        <li class="shelf-group shelf-more"><a class="spine spine-more" href="docs/plugins.html"><span>All 88, in the guide</span><small>More</small></a></li>
       </ul>
     </section>
 

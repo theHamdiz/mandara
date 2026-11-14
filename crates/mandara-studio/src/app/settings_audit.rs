@@ -15,9 +15,10 @@ use serde_json::Value;
 
 use crate::registry::{self, Control, Section, Setting};
 
-/// Crates whose code reads settings (Studio itself only writes them).
+/// Crates whose code reads settings, including Studio’s independent appearance.
 const CONSUMER_CRATES: &[&str] = &[
     "mandara-ui/src",
+    "mandara-studio/src",
     "mandara-services/src",
     "mandara-app/src",
     "mandara-config/src",
@@ -33,6 +34,7 @@ const CONSUMER_CRATES: &[&str] = &[
 const UNEXPOSED_READS: &[(&str, &str, &str)] = &[
     // Retired by `general.units`; still read so old configs keep working.
     ("weather", "fahrenheit", "legacy flag replaced by General → Units"),
+    ("local-ai", "url", "legacy Ollama address replaced by Local AI → Server address"),
 ];
 
 /// Plugin tables in the registry that belong to no built-in (the

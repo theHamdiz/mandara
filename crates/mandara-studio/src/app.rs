@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, AppContext as _, ClickEvent, Context, Entity, FontWeight, InteractiveElement, IntoElement,
-    MouseButton, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window, div,
+    ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window, div,
     prelude::FluentBuilder as _, px,
 };
 use mandara_config::ShellConfig;
@@ -81,8 +81,12 @@ mod launcher_placement;
 pub mod looks_page;
 mod looks_yours;
 mod network_page;
+mod native_shortcuts;
+pub use native_shortcuts::ShortcutsTab;
 mod notifications_page;
 mod page_visit;
+mod studio_frame;
+mod studio_looks;
 mod plugin_gate;
 pub mod plugin_modal;
 mod plugin_offer;
@@ -168,6 +172,8 @@ pub struct StudioView {
     list_fields: HashMap<String, Entity<TextField>>,
     /// Keybind row waiting for a chord (Studio → Keyboard shortcuts).
     capturing: Option<usize>,
+    shortcuts_tab: ShortcutsTab,
+    native_shortcuts: native_shortcuts::Editor,
     focus: gpui::FocusHandle,
     maint: maint_page::Maint,
     depth_model: depth_model_row::DepthModelRow,
@@ -205,6 +211,7 @@ pub struct StudioView {
     components: component_designs::Previews,
     /// The Themes page's tab.
     themes_tab: looks_page::ThemesTab,
+    studio_looks: studio_looks::Gallery,
     /// The Desktop page's tab (Widgets when entering the page).
     desktop_tab: desktop_page::DesktopTab,
     /// Stash's edge catchers: the edge being resolved, and a change waiting
@@ -273,7 +280,7 @@ impl StudioView {
         });
         Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None,
             app_templates: Default::default(),
-            icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
+            icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, shortcuts_tab: Default::default(), native_shortcuts: Default::default(), focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), studio_looks: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -293,6 +300,9 @@ impl StudioView {
             self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
             self.themes = None;
             self.app_templates = Default::default();
+            self.studio_looks.release();
+            self.native_shortcuts.release();
+            keybind_conflicts::release(cx);
             self.icon_matches = None;
             // The Components previews' text fields go with the page.
             self.components = Default::default();
@@ -1154,17 +1164,6 @@ impl StudioView {
             )))
             .child(list)
             .child(div().row().flex_col().gap(px(SPACE_8_PX)).child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(t("Add a shortcut"))).child(quick))
-            .when(target.is_some(), |el| {
-                let ours: Rc<[String]> = binds.iter().map(|b| b.chord()).collect();
-                el.child(
-                    div()
-                        .row()
-                        .flex_col()
-                        .gap(px(SPACE_8_PX))
-                        .child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(tf("Shortcuts in your {target_name} config", &[("target_name", &target_name)])))
-                        .child(keybind_conflicts::own_binds(taken.clone(), ours, mandara_ui::fonts::fonts(cx).mono.clone(), p)),
-                )
-            })
             .into_any_element()
     }
 
@@ -1859,25 +1858,31 @@ impl Render for StudioView {
         frame_meter::begin();
         let p = mandara_core::frame_palette(window, cx);
         let cfg = config(cx).read(cx).snapshot();
+        let client_controls = crate::client_controls(window.window_decorations(), registry::running_compositor());
+        registry::set_client_controls(client_controls);
         registry::prime(&cfg);
         self.launcher_follow(&cfg, window, cx);
         if !self.query.is_empty() || !window.is_visible() {
             self.agent_page = None;
             self.motion_preview = None;
             self.app_templates = Default::default();
+            self.studio_looks.release();
+            self.native_shortcuts.release();
+            keybind_conflicts::release(cx);
         }
         let fonts = mandara_ui::fonts::fonts(cx);
         // Choices measure their labels in Studio's font this frame.
         choice::begin_frame(window, fonts.studio.clone());
         // Breakpoints: icon rail under 900 px; stacked rows when the content
         // column gets too narrow for label + control side by side.
-        self.page = grid::PageMetrics::of(window);
+        let studio_frame = studio_frame::frame(&cfg);
+        self.page = grid::PageMetrics::with_frame(f32::from(window.viewport_size().width), studio_frame.as_ref());
         self.rail = self.page.rail;
         self.stack_rows = self.page.stack_rows;
         let gutter = self.page.gutter;
         let rail = self.rail;
 
-        let nav = self.nav(rail, window, &p, cx);
+        let nav = self.nav(rail, studio_frame.as_ref(), window, &p, cx);
 
         // The folds of this frame's page, counted as the body builds them.
         self.fold_keys.clear();
@@ -1940,7 +1945,7 @@ impl Render for StudioView {
                     let keyrings = keyrings_card::element(cx);
                     div().row().flex_col().gap(px(SPACE_26_PX)).child(picker).child(rows).child(keyrings).into_any_element()
                 }
-                Section::Shortcuts => self.shortcuts(&cfg, &p, cx),
+                Section::Shortcuts => self.shortcuts_page(&cfg, &p, window, cx),
                 // The ready-made looks first, then the sections in setup
                 // order (launcher_page.rs).
                 Section::Launcher => self.launcher_page(&cfg, &p, cx),
@@ -1964,42 +1969,8 @@ impl Render for StudioView {
             (self.section.label(), body)
         };
 
-        // Client-side title bar: the whole strip drags the window (double-
-        // click maximizes), with minimize / maximize / close at the end.
-        let win_btn = |id: &'static str, icon_name: &'static str, danger: bool| {
-            div()
-                .id(id)
-                .size(px(DIM_30_PX))
-                .rounded_full()
-                .row()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(move |s| {
-                    s.bg(if danger { p.urgent_coral.with_alpha(ALPHA_90).hsla() } else { p.on_surface.with_alpha(ALPHA_8).hsla() })
-                })
-                .child(icon(icon_name, ICON_14_PX, p.on_surface_variant))
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-        };
-        let titlebar = div()
-            .id("studio-titlebar")
-            .h(px(DIM_46_PX))
-            .flex_none()
-            .px(px(SPACE_12_PX))
-            .row()
-            .items_center()
-            .gap(px(SPACE_4_PX))
-            .on_mouse_down(MouseButton::Left, |e, window, _| {
-                if e.click_count >= 2 {
-                    window.zoom_window();
-                } else {
-                    begin_move(window);
-                }
-            })
-            .child(div().flex_1())
-            .child(win_btn("win-min", "minus", false).on_click(|_, window, _| window.minimize_window()))
-            .child(win_btn("win-max", "maximize", false).on_click(|_, window, _| window.zoom_window()))
-            .child(win_btn("win-close", "close", true).on_click(|_, window, _| window.remove_window()));
+        let titlebar = client_controls
+            .then(|| studio_frame::titlebar(studio_frame.as_ref(), &p, fonts.studio.clone(), window.window_controls()));
         // `MANDARA_STUDIO_SCROLL=<px>` opens the page scrolled down, once
         // (screenshots of long pages without driving the pointer).
         static SCROLLED: std::sync::Once = std::sync::Once::new();
@@ -2021,6 +1992,7 @@ impl Render for StudioView {
         let content = div()
             .id("studio-content")
             .flex_1()
+            .min_w(px(0.0))
             .min_h(px(0.0))
             .overflow_y_scroll()
             .track_scroll(&self.content_scroll)
@@ -2055,7 +2027,7 @@ impl Render for StudioView {
         // The page's overlay scroll bar (it fills the content's place).
         // Left to right, the page's end edge is the window's border.
         let edge = if mandara_i18n::language().is_rtl() { px(0.0) } else { px(mandara_ui::scrollbar::WINDOW_EDGE_CLEARANCE_PX) };
-        let content = div().relative().flex_1().min_h(px(0.0)).flex().flex_col().child(content).child(mandara_ui::scrollbar::overlay_scrollbar(&self.content_scroll, &content_bar, &p).end_inset(edge));
+        let content = div().relative().flex_1().min_w(px(0.0)).min_h(px(0.0)).flex().flex_col().child(content).child(mandara_ui::scrollbar::overlay_scrollbar(&self.content_scroll, &content_bar, &p).end_inset(edge));
 
         let modal = self.plugin_modal_layer(&cfg, &p, window, cx);
         let edge_choice = self.stash_collision_layer(&cfg, &p, cx);
@@ -2072,13 +2044,11 @@ impl Render for StudioView {
                     cx.stop_propagation();
                 }
             }))
-            .bg(p.surface_base.hsla())
             .text_color(p.on_surface.hsla())
             // Typography → Studio font.
             .font_family(fonts.studio.clone())
             .text_size(px(TEXT_13_PX))
-            .child(nav)
-            .child(div().flex_1().min_w(px(0.0)).h_full().row().flex_col().when(crate::client_controls(window.window_decorations(), mandara_compositor::detect_from(|key| std::env::var_os(key))), |body| body.child(titlebar)).child(content))
+            .child(studio_frame::window(studio_frame.as_ref(), nav, content.into_any_element(), titlebar, &p))
             .children(modal)
             .children(edge_choice)
             .children(dock_picker)

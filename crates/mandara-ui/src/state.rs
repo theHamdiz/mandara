@@ -511,6 +511,15 @@ fn app_theme_key(palette: &mandara_theme::MandaraPalette, integrations: &mandara
 /// chosen is also checked against the published pack
 /// (`mandara_services::self_update::langpacks`).
 pub fn init_language(cx: &mut App) {
+    init_language_with_font(cx, |config| &config.typography.arabic_font);
+}
+
+/// The interface language stays shared; Studio's font fallback uses its own recipe.
+pub fn init_studio_language(cx: &mut App) {
+    init_language_with_font(cx, |config| &config.studio_typography().arabic_font);
+}
+
+fn init_language_with_font(cx: &mut App, arabic: fn(&ShellConfig) -> &str) {
     use mandara_services::self_update::langpacks;
     langpacks::install_hooks();
     let store = config(cx);
@@ -519,7 +528,7 @@ pub fn init_language(cx: &mut App) {
     mandara_i18n::set_language(last.lang());
     // The font fallback chain follows the language (Urdu's Nastaliq, the
     // CJK / Bengali / Devanagari / Telugu faces).
-    crate::fonts::sync_fallbacks(&store.read(cx).get().typography.arabic_font, cx);
+    crate::fonts::sync_fallbacks(arabic(store.read(cx).get()), cx);
     let packs = langpacks::subscribe();
     cx.spawn(async move |cx| {
         while packs.recv().await.is_ok() {
@@ -539,7 +548,7 @@ pub fn init_language(cx: &mut App) {
             last = locale;
             mandara_i18n::set_language(locale.lang());
             langpacks::selected(locale.lang());
-            crate::fonts::sync_fallbacks(&store.read(cx).get().typography.arabic_font, cx);
+            crate::fonts::sync_fallbacks(arabic(store.read(cx).get()), cx);
             cx.refresh_windows();
         }
     })

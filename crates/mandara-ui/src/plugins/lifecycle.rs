@@ -109,6 +109,8 @@ thread_local! {
 /// Stops what an off plugin owns outside its views. Runs on every config
 /// change; returns at once unless the plugin switches moved.
 fn sync(cx: &mut App) {
+    if !is_on(super::backups::ID, cx) { super::backups::stop(); }
+    if !is_on(super::app_permissions::ID, cx) { super::app_permissions::stop(); }
     // Stash follows its settings (shake level) on every config change.
     if is_on(super::stash::ID, cx) {
         super::stash::start(cx);
@@ -128,6 +130,7 @@ fn sync(cx: &mut App) {
         (super::hadith::ID, super::hadith::clear_settings as fn()),
         (super::quran::ID, super::quran::clear_settings as fn()),
         (super::home_assistant::ID, super::home_assistant::stop as fn()),
+        (super::local_ai::ID, super::local_ai::stop as fn()),
         (super::phone_connect::ID, super::phone_connect::stop as fn()),
     ] {
         if !is_on(id, cx) { stop(); }
@@ -181,7 +184,9 @@ mod tests {
     const OPT_IN: &[&str] = &[
         "2048",
         "app-installer",
+        "app-permissions",
         "authenticator",
+        "backups",
         "boot-look",
         "breaks",
         "ci",

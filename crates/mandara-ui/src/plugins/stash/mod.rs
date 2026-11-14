@@ -27,6 +27,7 @@
 //! minimized or closed shelf releases, followed by the shared glibc trim.
 
 mod edges;
+mod drop_zone;
 mod ingest;
 pub(crate) mod model;
 mod quicklook;

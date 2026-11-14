@@ -119,29 +119,12 @@ fn hot_cpu_value(pct: i64, host_cpus: usize) -> f32 {
 const CPU_SCALE_FLOOR: f32 = 100.0;
 /// PIDs previewed in a group's detail line.
 const PID_PREVIEW: usize = 4;
-/// How often a closed-panel watch polls the panel's open progress.
-const CLOSE_POLL: Duration = Duration::from_secs(1);
-
 /// Calls `on_close` once the panel behind `p` has fully closed (its open
 /// progress is back at zero). Arm it from the panel's render; one watch runs
 /// per `armed` flag at a time and ends after firing, so a closed panel costs
 /// nothing.
 pub(super) fn on_panel_close(p: &PanelCx, armed: &Rc<Cell<bool>>, cx: &mut App, on_close: impl FnOnce(&mut App) + 'static) {
-    if armed.replace(true) {
-        return;
-    }
-    let (p, armed) = (p.clone(), armed.clone());
-    cx.spawn(async move |cx| {
-        loop {
-            cx.background_executor().timer(CLOSE_POLL).await;
-            if p.progress() <= 0.0 {
-                break;
-            }
-        }
-        armed.set(false);
-        cx.update(on_close);
-    })
-    .detach();
+    super::panel_fx::visibility::on_close(p, armed, cx, on_close);
 }
 
 /// `ink_on`: backgrounds lighter than this get dark ink.

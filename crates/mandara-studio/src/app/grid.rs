@@ -12,7 +12,7 @@
 //! leading edge, and right-to-left languages mirror the order.
 
 use mandara_ui::bidi::Bidi as _;
-use gpui::{AnyElement, Div, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder as _, px};
+use gpui::{AnyElement, App, Div, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder as _, px};
 use mandara_theme::MandaraPalette;
 use mandara_ui::hstrip::HStrip;
 
@@ -34,8 +34,14 @@ pub struct PageMetrics {
 
 impl PageMetrics {
     pub fn for_width(window_w: f32) -> Self {
+        Self::with_frame(window_w, None)
+    }
+
+    pub fn with_frame(window_w: f32, frame: Option<&mandara_config::studio::StudioFrame>) -> Self {
+        let inset = frame.map_or(0.0, |f| f.inset * 2.0 + f.border * 2.0);
+        let window_w = (window_w - inset).max(0.0);
         let rail = window_w < RAIL_BELOW_PX;
-        let content_w = (window_w - if rail { RAIL_W_PX } else { NAV_W_PX }).max(0.0);
+        let content_w = (window_w - super::studio_frame::sidebar_width(frame, rail) - frame.map_or(0.0, |f| f.sidebar_inset * 2.0)).max(0.0);
         let gutter = if content_w < GUTTER_SMALL_BELOW_PX {
             GUTTER_SMALL_PX
         } else if content_w < GUTTER_MEDIUM_BELOW_PX {
@@ -46,8 +52,10 @@ impl PageMetrics {
         Self { rail, stack_rows: content_w < STACK_ROWS_BELOW_PX, gutter, column_w: (content_w - 2.0 * gutter).clamp(0.0, PAGE_MAX_W_PX) }
     }
 
-    pub fn of(window: &Window) -> Self {
-        Self::for_width(f32::from(window.viewport_size().width))
+    pub fn of(window: &Window, cx: &App) -> Self {
+        let config = mandara_ui::state::config(cx).read(cx).snapshot();
+        let frame = super::studio_frame::frame(&config);
+        Self::with_frame(f32::from(window.viewport_size().width), frame.as_ref())
     }
 }
 
@@ -288,5 +296,25 @@ mod tests {
         let wide = PageMetrics::for_width(2560.0);
         assert!(!wide.rail && !wide.stack_rows);
         assert_eq!(wide.column_w, PAGE_MAX_W_PX);
+        let frame = mandara_config::studio::StudioLook::Telemetry.appearance().frame;
+        let metrics = PageMetrics::with_frame(1200.0, Some(&frame));
+        assert_eq!(metrics.column_w, 1200.0 - 2.0 * (frame.inset + frame.border + frame.sidebar_inset) - frame.sidebar_width - 2.0 * metrics.gutter);
+    }
+
+    #[test]
+    fn every_studio_frame_keeps_grids_inside_narrow_and_wide_windows() {
+        for look in mandara_config::studio::StudioLook::ALL {
+            let frame = look.appearance().frame;
+            for width in [600.0, 780.0, 1200.0, 2560.0] {
+                let page = PageMetrics::with_frame(width, Some(&frame));
+                let occupied = 2.0 * (frame.inset + frame.border + frame.sidebar_inset + page.gutter)
+                    + super::super::studio_frame::sidebar_width(Some(&frame), page.rail)
+                    + page.column_w;
+                assert!(occupied <= width, "{look:?} at {width}: {occupied}");
+                for spec in [THEME_GRID, ICON_TILE_GRID, CHIP_GRID] {
+                    assert!(fit(page.column_w, spec).balanced(9).width <= page.column_w);
+                }
+            }
+        }
     }
 }

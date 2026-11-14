@@ -390,7 +390,7 @@ fn write_atomic_checked_using(lock: &mandara_theme::templates::WriteLock, before
     let tmp = dir.join(format!(".{file_name}.{}.{stamp}.{revision}.tmp", std::process::id()));
     let mut temporary_created = false;
     let result = (|| {
-        let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&tmp).with_context(|| format!("creating {}", tmp.display()))?;
+        let mut file = private_temporary(&tmp).with_context(|| format!("creating {}", tmp.display()))?;
         temporary_created = true;
         file.write_all(contents)?;
         if let Some(permissions) = permissions { file.set_permissions(permissions)?; }
@@ -404,6 +404,12 @@ fn write_atomic_checked_using(lock: &mandara_theme::templates::WriteLock, before
     })();
     if result.is_err() && temporary_created { fs::remove_file(&tmp).with_context(|| format!("removing incomplete write {}", tmp.display()))?; }
     result
+}
+
+/// Unpublished config bytes stay private before final permissions are restored.
+fn private_temporary(path: &Path) -> std::io::Result<fs::File> {
+    use std::os::unix::fs::OpenOptionsExt as _;
+    fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path)
 }
 
 /// The file a chain of symlinks at `path` ends at (even when it doesn't
@@ -559,6 +565,16 @@ impl ConfigWatcher {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn unpublished_configuration_is_never_group_or_world_readable() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("private.tmp");
+        let temporary = super::private_temporary(&path).unwrap();
+        assert_eq!(temporary.metadata().unwrap().permissions().mode() & 0o077, 0);
+        assert!(super::private_temporary(&path).is_err(), "an existing temporary is never followed or truncated");
+    }
+
     #[test]
     fn a_file_changed_after_merging_is_kept_then_merged_on_retry() {
         let root = tempfile::tempdir().unwrap(); let path = root.path().join("config.toml");

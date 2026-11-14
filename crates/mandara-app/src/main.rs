@@ -46,6 +46,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Private filesystem helper; accepts only fixed, revalidated storage actions.
+    #[command(hide = true)]
+    StorageAdmin { args: Vec<String> },
     /// Private inference worker; never starts the shell or connects to IPC.
     #[command(hide = true)]
     AgentWorker,
@@ -229,6 +232,7 @@ fn main() -> Result<()> {
     let matches = <Cli as clap::CommandFactory>::command().version(mandara_version::version()).long_version(long).get_matches();
     let cli = <Cli as clap::FromArgMatches>::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     match cli.command {
+        Some(Cmd::StorageAdmin { args }) => std::process::exit(mandara_services::backups::filesystem::admin::main(&args)),
         Some(Cmd::AgentWorker) => {
             mandara_services::command_agent::worker_main(mandara_studio::agent_settings_catalog)
         }
@@ -773,14 +777,14 @@ fn run_studio(section: Option<String>) -> Result<()> {
     application().with_assets(MandaraAssets).run(move |cx: &mut App| {
         mandara_core::set_build_info(cx, build_info());
         let cfg = store.snapshot();
-        cx.set_global(Fonts::resolve(&cfg.typography, cx));
+        cx.set_global(Fonts::resolve(cfg.studio_typography(), cx));
         cx.set_global(build_registry());
         let (config, _shell) = mandara_ui::init_state(store, cx);
         mandara_ui::icon_theme::set_theme_override(cfg.appearance.icon_theme.clone());
-        let mut typography = cfg.typography.clone();
+        let mut typography = cfg.studio_typography().clone();
         cx.observe(&config, move |config, cx| {
             mandara_ui::icon_theme::set_theme_override(config.read(cx).get().appearance.icon_theme.clone());
-            let next = config.read(cx).get().typography.clone();
+            let next = config.read(cx).get().studio_typography().clone();
             if next != typography {
                 cx.set_global(Fonts::resolve(&next, cx));
                 typography = next;
@@ -888,6 +892,17 @@ fn absolute_install_paths(mut args: Vec<String>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use clap::Parser as _;
+
+    #[test]
+    fn storage_admin_passes_one_json_request_without_exposing_a_shell_command() {
+        use clap::CommandFactory as _;
+        let document = r#"{"action":"inspect","mount":{"target":"/a directory"}}"#;
+        let cli = Cli::try_parse_from(["mandara", "storage-admin", document]).unwrap();
+        assert!(matches!(cli.command, Some(Cmd::StorageAdmin { args }) if args == [document]));
+        let mut command = Cli::command();
+        assert!(!command.render_help().to_string().contains("storage-admin"));
+        assert!(Cli::try_parse_from(["mandara", "storage-admin", "--command", "rm"]).is_err());
+    }
 
     /// The root side of a system update gets its words untouched (the
     /// helper validates them itself), including `--protocol`.

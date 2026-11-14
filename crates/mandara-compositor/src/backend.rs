@@ -67,7 +67,7 @@ pub trait CompositorBackend: Send + Sync {
 /// owns (and options the config doctor found `version` rejects). Used by the
 /// live sync, `mandara setup` and Studio's Config doctor.
 pub fn write_dropin(target: Target, config: &CompositorConfig, borders: Option<BorderColors>, version: Option<(u32, u32)>) -> Result<(PathBuf, Emitted)> {
-    let managed = ManagedConfig { config, borders, existing_chords: existing_chords(target), mandara_bin: mandara_binary(), version, user_autostarts: mandara_config::compositor::user_autostarts(target) };
+    let managed = ManagedConfig { config, borders, existing_chords: existing_chords(target)?, mandara_bin: mandara_binary(), version, user_autostarts: mandara_config::compositor::user_autostarts(target) };
     let emitted = emit(target, &managed);
     let path = write_generated(target, &emitted)?;
     Ok((path, emitted))

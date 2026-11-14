@@ -457,10 +457,29 @@ build inside a toolbox or distrobox container instead, or install a release.
 
 ## NixOS
 
+The Updates plugin checks your default `/etc/nixos` configuration and hostname
+before offering native updates or rebuilds. A verified default flake or root
+NixOS channel keeps its supported actions enabled. A custom or unavailable
+source shows a reason instead of running a guessed command. Existing system
+generations can still be switched or rolled back independently of that source.
+Flatpak updates remain available when Flatpak is installed.
+
+Flake inspection uses cached inputs with networking disabled; it never updates
+the lock file or builds your configuration. The check uses NixOS's standard
+`unshare` utility. If the kernel prevents that isolated check, native build
+actions explain that the flake could not be verified; generation controls stay
+available independently.
+
 Mandara is a flake: Nix builds it from source (a release build, like the
 tarballs) and keeps it updated, so the built-in updater stays out of the
 way. Studio → About says "Installed by Nix" and `mandara update apply`
 refuses; you update with `nix flake update` and a rebuild instead.
+
+The flake defaults to stable NixOS 26.05. The package and modules are checked
+against `nixos-26.05`, `nixos-unstable` and the older `nixos-25.11` branch.
+Keep your system's own channel: the `follows` line below makes Mandara use it
+too. This does not switch your system to unstable. Mandara is installed from
+this repository's flake; it is not currently a package in official Nixpkgs.
 
 Try it without installing anything:
 
@@ -480,7 +499,7 @@ distributions. Add the flake to your system flake:
 ```nix
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "https://channels.nixos.org/nixos-26.05/nixexprs.tar.zst";
     mandara.url = "github:theHamdiz/mandara";
     mandara.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -1056,3 +1075,19 @@ If application icons are missing after installation, open **Studio →
 Maintenance** and refresh its health checks. A missing icon theme links to
 **Themes → Icons**; install the named theme or select one already present.
 The check does not reset your choice.
+
+
+### Optional storage and permission tools
+
+The **Backups** plugin uses restic for encrypted copies, `btrfs-progs` for
+native Btrfs snapshots and maintenance, and `fstrim` for discard on supported
+filesystems and devices. **App permissions** uses Flatpak. The Rust installer
+includes these in its optional package group, using `btrfsprogs` on openSUSE,
+full package atoms on Gentoo and Alpine's separate `fstrim` package. FreeBSD
+receives restic; native filesystem maintenance and Flatpak controls require
+Linux. None of these plugins is enabled by installation.
+
+On NixOS, add `pkgs.restic`, `pkgs.btrfs-progs` and `pkgs.util-linux` to your
+system packages and enable Flatpak separately if you use it. Mandara's source
+package includes zstd's development output so `zstd-sys` can find `libzstd`
+through pkg-config; a custom dependency override is not needed.

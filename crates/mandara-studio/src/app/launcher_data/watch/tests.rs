@@ -13,6 +13,12 @@ fn receive(events: &async_channel::Receiver<()>) {
     }
 }
 
+fn retire_root(watch: &mut Watch, root: &std::path::Path) {
+    if let Err(error) = watch.watcher.unwatch(root) {
+        assert!(matches!(error.kind, notify::ErrorKind::WatchNotFound), "{error}");
+    }
+}
+
 /// Missing roots are followed down as packages create directories, then
 /// their contents trigger catalog invalidation without a periodic scan.
 #[test]
@@ -82,7 +88,9 @@ fn removed_and_replaced_application_roots_resume_notifications() {
     let (wake, events) = async_channel::bounded(1);
     let mut watch = Watch::new(Roots { applications: vec![apps.clone()], usage: temp.path().join("usage.toml"), preferences: vec![] }, revisions.clone(), wake).unwrap();
     // Simulate notify's automatic retirement deterministically on the real backend.
-    watch.watcher.unwatch(&apps).unwrap();
+    retire_root(&mut watch, &apps);
+    // A delayed backend removal can retire the watch before the next refresh.
+    retire_root(&mut watch, &apps);
     std::fs::remove_dir(&apps).unwrap();
     watch.refresh().unwrap();
     assert!(!watch.watching.contains(&apps));
@@ -90,7 +98,7 @@ fn removed_and_replaced_application_roots_resume_notifications() {
     watch.refresh().unwrap();
     assert!(watch.watching.contains(&apps));
     // Replacement can also finish before the coalesced refresh observes the gap.
-    watch.watcher.unwatch(&apps).unwrap();
+    retire_root(&mut watch, &apps);
     std::fs::remove_dir(&apps).unwrap();
     std::fs::create_dir(&apps).unwrap();
     watch.refresh().unwrap();

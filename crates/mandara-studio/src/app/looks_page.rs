@@ -425,6 +425,7 @@ pub enum ThemesTab {
     #[default]
     Colors,
     Components,
+    Studio,
     Cursors,
     Icons,
     Boot,
@@ -433,13 +434,14 @@ pub enum ThemesTab {
 }
 
 impl ThemesTab {
-    pub const ALL: [ThemesTab; 6] = [ThemesTab::Colors, ThemesTab::Components, ThemesTab::Cursors, ThemesTab::Icons, ThemesTab::Boot, ThemesTab::Sounds];
+    pub const ALL: [ThemesTab; 7] = [ThemesTab::Colors, ThemesTab::Studio, ThemesTab::Components, ThemesTab::Cursors, ThemesTab::Icons, ThemesTab::Boot, ThemesTab::Sounds];
 
     /// Deep-link name (`mandara studio themes/components`).
     pub fn slug(self) -> &'static str {
         match self {
             ThemesTab::Colors => "colors",
             ThemesTab::Components => "components",
+            ThemesTab::Studio => "studio",
             ThemesTab::Cursors => "cursors",
             ThemesTab::Icons => "icons",
             ThemesTab::Boot => "boot",
@@ -467,6 +469,7 @@ impl ThemesTab {
         match self {
             ThemesTab::Colors => tk("Colors & style"),
             ThemesTab::Components => tk("Components"),
+            ThemesTab::Studio => tk("Studio"),
             ThemesTab::Cursors => tk("Cursors"),
             ThemesTab::Icons => tk("Icons"),
             ThemesTab::Boot => tk("Boot"),
@@ -482,6 +485,7 @@ impl super::page_tabs::PageTab for ThemesTab {
         match self {
             ThemesTab::Colors => "palette",
             ThemesTab::Components => "grid",
+            ThemesTab::Studio => "window",
             ThemesTab::Cursors => "pointer",
             ThemesTab::Icons => "tiles",
             ThemesTab::Boot => "power",
@@ -499,6 +503,7 @@ impl StudioView {
             if self.themes_tab == ThemesTab::Sounds {
                 cx.defer(super::sounds_page::release);
             }
+            self.studio_looks.release();
             self.themes_tab = tab;
             self.app_templates = Default::default();
             // The other tab's previews go: nothing of them stays alive.
@@ -520,6 +525,7 @@ impl StudioView {
         let body = match tab {
             ThemesTab::Colors => self.themes_colors(cfg, p, cx),
             ThemesTab::Components => self.components_section(cfg, p, cx),
+            ThemesTab::Studio => self.studio_looks_page(cfg, p, window.is_visible(), cx),
             ThemesTab::Cursors => self.cursor_section(cfg, p, window, cx),
             ThemesTab::Icons => self.icons_section(cfg, p, window, cx),
             ThemesTab::Boot => self.boot_tab(cfg, p, window, cx),
@@ -546,9 +552,7 @@ impl StudioView {
         let tune_head = section_head(t("Fine-tune"), t("Schedule, tuning, style and icons"), Vec::new(), display, p);
         // Cursor rows sit in the Cursor section, component designs in
         // theirs, app themes in their grid.
-        let rows = self.rows(registry::in_section(Section::Themes).filter(|s| {
-                !SHOWN_ABOVE.contains(&s.path) && s.group != CURSOR && s.group != APP_THEMES_GROUP && s.group != COMPONENTS
-            }), cfg, p, cx);
+        let rows = self.rows(registry::in_section(Section::Themes).filter(|s| !SHOWN_ABOVE.contains(&s.path) && s.group != CURSOR && s.group != APP_THEMES_GROUP && s.group != COMPONENTS && s.group != registry::studio_settings::GROUP), cfg, p, cx);
         let tune = div().row().flex_col().gap(px(SPACE_14_PX)).child(tune_head).child(rows);
         div().row().flex_col().gap(px(PAGE_SECTION_GAP_PX)).child(preview).child(looks).child(themes).child(wallpaper).child(apps).child(tune).into_any_element()
     }
