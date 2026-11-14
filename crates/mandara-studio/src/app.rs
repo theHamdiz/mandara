@@ -2048,10 +2048,10 @@ impl Render for StudioView {
             // Typography → Studio font.
             .font_family(fonts.studio.clone())
             .text_size(px(TEXT_13_PX))
-            .child(studio_frame::window(studio_frame.as_ref(), nav, content.into_any_element(), titlebar, &p))
-            .children(modal)
-            .children(edge_choice)
-            .children(dock_picker)
+            .child(studio_frame::window(studio_frame.as_ref(), nav, content.into_any_element(), titlebar, &p)
+                .children(modal)
+                .children(edge_choice)
+                .children(dock_picker))
             .children(frame_meter::end())
     }
 }

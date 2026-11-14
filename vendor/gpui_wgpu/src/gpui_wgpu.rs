@@ -1,3 +1,5 @@
+// Mandara patch 18: one capability policy for device limits and instance data.
+mod compatibility;
 mod cosmic_text_system;
 mod memory_tuning;
 mod transition;

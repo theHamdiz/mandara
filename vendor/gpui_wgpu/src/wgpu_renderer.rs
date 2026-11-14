@@ -1940,10 +1940,11 @@ impl WgpuRendererCore {
             return 0;
         }
         let target_format = self.target_format;
+        let texture_instances = self.uses_webgl_instance_data;
         let resources = &mut self.resources;
         let transitions = resources
             .transitions
-            .get_or_insert_with(|| TransitionResources::new(&resources.device, &resources.queue, target_format));
+            .get_or_insert_with(|| TransitionResources::new(&resources.device, &resources.queue, target_format, texture_instances));
         transitions.last_used = std::time::Instant::now();
         let mut ready = 0;
         for (slot, sprite) in scene
@@ -3342,6 +3343,7 @@ mod tests {
         // Mandara patch 16: its own module, uniforms only (WebGL2 can run it).
         assert!(!crate::transition::TRANSITION_SHADER.contains("var<storage"));
         validate_wgsl(crate::transition::TRANSITION_SHADER, naga::valid::Capabilities::empty());
+        validate_wgsl(&crate::compatibility::transition_shader(true), naga::valid::Capabilities::empty());
     }
 
     /// A `w × h` BGRA image of one colour, uploaded as image `id`.

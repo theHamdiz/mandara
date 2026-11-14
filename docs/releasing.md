@@ -139,6 +139,9 @@ Every push and pull request runs:
   with `--locked`, plus `cargo xtask status`. Clippy runs as a report only.
 - **Plugins**: example plugins build for `wasm32-wasip2` and are packaged in
   marketplace format.
+- **Nix flake** checks stable NixOS, unstable and 25.11. Hosted runners use
+  one derivation and compiler job with 16 GiB of swap; fat LTO and the
+  release profile stay unchanged.
 - **Installer**: the installer is the binary (`crates/mandara-install`); its
   unit tests (argument parsing, per-family dry-run plans, package-manager
   argv, SHA-256 checks, desktop entry, uninstall) run with the workspace

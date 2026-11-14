@@ -140,6 +140,7 @@ fn window_with(
     let Some(f) = frame else {
         return div()
             .size_full()
+            .relative()
             .row()
             .bg(p.surface_base.hsla())
             .child(nav)
@@ -165,11 +166,14 @@ fn window_with(
         f.radius
     };
     let surface = div()
+        .size_full()
+        .relative()
         .flex_1()
         .min_h(px(0.0))
         .min_w(px(0.0))
         .row()
-        .flex_col();
+        .flex_col()
+        .p(px(f.inset));
     let fill = if f.design == FrameDesign::Glass {
         Fill(
             p.surface_base.with_alpha(f.opacity),
@@ -209,7 +213,7 @@ fn window_with(
     if let Some(corner) = shaped(family, radius) {
         let ink = cut::Ink::solid(None, Some((outline, f.border)));
         // The outline follows the chassis silhouette, outside its child mask.
-        surface = surface.p(px(f.border)).relative().child(
+        surface = surface.p(px(f.inset + f.border)).child(
             canvas(
                 |_, _, _| {},
                 move |bounds, _, window, _| {
@@ -239,13 +243,9 @@ fn window_with(
     } else {
         body.child(nav).child(content)
     };
-    surface = surface.children(title).child(body);
-    div()
-        .size_full()
-        .p(px(f.inset))
-        .row()
-        .flex_col()
-        .child(surface)
+    // The frame fills the native window. Its inset is interior spacing;
+    // transparent outer padding becomes a second rectangle under compositor effects.
+    surface.children(title).child(body)
 }
 
 fn nav_at_end(frame: &StudioFrame) -> bool {
@@ -256,6 +256,29 @@ fn nav_at_end(frame: &StudioFrame) -> bool {
 mod tests {
     use super::*;
     use mandara_config::studio::StudioLook;
+
+    #[test]
+    fn every_studio_look_clips_dialogs_to_the_window_frame() {
+        use gpui::IntoElement as _;
+
+        let palette = mandara_theme::engine::default_palette(true);
+        for look in StudioLook::ALL {
+            let frame = look.appearance().frame;
+            let mut surface = window(
+                Some(&frame),
+                div().into_any_element(),
+                div().into_any_element(),
+                None,
+                &palette,
+            );
+            let overflow = &surface.style().overflow;
+            assert_eq!(
+                (overflow.x, overflow.y),
+                (Some(gpui::Overflow::Clip), Some(gpui::Overflow::Clip)),
+                "{look:?}: dialogs must share the painted frame's clip, without an outer wrapper"
+            );
+        }
+    }
 
     #[test]
     fn asymmetric_frames_and_navigation_mirror_without_changing_their_size() {

@@ -17,6 +17,8 @@ mod environment;
 #[derive(Default)]
 pub struct NativeConfig {
     pub file: Option<PathBuf>,
+    /// A native launch flag selected this file instead of the compositor's defaults.
+    pub explicit_file: bool,
     pub additional_files: Vec<PathBuf>,
     pub primary_mod_is_alt: bool,
     pub environment: Option<mandara_config::compositor::IncludeEnvironment>,

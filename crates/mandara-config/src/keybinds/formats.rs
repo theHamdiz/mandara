@@ -17,7 +17,7 @@ use crate::{compositor::Target, keybinds::ShortcutFormat};
 
 pub(super) fn format(target: Target, file: &Path, source: &str) -> &'static dyn ShortcutFormat {
     match target {
-        Target::Mango if file.extension().is_some_and(|ext| ext == "toml") => {
+        Target::Mango if crate::compositor::mango_toml(file, source) => {
             &toml::Toml(Target::Mango)
         }
         Target::Mango => &lines::Lines(Target::Mango),

@@ -241,8 +241,9 @@ pub(crate) struct TransitionResources {
 }
 
 impl TransitionResources {
-    pub(crate) fn new(device: &wgpu::Device, queue: &wgpu::Queue, format: wgpu::TextureFormat) -> Self {
-        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("transition_shader"), source: wgpu::ShaderSource::Wgsl(TRANSITION_SHADER.into()) });
+    pub(crate) fn new(device: &wgpu::Device, queue: &wgpu::Queue, format: wgpu::TextureFormat, texture_instances: bool) -> Self {
+        // Mandara patch 18: native legacy GL needs the portable bit scan too.
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("transition_shader"), source: wgpu::ShaderSource::Wgsl(crate::compatibility::transition_shader(texture_instances)) });
         let size = std::mem::size_of::<TransitionUniforms>() as u64;
         let texture = |binding| wgpu::BindGroupLayoutEntry {
             binding,

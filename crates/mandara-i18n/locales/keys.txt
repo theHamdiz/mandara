@@ -1,3 +1,4 @@
+  {suggestions}
  +{count} more
 "English" = "Translation" pairs, one file per language
 "{value}" isn't a duration like 30m, 2h or 1h30m
@@ -848,6 +849,7 @@ Automatic login
 Automatic picks GPU Screen Recorder, then wf-recorder, then the built-in encoder (AV1, no sound)
 Automatically hide and show the Dock
 Automatically unlock this keyring whenever I'm logged in
+Autostart is enabled but its generated configuration is not connected. Run `mandara setup` to repair it.
 Available
 Available login screens
 Available models or workspaces on your configured AI server (JSON)
@@ -1676,6 +1678,7 @@ Copy to clipboard
 Copy translation
 Copy with meaning
 Copy {file} ({size}) to {dir}
+Copying MangoWM's system configuration would change its include paths. Create your user configuration manually before running setup.
 Copying…
 Coral
 Core {n}
@@ -4258,6 +4261,13 @@ Mandara's shortcuts and your compositor's appear here
 Mandara's shortcuts changed while saving. Refresh the list and try again.
 MangoWM
 MangoWM and Niri only
+MangoWM could not validate the configuration. Nothing was changed.
+MangoWM rejected the configuration change. Previous settings were kept.
+MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged.
+MangoWM's configuration is not valid TOML.
+MangoWM's global settings must be a table.
+MangoWM's optional sources must be a path or a list of paths.
+MangoWM's system configuration is too large to copy safely.
 MangoWM, Niri, Hyprland, Sway, River
 MangoWM, Niri, Hyprland, Umbriel, Sway
 MangoWM, Niri, Umbriel, Sway, River
@@ -4773,6 +4783,7 @@ No collection {name}; see `hadith collections`
 No colors yet
 No comments yet
 No community plugins yet. Be the first to publish one.
+No compositor configuration was found at {path}.
 No config file yet — defaults are in use
 No connected external monitor named {name}
 No container engine
@@ -7152,6 +7163,7 @@ Space between the left bar's items and its long edges (unset: Item size)
 Space between the right bar's items and its long edges (unset: Item size)
 Space inside cards
 Space inside each bar item, around its content
+Space inside the window frame.
 Spacing
 Speak the truth
 Speakers
@@ -8611,7 +8623,6 @@ Unknown category
 Unknown city or time zone {name}
 Unknown code type {kind}
 Unknown command {command}; did you mean:
-  {suggestions}
 Unknown command {command}; run `mandara commands` for the catalog
 Unknown effect "{effect}"
 Unknown event

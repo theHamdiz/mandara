@@ -595,11 +595,16 @@ fn conflicts_are_retired_when_accepted() {
     let f = Fixture::new();
     let mut host = FakeHost::with(&["pacman", "sudo"]);
     let b = f.home().join(".local/bin/mandara").display().to_string();
-    host.codes.insert(format!("{b} setup --check"), crate::installer::SETUP_CONFLICTS);
+    let check = format!("{b} setup --check");
+    host.codes.insert(check.clone(), crate::installer::SETUP_CONFLICTS);
+    host.stdout.insert(check, "Autostart is disconnected.\nconflict: existing shortcut".into());
     run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
     let ran = host.ran();
     assert!(ran.contains(&format!("{b} setup")), "{ran:#?}");
     assert!(ran.contains(&format!("{b} setup --fix-conflicts")));
+    let text = host.text();
+    assert!(text.contains("Autostart is disconnected."));
+    assert!(text.contains("conflict: existing shortcut"));
 }
 
 /// A fake running shell: `/proc/<pid>` under the fixture root, its `exe`
@@ -1027,11 +1032,14 @@ fn config_errors_are_reported_without_retiring() {
     let f = Fixture::new();
     let mut host = FakeHost::with(&["pacman", "sudo"]);
     let b = f.home().join(".local/bin/mandara").display().to_string();
-    host.codes.insert(format!("{b} setup --check"), crate::installer::SETUP_CONFIG_ERRORS);
+    let check = format!("{b} setup --check");
+    host.codes.insert(check.clone(), crate::installer::SETUP_CONFIG_ERRORS);
+    host.stdout.insert(check, "No compositor configuration was found at /home/example/.config/mango/config.conf.".into());
     run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
     let ran = host.ran();
     assert!(!ran.contains(&format!("{b} setup --fix-conflicts")), "{ran:#?}");
     assert!(host.text().contains("Config doctor"));
+    assert!(host.text().contains("No compositor configuration was found at /home/example/.config/mango/config.conf."));
 }
 
 #[test]
@@ -1463,7 +1471,7 @@ fn failed_kwin_availability_is_not_reported_as_a_config_or_keyboard_error() {
     host.stdout.insert(check, "KWin availability: unable to start probe".into());
     run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, compositor: Some("kwin".into()), ..Default::default() }).unwrap();
     let text = host.text();
-    assert!(text.contains("KWin availability: unable to start probe"), "{text}");
+    assert_eq!(text.matches("KWin availability: unable to start probe").count(), 1, "{text}");
     assert!(!text.contains("your compositor reports errors in its config"));
     assert!(!text.contains("Install libxkbcommon"));
     assert!(host.ran().iter().all(|command| !command.contains("--fix-conflicts")));

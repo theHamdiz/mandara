@@ -91,7 +91,7 @@ fn changed() -> String {
 
 /// Keep each pre-edit version, including later palette changes and undo. The
 /// file stays a symlink; the backup stores its target's bytes and permissions.
-fn backup(lock: &WriteLock, expected: Option<FileStamp>) -> Result<Option<PathBuf>> {
+pub(crate) fn backup(lock: &WriteLock, expected: Option<FileStamp>) -> Result<Option<PathBuf>> {
     backup_with(lock, expected, |path| {
         fs::File::open(path.parent().context("backup has no parent directory")?)?.sync_all()?;
         Ok(())

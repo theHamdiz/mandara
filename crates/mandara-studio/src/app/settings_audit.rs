@@ -77,8 +77,12 @@ fn without_test_module(text: &str) -> &str {
     while let Some(at) = text[from..].find("#[cfg(test)]") {
         let at = from + at;
         let rest = text[at + "#[cfg(test)]".len()..].trim_start();
-        if rest.starts_with("mod ") || rest.starts_with("pub mod ") || rest.starts_with("pub(crate) mod ") {
-            return &text[..at];
+        if let Some(module) = rest.strip_prefix("mod ").or_else(|| rest.strip_prefix("pub mod ")).or_else(|| rest.strip_prefix("pub(crate) mod ")) {
+            let end = module.find(|c: char| !c.is_alphanumeric() && c != '_').unwrap_or(module.len());
+            // An external test module has no body here; consumers can follow it.
+            if !module[end..].trim_start().starts_with(';') {
+                return &text[..at];
+            }
         }
         from = at + 1;
     }
@@ -187,6 +191,15 @@ mod tests {
     let expected = [("demo", "legacy"), ("demo", "borrowed"), ("literal", "lazy"), ("demo", "manual")]
         .map(|(id, key)| (id.to_string(), key.to_string()));
     assert_eq!(setting_reads_in(&source), BTreeSet::from(expected));
+}
+
+#[test]
+fn scanner_keeps_consumers_after_external_test_module_declarations() {
+    for declaration in ["mod fixtures;", "pub mod fixtures ;", "pub(crate) mod fixtures;"] {
+        let full = format!("#[cfg(test)]\n{declaration}\nfn render() {{ settings.setting(\"demo\", \"live\", false); }}\n#[cfg(test)]\nmod tests {{ fn fixture() {{ settings.setting(\"demo\", \"test_only\", false); }} }}");
+        let source = Source { path: PathBuf::from("demo.rs"), text: without_test_module(&full).into() };
+        assert_eq!(setting_reads_in(&source), BTreeSet::from([("demo".to_string(), "live".to_string())]), "{declaration}");
+    }
 }
 
 /// Files that belong to plugin `id`: they name it, define it, or use the

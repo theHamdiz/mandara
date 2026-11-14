@@ -194,12 +194,12 @@ fn nix_runner_memory_is_prepared_before_compilation_without_reducing_release_opt
     let steps = workflow["jobs"]["nix"]["steps"].as_sequence().unwrap();
     let memory = steps.iter().position(|step| step["run"].as_str().is_some_and(|run| run.contains("sudo swapon /swapfile-mandara-nix"))).unwrap();
     let setup = steps[memory]["run"].as_str().unwrap();
-    for operation in ["fallocate -l 8G", "chmod 600", "mkswap", "swapon"] { assert!(setup.contains(operation)); }
+    for operation in ["fallocate -l 16G", "chmod 600", "mkswap", "swapon"] { assert!(setup.contains(operation)); }
     for (index, step) in steps.iter().enumerate() {
         let run = step["run"].as_str().unwrap_or_default();
         if run.contains("nix build") || run.contains("nix flake check") {
             assert!(memory < index, "swap must exist before the evaluator starts builders");
-            assert!(run.contains("--max-jobs 1 --cores 2"), "bound both derivations and compiler jobs");
+            assert!(run.contains("--max-jobs 1 --cores 1"), "leave runner headroom with one derivation and compiler job");
         }
     }
     let manifest: toml::Value = toml::from_str(&std::fs::read_to_string(crate::root().join("Cargo.toml")).unwrap()).unwrap();

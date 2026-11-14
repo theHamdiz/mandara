@@ -38,6 +38,7 @@ pub(super) fn inspect(
     if let Some(file) = from_arguments(target, arguments, cwd)? {
         return Ok(NativeConfig {
             file: Some(file),
+            explicit_file: true,
             ..Default::default()
         });
     }
@@ -119,6 +120,25 @@ pub(super) fn inspect(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mango_follows_its_home_and_distinguishes_explicit_config_arguments() {
+        let directory = tempfile::tempdir().unwrap();
+        let home = directory.path().join("home");
+        let config = directory.path().join("xdg");
+        let file = home.join(".config/mango/config.toml");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(config.join("mango")).unwrap();
+        std::fs::write(&file, "[global]\nborder_radius = 6\n").unwrap();
+        std::fs::write(config.join("mango/config.conf"), "border_radius=12\n").unwrap();
+        let environment = format!("HOME={}\0XDG_CONFIG_HOME={}\0", home.display(), config.display());
+        let default = inspect(Target::Mango, &["mango".into()], environment.as_bytes(), directory.path()).unwrap();
+        assert_eq!(default.file.as_ref(), Some(&file));
+        assert!(!default.explicit_file);
+        let explicit = inspect(Target::Mango, &["mango".into(), "-c".into(), file.clone().into_os_string()], environment.as_bytes(), directory.path()).unwrap();
+        assert_eq!(explicit.file.as_ref(), Some(&file));
+        assert!(explicit.explicit_file);
+    }
 
     #[test]
     #[cfg(target_os = "linux")]

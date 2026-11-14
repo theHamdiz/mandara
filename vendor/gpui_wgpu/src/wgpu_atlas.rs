@@ -407,9 +407,12 @@ mod tests {
                 .request_device(&wgpu::DeviceDescriptor {
                     label: Some("wgpu_atlas_test_device"),
                     required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::downlevel_defaults()
-                        .using_resolution(adapter.limits())
-                        .using_alignment(adapter.limits()),
+                    // Mandara patch 18: exercise the same limits as the renderer.
+                    required_limits: crate::compatibility::required_limits(
+                        adapter.get_info().backend,
+                        &adapter.limits(),
+                        adapter.get_downlevel_capabilities().flags,
+                    ),
                     memory_hints: wgpu::MemoryHints::MemoryUsage,
                     trace: wgpu::Trace::Off,
                     experimental_features: wgpu::ExperimentalFeatures::disabled(),

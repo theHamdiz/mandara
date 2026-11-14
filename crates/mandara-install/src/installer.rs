@@ -1259,6 +1259,11 @@ impl<'a> Installer<'a> {
             self.say(Level::Warn, if details.is_empty() { t("Check failed") } else { details });
             return;
         }
+        if let Some(output) = &checked {
+            for line in output.stdout.lines().chain(output.stderr.lines()).filter(|line| !line.trim().is_empty()) {
+                self.say(Level::Info, line);
+            }
+        }
         if checked.as_ref().and_then(|o| o.code) == Some(SETUP_PREREQUISITE) {
             self.say(Level::Warn, t("Install libxkbcommon before checking or changing compositor shortcuts."));
             return;

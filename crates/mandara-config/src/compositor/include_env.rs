@@ -42,14 +42,33 @@ impl IncludeEnvironment {
     }
 
     pub(crate) fn expand(&self, raw: &str) -> Result<OsString> {
+        self.expand_inner(raw, MAX_PATH_BYTES, false)
+    }
+
+    /// MangoWM expands its own declared variables, retaining unknown names literally.
+    pub(super) fn expand_config(&self, raw: &str) -> Result<OsString> {
+        self.expand_inner(raw, crate::keybinds::MAX_FIELD_BYTES, true)
+    }
+
+    pub(super) fn define(&mut self, name: &str, value: OsString) -> Result<()> {
+        let values = self.0.get_or_insert_with(BTreeMap::new);
         ensure!(
-            raw.len() <= MAX_PATH_BYTES,
+            values.contains_key(OsStr::new(name)) || values.len() < crate::keybinds::MAX_FIELDS,
+            mandara_i18n::t("The shortcut configuration is too large to edit.")
+        );
+        values.insert(name.into(), value);
+        Ok(())
+    }
+
+    fn expand_inner(&self, raw: &str, limit: usize, preserve_unknown: bool) -> Result<OsString> {
+        ensure!(
+            raw.len() <= limit,
             mandara_i18n::t("An include path is too long.")
         );
         let mut result = OsString::new();
         let mut rest = raw;
         while let Some(at) = rest.find('$') {
-            append(&mut result, OsStr::new(&rest[..at]))?;
+            append(&mut result, OsStr::new(&rest[..at]), limit)?;
             let tail = &rest[at + 1..];
             let (name, next) = if let Some(braced) = tail.strip_prefix('{') {
                 braced
@@ -62,13 +81,24 @@ impl IncludeEnvironment {
                 (&tail[..end], &tail[end..])
             };
             if name.is_empty() {
-                append(&mut result, OsStr::new("$"))?;
+                let literal = if preserve_unknown {
+                    &rest[at..rest.len() - next.len()]
+                } else {
+                    "$"
+                };
+                append(&mut result, OsStr::new(literal), limit)?;
             } else if let Some(value) = self.value(name) {
-                append(&mut result, &value)?;
+                append(&mut result, &value, limit)?;
+            } else if preserve_unknown {
+                append(
+                    &mut result,
+                    OsStr::new(&rest[at..rest.len() - next.len()]),
+                    limit,
+                )?;
             }
             rest = next;
         }
-        append(&mut result, OsStr::new(rest))?;
+        append(&mut result, OsStr::new(rest), limit)?;
         Ok(result)
     }
 
@@ -107,11 +137,11 @@ impl IncludeEnvironment {
     }
 }
 
-fn append(out: &mut OsString, value: &OsStr) -> Result<()> {
+fn append(out: &mut OsString, value: &OsStr, limit: usize) -> Result<()> {
     ensure!(
         out.len()
             .checked_add(value.len())
-            .is_some_and(|bytes| bytes <= MAX_PATH_BYTES),
+            .is_some_and(|bytes| bytes <= limit),
         mandara_i18n::t("An include path is too long.")
     );
     out.push(value);
