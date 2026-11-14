@@ -13,6 +13,7 @@ use mandara_config::doctor::{self, CheckEnv, CheckerStatus, Report, fix as dfix,
 use mandara_config::paths;
 
 use crate::ipc;
+mod mango;
 
 /// `mandara setup --check` exit code when conflicts were found (scripts and
 /// `mandara install` test for it).
@@ -132,10 +133,17 @@ pub fn setup(o: Options) -> Result<()> {
         // Sway without a config of its own runs the system one: the user's
         // starts as a copy of it (sway's documented first step), so the
         // include line has somewhere to go and sway's defaults stay.
+        if target == Target::Mango {
+            mango::check_path()?;
+            if !o.check && o.fix.is_empty() { mandara_config::compositor::seed_mango_user_config()?; }
+        }
         if target == Target::Sway && !o.check && o.fix.is_empty() && mandara_config::compositor::seed_sway_user_config()? {
             println!("Sway: started {} as a copy of {}", target.user_config().display(), mandara_config::compositor::SWAY_SYSTEM_CONFIG);
         }
         let has_config = target.user_config().exists();
+        if target == Target::Mango && !has_config && !o.check {
+            anyhow::bail!("{}", mandara_i18n::tf("No compositor configuration was found at {path}.", &[("path", &target.user_config().display())]));
+        }
         let env = CheckEnv::default();
         // The config as the compositor reads it before Mandara touches it.
         let before = doctor::check(target);
@@ -204,6 +212,8 @@ pub fn setup(o: Options) -> Result<()> {
             }
         }
         if !has_config {
+            print_report(&report);
+            config_errors += 1;
             continue;
         }
         // Fixes asked for by id, bottom of each file first: a removed line
@@ -239,6 +249,14 @@ pub fn setup(o: Options) -> Result<()> {
         let report = state::record(report);
         print_report(&report);
         config_errors += report.errors();
+        if o.check && target == Target::Mango && cfg.compositor.autostart
+            && !user_autostarts(target)
+            && (!mandara_config::compositor::include_installed(target)
+                || !std::fs::read_to_string(target.generated_file()).is_ok_and(|text| mandara_config::compositor::starts_mandara(&text)))
+        {
+            println!("{}", mandara_i18n::t("Autostart is enabled but its generated configuration is not connected. Run `mandara setup` to repair it."));
+            config_errors += 1;
+        }
         let found = conflicts::scan(target, &cfg.compositor);
         let fixable: Vec<conflicts::Conflict> = found.iter().filter(|c| c.is_conflict()).cloned().collect();
         total_conflicts += fixable.len();
@@ -309,7 +327,10 @@ fn print_report(report: &Report) {
     let name = report.target.name();
     let version = report.version.as_deref().map(|v| format!(" {v}")).unwrap_or_default();
     match &report.status {
-        CheckerStatus::NoConfig => return,
+        CheckerStatus::NoConfig => {
+            println!("{}", mandara_i18n::tf("No compositor configuration was found at {path}.", &[("path", &report.root.display())]));
+            return;
+        }
         CheckerStatus::NotInstalled => {
             println!("  config doctor: {name}'s checker isn't installed here, so the config wasn't checked");
             return;

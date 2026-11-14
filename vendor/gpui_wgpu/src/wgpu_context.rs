@@ -430,13 +430,21 @@ impl WgpuContext {
     async fn create_device(
         adapter: &wgpu::Adapter,
     ) -> anyhow::Result<(wgpu::Device, wgpu::Queue, bool, TextureFormat)> {
-        let dual_source_blending = adapter
+        // Mandara patch 18: the texture transport uses grayscale text and no storage buffers.
+        let texture_instances = crate::compatibility::texture_instances(
+            adapter.get_info().backend,
+            &adapter.limits(),
+            adapter.get_downlevel_capabilities().flags,
+        );
+        let dual_source_blending = !texture_instances && adapter
             .features()
             .contains(wgpu::Features::DUAL_SOURCE_BLENDING);
 
         let mut required_features = wgpu::Features::empty();
         if dual_source_blending {
             required_features |= wgpu::Features::DUAL_SOURCE_BLENDING;
+        } else if texture_instances {
+            log::info!("Using texture-backed instances for this OpenGL adapter's limits");
         } else {
             log::warn!(
                 "Dual-source blending not available on this GPU. \
@@ -445,20 +453,12 @@ impl WgpuContext {
         }
 
         let color_atlas_texture_format = Self::select_color_texture_format(adapter)?;
-        #[cfg(target_family = "wasm")]
-        let required_limits = if adapter.get_info().backend == wgpu::Backend::Gl {
-            wgpu::Limits::downlevel_webgl2_defaults()
-                .using_resolution(adapter.limits())
-                .using_alignment(adapter.limits())
-        } else {
-            wgpu::Limits::downlevel_defaults()
-                .using_resolution(adapter.limits())
-                .using_alignment(adapter.limits())
-        };
-        #[cfg(not(target_family = "wasm"))]
-        let required_limits = wgpu::Limits::downlevel_defaults()
-            .using_resolution(adapter.limits())
-            .using_alignment(adapter.limits());
+        // Mandara patch 18: keep the selected limits and shader transport together.
+        let required_limits = crate::compatibility::required_limits(
+            adapter.get_info().backend,
+            &adapter.limits(),
+            adapter.get_downlevel_capabilities().flags,
+        );
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -748,8 +748,12 @@ impl WgpuContext {
         let required_usages = wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST;
         let bgra_features = adapter.get_texture_format_features(wgpu::TextureFormat::Bgra8Unorm);
         let rgba_features = adapter.get_texture_format_features(wgpu::TextureFormat::Rgba8Unorm);
-        #[cfg(target_family = "wasm")]
-        if adapter.get_info().backend == wgpu::Backend::Gl
+        // Mandara patch 18: the compatibility transport shares WebGL2's RGBA atlas.
+        if crate::compatibility::texture_instances(
+            adapter.get_info().backend,
+            &adapter.limits(),
+            adapter.get_downlevel_capabilities().flags,
+        )
             && rgba_features.allowed_usages.contains(required_usages)
         {
             return Ok(wgpu::TextureFormat::Rgba8Unorm);
@@ -787,7 +791,12 @@ impl WgpuContext {
     }
 
     pub fn uses_webgl_instance_data(&self) -> bool {
-        matches!(self.backend, WgpuBackend::Gl) && cfg!(target_family = "wasm")
+        // Mandara patch 18: native GL can use the same instance transport.
+        crate::compatibility::texture_instances(
+            self.adapter.get_info().backend,
+            &self.adapter.limits(),
+            self.adapter.get_downlevel_capabilities().flags,
+        )
     }
 
     pub fn supports_dual_source_blending(&self) -> bool {

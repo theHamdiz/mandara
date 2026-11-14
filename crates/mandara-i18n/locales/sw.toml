@@ -10695,3 +10695,13 @@
 "Native filesystem maintenance is available on Linux." = "Matengenezo asilia ya mifumo ya faili yanapatikana kwenye Linux."
 "Undo could not finish. The retained file is available at {path}." = "Haikuwezekana kukamilisha kutendua. Faili iliyohifadhiwa inapatikana kwenye {path}."
 "The XDG folder is disabled or not configured on this system." = "Folda ya XDG imezimwa au haijasanidiwa kwenye mfumo huu."
+
+"No compositor configuration was found at {path}." = "Hakuna usanidi wa komposita uliopatikana katika {path}."
+"Autostart is enabled but its generated configuration is not connected. Run `mandara setup` to repair it." = "Kuanza kiotomatiki kumewezeshwa lakini usanidi uliotengenezwa haujaunganishwa. Endesha `mandara setup` ili kuurekebisha."
+"MangoWM could not validate the configuration. Nothing was changed." = "MangoWM haikuweza kuthibitisha usanidi. Hakuna kilichobadilishwa."
+"MangoWM rejected the configuration change. Previous settings were kept." = "MangoWM imekataa mabadiliko ya usanidi. Mipangilio ya awali imehifadhiwa."
+"MangoWM's system configuration is too large to copy safely." = "Usanidi wa mfumo wa MangoWM ni mkubwa mno kunakiliwa kwa usalama."
+"MangoWM's configuration is not valid TOML." = "Usanidi wa MangoWM si TOML halali."
+"MangoWM's global settings must be a table." = "Mipangilio ya jumla ya MangoWM lazima iwe jedwali."
+"MangoWM's optional sources must be a path or a list of paths." = "Vyanzo vya hiari vya MangoWM lazima viwe njia au orodha ya njia."
+"MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM inatumia usanidi maalum katika {path}. Usanidi otomatiki unahitaji eneo chaguomsingi la usanidi. Faili za komposita yako hazijabadilishwa."

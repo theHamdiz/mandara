@@ -10695,3 +10695,13 @@
 "Native filesystem maintenance is available on Linux." = "Bảo trì hệ thống tệp gốc có sẵn trên Linux."
 "Undo could not finish. The retained file is available at {path}." = "Không thể hoàn tất việc hoàn tác. Tệp được giữ lại nằm tại {path}."
 "The XDG folder is disabled or not configured on this system." = "Thư mục XDG đã bị tắt hoặc chưa được cấu hình trên hệ thống này."
+
+"No compositor configuration was found at {path}." = "Không tìm thấy cấu hình trình tổng hợp tại {path}."
+"Autostart is enabled but its generated configuration is not connected. Run `mandara setup` to repair it." = "Tự khởi động đã bật nhưng cấu hình được tạo chưa được kết nối. Chạy `mandara setup` để sửa."
+"MangoWM could not validate the configuration. Nothing was changed." = "MangoWM không thể xác thực cấu hình. Không có gì bị thay đổi."
+"MangoWM rejected the configuration change. Previous settings were kept." = "MangoWM đã từ chối thay đổi cấu hình. Các thiết lập trước đó được giữ nguyên."
+"MangoWM's system configuration is too large to copy safely." = "Cấu hình hệ thống của MangoWM quá lớn để sao chép an toàn."
+"MangoWM's configuration is not valid TOML." = "Cấu hình của MangoWM không phải TOML hợp lệ."
+"MangoWM's global settings must be a table." = "Thiết lập chung của MangoWM phải là một bảng."
+"MangoWM's optional sources must be a path or a list of paths." = "Các nguồn tùy chọn của MangoWM phải là một đường dẫn hoặc danh sách đường dẫn."
+"MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM dùng cấu hình tùy chỉnh tại {path}. Thiết lập tự động yêu cầu vị trí cấu hình mặc định. Các tệp của trình tổng hợp không bị thay đổi."

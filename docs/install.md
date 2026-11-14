@@ -640,7 +640,7 @@ COSMIC Settings ([labwc](#labwc), [COSMIC](#cosmic)).
 
 | | Include line in your config | Autostart |
 |---|---|---|
-| **MangoWM** | `source_optional=~/.config/mandara/generated/mango.conf` | `exec_once=` |
+| **MangoWM** | `source_optional=…/mandara/generated/mango.conf`, or a source in TOML's `[global]` | `exec_once=` |
 | **Niri** 25.11+ | `include optional=true "…/mandara/generated/niri.kdl"` (plain `include` before 26.04) | `spawn-at-startup` |
 | **Hyprland 0.57+** (Lua only) | `pcall(dofile, "…/mandara/generated/hyprland.lua")` in `hyprland.lua` | `hl.on("hyprland.start", …)` |
 | **Hyprland ≤ 0.56** | `source = ~/.config/mandara/generated/hyprland.conf` | `exec-once =` |
@@ -655,6 +655,19 @@ COSMIC Settings ([labwc](#labwc), [COSMIC](#cosmic)).
 The setup picker offers KWin only when `kwin_wayland` is installed. A
 failed KWin availability check is reported directly; it does not offer to
 retire shortcuts or label the failure a compositor-configuration error.
+
+MangoWM reads `~/.config/mango/config.conf`, then `config.toml`, even when
+`XDG_CONFIG_HOME` points elsewhere. When neither user file exists, setup
+starts one from `/etc/mango/config.conf` or `config.toml` and connects
+Mandara's generated file with the matching syntax. Existing user configs
+and symlinks stay in place; changes have backups and native validation.
+The system file stays unchanged. Automatic setup requires one of these
+default user paths. An explicitly selected custom config is reported
+without creating another default or editing the custom file.
+
+If an older installation left MangoWM starting without Mandara, update,
+then run `mandara setup --compositor mango --autostart`. Log out and back
+in after setup succeeds: `exec_once` runs at session startup, not on reload.
 
 Mandara detects the installed version and speaks its dialect, including
 Hyprland 0.57's Lua dispatches. On Niri the drop-in makes workspace
@@ -988,7 +1001,8 @@ mandara msg --json compositor check    # the same report from the running shell,
 ```
 
 `mandara setup --check` leaves compositor files unchanged. It exits with 10
-for shortcut conflicts, 11 for compositor configuration errors, 12 when a
+for shortcut conflicts, 11 for compositor configuration errors, missing
+configs or disconnected MangoWM autostart, 12 when a
 required keyboard library is unavailable, or 13 for failed KWin availability
 checks. The installer offers conflict retirement only after status 10.
 

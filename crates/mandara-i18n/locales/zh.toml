@@ -11032,3 +11032,13 @@
 "Native filesystem maintenance is available on Linux." = "原生文件系统维护功能可在 Linux 上使用。"
 "Undo could not finish. The retained file is available at {path}." = "无法完成撤销。保留的文件位于 {path}。"
 "The XDG folder is disabled or not configured on this system." = "此系统上的 XDG 文件夹已禁用或尚未配置。"
+
+"No compositor configuration was found at {path}." = "在 {path} 未找到合成器配置。"
+"Autostart is enabled but its generated configuration is not connected. Run `mandara setup` to repair it." = "已启用自动启动，但生成的配置尚未连接。请运行 `mandara setup` 修复。"
+"MangoWM could not validate the configuration. Nothing was changed." = "MangoWM 无法验证配置。未进行任何更改。"
+"MangoWM rejected the configuration change. Previous settings were kept." = "MangoWM 拒绝了配置更改。已保留原有设置。"
+"MangoWM's system configuration is too large to copy safely." = "MangoWM 的系统配置过大，无法安全复制。"
+"MangoWM's configuration is not valid TOML." = "MangoWM 的配置不是有效的 TOML。"
+"MangoWM's global settings must be a table." = "MangoWM 的全局设置必须是一个表。"
+"MangoWM's optional sources must be a path or a list of paths." = "MangoWM 的可选来源必须是一个路径或路径列表。"
+"MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM 正在使用 {path} 中的自定义配置。自动设置需要默认配置位置。合成器文件未作更改。"

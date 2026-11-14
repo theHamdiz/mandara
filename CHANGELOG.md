@@ -6,6 +6,14 @@ About → What's new shows it too.
 
 ## Unreleased
 
+This update repairs MangoWM startup and improves compatibility with older
+graphics hardware.
+
+### Fixed
+
+- MangoWM autostart now works when the compositor is using its system defaults without a user config. Setup keeps the defaults in a validated user copy, handles TOML and separate XDG directories, and reports missing startup connections instead of silently passing (#174).
+- Older OpenGL GPUs can use the existing compatible renderer instead of being rejected for storage-buffer or compute features that the interface does not need (#174).
+
 ## 0.30.0 — 2026-11-14
 
 Give Studio its own look, take control of app permissions and keep a way

@@ -394,6 +394,25 @@ GPU takes the same path as before, and a machine with no hardware adapter at
 all still ends on lavapipe or llvmpipe. `WGPU_BACKEND` still replaces the
 backend list.
 
+## 18. Native OpenGL compatibility (`compatibility.rs`, `wgpu_context.rs`)
+
+Native GL requested storage-buffer and compute limits even on adapters that
+cannot provide them. Device creation failed, leaving a CPU Vulkan renderer
+as the fallback. The existing integer-texture instance transport already
+works without those features, but selection was restricted to WebGL2.
+
+GL adapters without vertex storage or the standard device limits now use
+that transport with WebGL2 limits and the RGBA atlas. Features unused by
+that transport are not requested. Vulkan, Metal, DX12 and fully capable
+native GL retain their existing limits and storage-buffer path. The
+capability policy and its regression tests live in one module.
+
+The compatibility transition shader replaces `firstTrailingBit`, which
+GLSL 3.3 cannot compile, with a bounded bit scan. Modern adapters retain
+the original shader. Pixel tests cover the legacy transport, clipping,
+atlas uploads and all wallpaper transitions with storage and compute
+extensions disabled; the atlas tests request the same limits as the renderer.
+
 ## Tests
 
 * New `paths_render_through_bounding_box_textures` (headless renderer): a solid
