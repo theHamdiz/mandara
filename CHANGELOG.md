@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.30.1 — 2026-11-14
+
 This update repairs MangoWM startup and improves compatibility with older
 graphics hardware, and removes the empty frame around Studio Looks.
 
