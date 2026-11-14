@@ -147,8 +147,18 @@ jobs:
   # for users, and the NixOS and Home Manager modules evaluate (the NixOS
   # check builds a minimal system with the module and Mandara Login on).
   nix:
-    name: Nix flake (x86_64)
+    name: Nix flake (${{ matrix.channel }}, x86_64)
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - channel: nixos-26.05
+            archive: tar.zst
+          - channel: nixos-unstable
+            archive: tar.zst
+          - channel: nixos-25.11
+            archive: tar.xz
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -163,11 +173,11 @@ jobs:
 
       - name: Build
         run: |
-          nix build .#mandara --print-build-logs
+          nix build .#mandara --override-input nixpkgs https://channels.nixos.org/${{ matrix.channel }}/nixexprs.${{ matrix.archive }} --no-write-lock-file --print-build-logs
           ./result/bin/mandara --version
 
       - name: Flake check
-        run: nix flake check --print-build-logs
+        run: nix flake check --override-input nixpkgs https://channels.nixos.org/${{ matrix.channel }}/nixexprs.${{ matrix.archive }} --no-write-lock-file --print-build-logs
 
   plugins:
     name: Plugins (wasm32-wasip2)

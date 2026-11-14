@@ -28,6 +28,8 @@ use super::parse::Tracker;
 use super::plan::{BackendId, Step, StepKind, SystemBackend};
 use super::{FailureKind, Phase};
 
+pub mod availability;
+
 /// Generations listed at most (a system rarely keeps more).
 pub const MAX_GENERATIONS: usize = 200;
 /// Bounds of the clean-up actions.
@@ -41,11 +43,21 @@ pub const MAX_INPUTS: usize = 64;
 const NIX_FEATURES: [&str; 2] = ["--extra-experimental-features", "nix-command flakes"];
 /// NixOS's default `nix.nixPath`: root's channels and the system
 /// configuration (pkexec clears the environment, so it is set here).
-const NIX_PATH: &[(&str, &str)] =
-    &[("NIX_PATH", "nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos:nixos-config=/etc/nixos/configuration.nix:/nix/var/nix/profiles/per-user/root/channels")];
+const NIX_PATH: &[(&str, &str)] = &[(
+    "NIX_PATH",
+    "nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos:nixos-config=/etc/nixos/configuration.nix:/nix/var/nix/profiles/per-user/root/channels",
+)];
 /// Runs the switch in its own systemd unit, as `nixos-rebuild` does, so it
 /// finishes even if the session (and this helper) goes away meanwhile.
-const SYSTEMD_RUN: [&str; 7] = ["--collect", "--no-ask-password", "--pipe", "--quiet", "--service-type=exec", "--unit=mandara-switch-to-configuration", "--wait"];
+const SYSTEMD_RUN: [&str; 7] = [
+    "--collect",
+    "--no-ask-password",
+    "--pipe",
+    "--quiet",
+    "--service-type=exec",
+    "--unit=mandara-switch-to-configuration",
+    "--wait",
+];
 const SECS_PER_DAY: i64 = 86_400;
 
 /// The files the NixOS side reads (a fixture root in tests).
@@ -64,7 +76,10 @@ pub struct NixPaths {
 
 impl NixPaths {
     pub fn system() -> NixPaths {
-        NixPaths { trusted_store: true, ..NixPaths::under(Path::new("/")) }
+        NixPaths {
+            trusted_store: true,
+            ..NixPaths::under(Path::new("/"))
+        }
     }
 
     pub fn under(root: &Path) -> NixPaths {
@@ -104,7 +119,12 @@ pub enum RebuildMode {
 }
 
 impl RebuildMode {
-    pub const ALL: [RebuildMode; 4] = [RebuildMode::Switch, RebuildMode::Boot, RebuildMode::Test, RebuildMode::Build];
+    pub const ALL: [RebuildMode; 4] = [
+        RebuildMode::Switch,
+        RebuildMode::Boot,
+        RebuildMode::Test,
+        RebuildMode::Build,
+    ];
 
     pub fn id(self) -> &'static str {
         match self {
@@ -150,8 +170,13 @@ fn number(word: &str, range: std::ops::RangeInclusive<u32>) -> Result<u32, Strin
     if word.is_empty() || word.len() > 9 || !word.bytes().all(|b| b.is_ascii_digit()) {
         return Err(format!("not a number: {word:?}"));
     }
-    let n: u32 = word.parse().map_err(|_| format!("not a number: {word:?}"))?;
-    range.contains(&n).then_some(n).ok_or_else(|| format!("{n} is out of range"))
+    let n: u32 = word
+        .parse()
+        .map_err(|_| format!("not a number: {word:?}"))?;
+    range
+        .contains(&n)
+        .then_some(n)
+        .ok_or_else(|| format!("{n} is out of range"))
 }
 
 impl NixAction {
@@ -160,12 +185,20 @@ impl NixAction {
     pub fn parse(words: &[&str]) -> Result<NixAction, String> {
         let usage = || format!("usage: mandara system-update nixos {}", NixAction::USAGE);
         match words {
-            ["update", mode] => RebuildMode::from_id(mode).map(NixAction::Update).ok_or_else(usage),
-            ["rebuild", mode] => RebuildMode::from_id(mode).map(NixAction::Rebuild).ok_or_else(usage),
+            ["update", mode] => RebuildMode::from_id(mode)
+                .map(NixAction::Update)
+                .ok_or_else(usage),
+            ["rebuild", mode] => RebuildMode::from_id(mode)
+                .map(NixAction::Rebuild)
+                .ok_or_else(usage),
             ["rollback"] => Ok(NixAction::Rollback),
             ["switch-to", n] => number(n, 1..=u32::MAX / 2).map(NixAction::SwitchTo),
-            ["clean", "keep", n] => number(n, KEEP_RANGE).map(|n| NixAction::Clean(Cleanup::KeepLatest(n))),
-            ["clean", "older-than", n] => number(n, DAYS_RANGE).map(|n| NixAction::Clean(Cleanup::OlderThanDays(n))),
+            ["clean", "keep", n] => {
+                number(n, KEEP_RANGE).map(|n| NixAction::Clean(Cleanup::KeepLatest(n)))
+            }
+            ["clean", "older-than", n] => {
+                number(n, DAYS_RANGE).map(|n| NixAction::Clean(Cleanup::OlderThanDays(n)))
+            }
             _ => Err(usage()),
         }
     }
@@ -178,8 +211,12 @@ impl NixAction {
             NixAction::Rebuild(m) => out.extend(["rebuild".into(), m.id().into()]),
             NixAction::Rollback => out.push("rollback".into()),
             NixAction::SwitchTo(n) => out.extend(["switch-to".into(), n.to_string()]),
-            NixAction::Clean(Cleanup::KeepLatest(n)) => out.extend(["clean".into(), "keep".into(), n.to_string()]),
-            NixAction::Clean(Cleanup::OlderThanDays(n)) => out.extend(["clean".into(), "older-than".into(), n.to_string()]),
+            NixAction::Clean(Cleanup::KeepLatest(n)) => {
+                out.extend(["clean".into(), "keep".into(), n.to_string()])
+            }
+            NixAction::Clean(Cleanup::OlderThanDays(n)) => {
+                out.extend(["clean".into(), "older-than".into(), n.to_string()])
+            }
         }
         out
     }
@@ -194,14 +231,22 @@ pub enum Setup {
     /// `/etc/nixos/flake.nix` (followed when it is a link): its folder,
     /// whether root owns it (else its owner updates the inputs), and the
     /// configuration's name (the host name).
-    Flake { dir: PathBuf, root_owned: bool, host: String },
+    Flake {
+        dir: PathBuf,
+        root_owned: bool,
+        host: String,
+    },
     /// Channels: root's `nixos` channel, when one is set.
     Channels { channel: Option<String> },
 }
 
 /// A host name as `nixosConfigurations.<host>` uses it.
 fn valid_host(h: &str) -> bool {
-    !h.is_empty() && h.len() <= 64 && h.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') && !h.starts_with('-')
+    !h.is_empty()
+        && h.len() <= 64
+        && h.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+        && !h.starts_with('-')
 }
 
 pub fn setup(paths: &NixPaths) -> Setup {
@@ -209,11 +254,25 @@ pub fn setup(paths: &NixPaths) -> Setup {
     if let Ok(real) = std::fs::canonicalize(&flake)
         && let Some(dir) = real.parent()
     {
-        let host = std::fs::read_to_string(&paths.hostname).map(|h| h.trim().to_string()).unwrap_or_default();
-        return Setup::Flake { dir: dir.to_path_buf(), root_owned: mandara_config::admin::trusted_root_file(dir), host };
+        let host = std::fs::read_to_string(&paths.hostname)
+            .map(|h| h.trim().to_string())
+            .unwrap_or_default();
+        return Setup::Flake {
+            dir: dir.to_path_buf(),
+            root_owned: mandara_config::admin::trusted_root_file(dir),
+            host,
+        };
     }
-    let channel = std::fs::read_link(paths.root_channels.join("nixos")).ok().or_else(|| std::fs::canonicalize(paths.root_channels.join("nixos")).ok());
-    Setup::Channels { channel: channel.and_then(|p| p.parent().and_then(|p| p.file_name()).map(|n| store_name(&n.to_string_lossy()).to_string())) }
+    let channel = std::fs::read_link(paths.root_channels.join("nixos"))
+        .ok()
+        .or_else(|| std::fs::canonicalize(paths.root_channels.join("nixos")).ok());
+    Setup::Channels {
+        channel: channel.and_then(|p| {
+            p.parent()
+                .and_then(|p| p.file_name())
+                .map(|n| store_name(&n.to_string_lossy()).to_string())
+        }),
+    }
 }
 
 /// `/nix/store/<hash>-<name>` → `<name>`.
@@ -243,14 +302,23 @@ pub struct Generation {
 
 /// `system-42-link` → 42.
 fn link_number(name: &str, profile: &str) -> Option<u32> {
-    let n = name.strip_prefix(profile)?.strip_prefix('-')?.strip_suffix("-link")?;
+    let n = name
+        .strip_prefix(profile)?
+        .strip_prefix('-')?
+        .strip_suffix("-link")?;
     number(n, 0..=u32::MAX).ok()
 }
 
 /// The kernel version of a generation (`kernel` → `…-linux-6.6.30/bzImage`).
 fn kernel_of(store: &Path) -> String {
-    let Ok(target) = std::fs::read_link(store.join("kernel")) else { return String::new() };
-    let pkg = target.parent().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let Ok(target) = std::fs::read_link(store.join("kernel")) else {
+        return String::new();
+    };
+    let pkg = target
+        .parent()
+        .and_then(|p| p.file_name())
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let name = store_name(&pkg);
     name.strip_prefix("linux-").unwrap_or(name).to_string()
 }
@@ -258,7 +326,12 @@ fn kernel_of(store: &Path) -> String {
 /// The system generations, newest first (at most [`MAX_GENERATIONS`]).
 pub fn generations(paths: &NixPaths) -> Vec<Generation> {
     use std::os::unix::fs::MetadataExt as _;
-    let current = std::fs::read_link(paths.system_profile()).ok().and_then(|t| t.file_name().and_then(|n| link_number(&n.to_string_lossy(), "system")));
+    let current = std::fs::read_link(paths.system_profile())
+        .ok()
+        .and_then(|t| {
+            t.file_name()
+                .and_then(|n| link_number(&n.to_string_lossy(), "system"))
+        });
     let booted = std::fs::canonicalize(&paths.booted).ok();
     let mut out: Vec<Generation> = std::fs::read_dir(&paths.profiles)
         .into_iter()
@@ -266,12 +339,17 @@ pub fn generations(paths: &NixPaths) -> Vec<Generation> {
         .flatten()
         .filter_map(|e| {
             let number = link_number(&e.file_name().to_string_lossy(), "system")?;
-            let store = std::fs::canonicalize(e.path()).unwrap_or_else(|_| std::fs::read_link(e.path()).unwrap_or_default());
-            let date = std::fs::symlink_metadata(e.path()).map(|m| m.mtime()).unwrap_or_default();
+            let store = std::fs::canonicalize(e.path())
+                .unwrap_or_else(|_| std::fs::read_link(e.path()).unwrap_or_default());
+            let date = std::fs::symlink_metadata(e.path())
+                .map(|m| m.mtime())
+                .unwrap_or_default();
             Some(Generation {
                 number,
                 date,
-                nixos_version: std::fs::read_to_string(store.join("nixos-version")).map(|s| s.trim().to_string()).unwrap_or_default(),
+                nixos_version: std::fs::read_to_string(store.join("nixos-version"))
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default(),
                 kernel: kernel_of(&store),
                 current: current == Some(number),
                 booted: booted.as_deref() == Some(store.as_path()),
@@ -289,7 +367,12 @@ pub fn generations(paths: &NixPaths) -> Vec<Generation> {
 /// `nixos-version` (run as the user, with a short timeout).
 pub fn revision(store: &Path) -> Option<String> {
     let exe = store.join("sw/bin/nixos-version");
-    let out = std::process::Command::new(exe).arg("--configuration-revision").stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null()).output().ok()?;
+    let out = std::process::Command::new(exe)
+        .arg("--configuration-revision")
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
     let rev = String::from_utf8_lossy(&out.stdout).trim().to_string();
     (out.status.success() && !rev.is_empty() && rev.len() <= 128).then_some(rev)
 }
@@ -318,7 +401,9 @@ pub fn parse_list_generations_json(text: &str) -> Vec<Generation> {
         .take(MAX_GENERATIONS)
         .map(|r| Generation {
             number: r.generation,
-            date: chrono::NaiveDateTime::parse_from_str(&r.date, "%Y-%m-%d %H:%M:%S").map(|d| d.and_utc().timestamp()).unwrap_or_default(),
+            date: chrono::NaiveDateTime::parse_from_str(&r.date, "%Y-%m-%d %H:%M:%S")
+                .map(|d| d.and_utc().timestamp())
+                .unwrap_or_default(),
             nixos_version: r.nixos_version,
             kernel: r.kernel_version,
             current: r.current,
@@ -341,22 +426,36 @@ pub struct HomeGeneration {
 
 /// Where home-manager keeps the user's profile links.
 pub fn home_profile_dirs(home: &Path, user: &str) -> [PathBuf; 2] {
-    [home.join(".local/state/nix/profiles"), PathBuf::from("/nix/var/nix/profiles/per-user").join(user)]
+    [
+        home.join(".local/state/nix/profiles"),
+        PathBuf::from("/nix/var/nix/profiles/per-user").join(user),
+    ]
 }
 
 /// Home-manager generations, newest first (empty without home-manager).
 pub fn home_generations(dirs: &[PathBuf]) -> Vec<HomeGeneration> {
     use std::os::unix::fs::MetadataExt as _;
     for dir in dirs {
-        let current = std::fs::read_link(dir.join("home-manager")).ok().and_then(|t| t.file_name().and_then(|n| link_number(&n.to_string_lossy(), "home-manager")));
+        let current = std::fs::read_link(dir.join("home-manager"))
+            .ok()
+            .and_then(|t| {
+                t.file_name()
+                    .and_then(|n| link_number(&n.to_string_lossy(), "home-manager"))
+            });
         let mut out: Vec<HomeGeneration> = std::fs::read_dir(dir)
             .into_iter()
             .flatten()
             .flatten()
             .filter_map(|e| {
                 let number = link_number(&e.file_name().to_string_lossy(), "home-manager")?;
-                let date = std::fs::symlink_metadata(e.path()).map(|m| m.mtime()).unwrap_or_default();
-                Some(HomeGeneration { number, date, current: current == Some(number) })
+                let date = std::fs::symlink_metadata(e.path())
+                    .map(|m| m.mtime())
+                    .unwrap_or_default();
+                Some(HomeGeneration {
+                    number,
+                    date,
+                    current: current == Some(number),
+                })
             })
             .collect();
         if !out.is_empty() {
@@ -391,18 +490,31 @@ pub fn to_delete(gens: &[Generation], cleanup: Cleanup, now: i64) -> Vec<u32> {
 /// The Git work tree a flake in `dir` belongs to, found as Nix finds it:
 /// the nearest folder from `dir` up (not `/`) that has a `.git`.
 pub fn git_work_tree(dir: &Path) -> Option<PathBuf> {
-    dir.ancestors().take_while(|p| p.parent().is_some()).find(|p| p.join(".git").symlink_metadata().is_ok()).map(Path::to_path_buf)
+    dir.ancestors()
+        .take_while(|p| p.parent().is_some())
+        .find(|p| p.join(".git").symlink_metadata().is_ok())
+        .map(Path::to_path_buf)
 }
 
 fn nix_args(rest: &[&str]) -> Vec<String> {
-    NIX_FEATURES.iter().chain(rest).map(|s| s.to_string()).collect()
+    NIX_FEATURES
+        .iter()
+        .chain(rest)
+        .map(|s| s.to_string())
+        .collect()
 }
 
 /// The program of a generation, checked to be in the Nix store.
 fn store_program(store: &Path, rel: &str, paths: &NixPaths) -> Result<PathBuf, String> {
-    let exe = std::fs::canonicalize(store.join(rel)).map_err(|e| format!("{}: {e}", store.join(rel).display()))?;
-    if paths.trusted_store && (!exe.starts_with("/nix/store/") || !mandara_config::admin::trusted_root_file(&exe)) {
-        return Err(format!("{} is not a root-owned program in the Nix store", exe.display()));
+    let exe = std::fs::canonicalize(store.join(rel))
+        .map_err(|e| format!("{}: {e}", store.join(rel).display()))?;
+    if paths.trusted_store
+        && (!exe.starts_with("/nix/store/") || !mandara_config::admin::trusted_root_file(&exe))
+    {
+        return Err(format!(
+            "{} is not a root-owned program in the Nix store",
+            exe.display()
+        ));
     }
     Ok(exe)
 }
@@ -424,16 +536,26 @@ pub fn plan(action: &NixAction, paths: &NixPaths) -> Result<Vec<Step>, String> {
             let update = matches!(action, NixAction::Update(_));
             let mut steps = Vec::new();
             match setup(paths) {
-                Setup::Flake { dir, root_owned, host } => {
+                Setup::Flake {
+                    dir,
+                    root_owned,
+                    host,
+                } => {
                     if !valid_host(&host) {
-                        return Err(format!("the host name {host:?} can't name a flake configuration"));
+                        return Err(format!(
+                            "the host name {host:?} can't name a flake configuration"
+                        ));
                     }
                     let dir_s = dir.to_string_lossy().into_owned();
                     // A flake its owner keeps elsewhere (`/etc/nixos/flake.nix`
                     // linking into a home folder) is updated as that user,
                     // before the helper runs; root never writes there.
                     if update && root_owned {
-                        steps.push(Step::owned(StepKind::FlakeUpdate, "nix", nix_args(&["flake", "update", "--flake", &dir_s])));
+                        steps.push(Step::owned(
+                            StepKind::FlakeUpdate,
+                            "nix",
+                            nix_args(&["flake", "update", "--flake", &dir_s]),
+                        ));
                     }
                     // Root's Git refuses a work tree another user owns
                     // ("not owned by current user"), and pkexec sets no
@@ -441,33 +563,109 @@ pub fn plan(action: &NixAction, paths: &NixPaths) -> Result<Vec<Step>, String> {
                     // one repository. Its owner already decides what root
                     // builds and activates, so this grants nothing new.
                     let work_tree = git_work_tree(&dir);
-                    let attr = format!("{dir_s}#nixosConfigurations.\"{host}\".config.system.build.toplevel");
-                    steps.push(Step::owned(StepKind::Build, "nix", nix_args(&["build", "--log-format", "internal-json", "-v", "--no-link", "--print-out-paths", &attr])).trust_git(work_tree.clone()));
+                    let attr = format!(
+                        "{dir_s}#nixosConfigurations.\"{host}\".config.system.build.toplevel"
+                    );
+                    steps.push(
+                        Step::owned(
+                            StepKind::Build,
+                            "nix",
+                            nix_args(&[
+                                "build",
+                                "--log-format",
+                                "internal-json",
+                                "-v",
+                                "--no-link",
+                                "--print-out-paths",
+                                &attr,
+                            ]),
+                        )
+                        .trust_git(work_tree.clone()),
+                    );
                     if mode != RebuildMode::Build {
-                        steps.push(Step::owned(StepKind::Activate, "nixos-rebuild", vec![mode.id().into(), "--flake".into(), format!("{dir_s}#{host}")]).trust_git(work_tree));
+                        steps.push(
+                            Step::owned(
+                                StepKind::Activate,
+                                "nixos-rebuild",
+                                vec![
+                                    mode.id().into(),
+                                    "--flake".into(),
+                                    format!("{dir_s}#{host}"),
+                                ],
+                            )
+                            .trust_git(work_tree),
+                        );
                     }
                 }
                 Setup::Channels { .. } => {
                     if update {
-                        steps.push(Step::new(StepKind::ChannelUpdate, "nix-channel", &["--update"]).env(NIX_PATH));
+                        steps.push(
+                            Step::new(StepKind::ChannelUpdate, "nix-channel", &["--update"])
+                                .env(NIX_PATH),
+                        );
                     }
-                    steps.push(Step::new(StepKind::Build, "nix-build", &["--log-format", "internal-json", "-v", "--no-out-link", "<nixpkgs/nixos>", "-A", "system"]).env(NIX_PATH));
+                    steps.push(
+                        Step::new(
+                            StepKind::Build,
+                            "nix-build",
+                            &[
+                                "--log-format",
+                                "internal-json",
+                                "-v",
+                                "--no-out-link",
+                                "<nixpkgs/nixos>",
+                                "-A",
+                                "system",
+                            ],
+                        )
+                        .env(NIX_PATH),
+                    );
                     if mode != RebuildMode::Build {
-                        steps.push(Step::new(StepKind::Activate, "nixos-rebuild", &[mode.id()]).env(NIX_PATH));
+                        steps.push(
+                            Step::new(StepKind::Activate, "nixos-rebuild", &[mode.id()])
+                                .env(NIX_PATH),
+                        );
                     }
                 }
             }
             Ok(steps)
         }
-        NixAction::Rollback => Ok(vec![Step::new(StepKind::Activate, "nixos-rebuild", &["switch", "--rollback"]).env(NIX_PATH)]),
+        NixAction::Rollback => {
+            let gens = generations(paths);
+            let current = gens
+                .iter()
+                .find(|generation| generation.current)
+                .ok_or("the current system generation could not be identified")?;
+            let previous = gens
+                .iter()
+                .filter(|generation| generation.number < current.number)
+                .max_by_key(|generation| generation.number)
+                .ok_or("no earlier system generation is available")?;
+            plan(&NixAction::SwitchTo(previous.number), paths)
+        }
         NixAction::SwitchTo(n) => {
             let gens = generations(paths);
-            let generation = gens.iter().find(|g| g.number == n).ok_or_else(|| format!("generation {n} doesn't exist"))?;
+            let generation = gens
+                .iter()
+                .find(|g| g.number == n)
+                .ok_or_else(|| format!("generation {n} doesn't exist"))?;
             if generation.current {
                 return Err(format!("generation {n} is already the current one"));
             }
             let exe = store_program(&generation.store, "bin/switch-to-configuration", paths)?;
-            Ok(vec![Step::owned(StepKind::Activate, "nix-env", vec!["-p".into(), profile, "--switch-generation".into(), n.to_string()]), switch_step(exe, "switch")])
+            Ok(vec![
+                Step::owned(
+                    StepKind::Activate,
+                    "nix-env",
+                    vec![
+                        "-p".into(),
+                        profile,
+                        "--switch-generation".into(),
+                        n.to_string(),
+                    ],
+                ),
+                switch_step(exe, "switch"),
+            ])
         }
         NixAction::Clean(cleanup) => {
             let gens = generations(paths);
@@ -478,12 +676,19 @@ pub fn plan(action: &NixAction, paths: &NixPaths) -> Result<Vec<Step>, String> {
                 args.extend(delete.iter().map(u32::to_string));
                 steps.push(Step::owned(StepKind::DeleteGenerations, "nix-env", args));
             }
-            steps.push(Step::new(StepKind::CollectGarbage, "nix-collect-garbage", &[]));
+            steps.push(Step::new(
+                StepKind::CollectGarbage,
+                "nix-collect-garbage",
+                &[],
+            ));
             if !delete.is_empty()
                 && let Some(current) = gens.iter().find(|g| g.current)
             {
                 // Drops the deleted generations from the boot menu.
-                steps.push(switch_step(store_program(&current.store, "bin/switch-to-configuration", paths)?, "boot"));
+                steps.push(switch_step(
+                    store_program(&current.store, "bin/switch-to-configuration", paths)?,
+                    "boot",
+                ));
             }
             Ok(steps)
         }
@@ -557,7 +762,9 @@ pub fn nix_line<'a>(line: &'a str, t: &mut Tracker) -> NixLine<'a> {
         }
         return NixLine::Show(Cow::Borrowed(line));
     };
-    let Ok(head) = serde_json::from_str::<Head<'_>>(json) else { return NixLine::Hide };
+    let Ok(head) = serde_json::from_str::<Head<'_>>(json) else {
+        return NixLine::Hide;
+    };
     match head.action.as_ref() {
         "start" => {
             match head.kind {
@@ -566,7 +773,9 @@ pub fn nix_line<'a>(line: &'a str, t: &mut Tracker) -> NixLine<'a> {
                 ACT_BUILD => {
                     t.phase = Phase::Building;
                     if let Some(text) = &head.text
-                        && let Some(drv) = text.strip_prefix("building '").and_then(|r| r.split('\'').next())
+                        && let Some(drv) = text
+                            .strip_prefix("building '")
+                            .and_then(|r| r.split('\'').next())
                     {
                         let name = short_path(drv).to_string();
                         t.current = name;
@@ -574,7 +783,9 @@ pub fn nix_line<'a>(line: &'a str, t: &mut Tracker) -> NixLine<'a> {
                 }
                 ACT_COPY_PATH | ACT_SUBSTITUTE => {
                     if let Some(text) = &head.text
-                        && let Some(p) = text.strip_prefix("copying path '").and_then(|r| r.split('\'').next())
+                        && let Some(p) = text
+                            .strip_prefix("copying path '")
+                            .and_then(|r| r.split('\'').next())
                     {
                         if t.built == 0 && t.build_total == 0 {
                             t.phase = Phase::Downloading;
@@ -591,10 +802,15 @@ pub fn nix_line<'a>(line: &'a str, t: &mut Tracker) -> NixLine<'a> {
             }
         }
         "result" => match head.kind {
-            RES_PROGRESS if head.id != 0 && (head.id == t.nix_builds || head.id == t.nix_copies) => {
+            RES_PROGRESS
+                if head.id != 0 && (head.id == t.nix_builds || head.id == t.nix_copies) =>
+            {
                 if let Ok(p) = serde_json::from_str::<Progress>(json) {
                     let [done, expected, _, _] = p.fields;
-                    let (done, expected) = (u32::try_from(done).unwrap_or(u32::MAX), u32::try_from(expected).unwrap_or(u32::MAX));
+                    let (done, expected) = (
+                        u32::try_from(done).unwrap_or(u32::MAX),
+                        u32::try_from(expected).unwrap_or(u32::MAX),
+                    );
                     if head.id == t.nix_builds {
                         t.built = done;
                         t.build_total = expected;
@@ -680,10 +896,14 @@ pub struct InputChange {
 
 /// The root flake's direct inputs from `flake.lock` text.
 pub fn locked_inputs(lock: &str) -> Vec<LockedInput> {
-    let Ok(v) = serde_json::from_str::<serde_json::Value>(lock) else { return Vec::new() };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(lock) else {
+        return Vec::new();
+    };
     let nodes = &v["nodes"];
     let root = v["root"].as_str().unwrap_or("root");
-    let Some(inputs) = nodes[root]["inputs"].as_object() else { return Vec::new() };
+    let Some(inputs) = nodes[root]["inputs"].as_object() else {
+        return Vec::new();
+    };
     let mut out: Vec<LockedInput> = inputs
         .iter()
         .take(MAX_INPUTS)
@@ -691,8 +911,16 @@ pub fn locked_inputs(lock: &str) -> Vec<LockedInput> {
             // A follows-path (`["nixpkgs"]`) names no node of its own.
             let node = node.as_str()?;
             let locked = &nodes[node]["locked"];
-            let rev = locked["rev"].as_str().or_else(|| locked["narHash"].as_str()).unwrap_or_default().to_string();
-            Some(LockedInput { name: name.clone(), rev, last_modified: locked["lastModified"].as_i64().unwrap_or_default() })
+            let rev = locked["rev"]
+                .as_str()
+                .or_else(|| locked["narHash"].as_str())
+                .unwrap_or_default()
+                .to_string();
+            Some(LockedInput {
+                name: name.clone(),
+                rev,
+                last_modified: locked["lastModified"].as_i64().unwrap_or_default(),
+            })
         })
         .collect();
     out.sort_by(|a, b| a.name.cmp(&b.name));
@@ -705,18 +933,33 @@ pub fn input_changes(before: &[LockedInput], after: &[LockedInput]) -> Vec<Input
     for a in after {
         let old = before.iter().find(|b| b.name == a.name);
         if old.is_none_or(|o| o.rev != a.rev) {
-            out.push(InputChange { name: a.name.clone(), old: old.cloned(), new: Some(a.clone()) });
+            out.push(InputChange {
+                name: a.name.clone(),
+                old: old.cloned(),
+                new: Some(a.clone()),
+            });
         }
     }
-    for b in before.iter().filter(|b| !after.iter().any(|a| a.name == b.name)) {
-        out.push(InputChange { name: b.name.clone(), old: Some(b.clone()), new: None });
+    for b in before
+        .iter()
+        .filter(|b| !after.iter().any(|a| a.name == b.name))
+    {
+        out.push(InputChange {
+            name: b.name.clone(),
+            old: Some(b.clone()),
+            new: None,
+        });
     }
     out
 }
 
 /// argv updating a user-owned flake's inputs (run as that user).
 pub fn user_flake_update(dir: &Path) -> Step {
-    Step::owned(StepKind::FlakeUpdate, "nix", nix_args(&["flake", "update", "--flake", &dir.to_string_lossy()]))
+    Step::owned(
+        StepKind::FlakeUpdate,
+        "nix",
+        nix_args(&["flake", "update", "--flake", &dir.to_string_lossy()]),
+    )
 }
 
 // ── Differences between generations ──────────────────────────────────────
@@ -743,7 +986,12 @@ pub struct Diff {
 
 /// argv of `nix store diff-closures <a> <b>` (as the user).
 pub fn diff_argv(a: &Path, b: &Path) -> Vec<String> {
-    nix_args(&["store", "diff-closures", &a.to_string_lossy(), &b.to_string_lossy()])
+    nix_args(&[
+        "store",
+        "diff-closures",
+        &a.to_string_lossy(),
+        &b.to_string_lossy(),
+    ])
 }
 
 /// argv of `nix path-info -S <paths…>` (closure sizes, as the user).
@@ -774,14 +1022,29 @@ pub fn parse_diff_closures(text: &str) -> Vec<PackageChange> {
     let mut out = Vec::new();
     for raw in text.lines().take(MAX_CHANGES) {
         let line = super::protocol::clean_line(raw);
-        let Some((name, rest)) = line.split_once(": ") else { continue };
-        let Some((old, after)) = rest.split_once(" → ") else { continue };
+        let Some((name, rest)) = line.split_once(": ") else {
+            continue;
+        };
+        let Some((old, after)) = rest.split_once(" → ") else {
+            continue;
+        };
         let (new, size) = match after.split_once(", ") {
             Some((n, s)) => (n, parse_size(s.trim_start_matches('+')).unwrap_or(0)),
             None => (after, 0),
         };
-        let clean = |v: &str| if v == "∅" { String::new() } else { v.replace('ε', "") };
-        out.push(PackageChange { name: name.to_string(), old: clean(old.trim()), new: clean(new.trim()), delta: size });
+        let clean = |v: &str| {
+            if v == "∅" {
+                String::new()
+            } else {
+                v.replace('ε', "")
+            }
+        };
+        out.push(PackageChange {
+            name: name.to_string(),
+            old: clean(old.trim()),
+            new: clean(new.trim()),
+            delta: size,
+        });
     }
     out
 }
@@ -796,19 +1059,35 @@ pub fn closure_diff(a: &Path, b: &Path) -> Result<Diff, String> {
     }
     let a = std::fs::canonicalize(a).map_err(|e| format!("{}: {e}", a.display()))?;
     let b = std::fs::canonicalize(b).map_err(|e| format!("{}: {e}", b.display()))?;
-    let nix = crate::updates::find_program("nix").ok_or_else(|| "nix is not installed".to_string())?;
+    let nix =
+        crate::updates::find_program("nix").ok_or_else(|| "nix is not installed".to_string())?;
     let run = |argv: Vec<String>| -> Result<String, String> {
-        let out = std::process::Command::new(&nix).args(argv).env("LANG", "C").env("LC_ALL", "C").stdin(std::process::Stdio::null()).output().map_err(|e| e.to_string())?;
+        let out = std::process::Command::new(&nix)
+            .args(argv)
+            .env("LANG", "C")
+            .env("LC_ALL", "C")
+            .stdin(std::process::Stdio::null())
+            .output()
+            .map_err(|e| e.to_string())?;
         if out.status.success() {
             Ok(String::from_utf8_lossy(&out.stdout).into_owned())
         } else {
-            Err(String::from_utf8_lossy(&out.stderr).lines().rfind(|l| !l.trim().is_empty()).unwrap_or_default().to_string())
+            Err(String::from_utf8_lossy(&out.stderr)
+                .lines()
+                .rfind(|l| !l.trim().is_empty())
+                .unwrap_or_default()
+                .to_string())
         }
     };
     let changes = parse_diff_closures(&run(diff_argv(&a, &b))?);
-    let sizes = run(path_info_argv(&[&a, &b])).map(|t| parse_path_info(&t)).unwrap_or_default();
+    let sizes = run(path_info_argv(&[&a, &b]))
+        .map(|t| parse_path_info(&t))
+        .unwrap_or_default();
     let size = |p: &Path| sizes.iter().find(|(q, _)| q == p).map(|(_, s)| *s);
-    Ok(Diff { changes, closure_delta: size(&b).zip(size(&a)).map(|(b, a)| b - a) })
+    Ok(Diff {
+        changes,
+        closure_delta: size(&b).zip(size(&a)).map(|(b, a)| b - a),
+    })
 }
 
 /// `nix path-info -S` rows: `<path>\t<closure bytes>`.

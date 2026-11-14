@@ -34,6 +34,7 @@ const CONSUMER_CRATES: &[&str] = &[
 const UNEXPOSED_READS: &[(&str, &str, &str)] = &[
     // Retired by `general.units`; still read so old configs keep working.
     ("weather", "fahrenheit", "legacy flag replaced by General → Units"),
+    ("local-ai", "url", "legacy Ollama address replaced by Local AI → Server address"),
 ];
 
 /// Plugin tables in the registry that belong to no built-in (the

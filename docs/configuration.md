@@ -254,7 +254,7 @@ fixed:
 | Presentation mode (`presentation`, opt-in) | `auto_screen_share` (on while an app shares the screen) | off |
 | Share to phone (`share`, opt-in) | `minutes` (the link stops after this long, 1–120), `once` (stop after the first download) | 10 min, on |
 | Uptime monitor (`uptime`, opt-in) | `checks` (`https://…`, `http://…` or `host:port`, optionally `Name=target`, comma-separated), `interval_s` (10–3600), `notify` | empty, 60 s, on |
-| Local AI (`local-ai`, opt-in) | `url` (the Ollama server) | `http://127.0.0.1:11434` |
+| Local AI (`local-ai`, opt-in) | `provider`, `server`, `model`, `use_api_key`, `reply_tokens`, `context_bytes` | Ollama, provider's local address, no model selected, no optional key, 1024 tokens, 16384 bytes; an existing Ollama `url` is preserved ([guide](local-ai.md)) |
 | Git repositories (`git-repos`, opt-in) | `roots` (folders to look in, comma-separated), `depth` (1–6) | `~/projects, ~/Projects, ~/code, ~/src, ~/dev, ~/git`, 3 |
 | CI status (`ci`, opt-in) | `repos` (`owner/name`, comma-separated), `use_gh_token` (the `gh` CLI's login for private repos and higher limits; else `GITHUB_TOKEN`), `notify` | empty, on, on |
 | Crash reports (`crashes`, opt-in) | `notify` (a notification for a new crash) | on |
@@ -736,6 +736,10 @@ menu). A file without it gets the ring with every item. The menu's
 surface exists only while it shows; it has no timers and keeps no state
 once closed.
 
+Labels in the middle wrap to two lines, then shorten with an ellipsis.
+Text and shortcuts stay inside the circle with padding; smaller circles
+prioritize the label when a shortcut would crowd it.
+
 | Key | Values | Default |
 |---|---|---|
 | `style` | `ring` (icon buttons round the click) or `classic` (the glass list) | `ring` |
@@ -1083,6 +1087,11 @@ snapshot, and *Restore my look* / `mandara msg look restore` applies it
 back. `mandara msg look list`, `mandara msg look apply <id>
 [wallpaper-colors]`.
 
+New snapshots include all nine plugin groups across the main and vertical
+bars. Restoring keeps their original positions, including hidden groups,
+while retaining plugins added during a Look. Older snapshots cannot recover
+vertical positions that were never recorded.
+
 | id | Look | Components |
 |---|---|---|
 | `corniche-dusk` | rose glass pills, headline clock, system monitor, now-playing card | Classic |
@@ -1403,3 +1412,23 @@ updates, and their separate compositor fragment does not enable management of
 keybinds, input or layout.
 MangoWM requires `width`, `height` and `refresh_mhz` together when saving a
 resolution; scale, position and rotation can be saved independently.
+
+
+### Backups (`backups`)
+
+The opt-in plugin's Settings stores these keys under `[plugins.settings.backups]`.
+Locations start empty; Mandara never selects personal folders automatically.
+
+| Key | Meaning | Default |
+| --- | --- | --- |
+| `repository` | Absolute local restic repository path | empty |
+| `password_file` | Path to an existing private password file owned by you (`0600`); its contents are not stored in config | empty |
+| `sources` | Up to 32 absolute source-folder paths | empty list |
+| `snapshot_source` | Existing Btrfs subvolume on the selected mount | empty |
+| `snapshot_directory` | Existing destination folder on that mount | empty |
+| `cleanup_age_days` | Minimum cache-file age, 1–3650 days; separate from Trash previews | 30 |
+
+See [Backups and storage](backups.md) for the review, restore and maintenance
+flows. [App permissions](app-permissions.md) uses Flatpak's personal override
+files directly; it does not put passwords or application grants in Mandara's
+TOML config.

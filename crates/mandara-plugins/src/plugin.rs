@@ -9,7 +9,7 @@
 
 use std::cell::Cell;
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 use gpui::{AnyView, App, Global, Pixels, Size, Window};
 use serde::{Deserialize, Serialize};
@@ -343,6 +343,18 @@ pub struct PanelCx {
     card: bool,
 }
 
+/// Observes a panel without keeping a discarded host context alive.
+#[derive(Clone, Default)]
+pub struct WeakPanelCx(Weak<Cell<f32>>);
+
+impl WeakPanelCx {
+    /// `None` means the host and its views have released this panel.
+    pub fn progress(&self) -> Option<f32> { self.0.upgrade().map(|progress| progress.get()) }
+
+    /// Clones observe the same surface; a fork observes a different panel.
+    pub fn same_surface(&self, other: &Self) -> bool { self.0.ptr_eq(&other.0) }
+}
+
 /// Per-element reveal parameters for staggered panel entrances.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Reveal {
@@ -352,6 +364,9 @@ pub struct Reveal {
 }
 
 impl PanelCx {
+    /// Observe host lifetime without retaining its progress cell.
+    pub fn downgrade(&self) -> WeakPanelCx { WeakPanelCx(Rc::downgrade(&self.progress)) }
+
     pub fn new() -> Self {
         Self::default()
     }
@@ -744,6 +759,20 @@ pub fn discover_third_party(dir: &std::path::Path) -> Vec<PluginManifest> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn weak_panel_observers_release_replaced_hosts_and_keep_forks_distinct() {
+        let panel = super::PanelCx::for_monitor("demo");
+        panel.set_progress(1.0);
+        let observer = panel.downgrade();
+        let another = panel.clone();
+        assert!(observer.same_surface(&another.downgrade()));
+        assert!(!observer.same_surface(&panel.fork().downgrade()));
+        drop(panel);
+        assert_eq!(observer.progress(), Some(1.0));
+        drop(another);
+        assert_eq!(observer.progress(), None);
+    }
+
     use super::*;
 
     #[test]

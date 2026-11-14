@@ -12,8 +12,9 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{
-    App, ClipboardItem, Context, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
-    ParentElement, Render, Styled, Window, canvas, div, fill, prelude::FluentBuilder as _, px,
+    App, ClipboardItem, Context, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent,
+    MouseButton, MouseDownEvent, MouseMoveEvent, ParentElement, Render, Styled, Window, canvas,
+    div, fill, prelude::FluentBuilder as _, px,
 };
 use mandara_core::ToGpui;
 
@@ -67,10 +68,17 @@ pub struct TextField {
     /// Whether the field was focused when it last drew (its search box's
     /// frame follows it).
     shown_focus: bool,
+    max_bytes: Option<usize>,
 }
 
 impl TextField {
-    pub fn new(value: String, placeholder: impl Into<String>, live: bool, on_commit: OnCommit, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        value: String,
+        placeholder: impl Into<String>,
+        live: bool,
+        on_commit: OnCommit,
+        cx: &mut Context<Self>,
+    ) -> Self {
         Self {
             caret: value.len(),
             value,
@@ -94,6 +102,7 @@ impl TextField {
             embedded: false,
             design: None,
             shown_focus: false,
+            max_bytes: None,
         }
     }
 
@@ -139,6 +148,15 @@ impl TextField {
         self
     }
 
+    /// Bound an editor before copying pasted text into its retained buffer.
+    pub fn max_bytes(mut self, limit: usize) -> Self {
+        self.max_bytes = Some(limit);
+        self.value.truncate(floor_boundary(&self.value, limit));
+        self.value.shrink_to(limit);
+        self.caret = self.caret.min(self.value.len());
+        self
+    }
+
     /// Leave outside-click save/cancel decisions to the parent surface.
     pub fn parent_commits(mut self) -> Self {
         self.commit_on_click_out = false;
@@ -159,15 +177,16 @@ impl TextField {
     /// Replaces the value unless the user is editing.
     pub fn sync(&mut self, value: &str) {
         if !self.dirty && self.value != value {
-            self.value = value.to_string();
-            self.caret = self.value.len();
-            self.anchor = None;
+            self.set(value);
         }
     }
 
     /// Replaces the value unconditionally (e.g. switching the edited note).
     pub fn set(&mut self, value: &str) {
-        self.value = value.to_string();
+        let end = self
+            .max_bytes
+            .map_or(value.len(), |limit| floor_boundary(value, limit));
+        self.value = value[..end].to_string();
         self.caret = self.value.len();
         self.anchor = None;
         self.dirty = false;
@@ -193,7 +212,11 @@ impl TextField {
     /// Puts back text typed earlier (a kept draft, [`crate::card_drafts`])
     /// with its caret, and whether it was still uncommitted, so Enter,
     /// Escape and a click outside act on it as they would have.
-    pub fn restore(&mut self, value: String, caret: usize, dirty: bool) {
+    pub fn restore(&mut self, mut value: String, caret: usize, dirty: bool) {
+        if let Some(limit) = self.max_bytes {
+            value.truncate(floor_boundary(&value, limit));
+            value.shrink_to(limit);
+        }
         self.value = value;
         self.set_caret(caret);
         self.dirty = dirty;
@@ -202,7 +225,11 @@ impl TextField {
     /// The caret / selection over the current value (clamped: callers may
     /// replace `value` directly).
     fn edit(&mut self) -> Edit {
-        let mut e = Edit { text: std::mem::take(&mut self.value), caret: self.caret, anchor: self.anchor };
+        let mut e = Edit {
+            text: std::mem::take(&mut self.value),
+            caret: self.caret,
+            anchor: self.anchor,
+        };
         e.clamp();
         e
     }
@@ -234,7 +261,12 @@ impl TextField {
 pub fn delete_word(s: &mut String) {
     let trimmed = s.trim_end().len();
     s.truncate(trimmed);
-    let cut = s.char_indices().rev().find(|(_, c)| c.is_whitespace()).map(|(i, c)| i + c.len_utf8()).unwrap_or(0);
+    let cut = s
+        .char_indices()
+        .rev()
+        .find(|(_, c)| c.is_whitespace())
+        .map(|(i, c)| i + c.len_utf8())
+        .unwrap_or(0);
     s.truncate(cut);
 }
 
@@ -257,19 +289,28 @@ pub(crate) fn floor_boundary(s: &str, mut i: usize) -> usize {
 
 impl Edit {
     pub fn new(text: &str, caret: usize) -> Self {
-        let mut e = Edit { text: text.to_string(), caret, anchor: None };
+        let mut e = Edit {
+            text: text.to_string(),
+            caret,
+            anchor: None,
+        };
         e.clamp();
         e
     }
 
     fn clamp(&mut self) {
         self.caret = floor_boundary(&self.text, self.caret);
-        self.anchor = self.anchor.map(|a| floor_boundary(&self.text, a)).filter(|a| *a != self.caret);
+        self.anchor = self
+            .anchor
+            .map(|a| floor_boundary(&self.text, a))
+            .filter(|a| *a != self.caret);
     }
 
     /// The selected byte range, if any.
     pub fn selection(&self) -> Option<Range<usize>> {
-        self.anchor.filter(|a| *a != self.caret).map(|a| a.min(self.caret)..a.max(self.caret))
+        self.anchor
+            .filter(|a| *a != self.caret)
+            .map(|a| a.min(self.caret)..a.max(self.caret))
     }
 
     pub fn selected(&self) -> Option<&str> {
@@ -277,25 +318,38 @@ impl Edit {
     }
 
     fn prev(&self, i: usize) -> usize {
-        self.text[..i].char_indices().next_back().map_or(0, |(p, _)| p)
+        self.text[..i]
+            .char_indices()
+            .next_back()
+            .map_or(0, |(p, _)| p)
     }
 
     fn next(&self, i: usize) -> usize {
-        self.text[i..].chars().next().map_or(i, |c| i + c.len_utf8())
+        self.text[i..]
+            .chars()
+            .next()
+            .map_or(i, |c| i + c.len_utf8())
     }
 
     /// Start of the word before `i` (skipping whitespace first).
     fn word_left(&self, i: usize) -> usize {
         let before = &self.text[..i];
         let trimmed = before.trim_end().len();
-        before[..trimmed].char_indices().rev().find(|(_, c)| c.is_whitespace()).map_or(0, |(p, c)| p + c.len_utf8())
+        before[..trimmed]
+            .char_indices()
+            .rev()
+            .find(|(_, c)| c.is_whitespace())
+            .map_or(0, |(p, c)| p + c.len_utf8())
     }
 
     /// End of the word after `i` (skipping whitespace first).
     fn word_right(&self, i: usize) -> usize {
         let after = &self.text[i..];
         let lead = after.len() - after.trim_start().len();
-        after[lead..].char_indices().find(|(_, c)| c.is_whitespace()).map_or(self.text.len(), |(p, _)| i + lead + p)
+        after[lead..]
+            .char_indices()
+            .find(|(_, c)| c.is_whitespace())
+            .map_or(self.text.len(), |(p, _)| i + lead + p)
     }
 
     fn line_start(&self, i: usize) -> usize {
@@ -324,7 +378,11 @@ impl Edit {
         if let (Some(r), false) = (self.selection(), extend) {
             return self.move_to(r.start, false);
         }
-        let to = if word { self.word_left(self.caret) } else { self.prev(self.caret) };
+        let to = if word {
+            self.word_left(self.caret)
+        } else {
+            self.prev(self.caret)
+        };
         self.move_to(to, extend);
     }
 
@@ -333,7 +391,11 @@ impl Edit {
         if let (Some(r), false) = (self.selection(), extend) {
             return self.move_to(r.end, false);
         }
-        let to = if word { self.word_right(self.caret) } else { self.next(self.caret) };
+        let to = if word {
+            self.word_right(self.caret)
+        } else {
+            self.next(self.caret)
+        };
         self.move_to(to, extend);
     }
 
@@ -344,7 +406,11 @@ impl Edit {
     }
 
     pub fn end(&mut self, all: bool, extend: bool) {
-        let to = if all { self.text.len() } else { self.line_end(self.caret) };
+        let to = if all {
+            self.text.len()
+        } else {
+            self.line_end(self.caret)
+        };
         self.move_to(to, extend);
     }
 
@@ -365,7 +431,10 @@ impl Edit {
             self.line_start(start - 1)
         };
         let line_end = self.line_end(target_line);
-        let to = self.text[target_line..line_end].char_indices().nth(col).map_or(line_end, |(p, _)| target_line + p);
+        let to = self.text[target_line..line_end]
+            .char_indices()
+            .nth(col)
+            .map_or(line_end, |(p, _)| target_line + p);
         self.move_to(to, extend);
     }
 
@@ -378,8 +447,16 @@ impl Edit {
     /// The word around the caret (double-click).
     pub fn select_word(&mut self) {
         let at = self.caret;
-        let start = self.text[..at].char_indices().rev().take_while(|(_, c)| !c.is_whitespace()).last().map_or(at, |(p, _)| p);
-        let end = self.text[at..].char_indices().find(|(_, c)| c.is_whitespace()).map_or(self.text.len(), |(p, _)| at + p);
+        let start = self.text[..at]
+            .char_indices()
+            .rev()
+            .take_while(|(_, c)| !c.is_whitespace())
+            .last()
+            .map_or(at, |(p, _)| p);
+        let end = self.text[at..]
+            .char_indices()
+            .find(|(_, c)| c.is_whitespace())
+            .map_or(self.text.len(), |(p, _)| at + p);
         self.anchor = Some(start);
         self.caret = end;
         self.clamp();
@@ -393,10 +470,22 @@ impl Edit {
         self.anchor = None;
     }
 
+    fn insert_limited(&mut self, text: &str, limit: Option<usize>) {
+        let selected = self.selection().map_or(0, |range| range.len());
+        let room = limit.map_or(text.len(), |limit| {
+            limit.saturating_sub(self.text.len() - selected)
+        });
+        self.insert(&text[..floor_boundary(text, room)]);
+    }
+
     /// Backspace: the selection, else the char (or word) before the caret.
     pub fn backspace(&mut self, word: bool) {
         if self.selection().is_none() {
-            let from = if word { self.word_left(self.caret) } else { self.prev(self.caret) };
+            let from = if word {
+                self.word_left(self.caret)
+            } else {
+                self.prev(self.caret)
+            };
             self.anchor = Some(from);
         }
         self.insert("");
@@ -405,7 +494,11 @@ impl Edit {
     /// Delete: the selection, else the char (or word) after the caret.
     pub fn delete(&mut self, word: bool) {
         if self.selection().is_none() {
-            let to = if word { self.word_right(self.caret) } else { self.next(self.caret) };
+            let to = if word {
+                self.word_right(self.caret)
+            } else {
+                self.next(self.caret)
+            };
             self.anchor = Some(to);
         }
         self.insert("");
@@ -433,7 +526,10 @@ impl Edit {
         let out = f(&mut head);
         let delta = head.len() as isize - before as isize;
         self.text = head + &tail;
-        self.caret = floor_boundary(&self.text, (self.caret as isize + delta).max(start as isize) as usize);
+        self.caret = floor_boundary(
+            &self.text,
+            (self.caret as isize + delta).max(start as isize) as usize,
+        );
         self.anchor = None;
         out
     }
@@ -444,7 +540,8 @@ impl Edit {
         match self.selection() {
             Some(r) => {
                 let inner = self.text[r.clone()].to_string();
-                self.text.replace_range(r.clone(), &format!("{mark}{inner}{mark}"));
+                self.text
+                    .replace_range(r.clone(), &format!("{mark}{inner}{mark}"));
                 self.anchor = Some(r.start + mark.len());
                 self.caret = r.start + mark.len() + inner.len();
             }
@@ -565,13 +662,17 @@ impl TextField {
             }
             "v" if ctrl => {
                 if let Some(text) = cx.read_from_clipboard().and_then(|c| c.text()) {
-                    let text = if self.multiline { text } else { text.replace('\n', " ") };
-                    ed.insert(&text);
+                    let text = if self.multiline {
+                        text
+                    } else {
+                        text.replace('\n', " ")
+                    };
+                    ed.insert_limited(&text, self.max_bytes);
                     edited = true;
                 }
             }
             "enter" if self.multiline && !ctrl => {
-                ed.insert("\n");
+                ed.insert_limited("\n", self.max_bytes);
                 edited = true;
             }
             "enter" => {
@@ -602,8 +703,12 @@ impl TextField {
             }
             _ => {
                 moved = false;
-                if let Some(ch) = k.key_char.as_ref().filter(|_| !ctrl && !m.alt && !m.platform) {
-                    ed.insert(ch);
+                if let Some(ch) = k
+                    .key_char
+                    .as_ref()
+                    .filter(|_| !ctrl && !m.alt && !m.platform)
+                {
+                    ed.insert_limited(ch, self.max_bytes);
                     edited = true;
                 }
             }
@@ -621,7 +726,11 @@ impl TextField {
         self.focus.focus(window, cx);
         let mut ed = self.edit();
         if let Some(ix) = self.layout.caret_index_at(e.position) {
-            let ix = if self.masked { unmasked_index(&ed.text, ix) } else { ix };
+            let ix = if self.masked {
+                unmasked_index(&ed.text, ix)
+            } else {
+                ix
+            };
             ed.move_to(ix, e.modifiers.shift);
             if e.click_count == 2 {
                 ed.select_word();
@@ -639,9 +748,15 @@ impl TextField {
             self.dragging = false;
             return;
         }
-        let Some(ix) = self.layout.caret_index_at(e.position) else { return };
+        let Some(ix) = self.layout.caret_index_at(e.position) else {
+            return;
+        };
         let mut ed = self.edit();
-        let ix = if self.masked { unmasked_index(&ed.text, ix) } else { ix };
+        let ix = if self.masked {
+            unmasked_index(&ed.text, ix)
+        } else {
+            ix
+        };
         if ix != ed.caret {
             ed.move_to(ix, true);
             self.store(ed);
@@ -668,15 +783,30 @@ impl Render for TextField {
         let ed = self.edit();
         let (caret, selection) = (ed.caret, ed.selection());
         self.store(ed);
-        let shown = if self.masked { BULLET.to_string().repeat(self.value.chars().count()) } else { self.value.clone() };
-        let display = |i: usize| if self.masked { masked_index(&self.value, i) } else { i };
+        let shown = if self.masked {
+            BULLET.to_string().repeat(self.value.chars().count())
+        } else {
+            self.value.clone()
+        };
+        let display = |i: usize| {
+            if self.masked {
+                masked_index(&self.value, i)
+            } else {
+                i
+            }
+        };
         let text_el = if empty && !focused {
             crate::bidi::paragraph(mandara_i18n::tr(&self.placeholder))
         } else {
             let layout = self.layout.clone();
             let caret_d = display(caret);
-            let sel_d = selection.filter(|_| focused).map(|r| display(r.start)..display(r.end));
-            let (caret_color, sel_color) = (palette.primary.hsla(), palette.primary.with_alpha(SELECTION_ALPHA).hsla());
+            let sel_d = selection
+                .filter(|_| focused)
+                .map(|r| display(r.start)..display(r.end));
+            let (caret_color, sel_color) = (
+                palette.primary.hsla(),
+                palette.primary.with_alpha(SELECTION_ALPHA).hsla(),
+            );
             div()
                 .relative()
                 .child(crate::bidi::editable_paragraph(shown, &self.layout))
@@ -689,7 +819,8 @@ impl Render for TextField {
                                     window.paint_quad(fill(b, sel_color));
                                 }
                             }
-                            if focused && let Some(b) = layout.caret_bounds(caret_d, px(CARET_W_PX)) {
+                            if focused && let Some(b) = layout.caret_bounds(caret_d, px(CARET_W_PX))
+                            {
                                 window.paint_quad(fill(b, caret_color));
                             }
                         },
@@ -700,7 +831,11 @@ impl Render for TextField {
                 .into_any_element()
         };
         // Arabic hugs the right edge, Latin (paths, commands) the left.
-        let rtl = crate::bidi::text_is_rtl(if empty && !focused { &self.placeholder } else { &self.value });
+        let rtl = crate::bidi::text_is_rtl(if empty && !focused {
+            &self.placeholder
+        } else {
+            &self.value
+        });
         // Themes → Components → Text fields: the classic box is this one;
         // the other designs draw theirs, or none inside a search box.
         let design = self.design.unwrap_or_else(crate::style::input_design);
@@ -708,35 +843,74 @@ impl Render for TextField {
         let bare = !classic && self.embedded;
         // The outlined design's hint floats into its edge once the field is
         // focused or holds text (single-line fields with a hint).
-        let label = (design == crate::components::InputDesign::Outlined && !bare && !multiline && !self.placeholder.is_empty() && (focused || !empty))
+        let label = (design == crate::components::InputDesign::Outlined
+            && !bare
+            && !multiline
+            && !self.placeholder.is_empty()
+            && (focused || !empty))
             .then(|| gpui::SharedString::from(mandara_i18n::tr(&self.placeholder)));
         let el = div()
             .id("text-field")
             .track_focus(&self.focus)
             .min_w(px(160.0))
             .when(!multiline, |el| el.h(px(32.0)).flex().items_center())
-            .when(multiline, |el| el.min_h(px(96.0)).py(px(8.0)).line_height(px(19.0)));
+            .when(multiline, |el| {
+                el.min_h(px(96.0)).py(px(8.0)).line_height(px(19.0))
+            });
         let el = if classic {
             el.px(px(12.0))
                 .rounded(px(crate::style::radius(10.0)))
                 .bg(palette.surface_container_high.hsla())
                 .border_1()
-                .border_color(if focused { palette.primary.hsla() } else { palette.surface_container_high.hsla() })
+                .border_color(if focused {
+                    palette.primary.hsla()
+                } else {
+                    palette.surface_container_high.hsla()
+                })
         } else if bare {
             el
         } else {
-            crate::components::inputs::dress_labelled(el.relative().px(px(DESIGNED_PAD_X_PX)), design, focused, multiline, label.clone(), &palette)
+            crate::components::inputs::dress_labelled(
+                el.relative().px(px(DESIGNED_PAD_X_PX)),
+                design,
+                focused,
+                multiline,
+                label.clone(),
+                &palette,
+            )
         };
         el.cursor_text()
             .when_some(self.font.clone(), |el, f| el.font_family(f))
             .when_some(self.font_px, |el, s| el.text_size(px(s)))
-            .text_color(if empty { palette.on_surface_variant.with_alpha(0.6).hsla() } else { palette.on_surface.hsla() })
+            .text_color(if empty {
+                palette.on_surface_variant.with_alpha(0.6).hsla()
+            } else {
+                palette.on_surface.hsla()
+            })
             // The floating label stands out of the field: only the text is clipped then.
-            .when(!multiline && label.is_none(), |el| el.whitespace_nowrap().overflow_hidden())
-            .child(div().flex_1().min_w(px(0.0)).when(label.is_some(), |el| el.whitespace_nowrap().overflow_hidden()).when(rtl, |el| el.text_right()).when(!rtl, |el| el.text_left()).child(text_el))
-            .on_mouse_down(MouseButton::Left, cx.listener(|this, e: &MouseDownEvent, window, cx| this.press(e, window, cx)))
+            .when(!multiline && label.is_none(), |el| {
+                el.whitespace_nowrap().overflow_hidden()
+            })
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.0))
+                    .when(label.is_some(), |el| {
+                        el.whitespace_nowrap().overflow_hidden()
+                    })
+                    .when(rtl, |el| el.text_right())
+                    .when(!rtl, |el| el.text_left())
+                    .child(text_el),
+            )
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, e: &MouseDownEvent, window, cx| this.press(e, window, cx)),
+            )
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, cx| this.drag(e, cx)))
-            .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, _| this.dragging = false))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _, _, _| this.dragging = false),
+            )
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
                 if this.key(e, window, cx) {
                     cx.notify();
@@ -824,6 +998,22 @@ mod tests {
     }
 
     #[test]
+    fn bounded_pastes_keep_utf8_and_replace_only_the_selected_bytes() {
+        let mut edit = Edit::new("hello", 5);
+        edit.insert_limited(&"界".repeat(100_000), Some(10));
+        assert_eq!(edit.text, "hello界");
+        assert!(
+            edit.text.capacity() < 100,
+            "the paste must be bounded before allocation"
+        );
+        edit.select_all();
+        edit.insert_limited("مرحبا", Some(8));
+        assert_eq!(edit.text, "مرحب");
+        edit.insert_limited("!", Some(8));
+        assert_eq!(edit.text, "مرحب");
+    }
+
+    #[test]
     fn markdown_keys_act_at_the_caret() {
         // Ctrl+B wraps a selection mid-text.
         let mut e = Edit::new("make this bold now", 5);
@@ -858,7 +1048,10 @@ mod tests {
     #[test]
     fn masked_indices_map_to_bullets() {
         assert_eq!(masked_index("pässword", "pä".len()), 2 * BULLET.len_utf8());
-        assert_eq!(unmasked_index("pässword", 2 * BULLET.len_utf8()), "pä".len());
+        assert_eq!(
+            unmasked_index("pässword", 2 * BULLET.len_utf8()),
+            "pä".len()
+        );
         assert_eq!(unmasked_index("ab", 99), 2);
     }
 

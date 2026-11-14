@@ -760,5 +760,21 @@
     "motif": "shelf",
     "angle": -3,
     "panel": null
+  },
+  {
+    "id": "backups",
+    "name": "Backups",
+    "palette": "obsidian",
+    "motif": "shelf",
+    "angle": -6,
+    "panel": null
+  },
+  {
+    "id": "app-permissions",
+    "name": "App permissions",
+    "palette": "corniche",
+    "motif": "lattice",
+    "angle": 6,
+    "panel": null
   }
 ]

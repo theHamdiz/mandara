@@ -475,9 +475,15 @@ mod tests {
     /// forever; one that read codecs narrows the table.
     #[test]
     fn probe_failure_is_told_apart_from_pending() {
+        crate::test_process::isolated("recording::backend::tests::probe_fixture");
+    }
+
+    #[test]
+    #[ignore = "run by the parent probe test in a private single-threaded process"]
+    fn probe_fixture() {
         use std::os::unix::fs::PermissionsExt as _;
-        let dir = std::env::temp_dir().join(format!("mandara-gsr-probe-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let dir = directory.path();
         let fake = |name: &str, body: &str| {
             let p = dir.join(name);
             std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
@@ -497,7 +503,6 @@ mod tests {
         let s = &statuses(&installed)[0];
         assert!(s.probed && !s.probe_failed);
         assert_eq!(s.caps.codecs, [RecordCodec::H264, RecordCodec::Hevc]);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

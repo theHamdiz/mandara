@@ -8,7 +8,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use gpui::{
-    AnyElement, App, Entity, FontWeight, SharedString, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled, Window, div,
+    AnyElement, App, Entity, FontWeight, SharedString, InteractiveElement, IntoElement, ParentElement, Styled, Window, div,
     prelude::FluentBuilder as _, px,
 };
 use mandara_core::ToGpui;
@@ -18,6 +18,7 @@ use super::panel_fx::{ANGLE_DIAGONAL_DEG, EXPIRY_MARGIN, SMALL_ICON_PX, WASH_SOF
 use crate::icons::icon;
 use crate::kit::{icon_button, text};
 use crate::text_field::TextField;
+use crate::bidi::Bidi as _;
 
 /// Height of [`segmented`] and [`search_box`].
 pub const CONTROL_H: f32 = 34.0;
@@ -92,6 +93,7 @@ pub fn segmented(id: &'static str, segments: Vec<Segment>, palette: &MandaraPale
 /// [`segmented`] in `design`.
 pub fn segmented_as(design: crate::components::ChipDesign, id: &'static str, segments: Vec<Segment>, palette: &MandaraPalette) -> AnyElement {
     use crate::components::{ChipDesign, chips, surfaces::Surface as _};
+    let rtl = crate::bidi::rtl();
     if design != ChipDesign::Classic {
         let accent = readable(palette.primary, palette);
         let hover = wash(WASH_SOFT, palette);
@@ -102,14 +104,14 @@ pub fn segmented_as(design: crate::components::ChipDesign, id: &'static str, seg
         return div()
             .h(px(CONTROL_H))
             .flex_none()
-            .flex()
+            .row()
             .items_center()
             // Material: one outlined group; Connected: buttons a hair apart.
             .when(material, |el| crate::style::ClipRounded::clip_rounded(el.rounded(px(group_r)).border_1().border_color(edge.hsla())))
             .when(!material, |el| el.gap(px(SEG_GAP_PX)))
             .children(segments.into_iter().enumerate().map(move |(i, s)| {
                 let on_click = s.on_click.clone();
-                let place = chips::Place::visual(i, n);
+                let place = chips::Place::in_reading_order(i, n, rtl);
                 let corners = if material { chips::group_corners(place, group_r, CONTROL_H) } else { chips::connected_corners(place, s.active, CONTROL_H) };
                 let (fg, bg) = match (material, s.active) {
                     (true, true) => (accent, Some(chips::chosen(palette))),
@@ -119,13 +121,13 @@ pub fn segmented_as(design: crate::components::ChipDesign, id: &'static str, seg
                 };
                 // Material marks the chosen option with a check when it has no icon.
                 let glyph = s.icon.or((material && s.active).then_some("check"));
-                div()
+                let element = div()
                     .id((id, i))
                     .flex_1()
                     .h_full()
                     .px(px(SEG_PAD_X_PX))
                     .with_corners(corners)
-                    .flex()
+                    .row()
                     .items_center()
                     .justify_center()
                     .gap(px(SEG_ICON_GAP_PX))
@@ -134,11 +136,11 @@ pub fn segmented_as(design: crate::components::ChipDesign, id: &'static str, seg
                     .font_weight(if s.active { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
                     .text_color(fg.hsla())
                     .when_some(bg, |el, bg| el.bg(bg.hsla()))
-                    .when(material && i + 1 < n, |el| el.border_r_1().border_color(edge.hsla()))
+                    .when(material && i + 1 < n, |el| if rtl { el.border_l_1().border_color(edge.hsla()) } else { el.border_r_1().border_color(edge.hsla()) })
                     .when(!s.active, |el| el.hover(move |st| st.bg(hover.hsla())))
                     .when_some(glyph, |el, name| el.child(icon(name, SMALL_ICON_PX, fg)))
-                    .child(s.label)
-                    .on_click(move |_, window, cx| on_click(window, cx))
+                    .child(s.label);
+                super::panel_fx::controls::action(element, palette, on_click)
             }))
             .into_any_element();
     }
@@ -150,18 +152,18 @@ pub fn segmented_as(design: crate::components::ChipDesign, id: &'static str, seg
         .p(px(SEG_PAD_PX))
         .rounded(px(crate::style::radius(CONTROL_RADIUS_PX)))
         .bg(wash(SEG_TRACK, palette).hsla())
-        .flex()
+        .row()
         .items_center()
         .gap(px(SEG_GAP_PX))
         .children(segments.into_iter().enumerate().map(move |(i, s)| {
             let on_click = s.on_click.clone();
-            div()
+            let element = div()
                 .id((id, i))
                 .flex_1()
                 .h_full()
                 .px(px(SEG_PAD_X_PX))
                 .rounded(px(crate::style::radius(SEG_RADIUS_PX)))
-                .flex()
+                .row()
                 .items_center()
                 .justify_center()
                 .gap(px(SEG_ICON_GAP_PX))
@@ -171,8 +173,8 @@ pub fn segmented_as(design: crate::components::ChipDesign, id: &'static str, seg
                 .when(s.active, |el| el.bg(accent.with_alpha(super::panel_fx::alpha(SEG_ACTIVE, palette)).hsla()).text_color(accent.hsla()))
                 .when(!s.active, |el| el.text_color(palette.on_surface_variant.hsla()).hover(move |st| st.bg(hover.hsla())))
                 .when_some(s.icon, |el, name| el.child(icon(name, SMALL_ICON_PX, if s.active { accent } else { palette.on_surface_variant })))
-                .child(s.label)
-                .on_click(move |_, window, cx| on_click(window, cx))
+                .child(s.label);
+            super::panel_fx::controls::action(element, palette, on_click)
         }))
         .into_any_element()
 }

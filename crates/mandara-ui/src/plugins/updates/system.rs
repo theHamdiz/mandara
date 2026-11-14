@@ -12,15 +12,23 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use gpui::{AnyElement, App, FontWeight, InteractiveElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _, px};
+use gpui::{
+    AnyElement, App, FontWeight, InteractiveElement, IntoElement, ParentElement, SharedString,
+    StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _, px,
+};
 use mandara_core::{ToGpui, oklab_gradient};
 use mandara_i18n::{t, tf};
 use mandara_services::sysupdate::job::{self, Finished, Job, JobOutcome, JobState, Request};
-use mandara_services::sysupdate::nixos::{self, Cleanup, Diff, Generation, HomeGeneration, NixAction, RebuildMode, Setup};
+use mandara_services::sysupdate::nixos::{
+    self, Cleanup, Diff, Generation, HomeGeneration, NixAction, RebuildMode, Setup,
+};
 use mandara_services::sysupdate::{self, FailureKind, Phase, System};
 use mandara_theme::{Color, MandaraPalette};
 
-use super::super::panel_fx::{ANGLE_RIGHT_DEG, PILL_H_PX, SECTION_H_PX, SMALL_ICON_PX, TINT_FILL, TINT_HOVER, alpha, glass_card, meter, partner, pill_button, readable, section, wash, WASH_SOFT};
+use super::super::panel_fx::{
+    ANGLE_RIGHT_DEG, PILL_H_PX, SECTION_H_PX, SMALL_ICON_PX, TINT_FILL, TINT_HOVER, WASH_SOFT,
+    alpha, glass_card, meter, partner, pill_button, readable, section, wash,
+};
 use super::{Shared, alive, notify};
 use crate::fonts::tabular_nums;
 use crate::icons::icon;
@@ -142,13 +150,15 @@ pub(super) fn start(request: Request, cx: &mut App) -> Result<(), String> {
 /// After a job: refresh the package lists (or generations), and tell the
 /// user if no panel shows the summary.
 fn finished(job: &Job, cx: &mut App) {
-    let Some(f) = job.with(|s| s.finished.clone()) else { return };
+    let Some(f) = job.with(|s| s.finished.clone()) else {
+        return;
+    };
     let nix = job.with(|s| matches!(s.request, Request::Nix { .. }));
     if let Some(m) = alive() {
         {
             let mut mb = m.borrow_mut();
             if nix {
-                mb.nix.loaded = false;
+                mb.nix.free();
             }
         }
         if matches!(f.outcome, JobOutcome::Done { .. }) && !nix {
@@ -162,7 +172,15 @@ fn finished(job: &Job, cx: &mut App) {
     }
     let request = job.with(|s| s.request.clone());
     let (summary, body) = summary_text(&request, &f);
-    crate::plugins::notifications::send(cx, mandara_services::NotificationCommand::Post { app: t("Updates").into(), icon: "package".into(), summary, body });
+    crate::plugins::notifications::send(
+        cx,
+        mandara_services::NotificationCommand::Post {
+            app: t("Updates").into(),
+            icon: "package".into(),
+            summary,
+            body,
+        },
+    );
 }
 
 /// Dismisses a finished job's summary (frees its log).
@@ -177,7 +195,12 @@ pub(super) fn dismiss() {
 
 /// A finished job's headline and detail.
 fn summary_text(request: &Request, f: &Finished) -> (String, String) {
-    let freed = || f.freed.as_ref().map(|s| tf("Freed {size}", &[("size", s)])).unwrap_or_default();
+    let freed = || {
+        f.freed
+            .as_ref()
+            .map(|s| tf("Freed {size}", &[("size", s)]))
+            .unwrap_or_default()
+    };
     if let (Request::Nix { action }, JobOutcome::Done { .. }) = (request, &f.outcome) {
         let headline = match *action {
             NixAction::Update(mode) | NixAction::Rebuild(mode) => match mode {
@@ -192,15 +215,38 @@ fn summary_text(request: &Request, f: &Finished) -> (String, String) {
         };
         return (headline, freed());
     }
-    let updated = || if f.changed == 1 { t("Updated 1 package").to_string() } else { tf("Updated {count} packages", &[("count", &f.changed)]) };
+    let updated = || {
+        if f.changed == 1 {
+            t("Updated 1 package").to_string()
+        } else {
+            tf("Updated {count} packages", &[("count", &f.changed)])
+        }
+    };
     match &f.outcome {
-        JobOutcome::Done { nothing_to_do: true } => (t("Everything was already up to date").to_string(), String::new()),
-        JobOutcome::Done { .. } if f.changed > 0 => (updated(), f.restart.as_ref().map(|r| tf("Restart to finish: {reason}", &[("reason", r)])).unwrap_or_default()),
+        JobOutcome::Done {
+            nothing_to_do: true,
+        } => (
+            t("Everything was already up to date").to_string(),
+            String::new(),
+        ),
+        JobOutcome::Done { .. } if f.changed > 0 => (
+            updated(),
+            f.restart
+                .as_ref()
+                .map(|r| tf("Restart to finish: {reason}", &[("reason", r)]))
+                .unwrap_or_default(),
+        ),
         JobOutcome::Done { .. } => (t("Done").to_string(), freed()),
         // Stopped later (during Flatpak, after the system's packages).
         JobOutcome::Cancelled if f.changed > 0 => (t("Update cancelled").to_string(), updated()),
-        JobOutcome::Cancelled => (t("Update cancelled").to_string(), t("Nothing was installed").to_string()),
-        JobOutcome::Failed(failure) => (failure_title(failure.kind).to_string(), failure.kind.advice().to_string()),
+        JobOutcome::Cancelled => (
+            t("Update cancelled").to_string(),
+            t("Nothing was installed").to_string(),
+        ),
+        JobOutcome::Failed(failure) => (
+            failure_title(failure.kind).to_string(),
+            failure.kind.advice().to_string(),
+        ),
     }
 }
 
@@ -269,7 +315,14 @@ fn badge(label: impl Into<SharedString>, tint: Color, palette: &MandaraPalette) 
 }
 
 /// The accent gradient button (the main action of a row).
-fn primary_button(id: &'static str, icon_name: &'static str, label: impl Into<SharedString>, enabled: bool, palette: &MandaraPalette, on_click: impl Fn(&mut gpui::Window, &mut App) + 'static) -> AnyElement {
+fn primary_button(
+    id: &'static str,
+    icon_name: &'static str,
+    label: impl Into<SharedString>,
+    enabled: bool,
+    palette: &MandaraPalette,
+    on_click: impl Fn(&mut gpui::Window, &mut App) + 'static,
+) -> AnyElement {
     let from = palette.primary;
     let to = partner(palette.primary).with_lightness(palette.primary.lightness());
     let ink = palette.on_primary;
@@ -283,7 +336,12 @@ fn primary_button(id: &'static str, icon_name: &'static str, label: impl Into<Sh
         .items_center()
         .gap(px(INLINE_GAP_PX))
         .bg(oklab_gradient(ANGLE_RIGHT_DEG, from, to))
-        .shadow(vec![super::super::panel_fx::glow(readable(from, palette).with_alpha(BUTTON_GLOW_ALPHA), BUTTON_GLOW_BLUR_PX, 0.0, 1.0)])
+        .shadow(vec![super::super::panel_fx::glow(
+            readable(from, palette).with_alpha(BUTTON_GLOW_ALPHA),
+            BUTTON_GLOW_BLUR_PX,
+            0.0,
+            1.0,
+        )])
         .text_size(px(text::LABEL + 0.5))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(ink.hsla())
@@ -301,7 +359,11 @@ fn primary_button(id: &'static str, icon_name: &'static str, label: impl Into<Sh
 
 fn ago(ts: i64) -> String {
     use chrono::TimeZone as _;
-    chrono::Local.timestamp_opt(ts, 0).single().map(|d| d.format("%d %b %Y").to_string()).unwrap_or_default()
+    chrono::Local
+        .timestamp_opt(ts, 0)
+        .single()
+        .map(|d| d.format("%d %b %Y").to_string())
+        .unwrap_or_default()
 }
 
 fn short(rev: &str) -> &str {
@@ -311,19 +373,33 @@ fn short(rev: &str) -> &str {
 /// `+12.3 MiB` / `-300 KiB`.
 fn signed_size(bytes: i64) -> String {
     let sign = if bytes < 0 { "-" } else { "+" };
-    format!("{sign}{}", mandara_services::app_install::human_bytes(bytes.unsigned_abs()))
+    format!(
+        "{sign}{}",
+        mandara_services::app_install::human_bytes(bytes.unsigned_abs())
+    )
 }
 
 // ── The job card ─────────────────────────────────────────────────────────
 
 /// The card of the current job and its height; `None` without a job.
-pub(super) fn job_card(m: &Shared, card_r: f32, palette: &MandaraPalette, cx: &App) -> Option<(AnyElement, f32)> {
+pub(super) fn job_card(
+    m: &Shared,
+    card_r: f32,
+    palette: &MandaraPalette,
+    cx: &App,
+) -> Option<(AnyElement, f32)> {
     let job = active()?;
     let log_open = m.borrow().log_open;
     // The visible log lines, re-copied only when the job changed.
     let revision = job.with(|s| s.revision);
     if log_open && m.borrow().log_cache.0 != revision {
-        let lines = job.with(|s| s.log.iter().skip(s.log.len().saturating_sub(LOG_VISIBLE)).map(|l| SharedString::from(l.clone())).collect());
+        let lines = job.with(|s| {
+            s.log
+                .iter()
+                .skip(s.log.len().saturating_sub(LOG_VISIBLE))
+                .map(|l| SharedString::from(l.clone()))
+                .collect()
+        });
         m.borrow_mut().log_cache = (revision, lines);
     }
     let el = job.with(|s| match &s.finished {
@@ -349,65 +425,139 @@ fn log_box(m: &Shared, palette: &MandaraPalette, cx: &App) -> AnyElement {
         .font_family(mono)
         .text_size(px(LOG_TEXT_PX))
         .text_color(palette.on_surface_variant.hsla())
-        .children(lines.into_iter().map(|l| div().h(px(LOG_LINE_H)).flex_none().whitespace_nowrap().truncate().child(l)))
+        .children(lines.into_iter().map(|l| {
+            div()
+                .h(px(LOG_LINE_H))
+                .flex_none()
+                .whitespace_nowrap()
+                .truncate()
+                .child(l)
+        }))
         .into_any_element()
 }
 
 fn log_toggle(m: &Shared, open: bool, palette: &MandaraPalette) -> AnyElement {
     let m = m.clone();
-    pill_button("upd-log", Some(if open { "chevron-up" } else { "chevron-down" }), if open { t("Hide log") } else { t("Show log") }, palette.on_surface_variant, palette, move |_, cx| {
-        let open = {
-            let mut mb = m.borrow_mut();
-            mb.log_open = !mb.log_open;
-            mb.log_cache.0 = u64::MAX;
-            mb.log_open
-        };
-        let _ = open;
-        notify(&m, cx);
-    })
+    pill_button(
+        "upd-log",
+        Some(if open { "chevron-up" } else { "chevron-down" }),
+        if open { t("Hide log") } else { t("Show log") },
+        palette.on_surface_variant,
+        palette,
+        move |_, cx| {
+            let open = {
+                let mut mb = m.borrow_mut();
+                mb.log_open = !mb.log_open;
+                mb.log_cache.0 = u64::MAX;
+                mb.log_open
+            };
+            let _ = open;
+            notify(&m, cx);
+        },
+    )
     .into_any_element()
 }
 
 fn full_log_button(palette: &MandaraPalette) -> AnyElement {
-    pill_button("upd-full-log", Some("external"), t("Full log"), palette.on_surface_variant, palette, |_, _| {
-        let uri = format!("file://{}", job::log_path().display());
-        std::thread::spawn(move || {
-            if let Err(e) = mandara_services::session::open_uri(&uri) {
-                tracing::warn!("updates: {e}");
-            }
-        });
-    })
+    pill_button(
+        "upd-full-log",
+        Some("external"),
+        t("Full log"),
+        palette.on_surface_variant,
+        palette,
+        |_, _| {
+            let uri = format!("file://{}", job::log_path().display());
+            std::thread::spawn(move || {
+                if let Err(e) = mandara_services::session::open_uri(&uri) {
+                    tracing::warn!("updates: {e}");
+                }
+            });
+        },
+    )
     .into_any_element()
 }
 
-fn running_card(job: &Job, s: &JobState, m: &Shared, log_open: bool, card_r: f32, palette: &MandaraPalette, cx: &App) -> (AnyElement, f32) {
+fn running_card(
+    job: &Job,
+    s: &JobState,
+    m: &Shared,
+    log_open: bool,
+    card_r: f32,
+    palette: &MandaraPalette,
+    cx: &App,
+) -> (AnyElement, f32) {
     let accent = readable(palette.primary, palette);
     let phase = s.phase();
     // The program at work: the package manager, or the AUR helper.
     let what = match s.manager() {
-        Some(manager) if phase != Phase::Flatpak => tf("{phase} · {manager}", &[("phase", &phase.label()), ("manager", &manager)]),
+        Some(manager) if phase != Phase::Flatpak => tf(
+            "{phase} · {manager}",
+            &[("phase", &phase.label()), ("manager", &manager)],
+        ),
         _ => phase.label().to_string(),
     };
     // The item being worked on; the title already names the phase.
     let current = s.tracker.current.clone();
-    let step = if s.steps > 1 { tf("Step {n} of {total}", &[("n", &s.step.max(1)), ("total", &s.steps)]) } else { String::new() };
+    let step = if s.steps > 1 {
+        tf(
+            "Step {n} of {total}",
+            &[("n", &s.step.max(1)), ("total", &s.steps)],
+        )
+    } else {
+        String::new()
+    };
     let counts = s.tracker.counts().map(|(d, n)| format!("{d}/{n}"));
-    let meta = [Some(step).filter(|x| !x.is_empty()), counts].into_iter().flatten().collect::<Vec<_>>().join(" · ");
+    let meta = [Some(step).filter(|x| !x.is_empty()), counts]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" · ");
     let elapsed = crate::kit::format_duration(s.started.elapsed().as_secs());
     let cancel: AnyElement = if s.cancellable() {
         let job = job.clone();
-        pill_button("upd-cancel", Some("close"), t("Cancel"), readable(palette.urgent_coral, palette), palette, move |_, _| {
-            job.cancel();
-        })
+        pill_button(
+            "upd-cancel",
+            Some("close"),
+            t("Cancel"),
+            readable(palette.urgent_coral, palette),
+            palette,
+            move |_, _| {
+                job.cancel();
+            },
+        )
         .into_any_element()
     } else if s.cancel_requested {
-        div().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(t("Stopping…")).into_any_element()
-    } else if s.cancel_refused || matches!(phase, Phase::Installing | Phase::Hooks | Phase::Activating | Phase::Verifying | Phase::Cleaning) {
-        div().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(t("Can't stop now")).into_any_element()
+        div()
+            .text_size(px(text::LABEL))
+            .text_color(palette.on_surface_variant.hsla())
+            .child(t("Stopping…"))
+            .into_any_element()
+    } else if s.cancel_refused
+        || matches!(
+            phase,
+            Phase::Installing
+                | Phase::Hooks
+                | Phase::Activating
+                | Phase::Verifying
+                | Phase::Cleaning
+        )
+    {
+        div()
+            .text_size(px(text::LABEL))
+            .text_color(palette.on_surface_variant.hsla())
+            .child(t("Can't stop now"))
+            .into_any_element()
     } else {
         div().into_any_element()
     };
-    let mut h = CARD_PAD_PX * 2.0 + TITLE_ROW_H + CARD_GAP_PX + BAR_H + CARD_GAP_PX + META_ROW_H + CARD_GAP_PX + BUTTON_ROW_H;
+    let mut h = CARD_PAD_PX * 2.0
+        + TITLE_ROW_H
+        + CARD_GAP_PX
+        + BAR_H
+        + CARD_GAP_PX
+        + META_ROW_H
+        + CARD_GAP_PX
+        + BUTTON_ROW_H;
     if log_open {
         h += CARD_GAP_PX + LOG_H;
     }
@@ -430,12 +580,30 @@ fn running_card(job: &Job, s: &JobState, m: &Shared, log_open: bool, card_r: f32
                         .min_w(px(0.0))
                         .flex()
                         .flex_col()
-                        .child(div().text_size(px(text::BODY)).font_weight(FontWeight::SEMIBOLD).truncate().child(what))
-                        .child(div().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).truncate().child(current)),
+                        .child(
+                            div()
+                                .text_size(px(text::BODY))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .truncate()
+                                .child(what),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(text::LABEL))
+                                .text_color(palette.on_surface_variant.hsla())
+                                .truncate()
+                                .child(current),
+                        ),
                 )
                 .child(cancel),
         )
-        .child(meter(s.overall(), BAR_H, palette.primary, partner(palette.primary), palette))
+        .child(meter(
+            s.overall(),
+            BAR_H,
+            palette.primary,
+            partner(palette.primary),
+            palette,
+        ))
         .child(
             div()
                 .h(px(META_ROW_H))
@@ -447,13 +615,29 @@ fn running_card(job: &Job, s: &JobState, m: &Shared, log_open: bool, card_r: f32
                 .child(meta)
                 .child(elapsed),
         )
-        .child(div().h(px(BUTTON_ROW_H)).flex().items_center().gap(px(PILL_GAP_PX)).child(log_toggle(m, log_open, palette)).when(log_open, |el| el.child(full_log_button(palette))))
+        .child(
+            div()
+                .h(px(BUTTON_ROW_H))
+                .flex()
+                .items_center()
+                .gap(px(PILL_GAP_PX))
+                .child(log_toggle(m, log_open, palette))
+                .when(log_open, |el| el.child(full_log_button(palette))),
+        )
         .when(log_open, |el| el.child(log_box(m, palette, cx)))
         .into_any_element();
     (el, h)
 }
 
-fn finished_card(s: &JobState, f: &Finished, m: &Shared, log_open: bool, card_r: f32, palette: &MandaraPalette, cx: &App) -> (AnyElement, f32) {
+fn finished_card(
+    s: &JobState,
+    f: &Finished,
+    m: &Shared,
+    log_open: bool,
+    card_r: f32,
+    palette: &MandaraPalette,
+    cx: &App,
+) -> (AnyElement, f32) {
     let (headline, detail) = summary_text(&s.request, f);
     let (glyph, tint) = match &f.outcome {
         JobOutcome::Done { .. } => ("check", readable(palette.success_emerald, palette)),
@@ -468,10 +652,20 @@ fn finished_card(s: &JobState, f: &Finished, m: &Shared, log_open: bool, card_r:
     // A failure's advice gets two lines of its own; other details fit the
     // subtitle.
     let advice = failed.then(|| detail.clone());
-    let sub = [Some(crate::kit::format_duration(f.elapsed_secs)), Some(detail).filter(|d| !d.is_empty() && f.restart.is_none() && !failed)].into_iter().flatten().collect::<Vec<_>>().join(" · ");
+    let sub = [
+        Some(crate::kit::format_duration(f.elapsed_secs)),
+        Some(detail).filter(|d| !d.is_empty() && f.restart.is_none() && !failed),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" · ");
     let request = s.request.clone();
     let mut h = CARD_PAD_PX * 2.0 + TITLE_ROW_H + CARD_GAP_PX + BUTTON_ROW_H;
-    let restart = f.restart.clone().filter(|_| !matches!(f.outcome, JobOutcome::Failed(_)));
+    let restart = f
+        .restart
+        .clone()
+        .filter(|_| !matches!(f.outcome, JobOutcome::Failed(_)));
     if restart.is_some() {
         h += CARD_GAP_PX + BANNER_H;
     }
@@ -494,7 +688,11 @@ fn finished_card(s: &JobState, f: &Finished, m: &Shared, log_open: bool, card_r:
     // An AUR failure that needs a person: the helper's own command in your
     // terminal, where it can ask.
     let terminal = match (&f.outcome, s.failed_step, s.helper) {
-        (JobOutcome::Failed(failure), Some(mandara_services::sysupdate::plan::StepKind::Aur), Some(helper)) if sysupdate::aur::needs_terminal(failure.kind) => Some(helper.terminal_command()),
+        (
+            JobOutcome::Failed(failure),
+            Some(mandara_services::sysupdate::plan::StepKind::Aur),
+            Some(helper),
+        ) if sysupdate::aur::needs_terminal(failure.kind) => Some(helper.terminal_command()),
         _ => None,
     };
     let terminal_m = m.clone();
@@ -517,30 +715,86 @@ fn finished_card(s: &JobState, f: &Finished, m: &Shared, log_open: bool, card_r:
                         .min_w(px(0.0))
                         .flex()
                         .flex_col()
-                        .child(div().text_size(px(text::BODY)).font_weight(FontWeight::SEMIBOLD).truncate().child(headline))
-                        .child(div().font_features(tabular_nums()).text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).truncate().child(sub)),
+                        .child(
+                            div()
+                                .text_size(px(text::BODY))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .truncate()
+                                .child(headline),
+                        )
+                        .child(
+                            div()
+                                .font_features(tabular_nums())
+                                .text_size(px(text::LABEL))
+                                .text_color(palette.on_surface_variant.hsla())
+                                .truncate()
+                                .child(sub),
+                        ),
                 ),
         )
-        .when_some(advice, |el, a| el.child(div().h(px(ADVICE_H)).line_clamp(ADVICE_LINES).text_size(px(text::BODY_S)).child(a)))
+        .when_some(advice, |el, a| {
+            el.child(
+                div()
+                    .h(px(ADVICE_H))
+                    .line_clamp(ADVICE_LINES)
+                    .text_size(px(text::BODY_S))
+                    .child(a),
+            )
+        })
         .when_some(failure_detail, |el, d| {
-            el.child(div().h(px(META_ROW_H)).truncate().font_family(crate::fonts::fonts(cx).mono.clone()).text_size(px(LOG_TEXT_PX)).text_color(palette.on_surface_variant.hsla()).child(d))
+            el.child(
+                div()
+                    .h(px(META_ROW_H))
+                    .truncate()
+                    .font_family(crate::fonts::fonts(cx).mono.clone())
+                    .text_size(px(LOG_TEXT_PX))
+                    .text_color(palette.on_surface_variant.hsla())
+                    .child(d),
+            )
         })
         .when(!inputs.is_empty(), |el| {
-            el.child(div().flex().flex_col().children(inputs.into_iter().map(|i| {
-                let old = i.old.as_ref().map(|o| short(&o.rev).to_string()).unwrap_or_else(|| "∅".into());
-                let new = i.new.as_ref().map(|n| short(&n.rev).to_string()).unwrap_or_else(|| "∅".into());
-                let when = i.new.as_ref().map(|n| ago(n.last_modified)).unwrap_or_default();
+            el.child(
                 div()
-                    .h(px(INPUT_ROW_H))
                     .flex()
-                    .items_center()
-                    .gap(px(INLINE_GAP_PX))
-                    .text_size(px(text::BODY_S))
-                    .child(div().font_weight(FontWeight::MEDIUM).child(i.name))
-                    .child(div().flex_1())
-                    .child(div().font_features(tabular_nums()).text_color(palette.on_surface_variant.hsla()).child(format!("{old} → {new}")))
-                    .child(div().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(when))
-            })))
+                    .flex_col()
+                    .children(inputs.into_iter().map(|i| {
+                        let old = i
+                            .old
+                            .as_ref()
+                            .map(|o| short(&o.rev).to_string())
+                            .unwrap_or_else(|| "∅".into());
+                        let new = i
+                            .new
+                            .as_ref()
+                            .map(|n| short(&n.rev).to_string())
+                            .unwrap_or_else(|| "∅".into());
+                        let when = i
+                            .new
+                            .as_ref()
+                            .map(|n| ago(n.last_modified))
+                            .unwrap_or_default();
+                        div()
+                            .h(px(INPUT_ROW_H))
+                            .flex()
+                            .items_center()
+                            .gap(px(INLINE_GAP_PX))
+                            .text_size(px(text::BODY_S))
+                            .child(div().font_weight(FontWeight::MEDIUM).child(i.name))
+                            .child(div().flex_1())
+                            .child(
+                                div()
+                                    .font_features(tabular_nums())
+                                    .text_color(palette.on_surface_variant.hsla())
+                                    .child(format!("{old} → {new}")),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(text::LABEL))
+                                    .text_color(palette.on_surface_variant.hsla())
+                                    .child(when),
+                            )
+                    })),
+            )
         })
         .when_some(restart, |el, reason| {
             el.child(
@@ -553,14 +807,32 @@ fn finished_card(s: &JobState, f: &Finished, m: &Shared, log_open: bool, card_r:
                     .items_center()
                     .gap(px(CARD_GAP_PX))
                     .child(icon("refresh", SMALL_ICON_PX, warn))
-                    .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(text::BODY_S)).child(tf("Restart to finish: {reason}", &[("reason", &reason)])))
-                    .child(pill_button("upd-restart", Some("refresh"), t("Restart…"), warn, palette, |_, cx| {
-                        let registry = cx.global::<mandara_plugins::PluginRegistry>().commands.clone();
-                        let words: Vec<String> = ["session", "menu", "open"].map(String::from).to_vec();
-                        if let Err(e) = registry.execute(&words, cx) {
-                            tracing::warn!("updates: {e}");
-                        }
-                    })),
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.0))
+                            .truncate()
+                            .text_size(px(text::BODY_S))
+                            .child(tf("Restart to finish: {reason}", &[("reason", &reason)])),
+                    )
+                    .child(pill_button(
+                        "upd-restart",
+                        Some("refresh"),
+                        t("Restart…"),
+                        warn,
+                        palette,
+                        |_, cx| {
+                            let registry = cx
+                                .global::<mandara_plugins::PluginRegistry>()
+                                .commands
+                                .clone();
+                            let words: Vec<String> =
+                                ["session", "menu", "open"].map(String::from).to_vec();
+                            if let Err(e) = registry.execute(&words, cx) {
+                                tracing::warn!("updates: {e}");
+                            }
+                        },
+                    )),
             )
         })
         .child(
@@ -573,24 +845,45 @@ fn finished_card(s: &JobState, f: &Finished, m: &Shared, log_open: bool, card_r:
                 .when(log_open, |el| el.child(full_log_button(palette)))
                 .child(div().flex_1())
                 .when_some(terminal, |el, command| {
-                    el.child(pill_button("upd-aur-terminal", Some("terminal"), t("Open in terminal"), readable(palette.primary, palette), palette, move |_, cx| {
-                        let _ = super::run_in_terminal(Some(&terminal_m), command, cx);
-                        notify(&terminal_m, cx);
-                    }))
+                    el.child(pill_button(
+                        "upd-aur-terminal",
+                        Some("terminal"),
+                        t("Open in terminal"),
+                        readable(palette.primary, palette),
+                        palette,
+                        move |_, cx| {
+                            let _ = super::run_in_terminal(Some(&terminal_m), command, cx);
+                            notify(&terminal_m, cx);
+                        },
+                    ))
                 })
                 .when(failed, |el| {
-                    el.child(pill_button("upd-retry", Some("refresh"), t("Try again"), readable(palette.primary, palette), palette, move |_, cx| {
-                        dismiss();
-                        if let Err(e) = start(request.clone(), cx) {
-                            tracing::warn!("updates: {e}");
-                        }
-                        notify(&retry_m, cx);
-                    }))
+                    el.child(pill_button(
+                        "upd-retry",
+                        Some("refresh"),
+                        t("Try again"),
+                        readable(palette.primary, palette),
+                        palette,
+                        move |_, cx| {
+                            dismiss();
+                            if let Err(e) = start(request.clone(), cx) {
+                                tracing::warn!("updates: {e}");
+                            }
+                            notify(&retry_m, cx);
+                        },
+                    ))
                 })
-                .child(pill_button("upd-done", Some("check"), t("Done"), readable(palette.primary, palette), palette, move |_, cx| {
-                    dismiss();
-                    notify(&m2, cx);
-                })),
+                .child(pill_button(
+                    "upd-done",
+                    Some("check"),
+                    t("Done"),
+                    readable(palette.primary, palette),
+                    palette,
+                    move |_, cx| {
+                        dismiss();
+                        notify(&m2, cx);
+                    },
+                )),
         )
         .when(log_open, |el| el.child(log_box(m, palette, cx)))
         .into_any_element();
@@ -605,6 +898,9 @@ fn finished_card(s: &JobState, f: &Finished, m: &Shared, log_open: bool, card_r:
 pub(super) struct NixState {
     pub loaded: bool,
     loading: bool,
+    generation: u64,
+    cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    availability: Option<nixos::availability::Availability>,
     gens: Vec<Generation>,
     home: Vec<HomeGeneration>,
     setup: Option<Setup>,
@@ -619,8 +915,20 @@ pub(super) struct NixState {
 impl NixState {
     /// Frees the lists; keeps the chosen mode and count.
     pub fn free(&mut self) {
-        let (mode, keep) = (self.mode, self.keep);
-        *self = NixState { mode, keep, ..NixState::default() };
+        if let Some(cancel) = &self.cancel {
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        let (mode, keep, loading, diff_loading) =
+            (self.mode, self.keep, self.loading, self.diff_loading);
+        let generation = self.generation.wrapping_add(1);
+        *self = NixState {
+            mode,
+            keep,
+            loading,
+            diff_loading,
+            generation,
+            ..NixState::default()
+        };
     }
 }
 
@@ -629,51 +937,69 @@ pub(super) const DEFAULT_KEEP: u32 = 5;
 
 /// Loads the generations for an open panel.
 pub(super) fn load_nix(m: &Shared, cx: &mut App) {
-    {
+    let (generation, cancel) = {
         let mut mb = m.borrow_mut();
         if mb.nix.loaded || mb.nix.loading {
             return;
         }
         mb.nix.loading = true;
-    }
-    let task = cx.background_executor().spawn(async {
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        mb.nix.cancel = Some(cancel.clone());
+        (mb.nix.generation, cancel)
+    };
+    let task = cx.background_executor().spawn(async move {
         let paths = sysupdate::nix_paths();
         let mut gens = nixos::generations(&paths);
         for g in gens.iter_mut().take(REVISIONS_LOOKED_UP) {
             g.revision = nixos::revision(&g.store);
         }
-        (gens, nixos::home_generations(&sysupdate::home_profile_dirs()), nixos::setup(&paths))
+        (
+            gens,
+            nixos::home_generations(&sysupdate::home_profile_dirs()),
+            nixos::setup(&paths),
+            nixos::availability::inspect(&paths, &cancel),
+        )
     });
     let weak = std::rc::Rc::downgrade(m);
     cx.spawn(async move |cx| {
-        let (gens, home, setup) = task.await;
+        let (gens, home, setup, availability) = task.await;
         let Some(m) = weak.upgrade() else { return };
         {
             let mut mb = m.borrow_mut();
             mb.nix.loading = false;
-            if mb.open_panels > 0 {
+            mb.nix.cancel = None;
+            if mb.open_panels > 0 && mb.nix.generation == generation {
                 mb.nix.loaded = true;
                 mb.nix.gens = gens;
                 mb.nix.home = home;
                 mb.nix.setup = Some(setup);
+                mb.nix.availability = Some(availability);
             }
         }
-        cx.update(|cx| notify(&m, cx));
+        cx.update(|cx| {
+            if m.borrow().open_panels > 0 && !m.borrow().nix.loaded {
+                load_nix(&m, cx);
+            }
+            notify(&m, cx);
+        });
     })
     .detach();
 }
 
 fn compare(m: &Shared, a: u32, b: u32, cx: &mut App) {
     let paths = sysupdate::nix_paths();
-    {
+    let generation = {
         let mut mb = m.borrow_mut();
         if mb.nix.diff_loading {
             return;
         }
         mb.nix.diff_loading = true;
         mb.nix.diff = None;
-    }
-    let task = cx.background_executor().spawn(async move { nixos::closure_diff(&paths.generation_link(a), &paths.generation_link(b)) });
+        mb.nix.generation
+    };
+    let task = cx.background_executor().spawn(async move {
+        nixos::closure_diff(&paths.generation_link(a), &paths.generation_link(b))
+    });
     let weak = std::rc::Rc::downgrade(m);
     cx.spawn(async move |cx| {
         let diff = task.await;
@@ -681,7 +1007,7 @@ fn compare(m: &Shared, a: u32, b: u32, cx: &mut App) {
         {
             let mut mb = m.borrow_mut();
             mb.nix.diff_loading = false;
-            if mb.open_panels > 0 {
+            if mb.open_panels > 0 && mb.nix.generation == generation {
                 mb.nix.diff = Some((a, b, diff));
             }
         }
@@ -712,7 +1038,10 @@ fn confirm_text(action: NixAction, deletes: usize) -> String {
     match action {
         NixAction::Rollback => t("Roll back to the previous generation now?").to_string(),
         NixAction::SwitchTo(n) => tf("Switch to generation {n} now?", &[("n", &n)]),
-        NixAction::Clean(_) => tf("Delete {count} old generations and collect garbage?", &[("count", &deletes)]),
+        NixAction::Clean(_) => tf(
+            "Delete {count} old generations and collect garbage?",
+            &[("count", &deletes)],
+        ),
         NixAction::Update(_) | NixAction::Rebuild(_) => String::new(),
     }
 }
@@ -720,29 +1049,67 @@ fn confirm_text(action: NixAction, deletes: usize) -> String {
 /// How many generations the confirmed `action` deletes: what Delete will
 /// run, not what the stepper (still live under the bar) shows now.
 /// `deletes` is the stepper's count for `keep`, reused when they agree.
-fn confirm_deletes(action: NixAction, keep: u32, deletes: usize, gens: &[Generation], now: i64) -> usize {
+fn confirm_deletes(
+    action: NixAction,
+    keep: u32,
+    deletes: usize,
+    gens: &[Generation],
+    now: i64,
+) -> usize {
     match action {
-        NixAction::Clean(cleanup) if cleanup != Cleanup::KeepLatest(keep) => nixos::to_delete(gens, cleanup, now).len(),
+        NixAction::Clean(cleanup) if cleanup != Cleanup::KeepLatest(keep) => {
+            nixos::to_delete(gens, cleanup, now).len()
+        }
         _ => deletes,
     }
 }
 
 fn run_nix(m: &Shared, action: NixAction, cx: &mut App) {
     m.borrow_mut().nix.confirm = None;
+    if !nix_allowed(m, action) {
+        return;
+    }
     if let Err(e) = start(Request::Nix { action }, cx) {
         m.borrow_mut().status = Some((false, e, std::time::Instant::now()));
     }
     notify(m, cx);
 }
 
+fn nix_allowed(m: &Shared, action: NixAction) -> bool {
+    m.borrow()
+        .nix
+        .availability
+        .is_some_and(|availability| availability.reason(action).is_none())
+}
+
 /// The NixOS view and its height.
-pub(super) fn nix_view(m: &Shared, card_r: f32, row_r: f32, palette: &MandaraPalette) -> (Vec<AnyElement>, f32) {
+pub(super) fn nix_view(
+    m: &Shared,
+    card_r: f32,
+    row_r: f32,
+    palette: &MandaraPalette,
+) -> (Vec<AnyElement>, f32) {
     let accent = readable(palette.primary, palette);
     let busy = running();
+    let update_allowed = nix_allowed(m, NixAction::Update(RebuildMode::Switch));
+    let rebuild_allowed = nix_allowed(m, NixAction::Rebuild(RebuildMode::Switch));
+    let rollback_allowed = nix_allowed(m, NixAction::Rollback);
+    let cleanup_allowed = nix_allowed(m, NixAction::Clean(Cleanup::KeepLatest(DEFAULT_KEEP)));
     let (gens, home, setup, selected, confirm, mode, keep, diff, diff_loading, loaded) = {
         let mb = m.borrow();
         let n = &mb.nix;
-        (n.gens.clone(), n.home.clone(), n.setup.clone(), n.selected, n.confirm, n.mode.unwrap_or(RebuildMode::Switch), n.keep.unwrap_or(DEFAULT_KEEP), n.diff.clone(), n.diff_loading, n.loaded)
+        (
+            n.gens.clone(),
+            n.home.clone(),
+            n.setup.clone(),
+            n.selected,
+            n.confirm,
+            n.mode.unwrap_or(RebuildMode::Switch),
+            n.keep.unwrap_or(DEFAULT_KEEP),
+            n.diff.clone(),
+            n.diff_loading,
+            n.loaded,
+        )
     };
     let gap = super::GAP;
     let mut out: Vec<AnyElement> = Vec::new();
@@ -759,17 +1126,32 @@ pub(super) fn nix_view(m: &Shared, card_r: f32, row_r: f32, palette: &MandaraPal
     let current = gens.iter().find(|g| g.current);
     let booted = gens.iter().find(|g| g.booted);
     let (setup_title, setup_icon) = match &setup {
-        Some(Setup::Flake { dir, .. }) => (tf("Flake · {path}", &[("path", &dir.display())]), "git-branch"),
-        Some(Setup::Channels { channel: Some(c) }) => (tf("Channels · {channel}", &[("channel", c)]), "rss"),
+        Some(Setup::Flake { dir, .. }) => (
+            tf("Flake · {path}", &[("path", &dir.display())]),
+            "git-branch",
+        ),
+        Some(Setup::Channels { channel: Some(c) }) => {
+            (tf("Channels · {channel}", &[("channel", c)]), "rss")
+        }
         Some(Setup::Channels { channel: None }) => (t("Channels").to_string(), "rss"),
         None => (t("NixOS").to_string(), "box"),
     };
     let setup_sub = match current {
-        Some(g) => tf("Generation {n} · NixOS {version} · kernel {kernel}", &[("n", &g.number), ("version", &g.nixos_version), ("kernel", &g.kernel)]),
+        Some(g) => tf(
+            "Generation {n} · NixOS {version} · kernel {kernel}",
+            &[
+                ("n", &g.number),
+                ("version", &g.nixos_version),
+                ("kernel", &g.kernel),
+            ],
+        ),
         None if loaded => t("No system generations found").to_string(),
         None => t("Reading generations…").to_string(),
     };
-    let pending_boot = booted.zip(current).filter(|(b, c)| b.number != c.number).map(|(b, _)| b.number);
+    let pending_boot = booted
+        .zip(current)
+        .filter(|(b, c)| b.number != c.number)
+        .map(|(b, _)| b.number);
     let setup_card = glass_card(palette)
         .rounded(px(card_r))
         .h(px(SETUP_H))
@@ -784,38 +1166,65 @@ pub(super) fn nix_view(m: &Shared, card_r: f32, row_r: f32, palette: &MandaraPal
                 .min_w(px(0.0))
                 .flex()
                 .flex_col()
-                .child(div().text_size(px(text::BODY)).font_weight(FontWeight::SEMIBOLD).truncate().child(setup_title))
-                .child(div().font_features(tabular_nums()).text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).truncate().child(setup_sub)),
+                .child(
+                    div()
+                        .text_size(px(text::BODY))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .truncate()
+                        .child(setup_title),
+                )
+                .child(
+                    div()
+                        .font_features(tabular_nums())
+                        .text_size(px(text::LABEL))
+                        .text_color(palette.on_surface_variant.hsla())
+                        .truncate()
+                        .child(setup_sub),
+                ),
         )
-        .when_some(pending_boot, |el, b| el.child(badge(tf("Booted: {n}", &[("n", &b)]), readable(palette.tertiary, palette), palette)))
+        .when_some(pending_boot, |el, b| {
+            el.child(badge(
+                tf("Booted: {n}", &[("n", &b)]),
+                readable(palette.tertiary, palette),
+                palette,
+            ))
+        })
         .into_any_element();
     push(setup_card, SETUP_H, &mut out, &mut h);
 
     // ── Modes and update ─────────────────────────────────────────────────
-    let modes = div().flex().items_center().gap(px(PILL_GAP_PX)).children(RebuildMode::ALL.into_iter().map(|md| {
-        let on = md == mode;
-        let m = m.clone();
-        let tint = if on { accent } else { palette.on_surface_variant };
-        let hover = tint.with_alpha(alpha(TINT_HOVER, palette));
-        div()
-            .id(gpui::ElementId::Name(SharedString::new_static(md.id())))
-            .h(px(MODES_H - 4.0))
-            .px(px(MODE_CHIP_PAD_X_PX))
-            .rounded_full()
-            .flex()
-            .items_center()
-            .cursor_pointer()
-            .text_size(px(text::LABEL))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(tint.hsla())
-            .when(on, |el| el.bg(tint.with_alpha(alpha(TINT_FILL, palette)).hsla()))
-            .hover(move |s| s.bg(hover.hsla()))
-            .child(mode_label(md))
-            .on_click(move |_, _, cx| {
-                m.borrow_mut().nix.mode = Some(md);
-                notify(&m, cx);
-            })
-    }));
+    let modes = div().flex().items_center().gap(px(PILL_GAP_PX)).children(
+        RebuildMode::ALL.into_iter().map(|md| {
+            let on = md == mode;
+            let m = m.clone();
+            let tint = if on {
+                accent
+            } else {
+                palette.on_surface_variant
+            };
+            let hover = tint.with_alpha(alpha(TINT_HOVER, palette));
+            div()
+                .id(gpui::ElementId::Name(SharedString::new_static(md.id())))
+                .h(px(MODES_H - 4.0))
+                .px(px(MODE_CHIP_PAD_X_PX))
+                .rounded_full()
+                .flex()
+                .items_center()
+                .cursor_pointer()
+                .text_size(px(text::LABEL))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(tint.hsla())
+                .when(on, |el| {
+                    el.bg(tint.with_alpha(alpha(TINT_FILL, palette)).hsla())
+                })
+                .hover(move |s| s.bg(hover.hsla()))
+                .child(mode_label(md))
+                .on_click(move |_, _, cx| {
+                    m.borrow_mut().nix.mode = Some(md);
+                    notify(&m, cx);
+                })
+        }),
+    );
     let (mu, mr) = (m.clone(), m.clone());
     let actions = div()
         .h(px(MODES_H))
@@ -824,18 +1233,62 @@ pub(super) fn nix_view(m: &Shared, card_r: f32, row_r: f32, palette: &MandaraPal
         .gap(px(PILL_GAP_PX))
         .child(modes)
         .child(div().flex_1())
-        .child(pill_button("nix-rebuild", Some("refresh"), t("Rebuild"), accent, palette, move |_, cx| {
-            if !running() {
-                run_nix(&mr, NixAction::Rebuild(mode), cx);
-            }
-        })
-        .when(busy, |el| el.opacity(DISABLED_OPACITY)))
-        .child(primary_button("nix-update", "download", t("Update"), !busy, palette, move |_, cx| run_nix(&mu, NixAction::Update(mode), cx)))
+        .child(
+            pill_button(
+                "nix-rebuild",
+                Some("refresh"),
+                t("Rebuild"),
+                accent,
+                palette,
+                move |_, cx| {
+                    if !running() && nix_allowed(&mr, NixAction::Rebuild(mode)) {
+                        run_nix(&mr, NixAction::Rebuild(mode), cx);
+                    }
+                },
+            )
+            .when(busy || !rebuild_allowed, |el| el.opacity(DISABLED_OPACITY)),
+        )
+        .child(primary_button(
+            "nix-update",
+            "download",
+            t("Update"),
+            !busy && update_allowed,
+            palette,
+            move |_, cx| run_nix(&mu, NixAction::Update(mode), cx),
+        ))
         .into_any_element();
     push(actions, MODES_H, &mut out, &mut h);
-    let hint = div().h(px(MODE_HINT_H)).text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).truncate().child(mode_hint(mode)).into_any_element();
+    let hint = div()
+        .h(px(MODE_HINT_H))
+        .text_size(px(text::LABEL))
+        .text_color(palette.on_surface_variant.hsla())
+        .truncate()
+        .child(mode_hint(mode))
+        .into_any_element();
     out.push(hint);
     h += MODE_HINT_H;
+
+    if let Some(availability) = m.borrow().nix.availability {
+        let reasons = [
+            availability.update,
+            availability.rebuild,
+            availability.rollback,
+            availability.cleanup,
+        ];
+        for (index, reason) in reasons.iter().enumerate() {
+            if let Some(reason) = reason
+                && !reasons[..index].contains(&Some(*reason))
+            {
+                let label = div()
+                    .text_size(px(text::LABEL))
+                    .text_color(palette.on_surface_variant.hsla())
+                    .child(mandara_i18n::tr(reason.message()))
+                    .into_any_element();
+                // Reasons wrap over the panel width instead of hiding the cause in a clipped line.
+                push(label, MODE_HINT_H * 3.0, &mut out, &mut h);
+            }
+        }
+    }
 
     // ── Confirmation ─────────────────────────────────────────────────────
     let now = chrono::Utc::now().timestamp();
@@ -858,27 +1311,61 @@ pub(super) fn nix_view(m: &Shared, card_r: f32, row_r: f32, palette: &MandaraPal
             .items_center()
             .gap(px(CARD_GAP_PX))
             .child(icon("alert", SMALL_ICON_PX, danger))
-            .child(div().flex_1().min_w(px(0.0)).text_size(px(text::BODY_S)).font_weight(FontWeight::MEDIUM).truncate().child(confirm_text(action, confirm_deletes)))
-            .child(pill_button("nix-confirm-no", None, t("Cancel"), palette.on_surface_variant, palette, move |_, cx| {
-                mc.borrow_mut().nix.confirm = None;
-                notify(&mc, cx);
-            }))
-            .child(pill_button("nix-confirm-yes", Some("check"), label, danger, palette, move |_, cx| run_nix(&mk, action, cx)))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.0))
+                    .text_size(px(text::BODY_S))
+                    .font_weight(FontWeight::MEDIUM)
+                    .truncate()
+                    .child(confirm_text(action, confirm_deletes)),
+            )
+            .child(pill_button(
+                "nix-confirm-no",
+                None,
+                t("Cancel"),
+                palette.on_surface_variant,
+                palette,
+                move |_, cx| {
+                    mc.borrow_mut().nix.confirm = None;
+                    notify(&mc, cx);
+                },
+            ))
+            .child(pill_button(
+                "nix-confirm-yes",
+                Some("check"),
+                label,
+                danger,
+                palette,
+                move |_, cx| run_nix(&mk, action, cx),
+            ))
             .into_any_element();
         push(bar, CONFIRM_H, &mut out, &mut h);
     }
 
     // ── Generations ──────────────────────────────────────────────────────
     let mrb = m.clone();
-    let rollback = pill_button("nix-rollback", Some("undo"), t("Roll back"), accent, palette, move |_, cx| {
-        if !running() {
-            mrb.borrow_mut().nix.confirm = Some(NixAction::Rollback);
-            notify(&mrb, cx);
-        }
-    })
-    .when(busy, |el| el.opacity(DISABLED_OPACITY))
+    let rollback = pill_button(
+        "nix-rollback",
+        Some("undo"),
+        t("Roll back"),
+        accent,
+        palette,
+        move |_, cx| {
+            if !running() && nix_allowed(&mrb, NixAction::Rollback) {
+                mrb.borrow_mut().nix.confirm = Some(NixAction::Rollback);
+                notify(&mrb, cx);
+            }
+        },
+    )
+    .when(busy || !rollback_allowed, |el| el.opacity(DISABLED_OPACITY))
     .into_any_element();
-    push(section(t("Generations"), palette, Some(rollback)).into_any_element(), SECTION_H_PX.max(PILL_H_PX), &mut out, &mut h);
+    push(
+        section(t("Generations"), palette, Some(rollback)).into_any_element(),
+        SECTION_H_PX.max(PILL_H_PX),
+        &mut out,
+        &mut h,
+    );
     let mut rows: Vec<AnyElement> = Vec::new();
     let mut rows_h = 0.0;
     let current_n = current.map(|g| g.number);
@@ -893,10 +1380,28 @@ pub(super) fn nix_view(m: &Shared, card_r: f32, row_r: f32, palette: &MandaraPal
     }
     // The list gives up rows while a job, a comparison or a confirmation shows,
     // so the panel stays within the screen.
-    let visible = if diff.is_some() || diff_loading || confirm.is_some() || active().is_some() { GEN_VISIBLE_COMPACT } else { GEN_VISIBLE };
-    let list_h = rows_h.min(visible * (GEN_ROW_H + GEN_ROW_GAP)).max(if gens.is_empty() { 0.0 } else { GEN_ROW_H });
+    let visible = if diff.is_some() || diff_loading || confirm.is_some() || active().is_some() {
+        GEN_VISIBLE_COMPACT
+    } else {
+        GEN_VISIBLE
+    };
+    let list_h = rows_h
+        .min(visible * (GEN_ROW_H + GEN_ROW_GAP))
+        .max(if gens.is_empty() { 0.0 } else { GEN_ROW_H });
     if !gens.is_empty() {
-        let list = div().h(px(list_h)).child(div().id("nix-gens").size_full().overflow_y_scroll().flex().flex_col().gap(px(GEN_ROW_GAP)).children(rows)).into_any_element();
+        let list = div()
+            .h(px(list_h))
+            .child(
+                div()
+                    .id("nix-gens")
+                    .size_full()
+                    .overflow_y_scroll()
+                    .flex()
+                    .flex_col()
+                    .gap(px(GEN_ROW_GAP))
+                    .children(rows),
+            )
+            .into_any_element();
         push(list, list_h, &mut out, &mut h);
     }
 
@@ -909,13 +1414,23 @@ pub(super) fn nix_view(m: &Shared, card_r: f32, row_r: f32, palette: &MandaraPal
     // ── Clean up ─────────────────────────────────────────────────────────
     let (minus, plus, clean) = (m.clone(), m.clone(), m.clone());
     let stepper = |id: &'static str, glyph: &'static str, mm: Shared, delta: i32| {
-        crate::kit::icon_button(id, glyph, STEPPER_PX, palette.on_surface_variant, Some(wash(WASH_SOFT, palette)), move |_, cx| {
-            let mut mb = mm.borrow_mut();
-            let k = mb.nix.keep.unwrap_or(DEFAULT_KEEP) as i32 + delta;
-            mb.nix.keep = Some(k.clamp(*nixos::KEEP_RANGE.start() as i32, *nixos::KEEP_RANGE.end() as i32) as u32);
-            drop(mb);
-            notify(&mm, cx);
-        })
+        crate::kit::icon_button(
+            id,
+            glyph,
+            STEPPER_PX,
+            palette.on_surface_variant,
+            Some(wash(WASH_SOFT, palette)),
+            move |_, cx| {
+                let mut mb = mm.borrow_mut();
+                let k = mb.nix.keep.unwrap_or(DEFAULT_KEEP) as i32 + delta;
+                mb.nix.keep = Some(k.clamp(
+                    *nixos::KEEP_RANGE.start() as i32,
+                    *nixos::KEEP_RANGE.end() as i32,
+                ) as u32);
+                drop(mb);
+                notify(&mm, cx);
+            },
+        )
         .into_any_element()
     };
     let clean_row = div()
@@ -927,23 +1442,56 @@ pub(super) fn nix_view(m: &Shared, card_r: f32, row_r: f32, palette: &MandaraPal
         .child(icon("trash", SMALL_ICON_PX, palette.on_surface_variant))
         .child(div().child(t("Keep the newest")))
         .child(stepper("nix-keep-minus", "minus", minus, -1))
-        .child(div().font_features(tabular_nums()).font_weight(FontWeight::SEMIBOLD).child(keep.to_string()))
+        .child(
+            div()
+                .font_features(tabular_nums())
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(keep.to_string()),
+        )
         .child(stepper("nix-keep-plus", "plus", plus, 1))
-        .child(div().flex_1().min_w(px(0.0)).truncate().text_color(palette.on_surface_variant.hsla()).child(if deletes == 0 { t("nothing to delete").to_string() } else { tf("{count} to delete", &[("count", &deletes)]) }))
-        .child(pill_button("nix-clean", Some("trash"), t("Clean up"), readable(palette.urgent_coral, palette), palette, move |_, cx| {
-            if !running() {
-                let keep = clean.borrow().nix.keep.unwrap_or(DEFAULT_KEEP);
-                clean.borrow_mut().nix.confirm = Some(NixAction::Clean(Cleanup::KeepLatest(keep)));
-                notify(&clean, cx);
-            }
-        })
-        .when(busy, |el| el.opacity(DISABLED_OPACITY)))
+        .child(
+            div()
+                .flex_1()
+                .min_w(px(0.0))
+                .truncate()
+                .text_color(palette.on_surface_variant.hsla())
+                .child(if deletes == 0 {
+                    t("nothing to delete").to_string()
+                } else {
+                    tf("{count} to delete", &[("count", &deletes)])
+                }),
+        )
+        .child(
+            pill_button(
+                "nix-clean",
+                Some("trash"),
+                t("Clean up"),
+                readable(palette.urgent_coral, palette),
+                palette,
+                move |_, cx| {
+                    if !running()
+                        && nix_allowed(&clean, NixAction::Clean(Cleanup::KeepLatest(DEFAULT_KEEP)))
+                    {
+                        let keep = clean.borrow().nix.keep.unwrap_or(DEFAULT_KEEP);
+                        clean.borrow_mut().nix.confirm =
+                            Some(NixAction::Clean(Cleanup::KeepLatest(keep)));
+                        notify(&clean, cx);
+                    }
+                },
+            )
+            .when(busy || !cleanup_allowed, |el| el.opacity(DISABLED_OPACITY)),
+        )
         .into_any_element();
     push(clean_row, CLEAN_H, &mut out, &mut h);
 
     // ── Home Manager ─────────────────────────────────────────────────────
     if !home.is_empty() {
-        push(section(t("Home Manager"), palette, None).into_any_element(), SECTION_H_PX, &mut out, &mut h);
+        push(
+            section(t("Home Manager"), palette, None).into_any_element(),
+            SECTION_H_PX,
+            &mut out,
+            &mut h,
+        );
         let shown: Vec<&HomeGeneration> = home.iter().take(HOME_SHOWN).collect();
         let hh = shown.len() as f32 * HOME_ROW_H;
         let list = div()
@@ -957,9 +1505,19 @@ pub(super) fn nix_view(m: &Shared, card_r: f32, row_r: f32, palette: &MandaraPal
                     .gap(px(INLINE_GAP_PX))
                     .text_size(px(text::BODY_S))
                     .font_features(tabular_nums())
-                    .child(div().font_weight(FontWeight::SEMIBOLD).child(format!("#{}", g.number)))
-                    .child(div().text_color(palette.on_surface_variant.hsla()).child(ago(g.date)))
-                    .when(g.current, |el| el.child(badge(t("Current"), accent, palette)))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(format!("#{}", g.number)),
+                    )
+                    .child(
+                        div()
+                            .text_color(palette.on_surface_variant.hsla())
+                            .child(ago(g.date)),
+                    )
+                    .when(g.current, |el| {
+                        el.child(badge(t("Current"), accent, palette))
+                    })
             }))
             .into_any_element();
         push(list, hh, &mut out, &mut h);
@@ -967,17 +1525,27 @@ pub(super) fn nix_view(m: &Shared, card_r: f32, row_r: f32, palette: &MandaraPal
     (out, h)
 }
 
-fn gen_row(m: &Shared, g: &Generation, selected: bool, radius: f32, palette: &MandaraPalette) -> AnyElement {
+fn gen_row(
+    m: &Shared,
+    g: &Generation,
+    selected: bool,
+    radius: f32,
+    palette: &MandaraPalette,
+) -> AnyElement {
     let accent = readable(palette.primary, palette);
     let hover = palette.on_surface.with_alpha(alpha(ROW_HOVER, palette));
     let sel = accent.with_alpha(alpha(SELECTED_ROW, palette));
     let n = g.number;
     let m = m.clone();
-    let detail = [Some(tf("NixOS {version}", &[("version", &g.nixos_version)])), (!g.kernel.is_empty()).then(|| tf("kernel {kernel}", &[("kernel", &g.kernel)])), g.revision.as_deref().map(|r| short(r).to_string())]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
-        .join(" · ");
+    let detail = [
+        Some(tf("NixOS {version}", &[("version", &g.nixos_version)])),
+        (!g.kernel.is_empty()).then(|| tf("kernel {kernel}", &[("kernel", &g.kernel)])),
+        g.revision.as_deref().map(|r| short(r).to_string()),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" · ");
     div()
         .id(("nix-gen", n as usize))
         .h(px(GEN_ROW_H))
@@ -997,7 +1565,11 @@ fn gen_row(m: &Shared, g: &Generation, selected: bool, radius: f32, palette: &Ma
                 .font_features(tabular_nums())
                 .text_size(px(text::BODY))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(if g.current { accent.hsla() } else { palette.on_surface.hsla() })
+                .text_color(if g.current {
+                    accent.hsla()
+                } else {
+                    palette.on_surface.hsla()
+                })
                 .child(format!("#{n}")),
         )
         .child(
@@ -1006,22 +1578,52 @@ fn gen_row(m: &Shared, g: &Generation, selected: bool, radius: f32, palette: &Ma
                 .min_w(px(0.0))
                 .flex()
                 .flex_col()
-                .child(div().font_features(tabular_nums()).text_size(px(text::BODY_S)).font_weight(FontWeight::MEDIUM).truncate().child(detail))
-                .child(div().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(ago(g.date))),
+                .child(
+                    div()
+                        .font_features(tabular_nums())
+                        .text_size(px(text::BODY_S))
+                        .font_weight(FontWeight::MEDIUM)
+                        .truncate()
+                        .child(detail),
+                )
+                .child(
+                    div()
+                        .text_size(px(text::LABEL))
+                        .text_color(palette.on_surface_variant.hsla())
+                        .child(ago(g.date)),
+                ),
         )
-        .when(g.current, |el| el.child(badge(t("Current"), accent, palette)))
-        .when(g.booted, |el| el.child(badge(t("Booted"), readable(palette.tertiary, palette), palette)))
+        .when(g.current, |el| {
+            el.child(badge(t("Current"), accent, palette))
+        })
+        .when(g.booted, |el| {
+            el.child(badge(
+                t("Booted"),
+                readable(palette.tertiary, palette),
+                palette,
+            ))
+        })
         .on_click(move |_, _, cx| {
             {
                 let mut mb = m.borrow_mut();
-                mb.nix.selected = if mb.nix.selected == Some(n) { None } else { Some(n) };
+                mb.nix.selected = if mb.nix.selected == Some(n) {
+                    None
+                } else {
+                    Some(n)
+                };
             }
             notify(&m, cx);
         })
         .into_any_element()
 }
 
-fn gen_actions(m: &Shared, g: &Generation, current: Option<u32>, busy: bool, palette: &MandaraPalette) -> AnyElement {
+fn gen_actions(
+    m: &Shared,
+    g: &Generation,
+    current: Option<u32>,
+    busy: bool,
+    palette: &MandaraPalette,
+) -> AnyElement {
     let accent = readable(palette.primary, palette);
     let n = g.number;
     let (ms, mc) = (m.clone(), m.clone());
@@ -1033,32 +1635,72 @@ fn gen_actions(m: &Shared, g: &Generation, current: Option<u32>, busy: bool, pal
         .items_center()
         .gap(px(PILL_GAP_PX))
         .when(!g.current && !busy, |el| {
-            el.child(pill_button("nix-switch-to", Some("zap"), t("Switch to it"), accent, palette, move |_, cx| {
-                ms.borrow_mut().nix.confirm = Some(NixAction::SwitchTo(n));
-                notify(&ms, cx);
-            }))
+            el.child(pill_button(
+                "nix-switch-to",
+                Some("zap"),
+                t("Switch to it"),
+                accent,
+                palette,
+                move |_, cx| {
+                    if !nix_allowed(&ms, NixAction::SwitchTo(n)) {
+                        return;
+                    }
+                    ms.borrow_mut().nix.confirm = Some(NixAction::SwitchTo(n));
+                    notify(&ms, cx);
+                },
+            ))
         })
         .when_some(current.filter(|c| *c != n), |el, c| {
-            el.child(pill_button("nix-compare", Some("sliders"), tf("Compare with {n}", &[("n", &c)]), accent, palette, move |_, cx| {
-                let (a, b) = if n < c { (n, c) } else { (c, n) };
-                compare(&mc, a, b, cx);
-                notify(&mc, cx);
-            }))
+            el.child(pill_button(
+                "nix-compare",
+                Some("sliders"),
+                tf("Compare with {n}", &[("n", &c)]),
+                accent,
+                palette,
+                move |_, cx| {
+                    let (a, b) = if n < c { (n, c) } else { (c, n) };
+                    compare(&mc, a, b, cx);
+                    notify(&mc, cx);
+                },
+            ))
         })
-        .when(g.current, |el| el.child(div().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(t("This is the running configuration"))))
+        .when(g.current, |el| {
+            el.child(
+                div()
+                    .text_size(px(text::LABEL))
+                    .text_color(palette.on_surface_variant.hsla())
+                    .child(t("This is the running configuration")),
+            )
+        })
         .into_any_element()
 }
 
-fn diff_card(diff: Option<&(u32, u32, Result<Diff, String>)>, loading: bool, card_r: f32, palette: &MandaraPalette) -> (AnyElement, f32) {
+fn diff_card(
+    diff: Option<&(u32, u32, Result<Diff, String>)>,
+    loading: bool,
+    card_r: f32,
+    palette: &MandaraPalette,
+) -> (AnyElement, f32) {
     let accent = readable(palette.primary, palette);
     let mut h = CARD_PAD_PX * 2.0 + TITLE_ROW_H;
     let (title, sub, rows): (String, String, Vec<AnyElement>) = match diff {
-        None if loading => (t("Comparing generations…").to_string(), String::new(), Vec::new()),
+        None if loading => (
+            t("Comparing generations…").to_string(),
+            String::new(),
+            Vec::new(),
+        ),
         None => (String::new(), String::new(), Vec::new()),
-        Some((a, b, Err(e))) => (tf("Generation {a} → {b}", &[("a", a), ("b", b)]), e.clone(), Vec::new()),
+        Some((a, b, Err(e))) => (
+            tf("Generation {a} → {b}", &[("a", a), ("b", b)]),
+            e.clone(),
+            Vec::new(),
+        ),
         Some((a, b, Ok(d))) => {
             let sub = match d.closure_delta {
-                Some(delta) => tf("{count} packages changed · closure {size}", &[("count", &d.changes.len()), ("size", &signed_size(delta))]),
+                Some(delta) => tf(
+                    "{count} packages changed · closure {size}",
+                    &[("count", &d.changes.len()), ("size", &signed_size(delta))],
+                ),
                 None => tf("{count} packages changed", &[("count", &d.changes.len())]),
             };
             let rows = d
@@ -1066,7 +1708,11 @@ fn diff_card(diff: Option<&(u32, u32, Result<Diff, String>)>, loading: bool, car
                 .iter()
                 .take(DIFF_SHOWN)
                 .map(|c| {
-                    let versions = format!("{} → {}", if c.old.is_empty() { "∅" } else { &c.old }, if c.new.is_empty() { "∅" } else { &c.new });
+                    let versions = format!(
+                        "{} → {}",
+                        if c.old.is_empty() { "∅" } else { &c.old },
+                        if c.new.is_empty() { "∅" } else { &c.new }
+                    );
                     div()
                         .h(px(DIFF_ROW_H))
                         .flex()
@@ -1074,10 +1720,27 @@ fn diff_card(diff: Option<&(u32, u32, Result<Diff, String>)>, loading: bool, car
                         .gap(px(INLINE_GAP_PX))
                         .text_size(px(text::BODY_S))
                         .font_features(tabular_nums())
-                        .child(div().min_w(px(0.0)).truncate().font_weight(FontWeight::MEDIUM).child(c.name.clone()))
+                        .child(
+                            div()
+                                .min_w(px(0.0))
+                                .truncate()
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(c.name.clone()),
+                        )
                         .child(div().flex_1())
-                        .child(div().text_color(palette.on_surface_variant.hsla()).child(versions))
-                        .when(c.delta != 0, |el| el.child(div().text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).child(signed_size(c.delta))))
+                        .child(
+                            div()
+                                .text_color(palette.on_surface_variant.hsla())
+                                .child(versions),
+                        )
+                        .when(c.delta != 0, |el| {
+                            el.child(
+                                div()
+                                    .text_size(px(text::LABEL))
+                                    .text_color(palette.on_surface_variant.hsla())
+                                    .child(signed_size(c.delta)),
+                            )
+                        })
                         .into_any_element()
                 })
                 .collect();
@@ -1106,11 +1769,26 @@ fn diff_card(diff: Option<&(u32, u32, Result<Diff, String>)>, loading: bool, car
                         .min_w(px(0.0))
                         .flex()
                         .flex_col()
-                        .child(div().text_size(px(text::BODY)).font_weight(FontWeight::SEMIBOLD).truncate().child(title))
-                        .child(div().font_features(tabular_nums()).text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla()).truncate().child(sub)),
+                        .child(
+                            div()
+                                .text_size(px(text::BODY))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .truncate()
+                                .child(title),
+                        )
+                        .child(
+                            div()
+                                .font_features(tabular_nums())
+                                .text_size(px(text::LABEL))
+                                .text_color(palette.on_surface_variant.hsla())
+                                .truncate()
+                                .child(sub),
+                        ),
                 ),
         )
-        .when(!rows.is_empty(), |el| el.child(div().flex().flex_col().children(rows)))
+        .when(!rows.is_empty(), |el| {
+            el.child(div().flex().flex_col().children(rows))
+        })
         .into_any_element();
     (el, h)
 }
@@ -1118,7 +1796,9 @@ fn diff_card(diff: Option<&(u32, u32, Result<Diff, String>)>, loading: bool, car
 /// The update request for the current system ("Update all").
 pub(super) fn system_request(system: System, flatpak_pending: bool) -> Option<Request> {
     match system {
-        System::Managed(_) => Some(Request::System { flatpak: flatpak_pending }),
+        System::Managed(_) => Some(Request::System {
+            flatpak: flatpak_pending,
+        }),
         System::NixOs if flatpak_pending => Some(Request::Flatpak),
         _ if flatpak_pending => Some(Request::Flatpak),
         _ => None,
@@ -1129,30 +1809,122 @@ pub(super) fn system_request(system: System, flatpak_pending: bool) -> Option<Re
 mod tests {
     use super::*;
 
+    #[test]
+    fn closing_a_nix_panel_cancels_metadata_without_starting_overlapping_reads() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mut state = NixState {
+            loaded: true,
+            loading: true,
+            diff_loading: true,
+            generation: 9,
+            cancel: Some(cancel.clone()),
+            mode: Some(RebuildMode::Boot),
+            keep: Some(7),
+            ..NixState::default()
+        };
+        state.free();
+        assert!(cancel.load(Ordering::Relaxed));
+        assert!(
+            state.loading && state.diff_loading,
+            "reopening waits for the previous workers to return"
+        );
+        assert!(!state.loaded);
+        assert_eq!(
+            state.generation, 10,
+            "old completions cannot restore closed data"
+        );
+        assert_eq!((state.mode, state.keep), (Some(RebuildMode::Boot), Some(7)));
+        assert!(state.availability.is_none());
+    }
+
     fn finished(outcome: JobOutcome, changed: u32) -> Finished {
-        Finished { outcome, elapsed_secs: 1, changed, restart: None, freed: None, inputs: Vec::new(), warnings: 0 }
+        Finished {
+            outcome,
+            elapsed_secs: 1,
+            changed,
+            restart: None,
+            freed: None,
+            inputs: Vec::new(),
+            warnings: 0,
+        }
     }
 
     #[test]
     fn a_cancel_after_packages_changed_says_how_many() {
         let request = Request::System { flatpak: true };
-        assert_eq!(summary_text(&request, &finished(JobOutcome::Cancelled, 0)), (t("Update cancelled").to_string(), t("Nothing was installed").to_string()));
-        assert_eq!(summary_text(&request, &finished(JobOutcome::Cancelled, 1)).1, t("Updated 1 package"));
-        assert_eq!(summary_text(&request, &finished(JobOutcome::Cancelled, 12)).1, tf("Updated {count} packages", &[("count", &12)]));
+        assert_eq!(
+            summary_text(&request, &finished(JobOutcome::Cancelled, 0)),
+            (
+                t("Update cancelled").to_string(),
+                t("Nothing was installed").to_string()
+            )
+        );
+        assert_eq!(
+            summary_text(&request, &finished(JobOutcome::Cancelled, 1)).1,
+            t("Updated 1 package")
+        );
+        assert_eq!(
+            summary_text(&request, &finished(JobOutcome::Cancelled, 12)).1,
+            tf("Updated {count} packages", &[("count", &12)])
+        );
     }
 
     #[test]
     fn the_clean_up_confirmation_counts_what_delete_runs() {
         let now = 100 * 86_400;
-        let gens: Vec<Generation> = (1..=8).map(|n| Generation { number: n, date: now - i64::from(9 - n) * 86_400, current: n == 8, ..Generation::default() }).collect();
+        let gens: Vec<Generation> = (1..=8)
+            .map(|n| Generation {
+                number: n,
+                date: now - i64::from(9 - n) * 86_400,
+                current: n == 8,
+                ..Generation::default()
+            })
+            .collect();
         let shown = nixos::to_delete(&gens, Cleanup::KeepLatest(10), now).len();
         assert_eq!(shown, 0, "the stepper, raised to 10 after Clean up");
         // Clean up was pressed with 3: Delete still deletes all but the newest 3.
-        let confirmed = confirm_deletes(NixAction::Clean(Cleanup::KeepLatest(3)), 10, shown, &gens, now);
+        let confirmed = confirm_deletes(
+            NixAction::Clean(Cleanup::KeepLatest(3)),
+            10,
+            shown,
+            &gens,
+            now,
+        );
         assert_eq!(confirmed, 5);
-        assert_eq!(confirm_text(NixAction::Clean(Cleanup::KeepLatest(3)), confirmed), tf("Delete {count} old generations and collect garbage?", &[("count", &5)]));
-        assert_eq!(confirm_deletes(NixAction::Clean(Cleanup::KeepLatest(10)), 10, shown, &gens, now), 0);
-        assert_eq!(confirm_deletes(NixAction::Clean(Cleanup::OlderThanDays(4)), 10, shown, &gens, now), 4);
-        assert_eq!(confirm_deletes(NixAction::Rollback, 10, shown, &gens, now), shown);
+        assert_eq!(
+            confirm_text(NixAction::Clean(Cleanup::KeepLatest(3)), confirmed),
+            tf(
+                "Delete {count} old generations and collect garbage?",
+                &[("count", &5)]
+            )
+        );
+        assert_eq!(
+            confirm_deletes(
+                NixAction::Clean(Cleanup::KeepLatest(10)),
+                10,
+                shown,
+                &gens,
+                now
+            ),
+            0
+        );
+        assert_eq!(
+            confirm_deletes(
+                NixAction::Clean(Cleanup::OlderThanDays(4)),
+                10,
+                shown,
+                &gens,
+                now
+            ),
+            4
+        );
+        assert_eq!(
+            confirm_deletes(NixAction::Rollback, 10, shown, &gens, now),
+            shown
+        );
     }
 }

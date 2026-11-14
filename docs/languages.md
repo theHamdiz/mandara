@@ -7,6 +7,13 @@ the login screen. Pick one in Studio → General → Language, or leave it on
 **System** to follow your desktop's language (`LANG`, `LC_MESSAGES`,
 `LC_ALL`).
 
+The **Keyboard layout** plugin shows the typing layout, independently of
+the interface language. Enable it in Studio → Plugins. On Niri and
+Hyprland, it reads the current layout and changes from the compositor's
+session socket. This also works on NixOS without root access or membership
+in the `input` group. Start Mandara inside the compositor session so it
+inherits `NIRI_SOCKET`, or `HYPRLAND_INSTANCE_SIGNATURE` and `XDG_RUNTIME_DIR`.
+
 ## Language packs
 
 Translations live outside the binary, one **language pack** per language

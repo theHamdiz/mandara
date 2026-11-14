@@ -63,12 +63,35 @@ pub fn check() -> Result<(), String> {
     if is_offline() { Err(blocked()) } else { Ok(()) }
 }
 
+// Loopback fixtures must neither read the owner's config nor race the offline
+// switch test. This gate and state override do not exist in a shipped build.
+#[cfg(test)]
+static TEST_GATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(test)]
+pub(crate) struct OnlineFixture {
+    _guard: std::sync::MutexGuard<'static, ()>,
+    previous: u8,
+}
+
+#[cfg(test)]
+pub(crate) fn online_fixture() -> OnlineFixture {
+    let guard = TEST_GATE.lock().unwrap_or_else(|error| error.into_inner());
+    OnlineFixture { _guard: guard, previous: STATE.swap(ONLINE, Ordering::Relaxed) }
+}
+
+#[cfg(test)]
+impl Drop for OnlineFixture {
+    fn drop(&mut self) { STATE.store(self.previous, Ordering::Relaxed); }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn switch_blocks_requests() {
+        let _gate = TEST_GATE.lock().unwrap_or_else(|error| error.into_inner());
         set(true);
         assert!(is_offline());
         assert!(check().is_err());

@@ -114,8 +114,6 @@ const HUB_LIFT: f32 = 0.03;
 const GROOVE_ALPHA: f32 = 0.07;
 /// The hub's tint toward "close" under the pointer.
 const HUB_CLOSE_TINT: f32 = 0.14;
-/// Text in the hub: its box against the hub, and the hint's dimming.
-const HUB_TEXT: f32 = 0.84;
 /// The hub's label: line height and gap to its keybind.
 const HUB_LINE_H: f32 = 16.0;
 const HUB_TEXT_GAP: f32 = 4.0;
@@ -142,12 +140,27 @@ const PEARL_SHADOW: f32 = 0.55;
 pub struct Item {
     pub entry: Entry,
     path: SharedString,
+    hint: Option<SharedString>,
+    label_layout: std::cell::OnceCell<crate::bidi::ParagraphLayout>,
+    hint_layout: std::cell::OnceCell<crate::bidi::ParagraphLayout>,
 }
 
 impl Item {
     pub fn new(entry: Entry) -> Self {
         let path = SharedString::from(format!("icons/{}.svg", entry.icon));
-        Self { entry, path }
+        let hint = match &entry.hint {
+            Some(super::Hint::Text(text)) => (!text.is_empty()).then(|| text.clone()),
+            Some(super::Hint::Keys(keys)) => {
+                let mut text = String::new();
+                for key in keys {
+                    if !text.is_empty() { text.push_str(" + "); }
+                    text.push_str(key);
+                }
+                (!text.is_empty()).then(|| text.into())
+            }
+            None => None,
+        };
+        Self { entry, path, hint, label_layout: Default::default(), hint_layout: Default::default() }
     }
 }
 
@@ -594,28 +607,31 @@ fn draw(s: Scene, items: &[Item], outer_items: [&[Item]; MAX_LEVELS], palette: &
         _ => None,
     };
     let hub = s.ring.hub * scale;
+    let box_layout = geom::HubText::new(hub, HUB_LINE_H, super::KEY_H, HUB_TEXT_GAP, focused.is_some_and(|item| item.hint.is_some()));
     let names_here = s.labels == MenuLabels::Hub;
     let content: AnyElement = match focused {
-        Some(it) if names_here => {
+        Some(it) if names_here && box_layout.lines > 0 => {
             let e = &it.entry;
             div()
+                .w_full()
+                .min_w_0()
                 .flex()
                 .flex_col()
                 .items_center()
                 .gap(px(HUB_TEXT_GAP))
-                .child(div().w_full().text_size(px(text::BODY)).font_weight(FontWeight::MEDIUM).line_height(px(HUB_LINE_H)).text_center().line_clamp(2).text_color((if e.danger { palette.urgent_coral } else { ink.fg }).hsla()).child(crate::bidi::paragraph(e.label.clone())))
-                .children(e.hint.as_ref().map(|h| super::hint_el(h, palette)))
+                .child(div().w_full().min_w_0().text_size(px(text::BODY)).font_weight(FontWeight::MEDIUM).line_height(px(HUB_LINE_H)).whitespace_normal().text_center().line_clamp(usize::from(box_layout.lines)).text_color((if e.danger { palette.urgent_coral } else { ink.fg }).hsla()).child(crate::bidi::editable_paragraph(e.label.clone(), it.label_layout.get_or_init(Default::default))))
+                .when(box_layout.hint, |el| el.children(it.hint.as_ref().map(|hint| div().w_full().min_w_0().text_size(px(text::LABEL)).line_height(px(super::KEY_H)).whitespace_normal().text_center().line_clamp(1).text_color(ink.dim.hsla()).child(crate::bidi::editable_paragraph(hint.clone(), it.hint_layout.get_or_init(Default::default))))))
                 .into_any_element()
         }
         // Names around the ring: the hub keeps a keybind, else "close".
         Some(it) => match &it.entry.hint {
-            Some(h @ super::Hint::Keys(_)) => super::hint_el(h, palette),
+            Some(super::Hint::Keys(_)) if box_layout.lines > 0 => div().w_full().min_w_0().text_size(px(text::LABEL)).line_height(px(super::KEY_H)).whitespace_normal().text_center().line_clamp(1).text_color(ink.dim.hsla()).child(crate::bidi::editable_paragraph(it.hint.clone().unwrap_or_default(), it.hint_layout.get_or_init(Default::default))).into_any_element(),
             _ => close_glyph(s.sel, s.depth, &ink),
         },
         None => close_glyph(s.sel, s.depth, &ink),
     };
-    let box_w = 2.0 * hub * HUB_TEXT;
-    root = root.child(div().absolute().left(px(s.center.0 - box_w / 2.0)).top(px(s.center.1 - box_w / 2.0)).size(px(box_w)).flex().items_center().justify_center().opacity(a).child(content));
+    let box_w = box_layout.side;
+    root = root.child(div().absolute().left(px(s.center.0 - box_w / 2.0)).top(px(s.center.1 - box_w / 2.0)).size(px(box_w)).overflow_hidden().flex().items_center().justify_center().opacity(a).child(content));
 
     // A label beside the item under the pointer.
     if s.labels == MenuLabels::Around
@@ -1507,6 +1523,16 @@ impl Preview {
 mod tests {
     use super::*;
     use crate::desktop_menu::{AddCategory, Hint, add_levels, entry};
+
+    #[test]
+    fn hub_text_layouts_are_lazy_and_shortcut_text_is_cached_once() {
+        let item = Item::new(entry(0, "box", "A long label", Action::Studio).hint(Some(Hint::Keys(vec!["Super".into(), "Shift".into(), "D".into()]))));
+        assert_eq!(item.hint.as_deref(), Some("Super + Shift + D"));
+        assert!(item.label_layout.get().is_none() && item.hint_layout.get().is_none());
+        item.label_layout.get_or_init(Default::default);
+        assert!(item.label_layout.get().is_some());
+        assert!(item.hint_layout.get().is_none(), "an unseen hint does not allocate a paragraph cache");
+    }
 
     fn entries(n: usize) -> Vec<Entry> {
         (0..n).map(|i| entry(0, "box", format!("Item {i}"), if i == 1 { Action::AddMenu } else { Action::Studio }).hint((i == 0).then(|| Hint::Text("1".into())))).collect()

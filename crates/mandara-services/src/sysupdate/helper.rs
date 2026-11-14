@@ -63,7 +63,10 @@ impl Action {
             ["--protocol"] => Ok(Action::Protocol),
             ["apply"] => Ok(Action::Apply),
             ["nixos", rest @ ..] => NixAction::parse(rest).map(Action::Nix),
-            _ => Err(format!("usage: mandara system-update apply | --protocol | nixos {}", NixAction::USAGE)),
+            _ => Err(format!(
+                "usage: mandara system-update apply | --protocol | nixos {}",
+                NixAction::USAGE
+            )),
         }
     }
 }
@@ -77,6 +80,9 @@ pub struct CancelSignal {
 }
 
 impl CancelSignal {
+    pub(crate) fn flag(&self) -> &AtomicBool {
+        &self.requested
+    }
     pub fn requested(&self) -> bool {
         self.requested.load(Ordering::SeqCst)
     }
@@ -113,9 +119,24 @@ impl CancelSignal {
 /// Starts and waits for the steps' programs (the real one runs them;
 /// tests and the sandbox replay recorded output).
 pub trait Runner: Sync {
+    /// Real runners recheck eligibility before a privileged write. Replays
+    /// provide their own recorded configuration and never run native tools.
+    fn check_nix(
+        &self,
+        _action: NixAction,
+        _paths: &nixos::NixPaths,
+        _cancel: &CancelSignal,
+    ) -> Result<(), String> {
+        Ok(())
+    }
     /// Runs `step`, handing every output line to `line`, until it exits.
     /// A cancellable step stops early when `cancel` is requested.
-    fn run(&self, step: &Step, line: &mut dyn FnMut(&str), cancel: &CancelSignal) -> std::io::Result<Option<i32>>;
+    fn run(
+        &self,
+        step: &Step,
+        line: &mut dyn FnMut(&str),
+        cancel: &CancelSignal,
+    ) -> std::io::Result<Option<i32>>;
 }
 
 /// Runs the programs as they are (as root, from the safe folders).
@@ -124,10 +145,18 @@ pub struct SystemRunner;
 /// `program` in the safe folders, only when root owns it and the folders
 /// above it.
 pub fn trusted_program(program: &str) -> std::io::Result<PathBuf> {
-    let path = super::find_safe(program).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, format!("{program} is not installed")))?;
+    let path = super::find_safe(program).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("{program} is not installed"),
+        )
+    })?;
     let real = std::fs::canonicalize(&path)?;
     if !mandara_config::admin::trusted_root_file(&real) {
-        return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, format!("{} is not owned by root", real.display())));
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!("{} is not owned by root", real.display()),
+        ));
     }
     Ok(path)
 }
@@ -136,13 +165,32 @@ pub fn trusted_program(program: &str) -> std::io::Result<PathBuf> {
 pub fn trusted_store_program(exe: &Path) -> std::io::Result<PathBuf> {
     let real = std::fs::canonicalize(exe)?;
     if !real.starts_with("/nix/store/") || !mandara_config::admin::trusted_root_file(&real) {
-        return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, format!("{} is not a root-owned program in the Nix store", real.display())));
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!(
+                "{} is not a root-owned program in the Nix store",
+                real.display()
+            ),
+        ));
     }
     Ok(real)
 }
 
 impl Runner for SystemRunner {
-    fn run(&self, step: &Step, line: &mut dyn FnMut(&str), cancel: &CancelSignal) -> std::io::Result<Option<i32>> {
+    fn check_nix(
+        &self,
+        action: NixAction,
+        paths: &nixos::NixPaths,
+        cancel: &CancelSignal,
+    ) -> Result<(), String> {
+        nixos::availability::check(paths, action, cancel.flag())
+    }
+    fn run(
+        &self,
+        step: &Step,
+        line: &mut dyn FnMut(&str),
+        cancel: &CancelSignal,
+    ) -> std::io::Result<Option<i32>> {
         use std::os::unix::process::CommandExt as _;
         let program = match &step.exe {
             Some(exe) => trusted_store_program(exe)?,
@@ -164,7 +212,11 @@ impl Runner for SystemRunner {
             // Its own process group, so a cancel reaches its children too.
             .process_group(0);
         // Kept until the program exits.
-        let trust = step.git_safe_dir.as_deref().map(|dir| GitTrust::new(dir, Path::new(ROOT_HOME))).transpose()?;
+        let trust = step
+            .git_safe_dir
+            .as_deref()
+            .map(|dir| GitTrust::new(dir, Path::new(ROOT_HOME)))
+            .transpose()?;
         if let Some(trust) = &trust {
             cmd.env("XDG_CONFIG_HOME", trust.config_home());
         }
@@ -191,7 +243,10 @@ impl GitTrust {
     pub fn new(work_tree: &Path, home: &Path) -> std::io::Result<GitTrust> {
         let config = git_trust_config(work_tree, &home.join(".config/git/config"))?;
         use std::os::unix::fs::PermissionsExt as _;
-        let dir = tempfile::Builder::new().prefix("mandara-git-").permissions(std::fs::Permissions::from_mode(0o700)).tempdir()?;
+        let dir = tempfile::Builder::new()
+            .prefix("mandara-git-")
+            .permissions(std::fs::Permissions::from_mode(0o700))
+            .tempdir()?;
         std::fs::create_dir(dir.path().join("git"))?;
         std::fs::write(dir.path().join("git/config"), config)?;
         std::os::unix::fs::symlink(home.join(".config/nix"), dir.path().join("nix"))?;
@@ -212,31 +267,62 @@ pub fn git_trust_config(work_tree: &Path, root_git: &Path) -> std::io::Result<St
         let s = p
             .to_str()
             .filter(|s| !s.chars().any(char::is_control))
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("{} can't be named in a Git configuration", p.display())))?;
-        Ok(format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")))
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("{} can't be named in a Git configuration", p.display()),
+                )
+            })?;
+        Ok(format!(
+            "\"{}\"",
+            s.replace('\\', "\\\\").replace('"', "\\\"")
+        ))
     }
-    Ok(format!("[include]\n\tpath = {}\n[safe]\n\tdirectory = {}\n", quoted(root_git)?, quoted(work_tree)?))
+    Ok(format!(
+        "[include]\n\tpath = {}\n[safe]\n\tdirectory = {}\n",
+        quoted(root_git)?,
+        quoted(work_tree)?
+    ))
 }
 
 /// Reads `child`'s stdout and stderr line by line (one bounded line buffer
 /// per pipe) until it exits.
-pub fn pump(child: &mut std::process::Child, line: &mut dyn FnMut(&str), cancel: &CancelSignal, cancellable: bool) -> std::io::Result<Option<i32>> {
+pub fn pump(
+    child: &mut std::process::Child,
+    line: &mut dyn FnMut(&str),
+    cancel: &CancelSignal,
+    cancellable: bool,
+) -> std::io::Result<Option<i32>> {
     pump_with(child, line, cancel, &|| cancellable)
 }
 
 /// [`pump`], signalling a requested cancel only while `may_signal` says so
 /// (a request made earlier waits, e.g. until the AUR helper's pacman has
 /// finished installing).
-pub fn pump_with(child: &mut std::process::Child, line: &mut dyn FnMut(&str), cancel: &CancelSignal, may_signal: &dyn Fn() -> bool) -> std::io::Result<Option<i32>> {
+pub fn pump_with(
+    child: &mut std::process::Child,
+    line: &mut dyn FnMut(&str),
+    cancel: &CancelSignal,
+    may_signal: &dyn Fn() -> bool,
+) -> std::io::Result<Option<i32>> {
     let (tx, rx) = mpsc::sync_channel::<String>(256);
-    let readers: Vec<_> = [child.stdout.take().map(|p| Box::new(p) as Box<dyn std::io::Read + Send>), child.stderr.take().map(|p| Box::new(p) as Box<dyn std::io::Read + Send>)]
-        .into_iter()
-        .flatten()
-        .map(|pipe| {
-            let tx = tx.clone();
-            std::thread::spawn(move || read_lines(pipe, &mut |l| tx.send(l.to_string()).is_ok()))
-        })
-        .collect();
+    let readers: Vec<_> = [
+        child
+            .stdout
+            .take()
+            .map(|p| Box::new(p) as Box<dyn std::io::Read + Send>),
+        child
+            .stderr
+            .take()
+            .map(|p| Box::new(p) as Box<dyn std::io::Read + Send>),
+    ]
+    .into_iter()
+    .flatten()
+    .map(|pipe| {
+        let tx = tx.clone();
+        std::thread::spawn(move || read_lines(pipe, &mut |l| tx.send(l.to_string()).is_ok()))
+    })
+    .collect();
     drop(tx);
     let mut signalled = None;
     loop {
@@ -323,7 +409,8 @@ impl<'a> Out<'a> {
 
     pub fn line(&mut self, s: &str) {
         self.buf.clear();
-        self.buf.extend_from_slice(protocol::clean_line(s).as_bytes());
+        self.buf
+            .extend_from_slice(protocol::clean_line(s).as_bytes());
         self.write_buf();
     }
 
@@ -342,17 +429,27 @@ impl<'a> Out<'a> {
 
 /// Runs `steps` in order with `backend`'s rules, writing markers and the
 /// output to `out`. Returns how it ended.
-pub fn execute(steps: Vec<Step>, backend: &dyn SystemBackend, runner: &dyn Runner, out: &mut Out<'_>, cancel: &CancelSignal) -> Outcome {
+pub fn execute(
+    steps: Vec<Step>,
+    backend: &dyn SystemBackend,
+    runner: &dyn Runner,
+    out: &mut Out<'_>,
+    cancel: &CancelSignal,
+) -> Outcome {
     let mut queue: std::collections::VecDeque<Step> = steps.into();
     let mut tracker = Tracker::default();
-    let mut tail: std::collections::VecDeque<String> = std::collections::VecDeque::with_capacity(TAIL_LINES);
+    let mut tail: std::collections::VecDeque<String> =
+        std::collections::VecDeque::with_capacity(TAIL_LINES);
     let mut index = 0u32;
     while let Some(step) = queue.pop_front() {
         if cancel.requested() {
             return Outcome::Cancelled;
         }
         index += 1;
-        out.mark(&Mark::Step { index, kind: step.kind });
+        out.mark(&Mark::Step {
+            index,
+            kind: step.kind,
+        });
         tracker.begin_step(step.kind);
         tail.clear();
         cancel.set_cancellable(step.kind.cancellable());
@@ -378,7 +475,10 @@ pub fn execute(steps: Vec<Step>, backend: &dyn SystemBackend, runner: &dyn Runne
             Ok(code) => code,
             Err(e) => {
                 out.line(&format!("{}: {e}", step.program));
-                out.mark(&Mark::Exit { index, code: Some(127) });
+                out.mark(&Mark::Exit {
+                    index,
+                    code: Some(127),
+                });
                 return Outcome::Failed(FailureKind::Other);
             }
         };
@@ -395,7 +495,11 @@ pub fn execute(steps: Vec<Step>, backend: &dyn SystemBackend, runner: &dyn Runne
             }
             Next::Fail(kind) => {
                 let lines: Vec<&str> = tail.iter().map(String::as_str).collect();
-                let kind = if kind == FailureKind::Other { backend.classify(&lines) } else { kind };
+                let kind = if kind == FailureKind::Other {
+                    backend.classify(&lines)
+                } else {
+                    kind
+                };
                 return Outcome::Failed(kind);
             }
         }
@@ -429,15 +533,24 @@ struct SharedOut(Arc<std::sync::Mutex<Box<dyn Write + Send>>>);
 
 impl Write for SharedOut {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.0.lock().map_err(|_| std::io::Error::other("poisoned"))?.write(buf)
+        self.0
+            .lock()
+            .map_err(|_| std::io::Error::other("poisoned"))?
+            .write(buf)
     }
 
     fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
-        self.0.lock().map_err(|_| std::io::Error::other("poisoned"))?.write_all(buf)
+        self.0
+            .lock()
+            .map_err(|_| std::io::Error::other("poisoned"))?
+            .write_all(buf)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        self.0.lock().map_err(|_| std::io::Error::other("poisoned"))?.flush()
+        self.0
+            .lock()
+            .map_err(|_| std::io::Error::other("poisoned"))?
+            .flush()
     }
 }
 
@@ -463,17 +576,39 @@ pub fn main(args: &[String]) -> i32 {
         eprintln!("mandara system-update must run as root (through pkexec)");
         return EXIT_NOT_ROOT;
     }
-    let shared: Arc<std::sync::Mutex<Box<dyn Write + Send>>> = Arc::new(std::sync::Mutex::new(Box::new(std::io::stdout())));
+    let shared: Arc<std::sync::Mutex<Box<dyn Write + Send>>> =
+        Arc::new(std::sync::Mutex::new(Box::new(std::io::stdout())));
     let cancel = CancelSignal::default();
     watch_stdin(cancel.clone(), shared.clone());
     let mut writer = SharedOut(shared);
     let mut out = Out::new(&mut writer);
-    run_action(&action, System::detect(), &SystemRunner, &mut out, &cancel, &nixos::NixPaths::system())
+    run_action(
+        &action,
+        System::detect(),
+        &SystemRunner,
+        &mut out,
+        &cancel,
+        &nixos::NixPaths::system(),
+    )
 }
 
 /// Plans and runs `action` on `system`; writes the `begin` and `done`
 /// markers. The exit code of the helper.
-pub fn run_action(action: &Action, system: System, runner: &dyn Runner, out: &mut Out<'_>, cancel: &CancelSignal, nix: &nixos::NixPaths) -> i32 {
+pub fn run_action(
+    action: &Action,
+    system: System,
+    runner: &dyn Runner,
+    out: &mut Out<'_>,
+    cancel: &CancelSignal,
+    nix: &nixos::NixPaths,
+) -> i32 {
+    if let Action::Nix(action) = action
+        && let Err(error) = runner.check_nix(*action, nix, cancel)
+    {
+        out.line(&error);
+        out.mark(&Mark::Done(Outcome::Failed(FailureKind::Other)));
+        return EXIT_UNSUPPORTED;
+    }
     let (backend, steps): (&dyn SystemBackend, Vec<Step>) = match (action, system) {
         (Action::Apply, System::Managed(id)) => {
             let b = plan::backend(id);
@@ -488,12 +623,17 @@ pub fn run_action(action: &Action, system: System, runner: &dyn Runner, out: &mu
             }
         },
         (_, system) => {
-            out.line(&format!("this action doesn't apply to this system ({system:?})"));
+            out.line(&format!(
+                "this action doesn't apply to this system ({system:?})"
+            ));
             out.mark(&Mark::Done(Outcome::Failed(FailureKind::Other)));
             return EXIT_UNSUPPORTED;
         }
     };
-    out.mark(&Mark::Begin { backend: backend_id(backend), steps: steps.len() as u32 });
+    out.mark(&Mark::Begin {
+        backend: backend_id(backend),
+        steps: steps.len() as u32,
+    });
     let outcome = execute(steps, backend, runner, out, cancel);
     out.mark(&Mark::Done(outcome));
     match outcome {
@@ -517,7 +657,12 @@ pub fn helper_speaks_protocol(admin: &Path) -> bool {
         .output()
         .ok()
         .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<u32>().ok())
+        .and_then(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .trim()
+                .parse::<u32>()
+                .ok()
+        })
         == Some(protocol::PROTOCOL)
 }
 
@@ -534,8 +679,22 @@ mod tests {
     fn only_fixed_actions_are_accepted() {
         assert_eq!(Action::parse(&words("apply")), Ok(Action::Apply));
         assert_eq!(Action::parse(&words("--protocol")), Ok(Action::Protocol));
-        for bad in ["", "apply now", "apply --overwrite *", "apply; rm -rf /", "pacman -Syu", "run sh -c id", "APPLY", "--protocol apply", "nixos", "nixos rm -rf"] {
-            assert!(Action::parse(&words(bad)).is_err(), "{bad:?} must be refused");
+        for bad in [
+            "",
+            "apply now",
+            "apply --overwrite *",
+            "apply; rm -rf /",
+            "pacman -Syu",
+            "run sh -c id",
+            "APPLY",
+            "--protocol apply",
+            "nixos",
+            "nixos rm -rf",
+        ] {
+            assert!(
+                Action::parse(&words(bad)).is_err(),
+                "{bad:?} must be refused"
+            );
         }
         // An argument with spaces or a newline is one word, still refused.
         assert!(Action::parse(&["apply\nnixos".to_string()]).is_err());
@@ -579,10 +738,58 @@ mod tests {
     fn unsupported_systems_are_refused() {
         let mut buf: Vec<u8> = Vec::new();
         let mut out = Out::new(&mut buf);
-        let code = run_action(&Action::Apply, System::NixOs, &crate::sysupdate::fake::Replay::new(BackendId::Pacman), &mut out, &CancelSignal::default(), &nixos::NixPaths::system());
+        let code = run_action(
+            &Action::Apply,
+            System::NixOs,
+            &crate::sysupdate::fake::Replay::new(BackendId::Pacman),
+            &mut out,
+            &CancelSignal::default(),
+            &nixos::NixPaths::system(),
+        );
         assert_eq!(code, EXIT_UNSUPPORTED);
         let text = String::from_utf8(buf).unwrap();
-        assert!(text.ends_with(&format!("{}\n", Mark::Done(Outcome::Failed(FailureKind::Other)).line())));
+        assert!(text.ends_with(&format!(
+            "{}\n",
+            Mark::Done(Outcome::Failed(FailureKind::Other)).line()
+        )));
+    }
+
+    #[test]
+    fn the_privileged_side_rechecks_before_running_any_step() {
+        struct Unsupported;
+        impl Runner for Unsupported {
+            fn check_nix(
+                &self,
+                _: NixAction,
+                _: &nixos::NixPaths,
+                _: &CancelSignal,
+            ) -> Result<(), String> {
+                Err("fixture: unsupported configuration".into())
+            }
+            fn run(
+                &self,
+                _: &Step,
+                _: &mut dyn FnMut(&str),
+                _: &CancelSignal,
+            ) -> std::io::Result<Option<i32>> {
+                panic!("no privileged writes before validation")
+            }
+        }
+        let mut buffer = Vec::new();
+        let code = run_action(
+            &Action::Nix(NixAction::Rollback),
+            System::NixOs,
+            &Unsupported,
+            &mut Out::new(&mut buffer),
+            &CancelSignal::default(),
+            &nixos::NixPaths::system(),
+        );
+        assert_eq!(code, EXIT_UNSUPPORTED);
+        assert!(
+            String::from_utf8(buffer)
+                .unwrap()
+                .contains("fixture: unsupported configuration")
+        );
     }
     /// Records each `write` the helper's output makes.
     struct Writes(Vec<Vec<u8>>);
@@ -606,9 +813,27 @@ mod tests {
         let mut w = Writes(Vec::new());
         let mut out = Out::new(&mut w);
         out.line("(1/2) upgrading linux\x1b[0m");
-        out.mark(&Mark::Step { index: 2, kind: plan::StepKind::Install });
+        out.mark(&Mark::Step {
+            index: 2,
+            kind: plan::StepKind::Install,
+        });
         out.line("done");
-        assert_eq!(w.0, [b"(1/2) upgrading linux\n".to_vec(), format!("{}\n", Mark::Step { index: 2, kind: plan::StepKind::Install }.line()).into_bytes(), b"done\n".to_vec()]);
+        assert_eq!(
+            w.0,
+            [
+                b"(1/2) upgrading linux\n".to_vec(),
+                format!(
+                    "{}\n",
+                    Mark::Step {
+                        index: 2,
+                        kind: plan::StepKind::Install
+                    }
+                    .line()
+                )
+                .into_bytes(),
+                b"done\n".to_vec()
+            ]
+        );
     }
 
     #[test]
@@ -620,19 +845,48 @@ mod tests {
         let config = std::fs::read_to_string(config_home.join("git/config")).unwrap();
         assert_eq!(
             config,
-            format!("[include]\n\tpath = \"{}/.config/git/config\"\n[safe]\n\tdirectory = \"/home/me/my \\\"nix\\\" config\"\n", home.path().display()),
+            format!(
+                "[include]\n\tpath = \"{}/.config/git/config\"\n[safe]\n\tdirectory = \"/home/me/my \\\"nix\\\" config\"\n",
+                home.path().display()
+            ),
             "root's own XDG Git settings first, then the one trusted folder"
         );
-        assert_eq!(std::fs::read_link(config_home.join("nix")).unwrap(), home.path().join(".config/nix"), "Nix still reads root's own configuration");
+        assert_eq!(
+            std::fs::read_link(config_home.join("nix")).unwrap(),
+            home.path().join(".config/nix"),
+            "Nix still reads root's own configuration"
+        );
         use std::os::unix::fs::PermissionsExt as _;
-        assert_eq!(std::fs::metadata(&config_home).unwrap().permissions().mode() & 0o777, 0o700);
+        assert_eq!(
+            std::fs::metadata(&config_home)
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o700
+        );
         // Git itself reads it back as exactly that one folder.
-        if let Ok(o) = Command::new("git").args(["config", "--file"]).arg(config_home.join("git/config")).args(["--includes", "--get-all", "safe.directory"]).output() {
+        if let Ok(o) = Command::new("git")
+            .args(["config", "--file"])
+            .arg(config_home.join("git/config"))
+            .args(["--includes", "--get-all", "safe.directory"])
+            .output()
+        {
             assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-            assert_eq!(String::from_utf8_lossy(&o.stdout), format!("{}\n", tree.display()));
+            assert_eq!(
+                String::from_utf8_lossy(&o.stdout),
+                format!("{}\n", tree.display())
+            );
         }
         drop(trust);
         assert!(!config_home.exists(), "removed after the command");
-        assert!(git_trust_config(Path::new("/home/me/a\nb"), Path::new("/root/.config/git/config")).is_err(), "a line break can't add settings");
+        assert!(
+            git_trust_config(
+                Path::new("/home/me/a\nb"),
+                Path::new("/root/.config/git/config")
+            )
+            .is_err(),
+            "a line break can't add settings"
+        );
     }
 }

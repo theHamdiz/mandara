@@ -186,3 +186,30 @@ fn release_artifact_downloads_keep_producer_and_integrity_contracts() {
     download["continue-on-error"] = serde_yaml_ng::Value::String("false".into());
     release_artifact_handoff(&safe).unwrap();
 }
+
+#[test]
+fn nix_builds_cover_stable_unstable_and_the_previous_reported_release() {
+    let workflow = std::fs::read_to_string(crate::root().join(".github/workflows/ci.yml")).unwrap();
+    let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&workflow).unwrap();
+    let job = &workflow["jobs"]["nix"];
+    let channels = job["strategy"]["matrix"]["include"].as_sequence().unwrap();
+    for channel in ["nixos-26.05", "nixos-unstable", "nixos-25.11"] {
+        assert!(
+            channels
+                .iter()
+                .any(|value| value["channel"].as_str() == Some(channel))
+        );
+    }
+    for step in job["steps"].as_sequence().unwrap() {
+        if let Some(run) = step["run"].as_str()
+            && (run.contains("nix build") || run.contains("nix flake check"))
+        {
+            assert!(run.contains("--override-input nixpkgs https://channels.nixos.org/${{ matrix.channel }}/nixexprs.${{ matrix.archive }}"));
+            assert!(run.contains("--no-write-lock-file"));
+        }
+    }
+    let flake = std::fs::read_to_string(crate::root().join("flake.nix")).unwrap();
+    assert!(flake.contains(
+        "inputs.nixpkgs.url = \"https://channels.nixos.org/nixos-26.05/nixexprs.tar.zst\""
+    ));
+}

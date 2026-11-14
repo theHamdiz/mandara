@@ -29,7 +29,7 @@ running can finish; disabling the plugin prevents a follow-up refresh.
 </tr>
 </table>
 
-The 86 first-party plugins (50 of them ship switched off, marked *opt-in*):
+The 88 first-party plugins (52 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -49,6 +49,8 @@ The 86 first-party plugins (50 of them ship switched off, marked *opt-in*):
 | **Resources** | CPU, memory and disk usage |
 | **Mini stats** | CPU, memory, network, temperature and battery as compact numbers in the bar *(opt-in)* |
 | **Process hunter** | Find running processes by name or PID and end them | *(opt-in)*
+| **Backups** | Encrypted backup snapshots, native Btrfs snapshots and reviewed storage cleanup ([guide](backups.md)) *(opt-in)* |
+| **App permissions** | Inspect Flatpak access and edit personal sandbox grants with backups and Undo ([guide](app-permissions.md)) *(opt-in)* |
 | **Drives** | Mounted filesystems and removable drives: mount, unlock and safely remove | *(opt-in)*
 | **Containers** | Docker and Podman containers: status, live usage, logs and controls | *(opt-in)*
 | **Services** | systemd units: failed alerts, start, stop, enable and journal | *(opt-in)*
@@ -100,7 +102,7 @@ The 86 first-party plugins (50 of them ship switched off, marked *opt-in*):
 | **Share to phone** | Clipboard text, a screenshot or a file, served once on your network behind a QR code *(opt-in)* |
 | **Tailscale** | Your tailnet: this device, peers, direct or relayed paths, exit nodes, connect and disconnect *(opt-in)* |
 | **Uptime monitor** | Watches your sites and services (HTTP or TCP) and tells you when one goes down *(opt-in)* |
-| **Local AI** | Ollama models in memory and on disk: GPU memory, unload timers, load and unload *(opt-in)* |
+| **Local AI** | Streaming chat with local servers and AnythingLLM workspaces, plus Ollama memory and model controls ([setup](local-ai.md)) *(opt-in)* |
 | **Listening ports** | Which apps listen on which ports, who can reach them, open in the browser or end them *(opt-in)* |
 | **Git repositories** | Your local repositories: branch, uncommitted changes and unpushed commits, with a terminal a click away *(opt-in)* |
 | **CI status** | GitHub Actions runs of your repositories, with a notification when a run finishes *(opt-in)* |

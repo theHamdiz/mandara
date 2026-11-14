@@ -292,7 +292,7 @@ pub fn mounts(sys: &Sys) -> Vec<(PathBuf, String)> {
 }
 
 /// mountinfo escapes space, tab, newline and backslash as `\ooo`.
-fn unescape_mount(s: &str) -> String {
+pub(crate) fn unescape_mount(s: &str) -> String {
     let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;

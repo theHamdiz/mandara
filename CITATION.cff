@@ -12,7 +12,7 @@ abstract: >-
   Native drivers support MangoWM, Niri, Hyprland, Umbriel, Sway, River
   Classic, KWin, Aqueous, labwc and COSMIC. Sandboxed WebAssembly plugins and documented commands
   with JSON replies extend the desktop. It includes 19 bar presets,
-  19 Looks, 86 built-in plugins and 32 pages of live settings.
+  19 Looks, 88 built-in plugins and 32 pages of live settings.
 url: "https://thehamdiz.github.io/mandara/"
 type: software
 authors:

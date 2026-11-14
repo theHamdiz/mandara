@@ -20,7 +20,7 @@ fn the_readme_keeps_its_images_badges_and_gallery_layout() {
     }
     // Includes source URLs, alt text, scheme variants, cell widths and tag order.
     // Update only when a deliberate visual change has been reviewed.
-    assert_eq!(format!("{:x}", Sha256::digest(tags.join("\n"))), "e6bc233c89d1a185a92e86c71963c1c3918a32d95a158bbad10d0aa741d5202e");
+    assert_eq!(format!("{:x}", Sha256::digest(tags.join("\n"))), "5f55f03a65cbc039a1a4b2066eccd2fbc1d49345ed1e82914c612293bc9ebf0d");
 }
 
 fn section<'a>(source: &'a str, heading: &str) -> &'a str {
@@ -38,8 +38,8 @@ fn the_readme_keeps_its_feature_lists_and_key_capabilities() {
     let lower = source.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
     for feature in [
         "dynamic island", "on-screen displays", "offline ocr", "polkit", "clipboard", "all displays", "panel images",
-        "profiles", "19 bar presets", "32 pages", "86 built-in plugins", "webassembly", "natural language",
-        "ghostty", "gtk 3/4", "qt 5/6", "kvantum", "zed", "kitty", "foot", "alacritty", "btop", "cava", "tmux", "zellij", "spicetify",
+        "profiles", "19 bar presets", "32 pages", "88 built-in plugins", "webassembly", "natural language",
+        "backups", "app permissions", "btrfs", "helium", "celluloid", "rufin", "ghostty", "gtk 3/4", "qt 5/6", "kvantum", "zed", "kitty", "foot", "alacritty", "btop", "cava", "tmux", "zellij", "spicetify",
         "grub", "limine", "refind", "plymouth", "nixos", "freebsd", "steamos", "hijri", "eastern arabic", "yasser al-dossary", "abdulrashid sufi", "abdul basit abdul samad",
     ] {
         assert!(lower.contains(feature), "missing feature: {feature}");

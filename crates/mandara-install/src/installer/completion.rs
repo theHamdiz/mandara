@@ -12,6 +12,8 @@ impl Installer<'_> {
             t("Open Mandara Studio from your application menu."),
         );
         self.say(Level::Info, t("Studio design: Themes → Studio"));
+        self.say(Level::Info, t("Backups and app permissions: Studio → Plugins"));
+        self.say(Level::Info, t("App colours: Themes → Other apps"));
         self.say(
             Level::Info,
             t("Compositor shortcuts: Keyboard shortcuts → Compositor"),

@@ -90,7 +90,7 @@ impl Transport for Client {
 
 impl Client {
     /// Validate the destination and bound the JSON body before any network I/O.
-    fn request(method: Method, url: &str, body: Option<&Value>, auth: Option<Authorization<'_>>) -> Result<Request<Vec<u8>>, String> {
+    pub(crate) fn request(method: Method, url: &str, body: Option<&Value>, auth: Option<Authorization<'_>>) -> Result<Request<Vec<u8>>, String> {
         if !web_url(url) { return Err(t("Use an http:// or https:// server address without a password").into()); }
         if (auth.is_some() || body.is_some_and(|value| value.get("api_key").is_some())) && !encrypted_or_local(url) {
             return Err(t("Use an https:// address, or a local IP address, when sending an API key").into());
@@ -108,20 +108,36 @@ impl Client {
     fn send_online(&self, request: Request<Vec<u8>>) -> Result<Value, Error> {
         let mut response = self.agent.run(request).map_err(|error| tf("Request failed: {error}", &[("error", &error)]).to_string())?;
         let status = response.status();
-        if status.is_redirection() { return Err(t("The server redirected this request; enter its final address in Studio").to_string().into()); }
-        if !status.is_success() {
-            return Err(Error { status: Some(status.as_u16()), message: match status.as_u16() {
-                401 | 403 => t("The server rejected the API key").into(),
-                429 => t("The server is receiving too many requests; try again later").into(),
-                status => tf("Server replied with HTTP {status}", &[("status", &status)]).to_string(),
-            }});
-        }
+        Self::check_status(status)?;
         let mut bytes = Vec::new();
         response.body_mut().as_reader().take((MAX_RESPONSE_BYTES + 1) as u64).read_to_end(&mut bytes)
             .map_err(|error| tf("Request failed: {error}", &[("error", &error)]).to_string())?;
         if bytes.len() > MAX_RESPONSE_BYTES { return Err(t("The server's response was too large").to_string().into()); }
         if bytes.is_empty() { return Ok(Value::Null); }
         serde_json::from_slice(&bytes).map_err(|_| t("The server did not return valid JSON").to_string().into())
+    }
+
+    pub(crate) fn check_status(status: ureq::http::StatusCode) -> Result<(), Error> {
+        if status.is_redirection() {
+            return Err(
+                t("The server redirected this request; enter its final address in Studio")
+                    .to_string()
+                    .into(),
+            );
+        }
+        if !status.is_success() {
+            return Err(Error {
+                status: Some(status.as_u16()),
+                message: match status.as_u16() {
+                    401 | 403 => t("The server rejected the API key").into(),
+                    429 => t("The server is receiving too many requests; try again later").into(),
+                    status => {
+                        tf("Server replied with HTTP {status}", &[("status", &status)]).to_string()
+                    }
+                },
+            });
+        }
+        Ok(())
     }
 }
 

@@ -8,6 +8,8 @@
 
 mod redraw;
 pub use redraw::redraw_in;
+pub(super) mod controls;
+pub(super) mod visibility;
 
 use crate::bidi::Bidi as _;
 use std::cell::RefCell;

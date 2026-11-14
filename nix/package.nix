@@ -14,6 +14,7 @@
   fontconfig,
   freetype,
   linux-pam,
+  zstd,
   # The flake's source tree, its revision (`self.rev`, or "unknown") and
   # last commit time (`self.lastModified`, Unix seconds).
   src,
@@ -54,6 +55,7 @@ rustPlatform.buildRustPackage {
     fontconfig
     freetype
     linux-pam
+    zstd
   ];
 
   # The `mandara` binary, plus `xtask` to compile the language packs into

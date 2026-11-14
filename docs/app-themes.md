@@ -28,6 +28,34 @@ Compositor borders use **Studio → Compositor → Integration → Sync border
 colors**, where the backend supports it. They use Mandara's validated generated
 drop-in, keeping your own compositor settings intact.
 
+## GTK apps, including Celluloid and Rufin
+
+The **GTK** switch covers Celluloid and Rufin. In Rufin, choose **System** for
+both its theme and accent; an explicit Rufin theme or accent remains its own
+choice. Mandara keeps its generated stylesheet beside `gtk.css` in each GTK
+config folder. For Flatpak installs of these two apps, it also updates their
+existing `~/.var/app/<app-id>/config/gtk-4.0` folders. Open a newly installed
+app once before applying colours. No sandbox permissions need changing and
+the stylesheet does not depend on Mandara's cache. Existing personal CSS,
+imports and symlinks are preserved; switching GTK integration off restores
+owned changes. Imported GTK 4 extensions use these same destinations.
+Restart an app if it does not reload GTK styles itself.
+
+## Helium and other Chromium browsers
+
+Search **Helium** in **Browse app templates** and review the **Chromium based**
+package. The shared template also covers Chrome, Chromium and Brave. It sets
+`BrowserThemeColor`; the browser derives its own theme from that colour, and
+web pages keep their own styling.
+
+Read the package's Instructions before enabling it. Its native Linux policy is
+machine-wide and affects all profiles sharing the browser's policy directory.
+First-time setup requires reviewed administrator approval through polkit;
+prepared policy files receive later palette updates without elevation. Helium
+uses the shared `/etc/chromium/policies/managed` location. Reload policies or
+restart the browser if it does not pick up a change. Mandara neither installs
+a browser nor changes an app's theme merely because it appears in the catalog.
+
 ## More apps and your own templates
 
 In **Studio → Themes → Other apps**, choose **Browse app templates** to search

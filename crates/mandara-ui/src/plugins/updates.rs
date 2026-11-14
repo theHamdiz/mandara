@@ -434,6 +434,7 @@ fn start_check(m: &Shared, reply: Option<async_channel::Sender<Result<String, St
             return;
         }
         mb.checking = true;
+        mb.nix.free();
     }
     let Settings { opts, aur_helper: preferred, .. } = settings(cx);
     // Check, cache write and helper lookup all run off the UI thread.

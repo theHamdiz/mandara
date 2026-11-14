@@ -12,6 +12,8 @@ use serde::Deserialize;
 use crate::backend::CompositorBackend;
 use crate::model::{ClientInfo, CompositorEvent, CompositorKind, MonitorInfo, NavigationModel, WorkspaceStatus};
 
+mod keyboard;
+
 /// Hyprland 0.57 leaves `id` out for named and special workspaces and
 /// tags each with a `type`; older versions give special ones negative ids.
 #[derive(Clone, Debug, Deserialize)]
@@ -264,6 +266,10 @@ impl HyprlandDriver {
         let mut events = self.navigation_events();
         if let Ok(focused) = self.get_active_client() { events.push(CompositorEvent::FocusedClient(focused)); }
         if let Ok(monitors) = self.get_monitors() { events.push(CompositorEvent::Monitors(monitors)); }
+        if let Ok(devices) = self.json::<serde_json::Value>("devices")
+            && let Some(layout) = keyboard::initial(&devices) {
+                events.push(CompositorEvent::KeyboardLayout(layout.to_owned()));
+            }
         events
     }
 
@@ -322,7 +328,7 @@ impl CompositorBackend for HyprlandDriver {
                     if tx.send_blocking(event).is_err() { return; }
                 }
                 for line in BufReader::new(stream).lines().map_while(Result::ok) {
-                    let Some((event, _)) = parse_event(&line) else { continue };
+                    let Some((event, data)) = parse_event(&line) else { continue };
                     let events: Vec<CompositorEvent> = match event {
                         "workspace" | "workspacev2" | "createworkspace" | "destroyworkspace" | "focusedmon" | "openwindow"
                         | "closewindow" | "movewindow" | "urgent" => driver.navigation_events(),
@@ -330,6 +336,7 @@ impl CompositorBackend for HyprlandDriver {
                             vec![CompositorEvent::FocusedClient(driver.get_active_client().ok().flatten())]
                         }
                         "monitoradded" | "monitorremoved" => vec![CompositorEvent::Monitors(driver.get_monitors().unwrap_or_default())],
+                        "activelayout" => keyboard::switched(data).map(|layout| CompositorEvent::KeyboardLayout(layout.to_owned())).into_iter().collect(),
                         _ => Vec::new(),
                     };
                     for e in events {
@@ -636,10 +643,10 @@ mod tests {
             }
         };
         let server = std::thread::spawn(move || {
-            let _stream = accept(&events);
+            let mut event_stream = accept(&events);
             let monitors = r#"[{"name":"DP-1","activeWorkspace":{"id":2},"width":1707,"height":960}]"#;
             let focused = r#"{"address":"0x7","title":"Fresh window","workspace":{"id":2}}"#;
-            for (command, reply) in [("j/workspaces", r#"[{"id":2,"name":"2","monitor":"DP-1","windows":1}]"#.to_string()), ("j/monitors", monitors.into()), ("j/clients", format!("[{focused}]")), ("j/monitors", monitors.into()), ("j/activewindow", focused.into()), ("j/monitors", monitors.into()), ("j/monitors", monitors.into())] {
+            for (command, reply) in [("j/workspaces", r#"[{"id":2,"name":"2","monitor":"DP-1","windows":1}]"#.to_string()), ("j/monitors", monitors.into()), ("j/clients", format!("[{focused}]")), ("j/monitors", monitors.into()), ("j/activewindow", focused.into()), ("j/monitors", monitors.into()), ("j/monitors", monitors.into()), ("j/devices", r#"{"keyboards":[{"main":true,"active_keymap":"English (US)"}]}"#.into())] {
                 let mut stream = accept(&requests);
                 stream.set_read_timeout(Some(crate::REQUEST_TIMEOUT)).unwrap();
                 let mut input = vec![0; command.len()];
@@ -647,21 +654,23 @@ mod tests {
                 assert_eq!(input, command.as_bytes());
                 stream.write_all(reply.as_bytes()).unwrap();
             }
+            event_stream.write_all(b"activelayout>>keyboard,Arabic\nactivelayout>>keyboard,\nactivelayout>>keyboard,English (US, intl.)\n").unwrap();
         });
         let driver = HyprlandDriver { dir: dir.0.clone(), version: Some((0, 57)), lua: true };
         let rx = driver.subscribe_events();
         let deadline = Instant::now() + crate::REQUEST_TIMEOUT;
         let mut initial = Vec::new();
-        while initial.len() < 4 && Instant::now() < deadline {
+        while initial.len() < 7 && Instant::now() < deadline {
             match rx.try_recv() { Ok(event) => initial.push(event), Err(_) => std::thread::sleep(POLL) }
         }
         drop(rx);
         server.join().unwrap();
-        assert_eq!(initial.len(), 4);
+        assert_eq!(initial.len(), 7);
         assert!(matches!(&initial[0], CompositorEvent::Navigation { monitor, model: NavigationModel::Workspaces { workspaces } } if monitor == "DP-1" && workspaces[0].id == 2));
         assert!(matches!(&initial[1], CompositorEvent::Clients(clients) if clients[0].id == 7));
         assert!(matches!(&initial[2], CompositorEvent::FocusedClient(Some(client)) if client.title == "Fresh window"));
         assert!(matches!(&initial[3], CompositorEvent::Monitors(monitors) if monitors[0].width == 1707));
+        assert_eq!(&initial[4..], [CompositorEvent::KeyboardLayout("English (US)".into()), CompositorEvent::KeyboardLayout("Arabic".into()), CompositorEvent::KeyboardLayout("English (US, intl.)".into())]);
     }
 
 }

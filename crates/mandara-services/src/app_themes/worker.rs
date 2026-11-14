@@ -297,6 +297,21 @@ fn export_at(
         &locations.config,
         &mut ledger,
     );
+    if targets.gtk {
+        use mandara_theme::templates::{gtk, gtk_flatpak_directories, install_gtk_stylesheet};
+        match gtk_flatpak_directories(&locations.home, "gtk-4.0") {
+            Ok(directories) => {
+                let body = gtk(&inputs.palette);
+                for directory in directories {
+                    match install_gtk_stylesheet(&mut ledger, "gtk", &directory, "mandara-colors.css", &body) {
+                        Ok(paths) => native.files.extend(paths),
+                        Err(error) => { native.errors.insert(directory.display().to_string(), error.to_string()); }
+                    }
+                }
+            }
+            Err(error) => { native.errors.insert("gtk".into(), error.to_string()); }
+        }
+    }
     native.append(mandara_theme::templates::sync_apps_checked(
         &inputs.palette,
         apps,
@@ -410,6 +425,30 @@ mod tests {
             assert!(export_at(&inputs, &locations, &cancel, &||false).unwrap().errors.is_empty());
             assert_eq!(std::fs::read_to_string(css).unwrap(), "/* personal */\n");
         }
+    }
+
+    #[test]
+    fn gtk_exports_reach_flatpak_namespaces_and_restore_personal_styles() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = locations(root.path());
+        let css = locations.home.join(".var/app/io.github.screwys.Rufin/config/gtk-4.0/gtk.css");
+        std::fs::create_dir_all(css.parent().unwrap()).unwrap();
+        std::fs::write(&css, "/* personal */\n").unwrap();
+        let mut inputs = inputs();
+        inputs.integrations.gtk4 = true;
+        let cancel = AtomicBool::new(false);
+        for dark in [true, false] {
+            inputs.palette = mandara_theme::engine::default_palette(dark);
+            let report = export_at(&inputs, &locations, &cancel, &||false).unwrap();
+            assert!(report.errors.is_empty(), "{:?}", report.errors);
+            assert!(report.files.contains(&css));
+            assert_eq!(std::fs::read_to_string(css.with_file_name("mandara-colors.css")).unwrap(), mandara_theme::templates::gtk(&inputs.palette));
+        }
+        inputs.integrations.gtk4 = false;
+        assert!(export_at(&inputs, &locations, &cancel, &||false).unwrap().errors.is_empty());
+        assert_eq!(std::fs::read_to_string(&css).unwrap(), "/* personal */\n");
+        assert!(!css.with_file_name("mandara-colors.css").exists());
+        assert!(!locations.home.join(".var/app/io.github.celluloid_player.Celluloid").exists());
     }
 
     #[test]

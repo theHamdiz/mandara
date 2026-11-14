@@ -1,10 +1,11 @@
-//! Short-lived template commands with bounded output and a process-group deadline.
+//! Short-lived native commands with bounded output and a process-group deadline.
 
 use std::os::unix::process::CommandExt as _;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+use std::io::Write as _;
 
 use anyhow::{Context as _, Result, bail, ensure};
 use mandara_theme::templates::custom::Command as RenderedCommand;
@@ -18,6 +19,8 @@ pub const TIMEOUT: Duration = Duration::from_secs(TIMEOUT_SECONDS);
 /// Only running commands are polled; no thread remains after the job completes.
 const WAIT_MILLIS: u64 = 20;
 const WAIT: Duration = Duration::from_millis(WAIT_MILLIS);
+/// Check cancellation between batches even when a tool continuously fills its pipe.
+const READ_BATCH_CHUNKS: usize = 64;
 
 struct Group {
     child: Child,
@@ -32,23 +35,20 @@ impl Drop for Group {
     }
 }
 
-fn read_available(pipe: &mut impl std::io::Read, bytes: &mut Vec<u8>) -> Result<()> {
+fn read_available(pipe: &mut impl std::io::Read, consume: &mut impl FnMut(&[u8]) -> Result<()>) -> Result<bool> {
     let mut buffer = [0; 4096];
-    loop {
+    for _ in 0..READ_BATCH_CHUNKS {
         match pipe.read(&mut buffer) {
-            Ok(0) => return Ok(()),
+            Ok(0) => return Ok(true),
             Ok(n) => {
-                ensure!(
-                    n <= MAX_OUTPUT.saturating_sub(bytes.len()),
-                    "template command output exceeds {MAX_OUTPUT} bytes"
-                );
-                bytes.extend_from_slice(&buffer[..n]);
+                consume(&buffer[..n])?;
             }
-            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => return Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => return Ok(true),
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(error) => return Err(error.into()),
         }
     }
+    Ok(false)
 }
 
 pub fn run(
@@ -69,22 +69,59 @@ pub fn run(
 
 /// Run a native checker with the same output, cancellation and child-process bounds.
 pub(crate) fn native(
-    mut command: Command,
+    command: Command,
     cancel: &AtomicBool,
     timeout: Duration,
 ) -> Result<(String, String)> {
+    let mut output = Vec::new();
+    let diagnostic = stream_native(command, cancel, timeout, &mut |bytes| {
+        ensure!(bytes.len() <= MAX_OUTPUT.saturating_sub(output.len()), "native command output exceeds {MAX_OUTPUT} bytes");
+        output.extend_from_slice(bytes);
+        Ok(())
+    })?;
+    Ok((String::from_utf8(output).context("command returned non-UTF-8 output")?, diagnostic))
+}
+
+/// Stream a native job through bounded chunks, sharing cancellation and process-group cleanup.
+/// The consumer bounds its retained data; stderr always has the short diagnostic limit.
+pub(crate) fn stream_native(
+    command: Command,
+    cancel: &AtomicBool,
+    timeout: Duration,
+    consume: &mut impl FnMut(&[u8]) -> Result<()>,
+) -> Result<String> {
+    stream(command, cancel, timeout, false, consume)
+}
+
+/// The root helper cancels its own child after a request on its private input pipe.
+pub(crate) fn stream_native_controlled(
+    command: Command,
+    cancel: &AtomicBool,
+    timeout: Duration,
+    consume: &mut impl FnMut(&[u8]) -> Result<()>,
+) -> Result<String> {
+    stream(command, cancel, timeout, true, consume)
+}
+
+fn stream(
+    mut command: Command,
+    cancel: &AtomicBool,
+    timeout: Duration,
+    controlled: bool,
+    consume: &mut impl FnMut(&[u8]) -> Result<()>,
+) -> Result<String> {
     ensure!(
         !cancel.load(Ordering::Acquire),
-        "template command was cancelled"
+        "native command was cancelled"
     );
     let mut group = Group {
         child: command
-            .stdin(Stdio::null())
+            .stdin(if controlled { Stdio::piped() } else { Stdio::null() })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .process_group(0)
             .spawn()
-            .context("starting app theme command")?,
+            .context("starting native command")?,
         completed: false,
     };
     let mut stdout = group
@@ -99,39 +136,99 @@ pub(crate) fn native(
         .context("template stderr is unavailable")?;
     fcntl_setfl(&stdout, fcntl_getfl(&stdout)? | OFlags::NONBLOCK)?;
     fcntl_setfl(&stderr, fcntl_getfl(&stderr)? | OFlags::NONBLOCK)?;
-    let mut output = Vec::new();
+    let mut input = group.child.stdin.take();
+    let mut cancel_sent = false;
     let mut diagnostic = Vec::new();
-    let deadline = Instant::now() + timeout;
+    let mut diagnostic_chunk = |bytes: &[u8]| {
+        ensure!(bytes.len() <= MAX_OUTPUT.saturating_sub(diagnostic.len()), "command diagnostics exceed {MAX_OUTPUT} bytes");
+        diagnostic.extend_from_slice(bytes);
+        Ok(())
+    };
+    let mut deadline = Instant::now() + timeout;
+    let mut exited = None;
     loop {
-        read_available(&mut stdout, &mut output)?;
-        read_available(&mut stderr, &mut diagnostic)?;
-        if let Some(status) = group.child.try_wait()? {
-            read_available(&mut stdout, &mut output)?;
-            read_available(&mut stderr, &mut diagnostic)?;
+        let output_drained = read_available(&mut stdout, consume)?;
+        let diagnostic_drained = read_available(&mut stderr, &mut diagnostic_chunk)?;
+        if exited.is_none() { exited = group.child.try_wait()?; }
+        if let Some(status) = exited.filter(|_| output_drained && diagnostic_drained) {
+            ensure!(controlled || !cancel_sent, "native command was cancelled");
             ensure!(
                 status.success(),
-                "template command exited {status}: {}",
+                "native command exited {status}: {}",
                 String::from_utf8_lossy(&diagnostic).trim()
             );
-            let output =
-                String::from_utf8(output).context("template command returned non-UTF-8 paths")?;
             let diagnostic = String::from_utf8_lossy(&diagnostic).into_owned();
             group.completed = true;
-            return Ok((output, diagnostic));
+            return Ok(diagnostic);
         }
-        if cancel.load(Ordering::Acquire) {
-            bail!("template command was cancelled");
+        if cancel.load(Ordering::Acquire) && !cancel_sent {
+                if controlled {
+                    let input = input.as_mut().context("administrator control pipe is unavailable")?;
+                    input.write_all(b"cancel\n")?;
+                    input.flush()?;
+                } else {
+                    // Restic releases its repository lock and btrfs scrub
+                    // records progress and cancels its ioctl on SIGINT.
+                    crate::hooks::kill_group(group.child.id(), libc::SIGINT);
+                }
+                cancel_sent = true;
+                deadline = Instant::now() + TIMEOUT;
         }
         if Instant::now() >= deadline {
-            bail!("template command timed out");
+            bail!("native command timed out");
         }
-        std::thread::sleep(WAIT);
+        if output_drained && diagnostic_drained { std::thread::sleep(WAIT); }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn continuous_output_cannot_starve_cancellation() {
+        let cancel = AtomicBool::new(false);
+        let mut command = Command::new("sh");
+        command.args(["-c", "while :; do printf 'continuous output'; done"]);
+        let started = Instant::now();
+        let result = stream_native(command, &cancel, TIMEOUT, &mut |_| { cancel.store(true, Ordering::Release); Ok(()) });
+        assert!(result.unwrap_err().to_string().contains("cancelled"));
+        assert!(started.elapsed() < TIMEOUT);
+    }
+
+    #[test]
+    fn cancellation_allows_a_native_tools_cleanup_before_the_hard_deadline() {
+        let root = tempfile::tempdir().unwrap();
+        let cancel = AtomicBool::new(false);
+        let mut command = Command::new("sh");
+        command.current_dir(root.path()).args(["-c", "trap 'printf cleaned > receipt; exit 0' INT; printf ready; while :; do :; done"]);
+        let result = stream_native(command, &cancel, TIMEOUT, &mut |_| { cancel.store(true, Ordering::Release); Ok(()) });
+        assert!(result.unwrap_err().to_string().contains("cancelled"));
+        assert_eq!(std::fs::read_to_string(root.path().join("receipt")).unwrap(), "cleaned");
+    }
+
+    #[test]
+    fn administrator_cancellation_is_sent_over_the_control_pipe() {
+        let cancel = AtomicBool::new(false);
+        let mut command = Command::new("sh");
+        command.args(["-c", "printf 'ready\\n'; read -r request; [ \"$request\" = cancel ] && printf 'cancelled safely'"]);
+        let mut output = Vec::new();
+        stream_native_controlled(command, &cancel, TIMEOUT, &mut |bytes| { output.extend_from_slice(bytes); cancel.store(true, Ordering::Release); Ok(()) }).unwrap();
+        assert_eq!(output, b"ready\ncancelled safely");
+    }
+
+    #[test]
+    fn streaming_jobs_do_not_retain_the_entire_progress_log() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "i=0; while [ $i -lt 20000 ]; do printf 'progress update\\n'; i=$((i+1)); done"]);
+        let mut bytes = 0;
+        stream_native(command, &AtomicBool::new(false), TIMEOUT, &mut |chunk| {
+            bytes += chunk.len();
+            Ok(())
+        }).unwrap();
+        assert_eq!(bytes, 20000 * "progress update\n".len());
+        assert!(bytes > MAX_OUTPUT);
+    }
 
     struct Cleanup(i32);
     impl Drop for Cleanup {

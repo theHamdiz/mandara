@@ -864,3 +864,10 @@ draft keeps unrelated changes made while the page was open. Kept arrangements
 survive theme and Look changes, restarts and updates. Widget settings explain
 when a layout fixes text positions or needs a header, rather than presenting
 controls that appear to do nothing.
+
+
+The opt-in [Backups](backups.md) and [App permissions](app-permissions.md)
+plugins are available in **Plugins**. Backups' Settings contains the repository,
+password-file path, source folders, local snapshot locations and cache age.
+Their panels handle the everyday actions and review each destructive storage
+operation before it runs.

@@ -523,3 +523,32 @@ fn requests_with_the_aur_say_which_steps_they_run() {
     assert_eq!(build_reason(&["/home/u/.cache/paru/clone/x/PKGBUILD: line 3: oops", "==> ERROR: A failure occurred in build()."]), Some("PKGBUILD: line 3: oops"));
     assert_eq!(build_reason(&["nothing failed here"]), None);
 }
+
+#[test]
+fn an_unsupported_nix_configuration_is_rejected_before_authorization_or_user_writes() {
+    struct Unsupported;
+    impl Launcher for Unsupported {
+        fn check_nix(&self, _: NixAction, _: &CancelSignal) -> Result<(), String> {
+            Err("fixture: no matching host".into())
+        }
+        fn prepare(&self) -> Result<PathBuf, Failure> {
+            panic!("must not request authorization")
+        }
+        fn root(&self, _: &Path, _: &[String]) -> std::io::Result<RootProc> {
+            panic!("must not start the helper")
+        }
+        fn user(&self) -> &dyn Runner {
+            panic!("must not update a user-owned lock file")
+        }
+    }
+    let job = start(
+        Request::Nix {
+            action: NixAction::Update(RebuildMode::Switch),
+        },
+        Arc::new(Unsupported),
+        quiet(),
+    );
+    assert!(
+        matches!(wait(&job).outcome, JobOutcome::Failed(Failure { detail, .. }) if detail == "fixture: no matching host")
+    );
+}

@@ -11,6 +11,9 @@ use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 const REGISTRY_LIVE_BUDGET: isize = 4 * 1024 * 1024;
 /// Bytes allocated in total while registering (transient included).
 const REGISTRY_TOTAL_BUDGET: usize = 16 * 1024 * 1024;
+/// Public plugin totals exclude command namespaces without a plugin manifest.
+const BUILTIN_PLUGIN_COUNT: usize = 88;
+const OPT_IN_PLUGIN_COUNT: usize = 52;
 
 struct Counting;
 
@@ -54,5 +57,9 @@ fn registering_every_plugin_stays_within_budget() {
     assert!(live <= REGISTRY_LIVE_BUDGET, "registering plugins keeps {} KiB (budget {} KiB): initialize lazily", live / 1024, REGISTRY_LIVE_BUDGET / 1024);
     assert!(total <= REGISTRY_TOTAL_BUDGET, "registering plugins allocates {} KiB (budget {} KiB)", total / 1024, REGISTRY_TOTAL_BUDGET / 1024);
     assert_eq!(spawned, 0, "registering plugins started threads");
+    let builtins = || registry.manifests().filter(|manifest| manifest.origin == mandara_plugins::PluginOrigin::Builtin);
+    assert_eq!(builtins().count(), BUILTIN_PLUGIN_COUNT, "keep public plugin counts in sync with the actual registry");
+    assert_eq!(builtins().filter(|manifest| !manifest.enabled_by_default).count(), OPT_IN_PLUGIN_COUNT);
+    for id in ["backups", "app-permissions"] { assert!(!registry.manifest(id).unwrap().enabled_by_default, "new tools must remain opt-in"); }
     drop(registry);
 }

@@ -49,7 +49,7 @@ fn public_counts_follow_studios_presets_and_the_plugin_guide() {
     }
     let guide = std::fs::read_to_string(crate::root().join("docs/plugins.md")).unwrap();
     let count = guide.lines().filter(|line| line.starts_with("| **")).count();
-    assert_eq!(count, 86);
+    assert_eq!(count, 88);
     assert!(guide.contains("| **Taskbar** |"));
     for path in ["README.md", "llms.txt", "CITATION.cff", "AGENTS.md"] {
         let text = std::fs::read_to_string(crate::root().join(path)).unwrap();

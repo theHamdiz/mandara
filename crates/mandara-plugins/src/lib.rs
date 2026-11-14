@@ -21,5 +21,5 @@ pub use guard::{guard, install_panic_hook};
 pub use command::{ArgKind, ArgSpec, Args, CommandGate, CommandRegistry, CommandSpec, Output};
 pub use plugin::{
     CardRelease, ClickHandler, DesktopWidgetStyle, DesktopWidgetType, MakeWidgets, ManifestSetting, ManifestText, ManifestWidget, SettingChoice, SettingKind, PanelCx, PanelSpec, PluginFactory, PluginInstance, PluginManifest, PluginOrigin, PluginRegistry,
-    Reveal, Zone, discover_third_party, split_settings, split_widgets, valid_settings,
+    Reveal, WeakPanelCx, Zone, discover_third_party, split_settings, split_widgets, valid_settings,
 };

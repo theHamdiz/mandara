@@ -28,7 +28,7 @@ so small lettering stays clean.
 
 ## Plugins
 
-The 86 artwork entries below cover 85 of Mandara’s 86 built-in plugins and the Moon phase example. Taskbar uses the pinned and running applications’ own icons. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
+The 88 artwork entries below cover 87 of Mandara’s 88 built-in plugins and the Moon phase example. Taskbar uses the pinned and running applications’ own icons. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
 
 | Preview | Files | Notes |
 | --- | --- | --- |
@@ -118,6 +118,8 @@ The 86 artwork entries below cover 85 of Mandara’s 86 built-in plugins and the
 | <img src="plugins/home-assistant/icon.png" width="40" alt="Home Assistant icon"> <img src="plugins/home-assistant/cover.png" width="128" alt="Home Assistant cover"> | **Home Assistant** · [SVG](plugins/home-assistant/icon.svg) · [256 PNG](plugins/home-assistant/icon.png) · [Cover](plugins/home-assistant/cover.png) | Corniche · illustration |
 | <img src="plugins/sudoku/icon.png" width="40" alt="Sudoku icon"> <img src="plugins/sudoku/cover.png" width="128" alt="Sudoku cover"> | **Sudoku** · [SVG](plugins/sudoku/icon.svg) · [256 PNG](plugins/sudoku/icon.png) · [Cover](plugins/sudoku/cover.png) | Obsidian · cream puzzle lattice and gold selected cell · illustration |
 | <img src="plugins/2048/icon.png" width="40" alt="2048 icon"> <img src="plugins/2048/cover.png" width="128" alt="2048 cover"> | **2048** · [SVG](plugins/2048/icon.svg) · [256 PNG](plugins/2048/icon.png) · [Cover](plugins/2048/cover.png) | Twilight · sliding tiles and a gold merged tile · illustration |
+| <img src="plugins/backups/icon.png" width="40" alt="Backups icon"> <img src="plugins/backups/cover.png" width="128" alt="Backups cover"> | **Backups** · [SVG](plugins/backups/icon.svg) · [256 PNG](plugins/backups/icon.png) · [Cover](plugins/backups/cover.png) | Obsidian · layered archive and a gold return arc · illustration |
+| <img src="plugins/app-permissions/icon.png" width="40" alt="App permissions icon"> <img src="plugins/app-permissions/cover.png" width="128" alt="App permissions cover"> | **App permissions** · [SVG](plugins/app-permissions/icon.svg) · [256 PNG](plugins/app-permissions/icon.png) · [Cover](plugins/app-permissions/cover.png) | Corniche · access grid and a key · illustration |
 
 ## Launcher alternatives
 

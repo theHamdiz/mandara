@@ -26,6 +26,8 @@ For a visual tour, try the [Look previews on the website](https://thehamdiz.gith
 | [Sidebar, notes and notifications](sidebar-and-notifications.md) | Sidebar tabs, to-do lists, Markdown notes, the notification center |
 | [Motion](motion.md) | Spring presets, live preview, accessibility and per-surface playback |
 | [Panel images](panel-images.md) | Copy a visible plugin panel to the clipboard |
+| [Backups and storage](backups.md) | Encrypted backup copies, native Btrfs snapshots, reviewed cache/Trash cleanup and filesystem maintenance |
+| [App permissions](app-permissions.md) | Flatpak sandbox grants, personal overrides and Undo |
 | [App themes](app-themes.md) | Opt-in palette exports, activation steps and restoring app files |
 | [Boot look](boot-look.md) | The boot menu (GRUB, Limine, rEFInd) and splash (Plymouth): themes, your own image, the safety model, restore |
 | [Wallpapers](wallpapers.md) | The wallpaper picker and engine, and the wallpaper generator |

@@ -21,12 +21,12 @@ async fn mutation(operation: impl std::future::Future<Output = Result<(), String
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Provider { DeepL, LibreTranslate, HomeAssistant }
+pub enum Provider { DeepL, LibreTranslate, HomeAssistant, LocalAi }
 
 impl Provider {
     /// The provider name shown beside a saved key.
     pub fn name(self) -> &'static str {
-        match self { Self::DeepL => "DeepL", Self::LibreTranslate => "LibreTranslate", Self::HomeAssistant => "Home Assistant" }
+        match self { Self::DeepL => "DeepL", Self::LibreTranslate => "LibreTranslate", Self::HomeAssistant => "Home Assistant", Self::LocalAi => "Local AI" }
     }
 
     /// A stable keyring attribute; display names may change without moving keys.
@@ -35,6 +35,7 @@ impl Provider {
             Self::DeepL => "deepl",
             Self::LibreTranslate => "libretranslate",
             Self::HomeAssistant => "home-assistant",
+            Self::LocalAi => "local-ai",
         }
     }
 }

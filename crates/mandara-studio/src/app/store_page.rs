@@ -62,7 +62,7 @@ pub(crate) const HIDDEN_PLUGINS: &[&str] = &["compositor"];
 pub(crate) const PLUGIN_CATEGORIES: &[(&str, &[&str])] = &[
     (tk("Bar essentials"), &["workspaces", "active-window", "clock", "language", "keyboard-layout", "main-menu", "session", "quick-settings", "dock"]),
     (tk("System"), &["network", "bluetooth", "tailscale", "phone-connect", "home-assistant", "audio", "tray", "resources", "mini-stats", "processes", "notifications", "clipboard", "drives", "power", "privacy"]),
-    (tk("Maintenance"), &["updates", "services", "containers", "app-installer", "uptime", "crashes"]),
+    (tk("Maintenance"), &["updates", "services", "containers", "app-installer", "app-permissions", "backups", "uptime", "crashes"]),
     (tk("Developer tools"), &["progress", "ports", "git-repos", "ci", "local-ai"]),
     (tk("Media & capture"), &["media", "radio", "screenshot", "color-picker", "soundscapes", "share"]),
     (tk("Look & feel"), &["wallpaper", "wallpaper-depth", "wallpaper-generator", "wallhaven", "cursors", "icon-themes", "boot-look"]),
@@ -462,6 +462,8 @@ pub(crate) fn plugin_icon(id: &str) -> &'static str {
         "privacy" => "eye-off",
         "screen-time" => "clock",
         "ports" => "plug",
+        "app-permissions" => "shield",
+        "backups" => "box",
         "git-repos" => "git-branch",
         "ci" => "workflow",
         "crashes" => "bug",

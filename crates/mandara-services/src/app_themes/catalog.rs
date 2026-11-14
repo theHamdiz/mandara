@@ -1,6 +1,7 @@
 //! Catalog discovery and immutable, lazy installation of selected templates.
 
 mod files;
+mod apps;
 
 use std::collections::BTreeMap;
 use std::io::Read as _;
@@ -46,6 +47,9 @@ pub struct Entry {
     pub id: String,
     pub source: String,
     pub name: String,
+    /// Product names covered by a shared template, supplied by Mandara.
+    #[serde(default)]
+    pub aliases: Vec<String>,
     pub category: String,
     pub documentation_url: String,
     pub files: Vec<File>,
@@ -142,15 +146,17 @@ pub fn list_with(
             bytes.len() as u64 <= MAX_CATALOG_BYTES,
             "cached catalog is too large"
         );
-        if let Ok(cached) = serde_json::from_slice::<Cached>(&bytes)
+        if let Ok(mut cached) = serde_json::from_slice::<Cached>(&bytes)
             && same_source(&cached.source, source)
         {
             validate_entries(source, &cached.entries)?;
+            apps::annotate(source, &mut cached.entries);
             return Ok(cached.entries);
         }
     }
     let bytes = transport.get(&source.index_url, MAX_CATALOG_BYTES)?;
-    let entries = decode(source, &bytes)?;
+    let mut entries = decode(source, &bytes)?;
+    apps::annotate(source, &mut entries);
     std::fs::create_dir_all(&directory)?;
     mandara_config::store::write_atomic(
         &path,
@@ -178,6 +184,7 @@ fn decode(source: &CatalogSource, bytes: &[u8]) -> Result<Vec<Entry>> {
                     id: app.name.clone(),
                     source: source.id.clone(),
                     name: app.name.clone(),
+                    aliases: Vec::new(),
                     folder: app.name,
                     category: app.category,
                     documentation_url: String::new(),
@@ -216,6 +223,7 @@ fn decode(source: &CatalogSource, bytes: &[u8]) -> Result<Vec<Entry>> {
                         id: id.clone(),
                         source: source.id.clone(),
                         name: meta.name.clone(),
+                        aliases: Vec::new(),
                         category: meta.category.clone(),
                         documentation_url: meta.documentation_url.clone(),
                         files: Vec::new(),
@@ -237,6 +245,7 @@ fn validate_entries(source: &CatalogSource, entries: &[Entry]) -> Result<()> {
     );
     let mut ids = std::collections::BTreeSet::new();
     for entry in entries {
+        apps::validate(&entry.aliases)?;
         ensure!(
             entry.source == source.id && ids.insert(&entry.id),
             "duplicate app or incorrect source in catalog"
@@ -586,6 +595,12 @@ mod tests {
 
     #[test]
     fn pruning_keeps_active_and_undo_revisions_until_their_owners_release_them() {
+        crate::test_process::isolated("app_themes::catalog::tests::revision_lease_fixture");
+    }
+
+    #[test]
+    #[ignore = "the parent checks lease lifetime without descriptors inherited by unrelated child processes"]
+    fn revision_lease_fixture() {
         let dir = tempfile::tempdir().unwrap();
         let fixture = Fixture {
             calls: Cell::new(0),

@@ -4,10 +4,14 @@
 //! output), and talk to the UI exclusively through channels. Commands may
 //! carry a reply channel so CLI callers receive structured results.
 
+#[cfg(test)]
+mod test_process;
+
 pub mod accounts;
 pub mod actor;
 pub mod adhan;
 pub mod app_install;
+pub mod app_permissions;
 pub mod app_scope;
 pub mod app_themes;
 pub mod app_uninstall;
@@ -15,6 +19,7 @@ pub mod appearance;
 pub mod audio;
 pub mod authenticator;
 pub mod backlight;
+pub mod backups;
 pub mod bluetooth;
 pub mod boot;
 pub mod breaks;

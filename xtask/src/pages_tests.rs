@@ -478,6 +478,12 @@ fn the_plugin_shelf_matches_the_guide() {
     let source = homepage();
     let page = roxmltree::Document::parse(&source).unwrap();
     let shelf = page.descendants().find(|n| n.has_tag_name("ul") && has_class(*n, "shelf")).unwrap();
+    for group in shelf.children().filter(|n| has_class(*n, "shelf-group") && !has_class(*n, "shelf-more")) {
+        let heading = group.children().find(|n| n.has_tag_name("h3")).unwrap();
+        let claimed = heading.children().find(|n| n.has_tag_name("small")).unwrap().text().unwrap().parse::<usize>().unwrap();
+        let actual = group.descendants().filter(|n| n.has_tag_name("a") && has_class(*n, "spine")).count();
+        assert_eq!(claimed, actual, "{}: category count", heading.text().unwrap());
+    }
     let spines: Vec<_> = shelf.descendants().filter(|n| n.has_tag_name("a") && has_class(*n, "spine")).collect();
     let shown: BTreeSet<_> = spines.iter().filter(|n| !has_class(**n, "spine-more")).map(|n| text_of(n.first_element_child().unwrap())).collect();
     assert_eq!(shown, names.difference(&faith).cloned().collect(), "every plugin but the faith ones");

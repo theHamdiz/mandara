@@ -470,6 +470,14 @@ impl Ledger {
             }
         }
         let kept = |path: &Path| super::destination::identity(path).is_ok_and(|path| resolved.contains(&path));
+        // An owned stylesheet can create a directory that still contains its
+        // import when the stylesheet is retired. Retry only recorded empty
+        // directories after both kinds of owned entries have been restored.
+        let mut directories: Vec<PathBuf> = self.files.values().filter(|entry| entry.app == app)
+            .flat_map(|entry| entry.created_dirs.iter().cloned())
+            .chain(self.blocks.values().filter(|entry| entry.app == app).flat_map(|entry| entry.created_dirs.iter().cloned())).collect();
+        directories.sort_unstable_by_key(|path| std::cmp::Reverse(path.components().count()));
+        directories.dedup();
         let files: Vec<String> = self.files.iter().filter(|(k, e)| e.app == app && !kept(Path::new(k))).map(|(k, _)| k.clone()).collect();
         for k in files {
             if let Err(error) = self.restore_file(&k, &mut changed) {
@@ -484,6 +492,7 @@ impl Ledger {
         for k in blocks {
             self.restore_block(k, &mut changed);
         }
+        remove_empty(&directories);
         changed
     }
 

@@ -11,6 +11,15 @@ use mandara_i18n::t;
 
 use super::panel_fx::ViewSet;
 
+mod reads;
+
+struct Read<V> {
+    generation: u64,
+    previous: Option<Arc<V>>,
+    work: Box<dyn FnOnce(Option<Arc<V>>) -> Result<V, String> + Send>,
+    views: ViewSet,
+}
+
 pub(super) struct Data<K, V> {
     key: Option<K>,
     generation: u64,
@@ -19,11 +28,13 @@ pub(super) struct Data<K, V> {
     pub value: Option<Arc<V>>,
     pub error: Option<String>,
     pub views: ViewSet,
+    trim_evictions: bool,
+    reads: Option<reads::Slot<Read<V>>>,
 }
 
 impl<K, V> Default for Data<K, V> {
     fn default() -> Self {
-        Self { key: None, generation: 0, pending: None, finished: None, value: None, error: None, views: ViewSet::default() }
+        Self { key: None, generation: 0, pending: None, finished: None, value: None, error: None, views: ViewSet::default(), trim_evictions: false, reads: None }
     }
 }
 
@@ -35,7 +46,9 @@ impl<K: PartialEq, V> Data<K, V> {
     pub fn select(&mut self, key: K) {
         if self.key.as_ref() != Some(&key) {
             self.key = Some(key);
-            self.value = None;
+            let released = self.value.take().is_some();
+            let queued = self.reads.as_mut().is_some_and(reads::Slot::clear);
+            if (released || queued) && self.trim_evictions { mandara_services::memory::request_trim(); }
             self.error = None;
             self.pending = None;
             self.finished = None;
@@ -46,17 +59,20 @@ impl<K: PartialEq, V> Data<K, V> {
     /// In-flight work may still finish, but its result is rejected. Preserve
     /// the generation across reuse so it cannot match a newly started read.
     pub fn clear(&mut self) {
+        let released = self.value.take().is_some();
+        let queued = self.reads.as_mut().is_some_and(reads::Slot::clear);
         self.key = None;
         self.pending = None;
         self.finished = None;
-        self.value = None;
         self.error = None;
         self.views = ViewSet::default();
+        if (released || queued) && self.trim_evictions { mandara_services::memory::request_trim(); }
     }
 
     /// An explicit action changed the source. A read that began before it
     /// must not overwrite the subsequent refresh.
     pub fn invalidate(&mut self) {
+        if let Some(reads) = &mut self.reads { reads.clear(); }
         self.pending = None;
         self.finished = None;
     }
@@ -76,7 +92,12 @@ impl<K: PartialEq, V> Data<K, V> {
     /// Reject a stale generation and retain the last successful value on refresh errors.
     /// Errors also record completion time, preventing retries on every render.
     fn finish(&mut self, generation: u64, result: Result<V, String>, now: Instant) -> bool {
-        if self.pending != Some(generation) { return false; }
+        if self.pending != Some(generation) {
+            let released = result.is_ok();
+            drop(result);
+            if released && self.trim_evictions { mandara_services::memory::request_trim(); }
+            return false;
+        }
         self.pending = None;
         self.finished = Some(now);
         match result {
@@ -85,6 +106,12 @@ impl<K: PartialEq, V> Data<K, V> {
         }
         true
     }
+}
+
+/// View-only reads run sequentially with one replaceable successor. Eviction
+/// requests allocator upkeep, including late results rejected after closing.
+pub(super) fn evicting<K, V>() -> Rc<RefCell<Data<K, V>>> {
+    Rc::new(RefCell::new(Data { trim_evictions: true, reads: Some(reads::Slot::default()), ..Data::default() }))
 }
 
 /// Call only from a visible panel or an explicit command. The job receives
@@ -97,12 +124,37 @@ pub(super) fn load<K: PartialEq + 'static, V: Send + Sync + 'static>(
 ) {
     let Some(generation) = data.borrow_mut().begin(key, force, age, Instant::now()) else { return };
     let previous = data.borrow().value.clone();
+    if data.borrow().reads.is_some() {
+        let views = data.borrow().views.clone();
+        let read = Read { generation, previous, work: Box::new(job), views: views.clone() };
+        let next = data.borrow_mut().reads.as_mut().and_then(|slot| slot.push(read));
+        views.notify(cx);
+        if let Some(read) = next { run_bounded(data.clone(), read, cx); }
+        return;
+    }
     let data = Rc::clone(data);
     let views = data.borrow().views.clone();
     views.notify(cx);
     cx.spawn(async move |cx| {
         let result = mandara_services::runtime::unblock(move || job(previous)).await;
         if data.borrow_mut().finish(generation, result, Instant::now()) { views.notify_async(cx); }
+    }).detach();
+}
+
+fn run_bounded<K: PartialEq + 'static, V: Send + Sync + 'static>(
+    data: Rc<RefCell<Data<K, V>>>, read: Read<V>, cx: &mut App,
+) {
+    cx.spawn(async move |cx| {
+        let Read { generation, previous, work, views } = read;
+        let result = mandara_services::runtime::unblock(move || work(previous)).await;
+        let (changed, next) = {
+            let mut state = data.borrow_mut();
+            let changed = state.finish(generation, result, Instant::now());
+            let next = state.reads.as_mut().and_then(reads::Slot::complete);
+            (changed, next)
+        };
+        if changed { views.notify_async(cx); }
+        if let Some(read) = next { cx.update(|cx| run_bounded(data, read, cx)); }
     }).detach();
 }
 
@@ -162,6 +214,24 @@ mod tests {
     use super::*;
 
     const AGE: Duration = Duration::from_secs(30);
+
+    #[test]
+    fn view_only_eviction_drops_current_and_late_snapshots_without_restoring_the_cache() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        struct Snapshot(Arc<AtomicUsize>);
+        impl Drop for Snapshot { fn drop(&mut self) { self.0.fetch_add(1, Ordering::Relaxed); } }
+        let dropped = Arc::new(AtomicUsize::new(0));
+        let data = evicting::<(), Snapshot>();
+        let now = Instant::now();
+        let first = data.borrow_mut().begin((), false, AGE, now).unwrap();
+        assert!(data.borrow_mut().finish(first, Ok(Snapshot(dropped.clone())), now));
+        let late = data.borrow_mut().begin((), true, AGE, now).unwrap();
+        data.borrow_mut().clear();
+        assert_eq!(dropped.load(Ordering::Relaxed), 1);
+        assert!(!data.borrow_mut().finish(late, Ok(Snapshot(dropped.clone())), now));
+        assert_eq!(dropped.load(Ordering::Relaxed), 2);
+        assert!(data.borrow().value.is_none());
+    }
 
     #[test]
     fn changing_servers_discards_the_old_response_and_private_data() {
