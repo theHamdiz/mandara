@@ -4,8 +4,8 @@
 
 [mandara-app]
 kind = "binary"
-version = "0.30.1"
-hash = "1da18fc0b2108e1f1cbced3703879fca"
+version = "0.30.2"
+hash = "d20039c988a4201c5d9d794e4f4660ca"
 
 [mandara-compositor]
 kind = "library"
@@ -29,8 +29,8 @@ hash = "67a5602ee7db96adbb32fdcd3de3c4cd"
 
 [mandara-greeter]
 kind = "library"
-version = "0.28.1"
-hash = "37c61b38228806cba51516d79ab8aa89"
+version = "0.28.2"
+hash = "aea4489e534349a79f7649968e2fedb6"
 
 [mandara-i18n]
 kind = "library"
@@ -39,8 +39,8 @@ hash = "8d1cf023d2c079be09628b8abfacd6d3"
 
 [mandara-install]
 kind = "library"
-version = "0.23.1"
-hash = "4e7ae3a5d0347f182b6841e507db69e7"
+version = "0.23.2"
+hash = "e6d8c56acd5a299aa68695dc21ed59a5"
 
 [mandara-media]
 kind = "library"
@@ -49,18 +49,18 @@ hash = "454dcba80a352a78e76764e362338053"
 
 [mandara-plugins]
 kind = "library"
-version = "0.27.1"
-hash = "7c16ded988c04e98377ccfa6a8ae3867"
+version = "0.27.2"
+hash = "97d13d382b187b34db5d72833ec697b5"
 
 [mandara-services]
 kind = "library"
-version = "0.30.1"
-hash = "bb7e9759d2a104d8ccffcbb2deb695ec"
+version = "0.30.2"
+hash = "4c912602d890c0dc966dd016ed18b03f"
 
 [mandara-studio]
 kind = "library"
-version = "0.30.1"
-hash = "8952dd4c36a1acd17cb2a0301f75cebe"
+version = "0.30.2"
+hash = "abdb32114101309b8ff9a6eecf9bf8f0"
 
 [mandara-theme]
 kind = "library"
@@ -69,8 +69,8 @@ hash = "a87516acbf0123158d2a338968d9e884"
 
 [mandara-ui]
 kind = "library"
-version = "0.28.1"
-hash = "822a1145a700b208db7f70a046746297"
+version = "0.28.2"
+hash = "38d9626f6fcfe0fdc42a60d00349fb3a"
 
 [mandara-version]
 kind = "library"
@@ -79,8 +79,8 @@ hash = "85ede0f6a20cefbb6989dd3d5a44000c"
 
 [mandara-wallgen]
 kind = "library"
-version = "0.27.1"
-hash = "e77bf90d1219f658646868cb36cf743e"
+version = "0.27.2"
+hash = "97165a3c3f93c775baec754e53c24f69"
 
 [mandara-webp]
 kind = "library"
@@ -94,5 +94,5 @@ hash = "2126badcecb5732dffd43bb849319549"
 
 [xtask]
 kind = "tool"
-version = "0.25.1"
-hash = "1c054991c31b68513f1401b906f4c29d"
+version = "0.25.2"
+hash = "e43b7e14f794cdf7aab3c2505be0477e"

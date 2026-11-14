@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.30.2 — 2026-11-14
+
 Keep your own NixOS channel when adding Mandara.
 
 ### Fixed
