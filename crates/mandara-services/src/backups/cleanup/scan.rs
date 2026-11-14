@@ -55,7 +55,8 @@ fn walk(&mut self, relative: &Path) -> Result<()> {
         Err(error) => return Err(error),
     };
     let metadata = file.metadata()?;
-    if metadata.dev() != self.device || paths::mount_id(&file)? != self.mount || metadata.uid() != rustix::process::getuid().as_raw() { self.preview.left_untouched += 1; return Ok(()); }
+    let stamp = Stamp::from_metadata(&metadata, paths::mount_id(&file)?);
+    if stamp.device != self.device || stamp.mount != self.mount || metadata.uid() != rustix::process::getuid().as_raw() { self.preview.left_untouched += 1; return Ok(()); }
     if metadata.is_dir() {
         for entry in Dir::read_from(&file)? {
             let entry = entry?;
@@ -63,10 +64,11 @@ fn walk(&mut self, relative: &Path) -> Result<()> {
             if matches!(name.to_str(), Some("." | "..")) { continue; }
             self.walk(&relative.join(name))?;
         }
-        self.preview.directories.push(Entry { relative: relative.into(), stamp: Stamp::of(&file)? });
-    } else if metadata.is_file() && (self.kind == Kind::Trash || metadata.modified()? < self.cutoff) {
+        self.preview.directories.push(Entry { relative: relative.into(), stamp });
+    // Shared inodes can have aliases outside the reviewed tree. Leave them intact.
+    } else if metadata.is_file() && metadata.nlink() == 1 && (self.kind == Kind::Trash || metadata.modified()? < self.cutoff) {
         self.preview.logical_bytes = self.preview.logical_bytes.checked_add(metadata.len()).context("cleanup size overflow")?;
-        self.preview.files.push(Entry { relative: relative.into(), stamp: Stamp::of(&file)? });
+        self.preview.files.push(Entry { relative: relative.into(), stamp });
     } else { self.preview.left_untouched += 1; }
     Ok(())
 }

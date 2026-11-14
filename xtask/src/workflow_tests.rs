@@ -188,6 +188,26 @@ fn release_artifact_downloads_keep_producer_and_integrity_contracts() {
 }
 
 #[test]
+fn nix_runner_memory_is_prepared_before_compilation_without_reducing_release_optimization() {
+    let workflow = std::fs::read_to_string(crate::root().join(".github/workflows/ci.yml")).unwrap();
+    let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&workflow).unwrap();
+    let steps = workflow["jobs"]["nix"]["steps"].as_sequence().unwrap();
+    let memory = steps.iter().position(|step| step["run"].as_str().is_some_and(|run| run.contains("sudo swapon /swapfile-mandara-nix"))).unwrap();
+    let setup = steps[memory]["run"].as_str().unwrap();
+    for operation in ["fallocate -l 8G", "chmod 600", "mkswap", "swapon"] { assert!(setup.contains(operation)); }
+    for (index, step) in steps.iter().enumerate() {
+        let run = step["run"].as_str().unwrap_or_default();
+        if run.contains("nix build") || run.contains("nix flake check") {
+            assert!(memory < index, "swap must exist before the evaluator starts builders");
+            assert!(run.contains("--max-jobs 1 --cores 2"), "bound both derivations and compiler jobs");
+        }
+    }
+    let manifest: toml::Value = toml::from_str(&std::fs::read_to_string(crate::root().join("Cargo.toml")).unwrap()).unwrap();
+    assert_eq!(manifest["profile"]["release"]["lto"].as_str(), Some("fat"));
+    assert_eq!(manifest["profile"]["release"]["codegen-units"].as_integer(), Some(1));
+}
+
+#[test]
 fn nix_builds_cover_stable_unstable_and_the_previous_reported_release() {
     let workflow = std::fs::read_to_string(crate::root().join(".github/workflows/ci.yml")).unwrap();
     let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&workflow).unwrap();

@@ -54,7 +54,7 @@ Trash items use a separate preview rather than the cache age.
 
 Close affected applications before **Permanently remove these files**. Removal
 is permanent, and applications may need to download their caches again.
-Changed selections require a new preview. Files added after the preview, links,
+Changed selections require a new preview. Files added after the preview, symbolic and hard links,
 other mounted filesystems, recovery folders and protected personal-data
 locations stay untouched. Trash recovery information stays until its payload
 is gone. Sizes describe the selected files, not a promise about reclaimed disk

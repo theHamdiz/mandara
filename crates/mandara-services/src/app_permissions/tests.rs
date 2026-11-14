@@ -40,6 +40,28 @@ fn broader_and_conditional_grants_cannot_be_mistaken_for_independent_off_switche
 }
 
 #[test]
+fn x11_fallback_and_its_wayland_condition_are_not_independent_switches() {
+    for sockets in ["x11;wayland;fallback-x11;", "fallback-x11;"] {
+        let permissions = crate::app_install::flatpak::parse_context(&format!("[Context]\nsockets={sockets}\n")).unwrap();
+        let rows = model::capabilities(&permissions);
+        for value in ["x11", "fallback-x11", "wayland"] {
+            let row = rows.iter().find(|row| row.value == value).unwrap();
+            assert!(!row.editable, "{sockets}: {value}");
+            assert_eq!(row.constraint, Some(Constraint::Conditional));
+        }
+    }
+    let permissions = crate::app_install::flatpak::parse_context("[Context]\nsockets=x11;wayland;\n").unwrap();
+    assert!(model::capabilities(&permissions).iter().filter(|row| matches!(row.value.as_str(), "x11" | "wayland")).all(|row| row.editable));
+    for conditional in ["if:x11:!has-wayland", "if:fallback-x11:!has-wayland", "if:wayland:has-wayland"] {
+        let permissions = crate::app_install::flatpak::parse_context(&format!("[Context]\nsockets=x11;wayland;{conditional};\n")).unwrap();
+        for row in model::capabilities(&permissions).iter().filter(|row| matches!(row.value.as_str(), "x11" | "wayland")) {
+            assert!(!row.editable);
+            assert_eq!(row.constraint, Some(Constraint::Conditional));
+        }
+    }
+}
+
+#[test]
 fn a_selected_key_keeps_comments_other_groups_and_unknown_grants() {
     let before = "# personal\r\n[Context]\r\nsockets=wayland;\r\nshared=network;\r\n# keep me\r\n[Environment]\r\nMY_VALUE=untouched\r\n";
     let generated = "[Context]\nsockets=wayland;\nshared=!network;\n[Environment]\nMY_VALUE=untouched\n";

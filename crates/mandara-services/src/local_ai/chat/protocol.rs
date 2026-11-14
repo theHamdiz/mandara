@@ -57,7 +57,7 @@ fn models(value: Value, array: &str, name: &str) -> Result<Vec<String>, String> 
 fn error(value: &Value) -> Result<(), String> {
     if value
         .get("error")
-        .is_some_and(|error| !error.is_null() && error != "")
+        .is_some_and(|error| !error.is_null() && error != "" && error != false)
         || value.get("type").is_some_and(|kind| kind == "abort")
     {
         // Error bodies can contain credentials, prompts or arbitrary server details.

@@ -2708,7 +2708,6 @@ Flat, softly shadowed cursors from the Qogir icon theme
 Flat, with a fine outline
 Flatpak app id
 Flatpak applies the app's sandbox from its remote
-Flatpak did not return this app's sandbox permissions.
 Flatpak downloads the app and any runtime it needs from its remote
 Flatpak installs
 Flatpak isn't installed. Install it with your package manager, then try again.

@@ -1,5 +1,6 @@
 //! Flatpak supplies the effective metadata and validates each override's native syntax.
 
+use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::AtomicBool;
@@ -18,8 +19,18 @@ pub(super) const MAX_BYTES: u64 = 64 * 1024;
 pub struct Flatpak { pub(super) data: PathBuf }
 impl Default for Flatpak {
     fn default() -> Self {
-        Self { data: mandara_config::paths::data_dir().with_file_name("flatpak") }
+        Self { data: user_directory(std::env::var_os("FLATPAK_USER_DIR").as_deref()) }
     }
+}
+
+fn user_directory(custom: Option<&OsStr>) -> PathBuf {
+    custom.filter(|path| !path.is_empty()).map(PathBuf::from)
+        .unwrap_or_else(|| mandara_config::paths::data_dir().with_file_name("flatpak"))
+}
+
+fn permissions(metadata: &str) -> crate::app_install::flatpak::Permissions {
+    // A successful native read can omit Context when the app has no grants.
+    crate::app_install::flatpak::parse_context(metadata).unwrap_or_default()
 }
 
 pub(super) fn valid_id(id: &str) -> bool {
@@ -73,7 +84,7 @@ impl Backend for Flatpak {
         select_installation(&mut command, &app.installation)?;
         command.arg(&app.id);
         let metadata = run(command, cancel)?;
-        let permissions = crate::app_install::flatpak::parse_context(&metadata).context(t("Flatpak did not return this app's sandbox permissions."))?;
+        let permissions = permissions(&metadata);
         let path = self.data.join("overrides").join(&app.id);
         let target = mandara_theme::templates::destination::identity(&path)?;
         let stamp = FileStamp::at(&target)?;
@@ -91,6 +102,15 @@ impl Backend for Flatpak {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_user_installations_and_empty_permission_groups_are_supported() {
+        assert_eq!(user_directory(Some(OsStr::new("/custom/apps"))), PathBuf::from("/custom/apps"));
+        assert_eq!(user_directory(Some(OsStr::new(""))), user_directory(None));
+        assert!(permissions("").is_empty());
+        assert!(permissions("[Environment]\nLANG=en_US.UTF-8\n").is_empty());
+        assert_eq!(permissions("[Context]\nshared=network;\n").shared, ["network"]);
+    }
 
     #[test]
     fn default_user_and_named_installations_use_their_native_flags() {

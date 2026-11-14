@@ -38,6 +38,49 @@ fn cache_preview_removes_only_old_selected_files_and_keeps_new_files_and_links()
 }
 
 #[test]
+fn shared_inodes_are_kept_while_the_rest_of_a_reviewed_selection_finishes() {
+    for kind in [Kind::Cache, Kind::Trash] {
+        let root = tempfile::tempdir().unwrap();
+        let files = root.path().join("files");
+        let directory = files.join("cache");
+        std::fs::create_dir_all(&directory).unwrap();
+        if kind == Kind::Trash {
+            let info = root.path().join("info");
+            std::fs::create_dir(&info).unwrap();
+            std::fs::write(info.join("cache.trashinfo"), "[Trash Info]\nPath=/example/cache\nDeletionDate=2026-10-01T12:00:00\n").unwrap();
+        }
+        old_file(&directory.join("first"), "shared cache");
+        std::fs::hard_link(directory.join("first"), directory.join("second")).unwrap();
+        old_file(&directory.join("ordinary"), "remove");
+        let selected = preview(&candidate(&files, kind), DEFAULT_AGE_DAYS, &AtomicBool::new(false)).unwrap();
+        assert_eq!(selected.file_count(), 1);
+        assert_eq!(selected.left_untouched, 2);
+        let report = remove(&selected, &AtomicBool::new(false)).unwrap();
+        assert_eq!(report.files_removed, 1);
+        for name in ["first", "second"] {
+            assert_eq!(std::fs::read_to_string(directory.join(name)).unwrap(), "shared cache");
+        }
+        assert!(!directory.join("ordinary").exists());
+        if kind == Kind::Trash { assert!(root.path().join("info/cache.trashinfo").exists()); }
+    }
+}
+
+#[test]
+fn an_eligibility_snapshot_cannot_adopt_a_later_rewrite() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("cache");
+    old_file(&path, "old");
+    let file = std::fs::File::open(&path).unwrap();
+    let metadata = file.metadata().unwrap();
+    let mount = paths::mount_id(&file).unwrap();
+    std::fs::write(&path, "recent replacement").unwrap();
+    let selected = Stamp::from_metadata(&metadata, mount);
+    assert_eq!(selected.bytes, 3);
+    assert_ne!(selected, Stamp::of(&file).unwrap());
+    assert!(!selected.after_rename(Stamp::of(&file).unwrap()));
+}
+
+#[test]
 fn changed_files_and_cancelled_previews_remove_nothing() {
     let root = tempfile::tempdir().unwrap();
     old_file(&root.path().join("cached"), "old");
@@ -112,17 +155,18 @@ fn a_location_cannot_change_between_listing_and_preview_through_an_ancestor_alia
 fn native_storage_vm_cleanup_never_crosses_even_a_same_device_bind_mount() {
     assert_eq!(std::fs::read_to_string("/mandara-storage-fixture").unwrap(), "mandara-disposable-storage-264\n");
     assert!(rustix::process::geteuid().is_root());
-    let base = Path::new("/fixture/ext4/cleanup");
-    std::fs::create_dir(base).unwrap();
+    let mut fixture = crate::backups::native_fixture::Fixture::new(Path::new("/fixture/ext4"));
+    let base = fixture.path().to_path_buf();
     let cache = base.join("cache");
     let outside = base.join("outside");
     std::fs::create_dir(&cache).unwrap(); std::fs::create_dir(&outside).unwrap();
     old_file(&cache.join("old"), "old cache");
     old_file(&outside.join("personal"), "keep");
     std::fs::create_dir(cache.join("bound")).unwrap();
+    fixture.mount(&cache.join("bound"));
     let status = std::process::Command::new("mount").arg("--bind").arg(&outside).arg(cache.join("bound")).status().unwrap();
     assert!(status.success());
-    let selected = preview(&candidate(base, Kind::Cache), DEFAULT_AGE_DAYS, &AtomicBool::new(false)).unwrap();
+    let selected = preview(&candidate(&base, Kind::Cache), DEFAULT_AGE_DAYS, &AtomicBool::new(false)).unwrap();
     assert_eq!(selected.file_count(), 1);
     assert!(selected.left_untouched > 0);
     remove(&selected, &AtomicBool::new(false)).unwrap();

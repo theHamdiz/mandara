@@ -6,6 +6,8 @@ pub mod filesystem;
 pub mod cleanup;
 #[cfg(test)]
 mod tests;
+#[cfg(all(test, target_os = "linux"))]
+mod native_fixture;
 
 pub use model::{MAX_PATH_BYTES, MAX_SOURCES, Operation, Progress, Settings, Snapshot, Summary};
 pub use restic::Restic;

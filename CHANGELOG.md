@@ -28,6 +28,7 @@ and more apps can follow your colours.
 
 ### Fixed
 
+- Backup histories keep the newest entries across source groups, literal repository names stay excluded, and cleanup previews leave shared files untouched. Conditional app permissions stay locked together so switching one off cannot expose another route.
 - Long labels and shortcuts in the desktop's circular menu now wrap or shorten inside the centre circle, with padding that also holds at smaller sizes and in Arabic.
 - Restoring your Look puts plugins back in their original top and vertical bar groups, including Raml Tram's middle rail. Hidden groups no longer create duplicate placements.
 - NixOS Updates checks the default configuration before offering a rebuild or changing flake inputs. Supported actions stay available, unavailable ones explain why, and rollback uses an existing generation without needing the original build configuration. Flatpak updates remain available independently.
@@ -39,6 +40,7 @@ and more apps can follow your colours.
 
 ### Under the hood
 
+- Nix CI gives optimized linking bounded swap space and limits competing builders, preserving the same release optimization settings.
 - Discarded panel hosts no longer keep close watchers alive. Shared backup and permission views release their data after the last visible panel closes.
 - Keep native shortcut checks and release manifests clean on current Rust and FreeBSD builds. Lock and file-watch checks handle concurrent process launches and directory replacement reliably.
 

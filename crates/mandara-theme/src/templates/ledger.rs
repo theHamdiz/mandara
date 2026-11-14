@@ -168,9 +168,7 @@ fn missing_dirs(path: &Path) -> Vec<PathBuf> {
 /// Removes folders Mandara created (deepest first) while they are empty.
 fn remove_empty(dirs: &[PathBuf]) {
     for dir in dirs {
-        if std::fs::remove_dir(dir).is_err() {
-            break;
-        }
+        let _ = std::fs::remove_dir(dir);
     }
 }
 
@@ -550,6 +548,19 @@ impl Ledger {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn empty_directory_cleanup_continues_after_missing_and_personal_directories() {
+        let root = tempfile::tempdir().unwrap();
+        let personal = root.path().join("personal");
+        let empty = root.path().join("empty");
+        std::fs::create_dir(&personal).unwrap();
+        std::fs::create_dir(&empty).unwrap();
+        std::fs::write(personal.join("keep"), "personal").unwrap();
+        super::remove_empty(&[root.path().join("missing"), personal.clone(), empty.clone()]);
+        assert!(!empty.exists());
+        assert_eq!(std::fs::read_to_string(personal.join("keep")).unwrap(), "personal");
+    }
+
     use super::*;
 
     #[test]

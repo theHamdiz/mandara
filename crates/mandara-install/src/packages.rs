@@ -236,6 +236,7 @@ pub fn login_package(family: Family, program: &str) -> String {
 /// an inference engine or model downloads to any distribution's package set.
 /// Keyboard-layout reporting uses the compositor's session socket; it needs
 /// neither device access nor an extra privileged service.
+/// Offline flake inspection uses NixOS's standard util-linux `unshare` command.
 pub const NIXOS_HINT: &[&str] = &[
     "inputs.mandara.url = \"github:theHamdiz/mandara\";      # in your flake.nix",
     "imports = [ inputs.mandara.nixosModules.default ];      # in configuration.nix",

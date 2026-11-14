@@ -78,7 +78,10 @@ pub(super) fn capabilities(permissions: &Permissions) -> Vec<Capability> {
                 Key::Filesystems => matches!(value, "home" | "xdg-desktop" | "xdg-documents" | "xdg-download" | "xdg-music" | "xdg-pictures" | "xdg-videos") && effective.iter().any(|grant| matches!(grant.as_str(), "host" | "host:ro" | "host:rw" | "host:create")),
                 _ => false,
             };
-            let constraint = if conditional || value.starts_with("if:") { Some(Constraint::Conditional) }
+            let fallback = key == Key::Sockets && matches!(value, "x11" | "fallback-x11" | "wayland")
+                && effective.iter().any(|grant| grant == "fallback-x11" || grant.strip_prefix("if:")
+                    .and_then(|grant| grant.split_once(':')).is_some_and(|(permission, _)| matches!(permission, "x11" | "fallback-x11" | "wayland")));
+            let constraint = if conditional || fallback || value.starts_with("if:") { Some(Constraint::Conditional) }
                 else if broader { Some(Constraint::Broader) }
                 else if scoped || !editable { Some(Constraint::Scoped) } else { None };
             rows.push(Capability { key, value: value.into(), allowed: !conditional && effective.iter().any(|grant| grant == value), editable: editable && constraint.is_none(), constraint });

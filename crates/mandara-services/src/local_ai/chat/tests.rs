@@ -121,6 +121,24 @@ fn streams_accept_native_unicode_chunks_keepalives_and_final_content() {
 }
 
 #[test]
+fn workspace_success_flags_preserve_streamed_and_final_reply_text() {
+    for kind in ["textResponseChunk", "finalizeResponseStream"] {
+        let wire = format!("data: {}\n\ndata: {}\n\n",
+            json!({"type":"textResponseChunk","textResponse":"مرحبا","close":false,"error":false}),
+            json!({"type":kind,"textResponse":"!","close":true,"error":false}));
+        let mut output = String::new();
+        stream::read(wire.as_bytes(), for_provider(Provider::AnythingLlm), || false,
+            &mut |text| { output.push_str(text); true }).unwrap();
+        assert_eq!(output, "مرحبا!");
+    }
+    for error in [json!(true), json!("failed"), json!({"message":"failed"})] {
+        let wire = format!("data: {}\n\n", json!({"type":"finalizeResponseStream","textResponse":"rejected","close":true,"error":error}));
+        assert!(stream::read(wire.as_bytes(), for_provider(Provider::AnythingLlm), || false,
+            &mut |_| panic!("failed events must not publish text")).is_err());
+    }
+}
+
+#[test]
 fn malformed_truncated_and_oversized_streams_fail_and_cancellation_keeps_no_reply() {
     for wire in [
         "data: broken\n\n".into(),

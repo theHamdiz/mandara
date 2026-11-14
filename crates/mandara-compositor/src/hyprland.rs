@@ -266,11 +266,13 @@ impl HyprlandDriver {
         let mut events = self.navigation_events();
         if let Ok(focused) = self.get_active_client() { events.push(CompositorEvent::FocusedClient(focused)); }
         if let Ok(monitors) = self.get_monitors() { events.push(CompositorEvent::Monitors(monitors)); }
-        if let Ok(devices) = self.json::<serde_json::Value>("devices")
-            && let Some(layout) = keyboard::initial(&devices) {
-                events.push(CompositorEvent::KeyboardLayout(layout.to_owned()));
-            }
+        events.extend(self.keyboard_event());
         events
+    }
+
+    fn keyboard_event(&self) -> Option<CompositorEvent> {
+        let devices = self.json::<serde_json::Value>("devices").ok()?;
+        keyboard::initial(&devices).map(|layout| CompositorEvent::KeyboardLayout(layout.to_owned()))
     }
 
     fn navigation_events(&self) -> Vec<CompositorEvent> {
@@ -336,7 +338,7 @@ impl CompositorBackend for HyprlandDriver {
                             vec![CompositorEvent::FocusedClient(driver.get_active_client().ok().flatten())]
                         }
                         "monitoradded" | "monitorremoved" => vec![CompositorEvent::Monitors(driver.get_monitors().unwrap_or_default())],
-                        "activelayout" => keyboard::switched(data).map(|layout| CompositorEvent::KeyboardLayout(layout.to_owned())).into_iter().collect(),
+                        "activelayout" if keyboard::switched(data).is_some() => driver.keyboard_event().into_iter().collect(),
                         _ => Vec::new(),
                     };
                     for e in events {
@@ -654,23 +656,34 @@ mod tests {
                 assert_eq!(input, command.as_bytes());
                 stream.write_all(reply.as_bytes()).unwrap();
             }
-            event_stream.write_all(b"activelayout>>keyboard,Arabic\nactivelayout>>keyboard,\nactivelayout>>keyboard,English (US, intl.)\n").unwrap();
+            for (event, main) in [("keyboard,Arabic", Some("Arabic")), ("keyboard,", None), ("secondary,French", Some("Arabic")), ("keyboard,English (US, intl.)", Some("English (US, intl.)"))] {
+                writeln!(event_stream, "activelayout>>{event}").unwrap();
+                if let Some(main) = main {
+                    let mut stream = accept(&requests);
+                    stream.set_read_timeout(Some(crate::REQUEST_TIMEOUT)).unwrap();
+                    let mut command = [0; "j/devices".len()];
+                    stream.read_exact(&mut command).unwrap();
+                    assert_eq!(&command, b"j/devices");
+                    let devices = serde_json::json!({"keyboards":[{"main":false,"active_keymap":"French"},{"main":true,"active_keymap":main}]});
+                    stream.write_all(devices.to_string().as_bytes()).unwrap();
+                }
+            }
         });
         let driver = HyprlandDriver { dir: dir.0.clone(), version: Some((0, 57)), lua: true };
         let rx = driver.subscribe_events();
         let deadline = Instant::now() + crate::REQUEST_TIMEOUT;
         let mut initial = Vec::new();
-        while initial.len() < 7 && Instant::now() < deadline {
+        while initial.len() < 8 && Instant::now() < deadline {
             match rx.try_recv() { Ok(event) => initial.push(event), Err(_) => std::thread::sleep(POLL) }
         }
         drop(rx);
         server.join().unwrap();
-        assert_eq!(initial.len(), 7);
+        assert_eq!(initial.len(), 8);
         assert!(matches!(&initial[0], CompositorEvent::Navigation { monitor, model: NavigationModel::Workspaces { workspaces } } if monitor == "DP-1" && workspaces[0].id == 2));
         assert!(matches!(&initial[1], CompositorEvent::Clients(clients) if clients[0].id == 7));
         assert!(matches!(&initial[2], CompositorEvent::FocusedClient(Some(client)) if client.title == "Fresh window"));
         assert!(matches!(&initial[3], CompositorEvent::Monitors(monitors) if monitors[0].width == 1707));
-        assert_eq!(&initial[4..], [CompositorEvent::KeyboardLayout("English (US)".into()), CompositorEvent::KeyboardLayout("Arabic".into()), CompositorEvent::KeyboardLayout("English (US, intl.)".into())]);
+        assert_eq!(&initial[4..], [CompositorEvent::KeyboardLayout("English (US)".into()), CompositorEvent::KeyboardLayout("Arabic".into()), CompositorEvent::KeyboardLayout("Arabic".into()), CompositorEvent::KeyboardLayout("English (US, intl.)".into())]);
     }
 
 }

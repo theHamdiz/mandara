@@ -1,6 +1,7 @@
 use super::*;
 use std::os::unix::fs::PermissionsExt as _;
 use std::sync::atomic::AtomicBool;
+use std::path::Path;
 
 fn native_environment() {
     let directory = std::path::PathBuf::from(std::env::var_os("MANDARA_BACKUP_TEST_HOME").expect("run native backup tests with a private fixture home"));
@@ -42,8 +43,39 @@ fn histories_validate_identity_and_restore_creates_fresh_destinations() {
 }
 
 #[test]
+fn grouped_histories_keep_the_newest_snapshots_without_rejecting_valid_older_groups() {
+    let records: Vec<_> = (0..100).map(|index| serde_json::json!({"id":format!("{index:064x}"),"time":format!("2026-11-{:02}T{:02}:00:00Z", index / 24 + 1, index % 24)})).collect();
+    let rows = restic::snapshots(&serde_json::to_vec(&records).unwrap()).unwrap();
+    assert_eq!(rows.len(), 64);
+    assert!(rows.capacity() <= 64);
+    assert_eq!(rows[0].id, format!("{:064x}", 99));
+    assert_eq!(rows[63].id, format!("{:064x}", 36));
+    let mut invalid = records;
+    invalid[0]["id"] = "invalid".into();
+    assert!(restic::snapshots(&serde_json::to_vec(&invalid).unwrap()).is_err());
+}
+
+#[test]
+fn repository_patterns_preserve_literal_globs_and_non_utf8_paths() {
+    use std::os::unix::ffi::OsStrExt as _;
+    assert_eq!(restic::repository_exclusion(Path::new(r"/backup[1]?*\repo")), r"/backup\[1\]\?\*\\repo");
+    let path = Path::new(std::ffi::OsStr::from_bytes(b"/backup/\xff[1]"));
+    assert_eq!(restic::repository_exclusion(path).as_encoded_bytes(), b"/backup/\xff\\[1\\]");
+}
+
+#[test]
+fn backup_history_orders_instants_across_hostname_timezones() {
+    let records = serde_json::json!([
+        {"id":"a".repeat(64),"time":"2026-11-14T01:00:00+02:00"},
+        {"id":"b".repeat(64),"time":"2026-11-14T00:00:00Z"}
+    ]);
+    let rows = restic::snapshots(&serde_json::to_vec(&records).unwrap()).unwrap();
+    assert_eq!(rows[0].id, "b".repeat(64));
+}
+
+#[test]
 fn older_snapshots_do_not_invent_zero_counts_and_password_modes_match_the_settings_contract() {
-    let rows = restic::snapshots(format!(r#"[{{"id":"{}","time":"2026-11-13"}}]"#, "a".repeat(64)).as_bytes()).unwrap();
+    let rows = restic::snapshots(format!(r#"[{{"id":"{}","time":"2026-11-13T00:00:00Z"}}]"#, "a".repeat(64)).as_bytes()).unwrap();
     assert!(rows[0].summary.is_none());
     let root = tempfile::tempdir().unwrap();
     let password = root.path().join("password");
@@ -65,10 +97,12 @@ fn native_encrypted_backup_check_and_restore_copy() {
     let source = root.path().join("source");
     std::fs::create_dir(&source).unwrap();
     std::fs::write(source.join("original.txt"), "first edition").unwrap();
+    std::fs::create_dir(source.join("repository1")).unwrap();
+    std::fs::write(source.join("repository1/personal.txt"), "keep this neighbor").unwrap();
     let password = root.path().join("password");
     std::fs::write(&password, "synthetic integration-test secret").unwrap();
     std::fs::set_permissions(&password, std::fs::Permissions::from_mode(0o600)).unwrap();
-    let settings = Settings { repository: root.path().join("repository"), password_file: password.clone(), sources: vec![source.clone()] };
+    let settings = Settings { repository: source.join("repository[1]"), password_file: password.clone(), sources: vec![source.clone()] };
     let cancel = AtomicBool::new(false);
     Restic.execute(&settings, Operation::Initialize, &cancel, &mut |_| {}).unwrap();
     let summary = Restic.execute(&settings, Operation::Backup, &cancel, &mut |_| {}).unwrap();
@@ -81,6 +115,8 @@ fn native_encrypted_backup_check_and_restore_copy() {
     assert_eq!(std::fs::read_to_string(source.join("original.txt")).unwrap(), "later edition");
     let relative = source.strip_prefix("/").unwrap().join("original.txt");
     assert_eq!(std::fs::read_to_string(restored.join(relative)).unwrap(), "first edition");
+    assert_eq!(std::fs::read_to_string(restored.join(source.strip_prefix("/").unwrap()).join("repository1/personal.txt")).unwrap(), "keep this neighbor");
+    assert!(!restored.join(settings.repository.strip_prefix("/").unwrap()).exists());
     std::fs::set_permissions(password, std::fs::Permissions::from_mode(0o644)).unwrap();
     assert!(Restic.snapshots(&settings, &cancel).is_err());
 }

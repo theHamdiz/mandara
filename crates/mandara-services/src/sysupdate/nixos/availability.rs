@@ -12,6 +12,13 @@ use super::{NixAction, NixPaths, Setup};
 /// An offline attribute-name lookup should finish promptly even when a flake is broken.
 const CHECK_TIMEOUT: Duration = Duration::from_secs(8);
 
+fn isolated_eval(nix: &Path, unshare: &Path, root: bool) -> std::process::Command {
+    let mut command = std::process::Command::new(unshare);
+    if !root { command.args(["--user", "--map-current-user"]); }
+    command.args(["--net", "--"]).arg(nix);
+    command
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Reason {
@@ -94,7 +101,8 @@ impl Inspector for Native {
 
     fn flake_has_host(&self, dir: &Path, host: &str, cancel: &AtomicBool) -> Result<bool, ()> {
         let program = super::super::helper::trusted_program("nix").map_err(|_| ())?;
-        let mut command = std::process::Command::new(program);
+        let unshare = super::super::helper::trusted_program("unshare").map_err(|_| ())?;
+        let mut command = isolated_eval(&program, &unshare, rustix::process::geteuid().is_root());
         let trust = if rustix::process::geteuid().is_root() {
             super::git_work_tree(dir)
                 .map(|tree| super::super::helper::GitTrust::new(&tree, Path::new("/root")))
@@ -119,6 +127,9 @@ impl Inspector for Native {
                 "false",
                 "--option",
                 "accept-flake-config",
+                "false",
+                "--option",
+                "allow-unsafe-native-code-during-evaluation",
                 "false",
                 "--apply",
                 "builtins.attrNames",
@@ -180,7 +191,7 @@ fn inspect_actions(
                     Some(Reason::MissingConfiguration)
                 } else if !super::valid_host(host) {
                     Some(Reason::MissingHost)
-                } else if !rebuild_tools || !probe.tool("nix") {
+                } else if !rebuild_tools || !probe.tool("nix") || !probe.tool("unshare") {
                     Some(Reason::MissingTools)
                 } else {
                     if !probe.writable_flake(dir, *root_owned) {
@@ -260,3 +271,5 @@ pub fn check(paths: &NixPaths, action: NixAction, cancel: &AtomicBool) -> Result
 
 #[cfg(test)]
 mod tests;
+#[cfg(all(test, target_os = "linux"))]
+mod native_tests;

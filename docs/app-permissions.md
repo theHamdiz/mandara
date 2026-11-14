@@ -11,8 +11,9 @@ access, including cameras and graphics devices. Portals can still grant files
 you explicitly choose.
 
 Conditional, scoped and overlapping grants stay locked with an explanation.
-Their native rules remain visible under **Native permission details**. The
-panel does not pretend that a broad device grant provides independent camera
+Their native rules remain visible under **Native permission details**.
+X11 fallback depends on Wayland availability, so those display grants also
+stay locked. The panel does not pretend that a broad device grant provides independent camera
 or microphone switches, or silently replace a conditional grant with an
 unconditional one.
 
@@ -27,6 +28,9 @@ Personal overrides apply to the app across all its installations. Restart the
 app after editing or using Undo so the new sandbox is used. App permissions
 requires Flatpak on Linux; it does not change native applications or manage
 portal grants.
+
+Custom installations selected through `FLATPAK_USER_DIR` use that same folder
+for inspection and personal overrides.
 
 The optional installer package is `flatpak`; on NixOS, enable Flatpak in your
 system configuration. `mandara commands` documents `permissions apps`,

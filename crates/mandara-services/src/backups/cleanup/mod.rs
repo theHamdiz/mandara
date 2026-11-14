@@ -55,7 +55,10 @@ struct Stamp { device: u64, mount: u64, inode: u64, bytes: u64, modified: (i64, 
 impl Stamp {
     fn of(file: &File) -> Result<Self> {
         let meta = file.metadata()?;
-        Ok(Self { device: meta.dev(), mount: paths::mount_id(file)?, inode: meta.ino(), bytes: meta.len(), modified: (meta.mtime(), meta.mtime_nsec()), changed: (meta.ctime(), meta.ctime_nsec()) })
+        Ok(Self::from_metadata(&meta, paths::mount_id(file)?))
+    }
+    fn from_metadata(meta: &std::fs::Metadata, mount: u64) -> Self {
+        Self { device: meta.dev(), mount, inode: meta.ino(), bytes: meta.len(), modified: (meta.mtime(), meta.mtime_nsec()), changed: (meta.ctime(), meta.ctime_nsec()) }
     }
     fn identity(self, other: Self) -> bool { self.device == other.device && self.mount == other.mount && self.inode == other.inode }
     fn after_rename(self, other: Self) -> bool { self.identity(other) && self.bytes == other.bytes && self.modified == other.modified }

@@ -74,22 +74,32 @@ fn default_id(text: &str) -> Result<u64> {
 }
 
 pub(super) fn inspect(runner: &impl Runner, mount: &Mount, mounts: &[Mount], cancel: &AtomicBool) -> Result<Reply> {
+    let directory = checked_mount(mount, mounts)?;
+    inspect_at(runner, mount, mounts, &pinned_path(&directory), cancel)
+}
+
+fn inspect_at(runner: &impl Runner, mount: &Mount, mounts: &[Mount], path: &Path, cancel: &AtomicBool) -> Result<Reply> {
     ensure!(mount.supports_snapshots(), "{}", t("This filesystem does not support native Btrfs snapshots."));
-    let default = run(runner, "btrfs", &["subvolume", "get-default"], &mount.target, cancel, READ_TIMEOUT)?;
-    let text = run(runner, "btrfs", &["subvolume", "list", "-s", "-u", "-q"], &mount.target, cancel, READ_TIMEOUT)?;
+    let default = run(runner, "btrfs", &["subvolume", "get-default"], path, cancel, READ_TIMEOUT)?;
+    let text = run(runner, "btrfs", &["subvolume", "list", "-s", "-u", "-q"], path, cancel, READ_TIMEOUT)?;
     Ok(Reply { snapshots: snapshots(&text, mount, mounts, default_id(&default)?)?, output: String::new() })
 }
 
-pub(super) fn checked_mount(requested: &Mount, mounts: &[Mount]) -> Result<()> {
+pub(super) fn checked_mount(requested: &Mount, mounts: &[Mount]) -> Result<File> {
     ensure!(mounts.iter().any(|mount| mount == requested), "{}", t("The filesystem mount changed. Refresh before continuing."));
     ensure!(requested.target.canonicalize()? == requested.target, "{}", t("The filesystem mount moved. Refresh before continuing."));
-    Ok(())
+    opened_directory(&requested.target, requested)
 }
 
 fn selected_directory(path: &Path, mount: &Mount, mounts: &[Mount]) -> Result<File> {
     let deepest = mounts.iter().filter(|other| path.starts_with(&other.target))
         .max_by_key(|other| (other.target.components().count(), other.id));
     ensure!(deepest == Some(mount), "{}", t("The source and snapshot folder must belong to the selected Btrfs mount."));
+    opened_directory(path, mount)
+}
+
+fn opened_directory(path: &Path, mount: &Mount) -> Result<File> {
+    ensure!(path.is_absolute() && mount.target.is_absolute(), "{}", t("The filesystem mount changed. Refresh before continuing."));
     let file = File::from(rustix::fs::open(path, rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::DIRECTORY | rustix::fs::OFlags::CLOEXEC | rustix::fs::OFlags::NOFOLLOW, rustix::fs::Mode::empty())?);
     #[cfg(target_os = "linux")]
     {
@@ -106,14 +116,15 @@ fn pinned_path(file: &File) -> PathBuf {
 
 pub(super) fn apply(runner: &impl Runner, request: &Request, mounts: &[Mount], cancel: &AtomicBool) -> Result<Reply> {
     let mount = request.mount();
-    checked_mount(mount, mounts)?;
+    let directory = checked_mount(mount, mounts)?;
+    let target = pinned_path(&directory);
     if !matches!(request, Request::Inspect { .. }) { ensure!(!mount.read_only, "{}", t("This filesystem is mounted read-only.")); }
     match request {
-        Request::Inspect { .. } => inspect(runner, mount, mounts, cancel),
+        Request::Inspect { .. } => inspect_at(runner, mount, mounts, &target, cancel),
         Request::Delete { snapshot, .. } => {
-            let current = inspect(runner, mount, mounts, cancel)?;
+            let current = inspect_at(runner, mount, mounts, &target, cancel)?;
             ensure!(!snapshot.protected && current.snapshots.iter().any(|row| row == snapshot && !row.protected), "{}", t("This snapshot is active, protected or changed. Refresh before removing it."));
-            let output = run(runner, "btrfs", &["subvolume", "delete", "--commit-after", "--subvolid", &snapshot.id.to_string()], &mount.target, cancel, READ_TIMEOUT)?;
+            let output = run(runner, "btrfs", &["subvolume", "delete", "--commit-after", "--subvolid", &snapshot.id.to_string()], &target, cancel, READ_TIMEOUT)?;
             Ok(Reply { output, ..Default::default() })
         }
         Request::Create { source, directory, name, .. } => {
@@ -144,7 +155,7 @@ pub(super) fn apply(runner: &impl Runner, request: &Request, mounts: &[Mount], c
                     ("fstrim", &["--verbose", "--"])
                 }
             };
-            let output = run(runner, program, args, &mount.target, cancel, MAINTENANCE_TIMEOUT)?;
+            let output = run(runner, program, args, &target, cancel, MAINTENANCE_TIMEOUT)?;
             Ok(Reply { output, ..Default::default() })
         }
     }
@@ -155,7 +166,6 @@ pub struct Native;
 impl Backend for Native {
     fn inspect(&self, mount: &Mount, cancel: &AtomicBool) -> Result<Reply> {
         let mounts = mounted()?;
-        checked_mount(mount, &mounts)?;
         inspect(&SystemRunner, mount, &mounts, cancel)
     }
     fn apply(&self, request: &Request, cancel: &AtomicBool) -> Result<Reply> { super::admin::run(request, cancel) }

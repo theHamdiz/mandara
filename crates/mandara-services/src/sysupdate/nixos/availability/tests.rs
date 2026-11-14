@@ -1,5 +1,18 @@
 use super::*;
 
+#[test]
+fn flake_inspection_has_no_network_and_preserves_the_callers_identity() {
+    use std::ffi::OsStr;
+    for root in [false, true] {
+        let command = isolated_eval(Path::new("/nix/store/nix/bin/nix"), Path::new("/nix/store/util-linux/bin/unshare"), root);
+        assert_eq!(command.get_program(), OsStr::new("/nix/store/util-linux/bin/unshare"));
+        let args: Vec<_> = command.get_args().collect();
+        assert!(args.ends_with(&[OsStr::new("--net"), OsStr::new("--"), OsStr::new("/nix/store/nix/bin/nix")]));
+        assert_eq!(args.contains(&OsStr::new("--map-current-user")), !root);
+        assert!(!args.contains(&OsStr::new("--fork")), "the bounded worker must own the evaluator directly");
+    }
+}
+
 struct Probe {
     host: Result<bool, ()>,
     writable: bool,

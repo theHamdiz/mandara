@@ -1,5 +1,7 @@
 //! Native restic JSON with bounded retained output and cancellable child ownership.
 
+use std::ffi::OsString;
+use std::os::unix::ffi::{OsStrExt as _, OsStringExt as _};
 use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
 use std::path::Path;
 use std::process::Command;
@@ -40,11 +42,34 @@ pub(super) fn command(settings: &Settings) -> Result<Command> {
 
 pub(super) fn snapshots(text: &[u8]) -> Result<Vec<Snapshot>> {
     ensure!(text.len() <= MAX_JSON_BYTES, "backup history is too large");
-    let mut rows: Vec<Snapshot> = serde_json::from_slice(text)?;
-    ensure!(rows.len() <= SNAPSHOTS, "backup history has too many entries");
-    ensure!(rows.iter().all(|row| valid_id(&row.id)), "invalid backup snapshot identity");
-    rows.sort_unstable_by(|a, b| b.time.cmp(&a.time));
+    let mut rows: Vec<DatedSnapshot> = serde_json::from_slice(text)?;
+    ensure!(rows.iter().all(|row| valid_id(&row.snapshot.id)), "invalid backup snapshot identity");
+    rows.sort_unstable_by_key(|row| std::cmp::Reverse(row.time));
+    rows.truncate(SNAPSHOTS);
+    let mut rows: Vec<_> = rows.into_iter().map(|row| row.snapshot).collect();
+    rows.shrink_to(SNAPSHOTS);
     Ok(rows)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(try_from = "Snapshot")]
+struct DatedSnapshot { snapshot: Snapshot, time: chrono::DateTime<chrono::FixedOffset> }
+impl TryFrom<Snapshot> for DatedSnapshot {
+    type Error = chrono::ParseError;
+    fn try_from(snapshot: Snapshot) -> std::result::Result<Self, Self::Error> {
+        let time = chrono::DateTime::parse_from_rfc3339(&snapshot.time)?;
+        Ok(Self { snapshot, time })
+    }
+}
+
+/// Restic treats exclusions as Go filepath patterns, even when the repository is a literal path.
+pub(super) fn repository_exclusion(path: &Path) -> OsString {
+    let mut pattern = Vec::with_capacity(path.as_os_str().len());
+    for &byte in path.as_os_str().as_bytes() {
+        if matches!(byte, b'\\' | b'*' | b'?' | b'[' | b']') { pattern.push(b'\\'); }
+        pattern.push(byte);
+    }
+    OsString::from_vec(pattern)
 }
 
 pub(super) fn valid_id(id: &str) -> bool {
@@ -126,7 +151,7 @@ impl Backend for Restic {
             Operation::Backup => {
                 ensure!(!settings.sources.is_empty(), "{}", t("Choose source folders in Studio before starting a backup."));
                 let repository = settings.repository.canonicalize()?;
-                command.args(["backup", "--exclude"]).arg(&repository).arg("--");
+                command.args(["backup", "--exclude"]).arg(repository_exclusion(&repository)).arg("--");
                 for source in &settings.sources {
                     let source = source.canonicalize()?;
                     ensure!(source.is_dir() && !source.starts_with(&repository), "{}", t("A backup source must be a folder outside the backup repository."));

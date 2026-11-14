@@ -602,12 +602,19 @@ pub fn run_action(
     cancel: &CancelSignal,
     nix: &nixos::NixPaths,
 ) -> i32 {
-    if let Action::Nix(action) = action
-        && let Err(error) = runner.check_nix(*action, nix, cancel)
-    {
-        out.line(&error);
-        out.mark(&Mark::Done(Outcome::Failed(FailureKind::Other)));
-        return EXIT_UNSUPPORTED;
+    if let Action::Nix(action) = action {
+        cancel.set_cancellable(true);
+        let checked = runner.check_nix(*action, nix, cancel);
+        cancel.set_cancellable(false);
+        if cancel.requested() {
+            out.mark(&Mark::Done(Outcome::Cancelled));
+            return EXIT_CANCELLED;
+        }
+        if let Err(error) = checked {
+            out.line(&error);
+            out.mark(&Mark::Done(Outcome::Failed(FailureKind::Other)));
+            return EXIT_UNSUPPORTED;
+        }
     }
     let (backend, steps): (&dyn SystemBackend, Vec<Step>) = match (action, system) {
         (Action::Apply, System::Managed(id)) => {
@@ -752,6 +759,26 @@ mod tests {
             "{}\n",
             Mark::Done(Outcome::Failed(FailureKind::Other)).line()
         )));
+    }
+
+    #[test]
+    fn cancelling_during_nix_preflight_is_accepted_and_never_runs_a_step() {
+        struct CancelledProbe;
+        impl Runner for CancelledProbe {
+            fn check_nix(&self, _: NixAction, _: &nixos::NixPaths, cancel: &CancelSignal) -> Result<(), String> {
+                assert!(cancel.try_request());
+                Err("cancelled fixture probe".into())
+            }
+            fn run(&self, _: &Step, _: &mut dyn FnMut(&str), _: &CancelSignal) -> std::io::Result<Option<i32>> {
+                panic!("a cancelled probe cannot launch an update")
+            }
+        }
+        let mut output = Vec::new();
+        let cancel = CancelSignal::default();
+        assert_eq!(run_action(&Action::Nix(NixAction::Rebuild(nixos::RebuildMode::Build)), System::NixOs,
+            &CancelledProbe, &mut Out::new(&mut output), &cancel, &nixos::NixPaths::system()), EXIT_CANCELLED);
+        assert!(!cancel.is_cancellable());
+        assert_eq!(String::from_utf8(output).unwrap().trim(), Mark::Done(Outcome::Cancelled).line().trim());
     }
 
     #[test]

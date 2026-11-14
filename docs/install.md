@@ -464,6 +464,12 @@ source shows a reason instead of running a guessed command. Existing system
 generations can still be switched or rolled back independently of that source.
 Flatpak updates remain available when Flatpak is installed.
 
+Flake inspection uses cached inputs with networking disabled; it never updates
+the lock file or builds your configuration. The check uses NixOS's standard
+`unshare` utility. If the kernel prevents that isolated check, native build
+actions explain that the flake could not be verified; generation controls stay
+available independently.
+
 Mandara is a flake: Nix builds it from source (a release build, like the
 tarballs) and keeps it updated, so the built-in updater stays out of the
 way. Studio → About says "Installed by Nix" and `mandara update apply`
