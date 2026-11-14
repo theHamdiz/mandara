@@ -37,7 +37,7 @@
   <a href="docs/desktop.md"><img src="https://img.shields.io/badge/Wayland-native-22D3EE?logo=wayland&logoColor=E9E5FF&labelColor=0B1026" alt="Wayland native"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-8B5CF6?labelColor=0B1026" alt="GPU rendered"/></a>
   <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic%20%C2%B7%20KWin%20%C2%B7%20Aqueous%20%C2%B7%20labwc%20%C2%B7%20COSMIC-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc, COSMIC"/></a>
-  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-88%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="88 built-in plugins plus WebAssembly"/></a>
+  <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-89%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="89 built-in plugins plus WebAssembly"/></a>
   <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-20%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="20 languages"/></a>
   <br/>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/resources-measured-2DD4BF?labelColor=0B1026" alt="Resource measurements and current limits"/></a>
@@ -100,7 +100,7 @@ and tick off tasks where they sit.
 | **Resources** | [Measurements and current limits](docs/performance.md); the 100 MiB startup and operation target remains open |
 | **Settings** | Live in Mandara Studio (`mandara studio`), saved to `~/.config/mandara/config.toml`; [thirteen colour launcher icons](docs/configuration.md#launcher-button-artwork) |
 | **Automation** | JSON replies through `mandara msg`; the full catalog in `mandara commands --json` |
-| **Plugins** | 88 built in, plus third-party Rust plugins in sandboxed WebAssembly |
+| **Plugins** | 89 built in, plus third-party Rust plugins in sandboxed WebAssembly |
 | **Widgets** | Mechanical, word and binary clocks, calendars and weather dials; passive widgets work on lock and login screens too |
 | **Languages** | 20, including right-to-left Arabic, Persian and Urdu |
 | **License** | GPL-3.0-or-later |
@@ -150,7 +150,7 @@ and tick off tasks where they sit.
    placement map. [Boot look](docs/boot-look.md)
    styles GRUB, Limine, rEFInd and Plymouth, or uses your image, with a plan,
    backups and one-click restore. Display changes have a keep-or-revert countdown.
-9. **Extensions with room to experiment.** Choose from 88 built-in plugins
+9. **Extensions with room to experiment.** Choose from 89 built-in plugins
    or write your own in Rust. Sandboxed WebAssembly keeps a crashing plugin
    from taking down your desktop. Optional [backups](docs/backups.md) bring
    encrypted backups, private restore copies, Btrfs snapshots and reviewed cleanup;
@@ -173,6 +173,8 @@ and tick off tasks where they sit.
 - **A look that feels like you.** Try glass pills, a flower rail, a taskbar
   or a full screen frame. Tune the corners, colours, glass and motion.
   [Your desktop](docs/desktop.md)
+- **Wallpapers from Steam Workshop.** Apply installed Wallpaper Engine scenes
+  and videos by display. [Steam Workshop](docs/wallpapers.md#steam-workshop)
 - **Settings you can see.** Preview a change in Studio before making it
   part of your day. [Mandara Studio](docs/studio.md)
 - **Less app-hopping.** Lyrics, per-app sound, capture tools, a sorted

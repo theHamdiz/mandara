@@ -292,6 +292,19 @@ pub fn open_count(cx: &App) -> usize {
     cx.try_global::<Host>().map_or(0, |h| h.open.len())
 }
 
+/// Areas that must receive pointer input even when the desktop canvas is
+/// above these cards on the same layer.
+pub(crate) fn input_exclusions(output: &str, cx: &App) -> Vec<mandara_core::shm_canvas::Rect> {
+    let Some(host) = cx.try_global::<Host>() else { return Vec::new() };
+    host.open.iter()
+        .filter(|(key, _)| key.output == output && !matches!(key.card.as_str(), WAVE | FRAMED_BARS | MIRRORED_BARS))
+        .map(|(key, _)| {
+            let (x, y, w, h) = key.rect;
+            mandara_core::shm_canvas::Rect::new(x, y, w as u32, h as u32)
+        })
+        .collect()
+}
+
 /// Every wanted surface `(key, output index)` and the next time
 /// visibility may change.
 fn plan(cfg: &ShellConfig, outs: &[mandara_core::OutputGeometry], clock: &MediaClock, rtl: bool, now: Instant) -> (Vec<(Key, usize)>, Option<Instant>) {
@@ -432,6 +445,7 @@ fn reconcile(cx: &mut App) {
         (t, task)
     });
     cx.set_global(host);
+    crate::backdrop::refresh(cx);
 }
 
 /// Added to grace deadlines so the re-check lands after them.

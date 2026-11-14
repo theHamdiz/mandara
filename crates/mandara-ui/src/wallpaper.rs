@@ -557,7 +557,11 @@ pub fn apply(path: PathBuf, cx: &mut App) {
 pub fn reconcile_theme(c: &mut mandara_config::ShellConfig) -> bool {
     // The colours follow the image on screen: the light / dark variant
     // when one is set, else the main wallpaper.
-    let shown = mandara_config::desktop::effective_wallpaper(c.wallpaper.path.as_ref(), &c.wallpaper.variants, None, c.theme.mode.is_dark());
+    reconcile_theme_with_preview(c, None)
+}
+
+fn reconcile_theme_with_preview(c: &mut mandara_config::ShellConfig, preview: Option<PathBuf>) -> bool {
+    let shown = preview.or_else(|| mandara_config::desktop::effective_wallpaper(c.wallpaper.path.as_ref(), &c.wallpaper.variants, None, c.theme.mode.is_dark()));
     match (&c.theme.source, c.wallpaper.match_colors, shown) {
         // A new wallpaper keeps the scheme style; the seed choice resets.
         (ThemeSource::Wallpaper { path, variant, .. }, true, Some(wp)) if *path != wp => {
@@ -581,17 +585,18 @@ pub fn reconcile_theme(c: &mut mandara_config::ShellConfig) -> bool {
     }
 }
 
-/// Watches the config and applies [`reconcile_theme`] (shell process).
+pub(crate) fn sync_theme(cx: &mut App) {
+    let mut next = (*config(cx).read(cx).snapshot()).clone();
+    if reconcile_theme_with_preview(&mut next, crate::wallpaper_engine::theme_preview(cx)) {
+        update_config(cx, |c| *c = next);
+    }
+}
+
+/// Watches the config and applies the current wallpaper theme.
 pub fn init_theme_sync(cx: &mut App) {
     let store = config(cx);
-    let sync = |cx: &mut App| {
-        let mut next = (*config(cx).read(cx).snapshot()).clone();
-        if reconcile_theme(&mut next) {
-            update_config(cx, |c| *c = next);
-        }
-    };
-    sync(cx);
-    cx.observe(&store, move |_, cx| sync(cx)).detach();
+    sync_theme(cx);
+    cx.observe(&store, |_, cx| sync_theme(cx)).detach();
 }
 
 /// A window matching `covers` is on output `monitor`'s active workspace /
@@ -912,7 +917,7 @@ impl Render for WallpaperView {
             let _ = window.drop_image(image);
         }
         let cfg = self.config.read(cx).snapshot();
-        if !cfg.wallpaper.enabled {
+        if !cfg.wallpaper.enabled || self.monitor.as_deref().is_some_and(|o| crate::wallpaper_engine::active(o, cx)) {
             self.target = None;
             for shown in [self.current.take(), self.previous.take()].into_iter().flatten() {
                 crate::image_cache::evict_path(&shown, window, cx);
@@ -922,7 +927,8 @@ impl Render for WallpaperView {
             return div().size_full();
         }
         // Per-output and light / dark variants, then the main wallpaper.
-        let wanted = mandara_config::desktop::effective_wallpaper(cfg.wallpaper.path.as_ref(), &cfg.wallpaper.variants, self.monitor.as_deref(), cfg.theme.mode.is_dark());
+        let wanted = self.monitor.as_deref().and_then(|output| crate::wallpaper_engine::still_for_output(output, cx))
+            .or_else(|| mandara_config::desktop::effective_wallpaper(cfg.wallpaper.path.as_ref(), &cfg.wallpaper.variants, self.monitor.as_deref(), cfg.theme.mode.is_dark()));
         if wanted != self.target || (wanted.is_some() && cfg.wallpaper.fill != self.fill) {
             match wanted {
                 Some(path) => {

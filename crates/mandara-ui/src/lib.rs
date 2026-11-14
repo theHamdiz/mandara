@@ -74,6 +74,7 @@ pub mod toast_drawer;
 pub mod toasts;
 pub mod slideshow;
 pub mod wallpaper;
+pub mod wallpaper_engine;
 pub mod wallpaper_fill;
 pub mod wallpaper_shader;
 pub mod markdown;

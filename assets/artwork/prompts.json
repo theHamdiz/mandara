@@ -40,6 +40,14 @@
       "panel": null,
       "store": "Listed under More when uncategorized; included in Discover's first shelf."
     },
+    "wallpaper-engine": {
+      "glyph": "Two overlapping desktop displays and a play symbol, in ivory and gold on a violet tile.",
+      "palette": "twilight",
+      "motif": "aurora",
+      "panel": null,
+      "scene": "wallpaper-engine.jpg",
+      "prompt": "Landscape 16:9 with luminous violet and cyan light ribbons around the bottom and right, fading into a midnight indigo background. Keep the upper left dark and open for the title. No text, logos or icons. Background generated with ImageGen."
+    },
     "wallpaper-generator": {
       "glyph": "Cream paintbrush with a gold ferrule and paint drop; sea-glass teal tile from #40C8BD to #185D54. The diagonal brush silhouette has no wave or picture frame, distinguishing it from Soundscapes, Wallpaper and Media at small sizes.",
       "palette": "corniche",

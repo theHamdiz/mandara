@@ -28,7 +28,7 @@ chrono.workspace = true
 tracing.workspace = true
 anyhow.workspace = true
 rustix.workspace = true
-image.workspace = true
+image = { workspace = true, features = ["gif"] }
 # Video wallpapers: demux, AV1 decode, YUV conversion into wl_shm buffers.
 mandara-media.workspace = true
 # The wallpaper generator plugin's engine.
@@ -41,6 +41,7 @@ pulldown-cmark.workspace = true
 dirs.workspace = true
 serde_json.workspace = true
 async-channel.workspace = true
+tempfile.workspace = true
 # Keyring dialog: password buffers are wiped on drop.
 zeroize = "1"
 # 0.23: the fontdb cosmic-text 0.19 uses.
@@ -54,7 +55,6 @@ resvg = { version = "0.46", default-features = false }
 sha2.workspace = true
 
 [dev-dependencies]
-tempfile.workspace = true
 # tests/video_wallpaper.rs encodes its AV1 clip in pure Rust.
 rav1e.workspace = true
 usvg = { version = "0.46", default-features = false }

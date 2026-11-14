@@ -38,7 +38,7 @@ fn the_readme_keeps_its_feature_lists_and_key_capabilities() {
     let lower = source.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
     for feature in [
         "dynamic island", "on-screen displays", "offline ocr", "polkit", "clipboard", "all displays", "panel images",
-        "profiles", "19 bar presets", "32 pages", "88 built-in plugins", "webassembly", "natural language",
+        "profiles", "19 bar presets", "32 pages", "89 built-in plugins", "webassembly", "natural language",
         "backups", "app permissions", "btrfs", "helium", "celluloid", "rufin", "ghostty", "gtk 3/4", "qt 5/6", "kvantum", "zed", "kitty", "foot", "alacritty", "btop", "cava", "tmux", "zellij", "spicetify",
         "grub", "limine", "refind", "plymouth", "nixos", "freebsd", "steamos", "hijri", "eastern arabic", "yasser al-dossary", "abdulrashid sufi", "abdul basit abdul samad",
     ] {

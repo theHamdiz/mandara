@@ -4178,6 +4178,8 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         assert!(doc.nodes().iter().any(|n| n.name().value() == "binds"));
         assert!(out.text.contains("Mod+Space { spawn \"mandara\" \"msg\" \"launcher\" \"toggle\"; }"));
         assert!(out.text.contains("active-gradient from=\"#5eead4\""));
+        assert!(out.text.contains("match namespace=\"^mandara-wallpaper$\"\n    place-within-backdrop true"));
+        assert!(!out.text.contains("linux-wallpaperengine"));
     }
 
     #[test]

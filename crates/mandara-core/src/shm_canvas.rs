@@ -92,6 +92,7 @@ const SCROLL_STEP: f64 = 10.0;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CanvasLayer {
     Background,
+    Bottom,
     /// For screenshots / previews above all windows.
     Overlay,
 }
@@ -375,6 +376,8 @@ impl Plane {
 struct Canvas {
     surface: wl_surface::WlSurface,
     layer: zwlr_layer_surface_v1::ZwlrLayerSurfaceV1,
+    canvas_layer: CanvasLayer,
+    input_exclusions: Vec<Rect>,
     viewport: Option<wp_viewport::WpViewport>,
     fractional: Option<wp_fractional_scale_v1::WpFractionalScaleV1>,
     width: u32,
@@ -620,7 +623,7 @@ impl Host {
         let xdg_output = globals.bind::<zxdg_output_manager_v1::ZxdgOutputManagerV1, _, _>(&qh, 1..=3, ()).ok();
         // The desktop takes pointer input (its menu); an overlay preview
         // never swallows clicks.
-        let input = layer == CanvasLayer::Background;
+        let input = layer != CanvasLayer::Overlay;
         let cursor_shape = if input { globals.bind::<wp_cursor_shape_manager_v1::WpCursorShapeManagerV1, _, _>(&qh, 1..=1, ()).ok() } else { None };
         let data_device_manager = if input { globals.bind::<wl_data_device_manager::WlDataDeviceManager, _, _>(&qh, 1..=3, ()).ok() } else { None };
         let mut state = State {
@@ -702,16 +705,15 @@ impl Host {
         std::mem::take(&mut self.state.changed)
     }
 
-    /// Snapshots known outputs. Geometry stays `None` until the canvas is
-    /// configured and its preferred fractional scale, if requested, has arrived.
+    /// Snapshots known outputs. Once configured, the canvas uses its integer
+    /// output scale until the compositor reports a preferred fractional scale.
     pub fn outputs(&self) -> Vec<OutputInfo> {
         self.state
             .outputs
             .iter()
             .map(|o| {
-                // Not ready until the preferred fractional scale is known
-                // (else the first paint would be at the wrong size).
-                let c = o.canvas.as_ref().filter(|c| c.configured && c.width > 0 && c.height > 0 && (c.fractional.is_none() || c.scale120 > 0));
+                // A virtual KWin output may advertise fractional-scale without sending a preference.
+                let c = o.canvas.as_ref().filter(|c| c.configured && c.width > 0 && c.height > 0);
                 OutputInfo {
                     id: o.global,
                     name: o.name.clone(),
@@ -726,24 +728,32 @@ impl Host {
             .collect()
     }
 
-    /// Creates the canvas (layer surface) for output `id` if it has none.
+    /// Creates the canvas for output `id` or remaps it when its layer changes.
+    /// Returns true if the previous canvas was discarded.
     /// Waits for native logical dimensions, or a complete legacy batch, before
     /// requesting any surface size. Paint dimensions come from configure replies,
     /// never from treating the request itself as an acknowledgement.
-    pub fn ensure_canvas(&mut self, id: u32) {
+    pub fn ensure_canvas(&mut self, id: u32, layer: Option<CanvasLayer>) -> bool {
         let s = &mut self.state;
-        let Some(i) = s.outputs.iter().position(|o| o.global == id) else { return };
-        if s.outputs[i].canvas.is_some() {
-            return;
+        let Some(i) = s.outputs.iter().position(|o| o.global == id) else { return false };
+        let layer = layer.unwrap_or(s.layer);
+        if s.outputs[i].canvas.as_ref().is_some_and(|c| c.canvas_layer == layer) {
+            return false;
         }
-        let Some((width, height)) = s.outputs[i].logical_size() else { return };
+        let Some((width, height)) = s.outputs[i].logical_size() else { return false };
+        let previous = s.outputs[i].canvas.take();
+        let remapped = previous.is_some();
+        if let Some(canvas) = previous {
+            canvas.destroy();
+        }
         let qh = s.qh.clone();
         let surface = s.compositor.create_surface(&qh, id);
-        let layer = match s.layer {
+        let wl_layer = match layer {
             CanvasLayer::Background => zwlr_layer_shell_v1::Layer::Background,
+            CanvasLayer::Bottom => zwlr_layer_shell_v1::Layer::Bottom,
             CanvasLayer::Overlay => zwlr_layer_shell_v1::Layer::Overlay,
         };
-        let ls = s.layer_shell.get_layer_surface(&surface, Some(&s.outputs[i].output), layer, s.namespace.clone(), &qh, id);
+        let ls = s.layer_shell.get_layer_surface(&surface, Some(&s.outputs[i].output), wl_layer, s.namespace.clone(), &qh, id);
         ls.set_size(width, height);
         use zwlr_layer_surface_v1::Anchor;
         ls.set_anchor(Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right);
@@ -766,6 +776,8 @@ impl Host {
         s.outputs[i].canvas = Some(Canvas {
             surface,
             layer: ls,
+            canvas_layer: layer,
+            input_exclusions: Vec::new(),
             viewport,
             fractional,
             width: 0,
@@ -785,6 +797,7 @@ impl Host {
             placed_for: None,
         });
         s.changed = true;
+        remapped
     }
 
     /// Destroys output `id`'s canvas.
@@ -792,6 +805,31 @@ impl Host {
         if let Some(c) = self.state.outputs.iter_mut().find(|o| o.global == id).and_then(|o| o.canvas.take()) {
             c.destroy();
             self.state.changed = true;
+        }
+    }
+
+    /// Leaves these output-local logical rectangles to independently interactive surfaces.
+    pub fn exclude_from_input(&mut self, id: u32, rects: &[Rect]) {
+        let s = &mut self.state;
+        if !s.input {
+            return;
+        }
+        let qh = s.qh.clone();
+        let compositor = s.compositor.clone();
+        if let Some(c) = s.canvas_mut(id).filter(|c| c.input_exclusions != rects) {
+            if rects.is_empty() {
+                c.surface.set_input_region(None);
+            } else {
+                let region = compositor.create_region(&qh, ());
+                region.add(0, 0, i32::MAX, i32::MAX);
+                for r in rects {
+                    region.subtract(r.x, r.y, r.w as i32, r.h as i32);
+                }
+                c.surface.set_input_region(Some(&region));
+                region.destroy();
+            }
+            c.input_exclusions.clear();
+            c.input_exclusions.extend_from_slice(rects);
         }
     }
 
@@ -1394,6 +1432,9 @@ impl Dispatch<wl_callback::WlCallback, u32> for State {
 
 impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, u32> for State {
     fn event(state: &mut Self, layer: &zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, event: zwlr_layer_surface_v1::Event, global: &u32, _: &Connection, _: &QueueHandle<Self>) {
+        if state.canvas_mut(*global).is_none_or(|c| c.layer != *layer) {
+            return;
+        }
         match event {
             zwlr_layer_surface_v1::Event::Configure { serial, width, height } => {
                 layer.ack_configure(serial);

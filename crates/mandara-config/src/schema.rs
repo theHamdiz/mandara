@@ -1627,8 +1627,47 @@ pub struct WallpaperConfig {
     /// Light / dark and per-output wallpapers.
     pub variants: crate::desktop::WallpaperVariants,
     pub slideshow: crate::desktop::WallpaperSlideshow,
+    /// Steam Workshop item ID per Wayland output.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub workshop: BTreeMap<String, u64>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub workshop_workspaces: BTreeMap<String, BTreeMap<String, u64>>,
+    pub workshop_options: WorkshopOptions,
     /// Video wallpaper playback (pausing, frame rate).
     pub video: crate::desktop::WallpaperVideo,
+}
+
+/// Renderer preferences shared by the Workshop selections.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WorkshopOptions {
+    pub fps: u32,
+    pub volume: u32,
+    pub mute: bool,
+    pub mouse: bool,
+    pub pause_fullscreen: bool,
+    pub save_still: bool,
+    pub live: bool,
+    pub executable: String,
+    pub steam_folder: String,
+    pub scaling: String,
+}
+
+impl Default for WorkshopOptions {
+    fn default() -> Self {
+        Self {
+            fps: 30,
+            volume: 15,
+            mute: true,
+            mouse: false,
+            pause_fullscreen: true,
+            save_still: true,
+            live: true,
+            executable: "linux-wallpaperengine".into(),
+            steam_folder: String::new(),
+            scaling: "default".into(),
+        }
+    }
 }
 
 impl Default for WallpaperConfig {
@@ -1667,6 +1706,9 @@ impl Default for WallpaperConfig {
             sketch: crate::desktop::SketchOptions::default(),
             variants: crate::desktop::WallpaperVariants::default(),
             slideshow: crate::desktop::WallpaperSlideshow::default(),
+            workshop: BTreeMap::new(),
+            workshop_workspaces: BTreeMap::new(),
+            workshop_options: WorkshopOptions::default(),
             video: crate::desktop::WallpaperVideo::default(),
         }
     }

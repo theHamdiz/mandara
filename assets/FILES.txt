@@ -20,6 +20,7 @@ assets/artwork/scenes/desktop-visualizers.jpg
 assets/artwork/scenes/desktop-weather.jpg
 assets/artwork/scenes/desktop-world-clock.jpg
 assets/artwork/scenes/wallpaper-depth.jpg
+assets/artwork/scenes/wallpaper-engine.jpg
 assets/artwork/twilight.png
 assets/brand/mandara-1024.png
 assets/brand/mandara-128.png
@@ -304,6 +305,9 @@ assets/plugins/wallhaven/icon.svg
 assets/plugins/wallpaper-depth/cover.png
 assets/plugins/wallpaper-depth/icon.png
 assets/plugins/wallpaper-depth/icon.svg
+assets/plugins/wallpaper-engine/cover.png
+assets/plugins/wallpaper-engine/icon.png
+assets/plugins/wallpaper-engine/icon.svg
 assets/plugins/wallpaper-generator/cover.png
 assets/plugins/wallpaper-generator/icon.png
 assets/plugins/wallpaper-generator/icon.svg

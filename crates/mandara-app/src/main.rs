@@ -648,6 +648,7 @@ fn run_shell() -> Result<()> {
         .detach();
 
         surfaces::init(outputs.clone(), cx);
+        mandara_ui::wallpaper_engine::init(cx);
         // Panels that floated when the shell last stopped come back.
         mandara_ui::floating::init(cx);
         if mandara_ui::backdrop::software_enabled() {

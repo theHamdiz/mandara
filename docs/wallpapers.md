@@ -34,6 +34,33 @@ The wallpaper picker and engine, and Mandara's own wallpaper generator.
 </tr>
 </table>
 
+### Steam Workshop
+
+Install a version of [linux-wallpaperengine](https://github.com/Almamu/linux-wallpaperengine)
+that supports the `--layer` flag, and subscribe to wallpapers through Steam.
+Turn on **Wallpaper Engine** under **Studio → Plugins** or from the **Steam Workshop** tab.
+Then open **Studio → Wallpaper → Steam Workshop**, select a display, and apply
+an installed scene or video from the grid. Animated GIF previews show a still frame. **Restore** returns that display to its regular
+Mandara wallpaper. Other displays keep their selections.
+
+Choose **Default** for the display-wide selection, or select a workspace
+to override it. A workspace without an override uses the display default.
+Workspace choices are available when the compositor reports workspaces.
+
+**Save a still as the default wallpaper** is on by default. When the
+display-wide selection renders its first frame, Mandara saves that frame and
+uses it as its normal wallpaper. Desktop widgets draw above the live scene
+and below application windows. Umbriel uses the live background in its
+overview and mirrors it into workspace previews when `overview.workspace_wallpaper`
+is enabled. Niri shows the active scene in its workspace previews as well.
+**Still image** saves the active scene's capture as the default on demand. Turning off **Animated wallpaper** keeps only the captured image.
+In **Settings**, configure frame rate, mute, volume, mouse interaction,
+fullscreen pausing, fill mode and the path to a compatible `linux-wallpaperengine`
+executable. **Wallpaper Engine folder** is detected automatically from
+native or Flatpak Steam and its registered libraries. Enter a Steam library
+folder or the Wallpaper Engine installation folder to use a location on
+another disk. Clear the field to return to automatic detection.
+
 ### Sketch transition
 
 Pick **Sketch** as the transition (*Studio → Wallpaper → Fit & effects*, or

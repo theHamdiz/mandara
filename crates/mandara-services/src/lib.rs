@@ -39,6 +39,7 @@ pub mod cursors;
 pub mod ddc;
 pub mod depth_model;
 pub mod desktop_feeds;
+pub mod wallpaper_engine;
 pub mod desktop_notify;
 pub mod drives;
 pub mod editor;

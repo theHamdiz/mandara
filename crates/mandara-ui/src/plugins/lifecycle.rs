@@ -232,6 +232,7 @@ mod tests {
         "updates",
         "uptime",
         "wallhaven",
+        "wallpaper-engine",
         "wallpaper-generator",
         "world-clock",
     ];

@@ -35,6 +35,7 @@ pub(crate) const CARD_STYLE: &[(&str, &str)] = &[("tonal", tk("Tonal")), ("raise
 const INK_TEXTURE: &[(&str, &str)] = &[("none", tk("None")), ("halftone", tk("Halftone dots")), ("hatch", tk("Pen hatching"))];
 /// Themes' group of component designs (its own section on the page).
 pub(crate) const COMPONENTS: &str = tk("Components");
+const WORKSHOP_SCALE: &[(&str, &str)] = &[("default", tk("Default")), ("fill", tk("Fill")), ("fit", tk("Fit")), ("stretch", tk("Stretch"))];
 const FILL: &[(&str, &str)] = &[("cover", tk("Fill")), ("contain", tk("Fit")), ("stretch", tk("Stretch")), ("center", tk("Center")), ("tile", tk("Tile"))];
 /// `WallpaperTransition::ALL`'s order, each with how it looks.
 pub(crate) const TRANSITION: &[(&str, &str)] = &[
@@ -144,6 +145,16 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Bars, tk("Main menu"), "/panels/menu_tile_surface", tk("Tile surface"), tk("Flat fills (the default), raised 3D tiles with a glass rim, or see-through glass"), Choice(MENU_TILE_SURFACE)),
         s(Bars, tk("Main menu"), "/panels/menu_tile_shadow", tk("Tile shadow"), tk("How strong the shadow under Home cards and action tiles is (0 for none)"), Control::Slider { min: 0.0, max: 1.0, step: 0.05, unit: "" }),
         s(Bars, tk("Behaviour"), "/bar/over_fullscreen", tk("Show over fullscreen windows"), tk("Keeps the bar and its panels above fullscreen apps; applies after a shell restart"), Toggle),
+        s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/save_still", tk("Save a still as the default wallpaper"), "", Toggle),
+        s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/live", tk("Animated wallpaper"), "", Toggle),
+        s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/scaling", tk("Fill mode"), "", Choice(WORKSHOP_SCALE)),
+        s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/fps", tk("Frame rate limit"), "", slider(1.0, 240.0, 1.0, " fps")),
+        s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/mute", tk("Mute"), "", Toggle),
+        s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/volume", tk("Volume"), "", slider(0.0, 100.0, 1.0, "%")),
+        s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/mouse", tk("Mouse"), "", Toggle),
+        s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/pause_fullscreen", tk("Pause during fullscreen"), "", Toggle),
+        s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/steam_folder", tk("Wallpaper Engine folder"), tk("Enter a Steam library or Wallpaper Engine installation folder. Leave empty for automatic detection."), Text { placeholder: tk("Automatic") }),
+        s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/executable", tk("Engine"), "", Text { placeholder: "linux-wallpaperengine" }),
         // Wallpaper
         s(Wallpaper, tk("Desktop"), "/wallpaper/fill", tk("Fill mode"), tk("How images that don't match the screen are placed"), Choice(FILL)),
         s(Wallpaper, tk("Desktop"), "/wallpaper/fill_color", tk("Fill color"), tk("Behind Fit and Center (hex)"), Text { placeholder: "#000000" }),

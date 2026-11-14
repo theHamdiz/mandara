@@ -61,3 +61,6 @@ pub use motion::MotionConfig;
 pub use schema::*;
 pub use store::{ConfigStore, ConfigWatcher, ReloadOutcome, write_atomic};
 pub mod agent;
+
+/// Opt-in native plugin for installed Steam Workshop wallpapers.
+pub const WALLPAPER_ENGINE_ID: &str = "wallpaper-engine";

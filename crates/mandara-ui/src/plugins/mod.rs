@@ -179,6 +179,7 @@ pub fn register_builtin(registry: &mut PluginRegistry) {
     tiles::register(registry);
     weather::register(registry);
     wallpaper::register(registry);
+    crate::wallpaper_engine::register(registry);
     wallpaper_generator::register(registry);
     wallpaper_depth::register(registry);
     wallhaven::register(registry);

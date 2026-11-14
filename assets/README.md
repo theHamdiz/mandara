@@ -28,7 +28,7 @@ so small lettering stays clean.
 
 ## Plugins
 
-The 88 artwork entries below cover 87 of Mandara’s 88 built-in plugins and the Moon phase example. Taskbar uses the pinned and running applications’ own icons. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
+The 89 artwork entries below cover 88 of Mandara’s 89 built-in plugins and the Moon phase example. Taskbar uses the pinned and running applications’ own icons. Each SVG has a 512-unit viewBox; each icon PNG is 256×256. Covers are 1600×900. Screenshot covers retain the supplied panel content and proportions; the other covers are illustrations.
 
 | Preview | Files | Notes |
 | --- | --- | --- |
@@ -74,6 +74,7 @@ The 88 artwork entries below cover 87 of Mandara’s 88 built-in plugins and the
 | <img src="plugins/app-installer/icon.png" width="40" alt="App installer icon"> <img src="plugins/app-installer/cover.png" width="128" alt="App installer cover"> | **App installer** · [SVG](plugins/app-installer/icon.svg) · [256 PNG](plugins/app-installer/icon.png) · [Cover](plugins/app-installer/cover.png) | Obsidian · open package and download arrow · illustration |
 | <img src="plugins/screen-time/icon.png" width="40" alt="Screen time icon"> <img src="plugins/screen-time/cover.png" width="128" alt="Screen time cover"> | **Screen time** · [SVG](plugins/screen-time/icon.svg) · [256 PNG](plugins/screen-time/icon.png) · [Cover](plugins/screen-time/cover.png) | Twilight · hourglass and warm sand · illustration |
 | <img src="plugins/mini-stats/icon.png" width="40" alt="Mini stats icon"> <img src="plugins/mini-stats/cover.png" width="128" alt="Mini stats cover"> | **Mini stats** · [SVG](plugins/mini-stats/icon.svg) · [256 PNG](plugins/mini-stats/icon.png) · [Cover](plugins/mini-stats/cover.png) | Obsidian · compact gauges · illustration |
+| <img src="plugins/wallpaper-engine/icon.png" width="40" alt="Wallpaper Engine icon"> <img src="plugins/wallpaper-engine/cover.png" width="128" alt="Wallpaper Engine cover"> | **Wallpaper Engine** · [SVG](plugins/wallpaper-engine/icon.svg) · [256 PNG](plugins/wallpaper-engine/icon.png) · [Cover](plugins/wallpaper-engine/cover.png) | Twilight · overlapping displays and a play symbol · AI-generated light ribbons |
 | <img src="plugins/wallpaper-generator/icon.png" width="40" alt="Wallpaper generator icon"> <img src="plugins/wallpaper-generator/cover.png" width="128" alt="Wallpaper generator cover"> | **Wallpaper generator** · [SVG](plugins/wallpaper-generator/icon.svg) · [256 PNG](plugins/wallpaper-generator/icon.png) · [Cover](plugins/wallpaper-generator/cover.png) | Corniche · sea-glass paintbrush and gold paint drop · illustration; art prepared ahead of plugin registration |
 | <img src="plugins/wallpaper-depth/icon.png" width="40" alt="Wallpaper depth icon"> <img src="plugins/wallpaper-depth/cover.png" width="128" alt="Wallpaper depth cover"> | **Wallpaper depth** · [SVG](plugins/wallpaper-depth/icon.svg) · [256 PNG](plugins/wallpaper-depth/icon.png) · [Cover](plugins/wallpaper-depth/cover.png) | Corniche · a clock tucked behind a rocky coast · painted scene |
 | <img src="plugins/wallhaven/icon.png" width="40" alt="Wallhaven icon"> <img src="plugins/wallhaven/cover.png" width="128" alt="Wallhaven cover"> | **Wallhaven** · [SVG](plugins/wallhaven/icon.svg) · [256 PNG](plugins/wallhaven/icon.png) · [Cover](plugins/wallhaven/cover.png) | Twilight · cream cloud with a gold download arrow · illustration |
@@ -215,7 +216,7 @@ The whole pipeline is Rust (`xtask/src/art.rs`): SVGs render with [resvg](https:
 
 `cargo xtask art` turns every built-in plugin's art into the compact set the shell and Studio embed, in [`crates/mandara-ui/assets/plugin-art/<id>/`](../crates/mandara-ui/assets/plugin-art): `icon.webp` (128 px, rendered from the SVG), `icon@2x.webp` (256 px) and `cover.jpg` (960×540, JPEG quality 82; lossless `cover.webp` when the cover has transparency), plus the generated `index.rs` table. The generated files are committed — they are build inputs. Example plugins in `plugins/examples/` ship their own `icon.png` / `cover.png` inside their package instead.
 
-The embedded-art ceiling is **8,750,000 bytes (8.35 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 87 artwork sets use **8,678,056 bytes (8.28 MiB)**, leaving **71,944 bytes (70 KiB)** of headroom. New artwork must fit this budget or raise it explicitly.
+The embedded-art ceiling is **8,900,000 bytes (8.49 MiB)**, rounded to 50,000 bytes. Icons are embedded as pixel-exact lossless WebP and covers as 960×540 JPEG. The 88 artwork sets use **8,798,731 bytes (8.39 MiB)**, leaving **101,269 bytes (99 KiB)** of headroom. New artwork must fit this budget or raise it explicitly.
 
 ```sh
 cargo xtask art --compose            # render source icons and compose covers (--only ID)

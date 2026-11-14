@@ -160,10 +160,23 @@ fn kv_pairs(text: &str) -> Vec<(String, String)> {
     out
 }
 
-/// Steam's own folder (the native install, else the Flatpak).
-fn steam_root() -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
-    [home.join(".local/share/Steam"), home.join(".steam/steam"), home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam")].into_iter().find(|p| p.join("steamapps").is_dir())
+/// Existing Steam installations (native and Flatpak).
+pub(crate) fn steam_roots() -> impl Iterator<Item = PathBuf> {
+    dirs::home_dir().into_iter().flat_map(|home| {
+        [
+            dirs::data_dir().unwrap_or_else(|| home.join(".local/share")).join("Steam"),
+            home.join(".local/share/Steam"),
+            home.join(".steam/steam"),
+            home.join(".steam/root"),
+            home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam"),
+        ]
+    }).filter(|path| path.join("steamapps").is_dir())
+}
+
+/// The default and additional Steam library roots.
+pub(crate) fn steam_libraries(root: &Path) -> impl Iterator<Item = PathBuf> + use<> {
+    let libraries = std::fs::read_to_string(root.join("steamapps/libraryfolders.vdf")).map(|t| kv_pairs(&t).into_iter().filter(|(k, _)| k == "path").map(|(_, v)| PathBuf::from(v)).collect::<Vec<_>>()).unwrap_or_default();
+    std::iter::once(root.to_path_buf()).chain(libraries)
 }
 
 /// Tools, runtimes and redistributables, not games.
@@ -174,11 +187,10 @@ fn is_tool(name: &str) -> bool {
 
 /// Installed games, most recently played first.
 pub fn steam_games() -> Vec<SteamGame> {
-    let Some(root) = steam_root() else { return Vec::new() };
-    let libraries = std::fs::read_to_string(root.join("steamapps/libraryfolders.vdf")).map(|t| kv_pairs(&t).into_iter().filter(|(k, _)| k == "path").map(|(_, v)| PathBuf::from(v)).collect::<Vec<_>>()).unwrap_or_default();
+    let Some(root) = steam_roots().next() else { return Vec::new() };
     let mut seen = HashSet::new();
     let mut games = Vec::new();
-    for lib in std::iter::once(root.clone()).chain(libraries) {
+    for lib in steam_libraries(&root) {
         let Ok(dir) = std::fs::read_dir(lib.join("steamapps")) else { continue };
         for e in dir.flatten() {
             let name = e.file_name().to_string_lossy().to_string();

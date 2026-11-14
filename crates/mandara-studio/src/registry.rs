@@ -604,7 +604,9 @@ pub fn in_section(section: Section) -> impl Iterator<Item = &'static Setting> {
 /// The opt-in plugin a setting belongs to: its rows show only while that
 /// plugin is on (Wallhaven's search options, the cursor settings).
 pub fn required_plugin(path: &str) -> Option<&'static str> {
-    if path.starts_with("/wallpaper/wallhaven") {
+    if path.starts_with("/wallpaper/workshop_options/") {
+        Some(mandara_config::WALLPAPER_ENGINE_ID)
+    } else if path.starts_with("/wallpaper/wallhaven") {
         Some(mandara_config::upgrade::WALLHAVEN_ID)
     } else if path.starts_with("/wallpaper/depth") {
         // The depth plugin is core (always on): this only files its rows

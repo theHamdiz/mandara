@@ -12,8 +12,8 @@ const REGISTRY_LIVE_BUDGET: isize = 4 * 1024 * 1024;
 /// Bytes allocated in total while registering (transient included).
 const REGISTRY_TOTAL_BUDGET: usize = 16 * 1024 * 1024;
 /// Public plugin totals exclude command namespaces without a plugin manifest.
-const BUILTIN_PLUGIN_COUNT: usize = 88;
-const OPT_IN_PLUGIN_COUNT: usize = 52;
+const BUILTIN_PLUGIN_COUNT: usize = 89;
+const OPT_IN_PLUGIN_COUNT: usize = 53;
 
 struct Counting;
 

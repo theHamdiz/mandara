@@ -29,7 +29,7 @@ running can finish; disabling the plugin prevents a follow-up refresh.
 </tr>
 </table>
 
-The 88 first-party plugins (52 of them ship switched off, marked *opt-in*):
+The 89 first-party plugins (53 of them ship switched off, marked *opt-in*):
 
 | Plugin | What it does |
 |---|---|
@@ -74,6 +74,7 @@ The 88 first-party plugins (52 of them ship switched off, marked *opt-in*):
 | **Wallpaper** | Wallpaper picker and desktop background |
 | **Wallpaper depth** | Draws the wallpaper's subject over the desktop clock and widgets: hand-tuned, or with a small depth model downloaded on demand *(core)* |
 | **Wallhaven** | Search and download wallpapers from wallhaven.cc right in the wallpaper picker *(opt-in)* |
+| **Wallpaper Engine** | Browse installed Steam Workshop scenes and videos and apply them by display *(opt-in)* |
 | **Wallpaper generator** | Procedural wallpapers and seamless AV1 video loops at any size up to 8K: twelve styles, every variable adjustable, on a schedule if you want *(opt-in)* |
 | **System tray** | Status icons and menus of background apps |
 | **World clock** | Cities around the world with daylight and a meeting planner | *(opt-in)*

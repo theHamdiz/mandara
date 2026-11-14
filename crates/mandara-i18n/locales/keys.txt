@@ -631,6 +631,7 @@ Animate opening applications
 Animated current conditions, hourly and 5-day forecast
 Animated loaders from the most popular Plymouth collection
 Animated sky
+Animated wallpaper
 Animation
 Animation presets
 Animation speed
@@ -692,6 +693,7 @@ Applies instantly
 Applies live on {compositor}; apps started from now on use it too.
 Applies now; reverts after {seconds} s unless you keep it
 Apply
+Apply a Steam Workshop wallpaper to a display
 Apply a Studio window design without changing the desktop Look
 Apply a look, built-in or yours (your setup is saved first so it can be restored)
 Apply a motion preset: its spring and choreography (accessibility and surface speeds stay yours)
@@ -2387,6 +2389,7 @@ Enjoying Mandara?
 Enrol the changed Limine config
 Enter
 Enter / Capture copies the image
+Enter a Steam library or Wallpaper Engine installation folder. Leave empty for automatic detection.
 Enter a complete shortcut sequence.
 Enter a key combination supported by Aqueous.
 Enter a message
@@ -3560,6 +3563,7 @@ Internet
 Internet radio: curated stations by genre, your own stations and favourites, with live now-playing
 Interview, 1929
 Invalid PID
+Invalid Workshop item ID
 Invalid character {char} in the secret
 Invalid declarations are skipped with a warning; see Validate below.
 Invalid manifest
@@ -4801,6 +4805,7 @@ No date
 No desktop widget {id}
 No device matching "{query}"
 No devices yet
+No display connected
 No display named {name}
 No download for this system in the release
 No downloads yet
@@ -4841,6 +4846,7 @@ No index.theme
 No input devices
 No input seat is available
 No install job {id}
+No installed Workshop wallpapers found
 No installed app opens these.
 No installed app {id}
 No installed app {name} (use its desktop id, e.g. org.gnome.Nautilus)
@@ -6313,6 +6319,7 @@ Restore a backup into a fresh copy folder
 Restore a copy…
 Restore before {what}
 Restore my look
+Restore the regular wallpaper on a display
 Restore the setup from before {what}
 Restored as it was
 Restoring copies…
@@ -6513,6 +6520,7 @@ Saturation
 Saturday
 Saturday and Sunday
 Save
+Save a still as the default wallpaper
 Save a verse or hadith
 Save an article to read it later
 Save articles to read them later; they stay even after they leave their feed.
@@ -7273,6 +7281,7 @@ Status text
 Stay awake while media plays
 Stay humble
 Stays for
+Steam Workshop
 Step by step walk the thousand-mile road.
 Step must be a number
 Step {n} of {total}
@@ -8917,6 +8926,12 @@ Wallhaven returned something that isn't an image
 Wallhaven search failed: {error}
 Wallhaven · {resolution}
 Wallpaper
+Wallpaper Engine
+Wallpaper Engine cannot use display {output}
+Wallpaper Engine exited: {status}
+Wallpaper Engine folder
+Wallpaper Engine folder not found: {path}
+Wallpaper Engine produced no frame
 Wallpaper change
 Wallpaper colors
 Wallpaper depth
@@ -9171,6 +9186,8 @@ Working out the plan with your system…
 Working…
 Works and Days
 Works in the background
+Workshop item ID
+Workshop item {id} is unavailable
 Workspace not found
 Workspaces
 World

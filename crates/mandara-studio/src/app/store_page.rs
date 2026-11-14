@@ -65,7 +65,7 @@ pub(crate) const PLUGIN_CATEGORIES: &[(&str, &[&str])] = &[
     (tk("Maintenance"), &["updates", "services", "containers", "app-installer", "app-permissions", "backups", "uptime", "crashes"]),
     (tk("Developer tools"), &["progress", "ports", "git-repos", "ci", "local-ai"]),
     (tk("Media & capture"), &["media", "radio", "screenshot", "color-picker", "soundscapes", "share"]),
-    (tk("Look & feel"), &["wallpaper", "wallpaper-depth", "wallpaper-generator", "wallhaven", "cursors", "icon-themes", "boot-look"]),
+    (tk("Look & feel"), &["wallpaper", "wallpaper-depth", "wallpaper-engine", "wallpaper-generator", "wallhaven", "cursors", "icon-themes", "boot-look"]),
     (tk("Desktop widgets"), &["desktop-clocks", "desktop-monitor", "desktop-decorations", "desktop-visualizers", "desktop-now-playing", "desktop-calendar", "desktop-weather", "desktop-world-clock", "desktop-countdown", "desktop-productivity", "desktop-sky", "desktop-identity", "desktop-fun", "desktop-info"]),
     (tk("Productivity"), &["todo", "notes", "stash", "translator", "pomodoro", "authenticator", "screen-time", "keybinds", "breaks", "presentation"]),
     (tk("Everyday info"), &["weather", "feeds", "reddit", "prayer-times", "jannah", "quran", "hadith", "world-clock", "net-speed"]),
@@ -476,6 +476,7 @@ pub(crate) fn plugin_icon(id: &str) -> &'static str {
         "breaks" => "eye",
         "presentation" => "monitor",
         "reddit" => "messages",
+        "wallpaper-engine" => "image",
         _ => "grid",
     }
 }

@@ -109,10 +109,11 @@ pub enum WallpaperTab {
     Effects,
     Generator,
     Online,
+    Workshop,
 }
 
 impl WallpaperTab {
-    pub const ALL: [WallpaperTab; 5] = [WallpaperTab::Wallpaper, WallpaperTab::Slideshow, WallpaperTab::Effects, WallpaperTab::Generator, WallpaperTab::Online];
+    pub const ALL: [WallpaperTab; 6] = [WallpaperTab::Wallpaper, WallpaperTab::Slideshow, WallpaperTab::Effects, WallpaperTab::Generator, WallpaperTab::Online, WallpaperTab::Workshop];
 
     /// Deep-link name (`mandara studio wallpaper --tab slideshow`).
     pub fn slug(self) -> &'static str {
@@ -122,6 +123,7 @@ impl WallpaperTab {
             WallpaperTab::Effects => "effects",
             WallpaperTab::Generator => "generator",
             WallpaperTab::Online => "online",
+            WallpaperTab::Workshop => "workshop",
         }
     }
 
@@ -144,6 +146,7 @@ impl WallpaperTab {
             WallpaperTab::Effects => t("Fit & effects"),
             WallpaperTab::Generator => t("Generator"),
             WallpaperTab::Online => t("Online"),
+            WallpaperTab::Workshop => t("Steam Workshop"),
         }
     }
 
@@ -154,6 +157,7 @@ impl WallpaperTab {
             WallpaperTab::Effects => "sliders",
             WallpaperTab::Generator => "brush",
             WallpaperTab::Online => "globe",
+            WallpaperTab::Workshop => "image",
         }
     }
 }
@@ -174,6 +178,36 @@ fn available(cfg: &ShellConfig, cx: &App) -> Vec<WallpaperTab> {
             _ => true,
         })
         .collect()
+}
+
+struct Workshop {
+    items: Vec<mandara_services::wallpaper_engine::Project>,
+    outputs: Vec<String>,
+}
+
+fn workshop_args(action: &str, output: &str, id: Option<u64>, workspace: Option<u32>) -> Vec<String> {
+    let mut args = vec!["wallpaper".into(), "workshop".into(), action.into(), output.into()];
+    args.extend(id.map(|id| id.to_string()));
+    args.extend(workspace.map(|id| id.to_string()));
+    args
+}
+
+fn workshop_command(args: Vec<String>, cx: &mut Context<StudioView>) {
+    if st(cx).workshop_busy {
+        return;
+    }
+    let page = st(cx);
+    let visit = page.visit.clone();
+    page.workshop_busy = true;
+    page.note = None;
+    cx.notify();
+    form::shell(args, cx, move |_, result, cx| {
+        if current_visit(cx, &visit) {
+            let page = st(cx);
+            page.workshop_busy = false;
+            page.note = result.err().map(|error| (error, true));
+        }
+    });
 }
 
 /// What the page keeps between frames (a global, dropped on leaving).
@@ -207,6 +241,17 @@ struct Page {
     status_for: Option<(WallpaperSlideshow, Option<PathBuf>)>,
     status_loading: bool,
     status_wake: Option<Task<()>>,
+    workshop: Option<Rc<Workshop>>,
+    workshop_loading: bool,
+    workshop_folder: Option<String>,
+    workshop_error: Option<String>,
+    workshop_output: Option<String>,
+    workshop_workspace: Option<u32>,
+    workshop_navigation: std::collections::HashMap<String, mandara_compositor::NavigationModel>,
+    workshop_page: usize,
+    workshop_query: String,
+    workshop_busy: bool,
+    workshop_drawn: HashSet<(PathBuf, u32)>,
     note: Option<(String, bool)>,
 }
 impl gpui::Global for Page {}
@@ -232,6 +277,10 @@ pub(super) fn release(cx: &mut App) {
     let scale = page.scale;
     let drawn: Vec<(PathBuf, u32)> = page.drawn.iter().cloned().collect();
     let preview = page.preview.as_ref().and_then(|(_, r)| r.as_ref().ok()).map(|p| p.file.clone());
+    let workshop = page.workshop_drawn.clone();
+    for (path, edge) in workshop {
+        mandara_ui::icon_raster::forget_cached_edge(&path, edge, cx);
+    }
     for (thumb, w) in drawn {
         mandara_ui::icon_raster::forget_cached(&thumb, w as f32, scale, cx);
     }
@@ -325,6 +374,11 @@ impl StudioView {
 
     fn set_wallpaper_tab(&mut self, tab: WallpaperTab, cx: &mut Context<Self>) {
         let from = st(cx).tab;
+        if from == WallpaperTab::Workshop && tab != from {
+            for (path, edge) in std::mem::take(&mut st(cx).workshop_drawn) {
+                mandara_ui::icon_raster::forget_cached_edge(&path, edge, cx);
+            }
+        }
         if from == WallpaperTab::Generator && tab != from {
             // The generator's previews go with its tab.
             super::wallgen_page::release(cx);
@@ -348,8 +402,191 @@ impl StudioView {
             WallpaperTab::Effects => self.wp_effects_tab(cfg, p, cx),
             WallpaperTab::Generator => self.wallgen_panel(cfg, p, cx),
             WallpaperTab::Online => self.wp_online_tab(cfg, p, cx),
+            WallpaperTab::Workshop if !cfg.plugins.opted_in(mandara_ui::wallpaper_engine::ID) => {
+                self.plugin_offer(mandara_ui::wallpaper_engine::ID, p, cx)
+            }
+            WallpaperTab::Workshop => self.wp_workshop_tab(cfg, p, window, cx),
         };
         div().row().flex_col().gap(px(SPACE_22_PX)).child(bar).children(note).child(body).into_any_element()
+    }
+
+    fn wp_load_workshop(&mut self, cx: &mut Context<Self>) {
+        let folder = super::config(cx).read(cx).get().wallpaper.workshop_options.steam_folder.clone();
+        let page = st(cx);
+        if page.workshop_loading {
+            return;
+        }
+        page.workshop_loading = true;
+        page.workshop_folder = Some(folder.clone());
+        page.workshop_error = None;
+        page.note = None;
+        let visit = page.visit.clone();
+        let navigation_visit = visit.clone();
+        form::shell(vec!["workspace".into(), "list".into()], cx, move |_, result, cx| {
+            if current_visit(cx, &navigation_visit) {
+                st(cx).workshop_navigation = result.ok().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+            }
+        });
+        form::job(cx, move || {
+            let library = mandara_services::wallpaper_engine::discover(&folder)
+                .map_err(|path| tf("Wallpaper Engine folder not found: {path}", &[("path", &path.display())]))?;
+            let mut items: Vec<_> = library.projects.into_values().collect();
+            items.sort_by_cached_key(|p| p.title.to_lowercase());
+            let outputs = mandara_core::query_outputs().unwrap_or_default().into_iter()
+                .map(|output| output.name).filter(|name| !name.is_empty()).collect();
+            Ok(Workshop { items, outputs })
+        }, move |_, result, cx| {
+            if !current_visit(cx, &visit) {
+                return;
+            }
+            let page = st(cx);
+            page.workshop_loading = false;
+            page.workshop_page = 0;
+            match result {
+                Ok(data) => page.workshop = Some(Rc::new(data)),
+                Err(error) => {
+                    page.workshop = None;
+                    page.workshop_error = Some(error);
+                }
+            }
+        });
+    }
+
+    fn wp_workshop_tab(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        if st(cx).workshop_folder.as_ref() != Some(&cfg.wallpaper.workshop_options.steam_folder) {
+            self.wp_load_workshop(cx);
+        }
+        let reload = button("workshop-refresh", "refresh", t("Refresh"), false, p).tab_index(0)
+            .on_click(cx.listener(|this, _, _, cx| this.wp_load_workshop(cx)));
+        let settings = button("workshop-settings", "sliders", t("Settings"), false, p).tab_index(0)
+            .on_click(cx.listener(|this, _, window, cx| this.open_plugin(mandara_ui::wallpaper_engine::ID, super::plugin_modal::ModalView::Settings, window, cx)));
+        let mut controls = div().row().flex_wrap().gap(px(SPACE_8_PX)).child(reload).child(settings);
+        let data = st(cx).workshop.clone().filter(|_| !st(cx).workshop_loading);
+        let Some(data) = data else {
+            let error = st(cx).workshop_error.as_deref();
+            return div().row().flex_col().gap(px(SPACE_14_PX)).child(controls)
+                .child(form::note(error.unwrap_or_else(|| t("Loading…")), error.is_some(), p)).into_any_element();
+        };
+        let search = form::input("workshop-search", t("Filter by name"), false, cx);
+        let query = form::value("workshop-search", cx).to_lowercase();
+        let page = st(cx);
+        if page.workshop_query != query {
+            page.workshop_query = query.clone();
+            page.workshop_page = 0;
+        }
+        let output = page.workshop_output.as_ref().filter(|o| data.outputs.contains(o))
+            .or_else(|| cfg.displays.primary.as_ref().filter(|o| data.outputs.contains(o)))
+            .or(data.outputs.first()).cloned();
+        let workspace = page.workshop_workspace;
+        let navigation = output.as_ref().and_then(|o| page.workshop_navigation.get(o)).cloned();
+        let selected = output.as_ref().and_then(|o| match workspace {
+            Some(id) => cfg.wallpaper.workshop_workspaces.get(o)?.get(&id.to_string()),
+            None => cfg.wallpaper.workshop.get(o),
+        }).copied();
+        let busy = page.workshop_busy;
+        let filtered: Vec<_> = data.items.iter().filter(|item| {
+            query.is_empty() || item.title.to_lowercase().contains(&query) || item.id.to_string() == query
+        }).collect();
+        let requested_page = page.workshop_page;
+        let fit = grid::fit(self.page.column_w, TILE_GRID);
+        let per_page = fit.cols * PAGE_ROWS;
+        let page_no = requested_page.min(filtered.len().saturating_sub(1) / per_page);
+        let width = fit.card_w;
+        let height = fit.aspect_h(TILE_RATIO, 0.0);
+        let scale = window.scale_factor();
+        for name in &data.outputs {
+            let chosen = output.as_ref() == Some(name);
+            let name = name.clone();
+            controls = controls.child(
+                chip(format!("workshop-output-{name}"), name.clone(), chosen, p).tab_index(0)
+                    .on_click(cx.listener(move |_, _, _, cx| {
+                        st(cx).workshop_output = Some(name.clone());
+                        st(cx).workshop_workspace = None;
+                        cx.notify();
+                    })),
+            );
+        }
+        if let Some(out) = output.clone().filter(|_| selected.is_some() && !busy) {
+            controls = controls.child(button("workshop-restore", "image", t("Restore"), false, p).tab_index(0)
+                .on_click(cx.listener(move |_, _, _, cx| workshop_command(workshop_args("clear", &out, None, workspace), cx))));
+        }
+        if let Some(out) = output.clone().filter(|_| selected.is_some() && !busy) {
+            controls = controls.child(button("workshop-still", "camera", t("Still image"), false, p).tab_index(0)
+                .on_click(cx.listener(move |_, _, _, cx| workshop_command(workshop_args("save-still", &out, None, None), cx))));
+        }
+        let mut body = div().row().flex_col().gap(px(SPACE_14_PX)).child(controls).child(div().w(px(SEARCH_W_PX)).max_w_full().child(search));
+        if let Some(mandara_compositor::NavigationModel::Workspaces { workspaces }) = navigation {
+            let mut scopes = div().row().flex_wrap().items_center().gap(px(SPACE_8_PX))
+                .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("Workspaces")))
+                .child(chip("workshop-default", t("Default"), workspace.is_none(), p).tab_index(0)
+                    .on_click(cx.listener(|_, _, _, cx| { st(cx).workshop_workspace = None; cx.notify(); })));
+            for item in workspaces {
+                let id = item.id;
+                scopes = scopes.child(chip(format!("workshop-workspace-{id}"), item.name, workspace == Some(id), p).tab_index(0)
+                    .on_click(cx.listener(move |_, _, _, cx| { st(cx).workshop_workspace = Some(id); cx.notify(); })));
+            }
+            body = body.child(scopes);
+        }
+        if busy {
+            body = body.child(form::note(t("Loading…"), false, p));
+        }
+        if data.items.is_empty() {
+            return body.child(form::note(t("No installed Workshop wallpapers found"), false, p)).into_any_element();
+        }
+        let Some(output) = output else {
+            return body.child(form::note(t("No display connected"), true, p)).into_any_element();
+        };
+        let from = page_no * per_page;
+        let to = (from + per_page).min(filtered.len());
+        let visible = &filtered[from..to];
+        let current: HashSet<_> = visible.iter().filter_map(|item| item.preview.as_ref())
+            .map(|p| (p.clone(), mandara_ui::icon_raster::edge_for(width, scale))).collect();
+        let previous = std::mem::take(&mut st(cx).workshop_drawn);
+        for (path, edge) in previous.difference(&current) {
+            mandara_ui::icon_raster::forget_edge(path, *edge, window, cx);
+        }
+        st(cx).workshop_drawn = current;
+        if visible.is_empty() {
+            return body.child(form::note(t("No results"), false, p)).into_any_element();
+        }
+        let items = visible.iter().map(|item| {
+            let id = item.id;
+            let output = output.clone();
+            let active = selected == Some(id);
+            let picture = div().relative().w_full().h(px(height)).clip_rounded().rounded(px(RADIUS_14_PX))
+                .bg(p.surface_container_high.hsla())
+                .border_2()
+                .border_color(if active { p.primary.hsla() } else { gpui::transparent_black() })
+                .child(item.preview.as_ref().map(|path| {
+                    img(mandara_ui::icon_raster::source(path, width)).size_full().object_fit(gpui::ObjectFit::Cover).into_any_element()
+                }).unwrap_or_else(|| placeholder("image", p)))
+                .when(active, |el| el.child(div().absolute().top(px(SPACE_6_PX)).inset_start(px(SPACE_6_PX)).child(tag("check", t("Current"), p))));
+            div().id(SharedString::from(format!("workshop-apply-{id}"))).w_full()
+                .row().flex_col().gap(px(SPACE_6_PX))
+                .tooltip(tip(item.title.clone(), p))
+                .when(!busy, |card| card.tab_index(0).cursor_pointer()
+                    .hover(|s| s.bg(p.primary.with_alpha(ALPHA_8).hsla()))
+                    .focus(|s| s.bg(p.primary.with_alpha(ALPHA_12).hsla()))
+                    .on_click(cx.listener(move |_, _, _, cx| workshop_command(workshop_args("set", &output, Some(id), workspace), cx))))
+                .child(picture)
+                .child(div().px(px(SPACE_4_PX)).truncate().text_size(px(TEXT_12_PX))
+                    .text_color(if active { p.on_surface } else { p.on_surface_variant }.hsla())
+                    .child(item.title.clone()))
+        });
+        let mut pager = div().row().items_center().gap(px(SPACE_12_PX));
+        if page_no > 0 {
+            pager = pager.child(button("workshop-prev", "chevron-left", t("Previous"), false, p).tab_index(0)
+                .on_click(cx.listener(move |_, _, _, cx| { st(cx).workshop_page = page_no - 1; cx.notify(); })));
+        }
+        if filtered.len() > per_page {
+            pager = pager.child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla())
+                .child(tf("{from}–{to} of {count}", &[("from", &(from + 1)), ("to", &to), ("count", &filtered.len())])));
+        }
+        if to < filtered.len() {
+            pager = pager.child(button("workshop-next", "chevron-right", t("Next"), false, p).tab_index(0)
+                .on_click(cx.listener(move |_, _, _, cx| { st(cx).workshop_page = page_no + 1; cx.notify(); })));
+        }
+        body.child(fit.render(items)).child(pager).into_any_element()
     }
 
     /// One slim row of underlined tabs (it scrolls sideways when narrow).

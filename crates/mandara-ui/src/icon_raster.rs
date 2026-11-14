@@ -230,6 +230,18 @@ mod tests {
     }
 
     #[test]
+    fn gif_preview_decodes_as_a_still() {
+        let dir = tempfile::tempdir().unwrap();
+        let gif = dir.path().join("preview.gif");
+        let frame = image::RgbaImage::from_pixel(96, 48, image::Rgba([255, 0, 0, 255]));
+        image::codecs::gif::GifEncoder::new(std::fs::File::create(&gif).unwrap())
+            .encode_frame(image::Frame::new(frame)).unwrap();
+        let preview = decode(&gif, 72).unwrap();
+        assert_eq!((preview.size(0).width.0, preview.size(0).height.0), (72, 36));
+        assert_eq!(&preview.as_bytes(0).unwrap()[..4], &[0, 0, 255, 255]);
+    }
+
+    #[test]
     fn svg_and_png_decode_at_the_drawn_size() {
         let dir = std::env::temp_dir().join(format!("mandara-icon-raster-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();

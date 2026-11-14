@@ -98,6 +98,12 @@ mandara msg wallpaper slideshow hours 08:00-22:00   # only change between two ti
 mandara msg wallpaper slideshow transition grow 1500   # desktop|fade|wipe|grow|none [ms]
 mandara msg wallpaper slideshow option per-display on   # on-start|pause-fullscreen|pause-battery|pause-locked|subfolders|per-display on|off|toggle
 mandara msg wallpaper output DP-1 ~/Pictures/side.jpg   # per-display wallpaper (clear to remove)
+mandara msg plugins enable wallpaper-engine           # enable the built-in plugin
+mandara msg wallpaper workshop set DP-1 2344341327     # installed Workshop item ID
+mandara msg wallpaper workshop set DP-1 2344341327 3   # workspace 3 override
+mandara msg wallpaper workshop clear DP-1 3            # use the display default on workspace 3
+mandara msg wallpaper workshop clear DP-1              # clear the display default
+mandara msg wallpaper workshop save-still DP-1         # make the captured frame the Mandara wallpaper
 mandara msg wallpaper set ~/Pictures/Wallpapers/tide.webm  # AV1 video wallpapers (.webm, .mkv, .ivf) loop on the desktop
 mandara msg wallpaper render-preview /tmp/desktop.png 3840x2160@1.5   # the desktop canvas offscreen (same painters as the live one)
 mandara msg depth status                   # depth effect: mode (hand-tuned | model), current mask, model install, last model run

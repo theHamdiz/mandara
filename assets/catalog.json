@@ -387,6 +387,15 @@
     "panel": null
   },
   {
+    "id": "wallpaper-engine",
+    "name": "Wallpaper Engine",
+    "palette": "twilight",
+    "motif": "aurora",
+    "angle": -6,
+    "panel": null,
+    "scene": "wallpaper-engine.jpg"
+  },
+  {
     "id": "wallpaper-generator",
     "name": "Wallpaper generator",
     "palette": "corniche",

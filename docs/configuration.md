@@ -612,6 +612,17 @@ minute later (or when the `from` time comes). Turning `per_display` off
 hands the displays showing slideshow wallpapers back to the main one; your
 own per-display choices stay.
 
+## Steam Workshop wallpapers
+
+`[wallpaper.workshop]` maps Wayland connector names (for example, `DP-1`) to
+integer Workshop item IDs. Studio writes this mapping when you apply a scene.
+`[wallpaper.workshop_workspaces.<output>]` maps workspace IDs to item IDs.
+`[wallpaper.workshop_options]` controls `fps`, `volume`, `mute`, `mouse`,
+`pause_fullscreen`, `save_still`, `live`, `scaling`, the renderer `executable` and the optional `steam_folder`. An empty
+`steam_folder` detects Steam libraries automatically.
+Remove an entry to restore the regular wallpaper on that display. See
+[Steam Workshop](wallpapers.md#steam-workshop) for renderer requirements.
+
 ## Video wallpapers
 
 Video frames and their surrounding fill color cover the entire display at
