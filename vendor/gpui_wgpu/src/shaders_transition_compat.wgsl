@@ -8,4 +8,3 @@ fn first_shard_bit(value: u32) -> u32 {
     if ((bits & 0x3u) == 0u) { bits >>= 2u; offset += 2u; }
     return offset + select(0u, 1u, (bits & 1u) == 0u);
 }
-
