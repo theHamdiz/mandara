@@ -10693,3 +10693,4 @@
 "The filesystem mount table is invalid or too large." = "Bảng gắn hệ thống tệp không hợp lệ hoặc quá lớn."
 
 "Native filesystem maintenance is available on Linux." = "Bảo trì hệ thống tệp gốc có sẵn trên Linux."
+"Undo could not finish. The retained file is available at {path}." = "Không thể hoàn tất việc hoàn tác. Tệp được giữ lại nằm tại {path}."

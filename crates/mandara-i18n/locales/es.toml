@@ -11029,3 +11029,4 @@
 "The filesystem mount table is invalid or too large." = "La tabla de montajes de sistemas de archivos no es válida o es demasiado grande."
 
 "Native filesystem maintenance is available on Linux." = "El mantenimiento nativo de sistemas de archivos está disponible en Linux."
+"Undo could not finish. The retained file is available at {path}." = "No se pudo completar la acción de deshacer. El archivo conservado está en {path}."

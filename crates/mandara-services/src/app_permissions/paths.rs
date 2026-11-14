@@ -218,11 +218,11 @@ fn lexical(path: &Path) -> Result<PathBuf> {
     Ok(result)
 }
 
-/// Native flags escape colons and backslashes; metadata adds GKeyFile escaping.
+/// The metadata reader has already removed the outer GKeyFile escaping layer.
 fn location(grant: &str) -> Result<String> {
     ensure!(grant.len() <= MAX_PATH_BYTES, invalid());
     let mut result = String::with_capacity(grant.len());
-    let mut chars = grant.chars().peekable();
+    let mut chars = grant.chars();
     while let Some(ch) = chars.next() {
         match ch {
             ':' => {
@@ -233,14 +233,7 @@ fn location(grant: &str) -> Result<String> {
                 break;
             }
             '\\' => {
-                let next = chars.next().context(invalid())?;
-                // The native permission list escapes a flag escape once more.
-                let next = if next == '\\' && chars.peek() == Some(&':') {
-                    chars.next().context(invalid())?
-                } else {
-                    next
-                };
-                result.push(next);
+                result.push(chars.next().context(invalid())?);
             }
             _ => result.push(ch),
         }
@@ -304,7 +297,7 @@ mod tests {
         );
         assert_eq!(locations.resolve("xdg-pictures").unwrap(), None);
         assert_eq!(
-            locations.resolve("~/Music\\\\:live:ro").unwrap().unwrap(),
+            locations.resolve("~/Music\\:live:ro").unwrap().unwrap(),
             Path::new("/home/alice/Music:live")
         );
         assert!(locations.resolve(&"x".repeat(MAX_PATH_BYTES + 1)).is_err());
@@ -347,6 +340,18 @@ mod tests {
                 .constraint,
             Some(Constraint::Broader)
         );
+    }
+
+    #[test]
+    fn escaped_metadata_paths_reach_overlap_checks_as_complete_locations() {
+        let locations = Locations::in_home(Path::new("/tmp/A;B"), "XDG_MUSIC_DIR=\"/tmp/C:D\"\n").unwrap();
+        let permissions = parse_context("[Context]\nfilesystems=home;/tmp/A\\;B;xdg-music;/tmp/C\\\\:D:ro;\nsockets=wayland;\n").unwrap();
+        let mut rows = super::super::model::capabilities(&permissions, &permissions);
+        locations.constrain(&mut rows, &permissions.filesystems).unwrap();
+        for value in ["home", "xdg-music"] {
+            assert_eq!(rows.iter().find(|row| row.value == value).unwrap().constraint, Some(Constraint::Broader));
+        }
+        assert!(rows.iter().find(|row| row.value == "wayland").unwrap().editable);
     }
 
     #[test]

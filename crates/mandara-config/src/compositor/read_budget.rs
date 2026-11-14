@@ -11,6 +11,7 @@ use std::{
 pub(super) struct ReadBudget {
     seen: BTreeSet<PathBuf>,
     bytes: usize,
+    visits: usize,
 }
 
 impl ReadBudget {
@@ -23,9 +24,15 @@ impl ReadBudget {
             return Ok(None);
         }
         let real = std::fs::canonicalize(file)?;
-        if super::is_generated(&real) || !self.seen.insert(real) {
+        if super::is_generated(&real) {
             return Ok(None);
         }
+        self.seen.insert(real);
+        self.visits += 1;
+        ensure!(
+            self.visits <= crate::keybinds::MAX_BINDINGS,
+            mandara_i18n::t("The shortcut configuration includes too many files.")
+        );
         ensure!(
             self.seen.len() <= crate::keybinds::MAX_FILES,
             mandara_i18n::t("The shortcut configuration includes too many files.")

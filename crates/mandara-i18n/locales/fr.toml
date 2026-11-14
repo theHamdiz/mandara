@@ -11035,3 +11035,4 @@
 "The filesystem mount table is invalid or too large." = "La table des montages des systèmes de fichiers est invalide ou trop volumineuse."
 
 "Native filesystem maintenance is available on Linux." = "La maintenance native des systèmes de fichiers est disponible sous Linux."
+"Undo could not finish. The retained file is available at {path}." = "L’annulation n’a pas pu aboutir. Le fichier conservé se trouve dans {path}."

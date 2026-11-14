@@ -10693,3 +10693,4 @@
 "The filesystem mount table is invalid or too large." = "Jedwali la viunganishi vya mifumo ya faili si halali au ni kubwa mno."
 
 "Native filesystem maintenance is available on Linux." = "Matengenezo asilia ya mifumo ya faili yanapatikana kwenye Linux."
+"Undo could not finish. The retained file is available at {path}." = "Haikuwezekana kukamilisha kutendua. Faili iliyohifadhiwa inapatikana kwenye {path}."

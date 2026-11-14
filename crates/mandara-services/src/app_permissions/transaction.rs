@@ -1,6 +1,6 @@
 //! One native override key, backed up before publication and guarded against stale edits.
 
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::{Read as _, Write as _};
 use std::os::unix::fs::OpenOptionsExt as _;
 use std::path::{Path, PathBuf};
@@ -44,8 +44,7 @@ impl Undo {
         if self.original {
             mandara_config::store::write_atomic_checked(&lock, Some(self.written), self.before.as_bytes())?;
         } else {
-            std::fs::remove_file(lock.target())?;
-            File::open(lock.target().parent().context(t("The Flatpak permission data is invalid or too large."))?)?.sync_all()?;
+            super::removal::remove(&lock, self.written)?;
         }
         Ok(())
     }

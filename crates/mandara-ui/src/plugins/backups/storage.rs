@@ -41,6 +41,18 @@ impl Default for State {
     }
 }
 impl State {
+    fn snapshot_count(&self) -> usize {
+        self.elevated.as_ref().filter(|(owner, _)| Some(owner) == self.selected.as_ref())
+            .map_or_else(|| self.native.borrow().value.as_ref().map_or(0, |reply| reply.snapshots.len()), |(_, reply)| reply.snapshots.len())
+    }
+    fn normalize_page(&mut self) {
+        self.page = self.page.min(self.snapshot_count().saturating_sub(1) / ROWS_PER_PAGE);
+    }
+    fn move_page(&mut self, forward: bool) {
+        self.normalize_page();
+        self.page = if forward { self.page.saturating_add(1).min(self.snapshot_count().saturating_sub(1) / ROWS_PER_PAGE) }
+            else { self.page.saturating_sub(1) };
+    }
     fn empty_message(&self, data: &integration::Data<(), Vec<Mount>>) -> Option<&'static str> {
         (self.opened && data.error.is_none()).then(|| if data.busy() { t("Reading filesystems…") } else { t("No supported filesystems found") })
     }
@@ -171,6 +183,7 @@ pub(super) fn render(model: &Shared, maintenance: bool, p: &MandaraPalette, wind
     model.borrow().storage.mounts.borrow().views.track(window);
     model.borrow().storage.native.borrow().views.track(window);
     if !model.borrow().storage.opened && model.borrow().active.is_none() { refresh(model, cx); }
+    model.borrow_mut().storage.normalize_page();
     let state = model.borrow();
     let storage = &state.storage;
     let mut body = div().flex_1().min_h_0().row().flex_col().gap(px(tokens::MD));
@@ -241,9 +254,10 @@ pub(super) fn render(model: &Shared, maintenance: bool, p: &MandaraPalette, wind
             if rows.is_empty() { list = list.child(if native.busy() { t("Reading local snapshots…") } else { t("No snapshots loaded") }); }
             if rows.len() > ROWS_PER_PAGE {
                 let previous = model.clone(); let next = model.clone();
-                list = list.child(div().row().gap(px(tokens::SM))
-                    .child(action("snapshots-previous", t("Previous"), "chevron-left", p, move |_, cx| { let mut state = previous.borrow_mut(); state.storage.page = state.storage.page.saturating_sub(1); state.views.notify(cx); }))
-                    .child(action("snapshots-next", t("Next"), "chevron-right", p, move |_, cx| { next.borrow_mut().storage.page = page + 1; next.borrow().views.notify(cx); })));
+                let mut pages = div().row().gap(px(tokens::SM));
+                if page > 0 { pages = pages.child(action("snapshots-previous", t("Previous"), "chevron-left", p, move |_, cx| { let mut state = previous.borrow_mut(); state.storage.move_page(false); state.views.notify(cx); })); }
+                if (page + 1) * ROWS_PER_PAGE < rows.len() { pages = pages.child(action("snapshots-next", t("Next"), "chevron-right", p, move |_, cx| { let mut state = next.borrow_mut(); state.storage.move_page(true); state.views.notify(cx); })); }
+                list = list.child(pages);
             }
             body = body.child(list);
             if state.active.is_none() {
@@ -286,6 +300,29 @@ mod tests {
 
     fn mount() -> Mount {
         Mount { id: 8, device: "0:33".into(), root: "/".into(), target: "/snapshots".into(), filesystem: "btrfs".into(), read_only: false, subvolume_id: Some(5) }
+    }
+
+    #[test]
+    fn snapshot_navigation_stays_with_the_visible_page_when_the_list_changes() {
+        let selected = mount();
+        let reply = |count| Reply { snapshots: (0..count).map(|id| mandara_services::backups::filesystem::Snapshot {
+            id, uuid: id.to_string(), parent_uuid: String::new(), path: format!("/snapshot-{id}").into(), protected: false,
+        }).collect(), ..Default::default() };
+        let mut state = State { selected: Some(selected.clone()), elevated: Some((selected.clone(), reply(13))), ..State::default() };
+        for _ in 0..8 { state.move_page(true); }
+        assert_eq!(state.page, 2);
+        state.move_page(false);
+        assert_eq!(state.page, 1);
+        state.page = usize::MAX;
+        state.elevated = Some((selected.clone(), reply(7)));
+        state.move_page(false);
+        assert_eq!(state.page, 0, "Previous advances from the actual last page");
+        state.move_page(true);
+        state.move_page(true);
+        assert_eq!(state.page, 1);
+        state.elevated = Some((selected, reply(0)));
+        state.normalize_page();
+        assert_eq!(state.page, 0);
     }
 
     #[test]

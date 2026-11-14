@@ -157,6 +157,16 @@ fn native_override_preserves_symlinks_and_stale_undo_never_erases_personal_edits
     assert_eq!(std::fs::read_to_string(&target).unwrap(), before);
     assert!(undo.restore().is_err(), "Undo only owns its original publication");
     assert!(transaction::apply(&session, network, false, &AtomicBool::new(false), || Ok(())).is_err(), "same-byte replacement still makes an old session stale");
+
+    let absent = root.path().join("absent-override");
+    let fresh = Session { path: absent.clone(), target: absent.clone(), before: String::new(), stamp: None, ..session.clone() };
+    let undo = transaction::apply(&fresh, network, false, &AtomicBool::new(false), || Ok(())).unwrap();
+    assert!(std::fs::read_to_string(&absent).unwrap().contains("!network"));
+    assert!(undo.backup.is_none());
+    undo.restore().unwrap();
+    assert!(!absent.exists());
+    assert!(!std::fs::read_dir(root.path()).unwrap().filter_map(Result::ok)
+        .any(|entry| entry.file_name().to_string_lossy().starts_with(".mandara-undo-")));
 }
 
 #[test]
@@ -267,5 +277,23 @@ fn native_effective_grants_are_rechecked_without_changing_the_personal_override(
     let current = backend.inspect(&app, &cancel).unwrap();
     assert!(current.capabilities.iter().any(|row| row.value == "home" && row.constraint == Some(Constraint::Broader)));
     assert!(backend.set(&session, capability, false, &cancel).is_err());
-    assert_eq!(std::fs::read_to_string(path).unwrap(), "[Context]\nfilesystems=home;\n");
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "[Context]\nfilesystems=home;\n");
+
+    std::fs::write(&global, "").unwrap();
+    std::fs::write(&path, "[Context]\nshared=network;\n").unwrap();
+    let mut command = std::process::Command::new("flatpak");
+    command.args(["override", "--user"]);
+    for name in ["A;B", "C:D", "E\\F"] {
+        let directory = home.join(name);
+        std::fs::create_dir_all(&directory).unwrap();
+        let escaped = directory.to_str().unwrap().replace('\\', "\\\\").replace(':', "\\:");
+        command.arg(format!("--filesystem={escaped}:ro"));
+    }
+    command.arg(&app.id);
+    native::run(command, &cancel).unwrap();
+    let current = backend.inspect(&app, &cancel).unwrap();
+    for suffix in ["/A;B:ro", "/C\\:D:ro", "/E\\\\F:ro"] {
+        assert!(current.permissions.filesystems.iter().any(|value| value.ends_with(suffix)), "{}: {:?}", suffix, current.permissions.filesystems);
+    }
+    assert!(current.capabilities.iter().any(|row| row.value == "network" && row.editable));
 }

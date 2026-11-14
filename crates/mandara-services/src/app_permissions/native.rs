@@ -28,22 +28,26 @@ fn user_directory(custom: Option<&OsStr>) -> PathBuf {
         .unwrap_or_else(|| mandara_config::paths::data_dir().with_file_name("flatpak"))
 }
 
-fn permissions(metadata: &str) -> crate::app_install::flatpak::Permissions {
-    // A successful native read can omit Context when the app has no grants.
-    crate::app_install::flatpak::parse_context(metadata).unwrap_or_default()
+fn context(metadata: &str, parse: fn(&str) -> Option<crate::app_install::flatpak::Permissions>) -> Result<crate::app_install::flatpak::Permissions> {
+    let parsed = parse(metadata);
+    ensure!(parsed.is_some() || !metadata.lines().any(|line| line.trim() == "[Context]"), "{}", t("The Flatpak permission data is invalid or too large."));
+    Ok(parsed.unwrap_or_default())
 }
 
-fn capability_domain(texts: [&str; 3]) -> crate::app_install::flatpak::Permissions {
+fn permissions(metadata: &str) -> Result<crate::app_install::flatpak::Permissions> {
+    context(metadata, crate::app_install::flatpak::parse_context)
+}
+
+fn capability_domain(texts: [&str; 3]) -> Result<crate::app_install::flatpak::Permissions> {
     let mut domain = crate::app_install::flatpak::Permissions::default();
     for text in texts {
-        if let Some(grants) = crate::app_install::flatpak::context_domain(text) {
-            domain.shared.extend(grants.shared);
-            domain.sockets.extend(grants.sockets);
-            domain.devices.extend(grants.devices);
-            domain.filesystems.extend(grants.filesystems);
-        }
+        let grants = context(text, crate::app_install::flatpak::context_domain)?;
+        domain.shared.extend(grants.shared);
+        domain.sockets.extend(grants.sockets);
+        domain.devices.extend(grants.devices);
+        domain.filesystems.extend(grants.filesystems);
     }
-    domain
+    Ok(domain)
 }
 
 fn info(app: &App, flag: &str, cancel: &AtomicBool) -> Result<String> {
@@ -53,7 +57,7 @@ fn info(app: &App, flag: &str, cancel: &AtomicBool) -> Result<String> {
     command.arg(&app.id);
     let text = run(command, cancel)?;
     ensure!(text.len() as u64 <= MAX_BYTES, "{}", t("The Flatpak permission data is invalid or too large."));
-    Ok(text)
+    super::output::decode(text)
 }
 
 pub(super) fn valid_id(id: &str) -> bool {
@@ -105,13 +109,13 @@ impl Backend for Flatpak {
         let metadata = info(app, "--show-permissions", cancel)?;
         // Effective metadata flattens revoked grants away; retain their editable names too.
         let declared = info(app, "--show-metadata", cancel)?;
-        let permissions = permissions(&metadata);
+        let permissions = permissions(&metadata)?;
         let path = self.data.join("overrides").join(&app.id);
         let target = mandara_theme::templates::destination::identity(&path)?;
         let stamp = FileStamp::at(&target)?;
         let before = super::transaction::read(&target)?;
         ensure!(FileStamp::at(&target)? == stamp && mandara_theme::templates::destination::identity(&path)? == target, "{}", t("The app permissions changed. Refresh before saving."));
-        let domain = capability_domain([&metadata, &declared, &before]);
+        let domain = capability_domain([&metadata, &declared, &before])?;
         let mut capabilities = model::capabilities(&permissions, &domain);
         if !permissions.filesystems.is_empty() {
             super::paths::Locations::load()?.constrain(&mut capabilities, &permissions.filesystems)?;
@@ -145,8 +149,8 @@ mod tests {
         let effective = "[Context]\nsockets=wayland;\n";
         let declared = "[Context]\ndevices=kvm;\nsockets=cups;wayland;\n";
         let personal = "[Context]\ndevices=!kvm;!input;\nsockets=!cups;\n";
-        let domain = capability_domain([effective, declared, personal]);
-        let rows = model::capabilities(&permissions(effective), &domain);
+        let domain = capability_domain([effective, declared, personal]).unwrap();
+        let rows = model::capabilities(&permissions(effective).unwrap(), &domain);
         for value in ["kvm", "input", "cups"] {
             let row = rows.iter().find(|row| row.value == value).unwrap();
             assert!(!row.allowed && row.editable, "{value}");
@@ -159,9 +163,10 @@ mod tests {
     fn custom_user_installations_and_empty_permission_groups_are_supported() {
         assert_eq!(user_directory(Some(OsStr::new("/custom/apps"))), PathBuf::from("/custom/apps"));
         assert_eq!(user_directory(Some(OsStr::new(""))), user_directory(None));
-        assert!(permissions("").is_empty());
-        assert!(permissions("[Environment]\nLANG=en_US.UTF-8\n").is_empty());
-        assert_eq!(permissions("[Context]\nshared=network;\n").shared, ["network"]);
+        assert!(permissions("").unwrap().is_empty());
+        assert!(permissions("[Environment]\nLANG=en_US.UTF-8\n").unwrap().is_empty());
+        assert_eq!(permissions("[Context]\nshared=network;\n").unwrap().shared, ["network"]);
+        assert!(permissions("[Context]\nfilesystems=/tmp/A\\q;\n").is_err(), "invalid lists never become an empty effective permission set");
     }
 
     #[test]

@@ -4,39 +4,68 @@ use anyhow::{Result, ensure};
 use std::borrow::Cow;
 
 pub(super) fn expand<'a>(input: &'a str, variables: &[(String, String)]) -> Result<Cow<'a, str>> {
-    let mut output = Cow::Borrowed(input);
     ensure!(
-        output.len() <= crate::keybinds::MAX_FILE_BYTES,
+        input.len() <= crate::keybinds::MAX_FILE_BYTES,
         mandara_i18n::t("The shortcut configuration is too large to edit.")
     );
-    for (name, value) in variables {
-        let count = output.matches(name).count();
-        if count == 0 {
+    let mut bytes = 0_usize;
+    let changed = substitute(input, variables, |part| {
+        bytes = bytes
+            .checked_add(part.len())
+            .filter(|size| *size <= crate::keybinds::MAX_FILE_BYTES)
+            .ok_or_else(|| {
+                anyhow::anyhow!(mandara_i18n::t(
+                    "The shortcut configuration is too large to edit."
+                ))
+            })?;
+        Ok(())
+    })?;
+    if !changed {
+        return Ok(Cow::Borrowed(input));
+    }
+    let mut output = String::with_capacity(bytes);
+    substitute(input, variables, |part| {
+        output.push_str(part);
+        Ok(())
+    })?;
+    Ok(Cow::Owned(output))
+}
+
+fn substitute(
+    input: &str,
+    variables: &[(String, String)],
+    mut append: impl FnMut(&str) -> Result<()>,
+) -> Result<bool> {
+    let (mut at, mut start, mut changed) = (0, 0, false);
+    let bytes = input.as_bytes();
+    while let Some(offset) = input[at..].find('$') {
+        at += offset;
+        // Sway leaves a singly escaped dollar for the next parsing layer.
+        if at > 0 && bytes[at - 1] == b'\\' && (at == 1 || bytes[at - 2] != b'\\') {
+            at += 1;
             continue;
         }
-        let size = count
-            .checked_mul(name.len())
-            .and_then(|removed| output.len().checked_sub(removed))
-            .and_then(|kept| {
-                count
-                    .checked_mul(value.len())
-                    .and_then(|added| kept.checked_add(added))
+        let replacement = if bytes.get(at + 1) == Some(&b'$') {
+            Some(("$", at + 2))
+        } else {
+            variables.iter().find_map(|(name, value)| {
+                input[at..]
+                    .starts_with(name)
+                    .then_some((value.as_str(), at + name.len()))
             })
-            .filter(|&size| size <= crate::keybinds::MAX_FILE_BYTES)
-            .ok_or_else(|| {
-                anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit."))
-            })?;
-        let mut next = String::with_capacity(size);
-        let mut start = 0;
-        for (at, _) in output.match_indices(name) {
-            next.push_str(&output[start..at]);
-            next.push_str(value);
-            start = at + name.len();
-        }
-        next.push_str(&output[start..]);
-        output = Cow::Owned(next);
+        };
+        let Some((value, end)) = replacement else {
+            at += 1;
+            continue;
+        };
+        append(&input[start..at])?;
+        append(value)?;
+        start = end;
+        at = end;
+        changed = true;
     }
-    Ok(output)
+    append(&input[start..])?;
+    Ok(changed)
 }
 
 pub(super) fn check_assignment(
@@ -49,16 +78,21 @@ pub(super) fn check_assignment(
         replacing || variables.len() < crate::keybinds::MAX_BINDINGS,
         mandara_i18n::t("The shortcut configuration is too large to edit.")
     );
-    let mut bytes = name
-        .len()
-        .checked_add(value.len())
-        .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit.")))?;
+    let mut bytes = name.len().checked_add(value.len()).ok_or_else(|| {
+        anyhow::anyhow!(mandara_i18n::t(
+            "The shortcut configuration is too large to edit."
+        ))
+    })?;
     for (key, value) in variables.iter().filter(|(key, _)| key != name) {
         bytes = bytes
             .checked_add(key.len())
             .and_then(|bytes| bytes.checked_add(value.len()))
             .filter(|&bytes| bytes <= crate::keybinds::MAX_TOTAL_BYTES)
-            .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("The shortcut configuration is too large to edit.")))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!(mandara_i18n::t(
+                    "The shortcut configuration is too large to edit."
+                ))
+            })?;
     }
     ensure!(
         bytes <= crate::keybinds::MAX_TOTAL_BYTES,
@@ -70,6 +104,28 @@ pub(super) fn check_assignment(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn escaped_dollars_remain_available_to_the_next_parsing_layer() {
+        let variables = [
+            ("$KEYS".into(), "WRONG".into()),
+            ("$OTHER".into(), "value".into()),
+        ];
+        assert_eq!(expand("$$KEYS", &variables).unwrap(), "$KEYS");
+        assert_eq!(expand(r"\$KEYS", &variables).unwrap(), r"\$KEYS");
+        assert_eq!(expand(r"\\$KEYS", &variables).unwrap(), r"\\WRONG");
+        assert_eq!(
+            expand("$KEYS $$OTHER $OTHER", &variables).unwrap(),
+            "WRONG $OTHER value"
+        );
+        assert_eq!(
+            expand(
+                "$a",
+                &[("$a".into(), "$b".into()), ("$b".into(), "value".into())]
+            )
+            .unwrap(),
+            "$b"
+        );
+    }
     #[test]
     fn oversized_substitution_is_rejected_before_constructing_output() {
         let variables = [("$a".into(), "x".repeat(crate::keybinds::MAX_FILE_BYTES))];

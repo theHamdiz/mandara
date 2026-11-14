@@ -10792,3 +10792,4 @@
 "The filesystem mount table is invalid or too large." = "فائل سسٹم ماؤنٹ جدول غلط یا بہت بڑا ہے۔"
 
 "Native filesystem maintenance is available on Linux." = "مقامی فائل سسٹم کی دیکھ بھال Linux پر دستیاب ہے۔"
+"Undo could not finish. The retained file is available at {path}." = "تبدیلی واپس نہیں کی جا سکی۔ محفوظ کردہ فائل {path} پر دستیاب ہے۔"

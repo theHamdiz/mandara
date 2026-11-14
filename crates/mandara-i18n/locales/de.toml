@@ -11033,3 +11033,4 @@
 "The filesystem mount table is invalid or too large." = "Die Dateisystem-Einhängetabelle ist ungültig oder zu groß."
 
 "Native filesystem maintenance is available on Linux." = "Native Dateisystemwartung ist unter Linux verfügbar."
+"Undo could not finish. The retained file is available at {path}." = "Rückgängig machen konnte nicht abgeschlossen werden. Die aufbewahrte Datei liegt unter {path}."

@@ -8577,6 +8577,7 @@ Under the dial
 Under the hood
 Under the top group
 Undo
+Undo could not finish. The retained file is available at {path}.
 Undo the display change being tested right away
 Undo the last app permission change while its file is unchanged
 Undone

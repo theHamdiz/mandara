@@ -2677,7 +2677,10 @@ pub fn existing_chords_checked_in(
     }
     let mut out = BTreeSet::new();
     let mut stack = vec![root.to_path_buf()];
+    let mut visited = BTreeSet::new();
     while let Some(file) = stack.pop() {
+        if is_generated(&file) { continue; }
+        if !visited.insert(std::fs::canonicalize(&file)?) { continue; }
         let Some(text) = budget.read(&file)? else { continue; };
         if target == Target::Hyprland {
             out.extend(hyprland_chords_checked(&text)?.into_iter().map(|(_, chord)| chord));
@@ -3817,6 +3820,22 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
     }
 
     #[test]
+    fn mango_replays_completed_includes_in_the_current_mode_and_rejects_recursion() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config.conf");
+        let child = directory.path().join("keys.conf");
+        std::fs::write(&child, "bind=SUPER,Space,spawn,foot\n").unwrap();
+        std::fs::write(&root, "key_mode=resize\nsource=keys.conf\nkey_mode=default\nsource=keys.conf\nsource_optional=mandara/generated/mango.conf\n").unwrap();
+        assert!(existing_chords_checked_in(Target::Mango, &root, &IncludeEnvironment::captured([])).unwrap().contains("super+space"));
+        std::fs::write(&child, "source=config.conf\n").unwrap();
+        assert!(existing_chords_checked_in(Target::Mango, &root, &IncludeEnvironment::captured([])).unwrap_err().to_string().contains(mandara_i18n::t("The shortcut configuration contains an include cycle.")));
+        let text = format!("# {}\n", "x".repeat(crate::keybinds::MAX_FILE_BYTES / 2));
+        std::fs::write(&child, &text).unwrap();
+        std::fs::write(&root, "source=keys.conf\n".repeat(crate::keybinds::MAX_TOTAL_BYTES / text.len() + 1)).unwrap();
+        assert!(existing_chords_checked_in(Target::Mango, &root, &IncludeEnvironment::captured([])).is_err());
+    }
+
+    #[test]
     fn mango_toml_conflicts_keep_native_modes_and_generated_include_context() {
         let directory = tempfile::tempdir().unwrap();
         let root = directory.path().join("config.toml");
@@ -3847,7 +3866,7 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         let root = directory.path().join("config.conf");
         let child = directory.path().join("keys.conf");
         std::fs::write(&root, "key_mode=resize\nsource=keys.conf\nkey_mode=default\nbind=SUPER,W,killclient\nsource_optional=missing.conf\n").unwrap();
-        std::fs::write(&child, "source=config.conf\nbind=SUPER,Q,killclient\n").unwrap();
+        std::fs::write(&child, "bind=SUPER,Q,killclient\n").unwrap();
         assert_eq!(existing_chords_checked(Target::Mango, &root).unwrap(), BTreeSet::from(["super+w".into()]));
         for target in [Target::Mango, Target::Niri, Target::Hyprland, Target::Umbriel, Target::Sway] {
             std::fs::write(&root, vec![b'x'; crate::keybinds::MAX_FILE_BYTES + 1]).unwrap();

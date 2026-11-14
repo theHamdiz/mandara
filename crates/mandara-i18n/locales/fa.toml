@@ -10792,3 +10792,4 @@
 "The filesystem mount table is invalid or too large." = "جدول اتصال سامانه‌های پرونده نامعتبر یا بیش از حد بزرگ است."
 
 "Native filesystem maintenance is available on Linux." = "نگهداری بومی سامانهٔ پرونده در Linux در دسترس است."
+"Undo could not finish. The retained file is available at {path}." = "بازگردانی کامل نشد. فایل نگه‌داری‌شده در {path} موجود است."

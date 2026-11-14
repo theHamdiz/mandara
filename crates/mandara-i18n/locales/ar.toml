@@ -11039,3 +11039,4 @@
 "The filesystem mount table is invalid or too large." = "جدول نقاط تركيب أنظمة الملفات غير صالح أو كبير جدًا."
 
 "Native filesystem maintenance is available on Linux." = "صيانة أنظمة الملفات الأصلية متاحة على Linux."
+"Undo could not finish. The retained file is available at {path}." = "تعذّر إكمال التراجع. الملف المحتفَظ به متاح في {path}."

@@ -10793,3 +10793,4 @@
 "The filesystem mount table is invalid or too large." = "ফাইলসিস্টেম মাউন্ট তালিকা অবৈধ বা খুব বড়।"
 
 "Native filesystem maintenance is available on Linux." = "নেটিভ ফাইলসিস্টেম রক্ষণাবেক্ষণ Linux-এ উপলব্ধ।"
+"Undo could not finish. The retained file is available at {path}." = "পূর্বাবস্থায় ফেরানো সম্পূর্ণ করা যায়নি। সংরক্ষিত ফাইলটি {path}-এ পাওয়া যাবে।"

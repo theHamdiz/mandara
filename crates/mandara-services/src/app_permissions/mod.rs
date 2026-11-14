@@ -2,7 +2,9 @@
 
 mod model;
 mod native;
+mod output;
 mod paths;
+mod removal;
 mod transaction;
 #[cfg(test)]
 mod tests;

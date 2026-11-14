@@ -20,50 +20,56 @@ pub(super) fn chords_from(
         environment: &'e IncludeEnvironment,
     }
     fn walk(w: &mut Walk, file: &Path, mode: String) -> Result<String> {
-        if !w.visited.insert(file.to_path_buf()) {
-            return Ok(mode);
-        }
-        let Some(text) = (w.read)(file)? else {
-            return Ok(mode);
-        };
-        if file
-            .extension()
-            .is_some_and(|extension| extension == "toml")
-        {
-            return toml_file(w, file, &text, mode);
-        }
-        let mut mode = mode;
-        // Split the file at its `source=` lines so each part starts in the
-        // mode the previous part (or sourced file) left.
-        let mut chunk = String::new();
-        for line in text.lines() {
-            let sourced = (!line.trim_start().starts_with('#'))
-                .then(|| include_path(Target::Mango, line))
-                .flatten();
-            match sourced {
-                Some(path) => {
-                    mode = flush(w, &mut chunk, mode)?;
-                    let path = w
-                        .environment
-                        .resolve(file, &w.environment.expand(path.trim().trim_matches('"'))?)?;
-                    if path == Target::Mango.generated_file()
-                        || is_generated(&path)
-                        || std::fs::canonicalize(&path).is_ok_and(|path| is_generated(&path))
-                    {
-                        w.ours.get_or_insert_with(|| mode.clone());
-                    } else if path.try_exists()?
-                        || !line.trim_start().starts_with("source_optional")
-                    {
-                        mode = walk(w, &path, mode)?;
+        let key = std::fs::canonicalize(file).unwrap_or_else(|_| file.to_path_buf());
+        anyhow::ensure!(
+            w.visited.insert(key.clone()),
+            mandara_i18n::t("The shortcut configuration contains an include cycle.")
+        );
+        let result = (|| {
+            let Some(text) = (w.read)(file)? else {
+                return Ok(mode);
+            };
+            if file
+                .extension()
+                .is_some_and(|extension| extension == "toml")
+            {
+                return toml_file(w, file, &text, mode);
+            }
+            let mut mode = mode;
+            // Split the file at its `source=` lines so each part starts in the
+            // mode the previous part (or sourced file) left.
+            let mut chunk = String::new();
+            for line in text.lines() {
+                let sourced = (!line.trim_start().starts_with('#'))
+                    .then(|| include_path(Target::Mango, line))
+                    .flatten();
+                match sourced {
+                    Some(path) => {
+                        mode = flush(w, &mut chunk, mode)?;
+                        let path = w
+                            .environment
+                            .resolve(file, &w.environment.expand(path.trim().trim_matches('"'))?)?;
+                        if path == Target::Mango.generated_file()
+                            || is_generated(&path)
+                            || std::fs::canonicalize(&path).is_ok_and(|path| is_generated(&path))
+                        {
+                            w.ours.get_or_insert_with(|| mode.clone());
+                        } else if path.try_exists()?
+                            || !line.trim_start().starts_with("source_optional")
+                        {
+                            mode = walk(w, &path, mode)?;
+                        }
+                    }
+                    None => {
+                        chunk.push_str(line);
+                        chunk.push('\n');
                     }
                 }
-                None => {
-                    chunk.push_str(line);
-                    chunk.push('\n');
-                }
             }
-        }
-        flush(w, &mut chunk, mode)
+            flush(w, &mut chunk, mode)
+        })();
+        w.visited.remove(&key);
+        result
     }
     fn flush(w: &mut Walk, chunk: &mut String, mode: String) -> Result<String> {
         let (binds, mode) = mango_binds_checked(

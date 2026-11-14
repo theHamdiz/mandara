@@ -11034,3 +11034,4 @@
 "The filesystem mount table is invalid or too large." = "Dosya sistemi bağlama tablosu geçersiz veya çok büyük."
 
 "Native filesystem maintenance is available on Linux." = "Yerel dosya sistemi bakımı Linux üzerinde kullanılabilir."
+"Undo could not finish. The retained file is available at {path}." = "Geri alma tamamlanamadı. Korunan dosya {path} konumunda."

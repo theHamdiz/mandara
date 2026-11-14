@@ -14,18 +14,7 @@ pub(super) fn mount_id(file: &File) -> Result<u64> {
     { let _ = file; anyhow::bail!("{}", t("Reviewed file cleanup is available on Linux.")) }
 }
 
-pub(super) fn claim(from: &File, name: &OsStr, to: &File, destination: &OsStr) -> Result<()> {
-    #[cfg(target_os = "linux")]
-    {
-        rustix::fs::renameat_with(from, name, to, destination, rustix::fs::RenameFlags::NOREPLACE)?;
-        Ok(())
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        let _ = (from, name, to, destination);
-        anyhow::bail!("{}", t("Reviewed file cleanup is available on Linux."))
-    }
-}
+pub(super) use crate::file_claim::rename as claim;
 
 pub(super) fn open(path: &Path) -> Result<File> { Ok(File::from(rustix::fs::open(path, OPEN, Mode::empty())?)) }
 pub(super) fn child(parent: &File, name: &OsStr) -> Result<File> { Ok(File::from(openat(parent, name, OPEN, Mode::empty())?)) }

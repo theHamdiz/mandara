@@ -20,6 +20,7 @@ pub mod audio;
 pub mod authenticator;
 pub mod backlight;
 pub mod backups;
+mod file_claim;
 pub mod bluetooth;
 pub mod boot;
 pub mod breaks;

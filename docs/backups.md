@@ -31,6 +31,7 @@ while the panel is closed; disabling the plugin requests cancellation.
 
 Mandara does not schedule backups, forget old restic snapshots or prune a
 repository automatically. Those remain deliberate choices outside this panel.
+Snapshot navigation stops at the last page and adjusts when the list changes.
 
 ## Local Btrfs snapshots
 

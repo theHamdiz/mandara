@@ -172,6 +172,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn escaped_sway_variables_reach_environment_expansion_and_nested_quotes_stay_grouped() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("config");
+        std::fs::write(&file, "set $KEYS WRONG\ninclude $$KEYS\ninclude \"'keys with spaces.conf'\"\n").unwrap();
+        std::fs::write(root.path().join("keys.conf"), "bindsym Mod4+q kill\n").unwrap();
+        std::fs::write(root.path().join("keys with spaces.conf"), "bindsym Mod4+w kill\n").unwrap();
+        let environment = IncludeEnvironment::captured([("KEYS".into(), "keys.conf".into())]);
+        assert_eq!(checked_in(&file, &environment).unwrap(), BTreeSet::from(["super+q".into(), "super+w".into()]));
+        let scan = crate::keybinds::scan_roots_in(Target::Sway, [file], &environment);
+        assert!(scan.errors.is_empty(), "{:?}", scan.errors);
+        assert_eq!(scan.sources.len(), 3);
+    }
+
+    #[test]
     fn environment_include_lists_contribute_every_native_shortcut() {
         let root = tempfile::tempdir().unwrap();
         let file = root.path().join("config");

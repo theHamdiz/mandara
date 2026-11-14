@@ -11034,3 +11034,4 @@
 "The filesystem mount table is invalid or too large." = "Таблица монтирования файловых систем недопустима или слишком велика."
 
 "Native filesystem maintenance is available on Linux." = "Встроенное обслуживание файловых систем доступно в Linux."
+"Undo could not finish. The retained file is available at {path}." = "Не удалось отменить изменение. Сохранённый файл находится в {path}."

@@ -10792,3 +10792,4 @@
 "The filesystem mount table is invalid or too large." = "Tabel kait sistem berkas tidak valid atau terlalu besar."
 
 "Native filesystem maintenance is available on Linux." = "Pemeliharaan sistem berkas bawaan tersedia di Linux."
+"Undo could not finish. The retained file is available at {path}." = "Pembatalan perubahan tidak dapat diselesaikan. Berkas yang disimpan tersedia di {path}."

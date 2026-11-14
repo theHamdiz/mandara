@@ -124,9 +124,12 @@ pub(super) fn expand(
         }
         if arg.starts_with(['"', '\'']) {
             let mut escaped = false;
+            let mut quote = None;
             for byte in arg.bytes() {
                 match byte {
-                    b'"' | b'\'' if !escaped => {}
+                    b'"' | b'\'' if !escaped && quote.is_none_or(|active| active == byte) => {
+                        quote = if quote.is_some() { None } else { Some(byte) };
+                    }
                     b'\\' => {
                         escaped = !escaped;
                         line.push(byte);
@@ -234,6 +237,14 @@ mod tests {
         assert_eq!(words("x\"$FILES\""), ["xone.conf two.conf"]);
         assert_eq!(words("x'$FILES'"), ["x$FILES"]);
         assert_eq!(words("my\\ dir/x.conf"), ["my dir/x.conf"]);
+        assert_eq!(
+            words("\"'keys with spaces.conf'\""),
+            ["keys with spaces.conf"]
+        );
+        assert_eq!(
+            words("'\"keys with spaces.conf\"'"),
+            ["keys with spaces.conf"]
+        );
         assert_eq!(words("~/keys"), ["/home/a \\[b\\]/keys"]);
         assert!(words("$UNSET").is_empty());
         assert_eq!(words("$UNSET~/keys"), ["/home/a \\[b\\]/keys"]);

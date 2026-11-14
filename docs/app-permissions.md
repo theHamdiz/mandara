@@ -32,6 +32,10 @@ and Undo receipt rather than hiding a change that already reached disk.
 Before saving, Mandara checks the app's effective grants again. A changed
 installation or global override can lock a previously editable control; refresh
 the panel to review the new permissions.
+Folder names containing semicolons or native filesystem escapes keep their
+original meaning. Undo claims and checks a newly created override before removing
+it. If another editor replaces it during Undo, that file is restored or kept in
+the recovery location reported by the error; a newer replacement is preserved.
 
 Personal overrides apply to the app across all its installations. Restart the
 app after editing or using Undo so the new sandbox is used. App permissions

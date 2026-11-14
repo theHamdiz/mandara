@@ -28,6 +28,7 @@ and more apps can follow your colours.
 
 ### Fixed
 
+- Shortcut scans preserve repeated MangoWM includes, escaped Sway variables and nested quotes. Snapshot paging stops at the last page, escaped folder names remain readable in App permissions, and Undo preserves files replaced by another editor.
 - Backups keeps completed restore locations across tabs and unrelated disk jobs, refreshes snapshot lists after changes and handles checks and restores with older distribution packages. Cancelled cleanup previews stay dismissed, and revoked app permissions remain available to turn back on. Broad host, full-root and equivalent folder grants lock overlapping permission controls.
 - Stash summoned by a drag or shake shows only its drop zone until something lands in it. Standalone shelves keep their usual controls, and long shelf-menu options wrap within their rows.
 - Stopping Local AI while it connects or waits for a reply no longer reports a false connection error.
