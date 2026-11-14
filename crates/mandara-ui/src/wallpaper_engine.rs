@@ -139,7 +139,7 @@ pub fn register(r: &mut PluginRegistry) {
 pub fn init(cx: &mut App) {
     cx.set_global(Engine::default());
     cx.observe(&config(cx), |_, cx| sync(cx)).detach();
-    cx.observe_global::<Outputs>(|cx| sync(cx)).detach();
+    cx.observe_global::<Outputs>(sync).detach();
     let hub = crate::hub::hub(cx);
     let mut rev = hub.read(cx).revision(crate::hub::Domains::NAVIGATION);
     cx.observe(&hub, move |hub, cx| {
