@@ -79,6 +79,8 @@ Niri's `NIRI_CONFIG`, Sway's reported active file and labwc's merged config
 directories. Read-only sources remain visible with an explanation. KWin
 conflicts include alternative shortcuts, punctuation and the first key of a
 multi-key sequence. Sway includes share their variables and binding modes.
+Environment variables containing several include paths follow Sway's native
+word splitting and quoting, without executing command substitutions.
 Labwc lists direct keyboard bindings; unsupported nested key chains stay
 untouched and do not become editable shortcuts.
 Niri's `Mod` follows the merged input settings and its native nested-session
@@ -101,7 +103,9 @@ over-budget source reports an error instead of silently omitting shortcuts.
 Managed companion files use the same bounded, regular-file reads. Legacy
 Hyprland validation preserves variable assignments and includes in their
 native order, including repeated includes and inherited submaps, without
-running startup commands. Sway limits the total retained expansion data as
+running startup commands. A submap named `default` remains separate from the
+default binding scope. Linked Lua companion files keep their Lua syntax even
+when their destination has no extension. Sway limits the total retained expansion data as
 well as each individual value. Continued includes are resolved; continued
 bindings remain visible and read-only so their formatting stays intact.
 If Linux restricts the compositor's environment, discovery falls back to the

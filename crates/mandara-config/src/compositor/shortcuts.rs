@@ -59,7 +59,7 @@ pub fn replace(
         "{}",
         t("The managed compositor file has changed. Run Config doctor before editing shortcuts.")
     );
-    let lua = file.extension().is_some_and(|extension| extension == "lua");
+    let lua = target == Target::Hyprland && crate::keybinds::hyprland_lua(file, previous);
     let fresh = match target {
         Target::Hyprland if lua => super::emit_hyprland_lua(managed),
         Target::Hyprland => super::emit_hyprland_conf(managed),

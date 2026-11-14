@@ -4,9 +4,26 @@ use super::*;
 
 #[derive(Default, Debug, serde::Serialize)]
 pub struct NiriModifiers {
-    normal: Option<String>,
-    nested: Option<String>,
+    normal: Option<&'static str>,
+    nested: Option<&'static str>,
     pub nested_session: bool,
+}
+
+fn modifier_name(value: &str) -> Option<&'static str> {
+    [
+        ("Ctrl", "Ctrl"),
+        ("Control", "Ctrl"),
+        ("Shift", "Shift"),
+        ("Alt", "Alt"),
+        ("Super", "Super"),
+        ("Win", "Super"),
+        ("ISO_Level3_Shift", "Mod5"),
+        ("Mod5", "Mod5"),
+        ("ISO_Level5_Shift", "Mod3"),
+        ("Mod3", "Mod3"),
+    ]
+    .into_iter()
+    .find_map(|(name, canonical)| name.eq_ignore_ascii_case(value).then_some(canonical))
 }
 
 pub fn resolve_mod(scan: &mut Scan, nested: bool) {
@@ -14,12 +31,11 @@ pub fn resolve_mod(scan: &mut Scan, nested: bool) {
         return;
     };
     modifiers.nested_session = nested;
-    let normal = modifiers.normal.as_deref().unwrap_or("Super");
+    let normal = modifiers.normal.unwrap_or("Super");
     // Niri swaps Alt back to Super in a nested window unless explicitly set.
     let modifier = if nested {
         modifiers
             .nested
-            .as_deref()
             .unwrap_or(if normal.eq_ignore_ascii_case("Alt") {
                 "Super"
             } else {
@@ -28,13 +44,41 @@ pub fn resolve_mod(scan: &mut Scan, nested: bool) {
     } else {
         normal
     };
-    for row in scan
-        .sources
-        .iter_mut()
-        .flat_map(|source| &mut source.bindings)
-    {
-        if let Some(field) = row.fields.iter().find(|field| field.label == "Shortcut") {
-            let mut value = String::with_capacity(field.value.len() + modifier.len());
+    let mut retained = 0_usize;
+    for source in &mut scan.sources {
+        for row in &mut source.bindings {
+            let Some(field) = row.fields.iter().find(|field| field.label == "Shortcut") else {
+                continue;
+            };
+            let bytes =
+                field
+                    .value
+                    .split('+')
+                    .enumerate()
+                    .try_fold(0_usize, |bytes, (index, part)| {
+                        bytes.checked_add(usize::from(index != 0))?.checked_add(
+                            if part.eq_ignore_ascii_case("Mod") {
+                                modifier.len()
+                            } else {
+                                part.len()
+                            },
+                        )
+                    });
+            let Some(bytes) = bytes.filter(|bytes| {
+                *bytes <= super::super::MAX_FIELD_BYTES
+                    && retained
+                        .checked_add(*bytes)
+                        .is_some_and(|sum| sum <= MAX_TOTAL_BYTES)
+            }) else {
+                row.chord = None;
+                scan.errors.push((
+                    source.file.clone(),
+                    mandara_i18n::t("The shortcut configuration is too large to edit.").into(),
+                ));
+                return;
+            };
+            retained += bytes;
+            let mut value = String::with_capacity(bytes);
             for (index, part) in field.value.split('+').enumerate() {
                 if index != 0 {
                     value.push('+');
@@ -87,7 +131,10 @@ fn walk(
     environment: &IncludeEnvironment,
 ) -> Result<()> {
     *visits += 1;
-    ensure!(*visits <= MAX_BINDINGS, mandara_i18n::t("The shortcut configuration includes too many files."));
+    ensure!(
+        *visits <= MAX_BINDINGS,
+        mandara_i18n::t("The shortcut configuration includes too many files.")
+    );
     let real = std::fs::canonicalize(file)?;
     if is_generated(file) || is_generated(&real) {
         if !scan.generated.iter().any(|path| path == file) {
@@ -95,7 +142,10 @@ fn walk(
         }
         return Ok(());
     }
-    ensure!(visited.insert(real.clone()), mandara_i18n::t("The shortcut configuration contains an include cycle."));
+    ensure!(
+        visited.insert(real.clone()),
+        mandara_i18n::t("The shortcut configuration contains an include cycle.")
+    );
     ensure!(
         visited.len() <= MAX_FILES,
         mandara_i18n::t("The shortcut configuration includes too many files.")
@@ -129,8 +179,11 @@ fn walk(
     for node in document.nodes() {
         match node.name().value() {
             "include" => {
-                let (path, optional) = crate::compositor::niri_include(node)
-                    .ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("Computed shortcuts must be edited in their source configuration.")))?;
+                let (path, optional) = crate::compositor::niri_include(node).ok_or_else(|| {
+                    anyhow::anyhow!(mandara_i18n::t(
+                        "Computed shortcuts must be edited in their source configuration."
+                    ))
+                })?;
                 let path = environment.resolve(file, std::ffi::OsStr::new(path))?;
                 if path.try_exists()? || !optional {
                     walk(&path, scan, visited, bytes, count, visits, environment)?;
@@ -144,10 +197,9 @@ fn walk(
                             "mod-key-nested" => &mut scan.niri.as_mut().expect("Niri scan").nested,
                             _ => continue,
                         };
-                        *modifier = setting
-                            .get(0)
-                            .and_then(kdl::KdlValue::as_string)
-                            .map(str::to_owned);
+                        let value = setting.get(0).and_then(kdl::KdlValue::as_string)
+                            .and_then(modifier_name).ok_or_else(|| anyhow::anyhow!(mandara_i18n::t("Some compositor shortcuts cannot be resolved safely. Edit them in their source configuration first.")))?;
+                        *modifier = Some(value);
                     }
                 }
             }
@@ -161,6 +213,67 @@ fn walk(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn modifier_names_and_expansions_are_bounded_before_copying() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("config.kdl");
+        std::fs::write(
+            &root,
+            format!(
+                "input {{ mod-key \"{}\"; }}\nbinds {{ {}Q {{ quit; }}; }}\n",
+                "m".repeat(128 * 1024),
+                "Mod+".repeat(8192)
+            ),
+        )
+        .unwrap();
+        assert!(
+            !scan(
+                std::slice::from_ref(&root),
+                &IncludeEnvironment::captured([])
+            )
+            .errors
+            .is_empty()
+        );
+        let chord = format!(
+            "{}Q",
+            "Mod+".repeat(super::super::super::MAX_FIELD_BYTES / 4 - 1)
+        );
+        std::fs::write(
+            &root,
+            format!("input {{ mod-key \"Super\"; }}\nbinds {{ {chord} {{ quit; }}; }}\n"),
+        )
+        .unwrap();
+        assert!(
+            !scan(
+                std::slice::from_ref(&root),
+                &IncludeEnvironment::captured([])
+            )
+            .errors
+            .is_empty()
+        );
+        for (name, expected) in [
+            ("Control", "ctrl+q"),
+            ("Win", "super+q"),
+            ("ISO_Level3_Shift", "mod5+q"),
+            ("ISO_Level5_Shift", "hyper+q"),
+        ] {
+            std::fs::write(
+                &root,
+                format!("input {{ mod-key \"{name}\"; }}\nbinds {{ Mod+Q {{ quit; }}; }}\n"),
+            )
+            .unwrap();
+            let result = scan(
+                std::slice::from_ref(&root),
+                &IncludeEnvironment::captured([]),
+            );
+            assert!(result.errors.is_empty(), "{:?}", result.errors);
+            assert_eq!(
+                result.sources[0].bindings[0].chord.as_deref(),
+                Some(expected)
+            );
+        }
+    }
+
     #[test]
     fn repeated_includes_reapply_settings_and_recursive_includes_fail() {
         let directory = tempfile::tempdir().unwrap();
@@ -184,7 +297,9 @@ mod tests {
         )
         .unwrap();
         let result = scan(&[root], &IncludeEnvironment::default());
-        assert!(result.errors[0].1.contains(mandara_i18n::t("The shortcut configuration contains an include cycle.")));
+        assert!(result.errors[0].1.contains(mandara_i18n::t(
+            "The shortcut configuration contains an include cycle."
+        )));
     }
     #[test]
     fn inline_includes_merge_modifiers_in_place_and_nested_defaults_follow_niri() {
@@ -203,7 +318,7 @@ mod tests {
         assert_eq!(row(&scan).as_deref(), Some("alt+q"));
         resolve_mod(&mut scan, true);
         assert_eq!(row(&scan).as_deref(), Some("super+q"));
-        scan.niri.as_mut().unwrap().nested = Some("Mod5".into());
+        scan.niri.as_mut().unwrap().nested = Some("Mod5");
         resolve_mod(&mut scan, true);
         assert_eq!(row(&scan).as_deref(), Some("mod5+q"));
         assert!(

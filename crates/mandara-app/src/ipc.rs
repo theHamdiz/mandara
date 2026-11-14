@@ -37,6 +37,9 @@ const BOOT_REPLY_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
 fn reply_timeout(args: &[String]) -> Duration {
     match (args.first().map(String::as_str), args.get(1).map(String::as_str)) {
+        (Some("permissions"), Some(_)) => {
+            mandara_services::app_permissions::OPERATION_TIMEOUT + CLIENT_READ_TIMEOUT
+        }
         (Some("backups"), Some(command)) if command != "cancel" => {
             mandara_services::backups::OPERATION_TIMEOUT + CLIENT_READ_TIMEOUT
         }
@@ -213,6 +216,9 @@ mod tests {
         let words = |value: &str| value.split_whitespace().map(String::from).collect::<Vec<_>>();
         for command in ["backups start", "backups check", "backups init", "backups restore id /copies", "backups list", "backups storage confirm", "backups cleanup confirm"] {
             assert_eq!(reply_timeout(&words(command)), mandara_services::backups::OPERATION_TIMEOUT + CLIENT_READ_TIMEOUT);
+        }
+        for command in ["permissions apps", "permissions inspect app system", "permissions set app system shared network false", "permissions undo"] {
+            assert_eq!(reply_timeout(&words(command)), mandara_services::app_permissions::OPERATION_TIMEOUT + CLIENT_READ_TIMEOUT);
         }
         for command in ["ai chat send hello", "ai models"] {
             assert_eq!(reply_timeout(&words(command)), mandara_services::local_ai::chat::CHAT_TIMEOUT + CLIENT_READ_TIMEOUT);

@@ -2,6 +2,70 @@ use super::*;
 use mandara_theme::templates::FileStamp;
 use std::sync::atomic::AtomicBool;
 
+struct OverrideFixture(Vec<(std::path::PathBuf, Option<Vec<u8>>)>);
+impl OverrideFixture {
+    fn capture(home: &std::path::Path, paths: &[std::path::PathBuf]) -> Self {
+        let home = std::fs::canonicalize(home).unwrap();
+        Self(paths.iter().map(|path| {
+            let target = mandara_theme::templates::destination::identity(path).unwrap();
+            assert!(target.starts_with(&home), "fixture override must stay in the private home");
+            let before = match std::fs::read(&target) {
+                Ok(bytes) => Some(bytes),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(error) => panic!("could not capture fixture override: {error}"),
+            };
+            (target, before)
+        }).collect())
+    }
+}
+impl Drop for OverrideFixture {
+    fn drop(&mut self) {
+        for (path, before) in &self.0 {
+            let result = match before {
+                Some(bytes) => std::fs::write(path, bytes),
+                None => match std::fs::remove_file(path) {
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                    result => result,
+                },
+            };
+            if let Err(error) = result {
+                eprintln!("could not restore private fixture {}: {error}", path.display());
+            }
+        }
+    }
+}
+
+#[test]
+fn native_fixture_restores_existing_and_absent_overrides_on_success_and_unwind() {
+    for unwind in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let existing = root.path().join("existing");
+        let absent = root.path().join("absent");
+        std::fs::write(&existing, b"original").unwrap();
+        let result = std::panic::catch_unwind(|| {
+            let _restore = OverrideFixture::capture(root.path(), &[existing.clone(), absent.clone()]);
+            std::fs::write(&existing, b"changed").unwrap();
+            std::fs::write(&absent, b"new").unwrap();
+            assert!(!unwind, "exercise fixture unwind");
+        });
+        assert_eq!(result.is_err(), unwind);
+        assert_eq!(std::fs::read(existing).unwrap(), b"original");
+        assert!(!absent.exists());
+    }
+}
+
+#[test]
+fn permission_reads_reject_special_files_and_oversized_metadata() {
+    let root = tempfile::tempdir().unwrap();
+    let fifo = root.path().join("fifo");
+    rustix::fs::mkfifoat(rustix::fs::CWD, &fifo, rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR).unwrap();
+    assert!(transaction::read(&fifo).is_err());
+    assert!(transaction::read(root.path()).is_err());
+    let file = root.path().join("large");
+    std::fs::write(&file, vec![b'x'; native::MAX_BYTES as usize + 1]).unwrap();
+    assert!(transaction::read(&file).is_err());
+}
+
 #[test]
 fn native_records_keep_installations_distinct_and_reject_invalid_ids() {
     let rows = native::apps("org.example.Player\tPlayer\tsystem\norg.example.Player\tPlayer\tuser\n").unwrap();
@@ -180,15 +244,28 @@ fn native_effective_grants_are_rechecked_without_changing_the_personal_override(
     let overrides = backend.data.join("overrides");
     std::fs::create_dir_all(&overrides).unwrap();
     let path = overrides.join(&app.id);
+    let global = overrides.join("global");
+    let _restore = OverrideFixture::capture(&home, &[path.clone(), global.clone()]);
+    std::fs::write(&global, "").unwrap();
     let before = "[Context]\ndevices=dri;\n";
     std::fs::write(&path, before).unwrap();
     let cancel = AtomicBool::new(false);
     let session = backend.inspect(&app, &cancel).unwrap();
     let dri = session.capabilities.iter().find(|row| row.value == "dri").unwrap();
     assert!(dri.allowed && dri.editable);
-    std::fs::write(overrides.join("global"), "[Context]\ndevices=all;\n").unwrap();
+    std::fs::write(&global, "[Context]\ndevices=all;\n").unwrap();
     let current = backend.inspect(&app, &cancel).unwrap();
     assert!(current.capabilities.iter().any(|row| row.value == "dri" && row.constraint == Some(Constraint::Broader)));
     assert!(backend.set(&session, dri, false, &cancel).is_err());
-    assert_eq!(std::fs::read_to_string(path).unwrap(), before);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
+    std::fs::write(&global, "").unwrap();
+    std::fs::write(&path, "[Context]\nfilesystems=home;\n").unwrap();
+    let session = backend.inspect(&app, &cancel).unwrap();
+    let capability = session.capabilities.iter().find(|row| row.value == "home").unwrap();
+    assert!(capability.editable);
+    std::fs::write(&global, format!("[Context]\nfilesystems={};\n", home.display())).unwrap();
+    let current = backend.inspect(&app, &cancel).unwrap();
+    assert!(current.capabilities.iter().any(|row| row.value == "home" && row.constraint == Some(Constraint::Broader)));
+    assert!(backend.set(&session, capability, false, &cancel).is_err());
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "[Context]\nfilesystems=home;\n");
 }

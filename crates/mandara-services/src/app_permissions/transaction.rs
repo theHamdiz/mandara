@@ -16,7 +16,7 @@ use super::native::MAX_BYTES;
 
 pub(super) fn read(path: &Path) -> Result<String> {
     let mut text = String::new();
-    match File::open(path) {
+    match OpenOptions::new().read(true).custom_flags(rustix::fs::OFlags::NONBLOCK.bits() as i32).open(path) {
         Ok(file) => { ensure!(file.metadata()?.is_file(), "{}", t("The Flatpak permission data is invalid or too large.")); file.take(MAX_BYTES + 1).read_to_string(&mut text)?; }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound && std::fs::symlink_metadata(path).is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound) => {}
         Err(error) => return Err(error.into()),

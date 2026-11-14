@@ -344,6 +344,49 @@ mod tests {
     }
 
     #[test]
+    fn lua_companion_aliases_keep_their_language_when_saving_and_undoing() {
+        isolated_transaction("shortcuts::transaction::tests::lua_companion_transaction_runs_in_private_environment");
+    }
+
+    #[test]
+    #[ignore = "launched by the parent test with private paths and no display"]
+    fn lua_companion_transaction_runs_in_private_environment() {
+        let root = std::path::PathBuf::from(std::env::var_os("MANDARA_ISOLATED_SHORTCUT_TEST").expect("run through the isolated parent"));
+        assert_eq!(fs::read_to_string(root.join(".mandara-shortcut-test")).unwrap(), "isolated shortcut transaction\n");
+        assert!(std::env::var_os("WAYLAND_DISPLAY").is_none());
+        let generated = root.join("config/mandara/generated/hyprland.lua");
+        let actual = root.join("managed-content");
+        fs::create_dir_all(generated.parent().unwrap()).unwrap();
+        symlink(&actual, &generated).unwrap();
+        let file = root.join("hyprland.lua");
+        let original = format!("hl.bind(\"SUPER + Q\", hl.dsp.window.close())\npcall(dofile, {:?})\n", generated.to_str().unwrap());
+        fs::write(&file, &original).unwrap();
+        let config = CompositorConfig { autostart: false, keybinds: vec![compositor::Keybind::new(&["super"], "space", compositor::BindAction::Mandara("launcher toggle".into()))], ..Default::default() };
+        let managed = ManagedConfig { config: &config, borders: None, existing_chords: Default::default(), mandara_bin: mandara_compositor::backend::mandara_binary(), version: None, user_autostarts: true };
+        let before = format!("{}-- personal tail\n", compositor::emit_hyprland_lua(&managed).text);
+        fs::write(&actual, &before).unwrap();
+        let initial = Preferences { target: Target::Hyprland, manage: true, keybinds: config.keybinds.clone() };
+        let scan = || Session { target: Target::Hyprland, root: file.clone(), scan: keybinds::scan_from(Target::Hyprland, &file), environment: Default::default(), primary_mod_is_alt: false };
+        let session = scan();
+        assert!(session.scan.errors.is_empty(), "{:?}", session.scan.errors);
+        let source = &session.scan.sources[0];
+        let values = source.bindings[0].fields.iter().map(|field| if field.label == "Shortcut" { "\"SUPER + W\"".into() } else { field.value.clone() }).collect::<Vec<_>>();
+        let edit = keybinds::prepare(Target::Hyprland, &source.binding_id(0).unwrap(), &values).unwrap();
+        apply(&session, &edit, &initial, &|| Ok(initial.clone()), &NoopBackend).unwrap();
+        assert_eq!(fs::read_to_string(&file).unwrap(), original.replace("SUPER + Q", "SUPER + W"));
+        assert_eq!(fs::read_link(&generated).unwrap(), actual);
+        let after = fs::read_to_string(&actual).unwrap();
+        assert!(after.contains("pcall(hl.bind,"));
+        assert!(!after.contains("bind = "));
+        assert!(after.ends_with("-- personal tail\n"));
+        let undo = edit.undo().unwrap();
+        let edit = keybinds::prepare(Target::Hyprland, &undo.id, &undo.values).unwrap();
+        apply(&scan(), &edit, &initial, &|| Ok(initial.clone()), &NoopBackend).unwrap();
+        assert_eq!(fs::read_to_string(file).unwrap(), original);
+        assert_eq!(fs::read_to_string(actual).unwrap(), before);
+    }
+
+    #[test]
     #[ignore = "launched by the parent test with private paths and no display"]
     fn mango_mode_transaction_runs_in_private_environment() {
         let root = std::path::PathBuf::from(

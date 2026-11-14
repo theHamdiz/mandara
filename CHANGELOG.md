@@ -28,7 +28,7 @@ and more apps can follow your colours.
 
 ### Fixed
 
-- Backups keeps completed restore locations between tabs, refreshes snapshot lists after changes and handles checks and restores with older distribution packages. Cancelled cleanup previews stay dismissed, and revoked app permissions remain available to turn back on. Broad host and full-root access lock overlapping permission controls.
+- Backups keeps completed restore locations across tabs and unrelated disk jobs, refreshes snapshot lists after changes and handles checks and restores with older distribution packages. Cancelled cleanup previews stay dismissed, and revoked app permissions remain available to turn back on. Broad host, full-root and equivalent folder grants lock overlapping permission controls.
 - Stash summoned by a drag or shake shows only its drop zone until something lands in it. Standalone shelves keep their usual controls, and long shelf-menu options wrap within their rows.
 - Stopping Local AI while it connects or waits for a reply no longer reports a false connection error.
 - Backup histories keep the newest entries across source groups, literal repository names stay excluded, and cleanup previews leave shared files untouched. Conditional app permissions stay locked together so switching one off cannot expose another route.
@@ -37,9 +37,9 @@ and more apps can follow your colours.
 - NixOS Updates checks the default configuration before offering a rebuild or changing flake inputs. Supported actions stay available, unavailable ones explain why, and rollback uses an existing generation without needing the original build configuration. Flatpak updates remain available independently.
 - The keyboard-layout badge now shows Niri and Hyprland's current layout at startup and follows switches immediately, including on NixOS.
 - Source builds on NixOS now include the compression library needed by the Rust dependencies. Thanks to Abdellah Azarfane for the report and workaround (#173).
-- Large shortcut configurations respect the retained-memory budget, sparse includes keep their valid files, and unrelated Niri edits preserve native shortcut conflicts.
+- Large shortcut configurations respect the retained-memory budget, sparse includes keep their valid files, and unrelated Niri edits preserve native shortcut conflicts. Sway environment include lists, named Hyprland submaps and linked Lua drop-ins retain their native behavior.
 - Container network mounts no longer prevent Backups from listing storage, and Snapshots waits for its first read before showing an empty list.
-- Backup, model-loading and Local AI chat commands wait for their real operation deadlines instead of giving up after fifteen seconds.
+- Backup, app-permission, model-loading and Local AI chat commands wait for their real operation deadlines instead of giving up after fifteen seconds.
 - Optional Niri includes and MangoWM TOML modes keep their native shortcut conflicts. Scan-limit messages follow your language. App permissions rechecks effective grants before saving, and backup tabs retry cancelled reads without leaving an empty review or an outdated permission warning.
 - **Non-Latin shortcut keys no longer crash the editor.** Arabic and other Unicode keys can be inspected safely.
 - **Shortcut edits stay with the selected binding.** Labwc lists the bindings it recognizes and preserves unsupported nested chains. Oversized or ambiguous configurations explain why editing is unavailable. Hyprland checks use the variables active at each binding. Included files and continued blocks keep their shortcuts.

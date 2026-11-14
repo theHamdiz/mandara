@@ -43,6 +43,16 @@ fn mount_tables_decode_paths_and_keep_read_only_and_subvolume_identity() {
 }
 
 #[test]
+fn mount_paths_keep_unicode_whitespace_inside_their_fields() {
+    let record = "30 1 0:33 /@Backup\u{a0}Root /mnt/Backup\u{a0}Disk rw,relatime - btrfs /dev/test rw,subvolid=256\n";
+    let rows = mounts::parse(record).unwrap();
+    assert_eq!(rows[0].root, std::path::Path::new("/@Backup\u{a0}Root"));
+    assert_eq!(rows[0].target, std::path::Path::new("/mnt/Backup\u{a0}Disk"));
+    assert!(!rows[0].read_only);
+    assert_eq!(rows[0].subvolume_id, Some(256));
+}
+
+#[test]
 fn namespace_mounts_retain_their_target_without_becoming_storage_actions() {
     let record = "6510 6500 0:7 net:[4026531833] /run/docker/netns/default rw,nosuid master:1956 - nsfs nsfs rw\n";
     let rows = mounts::parse(record).unwrap();

@@ -172,6 +172,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn environment_include_lists_contribute_every_native_shortcut() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("config");
+        std::fs::write(&file, "include $KEY_FILES\n").unwrap();
+        std::fs::write(root.path().join("one.conf"), "bindsym Mod4+q kill\n").unwrap();
+        std::fs::write(root.path().join("two.conf"), "bindsym Mod4+w kill\n").unwrap();
+        let environment = IncludeEnvironment::captured([("KEY_FILES".into(), "one.conf two.conf".into())]);
+        assert_eq!(checked_in(&file, &environment).unwrap(), BTreeSet::from(["super+q".into(), "super+w".into()]));
+        let source = crate::keybinds::scan_roots_in(Target::Sway, [file], &environment);
+        assert!(source.errors.is_empty(), "{:?}", source.errors);
+        assert_eq!(source.sources.iter().map(|source| source.bindings.len()).sum::<usize>(), 2);
+    }
+
+    #[test]
     fn a_later_failed_read_cannot_authorize_partial_conflict_discovery() {
         let directory = tempfile::tempdir().unwrap();
         let valid = directory.path().join("valid");

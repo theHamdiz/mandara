@@ -112,7 +112,11 @@ impl Backend for Flatpak {
         let before = super::transaction::read(&target)?;
         ensure!(FileStamp::at(&target)? == stamp && mandara_theme::templates::destination::identity(&path)? == target, "{}", t("The app permissions changed. Refresh before saving."));
         let domain = capability_domain([&metadata, &declared, &before]);
-        Ok(Session { app: app.clone(), capabilities: model::capabilities(&permissions, &domain), permissions, metadata, path, target, before, stamp })
+        let mut capabilities = model::capabilities(&permissions, &domain);
+        if !permissions.filesystems.is_empty() {
+            super::paths::Locations::load()?.constrain(&mut capabilities, &permissions.filesystems)?;
+        }
+        Ok(Session { app: app.clone(), capabilities, permissions, metadata, path, target, before, stamp })
     }
 
     fn set(&self, session: &Session, capability: &Capability, allowed: bool, cancel: &AtomicBool) -> Result<Undo> {

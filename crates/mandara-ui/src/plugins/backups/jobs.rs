@@ -58,6 +58,11 @@ pub(super) fn start(model: &Shared, operation: Operation, cx: &mut App) -> Resul
     };
     let progress = model.borrow().progress.clone();
     let scope = (settings.repository.clone(), settings.password_file.clone());
+    {
+        let mut state = model.borrow_mut();
+        state.summary = None;
+        state.summary_scope = None;
+    }
     perform(model, status, move |token| Restic.execute(&settings, operation, &token, &mut |value| {
         *progress.lock().unwrap_or_else(|error| error.into_inner()) = value;
     }).map_err(|error| format!("{error:#}")), move |summary, model, _| {
@@ -65,6 +70,17 @@ pub(super) fn start(model: &Shared, operation: Operation, cx: &mut App) -> Resul
         state.summary = Some(summary);
         state.summary_scope = Some(scope);
     }, cx)
+}
+
+fn begin_action(state: &mut super::Model, status: &'static str, cancel: Arc<AtomicBool>) {
+    state.read_cancel.store(true, Ordering::Release);
+    state.status = status;
+    state.active = Some(cancel);
+    state.error = None;
+    *state.progress.lock().unwrap_or_else(|error| error.into_inner()) = Progress::default();
+    state.history.borrow_mut().invalidate();
+    state.storage.cancel_reads();
+    state.cleanup.cancel_reads();
 }
 
 /// The archive, native filesystem and cleanup tabs share one operation slot.
@@ -79,16 +95,7 @@ pub(super) fn perform<T: serde::Serialize + Send + 'static>(
     let token = cancel.clone();
     {
         let mut state = model.borrow_mut();
-        state.read_cancel.store(true, Ordering::Release);
-        state.status = status;
-        state.active = Some(cancel);
-        state.error = None;
-        state.summary = None;
-        state.summary_scope = None;
-        *state.progress.lock().unwrap_or_else(|error| error.into_inner()) = Progress::default();
-        state.history.borrow_mut().invalidate();
-        state.storage.cancel_reads();
-        state.cleanup.cancel_reads();
+        begin_action(&mut state, status, cancel);
         state.views.notify(cx);
     }
     let model = model.clone();
@@ -114,6 +121,17 @@ pub(super) fn perform<T: serde::Serialize + Send + 'static>(
 mod tests {
     use super::*;
     use mandara_services::backups::Settings;
+
+    #[test]
+    fn unrelated_actions_keep_the_completed_restore_receipt() {
+        let path = std::path::PathBuf::from("/copies/restored");
+        let scope = (std::path::PathBuf::from("/repository"), std::path::PathBuf::from("/password"));
+        let mut state = super::super::Model { summary: Some(mandara_services::backups::Summary { restored_to: Some(path.clone()), ..Default::default() }), summary_scope: Some(scope.clone()), ..Default::default() };
+        begin_action(&mut state, tk("Reading filesystems…"), Arc::new(AtomicBool::new(false)));
+        assert_eq!(state.summary.as_ref().unwrap().restored_to.as_ref(), Some(&path));
+        assert_eq!(state.summary_scope.as_ref(), Some(&scope));
+        assert!(state.active.is_some());
+    }
 
     #[test]
     fn a_restore_picker_cannot_switch_repositories_while_open() {

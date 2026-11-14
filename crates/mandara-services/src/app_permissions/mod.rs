@@ -2,6 +2,7 @@
 
 mod model;
 mod native;
+mod paths;
 mod transaction;
 #[cfg(test)]
 mod tests;
@@ -19,3 +20,8 @@ pub trait Backend {
     fn inspect(&self, app: &App, cancel: &AtomicBool) -> Result<Session>;
     fn set(&self, session: &Session, capability: &Capability, allowed: bool, cancel: &AtomicBool) -> Result<Undo>;
 }
+
+/// A checked edit lists apps, reads two metadata views twice and generates one override.
+const MAX_OPERATION_COMMANDS: u32 = 6;
+/// IPC waits for the complete sequence, including each native command's bounded deadline.
+pub const OPERATION_TIMEOUT: std::time::Duration = crate::app_themes::process::TIMEOUT.saturating_mul(MAX_OPERATION_COMMANDS);

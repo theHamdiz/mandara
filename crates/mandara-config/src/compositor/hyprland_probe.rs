@@ -27,7 +27,7 @@ pub fn shortcut_probe(
         bytes: 0,
         matches: 0,
         visitor: None,
-        scope: "default".into(),
+        scope: String::new(),
         expanded_bytes: 0,
     };
     probe.visit(root)?;
@@ -61,7 +61,7 @@ pub(crate) fn visit_sources(
         bytes: 0,
         matches: 0,
         visitor: Some(visitor),
-        scope: "default".into(),
+        scope: String::new(),
         expanded_bytes: 0,
     };
     for root in roots {
@@ -98,7 +98,7 @@ pub(crate) fn chords(
             Ok(())
         }
         fn binding(&mut self, target: &Path, _: usize, scope: &str, expanded: &str) -> Result<()> {
-            if scope == "default" && !self.generated.contains(target) {
+            if scope.is_empty() && !self.generated.contains(target) {
                 self.values.extend(chord(expanded));
             }
             Ok(())
@@ -233,7 +233,7 @@ impl Probe<'_> {
                 if name == "submap" {
                     self.scope = self.expand(value.trim())?;
                     if self.scope == "reset" {
-                        self.scope = "default".into();
+                        self.scope.clear();
                     }
                     self.append(raw.trim())?;
                     continue;
@@ -299,6 +299,19 @@ fn uncomment(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_named_default_submap_is_distinct_from_the_default_scope() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("hyprland.conf");
+        std::fs::write(&root, "submap = default\nbind = SUPER, Space, exec, foot\nsubmap = reset\nbind = SUPER, Q, killactive\n").unwrap();
+        let environment = IncludeEnvironment::captured([]);
+        assert_eq!(chords(&root, &environment).unwrap(), std::collections::BTreeSet::from(["super+q".into()]));
+        let scan = crate::keybinds::scan_roots_in(super::super::Target::Hyprland, [root], &environment);
+        assert!(scan.errors.is_empty(), "{:?}", scan.errors);
+        assert_eq!(scan.sources[0].bindings[0].scope, "default");
+        assert!(scan.sources[0].bindings[1].scope.is_empty());
+    }
 
     #[test]
     fn includes_and_reassignments_surround_the_selected_binding_in_native_order() {

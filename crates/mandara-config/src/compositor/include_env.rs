@@ -32,7 +32,7 @@ impl IncludeEnvironment {
         Self(Some(values.into_iter().collect()))
     }
 
-    fn value(&self, key: &str) -> Option<Cow<'_, OsStr>> {
+    pub(super) fn value(&self, key: &str) -> Option<Cow<'_, OsStr>> {
         match &self.0 {
             Some(values) => values
                 .get(OsStr::new(key))
@@ -42,7 +42,10 @@ impl IncludeEnvironment {
     }
 
     pub(crate) fn expand(&self, raw: &str) -> Result<OsString> {
-        ensure!(raw.len() <= MAX_PATH_BYTES, mandara_i18n::t("An include path is too long."));
+        ensure!(
+            raw.len() <= MAX_PATH_BYTES,
+            mandara_i18n::t("An include path is too long.")
+        );
         let mut result = OsString::new();
         let mut rest = raw;
         while let Some(at) = rest.find('$') {
@@ -72,7 +75,10 @@ impl IncludeEnvironment {
     /// Niri expands only a leading home component; variable expansion is a
     /// separate step for the dialects that support it.
     pub(crate) fn resolve(&self, including: &Path, raw: &OsStr) -> Result<PathBuf> {
-        ensure!(raw.len() <= MAX_PATH_BYTES, mandara_i18n::t("An include path is too long."));
+        ensure!(
+            raw.len() <= MAX_PATH_BYTES,
+            mandara_i18n::t("An include path is too long.")
+        );
         let path = Path::new(raw);
         let path = if let Ok(rest) = path.strip_prefix("~") {
             let home = self.value("HOME").context(mandara_i18n::t(

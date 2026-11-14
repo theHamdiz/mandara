@@ -33,14 +33,14 @@ pub(super) fn parse(text: &str) -> Result<Vec<Mount>> {
     for line in text.lines() {
         ensure!(mounts.len() < MAX_MOUNTS, t("The filesystem mount table is invalid or too large."));
         let (left, right) = line.split_once(" - ").context(t("The filesystem mount table is invalid or too large."))?;
-        let mut fields = left.split_whitespace();
+        let mut fields = left.split(' ').filter(|field| !field.is_empty());
         let id = fields.next().context(t("The filesystem mount table is invalid or too large."))?.parse()?;
         let _parent = fields.next().context(t("The filesystem mount table is invalid or too large."))?;
         let device = fields.next().context(t("The filesystem mount table is invalid or too large."))?.to_owned();
         let root = PathBuf::from(crate::boot::detect::unescape_mount(fields.next().context(t("The filesystem mount table is invalid or too large."))?));
         let target = PathBuf::from(crate::boot::detect::unescape_mount(fields.next().context(t("The filesystem mount table is invalid or too large."))?));
         let options = fields.next().context(t("The filesystem mount table is invalid or too large."))?;
-        let mut trailing = right.split_whitespace();
+        let mut trailing = right.split(' ').filter(|field| !field.is_empty());
         let filesystem = trailing.next().context(t("The filesystem mount table is invalid or too large."))?.to_owned();
         let _source = trailing.next().context(t("The filesystem mount table is invalid or too large."))?;
         let super_options = trailing.next().context(t("The filesystem mount table is invalid or too large."))?;

@@ -26,7 +26,7 @@ report this check as text; Mandara uses the command’s exit result.
 **Restore a copy…** asks for a parent folder and creates a fresh private folder
 inside it. Your original files stay where they are. Cancelling leaves any
 partially restored copies in that folder. The completed restore location stays
-available when you switch tabs within the same repository. Explicitly started jobs can finish
+available when you switch tabs or run unrelated disk jobs within the same repository. Explicitly started jobs can finish
 while the panel is closed; disabling the plugin requests cancellation.
 
 Mandara does not schedule backups, forget old restic snapshots or prune a

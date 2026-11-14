@@ -153,7 +153,7 @@ and tick off tasks where they sit.
    or write your own in Rust. Sandboxed WebAssembly keeps a crashing plugin
    from taking down your desktop. Optional [backups](docs/backups.md) bring
    encrypted backups, private restore copies, Btrfs snapshots and reviewed cleanup;
-   [app permissions](docs/app-permissions.md) puts guarded Flatpak controls within reach.
+   [app permissions](docs/app-permissions.md) puts Flatpak controls and clear access limits within reach.
 10. **Ready for your routines.** Documented commands with JSON replies let
     scripts and AI agents drive the desktop and report live progress to the
     bar. [Automation](docs/agent-ready.md).

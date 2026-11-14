@@ -15,6 +15,9 @@ Host-file access also locks the narrower system-folder controls. Full
 `host-root` access locks overlapping filesystem controls until its native rule
 is changed. Revoked
 explicit permissions remain available to turn back on. Their native rules remain visible under **Native permission details**.
+Equivalent absolute paths, home-relative paths and XDG folder aliases also lock
+the affected controls when another grant keeps that folder accessible. Custom
+XDG folder locations are read again during inspection and before saving.
 X11 fallback depends on Wayland availability, so those display grants also
 stay locked. The panel does not pretend that a broad device grant provides independent camera
 or microphone switches, or silently replace a conditional grant with an

@@ -15,6 +15,7 @@ pub(super) fn chords_from(
         limit: usize,
         visited: BTreeSet<PathBuf>,
         binds: Vec<(String, String)>,
+        retained: usize,
         ours: Option<String>,
         environment: &'e IncludeEnvironment,
     }
@@ -50,7 +51,9 @@ pub(super) fn chords_from(
                         || std::fs::canonicalize(&path).is_ok_and(|path| is_generated(&path))
                     {
                         w.ours.get_or_insert_with(|| mode.clone());
-                    } else if path.try_exists()? || !line.trim_start().starts_with("source_optional") {
+                    } else if path.try_exists()?
+                        || !line.trim_start().starts_with("source_optional")
+                    {
                         mode = walk(w, &path, mode)?;
                     }
                 }
@@ -63,7 +66,13 @@ pub(super) fn chords_from(
         flush(w, &mut chunk, mode)
     }
     fn flush(w: &mut Walk, chunk: &mut String, mode: String) -> Result<String> {
-        let (binds, mode) = mango_binds(chunk, &mode, w.keys);
+        let (binds, mode) = mango_binds_checked(
+            chunk,
+            &mode,
+            w.keys,
+            &mut w.retained,
+            w.limit.saturating_sub(w.binds.len()),
+        )?;
         w.binds.extend(binds.into_iter().map(|b| (b.chord, b.mode)));
         anyhow::ensure!(
             w.binds.len() <= w.limit,
@@ -74,12 +83,16 @@ pub(super) fn chords_from(
     }
     fn toml_file(w: &mut Walk, file: &Path, text: &str, inherited: String) -> Result<String> {
         let document: toml::Value = toml::from_str(text)?;
-        let mut mode = document
+        let mode = document
             .get("global")
             .and_then(|global| global.get("key_mode"))
             .and_then(toml::Value::as_str)
-            .unwrap_or(&inherited)
-            .to_owned();
+            .unwrap_or(&inherited);
+        anyhow::ensure!(
+            mode.len() <= crate::keybinds::MAX_FIELD_BYTES,
+            mandara_i18n::t("The shortcut configuration is too large to edit.")
+        );
+        let mut mode = mode.to_owned();
         if let Some(table) = document.get("bind").and_then(toml::Value::as_table) {
             toml_table(w, table, &mode, false)?;
         }
@@ -97,25 +110,36 @@ pub(super) fn chords_from(
     fn toml_table(w: &mut Walk, table: &toml::Table, mode: &str, nested: bool) -> Result<()> {
         for (key, value) in table {
             if let Some(child) = value.as_table() {
+                anyhow::ensure!(
+                    key.len() <= crate::keybinds::MAX_FIELD_BYTES,
+                    mandara_i18n::t("The shortcut configuration is too large to edit.")
+                );
                 toml_table(w, child, if nested { mode } else { key }, true)?;
             } else if value.is_str()
                 || value
                     .as_array()
                     .is_some_and(|values| values.iter().any(toml::Value::is_str))
             {
+                anyhow::ensure!(
+                    key.len() <= crate::keybinds::MAX_FIELD_BYTES,
+                    mandara_i18n::t("The shortcut configuration is too large to edit.")
+                );
+                anyhow::ensure!(
+                    w.binds.len() < w.limit,
+                    mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
+                );
                 let chord = crate::keybinds::normalize(key).ok_or_else(|| {
                     anyhow::anyhow!(mandara_i18n::t(
                         "Computed shortcuts must be edited in their source configuration."
                     ))
                 })?;
                 let (mods, key) = chord.rsplit_once('+').unwrap_or(("", &chord));
-                w.binds.push((
-                    mango_chord(
-                        mods.split('+').filter(|value| !value.is_empty()),
-                        w.keys.canonical(key, false),
-                    ),
-                    mode.to_owned(),
-                ));
+                let chord = mango_chord(
+                    mods.split('+').filter(|value| !value.is_empty()),
+                    w.keys.canonical(key, false),
+                );
+                retain_mango_binding(&mut w.retained, &chord, mode)?;
+                w.binds.push((chord, mode.to_owned()));
                 anyhow::ensure!(
                     w.binds.len() <= w.limit,
                     mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
@@ -130,6 +154,7 @@ pub(super) fn chords_from(
         limit,
         visited: BTreeSet::new(),
         binds: Vec::new(),
+        retained: 0,
         ours: None,
         environment,
     };
