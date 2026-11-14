@@ -6,19 +6,20 @@ use std::sync::{Mutex, MutexGuard};
 
 static LOCK: Mutex<()> = Mutex::new(());
 
+/// Keep filesystem state serialized until the test's final cleanup assertions.
+pub(super) fn lock() -> MutexGuard<'static, ()> {
+    LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 pub(super) struct Fixture {
     directory: Option<tempfile::TempDir>,
     mounts: Vec<(PathBuf, Vec<u64>)>,
     subvolumes: Vec<PathBuf>,
     default: Option<(PathBuf, u64)>,
-    _guard: MutexGuard<'static, ()>,
 }
 
 impl Fixture {
     pub fn new(parent: &Path) -> Self {
-        let guard = LOCK
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
         assert_eq!(
             std::fs::read_to_string("/mandara-storage-fixture").unwrap(),
             "mandara-disposable-storage-264\n"
@@ -38,7 +39,6 @@ impl Fixture {
             mounts: Vec::new(),
             subvolumes: Vec::new(),
             default: None,
-            _guard: guard,
         }
     }
 

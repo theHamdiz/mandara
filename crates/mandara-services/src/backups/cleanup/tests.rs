@@ -153,6 +153,7 @@ fn a_location_cannot_change_between_listing_and_preview_through_an_ancestor_alia
 #[test]
 #[ignore = "requires the disposable storage VM marker and synthetic Btrfs/ext4 disks"]
 fn native_storage_vm_cleanup_never_crosses_even_a_same_device_bind_mount() {
+    let _lock = crate::backups::native_fixture::lock();
     assert_eq!(std::fs::read_to_string("/mandara-storage-fixture").unwrap(), "mandara-disposable-storage-264\n");
     assert!(rustix::process::geteuid().is_root());
     let mut fixture = crate::backups::native_fixture::Fixture::new(Path::new("/fixture/ext4"));

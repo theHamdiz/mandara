@@ -23,6 +23,7 @@ fn native(args: &[&str]) {
 #[test]
 #[ignore = "requires the disposable storage VM marker and synthetic Btrfs/ext4 disks"]
 fn native_storage_vm_snapshots_and_maintenance() {
+    let _lock = crate::backups::native_fixture::lock();
     let mounts = fixture();
     let mount = mounts.iter().find(|mount| mount.target == Path::new("/fixture/btrfs")).unwrap().clone();
     let cancel = AtomicBool::new(false);
@@ -87,6 +88,7 @@ fn native_storage_vm_snapshots_and_maintenance() {
 #[test]
 #[ignore = "requires the disposable storage VM marker and synthetic Btrfs/ext4 disks"]
 fn native_storage_vm_fixture_cleanup_runs_during_unwinding() {
+    let _lock = crate::backups::native_fixture::lock();
     fixture();
     let root = std::cell::RefCell::new(None);
     let original_default = std::cell::RefCell::new(Vec::new());

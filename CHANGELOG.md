@@ -40,6 +40,7 @@ and more apps can follow your colours.
 
 ### Under the hood
 
+- Backup safety checks cover parallel operations as well as interrupted cleanup.
 - Nix CI gives optimized linking bounded swap space and limits competing builders, preserving the same release optimization settings.
 - Discarded panel hosts no longer keep close watchers alive. Shared backup and permission views release their data after the last visible panel closes.
 - Keep native shortcut checks and release manifests clean on current Rust and FreeBSD builds. Lock and file-watch checks handle concurrent process launches and directory replacement reliably.
