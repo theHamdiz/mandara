@@ -88,11 +88,16 @@ pub(super) fn restore_directory(parent: &Path, snapshot: &str) -> Result<tempfil
 pub(super) struct Events {
     pending: Vec<u8>,
     pub summary: Summary,
+    json: bool,
 }
 impl Events {
-    pub fn new() -> Self { Self { pending: Vec::new(), summary: Summary::default() } }
+    pub fn new(operation: &Operation) -> Self {
+        // Older Restic checks print plain text even with --json; their exit status is authoritative.
+        Self { pending: Vec::new(), summary: Summary::default(), json: !matches!(operation, Operation::Check) }
+    }
 
     pub fn push(&mut self, mut bytes: &[u8], progress: &mut dyn FnMut(Progress)) -> Result<()> {
+        if !self.json { return Ok(()); }
         while !bytes.is_empty() {
             let length = bytes.iter().position(|byte| *byte == b'\n').map_or(bytes.len(), |index| index + 1);
             ensure!(length <= MAX_EVENT_BYTES.saturating_sub(self.pending.len()), "{}", t("The backup progress record is too large."));
@@ -144,6 +149,7 @@ impl Backend for Restic {
 
     fn execute(&self, settings: &Settings, operation: Operation, cancel: &AtomicBool, progress: &mut dyn FnMut(Progress)) -> Result<Summary> {
         let mut command = command(settings)?;
+        let mut events = Events::new(&operation);
         let mut destination = None;
         match operation {
             Operation::Initialize => { command.arg("init"); }
@@ -165,7 +171,6 @@ impl Backend for Restic {
                 destination = Some(directory);
             }
         }
-        let mut events = Events::new();
         // Keep partial restores too: cancellation must never erase already restored copies.
         let restored_to = destination.map(tempfile::TempDir::keep);
         let result = crate::app_themes::process::stream_native(command, cancel, OPERATION_TIMEOUT, &mut |chunk| events.push(chunk, progress));

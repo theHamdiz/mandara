@@ -20,7 +20,8 @@ Open the panel's **Settings** and choose:
 Use **Initialize repository** once for a new repository, then **Back up now**.
 The timeline lists recent snapshots with their source folders, file counts and
 sizes when available. **Check repository** asks restic to check the repository's structure and
-indexes; it does not read every byte of every stored file.
+indexes; it does not read every byte of every stored file. Older Restic versions
+report this check as text; Mandara uses the command’s exit result.
 
 **Restore a copy…** asks for a parent folder and creates a fresh private folder
 inside it. Your original files stay where they are. Cancelling leaves any

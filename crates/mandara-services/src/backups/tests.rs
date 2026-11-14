@@ -14,7 +14,7 @@ fn native_environment() {
 
 #[test]
 fn split_progress_records_and_restore_counters_are_lossless_and_bounded() {
-    let mut events = restic::Events::new();
+    let mut events = restic::Events::new(&Operation::Backup);
     let text = b"{\"message_type\":\"status\",\"percent_done\":0.25,\"files_restored\":3,\"bytes_restored\":19}\n{\"message_type\":\"summary\",\"snapshot_id\":\"abc\",\"total_files_processed\":4,\"total_bytes_processed\":200}";
     let mut updates = Vec::new();
     for chunk in text.chunks(7) { events.push(chunk, &mut |progress| updates.push(progress)).unwrap(); }
@@ -26,6 +26,21 @@ fn split_progress_records_and_restore_counters_are_lossless_and_bounded() {
     assert_eq!(events.summary.files, 4);
     assert_eq!(events.summary.bytes, 200);
     assert!(events.push(&vec![b'x'; 256 * 1024 + 1], &mut |_| {}).is_err());
+}
+
+#[test]
+fn legacy_check_text_is_streamed_without_weakening_structured_operation_validation() {
+    let mut check = restic::Events::new(&Operation::Check);
+    let mut updates = 0;
+    for _ in 0..16 {
+        check.push(&vec![b'x'; 256 * 1024 + 1], &mut |_| updates += 1).unwrap();
+    }
+    check.finish(&mut |_| updates += 1).unwrap();
+    assert_eq!(updates, 0);
+    assert_eq!(check.summary.files, 0);
+    for operation in [Operation::Initialize, Operation::Backup, Operation::Restore { snapshot: "a".repeat(64), parent: "/copies".into() }] {
+        assert!(restic::Events::new(&operation).push(b"invalid progress\n", &mut |_| {}).is_err());
+    }
 }
 
 #[test]
