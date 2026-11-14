@@ -10988,3 +10988,39 @@
 "Waiting for the model…" = "モデルを待っています…"
 "Write a message…" = "メッセージを書く…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 バイト"
+
+"App permissions supports up to 512 installed Flatpak apps." = "アプリの権限では、インストール済みのFlatpakアプリを最大512個まで扱えます。"
+
+"Choose a valid Flatpak app and installation." = "有効なFlatpakアプリとインストール先を選んでください。"
+
+"Restic returned invalid backup progress." = "Resticが無効なバックアップ進捗を返しました。"
+
+"The Btrfs default subvolume could not be read." = "Btrfsの既定のサブボリュームを読み取れませんでした。"
+
+"The Btrfs snapshot list is incomplete or invalid." = "Btrfsスナップショット一覧が不完全か無効です。"
+
+"The backup history contains an invalid snapshot." = "バックアップ履歴に無効なスナップショットがあります。"
+
+"The backup history is too large to display." = "バックアップ履歴が大きすぎて表示できません。"
+
+"The backup progress record is too large." = "バックアップ進捗のレコードが大きすぎます。"
+
+"The cleanup age is invalid." = "クリーンアップの経過日数が無効です。"
+
+"The cleanup folder must belong to you." = "クリーンアップ対象のフォルダーはあなたが所有している必要があります。"
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "クリーンアップのプレビューが安全上の制限を超えています。より小さい場所を選んでください。"
+
+"The filesystem contains too many snapshots to display." = "ファイルシステムのスナップショットが多すぎて表示できません。"
+
+"The filesystem tool reported: {details}" = "ファイルシステムツールの報告: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "ファイルシステムツールが無効なUTF-8テキストを返しました。"
+
+"The filesystem tool returned too much data." = "ファイルシステムツールが大量のデータを返しました。"
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "ゴミ箱の情報がないか無効です。クリーンアップ前に項目を確認してください。"
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "スナップショット名には128文字以内の英数字、ハイフン、アンダースコアを使ってください。"
+
+"The Flatpak permission data is invalid or too large." = "Flatpakの権限データが無効か大きすぎます。"

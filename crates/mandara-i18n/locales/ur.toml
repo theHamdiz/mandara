@@ -10744,3 +10744,39 @@
 "Waiting for the model…" = "ماڈل کا انتظار…"
 "Write a message…" = "پیغام لکھیں…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 بائٹس"
+
+"App permissions supports up to 512 installed Flatpak apps." = "ایپ کی اجازتیں زیادہ سے زیادہ 512 نصب شدہ Flatpak ایپس کی معاونت کرتی ہیں۔"
+
+"Choose a valid Flatpak app and installation." = "ایک درست Flatpak ایپ اور تنصیب منتخب کریں۔"
+
+"Restic returned invalid backup progress." = "Restic نے بیک اپ کی پیش رفت کا غلط ڈیٹا واپس کیا۔"
+
+"The Btrfs default subvolume could not be read." = "Btrfs کا طے شدہ ذیلی والیوم پڑھا نہیں جا سکا۔"
+
+"The Btrfs snapshot list is incomplete or invalid." = "Btrfs سنیپ شاٹس کی فہرست نامکمل یا غلط ہے۔"
+
+"The backup history contains an invalid snapshot." = "بیک اپ کی تاریخ میں ایک غلط سنیپ شاٹ ہے۔"
+
+"The backup history is too large to display." = "بیک اپ کی تاریخ دکھانے کے لیے بہت بڑی ہے۔"
+
+"The backup progress record is too large." = "بیک اپ کی پیش رفت کا ریکارڈ بہت بڑا ہے۔"
+
+"The cleanup age is invalid." = "صفائی کی مدت کی حد غلط ہے۔"
+
+"The cleanup folder must belong to you." = "صفائی کا فولڈر آپ کی ملکیت ہونا چاہیے۔"
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "صفائی کا پیش منظر حفاظتی حدود سے تجاوز کرتا ہے۔ چھوٹی جگہ منتخب کریں۔"
+
+"The filesystem contains too many snapshots to display." = "فائل سسٹم میں دکھانے سے زیادہ سنیپ شاٹس ہیں۔"
+
+"The filesystem tool reported: {details}" = "فائل سسٹم کے آلے نے بتایا: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "فائل سسٹم کے آلے نے غلط UTF-8 متن واپس کیا۔"
+
+"The filesystem tool returned too much data." = "فائل سسٹم کے آلے نے بہت زیادہ ڈیٹا واپس کیا۔"
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "ردی کی معلومات موجود نہیں یا غلط ہیں۔ صفائی سے پہلے آئٹم کا معائنہ کریں۔"
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "سنیپ شاٹ کے نام کے لیے زیادہ سے زیادہ 128 حروف، اعداد، ہائفن یا انڈر سکور استعمال کریں۔"
+
+"The Flatpak permission data is invalid or too large." = "Flatpak اجازتوں کا ڈیٹا غلط یا بہت بڑا ہے۔"

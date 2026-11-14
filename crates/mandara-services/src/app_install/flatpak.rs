@@ -71,6 +71,15 @@ const PNG_CHUNK_TAIL: usize = 8;
 
 /// Parses a metadata key file's `[Context]` group.
 pub fn parse_context(text: &str) -> Option<Permissions> {
+    parse_context_with(text, |value| (!value.starts_with('!')).then_some(value))
+}
+
+/// Names present in Context, including revoked grants, for editable permission controls.
+pub(crate) fn context_domain(text: &str) -> Option<Permissions> {
+    parse_context_with(text, |value| Some(value.strip_prefix('!').unwrap_or(value)))
+}
+
+fn parse_context_with(text: &str, value: fn(&str) -> Option<&str>) -> Option<Permissions> {
     let mut on = false;
     let mut p = Permissions::default();
     let mut seen = false;
@@ -82,8 +91,7 @@ pub fn parse_context(text: &str) -> Option<Permissions> {
             continue;
         }
         let Some((k, v)) = l.split_once('=').filter(|_| on) else { continue };
-        // `!x` revokes: not a permission.
-        let list = || v.split(';').map(str::trim).filter(|x| !x.is_empty() && !x.starts_with('!')).map(String::from).collect::<Vec<_>>();
+        let list = || v.split(';').map(str::trim).filter(|value| !value.is_empty()).filter_map(value).map(String::from).collect::<Vec<_>>();
         match k.trim() {
             "shared" => p.shared = list(),
             "sockets" => p.sockets = list(),

@@ -83,10 +83,9 @@ Labwc lists direct keyboard bindings; unsupported nested key chains stay
 untouched and do not become editable shortcuts.
 Niri's `Mod` follows the merged input settings and its native nested-session
 behaviour; boolean options retain Niri's KDL v1 syntax.
-For River, this editor may change selected literal `riverctl map` fields
-in `init`, with backups and Undo. Other statements stay intact. Scanning and
-validation never execute the program; live changes use `riverctl`. General
-compositor setup continues to leave `init` alone.
+For River, this editor applies selected mappings live through `riverctl map`
+and `riverctl unmap`, with Undo. It leaves `init` unchanged. Scanning and
+validation never execute the program.
 If a River mapping's mode, modifiers or key cannot be resolved, other edits
 are locked too: the editor cannot safely displace an unknown live mapping.
 Shell control flow, sourced scripts and startup programs can hide further

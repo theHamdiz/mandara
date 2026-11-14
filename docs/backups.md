@@ -24,7 +24,8 @@ indexes; it does not read every byte of every stored file.
 
 **Restore a copy…** asks for a parent folder and creates a fresh private folder
 inside it. Your original files stay where they are. Cancelling leaves any
-partially restored copies in that folder. Explicitly started jobs can finish
+partially restored copies in that folder. The completed restore location stays
+available when you switch tabs within the same repository. Explicitly started jobs can finish
 while the panel is closed; disabling the plugin requests cancellation.
 
 Mandara does not schedule backups, forget old restic snapshots or prune a
@@ -42,7 +43,8 @@ New snapshots are read-only. Nested subvolumes need their own snapshots.
 continue. Mounted snapshots, the default subvolume and the filesystem's top
 level are protected. The administrator helper rechecks the mount and snapshot
 identities before removing anything. A changed mount or snapshot requires a
-fresh review. Removing a snapshot does not guarantee an equal increase in free
+fresh review. Successful snapshot and maintenance actions refresh the selected
+filesystem; a privileged list may need administrator approval again. Removing a snapshot does not guarantee an equal increase in free
 space: other snapshots may still reference the same blocks.
 
 ## Reviewed cleanup
@@ -78,7 +80,8 @@ runs an offline filesystem repair or replaces the active system from a snapshot.
 
 ## Required tools and commands
 
-Encrypted backups use `restic`. On Linux, snapshots and scrub/reclaim use
+Encrypted backups use the distribution’s `restic` package, including 0.16.4.
+Each restore uses a new private directory rather than overwriting an earlier copy. On Linux, snapshots and scrub/reclaim use
 `btrfs-progs`, trim uses `fstrim`, and administrator approval uses polkit.
 `mandara install` includes these as optional packages, with the package names
 appropriate to the distribution. On NixOS, add `pkgs.restic`, `pkgs.btrfs-progs`
@@ -94,6 +97,7 @@ For file cleanup, `backups cleanup locations` lists eligible paths. Pass one to
 `backups cleanup preview`, then read `backups cleanup review` and its
 `next_offset` pages; every reviewed file has an absolute path.
 `backups cleanup confirm` permanently removes only that
-retained manifest; `backups cancel` discards it. New previews, closing the panel
-and restarting the shell also discard the review. Each plugin runs one explicit
+retained manifest; `backups cancel` discards it. New previews, leaving the tab, closing the panel
+and restarting the shell also discard the review. A late preview cannot bring a
+cancelled review back. Each plugin runs one explicit
 command at a time, including reads.

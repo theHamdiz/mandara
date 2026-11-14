@@ -10646,3 +10646,39 @@
 "Waiting for the model…" = "మోడల్ కోసం వేచి ఉంది…"
 "Write a message…" = "సందేశాన్ని రాయండి…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 బైట్‌లు"
+
+"App permissions supports up to 512 installed Flatpak apps." = "అనువర్తన అనుమతులు గరిష్ఠంగా 512 ఇన్‌స్టాల్ చేసిన Flatpak అనువర్తనాలకు మద్దతు ఇస్తాయి."
+
+"Choose a valid Flatpak app and installation." = "చెల్లుబాటు అయ్యే Flatpak అనువర్తనాన్ని, ఇన్‌స్టాలేషన్‌ను ఎంచుకోండి."
+
+"Restic returned invalid backup progress." = "Restic చెల్లని బ్యాకప్ పురోగతిని తిరిగి ఇచ్చింది."
+
+"The Btrfs default subvolume could not be read." = "Btrfs అప్రమేయ ఉపవాల్యూమ్‌ను చదవలేకపోయింది."
+
+"The Btrfs snapshot list is incomplete or invalid." = "Btrfs స్నాప్‌షాట్ జాబితా అసంపూర్ణంగా ఉంది లేదా చెల్లదు."
+
+"The backup history contains an invalid snapshot." = "బ్యాకప్ చరిత్రలో చెల్లని స్నాప్‌షాట్ ఉంది."
+
+"The backup history is too large to display." = "బ్యాకప్ చరిత్ర ప్రదర్శించడానికి చాలా పెద్దది."
+
+"The backup progress record is too large." = "బ్యాకప్ పురోగతి రికార్డు చాలా పెద్దది."
+
+"The cleanup age is invalid." = "శుభ్రపరిచే వయస్సు పరిమితి చెల్లదు."
+
+"The cleanup folder must belong to you." = "శుభ్రపరిచే ఫోల్డర్ మీ స్వంతం అయి ఉండాలి."
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "శుభ్రపరిచే ముందస్తు వీక్షణ భద్రతా పరిమితులను మించింది. చిన్న స్థానాన్ని ఎంచుకోండి."
+
+"The filesystem contains too many snapshots to display." = "ఫైల్ వ్యవస్థలో ప్రదర్శించలేనన్ని స్నాప్‌షాట్‌లు ఉన్నాయి."
+
+"The filesystem tool reported: {details}" = "ఫైల్ వ్యవస్థ సాధనం నివేదించింది: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "ఫైల్ వ్యవస్థ సాధనం చెల్లని UTF-8 పాఠ్యాన్ని తిరిగి ఇచ్చింది."
+
+"The filesystem tool returned too much data." = "ఫైల్ వ్యవస్థ సాధనం చాలా ఎక్కువ డేటాను తిరిగి ఇచ్చింది."
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "చెత్త సమాచారం లేదు లేదా చెల్లదు. శుభ్రపరిచే ముందు అంశాన్ని పరిశీలించండి."
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "స్నాప్‌షాట్ పేరు కోసం గరిష్ఠంగా 128 అక్షరాలు, అంకెలు, హైఫన్‌లు లేదా అండర్‌స్కోర్‌లను వాడండి."
+
+"The Flatpak permission data is invalid or too large." = "Flatpak అనుమతి డేటా చెల్లదు లేదా చాలా పెద్దది."

@@ -17,11 +17,11 @@ use super::native::MAX_BYTES;
 pub(super) fn read(path: &Path) -> Result<String> {
     let mut text = String::new();
     match File::open(path) {
-        Ok(file) => { ensure!(file.metadata()?.is_file(), "override is not a regular file"); file.take(MAX_BYTES + 1).read_to_string(&mut text)?; }
+        Ok(file) => { ensure!(file.metadata()?.is_file(), "{}", t("The Flatpak permission data is invalid or too large.")); file.take(MAX_BYTES + 1).read_to_string(&mut text)?; }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound && std::fs::symlink_metadata(path).is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound) => {}
         Err(error) => return Err(error.into()),
     }
-    ensure!(text.len() as u64 <= MAX_BYTES, "Flatpak override is too large");
+    ensure!(text.len() as u64 <= MAX_BYTES, "{}", t("The Flatpak permission data is invalid or too large."));
     Ok(text)
 }
 
@@ -45,7 +45,7 @@ impl Undo {
             mandara_config::store::write_atomic_checked(&lock, Some(self.written), self.before.as_bytes())?;
         } else {
             std::fs::remove_file(lock.target())?;
-            File::open(lock.target().parent().context("override has no parent")?)?.sync_all()?;
+            File::open(lock.target().parent().context(t("The Flatpak permission data is invalid or too large."))?)?.sync_all()?;
         }
         Ok(())
     }
@@ -53,7 +53,7 @@ impl Undo {
 
 fn backup(path: &Path, body: &str) -> Result<PathBuf> {
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos();
-    let path = path.with_file_name(format!("{}.mandara-{stamp}.bak", path.file_name().context("override has no name")?.to_string_lossy()));
+    let path = path.with_file_name(format!("{}.mandara-{stamp}.bak", path.file_name().context(t("The Flatpak permission data is invalid or too large."))?.to_string_lossy()));
     let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&path)?;
     file.write_all(body.as_bytes())?;
     file.sync_all()?;
@@ -68,7 +68,7 @@ pub(super) fn merge(before: &str, generated: &str, key: &str) -> Result<String> 
         if line.trim().starts_with('[') { in_context = line.trim() == "[Context]"; }
         if in_context && let Some((name, _)) = line.split_once('=') && name.trim() == key { value = Some(line); }
     }
-    let replacement = value.context("Flatpak did not generate the selected permission key")?;
+    let replacement = value.context(t("The Flatpak permission data is invalid or too large."))?;
     let mut result = String::with_capacity(before.len() + replacement.len());
     let mut inside = false;
     let mut seen_context = false;
@@ -77,10 +77,10 @@ pub(super) fn merge(before: &str, generated: &str, key: &str) -> Result<String> 
         if line.trim().starts_with('[') {
             if inside && !replaced { result.push_str(replacement); result.push('\n'); replaced = true; }
             inside = line.trim() == "[Context]";
-            if inside { ensure!(!seen_context, "duplicate Context group in Flatpak override"); seen_context = true; }
+            if inside { ensure!(!seen_context, "{}", t("The Flatpak permission data is invalid or too large.")); seen_context = true; }
         }
         if inside && line.split_once('=').is_some_and(|(name, _)| name.trim() == key) {
-            ensure!(!replaced, "duplicate selected key in Flatpak override");
+            ensure!(!replaced, "{}", t("The Flatpak permission data is invalid or too large."));
             result.push_str(replacement); result.push('\n'); replaced = true;
         } else { result.push_str(line); }
     }
@@ -89,7 +89,7 @@ pub(super) fn merge(before: &str, generated: &str, key: &str) -> Result<String> 
         if !seen_context { result.push_str("[Context]\n"); }
         result.push_str(replacement); result.push('\n');
     }
-    ensure!(result.len() as u64 <= MAX_BYTES, "Flatpak override is too large");
+    ensure!(result.len() as u64 <= MAX_BYTES, "{}", t("The Flatpak permission data is invalid or too large."));
     Ok(result)
 }
 
@@ -140,7 +140,7 @@ mod tests {
         let before = "[Context]\nshared=network;\n";
         std::fs::write(&path, before).unwrap();
         let permissions = crate::app_install::flatpak::parse_context(before).unwrap();
-        let session = Session { app: super::super::App { id: "org.example.Test".into(), name: "Test".into(), installation: "user".into() }, capabilities: super::super::model::capabilities(&permissions), permissions, metadata: before.into(), path: path.clone(), target: path.clone(), before: before.into(), stamp: FileStamp::at(&path).unwrap() };
+        let session = Session { app: super::super::App { id: "org.example.Test".into(), name: "Test".into(), installation: "user".into() }, capabilities: super::super::model::capabilities(&permissions, &permissions), permissions, metadata: before.into(), path: path.clone(), target: path.clone(), before: before.into(), stamp: FileStamp::at(&path).unwrap() };
         std::fs::write(&path, "[Context]\nshared=!network;\n").unwrap();
         let stamp = FileStamp::at(&path).unwrap().unwrap();
         let error = mandara_config::store::PublishedWriteError::new(&path, stamp, std::io::Error::other("injected directory sync failure"));

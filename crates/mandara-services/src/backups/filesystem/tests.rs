@@ -1,7 +1,11 @@
 use super::*;
+#[cfg(target_os = "linux")]
 use std::cell::RefCell;
+#[cfg(target_os = "linux")]
 use std::ffi::OsString;
+#[cfg(target_os = "linux")]
 use std::sync::atomic::AtomicBool;
+#[cfg(target_os = "linux")]
 use std::time::Duration;
 
 fn mount(target: &std::path::Path) -> Mount {
@@ -14,8 +18,10 @@ fn mount(target: &std::path::Path) -> Mount {
 
 const SNAPSHOTS: &str = "ID 257 gen 123 top level 5 parent_uuid 11111111-1111-1111-1111-111111111111 uuid 22222222-2222-2222-2222-222222222222 path snapshots/one\nID 258 gen 124 top level 5 parent_uuid 11111111-1111-1111-1111-111111111111 uuid 33333333-3333-3333-3333-333333333333 path snapshots/two with spaces\n";
 
+#[cfg(target_os = "linux")]
 #[derive(Default)]
 struct Recorder { calls: RefCell<Vec<(String, Vec<OsString>)>>, paths: RefCell<Vec<std::path::PathBuf>> }
+#[cfg(target_os = "linux")]
 impl btrfs::Runner for Recorder {
     fn run(&self, program: &str, args: &[OsString], _: &AtomicBool, _: Duration) -> anyhow::Result<String> {
         self.calls.borrow_mut().push((program.into(), args.to_vec()));
@@ -31,7 +37,7 @@ fn mount_tables_decode_paths_and_keep_read_only_and_subvolume_identity() {
     let rows = mounts::parse("30 1 0:33 /@ /mnt/my\\040disk rw,relatime - btrfs /dev/test rw,subvolid=256,subvol=/@\n31 1 8:1 / /media/old ro - ext4 /dev/test2 ro\n").unwrap();
     assert_eq!(rows[0].target, std::path::Path::new("/mnt/my disk"));
     assert_eq!(rows[0].subvolume_id, Some(256));
-    assert!(rows[0].supports_snapshots());
+    assert_eq!(rows[0].supports_snapshots(), cfg!(target_os = "linux"));
     assert!(!rows[1].supports_trim());
     assert!(mounts::parse("incomplete").is_err());
 }
@@ -49,6 +55,7 @@ fn default_and_mounted_snapshots_are_protected_and_listing_paths_are_not_execute
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn deletion_rechecks_identity_and_never_emits_recursive_or_default_changes() {
     let root = tempfile::tempdir().unwrap();
     let base = mount(root.path());
@@ -67,6 +74,7 @@ fn deletion_rechecks_identity_and_never_emits_recursive_or_default_changes() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn maintenance_is_scoped_and_never_runs_an_unfiltered_balance_or_repair() {
     let root = tempfile::tempdir().unwrap();
     let base = mount(root.path());

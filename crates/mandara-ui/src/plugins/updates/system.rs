@@ -1274,6 +1274,7 @@ pub(super) fn nix_view(
             availability.rebuild,
             availability.rollback,
             availability.cleanup,
+            availability.generations,
         ];
         for (index, reason) in reasons.iter().enumerate() {
             if let Some(reason) = reason
@@ -1627,6 +1628,7 @@ fn gen_actions(
     let accent = readable(palette.primary, palette);
     let n = g.number;
     let (ms, mc) = (m.clone(), m.clone());
+    let switch_allowed = nix_allowed(m, NixAction::SwitchTo(n));
     div()
         .h(px(GEN_ACTIONS_H))
         .flex_none()
@@ -1639,7 +1641,7 @@ fn gen_actions(
                 "nix-switch-to",
                 Some("zap"),
                 t("Switch to it"),
-                accent,
+                if switch_allowed { accent } else { palette.on_surface_variant },
                 palette,
                 move |_, cx| {
                     if !nix_allowed(&ms, NixAction::SwitchTo(n)) {
@@ -1648,7 +1650,8 @@ fn gen_actions(
                     ms.borrow_mut().nix.confirm = Some(NixAction::SwitchTo(n));
                     notify(&ms, cx);
                 },
-            ))
+            ).when(!switch_allowed, |button| button.opacity(DISABLED_OPACITY))
+                .when(!switch_allowed, |button| button.cursor_default()))
         })
         .when_some(current.filter(|c| *c != n), |el, c| {
             el.child(pill_button(
@@ -1808,6 +1811,17 @@ pub(super) fn system_request(system: System, flatpak_pending: bool) -> Option<Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn generation_switches_follow_their_own_availability_reason() {
+        use mandara_services::sysupdate::nixos::availability::{Availability, Reason};
+        let model = std::rc::Rc::new(RefCell::new(super::super::Model::default()));
+        model.borrow_mut().nix.availability = Some(Availability { update: None, rebuild: None, rollback: None, cleanup: None, generations: Some(Reason::NoCurrentGeneration) });
+        assert!(nix_allowed(&model, NixAction::Update(RebuildMode::Switch)));
+        assert!(!nix_allowed(&model, NixAction::SwitchTo(4)));
+        model.borrow_mut().nix.availability.as_mut().unwrap().generations = None;
+        assert!(nix_allowed(&model, NixAction::SwitchTo(4)));
+    }
 
     #[test]
     fn closing_a_nix_panel_cancels_metadata_without_starting_overlapping_reads() {

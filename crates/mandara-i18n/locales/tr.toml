@@ -10986,3 +10986,39 @@
 "Waiting for the model…" = "Model bekleniyor…"
 "Write a message…" = "Bir mesaj yazın…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 bayt"
+
+"App permissions supports up to 512 installed Flatpak apps." = "Uygulama izinleri en fazla 512 kurulu Flatpak uygulamasını destekler."
+
+"Choose a valid Flatpak app and installation." = "Geçerli bir Flatpak uygulaması ve kurulumu seçin."
+
+"Restic returned invalid backup progress." = "Restic geçersiz yedekleme ilerlemesi döndürdü."
+
+"The Btrfs default subvolume could not be read." = "Btrfs varsayılan alt birimi okunamadı."
+
+"The Btrfs snapshot list is incomplete or invalid." = "Btrfs anlık görüntü listesi eksik veya geçersiz."
+
+"The backup history contains an invalid snapshot." = "Yedekleme geçmişinde geçersiz bir anlık görüntü var."
+
+"The backup history is too large to display." = "Yedekleme geçmişi görüntülenemeyecek kadar büyük."
+
+"The backup progress record is too large." = "Yedekleme ilerleme kaydı çok büyük."
+
+"The cleanup age is invalid." = "Temizlik için yaş sınırı geçersiz."
+
+"The cleanup folder must belong to you." = "Temizlenecek klasör size ait olmalıdır."
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "Temizlik önizlemesi güvenlik sınırlarını aşıyor. Daha küçük bir konum seçin."
+
+"The filesystem contains too many snapshots to display." = "Dosya sisteminde görüntülenemeyecek kadar çok anlık görüntü var."
+
+"The filesystem tool reported: {details}" = "Dosya sistemi aracı bildirdi: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "Dosya sistemi aracı geçersiz UTF-8 metni döndürdü."
+
+"The filesystem tool returned too much data." = "Dosya sistemi aracı çok fazla veri döndürdü."
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "Çöp bilgisi eksik veya geçersiz. Temizlemeden önce öğeyi inceleyin."
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "Anlık görüntü adı için en fazla 128 harf, rakam, kısa çizgi veya alt çizgi kullanın."
+
+"The Flatpak permission data is invalid or too large." = "Flatpak izin verileri geçersiz veya çok büyük."

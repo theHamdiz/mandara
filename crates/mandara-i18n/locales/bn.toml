@@ -10745,3 +10745,39 @@
 "Waiting for the model…" = "মডেলের জন্য অপেক্ষা হচ্ছে…"
 "Write a message…" = "বার্তা লিখুন…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 বাইট"
+
+"App permissions supports up to 512 installed Flatpak apps." = "অ্যাপের অনুমতিতে সর্বোচ্চ 512টি ইনস্টল করা Flatpak অ্যাপ সমর্থিত।"
+
+"Choose a valid Flatpak app and installation." = "একটি বৈধ Flatpak অ্যাপ ও ইনস্টলেশন বেছে নিন।"
+
+"Restic returned invalid backup progress." = "Restic অবৈধ ব্যাকআপ অগ্রগতি ফিরিয়েছে।"
+
+"The Btrfs default subvolume could not be read." = "Btrfs-এর ডিফল্ট সাবভলিউম পড়া যায়নি।"
+
+"The Btrfs snapshot list is incomplete or invalid." = "Btrfs স্ন্যাপশট তালিকা অসম্পূর্ণ বা অবৈধ।"
+
+"The backup history contains an invalid snapshot." = "ব্যাকআপ ইতিহাসে একটি অবৈধ স্ন্যাপশট আছে।"
+
+"The backup history is too large to display." = "ব্যাকআপ ইতিহাস দেখানোর জন্য অত্যন্ত বড়।"
+
+"The backup progress record is too large." = "ব্যাকআপ অগ্রগতির রেকর্ড অত্যন্ত বড়।"
+
+"The cleanup age is invalid." = "পরিষ্কারের সময়সীমা অবৈধ।"
+
+"The cleanup folder must belong to you." = "পরিষ্কারের ফোল্ডারের মালিক আপনাকে হতে হবে।"
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "পরিষ্কারের পূর্বরূপ নিরাপত্তাসীমা ছাড়িয়েছে। ছোট একটি অবস্থান বেছে নিন।"
+
+"The filesystem contains too many snapshots to display." = "ফাইলসিস্টেমে দেখানোর চেয়ে বেশি স্ন্যাপশট আছে।"
+
+"The filesystem tool reported: {details}" = "ফাইলসিস্টেম টুল জানিয়েছে: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "ফাইলসিস্টেম টুল অবৈধ UTF-8 লেখা ফিরিয়েছে।"
+
+"The filesystem tool returned too much data." = "ফাইলসিস্টেম টুল অতিরিক্ত তথ্য ফিরিয়েছে।"
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "ট্র্যাশের তথ্য অনুপস্থিত বা অবৈধ। পরিষ্কারের আগে আইটেমটি পরীক্ষা করুন।"
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "স্ন্যাপশটের নামে সর্বোচ্চ 128টি অক্ষর, সংখ্যা, হাইফেন বা আন্ডারস্কোর ব্যবহার করুন।"
+
+"The Flatpak permission data is invalid or too large." = "Flatpak অনুমতির তথ্য অবৈধ বা অত্যন্ত বড়।"

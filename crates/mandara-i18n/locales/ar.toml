@@ -10991,3 +10991,39 @@
 "Waiting for the model…" = "في انتظار النموذج…"
 "Write a message…" = "اكتب رسالة…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 بايت"
+
+"App permissions supports up to 512 installed Flatpak apps." = "تدعم أذونات التطبيقات ما يصل إلى 512 تطبيق Flatpak مثبتًا."
+
+"Choose a valid Flatpak app and installation." = "اختر تطبيق Flatpak وتثبيتًا صالحين."
+
+"Restic returned invalid backup progress." = "أعاد Restic بيانات غير صالحة لتقدم النسخ الاحتياطي."
+
+"The Btrfs default subvolume could not be read." = "تعذرت قراءة المجلد الفرعي الافتراضي لنظام Btrfs."
+
+"The Btrfs snapshot list is incomplete or invalid." = "قائمة لقطات Btrfs غير مكتملة أو غير صالحة."
+
+"The backup history contains an invalid snapshot." = "يحتوي سجل النسخ الاحتياطي على لقطة غير صالحة."
+
+"The backup history is too large to display." = "سجل النسخ الاحتياطي أكبر من أن يُعرض."
+
+"The backup progress record is too large." = "سجل تقدم النسخ الاحتياطي كبير جدًا."
+
+"The cleanup age is invalid." = "مدة التنظيف غير صالحة."
+
+"The cleanup folder must belong to you." = "يجب أن يكون مجلد التنظيف ملكًا لك."
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "تتجاوز معاينة التنظيف حدود الأمان. اختر موقعًا أصغر."
+
+"The filesystem contains too many snapshots to display." = "يحتوي نظام الملفات على لقطات أكثر مما يمكن عرضه."
+
+"The filesystem tool reported: {details}" = "أفادت أداة نظام الملفات: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "أعادت أداة نظام الملفات نص UTF-8 غير صالح."
+
+"The filesystem tool returned too much data." = "أعادت أداة نظام الملفات بيانات كثيرة جدًا."
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "معلومات سلة المهملات مفقودة أو غير صالحة. افحص العنصر قبل تنظيفه."
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "استخدم حتى 128 حرفًا أو رقمًا أو شرطة أو شرطة سفلية لاسم اللقطة."
+
+"The Flatpak permission data is invalid or too large." = "بيانات أذونات Flatpak غير صالحة أو كبيرة جدًا."

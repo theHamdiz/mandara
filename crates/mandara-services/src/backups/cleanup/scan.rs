@@ -8,21 +8,21 @@ pub fn preview(candidate: &Candidate, age_days: u64, cancel: &AtomicBool) -> Res
     let root = open(&candidate.root)?;
     let stamp = Stamp::of(&root)?;
     ensure!(candidate.root_stamp.identity(stamp), "{}", t("The cleanup location changed. Refresh its locations before previewing files."));
-    ensure!(root.metadata()?.is_dir() && root.metadata()?.uid() == rustix::process::getuid().as_raw(), "cleanup root is not your directory");
+    ensure!(root.metadata()?.is_dir() && root.metadata()?.uid() == rustix::process::getuid().as_raw(), "{}", t("The cleanup folder must belong to you."));
     let mut preview = Preview { candidate: candidate.clone(), logical_bytes: 0, left_untouched: 0, root: stamp, files: Vec::new(), directories: Vec::new(), info: None };
-    let cutoff = SystemTime::now().checked_sub(Duration::from_secs(age_days.clamp(AGE_DAYS_RANGE.0, AGE_DAYS_RANGE.1) * SECONDS_PER_DAY)).context("invalid cleanup age")?;
+    let cutoff = SystemTime::now().checked_sub(Duration::from_secs(age_days.clamp(AGE_DAYS_RANGE.0, AGE_DAYS_RANGE.1) * SECONDS_PER_DAY)).context(t("The cleanup age is invalid."))?;
     Scanner { root: &root, device: stamp.device, mount: stamp.mount, kind: candidate.kind, cutoff, cancel, preview: &mut preview, path_bytes: 0, visits: 0 }.walk(&candidate.relative)?;
     if let Some(path) = &candidate.info {
         use std::io::Read as _;
-        let directory = open(path.parent().context("Trash information has no parent")?)?;
+        let directory = open(path.parent().context(t("Trash information is missing or invalid. Inspect the item before cleaning it."))?)?;
         let parent_stamp = Stamp::of(&directory)?;
-        ensure!(candidate.info_directory.is_some_and(|stamp| stamp.identity(parent_stamp)), "Trash information directory changed");
-        let info = child(&directory, path.file_name().context("Trash information has no name")?)?;
-        ensure!(info.metadata()?.is_file(), "Trash information is not a regular file");
+        ensure!(candidate.info_directory.is_some_and(|stamp| stamp.identity(parent_stamp)), "{}", t("The cleanup location changed. Refresh its locations before previewing files."));
+        let info = child(&directory, path.file_name().context(t("Trash information is missing or invalid. Inspect the item before cleaning it."))?)?;
+        ensure!(info.metadata()?.is_file(), "{}", t("Trash information is missing or invalid. Inspect the item before cleaning it."));
         let mut document = String::new();
         info.try_clone()?.take(MAX_INFO_BYTES + 1).read_to_string(&mut document)?;
         ensure!(document.len() as u64 <= MAX_INFO_BYTES && document.lines().next() == Some("[Trash Info]")
-            && document.lines().any(|line| line.starts_with("Path=")) && document.lines().any(|line| line.starts_with("DeletionDate=")), "Trash information is missing or invalid; inspect the item before cleaning it");
+            && document.lines().any(|line| line.starts_with("Path=")) && document.lines().any(|line| line.starts_with("DeletionDate=")), "{}", t("Trash information is missing or invalid. Inspect the item before cleaning it."));
         preview.info = Some((path.clone(), Stamp::of(&info)?, parent_stamp));
     }
     Ok(preview)
@@ -43,11 +43,11 @@ impl Scanner<'_> {
 fn walk(&mut self, relative: &Path) -> Result<()> {
     ensure!(!self.cancel.load(Ordering::Acquire), "{}", t("Cancelled"));
     self.visits += 1;
-    ensure!(self.visits <= MAX_FILES, "cleanup selection has too many entries");
-    ensure!(relative.components().count() <= MAX_DEPTH, "cleanup directory is too deep");
-    ensure!(self.preview.files.len() + self.preview.directories.len() < MAX_FILES, "cleanup selection has too many files");
-    self.path_bytes = self.path_bytes.checked_add(relative.as_os_str().len()).context("cleanup paths overflow")?;
-    ensure!(self.path_bytes <= MAX_PATH_BYTES, "cleanup selection is too large");
+    ensure!(self.visits <= MAX_FILES, "{}", t("The cleanup preview exceeds its safety limits. Choose a smaller location."));
+    ensure!(relative.components().count() <= MAX_DEPTH, "{}", t("The cleanup preview exceeds its safety limits. Choose a smaller location."));
+    ensure!(self.preview.files.len() + self.preview.directories.len() < MAX_FILES, "{}", t("The cleanup preview exceeds its safety limits. Choose a smaller location."));
+    self.path_bytes = self.path_bytes.checked_add(relative.as_os_str().len()).context(t("The cleanup preview exceeds its safety limits. Choose a smaller location."))?;
+    ensure!(self.path_bytes <= MAX_PATH_BYTES, "{}", t("The cleanup preview exceeds its safety limits. Choose a smaller location."));
     let (directory, name) = parent(self.root, relative)?;
     let file = match child(&directory, &name) {
         Ok(file) => file,
@@ -67,7 +67,7 @@ fn walk(&mut self, relative: &Path) -> Result<()> {
         self.preview.directories.push(Entry { relative: relative.into(), stamp });
     // Shared inodes can have aliases outside the reviewed tree. Leave them intact.
     } else if metadata.is_file() && metadata.nlink() == 1 && (self.kind == Kind::Trash || metadata.modified()? < self.cutoff) {
-        self.preview.logical_bytes = self.preview.logical_bytes.checked_add(metadata.len()).context("cleanup size overflow")?;
+        self.preview.logical_bytes = self.preview.logical_bytes.checked_add(metadata.len()).context(t("The cleanup preview exceeds its safety limits. Choose a smaller location."))?;
         self.preview.files.push(Entry { relative: relative.into(), stamp });
     } else { self.preview.left_untouched += 1; }
     Ok(())

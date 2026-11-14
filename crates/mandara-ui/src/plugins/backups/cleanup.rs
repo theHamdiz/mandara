@@ -36,19 +36,22 @@ pub(super) struct State {
     page: usize,
     paths_page: usize,
     report: Option<Report>,
+    review_generation: u64,
 }
 impl Default for State {
     fn default() -> Self {
-        Self { candidates: integration::evicting(), preview: integration::evicting(), command_preview: None, selected: None, cancel: Arc::default(), opened: false, page: 0, paths_page: 0, report: None }
+        Self { candidates: integration::evicting(), preview: integration::evicting(), command_preview: None, selected: None, cancel: Arc::default(), opened: false, page: 0, paths_page: 0, report: None, review_generation: 0 }
     }
 }
 impl State {
+    pub fn invalidate_review(&mut self) { self.review_generation = self.review_generation.wrapping_add(1); }
     pub fn cancel_reads(&mut self) {
         self.cancel.store(true, Ordering::Release);
         self.candidates.borrow_mut().invalidate();
         self.preview.borrow_mut().invalidate();
     }
     pub fn clear(&mut self) {
+        self.invalidate_review();
         self.cancel.store(true, Ordering::Release);
         self.candidates.borrow_mut().clear();
         self.preview.borrow_mut().clear();

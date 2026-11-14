@@ -10743,3 +10743,39 @@
 "Waiting for the model…" = "모델을 기다리는 중…"
 "Write a message…" = "메시지를 입력하세요…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 바이트"
+
+"App permissions supports up to 512 installed Flatpak apps." = "앱 권한은 설치된 Flatpak 앱을 최대 512개까지 지원합니다."
+
+"Choose a valid Flatpak app and installation." = "유효한 Flatpak 앱과 설치를 선택하세요."
+
+"Restic returned invalid backup progress." = "Restic이 잘못된 백업 진행 정보를 반환했습니다."
+
+"The Btrfs default subvolume could not be read." = "Btrfs 기본 하위 볼륨을 읽을 수 없습니다."
+
+"The Btrfs snapshot list is incomplete or invalid." = "Btrfs 스냅샷 목록이 불완전하거나 잘못되었습니다."
+
+"The backup history contains an invalid snapshot." = "백업 기록에 잘못된 스냅샷이 있습니다."
+
+"The backup history is too large to display." = "백업 기록이 너무 커서 표시할 수 없습니다."
+
+"The backup progress record is too large." = "백업 진행 레코드가 너무 큽니다."
+
+"The cleanup age is invalid." = "정리 기간이 잘못되었습니다."
+
+"The cleanup folder must belong to you." = "정리 폴더는 본인 소유여야 합니다."
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "정리 미리보기가 안전 한도를 초과했습니다. 더 작은 위치를 선택하세요."
+
+"The filesystem contains too many snapshots to display." = "파일 시스템의 스냅샷이 너무 많아 표시할 수 없습니다."
+
+"The filesystem tool reported: {details}" = "파일 시스템 도구 보고: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "파일 시스템 도구가 잘못된 UTF-8 텍스트를 반환했습니다."
+
+"The filesystem tool returned too much data." = "파일 시스템 도구가 너무 많은 데이터를 반환했습니다."
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "휴지통 정보가 없거나 잘못되었습니다. 정리하기 전에 항목을 확인하세요."
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "스냅샷 이름에는 최대 128자의 영문자, 숫자, 하이픈 또는 밑줄을 사용하세요."
+
+"The Flatpak permission data is invalid or too large." = "Flatpak 권한 데이터가 잘못되었거나 너무 큽니다."

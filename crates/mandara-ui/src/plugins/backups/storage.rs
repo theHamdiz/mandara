@@ -41,6 +41,19 @@ impl Default for State {
     }
 }
 impl State {
+    fn complete(&mut self, selected: &Mount, reply: Reply, inspect: bool) -> bool {
+        self.preview = None;
+        if !self.opened || self.selected.as_ref() != Some(selected) { return false; }
+        if inspect {
+            self.elevated = Some((selected.clone(), reply));
+            false
+        } else {
+            self.notice = Some(if reply.output.trim().is_empty() { t("Completed successfully").into() } else { reply.output });
+            self.elevated = None;
+            self.native.borrow_mut().clear();
+            true
+        }
+    }
     pub fn clear(&mut self) {
         self.cancel.store(true, Ordering::Release);
         self.mounts.borrow_mut().clear();
@@ -112,17 +125,12 @@ pub(super) fn apply_output(model: &Shared, request: Request, cx: &mut App) -> Re
         Request::Maintain { operation: Maintenance::Trim, .. } => tk("Trimming unused blocks…"),
     };
     let inspect = matches!(request, Request::Inspect { .. });
-    jobs::perform(model, status, move |cancel| Native.apply(&request, &cancel).map_err(|error| format!("{error:#}")), move |reply, model, _| {
-        let mut state = model.borrow_mut();
-        state.storage.preview = None;
-        if state.opened && state.storage.selected.as_ref() == Some(&selected) {
-            if inspect { state.storage.elevated = Some((selected, reply)); }
-            else {
-                state.storage.notice = Some(if reply.output.trim().is_empty() { t("Completed successfully").into() } else { reply.output });
-                state.storage.elevated = None;
-                state.storage.native.borrow_mut().clear();
-            }
-        }
+    jobs::perform(model, status, move |cancel| Native.apply(&request, &cancel).map_err(|error| format!("{error:#}")), move |reply, model, cx| {
+        let reload = {
+            let mut state = model.borrow_mut();
+            state.opened && state.storage.complete(&selected, reply, inspect)
+        };
+        if reload { refresh(model, cx); }
     }, cx)
 }
 
@@ -263,4 +271,34 @@ pub(super) fn render(model: &Shared, maintenance: bool, p: &MandaraPalette, wind
     body.child(action("storage-refresh", t("Refresh"), "refresh", p, move |_, cx| {
         if shared.borrow().active.is_none() { shared.borrow_mut().storage.clear(); refresh(&shared, cx); shared.borrow().views.notify(cx); }
     })).into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mount() -> Mount {
+        Mount { id: 8, device: "0:33".into(), root: "/".into(), target: "/snapshots".into(), filesystem: "btrfs".into(), read_only: false, subvolume_id: Some(5) }
+    }
+
+    #[test]
+    fn mutations_reload_the_visible_selection_and_inspection_keeps_its_reply() {
+        let mount = mount();
+        let mut state = State { opened: true, selected: Some(mount.clone()), ..State::default() };
+        assert!(!state.complete(&mount, Reply::default(), true));
+        assert!(state.elevated.is_some());
+        for output in ["Snapshot created", "Snapshot deleted", "Maintenance finished"] {
+            assert!(state.complete(&mount, Reply { output: output.into(), ..Reply::default() }, false));
+            assert_eq!(state.notice.as_deref(), Some(output));
+            assert!(state.elevated.is_none());
+        }
+        let mut other = mount.clone();
+        other.id += 1;
+        assert!(!state.complete(&other, Reply::default(), false));
+        state.clear();
+        assert!(!state.complete(&mount, Reply::default(), false));
+        assert!(state.selected.is_none());
+        assert!(state.notice.is_none());
+        assert!(!state.native.borrow().busy());
+    }
 }

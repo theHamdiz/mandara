@@ -10744,3 +10744,39 @@
 "Waiting for the model…" = "Menunggu model…"
 "Write a message…" = "Tulis pesan…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 bita"
+
+"App permissions supports up to 512 installed Flatpak apps." = "Izin aplikasi mendukung hingga 512 aplikasi Flatpak terpasang."
+
+"Choose a valid Flatpak app and installation." = "Pilih aplikasi Flatpak dan instalasi yang valid."
+
+"Restic returned invalid backup progress." = "Restic mengembalikan progres pencadangan yang tidak valid."
+
+"The Btrfs default subvolume could not be read." = "Subvolume bawaan Btrfs tidak dapat dibaca."
+
+"The Btrfs snapshot list is incomplete or invalid." = "Daftar snapshot Btrfs tidak lengkap atau tidak valid."
+
+"The backup history contains an invalid snapshot." = "Riwayat cadangan berisi snapshot yang tidak valid."
+
+"The backup history is too large to display." = "Riwayat cadangan terlalu besar untuk ditampilkan."
+
+"The backup progress record is too large." = "Catatan progres pencadangan terlalu besar."
+
+"The cleanup age is invalid." = "Batas usia pembersihan tidak valid."
+
+"The cleanup folder must belong to you." = "Folder pembersihan harus milik Anda."
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "Pratinjau pembersihan melampaui batas keamanan. Pilih lokasi yang lebih kecil."
+
+"The filesystem contains too many snapshots to display." = "Sistem berkas berisi terlalu banyak snapshot untuk ditampilkan."
+
+"The filesystem tool reported: {details}" = "Alat sistem berkas melaporkan: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "Alat sistem berkas mengembalikan teks UTF-8 yang tidak valid."
+
+"The filesystem tool returned too much data." = "Alat sistem berkas mengembalikan terlalu banyak data."
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "Informasi Sampah hilang atau tidak valid. Periksa item sebelum membersihkannya."
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "Gunakan hingga 128 huruf, angka, tanda hubung, atau garis bawah untuk nama snapshot."
+
+"The Flatpak permission data is invalid or too large." = "Data izin Flatpak tidak valid atau terlalu besar."

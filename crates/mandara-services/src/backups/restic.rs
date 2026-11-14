@@ -41,9 +41,9 @@ pub(super) fn command(settings: &Settings) -> Result<Command> {
 }
 
 pub(super) fn snapshots(text: &[u8]) -> Result<Vec<Snapshot>> {
-    ensure!(text.len() <= MAX_JSON_BYTES, "backup history is too large");
+    ensure!(text.len() <= MAX_JSON_BYTES, "{}", t("The backup history is too large to display."));
     let mut rows: Vec<DatedSnapshot> = serde_json::from_slice(text)?;
-    ensure!(rows.iter().all(|row| valid_id(&row.snapshot.id)), "invalid backup snapshot identity");
+    ensure!(rows.iter().all(|row| valid_id(&row.snapshot.id)), "{}", t("The backup history contains an invalid snapshot."));
     rows.sort_unstable_by_key(|row| std::cmp::Reverse(row.time));
     rows.truncate(SNAPSHOTS);
     let mut rows: Vec<_> = rows.into_iter().map(|row| row.snapshot).collect();
@@ -80,7 +80,7 @@ pub(super) fn restore_directory(parent: &Path, snapshot: &str) -> Result<tempfil
     ensure!(parent.is_absolute() && valid_id(snapshot), "{}", t("Choose a restore folder and a valid snapshot."));
     let parent = parent.canonicalize()?;
     ensure!(parent.is_dir(), "{}", t("The restore destination must be a folder."));
-    let directory = tempfile::Builder::new().prefix(&format!("Restored-{}-", &snapshot[..8])).tempdir_in(parent)?;
+    let directory = tempfile::Builder::new().prefix(&format!("Restored-{}-", &snapshot[..8])).permissions(std::fs::Permissions::from_mode(0o700)).tempdir_in(parent)?;
     Ok(directory)
 }
 
@@ -95,7 +95,7 @@ impl Events {
     pub fn push(&mut self, mut bytes: &[u8], progress: &mut dyn FnMut(Progress)) -> Result<()> {
         while !bytes.is_empty() {
             let length = bytes.iter().position(|byte| *byte == b'\n').map_or(bytes.len(), |index| index + 1);
-            ensure!(length <= MAX_EVENT_BYTES.saturating_sub(self.pending.len()), "backup progress record is too large");
+            ensure!(length <= MAX_EVENT_BYTES.saturating_sub(self.pending.len()), "{}", t("The backup progress record is too large."));
             self.pending.extend_from_slice(&bytes[..length]);
             bytes = &bytes[length..];
             if self.pending.last() == Some(&b'\n') { self.record(progress)?; }
@@ -113,7 +113,7 @@ impl Events {
         match value.get("message_type").and_then(|value| value.as_str()) {
             Some("status") => {
                 let mut state: Progress = serde_json::from_value(value)?;
-                ensure!(state.percent_done.is_finite(), "invalid backup progress");
+                ensure!(state.percent_done.is_finite(), "{}", t("Restic returned invalid backup progress."));
                 state.percent_done = state.percent_done.clamp(0.0, 1.0);
                 progress(state);
             }
@@ -135,7 +135,7 @@ impl Backend for Restic {
         command.args(["snapshots", "--latest", &SNAPSHOTS.to_string(), "--group-by", ""]);
         let mut bytes = Vec::new();
         crate::app_themes::process::stream_native(command, cancel, LIST_TIMEOUT, &mut |chunk| {
-            ensure!(chunk.len() <= MAX_JSON_BYTES.saturating_sub(bytes.len()), "backup history is too large");
+            ensure!(chunk.len() <= MAX_JSON_BYTES.saturating_sub(bytes.len()), "{}", t("The backup history is too large to display."));
             bytes.extend_from_slice(chunk);
             Ok(())
         })?;
@@ -160,7 +160,8 @@ impl Backend for Restic {
             }
             Operation::Restore { snapshot, parent } => {
                 let directory = restore_directory(&parent, &snapshot)?;
-                command.args(["restore", &snapshot, "--target"]).arg(directory.path()).args(["--overwrite", "never"]);
+                // The fresh, private destination also keeps older Restic releases safe.
+                command.args(["restore", &snapshot, "--target"]).arg(directory.path());
                 destination = Some(directory);
             }
         }

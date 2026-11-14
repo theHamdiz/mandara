@@ -10986,3 +10986,39 @@
 "Waiting for the model…" = "Ожидание модели…"
 "Write a message…" = "Напишите сообщение…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 байт"
+
+"App permissions supports up to 512 installed Flatpak apps." = "Разрешения приложений поддерживают до 512 установленных приложений Flatpak."
+
+"Choose a valid Flatpak app and installation." = "Выберите допустимое приложение Flatpak и установку."
+
+"Restic returned invalid backup progress." = "Restic вернул неверные данные о ходе резервного копирования."
+
+"The Btrfs default subvolume could not be read." = "Не удалось прочитать подтом Btrfs по умолчанию."
+
+"The Btrfs snapshot list is incomplete or invalid." = "Список снимков Btrfs неполон или неверен."
+
+"The backup history contains an invalid snapshot." = "История резервных копий содержит неверный снимок."
+
+"The backup history is too large to display." = "История резервных копий слишком велика для отображения."
+
+"The backup progress record is too large." = "Запись о ходе резервного копирования слишком велика."
+
+"The cleanup age is invalid." = "Срок очистки указан неверно."
+
+"The cleanup folder must belong to you." = "Папка для очистки должна принадлежать вам."
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "Предпросмотр очистки превышает ограничения безопасности. Выберите папку поменьше."
+
+"The filesystem contains too many snapshots to display." = "В файловой системе слишком много снимков для отображения."
+
+"The filesystem tool reported: {details}" = "Утилита файловой системы сообщила: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "Утилита файловой системы вернула неверный текст UTF-8."
+
+"The filesystem tool returned too much data." = "Утилита файловой системы вернула слишком много данных."
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "Информация корзины отсутствует или неверна. Проверьте объект перед очисткой."
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "Имя снимка может содержать до 128 букв, цифр, дефисов или подчёркиваний."
+
+"The Flatpak permission data is invalid or too large." = "Данные разрешений Flatpak неверны или слишком велики."

@@ -10646,3 +10646,39 @@
 "Waiting for the model…" = "मॉडेलची वाट पाहत आहे…"
 "Write a message…" = "संदेश लिहा…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 बाइट"
+
+"App permissions supports up to 512 installed Flatpak apps." = "अ‍ॅप परवानग्या जास्तीत जास्त 512 स्थापित Flatpak अ‍ॅपना समर्थन देतात."
+
+"Choose a valid Flatpak app and installation." = "वैध Flatpak अ‍ॅप आणि स्थापना निवडा."
+
+"Restic returned invalid backup progress." = "Restic ने अवैध बॅकअप प्रगती परत केली."
+
+"The Btrfs default subvolume could not be read." = "Btrfs चा पूर्वनिर्धारित सबव्हॉल्यूम वाचता आला नाही."
+
+"The Btrfs snapshot list is incomplete or invalid." = "Btrfs स्नॅपशॉट यादी अपूर्ण किंवा अवैध आहे."
+
+"The backup history contains an invalid snapshot." = "बॅकअप इतिहासात अवैध स्नॅपशॉट आहे."
+
+"The backup history is too large to display." = "बॅकअप इतिहास दाखवण्यासाठी खूप मोठा आहे."
+
+"The backup progress record is too large." = "बॅकअप प्रगतीची नोंद खूप मोठी आहे."
+
+"The cleanup age is invalid." = "स्वच्छतेची कालमर्यादा अवैध आहे."
+
+"The cleanup folder must belong to you." = "स्वच्छतेचा फोल्डर तुमच्या मालकीचा असणे आवश्यक आहे."
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "स्वच्छतेचे पूर्वावलोकन सुरक्षितता मर्यादा ओलांडते. लहान स्थान निवडा."
+
+"The filesystem contains too many snapshots to display." = "फाइल प्रणालीत दाखवता येतील त्यापेक्षा अधिक स्नॅपशॉट आहेत."
+
+"The filesystem tool reported: {details}" = "फाइल प्रणाली साधनाचा अहवाल: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "फाइल प्रणाली साधनाने अवैध UTF-8 मजकूर परत केला."
+
+"The filesystem tool returned too much data." = "फाइल प्रणाली साधनाने खूप जास्त डेटा परत केला."
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "कचरापेटीची माहिती गहाळ किंवा अवैध आहे. स्वच्छतेपूर्वी घटक तपासा."
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "स्नॅपशॉटच्या नावासाठी जास्तीत जास्त 128 अक्षरे, अंक, हायफन किंवा अंडरस्कोर वापरा."
+
+"The Flatpak permission data is invalid or too large." = "Flatpak परवानगी डेटा अवैध किंवा खूप मोठा आहे."

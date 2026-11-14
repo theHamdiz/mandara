@@ -73,7 +73,7 @@ pub(super) fn render(model: &Shared, context: &PanelCx, p: &MandaraPalette, wind
         state.history_page = 0;
         state.history.borrow_mut().clear();
         state.opened = false;
-        state.summary = None;
+        state.retain_summary_for(&preferences.0);
     }
     model.borrow().views.track(window);
     model.borrow().history.borrow().views.track(window);

@@ -51,6 +51,9 @@ impl Default for Model {
     }
 }
 impl Model {
+    fn completion_target(&self) -> Option<Option<InstalledApp>> {
+        self.opened.then(|| self.selected.clone())
+    }
     fn cancel_reads(&mut self) {
         self.read_cancel.store(true, Ordering::Release);
         self.apps.borrow_mut().invalidate();
@@ -121,6 +124,19 @@ pub fn register(registry: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn action_completions_refresh_the_reopened_list_without_restoring_hidden_data() {
+        let mut model = Model::default();
+        let app = InstalledApp { id: "org.example.App".into(), name: "Example".into(), installation: "user".into() };
+        model.opened = true;
+        model.selected = Some(app.clone());
+        assert_eq!(model.completion_target(), Some(Some(app)));
+        model.opened = false;
+        model.selected = None;
+        assert_eq!(model.completion_target(), None);
+        model.opened = true;
+        assert_eq!(model.completion_target(), Some(None));
+    }
     #[test]
     fn refresh_renews_a_cancelled_token_and_invalidates_pending_reads() {
         let mut model = Model::default();

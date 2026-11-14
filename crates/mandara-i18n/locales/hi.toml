@@ -10989,3 +10989,39 @@
 "Waiting for the model…" = "मॉडल की प्रतीक्षा हो रही है…"
 "Write a message…" = "संदेश लिखें…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 बाइट"
+
+"App permissions supports up to 512 installed Flatpak apps." = "ऐप अनुमतियाँ अधिकतम 512 स्थापित Flatpak ऐप का समर्थन करती हैं।"
+
+"Choose a valid Flatpak app and installation." = "एक मान्य Flatpak ऐप और स्थापना चुनें।"
+
+"Restic returned invalid backup progress." = "Restic ने अमान्य बैकअप प्रगति लौटाई।"
+
+"The Btrfs default subvolume could not be read." = "Btrfs का डिफ़ॉल्ट सबवॉल्यूम पढ़ा नहीं जा सका।"
+
+"The Btrfs snapshot list is incomplete or invalid." = "Btrfs स्नैपशॉट सूची अधूरी या अमान्य है।"
+
+"The backup history contains an invalid snapshot." = "बैकअप इतिहास में एक अमान्य स्नैपशॉट है।"
+
+"The backup history is too large to display." = "बैकअप इतिहास दिखाने के लिए बहुत बड़ा है।"
+
+"The backup progress record is too large." = "बैकअप प्रगति रिकॉर्ड बहुत बड़ा है।"
+
+"The cleanup age is invalid." = "सफाई की आयु सीमा अमान्य है।"
+
+"The cleanup folder must belong to you." = "सफाई फ़ोल्डर का स्वामी आपको होना चाहिए।"
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "सफाई का पूर्वावलोकन सुरक्षा सीमाओं से अधिक है। छोटा स्थान चुनें।"
+
+"The filesystem contains too many snapshots to display." = "फ़ाइल सिस्टम में दिखाने से अधिक स्नैपशॉट हैं।"
+
+"The filesystem tool reported: {details}" = "फ़ाइल सिस्टम उपकरण ने बताया: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "फ़ाइल सिस्टम उपकरण ने अमान्य UTF-8 पाठ लौटाया।"
+
+"The filesystem tool returned too much data." = "फ़ाइल सिस्टम उपकरण ने बहुत अधिक डेटा लौटाया।"
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "कचरे की जानकारी गायब या अमान्य है। सफाई से पहले आइटम की जाँच करें।"
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "स्नैपशॉट के नाम में अधिकतम 128 अक्षर, अंक, हाइफ़न या अंडरस्कोर इस्तेमाल करें।"
+
+"The Flatpak permission data is invalid or too large." = "Flatpak अनुमति डेटा अमान्य या बहुत बड़ा है।"

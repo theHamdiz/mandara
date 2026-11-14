@@ -57,9 +57,14 @@ pub(super) fn start(model: &Shared, operation: Operation, cx: &mut App) -> Resul
         Operation::Restore { .. } => tk("Restoring copies…"),
     };
     let progress = model.borrow().progress.clone();
+    let scope = (settings.repository.clone(), settings.password_file.clone());
     perform(model, status, move |token| Restic.execute(&settings, operation, &token, &mut |value| {
         *progress.lock().unwrap_or_else(|error| error.into_inner()) = value;
-    }).map_err(|error| format!("{error:#}")), |summary, model, _| model.borrow_mut().summary = Some(summary), cx)
+    }).map_err(|error| format!("{error:#}")), move |summary, model, _| {
+        let mut state = model.borrow_mut();
+        state.summary = Some(summary);
+        state.summary_scope = Some(scope);
+    }, cx)
 }
 
 /// The archive, native filesystem and cleanup tabs share one operation slot.
@@ -79,6 +84,7 @@ pub(super) fn perform<T: serde::Serialize + Send + 'static>(
         state.active = Some(cancel);
         state.error = None;
         state.summary = None;
+        state.summary_scope = None;
         *state.progress.lock().unwrap_or_else(|error| error.into_inner()) = Progress::default();
         state.history.borrow_mut().invalidate();
         state.storage.cancel_reads();

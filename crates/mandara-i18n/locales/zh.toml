@@ -10982,3 +10982,39 @@
 "Waiting for the model…" = "正在等待模型…"
 "Write a message…" = "输入消息…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 字节"
+
+"App permissions supports up to 512 installed Flatpak apps." = "应用权限最多支持 512 个已安装的 Flatpak 应用。"
+
+"Choose a valid Flatpak app and installation." = "请选择有效的 Flatpak 应用和安装位置。"
+
+"Restic returned invalid backup progress." = "Restic 返回了无效的备份进度。"
+
+"The Btrfs default subvolume could not be read." = "无法读取 Btrfs 默认子卷。"
+
+"The Btrfs snapshot list is incomplete or invalid." = "Btrfs 快照列表不完整或无效。"
+
+"The backup history contains an invalid snapshot." = "备份历史包含无效的快照。"
+
+"The backup history is too large to display." = "备份历史过大，无法显示。"
+
+"The backup progress record is too large." = "备份进度记录过大。"
+
+"The cleanup age is invalid." = "清理期限无效。"
+
+"The cleanup folder must belong to you." = "清理文件夹必须归你所有。"
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "清理预览超出安全限制。请选择较小的位置。"
+
+"The filesystem contains too many snapshots to display." = "文件系统中的快照过多，无法显示。"
+
+"The filesystem tool reported: {details}" = "文件系统工具报告：{details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "文件系统工具返回了无效的 UTF-8 文本。"
+
+"The filesystem tool returned too much data." = "文件系统工具返回了过多数据。"
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "回收站信息缺失或无效。请在清理前检查该项目。"
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "快照名称最多可使用 128 个字母、数字、连字符或下划线。"
+
+"The Flatpak permission data is invalid or too large." = "Flatpak 权限数据无效或过大。"

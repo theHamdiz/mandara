@@ -10744,3 +10744,39 @@
 "Waiting for the model…" = "در انتظار مدل…"
 "Write a message…" = "پیامی بنویسید…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 بایت"
+
+"App permissions supports up to 512 installed Flatpak apps." = "مجوزهای برنامه از حداکثر 512 برنامهٔ Flatpak نصب‌شده پشتیبانی می‌کند."
+
+"Choose a valid Flatpak app and installation." = "یک برنامهٔ Flatpak و محل نصب معتبر انتخاب کنید."
+
+"Restic returned invalid backup progress." = "Restic اطلاعات نامعتبری برای پیشرفت پشتیبان‌گیری برگرداند."
+
+"The Btrfs default subvolume could not be read." = "خواندن زیرجلد پیش‌فرض Btrfs ممکن نشد."
+
+"The Btrfs snapshot list is incomplete or invalid." = "فهرست نماگرفت‌های Btrfs ناقص یا نامعتبر است."
+
+"The backup history contains an invalid snapshot." = "تاریخچهٔ پشتیبان‌گیری دارای یک نماگرفت نامعتبر است."
+
+"The backup history is too large to display." = "تاریخچهٔ پشتیبان‌گیری برای نمایش بیش از حد بزرگ است."
+
+"The backup progress record is too large." = "رکورد پیشرفت پشتیبان‌گیری بیش از حد بزرگ است."
+
+"The cleanup age is invalid." = "بازهٔ زمانی پاک‌سازی نامعتبر است."
+
+"The cleanup folder must belong to you." = "پوشهٔ پاک‌سازی باید متعلق به شما باشد."
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "پیش‌نمایش پاک‌سازی از محدودیت‌های ایمنی فراتر رفته است. محل کوچک‌تری انتخاب کنید."
+
+"The filesystem contains too many snapshots to display." = "تعداد نماگرفت‌های سامانهٔ پرونده برای نمایش بیش از حد زیاد است."
+
+"The filesystem tool reported: {details}" = "ابزار سامانهٔ پرونده گزارش داد: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "ابزار سامانهٔ پرونده متن UTF-8 نامعتبری برگرداند."
+
+"The filesystem tool returned too much data." = "ابزار سامانهٔ پرونده داده‌های بیش از حدی برگرداند."
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "اطلاعات زباله‌دان موجود نیست یا نامعتبر است. پیش از پاک‌سازی، مورد را بررسی کنید."
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "برای نام نماگرفت حداکثر 128 حرف، رقم، خط تیره یا زیرخط استفاده کنید."
+
+"The Flatpak permission data is invalid or too large." = "داده‌های مجوز Flatpak نامعتبر یا بیش از حد بزرگ است."

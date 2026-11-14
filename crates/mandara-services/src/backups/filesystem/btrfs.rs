@@ -7,7 +7,7 @@ use std::process::Command;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use anyhow::{Context as _, Result, ensure};
-use mandara_i18n::t;
+use mandara_i18n::{t, tf};
 use super::{Backend, Maintenance, Mount, Reply, Request, Snapshot, mounted};
 
 /// A complete snapshot listing is bounded independently of command diagnostics.
@@ -30,12 +30,12 @@ impl Runner for SystemRunner {
         command.args(arguments).env_clear().env("PATH", crate::sysupdate::SAFE_PATH).env("LC_ALL", "C").env("HOME", "/root");
         let mut output = Vec::new();
         let diagnostics = crate::app_themes::process::stream_native(command, cancel, timeout, &mut |bytes| {
-            ensure!(bytes.len() <= MAX_SNAPSHOT_BYTES.saturating_sub(output.len()), "filesystem output is too large");
+            ensure!(bytes.len() <= MAX_SNAPSHOT_BYTES.saturating_sub(output.len()), "{}", t("The filesystem tool returned too much data."));
             output.extend_from_slice(bytes);
             Ok(())
         })?;
-        ensure!(diagnostics.trim().is_empty(), "filesystem tool reported: {}", diagnostics.trim());
-        String::from_utf8(output).context("filesystem output is not UTF-8")
+        ensure!(diagnostics.trim().is_empty(), "{}", tf("The filesystem tool reported: {details}", &[("details", &diagnostics.trim())]));
+        String::from_utf8(output).context(t("The filesystem tool returned invalid UTF-8 text."))
     }
 }
 
@@ -51,16 +51,16 @@ fn uuid(value: &str) -> bool {
 pub(super) fn snapshots(text: &str, mount: &Mount, mounts: &[Mount], default: u64) -> Result<Vec<Snapshot>> {
     let mut rows = Vec::new();
     for line in text.lines().filter(|line| !line.trim().is_empty()) {
-        ensure!(rows.len() < MAX_SNAPSHOTS, "too many local snapshots");
-        let (fields, path) = line.split_once(" path ").context("unrecognized Btrfs snapshot listing")?;
+        ensure!(rows.len() < MAX_SNAPSHOTS, "{}", t("The filesystem contains too many snapshots to display."));
+        let (fields, path) = line.split_once(" path ").context(t("The Btrfs snapshot list is incomplete or invalid."))?;
         let fields: Vec<_> = fields.split_whitespace().collect();
         let value = |name: &str| fields.windows(2).find(|pair| pair[0] == name).map(|pair| pair[1]);
-        let id = value("ID").context("missing Btrfs snapshot id")?.parse::<u64>()?;
-        let identity = value("uuid").context("missing Btrfs snapshot UUID")?;
-        let parent = value("parent_uuid").context("missing Btrfs snapshot parent UUID")?;
-        ensure!(uuid(identity) && uuid(parent), "unrecognized Btrfs snapshot identity");
+        let id = value("ID").context(t("The Btrfs snapshot list is incomplete or invalid."))?.parse::<u64>().context(t("The Btrfs snapshot list is incomplete or invalid."))?;
+        let identity = value("uuid").context(t("The Btrfs snapshot list is incomplete or invalid."))?;
+        let parent = value("parent_uuid").context(t("The Btrfs snapshot list is incomplete or invalid."))?;
+        ensure!(uuid(identity) && uuid(parent), "{}", t("The Btrfs snapshot list is incomplete or invalid."));
         let path = PathBuf::from(path);
-        ensure!(!path.as_os_str().is_empty() && path.components().all(|part| matches!(part, Component::Normal(_))) && !path.as_os_str().as_encoded_bytes().iter().any(|byte| byte.is_ascii_control()), "invalid Btrfs snapshot path");
+        ensure!(!path.as_os_str().is_empty() && path.components().all(|part| matches!(part, Component::Normal(_))) && !path.as_os_str().as_encoded_bytes().iter().any(|byte| byte.is_ascii_control()), "{}", t("The Btrfs snapshot list is incomplete or invalid."));
         let protected = id <= 5 || id == default || mounts.iter().any(|other| other.device == mount.device && (other.subvolume_id == Some(id) || other.root == Path::new("/").join(&path)));
         rows.push(Snapshot { id, uuid: identity.into(), parent_uuid: parent.into(), path, protected });
     }
@@ -69,8 +69,8 @@ pub(super) fn snapshots(text: &str, mount: &Mount, mounts: &[Mount], default: u6
 
 fn default_id(text: &str) -> Result<u64> {
     let mut fields = text.split_whitespace();
-    ensure!(fields.next() == Some("ID"), "unrecognized Btrfs default subvolume");
-    fields.next().context("missing Btrfs default subvolume id")?.parse().map_err(Into::into)
+    ensure!(fields.next() == Some("ID"), "{}", t("The Btrfs default subvolume could not be read."));
+    fields.next().context(t("The Btrfs default subvolume could not be read."))?.parse().context(t("The Btrfs default subvolume could not be read."))
 }
 
 pub(super) fn inspect(runner: &impl Runner, mount: &Mount, mounts: &[Mount], cancel: &AtomicBool) -> Result<Reply> {
@@ -129,7 +129,7 @@ pub(super) fn apply(runner: &impl Runner, request: &Request, mounts: &[Mount], c
         }
         Request::Create { source, directory, name, .. } => {
             ensure!(mount.supports_snapshots(), "{}", t("This filesystem does not support native Btrfs snapshots."));
-            ensure!(!name.is_empty() && name.len() <= 128 && name.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')), "invalid local snapshot name");
+            ensure!(!name.is_empty() && name.len() <= 128 && name.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')), "{}", t("Use up to 128 letters, numbers, hyphens or underscores for the snapshot name."));
             let source = source.canonicalize()?;
             let directory = directory.canonicalize()?;
             let source = selected_directory(&source, mount, mounts)?;
@@ -143,11 +143,11 @@ pub(super) fn apply(runner: &impl Runner, request: &Request, mounts: &[Mount], c
         Request::Maintain { operation, .. } => {
             let (program, args): (&str, &[&str]) = match operation {
                 Maintenance::Scrub => {
-                    ensure!(mount.supports_snapshots(), "Btrfs scrub requires Btrfs");
+                    ensure!(mount.supports_snapshots(), "{}", t("This filesystem does not support native Btrfs snapshots."));
                     ("btrfs", &["scrub", "start", "-B"])
                 }
                 Maintenance::ReclaimEmptyChunks => {
-                    ensure!(mount.supports_snapshots(), "Btrfs space reclamation requires Btrfs");
+                    ensure!(mount.supports_snapshots(), "{}", t("This filesystem does not support native Btrfs snapshots."));
                     ("btrfs", &["balance", "start", "-dusage=0", "-musage=0"])
                 }
                 Maintenance::Trim => {

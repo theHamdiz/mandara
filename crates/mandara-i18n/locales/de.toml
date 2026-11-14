@@ -10985,3 +10985,39 @@
 "Waiting for the model…" = "Warte auf das Modell…"
 "Write a message…" = "Nachricht schreiben…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 Bytes"
+
+"App permissions supports up to 512 installed Flatpak apps." = "App-Berechtigungen unterstützt bis zu 512 installierte Flatpak-Apps."
+
+"Choose a valid Flatpak app and installation." = "Wähle eine gültige Flatpak-App und Installation."
+
+"Restic returned invalid backup progress." = "Restic hat ungültige Angaben zum Sicherungsfortschritt zurückgegeben."
+
+"The Btrfs default subvolume could not be read." = "Das Btrfs-Standard-Subvolume konnte nicht gelesen werden."
+
+"The Btrfs snapshot list is incomplete or invalid." = "Die Btrfs-Snapshot-Liste ist unvollständig oder ungültig."
+
+"The backup history contains an invalid snapshot." = "Der Sicherungsverlauf enthält einen ungültigen Snapshot."
+
+"The backup history is too large to display." = "Der Sicherungsverlauf ist zu groß für die Anzeige."
+
+"The backup progress record is too large." = "Der Datensatz zum Sicherungsfortschritt ist zu groß."
+
+"The cleanup age is invalid." = "Die Altersgrenze für die Bereinigung ist ungültig."
+
+"The cleanup folder must belong to you." = "Der Bereinigungsordner muss dir gehören."
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "Die Bereinigungsvorschau überschreitet die Sicherheitsgrenzen. Wähle einen kleineren Ort."
+
+"The filesystem contains too many snapshots to display." = "Das Dateisystem enthält zu viele Snapshots für die Anzeige."
+
+"The filesystem tool reported: {details}" = "Das Dateisystemwerkzeug meldet: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "Das Dateisystemwerkzeug hat ungültigen UTF-8-Text zurückgegeben."
+
+"The filesystem tool returned too much data." = "Das Dateisystemwerkzeug hat zu viele Daten zurückgegeben."
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "Die Papierkorbinformationen fehlen oder sind ungültig. Prüfe das Element vor dem Bereinigen."
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "Verwende für den Snapshot-Namen bis zu 128 Buchstaben, Ziffern, Binde- oder Unterstriche."
+
+"The Flatpak permission data is invalid or too large." = "Die Flatpak-Berechtigungsdaten sind ungültig oder zu groß."

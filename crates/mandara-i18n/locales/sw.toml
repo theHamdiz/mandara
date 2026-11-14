@@ -10645,3 +10645,39 @@
 "Waiting for the model…" = "Inasubiri modeli…"
 "Write a message…" = "Andika ujumbe…"
 "{bytes} / 8192 bytes" = "{bytes} / baiti 8192"
+
+"App permissions supports up to 512 installed Flatpak apps." = "Ruhusa za programu inasaidia hadi programu 512 za Flatpak zilizosakinishwa."
+
+"Choose a valid Flatpak app and installation." = "Chagua programu na usakinishaji halali wa Flatpak."
+
+"Restic returned invalid backup progress." = "Restic imerudisha taarifa batili za maendeleo ya hifadhi rudufu."
+
+"The Btrfs default subvolume could not be read." = "Kijuzuu chaguomsingi cha Btrfs hakikuweza kusomwa."
+
+"The Btrfs snapshot list is incomplete or invalid." = "Orodha ya taswira za Btrfs haijakamilika au si halali."
+
+"The backup history contains an invalid snapshot." = "Historia ya hifadhi rudufu ina taswira batili."
+
+"The backup history is too large to display." = "Historia ya hifadhi rudufu ni kubwa mno kuonyeshwa."
+
+"The backup progress record is too large." = "Rekodi ya maendeleo ya hifadhi rudufu ni kubwa mno."
+
+"The cleanup age is invalid." = "Kikomo cha umri wa kusafisha si halali."
+
+"The cleanup folder must belong to you." = "Lazima uwe mmiliki wa folda ya kusafisha."
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "Hakikisho la kusafisha linazidi mipaka ya usalama. Chagua eneo dogo zaidi."
+
+"The filesystem contains too many snapshots to display." = "Mfumo wa faili una taswira nyingi mno kuonyeshwa."
+
+"The filesystem tool reported: {details}" = "Zana ya mfumo wa faili imeripoti: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "Zana ya mfumo wa faili imerudisha maandishi batili ya UTF-8."
+
+"The filesystem tool returned too much data." = "Zana ya mfumo wa faili imerudisha data nyingi mno."
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "Taarifa za Tupio hazipo au si halali. Kagua kipengee kabla ya kukisafisha."
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "Tumia hadi herufi, nambari, vistari au mistari ya chini 128 kwa jina la taswira."
+
+"The Flatpak permission data is invalid or too large." = "Data ya ruhusa za Flatpak si halali au ni kubwa mno."

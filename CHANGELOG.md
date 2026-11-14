@@ -28,6 +28,7 @@ and more apps can follow your colours.
 
 ### Fixed
 
+- Backups keeps completed restore locations between tabs, refreshes snapshot lists after changes and restores with older distribution packages. Cancelled cleanup previews stay dismissed, and revoked app permissions remain available to turn back on.
 - Stash summoned by a drag or shake shows only its drop zone until something lands in it. Standalone shelves keep their usual controls, and long shelf-menu options wrap within their rows.
 - Stopping Local AI while it connects or waits for a reply no longer reports a false connection error.
 - Backup histories keep the newest entries across source groups, literal repository names stay excluded, and cleanup previews leave shared files untouched. Conditional app permissions stay locked together so switching one off cannot expose another route.

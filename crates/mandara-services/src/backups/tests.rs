@@ -36,6 +36,8 @@ fn histories_validate_identity_and_restore_creates_fresh_destinations() {
     let first = restic::restore_directory(root.path(), &id).unwrap();
     let second = restic::restore_directory(root.path(), &id).unwrap();
     assert_ne!(first.path(), second.path());
+    assert_eq!(std::fs::metadata(first.path()).unwrap().permissions().mode() & 0o777, 0o700);
+    assert!(std::fs::read_dir(first.path()).unwrap().next().is_none());
     std::fs::write(first.path().join("existing"), "keep").unwrap();
     assert!(!second.path().join("existing").exists());
     assert!(restic::restore_directory(root.path(), "../../etc").is_err());
@@ -113,6 +115,14 @@ fn native_encrypted_backup_check_and_restore_copy() {
     std::fs::write(source.join("original.txt"), "later edition").unwrap();
     let restored = Restic.execute(&settings, Operation::Restore { snapshot: snapshots[0].id.clone(), parent: root.path().into() }, &cancel, &mut |_| {}).unwrap().restored_to.unwrap();
     assert_eq!(std::fs::read_to_string(source.join("original.txt")).unwrap(), "later edition");
+    let again = Restic.execute(&settings, Operation::Restore { snapshot: snapshots[0].id.clone(), parent: root.path().into() }, &cancel, &mut |_| {}).unwrap().restored_to.unwrap();
+    assert_ne!(restored, again);
+    for directory in [&restored, &again] {
+        assert_eq!(std::fs::metadata(directory).unwrap().permissions().mode() & 0o777, 0o700);
+    }
+    std::fs::write(restored.join("keep.txt"), "existing copy").unwrap();
+    assert!(!again.join("keep.txt").exists());
+    assert_eq!(std::fs::read_to_string(restored.join("keep.txt")).unwrap(), "existing copy");
     let relative = source.strip_prefix("/").unwrap().join("original.txt");
     assert_eq!(std::fs::read_to_string(restored.join(relative)).unwrap(), "first edition");
     assert_eq!(std::fs::read_to_string(restored.join(source.strip_prefix("/").unwrap()).join("repository1/personal.txt")).unwrap(), "keep this neighbor");

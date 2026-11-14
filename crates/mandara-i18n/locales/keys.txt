@@ -670,6 +670,7 @@ App name
 App name or pattern, then Enter
 App permissions
 App permissions are available for Flatpak apps on Linux.
+App permissions supports up to 512 installed Flatpak apps.
 App reminders
 App theme files
 App themes
@@ -1351,6 +1352,7 @@ Choose a sound theme folder
 Choose a source and target language
 Choose a username
 Choose a valid AnythingLLM workspace slug
+Choose a valid Flatpak app and installation.
 Choose a valid Home Assistant entity
 Choose an absolute repository path and password-file path in Studio.
 Choose an area to record
@@ -6290,6 +6292,7 @@ Restarted {unit}
 Restarting
 Restarting…
 Restart…
+Restic returned invalid backup progress.
 Resting icon size
 Restore
 Restore a backup into a fresh copy folder
@@ -7617,10 +7620,13 @@ The Arabic and the meanings are shown exactly as the dataset gives them, with it
 The Art of War III
 The Book of Five Rings
 The Book of Tea
+The Btrfs default subvolume could not be read.
+The Btrfs snapshot list is incomplete or invalid.
 The COSMIC desktop's set, from Pop!_OS
 The Cardinals
 The Dracula emblem with spinning coloured stripes
 The Dracula palette's purple and pink on deep night
+The Flatpak permission data is invalid or too large.
 The Gardener 45
 The Hare and the Tortoise
 The Inbox can be renamed but not deleted
@@ -7679,8 +7685,11 @@ The audio server is unavailable
 The audio server isn't reachable
 The authentication helper is not available
 The ayah of the day with its meaning
+The backup history contains an invalid snapshot.
+The backup history is too large to display.
 The backup operation did not finish.
 The backup password file must belong to you and have permissions 0600.
+The backup progress record is too large.
 The bar chip isn't placed
 The bar floats over windows while it auto-hides
 The bar is on the other edge: the launcher opens from the bare screen edge instead of growing out of the bar.
@@ -7717,8 +7726,11 @@ The cards always open in the middle of the screen
 The carousel opened from the bar, the main menu or `mandara msg wallpaper picker toggle`
 The centre
 The checker rejected the config without saying why.
+The cleanup age is invalid.
+The cleanup folder must belong to you.
 The cleanup location changed. Refresh its locations before previewing files.
 The cleanup path is too long.
+The cleanup preview exceeds its safety limits. Choose a smaller location.
 The cleanup selection changed. Preview it again before removing anything.
 The clipboard holds a password, so it isn't shared
 The clipboard holds too much to share
@@ -7814,9 +7826,13 @@ The feed server returned no content
 The file chooser failed: {error}
 The file is larger than this location allows.
 The files were restored, but the compositor could not reload them: {error}
+The filesystem contains too many snapshots to display.
 The filesystem mount changed. Refresh before continuing.
 The filesystem mount moved. Refresh before continuing.
 The filesystem request is too large.
+The filesystem tool reported: {details}
+The filesystem tool returned invalid UTF-8 text.
+The filesystem tool returned too much data.
 The fill drawn as a gentle wave, flat when nearly empty or full
 The fill, a small gap, an upright handle, then the rest of the track ending in a dot
 The fill, a small gap, then the track ending in a dot
@@ -8412,6 +8428,7 @@ Translations of your labels
 Translator
 Translucency
 Trash
+Trash information is missing or invalid. Inspect the item before cleaning it.
 Trash item
 Tray items (role, status, icons, menus)
 Tries before giving up on a station that dropped
@@ -8751,6 +8768,7 @@ Use the time an app asks for instead of the values above
 Use this location publicly
 Use this variation
 Use today, next, prev, +N / -N days, YYYY-MM or YYYY-MM-DD
+Use up to 128 letters, numbers, hyphens or underscores for the snapshot name.
 Use your own stiffness and damping instead of the global motion settings
 Use {zone}
 Use “{font}”

@@ -54,15 +54,15 @@ pub struct Session {
     pub(super) stamp: Option<FileStamp>,
 }
 
-pub(super) fn capabilities(permissions: &Permissions) -> Vec<Capability> {
+pub(super) fn capabilities(permissions: &Permissions, domain: &Permissions) -> Vec<Capability> {
     let mut rows = Vec::new();
-    for (key, effective, common) in [
-        (Key::Shared, &permissions.shared, &["network", "ipc"][..]),
-        (Key::Sockets, &permissions.sockets, &["wayland", "x11", "pulseaudio", "ssh-auth"][..]),
-        (Key::Devices, &permissions.devices, &["dri", "all"][..]),
-        (Key::Filesystems, &permissions.filesystems, &["home", "host"][..]),
+    for (key, effective, known, common) in [
+        (Key::Shared, &permissions.shared, &domain.shared, &["network", "ipc"][..]),
+        (Key::Sockets, &permissions.sockets, &domain.sockets, &["wayland", "x11", "pulseaudio", "ssh-auth"][..]),
+        (Key::Devices, &permissions.devices, &domain.devices, &["dri", "all"][..]),
+        (Key::Filesystems, &permissions.filesystems, &domain.filesystems, &["home", "host"][..]),
     ] {
-        for value in effective.iter().map(String::as_str).chain(common.iter().copied()) {
+        for value in known.iter().map(String::as_str).chain(common.iter().copied()) {
             if rows.iter().any(|row: &Capability| row.key == key && row.value == value) { continue; }
             let editable = !value.contains('=') && !value.contains(':')
                 && match key {
@@ -75,7 +75,7 @@ pub(super) fn capabilities(permissions: &Permissions) -> Vec<Capability> {
             let scoped = value.contains(':') || value.contains('=') || effective.iter().any(|grant| grant.strip_prefix(value).is_some_and(|suffix| matches!(suffix, ":ro" | ":rw" | ":create")));
             let broader = match key {
                 Key::Devices => !matches!(value, "all" | "shm") && effective.iter().any(|grant| grant == "all" || grant.starts_with("if:all:")),
-                Key::Filesystems => matches!(value, "home" | "xdg-desktop" | "xdg-documents" | "xdg-download" | "xdg-music" | "xdg-pictures" | "xdg-videos") && effective.iter().any(|grant| matches!(grant.as_str(), "host" | "host:ro" | "host:rw" | "host:create")),
+                Key::Filesystems => matches!(value, "home" | "host-os" | "host-etc" | "xdg-desktop" | "xdg-documents" | "xdg-download" | "xdg-music" | "xdg-pictures" | "xdg-videos") && effective.iter().any(|grant| matches!(grant.as_str(), "host" | "host:ro" | "host:rw" | "host:create")),
                 _ => false,
             };
             let fallback = key == Key::Sockets && matches!(value, "x11" | "fallback-x11" | "wayland")

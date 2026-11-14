@@ -10644,3 +10644,39 @@
 "Waiting for the model…" = "À espera do modelo…"
 "Write a message…" = "Escreva uma mensagem…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 bytes"
+
+"App permissions supports up to 512 installed Flatpak apps." = "Permissões de aplicativos aceita até 512 aplicativos Flatpak instalados."
+
+"Choose a valid Flatpak app and installation." = "Escolha um aplicativo Flatpak e uma instalação válidos."
+
+"Restic returned invalid backup progress." = "O Restic retornou dados de progresso de backup inválidos."
+
+"The Btrfs default subvolume could not be read." = "Não foi possível ler o subvolume padrão do Btrfs."
+
+"The Btrfs snapshot list is incomplete or invalid." = "A lista de snapshots Btrfs está incompleta ou é inválida."
+
+"The backup history contains an invalid snapshot." = "O histórico de backups contém um snapshot inválido."
+
+"The backup history is too large to display." = "O histórico de backups é grande demais para exibir."
+
+"The backup progress record is too large." = "O registro de progresso do backup é grande demais."
+
+"The cleanup age is invalid." = "A idade para limpeza é inválida."
+
+"The cleanup folder must belong to you." = "A pasta de limpeza deve pertencer a você."
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "A prévia da limpeza excede os limites de segurança. Escolha um local menor."
+
+"The filesystem contains too many snapshots to display." = "O sistema de arquivos contém snapshots demais para exibir."
+
+"The filesystem tool reported: {details}" = "A ferramenta do sistema de arquivos informou: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "A ferramenta do sistema de arquivos retornou texto UTF-8 inválido."
+
+"The filesystem tool returned too much data." = "A ferramenta do sistema de arquivos retornou dados demais."
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "As informações da lixeira estão ausentes ou são inválidas. Inspecione o item antes de limpá-lo."
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "Use até 128 letras, números, hífens ou sublinhados no nome do snapshot."
+
+"The Flatpak permission data is invalid or too large." = "Os dados de permissão do Flatpak são inválidos ou grandes demais."

@@ -10645,3 +10645,39 @@
 "Waiting for the model…" = "Đang chờ mô hình…"
 "Write a message…" = "Viết tin nhắn…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 byte"
+
+"App permissions supports up to 512 installed Flatpak apps." = "Quyền ứng dụng hỗ trợ tối đa 512 ứng dụng Flatpak đã cài đặt."
+
+"Choose a valid Flatpak app and installation." = "Chọn ứng dụng Flatpak và bản cài đặt hợp lệ."
+
+"Restic returned invalid backup progress." = "Restic trả về tiến độ sao lưu không hợp lệ."
+
+"The Btrfs default subvolume could not be read." = "Không thể đọc ổ con mặc định của Btrfs."
+
+"The Btrfs snapshot list is incomplete or invalid." = "Danh sách ảnh chụp Btrfs không đầy đủ hoặc không hợp lệ."
+
+"The backup history contains an invalid snapshot." = "Lịch sử sao lưu chứa ảnh chụp không hợp lệ."
+
+"The backup history is too large to display." = "Lịch sử sao lưu quá lớn để hiển thị."
+
+"The backup progress record is too large." = "Bản ghi tiến độ sao lưu quá lớn."
+
+"The cleanup age is invalid." = "Giới hạn tuổi để dọn dẹp không hợp lệ."
+
+"The cleanup folder must belong to you." = "Thư mục dọn dẹp phải thuộc sở hữu của bạn."
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "Bản xem trước dọn dẹp vượt giới hạn an toàn. Hãy chọn vị trí nhỏ hơn."
+
+"The filesystem contains too many snapshots to display." = "Hệ thống tệp chứa quá nhiều ảnh chụp để hiển thị."
+
+"The filesystem tool reported: {details}" = "Công cụ hệ thống tệp báo: {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "Công cụ hệ thống tệp trả về văn bản UTF-8 không hợp lệ."
+
+"The filesystem tool returned too much data." = "Công cụ hệ thống tệp trả về quá nhiều dữ liệu."
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "Thông tin Thùng rác bị thiếu hoặc không hợp lệ. Hãy kiểm tra mục trước khi dọn dẹp."
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "Dùng tối đa 128 chữ cái, chữ số, dấu gạch nối hoặc gạch dưới cho tên ảnh chụp."
+
+"The Flatpak permission data is invalid or too large." = "Dữ liệu quyền Flatpak không hợp lệ hoặc quá lớn."

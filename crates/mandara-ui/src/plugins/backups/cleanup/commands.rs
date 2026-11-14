@@ -21,14 +21,16 @@ fn prepare(model: &Shared, path: PathBuf, cx: &mut App) -> Result<async_channel:
     if model.borrow().active.is_some() { return Err(t("An action is still running").into()); }
     let age_days = super::super::preferences(cx).1.cleanup_days;
     model.borrow_mut().cleanup.clear();
+    let generation = model.borrow().cleanup.review_generation;
     jobs::perform(model, tk("Preparing the cleanup preview…"), move |cancel| {
         let candidate = api::candidates().map_err(|error| format!("{error:#}"))?.into_iter()
             .find(|candidate| candidate.path == path)
             .ok_or_else(|| t("Choose a current path from backups cleanup locations.").to_owned())?;
         let preview = Arc::new(api::preview(&candidate, age_days, &cancel).map_err(|error| format!("{error:#}"))?);
         Ok(Prepared { path, files: preview.file_count(), logical_bytes: preview.logical_bytes, left_untouched: preview.left_untouched, preview, age_days })
-    }, |prepared, model, _| {
+    }, move |prepared, model, _| {
         let mut state = model.borrow_mut();
+        if state.cleanup.review_generation != generation { return; }
         state.select_page(Page::Cleanup);
         state.cleanup.selected = Some(prepared.preview.candidate.clone());
         state.cleanup.command_preview = Some(prepared.preview);
@@ -75,6 +77,23 @@ pub(in crate::plugins::backups) fn register(registry: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cancelled_closed_or_abandoned_previews_cannot_restore_a_review() {
+        let shared = Rc::new(RefCell::new(super::super::super::Model::default()));
+        let generation = shared.borrow().cleanup.review_generation;
+        cancel_review(&shared);
+        assert_ne!(shared.borrow().cleanup.review_generation, generation);
+        let generation = shared.borrow().cleanup.review_generation;
+        shared.borrow_mut().select_page(Page::Snapshots);
+        assert_ne!(shared.borrow().cleanup.review_generation, generation, "navigation invalidates a CLI preview even when it started outside Cleanup");
+        shared.borrow_mut().select_page(Page::Cleanup);
+        let generation = shared.borrow().cleanup.review_generation;
+        shared.borrow_mut().select_page(Page::Cleanup);
+        assert_eq!(shared.borrow().cleanup.review_generation, generation, "rendering the same page keeps a current review");
+        shared.borrow_mut().cleanup.clear();
+        assert_ne!(shared.borrow().cleanup.review_generation, generation, "closing releases the review and rejects its late completion");
+        assert!(reviewed(&shared).is_err());
+    }
     #[test]
     fn a_cleanup_confirmation_requires_a_retained_manifest() {
         let model = Rc::new(RefCell::new(super::super::super::Model::default()));

@@ -69,6 +69,7 @@ struct Model {
     status: &'static str,
     progress: Arc<Mutex<Progress>>,
     summary: Option<Summary>,
+    summary_scope: Option<(std::path::PathBuf, std::path::PathBuf)>,
     error: Option<String>,
     opened: bool,
     close_watch: Rc<Cell<bool>>,
@@ -76,12 +77,19 @@ struct Model {
 }
 impl Default for Model {
     fn default() -> Self {
-        Self { page: Page::Archive, storage: storage::State::default(), cleanup: cleanup::State::default(), history: integration::evicting(), history_settings: None, history_page: 0, views: ViewSet::default(), active: None, read_cancel: Arc::default(), status: tk("Working…"), progress: Arc::default(), summary: None, error: None, opened: false, close_watch: Rc::default(), visibility: Default::default() }
+        Self { page: Page::Archive, storage: storage::State::default(), cleanup: cleanup::State::default(), history: integration::evicting(), history_settings: None, history_page: 0, views: ViewSet::default(), active: None, read_cancel: Arc::default(), status: tk("Working…"), progress: Arc::default(), summary: None, summary_scope: None, error: None, opened: false, close_watch: Rc::default(), visibility: Default::default() }
     }
 }
 impl Model {
+    fn retain_summary_for(&mut self, settings: &Settings) {
+        if self.summary_scope.as_ref().is_none_or(|(repository, password)| repository != &settings.repository || password != &settings.password_file) {
+            self.summary = None;
+            self.summary_scope = None;
+        }
+    }
     fn select_page(&mut self, page: Page) {
         if self.page == page { return; }
+        self.cleanup.invalidate_review();
         match self.page {
             Page::Archive => {
                 self.read_cancel.store(true, Ordering::Release);
@@ -143,6 +151,27 @@ pub fn register(registry: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn completed_restore_locations_survive_page_and_presentation_changes_in_the_same_repository() {
+        let settings = Settings { repository: "/archive".into(), password_file: "/password".into(), sources: Vec::new() };
+        let restored_to = std::path::PathBuf::from("/copies/Restored-12345678");
+        let mut model = Model { summary: Some(Summary { restored_to: Some(restored_to.clone()), ..Summary::default() }), summary_scope: Some((settings.repository.clone(), settings.password_file.clone())), ..Model::default() };
+        model.select_page(Page::Cleanup);
+        model.select_page(Page::Archive);
+        model.retain_summary_for(&settings);
+        assert_eq!(model.summary.as_ref().unwrap().restored_to.as_ref(), Some(&restored_to));
+        let mut changed = settings.clone();
+        changed.sources.push("/other-source".into());
+        model.retain_summary_for(&changed);
+        assert!(model.summary.is_some());
+        for changed in [Settings { repository: "/other".into(), ..settings.clone() }, Settings { password_file: "/other".into(), ..settings.clone() }] {
+            model.summary = Some(Summary::default());
+            model.summary_scope = Some((settings.repository.clone(), settings.password_file.clone()));
+            model.retain_summary_for(&changed);
+            assert!(model.summary.is_none());
+            assert!(model.summary_scope.is_none());
+        }
+    }
     #[test]
     fn oversized_preferences_are_bounded_before_copying_them_into_a_view() {
         let mut config = ShellConfig::default();

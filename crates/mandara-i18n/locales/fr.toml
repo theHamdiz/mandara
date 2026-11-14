@@ -10987,3 +10987,39 @@
 "Waiting for the model…" = "En attente du modèle…"
 "Write a message…" = "Écrivez un message…"
 "{bytes} / 8192 bytes" = "{bytes} / 8192 octets"
+
+"App permissions supports up to 512 installed Flatpak apps." = "Autorisations des applications prend en charge jusqu’à 512 applications Flatpak installées."
+
+"Choose a valid Flatpak app and installation." = "Choisissez une application Flatpak et une installation valides."
+
+"Restic returned invalid backup progress." = "Restic a renvoyé des données de progression de sauvegarde invalides."
+
+"The Btrfs default subvolume could not be read." = "Le sous-volume Btrfs par défaut n’a pas pu être lu."
+
+"The Btrfs snapshot list is incomplete or invalid." = "La liste des instantanés Btrfs est incomplète ou invalide."
+
+"The backup history contains an invalid snapshot." = "L’historique des sauvegardes contient un instantané invalide."
+
+"The backup history is too large to display." = "L’historique des sauvegardes est trop volumineux pour être affiché."
+
+"The backup progress record is too large." = "L’enregistrement de progression de sauvegarde est trop volumineux."
+
+"The cleanup age is invalid." = "L’ancienneté de nettoyage est invalide."
+
+"The cleanup folder must belong to you." = "Le dossier de nettoyage doit vous appartenir."
+
+"The cleanup preview exceeds its safety limits. Choose a smaller location." = "L’aperçu du nettoyage dépasse les limites de sécurité. Choisissez un emplacement plus petit."
+
+"The filesystem contains too many snapshots to display." = "Le système de fichiers contient trop d’instantanés pour être affichés."
+
+"The filesystem tool reported: {details}" = "L’outil du système de fichiers a indiqué : {details}"
+
+"The filesystem tool returned invalid UTF-8 text." = "L’outil du système de fichiers a renvoyé du texte UTF-8 invalide."
+
+"The filesystem tool returned too much data." = "L’outil du système de fichiers a renvoyé trop de données."
+
+"Trash information is missing or invalid. Inspect the item before cleaning it." = "Les informations de la corbeille sont absentes ou invalides. Inspectez l’élément avant de le nettoyer."
+
+"Use up to 128 letters, numbers, hyphens or underscores for the snapshot name." = "Utilisez jusqu’à 128 lettres, chiffres, tirets ou traits de soulignement pour le nom de l’instantané."
+
+"The Flatpak permission data is invalid or too large." = "Les données d’autorisation Flatpak sont invalides ou trop volumineuses."
