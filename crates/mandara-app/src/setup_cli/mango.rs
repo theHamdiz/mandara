@@ -36,6 +36,14 @@ fn supported(user: &Path, actual: &Path, explicit: bool) -> bool {
     user.is_file()
         && (user == actual
             || user.extension() == actual.extension()
+                && user
+                    .parent()
+                    .zip(actual.parent())
+                    .is_some_and(|(user, actual)| {
+                        std::fs::canonicalize(user).is_ok_and(|user| {
+                            std::fs::canonicalize(actual).is_ok_and(|actual| user == actual)
+                        })
+                    })
                 && std::fs::canonicalize(user).is_ok_and(|user| {
                     std::fs::canonicalize(actual).is_ok_and(|actual| actual == user)
                 }))
@@ -61,6 +69,14 @@ mod tests {
         let alias = directory.path().join("alias.conf");
         std::os::unix::fs::symlink(&user, &alias).unwrap();
         assert!(supported(&user, &alias, true));
+        let other_directory = directory.path().join("other");
+        std::fs::create_dir(&other_directory).unwrap();
+        let relocated = other_directory.join("alias.conf");
+        std::os::unix::fs::symlink(&user, &relocated).unwrap();
+        assert!(
+            !supported(&user, &relocated, true),
+            "a -c alias in another directory changes ./ include paths"
+        );
         let other_format = directory.path().join("alias.toml");
         std::os::unix::fs::symlink(&user, &other_format).unwrap();
         assert!(!supported(&user, &other_format, true));

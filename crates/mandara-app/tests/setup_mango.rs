@@ -205,3 +205,44 @@ fn missing_generated_autostart_is_detected_and_setup_repairs_it() {
             .success()
     );
 }
+
+#[test]
+fn mango_check_accepts_generated_autostart_through_an_indirect_include() {
+    if Command::new("mango").arg("-v").output().is_err() {
+        return;
+    }
+    let fixture = Fixture::new();
+    let main = fixture.config_file("conf");
+    std::fs::create_dir_all(main.parent().unwrap()).unwrap();
+    std::fs::write(&main, "border_radius=6\n").unwrap();
+    let setup = fixture.run(&["setup", "--compositor", "mango", "--autostart"]);
+    assert!(
+        setup.status.success(),
+        "{}",
+        String::from_utf8_lossy(&setup.stderr)
+    );
+    let generated = fixture.config.join("mandara/generated/mango.conf");
+    std::fs::write(&main, "source=./child.conf\n").unwrap();
+    std::fs::write(
+        main.with_file_name("child.conf"),
+        format!("source_optional={}\n", generated.display()),
+    )
+    .unwrap();
+    let check = fixture.run(&["setup", "--compositor", "mango", "--check"]);
+    assert!(
+        check.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&check.stdout),
+        String::from_utf8_lossy(&check.stderr)
+    );
+    let reconnect = fixture.run(&["setup", "--compositor", "mango", "--autostart"]);
+    assert!(
+        reconnect.status.success(),
+        "{}",
+        String::from_utf8_lossy(&reconnect.stderr)
+    );
+    assert_eq!(
+        std::fs::read_to_string(main).unwrap(),
+        "source=./child.conf\n"
+    );
+}

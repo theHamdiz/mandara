@@ -11046,3 +11046,5 @@
 "MangoWM's global settings must be a table." = "MangoWM genel ayarları bir tablo olmalıdır."
 "MangoWM's optional sources must be a path or a list of paths." = "MangoWM isteğe bağlı kaynakları bir yol veya yol listesi olmalıdır."
 "MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM, {path} konumunda özel bir yapılandırma kullanıyor. Otomatik kurulum varsayılan yapılandırma konumunu gerektirir. Birleştiricinizin dosyaları değiştirilmedi."
+"Copying MangoWM's system configuration would change its include paths. Create your user configuration manually before running setup." = "MangoWM sistem yapılandırmasını kopyalamak, dahil edilen dosyaların yollarını değiştirir. Kurulumu çalıştırmadan önce kullanıcı yapılandırmanızı elle oluşturun."
+"Space inside the window frame." = "Pencere çerçevesinin içindeki boşluk."

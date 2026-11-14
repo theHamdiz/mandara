@@ -134,8 +134,8 @@ and tick off tasks where they sit.
    Raindrop and five classic springs, with live previews, per-surface speeds
    and optional system accessibility preferences. [Motion controls](docs/motion.md).
 6. **Make changes and see them.** Mandara Studio has 32 pages of live
-   settings and previews. Give Studio its own look, or edit your compositor's
-   shortcuts with conflict checks and Undo. Save bar arrangements as profiles;
+   settings and previews. Give Studio its own shaped window and controls, or
+   edit your compositor's shortcuts with conflict checks and Undo. Save bar arrangements as profiles;
    Maintenance spots missing icon themes and takes you to the right settings.
 7. **Colours that belong together.** Choose a hand-tuned theme or a Material
    You (HCT) palette from your wallpaper. Opt in to matching Ghostty, GTK 3/4,

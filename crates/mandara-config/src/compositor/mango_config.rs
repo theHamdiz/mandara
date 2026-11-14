@@ -90,6 +90,7 @@ pub(super) fn add_include(text: &str, path: &str) -> Result<Option<String>> {
 pub(super) fn install_include(path: &Path) -> Result<bool> {
     use super::Target;
     use crate::doctor::{self, CheckEnv, CheckerStatus, fix};
+    super::mango_includes::validate_generated_path(&Target::Mango.generated_file())?;
     if super::include_installed_at(Target::Mango, path) {
         return Ok(false);
     }

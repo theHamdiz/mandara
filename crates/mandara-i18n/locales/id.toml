@@ -10804,3 +10804,5 @@
 "MangoWM's global settings must be a table." = "Pengaturan global MangoWM harus berupa tabel."
 "MangoWM's optional sources must be a path or a list of paths." = "Sumber opsional MangoWM harus berupa jalur atau daftar jalur."
 "MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM menggunakan konfigurasi khusus di {path}. Penyiapan otomatis memerlukan lokasi konfigurasi bawaan. Berkas kompositor Anda tidak diubah."
+"Copying MangoWM's system configuration would change its include paths. Create your user configuration manually before running setup." = "Menyalin konfigurasi sistem MangoWM akan mengubah jalur berkas yang disertakan. Buat konfigurasi pengguna secara manual sebelum menjalankan penyiapan."
+"Space inside the window frame." = "Ruang di dalam bingkai jendela."

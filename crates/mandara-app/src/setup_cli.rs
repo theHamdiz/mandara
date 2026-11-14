@@ -252,7 +252,7 @@ pub fn setup(o: Options) -> Result<()> {
         if o.check && target == Target::Mango && cfg.compositor.autostart
             && !user_autostarts(target)
             && (!mandara_config::compositor::include_installed(target)
-                || !std::fs::read_to_string(target.generated_file()).is_ok_and(|text| mandara_config::compositor::starts_mandara(&text)))
+                || !mandara_config::keybinds::read_source(&target.generated_file()).is_ok_and(|text| mandara_config::compositor::starts_mandara(&text)))
         {
             println!("{}", mandara_i18n::t("Autostart is enabled but its generated configuration is not connected. Run `mandara setup` to repair it."));
             config_errors += 1;

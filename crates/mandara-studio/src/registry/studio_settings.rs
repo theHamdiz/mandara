@@ -145,9 +145,12 @@ pub(super) fn entries(shell: &[Setting]) -> Vec<Setting> {
             tk("Window buttons at start"),
             Toggle,
         ),
-        entry(
+        s(
+            Section::Themes,
+            GROUP,
             "/studio/frame/inset",
             tk("Window inset"),
+            tk("Space inside the window frame."),
             span(ranges::INSET, " px"),
         ),
         entry(

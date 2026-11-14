@@ -11042,3 +11042,5 @@
 "MangoWM's global settings must be a table." = "MangoWM 的全局设置必须是一个表。"
 "MangoWM's optional sources must be a path or a list of paths." = "MangoWM 的可选来源必须是一个路径或路径列表。"
 "MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM 正在使用 {path} 中的自定义配置。自动设置需要默认配置位置。合成器文件未作更改。"
+"Copying MangoWM's system configuration would change its include paths. Create your user configuration manually before running setup." = "复制 MangoWM 的系统配置会改变所包含文件的路径。请先手动创建用户配置，再运行设置。"
+"Space inside the window frame." = "窗口边框内的留白。"

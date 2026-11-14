@@ -184,6 +184,8 @@ these ranges:
 Other presets save their own values. A manually supplied partial
 `[studio.frame]` table defaults its missing title height and sidebar width
 to 46 and 252; the remaining defaults match the table above.
+`inset` pads the contents inside the painted window frame, rather than adding
+transparent space outside it. Dialog overlays are clipped to that frame too.
 
 ## What's configurable
 

@@ -7,12 +7,17 @@ About → What's new shows it too.
 ## Unreleased
 
 This update repairs MangoWM startup and improves compatibility with older
-graphics hardware.
+graphics hardware, and removes the empty frame around Studio Looks.
 
 ### Fixed
 
 - MangoWM autostart now works when the compositor is using its system defaults without a user config. Setup keeps the defaults in a validated user copy, handles TOML and separate XDG directories, and reports missing startup connections instead of silently passing (#174).
 - Older OpenGL GPUs can use the existing compatible renderer instead of being rejected for storage-buffer or compute features that the interface does not need (#174).
+- Studio Looks keep their spacing inside the painted window instead of leaving a translucent rectangle around it. Dialogs stay clipped to the same frame.
+
+### Under the hood
+
+- Compositor status follows startup includes off the UI thread.
 
 ## 0.30.0 — 2026-11-14
 

@@ -62,6 +62,7 @@ pub(super) fn seed_in(
         "{}",
         mandara_i18n::t("MangoWM's system configuration is too large to copy safely.")
     );
+    super::mango_includes::preserve_targets(&source, &destination, &text)?;
     let mut before = doctor::check_with(Target::Mango, &source, env);
     ensure!(
         before.status == CheckerStatus::Ran && before.problems() == 0,

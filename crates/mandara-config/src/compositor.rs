@@ -43,6 +43,7 @@ mod include_env;
 mod read_budget;
 mod mango_read;
 mod mango_config;
+mod mango_includes;
 pub(crate) use mango_config::is_toml as mango_toml;
 mod mango_seed;
 pub use mango_seed::seed_user_config as seed_mango_user_config;
@@ -3210,13 +3211,7 @@ fn include_installed_at(target: Target, config: &Path) -> bool {
     }
     let needle = target.generated_file();
     if target == Target::Mango {
-        return std::fs::read_to_string(config).is_ok_and(|text| {
-            included_files(target, config, &text).iter().any(|path| {
-                path == &needle || std::fs::canonicalize(path).is_ok_and(|path| {
-                    std::fs::canonicalize(&needle).is_ok_and(|needle| path == needle)
-                })
-            })
-        });
+        return mango_includes::connected(config, &needle).unwrap_or(false);
     }
     let needle_name = needle.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
     std::fs::read_to_string(config)
@@ -3303,7 +3298,8 @@ fn install_include_at(target: Target, path: &Path) -> Result<bool> {
         Some(None) => return Ok(false),
         None => {
             let sep = if original.ends_with('\n') { "" } else { "\n" };
-            format!("{original}{sep}\n{comment}\n{}\n", target.include_line())
+            let line = if target == Target::Mango { mango_config::include_hint(path, &target.generated_file()) } else { target.include_line() };
+            format!("{original}{sep}\n{comment}\n{line}\n")
         }
     };
     // MangoWM's caller already recorded its timestamped Config doctor backup.
@@ -4394,7 +4390,7 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         assert!(install_include_at(Target::Mango, &file).unwrap());
         let after = std::fs::read_to_string(&file).unwrap();
         assert!(after.starts_with("blur=1\nbind=SUPER,q,killclient\n"), "user content must be preserved verbatim");
-        assert!(after.trim_end().ends_with(&Target::Mango.include_line()));
+        assert!(after.trim_end().ends_with(&mango_config::include_hint(&file, &Target::Mango.generated_file())));
         assert!(!install_include_at(Target::Mango, &file).unwrap(), "second install is a no-op");
         assert_eq!(std::fs::read_to_string(&file).unwrap(), after);
         assert!(!dir.path().join("config.conf.mandara-backup").exists(), "MangoWM's public caller owns the doctor backup");

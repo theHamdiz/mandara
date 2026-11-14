@@ -1,6 +1,8 @@
 //! Compositor integration commands and live sync of the generated drop-in
 //! (layer rules, window/tag rules, keybinds, palette border colors).
 
+mod status;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -338,17 +340,8 @@ pub fn register(r: &mut PluginRegistry) {
         let effective = config.effective_compositor();
         serde_json::to_value(mandara_services::shortcuts::Preferences { target, manage: effective.manage, keybinds: effective.keybinds.clone() }).map_err(|error| error.to_string())
     }).example("compositor shortcuts state"));
-    r.command(ID, CommandSpec::new("compositor status", mandara_i18n::tk("Detected compositor and drop-in state"), |_, cx| {
-        let b = backend(cx)?;
-        let target = b.target();
-        Ok(json!({
-            "compositor": b.kind(),
-            "user_config": target.user_config(),
-            "generated": target.generated_file(),
-            "generated_exists": target.generated_file().exists(),
-            "included": include_installed(target),
-            "include_line": target.include_line(),
-        }))
+    r.command(ID, CommandSpec::new_output("compositor status", mandara_i18n::tk("Detected compositor and drop-in state"), |_, cx| {
+        Ok(status::pending(backend(cx)?.kind()))
     }));
     r.command(ID, CommandSpec::new_output("compositor sync", mandara_i18n::tk("Regenerate the drop-in (rules, binds, border colors) and reload"), |_, cx| {
         let (backend, cfg, borders) = sync_inputs(cx)?;

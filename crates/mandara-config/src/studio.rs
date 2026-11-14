@@ -88,6 +88,7 @@ pub struct StudioFrame {
     pub header_accent: bool,
     pub opacity: f32,
     pub controls_at_start: bool,
+    /// Interior frame padding; the painted silhouette fills the native window.
     pub inset: f32,
     pub radius: f32,
     pub border: f32,

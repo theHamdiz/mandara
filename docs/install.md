@@ -640,7 +640,7 @@ COSMIC Settings ([labwc](#labwc), [COSMIC](#cosmic)).
 
 | | Include line in your config | Autostart |
 |---|---|---|
-| **MangoWM** | `source_optional=…/mandara/generated/mango.conf`, or a source in TOML's `[global]` | `exec_once=` |
+| **MangoWM** | `source_optional=~/.config/mandara/generated/mango.conf`, or a source in TOML's `[global]` | `exec_once=` |
 | **Niri** 25.11+ | `include optional=true "…/mandara/generated/niri.kdl"` (plain `include` before 26.04) | `spawn-at-startup` |
 | **Hyprland 0.57+** (Lua only) | `pcall(dofile, "…/mandara/generated/hyprland.lua")` in `hyprland.lua` | `hl.on("hyprland.start", …)` |
 | **Hyprland ≤ 0.56** | `source = ~/.config/mandara/generated/hyprland.conf` | `exec-once =` |
@@ -664,6 +664,10 @@ and symlinks stay in place; changes have backups and native validation.
 The system file stays unchanged. Automatic setup requires one of these
 default user paths. An explicitly selected custom config is reported
 without creating another default or editing the custom file.
+The generated file uses `$XDG_CONFIG_HOME/mandara/generated/mango.conf`
+when `XDG_CONFIG_HOME` is set; setup writes the full absolute path.
+System configs whose include targets would change when copied require
+manual preparation of the user config and its supporting files first.
 
 If an older installation left MangoWM starting without Mandara, update,
 then run `mandara setup --compositor mango --autostart`. Log out and back

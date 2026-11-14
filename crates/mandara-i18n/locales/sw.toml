@@ -10705,3 +10705,5 @@
 "MangoWM's global settings must be a table." = "Mipangilio ya jumla ya MangoWM lazima iwe jedwali."
 "MangoWM's optional sources must be a path or a list of paths." = "Vyanzo vya hiari vya MangoWM lazima viwe njia au orodha ya njia."
 "MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM inatumia usanidi maalum katika {path}. Usanidi otomatiki unahitaji eneo chaguomsingi la usanidi. Faili za komposita yako hazijabadilishwa."
+"Copying MangoWM's system configuration would change its include paths. Create your user configuration manually before running setup." = "Kunakili usanidi wa mfumo wa MangoWM kutabadilisha njia za faili zinazojumuishwa. Unda usanidi wako wa mtumiaji mwenyewe kabla ya kuendesha usanidi."
+"Space inside the window frame." = "Nafasi ndani ya fremu ya dirisha."

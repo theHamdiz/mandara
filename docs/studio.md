@@ -214,6 +214,9 @@ Accessibility preferences still apply. When the compositor supplies native
 window decorations, title-bar settings are locked with that explanation.
 The window name appears once, in the title bar; the sidebar starts with
 search and navigation.
+**Window inset** adds space inside the painted frame. The frame reaches the
+native window edge, and dialogs share its clipping, so inset and shaped Looks
+do not leave an extra translucent rectangle around the window.
 
 ### Desktop
 

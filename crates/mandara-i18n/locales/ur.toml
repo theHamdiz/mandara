@@ -10804,3 +10804,5 @@
 "MangoWM's global settings must be a table." = "MangoWM کی عمومی ترتیبات ایک جدول ہونی چاہییں۔"
 "MangoWM's optional sources must be a path or a list of paths." = "MangoWM کے اختیاری ماخذ ایک راستہ یا راستوں کی فہرست ہونے چاہییں۔"
 "MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM، {path} پر حسب ضرورت ترتیب استعمال کر رہا ہے۔ خودکار سیٹ اپ کے لیے ترتیب کا طے شدہ مقام درکار ہے۔ آپ کے کمپوزیٹر کی فائلیں تبدیل نہیں کی گئیں۔"
+"Copying MangoWM's system configuration would change its include paths. Create your user configuration manually before running setup." = "MangoWM کی سسٹم ترتیب کاپی کرنے سے شامل فائلوں کے راستے بدل جائیں گے۔ سیٹ اپ چلانے سے پہلے اپنی صارف ترتیب دستی طور پر بنائیں۔"
+"Space inside the window frame." = "ونڈو کے فریم کے اندر کی جگہ۔"

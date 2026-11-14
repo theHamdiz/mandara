@@ -10705,3 +10705,5 @@
 "MangoWM's global settings must be a table." = "Thiết lập chung của MangoWM phải là một bảng."
 "MangoWM's optional sources must be a path or a list of paths." = "Các nguồn tùy chọn của MangoWM phải là một đường dẫn hoặc danh sách đường dẫn."
 "MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM dùng cấu hình tùy chỉnh tại {path}. Thiết lập tự động yêu cầu vị trí cấu hình mặc định. Các tệp của trình tổng hợp không bị thay đổi."
+"Copying MangoWM's system configuration would change its include paths. Create your user configuration manually before running setup." = "Sao chép cấu hình hệ thống của MangoWM sẽ thay đổi đường dẫn đến các tệp được nạp. Hãy tự tạo cấu hình người dùng trước khi chạy thiết lập."
+"Space inside the window frame." = "Khoảng trống bên trong khung cửa sổ."

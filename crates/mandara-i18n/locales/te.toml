@@ -10706,3 +10706,5 @@
 "MangoWM's global settings must be a table." = "MangoWM సాధారణ సెట్టింగ్‌లు పట్టికగా ఉండాలి."
 "MangoWM's optional sources must be a path or a list of paths." = "MangoWM ఐచ్ఛిక మూలాలు ఒక పాత్ లేదా పాత్‌ల జాబితాగా ఉండాలి."
 "MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM {path}లో అనుకూల కాన్ఫిగరేషన్‌ను ఉపయోగిస్తోంది. ఆటోమేటిక్ సెటప్‌కు డిఫాల్ట్ కాన్ఫిగరేషన్ స్థానం అవసరం. మీ కంపోజిటర్ ఫైళ్లు మార్చబడలేదు."
+"Copying MangoWM's system configuration would change its include paths. Create your user configuration manually before running setup." = "MangoWM సిస్టమ్ కాన్ఫిగరేషన్‌ను కాపీ చేస్తే చేర్చిన ఫైళ్ల మార్గాలు మారిపోతాయి. సెటప్‌ను అమలు చేసే ముందు మీ వినియోగదారు కాన్ఫిగరేషన్‌ను మాన్యువల్‌గా సృష్టించండి."
+"Space inside the window frame." = "విండో ఫ్రేమ్ లోపలి ఖాళీ."

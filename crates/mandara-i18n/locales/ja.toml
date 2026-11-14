@@ -11048,3 +11048,5 @@
 "MangoWM's global settings must be a table." = "MangoWM のグローバル設定はテーブルである必要があります。"
 "MangoWM's optional sources must be a path or a list of paths." = "MangoWM の任意の読み込み先は、パスまたはパスの一覧である必要があります。"
 "MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM は {path} のカスタム設定を使用しています。自動セットアップには既定の設定場所が必要です。コンポジターのファイルは変更されていません。"
+"Copying MangoWM's system configuration would change its include paths. Create your user configuration manually before running setup." = "MangoWM のシステム設定をコピーすると、読み込むファイルのパスが変わります。セットアップを実行する前に、ユーザー設定を手動で作成してください。"
+"Space inside the window frame." = "ウィンドウ枠の内側の余白。"

@@ -10704,3 +10704,5 @@
 "MangoWM's global settings must be a table." = "As definições globais do MangoWM têm de ser uma tabela."
 "MangoWM's optional sources must be a path or a list of paths." = "As fontes opcionais do MangoWM têm de ser um caminho ou uma lista de caminhos."
 "MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "O MangoWM usa uma configuração personalizada em {path}. A configuração automática requer o local padrão. Seus arquivos do compositor não foram alterados."
+"Copying MangoWM's system configuration would change its include paths. Create your user configuration manually before running setup." = "Copiar a configuração de sistema do MangoWM alteraria os caminhos dos arquivos incluídos. Crie sua configuração de usuário manualmente antes de executar a configuração."
+"Space inside the window frame." = "Espaço dentro da moldura da janela."

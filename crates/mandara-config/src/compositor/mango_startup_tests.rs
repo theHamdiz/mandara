@@ -237,3 +237,41 @@ fn mango_seed_rolls_back_when_relative_includes_break_in_the_new_location() {
         original
     );
 }
+
+#[test]
+fn mango_seed_does_not_silently_drop_relative_optional_includes() {
+    if std::process::Command::new("mango")
+        .arg("-v")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    for (extension, original) in [
+        ("conf", "source_optional=./bindings.conf\n"),
+        ("toml", "[global]\nsource_optional = ['./bindings.conf']\n"),
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let system = directory.path().join("system");
+        let home = directory.path().join("home");
+        std::fs::create_dir(&system).unwrap();
+        let source = system.join(format!("config.{extension}"));
+        std::fs::write(&source, original).unwrap();
+        std::fs::write(
+            system.join("bindings.conf"),
+            "bind=SUPER,Return,spawn,foot\n",
+        )
+        .unwrap();
+        let store = crate::doctor::fix::Store {
+            backups: directory.path().join("backups"),
+            unsupported: directory.path().join("unsupported.json"),
+        };
+        assert!(
+            mango_seed::seed_in(&home, &system, &crate::doctor::CheckEnv::default(), &store)
+                .is_err(),
+            "{extension}: an optional include must not silently disappear"
+        );
+        assert!(!mango_config::user_file(&home).exists());
+        assert_eq!(std::fs::read_to_string(source).unwrap(), original);
+    }
+}

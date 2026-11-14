@@ -27,6 +27,19 @@ impl ReadBudget {
         if super::is_generated(&real) {
             return Ok(None);
         }
+        self.read_real(file, real).map(Some)
+    }
+
+    pub(super) fn read_all(&mut self, file: &Path) -> Result<String> {
+        self.read_real(file, std::fs::canonicalize(file)?)
+    }
+
+    pub(super) fn snapshot(&mut self, file: &Path, text: &str) -> Result<()> {
+        self.visit(std::fs::canonicalize(file)?)?;
+        self.retain(text.len())
+    }
+
+    fn visit(&mut self, real: PathBuf) -> Result<()> {
         self.seen.insert(real);
         self.visits += 1;
         ensure!(
@@ -37,6 +50,11 @@ impl ReadBudget {
             self.seen.len() <= crate::keybinds::MAX_FILES,
             mandara_i18n::t("The shortcut configuration includes too many files.")
         );
+        Ok(())
+    }
+
+    fn read_real(&mut self, file: &Path, real: PathBuf) -> Result<String> {
+        self.visit(real)?;
         let input = crate::regular::open(file)?;
         let mut text = String::new();
         input
@@ -46,11 +64,16 @@ impl ReadBudget {
             text.len() <= crate::keybinds::MAX_FILE_BYTES,
             mandara_i18n::t("The shortcut configuration is too large to edit.")
         );
-        self.bytes += text.len();
+        self.retain(text.len())?;
+        Ok(text)
+    }
+
+    fn retain(&mut self, bytes: usize) -> Result<()> {
+        self.bytes += bytes;
         ensure!(
             self.bytes <= crate::keybinds::MAX_TOTAL_BYTES,
             mandara_i18n::t("The shortcut configuration is too large to edit.")
         );
-        Ok(Some(text))
+        Ok(())
     }
 }

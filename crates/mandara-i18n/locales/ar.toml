@@ -11051,3 +11051,5 @@
 "MangoWM's global settings must be a table." = "يجب أن تكون إعدادات MangoWM العامة جدولًا."
 "MangoWM's optional sources must be a path or a list of paths." = "يجب أن تكون المصادر الاختيارية في MangoWM مسارًا أو قائمة مسارات."
 "MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "يستخدم MangoWM إعدادات مخصصة في {path}. يتطلب الإعداد التلقائي موقع الإعدادات الافتراضي. لم تتغير ملفات إعدادات مدير النوافذ."
+"Copying MangoWM's system configuration would change its include paths. Create your user configuration manually before running setup." = "سيؤدي نسخ إعدادات MangoWM العامة إلى تغيير مسارات الملفات المضمّنة. أنشئ إعدادات المستخدم يدويًا قبل تشغيل الإعداد."
+"Space inside the window frame." = "مساحة داخل إطار النافذة."

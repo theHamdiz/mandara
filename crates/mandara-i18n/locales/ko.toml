@@ -10803,3 +10803,5 @@
 "MangoWM's global settings must be a table." = "MangoWM의 전역 설정은 테이블이어야 합니다."
 "MangoWM's optional sources must be a path or a list of paths." = "MangoWM의 선택적 소스는 경로 또는 경로 목록이어야 합니다."
 "MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM이 {path}의 사용자 지정 설정을 사용하고 있습니다. 자동 설정에는 기본 설정 위치가 필요합니다. 컴포지터 파일은 변경되지 않았습니다."
+"Copying MangoWM's system configuration would change its include paths. Create your user configuration manually before running setup." = "MangoWM의 시스템 설정을 복사하면 포함된 파일의 경로가 바뀝니다. 설정을 실행하기 전에 사용자 설정을 수동으로 만드세요."
+"Space inside the window frame." = "창 테두리 안쪽 여백."

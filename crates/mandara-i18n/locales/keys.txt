@@ -1,3 +1,4 @@
+  {suggestions}
  +{count} more
 "English" = "Translation" pairs, one file per language
 "{value}" isn't a duration like 30m, 2h or 1h30m
@@ -1677,6 +1678,7 @@ Copy to clipboard
 Copy translation
 Copy with meaning
 Copy {file} ({size}) to {dir}
+Copying MangoWM's system configuration would change its include paths. Create your user configuration manually before running setup.
 Copying…
 Coral
 Core {n}
@@ -7161,6 +7163,7 @@ Space between the left bar's items and its long edges (unset: Item size)
 Space between the right bar's items and its long edges (unset: Item size)
 Space inside cards
 Space inside each bar item, around its content
+Space inside the window frame.
 Spacing
 Speak the truth
 Speakers
@@ -8620,7 +8623,6 @@ Unknown category
 Unknown city or time zone {name}
 Unknown code type {kind}
 Unknown command {command}; did you mean:
-  {suggestions}
 Unknown command {command}; run `mandara commands` for the catalog
 Unknown effect "{effect}"
 Unknown event
