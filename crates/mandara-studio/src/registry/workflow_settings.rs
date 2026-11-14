@@ -90,6 +90,7 @@ pub fn entries() -> Vec<Setting> {
         s(Launcher, PROVIDERS, "/launcher/providers/emoji/enabled", tk("Emoji"), tk("Find emoji by English or Arabic name; Enter copies"), Toggle),
         s(Launcher, PROVIDERS, "/launcher/providers/emoji/prefix", tk("Emoji prefix"), tk("Typed first to search only emoji"), Text { placeholder: ":" }),
         s(Launcher, PROVIDERS, "/launcher/providers/emoji/global", tk("Emoji in plain searches"), tk("Mix matching emoji into every search"), Toggle),
+        s(Launcher, PROVIDERS, "/launcher/providers/kaomoji/enabled", tk("Kaomoji"), tk("Open the kaomoji picker"), Toggle),
         s(Launcher, PROVIDERS, "/launcher/providers/windows/enabled", tk("Open windows"), tk("Find a window by title or app; Enter focuses it"), Toggle),
         s(Launcher, PROVIDERS, "/launcher/providers/windows/prefix", tk("Windows prefix"), tk("Typed first to search only open windows"), Text { placeholder: "@" }),
         s(Launcher, PROVIDERS, "/launcher/providers/windows/global", tk("Windows in plain searches"), tk("Mix matching windows into every search"), Toggle),

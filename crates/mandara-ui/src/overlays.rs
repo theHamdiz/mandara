@@ -20,6 +20,7 @@ mod launcher_looks;
 mod beacon_keyboard;
 mod launcher_agent;
 mod launcher_hint;
+mod kaomoji;
 
 use crate::bidi::Bidi as _;
 use crate::launcher_icons::IconLedger;
@@ -968,6 +969,9 @@ fn search(query: &str, apps: &[DesktopApp], index: &[Item]) -> Vec<Item> {
 fn search_with(query: &str, apps: &[DesktopApp], index: &[Item], ctx: &SearchCtx) -> Vec<Item> {
     let q = query.trim();
     let routed = launcher_ext::route(q, &ctx.providers);
+    if let Some(("kaomoji", rest)) = routed {
+        return kaomoji::results(rest, None);
+    }
     let actions_prefix = routed.filter(|(id, _)| *id == "actions").map(|(_, rest)| rest);
     if let Some(expr) = q.strip_prefix('=') {
         apps::calculate(expr).map(|value| vec![Item::Calc { expr: expr.trim().to_string(), value }]).unwrap_or_default()
@@ -1513,12 +1517,24 @@ impl LauncherView {
         // Where the tiles were (the grid reflows from there).
         let was_grid = self.grid_active();
         let before: std::collections::HashMap<String, usize> = if was_grid { self.results.iter().enumerate().map(|(i, it)| (usage_key(it), i)).collect() } else { Default::default() };
-        let mut results = search_with(&self.effective_query(), &self.apps, &self.index, &self.ctx);
+        let kaomoji = self.kaomoji_active();
+        if self.category.is_some_and(|f| matches!(f, GridFilter::Kaomoji(_)) != kaomoji) {
+            self.category = None;
+        }
+        let mut results = if let Some(rest) = self.kaomoji_query() {
+            let mood = match self.category {
+                Some(GridFilter::Kaomoji(mood)) => Some(mood),
+                _ => None,
+            };
+            kaomoji::results(rest, mood)
+        } else {
+            search_with(&self.effective_query(), &self.apps, &self.index, &self.ctx)
+        };
         if self.mode == Some(BeaconMode::Apps) {
             results.retain(|i| matches!(i, Item::App(_)));
         }
         let grid = self.grid_active();
-        if grid && let Some(f) = self.category {
+        if grid && let Some(f) = self.category.filter(|f| !matches!(f, GridFilter::Kaomoji(_))) {
             results.retain(|i| f.keeps(i, &self.ctx.pinned));
         }
         if self.grouped() {
@@ -1551,11 +1567,23 @@ impl LauncherView {
         }
     }
 
+    fn kaomoji_query(&self) -> Option<&str> {
+        self.mode.is_none().then_some(())?;
+        match launcher_ext::route(&self.query, &self.ctx.providers) {
+            Some(("kaomoji", rest)) => Some(rest),
+            _ => None,
+        }
+    }
+
+    fn kaomoji_active(&self) -> bool {
+        self.kaomoji_query().is_some()
+    }
+
     /// The grid shows: the Grid layout while browsing or typing plain
     /// words, and the Beacon's Apps mode.
     fn grid_active(&self) -> bool {
         use mandara_config::workflow::{LauncherLayout, LauncherStyle};
-        match self.look.style {
+        self.kaomoji_active() || match self.look.style {
             LauncherStyle::Classic => self.look.layout == LauncherLayout::Grid && launcher_looks::is_plain(&self.query, &self.ctx.providers),
             LauncherStyle::Beacon => self.agent.is_none() && self.mode == Some(BeaconMode::Apps),
         }
@@ -1678,7 +1706,7 @@ impl LauncherView {
         let count = self.count();
         self.blink_from = Instant::now();
         let beacon = self.look.style == mandara_config::workflow::LauncherStyle::Beacon;
-        if beacon_keyboard::handle(self.look.style, &self.focus, k, window, cx) {
+        if !self.kaomoji_active() && beacon_keyboard::handle(self.look.style, &self.focus, k, window, cx) {
             return;
         }
         // Beacon: Ctrl+1–4 pick a mode; Backspace on an empty field or
@@ -1697,8 +1725,9 @@ impl LauncherView {
         }
         // Grid: arrows move in two dimensions, Tab switches the category.
         if self.grid_active() && !k.modifiers.control {
-            if k.key == "tab" && self.look.grid_categories && !self.categories.is_empty() {
-                let next = launcher_looks::cycle(self.category, &self.categories, k.modifiers.shift);
+            let categories = self.grid_categories();
+            if k.key == "tab" && (self.look.grid_categories || self.kaomoji_active()) && !categories.is_empty() {
+                let next = launcher_looks::cycle(self.category, categories, k.modifiers.shift);
                 self.set_category(next, cx);
                 return;
             }
@@ -2098,7 +2127,7 @@ impl Render for LauncherView {
         let lead_px = if look.compact { ROW_LEAD_COMPACT_PX } else { ROW_LEAD_PX };
         let grid = self.grid_active();
         let grouped = !grid && !self.sections.is_empty();
-        let chips = grid && look.grid_categories && !self.categories.is_empty();
+        let chips = grid && (look.grid_categories || self.kaomoji_active()) && !self.grid_categories().is_empty();
         let chips_h = if chips { launcher_looks::CHIPS_H + LIST_GAP } else { 0.0 };
         let hints_h = if look.hints { launcher_looks::HINTS_H + LIST_GAP } else { 0.0 };
         // Rows: as many results as configured, as fit the height setting.
@@ -2114,7 +2143,7 @@ impl Render for LauncherView {
         // The grid's columns follow the width this placement gives.
         let g = grid.then(|| {
             let width = crate::launcher_place::for_config_with_bar(&cfg, (sw, sh), look.size().1, bar_here, bar_span, button).rect.w;
-            launcher_looks::grid_geom(width - PAD * 2.0, look.grid_icon(), look.grid_columns)
+            self.result_grid_geom(width - PAD * 2.0)
         });
         let lay = if grouped { launcher_looks::list_layout(n, &self.sections, row_h, launcher_looks::HEADER_H) } else { Default::default() };
         // Visible window and list height (the width comes from the placement).
@@ -2424,6 +2453,31 @@ struct Overlays {
 
 impl gpui::Global for Overlays {}
 
+#[derive(Default)]
+struct OpenKaomoji(Option<String>);
+
+impl gpui::Global for OpenKaomoji {}
+
+/// Open the normal launcher directly in the kaomoji grid.
+pub(crate) fn show_kaomoji(cx: &mut App) -> bool {
+    let cfg = &config(cx).read(cx).get().launcher;
+    let provider = &cfg.providers.kaomoji;
+    if !cfg.enabled || !provider.enabled
+        || !matches!(launcher_ext::route(&provider.prefix, &cfg.providers), Some(("kaomoji", "")))
+    {
+        return false;
+    }
+    cx.default_global::<OpenKaomoji>().0 = Some(provider.prefix.clone());
+    shell(cx).update(cx, |s, cx| {
+        if s.launcher_open {
+            cx.notify();
+        } else {
+            s.set_launcher(true, cx);
+        }
+    });
+    true
+}
+
 /// The output (connector name, and its logical size when known) the next
 /// wallpaper picker opens on.
 #[derive(Default)]
@@ -2461,6 +2515,18 @@ pub fn init_overlays(cx: &mut App) {
                 .open_window(overlay_spec(SurfaceRole::Launcher, w, h, display), |window, cx| cx.new(|cx| LauncherView::new((w, h), window, cx)))
                 .map_err(|e| tracing::error!("launcher: {e:#}"))
                 .ok();
+        }
+        let kaomoji = std::mem::take(&mut cx.default_global::<OpenKaomoji>().0);
+        if launcher && let (Some(prefix), Some(handle)) = (kaomoji, overlays.launcher) {
+            let _ = handle.update(cx, |view, window, cx| {
+                view.mode = None;
+                view.agent = None;
+                view.category = None;
+                view.select_all = false;
+                view.set_query(prefix, cx);
+                view.focus.focus(window, cx);
+                cx.notify();
+            });
         }
         if session && !is_open(&overlays.session, cx) {
             overlays.session = cx

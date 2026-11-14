@@ -46,6 +46,7 @@ pub mod defaults {
     pub const LAUNCHER_DIM: f32 = 0.0;
     /// Provider prefixes.
     pub const PREFIX_EMOJI: &str = ":";
+    pub const PREFIX_KAOMOJI: &str = "::";
     pub const PREFIX_WINDOWS: &str = "@";
     pub const PREFIX_CLIPBOARD: &str = "#";
     pub const PREFIX_WALLPAPERS: &str = "*";
@@ -124,6 +125,10 @@ fn provider(prefix: &str, global: bool) -> ProviderConfig {
     ProviderConfig { enabled: true, prefix: prefix.into(), global }
 }
 
+fn kaomoji_provider() -> ProviderConfig {
+    provider(defaults::PREFIX_KAOMOJI, false)
+}
+
 /// The launcher's search providers besides apps, `/` slash commands and
 /// `=` arithmetic.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -131,6 +136,9 @@ fn provider(prefix: &str, global: bool) -> ProviderConfig {
 pub struct LauncherProviders {
     /// Emoji by English or Arabic name; Enter copies (or pastes).
     pub emoji: ProviderConfig,
+    /// Categorized kaomoji picker.
+    #[serde(default = "kaomoji_provider")]
+    pub kaomoji: ProviderConfig,
     /// Open windows; Enter focuses.
     pub windows: ProviderConfig,
     /// Clipboard history; Enter copies (or pastes).
@@ -147,6 +155,7 @@ impl Default for LauncherProviders {
     fn default() -> Self {
         Self {
             emoji: provider(defaults::PREFIX_EMOJI, false),
+            kaomoji: kaomoji_provider(),
             windows: provider(defaults::PREFIX_WINDOWS, true),
             clipboard: provider(defaults::PREFIX_CLIPBOARD, false),
             wallpapers: provider(defaults::PREFIX_WALLPAPERS, false),
@@ -158,8 +167,8 @@ impl Default for LauncherProviders {
 
 impl LauncherProviders {
     /// `(id, provider)` pairs, in display order.
-    pub fn all(&self) -> [(&'static str, &ProviderConfig); 6] {
-        [("emoji", &self.emoji), ("windows", &self.windows), ("clipboard", &self.clipboard), ("wallpapers", &self.wallpapers), ("files", &self.files), ("actions", &self.actions)]
+    pub fn all(&self) -> [(&'static str, &ProviderConfig); 7] {
+        [("emoji", &self.emoji), ("kaomoji", &self.kaomoji), ("windows", &self.windows), ("clipboard", &self.clipboard), ("wallpapers", &self.wallpapers), ("files", &self.files), ("actions", &self.actions)]
     }
 }
 
@@ -965,6 +974,7 @@ mod tests {
         let old: ShellConfig = toml::from_str("[launcher]\nmax_results = 9\n").unwrap();
         assert_eq!(old.launcher.max_results, 9);
         assert_eq!(old.launcher.providers.emoji.prefix, ":");
+        assert_eq!(old.launcher.providers.kaomoji, kaomoji_provider());
         assert_eq!(old.dock, DockConfig::default());
         assert_eq!(old.clipboard.max_entries, defaults::CLIPBOARD_MAX_ENTRIES);
         assert!(old.switcher.release_commits);

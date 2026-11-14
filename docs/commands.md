@@ -56,6 +56,7 @@ mode blocks every update request.
 
 ```bash
 mandara msg launcher toggle
+mandara msg launcher kaomoji               # categorized grid, also opened by typing ::
 mandara msg shell state                     # what is open (panel, sidebar, launcher, menus) and whether the launcher opens on hover
 mandara msg hotcorners status               # each corner's action and state per display, recent fires; hotcorners trigger top-left
 mandara msg panel open media

@@ -627,6 +627,7 @@ Analog
 Analog clock
 Anchor
 Angle
+Angry
 Animate opening applications
 Animated current conditions, hourly and 5-day forecast
 Animated loaders from the most popular Plymouth collection
@@ -1213,6 +1214,7 @@ Category chips
 Catppuccin
 Catppuccin Mocha
 Catppuccin's pastel flavours for the rEFInd menu
+Cats
 Caustics
 Cel-shaded speed rays, halftone dots and an inked frame, like a comic panel
 Cell shape
@@ -1817,6 +1819,7 @@ Critical notifications
 Critical notifications still pop up while do not disturb is on
 Critical only
 Crop shape
+Crying
 Ctrl
 Ctrl+Enter to send · Enter for a new line
 Ctrl+Shift
@@ -3084,6 +3087,7 @@ Hand-tuned needs no download and skips wallpapers it isn't sure about. Model dow
 Hands
 Hands over numerals
 Hangs from the top edge with curved shoulders
+Happy
 Hard
 Hard disk
 Hard shadow
@@ -3681,6 +3685,7 @@ KWin's active shortcuts changed. Refresh the list and try again.
 KWin: startup entry {path}
 Kahlil Gibran
 Kanagawa
+Kaomoji
 Karachi
 KeePassXC
 KeePassXC didn't start.
@@ -5340,6 +5345,7 @@ Open the development folder
 Open the drives panel to mount or safely remove it
 Open the eyedropper; replies with the picked color's formats (or an error if cancelled)
 Open the folder afterwards
+Open the kaomoji picker
 Open the panel after picking
 Open the panel to download the Qur'an
 Open the reader at a surah or ayah and return its text and meaning
@@ -5412,6 +5418,7 @@ Organic warp
 Other
 Other Wi-Fi networks listed in the panel
 Other apps
+Other kaomojis
 Other settings
 Other xkb options
 Our Mutual Friend
@@ -6489,6 +6496,7 @@ SURAH {n}
 SVG, PNG, JPEG or WebP
 SW
 Saadi
+Sad
 Safar
 Safely remove
 Safely remove a drive: unmount and lock its volumes, then eject or power it off
@@ -7388,6 +7396,7 @@ Surah {n} · {count} ayahs
 Surahs
 Surface
 Surface transitions
+Surprise
 Surprise me
 Suspend
 Suspend, then hibernate
@@ -10349,6 +10358,7 @@ your default
 “{prefix}” clipboard
 “{prefix}” emoji
 “{prefix}” files
+“{prefix}” kaomoji
 “{prefix}” wallpapers
 “{prefix}” windows
 “{repo}” isn't an owner/name repository

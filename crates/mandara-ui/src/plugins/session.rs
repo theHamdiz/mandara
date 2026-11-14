@@ -87,6 +87,13 @@ pub fn register(r: &mut PluginRegistry) {
         );
     }
     r.command(
+        LAUNCHER_ID,
+        CommandSpec::new("launcher kaomoji", mandara_i18n::tk("Open the kaomoji picker"), |_, cx| {
+            Ok(json!({ "open": crate::overlays::show_kaomoji(cx) }))
+        })
+        .example("launcher kaomoji"),
+    );
+    r.command(
         ID,
         CommandSpec::new_output("session run", mandara_i18n::tk("Lock, log out, sleep, hibernate, restart or shut down"), |a, _| {
             let id = a.str(0)?;

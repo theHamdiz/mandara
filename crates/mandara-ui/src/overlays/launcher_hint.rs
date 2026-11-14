@@ -40,6 +40,7 @@ pub(super) enum Form {
 fn provider_entry(id: &str) -> Option<&'static str> {
     Some(match id {
         "emoji" => tk("“{prefix}” emoji"),
+        "kaomoji" => tk("“{prefix}” kaomoji"),
         "windows" => tk("“{prefix}” windows"),
         "clipboard" => tk("“{prefix}” clipboard"),
         "wallpapers" => tk("“{prefix}” wallpapers"),
@@ -150,9 +151,11 @@ mod tests {
         // A switched-off provider and an emptied prefix leave the list; a
         // changed prefix shows as configured.
         providers.clipboard.enabled = false;
+        providers.kaomoji.enabled = false;
         providers.files.prefix.clear();
         providers.windows.prefix = "w:".into();
         let text = compose(&providers, true, Form::Full);
+        assert!(!text.contains("kaomoji"));
         assert!(!text.contains("clipboard") && !text.contains("files"), "{text:?}");
         assert!(text.contains("“w:” windows") && !text.contains("“@”"), "{text:?}");
         // Built-in syntax and the agent lead the providers (so they stay

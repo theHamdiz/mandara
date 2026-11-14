@@ -777,6 +777,9 @@ mod tests {
     fn routes_by_longest_prefix() {
         let mut p = LauncherProviders::default();
         assert_eq!(route(":smile", &p), Some(("emoji", "smile")));
+        assert_eq!(route("::gato", &p), Some(("kaomoji", "gato")));
+        p.kaomoji.enabled = false;
+        assert_eq!(route("::gato", &p), Some(("emoji", ":gato")));
         assert_eq!(route("  @term", &p), Some(("windows", "term")));
         assert_eq!(route("firefox", &p), None);
         p.emoji.enabled = false;

@@ -181,6 +181,7 @@ pub(super) enum GridFilter {
     Pinned,
     /// A display group of `crate::plugins::dock::applications::group_of`.
     Group(&'static str),
+    Kaomoji(super::kaomoji::Mood),
 }
 
 impl GridFilter {
@@ -188,6 +189,7 @@ impl GridFilter {
         match self {
             GridFilter::Pinned => t("Pinned").into(),
             GridFilter::Group(g) => t(g).into(),
+            GridFilter::Kaomoji(mood) => t(mood.label()).into(),
         }
     }
 
@@ -470,6 +472,32 @@ fn glass(cfg: &mandara_config::ShellConfig, palette: &MandaraPalette, progress: 
 impl LauncherView {
     // ── Grid ────────────────────────────────────────────────────────────
 
+    pub(super) fn grid_categories(&self) -> &[GridFilter] {
+        if self.kaomoji_active() {
+            use super::kaomoji::Mood;
+            &[
+                GridFilter::Kaomoji(Mood::Happy),
+                GridFilter::Kaomoji(Mood::Sad),
+                GridFilter::Kaomoji(Mood::Surprise),
+                GridFilter::Kaomoji(Mood::Angry),
+                GridFilter::Kaomoji(Mood::Crying),
+                GridFilter::Kaomoji(Mood::Cats),
+                GridFilter::Kaomoji(Mood::Other),
+            ]
+        } else {
+            &self.categories
+        }
+    }
+
+    pub(super) fn result_grid_geom(&self, width: f32) -> GridGeom {
+        if self.kaomoji_active() {
+            let cols = ((width / 162.0).floor() as usize).clamp(1, self.look.grid_columns.clamp(1, 10) as usize);
+            GridGeom { cols, cell_w: width.max(0.0) / cols as f32, tile_h: 104.0, icon: 0.0 }
+        } else {
+            grid_geom(width, self.look.grid_icon(), self.look.grid_columns)
+        }
+    }
+
     /// The grid's rows `range` (the `uniform_list` asks for visible ones).
     fn grid_rows(&mut self, range: Range<usize>, g: GridGeom, window: &mut Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let palette = mandara_core::frame_palette(window, cx);
@@ -492,7 +520,12 @@ impl LauncherView {
                     None => (dx, dy, opacity),
                 };
                 let selected = i == self.selected;
-                let lead = self.lead(&item, g.icon, &palette, cx);
+                let kaomoji = matches!(&item, Item::Hit(hit) if hit.provider == "kaomoji");
+                let lead = if let Item::Hit(hit) = &item && kaomoji {
+                    super::kaomoji::tile(&hit.label, g.tile_h - TILE_PAD_TOP)
+                } else {
+                    self.lead(&item, g.icon, &palette, cx)
+                };
                 let hover = cx.listener(move |this, hovered: &bool, _, cx| {
                     if *hovered && !ignore_mouse && this.selected != i {
                         this.selected = i;
@@ -518,7 +551,7 @@ impl LauncherView {
                         .when(selected, |el| el.bg(accent.with_alpha(SELECTED_ALPHA).hsla()))
                         .when(!selected, |el| el.hover(|s| s.bg(palette.on_surface.with_alpha(HOVER_ALPHA).hsla())))
                         .child(lead)
-                        .child(
+                        .when(!kaomoji, |el| el.child(
                             div()
                                 .w_full()
                                 .px(px(CHIP_GAP))
@@ -529,7 +562,7 @@ impl LauncherView {
                                 .line_height(px(NAME_LINE_H))
                                 .when(selected, |el| el.text_color(accent.hsla()))
                                 .child(title_of(&item)),
-                        )
+                        ))
                         .on_hover(hover)
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.activate(i, cx))),
                 );
@@ -556,7 +589,8 @@ impl LauncherView {
     pub(super) fn chips_element(&self, palette: &MandaraPalette, modes: Option<usize>, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let accent = readable(palette.primary, palette);
         let on_accent = accent.best_on(Color::hex("#ffffff"), Color::hex("#101010"));
-        let focus = modes.map(|modes| super::beacon_keyboard::categories(self.categories.len() + 1, modes, window, cx));
+        let categories = self.grid_categories();
+        let focus = modes.map(|modes| super::beacon_keyboard::categories(categories.len() + 1, modes, window, cx));
         // Shaped like the chips of the design picked under Themes →
         // Components: classic filled pills, Material's outlined chips with a
         // tinted pick, Connected's outlined pills.
@@ -594,7 +628,7 @@ impl LauncherView {
         let mut row = div().id("launcher-chips").h(px(CHIPS_H)).flex_none().row().gap(px(CHIP_GAP)).overflow_x_scroll()
             .when(modes.is_some(), |el| el.flex_row())
             .when_some(focus.as_ref(), |el, (scroll, _)| el.track_scroll(scroll));
-        let count = self.categories.len() + 1;
+        let count = categories.len() + 1;
         let rtl = modes.is_some() && crate::bidi::rtl();
         for child in 0..count {
             let index = super::beacon_keyboard::category_child(child, count, rtl);
@@ -603,7 +637,7 @@ impl LauncherView {
                 continue;
             }
             let n = index - 1;
-            let f = self.categories[n];
+            let f = categories[n];
             row = row.child(chip(SharedString::from(format!("launcher-chip-{n}")), f.label(), self.category == Some(f), n + 1).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 let next = if this.category == Some(f) { None } else { Some(f) };
                 this.set_category(next, cx);
@@ -713,10 +747,10 @@ impl LauncherView {
         let row_h = if look.compact { super::ROW_H_COMPACT } else { super::ROW_H };
         let lead_px = if look.compact { super::ROW_LEAD_COMPACT_PX } else { super::ROW_LEAD_PX };
         let hints_h = if look.hints { HINTS_H } else { 0.0 };
-        let chips = grid && look.grid_categories && !self.categories.is_empty();
+        let chips = grid && (look.grid_categories || self.kaomoji_active()) && !self.grid_categories().is_empty();
         let room = (place.card.h - CARD_PAD * 2.0 - hints_h).max(row_h);
         let inner_w = place.card.w - CARD_PAD * 2.0;
-        let g = grid_geom(inner_w, look.grid_icon(), look.grid_columns);
+        let g = self.result_grid_geom(inner_w);
         self.grid_cols = g.cols;
         let lay = list_layout(self.results.len(), &self.sections, row_h, HEADER_H);
         let content_h = if grid {
@@ -871,7 +905,7 @@ impl LauncherView {
             let reveal = if card_target > 0.0 { (card_h / card_target).clamp(0.0, 1.0) } else { (card_h / (CARD_PAD * 2.0 + row_h)).clamp(0.0, 1.0) };
             let body = if grid {
                 let grid_el = self.grid_element(g, list_h, &palette, cx);
-                div().flex().flex_col().gap(px(CARD_PAD)).when(chips, |el| el.child(self.chips_element(&palette, Some(modes.len()), window, cx))).child(grid_el).into_any_element()
+                div().flex().flex_col().gap(px(CARD_PAD)).when(chips, |el| el.child(self.chips_element(&palette, (!self.kaomoji_active()).then_some(modes.len()), window, cx))).child(grid_el).into_any_element()
             } else {
                 self.grouped_element(&lay, list_h, row_h, lead_px, true, &palette, cx)
             };
