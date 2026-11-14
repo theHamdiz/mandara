@@ -37,8 +37,8 @@ in
 
     package = mkOption {
       type = types.package;
-      default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
-      defaultText = literalExpression "mandara.packages.\${pkgs.stdenv.hostPlatform.system}.default";
+      default = (self.overlays.default pkgs pkgs).mandara;
+      defaultText = literalExpression "(mandara.overlays.default pkgs pkgs).mandara";
       description = "The Mandara package to install.";
     };
 

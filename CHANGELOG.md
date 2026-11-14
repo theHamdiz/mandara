@@ -6,6 +6,12 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Keep your own NixOS channel when adding Mandara.
+
+### Fixed
+
+- NixOS and Home Manager build Mandara with the host's packages. The install guide keeps your existing Nixpkgs input, kernel and driver configuration; standalone runs use the tested NixOS unstable channel.
+
 ## 0.30.1 — 2026-11-14
 
 This update repairs MangoWM startup and improves compatibility with older

@@ -323,7 +323,8 @@ Without curl, use the base system's `fetch`.
 
 **NixOS:** try `nix run github:theHamdiz/mandara`, then add
 `programs.mandara.enable = true;` through the NixOS or Home Manager module.
-Stable is the default; your system can stay on stable or unstable.
+The modules use your system's packages; standalone runs default to the
+tested NixOS unstable channel. Stable remains supported.
 Update from your configuration flake directory with
 `nix flake update mandara`, then `sudo nixos-rebuild switch --flake .` or
 `home-manager switch --flake .`. Use your input name if it differs from

@@ -1,7 +1,7 @@
 {
   description = "Mandara Shell: a design-first Wayland desktop shell for MangoWM, Niri, Hyprland, Sway, River Classic and Umbriel";
 
-  inputs.nixpkgs.url = "https://channels.nixos.org/nixos-26.05/nixexprs.tar.zst";
+  inputs.nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst";
   inputs.rust-overlay = {
     url = "github:oxalica/rust-overlay";
     inputs.nixpkgs.follows = "nixpkgs";
@@ -141,6 +141,7 @@
           expectedFile = (pkgs.formats.toml { }).generate "mandara-config.toml" cfg.settings;
         in
         {
+          host-packages = import ./nix/tests/host-packages.nix { inherit self lib pkgs; };
           nixos-module = nixos.config.system.build.toplevel;
           compression-library =
             assert lib.assertMsg (

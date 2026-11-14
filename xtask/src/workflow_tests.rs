@@ -228,8 +228,39 @@ fn nix_builds_cover_stable_unstable_and_the_previous_reported_release() {
             assert!(run.contains("--no-write-lock-file"));
         }
     }
+    assert!(job["steps"].as_sequence().unwrap().iter().any(|step| {
+        step["run"].as_str().is_some_and(|run| {
+            run.contains(".#checks.x86_64-linux.host-packages.drvPath")
+                && run.contains("--option abort-on-warn true")
+        })
+    }));
     let flake = std::fs::read_to_string(crate::root().join("flake.nix")).unwrap();
     assert!(flake.contains(
-        "inputs.nixpkgs.url = \"https://channels.nixos.org/nixos-26.05/nixexprs.tar.zst\""
+        "inputs.nixpkgs.url = \"https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst\""
     ));
+}
+
+#[test]
+fn nix_install_instructions_preserve_the_system_input() {
+    let guide = std::fs::read_to_string(crate::root().join("docs/install.md")).unwrap();
+    let nixos = guide
+        .split("## NixOS\n")
+        .nth(1)
+        .unwrap()
+        .split("## Compositors\n")
+        .next()
+        .unwrap();
+    assert!(
+        !nixos.contains("nixpkgs.url ="),
+        "adding Mandara must not replace the system's channel"
+    );
+    assert!(nixos.contains("inputs.mandara.inputs.nixpkgs.follows = \"nixpkgs\";"));
+    let lock: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(crate::root().join("flake.lock")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        lock["nodes"]["nixpkgs"]["original"]["url"],
+        "https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst"
+    );
 }

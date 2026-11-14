@@ -180,6 +180,9 @@ jobs:
 
       - uses: cachix/install-nix-action@v31
 
+      - name: Host package isolation
+        run: nix eval --raw .#checks.x86_64-linux.host-packages.drvPath --override-input nixpkgs https://channels.nixos.org/${{ matrix.channel }}/nixexprs.${{ matrix.archive }} --no-write-lock-file --option abort-on-warn true
+
       - name: Build
         run: |
           nix build .#mandara --override-input nixpkgs https://channels.nixos.org/${{ matrix.channel }}/nixexprs.${{ matrix.archive }} --no-write-lock-file --print-build-logs --max-jobs 1 --cores 1

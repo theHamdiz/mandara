@@ -239,6 +239,7 @@ pub fn login_package(family: Family, program: &str) -> String {
 /// Offline flake inspection uses NixOS's standard util-linux `unshare` command.
 pub const NIXOS_HINT: &[&str] = &[
     "inputs.mandara.url = \"github:theHamdiz/mandara\";      # in your flake.nix",
+    "inputs.mandara.inputs.nixpkgs.follows = \"nixpkgs\";",
     "imports = [ inputs.mandara.nixosModules.default ];      # in configuration.nix",
     "programs.mandara.enable = true;                          # PAM, polkit, portals, fonts, services",
     "programs.mandara.greeter.enable = true;                  # optional: Mandara Login on greetd",

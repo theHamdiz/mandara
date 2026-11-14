@@ -473,12 +473,15 @@ available independently.
 Mandara is a flake: Nix builds it from source (a release build, like the
 tarballs) and keeps it updated, so the built-in updater stays out of the
 way. Studio → About says "Installed by Nix" and `mandara update apply`
-refuses; you update with `nix flake update` and a rebuild instead.
+refuses; update only the Mandara input with `nix flake update mandara` and
+rebuild your existing system configuration instead.
 
-The flake defaults to stable NixOS 26.05. The package and modules are checked
-against `nixos-26.05`, `nixos-unstable` and the older `nixos-25.11` branch.
-Keep your system's own channel: the `follows` line below makes Mandara use it
-too. This does not switch your system to unstable. Mandara is installed from
+Standalone runs use the official `nixos-unstable` channel, whose updates pass
+Hydra's NixOS tests. The package and modules are checked against
+`nixos-26.05`, `nixos-unstable` and the older `nixos-25.11` branch.
+The NixOS and Home Manager modules build Mandara with your host's package set.
+Preserve your system's Nixpkgs input and its locked revision when adding
+Mandara. Mandara is installed from
 this repository's flake; it is not currently a package in official Nixpkgs.
 
 Try it without installing anything:
@@ -494,32 +497,38 @@ Or install it into your profile with
 ### NixOS module
 
 The module sets up, system-wide, what `mandara install` sets up on other
-distributions. Add the flake to your system flake:
+distributions. Add only these inputs to your existing system flake:
 
 ```nix
-{
-  inputs = {
-    nixpkgs.url = "https://channels.nixos.org/nixos-26.05/nixexprs.tar.zst";
-    mandara.url = "github:theHamdiz/mandara";
-    mandara.inputs.nixpkgs.follows = "nixpkgs";
-  };
+inputs.mandara.url = "github:theHamdiz/mandara";
+inputs.mandara.inputs.nixpkgs.follows = "nixpkgs";
+```
 
-  outputs = { nixpkgs, mandara, ... }: {
-    nixosConfigurations.my-machine = nixpkgs.lib.nixosSystem {
-      modules = [
-        ./configuration.nix
-        mandara.nixosModules.default
-        {
-          programs.mandara.enable = true;
-          # programs.mandara.greeter.enable = true;  # Mandara Login
-        }
-      ];
-    };
-  };
+Keep your existing `nixpkgs` declaration, hardware configuration, kernel and
+driver settings. Add `mandara` to your existing `outputs` arguments, then add
+these entries to your existing `nixosSystem` module list:
+
+```nix
+mandara.nixosModules.default
+{
+  programs.mandara.enable = true;
+  # programs.mandara.greeter.enable = true;  # Mandara Login
 }
 ```
 
-Then `sudo nixos-rebuild switch`. With `programs.mandara.enable` you get:
+Update only the Mandara input with `nix flake update mandara`. Review the lock
+diff before rebuilding: your root Nixpkgs revision should remain unchanged.
+Build first with `sudo nixos-rebuild build --flake .#your-host`, using your
+existing flake and configuration name. Activate it with your usual rebuild
+command once you have reviewed the result.
+
+If an earlier channel change left a generation unable to boot, select the last
+working generation in your boot menu first. Restore your prior system input
+and its locked revision from your configuration history before rebuilding.
+Changing `flake.lock` alone does not replace an existing boot generation; see
+[NixOS rollback guidance](https://nixos.org/manual/nixos/stable/#sec-rollback).
+
+With `programs.mandara.enable` you get:
 
 | | |
 |---|---|
@@ -533,7 +542,7 @@ Then `sudo nixos-rebuild switch`. With `programs.mandara.enable` you get:
 | Option | Default | Meaning |
 |---|---|---|
 | `programs.mandara.enable` | `false` | Everything in the table above |
-| `programs.mandara.package` | this flake's build | The Mandara package |
+| `programs.mandara.package` | built with host Nixpkgs | The Mandara package |
 | `programs.mandara.fonts.enable` | `true` | Install the fonts |
 | `programs.mandara.services.enable` | `true` | Enable the services Studio talks to |
 | `programs.mandara.monitorBrightness.enable` | `false` | Load `i2c-dev` for external monitor brightness (DDC/CI); add yourself to the `i2c` group |
@@ -578,7 +587,7 @@ For per-user settings, import the Home Manager module:
 | Option | Default | Meaning |
 |---|---|---|
 | `programs.mandara.enable` | `false` | Install Mandara for this user |
-| `programs.mandara.package` | this flake's build | The Mandara package |
+| `programs.mandara.package` | built with host Nixpkgs | The Mandara package |
 | `programs.mandara.settings` | `{ }` | Settings written to `~/.config/mandara/config.toml` ([configuration.md](configuration.md)) |
 | `programs.mandara.systemd.enable` | `false` | Start Mandara as a systemd user service |
 | `programs.mandara.systemd.target` | `graphical-session.target` | The user target that starts and stops it |

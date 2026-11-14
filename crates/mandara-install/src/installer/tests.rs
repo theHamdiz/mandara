@@ -310,6 +310,8 @@ fn nixos_and_unknown_systems_get_hints() {
     run(&mut host, &FakeProbe::default(), f.facts(Family::NixOS), dry(InstallArgs { no_greeter: true, ..Default::default() })).unwrap();
     let text = host.text();
     assert!(text.contains("NixOS: install Mandara with its flake") && text.contains("programs.mandara.enable = true;"), "{text}");
+    assert!(text.contains("inputs.mandara.inputs.nixpkgs.follows = \"nixpkgs\";"), "{text}");
+    assert!(!text.contains("nixpkgs.url ="), "the installer must preserve the system's channel: {text}");
     assert!(text.contains("docs/install.md#nixos"), "{text}");
     assert!(!text.contains("would run: sudo"));
     // Mandara Login comes from the NixOS module, not greetd + cage packages.
