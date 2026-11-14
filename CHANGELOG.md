@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.30.0 — 2026-11-14
+
 Give Studio its own look, take control of app permissions and keep a way
 back with backups and snapshots. Compositor shortcuts can be edited safely,
 and more apps can follow your colours.
