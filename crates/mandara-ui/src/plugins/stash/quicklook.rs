@@ -214,6 +214,8 @@ impl Render for QuickLook {
         let item = self.item.clone();
         div()
             .id("stash-ql")
+            .font_family(cx.global::<crate::fonts::Fonts>().panels.clone())
+            .text_start()
             .track_focus(&self.focus)
             .size_full()
             .rounded(px(crate::style::radius(22.0)))

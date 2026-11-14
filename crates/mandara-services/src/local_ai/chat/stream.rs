@@ -27,11 +27,11 @@ pub(super) fn read(
         let read = reader
             .by_ref()
             .take((MAX_FRAME_BYTES + 1) as u64)
-            .read_until(b'\n', &mut line)
-            .map_err(|_| t("The AI connection closed before the reply finished").to_string())?;
+            .read_until(b'\n', &mut line);
         if cancelled() {
             return Ok(());
         }
+        let read = read.map_err(|_| t("The AI connection closed before the reply finished").to_string())?;
         if read == 0 {
             break;
         }

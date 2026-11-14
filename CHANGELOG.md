@@ -28,6 +28,8 @@ and more apps can follow your colours.
 
 ### Fixed
 
+- Stash summoned by a drag or shake shows only its drop zone until something lands in it. Standalone shelves keep their usual controls, and long shelf-menu options wrap within their rows.
+- Stopping Local AI while it connects or waits for a reply no longer reports a false connection error.
 - Backup histories keep the newest entries across source groups, literal repository names stay excluded, and cleanup previews leave shared files untouched. Conditional app permissions stay locked together so switching one off cannot expose another route.
 - Long labels and shortcuts in the desktop's circular menu now wrap or shorten inside the centre circle, with padding that also holds at smaller sizes and in Arabic.
 - Restoring your Look puts plugins back in their original top and vertical bar groups, including Raml Tram's middle rail. Hidden groups no longer create duplicate placements.

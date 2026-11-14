@@ -204,10 +204,11 @@ impl Session {
             Some(&body),
             key.map(Authorization::Bearer),
         )?;
-        let mut response = self
-            .agent
-            .run(request)
-            .map_err(|_| t("Could not reach the AI server").to_string())?;
+        let response = self.agent.run(request);
+        if self.cancelled() {
+            return Ok(());
+        }
+        let mut response = response.map_err(|_| t("Could not reach the AI server").to_string())?;
         Client::check_status(response.status())?;
         stream::read(
             response.body_mut().as_reader(),

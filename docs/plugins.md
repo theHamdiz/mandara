@@ -214,6 +214,11 @@ you summon them, and hold whatever you drop on them until you drag it out
 again. Use one to carry a file between two folders, to gather pictures and
 links for a message, or to park a snippet of text while you switch apps.
 
+A shake or drag reaching an edge opens just the drop zone, without a shelf
+frame or title bar. Once something lands, the shelf's controls appear.
+Shelves opened from the bar, tray, a shortcut or `stash new` keep their usual
+controls, including when empty.
+
 - **Anything goes in.** Files and folders are kept by reference (the shelf
   holds where they are, not a copy). A picture dragged from a browser is
   saved into the stash; if a page offers only the picture's link, the shelf

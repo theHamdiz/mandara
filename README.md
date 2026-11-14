@@ -176,8 +176,8 @@ and tick off tasks where they sit.
   part of your day. [Mandara Studio](docs/studio.md)
 - **Less app-hopping.** Lyrics, per-app sound, capture tools, a sorted
   clipboard, night light and sound themes are close by. Drop files onto
-  [floating shelves](docs/plugins.md#stash-floating-shelves), or install an
-  app by dragging its package in. [More features](docs/more-features.md)
+  [floating shelves](docs/plugins.md#stash-floating-shelves), summon a drop zone
+  with a shake, or install an app by dragging its package in. [More features](docs/more-features.md)
 - **A welcome of your own.** Matching lock and login screens, with your
   wallpaper and ready-made looks. [Lock and login](docs/lock-and-login.md)
 - **Words that feel familiar.** Choose your language and reading direction.

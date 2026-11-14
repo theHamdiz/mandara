@@ -28,6 +28,7 @@ use mandara_core::{SurfaceRole, ToGpui as _};
 use mandara_i18n::{t, tf};
 use mandara_theme::{Color, MandaraPalette};
 
+use super::drop_zone;
 use super::model::{Item, ItemKind};
 use super::thumbs::{Key, Thumb};
 use super::{EDGE_INSET, Origin, entity, entity_ref, store};
@@ -103,8 +104,6 @@ const THUMB_SHADOW_BLUR: f32 = 8.0;
 const THUMB_SHADOW_SPREAD: f32 = -2.0;
 /// A list row's icon corners.
 const LIST_ICON_RADIUS: f32 = 8.0;
-/// The empty shelf's round badge.
-const EMPTY_BADGE: f32 = 52.0;
 /// Notes and the cache-limit banner: inset from the card's sides and corners.
 const BANNER_INSET: f32 = 10.0;
 const BANNER_RADIUS: f32 = 10.0;
@@ -178,6 +177,7 @@ pub fn open(id: u64, cx: &mut App) -> Option<WindowHandle<ShelfWindow>> {
     let name = output.clone();
     match cx.open_window(options(origin, surface, display), move |window, cx| {
         window.set_accepts_data_drops(true);
+        window.set_input_region(Some(&[]));
         cx.new(|cx| ShelfWindow::new(id, name, origin, out, cx))
     }) {
         Ok(h) => {
@@ -243,6 +243,7 @@ impl Render for Ghost {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = mandara_core::frame_palette(window, cx);
         div()
+            .font_family(cx.global::<crate::fonts::Fonts>().panels.clone())
             .row()
             .items_center()
             .gap(px(tokens::SM))
@@ -273,6 +274,8 @@ pub struct ShelfWindow {
     live: Option<(f32, f32, f32, f32)>,
     settle: Option<(Instant, (f32, f32), (f32, f32))>,
     input: Option<Bounds<Pixels>>,
+    /// Keep shaped prompt rows across animation frames, including RTL wrapping.
+    drop_layout: std::cell::OnceCell<crate::bidi::ParagraphLayout>,
     hold: Option<(u64, Task<()>)>,
     held: Option<u64>,
     _observe: Subscription,
@@ -288,7 +291,7 @@ impl ShelfWindow {
     fn new(id: u64, output: Option<String>, origin: (f32, f32), out: (f32, f32), cx: &mut Context<Self>) -> Self {
         let e = entity(cx);
         let observe = cx.observe(&e, |_, _, cx| cx.notify());
-        Self { id, output, focus: cx.focus_handle(), scroll: UniformListScrollHandle::new(), origin, out, moving: None, resizing: None, live: None, settle: None, input: None, hold: None, held: None, _observe: observe }
+        Self { id, output, focus: cx.focus_handle(), scroll: UniformListScrollHandle::new(), origin, out, moving: None, resizing: None, live: None, settle: None, input: None, drop_layout: Default::default(), hold: None, held: None, _observe: observe }
     }
 
     /// The card's place and size (output-local).
@@ -418,8 +421,15 @@ impl ShelfWindow {
                 }
             }
             "escape" => {
+                let dismiss_target = {
+                    let stash = entity(cx);
+                    let stash = stash.read(cx);
+                    stash.state.shelf(id).is_some_and(|shelf| stash.ui.get(&id).is_some_and(|ui| drop_zone::can_dismiss(ui.origin, shelf.items.len(), ui.busy)))
+                };
                 if super::quicklook::is_open(cx) {
                     super::quicklook::close(cx);
+                } else if dismiss_target {
+                    super::close(id, true, cx);
                 } else {
                     ui(id, cx, |u| {
                         u.selected.clear();
@@ -580,10 +590,6 @@ impl Render for ShelfWindow {
         // Card position inside the surface.
         let (left, top) = (x - self.origin.0, y - self.origin.1);
         let card = Bounds::new(point(px(left), px(top)), size(px(w), px(h)));
-        if self.input != Some(card) {
-            self.input = Some(card);
-            window.set_input_region(Some(&[card]));
-        }
         let cfg = crate::state::config(cx).read(cx).get();
         let (fill, _) = crate::overlays::panel_fill(cfg, &p, false);
         let (view, count, move_out) = e.read(cx).state.shelf(id).map(|s| (s.view, s.items.len(), s.move_out)).unwrap_or((ShelfView::Grid, 0, false));
@@ -620,18 +626,23 @@ impl Render for ShelfWindow {
             }
             None => (0.0, 0.0, 1.0),
         };
-        let rim = mandara_core::glass_rim(p.specular_rim_light, p.specular_rim_shadow);
-        let mut shadows = soft_shadow(&p, 0.32);
-        shadows.extend(rim);
+        let input = drop_zone::input_bounds(card, (enter_dx, enter_dy), enter_alpha);
+        if self.input != input {
+            self.input = input;
+            match input {
+                Some(bounds) => window.set_input_region(Some(&[bounds])),
+                None => window.set_input_region(Some(&[])),
+            }
+        }
+        let frameless = drop_zone::frameless(origin, count);
         let glow = p.primary;
-        let body_h = h - HEADER_H;
+        let body_h = h - if frameless { ZERO } else { HEADER_H };
         let body = match (count, view) {
-            (0, _) => empty_state(&p, busy > 0).into_any_element(),
+            (0, _) => drop_zone::empty(&p, busy > 0, frameless, drag_over, fill, CARD_RADIUS, self.drop_layout.get_or_init(Default::default)).into_any_element(),
             (_, ShelfView::Grid) => self.grid(w, body_h, scale, &p, cx),
             (_, ShelfView::List) => self.list(w, body_h, scale, &p, cx),
             (_, ShelfView::Stack) => self.stack(count, w, body_h, scale, &p, cx),
         };
-        let header = self.header(count, view, busy, selected_n, move_out, &p, cx);
         let this = cx.entity().downgrade();
         let this_up = this.clone();
         let this_drop = this.clone();
@@ -679,14 +690,25 @@ impl Render for ShelfWindow {
             .h(px(h))
             .opacity(enter_alpha)
             .rounded(px(crate::style::radius(CARD_RADIUS)))
-            .bg(fill)
-            .shadow(shadows)
-            .when(drag_over, |el| el.border_2().border_color(glow.with_alpha(0.9).hsla()))
+            .when(!frameless, |el| {
+                let mut shadows = soft_shadow(&p, 0.32);
+                shadows.extend(mandara_core::glass_rim(p.specular_rim_light, p.specular_rim_shadow));
+                el.bg(fill).shadow(shadows)
+            })
+            .when(drag_over && !frameless, |el| el.border_2().border_color(glow.with_alpha(0.9).hsla()))
             .overflow_hidden()
             .flex()
             .flex_col()
-            .on_any_mouse_down(cx.listener(|this, _: &MouseDownEvent, window, cx| {
+            .on_any_mouse_down(cx.listener(move |this, event: &MouseDownEvent, window, cx| {
                 window.focus(&this.focus, cx);
+                if frameless && event.button == MouseButton::Right {
+                    ui(this.id, cx, |ui| {
+                        ui.menu = None;
+                        ui.shelf_menu = true;
+                    });
+                    cx.stop_propagation();
+                    return;
+                }
                 // A press anywhere else closes an open menu (menus and the
                 // header's buttons keep their own presses).
                 let id = this.id;
@@ -698,20 +720,19 @@ impl Render for ShelfWindow {
                     });
                 }
             }))
-            .child(mandara_core::grain_overlay())
-            .child(header)
+            .when(!frameless, |el| el.child(mandara_core::grain_overlay()).child(self.header(count, view, busy, selected_n, move_out, &p, cx)))
             .child(div().flex_1().min_h(px(0.0)).relative().child(body))
             .when_some(note, |el, n| el.child(note_bar(id, n, &p)))
             .when_some(over, |el, bytes| el.child(over_bar(bytes, &p)))
-            .child(grip(&p, cx))
+            .when(!frameless, |el| el.child(grip(&p, cx)))
             .when(shelf_menu, |el| el.child(shelf_menu_el(id, move_out, count, &p)))
             .when_some(menu, |el, (item, at)| el.when_some(items_of(id, &[item], cx).into_iter().next(), |el, it| el.child(item_menu(id, &it, point(at.x - px(left), at.y - px(top)), w, h, &p))))
             .when(confirm, |el| el.child(confirm_close(id, count, &p)))
             .when_some(poof.filter(|_| !reduce), |el, (at, centres)| el.child(poof_el(now.duration_since(at), &centres, (w, h), &p)))
             // Drops land here (files by reference, other data read off the
             // UI thread), and flip the glow while a drag is over the card.
-            .drag_over::<ExternalPaths>(move |s, _, _, _| s.border_2().border_color(glow.hsla()))
-            .drag_over::<ExternalData>(move |s, _, _, _| s.border_2().border_color(glow.hsla()))
+            .drag_over::<ExternalPaths>(move |s, _, _, _| if frameless { s } else { s.border_2().border_color(glow.hsla()) })
+            .drag_over::<ExternalData>(move |s, _, _, _| if frameless { s } else { s.border_2().border_color(glow.hsla()) })
             .on_drag_move::<ExternalPaths>(cx.listener(|this, ev: &gpui::DragMoveEvent<ExternalPaths>, _, cx| this.drag_moved(ev.bounds.contains(&ev.event.position), cx)))
             .on_drag_move::<ExternalData>(cx.listener(|this, ev: &gpui::DragMoveEvent<ExternalData>, _, cx| this.drag_moved(ev.bounds.contains(&ev.event.position), cx)))
             .on_drop(move |paths: &ExternalPaths, window, cx| {
@@ -729,7 +750,7 @@ impl Render for ShelfWindow {
                 super::drop_data(id, data, Some(window.mouse_position()), cx);
             });
         let shake = self.output.as_deref().and_then(|o| super::shake_hook(o, self.origin));
-        div().size_full().relative().child(card_el).child(listeners).children(shake).into_any_element()
+        div().font_family(cx.global::<crate::fonts::Fonts>().panels.clone()).text_start().size_full().relative().child(card_el).child(listeners).children(shake).into_any_element()
     }
 }
 
@@ -768,14 +789,14 @@ impl ShelfWindow {
             }
             FileDropEvent::Ended => e.update(cx, |s, _| s.drag_out = None),
             FileDropEvent::Exited => {
-                let edge_born = e.update(cx, |s, cx| {
-                    let empty = s.state.shelf(id).is_some_and(|sh| sh.items.is_empty());
+                let transient_target = e.update(cx, |s, cx| {
+                    let count = s.state.shelf(id).map(|sh| sh.items.len());
                     let ui = s.ui.entry(id).or_default();
                     ui.drag_over = false;
                     cx.notify();
-                    empty && matches!(ui.origin, Some(Origin::Edge(_))) && ui.busy == 0
+                    count.is_some_and(|count| drop_zone::can_dismiss(ui.origin, count, ui.busy))
                 });
-                if edge_born {
+                if transient_target {
                     let task = cx.spawn(async move |_, cx| {
                         cx.background_executor().timer(RETRACT_AFTER).await;
                         cx.update(|cx| {
@@ -784,7 +805,7 @@ impl ShelfWindow {
                                 s.state.shelf(id).is_some_and(|sh| sh.items.is_empty()) && s.ui.get(&id).is_some_and(|u| u.retract.is_some() && u.busy == 0)
                             });
                             if still {
-                                tracing::info!("stash: edge shelf {id} retracts (the drag went elsewhere)");
+                                tracing::info!("stash: drop target {id} retracts (the drag went elsewhere)");
                                 super::close(id, true, cx);
                             }
                         });
@@ -1231,28 +1252,6 @@ fn click_tile(shelf: u64, id: u64, e: &ClickEvent, cx: &mut App) {
     });
 }
 
-fn empty_state(p: &MandaraPalette, busy: bool) -> impl IntoElement {
-    div()
-        .size_full()
-        .p(px(BODY_PAD + 4.0))
-        .child(
-            div()
-                .size_full()
-                .rounded(px(crate::style::radius(16.0)))
-                .border_2()
-                .border_dashed()
-                .border_color(p.on_surface_variant.with_alpha(0.25).hsla())
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .gap(px(tokens::SM))
-                .child(div().size(px(EMPTY_BADGE)).rounded_full().bg(p.primary.with_alpha(0.14).hsla()).flex().items_center().justify_center().child(icon("download", 24.0, p.primary)))
-                .child(div().text_size(px(text::BODY)).font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface.hsla()).child(if busy { t("Adding…") } else { t("Drop anything here") }))
-                .child(div().px(px(tokens::MD)).text_center().text_size(px(text::LABEL)).text_color(p.on_surface_variant.hsla()).child(t("Files, pictures, text and links wait here until you drag them out"))),
-        )
-}
-
 fn note_bar(shelf: u64, note: String, p: &MandaraPalette) -> impl IntoElement {
     div()
         .id("stash-note")
@@ -1324,8 +1323,9 @@ fn menu_row(id: (&'static str, usize), glyph: &'static str, label: SharedString,
     let hover = p.on_surface.with_alpha(0.08);
     div()
         .id(id)
-        .h(px(MENU_ROW_H))
+        .min_h(px(MENU_ROW_H))
         .px(px(tokens::SM))
+        .py(px(tokens::XS))
         .rounded(px(MENU_ROW_RADIUS))
         .row()
         .items_center()
@@ -1335,7 +1335,7 @@ fn menu_row(id: (&'static str, usize), glyph: &'static str, label: SharedString,
         .text_size(px(text::BODY_S))
         .text_color(p.on_surface.hsla())
         .child(icon(glyph, 14.0, p.on_surface_variant))
-        .child(label)
+        .child(div().flex_1().min_w(px(ZERO)).child(crate::bidi::paragraph(label)))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(move |_, _, cx| on_click(cx))
         .into_any_element()

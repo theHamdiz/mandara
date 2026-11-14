@@ -219,6 +219,15 @@ fn histories_drop_complete_old_turns_and_sessions_never_share_an_identity() {
 
 #[test]
 fn cancelling_an_agent_interrupts_an_actual_blocked_response() {
+    cancelled_request(true);
+}
+
+#[test]
+fn cancelling_while_waiting_for_response_headers_is_not_a_connection_failure() {
+    cancelled_request(false);
+}
+
+fn cancelled_request(send_headers: bool) {
     use std::io::{Read as _, Write as _};
     use std::net::TcpListener;
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -231,11 +240,12 @@ fn cancelling_an_agent_interrupts_an_actual_blocked_response() {
             .unwrap();
         let mut buffer = [0; 4096];
         assert!(socket.read(&mut buffer).unwrap() > 0, "the client sent its request");
-        socket
-            .write_all(
+        if send_headers {
+            socket.write_all(
                 b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n",
             )
             .unwrap();
+        }
         ready_tx.send(()).unwrap();
         while socket.read(&mut buffer).is_ok_and(|n| n > 0) {}
     });
@@ -263,4 +273,21 @@ fn cancelling_an_agent_interrupts_an_actual_blocked_response() {
         .unwrap();
     worker.join().unwrap();
     server.join().unwrap();
+}
+
+#[test]
+fn cancelled_reads_finish_quietly_while_real_connection_errors_still_fail() {
+    struct FailedRead<'a>(Option<&'a AtomicBool>);
+    impl std::io::Read for FailedRead<'_> {
+        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+            if let Some(cancelled) = self.0 { cancelled.store(true, Ordering::Release); }
+            Err(std::io::ErrorKind::ConnectionAborted.into())
+        }
+    }
+    for cancel in [false, true] {
+        let cancelled = AtomicBool::new(false);
+        let result = stream::read(FailedRead(cancel.then_some(&cancelled)), for_provider(Provider::Jan),
+            || cancelled.load(Ordering::Acquire), &mut |_| panic!("failed reads must not publish text"));
+        assert_eq!(result.is_ok(), cancel);
+    }
 }
