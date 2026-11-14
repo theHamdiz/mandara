@@ -124,3 +124,27 @@ fn host_access_cannot_be_revoked_through_its_narrower_controls() {
     let domain = crate::app_install::flatpak::context_domain(metadata).unwrap();
     assert!(model::capabilities(&effective, &domain).iter().filter(|row| matches!(row.value.as_str(), "host-os" | "host-etc")).all(|row| row.editable));
 }
+
+#[test]
+fn full_root_grants_lock_narrower_filesystem_controls_without_locking_a_revoked_root() {
+    use crate::app_install::flatpak::{parse_context, context_domain};
+    let narrow = ["host", "home", "host-os", "host-etc", "xdg-desktop", "xdg-documents", "xdg-download", "xdg-music", "xdg-pictures", "xdg-videos"];
+    for grant in ["host-root", "host-root:ro", "host-root:rw", "host-root:create"] {
+        let metadata = format!("[Context]\nfilesystems={grant};{};\n", narrow.join(";"));
+        let effective = parse_context(&metadata).unwrap();
+        let rows = model::capabilities(&effective, &effective);
+        for value in narrow {
+            let row = rows.iter().find(|row| row.value == value).unwrap();
+            assert!(!row.editable, "{grant}: {value}");
+            assert_eq!(row.constraint, Some(Constraint::Broader));
+        }
+        assert_eq!(rows.iter().find(|row| row.value == grant).unwrap().constraint, Some(Constraint::Scoped));
+    }
+    let metadata = "[Context]\nfilesystems=!host-root;!host-os;!host-etc;\n";
+    let effective = parse_context(metadata).unwrap();
+    let domain = context_domain(metadata).unwrap();
+    for row in model::capabilities(&effective, &domain).iter().filter(|row| narrow.contains(&row.value.as_str())) {
+        assert!(row.editable);
+        assert!(!row.allowed);
+    }
+}

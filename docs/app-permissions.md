@@ -11,7 +11,9 @@ access, including cameras and graphics devices. Portals can still grant files
 you explicitly choose.
 
 Conditional, scoped and overlapping grants stay locked with an explanation.
-Host-file access also locks the narrower system-folder controls. Revoked
+Host-file access also locks the narrower system-folder controls. Full
+`host-root` access locks overlapping filesystem controls until its native rule
+is changed. Revoked
 explicit permissions remain available to turn back on. Their native rules remain visible under **Native permission details**.
 X11 fallback depends on Wayland availability, so those display grants also
 stay locked. The panel does not pretend that a broad device grant provides independent camera

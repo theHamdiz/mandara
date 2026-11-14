@@ -75,7 +75,8 @@ pub(super) fn capabilities(permissions: &Permissions, domain: &Permissions) -> V
             let scoped = value.contains(':') || value.contains('=') || effective.iter().any(|grant| grant.strip_prefix(value).is_some_and(|suffix| matches!(suffix, ":ro" | ":rw" | ":create")));
             let broader = match key {
                 Key::Devices => !matches!(value, "all" | "shm") && effective.iter().any(|grant| grant == "all" || grant.starts_with("if:all:")),
-                Key::Filesystems => matches!(value, "home" | "host-os" | "host-etc" | "xdg-desktop" | "xdg-documents" | "xdg-download" | "xdg-music" | "xdg-pictures" | "xdg-videos") && effective.iter().any(|grant| matches!(grant.as_str(), "host" | "host:ro" | "host:rw" | "host:create")),
+                Key::Filesystems => editable && (effective.iter().any(|grant| matches!(grant.as_str(), "host-root" | "host-root:ro" | "host-root:rw" | "host-root:create"))
+                    || matches!(value, "home" | "host-os" | "host-etc" | "xdg-desktop" | "xdg-documents" | "xdg-download" | "xdg-music" | "xdg-pictures" | "xdg-videos") && effective.iter().any(|grant| matches!(grant.as_str(), "host" | "host:ro" | "host:rw" | "host:create"))),
                 _ => false,
             };
             let fallback = key == Key::Sockets && matches!(value, "x11" | "fallback-x11" | "wayland")
