@@ -18,6 +18,7 @@ graphics hardware, and removes the empty frame around Studio Looks.
 ### Under the hood
 
 - Compositor status follows startup includes off the UI thread.
+- Nix checks reserve more build headroom during optimized linking.
 
 ## 0.30.0 — 2026-11-14
 
