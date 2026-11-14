@@ -51,6 +51,7 @@ pub(super) fn argument(bytes: &mut Vec<u8>, start: usize) -> Result<()> {
             b'\\' | b'\'' | b'"' | b'?' => next,
             b'x' => {
                 // Sway 1.12 consumes at most two decimal digits in this form.
+                let digits_start = read;
                 let mut value = 0;
                 for _ in 0..2 {
                     let Some(&digit) = bytes.get(read).filter(|byte| byte.is_ascii_digit()) else {
@@ -59,10 +60,19 @@ pub(super) fn argument(bytes: &mut Vec<u8>, start: usize) -> Result<()> {
                     value = value * 16 + digit - b'0';
                     read += 1;
                 }
-                if value == 0 {
-                    continue;
+                if read != digits_start {
+                    if value != 0 {
+                        bytes[written] = value;
+                        written += 1;
+                    }
+                    // A consumed digit stops Sway's unescape loop; its final
+                    // compaction keeps the remaining suffix unchanged.
+                    let remaining = bytes.len() - read;
+                    bytes.copy_within(read.., written);
+                    bytes.truncate(written + remaining);
+                    return Ok(());
                 }
-                value
+                continue;
             }
             _ => {
                 bytes[written] = b'\\';
@@ -85,12 +95,25 @@ mod tests {
     fn native_argument_escapes_are_decoded_once() {
         let mut bytes = br#"prefix \"a\t\x20\?\$\q\\b"#.to_vec();
         argument(&mut bytes, "prefix ".len()).unwrap();
-        assert_eq!(bytes, b"prefix \"a\t ?\\$\\q\\b");
+        assert_eq!(bytes, b"prefix \"a\t \\?\\$\\q\\\\b");
         for input in [&b"name\0suffix"[..], &br"name\tpart\0suffix"[..]] {
             assert!(
                 argument(&mut input.to_vec(), 0).is_err(),
                 "NUL-truncated arguments cannot authorize partial conflict discovery"
             );
+        }
+    }
+
+    #[test]
+    fn hexadecimal_escapes_preserve_the_unparsed_suffix() {
+        for (raw, expected) in [
+            (&br"\x61\\keys.conf"[..], &br"a\\keys.conf"[..]),
+            (&br"\x0\t"[..], &br"\t"[..]),
+            (&br"\x\t"[..], &b"\t"[..]),
+        ] {
+            let mut bytes = raw.to_vec();
+            argument(&mut bytes, 0).unwrap();
+            assert_eq!(bytes, expected);
         }
     }
 }

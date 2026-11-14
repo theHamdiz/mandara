@@ -178,6 +178,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn hexadecimal_include_escapes_keep_the_native_filename_and_bindings() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("config");
+        let native = root.path().join(r"a\keys.conf");
+        let other = root.path().join("akeys.conf");
+        std::fs::write(&file, "include \\x61\\\\keys.conf\n").unwrap();
+        std::fs::write(&native, "bindsym Mod4+q kill\n").unwrap();
+        std::fs::write(&other, "bindsym Mod4+w kill\n").unwrap();
+        let environment = IncludeEnvironment::captured([]);
+        assert_eq!(checked_in(&file, &environment).unwrap(), BTreeSet::from(["super+q".into()]));
+        let sources = shortcut_sources_in(std::slice::from_ref(&file), &environment).unwrap();
+        assert_eq!(sources.files.len(), 2);
+        assert!(sources.files.iter().any(|(path, _)| path == &native));
+        assert!(!sources.files.iter().any(|(path, _)| path == &other));
+    }
+
+    #[test]
     fn variable_commands_and_escaped_quote_arguments_discover_native_sources() {
         let root = tempfile::tempdir().unwrap();
         let file = root.path().join("config");

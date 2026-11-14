@@ -84,7 +84,8 @@ word splitting and quoting, without executing command substitutions.
 Escaped dollar references remain available to environment expansion, and nested
 quotes preserve filenames containing spaces.
 Sway commands stored in variables can include other files too; their bindings
-take part in the same conflict checks.
+take part in the same conflict checks. Numeric filename escapes preserve Sway's
+native handling of the remaining path.
 Labwc lists direct keyboard bindings; unsupported nested key chains stay
 untouched and do not become editable shortcuts.
 Niri's `Mod` follows the merged input settings and its native nested-session
