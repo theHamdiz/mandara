@@ -389,7 +389,8 @@ Without a running shell (a session that won't start, a TTY), the same check
 and fixes work from the terminal:
 
 ```bash
-mandara setup --check                       # the Config doctor's report and conflicts, nothing changed; exit 10 = conflicts, 11 = errors
+mandara setup --check                       # report only; exit 10 = conflicts, 11 = errors, missing config or disconnected MangoWM startup
+mandara setup --compositor mango --autostart # connect startup, using a validated copy of system defaults if no user config exists
 mandara setup --fix 1a2b3c4d=comment        # ID=comment|remove|regenerate, repeatable
 mandara setup --restore ~/.local/share/mandara/doctor-backups/<backup>   # undo a fix
 ```

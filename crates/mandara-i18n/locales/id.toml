@@ -10794,3 +10794,13 @@
 "Native filesystem maintenance is available on Linux." = "Pemeliharaan sistem berkas bawaan tersedia di Linux."
 "Undo could not finish. The retained file is available at {path}." = "Pembatalan perubahan tidak dapat diselesaikan. Berkas yang disimpan tersedia di {path}."
 "The XDG folder is disabled or not configured on this system." = "Folder XDG dinonaktifkan atau belum dikonfigurasi pada sistem ini."
+
+"No compositor configuration was found at {path}." = "Konfigurasi kompositor tidak ditemukan di {path}."
+"Autostart is enabled but its generated configuration is not connected. Run `mandara setup` to repair it." = "Mulai otomatis diaktifkan, tetapi konfigurasi yang dihasilkan belum terhubung. Jalankan `mandara setup` untuk memperbaikinya."
+"MangoWM could not validate the configuration. Nothing was changed." = "MangoWM tidak dapat memvalidasi konfigurasi. Tidak ada yang diubah."
+"MangoWM rejected the configuration change. Previous settings were kept." = "MangoWM menolak perubahan konfigurasi. Pengaturan sebelumnya dipertahankan."
+"MangoWM's system configuration is too large to copy safely." = "Konfigurasi sistem MangoWM terlalu besar untuk disalin dengan aman."
+"MangoWM's configuration is not valid TOML." = "Konfigurasi MangoWM bukan TOML yang valid."
+"MangoWM's global settings must be a table." = "Pengaturan global MangoWM harus berupa tabel."
+"MangoWM's optional sources must be a path or a list of paths." = "Sumber opsional MangoWM harus berupa jalur atau daftar jalur."
+"MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM menggunakan konfigurasi khusus di {path}. Penyiapan otomatis memerlukan lokasi konfigurasi bawaan. Berkas kompositor Anda tidak diubah."

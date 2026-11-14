@@ -42,6 +42,12 @@ mod glob;
 mod include_env;
 mod read_budget;
 mod mango_read;
+mod mango_config;
+pub(crate) use mango_config::is_toml as mango_toml;
+mod mango_seed;
+pub use mango_seed::seed_user_config as seed_mango_user_config;
+#[cfg(test)]
+mod mango_startup_tests;
 mod sway_read;
 mod sway_escape;
 mod sway_vars;
@@ -198,7 +204,7 @@ impl Target {
     /// Resolve native defaults in the compositor's home, which can differ from Studio's.
     pub fn user_config_in(self, config: &Path, home: &Path) -> PathBuf {
         match self {
-            Target::Mango => config.join("mango/config.conf"),
+            Target::Mango => mango_config::user_file(home),
             Target::Niri => config.join("niri/config.kdl"),
             Target::Hyprland if installed_version(Self::Hyprland).is_some_and(hyprland_reads_lua)
                 || config.join("hypr/hyprland.lua").exists() => config.join("hypr/hyprland.lua"),
@@ -224,7 +230,7 @@ impl Target {
     /// The single line Mandara adds to the user's config.
     pub fn include_line(self) -> String {
         match self {
-            Target::Mango => "source_optional=~/.config/mandara/generated/mango.conf".into(),
+            Target::Mango => mango_config::include_hint(&self.user_config(), &self.generated_file()),
             // An absolute path works from niri 25.11 (`~/` needs 26.04).
             Target::Niri => niri_include_line(&self.generated_file().display().to_string(), installed_version(Target::Niri)),
             Target::Hyprland if Self::hyprland_lua() => {
@@ -2449,6 +2455,9 @@ pub(crate) fn resolve_include(base: &Path, raw: &str) -> PathBuf {
 /// expands `~`, `$VAR` and globs such as `/etc/sway/config.d/*`, and skips
 /// a pattern that matches nothing).
 pub(crate) fn included_files(target: Target, file: &Path, text: &str) -> Vec<PathBuf> {
+    if target == Target::Mango && mango_toml(file, text) {
+        return crate::keybinds::mango_includes(file, text, &IncludeEnvironment::default()).unwrap_or_default();
+    }
     includes_in(target, text)
         .into_iter()
         .flat_map(|raw| match target {
@@ -2466,6 +2475,11 @@ pub(crate) fn included_files_bounded_in(
     limit: usize,
     environment: &IncludeEnvironment,
 ) -> Result<Vec<PathBuf>> {
+    if target == Target::Mango && mango_toml(file, text) {
+        let files = crate::keybinds::mango_includes(file, text, environment)?;
+        anyhow::ensure!(files.len() <= limit, mandara_i18n::t("The shortcut configuration includes too many files."));
+        return Ok(files);
+    }
     let mut files = Vec::new();
     for (raw, optional) in include_specs(target, text) {
         if target == Target::Sway {
@@ -3195,6 +3209,15 @@ fn include_installed_at(target: Target, config: &Path) -> bool {
         return std::fs::read_to_string(config).is_ok_and(|t| river_starts_mandara(&t));
     }
     let needle = target.generated_file();
+    if target == Target::Mango {
+        return std::fs::read_to_string(config).is_ok_and(|text| {
+            included_files(target, config, &text).iter().any(|path| {
+                path == &needle || std::fs::canonicalize(path).is_ok_and(|path| {
+                    std::fs::canonicalize(&needle).is_ok_and(|needle| path == needle)
+                })
+            })
+        });
+    }
     let needle_name = needle.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
     std::fs::read_to_string(config)
         .map(|t| {
@@ -3219,6 +3242,7 @@ fn in_nix_store(real: &Path) -> bool {
 /// explains why.
 pub fn install_include(target: Target) -> Result<bool> {
     let path = target.user_config();
+    if target == Target::Mango { return mango_config::install_include(&path); }
     let before = std::fs::read_to_string(&path).ok();
     let added = install_include_at(target, &path)?;
     if added
@@ -3247,21 +3271,25 @@ fn install_include_at(target: Target, path: &Path) -> Result<bool> {
     if let Ok(real) = std::fs::canonicalize(path)
         && in_nix_store(&real)
     {
-        let msg = mandara_i18n::tf("{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}", &[("path", &path.display()), ("line", &target.include_line())]);
+        let line = if target == Target::Mango { mango_config::include_hint(path, &target.generated_file()) } else { target.include_line() };
+        let msg = mandara_i18n::tf("{path} is made by Nix (Home Manager or NixOS) and is read-only: add this line to its Nix configuration, rebuild, and run `mandara setup` again: {line}", &[("path", &path.display()), ("line", &line)]);
         anyhow::bail!("{msg}");
     }
     if target == Target::Sway && !path.exists() {
         seed_sway_config(path, Path::new(SWAY_SYSTEM_CONFIG))?;
     }
+    let lock = mandara_theme::templates::WriteLock::new(path)?;
     let original = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    let stamp = lock.check(original.as_bytes())?;
     // Umbriel's include is a TOML array: worked out (and the file checked
     // to be TOML) before anything is written.
-    let umbriel = match target {
+    let edited = match target {
         Target::Umbriel => Some(umbriel_add_include(&original, &target.generated_file().display().to_string()).with_context(|| format!("adding Mandara's include to {}", path.display()))?),
+        Target::Mango if mango_toml(path, &original) => {
+            Some(mango_config::add_include(&original, &target.generated_file().display().to_string()).with_context(|| format!("adding Mandara's include to {}", path.display()))?)
+        }
         _ => None,
     };
-    let backup = path.with_extension(format!("{}.mandara-backup", path.extension().and_then(|e| e.to_str()).unwrap_or("conf")));
-    std::fs::write(&backup, &original).with_context(|| format!("writing backup {}", backup.display()))?;
     let comment = match target {
         Target::Niri => "// Mandara Shell (generated rules, binds and colors)",
         Target::Hyprland if Target::hyprland_lua() => {
@@ -3269,7 +3297,7 @@ fn install_include_at(target: Target, path: &Path) -> Result<bool> {
         }
         _ => INCLUDE_COMMENT,
     };
-    let updated = match umbriel {
+    let updated = match edited {
         Some(Some(text)) => text,
         // Already listed (a commented-out copy aside): nothing to change.
         Some(None) => return Ok(false),
@@ -3278,7 +3306,9 @@ fn install_include_at(target: Target, path: &Path) -> Result<bool> {
             format!("{original}{sep}\n{comment}\n{}\n", target.include_line())
         }
     };
-    crate::store::write_atomic(path, updated.as_bytes())?;
+    // MangoWM's caller already recorded its timestamped Config doctor backup.
+    if target != Target::Mango { crate::doctor::theme::backup(&lock, stamp)?; }
+    crate::store::write_atomic_checked(&lock, stamp, updated.as_bytes())?;
     Ok(true)
 }
 
@@ -4341,7 +4371,9 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         let after = std::fs::read_to_string(&file).unwrap();
         assert!(after.starts_with(user) && include_installed_at(Target::Umbriel, &file), "{after}");
         assert!(!install_include_at(Target::Umbriel, &file).unwrap(), "second install is a no-op");
-        assert_eq!(std::fs::read_to_string(dir.path().join("config.toml.mandara-backup")).unwrap(), user);
+        let backups: Vec<_> = std::fs::read_dir(dir.path()).unwrap().map(|entry| entry.unwrap().path()).filter(|path| path.file_name().unwrap().to_string_lossy().starts_with("config.toml.mandara-backup-")).collect();
+        assert_eq!(backups.len(), 1);
+        assert_eq!(std::fs::read_to_string(&backups[0]).unwrap(), user);
         // A broken file is refused before anything is written.
         std::fs::write(&file, "[general\n").unwrap();
         assert!(install_include_at(Target::Umbriel, &file).is_err());
@@ -4365,8 +4397,7 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         assert!(after.trim_end().ends_with(&Target::Mango.include_line()));
         assert!(!install_include_at(Target::Mango, &file).unwrap(), "second install is a no-op");
         assert_eq!(std::fs::read_to_string(&file).unwrap(), after);
-        let backup = dir.path().join("config.conf.mandara-backup");
-        assert_eq!(std::fs::read_to_string(backup).unwrap(), "blur=1\nbind=SUPER,q,killclient");
+        assert!(!dir.path().join("config.conf.mandara-backup").exists(), "MangoWM's public caller owns the doctor backup");
     }
 
     /// A user's sway config: variables, a bind block, a mode, flags.

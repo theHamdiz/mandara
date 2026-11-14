@@ -10793,3 +10793,13 @@
 "Native filesystem maintenance is available on Linux." = "기본 파일 시스템 유지 관리는 Linux에서 사용할 수 있습니다."
 "Undo could not finish. The retained file is available at {path}." = "실행 취소를 완료하지 못했습니다. 보관된 파일은 {path}에 있습니다."
 "The XDG folder is disabled or not configured on this system." = "이 시스템에서 XDG 폴더가 비활성화되었거나 설정되지 않았습니다."
+
+"No compositor configuration was found at {path}." = "{path}에서 컴포지터 설정을 찾지 못했습니다."
+"Autostart is enabled but its generated configuration is not connected. Run `mandara setup` to repair it." = "자동 시작이 활성화되어 있지만 생성된 설정이 연결되지 않았습니다. `mandara setup`을 실행하여 복구하세요."
+"MangoWM could not validate the configuration. Nothing was changed." = "MangoWM이 설정을 검증하지 못했습니다. 아무것도 변경하지 않았습니다."
+"MangoWM rejected the configuration change. Previous settings were kept." = "MangoWM이 설정 변경을 거부했습니다. 이전 설정을 유지했습니다."
+"MangoWM's system configuration is too large to copy safely." = "MangoWM의 시스템 설정이 너무 커서 안전하게 복사할 수 없습니다."
+"MangoWM's configuration is not valid TOML." = "MangoWM의 설정이 올바른 TOML이 아닙니다."
+"MangoWM's global settings must be a table." = "MangoWM의 전역 설정은 테이블이어야 합니다."
+"MangoWM's optional sources must be a path or a list of paths." = "MangoWM의 선택적 소스는 경로 또는 경로 목록이어야 합니다."
+"MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM이 {path}의 사용자 지정 설정을 사용하고 있습니다. 자동 설정에는 기본 설정 위치가 필요합니다. 컴포지터 파일은 변경되지 않았습니다."

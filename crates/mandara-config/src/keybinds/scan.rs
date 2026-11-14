@@ -84,12 +84,6 @@ pub fn default_root_in(target: Target, config: &Path, home: &Path) -> PathBuf {
     match target {
         Target::KWin => config.join("kglobalshortcutsrc"),
         Target::Cosmic => config.join("cosmic/com.system76.CosmicSettings.Shortcuts/v1/custom"),
-        Target::Mango
-            if !target.user_config_in(config, home).exists()
-                && config.join("mango/config.toml").exists() =>
-        {
-            config.join("mango/config.toml")
-        }
         _ => target.user_config_in(config, home),
     }
 }
@@ -175,18 +169,13 @@ pub fn scan_roots_in(
                 total_bindings <= MAX_BINDINGS,
                 mandara_i18n::t("The compositor has too many shortcuts to edit at once.")
             );
-            let mut children =
-                if target == Target::Mango && file.extension().is_some_and(|ext| ext == "toml") {
-                    mango_includes(&file, &source, environment)?
-                } else {
-                    included_files_bounded_in(
-                        target,
-                        &file,
-                        &source,
-                        MAX_FILES.saturating_sub(seen.len() + queue.len()),
-                        environment,
-                    )?
-                };
+            let mut children = included_files_bounded_in(
+                target,
+                &file,
+                &source,
+                MAX_FILES.saturating_sub(seen.len() + queue.len()),
+                environment,
+            )?;
             ensure!(
                 seen.len() + queue.len() + children.len() <= MAX_FILES,
                 mandara_i18n::t("The shortcut configuration includes too many files.")

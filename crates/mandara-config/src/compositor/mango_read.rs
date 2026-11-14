@@ -29,10 +29,7 @@ pub(super) fn chords_from(
             let Some(text) = (w.read)(file)? else {
                 return Ok(mode);
             };
-            if file
-                .extension()
-                .is_some_and(|extension| extension == "toml")
-            {
+            if mango_toml(file, &text) {
                 return toml_file(w, file, &text, mode);
             }
             let mut mode = mode;

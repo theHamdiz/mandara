@@ -10696,3 +10696,13 @@
 "Native filesystem maintenance is available on Linux." = "मूळ फाइलसिस्टम देखभाल Linux वर उपलब्ध आहे."
 "Undo could not finish. The retained file is available at {path}." = "पूर्ववत करणे पूर्ण होऊ शकले नाही. जतन केलेली फाइल {path} येथे उपलब्ध आहे."
 "The XDG folder is disabled or not configured on this system." = "या प्रणालीवर XDG फोल्डर अक्षम आहे किंवा कॉन्फिगर केलेला नाही."
+
+"No compositor configuration was found at {path}." = "{path} येथे कंपोझिटरचे कॉन्फिगरेशन सापडले नाही."
+"Autostart is enabled but its generated configuration is not connected. Run `mandara setup` to repair it." = "स्वयंचलित प्रारंभ सुरू आहे, पण तयार केलेले कॉन्फिगरेशन जोडलेले नाही. दुरुस्तीसाठी `mandara setup` चालवा."
+"MangoWM could not validate the configuration. Nothing was changed." = "MangoWM ला कॉन्फिगरेशन पडताळता आले नाही. काहीही बदलले नाही."
+"MangoWM rejected the configuration change. Previous settings were kept." = "MangoWM ने कॉन्फिगरेशनमधील बदल नाकारला. आधीची सेटिंग्ज राखली आहेत."
+"MangoWM's system configuration is too large to copy safely." = "MangoWM चे प्रणाली कॉन्फिगरेशन सुरक्षितपणे कॉपी करण्यासाठी खूप मोठे आहे."
+"MangoWM's configuration is not valid TOML." = "MangoWM चे कॉन्फिगरेशन वैध TOML नाही."
+"MangoWM's global settings must be a table." = "MangoWM ची जागतिक सेटिंग्ज तक्ता असणे आवश्यक आहे."
+"MangoWM's optional sources must be a path or a list of paths." = "MangoWM चे ऐच्छिक स्रोत एक पथ किंवा पथांची सूची असणे आवश्यक आहे."
+"MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM {path} येथे सानुकूल संरचना वापरत आहे. स्वयंचलित सेटअपसाठी पूर्वनिर्धारित संरचना स्थान आवश्यक आहे. तुमच्या कंपोझिटरच्या फाइल्स बदललेल्या नाहीत."

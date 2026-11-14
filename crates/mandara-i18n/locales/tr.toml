@@ -11036,3 +11036,13 @@
 "Native filesystem maintenance is available on Linux." = "Yerel dosya sistemi bakımı Linux üzerinde kullanılabilir."
 "Undo could not finish. The retained file is available at {path}." = "Geri alma tamamlanamadı. Korunan dosya {path} konumunda."
 "The XDG folder is disabled or not configured on this system." = "XDG klasörü bu sistemde devre dışı bırakılmış veya yapılandırılmamış."
+
+"No compositor configuration was found at {path}." = "{path} konumunda bir birleştirici yapılandırması bulunamadı."
+"Autostart is enabled but its generated configuration is not connected. Run `mandara setup` to repair it." = "Otomatik başlatma etkin ancak oluşturulan yapılandırma bağlı değil. Onarmak için `mandara setup` çalıştırın."
+"MangoWM could not validate the configuration. Nothing was changed." = "MangoWM yapılandırmayı doğrulayamadı. Hiçbir şey değiştirilmedi."
+"MangoWM rejected the configuration change. Previous settings were kept." = "MangoWM yapılandırma değişikliğini reddetti. Önceki ayarlar korundu."
+"MangoWM's system configuration is too large to copy safely." = "MangoWM sistem yapılandırması güvenle kopyalanamayacak kadar büyük."
+"MangoWM's configuration is not valid TOML." = "MangoWM yapılandırması geçerli TOML değil."
+"MangoWM's global settings must be a table." = "MangoWM genel ayarları bir tablo olmalıdır."
+"MangoWM's optional sources must be a path or a list of paths." = "MangoWM isteğe bağlı kaynakları bir yol veya yol listesi olmalıdır."
+"MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM, {path} konumunda özel bir yapılandırma kullanıyor. Otomatik kurulum varsayılan yapılandırma konumunu gerektirir. Birleştiricinizin dosyaları değiştirilmedi."

@@ -1027,11 +1027,14 @@ fn config_errors_are_reported_without_retiring() {
     let f = Fixture::new();
     let mut host = FakeHost::with(&["pacman", "sudo"]);
     let b = f.home().join(".local/bin/mandara").display().to_string();
-    host.codes.insert(format!("{b} setup --check"), crate::installer::SETUP_CONFIG_ERRORS);
+    let check = format!("{b} setup --check");
+    host.codes.insert(check.clone(), crate::installer::SETUP_CONFIG_ERRORS);
+    host.stdout.insert(check, "No compositor configuration was found at /home/example/.config/mango/config.conf.".into());
     run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, ..Default::default() }).unwrap();
     let ran = host.ran();
     assert!(!ran.contains(&format!("{b} setup --fix-conflicts")), "{ran:#?}");
     assert!(host.text().contains("Config doctor"));
+    assert!(host.text().contains("No compositor configuration was found at /home/example/.config/mango/config.conf."));
 }
 
 #[test]

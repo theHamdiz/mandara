@@ -793,6 +793,18 @@ under the field, follow-up prompts (OTP codes, "new password") reuse it.
 
 ## Troubleshooting
 
+* **Slow rendering on older graphics hardware** — the login screen can use
+  OpenGL without shader storage buffers or compute support. Update Mandara
+  through **Studio → About → Update now**, then refresh its separate installed
+  login-screen copy with `sudo mandara greeter use mandara --apply`. Review
+  the printed plan first with `mandara greeter use mandara --dry-run`.
+  This preserves the current session; the new copy runs at the next login.
+  To inspect a
+  preview without changing the login screen, run
+  `RUST_LOG='warn,gpui_wgpu=info,mandara_greeter=info' mandara greeter --demo --background solid`.
+  Its terminal output names the selected adapter and reports frame timings;
+  Esc twice closes the preview. A fast solid preview alone does not establish
+  whether the installed login screen is using the same driver or background.
 * **Black screen / greetd falls back to a text prompt** — check
   `journalctl -u greetd -b`. Make sure `cage` is installed and that
   `/usr/local/lib/mandara/mandara-greeter greeter` exists and is executable.

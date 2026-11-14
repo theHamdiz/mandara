@@ -11039,3 +11039,13 @@
 "Native filesystem maintenance is available on Linux." = "नेटिव फ़ाइलसिस्टम रखरखाव Linux पर उपलब्ध है।"
 "Undo could not finish. The retained file is available at {path}." = "बदलाव वापस नहीं किया जा सका। सुरक्षित रखी गई फ़ाइल {path} पर उपलब्ध है।"
 "The XDG folder is disabled or not configured on this system." = "इस सिस्टम पर XDG फ़ोल्डर बंद है या कॉन्फ़िगर नहीं किया गया है।"
+
+"No compositor configuration was found at {path}." = "{path} पर कंपोज़िटर का कॉन्फ़िगरेशन नहीं मिला।"
+"Autostart is enabled but its generated configuration is not connected. Run `mandara setup` to repair it." = "अपने आप शुरू होना चालू है, लेकिन उसका बनाया गया कॉन्फ़िगरेशन जुड़ा नहीं है। इसे ठीक करने के लिए `mandara setup` चलाएँ।"
+"MangoWM could not validate the configuration. Nothing was changed." = "MangoWM कॉन्फ़िगरेशन की जाँच नहीं कर सका। कुछ भी नहीं बदला गया।"
+"MangoWM rejected the configuration change. Previous settings were kept." = "MangoWM ने कॉन्फ़िगरेशन में बदलाव अस्वीकार कर दिया। पिछली सेटिंग्स रखी गईं।"
+"MangoWM's system configuration is too large to copy safely." = "MangoWM का सिस्टम कॉन्फ़िगरेशन सुरक्षित रूप से कॉपी करने के लिए बहुत बड़ा है।"
+"MangoWM's configuration is not valid TOML." = "MangoWM का कॉन्फ़िगरेशन मान्य TOML नहीं है।"
+"MangoWM's global settings must be a table." = "MangoWM की सामान्य सेटिंग्स एक तालिका होनी चाहिए।"
+"MangoWM's optional sources must be a path or a list of paths." = "MangoWM के वैकल्पिक स्रोत एक पथ या पथों की सूची होने चाहिए।"
+"MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM {path} पर कस्टम कॉन्फ़िगरेशन का उपयोग कर रहा है। स्वचालित सेटअप के लिए डिफ़ॉल्ट कॉन्फ़िगरेशन स्थान आवश्यक है। आपके कंपोज़िटर की फ़ाइलें बदली नहीं गई हैं।"

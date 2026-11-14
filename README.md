@@ -111,8 +111,8 @@ and tick off tasks where they sit.
    tags, Niri's scrolling columns, Hyprland, Umbriel and Sway workspaces,
    KWin's Plasma windows, virtual desktops, clipboard and capture,
    Aqueous's live state stream, and labwc and COSMIC's ext-workspace protocol.
-   Version-aware setup uses
-   the right dialect, including Hyprland 0.57's Lua config.
+   Version-aware setup follows MangoWM's conf or TOML defaults and
+   Hyprland 0.57's Lua config.
 2. **Your setup stays yours.** At most one include line; generated settings
    live in their own drop-ins, with the compositor's validator and rollback.
    River uses its native protocol instead. KWin, Aqueous, labwc and COSMIC
@@ -121,7 +121,8 @@ and tick off tasks where they sit.
    all displays, screen recording, offline OCR and polkit prompts come built
    in. Copy any plugin panel to the clipboard with its camera button,
    including floating and third-party panels. [Panel images](docs/panel-images.md).
-   Vulkan or OpenGL uses your GPU, including in 3D-accelerated virtual machines.
+   Vulkan or OpenGL uses your GPU, including older OpenGL hardware and
+   3D-accelerated virtual machines.
 4. **Performance you can check.** Plugins load when needed; hidden panels
    stop refreshing, and image previews release their caches after closing.
    Your display, driver and widgets affect resource use; the performance

@@ -10795,3 +10795,13 @@
 "Native filesystem maintenance is available on Linux." = "নেটিভ ফাইলসিস্টেম রক্ষণাবেক্ষণ Linux-এ উপলব্ধ।"
 "Undo could not finish. The retained file is available at {path}." = "পূর্বাবস্থায় ফেরানো সম্পূর্ণ করা যায়নি। সংরক্ষিত ফাইলটি {path}-এ পাওয়া যাবে।"
 "The XDG folder is disabled or not configured on this system." = "এই সিস্টেমে XDG ফোল্ডারটি নিষ্ক্রিয় বা কনফিগার করা নেই।"
+
+"No compositor configuration was found at {path}." = "{path}-এ কম্পোজিটরের কনফিগারেশন পাওয়া যায়নি।"
+"Autostart is enabled but its generated configuration is not connected. Run `mandara setup` to repair it." = "স্বয়ংক্রিয় চালু সক্রিয়, কিন্তু তৈরি করা কনফিগারেশন যুক্ত নেই। মেরামত করতে `mandara setup` চালান।"
+"MangoWM could not validate the configuration. Nothing was changed." = "MangoWM কনফিগারেশন যাচাই করতে পারেনি। কিছুই পরিবর্তন করা হয়নি।"
+"MangoWM rejected the configuration change. Previous settings were kept." = "MangoWM কনফিগারেশনের পরিবর্তন প্রত্যাখ্যান করেছে। আগের সেটিংস রাখা হয়েছে।"
+"MangoWM's system configuration is too large to copy safely." = "MangoWM-এর সিস্টেম কনফিগারেশন নিরাপদে কপি করার জন্য অনেক বড়।"
+"MangoWM's configuration is not valid TOML." = "MangoWM-এর কনফিগারেশন বৈধ TOML নয়।"
+"MangoWM's global settings must be a table." = "MangoWM-এর সাধারণ সেটিংস একটি টেবিল হতে হবে।"
+"MangoWM's optional sources must be a path or a list of paths." = "MangoWM-এর ঐচ্ছিক উৎস একটি পথ বা পথের তালিকা হতে হবে।"
+"MangoWM uses a custom config at {path}. Automatic setup requires its default config location. Your compositor files were left unchanged." = "MangoWM {path}-এ একটি কাস্টম কনফিগারেশন ব্যবহার করছে। স্বয়ংক্রিয় সেটআপের জন্য ডিফল্ট কনফিগারেশন অবস্থান প্রয়োজন। আপনার কম্পোজিটরের ফাইলগুলো অপরিবর্তিত রয়েছে।"
