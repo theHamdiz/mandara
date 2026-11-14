@@ -11035,3 +11035,4 @@
 
 "Native filesystem maintenance is available on Linux." = "Yerel dosya sistemi bakımı Linux üzerinde kullanılabilir."
 "Undo could not finish. The retained file is available at {path}." = "Geri alma tamamlanamadı. Korunan dosya {path} konumunda."
+"The XDG folder is disabled or not configured on this system." = "XDG klasörü bu sistemde devre dışı bırakılmış veya yapılandırılmamış."

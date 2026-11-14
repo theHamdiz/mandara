@@ -11035,3 +11035,4 @@
 
 "Native filesystem maintenance is available on Linux." = "Встроенное обслуживание файловых систем доступно в Linux."
 "Undo could not finish. The retained file is available at {path}." = "Не удалось отменить изменение. Сохранённый файл находится в {path}."
+"The XDG folder is disabled or not configured on this system." = "Папка XDG отключена или не настроена в этой системе."

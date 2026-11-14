@@ -11034,3 +11034,4 @@
 
 "Native filesystem maintenance is available on Linux." = "Native Dateisystemwartung ist unter Linux verfügbar."
 "Undo could not finish. The retained file is available at {path}." = "Rückgängig machen konnte nicht abgeschlossen werden. Die aufbewahrte Datei liegt unter {path}."
+"The XDG folder is disabled or not configured on this system." = "Der XDG-Ordner ist auf diesem System deaktiviert oder nicht eingerichtet."

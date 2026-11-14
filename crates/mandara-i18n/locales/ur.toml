@@ -10793,3 +10793,4 @@
 
 "Native filesystem maintenance is available on Linux." = "مقامی فائل سسٹم کی دیکھ بھال Linux پر دستیاب ہے۔"
 "Undo could not finish. The retained file is available at {path}." = "تبدیلی واپس نہیں کی جا سکی۔ محفوظ کردہ فائل {path} پر دستیاب ہے۔"
+"The XDG folder is disabled or not configured on this system." = "اس سسٹم پر XDG فولڈر غیر فعال ہے یا ترتیب نہیں دیا گیا۔"

@@ -125,8 +125,14 @@ impl Reader<'_> {
         ) {
             let logical = logical?;
             let line = logical.text.as_ref();
-            let included = (!line.trim_start().starts_with('#'))
-                .then(|| include_path(Target::Sway, line))
+            if line.trim_start().starts_with('$') {
+                self.chunk(file, &chunk, start)?;
+                chunk.clear();
+                start = logical.number - 1;
+            }
+            let command = super::sway_vars::command(line, &self.vars)?;
+            let included = (!command.trim_start().starts_with('#'))
+                .then(|| include_path(Target::Sway, &command))
                 .flatten();
             if let Some(raw) = included {
                 self.chunk(file, &chunk, start)?;
@@ -170,6 +176,28 @@ impl Reader<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn variable_commands_and_escaped_quote_arguments_discover_native_sources() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("config");
+        std::fs::write(&file, "set $load include\n$load keys.conf\n$load \\\"keys with spaces.conf\\\"\nset $bind bindsym\n$bind Mod4+e kill\n").unwrap();
+        std::fs::write(root.path().join("keys.conf"), "bindsym Mod4+q kill\n").unwrap();
+        std::fs::write(root.path().join("keys with spaces.conf"), "bindsym Mod4+w kill\n").unwrap();
+        let environment = IncludeEnvironment::captured([]);
+        assert_eq!(checked_in(&file, &environment).unwrap(), BTreeSet::from(["super+q".into(), "super+w".into(), "super+e".into()]));
+        let sources = shortcut_sources_in(std::slice::from_ref(&file), &environment).unwrap();
+        assert_eq!(sources.files.len(), 3);
+        assert_eq!(sources.bindings.len(), 3);
+        std::fs::write(&file, r#"set $load include
+set $quoted \\\"keys with spaces.conf\\\"
+$load $quoted
+"#).unwrap();
+        assert_eq!(checked_in(&file, &environment).unwrap(), BTreeSet::from(["super+w".into()]));
+        assert_eq!(shortcut_sources_in(std::slice::from_ref(&file), &environment).unwrap().files.len(), 2);
+        std::fs::write(&file, "$unresolved keys.conf\n").unwrap();
+        assert!(checked_in(&file, &environment).is_err());
+    }
 
     #[test]
     fn escaped_sway_variables_reach_environment_expansion_and_nested_quotes_stay_grouped() {

@@ -43,9 +43,11 @@ mod include_env;
 mod read_budget;
 mod mango_read;
 mod sway_read;
+mod sway_escape;
 mod sway_vars;
 mod sway_words;
 pub(crate) mod hyprland_probe;
+mod hyprland_vars;
 pub use hyprland_probe::shortcut_probe as hyprland_shortcut_probe;
 pub use include_env::IncludeEnvironment;
 pub mod shortcuts;
@@ -2854,13 +2856,16 @@ fn sway_binds_in(text: &str, vars: &mut Vec<(String, String)>, blocks: &mut Vec<
             blocks.pop();
             continue;
         }
+        let command = sway_vars::command(line, vars)?;
+        let line = command.as_ref();
         if let Some(rest) = line.strip_prefix("set ")
             && let Some((name, value)) = rest.trim().split_once(char::is_whitespace)
             && name.starts_with('$')
         {
             let value = sway_vars::expand(value.trim(), vars)?;
+            let value = sway_escape::assignment(&value)?;
             sway_vars::check_assignment(vars, name, &value)?;
-            set_var_owned(vars, name, value.into_owned());
+            set_var_owned(vars, name, value);
             continue;
         }
         let line = sway_vars::expand(line, vars)?;
@@ -3858,6 +3863,20 @@ value = "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'"
         assert!(mango_read::chords_from(&legacy, &keys, crate::keybinds::MAX_BINDINGS,
             &mut |path| budget.read(path), &IncludeEnvironment::captured([])).is_err(),
             "optional sources suppress absence, not symlink errors");
+    }
+
+    #[test]
+    fn mango_conflicts_cover_every_managed_include_mode_in_both_dialects() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("config.conf");
+        std::fs::write(&file, "key_mode=default\nbind=SUPER,Q,killclient\nsource_optional=mandara/generated/mango.conf\nkey_mode=resize\nbind=SUPER,Space,killclient\nsource_optional=mandara/generated/mango.conf\n").unwrap();
+        let expected = BTreeSet::from(["super+q".into(), "super+space".into()]);
+        let environment = IncludeEnvironment::captured([]);
+        assert_eq!(existing_chords_checked_in(Target::Mango, &file, &environment).unwrap(), expected);
+        let file = root.path().join("config.toml");
+        std::fs::write(&file, "[global]\nkey_mode='default'\nsource_optional=['mandara/generated/mango.conf', 'resize.toml']\n[bind]\n'Super+Q'='killclient'\n").unwrap();
+        std::fs::write(root.path().join("resize.toml"), "[global]\nkey_mode='resize'\nsource_optional=['mandara/generated/mango.conf']\n[bind.resize]\n'Super+Space'='killclient'\n").unwrap();
+        assert_eq!(existing_chords_checked_in(Target::Mango, &file, &environment).unwrap(), expected);
     }
 
     #[test]

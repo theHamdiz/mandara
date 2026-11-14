@@ -83,6 +83,8 @@ Environment variables containing several include paths follow Sway's native
 word splitting and quoting, without executing command substitutions.
 Escaped dollar references remain available to environment expansion, and nested
 quotes preserve filenames containing spaces.
+Sway commands stored in variables can include other files too; their bindings
+take part in the same conflict checks.
 Labwc lists direct keyboard bindings; unsupported nested key chains stay
 untouched and do not become editable shortcuts.
 Niri's `Mod` follows the merged input settings and its native nested-session
@@ -93,6 +95,7 @@ MangoWM conflict checks follow both legacy and TOML sources, keeping bindings
 in their native modes rather than treating every mode as active together.
 Repeated MangoWM includes are read in their current mode; recursive includes
 stop the save with an explanation.
+When several modes load Mandara's managed file, conflicts in each mode are kept.
 For River, this editor applies selected mappings live through `riverctl map`
 and `riverctl unmap`, with Undo. It leaves `init` unchanged. Scanning and
 validation never execute the program.

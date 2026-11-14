@@ -10792,3 +10792,4 @@
 
 "Native filesystem maintenance is available on Linux." = "기본 파일 시스템 유지 관리는 Linux에서 사용할 수 있습니다."
 "Undo could not finish. The retained file is available at {path}." = "실행 취소를 완료하지 못했습니다. 보관된 파일은 {path}에 있습니다."
+"The XDG folder is disabled or not configured on this system." = "이 시스템에서 XDG 폴더가 비활성화되었거나 설정되지 않았습니다."

@@ -137,12 +137,15 @@ impl Locations {
         // Each grant is resolved once, rather than once per settings row.
         let mut controls = Vec::with_capacity(USER_DIRS.len() + 7);
         for (index, row) in rows
-            .iter()
+            .iter_mut()
             .enumerate()
             .filter(|(_, row)| row.key == Key::Filesystems && row.editable)
         {
             if let Some(path) = self.resolve(&row.value)? {
                 controls.push((index, canonical(&path)?));
+            } else if USER_DIRS.iter().any(|(name, _)| *name == row.value) {
+                row.editable = false;
+                row.constraint = Some(Constraint::Unavailable);
             }
             if row.value == "host-os" {
                 for path in SYSTEM_TREES {
@@ -245,6 +248,25 @@ fn location(grant: &str) -> Result<String> {
 mod tests {
     use super::*;
     use crate::app_install::flatpak::parse_context;
+
+    #[test]
+    fn directory_whitespace_and_unavailable_aliases_keep_their_native_meaning() {
+        let locations = Locations::in_home(Path::new("/home/alice"), "XDG_MUSIC_DIR=\"/media/Audio \"\nXDG_PICTURES_DIR=\"$HOME\"\n").unwrap();
+        let permissions = parse_context("[Context]\nfilesystems=xdg-music;xdg-pictures;xdg-documents;/media/Audio ;\n").unwrap();
+        let mut rows = super::super::model::capabilities(&permissions, &permissions);
+        locations.constrain(&mut rows, &permissions.filesystems).unwrap();
+        assert_eq!(rows.iter().find(|row| row.value == "xdg-music").unwrap().constraint, Some(Constraint::Broader));
+        for value in ["xdg-pictures", "xdg-documents"] {
+            let row = rows.iter().find(|row| row.value == value).unwrap();
+            assert!(!row.editable);
+            assert_eq!(row.constraint, Some(Constraint::Unavailable));
+        }
+        let empty = Default::default();
+        let mut rows = super::super::model::capabilities(&empty, &permissions);
+        locations.constrain(&mut rows, &[]).unwrap();
+        assert!(!rows.iter().find(|row| row.value == "xdg-pictures").unwrap().editable);
+        assert!(rows.iter().find(|row| row.value == "xdg-music").unwrap().editable);
+    }
 
     #[test]
     fn equivalent_and_parent_paths_lock_only_the_affected_controls() {

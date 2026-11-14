@@ -70,6 +70,7 @@ fn grant(row: &Capability, busy: bool, model: &Shared, p: &MandaraPalette) -> An
         let reason = match row.constraint {
             Some(Constraint::Conditional) => t("Conditional access; the native rule decides at app startup."),
             Some(Constraint::Broader) => t("A broader grant overlaps this access. Review that grant and the native details first."),
+            Some(Constraint::Unavailable) => t("The XDG folder is disabled or not configured on this system."),
             _ => t("Advanced or scoped grant; inspect its native details below."),
         };
         return div().row().flex_col().gap(px(tokens::XS)).child(card)

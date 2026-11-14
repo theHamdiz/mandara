@@ -144,16 +144,7 @@ impl Probe<'_> {
     }
 
     fn expand(&self, input: &str) -> Result<String> {
-        let mut value = input.to_owned();
-        // Hyprlang permits at most 100 rounds, with longer variable names first.
-        const MAX_EXPANSIONS: usize = 100;
-        for _ in 0..MAX_EXPANSIONS {
-            if !self.variables.iter().any(|(name, _)| value.contains(name)) {
-                return Ok(value);
-            }
-            value = sway_vars::expand(&value, &self.variables)?.into_owned();
-        }
-        anyhow::bail!(mandara_i18n::t("The shortcut configuration is too large to edit."))
+        super::hyprland_vars::expand(input, &self.variables)
     }
 
     fn binding_expansion(&mut self, line: &str) -> Result<String> {
@@ -299,6 +290,20 @@ fn uncomment(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn escaped_variable_arguments_do_not_block_native_shortcut_discovery() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("hyprland.conf");
+        let binding = r"bind = SUPER, Q, exec, notify-send \$arg";
+        std::fs::write(&file, format!("$arg = hello\n{binding}\n")).unwrap();
+        let environment = IncludeEnvironment::captured([]);
+        assert_eq!(chords(&file, &environment).unwrap(), std::collections::BTreeSet::from(["super+q".into()]));
+        assert!(shortcut_probe(&file, &file, 2, binding, &environment).is_ok());
+        let scan = crate::keybinds::scan_roots_in(super::super::Target::Hyprland, [file], &environment);
+        assert!(scan.errors.is_empty(), "{:?}", scan.errors);
+        assert!(scan.sources[0].bindings[0].fields.iter().any(|field| field.value.contains(r"\$arg")), "the editor preserves native expressions");
+    }
 
     #[test]
     fn a_named_default_submap_is_distinct_from_the_default_scope() {

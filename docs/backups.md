@@ -35,6 +35,9 @@ Snapshot navigation stops at the last page and adjusts when the list changes.
 
 ## Local Btrfs snapshots
 
+An operation's review remains open until you continue or cancel it, including
+reviews opened through a command while the panel is visible.
+
 Choose **Snapshots**, select a Btrfs filesystem and load its snapshot list.
 Reading the complete list can require **Load snapshots with administrator
 approval**. For creation, set **Local snapshot source** to an existing subvolume

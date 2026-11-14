@@ -69,7 +69,7 @@ impl Words {
     }
 }
 
-fn arguments(mut line: &str) -> impl Iterator<Item = &str> {
+pub(super) fn arguments(mut line: &str) -> impl Iterator<Item = &str> {
     std::iter::from_fn(move || {
         line = line.trim_start_matches(|ch: char| ch.is_ascii_whitespace());
         if line.is_empty() {
@@ -122,6 +122,7 @@ pub(super) fn expand(
         if !line.is_empty() {
             line.push(b' ');
         }
+        let start = line.len();
         if arg.starts_with(['"', '\'']) {
             let mut escaped = false;
             let mut quote = None;
@@ -142,6 +143,7 @@ pub(super) fn expand(
         } else {
             line.extend_from_slice(arg.as_bytes());
         }
+        super::sway_escape::argument(&mut line, start)?;
     }
     let mut words = Words {
         limit: limit.min(crate::keybinds::MAX_BINDINGS),

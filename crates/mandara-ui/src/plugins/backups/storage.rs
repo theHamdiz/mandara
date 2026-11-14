@@ -48,6 +48,9 @@ impl State {
     fn normalize_page(&mut self) {
         self.page = self.page.min(self.snapshot_count().saturating_sub(1) / ROWS_PER_PAGE);
     }
+    fn needs_refresh(&self, busy: bool) -> bool {
+        !self.opened && self.preview.is_none() && !busy
+    }
     fn move_page(&mut self, forward: bool) {
         self.normalize_page();
         self.page = if forward { self.page.saturating_add(1).min(self.snapshot_count().saturating_sub(1) / ROWS_PER_PAGE) }
@@ -182,7 +185,8 @@ fn preview(request: &Request, model: &Shared, p: &MandaraPalette) -> AnyElement 
 pub(super) fn render(model: &Shared, maintenance: bool, p: &MandaraPalette, window: &mut Window, cx: &mut App) -> AnyElement {
     model.borrow().storage.mounts.borrow().views.track(window);
     model.borrow().storage.native.borrow().views.track(window);
-    if !model.borrow().storage.opened && model.borrow().active.is_none() { refresh(model, cx); }
+    let refresh_needed = { let state = model.borrow(); state.storage.needs_refresh(state.active.is_some()) };
+    if refresh_needed { refresh(model, cx); }
     model.borrow_mut().storage.normalize_page();
     let state = model.borrow();
     let storage = &state.storage;
@@ -300,6 +304,22 @@ mod tests {
 
     fn mount() -> Mount {
         Mount { id: 8, device: "0:33".into(), root: "/".into(), target: "/snapshots".into(), filesystem: "btrfs".into(), read_only: false, subvolume_id: Some(5) }
+    }
+
+    #[test]
+    fn a_pending_review_survives_cancelled_reads_and_automatic_render_refresh() {
+        let mut state = State::default();
+        assert!(state.needs_refresh(false));
+        state.preview = Some(Request::Maintain { mount: mount(), operation: Maintenance::Trim });
+        state.cancel_reads();
+        assert!(!state.needs_refresh(false));
+        assert!(!state.needs_refresh(true));
+        assert!(state.preview.is_some());
+        state.preview = None;
+        assert!(state.needs_refresh(false));
+        assert!(!state.needs_refresh(true));
+        state.opened = true;
+        assert!(!state.needs_refresh(false));
     }
 
     #[test]

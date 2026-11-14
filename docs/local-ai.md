@@ -35,6 +35,7 @@ interrupts the current request; **Copy** copies an answer. **New chat** clears
 the transcript and gives AnythingLLM a fresh session identity. Closing the
 last panel cancels the stream and clears the transcript and drafts. Mandara
 does not delete your server's history or change its workspace settings.
+**Stop** keeps any partial reply without showing cancellation as an error.
 
 Only one reply runs at a time. Prompts and replies are each limited to 8 KiB;
 the transcript keeps at most sixteen messages and 16–32 KiB, dropping the

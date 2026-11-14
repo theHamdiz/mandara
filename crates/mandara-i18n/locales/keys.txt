@@ -7663,6 +7663,7 @@ The Tale of Genji
 The Tanzil text and its meaning, for the Qur'an plugin (api.alquran.cloud)
 The Trash: count its items, or empty it (asks for --yes)
 The XCursor theme name, e.g. Bibata-Modern-Ice; pick one from the gallery above
+The XDG folder is disabled or not configured on this system.
 The active keyboard layout; click to switch
 The address has no server name
 The adhan for {prayer} is playing

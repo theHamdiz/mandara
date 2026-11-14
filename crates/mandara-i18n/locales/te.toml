@@ -10695,3 +10695,4 @@
 
 "Native filesystem maintenance is available on Linux." = "స్థానిక ఫైల్‌సిస్టమ్ నిర్వహణ Linuxలో అందుబాటులో ఉంది."
 "Undo could not finish. The retained file is available at {path}." = "చర్యను రద్దు చేయడం పూర్తి కాలేదు. భద్రపరిచిన ఫైల్ {path} వద్ద అందుబాటులో ఉంది."
+"The XDG folder is disabled or not configured on this system." = "ఈ సిస్టమ్‌లో XDG ఫోల్డర్ నిలిపివేయబడింది లేదా కాన్ఫిగర్ చేయబడలేదు."

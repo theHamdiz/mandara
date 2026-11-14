@@ -16,7 +16,7 @@ pub(super) fn chords_from(
         visited: BTreeSet<PathBuf>,
         binds: Vec<(String, String)>,
         retained: usize,
-        ours: Option<String>,
+        ours: BTreeSet<String>,
         environment: &'e IncludeEnvironment,
     }
     fn walk(w: &mut Walk, file: &Path, mode: String) -> Result<String> {
@@ -53,7 +53,7 @@ pub(super) fn chords_from(
                             || is_generated(&path)
                             || std::fs::canonicalize(&path).is_ok_and(|path| is_generated(&path))
                         {
-                            w.ours.get_or_insert_with(|| mode.clone());
+                            w.ours.insert(mode.clone());
                         } else if path.try_exists()?
                             || !line.trim_start().starts_with("source_optional")
                         {
@@ -106,7 +106,7 @@ pub(super) fn chords_from(
             if is_generated(&path)
                 || std::fs::canonicalize(&path).is_ok_and(|path| is_generated(&path))
             {
-                w.ours.get_or_insert_with(|| mode.clone());
+                w.ours.insert(mode.clone());
             } else {
                 mode = walk(w, &path, mode)?;
             }
@@ -161,16 +161,16 @@ pub(super) fn chords_from(
         visited: BTreeSet::new(),
         binds: Vec::new(),
         retained: 0,
-        ours: None,
+        ours: BTreeSet::new(),
         environment,
     };
     walk(&mut w, root, mango_keys::DEFAULT_MODE.to_string())?;
-    let ours = w
-        .ours
-        .unwrap_or_else(|| mango_keys::DEFAULT_MODE.to_string());
+    if w.ours.is_empty() {
+        w.ours.insert(mango_keys::DEFAULT_MODE.to_string());
+    }
     Ok(w.binds
         .into_iter()
-        .filter(|(_, mode)| mango_keys::modes_meet(mode, &ours))
+        .filter(|(_, mode)| w.ours.iter().any(|ours| mango_keys::modes_meet(mode, ours)))
         .map(|(chord, _)| chord)
         .collect())
 }

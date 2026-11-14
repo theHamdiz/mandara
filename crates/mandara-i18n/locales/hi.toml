@@ -11038,3 +11038,4 @@
 
 "Native filesystem maintenance is available on Linux." = "नेटिव फ़ाइलसिस्टम रखरखाव Linux पर उपलब्ध है।"
 "Undo could not finish. The retained file is available at {path}." = "बदलाव वापस नहीं किया जा सका। सुरक्षित रखी गई फ़ाइल {path} पर उपलब्ध है।"
+"The XDG folder is disabled or not configured on this system." = "इस सिस्टम पर XDG फ़ोल्डर बंद है या कॉन्फ़िगर नहीं किया गया है।"

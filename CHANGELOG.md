@@ -28,10 +28,11 @@ and more apps can follow your colours.
 
 ### Fixed
 
+- Storage reviews stay visible until you choose Continue or Cancel. App permissions preserves spaces in folder names and explains disabled XDG folders; shortcut discovery follows variable-defined Sway includes and every mode that loads MangoWM's managed settings.
 - Shortcut scans preserve repeated MangoWM includes, escaped Sway variables and nested quotes. Snapshot paging stops at the last page, escaped folder names remain readable in App permissions, and Undo preserves files replaced by another editor.
 - Backups keeps completed restore locations across tabs and unrelated disk jobs, refreshes snapshot lists after changes and handles checks and restores with older distribution packages. Cancelled cleanup previews stay dismissed, and revoked app permissions remain available to turn back on. Broad host, full-root and equivalent folder grants lock overlapping permission controls.
 - Stash summoned by a drag or shake shows only its drop zone until something lands in it. Standalone shelves keep their usual controls, and long shelf-menu options wrap within their rows.
-- Stopping Local AI while it connects or waits for a reply no longer reports a false connection error.
+- Stopping Local AI keeps any partial reply without displaying a false error, including while it connects or waits for the model.
 - Backup histories keep the newest entries across source groups, literal repository names stay excluded, and cleanup previews leave shared files untouched. Conditional app permissions stay locked together so switching one off cannot expose another route.
 - Long labels and shortcuts in the desktop's circular menu now wrap or shorten inside the centre circle, with padding that also holds at smaller sizes and in Arabic.
 - Restoring your Look puts plugins back in their original top and vertical bar groups, including Raml Tram's middle rail. Hidden groups no longer create duplicate placements.

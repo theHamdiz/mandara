@@ -11030,3 +11030,4 @@
 
 "Native filesystem maintenance is available on Linux." = "El mantenimiento nativo de sistemas de archivos está disponible en Linux."
 "Undo could not finish. The retained file is available at {path}." = "No se pudo completar la acción de deshacer. El archivo conservado está en {path}."
+"The XDG folder is disabled or not configured on this system." = "La carpeta XDG está desactivada o no está configurada en este sistema."

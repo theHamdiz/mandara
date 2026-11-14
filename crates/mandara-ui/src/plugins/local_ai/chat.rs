@@ -61,6 +61,26 @@ struct Model {
     watch: Rc<Cell<bool>>,
 }
 
+impl Model {
+    fn finish(&mut self, progress: &mut Progress, model: &str, cancelled: bool) -> Result<String, String> {
+        let outcome = progress.finished.take().unwrap_or_else(|| Err(t("The model returned no text").into()));
+        let reply = if cancelled {
+            Err(t("Cancelled").into())
+        } else {
+            outcome.and_then(|()| {
+                if progress.text.is_empty() { Err(t("The model returned no text").into()) }
+                else { Ok(serde_json::json!({"model":model,"reply":progress.text}).to_string()) }
+            })
+        };
+        if !progress.text.is_empty() {
+            self.history.push(Message { role: Role::Assistant, content: std::mem::take(&mut progress.text).into() });
+        }
+        self.error = if cancelled { None } else { reply.as_ref().err().cloned() };
+        if let Some(settings) = self.settings.as_ref() { service::trim(&mut self.history, settings.context_bytes); }
+        reply
+    }
+}
+
 type Shared = Rc<RefCell<Model>>;
 thread_local! { static MODEL: OnceCell<Shared> = const { OnceCell::new() }; }
 fn model() -> Shared {
@@ -316,37 +336,7 @@ pub(super) fn send(
                 && let Some(progress) = state.progress.take()
             {
                 let mut progress = progress.lock().unwrap_or_else(|error| error.into_inner());
-                let outcome = progress
-                    .finished
-                    .take()
-                    .unwrap_or_else(|| Err(t("The model returned no text").into()));
-                reply = if cancelled {
-                    Err(t("Cancelled").into())
-                } else {
-                    outcome.and_then(|()| {
-                        if progress.text.is_empty() {
-                            Err(t("The model returned no text").into())
-                        } else {
-                            Ok(
-                                serde_json::json!({"model":reply_model,"reply":progress.text})
-                                    .to_string(),
-                            )
-                        }
-                    })
-                };
-                if !progress.text.is_empty() {
-                    state.history.push(Message {
-                        role: Role::Assistant,
-                        content: std::mem::take(&mut progress.text).into(),
-                    });
-                }
-                if let Err(error) = &reply {
-                    state.error = Some(error.clone());
-                }
-                if let Some(settings) = state.settings.as_ref() {
-                    let limit = settings.context_bytes;
-                    service::trim(&mut state.history, limit);
-                }
+                reply = state.finish(&mut progress, &reply_model, cancelled);
             }
         }
         let _ = reply_tx.try_send(reply);
@@ -411,6 +401,20 @@ pub(super) fn render(state: &State, palette: &MandaraPalette, window: &mut Windo
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stopping_keeps_partial_text_and_the_command_result_without_a_false_ui_error() {
+        let mut state = Model::default();
+        state.history.push(Message { role: Role::User, content: "Question".into() });
+        let mut progress = Progress { text: "Partial reply".into(), finished: Some(Err("connection interrupted".into())), ..Progress::default() };
+        assert_eq!(state.finish(&mut progress, "fixture", true).unwrap_err(), t("Cancelled"));
+        assert!(state.error.is_none());
+        assert_eq!(state.history.len(), 2);
+        assert_eq!(state.history[1].role, Role::Assistant);
+        assert_eq!(state.history[1].content.as_ref(), "Partial reply");
+        let mut failed = Progress { finished: Some(Err("server unavailable".into())), ..Progress::default() };
+        assert!(state.finish(&mut failed, "fixture", false).is_err());
+        assert_eq!(state.error.as_deref(), Some("server unavailable"));
+    }
     #[test]
     fn disabling_releases_chat_data_and_cancels_without_multiplying_workers() {
         let shared = model();

@@ -255,7 +255,8 @@ fn native_effective_grants_are_rechecked_without_changing_the_personal_override(
     std::fs::create_dir_all(&overrides).unwrap();
     let path = overrides.join(&app.id);
     let global = overrides.join("global");
-    let _restore = OverrideFixture::capture(&home, &[path.clone(), global.clone()]);
+    let user_dirs = std::path::PathBuf::from(std::env::var_os("XDG_CONFIG_HOME").unwrap()).join("user-dirs.dirs");
+    let _restore = OverrideFixture::capture(&home, &[path.clone(), global.clone(), user_dirs.clone()]);
     std::fs::write(&global, "").unwrap();
     let before = "[Context]\ndevices=dri;\n";
     std::fs::write(&path, before).unwrap();
@@ -281,6 +282,9 @@ fn native_effective_grants_are_rechecked_without_changing_the_personal_override(
 
     std::fs::write(&global, "").unwrap();
     std::fs::write(&path, "[Context]\nshared=network;\n").unwrap();
+    let music = home.join("Audio ");
+    std::fs::create_dir_all(&music).unwrap();
+    std::fs::write(&user_dirs, format!("XDG_MUSIC_DIR=\"{}\"\nXDG_PICTURES_DIR=\"$HOME\"\n", music.display())).unwrap();
     let mut command = std::process::Command::new("flatpak");
     command.args(["override", "--user"]);
     for name in ["A;B", "C:D", "E\\F"] {
@@ -289,11 +293,14 @@ fn native_effective_grants_are_rechecked_without_changing_the_personal_override(
         let escaped = directory.to_str().unwrap().replace('\\', "\\\\").replace(':', "\\:");
         command.arg(format!("--filesystem={escaped}:ro"));
     }
-    command.arg(&app.id);
+    command.args(["--filesystem=xdg-music", "--filesystem=xdg-pictures"]).arg(format!("--filesystem={}", music.display())).arg(&app.id);
     native::run(command, &cancel).unwrap();
     let current = backend.inspect(&app, &cancel).unwrap();
     for suffix in ["/A;B:ro", "/C\\:D:ro", "/E\\\\F:ro"] {
         assert!(current.permissions.filesystems.iter().any(|value| value.ends_with(suffix)), "{}: {:?}", suffix, current.permissions.filesystems);
     }
     assert!(current.capabilities.iter().any(|row| row.value == "network" && row.editable));
+    assert!(current.permissions.filesystems.iter().any(|value| value.ends_with("/Audio ")));
+    assert!(current.capabilities.iter().any(|row| row.value == "xdg-music" && row.constraint == Some(Constraint::Broader)));
+    assert!(current.capabilities.iter().any(|row| row.value == "xdg-pictures" && row.constraint == Some(Constraint::Unavailable)));
 }

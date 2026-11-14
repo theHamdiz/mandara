@@ -39,7 +39,7 @@ pub struct Capability {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-pub enum Constraint { Scoped, Conditional, Broader }
+pub enum Constraint { Scoped, Conditional, Broader, Unavailable }
 
 #[derive(Clone, Debug)]
 pub struct Session {

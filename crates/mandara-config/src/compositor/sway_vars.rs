@@ -3,6 +3,30 @@
 use anyhow::{Result, ensure};
 use std::borrow::Cow;
 
+/// Sway resolves a variable-defined command before its normal argument expansion.
+pub(super) fn command<'a>(input: &'a str, variables: &[(String, String)]) -> Result<Cow<'a, str>> {
+    let Some(name) = super::sway_words::arguments(input)
+        .next()
+        .filter(|word| word.starts_with('$'))
+    else {
+        return Ok(Cow::Borrowed(input));
+    };
+    let tail = &input.trim_start_matches(|ch: char| ch.is_ascii_whitespace())[name.len()..];
+    let first = expand(name, variables)?;
+    ensure!(
+        !first.starts_with('$') && !first.contains(['\n', '\r']),
+        mandara_i18n::t("Computed shortcuts must be edited in their source configuration.")
+    );
+    ensure!(
+        first.len().saturating_add(tail.len()) <= crate::keybinds::MAX_FILE_BYTES,
+        mandara_i18n::t("The shortcut configuration is too large to edit.")
+    );
+    let mut output = String::with_capacity(first.len() + tail.len());
+    output.push_str(&first);
+    output.push_str(tail);
+    Ok(Cow::Owned(output))
+}
+
 pub(super) fn expand<'a>(input: &'a str, variables: &[(String, String)]) -> Result<Cow<'a, str>> {
     ensure!(
         input.len() <= crate::keybinds::MAX_FILE_BYTES,

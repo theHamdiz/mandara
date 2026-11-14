@@ -24,23 +24,23 @@ fn parse(text: &str, include_revoked: bool) -> Option<Permissions> {
     let mut inside = false;
     let mut seen = false;
     let mut permissions = Permissions::default();
-    for line in text.lines().map(str::trim) {
+    for line in text.lines().map(|line| line.trim_start_matches([' ', '\t'])) {
         if line.starts_with('[') {
-            inside = line == "[Context]";
+            inside = line.trim_end_matches([' ', '\t']) == "[Context]";
             seen |= inside;
             continue;
         }
         let Some((key, value)) = line.split_once('=').filter(|_| inside) else {
             continue;
         };
-        let field = match key.trim() {
+        let field = match key.trim_end_matches([' ', '\t']) {
             "shared" => &mut permissions.shared,
             "sockets" => &mut permissions.sockets,
             "devices" => &mut permissions.devices,
             "filesystems" => &mut permissions.filesystems,
             _ => continue,
         };
-        *field = list(value, include_revoked)?;
+        *field = list(value.trim_start_matches([' ', '\t']), include_revoked)?;
     }
     seen.then_some(permissions)
 }
@@ -51,7 +51,6 @@ fn list(raw: &str, include_revoked: bool) -> Option<Vec<String>> {
     let mut start = 0;
     let mut escaped = false;
     let mut append = |raw: &str| {
-        let raw = raw.trim();
         if raw.is_empty() {
             return Some(());
         }
@@ -107,6 +106,13 @@ fn decode(raw: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn list_item_whitespace_is_data_and_syntax_whitespace_is_not() {
+        let text = " \t[Context] \t\n filesystems \t= \t/media/Audio ; /media/Other;\nsockets=wayland;\n";
+        assert_eq!(parse_context(text).unwrap().filesystems, ["/media/Audio ", " /media/Other"]);
+        assert_eq!(parse_context("[Context]\nfilesystems=/media/Audio \n").unwrap().filesystems, ["/media/Audio "]);
+    }
 
     #[test]
     fn filesystem_lists_decode_separators_once_and_keep_native_flag_escapes() {

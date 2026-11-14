@@ -10694,3 +10694,4 @@
 
 "Native filesystem maintenance is available on Linux." = "Bảo trì hệ thống tệp gốc có sẵn trên Linux."
 "Undo could not finish. The retained file is available at {path}." = "Không thể hoàn tất việc hoàn tác. Tệp được giữ lại nằm tại {path}."
+"The XDG folder is disabled or not configured on this system." = "Thư mục XDG đã bị tắt hoặc chưa được cấu hình trên hệ thống này."

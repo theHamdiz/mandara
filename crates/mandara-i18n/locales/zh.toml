@@ -11031,3 +11031,4 @@
 
 "Native filesystem maintenance is available on Linux." = "原生文件系统维护功能可在 Linux 上使用。"
 "Undo could not finish. The retained file is available at {path}." = "无法完成撤销。保留的文件位于 {path}。"
+"The XDG folder is disabled or not configured on this system." = "此系统上的 XDG 文件夹已禁用或尚未配置。"

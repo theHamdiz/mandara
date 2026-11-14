@@ -117,9 +117,7 @@ impl Backend for Flatpak {
         ensure!(FileStamp::at(&target)? == stamp && mandara_theme::templates::destination::identity(&path)? == target, "{}", t("The app permissions changed. Refresh before saving."));
         let domain = capability_domain([&metadata, &declared, &before])?;
         let mut capabilities = model::capabilities(&permissions, &domain);
-        if !permissions.filesystems.is_empty() {
-            super::paths::Locations::load()?.constrain(&mut capabilities, &permissions.filesystems)?;
-        }
+        super::paths::Locations::load()?.constrain(&mut capabilities, &permissions.filesystems)?;
         Ok(Session { app: app.clone(), capabilities, permissions, metadata, path, target, before, stamp })
     }
 
