@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+This update fixes session selection in Mandara Login.
+
 ### Fixed
 
 - Clicking a session in Mandara Login now selects it.
