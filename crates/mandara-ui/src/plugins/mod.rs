@@ -6,6 +6,7 @@ pub mod app_permissions;
 pub mod backups;
 pub mod audio;
 pub mod bluetooth;
+pub mod bar_chip;
 pub mod clipboard;
 pub mod clock;
 pub mod keyboard;
@@ -117,9 +118,29 @@ pub fn follow<T: 'static>(view: &AnyView, source: &gpui::Entity<T>, cx: &mut App
     }
 }
 
+/// Like [`follow`], but runs `f` on every notification and re-renders
+/// `view` only when it returns `true` (a bar item that records samples
+/// while its current look shows none of them).
+pub fn follow_with<T: 'static>(view: &AnyView, source: &gpui::Entity<T>, f: impl FnMut(gpui::Entity<T>, &mut App) -> bool + 'static, cx: &mut App) {
+    match view.clone().downcast::<FnView>() {
+        Ok(view) => view.update(cx, |view, cx| view.observe_with(source, f, cx)),
+        Err(view) => {
+            let id = view.entity_id();
+            let mut f = f;
+            cx.observe(source, move |source, cx| {
+                if f(source, cx) {
+                    cx.notify(id);
+                }
+            })
+            .detach();
+        }
+    }
+}
+
 /// Registers every shipped plugin and the core shell commands.
 pub fn register_builtin(registry: &mut PluginRegistry) {
     core_commands::register(registry);
+    bar_chip::register(registry);
     crate::sidebar_tabs::register(registry);
     diagnostics::register(registry);
     compositor::register(registry);

@@ -1,4 +1,5 @@
-//! Resources plugin: CPU / memory rings in the bar; a system dashboard
+//! Resources plugin: CPU / memory rings in the bar (or a glyph, labelled
+//! numbers or live graphs: [`bar`]); a system dashboard
 //! panel with live CPU and memory sparklines, frequency / temperature /
 //! load, per-GPU load / VRAM / temperature cards, component temperatures
 //! (in the user's units) with heat bars, per-filesystem storage meters,
@@ -16,6 +17,7 @@
 //! fictional values in [`demo`] (docs screenshots).
 
 pub(crate) mod demo;
+mod bar;
 mod temperature_rows;
 use temperature_rows::{TEMP_COLUMNS, temperature_rows};
 
@@ -39,11 +41,11 @@ use serde_json::json;
 
 use super::fn_view;
 use super::panel_fx::{
-    HEADER_H, History, LINK_H_PX, LINK_HOVER_ALPHA, LINK_PAD_X_PX, PERCENT_STEP, PanelShape, Readout, SECTION_H_PX, SMALL_ICON_PX, ViewSet, chip,
+    HEADER_H, History, LINK_H_PX, LINK_HOVER_ALPHA, LINK_PAD_X_PX, PERCENT_STEP, PanelShape, SECTION_H_PX, SMALL_ICON_PX, ViewSet, chip,
     glass_card, header, meter, partner, percent_text, readable, redraw_in, section, sparkline,
 };
 use crate::fonts::{fonts, tabular_nums};
-use crate::icons::{icon, ring};
+use crate::icons::icon;
 use crate::kit::{card, reveal, text, tokens};
 use crate::widgets::sensors::{self, Component, ComponentTemp, Gpu, Heat, Label};
 use crate::widgets::system::{SystemSampler, disk_usage, format_bytes, format_uptime};
@@ -330,10 +332,11 @@ impl Tuning {
     }
 }
 
-/// CPU / memory / process sampling period (`refresh_ms`); the hub's bar
-/// sampler follows it too.
+/// The hub's CPU / memory sampling period: the panel's `refresh_ms`, or a
+/// visible Numbers / Sparkline chip's `bar_refresh_ms` while one is drawn
+/// on a bar that shows ([`bar::cadence`]).
 pub fn sample_every(cx: &App) -> Duration {
-    Tuning::of(cx).sample_every
+    bar::cadence(Tuning::of(cx).sample_every)
 }
 
 // ── Sampling ─────────────────────────────────────────────────────────────
@@ -1622,47 +1625,9 @@ pub fn register(r: &mut PluginRegistry) {
             super::follow(&sidebar, &crate::hub::resources_entity(cx), cx);
             return PluginInstance { sidebar: Some(sidebar), ..PluginInstance::empty() };
         }
-        // Displayed values spring toward each smoothed sample.
-        let shown = Rc::new(RefCell::new((
-            Readout::new(CHIP_SPRING, CHIP_SNAP_BELOW, PERCENT_STEP),
-            Readout::new(CHIP_SPRING, CHIP_SNAP_BELOW, PERCENT_STEP),
-        )));
-        let bar_live = live.clone();
-        let bar = fn_view(
-            None,
-            move |palette, window, cx| {
-                let (cpu, mem) = {
-                    let s = crate::hub::resources_entity(cx).read(cx);
-                    (s.cpu, s.mem)
-                };
-                // The bar renders on every hub sample, so history keeps
-                // accumulating while the panel is closed.
-                bar_live.borrow_mut().record(cpu, mem);
-                let (cpu, mem) = {
-                    let mut st = shown.borrow_mut();
-                    (st.0.show(cpu, window), st.1.show(mem, window))
-                };
-                let track = palette.on_surface.with_alpha(CHIP_TRACK_ALPHA);
-                let meter = |value: f32, color| {
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(CHIP_RING_GAP_PX))
-                        .child(ring(value, CHIP_RING_D_PX, CHIP_RING_STROKE_PX, color, track))
-                        .child(div().w(px(CHIP_VALUE_W_PX)).text_color(palette.on_surface_variant.hsla()).child(percent_text(value)))
-                };
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(CHIP_GAP_PX))
-                    .font_features(tabular_nums())
-                    .child(meter(cpu, palette.primary))
-                    .child(meter(mem, palette.tertiary))
-                    .into_any_element()
-            },
-            window,
-            cx,
-        );
+        // In its chosen look; history keeps accumulating from the hub's
+        // samples while the panel is closed, whatever the look.
+        let bar = bar::bar_view(live.clone(), window, cx);
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W_PX), px(panel_height(0, 0.0, DEFAULT_TOP_APPS as usize)))));
         // Prime host, filesystems, temperatures and GPUs off the UI thread
         // so the panel opens at its final size with its header filled in.
@@ -1696,7 +1661,7 @@ pub fn register(r: &mut PluginRegistry) {
         let panel = fn_view(None, panel_view(panel_cx.clone(), live.clone(), size_cell.clone()), window, cx);
         let sidebar = sidebar_card(live.clone(), window, cx);
         let samples = crate::hub::resources_entity(cx);
-        for view in [&bar, &panel, &sidebar] {
+        for view in [&panel, &sidebar] {
             super::follow(view, &samples, cx);
         }
         PluginInstance {

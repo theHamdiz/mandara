@@ -953,6 +953,7 @@ Begin at the beginning, and go on till you come to the end: then stop.
 Behaviour
 Behind Fit and Center (hex)
 Behind the subject
+Bell and badge
 Below this, notifications go straight to the history
 Benjamin Franklin
 Beside the ring
@@ -1125,6 +1126,7 @@ COSMIC has no standalone configuration checker. Its settings are managed in COSM
 COSMIC sets its own window animations
 COSMIC settings are managed in COSMIC Settings
 CPU
+CPU and memory
 CPU graph
 CPU scaling driver
 CPU temp
@@ -1335,6 +1337,7 @@ Children side by side, gap apart
 Children stacked, gap apart
 Chinua Achebe
 Chip design
+Chip refresh every
 Chips and choices
 Chips for text, links, Markdown, code, CSS, colors, images and files above the list
 Choices between a few options in Studio and in panels, and filter chips
@@ -2057,6 +2060,7 @@ Development folder
 Device
 Device access
 Device id from phone devices
+Device name
 Device removed
 Devices
 Devices you add to your tailnet appear here
@@ -2817,9 +2821,13 @@ For supported SSDs and thin-provisioned storage
 For terminal apps; empty uses your preferred terminal (Applications), then $TERMINAL, then the first installed one
 For the Cards style
 For the Custom quality
+For the Latest notification chip
 For the Model mode
+For the Numbers and Sparkline chips; the rings follow Refresh every
 For the Ring style
 For the Sketch transition
+For the chips that show the device's name
+For the chips that show the network's name
 For the things we have to learn before we can do, we learn by doing.
 For windows whose app id doesn't name their app (games, web apps): * matches anything, e.g. steam_app_* → steam.
 For you only needs no password; for everyone, Flatpak asks for it
@@ -3306,6 +3314,7 @@ How often every check runs in the background
 How often failed units are counted for the chip's badge
 How often filesystem usage is read again while the panel is open
 How often subscriptions are downloaded again
+How often the Numbers and Sparkline chips update while the bar shows them
 How often the background refresh runs; feeds that failed wait longer before trying again
 How often the container list updates while the panel is closed (the open panel refreshes every 2 s)
 How often the desktop widgets show a new verse or hadith; the panel and sidebar show a fresh one each time they open
@@ -3371,6 +3380,8 @@ Ibn Khaldun
 Ibn Majah
 Ibn Sina
 Ice
+Icon
+Icon and count
 Icon colour
 Icon name or image path
 Icon shape
@@ -3833,6 +3844,7 @@ Late frames
 Latest Arch Linux news headlines
 Latest GitHub Actions runs of the watched repositories
 Latest archlinux.org news headline (fetched only while the panel is open)
+Latest notification
 Latest screenshot
 Latest: {app}, {when}
 Latin text recognition
@@ -4610,6 +4622,8 @@ Name a VPN: no VPN was used yet
 Name a folder, e.g. ~/Documents
 Name a model
 Name an app (desktop id or name)
+Name and battery
+Name and strength
 Name at least one file to install
 Name in the launcher (empty keeps the app's own)
 Name the app the rule is for
@@ -5208,6 +5222,7 @@ Off: the compositor's own config decides at the next start
 Off: your wallpaper stays until you change it
 Offers itself to media keys and controls over MPRIS
 Office
+Offline
 Offline mode
 Offline mode is on (Studio → Privacy)
 Offline mode is on (Studio → Privacy): the Qur'an downloads once it's off
@@ -6426,6 +6441,8 @@ Ring size
 Ring starts at
 Ring width
 Ring, ping or change pairing for a device
+Rings and numbers
+Rings, one icon, labelled numbers or a small live graph beside each number; a click opens the panel either way
 Ripple
 Ripple: a wave spreads from the pointer or the centre
 Rise from below
@@ -6442,6 +6459,9 @@ Roll back
 Roll back to the previous generation now?
 Rolled back to the previous generation
 Room around the icons
+Room for the device's name before it trails off
+Room for the latest notification before it trails off
+Room for the network's name before it trails off
 Room for the title in the bar
 Rose
 Rose Gold
@@ -6990,6 +7010,7 @@ Show only this tag / focus this workspace
 Show or hide every desktop widget at once (none is switched off)
 Show or hide one side bar
 Show or regenerate the depth mask of the current wallpaper (the depth plugin's `depth status` / `depth regenerate`)
+Show or switch what a plugin's bar item shows: its icon or a live chip
 Show over fullscreen apps
 Show over fullscreen windows
 Show previews
@@ -7069,6 +7090,7 @@ Sidebars
 Sidebars & hover
 Sideways text
 Sign in without a password when the computer starts.
+Signal strength
 Signed in just now
 Signed in through the gh CLI
 Signed in {n} d ago
@@ -7206,6 +7228,7 @@ Space inside cards
 Space inside each bar item, around its content
 Space inside the window frame.
 Spacing
+Sparkline
 Speak the truth
 Speakers
 Spectrum bars
@@ -7638,6 +7661,7 @@ Text to translate
 Text translation
 Text under it
 Text weight
+Text width
 Text with placeholders
 Text, an image or a file
 Texture
@@ -7677,6 +7701,7 @@ The Applications folder is off (Studio → Dock → Applications folder)
 The Applications folder: open or close its grid of apps
 The Arabic and the meanings are shown exactly as the dataset gives them, with its grades and graders. Where your language has no translation of a collection, the English one is shown and labelled.
 The Art of War III
+The Bluetooth icon with how many devices are connected, or the connected device's name (and its battery)
 The Book of Five Rings
 The Book of Tea
 The Btrfs default subvolume could not be read.
@@ -7773,6 +7798,7 @@ The battery is nearly empty. Plug in the charger to cancel.
 The battery reading turns coral at or below this charge
 The battery's percentage beside its icon
 The beginning is the most important part of any work.
+The bell and its badge, or the latest notification's app and summary with the count (anyone looking at your screen can read it)
 The big clock on the lock screen
 The boot menu and the splash before your desktop: themes from their authors or your own image. Every change shows its plan first, is backed up and can be restored.
 The boot theme catalog (licence, pinned download, downloaded) and the splash themes installed here
@@ -7824,6 +7850,7 @@ The compositor's configuration path is missing.
 The compositor's environment is too large to inspect.
 The compositor's launch arguments are too large to inspect.
 The compositor's shortcut checker could not run. No files were changed.
+The connection icon, or a chip with the network's name and / or its Wi-Fi signal
 The connection to the station dropped
 The contract (WIT)
 The corner family of cards in panels, the sidebar and Studio; Corner roundness still sets their size
@@ -7920,6 +7947,7 @@ The hotspot's name, password and Wi-Fi QR payload
 The hour
 The i2c-dev kernel module isn't loaded
 The icon on the bar's launcher button
+The icon shows no readings
 The icon theme catalog (variants, licence, installed, active), your imports and other installed icon themes
 The icons of the apps on each tag or workspace
 The idle manager is not running
@@ -9074,6 +9102,7 @@ What opens when you right-click the bar between and around its items
 What plays: station, title, format, buffer, volume
 What scripts can show
 What the Sketch transition draws its lines in
+What the bar item shows
 What the bar item shows while a station plays
 What the bar shows for this layout, e.g. EN or ع
 What the idle stage, the critical battery action and the session menu's Sleep do
@@ -9209,6 +9238,7 @@ Wipe along the strokes
 Wipes the clipboard if it still holds the code (0 = never)
 WireGuard works out of the box; .ovpn files need networkmanager-openvpn.
 WireGuard works out of the box; OpenVPN uses NetworkManager's plugin.
+Wired
 Wired and Wi-Fi adapters appear here.
 Wired connection
 With Apply to apps: GTK's sound theme (gsettings and existing settings.ini files) and KDE's kdeglobals. Turning the plugin off puts them back.
@@ -9662,6 +9692,7 @@ local time, HH:MM
 logical px from the left
 logical px from the top
 look id (see look list)
+look to switch to (leave out to show the current one)
 lookup failed
 m
 macOS- and Material-inspired icons with soft gradients
@@ -9783,6 +9814,7 @@ plugin id (see `plugins list`)
 plugin id, e.g. clock, media, network
 plugin off
 plugin stopped
+plugin with bar chips
 plugin.toml can't be read: {error}
 plugin.toml is invalid: {error}
 plugin.toml lists desktop widgets, but the plugin isn't built for the desktop-plugin world
@@ -10222,6 +10254,7 @@ your default
 {n} connected
 {n} days
 {n} days ago
+{n} devices
 {n} favourites
 {n} finished
 {n} found

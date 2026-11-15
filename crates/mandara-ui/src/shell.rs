@@ -1450,6 +1450,7 @@ impl Render for ShellView {
         let shell_state = self.shell.read(cx);
         let panel_open = shell_state.panel_on(&self.monitor).is_some();
         self.autohide.update(&cfg, &self.monitor, panel_open || sidebar_up);
+        crate::bar::autohide::note_slid_away(window.window_handle().window_id(), self.autohide.is_hidden());
         // The corner tab shows on a settled plugin panel while hovered, and
         // always while pinned.
         let tab_wanted = panel_open

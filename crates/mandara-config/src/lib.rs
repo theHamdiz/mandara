@@ -3,6 +3,7 @@
 
 pub mod admin;
 pub mod auth_design;
+pub mod bar_display;
 pub mod alerts;
 pub mod app_themes;
 pub mod apps;
