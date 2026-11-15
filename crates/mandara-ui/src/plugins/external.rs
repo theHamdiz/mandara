@@ -192,41 +192,49 @@ fn write_storage_later(path: std::path::PathBuf, json: std::sync::Arc<str>, cx: 
 /// Tries the failed storage writes again (a plugin unloading, or another
 /// write starting: the disk may have room again).
 fn retry_unsaved_storage(cx: &mut App) {
+    retry_unsaved_with(|path, generation, json| spawn_storage_write(path, generation, json, cx));
+}
+
+/// Hands each failed snapshot still worth writing to `start`, as a new
+/// generation.
+fn retry_unsaved_with(mut start: impl FnMut(std::path::PathBuf, u64, std::sync::Arc<str>)) {
     for (path, json) in storage_writes(StorageWrites::take_retries) {
         let generation = storage_writes(|w| w.begin(&path));
-        spawn_storage_write(path, generation, json, cx);
+        start(path, generation, json);
     }
 }
 
 fn spawn_storage_write(path: std::path::PathBuf, generation: u64, json: std::sync::Arc<str>, cx: &mut App) {
-    use std::sync::Mutex;
+    let executor = cx.background_executor().clone();
+    cx.background_executor().spawn(run_storage_write(path, generation, json, move || executor.timer(STORAGE_RETRY))).detach();
+}
+
+/// One snapshot's write: up to [`STORAGE_WRITE_ATTEMPTS`] tries with `wait`
+/// between them, skipped once a newer snapshot supersedes it, and kept for
+/// a later retry when every try fails.
+async fn run_storage_write<W: std::future::Future<Output = ()>>(path: std::path::PathBuf, generation: u64, json: std::sync::Arc<str>, mut wait: impl FnMut() -> W) {
     // Serializes the disk writes; only background tasks take it, so the UI
     // thread never waits on a slow disk.
-    static WRITING: Mutex<()> = Mutex::new(());
-    let executor = cx.background_executor().clone();
-    cx.background_executor()
-        .spawn(async move {
-            for attempt in 0..STORAGE_WRITE_ATTEMPTS {
-                let written = {
-                    let _writing = WRITING.lock().unwrap_or_else(|e| e.into_inner());
-                    // A newer snapshot supersedes this one.
-                    if !storage_writes(|w| w.is_current(&path, generation)) {
-                        return;
-                    }
-                    wasm::write_storage(&path, &json)
-                };
-                match written {
-                    Ok(()) => return storage_writes(|w| w.written(&path, generation)),
-                    Err(err) if attempt + 1 == STORAGE_WRITE_ATTEMPTS => {
-                        tracing::warn!(target: "mandara::plugin", "writing {}: {err} (kept to try again)", path.display());
-                        return storage_writes(|w| w.failed(path, generation, json));
-                    }
-                    // A transient failure (a full or busy disk): try again.
-                    Err(_) => executor.timer(STORAGE_RETRY).await,
-                }
+    static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    for attempt in 0..STORAGE_WRITE_ATTEMPTS {
+        let written = {
+            let _writing = WRITING.lock().unwrap_or_else(|e| e.into_inner());
+            // A newer snapshot supersedes this one.
+            if !storage_writes(|w| w.is_current(&path, generation)) {
+                return;
             }
-        })
-        .detach();
+            wasm::write_storage(&path, &json)
+        };
+        match written {
+            Ok(()) => return storage_writes(|w| w.written(&path, generation)),
+            Err(err) if attempt + 1 == STORAGE_WRITE_ATTEMPTS => {
+                tracing::warn!(target: "mandara::plugin", "writing {}: {err} (kept to try again)", path.display());
+                return storage_writes(|w| w.failed(path, generation, json));
+            }
+            // A transient failure (a full or busy disk): try again.
+            Err(_) => wait().await,
+        }
+    }
 }
 
 /// How often a plugin's storage write is tried, and the wait between tries.
@@ -1069,6 +1077,49 @@ mod tests {
         w.failed(b.into(), gb, "B1".into());
         w.begin(b);
         assert!(w.take_retries().is_empty(), "the newer snapshot wins");
+    }
+
+    /// Runs a future whose waits are all ready (the test's `wait`).
+    fn block_on<F: std::future::Future>(future: F) -> F::Output {
+        let mut future = std::pin::pin!(future);
+        let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+        loop {
+            if let std::task::Poll::Ready(out) = future.as_mut().poll(&mut cx) {
+                return out;
+            }
+        }
+    }
+
+    /// The host's own write task and retry scheduling against a real write
+    /// error: every try fails and the snapshot is kept; once the disk
+    /// recovers, the retry path writes it and nothing is left to retry.
+    #[test]
+    fn the_host_write_task_keeps_and_retries_a_failed_snapshot() {
+        let dir = std::env::temp_dir().join(format!("mandara-host-task-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let blocker = dir.join("blocked");
+        std::fs::write(&blocker, "not a folder").unwrap();
+        let path = blocker.join("p.json");
+        let json: std::sync::Arc<str> = "{\"a\":\"1\"}".into();
+        let generation = super::storage_writes(|w| w.begin(&path));
+        let tries = std::cell::Cell::new(0);
+        block_on(super::run_storage_write(path.clone(), generation, json.clone(), || {
+            tries.set(tries.get() + 1);
+            async {}
+        }));
+        assert_eq!(tries.get(), super::STORAGE_WRITE_ATTEMPTS - 1, "waited between every try");
+        assert!(!path.exists());
+        std::fs::remove_file(&blocker).unwrap();
+        let mut started = Vec::new();
+        super::retry_unsaved_with(|p, g, j| {
+            started.push(p.clone());
+            block_on(super::run_storage_write(p, g, j, || async {}));
+        });
+        assert!(started.contains(&path), "the kept snapshot was retried");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), &*json);
+        super::retry_unsaved_with(|p, _, _| assert_ne!(p, path, "written: not retried again"));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// The host's retry path against a real write error: every try fails,
