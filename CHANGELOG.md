@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Find and copy kaomojis directly from the launcher.
+
+### New
+
 - **Copy kaomojis from the launcher.** Type `::` for a searchable grid with category tabs. Turn it on or off under Studio → Launcher → Search providers.
 
 ## 0.30.2 — 2026-11-14

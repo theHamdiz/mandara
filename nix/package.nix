@@ -104,6 +104,7 @@ rustPlatform.buildRustPackage {
     install -Dm644 packaging/org.mandara.studio.desktop -t $out/share/applications
     # The main menu's calligraphy is drawn from Reem Kufi (OFL).
     install -Dm644 crates/mandara-ui/assets/calligraphy/OFL.txt $out/share/licenses/mandara/OFL.txt
+    install -Dm644 COPYRIGHT.md $out/share/licenses/mandara/COPYRIGHT.md
     install -Dm644 packaging/org.mandara.studio.svg -t $out/share/icons/hicolor/scalable/apps
     install -Dm644 packaging/pam/mandara-lock -t $out/share/doc/mandara/pam.d
     substituteInPlace $out/share/applications/org.mandara.studio.desktop \
