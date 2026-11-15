@@ -107,10 +107,14 @@ fn catalog() -> &'static [Kaomoji] {
         let mut items: Vec<Kaomoji> = Vec::new();
         for row in source {
             let index = *seen.entry(row.text.clone()).or_insert_with(|| {
+                let keywords = row.text.to_lowercase();
                 items.push(Kaomoji {
                     text: row.text,
                     slug: row.slug,
-                    entry: Entry::default(),
+                    entry: Entry {
+                        keywords,
+                        ..Entry::default()
+                    },
                 });
                 items.len() - 1
             });
@@ -157,10 +161,14 @@ fn catalog() -> &'static [Kaomoji] {
 }
 
 pub(super) fn results(query: &str, mood: Option<Mood>) -> Vec<Item> {
+    hits(query, mood).map(Item::Hit).collect()
+}
+
+pub(super) fn hits(query: &str, mood: Option<Mood>) -> impl Iterator<Item = Hit> {
     let query = query.to_lowercase();
     catalog()
         .iter()
-        .filter(|item| {
+        .filter(move |item| {
             mood.is_none_or(|mood| {
                 if mood == Mood::Other {
                     item.entry.moods == 0
@@ -169,24 +177,21 @@ pub(super) fn results(query: &str, mood: Option<Mood>) -> Vec<Item> {
                 }
             })
         })
-        .filter(|item| {
+        .filter(move |item| {
             query
                 .split_whitespace()
-                .all(|word| item.entry.keywords.contains(word) || item.text.contains(word))
+                .all(|word| item.entry.keywords.contains(word))
         })
-        .map(|item| {
-            Item::Hit(Hit {
-                provider: "kaomoji",
-                key: item.slug.into(),
-                label: item.text.clone(),
-                detail: String::new(),
-                lead: Lead::Glyph(item.text.clone()),
-                badge: tk("Kaomoji"),
-                keywords: String::new(),
-                action: HitAction::Copy(item.text.clone()),
-            })
+        .map(|item| Hit {
+            provider: "kaomoji",
+            key: item.slug.into(),
+            label: item.text.clone(),
+            detail: String::new(),
+            lead: Lead::Glyph(item.text.clone()),
+            badge: tk("Kaomoji"),
+            keywords: item.entry.keywords.clone(),
+            action: HitAction::Copy(item.text.clone()),
         })
-        .collect()
 }
 
 /// Keep the original line breaks and indentation, including in ASCII art.
@@ -198,21 +203,31 @@ pub(super) fn tile(label: &str, height: f32) -> AnyElement {
         .flex()
         .flex_col()
         .justify_center()
-        .text_center()
+        .items_center()
         .text_size(px(if label.contains('\n') { 13.0 } else { 17.0 }))
         .line_height(px(16.0))
-        .children(label.lines().map(|line| {
-            div()
-                .w_full()
-                .truncate()
-                .child(line.replace(' ', "\u{00a0}"))
-        }))
+        .child(
+            div().max_w_full().flex().flex_col().text_left().children(
+                label
+                    .lines()
+                    .map(|line| div().truncate().child(line.replace(' ', "\u{00a0}"))),
+            ),
+        )
         .into_any_element()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn glyph_search_ignores_case_and_copies_the_original() {
+        for (query, original) in [("(t_t)", "(T_T)"), ("otl", "OTL")] {
+            assert!(hits(query, None).any(|hit| {
+                hit.label == original && hit.action == HitAction::Copy(original.into())
+            }));
+        }
+    }
 
     #[test]
     fn catalog_keeps_unique_text_categories_and_exact_clipboard_content() {

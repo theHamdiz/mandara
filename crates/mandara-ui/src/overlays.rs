@@ -651,6 +651,7 @@ impl SearchCtx {
     fn provider_hits(&self, id: &str, q: &str, limit: usize) -> Vec<Hit> {
         match id {
             "emoji" => launcher_ext::emoji_hits(q, limit),
+            "kaomoji" => kaomoji::hits(q, None).take(limit).collect(),
             "windows" => launcher_ext::window_hits(q, &self.windows, limit),
             "clipboard" => launcher_ext::clipboard_hits(q, &self.clipboard.entries, &self.clipboard.collections, limit),
             "wallpapers" => launcher_ext::wallpaper_hits(q, &self.wallpapers, limit),
@@ -2948,6 +2949,21 @@ mod tests {
         let browse = start.elapsed().as_secs_f64() * 1000.0 / runs as f64;
         eprintln!("launcher keystroke (600 apps, debug build): search + group + reflow map {per_key:.2} ms, browse order {browse:.2} ms");
         assert!(per_key < 40.0 && browse < 40.0, "{per_key:.2} / {browse:.2} ms");
+    }
+
+    #[test]
+    fn kaomoji_joins_plain_search_only_when_enabled_globally() {
+        let mut ctx = SearchCtx::default();
+        let includes_kaomoji = |query, ctx: &SearchCtx| {
+            search_with(query, &[], &[], ctx).iter()
+                .any(|item| matches!(item, Item::Hit(hit) if hit.provider == "kaomoji"))
+        };
+        assert!(!includes_kaomoji("gato", &ctx));
+        assert!(includes_kaomoji("::gato", &ctx));
+        ctx.providers.kaomoji.global = true;
+        assert!(includes_kaomoji("gato", &ctx));
+        ctx.providers.kaomoji.enabled = false;
+        assert!(!includes_kaomoji("gato", &ctx));
     }
 
     /// Provider settings edited while the launcher is open take effect
