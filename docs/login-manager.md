@@ -384,7 +384,7 @@ instead (see [commands.md](commands.md#keyrings-and-passwords)).
 
 ## Design it in Mandara Studio
 
-`mandara studio "login screen"` (or Studio → **Login screen**) edits every
+`mandara studio "login screen"` (or Studio → **Login & Lock Screens → Login**) edits every
 setting with a **live preview** — the real greeter view, rendering your draft.
 
 The first tab, **Looks**, applies a whole design in one click: **Mandara**

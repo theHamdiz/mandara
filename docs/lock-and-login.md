@@ -62,8 +62,8 @@ changes; an empty collection starts no painter or weather service.
   rolling clock, springy entrances, a breathing avatar ring, typing ripples,
   a shake on a wrong password and a cinematic zoom into your session.
 - **Design it in Studio**: drag every element on a live, smooth preview in
-  Studio → Login & Lock Screens → Login (below), or start from one of three looks: Mandara,
-  Midnight card or Material You.
+  Studio → Login & Lock Screens → Login (below), or start from one of six looks: Mandara,
+  Midnight card, Material You, Ghostline, Chrome Halo or Meridian.
 - **Try it safely**: `mandara greeter --demo` runs it on your session
   without logging you out. `sudo mandara greeter install` prints its plan,
   keeps backups and switches display managers only when you add `--apply`.

@@ -1986,7 +1986,7 @@ impl Render for StudioView {
         }
         let folds_toolbar = self.fold_toolbar(&p, cx);
         let content_bar = mandara_ui::scrollbar::keyed_state("studio-content");
-        let shortcut_workspace = self.section == Section::Shortcuts && self.shortcuts_tab == native_shortcuts::ShortcutsTab::Compositor;
+        let shortcut_workspace = self.query.is_empty() && self.section == Section::Shortcuts && self.shortcuts_tab == native_shortcuts::ShortcutsTab::Compositor;
         let content = div()
             .id("studio-content")
             .flex_1()
