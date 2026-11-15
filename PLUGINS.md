@@ -395,7 +395,8 @@ the grant stop drawing. Ask only for what you use.
 | `media.control` | `play-pause`, `next`, `previous`, `seek {seconds}`, `volume {level 0–1}`. |
 | `wallpaper.read` | `current` → `{name, image}`; `list {offset, limit ≤ 60}` → `{total, offset, items: [{name, image}]}` of the wallpaper folder. |
 | `wallpaper.set` | `apply {image}`: a handle from `wallpaper.read` or `files.folders` only (needs a user gesture). |
-| `files.folders` | `folders` → the folders the person chose for you in Studio (`{id, name}`, never paths); `list {folder, offset, limit}` → image names and handles; `choose` opens your Studio page to add one (needs a user gesture). |
+| `files.folders` | `folders` → the folders the person chose for you in Studio (`{id, name}`, never paths); `list {folder, offset, limit}` → image names and handles (or `list {project, offset, limit}` for the pictures inside one project); `projects {folder, offset, limit ≤ 60}` → `{total, offset, items: [{project, name, title, kind, live, preview}]}`, the folders directly inside it as opaque project handles, with the title and type from a `project.json`, `live` when it can run as a live wallpaper, and a preview image handle (its declared preview, else its first image, `0` when none); `choose` opens your Studio page to add one (needs a user gesture). |
+| `wallpaper.live` | `render {project, output?}` plays a project handle from `projects` as a live wallpaper, on one display (a name from `status`) or on every display that shows the wallpaper (needs a user gesture) → `{rendering: [outputs], renderer}`; `stop {output?}` ends your scenes → `{stopped}`; `status` → `{renderer, problem?, outputs: [{output, state: off, running, paused or failed, plugin, error}]}`. Needs `files.folders` too. |
 | `notifications.send` | `send {title, body}`. |
 | `windows.read` | `list`, `active` (the JSON of `mandara msg window list` / `window active`). |
 | `windows.control` | `focus {id}`, `close {id}` (closing needs a user gesture). |
@@ -407,14 +408,15 @@ the grant stop drawing. Ask only for what you use.
 | `open.web` | `open {url}`: https only, no user name or password (needs a user gesture). |
 | `osd.show` | `show {title, icon, level 0–100}`. |
 | `theme.control` | `mode {mode: "light" or "dark"}`. |
-| `events` | `subscribe {topic}`: `theme`, `wallpaper`, and with their read capability `windows`, `workspaces` and `power`. Each change arrives as `{topic, value}`. |
+| `events` | `subscribe {topic}`: `theme`, `wallpaper`, and with their read capability `windows`, `workspaces` and `power`, and with `wallpaper.live` `live-wallpaper` (the `outputs` of `status`). Each change arrives as `{topic, value}`. |
 | `timers` | `after {ms}` (5 s to 1 day) or `every {ms}` (at least a minute): wake-ups arrive as replies. Needs no grant. |
 | `launcher.global` | Not a service: lets your `global` launcher providers see plain searches and add results to them (at most 2 plugins are asked per search). |
 | `net:<host>` | `fetch {url, method GET or POST, body}` to exactly that host over HTTPS, port 443, no redirects and no proxy; at most 16 KiB sent and 256 KiB received, 10 s; a host whose address is on your machine or local network is refused. Two requests run at a time for all plugins. |
 | `plugins.call:<id>` | Any operation plugin `<id>` lists in `serves`, with a JSON payload; answered on the next tick (calls never nest). |
 
 **User gestures.** Reading the clipboard, opening a page, setting a
-wallpaper, closing a window and opening the folder chooser only work while
+wallpaper, starting a live wallpaper, closing a window and opening the
+folder chooser only work while
 your plugin handles a click, key press, typed text, launcher choice or
 command: never from a render, a timer or a reply. One gesture allows one
 such request; a request made at another time fails at once.
@@ -448,7 +450,23 @@ update is replaced by its newest); 256 image handles per instance.
   about 40 megapixels; decoded sizes are rounded so the cache stays small.
 - Image handles are opaque and belong to one plugin instance; their files
   are re-checked against the grants before every draw. Folder listings
-  never leave the granted folder (links pointing out are skipped).
+  never leave the granted folder (links pointing out are skipped), and
+  links are resolved when a folder is read, so a folder swapped for a link
+  since it was listed can't lead out either. Project handles die with the
+  folder's grant and are never drawn.
+- Live wallpapers run only a renderer Mandara knows
+  (`linux-wallpaperengine`, a build with `--layer`), found on `PATH` when you
+  ask. Mandara writes its whole command line: the project folder from your
+  handle, checked again inside the granted folder; the display from its own
+  list; your video wallpaper frame-rate limit, sound and mouse off, and its
+  usual pause for fullscreen windows. Plugins never send a program, an argument, a path or
+  an environment variable. Only scene and video projects run (web ones run
+  scripts). The renderer gets no shell, a minimal environment and no
+  input, leads its own process group, and is killed if the shell dies. One
+  runs per display. It is paused (`SIGSTOP`) where the desktop can't be
+  seen, by the video wallpaper rules, and it ends when any wallpaper is
+  applied, either grant is revoked, the plugin is switched off, removed or
+  rebuilt, the display goes away or the shell quits.
 - Payloads never become command lines: window and workspace ids are
   validated, and controls run Mandara's own documented commands.
 - Plugin-to-plugin calls need both sides: the caller's grant and the

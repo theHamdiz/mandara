@@ -16,6 +16,8 @@ Studio refinements, optional bar and dock effects, richer third-party plugins, a
 
 - A fine grain texture for Studio, cards, bars, the launcher, panels, the dock and the taskbar, each with its own style (fine, film, paper fibre or speckle), strength, size, contrast and colour, kept subtle. Find it under Themes → Components → Grain; it is off until you pick a style.
 
+- Third-party plugins can play live wallpapers, such as Wallpaper Engine scenes, with `linux-wallpaperengine` installed. Grant a plugin your Workshop folder once and it can show every project inside it, with titles and previews. Live wallpapers are a separate permission, start only when you click, pause when the desktop is hidden, and stop when you choose another wallpaper. Desktop widgets stay above them.
+
 ### Improved
 
 - Studio's About, Maintenance, Profiles & Backups, Privacy, Date, Time & Location, Power & Idle, Network & Bluetooth, Audio & Media, Dock and Plugins pages share one calmer design: every page has a header that says what it is for, settings sit in grouped lists divided by fine lines, and states show as a small dot instead of coloured badges. Page names are now in Title Case.

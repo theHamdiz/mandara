@@ -377,7 +377,7 @@ pub fn host_info() -> HostInfo {
 /// granted and, for a folder's picture, that folder still is.
 fn image_allowed(access: &Access, e: &ImageEntry) -> bool {
     match &e.origin {
-        ImageOrigin::Folder(folder) => access.allows_folder(folder),
+        ImageOrigin::Folder(folder) | ImageOrigin::Project(folder) => access.allows_folder(folder),
         origin => origin.capability().is_none_or(|c| access.allows(&c)),
     }
 }

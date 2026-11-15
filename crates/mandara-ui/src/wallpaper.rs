@@ -652,6 +652,8 @@ pub fn thumbnails(cx: &mut App) -> Entity<Thumbnails> {
 /// Sets the wallpaper (the theme follows it when "match colors" is on —
 /// see [`reconcile_theme`]).
 pub fn apply(path: PathBuf, cx: &mut App) {
+    // A wallpaper applied ends live scenes, even when it is the same picture.
+    crate::plugins::external::live::stop_all(cx);
     update_config(cx, |c| c.wallpaper.path = Some(path));
 }
 
@@ -1017,7 +1019,8 @@ impl Render for WallpaperView {
             let _ = window.drop_image(image);
         }
         let cfg = self.config.read(cx).snapshot();
-        if !cfg.wallpaper.enabled {
+        // A live scene draws this output's wallpaper itself.
+        if !cfg.wallpaper.enabled || self.monitor.as_deref().is_some_and(crate::plugins::external::live::covers) {
             self.target = None;
             for shown in [self.current.take(), self.previous.take()].into_iter().flatten() {
                 crate::image_cache::evict_path(&shown, window, cx);

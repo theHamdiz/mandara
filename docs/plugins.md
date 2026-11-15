@@ -611,11 +611,12 @@ changes; nothing runs at idle and nothing polls. Measurements are in
   results and commands (`mandara msg plugins run`, shortcuts, hooks,
   skills, agents), keep private storage and use timers. Media, wallpapers,
   folders you choose, windows, workspaces, system load, the clipboard,
-  notifications, on-screen displays, desktop events, other plugins and a
-  web address are each a permission you switch on in Studio → Plugins →
-  the plugin → Permissions and can switch off at any moment. Reading the
-  clipboard, opening a page, setting a wallpaper and closing a window only
-  work right after you click or type in the plugin.
+  notifications, on-screen displays, desktop events, other plugins, live
+  wallpapers and a web address are each a permission you switch on in
+  Studio → Plugins → the plugin → Permissions and can switch off at any
+  moment. Reading the clipboard, opening a page, setting a wallpaper,
+  starting a live wallpaper and closing a window only work right after you
+  click or type in the plugin.
 - **Settings.** A plugin declares its settings in `plugin.toml`, and Studio
   builds its settings modal from them. The older `commands` permission
   lets it use Mandara's interface (open panels, control media and volume,
