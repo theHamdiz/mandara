@@ -217,6 +217,41 @@ pub fn portal_packages(family: Family, has_program: impl Fn(&str) -> bool) -> Ve
     out
 }
 
+/// The package that installs Plasma's login session
+/// (`share/wayland-sessions/plasma.desktop`, openSUSE's
+/// `plasmawayland.desktop`) on each family. KWin is packaged on its own
+/// (`kwin`, `kwin6`, `kwin-wayland`, `plasma6-kwin`), and that package
+/// brings `kwin_wayland` but no session, so a login screen can't offer
+/// Plasma until this one is installed. Checked against each family's file
+/// lists (Arch extra, Debian 13 and sid, Ubuntu 26.04, Fedora 44, openSUSE
+/// Tumbleweed, Void, Alpine 3.24, Solus, FreeBSD's ports tree) and
+/// Gentoo's ebuild.
+const PLASMA_SESSION: &[(Family, &str)] = &[
+    (Family::Arch, "plasma-workspace"),
+    (Family::Debian, "plasma-workspace"),
+    (Family::Fedora, "plasma-workspace"),
+    (Family::Suse, "plasma6-session"),
+    (Family::Void, "plasma-workspace"),
+    (Family::Alpine, "plasma-workspace"),
+    (Family::Gentoo, "kde-plasma/plasma-workspace"),
+    (Family::Solus, "plasma-workspace"),
+    (Family::FreeBSD, "plasma6-plasma-workspace"),
+];
+
+/// Ubuntu (26.04) and the distributions built on it split the session
+/// into its own package, which depends on `plasma-workspace`; Debian keeps
+/// it in `plasma-workspace`.
+const UBUNTU_PLASMA_SESSION: &str = "plasma-session-wayland";
+
+/// The package that adds Plasma's login session on `family` (`os` tells
+/// Ubuntu from Debian), when it has one.
+pub fn plasma_session_package(family: Family, os: &crate::family::OsRelease) -> Option<&'static str> {
+    if family == Family::Debian && std::iter::once(&os.id).chain(&os.id_like).any(|id| id == "ubuntu") {
+        return Some(UBUNTU_PLASMA_SESSION);
+    }
+    PLASMA_SESSION.iter().find(|(f, _)| *f == family).map(|(_, p)| *p)
+}
+
 /// The package providing a login-screen program (`greetd`, `cage`, a kiosk
 /// compositor) on `family`: Gentoo needs the full atom.
 pub fn login_package(family: Family, program: &str) -> String {

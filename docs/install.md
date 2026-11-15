@@ -689,7 +689,9 @@ COSMIC Settings ([labwc](#labwc), [COSMIC](#cosmic)).
 | **labwc** 0.8.3+ | none for shell settings; imported app colours can use `themerc-override` | the line you add to `~/.config/labwc/autostart`: `mandara &` |
 | **COSMIC** | none: COSMIC's settings stay in COSMIC Settings | add `mandara` in COSMIC Settings → Applications → Startup applications |
 
-The setup picker offers KWin only when `kwin_wayland` is installed. A
+The setup picker offers KWin only when `kwin_wayland` is installed, and
+the installer warns when Plasma’s login session is missing
+([Plasma / KWin](#plasma--kwin)). A
 failed KWin availability check is reported directly; it does not offer to
 retire shortcuts or label the failure a compositor-configuration error.
 
@@ -787,7 +789,27 @@ External brightness shows module and permission diagnostics.
 
 Start Mandara inside a **Plasma Wayland** session. The installer recognizes
 an existing KWin installation; it does not install a complete Plasma desktop
-as a standalone window-manager choice. To enable startup explicitly:
+as a standalone window-manager choice.
+
+**KWin alone is not a login session.** Most distributions package KWin by
+itself: that package brings `kwin_wayland` but not Plasma’s session file
+(`wayland-sessions/plasma.desktop`), so Mandara Login and other login screens
+have nothing to offer. `mandara setup --compositor kwin` and `mandara install`
+check for it and, when it is missing, name the package that adds it:
+
+| Distribution | Package with Plasma’s login session |
+|---|---|
+| Arch, Debian, Fedora, Void, Alpine, Solus | `plasma-workspace` |
+| Ubuntu and distributions built on it | `plasma-session-wayland` |
+| openSUSE | `plasma6-session` |
+| Gentoo | `kde-plasma/plasma-workspace` |
+| FreeBSD | `plasma6-plasma-workspace` |
+
+Install it, then choose **Plasma** at the login screen.
+
+**Starting Mandara inside Plasma.** KWin has no drop-in, so a plain
+`mandara setup --compositor kwin` writes nothing, and setup says so. Add
+`--autostart` to create Mandara’s startup entry:
 
 ```bash
 mandara setup --compositor kwin --autostart

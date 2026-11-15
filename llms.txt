@@ -47,7 +47,7 @@ Key facts:
 
 ## Developers
 
-- [Writing plugins](https://github.com/theHamdiz/mandara/blob/main/PLUGINS.md): the WebAssembly plugin guide, WIT contract and marketplace
+- [Writing plugins](https://github.com/theHamdiz/mandara/blob/main/PLUGINS.md): the WebAssembly plugin guide, WIT contract, marketplace and the design and quality standard every plugin (and every AI agent writing one) must meet
 - [AGENTS.md](https://github.com/theHamdiz/mandara/blob/main/AGENTS.md): repository map, build and check commands, hard rules, for people and coding agents
 - [Building from source](https://github.com/theHamdiz/mandara/blob/main/docs/building.md): crates, build options, the build fingerprint
 - [Development tools](https://github.com/theHamdiz/mandara/blob/main/docs/development.md): the headless demo sandbox and resource checks

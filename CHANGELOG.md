@@ -6,11 +6,53 @@ About → What's new shows it too.
 
 ## Unreleased
 
-The shell keeps crash diagnostics and recovers from an unexpected display shutdown.
+Studio refinements, optional bar and dock effects, richer third-party plugins, a responsive launcher, and recovery from unexpected display shutdowns.
+
+### New
+
+- Bar items can be live chips: Resources shows labelled numbers, tiny live graphs or one inline chart of CPU and memory; Notifications shows your latest notification and the count; Network shows the network name and signal; Bluetooth shows your connected device and its battery. Pick a look under *In the bar* in each plugin's settings, or with `mandara msg bar display`; nothing changes until you do.
+
+- The dock can be made of liquid glass, lift or highlight the icon under your pointer, glow under running apps and show app names after a delay you choose. The taskbar gains a glass tray, app names, window counts, a raised focus style and coral for apps that need you. All of it is off until you pick it.
+
+- A fine grain texture for Studio, cards, bars, the launcher, panels, the dock and the taskbar, each with its own style (fine, film, paper fibre or speckle), strength, size, contrast and colour, kept subtle. Find it under Themes → Components → Grain; it is off until you pick a style.
+
+- Third-party plugins can play live wallpapers, such as Wallpaper Engine scenes, with `linux-wallpaperengine` installed. Grant a plugin your Workshop folder once and it can show every project inside it, with titles and previews. Live wallpapers are a separate permission, start only when you click, pause when the desktop is hidden, and stop when you choose another wallpaper. Desktop widgets stay above them.
+
+### Improved
+
+- Studio's About, Maintenance, Profiles & Backups, Privacy, Date, Time & Location, Power & Idle, Network & Bluetooth, Audio & Media, Dock and Plugins pages share one calmer design: every page has a header that says what it is for, settings sit in grouped lists divided by fine lines, and states show as a small dot instead of coloured badges. Page names are now in Title Case.
+
+- The Plugins page keeps its tabs, search and categories in one toolbar, and its categories in a single row that scrolls.
+
+- The lock screen's design picker shows the same six previews as the login screen.
+
+- About shows the latest five releases under What's new and keeps only those in memory; the full history is a click away.
+
+- Typography opens with a live specimen of your interface, display, Arabic and monospace fonts, drawn in each face at your weight and size.
+
+- In right-to-left languages Studio's close button sits at the outer edge of the title bar.
+
+- Studio → Input now offers every keyboard layout and variant your system has, including the rarer ones such as Arabic (ErgoArabic), Arabic with 4th-level extensions and Sun Type 6/7, marked *Extra*; searching a variant's name, like “ergoarabic”, finds its layout.
 
 ### Fixed
 
 - An unexpected display-loop shutdown no longer quietly stops the shell's restart supervisor. Warnings and crash errors also reach the system journal when the desktop discards terminal output.
+
+- Plugin live wallpapers follow pause rules with either wallpaper renderer. Pending scenes cancel when superseded, and renderer helpers stop after a shell crash.
+
+- Parallel Config doctor checks no longer collide when creating their private runtime folders.
+
+- Scrolling list views in third-party plugins no longer flicker back to their first rows after you stop scrolling.
+
+- When KWin is installed without Plasma's login session, `mandara setup --compositor kwin` and the installer now explain why the login screen can't offer it and name the package to install, and setup says when `--autostart` is needed for Mandara to start inside Plasma.
+
+- The launcher stays responsive while a slow network or external drive loads recent files, usage history, wallpapers, or the app and icon catalog. Thanks to @is-suzart (#193).
+
+### Under the hood
+
+- The demo sandbox keeps Mango's config in its native home-based location, so display changes pass the same configuration checks as a normal session.
+
+- The plugin guide gains a design and quality standard for everyone writing third-party plugins, and a strict version for AI coding agents: a designed hierarchy, polish passes on real screenshots, bounded memory and idiomatic Rust.
 
 ## 0.33.0 — 2026-11-15
 

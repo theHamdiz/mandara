@@ -85,10 +85,10 @@ impl StudioView {
             .cursor_pointer()
             .surface_corners(RADIUS_20_PX)
             .hover(|el| el.bg(p.on_surface.with_alpha(ALPHA_3_5).hsla()))
-            .child(div().flex_none().size(px(DIM_28_PX)).rounded_full().bg(if open { p.primary.with_alpha(ALPHA_15).hsla() } else { p.surface_container_high.hsla() }).row().items_center().justify_center().child(icon(
+            .child(div().flex_none().size(px(DIM_28_PX)).rounded_full().bg(p.on_surface.with_alpha(ALPHA_6).hsla()).row().items_center().justify_center().child(icon(
                 if open { "arrow-down" } else { mandara_ui::bidi::dir_icon("chevron-right") },
                 ICON_14_PX,
-                if open { p.primary } else { p.on_surface_variant },
+                p.on_surface_variant,
             )))
             .child(
                 div()
@@ -131,7 +131,7 @@ impl StudioView {
             .row()
             .flex_col()
             .child(header)
-            .children(content.map(|c| div().border_t_1().border_color(p.on_surface.with_alpha(ALPHA_6).hsla()).p(px(SPACE_6_PX)).child(c)))
+            .children(content.map(|c| div().border_t_1().border_color(super::grouped::hairline(p)).p(px(SPACE_6_PX)).child(c)))
             .into_any_element()
     }
 

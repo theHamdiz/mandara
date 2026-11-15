@@ -18,6 +18,7 @@
 //!   and how each manager brings them up to date;
 //! * [`compositors`] — the compositors Mandara runs on and their packages,
 //!   offered when none is installed;
+//! * [`plasma`] — Plasma's login session, which KWin's own package lacks;
 //! * [`image`] — image-based (immutable) systems: detection, and the
 //!   tool that adds packages to the next image;
 //! * [`installer`] — the flows, against a [`host::Host`] so tests (and
@@ -34,6 +35,7 @@ pub mod index;
 pub mod installer;
 pub mod packages;
 pub mod pkg;
+pub mod plasma;
 pub mod platform;
 pub mod release;
 mod tui;

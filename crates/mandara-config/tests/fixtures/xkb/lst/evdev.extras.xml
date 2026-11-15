@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE xkbConfigRegistry SYSTEM "xkb.dtd">
+<xkbConfigRegistry>
+  <modelList/>
+  <layoutList>
+    <layout>
+      <configItem popularity="exotic">
+        <name>apl</name>
+        <shortDescription>apl</shortDescription>
+        <description>APL</description>
+      </configItem>
+      <variantList>
+        <variant>
+          <configItem popularity="exotic">
+            <name>dyalog</name>
+            <description>APL symbols (Dyalog APL)</description>
+          </configItem>
+        </variant>
+      </variantList>
+    </layout>
+    <layout>
+      <configItem popularity="exotic">
+        <name>ara</name>
+        <shortDescription>ar</shortDescription>
+        <description>Arabic</description>
+        <languageList>
+          <iso639Id>ara</iso639Id>
+        </languageList>
+      </configItem>
+      <variantList>
+        <variant>
+          <configItem popularity="exotic">
+            <name>sun_type6</name>
+            <description>Arabic (Sun Type 6/7)</description>
+          </configItem>
+        </variant>
+        <variant>
+          <configItem popularity="exotic">
+            <name>basic_ext</name>
+            <description>Arabic (Arabic numerals, extensions in the 4th level)</description>
+          </configItem>
+        </variant>
+        <variant>
+          <configItem popularity="exotic">
+            <name>basic_ext_digits</name>
+            <description>Arabic (Eastern Arabic numerals, extensions in the 4th level)</description>
+          </configItem>
+        </variant>
+	<variant>
+          <configItem popularity="exotic">
+            <name>ergoarabic</name>
+            <description>Arabic (ErgoArabic)</description>
+          </configItem>
+	</variant>
+        <!-- Already in evdev.lst: kept once, not marked extra. -->
+        <variant>
+          <configItem popularity="exotic">
+            <name>digits</name>
+            <description>Arabic (Eastern Arabic numerals)</description>
+          </configItem>
+        </variant>
+      </variantList>
+    </layout>
+    <layout>
+      <configItem popularity="exotic">
+        <name>trans</name>
+        <description>Hindi &amp; Sanskrit (transliteration)</description>
+      </configItem>
+    </layout>
+  </layoutList>
+  <optionList>
+    <group allowMultipleSelection="true">
+      <configItem popularity="exotic">
+        <name>lv3</name>
+        <description>Key to choose the 3rd level</description>
+      </configItem>
+      <option>
+        <configItem popularity="exotic">
+          <name>lv3:4_switch_isolated</name>
+          <description>Number key 4 when pressed in isolation</description>
+        </configItem>
+      </option>
+    </group>
+    <group allowMultipleSelection="false">
+      <configItem popularity="exotic">
+        <name>grp</name>
+        <description>Switching to another layout</description>
+      </configItem>
+      <option>
+        <configItem popularity="exotic">
+          <name>grp:alt_shift_toggle</name>
+          <description>Alt+Shift</description>
+        </configItem>
+      </option>
+      <option>
+        <configItem popularity="exotic">
+          <name>grp:menu_toggle</name>
+          <description>Menu</description>
+        </configItem>
+      </option>
+    </group>
+  </optionList>
+</xkbConfigRegistry>

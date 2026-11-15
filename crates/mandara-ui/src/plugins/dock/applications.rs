@@ -210,6 +210,11 @@ pub struct AppsGrid {
 
 impl AppsGrid {
     fn new(anchor: (f32, f32, f32, f32), window: &mut Window, cx: &mut Context<Self>) -> Self {
+        crate::launcher_ext::warm_usage(cx);
+        cx.observe_global::<crate::launcher_ext::UsageRevision>(|this, cx| {
+            this.usage = usage_map(cx);
+            this.rebuild(cx);
+        }).detach();
         let dock = config(cx).read(cx).get().dock_sanitized();
         let apps: Rc<[DesktopApp]> = super::picker::installed_apps(cx).into();
         let search = Self::search_field(window, cx);

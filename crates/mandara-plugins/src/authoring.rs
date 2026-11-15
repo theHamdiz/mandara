@@ -295,7 +295,7 @@ pub fn quick_start(dev_dir: &std::path::Path) -> Vec<Step> {
 /// The permissions a manifest may list (`net:<host>` and
 /// `plugins.call:<id>` name their target).
 pub const PERMISSIONS: &[&str] = &[
-    PERMISSION_COMMANDS, "media.read", "media.control", "wallpaper.read", "wallpaper.set", "files.folders", "notifications.send", "windows.read", "windows.control", "workspaces.read", "workspaces.control", "system.read", "clipboard.read", "clipboard.write",
+    PERMISSION_COMMANDS, "media.read", "media.control", "wallpaper.read", "wallpaper.set", "wallpaper.live", "files.folders", "notifications.send", "windows.read", "windows.control", "workspaces.read", "workspaces.control", "system.read", "clipboard.read", "clipboard.write",
     "open.web", "osd.show", "theme.control", "events", "timers", "launcher.global", "net:<host>", "plugins.call:<id>",
 ];
 
@@ -356,6 +356,9 @@ mod tests {
         assert!(guide.contains(&format!("rustup target add {WASM_TARGET}")));
         assert!(guide.contains(EXAMPLE_DIR) && guide.contains(REPOSITORY));
         assert!(guide.contains("--tab develop"));
+        let walkthrough = guide.split("### Polish:").nth(1).unwrap().split("```bash").nth(1).unwrap().split("```").next().unwrap();
+        assert!(!walkthrough.contains("eval "), "sandbox setup must preserve the host toolchain environment");
+        assert!(walkthrough.contains("target/sandbox/home/data/mandara/plugins-dev/my-plugin"));
         assert!(guide.contains(&format!("cp -r mandara-src/{WIT_DIR} my-plugin/wit")), "PLUGINS.md's quick start copies the WIT like quick_start()");
         for f in &contract().exports {
             assert!(guide.contains(&format!("`{}(", f.name)), "PLUGINS.md documents export {}", f.name);

@@ -93,8 +93,12 @@ pub enum Capability {
     /// issued for a wallpaper or a granted folder.
     WallpaperSet,
     /// `files.folders`: the images in folders the person chose for this
-    /// plugin in Studio (names and image handles, never paths).
+    /// plugin in Studio, and the project folders inside them (names and
+    /// opaque handles, never paths).
     Folders,
+    /// `wallpaper.live`: play a project from a granted folder as a live
+    /// wallpaper, with a renderer the host knows and starts itself.
+    WallpaperLive,
     /// `notifications.send`: post a notification.
     Notify,
     /// `windows.read`: the open windows (app, title, workspace) and which
@@ -148,6 +152,7 @@ impl Capability {
             "wallpaper.read" => Self::WallpaperRead,
             "wallpaper.set" => Self::WallpaperSet,
             "files.folders" => Self::Folders,
+            "wallpaper.live" => Self::WallpaperLive,
             "notifications.send" => Self::Notify,
             "windows.read" => Self::WindowsRead,
             "windows.control" => Self::WindowsControl,
@@ -184,7 +189,7 @@ impl Capability {
     /// text, launcher choice or command in the plugin (user activation), so
     /// a plugin can't do them on its own in the background.
     pub fn needs_activation(&self, operation: &str) -> bool {
-        matches!((self, operation), (Self::ClipboardRead, "text") | (Self::OpenWeb, "open") | (Self::WallpaperSet, "apply") | (Self::WindowsControl, "close") | (Self::Folders, "choose"))
+        matches!((self, operation), (Self::ClipboardRead, "text") | (Self::OpenWeb, "open") | (Self::WallpaperSet, "apply") | (Self::WallpaperLive, "render") | (Self::WindowsControl, "close") | (Self::Folders, "choose"))
     }
 
     /// The operations a request with this capability may name.
@@ -195,7 +200,8 @@ impl Capability {
             Self::MediaControl => &["play-pause", "next", "previous", "seek", "volume"],
             Self::WallpaperRead => &["current", "list"],
             Self::WallpaperSet => &["apply"],
-            Self::Folders => &["folders", "list", "choose"],
+            Self::Folders => &["folders", "list", "projects", "choose"],
+            Self::WallpaperLive => &["status", "render", "stop"],
             Self::Notify => &["send"],
             Self::WindowsRead => &["list", "active"],
             Self::WindowsControl => &["focus", "close"],
@@ -226,7 +232,8 @@ impl Capability {
             Self::MediaControl => tk("Play, pause, skip and seek media"),
             Self::WallpaperRead => tk("See your wallpapers"),
             Self::WallpaperSet => tk("Change the wallpaper"),
-            Self::Folders => tk("See the images in folders you choose for it"),
+            Self::Folders => tk("See the pictures and projects in folders you choose for it"),
+            Self::WallpaperLive => tk("Play live wallpapers from folders you choose for it, with a renderer installed on your computer"),
             Self::Notify => tk("Send notifications"),
             Self::WindowsRead => tk("See your open windows"),
             Self::WindowsControl => tk("Focus and close windows"),
@@ -262,6 +269,7 @@ impl Capability {
             Self::MediaRead | Self::MediaControl => "music",
             Self::WallpaperRead | Self::WallpaperSet => "image",
             Self::Folders => "folder",
+            Self::WallpaperLive => "play",
             Self::Notify => "bell",
             Self::WindowsRead | Self::WindowsControl => "window",
             Self::WorkspacesRead | Self::WorkspacesControl => "grid",
@@ -293,6 +301,7 @@ impl fmt::Display for Capability {
             Self::WallpaperRead => f.write_str("wallpaper.read"),
             Self::WallpaperSet => f.write_str("wallpaper.set"),
             Self::Folders => f.write_str("files.folders"),
+            Self::WallpaperLive => f.write_str("wallpaper.live"),
             Self::Notify => f.write_str("notifications.send"),
             Self::WindowsRead => f.write_str("windows.read"),
             Self::WindowsControl => f.write_str("windows.control"),
@@ -314,8 +323,9 @@ impl fmt::Display for Capability {
 }
 
 /// Topics `events` `subscribe` takes, and the read capability each needs
-/// besides `events` (none for theme and wallpaper changes).
-pub const EVENT_TOPICS: &[(&str, Option<Capability>)] = &[("theme", None), ("wallpaper", None), ("windows", Some(Capability::WindowsRead)), ("workspaces", Some(Capability::WorkspacesRead)), ("power", Some(Capability::SystemRead))];
+/// besides `events` (none for theme and wallpaper changes; `live-wallpaper`
+/// needs `wallpaper.live`).
+pub const EVENT_TOPICS: &[(&str, Option<Capability>)] = &[("theme", None), ("wallpaper", None), ("windows", Some(Capability::WindowsRead)), ("workspaces", Some(Capability::WorkspacesRead)), ("power", Some(Capability::SystemRead)), ("live-wallpaper", Some(Capability::WallpaperLive))];
 
 /// Timer bounds: a one-shot timer waits 5 s to 1 day; a repeating one at
 /// least a minute (plugins don't poll).
@@ -717,7 +727,7 @@ mod tests {
 
     #[test]
     fn capabilities_round_trip_and_reject_wide_authority() {
-        for s in ["commands", "media.read", "media.control", "wallpaper.read", "wallpaper.set", "files.folders", "notifications.send", "windows.read", "windows.control", "workspaces.read", "workspaces.control", "system.read", "clipboard.read", "clipboard.write", "open.web", "osd.show", "theme.control", "events", "timers", "launcher.global", "net:api.example.com", "plugins.call:moon-phase"] {
+        for s in ["commands", "media.read", "media.control", "wallpaper.read", "wallpaper.set", "files.folders", "wallpaper.live", "notifications.send", "windows.read", "windows.control", "workspaces.read", "workspaces.control", "system.read", "clipboard.read", "clipboard.write", "open.web", "osd.show", "theme.control", "events", "timers", "launcher.global", "net:api.example.com", "plugins.call:moon-phase"] {
             assert_eq!(Capability::parse(s).unwrap().to_string(), s);
         }
         for bad in ["net:*", "net:*.example.com", "net:https://example.com", "net:example.com:443", "net:example.com/path", "net:localhost", "net:192.168.1.1", "net:printer.local", "net:example", "plugins.call:Bad Id", "files", "media", ""] {
@@ -749,6 +759,11 @@ mod tests {
         assert!(a.refuse_now(&Capability::ClipboardRead, "text", true).is_none());
         assert!(a.refuse_now(&Capability::OpenWeb, "open", false).is_some());
         assert!(a.refuse_now(&Capability::ClipboardWrite, "text", false).is_none(), "copying needs no gesture");
+        let live = Access::new(&["wallpaper.live".into()], &["wallpaper.live".into()]);
+        assert!(live.refuse_now(&Capability::WallpaperLive, "render", false).unwrap().contains("click"), "a scene starts only from a gesture");
+        assert!(live.refuse_now(&Capability::WallpaperLive, "render", true).is_none());
+        assert!(live.refuse_now(&Capability::WallpaperLive, "stop", false).is_none() && live.refuse_now(&Capability::WallpaperLive, "status", false).is_none(), "stopping and asking need none");
+        assert!(live.refuse(&Capability::WallpaperLive, "exec").unwrap().contains("no operation"), "no other operation, so no program or argument");
         let timers = Access::new(&["timers".into()], &[]);
         assert!(timers.allows(&Capability::Timers), "timers need no grant");
         assert!(Capability::Timers.is_subscription("every") && !Capability::Timers.is_subscription("after"));

@@ -55,6 +55,15 @@ pub mod defaults {
     pub const DOCK_APPS_ICON_PX: f32 = 72.0;
     /// The stack every new dock has.
     pub const DOCK_DOWNLOADS: &str = "~/Downloads";
+    /// Liquid glass: strength of its specular highlights and of the light
+    /// gathered inside its edges (0–1).
+    pub const DOCK_GLOSS: f32 = 0.6;
+    pub const DOCK_REFRACTION: f32 = 0.5;
+    /// How far a hovered icon rises with the Lift hover, logical px.
+    pub const DOCK_HOVER_LIFT_PX: f32 = 6.0;
+    /// Pointer rest on an icon before its name shows, ms (0: at once, as
+    /// the dock always did).
+    pub const DOCK_TOOLTIP_DELAY_MS: u64 = 0;
 }
 
 /// Named bounds of every numeric dock setting (logical px unless noted).
@@ -87,6 +96,12 @@ pub mod ranges {
     pub const FAN_ITEMS: Span = Span::new(4.0, 20.0, 1.0);
     /// Icon size in the Applications grid.
     pub const APPS_ICON_SIZE: Span = Span::new(48.0, 128.0, 4.0);
+    /// Liquid glass highlights and inner light, 0–1.
+    pub const GLOSS: Span = Span::new(0.0, 1.0, 0.05);
+    pub const REFRACTION: Span = Span::new(0.0, 1.0, 0.05);
+    /// The Lift hover's height.
+    pub const HOVER_LIFT: Span = Span::new(0.0, 16.0, 1.0);
+    pub const TOOLTIP_DELAY_MS: Span = Span::new(0.0, 1000.0, 50.0);
 }
 
 /// Screen edge the dock sits on.
@@ -134,7 +149,81 @@ pub enum DockIndicator {
     Bar,
     /// One dot per app, like macOS.
     Dot,
+    /// A soft line of light under the app, brightest on the focused one.
+    Glow,
     None,
+}
+
+impl DockIndicator {
+    pub const ALL: [Self; 5] = [Self::Dots, Self::Bar, Self::Dot, Self::Glow, Self::None];
+}
+
+/// What the dock is made of (`dock.material`). Both are drawn by the shell
+/// itself (rounded rectangles, inset highlights and OKLCH gradients), so
+/// they look the same on every compositor, blur or not.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockMaterial {
+    /// The chromatic glass the dock always had: the frame colour, a 1 px
+    /// specular rim and a soft shadow.
+    #[default]
+    Classic,
+    /// Layered liquid glass: a translucent tinted body that deepens toward
+    /// its bottom, a bright specular top edge, light gathered inside its
+    /// edges and a soft lens highlight across its upper half.
+    Liquid,
+}
+
+impl DockMaterial {
+    pub const ALL: [Self; 2] = [Self::Classic, Self::Liquid];
+}
+
+/// How separators look (`dock.separator_style`, while `separator` is on).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SeparatorStyle {
+    /// A hairline, like macOS.
+    #[default]
+    Line,
+    /// Only the gap, without a line.
+    Space,
+}
+
+impl SeparatorStyle {
+    pub const ALL: [Self; 2] = [Self::Line, Self::Space];
+}
+
+/// What the name label on hover is made of (`dock.tooltip_style`).
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TooltipStyle {
+    /// A small pill in the frame colour.
+    #[default]
+    Pill,
+    /// The dock's own material: its glass and texture.
+    Material,
+}
+
+impl TooltipStyle {
+    pub const ALL: [Self; 2] = [Self::Pill, Self::Material];
+}
+
+/// What the icon under the pointer does (`[dock.motion] hover`), on top of
+/// magnification.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HoverMotion {
+    /// Nothing more (the dock as it always was).
+    #[default]
+    None,
+    /// It rises a little on a spring (`dock.hover_lift`).
+    Lift,
+    /// A soft plate fades in behind it.
+    Highlight,
+}
+
+impl HoverMotion {
+    pub const ALL: [Self; 3] = [Self::None, Self::Lift, Self::Highlight];
 }
 
 /// App launch feedback on the dock icon (`[dock.motion] launch`), while the
@@ -257,6 +346,7 @@ pub struct DockMotion {
     pub minimize: MinimizeFeedback,
     pub items: ItemMotion,
     pub reveal: DockReveal,
+    pub hover: HoverMotion,
 }
 
 /// Which displays show the dock.
@@ -466,6 +556,12 @@ pub struct DockConfig {
     pub motion: DockMotion,
     /// App names above the icons on hover.
     pub tooltips: bool,
+    /// What the name label is made of.
+    pub tooltip_style: TooltipStyle,
+    /// Pointer rest on an icon before its name shows, ms.
+    pub tooltip_delay_ms: u64,
+    /// How far a hovered icon rises with `motion.hover = "lift"`, logical px.
+    pub hover_lift: f32,
     /// Icons grow under the pointer.
     pub magnification: bool,
     pub magnify: f32,
@@ -481,6 +577,17 @@ pub struct DockConfig {
     pub stack_names: bool,
 
     // ── Appearance ──
+    /// Classic glass or liquid glass.
+    pub material: DockMaterial,
+    /// Liquid glass: specular highlight strength (0–1).
+    pub gloss: f32,
+    /// Liquid glass: light gathered inside its edges and the lens
+    /// highlight (0–1).
+    pub refraction: f32,
+    /// Grain over the glass (`[dock.grain]`; off by default).
+    pub grain: crate::grain::Grain,
+    /// What `separator` draws.
+    pub separator_style: SeparatorStyle,
     pub icon_size: f32,
     pub spacing: f32,
     pub padding: f32,
@@ -533,6 +640,9 @@ impl Default for DockConfig {
             bounce_only_music: false,
             motion: DockMotion::default(),
             tooltips: true,
+            tooltip_style: TooltipStyle::Pill,
+            tooltip_delay_ms: defaults::DOCK_TOOLTIP_DELAY_MS,
+            hover_lift: defaults::DOCK_HOVER_LIFT_PX,
             magnification: true,
             magnify: defaults::DOCK_MAGNIFY,
             magnify_spread: defaults::DOCK_MAGNIFY_SPREAD,
@@ -540,6 +650,11 @@ impl Default for DockConfig {
             stack_items: defaults::DOCK_STACK_ITEMS,
             fan_items: defaults::DOCK_FAN_ITEMS,
             stack_names: true,
+            material: DockMaterial::Classic,
+            gloss: defaults::DOCK_GLOSS,
+            refraction: defaults::DOCK_REFRACTION,
+            grain: crate::grain::Grain::default(),
+            separator_style: SeparatorStyle::Line,
             icon_size: defaults::DOCK_ICON_PX,
             spacing: defaults::DOCK_SPACING_PX,
             padding: defaults::DOCK_PADDING_PX,
@@ -606,6 +721,11 @@ impl DockConfig {
             magnify: ranges::MAGNIFY.clamp(self.magnify, d.magnify),
             magnify_spread: ranges::MAGNIFY_SPREAD.clamp(self.magnify_spread, d.magnify_spread),
             hide_speed: ranges::HIDE_SPEED.clamp(self.hide_speed, d.hide_speed),
+            gloss: ranges::GLOSS.clamp(self.gloss, d.gloss),
+            refraction: ranges::REFRACTION.clamp(self.refraction, d.refraction),
+            grain: self.grain.sanitized(),
+            hover_lift: ranges::HOVER_LIFT.clamp(self.hover_lift, d.hover_lift),
+            tooltip_delay_ms: ms(self.tooltip_delay_ms, ranges::TOOLTIP_DELAY_MS),
             show_delay_ms: ms(self.show_delay_ms, ranges::SHOW_DELAY_MS),
             hide_delay_ms: ms(self.hide_delay_ms, ranges::HIDE_DELAY_MS),
             max_apps: count(self.max_apps, ranges::MAX_APPS),
@@ -961,6 +1081,25 @@ mod tests {
         assert_eq!(ids(&MinimizeFeedback::ALL), ["dip", "pulse", "none"]);
         assert_eq!(ids(&ItemMotion::ALL), ["spring", "fade", "none"]);
         assert_eq!(ids(&DockReveal::ALL), ["slide", "fade", "scale"]);
+    }
+
+    /// A dock table from before materials, grain, hover and name labels
+    /// loads exactly the look it had; the new values clamp and round-trip.
+    #[test]
+    fn old_dock_tables_keep_their_look() {
+        let old: DockConfig = toml::from_str("opacity = 0.8\nrim = true\nindicator = \"bar\"\n[motion]\nlaunch = \"pulse\"\n").unwrap();
+        assert_eq!(old.material, DockMaterial::Classic);
+        assert!(!old.grain.is_on());
+        assert_eq!((old.separator_style, old.tooltip_style, old.tooltip_delay_ms), (SeparatorStyle::Line, TooltipStyle::Pill, 0));
+        assert_eq!(old.motion.hover, HoverMotion::None, "no hover feedback unless chosen");
+        assert_eq!(old.motion.launch, LaunchFeedback::Pulse);
+        let wild = DockConfig { gloss: 7.0, refraction: -1.0, hover_lift: 99.0, tooltip_delay_ms: 90_000, grain: crate::grain::Grain { amount: 3.0, ..crate::grain::Grain::with_style(crate::grain::GrainStyle::Film) }, ..DockConfig::default() }.sanitized();
+        assert_eq!((wild.gloss, wild.refraction, wild.hover_lift), (ranges::GLOSS.max, ranges::REFRACTION.min, ranges::HOVER_LIFT.max));
+        assert_eq!(wild.tooltip_delay_ms, ranges::TOOLTIP_DELAY_MS.max as u64);
+        assert_eq!(wild.grain.amount, crate::grain::ranges::AMOUNT.max);
+        let liquid: DockConfig = toml::from_str("material = \"liquid\"\nindicator = \"glow\"\n[grain]\nstyle = \"paper\"\n[motion]\nhover = \"lift\"\n").unwrap();
+        assert_eq!((liquid.material, liquid.indicator, liquid.grain.style, liquid.motion.hover), (DockMaterial::Liquid, DockIndicator::Glow, crate::grain::GrainStyle::Paper, HoverMotion::Lift));
+        assert_eq!(toml::from_str::<DockConfig>(&toml::to_string(&liquid).unwrap()).unwrap(), liquid);
     }
 
     #[test]

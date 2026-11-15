@@ -266,7 +266,7 @@ fn surface_icon(k: SurfaceKind) -> &'static str {
 fn surface_label(k: SurfaceKind) -> &'static str {
     match k {
         SurfaceKind::Bar => tk("Bar"),
-        SurfaceKind::Osd => tk("On-screen displays"),
+        SurfaceKind::Osd => tk("On-Screen Displays"),
         SurfaceKind::Notifications => tk("Notifications"),
         SurfaceKind::Wallpaper => tk("Wallpaper"),
         SurfaceKind::Dock => tk("Dock"),

@@ -29,6 +29,7 @@ use mandara_plugins::extension::Access;
 use mandara_plugins::wasm::{EventValue, PluginEvent, RenderContext, SurfaceKind};
 
 mod brokers;
+pub(crate) use brokers::live;
 
 pub(crate) type Shared = Rc<RefCell<Option<WasmPlugin>>>;
 
@@ -276,7 +277,8 @@ pub(crate) fn images_for(id: &str) -> plugin_view::Images {
     Rc::new(move |handle, _cx| {
         let plugin = loaded(&id)?;
         let guard = plugin.borrow();
-        Some(guard.as_ref()?.image(handle)?.path.clone())
+        // A project handle names a folder, not a picture.
+        guard.as_ref()?.image(handle).filter(|e| e.origin.is_picture()).map(|e| e.path.clone())
     })
 }
 
@@ -375,6 +377,8 @@ fn forget(id: &str, cx: &mut App) {
     CATALOGS.with(|c| c.borrow_mut().remove(id));
     LOAD_ERRORS.with(|e| e.borrow_mut().remove(id));
     brokers::forget(id, cx);
+    // A removed or rebuilt plugin's live wallpapers end with it.
+    live::stop_plugin(id, cx);
     retry_unsaved_storage(cx);
 }
 

@@ -47,15 +47,14 @@ fn active_theme() -> Option<String> {
     if let Some(theme) = OVERRIDE.lock().ok().and_then(|o| o.clone()) {
         return Some(theme);
     }
-    let mut cached = GTK.lock().unwrap_or_else(|e| e.into_inner());
-    match cached.as_ref() {
-        Some((at, theme)) if at.elapsed() < SYSTEM_THEME_TTL => theme.clone(),
-        _ => {
-            let theme = desktop_icon_theme();
-            *cached = Some((std::time::Instant::now(), theme.clone()));
-            theme
-        }
+    if let Some((at, theme)) = GTK.lock().unwrap_or_else(|e| e.into_inner()).as_ref()
+        && at.elapsed() < SYSTEM_THEME_TTL
+    {
+        return theme.clone();
     }
+    let theme = desktop_icon_theme();
+    *GTK.lock().unwrap_or_else(|e| e.into_inner()) = Some((std::time::Instant::now(), theme.clone()));
+    theme
 }
 
 /// The desktop preference, without Mandara's override or lookup cache.

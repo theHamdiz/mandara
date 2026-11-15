@@ -275,7 +275,8 @@ impl Preset {
     /// for the classic presets, which leave the dock as it is.
     pub fn dock(self) -> Option<DockMotion> {
         use crate::dock::{AttentionFeedback as A, DockReveal as R, IndicatorMotion as I, ItemMotion as It, LaunchFeedback as L, MinimizeFeedback as M};
-        let m = |launch, attention, indicator, minimize, items, reveal| DockMotion { launch, attention, indicator, minimize, items, reveal };
+        // The hover stays the user's own: presets set the dock's feedback, not how it answers the pointer.
+        let m = |launch, attention, indicator, minimize, items, reveal| DockMotion { launch, attention, indicator, minimize, items, reveal, hover: crate::dock::HoverMotion::None };
         match self {
             Self::Default | Self::Snappy | Self::Smooth | Self::Bouncy | Self::Subtle => None,
             // A swell: icons breathe, everything rolls in on springs.
@@ -331,7 +332,7 @@ impl Preset {
         self.apply(&mut cfg.motion);
         if cfg.motion.preset_desktop {
             if let Some(d) = self.dock() {
-                cfg.dock.motion = d;
+                cfg.dock.motion = crate::dock::DockMotion { hover: cfg.dock.motion.hover, ..d };
             }
             if let Some(w) = self.wallpaper() {
                 cfg.wallpaper.transition = w;
@@ -491,6 +492,13 @@ mod tests {
         Preset::Raindrop.apply_to(&mut cfg);
         assert_eq!(cfg.motion.preset(), Some(Preset::Raindrop));
         assert_eq!(Some(cfg.dock.motion), Preset::Raindrop.dock());
+        // A preset never takes away the hover you chose.
+        cfg.dock.motion.hover = crate::dock::HoverMotion::Highlight;
+        Preset::Tide.apply_to(&mut cfg);
+        assert_eq!(cfg.dock.motion.hover, crate::dock::HoverMotion::Highlight);
+        assert_eq!(Some(cfg.dock.motion.launch), Preset::Tide.dock().map(|d| d.launch));
+        cfg.dock.motion.hover = crate::dock::HoverMotion::None;
+        Preset::Raindrop.apply_to(&mut cfg);
         assert_eq!(cfg.wallpaper.transition, crate::desktop::WallpaperTransition::Ripple);
         assert_eq!(cfg.compositor.look.windows, windows);
         cfg.motion.preset_windows = true;

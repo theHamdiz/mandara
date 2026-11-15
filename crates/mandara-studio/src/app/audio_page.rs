@@ -220,9 +220,7 @@ impl StudioView {
         let mixer = state(cx).mixer.clone();
         let body: AnyElement = match mixer {
             None => card(p).child(div().text_color(p.on_surface_variant.hsla()).child(t("Reading audio devices…"))).into_any_element(),
-            Some(Err(e)) => card(p)
-                .child(heading(t("The audio server isn't reachable"), tf("PipeWire (pipewire-pulse) or PulseAudio must be running: {error}", &[("error", &e)]), p))
-                .into_any_element(),
+            Some(Err(e)) => super::grouped::notice("volume-off", p.warning_amber, t("The audio server isn't reachable"), tf("PipeWire (pipewire-pulse) or PulseAudio must be running: {error}", &[("error", &e)]), p),
             Some(Ok(m)) => {
                 let outputs = self.devices("out", &m.outputs, true, cfg, p, cx);
                 let inputs = self.devices("in", &m.inputs, false, cfg, p, cx);
@@ -232,7 +230,7 @@ impl StudioView {
                 div()
                     .row()
                     .flex_col()
-                    .gap(px(SPACE_26_PX))
+                    .gap(px(GROUP_SECTION_GAP_PX))
                     .child(mute_all)
                     .child(div().row().flex_col().gap(px(SPACE_10_PX)).child(group_title(t("Apps"), p)).child(apps))
                     // Output and input side by side when both fit.
@@ -256,7 +254,7 @@ impl StudioView {
         div()
             .row()
             .flex_col()
-            .gap(px(SPACE_26_PX))
+            .gap(px(GROUP_SECTION_GAP_PX))
             .child(body)
             .child(volume)
             .child(div().row().flex_col().gap(px(SPACE_10_PX)).child(group_title(t("Visualizer preview"), p)).child(preview))

@@ -89,6 +89,7 @@ pub mod progress;
 pub mod quran;
 pub mod radio;
 pub mod reaper;
+pub mod renderer_worker;
 pub mod recording;
 pub mod reddit;
 pub mod runtime;

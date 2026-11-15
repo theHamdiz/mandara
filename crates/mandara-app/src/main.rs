@@ -182,9 +182,14 @@ enum Cmd {
     /// Remove the binary and desktop entry and empty the compositor
     /// drop-ins (your settings are kept).
     Uninstall(mandara_install::UninstallArgs),
-    /// Internal: the wallpaper depth plugin's helper. Runs the depth model
-    /// once on one image at idle priority with memory and time caps, writes
-    /// the depth map and exits (started by the shell, not by hand).
+    /// Internal: owns a live renderer and cleans up after its controller.
+    #[command(hide = true)]
+    RendererWorker {
+        program: std::path::PathBuf,
+        #[arg(last = true)]
+        args: Vec<std::ffi::OsString>,
+    },
+    /// Internal: isolated depth inference.
     #[command(hide = true)]
     DepthWorker {
         model: std::path::PathBuf,
@@ -340,6 +345,10 @@ fn run() -> Result<()> {
             mandara_install::uninstall(args, &mandara_greeter::install_probe::InstallerProbe).map_err(anyhow::Error::msg)
         }
         Some(Cmd::Run) => run_shell(),
+        Some(Cmd::RendererWorker { program, args }) => {
+            mandara_services::renderer_worker::run(&program, &args)?;
+            Ok(())
+        }
         Some(Cmd::DepthWorker { model, image, out }) => std::process::exit(mandara_services::depth_model::worker_main(&model, &image, &out)),
         None => supervise(),
     }

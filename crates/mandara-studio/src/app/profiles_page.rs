@@ -26,8 +26,8 @@ use mandara_theme::MandaraPalette;
 use mandara_ui::icons::icon;
 use mandara_ui::state::{config, update_config};
 
-use super::StudioView;
-use super::compositor_page::{badge, button, card, chip, group_title, heading, tip};
+use super::{StudioView, grouped};
+use super::compositor_page::{button, chip, heading, tip};
 use super::form::{self, note};
 use crate::registry::{self, Section};
 use crate::tokens::*;
@@ -258,16 +258,16 @@ impl StudioView {
         let saved = self.prof_profiles(p, cx);
         let transfer = self.prof_transfer(p, cx);
         let reset = self.prof_reset(cfg, p, cx);
-        let section = |title: String, body: AnyElement| div().row().flex_col().gap(px(SPACE_10_PX)).child(group_title(title, p)).child(body);
+        let section = |title: &'static str, caption: Option<&'static str>, body: AnyElement| grouped::section(grouped::header(title, caption.map(SharedString::from), Vec::new(), p), body);
         div()
             .row()
             .flex_col()
-            .gap(px(SPACE_26_PX))
+            .gap(px(GROUP_SECTION_GAP_PX))
             .children(note_el)
-            .child(section(t("Recent changes").into(), history))
-            .child(section(t("Profiles").into(), saved))
-            .child(section(t("Export, import & support").into(), transfer))
-            .child(section(t("Reset a page").into(), reset))
+            .child(section(t("Recent changes"), Some(t("Every edit in Studio, newest first. Undo one, or go back to before it.")), history))
+            .child(section(t("Profiles"), Some(t("Saved setups you can switch between with one click.")), saved))
+            .child(section(t("Export, import & support"), None, transfer))
+            .child(section(t("Reset a page"), Some(t("Puts one page back to its defaults. Click twice to confirm; Undo is under Recent changes.")), reset))
             .into_any_element()
     }
 
@@ -275,44 +275,30 @@ impl StudioView {
         let all = st(cx).all_history;
         let rows: Vec<(usize, Instant, Vec<String>)> = cx.default_global::<History>().changes.iter().enumerate().map(|(i, c)| (i, c.at, c.labels.clone())).collect();
         if rows.is_empty() {
-            return card(p).child(heading(t("No changes yet"), t("Edits you make in Studio appear here, newest first, with an Undo."), p)).into_any_element();
+            return grouped::group(vec![grouped::empty(t("No changes yet"), t("Edits you make in Studio appear here, newest first, with an Undo."), p)], false, p).into_any_element();
         }
         let total = rows.len();
-        let mut col = card(p).gap(px(SPACE_4_PX)).p(px(SPACE_8_PX));
+        let mono = mandara_ui::fonts::fonts(cx).mono.clone();
+        let mut list = Vec::new();
         for (i, at, labels) in rows.into_iter().take(if all { usize::MAX } else { HISTORY_SHOWN }) {
-            let what = summary(&labels);
-            col = col.child(
-                div()
-                    .px(px(SPACE_12_PX))
-                    .py(px(SPACE_8_PX))
-                    .rounded(px(RADIUS_14_PX))
-                    .row()
-                    .items_center()
-                    .gap(px(SPACE_12_PX))
-                    .hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_3_5).hsla()))
-                    .child(icon("refresh", ICON_14_PX, if i == 0 { p.primary } else { p.on_surface_variant }))
-                    .child(div().flex_1().min_w(px(0.0)).overflow_hidden().text_ellipsis().whitespace_nowrap().child(what))
-                    .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(ago(at)))
-                    .child(
-                        chip(SharedString::from(format!("undo-{i}")), if i == 0 { t("Undo") } else { t("Back to before this") }, false, p)
-                            .child(icon("undo", ICON_11_PX, p.primary))
-                            .when(i > 0, |el| el.tooltip(tip(t("Also undoes the newer changes above"), p)))
-                            .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
-                                undo_to(i, cx);
-                                st(cx).note = Some((t("Undone").into(), false));
-                                cx.notify();
-                            })),
-                    ),
-            );
+            let undo = chip(SharedString::from(format!("undo-{i}")), if i == 0 { t("Undo") } else { t("Back to before this") }, false, p)
+                .child(icon("undo", ICON_11_PX, p.on_surface_variant))
+                .when(i > 0, |el| el.tooltip(tip(t("Also undoes the newer changes above"), p)))
+                .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                    undo_to(i, cx);
+                    st(cx).note = Some((t("Undone").into(), false));
+                    cx.notify();
+                }));
+            list.push(grouped::row(Some("refresh"), summary(&labels)).caption(ago(at)).accent(i == 0).trailing(undo).render(false, mono.clone(), p));
         }
         if total > HISTORY_SHOWN {
-            col = col.child(div().p(px(SPACE_6_PX)).child(chip("history-all", if all { SharedString::from(t("Fewer")) } else { SharedString::from(tf("All {count}", &[("count", &total)])) }, false, p).on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
+            list.push(div().px(px(GROUP_ROW_PAD_X_PX)).py(px(SPACE_10_PX)).child(chip("history-all", if all { SharedString::from(t("Fewer")) } else { SharedString::from(tf("All {count}", &[("count", &total)])) }, false, p).on_click(cx.listener(|_, _: &ClickEvent, _, cx| {
                 let s = st(cx);
                 s.all_history = !s.all_history;
                 cx.notify();
-            }))));
+            }))).into_any_element());
         }
-        col.into_any_element()
+        grouped::group(list, true, p).into_any_element()
     }
 
     fn prof_profiles(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
@@ -320,34 +306,23 @@ impl StudioView {
             let s = st(cx);
             (s.profiles.clone().unwrap_or_default(), s.scope)
         };
-        let mut col = card(p).gap(px(SPACE_4_PX)).p(px(SPACE_8_PX));
+        let stack = self.stack_rows;
+        let mono = mandara_ui::fonts::fonts(cx).mono.clone();
+        let mut rows: Vec<AnyElement> = Vec::new();
         if list.is_empty() {
-            col = col.child(div().p(px(SPACE_10_PX)).child(heading(t("No profiles yet"), t("Save how things look now — say “Work” and “Night” — and switch with one click or `mandara msg profile apply Night`."), p)));
+            rows.push(grouped::empty(t("No profiles yet"), t("Save how things look now — say “Work” and “Night” — and switch with one click or `mandara msg profile apply Night`."), p));
         }
         for prof in list {
             let del_key = format!("profile-del-{}", prof.name);
             let armed = Self::prof_armed(&del_key, cx);
             let (n1, n2) = (prof.name.clone(), prof.name.clone());
-            col = col.child(
-                div()
-                    .px(px(SPACE_12_PX))
-                    .py(px(SPACE_10_PX))
-                    .rounded(px(RADIUS_14_PX))
-                    .row()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(px(SPACE_12_PX))
-                    .child(icon(match prof.scope { ProfileScope::Bar => "monitor", ProfileScope::Look => "sun", ProfileScope::Full => "package" }, ICON_16_PX, p.primary))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(DIM_140_PX))
-                            .row()
-                            .flex_col()
-                            .child(div().row().items_center().gap(px(SPACE_8_PX)).child(div().font_weight(FontWeight::MEDIUM).child(prof.name.clone())).child(badge(match prof.scope { ProfileScope::Bar => t("Bar"), ProfileScope::Look => t("Look"), ProfileScope::Full => t("Everything") }, p.tertiary)))
-                            .child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(if prof.description.is_empty() { tf("Saved {when}", &[("when", &prof.saved)]) } else { prof.description.clone() })),
-                    )
-                    .child(button(SharedString::from(format!("profile-apply-{}", prof.name)), "check", t("Apply"), true, p).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+            let scope_label = match prof.scope { ProfileScope::Bar => t("Bar"), ProfileScope::Look => t("Look"), ProfileScope::Full => t("Everything") };
+            let caption = if prof.description.is_empty() { format!("{scope_label} · {}", tf("Saved {when}", &[("when", &prof.saved)])) } else { format!("{scope_label} · {}", prof.description) };
+            let glyph = match prof.scope { ProfileScope::Bar => "monitor", ProfileScope::Look => "sun", ProfileScope::Full => "package" };
+            rows.push(
+                grouped::row(Some(glyph), prof.name.clone())
+                    .caption(caption)
+                    .trailing(button(SharedString::from(format!("profile-apply-{}", prof.name)), "check", t("Apply"), false, p).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
                         let Some(profile) = profiles::find(&n1) else { return };
                         let cfg = config(cx).read(cx).snapshot();
                         match profiles::apply(&cfg, &profile) {
@@ -359,7 +334,7 @@ impl StudioView {
                         }
                         cx.notify();
                     })))
-                    .child(chip(SharedString::from(del_key.clone()), if armed { t("Delete?") } else { t("Delete") }, false, p).when(armed, |el| el.bg(p.urgent_coral.with_alpha(ALPHA_16).hsla()).text_color(p.urgent_coral.hsla())).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                    .trailing(chip(SharedString::from(del_key.clone()), if armed { t("Delete?") } else { t("Delete") }, false, p).when(armed, |el| el.bg(p.urgent_coral.with_alpha(ALPHA_16).hsla()).text_color(p.urgent_coral.hsla())).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
                         if Self::prof_arm(&del_key, cx) {
                             let r = profiles::delete(&n2);
                             let s = st(cx);
@@ -369,7 +344,8 @@ impl StudioView {
                             }
                         }
                         cx.notify();
-                    }))),
+                    })))
+                    .render(stack, mono.clone(), p),
             );
         }
         let name = form::input("profile-name", t("Profile name, e.g. Night"), false, cx);
@@ -401,7 +377,8 @@ impl StudioView {
             });
             cx.notify();
         }));
-        col.child(div().p(px(SPACE_10_PX)).row().flex_wrap().items_center().gap(px(SPACE_8_PX)).child(div().flex_1().min_w(px(DIM_200_PX)).child(name)).child(bar).child(look).child(full).child(save)).into_any_element()
+        rows.push(div().w_full().px(px(GROUP_ROW_PAD_X_PX)).py(px(SPACE_12_PX)).row().flex_wrap().items_center().gap(px(SPACE_8_PX)).child(div().flex_1().min_w(px(DIM_200_PX)).child(name)).child(bar).child(look).child(full).child(save).into_any_element());
+        grouped::group(rows, true, p).into_any_element()
     }
 
     fn prof_transfer(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
@@ -484,24 +461,29 @@ impl StudioView {
                 .text_color(p.warning_amber.hsla())
                 .child(mandara_ui::bidi::paragraph(tf("That file includes personal values ({keys}); turn on “Redact personal values” before sharing it.", &[("keys", &sensitive.join(", "))])))
         });
-        card(p)
-            .child(heading(t("Export"), t("A single TOML file you can keep, share or import on another machine. Existing files are never overwritten."), p))
-            .child(
-                div()
-                    .row()
-                    .flex_wrap()
-                    .gap(px(SPACE_6_PX))
-                    .child(toggle("export-changes", t("Only what I changed"), changes_only, |s| s.changes_only = !s.changes_only, cx))
-                    .child(toggle("export-redact", t("Redact personal values"), redact, |s| s.redact = !s.redact, cx)),
-            )
-            .child(div().row().items_center().gap(px(SPACE_8_PX)).child(div().flex_1().child(path)).child(export))
-            .children(warning)
-            .child(div().h(px(SPACE_6_PX)))
-            .child(heading(t("Import"), t("Loads an exported file; your current settings are backed up first (Maintenance → Backups)."), p))
-            .child(div().row().items_center().gap(px(SPACE_8_PX)).child(div().flex_1().child(import_path)).child(import))
-            .child(div().h(px(SPACE_6_PX)))
-            .child(div().row().items_center().gap(px(SPACE_10_PX)).child(report).child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("Versions, compositor and your changed settings with personal values removed.")))))
-            .into_any_element()
+        let block = |el: gpui::Div| el.w_full().px(px(GROUP_ROW_PAD_X_PX)).py(px(SPACE_14_PX)).row().flex_col().gap(px(SPACE_10_PX)).into_any_element();
+        let export_block = block(
+            div()
+                .child(heading(t("Export"), t("A single TOML file you can keep, share or import on another machine. Existing files are never overwritten."), p))
+                .child(
+                    div()
+                        .row()
+                        .flex_wrap()
+                        .gap(px(SPACE_6_PX))
+                        .child(toggle("export-changes", t("Only what I changed"), changes_only, |s| s.changes_only = !s.changes_only, cx))
+                        .child(toggle("export-redact", t("Redact personal values"), redact, |s| s.redact = !s.redact, cx)),
+                )
+                .child(div().row().items_center().gap(px(SPACE_8_PX)).child(div().flex_1().child(path)).child(export))
+                .children(warning),
+        );
+        let import_block = block(
+            div()
+                .child(heading(t("Import"), t("Loads an exported file; your current settings are backed up first (Maintenance → Backups)."), p))
+                .child(div().row().items_center().gap(px(SPACE_8_PX)).child(div().flex_1().child(import_path)).child(import)),
+        );
+        let mono = mandara_ui::fonts::fonts(cx).mono.clone();
+        let report_row = grouped::row(Some("note"), t("Support report")).caption(t("Versions, compositor and your changed settings with personal values removed.")).wrap().trailing(report).render(self.stack_rows, mono, p);
+        grouped::group(vec![export_block, import_block, report_row], false, p).into_any_element()
     }
 
     fn prof_reset(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
@@ -523,10 +505,10 @@ impl StudioView {
                     .items_center()
                     .gap(px(SPACE_10_PX))
                     .cursor_pointer()
-                    .bg(if armed { p.urgent_coral.with_alpha(ALPHA_14).hsla() } else { p.surface_container_high.hsla() })
+                    .bg(if armed { p.urgent_coral.with_alpha(ALPHA_14).hsla() } else { p.surface_container.hsla() })
                     .when(changed == 0, |el| el.opacity(ALPHA_50))
                     .hover(|s| s.opacity(ALPHA_88))
-                    .child(icon(section.icon(), ICON_15_PX, if armed { p.urgent_coral } else { p.primary }))
+                    .child(icon(section.icon(), ICON_15_PX, if armed { p.urgent_coral } else { p.on_surface_variant }))
                     .child(div().flex_1().min_w(px(0.0)).row().flex_col().child(div().font_weight(FontWeight::MEDIUM).overflow_hidden().text_ellipsis().whitespace_nowrap().child(section.label())).child(div().text_size(px(TEXT_11_5_PX)).text_color(if armed { p.urgent_coral.hsla() } else { p.on_surface_variant.hsla() }).child(if armed {
                         t("Click again to reset").to_string()
                     } else if changed == 0 {

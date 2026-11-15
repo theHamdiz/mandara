@@ -34,6 +34,11 @@ does not hold up the shell, and stderr output remains available on every
 supported system. Reproduce crashes in the private sandbox and retain the
 log around the failure before changing code.
 
+The sandbox keeps Mango's native config at
+`target/sandbox/home/.config/mango/config.conf`. Mandara's own config stays
+under its separate `XDG_CONFIG_HOME`, so the Config doctor can validate
+saved display changes against the compositor's real config.
+
 ## Website
 
 GitHub Pages serves `index.html` as the homepage and the Markdown guides as

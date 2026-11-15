@@ -20,7 +20,7 @@ use mandara_theme::MandaraPalette;
 use mandara_ui::icons::icon;
 use mandara_ui::update_config;
 
-use super::StudioView;
+use super::{StudioView, grouped};
 use super::compositor_page::{badge, button, card, chip, group_title, heading, regex_problem};
 use crate::registry::{self, Section};
 use crate::tokens::*;
@@ -264,25 +264,42 @@ impl StudioView {
 
     pub(super) fn privacy_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let rows = self.rows(registry::in_section(Section::Privacy), cfg, p, cx);
+        let stack = self.stack_rows;
+        let mono = mandara_ui::fonts::fonts(cx).mono.clone();
         let mic = self.ignore_list("mic", mandara_i18n::tk("Microphone"), &cfg.privacy.ignore_microphone, |c| &mut c.privacy.ignore_microphone, p, cx);
         let cam = self.ignore_list("camera", mandara_i18n::tk("Camera"), &cfg.privacy.ignore_camera, |c| &mut c.privacy.ignore_camera, p, cx);
         let screen = self.ignore_list("screen", mandara_i18n::tk("Screen sharing"), &cfg.privacy.ignore_screen_share, |c| &mut c.privacy.ignore_screen_share, p, cx);
         let placed = [&cfg.bar.left, &cfg.bar.center, &cfg.bar.right].iter().any(|z| z.iter().any(|id| id == "privacy"));
-        let ignore = card(p)
-            .child(heading(t("Never report"), t("Apps you trust, e.g. a voice assistant that always listens. Case-insensitive regular expressions."), p))
-            .child(super::grid::fit(self.page.column_w, PANEL_GRID).at_most(3).render([div().flex_1().child(mic), div().flex_1().child(cam), div().flex_1().child(screen)]));
-        div()
-            .row()
-            .flex_col()
-            .gap(px(SPACE_26_PX))
-            .child(rows)
-            .when(!placed && cfg.privacy.indicators, |el| {
-                el.child(
-                    card(p).child(heading(t("The bar chip isn't placed"), tf("Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way.", &[("name", &t("Privacy"))]), p)),
-                )
-            })
-            .child(div().row().flex_col().gap(px(SPACE_10_PX)).child(group_title(t("Ignore"), p)).child(ignore))
-            .into_any_element()
+        // Each list under its device's tile, one calm group.
+        let device = |glyph: &'static str, list: AnyElement| {
+            div()
+                .w_full()
+                .px(px(GROUP_ROW_PAD_X_PX))
+                .py(px(SPACE_14_PX))
+                .row()
+                .items_start()
+                .gap(px(GROUP_ROW_GAP_PX))
+                .child(grouped::tile(glyph, false, p))
+                .child(div().flex_1().min_w(px(0.0)).child(list))
+                .into_any_element()
+        };
+        let ignore = grouped::section(
+            grouped::header(t("Never report"), Some(t("Apps you trust, e.g. a voice assistant that always listens. Case-insensitive regular expressions.").into()), Vec::new(), p),
+            grouped::group(vec![device("mic", mic), device("camera", cam), device("monitor", screen)], true, p),
+        );
+        let chip_note = (!placed && cfg.privacy.indicators).then(|| {
+            let open = button("privacy-open-bars", Section::Bars.icon(), Section::Bars.label(), false, p).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.show(Section::Bars, cx)));
+            grouped::group(
+                vec![grouped::row(Some("info"), t("The bar chip isn't placed"))
+                    .caption(tf("Add the “{name}” plugin to the bar (Studio → Bars → Bar) to see the indicator there; on-screen displays work either way.", &[("name", &t("Privacy"))]))
+                    .wrap()
+                    .trailing(open)
+                    .render(stack, mono, p)],
+                true,
+                p,
+            )
+        });
+        div().row().flex_col().gap(px(GROUP_SECTION_GAP_PX)).child(rows).children(chip_note).child(ignore).into_any_element()
     }
 }
 

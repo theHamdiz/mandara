@@ -1,25 +1,32 @@
-//! Network plugin (NetworkManager): connectivity icon in the bar; a panel
+//! Network plugin (NetworkManager): connectivity icon in the bar (or a chip
+//! with the network's name and / or its signal, `bar_style`); a panel
 //! with the current connection as a hero (signal, band, live throughput),
 //! the Wi-Fi radio switch, rescan, and nearby networks with signal bars,
 //! lock badges and connect / disconnect actions.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gpui::SharedString;
 use gpui::{AnyElement, App, FontWeight, InteractiveElement as _, IntoElement, ParentElement, StatefulInteractiveElement as _, Styled, div, prelude::FluentBuilder as _, px, size};
+use mandara_config::ShellConfig;
+use mandara_config::bar_display::{BarDisplay, NETWORK_BAR_WIDTH, NETWORK_BAR_WIDTH_RANGE, NetworkBar};
 use mandara_core::{ToGpui, oklab_gradient};
-use mandara_i18n::{t, tf, tk};
+use mandara_i18n::{Lang, t, tf, tk};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, Output, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
 use mandara_services::network::{AccessPoint, Connectivity, NetworkCommand, NetworkState, strength_tier};
 use mandara_theme::MandaraPalette;
 use serde_json::json;
 
+use super::bar_chip;
 use super::panel_fx::{
-    self, ANGLE_DIAGONAL_DEG, Cached, HEADER_H, PanelShape, SECTION_H_PX, WASH_SOFT, empty_state, header, partner, pill_button, readable, redraw_in, section, signal_bars,
-    wash,
+    self, ANGLE_DIAGONAL_DEG, Cached, HEADER_H, PanelShape, SECTION_H_PX, WASH_SOFT, empty_state, header, partner, percent_text, pill_button, readable, redraw_in, section,
+    signal_bars, wash,
 };
+use super::settings_cache::{ConfigSettings, SettingsCache};
+use crate::bidi::Bidi as _;
 use crate::hub::Domains;
 use super::{domain_view, json};
 use crate::fonts::tabular_nums;
@@ -51,6 +58,11 @@ const SCAN_BUTTON_PX: f32 = 30.0;
 /// Bar status glyph and its alpha while disconnected.
 const BAR_ICON_PX: f32 = 15.0;
 const BAR_OFFLINE_ALPHA: f32 = 0.6;
+/// Fixed width of a chip's strength figure, so `9%` → `10%` never shifts
+/// its neighbours.
+const BAR_STRENGTH_W_PX: f32 = 28.0;
+/// Signal strength is reported in percent.
+const PERCENT: f32 = 100.0;
 
 /// Lower bounds of the 6 GHz and 5 GHz Wi-Fi bands.
 const BAND_6GHZ_FROM_MHZ: u32 = 5900;
@@ -440,18 +452,80 @@ fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>) -> impl
     }
 }
 
+// ── Bar item: the glyph, or a chip with the name and / or the signal ─────
+
+/// The bar item's look (`bar_style`, `bar_width`), resolved once per
+/// config snapshot.
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct BarLook {
+    style: NetworkBar,
+    width: f32,
+}
+
+impl ConfigSettings for BarLook {
+    type Scope = ();
+
+    fn resolve(config: &ShellConfig, _: Lang, _: ()) -> Self {
+        let p = &config.plugins;
+        let w = p.setting(ID, "bar_width", NETWORK_BAR_WIDTH).clamp(NETWORK_BAR_WIDTH_RANGE.0, NETWORK_BAR_WIDTH_RANGE.1);
+        Self { style: NetworkBar::parse(p.setting_str(ID, "bar_style")), width: w as f32 }
+    }
+}
+
+thread_local! {
+    static BAR_LOOK: RefCell<SettingsCache<BarLook>> = const { RefCell::new(SettingsCache::new()) };
+}
+
+fn bar_look(config: &Arc<ShellConfig>) -> BarLook {
+    *BAR_LOOK.with(|l| l.borrow_mut().get(config, mandara_i18n::language(), ()))
+}
+
+/// What a chip calls the connection: its name, or the state it is in.
+fn bar_name(state: &NetworkState) -> &str {
+    let named = |fallback: &'static str| if state.primary.trim().is_empty() { fallback } else { state.primary.trim() };
+    match state.connectivity {
+        Connectivity::Wifi => named(t("Wi-Fi")),
+        Connectivity::Ethernet => named(t("Wired")),
+        Connectivity::Connecting => t("Connecting…"),
+        Connectivity::Disconnected if !state.wifi_enabled => t("Wi-Fi is off"),
+        Connectivity::Disconnected => t("Offline"),
+    }
+}
+
+fn bar_view(name: &RefCell<bar_chip::TextSlot>, palette: &MandaraPalette, cx: &App) -> AnyElement {
+    let hub = hub(cx);
+    let state = &hub.read(cx).network;
+    let offline = state.connectivity == Connectivity::Disconnected;
+    let color = if offline { palette.on_surface_variant.with_alpha(BAR_OFFLINE_ALPHA) } else { palette.on_surface };
+    let glyph = || icon(status_icon(state), crate::style::bar_icon(BAR_ICON_PX), color);
+    let look = bar_look(&crate::state::config(cx).read(cx).snapshot());
+    // A side bar has no room for text: the classic glyph there.
+    if look.style == NetworkBar::Icon || crate::bar::vertical(cx) {
+        return div().flex().items_center().child(glyph()).into_any_element();
+    }
+    let wifi = state.connectivity == Connectivity::Wifi;
+    let label = name.borrow_mut().get(bar_name(state));
+    let ink = if offline { palette.on_surface_variant } else { palette.on_surface };
+    // Tabular figures only on the percentage: on names they space out
+    // hyphens and letters ("Wi-Fi").
+    bar_chip::text_row(bar_chip::GLYPH_GAP_PX)
+        .map(|el| match (look.style, wifi) {
+            // Bars read left to right in every language.
+            (NetworkBar::Signal, true) => el.child(div().ltr_row().child(signal_bars(state.strength, ink, palette))),
+            _ => el.child(glyph()),
+        })
+        // Without Wi-Fi the Signal look names the link or its state instead.
+        .when(look.style.name() || !wifi, |el| el.child(bar_chip::label(label, look.width, ink)))
+        .when(look.style.strength() && wifi, |el| {
+            el.child(div().w(px(BAR_STRENGTH_W_PX)).flex_none().font_features(tabular_nums()).text_color(palette.on_surface_variant.hsla()).child(percent_text(f32::from(state.strength) / PERCENT)))
+        })
+        .into_any_element()
+}
+
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Network"), tk("Wi-Fi and wired connectivity"), Some(Zone::Right)), |window, cx, panel_cx| {
-        let bar = domain_view(Domains::NETWORK,
-            None,
-            |palette, _, cx| {
-                let state = &hub(cx).read(cx).network;
-                let color = if state.connectivity == Connectivity::Disconnected { palette.on_surface_variant.with_alpha(BAR_OFFLINE_ALPHA) } else { palette.on_surface };
-                div().flex().items_center().child(icon(status_icon(state), crate::style::bar_icon(BAR_ICON_PX), color)).into_any_element()
-            },
-            window,
-            cx,
-        );
+        let name = RefCell::new(bar_chip::TextSlot::default());
+        let bar = domain_view(Domains::NETWORK, None, move |palette, _, cx| bar_view(&name, palette, cx), window, cx);
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(INITIAL_PANEL_H))));
         let panel = domain_view(Domains::NETWORK, None, panel_view(panel_cx.clone(), size_cell.clone()), window, cx);
         PluginInstance {
@@ -508,5 +582,28 @@ mod tests {
         assert_eq!((r.down, r.up), (1000.0, 500.0));
         assert!(!r.due(), "a fresh sample is not retaken");
         assert_eq!(r.down_text.get(r.down as u64, rate).as_ref(), rate(&1000).as_str());
+    }
+
+    #[test]
+    fn chips_name_the_connection_or_its_state() {
+        let mut s = NetworkState { connectivity: Connectivity::Wifi, primary: "Home-5G".into(), wifi_enabled: true, strength: 72, ..Default::default() };
+        assert_eq!(bar_name(&s), "Home-5G");
+        s.primary = " ".into();
+        assert_eq!(bar_name(&s), t("Wi-Fi"));
+        s.connectivity = Connectivity::Ethernet;
+        assert_eq!(bar_name(&s), t("Wired"));
+        s.connectivity = Connectivity::Disconnected;
+        assert_eq!(bar_name(&s), t("Offline"));
+        s.wifi_enabled = false;
+        assert_eq!(bar_name(&s), t("Wi-Fi is off"));
+    }
+
+    #[test]
+    fn the_bar_keeps_its_glyph_until_a_chip_is_picked() {
+        let l = bar_look(&Arc::new(ShellConfig::default()));
+        assert_eq!(l, BarLook { style: NetworkBar::Icon, width: NETWORK_BAR_WIDTH as f32 });
+        let mut c = ShellConfig::default();
+        c.plugins.settings.insert(ID.into(), toml::from_str("bar_style = \"both\"\nbar_width = 1").unwrap());
+        assert_eq!(bar_look(&Arc::new(c)), BarLook { style: NetworkBar::Both, width: NETWORK_BAR_WIDTH_RANGE.0 as f32 });
     }
 }
