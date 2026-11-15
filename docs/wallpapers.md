@@ -48,6 +48,25 @@ lists them. Like every transition but fade and wipe it plays on the GPU, on
 the default software wallpaper too (through a surface that exists only
 while it plays); reduced motion makes it a fade.
 
+### Live wallpapers from plugins
+
+A third-party plugin can play live wallpapers, such as Wallpaper Engine
+scenes and videos from your Steam Workshop folder, when
+[`linux-wallpaperengine`](https://github.com/Almamu/linux-wallpaperengine)
+(a build with `--layer`) is installed. Give the plugin the folder once
+(*Studio → Plugins → the plugin → Permissions*, *See the pictures and
+projects in folders you choose for it*), and it can show every project
+inside it with its title and preview. Playing them is a second permission
+(*Play live wallpapers…*), and a scene starts only when you click in the
+plugin. Mandara runs the renderer itself: on one display or all of them,
+silent, without the mouse, at your video wallpaper frame-rate limit, and
+paused by the video wallpaper rules (*Fit & effects*: behind windows, on
+battery, while locked or with the screens off). Your desktop widgets and
+clock stay above the scene and below your windows. The scene ends when you
+pick another wallpaper anywhere, switch off either permission or the
+plugin, unplug the display or quit; your wallpaper comes back as it was.
+Web projects don't run (they run scripts).
+
 ## Slideshow
 
 Turn it on in *Studio → Wallpaper → Slideshow* or with

@@ -6,7 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
-Install apps from any tar archive, tidy up the download afterwards, and skip the compile on NixOS.
+Play live wallpapers from plugins, install apps from any tar archive, tidy up the download afterwards, and skip the compile on NixOS.
+
+### New
+
+- Third-party plugins can play live wallpapers, such as Wallpaper Engine scenes, with `linux-wallpaperengine` installed. Grant a plugin your Workshop folder once and it can show every project inside it, with titles and previews. Live wallpapers are a separate permission, start only when you click, pause when the desktop is hidden, and stop when you choose another wallpaper. Desktop widgets stay above them.
 
 ### Improved
 

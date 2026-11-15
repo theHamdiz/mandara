@@ -5710,6 +5710,7 @@ Play a shell sound if sounds and that event are on (or any theme sound name)
 Play a sound for
 Play a station (by id or name), or the usual one
 Play from here
+Play live wallpapers from folders you choose for it, with a renderer installed on your computer
 Play music or video in any MPRIS player
 Play one event's sound from a theme (the active one by default), even while sounds are off; answers with its length and level outline
 Play or pause
@@ -6761,7 +6762,7 @@ See all {count}
 See everything you search for in the launcher
 See more on Reddit
 See processor, memory and battery use
-See the images in folders you choose for it
+See the pictures and projects in folders you choose for it
 See what's playing and its cover
 See your open windows
 See your wallpapers

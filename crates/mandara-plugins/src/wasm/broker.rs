@@ -39,6 +39,9 @@ pub enum ImageOrigin {
     Wallpaper,
     /// A file in a folder the person granted (`files.folders`).
     Folder(PathBuf),
+    /// A project folder inside a folder the person granted (`files.folders`
+    /// `projects`): a handle for `wallpaper.live`, never drawn.
+    Project(PathBuf),
     /// The playing track's cover (`media.read`).
     MediaArt,
 }
@@ -49,9 +52,14 @@ impl ImageOrigin {
         match self {
             Self::Asset => None,
             Self::Wallpaper => Some(Capability::WallpaperRead),
-            Self::Folder(_) => Some(Capability::Folders),
+            Self::Folder(_) | Self::Project(_) => Some(Capability::Folders),
             Self::MediaArt => Some(Capability::MediaRead),
         }
+    }
+
+    /// Whether the handle is a picture (a project handle isn't drawn).
+    pub fn is_picture(&self) -> bool {
+        !matches!(self, Self::Project(_))
     }
 }
 
