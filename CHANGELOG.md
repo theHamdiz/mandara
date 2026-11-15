@@ -6,6 +6,12 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The shell keeps crash diagnostics and recovers from an unexpected display shutdown.
+
+### Fixed
+
+- An unexpected display-loop shutdown no longer quietly stops the shell's restart supervisor. Warnings and crash errors also reach the system journal when the desktop discards terminal output.
+
 ## 0.33.0 — 2026-11-15
 
 Install apps from any tar archive, tidy up the download afterwards, and skip the compile on NixOS.
