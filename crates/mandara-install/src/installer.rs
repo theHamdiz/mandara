@@ -1299,7 +1299,7 @@ impl<'a> Installer<'a> {
     fn greeter(&mut self, exe: &Path) {
         let wanted = self.setup.map_or(!self.args.no_greeter, |s| s.greeter);
         if !wanted {
-            let line = if self.args.no_greeter { "login screen unchanged (--no-greeter); switch any time in Studio → Login screen → Login manager" } else { t("Login screen kept; switch any time in Studio → Login screen → Login manager.") };
+            let line = if self.args.no_greeter { "login screen unchanged (--no-greeter); switch any time in Studio → Login & Lock Screens → Login → Login manager" } else { t("Login screen kept; switch any time in Studio → Login & Lock Screens → Login → Login manager.") };
             self.say(Level::Detail, line);
             return;
         }
@@ -1327,6 +1327,7 @@ impl<'a> Installer<'a> {
                 }
             } else {
                 self.say(Level::Ok, "Mandara Login is your login screen");
+                self.say(Level::Detail, t("Choose matching login and lock designs in Studio."));
             }
             self.freebsd_greeter_power(exe);
             self.keyring_unlock(exe);
@@ -1334,7 +1335,7 @@ impl<'a> Installer<'a> {
         }
         // The setup screen has already asked; only runs without it ask here.
         if self.setup.is_none() && !self.ask("Use Mandara Login as your login screen?", true) {
-            self.say(Level::Info, "kept your login screen; switch any time in Studio → Login screen → Login manager");
+            self.say(Level::Info, "kept your login screen; switch any time in Studio → Login & Lock Screens → Login → Login manager");
             return;
         }
         let missing: Vec<&str> = LOGIN_PROGRAMS.iter().copied().filter(|p| !self.has(p)).collect();
@@ -1384,7 +1385,7 @@ impl<'a> Installer<'a> {
             self.freebsd_greeter_power(exe);
             self.keyring_unlock(exe);
         } else {
-            self.say(Level::Warn, "the login screen was not changed; see above, or switch later in Studio → Login screen → Login manager");
+            self.say(Level::Warn, "the login screen was not changed; see above, or switch later in Studio → Login & Lock Screens → Login → Login manager");
         }
     }
 

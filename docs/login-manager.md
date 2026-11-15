@@ -49,7 +49,7 @@ they're missing (not with `--no-deps`) and runs
 `sudo mandara greeter use mandara --apply`. `--no-greeter` skips the step,
 `--dry-run` only prints the plan. On upgrades it refreshes the installed
 greeter binary when it's out of date. You can switch back any time with
-Studio → Login screen → **Login manager** or `sudo mandara greeter restore
+Studio → Login & Lock Screens → Login → **Login manager** or `sudo mandara greeter restore
 latest`.
 
 ## Switch login screens: `greeter list` / `use` / `restore`
@@ -384,7 +384,7 @@ instead (see [commands.md](commands.md#keyrings-and-passwords)).
 
 ## Design it in Mandara Studio
 
-`mandara studio "login screen"` (or Studio → **Login screen**) edits every
+`mandara studio "login screen"` (or Studio → **Login & Lock Screens → Login**) edits every
 setting with a **live preview** — the real greeter view, rendering your draft.
 
 The first tab, **Looks**, applies a whole design in one click: **Mandara**
@@ -449,6 +449,12 @@ tabs: Layout, Background, Clock & date, Sign-in (card, user, password
 field), Session, power & extras (logo, scheme switcher, language), Theme &
 glass, and Motion & accessibility.
 
+The lock screen offers the same six designs in **Studio → Login & Lock Screens → Lock → Design**.
+Both pickers share their catalog and preset proportions; login and lock retain
+independent selections. Ghostline and Chrome Halo stack on narrow displays,
+and Meridian mirrors its name and password line in right-to-left languages.
+The secure locker keeps its existing password handling and blank-display policy.
+
 <table>
 <tr>
 <td width="33%" valign="top"><img src="screenshots/greeter.webp" alt="Mandara Login in its Mandara design: a big clock, the avatar and a glass password field floating over glossy cyan, violet and pink ribbons, with the Mandara emblem above the keyboard pill" width="100%"/><br/><sub><b>Mandara</b>: everything floats on the backdrop</sub></td>
@@ -505,7 +511,7 @@ own copy never runs as root.
 
 ## Public widgets
 
-**Studio → Login screen → Layout → Widgets** adds passive widgets from the
+**Studio → Login & Lock Screens → Login → Layout → Widgets** adds passive widgets from the
 built-in gallery or copies one from the desktop. Position each copy with
 its anchor, offsets, scale and opacity; later desktop edits do not change
 it. **Apply to login screen** installs this draft through the existing

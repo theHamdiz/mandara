@@ -1,4 +1,4 @@
-//! Studio → Login screen: every Mandara Login setting, with a live preview
+//! Studio → Login & Lock Screens → Login: every Mandara Login setting, with a live preview
 //! that is the real greeter view rendering the draft at a scaled size.
 //!
 //! * Controls on the bottom edit `~/.config/mandara/greeter.toml` (the
@@ -233,6 +233,9 @@ const SWATCH_ACCENT_LIGHTNESS: f32 = 0.45;
 /// later visit rebuilds it as it was. Kept while a system apply runs or a
 /// slider drag hasn't saved yet.
 pub(super) fn release(cx: &mut gpui::App) {
+    if let Some(preview) = cx.try_global::<PageHandle>().map(|h| h.0.read(cx).preview.clone()) {
+        preview.update(cx, |view, _| view.suspend_preview());
+    }
     let busy = cx.try_global::<PageHandle>().is_some_and(|h| {
         let page = h.0.read(cx);
         page.applying || page.dirty || page.manager.busy()

@@ -145,7 +145,7 @@ impl Section {
             Section::Applications => tk("Applications"),
             Section::Profiles => tk("Profiles & backup"),
             Section::Power => tk("Power & idle"),
-            Section::LoginScreen => tk("Login screen"),
+            Section::LoginScreen => tk("Login & Lock Screens"),
             Section::LockScreen => tk("Lock appearance"),
             Section::DateTime => tk("Date, time & location"),
             Section::Users => tk("Users"),
@@ -208,7 +208,7 @@ impl Section {
     /// The sidebar group this section sits in (`None` for Home, pinned
     /// above the groups).
     pub fn group(self) -> Option<NavGroup> {
-        NavGroup::ALL.into_iter().find(|g| g.sections().contains(&self))
+        NavGroup::ALL.into_iter().find(|g| g.sections().contains(&if self == Section::LockScreen { Section::LoginScreen } else { self }))
     }
 }
 
@@ -287,7 +287,7 @@ impl NavGroup {
             NavGroup::LookAndFeel => &[Themes, Wallpaper, Desktop, Typography, Motion],
             NavGroup::Desktop => &[Bars, Dock, Launcher, WindowSwitcher, Notifications, Osd],
             NavGroup::System => &[Displays, Audio, Network, Power, Input, Shortcuts, DateTime, Applications],
-            NavGroup::Security => &[Users, LoginScreen, LockScreen, Privacy],
+            NavGroup::Security => &[Users, LoginScreen, Privacy],
             NavGroup::Extend => &[Plugins, Compositor, AiShellAgent],
             NavGroup::Mandara => &[General, Profiles, Performance, Maintenance, About],
         }
@@ -632,6 +632,8 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     if let Some(reason) = system_settings::native_locked(setting.path, running_compositor()) { return Some(reason); }
     if let Some(reason) = motion_settings::locked(setting.path, cfg) { return Some(reason); }
     match setting.path {
+        "/lock/clock_style" if setting.control.has_value() && cfg.lock.design != mandara_config::desktop::LockDesign::Mandara => Some(tk("This design sets its own clock layout.")),
+        "/lock/show_avatar" if cfg.lock.design == mandara_config::desktop::LockDesign::Meridian => Some(tk("Meridian has no profile picture.")),
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),
         "/session_menu/position" if cfg.session_menu.style == mandara_config::power::SessionMenuStyle::Grid => Some(tk("The grid always opens in the middle")),
@@ -1321,6 +1323,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn preset_owned_lock_settings_explain_their_limits_and_leave_preview_available() {
+        let clock = by_path("/lock/clock_style").unwrap();
+        let avatar = by_path("/lock/show_avatar").unwrap();
+        let preview = settings().iter().find(|setting| setting.path == "/lock/clock_style" && matches!(setting.control, Control::Command { .. })).unwrap();
+        for design in mandara_config::desktop::LockDesign::ALL {
+            let mut cfg = ShellConfig::default();
+            cfg.lock.design = design;
+            assert_eq!(locked(clock, &cfg).is_some(), design != mandara_config::desktop::LockDesign::Mandara);
+            assert_eq!(locked(avatar, &cfg).is_some(), design == mandara_config::desktop::LockDesign::Meridian);
+            assert!(locked(preview, &cfg).is_none());
+        }
+    }
+
+    #[test]
     fn every_path_resolves_and_round_trips() {
         let cfg = ShellConfig::default();
         // A status or a button has no value to write back.
@@ -1413,9 +1429,9 @@ mod tests {
     fn every_section_but_home_sits_in_exactly_one_group() {
         for section in Section::ALL {
             let groups = NavGroup::ALL.iter().filter(|g| g.sections().contains(&section)).count();
-            assert_eq!(groups, usize::from(section != Section::Home), "{:?} is in {groups} groups", section.title());
+            assert_eq!(groups, usize::from(!matches!(section, Section::Home | Section::LockScreen)), "{:?} is in {groups} groups", section.title());
         }
-        assert_eq!(nav_order().count(), Section::ALL.len());
+        assert_eq!(nav_order().count(), Section::ALL.len() - 1);
         for g in NavGroup::ALL {
             assert_eq!(NavGroup::parse(g.id()), Some(g));
         }

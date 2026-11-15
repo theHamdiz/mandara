@@ -8022,7 +8022,7 @@
 
 "Cancelled — nothing was changed." = "취소됨 — 아무것도 변경하지 않았습니다."
 
-"Login screen kept; switch any time in Studio → Login screen → Login manager." = "현재 로그인 화면을 유지합니다. Studio → 로그인 화면 → 로그인 관리자에서 언제든지 바꿀 수 있습니다."
+"Login screen kept; switch any time in Studio → Login & Lock Screens → Login → Login manager." = "현재 로그인 및 잠금 화면 → 로그인을 유지합니다. Studio → 로그인 및 잠금 화면 → 로그인 → 로그인 관리자에서 언제든지 바꿀 수 있습니다."
 
 "Setup" = "설정"
 
@@ -9466,7 +9466,7 @@
 "Trying again without the optional packages: {packages}" = "선택 패키지 없이 다시 시도하는 중: {packages}"
 "{tool} couldn't add the packages. Add them later with: {command}" = "{tool}이(가) 패키지를 추가하지 못했습니다. 나중에 다음 명령으로 추가하세요: {command}"
 "Restart your computer to start using the new packages. Everything else is ready now." = "새 패키지를 사용하려면 컴퓨터를 다시 시작하세요. 나머지는 모두 준비되었습니다."
-"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Mandara Login 패키지는 다음 부팅 때 들어옵니다: {packages}. 다시 시작한 뒤 Studio → 로그인 화면 → 로그인 관리자에서 전환하거나 다음을 실행하세요: {command}"
+"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login & Lock Screens → Login → Login manager, or run: {command}" = "Mandara Login 패키지는 다음 부팅 때 들어옵니다: {packages}. 다시 시작한 뒤 Studio → 로그인 및 잠금 화면 → 로그인 → 로그인 관리자에서 전환하거나 다음을 실행하세요: {command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "이 시스템은 이미지 기반입니다. Mandara는 홈 폴더에 설치되고, 설치 프로그램은 없는 시스템 패키지만 추가합니다."
 "Aqueous settings stay in its own files in ~/.config/aqueous" = "Aqueous 설정은 ~/.config/aqueous에 있는 자체 파일에 그대로 둡니다"
 "Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there." = "Aqueous에는 별도의 설정 검사기가 없습니다. ~/.config/aqueous의 자체 파일을 다시 불러올 때 스스로 검증하며, Mandara는 그곳에 아무것도 쓰지 않습니다."
@@ -10823,3 +10823,22 @@
 "Wallpaper Engine folder" = "Wallpaper Engine 폴더"
 "Enter a Steam library or Wallpaper Engine installation folder. Leave empty for automatic detection." = "Steam 라이브러리 또는 Wallpaper Engine 설치 폴더를 입력하세요. 자동 감지를 사용하려면 비워 두세요."
 "Wallpaper Engine folder not found: {path}" = "Wallpaper Engine 폴더를 찾을 수 없음: {path}"
+
+"The same six designs as the login screen, with an independent selection" = "로그인 화면과 동일한 여섯 디자인을 독립적으로 선택합니다"
+"Select a shortcut to edit its values." = "값을 편집할 단축키를 선택하세요."
+"{count} shortcuts" = "단축키 {count}개"
+"Also used by Mandara" = "Mandara에서도 사용 중"
+"Choose matching login and lock designs in Studio." = "Studio에서 로그인과 잠금 화면에 어울리는 디자인을 선택하세요."
+"Login & Lock Screens" = "로그인 및 잠금 화면"
+"This design sets its own clock layout." = "이 디자인은 자체 시계 배치를 사용합니다."
+"Meridian has no profile picture." = "Meridian에는 프로필 사진이 없습니다."
+"A big clock, your picture over a glass field, everything floating on the backdrop" = "큰 시계와 글래스 입력란 위의 내 사진, 모든 요소가 배경 위에 떠 있습니다"
+"Midnight card" = "미드나이트 카드"
+"A quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" = "사용자, 비밀번호, 세션을 담은 외곽선 카드 하나 위에 차분한 시계, 미드나이트 네이비와 시트린 색상"
+"Colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar, chips and tonal buttons" = "배경화면에서 가져온 색, 두 줄의 큰 시계, 물결 테두리 아바타와 칩, 토널 버튼이 담긴 토널 카드"
+"Ghostline" = "Ghostline"
+"Graphite and ice-white hairlines: a wireframe sign-in panel on the left with live readouts, a terminal password line and a ruler clock, in cold cyan" = "그라파이트와 얼음빛 흰 헤어라인: 왼쪽에 실시간 수치를 담은 와이어프레임 로그인 패널, 터미널 같은 암호 줄, 자 모양 시계를 차가운 시안으로"
+"Chrome Halo" = "Chrome Halo"
+"Deep ink and holographic light: a luminous ring around a light clock, and a machined sign-in module on the right with a pill button" = "깊은 잉크와 홀로그램 빛: 가벼운 시계를 감싸는 빛나는 고리, 오른쪽에 알약 버튼이 있는 정밀 가공 로그인 모듈"
+"Meridian" = "Meridian"
+"No boxes: your name and password ride on one hairline across a calm dawn field, over enormous whisper-thin numerals; light or dark" = "상자는 없습니다: 이름과 암호가 고요한 새벽 들판을 가로지르는 헤어라인 하나 위에, 속삭이듯 얇은 거대한 숫자 위에 놓입니다; 밝게 또는 어둡게"

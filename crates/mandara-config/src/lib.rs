@@ -2,6 +2,7 @@
 //! its file watcher, and XDG [`paths`].
 
 pub mod admin;
+pub mod auth_design;
 pub mod alerts;
 pub mod app_themes;
 pub mod apps;

@@ -150,6 +150,11 @@ fn bars_part_target(target: &str) -> Option<registry::bars::SidebarsPart> {
 /// line (`mandara studio appearance` opens Themes).
 const FORMER_SECTIONS: &[(&str, registry::Section)] = &[
     ("shortcuts", registry::Section::Shortcuts),
+    ("greeter", registry::Section::LoginScreen),
+    ("login-screen", registry::Section::LoginScreen),
+    ("login screen", registry::Section::LoginScreen),
+    ("lock-screen", registry::Section::LockScreen),
+    ("lock screen", registry::Section::LockScreen),
     ("appearance", registry::Section::Themes),
     ("looks", registry::Section::Themes),
     ("cursor", registry::Section::Themes),
@@ -188,6 +193,7 @@ pub fn resolve_section(target: &str) -> Option<registry::Section> {
     if let Some((_, section)) = FORMER_SECTIONS.iter().find(|(former, _)| *former == name) {
         return Some(*section);
     }
+    if mandara_i18n::tr("Login screen").to_lowercase() == name { return Some(registry::Section::LoginScreen); }
     if former_bars_tab(&name).is_some() { return Some(registry::Section::Bars); }
     let all = registry::Section::ALL;
     all.into_iter()
@@ -197,6 +203,12 @@ pub fn resolve_section(target: &str) -> Option<registry::Section> {
         .or_else(|| {
             all.into_iter().find(|s| s.title().to_lowercase().starts_with(&name))
         })
+}
+
+fn auth_tab_target(target: &str) -> Option<app::auth_page::AuthTab> {
+    let (section, tab) = target.split_once('/')?;
+    (resolve_section(section) == Some(registry::Section::LoginScreen)).then_some(())?;
+    app::auth_page::AuthTab::parse(tab)
 }
 
 /// Opens Studio on a section (by English title, case-insensitive, or its
@@ -213,6 +225,7 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
     let desktop_widget = section.and_then(desktop_widget_target);
     let desktop_tab = section.and_then(desktop_tab_target);
     let shortcuts_tab = section.and_then(shortcuts_tab_target);
+    let auth_tab = section.and_then(auth_tab_target);
     // `power/<part>` scrolls the Power & idle page to that part.
     let power_part = section.and_then(|t| t.strip_prefix("power/")).map(str::to_string);
     let cursor = section.is_some_and(cursor_target);
@@ -228,6 +241,7 @@ pub fn open_at(section: Option<&str>, cx: &mut App) {
         if let Some(s) = section {
             view.show(s, cx);
         }
+        if let Some(tab) = auth_tab { view.show_auth_tab(tab, cx); }
         if let Some((tab, scroll)) = tab {
             view.show_plugins_tab(tab, scroll, cx);
         }
@@ -377,6 +391,19 @@ pub fn run(section: Option<&str>, cx: &mut App) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn auth_page_accepts_new_tabs_and_old_page_links() {
+        use registry::Section;
+        use app::auth_page::AuthTab;
+        assert_eq!(resolve_section("login-screen"), Some(Section::LoginScreen));
+        assert_eq!(resolve_section("lock-screen"), Some(Section::LockScreen));
+        assert_eq!(resolve_section("greeter"), Some(Section::LoginScreen));
+        assert_eq!(auth_tab_target("greeter/lock"), Some(AuthTab::Lock));
+        assert_eq!(auth_tab_target("greeter/login"), Some(AuthTab::Login));
+        assert_eq!(auth_tab_target("themes/lock"), None);
+        assert_eq!(auth_tab_target("greeter/unknown"), None);
+    }
+
     #[test]
     fn shortcut_links_select_only_the_shortcuts_page_tabs() {
         use crate::app::ShortcutsTab;
@@ -548,7 +575,7 @@ mod tests {
             assert_eq!(section.icon(), *icon, "launcher entry `{slug}` and the sidebar use different icons");
             reached.push(section);
         }
-        for s in Section::ALL {
+        for s in registry::nav_order() {
             assert!(reached.contains(&s), "Studio section {:?} has no launcher entry", s.title());
         }
         // The launcher lists sections in sidebar order.

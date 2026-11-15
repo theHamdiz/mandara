@@ -135,7 +135,7 @@ and tick off tasks where they sit.
    and optional system accessibility preferences. [Motion controls](docs/motion.md).
 6. **Make changes and see them.** Mandara Studio has 32 pages of live
    settings and previews. Give Studio its own shaped window and controls, or
-   edit your compositor's shortcuts with conflict checks and Undo. Save bar arrangements as profiles;
+   edit your compositor's shortcuts in a roomy split editor with conflict checks and Undo. Save bar arrangements as profiles;
    Maintenance spots missing icon themes and takes you to the right settings.
 7. **Colours that belong together.** Choose a hand-tuned theme or a Material
    You (HCT) palette from your wallpaper. Opt in to matching Ghostty, GTK 3/4,
@@ -258,7 +258,7 @@ and desktop widgets stay. Side bars can wear their own style too
 
 <table>
 <tr>
-<td width="50%" valign="top"><img src="docs/screenshots/lock-screen.webp" alt="The lock screen in its Mandara design over blurred coral, violet and gold ribbons: the date, a big clock, the avatar and the glass password field" width="100%"/><br/><sub><b>The lock screen</b>, made to match: the <b>Mandara</b> design</sub></td>
+<td width="50%" valign="top"><img src="docs/screenshots/lock-screen.webp" alt="The lock screen in its Mandara design over blurred coral, violet and gold ribbons: the date, a big clock, the avatar and the glass password field" width="100%"/><br/><sub><b>The lock screen</b>: all six login designs, including <b>Mandara</b></sub></td>
 <td width="50%" valign="top"><img src="docs/screenshots/lock-screen-material-you.webp" alt="The lock screen in its Material You design over blurred blue and teal ribbons: the date, a big stacked clock, and a tonal card with the scalloped avatar, a filled password field and a round button" width="100%"/><br/><sub>…and its <b>Material You</b> design</sub></td>
 </tr>
 </table>
@@ -316,7 +316,7 @@ Studio is always in your application menu.
 Aeon, Kalpa and Vanilla OS — use the same command. Mandara goes in your home
 folder; missing system packages use one approved `rpm-ostree`,
 `transactional-update` or `abroot` transaction. Reboot only when prompted,
-then enable Mandara Login in Studio → Login screen. **SteamOS** uses your
+then enable Mandara Login in Studio → Login & Lock Screens → Login. **SteamOS** uses your
 home folder only. [Immutable systems](docs/install.md#immutable-systems).
 
 **FreeBSD 14+** (14.4 and newer, including 15; amd64) uses the same command.

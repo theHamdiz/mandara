@@ -98,11 +98,20 @@ pub(super) fn build(session: &Session, bindings: &[Keybind]) -> Vec<Row> {
                         .unwrap_or_default()
                         .into();
                     let mut action = String::new();
-                    for field in row.fields.iter().filter(|field| field.label == "Action") {
-                        if !action.is_empty() {
-                            action.push_str("; ");
+                    for field in &row.fields {
+                        match field.label {
+                            "Action" => {
+                                if !action.is_empty() {
+                                    action.push_str("; ");
+                                }
+                                action.push_str(&field.value);
+                            }
+                            "Argument" | "Arguments" if !field.value.is_empty() => {
+                                action.push(' ');
+                                action.push_str(&field.value);
+                            }
+                            _ => {}
                         }
-                        action.push_str(&field.value);
                     }
                     let location: SharedString = format!(
                         "{}:{} · {}",
@@ -148,6 +157,24 @@ pub(super) fn filter(rows: &[Row], query: &str) -> Vec<usize> {
 mod tests {
     use super::*;
     use mandara_config::compositor::BindAction;
+
+    #[test]
+    fn commands_with_the_same_dispatcher_are_distinguishable_in_the_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("config.conf");
+        std::fs::write(&file, "bind=SUPER,F1,spawn,foot --title=Terminal\nbind=SUPER,F2,spawn,helium https://example.org\n").unwrap();
+        let session = Session {
+            environment: Default::default(),
+            target: Target::Mango,
+            root: file.clone(),
+            scan: keybinds::scan_from(Target::Mango, &file),
+            primary_mod_is_alt: false,
+        };
+        let rows = build(&session, &[]);
+        assert_eq!(rows[0].action.as_ref(), "spawn foot --title=Terminal");
+        assert_eq!(rows[1].action.as_ref(), "spawn helium https://example.org");
+        assert_eq!(filter(&rows, "helium"), [1]);
+    }
 
     #[test]
     fn qt_alternatives_and_sequence_prefixes_compare_with_large_shell_binding_lists() {
