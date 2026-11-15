@@ -50,6 +50,8 @@ Studio refinements, optional bar and dock effects, richer third-party plugins, a
 
 ### Under the hood
 
+- The demo sandbox keeps Mango's config in its native home-based location, so display changes pass the same configuration checks as a normal session.
+
 - The plugin guide gains a design and quality standard for everyone writing third-party plugins, and a strict version for AI coding agents: a designed hierarchy, polish passes on real screenshots, bounded memory and idiomatic Rust.
 
 ## 0.33.0 — 2026-11-15
