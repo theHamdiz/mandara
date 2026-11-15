@@ -95,7 +95,8 @@ impl ureq::unversioned::resolver::Resolver for Pinned {
 
 /// Sends one request. `method` is GET or POST (`body` only with POST).
 /// The host's addresses are looked up first and refused when any is local,
-/// so a public name can't be pointed at your router or printer.
+/// so a public name can't be pointed at your router or printer, and the
+/// connection goes straight to those addresses (never through a proxy).
 pub fn fetch(host: &str, url: &str, method: &str, body: Option<&str>) -> Result<Response, String> {
     crate::offline::check()?;
     let uri = check_url(url, host)?;
@@ -111,11 +112,16 @@ pub fn fetch(host: &str, url: &str, method: &str, body: Option<&str>) -> Result<
     if method == Method::GET && !body.is_empty() {
         return Err("a GET request has no body".into());
     }
+    // One deadline for the lookup and the exchange.
+    let started = std::time::Instant::now();
     let addresses = (host, HTTPS_PORT).to_socket_addrs().map_err(|e| format!("{host}: {e}"))?.collect::<Vec<_>>();
     if addresses.is_empty() || addresses.iter().any(|a| is_local(a.ip())) {
         return Err(format!("{host} points at a local or private address"));
     }
-    let config = ureq::Agent::config_builder().timeout_global(Some(TIMEOUT)).max_redirects(0).http_status_as_error(false).build();
+    let left = TIMEOUT.checked_sub(started.elapsed()).filter(|d| !d.is_zero()).ok_or_else(|| format!("{host}: the lookup took too long"))?;
+    // No proxy: the connection must go to the addresses checked above (a
+    // proxy would resolve the host again itself).
+    let config = ureq::Agent::config_builder().timeout_global(Some(left)).max_redirects(0).http_status_as_error(false).proxy(None).build();
     let agent = ureq::Agent::with_parts(config, ureq::unversioned::transport::DefaultConnector::default(), Pinned(addresses));
     let request = Request::builder()
         .method(method)

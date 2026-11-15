@@ -97,26 +97,35 @@ fn topic_capability(r: &Request) -> Option<Capability> {
     extension::EVENT_TOPICS.iter().find(|(t, _)| *t == topic).and_then(|(_, c)| c.clone())
 }
 
+/// A result waiting to be handed over.
+struct Waiting {
+    id: u64,
+    result: Result<String, String>,
+    capability: Capability,
+    also: Option<Capability>,
+}
+
 #[derive(Default)]
 pub struct Broker {
-    /// Ids come from one counter (requests and image handles alike), so a
-    /// handle is never mistaken for a request.
-    next_id: u64,
     /// Queued and not yet taken by the host.
     queued: Vec<Request>,
     /// Taken and not yet answered.
     outstanding: Vec<Open>,
     /// Subscriptions the plugin cancelled (the host stops their sources).
     cancelled: Vec<u64>,
-    /// Results waiting for the next `extension-event`.
-    inbox: VecDeque<(u64, Result<String, String>)>,
+    /// Results waiting for the next `extension-event`, with the
+    /// capabilities they rely on (re-checked when grants change).
+    inbox: VecDeque<Waiting>,
     images: VecDeque<(u64, ImageEntry)>,
 }
 
 impl Broker {
+    /// A fresh id from one counter for the whole process (requests and
+    /// image handles alike): a reloaded plugin never reuses an id, so a late
+    /// result for its old instance can't answer a new request.
     fn issue(&mut self) -> u64 {
-        self.next_id += 1;
-        self.next_id
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
     fn open(&self, subscription: bool) -> usize {
@@ -168,7 +177,7 @@ impl Broker {
         {
             self.cancelled.push(id);
         }
-        self.inbox.retain(|(r, _)| *r != id);
+        self.inbox.retain(|w| w.id != id);
     }
 
     /// Requests queued since the last take; they are outstanding until
@@ -205,6 +214,7 @@ impl Broker {
             return false;
         }
         let subscription = self.outstanding[at].subscription;
+        let (capability, also) = (self.outstanding[at].capability.clone(), self.outstanding[at].also.clone());
         if !subscription {
             self.outstanding.remove(at);
         }
@@ -212,14 +222,14 @@ impl Broker {
             Ok(body) if body.len() > extension::MAX_REPLY_BYTES => Err(format!("the reply was larger than {} bytes", extension::MAX_REPLY_BYTES)),
             other => other,
         };
-        if subscription && let Some(slot) = self.inbox.iter_mut().find(|(r, _)| *r == id) {
-            slot.1 = result;
+        if subscription && let Some(slot) = self.inbox.iter_mut().find(|w| w.id == id) {
+            slot.result = result;
             return true;
         }
         if self.inbox.len() >= extension::MAX_INBOX {
             self.inbox.pop_front();
         }
-        self.inbox.push_back((id, result));
+        self.inbox.push_back(Waiting { id, result, capability, also });
         true
     }
 
@@ -227,6 +237,9 @@ impl Broker {
     /// picks (a revoked grant), and the queued ones: later results for them
     /// are dropped, and closed subscriptions are reported as cancelled.
     pub fn close_where(&mut self, access: &Access) {
+        // Results already waiting are dropped too: nothing read under a
+        // revoked grant is handed over afterwards.
+        self.inbox.retain(|w| access.allows(&w.capability) && w.also.as_ref().is_none_or(|c| access.allows(c)));
         self.queued.retain(|r| access.allows(&r.capability) && topic_capability(r).is_none_or(|c| access.allows(&c)));
         let cancelled = &mut self.cancelled;
         self.outstanding.retain(|o| {
@@ -248,7 +261,7 @@ impl Broker {
     }
 
     pub fn take_replies(&mut self) -> Vec<(u64, Result<String, String>)> {
-        self.inbox.drain(..).collect()
+        self.inbox.drain(..).map(|w| (w.id, w.result)).collect()
     }
 
     /// A handle for `entry` (the same one if it already has one). Past
@@ -354,6 +367,28 @@ mod tests {
     }
 
     #[test]
+    fn replies_waiting_when_a_grant_is_revoked_are_dropped() {
+        let mut b = Broker::default();
+        let a = access();
+        let status = b.submit(&a, false, "media.read", "status".into(), "").unwrap();
+        let next = b.submit(&a, false, "media.control", "next".into(), "").unwrap();
+        b.take_requests();
+        assert!(b.deliver(&a, status, Ok("{\"title\":\"private\"}".into())));
+        assert!(b.deliver(&a, next, Ok("{}".into())));
+        b.close_where(&Access::new(&["media.read".into(), "media.control".into()], &["media.control".into()]));
+        assert_eq!(b.take_replies().iter().map(|(id, _)| *id).collect::<Vec<_>>(), [next], "the media.read answer never reaches the plugin");
+    }
+
+    #[test]
+    fn ids_are_never_reused_across_instances() {
+        let (mut one, mut two) = (Broker::default(), Broker::default());
+        let a = access();
+        let first = one.submit(&a, false, "media.read", "status".into(), "").unwrap();
+        let second = two.submit(&a, false, "media.read", "status".into(), "").unwrap();
+        assert_ne!(first, second);
+    }
+
+    #[test]
     fn revoking_a_topics_read_capability_closes_it() {
         let mut b = Broker::default();
         let both = Access::new(&["events".into(), "windows.read".into()], &["events".into(), "windows.read".into()]);
@@ -384,6 +419,7 @@ mod tests {
         b.close_where(&Access::new(&["media.read".into(), "media.control".into()], &["media.control".into()]));
         assert_eq!(b.take_cancelled(), [sub]);
         assert!(!b.is_open(sub) && b.is_open(next));
+        assert!(b.take_replies().is_empty());
         assert!(b.take_requests().iter().all(|r| r.id != queued), "queued media.read requests are dropped");
     }
 

@@ -104,7 +104,16 @@ pub fn vet(dir: &Path, reserved_ids: &[&str], repo: Option<&str>) -> Result<(), 
 
     // Every command is captured (none runs here), so any attempt shows.
     let settings = crate::split_settings(m.settings.clone()).0.iter().map(|s| (s.key.clone(), s.default_json())).collect();
-    let mut plugin = WasmPlugin::instantiate(&m.id, dir, &component, settings, crate::extension::Access::commands(true)).map_err(|e| broken(tf("It fails to start: {error}", &[("error", &format!("{e:#}"))])))?;
+    // Its declared capabilities that need no grant (timers) work as in the
+    // shell; `commands` is always on here so any attempt is captured.
+    let mut access = crate::extension::Access::new(&m.permissions, &[]);
+    for c in [crate::extension::Capability::Commands] {
+        if !access.declares(&c) {
+            access.declared.push(c.clone());
+            access.granted.push(c);
+        }
+    }
+    let mut plugin = WasmPlugin::instantiate(&m.id, dir, &component, settings, access).map_err(|e| broken(tf("It fails to start: {error}", &[("error", &format!("{e:#}"))])))?;
     behaved(&mut plugin)?;
     let theme = probe_palette();
     let mut shows_something = false;
@@ -142,7 +151,8 @@ pub fn vet(dir: &Path, reserved_ids: &[&str], repo: Option<&str>) -> Result<(), 
         }
         for provider in crate::extension::split_launchers(launchers).0 {
             for query in PROBE_QUERIES {
-                let _ = plugin.launcher_query(&provider.id, query, crate::extension::MAX_HITS);
+                // Launcher results are useful output too.
+                shows_something |= plugin.launcher_query(&provider.id, query, crate::extension::MAX_HITS).iter().any(|h| !h.title.trim().is_empty());
                 behaved(&mut plugin)?;
             }
         }

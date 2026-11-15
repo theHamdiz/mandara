@@ -476,6 +476,10 @@ impl WasmPlugin {
     /// instantiates it, negotiates features (extension plugins) and runs
     /// `init`.
     pub(crate) fn instantiate(id: &str, plugin_dir: &Path, component: &Component, settings: serde_json::Map<String, serde_json::Value>, access: Access) -> Result<Self> {
+        // The id names its storage file: nothing else may reach a path.
+        if !valid_id(id) {
+            anyhow::bail!("plugin id `{id}` must be 1–{MAX_ID_LEN} lowercase letters, digits, - or _");
+        }
         let mut linker: Linker<HostState> = Linker::new(engine()?);
         w(wasmtime_wasi::p2::add_to_linker_sync(&mut linker), "linking WASI")?;
         w(non_blocking_waits(&mut linker), "linking WASI")?;
@@ -711,7 +715,7 @@ impl WasmPlugin {
             clip(&mut hit.title, MAX_HIT_TEXT);
             clip(&mut hit.detail, MAX_HIT_TEXT);
             clip(&mut hit.keywords, MAX_HIT_TEXT);
-            i18n.translate_hit(hit);
+            i18n.translate_hit(hit, MAX_HIT_TEXT);
         }
         hits
     }

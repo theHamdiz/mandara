@@ -181,13 +181,26 @@ fn focus_handle(n: &Node2, frame: &Frame, window: &mut Window, cx: &mut App) -> 
     window.use_keyed_state(frame.state_key(n, "focus"), cx, |_, cx| cx.focus_handle().tab_stop(true)).read(cx).clone()
 }
 
+/// Where a field's typing goes: refreshed on every render, so a plugin that
+/// changes the node's action (or a reloaded plugin's new sink) is followed.
+type FieldRoute = Rc<std::cell::RefCell<(Frame, Node2)>>;
+
 fn field_state(n: &Node2, frame: &Frame, window: &mut Window, cx: &mut App) -> Entity<TextField> {
-    let (sink, frame2, template) = (frame.sink.clone(), frame.clone(), Node2 { children: Vec::new(), options: Vec::new(), marks: Vec::new(), ..n.clone() });
+    let template = Node2 { children: Vec::new(), options: Vec::new(), marks: Vec::new(), ..n.clone() };
+    let route: Entity<FieldRoute> = window.use_keyed_state(frame.state_key(n, "route"), cx, {
+        let (frame, template) = (frame.clone(), template.clone());
+        move |_, _| Rc::new(std::cell::RefCell::new((frame, template)))
+    });
+    let route = route.read(cx).clone();
+    *route.borrow_mut() = (frame.clone(), template);
     let entity = window.use_keyed_state(frame.state_key(n, "field"), cx, move |_, cx| {
-        let on_commit: crate::text_field::OnCommit = Rc::new(move |value, window, cx| sink(frame2.event(&template, ExtValue::Text(value)), window, cx));
-        let mut field = TextField::new(String::new(), String::new(), true, on_commit, cx);
-        field = field.max_bytes(mandara_plugins::extension::MAX_PAYLOAD_BYTES);
-        field
+        let on_commit: crate::text_field::OnCommit = Rc::new(move |value, window, cx| {
+            let (frame, template) = route.borrow().clone();
+            if !template.disabled {
+                (frame.sink)(frame.event(&template, ExtValue::Text(value)), window, cx);
+            }
+        });
+        TextField::new(String::new(), String::new(), true, on_commit, cx).max_bytes(mandara_plugins::extension::MAX_PAYLOAD_BYTES)
     });
     entity.update(cx, |f, _| f.sync(&n.text));
     entity
@@ -331,6 +344,18 @@ fn node(view: &Rc<View2>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame,
             .into_any_element(),
         Kind2::Spacer => div().flex_1().into_any_element(),
         Kind2::Divider => styled(div().id(id), &n.style).h(px(DIVIDER_PX)).w_full().flex_none().bg(p.on_surface.with_alpha(DIVIDER_ALPHA).hsla()).into_any_element(),
+        // A disabled field is drawn, not editable: no caret, typing or paste.
+        Kind2::Input if n.disabled => styled(div().id(id), &n.style)
+            .when(n.style.width <= 0.0, |el| el.w_full())
+            .opacity(DISABLED_ALPHA)
+            .px(px(tokens::MD))
+            .py(px(tokens::SM))
+            .rounded(px(tokens::SM))
+            .bg(p.on_surface.with_alpha(PLACEHOLDER_ALPHA).hsla())
+            .text_size(px(text::BODY))
+            .text_color(if n.text.is_empty() { p.on_surface_variant.hsla() } else { p.on_surface.hsla() })
+            .child(if n.text.is_empty() { n.hint.clone() } else { n.text.clone() })
+            .into_any_element(),
         Kind2::Input => {
             let field = field_state(n, frame, window, cx);
             field.update(cx, |f, _| f.set_placeholder(&n.hint));
@@ -338,10 +363,9 @@ fn node(view: &Rc<View2>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame,
             let submit = field.clone();
             styled(div().id(id), &n.style)
                 .when(n.style.width <= 0.0, |el| el.w_full())
-                .when(n.disabled, |el| el.opacity(DISABLED_ALPHA))
                 // Enter submits; the field itself already sent `text`.
                 .capture_key_down(move |e: &KeyDownEvent, window, cx| {
-                    if e.keystroke.key == "enter" && !template.disabled {
+                    if e.keystroke.key == "enter" {
                         let value = submit.read(cx).value.clone();
                         sink(frame2.event(&template, ExtValue::Submit(value)), window, cx);
                     }
@@ -360,7 +384,7 @@ fn node(view: &Rc<View2>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame,
             control(el, n, ExtValue::Checked(!on), p, frame, window, cx)
         }
         Kind2::Slider => slider(n, id, frame.element_id(n, at + MAX_DRAWN), p, frame),
-        Kind2::Choice => choice(n, id, p, frame),
+        Kind2::Choice => choice(n, id, p, frame, window, cx),
         Kind2::Image => image(n, id, p, frame, window, cx),
         Kind2::Canvas => canvas_marks(n, id, p),
     };
@@ -430,7 +454,7 @@ fn slider(n: &Node2, id: ElementId, track: ElementId, p: &MandaraPalette, frame:
         .into_any_element()
 }
 
-fn choice(n: &Node2, id: ElementId, p: &MandaraPalette, frame: &Frame) -> AnyElement {
+fn choice(n: &Node2, id: ElementId, p: &MandaraPalette, frame: &Frame, window: &mut Window, cx: &mut App) -> AnyElement {
     let track = styled(div().id(id), &n.style)
         .when(n.style.width <= 0.0, |el| el.w_full())
         .flex()
@@ -479,6 +503,28 @@ fn choice(n: &Node2, id: ElementId, p: &MandaraPalette, frame: &Frame) -> AnyEle
             segment
         };
         track = track.child(segment);
+    }
+    // Keyboard: focus the control, then ← / → (in reading order) and
+    // Home / End pick an option.
+    if interactive(n) && !n.id.is_empty() && !n.options.is_empty() {
+        let focus = focus_handle(n, frame, window, cx);
+        let (sink, f, template) = (frame.sink.clone(), frame.clone(), n.clone());
+        track = track.track_focus(&focus).focus(|s| s.border(px(FOCUS_RING_PX)).border_color(p.primary.with_alpha(FOCUS_RING_ALPHA).hsla())).on_key_down(move |e: &KeyDownEvent, window, cx| {
+            let (count, at) = (template.options.len(), (template.index as usize).min(template.options.len() - 1));
+            let rtl = mandara_i18n::language().is_rtl();
+            let next = match e.keystroke.key.as_str() {
+                "right" if !rtl => (at + 1).min(count - 1),
+                "left" if rtl => (at + 1).min(count - 1),
+                "left" | "right" => at.saturating_sub(1),
+                "home" => 0,
+                "end" => count - 1,
+                _ => return,
+            };
+            cx.stop_propagation();
+            if next != at {
+                sink(f.event(&template, ExtValue::Choice(template.options[next].value.clone())), window, cx);
+            }
+        });
     }
     track.into_any_element()
 }

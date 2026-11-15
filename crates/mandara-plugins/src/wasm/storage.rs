@@ -8,6 +8,11 @@ use std::path::PathBuf;
 
 use crate::extension::{MAX_STORAGE_BYTES, MAX_STORAGE_KEY, MAX_STORAGE_KEYS, MAX_STORAGE_VALUE};
 
+/// The most bytes JSON uses for one stored byte (`\u0000`), and its
+/// overhead per key (quotes, colon, comma).
+const JSON_ESCAPE: usize = 6;
+const JSON_PER_KEY: usize = 8;
+
 pub struct Storage {
     path: PathBuf,
     map: Option<BTreeMap<String, String>>,
@@ -28,7 +33,9 @@ impl Storage {
             // over the limits starts empty.
             let map: BTreeMap<String, String> = std::fs::read(&self.path)
                 .ok()
-                .filter(|b| b.len() <= MAX_STORAGE_BYTES * 2)
+                // JSON may escape a byte as six (`\u0000`), plus quotes,
+                // separators and braces per key.
+                .filter(|b| b.len() <= MAX_STORAGE_BYTES * JSON_ESCAPE + MAX_STORAGE_KEYS * JSON_PER_KEY)
                 .and_then(|b| serde_json::from_slice(&b).ok())
                 .filter(|m: &BTreeMap<String, String>| m.len() <= MAX_STORAGE_KEYS)
                 .unwrap_or_default();
@@ -106,6 +113,22 @@ pub fn write(path: &std::path::Path, json: &str) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn escaped_values_survive_a_reload() {
+        let dir = std::env::temp_dir().join(format!("mandara-storage-{}", std::process::id()));
+        let path = dir.join("p.json");
+        let mut s = Storage { path: path.clone(), map: Some(BTreeMap::new()), bytes: 0, dirty: false };
+        for i in 0..6 {
+            s.set(format!("k{i}"), "\0".repeat(MAX_STORAGE_VALUE - 8)).unwrap();
+        }
+        let (p, json) = s.take_flush().unwrap();
+        assert!(json.len() > MAX_STORAGE_BYTES * 2, "the file is larger than the decoded limit");
+        write(&p, &json).unwrap();
+        let mut again = Storage { path, map: None, bytes: 0, dirty: false };
+        assert_eq!(again.keys().len(), 6, "nothing is lost on reload");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     #[test]
     fn storage_is_bounded_and_flushes_once() {
