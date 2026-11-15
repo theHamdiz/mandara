@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.33.0 — 2026-11-15
+
 Install apps from any tar archive, tidy up the download afterwards, and skip the compile on NixOS.
 
 ### Improved
