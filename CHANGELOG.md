@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Use your installed Steam Workshop wallpapers directly from Studio.
+
+### New
+
 - **Use installed Steam Workshop wallpapers.** Wallpaper in Studio can apply Wallpaper Engine scenes and videos to individual displays and restore the regular wallpaper.
 
 ## 0.30.2 — 2026-11-14

@@ -20,7 +20,7 @@ fn the_readme_keeps_its_images_badges_and_gallery_layout() {
     }
     // Includes source URLs, alt text, scheme variants, cell widths and tag order.
     // Update only when a deliberate visual change has been reviewed.
-    assert_eq!(format!("{:x}", Sha256::digest(tags.join("\n"))), "5f55f03a65cbc039a1a4b2066eccd2fbc1d49345ed1e82914c612293bc9ebf0d");
+    assert_eq!(format!("{:x}", Sha256::digest(tags.join("\n"))), "35a8f466fc0af88bebfe316dc7112712a10f399728f7d0164390a44b9e0a038a");
 }
 
 fn section<'a>(source: &'a str, heading: &str) -> &'a str {
@@ -33,7 +33,7 @@ fn the_readme_keeps_its_feature_lists_and_key_capabilities() {
     let detailed = section(&source, "What sets Mandara apart");
     let numbered: Vec<_> = detailed.lines().filter_map(|line| line.split_once(". **")).filter_map(|(number, _)| number.parse::<usize>().ok()).collect();
     assert_eq!(numbered, (1..=12).collect::<Vec<_>>());
-    assert_eq!(section(&source, "Why you'll like it").lines().filter(|line| line.starts_with("- **")).count(), 7);
+    assert_eq!(section(&source, "Why you'll like it").lines().filter(|line| line.starts_with("- **")).count(), 8);
     assert_eq!(section(&source, "At a glance").lines().filter(|line| line.starts_with("| **")).count(), 10);
     let lower = source.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
     for feature in [
