@@ -191,6 +191,15 @@ impl TextField {
         }
     }
 
+    /// Changes the hint shown while empty (a plugin's field can change it
+    /// between renders); kept as given, already translated.
+    pub fn set_placeholder(&mut self, placeholder: &str) {
+        if self.placeholder != placeholder {
+            self.placeholder.clear();
+            self.placeholder.push_str(placeholder);
+        }
+    }
+
     /// Replaces the value unconditionally (e.g. switching the edited note).
     pub fn set(&mut self, value: &str) {
         let end = self

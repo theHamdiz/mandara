@@ -259,9 +259,10 @@ fn marketplace_search_install_load_uninstall() {
     let (pid, pdir, entry) = (plugin.id.clone(), plugin.dir.clone(), plugin.entry.clone());
     let settings = plugin.settings.iter().map(|s| (s.key.clone(), s.default_json())).collect();
     let ran = std::thread::spawn(move || {
-        let mut p = WasmPlugin::load(&pid, &pdir, &entry, settings, false).map_err(|e| format!("{e:#}"))?;
+        let mut p = WasmPlugin::load(&pid, &pdir, &entry, settings, mandara_plugins::extension::Access::default()).map_err(|e| format!("{e:#}"))?;
         let theme = palette();
-        let surfaces = (p.bar(&theme).is_some(), p.panel(&theme).is_some());
+        let mut shown = |surface| matches!(p.render(&theme, &mandara_plugins::wasm::RenderContext { surface, outlet: String::new(), instance: String::new(), width: 0.0, height: 0.0, numerals: String::new(), calendar: String::new(), language: String::new() }), Ok(Some(_)));
+        let surfaces = (shown(mandara_plugins::wasm::SurfaceKind::Bar), shown(mandara_plugins::wasm::SurfaceKind::Panel));
         Ok::<_, String>((surfaces, p.disabled.clone()))
     })
     .join()

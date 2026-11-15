@@ -402,6 +402,7 @@ Add a community to start
 Add a community to your list
 Add a community, like r/linux
 Add a feed
+Add a folder
 Add a folder, e.g. ~/Documents — Enter
 Add a header to use text settings with this layout.
 Add a hook
@@ -475,6 +476,7 @@ Add yourself to the {group} group (`sudo usermod -aG {group} $USER`), then log o
 Add {app} to your apps (~/.local/share/applications)
 Add {count} packages with {tool}? They arrive with the next boot: {packages}
 Added
+Added by the {plugin} plugin
 Added here
 Added {account}
 Added {name}
@@ -1259,6 +1261,7 @@ Change password
 Change profile photo
 Change resolution, scale and display arrangement in Plasma System Settings. Shell placement below still applies.
 Change the current recipe: key=value pairs (style, seed, palette, light or any parameter) or a whole TOML recipe
+Change the wallpaper
 Change the wallpaper on a timer
 Change theme
 Change this window, its sidebar and every control. Your desktop Look stays separate.
@@ -1364,6 +1367,7 @@ Choose a boot entry for this item in Studio → Power & idle
 Choose a current path from backups cleanup locations.
 Choose a file to import
 Choose a file…
+Choose a folder for this plugin
 Choose a local snapshot source and destination folder in Settings to create snapshots. Nested subvolumes are not included.
 Choose a model or workspace
 Choose a model or workspace in Studio
@@ -1376,6 +1380,7 @@ Choose a restore folder and a valid snapshot.
 Choose a sound theme archive
 Choose a sound theme folder
 Choose a source and target language
+Choose a third-party plugin's launcher result (what Enter on it does)
 Choose a username
 Choose a valid AnythingLLM workspace slug
 Choose a valid Flatpak app and installation.
@@ -1623,6 +1628,7 @@ Connect to the Wayland display
 Connect to the network
 Connect to the running shell before saving shortcuts.
 Connect to the tailnet (answers with a login link when the device must log in)
+Connect to {host}
 Connect your Reddit app
 Connect your home in Studio
 Connect your own Reddit app
@@ -2781,6 +2787,7 @@ Flush with the screen edge, or floating clear of the edges and the bar (sidebar 
 Focus
 Focus a window (by id from `window list`)
 Focus and break lengths are the Pomodoro plugin's settings.
+Focus and close windows
 Focus follows the pointer
 Focus next window
 Focus session {count} done
@@ -3163,6 +3170,7 @@ Health & repair: mandara studio maintenance
 Health checks
 Health checks, downloads, caches and backups
 Heap & buffers
+Hear about desktop changes
 Heavier springs move more slowly
 Heavy
 Heavy and unhurried: surfaces glide in on a slant, content trailing like a sail
@@ -3652,7 +3660,9 @@ Islamic daily prayer times and countdown (opt-in)
 Islamic day numbers under each day and the Hijri month in the clock panel's calendar (Prayer times' adjustment applies)
 Island
 It appears in Marketplace, ranked by stars. Archives up to {mb} MB; paths, links and the id are checked on install.
+It asks for these. Each stays off until you switch it on, and you can switch it off again at any time.
 It asks for {interface}, which plugins can't use
+It can also send what it sees to the sites it connects to. Keep both on only for plugins you trust.
 It can connect to the internet
 It can play sound and may use the microphone
 It can read and change any file
@@ -3683,8 +3693,7 @@ It poses as Mandara's built-in {plugin} plugin
 It reads Linux's socket tables in /proc/net, which FreeBSD doesn't have; sockstat(1) lists FreeBSD's
 It runs commands without being asked ({command})
 It runs the program directly with its arguments, never through a shell. Quote an argument that holds spaces.
-It shows nothing: its bar item, panel and sidebar card are all empty
-It shows nothing: its bar item, panel, sidebar card and desktop widgets are all empty
+It shows nothing: its bar item, panel, sidebar card, desktop widgets, Studio tabs and launcher results are all empty
 It's Mandara's {example} example, republished unchanged
 It's the unchanged plugin template (still named {name})
 It's time for {prayer}
@@ -3700,6 +3709,7 @@ Its items, shape and look. Drag plugins into its groups below.
 Its name (optional)
 Its own speed
 Its people
+Its view breaks a limit: {error}
 JPEG
 JPEG quality
 JSON create, delete or maintenance request to review
@@ -5447,6 +5457,7 @@ Open the tray panel (an item's menu, or the overview)
 Open the wallpaper picker
 Open to network
 Open video
+Open web pages in your browser, when you use it
 Open when the pointer touches the sidebar's edge
 Open windows
 Open windows, most recently used first
@@ -5791,6 +5802,7 @@ Play one event's sound from a theme (the active one by default), even while soun
 Play or pause
 Play or pause the radio
 Play the adhan now (to hear it; it must be downloaded)
+Play, pause, skip and seek media
 Playback speed for this surface; zero applies transitions instantly
 Playback speed of the menu; zero opens and closes it at once
 Playback state, levels, preset and sleep timer
@@ -6103,6 +6115,7 @@ Read the configured Home Assistant favourites
 Read the exact reviewed paths in bounded pages
 Read the folder again
 Read the text in an image file (PP-OCRv5; auto, latin or arabic)
+Read the text you copied, when you use it
 Read the whole Qur'an with its meaning, listen to it recited, keep your place and your khatm (opt-in)
 Read your home while the panel is open; actions also refresh its state
 Read-only
@@ -6368,6 +6381,7 @@ Reply
 Reply to {app}: {summary}
 Reply tokens
 Report a problem
+Report an issue
 Report written to {file} (personal values redacted) — attach it to your bug report
 Repositories
 Repository details are missing IDs required by the store policy.
@@ -6555,6 +6569,8 @@ Ruled to-do list
 Rules
 Rumi
 Run
+Run Mandara's interface commands (open panels, control media and volume, post notifications)
+Run a command a third-party plugin offers (its [[commands]]), for shortcuts, hooks and agents
 Run a command when something happens. Event details arrive as environment variables (MANDARA_EVENT, MANDARA_WALLPAPER, MANDARA_BATTERY_PERCENT…), never inside the command line. Before-logout, restart, shutdown and sleep hooks finish before the action.
 Run a download speed test against speed.cloudflare.com
 Run a hot corner's action now, as if the pointer rested there
@@ -6843,7 +6859,14 @@ Security
 Security & Accounts
 See all
 See all {count}
+See everything you search for in the launcher
 See more on Reddit
+See processor, memory and battery use
+See the images in folders you choose for it
+See what's playing and its cover
+See your open windows
+See your wallpapers
+See your workspaces
 Seed
 Seeing Allah
 Seek forgiveness daily
@@ -6871,6 +6894,7 @@ Send a notification when a check goes down or comes back up
 Send a sample notification
 Send apps to their own output
 Send clipboard text
+Send notifications
 Send one app stream to another output
 Send text to a paired, connected device
 Send the clipboard, a screenshot or a file to your phone with a QR code
@@ -7536,6 +7560,7 @@ Swipe to dismiss
 Swirl
 Switch
 Switch automatically
+Switch between light and dark
 Switch between light and dark appearance
 Switch items on or off and put them in order: the first sits at the top of the ring, the rest follow clockwise (the other way in right-to-left languages).
 Switch layout
@@ -7558,6 +7583,7 @@ Switch to the next tiling layout
 Switch to this profile when running on battery
 Switch to this profile when the charger is plugged in
 Switch workspace
+Switch workspaces
 Switched to generation {n}
 Switched to the new generation
 Switched to {name} — Undo is under Recent changes
@@ -7634,6 +7660,7 @@ Take screenshot
 Takes effect the next time you log in or restart. Your current session isn't touched.
 Taking a short break
 Talk
+Talk to the {plugin} plugin
 Tallest it grows; fewer rows show when this is low
 Tallest panel, as a share of the screen height the bar leaves free
 Tallest the floating card grows
@@ -7896,6 +7923,7 @@ The colour its items light up and wash with
 The command has too many arguments
 The command holds a character no program accepts
 The command is empty
+The commands switched-on third-party plugins offer
 The community store has blocked installs and updates for {repository}.
 The community the sidebar card shows; empty follows your first community
 The compiled WebAssembly component (manifest `entry`)
@@ -8408,6 +8436,8 @@ This phone is not connected
 This picture can't be shown
 This player doesn't let you change its volume
 This plugin has no published release yet
+This plugin has nothing to show here
+This plugin isn't installed any more
 This plugin works without settings.
 This post's text is covered
 This recorder can't write that format here
@@ -9063,6 +9093,7 @@ Waiting for you
 Waiting for your password…
 Waiting to discharge
 Waiting…
+Wake up on a timer
 Walden
 Walk around, drink some water and rest your eyes
 Walk gently and think little of yourself; the humble are honoured there.
@@ -9732,6 +9763,8 @@ internal error while reading text (logged)
 invalid value for {setting}: {error}
 issuer or account name
 item id, title or key
+its [[launcher]] id
+its command, then any words for it
 its name (default: the parent's name · Custom)
 job id from apps jobs
 journalctl failed
@@ -9889,10 +9922,10 @@ plugin id (see `plugins list`)
 plugin id, e.g. clock, media, network
 plugin off
 plugin stopped
+plugin view too large
 plugin with bar chips
 plugin.toml can't be read: {error}
 plugin.toml is invalid: {error}
-plugin.toml lists desktop widgets, but the plugin isn't built for the desktop-plugin world
 port number
 post id or address
 power-profiles-daemon is not running
@@ -9991,6 +10024,7 @@ the plugin folder (plugin.toml and plugin.wasm)
 the problem's id from `compositor check`
 the release doesn't publish the new binary's checksum
 the reply
+the result's id
 the text to share
 the whole config as JSON
 theme (catalog id[/variant], a prepared or installed name, or a Mandara theme for limine), then --dry-run, --gfxmode WxH, --wallpaper image|PATH, --branding TEXT

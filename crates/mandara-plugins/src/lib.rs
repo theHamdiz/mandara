@@ -11,6 +11,7 @@
 
 pub mod authoring;
 pub mod command;
+pub mod extension;
 pub mod guard;
 pub mod lifecycle;
 pub mod plugin;

@@ -117,6 +117,9 @@ mandara msg theme apps disable community:rofi # undo its managed changes
 mandara msg theme apps import ~/Themes/apps.toml # import new entries switched off
 mandara msg theme apps status               # last export and setup errors
 mandara msg plugins vet ./my-plugin          # the marketplace's compliance check: {"ok":true} or {"ok":false,"class":"broken|malicious|placeholder","reason":…}
+mandara msg plugins commands                 # the commands third-party plugins offer (their [[commands]])
+mandara msg plugins run moon-phase remind    # run one: bind it to a shortcut, a hook or a skill
+mandara msg plugins launch moon-phase moon full   # what Enter on a plugin's launcher result does
 mandara msg config get /bar/height         # config set /bar/height 30, show, reload, export, import, reset
 mandara msg studio displays                 # open Studio on a page (docs/studio.md)
 mandara msg studio bars/sidebars            # Bars → Sidebars: what each edge holds, then its settings

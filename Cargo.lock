@@ -4362,6 +4362,7 @@ dependencies = [
  "mandara-services",
  "serde",
  "serde_json",
+ "sha2",
  "tar",
  "toml 1.2.0+spec-1.1.0",
  "tracing",

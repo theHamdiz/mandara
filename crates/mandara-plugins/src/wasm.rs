@@ -8,8 +8,7 @@
 //! The epoch ticker thread only ticks while a plugin call is running
 //! ([`ActiveCall`]); between calls it is parked and costs nothing.
 
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -20,49 +19,32 @@ use wasmtime::component::{Component, HasSelf, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
+mod broker;
 mod catalogs;
+mod storage;
+pub use broker::{ImageEntry, ImageOrigin, Request, asset_path, is_image};
 pub use catalogs::PluginCatalogs;
+pub use storage::write_snapshot as write_storage;
+
+use crate::extension::{self, Access};
 
 wasmtime::component::bindgen!({ world: "plugin", path: "wit" });
 
-/// The `desktop-plugin` world: `plugin` plus desktop widgets. Its shared
-/// interfaces are the ones generated above, so one host serves both.
-mod desktop_world {
-    wasmtime::component::bindgen!({
-        world: "desktop-plugin",
-        path: "wit",
-        with: { "mandara:plugin/types": super::mandara::plugin::types, "mandara:plugin/host": super::mandara::plugin::host },
-    });
-}
 
-pub use desktop_world::DesktopPlugin;
-pub use desktop_world::mandara::plugin::desktop::WidgetContext;
-pub use mandara::plugin::types::{Kind, Node, Tone};
+pub use mandara::plugin::types::Tone;
+pub use mandara::plugin::ui::{
+    Align, Context as RenderContext, Event as PluginEvent, KeyPress, Kind, Mark, Node, OptionItem, Reply, Shape, Style, Surface as SurfaceKind, Value as EventValue,
+};
 
-/// The export a component built for the `desktop-plugin` world has.
-const DESKTOP_EXPORT: &str = "desktop-widget";
+/// Longest launcher result text (title, detail, keywords), in bytes; longer
+/// text is cut at a character boundary.
+const MAX_HIT_TEXT: usize = 256;
 /// Most desktop widget kinds one plugin may offer.
 pub const MAX_DESKTOP_WIDGETS: usize = 16;
 
 /// Desktop widget ids: 1–64 lowercase ASCII letters, digits and `-`.
 pub fn valid_widget_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= MAX_ID_LEN && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-}
-
-/// A component's bindings: the plain `plugin` world, or `desktop-plugin`.
-enum Bindings {
-    Plain(Plugin),
-    Desktop(DesktopPlugin),
-}
-
-/// Calls an export both worlds have, whichever the component was built for.
-macro_rules! either {
-    ($b:expr, $s:expr, $call:ident $(, $arg:expr)*) => {
-        match $b {
-            Bindings::Plain(p) => p.$call($s $(, $arg)*),
-            Bindings::Desktop(p) => p.$call($s $(, $arg)*),
-        }
-    };
 }
 
 /// Converts a wasmtime error into an anyhow one with context.
@@ -83,8 +65,10 @@ pub const CALL_BUDGET: Duration = Duration::from_millis(TICK_MS * CALL_BUDGET_TI
 pub const INIT_BUDGET: Duration = Duration::from_millis(TICK_MS * CALL_BUDGET_TICKS * INIT_BUDGET_FACTOR);
 /// Commands a plugin may queue with `host::command` per call.
 pub const MAX_QUEUED_COMMANDS: usize = 16;
-/// The only permission a manifest can ask for.
-pub const PERMISSION_COMMANDS: &str = "commands";
+/// The v0.1 permission: queue Mandara's interface commands.
+pub const PERMISSION_COMMANDS: &str = extension::Capability::COMMANDS;
+/// A launcher query's budget in epoch ticks ([`extension::LAUNCHER_BUDGET`]).
+const LAUNCHER_BUDGET_TICKS: u64 = extension::LAUNCHER_BUDGET.as_millis() as u64 / TICK_MS;
 
 /// The Mandara commands a plugin with [`PERMISSION_COMMANDS`] may queue:
 /// interface actions only (open a panel, control media and volume, post a
@@ -208,11 +192,16 @@ pub struct HostState {
     limits: wasmtime::StoreLimits,
     table: ResourceTable,
     id: String,
+    dir: PathBuf,
     settings: serde_json::Map<String, serde_json::Value>,
-    allow_commands: bool,
+    access: Access,
     /// Commands the plugin asked to run (executed by the shell afterwards).
     pub queued: Vec<String>,
     i18n: PluginCatalogs,
+    broker: broker::Broker,
+    storage: storage::Storage,
+    /// Set while the plugin handles a user's input (user activation).
+    activated: bool,
 }
 
 impl WasiView for HostState {
@@ -222,7 +211,51 @@ impl WasiView for HostState {
 }
 
 impl mandara::plugin::types::Host for HostState {}
-impl desktop_world::mandara::plugin::desktop::Host for HostState {}
+impl mandara::plugin::platform::Host for HostState {}
+impl mandara::plugin::ui::Host for HostState {}
+
+impl mandara::plugin::storage::Host for HostState {
+    fn get(&mut self, key: String) -> Option<String> {
+        self.storage.get(&key)
+    }
+
+    fn set(&mut self, key: String, value: String) -> Result<(), String> {
+        self.storage.set(key, value)
+    }
+
+    fn remove(&mut self, key: String) {
+        self.storage.remove(&key);
+    }
+
+    fn keys(&mut self) -> Vec<String> {
+        self.storage.keys()
+    }
+}
+
+impl mandara::plugin::broker::Host for HostState {
+    fn submit(&mut self, request: mandara::plugin::broker::Request) -> Result<u64, String> {
+        let needs_gesture = extension::Capability::parse(&request.capability).is_ok_and(|c| c.needs_activation(&request.operation));
+        let id = self.broker.submit(&self.access, self.activated, &request.capability, request.operation, &request.payload)?;
+        // One sensitive action per gesture: a click can't authorise a burst.
+        if needs_gesture {
+            self.activated = false;
+        }
+        Ok(id)
+    }
+
+    fn cancel(&mut self, id: u64) {
+        self.broker.cancel(id);
+    }
+
+    fn granted(&mut self) -> Vec<String> {
+        self.access.granted.iter().map(ToString::to_string).collect()
+    }
+
+    fn asset_image(&mut self, name: String) -> Result<u64, String> {
+        let path = broker::asset_path(&self.dir, &name)?;
+        self.broker.issue_image(ImageEntry { path, origin: ImageOrigin::Asset }).ok_or_else(|| "no image handles are left".into())
+    }
+}
 
 impl mandara::plugin::host::Host for HostState {
     fn log(&mut self, message: String) {
@@ -238,7 +271,7 @@ impl mandara::plugin::host::Host for HostState {
     }
 
     fn command(&mut self, line: String) -> Result<(), String> {
-        if !self.allow_commands {
+        if !self.access.allows(&extension::Capability::Commands) {
             return Err("this plugin lacks the \"commands\" permission".into());
         }
         if self.queued.len() >= MAX_QUEUED_COMMANDS {
@@ -290,10 +323,15 @@ fn non_blocking_waits(linker: &mut Linker<HostState>) -> wasmtime::Result<()> {
 /// Compiles (or loads the cached native code for) a component.
 pub(crate) fn load_component(path: &Path) -> Result<Component> {
     let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
-    let mut h = DefaultHasher::new();
-    bytes.hash(&mut h);
-    env!("CARGO_PKG_VERSION").hash(&mut h);
-    let cache = mandara_config::paths::cache_dir().join("plugins").join(format!("{:016x}.cwasm", h.finish()));
+    // A cryptographic key: no component can be made to share another's
+    // compiled code.
+    use sha2::Digest as _;
+    let mut h = sha2::Sha256::new();
+    h.update(env!("CARGO_PKG_VERSION").as_bytes());
+    h.update([0]);
+    h.update(&bytes);
+    let key: String = h.finalize().iter().map(|b| format!("{b:02x}")).collect();
+    let cache = mandara_config::paths::cache_dir().join("plugins").join(format!("{key}.cwasm"));
     if cache.exists() {
         // SAFETY: the file was produced by `precompile_component` with this
         // engine configuration and lives in our own cache directory.
@@ -305,7 +343,15 @@ pub(crate) fn load_component(path: &Path) -> Result<Component> {
     if let Some(dir) = cache.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    let _ = std::fs::write(&cache, &compiled);
+    // Written beside it and renamed into place: another loader (the shell
+    // and Studio, or two threads) maps this file, and a half-written one
+    // would fault it.
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    let tmp = cache.with_extension(format!("{}.{}.tmp", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+    // Either step failing (a full disk) leaves no partial file behind.
+    if std::fs::write(&tmp, &compiled).and_then(|()| std::fs::rename(&tmp, &cache)).is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
     // SAFETY: bytes just produced by `precompile_component` above.
     w(unsafe { Component::deserialize(engine()?, &compiled) }, "loading compiled plugin")
 }
@@ -314,40 +360,70 @@ pub(crate) fn load_component(path: &Path) -> Result<Component> {
 pub struct WasmPlugin {
     pub id: String,
     store: Store<HostState>,
-    bindings: Bindings,
+    bindings: Plugin,
     /// Set (with the reason) once the plugin trapped or errored; a disabled
     /// plugin is never called again.
     pub disabled: Option<String>,
+    /// The features the plugin negotiated.
+    pub features: Vec<String>,
+}
+
+/// What the host offers plugins (`negotiate`'s argument).
+pub fn host_info() -> HostInfo {
+    HostInfo { api: extension::API_LEVEL, features: extension::FEATURES.iter().map(|f| (*f).to_string()).collect(), version: env!("CARGO_PKG_VERSION").to_string() }
+}
+
+/// Whether an image handle's origin is still allowed: its capability is
+/// granted and, for a folder's picture, that folder still is.
+fn image_allowed(access: &Access, e: &ImageEntry) -> bool {
+    match &e.origin {
+        ImageOrigin::Folder(folder) => access.allows_folder(folder),
+        origin => origin.capability().is_none_or(|c| access.allows(&c)),
+    }
+}
+
+/// Cuts `s` to at most `max` bytes at a character boundary.
+fn clip(s: &mut String, max: usize) {
+    if s.len() > max {
+        let mut at = max;
+        while !s.is_char_boundary(at) {
+            at -= 1;
+        }
+        s.truncate(at);
+    }
 }
 
 impl WasmPlugin {
-    pub fn load(id: &str, plugin_dir: &Path, component: &Path, settings: serde_json::Map<String, serde_json::Value>, allow_commands: bool) -> Result<Self> {
-        Self::instantiate(id, plugin_dir, &load_component(component)?, settings, allow_commands)
+    pub fn load(id: &str, plugin_dir: &Path, component: &Path, settings: serde_json::Map<String, serde_json::Value>, access: Access) -> Result<Self> {
+        Self::instantiate(id, plugin_dir, &load_component(component)?, settings, access)
     }
 
     /// [`Self::load`] for an already compiled component: links the host,
-    /// instantiates it and runs `init`.
-    pub(crate) fn instantiate(id: &str, plugin_dir: &Path, component: &Component, settings: serde_json::Map<String, serde_json::Value>, allow_commands: bool) -> Result<Self> {
+    /// instantiates it, negotiates features (extension plugins) and runs
+    /// `init`.
+    pub(crate) fn instantiate(id: &str, plugin_dir: &Path, component: &Component, settings: serde_json::Map<String, serde_json::Value>, access: Access) -> Result<Self> {
+        // The id names its storage file: nothing else may reach a path.
+        if !valid_id(id) {
+            anyhow::bail!("plugin id `{id}` must be 1–{MAX_ID_LEN} lowercase letters, digits, - or _");
+        }
         let mut linker: Linker<HostState> = Linker::new(engine()?);
         w(wasmtime_wasi::p2::add_to_linker_sync(&mut linker), "linking WASI")?;
         w(non_blocking_waits(&mut linker), "linking WASI")?;
-        // A component built for `desktop-plugin` exports its desktop widgets.
-        let desktop = component.component_type().exports(engine()?).any(|(name, _)| name == DESKTOP_EXPORT);
-        if desktop {
-            w(DesktopPlugin::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |s| s), "linking host")?;
-        } else {
-            w(Plugin::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |s| s), "linking host")?;
-        }
+        w(Plugin::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |s| s), "linking host")?;
         let state = HostState {
             // No preopens, env, args or network: an empty sandbox.
             wasi: WasiCtxBuilder::new().build(),
             limits: wasmtime::StoreLimitsBuilder::new().memory_size(MAX_PLUGIN_MEMORY).instances(MAX_INSTANCES).tables(MAX_TABLES).table_elements(MAX_TABLE_ELEMENTS).trap_on_grow_failure(true).build(),
             table: ResourceTable::new(),
             id: id.to_string(),
+            dir: plugin_dir.to_path_buf(),
             settings,
-            allow_commands,
+            access,
             queued: Vec::new(),
             i18n: PluginCatalogs::new(plugin_dir),
+            broker: broker::Broker::default(),
+            storage: storage::Storage::new(id),
+            activated: false,
         };
         let mut store = Store::new(engine()?, state);
         // Memory and table growth past the limits traps (the plugin is
@@ -356,24 +432,27 @@ impl WasmPlugin {
         store.set_epoch_deadline(CALL_BUDGET_TICKS * INIT_BUDGET_FACTOR);
         let bindings = {
             let _active = ActiveCall::start();
-            if desktop {
-                Bindings::Desktop(w(DesktopPlugin::instantiate(&mut store, component, &linker), "instantiating plugin")?)
-            } else {
-                Bindings::Plain(w(Plugin::instantiate(&mut store, component, &linker), "instantiating plugin")?)
-            }
+            w(Plugin::instantiate(&mut store, component, &linker), "instantiating plugin")?
         };
-        let mut plugin = Self { id: id.to_string(), store, bindings, disabled: None };
-        plugin.call_within("init", CALL_BUDGET_TICKS * INIT_BUDGET_FACTOR, |b, s| either!(b, s, call_init)).map(|r| r.map_err(|e| anyhow::anyhow!("init failed: {e}"))).unwrap_or(Ok(()))?;
+        let mut plugin = Self { id: id.to_string(), store, bindings, disabled: None, features: Vec::new() };
+        let info = host_info();
+        let wanted = plugin.call("negotiate", |b, s| b.call_negotiate(s, &info)).ok_or_else(|| anyhow::anyhow!("negotiate failed: {}", plugin.disabled.clone().unwrap_or_default()))?;
+        let missing = extension::missing_features(&wanted);
+        if !missing.is_empty() {
+            anyhow::bail!("it needs features this Mandara doesn't have ({}); update Mandara", missing.join(", "));
+        }
+        plugin.features = wanted;
+        plugin.call_within("init", CALL_BUDGET_TICKS * INIT_BUDGET_FACTOR, |b, s| b.call_init(s)).map(|r| r.map_err(|e| anyhow::anyhow!("init failed: {e}"))).unwrap_or(Ok(()))?;
         Ok(plugin)
     }
 
     /// Runs one export under the time budget; a trap disables the plugin.
-    fn call<T>(&mut self, what: &str, f: impl FnOnce(&Bindings, &mut Store<HostState>) -> wasmtime::Result<T>) -> Option<T> {
+    fn call<T>(&mut self, what: &str, f: impl FnOnce(&Plugin, &mut Store<HostState>) -> wasmtime::Result<T>) -> Option<T> {
         self.call_within(what, CALL_BUDGET_TICKS, f)
     }
 
     /// [`Self::call`] with an explicit budget in epoch ticks.
-    fn call_within<T>(&mut self, what: &str, ticks: u64, f: impl FnOnce(&Bindings, &mut Store<HostState>) -> wasmtime::Result<T>) -> Option<T> {
+    fn call_within<T>(&mut self, what: &str, ticks: u64, f: impl FnOnce(&Plugin, &mut Store<HostState>) -> wasmtime::Result<T>) -> Option<T> {
         if self.disabled.is_some() {
             return None;
         }
@@ -393,31 +472,6 @@ impl WasmPlugin {
         }
     }
 
-    fn localized(&mut self, view: Option<View>) -> Option<View> {
-        let mut view = view?;
-        self.store.data_mut().i18n.translate_view(&mut view);
-        Some(view)
-    }
-
-    pub fn bar(&mut self, theme: &Palette) -> Option<View> {
-        let v = self.call("bar", |b, s| either!(b, s, call_bar, theme)).flatten();
-        self.localized(v)
-    }
-
-    pub fn panel(&mut self, theme: &Palette) -> Option<View> {
-        let v = self.call("panel", |b, s| either!(b, s, call_panel, theme)).flatten();
-        self.localized(v)
-    }
-
-    pub fn sidebar(&mut self, theme: &Palette) -> Option<View> {
-        let v = self.call("sidebar", |b, s| either!(b, s, call_sidebar, theme)).flatten();
-        self.localized(v)
-    }
-
-    pub fn on_event(&mut self, action: &str) {
-        self.call("on-event", |b, s| either!(b, s, call_on_event, action));
-    }
-
     /// The settings `host::setting` answers from.
     pub fn settings(&self) -> &serde_json::Map<String, serde_json::Value> {
         &self.store.data().settings
@@ -428,29 +482,153 @@ impl WasmPlugin {
         self.store.data_mut().settings = settings;
     }
 
-    /// Whether the plugin offers desktop widgets (built for `desktop-plugin`).
-    pub fn has_desktop(&self) -> bool {
-        matches!(self.bindings, Bindings::Desktop(_))
-    }
-
-    /// A placed desktop widget's view.
-    pub fn desktop_widget(&mut self, theme: &Palette, context: &WidgetContext) -> Option<View> {
-        let v = self
-            .call("desktop-widget", |b, s| match b {
-                Bindings::Desktop(p) => p.call_desktop_widget(s, theme, context),
-                Bindings::Plain(_) => Ok(None),
-            })
-            .flatten();
-        self.localized(v)
-    }
-
     pub fn refresh_ms(&mut self) -> u32 {
-        self.call("refresh-ms", |b, s| either!(b, s, call_refresh_ms)).unwrap_or(0)
+        self.call("refresh-ms", |b, s| b.call_refresh_ms(s)).unwrap_or(0)
     }
 
     /// Commands queued by the plugin since the last call.
     pub fn take_commands(&mut self) -> Vec<String> {
         std::mem::take(&mut self.store.data_mut().queued)
+    }
+
+    /// The view for `context` (`Ok(None)`: nothing there). `Err`: the view
+    /// broke a limit ([`extension::check_view`]) and is refused whole; the
+    /// plugin keeps running.
+    pub fn render(&mut self, theme: &Palette, context: &RenderContext) -> Result<Option<View>, String> {
+        let view = self.call("render", |b, s| b.call_render(s, theme, context)).flatten();
+        let Some(mut view) = view else { return Ok(None) };
+        extension::check_view(&view)?;
+        self.store.data_mut().i18n.translate_view(&mut view);
+        Ok(Some(view))
+    }
+
+    /// Sends an input event (a click, typing, a key, a list range, a
+    /// launcher choice).
+    pub fn on_event(&mut self, event: &PluginEvent) {
+        // Input from the person (or a command they ran) is a user gesture;
+        // list scrolling and broker replies are not.
+        let activated = !matches!(event.value, EventValue::Range(_) | EventValue::Replies(_));
+        self.store.data_mut().activated = activated;
+        self.call("on-event", |b, s| b.call_on_event(s, event));
+        self.store.data_mut().activated = false;
+    }
+
+    /// Storage changed by the last calls: its file and new contents, for
+    /// the host to write off the UI thread ([`write_storage`]).
+    pub fn take_storage_flush(&mut self) -> Option<(PathBuf, std::sync::Arc<str>)> {
+        self.store.data_mut().storage.take_flush()
+    }
+
+    /// Hands waiting broker results to the plugin (one `replies` event).
+    /// Returns whether there were any.
+    pub fn flush_replies(&mut self, context: &RenderContext) -> bool {
+        if !self.store.data().broker.has_replies() {
+            return false;
+        }
+        let replies = self.store.data_mut().broker.take_replies().into_iter().map(|(id, outcome)| Reply { id, outcome }).collect();
+        self.on_event(&PluginEvent { context: context.clone(), node: String::new(), action: String::new(), value: EventValue::Replies(replies) });
+        true
+    }
+
+    /// Results of launcher provider `provider` (declared in plugin.toml) for
+    /// `query`, under the tighter launcher budget; at most
+    /// [`extension::MAX_HITS`], with long text cut.
+    pub fn launcher_query(&mut self, provider: &str, query: &str, limit: usize) -> Vec<Hit> {
+        let limit = limit.min(extension::MAX_HITS);
+        let mut hits = self.call_within("launcher-query", LAUNCHER_BUDGET_TICKS, |b, s| b.call_launcher_query(s, provider, query, limit as u32)).unwrap_or_default();
+        hits.truncate(limit);
+        let i18n = &mut self.store.data_mut().i18n;
+        for hit in &mut hits {
+            clip(&mut hit.id, extension::MAX_NAME_LEN);
+            clip(&mut hit.title, MAX_HIT_TEXT);
+            clip(&mut hit.detail, MAX_HIT_TEXT);
+            clip(&mut hit.keywords, MAX_HIT_TEXT);
+            i18n.translate_hit(hit, MAX_HIT_TEXT);
+        }
+        hits
+    }
+
+    /// Another plugin's call into an operation this one serves.
+    pub fn on_call(&mut self, caller: &str, operation: &str, payload: &str) -> Result<String, String> {
+        let answer = self.call("on-call", |b, s| b.call_on_call(s, caller, operation, payload));
+        match answer {
+            Some(Ok(body)) if body.len() > extension::MAX_REPLY_BYTES => Err("the answer was too large".into()),
+            Some(answer) => answer,
+            None => Err("the plugin stopped".into()),
+        }
+    }
+
+    /// What it may do now.
+    pub fn access(&self) -> &Access {
+        &self.store.data().access
+    }
+
+    /// Replaces its grants (a change in Studio applies at once). Requests
+    /// and subscriptions under a revoked capability are closed (closed
+    /// subscriptions show up in [`Self::take_cancelled`]), and image handles
+    /// that relied on it are released. Returns whether anything changed.
+    pub fn set_access(&mut self, access: Access) -> bool {
+        let state = self.store.data_mut();
+        if state.access == access {
+            return false;
+        }
+        state.access = access;
+        let HostState { access, broker, .. } = state;
+        broker.close_where(access);
+        broker.release_images(|e| image_allowed(access, e));
+        true
+    }
+
+    /// Whether commands, broker requests or cancellations wait to be taken.
+    pub fn has_pending(&self) -> bool {
+        let state = self.store.data();
+        !state.queued.is_empty() || state.broker.has_queued() || state.storage.is_dirty()
+    }
+
+    /// Requests queued since the last take (the shell's brokers run them).
+    pub fn take_requests(&mut self) -> Vec<Request> {
+        self.store.data_mut().broker.take_requests()
+    }
+
+    /// Subscriptions the plugin cancelled since the last take.
+    pub fn take_cancelled(&mut self) -> Vec<u64> {
+        self.store.data_mut().broker.take_cancelled()
+    }
+
+    /// Delivers a broker result (see [`broker::Broker::deliver`]); `false`
+    /// when the request was cancelled or already answered.
+    pub fn deliver(&mut self, id: u64, result: Result<String, String>) -> bool {
+        let HostState { access, broker, .. } = self.store.data_mut();
+        broker.deliver(access, id, result)
+    }
+
+    /// Whether request or subscription `id` is still open.
+    pub fn is_open(&self, id: u64) -> bool {
+        self.store.data().broker.is_open(id)
+    }
+
+    /// An image handle for `entry`, owned by this instance (`None` once
+    /// ids are spent).
+    pub fn issue_image(&mut self, entry: ImageEntry) -> Option<u64> {
+        self.store.data_mut().broker.issue_image(entry)
+    }
+
+    /// The image behind `handle`, if this instance issued it and its origin
+    /// is still allowed.
+    pub fn image(&self, handle: u64) -> Option<&ImageEntry> {
+        let state = self.store.data();
+        state.broker.image(handle).filter(|e| image_allowed(&state.access, e))
+    }
+
+    /// Image handles it holds (diagnostics: bounded by
+    /// [`extension::MAX_IMAGE_HANDLES`]).
+    pub fn image_handles(&self) -> usize {
+        self.store.data().broker.image_count()
+    }
+
+    /// The plugin's folder.
+    pub fn dir(&self) -> &Path {
+        &self.store.data().dir
     }
 }
 
@@ -483,12 +661,26 @@ pub struct Discovered {
     pub entry: PathBuf,
     pub permissions: Vec<String>,
     pub homepage: String,
+    /// Its source code ("Source code" in Studio).
+    pub repository: String,
+    /// Where to report problems ("Report an issue" in Studio).
+    pub support: String,
     /// `[i18n.<code>]` name / description overrides.
     pub translations: std::collections::BTreeMap<String, crate::ManifestText>,
     /// `[[settings]]` declarations (validated).
     pub settings: Vec<crate::ManifestSetting>,
     /// `[[widgets]]`: the desktop widgets it draws (validated).
     pub widgets: Vec<crate::ManifestWidget>,
+    /// `[[launcher]]`: its launcher providers (validated).
+    pub launcher: Vec<extension::ManifestLauncher>,
+    /// `[[studio-tabs]]`: its tabs in Studio pages (validated).
+    pub studio_tabs: Vec<extension::ManifestStudioTab>,
+    /// Operations other plugins may call (validated).
+    pub serves: Vec<String>,
+    /// Its panel's size (`[panel]`, clamped).
+    pub panel: extension::ManifestPanel,
+    /// `[[commands]]`: commands it offers (validated).
+    pub commands: Vec<extension::ManifestCommand>,
 }
 
 /// The contents of a `plugin.toml` (the format documented in PLUGINS.md
@@ -514,6 +706,10 @@ pub struct ManifestFile {
     #[serde(default)]
     pub homepage: String,
     #[serde(default)]
+    pub repository: String,
+    #[serde(default)]
+    pub support: String,
+    #[serde(default)]
     pub i18n: std::collections::BTreeMap<String, crate::ManifestText>,
     /// As declared (unvalidated).
     #[serde(default)]
@@ -521,6 +717,21 @@ pub struct ManifestFile {
     /// Desktop widgets it draws, as declared (unvalidated).
     #[serde(default)]
     pub widgets: Vec<crate::ManifestWidget>,
+    /// Launcher providers, as declared (unvalidated).
+    #[serde(default)]
+    pub launcher: Vec<extension::ManifestLauncher>,
+    /// Studio tabs, as declared (unvalidated).
+    #[serde(default, rename = "studio-tabs")]
+    pub studio_tabs: Vec<extension::ManifestStudioTab>,
+    /// Operations other plugins may call, as declared (unvalidated).
+    #[serde(default)]
+    pub serves: Vec<String>,
+    /// Its panel's size, as declared.
+    #[serde(default)]
+    pub panel: Option<extension::ManifestPanel>,
+    /// Commands it offers, as declared (unvalidated).
+    #[serde(default)]
+    pub commands: Vec<extension::ManifestCommand>,
 }
 
 fn default_version() -> String {
@@ -556,9 +767,18 @@ impl ManifestFile {
         if self.name.trim().is_empty() {
             out.push("name is empty".into());
         }
-        out.extend(self.permissions.iter().filter(|p| p.as_str() != PERMISSION_COMMANDS).map(|p| format!("unknown permission `{p}` (only `{PERMISSION_COMMANDS}` exists)")));
+        out.extend(extension::split_capabilities(&self.permissions).1);
         out.extend(crate::split_settings(self.settings.clone()).1);
         out.extend(crate::split_widgets(self.widgets.clone()).1);
+        out.extend(extension::split_launchers(self.launcher.clone()).1);
+        out.extend(extension::split_studio_tabs(self.studio_tabs.clone()).1);
+        out.extend(extension::split_serves(self.serves.clone()).1);
+        out.extend(extension::split_commands(self.commands.clone()).1);
+        for (field, url) in [("repository", &self.repository), ("support", &self.support)] {
+            if !url.is_empty() && !extension::valid_link(url) {
+                out.push(format!("{field} must be an http(s) address"));
+            }
+        }
         out
     }
 
@@ -577,7 +797,14 @@ impl ManifestFile {
             zone: self.zone,
             permissions: self.permissions,
             homepage: self.homepage,
+            repository: self.repository,
+            support: self.support,
             translations: self.i18n,
+            launcher: extension::split_launchers(self.launcher).0,
+            studio_tabs: extension::split_studio_tabs(self.studio_tabs).0,
+            serves: extension::split_serves(self.serves).0,
+            panel: self.panel.unwrap_or(extension::DEFAULT_PANEL).clamped(),
+            commands: extension::split_commands(self.commands).0,
         }
     }
 }
@@ -723,6 +950,10 @@ mod tests {
     /// worker thread and render each surface. Skipped until the example is
     /// built (`cargo build --release --target wasm32-wasip2` in
     /// plugins/examples/moon-phase).
+    fn bar_context() -> RenderContext {
+        RenderContext { surface: SurfaceKind::Bar, outlet: String::new(), instance: String::new(), width: 0.0, height: 0.0, numerals: String::new(), calendar: String::new(), language: String::new() }
+    }
+
     #[test]
     fn test_loads_the_example_off_thread() {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/examples/moon-phase");
@@ -747,8 +978,8 @@ mod tests {
         };
         let id = file.id.clone();
         let result = std::thread::spawn(move || {
-            let mut p = WasmPlugin::load(&id, &dir, &entry, settings, false).map_err(|e| format!("{e:#}"))?;
-            let bar = p.bar(&palette).is_some();
+            let mut p = WasmPlugin::load(&id, &dir, &entry, settings, Access::default()).map_err(|e| format!("{e:#}"))?;
+            let bar = matches!(p.render(&palette, &bar_context()), Ok(Some(_)));
             Ok::<_, String>((bar, p.disabled.clone()))
         })
         .join()
@@ -774,9 +1005,9 @@ mod tests {
             let entry = dir.join("target/wasm32-wasip2/release/moon_phase.wasm");
             let palette = palette.clone();
             std::thread::spawn(move || {
-                let mut p = WasmPlugin::load("moon-phase", &dir, &entry, serde_json::Map::new(), false).map_err(|e| format!("{e:#}"))?;
+                let mut p = WasmPlugin::load("moon-phase", &dir, &entry, serde_json::Map::new(), Access::default()).map_err(|e| format!("{e:#}"))?;
                 let started = std::time::Instant::now();
-                let bar = p.bar(&palette).is_some();
+                let bar = matches!(p.render(&palette, &bar_context()), Ok(Some(_)));
                 Ok::<_, String>((bar, p.disabled.clone(), started.elapsed()))
             })
             .join()
@@ -807,6 +1038,10 @@ mod tests {
         let p = m.problems();
         assert_eq!(p.len(), 4, "{p:?}");
         assert!(p[0].contains("Bad Id") && p[2].contains("network") && p[3].contains("no choices"));
+        let m = ManifestFile::parse("id = \"x\"\nname = \"X\"\npermissions = [\"media.read\", \"net:*\"]\nrepository = \"ftp://x\"\n[[launcher]]\nid = \"moon\"\nname = \"Moon\"\nprefix = \"moon \"\n[[studio-tabs]]\npage = \"nowhere\"\nid = \"t\"\ntitle = \"T\"\n").unwrap();
+        let p = m.problems();
+        assert_eq!(p.len(), 3, "{p:?}");
+        assert!(p[0].contains("net:*") && p[1].contains("nowhere") && p[2].contains("repository"));
         assert!(ManifestFile::parse("name = \"no id\"").unwrap_err().contains("id"));
         assert!(valid_id("moon-phase_2") && !valid_id("") && !valid_id("a/b") && !valid_id(&"a".repeat(MAX_ID_LEN + 1)));
     }

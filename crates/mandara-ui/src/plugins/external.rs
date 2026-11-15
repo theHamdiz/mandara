@@ -12,45 +12,32 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gpui::{AnyElement, App, FontWeight, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _, px, size};
+use gpui::{AnyElement, App, IntoElement, ParentElement, Styled, div, px, size};
 use mandara_config::desktop_cards as dc;
 use mandara_core::ToGpui;
-use mandara_plugins::wasm::{self, Discovered, Kind, Palette, Source, Tone, View, WasmPlugin};
+use mandara_plugins::wasm::{self, Discovered, Palette, Source, Tone, WasmPlugin};
 use mandara_plugins::{PanelSpec, PluginInstance, PluginManifest, PluginOrigin, PluginRegistry};
 use mandara_theme::{Color, MandaraPalette};
 
+use super::plugin_view::{self as plugin_view, Frame};
 use super::fn_view;
 use super::panel_fx::{ViewSet, redraw_in};
 use crate::icons::icon;
-use crate::kit::{card, text, tokens};
+use crate::kit::{text, tokens};
 use crate::state::config;
+use mandara_plugins::extension::Access;
+use mandara_plugins::wasm::{EventValue, PluginEvent, RenderContext, SurfaceKind};
 
-type Shared = Rc<RefCell<Option<WasmPlugin>>>;
+mod brokers;
+
+pub(crate) type Shared = Rc<RefCell<Option<WasmPlugin>>>;
 
 /// Shortest refresh interval a plugin may ask for.
 const MIN_REFRESH_MS: u64 = 250;
-/// Deepest node nesting rendered (guards against cyclic / hostile trees).
-const MAX_DEPTH: u32 = 32;
-/// Most nodes one plugin view renders. Children are node indices, so a
-/// few nodes listing each other repeatedly could expand exponentially.
-const MAX_RENDERED_NODES: usize = 2048;
-/// Font sizes a plugin may request.
-const MIN_TEXT_PX: f32 = 6.0;
-const MAX_TEXT_PX: f32 = 96.0;
-/// Default icon size.
-const ICON_PX: f32 = 16.0;
-/// Button geometry.
-const BUTTON_H_PX: f32 = 30.0;
-const BUTTON_PAD_X_PX: f32 = 14.0;
-const BUTTON_GAP_PX: f32 = 6.0;
-/// Meter geometry and track alpha.
-const METER_H_PX: f32 = 6.0;
-const METER_MIN_W_PX: f32 = 40.0;
-const METER_TRACK_ALPHA: f32 = 0.1;
-/// Default panel size and padding for third-party panels.
-const PANEL_W_PX: f32 = 360.0;
-const PANEL_H_PX: f32 = 380.0;
+/// Padding inside third-party panels (their size is plugin.toml's `[panel]`).
 const PANEL_PAD_PX: f32 = tokens::LG;
+/// The panel's "whose is this" line is quieter than muted text.
+const ATTRIBUTION_ALPHA: f32 = 0.75;
 
 thread_local! {
     /// One loaded instance per plugin id (bar, panel and card share it).
@@ -58,6 +45,239 @@ thread_local! {
     /// Why a plugin failed to load (`{err:#}`), for `plugins list` and
     /// Studio → Plugins → Local.
     static LOAD_ERRORS: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
+    /// Every drawn surface of each plugin (bar, panel, card, desktop
+    /// widgets, Studio tabs): a click or a broker reply re-renders them all.
+    static VIEWS: RefCell<HashMap<String, ViewSet>> = RefCell::new(HashMap::new());
+}
+
+thread_local! {
+    /// Each plugin's own catalogs, for the names Mandara shows outside its
+    /// views (Studio tab titles, launcher provider names); a language loads
+    /// once, on first use.
+    static CATALOGS: RefCell<HashMap<String, wasm::PluginCatalogs>> = RefCell::new(HashMap::new());
+}
+
+/// `text` translated with plugin `d`'s catalog.
+fn translated(d: &Discovered, text: &str) -> String {
+    CATALOGS.with(|c| c.borrow_mut().entry(d.id.clone()).or_insert_with(|| wasm::PluginCatalogs::new(&d.dir)).translate(text))
+}
+
+/// The views of plugin `id` (made on first use; dropped views fall out).
+pub(crate) fn views_of(id: &str) -> ViewSet {
+    VIEWS.with(|v| v.borrow_mut().entry(id.to_string()).or_default().clone())
+}
+
+/// What plugin `d` may do now: its declared permissions, and of those the
+/// ones the person granted (`[plugins.grants.<id>]`).
+fn access_for(d: &Discovered, cx: &App) -> Access {
+    Access::from_grant(&d.permissions, config(cx).read(cx).get().plugins.grants.get(&d.id))
+}
+
+thread_local! {
+    /// Follows the config so a grant revoked in Studio applies to every
+    /// loaded plugin at once, drawn or not.
+    static GRANT_WATCH: RefCell<Option<gpui::Subscription>> = const { RefCell::new(None) };
+}
+
+/// Starts following grants (once; it costs nothing until the config changes).
+pub(crate) fn watch_grants(cx: &mut App) {
+    if GRANT_WATCH.with(|w| w.borrow().is_some()) {
+        return;
+    }
+    let subscription = cx.observe(&config(cx), |_, cx| apply_grants(cx));
+    GRANT_WATCH.with(|w| *w.borrow_mut() = Some(subscription));
+}
+
+/// Applies the config's grants to every loaded plugin: what lost its grant
+/// is closed now (subscriptions, timers, queued requests, image handles).
+fn apply_grants(cx: &mut App) {
+    let loaded: Vec<(String, Shared)> = LOADED.with(|l| l.borrow().iter().map(|(k, v)| (k.clone(), v.clone())).collect());
+    for (id, shared) in loaded {
+        let Some(d) = discovered(&id) else { continue };
+        let access = access_for(&d, cx);
+        let changed = shared.borrow_mut().as_mut().is_some_and(|p| p.set_access(access));
+        if changed {
+            after_call(&id, &shared, cx);
+            views_of(&id).notify(cx);
+        }
+    }
+}
+
+/// The loaded instance of plugin `id`, if it is loaded.
+pub(crate) fn loaded(id: &str) -> Option<Shared> {
+    LOADED.with(|l| l.borrow().get(id).cloned())
+}
+
+/// The registered plugin `id`.
+pub(crate) fn discovered(id: &str) -> Option<Discovered> {
+    DISCOVERED.with(|m| m.borrow().get(id).cloned())
+}
+
+/// After a call into the plugin outside rendering: runs the commands it
+/// queued, hands its broker requests to the brokers and stops the
+/// subscriptions it cancelled.
+pub(crate) fn after_call(id: &str, plugin: &Shared, cx: &mut App) {
+    let (commands, requests, cancelled, storage) = match plugin.borrow_mut().as_mut() {
+        Some(p) => (p.take_commands(), p.take_requests(), p.take_cancelled(), p.take_storage_flush()),
+        None => return,
+    };
+    if let Some((path, json)) = storage {
+        write_storage_later(path, json, cx);
+    }
+    watch_grants(cx);
+    run_commands(id, commands, cx);
+    brokers::stop(id, &cancelled, cx);
+    if !requests.is_empty() {
+        brokers::dispatch(id, requests, cx);
+    }
+}
+
+/// Which storage snapshot of each file is the newest, and the newest ones
+/// whose writes failed: those are kept and tried again with the next write
+/// or when a plugin unloads (no timer runs while idle).
+#[derive(Default)]
+struct StorageWrites {
+    newest: HashMap<std::path::PathBuf, u64>,
+    unsaved: HashMap<std::path::PathBuf, (u64, std::sync::Arc<str>)>,
+}
+
+impl StorageWrites {
+    /// A new snapshot of `path`: it supersedes every earlier one.
+    fn begin(&mut self, path: &std::path::Path) -> u64 {
+        let g = self.newest.entry(path.to_path_buf()).or_insert(0);
+        *g += 1;
+        *g
+    }
+
+    fn is_current(&self, path: &std::path::Path, generation: u64) -> bool {
+        self.newest.get(path) == Some(&generation)
+    }
+
+    /// Every try failed: keep the snapshot if it is still the newest.
+    fn failed(&mut self, path: std::path::PathBuf, generation: u64, json: std::sync::Arc<str>) {
+        if self.is_current(&path, generation) {
+            self.unsaved.insert(path, (generation, json));
+        }
+    }
+
+    fn written(&mut self, path: &std::path::Path, generation: u64) {
+        if self.unsaved.get(path).is_some_and(|(g, _)| *g <= generation) {
+            self.unsaved.remove(path);
+        }
+    }
+
+    /// The failed snapshots still worth writing (a newer one supersedes).
+    fn take_retries(&mut self) -> Vec<(std::path::PathBuf, std::sync::Arc<str>)> {
+        let unsaved = std::mem::take(&mut self.unsaved);
+        unsaved.into_iter().filter(|(path, (g, _))| self.is_current(path, *g)).map(|(path, (_, json))| (path, json)).collect()
+    }
+}
+
+static STORAGE_WRITES: std::sync::Mutex<Option<StorageWrites>> = std::sync::Mutex::new(None);
+
+fn storage_writes<R>(f: impl FnOnce(&mut StorageWrites) -> R) -> R {
+    f(STORAGE_WRITES.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(Default::default))
+}
+
+/// Writes a plugin's storage file on the background executor. Writes of
+/// the same file never land out of order: each carries a generation and
+/// only the newest one is written. Snapshots whose writes failed before are
+/// tried again first.
+fn write_storage_later(path: std::path::PathBuf, json: std::sync::Arc<str>, cx: &mut App) {
+    let generation = storage_writes(|w| w.begin(&path));
+    retry_unsaved_storage(cx);
+    spawn_storage_write(path, generation, json, cx);
+}
+
+/// Tries the failed storage writes again (a plugin unloading, or another
+/// write starting: the disk may have room again).
+fn retry_unsaved_storage(cx: &mut App) {
+    retry_unsaved_with(|path, generation, json| spawn_storage_write(path, generation, json, cx));
+}
+
+/// Hands each failed snapshot still worth writing to `start`, as a new
+/// generation.
+fn retry_unsaved_with(mut start: impl FnMut(std::path::PathBuf, u64, std::sync::Arc<str>)) {
+    for (path, json) in storage_writes(StorageWrites::take_retries) {
+        let generation = storage_writes(|w| w.begin(&path));
+        start(path, generation, json);
+    }
+}
+
+fn spawn_storage_write(path: std::path::PathBuf, generation: u64, json: std::sync::Arc<str>, cx: &mut App) {
+    let executor = cx.background_executor().clone();
+    cx.background_executor().spawn(run_storage_write(path, generation, json, move || executor.timer(STORAGE_RETRY))).detach();
+}
+
+/// One snapshot's write: up to [`STORAGE_WRITE_ATTEMPTS`] tries with `wait`
+/// between them, skipped once a newer snapshot supersedes it, and kept for
+/// a later retry when every try fails.
+async fn run_storage_write<W: std::future::Future<Output = ()>>(path: std::path::PathBuf, generation: u64, json: std::sync::Arc<str>, mut wait: impl FnMut() -> W) {
+    // Serializes the disk writes; only background tasks take it, so the UI
+    // thread never waits on a slow disk.
+    static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    for attempt in 0..STORAGE_WRITE_ATTEMPTS {
+        let written = {
+            let _writing = WRITING.lock().unwrap_or_else(|e| e.into_inner());
+            // A newer snapshot supersedes this one.
+            if !storage_writes(|w| w.is_current(&path, generation)) {
+                return;
+            }
+            wasm::write_storage(&path, &json)
+        };
+        match written {
+            Ok(()) => return storage_writes(|w| w.written(&path, generation)),
+            Err(err) if attempt + 1 == STORAGE_WRITE_ATTEMPTS => {
+                tracing::warn!(target: "mandara::plugin", "writing {}: {err} (kept to try again)", path.display());
+                return storage_writes(|w| w.failed(path, generation, json));
+            }
+            // A transient failure (a full or busy disk): try again.
+            Err(_) => wait().await,
+        }
+    }
+}
+
+/// How often a plugin's storage write is tried, and the wait between tries.
+const STORAGE_WRITE_ATTEMPTS: u32 = 3;
+const STORAGE_RETRY: Duration = Duration::from_millis(500);
+
+/// [`after_call`] from a render: deferred, since rendering must not
+/// change the app.
+fn after_render(id: &str, plugin: &Shared, cx: &mut App) {
+    let pending = plugin.borrow().as_ref().is_some_and(|p| p.has_pending());
+    if pending {
+        let (id, plugin) = (id.to_string(), plugin.clone());
+        cx.defer(move |cx| after_call(&id, &plugin, cx));
+    }
+}
+
+/// Sends `event` to plugin `id`, runs what it queued and re-renders it.
+pub(crate) fn send_event(id: &str, plugin: &Shared, event: &PluginEvent, cx: &mut App) {
+    if let Some(p) = plugin.borrow_mut().as_mut() {
+        p.on_event(event);
+    }
+    after_call(id, plugin, cx);
+    views_of(id).notify(cx);
+}
+
+/// The event sink for an extension view of plugin `d`.
+pub(crate) fn sink_for(d: &Discovered) -> plugin_view::Sink {
+    let declared = d.clone();
+    Rc::new(move |event, _window, cx| {
+        let plugin = instance(&declared, cx);
+        send_event(&declared.id, &plugin, &event, cx);
+    })
+}
+
+/// Resolves plugin `id`'s image handles: only ones its live instance
+/// issued and whose origin is still granted.
+pub(crate) fn images_for(id: &str) -> plugin_view::Images {
+    let id = id.to_string();
+    Rc::new(move |handle, _cx| {
+        let plugin = loaded(&id)?;
+        let guard = plugin.borrow();
+        Some(guard.as_ref()?.image(handle)?.path.clone())
+    })
 }
 
 /// What `host::setting` answers for `d`: the defaults its manifest declares
@@ -76,8 +296,8 @@ fn instance(d: &Discovered, cx: &App) -> Shared {
         return s;
     }
     let settings = settings_for(d, cx);
-    let allow_commands = d.permissions.iter().any(|p| p == wasm::PERMISSION_COMMANDS);
-    let loaded = mandara_plugins::guard(&format!("plugin `{}` load", d.id), || WasmPlugin::load(&d.id, &d.dir, &d.entry, settings, allow_commands))
+    let access = access_for(d, cx);
+    let loaded = mandara_plugins::guard(&format!("plugin `{}` load", d.id), || WasmPlugin::load(&d.id, &d.dir, &d.entry, settings, access))
         .unwrap_or_else(|| Err(anyhow::anyhow!("loader crashed")));
     let shared: Shared = Rc::new(RefCell::new(match loaded {
         Ok(p) => {
@@ -142,15 +362,20 @@ fn release_card(id: &str, cx: &mut App) {
         return;
     }
     // A click handler may still hold the instance for a moment; the last
-    // handle frees it.
+    // handle frees it. Its subscriptions end with it.
     LOADED.with(|l| l.borrow_mut().remove(id));
+    brokers::forget(id, cx);
+    retry_unsaved_storage(cx);
     mandara_services::memory::request_trim();
 }
 
 /// Forgets a plugin's instance and load error (removed or reloaded).
-fn forget(id: &str) {
+fn forget(id: &str, cx: &mut App) {
     LOADED.with(|l| l.borrow_mut().remove(id));
+    CATALOGS.with(|c| c.borrow_mut().remove(id));
     LOAD_ERRORS.with(|e| e.borrow_mut().remove(id));
+    brokers::forget(id, cx);
+    retry_unsaved_storage(cx);
 }
 
 /// The palette record plugins receive, from the live theme. Cached for the
@@ -189,95 +414,27 @@ fn encode_palette(p: &MandaraPalette) -> Palette {
 
 /// The theme color of a view tone.
 pub fn tone_color(t: Tone, p: &MandaraPalette) -> Color {
-    match t {
-        Tone::Normal => p.on_surface,
-        Tone::Muted => p.on_surface_variant,
-        Tone::Accent => p.primary,
-        Tone::Error => p.urgent_coral,
-        Tone::Success => p.success_emerald,
-        Tone::Warning => p.warning_amber,
-    }
-}
-
-/// Renders a plugin view tree (arena) with Mandara's components.
-/// `emoji` is the colour emoji family for text that is only emoji.
-fn render(view: &View, palette: &MandaraPalette, plugin: &Shared, id: &str, views: &ViewSet, emoji: Option<&gpui::SharedString>) -> AnyElement {
-    #[allow(clippy::too_many_arguments)]
-    fn node(view: &View, i: u32, depth: u32, p: &MandaraPalette, plugin: &Shared, id: &str, views: &ViewSet, emoji: Option<&gpui::SharedString>, key: &mut usize) -> AnyElement {
-        let Some(n) = view.nodes.get(i as usize).filter(|_| depth < MAX_DEPTH && *key < MAX_RENDERED_NODES) else { return div().into_any_element() };
-        *key += 1;
-        let children: Vec<AnyElement> = n.children.iter().map(|c| node(view, *c, depth + 1, p, plugin, id, views, emoji, key)).collect();
-        let color = tone_color(n.tone, p);
-        let size_or = |d: f32| if n.size > 0.0 { n.size.clamp(MIN_TEXT_PX, MAX_TEXT_PX) } else { d };
-        let mut el = match n.kind {
-            Kind::Row => div().flex().items_center().gap(px(n.gap.max(0.0))).children(children),
-            Kind::Column => div().flex().flex_col().gap(px(n.gap.max(0.0))).children(children),
-            Kind::Card => card(p).flex().flex_col().gap(px(if n.gap > 0.0 { n.gap } else { tokens::SM })).children(children),
-            Kind::Text => div()
-                .text_size(px(size_or(text::BODY)))
-                .text_color(color.hsla())
-                .when(n.bold, |el| el.font_weight(FontWeight::SEMIBOLD))
-                .when_some(emoji.filter(|_| crate::fonts::emoji_only(&n.text)), |el, family| el.font_family(family.clone()))
-                .child(n.text.clone()),
-            Kind::Icon => div().child(icon(crate::icons::ICON_NAMES.iter().find(|x| **x == n.text).copied().unwrap_or("circle"), size_or(ICON_PX), color)),
-            Kind::Button => div()
-                .h(px(BUTTON_H_PX))
-                .px(px(BUTTON_PAD_X_PX))
-                .rounded_full()
-                .flex()
-                .items_center()
-                .gap(px(BUTTON_GAP_PX))
-                .cursor_pointer()
-                .bg(if n.tone == Tone::Accent { p.primary.hsla() } else { p.surface_container_high.hsla() })
-                .text_color(if n.tone == Tone::Accent { p.on_primary.hsla() } else { p.on_surface.hsla() })
-                .text_size(px(size_or(text::BODY_S)))
-                .font_weight(FontWeight::MEDIUM)
-                .children(children)
-                .when(!n.text.is_empty(), |el| el.child(n.text.clone())),
-            Kind::Meter => div()
-                .h(px(METER_H_PX))
-                .w_full()
-                .min_w(px(METER_MIN_W_PX))
-                .rounded_full()
-                .bg(p.on_surface.with_alpha(METER_TRACK_ALPHA).hsla())
-                .child(div().h_full().rounded_full().w(gpui::relative(n.value.clamp(0.0, 1.0))).bg(color.hsla())),
-            Kind::Spacer => div().flex_1(),
-        };
-        if n.grow {
-            el = el.flex_1().min_w(px(0.0));
-        }
-        if n.action.is_empty() {
-            return el.into_any_element();
-        }
-        let (action, plugin, views) = (n.action.clone(), plugin.clone(), views.clone());
-        el.id(gpui::SharedString::from(format!("plg-{id}-{key}")))
-            .cursor_pointer()
-            .on_click(move |_, _, cx| {
-                let commands = match plugin.borrow_mut().as_mut() {
-                    Some(pl) => {
-                        pl.on_event(&action);
-                        pl.take_commands()
-                    }
-                    None => Vec::new(),
-                };
-                run_commands(commands, cx);
-                // The plugin's state changed: re-render its bar, panel and card.
-                views.notify(cx);
-            })
-            .into_any_element()
-    }
-    let mut key = 0;
-    node(view, view.root, 0, palette, plugin, id, views, emoji, &mut key)
+    plugin_view::tone_color(t, p)
 }
 
 /// Runs commands a plugin queued (through the documented registry), only
 /// those on the plugin allowlist ([`mandara_plugins::wasm::PLUGIN_COMMANDS`]):
 /// anything else would act outside the WebAssembly sandbox.
-fn run_commands(lines: Vec<String>, cx: &mut App) {
+fn run_commands(plugin: &str, lines: Vec<String>, cx: &mut App) {
+    if lines.is_empty() {
+        return;
+    }
+    // Extension plugins also need the capability a command stands for: the
+    // v0.1 `commands` permission must not get around a revoked grant.
+    let access = discovered(plugin).map(|d| access_for(&d, cx));
     for line in lines {
         let words: Vec<String> = line.split_whitespace().map(str::to_string).collect();
         let registry = cx.global::<PluginRegistry>().commands.clone();
         match registry.resolve(&words) {
+            Ok(r) if mandara_plugins::extension::command_capability(r.spec.path).is_some_and(|c| !access.as_ref().is_some_and(|a| a.allows(&c))) => {
+                tracing::warn!(target: "mandara::plugin", "plugin command `{}` refused: it needs the matching capability granted", r.spec.path);
+                continue;
+            }
             Ok(r) if mandara_plugins::wasm::plugin_may_run(r.spec.path) => {}
             Ok(r) => {
                 tracing::warn!(target: "mandara::plugin", "plugin command `{}` refused: plugins may only run interface commands", r.spec.path);
@@ -301,6 +458,80 @@ enum Surface {
     Sidebar,
 }
 
+impl Surface {
+    fn kind(self) -> SurfaceKind {
+        match self {
+            Self::Bar => SurfaceKind::Bar,
+            Self::Panel => SurfaceKind::Panel,
+            Self::Sidebar => SurfaceKind::Sidebar,
+        }
+    }
+}
+
+/// What a surface shows when the plugin has no view: why, if it stopped.
+fn stopped(plugin: &Shared, palette: &MandaraPalette) -> AnyElement {
+    match &*plugin.borrow() {
+        Some(p) if p.disabled.is_some() => div().text_size(px(text::LABEL)).text_color(palette.urgent_coral.hsla()).child(mandara_i18n::t("plugin stopped")).into_any_element(),
+        None => div().text_size(px(text::LABEL)).text_color(palette.urgent_coral.hsla()).child(mandara_i18n::t("plugin failed")).into_any_element(),
+        _ => div().into_any_element(),
+    }
+}
+
+thread_local! {
+    /// The config snapshot (its address) each plugin's settings and grants
+    /// were last read from, with the instance (held, so a new snapshot can
+    /// never reuse the address of the one remembered).
+    static FOLLOWED: RefCell<HashMap<String, (std::sync::Arc<mandara_config::ShellConfig>, usize)>> = RefCell::new(HashMap::new());
+}
+
+/// Keeps a loaded plugin's settings and grants in step with the config:
+/// re-read only when the config snapshot changes (its address), so a
+/// render costs a pointer compare. A Studio edit or a revoked grant
+/// reaches the plugin on its next render.
+fn follow_config(declared: &Discovered, plugin: &Shared, cx: &mut App) {
+    let snapshot = config(cx).read(cx).snapshot();
+    // Keyed by instance too: a reloaded plugin reads the config afresh.
+    let instance = Rc::as_ptr(plugin) as usize;
+    let previous = FOLLOWED.with(|f| f.borrow_mut().insert(declared.id.clone(), (snapshot.clone(), instance)));
+    if previous.is_some_and(|(seen, seen_instance)| std::sync::Arc::ptr_eq(&seen, &snapshot) && seen_instance == instance) {
+        return;
+    }
+    let current = settings_for(declared, cx);
+    let access = access_for(declared, cx);
+    if let Some(p) = plugin.borrow_mut().as_mut() {
+        if p.settings() != &current {
+            p.set_settings(current);
+        }
+        p.set_access(access);
+    }
+}
+
+/// A notice drawn where a plugin's view was refused (too large, …).
+fn refused(reason: &str, palette: &MandaraPalette) -> AnyElement {
+    tracing::warn!(target: "mandara::plugin", "plugin view refused: {reason}");
+    div().text_size(px(text::LABEL)).text_color(palette.urgent_coral.hsla()).child(mandara_i18n::t("plugin view too large")).into_any_element()
+}
+
+/// The frame an extension view of `d` draws in.
+fn frame_for(d: &Discovered, context: RenderContext, key: String, cx: &App) -> Frame {
+    Frame { key: key.into(), context, sink: sink_for(d), images: images_for(&d.id), emoji: cx.try_global::<crate::fonts::Fonts>().and_then(|f| f.emoji.clone()) }
+}
+
+/// Plugin `d`'s view for `context`, drawn; `None` when it has none there.
+pub(crate) fn draw_extension(d: &Discovered, plugin: &Shared, context: RenderContext, key: String, palette: &MandaraPalette, window: &mut gpui::Window, cx: &mut App) -> Option<AnyElement> {
+    let theme = palette_for(palette);
+    let result = {
+        let mut guard = plugin.borrow_mut();
+        guard.as_mut()?.render(&theme, &context)
+    };
+    after_render(&d.id, plugin, cx);
+    match result {
+        Ok(Some(view)) => Some(plugin_view::render(view, palette, &frame_for(d, context, key, cx), window, cx)),
+        Ok(None) => None,
+        Err(reason) => Some(refused(&reason, palette)),
+    }
+}
+
 fn surface_view(d: &Discovered, which: Surface, views: ViewSet, window: &mut gpui::Window, cx: &mut App) -> gpui::AnyView {
     let plugin = instance(d, cx);
     let refresh = plugin.borrow_mut().as_mut().map(|p| p.refresh_ms()).unwrap_or(0);
@@ -309,13 +540,12 @@ fn surface_view(d: &Discovered, which: Surface, views: ViewSet, window: &mut gpu
     let tick = (refresh > 0).then(|| Duration::from_millis(u64::from(refresh).max(MIN_REFRESH_MS)));
     let id = d.id.clone();
     let declared = d.clone();
-    // Settings resolved under a config generation (the snapshot's address):
-    // re-derived only when the config changes, not every frame.
-    let settings_gen = RefCell::new(0_usize);
+    let plugin_views = views_of(&d.id);
     fn_view(
         None,
         move |palette, window, cx| {
             views.track(window);
+            plugin_views.track(window);
             // Looked up per render (a map hit): after a hot reload an open
             // bar item, panel or card draws the fresh instance at once
             // instead of the one it was created with.
@@ -323,47 +553,29 @@ fn surface_view(d: &Discovered, which: Surface, views: ViewSet, window: &mut gpu
             if let Some(every) = tick {
                 redraw_in(every, window, cx);
             }
-            let theme = palette_for(palette);
-            // Live settings: a Studio edit reaches the plugin on its next render.
-            let generation = std::sync::Arc::as_ptr(&config(cx).read(cx).snapshot()) as usize;
-            if *settings_gen.borrow() != generation {
-                *settings_gen.borrow_mut() = generation;
-                let current = settings_for(&declared, cx);
-                if let Some(p) = plugin.borrow_mut().as_mut().filter(|p| p.settings() != &current) {
-                    p.set_settings(current);
-                }
-            }
-            let view = {
-                let mut guard = plugin.borrow_mut();
-                match guard.as_mut() {
-                    Some(p) => match which {
-                        Surface::Bar => p.bar(&theme),
-                        Surface::Panel => p.panel(&theme),
-                        Surface::Sidebar => p.sidebar(&theme),
-                    },
-                    None => None,
-                }
-            };
-            let commands = plugin.borrow_mut().as_mut().map(|p| p.take_commands()).unwrap_or_default();
-            if !commands.is_empty() {
-                // Defer: rendering must not mutate the app.
-                cx.defer(move |cx| run_commands(commands, cx));
-            }
-            match view {
-                Some(v) => {
-                    let emoji = cx.try_global::<crate::fonts::Fonts>().and_then(|f| f.emoji.clone());
-                    let el = render(&v, palette, &plugin, &id, &views, emoji.as_ref());
-                    match which {
-                        Surface::Panel => div().size_full().p(px(PANEL_PAD_PX)).child(el).into_any_element(),
-                        _ => el,
+            follow_config(&declared, &plugin, cx);
+            let bounds = window.viewport_size();
+            let context = RenderContext { surface: which.kind(), outlet: String::new(), instance: String::new(), width: f32::from(bounds.width), height: f32::from(bounds.height), numerals: String::new(), calendar: String::new(), language: String::new() };
+            if let Some(el) = draw_extension(&declared, &plugin, context, format!("plg-{id}-{}", which.kind() as u8), palette, window, cx) {
+                return match which {
+                    // A quiet line says whose panel it is, so a plugin's view
+                    // can't pass for one of Mandara's own (a sign-in prompt).
+                    Surface::Panel => {
+                        let name = cx.global::<PluginRegistry>().get(&id).map(|f| f.manifest.display_name()).unwrap_or_else(|| declared.name.clone());
+                        let by = div()
+                            .flex()
+                            .items_center()
+                            .gap(px(tokens::XS))
+                            .text_size(px(text::CAPTION))
+                            .text_color(palette.on_surface_variant.with_alpha(ATTRIBUTION_ALPHA).hsla())
+                            .child(icon("plug", text::CAPTION, palette.on_surface_variant.with_alpha(ATTRIBUTION_ALPHA)))
+                            .child(name);
+                        div().size_full().p(px(PANEL_PAD_PX)).flex().flex_col().gap(px(tokens::SM)).child(div().flex_1().min_h(px(0.0)).child(el)).child(by).into_any_element()
                     }
-                }
-                None => match &*plugin.borrow() {
-                    Some(p) if p.disabled.is_some() => div().text_size(px(text::LABEL)).text_color(palette.urgent_coral.hsla()).child(mandara_i18n::t("plugin stopped")).into_any_element(),
-                    None => div().text_size(px(text::LABEL)).text_color(palette.urgent_coral.hsla()).child(mandara_i18n::t("plugin failed")).into_any_element(),
-                    _ => div().into_any_element(),
-                },
+                    _ => el,
+                };
             }
+            stopped(&plugin, palette)
         },
         window,
         cx,
@@ -412,6 +624,8 @@ fn register_one(r: &mut PluginRegistry, d: Discovered) {
         translations: d.translations.clone(),
         permissions: d.permissions.clone(),
         homepage: d.homepage.clone(),
+        repository: d.repository.clone(),
+        support: d.support.clone(),
         settings: d.settings.clone(),
     };
     if PRINTS.with(|p| !p.borrow().contains_key(&d.id)) {
@@ -434,7 +648,7 @@ fn register_one(r: &mut PluginRegistry, d: Discovered) {
             bar: Some(surface_view(&d, Surface::Bar, views.clone(), window, cx)),
             panel: Some(PanelSpec {
                 view: surface_view(&d, Surface::Panel, views.clone(), window, cx),
-                size: Rc::new(std::cell::Cell::new(size(px(PANEL_W_PX), px(PANEL_H_PX)))),
+                size: Rc::new(std::cell::Cell::new(size(px(d.panel.width), px(d.panel.height)))),
             }),
             sidebar: Some(surface_view(&d, Surface::Sidebar, views, window, cx)),
             ..PluginInstance::empty()
@@ -482,38 +696,26 @@ pub fn desktop_card_view(card: &str, placed: String, size: (f32, f32), window: &
     let views = ViewSet::default();
     let refresh = instance(&d, cx).borrow_mut().as_mut().map(|p| p.refresh_ms()).unwrap_or(0);
     let tick = (refresh > 0).then(|| Duration::from_millis(u64::from(refresh).max(MIN_REFRESH_MS)));
+    let plugin_views = views_of(&d.id);
     Some(fn_view(
         None,
         move |palette, window, cx| {
             views.track(window);
+            plugin_views.track(window);
             if let Some(every) = tick {
                 redraw_in(every, window, cx);
             }
             let plugin = instance(&d, cx);
+            follow_config(&d, &plugin, cx);
+            // The person's choices for the widget's digits, dates and language.
             let opts: dc::PluginCardOptions = config(cx).read(cx).get().desktop.widgets.get(&placed).and_then(dc::as_card).map(dc::options).unwrap_or_default();
-            let context = wasm::WidgetContext {
-                widget: widget.clone(),
-                instance: placed.clone(),
-                width: size.0,
-                height: size.1,
-                numerals: serde_plain(&opts.numerals),
-                calendar: serde_plain(&opts.calendar),
-                language: opts.language.clone(),
-            };
-            let theme = palette_for(palette);
-            let view = plugin.borrow_mut().as_mut().and_then(|p| p.desktop_widget(&theme, &context));
-            let commands = plugin.borrow_mut().as_mut().map(|p| p.take_commands()).unwrap_or_default();
-            if !commands.is_empty() {
-                cx.defer(move |cx| run_commands(commands, cx));
-            }
-            let emoji = cx.try_global::<crate::fonts::Fonts>().and_then(|f| f.emoji.clone());
-            let body = view.map(|v| render(&v, palette, &plugin, &d.id, &views, emoji.as_ref()));
-            let _ = window;
+            let context = RenderContext { surface: SurfaceKind::Desktop, outlet: widget.clone(), instance: placed.clone(), width: size.0, height: size.1, numerals: serde_plain(&opts.numerals), calendar: serde_plain(&opts.calendar), language: opts.language.clone() };
+            let body = draw_extension(&d, &plugin, context, format!("plg-{}-desk-{placed}", d.id), palette, window, cx).unwrap_or_else(|| stopped(&plugin, palette));
             div()
                 .size_full()
                 .p(px(crate::cards::SHADOW_PAD_PX))
                 .text_color(palette.on_surface.hsla())
-                .child(crate::cards::now_playing::glass(palette, crate::style::card_radius(), 1.0).size_full().p(px(DESKTOP_CARD_PAD_PX)).flex().flex_col().children(body))
+                .child(crate::cards::now_playing::glass(palette, crate::style::card_radius(), 1.0).size_full().p(px(DESKTOP_CARD_PAD_PX)).flex().flex_col().child(body))
                 .into_any_element()
         },
         window,
@@ -526,6 +728,217 @@ fn serde_plain(v: &impl serde::Serialize) -> String {
     serde_json::to_value(v).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
 }
 
+
+// ── Studio tabs ──────────────────────────────────────────────────────────
+
+/// The Studio tabs switched-on third-party plugins add to `page` (one of
+/// [`mandara_plugins::extension::STUDIO_TAB_PAGES`]): `(plugin id, plugin
+/// name, tab)`, ordered by plugin then declaration.
+pub fn studio_tabs(page: &str, cx: &App) -> Vec<(String, String, mandara_plugins::extension::ManifestStudioTab)> {
+    let cfg = config(cx).read(cx).get();
+    let registry = cx.global::<PluginRegistry>();
+    let mut out: Vec<_> = DISCOVERED.with(|m| {
+        m.borrow()
+            .values()
+            .filter(|d| registry.is_enabled(&d.id, &cfg.plugins))
+            .flat_map(|d| {
+                d.studio_tabs.iter().filter(|t| t.page == page).map(|t| {
+                    let mut tab = t.clone();
+                    tab.title = translated(d, &t.title);
+                    (d.id.clone(), registry.get(&d.id).map(|f| f.manifest.display_name()).unwrap_or_else(|| d.name.clone()), tab)
+                })
+            })
+            .collect()
+    });
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+/// Draws plugin `plugin`'s Studio tab `tab` (`width` logical px wide):
+/// its extension view for that outlet, or a short note when it has none.
+pub fn studio_tab_view(plugin: &str, tab: &str, width: f32, palette: &MandaraPalette, window: &mut gpui::Window, cx: &mut App) -> AnyElement {
+    let Some(d) = discovered(plugin) else { return note(mandara_i18n::t("This plugin isn't installed any more"), palette) };
+    views_of(plugin).track(window);
+    watch_grants(cx);
+    let shared = instance(&d, cx);
+    follow_config(&d, &shared, cx);
+    let context = RenderContext { surface: SurfaceKind::Studio, outlet: tab.to_string(), instance: String::new(), width, height: 0.0, numerals: String::new(), calendar: String::new(), language: String::new() };
+    if let Some(el) = draw_extension(&d, &shared, context, format!("plg-{plugin}-studio-{tab}"), palette, window, cx) {
+        return el;
+    }
+    match &*shared.borrow() {
+        Some(p) if p.disabled.is_some() => note(mandara_i18n::t("plugin stopped"), palette),
+        None => note(mandara_i18n::t("plugin failed"), palette),
+        _ => note(mandara_i18n::t("This plugin has nothing to show here"), palette),
+    }
+}
+
+fn note(text: impl Into<gpui::SharedString>, palette: &MandaraPalette) -> AnyElement {
+    div().text_size(px(text::BODY_S)).text_color(palette.on_surface_variant.hsla()).child(text.into()).into_any_element()
+}
+
+// ── Launcher providers ───────────────────────────────────────────────────
+
+/// Most plugin providers a plain launcher search asks.
+const MAX_GLOBAL_PROVIDERS: usize = 2;
+/// Longest word a `plugins run` command passes on.
+const MAX_COMMAND_WORD: usize = 256;
+
+/// `plugins run <plugin> <command> [args…]`: runs a command plugin.toml's
+/// `[[commands]]` declares (a user gesture for the plugin).
+pub fn run_command(plugin: &str, words: &[String], cx: &mut App) -> Result<(), String> {
+    let d = discovered(plugin).ok_or_else(|| format!("no plugin `{plugin}`"))?;
+    let name = words.first().ok_or("a command name is needed")?;
+    if !d.commands.iter().any(|c| c.name == *name) {
+        return Err(format!("`{plugin}` has no command `{name}`"));
+    }
+    if words.len() > 1 + mandara_plugins::extension::MAX_COMMAND_ARGS || words.iter().any(|w| w.len() > MAX_COMMAND_WORD) {
+        return Err("too many or too long words".into());
+    }
+    if !cx.global::<PluginRegistry>().is_enabled(plugin, &config(cx).read(cx).get().plugins) {
+        return Err(format!("`{plugin}` is switched off"));
+    }
+    let shared = instance(&d, cx);
+    if shared.borrow().is_none() {
+        return Err(format!("`{plugin}` isn't running"));
+    }
+    let event = PluginEvent { context: RenderContext { surface: SurfaceKind::Launcher, outlet: String::new(), instance: String::new(), width: 0.0, height: 0.0, numerals: String::new(), calendar: String::new(), language: String::new() }, node: String::new(), action: name.clone(), value: EventValue::Command(words.to_vec()) };
+    send_event(plugin, &shared, &event, cx);
+    Ok(())
+}
+
+/// The commands every switched-on plugin offers: (plugin, command).
+pub fn plugin_commands(cx: &App) -> Vec<(String, mandara_plugins::extension::ManifestCommand)> {
+    let cfg = config(cx).read(cx).get();
+    let registry = cx.global::<PluginRegistry>();
+    DISCOVERED.with(|m| m.borrow().values().filter(|d| registry.is_enabled(&d.id, &cfg.plugins)).flat_map(|d| d.commands.iter().map(|c| (d.id.clone(), c.clone()))).collect())
+}
+
+/// A launcher provider a third-party plugin declares (`[[launcher]]`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct PluginProvider {
+    pub plugin: String,
+    pub id: String,
+    pub name: String,
+    pub prefix: String,
+    pub global: bool,
+    pub icon: &'static str,
+}
+
+/// The launcher providers of switched-on extension plugins.
+pub fn launcher_providers(cx: &App) -> Vec<PluginProvider> {
+    let cfg = config(cx).read(cx).get();
+    let registry = cx.global::<PluginRegistry>();
+    DISCOVERED.with(|m| {
+        m.borrow()
+            .values()
+            .filter(|d| !d.launcher.is_empty() && registry.is_enabled(&d.id, &cfg.plugins))
+            .flat_map(|d| {
+                d.launcher.iter().map(|l| PluginProvider {
+                    plugin: d.id.clone(),
+                    id: l.id.clone(),
+                    name: translated(d, &l.name),
+                    prefix: l.prefix.clone(),
+                    global: l.global,
+                    icon: crate::icons::ICON_NAMES.iter().find(|x| **x == l.icon).copied().unwrap_or("plug"),
+                })
+            })
+            .collect()
+    })
+}
+
+/// Plugin launcher results for `query`: `(routed, hits)`. When the query
+/// starts with a provider's prefix (the longest wins) only that provider
+/// answers and `routed` is true; otherwise providers marked `global` add a
+/// few hits to the plain search. Each query runs in the plugin's sandbox
+/// under the launcher's time budget.
+pub fn launcher_hits(query: &str, builtin_routed: bool, cx: &App) -> (bool, Vec<crate::launcher_ext::Hit>) {
+    let q = query.trim_start();
+    let providers = launcher_providers(cx);
+    if providers.is_empty() || q.is_empty() {
+        return (false, Vec::new());
+    }
+    let routed = providers.iter().filter(|p| !p.prefix.is_empty() && q.starts_with(p.prefix.as_str())).max_by_key(|p| p.prefix.len());
+    if let Some(p) = routed {
+        return (true, query_provider(p, &q[p.prefix.len()..], crate::launcher_ext::PROVIDER_LIMIT, cx));
+    }
+    // A query for one of Mandara's own providers (`files:`, …) isn't a
+    // plain search: global plugin providers never see it.
+    if builtin_routed {
+        return (false, Vec::new());
+    }
+    // Plain searches go only to providers the person allowed to see them
+    // (`launcher.global`), and to a few at most: each keystroke waits.
+    let may_see = |p: &&PluginProvider| discovered(&p.plugin).is_some_and(|d| access_for(&d, cx).allows(&mandara_plugins::extension::Capability::LauncherGlobal));
+    let hits = providers.iter().filter(|p| p.global).filter(may_see).take(MAX_GLOBAL_PROVIDERS).flat_map(|p| query_provider(p, q, crate::launcher_ext::global_limit(), cx)).collect();
+    (false, hits)
+}
+
+fn query_provider(p: &PluginProvider, query: &str, limit: usize, cx: &App) -> Vec<crate::launcher_ext::Hit> {
+    use crate::launcher_ext::{Hit, HitAction, Lead};
+    let Some(d) = discovered(&p.plugin) else { return Vec::new() };
+    let plugin = instance(&d, cx);
+    let hits = plugin.borrow_mut().as_mut().map(|pl| pl.launcher_query(&p.id, query.trim(), limit)).unwrap_or_default();
+    QUERIED.with(|q| {
+        let mut q = q.borrow_mut();
+        if !q.contains(&p.plugin) {
+            q.push(p.plugin.clone());
+        }
+    });
+    let images = images_for(&p.plugin);
+    // Every result says which plugin it comes from, so none can pass for an
+    // app or a Mandara action.
+    let from = cx.global::<PluginRegistry>().get(&p.plugin).map(|f| f.manifest.display_name()).unwrap_or_else(|| d.name.clone());
+    hits.into_iter()
+        .map(|h| {
+            let lead = match (h.image != 0).then(|| images(h.image, cx)).flatten() {
+                Some(path) => Lead::Picture(path),
+                None => Lead::Icon(crate::icons::ICON_NAMES.iter().find(|x| **x == h.icon).copied().unwrap_or(p.icon)),
+            };
+            Hit {
+                provider: "plugin",
+                key: format!("{}/{}/{}", p.plugin, p.id, h.id),
+                label: h.title,
+                detail: if h.detail.is_empty() { from.clone() } else { format!("{from} · {}", h.detail) },
+                lead,
+                badge: mandara_i18n::tk("Plugin"),
+                keywords: h.keywords,
+                action: HitAction::Command(vec!["plugins".into(), "launch".into(), p.plugin.clone(), p.id.clone(), h.id]),
+            }
+        })
+        .collect()
+}
+
+thread_local! {
+    /// Plugins asked for launcher results since the last settle.
+    static QUERIED: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
+
+/// After a launcher search: hands the broker requests the asked plugins
+/// queued (a query may ask for data) to the brokers. Commands queued from
+/// a query are dropped: typing in the launcher never runs a command.
+pub fn settle_launcher(cx: &mut App) {
+    for plugin in QUERIED.with(|q| std::mem::take(&mut *q.borrow_mut())) {
+        let Some(shared) = loaded(&plugin) else { continue };
+        let dropped = shared.borrow_mut().as_mut().map(|p| p.take_commands()).unwrap_or_default();
+        if !dropped.is_empty() {
+            tracing::warn!(target: "mandara::plugin", "plugin `{plugin}` queued commands from a launcher query; they were dropped");
+        }
+        after_call(&plugin, &shared, cx);
+    }
+}
+
+/// `plugins launch <plugin> <provider> <hit>`: a launcher result was chosen.
+pub fn launch(plugin: &str, provider: &str, hit: &str, cx: &mut App) -> Result<(), String> {
+    let d = discovered(plugin).filter(|d| d.launcher.iter().any(|l| l.id == provider)).ok_or_else(|| format!("no launcher provider {plugin}/{provider}"))?;
+    if !cx.global::<PluginRegistry>().is_enabled(plugin, &config(cx).read(cx).get().plugins) {
+        return Err(format!("`{plugin}` is switched off"));
+    }
+    let shared = instance(&d, cx);
+    let event = PluginEvent { context: RenderContext { surface: SurfaceKind::Launcher, outlet: provider.to_string(), instance: String::new(), width: 0.0, height: 0.0, numerals: String::new(), calendar: String::new(), language: String::new() }, node: String::new(), action: String::new(), value: EventValue::Launch(hit.to_string()) };
+    send_event(plugin, &shared, &event, cx);
+    Ok(())
+}
 
 fn is_builtin(r: &PluginRegistry, id: &str) -> bool {
     r.get(id).is_some_and(|f| f.manifest.origin == PluginOrigin::Builtin)
@@ -563,11 +976,11 @@ fn scan() -> Vec<(Discovered, u64)> {
 /// Applies a [`scan`]: registers, reloads and removes plugins.
 fn apply_scan(found: Vec<(Discovered, u64)>, cx: &mut App) -> Vec<String> {
     let mut changes = Vec::new();
-    cx.update_global::<PluginRegistry, _>(|r, _| {
+    cx.update_global::<PluginRegistry, _>(|r, cx| {
         let registered: Vec<String> = r.manifests().filter(|m| matches!(m.origin, PluginOrigin::ThirdParty { .. })).map(|m| m.id.clone()).collect();
         for id in registered.iter().filter(|id| !found.iter().any(|(d, _)| &d.id == *id)) {
             r.unregister(id);
-            forget(id);
+            forget(id, cx);
             PRINTS.with(|p| p.borrow_mut().remove(id));
             changes.push(format!("removed {id}"));
         }
@@ -579,7 +992,7 @@ fn apply_scan(found: Vec<(Discovered, u64)>, cx: &mut App) -> Vec<String> {
             if known == Some(print) {
                 continue;
             }
-            forget(&d.id);
+            forget(&d.id, cx);
             PRINTS.with(|p| p.borrow_mut().insert(d.id.clone(), print));
             changes.push(format!("{} {}", if known.is_some() { "reloaded" } else { "added" }, d.id));
             register_one(r, d);
@@ -640,6 +1053,102 @@ pub fn watch(cx: &mut App) {
 #[cfg(test)]
 mod tests {
     use mandara_plugins::wasm::{PLUGIN_COMMANDS, plugin_may_run};
+
+    /// A snapshot whose every write failed is kept and offered again, until
+    /// a newer snapshot of the same file supersedes it.
+    #[test]
+    fn failed_storage_snapshots_are_kept_until_written_or_superseded() {
+        use std::path::Path;
+        let mut w = super::StorageWrites::default();
+        let (a, b) = (Path::new("/s/a.json"), Path::new("/s/b.json"));
+        let ga = w.begin(a);
+        w.failed(a.into(), ga, "A1".into());
+        assert_eq!(w.take_retries(), [(a.to_path_buf(), std::sync::Arc::<str>::from("A1"))], "kept after the tries ran out");
+        // Retried as a new generation that fails again, then succeeds.
+        let ga = w.begin(a);
+        w.failed(a.into(), ga, "A1".into());
+        let retries = w.take_retries();
+        let ga = w.begin(a);
+        assert_eq!(retries.len(), 1);
+        w.written(a, ga);
+        assert!(w.take_retries().is_empty(), "written: nothing left");
+        // A newer snapshot of the file supersedes a failed one.
+        let gb = w.begin(b);
+        w.failed(b.into(), gb, "B1".into());
+        w.begin(b);
+        assert!(w.take_retries().is_empty(), "the newer snapshot wins");
+    }
+
+    /// Runs a future whose waits are all ready (the test's `wait`).
+    fn block_on<F: std::future::Future>(future: F) -> F::Output {
+        let mut future = std::pin::pin!(future);
+        let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+        loop {
+            if let std::task::Poll::Ready(out) = future.as_mut().poll(&mut cx) {
+                return out;
+            }
+        }
+    }
+
+    /// The host's own write task and retry scheduling against a real write
+    /// error: every try fails and the snapshot is kept; once the disk
+    /// recovers, the retry path writes it and nothing is left to retry.
+    #[test]
+    fn the_host_write_task_keeps_and_retries_a_failed_snapshot() {
+        let dir = std::env::temp_dir().join(format!("mandara-host-task-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let blocker = dir.join("blocked");
+        std::fs::write(&blocker, "not a folder").unwrap();
+        let path = blocker.join("p.json");
+        let json: std::sync::Arc<str> = "{\"a\":\"1\"}".into();
+        let generation = super::storage_writes(|w| w.begin(&path));
+        let tries = std::cell::Cell::new(0);
+        block_on(super::run_storage_write(path.clone(), generation, json.clone(), || {
+            tries.set(tries.get() + 1);
+            async {}
+        }));
+        assert_eq!(tries.get(), super::STORAGE_WRITE_ATTEMPTS - 1, "waited between every try");
+        assert!(!path.exists());
+        std::fs::remove_file(&blocker).unwrap();
+        let mut started = Vec::new();
+        super::retry_unsaved_with(|p, g, j| {
+            started.push(p.clone());
+            block_on(super::run_storage_write(p, g, j, || async {}));
+        });
+        assert!(started.contains(&path), "the kept snapshot was retried");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), &*json);
+        super::retry_unsaved_with(|p, _, _| assert_ne!(p, path, "written: not retried again"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The host's retry path against a real write error: every try fails,
+    /// the snapshot is kept, and after the disk recovers the retry writes it.
+    #[test]
+    fn a_failed_storage_write_is_retried_after_the_disk_recovers() {
+        let dir = std::env::temp_dir().join(format!("mandara-host-storage-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let blocker = dir.join("blocked");
+        std::fs::write(&blocker, "not a folder").unwrap();
+        let path = blocker.join("p.json");
+        let json: std::sync::Arc<str> = "{\"a\":\"1\"}".into();
+        let mut w = super::StorageWrites::default();
+        let generation = w.begin(&path);
+        for _ in 0..super::STORAGE_WRITE_ATTEMPTS {
+            assert!(mandara_plugins::wasm::write_storage(&path, &json).is_err());
+        }
+        w.failed(path.clone(), generation, json.clone());
+        std::fs::remove_file(&blocker).unwrap();
+        for (p, j) in w.take_retries() {
+            let generation = w.begin(&p);
+            mandara_plugins::wasm::write_storage(&p, &j).unwrap();
+            w.written(&p, generation);
+        }
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), &*json);
+        assert!(w.take_retries().is_empty(), "nothing left to retry");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     /// Issue #10: plugins may only queue interface commands. Every allowed
     /// path is a real built-in command (a typo would silently block it),

@@ -182,6 +182,12 @@ impl StudioView {
         }))
     }
 
+    /// The marketplace repository (`owner/repo`) a plugin folder was
+    /// installed from, if it came from the marketplace.
+    pub(super) fn market_repo_of(&self, dir: &std::path::Path) -> Option<String> {
+        self.market.installed.iter().find(|(_, (folder, _))| folder == dir).map(|(repo, _)| repo.clone())
+    }
+
     fn market_job(&mut self, repo: String, install: bool, force: bool, cx: &mut Context<Self>) {
         if self.market.jobs.contains_key(&repo) {
             return;
@@ -328,28 +334,37 @@ impl StudioView {
         // A stable hue per repository, so each community card has its own color.
         let hue = l.full_name.bytes().fold(0u32, |h, b| h.wrapping_mul(HASH_MULTIPLIER).wrapping_add(u32::from(b))) % FULL_TURN_DEG;
         let tone = p.primary.rotate_hue(hue as f32);
-        let url = l.html_url.clone();
+        // Where its code lives and where to report a problem, always in
+        // view on the card.
+        let link = |what: &str, glyph: &'static str, label: &'static str, url: String| {
+            div()
+                .id(SharedString::from(format!("mk-{what}-{key}")))
+                .h(px(DIM_24_PX))
+                .px(px(SPACE_10_PX))
+                .rounded_full()
+                .row()
+                .items_center()
+                .gap(px(SPACE_4_PX))
+                .cursor_pointer()
+                .bg(p.surface_base.with_alpha(ALPHA_72).hsla())
+                .text_size(px(TEXT_11_PX))
+                .font_weight(FontWeight::MEDIUM)
+                .hover(|s| s.bg(p.surface_container_high.hsla()))
+                .child(icon(glyph, ICON_11_PX, p.on_surface))
+                .child(label)
+                .on_click(move |_, _, _| {
+                    let _ = mandara_services::session::open_uri(&url);
+                })
+        };
+        let repo_url = l.html_url.trim_end_matches('/').to_string();
         let github = div()
-            .id(SharedString::from(format!("mk-open-{key}")))
             .absolute()
             .top(px(SPACE_10_PX))
             .inset_end(px(SPACE_10_PX))
-            .h(px(DIM_24_PX))
-            .px(px(SPACE_10_PX))
-            .rounded_full()
             .row()
-            .items_center()
-            .gap(px(SPACE_4_PX))
-            .cursor_pointer()
-            .bg(p.surface_base.with_alpha(ALPHA_72).hsla())
-            .text_size(px(TEXT_11_PX))
-            .font_weight(FontWeight::MEDIUM)
-            .hover(|s| s.bg(p.surface_container_high.hsla()))
-            .child(icon("external", ICON_11_PX, p.on_surface))
-            .child(t("GitHub"))
-            .on_click(move |_, _, _| {
-                let _ = mandara_services::session::open_uri(&url);
-            });
+            .gap(px(SPACE_6_PX))
+            .child(link("source", "git-branch", t("Source code"), repo_url.clone()))
+            .child(link("issues", "bug", t("Report an issue"), format!("{repo_url}/issues")));
         let initial = l.name.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_default();
         div()
             .relative()

@@ -324,6 +324,9 @@ impl StudioView {
     }
 
     fn set_wallpaper_tab(&mut self, tab: WallpaperTab, cx: &mut Context<Self>) {
+        // Choosing one of the page's own tabs (a deep link too) leaves a
+        // plugin's tab.
+        super::page_tabs::choose_plugin_tab("wallpaper", None, cx);
         let from = st(cx).tab;
         if from == WallpaperTab::Generator && tab != from {
             // The generator's previews go with its tab.
@@ -341,6 +344,9 @@ impl StudioView {
         let tabs = available(cfg, cx);
         let tab = Some(st(cx).tab).filter(|t| tabs.contains(t)).unwrap_or_default();
         let bar = self.wallpaper_tab_bar(&tabs, tab, p, window, cx);
+        if let Some(body) = super::page_tabs::plugin_body("wallpaper-tabs", super::grid::PageMetrics::of(window, cx).column_w, p, window, cx) {
+            return div().row().flex_col().gap(px(SPACE_22_PX)).child(bar).child(body).into_any_element();
+        }
         let note = st(cx).note.clone().map(|(text, error)| form::note(&text, error, p));
         let body = match tab {
             WallpaperTab::Wallpaper => self.wp_current_tab(cfg, p, window, cx),

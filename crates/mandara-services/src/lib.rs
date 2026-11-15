@@ -75,6 +75,7 @@ pub mod notify_policy;
 pub mod ocr;
 pub mod offline;
 pub mod outputs;
+pub mod plugin_net;
 pub mod phone_connect;
 pub mod plasma_lock;
 pub mod polkit;

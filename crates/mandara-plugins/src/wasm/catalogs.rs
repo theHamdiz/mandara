@@ -56,16 +56,66 @@ impl PluginCatalogs {
         text
     }
 
-    /// Translates owned labels while keeping their buffers when possible.
+    /// Replaces `text` with its translation only while the translated total
+    /// stays within `budget` bytes (a catalog can map a short label to a
+    /// long string); the length is checked before anything is copied.
+    /// Returns whether it still fits.
+    fn translate_bounded(&mut self, lang: Lang, text: &mut String, budget: &mut usize) -> bool {
+        let len = match self.translation(lang, text) {
+            Some(t) if t != text.as_str() => t.len(),
+            _ => text.len(),
+        };
+        if len > *budget {
+            return false;
+        }
+        *budget -= len;
+        self.translate_in_place(lang, text);
+        true
+    }
+
+    /// Translates a view's labels, button text,
+    /// hints and option labels, within the view's text budget
+    /// ([`crate::extension::MAX_VIEW_BYTES`]): past it the rest stays as
+    /// sent. A field's value (`input`) is the person's own text and is
+    /// never translated.
     pub(super) fn translate_view(&mut self, view: &mut View) {
         let lang = mandara_i18n::language();
         if lang == Lang::En {
             return;
         }
+        // The untranslated text already counts against the budget.
+        // Every string the view check counts, as `check_view` counts them.
+        let sent: usize = view.focus.len() + view.nodes.iter().map(|n| n.id.len() + n.text.len() + n.hint.len() + n.action.len() + n.options.iter().map(|o| o.value.len() + o.label.len()).sum::<usize>()).sum::<usize>();
+        let mut budget = crate::extension::MAX_VIEW_BYTES.saturating_sub(sent);
         for node in &mut view.nodes {
-            if matches!(node.kind, Kind::Text | Kind::Button) {
-                self.translate_in_place(lang, &mut node.text);
+            // Each replacement may use what its original text used, plus
+            // what is left.
+            let grow = |this: &mut Self, text: &mut String, budget: &mut usize| {
+                let mut room = *budget + text.len();
+                if this.translate_bounded(lang, text, &mut room) {
+                    *budget = room;
+                }
+            };
+            if matches!(node.kind, Kind::Text | Kind::Button | Kind::Toggle) {
+                grow(self, &mut node.text, &mut budget);
             }
+            grow(self, &mut node.hint, &mut budget);
+            for option in &mut node.options {
+                grow(self, &mut option.label, &mut budget);
+            }
+        }
+    }
+
+    /// Translates a launcher result's title and detail, each only when its
+    /// translation fits `max` bytes.
+    pub(super) fn translate_hit(&mut self, hit: &mut super::Hit, max: usize) {
+        let lang = mandara_i18n::language();
+        if lang == Lang::En {
+            return;
+        }
+        for text in [&mut hit.title, &mut hit.detail] {
+            let mut room = max;
+            self.translate_bounded(lang, text, &mut room);
         }
     }
 }
@@ -114,14 +164,18 @@ mod tests {
         with_language(Some(Lang::En), || assert_eq!(catalogs.translate_owned("Hello".into()), "Hello"));
     }
 
+    fn style() -> crate::wasm::Style {
+        crate::wasm::Style { width: 0.0, height: 0.0, min_width: 0.0, min_height: 0.0, padding: 0.0, gap: 0.0, radius: 0.0, size: 0.0, grow: false, bold: false, align: crate::wasm::Align::Auto, tone: Tone::Normal }
+    }
+
     fn node(kind: Kind) -> Node {
-        Node { kind, text: "Hello".into(), value: 0.0, children: Vec::new(), action: "run".into(), tone: Tone::Normal, size: 0.0, gap: 0.0, bold: false, grow: false }
+        Node { id: String::new(), kind, text: "Hello".into(), hint: String::new(), action: "run".into(), value: 0.0, min: 0.0, max: 0.0, step: 0.0, index: 0, children: Vec::new(), style: style(), options: Vec::new(), image: 0, marks: Vec::new(), disabled: false }
     }
 
     #[test]
     fn view_translation_only_changes_text_and_button_labels() {
         let mut catalogs = catalogs();
-        let mut view = View { nodes: vec![node(Kind::Text), node(Kind::Button), node(Kind::Icon), node(Kind::Meter)], root: 0 };
+        let mut view = View { nodes: vec![node(Kind::Text), node(Kind::Button), node(Kind::Icon), node(Kind::Meter)], root: 0, focus: String::new() };
         with_language(Some(Lang::Ar), || catalogs.translate_view(&mut view));
         assert_eq!(view.nodes.iter().map(|node| node.text.as_str()).collect::<Vec<_>>(), ["مرحبا", "مرحبا", "Hello", "Hello"]);
         assert!(view.nodes.iter().all(|node| node.action == "run"));
@@ -134,5 +188,36 @@ mod tests {
         with_language(Some(Lang::En), || assert_eq!(catalogs.translate_owned("Hello".into()), "Hello"));
         with_language(Some(Lang::Ar), || assert!(catalogs.translate_owned(String::new()).is_empty()));
         assert!(catalogs.loaded.is_empty());
+    }
+
+    /// A catalog mapping a short label to a huge string can't grow a view
+    /// past its text budget (the copies stop before it, untranslated).
+    #[test]
+    fn translation_stays_within_the_view_budget() {
+        let huge = "y".repeat(crate::extension::MAX_VIEW_BYTES / 4);
+        let mut catalogs = PluginCatalogs::new(Path::new("unused-plugin-directory"));
+        catalogs.loaded.insert(Lang::Ar, Some(Catalog::parse(&format!("\"x\" = \"{huge}\"")).unwrap()));
+        let text = |t: &str| Node { text: t.into(), ..node(Kind::Text) };
+        let mut view = View { nodes: (0..100).map(|_| text("x")).collect(), root: 0, focus: String::new() };
+        with_language(Some(Lang::Ar), || catalogs.translate_view(&mut view));
+        let total: usize = view.nodes.iter().map(|n| n.text.len()).sum();
+        assert!(total <= crate::extension::MAX_VIEW_BYTES, "{total} bytes");
+        assert!(view.nodes.iter().any(|n| n.text == "x"), "the rest stays as sent");
+    }
+
+    /// Fields the view check counts but translation never changes (focus,
+    /// ids, actions, option values) are reserved first, so a valid view
+    /// still passes the check after translation.
+    #[test]
+    fn translation_reserves_every_counted_field() {
+        let huge = "y".repeat(crate::extension::MAX_VIEW_BYTES * 3 / 4);
+        let mut catalogs = PluginCatalogs::new(Path::new("unused-plugin-directory"));
+        catalogs.loaded.insert(Lang::Ar, Some(Catalog::parse(&format!("\"x\" = \"{huge}\"")).unwrap()));
+        let focus = "f".repeat(crate::extension::MAX_VIEW_BYTES / 2);
+        let mut view = View { nodes: vec![Node { text: "x".into(), ..node(Kind::Text) }], root: 0, focus };
+        crate::extension::check_view(&view).expect("valid as sent");
+        with_language(Some(Lang::Ar), || catalogs.translate_view(&mut view));
+        assert_eq!(view.nodes[0].text, "x", "the translation doesn't fit next to the focus");
+        crate::extension::check_view(&view).expect("still valid after translation");
     }
 }
