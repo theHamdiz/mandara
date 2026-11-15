@@ -2651,6 +2651,7 @@ impl GreeterView {
                             this.session_ix = i;
                             this.session_menu = false;
                             this.field = Field::Password;
+                            this.activity();
                             cx.notify();
                         }))
                         .child(div().w(px(18.0 * k)).when(selected, |el| el.child(icon("check", 16.0 * k, ink))))
@@ -2734,6 +2735,7 @@ impl GreeterView {
                             this.session_ix = i;
                             this.session_menu = false;
                             this.field = Field::Password;
+                            this.activity();
                             cx.notify();
                         }))
                         .child(div().w(px(16.0 * k)).when(selected, |el| el.child(icon("check", 15.0 * k, p.primary.hsla()))))

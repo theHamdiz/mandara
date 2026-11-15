@@ -253,6 +253,7 @@ impl GreeterView {
                                 this.session_ix = i;
                                 this.session_menu = false;
                                 this.field = Field::Password;
+                                this.activity();
                                 cx.notify();
                             }))
                             .child(label),
