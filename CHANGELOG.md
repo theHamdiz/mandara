@@ -6,15 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
-Third-party plugins can now become part of the desktop itself, behind permissions you grant and can take back, and Studio is calmer and more consistent, with live chips in the bar, a richer dock and an optional grain texture.
+A calmer, more consistent Studio, with live chips in the bar, a richer dock and an optional grain texture.
 
 ### New
 
-- Third-party plugins draw rich native views with text fields, switches, sliders, segmented controls, grids, virtual lists, images and charts, in your theme, light or dark, and in right-to-left languages.
-- Plugins can add their own tabs to Studio's Themes, Bars, Desktop and Wallpaper pages, offer launcher results, size their own panels, and offer commands you can run with `mandara msg plugins run`, bind to shortcuts or use in hooks, skills and agents.
-- Plugins can ask for what's playing, media controls, wallpapers, pictures in folders you choose, windows, workspaces, system load, the clipboard, notifications, on-screen displays, desktop events, timers, other plugins and one web address at a time. Each one is off until you switch it on in Studio → Plugins → the plugin → Permissions, and you can switch it off again at any moment.
-- Every third-party plugin page and store card links to its source code and to where you can report an issue.
-- The moon-phase example plugin is a full showcase: a rendered moon for every phase, a look-ahead slider, an illumination chart, coming full and new moons, a moon calendar tab in Studio → Desktop, `moon ` results in the launcher and a full-moon reminder.
 - Bar items can be live chips: Resources shows labelled numbers, tiny live graphs or one inline chart of CPU and memory; Notifications shows your latest notification and the count; Network shows the network name and signal; Bluetooth shows your connected device and its battery. Pick a look under *In the bar* in each plugin's settings, or with `mandara msg bar display`; nothing changes until you do.
 - The dock can be made of liquid glass, lift or highlight the icon under your pointer, glow under running apps and show app names after a delay you choose. The taskbar gains a glass tray, app names, window counts, a raised focus style and coral for apps that need you. All of it is off until you pick it.
 - A fine grain texture for Studio, cards, bars, the launcher, panels, the dock and the taskbar, each with its own style (fine, film, paper fibre or speckle), strength, size, contrast and colour, kept subtle. Find it under Themes → Components → Grain; it is off until you pick a style.
@@ -28,11 +23,26 @@ Third-party plugins can now become part of the desktop itself, behind permission
 - Typography opens with a live specimen of your interface, display, Arabic and monospace fonts, drawn in each face at your weight and size.
 - In right-to-left languages Studio's close button sits at the outer edge of the title bar.
 
+## 0.32.0 — 2026-11-15
+
+Third-party plugins can now become part of the desktop itself: rich native
+views, Studio tabs, launcher results, commands and the desktop's services,
+each behind a permission you grant and can take back.
+
+### New
+
+- Third-party plugins draw rich native views with text fields, switches, sliders, segmented controls, grids, virtual lists, images and charts, in your theme, light or dark, and in right-to-left languages.
+- Plugins can add their own tabs to Studio's Themes, Bars, Desktop and Wallpaper pages, offer launcher results, size their own panels, and offer commands you can run with `mandara msg plugins run`, bind to shortcuts or use in hooks, skills and agents.
+- Plugins can ask for what's playing, media controls, wallpapers, pictures in folders you choose, windows, workspaces, system load, the clipboard, notifications, on-screen displays, desktop events, timers, other plugins and one web address at a time. Each one is off until you switch it on in Studio → Plugins → the plugin → Permissions, and you can switch it off again at any moment.
+- Every third-party plugin page and store card links to its source code and to where you can report an issue.
+- The moon-phase example plugin is a full showcase: a rendered moon for every phase, a look-ahead slider, an illumination chart, coming full and new moons, a moon calendar tab in Studio → Desktop, `moon ` results in the launcher and a full-moon reminder.
+
 ### Under the hood
 
 - Sensitive plugin actions (reading the clipboard, opening a page, setting a wallpaper, closing a window) only work right after you click or type in that plugin, plugin views, requests, queues and launcher time are bounded, and the compliance check now tries every new kind of plugin view.
 - The plugin interface is now one contract (`mandara:plugin@0.2.0`) with a single `render` for every surface. Third-party plugins built for the earlier interface no longer load until their authors rebuild them against the updated guide.
 - Two programs loading the same plugin at once can no longer crash on a half-written compiled-plugin cache.
+
 
 ## 0.31.0 — 2026-11-15
 
