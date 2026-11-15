@@ -1700,9 +1700,12 @@ impl LauncherView {
         let selected = (self.selected != 0).then(|| self.results.get(self.selected)).flatten().map(selection_key);
         self.refilter(cx);
         if let Some(selected) = selected
-            && let Some(index) = self.results.iter().position(|item| selection_key(item) == selected)
+            && let Some(index) = self.results.iter().take(self.count()).position(|item| selection_key(item) == selected)
         {
             self.selected = index;
+            if self.grid_active() {
+                self.reveal_selected();
+            }
         }
         cx.notify();
     }
@@ -2786,8 +2789,6 @@ mod tests {
         }
     }
 
-    /// `reddit` and `subreddit` find the plugin; `r/name` opens that
-    /// community, only while the plugin is on.
     #[test]
     fn window_selection_distinguishes_windows_from_the_same_app() {
         let window = |id: &str| Item::Hit(Hit {
@@ -2806,6 +2807,8 @@ mod tests {
         assert_ne!(selection_key(&first), selection_key(&second));
     }
 
+    /// `reddit` and `subreddit` find the plugin; `r/name` opens that
+    /// community, only while the plugin is on.
     #[test]
     fn reddit_names_and_communities_reach_the_plugin() {
         let (registry, mut cfg, index) = fixture();
