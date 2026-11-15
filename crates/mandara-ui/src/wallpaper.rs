@@ -441,10 +441,70 @@ pub fn display_copy(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
 /// picker thumbnail, any other size a slanted slice of that size.
 pub type Job = (PathBuf, u32, u32);
 
+/// Set on a job's height to ask for a plain [`fit`] picture of
+/// `width × (height & !FIT_JOB)` instead of a slanted slice: plugin images
+/// (album covers, folder pictures, plugin assets) decoded at their drawn
+/// size through the same bounded worker.
+pub const FIT_JOB: u32 = 1 << 31;
+
+/// Longest side of a [`fit`] picture (physical px): a plugin can't ask
+/// the worker for a huge decode target.
+pub const FIT_MAX_SIDE: u32 = 2048;
+/// [`fit`] sizes are rounded up to this step, so a plugin choosing odd
+/// sizes can't fill the cache with near-identical copies.
+pub const FIT_STEP: u32 = 16;
+/// Largest picture [`fit`] decodes, read from its header first: about an
+/// 8K photo. Anything larger is refused before a byte of pixels is
+/// allocated (a tiny, highly compressed file can't expand into gigabytes).
+pub const FIT_MAX_SOURCE_PIXELS: u64 = 40_000_000;
+pub const FIT_MAX_SOURCE_SIDE: u32 = 12_000;
+
+/// A fit job's size rounded to [`FIT_STEP`] (and clamped).
+pub fn fit_size(px: f32) -> u32 {
+    let px = if px.is_finite() { px.max(1.0) as u32 } else { 1 };
+    px.div_ceil(FIT_STEP).saturating_mul(FIT_STEP).clamp(FIT_STEP, FIT_MAX_SIDE)
+}
+
+/// `path` cover-cropped to exactly `w × h` (physical px, at most
+/// [`FIT_MAX_SIDE`]), cached: PNG when it has transparency, else JPEG.
+pub fn fit(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
+    let (w, h) = (w.clamp(1, FIT_MAX_SIDE), h.clamp(1, FIT_MAX_SIDE));
+    let dir = mandara_config::paths::cache_dir().join("plugin-images");
+    let key = cache_key(path, &format!("fit{w}x{h}"));
+    let (jpeg, png) = (dir.join(&key), dir.join(key.replace(".jpg", ".png")));
+    if jpeg.exists() {
+        return Ok(jpeg);
+    }
+    if png.exists() {
+        return Ok(png);
+    }
+    if !mandara_media::is_video(path) {
+        let (sw, sh) = image::ImageReader::open(path).and_then(|r| r.with_guessed_format()).map_err(|e| e.to_string())?.into_dimensions().map_err(|e| e.to_string())?;
+        if sw > FIT_MAX_SOURCE_SIDE || sh > FIT_MAX_SOURCE_SIDE || u64::from(sw) * u64::from(sh) > FIT_MAX_SOURCE_PIXELS {
+            return Err(format!("{}: {sw}×{sh} is too large to show", path.display()));
+        }
+    }
+    let src = open_still(path)?;
+    let out = cover(&src, w, h);
+    drop(src);
+    if out.color().has_alpha() {
+        use image::ImageEncoder as _;
+        let rgba = out.to_rgba8();
+        drop(out);
+        cache::write(&png, |writer| image::codecs::png::PngEncoder::new(writer).write_image(rgba.as_raw(), rgba.width(), rgba.height(), image::ExtendedColorType::Rgba8).map_err(|e| e.to_string()))?;
+        Ok(png)
+    } else {
+        save_jpeg(&out, &jpeg, THUMB_QUALITY)?;
+        Ok(jpeg)
+    }
+}
+
 /// Most thumbnail decodes in flight at once. Jobs run on GPUI's shared
 /// background executor (no dedicated threads); the cap bounds the transient
 /// memory of full-size decodes (a 4K JPEG decodes to ~33 MB).
 const MAX_THUMB_JOBS: usize = 3;
+/// Finished and failed thumbnails remembered before the lists start over.
+const MAX_REMEMBERED_THUMBS: usize = 4096;
 
 #[derive(Default)]
 pub struct Thumbnails {
@@ -503,13 +563,27 @@ impl Thumbnails {
             self.in_flight += 1;
             let work = job.clone();
             let task = cx.background_executor().spawn(async move {
-                if work.1 == 0 { thumbnail(&work.0) } else { slant(&work.0, work.1, work.2) }
+                if work.1 == 0 {
+                    thumbnail(&work.0)
+                } else if work.2 & FIT_JOB != 0 {
+                    fit(&work.0, work.1, work.2 & !FIT_JOB)
+                } else {
+                    slant(&work.0, work.1, work.2)
+                }
             });
             cx.spawn(async move |this, cx| {
                 let result = task.await;
                 let _ = this.update(cx, |t, cx| {
                     t.in_flight -= 1;
                     t.requested.remove(&job);
+                    // The maps only remember where cached files are: past a
+                    // bound they start over (the files stay on disk).
+                    if t.ready.len() >= MAX_REMEMBERED_THUMBS {
+                        t.ready = HashMap::new();
+                    }
+                    if t.failed.len() >= MAX_REMEMBERED_THUMBS {
+                        t.failed = HashSet::new();
+                    }
                     match result {
                         Ok(thumb) => {
                             t.ready.insert(job, thumb);

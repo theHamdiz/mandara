@@ -54,6 +54,9 @@ pub enum Lead {
     Image(PathBuf),
     /// A bundled Mandara icon.
     Icon(&'static str),
+    /// A square picture with its own shape (a plugin's image), drawn whole
+    /// at the tile's size.
+    Picture(PathBuf),
 }
 
 /// What activating a provider result does.

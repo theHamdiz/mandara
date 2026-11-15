@@ -522,6 +522,9 @@ impl StudioView {
     pub(super) fn themes_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut gpui::Window, cx: &mut Context<Self>) -> AnyElement {
         let tab = self.themes_tab;
         let tabs = super::page_tabs::bar("themes-tabs", &ThemesTab::ALL, tab, p, |view, tab, _, cx| view.show_themes_tab(tab, cx), window, cx);
+        if let Some(body) = super::page_tabs::plugin_body("themes-tabs", super::grid::PageMetrics::of(window, cx).column_w, p, window, cx) {
+            return div().row().flex_col().gap(px(SPACE_22_PX)).child(tabs).child(body).into_any_element();
+        }
         let body = match tab {
             ThemesTab::Colors => self.themes_colors(cfg, p, cx),
             ThemesTab::Components => self.components_section(cfg, p, cx),

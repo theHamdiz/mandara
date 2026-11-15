@@ -975,6 +975,31 @@ pub struct PluginsConfig {
     /// Free-form settings tables keyed by plugin id, e.g.
     /// `[plugins.settings.prayer-times] latitude = 31.2`.
     pub settings: BTreeMap<String, toml::Table>,
+    /// What the person granted each third-party plugin (Studio → Plugins →
+    /// the plugin → Permissions), e.g. `[plugins.grants.moon-phase]
+    /// capabilities = ["media.read"]`. Revoking removes the entry; the
+    /// shell checks every request against this table when it arrives.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub grants: BTreeMap<String, PluginGrant>,
+}
+
+/// The person's grants for one third-party plugin.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PluginGrant {
+    /// Granted capability names (`media.read`, `net:api.example.com`, …);
+    /// only ones the plugin declares count.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<String>,
+    /// Folders chosen for its `files.folders` capability.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub folders: Vec<std::path::PathBuf>,
+}
+
+impl PluginGrant {
+    pub fn is_empty(&self) -> bool {
+        self.capabilities.is_empty() && self.folders.is_empty()
+    }
 }
 
 /// A layout list that holds plugin ids.
@@ -1024,6 +1049,7 @@ impl Default for PluginsConfig {
             removed: Vec::new(),
             removed_places: BTreeMap::new(),
             settings: BTreeMap::new(),
+            grants: BTreeMap::new(),
         }
     }
 }
@@ -1035,6 +1061,32 @@ impl PluginsConfig {
     /// where the registry isn't, such as the compositor emitters.
     pub fn opted_in(&self, id: &str) -> bool {
         self.enabled.iter().any(|e| e == id) && !self.disabled.iter().any(|d| d == id) && !self.is_removed(id)
+    }
+
+    /// The capabilities granted to plugin `id` (empty when none).
+    pub fn granted(&self, id: &str) -> &[String] {
+        self.grants.get(id).map(|g| g.capabilities.as_slice()).unwrap_or_default()
+    }
+
+    /// Folders granted to plugin `id` for `files.folders`.
+    pub fn granted_folders(&self, id: &str) -> &[std::path::PathBuf] {
+        self.grants.get(id).map(|g| g.folders.as_slice()).unwrap_or_default()
+    }
+
+    /// Grants or revokes `capability` for plugin `id`. Revoking the last
+    /// grant removes the plugin's entry. Returns whether it changed.
+    pub fn set_granted(&mut self, id: &str, capability: &str, on: bool) -> bool {
+        let entry = self.grants.entry(id.to_string()).or_default();
+        let had = entry.capabilities.iter().any(|c| c == capability);
+        if on && !had {
+            entry.capabilities.push(capability.to_string());
+        } else if !on && had {
+            entry.capabilities.retain(|c| c != capability);
+        }
+        if entry.is_empty() {
+            self.grants.remove(id);
+        }
+        on != had
     }
 
     /// Whether `id` was removed (see [`PluginsConfig::removed`]).

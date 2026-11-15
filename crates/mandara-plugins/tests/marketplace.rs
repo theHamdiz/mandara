@@ -259,7 +259,7 @@ fn marketplace_search_install_load_uninstall() {
     let (pid, pdir, entry) = (plugin.id.clone(), plugin.dir.clone(), plugin.entry.clone());
     let settings = plugin.settings.iter().map(|s| (s.key.clone(), s.default_json())).collect();
     let ran = std::thread::spawn(move || {
-        let mut p = WasmPlugin::load(&pid, &pdir, &entry, settings, false).map_err(|e| format!("{e:#}"))?;
+        let mut p = WasmPlugin::load(&pid, &pdir, &entry, settings, mandara_plugins::extension::Access::default()).map_err(|e| format!("{e:#}"))?;
         let theme = palette();
         let surfaces = (p.bar(&theme).is_some(), p.panel(&theme).is_some());
         Ok::<_, String>((surfaces, p.disabled.clone()))

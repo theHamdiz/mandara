@@ -874,6 +874,42 @@ pub fn register(r: &mut PluginRegistry) {
     );
 
     r.command(
+        "core",
+        CommandSpec::new("plugins run", mandara_i18n::tk("Run a command a third-party plugin offers (its [[commands]]), for shortcuts, hooks and agents"), |a, cx| {
+            let plugin = a.str(0)?.to_string();
+            let mut words = Vec::new();
+            let mut i = 1;
+            while let Some(w) = a.get(i) {
+                words.push(w.to_string());
+                i += 1;
+            }
+            crate::plugins::external::run_command(&plugin, &words, cx)?;
+            Ok(json!({ "plugin": plugin, "command": words }))
+        })
+        .arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id")))
+        .arg(ArgSpec::required("command", ArgKind::String, mandara_i18n::tk("its command, then any words for it")))
+        .example("plugins run moon-phase remind"),
+    );
+    r.command(
+        "core",
+        CommandSpec::new("plugins commands", mandara_i18n::tk("The commands switched-on third-party plugins offer"), |_, cx| {
+            Ok(json!(crate::plugins::external::plugin_commands(cx).into_iter().map(|(plugin, c)| json!({ "plugin": plugin, "command": c.name, "summary": c.summary })).collect::<Vec<_>>()))
+        })
+        .example("plugins commands"),
+    );
+    r.command(
+        "core",
+        CommandSpec::new("plugins launch", mandara_i18n::tk("Choose a third-party plugin's launcher result (what Enter on it does)"), |a, cx| {
+            let (plugin, provider, hit) = (a.str(0)?.to_string(), a.str(1)?.to_string(), a.str(2)?.to_string());
+            crate::plugins::external::launch(&plugin, &provider, &hit, cx)?;
+            Ok(json!({ "plugin": plugin, "provider": provider, "hit": hit }))
+        })
+        .arg(ArgSpec::required("plugin", ArgKind::String, mandara_i18n::tk("plugin id")))
+        .arg(ArgSpec::required("provider", ArgKind::String, mandara_i18n::tk("its [[launcher]] id")))
+        .arg(ArgSpec::required("hit", ArgKind::String, mandara_i18n::tk("the result's id")))
+        .example("plugins launch moon-phase moon next-full"),
+    );
+    r.command(
         core,
         CommandSpec::new("plugins reload", mandara_i18n::tk("Hot-reload plugins from the plugin folders (also happens automatically)"), |_, cx| Ok(json!(crate::plugins::external::sync(cx))),
         ),

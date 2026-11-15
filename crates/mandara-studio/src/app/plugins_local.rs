@@ -426,11 +426,12 @@ impl StudioView {
         }
         let palette = mandara_ui::plugins::external::palette_for(p);
         self.local.tests.insert(key.clone(), TestState::Running);
+        // The grants the person gave it, as in the shell.
+        let access = mandara_plugins::extension::Access::new(&plugin.permissions, cfg.plugins.granted(&plugin.id));
         let task = cx.background_executor().spawn(async move {
-            let allow = plugin.permissions.iter().any(|x| x == wasm::PERMISSION_COMMANDS);
             mandara_plugins::guard(&format!("plugin `{}` test load", plugin.id), move || {
                 let start = Instant::now();
-                let mut w = wasm::WasmPlugin::load(&plugin.id, &plugin.dir, &plugin.entry, settings, allow).map_err(|e| format!("{e:#}"))?;
+                let mut w = wasm::WasmPlugin::load(&plugin.id, &plugin.dir, &plugin.entry, settings, access).map_err(|e| format!("{e:#}"))?;
                 let (bar, panel, sidebar) = (w.bar(&palette).is_some(), w.panel(&palette).is_some(), w.sidebar(&palette).is_some());
                 if let Some(reason) = w.disabled.clone() {
                     return Err(reason);

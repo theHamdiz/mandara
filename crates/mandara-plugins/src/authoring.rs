@@ -11,6 +11,32 @@ use crate::wasm::{ManifestFile, PERMISSION_COMMANDS};
 /// The plugin interface, exactly as the host is generated from it.
 pub const WIT: &str = include_str!("../wit/plugin.wit");
 
+/// The extension platform's interface (`extension-plugin` world).
+pub const EXTENSIONS_WIT: &str = include_str!("../wit/extensions.wit");
+
+/// The extension world's exports and host imports (broker and storage),
+/// read from [`EXTENSIONS_WIT`]: `(exports, imports)`.
+pub fn extension_functions() -> (Vec<String>, Vec<String>) {
+    let (mut exports, mut imports) = (Vec::new(), Vec::new());
+    let mut iface = "";
+    for line in EXTENSIONS_WIT.lines().map(str::trim) {
+        if let Some(rest) = line.strip_prefix("interface ") {
+            iface = rest.trim_end_matches('{').trim();
+        } else if line.starts_with("world ") {
+            iface = "world";
+        }
+        if let Some(rest) = line.strip_prefix("export ") {
+            exports.extend(rest.split_once(':').map(|(name, _)| name.trim().to_string()));
+        } else if matches!(iface, "broker" | "storage")
+            && let Some((name, sig)) = line.split_once(':')
+            && sig.trim_start().starts_with("func")
+        {
+            imports.push(name.trim().to_string());
+        }
+    }
+    (exports, imports)
+}
+
 /// The WIT file's path in the Mandara repository.
 pub const WIT_REPO_PATH: &str = "crates/mandara-plugins/wit/plugin.wit";
 
@@ -286,8 +312,12 @@ pub fn quick_start(dev_dir: &std::path::Path) -> Vec<Step> {
     ]
 }
 
-/// The permissions a manifest may list.
-pub const PERMISSIONS: &[&str] = &[PERMISSION_COMMANDS];
+/// The permissions a manifest may list (`net:<host>` and
+/// `plugins.call:<id>` name their target).
+pub const PERMISSIONS: &[&str] = &[
+    PERMISSION_COMMANDS, "media.read", "media.control", "wallpaper.read", "wallpaper.set", "files.folders", "notifications.send", "windows.read", "windows.control", "workspaces.read", "workspaces.control", "system.read", "clipboard.read", "clipboard.write",
+    "open.web", "osd.show", "theme.control", "events", "timers", "launcher.global", "net:<host>", "plugins.call:<id>",
+];
 
 /// Parses [`EXAMPLE_MANIFEST`] (always succeeds; tested).
 pub fn example_manifest() -> ManifestFile {
@@ -352,6 +382,23 @@ mod tests {
         }
         for f in &contract().imports {
             assert!(guide.contains(&format!("`{}(", f.name)), "PLUGINS.md documents host import {}", f.name);
+        }
+        let (exports, imports) = extension_functions();
+        assert_eq!(exports, ["negotiate", "extension-view", "extension-event", "launcher-query", "extension-call"]);
+        assert_eq!(imports, ["submit", "cancel", "granted", "asset-image", "get", "set", "remove", "keys"]);
+        for name in exports.iter().chain(&imports) {
+            assert!(guide.contains(&format!("`{name}(")), "PLUGINS.md documents {name}");
+        }
+        for p in PERMISSIONS {
+            assert!(guide.contains(&format!("`{p}`")), "PLUGINS.md documents the {p} permission");
+        }
+        for (name, value) in [("MAX_VIEW_NODES", crate::extension::MAX_VIEW_NODES), ("MAX_PAYLOAD_BYTES", crate::extension::MAX_PAYLOAD_BYTES), ("MAX_PENDING_REQUESTS", crate::extension::MAX_PENDING_REQUESTS), ("MAX_SUBSCRIPTIONS", crate::extension::MAX_SUBSCRIPTIONS), ("MAX_HITS", crate::extension::MAX_HITS)] {
+            assert!(guide.contains(&format!("{value} ")), "PLUGINS.md states {name} ({value})");
+        }
+        assert!(guide.contains(&format!("{} ms launcher budget", crate::extension::LAUNCHER_BUDGET.as_millis())));
+        assert!(guide.contains(&format!("API level {}", crate::extension::API_LEVEL)));
+        for f in crate::extension::FEATURES {
+            assert!(guide.contains(&format!("`{f}`")), "PLUGINS.md lists feature {f}");
         }
     }
 

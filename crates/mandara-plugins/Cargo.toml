@@ -21,6 +21,8 @@ anyhow.workspace = true
 tracing.workspace = true
 wasmtime.workspace = true
 wasmtime-wasi.workspace = true
+# Compiled-plugin cache keys.
+sha2.workspace = true
 
 [dev-dependencies]
 # tests/marketplace.rs: search → install → load against a mock GitHub.

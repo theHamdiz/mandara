@@ -38,12 +38,13 @@ Contributing to Mandara itself (built-in plugins, Studio, the shell)? See
 3. [The API (WIT)](#the-api-wit)
 4. [Views](#views)
 5. [Desktop widgets](#desktop-widgets)
-6. [Walkthrough: the moon-phase example](#walkthrough-the-moon-phase-example)
-7. [Settings, commands and permissions](#settings-commands-and-permissions)
-8. [Localization](#localization)
-9. [Where plugins live](#where-plugins-live)
-10. [Publishing to the marketplace](#publishing-to-the-marketplace)
-11. [Guidelines](#guidelines)
+6. [Extension plugins](#extension-plugins)
+7. [Walkthrough: the moon-phase example](#walkthrough-the-moon-phase-example)
+8. [Settings, commands and permissions](#settings-commands-and-permissions)
+9. [Localization](#localization)
+10. [Where plugins live](#where-plugins-live)
+11. [Publishing to the marketplace](#publishing-to-the-marketplace)
+12. [Guidelines](#guidelines)
 
 ## Quick start
 
@@ -314,58 +315,326 @@ Switching your plugin off in Studio hides its widgets (people keep them in
 their list), and nothing of it runs until one of its widgets is placed and
 shown.
 
-## Walkthrough: the moon-phase example
+## Extension plugins
 
-[`plugins/examples/moon-phase`](plugins/examples/moon-phase) is a complete
-plugin: a moon icon with the lit percentage in the bar, and a panel and
-sidebar card with tonight's moon in large colour emoji, three stat cards,
-the whole cycle as a strip, and a toggle. Read
-[`src/lib.rs`](plugins/examples/moon-phase/src/lib.rs) alongside this.
+The `extension-plugin` world (API level 1, in
+[`crates/mandara-plugins/wit/extensions.wit`](crates/mandara-plugins/wit/extensions.wit))
+lets a plugin go far beyond a bar item: rich native views with fields,
+switches, sliders, segmented controls, grids, virtual lists, images and
+charts; tabs in Studio's pages; launcher results; commands people run from
+the terminal, compositor shortcuts, hooks, skills and agents; private
+storage; timers; desktop events; and the desktop's services (media,
+wallpapers, windows, workspaces, the clipboard, notifications, the network,
+other plugins), each behind a capability the person grants and can revoke.
 
-**Named sizes, not magic numbers.** Every size and gap is a constant:
+| The moon-phase example's panel | Its tab in Studio → Desktop |
+|---|---|
+| <img src="docs/screenshots/plugin-showcase-dark.webp" alt="The moon-phase panel in the dark theme" width="300"/> <img src="docs/screenshots/plugin-showcase-light.webp" alt="The moon-phase panel in the light theme" width="300"/> | <img src="docs/screenshots/plugin-studio-tab-dark.webp" alt="The moon calendar tab in Studio, dark" width="420"/> <img src="docs/screenshots/plugin-studio-tab-light.webp" alt="The moon calendar tab in Studio, light" width="420"/> |
 
-```rust
-const HERO_MOON_PX: f32 = 64.0;
-const STAT_MOON_PX: f32 = 18.0;
-const STRIP_MOON_PX: f32 = 16.0;
-const STRIP_NOW_PX: f32 = 26.0;
-```
-
-**Colour emoji.** The phases are emoji ending in U+FE0F, so the colour
-emoji font draws them rather than a text font's flat symbol:
-
-```rust
-const PHASE_GLYPHS: [&str; 8] = ["🌑\u{FE0F}", "🌒\u{FE0F}", "🌓\u{FE0F}", "🌔\u{FE0F}", "🌕\u{FE0F}", "🌖\u{FE0F}", "🌗\u{FE0F}", "🌘\u{FE0F}"];
-```
-
-**A tiny arena builder.** `Tree` pushes nodes and returns their index:
+It is additive. The `plugin` and `desktop-plugin` worlds are frozen, and
+every plugin built for them keeps loading unchanged beside extension
+plugins. `extension-plugin` includes `desktop-plugin`, so its older exports
+stay as fallbacks: when `extension-view(` returns none for a surface,
+Mandara asks `bar`, `panel`, `sidebar` or `desktop-widget` as before, and
+you can move one surface at a time.
 
 ```rust
-impl Tree {
-    fn add(&mut self, kind: Kind, text: &str) -> u32 {
-        self.nodes.push(Node { kind, text: text.into(), value: 0.0, children: Vec::new(), action: String::new(), tone: Tone::Normal, size: 0.0, gap: 6.0, bold: false, grow: false });
-        (self.nodes.len() - 1) as u32
-    }
-    // node(i) -> &mut Node, children(parent, &[kids]), view(root) -> Option<View>
+wit_bindgen::generate!({ world: "extension-plugin", path: "wit" });
+
+use mandara::plugin::{broker, host, storage};
+use mandara::plugin::platform::HostInfo;
+use mandara::plugin::ui::{self, Surface, Value};
+
+impl Guest for MyPlugin {
+    // … init, bar, panel, sidebar, on_event, refresh_ms, desktop_widget …
+    fn negotiate(_host: HostInfo) -> Vec<String> { vec!["ui.layout".into(), "launcher".into()] }
+    fn extension_view(theme: Theme, context: ui::Context) -> Option<RichView> { /* … */ None }
+    fn extension_event(event: ui::Event) { /* clicks, typing, replies … */ }
+    fn launcher_query(provider: String, query: String, limit: u32) -> Vec<ui::Hit> { Vec::new() }
+    fn extension_call(caller: String, operation: String, payload: String) -> Result<String, String> { Err("no".into()) }
 }
 ```
 
-**Reusable pieces.** A stat card is a `card` with an emoji, a muted label
-and a bold value; `grow` makes the three cards share the row equally:
+| Export | Purpose |
+|---|---|
+| `negotiate(host)` | Called first, before `init`, with the API level, the host's features and Mandara's version. Return the features you use; a host lacking one refuses to load the plugin with a clear message instead of half-working. |
+| `extension-view(theme, context)` | The view for a surface (`bar`, `panel`, `sidebar`, `desktop`, `studio`) and outlet (`""` for your own surfaces, a widget id, a Studio tab id). None falls back to the older export. |
+| `extension-event(event)` | Input (a click, typed text, Enter, a switch, a slider, a choice, a key, a list's visible rows), a launcher choice, a command, and broker replies. |
+| `launcher-query(provider, query, limit)` | Results for one of your `[[launcher]]` providers, under a 30 ms launcher budget (past it the plugin stops). At most 24 results. |
+| `extension-call(caller, operation, payload)` | Another plugin calls an operation you list in `serves`. JSON in, JSON out. |
+
+| Import | Purpose |
+|---|---|
+| `submit(request)` | Asks a host service for something: returns a request id at once, never waits. The answer arrives as a `replies` event. |
+| `cancel(id)` | Ends a subscription or drops a waiting request. |
+| `granted()` | The capabilities granted right now. |
+| `asset-image(name)` | An image handle for a PNG, JPEG or WebP in your `assets/` folder (at most 512 KiB, no folders, no links out of `assets/`). |
+| `get(key)`, `set(key, value)`, `remove(key)`, `keys()` | Your private storage (`storage` interface): kept across restarts in `~/.local/share/mandara/plugin-storage/<id>.json`, out of every other plugin's reach, at most 1024 keys, 128-byte keys, 64 KiB values and 1 MiB in all. |
+
+**Features** `negotiate` may name (this host has all of them): `ui.layout`,
+`ui.input`, `ui.toggle`, `ui.slider`, `ui.choice`, `ui.grid`, `ui.scroll`,
+`ui.list`, `ui.image`, `ui.canvas`, `ui.keys`, `launcher`, `studio-tabs`,
+`broker` and `plugin-calls`.
+
+### Rich views
+
+An extension view is an arena like a classic one, with richer nodes. Every
+node has a stable `id` (it keeps a field's text and caret, a list's scroll
+and keyboard focus across renders), `kind`, `text`, `hint` (placeholder,
+tooltip or image description), `action`, `value`, `min`, `max`, `step`,
+`index`, `children`, `style`, `options`, `image`, `marks` and `disabled`.
+
+| Kind | Meaning |
+|---|---|
+| `row` / `column` | Children side by side / stacked, `style.gap` apart. `style.align`: `auto` (rows centre, columns stretch), `start`, `center`, `end`, `stretch`. |
+| `group` | An inset grouped section: one quiet rounded surface whose children are rows separated by hairlines, the settings-list look. Prefer groups to cards in cards. |
+| `card` | A rounded card. |
+| `grid` | Children in `index` equal columns (1–12). |
+| `scroll` | A vertical scroll area, `style.height` tall. |
+| `list` | A virtual list: `index` rows of `style.min-height` each (default 36) in a `style.height` viewport. Send only the rows around what's visible as children (rows `value` .. `value + children`); scrolling elsewhere sends a `range(first, count)` event, and rows you haven't sent draw as placeholders. Mark rows `grow` to fill the width. |
+| `text`, `icon` | A label; a bundled icon by name. |
+| `button` | `style.tone`: `accent` is your one filled primary action, `muted` a plain text button, anything else a quiet tinted button. Children (an icon) come before `text`. |
+| `meter`, `spacer`, `divider` | Progress (`value` 0–1), flexible space, a thin rule. |
+| `input` | A text field: `text` is its value, `hint` its placeholder; sends `text` while typing and `submit` on Enter. |
+| `toggle` | A switch (on when `value` ≥ 0.5) with `text` as its label; sends `checked`. |
+| `slider` | `min`..`max`, snapping to `step`; sends `number` once per value reached, not per pointer move. |
+| `choice` | A segmented control: `options` (`value`, `label`), the chosen one at `index`, raised; sends `choice`. |
+| `image` | A host-issued image handle, drawn at `style.width` × `style.height` with `style.radius`. Pictures are decoded once at the size they're drawn by Mandara's bounded thumbnail worker, never full size. |
+| `canvas` | Vector `marks` (`rect`, `ellipse`, `line`) in fractions of the canvas, with a tone, opacity and corner radius: bars, rings, sparklines and charts. Without a width a canvas fills its parent. |
+
+Nodes with an `action` are focusable: Enter or Space activates them, and
+other keys arrive as `key` events (with Ctrl, Alt, Shift and Super). A view
+can name a node in `focus` to move keyboard focus there once.
+
+A view is checked before anything is drawn and refused whole (the plugin
+keeps running) when it has more than 2048 nodes, 262144 bytes of text
+(256 KiB), 2048 canvas marks, 32 options in a choice, 100000 list rows, or
+a child index outside the view.
+
+### Outlets in plugin.toml
+
+```toml
+# Its panel's size (logical px; 280–720 wide, 200–880 tall).
+[panel]
+width = 380
+height = 572
+
+# Typed first in the launcher, it asks only this provider. With global =
+# true it also adds a few results to plain searches, once the person grants
+# `launcher.global` (it then sees what they type). At most 4 providers.
+[[launcher]]
+id = "moon"
+name = "Moon phases"
+prefix = "moon "
+icon = "moon"
+
+# A tab in a Studio page's tab bar: themes, bars, desktop or wallpaper.
+[[studio-tabs]]
+page = "desktop"
+id = "moon"
+title = "Moon"
+icon = "moon"
+
+# Commands: `mandara msg plugins run moon-phase remind`, from a compositor
+# shortcut, a hook, a skill or an agent. `mandara msg plugins commands`
+# lists every plugin's.
+[[commands]]
+name = "remind"
+summary = "Post a reminder of the next full moon"
+
+# Operations other plugins may call (they need plugins.call:moon-phase).
+serves = ["phase"]
+
+# Where its code lives and where to report problems: Studio shows
+# "Source code" and "Report an issue" on its page and its store card.
+repository = "https://github.com/you/moon-phase"
+support = "https://github.com/you/moon-phase/issues"
+```
+
+Studio tabs appear after a page's own tabs with an "Added by …" line above
+your view, so people always know what is yours. Launcher results run
+`mandara msg plugins launch <plugin> <provider> <id>` when chosen, and you
+get a `launch` event; a command arrives as a `command` event with its name
+and words.
+
+### Capabilities
+
+Every service is a capability: list it in `permissions`, and the person
+grants it on your plugin's page in Studio (Plugins → your plugin →
+Permissions). Declaring grants nothing, every grant can be revoked at any
+time, and Mandara checks the live grants when each request arrives:
+revoking closes open subscriptions at once and image handles that relied on
+the grant stop drawing. Ask only for what you use.
+
+| Capability | Operations (payload → answer) |
+|---|---|
+| `commands` | Interface commands through `host::command` (the v0.1 permission; declaring it is consent). |
+| `media.read` | `status` → the track (`title`, `artist`, `album`, `position`, `length`, `status`, `can_next`, `can_seek`, `volume`, `art` image handle, `at_ms`); `subscribe` → the same, again on every change. |
+| `media.control` | `play-pause`, `next`, `previous`, `seek {seconds}`, `volume {level 0–1}`. |
+| `wallpaper.read` | `current` → `{name, image}`; `list {offset, limit ≤ 60}` → `{total, offset, items: [{name, image}]}` of the wallpaper folder. |
+| `wallpaper.set` | `apply {image}`: a handle from `wallpaper.read` or `files.folders` only (needs a user gesture). |
+| `files.folders` | `folders` → the folders the person chose for you in Studio (`{id, name}`, never paths); `list {folder, offset, limit}` → image names and handles; `choose` opens your Studio page to add one (needs a user gesture). |
+| `notifications.send` | `send {title, body}`. |
+| `windows.read` | `list`, `active` (the JSON of `mandara msg window list` / `window active`). |
+| `windows.control` | `focus {id}`, `close {id}` (closing needs a user gesture). |
+| `workspaces.read` | `list`. |
+| `workspaces.control` | `view {workspace 1–32}`. |
+| `system.read` | `resources`, `power`. |
+| `clipboard.read` | `text` → the copied text (needs a user gesture). |
+| `clipboard.write` | `text {text}` copies it. |
+| `open.web` | `open {url}`: https only, no user name or password (needs a user gesture). |
+| `osd.show` | `show {title, icon, level 0–100}`. |
+| `theme.control` | `mode {mode: "light" or "dark"}`. |
+| `events` | `subscribe {topic}`: `theme`, `wallpaper`, and with their read capability `windows`, `workspaces` and `power`. Each change arrives as `{topic, value}`. |
+| `timers` | `after {ms}` (5 s to 1 day) or `every {ms}` (at least a minute): wake-ups arrive as replies. Needs no grant. |
+| `launcher.global` | Not a service: lets your `global` launcher providers see plain searches and add results to them (at most 2 plugins are asked per search). |
+| `net:<host>` | `fetch {url, method GET or POST, body}` to exactly that host over HTTPS, port 443, no redirects; at most 16 KiB sent and 256 KiB received, 10 s; a host whose address is on your machine or local network is refused. Two requests run at a time for all plugins. |
+| `plugins.call:<id>` | Any operation plugin `<id>` lists in `serves`, with a JSON payload; answered on the next tick (calls never nest). |
+
+**User gestures.** Reading the clipboard, opening a page, setting a
+wallpaper, closing a window and opening the folder chooser only work while
+your plugin handles a click, key press, typed text, launcher choice or
+command: never from a render, a timer or a reply. One gesture allows one
+such request; a request made at another time fails at once.
+
+**Results arrive on the next tick.** Replies are delivered a frame after
+the call that caused them, never inside it, so answering a reply with a new
+request is fine and can't loop the shell.
+
+**Limits.** At most 8 requests wait or run per plugin and 8 subscriptions
+stay open; a request payload is at most 16384 bytes (16 KiB) of JSON and a
+reply at most 256 KiB; 32 replies wait for you (a subscription's older
+update is replaced by its newest); 256 image handles per instance.
+
+### Security model
+
+- The sandbox is unchanged: no files, network, environment or programs,
+  and blocking waits return at once. Services are reached only through the
+  broker, and the broker is enforced by Mandara, never by WIT alone.
+- Requests are checked three times: when submitted (declared, granted, a
+  known operation, the payload's size and shape, a user gesture where
+  needed), against the live config before anything runs, and again when a
+  result is delivered. Revoking a grant applies to every loaded plugin at
+  once, drawn or not.
+- An extension plugin's `host::command` also needs the capability a
+  command stands for (media commands need `media.control`, `notifications
+  send` needs `notifications.send`, and so on), so `commands` can't get
+  around a revoked grant.
+- Views must be trees (each node has one parent), so a small view can't
+  expand into a huge one; list rows are at least 16 px.
+- Pictures are measured from their headers before decoding and refused past
+  about 40 megapixels; decoded sizes are rounded so the cache stays small.
+- Image handles are opaque and belong to one plugin instance; their files
+  are re-checked against the grants before every draw. Folder listings
+  never leave the granted folder (links pointing out are skipped).
+- Payloads never become command lines: window and workspace ids are
+  validated, and controls run Mandara's own documented commands.
+- Plugin-to-plugin calls need both sides: the caller's grant and the
+  callee's `serves`. They run on the next tick, so two plugins can't call
+  into each other re-entrantly.
+- Network: one host per capability, https only, no redirects. The host's
+  addresses are checked once and the connection is pinned to exactly those
+  (a second lookup can't redirect it to your network: DNS rebinding).
+- Studio loads a plugin's tab in its own process; there, the services that
+  belong to the shell (media, windows, events, …) answer with an error.
+- Combined grants add up. A plugin that may read something (your media,
+  clipboard or windows) and connect to the internet could send what it
+  reads there; Studio warns when a plugin has both.
+- Spoofing: plugin panels end with a quiet line naming the plugin, Studio
+  tabs say "Added by …", launcher results name their plugin, and fields
+  never mask text (no fake password prompts).
+- The compliance check probes every extension view, desktop widget, Studio
+  tab and launcher provider, and fails a release whose views break a limit,
+  whose launcher runs past its budget, or that needs features no host has.
+
+### Designing extension views
+
+Mandara's surfaces are calm and consistent, and yours should blend in: one
+surface, sections as `group`s with rows and a value at the trailing edge,
+one filled `accent` button at most, a segmented `choice` for switching
+views, `caption`-sized muted text for context, tabular figures for numbers,
+and real artwork (images or canvas marks) rather than emoji used as art.
+Check light and dark themes and right-to-left languages before publishing.
+The moon-phase example shows each of these.
+
+## Walkthrough: the moon-phase example
+
+[`plugins/examples/moon-phase`](plugins/examples/moon-phase) is a complete
+extension plugin: a moon icon with the lit percentage in the bar (the older
+`bar` export), and an extension panel with tonight's moon as rendered
+artwork, a look-ahead slider, a segmented view switch, grouped details, an
+illumination chart, a virtual list of coming full and new moons, a date
+field and a reminder. It adds a month-of-moons tab to Studio → Desktop,
+launcher results (`moon `), `remind` and `show` commands, a desktop widget,
+remembers its view in private storage, and serves a `phase` operation to
+other plugins. Its moon pictures are original, rendered by the Rust program
+in [`art/`](plugins/examples/moon-phase/art) for every phase and hemisphere.
+Read [`src/lib.rs`](plugins/examples/moon-phase/src/lib.rs) alongside this;
+the notes below cover the parts every plugin has.
+
+**Named sizes on a 4 px rhythm.** Every size and gap is a constant:
 
 ```rust
-fn stat(t: &mut Tree, moon: &str, label: &str, value: &str) -> u32 {
-    let mark = t.add(Kind::Text, moon);
-    t.node(mark).size = STAT_MOON_PX;
-    let l = t.add(Kind::Text, label);
-    t.node(l).tone = Tone::Muted;
-    t.node(l).size = SMALL_PX;
-    let v = t.add(Kind::Text, value);
-    t.node(v).bold = true;
-    let card = t.add(Kind::Card, "");
-    t.node(card).gap = STACK_GAP;
-    t.node(card).grow = true;
-    t.children(card, &[mark, l, v])
+const HERO_MOON_PX: f32 = 72.0;
+const ROW_MOON_PX: f32 = 16.0;
+const TITLE_PX: f32 = 20.0;
+const CAPTION_PX: f32 = 11.0;
+const SECTION_GAP: f32 = 16.0;
+const ROW_GAP: f32 = 8.0;
+```
+
+**Negotiate what you use.** An older Mandara without one of these refuses
+to load the plugin with a clear message:
+
+```rust
+fn negotiate(_host: HostInfo) -> Vec<String> {
+    FEATURES.iter().map(|f| (*f).to_string()).collect()
+}
+```
+
+**Real artwork through image handles.** The moon is a picture per phase in
+`assets/`, asked for once and cached:
+
+```rust
+fn moon_image(m: &Moon, hemi: Hemisphere) -> u64 {
+    let frame = ((m.age / SYNODIC * ART_PHASES).round() as usize) % ART_PHASES as usize;
+    let name = format!("moon-{}-{frame:02}.png", if hemi == Hemisphere::North { 'n' } else { 's' });
+    ART.with(|art| *art.borrow_mut().entry(name).or_insert_with_key(|name| broker::asset_image(name).unwrap_or(0)))
+}
+```
+
+**Groups of rows, values at the trailing edge.** One helper builds a
+settings-list row; a `group` draws hairlines between rows:
+
+```rust
+fn line(t: &mut Tree, lead: Option<u32>, label: &str, value: &str, detail: &str) -> u32 { /* label, spacer, value, muted detail */ }
+
+let full = line(t, Some(full_art), &host::translate("Full moon"), &date.short(), &when(days));
+t.group(&[full, new, age, side])
+```
+
+**State in one place.** Everything the views remember lives in one small
+`State` in a `thread_local!` `RefCell` (numbers and two short strings,
+nothing that grows), and events update it:
+
+```rust
+("ahead", Value::Number(v)) => with(|s| s.ahead = v.round().clamp(-LOOK_DAYS, LOOK_DAYS) as i32),
+("upcoming", Value::Range((first, _))) => with(|s| s.list_start = first.min(UPCOMING)),
+("date", Value::Submit(text)) => with(|s| s.found = Date::parse(&text).map(|d| d.days)),
+```
+
+**A virtual list that pages.** The list declares 200 rows but sends only
+the 24 around what's on screen; scrolling elsewhere sends a `range` event
+and the plugin answers with those rows on the next render.
+
+**Services through the broker.** "Remind me" submits a request and shows
+what happened when the reply arrives; until notifications are granted in
+Studio, it says so instead:
+
+```rust
+match broker::submit(&broker::Request { capability: "notifications.send".into(), operation: "send".into(), payload }) {
+    Ok(id) => with(|s| s.reminder = Some(id)),
+    Err(why) => with(|s| s.status = denied(&why)),
 }
 ```
 
@@ -381,33 +650,25 @@ fn hemisphere() -> Hemisphere {
 }
 ```
 
-**Interaction.** The toggle is a button with an `action`; `on_event` flips
-a static, and Mandara re-renders the bar item, panel and card:
+**Remembered across restarts.** The chosen view goes to private storage
+and `init` reads it back:
 
 ```rust
-static DETAILED: AtomicBool = AtomicBool::new(true);
-
-let toggle = t.add(Kind::Button, if DETAILED.load(Ordering::Relaxed) { "Hide the cycle" } else { "Show the cycle" });
-t.node(toggle).action = "toggle".into();
-
-fn on_event(action: String) {
-    if action == "toggle" {
-        DETAILED.fetch_xor(true, Ordering::Relaxed);
-    }
-}
+let _ = storage::set(MODE_KEY, &key);
 ```
 
-**Translation.** Plain labels such as `"Full moon"` and the button text are
-translated by the host. Composed strings go through `host::translate` with
-a placeholder:
+**Translation.** Labels, hints and option labels in views are translated by
+the host from `locales/`. Composed strings go through `host::translate`
+with a placeholder:
 
 ```rust
 host::translate("In {days} days").replace("{days}", &n.to_string())
 ```
 
-**Same content, two frames.** `panel()` puts the rows from `details()` in a
-`column`; `sidebar()` puts the same rows in a `card`. `refresh_ms()`
-returns `60_000`: the moon changes slowly.
+**Fallbacks.** `extension_view` returns none for the bar, so the classic
+`bar` export draws the bar item, and `panel` / `sidebar` stay as plain
+summaries for older hosts. `refresh_ms()` returns `60_000`: the moon
+changes slowly.
 
 ## Settings, commands and permissions
 
@@ -488,6 +749,8 @@ returns `60_000`: the moon changes slowly.
   `host::command` returns an error.
   Users see the permission, with what it allows, on your plugin's product
   page in Studio.
+- **Capabilities:** extension plugins reach Mandara's services through
+  [capabilities](#capabilities) the person grants and can revoke.
 - **No other access:** there is no filesystem, network, environment or
   subprocess access (WASI is linked but empty). Each call has a 100 ms time budget (1 s for `init`). A
   call that runs past it, or traps, stops the plugin: its surfaces show
@@ -608,7 +871,7 @@ and no review queue.
    mkdir -p dist/moon-phase
    cp plugin.toml dist/moon-phase/
    cp target/wasm32-wasip2/release/moon_phase.wasm dist/moon-phase/plugin.wasm
-   cp -r locales icon.png cover.png dist/moon-phase/ 2>/dev/null || true
+   cp -r locales assets icon.png cover.png dist/moon-phase/ 2>/dev/null || true
    tar -czf moon-phase.mandara.tar.gz -C dist moon-phase
    gh release create v0.1.0 moon-phase.mandara.tar.gz --title "v0.1.0" --notes "First release"
    ```
@@ -746,7 +1009,7 @@ jobs:
           ID=$(grep '^id' plugin.toml | cut -d'"' -f2)
           mkdir -p dist/$ID && cp plugin.toml dist/$ID/
           cp target/wasm32-wasip2/release/*.wasm dist/$ID/plugin.wasm
-          cp -r locales icon.png cover.png dist/$ID/ 2>/dev/null || true
+          cp -r locales assets icon.png cover.png dist/$ID/ 2>/dev/null || true
           tar -czf $ID.mandara.tar.gz -C dist $ID
       # Optional: delta updates. Users on the previous version download a
       # small patch for plugin.wasm instead of the whole archive (Mandara

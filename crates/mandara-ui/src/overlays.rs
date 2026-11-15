@@ -566,6 +566,11 @@ struct SearchCtx {
     recent_files: Vec<std::path::PathBuf>,
     /// Desktop actions of the apps (empty when they aren't listed).
     app_actions: Vec<Hit>,
+    /// Third-party plugin results for the current query, asked before the
+    /// search ([`SearchCtx::ask_plugins`]); `plugin_routed` when the query
+    /// was addressed to a plugin provider's prefix.
+    plugin_hits: Vec<Hit>,
+    plugin_routed: bool,
 }
 
 /// Providers whose live data [`SearchCtx`] gathers; the others search
@@ -644,6 +649,18 @@ impl SearchCtx {
         }
         self.providers.clone_from(providers);
         true
+    }
+
+    /// Asks the plugins' launcher providers for `query` (each in its
+    /// sandbox, under the launcher time budget).
+    fn ask_plugins(&mut self, query: &str, cx: &App) {
+        let q = query.trim_start();
+        if q.starts_with(['/', '=', '>', '!']) {
+            self.plugin_hits.clear();
+            self.plugin_routed = false;
+            return;
+        }
+        (self.plugin_routed, self.plugin_hits) = crate::plugins::external::launcher_hits(q, cx);
     }
 
     /// Results of provider `id` for `q`.
@@ -972,7 +989,9 @@ fn search_with(query: &str, apps: &[DesktopApp], index: &[Item], ctx: &SearchCtx
     let q = query.trim();
     let routed = launcher_ext::route(q, &ctx.providers);
     let actions_prefix = routed.filter(|(id, _)| *id == "actions").map(|(_, rest)| rest);
-    if let Some(expr) = q.strip_prefix('=') {
+    if ctx.plugin_routed {
+        ctx.plugin_hits.iter().cloned().map(Item::Hit).collect()
+    } else if let Some(expr) = q.strip_prefix('=') {
         apps::calculate(expr).map(|value| vec![Item::Calc { expr: expr.trim().to_string(), value }]).unwrap_or_default()
     } else if let Some((id, rest)) = routed.filter(|(id, _)| *id != "actions" && !q.starts_with('/')) {
         ctx.provider_hits(id, rest, launcher_ext::PROVIDER_LIMIT).into_iter().map(Item::Hit).collect()
@@ -1002,6 +1021,7 @@ fn search_with(query: &str, apps: &[DesktopApp], index: &[Item], ctx: &SearchCtx
             .filter(|id| *id != "actions")
             .flat_map(|id| ctx.provider_hits(id, q, launcher_ext::global_limit()))
             .chain(ctx.app_actions.iter().cloned())
+            .chain(ctx.plugin_hits.iter().cloned())
             .map(Item::Hit);
         let pool: Vec<Item> = apps.iter().cloned().map(Item::App).chain(entries).chain(hits).collect();
         let lines = if actions_global { command_matches(q, index, false) } else { Vec::new() };
@@ -1196,7 +1216,8 @@ fn launcher_apps(cx: &App) -> Vec<DesktopApp> {
 pub fn search_json(query: &str, cx: &App) -> serde_json::Value {
     let apps = launcher_apps(cx);
     let index = build_index(cx);
-    let ctx = SearchCtx::gather(&apps, cx);
+    let mut ctx = SearchCtx::gather(&apps, cx);
+    ctx.ask_plugins(query, cx);
     let results: Vec<serde_json::Value> = search_with(query, &apps, &index, &ctx)
         .into_iter()
         .take(12)
@@ -1231,7 +1252,8 @@ pub fn run_json(args: &[String], cx: &mut App) -> Result<serde_json::Value, Stri
     }
     let query = query.join(" ");
     let apps = launcher_apps(cx);
-    let ctx = SearchCtx::gather(&apps, cx);
+    let mut ctx = SearchCtx::gather(&apps, cx);
+    ctx.ask_plugins(&query, cx);
     let results = search_with(&query, &apps, &build_index(cx), &ctx);
     let item = results.get(index).ok_or_else(|| tf("No result #{index} for {query} ({count} results)", &[("index", &index), ("query", &format!("{query:?}")), ("count", &results.len())]))?;
     let mut out = result_json(item, &query);
@@ -1328,6 +1350,9 @@ pub struct LauncherView {
     released: bool,
     /// Thumbnails of image results (`None` while being made).
     thumbs: std::collections::HashMap<std::path::PathBuf, Option<std::path::PathBuf>>,
+    /// The launcher redraws when the thumbnail worker finishes a plugin
+    /// picture (set up on the first one).
+    pictures_observed: bool,
     clock: FrameClock,
     closing: bool,
     /// Pointer has been inside the drawer (enables leave-to-close).
@@ -1462,6 +1487,7 @@ impl LauncherView {
             scale: window.scale_factor(),
             released: false,
             thumbs: Default::default(),
+            pictures_observed: false,
             clock: FrameClock::new(),
             closing: false,
             entered: false,
@@ -1521,7 +1547,9 @@ impl LauncherView {
         // Where the tiles were (the grid reflows from there).
         let was_grid = self.grid_active();
         let before: std::collections::HashMap<String, usize> = if was_grid { self.results.iter().enumerate().map(|(i, it)| (usage_key(it), i)).collect() } else { Default::default() };
-        let mut results = search_with(&self.effective_query(), &self.apps, &self.index, &self.ctx);
+        let query = self.effective_query();
+        self.ctx.ask_plugins(&query, cx);
+        let mut results = search_with(&query, &self.apps, &self.index, &self.ctx);
         if self.mode == Some(BeaconMode::Apps) {
             results.retain(|i| matches!(i, Item::App(_)));
         }
@@ -1894,6 +1922,26 @@ impl LauncherView {
         None
     }
 
+    /// A plugin's picture at `side` physical px, kept square with its
+    /// transparency, through the shared bounded thumbnail worker
+    /// ([`crate::wallpaper::fit`]); `None` until it is ready.
+    fn picture(&mut self, path: &std::path::Path, side: f32, cx: &mut Context<Self>) -> Option<std::path::PathBuf> {
+        let side = crate::wallpaper::fit_size(side);
+        let job = (path.to_path_buf(), side, side | crate::wallpaper::FIT_JOB);
+        let thumbs = crate::wallpaper::thumbnails(cx);
+        if let Some(ready) = thumbs.read(cx).get_job(&job).cloned() {
+            return Some(ready);
+        }
+        if !thumbs.read(cx).failed_job(&job) {
+            // Redraw once it's made (one observer for the launcher's life).
+            if !std::mem::replace(&mut self.pictures_observed, true) {
+                cx.observe(&thumbs, |_, _, cx| cx.notify()).detach();
+            }
+            thumbs.update(cx, |t, cx| t.request_jobs([job], cx));
+        }
+        None
+    }
+
     /// One list row: lead tile, title and detail, badge. `on_accent`: the
     /// row sits on the accent-filled highlight (Beacon), its text follows.
     fn list_row(&mut self, i: usize, item: &Item, row_h: f32, lead_px: f32, look: &mandara_config::workflow::LauncherLook, on_accent: bool, palette: &MandaraPalette, cx: &mut Context<Self>) -> gpui::AnyElement {
@@ -2040,6 +2088,10 @@ impl LauncherView {
                     crate::icon_shape::plate(shape, size, fill, icon)
                 }
                 Lead::Icon(name) => tile().bg(palette.surface_container_high.hsla()).child(icon(name, size * LEAD_ICON_FRAC, palette.primary)).into_any_element(),
+                Lead::Picture(path) => match self.picture(path, size * self.scale, cx) {
+                    Some(picture) => img(picture).size(px(size)).flex_none().into_any_element(),
+                    None => tile().into_any_element(),
+                },
                 Lead::Image(path) => match self.thumb(path, cx) {
                     Some(thumb) => img(thumb).size(px(size)).flex_none().rounded(px(crate::style::radius(THUMB_RADIUS))).object_fit(ObjectFit::Cover).into_any_element(),
                     None => tile().bg(palette.surface_container_high.hsla()).child(icon("image", size * LEAD_ICON_FRAC, palette.on_surface_variant)).into_any_element(),

@@ -11,6 +11,7 @@ pub mod clock;
 pub mod keyboard;
 pub mod language;
 pub mod lifecycle;
+pub mod extension_view;
 mod settings_cache;
 pub mod compositor;
 pub mod containers;

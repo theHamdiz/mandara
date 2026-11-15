@@ -2,10 +2,16 @@ id = "moon-phase"
 name = "Moon phase"
 description = "Tonight's moon: phase, illumination and days to the next full moon"
 author = "Mandara examples"
-version = "0.2.15"
+version = "0.3.0"
 zone = "right"
 entry = "plugin.wasm"
-permissions = []
+# "commands" opens its panel from a launcher result; "notifications.send"
+# posts the full-moon reminder once you allow it in Studio.
+permissions = ["commands", "notifications.send"]
+repository = "https://github.com/theHamdiz/mandara"
+support = "https://github.com/theHamdiz/mandara/issues"
+# Other plugins granted plugins.call:moon-phase may ask for `phase`.
+serves = ["phase"]
 
 # Settings Studio shows in this plugin's settings modal. Values are stored in
 # [plugins.settings.moon-phase] and read with `host::setting("<key>")`.
@@ -42,3 +48,33 @@ description = "Tonight's phase, large, on the desktop"
 icon = "moon"
 width = 240
 height = 190
+
+# Commands anyone can run (`mandara msg plugins run moon-phase remind`),
+# bind to a compositor shortcut, or use in a hook, a skill or an agent.
+[[commands]]
+name = "remind"
+summary = "Post a reminder of the next full moon"
+
+[[commands]]
+name = "show"
+summary = "Open the panel on a date (YYYY-MM-DD), or tonight"
+
+# The panel's size in logical px (default 360 × 380).
+[panel]
+width = 380
+height = 572
+
+# Launcher results: type "moon " for tonight, the next full and new moon,
+# or a date (moon 2026-12-24).
+[[launcher]]
+id = "moon"
+name = "Moon phases"
+prefix = "moon "
+icon = "moon"
+
+# A tab on Studio's Desktop page: a month of moons.
+[[studio-tabs]]
+page = "desktop"
+id = "moon"
+title = "Moon"
+icon = "moon"

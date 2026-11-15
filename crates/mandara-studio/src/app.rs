@@ -89,6 +89,7 @@ mod page_visit;
 mod studio_frame;
 mod studio_looks;
 mod plugin_gate;
+mod plugin_grants;
 pub mod plugin_modal;
 mod plugin_offer;
 pub mod plugins_local;

@@ -5,8 +5,10 @@
 //! failure:
 //!
 //! * **Broken:** plugin.toml doesn't parse or has problems; the component
-//!   is missing, isn't a component or doesn't compile or start; `init` or a
-//!   render traps or runs past its budget.
+//!   is missing, isn't a component or doesn't compile or start (including
+//!   an extension plugin needing features this Mandara lacks); `init`, a
+//!   render or a launcher query traps or runs past its budget; plugin.toml
+//!   declares launcher providers or Studio tabs the component can't serve.
 //! * **Malicious:** its id or name poses as a built-in plugin; it imports
 //!   interfaces the host doesn't link; it queues commands while loading or
 //!   rendering, before any user event.
@@ -23,7 +25,7 @@ use mandara_i18n::{t, tf};
 use mandara_services::marketplace::{Class, Finding};
 
 use crate::wasm::mandara::plugin::types::Palette;
-use crate::wasm::{self, Kind, ManifestFile, View, WasmPlugin};
+use crate::wasm::{self, ExtContext, ExtSurface, Kind, Kind2, ManifestFile, View, View2, WasmPlugin};
 use crate::{PluginOrigin, PluginRegistry};
 
 /// Import namespaces the host links: the plugin world, and WASI preview 2
@@ -102,7 +104,7 @@ pub fn vet(dir: &Path, reserved_ids: &[&str], repo: Option<&str>) -> Result<(), 
 
     // Every command is captured (none runs here), so any attempt shows.
     let settings = crate::split_settings(m.settings.clone()).0.iter().map(|s| (s.key.clone(), s.default_json())).collect();
-    let mut plugin = WasmPlugin::instantiate(&m.id, dir, &component, settings, true).map_err(|e| broken(tf("It fails to start: {error}", &[("error", &format!("{e:#}"))])))?;
+    let mut plugin = WasmPlugin::instantiate(&m.id, dir, &component, settings, crate::extension::Access::commands(true)).map_err(|e| broken(tf("It fails to start: {error}", &[("error", &format!("{e:#}"))])))?;
     behaved(&mut plugin)?;
     let theme = probe_palette();
     let mut shows_something = false;
@@ -122,12 +124,42 @@ pub fn vet(dir: &Path, reserved_ids: &[&str], repo: Option<&str>) -> Result<(), 
         behaved(&mut plugin)?;
         shows_something |= view.as_ref().is_some_and(has_content);
     }
+    // Extension plugins: every surface, desktop widget and Studio tab
+    // through `extension-view`, and every launcher provider once.
+    let (launchers, tabs) = (m.launcher.clone(), m.studio_tabs.clone());
+    if (!launchers.is_empty() || !tabs.is_empty()) && !plugin.is_extension() {
+        return Err(broken(t("plugin.toml lists launcher providers or Studio tabs, but the plugin isn't built for the extension-plugin world").to_string()));
+    }
+    if plugin.is_extension() {
+        let surfaces = [ExtSurface::Panel, ExtSurface::Sidebar, ExtSurface::Bar].map(|surface| (surface, String::new(), PROBE_W_PX, PROBE_H_PX));
+        let desktop = widgets.iter().map(|w| (ExtSurface::Desktop, w.id.clone(), w.width, w.height));
+        let studio = crate::extension::split_studio_tabs(tabs).0.into_iter().map(|tab| (ExtSurface::Studio, tab.id, PROBE_STUDIO_W_PX, 0.0));
+        for (surface, outlet, width, height) in surfaces.into_iter().chain(desktop).chain(studio) {
+            let context = ExtContext { surface, outlet, instance: String::new(), width, height };
+            let view = plugin.extension_view(&theme, &context).map_err(|e| broken(tf("Its view breaks a limit: {error}", &[("error", &e)])))?;
+            behaved(&mut plugin)?;
+            shows_something |= view.as_ref().is_some_and(has_content2);
+        }
+        for provider in crate::extension::split_launchers(launchers).0 {
+            for query in PROBE_QUERIES {
+                let _ = plugin.launcher_query(&provider.id, query, crate::extension::MAX_HITS);
+                behaved(&mut plugin)?;
+            }
+        }
+    }
     if !shows_something {
         let why = if plugin.has_desktop() { t("It shows nothing: its bar item, panel, sidebar card and desktop widgets are all empty") } else { t("It shows nothing: its bar item, panel and sidebar card are all empty") };
         return Err(Finding::new(Class::Placeholder, why));
     }
     Ok(())
 }
+
+/// The size extension views are probed at (a panel), and a Studio tab's width.
+const PROBE_W_PX: f32 = 360.0;
+const PROBE_H_PX: f32 = 380.0;
+const PROBE_STUDIO_W_PX: f32 = 720.0;
+/// Launcher queries a provider is probed with.
+const PROBE_QUERIES: [&str; 2] = ["", "a"];
 
 /// After a call: it neither trapped nor ran past its budget, and queued
 /// no command (no user event has happened).
@@ -175,6 +207,15 @@ fn has_content(view: &View) -> bool {
         Kind::Text | Kind::Button | Kind::Icon => !n.text.trim().is_empty(),
         Kind::Meter => true,
         Kind::Row | Kind::Column | Kind::Card | Kind::Spacer => false,
+    })
+}
+
+/// [`has_content`] for extension views: text, icons, controls or an image.
+fn has_content2(view: &View2) -> bool {
+    view.nodes.iter().any(|n| match n.kind {
+        Kind2::Text | Kind2::Button | Kind2::Icon => !n.text.trim().is_empty() || !n.children.is_empty(),
+        Kind2::Meter | Kind2::Input | Kind2::Toggle | Kind2::Slider | Kind2::Choice | Kind2::Image | Kind2::Canvas | Kind2::List => true,
+        Kind2::Row | Kind2::Column | Kind2::Card | Kind2::Group | Kind2::Grid | Kind2::Scroll | Kind2::Spacer | Kind2::Divider => false,
     })
 }
 

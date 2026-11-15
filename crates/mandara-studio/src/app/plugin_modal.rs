@@ -499,7 +499,7 @@ fn zone_lane(zone: Option<Zone>) -> Lane {
 }
 
 /// A rounded action button.
-fn action(id: impl Into<SharedString>, icon_name: &'static str, label: String, primary: bool, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
+pub(super) fn action(id: impl Into<SharedString>, icon_name: &'static str, label: String, primary: bool, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
     use mandara_ui::components::buttons::{Ink, designed};
     let (bg, fg) = if primary { (p.primary, p.on_primary) } else { (p.surface_container_high, p.on_surface) };
     let hover = if primary { bg.lighten(BUTTON_HOVER_LIGHTEN) } else { p.primary.with_alpha(ALPHA_14) };
@@ -534,7 +534,7 @@ fn chip(text: String, color: Color) -> gpui::Div {
 }
 
 /// A product-page section: its title, then the caller's content.
-fn section(title: &'static str, p: &MandaraPalette) -> gpui::Div {
+pub(super) fn section(title: &'static str, p: &MandaraPalette) -> gpui::Div {
     div().row().flex_col().gap(px(SPACE_10_PX)).child(div().text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface.hsla()).child(title))
 }
 
@@ -877,7 +877,10 @@ impl StudioView {
         let access: Vec<(Access, &'static str)> = match &m.origin {
             PluginOrigin::Builtin => BUILTIN_ACCESS.iter().find(|(id, _)| *id == m.id).map(|(_, a)| a.to_vec()).unwrap_or_default(),
             PluginOrigin::ThirdParty { .. } => {
-                let mut list: Vec<(Access, &'static str)> = m.permissions.iter().map(|n| permission_text(n)).collect();
+                // Capabilities the person grants are listed with their
+                // switches under Permissions (plugin_grants.rs).
+                let granted_later = |n: &str| mandara_plugins::extension::Capability::parse(n).is_ok_and(|c| c.needs_grant());
+                let mut list: Vec<(Access, &'static str)> = m.permissions.iter().filter(|n| !granted_later(n)).map(|n| permission_text(n)).collect();
                 list.push((Access::Sandboxed, tk("Runs sandboxed: no files, network or devices, with a time limit on every call")));
                 list
             }
@@ -997,6 +1000,7 @@ impl StudioView {
             })
             .collect();
         let permissions = grid::fit(inner_w, PERMISSION_GRID).render(permission_cards);
+        let grants = self.plugin_grants(m, cfg, p, cx);
 
         // ── Settings ────────────────────────────────────────────────────
         let settings_card = {
@@ -1092,6 +1096,7 @@ impl StudioView {
             })));
         }
         if let PluginOrigin::ThirdParty { path } = &m.origin {
+            manage = manage.children(self.plugin_links(m, path, p));
             if !m.homepage.is_empty() {
                 let url = m.homepage.clone();
                 manage = manage.child(action("plugin-modal-homepage", "globe", t("Homepage").into(), false, p).on_click(move |_, _, _| {
@@ -1194,7 +1199,7 @@ impl StudioView {
                     .child(band)
                     .child(section(t("About"), p).child(div().text_size(px(TEXT_13_5_PX)).line_height(px(LEADING_21_PX)).text_color(p.on_surface.with_alpha(ALPHA_86).hsla()).when(rtl, |el| el.text_right()).child(mandara_ui::bidi::paragraph(m.display_description()))))
                     .children(whats_new)
-                    .child(section(if builtin { t("System access") } else { t("Permissions") }, p).child(permissions))
+                    .child(section(if builtin { t("System access") } else { t("Permissions") }, p).child(permissions).children(grants))
                     .child(section(t("Settings"), p).child(settings_card))
                     .child(section(t("Fits in"), p).child(fits).child(placement))
                     .child(section(t("Manage"), p).child(manage)),

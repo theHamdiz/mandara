@@ -35,6 +35,9 @@ impl StudioView {
     pub(super) fn bars_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let tab = self.bars_tab;
         let tabs = page_tabs::bar("bars-tabs", &BarsTab::ALL, tab, p, |view, tab, _, cx| view.show_bars_tab(tab, cx), window, cx);
+        if let Some(body) = page_tabs::plugin_body("bars-tabs", super::grid::PageMetrics::of(window, cx).column_w, p, window, cx) {
+            return div().row().flex_col().gap(px(SPACE_22_PX)).child(tabs).child(body).into_any_element();
+        }
         let body = match tab {
             BarsTab::Bar => {
                 let rows = self.rows(registry::in_section(Section::Bars).filter(|setting| BarsTab::for_path(setting.path) == Some(tab)), cfg, p, cx);

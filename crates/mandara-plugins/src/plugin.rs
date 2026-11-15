@@ -55,6 +55,12 @@ pub struct PluginManifest {
     /// Third-party project page.
     #[serde(default)]
     pub homepage: String,
+    /// Third-party source code (plugin.toml `repository`).
+    #[serde(default)]
+    pub repository: String,
+    /// Third-party issue tracker or support page (plugin.toml `support`).
+    #[serde(default)]
+    pub support: String,
     /// Third-party settings declared with `[[settings]]` (stored in
     /// `[plugins.settings.<id>]`, read with `host::setting`).
     #[serde(default)]
@@ -305,8 +311,22 @@ impl PluginManifest {
             translations: Default::default(),
             permissions: Vec::new(),
             homepage: String::new(),
+            repository: String::new(),
+            support: String::new(),
             settings: Vec::new(),
         }
+    }
+
+    /// A third-party plugin's source code link ("Source code"), from
+    /// `repository` or a GitHub `homepage`.
+    pub fn source_url(&self) -> Option<String> {
+        crate::extension::source_url(&self.repository, &self.homepage)
+    }
+
+    /// Where to report a problem ("Report an issue"): `support`, else the
+    /// GitHub repository's issues.
+    pub fn issues_url(&self) -> Option<String> {
+        crate::extension::issues_url(&self.support, &self.repository, &self.homepage)
     }
 
     /// The name in the interface language (English fallback).
@@ -720,6 +740,10 @@ pub fn discover_third_party(dir: &std::path::Path) -> Vec<PluginManifest> {
         #[serde(default)]
         homepage: String,
         #[serde(default)]
+        repository: String,
+        #[serde(default)]
+        support: String,
+        #[serde(default)]
         settings: Vec<ManifestSetting>,
 }
     fn default_version() -> String {
@@ -745,6 +769,8 @@ pub fn discover_third_party(dir: &std::path::Path) -> Vec<PluginManifest> {
                     translations: raw.i18n,
                     permissions: raw.permissions,
                     homepage: raw.homepage,
+                    repository: raw.repository,
+                    support: raw.support,
                 }),
                 Err(err) => {
                     tracing::warn!("skipping plugin manifest {}: {err}", path.display());

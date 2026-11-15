@@ -68,6 +68,36 @@ impl PluginCatalogs {
             }
         }
     }
+
+    /// [`Self::translate_view`] for extension views: labels, button text,
+    /// hints and option labels. A field's value (`input`) is the person's
+    /// own text and is never translated.
+    pub(super) fn translate_view2(&mut self, view: &mut super::View2) {
+        use super::Kind2;
+        let lang = mandara_i18n::language();
+        if lang == Lang::En {
+            return;
+        }
+        for node in &mut view.nodes {
+            if matches!(node.kind, Kind2::Text | Kind2::Button | Kind2::Toggle) {
+                self.translate_in_place(lang, &mut node.text);
+            }
+            self.translate_in_place(lang, &mut node.hint);
+            for option in &mut node.options {
+                self.translate_in_place(lang, &mut option.label);
+            }
+        }
+    }
+
+    /// Translates a launcher result's title and detail.
+    pub(super) fn translate_hit(&mut self, hit: &mut super::Hit) {
+        let lang = mandara_i18n::language();
+        if lang == Lang::En {
+            return;
+        }
+        self.translate_in_place(lang, &mut hit.title);
+        self.translate_in_place(lang, &mut hit.detail);
+    }
 }
 
 #[cfg(test)]

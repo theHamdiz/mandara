@@ -570,16 +570,28 @@ changes; nothing runs at idle and nothing polls. Measurements are in
   block or sleep, its memory is capped at 64 MiB and its views are capped
   in size. A plugin that traps or crosses a limit is switched off; the
   shell keeps running.
-- **Native look for free.** A plugin returns a declarative view tree (rows,
-  columns, cards, text, icons, buttons, meters) and Mandara draws it
-  with the current theme in every palette, light or dark, right to left in
-  Arabic.
-- **Settings and permissions.** A plugin declares its settings in
-  `plugin.toml`, and Studio builds its settings modal from them. The only
-  permission, `commands`, lets it use Mandara's interface (open panels,
-  control media and volume, post notifications, add notes and to-dos),
-  never commands that run programs or change settings; Studio shows it in
-  the plugin's detail modal.
+- **Native look for free.** A plugin returns a declarative view tree and
+  Mandara draws it with the current theme in every palette, light or dark,
+  right to left in Arabic. Plugins built for the extension platform get
+  rich controls too: text fields, switches, sliders, segmented controls,
+  grouped sections, grids, virtual lists, images and charts.
+- **Deeply integrated, on your terms.** Extension plugins can add tabs to
+  Studio's Themes, Bars, Desktop and Wallpaper pages, offer launcher
+  results and commands (`mandara msg plugins run`, shortcuts, hooks,
+  skills, agents), keep private storage and use timers. Media, wallpapers,
+  folders you choose, windows, workspaces, system load, the clipboard,
+  notifications, on-screen displays, desktop events, other plugins and a
+  web address are each a permission you switch on in Studio → Plugins →
+  the plugin → Permissions and can switch off at any moment. Reading the
+  clipboard, opening a page, setting a wallpaper and closing a window only
+  work right after you click or type in the plugin.
+- **Settings.** A plugin declares its settings in `plugin.toml`, and Studio
+  builds its settings modal from them. The older `commands` permission
+  lets it use Mandara's interface (open panels, control media and volume,
+  post notifications, add notes and to-dos), never commands that run
+  programs or change settings.
+- **Links.** Every third-party plugin page and store card shows "Source
+  code" and "Report an issue".
 - **Live.** Drop a folder in, rebuild, edit a translation or delete it, and
   Mandara reloads it within about half a second.
 - **Translated.** Plugins ship their own locale files; the shell picks the
@@ -595,7 +607,7 @@ There are two ways to get a plugin to people.
 2. Add the repository topic **`mandara-plugin`** (repository → About → ⚙ →
    Topics). That topic is the only thing the marketplace searches for.
 3. Publish a **release** with one asset named **`<id>.mandara.tar.gz`**: a
-   folder holding `plugin.toml`, `plugin.wasm` and, optionally, `locales/`,
+   folder holding `plugin.toml`, `plugin.wasm` and, optionally, `locales/`, `assets/`,
    `icon.png` and `cover.png`.
 
 If the store policy permits it, your plugin is listed in **Studio → Plugins → Community**
