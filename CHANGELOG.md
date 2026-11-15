@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.31.0 — 2026-11-15
+
 Matching login and lock designs, and room to work with compositor shortcuts.
 
 ### Improved
