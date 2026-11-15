@@ -470,6 +470,10 @@ fn optional(min: f64, max: f64, step: f64, unit: &'static str, default: f64) -> 
 }
 
 pub(crate) const ICON_STYLES: &[(&str, &str)] = &[("monochrome", tk("Monochrome")), ("color", tk("Color"))];
+/// Surface grain (`mandara_config::grain`), in `GrainStyle::ALL` /
+/// `GrainTint::ALL` order: shared by every surface that offers grain.
+pub(crate) const GRAIN_STYLES: &[(&str, &str)] = &[("none", tk("None")), ("fine", tk("Fine")), ("film", tk("Film")), ("paper", tk("Paper fibre")), ("speckle", tk("Speckle"))];
+pub(crate) const GRAIN_TINTS: &[(&str, &str)] = &[("neutral", tk("Neutral")), ("surface", tk("Surface colour"))];
 /// `[plugins.settings.workspaces] labels` and `[plugins.settings.active-window] show`.
 const WORKSPACE_LABELS: &[(&str, &str)] = &[("auto", tk("Number, or a short name")), ("number", tk("Number")), ("dots", tk("Dots"))];
 const ACTIVE_WINDOW_SHOW: &[(&str, &str)] = &[("app-and-title", tk("App and title")), ("app", tk("App")), ("title", tk("Title"))];
@@ -629,6 +633,7 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     if let Some(reason) = integration_settings::locked(setting.path, cfg) { return Some(reason); }
     if let Some(reason) = system_settings::native_locked(setting.path, running_compositor()) { return Some(reason); }
     if let Some(reason) = motion_settings::locked(setting.path, cfg) { return Some(reason); }
+    if let Some(reason) = workflow_settings::locked(setting.path, cfg) { return Some(reason); }
     match setting.path {
         "/lock/clock_style" if setting.control.has_value() && cfg.lock.design != mandara_config::desktop::LockDesign::Mandara => Some(tk("This design sets its own clock layout.")),
         "/lock/show_avatar" if cfg.lock.design == mandara_config::desktop::LockDesign::Meridian => Some(tk("Meridian has no profile picture.")),

@@ -204,6 +204,7 @@ the dock always sits exactly where and how it would without them.
 | **Minimizing** | *Dip*, *Pulse*, *Off* | The app's icon squashes into the dock and springs back, or swells once, when one of its windows minimizes (the window's own animation is the compositor's) |
 | **Adding and removing** | *Grow*, *Fade*, *Instant* | New icons grow in, removed ones shrink out, and the others slide over, also after you drag one to a new place |
 | **Showing and hiding** | *Slide*, *Fade*, *Zoom* | The dock slides in from its edge, fades in place, or grows out of its edge while fading in, for auto-hide too |
+| **Hover** | *Off*, *Lift*, *Highlight* | The icon under the pointer rises a little (`dock.hover_lift`, 0–16 px, 6 by default) or gets a soft plate behind it, on a spring, on top of magnification |
 
 **Animate opening applications** and **Bounce for attention** in **Studio →
 Dock** still turn the first two off, whatever their style. The icons the dock
@@ -214,14 +215,16 @@ The six presets from **Corniche tide** on each carry a matching set of dock
 animations: Tide pulses and rolls icons in on springs, Lighthouse sends
 ripples and fades, Felucca fades and sways for attention, Magnetic bounces,
 wiggles and dips, Mercury pulses and zooms the dock out of its edge, and
-Raindrop bounces, dips and zooms. The classic presets leave the dock as it is.
+Raindrop bounces, dips and zooms. The classic presets leave the dock as it is,
+and no preset changes your **Hover** choice.
 
 They live under `[dock.motion]`: `launch` (`bounce`, `pulse`, `ripple`,
 `none`), `attention` (`bounce`, `pulse`, `wiggle`, `none`), `indicator`
 (`spring`, `fade`, `none`), `minimize` (`dip`, `pulse`, `none`), `items`
-(`spring`, `fade`, `none`) and `reveal` (`slide`, `fade`, `scale`). Docks
-from before keep their bounces and slide, and gain the indicator, minimize
-and icon animations:
+(`spring`, `fade`, `none`), `reveal` (`slide`, `fade`, `scale`) and `hover`
+(`none`, `lift`, `highlight`). Docks from before keep their bounces and
+slide, gain the indicator, minimize and icon animations, and have no hover
+feedback until you pick one:
 
 ```toml
 [dock.motion]

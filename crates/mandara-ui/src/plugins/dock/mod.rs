@@ -46,7 +46,7 @@ use gpui::{
     AnyWindowHandle, App, AppContext as _, Bounds, Context, DispatchPhase, DragMoveEvent, Entity, ExternalPaths, FontWeight, Global, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Render,
     SharedString, StatefulInteractiveElement, Styled, Window, WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions, canvas, div, point, prelude::FluentBuilder as _, px, size,
 };
-use mandara_config::dock::{AttentionFeedback, IndicatorMotion, ItemMotion, LaunchFeedback, MinimizeFeedback};
+use mandara_config::dock::{AttentionFeedback, HoverMotion, IndicatorMotion, ItemMotion, LaunchFeedback, MinimizeFeedback, SeparatorStyle, TooltipStyle};
 use mandara_config::workflow::{DockAlignment, DockAutoHide, DockConfig, DockIndicator, DockPosition};
 use mandara_core::{FrameClock, SpringConfig, SpringValue, SurfaceRole, ToGpui};
 use mandara_i18n::{t, tf, tk};
@@ -58,7 +58,7 @@ use crate::apps::App as DesktopApp;
 use crate::fonts::{fonts, tabular_nums};
 use crate::icons::icon;
 use crate::kit::text;
-use crate::plugins::panel_fx::{elevation, glow, readable, rim, wash, WASH_SOFT};
+use crate::plugins::panel_fx::{glow, readable, rim, wash, WASH_SOFT};
 use crate::state::{config, shell, update_config};
 use crate::windows::Windows;
 
@@ -115,6 +115,21 @@ const BAR_W_FOCUSED_PX: f32 = 18.0;
 const INDICATOR_INSET_FRAC: f32 = 0.32;
 /// Most indicator dots per app.
 const MAX_DOTS: usize = 3;
+/// The Glow indicator: a short line of light (width, focused width,
+/// thickness), its glow `(alpha focused, alpha running, blur)`; the blur
+/// stays small, as MangoWM blurs alpha into halos.
+const GLOW_W_PX: f32 = 12.0;
+const GLOW_W_FOCUSED_PX: f32 = 20.0;
+const GLOW_H_PX: f32 = 3.0;
+const GLOW_SHADOW: (f32, f32, f32) = (0.7, 0.35, 5.0);
+/// The Highlight hover's plate: its margin round the icon (a share of the
+/// dock's padding, within bounds, logical px) and its alpha `(dark, light)`.
+const HIGHLIGHT_PAD_FRAC: f32 = 0.5;
+const HIGHLIGHT_PAD_PX: (f32, f32) = (2.0, 6.0);
+const HIGHLIGHT_ALPHA: (f32, f32) = (0.12, 0.09);
+/// The hover spring (lift and highlight): quick, barely overshooting.
+const HOVER_SPRING: SpringConfig = SpringConfig::new(520.0, 40.0, 1.0);
+const HOVER_EPSILON: f32 = 0.005;
 /// Badges: size, overlap with the icon's corner, padding, text.
 const BADGE_PX: f32 = 18.0;
 const BADGE_INSET_FRAC: f32 = 0.72;
@@ -420,7 +435,25 @@ fn surface_thickness(cfg: &DockConfig) -> f32 {
     let dock = cfg.icon_size + cfg.padding * 2.0;
     let grow = if cfg.magnification { cfg.icon_size * (cfg.magnify - 1.0).max(0.0) } else { 0.0 };
     let bounce = cfg.icon_size * model::HOP_FRAC;
+    // The hover lift (at most `ranges::HOVER_LIFT`, well inside the tooltip
+    // room) never resizes the surface: changing it reopens nothing.
     (cfg.margin + dock + grow.max(bounce) + TOOLTIP_SPACE).ceil()
+}
+
+/// How far a hovered icon rises (0 unless the Lift hover is on).
+fn hover_lift(cfg: &DockConfig) -> f32 {
+    if cfg.motion.hover == HoverMotion::Lift { cfg.hover_lift } else { 0.0 }
+}
+
+/// `r` on the device pixel grid of a surface at `scale`: origin and size
+/// rounded separately, so a square icon stays square and every edge lands
+/// crisp (whole logical pixels at scale 1).
+fn snap(r: (f32, f32, f32, f32), scale: f32) -> (f32, f32, f32, f32) {
+    let s = scale.max(f32::EPSILON);
+    let g = |v: f32| (v * s).round() / s;
+    // Never snap a visible hairline away.
+    let len = |v: f32| if v > 0.0 { g(v).max(1.0 / s) } else { 0.0 };
+    (g(r.0), g(r.1), len(r.2), len(r.3))
 }
 
 /// `origin` of a `size`-px box moved inside the surface, `room` px clear
@@ -470,6 +503,8 @@ struct SlotMotion {
     marks: SpringValue<f32>,
     /// Offset along the dock after a reorder, px, springing back to 0.
     shift: SpringValue<f32>,
+    /// 0 → 1 while the pointer rests on it (`[dock.motion] hover`).
+    hover: SpringValue<f32>,
     /// Minimized windows last frame, and when the latest one minimized.
     minimized: u8,
     minimized_at: Option<Instant>,
@@ -482,6 +517,7 @@ impl SlotMotion {
             presence: SpringValue::new(presence, ARRIVE_SPRING).with_rest_epsilon(PRESENCE_EPSILON),
             marks: SpringValue::new(marks, MARKS_SPRING).with_rest_epsilon(MARKS_EPSILON),
             shift: SpringValue::new(0.0, SCALE_SPRING).with_rest_epsilon(SHIFT_EPSILON),
+            hover: SpringValue::new(0.0, HOVER_SPRING).with_rest_epsilon(HOVER_EPSILON),
             minimized,
             minimized_at: None,
         }
@@ -502,6 +538,8 @@ struct Frame {
     marks: f32,
     /// Reorder offset, px.
     shift: f32,
+    /// Hover lift / highlight, 0–1.
+    hover: f32,
     nudge: model::Nudge,
     /// A launch Ripple's ring: size (icon sizes) and opacity.
     ring: Option<(f32, f32)>,
@@ -543,6 +581,11 @@ pub struct DockView {
     /// Pointer position along the dock axis (surface coords), when inside.
     pointer: Option<f32>,
     hovered: Option<String>,
+    /// When the pointer came onto the icons (`dock.tooltip_delay_ms`
+    /// counts from here; moving between icons keeps the label up), and the
+    /// one wake-up that shows a delayed label.
+    hover_since: Option<Instant>,
+    tip_task: Option<gpui::Task<()>>,
     /// Out regardless of hiding until this instant (`dock show`, just opened).
     shown_until: Option<Instant>,
     /// Pointer reveal, delays and popover pinning.
@@ -631,6 +674,8 @@ impl DockView {
             clock: FrameClock::new(),
             pointer: None,
             hovered: None,
+            hover_since: None,
+            tip_task: None,
             shown_until: reveal.then(|| Instant::now() + SHOW_ON_OPEN),
             reveal: model::Reveal::default(),
             reveal_task: None,
@@ -745,6 +790,8 @@ impl DockView {
         if !inside {
             self.pointer = None;
             self.hovered = None;
+            self.hover_since = None;
+            self.tip_task = None;
         }
         self.sync_timers(cx);
         cx.notify();
@@ -1041,6 +1088,8 @@ impl Render for DockView {
         let surface = (f32::from(vp.width), f32::from(vp.height));
         let horizontal = cfg.position == DockPosition::Bottom;
         let extent = if horizontal { surface.0 } else { surface.1 };
+        // Everything drawn lands on the device pixel grid.
+        let scale = window.scale_factor();
         let base = cfg.icon_size.max(MIN_ICON_PX);
         // App icons decode once at the largest size magnification reaches
         // (crate::icon_raster): a size that springs never waits on a decode.
@@ -1084,7 +1133,7 @@ impl Render for DockView {
                 _ if !it.running() => 0.0,
                 DockIndicator::None => 0.0,
                 DockIndicator::Dots => it.windows.len().min(MAX_DOTS) as f32,
-                DockIndicator::Dot | DockIndicator::Bar => 1.0,
+                DockIndicator::Dot | DockIndicator::Bar | DockIndicator::Glow => 1.0,
             };
             let minimized = it.windows.iter().filter(|w| w.minimized).count().min(u8::MAX.into()) as u8;
             if !self.slots.contains_key(&it.key) {
@@ -1164,7 +1213,7 @@ impl Render for DockView {
                 }
             }
             let (share, size, alpha) = model::presence(motion.items, slot.presence.value());
-            frames.push(Frame { scale: 1.0, slot: share, size, alpha, marks: slot.marks.value().max(0.0), shift: slot.shift.value(), nudge, ring, leaving });
+            frames.push(Frame { scale: 1.0, slot: share, size, alpha, marks: slot.marks.value().max(0.0), shift: slot.shift.value(), hover: 0.0, nudge, ring, leaving });
         }
 
         // Magnification targets and slot lengths.
@@ -1197,11 +1246,19 @@ impl Render for DockView {
                 (Some(p), true, k) if !matches!(k, Kind::Separator | Kind::Media) && dragging.is_none() => magnification((p - c) / base, cfg.magnify, cfg.magnify_spread),
                 _ => 1.0,
             };
-            if let Some(spring) = self.slots.get_mut(&it.key).map(|s| &mut s.scale) {
+            if let Some(s) = self.slots.get_mut(&it.key) {
+                let spring = &mut s.scale;
                 spring.set_instant(reduce);
                 spring.set_target(target);
                 moving |= spring.step(dt);
                 f.scale = if it.kind == Kind::Separator { 1.0 } else { spring.value().max(1.0) };
+                // The hover lift / highlight follows the icon under the
+                // pointer (never a dragged or leaving one).
+                let hovered = motion.hover != HoverMotion::None && dragging.is_none() && !f.leaving && !matches!(it.kind, Kind::Separator | Kind::Media) && self.hovered.as_deref() == Some(it.key.as_str());
+                s.hover.set_instant(reduce || hidden);
+                s.hover.set_target(if hovered { 1.0 } else { 0.0 });
+                moving |= s.hover.step(dt);
+                f.hover = s.hover.value().clamp(0.0, 1.0);
             }
         }
         self.centres = centres;
@@ -1240,7 +1297,7 @@ impl Render for DockView {
         let shown = reveal.alpha;
         let (zk, zoom_at) = (reveal.scale, model::zoom_origin(cfg.position, dock_rect));
         let z = |r| model::zoom(r, zoom_at, zk);
-        let bg = z(model::place(cfg.position, surface, cfg.margin, start, -slide, len, thickness));
+        let bg = snap(z(model::place(cfg.position, surface, cfg.margin, start, -slide, len, thickness)), scale);
         self.glass = bg;
         self.surface = surface;
         // Nothing animates on a hidden dock.
@@ -1262,10 +1319,13 @@ impl Render for DockView {
         let reflow = std::mem::take(&mut self.reflow) && !instant_items;
         for (it, f) in list.iter().zip(frames.iter_mut()) {
             if it.kind == Kind::Separator {
-                let l = base * SEPARATOR_FRAC * f.size;
-                let gap = (slot(&it.kind) * f.slot - SEPARATOR_PX) / 2.0;
-                let (x, y, w, h) = z(model::place(cfg.position, surface, cfg.margin, along + gap + f.shift, (thickness - l) / 2.0 - slide, SEPARATOR_PX, l));
-                children.push(div().absolute().left(px(x)).top(px(y)).w(px(w)).h(px(h)).rounded_full().bg(palette.on_surface.with_alpha(SEPARATOR_ALPHA * f.alpha * shown).hsla()).into_any_element());
+                // A hairline, or only its gap (`dock.separator_style`).
+                if cfg.separator_style == SeparatorStyle::Line {
+                    let l = base * SEPARATOR_FRAC * f.size;
+                    let gap = (slot(&it.kind) * f.slot - SEPARATOR_PX) / 2.0;
+                    let (x, y, w, h) = snap(z(model::place(cfg.position, surface, cfg.margin, along + gap + f.shift, (thickness - l) / 2.0 - slide, SEPARATOR_PX, l)), scale);
+                    children.push(div().absolute().left(px(x)).top(px(y)).w(px(w)).h(px(h)).rounded_full().bg(palette.on_surface.with_alpha(SEPARATOR_ALPHA * f.alpha * shown).hsla()).into_any_element());
+                }
                 along += slot(&it.kind) * f.slot;
                 continue;
             }
@@ -1273,7 +1333,8 @@ impl Render for DockView {
             let size_px = base * f.scale;
             let sized = size_px * f.size;
             let drawn = sized * (1.0 + f.nudge.grow);
-            let lift = f.nudge.lift * base * model::HOP_FRAC;
+            // Bounces and the Lift hover raise it.
+            let lift = f.nudge.lift * base * model::HOP_FRAC + f.hover * hover_lift(cfg);
             let slot_px = if it.kind == Kind::Media { media_len } else { size_px };
             let mut centre = along + slot_px * f.slot / 2.0;
             if reflow
@@ -1315,7 +1376,7 @@ impl Render for DockView {
                     rect = model::place(cfg.position, surface, cfg.margin, a, cfg.padding - slide, size_px, size_px);
                 }
             }
-            let rect = z(rect);
+            let rect = snap(z(rect), scale);
             if !f.leaving {
                 rects.push((it.key.clone(), rect));
             }
@@ -1331,7 +1392,17 @@ impl Render for DockView {
                 let (cx0, cy0) = (rect.0 + rect.2 / 2.0, rect.1 + rect.3 / 2.0);
                 children.push(div().absolute().left(px(cx0 - ring / 2.0)).top(px(cy0 - ring / 2.0)).size(px(ring)).rounded_full().border_2().border_color(accent.with_alpha(ring_alpha * shown).hsla()).into_any_element());
             }
-            let tile_px = drawn * zk;
+            // The Highlight hover: a soft plate behind the icon, its corners
+            // concentric with the glass round it.
+            if motion.hover == HoverMotion::Highlight && f.hover > HOVER_EPSILON && shown > 0.0 {
+                let pad = (cfg.padding * HIGHLIGHT_PAD_FRAC).clamp(HIGHLIGHT_PAD_PX.0, HIGHLIGHT_PAD_PX.1);
+                let (x, y, w, h) = snap((rect.0 - pad, rect.1 - pad, rect.2 + pad * 2.0, rect.3 + pad * 2.0), scale);
+                let r = crate::style::concentric(crate::style::radius(cfg.radius.min(thickness / 2.0)), cfg.padding - pad);
+                let alpha = if palette.is_dark { HIGHLIGHT_ALPHA.0 } else { HIGHLIGHT_ALPHA.1 };
+                children.push(div().absolute().left(px(x)).top(px(y)).w(px(w)).h(px(h)).rounded(px(r)).bg(palette.on_surface.with_alpha(alpha * f.hover * shown).hsla()).into_any_element());
+            }
+            // Its tile fills the snapped rectangle exactly (centred to the pixel).
+            let tile_px = rect.2.min(rect.3);
             let tile: gpui::AnyElement = match &it.kind {
                 // The launcher button wears the bar's launcher icon (Studio → Launcher).
                 Kind::Launcher => launcher_tile(&launcher_icon, tile_px, &palette, accent),
@@ -1378,6 +1449,7 @@ impl Render for DockView {
                             }
                             if *hovered {
                                 this.hovered = Some(key_hover.clone());
+                                this.hover_since.get_or_insert_with(Instant::now);
                             } else if this.hovered.as_deref() == Some(key_hover.as_str()) {
                                 this.hovered = None;
                             }
@@ -1431,16 +1503,25 @@ impl Render for DockView {
                         }
                     }
                 } else if let Some((grown, alpha)) = model::indicator_mark(style, f.marks.min(1.0), 0) {
-                    let w = match cfg.indicator {
-                        DockIndicator::Bar if focused => BAR_W_FOCUSED_PX,
-                        DockIndicator::Bar => BAR_W_PX,
-                        _ => DOT_PX,
-                    } * grown;
-                    marks[0] = (centre - w / 2.0, w, DOT_PX * grown, alpha);
+                    let (w, depth) = match cfg.indicator {
+                        DockIndicator::Bar if focused => (BAR_W_FOCUSED_PX, DOT_PX),
+                        DockIndicator::Bar => (BAR_W_PX, DOT_PX),
+                        DockIndicator::Glow if focused => (GLOW_W_FOCUSED_PX, GLOW_H_PX),
+                        DockIndicator::Glow => (GLOW_W_PX, GLOW_H_PX),
+                        _ => (DOT_PX, DOT_PX),
+                    };
+                    marks[0] = (centre - w * grown / 2.0, w * grown, depth * grown, alpha);
                     n = 1;
                 }
+                // The Glow indicator lights every running app, the focused
+                // one brightest; the others glow only while focused.
+                let halo = match cfg.indicator {
+                    DockIndicator::Glow => Some(glow((if focused { accent } else { tint }).with_alpha(if focused { GLOW_SHADOW.0 } else { GLOW_SHADOW.1 }), GLOW_SHADOW.2, 0.0, 0.0)),
+                    _ if focused => Some(glow(accent.with_alpha(FOCUS_GLOW.0), FOCUS_GLOW.1, 0.0, 0.0)),
+                    _ => None,
+                };
                 for &(m, l, depth, alpha) in &marks[..n] {
-                    let (x, y, w, h) = z(model::place(cfg.position, surface, cfg.margin, m, inset - depth / 2.0 - slide, l, depth));
+                    let (x, y, w, h) = snap(z(model::place(cfg.position, surface, cfg.margin, m, inset - depth / 2.0 - slide, l, depth)), scale);
                     children.push(
                         div()
                             .absolute()
@@ -1451,7 +1532,7 @@ impl Render for DockView {
                             .rounded_full()
                             .bg(tint.hsla())
                             .opacity(shown * alpha)
-                            .when(focused, |el| el.shadow(vec![glow(accent.with_alpha(FOCUS_GLOW.0), FOCUS_GLOW.1, 0.0, 0.0)]))
+                            .when_some(halo.clone(), |el, h| el.shadow(vec![h]))
                             .into_any_element(),
                     );
                 }
@@ -1557,7 +1638,26 @@ impl Render for DockView {
         // Tooltip over the hovered icon (or why an install failed, or that
         // a dragged icon is about to go).
         let removing = self.drag.as_ref().filter(|d| d.active && d.remove).map(|d| d.key.clone());
-        let tip_key = removing.clone().or_else(|| self.hovered.clone().filter(|_| dragging.is_none() && shown > 0.5 && cfg.tooltips));
+        // `dock.tooltip_delay_ms`: the label waits for the pointer to rest
+        // (one wake-up, no frames meanwhile); once up, it follows the
+        // pointer from icon to icon at once.
+        let delay = Duration::from_millis(cfg.tooltip_delay_ms);
+        let rested = self.hover_since.map_or(Duration::ZERO, |t| now.saturating_duration_since(t));
+        let tip_ready = delay.is_zero() || rested >= delay;
+        if tip_ready || self.hovered.is_none() {
+            self.tip_task = None;
+        } else if self.tip_task.is_none() {
+            let wait = delay - rested;
+            self.tip_task = Some(cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(wait).await;
+                let _ = this.update(cx, |this, cx| {
+                    this.tip_task = None;
+                    cx.notify();
+                });
+            }));
+        }
+        let cfg = &self.cfg;
+        let tip_key = removing.clone().or_else(|| self.hovered.clone().filter(|_| dragging.is_none() && shown > 0.5 && cfg.tooltips && tip_ready));
         if let Some(h) = tip_key
             && let Some((_, r)) = rects.iter().find(|(k, _)| *k == h)
             && let Some(item) = list.iter().find(|i| i.key == h)
@@ -1587,25 +1687,14 @@ impl Render for DockView {
                 DockPosition::Left => (r.0 + r.2 + TOOLTIP_GAP, r.1 + r.3 / 2.0 - TOOLTIP_H / 2.0),
                 DockPosition::Right => (r.0 - est_w - TOOLTIP_GAP, r.1 + r.3 / 2.0 - TOOLTIP_H / 2.0),
             };
-            children.push(
-                div()
-                    .absolute()
-                    .left(px(x.clamp(2.0, (surface.0 - est_w - 2.0).max(2.0))))
-                    .top(px(y.max(2.0)))
-                    .w(px(est_w))
-                    .h(px(TOOLTIP_H))
-                    .rounded_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .bg(crate::shell::frame_color(&palette).hsla())
-                    .shadow(rim(&palette))
-                    .text_size(px(text::BODY_S))
-                    .font_weight(FontWeight::MEDIUM)
-                    .truncate()
-                    .child(label)
-                    .into_any_element(),
-            );
+            let (x, y, w, h) = snap((x.clamp(2.0, (surface.0 - est_w - 2.0).max(2.0)), y.max(2.0), est_w, TOOLTIP_H), scale);
+            let tip = div().absolute().left(px(x)).top(px(y)).w(px(w)).h(px(h)).flex().items_center().justify_center().text_size(px(text::BODY_S)).font_weight(FontWeight::MEDIUM).truncate();
+            let tip = match cfg.tooltip_style {
+                TooltipStyle::Pill => tip.rounded_full().bg(crate::shell::frame_color(&palette).hsla()).shadow(rim(&palette)),
+                // The dock's own glass and texture, on a pill.
+                TooltipStyle::Material => crate::components::materials::dress(tip, &crate::components::materials::Material::dock(cfg), h, h / 2.0, &palette, scale, Some(window.window_handle()), cx),
+            };
+            children.push(tip.child(label).into_any_element());
         }
         // "Drop to install": a label over the Applications folder (or the
         // dock's middle) while an installable app is dragged over the dock.
@@ -1656,29 +1745,21 @@ impl Render for DockView {
             self.region = vec![irect];
         }
 
-        let fill = crate::shell::frame_color(&palette).mix(palette.primary, cfg.tint).with_alpha(cfg.opacity);
-        let mut shadow = Vec::new();
-        if cfg.shadow {
-            shadow.extend(elevation(&palette, 1.0));
-        }
-        if cfg.rim {
-            shadow.extend(rim(&palette));
-        }
-        if self.install_hover {
+        // The glass: classic or liquid, with its texture (`dock.material`,
+        // `dock.texture`), in the components' shared material.
+        let material = crate::components::materials::Material::dock(cfg);
+        let glass_r = crate::style::radius(cfg.radius.min(thickness / 2.0));
+        let glass_h = if horizontal { bg.3 } else { bg.2 };
+        let background = div().id("dock-glass").absolute().left(px(bg.0)).top(px(bg.1)).w(px(bg.2)).h(px(bg.3));
+        let background = crate::components::materials::dress(background, &material, glass_h, glass_r, &palette, scale, Some(window.window_handle()), cx);
+        let background = if self.install_hover {
+            let mut shadow = crate::components::materials::shadows(&material, glass_h, &palette);
             shadow.push(glow(accent.with_alpha(INSTALL_GLOW.0), INSTALL_GLOW.1, 0.0, 0.0));
-        }
-        let background = div()
-            .id("dock-glass")
-            .absolute()
-            .left(px(bg.0))
-            .top(px(bg.1))
-            .w(px(bg.2))
-            .h(px(bg.3))
-            .rounded(px(crate::style::radius(cfg.radius.min(thickness / 2.0))))
-            .bg(fill.hsla())
-            .shadow(if crate::style::ink_shadow() > 0.0 { crate::plugins::panel_fx::elevation(&palette, 1.0) } else { shadow })
-            // Inked (`[style.ink]`): an ink outline.
-            .when(crate::style::ink_outline() > 0.0, |el| el.border(px(crate::style::ink_outline())).border_color(crate::plugins::panel_fx::ink(&palette).hsla()))
+            background.shadow(shadow)
+        } else {
+            background
+        };
+        let background = background
             .opacity(shown)
             .on_mouse_down(MouseButton::Right, cx.listener(|this, e: &MouseDownEvent, _, cx| {
                 this.open_menu_for(None, false, (f32::from(e.position.x), f32::from(e.position.y)), cx);
@@ -2445,8 +2526,58 @@ mod tests {
 
     #[test]
     fn slot_state_stays_small() {
-        // Retained per icon while it shows: four springs and a clock.
-        assert!(std::mem::size_of::<SlotMotion>() <= 320, "{}", std::mem::size_of::<SlotMotion>());
+        // Retained per icon while it shows: five springs (the fifth is the
+        // hover, measured at 360 bytes in all) and a clock.
+        assert!(std::mem::size_of::<SlotMotion>() <= 368, "{}", std::mem::size_of::<SlotMotion>());
         assert!(std::mem::size_of::<Frame>() <= 64, "{}", std::mem::size_of::<Frame>());
+    }
+
+    /// The hover, the material and the grain never change the surface's
+    /// size (a resized layer surface is reopened, and jitters).
+    #[test]
+    fn looks_never_resize_the_surface() {
+        let base = DockConfig::default();
+        let styled = DockConfig {
+            material: mandara_config::dock::DockMaterial::Liquid,
+            grain: mandara_config::grain::Grain::with_style(mandara_config::grain::GrainStyle::Film),
+            motion: mandara_config::dock::DockMotion { hover: HoverMotion::Lift, ..base.motion },
+            hover_lift: mandara_config::dock::ranges::HOVER_LIFT.max,
+            indicator: DockIndicator::Glow,
+            ..base.clone()
+        };
+        assert_eq!(surface_thickness(&base), surface_thickness(&styled));
+        // The highest lift stays inside the room kept above the icons.
+        const { assert!(mandara_config::dock::ranges::HOVER_LIFT.max < TOOLTIP_SPACE) };
+        assert_eq!(hover_lift(&styled), mandara_config::dock::ranges::HOVER_LIFT.max);
+        assert_eq!(hover_lift(&base), 0.0, "no lift without the Lift hover");
+    }
+
+    /// Rectangles land on the device pixel grid with their size kept square
+    /// and a hairline never vanishing.
+    #[test]
+    fn snapping_keeps_squares_and_hairlines() {
+        for scale in [1.0, 1.25, 1.5, 2.0] {
+            let (x, y, w, h) = snap((10.37, 4.81, 48.4, 48.4), scale);
+            for v in [x, y, w, h] {
+                assert!(((v * scale) - (v * scale).round()).abs() < 1e-4, "{v} @{scale}");
+            }
+            assert_eq!(w, h, "a square stays square @{scale}");
+            let (_, _, line, _) = snap((0.0, 0.0, 0.2, 10.0), scale);
+            assert!(line >= 1.0 / scale - 1e-6, "a hairline stays visible @{scale}");
+        }
+        assert_eq!(snap((0.0, 0.0, 0.0, 5.0), 1.5).2, 0.0, "nothing stays nothing");
+    }
+
+    #[test]
+    fn hover_springs_rest_when_nothing_moves() {
+        let mut slot = SlotMotion::new(1.0, 0.0, 0);
+        assert!(!slot.hover.step(1.0 / 60.0), "idle: no frames");
+        slot.hover.set_target(1.0);
+        let mut frames = 0;
+        while slot.hover.step(1.0 / 60.0) {
+            frames += 1;
+            assert!(frames < 120, "settles");
+        }
+        assert!((slot.hover.value() - 1.0).abs() <= HOVER_EPSILON);
     }
 }

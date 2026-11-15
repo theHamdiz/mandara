@@ -206,7 +206,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 | Page | Settings |
 |---|---|
 | Bars | **Bar**: layout and appearance (`bar.*`); **Sidebars**: what each side edge holds, then the left/right plugin bars (`side_bars.*`) and the sidebar panel's widget tabs, cards and appearance (`sidebar.*`, `sidebar.look.*`); **Drop-down panels**: geometry, material, main menu and animation (`panels.*`, `bar.panel_radius`); **Edges & corners**: hover triggers (`edges.*`, `sidebar.hover_reveal`), hot corners (`hot_corners.*`) and rounded screen corners (`screen_corners.*`) |
-| Dock | layout (position, size, magnification), behaviour (auto-hide, delays, slide speed, bounces, minimize into icon; window geometry is checked periodically only for Smart hiding), apps (`pinned` order — `"@launcher"` is the launcher button, at any position; it replaces 0.22's `launcher_button` / `launcher_at_end`, which are moved into `pinned` once — running, recent apps, indicators, badges), stacks (`[[dock.stacks]]` path / view / sort / display, `stack_items`, `fan_items`, `stack_names`), the Applications folder (`[dock.applications]` enabled / view / order / icon_size; replaces 0.1's `applications_slot`), Trash, the now-playing chip (`dock.media_chip`), appearance (opacity, tint, radius, padding, spacing, shadow, rim) — every number clamped to `mandara_config::dock::ranges` (`dock.*`) |
+| Dock | layout (position, size, magnification), behaviour (auto-hide, delays, slide speed, bounces, minimize into icon; window geometry is checked periodically only for Smart hiding), apps (`pinned` order — `"@launcher"` is the launcher button, at any position; it replaces 0.22's `launcher_button` / `launcher_at_end`, which are moved into `pinned` once — running, recent apps, indicators, badges), stacks (`[[dock.stacks]]` path / view / sort / display, `stack_items`, `fan_items`, `stack_names`), the Applications folder (`[dock.applications]` enabled / view / order / icon_size; replaces 0.1's `applications_slot`), Trash, the now-playing chip (`dock.media_chip`), appearance (opacity, tint, radius, padding, spacing, shadow, rim; `dock.material` = `classic`, the default, or `liquid`, with `dock.gloss` and `dock.refraction`, 0–1; grain under `[dock.grain]`, see [Surface grain](#surface-grain); `dock.separator_style` = `line` or `space`), indicators (`dock.indicator` = `dots`, `dot`, `bar`, `glow` or `none`), name labels (`dock.tooltip_style` = `pill` or `material`, `dock.tooltip_delay_ms`, 0–1000, 0 by default), the hover lift (`dock.hover_lift`, 0–16 px, with `[dock.motion] hover`) — every number clamped to `mandara_config::dock::ranges` (`dock.*`) |
 | Launcher | ready-made looks ([Launcher looks](#launcher-looks)), style (classic / beacon), placement (`launcher.look.position`, see [Launcher placement](#launcher-placement)), align to the launcher button, width / height when attached and in the center, layout, grid columns and icon size, category chips, grouped results, keyboard hints, Beacon bar width and height, dim, results (`launcher.max_results`), providers and prefixes, ranking half-life and recent count, launching (`launcher.*`) |
 | Window switcher | style, previews, scope, thumbnail width, columns (`switcher.*`); screen time retention, idle and limits (`screen_time.*`) |
 | Notifications | position, width, scale, opacity, joined to the bar (`notifications.joined`, off by default), timeouts per urgency, maximum visible, history size and age, do not disturb, quiet hours, rules (`notifications.*`) |
@@ -880,6 +880,16 @@ launcher and the **Taskbar** item (`taskbar`: the dock's pinned apps, then every
 window, from the window list; on a compositor without one, the
 compositor's own client list marks what runs and a click starts the app)
 centred, and the clock stacked over the date on the right.
+The Taskbar item's own settings (Studio → Plugins → Taskbar,
+`[plugins.settings.taskbar]`) leave it as it always looked until you change
+them: `material` (`none`, `classic` or `liquid`: a tray of the dock's glass
+under the buttons, at the bar's height), `grain` and `grain_amount` (the
+tray's [grain](#surface-grain)), `indicator` (`line`, `dot`, `dots`,
+`glow`, `none`), `focus_style` (`tint`, `raised`, `accent`, `none`),
+`labels` (`none`, `focused`, `running`) and `label_width` (48–240 px),
+`group_windows` (on: one button per app; off: one per window, named after
+its title), `window_count`, `urgent` (apps asking for attention turn coral,
+on by default), `icon_size` (14–24 px) and `spacing` (0–12 px).
 A style sets the layout, edge and height, the item and icon shapes and
 colours, insets and spacing, the screen frame, the notch's width
 (*Pharos Beam*), the bar font (*System monitor* uses your monospace font,
@@ -1217,6 +1227,30 @@ stay crisp: a hand-drawn wobble would need every edge drawn as a path
 instead of the GPU's rounded rectangles, at a cost on every frame. The textures are one cached image each, drawn once on
 first use; nothing animates. Text keeps its surface colours, so contrast
 is unchanged.
+### Surface grain
+
+A fine texture a surface can wear: one settings table for every surface
+that offers it (the dock's `[dock.grain]`; the taskbar's tray takes its
+style and strength from `[plugins.settings.taskbar]`), off by default.
+
+```toml
+[dock.grain]
+style = "film"      # none (default), fine, film, paper, speckle
+amount = 0.05       # strongest speck's alpha, 0–0.12
+scale = 1.0         # speck size, 1–3 logical px
+contrast = 1.0      # 0.5–1.5: higher makes strong specks stand out
+tint = "neutral"    # or "surface": specks in the hue of the theme's surfaces
+seed = 0            # another random field
+```
+
+*Fine* is an even single-pixel sand, *Film* soft clumps like fast film,
+*Paper fibre* short horizontal fibres over a faint tooth, *Speckle* sparse
+dark flecks on a clean surface. Every number is clamped to its range when
+read. Each distinct grain is one 128 × 128 tile drawn once on a background
+thread and painted pixel for pixel (crisp at fractional scales, and still
+while a surface grows or slides); at most six tiles are kept, the least
+recently used leaving the GPU atlas first.
+
 ## Launcher placement
 
 ```toml
