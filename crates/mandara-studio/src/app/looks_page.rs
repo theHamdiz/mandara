@@ -497,6 +497,9 @@ impl super::page_tabs::PageTab for ThemesTab {
 impl StudioView {
     /// Opens Themes on `tab`, its content at the top.
     pub fn show_themes_tab(&mut self, tab: ThemesTab, cx: &mut Context<Self>) {
+        // Choosing one of the page's own tabs (a deep link too) leaves a
+        // plugin's tab.
+        super::page_tabs::choose_plugin_tab("themes", None, cx);
         self.show(Section::Themes, cx);
         if self.themes_tab != tab {
             // The sound gallery's lists, fields and cover go with its tab.
@@ -522,6 +525,9 @@ impl StudioView {
     pub(super) fn themes_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut gpui::Window, cx: &mut Context<Self>) -> AnyElement {
         let tab = self.themes_tab;
         let tabs = super::page_tabs::bar("themes-tabs", &ThemesTab::ALL, tab, p, |view, tab, _, cx| view.show_themes_tab(tab, cx), window, cx);
+        if let Some(body) = super::page_tabs::plugin_body("themes-tabs", super::grid::PageMetrics::of(window, cx).column_w, p, window, cx) {
+            return div().row().flex_col().gap(px(SPACE_22_PX)).child(tabs).child(body).into_any_element();
+        }
         let body = match tab {
             ThemesTab::Colors => self.themes_colors(cfg, p, cx),
             ThemesTab::Components => self.components_section(cfg, p, cx),

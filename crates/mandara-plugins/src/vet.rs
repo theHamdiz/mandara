@@ -5,8 +5,10 @@
 //! failure:
 //!
 //! * **Broken:** plugin.toml doesn't parse or has problems; the component
-//!   is missing, isn't a component or doesn't compile or start; `init` or a
-//!   render traps or runs past its budget.
+//!   is missing, isn't a component or doesn't compile or start (including
+//!   an extension plugin needing features this Mandara lacks); `init`, a
+//!   render or a launcher query traps or runs past its budget; plugin.toml
+//!   declares launcher providers or Studio tabs the component can't serve.
 //! * **Malicious:** its id or name poses as a built-in plugin; it imports
 //!   interfaces the host doesn't link; it queues commands while loading or
 //!   rendering, before any user event.
@@ -22,8 +24,8 @@ use std::path::Path;
 use mandara_i18n::{t, tf};
 use mandara_services::marketplace::{Class, Finding};
 
-use crate::wasm::mandara::plugin::types::Palette;
-use crate::wasm::{self, Kind, ManifestFile, View, WasmPlugin};
+use crate::wasm::Palette;
+use crate::wasm::{self, Kind, ManifestFile, RenderContext, SurfaceKind, View, WasmPlugin};
 use crate::{PluginOrigin, PluginRegistry};
 
 /// Import namespaces the host links: the plugin world, and WASI preview 2
@@ -102,32 +104,51 @@ pub fn vet(dir: &Path, reserved_ids: &[&str], repo: Option<&str>) -> Result<(), 
 
     // Every command is captured (none runs here), so any attempt shows.
     let settings = crate::split_settings(m.settings.clone()).0.iter().map(|s| (s.key.clone(), s.default_json())).collect();
-    let mut plugin = WasmPlugin::instantiate(&m.id, dir, &component, settings, true).map_err(|e| broken(tf("It fails to start: {error}", &[("error", &format!("{e:#}"))])))?;
+    // Its declared capabilities that need no grant (timers) work as in the
+    // shell; `commands` is always on here so any attempt is captured.
+    let mut access = crate::extension::Access::new(&m.permissions, &[]);
+    let commands = crate::extension::Capability::Commands;
+    if !access.declares(&commands) {
+        access.declared.push(commands.clone());
+        access.granted.push(commands);
+    }
+    let mut plugin = WasmPlugin::instantiate(&m.id, dir, &component, settings, access).map_err(|e| broken(tf("It fails to start: {error}", &[("error", &format!("{e:#}"))])))?;
     behaved(&mut plugin)?;
     let theme = probe_palette();
     let mut shows_something = false;
-    for render in [WasmPlugin::bar, WasmPlugin::panel, WasmPlugin::sidebar] {
-        let view = render(&mut plugin, &theme);
-        behaved(&mut plugin)?;
-        shows_something |= view.as_ref().is_some_and(has_content);
-    }
-    // A plugin may offer only desktop widgets.
+    // Every surface, desktop widget and Studio tab, then every launcher
+    // provider once.
     let widgets = crate::split_widgets(m.widgets.clone()).0;
-    if !widgets.is_empty() && !plugin.has_desktop() {
-        return Err(broken(t("plugin.toml lists desktop widgets, but the plugin isn't built for the desktop-plugin world").to_string()));
-    }
-    for info in &widgets {
-        let context = wasm::WidgetContext { widget: info.id.clone(), instance: format!("{}-1", info.id), width: info.width, height: info.height, numerals: "auto".into(), calendar: "gregorian".into(), language: String::new() };
-        let view = plugin.desktop_widget(&theme, &context);
+    let surfaces = [SurfaceKind::Bar, SurfaceKind::Panel, SurfaceKind::Sidebar].map(|surface| (surface, String::new(), PROBE_W_PX, PROBE_H_PX));
+    let desktop = widgets.iter().map(|w| (SurfaceKind::Desktop, w.id.clone(), w.width, w.height));
+    let studio = crate::extension::split_studio_tabs(m.studio_tabs.clone()).0.into_iter().map(|tab| (SurfaceKind::Studio, tab.id, PROBE_STUDIO_W_PX, 0.0));
+    for (surface, outlet, width, height) in surfaces.into_iter().chain(desktop).chain(studio) {
+        let desktop_text = surface == SurfaceKind::Desktop;
+        let text = |s: &str| if desktop_text { s.to_string() } else { String::new() };
+        let context = RenderContext { surface, outlet, instance: String::new(), width, height, numerals: text("auto"), calendar: text("gregorian"), language: String::new() };
+        let view = plugin.render(&theme, &context).map_err(|e| broken(tf("Its view breaks a limit: {error}", &[("error", &e)])))?;
         behaved(&mut plugin)?;
         shows_something |= view.as_ref().is_some_and(has_content);
+    }
+    for provider in crate::extension::split_launchers(m.launcher.clone()).0 {
+        for query in PROBE_QUERIES {
+            // Launcher results are useful output too.
+            shows_something |= plugin.launcher_query(&provider.id, query, crate::extension::MAX_HITS).iter().any(|h| !h.title.trim().is_empty());
+            behaved(&mut plugin)?;
+        }
     }
     if !shows_something {
-        let why = if plugin.has_desktop() { t("It shows nothing: its bar item, panel, sidebar card and desktop widgets are all empty") } else { t("It shows nothing: its bar item, panel and sidebar card are all empty") };
-        return Err(Finding::new(Class::Placeholder, why));
+        return Err(Finding::new(Class::Placeholder, t("It shows nothing: its bar item, panel, sidebar card, desktop widgets, Studio tabs and launcher results are all empty")));
     }
     Ok(())
 }
+
+/// The size extension views are probed at (a panel), and a Studio tab's width.
+const PROBE_W_PX: f32 = 360.0;
+const PROBE_H_PX: f32 = 380.0;
+const PROBE_STUDIO_W_PX: f32 = 720.0;
+/// Launcher queries a provider is probed with.
+const PROBE_QUERIES: [&str; 2] = ["", "a"];
 
 /// After a call: it neither trapped nor ran past its budget, and queued
 /// no command (no user event has happened).
@@ -169,12 +190,14 @@ fn unlinked_import<'a>(mut names: impl Iterator<Item = &'a str>) -> Option<Strin
     names.find(|name| !LINKED_IMPORTS.iter().any(|ns| name.starts_with(ns))).map(str::to_string)
 }
 
-/// Some visible text, icon or meter.
+/// Some visible text, icons, controls or an image.
 fn has_content(view: &View) -> bool {
     view.nodes.iter().any(|n| match n.kind {
-        Kind::Text | Kind::Button | Kind::Icon => !n.text.trim().is_empty(),
-        Kind::Meter => true,
-        Kind::Row | Kind::Column | Kind::Card | Kind::Spacer => false,
+        // A text node draws only its text; a button draws its children too.
+        Kind::Text | Kind::Icon => !n.text.trim().is_empty(),
+        Kind::Button => !n.text.trim().is_empty() || !n.children.is_empty(),
+        Kind::Meter | Kind::Input | Kind::Toggle | Kind::Slider | Kind::Choice | Kind::Image | Kind::Canvas | Kind::List => true,
+        Kind::Row | Kind::Column | Kind::Card | Kind::Group | Kind::Grid | Kind::Scroll | Kind::Spacer | Kind::Divider => false,
     })
 }
 

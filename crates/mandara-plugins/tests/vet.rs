@@ -83,5 +83,14 @@ fn each_class_is_caught() {
     } else {
         eprintln!("skipped the moon-phase check: {} not built", built.display());
     }
+
+    // Every surface, Studio tab and launcher provider is probed.
+    let ext = data().join("../extension/fixture.wasm");
+    let ext_manifest = |mode: &str, extra: &str| format!("id = \"ext-{mode}\"\nname = \"Ext {mode}\"\ndescription = \"A test plugin\"\n{extra}\n[[settings]]\nkey = \"mode\"\ntype = \"text\"\ndefault = \"{mode}\"\n");
+    let launcher = "[[launcher]]\nid = \"moon\"\nname = \"Moon\"\nprefix = \"moon \"\n";
+    assert_eq!(class(&folder("ext-ok", &ext_manifest("ok", launcher), &ext)), None, "an extension plugin passes");
+    assert_eq!(class(&folder("ext-huge", &ext_manifest("huge", ""), &ext)), Some(Class::Broken), "a view past the node limit");
+    assert_eq!(class(&folder("ext-future", &ext_manifest("future", ""), &ext)), Some(Class::Broken), "a feature this host lacks");
+    assert_eq!(class(&folder("ext-spin", &ext_manifest("spin", launcher), &ext)), Some(Class::Broken), "a launcher query past its budget");
     let _ = std::fs::remove_dir_all(cache);
 }

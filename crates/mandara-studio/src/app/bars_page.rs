@@ -23,6 +23,9 @@ impl StudioView {
     /// Uses normal page navigation to open Bars, then selects the destination
     /// and starts its content at the top.
     pub fn show_bars_tab(&mut self, tab: BarsTab, cx: &mut Context<Self>) {
+        // Choosing one of the page's own tabs (a deep link too) leaves a
+        // plugin's tab.
+        super::page_tabs::choose_plugin_tab("bars", None, cx);
         self.show(Section::Bars, cx);
         self.bars_tab = tab;
         sidebars::forget_scroll(cx);
@@ -35,6 +38,9 @@ impl StudioView {
     pub(super) fn bars_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let tab = self.bars_tab;
         let tabs = page_tabs::bar("bars-tabs", &BarsTab::ALL, tab, p, |view, tab, _, cx| view.show_bars_tab(tab, cx), window, cx);
+        if let Some(body) = page_tabs::plugin_body("bars-tabs", super::grid::PageMetrics::of(window, cx).column_w, p, window, cx) {
+            return div().row().flex_col().gap(px(SPACE_22_PX)).child(tabs).child(body).into_any_element();
+        }
         let body = match tab {
             BarsTab::Bar => {
                 let rows = self.rows(registry::in_section(Section::Bars).filter(|setting| BarsTab::for_path(setting.path) == Some(tab)), cfg, p, cx);

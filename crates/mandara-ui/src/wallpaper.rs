@@ -389,13 +389,18 @@ pub fn slant(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
     }
     let img = image::RgbaImage::from_raw(w + off, h, rgba).ok_or("bad output")?;
     cache::write(&out, |writer| image::DynamicImage::ImageRgba8(img).write_to(writer, image::ImageFormat::Png).map_err(|e| e.to_string()))?;
-    prune(&dir, 400 * 1024 * 1024);
+    let _ = prune(&dir, 400 * 1024 * 1024);
     Ok(out)
 }
 
+/// Set when pruning removed fitted images, so the worker forgets where
+/// they were (a remembered path to a deleted file would never be redone).
+static FIT_PRUNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Keeps a cache directory under `limit` bytes, oldest files first.
-fn prune(dir: &Path, limit: u64) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+/// Returns whether any file was removed.
+fn prune(dir: &Path, limit: u64) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else { return false };
     let mut files: Vec<(std::time::SystemTime, u64, PathBuf)> = entries
         .flatten()
         .filter_map(|e| {
@@ -405,17 +410,20 @@ fn prune(dir: &Path, limit: u64) {
         .collect();
     let mut total: u64 = files.iter().map(|f| f.1).sum();
     if total <= limit {
-        return;
+        return false;
     }
     files.sort();
+    let mut removed = false;
     for (_, len, path) in files {
         if total <= limit * 9 / 10 {
             break;
         }
         if std::fs::remove_file(&path).is_ok() {
             total -= len;
+            removed = true;
         }
     }
+    removed
 }
 
 /// A copy no larger than the output (physical pixels), so a 6000 px photo
@@ -441,10 +449,82 @@ pub fn display_copy(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
 /// picker thumbnail, any other size a slanted slice of that size.
 pub type Job = (PathBuf, u32, u32);
 
+/// Set on a job's height to ask for a plain [`fit`] picture of
+/// `width × (height & !FIT_JOB)` instead of a slanted slice: plugin images
+/// (album covers, folder pictures, plugin assets) decoded at their drawn
+/// size through the same bounded worker.
+pub const FIT_JOB: u32 = 1 << 31;
+
+/// Longest side of a [`fit`] picture (physical px): a plugin can't ask
+/// the worker for a huge decode target.
+pub const FIT_MAX_SIDE: u32 = 2048;
+/// [`fit`] sizes are rounded up to this step, so a plugin choosing odd
+/// sizes can't fill the cache with near-identical copies.
+pub const FIT_STEP: u32 = 16;
+/// Largest picture [`fit`] decodes, read from its header first: about an
+/// 8K photo. Anything larger is refused before a byte of pixels is
+/// allocated (a tiny, highly compressed file can't expand into gigabytes).
+pub const FIT_MAX_SOURCE_PIXELS: u64 = 40_000_000;
+pub const FIT_MAX_SOURCE_SIDE: u32 = 12_000;
+/// Byte budget of the `plugin-images` cache: plugins can draw one picture
+/// at several sizes, so the oldest copies go past this.
+const FIT_CACHE_BYTES: u64 = 400 * 1024 * 1024;
+
+/// A fit job's size rounded to [`FIT_STEP`] (and clamped).
+pub fn fit_size(px: f32) -> u32 {
+    let px = if px.is_finite() { px.max(1.0) as u32 } else { 1 };
+    px.div_ceil(FIT_STEP).saturating_mul(FIT_STEP).clamp(FIT_STEP, FIT_MAX_SIDE)
+}
+
+/// `path` cover-cropped to exactly `w × h` (physical px, at most
+/// [`FIT_MAX_SIDE`]), cached: PNG when it has transparency, else JPEG.
+pub fn fit(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
+    let (w, h) = (w.clamp(1, FIT_MAX_SIDE), h.clamp(1, FIT_MAX_SIDE));
+    let dir = mandara_config::paths::cache_dir().join("plugin-images");
+    let key = cache_key(path, &format!("fit{w}x{h}"));
+    let (jpeg, png) = (dir.join(&key), dir.join(key.replace(".jpg", ".png")));
+    if jpeg.exists() {
+        return Ok(jpeg);
+    }
+    if png.exists() {
+        return Ok(png);
+    }
+    if !mandara_media::is_video(path) {
+        let (sw, sh) = image::ImageReader::open(path).and_then(|r| r.with_guessed_format()).map_err(|e| e.to_string())?.into_dimensions().map_err(|e| e.to_string())?;
+        if sw > FIT_MAX_SOURCE_SIDE || sh > FIT_MAX_SOURCE_SIDE || u64::from(sw) * u64::from(sh) > FIT_MAX_SOURCE_PIXELS {
+            return Err(format!("{}: {sw}×{sh} is too large to show", path.display()));
+        }
+    }
+    let src = open_still(path)?;
+    let out = cover(&src, w, h);
+    drop(src);
+    if out.color().has_alpha() {
+        use image::ImageEncoder as _;
+        let rgba = out.to_rgba8();
+        drop(out);
+        cache::write(&png, |writer| image::codecs::png::PngEncoder::new(writer).write_image(rgba.as_raw(), rgba.width(), rgba.height(), image::ExtendedColorType::Rgba8).map_err(|e| e.to_string()))?;
+        if prune(&dir, FIT_CACHE_BYTES) {
+            FIT_PRUNED.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        Ok(png)
+    } else {
+        save_jpeg(&out, &jpeg, THUMB_QUALITY)?;
+        if prune(&dir, FIT_CACHE_BYTES) {
+            FIT_PRUNED.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        Ok(jpeg)
+    }
+}
+
 /// Most thumbnail decodes in flight at once. Jobs run on GPUI's shared
 /// background executor (no dedicated threads); the cap bounds the transient
 /// memory of full-size decodes (a 4K JPEG decodes to ~33 MB).
 const MAX_THUMB_JOBS: usize = 3;
+/// Thumbnails waiting to be made; a page that asks for more drops the
+/// least important ones (they are asked for again when shown).
+const MAX_QUEUED_THUMBS: usize = 256;
+/// Finished and failed thumbnails remembered before the lists start over.
+const MAX_REMEMBERED_THUMBS: usize = 4096;
 
 #[derive(Default)]
 pub struct Thumbnails {
@@ -487,6 +567,12 @@ impl Thumbnails {
             }
             if self.requested.insert(job.clone()) {
                 self.queue.push(job);
+                // Bounded: past the limit the least important waiting job
+                // (the front: the most important is last) is dropped.
+                if self.queue.len() > MAX_QUEUED_THUMBS {
+                    let dropped = self.queue.remove(0);
+                    self.requested.remove(&dropped);
+                }
             } else if let Some(i) = self.queue.iter().position(|x| *x == job) {
                 // Re-prioritise something already queued.
                 let job = self.queue.remove(i);
@@ -503,13 +589,32 @@ impl Thumbnails {
             self.in_flight += 1;
             let work = job.clone();
             let task = cx.background_executor().spawn(async move {
-                if work.1 == 0 { thumbnail(&work.0) } else { slant(&work.0, work.1, work.2) }
+                if work.1 == 0 {
+                    thumbnail(&work.0)
+                } else if work.2 & FIT_JOB != 0 {
+                    fit(&work.0, work.1, work.2 & !FIT_JOB)
+                } else {
+                    slant(&work.0, work.1, work.2)
+                }
             });
             cx.spawn(async move |this, cx| {
                 let result = task.await;
                 let _ = this.update(cx, |t, cx| {
                     t.in_flight -= 1;
                     t.requested.remove(&job);
+                    // The maps only remember where cached files are: past a
+                    // bound they start over (the files stay on disk).
+                    if t.ready.len() >= MAX_REMEMBERED_THUMBS {
+                        t.ready = HashMap::new();
+                    }
+                    if t.failed.len() >= MAX_REMEMBERED_THUMBS {
+                        t.failed = HashSet::new();
+                    }
+                    // Fitted images may have been pruned: they are made again
+                    // when next asked for (a cheap check when the file stayed).
+                    if FIT_PRUNED.swap(false, std::sync::atomic::Ordering::Relaxed) {
+                        t.ready.retain(|job, _| job.2 & FIT_JOB == 0);
+                    }
                     match result {
                         Ok(thumb) => {
                             t.ready.insert(job, thumb);

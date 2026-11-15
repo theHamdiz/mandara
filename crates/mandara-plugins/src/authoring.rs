@@ -142,8 +142,7 @@ pub struct WitCase {
 pub struct Contract {
     /// `package …;`
     pub package: String,
-    /// What a plugin provides (`world plugin` exports, then the
-    /// `desktop-plugin` world's desktop widgets).
+    /// What a plugin provides (`world plugin` exports).
     pub exports: Vec<WitFunc>,
     /// What Mandara provides (`interface host`).
     pub imports: Vec<WitFunc>,
@@ -157,7 +156,7 @@ pub struct Contract {
 
 /// Parses the subset of WIT that [`WIT`] uses.
 pub fn parse_contract(wit: &str) -> Contract {
-    #[derive(PartialEq)]
+    #[derive(Clone, Copy, PartialEq)]
     enum Block {
         None,
         Host,
@@ -168,6 +167,8 @@ pub fn parse_contract(wit: &str) -> Contract {
     }
     let mut c = Contract::default();
     let mut block = Block::None;
+    // The interface or world a nested record or enum sits in.
+    let mut outer = Block::None;
     let mut depth = 0usize;
     let mut doc: Vec<String> = Vec::new();
     for raw in wit.lines() {
@@ -199,20 +200,27 @@ pub fn parse_contract(wit: &str) -> Contract {
             depth += 1;
             if depth <= 2 {
                 block = match line.trim_end_matches('{').trim() {
-                    "interface host" => Block::Host,
-                    "world plugin" | "world desktop-plugin" => Block::World,
+                    "interface host" | "interface broker" | "interface storage" => Block::Host,
+                    "world plugin" => Block::World,
                     "enum kind" => Block::Kind,
                     "record node" => Block::Node,
                     _ if depth == 1 => Block::None,
                     _ => Block::Other,
                 };
+                if depth == 1 {
+                    outer = block;
+                }
             }
             doc.clear();
             continue;
         }
         if line.starts_with('}') {
             depth = depth.saturating_sub(1);
-            block = if depth == 0 { Block::None } else { Block::Other };
+            block = match depth {
+                0 => Block::None,
+                1 => outer,
+                _ => Block::Other,
+            };
             doc.clear();
             continue;
         }
@@ -221,11 +229,8 @@ pub fn parse_contract(wit: &str) -> Contract {
                 let decl = if block == Block::World { line.strip_prefix("export ") } else { Some(line) };
                 if let Some((name, sig)) = decl.and_then(|d| d.split_once(':')).filter(|(_, s)| s.trim_start().starts_with("func")) {
                     let f = WitFunc { name: name.trim().into(), signature: sig.trim().trim_end_matches(';').into(), doc: take_doc(&mut doc) };
-                    // `desktop-plugin` repeats the `plugin` world's exports.
                     if block == Block::World {
-                        if !c.exports.iter().any(|e| e.name == f.name) {
-                            c.exports.push(f);
-                        }
+                        c.exports.push(f);
                     } else {
                         c.imports.push(f);
                     }
@@ -233,7 +238,8 @@ pub fn parse_contract(wit: &str) -> Contract {
             }
             Block::Kind => {
                 for case in line.split(',').map(str::trim).filter(|s| !s.is_empty()) {
-                    c.kinds.push(WitCase { name: case.into(), doc: take_doc(&mut doc) });
+                    // `%list`: a WIT keyword used as a name.
+                    c.kinds.push(WitCase { name: case.trim_start_matches('%').into(), doc: take_doc(&mut doc) });
                 }
             }
             Block::Node => {
@@ -286,8 +292,12 @@ pub fn quick_start(dev_dir: &std::path::Path) -> Vec<Step> {
     ]
 }
 
-/// The permissions a manifest may list.
-pub const PERMISSIONS: &[&str] = &[PERMISSION_COMMANDS];
+/// The permissions a manifest may list (`net:<host>` and
+/// `plugins.call:<id>` name their target).
+pub const PERMISSIONS: &[&str] = &[
+    PERMISSION_COMMANDS, "media.read", "media.control", "wallpaper.read", "wallpaper.set", "files.folders", "notifications.send", "windows.read", "windows.control", "workspaces.read", "workspaces.control", "system.read", "clipboard.read", "clipboard.write",
+    "open.web", "osd.show", "theme.control", "events", "timers", "launcher.global", "net:<host>", "plugins.call:<id>",
+];
 
 /// Parses [`EXAMPLE_MANIFEST`] (always succeeds; tested).
 pub fn example_manifest() -> ManifestFile {
@@ -323,12 +333,12 @@ mod tests {
         let c = contract();
         assert!(c.package.starts_with("mandara:plugin@"));
         let names = |v: &[WitFunc]| v.iter().map(|f| f.name.clone()).collect::<Vec<_>>();
-        assert_eq!(names(&c.exports), ["init", "bar", "panel", "sidebar", "on-event", "refresh-ms", "desktop-widget"]);
-        assert_eq!(names(&c.imports), ["log", "now-unix-ms", "setting", "command", "locale", "translate"]);
+        assert_eq!(names(&c.exports), ["negotiate", "init", "render", "on-event", "refresh-ms", "launcher-query", "on-call"]);
+        assert_eq!(names(&c.imports), ["log", "now-unix-ms", "setting", "command", "locale", "translate", "submit", "cancel", "granted", "asset-image", "get", "set", "remove", "keys"]);
         let cases = |v: &[WitCase]| v.iter().map(|k| k.name.clone()).collect::<Vec<_>>();
-        assert_eq!(cases(&c.kinds), ["row", "column", "card", "text", "icon", "button", "meter", "spacer"]);
+        assert_eq!(cases(&c.kinds), ["row", "column", "card", "grid", "scroll", "list", "text", "icon", "button", "meter", "spacer", "divider", "input", "toggle", "slider", "choice", "image", "canvas", "group"]);
         assert_eq!(cases(&c.tones), ["normal", "muted", "accent", "error", "success", "warning"]);
-        assert_eq!(c.exports[0].signature, "func() -> result<_, string>");
+        assert_eq!(c.exports[1].signature, "func() -> result<_, string>");
         assert_eq!(c.imports[2].signature, "func(key: string) -> option<string>");
         assert!(c.imports[3].doc.contains("commands"));
         assert!(c.node_fields.iter().any(|f| f.name == "action" && f.signature == "string"));
@@ -352,6 +362,25 @@ mod tests {
         }
         for f in &contract().imports {
             assert!(guide.contains(&format!("`{}(", f.name)), "PLUGINS.md documents host import {}", f.name);
+        }
+        for p in PERMISSIONS {
+            assert!(guide.contains(&format!("`{p}`")), "PLUGINS.md documents the {p} permission");
+        }
+        // Each limit in the sentence that documents it, not just the number.
+        use crate::extension as x;
+        for phrase in [
+            format!("more than {} nodes", x::MAX_VIEW_NODES),
+            format!("a request payload is at most {} bytes", x::MAX_PAYLOAD_BYTES),
+            format!("At most {} requests wait or run per plugin", x::MAX_PENDING_REQUESTS),
+            format!("{} subscriptions\nstay open", x::MAX_SUBSCRIPTIONS),
+            format!("At most {} results", x::MAX_HITS),
+        ] {
+            assert!(guide.contains(&phrase), "PLUGINS.md must say {phrase:?}");
+        }
+        assert!(guide.contains(&format!("{} ms launcher budget", crate::extension::LAUNCHER_BUDGET.as_millis())));
+        assert!(guide.contains(&format!("API level {}", crate::extension::API_LEVEL)));
+        for f in crate::extension::FEATURES {
+            assert!(guide.contains(&format!("`{f}`")), "PLUGINS.md lists feature {f}");
         }
     }
 

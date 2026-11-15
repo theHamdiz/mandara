@@ -426,15 +426,23 @@ impl StudioView {
         }
         let palette = mandara_ui::plugins::external::palette_for(p);
         self.local.tests.insert(key.clone(), TestState::Running);
+        // The grants the person gave it, as in the shell.
+        let access = mandara_plugins::extension::Access::from_grant(&plugin.permissions, cfg.plugins.grants.get(&plugin.id));
         let task = cx.background_executor().spawn(async move {
-            let allow = plugin.permissions.iter().any(|x| x == wasm::PERMISSION_COMMANDS);
             mandara_plugins::guard(&format!("plugin `{}` test load", plugin.id), move || {
                 let start = Instant::now();
-                let mut w = wasm::WasmPlugin::load(&plugin.id, &plugin.dir, &plugin.entry, settings, allow).map_err(|e| format!("{e:#}"))?;
-                let (bar, panel, sidebar) = (w.bar(&palette).is_some(), w.panel(&palette).is_some(), w.sidebar(&palette).is_some());
+                let mut w = wasm::WasmPlugin::load(&plugin.id, &plugin.dir, &plugin.entry, settings, access).map_err(|e| format!("{e:#}"))?;
+                // A refused view (over a limit) is an error to show, not an
+                // absent surface.
+                let mut shown = |surface: wasm::SurfaceKind| -> Result<bool, String> {
+                    let context = wasm::RenderContext { surface, outlet: String::new(), instance: String::new(), width: 0.0, height: 0.0, numerals: String::new(), calendar: String::new(), language: String::new() };
+                    w.render(&palette, &context).map(|view| view.is_some()).map_err(|e| format!("{e:#}"))
+                };
+                let probed = (|| Ok::<_, String>((shown(wasm::SurfaceKind::Bar)?, shown(wasm::SurfaceKind::Panel)?, shown(wasm::SurfaceKind::Sidebar)?)))();
                 if let Some(reason) = w.disabled.clone() {
                     return Err(reason);
                 }
+                let (bar, panel, sidebar) = probed?;
                 Ok(TestReport { elapsed: start.elapsed(), bar, panel, sidebar })
             })
             .unwrap_or_else(|| Err("the loader crashed".into()))

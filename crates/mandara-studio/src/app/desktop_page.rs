@@ -202,6 +202,9 @@ impl StudioView {
     }
 
     pub(super) fn set_desktop_tab(&mut self, tab: DesktopTab, cx: &mut Context<Self>) {
+        // Choosing one of the page's own tabs (a deep link too) leaves a
+        // plugin's tab.
+        super::page_tabs::choose_plugin_tab("desktop", None, cx);
         if self.desktop_tab != tab {
             if self.desktop_tab == DesktopTab::ContextMenu {
                 cx.defer(release);
@@ -216,6 +219,9 @@ impl StudioView {
     pub(super) fn desktop_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let tab = self.desktop_tab;
         let bar = super::page_tabs::bar("desktop-tabs", &DesktopTab::ALL, tab, p, |view, tab, _, cx| view.set_desktop_tab(tab, cx), window, cx);
+        if let Some(body) = super::page_tabs::plugin_body("desktop-tabs", super::grid::PageMetrics::of(window, cx).column_w, p, window, cx) {
+            return div().row().flex_col().gap(px(SPACE_22_PX)).child(bar).child(body).into_any_element();
+        }
         let body = match tab {
             DesktopTab::Widgets => self.desktop_widgets_page(cfg, p, window, cx),
             // The interactive cards and GPU visualizers (looks_page.rs).

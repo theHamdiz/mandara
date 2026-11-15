@@ -477,9 +477,14 @@ fn plugins(args: &[String]) -> Result<()> {
                 add_file(&mut tar, &dir.join(extra), &format!("{id}/{extra}"), MODE_FILE)?;
             }
         }
-        if let Ok(entries) = std::fs::read_dir(dir.join("locales")) {
-            for e in entries.flatten() {
-                add_file(&mut tar, &e.path(), &format!("{id}/locales/{}", e.file_name().to_string_lossy()), MODE_FILE)?;
+        // Catalogs and the images a plugin draws (`broker.asset-image`):
+        // plain files only, one level deep.
+        for folder in ["locales", "assets"] {
+            let Ok(entries) = std::fs::read_dir(dir.join(folder)) else { continue };
+            let mut files: Vec<PathBuf> = entries.flatten().map(|e| e.path()).filter(|p| p.is_file() && !p.is_symlink()).collect();
+            files.sort();
+            for f in files {
+                add_file(&mut tar, &f, &format!("{id}/{folder}/{}", f.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()), MODE_FILE)?;
             }
         }
         tar.into_inner().map_err(|e| e.to_string())?.finish().map_err(|e| e.to_string())?;
