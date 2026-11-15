@@ -27,8 +27,11 @@
 //!   installable file dragged over it glows "Drop to install" and dropping
 //!   installs it (respects reduce motion).
 //!
+//! Once installed, the pill offers to move the file to the Trash
+//! ([`Cleanup`], `after_install = "ask"`, the default).
+//!
 //! Commands: `apps install <path…> [--yes] [--no-path-shim] [--dry-run]`,
-//! `apps jobs`, `apps jobs cancel <id>`; `apps installed --by-mandara`
+//! `apps jobs`, `apps jobs cancel <id>`, `apps jobs trash-file <id>`; `apps installed --by-mandara`
 //! lists what this plugin installed. Settings
 //! (`[plugins.settings.app-installer]`, Studio → Plugins → App installer):
 //! `install_dir`, `path_shims`, `confirm_rootless`, `flatpak_scope`,
@@ -57,6 +60,8 @@ pub const ID: &str = "app-installer";
 pub const JOB_LINGER: Duration = Duration::from_secs(8);
 /// Failed jobs stay until closed, or this long.
 const FAILED_LINGER: Duration = Duration::from_secs(60);
+/// A finished job offering to trash its file stays long enough to decide.
+const OFFER_LINGER: Duration = Duration::from_secs(20);
 /// Preview files older than this are stale (a crash or a hidden job left
 /// them); the first install of a session sweeps them.
 const PREVIEW_MAX_AGE: Duration = Duration::from_secs(60 * 60);
@@ -87,6 +92,21 @@ pub struct JobOptions {
     pub yes: bool,
     pub no_path_shim: bool,
     pub dry_run: bool,
+}
+
+/// The installed-from file, once the app is installed.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Cleanup {
+    /// Nothing to offer (not installed, kept by the settings, a dry run).
+    #[default]
+    None,
+    /// "Move to Trash" is offered.
+    Offered,
+    Trashing,
+    /// In the Trash (asked for, or by the `trash` setting).
+    Trashed,
+    Failed(String),
 }
 
 /// One file being installed.
@@ -123,6 +143,8 @@ pub struct Job {
     pub keep_in_dock: bool,
     /// When installing started (the progress pill's elapsed time).
     pub started_at: Option<Instant>,
+    /// What happens to the installed-from file.
+    pub cleanup: Cleanup,
     pub(crate) cancel: Arc<AtomicBool>,
     pub(crate) finished_at: Option<Instant>,
 }
@@ -167,6 +189,7 @@ impl Job {
             "progress": self.progress(),
             "error": self.result.as_ref().and_then(|r| r.as_ref().err()),
             "outcome": self.result.as_ref().and_then(|r| r.as_ref().ok()),
+            "cleanup": self.cleanup,
             "plan": self.plan.as_deref().map(plan_json),
         })
     }
@@ -355,6 +378,7 @@ fn start(paths: Vec<PathBuf>, origin: InstallOrigin, options: JobOptions, reply:
                 install_when_ready: false,
                 keep_in_dock: origin == InstallOrigin::Dock,
                 started_at: None,
+                cleanup: Cleanup::None,
                 cancel: Arc::new(AtomicBool::new(false)),
                 finished_at: None,
             });
@@ -661,9 +685,15 @@ fn finish(id: u64, result: Result<Outcome, String>, cx: &mut App) {
         Err(_) if cancelled => Phase::Cancelled,
         Err(_) => Phase::Failed,
     };
+    let offer = settings(cx).offer_cleanup();
     let Some(job) = q.update(cx, |q, cx| {
         let j = q.job_mut(id)?;
         j.phase = phase;
+        j.cleanup = match &result {
+            Ok(o) if o.trashed_source.is_some() => Cleanup::Trashed,
+            Ok(o) if offer && !o.dry_run => Cleanup::Offered,
+            _ => Cleanup::None,
+        };
         j.fraction = Some(if phase == Phase::Done { 1.0 } else { j.fraction.unwrap_or(0.0) });
         if let Ok(o) = &result {
             j.desktop_id = o.desktop_id.clone().or(j.desktop_id.clone());
@@ -695,13 +725,55 @@ fn finish(id: u64, result: Result<Outcome, String>, cx: &mut App) {
     }
     // Finished jobs leave the queue after a while (failed ones on screen
     // wait to be closed).
-    let linger = if phase == Phase::Failed { FAILED_LINGER } else { JOB_LINGER };
+    let linger = match (phase, &job.cleanup) {
+        (Phase::Failed, _) => FAILED_LINGER,
+        (_, Cleanup::Offered) => OFFER_LINGER,
+        _ => JOB_LINGER,
+    };
     cx.spawn(async move |cx| {
         cx.background_executor().timer(linger).await;
         cx.update(|cx| dismiss(id, cx));
     })
     .detach();
     crate::installer_overlay::ensure_open(cx);
+}
+
+/// The finished pill's "Move to Trash": moves the file the app was
+/// installed from to the Trash, off the UI thread.
+pub fn trash_installed_file(id: u64, cx: &mut App) -> Result<(), String> {
+    let q = queue(cx);
+    let path = q.update(cx, |q, cx| {
+        let j = q.job_mut(id).ok_or_else(|| tf("No install job {id}", &[("id", &id)]))?;
+        if j.phase != Phase::Done || matches!(j.cleanup, Cleanup::Trashing | Cleanup::Trashed) || was_dry_run(j) {
+            return Err(tf("Job {id} has no file left to move to the Trash", &[("id", &id)]));
+        }
+        j.cleanup = Cleanup::Trashing;
+        cx.notify();
+        Ok(j.path.clone())
+    })?;
+    let settings = settings(cx);
+    let task = cx.background_spawn(async move { engine::trash_installed_file(&path, &InstallEnv::current(&settings)) });
+    cx.spawn(async move |cx| {
+        let result = task.await;
+        cx.update(|cx| {
+            queue(cx).update(cx, |q, cx| {
+                if let Some(j) = q.job_mut(id) {
+                    j.cleanup = match result {
+                        Ok(_) => Cleanup::Trashed,
+                        Err(e) => Cleanup::Failed(e),
+                    };
+                }
+                cx.notify();
+            });
+        });
+    })
+    .detach();
+    Ok(())
+}
+
+/// Whether a finished job was only a dry run.
+pub(crate) fn was_dry_run(j: &Job) -> bool {
+    j.result.as_ref().is_some_and(|r| r.as_ref().is_ok_and(|o| o.dry_run))
 }
 
 fn post(app: &str, summary: String, body: String, cx: &mut App) {
@@ -794,6 +866,16 @@ pub fn register(r: &mut PluginRegistry) {
         })
         .arg(ArgSpec::required("id", ArgKind::Integer, tk("job id from apps jobs"))),
     );
+    r.command(
+        ID,
+        CommandSpec::new("apps jobs trash-file", tk("Move the file a finished install came from to the Trash"), |a, cx| {
+            let id = u64::try_from(a.int(0)?).map_err(|e| e.to_string())?;
+            trash_installed_file(id, cx)?;
+            Ok(json!({ "trashing": id, "next": "mandara msg apps jobs" }))
+        })
+        .arg(ArgSpec::required("id", ArgKind::Integer, tk("job id from apps jobs")))
+        .example("apps jobs trash-file 1"),
+    );
 }
 
 #[cfg(test)]
@@ -822,6 +904,7 @@ mod tests {
             install_when_ready: false,
             keep_in_dock: true,
             started_at: None,
+            cleanup: Cleanup::None,
             cancel: Arc::new(AtomicBool::new(false)),
             finished_at: None,
         }

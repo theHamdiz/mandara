@@ -14,7 +14,7 @@ plugin, so you can switch it off or remove it like any other.
 |---|---|---|
 | **AppImage** | read without running it; its icon, name and launcher are extracted; installed in your home folder | no |
 | **Flatpak** (`.flatpak`, `.flatpakref`) | `flatpak install --user` | no |
-| **Portable app** (`.tar.gz`, `.zip`, …) | unpacked safely, main program and icon found, launcher created | no |
+| **Portable app** (`.tar`, `.tar.gz`, `.tar.xz`, `.tar.zst`, `.tar.bz2`, `.zip`) | unpacked safely, main program and icon found, launcher created | no |
 | **Native package** (`.deb`, `.rpm`, `.pkg.tar.zst`, `.apk`, `.xbps`) | your own package manager installs it, after showing what else it would pull in | yes, through the polkit dialog |
 
 - **A proper installer sheet:** the app's icon, version, developer,
@@ -26,7 +26,8 @@ plugin, so you can switch it off or remove it like any other.
 - **Feedback all the way:** a "Drop to install" glow while you drag, a queue
   when you drop several files, a progress ring with its steps and elapsed
   time, a spring bounce with Open / Keep in Dock / Show in Applications when
-  it's ready, and failure cards that explain what went wrong and offer a fix
+  it's ready, an offer to move the file you installed from to the Trash
+  (Studio → Plugins → App installer → *After installing*), and failure cards that explain what went wrong and offer a fix
   (for example "Not enough space" with Open folder, or "Find it on Flathub"
   for a package built for another distribution).
 - **In Studio → Applications:** a drop card ("Drop an app here, or choose a
@@ -34,6 +35,9 @@ plugin, so you can switch it off or remove it like any other.
   Show in Files and Uninstall.
 - **On your `$PATH` too, if you like:** a `~/.local/bin/<name>` link (or a
   two-line `flatpak run` wrapper), never overwriting anything of yours.
+- **Named however it was downloaded:** the format comes from the file's
+  first bytes, not its name, so a `.tar` that is really gzip, or a plain
+  tar named `.tar.gz`, installs without renaming.
 - **Where things go:** AppImages and portable apps live in
   `~/.local/share/mandara/apps/` with a launcher entry and icon; nothing
   needs root except a native package.

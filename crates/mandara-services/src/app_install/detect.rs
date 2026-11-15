@@ -1,6 +1,7 @@
 //! Format detection by magic bytes (the extension only breaks ties between
 //! formats that share a container, e.g. a `.pkg.tar.zst` and a portable
-//! `.tar.zst`), and ELF header reading (architecture, where an AppImage's
+//! `.tar.zst`, so a misnamed `.tar` that is really gzip still installs),
+//! and ELF header reading (architecture, where an AppImage's
 //! runtime ends and its squashfs payload starts).
 
 use std::io::Read as _;
@@ -21,6 +22,13 @@ const SQUASHFS_MAGIC: &[u8] = b"hsqs";
 const GZIP_MAGIC: &[u8] = b"\x1f\x8b";
 const XZ_MAGIC: &[u8] = b"\xfd7zXZ\x00";
 const ZSTD_MAGIC: &[u8] = b"\x28\xb5\x2f\xfd";
+const BZIP2_MAGIC: &[u8] = b"BZh";
+/// A tar header is one 512-byte block; POSIX (and GNU) headers carry
+/// `ustar` at byte 257, and every header carries an octal checksum.
+const TAR_BLOCK: usize = 512;
+const USTAR_AT: usize = 257;
+const USTAR: &[u8] = b"ustar";
+const TAR_CHECKSUM: std::ops::Range<usize> = 148..156;
 const ZIP_MAGIC: &[u8] = b"PK\x03\x04";
 const AR_MAGIC: &[u8] = b"!<arch>\n";
 const DEB_FIRST_MEMBER: &[u8] = b"debian-binary";
@@ -42,6 +50,9 @@ pub enum Format {
     TarGz,
     TarXz,
     TarZst,
+    /// Plain, uncompressed `.tar`.
+    Tar,
+    TarBz2,
     Zip,
     Deb,
     Rpm,
@@ -78,13 +89,15 @@ impl Family {
 }
 
 impl Format {
-    pub const ALL: [Format; 12] = [
+    pub const ALL: [Format; 14] = [
         Format::AppImage,
         Format::FlatpakBundle,
         Format::FlatpakRef,
         Format::TarGz,
         Format::TarXz,
         Format::TarZst,
+        Format::Tar,
+        Format::TarBz2,
         Format::Zip,
         Format::Deb,
         Format::Rpm,
@@ -97,7 +110,7 @@ impl Format {
         match self {
             Format::AppImage => Family::AppImage,
             Format::FlatpakBundle | Format::FlatpakRef => Family::Flatpak,
-            Format::TarGz | Format::TarXz | Format::TarZst | Format::Zip => Family::Portable,
+            Format::TarGz | Format::TarXz | Format::TarZst | Format::Tar | Format::TarBz2 | Format::Zip => Family::Portable,
             Format::Deb | Format::Rpm | Format::Pacman | Format::Apk | Format::Xbps => Family::Native,
         }
     }
@@ -111,6 +124,8 @@ impl Format {
             Format::TarGz => ".tar.gz",
             Format::TarXz => ".tar.xz",
             Format::TarZst => ".tar.zst",
+            Format::Tar => ".tar",
+            Format::TarBz2 => ".tar.bz2",
             Format::Zip => ".zip",
             Format::Deb => ".deb",
             Format::Rpm => ".rpm",
@@ -129,10 +144,12 @@ impl Format {
             Format::TarGz => &["*.tar.gz", "*.tgz"],
             Format::TarXz => &["*.tar.xz", "*.txz"],
             Format::TarZst => &["*.tar.zst", "*.tzst"],
+            Format::Tar => &["*.tar"],
+            Format::TarBz2 => &["*.tar.bz2", "*.tbz2", "*.tbz"],
             Format::Zip => &["*.zip"],
             Format::Deb => &["*.deb"],
             Format::Rpm => &["*.rpm"],
-            Format::Pacman => &["*.pkg.tar.zst", "*.pkg.tar.xz"],
+            Format::Pacman => &["*.pkg.tar.zst", "*.pkg.tar.xz", "*.pkg.tar"],
             Format::Apk => &["*.apk"],
             Format::Xbps => &["*.xbps"],
         }
@@ -260,6 +277,26 @@ pub fn head(path: &Path) -> std::io::Result<Vec<u8>> {
     Ok(buf)
 }
 
+/// Whether `head` starts with a tar header: the `ustar` magic, or (old
+/// v7 archives have none) a valid header checksum.
+pub fn is_tar(head: &[u8]) -> bool {
+    let Some(block) = head.get(..TAR_BLOCK) else { return false };
+    if block.get(USTAR_AT..USTAR_AT + USTAR.len()) == Some(USTAR) {
+        return true;
+    }
+    // Octal digits after optional spaces; the field is 8 bytes, so it fits.
+    let mut stored = 0u32;
+    for d in block[TAR_CHECKSUM].iter().skip_while(|b| **b == b' ').take_while(|b| b.is_ascii_digit()) {
+        if *d > b'7' {
+            return false;
+        }
+        stored = stored * 8 + u32::from(d - b'0');
+    }
+    // The checksum counts its own field as spaces.
+    let sum: u32 = block.iter().enumerate().map(|(i, b)| if TAR_CHECKSUM.contains(&i) { u32::from(b' ') } else { u32::from(*b) }).sum();
+    block[0] != 0 && stored == sum
+}
+
 /// The lowercase file name.
 fn lower_name(path: &Path) -> String {
     path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default()
@@ -317,13 +354,17 @@ pub fn sniff(path: &Path, head: &[u8]) -> Result<Format, Option<Unsupported>> {
         Some(Format::TarXz)
     } else if head.starts_with(ZSTD_MAGIC) {
         Some(Format::TarZst)
+    } else if head.starts_with(BZIP2_MAGIC) {
+        Some(Format::TarBz2)
+    } else if is_tar(head) {
+        Some(Format::Tar)
     } else {
         None
     };
     if let Some(container) = compressed {
         // Same containers, told apart by name (contents are checked when
         // the file is inspected).
-        if name.contains(".pkg.tar.") {
+        if name.contains(".pkg.tar.") || name.ends_with(".pkg.tar") {
             return Ok(Format::Pacman);
         }
         if name.ends_with(".xbps") {
@@ -394,8 +435,41 @@ mod tests {
         assert_eq!(sniff(&p("app.tar.xz"), XZ_MAGIC), Ok(Format::TarXz));
         assert_eq!(sniff(&p("app.tgz"), GZIP_MAGIC), Ok(Format::TarGz));
         assert_eq!(sniff(&p("app-1.0-r0.apk"), GZIP_MAGIC), Ok(Format::Apk));
+        assert_eq!(sniff(&p("app-1.0.tar.bz2"), b"BZh91AY&SY"), Ok(Format::TarBz2));
         assert_eq!(sniff(&p("notes.txt"), b"hello"), Err(None));
         assert_eq!(sniff(&p("x.snap"), b"hsqs...."), Err(Some(Unsupported::Snap)));
+    }
+
+    /// One tar header block for `name`, `ustar` or old v7 style.
+    fn tar_header(name: &str, ustar: bool) -> Vec<u8> {
+        let mut h = if ustar { tar::Header::new_ustar() } else { tar::Header::new_old() };
+        h.set_path(name).unwrap();
+        h.set_size(0);
+        h.set_cksum();
+        h.as_bytes().to_vec()
+    }
+
+    #[test]
+    fn plain_tars_install_whatever_they_are_called() {
+        let p = |n: &str| std::path::PathBuf::from(n);
+        let posix = tar_header("app/run", true);
+        let old = tar_header("app/run", false);
+        assert!(is_tar(&posix) && is_tar(&old));
+        assert_eq!(sniff(&p("app-1.0.tar"), &posix), Ok(Format::Tar));
+        assert_eq!(sniff(&p("app-1.0.tar"), &old), Ok(Format::Tar), "v7 headers have no magic, only a checksum");
+        assert_eq!(sniff(&p("app-1.0.tar.gz"), &posix), Ok(Format::Tar), "a plain tar named .tar.gz");
+        assert_eq!(sniff(&p("app-1.0.tar"), GZIP_MAGIC), Ok(Format::TarGz), "a gzip named .tar");
+        assert_eq!(sniff(&p("app-1.0-1-x86_64.pkg.tar"), &posix), Ok(Format::Pacman));
+        let mut broken = old.clone();
+        broken[0] ^= 1;
+        assert!(!is_tar(&broken), "a wrong checksum isn't a tar");
+        assert!(!is_tar(&[0u8; TAR_BLOCK]), "zeros (an empty tar's end) aren't a header");
+        assert!(!is_tar(&posix[..TAR_BLOCK - 1]), "a short file isn't a tar");
+        assert!(picker_globs_cover(&["*.tar", "*.tar.bz2", "*.tbz2", "*.pkg.tar"]));
+    }
+
+    fn picker_globs_cover(globs: &[&str]) -> bool {
+        globs.iter().all(|g| Format::ALL.iter().any(|f| f.globs().contains(g)))
     }
 
     #[test]
