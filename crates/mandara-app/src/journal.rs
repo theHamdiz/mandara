@@ -245,7 +245,12 @@ mod tests {
                 break error;
             }
         };
-        assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
+        // FreeBSD reports datagram queue pressure as ENOBUFS.
+        assert!(
+            error.kind() == io::ErrorKind::WouldBlock
+                || (cfg!(target_os = "freebsd") && error.raw_os_error() == Some(libc::ENOBUFS)),
+            "{error}"
+        );
         Record::new(&journal, b'3')
             .write_all(b"journal is full")
             .unwrap();
