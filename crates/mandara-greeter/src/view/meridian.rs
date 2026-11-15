@@ -238,7 +238,7 @@ impl GreeterView {
             }
             band = band.child(start(above(div()), margin).child(sess));
             if self.session_menu {
-                let mut list = div().flex().flex_col().gap(px(8.0 * k)).when(f.rtl, |el| el.items_end());
+                let mut list = div().block_mouse_except_scroll().flex().flex_col().gap(px(8.0 * k)).when(f.rtl, |el| el.items_end());
                 for (i, s) in self.sessions.iter().enumerate() {
                     let selected = i == self.session_ix;
                     let label = if s.kind == SessionKind::X11 { format!("{} (X11)", s.name) } else { s.name.clone() };
@@ -253,6 +253,7 @@ impl GreeterView {
                                 this.session_ix = i;
                                 this.session_menu = false;
                                 this.field = Field::Password;
+                                this.activity();
                                 cx.notify();
                             }))
                             .child(label),

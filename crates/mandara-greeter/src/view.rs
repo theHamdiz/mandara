@@ -2616,6 +2616,7 @@ impl GreeterView {
         if open && !self.sessions.is_empty() {
             let below = (cfg.card.enabled && cfg.card.session_inside) || cfg.placement(Element::Session).anchor.fraction().1 < 0.5;
             let mut menu = div()
+                .block_mouse_except_scroll()
                 .absolute()
                 .when(below, |el| el.top(px(h + 6.0 * k)))
                 .when(!below, |el| el.bottom(px(h + 6.0 * k)))
@@ -2650,6 +2651,7 @@ impl GreeterView {
                             this.session_ix = i;
                             this.session_menu = false;
                             this.field = Field::Password;
+                            this.activity();
                             cx.notify();
                         }))
                         .child(div().w(px(18.0 * k)).when(selected, |el| el.child(icon("check", 16.0 * k, ink))))
@@ -2701,6 +2703,7 @@ impl GreeterView {
         if self.session_menu && !self.sessions.is_empty() {
             let below = (cfg.card.enabled && cfg.card.session_inside) || cfg.placement(Element::Session).anchor.fraction().1 < 0.5;
             let mut list = div()
+                .block_mouse_except_scroll()
                 .absolute()
                 .when(below, |el| el.top(px(h + 10.0 * k)))
                 .when(!below, |el| el.bottom(px(h + 10.0 * k)))
@@ -2732,6 +2735,7 @@ impl GreeterView {
                             this.session_ix = i;
                             this.session_menu = false;
                             this.field = Field::Password;
+                            this.activity();
                             cx.notify();
                         }))
                         .child(div().w(px(16.0 * k)).when(selected, |el| el.child(icon("check", 15.0 * k, p.primary.hsla()))))
@@ -3177,6 +3181,7 @@ impl Render for GreeterView {
                     }
                     this.focus.focus(window, cx);
                     this.activity();
+                    // Session popups block this hitbox so their rows survive until mouse-up.
                     this.session_menu = false;
                     cx.notify();
                 }),
