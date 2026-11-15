@@ -494,6 +494,30 @@ Or install it into your profile with
 `nix profile install github:theHamdiz/mandara` (update with
 `nix profile upgrade mandara`).
 
+### Binary cache
+
+After every release, prebuilt Mandara goes to the binary cache
+`https://mandara.cachix.org`, built against the current `nixos-26.05`,
+`nixos-unstable` and `nixos-25.11` channels and against Mandara's own lock
+file. When your Nixpkgs revision matches one of those, Nix downloads Mandara
+instead of compiling it; otherwise it builds from source as before.
+
+- `nix run` and `nix profile install` ask whether to use the cache. Nix only
+  honours the answer for
+  [trusted users](https://nix.dev/manual/nix/latest/command-ref/conf-file.html#conf-trusted-users);
+  everyone else adds it system-wide, as below.
+- On NixOS, set `programs.mandara.binaryCache.enable = true;` (see the
+  options below). It adds the cache beside your own and applies from the
+  rebuild after the one that turns it on.
+- Anywhere else, add it to `/etc/nix/nix.conf`:
+
+  ```ini
+  extra-substituters = https://mandara.cachix.org
+  extra-trusted-public-keys = mandara.cachix.org-1:oOp26vScHzVwCDKAGScpvgPFE8r06UQpDyCdA5u1gh8=
+  ```
+
+  then restart the daemon (`sudo systemctl restart nix-daemon`).
+
 ### NixOS module
 
 The module sets up, system-wide, what `mandara install` sets up on other
@@ -545,6 +569,7 @@ With `programs.mandara.enable` you get:
 | `programs.mandara.package` | built with host Nixpkgs | The Mandara package |
 | `programs.mandara.fonts.enable` | `true` | Install the fonts |
 | `programs.mandara.services.enable` | `true` | Enable the services Studio talks to |
+| `programs.mandara.binaryCache.enable` | `false` | Download prebuilt Mandara from `mandara.cachix.org` when your Nixpkgs revision matches one it was built with ([Binary cache](#binary-cache)) |
 | `programs.mandara.monitorBrightness.enable` | `false` | Load `i2c-dev` for external monitor brightness (DDC/CI); add yourself to the `i2c` group |
 | `programs.mandara.greeter.enable` | `false` | Mandara Login on greetd, in `cage`, listing the sessions of every compositor you enabled; turn your other display manager off |
 | `programs.mandara.greeter.unlockKeyring` | GNOME Keyring's state | Unlock GNOME Keyring with the password you type at Mandara Login |

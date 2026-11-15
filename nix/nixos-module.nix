@@ -30,6 +30,12 @@ let
   # crates/mandara-config/src/paths.rs).
   greeterStateDir = "/var/lib/mandara-greeter";
   loginWallpaperDir = "/var/lib/mandara-login/wallpapers";
+  # Mandara's binary cache, filled by .github/workflows/nix-cache.yml. The
+  # key must match flake.nix's nixConfig.
+  binaryCache = {
+    url = "https://mandara.cachix.org";
+    key = "mandara.cachix.org-1:oOp26vScHzVwCDKAGScpvgPFE8r06UQpDyCdA5u1gh8=";
+  };
 in
 {
   options.programs.mandara = {
@@ -74,6 +80,20 @@ in
         Let Studio → Displays set external monitors' brightness over DDC/CI:
         loads `i2c-dev` (`hardware.i2c.enable`). Add yourself to the `i2c`
         group: `users.users.<name>.extraGroups = [ "i2c" ];`.
+      '';
+    };
+
+    binaryCache.enable = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Download prebuilt Mandara from its binary cache (${binaryCache.url})
+        instead of compiling it, when your Nixpkgs revision matches one the
+        cache was built with (the current `nixos-26.05`, `nixos-unstable` or
+        `nixos-25.11`, or Mandara's own lock file); otherwise Nix builds from
+        source as before. Adds the cache with `nix.settings.extra-substituters`
+        and its key with `extra-trusted-public-keys`, beside your own caches.
+        Takes effect from the rebuild after the one that enables it.
       '';
     };
 
@@ -151,6 +171,13 @@ in
         !(config.services.tlp.enable || config.services.auto-cpufreq.enable)
       );
       services.gnome.gnome-keyring.enable = mkDefault true;
+    })
+
+    (mkIf cfg.binaryCache.enable {
+      nix.settings = {
+        extra-substituters = [ binaryCache.url ];
+        extra-trusted-public-keys = [ binaryCache.key ];
+      };
     })
 
     (mkIf cfg.monitorBrightness.enable {
