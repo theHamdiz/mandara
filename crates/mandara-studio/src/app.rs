@@ -103,6 +103,7 @@ mod swatch_list;
 mod switcher_page;
 mod theme_galleries;
 mod themes_page;
+mod typography_page;
 mod wallgen_logic;
 mod wallgen_page;
 pub mod wallpaper_page;
@@ -1789,6 +1790,7 @@ impl Render for StudioView {
                 // The wallpaper on the desktop first, then tabs
                 // (wallpaper_page.rs).
                 Section::Wallpaper => self.wallpaper_page(&cfg, &p, window, cx),
+                Section::Typography => self.typography_page(&cfg, &p, cx),
                 section => self.rows(registry::in_section(section), &cfg, &p, cx),
             };
             (self.section.label(), body)
