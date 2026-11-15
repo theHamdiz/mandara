@@ -76,6 +76,8 @@ jobs:
           sudo swapon /swapfile-mandara-nix
 
       - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
       # Pull only: the push below uploads just Mandara's runtime closure, not
       # the toolchain and sources the build fetched.
@@ -84,11 +86,23 @@ jobs:
           name: mandara
           skipPush: true
 
+      # Built exactly as users get it: the flake fetched from GitHub at this
+      # commit (so `self.rev` is set, as in their lock), and for a channel
+      # through the NixOS module's overlay with that channel's packages.
+      # `nix build .#mandara --override-input nixpkgs …` would not match:
+      # an override drops `self.rev`, so the package records "unknown".
       - name: Build
         run: |
-          override=()
-          if [ -n "$NIXPKGS" ]; then override=(--override-input nixpkgs "$NIXPKGS" --no-write-lock-file); fi
-          nix build .#mandara "${override[@]}" --print-build-logs --max-jobs 1 --cores 1
+          flake="github:${GITHUB_REPOSITORY}/$(git rev-parse HEAD)"
+          if [ -n "$NIXPKGS" ]; then
+            nix build --impure --print-build-logs --max-jobs 1 --cores 1 --expr "
+              let
+                mandara = builtins.getFlake \"$flake\";
+                pkgs = (builtins.getFlake \"$NIXPKGS\").legacyPackages.x86_64-linux;
+              in (mandara.overlays.default pkgs pkgs).mandara"
+          else
+            nix build "$flake#mandara" --print-build-logs --max-jobs 1 --cores 1
+          fi
           ./result/bin/mandara --version
 
       - name: Upload

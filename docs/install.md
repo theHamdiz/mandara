@@ -499,8 +499,9 @@ Or install it into your profile with
 After every release, prebuilt Mandara goes to the binary cache
 `https://mandara.cachix.org`, built against the current `nixos-26.05`,
 `nixos-unstable` and `nixos-25.11` channels and against Mandara's own lock
-file. When your Nixpkgs revision matches one of those, Nix downloads Mandara
-instead of compiling it; otherwise it builds from source as before.
+file. When your Nixpkgs revision matches one of those and that build has
+finished uploading, Nix downloads Mandara instead of compiling it; otherwise
+it builds from source as before.
 
 - `nix run` and `nix profile install` ask whether to use the cache. Nix only
   honours the answer for
@@ -516,7 +517,9 @@ instead of compiling it; otherwise it builds from source as before.
   extra-trusted-public-keys = mandara.cachix.org-1:oOp26vScHzVwCDKAGScpvgPFE8r06UQpDyCdA5u1gh8=
   ```
 
-  then restart the daemon (`sudo systemctl restart nix-daemon`).
+  then restart the Nix daemon with your service manager
+  (`sudo systemctl restart nix-daemon` on systemd). A single-user install
+  has no daemon and reads the file on its next run.
 
 ### NixOS module
 
