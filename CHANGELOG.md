@@ -6,7 +6,7 @@ About → What's new shows it too.
 
 ## Unreleased
 
-A calmer, more consistent Studio, with live chips in the bar, a richer dock and an optional grain texture.
+A calmer, more consistent Studio, with live chips in the bar, a richer dock and an optional grain texture, and an App Installer that takes any tar archive and tidies up the download afterwards.
 
 ### New
 
@@ -22,6 +22,8 @@ A calmer, more consistent Studio, with live chips in the bar, a richer dock and 
 - About shows the latest five releases under What's new and keeps only those in memory; the full history is a click away.
 - Typography opens with a live specimen of your interface, display, Arabic and monospace fonts, drawn in each face at your weight and size.
 - In right-to-left languages Studio's close button sits at the outer edge of the title bar.
+- The App Installer takes plain `.tar` and `.tar.bz2` archives, and recognises every archive by what it really is, so a download no longer needs renaming to `.tar.gz` first.
+- Once an app is installed, the installer offers to move the file you installed it from to the Trash. Choose *Keep the file* or *Move it to the Trash* under Studio → Plugins → App installer → After installing to skip the question.
 
 ## 0.32.1 — 2026-11-15
 

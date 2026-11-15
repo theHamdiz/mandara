@@ -450,6 +450,7 @@ mandara msg apps installed --by-mandara  # what the app installer installed, wit
 mandara msg apps install ~/Downloads/Obsidian-1.6.7.AppImage  # [--yes] skip the on-screen card, [--no-path-shim], [--dry-run] print the plan
 mandara msg apps jobs                # installer jobs: phase (inspect/confirm/install/integrate/done/failed/cancelled), progress 0..1, outcome
 mandara msg apps jobs cancel 3       # stop a job (rootless installs roll back)
+mandara msg apps jobs trash-file 3   # move a finished job's installer file to the Trash
 mandara msg apps owner firefox       # who installed it, the exact removal command, what else goes, leftovers (changes nothing)
 mandara msg apps uninstall org.gimp.GIMP --dry-run  # [--purge-data] leftovers to the Trash, [--confirm-default] for a default app
 mandara msg profile save look Night  # profile list|apply|delete; config export <file> [changes] [redact], import, reset <section>
@@ -548,19 +549,23 @@ in the shell's environment forces a dry run.
 
 `apps install` (the **App installer** plugin) detects each file's format by
 its magic bytes and never runs it: **AppImage** (read through its embedded
-squashfs) and **portable archives** (`.tar.gz`/`.tar.xz`/`.tar.zst`/`.zip`,
+squashfs) and **portable archives** (`.tar`, `.tar.gz`, `.tar.xz`,
+`.tar.zst`, `.tar.bz2`, `.zip`, whatever the file is called,
 unpacked with path-traversal, link and size checks) install rootless into
 `~/.local/share/mandara/apps/<id>/` with a desktop entry
 (`~/.local/share/applications/mandara-<id>.desktop`), an icon in
 `~/.local/share/icons/hicolor` and an optional `~/.local/bin/<name>` command
 (never replacing an existing file); **Flatpak** bundles / `.flatpakref` run
 `flatpak install --user --noninteractive`; **native packages** (`.deb`,
-`.rpm`, `.pkg.tar.zst`, `.apk`, `.xbps`) go only through the system's own
+`.rpm`, `.pkg.tar.zst`/`.pkg.tar`, `.apk`, `.xbps`) go only through the system's own
 package manager via `pkexec`, after its simulation, and a package for another
 distribution is refused with an explanation (no conversion, no containers).
 Without `--yes` the confirmation card appears on screen and the command
 returns the queued job ids at once (follow them with `apps jobs`). A
-duplicate (same app id) offers Update / Keep both. Relative paths are made
+duplicate (same app id) offers Update / Keep both. Once installed, the pill
+offers to move the file to the Trash (`after_install = "ask"`, the default;
+`keep` and `trash` skip the question); `apps jobs` shows it as `cleanup`, and
+`apps jobs trash-file <id>` accepts the offer. Relative paths are made
 absolute by `mandara msg`. `MANDARA_INSTALL_DRY_RUN=1` in the shell's
 environment forces dry runs.
 

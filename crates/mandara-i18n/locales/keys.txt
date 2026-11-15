@@ -2300,6 +2300,7 @@ Dry run (MANDARA_UNINSTALL_DRY_RUN): nothing will be removed or moved.
 Dry run: nothing changed. {app} would be removed and {count} items moved to the Trash.
 Dry run: nothing was changed.
 Dry run: nothing was installed
+Dry run: nothing was moved
 Dune size
 Dunes
 Duplicate
@@ -3725,6 +3726,7 @@ Jannah quote
 Jannah verse
 Japanese proverb
 Jazz
+Job {id} has no file left to move to the Trash
 Johann Wolfgang von Goethe
 Join
 Join a hidden network
@@ -4621,6 +4623,7 @@ Move the desktop clock to where the wallpaper's subject tucks into it
 Move the dock to the bottom
 Move the dock to the left
 Move the dock to the right
+Move the file a finished install came from to the Trash
 Move the sidebar to the left
 Move the sidebar to the right
 Move the toolbar to the bottom · M
@@ -4636,6 +4639,7 @@ Moves here from the other edge
 Moves with the music
 Moving clouds, rain and stars (off with reduced motion)
 Moving shapes stretch along their travel and round off at rest
+Moving to the Trash…
 Muhammad Ayyub
 Muharram
 Muqaddimah
@@ -5281,6 +5285,7 @@ Off: stay with the current player until it closes
 Off: the clock keeps its own time
 Off: the compositor's own config decides at the next start
 Off: your wallpaper stays until you change it
+Offer to move it to the Trash
 Offers itself to media keys and controls over MPRIS
 Office
 Offline
@@ -10281,12 +10286,14 @@ your default
 {file} failed verification (sha256 {got})
 {file} has no published checksum; not installing it
 {file} is a program, not an app package: move it to ~/.local/bin to use it.
+{file} is in the Trash
 {file} is missing
 {file} is too large for a theme
 {file} is written, but your config doesn't include it yet — Maintenance → Compositor adds the one include line.
 {file} isn't a WebAssembly component (build it for wasm32-wasip2)
 {file} isn't a sound file
 {file} isn't an app Mandara can install (AppImage, Flatpak, archive or package)
+{file} isn't needed any more
 {file} not found: build the plugin and copy the .wasm here
 {file} sources Mandara's drop-in
 {file}, line {line}
