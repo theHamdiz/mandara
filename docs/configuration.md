@@ -229,7 +229,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 | Page | Settings |
 |---|---|
 | Login screen | the greeter's own designer (look, timings, backgrounds) |
-| Lock appearance | **design** (`lock.design`: `mandara` or `material-you`), clock, background, blur, dim, what it shows, OLED care, **low-battery mark** (`lock.low_battery_percent`), **password symbols** (`lock.password_symbols`: shapes or dots) |
+| Login & Lock Screens → Lock | **design** (`lock.design`: `mandara`, `midnight-card`, `material-you`, `ghostline`, `chrome-halo` or `meridian`), clock, background, blur, dim, what it shows, OLED care, **low-battery mark** (`lock.low_battery_percent`), **password symbols** (`lock.password_symbols`: shapes or dots) |
 | Privacy | indicators, ignored apps, camera poll (`privacy.*`) |
 | General → Security | polkit agent, keyring prompter, **password dialog width** (`general.auth_dialog_width`, 360–640 px, both the polkit and keyring-unlock dialogs) |
 

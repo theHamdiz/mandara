@@ -423,7 +423,7 @@ run) goes to `/usr/local/lib/mandara`, which survives updates on Fedora
 Atomic, openSUSE and Vanilla OS. **Mandara Login** needs greetd and cage, which come
 with the same transaction. The switch itself needs them installed, so it
 waits for the reboot: after restarting, Mandara Login is one click away in
-Studio → Login screen → Login manager, or run the
+Studio → Login & Lock Screens → Login → Login manager, or run the
 `sudo ~/.local/bin/mandara greeter use mandara --apply` command the installer
 prints. It writes greetd's config in `/etc/greetd` (kept across updates), and
 its media folders go to `/usr/local/share/mandara/login` because

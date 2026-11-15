@@ -2,14 +2,14 @@
 
 ## Widgets on login and lock screens
 
-Open **Studio → Login screen → Layout → Widgets** to add a public
+Open **Studio → Login & Lock Screens → Login → Layout → Widgets** to add a public
 decoration to Mandara Login. Choose **Add a widget** to open the gallery.
 Its **Copy from desktop** section appears when an eligible desktop widget
 exists; use it to keep that widget's appearance and position. Expand a
 placed widget to change its anchor, offsets, scale or opacity. Use
 **Apply to login screen** when the draft is ready.
 
-The same editor is under **Studio → Lock appearance → Widgets** for
+The same editor is under **Studio → Login & Lock Screens → Lock → Widgets** for
 Mandara's native locker. On KWin, Plasma's secure locker owns that screen;
 Studio explains the limitation and leaves the custom lock editor disabled.
 Login widgets remain available through Mandara Login.
@@ -62,7 +62,7 @@ changes; an empty collection starts no painter or weather service.
   rolling clock, springy entrances, a breathing avatar ring, typing ripples,
   a shake on a wrong password and a cinematic zoom into your session.
 - **Design it in Studio**: drag every element on a live, smooth preview in
-  Studio → Login screen (below), or start from one of three looks: Mandara,
+  Studio → Login & Lock Screens → Login (below), or start from one of three looks: Mandara,
   Midnight card or Material You.
 - **Try it safely**: `mandara greeter --demo` runs it on your session
   without logging you out. `sudo mandara greeter install` prints its plan,
@@ -71,7 +71,7 @@ changes; an empty collection starts no painter or weather service.
 - **Your login screen by default**: the installer asks once, installs
   greetd and cage, and switches to Mandara Login with a backup
   (`--no-greeter` skips it; undo with `sudo mandara greeter restore latest`).
-- **Switch login screens any time**: Studio → Login screen → **Login
+- **Switch login screens any time**: Studio → Login & Lock Screens → Login → **Login
   manager** lists Mandara Login, tuigreet, ReGreet, gtkgreet, nwg-hello,
   QtGreet, agreety, SDDM, GDM, LightDM, Ly and LXDM. One that isn't installed
   gets **Install & use**, which installs it with what it needs (greetd, cage,
@@ -105,9 +105,9 @@ changes; an empty collection starts no painter or weather service.
 - **Lock screen**: `ext-session-lock-v1` on every display, your password
   checked through PAM, a big clock, avatar, now playing, weather,
   notification count and battery, with classic, stacked or compact layouts
-  and black secondary displays for OLED care. Studio → Lock appearance →
-  **Design** (`lock.design`) switches it between **Mandara** and **Material
-  You**: colours from your wallpaper, a big stacked clock whose weight grows
+  and black secondary displays for OLED care. Studio → Login & Lock Screens → Lock →
+  **Design** (`lock.design`) offers **Mandara**, **Midnight card**, **Material
+  You**, **Ghostline**, **Chrome Halo** and **Meridian**. Material You brings colours from your wallpaper, a big stacked clock whose weight grows
   as the screen appears, weather, music and notifications as tonal chips, and
   a tonal card with your picture in a scalloped shape, a filled password field
   and a round button beside it that squares off and shows Material's loading
@@ -121,14 +121,13 @@ changes; an empty collection starts no painter or weather service.
   on the character, and neighbours never match. Symbols start at the
   field's start edge (the right edge in right-to-left languages) and keep
   their places while you type or delete; a full field scrolls by one so
-  the newest stays visible. Choose plain dots in Studio → Lock appearance →
-  **Password symbols** (`lock.password_symbols = "dots"`) or Studio → Login
-  screen → **Hide typing as**. Reduced motion skips the pop and fade.
+  the newest stays visible. Choose plain dots in Studio → Login & Lock Screens → Lock →
+  **Password symbols** (`lock.password_symbols = "dots"`) or Studio → Login & Lock Screens → Login → **Hide typing as**. Reduced motion skips the pop and fade.
 
 <p align="center">
   <img src="screenshots/studio-login.webp" alt="Studio: the login screen designer with a live preview, the Try it buttons and the three Looks: Mandara, Midnight card and Material You" width="100%"/>
   <br/>
-  <sub>Studio → Login screen: the designer with a live preview.</sub>
+  <sub>Studio → Login & Lock Screens → Login: the designer with a live preview.</sub>
 </p>
 
 On **Plasma Wayland / KWin**, lock requests use Plasma’s secure locker.
@@ -138,3 +137,20 @@ lock-surface protocol used by Mandara’s own locker.
 
 Public Hijri dates change at local midnight. These screens do not read your
 private prayer location or sunset adjustments.
+
+## Lock screen designs
+
+The four additional designs below use the same presets as Login. Each screen
+keeps its own selection and background. Designs with a fixed clock layout explain
+that in the clock settings; Meridian uses a name and password line without an avatar.
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/lock-midnight-card.webp" alt="Midnight card lock screen: a quiet clock above an outlined navy card" width="100%"/><br/><sub>Midnight card</sub></td>
+<td width="50%"><img src="screenshots/lock-ghostline.webp" alt="Ghostline lock screen: a wireframe card on the left and cyan ruler clock on the right" width="100%"/><br/><sub>Ghostline</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="screenshots/lock-chrome-halo.webp" alt="Chrome Halo lock screen: a luminous clock ring and a bezel card" width="100%"/><br/><sub>Chrome Halo</sub></td>
+<td width="50%"><img src="screenshots/lock-meridian.webp" alt="Meridian lock screen: name and password on one hairline across a warm light background" width="100%"/><br/><sub>Meridian</sub></td>
+</tr>
+</table>

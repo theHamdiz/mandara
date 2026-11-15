@@ -842,18 +842,7 @@ impl GreeterConfig {
     }
 }
 
-/// Ready-made looks for the whole screen: `(id, English name, summary)`.
-/// Applying one ([`GreeterConfig::apply_look`]) changes how the screen
-/// looks and where things sit; who is listed, sessions, folders, language
-/// and accessibility stay as they are.
-pub const LOOKS: [(&str, &str, &str); 6] = [
-    ("mandara", "Mandara", "A big clock, your picture over a glass field, everything floating on the backdrop"),
-    ("midnight-card", "Midnight card", "A quiet clock over one outlined card with the user, password and session, in midnight navy and citrine"),
-    ("material-you", "Material You", "Colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar, chips and tonal buttons"),
-    ("ghostline", "Ghostline", "Graphite and ice-white hairlines: a wireframe sign-in panel on the left with live readouts, a terminal password line and a ruler clock, in cold cyan"),
-    ("chrome-halo", "Chrome Halo", "Deep ink and holographic light: a luminous ring around a light clock, and a machined sign-in module on the right with a pill button"),
-    ("meridian", "Meridian", "No boxes: your name and password ride on one hairline across a calm dawn field, over enormous whisper-thin numerals; light or dark"),
-];
+pub use mandara_config::auth_design::LOOKS;
 
 /// Where a look puts the sign-in: the horizontal anchor of its user card.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -895,18 +884,14 @@ impl GreeterConfig {
         match id {
             "mandara" => {}
             "midnight-card" => {
-                self.theme.preset = "night-citrine".into();
                 self.theme.roundness = 0.32;
                 self.theme.glass = 0.0;
                 self.theme.rim = 0.0;
                 self.background.mode = BackgroundMode::Solid;
-                self.background.solid = "#070722".into();
                 self.background.dim = 0.32;
                 self.background.vignette = 0.0;
                 self.background.orbs = false;
                 self.background.grain = 0.0;
-                self.clock.size = 96.0;
-                self.clock.weight = 400;
                 self.clock.opacity = 1.0;
                 self.clock.roll_digits = false;
                 self.date.size = 15.0;
@@ -914,14 +899,11 @@ impl GreeterConfig {
                 self.date.opacity = 0.6;
                 self.user.avatar_source = AvatarSource::Icon;
                 self.user.avatar_shape = AvatarShape::Bare;
-                self.user.avatar_size = 64.0;
                 self.user.glow_ring = false;
-                self.user.name_size = 16.0;
                 self.password.style = FieldStyle::Inset;
                 self.password.submit = SubmitButton::Beside;
                 self.password.mask = PasswordMask::Shapes;
                 self.password.accent_border = true;
-                self.password.height = 40.0;
                 self.password.text_size = 14.0;
                 self.password.glow = false;
                 self.password.keystroke_ripple = false;
@@ -1006,13 +988,10 @@ impl GreeterConfig {
                 // Cyberpunk made clean: graphite, ice-white hairlines, one
                 // cold cyan accent (the theme's magenta-pink tertiary is the
                 // sparing second one), everything measured.
-                self.theme.preset = "vesper".into();
-                self.theme.accent = "#5fd7ff".into();
                 self.theme.glass = 0.0;
                 self.theme.rim = 0.0;
                 self.theme.roundness = 0.12;
                 self.background.mode = BackgroundMode::Solid;
-                self.background.solid = "#0b0d10".into();
                 self.background.user_wallpaper = false;
                 self.background.orbs = false;
                 self.background.dim = 0.0;
@@ -1021,21 +1000,16 @@ impl GreeterConfig {
                 self.background.parallax = 0.0;
                 self.background.overlay = Overlay::Hud;
                 self.clock.face = ClockFace::Ruler;
-                self.clock.size = 168.0;
-                self.clock.weight = 200;
                 self.clock.stacked = true;
                 self.clock.opacity = 0.96;
                 self.date.size = 13.0;
                 self.date.weight = 500;
                 self.date.opacity = 0.62;
                 self.user.avatar_shape = AvatarShape::Rounded;
-                self.user.avatar_size = 52.0;
                 self.user.glow_ring = false;
-                self.user.name_size = 18.0;
                 self.password.style = FieldStyle::Terminal;
                 self.password.mask = PasswordMask::Dots;
                 self.password.accent_border = true;
-                self.password.height = 46.0;
                 self.password.text_size = 14.0;
                 self.password.glow = false;
                 self.session.style = SessionStyle::Field;
@@ -1061,11 +1035,9 @@ impl GreeterConfig {
             "chrome-halo" => {
                 // Liquid chrome and iridescent light on deep ink, warm: the
                 // ring takes the theme's gold, periwinkle and rose.
-                self.theme.preset = "pharos-night".into();
                 self.theme.glass = 0.0;
                 self.theme.rim = 0.0;
                 self.background.mode = BackgroundMode::Solid;
-                self.background.solid = "#06070e".into();
                 self.background.user_wallpaper = false;
                 self.background.orbs = false;
                 self.background.dim = 0.0;
@@ -1074,18 +1046,13 @@ impl GreeterConfig {
                 self.background.parallax = 8.0;
                 self.background.overlay = Overlay::Prism;
                 self.clock.face = ClockFace::Halo;
-                self.clock.size = 124.0;
-                self.clock.weight = 200;
                 self.clock.opacity = 1.0;
                 self.date.size = 15.0;
                 self.date.weight = 400;
                 self.date.opacity = 0.72;
-                self.user.avatar_size = 60.0;
                 self.user.glow_ring = false;
-                self.user.name_size = 20.0;
                 self.password.style = FieldStyle::Recessed;
                 self.password.submit = SubmitButton::Pill;
-                self.password.height = 52.0;
                 self.password.text_size = 15.0;
                 self.password.reveal_toggle = true;
                 self.session.style = SessionStyle::Pill;
@@ -1109,13 +1076,9 @@ impl GreeterConfig {
             "meridian" => {
                 // Editorial calm: one field, one line, type on it, one
                 // accent at most (a warm terracotta, for the caret alone).
-                self.theme.preset = "mandara-corniche".into();
-                self.theme.accent = "#c0623a".into();
-                self.theme.light = true;
                 self.theme.glass = 0.0;
                 self.theme.rim = 0.0;
                 self.background.mode = BackgroundMode::Solid;
-                self.background.solid = "#f3efe6".into();
                 self.background.user_wallpaper = false;
                 self.background.orbs = false;
                 self.background.dim = 0.0;
@@ -1124,15 +1087,12 @@ impl GreeterConfig {
                 self.background.parallax = 0.0;
                 self.background.overlay = Overlay::Horizon;
                 self.clock.face = ClockFace::Vast;
-                self.clock.size = 150.0;
-                self.clock.weight = 100;
                 self.clock.opacity = 0.075;
                 self.clock.roll_digits = false;
                 self.date.size = 11.5;
                 self.date.weight = 500;
                 self.date.opacity = 0.7;
                 self.user.avatar_source = AvatarSource::Icon;
-                self.user.name_size = 40.0;
                 self.password.mask = PasswordMask::Dots;
                 self.password.glow = false;
                 self.password.text_size = 15.0;
@@ -1151,6 +1111,21 @@ impl GreeterConfig {
                 }
             }
             _ => return false,
+        }
+        if let Some(tokens) = mandara_config::auth_design::AuthDesign::parse(id).and_then(|design| design.tokens()) {
+            self.theme.preset = tokens.preset.into();
+            self.theme.accent = tokens.accent.into();
+            self.theme.light = tokens.light;
+            self.background.solid = tokens.backdrop.into();
+            self.clock.size = tokens.clock;
+            self.clock.weight = tokens.clock_weight;
+            self.user.avatar_size = tokens.avatar;
+            self.user.name_size = tokens.name;
+            self.password.height = tokens.field_height;
+            if id != "meridian" {
+                self.card.width = tokens.card_width;
+                self.card.radius = tokens.card_radius;
+            }
         }
         self.normalize();
         true
@@ -1359,7 +1334,7 @@ impl GreeterConfig {
             std::fs::create_dir_all(dir)?;
         }
         let tmp = path.with_extension("toml.tmp");
-        std::fs::write(&tmp, format!("# Mandara Login draft (Studio → Login screen). Install with `mandara greeter apply-config`.\n{}", self.to_toml()))?;
+        std::fs::write(&tmp, format!("# Mandara Login draft (Studio → Login & Lock Screens → Login). Install with `mandara greeter apply-config`.\n{}", self.to_toml()))?;
         std::fs::rename(tmp, &path)?;
         Ok(path)
     }
@@ -1485,6 +1460,14 @@ pub fn apply_config(from: &Path) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn meridian_keeps_the_existing_hidden_avatar_measurement() {
+        let mut cfg = GreeterConfig::default();
+        assert!(cfg.apply_look("meridian"));
+        assert_eq!(cfg.user.avatar_size, UserConfig::default().avatar_size);
+        assert_eq!(cfg.current_look(), Some("meridian"));
+    }
+
     #[test]
     fn local_media_folders_are_searched_once_when_they_exist() {
         let dir = tempfile::tempdir().unwrap();

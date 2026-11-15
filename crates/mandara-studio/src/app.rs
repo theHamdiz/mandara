@@ -20,6 +20,7 @@ use mandara_ui::icons::icon;
 use mandara_ui::state::{config, update_config};
 use serde_json::Value;
 
+pub(crate) mod auth_page;
 mod agent_page;
 mod depth_model_row;
 mod maint_page;
@@ -173,6 +174,7 @@ pub struct StudioView {
     /// Keybind row waiting for a chord (Studio → Keyboard shortcuts).
     capturing: Option<usize>,
     shortcuts_tab: ShortcutsTab,
+    auth_tab: auth_page::AuthTab,
     native_shortcuts: native_shortcuts::Editor,
     focus: gpui::FocusHandle,
     maint: maint_page::Maint,
@@ -280,7 +282,7 @@ impl StudioView {
         });
         Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None,
             app_templates: Default::default(),
-            icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, shortcuts_tab: Default::default(), native_shortcuts: Default::default(), focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), studio_looks: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
+            icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, shortcuts_tab: Default::default(), auth_tab: Default::default(), native_shortcuts: Default::default(), focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), studio_looks: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -288,6 +290,12 @@ impl StudioView {
     /// (the content scroller is shared: a page must not inherit the last
     /// one's offset, which left short pages "stuck" at their bottom).
     pub fn show(&mut self, section: Section, cx: &mut Context<Self>) {
+        let (section, tab) = auth_page::navigation(section, self.auth_tab);
+        if self.auth_tab != tab && section == Section::LoginScreen {
+            self.content_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
+            if tab == auth_page::AuthTab::Lock { cx.defer(greeter_page::release); }
+        }
+        self.auth_tab = tab;
         if section == Section::Bars { self.bars_tab = Default::default(); }
         if section == Section::Themes && self.section != Section::Themes { self.themes_tab = Default::default(); }
         if section == Section::Desktop && self.section != Section::Desktop { self.desktop_tab = Default::default(); }
@@ -1924,18 +1932,7 @@ impl Render for StudioView {
                 Section::Power => self.power_page(&cfg, &p, cx),
                 Section::Displays => self.displays_page(&cfg, &p, cx),
                 Section::Maintenance => self.maintenance(&p, cx),
-                Section::LoginScreen => greeter_page::element(cx),
-                Section::LockScreen => {
-                    let rows = self.rows(registry::in_section(Section::LockScreen), &cfg, &p, cx);
-                    let widgets = if registry::running_compositor() == Some(mandara_config::compositor::Target::KWin) {
-                        compositor_page::card(&p).p(px(SPACE_16_PX)).child(compositor_page::heading(t("Widgets"), t("Plasma's secure locker controls this screen. Custom lock widgets are available with Mandara's native locker on supported compositors."), &p)).into_any_element()
-                    } else {
-                        auth_widgets::panel("lock", &cfg.lock.widgets, Rc::new(|edit, cx| {
-                                update_config(cx, |cfg| edit.apply(&mut cfg.lock.widgets))
-                            }), &p, cx)
-                    };
-                    div().row().flex_col().gap(px(SPACE_26_PX)).child(rows).child(widgets).into_any_element()
-                }
+                Section::LoginScreen | Section::LockScreen => self.auth_page(&cfg, &p, window, cx),
                 Section::Users => users_page::element(cx),
                 Section::Bars => self.bars_page(&cfg, &p, window, cx),
                 Section::General => {
@@ -1989,12 +1986,14 @@ impl Render for StudioView {
         }
         let folds_toolbar = self.fold_toolbar(&p, cx);
         let content_bar = mandara_ui::scrollbar::keyed_state("studio-content");
+        let shortcut_workspace = self.section == Section::Shortcuts && self.shortcuts_tab == native_shortcuts::ShortcutsTab::Compositor;
         let content = div()
             .id("studio-content")
             .flex_1()
             .min_w(px(0.0))
             .min_h(px(0.0))
-            .overflow_y_scroll()
+            .when(!shortcut_workspace, |el| el.overflow_y_scroll())
+            .when(shortcut_workspace, |el| el.overflow_hidden())
             .track_scroll(&self.content_scroll)
             .px(px(gutter))
             .pb(px(SPACE_30_PX))
@@ -2002,6 +2001,7 @@ impl Render for StudioView {
                 div()
                     .w_full()
                     .max_w(px(PAGE_MAX_W_PX))
+                    .when(shortcut_workspace, |el| el.h_full().min_h(px(0.0)))
                     .mx_auto()
                     .min_w(px(0.0))
                     .row()

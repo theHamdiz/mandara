@@ -49,6 +49,7 @@ impl StudioView {
     /// titles on different Bars tabs must not share saved expansion state.
     pub(super) fn fold_key(&self, name: &str) -> String {
         if self.section == crate::registry::Section::Bars { format!("Bars/{}/{name}", self.bars_tab.slug()) }
+        else if self.section == crate::registry::Section::LoginScreen && self.auth_tab == super::auth_page::AuthTab::Lock { format!("LockScreen/{name}") }
         else { format!("{:?}/{name}", self.section) }
     }
 

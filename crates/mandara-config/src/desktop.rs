@@ -361,18 +361,8 @@ pub enum LockBackground {
     Color,
 }
 
-/// The lock screen's design.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum LockDesign {
-    /// The big clock, the avatar with its accent rim and the glass field.
-    #[default]
-    Mandara,
-    /// Material You: colours from the wallpaper, a big stacked clock in a
-    /// variable weight, and a tonal card with the scalloped avatar, a
-    /// filled field and Material chips.
-    MaterialYou,
-}
+/// Login and lock screens offer the same designs.
+pub use crate::auth_design::AuthDesign as LockDesign;
 
 /// How typed password characters are hidden on the lock screen.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
