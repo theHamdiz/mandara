@@ -2823,7 +2823,7 @@ For the Cards style
 For the Custom quality
 For the Latest notification chip
 For the Model mode
-For the Numbers and Sparkline chips; the rings follow Refresh every
+For the Numbers, Sparkline and Chart chips; the rings follow Refresh every
 For the Ring style
 For the Sketch transition
 For the chips that show the device's name
@@ -3314,7 +3314,7 @@ How often every check runs in the background
 How often failed units are counted for the chip's badge
 How often filesystem usage is read again while the panel is open
 How often subscriptions are downloaded again
-How often the Numbers and Sparkline chips update while the bar shows them
+How often the Numbers, Sparkline and Chart chips update while the bar shows them
 How often the background refresh runs; feeds that failed wait longer before trying again
 How often the container list updates while the panel is closed (the open panel refreshes every 2 s)
 How often the desktop widgets show a new verse or hadith; the panel and sidebar show a fresh one each time they open
@@ -3494,6 +3494,7 @@ Ink
 Ink black
 Ink lines
 Ink outlines
+Inline chart
 Inner padding
 Input
 Input device

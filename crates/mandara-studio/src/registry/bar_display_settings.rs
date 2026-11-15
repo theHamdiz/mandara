@@ -26,7 +26,7 @@ const TEXT_WIDTH: &str = tk("Text width");
 const MS_STEP: f64 = 250.0;
 const PX_STEP: f64 = 10.0;
 
-const RESOURCES_LOOKS: &[(&str, &str)] = &[("rings", tk("Rings and numbers")), ("icon", tk("Icon")), ("numbers", tk("Numbers")), ("sparkline", tk("Sparkline"))];
+const RESOURCES_LOOKS: &[(&str, &str)] = &[("rings", tk("Rings and numbers")), ("icon", tk("Icon")), ("numbers", tk("Numbers")), ("sparkline", tk("Sparkline")), ("chart", tk("Inline chart"))];
 const RESOURCES_METRICS: &[(&str, &str)] = &[("both", tk("CPU and memory")), ("cpu", tk("CPU")), ("memory", tk("Memory"))];
 const NOTIFICATIONS_LOOKS: &[(&str, &str)] = &[("icon", tk("Bell and badge")), ("latest", tk("Latest notification"))];
 const NETWORK_LOOKS: &[(&str, &str)] = &[("icon", tk("Icon")), ("name", tk("Network name")), ("signal", tk("Signal strength")), ("both", tk("Name and strength"))];
@@ -46,7 +46,7 @@ pub fn entries() -> Vec<Setting> {
     vec![
         choice(RESOURCES, "/plugins/settings/resources/bar_style", tk("Rings, one icon, labelled numbers or a small live graph beside each number; a click opens the panel either way"), RESOURCES_LOOKS, ResourcesBar::ALL[0].1),
         sd(Plugins, RESOURCES, "/plugins/settings/resources/bar_metrics", tk("Readings"), tk("What the bar item shows"), Control::Choice(RESOURCES_METRICS), Value::from(bd::ResourcesMetrics::ALL[0].1)),
-        sd(Plugins, RESOURCES, "/plugins/settings/resources/bar_refresh_ms", tk("Chip refresh every"), tk("How often the Numbers and Sparkline chips update while the bar shows them"), ints(bd::RESOURCES_BAR_REFRESH_MS_RANGE, MS_STEP, " ms"), Value::from(bd::RESOURCES_BAR_REFRESH_MS)),
+        sd(Plugins, RESOURCES, "/plugins/settings/resources/bar_refresh_ms", tk("Chip refresh every"), tk("How often the Numbers, Sparkline and Chart chips update while the bar shows them"), ints(bd::RESOURCES_BAR_REFRESH_MS_RANGE, MS_STEP, " ms"), Value::from(bd::RESOURCES_BAR_REFRESH_MS)),
         choice(NOTIFICATIONS, "/plugins/settings/notifications/bar_style", tk("The bell and its badge, or the latest notification's app and summary with the count (anyone looking at your screen can read it)"), NOTIFICATIONS_LOOKS, NotificationsBar::ALL[0].1),
         sd(Plugins, NOTIFICATIONS, "/plugins/settings/notifications/bar_width", TEXT_WIDTH, tk("Room for the latest notification before it trails off"), ints(bd::NOTIFICATIONS_BAR_WIDTH_RANGE, PX_STEP, " px"), Value::from(bd::NOTIFICATIONS_BAR_WIDTH)),
         choice(NETWORK, "/plugins/settings/network/bar_style", tk("The connection icon, or a chip with the network's name and / or its Wi-Fi signal"), NETWORK_LOOKS, NetworkBar::ALL[0].1),
@@ -65,7 +65,7 @@ fn look<T: BarDisplay>(cfg: &ShellConfig, plugin: &str) -> T {
 pub fn locked(path: &str, cfg: &ShellConfig) -> Option<&'static str> {
     match path {
         "/plugins/settings/resources/bar_metrics" if look::<ResourcesBar>(cfg, "resources") == ResourcesBar::Icon => Some(tk("The icon shows no readings")),
-        "/plugins/settings/resources/bar_refresh_ms" if !look::<ResourcesBar>(cfg, "resources").ticks() => Some(tk("For the Numbers and Sparkline chips; the rings follow Refresh every")),
+        "/plugins/settings/resources/bar_refresh_ms" if !look::<ResourcesBar>(cfg, "resources").ticks() => Some(tk("For the Numbers, Sparkline and Chart chips; the rings follow Refresh every")),
         "/plugins/settings/notifications/bar_width" if look::<NotificationsBar>(cfg, "notifications") == NotificationsBar::Icon => Some(tk("For the Latest notification chip")),
         "/plugins/settings/network/bar_width" if !look::<NetworkBar>(cfg, "network").name() => Some(tk("For the chips that show the network's name")),
         "/plugins/settings/bluetooth/bar_width" if look::<BluetoothBar>(cfg, "bluetooth") == BluetoothBar::Icon => Some(tk("For the chips that show the device's name")),

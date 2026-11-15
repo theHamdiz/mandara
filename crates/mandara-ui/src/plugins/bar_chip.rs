@@ -1,7 +1,8 @@
 //! What live bar chips share (`[plugins.settings.<id>] bar_style`, see
 //! [`mandara_config::bar_display`]): a text slot that formats again only
 //! when its source text changes, a truncating label, a short trail of
-//! samples drawn as a tiny sparkline of SDF quads, and the `bar display`
+//! samples drawn as a tiny sparkline or an inline area chart of SDF quads,
+//! and the `bar display`
 //! command that switches a plugin's look.
 //!
 //! A chip is content only: the bar's own capsules, tiles and shapes go
@@ -32,6 +33,21 @@ const SPARK_GAP_PX: f32 = 1.0;
 const SPARK_MIN_PX: f32 = 1.5;
 /// How much the oldest column fades.
 const SPARK_AGE_FADE: f32 = 0.55;
+/// The samples the inline chart spans (fixed size: no heap).
+pub const CHART_TRAIL: usize = 30;
+/// The inline chart: its size (designed; the height follows the icon
+/// scale), corner radius, column width, edge thickness, the inset that
+/// keeps 0 % and 100 % inside the well, and its midline.
+const CHART_W_PX: f32 = 64.0;
+const CHART_H_PX: f32 = 16.0;
+const CHART_RADIUS_PX: f32 = 4.0;
+const CHART_COLUMN_PX: f32 = 1.0;
+const CHART_LINE_PX: f32 = 1.5;
+const CHART_INSET_PX: f32 = 2.0;
+const CHART_GRID_PX: f32 = 1.0;
+/// The area's fill under its edge, and the second reading's line.
+const CHART_AREA_ALPHA: f32 = 0.22;
+const CHART_SECOND_ALPHA: f32 = 0.85;
 
 /// A label kept as shared text: re-made only when the text it shows
 /// changes, compared borrowed so an unchanged render allocates nothing.
@@ -53,20 +69,28 @@ pub fn label(text: SharedString, max_w: f32, color: Color) -> Div {
     div().min_w(px(0.0)).max_w(px(max_w)).truncate().text_color(color.hsla()).child(text)
 }
 
-/// The newest [`TRAIL`] samples of one reading, oldest first.
-#[derive(Copy, Clone, Debug, Default, PartialEq)]
-pub struct Trail {
-    values: [f32; TRAIL],
+/// The newest `N` samples of one reading, oldest first ([`TRAIL`] for
+/// the sparkline, [`CHART_TRAIL`] for the inline chart; fixed size, no
+/// heap).
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Trail<const N: usize = TRAIL> {
+    values: [f32; N],
     len: usize,
 }
 
-impl Trail {
+impl<const N: usize> Default for Trail<N> {
+    fn default() -> Self {
+        Self { values: [0.0; N], len: 0 }
+    }
+}
+
+impl<const N: usize> Trail<N> {
     /// Appends a sample (clamped to `0..=1`), dropping the oldest when full.
     pub fn push(&mut self, v: f32) {
         let v = v.clamp(0.0, 1.0);
-        if self.len == TRAIL {
+        if self.len == N {
             self.values.copy_within(1.., 0);
-            self.values[TRAIL - 1] = v;
+            self.values[N - 1] = v;
         } else {
             self.values[self.len] = v;
             self.len += 1;
@@ -84,6 +108,23 @@ impl Trail {
     /// The samples, oldest first.
     pub fn values(&self) -> &[f32] {
         &self.values[..self.len]
+    }
+
+    /// The trail's value at `t` along its full width (0 = the oldest slot,
+    /// 1 = the newest sample), linearly between samples; `None` left of
+    /// the first sample while the trail is still filling.
+    fn at(&self, t: f32) -> Option<f32> {
+        if self.len == 0 {
+            return None;
+        }
+        let pos = t.clamp(0.0, 1.0) * (N - 1) as f32 - (N - self.len) as f32;
+        if pos < 0.0 {
+            return None;
+        }
+        let i = pos.floor() as usize;
+        let next = (i + 1).min(self.len - 1);
+        let f = pos - i as f32;
+        Some(self.values[i] * (1.0 - f) + self.values[next] * f)
     }
 }
 
@@ -115,6 +156,48 @@ pub fn sparkline(trail: Trail, color: Color, track: Color) -> impl IntoElement {
     .w(px(SPARK_W_PX))
     .h(px(h))
     .flex_none()
+}
+
+/// An inline area chart of up to two readings over [`CHART_TRAIL`]
+/// samples, newest at the right (charts stay left to right): the first as
+/// a soft filled area under a bright edge, the second as a fine line over
+/// it. One-pixel columns of SDF quads, interpolated between samples, so
+/// the edge reads as a smooth line; nothing is allocated.
+pub fn chart(area: Option<(Trail<CHART_TRAIL>, Color)>, line: Option<(Trail<CHART_TRAIL>, Color)>, track: Color) -> impl IntoElement {
+    let h = crate::style::bar_icon(CHART_H_PX);
+    canvas(
+        |_, _, _| {},
+        move |bounds: Bounds<gpui::Pixels>, _, window, _| {
+            let (w, h) = (f32::from(bounds.size.width), f32::from(bounds.size.height));
+            let (x0, y0) = (bounds.origin.x, bounds.origin.y);
+            // The well, then a faint midline for scale.
+            window.paint_quad(fill(bounds, track.hsla()).corner_radii(px(CHART_RADIUS_PX)));
+            window.paint_quad(fill(Bounds::new(point(x0, y0 + px((h / 2.0).round())), size(px(w), px(CHART_GRID_PX))), track.hsla()));
+            let columns = (w / CHART_COLUMN_PX).floor().max(1.0) as usize;
+            for c in 0..columns {
+                let t = if columns > 1 { c as f32 / (columns - 1) as f32 } else { 1.0 };
+                let x = x0 + px(c as f32 * CHART_COLUMN_PX);
+                let top = |v: f32| (h - CHART_INSET_PX - v * (h - 2.0 * CHART_INSET_PX)).clamp(0.0, h);
+                if let Some((trail, color)) = area
+                    && let Some(v) = trail.at(t)
+                {
+                    let y = top(v);
+                    window.paint_quad(fill(Bounds::new(point(x, y0 + px(y)), size(px(CHART_COLUMN_PX), px(h - y))), color.with_alpha(CHART_AREA_ALPHA).hsla()));
+                    window.paint_quad(fill(Bounds::new(point(x, y0 + px(y - CHART_LINE_PX / 2.0)), size(px(CHART_COLUMN_PX), px(CHART_LINE_PX))), color.hsla()));
+                }
+                if let Some((trail, color)) = line
+                    && let Some(v) = trail.at(t)
+                {
+                    let y = top(v);
+                    window.paint_quad(fill(Bounds::new(point(x, y0 + px(y - CHART_LINE_PX / 2.0)), size(px(CHART_COLUMN_PX), px(CHART_LINE_PX))), color.with_alpha(CHART_SECOND_ALPHA).hsla()));
+                }
+            }
+        },
+    )
+    .w(px(CHART_W_PX))
+    .h(px(h))
+    .flex_none()
+    .rounded(px(CHART_RADIUS_PX))
 }
 
 // ── `bar display` ────────────────────────────────────────────────────────
@@ -195,7 +278,7 @@ mod tests {
 
     #[test]
     fn trails_keep_the_newest_samples_in_order() {
-        let mut t = Trail::default();
+        let mut t: Trail = Trail::default();
         assert!(t.is_empty());
         for i in 0..TRAIL + 3 {
             t.push(i as f32 / 100.0);
@@ -206,6 +289,20 @@ mod tests {
         t.push(7.0);
         assert_eq!(*t.values().last().unwrap(), 1.0, "clamped");
         assert_eq!(std::mem::size_of::<Trail>(), TRAIL * 4 + std::mem::size_of::<usize>(), "inline, no heap");
+    }
+
+    #[test]
+    fn the_chart_interpolates_between_samples_and_starts_empty_on_the_left() {
+        let mut t: Trail<4> = Trail::default();
+        assert_eq!(t.at(1.0), None);
+        t.push(0.2);
+        t.push(0.6);
+        // Two samples fill the newest third: nothing left of them.
+        assert_eq!(t.at(0.0), None);
+        assert!((t.at(1.0).unwrap() - 0.6).abs() < 1e-6);
+        let mid = t.at(5.0 / 6.0).unwrap();
+        assert!((mid - 0.4).abs() < 1e-6, "halfway between the two samples: {mid}");
+        assert_eq!(std::mem::size_of::<Trail<CHART_TRAIL>>(), CHART_TRAIL * 4 + std::mem::size_of::<usize>(), "inline, no heap");
     }
 
     #[test]

@@ -176,7 +176,7 @@ and every plugin keeps its classic look until you pick another one.
 
 | Plugin | Looks | Chip options |
 |---|---|---|
-| **Resources** | `rings` (the classic two rings with percentages), `icon`, `numbers` (CPU and RAM labels with their percentages), `sparkline` (a small live graph beside each percentage) | *Readings*: CPU, memory or both; *Chip refresh every*: 0.5–10 s (1 s) |
+| **Resources** | `rings` (the classic two rings with percentages), `icon`, `numbers` (CPU and RAM labels with their percentages), `sparkline` (a small live graph beside each percentage), `chart` (one inline area chart of the last 30 samples, CPU filled and memory as a line, with both figures) | *Readings*: CPU, memory or both; *Chip refresh every*: 0.5–10 s (1 s) |
 | **Notifications** | `icon` (the classic bell and badge), `latest` (the bell, the latest notification's app and summary, and the count: unread ones in the accent, otherwise how many are kept) | *Text width* |
 | **Network** | `icon` (classic), `name` (the network's name), `signal` (Wi-Fi signal bars and strength), `both` (name and strength) | *Text width* |
 | **Bluetooth** | `icon` (the classic icon and count), `name` (the connected device, or how many are connected), `battery` (its name and battery ring) | *Text width* |

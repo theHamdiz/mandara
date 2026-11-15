@@ -45,10 +45,12 @@ pub enum ResourcesBar {
     Numbers,
     /// A small live graph beside each percentage.
     Sparkline,
+    /// One inline area chart of the readings, with their figures.
+    Chart,
 }
 
 impl BarDisplay for ResourcesBar {
-    const ALL: &'static [(Self, &'static str)] = &[(Self::Rings, "rings"), (Self::Icon, "icon"), (Self::Numbers, "numbers"), (Self::Sparkline, "sparkline")];
+    const ALL: &'static [(Self, &'static str)] = &[(Self::Rings, "rings"), (Self::Icon, "icon"), (Self::Numbers, "numbers"), (Self::Sparkline, "sparkline"), (Self::Chart, "chart")];
 }
 
 impl ResourcesBar {
@@ -60,7 +62,7 @@ impl ResourcesBar {
     /// Ticks at the chip's own cadence (`bar_refresh_ms`) instead of the
     /// panel's `refresh_ms`, which the classic rings keep following.
     pub fn ticks(self) -> bool {
-        matches!(self, Self::Numbers | Self::Sparkline)
+        matches!(self, Self::Numbers | Self::Sparkline | Self::Chart)
     }
 }
 

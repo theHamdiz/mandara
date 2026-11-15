@@ -23,7 +23,7 @@ use mandara_core::ToGpui as _;
 use mandara_i18n::{Lang, t};
 use mandara_theme::{Color, MandaraPalette};
 
-use super::super::bar_chip::{self, GLYPH_PX, Trail};
+use super::super::bar_chip::{self, CHART_TRAIL, GLYPH_PX, Trail};
 use super::super::panel_fx::{PERCENT_STEP, Readout, percent_text, readable};
 use super::super::settings_cache::{ConfigSettings, SettingsCache};
 use super::{CHIP_GAP_PX, CHIP_RING_D_PX, CHIP_RING_GAP_PX, CHIP_RING_STROKE_PX, CHIP_SNAP_BELOW, CHIP_SPRING, CHIP_TRACK_ALPHA, CHIP_VALUE_W_PX, Live};
@@ -100,6 +100,8 @@ fn cadence_at(demand: Option<(Instant, Duration)>, base: Duration, now: Instant)
 pub(super) struct Chip {
     rings: (Readout, Readout),
     trails: (Trail, Trail),
+    /// The inline chart's longer history.
+    charts: (Trail<CHART_TRAIL>, Trail<CHART_TRAIL>),
 }
 
 impl Chip {
@@ -107,6 +109,7 @@ impl Chip {
         Self {
             rings: (Readout::new(CHIP_SPRING, CHIP_SNAP_BELOW, PERCENT_STEP), Readout::new(CHIP_SPRING, CHIP_SNAP_BELOW, PERCENT_STEP)),
             trails: (Trail::default(), Trail::default()),
+            charts: (Trail::default(), Trail::default()),
         }
     }
 
@@ -116,6 +119,8 @@ impl Chip {
         live.borrow_mut().record(cpu, mem);
         self.trails.0.push(cpu);
         self.trails.1.push(mem);
+        self.charts.0.push(cpu);
+        self.charts.1.push(mem);
         look.style.live()
     }
 }
@@ -169,7 +174,7 @@ pub(super) fn render(chip: &RefCell<Chip>, palette: &MandaraPalette, window: &mu
                 .when(m.memory(), |el| el.child(meter(mem, palette.tertiary)))
                 .into_any_element()
         }
-        ResourcesBar::Numbers | ResourcesBar::Sparkline if vertical => {
+        ResourcesBar::Numbers | ResourcesBar::Sparkline | ResourcesBar::Chart if vertical => {
             // A side bar: each label over its figure.
             let (cpu_ink, mem_ink) = figure_colors(cpu, mem, palette);
             let pair = |label: &'static str, value: f32, ink: Color| {
@@ -220,6 +225,29 @@ pub(super) fn render(chip: &RefCell<Chip>, palette: &MandaraPalette, window: &mu
                 .font_features(tabular_nums())
                 .when(m.cpu(), |el| el.child(graph(cpu_trail, hot(cpu, HOT_CPU, palette.primary), cpu, cpu_ink)))
                 .when(m.memory(), |el| el.child(graph(mem_trail, hot(mem, HOT_MEM, palette.tertiary), mem, mem_ink)))
+                .into_any_element()
+        }
+        ResourcesBar::Chart => {
+            let (cpu_ink, mem_ink) = figure_colors(cpu, mem, palette);
+            let track = palette.on_surface.with_alpha(SPARK_TRACK_ALPHA);
+            let (cpu_trail, mem_trail) = chip.borrow().charts;
+            let hot = |v: f32, at: f32, c: Color| if v >= at { readable(palette.warning_amber, palette) } else { readable(c, palette) };
+            let cpu_series = m.cpu().then(|| (cpu_trail, hot(cpu, HOT_CPU, palette.primary)));
+            let mem_series = m.memory().then(|| (mem_trail, hot(mem, HOT_MEM, palette.tertiary)));
+            // With one reading it is the area; with both, CPU fills and memory is the line.
+            let (area, line) = match (cpu_series, mem_series) {
+                (Some(c), m) => (Some(c), m),
+                (None, m) => (m, None),
+            };
+            // Charts and their figures read left to right in every language.
+            div()
+                .ltr_row()
+                .items_center()
+                .gap(px(bar_chip::GLYPH_GAP_PX))
+                .font_features(tabular_nums())
+                .child(bar_chip::chart(area, line, track))
+                .when(m.cpu(), |el| el.child(figure(cpu, cpu_ink)))
+                .when(m.memory(), |el| el.child(figure(mem, mem_ink)))
                 .into_any_element()
         }
     }
@@ -290,5 +318,6 @@ mod tests {
         assert_eq!(chip.trails.1.values(), &[0.4]);
         assert!(chip.on_sample(&live, (0.3, 0.5), BarLook { style: ResourcesBar::Numbers, ..icon }));
         assert_eq!(chip.trails.0.len(), 2);
+        assert_eq!(chip.charts.1.values(), &[0.4, 0.5], "the chart keeps its own, longer history");
     }
 }

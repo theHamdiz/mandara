@@ -241,7 +241,7 @@ fixed:
 
 | Plugin | Keys (`plugins.settings.<id>.…`) | Default |
 |---|---|---|
-| Resources (`resources`) | `refresh_ms` (also the bar rings), `disks_every_s`, `top_apps`, `temps_shown`, `disk_warn_percent`, `disk_full_percent`, `bar_style` (`rings`, `icon`, `numbers`, `sparkline`), `bar_metrics` (`both`, `cpu`, `memory`), `bar_refresh_ms` (the Numbers and Sparkline chips while the bar shows them, 500–10000 ms) | 1500 ms, 15 s, 5, 8, 80 %, 90 %, rings, both, 1000 ms |
+| Resources (`resources`) | `refresh_ms` (also the bar rings), `disks_every_s`, `top_apps`, `temps_shown`, `disk_warn_percent`, `disk_full_percent`, `bar_style` (`rings`, `icon`, `numbers`, `sparkline`, `chart`), `bar_metrics` (`both`, `cpu`, `memory`), `bar_refresh_ms` (the Numbers, Sparkline and Chart chips while the bar shows them, 500–10000 ms) | 1500 ms, 15 s, 5, 8, 80 %, 90 %, rings, both, 1000 ms |
 | Process hunter (`processes`) | `refresh_ms`, `hot_cpu_percent` | 1500 ms, 50 % |
 | Containers (`containers`) | `hot_cpu_percent`, `refresh_s` (list refresh while the panel is closed, 5–600 s) (plus engine, stopped containers, log lines) | 80 %, 30 s |
 | Updates (`updates`) | `first_check_delay_s` (0–600 s after login), `news_count` (Arch news headlines, 1–5), `run_in` (`mandara`: in the panel with progress, or `terminal`), `nixos_keep` (generations a NixOS clean-up keeps, 1–30) | 20 s, 1, `mandara`, 5 |
