@@ -100,11 +100,10 @@ const FEATURED: &[&str] = &["media", "wallpaper", "weather", "clipboard", "scree
 
 // ── Layout ───────────────────────────────────────────────────────────────
 
-/// The search field never shrinks below this beside the tabs.
-const SEARCH_MIN_W_PX: f32 = 200.0;
-/// From this page width the tabs and the search share one toolbar row;
-/// narrower, the search drops to a row of its own and the tabs scroll.
-const STORE_TOOLBAR_ONE_ROW_FROM_PX: f32 = 900.0;
+/// The store's inset search field.
+const SEARCH_FIELD_H_PX: f32 = 40.0;
+/// From this page width the tabs fit in one row; narrower, they scroll.
+const STORE_TABS_FIT_FROM_PX: f32 = 900.0;
 /// Hero: height per unit of the column width, within these bounds.
 const HERO_ASPECT: f32 = 0.36;
 const HERO_MIN_H_PX: f32 = 300.0;
@@ -981,41 +980,77 @@ impl StudioView {
         // The tabs scroll sideways on a narrow page instead of wrapping.
         // One toolbar: the places, the search and (on Discover) the
         // categories share a single surface, divided by hairlines.
-        let nav = div().row().flex_none().items_center().gap(px(SEGMENT_PAD_PX)).children(segments);
-        let wide = self.page.column_w >= STORE_TOOLBAR_ONE_ROW_FROM_PX;
-        let nav = if wide {
+        // A segmented track: the tabs sit in one quiet groove and the open
+        // one is raised out of it.
+        let nav = div()
+            .p(px(SEGMENT_PAD_PX))
+            .rounded_full()
+            .bg(p.on_surface.with_alpha(ALPHA_5).hsla())
+            .row()
+            .flex_none()
+            .items_center()
+            .gap(px(SEGMENT_PAD_PX))
+            .children(segments);
+        let track_h = SEGMENT_H_PX + 2.0 * SEGMENT_PAD_PX;
+        let nav = if self.page.column_w >= STORE_TABS_FIT_FROM_PX {
             nav.into_any_element()
         } else {
             let strip = grid::strip("store-tabs");
-            let row = strip.row("store-tabs").row().items_center().h(px(SEGMENT_H_PX)).child(nav);
-            strip.with_chevrons("store-tabs", row, SEGMENT_H_PX, p)
+            let row = strip.row("store-tabs").row().items_center().h(px(track_h)).child(nav);
+            strip.with_chevrons("store-tabs", row, track_h, p)
         };
+        // The search: an inset field with a clear button and, while it
+        // filters, how many plugins match. The categories sit right under
+        // it, in the same filter well.
         let searchable = !matches!(current, PluginsTab::Local | PluginsTab::Updates);
+        let query = self.store.query.trim().to_string();
         let search = searchable.then(|| {
             let field = self.store_search(cx);
-            div().flex_1().min_w(px(SEARCH_MIN_W_PX)).h(px(SEGMENT_H_PX)).row().items_center().gap(px(SPACE_8_PX)).child(icon("search", ICON_15_PX, p.on_surface_variant)).child(div().flex_1().min_w(px(0.0)).child(field))
-        });
-        let line = super::grouped::hairline(p);
-        let pad = |el: gpui::Div| el.w_full().px(px(SEGMENT_PAD_PX * 2.0)).py(px(SEGMENT_PAD_PX * 2.0));
-        let mut rows: Vec<AnyElement> = Vec::new();
-        match search {
-            Some(search) if wide => rows.push(
-                pad(div())
+            let clear = (!query.is_empty()).then(|| {
+                div()
+                    .id("store-search-clear")
+                    .flex_none()
+                    .size(px(DIM_24_PX))
+                    .rounded_full()
                     .row()
                     .items_center()
-                    .gap(px(SPACE_12_PX))
-                    .child(div().min_w(px(0.0)).child(nav))
-                    .child(div().w(px(BORDER_1_PX)).h(px(SEGMENT_H_PX - 2.0 * SEGMENT_PAD_PX)).bg(line))
-                    .child(search.pad_end(px(SPACE_6_PX)))
-                    .into_any_element(),
-            ),
-            Some(search) => {
-                rows.push(pad(div()).child(nav).into_any_element());
-                rows.push(pad(div()).pad_start(px(SPACE_14_PX)).child(search).into_any_element());
-            }
-            None => rows.push(pad(div()).child(nav).into_any_element()),
+                    .justify_center()
+                    .cursor_pointer()
+                    .bg(p.on_surface.with_alpha(ALPHA_8).hsla())
+                    .hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_14).hsla()))
+                    .tooltip(super::compositor_page::tip(t("Clear"), p))
+                    .child(icon("close", ICON_12_PX, p.on_surface_variant))
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.store.query.clear();
+                        if let Some(field) = &this.store.search {
+                            field.update(cx, |f, _| f.set(""));
+                        }
+                        if this.plugins_tab == PluginsTab::Marketplace {
+                            this.market_follow_query(String::new(), true, cx);
+                        }
+                        cx.notify();
+                    }))
+            });
+            div()
+                .w_full()
+                .h(px(SEARCH_FIELD_H_PX))
+                .px(px(SPACE_14_PX))
+                .rounded_full()
+                .bg(p.surface_base.with_alpha(ALPHA_70).hsla())
+                .border_1()
+                .border_color(super::grouped::hairline(p))
+                .row()
+                .items_center()
+                .gap(px(SPACE_10_PX))
+                .child(icon("search", ICON_15_PX, p.on_surface_variant))
+                .child(div().flex_1().min_w(px(0.0)).child(field))
+                .children(clear)
+        });
+        // A row, so the track hugs its tabs instead of spanning the toolbar.
+        let mut rows: Vec<AnyElement> = vec![div().w_full().px(px(SPACE_12_PX)).py(px(SPACE_12_PX)).row().items_center().child(div().min_w(px(0.0)).max_w_full().child(nav)).into_any_element()];
+        if search.is_some() || chips.is_some() {
+            rows.push(div().w_full().px(px(SPACE_12_PX)).pt(px(SPACE_12_PX)).pb(px(SPACE_14_PX)).row().flex_col().gap(px(SPACE_12_PX)).children(search).children(chips).into_any_element());
         }
-        rows.extend(chips.map(|c| pad(div()).child(c).into_any_element()));
         super::grouped::group(rows, false, p).into_any_element()
     }
 

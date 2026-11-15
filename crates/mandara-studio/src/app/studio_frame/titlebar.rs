@@ -19,7 +19,7 @@ const LIGHT_TARGET_WIDTH: f32 = 20.0;
 const LIGHTS_GROUP: &str = "studio-window-lights";
 const WINDOW_BUTTONS: f32 = 3.0;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum Control {
     Close,
     Minimize,
@@ -40,6 +40,20 @@ impl Control {
             Self::Minimize => window.minimize_window(),
             Self::Maximize => window.zoom_window(),
         }
+    }
+}
+
+/// The controls left to right on screen. Close always sits at the
+/// window's outer edge: the group mirrors with the language, so in a
+/// right-to-left language the controls at the end of the title bar read
+/// close, maximize, minimize from the left edge.
+fn control_order(at_start: bool, rtl: bool) -> [Control; 3] {
+    let reading = if at_start { [Control::Close, Control::Minimize, Control::Maximize] } else { [Control::Minimize, Control::Maximize, Control::Close] };
+    if rtl {
+        let [a, b, c] = reading;
+        [c, b, a]
+    } else {
+        reading
     }
 }
 
@@ -171,11 +185,15 @@ pub(in crate::app) fn titlebar(
         .gap(px(if lights { 0.0 } else { SPACE_4_PX }))
         .items_center()
         .flex_none();
-    controls = if f.controls_at_start {
-        controls.child(close).child(min).child(max)
-    } else {
-        controls.child(min).child(max).child(close)
-    };
+    let mut parts = [Some(close), Some(min), Some(max)];
+    for control in control_order(f.controls_at_start, mandara_i18n::language().is_rtl()) {
+        let slot = match control {
+            Control::Close => 0,
+            Control::Minimize => 1,
+            Control::Maximize => 2,
+        };
+        controls = controls.children(parts[slot].take());
+    }
     let caption = div()
         .flex_1()
         .min_w(px(0.0))
@@ -274,6 +292,16 @@ mod tests {
                 assert_eq!(Control::Maximize.supported(capabilities), maximize);
             }
         }
+    }
+
+    #[test]
+    fn close_sits_at_the_outer_edge_in_both_directions() {
+        use Control::*;
+        assert_eq!(control_order(false, false), [Minimize, Maximize, Close]);
+        assert_eq!(control_order(true, false), [Close, Minimize, Maximize]);
+        // Right to left the end of the bar is its left edge: close outermost.
+        assert_eq!(control_order(false, true), [Close, Maximize, Minimize]);
+        assert_eq!(control_order(true, true), [Maximize, Minimize, Close]);
     }
 
     #[test]

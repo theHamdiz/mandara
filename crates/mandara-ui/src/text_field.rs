@@ -879,8 +879,6 @@ impl Render for TextField {
                 } else {
                     palette.surface_container_high.hsla()
                 })
-        } else if bare {
-            el
         } else {
             crate::components::inputs::dress_labelled(
                 el.relative().px(px(DESIGNED_PAD_X_PX)),
