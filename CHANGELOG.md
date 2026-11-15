@@ -6,11 +6,12 @@ About → What's new shows it too.
 
 ## Unreleased
 
-This update fixes session selection in Mandara Login.
+Mandara Login takes session clicks again, and plugin lists scroll smoothly.
 
 ### Fixed
 
 - Clicking a session in Mandara Login now selects it.
+- Scrolling list views in third-party plugins no longer flicker back to their first rows after you stop scrolling.
 
 ## 0.32.0 — 2026-11-15
 
