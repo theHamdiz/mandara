@@ -6,6 +6,10 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- Clicking a session in Mandara Login now selects it.
+
 ## 0.32.0 — 2026-11-15
 
 Third-party plugins can now become part of the desktop itself: rich native
