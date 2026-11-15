@@ -138,6 +138,8 @@ pub struct Facts {
     /// `$XDG_DATA_HOME` / `$XDG_CONFIG_HOME`.
     pub xdg_data: Option<String>,
     pub xdg_config: Option<String>,
+    /// `$XDG_DATA_DIRS`: where login screens find sessions.
+    pub xdg_data_dirs: Option<String>,
     /// The release keys signatures are checked against (the shipped ones;
     /// a test key in tests).
     pub release_keys: Vec<PublicKey>,
@@ -178,6 +180,7 @@ impl Facts {
             mirror: env(release::RELEASE_BASE_ENV),
             xdg_data: env("XDG_DATA_HOME"),
             xdg_config: env("XDG_CONFIG_HOME"),
+            xdg_data_dirs: env("XDG_DATA_DIRS"),
             release_keys: signing::trusted_keys(),
         }
     }
@@ -1234,9 +1237,14 @@ impl<'a> Installer<'a> {
         if autostart {
             setup.push("--autostart".into());
         }
+        let session_hint = self.plasma_session_hint();
         match self.run(Cmd::from_argv(setup).env(SETUP_LOG.0, SETUP_LOG.1).io(Io::Capture)) {
             Some(out) => {
                 for line in out.stdout.lines().chain(out.stderr.lines()) {
+                    // Setup for KWin explains the missing session itself.
+                    if session_hint.as_deref() == Some(line.trim()) {
+                        continue;
+                    }
                     self.say(Level::Info, line);
                 }
                 if !out.success {
@@ -1244,6 +1252,11 @@ impl<'a> Installer<'a> {
                 }
             }
             None => self.say(Level::Warn, "compositor setup failed; run `mandara setup` later"),
+        }
+        // KWin without Plasma's session never shows at login, whichever
+        // compositor this install is for.
+        if let Some(hint) = session_hint {
+            self.say(Level::Warn, hint);
         }
         // Leftovers that fight Mandara: an old launcher or wallpaper picker
         // on its keys, another bar, notification or wallpaper daemon.
@@ -1288,6 +1301,13 @@ impl<'a> Installer<'a> {
         } else {
             self.say(Level::Info, "kept — Mandara skips its binds on those keys; run `mandara setup --fix-conflicts` any time");
         }
+    }
+
+    /// What to say when KWin is installed without Plasma's login session
+    /// ([`crate::plasma`]), looking in the system's session folders.
+    fn plasma_session_hint(&self) -> Option<String> {
+        let roots = crate::plasma::data_roots(self.facts.xdg_data_dirs.as_deref());
+        crate::plasma::missing_session_hint(self.facts.family, &self.facts.os, |p| self.has(p), || crate::plasma::has_session(&self.facts.root, &roots))
     }
 
     /// Mandara Login becomes the login screen unless --no-greeter: greetd +

@@ -489,3 +489,17 @@ fn mango_drop_in_writes_heal_or_roll_back() {
     assert_eq!(state::unsupported(&store.unsupported, Target::Mango, version), vec!["blur_optimizedx".to_string(), "shadows_optimizedx".to_string()]);
     assert!(state::unsupported(&store.unsupported, Target::Mango, "0.19.0").is_empty(), "a new version tries the options again");
 }
+
+#[test]
+fn parallel_checkers_have_distinct_private_runtime_directories() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let directories: Vec<_> = std::thread::scope(|scope| {
+        let jobs: Vec<_> = (0..64).map(|_| scope.spawn(PrivateDir::new)).collect();
+        jobs.into_iter().map(|job| job.join().unwrap().unwrap()).collect()
+    });
+    let paths: std::collections::HashSet<_> = directories.iter().map(|directory| directory.path().to_path_buf()).collect();
+    assert_eq!(paths.len(), directories.len());
+    assert!(directories.iter().all(|directory| directory.path().metadata().unwrap().permissions().mode() & 0o777 == 0o700));
+    drop(directories);
+    assert!(paths.iter().all(|path| !path.exists()));
+}

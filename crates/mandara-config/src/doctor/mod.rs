@@ -661,26 +661,16 @@ pub(crate) fn run_isolated(argv: &[OsString], extra: &[(&str, &str)]) -> Option<
 }
 
 /// A private `0700` folder, removed again when dropped.
-pub(crate) struct PrivateDir(PathBuf);
+pub(crate) struct PrivateDir(tempfile::TempDir);
 
 impl PrivateDir {
     pub(crate) fn new() -> std::io::Result<Self> {
-        use std::os::unix::fs::DirBuilderExt as _;
-        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or_default();
-        let dir = std::env::temp_dir().join(format!("mandara-doctor-{}-{nanos}", std::process::id()));
-        std::fs::DirBuilder::new().mode(0o700).create(&dir)?;
-        Ok(Self(dir))
+        use std::os::unix::fs::PermissionsExt as _;
+        tempfile::Builder::new().prefix("mandara-doctor-")
+            .permissions(std::fs::Permissions::from_mode(0o700)).tempdir().map(Self)
     }
 
-    pub(crate) fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for PrivateDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
+    pub(crate) fn path(&self) -> &Path { self.0.path() }
 }
 
 /// Removes ANSI colour / cursor sequences.

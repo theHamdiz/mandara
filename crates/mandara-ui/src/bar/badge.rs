@@ -43,9 +43,13 @@ const MAX_SPILL_PX: f32 = 3.0;
 /// the icon under it.
 const RING_PX: f32 = 1.5;
 
-/// What a badge reads: the count, or `99+` past [`MAX_SHOWN`].
+/// What a badge reads: the count, or `99+` past [`MAX_SHOWN`]. The figures
+/// are formatted once per thread, not on every render.
 pub fn label(n: usize) -> SharedString {
-    if n > MAX_SHOWN { SharedString::new_static("99+") } else { n.to_string().into() }
+    thread_local! {
+        static LABELS: Vec<SharedString> = (0..=MAX_SHOWN).map(|n| SharedString::from(n.to_string())).collect();
+    }
+    if n > MAX_SHOWN { SharedString::new_static("99+") } else { LABELS.with(|l| l[n].clone()) }
 }
 
 /// A badge's rect relative to the top-left of the icon it rides on, and
@@ -150,6 +154,29 @@ pub fn counted(icon: impl IntoElement, icon_px: f32, n: usize, badge: Badge, plu
             .child(pill(INLINE_H_PX, INLINE_TEXT_PX).min_w(px(INLINE_H_PX)).px(px(INLINE_PAD_X_PX)).child(text))
             .into_any_element(),
     }
+}
+
+/// `n`'s badge on its own, as it sits beside an icon on the shipped bar
+/// (a live chip's count after its text). Nothing for zero.
+pub fn inline(n: usize, badge: Badge) -> Option<AnyElement> {
+    (n > 0).then(|| {
+        div()
+            .h(px(INLINE_H_PX))
+            .min_w(px(INLINE_H_PX))
+            .px(px(INLINE_PAD_X_PX))
+            .flex_none()
+            .rounded_full()
+            .bg(badge.fill.hsla())
+            .text_color(badge.ink.hsla())
+            .text_size(px(INLINE_TEXT_PX))
+            .font_weight(FontWeight::BOLD)
+            .font_features(crate::fonts::tabular_nums())
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(label(n))
+            .into_any_element()
+    })
 }
 
 

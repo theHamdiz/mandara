@@ -663,10 +663,15 @@ fn list(view: &Rc<View>, n: &Node, i: u32, depth: u32, p: &MandaraPalette, frame
     let asked = asked.read(cx).clone();
     let (view, frame2, palette, template) = (view.clone(), frame.clone(), p.clone(), n.clone());
     let sent = n.children.len();
+    // GPUI sizes the rows by drawing one of them on its own: measure the
+    // first row the plugin sent (all rows are the same size), so that probe
+    // is covered and never mistaken for the rows on screen.
+    let probe = start.min(count.saturating_sub(1));
+    let on_screen = ((h / row_h).ceil() as usize).clamp(1, count.max(1));
     uniform_list(frame.element_id(n, i as usize), count, move |range: Range<usize>, window, cx| {
-        let covered = range.start >= start && range.end <= start + sent;
-        let want = (range.start as u32, range.len() as u32);
-        if !covered && asked.get() != want {
+        if let Some(want) = range_request(&range, start, sent, probe, on_screen)
+            && asked.get() != want
+        {
             asked.set(want);
             let (sink, event) = (frame2.sink.clone(), frame2.event(&template, EventValue::Range(want)));
             window.defer(cx, move |window, cx| sink(event, window, cx));
@@ -684,10 +689,50 @@ fn list(view: &Rc<View>, n: &Node, i: u32, depth: u32, p: &MandaraPalette, frame
             })
             .collect::<Vec<_>>()
     })
+    .with_width_from_item(Some(probe))
     .h(px(h))
     .w_full()
     .into_any_element()
 }
 
+/// The `range` a virtual list's row callback asks the plugin for, if any:
+/// rows `range` are wanted and the plugin sent `sent` rows from `start`.
+/// GPUI also calls the callback for the single row `probe` to measure it;
+/// while more than one row is `on_screen`, that probe isn't what's shown.
+fn range_request(range: &Range<usize>, start: usize, sent: usize, probe: usize, on_screen: usize) -> Option<(u32, u32)> {
+    let covered = range.start >= start && range.end <= start + sent;
+    let is_probe = on_screen > 1 && range.len() == 1 && range.start == probe;
+    (!covered && !is_probe).then(|| (range.start as u32, range.len() as u32))
+}
+
 /// How much of a placeholder row's height its bar fills.
 const PLACEHOLDER_FILL: f32 = 0.6;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// One frame of a list: GPUI's sizing probe, then the rows on screen.
+    fn frame(start: usize, sent: usize, on_screen: usize, visible: Range<usize>) -> Vec<(u32, u32)> {
+        let probe = start.min(99);
+        [probe..probe + 1, visible].iter().filter_map(|r| range_request(r, start, sent, probe, on_screen)).collect()
+    }
+
+    #[test]
+    fn the_sizing_probe_is_never_reported_as_the_visible_rows() {
+        // Issue #188: rows 0..8 sent, scrolled to row 10, four rows on screen.
+        assert_eq!(frame(0, 8, 4, 10..14), [(10, 4)]);
+        // The plugin answers with rows 10..18: nothing more is asked, and
+        // row 0 is never requested again.
+        assert_eq!(frame(10, 8, 4, 10..14), []);
+        // Nothing sent yet: the probe still asks for nothing.
+        assert_eq!(frame(0, 0, 4, 0..4), [(0, 4)]);
+    }
+
+    #[test]
+    fn a_one_row_viewport_still_gets_its_range() {
+        assert_eq!(range_request(&(10..11), 0, 8, 0, 1), Some((10, 1)));
+        assert_eq!(range_request(&(0..1), 0, 0, 0, 1), Some((0, 1)));
+        assert_eq!(range_request(&(3..4), 0, 8, 0, 4), None, "covered rows ask nothing");
+    }
+}

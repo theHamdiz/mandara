@@ -136,6 +136,15 @@ const TONE_HALF_H_BLOCK: f32 = 0.6;
 pub struct Scene {
     pub enabled: bool,
     pub wallpaper: WallpaperConfig,
+    /// Outputs showing a plugin's live scene ([`crate::plugins::external::live`]),
+    /// with a picture of it for the widgets' ink. Their wallpaper isn't
+    /// painted, and the canvas moves to the bottom layer, above the scene.
+    live: HashMap<String, Option<PathBuf>>,
+    /// Desktop cards on those outputs: the canvas leaves their pointer input
+    /// to them (they share its layer then).
+    live_card_input: HashMap<String, Vec<Rect>>,
+    /// Outputs whose live scene may play now (the video rules).
+    live_play: Vec<String>,
     pub dark: bool,
     pub h24: bool,
     pub rtl: bool,
@@ -442,9 +451,11 @@ pub(crate) fn refresh(cx: &mut App) {
     let outputs = driver.borrow().outputs.clone();
     let mut scene = build_scene(&outputs, cx);
     scene.overlay = overlay::allowed_by_env() && driver.borrow().overlay_failures < overlay::FAILURES_BEFORE_OFF;
-    if !scene.video_play.is_empty() || scene_has_video(&scene, &outputs) {
+    if !scene.video_play.is_empty() || !scene.live.is_empty() || scene_has_video(&scene, &outputs) {
         watch_power(&driver, cx);
     }
+    // Live scenes pause where the desktop can't be seen, like videos.
+    crate::wallpaper_playback::refresh(cx);
     let mut d = driver.borrow_mut();
     if d.last.as_ref() == Some(&scene) {
         return;
@@ -502,21 +513,15 @@ fn video_outputs(cfg: &mandara_config::ShellConfig, outputs: &[String], dark: bo
     if !w.enabled || w.video.still_frame {
         return Vec::new();
     }
-    let videos: Vec<&String> = outputs.iter().filter(|o| effective_wallpaper(w.path.as_ref(), &w.variants, Some(o), dark).is_some_and(|p| video::is_video(&p))).collect();
-    if videos.is_empty() {
-        return Vec::new();
-    }
-    let base = video::Conditions {
-        locked: crate::lock::is_locked(),
-        screens_off: crate::powerctl::idle::manager(cx).is_some_and(|m| m.read(cx).screens_off()),
-        on_battery: crate::powerctl::battery::on_battery(cx),
-        ..video::Conditions::default()
-    };
-    videos
-        .into_iter()
-        .filter(|o| video::may_play(&w.video, &video::Conditions { covered: !crate::wallpaper::desktop_visible(o, cx), fullscreen: crate::wallpaper::fullscreen_on(o, cx), ..base }))
-        .cloned()
-        .collect()
+    let videos: Vec<&String> = outputs.iter().filter(|o| !crate::plugins::external::live::covers(o) && effective_wallpaper(w.path.as_ref(), &w.variants, Some(o), dark).is_some_and(|p| video::is_video(&p))).collect();
+    playing(&w.video, videos, cx)
+}
+
+/// Of `outputs` (showing something that moves), the ones where it may play
+/// now under `rules`.
+fn playing(rules: &mandara_config::desktop::WallpaperVideo, outputs: Vec<&String>, cx: &App) -> Vec<String> {
+    let conditions = crate::wallpaper_playback::conditions(cx);
+    outputs.into_iter().filter(|output| crate::wallpaper_playback::may_play(rules, output, conditions, cx)).cloned().collect()
 }
 
 /// Resolve one desktop scene, including any widget position currently being dragged.
@@ -588,10 +593,20 @@ fn build_scene(outputs: &[String], cx: &mut App) -> Scene {
     // Slideshow changes may have their own transition.
     let mut wallpaper = w.clone();
     crate::slideshow::scene_transition(&mut wallpaper, cx);
+    let live: HashMap<String, Option<PathBuf>> = if w.enabled { crate::plugins::external::live::shown().into_iter().filter(|(o, _)| outputs.contains(o)).collect() } else { HashMap::new() };
+    let live_card_input = live.keys().map(|o| (o.clone(), crate::cards::input_exclusions(o, cx))).collect();
+    // A scene plays under the video wallpaper's pause rules; "still frame"
+    // is a video setting, and a scene was asked for to move.
+    let mut rules = w.video.clone();
+    rules.still_frame = false;
+    let live_play = playing(&rules, live.keys().collect(), cx);
     Scene {
         depth,
         enabled: w.enabled,
         wallpaper,
+        live,
+        live_card_input,
+        live_play,
         dark,
         h24: cfg.general.clock_24h,
         rtl: cfg.general.locale.is_rtl(),
@@ -974,6 +989,7 @@ fn calendar_events(cfg: &mandara_config::ShellConfig, cx: &App) -> Vec<widgets::
 #[derive(Clone, Debug, PartialEq)]
 struct Want {
     path: PathBuf,
+    live: bool,
     fill: WallpaperFill,
     fill_color: String,
     size: (u32, u32),
@@ -1397,7 +1413,7 @@ impl Renderer {
         let mut shown: Vec<(PathBuf, Vec<video::Consumer>)> = Vec::new();
         for out in &self.outs {
             let (Some(geom), Some(slot)) = (out.geom, out.current()) else { continue };
-            if !video::is_video(&slot.want.path) {
+            if slot.want.live || !video::is_video(&slot.want.path) {
                 continue;
             }
             // Mid-transition the plane holds its poster (or last frame).
@@ -1428,11 +1444,30 @@ impl Renderer {
             out.geom = None;
             return Ok(());
         }
-        host.ensure_canvas(id);
+        let live = scene.live.get(&out.name);
+        // On the bottom layer the desktop widgets stay above the scene (on
+        // the background layer) and below windows.
+        if host.ensure_canvas(id, live.map(|_| CanvasLayer::Bottom)) {
+            if let Some(pending) = &out.pending {
+                let _ = self.events.send_blocking(Event::OverlayCancel(id, pending.serial));
+            }
+            out.reset();
+            out.geom = None;
+        }
         let Some(geom) = out.geom else { return Ok(()) };
+        host.exclude_from_input(id, scene.live_card_input.get(&out.name).map_or(&[], Vec::as_slice));
         let w = &scene.wallpaper;
-        let want = effective_wallpaper(w.path.as_ref(), &w.variants, Some(&out.name), scene.dark)
-            .map(|path| Want { fill: video::effective_fill(&path, w.fill), path, fill_color: w.fill_color.clone(), size: geom.physical });
+        // Over a scene the wallpaper isn't painted; a picture of the scene
+        // (else the wallpaper) only chooses the widgets' ink.
+        let ink = live.cloned().flatten();
+        let path = ink.clone().or_else(|| effective_wallpaper(w.path.as_ref(), &w.variants, Some(&out.name), scene.dark));
+        let want = path.map(|path| Want {
+            fill: if ink.is_some() { WallpaperFill::Cover } else { video::effective_fill(&path, w.fill) },
+            path,
+            live: live.is_some(),
+            fill_color: w.fill_color.clone(),
+            size: geom.physical,
+        });
         let Some(want) = want else {
             // Nothing to show: a transparent canvas (another daemon may draw).
             for p in WALLPAPER.into_iter().chain(CUT).chain([RING, HALO, DIGITS, PILL, video::FILL_PLANE]) {
@@ -1753,7 +1788,7 @@ impl Renderer {
 /// The ready depth mask for `want`, if depth applies to it.
 fn mask_for(scene: &Scene, want: &Want) -> Option<CutKey> {
     let w = &scene.wallpaper;
-    if !((w.desktop_clock || scene.widgets.any_behind()) && w.depth_effect && w.fill == WallpaperFill::Cover) || video::is_video(&want.path) {
+    if want.live || !((w.desktop_clock || scene.widgets.any_behind()) && w.depth_effect && w.fill == WallpaperFill::Cover) || video::is_video(&want.path) {
         return None;
     }
     scene.masks.get(&want.path).map(|m| (m.clone(), scene.mask_generation))
@@ -1765,7 +1800,7 @@ fn prep_for(scene: &Scene, out: &Out, want: &Want) -> Option<Prep> {
     use crate::wallpaper_shader::{effective, existing_mask, uses_shader};
     let kind = effective(scene.wallpaper.transition, scene.reduce_motion);
     let shown = out.current()?;
-    if !scene.overlay || !uses_shader(kind) || shown.want.size != want.size || video::is_video(&want.path) || video::is_video(&shown.want.path) {
+    if want.live || shown.want.live || !scene.overlay || !uses_shader(kind) || shown.want.size != want.size || video::is_video(&want.path) || video::is_video(&shown.want.path) {
         return None;
     }
     let sketch = (kind == WallpaperTransition::Sketch).then(|| {
@@ -1915,7 +1950,7 @@ fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: 
             return Ok(());
         }
     }
-    let instant = cut_in || first || size_changed || kind == WallpaperTransition::None || (kind == WallpaperTransition::Fade && !alpha) || (kind != WallpaperTransition::Fade && !host.supports_viewport());
+    let instant = want.live || out.current().is_some_and(|s| s.want.live) || cut_in || first || size_changed || kind == WallpaperTransition::None || (kind == WallpaperTransition::Fade && !alpha) || (kind != WallpaperTransition::Fade && !host.supports_viewport());
     let animated = !instant && incoming != from;
     host.hide(id, WALLPAPER[incoming]);
     host.hide(id, CUT[incoming]);
@@ -1930,14 +1965,16 @@ fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: 
     // A transition shows the whole incoming desktop on the incoming plane
     // (module docs); the wallpaper's own pixels wait for its end.
     let mut baked = None;
-    let painted = host.paint(id, WALLPAPER[incoming], Place::Full, None, false, false, |pm| {
-        pm.data_mut().copy_from_slice(pixmap.data());
-        if animated {
-            baked = bake(pm, out, &slot, scene, cx);
+    if !want.live {
+        let painted = host.paint(id, WALLPAPER[incoming], Place::Full, None, false, false, |pm| {
+            pm.data_mut().copy_from_slice(pixmap.data());
+            if animated {
+                baked = bake(pm, out, &slot, scene, cx);
+            }
+        })?;
+        if !painted {
+            anyhow::bail!("no free buffer for the wallpaper");
         }
-    })?;
-    if !painted {
-        anyhow::bail!("no free buffer for the wallpaper");
     }
     let raw = baked.is_some().then_some(pixmap);
     out.slots[incoming] = Some(slot);
@@ -2480,7 +2517,7 @@ pub fn render_preview(input: &desktop::PreviewInput) -> Result<serde_json::Value
     let scale = scale120 as f32 / mandara_core::shm_canvas::SCALE_DENOMINATOR as f32;
     let (lw, lh) = (pw as f32 / scale, ph as f32 / scale);
     let cfg = &input.cfg;
-    let want = Want { path: input.wallpaper.clone(), fill: cfg.fill, fill_color: cfg.fill_color.clone(), size: (pw, ph) };
+    let want = Want { path: input.wallpaper.clone(), live: false, fill: cfg.fill, fill_color: cfg.fill_color.clone(), size: (pw, ph) };
     let bg = load_background(&want)?;
     let mut canvas = bg.pixmap.clone();
     let fonts = FontNames::from(&input.fonts);

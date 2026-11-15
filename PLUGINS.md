@@ -55,7 +55,7 @@ Contributing to Mandara itself (built-in plugins, Studio, the shell)? See
 12. [Localization](#localization)
 13. [Where plugins live](#where-plugins-live)
 14. [Publishing to the marketplace](#publishing-to-the-marketplace)
-15. [Guidelines](#guidelines)
+15. [Design and quality standard](#design-and-quality-standard)
 
 ## Quick start
 
@@ -395,7 +395,8 @@ the grant stop drawing. Ask only for what you use.
 | `media.control` | `play-pause`, `next`, `previous`, `seek {seconds}`, `volume {level 0–1}`. |
 | `wallpaper.read` | `current` → `{name, image}`; `list {offset, limit ≤ 60}` → `{total, offset, items: [{name, image}]}` of the wallpaper folder. |
 | `wallpaper.set` | `apply {image}`: a handle from `wallpaper.read` or `files.folders` only (needs a user gesture). |
-| `files.folders` | `folders` → the folders the person chose for you in Studio (`{id, name}`, never paths); `list {folder, offset, limit}` → image names and handles; `choose` opens your Studio page to add one (needs a user gesture). |
+| `files.folders` | `folders` → the folders the person chose for you in Studio (`{id, name}`, never paths); `list {folder, offset, limit}` → image names and handles (or `list {project, offset, limit}` for the pictures inside one project); `projects {folder, offset, limit ≤ 60}` → `{total, offset, items: [{project, name, title, kind, live, preview}]}`, the folders directly inside it as opaque project handles, with the title and type from a `project.json`, `live` when it can run as a live wallpaper, and a preview image handle (its declared preview, else its first image, `0` when none); `choose` opens your Studio page to add one (needs a user gesture). |
+| `wallpaper.live` | `render {project, output?}` plays a project handle from `projects` as a live wallpaper, on one display (a name from `status`) or on every display that shows the wallpaper (needs a user gesture) → `{rendering: [outputs], renderer}`; `stop {output?}` ends your scenes → `{stopped}`; `status` → `{renderer, problem?, outputs: [{output, state: off, running, paused or failed, plugin, error}]}`. Needs `files.folders` too. |
 | `notifications.send` | `send {title, body}`. |
 | `windows.read` | `list`, `active` (the JSON of `mandara msg window list` / `window active`). |
 | `windows.control` | `focus {id}`, `close {id}` (closing needs a user gesture). |
@@ -407,14 +408,15 @@ the grant stop drawing. Ask only for what you use.
 | `open.web` | `open {url}`: https only, no user name or password (needs a user gesture). |
 | `osd.show` | `show {title, icon, level 0–100}`. |
 | `theme.control` | `mode {mode: "light" or "dark"}`. |
-| `events` | `subscribe {topic}`: `theme`, `wallpaper`, and with their read capability `windows`, `workspaces` and `power`. Each change arrives as `{topic, value}`. |
+| `events` | `subscribe {topic}`: `theme`, `wallpaper`, and with their read capability `windows`, `workspaces` and `power`, and with `wallpaper.live` `live-wallpaper` (the `outputs` of `status`). Each change arrives as `{topic, value}`. |
 | `timers` | `after {ms}` (5 s to 1 day) or `every {ms}` (at least a minute): wake-ups arrive as replies. Needs no grant. |
 | `launcher.global` | Not a service: lets your `global` launcher providers see plain searches and add results to them (at most 2 plugins are asked per search). |
 | `net:<host>` | `fetch {url, method GET or POST, body}` to exactly that host over HTTPS, port 443, no redirects and no proxy; at most 16 KiB sent and 256 KiB received, 10 s; a host whose address is on your machine or local network is refused. Two requests run at a time for all plugins. |
 | `plugins.call:<id>` | Any operation plugin `<id>` lists in `serves`, with a JSON payload; answered on the next tick (calls never nest). |
 
 **User gestures.** Reading the clipboard, opening a page, setting a
-wallpaper, closing a window and opening the folder chooser only work while
+wallpaper, starting a live wallpaper, closing a window and opening the
+folder chooser only work while
 your plugin handles a click, key press, typed text, launcher choice or
 command: never from a render, a timer or a reply. One gesture allows one
 such request; a request made at another time fails at once.
@@ -448,7 +450,23 @@ update is replaced by its newest); 256 image handles per instance.
   about 40 megapixels; decoded sizes are rounded so the cache stays small.
 - Image handles are opaque and belong to one plugin instance; their files
   are re-checked against the grants before every draw. Folder listings
-  never leave the granted folder (links pointing out are skipped).
+  never leave the granted folder (links pointing out are skipped), and
+  links are resolved when a folder is read, so a folder swapped for a link
+  since it was listed can't lead out either. Project handles die with the
+  folder's grant and are never drawn.
+- Live wallpapers run only a renderer Mandara knows
+  (`linux-wallpaperengine`, a build with `--layer`), found on `PATH` when you
+  ask. Mandara writes its whole command line: the project folder from your
+  handle, checked again inside the granted folder; the display from its own
+  list; your video wallpaper frame-rate limit, sound and mouse off, and its
+  usual pause for fullscreen windows. Plugins never send a program, an argument, a path or
+  an environment variable. Only scene and video projects run (web ones run
+  scripts). The renderer gets no shell, a minimal environment and no
+  input, leads its own process group, and is killed if the shell dies. One
+  runs per display. It is paused (`SIGSTOP`) where the desktop can't be
+  seen, by the video wallpaper rules, and it ends when any wallpaper is
+  applied, either grant is revoked, the plugin is switched off, removed or
+  rebuilt, the display goes away or the shell quits.
 - Payloads never become command lines: window and workspace ids are
   validated, and controls run Mandara's own documented commands.
 - Plugin-to-plugin calls need both sides: the caller's grant and the
@@ -985,19 +1003,128 @@ updates by patch first and the archive as the fallback, swaps the folder
 atomically and keeps the previous one. The shell hot-reloads the plugin and
 its enabled state is kept.
 
-## Guidelines
+## Design and quality standard
 
-- **Be light.** Render small trees, prefer `refresh-ms` of 1000 ms or more,
-  and do no heavy work in `bar()`, which runs on every render.
-- **Be native.** Use tones, not hard-coded colors. Mandara themes your plugin
-  for every palette, light or dark, with wallpaper colors.
+Every plugin, by a person or an AI coding agent, is held to the same bar as
+the built-in ones: it should look designed, feel native, and cost next to
+nothing. **If you are an AI agent, everything in this section is a
+requirement, not a suggestion.** Don't report a plugin as done until each
+pass below has run and found nothing left to fix.
+
+### Design: tasteful and creative, never a template
+
+- **Start from the glance.** Decide what someone needs in one second and
+  make that the hero: one large value or icon, then supporting details in
+  `muted` text. Build the hierarchy from size, weight and tone, not from
+  more colours or more boxes.
+- **Be creative inside the native vocabulary.** Grouped sections, grids,
+  charts, images, meters, sliders and segmented controls go a long way: a
+  meter as a progress arc of the day, a small chart as the story of the
+  week, a grid of images as the hero (see [Designing views](#designing-views)).
+  A card holding a title and three plain text lines is a placeholder, not a
+  design (and `plugins vet` refuses placeholders).
+- **One job per surface.** The bar item is compact: an icon and at most a
+  short value. The panel holds the details and actions. The sidebar card is
+  a summary. The desktop widget is readable from across the room. A Studio
+  tab holds settings and browsing, laid out like Studio's own pages.
+- **Tones, never colours.** Mandara themes every node for each palette,
+  light and dark, from the wallpaper. Use `accent` for the one thing that
+  matters most, `error` / `warning` / `success` only for real states.
+- **A spacing scale.** Pick a few named gaps and sizes (for example 4, 8,
+  12 and 16 px; 13, 16 and 28 px text) and use only those. Keep icon sizes
+  consistent within a row, and give numbers a fixed width so values don't
+  jitter.
+- **Every state is designed.** Loading, empty, error and "nothing today"
+  each get a deliberate view with a short sentence, never a blank card.
+- **Real data only.** Never show made-up values as real.
+- **Words.** Short labels in sentence case. Translations run longer
+  (German) and right to left (Arabic, Persian and Urdu); Mandara mirrors
+  rows for them, so check that nothing clips or reads in the wrong order.
+- **Icons mean what they say.** Sparkles are only for AI features; pick the
+  icon that names the thing.
+
+### Polish: several passes, pixel by pixel
+
+Rebuild and look again after every pass. Inspect real screenshots of the
+bar item, the panel, the sidebar card and any desktop widget; reading the
+code is not looking. In a Mandara checkout, the demo sandbox gives you a
+private desktop for this:
+
+```bash
+cargo xtask sandbox up
+mkdir -p target/sandbox/home/data/mandara/plugins-dev/my-plugin
+# copy plugin.toml, locales/, icons and plugin.wasm there (it hot-reloads)
+cargo xtask sandbox msg plugins enable my-plugin
+cargo xtask sandbox msg panel open my-plugin
+cargo xtask sandbox shot my-plugin-panel.png
+cargo xtask sandbox msg theme mode light                     # then dark
+```
+
+1. **Structure.** Does the tree follow the hierarchy you chose? Remove every
+   node that adds nothing, and flatten wrappers that only add depth.
+2. **Visual.** Light and dark, two or three wallpapers, English and Arabic.
+   Is the hero obvious? Does it look like it belongs next to the built-in
+   media, calendar and weather plugins?
+3. **Pixel.** Zoom in. Equal gaps, aligned edges and baselines, text and
+   icons centred on the same line, nothing truncated or wrapping onto a
+   lonely word, no uneven padding.
+4. **Resources.** The checks in the next section, measured, not assumed.
+5. **Code.** The Rust rules below, Clippy, then `mandara msg plugins vet
+   <dir>`.
+
+If a pass changes anything, run every pass again.
+
+### Resources: extremely light
+
+- **Memory only grows.** A WebAssembly plugin's linear memory never shrinks:
+  whatever you allocate at the peak stays reserved for as long as the
+  plugin runs. Keep peaks small. Stream instead of buffering, reuse one
+  scratch buffer, and give every collection a fixed upper bound (a ring of
+  the last *n* readings, not an ever-growing list).
+- **Render cheaply.** `render` runs for every surface each time it is
+  drawn. Compute when state changes (in `on-event`, or when the time moves past a
+  boundary), keep the result, and only rebuild the small view tree from it.
+  Don't format, parse or sort the same data on every call.
+- **Refresh rarely.** Use `refresh-ms` `0` if only clicks change the view,
+  and otherwise the longest interval that still looks right. A clock showing
+  minutes doesn't need a 250 ms refresh.
+- **Small trees.** Fewer nodes render faster and use less memory on both
+  sides. Never send hidden or off-screen content.
+- **Small binaries.** Few dependencies with `default-features = false`, no
+  heavyweight crates for simple jobs (a hand-written parser beats a regex
+  engine for one format), and the release profile from the example
+  (`opt-level = "s"`, `lto = true`, `strip = true`). Check the size of
+  `plugin.wasm` after each change and keep it as small as you can.
+
+### Rust: no anti-patterns
+
+- **Never panic.** A panic traps and switches your plugin off. No `unwrap`,
+  `expect`, unchecked indexing or `panic!` on any path real input can
+  reach; handle the error and show the designed error state.
+- **Borrow, don't copy.** Pass `&str` and slices. No `.clone()` just to
+  satisfy the borrow checker, no `collect()` only to count, search or
+  iterate once, no `to_string()` on values you only compare.
+- **Allocate once.** `Vec::with_capacity` when the size is known; `write!`
+  into one reused `String` instead of chains of `format!` in hot paths.
+- **Simple state.** Plugin state is shared by the bar item, the panel and
+  the card: keep it in a `thread_local!` or `static` with `Cell`, `RefCell`
+  or atomics. No `static mut`, no `unsafe` you can't justify in a comment,
+  no webs of `Rc<RefCell<…>>`.
+- **Types that say what they mean.** Enums instead of strings and flags,
+  named constants instead of magic numbers, small focused functions.
+- **Clean tools.** `cargo fmt`, and `cargo clippy --release --target
+  wasm32-wasip2 -- -D warnings` prints nothing. Read what
+  `clippy::pedantic` suggests and fix what applies.
+
+### The basics
+
+- **Be native.** Use tones, not hard-coded colors, so your plugin fits
+  every palette.
 - **Name your numbers.** Keep sizes and gaps in named constants, as the
   example does, so the layout is easy to tune.
 - **Be clear.** Use short labels, and give sentences one placeholder per
   value.
 - **Translate.** Ship at least the languages you can review; English is the
   fallback.
-- **Be honest.** Never show made-up data as real (for example, fake
-  visualizer bars).
 - **Ask for little.** Request `commands` only if the plugin really runs
   Mandara commands; users see every permission before they install.

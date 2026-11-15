@@ -228,3 +228,35 @@ fn commands_reach_the_plugin_as_a_gesture() {
     p.on_event(&PluginEvent { context: context(), node: String::new(), action: "remind".into(), value: EventValue::Command(vec!["remind".into(), "tonight".into()]) });
     assert!(log(&mut p).contains("command remind tonight"));
 }
+
+#[test]
+fn project_handles_follow_the_folder_grant_and_are_never_pictures() {
+    use_scratch_cache();
+    let declared = ["files.folders".to_string(), "wallpaper.live".into()];
+    let grant = |caps: &[&str], folders: Vec<PathBuf>| mandara_config::PluginGrant { capabilities: caps.iter().map(|c| c.to_string()).collect(), folders };
+    let both = ["files.folders", "wallpaper.live"];
+    let mut p = extension("ok", Access::from_grant(&declared, Some(&grant(&both, vec!["/steam/431960".into()])))).unwrap();
+    let project = p.issue_image(ImageEntry { path: "/steam/431960/123".into(), origin: ImageOrigin::Project("/steam/431960".into()) }).unwrap();
+    let preview = p.issue_image(ImageEntry { path: "/steam/431960/123/preview.jpg".into(), origin: ImageOrigin::Folder("/steam/431960".into()) }).unwrap();
+    assert!(p.image(project).is_some_and(|e| !e.origin.is_picture()), "a project handle resolves, but never as a picture");
+    assert!(p.image(preview).is_some_and(|e| e.origin.is_picture()));
+    // Revoking only wallpaper.live keeps the folder's handles: discovery
+    // and scenes are granted apart.
+    p.set_access(Access::from_grant(&declared, Some(&grant(&["files.folders"], vec!["/steam/431960".into()]))));
+    assert!(p.image(project).is_some());
+    // The folder taken out of the grant: both handles die at once.
+    p.set_access(Access::from_grant(&declared, Some(&grant(&both, vec!["/elsewhere".into()]))));
+    assert!(p.image(project).is_none() && p.image(preview).is_none());
+}
+
+#[test]
+fn live_wallpapers_are_their_own_grant_and_start_only_from_a_gesture() {
+    let live = Capability::parse("wallpaper.live").unwrap();
+    assert!(live.needs_grant() && live.needs_activation("render"));
+    assert!(!live.needs_activation("stop") && !live.needs_activation("status"));
+    assert_eq!(live.operations(), ["status", "render", "stop"], "no operation takes a program, an argument or a path");
+    let folders_only = Access::new(&["files.folders".into(), "wallpaper.live".into()], &["files.folders".into()]);
+    assert!(folders_only.refuse(&live, "render").unwrap().contains("granted"), "a folder grant doesn't start scenes");
+    let topic = extension::EVENT_TOPICS.iter().find(|(t, _)| *t == "live-wallpaper").unwrap();
+    assert_eq!(topic.1, Some(Capability::WallpaperLive), "its events need the grant too");
+}

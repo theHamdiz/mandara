@@ -3,6 +3,7 @@
 
 pub mod admin;
 pub mod auth_design;
+pub mod bar_display;
 pub mod alerts;
 pub mod app_themes;
 pub mod apps;
@@ -20,6 +21,7 @@ pub mod desktop_widgets;
 pub mod dock;
 pub mod doctor;
 pub mod floating;
+pub mod grain;
 pub mod input;
 pub mod kwin;
 pub mod login_layout;
@@ -44,6 +46,7 @@ pub mod store;
 pub mod studio;
 pub mod keybinds;
 pub mod surfaces;
+pub mod taskbar;
 pub mod upgrade;
 pub mod user_looks;
 pub mod wallgen;

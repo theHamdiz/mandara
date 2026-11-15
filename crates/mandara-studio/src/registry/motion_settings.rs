@@ -18,6 +18,7 @@ const DOCK_INDICATOR: &[(&str, &str)] = &[("spring", tk("Grow")), ("fade", tk("F
 const DOCK_MINIMIZE: &[(&str, &str)] = &[("dip", tk("Dip")), ("pulse", tk("Pulse")), ("none", tk("Off"))];
 const DOCK_ITEMS: &[(&str, &str)] = &[("spring", tk("Grow")), ("fade", tk("Fade")), ("none", tk("Instant"))];
 const DOCK_REVEAL: &[(&str, &str)] = &[("slide", tk("Slide")), ("fade", tk("Fade")), ("scale", tk("Zoom"))];
+const DOCK_HOVER: &[(&str, &str)] = &[("none", tk("Off")), ("lift", tk("Lift")), ("highlight", tk("Highlight"))];
 
 /// `[compositor.look.windows] style`, in `WindowStyle::ALL`'s order.
 const WINDOW_STYLES: &[(&str, &str)] = &[
@@ -115,6 +116,7 @@ pub(super) fn entries() -> Vec<Setting> {
         ("/dock/motion/minimize", tk("Minimizing"), tk("The app's icon answers when one of its windows minimizes"), DOCK_MINIMIZE),
         ("/dock/motion/items", tk("Adding and removing"), tk("New icons grow in, removed ones shrink out and the others slide over, also when you reorder them"), DOCK_ITEMS),
         ("/dock/motion/reveal", tk("Showing and hiding"), tk("How the dock comes and goes, auto-hide included"), DOCK_REVEAL),
+        ("/dock/motion/hover", tk("Hover"), tk("The icon under the pointer rises a little or gets a soft plate behind it, on a spring"), DOCK_HOVER),
     ] {
         entries.push(s(Motion, tk("Dock"), path, label, detail, Choice(choices)));
     }
@@ -140,7 +142,7 @@ mod tests {
 
     #[test]
     fn dock_motion_choices_match_the_config() {
-        use mandara_config::dock::{AttentionFeedback, DockReveal, IndicatorMotion, ItemMotion, LaunchFeedback, MinimizeFeedback};
+        use mandara_config::dock::{AttentionFeedback, DockReveal, HoverMotion, IndicatorMotion, ItemMotion, LaunchFeedback, MinimizeFeedback};
         fn ids<T: serde::Serialize>(all: &[T]) -> Vec<String> {
             all.iter().map(|v| serde_json::to_value(v).unwrap().as_str().unwrap().to_string()).collect()
         }
@@ -153,5 +155,6 @@ mod tests {
         assert_eq!(ids(&MinimizeFeedback::ALL), shown(super::DOCK_MINIMIZE));
         assert_eq!(ids(&ItemMotion::ALL), shown(super::DOCK_ITEMS));
         assert_eq!(ids(&DockReveal::ALL), shown(super::DOCK_REVEAL));
+        assert_eq!(ids(&HoverMotion::ALL), shown(super::DOCK_HOVER));
     }
 }

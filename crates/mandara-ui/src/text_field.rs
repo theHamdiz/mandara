@@ -62,6 +62,8 @@ pub struct TextField {
     /// Sits inside a search box that draws the field's design around it
     /// ([`crate::components::inputs`]).
     embedded: bool,
+    /// Draws only its text (a toolbar draws the box): [`Self::bare`].
+    bare: bool,
     /// Draws every design whatever `style.input_design` says (Studio's
     /// previews).
     design: Option<crate::components::InputDesign>,
@@ -100,6 +102,7 @@ impl TextField {
             dirty: false,
             commit_on_click_out: true,
             embedded: false,
+            bare: false,
             design: None,
             shown_focus: false,
             max_bytes: None,
@@ -118,6 +121,13 @@ impl TextField {
     /// the field itself draws only its text.
     pub fn embedded(mut self) -> Self {
         self.embedded = true;
+        self
+    }
+
+    /// Draws only the text, never a box, in every design: the field sits in
+    /// a toolbar or search bar that draws the shape around it.
+    pub fn bare(mut self) -> Self {
+        self.bare = true;
         self
     }
 
@@ -849,7 +859,7 @@ impl Render for TextField {
         // the other designs draw theirs, or none inside a search box.
         let design = self.design.unwrap_or_else(crate::style::input_design);
         let classic = design == crate::components::InputDesign::Classic;
-        let bare = !classic && self.embedded;
+        let bare = self.bare || (!classic && self.embedded);
         // The outlined design's hint floats into its edge once the field is
         // focused or holds text (single-line fields with a hint).
         let label = (design == crate::components::InputDesign::Outlined
@@ -866,7 +876,9 @@ impl Render for TextField {
             .when(multiline, |el| {
                 el.min_h(px(96.0)).py(px(8.0)).line_height(px(19.0))
             });
-        let el = if classic {
+        let el = if bare {
+            el
+        } else if classic {
             el.px(px(12.0))
                 .rounded(px(crate::style::radius(10.0)))
                 .bg(palette.surface_container_high.hsla())
@@ -876,8 +888,6 @@ impl Render for TextField {
                 } else {
                     palette.surface_container_high.hsla()
                 })
-        } else if bare {
-            el
         } else {
             crate::components::inputs::dress_labelled(
                 el.relative().px(px(DESIGNED_PAD_X_PX)),

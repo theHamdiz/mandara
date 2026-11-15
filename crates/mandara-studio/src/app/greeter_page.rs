@@ -46,8 +46,35 @@ use super::StudioView;
 use super::choice::{ChoiceItem, GREETER_CHOICE, placed};
 use crate::tokens::*;
 
-mod look_thumb;
+pub(super) mod look_thumb;
 mod manager;
+
+/// A design's card, shared by the Login looks and the Lock designs: the
+/// screen in miniature, its name (with "In use" on the chosen one) and a
+/// line about it.
+pub(super) fn look_card(id: impl Into<gpui::ElementId>, thumb: AnyElement, on: bool, name: String, in_use: String, summary: String, p: &MandaraPalette) -> gpui::Stateful<gpui::Div> {
+    div()
+        .id(id)
+        .h_full()
+        .p(px(SPACE_8_PX))
+        .rounded(px(RADIUS_14_PX))
+        .cursor_pointer()
+        .border_2()
+        .border_color(if on { p.primary.hsla() } else { gpui::transparent_black() })
+        .bg(p.surface_container_high.hsla())
+        .hover(|s| s.bg(p.surface_container.hsla()))
+        .child(thumb)
+        .child(div().pt(px(SPACE_8_PX)).row().items_center().gap(px(SPACE_6_PX)).child(div().text_size(px(TEXT_13_PX)).font_weight(gpui::FontWeight::SEMIBOLD).child(name)).when(on, |el| el.child(div().text_size(px(TEXT_11_PX)).text_color(p.primary.hsla()).child(in_use))))
+        .child(div().pt(px(SPACE_3_PX)).text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(summary))
+}
+
+/// The design cards' grid, at most three across (six make 3 × 2), and a
+/// miniature's size for a card of that grid.
+pub(super) fn look_grid(avail: f32) -> (super::grid::GridFit, f32, f32) {
+    let fit = super::grid::fit(avail, LOOK_GRID).at_most(LOOK_COLUMNS).balanced(LOOKS.len());
+    let thumb_w = (fit.card_w - 2.0 * (SPACE_8_PX + BORDER_2_PX)).max(1.0);
+    (fit, thumb_w, (thumb_w * LOOK_THUMB_ASPECT).floor())
+}
 
 /// The Looks tab's cards: three to a row (six looks make 3 × 2), fewer
 /// when the page is narrow.
@@ -911,9 +938,7 @@ impl GreeterPage {
     /// listed, sessions, language and folders stay).
     fn looks_group(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let current = self.draft.current_look();
-        let fit = super::grid::fit(self.width.get() - 2.0 * SPACE_10_PX, LOOK_GRID).at_most(LOOK_COLUMNS).balanced(LOOKS.len());
-        let thumb_w = (fit.card_w - 2.0 * (SPACE_8_PX + BORDER_2_PX)).max(1.0);
-        let thumb_h = (thumb_w * LOOK_THUMB_ASPECT).floor();
+        let (fit, thumb_w, thumb_h) = look_grid(self.width.get() - 2.0 * SPACE_10_PX);
         let mut cards: Vec<AnyElement> = Vec::new();
         for (i, (id, name, summary)) in LOOKS.into_iter().enumerate() {
             let mut probe = self.draft.clone();
@@ -925,25 +950,13 @@ impl GreeterPage {
             let pal = mandara_greeter::view::palette_for(&probe);
             let on = current == Some(id);
             cards.push(
-                div()
-                    .id(("look", i))
-                    .h_full()
-                    .p(px(SPACE_8_PX))
-                    .rounded(px(RADIUS_14_PX))
-                    .cursor_pointer()
-                    .border_2()
-                    .border_color(if on { p.primary.hsla() } else { gpui::transparent_black() })
-                    .bg(p.surface_container_high.hsla())
-                    .hover(|s| s.bg(p.surface_container.hsla()))
+                look_card(("look", i), look_thumb::thumb(&probe, &pal, thumb_w, thumb_h), on, tl(name), tl("In use"), tl(summary), p)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.selected = None;
                         this.edit(cx, move |c| {
                             c.apply_look(id);
                         })
                     }))
-                    .child(look_thumb::thumb(&probe, &pal, thumb_w, thumb_h))
-                    .child(div().pt(px(SPACE_8_PX)).row().items_center().gap(px(SPACE_6_PX)).child(div().text_size(px(TEXT_13_PX)).font_weight(gpui::FontWeight::SEMIBOLD).child(tl(name))).when(on, |el| el.child(div().text_size(px(TEXT_11_PX)).text_color(p.primary.hsla()).child(tl("In use")))))
-                    .child(div().pt(px(SPACE_3_PX)).text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(tl(summary)))
                     .into_any_element(),
             );
         }

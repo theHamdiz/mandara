@@ -56,7 +56,7 @@ fn bordered(el: gpui::Div) -> gpui::Div {
 }
 
 /// The look `cfg` (already applied) in a `w × h` miniature.
-pub(super) fn thumb(cfg: &GreeterConfig, pal: &MandaraPalette, w: f32, h: f32) -> AnyElement {
+pub(in crate::app) fn thumb(cfg: &GreeterConfig, pal: &MandaraPalette, w: f32, h: f32) -> AnyElement {
     let m = Mini { sc: w / REF_W, w, h };
     let ink = mandara_greeter::view::foreground(cfg);
     let accent = pal.primary.with_lightness(pal.primary.lightness().max(ACCENT_L));

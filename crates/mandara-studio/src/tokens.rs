@@ -465,3 +465,36 @@ pub const GREETER_SWATCH_ASPECT: f32 = 44.0 / 102.0;
 pub const MIXER_NAME_SHARE: f32 = 0.3;
 /// …this wide.
 pub const MIXER_NAME_MAX_W_PX: f32 = 200.0;
+
+// ── Grouped lists (`app::grouped`) ────────────────────────────────────
+/// An inset group's corner radius (unless a Studio card design sets one).
+pub const GROUP_RADIUS_PX: f32 = 16.0;
+/// A grouped row: its least height…
+pub const GROUP_ROW_MIN_H_PX: f32 = 52.0;
+/// …side padding…
+pub const GROUP_ROW_PAD_X_PX: f32 = 16.0;
+/// …top and bottom padding…
+pub const GROUP_ROW_PAD_Y_PX: f32 = 11.0;
+/// …and the gap between its icon tile and text.
+pub const GROUP_ROW_GAP_PX: f32 = 12.0;
+/// A grouped row's icon tile and its corner radius.
+pub const GROUP_TILE_PX: f32 = 30.0;
+pub const GROUP_TILE_RADIUS_PX: f32 = 8.0;
+/// The widest trailing value (a path, a build) before it ends in an ellipsis.
+pub const GROUP_VALUE_MAX_W_PX: f32 = 420.0;
+/// The gap between a group's header and its surface.
+pub const GROUP_HEADER_GAP_PX: f32 = 10.0;
+/// The gap between a page's grouped sections.
+pub const GROUP_SECTION_GAP_PX: f32 = 28.0;
+/// Hairlines between rows: ink at this opacity on dark and light themes
+/// (light surfaces need a little more to read).
+pub const GROUP_HAIRLINE_DARK_ALPHA: f32 = 0.07;
+pub const GROUP_HAIRLINE_LIGHT_ALPHA: f32 = 0.09;
+
+// ── Page headers ──────────────────────────────────────────────────────
+/// A page's large title (smaller with the narrow gutter).
+pub const PAGE_TITLE_PX: f32 = 30.0;
+pub const PAGE_TITLE_SMALL_PX: f32 = 24.0;
+/// The line under the title.
+pub const PAGE_SUBTITLE_PX: f32 = 14.0;
+pub const PAGE_SUBTITLE_LEADING_PX: f32 = 20.0;

@@ -251,13 +251,14 @@ impl TimeCard {
 
     fn entry(p: &MandaraPalette, ic: &'static str, name: String, sub: String, ok: bool, control: Option<AnyElement>) -> AnyElement {
         div()
-            .min_h(px(DIM_52_PX))
-            .px(px(SPACE_14_PX))
-            .py(px(SPACE_8_PX))
+            .w_full()
+            .min_h(px(GROUP_ROW_MIN_H_PX))
+            .px(px(GROUP_ROW_PAD_X_PX))
+            .py(px(GROUP_ROW_PAD_Y_PX))
             .row()
             .items_center()
-            .gap(px(SPACE_12_PX))
-            .child(div().size(px(DIM_32_PX)).flex_none().rounded(px(RADIUS_10_PX)).bg(p.surface_container_high.hsla()).row().items_center().justify_center().child(icon(ic, ICON_15_PX, if ok { p.success_emerald } else { p.primary })))
+            .gap(px(GROUP_ROW_GAP_PX))
+            .child(super::grouped::tile(ic, ok, p))
             .child(
                 div()
                     .flex_1()
@@ -318,7 +319,7 @@ impl Render for TimeCard {
         let mut banner = None;
         match self.status.clone() {
             None => rows.push(Self::entry(&p, "globe", t("Time zone").to_string(), t("Checking…").to_string(), false, None)),
-            Some(Err(e)) => rows.push(Self::entry(&p, "globe", t("Time zone").to_string(), tf("Couldn't read the clock: {error}", &[("error", &e)]), false, None)),
+            Some(Err(e)) => rows.push(super::grouped::notice_row("globe", p.warning_amber, t("Time zone"), tf("Couldn't read the clock: {error}", &[("error", &e)]), &p)),
             Some(Ok(s)) => {
                 if let Some(zone) = timedate::mismatch(&s.timezone, &location_zone, chrono::Utc::now()) {
                     banner = Some(self.mismatch_banner(&p, &s.timezone, zone, &place, cx));
@@ -366,10 +367,10 @@ impl Render for TimeCard {
         div()
             .row()
             .flex_col()
-            .gap(px(SPACE_6_PX))
-            .child(div().px(px(SPACE_6_PX)).row().items_center().justify_between().child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface_variant.hsla()).child(t("System clock"))).child(refresh))
+            .gap(px(GROUP_HEADER_GAP_PX))
+            .child(super::grouped::header(t("System clock"), None, vec![refresh.into_any_element()], &p))
             .children(banner)
-            .child(div().row().flex_col().py(px(SPACE_4_PX)).rounded(px(RADIUS_18_PX)).bg(p.surface_container.hsla()).children(rows))
+            .child(super::grouped::group(rows, true, &p))
             .when_some(self.message.clone(), |el, (ok, text)| el.child(div().px(px(SPACE_6_PX)).text_size(px(TEXT_12_PX)).text_color(if ok { p.on_surface_variant.hsla() } else { p.urgent_coral.hsla() }).child(text)))
     }
 }

@@ -89,6 +89,16 @@ impl FnView {
     pub fn observe_too<T: 'static>(&mut self, source: &gpui::Entity<T>, cx: &mut Context<Self>) {
         self._subscriptions.push(cx.observe(source, |_, _, cx| cx.notify()));
     }
+
+    /// Runs `f` whenever `source` notifies, for as long as this view lives,
+    /// and re-renders only when it returns `true` ([`super::follow_with`]).
+    pub fn observe_with<T: 'static>(&mut self, source: &gpui::Entity<T>, mut f: impl FnMut(gpui::Entity<T>, &mut App) -> bool + 'static, cx: &mut Context<Self>) {
+        self._subscriptions.push(cx.observe(source, move |_, source, cx| {
+            if f(source, cx) {
+                cx.notify();
+            }
+        }));
+    }
 }
 
 impl Render for FnView {

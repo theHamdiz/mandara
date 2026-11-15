@@ -57,6 +57,9 @@ pub struct Updates {
     pub(super) plugin_message: Option<(bool, String)>,
     /// About → What's new: the release shown open (the running one first).
     pub(super) whats_new: Option<String>,
+    /// About → What's new: the newest releases, parsed on About's first
+    /// show and dropped when it closes (never the whole history).
+    pub(super) changelog: Option<Vec<mandara_version::changelog::Release>>,
     /// The card's own background follows the update (download, apply,
     /// failure, success).
     fill: mandara_ui::progress_fill::ProgressFill,

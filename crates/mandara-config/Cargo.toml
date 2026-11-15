@@ -30,7 +30,6 @@ rustix.workspace = true
 # MangoWM resolves bind keys to keycodes; conflict checks must too.
 xkbcommon = { workspace = true }
 
-[dev-dependencies]
 tempfile.workspace = true
 
 [lints]

@@ -1203,16 +1203,28 @@ pub fn ensure_default_cursor_at(path: &Path, theme: &str) -> std::io::Result<boo
 
 // ── xkb catalog ─────────────────────────────────────────────────────────────
 
+/// One variant of an xkb layout.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct XkbVariant {
+    pub name: String,
+    pub description: String,
+    /// Listed only in xkeyboard-config's extras (`evdev.extras.xml`): rarer
+    /// layouts such as Arabic (ErgoArabic) that `evdev.lst` leaves out.
+    pub extra: bool,
+}
+
 /// One layout from the xkb rules list, with its variants.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct XkbLayout {
     pub name: String,
     pub description: String,
-    /// `(variant, description)`.
-    pub variants: Vec<(String, String)>,
+    pub variants: Vec<XkbVariant>,
+    /// The whole layout comes from the extras (see [`XkbVariant::extra`]).
+    pub extra: bool,
 }
 
-/// Layouts and `grp:` (layout switching) options from `evdev.lst`.
+/// Layouts and `grp:` (layout switching) options from `evdev.lst`, with
+/// the extras' layouts and variants merged in.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct XkbCatalog {
     pub layouts: Vec<XkbLayout>,
@@ -1220,7 +1232,23 @@ pub struct XkbCatalog {
     pub switch_options: Vec<(String, String)>,
 }
 
-pub const XKB_RULES: &str = "/usr/share/X11/xkb/rules/evdev.lst";
+/// xkeyboard-config's rules folder on the installed platform.
+pub const XKB_RULES_DIR: &str = xkb_rules_dir(cfg!(target_os = "freebsd"));
+
+const fn xkb_rules_dir(freebsd: bool) -> &'static str {
+    if freebsd { "/usr/local/share/X11/xkb/rules" } else { "/usr/share/X11/xkb/rules" }
+}
+
+fn system_xkb_catalog(root: &Path, freebsd: bool) -> XkbCatalog {
+    xkb_catalog_in(&root.join(xkb_rules_dir(freebsd).trim_start_matches('/')))
+}
+
+/// The main list, then its XML form when a distribution ships only that.
+const XKB_BASE_FILES: [&str; 2] = ["evdev.lst", "evdev.xml"];
+/// The extras: rarer layouts and variants, which the main list leaves out.
+const XKB_EXTRA_FILES: [&str; 2] = ["evdev.extras.lst", "evdev.extras.xml"];
+/// More XML nodes than any real registry has (evdev.xml has about 60 000).
+const XKB_XML_NODES_MAX: u32 = 1_000_000;
 
 /// Parses the `! layout`, `! variant` and `! option` sections of an
 /// `evdev.lst`.
@@ -1246,13 +1274,13 @@ pub fn parse_xkb_list(text: &str) -> XkbCatalog {
             None => (line, ""),
         };
         match section {
-            "layout" => cat.layouts.push(XkbLayout { name: key.into(), description: desc.into(), variants: Vec::new() }),
+            "layout" => cat.layouts.push(XkbLayout { name: key.into(), description: desc.into(), ..Default::default() }),
             "variant" => {
                 // `variant  layout: Description`
                 if let Some((layout, d)) = desc.split_once(':')
                     && let Some(l) = cat.layouts.iter_mut().find(|l| l.name == layout.trim())
                 {
-                    l.variants.push((key.into(), d.trim().into()));
+                    l.variants.push(XkbVariant { name: key.into(), description: d.trim().into(), extra: false });
                 }
             }
             "option" if key.starts_with("grp:") => cat.switch_options.push((key.into(), desc.into())),
@@ -1262,8 +1290,94 @@ pub fn parse_xkb_list(text: &str) -> XkbCatalog {
     cat
 }
 
+/// Parses an xkb registry (`evdev.xml`, `evdev.extras.xml`): its layouts
+/// with their variants, and the `grp:` options. A malformed file gives an
+/// empty catalog.
+pub fn parse_xkb_xml(text: &str) -> XkbCatalog {
+    let options = roxmltree::ParsingOptions { allow_dtd: true, nodes_limit: XKB_XML_NODES_MAX, ..Default::default() };
+    let Ok(doc) = roxmltree::Document::parse_with_options(text, options) else { return XkbCatalog::default() };
+    fn child<'a, 'i>(n: roxmltree::Node<'a, 'i>, tag: &str) -> Option<roxmltree::Node<'a, 'i>> {
+        n.children().find(|c| c.has_tag_name(tag))
+    }
+    // A `configItem`'s name and description.
+    fn item(n: roxmltree::Node<'_, '_>) -> Option<(String, String)> {
+        let config = child(n, "configItem")?;
+        let text = |tag| child(config, tag).and_then(|t| t.text()).map(str::trim).unwrap_or_default();
+        let name = text("name");
+        (!name.is_empty()).then(|| (name.to_string(), text("description").to_string()))
+    }
+    let mut cat = XkbCatalog::default();
+    let root = doc.root_element();
+    for layout in child(root, "layoutList").into_iter().flat_map(|l| l.children().filter(|c| c.has_tag_name("layout"))) {
+        let Some((name, description)) = item(layout) else { continue };
+        let variants = child(layout, "variantList")
+            .into_iter()
+            .flat_map(|v| v.children().filter(|c| c.has_tag_name("variant")))
+            .filter_map(item)
+            .map(|(name, description)| XkbVariant { name, description, extra: false })
+            .collect();
+        cat.layouts.push(XkbLayout { name, description, variants, extra: false });
+    }
+    for group in child(root, "optionList").into_iter().flat_map(|o| o.children().filter(|c| c.has_tag_name("group"))) {
+        if item(group).is_none_or(|(name, _)| name != "grp") {
+            continue;
+        }
+        cat.switch_options.extend(group.children().filter(|c| c.has_tag_name("option")).filter_map(item));
+    }
+    cat
+}
+
+/// Parses a rules file by its form: `.xml` or `.lst`.
+fn parse_xkb_file(path: &Path) -> Option<XkbCatalog> {
+    let text = std::fs::read_to_string(path).ok()?;
+    Some(if path.extension().is_some_and(|e| e == "xml") { parse_xkb_xml(&text) } else { parse_xkb_list(&text) })
+}
+
+impl XkbCatalog {
+    /// Adds `extras`' layouts and variants this catalog lacks, marked
+    /// [`extra`](XkbVariant::extra), keeping the layouts sorted by name.
+    pub fn merge_extras(&mut self, extras: XkbCatalog) {
+        for mut layout in extras.layouts {
+            for v in &mut layout.variants {
+                v.extra = true;
+            }
+            match self.layouts.iter_mut().find(|l| l.name == layout.name) {
+                Some(known) => {
+                    for v in layout.variants {
+                        if !known.variants.iter().any(|k| k.name == v.name) {
+                            known.variants.push(v);
+                        }
+                    }
+                }
+                None => {
+                    layout.extra = true;
+                    let at = self.layouts.partition_point(|l| l.name < layout.name);
+                    self.layouts.insert(at, layout);
+                }
+            }
+        }
+        for option in extras.switch_options {
+            if !self.switch_options.iter().any(|(o, _)| *o == option.0) {
+                self.switch_options.push(option);
+            }
+        }
+    }
+}
+
+/// The catalog in a rules folder: `evdev.lst` (or `evdev.xml`), then the
+/// extras (`evdev.extras.lst` or `evdev.extras.xml`) merged in.
+pub fn xkb_catalog_in(rules: &Path) -> XkbCatalog {
+    let first = |files: [&str; 2]| files.iter().find_map(|f| parse_xkb_file(&rules.join(f)));
+    let mut cat = first(XKB_BASE_FILES).unwrap_or_default();
+    if let Some(extras) = first(XKB_EXTRA_FILES) {
+        cat.merge_extras(extras);
+    }
+    cat
+}
+
+/// The system's catalog (read and parsed on each call: cache the result).
 pub fn xkb_catalog() -> XkbCatalog {
-    std::fs::read_to_string(XKB_RULES).map(|t| parse_xkb_list(&t)).unwrap_or_default()
+    system_xkb_catalog(Path::new("/"), cfg!(target_os = "freebsd"))
 }
 
 impl XkbCatalog {
@@ -1271,7 +1385,7 @@ impl XkbCatalog {
     /// (`English (US)` → `us`, `Arabic (Eastern Arabic numerals)` → `ara`).
     pub fn name_for(&self, description: &str) -> Option<&str> {
         let d = description.trim();
-        self.layouts.iter().find(|l| l.description == d || l.variants.iter().any(|(_, vd)| vd == d)).map(|l| l.name.as_str())
+        self.layouts.iter().find(|l| l.description == d || l.variants.iter().any(|v| v.description == d)).map(|l| l.name.as_str())
     }
 }
 
@@ -1461,17 +1575,71 @@ pub(crate) mod tests {
         assert_eq!(cat.name_for("English (US)"), Some("us"));
         assert_eq!(cat.name_for("Klingon"), None);
         assert_eq!(cat.layouts.len(), 2);
-        assert_eq!(cat.layouts[1].variants, vec![("digits".to_string(), "Arabic (Eastern Arabic numerals)".to_string())]);
+        assert_eq!(cat.layouts[1].variants, vec![XkbVariant { name: "digits".into(), description: "Arabic (Eastern Arabic numerals)".into(), extra: false }]);
         assert_eq!(cat.switch_options, vec![("grp:alt_shift_toggle".to_string(), "Alt+Shift".to_string())]);
     }
 
+    fn xkb_fixture(name: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/xkb").join(name)
+    }
+
+    fn variant_names(layout: &XkbLayout) -> Vec<(&str, bool)> {
+        layout.variants.iter().map(|v| (v.name.as_str(), v.extra)).collect()
+    }
+
     #[test]
-    fn system_xkb_list_parses_when_present() {
-        let cat = xkb_catalog();
-        if std::path::Path::new(XKB_RULES).exists() {
-            assert!(cat.layouts.iter().any(|l| l.name == "us"));
-            assert!(!cat.switch_options.is_empty());
+    fn system_catalog_reads_freebsd_local_prefix_with_its_extras() {
+        let root = tempfile::tempdir().unwrap();
+        let freebsd = root.path().join("usr/local/share/X11/xkb/rules");
+        let linux = root.path().join("usr/share/X11/xkb/rules");
+        std::fs::create_dir_all(&freebsd).unwrap();
+        std::fs::create_dir_all(&linux).unwrap();
+        std::fs::write(linux.join("evdev.lst"), "! layout\n us English (US)\n").unwrap();
+        for name in ["evdev.lst", "evdev.extras.xml"] {
+            std::fs::copy(xkb_fixture("lst").join(name), freebsd.join(name)).unwrap();
         }
+        let local = system_xkb_catalog(root.path(), true);
+        assert!(local.layouts.iter().any(|layout| layout.name == "ara" && layout.variants.iter().any(|variant| variant.name == "ergoarabic" && variant.extra)));
+        let system = system_xkb_catalog(root.path(), false);
+        assert_eq!(system.layouts.len(), 1);
+        assert_eq!(system.layouts[0].name, "us");
+    }
+
+    #[test]
+    fn extras_add_rare_layouts_and_variants_such_as_ergoarabic() {
+        let cat = xkb_catalog_in(&xkb_fixture("lst"));
+        let names: Vec<(&str, bool)> = cat.layouts.iter().map(|l| (l.name.as_str(), l.extra)).collect();
+        // New layouts slot in by name; known ones stay as evdev.lst has them.
+        assert_eq!(names, [("apl", true), ("ara", false), ("trans", true), ("us", false)]);
+        let ara = &cat.layouts[1];
+        assert_eq!(
+            variant_names(ara),
+            [("azerty", false), ("digits", false), ("sun_type6", true), ("basic_ext", true), ("basic_ext_digits", true), ("ergoarabic", true)]
+        );
+        assert_eq!(cat.name_for("Arabic (ErgoArabic)"), Some("ara"));
+        assert_eq!(variant_names(&cat.layouts[0]), [("dyalog", true)]);
+        // XML text is unescaped.
+        assert_eq!(cat.layouts[2].description, "Hindi & Sanskrit (transliteration)");
+        // Only `grp:` options, each once.
+        assert_eq!(cat.switch_options, [("grp:alt_shift_toggle".to_string(), "Alt+Shift".to_string()), ("grp:menu_toggle".to_string(), "Menu".to_string())]);
+    }
+
+    #[test]
+    fn registry_xml_is_read_when_there_is_no_list_and_extras_lst_wins() {
+        let cat = xkb_catalog_in(&xkb_fixture("xml"));
+        let names: Vec<(&str, bool)> = cat.layouts.iter().map(|l| (l.name.as_str(), l.extra)).collect();
+        assert_eq!(names, [("ara", true), ("us", false)]);
+        assert_eq!(variant_names(&cat.layouts[0]), [("ergoarabic", true)]);
+        assert_eq!(variant_names(&cat.layouts[1]), [("intl", false)]);
+        assert_eq!(cat.switch_options, [("grp:win_space_toggle".to_string(), "Win+Space".to_string())]);
+    }
+
+    #[test]
+    fn missing_or_malformed_rules_give_an_empty_catalog() {
+        assert_eq!(xkb_catalog_in(&xkb_fixture("absent")), XkbCatalog::default());
+        assert_eq!(parse_xkb_xml("<xkbConfigRegistry><layoutList><layout>"), XkbCatalog::default());
+        // A layout without a name is skipped, not invented.
+        assert!(parse_xkb_xml("<xkbConfigRegistry><layoutList><layout><configItem><description>X</description></configItem></layout></layoutList></xkbConfigRegistry>").layouts.is_empty());
     }
 
     #[test]

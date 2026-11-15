@@ -24,7 +24,25 @@
     its windows minimizes; icons grow in, shrink out and slide over when
     you add, remove or reorder them; and the dock slides, fades or zooms
     in and out. Pick each style (or turn it off) in **Studio → Motion →
-    Dock**; see [Motion](motion.md#dock).
+    Dock**; see [Motion](motion.md#dock). A **Hover** style there makes
+    the icon under the pointer rise a little or gain a soft plate behind it.
+  - **Material and grain:** the dock is *Classic glass* (the frame colour,
+    a 1 px specular rim and a soft shadow) or *Liquid glass*: a translucent
+    tinted body that deepens toward the bottom, a bright top edge, light
+    gathered inside its edges and a soft lens across its upper half, with
+    **Gloss** and **Refraction** to taste. Both are drawn by Mandara itself,
+    so they look the same with or without your compositor's blur, and keep
+    their shadows tight. Either can wear **grain** (*Fine*, *Film*, *Paper
+    fibre* or *Speckle*, neutral or in the theme's surface colour, with its
+    strength, speck size and contrast): one small tile drawn once in the
+    background and painted pixel for pixel, so it stays crisp at fractional
+    scales. Every edge, icon and mark lands on the device pixel grid, and
+    the hover plate's corners are concentric with the glass round it.
+  - **Indicators and labels:** running apps get one dot, a dot per window,
+    a bar, a soft line of light (*Glow*) or nothing; separators are a
+    hairline or only a gap; app names show as a pill or in the dock's own
+    material, at once or after a delay you set (then they follow the
+    pointer from icon to icon at once).
   - **Right-click any icon** for its windows, New Window and the app's own
     actions, **Options ▸ Keep in Dock ✓ · Open at Login ✓ · Show in
     Files**, Show All Windows, Hide and Quit / Force Quit. Unpinning a
@@ -68,7 +86,14 @@
   every look: `/`, `=`, the AI Shell Agent's `!` while it is switched on
   ([Local shell commands](command-agent.md)), then each provider that is on
   with the prefix you gave it. It follows Studio while the launcher is open.
-  It learns what you open (frecency, kept on this computer), shows pinned
+  Recent-file metadata, usage history, wallpaper folders, apps and icons load in the
+  background, so a slow drive keeps typing and other shell commands responsive.
+  Selection follows the same item when the results refresh. Catalog snapshots
+  are released after the last launcher closes. `launcher search` and
+  `launcher run` wait only for the data they need and stop waiting after ten
+  seconds if a drive does not respond.
+  It learns what you open (frecency, kept on this computer, with up to 1,024
+  recent ranking entries), shows pinned
   and recent apps first, and lists desktop actions (*New Private Window*).
   **Put it anywhere:** float it in the middle of the screen or attach it to
   the top or bottom edge at the left, middle or right. On the bar's edge it

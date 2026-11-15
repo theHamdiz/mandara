@@ -14,7 +14,6 @@ use gpui::{
 use mandara_config::ShellConfig;
 use mandara_core::ToGpui;
 use mandara_i18n::{t, tf, tk, tr};
-use mandara_plugins::{PluginOrigin, PluginRegistry};
 use mandara_theme::MandaraPalette;
 use mandara_ui::icons::icon;
 use mandara_ui::state::{config, update_config};
@@ -31,6 +30,7 @@ mod recorder_row;
 mod store_page;
 pub(crate) use store_page::{HIDDEN_PLUGINS, PLUGIN_CATEGORIES, plugin_art_cache_clear, plugin_icon, plugin_tile};
 mod about_links;
+mod about_page;
 mod admin_run;
 mod bars_page;
 mod designer;
@@ -73,6 +73,7 @@ mod dock_page;
 mod form;
 mod frame_meter;
 pub(crate) mod grid;
+mod grouped;
 mod icons_page;
 mod input_page;
 mod keybind_conflicts;
@@ -103,6 +104,7 @@ mod swatch_list;
 mod switcher_page;
 mod theme_galleries;
 mod themes_page;
+mod typography_page;
 mod wallgen_logic;
 mod wallgen_page;
 pub mod wallpaper_page;
@@ -133,6 +135,10 @@ fn begin_move(window: &mut Window) {
 }
 
 pub struct StudioView {
+    /// Lock → the design gallery's miniatures (each design applied to a
+    /// login config, with its palette), made on first show and dropped
+    /// with the page.
+    lock_designs: Option<Rc<[(mandara_greeter::config::GreeterConfig, MandaraPalette)]>>,
     agent_page: Option<Entity<agent_page::AgentPage>>,
     motion_preview: Option<Entity<motion_page::Preview>>,
     section: Section,
@@ -283,7 +289,7 @@ impl StudioView {
         });
         Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None,
             app_templates: Default::default(),
-            icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, shortcuts_tab: Default::default(), auth_tab: Default::default(), native_shortcuts: Default::default(), focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), studio_looks: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
+            icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, shortcuts_tab: Default::default(), auth_tab: Default::default(), native_shortcuts: Default::default(), focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), lock_designs: None, credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), studio_looks: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -313,10 +319,12 @@ impl StudioView {
             self.native_shortcuts.release();
             keybind_conflicts::release(cx);
             self.icon_matches = None;
+            self.lock_designs = None;
             // The Components previews' text fields go with the page.
             self.components = Default::default();
             if self.section == Section::About {
                 self.about_links = Default::default();
+                self.updates.changelog = None;
             }
             // The recorder's device and display lists are read afresh.
             self.recorder_row.new_visit();
@@ -785,8 +793,10 @@ impl StudioView {
     /// One group's rows (inside a fold or a plain card) on a card `width`
     /// logical px wide.
     fn group_card(&mut self, list: &[&Setting], width: f32, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> gpui::Div {
-        let mut card = div().row().flex_col().gap(px(ROW_GAP_PX));
-        let pad = if self.stack_rows { SPACE_14_PX } else { SPACE_18_PX };
+        let mut card = div().row().flex_col();
+        let pad = if self.stack_rows { SPACE_14_PX } else { GROUP_ROW_PAD_X_PX };
+        let line = grouped::hairline(p);
+        let mut first = true;
         // The room a control gets: the row's inner width under its label,
         // or beside a label squeezed to its minimum.
         let under = (width - 2.0 * pad).max(0.0);
@@ -816,12 +826,15 @@ impl StudioView {
                     _ => self.control(s, room, cfg, p, cx),
                 };
                 let picker = (s.control == Control::Icon).then(|| self.icon_picker(s, cfg, p, cx));
+                // Rows are divided by inset hairlines, one calm list.
+                if !std::mem::take(&mut first) {
+                    card = card.child(div().w_full().px(px(pad)).child(div().h(px(BORDER_1_PX)).w_full().bg(line)));
+                }
                 card = card.child(
                     div()
-                        .min_h(px(DIM_68_PX))
+                        .min_h(px(ROW_MIN_H_PX))
                         .px(px(pad))
-                        .py(px(SPACE_14_PX))
-                        .rounded(px(RADIUS_14_PX))
+                        .py(px(SPACE_12_PX))
                         .row()
                         // Narrow: the control sits under its label.
                         .when(stack, |el| el.flex_col().cross_start().gap(px(SPACE_10_PX)))
@@ -830,7 +843,6 @@ impl StudioView {
                         .when(!stack, |el| {
                         el.items_center().justify_between().gap(px(SPACE_24_PX))
                     })
-                        .hover(|el| el.bg(p.on_surface.with_alpha(ALPHA_3_5).hsla()))
                         .child(
                             div()
                                 .flex_1()
@@ -916,7 +928,7 @@ impl StudioView {
                         div()
                             .row()
                             .items_center()
-                            .child(div().flex_1().px(px(SPACE_10_PX)).text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(mandara_ui::bidi::paragraph(tr(title))))
+                            .child(div().flex_1().px(px(SPACE_4_PX)).text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).child(mandara_ui::bidi::paragraph(tr(title))))
                             .children(reset),
                     )
                     // The surface first (a squircle or cut one is drawn behind), then the rows.
@@ -1674,191 +1686,6 @@ impl StudioView {
             .child(div().row().gap(px(SPACE_10_PX)).child(action("shell-restart", "refresh", t("Restart shell"), false, &["restart"])).child(action("shell-quit", "power", t("Quit Mandara"), true, &["quit"])));
         div().row().flex_col().gap(px(SPACE_14_PX)).child(shell).child(studio).child(controls).into_any_element()
     }
-
-    /// Show the installed build, update state and project links in one page.
-    fn about(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        // Updates: the patch-first update card (updates_card.rs).
-        let updates = self.updates_card(cfg, p, window, cx);
-        let header_links = self.about_header_links(cfg, p, window, cx);
-        let build = mandara_core::build_info(cx);
-        let registry = cx.global::<PluginRegistry>();
-        let commands = registry.commands.all().len();
-        let first_party = registry.manifests().filter(|m| {
-                m.origin == PluginOrigin::Builtin && !HIDDEN_PLUGINS.contains(&m.id.as_str())
-            }).count();
-        let compositor = mandara_compositor::detected().map(|k| format!("{k:?}")).unwrap_or_else(|| t("none").into());
-        let fonts = mandara_ui::fonts::fonts(cx);
-        let link = |id: &'static str, glyph: &'static str, label: SharedString, url: &'static str| {
-            div()
-                .id(id)
-                .h(px(DIM_34_PX))
-                .px(px(SPACE_14_PX))
-                .rounded_full()
-                .row()
-                .items_center()
-                .gap(px(SPACE_8_PX))
-                .cursor_pointer()
-                .bg(p.surface_container_high.with_alpha(ALPHA_80).hsla())
-                .text_size(px(TEXT_12_5_PX))
-                .font_weight(FontWeight::MEDIUM)
-                .hover(|s| s.bg(p.primary.with_alpha(ALPHA_14).hsla()))
-                .child(icon(glyph, ICON_14_PX, p.on_surface_variant))
-                .child(label)
-                .on_click(move |_, _, _| open_link(url))
-        };
-
-        // Hero: the logo on a soft OKLCH wash of the theme's accent gradient.
-        let hero = div()
-            .relative()
-            .overflow_hidden()
-            .rounded(px(RADIUS_26_PX))
-            .bg(p.surface_container.hsla())
-            .border_1()
-            .border_color(p.specular_rim_light.with_alpha(ALPHA_25).hsla())
-            .child(div().absolute().inset_0().bg(mandara_core::oklab_gradient(ABOUT_WASH_ANGLE, p.accent_gradient_start.with_alpha(ALPHA_30), p.accent_gradient_end.with_alpha(ALPHA_8))))
-            .child(
-                div()
-                    .relative()
-                    .p(px(SPACE_28_PX))
-                    .row()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(px(SPACE_24_PX))
-                    .child(gpui::img(gpui::ImageSource::from(mandara_ui::plugin_art::brand_icon())).size(px(DIM_96_PX)).flex_none())
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(DIM_220_PX))
-                            .row()
-                            .flex_col()
-                            .gap(px(SPACE_6_PX))
-                            .child(div().text_size(px(TEXT_26_PX)).font_weight(FontWeight::BOLD).child(t("Mandara Shell")))
-                            .child(div().text_size(px(TEXT_14_PX)).text_color(p.on_surface.with_alpha(ALPHA_85).hsla()).child(mandara_ui::bidi::paragraph(t("A design-first Wayland desktop shell, written entirely in Rust."))))
-                            .child(
-                                div()
-                                    .pt(px(SPACE_6_PX))
-                                    .row()
-                                    .flex_wrap()
-                                    .gap(px(SPACE_8_PX))
-                                    .child(about_chip(format!("v{}", build.version), p.primary, fonts.mono.clone(), p))
-                                    .child(about_chip(LICENSE.to_string(), p.secondary, fonts.ui.clone(), p))
-                                    .child(about_chip(t("100% Rust").to_string(), p.tertiary, fonts.ui.clone(), p)),
-                            ),
-                    )
-                    .child(header_links),
-            );
-
-        // At a glance.
-        let stat = |value: String, label: SharedString, glyph: &'static str, tone: mandara_theme::Color| {
-            div()
-                .flex_1()
-                .min_w(px(DIM_140_PX))
-                .p(px(SPACE_16_PX))
-                .rounded(px(RADIUS_18_PX))
-                .bg(p.surface_container.hsla())
-                .row()
-                .flex_col()
-                .gap(px(SPACE_6_PX))
-                .child(icon(glyph, ICON_16_PX, tone))
-                .child(div().text_size(px(TEXT_24_PX)).font_weight(FontWeight::SEMIBOLD).font_features(mandara_ui::fonts::tabular_nums()).child(value))
-                .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(label))
-        };
-        let stats = div()
-            .row()
-            .flex_wrap()
-            .gap(px(SPACE_12_PX))
-            .child(stat(first_party.to_string(), t("Mandara plugins").into(), "grid", p.primary))
-            .child(stat(commands.to_string(), t("Documented commands").into(), "terminal", p.secondary))
-            .child(stat(mandara_i18n::Lang::ALL.len().to_string(), t("Languages").into(), "globe", p.tertiary))
-            .child(stat(compositor, t("Compositor").into(), "window", p.success_emerald));
-
-        // Details.
-        let line = |k: SharedString, v: SharedString, mono: bool| {
-            div()
-                .row()
-                .justify_between()
-                .gap(px(SPACE_16_PX))
-                .py(px(SPACE_10_PX))
-                .child(div().flex_none().text_color(p.on_surface_variant.hsla()).child(k))
-                // Long values (the config path) ellipsize instead of overflowing a narrow window.
-                .child(div().min_w(px(0.0)).truncate().font_weight(FontWeight::MEDIUM).when(mono, |el| {
-                            el.font_family(fonts.mono.clone()).text_size(px(TEXT_12_5_PX))
-                        }).child(v))
-        };
-        let details = div()
-            .rounded(px(RADIUS_18_PX))
-            .bg(p.surface_container.hsla())
-            .px(px(SPACE_20_PX))
-            .py(px(SPACE_8_PX))
-            .row()
-            .flex_col()
-            .child(line(t("Build").into(), build.long.clone().into(), true))
-            .child(line(t("Theme").into(), SharedString::from(&mandara_core::theme_entity(cx).read(cx).target().name), false))
-            .child(line(t("Appearance").into(), if cfg.theme.mode.is_dark() { t("Dark").into() } else { t("Light").into() }, false))
-            .child(line(t("Config").into(), mandara_config::paths::config_file().display().to_string().into(), true));
-
-        let links = div()
-            .row()
-            .flex_wrap()
-            .gap(px(SPACE_8_PX))
-            .child(link("about-source", "external", t("Source code").into(), PROJECT_URL))
-            .child(link("about-issues", "alert", t("Report a problem").into(), ISSUES_URL))
-            .child(link("about-plugins", "package", t("Plugin guide").into(), PLUGIN_GUIDE_URL))
-            .child(link("about-releases", "download", t("Releases").into(), RELEASES_URL));
-
-        // Support: optional, friendly, never in the way.
-        let support = div()
-            .relative()
-            .overflow_hidden()
-            .rounded(px(RADIUS_22_PX))
-            .bg(p.surface_container.hsla())
-            .child(div().absolute().inset_0().bg(mandara_core::oklab_gradient(ABOUT_WASH_ANGLE, p.urgent_coral.with_alpha(ALPHA_12), p.warning_amber.with_alpha(ALPHA_5))))
-            .child(
-                div()
-                    .relative()
-                    .p(px(SPACE_20_PX))
-                    .row()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(px(SPACE_16_PX))
-                    .child(div().flex_none().size(px(DIM_48_PX)).rounded_full().bg(p.urgent_coral.with_alpha(ALPHA_15).hsla()).row().items_center().justify_center().child(icon("heart", ICON_22_PX, p.urgent_coral)))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(DIM_220_PX))
-                            .row()
-                            .flex_col()
-                            .gap(px(SPACE_4_PX))
-                            .child(div().text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).child(t("Enjoying Mandara?")))
-                            .child(div().text_size(px(TEXT_12_5_PX)).line_height(px(LEADING_19_PX)).text_color(p.on_surface_variant.hsla()).child(t(
-                                "Mandara is free and always will be. If it makes your desktop a little nicer and you'd like to say thanks, you can chip in toward the AI credits and developer time behind it. Completely optional: using it, sharing it and reporting bugs help just as much.",
-                            ))),
-                    )
-                    .child(
-                        div()
-                            .id("about-support")
-                            .flex_none()
-                            .h(px(DIM_38_PX))
-                            .px(px(SPACE_16_PX))
-                            .rounded_full()
-                            .row()
-                            .items_center()
-                            .gap(px(SPACE_8_PX))
-                            .cursor_pointer()
-                            .bg(p.urgent_coral.with_alpha(ALPHA_15).hsla())
-                            .text_color(p.on_surface.hsla())
-                            .text_size(px(TEXT_13_PX))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .hover(|s| s.bg(p.urgent_coral.with_alpha(ALPHA_25).hsla()))
-                            .child(icon("coffee", ICON_15_PX, p.urgent_coral))
-                            .child(t("Buy me a coffee on Ko-fi"))
-                            .on_click(|_, _, _| open_link(SUPPORT_URL)),
-                    ),
-            );
-
-        let whats_new = self.whats_new_card(p, cx);
-        div().row().flex_col().gap(px(SPACE_16_PX)).child(hero).child(updates).child(whats_new).child(stats).child(details).child(links).child(support).into_any_element()
-    }
 }
 
 impl Render for StudioView {
@@ -1878,8 +1705,13 @@ impl Render for StudioView {
             self.studio_looks.release();
             self.native_shortcuts.release();
             keybind_conflicts::release(cx);
+            self.updates.changelog = None;
+            self.lock_designs = None;
         }
         let fonts = mandara_ui::fonts::fonts(cx);
+        // Grain behind the pages and on the cards (`[grain.studio]`, `[grain.cards]`).
+        mandara_ui::components::grain::prepare(mandara_ui::components::grain::Slot::Studio, &cfg.grain.studio, &p, window, cx);
+        mandara_ui::components::grain::prepare(mandara_ui::components::grain::Slot::Cards, &cfg.grain.cards, &p, window, cx);
         // Choices measure their labels in Studio's font this frame.
         choice::begin_frame(window, fonts.studio.clone());
         // Breakpoints: icon rail under 900 px; stacked rows when the content
@@ -1947,13 +1779,13 @@ impl Render for StudioView {
                 // The ready-made looks first, then the sections in setup
                 // order (launcher_page.rs).
                 Section::Launcher => self.launcher_page(&cfg, &p, cx),
-                Section::Dock => self.dock_page(&cfg, &p, cx),
+                Section::Dock => self.dock_page(&cfg, &p, window, cx),
                 Section::DateTime => {
                     // The system clock first: time zone, network time and
                     // the mismatch warning (time_card.rs).
                     let clock = time_card::element(cx);
                     let rows = self.rows(registry::in_section(Section::DateTime), &cfg, &p, cx);
-                    div().row().flex_col().gap(px(SPACE_26_PX)).child(clock).child(rows).into_any_element()
+                    div().row().flex_col().gap(px(GROUP_SECTION_GAP_PX)).child(clock).child(rows).into_any_element()
                 }
                 // Widgets, cards & visualizers, the context menu: three tabs
                 // (desktop_page.rs).
@@ -1962,11 +1794,13 @@ impl Render for StudioView {
                 // The wallpaper on the desktop first, then tabs
                 // (wallpaper_page.rs).
                 Section::Wallpaper => self.wallpaper_page(&cfg, &p, window, cx),
+                Section::Typography => self.typography_page(&cfg, &p, cx),
                 section => self.rows(registry::in_section(section), &cfg, &p, cx),
             };
             (self.section.label(), body)
         };
 
+        let subtitle = self.query.is_empty().then(|| SharedString::from(tr(self.section.subtitle())));
         let titlebar = client_controls
             .then(|| studio_frame::titlebar(studio_frame.as_ref(), &p, fonts.studio.clone(), window.window_controls()));
         // `MANDARA_STUDIO_SCROLL=<px>` opens the page scrolled down, once
@@ -2017,7 +1851,17 @@ impl Render for StudioView {
                             .items_end()
                             .justify_between()
                             .gap(px(SPACE_12_PX))
-                            .child(div().font_family(fonts.display.clone()).text_size(px(if gutter < GUTTER_MEDIUM_PX { PAGE_TITLE_SMALL_PX } else { PAGE_TITLE_PX })).font_weight(FontWeight::MEDIUM).child(title))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w(px(DIM_200_PX))
+                                    .row()
+                                    .flex_col()
+                                    .cross_start()
+                                    .gap(px(SPACE_4_PX))
+                                    .child(div().font_family(fonts.display.clone()).text_size(px(if gutter < GUTTER_MEDIUM_PX { PAGE_TITLE_SMALL_PX } else { PAGE_TITLE_PX })).font_weight(FontWeight::SEMIBOLD).child(title))
+                                    .when_some(subtitle, |el, s| el.child(div().max_w(px(TEXT_MEASURE_PX)).text_size(px(PAGE_SUBTITLE_PX)).line_height(px(PAGE_SUBTITLE_LEADING_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(s)))),
+                            )
                             .children(folds_toolbar),
                     )
                     .when_some(self.error.clone(), |el, e| {
@@ -2028,7 +1872,7 @@ impl Render for StudioView {
         // The page's overlay scroll bar (it fills the content's place).
         // Left to right, the page's end edge is the window's border.
         let edge = if mandara_i18n::language().is_rtl() { px(0.0) } else { px(mandara_ui::scrollbar::WINDOW_EDGE_CLEARANCE_PX) };
-        let content = div().relative().flex_1().min_w(px(0.0)).min_h(px(0.0)).flex().flex_col().child(content).child(mandara_ui::scrollbar::overlay_scrollbar(&self.content_scroll, &content_bar, &p).end_inset(edge));
+        let content = div().relative().flex_1().min_w(px(0.0)).min_h(px(0.0)).flex().flex_col().children(mandara_ui::components::grain::layer(mandara_ui::components::grain::Slot::Studio, gpui::Corners::default())).child(content).child(mandara_ui::scrollbar::overlay_scrollbar(&self.content_scroll, &content_bar, &p).end_inset(edge));
 
         let modal = self.plugin_modal_layer(&cfg, &p, window, cx);
         let edge_choice = self.stash_collision_layer(&cfg, &p, cx);
@@ -2060,9 +1904,6 @@ impl Render for StudioView {
 // ── Layout ──────────────────────────────────────────────────────────────
 // Breakpoints, sidebar widths and gutters live in `tokens.rs` (Responsive
 // layout) and are applied through `grid::PageMetrics`.
-/// Page title size (smaller with the narrow gutter).
-const PAGE_TITLE_PX: f32 = 28.0;
-const PAGE_TITLE_SMALL_PX: f32 = 23.0;
 
 // ── Performance sparklines ──────────────────────────────────────────────
 /// Headroom over the highest sample, so steady values sit mid-height.
@@ -2121,8 +1962,8 @@ const LOCKED_OPACITY: f32 = 0.45;
 const LOCKED_NOTE_MAX_W_PX: f32 = 260.0;
 /// Narrowest a setting's label column gets beside a wide control.
 const ROW_LABEL_MIN_PX: f32 = 160.0;
-/// Space between a settings card's rows.
-const ROW_GAP_PX: f32 = 2.0;
+/// A settings row's least height (a label over one line of help).
+const ROW_MIN_H_PX: f32 = 60.0;
 
 /// Most theme icons the icon picker lists for a search.
 const ICON_MATCHES_MAX: usize = 64;
@@ -2182,8 +2023,6 @@ const RELEASES_URL: &str = "https://github.com/theHamdiz/mandara/releases";
 pub(crate) const SUPPORT_URL: &str = "https://ko-fi.com/thehamdiz";
 /// The license, shown as is (an SPDX identifier, never translated).
 const LICENSE: &str = "GPL-3.0-or-later";
-/// Direction of the About page's accent washes, degrees.
-const ABOUT_WASH_ANGLE: f32 = 135.0;
 
 /// Under the language picker: the full reason a language pack couldn't be
 /// downloaded, with Retry (the card itself turns red with a short version;
@@ -2227,23 +2066,6 @@ fn open_link(url: &'static str) {
             tracing::warn!("opening {url}: {err}");
         }
     });
-}
-
-/// A small tinted pill on the About hero (version, license…).
-fn about_chip(text: String, tone: mandara_theme::Color, family: SharedString, p: &MandaraPalette) -> AnyElement {
-    div()
-        .h(px(DIM_24_PX))
-        .px(px(SPACE_10_PX))
-        .rounded_full()
-        .row()
-        .items_center()
-        .bg(tone.with_alpha(ALPHA_14).hsla())
-        .text_color(p.on_surface.hsla())
-        .text_size(px(TEXT_11_5_PX))
-        .font_weight(FontWeight::MEDIUM)
-        .font_family(family)
-        .child(text)
-        .into_any_element()
 }
 
 #[cfg(test)]

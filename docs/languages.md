@@ -14,6 +14,11 @@ session socket. This also works on NixOS without root access or membership
 in the `input` group. Start Mandara inside the compositor session so it
 inherits `NIRI_SOCKET`, or `HYPRLAND_INSTANCE_SIGNATURE` and `XDG_RUNTIME_DIR`.
 
+Studio → Input lists every layout and variant xkeyboard-config ships,
+including the extras its main list leaves out (Arabic's ErgoArabic, Sun
+Type 6/7 and the 4th-level extensions, among many others in other
+languages).
+
 ## Language packs
 
 Translations live outside the binary, one **language pack** per language

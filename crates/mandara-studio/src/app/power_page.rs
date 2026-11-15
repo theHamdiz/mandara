@@ -280,7 +280,7 @@ impl StudioView {
         div()
             .row()
             .flex_col()
-            .gap(px(SPACE_26_PX))
+            .gap(px(GROUP_SECTION_GAP_PX))
             .child(anchored("status", status))
             .child(anchored("timeouts", timeouts))
             .child(anchored("idle", idle_rows))

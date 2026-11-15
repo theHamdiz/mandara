@@ -11,7 +11,10 @@
 //! * `media.control`: play / pause, skip, seek and the player's volume.
 //! * `wallpaper.read` / `wallpaper.set`: the wallpaper folder as names and
 //!   image handles, paged; setting one from a handle the host issued.
-//! * `files.folders`: images in folders the person chose in Studio.
+//! * `files.folders`: images in folders the person chose in Studio, and the
+//!   project folders directly inside them (handles, previews, titles).
+//! * `wallpaper.live`: a project played as a live wallpaper by a renderer
+//!   the host knows, starts and stops itself ([`live`]).
 //! * `notifications.send`, `net:<host>` (HTTPS to that host only, off the
 //!   UI thread, two at a time) and `plugins.call:<id>` (run on the next
 //!   tick, so two plugins can never call into each other re-entrantly).
@@ -38,6 +41,8 @@ use serde_json::{Value, json};
 
 use super::{after_call, discovered, instance, loaded, views_of};
 use crate::hub::hub;
+
+pub(crate) mod live;
 
 /// Most items one page of a listing returns.
 pub const MAX_PAGE: usize = 60;
@@ -173,7 +178,7 @@ fn run(plugin: &str, r: &Request, cx: &mut App) -> Option<Result<Value, String>>
     // Studio runs plugin tabs without the shell's services.
     let shell_only = matches!(
         r.capability,
-        Capability::MediaRead | Capability::MediaControl | Capability::Notify | Capability::Events | Capability::WindowsRead | Capability::WindowsControl | Capability::WorkspacesRead | Capability::WorkspacesControl | Capability::SystemRead | Capability::Osd
+        Capability::MediaRead | Capability::MediaControl | Capability::Notify | Capability::Events | Capability::WindowsRead | Capability::WindowsControl | Capability::WorkspacesRead | Capability::WorkspacesControl | Capability::SystemRead | Capability::Osd | Capability::WallpaperLive
     );
     if shell_only && crate::hub::try_hub(cx).is_none() {
         return Some(Err("this works in the shell, not in Studio".into()));
@@ -194,9 +199,24 @@ fn run(plugin: &str, r: &Request, cx: &mut App) -> Option<Result<Value, String>>
         (Capability::WallpaperSet, "apply") => apply_wallpaper(plugin, &r.payload, cx),
         (Capability::Folders, "folders") => Ok(folders(plugin, cx)),
         (Capability::Folders, "list") => {
+            // A granted folder's own pictures, or a project's inside it.
+            let (dir, folder) = match r.payload.get("project").and_then(Value::as_u64) {
+                Some(handle) => match project_of(plugin, handle, cx) {
+                    Ok(found) => found,
+                    Err(e) => return Some(Err(e)),
+                },
+                None => match granted_folder(plugin, &r.payload, cx) {
+                    Some(folder) => (folder.clone(), folder),
+                    None => return Some(Err("no such granted folder".into())),
+                },
+            };
+            let root = folder.clone();
+            list_later(plugin, r.id, page(&r.payload), ImageOrigin::Folder(folder), move || images_in(&dir, &root), cx);
+            return None;
+        }
+        (Capability::Folders, "projects") => {
             let Some(folder) = granted_folder(plugin, &r.payload, cx) else { return Some(Err("no such granted folder".into())) };
-            let scan = folder.clone();
-            list_later(plugin, r.id, page(&r.payload), ImageOrigin::Folder(folder), move || images_in(&scan), cx);
+            projects_later(plugin, r.id, page(&r.payload), folder, cx);
             return None;
         }
         (Capability::Folders, "choose") => {
@@ -204,6 +224,12 @@ fn run(plugin: &str, r: &Request, cx: &mut App) -> Option<Result<Value, String>>
             crate::state::open_studio_at(Some(format!("plugins/{plugin}")), cx);
             Ok(json!({ "opened": "studio" }))
         }
+        (Capability::WallpaperLive, "status") => {
+            live::status(plugin, r.id, cx);
+            return None;
+        }
+        (Capability::WallpaperLive, "render") => return live::render(plugin, r.id, &r.payload, cx),
+        (Capability::WallpaperLive, "stop") => live::stop(plugin, &r.payload, cx),
         (Capability::Notify, "send") => notify(plugin, &r.payload, cx),
         (Capability::Net(host), "fetch") => {
             queue_net(NetJob { plugin: plugin.to_string(), id: r.id, host: host.clone(), url: text(&r.payload, "url"), method: text(&r.payload, "method"), body: r.payload.get("body").and_then(Value::as_str).map(str::to_string) }, cx);
@@ -465,19 +491,25 @@ fn current_wallpaper(plugin: &str, cx: &mut App) -> Value {
     }
 }
 
-/// Images directly inside `dir` (no hidden files, sorted by name, at most
-/// [`MAX_FOLDER_SCAN`]).
-fn images_in(dir: &Path) -> Vec<PathBuf> {
-    let (Ok(entries), Ok(root)) = (std::fs::read_dir(dir), dir.canonicalize()) else { return Vec::new() };
+/// Images directly inside `dir`, which must itself be inside granted
+/// folder `root` (no hidden files, sorted by name, at most
+/// [`MAX_FOLDER_SCAN`]). Links are resolved now and the resolved paths are
+/// returned, so a link, or a folder swapped for one since it was listed,
+/// can't lead out of `root`.
+fn images_in(dir: &Path, root: &Path) -> Vec<PathBuf> {
+    let Ok(root) = root.canonicalize() else { return Vec::new() };
+    let Some(dir) = live::contained(dir, &root) else { return Vec::new() };
+    let Ok(entries) = std::fs::read_dir(&dir) else { return Vec::new() };
     let mut out: Vec<PathBuf> = entries
         .flatten()
         .take(MAX_FOLDER_SCAN)
         .map(|e| e.path())
-        .filter(|p| !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) && p.is_file() && mandara_plugins::wasm::is_image(p))
-        // A link pointing out of the granted folder isn't in it.
-        .filter(|p| p.canonicalize().is_ok_and(|real| real.starts_with(&root)))
+        .filter(|p| !p.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) && mandara_plugins::wasm::is_image(p))
+        // A link pointing out of the folder isn't in it.
+        .filter_map(|p| live::contained(&p, &dir))
+        .filter(|real| real.is_file())
         .collect();
-    out.sort_by_key(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()));
+    live::sort_unique(&mut out);
     out
 }
 
@@ -497,6 +529,64 @@ fn list_later(plugin: &str, id: u64, (offset, limit): (usize, usize), origin: Im
         });
     })
     .detach();
+}
+
+/// One project of a `projects` page, read in the background.
+struct ProjectRow {
+    dir: PathBuf,
+    title: String,
+    kind: String,
+    preview: Option<PathBuf>,
+}
+
+/// The project folders in granted folder `folder`, one page of them with
+/// their titles, kinds and previews read in the background; the handles
+/// are issued on the UI thread.
+fn projects_later(plugin: &str, id: u64, (offset, limit): (usize, usize), folder: PathBuf, cx: &mut App) {
+    let scan = folder.clone();
+    let task = cx.background_executor().spawn(async move {
+        let all = live::projects_in(&scan, MAX_FOLDER_SCAN);
+        let total = all.len();
+        let rows: Vec<ProjectRow> = all
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .map(|dir| {
+                let info = live::project_info(&dir);
+                let preview = live::project_preview(&dir, &info);
+                ProjectRow { dir, title: info.title, kind: info.kind, preview }
+            })
+            .collect();
+        (total, rows)
+    });
+    let plugin = plugin.to_string();
+    cx.spawn(async move |cx| {
+        let (total, rows) = task.await;
+        cx.update(|cx| {
+            let items: Vec<Value> = rows
+                .into_iter()
+                .map(|r| {
+                    let preview = r.preview.and_then(|p| issue(&plugin, p, ImageOrigin::Folder(folder.clone()))).unwrap_or(0);
+                    let name = file_name(&r.dir);
+                    let project = issue(&plugin, r.dir, ImageOrigin::Project(folder.clone())).unwrap_or(0);
+                    json!({ "project": project, "name": name, "title": r.title, "kind": r.kind, "live": live::runnable(&r.kind), "preview": preview })
+                })
+                .collect();
+            deliver(&plugin, id, Ok(json!({ "total": total, "offset": offset, "items": items })), cx);
+        });
+    })
+    .detach();
+}
+
+/// The project folder behind `handle` and the granted folder it is in,
+/// while that folder is still granted.
+fn project_of(plugin: &str, handle: u64, cx: &App) -> Result<(PathBuf, PathBuf), String> {
+    let entry = loaded(plugin).and_then(|s| s.borrow().as_ref().and_then(|p| p.image(handle).cloned())).ok_or("that project handle isn't this plugin's (or its grant was revoked)")?;
+    let ImageOrigin::Project(folder) = entry.origin else { return Err("that handle isn't a project (use `projects`)".into()) };
+    if !crate::state::config(cx).read(cx).get().plugins.granted_folders(plugin).contains(&folder) {
+        return Err("that folder is no longer granted".into());
+    }
+    Ok((entry.path, folder))
 }
 
 fn apply_wallpaper(plugin: &str, payload: &serde_json::Map<String, Value>, cx: &mut App) -> Result<Value, String> {
@@ -666,6 +756,7 @@ fn topic_value(topic: &str, cx: &mut App) -> Value {
         "windows" => run(&["window", "list"], cx),
         "workspaces" => run(&["workspace", "list"], cx),
         "power" => run(&["power", "status"], cx),
+        "live-wallpaper" => live::snapshot(cx),
         _ => Value::Null,
     }
 }
@@ -806,7 +897,7 @@ mod tests {
             std::fs::write(dir.join(f), b"x").unwrap();
         }
         std::fs::write(dir.join("sub/deep.png"), b"x").unwrap();
-        let names: Vec<String> = images_in(&dir).iter().map(|p| file_name(p)).collect();
+        let names: Vec<String> = images_in(&dir, &dir).iter().map(|p| file_name(p)).collect();
         assert_eq!(names, ["A.jpg", "b.png", "c.webp"]);
         std::fs::remove_dir_all(dir).unwrap();
     }

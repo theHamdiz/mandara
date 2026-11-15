@@ -224,6 +224,17 @@ impl Readout {
         Self { spring: SpringValue::new(0.0, config), clock: FrameClock::new(), snap_below, settle }
     }
 
+    /// [`Readout::show`], or the sample itself at once while motion is
+    /// reduced (no animation frames at all).
+    pub fn show_reduced(&mut self, target: f32, reduced: bool, window: &Window) -> f32 {
+        if reduced {
+            self.spring.snap_to(target);
+            self.clock.idle();
+            return target;
+        }
+        self.show(target, window)
+    }
+
     /// The value to draw this frame for the live sample `target`; requests
     /// the next frame while the spring is visibly moving.
     pub fn show(&mut self, target: f32, window: &Window) -> f32 {

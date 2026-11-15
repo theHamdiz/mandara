@@ -206,7 +206,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 | Page | Settings |
 |---|---|
 | Bars | **Bar**: layout and appearance (`bar.*`); **Sidebars**: what each side edge holds, then the left/right plugin bars (`side_bars.*`) and the sidebar panel's widget tabs, cards and appearance (`sidebar.*`, `sidebar.look.*`); **Drop-down panels**: geometry, material, main menu and animation (`panels.*`, `bar.panel_radius`); **Edges & corners**: hover triggers (`edges.*`, `sidebar.hover_reveal`), hot corners (`hot_corners.*`) and rounded screen corners (`screen_corners.*`) |
-| Dock | layout (position, size, magnification), behaviour (auto-hide, delays, slide speed, bounces, minimize into icon; window geometry is checked periodically only for Smart hiding), apps (`pinned` order — `"@launcher"` is the launcher button, at any position; it replaces 0.22's `launcher_button` / `launcher_at_end`, which are moved into `pinned` once — running, recent apps, indicators, badges), stacks (`[[dock.stacks]]` path / view / sort / display, `stack_items`, `fan_items`, `stack_names`), the Applications folder (`[dock.applications]` enabled / view / order / icon_size; replaces 0.1's `applications_slot`), Trash, the now-playing chip (`dock.media_chip`), appearance (opacity, tint, radius, padding, spacing, shadow, rim) — every number clamped to `mandara_config::dock::ranges` (`dock.*`) |
+| Dock | layout (position, size, magnification), behaviour (auto-hide, delays, slide speed, bounces, minimize into icon; window geometry is checked periodically only for Smart hiding), apps (`pinned` order — `"@launcher"` is the launcher button, at any position; it replaces 0.22's `launcher_button` / `launcher_at_end`, which are moved into `pinned` once — running, recent apps, indicators, badges), stacks (`[[dock.stacks]]` path / view / sort / display, `stack_items`, `fan_items`, `stack_names`), the Applications folder (`[dock.applications]` enabled / view / order / icon_size; replaces 0.1's `applications_slot`), Trash, the now-playing chip (`dock.media_chip`), appearance (opacity, tint, radius, padding, spacing, shadow, rim; `dock.material` = `classic`, the default, or `liquid`, with `dock.gloss` and `dock.refraction`, 0–1; grain under `[dock.grain]`, see [Surface grain](#surface-grain); `dock.separator_style` = `line` or `space`), indicators (`dock.indicator` = `dots`, `dot`, `bar`, `glow` or `none`), name labels (`dock.tooltip_style` = `pill` or `material`, `dock.tooltip_delay_ms`, 0–1000, 0 by default), the hover lift (`dock.hover_lift`, 0–16 px, with `[dock.motion] hover`) — every number clamped to `mandara_config::dock::ranges` (`dock.*`) |
 | Launcher | ready-made looks ([Launcher looks](#launcher-looks)), style (classic / beacon), placement (`launcher.look.position`, see [Launcher placement](#launcher-placement)), align to the launcher button, width / height when attached and in the center, layout, grid columns and icon size, category chips, grouped results, keyboard hints, Beacon bar width and height, dim, results (`launcher.max_results`), providers and prefixes, ranking half-life and recent count, launching (`launcher.*`) |
 | Window switcher | style, previews, scope, thumbnail width, columns (`switcher.*`); screen time retention, idle and limits (`screen_time.*`) |
 | Notifications | position, width, scale, opacity, joined to the bar (`notifications.joined`, off by default), timeouts per urgency, maximum visible, history size and age, do not disturb, quiet hours, rules (`notifications.*`) |
@@ -241,7 +241,7 @@ fixed:
 
 | Plugin | Keys (`plugins.settings.<id>.…`) | Default |
 |---|---|---|
-| Resources (`resources`) | `refresh_ms` (also the bar rings), `disks_every_s`, `top_apps`, `temps_shown`, `disk_warn_percent`, `disk_full_percent` | 1500 ms, 15 s, 5, 8, 80 %, 90 % |
+| Resources (`resources`) | `refresh_ms` (also the bar rings), `disks_every_s`, `top_apps`, `temps_shown`, `disk_warn_percent`, `disk_full_percent`, `bar_style` (`rings`, `icon`, `numbers`, `sparkline`, `chart`), `bar_metrics` (`both`, `cpu`, `memory`), `bar_refresh_ms` (the Numbers, Sparkline and Chart chips while the bar shows them, 500–10000 ms) | 1500 ms, 15 s, 5, 8, 80 %, 90 %, rings, both, 1000 ms |
 | Process hunter (`processes`) | `refresh_ms`, `hot_cpu_percent` | 1500 ms, 50 % |
 | Containers (`containers`) | `hot_cpu_percent`, `refresh_s` (list refresh while the panel is closed, 5–600 s) (plus engine, stopped containers, log lines) | 80 %, 30 s |
 | Updates (`updates`) | `first_check_delay_s` (0–600 s after login), `news_count` (Arch news headlines, 1–5), `run_in` (`mandara`: in the panel with progress, or `terminal`), `nixos_keep` (generations a NixOS clean-up keeps, 1–30) | 20 s, 1, `mandara`, 5 |
@@ -256,11 +256,12 @@ fixed:
 | Services (`services`) | `list_refresh_s`, `failed_check_s` (plus default view, alert, journal lines) | 4 s, 60 s |
 | Drives (`drives`) | `usage_every_s`, `full_warn_percent` | 10 s, 90 % |
 | Network speed (`net-speed`) | `interval_s` | 1 s |
-| Network (`network`) | `networks_shown` | 7 |
+| Network (`network`) | `networks_shown`, `bar_style` (`icon`, `name`, `signal`, `both`), `bar_width` (room for the name, 60–240 px) | 7, icon, 120 px |
 | Clock (`clock`) | `agenda_rows` | 5 |
 | To-do (`todo`) | `panel_rows`, `card_rows`, `default_list` (list name; empty: Inbox), `show_completed`, `sort` (`newest`, `oldest`, `alphabetical`), `bar_count` (empty: all lists, or a list name) | 14, 8, Inbox, on, newest, all |
 | Notes (`notes`) | `default_topic` (empty: Notes), `storage_folder` (empty: `~/.local/share/mandara/notes`), `preview_by_default`, `editor_font` (`sans`, `mono`), `editor_size` | Notes, data folder, on, sans, 13 px |
-| Bluetooth (`bluetooth`) | `battery_warn_percent` (coral follows Power → peripheral alerts) | 30 % |
+| Bluetooth (`bluetooth`) | `battery_warn_percent` (coral follows Power → peripheral alerts), `bar_style` (`icon`, `name`, `battery`), `bar_width` (room for the device's name, 60–240 px) | 30 %, icon, 120 px |
+| Notifications (`notifications`) | `bar_style` (`icon`: the bell and badge, `latest`: the latest notification and the count), `bar_width` (room for its text, 80–360 px) | icon, 180 px |
 | Authenticator (`authenticator`) | `visible_rows` | 6 |
 | Wallpaper generator (`wallpaper-generator`) | recipe, size, format, folder, schedule and video loops: see [Wallpaper generator](#wallpaper-generator) | |
 | Wallhaven (`wallhaven`, opt-in) | `wallpaper.wallhaven_query` (default search; empty: the toplist), `wallpaper.wallhaven_sorting` (`toplist`, `date_added`, `views`, `favorites`, `random`) — shown on Studio → Wallpaper while the plugin is on; off, no Wallhaven request is made | empty, toplist |
@@ -880,6 +881,16 @@ launcher and the **Taskbar** item (`taskbar`: the dock's pinned apps, then every
 window, from the window list; on a compositor without one, the
 compositor's own client list marks what runs and a click starts the app)
 centred, and the clock stacked over the date on the right.
+The Taskbar item's own settings (Studio → Plugins → Taskbar,
+`[plugins.settings.taskbar]`) leave it as it always looked until you change
+them: `material` (`none`, `classic` or `liquid`: a tray of the dock's glass
+under the buttons, at the bar's height), `grain` and `grain_amount` (the
+tray's [grain](#surface-grain)), `indicator` (`line`, `dot`, `dots`,
+`glow`, `none`), `focus_style` (`tint`, `raised`, `accent`, `none`),
+`labels` (`none`, `focused`, `running`) and `label_width` (48–240 px),
+`group_windows` (on: one button per app; off: one per window, named after
+its title), `window_count`, `urgent` (apps asking for attention turn coral,
+on by default), `icon_size` (14–24 px) and `spacing` (0–12 px).
 A style sets the layout, edge and height, the item and icon shapes and
 colours, insets and spacing, the screen frame, the notch's width
 (*Pharos Beam*), the bar font (*System monitor* uses your monospace font,
@@ -1217,6 +1228,46 @@ stay crisp: a hand-drawn wobble would need every edge drawn as a path
 instead of the GPU's rounded rectangles, at a cost on every frame. The textures are one cached image each, drawn once on
 first use; nothing animates. Text keeps its surface colours, so contrast
 is unchanged.
+### Surface grain
+
+A fine texture a surface can wear: one settings table for every surface
+that offers it (the dock's `[dock.grain]`; the taskbar's tray takes its
+style and strength from `[plugins.settings.taskbar]`), off by default.
+
+```toml
+[dock.grain]
+style = "film"      # none (default), fine, film, paper, speckle
+amount = 0.05       # strongest speck's alpha, 0–0.12
+scale = 1.0         # speck size, 1–3 logical px
+contrast = 1.0      # 0.5–1.5: higher makes strong specks stand out
+tint = "neutral"    # or "surface": specks in the hue of the theme's surfaces
+seed = 0            # another random field
+```
+
+The same table grains the rest of the shell, each surface on its own and
+all off by default (Studio → Themes → Components → Grain):
+
+```toml
+[grain.studio]      # Mandara Studio, behind its pages
+style = "paper"
+[grain.cards]       # cards and grouped lists, in the shell and in Studio
+style = "fine"
+[grain.bars]        # the bars and their capsules
+[grain.launcher]    # the launcher
+[grain.panels]      # drop-down and plugin panels
+```
+
+Tiles are drawn once off the UI thread and shared; a surface without a
+style draws nothing.
+
+*Fine* is an even single-pixel sand, *Film* soft clumps like fast film,
+*Paper fibre* short horizontal fibres over a faint tooth, *Speckle* sparse
+dark flecks on a clean surface. Every number is clamped to its range when
+read. Each distinct grain is one 128 × 128 tile drawn once on a background
+thread and painted pixel for pixel (crisp at fractional scales, and still
+while a surface grows or slides); at most six tiles are kept, the least
+recently used leaving the GPU atlas first.
+
 ## Launcher placement
 
 ```toml
