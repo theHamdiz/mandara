@@ -240,8 +240,10 @@ mod tests {
         // SAFETY: the journal owns this descriptor; F_GETFL only reads its flags.
         let flags = unsafe { libc::fcntl(socket.as_raw_fd(), libc::F_GETFL) };
         assert!(flags >= 0 && flags & libc::O_NONBLOCK != 0);
+        let fill = b"fill";
+        socket.send(fill).unwrap();
         let error = loop {
-            if let Err(error) = socket.send(&[0; RECORD_BYTES]) {
+            if let Err(error) = socket.send(fill) {
                 break error;
             }
         };

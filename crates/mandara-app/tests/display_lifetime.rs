@@ -74,7 +74,7 @@ fn display_disconnect(supervised: bool) {
     use std::{
         ffi::OsString,
         io::Write as _,
-        os::unix::{ffi::OsStringExt as _, process::ExitStatusExt as _},
+        os::unix::{ffi::OsStringExt as _, fs::MetadataExt as _},
         process::Stdio,
     };
 
@@ -141,6 +141,7 @@ fn display_disconnect(supervised: bool) {
         &args[1..]
     };
     let mut child = Command::new(&args[0])
+        .arg("--die-with-parent")
         .args(replay_args)
         .env_clear()
         .envs(env)
@@ -162,6 +163,20 @@ fn display_disconnect(supervised: bool) {
         || sandbox.command(&["msg", "ping"]).status.success(),
         || std::fs::read_to_string(stderr.path()).unwrap(),
     );
+    let inner = std::fs::read_to_string(format!("/proc/{0}/task/{0}/children", child.id()))
+        .unwrap()
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .parse::<u32>()
+        .unwrap();
+    // Keep the namespace pinned until all of its processes have gone.
+    let namespace = std::fs::File::open(format!("/proc/{inner}/ns/pid")).unwrap();
+    let namespace_id = namespace.metadata().unwrap().ino();
+    assert_ne!(
+        namespace_id,
+        std::fs::metadata("/proc/self/ns/pid").unwrap().ino()
+    );
     let compositor = recorded_pid("mango");
     process_env(compositor);
     // SAFETY: this is the recorded compositor of this test's private runtime.
@@ -178,23 +193,34 @@ fn display_disconnect(supervised: bool) {
             || std::fs::read_to_string(stderr.path()).unwrap(),
         );
         assert!(child.try_wait().unwrap().is_none());
-        let supervisor = i32::try_from(child.id()).unwrap();
-        process_env(supervisor);
-        // SAFETY: this is our recorded supervisor in the private runtime.
-        assert_eq!(unsafe { libc::kill(supervisor, libc::SIGTERM) }, 0);
+        sandbox.run(&["shell", "stop"]);
     }
-    sandbox.wait(|| child.try_wait().unwrap().is_some());
+    sandbox.wait_with_diagnostics(
+        || child.try_wait().unwrap().is_some(),
+        || std::fs::read_to_string(stderr.path()).unwrap(),
+    );
     let status = child.wait().unwrap();
     let diagnostics = std::fs::read_to_string(stderr.path()).unwrap();
-    if supervised {
-        assert_eq!(status.signal(), Some(libc::SIGTERM), "{}", diagnostics);
-    } else {
+    if !supervised {
         assert_eq!(status.code(), Some(1), "{}", diagnostics);
     }
     assert!(diagnostics.contains("display event loop stopped without a quit request"));
     if supervised {
         assert!(diagnostics.contains("Mandara exited (exit code 1); restarting"));
     }
+    sandbox.wait_with_diagnostics(
+        || {
+            std::fs::read_dir("/proc")
+                .unwrap()
+                .flatten()
+                .all(|process| {
+                !std::fs::metadata(process.path().join("ns/pid"))
+                        .is_ok_and(|metadata| metadata.ino() == namespace_id)
+                })
+        },
+        || diagnostics.clone(),
+    );
+    drop(namespace);
 }
 
 impl Drop for Sandbox {
