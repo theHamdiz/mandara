@@ -6,7 +6,7 @@ About → What's new shows it too.
 
 ## Unreleased
 
-Studio refinements, optional bar and dock effects, richer third-party plugins, and a responsive launcher.
+Studio refinements, optional bar and dock effects, richer third-party plugins, a responsive launcher, and recovery from unexpected display shutdowns.
 
 ### New
 
@@ -35,6 +35,8 @@ Studio refinements, optional bar and dock effects, richer third-party plugins, a
 - Studio → Input now offers every keyboard layout and variant your system has, including the rarer ones such as Arabic (ErgoArabic), Arabic with 4th-level extensions and Sun Type 6/7, marked *Extra*; searching a variant's name, like “ergoarabic”, finds its layout.
 
 ### Fixed
+
+- An unexpected display-loop shutdown no longer quietly stops the shell's restart supervisor. Warnings and crash errors also reach the system journal when the desktop discards terminal output.
 
 - Plugin live wallpapers follow pause rules with either wallpaper renderer. Pending scenes cancel when superseded, and renderer helpers stop after a shell crash.
 

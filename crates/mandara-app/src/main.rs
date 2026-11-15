@@ -21,6 +21,7 @@ mod alloc;
 mod changelog_cli;
 mod config_mirror;
 mod ipc;
+mod journal;
 mod setup_cli;
 mod surfaces;
 mod update_cli;
@@ -198,6 +199,10 @@ enum Cmd {
 
 /// Initialize process services and dispatch the shell, Studio or a dedicated CLI worker.
 fn main() -> Result<()> {
+    run().inspect_err(|error| tracing::error!("{error:#}"))
+}
+
+fn run() -> Result<()> {
     alloc::init();
     if mandara_services::app_themes::firefox::launched(std::env::args().skip(1)) {
         return mandara_services::app_themes::firefox::host();
@@ -217,12 +222,24 @@ fn main() -> Result<()> {
             }
         }
     }
-    tracing_subscriber::fmt()
-        .with_env_filter(
+    use tracing_subscriber::{Layer as _, layer::SubscriberExt as _, util::SubscriberInitExt as _};
+    let long = Box::leak(mandara_version::long_version().into_boxed_str()) as &'static str;
+    let journal = journal::Journal::connect(long).map(|journal| {
+        tracing_subscriber::fmt::layer()
+            .with_ansi(false)
+            .without_time()
+            .with_file(true)
+            .with_line_number(true)
+            .with_writer(journal)
+            .with_filter(tracing_subscriber::filter::LevelFilter::WARN)
+    });
+    tracing_subscriber::registry()
+        .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "info,naga=warn,wgpu=warn,wgpu_hal=error,blade=warn".into()),
         )
-        .with_writer(std::io::stderr)
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+        .with(journal)
         .init();
     mandara_plugins::install_panic_hook();
     // A write past RLIMIT_FSIZE (e.g. a large screencopy buffer under a
@@ -233,7 +250,6 @@ fn main() -> Result<()> {
     }
 
     mandara_i18n::set_language(mandara_i18n::Lang::from_env());
-    let long = Box::leak(mandara_version::long_version().into_boxed_str()) as &'static str;
     let matches = <Cli as clap::CommandFactory>::command().version(mandara_version::version()).long_version(long).get_matches();
     let cli = <Cli as clap::FromArgMatches>::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     match cli.command {
@@ -613,7 +629,10 @@ fn run_shell() -> Result<()> {
 
     // Output changes can briefly leave no windows while surfaces are replaced.
     // Only an explicit quit should end the shell and its restart supervisor.
+    let lifetime = mandara_core::shell_lifetime::ShellLifetime::default();
+    let running = lifetime.clone();
     application().with_quit_mode(gpui::QuitMode::Explicit).with_assets(MandaraAssets).run(move |cx: &mut App| {
+        cx.set_global(running);
         mandara_core::set_build_info(cx, build_info());
         let cfg = store.snapshot();
         cx.set_global(Fonts::resolve(&cfg.typography, cx));
@@ -710,7 +729,7 @@ fn run_shell() -> Result<()> {
         .detach();
     });
     let _ = std::fs::remove_file(paths::ipc_socket());
-    Ok(())
+    lifetime.finished()
 }
 
 /// Launches `mandara studio [section]` detached from the shell's process

@@ -1001,7 +1001,7 @@ pub fn register(r: &mut PluginRegistry) {
     );
 
     r.command(core, CommandSpec::new("quit", mandara_i18n::tk("Quit Mandara Shell"), |_, cx| {
-        cx.quit();
+        mandara_core::shell_lifetime::ShellLifetime::quit(cx);
         Ok(json!("bye"))
     }));
 }

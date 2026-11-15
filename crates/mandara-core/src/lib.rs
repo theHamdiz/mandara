@@ -14,6 +14,7 @@ pub mod outputs;
 pub mod password_symbols;
 pub mod shape;
 pub mod session_lock;
+pub mod shell_lifetime;
 pub mod shake;
 pub mod shm_canvas;
 pub mod spring;
