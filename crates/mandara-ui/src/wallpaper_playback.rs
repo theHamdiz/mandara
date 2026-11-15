@@ -41,7 +41,9 @@ pub(crate) fn refresh(cx: &mut App) {
         .map(|(output, _)| output)
         .collect::<Vec<_>>();
     if outputs.is_empty() {
-        cx.remove_global::<Watch>();
+        if cx.has_global::<Watch>() {
+            cx.remove_global::<Watch>();
+        }
         return;
     }
     if !cx.has_global::<Watch>() {
@@ -85,4 +87,21 @@ fn watch(cx: &mut App) {
         _subscriptions: subscriptions,
         _locks: locks,
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refreshing_without_live_scenes_needs_no_watch_or_shell_state() {
+        gpui_platform::application()
+            .with_windowing(gpui::WindowingRequest::Headless)
+            .run(|cx| {
+                refresh(cx);
+                refresh(cx);
+                assert!(!cx.has_global::<Watch>());
+                cx.spawn(async |cx| cx.update(|cx| cx.quit())).detach();
+            });
+    }
 }

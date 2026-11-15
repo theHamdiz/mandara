@@ -97,18 +97,19 @@ pub(super) fn ready() -> async_channel::Receiver<()> {
     let (done, receive) = async_channel::bounded(1);
     state.ready = Some(receive.clone());
     mandara_services::runtime::spawn("launcher-usage-reader", async move {
-        let snapshot = mandara_services::runtime::unblock(|| initialize(&STATE, || read_file(&super::usage_path()))).await;
-        if let Some(snapshot) = snapshot { WRITER.submit(snapshot); }
+        mandara_services::runtime::unblock(|| initialize(&STATE, || read_file(&super::usage_path()), |snapshot| WRITER.submit(snapshot))).await;
         drop(done);
     });
     receive
 }
 
-fn initialize(state: &Mutex<State>, load: impl FnOnce() -> Usage) -> Option<Arc<Usage>> {
+fn initialize(state: &Mutex<State>, load: impl FnOnce() -> Usage, submit: impl FnOnce(Arc<Usage>)) {
     let mut history = load();
     history.bound();
     let mut state = state.lock().unwrap_or_else(|error| error.into_inner());
-    state.install(history).then(|| Arc::new(state.usage.clone()))
+    if state.install(history) {
+        submit(Arc::new(state.usage.clone()));
+    }
 }
 
 pub(super) fn read_file(path: &std::path::Path) -> Usage {
@@ -198,15 +199,53 @@ mod tests {
                     history.entries.insert(format!("app:{index}"), UsageEntry { score: 1.0, last: index });
                 }
                 history
-            }));
+            }, |_| panic!("an unchanged history must not be submitted")));
             started.recv().unwrap();
             assert!(state.try_lock().is_ok(), "UI access stays available during import");
             resume.send(()).unwrap();
-            assert!(worker.join().unwrap().is_none());
+            worker.join().unwrap();
         });
         let state = state.lock().unwrap();
         assert_eq!(state.usage.entries.len(), super::super::MAX_USAGE_ENTRIES);
         assert_eq!(state.usage.entries.values().map(|entry| entry.last).min(), Some(32_000 - super::super::MAX_USAGE_ENTRIES as i64));
+    }
+
+    #[test]
+    fn a_launch_after_initialization_cannot_be_overwritten_by_its_older_snapshot() {
+        let mut initial = State::default();
+        initial.record("first", 1, 7.0);
+        let state = Mutex::new(initial);
+        let (sender, receiver) = async_channel::bounded(1);
+        let writer = Writer(sender);
+        let (submitting, submitted) = std::sync::mpsc::channel();
+        let (resume, proceed) = std::sync::mpsc::channel();
+        std::thread::scope(|scope| {
+            let state = &state;
+            let writer = &writer;
+            let reader = scope.spawn(move || initialize(state, Usage::default, |snapshot| {
+                submitting.send(()).unwrap();
+                proceed.recv().unwrap();
+                writer.submit(snapshot);
+            }));
+            submitted.recv().unwrap();
+            let launch = scope.spawn(move || {
+                let mut state = state.lock().unwrap();
+                state.record("second", 2, 7.0);
+                writer.submit(Arc::new(state.usage.clone()));
+            });
+            assert!(state.try_lock().is_err(), "submission keeps the state-update order");
+            resume.send(()).unwrap();
+            reader.join().unwrap();
+            launch.join().unwrap();
+        });
+        let latest = receiver.try_recv().unwrap();
+        assert!(receiver.try_recv().is_err());
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("usage.toml");
+        mandara_config::write_atomic(&path, toml::to_string(latest.as_ref()).unwrap().as_bytes()).unwrap();
+        let saved = read_file(&path);
+        assert!(saved.entries.contains_key("first"));
+        assert!(saved.entries.contains_key("second"));
     }
 
     #[test]
