@@ -6,7 +6,13 @@ About → What's new shows it too.
 
 ## Unreleased
 
-A calmer, more consistent Studio, with live chips in the bar and a richer dock.
+A calmer, more consistent Studio, with live chips in the bar, a richer dock and an optional grain texture.
+
+### New
+
+- Bar items can be live chips: Resources shows labelled numbers, tiny live graphs or one inline chart of CPU and memory; Notifications shows your latest notification and the count; Network shows the network name and signal; Bluetooth shows your connected device and its battery. Pick a look under *In the bar* in each plugin's settings, or with `mandara msg bar display`; nothing changes until you do.
+- The dock can be made of liquid glass, lift or highlight the icon under your pointer, glow under running apps and show app names after a delay you choose. The taskbar gains a glass tray, app names, window counts, a raised focus style and coral for apps that need you. All of it is off until you pick it.
+- A fine grain texture for Studio, cards, bars, the launcher, panels, the dock and the taskbar, each with its own style (fine, film, paper fibre or speckle), strength, size, contrast and colour, kept subtle. Find it under Themes → Components → Grain; it is off until you pick a style.
 
 ### Improved
 
@@ -14,6 +20,8 @@ A calmer, more consistent Studio, with live chips in the bar and a richer dock.
 - The Plugins page keeps its tabs, search and categories in one toolbar, and its categories in a single row that scrolls.
 - The lock screen's design picker shows the same six previews as the login screen.
 - About shows the latest five releases under What's new and keeps only those in memory; the full history is a click away.
+- Typography opens with a live specimen of your interface, display, Arabic and monospace fonts, drawn in each face at your weight and size.
+- In right-to-left languages Studio's close button sits at the outer edge of the title bar.
 
 ## 0.31.0 — 2026-11-15
 
