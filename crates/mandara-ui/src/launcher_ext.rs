@@ -347,18 +347,19 @@ struct SnapshotJob<K, V> {
     snapshot: Arc<Snapshot<V>>,
 }
 
-/// Bounded blocking readers, one queued request, and keyed last-good values.
+/// Bounded blocking readers, one queued request per caller kind, and keyed last-good values.
 pub(super) struct BackgroundSnapshot<K, V> {
     values: std::collections::VecDeque<(K, Arc<V>)>,
     running: Vec<(K, Arc<Snapshot<V>>)>,
-    queued: Option<SnapshotJob<K, V>>,
+    queued_view: Option<SnapshotJob<K, V>>,
+    queued_command: Option<SnapshotJob<K, V>>,
 }
 
 impl<K: 'static, V: 'static> gpui::Global for BackgroundSnapshot<K, V> {}
 
 impl<K, V> Default for BackgroundSnapshot<K, V> {
     fn default() -> Self {
-        Self { values: Default::default(), running: Vec::new(), queued: None }
+        Self { values: Default::default(), running: Vec::new(), queued_view: None, queued_command: None }
     }
 }
 
@@ -368,27 +369,50 @@ impl<K: Clone + PartialEq + Send + 'static, V: Send + Sync + 'static> Background
     }
 
     pub(super) fn refresh(cx: &mut gpui::App, key: K, load: fn(K) -> V) -> Arc<Snapshot<V>> {
-        let state = cx.default_global::<Self>();
-        if let Some((_, snapshot)) = state.running.iter().find(|(running, _)| running == &key) {
-            return snapshot.clone();
-        }
-        if let Some(job) = &state.queued
-            && job.key == key
-        {
-            return job.snapshot.clone();
-        }
-        let (done, snapshot) = Snapshot::new();
-        let job = SnapshotJob { key, done, snapshot: snapshot.clone() };
-        if state.running.len() >= MAX_SNAPSHOT_READS {
-            // Replacing a queued job closes its signal without a value.
-            state.queued = Some(job);
-        } else {
-            Self::start(cx, job, load);
-        }
+        let snapshot = cx.default_global::<Self>().request(key, false);
+        Self::start_next(cx, load);
         snapshot
     }
 
-    fn start(cx: &mut gpui::App, job: SnapshotJob<K, V>, load: fn(K) -> V) {
+    pub(super) fn refresh_for_view(cx: &mut gpui::App, key: K, load: fn(K) -> V) {
+        cx.default_global::<Self>().request(key, true);
+        Self::start_next(cx, load);
+    }
+
+    fn request(&mut self, key: K, for_view: bool) -> Arc<Snapshot<V>> {
+        if let Some((_, snapshot)) = self.running.iter().find(|(running, _)| running == &key) {
+            return snapshot.clone();
+        }
+        if let Some(job) = self.queued_view.as_ref().filter(|job| job.key == key) {
+            return job.snapshot.clone();
+        }
+        if let Some(job) = self.queued_command.as_ref().filter(|job| job.key == key) {
+            let snapshot = job.snapshot.clone();
+            if for_view {
+                self.queued_view = self.queued_command.take();
+            }
+            return snapshot;
+        }
+        let slot = if for_view {
+            &mut self.queued_view
+        } else {
+            &mut self.queued_command
+        };
+        let (done, snapshot) = Snapshot::new();
+        *slot = Some(SnapshotJob { key, done, snapshot: snapshot.clone() });
+        snapshot
+    }
+
+    fn next(&mut self) -> Option<SnapshotJob<K, V>> {
+        if self.running.len() >= MAX_SNAPSHOT_READS {
+            return None;
+        }
+        // IPC must not replace the refresh that the open launcher is waiting for.
+        self.queued_view.take().or_else(|| self.queued_command.take())
+    }
+
+    fn start_next(cx: &mut gpui::App, load: fn(K) -> V) {
+        let Some(job) = cx.global_mut::<Self>().next() else { return };
         let SnapshotJob { key, done, snapshot } = job;
         cx.global_mut::<Self>().running.push((key.clone(), snapshot.clone()));
         let (result, receive) = async_channel::bounded(1);
@@ -411,9 +435,7 @@ impl<K: Clone + PartialEq + Send + 'static, V: Send + Sync + 'static> Background
                         state.values.pop_front();
                     }
                 }
-                if let Some(next) = state.queued.take() {
-                    Self::start(cx, next, load);
-                }
+                Self::start_next(cx, load);
             });
             done.close();
         }).detach();
@@ -916,6 +938,30 @@ mod tests {
         drop(cancel);
         assert!(snapshot.ready().is_closed());
         assert!(snapshot.value().is_none());
+    }
+
+    #[test]
+    fn ipc_refreshes_cannot_displace_the_open_launchers_queued_catalog() {
+        let mut catalogs = BackgroundSnapshot::<_, ()>::default();
+        let (_first, first) = Snapshot::new();
+        let (_second, second) = Snapshot::new();
+        catalogs.running.extend([(1, first), (2, second)]);
+
+        let shared = catalogs.request(3, false);
+        let view = catalogs.request(3, true);
+        let old_ipc = catalogs.request(4, false);
+        let ipc = catalogs.request(5, false);
+        assert!(Arc::ptr_eq(&view, &shared));
+        assert!(old_ipc.ready().is_closed());
+        assert!(!view.ready().is_closed());
+        assert!(!ipc.ready().is_closed());
+        assert!(catalogs.next().is_none());
+
+        catalogs.running.pop();
+        let next = catalogs.next().expect("the view keeps its place");
+        assert_eq!(next.key, 3);
+        assert!(Arc::ptr_eq(&view, &next.snapshot));
+        assert_eq!(catalogs.next().map(|job| job.key), Some(5));
     }
 
     #[test]

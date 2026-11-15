@@ -1529,7 +1529,7 @@ impl LauncherView {
             if providers_changed {
                 this.mode = launcher_looks::settle_mode(this.mode, &this.ctx.providers);
                 if !files_were_enabled && this.ctx.providers.files.enabled {
-                    launcher_ext::RecentFiles::refresh(cx, (), launcher_ext::read_recent_files);
+                    launcher_ext::RecentFiles::refresh_for_view(cx, (), launcher_ext::read_recent_files);
                 }
             }
             let wallpaper_dir = config.read(cx).get().wallpaper.directory.clone();
@@ -1538,13 +1538,13 @@ impl LauncherView {
                 this.wallpapers_key = wallpaper_dir;
                 if this.ctx.providers.wallpapers.enabled {
                     this.ctx.load("wallpapers", cx);
-                    Wallpapers::refresh(cx, this.wallpapers_key.clone(), launcher_data::read_wallpapers);
+                    Wallpapers::refresh_for_view(cx, this.wallpapers_key.clone(), launcher_data::read_wallpapers);
                 }
             }
             let catalog_key = CatalogRequest::new(config.read(cx).get(), &this.ctx.windows);
             if catalog_key != this.catalog_key {
                 this.catalog_key = catalog_key;
-                AppCatalog::refresh(cx, this.catalog_key.clone(), launcher_data::read_catalog);
+                AppCatalog::refresh_for_view(cx, this.catalog_key.clone(), launcher_data::read_catalog);
             }
             if look_changed {
                 this.ctx.set_catalog(this.ctx.catalog.clone(), this.look.app_actions);
@@ -1643,12 +1643,12 @@ impl LauncherView {
             output: None,
             created: Instant::now(),
         };
-        AppCatalog::refresh(cx, this.catalog_key.clone(), launcher_data::read_catalog);
+        AppCatalog::refresh_for_view(cx, this.catalog_key.clone(), launcher_data::read_catalog);
         if this.ctx.providers.wallpapers.enabled {
-            Wallpapers::refresh(cx, this.wallpapers_key.clone(), launcher_data::read_wallpapers);
+            Wallpapers::refresh_for_view(cx, this.wallpapers_key.clone(), launcher_data::read_wallpapers);
         }
         if this.ctx.providers.files.enabled {
-            launcher_ext::RecentFiles::refresh(cx, (), launcher_ext::read_recent_files);
+            launcher_ext::RecentFiles::refresh_for_view(cx, (), launcher_ext::read_recent_files);
         }
         this.categories = launcher_looks::categories(&this.ctx.catalog.apps, &this.ctx.pinned);
         if this.look.remember_query {
