@@ -554,6 +554,17 @@ fn usage_key(item: &Item) -> String {
     }
 }
 
+/// Windows share their app's usage score, but selection follows the window id.
+fn selection_key(item: &Item) -> String {
+    if let Item::Hit(hit) = item
+        && hit.provider == "windows"
+        && let HitAction::Command(words) = &hit.action
+    {
+        return words.join(" ");
+    }
+    usage_key(item)
+}
+
 /// Live data the providers search, gathered when the launcher opens. The
 /// provider settings follow config edits while it is open
 /// ([`SearchCtx::follow_providers`]).
@@ -1272,16 +1283,14 @@ fn with_results(
     let apps_key = ctx.uses(&query, "apps").then(|| CatalogRequest::new(cfg, &ctx.windows));
     let wallpapers_key = ctx.uses(&query, "wallpapers").then(|| cfg.wallpaper.directory.clone());
     let use_recents = ctx.uses(&query, "files");
-    let mut requests = Vec::new();
-    if let Some(key) = &apps_key {
-        requests.push(AppCatalog::refresh(cx, key.clone(), launcher_data::read_catalog));
-    }
-    if let Some(key) = &wallpapers_key {
-        requests.push(Wallpapers::refresh(cx, key.clone(), launcher_data::read_wallpapers));
-    }
-    if use_recents {
-        requests.push(launcher_ext::RecentFiles::refresh(cx, (), launcher_ext::read_recent_files));
-    }
+    let apps = apps_key.map(|key| AppCatalog::refresh(cx, key, launcher_data::read_catalog));
+    let wallpapers = wallpapers_key.map(|key| Wallpapers::refresh(cx, key, launcher_data::read_wallpapers));
+    let recents = use_recents.then(|| launcher_ext::RecentFiles::refresh(cx, (), launcher_ext::read_recent_files));
+    let requests = [
+        apps.as_ref().map(|request| request.ready()),
+        wallpapers.as_ref().map(|request| request.ready()),
+        recents.as_ref().map(|request| request.ready()),
+    ].into_iter().flatten().collect::<Vec<_>>();
     if requests.is_empty() {
         return finish(&query, search_with(&query, &[], &index, &ctx), cx).map(Into::into);
     }
@@ -1293,14 +1302,15 @@ fn with_results(
             let _ = reply.try_send(Err(timed_out()));
         } else if !reply.is_closed() {
             let output = cx.update(|cx| {
-                if let Some(key) = &apps_key {
-                    ctx.set_catalog(AppCatalog::get(cx, key).ok_or_else(timed_out)?, app_actions);
+                let cancelled = || t("Cancelled").to_string();
+                if let Some(request) = apps {
+                    ctx.set_catalog(request.value().ok_or_else(cancelled)?, app_actions);
                 }
-                if let Some(key) = &wallpapers_key {
-                    ctx.wallpapers = Wallpapers::get(cx, key).ok_or_else(timed_out)?;
+                if let Some(request) = wallpapers {
+                    ctx.wallpapers = request.value().ok_or_else(cancelled)?;
                 }
-                if use_recents {
-                    ctx.recent_files = launcher_ext::RecentFiles::get(cx, &()).unwrap_or_default();
+                if let Some(request) = recents {
+                    ctx.recent_files = request.value().ok_or_else(cancelled)?;
                 }
                 finish(&query, search_with(&query, &ctx.catalog.apps, &index, &ctx), cx)
             });
@@ -1687,10 +1697,10 @@ impl LauncherView {
         if !self.ctx.uses(&self.effective_query(), provider) {
             return;
         }
-        let selected = (self.selected != 0).then(|| self.results.get(self.selected)).flatten().map(usage_key);
+        let selected = (self.selected != 0).then(|| self.results.get(self.selected)).flatten().map(selection_key);
         self.refilter(cx);
         if let Some(selected) = selected
-            && let Some(index) = self.results.iter().position(|item| usage_key(item) == selected)
+            && let Some(index) = self.results.iter().position(|item| selection_key(item) == selected)
         {
             self.selected = index;
         }
@@ -2778,6 +2788,24 @@ mod tests {
 
     /// `reddit` and `subreddit` find the plugin; `r/name` opens that
     /// community, only while the plugin is on.
+    #[test]
+    fn window_selection_distinguishes_windows_from_the_same_app() {
+        let window = |id: &str| Item::Hit(Hit {
+            provider: "windows",
+            key: "org.example.App".into(),
+            label: String::new(),
+            detail: String::new(),
+            lead: Lead::Icon("window"),
+            badge: "",
+            keywords: String::new(),
+            action: HitAction::Command(vec!["window".into(), "focus".into(), id.into()]),
+        });
+        let first = window("1");
+        let second = window("2");
+        assert_eq!(usage_key(&first), usage_key(&second));
+        assert_ne!(selection_key(&first), selection_key(&second));
+    }
+
     #[test]
     fn reddit_names_and_communities_reach_the_plugin() {
         let (registry, mut cfg, index) = fixture();

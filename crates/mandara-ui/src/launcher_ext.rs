@@ -315,50 +315,82 @@ pub struct FileEntry {
     directory: bool,
 }
 
-/// One worker and at most one queued refresh for each launcher data source.
+/// One stalled key leaves room for a replacement without creating an
+/// unbounded number of threads if several mounts are unavailable.
+const MAX_SNAPSHOT_READS: usize = 2;
+
+pub(super) struct Snapshot<V> {
+    ready: async_channel::Receiver<()>,
+    value: OnceLock<Arc<V>>,
+}
+
+impl<V> Snapshot<V> {
+    fn new() -> (async_channel::Sender<()>, Arc<Self>) {
+        let (done, ready) = async_channel::bounded(1);
+        (done, Arc::new(Self { ready, value: OnceLock::new() }))
+    }
+
+    pub(super) fn ready(&self) -> async_channel::Receiver<()> {
+        self.ready.clone()
+    }
+
+    /// A closed signal with no value means the request was cancelled or
+    /// its worker stopped. The value belongs to this request, not the cache.
+    pub(super) fn value(&self) -> Option<Arc<V>> {
+        self.value.get().cloned()
+    }
+}
+
+struct SnapshotJob<K, V> {
+    key: K,
+    done: async_channel::Sender<()>,
+    snapshot: Arc<Snapshot<V>>,
+}
+
+/// Bounded blocking readers, one queued request, and keyed last-good values.
 pub(super) struct BackgroundSnapshot<K, V> {
-    value: Option<(K, Arc<V>)>,
-    running: Option<(K, async_channel::Receiver<()>)>,
-    queued: Option<(K, async_channel::Sender<()>, async_channel::Receiver<()>)>,
+    values: std::collections::VecDeque<(K, Arc<V>)>,
+    running: Vec<(K, Arc<Snapshot<V>>)>,
+    queued: Option<SnapshotJob<K, V>>,
 }
 
 impl<K: 'static, V: 'static> gpui::Global for BackgroundSnapshot<K, V> {}
 
 impl<K, V> Default for BackgroundSnapshot<K, V> {
     fn default() -> Self {
-        Self { value: None, running: None, queued: None }
+        Self { values: Default::default(), running: Vec::new(), queued: None }
     }
 }
 
 impl<K: Clone + PartialEq + Send + 'static, V: Send + Sync + 'static> BackgroundSnapshot<K, V> {
     pub(super) fn get(cx: &gpui::App, key: &K) -> Option<Arc<V>> {
-        let (loaded, value) = cx.try_global::<Self>()?.value.as_ref()?;
-        (loaded == key).then(|| value.clone())
+        cx.try_global::<Self>()?.values.iter().find_map(|(loaded, value)| (loaded == key).then(|| value.clone()))
     }
 
-    pub(super) fn refresh(cx: &mut gpui::App, key: K, load: fn(K) -> V) -> async_channel::Receiver<()> {
+    pub(super) fn refresh(cx: &mut gpui::App, key: K, load: fn(K) -> V) -> Arc<Snapshot<V>> {
         let state = cx.default_global::<Self>();
-        if let Some((running, wait)) = &state.running {
-            if running == &key {
-                state.queued = None;
-                return wait.clone();
-            }
-            if let Some((queued, _, wait)) = &state.queued
-                && queued == &key
-            {
-                return wait.clone();
-            }
-            let (done, wait) = async_channel::bounded(1);
-            state.queued = Some((key, done, wait.clone()));
-            return wait;
+        if let Some((_, snapshot)) = state.running.iter().find(|(running, _)| running == &key) {
+            return snapshot.clone();
         }
-        let (done, wait) = async_channel::bounded(1);
-        Self::start(cx, key, done, wait.clone(), load);
-        wait
+        if let Some(job) = &state.queued
+            && job.key == key
+        {
+            return job.snapshot.clone();
+        }
+        let (done, snapshot) = Snapshot::new();
+        let job = SnapshotJob { key, done, snapshot: snapshot.clone() };
+        if state.running.len() >= MAX_SNAPSHOT_READS {
+            // Replacing a queued job closes its signal without a value.
+            state.queued = Some(job);
+        } else {
+            Self::start(cx, job, load);
+        }
+        snapshot
     }
 
-    fn start(cx: &mut gpui::App, key: K, done: async_channel::Sender<()>, wait: async_channel::Receiver<()>, load: fn(K) -> V) {
-        cx.global_mut::<Self>().running = Some((key.clone(), wait));
+    fn start(cx: &mut gpui::App, job: SnapshotJob<K, V>, load: fn(K) -> V) {
+        let SnapshotJob { key, done, snapshot } = job;
+        cx.global_mut::<Self>().running.push((key.clone(), snapshot.clone()));
         let (result, receive) = async_channel::bounded(1);
         let input = key.clone();
         let _ = std::thread::Builder::new().name("mandara-launcher-data".into()).spawn(move || {
@@ -368,15 +400,21 @@ impl<K: Clone + PartialEq + Send + 'static, V: Send + Sync + 'static> Background
             let result = receive.recv().await;
             cx.update(|cx| {
                 let state = cx.global_mut::<Self>();
-                state.running = None;
+                state.running.retain(|(_, running)| !Arc::ptr_eq(running, &snapshot));
                 if let Ok(value) = result {
-                    state.value = Some((key, value));
+                    let _ = snapshot.value.set(value.clone());
+                    // A late result belongs to its own key. It cannot
+                    // replace the current directory's snapshot.
+                    state.values.retain(|(loaded, _)| loaded != &key);
+                    state.values.push_back((key, value));
+                    if state.values.len() > MAX_SNAPSHOT_READS {
+                        state.values.pop_front();
+                    }
                 }
-                if let Some((key, done, wait)) = state.queued.take() {
-                    Self::start(cx, key, done, wait, load);
+                if let Some(next) = state.queued.take() {
+                    Self::start(cx, next, load);
                 }
             });
-            // Close rather than send so every waiter sees completion.
             done.close();
         }).detach();
     }
@@ -863,6 +901,22 @@ pub fn register(r: &mut mandara_plugins::PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snapshot_keeps_its_value_after_completion_and_distinguishes_cancellation() {
+        let (done, snapshot) = Snapshot::new();
+        let second_waiter = snapshot.clone();
+        assert!(!second_waiter.ready().is_closed());
+        let _ = snapshot.value.set(Arc::new("first result"));
+        done.close();
+        assert!(second_waiter.ready().is_closed());
+        assert_eq!(second_waiter.value().as_deref(), Some(&"first result"));
+
+        let (cancel, snapshot) = Snapshot::<String>::new();
+        drop(cancel);
+        assert!(snapshot.ready().is_closed());
+        assert!(snapshot.value().is_none());
+    }
 
     #[test]
     fn routes_by_longest_prefix() {
