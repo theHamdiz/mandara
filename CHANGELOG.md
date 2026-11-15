@@ -30,6 +30,10 @@ Studio refinements, optional bar and dock effects, richer third-party plugins, a
 
 - In right-to-left languages Studio's close button sits at the outer edge of the title bar.
 
+### Fixed
+
+- Scrolling list views in third-party plugins no longer flicker back to their first rows after you stop scrolling.
+
 ## 0.33.0 — 2026-11-15
 
 Install apps from any tar archive, tidy up the download afterwards, and skip the compile on NixOS.
