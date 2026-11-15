@@ -1071,6 +1071,34 @@ mod tests {
         assert!(w.take_retries().is_empty(), "the newer snapshot wins");
     }
 
+    /// The host's retry path against a real write error: every try fails,
+    /// the snapshot is kept, and after the disk recovers the retry writes it.
+    #[test]
+    fn a_failed_storage_write_is_retried_after_the_disk_recovers() {
+        let dir = std::env::temp_dir().join(format!("mandara-host-storage-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let blocker = dir.join("blocked");
+        std::fs::write(&blocker, "not a folder").unwrap();
+        let path = blocker.join("p.json");
+        let json: std::sync::Arc<str> = "{\"a\":\"1\"}".into();
+        let mut w = super::StorageWrites::default();
+        let generation = w.begin(&path);
+        for _ in 0..super::STORAGE_WRITE_ATTEMPTS {
+            assert!(mandara_plugins::wasm::write_storage(&path, &json).is_err());
+        }
+        w.failed(path.clone(), generation, json.clone());
+        std::fs::remove_file(&blocker).unwrap();
+        for (p, j) in w.take_retries() {
+            let generation = w.begin(&p);
+            mandara_plugins::wasm::write_storage(&p, &j).unwrap();
+            w.written(&p, generation);
+        }
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), &*json);
+        assert!(w.take_retries().is_empty(), "nothing left to retry");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     /// Issue #10: plugins may only queue interface commands. Every allowed
     /// path is a real built-in command (a typo would silently block it),
     /// and nothing that starts programs or changes settings, startup apps,

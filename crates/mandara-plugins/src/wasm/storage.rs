@@ -218,6 +218,36 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// A write that really fails (its folder can't be made: a file stands
+    /// in the way) keeps the snapshot; a reload and a new edit build on it,
+    /// and once the disk recovers both edits land.
+    #[test]
+    fn a_real_write_error_loses_nothing_across_a_reload() {
+        let dir = std::env::temp_dir().join(format!("mandara-storage-error-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let blocker = dir.join("blocked");
+        std::fs::write(&blocker, "not a folder").unwrap();
+        let path = blocker.join("p.json");
+        let mut first = Storage { path: path.clone(), map: None, bytes: 0, dirty: false };
+        first.set("a".into(), "1".into()).unwrap();
+        let (p, json) = first.take_flush().unwrap();
+        assert!(write_snapshot(&p, &json).is_err(), "the write fails");
+        drop(first);
+        let mut second = Storage { path: path.clone(), map: None, bytes: 0, dirty: false };
+        assert_eq!(second.get("a").as_deref(), Some("1"), "the reload keeps the failed edit");
+        second.set("b".into(), "2".into()).unwrap();
+        let (p, json) = second.take_flush().unwrap();
+        assert!(write_snapshot(&p, &json).is_err(), "still failing");
+        // The disk recovers; the kept snapshot is written again.
+        std::fs::remove_file(&blocker).unwrap();
+        write_snapshot(&p, &json).unwrap();
+        assert!(!unwritten(|u| u.contains_key(&path)));
+        let mut third = Storage { path, map: None, bytes: 0, dirty: false };
+        assert_eq!((third.get("a").as_deref(), third.get("b").as_deref()), (Some("1"), Some("2")), "both edits are on disk");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn storage_is_bounded_and_flushes_once() {
         let mut s = Storage { path: PathBuf::from("/nonexistent/x.json"), map: Some(BTreeMap::new()), bytes: 0, dirty: false };
