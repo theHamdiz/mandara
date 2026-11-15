@@ -32,6 +32,7 @@ use gpui::{
     AnyElement, App, ClickEvent, Context, FocusHandle, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, SharedString, StatefulInteractiveElement, Styled,
     StyledImage as _, Subscription, Task, Window, div, img, prelude::FluentBuilder as _, px,
 };
+use mandara_compositor::NavigationModel;
 use mandara_config::ShellConfig;
 use mandara_config::desktop::{SlideshowSource, WallpaperSlideshow, defaults, effective_wallpaper, parse_interval};
 use mandara_core::ToGpui;
@@ -183,6 +184,13 @@ fn available(cfg: &ShellConfig, cx: &App) -> Vec<WallpaperTab> {
 struct Workshop {
     items: Vec<mandara_services::wallpaper_engine::Project>,
     outputs: Vec<String>,
+}
+
+fn effective_workshop_workspace(workspace: Option<u32>, navigation: Option<&NavigationModel>) -> Option<u32> {
+    workspace.filter(|id| {
+        matches!(navigation, Some(NavigationModel::Workspaces { workspaces })
+            if workspaces.iter().any(|workspace| workspace.id == *id))
+    })
 }
 
 fn workshop_args(action: &str, output: &str, id: Option<u64>, workspace: Option<u32>) -> Vec<String> {
@@ -481,8 +489,9 @@ impl StudioView {
         let output = page.workshop_output.as_ref().filter(|o| data.outputs.contains(o))
             .or_else(|| cfg.displays.primary.as_ref().filter(|o| data.outputs.contains(o)))
             .or(data.outputs.first()).cloned();
-        let workspace = page.workshop_workspace;
-        let navigation = output.as_ref().and_then(|o| page.workshop_navigation.get(o)).cloned();
+        let navigation = output.as_ref().and_then(|o| page.workshop_navigation.get(o));
+        let workspace = effective_workshop_workspace(page.workshop_workspace, navigation);
+        let navigation = navigation.cloned();
         let selected = output.as_ref().and_then(|o| match workspace {
             Some(id) => cfg.wallpaper.workshop_workspaces.get(o)?.get(&id.to_string()),
             None => cfg.wallpaper.workshop.get(o),
@@ -519,7 +528,7 @@ impl StudioView {
                 .on_click(cx.listener(move |_, _, _, cx| workshop_command(workshop_args("save-still", &out, None, None), cx))));
         }
         let mut body = div().row().flex_col().gap(px(SPACE_14_PX)).child(controls).child(div().w(px(SEARCH_W_PX)).max_w_full().child(search));
-        if let Some(mandara_compositor::NavigationModel::Workspaces { workspaces }) = navigation {
+        if let Some(NavigationModel::Workspaces { workspaces }) = navigation {
             let mut scopes = div().row().flex_wrap().items_center().gap(px(SPACE_8_PX))
                 .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(t("Workspaces")))
                 .child(chip("workshop-default", t("Default"), workspace.is_none(), p).tab_index(0)
@@ -1504,6 +1513,19 @@ impl StudioView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn workshop_uses_only_workspaces_on_the_effective_output() {
+        let navigation = NavigationModel::Workspaces {
+            workspaces: vec![mandara_compositor::WorkspaceStatus {
+                id: 7, name: "7".into(), active: false, occupied: false, urgent: false, layout: String::new(),
+            }],
+        };
+        let saved = Some(7);
+        assert_eq!(effective_workshop_workspace(saved, None), None);
+        assert_eq!(effective_workshop_workspace(Some(8), Some(&navigation)), None);
+        assert_eq!(effective_workshop_workspace(saved, Some(&navigation)), saved);
+    }
 
     #[test]
     fn tabs_parse_their_names_and_aliases() {
