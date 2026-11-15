@@ -6,6 +6,12 @@ About → What's new shows it too.
 
 ## Unreleased
 
+A clearer bar for third-party plugins.
+
+### Under the hood
+
+- The plugin guide gains a design and quality standard for everyone writing third-party plugins, and a strict version for AI coding agents: a designed hierarchy, polish passes on real screenshots, bounded memory and idiomatic Rust.
+
 ## 0.32.0 — 2026-11-15
 
 Third-party plugins can now become part of the desktop itself: rich native

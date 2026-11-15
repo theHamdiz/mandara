@@ -8,6 +8,10 @@
 //! Build with `cargo build --release --target wasm32-wasip2`, then copy the
 //! `.wasm` next to `plugin.toml` as `plugin.wasm` (with `locales/` and
 //! `assets/`) in `~/.local/share/mandara/plugins-dev/moon-phase/`.
+//!
+//! Building your own from this? Meet PLUGINS.md's "Design and quality
+//! standard" (mandatory for AI agents): a designed hierarchy, polish passes
+//! on real screenshots, bounded memory and no Rust anti-patterns.
 
 mod calendar;
 mod moon;
