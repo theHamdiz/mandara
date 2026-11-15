@@ -33,7 +33,7 @@ use std::time::Instant;
 
 use gpui::App;
 use mandara_plugins::extension::{Access, Capability};
-use mandara_plugins::wasm::{ExtContext, ExtSurface, ImageEntry, ImageOrigin, Request};
+use mandara_plugins::wasm::{ImageEntry, ImageOrigin, RenderContext, Request, SurfaceKind};
 use serde_json::{Value, json};
 
 use super::{after_call, discovered, instance, loaded, views_of};
@@ -93,8 +93,8 @@ struct NetJob {
 }
 
 /// The context of `replies` events (they aren't tied to one surface).
-fn reply_context() -> ExtContext {
-    ExtContext { surface: ExtSurface::Panel, outlet: String::new(), instance: String::new(), width: 0.0, height: 0.0 }
+fn reply_context() -> RenderContext {
+    RenderContext { surface: SurfaceKind::Panel, outlet: String::new(), instance: String::new(), width: 0.0, height: 0.0, numerals: String::new(), calendar: String::new(), language: String::new() }
 }
 
 /// Queues a result for plugin `plugin`'s request `id`. Results are handed
@@ -433,7 +433,8 @@ fn media_control(op: &str, payload: &serde_json::Map<String, Value>, cx: &mut Ap
         "play-pause" => MediaCommand::PlayPause,
         "next" => MediaCommand::Next,
         "previous" => MediaCommand::Previous,
-        "seek" => MediaCommand::SeekTo(std::time::Duration::from_secs_f64(number("seconds")?.max(0.0))),
+        // Fallible: a huge number would make `from_secs_f64` panic.
+        "seek" => MediaCommand::SeekTo(std::time::Duration::try_from_secs_f64(number("seconds")?.max(0.0)).map_err(|_| "`seconds` is out of range".to_string())?),
         "volume" => {
             if hub(cx).read(cx).media.as_ref().and_then(|m| m.volume).is_none() {
                 return Err("this player doesn't let you change its volume".into());
@@ -578,6 +579,14 @@ fn pump_net(cx: &mut App) {
             Some(job)
         });
         let Some(job) = job else { return };
+        // Still allowed and still wanted? A revoked grant or a cancelled
+        // request must not reach the network (a POST has effects).
+        let allowed = live_access(&job.plugin, cx).is_some_and(|a| a.allows(&Capability::Net(job.host.clone())));
+        let open = loaded(&job.plugin).is_some_and(|p| p.borrow().as_ref().is_some_and(|p| p.is_open(job.id)));
+        if !allowed || !open {
+            NET_QUEUE.with(|q| q.borrow_mut().1 -= 1);
+            continue;
+        }
         let (tx, rx) = async_channel::bounded(1);
         let (host, url, method, body) = (job.host, job.url, job.method, job.body);
         let spawned = std::thread::Builder::new().name("mandara-plugin-net".into()).spawn(move || {
@@ -617,7 +626,7 @@ fn call_plugin(caller: &str, callee: &str, op: &str, payload: &serde_json::Map<S
     }
     let shared = instance(&d, cx);
     let answer = match shared.borrow_mut().as_mut() {
-        Some(p) => p.extension_call(caller, op, &Value::Object(payload.clone()).to_string()),
+        Some(p) => p.on_call(caller, op, &Value::Object(payload.clone()).to_string()),
         None => Err(format!("`{callee}` couldn't be loaded")),
     };
     after_call(callee, &shared, cx);
@@ -752,6 +761,7 @@ pub(super) fn stop(plugin: &str, ids: &[u64], cx: &mut App) {
         }
     });
     TIMERS.with(|t| t.borrow_mut().retain(|(p, id), _| p != plugin || !ids.contains(id)));
+    NET_QUEUE.with(|q| q.borrow_mut().0.retain(|j| j.plugin != plugin || !ids.contains(&j.id)));
     release_watch_if_idle(cx);
 }
 

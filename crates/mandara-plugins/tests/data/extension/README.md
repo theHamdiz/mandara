@@ -1,6 +1,6 @@
-# Extension-platform fixture
+# Plugin-platform fixture
 
-`fixture.wasm` is one small `extension-plugin` component used by
+`fixture.wasm` is one small plugin component used by
 `crates/mandara-plugins/tests/extension.rs`. Its `mode` setting picks what
 it does:
 
@@ -24,4 +24,4 @@ cargo build --release --locked --target wasm32-wasip2
 cp target/wasm32-wasip2/release/extension_fixture.wasm ../fixture.wasm
 ```
 
-Rebuild it whenever `wit/extensions.wit` changes.
+Rebuild it whenever `wit/plugin.wit` changes.

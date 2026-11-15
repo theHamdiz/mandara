@@ -458,10 +458,9 @@ against [`crates/mandara-plugins/wit/plugin.wit`](crates/mandara-plugins/wit/plu
 They return declarative view trees that Mandara renders natively in every
 theme, and they run sandboxed: no files, network, environment or
 subprocesses, a time budget per call, and a trap disables only that plugin.
-The `extension-plugin` world (`wit/extensions.wit`, additive: the older
-worlds are frozen) adds rich controls, Studio tabs, launcher providers,
-commands, private storage and a broker for the desktop's services, each a
-capability the person grants and can revoke. The host enforces every rule
+One `plugin` world (`wit/plugin.wit`) covers rich controls on every surface,
+Studio tabs, launcher providers, commands, private storage and a broker for
+the desktop's services, each a capability the person grants and can revoke. The host enforces every rule
 (`crates/mandara-plugins/src/extension.rs` for the policy,
 `crates/mandara-ui/src/plugins/external/brokers.rs` for the services); a
 new service is a new capability with its operations, a second check in the

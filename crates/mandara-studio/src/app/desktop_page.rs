@@ -202,6 +202,9 @@ impl StudioView {
     }
 
     pub(super) fn set_desktop_tab(&mut self, tab: DesktopTab, cx: &mut Context<Self>) {
+        // Choosing one of the page's own tabs (a deep link too) leaves a
+        // plugin's tab.
+        super::page_tabs::choose_plugin_tab("desktop", None, cx);
         if self.desktop_tab != tab {
             if self.desktop_tab == DesktopTab::ContextMenu {
                 cx.defer(release);

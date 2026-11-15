@@ -30,43 +30,12 @@ use crate::extension::{self, Access};
 
 wasmtime::component::bindgen!({ world: "plugin", path: "wit" });
 
-/// The `desktop-plugin` world: `plugin` plus desktop widgets. Its shared
-/// interfaces are the ones generated above, so one host serves both.
-mod desktop_world {
-    wasmtime::component::bindgen!({
-        world: "desktop-plugin",
-        path: "wit",
-        with: { "mandara:plugin/types": super::mandara::plugin::types, "mandara:plugin/host": super::mandara::plugin::host },
-    });
-}
 
-/// The `extension-plugin` world (`wit/extensions.wit`): `desktop-plugin`
-/// plus rich views, outlets and the broker, sharing the interfaces above.
-pub(crate) mod extension_world {
-    wasmtime::component::bindgen!({
-        world: "extension-plugin",
-        path: "wit",
-        with: {
-            "mandara:plugin/types": super::mandara::plugin::types,
-            "mandara:plugin/host": super::mandara::plugin::host,
-            "mandara:plugin/desktop": super::desktop_world::mandara::plugin::desktop,
-        },
-    });
-}
-
-pub use desktop_world::DesktopPlugin;
-pub use desktop_world::mandara::plugin::desktop::WidgetContext;
-pub use extension_world::ExtensionPlugin;
-pub use extension_world::mandara::plugin::platform::HostInfo;
-pub use extension_world::mandara::plugin::ui::{
-    Align, Context as ExtContext, Event as ExtEvent, Hit, KeyPress, Kind as Kind2, Mark, Node as Node2, OptionItem, Reply, Shape, Style, Surface as ExtSurface, Value as ExtValue, View as View2,
+pub use mandara::plugin::types::Tone;
+pub use mandara::plugin::ui::{
+    Align, Context as RenderContext, Event as PluginEvent, KeyPress, Kind, Mark, Node, OptionItem, Reply, Shape, Style, Surface as SurfaceKind, Value as EventValue,
 };
-pub use mandara::plugin::types::{Kind, Node, Tone};
 
-/// The export a component built for the `desktop-plugin` world has.
-const DESKTOP_EXPORT: &str = "desktop-widget";
-/// The export a component built for the `extension-plugin` world has.
-const EXTENSION_EXPORT: &str = "extension-view";
 /// Longest launcher result text (title, detail, keywords), in bytes; longer
 /// text is cut at a character boundary.
 const MAX_HIT_TEXT: usize = 256;
@@ -76,34 +45,6 @@ pub const MAX_DESKTOP_WIDGETS: usize = 16;
 /// Desktop widget ids: 1–64 lowercase ASCII letters, digits and `-`.
 pub fn valid_widget_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= MAX_ID_LEN && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-}
-
-/// A component's bindings: the plain `plugin` world, `desktop-plugin`, or
-/// `extension-plugin`.
-enum Bindings {
-    Plain(Plugin),
-    Desktop(DesktopPlugin),
-    Extension(ExtensionPlugin),
-}
-
-/// Calls an export every world has, whichever the component was built for.
-macro_rules! either {
-    ($b:expr, $s:expr, $call:ident $(, $arg:expr)*) => {
-        match $b {
-            Bindings::Plain(p) => p.$call($s $(, $arg)*),
-            Bindings::Desktop(p) => p.$call($s $(, $arg)*),
-            Bindings::Extension(p) => p.$call($s $(, $arg)*),
-        }
-    };
-}
-
-/// Which world a component was built for.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum World {
-    Plugin,
-    DesktopPlugin,
-    ExtensionPlugin,
 }
 
 /// Converts a wasmtime error into an anyhow one with context.
@@ -270,11 +211,10 @@ impl WasiView for HostState {
 }
 
 impl mandara::plugin::types::Host for HostState {}
-impl desktop_world::mandara::plugin::desktop::Host for HostState {}
-impl extension_world::mandara::plugin::platform::Host for HostState {}
-impl extension_world::mandara::plugin::ui::Host for HostState {}
+impl mandara::plugin::platform::Host for HostState {}
+impl mandara::plugin::ui::Host for HostState {}
 
-impl extension_world::mandara::plugin::storage::Host for HostState {
+impl mandara::plugin::storage::Host for HostState {
     fn get(&mut self, key: String) -> Option<String> {
         self.storage.get(&key)
     }
@@ -292,8 +232,8 @@ impl extension_world::mandara::plugin::storage::Host for HostState {
     }
 }
 
-impl extension_world::mandara::plugin::broker::Host for HostState {
-    fn submit(&mut self, request: extension_world::mandara::plugin::broker::Request) -> Result<u64, String> {
+impl mandara::plugin::broker::Host for HostState {
+    fn submit(&mut self, request: mandara::plugin::broker::Request) -> Result<u64, String> {
         let needs_gesture = extension::Capability::parse(&request.capability).is_ok_and(|c| c.needs_activation(&request.operation));
         let id = self.broker.submit(&self.access, self.activated, &request.capability, request.operation, &request.payload)?;
         // One sensitive action per gesture: a click can't authorise a burst.
@@ -419,30 +359,15 @@ pub(crate) fn load_component(path: &Path) -> Result<Component> {
 pub struct WasmPlugin {
     pub id: String,
     store: Store<HostState>,
-    bindings: Bindings,
+    bindings: Plugin,
     /// Set (with the reason) once the plugin trapped or errored; a disabled
     /// plugin is never called again.
     pub disabled: Option<String>,
-    /// The features an extension plugin negotiated (empty for older worlds).
+    /// The features the plugin negotiated.
     pub features: Vec<String>,
 }
 
-/// Which world `component` was built for, from its exports.
-pub fn world_of(component: &Component) -> Result<World> {
-    let engine = engine()?;
-    let mut world = World::Plugin;
-    for (name, _) in component.component_type().exports(engine) {
-        if name == EXTENSION_EXPORT {
-            return Ok(World::ExtensionPlugin);
-        }
-        if name == DESKTOP_EXPORT {
-            world = World::DesktopPlugin;
-        }
-    }
-    Ok(world)
-}
-
-/// What the host offers extension plugins (`negotiate`'s argument).
+/// What the host offers plugins (`negotiate`'s argument).
 pub fn host_info() -> HostInfo {
     HostInfo { api: extension::API_LEVEL, features: extension::FEATURES.iter().map(|f| (*f).to_string()).collect(), version: env!("CARGO_PKG_VERSION").to_string() }
 }
@@ -483,14 +408,7 @@ impl WasmPlugin {
         let mut linker: Linker<HostState> = Linker::new(engine()?);
         w(wasmtime_wasi::p2::add_to_linker_sync(&mut linker), "linking WASI")?;
         w(non_blocking_waits(&mut linker), "linking WASI")?;
-        // The exports tell the world: `extension-view` for an extension
-        // plugin, `desktop-widget` for a desktop plugin.
-        let world = world_of(component)?;
-        match world {
-            World::ExtensionPlugin => w(ExtensionPlugin::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |s| s), "linking host")?,
-            World::DesktopPlugin => w(DesktopPlugin::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |s| s), "linking host")?,
-            World::Plugin => w(Plugin::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |s| s), "linking host")?,
-        }
+        w(Plugin::add_to_linker::<HostState, HasSelf<HostState>>(&mut linker, |s| s), "linking host")?;
         let state = HostState {
             // No preopens, env, args or network: an empty sandbox.
             wasi: WasiCtxBuilder::new().build(),
@@ -513,38 +431,27 @@ impl WasmPlugin {
         store.set_epoch_deadline(CALL_BUDGET_TICKS * INIT_BUDGET_FACTOR);
         let bindings = {
             let _active = ActiveCall::start();
-            match world {
-                World::ExtensionPlugin => Bindings::Extension(w(ExtensionPlugin::instantiate(&mut store, component, &linker), "instantiating plugin")?),
-                World::DesktopPlugin => Bindings::Desktop(w(DesktopPlugin::instantiate(&mut store, component, &linker), "instantiating plugin")?),
-                World::Plugin => Bindings::Plain(w(Plugin::instantiate(&mut store, component, &linker), "instantiating plugin")?),
-            }
+            w(Plugin::instantiate(&mut store, component, &linker), "instantiating plugin")?
         };
         let mut plugin = Self { id: id.to_string(), store, bindings, disabled: None, features: Vec::new() };
-        if world == World::ExtensionPlugin {
-            let info = host_info();
-            let wanted = plugin
-                .call("negotiate", |b, s| match b {
-                    Bindings::Extension(p) => p.call_negotiate(s, &info),
-                    _ => Ok(Vec::new()),
-                })
-                .ok_or_else(|| anyhow::anyhow!("negotiate failed: {}", plugin.disabled.clone().unwrap_or_default()))?;
-            let missing = extension::missing_features(&wanted);
-            if !missing.is_empty() {
-                anyhow::bail!("it needs features this Mandara doesn't have ({}); update Mandara", missing.join(", "));
-            }
-            plugin.features = wanted;
+        let info = host_info();
+        let wanted = plugin.call("negotiate", |b, s| b.call_negotiate(s, &info)).ok_or_else(|| anyhow::anyhow!("negotiate failed: {}", plugin.disabled.clone().unwrap_or_default()))?;
+        let missing = extension::missing_features(&wanted);
+        if !missing.is_empty() {
+            anyhow::bail!("it needs features this Mandara doesn't have ({}); update Mandara", missing.join(", "));
         }
-        plugin.call_within("init", CALL_BUDGET_TICKS * INIT_BUDGET_FACTOR, |b, s| either!(b, s, call_init)).map(|r| r.map_err(|e| anyhow::anyhow!("init failed: {e}"))).unwrap_or(Ok(()))?;
+        plugin.features = wanted;
+        plugin.call_within("init", CALL_BUDGET_TICKS * INIT_BUDGET_FACTOR, |b, s| b.call_init(s)).map(|r| r.map_err(|e| anyhow::anyhow!("init failed: {e}"))).unwrap_or(Ok(()))?;
         Ok(plugin)
     }
 
     /// Runs one export under the time budget; a trap disables the plugin.
-    fn call<T>(&mut self, what: &str, f: impl FnOnce(&Bindings, &mut Store<HostState>) -> wasmtime::Result<T>) -> Option<T> {
+    fn call<T>(&mut self, what: &str, f: impl FnOnce(&Plugin, &mut Store<HostState>) -> wasmtime::Result<T>) -> Option<T> {
         self.call_within(what, CALL_BUDGET_TICKS, f)
     }
 
     /// [`Self::call`] with an explicit budget in epoch ticks.
-    fn call_within<T>(&mut self, what: &str, ticks: u64, f: impl FnOnce(&Bindings, &mut Store<HostState>) -> wasmtime::Result<T>) -> Option<T> {
+    fn call_within<T>(&mut self, what: &str, ticks: u64, f: impl FnOnce(&Plugin, &mut Store<HostState>) -> wasmtime::Result<T>) -> Option<T> {
         if self.disabled.is_some() {
             return None;
         }
@@ -564,31 +471,6 @@ impl WasmPlugin {
         }
     }
 
-    fn localized(&mut self, view: Option<View>) -> Option<View> {
-        let mut view = view?;
-        self.store.data_mut().i18n.translate_view(&mut view);
-        Some(view)
-    }
-
-    pub fn bar(&mut self, theme: &Palette) -> Option<View> {
-        let v = self.call("bar", |b, s| either!(b, s, call_bar, theme)).flatten();
-        self.localized(v)
-    }
-
-    pub fn panel(&mut self, theme: &Palette) -> Option<View> {
-        let v = self.call("panel", |b, s| either!(b, s, call_panel, theme)).flatten();
-        self.localized(v)
-    }
-
-    pub fn sidebar(&mut self, theme: &Palette) -> Option<View> {
-        let v = self.call("sidebar", |b, s| either!(b, s, call_sidebar, theme)).flatten();
-        self.localized(v)
-    }
-
-    pub fn on_event(&mut self, action: &str) {
-        self.call("on-event", |b, s| either!(b, s, call_on_event, action));
-    }
-
     /// The settings `host::setting` answers from.
     pub fn settings(&self) -> &serde_json::Map<String, serde_json::Value> {
         &self.store.data().settings
@@ -599,39 +481,8 @@ impl WasmPlugin {
         self.store.data_mut().settings = settings;
     }
 
-    /// Whether the plugin offers desktop widgets (`desktop-plugin` or
-    /// `extension-plugin`, which includes it).
-    pub fn has_desktop(&self) -> bool {
-        matches!(self.bindings, Bindings::Desktop(_) | Bindings::Extension(_))
-    }
-
-    /// The world it was built for.
-    pub fn world(&self) -> World {
-        match self.bindings {
-            Bindings::Plain(_) => World::Plugin,
-            Bindings::Desktop(_) => World::DesktopPlugin,
-            Bindings::Extension(_) => World::ExtensionPlugin,
-        }
-    }
-
-    pub fn is_extension(&self) -> bool {
-        matches!(self.bindings, Bindings::Extension(_))
-    }
-
-    /// A placed desktop widget's view.
-    pub fn desktop_widget(&mut self, theme: &Palette, context: &WidgetContext) -> Option<View> {
-        let v = self
-            .call("desktop-widget", |b, s| match b {
-                Bindings::Desktop(p) => p.call_desktop_widget(s, theme, context),
-                Bindings::Extension(p) => p.call_desktop_widget(s, theme, context),
-                Bindings::Plain(_) => Ok(None),
-            })
-            .flatten();
-        self.localized(v)
-    }
-
     pub fn refresh_ms(&mut self) -> u32 {
-        self.call("refresh-ms", |b, s| either!(b, s, call_refresh_ms)).unwrap_or(0)
+        self.call("refresh-ms", |b, s| b.call_refresh_ms(s)).unwrap_or(0)
     }
 
     /// Commands queued by the plugin since the last call.
@@ -639,42 +490,26 @@ impl WasmPlugin {
         std::mem::take(&mut self.store.data_mut().queued)
     }
 
-    // ── Extension plugins ────────────────────────────────────────────────
-
-    /// The extension view for `context`. `Ok(None)`: not an extension
-    /// plugin, or it has nothing here (draw the older export instead).
-    /// `Err`: the view broke a limit ([`extension::check_view`]) and is
-    /// refused whole; the plugin keeps running.
-    pub fn extension_view(&mut self, theme: &Palette, context: &ExtContext) -> Result<Option<View2>, String> {
-        if !self.is_extension() {
-            return Ok(None);
-        }
-        let view = self
-            .call("extension-view", |b, s| match b {
-                Bindings::Extension(p) => p.call_extension_view(s, theme, context),
-                _ => Ok(None),
-            })
-            .flatten();
+    /// The view for `context` (`Ok(None)`: nothing there). `Err`: the view
+    /// broke a limit ([`extension::check_view`]) and is refused whole; the
+    /// plugin keeps running.
+    pub fn render(&mut self, theme: &Palette, context: &RenderContext) -> Result<Option<View>, String> {
+        let view = self.call("render", |b, s| b.call_render(s, theme, context)).flatten();
         let Some(mut view) = view else { return Ok(None) };
         extension::check_view(&view)?;
-        self.store.data_mut().i18n.translate_view2(&mut view);
+        self.store.data_mut().i18n.translate_view(&mut view);
         Ok(Some(view))
     }
 
     /// Sends an input event (a click, typing, a key, a list range, a
     /// launcher choice).
-    pub fn extension_event(&mut self, event: &ExtEvent) {
-        if self.is_extension() {
-            // Input from the person (or a command they ran) is a user
-            // gesture; list scrolling and broker replies are not.
-            let activated = !matches!(event.value, ExtValue::Range(_) | ExtValue::Replies(_));
-            self.store.data_mut().activated = activated;
-            self.call("extension-event", |b, s| match b {
-                Bindings::Extension(p) => p.call_extension_event(s, event),
-                _ => Ok(()),
-            });
-            self.store.data_mut().activated = false;
-        }
+    pub fn on_event(&mut self, event: &PluginEvent) {
+        // Input from the person (or a command they ran) is a user gesture;
+        // list scrolling and broker replies are not.
+        let activated = !matches!(event.value, EventValue::Range(_) | EventValue::Replies(_));
+        self.store.data_mut().activated = activated;
+        self.call("on-event", |b, s| b.call_on_event(s, event));
+        self.store.data_mut().activated = false;
     }
 
     /// Storage changed by the last calls: its file and new contents, for
@@ -685,12 +520,12 @@ impl WasmPlugin {
 
     /// Hands waiting broker results to the plugin (one `replies` event).
     /// Returns whether there were any.
-    pub fn flush_replies(&mut self, context: &ExtContext) -> bool {
-        if !self.store.data().broker.has_replies() || !self.is_extension() {
+    pub fn flush_replies(&mut self, context: &RenderContext) -> bool {
+        if !self.store.data().broker.has_replies() {
             return false;
         }
         let replies = self.store.data_mut().broker.take_replies().into_iter().map(|(id, outcome)| Reply { id, outcome }).collect();
-        self.extension_event(&ExtEvent { context: context.clone(), node: String::new(), action: String::new(), value: ExtValue::Replies(replies) });
+        self.on_event(&PluginEvent { context: context.clone(), node: String::new(), action: String::new(), value: EventValue::Replies(replies) });
         true
     }
 
@@ -698,16 +533,8 @@ impl WasmPlugin {
     /// `query`, under the tighter launcher budget; at most
     /// [`extension::MAX_HITS`], with long text cut.
     pub fn launcher_query(&mut self, provider: &str, query: &str, limit: usize) -> Vec<Hit> {
-        if !self.is_extension() {
-            return Vec::new();
-        }
         let limit = limit.min(extension::MAX_HITS);
-        let mut hits = self
-            .call_within("launcher-query", LAUNCHER_BUDGET_TICKS, |b, s| match b {
-                Bindings::Extension(p) => p.call_launcher_query(s, provider, query, limit as u32),
-                _ => Ok(Vec::new()),
-            })
-            .unwrap_or_default();
+        let mut hits = self.call_within("launcher-query", LAUNCHER_BUDGET_TICKS, |b, s| b.call_launcher_query(s, provider, query, limit as u32)).unwrap_or_default();
         hits.truncate(limit);
         let i18n = &mut self.store.data_mut().i18n;
         for hit in &mut hits {
@@ -721,14 +548,8 @@ impl WasmPlugin {
     }
 
     /// Another plugin's call into an operation this one serves.
-    pub fn extension_call(&mut self, caller: &str, operation: &str, payload: &str) -> Result<String, String> {
-        if !self.is_extension() {
-            return Err("it isn't an extension plugin".into());
-        }
-        let answer = self.call("extension-call", |b, s| match b {
-            Bindings::Extension(p) => p.call_extension_call(s, caller, operation, payload),
-            _ => Ok(Err(String::new())),
-        });
+    pub fn on_call(&mut self, caller: &str, operation: &str, payload: &str) -> Result<String, String> {
+        let answer = self.call("on-call", |b, s| b.call_on_call(s, caller, operation, payload));
         match answer {
             Some(Ok(body)) if body.len() > extension::MAX_REPLY_BYTES => Err("the answer was too large".into()),
             Some(answer) => answer,
@@ -1127,6 +948,10 @@ mod tests {
     /// worker thread and render each surface. Skipped until the example is
     /// built (`cargo build --release --target wasm32-wasip2` in
     /// plugins/examples/moon-phase).
+    fn bar_context() -> RenderContext {
+        RenderContext { surface: SurfaceKind::Bar, outlet: String::new(), instance: String::new(), width: 0.0, height: 0.0, numerals: String::new(), calendar: String::new(), language: String::new() }
+    }
+
     #[test]
     fn test_loads_the_example_off_thread() {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/examples/moon-phase");
@@ -1152,7 +977,7 @@ mod tests {
         let id = file.id.clone();
         let result = std::thread::spawn(move || {
             let mut p = WasmPlugin::load(&id, &dir, &entry, settings, Access::default()).map_err(|e| format!("{e:#}"))?;
-            let bar = p.bar(&palette).is_some();
+            let bar = matches!(p.render(&palette, &bar_context()), Ok(Some(_)));
             Ok::<_, String>((bar, p.disabled.clone()))
         })
         .join()
@@ -1180,7 +1005,7 @@ mod tests {
             std::thread::spawn(move || {
                 let mut p = WasmPlugin::load("moon-phase", &dir, &entry, serde_json::Map::new(), Access::default()).map_err(|e| format!("{e:#}"))?;
                 let started = std::time::Instant::now();
-                let bar = p.bar(&palette).is_some();
+                let bar = matches!(p.render(&palette, &bar_context()), Ok(Some(_)));
                 Ok::<_, String>((bar, p.disabled.clone(), started.elapsed()))
             })
             .join()

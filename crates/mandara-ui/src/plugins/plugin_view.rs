@@ -1,4 +1,4 @@
-//! Draws an extension plugin's view (`wit/extensions.wit`, `ui.view`) with
+//! Draws a third-party plugin's view (`wit/plugin.wit`, `ui.view`) with
 //! Mandara's own components, in every theme, light or dark, left to right
 //! or right to left. Shared by the shell (bar, panel, sidebar, desktop) and
 //! Studio (plugin tabs), which each pass a [`Frame`]: where events go and
@@ -26,7 +26,7 @@ use gpui::{
     StyledImage as _, prelude::FluentBuilder as _, px, relative, uniform_list,
 };
 use mandara_core::ToGpui;
-use mandara_plugins::wasm::{Align, ExtContext, ExtEvent, ExtValue, KeyPress, Kind2, Mark, Node2, Shape, Style, Tone, View2};
+use mandara_plugins::wasm::{Align, EventValue, KeyPress, Kind, Mark, Node, PluginEvent, RenderContext, Shape, Style, Tone, View};
 use mandara_theme::{Color, MandaraPalette};
 
 use crate::icons::icon;
@@ -47,13 +47,18 @@ const MIN_TEXT_PX: f32 = 6.0;
 const MAX_TEXT_PX: f32 = 96.0;
 /// Default icon size.
 const ICON_PX: f32 = 16.0;
-/// Button geometry, and a quiet button's tint.
+/// Button geometry: the compact height of Mandara's panel buttons (their
+/// shape follows the person's button design), and a quiet button's tint.
+/// Fixed because a plugin's layout is built around it.
 const BUTTON_H_PX: f32 = 28.0;
-const BUTTON_PAD_X_PX: f32 = 12.0;
+const BUTTON_PAD_X_PX: f32 = tokens::MD;
+/// How far a filled button's hover moves towards its text colour.
+const BUTTON_HOVER_MIX: f32 = 0.08;
 const BUTTON_GAP_PX: f32 = 6.0;
 const BUTTON_TINT_ALPHA: f32 = 0.08;
 /// Segmented control geometry: track, segment, inset and radii, the
-/// track's tint and the raised segment's shadow.
+/// track's tint and the raised segment's shadow. Fixed so plugin views lay
+/// out the same everywhere; the colours come from the live palette.
 const SEGMENT_H_PX: f32 = 28.0;
 const SEGMENT_PAD_X_PX: f32 = 10.0;
 const SEGMENT_INSET_PX: f32 = 2.0;
@@ -65,10 +70,11 @@ const SEGMENT_SHADOW_BLUR_PX: f32 = 3.0;
 /// How far a dark theme's raised segment lifts towards the text colour.
 const SEGMENT_RAISE_DARK: f32 = 0.2;
 /// An inset group: its radius, row padding and the hairline between rows
-/// (inset from the leading edge, like a settings list).
+/// (inset from the leading edge, like a settings list), on the shared
+/// spacing scale.
 const GROUP_RADIUS_PX: f32 = 12.0;
-const GROUP_ROW_PAD_X_PX: f32 = 12.0;
-const GROUP_ROW_PAD_Y_PX: f32 = 10.0;
+const GROUP_ROW_PAD_X_PX: f32 = tokens::MD;
+const GROUP_ROW_PAD_Y_PX: f32 = tokens::SM + tokens::XS / 2.0;
 const GROUP_TINT_ALPHA: f32 = 0.045;
 const HAIRLINE_ALPHA: f32 = 0.08;
 /// Meter geometry and track alpha.
@@ -102,7 +108,7 @@ const MAX_GRID_COLUMNS: u32 = 12;
 
 /// Where events go: the host delivers them to the plugin (and runs what it
 /// queued), then re-renders.
-pub type Sink = Rc<dyn Fn(ExtEvent, &mut Window, &mut App)>;
+pub type Sink = Rc<dyn Fn(PluginEvent, &mut Window, &mut App)>;
 
 /// Resolves an image handle to a file to draw (`None`: not this plugin's,
 /// or no longer allowed). Every picture is decoded at the size it is
@@ -114,7 +120,7 @@ pub type Images = Rc<dyn Fn(u64, &App) -> Option<PathBuf>>;
 pub struct Frame {
     /// Unique per plugin surface: element ids and node state hang off it.
     pub key: SharedString,
-    pub context: ExtContext,
+    pub context: RenderContext,
     pub sink: Sink,
     pub images: Images,
     /// The colour emoji family, for text that is only emoji.
@@ -122,15 +128,15 @@ pub struct Frame {
 }
 
 impl Frame {
-    fn event(&self, node: &Node2, value: ExtValue) -> ExtEvent {
-        ExtEvent { context: self.context.clone(), node: node.id.clone(), action: node.action.clone(), value }
+    fn event(&self, node: &Node, value: EventValue) -> PluginEvent {
+        PluginEvent { context: self.context.clone(), node: node.id.clone(), action: node.action.clone(), value }
     }
 
-    fn element_id(&self, node: &Node2, at: usize) -> ElementId {
+    fn element_id(&self, node: &Node, at: usize) -> ElementId {
         if node.id.is_empty() { ElementId::Name(format!("{}#{at}", self.key).into()) } else { ElementId::Name(format!("{}/{}", self.key, node.id).into()) }
     }
 
-    fn state_key(&self, node: &Node2, what: &str) -> SharedString {
+    fn state_key(&self, node: &Node, what: &str) -> SharedString {
         format!("{}/{}/{what}", self.key, node.id).into()
     }
 }
@@ -153,7 +159,7 @@ fn clamp(v: f32, max: f32) -> f32 {
 }
 
 /// Draws `view` (already checked) for `frame`.
-pub fn render(view: View2, p: &MandaraPalette, frame: &Frame, window: &mut Window, cx: &mut App) -> AnyElement {
+pub fn render(view: View, p: &MandaraPalette, frame: &Frame, window: &mut Window, cx: &mut App) -> AnyElement {
     let view = Rc::new(view);
     request_focus(&view, frame, window, cx);
     let mut drawn = 0;
@@ -162,14 +168,14 @@ pub fn render(view: View2, p: &MandaraPalette, frame: &Frame, window: &mut Windo
 
 /// Gives keyboard focus to `view.focus` once each time the plugin names a
 /// different node (re-rendering never steals focus back).
-fn request_focus(view: &View2, frame: &Frame, window: &mut Window, cx: &mut App) {
+fn request_focus(view: &View, frame: &Frame, window: &mut Window, cx: &mut App) {
     let asked = window.use_keyed_state(SharedString::from(format!("{}/focus-asked", frame.key)), cx, |_, _| String::new());
     if asked.read(cx).as_str() == view.focus {
         return;
     }
     asked.update(cx, |a, _| a.clone_from(&view.focus));
     let Some(target) = view.nodes.iter().find(|n| !n.id.is_empty() && n.id == view.focus) else { return };
-    if target.kind == Kind2::Input {
+    if target.kind == Kind::Input {
         let field = field_state(target, frame, window, cx);
         field.update(cx, |f, cx| f.focus(window, cx));
     } else {
@@ -177,16 +183,16 @@ fn request_focus(view: &View2, frame: &Frame, window: &mut Window, cx: &mut App)
     }
 }
 
-fn focus_handle(n: &Node2, frame: &Frame, window: &mut Window, cx: &mut App) -> FocusHandle {
+fn focus_handle(n: &Node, frame: &Frame, window: &mut Window, cx: &mut App) -> FocusHandle {
     window.use_keyed_state(frame.state_key(n, "focus"), cx, |_, cx| cx.focus_handle().tab_stop(true)).read(cx).clone()
 }
 
 /// Where a field's typing goes: refreshed on every render, so a plugin that
 /// changes the node's action (or a reloaded plugin's new sink) is followed.
-type FieldRoute = Rc<std::cell::RefCell<(Frame, Node2)>>;
+type FieldRoute = Rc<std::cell::RefCell<(Frame, Node)>>;
 
-fn field_state(n: &Node2, frame: &Frame, window: &mut Window, cx: &mut App) -> Entity<TextField> {
-    let template = Node2 { children: Vec::new(), options: Vec::new(), marks: Vec::new(), ..n.clone() };
+fn field_state(n: &Node, frame: &Frame, window: &mut Window, cx: &mut App) -> Entity<TextField> {
+    let template = Node { children: Vec::new(), options: Vec::new(), marks: Vec::new(), ..n.clone() };
     let route: Entity<FieldRoute> = window.use_keyed_state(frame.state_key(n, "route"), cx, {
         let (frame, template) = (frame.clone(), template.clone());
         move |_, _| Rc::new(std::cell::RefCell::new((frame, template)))
@@ -197,7 +203,7 @@ fn field_state(n: &Node2, frame: &Frame, window: &mut Window, cx: &mut App) -> E
         let on_commit: crate::text_field::OnCommit = Rc::new(move |value, window, cx| {
             let (frame, template) = route.borrow().clone();
             if !template.disabled {
-                (frame.sink)(frame.event(&template, ExtValue::Text(value)), window, cx);
+                (frame.sink)(frame.event(&template, EventValue::Text(value)), window, cx);
             }
         });
         TextField::new(String::new(), String::new(), true, on_commit, cx).max_bytes(mandara_plugins::extension::MAX_PAYLOAD_BYTES)
@@ -245,21 +251,21 @@ fn aligned(el: gpui::Stateful<gpui::Div>, a: Align) -> gpui::Stateful<gpui::Div>
     }
 }
 
-fn text_px(n: &Node2, default: f32) -> f32 {
+fn text_px(n: &Node, default: f32) -> f32 {
     if n.style.size > 0.0 && n.style.size.is_finite() { n.style.size.clamp(MIN_TEXT_PX, MAX_TEXT_PX) } else { default }
 }
 
-fn gap(n: &Node2, default: f32) -> f32 {
+fn gap(n: &Node, default: f32) -> f32 {
     let g = clamp(n.style.gap, MAX_SPACE_PX);
     if g > 0.0 { g } else { default }
 }
 
-fn interactive(n: &Node2) -> bool {
+fn interactive(n: &Node) -> bool {
     !n.action.is_empty() && !n.disabled
 }
 
 #[allow(clippy::too_many_arguments)]
-fn node(view: &Rc<View2>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame, drawn: &mut usize, window: &mut Window, cx: &mut App) -> AnyElement {
+fn node(view: &Rc<View>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame, drawn: &mut usize, window: &mut Window, cx: &mut App) -> AnyElement {
     let Some(n) = view.nodes.get(i as usize).filter(|_| depth < MAX_DEPTH && *drawn < MAX_DRAWN) else { return div().into_any_element() };
     *drawn += 1;
     let at = *drawn;
@@ -267,22 +273,22 @@ fn node(view: &Rc<View2>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame,
     let id = frame.element_id(n, at);
     let mut children = |window: &mut Window, cx: &mut App| -> Vec<AnyElement> { n.children.iter().map(|c| node(view, *c, depth + 1, p, frame, drawn, window, cx)).collect() };
     let el: AnyElement = match n.kind {
-        Kind2::Row => aligned(styled(div().id(id).flex().flex_row().items_center().gap(px(gap(n, 0.0))), &n.style), n.style.align).children(children(window, cx)).into_any_element(),
-        Kind2::Column => aligned(styled(div().id(id).flex().flex_col().gap(px(gap(n, 0.0))), &n.style), n.style.align).children(children(window, cx)).into_any_element(),
-        Kind2::Card => {
+        Kind::Row => aligned(styled(div().id(id).flex().flex_row().items_center().gap(px(gap(n, 0.0))), &n.style), n.style.align).children(children(window, cx)).into_any_element(),
+        Kind::Column => aligned(styled(div().id(id).flex().flex_col().gap(px(gap(n, 0.0))), &n.style), n.style.align).children(children(window, cx)).into_any_element(),
+        Kind::Card => {
             let body = styled(card(p).id(id).flex().flex_col().gap(px(gap(n, tokens::SM))), &n.style).children(children(window, cx));
             clickable(body, n, p, frame, window, cx)
         }
-        Kind2::Grid => {
+        Kind::Grid => {
             let cols = n.index.clamp(1, MAX_GRID_COLUMNS) as u16;
             styled(div().id(id).grid().grid_cols(cols).gap(px(gap(n, tokens::SM))), &n.style).children(children(window, cx)).into_any_element()
         }
-        Kind2::Scroll => {
+        Kind::Scroll => {
             let h = if n.style.height > 0.0 { clamp(n.style.height, MAX_DIM_PX) } else { SCROLL_H_PX };
             styled(div().id(id).flex().flex_col().gap(px(gap(n, 0.0))).overflow_y_scroll(), &n.style).h(px(h)).children(children(window, cx)).into_any_element()
         }
-        Kind2::List => list(view, n, i, depth, p, frame, window, cx),
-        Kind2::Text => {
+        Kind::List => list(view, n, i, depth, p, frame, window, cx),
+        Kind::Text => {
             let el = styled(div().id(id), &n.style)
                 .text_size(px(text_px(n, text::BODY)))
                 .text_color(color.hsla())
@@ -291,11 +297,11 @@ fn node(view: &Rc<View2>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame,
                 .child(crate::bidi::paragraph(n.text.clone()));
             clickable(el, n, p, frame, window, cx)
         }
-        Kind2::Icon => {
+        Kind::Icon => {
             let name = crate::icons::ICON_NAMES.iter().find(|x| **x == n.text).copied().unwrap_or("circle");
             clickable(styled(div().id(id), &n.style).child(icon(name, text_px(n, ICON_PX), color)), n, p, frame, window, cx)
         }
-        Kind2::Button => {
+        Kind::Button => {
             // One filled primary action, plain text buttons and quiet
             // tinted ones: never a wall of filled pills.
             let (bg, fg) = match n.style.tone {
@@ -304,16 +310,18 @@ fn node(view: &Rc<View2>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame,
                 Tone::Normal => (Some(p.on_surface.with_alpha(BUTTON_TINT_ALPHA)), p.on_surface),
                 _ => (Some(color.with_alpha(BUTTON_TINT_ALPHA)), color),
             };
-            let el = styled(div().id(id), &n.style)
-                .h(px(BUTTON_H_PX))
-                .px(px(BUTTON_PAD_X_PX))
-                .rounded_full()
+            // Shaped by the person's button design (Themes → Components),
+            // like Mandara's own buttons; the classic design is a pill.
+            let icon_only = n.text.is_empty();
+            let hover = bg.map_or(p.on_surface.with_alpha(HOVER_ALPHA), |c| c.mix(fg, BUTTON_HOVER_MIX));
+            let el = crate::components::buttons::designed(styled(div().id(id.clone()), &n.style).h(px(BUTTON_H_PX)).px(px(BUTTON_PAD_X_PX)), id, BUTTON_H_PX, icon_only, crate::components::buttons::Ink { bg, hover, outline: None }, Some(p), move |el| {
+                el.rounded_full().when_some(bg, |el, bg| el.bg(bg.hsla()))
+            })
                 .flex()
                 .flex_none()
                 .items_center()
                 .justify_center()
                 .gap(px(BUTTON_GAP_PX))
-                .when_some(bg, |el, bg| el.bg(bg.hsla()))
                 .text_color(fg.hsla())
                 .text_size(px(text_px(n, text::BODY_S)))
                 .font_weight(FontWeight::MEDIUM)
@@ -321,7 +329,7 @@ fn node(view: &Rc<View2>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame,
                 .when(!n.text.is_empty(), |el| el.child(n.text.clone()));
             clickable(el, n, p, frame, window, cx)
         }
-        Kind2::Group => {
+        Kind::Group => {
             let rows = children(window, cx);
             let count = rows.len();
             let hairline = p.on_surface.with_alpha(HAIRLINE_ALPHA);
@@ -334,7 +342,7 @@ fn node(view: &Rc<View2>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame,
             }
             group.into_any_element()
         }
-        Kind2::Meter => styled(div().id(id), &n.style)
+        Kind::Meter => styled(div().id(id), &n.style)
             .h(px(METER_H_PX))
             .w_full()
             .min_w(px(METER_MIN_W_PX))
@@ -342,10 +350,10 @@ fn node(view: &Rc<View2>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame,
             .bg(p.on_surface.with_alpha(TRACK_ALPHA).hsla())
             .child(div().h_full().rounded_full().w(relative(fraction(n.value))).bg(color.hsla()))
             .into_any_element(),
-        Kind2::Spacer => div().flex_1().into_any_element(),
-        Kind2::Divider => styled(div().id(id), &n.style).h(px(DIVIDER_PX)).w_full().flex_none().bg(p.on_surface.with_alpha(DIVIDER_ALPHA).hsla()).into_any_element(),
+        Kind::Spacer => div().flex_1().into_any_element(),
+        Kind::Divider => styled(div().id(id), &n.style).h(px(DIVIDER_PX)).w_full().flex_none().bg(p.on_surface.with_alpha(DIVIDER_ALPHA).hsla()).into_any_element(),
         // A disabled field is drawn, not editable: no caret, typing or paste.
-        Kind2::Input if n.disabled => styled(div().id(id), &n.style)
+        Kind::Input if n.disabled => styled(div().id(id), &n.style)
             .when(n.style.width <= 0.0, |el| el.w_full())
             .opacity(DISABLED_ALPHA)
             .px(px(tokens::MD))
@@ -356,7 +364,7 @@ fn node(view: &Rc<View2>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame,
             .text_color(if n.text.is_empty() { p.on_surface_variant.hsla() } else { p.on_surface.hsla() })
             .child(if n.text.is_empty() { n.hint.clone() } else { n.text.clone() })
             .into_any_element(),
-        Kind2::Input => {
+        Kind::Input => {
             let field = field_state(n, frame, window, cx);
             field.update(cx, |f, _| f.set_placeholder(&n.hint));
             let (sink, frame2, template) = (frame.sink.clone(), frame.clone(), n.clone());
@@ -367,13 +375,13 @@ fn node(view: &Rc<View2>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame,
                 .capture_key_down(move |e: &KeyDownEvent, window, cx| {
                     if e.keystroke.key == "enter" {
                         let value = submit.read(cx).value.clone();
-                        sink(frame2.event(&template, ExtValue::Submit(value)), window, cx);
+                        sink(frame2.event(&template, EventValue::Submit(value)), window, cx);
                     }
                 })
                 .child(field)
                 .into_any_element()
         }
-        Kind2::Toggle => {
+        Kind::Toggle => {
             let on = n.value >= 0.5;
             let el = styled(div().id(id), &n.style)
                 .flex()
@@ -381,12 +389,12 @@ fn node(view: &Rc<View2>, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame,
                 .gap(px(tokens::SM))
                 .when(!n.text.is_empty(), |el| el.child(div().flex_1().min_w(px(0.0)).text_size(px(text_px(n, text::BODY))).text_color(p.on_surface.hsla()).child(n.text.clone())))
                 .child(crate::components::toggles::switch(on, crate::style::toggle_design(), p));
-            control(el, n, ExtValue::Checked(!on), p, frame, window, cx)
+            control(el, n, EventValue::Checked(!on), p, frame, window, cx)
         }
-        Kind2::Slider => slider(n, id, frame.element_id(n, at + MAX_DRAWN), p, frame),
-        Kind2::Choice => choice(n, id, p, frame, window, cx),
-        Kind2::Image => image(n, id, p, frame, window, cx),
-        Kind2::Canvas => canvas_marks(n, id, p),
+        Kind::Slider => slider(n, id, frame.element_id(n, at + MAX_DRAWN), p, frame),
+        Kind::Choice => choice(n, id, p, frame, window, cx),
+        Kind::Image => image(n, id, p, frame, window, cx),
+        Kind::Canvas => canvas_marks(n, id, p),
     };
     el
 }
@@ -397,14 +405,14 @@ fn fraction(v: f32) -> f32 {
 
 /// A clickable node: hover tint, focus ring, Enter / Space to activate and
 /// other keys sent to the plugin.
-fn clickable(el: gpui::Stateful<gpui::Div>, n: &Node2, p: &MandaraPalette, frame: &Frame, window: &mut Window, cx: &mut App) -> AnyElement {
+fn clickable(el: gpui::Stateful<gpui::Div>, n: &Node, p: &MandaraPalette, frame: &Frame, window: &mut Window, cx: &mut App) -> AnyElement {
     if !interactive(n) {
         return el.when(n.disabled, |el| el.opacity(DISABLED_ALPHA)).into_any_element();
     }
-    control(el, n, ExtValue::Activate, p, frame, window, cx)
+    control(el, n, EventValue::Activate, p, frame, window, cx)
 }
 
-fn control(el: gpui::Stateful<gpui::Div>, n: &Node2, click: ExtValue, p: &MandaraPalette, frame: &Frame, window: &mut Window, cx: &mut App) -> AnyElement {
+fn control(el: gpui::Stateful<gpui::Div>, n: &Node, click: EventValue, p: &MandaraPalette, frame: &Frame, window: &mut Window, cx: &mut App) -> AnyElement {
     if !interactive(n) {
         return el.when(n.disabled, |el| el.opacity(DISABLED_ALPHA)).into_any_element();
     }
@@ -418,7 +426,7 @@ fn control(el: gpui::Stateful<gpui::Div>, n: &Node2, click: ExtValue, p: &Mandar
                 let k = &e.keystroke;
                 let value = match k.key.as_str() {
                     "enter" | "space" if !k.modifiers.control && !k.modifiers.alt => click.clone(),
-                    _ => ExtValue::Key(KeyPress { key: k.key.clone(), ctrl: k.modifiers.control, alt: k.modifiers.alt, shift: k.modifiers.shift, super_key: k.modifiers.platform }),
+                    _ => EventValue::Key(KeyPress { key: k.key.clone(), ctrl: k.modifiers.control, alt: k.modifiers.alt, shift: k.modifiers.shift, super_key: k.modifiers.platform }),
                 };
                 ksink(kf.event(&ktemplate, value), window, cx);
                 cx.stop_propagation();
@@ -428,7 +436,7 @@ fn control(el: gpui::Stateful<gpui::Div>, n: &Node2, click: ExtValue, p: &Mandar
         .into_any_element()
 }
 
-fn slider(n: &Node2, id: ElementId, track: ElementId, p: &MandaraPalette, frame: &Frame) -> AnyElement {
+fn slider(n: &Node, id: ElementId, track: ElementId, p: &MandaraPalette, frame: &Frame) -> AnyElement {
     let (min, max) = if n.min.is_finite() && n.max.is_finite() && n.max > n.min { (n.min, n.max) } else { (0.0, 1.0) };
     let step = if n.step.is_finite() && n.step > 0.0 { n.step } else { 0.0 };
     let at = if n.value.is_finite() { ((n.value - min) / (max - min)).clamp(0.0, 1.0) } else { 0.0 };
@@ -444,7 +452,7 @@ fn slider(n: &Node2, id: ElementId, track: ElementId, p: &MandaraPalette, frame:
         }
         // One event per value the person reaches, not per pointer move.
         if last.replace(value) != value {
-            sink(f.event(&template, ExtValue::Number(value)), window, cx);
+            sink(f.event(&template, EventValue::Number(value)), window, cx);
         }
     });
     styled(div().id(id), &n.style)
@@ -454,7 +462,7 @@ fn slider(n: &Node2, id: ElementId, track: ElementId, p: &MandaraPalette, frame:
         .into_any_element()
 }
 
-fn choice(n: &Node2, id: ElementId, p: &MandaraPalette, frame: &Frame, window: &mut Window, cx: &mut App) -> AnyElement {
+fn choice(n: &Node, id: ElementId, p: &MandaraPalette, frame: &Frame, window: &mut Window, cx: &mut App) -> AnyElement {
     let track = styled(div().id(id), &n.style)
         .when(n.style.width <= 0.0, |el| el.w_full())
         .flex()
@@ -498,7 +506,7 @@ fn choice(n: &Node2, id: ElementId, p: &MandaraPalette, frame: &Frame, window: &
             .child(option.label.clone());
         let segment = if interactive(n) && !chosen {
             let (sink, f, template, value) = (frame.sink.clone(), frame.clone(), n.clone(), option.value.clone());
-            segment.cursor_pointer().hover(|s| s.text_color(p.on_surface.hsla())).on_click(move |_, window, cx| sink(f.event(&template, ExtValue::Choice(value.clone())), window, cx))
+            segment.cursor_pointer().hover(|s| s.text_color(p.on_surface.hsla())).on_click(move |_, window, cx| sink(f.event(&template, EventValue::Choice(value.clone())), window, cx))
         } else {
             segment
         };
@@ -522,14 +530,14 @@ fn choice(n: &Node2, id: ElementId, p: &MandaraPalette, frame: &Frame, window: &
             };
             cx.stop_propagation();
             if next != at {
-                sink(f.event(&template, ExtValue::Choice(template.options[next].value.clone())), window, cx);
+                sink(f.event(&template, EventValue::Choice(template.options[next].value.clone())), window, cx);
             }
         });
     }
     track.into_any_element()
 }
 
-fn image(n: &Node2, id: ElementId, p: &MandaraPalette, frame: &Frame, window: &mut Window, cx: &mut App) -> AnyElement {
+fn image(n: &Node, id: ElementId, p: &MandaraPalette, frame: &Frame, window: &mut Window, cx: &mut App) -> AnyElement {
     let w = if n.style.width > 0.0 { clamp(n.style.width, MAX_DIM_PX) } else { IMAGE_PX };
     let h = if n.style.height > 0.0 { clamp(n.style.height, MAX_DIM_PX) } else { w };
     let radius = clamp(n.style.radius, MAX_SPACE_PX);
@@ -556,7 +564,7 @@ fn image(n: &Node2, id: ElementId, p: &MandaraPalette, frame: &Frame, window: &m
     clickable(shell, n, p, frame, window, cx)
 }
 
-fn canvas_marks(n: &Node2, id: ElementId, p: &MandaraPalette) -> AnyElement {
+fn canvas_marks(n: &Node, id: ElementId, p: &MandaraPalette) -> AnyElement {
     let h = if n.style.height > 0.0 { clamp(n.style.height, MAX_DIM_PX) } else { CANVAS_H_PX };
     // Without a width a canvas fills its parent (charts span their card).
     let el = styled(div().id(id), &n.style).relative().h(px(h)).flex_none();
@@ -607,7 +615,7 @@ fn unit(v: f32) -> f32 {
 /// rows `value .. value + children` and gets a `range` event when the rows
 /// on screen move outside them. Rows not sent yet draw as placeholders.
 #[allow(clippy::too_many_arguments)]
-fn list(view: &Rc<View2>, n: &Node2, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame, window: &mut Window, cx: &mut App) -> AnyElement {
+fn list(view: &Rc<View>, n: &Node, i: u32, depth: u32, p: &MandaraPalette, frame: &Frame, window: &mut Window, cx: &mut App) -> AnyElement {
     let count = n.index.min(mandara_plugins::extension::MAX_LIST_ROWS) as usize;
     let start = if n.value.is_finite() && n.value > 0.0 { n.value as usize } else { 0 };
     // At least a readable row: tiny rows would put thousands on screen.
@@ -622,7 +630,7 @@ fn list(view: &Rc<View2>, n: &Node2, i: u32, depth: u32, p: &MandaraPalette, fra
         let want = (range.start as u32, range.len() as u32);
         if !covered && asked.get() != want {
             asked.set(want);
-            let (sink, event) = (frame2.sink.clone(), frame2.event(&template, ExtValue::Range(want)));
+            let (sink, event) = (frame2.sink.clone(), frame2.event(&template, EventValue::Range(want)));
             window.defer(cx, move |window, cx| sink(event, window, cx));
         }
         let mut drawn = 0;

@@ -30,7 +30,7 @@ fn plugin_page(id: &str) -> Option<&'static str> {
 struct PluginTabChoice(std::collections::HashMap<&'static str, (String, String)>);
 impl gpui::Global for PluginTabChoice {}
 
-fn choose_plugin_tab(page: &'static str, choice: Option<(String, String)>, cx: &mut gpui::App) {
+pub(super) fn choose_plugin_tab(page: &'static str, choice: Option<(String, String)>, cx: &mut gpui::App) {
     let map = &mut cx.default_global::<PluginTabChoice>().0;
     match choice {
         Some(c) => map.insert(page, c),
@@ -111,9 +111,13 @@ impl TabState {
 /// A guarded frame callback retries scrolling after the initial layout,
 /// without retaining the view or scheduling frames after state settles.
 pub(super) fn bar<V: 'static, T: PageTab>(id: &'static str, tabs: &[T], current: T, p: &MandaraPalette, select: fn(&mut V, T, &mut Window, &mut Context<V>), window: &mut Window, cx: &mut Context<V>) -> AnyElement {
+    // Plugin tabs follow the page's own and share its keyboard navigation.
+    let page = plugin_page(id);
+    let plugin_tabs = page.map(|page| mandara_ui::plugins::external::studio_tabs(page, cx)).unwrap_or_default();
+    let total = tabs.len() + plugin_tabs.len();
     let state = window.use_keyed_state(SharedString::from(format!("{id}-state")), cx, |_, _| TabState { scroll: ScrollHandle::new(), focus: Vec::new(), last_focus: None, last_selection: None });
     let (scroll, focus, reveal, focused) = state.update(cx, |state, cx| {
-        state.focus.resize_with(tabs.len(), || cx.focus_handle().tab_index(0).tab_stop(true));
+        state.focus.resize_with(total, || cx.focus_handle().tab_index(0).tab_stop(true));
         let mut reveal = state.selected_target(tabs, current);
         let focused = state.focus.iter().position(|handle| handle.is_focused(window));
         if focused != state.last_focus {
@@ -140,11 +144,38 @@ pub(super) fn bar<V: 'static, T: PageTab>(id: &'static str, tabs: &[T], current:
     }
     let mut row = div().id(id).row().overflow_x_scroll().track_scroll(&scroll).border_b_1().border_color(p.outline.with_alpha(ALPHA_35).hsla());
     let choices: Rc<[T]> = Rc::from(tabs);
-    let page = plugin_page(id);
+    let plugin_choices: Rc<[(String, String)]> = plugin_tabs.iter().map(|(plugin, _, tab)| (plugin.clone(), tab.id.clone())).collect();
     let plugin_chosen = page.and_then(|page| chosen_plugin_tab(page, cx));
+    // Selects tab `at` of all of them: the page's own first, then plugins'.
+    let pick = {
+        let (choices, plugin_choices) = (choices.clone(), plugin_choices.clone());
+        Rc::new(move |view: &mut V, at: usize, window: &mut Window, cx: &mut Context<V>| match choices.get(at) {
+            Some(&tab) => {
+                if let Some(page) = page {
+                    choose_plugin_tab(page, None, cx);
+                }
+                select(view, tab, window, cx);
+            }
+            None => {
+                if let (Some(page), Some(choice)) = (page, plugin_choices.get(at - choices.len())) {
+                    choose_plugin_tab(page, Some(choice.clone()), cx);
+                    cx.notify();
+                }
+            }
+        })
+    };
+    // ← → (in reading order), Home and End move between all the tabs.
+    let arrows = move |at: usize, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<V>| -> Option<usize> {
+        let modifiers = event.keystroke.modifiers;
+        if modifiers.control || modifiers.alt || modifiers.platform || modifiers.shift { return None; }
+        let next = arrow_target(at, total, &event.keystroke.key, mandara_i18n::language().is_rtl())?;
+        if next > at { for _ in at..next { window.focus_next(cx); } }
+        else { for _ in next..at { window.focus_prev(cx); } }
+        Some(next)
+    };
     for (at, &tab) in tabs.iter().enumerate() {
         let on = tab == current && plugin_chosen.is_none();
-        let choices = choices.clone();
+        let (pick, pick_key) = (pick.clone(), pick.clone());
         row = row.child(div()
             .id(SharedString::from(format!("{id}-{}", tab.slug())))
             .relative().flex_none().h(px(DIM_36_PX)).px(px(SPACE_10_PX))
@@ -153,22 +184,10 @@ pub(super) fn bar<V: 'static, T: PageTab>(id: &'static str, tabs: &[T], current:
             .focus(|style| style.bg(p.surface_container_high.hsla()).text_color(p.on_surface.hsla()))
             .when(on, |el| el.text_color(p.on_surface.hsla()).font_weight(FontWeight::SEMIBOLD))
             .when(!on, |el| el.text_color(p.on_surface_variant.hsla()).hover(|style| style.text_color(p.on_surface.hsla())))
-            .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
-                if let Some(page) = page {
-                    choose_plugin_tab(page, None, cx);
-                }
-                select(view, tab, window, cx);
-            }))
+            .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| pick(view, at, window, cx)))
             .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
-                let modifiers = event.keystroke.modifiers;
-                if modifiers.control || modifiers.alt || modifiers.platform || modifiers.shift { return; }
-                let Some(next) = arrow_target(at, choices.len(), &event.keystroke.key, mandara_i18n::language().is_rtl()) else { return };
-                if next > at { for _ in at..next { window.focus_next(cx); } }
-                else { for _ in next..at { window.focus_prev(cx); } }
-                if let Some(page) = page {
-                    choose_plugin_tab(page, None, cx);
-                }
-                select(view, choices[next], window, cx);
+                let Some(next) = arrows(at, event, window, cx) else { return };
+                pick_key(view, next, window, cx);
                 cx.stop_propagation();
             }))
             .child(icon(tab.icon(), ICON_14_PX, if on { p.primary } else { p.on_surface_variant }))
@@ -177,35 +196,33 @@ pub(super) fn bar<V: 'static, T: PageTab>(id: &'static str, tabs: &[T], current:
     }
     // Tabs third-party plugins add, after the page's own (Enter or Space
     // chooses one, like a click).
-    if let Some(page) = page {
-        for (plugin, _, tab) in mandara_ui::plugins::external::studio_tabs(page, cx) {
-            let on = plugin_chosen.as_ref().is_some_and(|(p, t)| *p == plugin && *t == tab.id);
-            let icon_name = mandara_ui::icons::ICON_NAMES.iter().find(|x| **x == tab.icon).copied().unwrap_or("plug");
-            let choice = (plugin.clone(), tab.id.clone());
-            let (click, key) = (choice.clone(), choice);
-            row = row.child(div()
-                .id(SharedString::from(format!("{id}-plugin-{plugin}-{}", tab.id)))
-                .relative().flex_none().h(px(DIM_36_PX)).px(px(SPACE_10_PX))
-                .row().items_center().gap(px(SPACE_6_PX)).cursor_pointer().tab_index(0)
-                .text_size(px(TEXT_13_PX))
-                .focus(|style| style.bg(p.surface_container_high.hsla()).text_color(p.on_surface.hsla()))
-                .when(on, |el| el.text_color(p.on_surface.hsla()).font_weight(FontWeight::SEMIBOLD))
-                .when(!on, |el| el.text_color(p.on_surface_variant.hsla()).hover(|style| style.text_color(p.on_surface.hsla())))
-                .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
-                    choose_plugin_tab(page, Some(click.clone()), cx);
-                    cx.notify();
-                }))
-                .on_key_down(cx.listener(move |_, event: &KeyDownEvent, _, cx| {
-                    if matches!(event.keystroke.key.as_str(), "enter" | "space") {
-                        choose_plugin_tab(page, Some(key.clone()), cx);
-                        cx.notify();
-                        cx.stop_propagation();
-                    }
-                }))
-                .child(icon(icon_name, ICON_14_PX, if on { p.primary } else { p.on_surface_variant }))
-                .child(tab.title.clone())
-                .when(on, |el| el.child(div().absolute().bottom_0().left(px(SPACE_8_PX)).right(px(SPACE_8_PX)).h(px(TAB_UNDERLINE_PX)).rounded_full().bg(p.primary.hsla()))));
-        }
+    for (k, (plugin, _, tab)) in plugin_tabs.into_iter().enumerate() {
+        let at = choices.len() + k;
+        let on = plugin_chosen.as_ref().is_some_and(|(p, t)| *p == plugin && *t == tab.id);
+        let icon_name = mandara_ui::icons::ICON_NAMES.iter().find(|x| **x == tab.icon).copied().unwrap_or("plug");
+        let (pick, pick_key) = (pick.clone(), pick.clone());
+        row = row.child(div()
+            .id(SharedString::from(format!("{id}-plugin-{plugin}-{}", tab.id)))
+            .relative().flex_none().h(px(DIM_36_PX)).px(px(SPACE_10_PX))
+            .row().items_center().gap(px(SPACE_6_PX)).cursor_pointer().track_focus(&focus[at]).tab_index(0)
+            .text_size(px(TEXT_13_PX))
+            .focus(|style| style.bg(p.surface_container_high.hsla()).text_color(p.on_surface.hsla()))
+            .when(on, |el| el.text_color(p.on_surface.hsla()).font_weight(FontWeight::SEMIBOLD))
+            .when(!on, |el| el.text_color(p.on_surface_variant.hsla()).hover(|style| style.text_color(p.on_surface.hsla())))
+            .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| pick(view, at, window, cx)))
+            .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                let target = match event.keystroke.key.as_str() {
+                    "enter" | "space" => Some(at),
+                    _ => arrows(at, event, window, cx),
+                };
+                if let Some(next) = target {
+                    pick_key(view, next, window, cx);
+                    cx.stop_propagation();
+                }
+            }))
+            .child(icon(icon_name, ICON_14_PX, if on { p.primary } else { p.on_surface_variant }))
+            .child(tab.title.clone())
+            .when(on, |el| el.child(div().absolute().bottom_0().left(px(SPACE_8_PX)).right(px(SPACE_8_PX)).h(px(TAB_UNDERLINE_PX)).rounded_full().bg(p.primary.hsla()))));
     }
     row.into_any_element()
 }

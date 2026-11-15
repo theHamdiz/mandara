@@ -885,7 +885,13 @@ impl StudioView {
                 list
             }
         };
-        let areas = access.iter().filter(|(a, _)| *a != Access::Sandboxed).count();
+        // Capabilities moved to the Permissions switches still count as
+        // areas it may reach (when granted).
+        let granted_caps = match &m.origin {
+            PluginOrigin::ThirdParty { .. } => mandara_plugins::extension::Access::from_grant(&m.permissions, cfg.plugins.grants.get(&m.id)).granted.iter().filter(|c| c.needs_grant()).count(),
+            PluginOrigin::Builtin => 0,
+        };
+        let areas = access.iter().filter(|(a, _)| *a != Access::Sandboxed).count() + granted_caps;
         let fits_value = match (bar_capable, sidebar_capable) {
             (true, true) => t("Bar and sidebar"),
             (true, false) => t("Bar"),

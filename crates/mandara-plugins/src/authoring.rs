@@ -11,32 +11,6 @@ use crate::wasm::{ManifestFile, PERMISSION_COMMANDS};
 /// The plugin interface, exactly as the host is generated from it.
 pub const WIT: &str = include_str!("../wit/plugin.wit");
 
-/// The extension platform's interface (`extension-plugin` world).
-pub const EXTENSIONS_WIT: &str = include_str!("../wit/extensions.wit");
-
-/// The extension world's exports and host imports (broker and storage),
-/// read from [`EXTENSIONS_WIT`]: `(exports, imports)`.
-pub fn extension_functions() -> (Vec<String>, Vec<String>) {
-    let (mut exports, mut imports) = (Vec::new(), Vec::new());
-    let mut iface = "";
-    for line in EXTENSIONS_WIT.lines().map(str::trim) {
-        if let Some(rest) = line.strip_prefix("interface ") {
-            iface = rest.trim_end_matches('{').trim();
-        } else if line.starts_with("world ") {
-            iface = "world";
-        }
-        if let Some(rest) = line.strip_prefix("export ") {
-            exports.extend(rest.split_once(':').map(|(name, _)| name.trim().to_string()));
-        } else if matches!(iface, "broker" | "storage")
-            && let Some((name, sig)) = line.split_once(':')
-            && sig.trim_start().starts_with("func")
-        {
-            imports.push(name.trim().to_string());
-        }
-    }
-    (exports, imports)
-}
-
 /// The WIT file's path in the Mandara repository.
 pub const WIT_REPO_PATH: &str = "crates/mandara-plugins/wit/plugin.wit";
 
@@ -183,7 +157,7 @@ pub struct Contract {
 
 /// Parses the subset of WIT that [`WIT`] uses.
 pub fn parse_contract(wit: &str) -> Contract {
-    #[derive(PartialEq)]
+    #[derive(Clone, Copy, PartialEq)]
     enum Block {
         None,
         Host,
@@ -194,6 +168,8 @@ pub fn parse_contract(wit: &str) -> Contract {
     }
     let mut c = Contract::default();
     let mut block = Block::None;
+    // The interface or world a nested record or enum sits in.
+    let mut outer = Block::None;
     let mut depth = 0usize;
     let mut doc: Vec<String> = Vec::new();
     for raw in wit.lines() {
@@ -225,20 +201,27 @@ pub fn parse_contract(wit: &str) -> Contract {
             depth += 1;
             if depth <= 2 {
                 block = match line.trim_end_matches('{').trim() {
-                    "interface host" => Block::Host,
-                    "world plugin" | "world desktop-plugin" => Block::World,
+                    "interface host" | "interface broker" | "interface storage" => Block::Host,
+                    "world plugin" => Block::World,
                     "enum kind" => Block::Kind,
                     "record node" => Block::Node,
                     _ if depth == 1 => Block::None,
                     _ => Block::Other,
                 };
+                if depth == 1 {
+                    outer = block;
+                }
             }
             doc.clear();
             continue;
         }
         if line.starts_with('}') {
             depth = depth.saturating_sub(1);
-            block = if depth == 0 { Block::None } else { Block::Other };
+            block = match depth {
+                0 => Block::None,
+                1 => outer,
+                _ => Block::Other,
+            };
             doc.clear();
             continue;
         }
@@ -259,7 +242,8 @@ pub fn parse_contract(wit: &str) -> Contract {
             }
             Block::Kind => {
                 for case in line.split(',').map(str::trim).filter(|s| !s.is_empty()) {
-                    c.kinds.push(WitCase { name: case.into(), doc: take_doc(&mut doc) });
+                    // `%list`: a WIT keyword used as a name.
+                    c.kinds.push(WitCase { name: case.trim_start_matches('%').into(), doc: take_doc(&mut doc) });
                 }
             }
             Block::Node => {
@@ -353,12 +337,12 @@ mod tests {
         let c = contract();
         assert!(c.package.starts_with("mandara:plugin@"));
         let names = |v: &[WitFunc]| v.iter().map(|f| f.name.clone()).collect::<Vec<_>>();
-        assert_eq!(names(&c.exports), ["init", "bar", "panel", "sidebar", "on-event", "refresh-ms", "desktop-widget"]);
-        assert_eq!(names(&c.imports), ["log", "now-unix-ms", "setting", "command", "locale", "translate"]);
+        assert_eq!(names(&c.exports), ["negotiate", "init", "render", "on-event", "refresh-ms", "launcher-query", "on-call"]);
+        assert_eq!(names(&c.imports), ["log", "now-unix-ms", "setting", "command", "locale", "translate", "submit", "cancel", "granted", "asset-image", "get", "set", "remove", "keys"]);
         let cases = |v: &[WitCase]| v.iter().map(|k| k.name.clone()).collect::<Vec<_>>();
-        assert_eq!(cases(&c.kinds), ["row", "column", "card", "text", "icon", "button", "meter", "spacer"]);
+        assert_eq!(cases(&c.kinds), ["row", "column", "card", "grid", "scroll", "list", "text", "icon", "button", "meter", "spacer", "divider", "input", "toggle", "slider", "choice", "image", "canvas", "group"]);
         assert_eq!(cases(&c.tones), ["normal", "muted", "accent", "error", "success", "warning"]);
-        assert_eq!(c.exports[0].signature, "func() -> result<_, string>");
+        assert_eq!(c.exports[1].signature, "func() -> result<_, string>");
         assert_eq!(c.imports[2].signature, "func(key: string) -> option<string>");
         assert!(c.imports[3].doc.contains("commands"));
         assert!(c.node_fields.iter().any(|f| f.name == "action" && f.signature == "string"));
@@ -382,12 +366,6 @@ mod tests {
         }
         for f in &contract().imports {
             assert!(guide.contains(&format!("`{}(", f.name)), "PLUGINS.md documents host import {}", f.name);
-        }
-        let (exports, imports) = extension_functions();
-        assert_eq!(exports, ["negotiate", "extension-view", "extension-event", "launcher-query", "extension-call"]);
-        assert_eq!(imports, ["submit", "cancel", "granted", "asset-image", "get", "set", "remove", "keys"]);
-        for name in exports.iter().chain(&imports) {
-            assert!(guide.contains(&format!("`{name}(")), "PLUGINS.md documents {name}");
         }
         for p in PERMISSIONS {
             assert!(guide.contains(&format!("`{p}`")), "PLUGINS.md documents the {p} permission");

@@ -324,6 +324,9 @@ impl StudioView {
     }
 
     fn set_wallpaper_tab(&mut self, tab: WallpaperTab, cx: &mut Context<Self>) {
+        // Choosing one of the page's own tabs (a deep link too) leaves a
+        // plugin's tab.
+        super::page_tabs::choose_plugin_tab("wallpaper", None, cx);
         let from = st(cx).tab;
         if from == WallpaperTab::Generator && tab != from {
             // The generator's previews go with its tab.

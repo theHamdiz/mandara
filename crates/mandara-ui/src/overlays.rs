@@ -660,7 +660,8 @@ impl SearchCtx {
             self.plugin_routed = false;
             return;
         }
-        (self.plugin_routed, self.plugin_hits) = crate::plugins::external::launcher_hits(q, cx);
+        let builtin = launcher_ext::route(q, &self.providers).is_some();
+        (self.plugin_routed, self.plugin_hits) = crate::plugins::external::launcher_hits(q, builtin, cx);
     }
 
     /// Results of provider `id` for `q`.
@@ -1254,6 +1255,7 @@ pub fn run_json(args: &[String], cx: &mut App) -> Result<serde_json::Value, Stri
     let apps = launcher_apps(cx);
     let mut ctx = SearchCtx::gather(&apps, cx);
     ctx.ask_plugins(&query, cx);
+    crate::plugins::external::settle_launcher(cx);
     let results = search_with(&query, &apps, &build_index(cx), &ctx);
     let item = results.get(index).ok_or_else(|| tf("No result #{index} for {query} ({count} results)", &[("index", &index), ("query", &format!("{query:?}")), ("count", &results.len())]))?;
     let mut out = result_json(item, &query);
@@ -1549,6 +1551,7 @@ impl LauncherView {
         let before: std::collections::HashMap<String, usize> = if was_grid { self.results.iter().enumerate().map(|(i, it)| (usage_key(it), i)).collect() } else { Default::default() };
         let query = self.effective_query();
         self.ctx.ask_plugins(&query, cx);
+        crate::plugins::external::settle_launcher(cx);
         let mut results = search_with(&query, &self.apps, &self.index, &self.ctx);
         if self.mode == Some(BeaconMode::Apps) {
             results.retain(|i| matches!(i, Item::App(_)));

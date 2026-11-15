@@ -16,7 +16,7 @@ use std::time::Duration;
 use mandara_i18n::tk;
 use serde::{Deserialize, Serialize};
 
-use crate::wasm::extension_world::mandara::plugin::ui::{Kind as Kind2, Node as Node2, View as View2};
+use crate::wasm::{Kind, Node, View};
 
 /// The extension API level this host speaks (`platform.host-info.api`).
 pub const API_LEVEL: u32 = 1;
@@ -667,7 +667,7 @@ pub fn github_repo(url: &str) -> Option<String> {
 /// Why a view is refused, if it is: too many nodes, marks or bytes; a
 /// child index out of range; or a list declaring too many rows. Checked
 /// before anything is drawn, so a hostile tree costs one linear scan.
-pub fn check_view(view: &View2) -> Result<(), String> {
+pub fn check_view(view: &View) -> Result<(), String> {
     if view.nodes.len() > MAX_VIEW_NODES {
         return Err(format!("the view has {} nodes (at most {MAX_VIEW_NODES})", view.nodes.len()));
     }
@@ -694,7 +694,7 @@ pub fn check_view(view: &View2) -> Result<(), String> {
         if n.options.len() > MAX_CHOICE_OPTIONS {
             return Err(format!("a choice has {} options (at most {MAX_CHOICE_OPTIONS})", n.options.len()));
         }
-        if n.kind == Kind2::List && n.index > MAX_LIST_ROWS {
+        if n.kind == Kind::List && n.index > MAX_LIST_ROWS {
             return Err(format!("a list declares {} rows (at most {MAX_LIST_ROWS})", n.index));
         }
     }
@@ -707,7 +707,7 @@ pub fn check_view(view: &View2) -> Result<(), String> {
     Ok(())
 }
 
-fn node_bytes(n: &Node2) -> usize {
+fn node_bytes(n: &Node) -> usize {
     n.id.len() + n.text.len() + n.hint.len() + n.action.len() + n.options.iter().map(|o| o.value.len() + o.label.len()).sum::<usize>()
 }
 
@@ -756,13 +756,13 @@ mod tests {
 
     #[test]
     fn views_must_be_trees() {
-        use crate::wasm::{Align, Node2, Style, Tone};
-        let node = |children: Vec<u32>| Node2 {
-            id: String::new(), kind: Kind2::Column, text: String::new(), hint: String::new(), action: String::new(), value: 0.0, min: 0.0, max: 0.0, step: 0.0, index: 0, children,
+        use crate::wasm::{Align, Style, Tone};
+        let node = |children: Vec<u32>| Node {
+            id: String::new(), kind: Kind::Column, text: String::new(), hint: String::new(), action: String::new(), value: 0.0, min: 0.0, max: 0.0, step: 0.0, index: 0, children,
             style: Style { width: 0.0, height: 0.0, min_width: 0.0, min_height: 0.0, padding: 0.0, gap: 0.0, radius: 0.0, size: 0.0, grow: false, bold: false, align: Align::Auto, tone: Tone::Normal },
             options: Vec::new(), image: 0, marks: Vec::new(), disabled: false,
         };
-        let view = |nodes: Vec<Node2>| View2 { nodes, root: 0, focus: String::new() };
+        let view = |nodes: Vec<Node>| View { nodes, root: 0, focus: String::new() };
         assert!(check_view(&view(vec![node(vec![1, 2]), node(vec![]), node(vec![])])).is_ok());
         assert!(check_view(&view(vec![node(vec![1, 1]), node(vec![])])).unwrap_err().contains("trees"), "a shared child");
         assert!(check_view(&view(vec![node(vec![1]), node(vec![0])])).unwrap_err().contains("trees"), "a cycle through the root");

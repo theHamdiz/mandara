@@ -3629,8 +3629,7 @@ It poses as Mandara's built-in {plugin} plugin
 It reads Linux's socket tables in /proc/net, which FreeBSD doesn't have; sockstat(1) lists FreeBSD's
 It runs commands without being asked ({command})
 It runs the program directly with its arguments, never through a shell. Quote an argument that holds spaces.
-It shows nothing: its bar item, panel and sidebar card are all empty
-It shows nothing: its bar item, panel, sidebar card and desktop widgets are all empty
+It shows nothing: its bar item, panel, sidebar card, desktop widgets, Studio tabs and launcher results are all empty
 It's Mandara's {example} example, republished unchanged
 It's the unchanged plugin template (still named {name})
 It's time for {prayer}
@@ -9773,8 +9772,6 @@ plugin stopped
 plugin view too large
 plugin.toml can't be read: {error}
 plugin.toml is invalid: {error}
-plugin.toml lists desktop widgets, but the plugin isn't built for the desktop-plugin world
-plugin.toml lists launcher providers or Studio tabs, but the plugin isn't built for the extension-plugin world
 port number
 post id or address
 power-profiles-daemon is not running

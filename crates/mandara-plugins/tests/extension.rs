@@ -1,15 +1,14 @@
-//! The extension platform on real components: v0.1 plugins load unchanged
-//! beside `extension-plugin` ones, features are negotiated, every broker
-//! request is checked against the live grants, and views, queues, launcher
-//! results and launcher time are bounded. The extension fixture is one
-//! component whose `mode` setting picks its behaviour
-//! (tests/data/extension/README.md).
+//! The plugin platform on real components: features are negotiated, every
+//! broker request is checked against the live grants, sensitive requests
+//! need a user gesture, and views, queues, launcher results and launcher
+//! time are bounded. The extension fixture is one component whose `mode`
+//! setting picks its behaviour (tests/data/extension/README.md).
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use mandara_plugins::extension::{self, Access, Capability};
-use mandara_plugins::wasm::{ExtContext, ExtEvent, ExtSurface, ExtValue, ImageEntry, ImageOrigin, Kind2, Palette, WasmPlugin, World};
+use mandara_plugins::wasm::{EventValue, ImageEntry, ImageOrigin, Kind, Palette, PluginEvent, RenderContext, SurfaceKind, WasmPlugin};
 
 fn data() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data")
@@ -30,8 +29,8 @@ fn palette() -> Palette {
     }
 }
 
-fn context() -> ExtContext {
-    ExtContext { surface: ExtSurface::Panel, outlet: String::new(), instance: String::new(), width: 360.0, height: 380.0 }
+fn context() -> RenderContext {
+    RenderContext { surface: SurfaceKind::Panel, outlet: String::new(), instance: String::new(), width: 360.0, height: 380.0, numerals: String::new(), calendar: String::new(), language: String::new() }
 }
 
 /// A scratch plugin folder holding `wasm` (and an `assets/moon.png`).
@@ -61,12 +60,12 @@ fn extension(mode: &str, access: Access) -> anyhow::Result<WasmPlugin> {
 
 /// The fixture's log: the first text node of its panel view.
 fn log(p: &mut WasmPlugin) -> String {
-    let view = p.extension_view(&palette(), &context()).unwrap().expect("a panel view");
-    view.nodes.iter().find(|n| n.kind == Kind2::Text).map(|n| n.text.clone()).unwrap_or_default()
+    let view = p.render(&palette(), &context()).unwrap().expect("a panel view");
+    view.nodes.iter().find(|n| n.kind == Kind::Text).map(|n| n.text.clone()).unwrap_or_default()
 }
 
 fn click(p: &mut WasmPlugin, action: &str) {
-    p.extension_event(&ExtEvent { context: context(), node: action.into(), action: action.into(), value: ExtValue::Activate });
+    p.on_event(&PluginEvent { context: context(), node: action.into(), action: action.into(), value: EventValue::Activate });
 }
 
 fn use_scratch_cache() {
@@ -83,23 +82,18 @@ fn use_scratch_cache() {
 }
 
 #[test]
-fn v0_1_plugins_load_unchanged_beside_extensions() {
+fn a_plugin_negotiates_then_renders_its_surfaces() {
     use_scratch_cache();
-    let dir = folder("old", &data().join("vet/fixture.wasm"));
-    let mut old = WasmPlugin::load("old", &dir, &dir.join("plugin.wasm"), settings("ok"), Access::commands(false)).expect("a v0.1 plugin loads");
-    assert_eq!(old.world(), World::Plugin);
-    assert!(old.bar(&palette()).is_some(), "its bar export answers as before");
-    assert!(matches!(old.extension_view(&palette(), &context()), Ok(None)), "no extension view: the older exports are drawn");
-    assert!(old.launcher_query("x", "q", 5).is_empty());
-    assert!(old.disabled.is_none() && old.features.is_empty());
-
-    let mut new = extension("ok", Access::default()).expect("an extension plugin loads");
-    assert_eq!(new.world(), World::ExtensionPlugin);
-    assert!(new.has_desktop(), "extension-plugin includes desktop-plugin");
-    assert!(new.features.iter().any(|f| f == "launcher"));
-    assert!(new.bar(&palette()).is_some(), "its older exports stay as fallbacks");
-    assert!(matches!(new.extension_view(&palette(), &ExtContext { surface: ExtSurface::Bar, ..context() }), Ok(None)), "none falls back to `bar`");
-    assert!(log(&mut new).contains(&format!("api {}", extension::API_LEVEL)), "negotiate got the host's API level");
+    let mut p = extension("ok", Access::default()).expect("the fixture loads");
+    assert!(p.features.iter().any(|f| f == "launcher"));
+    let bar = p.render(&palette(), &RenderContext { surface: SurfaceKind::Bar, ..context() }).unwrap();
+    assert!(bar.is_some_and(|v| v.nodes.iter().any(|n| n.text == "Fixture")));
+    assert!(log(&mut p).contains(&format!("api {}", extension::API_LEVEL)), "negotiate got the host's API level");
+    // The compliance fixture (one more component) loads the same way.
+    let dir = folder("vet", &data().join("vet/fixture.wasm"));
+    let mut vet = WasmPlugin::load("vet", &dir, &dir.join("plugin.wasm"), settings("ok"), Access::default()).expect("loads");
+    assert!(matches!(vet.render(&palette(), &RenderContext { surface: SurfaceKind::Bar, ..context() }), Ok(Some(_))));
+    assert!(matches!(vet.render(&palette(), &context()), Ok(None)), "none where it has nothing");
 }
 
 #[test]
@@ -169,7 +163,7 @@ fn image_handles_are_plugin_scoped_and_follow_grants() {
 fn views_queues_and_launcher_results_are_bounded() {
     use_scratch_cache();
     let mut huge = extension("huge", Access::default()).unwrap();
-    let refused = huge.extension_view(&palette(), &context()).unwrap_err();
+    let refused = huge.render(&palette(), &context()).unwrap_err();
     assert!(refused.contains("5000 nodes"), "{refused}");
     assert!(huge.disabled.is_none(), "a refused view doesn't disable the plugin");
 
@@ -181,9 +175,9 @@ fn views_queues_and_launcher_results_are_bounded() {
     assert_eq!(hits.len(), extension::MAX_HITS);
     assert!(hits.iter().all(|h| h.title.len() <= 256));
 
-    let answer = p.extension_call("caller-plugin", "ping", "{\"n\":1}").unwrap();
+    let answer = p.on_call("caller-plugin", "ping", "{\"n\":1}").unwrap();
     assert!(answer.contains("caller-plugin"));
-    assert!(p.extension_call("caller-plugin", "nope", "{}").is_err());
+    assert!(p.on_call("caller-plugin", "nope", "{}").is_err());
 }
 
 #[test]
@@ -231,6 +225,6 @@ fn private_storage_persists_through_the_host_and_is_bounded() {
 fn commands_reach_the_plugin_as_a_gesture() {
     use_scratch_cache();
     let mut p = extension("ok", Access::default()).unwrap();
-    p.extension_event(&ExtEvent { context: context(), node: String::new(), action: "remind".into(), value: ExtValue::Command(vec!["remind".into(), "tonight".into()]) });
+    p.on_event(&PluginEvent { context: context(), node: String::new(), action: "remind".into(), value: EventValue::Command(vec!["remind".into(), "tonight".into()]) });
     assert!(log(&mut p).contains("command remind tonight"));
 }

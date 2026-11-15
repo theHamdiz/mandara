@@ -12,19 +12,16 @@ each behind a permission you grant and can take back.
 
 ### New
 
-- Plugins built for the new extension platform draw rich native views with text fields, switches, sliders, segmented controls, grids, virtual lists, images and charts, in your theme, light or dark, and in right-to-left languages.
+- Third-party plugins draw rich native views with text fields, switches, sliders, segmented controls, grids, virtual lists, images and charts, in your theme, light or dark, and in right-to-left languages.
 - Plugins can add their own tabs to Studio's Themes, Bars, Desktop and Wallpaper pages, offer launcher results, size their own panels, and offer commands you can run with `mandara msg plugins run`, bind to shortcuts or use in hooks, skills and agents.
 - Plugins can ask for what's playing, media controls, wallpapers, pictures in folders you choose, windows, workspaces, system load, the clipboard, notifications, on-screen displays, desktop events, timers, other plugins and one web address at a time. Each one is off until you switch it on in Studio → Plugins → the plugin → Permissions, and you can switch it off again at any moment.
 - Every third-party plugin page and store card links to its source code and to where you can report an issue.
 - The moon-phase example plugin is a full showcase: a rendered moon for every phase, a look-ahead slider, an illumination chart, coming full and new moons, a moon calendar tab in Studio → Desktop, `moon ` results in the launcher and a full-moon reminder.
 
-### Improved
-
-- Plugins built for earlier versions keep working exactly as before.
-
 ### Under the hood
 
 - Sensitive plugin actions (reading the clipboard, opening a page, setting a wallpaper, closing a window) only work right after you click or type in that plugin, plugin views, requests, queues and launcher time are bounded, and the compliance check now tries every new kind of plugin view.
+- The plugin interface is now one contract (`mandara:plugin@0.2.0`) with a single `render` for every surface; plugin authors build against it from the updated guide.
 - Two programs loading the same plugin at once can no longer crash on a half-written compiled-plugin cache.
 
 

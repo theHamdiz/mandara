@@ -1,11 +1,15 @@
-// Mandara plugin interface. Plugins are written in Rust, compiled to a
-// WebAssembly component (`cargo build --target wasm32-wasip2`), and run
-// sandboxed: no filesystem, network or environment access, a time budget
-// per call, and any trap disables only that plugin.
-package mandara:plugin@0.1.0;
+// Mandara plugin interface (API level 1). Plugins are written in Rust,
+// compiled to a WebAssembly component (`cargo build --target wasm32-wasip2`),
+// and run sandboxed: no filesystem, network, environment or programs, a
+// time budget per call, and any trap disables only that plugin. Everything
+// a plugin reaches outside its sandbox goes through the broker, as a
+// capability the person grants and can revoke; Mandara enforces every
+// rule here, WIT alone grants nothing.
+package mandara:plugin@0.2.0;
 
 interface types {
-    /// The live palette, as `#rrggbb` strings.
+    /// The live palette, as `#rrggbb` strings (for decisions such as a
+    /// different picture in light mode; views use tones, not colours).
     record palette {
         dark: bool,
         primary: string,
@@ -19,49 +23,7 @@ interface types {
         warning: string,
     }
 
-    enum kind {
-        /// Children laid out horizontally / vertically.
-        row,
-        column,
-        /// A rounded surface card around its children (sidebar style).
-        card,
-        /// `text` shown as a label.
-        text,
-        /// `text` names a bundled Mandara icon (e.g. "sun", "timer").
-        icon,
-        /// A clickable pill; `text` is its label, `action` its event.
-        button,
-        /// A progress bar; `value` in 0..=1.
-        meter,
-        /// Flexible empty space.
-        spacer,
-    }
-
     enum tone { normal, muted, accent, error, success, warning }
-
-    record node {
-        kind: kind,
-        text: string,
-        value: f32,
-        /// Indices into the view's node list.
-        children: list<u32>,
-        /// Sent to `on-event` when the node is clicked ("" = not clickable).
-        action: string,
-        tone: tone,
-        /// Font / icon size in logical px (0 = default).
-        size: f32,
-        /// Spacing between children (row / column / card).
-        gap: f32,
-        bold: bool,
-        /// Take the remaining space in the parent.
-        grow: bool,
-    }
-
-    /// A widget tree as an arena: `nodes[root]` is the top node.
-    record view {
-        nodes: list<node>,
-        root: u32,
-    }
 }
 
 interface host {
@@ -71,77 +33,312 @@ interface host {
     now-unix-ms: func() -> u64;
     /// The plugin's setting from `[plugins.settings.<id>]`, as JSON.
     setting: func(key: string) -> option<string>;
-    /// Queues a Mandara command (as `mandara msg …`). Needs the
-    /// "commands" permission in plugin.toml.
+    /// Queues one of Mandara's interface commands (as `mandara msg …`).
+    /// Needs the "commands" permission, and for commands a capability
+    /// covers (media, notifications, workspaces, OSD, theme, launcher
+    /// search) that capability too.
     command: func(line: string) -> result<_, string>;
-    /// The interface language as an ISO 639-1 code: "en", "ar", "es",
-    /// "fr", "zh", "tr", "ja", "de", "ru" or "hi". Right-to-left for "ar".
+    /// The interface language as an ISO 639-1 code ("ar" is right to left).
     locale: func() -> string;
     /// Translates English `text` with the plugin's own catalog
-    /// (`locales/<code>.toml` beside plugin.toml, `"English" = "…"` pairs);
-    /// returns `text` unchanged when there's no translation. Text and
-    /// button labels in returned views are translated this way
+    /// (`locales/<code>.toml`); views are translated this way
     /// automatically, so plugins only need this for composed strings.
     translate: func(text: string) -> string;
 }
 
-/// Desktop widgets: a plugin built for the `desktop-plugin` world draws
-/// widgets people place on the desktop (each on its own small surface, in
-/// the theme like the plugin's other views). The kinds it offers are
-/// listed in plugin.toml (`[[widgets]]`: id, name, description, icon,
-/// width, height), so Mandara can offer them without loading the plugin.
-interface desktop {
-    /// One placed widget, as it is drawn now.
-    record widget-context {
-        /// The kind (a `[[widgets]]` id from plugin.toml).
-        widget: string,
-        /// This placed widget (a kind can be placed more than once).
+interface platform {
+    /// What the host offers, given to `negotiate` before `init`.
+    record host-info {
+        /// The API level (1 for this file).
+        api: u32,
+        /// Every feature this host supports (see PLUGINS.md), such as
+        /// "ui.input", "ui.list", "launcher" or "studio-tabs".
+        features: list<string>,
+        /// The Mandara version, e.g. "0.31.0".
+        version: string,
+    }
+}
+
+interface ui {
+    use types.{tone};
+
+    enum kind {
+        /// Children side by side / stacked.
+        row,
+        column,
+        /// A rounded surface card around its children.
+        card,
+        /// Children in `index` equal columns (1–12), wrapping into rows.
+        grid,
+        /// Children in a vertical scroll area (`style.height` caps it).
+        scroll,
+        /// A virtual list of `index` rows, each `style.min-height` tall
+        /// (default 36), in a `style.height` viewport: the children are
+        /// rows `value` .. `value + children`, and scrolling past them
+        /// sends a `range` event asking for the rows on screen.
+        %list,
+        /// `text` as a label.
+        text,
+        /// `text` names a bundled Mandara icon.
+        icon,
+        /// A button; `text` is its label (after any children, such as an
+        /// icon), `action` its event. `style.tone`: `accent` is the one
+        /// filled primary action, `muted` a plain text button, anything
+        /// else a quiet tinted button.
+        button,
+        /// A progress bar, `value` in 0..=1.
+        meter,
+        /// Flexible empty space.
+        spacer,
+        /// A thin rule between groups.
+        divider,
+        /// A one-line text field: `text` is its value, `hint` its
+        /// placeholder; sends `text` while typing and `submit` on Enter.
+        input,
+        /// A switch: on when `value` >= 0.5; sends `checked`.
+        toggle,
+        /// A slider over `min`..`max` (step `step`, 0 = continuous);
+        /// sends `number`.
+        slider,
+        /// A segmented control: `options`, the chosen one at `index`
+        /// (raised); sends `choice` with the option's value. It spans its
+        /// parent unless `style.width` is set.
+        choice,
+        /// An image from a host-issued handle (`image`), drawn at
+        /// `style.width` x `style.height`; `hint` is its description.
+        image,
+        /// Simple vector marks (`marks`) in a `style.width` x
+        /// `style.height` box: shapes, bars and lines for charts.
+        canvas,
+        /// An inset grouped section: one quiet rounded surface whose
+        /// children are rows, separated by hairlines (the settings-list
+        /// look). Put rows, fields and sliders in groups rather than cards
+        /// in cards.
+        group,
+    }
+
+    /// How children line up across the layout's direction. `auto`: rows
+    /// centre their children, columns stretch them.
+    enum align { auto, start, center, end, stretch }
+
+    /// Where a view is drawn.
+    enum surface { bar, panel, sidebar, desktop, studio, launcher }
+
+    record context {
+        surface: surface,
+        /// Which outlet: "" for the plugin's own bar item, panel or
+        /// sidebar card; a `[[widgets]]` id on the desktop; a
+        /// `[[studio-tabs]]` id in Studio.
+        outlet: string,
+        /// This placed instance (desktop widgets can be placed twice).
         instance: string,
-        /// Its size now, logical px.
+        /// The space it has now, logical px (0 = sized by content).
         width: f32,
         height: f32,
-        /// The person's choices for its text: "auto", "western" or
-        /// "eastern-arabic" digits; "gregorian", "hijri", "both" or "none"
-        /// for dates; a language code ("" = the interface language).
+        /// On the desktop, the person's choices for the widget's text:
+        /// "auto", "western" or "eastern-arabic" digits; "gregorian",
+        /// "hijri", "both" or "none" for dates; a language code ("" = the
+        /// interface language). Empty elsewhere.
         numerals: string,
         calendar: string,
         language: string,
     }
+
+    record option-item { value: string, label: string }
+
+    enum shape {
+        rect,
+        ellipse,
+        /// From (x, y) to (x + width, y + height); `height` may be negative.
+        line,
+    }
+
+    /// One mark. Coordinates and sizes are fractions (0..=1) of the
+    /// canvas, so marks scale with it. No scripts, paths or URLs.
+    record mark {
+        shape: shape,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        tone: tone,
+        /// 0..=1 (0 is treated as 1, fully opaque).
+        opacity: f32,
+        /// Corner radius in logical px (rect only).
+        radius: f32,
+    }
+
+    /// Layout and look. Zero means "the default" for every number.
+    record style {
+        width: f32,
+        height: f32,
+        min-width: f32,
+        min-height: f32,
+        padding: f32,
+        gap: f32,
+        /// Corner radius in logical px.
+        radius: f32,
+        /// Font or icon size in logical px.
+        size: f32,
+        grow: bool,
+        bold: bool,
+        align: align,
+        tone: tone,
+    }
+
+    record node {
+        /// Unique within the view and stable across renders: it keeps a
+        /// field's caret, a list's scroll and keyboard focus. "" for nodes
+        /// that keep no state.
+        id: string,
+        kind: kind,
+        text: string,
+        /// Placeholder, tooltip or image description.
+        hint: string,
+        /// Sent back in events ("" = not interactive).
+        action: string,
+        value: f32,
+        min: f32,
+        max: f32,
+        step: f32,
+        /// Grid columns, the chosen option, or a list's row count.
+        index: u32,
+        /// Indices into the view's node list.
+        children: list<u32>,
+        style: style,
+        options: list<option-item>,
+        /// An image handle from the broker (0 = none).
+        image: u64,
+        marks: list<mark>,
+        disabled: bool,
+    }
+
+    /// A tree as an arena: `nodes[root]` is the top node. `focus` names a
+    /// node id to give keyboard focus to ("" = leave focus alone).
+    record view { nodes: list<node>, root: u32, focus: string }
+
+    record key-press {
+        /// GPUI key name: "a", "enter", "escape", "up", "pageup", "f5", …
+        key: string,
+        ctrl: bool,
+        alt: bool,
+        shift: bool,
+        super-key: bool,
+    }
+
+    /// A broker reply (or one update of a subscription).
+    record reply {
+        /// The id `broker.submit` returned.
+        id: u64,
+        /// Success: a JSON payload. Failure: why, in English.
+        outcome: result<string, string>,
+    }
+
+    variant value {
+        /// A click (or Enter / Space on a focused node).
+        activate,
+        text(string),
+        submit(string),
+        number(f32),
+        checked(bool),
+        choice(string),
+        /// The rows a list shows now: first row and count.
+        range(tuple<u32, u32>),
+        /// A key the focused node didn't use itself.
+        key(key-press),
+        /// A launcher result was chosen: the hit's id.
+        launch(string),
+        /// One of the plugin's `[[commands]]` was run (from the CLI, a
+        /// shortcut, a hook, a skill or an agent): its name, then the
+        /// words after it.
+        command(list<string>),
+        /// Broker replies, oldest first.
+        replies(list<reply>),
+    }
+
+    record event {
+        context: context,
+        /// The node's id ("" for launcher and broker events).
+        node: string,
+        action: string,
+        value: value,
+    }
+
+    /// A launcher result.
+    record hit {
+        /// Sent back in a `launch` event when chosen.
+        id: string,
+        title: string,
+        detail: string,
+        /// A bundled Mandara icon, or "" for the plugin's own.
+        icon: string,
+        /// An image handle (0 = none), drawn instead of the icon.
+        image: u64,
+        /// Extra words that find it.
+        keywords: string,
+    }
+}
+
+interface broker {
+    /// A request to a host service. `capability` names it ("media.read",
+    /// "wallpaper.set", "net:api.example.com", …): the plugin must
+    /// declare it in plugin.toml and the person must have granted it.
+    /// `payload` is a JSON object of at most 16 KiB.
+    record request { capability: string, operation: string, payload: string }
+
+    /// Queues a request and returns its id at once; never waits. The
+    /// result arrives later as a `replies` event. Fails at once when the
+    /// capability isn't declared, granted or known, the payload is too
+    /// large, too many requests are already waiting, or the operation needs
+    /// a user gesture (reading the clipboard, opening a page, setting a
+    /// wallpaper, closing a window) and the plugin isn't handling a click,
+    /// key press, typed text, launcher choice or command right now.
+    submit: func(request: request) -> result<u64, string>;
+    /// Ends a subscription or drops a waiting request.
+    cancel: func(id: u64);
+    /// The capabilities granted right now (they can change at any time).
+    granted: func() -> list<string>;
+    /// A handle for an image the plugin ships in its folder (`assets/`,
+    /// PNG, JPEG or WebP): a name like "moon.png", no folders.
+    asset-image: func(name: string) -> result<u64, string>;
+}
+
+/// The plugin's own private key-value storage: kept across restarts,
+/// bounded (1024 keys, 128-byte keys, 64 KiB values, 1 MiB in all) and
+/// out of every other plugin's reach. Values are yours to encode (JSON is
+/// a good choice).
+interface storage {
+    get: func(key: string) -> option<string>;
+    set: func(key: string, value: string) -> result<_, string>;
+    remove: func(key: string);
+    keys: func() -> list<string>;
 }
 
 world plugin {
-    use types.{palette, view};
+    use types.{palette};
+    use platform.{host-info};
+    use ui.{context, view, event, hit};
     import host;
+    import broker;
+    import storage;
 
-    /// Called once after loading.
+    /// Called first, before `init`: return the features you use. Loading
+    /// stops with a clear message when the host lacks one, so a plugin
+    /// never half-works on an older Mandara.
+    export negotiate: func(host: host-info) -> list<string>;
+    /// Called once after `negotiate`.
     export init: func() -> result<_, string>;
-    /// The bar item, panel and sidebar card (none = not provided).
-    export bar: func(theme: palette) -> option<view>;
-    export panel: func(theme: palette) -> option<view>;
-    export sidebar: func(theme: palette) -> option<view>;
-    /// A node with an `action` was clicked.
-    export on-event: func(action: string);
-    /// How often to re-render, in ms (0 = only after events).
+    /// The view for a surface and outlet: the bar item, its panel, the
+    /// sidebar card, a desktop widget, a Studio tab (none = nothing there).
+    export render: func(theme: palette, context: context) -> option<view>;
+    /// Input, launcher choices, commands and broker replies.
+    export on-event: func(event: event);
+    /// How often to render again while a surface is on screen, in ms
+    /// (0 = only after events).
     export refresh-ms: func() -> u32;
-}
-
-/// A plugin that also draws desktop widgets: everything in `plugin`
-/// (repeated here), plus `desktop-widget`. A plugin built for `plugin`
-/// alone keeps working.
-world desktop-plugin {
-    use types.{palette, view};
-    use desktop.{widget-context};
-    import host;
-
-    export init: func() -> result<_, string>;
-    export bar: func(theme: palette) -> option<view>;
-    export panel: func(theme: palette) -> option<view>;
-    export sidebar: func(theme: palette) -> option<view>;
-    export on-event: func(action: string);
-    export refresh-ms: func() -> u32;
-
-    /// One placed widget's view (none = nothing to show right now). It is
-    /// asked again after a click in it, when a setting changes and every
-    /// `refresh-ms`.
-    export desktop-widget: func(theme: palette, context: widget-context) -> option<view>;
+    /// Results for a declared `[[launcher]]` provider (at most `limit`).
+    export launcher-query: func(provider: string, query: string, limit: u32) -> list<hit>;
+    /// Another plugin calls one of the operations this one `serves`.
+    /// `payload` and the answer are JSON.
+    export on-call: func(caller: string, operation: string, payload: string) -> result<string, string>;
 }

@@ -12,21 +12,21 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gpui::{AnyElement, App, FontWeight, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _, px, size};
+use gpui::{AnyElement, App, IntoElement, ParentElement, Styled, div, px, size};
 use mandara_config::desktop_cards as dc;
 use mandara_core::ToGpui;
-use mandara_plugins::wasm::{self, Discovered, Kind, Palette, Source, Tone, View, WasmPlugin};
+use mandara_plugins::wasm::{self, Discovered, Palette, Source, Tone, WasmPlugin};
 use mandara_plugins::{PanelSpec, PluginInstance, PluginManifest, PluginOrigin, PluginRegistry};
 use mandara_theme::{Color, MandaraPalette};
 
-use super::extension_view::{self as ext_view, Frame};
+use super::plugin_view::{self as plugin_view, Frame};
 use super::fn_view;
 use super::panel_fx::{ViewSet, redraw_in};
 use crate::icons::icon;
-use crate::kit::{card, text, tokens};
+use crate::kit::{text, tokens};
 use crate::state::config;
 use mandara_plugins::extension::Access;
-use mandara_plugins::wasm::{ExtContext, ExtEvent, ExtSurface, ExtValue};
+use mandara_plugins::wasm::{EventValue, PluginEvent, RenderContext, SurfaceKind};
 
 mod brokers;
 
@@ -34,24 +34,6 @@ pub(crate) type Shared = Rc<RefCell<Option<WasmPlugin>>>;
 
 /// Shortest refresh interval a plugin may ask for.
 const MIN_REFRESH_MS: u64 = 250;
-/// Deepest node nesting rendered (guards against cyclic / hostile trees).
-const MAX_DEPTH: u32 = 32;
-/// Most nodes one plugin view renders. Children are node indices, so a
-/// few nodes listing each other repeatedly could expand exponentially.
-const MAX_RENDERED_NODES: usize = 2048;
-/// Font sizes a plugin may request.
-const MIN_TEXT_PX: f32 = 6.0;
-const MAX_TEXT_PX: f32 = 96.0;
-/// Default icon size.
-const ICON_PX: f32 = 16.0;
-/// Button geometry.
-const BUTTON_H_PX: f32 = 30.0;
-const BUTTON_PAD_X_PX: f32 = 14.0;
-const BUTTON_GAP_PX: f32 = 6.0;
-/// Meter geometry and track alpha.
-const METER_H_PX: f32 = 6.0;
-const METER_MIN_W_PX: f32 = 40.0;
-const METER_TRACK_ALPHA: f32 = 0.1;
 /// Padding inside third-party panels (their size is plugin.toml's `[panel]`).
 const PANEL_PAD_PX: f32 = tokens::LG;
 /// The panel's "whose is this" line is quieter than muted text.
@@ -162,17 +144,36 @@ fn write_storage_later(path: std::path::PathBuf, json: String, cx: &mut App) {
         *g += 1;
         *g
     };
+    // Serializes the disk writes; only background tasks take it, so the UI
+    // thread never waits on a slow disk.
+    static WRITING: Mutex<()> = Mutex::new(());
+    let executor = cx.background_executor().clone();
     cx.background_executor()
         .spawn(async move {
-            let map = NEWEST.lock().unwrap_or_else(|e| e.into_inner());
-            if map.as_ref().and_then(|m| m.get(&path)) == Some(&generation)
-                && let Err(err) = wasm::write_storage(&path, &json)
-            {
-                tracing::warn!(target: "mandara::plugin", "writing {}: {err}", path.display());
+            for attempt in 0..STORAGE_WRITE_ATTEMPTS {
+                let written = {
+                    let _writing = WRITING.lock().unwrap_or_else(|e| e.into_inner());
+                    let current = NEWEST.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|m| m.get(&path)) == Some(&generation);
+                    // A newer snapshot supersedes this one.
+                    if !current {
+                        return;
+                    }
+                    wasm::write_storage(&path, &json)
+                };
+                match written {
+                    Ok(()) => return,
+                    Err(err) if attempt + 1 == STORAGE_WRITE_ATTEMPTS => tracing::warn!(target: "mandara::plugin", "writing {}: {err}", path.display()),
+                    // A transient failure (a full or busy disk): try again.
+                    Err(_) => executor.timer(STORAGE_RETRY).await,
+                }
             }
         })
         .detach();
 }
+
+/// How often a plugin's storage write is tried, and the wait between tries.
+const STORAGE_WRITE_ATTEMPTS: u32 = 3;
+const STORAGE_RETRY: Duration = Duration::from_millis(500);
 
 /// [`after_call`] from a render: deferred, since rendering must not
 /// change the app.
@@ -185,16 +186,16 @@ fn after_render(id: &str, plugin: &Shared, cx: &mut App) {
 }
 
 /// Sends `event` to plugin `id`, runs what it queued and re-renders it.
-pub(crate) fn send_event(id: &str, plugin: &Shared, event: &ExtEvent, cx: &mut App) {
+pub(crate) fn send_event(id: &str, plugin: &Shared, event: &PluginEvent, cx: &mut App) {
     if let Some(p) = plugin.borrow_mut().as_mut() {
-        p.extension_event(event);
+        p.on_event(event);
     }
     after_call(id, plugin, cx);
     views_of(id).notify(cx);
 }
 
 /// The event sink for an extension view of plugin `d`.
-pub(crate) fn sink_for(d: &Discovered) -> ext_view::Sink {
+pub(crate) fn sink_for(d: &Discovered) -> plugin_view::Sink {
     let declared = d.clone();
     Rc::new(move |event, _window, cx| {
         let plugin = instance(&declared, cx);
@@ -204,7 +205,7 @@ pub(crate) fn sink_for(d: &Discovered) -> ext_view::Sink {
 
 /// Resolves plugin `id`'s image handles: only ones its live instance
 /// issued and whose origin is still granted.
-pub(crate) fn images_for(id: &str) -> ext_view::Images {
+pub(crate) fn images_for(id: &str) -> plugin_view::Images {
     let id = id.to_string();
     Rc::new(move |handle, _cx| {
         let plugin = loaded(&id)?;
@@ -345,75 +346,7 @@ fn encode_palette(p: &MandaraPalette) -> Palette {
 
 /// The theme color of a view tone.
 pub fn tone_color(t: Tone, p: &MandaraPalette) -> Color {
-    ext_view::tone_color(t, p)
-}
-
-/// Renders a plugin view tree (arena) with Mandara's components.
-/// `emoji` is the colour emoji family for text that is only emoji.
-fn render(view: &View, palette: &MandaraPalette, plugin: &Shared, id: &str, views: &ViewSet, emoji: Option<&gpui::SharedString>) -> AnyElement {
-    #[allow(clippy::too_many_arguments)]
-    fn node(view: &View, i: u32, depth: u32, p: &MandaraPalette, plugin: &Shared, id: &str, views: &ViewSet, emoji: Option<&gpui::SharedString>, key: &mut usize) -> AnyElement {
-        let Some(n) = view.nodes.get(i as usize).filter(|_| depth < MAX_DEPTH && *key < MAX_RENDERED_NODES) else { return div().into_any_element() };
-        *key += 1;
-        let children: Vec<AnyElement> = n.children.iter().map(|c| node(view, *c, depth + 1, p, plugin, id, views, emoji, key)).collect();
-        let color = tone_color(n.tone, p);
-        let size_or = |d: f32| if n.size > 0.0 { n.size.clamp(MIN_TEXT_PX, MAX_TEXT_PX) } else { d };
-        let mut el = match n.kind {
-            Kind::Row => div().flex().items_center().gap(px(n.gap.max(0.0))).children(children),
-            Kind::Column => div().flex().flex_col().gap(px(n.gap.max(0.0))).children(children),
-            Kind::Card => card(p).flex().flex_col().gap(px(if n.gap > 0.0 { n.gap } else { tokens::SM })).children(children),
-            Kind::Text => div()
-                .text_size(px(size_or(text::BODY)))
-                .text_color(color.hsla())
-                .when(n.bold, |el| el.font_weight(FontWeight::SEMIBOLD))
-                .when_some(emoji.filter(|_| crate::fonts::emoji_only(&n.text)), |el, family| el.font_family(family.clone()))
-                .child(n.text.clone()),
-            Kind::Icon => div().child(icon(crate::icons::ICON_NAMES.iter().find(|x| **x == n.text).copied().unwrap_or("circle"), size_or(ICON_PX), color)),
-            Kind::Button => div()
-                .h(px(BUTTON_H_PX))
-                .px(px(BUTTON_PAD_X_PX))
-                .rounded_full()
-                .flex()
-                .items_center()
-                .gap(px(BUTTON_GAP_PX))
-                .cursor_pointer()
-                .bg(if n.tone == Tone::Accent { p.primary.hsla() } else { p.surface_container_high.hsla() })
-                .text_color(if n.tone == Tone::Accent { p.on_primary.hsla() } else { p.on_surface.hsla() })
-                .text_size(px(size_or(text::BODY_S)))
-                .font_weight(FontWeight::MEDIUM)
-                .children(children)
-                .when(!n.text.is_empty(), |el| el.child(n.text.clone())),
-            Kind::Meter => div()
-                .h(px(METER_H_PX))
-                .w_full()
-                .min_w(px(METER_MIN_W_PX))
-                .rounded_full()
-                .bg(p.on_surface.with_alpha(METER_TRACK_ALPHA).hsla())
-                .child(div().h_full().rounded_full().w(gpui::relative(n.value.clamp(0.0, 1.0))).bg(color.hsla())),
-            Kind::Spacer => div().flex_1(),
-        };
-        if n.grow {
-            el = el.flex_1().min_w(px(0.0));
-        }
-        if n.action.is_empty() {
-            return el.into_any_element();
-        }
-        let (action, plugin, views) = (n.action.clone(), plugin.clone(), views.clone());
-        el.id(gpui::SharedString::from(format!("plg-{id}-{key}")))
-            .cursor_pointer()
-            .on_click(move |_, _, cx| {
-                if let Some(pl) = plugin.borrow_mut().as_mut() {
-                    pl.on_event(&action);
-                }
-                let id = plugin.borrow().as_ref().map(|p| p.id.clone()).unwrap_or_default();
-                after_call(&id, &plugin, cx);
-                // The plugin's state changed: re-render its bar, panel and card.
-                views.notify(cx);
-            })
-            .into_any_element()
-    }
-    let mut key = 0;
-    node(view, view.root, 0, palette, plugin, id, views, emoji, &mut key)
+    plugin_view::tone_color(t, p)
 }
 
 /// Runs commands a plugin queued (through the documented registry), only
@@ -425,13 +358,12 @@ fn run_commands(plugin: &str, lines: Vec<String>, cx: &mut App) {
     }
     // Extension plugins also need the capability a command stands for: the
     // v0.1 `commands` permission must not get around a revoked grant.
-    let extension = loaded(plugin).is_some_and(|p| p.borrow().as_ref().is_some_and(WasmPlugin::is_extension));
     let access = discovered(plugin).map(|d| access_for(&d, cx));
     for line in lines {
         let words: Vec<String> = line.split_whitespace().map(str::to_string).collect();
         let registry = cx.global::<PluginRegistry>().commands.clone();
         match registry.resolve(&words) {
-            Ok(r) if extension && mandara_plugins::extension::command_capability(r.spec.path).is_some_and(|c| !access.as_ref().is_some_and(|a| a.allows(&c))) => {
+            Ok(r) if mandara_plugins::extension::command_capability(r.spec.path).is_some_and(|c| !access.as_ref().is_some_and(|a| a.allows(&c))) => {
                 tracing::warn!(target: "mandara::plugin", "plugin command `{}` refused: it needs the matching capability granted", r.spec.path);
                 continue;
             }
@@ -459,19 +391,29 @@ enum Surface {
 }
 
 impl Surface {
-    fn ext(self) -> ExtSurface {
+    fn kind(self) -> SurfaceKind {
         match self {
-            Self::Bar => ExtSurface::Bar,
-            Self::Panel => ExtSurface::Panel,
-            Self::Sidebar => ExtSurface::Sidebar,
+            Self::Bar => SurfaceKind::Bar,
+            Self::Panel => SurfaceKind::Panel,
+            Self::Sidebar => SurfaceKind::Sidebar,
         }
+    }
+}
+
+/// What a surface shows when the plugin has no view: why, if it stopped.
+fn stopped(plugin: &Shared, palette: &MandaraPalette) -> AnyElement {
+    match &*plugin.borrow() {
+        Some(p) if p.disabled.is_some() => div().text_size(px(text::LABEL)).text_color(palette.urgent_coral.hsla()).child(mandara_i18n::t("plugin stopped")).into_any_element(),
+        None => div().text_size(px(text::LABEL)).text_color(palette.urgent_coral.hsla()).child(mandara_i18n::t("plugin failed")).into_any_element(),
+        _ => div().into_any_element(),
     }
 }
 
 thread_local! {
     /// The config snapshot (its address) each plugin's settings and grants
-    /// were last read from.
-    static FOLLOWED: RefCell<HashMap<String, usize>> = RefCell::new(HashMap::new());
+    /// were last read from, with the instance (held, so a new snapshot can
+    /// never reuse the address of the one remembered).
+    static FOLLOWED: RefCell<HashMap<String, (std::sync::Arc<mandara_config::ShellConfig>, usize)>> = RefCell::new(HashMap::new());
 }
 
 /// Keeps a loaded plugin's settings and grants in step with the config:
@@ -479,11 +421,11 @@ thread_local! {
 /// render costs a pointer compare. A Studio edit or a revoked grant
 /// reaches the plugin on its next render.
 fn follow_config(declared: &Discovered, plugin: &Shared, cx: &mut App) {
-    let generation = std::sync::Arc::as_ptr(&config(cx).read(cx).snapshot()) as usize;
-    let instance = Rc::as_ptr(plugin) as usize;
+    let snapshot = config(cx).read(cx).snapshot();
     // Keyed by instance too: a reloaded plugin reads the config afresh.
-    let key = generation ^ instance.rotate_left(32);
-    if FOLLOWED.with(|f| f.borrow_mut().insert(declared.id.clone(), key)) == Some(key) {
+    let instance = Rc::as_ptr(plugin) as usize;
+    let previous = FOLLOWED.with(|f| f.borrow_mut().insert(declared.id.clone(), (snapshot.clone(), instance)));
+    if previous.is_some_and(|(seen, seen_instance)| std::sync::Arc::ptr_eq(&seen, &snapshot) && seen_instance == instance) {
         return;
     }
     let current = settings_for(declared, cx);
@@ -503,22 +445,20 @@ fn refused(reason: &str, palette: &MandaraPalette) -> AnyElement {
 }
 
 /// The frame an extension view of `d` draws in.
-fn frame_for(d: &Discovered, context: ExtContext, key: String, cx: &App) -> Frame {
+fn frame_for(d: &Discovered, context: RenderContext, key: String, cx: &App) -> Frame {
     Frame { key: key.into(), context, sink: sink_for(d), images: images_for(&d.id), emoji: cx.try_global::<crate::fonts::Fonts>().and_then(|f| f.emoji.clone()) }
 }
 
-/// The extension view of plugin `d` for `context`, drawn; `None` when it
-/// has none there (draw the older export instead).
-pub(crate) fn draw_extension(d: &Discovered, plugin: &Shared, context: ExtContext, key: String, palette: &MandaraPalette, window: &mut gpui::Window, cx: &mut App) -> Option<AnyElement> {
+/// Plugin `d`'s view for `context`, drawn; `None` when it has none there.
+pub(crate) fn draw_extension(d: &Discovered, plugin: &Shared, context: RenderContext, key: String, palette: &MandaraPalette, window: &mut gpui::Window, cx: &mut App) -> Option<AnyElement> {
     let theme = palette_for(palette);
     let result = {
         let mut guard = plugin.borrow_mut();
-        let p = guard.as_mut().filter(|p| p.is_extension())?;
-        p.extension_view(&theme, &context)
+        guard.as_mut()?.render(&theme, &context)
     };
     after_render(&d.id, plugin, cx);
     match result {
-        Ok(Some(view)) => Some(ext_view::render(view, palette, &frame_for(d, context, key, cx), window, cx)),
+        Ok(Some(view)) => Some(plugin_view::render(view, palette, &frame_for(d, context, key, cx), window, cx)),
         Ok(None) => None,
         Err(reason) => Some(refused(&reason, palette)),
     }
@@ -545,11 +485,10 @@ fn surface_view(d: &Discovered, which: Surface, views: ViewSet, window: &mut gpu
             if let Some(every) = tick {
                 redraw_in(every, window, cx);
             }
-            let theme = palette_for(palette);
             follow_config(&declared, &plugin, cx);
             let bounds = window.viewport_size();
-            let context = ExtContext { surface: which.ext(), outlet: String::new(), instance: String::new(), width: f32::from(bounds.width), height: f32::from(bounds.height) };
-            if let Some(el) = draw_extension(&declared, &plugin, context, format!("plg-{id}-{}", which.ext() as u8), palette, window, cx) {
+            let context = RenderContext { surface: which.kind(), outlet: String::new(), instance: String::new(), width: f32::from(bounds.width), height: f32::from(bounds.height), numerals: String::new(), calendar: String::new(), language: String::new() };
+            if let Some(el) = draw_extension(&declared, &plugin, context, format!("plg-{id}-{}", which.kind() as u8), palette, window, cx) {
                 return match which {
                     // A quiet line says whose panel it is, so a plugin's view
                     // can't pass for one of Mandara's own (a sign-in prompt).
@@ -568,34 +507,7 @@ fn surface_view(d: &Discovered, which: Surface, views: ViewSet, window: &mut gpu
                     _ => el,
                 };
             }
-            let view = {
-                let mut guard = plugin.borrow_mut();
-                match guard.as_mut() {
-                    Some(p) => match which {
-                        Surface::Bar => p.bar(&theme),
-                        Surface::Panel => p.panel(&theme),
-                        Surface::Sidebar => p.sidebar(&theme),
-                    },
-                    None => None,
-                }
-            };
-            // Defer what it queued: rendering must not mutate the app.
-            after_render(&id, &plugin, cx);
-            match view {
-                Some(v) => {
-                    let emoji = cx.try_global::<crate::fonts::Fonts>().and_then(|f| f.emoji.clone());
-                    let el = render(&v, palette, &plugin, &id, &views, emoji.as_ref());
-                    match which {
-                        Surface::Panel => div().size_full().p(px(PANEL_PAD_PX)).child(el).into_any_element(),
-                        _ => el,
-                    }
-                }
-                None => match &*plugin.borrow() {
-                    Some(p) if p.disabled.is_some() => div().text_size(px(text::LABEL)).text_color(palette.urgent_coral.hsla()).child(mandara_i18n::t("plugin stopped")).into_any_element(),
-                    None => div().text_size(px(text::LABEL)).text_color(palette.urgent_coral.hsla()).child(mandara_i18n::t("plugin failed")).into_any_element(),
-                    _ => div().into_any_element(),
-                },
-            }
+            stopped(&plugin, palette)
         },
         window,
         cx,
@@ -727,36 +639,15 @@ pub fn desktop_card_view(card: &str, placed: String, size: (f32, f32), window: &
             }
             let plugin = instance(&d, cx);
             follow_config(&d, &plugin, cx);
-            let ext = ExtContext { surface: ExtSurface::Desktop, outlet: widget.clone(), instance: placed.clone(), width: size.0, height: size.1 };
-            if let Some(el) = draw_extension(&d, &plugin, ext, format!("plg-{}-desk-{placed}", d.id), palette, window, cx) {
-                return div()
-                    .size_full()
-                    .p(px(crate::cards::SHADOW_PAD_PX))
-                    .text_color(palette.on_surface.hsla())
-                    .child(crate::cards::now_playing::glass(palette, crate::style::card_radius(), 1.0).size_full().p(px(DESKTOP_CARD_PAD_PX)).flex().flex_col().child(el))
-                    .into_any_element();
-            }
+            // The person's choices for the widget's digits, dates and language.
             let opts: dc::PluginCardOptions = config(cx).read(cx).get().desktop.widgets.get(&placed).and_then(dc::as_card).map(dc::options).unwrap_or_default();
-            let context = wasm::WidgetContext {
-                widget: widget.clone(),
-                instance: placed.clone(),
-                width: size.0,
-                height: size.1,
-                numerals: serde_plain(&opts.numerals),
-                calendar: serde_plain(&opts.calendar),
-                language: opts.language.clone(),
-            };
-            let theme = palette_for(palette);
-            let view = plugin.borrow_mut().as_mut().and_then(|p| p.desktop_widget(&theme, &context));
-            after_render(&d.id, &plugin, cx);
-            let emoji = cx.try_global::<crate::fonts::Fonts>().and_then(|f| f.emoji.clone());
-            let body = view.map(|v| render(&v, palette, &plugin, &d.id, &views, emoji.as_ref()));
-            let _ = window;
+            let context = RenderContext { surface: SurfaceKind::Desktop, outlet: widget.clone(), instance: placed.clone(), width: size.0, height: size.1, numerals: serde_plain(&opts.numerals), calendar: serde_plain(&opts.calendar), language: opts.language.clone() };
+            let body = draw_extension(&d, &plugin, context, format!("plg-{}-desk-{placed}", d.id), palette, window, cx).unwrap_or_else(|| stopped(&plugin, palette));
             div()
                 .size_full()
                 .p(px(crate::cards::SHADOW_PAD_PX))
                 .text_color(palette.on_surface.hsla())
-                .child(crate::cards::now_playing::glass(palette, crate::style::card_radius(), 1.0).size_full().p(px(DESKTOP_CARD_PAD_PX)).flex().flex_col().children(body))
+                .child(crate::cards::now_playing::glass(palette, crate::style::card_radius(), 1.0).size_full().p(px(DESKTOP_CARD_PAD_PX)).flex().flex_col().child(body))
                 .into_any_element()
         },
         window,
@@ -803,7 +694,7 @@ pub fn studio_tab_view(plugin: &str, tab: &str, width: f32, palette: &MandaraPal
     watch_grants(cx);
     let shared = instance(&d, cx);
     follow_config(&d, &shared, cx);
-    let context = ExtContext { surface: ExtSurface::Studio, outlet: tab.to_string(), instance: String::new(), width, height: 0.0 };
+    let context = RenderContext { surface: SurfaceKind::Studio, outlet: tab.to_string(), instance: String::new(), width, height: 0.0, numerals: String::new(), calendar: String::new(), language: String::new() };
     if let Some(el) = draw_extension(&d, &shared, context, format!("plg-{plugin}-studio-{tab}"), palette, window, cx) {
         return el;
     }
@@ -840,10 +731,10 @@ pub fn run_command(plugin: &str, words: &[String], cx: &mut App) -> Result<(), S
         return Err(format!("`{plugin}` is switched off"));
     }
     let shared = instance(&d, cx);
-    if shared.borrow().as_ref().is_none_or(|p| !p.is_extension()) {
+    if shared.borrow().is_none() {
         return Err(format!("`{plugin}` isn't running"));
     }
-    let event = ExtEvent { context: ExtContext { surface: ExtSurface::Launcher, outlet: String::new(), instance: String::new(), width: 0.0, height: 0.0 }, node: String::new(), action: name.clone(), value: ExtValue::Command(words.to_vec()) };
+    let event = PluginEvent { context: RenderContext { surface: SurfaceKind::Launcher, outlet: String::new(), instance: String::new(), width: 0.0, height: 0.0, numerals: String::new(), calendar: String::new(), language: String::new() }, node: String::new(), action: name.clone(), value: EventValue::Command(words.to_vec()) };
     send_event(plugin, &shared, &event, cx);
     Ok(())
 }
@@ -893,7 +784,7 @@ pub fn launcher_providers(cx: &App) -> Vec<PluginProvider> {
 /// answers and `routed` is true; otherwise providers marked `global` add a
 /// few hits to the plain search. Each query runs in the plugin's sandbox
 /// under the launcher's time budget.
-pub fn launcher_hits(query: &str, cx: &App) -> (bool, Vec<crate::launcher_ext::Hit>) {
+pub fn launcher_hits(query: &str, builtin_routed: bool, cx: &App) -> (bool, Vec<crate::launcher_ext::Hit>) {
     let q = query.trim_start();
     let providers = launcher_providers(cx);
     if providers.is_empty() || q.is_empty() {
@@ -902,6 +793,11 @@ pub fn launcher_hits(query: &str, cx: &App) -> (bool, Vec<crate::launcher_ext::H
     let routed = providers.iter().filter(|p| !p.prefix.is_empty() && q.starts_with(p.prefix.as_str())).max_by_key(|p| p.prefix.len());
     if let Some(p) = routed {
         return (true, query_provider(p, &q[p.prefix.len()..], crate::launcher_ext::PROVIDER_LIMIT, cx));
+    }
+    // A query for one of Mandara's own providers (`files:`, …) isn't a
+    // plain search: global plugin providers never see it.
+    if builtin_routed {
+        return (false, Vec::new());
     }
     // Plain searches go only to providers the person allowed to see them
     // (`launcher.global`), and to a few at most: each keystroke waits.
@@ -915,6 +811,12 @@ fn query_provider(p: &PluginProvider, query: &str, limit: usize, cx: &App) -> Ve
     let Some(d) = discovered(&p.plugin) else { return Vec::new() };
     let plugin = instance(&d, cx);
     let hits = plugin.borrow_mut().as_mut().map(|pl| pl.launcher_query(&p.id, query.trim(), limit)).unwrap_or_default();
+    QUERIED.with(|q| {
+        let mut q = q.borrow_mut();
+        if !q.contains(&p.plugin) {
+            q.push(p.plugin.clone());
+        }
+    });
     let images = images_for(&p.plugin);
     // Every result says which plugin it comes from, so none can pass for an
     // app or a Mandara action.
@@ -939,6 +841,25 @@ fn query_provider(p: &PluginProvider, query: &str, limit: usize, cx: &App) -> Ve
         .collect()
 }
 
+thread_local! {
+    /// Plugins asked for launcher results since the last settle.
+    static QUERIED: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
+
+/// After a launcher search: hands the broker requests the asked plugins
+/// queued (a query may ask for data) to the brokers. Commands queued from
+/// a query are dropped: typing in the launcher never runs a command.
+pub fn settle_launcher(cx: &mut App) {
+    for plugin in QUERIED.with(|q| std::mem::take(&mut *q.borrow_mut())) {
+        let Some(shared) = loaded(&plugin) else { continue };
+        let dropped = shared.borrow_mut().as_mut().map(|p| p.take_commands()).unwrap_or_default();
+        if !dropped.is_empty() {
+            tracing::warn!(target: "mandara::plugin", "plugin `{plugin}` queued commands from a launcher query; they were dropped");
+        }
+        after_call(&plugin, &shared, cx);
+    }
+}
+
 /// `plugins launch <plugin> <provider> <hit>`: a launcher result was chosen.
 pub fn launch(plugin: &str, provider: &str, hit: &str, cx: &mut App) -> Result<(), String> {
     let d = discovered(plugin).filter(|d| d.launcher.iter().any(|l| l.id == provider)).ok_or_else(|| format!("no launcher provider {plugin}/{provider}"))?;
@@ -946,7 +867,7 @@ pub fn launch(plugin: &str, provider: &str, hit: &str, cx: &mut App) -> Result<(
         return Err(format!("`{plugin}` is switched off"));
     }
     let shared = instance(&d, cx);
-    let event = ExtEvent { context: ExtContext { surface: ExtSurface::Launcher, outlet: provider.to_string(), instance: String::new(), width: 0.0, height: 0.0 }, node: String::new(), action: String::new(), value: ExtValue::Launch(hit.to_string()) };
+    let event = PluginEvent { context: RenderContext { surface: SurfaceKind::Launcher, outlet: provider.to_string(), instance: String::new(), width: 0.0, height: 0.0, numerals: String::new(), calendar: String::new(), language: String::new() }, node: String::new(), action: String::new(), value: EventValue::Launch(hit.to_string()) };
     send_event(plugin, &shared, &event, cx);
     Ok(())
 }

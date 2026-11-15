@@ -8,24 +8,10 @@ pub const SYNODIC: f64 = 29.530_588_853;
 const NEW_MOON_MS: f64 = 947_182_440_000.0;
 /// Milliseconds per day.
 const DAY_MS: f64 = 86_400_000.0;
-/// The eight phases as the colour emoji font draws them (as seen from the
-/// northern hemisphere: a waxing moon lit on the right). Each ends in
-/// U+FE0F so the emoji form is used, not a text font's flat symbol.
-const PHASE_GLYPHS: [&str; 8] = ["🌑\u{FE0F}", "🌒\u{FE0F}", "🌓\u{FE0F}", "🌔\u{FE0F}", "🌕\u{FE0F}", "🌖\u{FE0F}", "🌗\u{FE0F}", "🌘\u{FE0F}"];
-
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Hemisphere {
     North,
     South,
-}
-
-/// The emoji of phase `i` as seen from `hemisphere` (the south sees the
-/// disc mirrored).
-pub fn glyph(i: usize, hemisphere: Hemisphere) -> &'static str {
-    match hemisphere {
-        Hemisphere::North => PHASE_GLYPHS[i % 8],
-        Hemisphere::South => PHASE_GLYPHS[(8 - i % 8) % 8],
-    }
 }
 
 pub struct Moon {
@@ -75,11 +61,6 @@ impl Moon {
         SYNODIC - self.age
     }
 
-    /// Which of the eight phases (0 = new, 4 = full).
-    pub fn phase_index(&self) -> usize {
-        ((self.age / SYNODIC * 8.0).round() as usize) % 8
-    }
-
     pub fn waxing(&self) -> bool {
         self.age < SYNODIC / 2.0
     }
@@ -114,7 +95,7 @@ mod tests {
     #[test]
     fn phases_follow_the_cycle() {
         let new = Moon::at(NEW_MOON_MS);
-        assert_eq!((new.name(), new.phase_index()), ("New moon", 0));
+        assert_eq!(new.name(), "New moon");
         let full = Moon::at(NEW_MOON_MS + SYNODIC / 2.0 * DAY_MS);
         assert_eq!(full.name(), "Full moon");
         assert!(full.illumination() > 0.99);

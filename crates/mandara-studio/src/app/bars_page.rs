@@ -23,6 +23,9 @@ impl StudioView {
     /// Uses normal page navigation to open Bars, then selects the destination
     /// and starts its content at the top.
     pub fn show_bars_tab(&mut self, tab: BarsTab, cx: &mut Context<Self>) {
+        // Choosing one of the page's own tabs (a deep link too) leaves a
+        // plugin's tab.
+        super::page_tabs::choose_plugin_tab("bars", None, cx);
         self.show(Section::Bars, cx);
         self.bars_tab = tab;
         sidebars::forget_scroll(cx);

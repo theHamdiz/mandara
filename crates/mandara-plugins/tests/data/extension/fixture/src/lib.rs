@@ -3,12 +3,12 @@
 
 use std::sync::Mutex;
 
-wit_bindgen::generate!({ world: "extension-plugin", path: "../../../../wit" });
+wit_bindgen::generate!({ world: "plugin", path: "../../../../wit" });
 
 use mandara::plugin::broker;
 use mandara::plugin::storage;
 use mandara::plugin::host;
-use mandara::plugin::types::{Kind, Node, Tone};
+use mandara::plugin::types::Tone;
 use mandara::plugin::ui;
 
 /// What happened, newest last; the view's first text node shows it.
@@ -49,30 +49,11 @@ impl Guest for Fixture {
         Ok(())
     }
 
-    fn bar(_theme: Palette) -> Option<View> {
-        let label = Node { kind: Kind::Text, text: "Fixture".into(), value: 0.0, children: Vec::new(), action: String::new(), tone: Tone::Normal, size: 0.0, gap: 0.0, bold: false, grow: false };
-        Some(View { nodes: vec![label], root: 0 })
-    }
-
-    fn panel(_theme: Palette) -> Option<View> {
-        None
-    }
-
-    fn sidebar(_theme: Palette) -> Option<View> {
-        None
-    }
-
-    fn on_event(_action: String) {}
-
     fn refresh_ms() -> u32 {
         0
     }
 
-    fn desktop_widget(_theme: Palette, _context: WidgetContext) -> Option<View> {
-        None
-    }
-
-    fn extension_view(_palette: Theme, context: ui::Context) -> Option<RichView> {
+    fn render(_theme: Palette, context: ui::Context) -> Option<ui::View> {
         if mode() == "huge" {
             let mut nodes: Vec<ui::Node> = (0..5000).map(|i| node(ui::Kind::Text, "", &format!("row {i}"))).collect();
             nodes[0].children = (1..5000).collect();
@@ -80,7 +61,7 @@ impl Guest for Fixture {
             return Some(ui::View { nodes, root: 0, focus: String::new() });
         }
         if context.surface == ui::Surface::Bar {
-            return None;
+            return Some(ui::View { nodes: vec![node(ui::Kind::Text, "", "Fixture")], root: 0, focus: String::new() });
         }
         if mode() == "sneaky" {
             // Rendering isn't a user gesture: this must be refused.
@@ -99,7 +80,7 @@ impl Guest for Fixture {
         Some(ui::View { nodes: vec![root, status, field, toggle, list, row], root: 0, focus: "field".into() })
     }
 
-    fn extension_event(event: ui::Event) {
+    fn on_event(event: ui::Event) {
         match event.value {
             ui::Value::Replies(replies) => {
                 for r in replies {
@@ -142,7 +123,7 @@ impl Guest for Fixture {
         (0..100).map(|i| ui::Hit { id: format!("hit-{i}"), title: format!("{query} {}", "x".repeat(1000)), detail: String::new(), icon: "moon".into(), image: 0, keywords: String::new() }).collect()
     }
 
-    fn extension_call(caller: String, operation: String, payload: String) -> Result<String, String> {
+    fn on_call(caller: String, operation: String, payload: String) -> Result<String, String> {
         match operation.as_str() {
             "ping" => Ok(format!("{{\"pong\": \"{caller}\", \"payload\": {payload}}}")),
             _ => Err(format!("no operation {operation}")),

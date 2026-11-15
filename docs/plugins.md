@@ -572,10 +572,10 @@ changes; nothing runs at idle and nothing polls. Measurements are in
   shell keeps running.
 - **Native look for free.** A plugin returns a declarative view tree and
   Mandara draws it with the current theme in every palette, light or dark,
-  right to left in Arabic. Plugins built for the extension platform get
-  rich controls too: text fields, switches, sliders, segmented controls,
-  grouped sections, grids, virtual lists, images and charts.
-- **Deeply integrated, on your terms.** Extension plugins can add tabs to
+  right to left in Arabic, with rich controls: text fields, switches,
+  sliders, segmented controls, grouped sections, grids, virtual lists,
+  images and charts.
+- **Deeply integrated, on your terms.** Plugins can add tabs to
   Studio's Themes, Bars, Desktop and Wallpaper pages, offer launcher
   results and commands (`mandara msg plugins run`, shortcuts, hooks,
   skills, agents), keep private storage and use timers. Media, wallpapers,

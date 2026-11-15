@@ -458,6 +458,9 @@ pub const FIT_STEP: u32 = 16;
 /// allocated (a tiny, highly compressed file can't expand into gigabytes).
 pub const FIT_MAX_SOURCE_PIXELS: u64 = 40_000_000;
 pub const FIT_MAX_SOURCE_SIDE: u32 = 12_000;
+/// Byte budget of the `plugin-images` cache: plugins can draw one picture
+/// at several sizes, so the oldest copies go past this.
+const FIT_CACHE_BYTES: u64 = 400 * 1024 * 1024;
 
 /// A fit job's size rounded to [`FIT_STEP`] (and clamped).
 pub fn fit_size(px: f32) -> u32 {
@@ -492,9 +495,11 @@ pub fn fit(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
         let rgba = out.to_rgba8();
         drop(out);
         cache::write(&png, |writer| image::codecs::png::PngEncoder::new(writer).write_image(rgba.as_raw(), rgba.width(), rgba.height(), image::ExtendedColorType::Rgba8).map_err(|e| e.to_string()))?;
+        prune(&dir, FIT_CACHE_BYTES);
         Ok(png)
     } else {
         save_jpeg(&out, &jpeg, THUMB_QUALITY)?;
+        prune(&dir, FIT_CACHE_BYTES);
         Ok(jpeg)
     }
 }
@@ -503,6 +508,9 @@ pub fn fit(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
 /// background executor (no dedicated threads); the cap bounds the transient
 /// memory of full-size decodes (a 4K JPEG decodes to ~33 MB).
 const MAX_THUMB_JOBS: usize = 3;
+/// Thumbnails waiting to be made; a page that asks for more drops the
+/// least important ones (they are asked for again when shown).
+const MAX_QUEUED_THUMBS: usize = 256;
 /// Finished and failed thumbnails remembered before the lists start over.
 const MAX_REMEMBERED_THUMBS: usize = 4096;
 
@@ -547,6 +555,12 @@ impl Thumbnails {
             }
             if self.requested.insert(job.clone()) {
                 self.queue.push(job);
+                // Bounded: past the limit the least important waiting job
+                // (the front: the most important is last) is dropped.
+                if self.queue.len() > MAX_QUEUED_THUMBS {
+                    let dropped = self.queue.remove(0);
+                    self.requested.remove(&dropped);
+                }
             } else if let Some(i) = self.queue.iter().position(|x| *x == job) {
                 // Re-prioritise something already queued.
                 let job = self.queue.remove(i);

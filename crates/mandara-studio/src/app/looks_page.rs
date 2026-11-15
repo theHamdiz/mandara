@@ -497,6 +497,9 @@ impl super::page_tabs::PageTab for ThemesTab {
 impl StudioView {
     /// Opens Themes on `tab`, its content at the top.
     pub fn show_themes_tab(&mut self, tab: ThemesTab, cx: &mut Context<Self>) {
+        // Choosing one of the page's own tabs (a deep link too) leaves a
+        // plugin's tab.
+        super::page_tabs::choose_plugin_tab("themes", None, cx);
         self.show(Section::Themes, cx);
         if self.themes_tab != tab {
             // The sound gallery's lists, fields and cover go with its tab.

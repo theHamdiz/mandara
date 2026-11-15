@@ -427,12 +427,16 @@ impl StudioView {
         let palette = mandara_ui::plugins::external::palette_for(p);
         self.local.tests.insert(key.clone(), TestState::Running);
         // The grants the person gave it, as in the shell.
-        let access = mandara_plugins::extension::Access::new(&plugin.permissions, cfg.plugins.granted(&plugin.id));
+        let access = mandara_plugins::extension::Access::from_grant(&plugin.permissions, cfg.plugins.grants.get(&plugin.id));
         let task = cx.background_executor().spawn(async move {
             mandara_plugins::guard(&format!("plugin `{}` test load", plugin.id), move || {
                 let start = Instant::now();
                 let mut w = wasm::WasmPlugin::load(&plugin.id, &plugin.dir, &plugin.entry, settings, access).map_err(|e| format!("{e:#}"))?;
-                let (bar, panel, sidebar) = (w.bar(&palette).is_some(), w.panel(&palette).is_some(), w.sidebar(&palette).is_some());
+                let mut shown = |surface: wasm::SurfaceKind| {
+                    let context = wasm::RenderContext { surface, outlet: String::new(), instance: String::new(), width: 0.0, height: 0.0, numerals: String::new(), calendar: String::new(), language: String::new() };
+                    matches!(w.render(&palette, &context), Ok(Some(_)))
+                };
+                let (bar, panel, sidebar) = (shown(wasm::SurfaceKind::Bar), shown(wasm::SurfaceKind::Panel), shown(wasm::SurfaceKind::Sidebar));
                 if let Some(reason) = w.disabled.clone() {
                     return Err(reason);
                 }

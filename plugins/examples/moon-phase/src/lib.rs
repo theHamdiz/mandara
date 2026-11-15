@@ -1,10 +1,9 @@
-//! Example Mandara plugin (Rust → WebAssembly component), built for the
-//! `extension-plugin` world: a rich panel (a look-ahead slider, a view
-//! switch, an illumination chart, a virtual list of coming full and new
-//! moons, a date field), a moon calendar tab in Studio → Desktop, launcher
-//! results (`moon `), a reminder notification and a `phase` operation other
-//! plugins can call. Its bar item and desktop widget use the older exports,
-//! which stay as fallbacks.
+//! Example Mandara plugin (Rust → WebAssembly component): a bar item, a
+//! rich panel (a look-ahead slider, a view switch, an illumination chart, a
+//! virtual list of coming full and new moons, a date field), a desktop
+//! widget, a moon calendar tab in Studio → Desktop, launcher results
+//! (`moon `), `remind` and `show` commands, a reminder notification, private
+//! storage and a `phase` operation other plugins can call.
 //!
 //! Build with `cargo build --release --target wasm32-wasip2`, then copy the
 //! `.wasm` next to `plugin.toml` as `plugin.wasm` (with `locales/` and
@@ -16,21 +15,26 @@ mod tree;
 
 use std::cell::RefCell;
 
-wit_bindgen::generate!({ world: "extension-plugin", path: "../../../crates/mandara-plugins/wit" });
+wit_bindgen::generate!({ world: "plugin", path: "../../../crates/mandara-plugins/wit" });
 
 use mandara::plugin::broker;
 use mandara::plugin::storage;
 use mandara::plugin::host;
-use mandara::plugin::types::{Kind, Tone};
+use mandara::plugin::types::Tone;
 use mandara::plugin::ui::{self, Kind as K, Surface, Value};
 
 use calendar::{Date, DAY_MS};
 use moon::{Hemisphere, Moon, SYNODIC};
-use tree::{Legacy, Tree};
+use tree::Tree;
 
 /// The features this plugin uses (`negotiate`); an older Mandara without
 /// one of them refuses to load it with a clear message.
 const FEATURES: &[&str] = &["ui.layout", "ui.input", "ui.slider", "ui.choice", "ui.grid", "ui.list", "ui.image", "ui.canvas", "ui.keys", "launcher", "studio-tabs", "broker"];
+
+// The plugin's own design, on Mandara's 4 px rhythm. Plugins can't read
+// Mandara's settings, so these are fixed by design; the person's theme,
+// light or dark mode, button design and language still apply through the
+// host's rendering.
 
 /// Sizes (logical px): the header's moon, a row's moon or icon, the
 /// title, a caption, a calendar day's moon and the plugin's mark in Studio.
@@ -48,6 +52,8 @@ const TIGHT_GAP: f32 = 4.0;
 const ROW_GAP: f32 = 8.0;
 const CELL_PAD_PX: f32 = 4.0;
 const HERO_RADIUS_PX: f32 = 12.0;
+/// The bar item's icon.
+const BAR_ICON_PX: f32 = 15.0;
 /// How much of the desktop widget's height its moon takes.
 const DESKTOP_MOON_SHARE: f32 = 0.42;
 /// How far the look-ahead slider reaches, in days either way.
@@ -408,8 +414,27 @@ fn panel(compact: bool) -> ui::View {
     t.view(root, "")
 }
 
-/// The desktop widget: tonight's moon, drawn large, its name and how lit.
-fn desktop(height: f32) -> ui::View {
+/// The bar item: a moon icon and, unless switched off, the lit percentage.
+fn bar() -> ui::View {
+    let m = Moon::at(now_ms());
+    let mut t = Tree::default();
+    let icon = t.add(K::Icon, "moon");
+    t.tone(icon, Tone::Accent);
+    t.node(icon).style.size = BAR_ICON_PX;
+    let mut kids = vec![icon];
+    if show_percent() {
+        kids.push(t.text(&format!("{:.0}%", m.illumination() * 100.0), 0.0));
+    }
+    let root = t.row(TIGHT_GAP, &kids);
+    t.view(root, "")
+}
+
+/// The desktop widget: tonight's moon, drawn large, its name and how lit,
+/// in the digits the person chose for it.
+fn desktop(context: &ui::Context) -> ui::View {
+    let height = context.height;
+    let language = if context.language.is_empty() { host::locale() } else { context.language.clone() };
+    let eastern = context.numerals == "eastern-arabic" || (context.numerals == "auto" && language == "ar");
     let hemi = hemisphere();
     let m = Moon::at(now_ms());
     let mut t = Tree::default();
@@ -417,7 +442,7 @@ fn desktop(height: f32) -> ui::View {
     let art = moon_art(&mut t, &m, hemi, size);
     let title = t.text(&host::translate(m.name()), TITLE_PX);
     t.bold(title);
-    let lit = t.text(&fill("{percent}% illuminated", &[("percent", &format!("{:.0}", m.illumination() * 100.0))]), 0.0);
+    let lit = t.text(&fill("{percent}% illuminated", &[("percent", &tree::digits(&format!("{:.0}", m.illumination() * 100.0), eastern))]), 0.0);
     t.tone(lit, Tone::Muted);
     let words = t.column(TIGHT_GAP, &[title, lit]);
     let root = t.column(ROW_GAP, &[art, words]);
@@ -535,6 +560,15 @@ fn denied(why: &str) -> String {
     if why.contains("granted") { host::translate("Allow notifications for this plugin in Studio → Plugins") } else { why.to_string() }
 }
 
+/// The integer field `key` of a flat JSON object (any JSON whitespace
+/// around the colon), without a JSON library in the plugin.
+fn json_int(json: &str, key: &str) -> Option<i64> {
+    let rest = json.split(&format!("\"{key}\"")).nth(1)?;
+    let rest = rest.trim_start_matches(|c: char| c.is_ascii_whitespace()).strip_prefix(':')?.trim_start_matches(|c: char| c.is_ascii_whitespace());
+    let end = rest.find(|c: char| !(c.is_ascii_digit() || c == '-')).unwrap_or(rest.len());
+    rest[..end].parse().ok()
+}
+
 /// `s` as a JSON string literal.
 fn json_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
@@ -636,6 +670,9 @@ fn launcher_results(query: &str, limit: u32) -> Vec<ui::Hit> {
     // Each result leads with that day's moon.
     let hit = |id: String, title: String, detail: String, m: &Moon, keywords: &str| ui::Hit { id, title, detail, icon: "moon".into(), image: moon_image(m, hemi), keywords: keywords.into() };
     let q = query.trim().to_lowercase();
+    if limit == 0 {
+        return Vec::new();
+    }
     if let Some(date) = Date::parse(&q) {
         let m = Moon::at((date.days as f64 + 0.5) * DAY_MS);
         return vec![hit(format!("day:{}", date.days), fill("{phase} on {date}", &[("phase", &host::translate(m.name())), ("date", &date.long())]), fill("{percent}% illuminated", &[("percent", &format!("{:.0}", m.illumination() * 100.0))]), &m, "date")];
@@ -666,56 +703,22 @@ impl Guest for Plugin {
         Ok(())
     }
 
-    /// The bar item stays on the older export: `extension-view` returns
-    /// none for the bar, so Mandara asks this.
-    fn bar(_theme: Palette) -> Option<View> {
-        let m = Moon::at(now_ms());
-        let mut t = Legacy::default();
-        let row = t.add(Kind::Row, "");
-        let icon = t.add(Kind::Icon, "moon");
-        t.node(icon).tone = Tone::Accent;
-        t.node(icon).size = 15.0;
-        if show_percent() {
-            let label = t.add(Kind::Text, &format!("{:.0}%", m.illumination() * 100.0));
-            t.children(row, &[icon, label]);
-        } else {
-            t.children(row, &[icon]);
-        }
-        t.view(row)
-    }
-
-    /// Older hosts (and the compliance check) still ask these.
-    fn panel(_theme: Palette) -> Option<View> {
-        Legacy::summary(&Moon::at(now_ms()), hemisphere())
-    }
-
-    fn sidebar(_theme: Palette) -> Option<View> {
-        Legacy::summary(&Moon::at(now_ms()), hemisphere())
-    }
-
-    fn on_event(_action: String) {}
-
     fn refresh_ms() -> u32 {
         60_000
     }
 
-    /// The desktop widget listed in plugin.toml (`[[widgets]]`, id "moon").
-    fn desktop_widget(_theme: Palette, context: WidgetContext) -> Option<View> {
-        (context.widget == "moon").then(|| Legacy::widget(&Moon::at(now_ms()), hemisphere(), &context)).flatten()
-    }
-
-    fn extension_view(_palette: Theme, context: ui::Context) -> Option<RichView> {
+    fn render(_theme: Palette, context: ui::Context) -> Option<ui::View> {
         match context.surface {
+            Surface::Bar => Some(bar()),
             Surface::Panel => Some(panel(false)),
             Surface::Sidebar => Some(panel(true)),
             Surface::Studio if context.outlet == "moon" => Some(studio_tab(context.width)),
-            Surface::Desktop if context.outlet == "moon" => Some(desktop(context.height)),
-            // The bar uses the older export.
+            Surface::Desktop if context.outlet == "moon" => Some(desktop(&context)),
             _ => None,
         }
     }
 
-    fn extension_event(event: ui::Event) {
+    fn on_event(event: ui::Event) {
         on_extension_event(event);
     }
 
@@ -725,11 +728,11 @@ impl Guest for Plugin {
 
     /// `phase` (plugin.toml `serves`): tonight's moon for other plugins,
     /// or a day's with `{"day": <days since 1970-01-01>}`.
-    fn extension_call(_caller: String, operation: String, payload: String) -> Result<String, String> {
+    fn on_call(_caller: String, operation: String, payload: String) -> Result<String, String> {
         if operation != "phase" {
             return Err(format!("no operation {operation}"));
         }
-        let day = payload.split("\"day\"").nth(1).and_then(|rest| rest.trim_start_matches([' ', ':']).split(|c: char| !c.is_ascii_digit() && c != '-').next()).and_then(|d| d.parse::<i64>().ok());
+        let day = json_int(&payload, "day");
         let m = match day {
             Some(day) => Moon::at((day as f64 + 0.5) * DAY_MS),
             None => Moon::at(now_ms()),
