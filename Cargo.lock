@@ -4163,7 +4163,7 @@ checksum = "fc04a4c58212d57930a24bf47d3fa87485264a3a054e9c10e042eb373573ad3c"
 
 [[package]]
 name = "mandara-app"
-version = "0.32.0"
+version = "0.32.1"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4282,7 +4282,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-greeter"
-version = "0.30.0"
+version = "0.30.1"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4465,7 +4465,7 @@ dependencies = [
 
 [[package]]
 name = "mandara-studio"
-version = "0.32.0"
+version = "0.32.1"
 dependencies = [
  "anyhow",
  "async-channel",

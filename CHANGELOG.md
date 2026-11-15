@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.32.1 — 2026-11-15
+
 This update fixes session selection in Mandara Login.
 
 ### Fixed
