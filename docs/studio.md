@@ -31,7 +31,7 @@ decorations, Studio uses those controls so there is only one set of buttons.
 <td width="50%" valign="top"><img src="screenshots/studio-plugins.webp" alt="Plugins → Installed: all 58 Mandara plugins with on / off counts, filter chips and switches" width="100%"/><br/><sub><b>Plugins → Installed</b></sub></td>
 </tr>
 <tr>
-<td width="50%" valign="top"><img src="screenshots/studio-power-menu.webp" alt="Power & idle: session menu editor" width="100%"/><br/><sub><b>Power &amp; idle</b>: the session menu editor</sub></td>
+<td width="50%" valign="top"><img src="screenshots/studio-power-menu.webp" alt="Power & Idle: session menu editor" width="100%"/><br/><sub><b>Power &amp; Idle</b>: the session menu editor</sub></td>
 <td width="50%" valign="top"><img src="screenshots/studio-about.webp" alt="About: the version, license badges and updates" width="100%"/><br/><sub><b>About</b>: version and binary-patch updates</sub></td>
 </tr>
 <tr>
@@ -48,13 +48,13 @@ rests, so windows move once instead of on every step. Studio
 opens on **Home**, a widget dashboard (a greeting over your wallpaper, live
 shell CPU / memory / VRAM, the theme with one-click switching, quick toggles,
 recent changes with Undo, and a card per group), and
-its sidebar groups 30 pages into **Look & feel**, **Desktop**, **System**,
-**Security & accounts**, **Extend** and **Mandara**: collapsible, searchable
+its sidebar groups 30 pages into **Look & Feel**, **Desktop**, **System**,
+**Security & Accounts**, **Extend** and **Mandara**: collapsible, searchable
 across every setting, keyboard-driven (Ctrl+F, Alt+↑/↓) and mirrored for
 Arabic, Persian and Urdu. Every page is responsive, from an icon rail and one column to
 ultra-wide.
 
-- **Look & feel**: appearance and palette tuning, themes with live mock-ups,
+- **Look & Feel**: appearance and palette tuning, themes with live mock-ups,
   cursor and icon themes (download, preview, apply, or your own),
   wallpaper (per display, light / dark, slideshow, depth clock),
   typography, motion (spring tuning, reduce motion).
@@ -67,7 +67,7 @@ ultra-wide.
   alerts, power-menu editor, event hooks), input devices, keyboard
   shortcuts with conflict detection, date / time / location and calendars,
   default and startup apps.
-- **Security & accounts**: users (AccountsService, photos, passwords),
+- **Security & Accounts**: users (AccountsService, photos, passwords),
   Mandara Login with a live preview, the lock screen's look, privacy
   indicators and offline mode.
 - **Extend**: a plugin store (featured hero, curated shelves, search,
@@ -169,7 +169,7 @@ The landing page, laid out like a widget dashboard:
   light, reduce motion and high contrast as tiles (the whole tile flips it;
   a tile that can't apply in your setup says why).
 * **Recent changes** — the newest edits made in Studio with how long ago and
-  an Undo, the number of saved profiles and shortcuts to Profiles & backup.
+  an Undo, the number of saved profiles and shortcuts to Profiles & Backups.
 * **Browse settings** — a card per group with its icon, summary and a pill
   for each of its pages.
 
@@ -225,9 +225,9 @@ do not leave an extra translucent rectangle around the window.
 | **Bars** | Four tabs keep related controls together: **Bar** (presets, plugin layout, position, spacing, shape and appearance), **Sidebars** (what each side edge holds — nothing, a side bar or the sidebar — picked from small previews, a preset's rail shown with a link to its preset; then *Side bar on the left/right*: plugin groups, pinning, shape and material; and *Sidebar panel*: widget tabs and cards, layout, appearance and motion), **Drop-down panels** (main menu, panel geometry, material and animation), and **Edges & corners** (hover triggers, hot corners and rounded screen corners). |
 | **Dock** | A macOS-style dock. On / off (a hint and *Show it now* when auto-hide keeps it out of sight), live preview, then six groups with their own Reset: **Layout** (position, alignment, size, magnification and its size / spread, only this display's windows), **Behaviour** (automatically hide and show — off / on / when a window overlaps — reveal and hide delays, slide speed, keep windows clear, above fullscreen, animate opening applications, bounce for attention, minimize windows into application icon, names on hover), **Apps** (the apps kept in the dock with icons: drag to reorder, × to remove, **Add app…** opens a searchable picker of installed apps with pinned ones checked; running apps, open-app indicators, recent apps and how many, notification badges, progress bars, window count, most apps, the **launcher button** — listed and dragged with the apps, **Add the launcher** brings it back —, the **now-playing chip** — album art, title and play / pause at the dock's end while music plays), **Applications folder** (on / off — a folder on the right of the dock that opens a Launchpad-style grid of your apps, with search, category chips and a right-click menu, and installs apps dropped on it — view as Grid / List, order A–Z / Most used / Categories, icon size), **Stacks & Trash** (each folder with View as Automatic / Fan / Grid / List, Sort by date added / modified / name / kind, Display as Stack / Folder, add a folder; Trash, files per stack, files in a fan — Automatic always fans the newest that many files, however big the folder — and show file names) and **Appearance** (glass opacity and accent tint, corner radius, padding, icon spacing, distance from the edge, shadow, specular rim, separators, not-running opacity). Which displays show it is set under Displays. On the dock itself: right-click an icon for its windows, New Window and the app's actions, **Options ▸ Keep in Dock ✓ / Open at Login ✓ / Show in Files** (and Uninstall… for apps Mandara installed), Show All Windows, Hide and Quit (Force Quit once a quit didn't take, or with Alt held); right-click empty dock space for Add app…, Keep the launcher in the Dock, auto-hide and magnification; drag icons to reorder, a running app into the pinned ones to keep it, or away from the dock to remove it; drop files on an app to open them with it, on the Trash to trash them, and installable apps on the dock or the Applications folder to install them. Click a stack for its fan (the newest files on an arc that pops up out of the icon as one piece, names in pills, *Open Downloads · N more* (the folder in your file manager) at the top) or its grid (arrow keys, Enter, type to filter, right-click for Open / Show in Files / Move to Trash); the dock stays out while a stack, the Applications grid or a menu is open. |
 | **Launcher** | Sections in setup order. **Launcher looks**: Classic, Grid and Beacon as three cards of exactly the same size (a miniature, the name, a two-to-three-line description and tags for the layout and placement), a click applies one; **Preview** opens the launcher. **Placement**: a small screen diagram with the bar along its edge and seven clickable spots — top left / middle / right, the center of the screen, bottom left / middle / right (the screen's own sides, also in right-to-left languages) — the chosen one highlighted, a line on how it looks with your bar (grows out of the bar like its panels, a floating card under floating pills, or "the bar is on the other edge" when it opens from the bare screen edge; a note when the dock makes it float above the dock, click only), and **Preview** to open it, with **Size & placement** under it (align to the launcher button, search field, width / height when attached and in the center). **Launcher button**: its icon picker. **Search & results**: style, layout, visible results, app icons, the grid and the Beacon bar, providers and prefixes, ranking, and what the ranking has learnt. **Behaviour**: on / off, dim, keyboard only, remembering the last search, launch prefix and systemd scopes. **Apps**: pinned and hidden apps and your own names and icons. Then slash commands and skills. |
-| **Window switcher** | Alt+Tab style and scope, previews, screen time. |
+| **Window Switcher** | Alt+Tab style and scope, previews, screen time. |
 | **Notifications** | Popup placement, size and timeouts per urgency, rules per app, do not disturb and quiet hours, history limits. |
-| **On-screen displays** | Every OSD kind, orientation, scale and offset. |
+| **On-Screen Displays** | Every OSD kind, orientation, scale and offset. |
 
 ### System
 
@@ -238,12 +238,12 @@ all displays disconnect and restores its surfaces when a display returns.
 | Page | What it covers |
 |---|---|
 | **Displays** | **Arrangement**: the canvas, a card per display under it with two or more (also one that's off), Apply / Reset with a keep-or-revert countdown, and the selected display's power, resolution, refresh rate, scale, rotation and adaptive sync in aligned rows; **Shell on each display** (bar, dock, OSDs, launcher & pop-ups, notifications, wallpaper); **Profiles** as same-size cards (Apply, Delete, *Connected*), *Save as profile*, keep after restart and the revert / auto-profile settings; **Monitor brightness** (DDC/CI); **Night light**. |
-| **Audio & media** | Per-app mixer and outputs, default devices (rename, hide), volume step and ceiling, ignored players, shell sounds, visualizer and lyrics. |
+| **Audio & Media** | Per-app mixer and outputs, default devices (rename, hide), volume step and ceiling, ignored players, shell sounds, visualizer and lyrics. |
 | **Network & Bluetooth** | Connection details, VPNs (WireGuard / OpenVPN import), hotspot with QR, saved networks, static IP / DNS; Bluetooth devices, pairing dialog, auto-connect, adapter. |
-| **Power & idle** | Status, idle timeouts (mains / battery), lock behaviour, idle commands, battery alerts (the Power panel's style, Classic or Modern, and the bar battery's pulses: coral while critical, a gentle breath while charging) and profiles, the power menu editor (entries, style, and the dock's **Position**: opposite the sidebar, left, right, top center or bottom center — at the top or bottom it hangs from the bar there, one piece with it in the edge-frame styles and a card next to a floating bar, or from the screen edge when the bar is elsewhere, which the preview says; the grid always opens in the middle, and so do the **Cards**, separate floating cards in a **Row** or a **Column** under *Card layout*, which locks the position with that reason), event hooks. |
+| **Power & Idle** | Status, idle timeouts (mains / battery), lock behaviour, idle commands, battery alerts (the Power panel's style, Classic or Modern, and the bar battery's pulses: coral while critical, a gentle breath while charging) and profiles, the power menu editor (entries, style, and the dock's **Position**: opposite the sidebar, left, right, top center or bottom center — at the top or bottom it hangs from the bar there, one piece with it in the edge-frame styles and a card next to a floating bar, or from the screen edge when the bar is elsewhere, which the preview says; the grid always opens in the middle, and so do the **Cards**, separate floating cards in a **Row** or a **Column** under *Card layout*, which locks the position with that reason), event hooks. |
 | **Input** | Keyboard layouts and labels, repeat, Num Lock; mouse and touchpad; focus follows mouse. The cursor lives on Themes → Cursors (a card here links there). |
-| **Keyboard shortcuts** | Two tabs. **Mandara** holds the shell's shortcuts, chord capture and conflict detection; **Add a shortcut** starts from an action, and **Program** runs your command. **Compositor** detects the running compositor, lists its native bindings and supported includes, and searches by keys, action or source. The virtualized list fills the available height; the value editor sits beside it in wide windows. Narrow windows switch between the list and editor, keeping both at full height. Select a row to edit individual values, then **Save**, **Cancel** or **Undo**. Page Up / Page Down follows the visible row count. Clean selections switch directly; save or cancel a changed draft before switching. Clashes with Mandara's shortcuts are marked. Saves preserve surrounding text and symlinks, take timestamped backups, reject stale sources and use native validation where available. Computed or unsupported bindings explain why they are read-only. Scanning never executes configuration scripts. Open it with `mandara studio shortcuts/compositor`. |
-| **Date, time & location** | The system clock (time zone with search, set time automatically, and a one-click fix when it doesn't match your location's time zone), clock and date formats, the calendar's week numbers, weekend days, Hijri dates and Eastern Arabic numerals, calendar subscriptions and reminders, the shared location (weather and prayer times follow it unless they have their own), weather. |
+| **Keyboard Shortcuts** | Two tabs. **Mandara** holds the shell's shortcuts, chord capture and conflict detection; **Add a shortcut** starts from an action, and **Program** runs your command. **Compositor** detects the running compositor, lists its native bindings and supported includes, and searches by keys, action or source. The virtualized list fills the available height; the value editor sits beside it in wide windows. Narrow windows switch between the list and editor, keeping both at full height. Select a row to edit individual values, then **Save**, **Cancel** or **Undo**. Page Up / Page Down follows the visible row count. Clean selections switch directly; save or cancel a changed draft before switching. Clashes with Mandara's shortcuts are marked. Saves preserve surrounding text and symlinks, take timestamped backups, reject stale sources and use native validation where available. Computed or unsupported bindings explain why they are read-only. Scanning never executes configuration scripts. Open it with `mandara studio shortcuts/compositor`. |
+| **Date, Time & Location** | The system clock (time zone with search, set time automatically, and a one-click fix when it doesn't match your location's time zone), clock and date formats, the calendar's week numbers, weekend days, Hijri dates and Eastern Arabic numerals, calendar subscriptions and reminders, the shared location (weather and prayer times follow it unless they have their own), weather. |
 | **Applications** | Installed apps (search, hide, rename, install from files by picker or drag and drop, uninstall with optional leftover cleanup), default apps, apps at login, how apps are launched. |
 
 ### Security & accounts
@@ -276,7 +276,7 @@ and verifies models, and provides a dry-run test bench. See
 | Page | What it covers |
 |---|---|
 | **General** | Language (a language whose pack is missing downloads it: its card fills with the download, turns green with a check when it's in, or red with the reason and Retry if it fails; see [Languages](languages.md#language-packs)), units, week start, polkit agent, lock routing, keyrings & passwords (GNOME Keyring prompts, KeePassXC dialog, unlock at login), restart after a crash. |
-| **Profiles & backup** | Recent changes with undo, named profiles, export / import, reset a page, support report. |
+| **Profiles & Backups** | Recent changes with undo, named profiles, export / import, reset a page, support report. |
 | **Performance** | The shell's own CPU, memory and threads, Studio's separately, frame-time diagnostics, restart / quit. |
 | **Maintenance** | Health checks with repair, downloads, cache cleanup, backups, factory reset. |
 | **About** | Mandara updates (binary patch first, full download as the fallback; marketplace plugin updates), version, compositor, theme, config path. |
@@ -423,7 +423,7 @@ and verifies models, and provides a dry-run test bench. See
   to the bar) and timeouts per urgency, a rules editor with one-click rules
   for recent apps, quiet modes, history limits; every OSD kind; indicator
   ignore lists.
-- **Audio & media**: per-app mixer (the row of the player the media panel
+- **Audio & Media**: per-app mixer (the row of the player the media panel
   follows sets that player's own volume when it allows it, as in the shell),
   default devices you can rename and hide, per-app outputs (calls to the
   headset, music to speakers), volume step and 100 % / 150 % ceiling,
@@ -439,7 +439,7 @@ and verifies models, and provides a dry-run test bench. See
   a list); the Bar and Dock pages link there. **Launcher & pop-ups** (the
   launcher, Alt+Tab, the app installer and password prompts) open on the
   display you're on when it is allowed, else on the main display; until
-  set, the row follows **On-screen displays**. External monitor brightness
+  set, the row follows **On-Screen Displays**. External monitor brightness
   works over DDC/CI (pure Rust, `/dev/i2c-*`, needs the `i2c` group).
 - **Night light**: warm screens from sunset to sunrise (your location),
   fixed times or always, with eased transitions, gamma and night dimming,
@@ -716,7 +716,7 @@ and verifies models, and provides a dry-run test bench. See
   the root-owned admin helper, never your own copy;
   `MANDARA_GREETER_DRY_RUN=1` keeps it plan-only), and KeePassXC's state with
   *Unlock now*.
-- **Profiles & backup**: recent changes with undo, named profiles (look
+- **Profiles & Backups**: recent changes with undo, named profiles (look
   only, or everything), export (only what changed, personal values
   redacted) and import, reset any page to defaults, and a redacted support
   report.

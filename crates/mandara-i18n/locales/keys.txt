@@ -574,6 +574,7 @@ Also used by Mandara
 Alt
 Alt+Shift
 Alt+Space
+Alt+Tab and screen time
 Alt+Tab runs `mandara msg switcher next`, Alt+Shift+Tab `switcher prev`
 Alt-Tab window switcher: next / prev open it or move the selection (releasing Alt switches); commit, cancel; open stays until Enter; demo previews without grabbing the keyboard
 AltGr
@@ -819,7 +820,7 @@ Attachment
 Attention
 Attention is the rarest and purest form of generosity.
 Audio
-Audio & media
+Audio & Media
 Audio and microphone
 Audio held ahead of what you hear: longer rides out a shaky connection, shorter starts sooner
 Audio ring
@@ -1071,6 +1072,7 @@ Btrfs scrub validates data and metadata
 Bubble
 Bubbles
 Buffer
+Bugs and ideas on GitHub
 Build
 Build and boot it next time; the running system stays
 Build and switch now, without making it the boot default
@@ -1459,6 +1461,7 @@ Clipboard only
 Clipboard prefix
 Clock
 Clock depth
+Clock formats, calendars, location and weather
 Clock style
 Clocks & time
 Clocks, weather, a system monitor, decorations and more on the wallpaper — behind its subject or in front. Each kind comes from a plugin; nothing runs until you add one.
@@ -1512,6 +1515,7 @@ Colour row
 Colourful tiles
 Colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar, chips and tonal buttons
 Colours of the art drawn for each station
+Colours, light and dark, shapes and app themes
 Column
 Columns
 Columns & outputs
@@ -1900,7 +1904,7 @@ Date pill
 Date style
 Date ticket
 Date tile
-Date, time & location
+Date, Time & Location
 Dawn
 Day
 Day and night globe
@@ -1942,6 +1946,7 @@ DeepL uses its own server and requires an API key
 Default
 Default ({font})
 Default apps per category (from mimeapps.list)
+Default apps, autostart and preferred apps
 Default column width
 Default items
 Default list
@@ -2009,6 +2014,7 @@ Depth · Arabic
 Depth · classic
 Depth · stacked
 Describe the active theme
+Describe what you want; the agent turns it into Mandara commands
 Description
 Desert
 Design
@@ -2101,6 +2107,7 @@ Discord
 Discourses I.15
 Discourses III.23
 Discover
+Discover, install and manage plugins
 Discrete
 Disk
 Disk full at
@@ -2141,7 +2148,6 @@ Dock items: pinned, running and recent apps with their windows, stacks
 Dock settings…
 Docker and Podman containers: status, live usage, logs and controls
 Doctor Brodie's Report
-Documented commands
 Doesn't match
 Doesn't parse: {error}
 Dokkodo
@@ -2456,6 +2462,7 @@ Every day is a new beginning
 Every display
 Every display gets its own wallpaper from the slideshow; off, they all change together
 Every display is off
+Every edit in Studio, newest first. Undo one, or go back to before it.
 Every entry's name beside its icon, or a narrow icon-only column
 Every fast you keep is remembered at a gate of its own.
 Every folder Mandara found, with what it made of it: start here when a plugin doesn't show up.
@@ -2474,6 +2481,7 @@ Every step you take toward learning is a step on an easy road.
 Every system package Mandara needs is already part of this system.
 Every task with its progress, elapsed time, ETA and status (JSON)
 Every variable of the style, then tone, light, texture and layout. The preview follows as you drag.
+Every version and its notes
 Every {every}
 Every {every} min · {short} s
 Every {every} min · {short} s · long break every {long} min
@@ -2799,6 +2807,7 @@ Follows the desktop's transition (Fit & effects)
 Follows which window has focus
 Follows your desktop
 Font
+Fonts and text sizes everywhere
 For developers
 For everyone (--system)
 For me (--user)
@@ -2900,6 +2909,7 @@ Fruit salad
 Full
 Full HD (1080p)
 Full WIT
+Full history
 Full in {time}
 Full log
 Full moon
@@ -3113,6 +3123,7 @@ Healing of Souls
 Health
 Health & repair: mandara studio maintenance
 Health checks
+Health checks, downloads, caches and backups
 Heap & buffers
 Heavier springs move more slowly
 Heavy
@@ -3243,6 +3254,7 @@ How a plugin goes from source code to the bar, and what it may do there.
 How a slideshow change replaces the wallpaper
 How an icon calls you when its app has an urgent window or a critical notification
 How app icons are drawn
+How apps, files and commands are found
 How big the hot spot in each corner is
 How cards stand off their panel: tonal, raised on a shadow or outlined
 How cards stand off their panel; panels and popups keep Shadows and Panel edges
@@ -3315,6 +3327,8 @@ How the bar item shows unread articles
 How the critical warning appears
 How the dock comes and goes, auto-hide included
 How the image arrives once its lines are drawn
+How the lock screen looks and what it shows
+How the login and lock screens look
 How the media panel draws the live audio spectrum
 How the shell's controls look. Pick a preset to set them all at once, or a design per component: each preview is the real control, so try it, then click a design to use it
 How the volume, brightness and mixer sliders look; thin sliders keep the classic look
@@ -3384,6 +3398,7 @@ Idle for {time}
 Idle handling is off
 Idle notifications are not available
 Idle stages are back on
+Idle stages, battery, the session menu and hooks
 Idle state: idle time, inhibitors, power source and the stages to come (JSON)
 Idle · hidden from the bar
 Idle — no inference worker
@@ -3402,7 +3417,6 @@ If you shed tears when you miss the sun, you also miss the stars.
 If you shut your door to all errors truth will be shut out.
 If you sing of beauty though alone in the heart of the desert you will have an audience.
 If you venture in pursuit of glory, don't be satisfied with less than the stars.
-Ignore
 Ignored players
 Illegal instruction
 Illness, loss and long nights are not wasted when met with patience.
@@ -3756,10 +3770,12 @@ Kept custom startup entry {path}
 Kept in the Dock
 Kernel
 Key
+Key bindings for Mandara and your compositor
 Key file…
 Key {code}
 Keyboard
 Keyboard / mouse input
+Keyboard Shortcuts
 Keyboard backlight
 Keyboard hints
 Keyboard layout
@@ -3771,7 +3787,7 @@ Keyboard lights are read from Linux's /sys/class/leds, which FreeBSD doesn't hav
 Keyboard model
 Keyboard only
 Keyboard shortcut
-Keyboard shortcuts
+Keyboard, mouse, touchpad and cursor
 Keycode
 Keypad {key}
 Keyring
@@ -3795,6 +3811,7 @@ Labels
 Landscape
 Language
 Language, backups, health and version
+Language, keyrings and the basics
 Languages
 Lao Tzu
 Laptop panels use the brightness keys. For external monitors, turn on DDC/CI in the monitor's own menu.
@@ -3836,6 +3853,7 @@ Launching
 Layered glassy waves
 Layout
 Layout designer
+Layout, plugins and the look of every bar
 Lead color
 Leading zero
 Lean on Him rather than charms and omens, and walk on without fear.
@@ -4034,9 +4052,9 @@ Locate me
 Location
 Location service (GeoClue)
 Lock
+Lock Appearance
 Lock after
 Lock and unlock
-Lock appearance
 Lock at login
 Lock before sleeping
 Lock keys
@@ -4078,6 +4096,7 @@ Longer copies aren't recorded
 Longer titles are cut short with an ellipsis
 Longitude
 Look
+Look & Feel
 Look & feel
 Look again
 Look at another reminder without changing the one shown (negative: the ones shown before)
@@ -5236,6 +5255,7 @@ On your lap — performance is limited
 On · nothing connected
 On, and in sync with internet time servers
 On, waiting to reach a time server
+On-Screen Displays
 On-screen displays
 Once per login, when KeePassXC is running with a locked database, Mandara's dialog asks for its password
 Once per session
@@ -5438,6 +5458,7 @@ Output / input volume and mute
 Output and input devices with your names; the default is marked, hidden ones too
 Output device
 Output volume and mute
+Output, input, per-app volume and media
 Outputs
 Outputs as the compositor sees them
 Over fullscreen apps
@@ -5656,6 +5677,7 @@ Pink noise
 Pinned
 Pinned & hidden apps
 Pinned apps
+Pinned apps, placement and behaviour
 Pinned entries
 Pinned entries listed above the history in the panel
 Pinned rows shown
@@ -5757,6 +5779,7 @@ Popups appear above games and videos in fullscreen
 Popups at once
 Popups hang from the bar in its colour, as one piece with it; on an edge without the bar, from the screen edge
 Popups show the app and title only; open the notification center to read
+Popups, rules, do not disturb and history
 Port or process…
 Port {port} belongs to another user's process; end it with your system tools
 Portable
@@ -5770,7 +5793,7 @@ Post a notification when a task is done or fails
 Postpone the break by N minutes (default 5)
 Pours out of the bar with curved flares, like its panels.
 Power
-Power & idle
+Power & Idle
 Power and session menu
 Power dock
 Power draw
@@ -5864,7 +5887,7 @@ Profile photo updated
 Profile picture
 Profile scope
 Profiles
-Profiles & backup
+Profiles & Backups
 Program
 Program and arguments, e.g. nautilus --new-window
 Program file
@@ -5874,6 +5897,7 @@ Progress
 Progress bars
 Progress design
 Progress reported by an app's notifications, on its icon
+Project
 Projects
 Prostration
 Proverbs are the palm-oil with which words are eaten.
@@ -5908,6 +5932,7 @@ Put the bar away or bring it back
 Put the bar on a screen edge
 Put the dock on the overlay layer
 Put the picked color on the clipboard right away
+Puts one page back to its defaults. Click twice to confirm; Undo is under Recent changes.
 Puzzles to play in the bar or right on the desktop
 Pywal-style colors.json and userChrome.css in ~/.cache/mandara/themes/firefox (see the README)
 Qaitbay Citadel
@@ -6000,6 +6025,7 @@ Read Claude Code's logs
 Read a selected Btrfs mount with administrator approval
 Read a setting by JSON pointer (whole config when omitted)
 Read an installed app's native sandbox grants
+Read it, build it, fork it
 Read local snapshots
 Read more
 Read on the website
@@ -6072,6 +6098,7 @@ Recent
 Recent apps
 Recent apps:
 Recent changes
+Recent changes, saved profiles, export and import
 Recent copies
 Recent encrypted backup snapshots
 Recent files, then names in Documents, Downloads, Pictures… (indexed in memory)
@@ -6292,6 +6319,7 @@ Resize diagonally
 Resize horizontally
 Resize vertically
 Resolution
+Resolution, scale and the arrangement of your screens
 Resolve the shortcut configuration errors before saving.
 Resources
 Respect the desktop's reduced-motion preference
@@ -6559,6 +6587,7 @@ Saved now; applied the next time Mandara runs under a supported compositor ({com
 Saved now; {file} is generated the next time Mandara runs under {compositor}.
 Saved profiles
 Saved settings profiles
+Saved setups you can switch between with one click.
 Saved {count} feeds to {path}
 Saved {name}
 Saved {when}
@@ -6734,7 +6763,7 @@ Secret Service keyring
 Secure Boot is on. Themes are pictures and text, not code, so they don't affect it; Mandara never replaces GRUB, shim or any signed file.
 Secured
 Security
-Security & accounts
+Security & Accounts
 See all
 See all {count}
 See more on Reddit
@@ -7199,6 +7228,7 @@ Spoiler
 Spoilers
 Spread salam
 Springs
+Springs, speed and reduced motion
 Square
 Square buttons, round toggles and fine outlines
 Square dots
@@ -7334,6 +7364,7 @@ Stops charging at {end}%
 Stops charging early to slow wear
 Stops in {time}
 Storage
+Storage & backups
 Storage service unavailable
 Store passwords unencrypted?
 Stray Birds 130
@@ -7391,6 +7422,7 @@ Sunset to sunrise at your location (Date, time & location, else the weather loca
 Super
 Super+Space
 Superscript
+Support report
 Supported by:
 Supported interface languages
 Supports pacman, AUR helpers, APT, DNF, Zypper, XBPS, apk and Flatpak
@@ -7688,6 +7720,7 @@ The Tanzil text and its meaning, for the Qur'an plugin (api.alquran.cloud)
 The Trash: count its items, or empty it (asks for --yes)
 The XCursor theme name, e.g. Bibata-Modern-Ice; pick one from the gallery above
 The XDG folder is disabled or not configured on this system.
+The accounts on this computer and their pictures
 The active keyboard layout; click to switch
 The address has no server name
 The adhan for {prayer} is playing
@@ -7906,6 +7939,7 @@ The knowledge of anything, since all things have causes, is not acquired or comp
 The laptop panel and external monitors move together
 The last log lines of a container
 The last one played
+The latest releases in plain words. Run mandara changelog to see every release in a terminal.
 The launcher opens when the pointer rests here
 The left bar's own icon colour, or the bar's
 The left bar's own icon shape, or the shared one
@@ -7965,6 +7999,7 @@ The past resembles the future more than water resembles water.
 The paths to Jannah, by group
 The percentage next to level bars
 The picture arrived empty
+The picture behind everything, and how it changes
 The pieces every Mandara bar is built from
 The place name next to the temperature
 The plan with administrator rights
@@ -8247,6 +8282,7 @@ This filesystem is mounted read-only.
 This flake cannot be updated here because its folder is read-only or belongs to another user.
 This folder is empty
 This grant permits both playback and recording
+This installation
 This is a {family} package ({extension}).
 This is an old (type 1) AppImage, which Mandara can't read safely. Download a newer build of the app.
 This is an older version ({new}) than the one installed ({old}).
@@ -8855,6 +8891,7 @@ Version {version}
 Version {version} available
 Version {version} is already installed
 Version {version} isn't recommended: {reason}
+Version, updates and what's new
 Versions, compositor and your changed settings with personal values removed.
 Vertical
 Vertical deck
@@ -8903,6 +8940,7 @@ Volume keys, the bar's scroll and `audio volume up / down`
 Volume per station
 Volume step
 Volume up
+Volume, brightness and the other pop-up indicators
 W
 WASM plugins
 WHAT IT CHANGES
@@ -9014,7 +9052,6 @@ Western (123)
 What a middle click between and around the bar's items does
 What a new game deals; the game's New button can pick another
 What changed between two NixOS generations (packages and closure size)
-What changed in each release, in plain words. Run mandara changelog to see it in a terminal.
 What clicking an entry does
 What do we live for, if it is not to make life less difficult to each other?
 What each edge holds
@@ -9045,6 +9082,7 @@ What the launcher searches, how results look and how they are ranked
 What the launcher shows for a query (apps, settings, commands, slash commands, skills)
 What the play button starts when no station is chosen yet
 What the record shortcut and `record start` capture
+What the shell uses, live
 What you do not want done to yourself, do not do to others.
 What's in {version}
 What's new
@@ -9109,6 +9147,7 @@ While we are postponing, life speeds by.
 White
 White noise
 Who installed an app, the exact removal command and its leftovers (changes nothing)
+Who is using your microphone, camera and screen
 Whoever strives, succeeds.
 Whoever you are responsible for, never deceive or neglect them.
 Whole output
@@ -9117,10 +9156,12 @@ Wi-Fi
 Wi-Fi and wired connectivity
 Wi-Fi is off
 Wi-Fi, Bluetooth, do not disturb and more; shapes that change when on
+Wi-Fi, VPN, hotspot and Bluetooth devices
 Widget kinds come from plugins: switch them on or off in Studio → Plugins (Desktop widgets).
 Widgets
 Widgets on the desktop (a widget's own font wins)
 Widgets on “{tab}”
+Widgets, cards, visualizers and the right-click menu
 Width
 Width in the center
 Width of a left or right bar
@@ -9135,6 +9176,7 @@ Wind
 Wind ripples
 Wind speed
 Window
+Window Switcher
 Window animation speed
 Window animations
 Window app id, e.g. steam_app_*
@@ -9151,6 +9193,7 @@ Window inset
 Window look
 Window opacity
 Window rules
+Window rules, layouts and your compositor's settings
 Window switcher
 Window title
 Window titles under the previews
@@ -9198,6 +9241,7 @@ Would remove {path}
 Write Mandara's GRUB settings file
 Write a look (built-in or yours) to a small portable file
 Write a message…
+Write a plugin in Rust
 Write a reply…
 Write in Markdown…
 Write it on your heart that every day is the best day in the year.
@@ -9330,6 +9374,7 @@ Your recent notes as tabs on the screen's edge
 Your saved verses and hadith, newest first
 Your session starts these (systemd's xdg-autostart).
 Your session's units
+Your shell at a glance
 Your sound theme
 Your status (empty: Online / Do not disturb)
 Your subscriptions with their folders and unread counts
@@ -9416,6 +9461,7 @@ backup to {folder}: {error}
 bar style
 boot entry id (see `session boot-entries`) or firmware
 boot entry id, e.g. windows.conf
+built in
 by {author}
 by {author} · v{version}
 by {author} · {stars} stars
@@ -9485,6 +9531,7 @@ device node (/dev/sdb1 or sdb1), label or UUID
 direct
 disabled
 display draft as JSON
+documented
 down
 download failed: {error}
 download size in MB (default from settings)
@@ -9860,6 +9907,7 @@ topic name or id
 topic name or id (default: every topic)
 topic name or id, or all
 transition style
+translated
 trigger
 uid {uid}
 unhealthy

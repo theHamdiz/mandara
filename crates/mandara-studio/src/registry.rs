@@ -132,24 +132,24 @@ impl Section {
             Section::Bars => tk("Bars"),
             Section::Launcher => tk("Launcher"),
             Section::Dock => tk("Dock"),
-            Section::WindowSwitcher => tk("Window switcher"),
+            Section::WindowSwitcher => tk("Window Switcher"),
             Section::Notifications => tk("Notifications"),
-            Section::Osd => tk("On-screen displays"),
+            Section::Osd => tk("On-Screen Displays"),
             Section::Privacy => tk("Privacy"),
             Section::Wallpaper => tk("Wallpaper"),
             Section::Desktop => tk("Desktop"),
             Section::Displays => tk("Displays"),
-            Section::Audio => tk("Audio & media"),
+            Section::Audio => tk("Audio & Media"),
             Section::Network => tk("Network & Bluetooth"),
             Section::Input => tk("Input"),
             Section::Applications => tk("Applications"),
-            Section::Profiles => tk("Profiles & backup"),
-            Section::Power => tk("Power & idle"),
+            Section::Profiles => tk("Profiles & Backups"),
+            Section::Power => tk("Power & Idle"),
             Section::LoginScreen => tk("Login & Lock Screens"),
-            Section::LockScreen => tk("Lock appearance"),
-            Section::DateTime => tk("Date, time & location"),
+            Section::LockScreen => tk("Lock Appearance"),
+            Section::DateTime => tk("Date, Time & Location"),
             Section::Users => tk("Users"),
-            Section::Shortcuts => tk("Keyboard shortcuts"),
+            Section::Shortcuts => tk("Keyboard Shortcuts"),
             Section::Motion => tk("Motion"),
             Section::General => tk("General"),
             Section::Typography => tk("Typography"),
@@ -164,6 +164,45 @@ impl Section {
     /// The title in the current language.
     pub fn label(self) -> String {
         tr(self.title())
+    }
+
+    /// The line under the page's title: what the page is for (`tk` text;
+    /// display it with `tr`).
+    pub fn subtitle(self) -> &'static str {
+        match self {
+            Section::AiShellAgent => tk("Describe what you want; the agent turns it into Mandara commands"),
+            Section::Home => tk("Your shell at a glance"),
+            Section::Themes => tk("Colours, light and dark, shapes and app themes"),
+            Section::Bars => tk("Layout, plugins and the look of every bar"),
+            Section::Launcher => tk("How apps, files and commands are found"),
+            Section::Dock => tk("Pinned apps, placement and behaviour"),
+            Section::WindowSwitcher => tk("Alt+Tab and screen time"),
+            Section::Notifications => tk("Popups, rules, do not disturb and history"),
+            Section::Osd => tk("Volume, brightness and the other pop-up indicators"),
+            Section::Privacy => tk("Who is using your microphone, camera and screen"),
+            Section::Wallpaper => tk("The picture behind everything, and how it changes"),
+            Section::Desktop => tk("Widgets, cards, visualizers and the right-click menu"),
+            Section::Displays => tk("Resolution, scale and the arrangement of your screens"),
+            Section::Audio => tk("Output, input, per-app volume and media"),
+            Section::Network => tk("Wi-Fi, VPN, hotspot and Bluetooth devices"),
+            Section::Input => tk("Keyboard, mouse, touchpad and cursor"),
+            Section::Applications => tk("Default apps, autostart and preferred apps"),
+            Section::Profiles => tk("Recent changes, saved profiles, export and import"),
+            Section::Power => tk("Idle stages, battery, the session menu and hooks"),
+            Section::LoginScreen => tk("How the login and lock screens look"),
+            Section::LockScreen => tk("How the lock screen looks and what it shows"),
+            Section::DateTime => tk("Clock formats, calendars, location and weather"),
+            Section::Users => tk("The accounts on this computer and their pictures"),
+            Section::Shortcuts => tk("Key bindings for Mandara and your compositor"),
+            Section::Motion => tk("Springs, speed and reduced motion"),
+            Section::General => tk("Language, keyrings and the basics"),
+            Section::Typography => tk("Fonts and text sizes everywhere"),
+            Section::Plugins => tk("Discover, install and manage plugins"),
+            Section::Compositor => tk("Window rules, layouts and your compositor's settings"),
+            Section::Performance => tk("What the shell uses, live"),
+            Section::Maintenance => tk("Health checks, downloads, caches and backups"),
+            Section::About => tk("Version, updates and what's new"),
+        }
     }
 
     /// Sidebar icon; the launcher's Studio entries use the same one
@@ -248,10 +287,10 @@ impl NavGroup {
     /// English title; display it with `tr`.
     pub fn title(self) -> &'static str {
         match self {
-            NavGroup::LookAndFeel => tk("Look & feel"),
+            NavGroup::LookAndFeel => tk("Look & Feel"),
             NavGroup::Desktop => tk("Desktop"),
             NavGroup::System => tk("System"),
-            NavGroup::Security => tk("Security & accounts"),
+            NavGroup::Security => tk("Security & Accounts"),
             NavGroup::Extend => tk("Extend"),
             NavGroup::Mandara => tk("Mandara"),
         }

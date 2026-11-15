@@ -15,7 +15,7 @@ use mandara_services::models;
 use mandara_theme::MandaraPalette;
 use mandara_ui::icons::icon;
 
-use super::StudioView;
+use super::{StudioView, grouped};
 use crate::maintenance::{self as m, CheckId, Health};
 use crate::tokens::*;
 
@@ -238,15 +238,8 @@ impl StudioView {
         if self.maint.results.is_empty() && !self.maint.checking {
             self.maint_refresh(cx);
         }
-        let card = || div().rounded(px(RADIUS_18_PX)).bg(p.surface_container.hsla()).p(px(SPACE_20_PX)).row().flex_col().gap(px(SPACE_12_PX));
-        let title = |t: &'static str, sub: &'static str| {
-            div()
-                .row()
-                .flex_col()
-                .gap(px(2.0))
-                .child(div().font_weight(FontWeight::SEMIBOLD).child(t))
-                .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(sub))
-        };
+        let stack = self.stack_rows;
+        let mono = mandara_ui::fonts::fonts(cx).mono.clone();
         let jobs = self.maint.jobs.clone();
         // A pill button; shows progress while its job runs.
         let button = |id: String, label: String, job: Option<&String>, kind: ButtonKind| {
@@ -255,7 +248,7 @@ impl StudioView {
                 ButtonKind::Primary => (p.primary, p.on_primary),
                 ButtonKind::Danger => (p.urgent_coral.with_alpha(ALPHA_14), p.urgent_coral),
                 ButtonKind::DangerArmed => (p.urgent_coral, p.on_primary),
-                ButtonKind::Tonal => (p.surface_container_high, p.on_surface),
+                ButtonKind::Tonal => (p.on_surface.with_alpha(ALPHA_8), p.on_surface),
             };
             let text = match running {
                 Some(u32::MAX) => t("Working…").to_string(),
@@ -264,8 +257,8 @@ impl StudioView {
             };
             div()
                 .id(SharedString::from(id))
-                .h(px(DIM_32_PX))
-                .px(px(SPACE_14_PX))
+                .h(px(DIM_30_PX))
+                .px(px(SPACE_12_PX))
                 .rounded_full()
                 .row()
                 .items_center()
@@ -278,129 +271,84 @@ impl StudioView {
                 .when(running.is_some(), |el| el.opacity(ALPHA_75))
                 .child(text)
         };
-        let badge = |h: Option<&Health>| {
+        let health = |h: Option<&Health>| {
             let (label, color) = match h {
                 Some(Health::Ok(_)) => (t("OK"), p.success_emerald),
                 Some(Health::Warn(_)) => (t("Attention"), p.warning_amber),
                 Some(Health::Broken(_)) => (t("Broken"), p.urgent_coral),
                 None => (t("Checking"), p.on_surface_variant),
             };
-            div().px(px(SPACE_9_PX)).h(px(DIM_22_PX)).rounded_full().row().items_center().flex_none().bg(color.with_alpha(ALPHA_15).hsla()).text_color(color.hsla()).text_size(px(TEXT_11_5_PX)).font_weight(FontWeight::SEMIBOLD).child(label)
+            grouped::status(label, color, p)
         };
+        let presence = |installed: bool| if installed { grouped::status(t("Installed"), p.success_emerald, p) } else { grouped::status(t("Not installed"), p.on_surface.with_alpha(ALPHA_30), p) };
 
         // ── Overview ──────────────────────────────────────────────────────
         let missing_models = models::MODELS.iter().filter(|m| !m.on_demand && !m.installed()).count();
         let issues = self.maint.results.values().filter(|h| !h.is_ok()).count() + missing_models;
         let can_repair = self.maint.can_repair(mandara_compositor::detected().is_some(), missing_models > 0);
         let all_good = !self.maint.results.is_empty() && issues == 0;
-        let hero = card()
-            .flex_row()
-            // Narrow windows: the buttons wrap under the summary.
-            .flex_wrap()
-            .items_center()
-            .gap(px(SPACE_16_PX))
-            .child(
-                div()
-                    .size(px(DIM_48_PX))
-                    .rounded(px(RADIUS_16_PX))
-                    .row()
-                    .items_center()
-                    .justify_center()
-                    .flex_none()
-                    .bg(if all_good { p.success_emerald.with_alpha(ALPHA_15).hsla() } else { p.warning_amber.with_alpha(ALPHA_15).hsla() })
-                    .child(icon(if all_good { "check" } else { "refresh" }, ICON_24_PX, if all_good { p.success_emerald } else { p.warning_amber })),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w(px(DIM_200_PX))
-                    .row()
-                    .flex_col()
-                    .gap(px(2.0))
-                    .child(div().text_size(px(TEXT_17_PX)).font_weight(FontWeight::SEMIBOLD).child(if self.maint.checking && self.maint.results.is_empty() {
-                        t("Checking your installation…").to_string()
-                    } else if all_good {
-                        t("Everything looks healthy").to_string()
-                    } else if issues == 1 {
-                        t("1 thing to look at").to_string()
-                    } else {
-                        tf("{n} things to look at", &[("n", &issues)])
-                    }))
-                    .child(div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("Config, compositor integration, app themes, fonts, plugin folders and downloadable models.")))),
-            )
-            .child(button("maint-check".into(), if self.maint.checking { t("Checking…").into() } else { t("Run checks").into() }, None, ButtonKind::Tonal).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.maint_refresh(cx))))
-            .when(can_repair && !self.maint.results.is_empty(), |el| el.child(button("maint-repair".into(), t("Repair all").into(), None, ButtonKind::Primary).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.maint_repair_all(cx)))));
+        let tone = if all_good { p.success_emerald } else { p.warning_amber };
+        let summary = if self.maint.checking && self.maint.results.is_empty() {
+            t("Checking your installation…").to_string()
+        } else if all_good {
+            t("Everything looks healthy").to_string()
+        } else if issues == 1 {
+            t("1 thing to look at").to_string()
+        } else {
+            tf("{n} things to look at", &[("n", &issues)])
+        };
+        let hero = grouped::group(
+            vec![div()
+                .w_full()
+                .p(px(if stack { SPACE_16_PX } else { SPACE_20_PX }))
+                .row()
+                .flex_wrap()
+                .items_center()
+                .gap(px(SPACE_16_PX))
+                .child(div().size(px(DIM_48_PX)).rounded(px(RADIUS_14_PX)).row().items_center().justify_center().flex_none().bg(tone.with_alpha(ALPHA_15).hsla()).child(icon(if all_good { "check" } else { "refresh" }, ICON_24_PX, tone)))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(DIM_200_PX))
+                        .row()
+                        .flex_col()
+                        .gap(px(SPACE_3_PX))
+                        .child(div().text_size(px(TEXT_17_PX)).font_weight(FontWeight::SEMIBOLD).child(summary))
+                        .child(div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(t("Config, compositor integration, app themes, fonts, plugin folders and downloadable models.")))),
+                )
+                .child(button("maint-check".into(), if self.maint.checking { t("Checking…").into() } else { t("Run checks").into() }, None, ButtonKind::Tonal).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.maint_refresh(cx))))
+                .when(can_repair && !self.maint.results.is_empty(), |el| el.child(button("maint-repair".into(), t("Repair all").into(), None, ButtonKind::Primary).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.maint_repair_all(cx)))))
+                .into_any_element()],
+            false,
+            p,
+        );
 
-        let message = self.maint.message.clone().map(|(ok, msg)| {
-            div()
-                .px(px(SPACE_14_PX))
-                .py(px(SPACE_10_PX))
-                .rounded(px(RADIUS_12_PX))
-                .text_size(px(TEXT_12_5_PX))
-                .bg(if ok { p.success_emerald.with_alpha(ALPHA_12).hsla() } else { p.urgent_coral.with_alpha(ALPHA_12).hsla() })
-                .text_color(if ok { p.success_emerald.hsla() } else { p.urgent_coral.hsla() })
-                .child(msg)
-        });
+        let message = self.maint.message.clone().map(|(ok, msg)| super::form::note(&msg, !ok, p));
 
         // ── Checks ────────────────────────────────────────────────────────
-        let mut checks = card().child(title(t("Health checks"), t("Each repair is safe: your compositor config only ever gets one include line, with a backup.")));
+        let mut checks = Vec::with_capacity(CheckId::ALL.len());
         for id in CheckId::ALL {
             let h = self.maint.results.get(&id).cloned();
             let key = format!("check:{id:?}");
             let fixable = h.as_ref().is_some_and(|h| !h.is_ok()) && !(matches!(id, CheckId::CompositorInclude | CheckId::CompositorDropIn | CheckId::CompositorConflicts) && mandara_compositor::detected().is_none());
-            checks = checks.child(
-                div()
-                    .row()
-                    .items_center()
-                    .gap(px(SPACE_12_PX))
-                    .py(px(SPACE_6_PX))
-                    .child(div().size(px(DIM_34_PX)).rounded(px(RADIUS_11_PX)).row().items_center().justify_center().flex_none().bg(p.surface_container_high.hsla()).child(icon(id.icon(), ICON_16_PX, p.on_surface_variant)))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.0))
-                            .row()
-                            .flex_col()
-                            .child(div().font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(tr(id.title()))))
-                            .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).truncate().child(h.as_ref().map(|h| h.detail().to_string()).unwrap_or_default())),
-                    )
-                    .child(badge(h.as_ref()))
-                    .when(fixable, |el| el.child(button(format!("fix-{id:?}"), tr(id.fix_label()), Some(&key), ButtonKind::Tonal).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.maint_fix(id, cx))))),
-            );
+            let row = grouped::row(Some(id.icon()), tr(id.title())).caption(h.as_ref().map(|h| h.detail().to_string()).unwrap_or_default()).trailing(health(h.as_ref()));
+            let row = if fixable { row.trailing(button(format!("fix-{id:?}"), tr(id.fix_label()), Some(&key), ButtonKind::Tonal).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.maint_fix(id, cx)))) } else { row };
+            checks.push(row.render(stack, mono.clone(), p));
         }
+        let checks = grouped::section(grouped::header(t("Health checks"), Some(t("Each repair is safe: your compositor config only ever gets one include line, with a backup.").into()), Vec::new(), p), grouped::group(checks, true, p));
 
         // ── Downloads ─────────────────────────────────────────────────────
-        let mut downloads = card().child(title(t("Downloads"), t("Models for copying text from screenshots and for the wallpaper depth effect's model mode. From Hugging Face, all Apache-2.0; the depth model downloads only when you pick that mode.")));
+        let mut downloads = Vec::new();
         for model in models::MODELS.iter().filter(|model| !mandara_services::command_agent::models::ALL.iter().any(|agent| agent.id == model.id)) {
             let installed = model.installed();
             let key = format!("model:{}", model.id);
             let id = model.id;
-            downloads = downloads.child(
-                div()
-                    .row()
-                    .items_center()
-                    .gap(px(SPACE_12_PX))
-                    .py(px(SPACE_6_PX))
-                    .child(div().size(px(DIM_34_PX)).rounded(px(RADIUS_11_PX)).row().items_center().justify_center().flex_none().bg(p.surface_container_high.hsla()).child(icon(model.icon, ICON_16_PX, p.on_surface_variant)))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.0))
-                            .row()
-                            .flex_col()
-                            .child(div().font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(tr(model.title))))
-                            .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).truncate().child(format!("{} · {}", tr(model.purpose), human(model.download_size())))),
-                    )
-                    .child({
-                        let color = if installed { p.success_emerald } else { p.on_surface_variant };
-                        div().px(px(SPACE_9_PX)).h(px(DIM_22_PX)).rounded_full().row().items_center().flex_none().bg(color.with_alpha(ALPHA_14).hsla()).text_color(color.hsla()).text_size(px(TEXT_11_5_PX)).font_weight(FontWeight::SEMIBOLD).child(if installed { t("Installed") } else { t("Not installed") })
-                    })
-                    .child(if installed {
-                        button(format!("rm-{id}"), t("Remove").into(), Some(&key), ButtonKind::Tonal).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.maint_model(id, false, cx)))
-                    } else {
-                        button(format!("dl-{id}"), t("Download").into(), Some(&key), ButtonKind::Primary).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.maint_model(id, true, cx)))
-                    }),
-            );
+            let action = if installed {
+                button(format!("rm-{id}"), t("Remove").into(), Some(&key), ButtonKind::Tonal).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.maint_model(id, false, cx)))
+            } else {
+                button(format!("dl-{id}"), t("Download").into(), Some(&key), ButtonKind::Primary).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.maint_model(id, true, cx)))
+            };
+            downloads.push(grouped::row(Some(model.icon), tr(model.title)).caption(format!("{} · {}", tr(model.purpose), human(model.download_size()))).trailing(presence(installed)).trailing(action).render(stack, mono.clone(), p));
         }
 
         // The Hadith plugin's library (downloaded by the shell, which hears
@@ -408,135 +356,81 @@ impl StudioView {
         let (collections, bytes) = mandara_services::hadith::store::summary();
         let installed = collections > 0;
         let key = "hadith-library".to_string();
-        downloads = downloads.child(
-            div()
-                .row()
-                .items_center()
-                .gap(px(SPACE_12_PX))
-                .py(px(SPACE_6_PX))
-                .child(div().size(px(DIM_34_PX)).rounded(px(RADIUS_11_PX)).row().items_center().justify_center().flex_none().bg(p.surface_container_high.hsla()).child(icon("hadith", ICON_16_PX, p.on_surface_variant)))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w(px(0.0))
-                        .row()
-                        .flex_col()
-                        .child(div().font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(t("Hadith library"))))
-                        .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).truncate().child(if installed {
-                            format!("{} · {}", tf("{n} collections from hadith-api (public domain)", &[("n", &collections)]), human(bytes))
-                        } else {
-                            t("Collections the Hadith plugin downloads from hadith-api (public domain)").to_string()
-                        })),
-                )
-                .child({
-                    let color = if installed { p.success_emerald } else { p.on_surface_variant };
-                    div().px(px(SPACE_9_PX)).h(px(DIM_22_PX)).rounded_full().row().items_center().flex_none().bg(color.with_alpha(ALPHA_14).hsla()).text_color(color.hsla()).text_size(px(TEXT_11_5_PX)).font_weight(FontWeight::SEMIBOLD).child(if installed { t("Installed") } else { t("Not installed") })
-                })
-                .child(if installed {
-                    button("rm-hadith".into(), t("Remove").into(), Some(&key), ButtonKind::Tonal).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.maint_job("hadith-library".into(), cx, |_| {
-                            let freed = mandara_services::hadith::store::remove_all()?;
-                            Ok((tf("Hadith library removed · {size} freed", &[("size", &human(freed))]), vec![vec!["hadith".into(), "status".into()]]))
-                        });
-                    }))
-                } else {
-                    button("dl-hadith".into(), t("Download").into(), Some(&key), ButtonKind::Primary).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.maint_job("hadith-library".into(), cx, |_| Ok((t("Downloading in the Hadith panel").to_string(), vec![vec!["hadith".into(), "download".into()]])));
-                    }))
-                }),
-        );
+        let caption = if installed {
+            format!("{} · {}", tf("{n} collections from hadith-api (public domain)", &[("n", &collections)]), human(bytes))
+        } else {
+            t("Collections the Hadith plugin downloads from hadith-api (public domain)").to_string()
+        };
+        let action = if installed {
+            button("rm-hadith".into(), t("Remove").into(), Some(&key), ButtonKind::Tonal).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                this.maint_job("hadith-library".into(), cx, |_| {
+                    let freed = mandara_services::hadith::store::remove_all()?;
+                    Ok((tf("Hadith library removed · {size} freed", &[("size", &human(freed))]), vec![vec!["hadith".into(), "status".into()]]))
+                });
+            }))
+        } else {
+            button("dl-hadith".into(), t("Download").into(), Some(&key), ButtonKind::Primary).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                this.maint_job("hadith-library".into(), cx, |_| Ok((t("Downloading in the Hadith panel").to_string(), vec![vec!["hadith".into(), "download".into()]])));
+            }))
+        };
+        downloads.push(grouped::row(Some("hadith"), t("Hadith library")).caption(caption).trailing(presence(installed)).trailing(action).render(stack, mono.clone(), p));
         // The Qur'an plugin's text and meaning (downloaded, never bundled).
         {
             use mandara_services::quran::store;
             let installed = store::installed_bytes();
             let key = "quran".to_string();
             let size = installed.unwrap_or(store::META_BYTES + store::TEXT_BYTES + store::MEANING_BYTES);
-            downloads = downloads.child(
-                div()
-                    .row()
-                    .items_center()
-                    .gap(px(SPACE_12_PX))
-                    .py(px(SPACE_6_PX))
-                    .child(div().size(px(DIM_34_PX)).rounded(px(RADIUS_11_PX)).row().items_center().justify_center().flex_none().bg(p.surface_container_high.hsla()).child(icon("book", ICON_16_PX, p.on_surface_variant)))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.0))
-                            .row()
-                            .flex_col()
-                            .child(div().font_weight(FontWeight::MEDIUM).child(mandara_ui::bidi::paragraph(t("Qur'an"))))
-                            .child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).truncate().child(format!("{} · {}", t("The Tanzil text and its meaning, for the Qur'an plugin (api.alquran.cloud)"), human(size)))),
-                    )
-                    .child({
-                        let color = if installed.is_some() { p.success_emerald } else { p.on_surface_variant };
-                        div().px(px(SPACE_9_PX)).h(px(DIM_22_PX)).rounded_full().row().items_center().flex_none().bg(color.with_alpha(ALPHA_14).hsla()).text_color(color.hsla()).text_size(px(TEXT_11_5_PX)).font_weight(FontWeight::SEMIBOLD).child(if installed.is_some() { t("Installed") } else { t("Not installed") })
-                    })
-                    .child(if installed.is_some() {
-                        button("rm-quran".into(), t("Remove").into(), Some(&key), ButtonKind::Tonal).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.maint_quran(false, cx)))
-                    } else {
-                        button("dl-quran".into(), t("Download").into(), Some(&key), ButtonKind::Primary).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.maint_quran(true, cx)))
-                    }),
-            );
+            let action = if installed.is_some() {
+                button("rm-quran".into(), t("Remove").into(), Some(&key), ButtonKind::Tonal).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.maint_quran(false, cx)))
+            } else {
+                button("dl-quran".into(), t("Download").into(), Some(&key), ButtonKind::Primary).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.maint_quran(true, cx)))
+            };
+            downloads.push(grouped::row(Some("book"), t("Qur'an")).caption(format!("{} · {}", t("The Tanzil text and its meaning, for the Qur'an plugin (api.alquran.cloud)"), human(size))).trailing(presence(installed.is_some())).trailing(action).render(stack, mono.clone(), p));
         }
+        let downloads = grouped::section(grouped::header(t("Downloads"), Some(t("Models for copying text from screenshots and for the wallpaper depth effect's model mode. From Hugging Face, all Apache-2.0; the depth model downloads only when you pick that mode.").into()), Vec::new(), p), grouped::group(downloads, true, p));
 
-        // ── Storage ───────────────────────────────────────────────────────
-        let storage = card().child(
-            div()
-                .row()
-                .items_center()
-                .gap(px(SPACE_12_PX))
-                .child(div().flex_1().min_w(px(0.0)).child(title(t("Caches"), t("Thumbnails and Wallhaven previews; they rebuild on demand."))))
-                .child(div().font_features(mandara_ui::fonts::tabular_nums()).text_color(p.on_surface_variant.hsla()).child(self.maint.cache_bytes.map(human).unwrap_or_else(|| "…".into())))
-                .child(button("maint-cache".into(), t("Clear").into(), Some(&"caches".to_string()), ButtonKind::Tonal).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.maint_job("caches".into(), cx, |_| m::clear_caches().map(|freed| (tf("Freed {size}", &[("size", &human(freed))]), Vec::new())));
-                }))),
-        );
-
-        // ── Backups & reset ───────────────────────────────────────────────
+        // ── Storage, backups & reset ──────────────────────────────────────
         let armed = self.maint.reset_armed.is_some_and(|t| t.elapsed() < RESET_ARM_WINDOW);
-        let mut backups = card()
-            .child(
-                div()
-                    .row()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(px(SPACE_12_PX))
-                    // The buttons drop under the title on a narrow window.
-                    .child(div().flex_1().min_w(px(DIM_240_PX)).child(title(t("Backups & factory reset"), t("Backups copy ~/.config/mandara. Factory reset backs up first, then restores every default."))))
-                    .child(button("maint-backup".into(), t("Back up now").into(), Some(&"backup".to_string()), ButtonKind::Tonal).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.maint_job("backup".into(), cx, |_| m::backup_now("manual").map(|p| (tf("Backed up to {folder}", &[("folder", &p.display())]), Vec::new())));
-                    })))
-                    .child(
-                        button("maint-reset".into(), if armed { t("Click again to reset").into() } else { t("Factory reset").into() }, Some(&"reset".to_string()), if armed { ButtonKind::DangerArmed } else { ButtonKind::Danger }).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                            if this.maint.reset_armed.is_some_and(|t| t.elapsed() < RESET_ARM_WINDOW) {
-                                this.maint.reset_armed = None;
-                                this.maint_job("reset".into(), cx, |_| m::factory_reset().map(|(b, f)| (tf("Defaults restored — your old setup is in {folder}", &[("folder", &b.display())]), f)));
-                            } else {
-                                this.maint.reset_armed = Some(Instant::now());
-                                cx.notify();
-                            }
-                        })),
-                    ),
-            );
+        let mut storage = vec![
+            grouped::row(Some("disk"), t("Caches"))
+                .caption(t("Thumbnails and Wallhaven previews; they rebuild on demand."))
+                .trailing(div().font_features(mandara_ui::fonts::tabular_nums()).text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(self.maint.cache_bytes.map(human).unwrap_or_else(|| "…".into())))
+                .trailing(button("maint-cache".into(), t("Clear").into(), Some(&"caches".to_string()), ButtonKind::Tonal).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    this.maint_job("caches".into(), cx, |_| m::clear_caches().map(|freed| (tf("Freed {size}", &[("size", &human(freed))]), Vec::new())));
+                })))
+                .render(stack, mono.clone(), p),
+            grouped::row(Some("download"), t("Backups & factory reset"))
+                .caption(t("Backups copy ~/.config/mandara. Factory reset backs up first, then restores every default."))
+                .wrap()
+                .trailing(button("maint-backup".into(), t("Back up now").into(), Some(&"backup".to_string()), ButtonKind::Tonal).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    this.maint_job("backup".into(), cx, |_| m::backup_now("manual").map(|p| (tf("Backed up to {folder}", &[("folder", &p.display())]), Vec::new())));
+                })))
+                .trailing(button("maint-reset".into(), if armed { t("Click again to reset").into() } else { t("Factory reset").into() }, Some(&"reset".to_string()), if armed { ButtonKind::DangerArmed } else { ButtonKind::Danger }).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    if this.maint.reset_armed.is_some_and(|t| t.elapsed() < RESET_ARM_WINDOW) {
+                        this.maint.reset_armed = None;
+                        this.maint_job("reset".into(), cx, |_| m::factory_reset().map(|(b, f)| (tf("Defaults restored — your old setup is in {folder}", &[("folder", &b.display())]), f)));
+                    } else {
+                        this.maint.reset_armed = Some(Instant::now());
+                        cx.notify();
+                    }
+                })))
+                .render(stack, mono.clone(), p),
+        ];
         for (i, b) in self.maint.backups.iter().take(BACKUPS_SHOWN).enumerate() {
             let name = b.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
             let path = b.clone();
-            backups = backups.child(
-                div()
-                    .row()
-                    .items_center()
-                    .gap(px(SPACE_12_PX))
-                    .py(px(SPACE_4_PX))
-                    .child(icon("disk", ICON_15_PX, p.on_surface_variant))
-                    .child(div().flex_1().min_w(px(0.0)).truncate().font_features(mandara_ui::fonts::tabular_nums()).text_size(px(TEXT_12_5_PX)).child(name))
-                    .child(button(format!("restore-{i}"), t("Restore").into(), Some(&format!("restore:{i}")), ButtonKind::Tonal).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            storage.push(
+                grouped::row(Some("clock"), name)
+                    .trailing(button(format!("restore-{i}"), t("Restore").into(), Some(&format!("restore:{i}")), ButtonKind::Tonal).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         let path = path.clone();
                         this.maint_job(format!("restore:{i}"), cx, move |_| m::restore(&path).map(|f| (t("Backup restored").to_string(), f)));
-                    }))),
+                    })))
+                    .render(false, mono.clone(), p),
             );
         }
+        let storage = grouped::section(grouped::header(t("Storage & backups"), None, Vec::new(), p), grouped::group(storage, true, p));
 
-        div().row().flex_col().gap(px(SPACE_14_PX)).child(hero).children(message).child(checks).child(downloads).child(storage).child(backups).into_any_element()
+        div().row().flex_col().gap(px(GROUP_SECTION_GAP_PX)).child(div().row().flex_col().gap(px(BENTO_GAP_PX)).child(hero).children(message)).child(checks).child(downloads).child(storage).into_any_element()
     }
 }
 

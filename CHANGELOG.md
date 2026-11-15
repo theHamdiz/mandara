@@ -6,6 +6,15 @@ About → What's new shows it too.
 
 ## Unreleased
 
+A calmer, more consistent Studio, with live chips in the bar and a richer dock.
+
+### Improved
+
+- Studio's About, Maintenance, Profiles & Backups, Privacy, Date, Time & Location, Power & Idle, Network & Bluetooth, Audio & Media, Dock and Plugins pages share one calmer design: every page has a header that says what it is for, settings sit in grouped lists divided by fine lines, and states show as a small dot instead of coloured badges. Page names are now in Title Case.
+- The Plugins page keeps its tabs, search and categories in one toolbar, and its categories in a single row that scrolls.
+- The lock screen's design picker shows the same six previews as the login screen.
+- About shows the latest five releases under What's new and keeps only those in memory; the full history is a click away.
+
 ## 0.31.0 — 2026-11-15
 
 Matching login and lock designs, and room to work with compositor shortcuts.

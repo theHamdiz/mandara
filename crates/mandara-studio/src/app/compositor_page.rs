@@ -68,8 +68,10 @@ pub(super) fn card(p: &MandaraPalette) -> Div {
     div().clipped_card_surface(radius, Fill(p.surface_container, None), Vec::new(), p).p(px(padding)).row().flex_col().gap(px(SPACE_12_PX))
 }
 
+/// A section's title over its card: the same calm header every grouped
+/// page uses (no accent: the accent marks choices and actions).
 pub(super) fn group_title(text: impl Into<SharedString>, p: &MandaraPalette) -> Div {
-    div().px(px(SPACE_10_PX)).text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(text.into())
+    div().px(px(SPACE_4_PX)).text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.on_surface.hsla()).child(text.into())
 }
 
 pub(super) fn heading(title: impl Into<SharedString>, detail: impl Into<SharedString>, p: &MandaraPalette) -> Div {

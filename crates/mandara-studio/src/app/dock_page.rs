@@ -302,18 +302,12 @@ impl StudioView {
         let enabled = cfg.dock_enabled();
         let hidden_note = (enabled && cfg.dock.auto_hide != DockAutoHide::Never).then(|| {
             let why = if cfg.dock.auto_hide == DockAutoHide::Smart { t("The dock hides while a window covers it. Touch the screen edge to bring it back.") } else { t("The dock hides until you touch the screen edge.") };
-            card(p)
-                .child(
-                    div()
-                        .row()
-                        .items_center()
-                        .gap(px(SPACE_12_PX))
-                        .child(icon("eye-off", ICON_16_PX, p.primary))
-                        .child(div().flex_1().min_w(px(0.0)).text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(why))
-                        .child(button("dock-show-now", "eye", t("Show it now"), false, p).on_click(cx.listener(|_, _: &ClickEvent, _, cx| ipc(cx, &["dock", "show"]))))
-                        .child(button("dock-never-hide", "check", t("Keep it visible"), true, p).on_click(cx.listener(|_, _: &ClickEvent, _, cx| update_config(cx, |c| c.dock.auto_hide = DockAutoHide::Never)))),
-                )
-                .into_any_element()
+            let row = super::grouped::row(Some("eye-off"), why)
+                .wrap()
+                .trailing(button("dock-show-now", "eye", t("Show it now"), false, p).on_click(cx.listener(|_, _: &ClickEvent, _, cx| ipc(cx, &["dock", "show"]))))
+                .trailing(button("dock-never-hide", "check", t("Keep it visible"), true, p).on_click(cx.listener(|_, _: &ClickEvent, _, cx| update_config(cx, |c| c.dock.auto_hide = DockAutoHide::Never))))
+                .render(self.stack_rows, mandara_ui::fonts::fonts(cx).mono.clone(), p);
+            super::grouped::group(vec![row], true, p).into_any_element()
         });
         let group = |name: &'static str| registry::in_section(Section::Dock).filter(move |s| s.group == name);
         let layout = self.rows(group(DOCK_LAYOUT), cfg, p, cx);
@@ -328,10 +322,12 @@ impl StudioView {
         div()
             .row()
             .flex_col()
-            .gap(px(SPACE_26_PX))
-            .child(toggle)
-            .children(hidden_note)
-            .child(card(p).child(div().text_size(px(TEXT_12_PX)).font_weight(FontWeight::SEMIBOLD).text_color(p.primary.hsla()).child(t("Preview"))).child(preview(&cfg.dock, &cfg.appearance.launcher_icon, p)))
+            .gap(px(GROUP_SECTION_GAP_PX))
+            .child(div().row().flex_col().gap(px(BENTO_GAP_PX)).child(toggle).children(hidden_note))
+            .child(super::grouped::section(
+                super::grouped::header(t("Preview"), None, Vec::new(), p),
+                super::grouped::group(vec![div().p(px(SPACE_16_PX)).child(preview(&cfg.dock, &cfg.appearance.launcher_icon, p)).into_any_element()], false, p),
+            ))
             .child(displays)
             .child(layout)
             .child(behaviour)
