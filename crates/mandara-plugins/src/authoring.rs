@@ -356,6 +356,9 @@ mod tests {
         assert!(guide.contains(&format!("rustup target add {WASM_TARGET}")));
         assert!(guide.contains(EXAMPLE_DIR) && guide.contains(REPOSITORY));
         assert!(guide.contains("--tab develop"));
+        let walkthrough = guide.split("### Polish:").nth(1).unwrap().split("```bash").nth(1).unwrap().split("```").next().unwrap();
+        assert!(!walkthrough.contains("eval "), "sandbox setup must preserve the host toolchain environment");
+        assert!(walkthrough.contains("target/sandbox/home/data/mandara/plugins-dev/my-plugin"));
         assert!(guide.contains(&format!("cp -r mandara-src/{WIT_DIR} my-plugin/wit")), "PLUGINS.md's quick start copies the WIT like quick_start()");
         for f in &contract().exports {
             assert!(guide.contains(&format!("`{}(", f.name)), "PLUGINS.md documents export {}", f.name);

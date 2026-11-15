@@ -361,11 +361,12 @@ mod tests {
                 "-c".into(),
                 "sleep 30 & echo $$ $! > \"$1\"; wait".into(),
                 "renderer".into(),
-                marker,
+                marker.clone(),
             ],
             tx,
         );
-        assert!(matches!(report(&rx, &group), Report::Spawned(Ok(_))));
+        let Report::Spawned(Ok(guardian)) = report(&rx, &group) else { panic!("guardian did not start") };
+        std::fs::write(Path::new(&marker).with_extension("guardian"), guardian.to_string()).unwrap();
         if std::env::var("MANDARA_RENDERER_TEST_PAUSED").is_ok_and(|value| value == "1") {
             let marker =
                 Path::new(&std::env::var_os("MANDARA_RENDERER_TEST_PARENT").unwrap()).to_path_buf();
@@ -419,7 +420,9 @@ mod tests {
                     .split_whitespace()
                     .filter_map(|pid| pid.parse().ok())
                     .collect();
-                if pids.len() == 2 && (!paused || marker.with_extension("paused").exists()) {
+                if pids.len() == 2 && marker.with_extension("guardian").exists() && (!paused || marker.with_extension("paused").exists()) {
+                    let mut pids = pids;
+                    pids.push(std::fs::read_to_string(marker.with_extension("guardian")).unwrap().parse().unwrap());
                     break pids;
                 }
             }

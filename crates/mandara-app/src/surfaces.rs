@@ -148,7 +148,7 @@ pub(super) fn enable_gpui_wallpapers(cx: &mut App) {
     for set in &mut state.sets {
         if set.wallpaper.is_none() {
             set.wallpaper = open_wallpaper(&set.spec, cx);
-            set.wallpaper_live = mandara_ui::wallpaper::live_on(&set.spec.monitor, cx);
+            set.wallpaper_live = mandara_ui::wallpaper::live_on(&set.spec.monitor);
         }
     }
     cx.set_global(state);
@@ -161,7 +161,7 @@ fn refresh_wallpaper_layers(cx: &mut App) {
     if !cx.global::<Surfaces>().gpui_wallpapers { return; }
     let mut state = std::mem::take(cx.global_mut::<Surfaces>());
     for set in &mut state.sets {
-        let live = mandara_ui::wallpaper::live_on(&set.spec.monitor, cx);
+        let live = mandara_ui::wallpaper::live_on(&set.spec.monitor);
         if set.wallpaper_live != live {
             if let Some(handle) = set.wallpaper.take() { close(handle, cx); }
             set.wallpaper = open_wallpaper(&set.spec, cx);
@@ -268,14 +268,14 @@ fn open(spec: Spec, wallpaper: bool, cx: &mut App) -> Option<SurfaceSet> {
     let strips = mandara_ui::shell::open_exclusion_strips(spec.display, spec.size, spec.monitor.clone(), cx);
     let wallpaper = wallpaper.then(|| open_wallpaper(&spec, cx)).flatten();
     tracing::info!("mandara shell surface on {} ({w}×{h} logical)", spec.monitor);
-    Some(SurfaceSet { wallpaper_live: mandara_ui::wallpaper::live_on(&spec.monitor, cx), spec, shell, wallpaper, strips })
+    Some(SurfaceSet { wallpaper_live: mandara_ui::wallpaper::live_on(&spec.monitor), spec, shell, wallpaper, strips })
 }
 
 fn open_wallpaper(spec: &Spec, cx: &mut App) -> Option<AnyWindowHandle> {
     let (w, h) = spec.size;
     let mut background = LayerSurfaceSpec::background(size(px(w), px(h)), spec.display);
     // The fallback clock stays above live renderers on the background layer.
-    background.layer = wallpaper_layer(mandara_ui::wallpaper::live_on(&spec.monitor, cx));
+    background.layer = wallpaper_layer(mandara_ui::wallpaper::live_on(&spec.monitor));
     let monitor = spec.monitor.clone();
     cx.open_window(background.window_options(), move |_, cx| cx.new(|cx| mandara_ui::wallpaper::WallpaperView::on_monitor(monitor, cx)))
         .map(Into::into).map_err(|err| tracing::error!("wallpaper surface: {err:#}")).ok()

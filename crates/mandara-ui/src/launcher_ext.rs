@@ -743,9 +743,11 @@ impl Usage {
 
     fn bound(&mut self) {
         self.entries.retain(|key, _| key.len() <= MAX_USAGE_KEY_BYTES);
-        while self.entries.len() > MAX_USAGE_ENTRIES {
-            let Some(oldest) = self.entries.iter().min_by_key(|(_, entry)| entry.last).map(|(key, _)| key.clone()) else { break };
-            self.entries.remove(&oldest);
+        if self.entries.len() > MAX_USAGE_ENTRIES {
+            let mut entries: Vec<_> = std::mem::take(&mut self.entries).into_iter().collect();
+            entries.select_nth_unstable_by(MAX_USAGE_ENTRIES, |a, b| b.1.last.cmp(&a.1.last).then_with(|| b.0.cmp(&a.0)));
+            entries.truncate(MAX_USAGE_ENTRIES);
+            self.entries = entries.into_iter().collect();
         }
     }
 }

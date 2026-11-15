@@ -553,12 +553,6 @@ pub(crate) fn stop_all(cx: &mut App) {
     settle(cx);
 }
 
-pub(crate) fn stop_on(output: &str, cx: &mut App) {
-    PENDING.with(|p| p.borrow_mut().stop_output(output));
-    stop_output(output, cx);
-    settle(cx);
-}
-
 /// Observes what ends scenes, from the first one on.
 fn watch(cx: &mut App) {
     if WATCH.with(|w| w.borrow().is_some()) {

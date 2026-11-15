@@ -97,15 +97,18 @@ pub(super) fn ready() -> async_channel::Receiver<()> {
     let (done, receive) = async_channel::bounded(1);
     state.ready = Some(receive.clone());
     mandara_services::runtime::spawn("launcher-usage-reader", async move {
-        let history = mandara_services::runtime::unblock(|| read_file(&super::usage_path())).await;
-        let mut state = STATE.lock().unwrap_or_else(|error| error.into_inner());
-        if state.install(history) {
-            WRITER.submit(Arc::new(state.usage.clone()));
-        }
-        drop(state);
+        let snapshot = mandara_services::runtime::unblock(|| initialize(&STATE, || read_file(&super::usage_path()))).await;
+        if let Some(snapshot) = snapshot { WRITER.submit(snapshot); }
         drop(done);
     });
     receive
+}
+
+fn initialize(state: &Mutex<State>, load: impl FnOnce() -> Usage) -> Option<Arc<Usage>> {
+    let mut history = load();
+    history.bound();
+    let mut state = state.lock().unwrap_or_else(|error| error.into_inner());
+    state.install(history).then(|| Arc::new(state.usage.clone()))
 }
 
 pub(super) fn read_file(path: &std::path::Path) -> Usage {
@@ -179,6 +182,32 @@ impl Writer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn large_history_is_prepared_without_holding_the_ui_state_lock() {
+        let state = Mutex::new(State::default());
+        let (loading, started) = std::sync::mpsc::channel();
+        let (resume, proceed) = std::sync::mpsc::channel();
+        std::thread::scope(|scope| {
+            let shared = &state;
+            let worker = scope.spawn(move || initialize(shared, || {
+                loading.send(()).unwrap();
+                proceed.recv().unwrap();
+                let mut history = Usage::default();
+                for index in 0..32_000 {
+                    history.entries.insert(format!("app:{index}"), UsageEntry { score: 1.0, last: index });
+                }
+                history
+            }));
+            started.recv().unwrap();
+            assert!(state.try_lock().is_ok(), "UI access stays available during import");
+            resume.send(()).unwrap();
+            assert!(worker.join().unwrap().is_none());
+        });
+        let state = state.lock().unwrap();
+        assert_eq!(state.usage.entries.len(), super::super::MAX_USAGE_ENTRIES);
+        assert_eq!(state.usage.entries.values().map(|entry| entry.last).min(), Some(32_000 - super::super::MAX_USAGE_ENTRIES as i64));
+    }
 
     #[test]
     fn launches_during_loading_match_serial_usage_across_half_life_edits() {

@@ -739,7 +739,7 @@ pub(crate) fn live_changed(cx: &mut App) {
 }
 
 /// Whether a renderer owns this output's wallpaper right now.
-pub fn live_on(output: &str, cx: &App) -> bool {
+pub fn live_on(output: &str) -> bool {
     crate::plugins::external::live::covers(output)
 }
 
@@ -1040,7 +1040,7 @@ impl Render for WallpaperView {
             let _ = window.drop_image(image);
         }
         let cfg = self.config.read(cx).snapshot();
-        let live = self.monitor.as_deref().is_some_and(|output| live_on(output, cx));
+        let live = self.monitor.as_deref().is_some_and(live_on);
         if !cfg.wallpaper.enabled || live {
             self.target = None;
             for shown in [self.current.take(), self.previous.take()].into_iter().flatten() {

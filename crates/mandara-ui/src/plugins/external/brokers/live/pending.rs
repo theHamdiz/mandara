@@ -65,9 +65,6 @@ impl Pending {
         }
     }
 
-    pub fn stop_output(&mut self, output: &str) {
-        self.0.remove(output);
-    }
 
     pub fn stop_plugin(&mut self, plugin: &str, only: Option<&str>) {
         self.0.retain(|output, start| {
@@ -131,7 +128,7 @@ mod tests {
         let outputs = vec!["DP-1".to_string()];
         let mut pending = Pending::default();
         let request = pending.begin("a", &outputs, wallpaper("/a"));
-        pending.stop_output("DP-1");
+        pending.stop_plugin("a", Some("DP-1"));
         assert!(
             pending
                 .complete(&request, outputs.clone(), &wallpaper("/a"), true)
