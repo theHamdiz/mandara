@@ -14,6 +14,10 @@ Install apps from any tar archive, tidy up the download afterwards, and skip the
 - Once an app is installed, the installer offers to move the file you installed it from to the Trash. Choose *Keep the file* or *Move it to the Trash* under Studio → Plugins → App installer → After installing to skip the question.
 - NixOS can download Mandara prebuilt instead of compiling it. Turn on `programs.mandara.binaryCache.enable`, or accept the cache when `nix run` asks; it applies when your Nixpkgs matches a current NixOS channel.
 
+### Fixed
+
+- The launcher stays responsive while a slow network or external drive loads recent files, wallpapers, or the app and icon catalog.
+
 ## 0.32.1 — 2026-11-15
 
 This update fixes session selection in Mandara Login.

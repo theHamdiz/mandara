@@ -103,15 +103,15 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         ID,
-        CommandSpec::new("launcher search", mandara_i18n::tk("What the launcher shows for a query (apps, settings, commands, slash commands, skills)"), |a, cx| {
-            Ok(crate::overlays::search_json(&a.rest(0), cx))
+        CommandSpec::new_output("launcher search", mandara_i18n::tk("What the launcher shows for a query (apps, settings, commands, slash commands, skills)"), |a, cx| {
+            crate::overlays::search_json(a.rest(0), cx)
         })
         .arg(ArgSpec::required("query", ArgKind::String, mandara_i18n::tk("search text, e.g. wallpaper or /g rust")))
         .example("launcher search background"),
     );
     r.command(
         LAUNCHER_ID,
-        CommandSpec::new("launcher run", mandara_i18n::tk("Activate a launcher result exactly as Enter would (--index N picks the Nth, --dry-run only reports what would run)"), |a, cx| {
+        CommandSpec::new_output("launcher run", mandara_i18n::tk("Activate a launcher result exactly as Enter would (--index N picks the Nth, --dry-run only reports what would run)"), |a, cx| {
             crate::overlays::run_json(&a.0, cx)
         })
         .arg(ArgSpec::required("query", ArgKind::String, mandara_i18n::tk("search text, optionally with --index N and --dry-run")))
