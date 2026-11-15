@@ -30,9 +30,13 @@ Studio refinements, optional bar and dock effects, richer third-party plugins, a
 
 - In right-to-left languages Studio's close button sits at the outer edge of the title bar.
 
+- Studio → Input now offers every keyboard layout and variant your system has, including the rarer ones such as Arabic (ErgoArabic), Arabic with 4th-level extensions and Sun Type 6/7, marked *Extra*; searching a variant's name, like “ergoarabic”, finds its layout.
+
 ### Fixed
 
 - Scrolling list views in third-party plugins no longer flicker back to their first rows after you stop scrolling.
+
+- When KWin is installed without Plasma's login session, `mandara setup --compositor kwin` and the installer now explain why the login screen can't offer it and name the package to install, and setup says when `--autostart` is needed for Mandara to start inside Plasma.
 
 ## 0.33.0 — 2026-11-15
 

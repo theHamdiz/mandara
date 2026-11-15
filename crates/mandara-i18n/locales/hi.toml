@@ -11274,3 +11274,8 @@
 "Job {id} has no file left to move to the Trash" = "जॉब {id} में ट्रैश में ले जाने के लिए कोई फ़ाइल नहीं बची"
 "Move the file a finished install came from to the Trash" = "पूरे हुए इंस्टॉल की फ़ाइल को ट्रैश में ले जाएँ"
 "Dry run: nothing was moved" = "ड्राई रन: कुछ भी नहीं हटाया गया"
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install {package} from your distribution, then choose Plasma at login." = "KWin इंस्टॉल है, लेकिन Plasma का लॉगिन सेशन नहीं है, इसलिए लॉगिन स्क्रीन इसे नहीं दिखा सकती। अपने डिस्ट्रीब्यूशन से {package} इंस्टॉल करें, फिर लॉगिन पर Plasma चुनें।"
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install your distribution’s Plasma workspace package, then choose Plasma at login." = "KWin इंस्टॉल है, लेकिन Plasma का लॉगिन सेशन नहीं है, इसलिए लॉगिन स्क्रीन इसे नहीं दिखा सकती। अपने डिस्ट्रीब्यूशन का Plasma वर्कस्पेस पैकेज इंस्टॉल करें, फिर लॉगिन पर Plasma चुनें।"
+"KWin: Mandara doesn’t start with Plasma yet. Run `mandara setup --compositor kwin --autostart` to add its startup entry, or start `mandara` yourself after logging in." = "KWin: Mandara अभी Plasma के साथ शुरू नहीं होता। इसकी स्टार्टअप प्रविष्टि जोड़ने के लिए `mandara setup --compositor kwin --autostart` चलाएँ, या लॉगिन के बाद `mandara` खुद शुरू करें।"
+"{variant} · extra" = "{variant} · अतिरिक्त"
+"Extra" = "अतिरिक्त"

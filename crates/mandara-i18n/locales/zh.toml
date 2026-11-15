@@ -11267,3 +11267,8 @@
 "Job {id} has no file left to move to the Trash" = "任务 {id} 没有可移到废纸篓的文件"
 "Move the file a finished install came from to the Trash" = "将已完成安装的源文件移到废纸篓"
 "Dry run: nothing was moved" = "试运行:未移动任何内容"
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install {package} from your distribution, then choose Plasma at login." = "KWin 已安装，但 Plasma 的登录会话没有安装，因此登录界面无法提供它。请从发行版安装 {package}，然后在登录时选择 Plasma。"
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install your distribution’s Plasma workspace package, then choose Plasma at login." = "KWin 已安装，但 Plasma 的登录会话没有安装，因此登录界面无法提供它。请安装发行版的 Plasma 工作空间软件包，然后在登录时选择 Plasma。"
+"KWin: Mandara doesn’t start with Plasma yet. Run `mandara setup --compositor kwin --autostart` to add its startup entry, or start `mandara` yourself after logging in." = "KWin：Mandara 还不会随 Plasma 启动。运行 `mandara setup --compositor kwin --autostart` 添加它的启动条目，或在登录后自行启动 `mandara`。"
+"{variant} · extra" = "{variant} · 额外"
+"Extra" = "额外"

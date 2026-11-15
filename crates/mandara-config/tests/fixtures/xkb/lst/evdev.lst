@@ -1,0 +1,16 @@
+! model
+  pc105           Generic 105-key PC
+
+! layout
+  ara             Arabic
+  us              English (US)
+
+! variant
+  azerty          ara: Arabic (AZERTY)
+  digits          ara: Arabic (Eastern Arabic numerals)
+  intl            us: English (US, intl., with dead keys)
+
+! option
+  grp                  Switching to another layout
+  grp:alt_shift_toggle Alt+Shift
+  ctrl:nocaps          Caps Lock as Ctrl

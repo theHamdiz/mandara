@@ -10930,3 +10930,8 @@
 "Job {id} has no file left to move to the Trash" = "Kazi {id} haina faili la kusogeza kwenda Taka"
 "Move the file a finished install came from to the Trash" = "Sogeza kwenda Taka faili la usakinishaji uliokamilika"
 "Dry run: nothing was moved" = "Jaribio kavu: hakuna kilichosogezwa"
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install {package} from your distribution, then choose Plasma at login." = "KWin imesakinishwa, lakini kipindi cha kuingia cha Plasma hakijasakinishwa, kwa hiyo skrini ya kuingia haiwezi kukitoa. Sakinisha {package} kutoka kwenye usambazaji wako, kisha chagua Plasma unapoingia."
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install your distribution’s Plasma workspace package, then choose Plasma at login." = "KWin imesakinishwa, lakini kipindi cha kuingia cha Plasma hakijasakinishwa, kwa hiyo skrini ya kuingia haiwezi kukitoa. Sakinisha kifurushi cha eneo la kazi la Plasma cha usambazaji wako, kisha chagua Plasma unapoingia."
+"KWin: Mandara doesn’t start with Plasma yet. Run `mandara setup --compositor kwin --autostart` to add its startup entry, or start `mandara` yourself after logging in." = "KWin: Mandara bado haianzi pamoja na Plasma. Endesha `mandara setup --compositor kwin --autostart` ili kuongeza ingizo lake la kuanza, au anzisha `mandara` mwenyewe baada ya kuingia."
+"{variant} · extra" = "{variant} · ziada"
+"Extra" = "Ziada"

@@ -11266,3 +11266,8 @@
 "Job {id} has no file left to move to the Trash" = "La tarea {id} no tiene ningún archivo que mover a la papelera"
 "Move the file a finished install came from to the Trash" = "Mover a la papelera el archivo del que vino una instalación terminada"
 "Dry run: nothing was moved" = "Simulación: no se movió nada"
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install {package} from your distribution, then choose Plasma at login." = "KWin está instalado, pero la sesión de inicio de Plasma no, así que la pantalla de inicio de sesión no puede ofrecerlo. Instala {package} desde tu distribución y luego elige Plasma al iniciar sesión."
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install your distribution’s Plasma workspace package, then choose Plasma at login." = "KWin está instalado, pero la sesión de inicio de Plasma no, así que la pantalla de inicio de sesión no puede ofrecerlo. Instala el paquete del espacio de trabajo de Plasma de tu distribución y luego elige Plasma al iniciar sesión."
+"KWin: Mandara doesn’t start with Plasma yet. Run `mandara setup --compositor kwin --autostart` to add its startup entry, or start `mandara` yourself after logging in." = "KWin: Mandara todavía no se inicia con Plasma. Ejecuta `mandara setup --compositor kwin --autostart` para añadir su entrada de inicio, o inicia `mandara` tú mismo después de iniciar sesión."
+"{variant} · extra" = "{variant} · extra"
+"Extra" = "Extra"

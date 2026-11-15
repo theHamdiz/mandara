@@ -11030,3 +11030,8 @@
 "Job {id} has no file left to move to the Trash" = "Tugas {id} tidak punya berkas untuk dipindahkan ke Tempat Sampah"
 "Move the file a finished install came from to the Trash" = "Pindahkan berkas asal pemasangan yang sudah selesai ke Tempat Sampah"
 "Dry run: nothing was moved" = "Uji coba: tidak ada yang dipindahkan"
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install {package} from your distribution, then choose Plasma at login." = "KWin sudah terpasang, tetapi sesi login Plasma belum, sehingga layar login tidak dapat menawarkannya. Pasang {package} dari distribusi Anda, lalu pilih Plasma saat login."
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install your distribution’s Plasma workspace package, then choose Plasma at login." = "KWin sudah terpasang, tetapi sesi login Plasma belum, sehingga layar login tidak dapat menawarkannya. Pasang paket ruang kerja Plasma dari distribusi Anda, lalu pilih Plasma saat login."
+"KWin: Mandara doesn’t start with Plasma yet. Run `mandara setup --compositor kwin --autostart` to add its startup entry, or start `mandara` yourself after logging in." = "KWin: Mandara belum berjalan bersama Plasma. Jalankan `mandara setup --compositor kwin --autostart` untuk menambahkan entri mulai otomatisnya, atau jalankan `mandara` sendiri setelah login."
+"{variant} · extra" = "{variant} · tambahan"
+"Extra" = "Tambahan"

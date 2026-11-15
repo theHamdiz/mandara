@@ -10930,3 +10930,8 @@
 "Job {id} has no file left to move to the Trash" = "Tác vụ {id} không còn tệp nào để chuyển vào Thùng rác"
 "Move the file a finished install came from to the Trash" = "Chuyển tệp của một lần cài đặt đã xong vào Thùng rác"
 "Dry run: nothing was moved" = "Chạy nháp: chưa chuyển gì"
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install {package} from your distribution, then choose Plasma at login." = "KWin đã được cài, nhưng phiên đăng nhập của Plasma thì chưa, nên màn hình đăng nhập không thể hiển thị nó. Hãy cài {package} từ bản phân phối của bạn, rồi chọn Plasma khi đăng nhập."
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install your distribution’s Plasma workspace package, then choose Plasma at login." = "KWin đã được cài, nhưng phiên đăng nhập của Plasma thì chưa, nên màn hình đăng nhập không thể hiển thị nó. Hãy cài gói không gian làm việc Plasma của bản phân phối, rồi chọn Plasma khi đăng nhập."
+"KWin: Mandara doesn’t start with Plasma yet. Run `mandara setup --compositor kwin --autostart` to add its startup entry, or start `mandara` yourself after logging in." = "KWin: Mandara chưa khởi động cùng Plasma. Chạy `mandara setup --compositor kwin --autostart` để thêm mục khởi động của nó, hoặc tự khởi động `mandara` sau khi đăng nhập."
+"{variant} · extra" = "{variant} · bổ sung"
+"Extra" = "Bổ sung"
