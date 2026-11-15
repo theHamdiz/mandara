@@ -251,7 +251,7 @@ struct Page {
     workshop_page: usize,
     workshop_query: String,
     workshop_busy: bool,
-    workshop_drawn: HashSet<(PathBuf, u32)>,
+    workshop_drawn: HashSet<mandara_ui::icon_raster::IconKey>,
     note: Option<(String, bool)>,
 }
 impl gpui::Global for Page {}
@@ -278,8 +278,8 @@ pub(super) fn release(cx: &mut App) {
     let drawn: Vec<(PathBuf, u32)> = page.drawn.iter().cloned().collect();
     let preview = page.preview.as_ref().and_then(|(_, r)| r.as_ref().ok()).map(|p| p.file.clone());
     let workshop = page.workshop_drawn.clone();
-    for (path, edge) in workshop {
-        mandara_ui::icon_raster::forget_cached_edge(&path, edge, cx);
+    for key in workshop {
+        mandara_ui::icon_raster::forget_workshop_preview(&key, None, cx);
     }
     for (thumb, w) in drawn {
         mandara_ui::icon_raster::forget_cached(&thumb, w as f32, scale, cx);
@@ -375,8 +375,8 @@ impl StudioView {
     fn set_wallpaper_tab(&mut self, tab: WallpaperTab, cx: &mut Context<Self>) {
         let from = st(cx).tab;
         if from == WallpaperTab::Workshop && tab != from {
-            for (path, edge) in std::mem::take(&mut st(cx).workshop_drawn) {
-                mandara_ui::icon_raster::forget_cached_edge(&path, edge, cx);
+            for key in std::mem::take(&mut st(cx).workshop_drawn) {
+                mandara_ui::icon_raster::forget_workshop_preview(&key, None, cx);
             }
         }
         if from == WallpaperTab::Generator && tab != from {
@@ -539,11 +539,11 @@ impl StudioView {
         let from = page_no * per_page;
         let to = (from + per_page).min(filtered.len());
         let visible = &filtered[from..to];
-        let current: HashSet<_> = visible.iter().filter_map(|item| item.preview.as_ref())
-            .map(|p| (p.clone(), mandara_ui::icon_raster::edge_for(width, scale))).collect();
+        let preview_key = |path: &std::path::Path| mandara_ui::icon_raster::IconKey::workshop_preview(path, width, scale);
+        let current: HashSet<_> = visible.iter().filter_map(|item| item.preview.as_deref()).map(preview_key).collect();
         let previous = std::mem::take(&mut st(cx).workshop_drawn);
-        for (path, edge) in previous.difference(&current) {
-            mandara_ui::icon_raster::forget_edge(path, *edge, window, cx);
+        for key in previous.difference(&current) {
+            mandara_ui::icon_raster::forget_workshop_preview(key, Some(window), cx);
         }
         st(cx).workshop_drawn = current;
         if visible.is_empty() {
@@ -558,7 +558,7 @@ impl StudioView {
                 .border_2()
                 .border_color(if active { p.primary.hsla() } else { gpui::transparent_black() })
                 .child(item.preview.as_ref().map(|path| {
-                    img(mandara_ui::icon_raster::source(path, width)).size_full().object_fit(gpui::ObjectFit::Cover).into_any_element()
+                    img(mandara_ui::icon_raster::workshop_source(preview_key(path))).size_full().object_fit(gpui::ObjectFit::Cover).into_any_element()
                 }).unwrap_or_else(|| placeholder("image", p)))
                 .when(active, |el| el.child(div().absolute().top(px(SPACE_6_PX)).inset_start(px(SPACE_6_PX)).child(tag("check", t("Current"), p))));
             div().id(SharedString::from(format!("workshop-apply-{id}"))).w_full()

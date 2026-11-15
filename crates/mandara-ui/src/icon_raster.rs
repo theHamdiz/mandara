@@ -20,12 +20,20 @@ use gpui::{App, Asset, ImageCacheError, ImageSource, RenderImage, Window};
 const SIZE_STEP_PX: u32 = 8;
 /// Largest bitmap edge decoded for an icon.
 const MAX_EDGE_PX: u32 = 512;
+const WORKSHOP_PREVIEW_EDGE: u32 = 4096;
 
 /// A colour icon file at a device-pixel edge.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct IconKey {
     pub path: Arc<Path>,
     pub edge: u32,
+    max_source_edge: Option<u32>,
+}
+
+impl IconKey {
+    pub fn workshop_preview(path: &Path, size: f32, scale: f32) -> Self {
+        Self { path: Arc::from(path), edge: edge_for(size, scale), max_source_edge: Some(WORKSHOP_PREVIEW_EDGE) }
+    }
 }
 
 /// [`Asset`] that decodes [`IconKey`]s off the UI thread.
@@ -38,7 +46,7 @@ impl Asset for SizedIcon {
     /// Moves file reads and SVG rasterization to a background task that owns
     /// the decode key independently of the element that requested it.
     fn load(source: Self::Source, cx: &mut App) -> impl std::future::Future<Output = Self::Output> + Send + 'static {
-        cx.background_executor().spawn(async move { decode(&source.path, source.edge) })
+        cx.background_executor().spawn(async move { decode(&source.path, source.edge, source.max_source_edge) })
     }
 }
 
@@ -62,7 +70,7 @@ pub fn source(path: &Path, size: f32) -> ImageSource {
     let path: Arc<Path> = Arc::from(path);
     ImageSource::Custom(Arc::new(move |window: &mut Window, cx: &mut App| {
         let edge = edge_for(size, window.scale_factor());
-        match window.use_asset::<SizedIcon>(&IconKey { path: path.clone(), edge }, cx) {
+        match window.use_asset::<SizedIcon>(&IconKey { path: path.clone(), edge, max_source_edge: None }, cx) {
             Some(ready) => {
                 if ready.is_ok() {
                     LAST_EDGE.with_borrow_mut(|last| last.insert(path.clone(), edge));
@@ -71,16 +79,34 @@ pub fn source(path: &Path, size: f32) -> ImageSource {
             }
             None => {
                 let previous = LAST_EDGE.with_borrow(|last| last.get(&path).copied()).filter(|e| *e != edge)?;
-                window.get_asset::<SizedIcon>(&IconKey { path: path.clone(), edge: previous }, cx)
+                window.get_asset::<SizedIcon>(&IconKey { path: path.clone(), edge: previous, max_source_edge: None }, cx)
             }
         }
     }))
 }
 
+/// Decode a Workshop asset with its source dimensions bounded.
+pub fn workshop_source(key: IconKey) -> ImageSource {
+    ImageSource::Custom(Arc::new(move |window: &mut Window, cx: &mut App| {
+        window.use_asset::<SizedIcon>(&key, cx)
+    }))
+}
+
+pub fn forget_workshop_preview(key: &IconKey, mut window: Option<&mut Window>, cx: &mut App) {
+    let image = match window.as_deref_mut() {
+        Some(window) => window.get_asset::<SizedIcon>(key, cx),
+        None => cx.loaded_asset::<SizedIcon>(key),
+    };
+    if let Some(Ok(image)) = image {
+        cx.drop_image(image, window);
+    }
+    cx.remove_asset::<SizedIcon>(key);
+}
+
 /// Drops `path`'s decoded bitmap for `size` (and its atlas texture in
 /// `window`); it is decoded again when next drawn.
 pub fn forget(path: &Path, size: f32, window: &mut Window, cx: &mut App) {
-    let key = IconKey { path: Arc::from(path), edge: edge_for(size, window.scale_factor()) };
+    let key = IconKey { path: Arc::from(path), edge: edge_for(size, window.scale_factor()), max_source_edge: None };
     if let Some(Ok(image)) = window.get_asset::<SizedIcon>(&key, cx) {
         cx.drop_image(image, Some(window));
     }
@@ -89,7 +115,7 @@ pub fn forget(path: &Path, size: f32, window: &mut Window, cx: &mut App) {
 
 /// [`forget`] for the bitmap decoded at device-pixel `edge` ([`edge_for`]).
 pub fn forget_edge(path: &Path, edge: u32, window: &mut Window, cx: &mut App) {
-    let key = IconKey { path: Arc::from(path), edge };
+    let key = IconKey { path: Arc::from(path), edge, max_source_edge: None };
     if let Some(Ok(image)) = window.get_asset::<SizedIcon>(&key, cx) {
         cx.drop_image(image, Some(window));
     }
@@ -99,7 +125,7 @@ pub fn forget_edge(path: &Path, edge: u32, window: &mut Window, cx: &mut App) {
 /// [`forget_edge`] without a window: the bitmap and its texture in every
 /// window that is not being updated right now. Never starts a decode.
 pub fn forget_cached_edge(path: &Path, edge: u32, cx: &mut App) {
-    let key = IconKey { path: Arc::from(path), edge };
+    let key = IconKey { path: Arc::from(path), edge, max_source_edge: None };
     if let Some(Ok(image)) = cx.loaded_asset::<SizedIcon>(&key) {
         cx.drop_image(image, None);
     }
@@ -113,15 +139,14 @@ pub fn forget_cached(path: &Path, size: f32, scale: f32, cx: &mut App) {
 }
 
 /// Borrows embedded artwork or owns file bytes for this decode, then returns
-/// one owned BGRA frame. Raster sources still decode before shrinking; only
-/// the returned bitmap is bounded by `edge`, not peak decoder memory.
-fn decode(path: &Path, edge: u32) -> Result<Arc<RenderImage>, ImageCacheError> {
+/// one owned BGRA frame. Workshop previews cap the input before decoding.
+fn decode(path: &Path, edge: u32, max_source_edge: Option<u32>) -> Result<Arc<RenderImage>, ImageCacheError> {
     let bytes = match crate::launcher_art::asset(path) {
         Some(bytes) => std::borrow::Cow::Borrowed(bytes),
         None => std::borrow::Cow::Owned(std::fs::read(path)?),
     };
-    let is_svg = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("svg") || e.eq_ignore_ascii_case("svgz"));
-    let rgba = if is_svg { render_svg(&bytes, edge)? } else { scale_raster(&bytes, edge)? };
+    let is_svg = max_source_edge.is_none() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("svg") || e.eq_ignore_ascii_case("svgz"));
+    let rgba = if is_svg { render_svg(&bytes, edge)? } else { scale_raster(&bytes, edge, max_source_edge)? };
     Ok(Arc::new(RenderImage::new(smallvec::smallvec![image::Frame::new(to_bgra(rgba))])))
 }
 
@@ -148,8 +173,16 @@ fn render_svg(bytes: &[u8], edge: u32) -> Result<image::RgbaImage, ImageCacheErr
 
 /// A raster icon, shrunk to fit `edge` when larger (never enlarged: GPUI
 /// scales it up on the GPU).
-fn scale_raster(bytes: &[u8], edge: u32) -> Result<image::RgbaImage, ImageCacheError> {
-    let img = image::load_from_memory(bytes).map_err(|e| ImageCacheError::Image(Arc::new(e)))?;
+fn scale_raster(bytes: &[u8], edge: u32, max_source_edge: Option<u32>) -> Result<image::RgbaImage, ImageCacheError> {
+    let decode = || {
+        let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format()?;
+        let mut limits = image::Limits::default();
+        limits.max_image_width = max_source_edge;
+        limits.max_image_height = max_source_edge;
+        reader.limits(limits);
+        reader.decode()
+    };
+    let img = decode().map_err(|err| ImageCacheError::Image(Arc::new(err)))?;
     if img.width().max(img.height()) <= edge {
         return Ok(img.into_rgba8());
     }
@@ -220,7 +253,7 @@ mod tests {
     fn bundled_launcher_art_is_coloured_and_sized_without_a_file() {
         for path in crate::launcher_art::ICONS.iter().map(|icon| icon.path).chain([crate::launcher_art::PHOENIX_PATH]) {
             for edge in [24, 40, 64] {
-                let image = decode(Path::new(path), edge).unwrap();
+                let image = decode(Path::new(path), edge, None).unwrap();
                 assert!(image.size(0).width.0 <= edge as i32 && image.size(0).height.0 <= edge as i32, "{path}");
                 let bytes = image.as_bytes(0).unwrap();
                 assert!(bytes.as_chunks::<4>().0.iter().any(|pixel| pixel[3] > 0), "{path} is blank");
@@ -236,9 +269,23 @@ mod tests {
         let frame = image::RgbaImage::from_pixel(96, 48, image::Rgba([255, 0, 0, 255]));
         image::codecs::gif::GifEncoder::new(std::fs::File::create(&gif).unwrap())
             .encode_frame(image::Frame::new(frame)).unwrap();
-        let preview = decode(&gif, 72).unwrap();
+        let preview = decode(&gif, 72, Some(WORKSHOP_PREVIEW_EDGE)).unwrap();
         assert_eq!((preview.size(0).width.0, preview.size(0).height.0), (72, 36));
         assert_eq!(&preview.as_bytes(0).unwrap()[..4], &[0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn workshop_previews_reject_oversized_dimensions() {
+        let dir = tempfile::tempdir().unwrap();
+        for (width, height) in [(WORKSHOP_PREVIEW_EDGE + 1, 1), (1, WORKSHOP_PREVIEW_EDGE + 1)] {
+            let png = dir.path().join("preview.png");
+            image::RgbaImage::new(width, height).save(&png).unwrap();
+            assert!(matches!(
+                decode(&png, 48, Some(WORKSHOP_PREVIEW_EDGE)),
+                Err(ImageCacheError::Image(err)) if matches!(&*err, image::ImageError::Limits(_))
+            ));
+            assert!(decode(&png, 48, None).is_ok());
+        }
     }
 
     #[test]
@@ -247,17 +294,17 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let svg = dir.join("big.svg");
         std::fs::write(&svg, r##"<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="512"><rect width="1024" height="512" fill="#ff0000"/></svg>"##).unwrap();
-        let img = decode(&svg, 72).unwrap();
+        let img = decode(&svg, 72, None).unwrap();
         assert_eq!((img.size(0).width.0, img.size(0).height.0), (72, 36), "fitted, aspect kept");
         // BGRA: red lands in the third byte.
         let first = &img.as_bytes(0).unwrap()[..4];
         assert_eq!((first[2], first[0], first[3]), (255, 0, 255));
         let png = dir.join("big.png");
         image::RgbaImage::from_pixel(256, 256, image::Rgba([0, 0, 255, 255])).save(&png).unwrap();
-        assert_eq!(decode(&png, 48).unwrap().size(0).width.0, 48);
+        assert_eq!(decode(&png, 48, None).unwrap().size(0).width.0, 48);
         let small = dir.join("small.png");
         image::RgbaImage::from_pixel(16, 16, image::Rgba([0, 0, 255, 255])).save(&small).unwrap();
-        assert_eq!(decode(&small, 48).unwrap().size(0).width.0, 16, "never enlarged");
+        assert_eq!(decode(&small, 48, None).unwrap().size(0).width.0, 16, "never enlarged");
         assert!(handles(&svg) && handles(&png) && !handles(&dir.join("x.xpm")));
         let _ = std::fs::remove_dir_all(dir);
     }

@@ -1,12 +1,13 @@
 //! Runs the external wallpaper renderer only on outputs with a Workshop selection.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use gpui::{App, Global, Task};
 use mandara_config::WorkshopOptions;
+use mandara_config::defaults::{WORKSHOP_FPS_RANGE, WORKSHOP_VOLUME_RANGE};
 use mandara_config::outputs::{SurfaceKind, assignment};
 use mandara_i18n::{t, tf, tk};
 use mandara_plugins::{
@@ -472,7 +473,7 @@ impl Running {
         cmd.args(["--layer", "background", "--screen-root", output, "--bg"])
             .arg(project.directory)
             .arg("--fps")
-            .arg(options.fps.clamp(1, 240).to_string())
+            .arg(options.fps.clamp(WORKSHOP_FPS_RANGE.0, WORKSHOP_FPS_RANGE.1).to_string())
             .arg("--screenshot")
             .arg(&capture)
             .stdin(Stdio::null());
@@ -482,7 +483,7 @@ impl Running {
         if options.mute {
             cmd.args(["--silent", "--noautomute", "--no-audio-processing"]);
         } else {
-            cmd.arg("--volume").arg(options.volume.min(100).to_string());
+            cmd.arg("--volume").arg(options.volume.clamp(WORKSHOP_VOLUME_RANGE.0, WORKSHOP_VOLUME_RANGE.1).to_string());
         }
         if !options.mouse {
             cmd.arg("--disable-mouse");
@@ -526,32 +527,12 @@ impl Running {
     }
 
     fn save_still(&self, id: u64) -> Result<PathBuf, String> {
-        use std::io::copy;
-        let directory = mandara_config::paths::data_dir()
-            .join("wallpapers")
-            .join("workshop");
-        std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
-        let path = directory.join(format!("{id}.jpg"));
-        if !path.is_file() {
-            let mut source = std::fs::File::open(&self.capture).map_err(|e| e.to_string())?;
-            let mut temp =
-                tempfile::NamedTempFile::new_in(&directory).map_err(|e| e.to_string())?;
-            copy(&mut source, &mut temp).map_err(|e| e.to_string())?;
-            temp.persist(&path).map_err(|e| e.to_string())?;
-        }
-        Ok(path)
+        let directory = mandara_config::paths::data_dir().join("wallpapers").join("workshop");
+        persist_still(&self.capture, &directory, id).map_err(|err| err.to_string())
     }
 
     fn has_frame(&self) -> bool {
-        use std::io::{Read as _, Seek as _, SeekFrom};
-        let Ok(mut file) = std::fs::File::open(&self.capture) else {
-            return false;
-        };
-        // The engine writes directly to the file; wait for the JPEG end marker.
-        let mut end = [0; 2];
-        file.seek(SeekFrom::End(-2)).is_ok()
-            && file.read_exact(&mut end).is_ok()
-            && end == [0xff, 0xd9]
+        std::fs::File::open(&self.capture).is_ok_and(|mut file| complete_jpeg(&mut file))
     }
 
     fn check(&mut self) -> Result<(), String> {
@@ -569,5 +550,59 @@ impl Drop for Running {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+    }
+}
+
+// The renderer writes directly to its capture file.
+fn complete_jpeg(file: &mut std::fs::File) -> bool {
+    use std::io::{Read as _, Seek as _, SeekFrom};
+
+    let mut end = [0; 2];
+    file.seek(SeekFrom::End(-2)).is_ok()
+        && file.read_exact(&mut end).is_ok()
+        && end == [0xff, 0xd9]
+}
+
+fn persist_still(capture: &Path, directory: &Path, id: u64) -> std::io::Result<PathBuf> {
+    use sha2::{Digest, Sha256};
+    use std::io::{self, Seek as _};
+
+    std::fs::create_dir_all(directory)?;
+    let mut temp = tempfile::NamedTempFile::new_in(directory)?;
+    io::copy(&mut std::fs::File::open(capture)?, &mut temp)?;
+    if !complete_jpeg(temp.as_file_mut()) {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "incomplete Workshop capture"));
+    }
+    // A changed capture gets a new path so the wallpaper cache loads its pixels.
+    let mut digest = Sha256::new();
+    temp.rewind()?;
+    io::copy(&mut temp, &mut digest)?;
+    let path = directory.join(format!("{id}-{:x}.jpg", digest.finalize()));
+    temp.persist(&path)?;
+    Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn saved_stills_follow_the_capture_and_reject_partial_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let capture = dir.path().join("capture.jpg");
+        let stills = dir.path().join("stills");
+        let first = b"first\xff\xd9";
+        let second = b"second\xff\xd9";
+        std::fs::write(&capture, first).unwrap();
+        let first_path = persist_still(&capture, &stills, 42).unwrap();
+        std::fs::write(&capture, second).unwrap();
+        let second_path = persist_still(&capture, &stills, 42).unwrap();
+        assert_ne!(first_path, second_path);
+        assert_eq!(std::fs::read(first_path).unwrap(), first);
+        assert_eq!(std::fs::read(&second_path).unwrap(), second);
+        assert_eq!(persist_still(&capture, &stills, 42).unwrap(), second_path);
+        std::fs::write(&capture, b"partial").unwrap();
+        assert_eq!(persist_still(&capture, &stills, 42).unwrap_err().kind(), std::io::ErrorKind::InvalidData);
+        assert_eq!(std::fs::read_dir(stills).unwrap().count(), 2);
     }
 }

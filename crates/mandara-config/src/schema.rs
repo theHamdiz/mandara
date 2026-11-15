@@ -19,6 +19,11 @@ const KM_PER_MILE: f32 = 1.609_344;
 
 /// Default values of the config schema, in one place.
 pub mod defaults {
+    pub const WORKSHOP_FPS: u32 = 30;
+    pub const WORKSHOP_FPS_RANGE: (u32, u32) = (1, 240);
+    pub const WORKSHOP_VOLUME: u32 = 15;
+    pub const WORKSHOP_VOLUME_RANGE: (u32, u32) = (0, 100);
+
     /// Pointer dwell on a screen edge before its overlay opens, ms.
     pub const EDGE_DWELL_MS: u64 = 140;
     /// Left sidebar width, logical px.
@@ -1656,8 +1661,8 @@ pub struct WorkshopOptions {
 impl Default for WorkshopOptions {
     fn default() -> Self {
         Self {
-            fps: 30,
-            volume: 15,
+            fps: defaults::WORKSHOP_FPS,
+            volume: defaults::WORKSHOP_VOLUME,
             mute: true,
             mouse: false,
             pause_fullscreen: true,

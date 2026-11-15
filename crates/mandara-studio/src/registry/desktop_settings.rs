@@ -2,6 +2,7 @@
 //! slideshow, interface style, date / time / calendar / location /
 //! weather, the lock screen's look, and hot / screen corners.
 
+use mandara_config::defaults::{WORKSHOP_FPS_RANGE, WORKSHOP_VOLUME_RANGE};
 use mandara_config::desktop::defaults::{SKETCH_DRAW_RANGE, SKETCH_LINE_RANGE, SLIDESHOW_INTERVAL_RANGE, SLIDESHOW_TRANSITION_RANGE, VIDEO_FPS_RANGE};
 use mandara_i18n::tk;
 
@@ -148,9 +149,9 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/save_still", tk("Save a still as the default wallpaper"), "", Toggle),
         s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/live", tk("Animated wallpaper"), "", Toggle),
         s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/scaling", tk("Fill mode"), "", Choice(WORKSHOP_SCALE)),
-        s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/fps", tk("Frame rate limit"), "", slider(1.0, 240.0, 1.0, " fps")),
+        s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/fps", tk("Frame rate limit"), "", slider(f64::from(WORKSHOP_FPS_RANGE.0), f64::from(WORKSHOP_FPS_RANGE.1), 1.0, " fps")),
         s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/mute", tk("Mute"), "", Toggle),
-        s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/volume", tk("Volume"), "", slider(0.0, 100.0, 1.0, "%")),
+        s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/volume", tk("Volume"), "", slider(f64::from(WORKSHOP_VOLUME_RANGE.0), f64::from(WORKSHOP_VOLUME_RANGE.1), 1.0, "%")),
         s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/mouse", tk("Mouse"), "", Toggle),
         s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/pause_fullscreen", tk("Pause during fullscreen"), "", Toggle),
         s(Plugins, tk("Wallpaper Engine"), "/wallpaper/workshop_options/steam_folder", tk("Wallpaper Engine folder"), tk("Enter a Steam library or Wallpaper Engine installation folder. Leave empty for automatic detection."), Text { placeholder: tk("Automatic") }),

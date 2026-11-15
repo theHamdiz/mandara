@@ -620,8 +620,11 @@ integer Workshop item IDs. Studio writes this mapping when you apply a scene.
 `[wallpaper.workshop_options]` controls `fps`, `volume`, `mute`, `mouse`,
 `pause_fullscreen`, `save_still`, `live`, `scaling`, the renderer `executable` and the optional `steam_folder`. An empty
 `steam_folder` detects Steam libraries automatically.
-Remove an entry to restore the regular wallpaper on that display. See
-[Steam Workshop](wallpapers.md#steam-workshop) for renderer requirements.
+Removing the display default leaves workspace overrides active. To restore
+the regular wallpaper on every workspace of that display, also remove its
+entries from `[wallpaper.workshop_workspaces.<output>]`, or clear each
+override with `mandara msg wallpaper workshop clear <output> <workspace>`.
+See [Steam Workshop](wallpapers.md#steam-workshop) for renderer requirements.
 
 ## Video wallpapers
 

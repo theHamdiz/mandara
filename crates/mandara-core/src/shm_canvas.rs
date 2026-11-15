@@ -378,6 +378,7 @@ struct Canvas {
     layer: zwlr_layer_surface_v1::ZwlrLayerSurfaceV1,
     canvas_layer: CanvasLayer,
     input_exclusions: Vec<Rect>,
+    input_dirty: bool,
     viewport: Option<wp_viewport::WpViewport>,
     fractional: Option<wp_fractional_scale_v1::WpFractionalScaleV1>,
     width: u32,
@@ -424,6 +425,17 @@ fn geometry_changed(placed_for: &mut Option<CanvasGeometry>, now: CanvasGeometry
 impl Canvas {
     fn geometry(&self) -> CanvasGeometry {
         CanvasGeometry { logical: (self.width, self.height), scale120: self.scale120(), buffer_scale: self.buffer_scale }
+    }
+
+    /// Fall back to integer scaling until the compositor sends a fractional preference.
+    fn update_integer_scale(&mut self, factor: i32) -> bool {
+        let factor = factor.max(1);
+        if self.scale120 != 0 || self.buffer_scale == factor {
+            return false;
+        }
+        self.buffer_scale = factor;
+        self.root_dirty = true;
+        true
     }
 
     /// Scale ×120 in effect (fractional when available, else integer).
@@ -778,6 +790,7 @@ impl Host {
             layer: ls,
             canvas_layer: layer,
             input_exclusions: Vec::new(),
+            input_dirty: false,
             viewport,
             fractional,
             width: 0,
@@ -830,6 +843,7 @@ impl Host {
             }
             c.input_exclusions.clear();
             c.input_exclusions.extend_from_slice(rects);
+            c.input_dirty = true;
         }
     }
 
@@ -1109,7 +1123,7 @@ impl Host {
         }
         let Some(c) = self.state.canvas_mut(id) else { return Ok(()) };
         // Nothing staged: no commit (the compositor would redo its work).
-        if !frame && !c.order_dirty && !c.root_dirty && c.root.is_some() && !c.planes.iter().any(|p| p.dirty) {
+        if !frame && !c.input_dirty && !c.order_dirty && !c.root_dirty && c.root.is_some() && !c.planes.iter().any(|p| p.dirty) {
             return Ok(());
         }
         if c.order_dirty {
@@ -1156,6 +1170,7 @@ impl Host {
             c.awaiting_since.get_or_insert(now);
         }
         c.surface.commit();
+        c.input_dirty = false;
         Ok(())
     }
 
@@ -1361,10 +1376,8 @@ impl Dispatch<wl_output::WlOutput, u32> for State {
         let Some(out) = state.outputs.iter_mut().find(|o| o.global == *global) else { return };
         if out.legacy.event(&event, out.output.version()) {
             if out.xdg_output.is_none() { out.resize_canvas(); }
-            if let Some(canvas) = out.canvas.as_mut()
-                && canvas.fractional.is_none()
-            {
-                canvas.buffer_scale = out.legacy.scale.max(1);
+            if let Some(canvas) = out.canvas.as_mut() {
+                canvas.update_integer_scale(out.legacy.scale);
             }
             state.changed = true;
         }
@@ -1410,10 +1423,8 @@ impl Dispatch<wl_surface::WlSurface, u32> for State {
     fn event(state: &mut Self, _: &wl_surface::WlSurface, event: wl_surface::Event, global: &u32, _: &Connection, _: &QueueHandle<Self>) {
         if let wl_surface::Event::PreferredBufferScale { factor } = event
             && let Some(c) = state.canvas_mut(*global)
-            && c.fractional.is_none()
-            && c.buffer_scale != factor
+            && c.update_integer_scale(factor)
         {
-            c.buffer_scale = factor;
             state.changed = true;
         }
     }
