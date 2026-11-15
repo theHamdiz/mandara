@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.34.0 — 2026-11-15
+
 Studio refinements, optional bar and dock effects, richer third-party plugins, and a responsive launcher.
 
 ### New
