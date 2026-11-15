@@ -24,7 +24,7 @@ mod catalogs;
 mod storage;
 pub use broker::{ImageEntry, ImageOrigin, Request, asset_path, is_image};
 pub use catalogs::PluginCatalogs;
-pub use storage::write as write_storage;
+pub use storage::write_snapshot as write_storage;
 
 use crate::extension::{self, Access};
 
@@ -515,7 +515,7 @@ impl WasmPlugin {
 
     /// Storage changed by the last calls: its file and new contents, for
     /// the host to write off the UI thread ([`write_storage`]).
-    pub fn take_storage_flush(&mut self) -> Option<(PathBuf, String)> {
+    pub fn take_storage_flush(&mut self) -> Option<(PathBuf, std::sync::Arc<str>)> {
         self.store.data_mut().storage.take_flush()
     }
 

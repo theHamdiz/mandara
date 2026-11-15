@@ -138,7 +138,7 @@ pub(crate) fn after_call(id: &str, plugin: &Shared, cx: &mut App) {
 #[derive(Default)]
 struct StorageWrites {
     newest: HashMap<std::path::PathBuf, u64>,
-    unsaved: HashMap<std::path::PathBuf, (u64, String)>,
+    unsaved: HashMap<std::path::PathBuf, (u64, std::sync::Arc<str>)>,
 }
 
 impl StorageWrites {
@@ -154,7 +154,7 @@ impl StorageWrites {
     }
 
     /// Every try failed: keep the snapshot if it is still the newest.
-    fn failed(&mut self, path: std::path::PathBuf, generation: u64, json: String) {
+    fn failed(&mut self, path: std::path::PathBuf, generation: u64, json: std::sync::Arc<str>) {
         if self.is_current(&path, generation) {
             self.unsaved.insert(path, (generation, json));
         }
@@ -167,7 +167,7 @@ impl StorageWrites {
     }
 
     /// The failed snapshots still worth writing (a newer one supersedes).
-    fn take_retries(&mut self) -> Vec<(std::path::PathBuf, String)> {
+    fn take_retries(&mut self) -> Vec<(std::path::PathBuf, std::sync::Arc<str>)> {
         let unsaved = std::mem::take(&mut self.unsaved);
         unsaved.into_iter().filter(|(path, (g, _))| self.is_current(path, *g)).map(|(path, (_, json))| (path, json)).collect()
     }
@@ -183,7 +183,7 @@ fn storage_writes<R>(f: impl FnOnce(&mut StorageWrites) -> R) -> R {
 /// the same file never land out of order: each carries a generation and
 /// only the newest one is written. Snapshots whose writes failed before are
 /// tried again first.
-fn write_storage_later(path: std::path::PathBuf, json: String, cx: &mut App) {
+fn write_storage_later(path: std::path::PathBuf, json: std::sync::Arc<str>, cx: &mut App) {
     let generation = storage_writes(|w| w.begin(&path));
     retry_unsaved_storage(cx);
     spawn_storage_write(path, generation, json, cx);
@@ -198,7 +198,7 @@ fn retry_unsaved_storage(cx: &mut App) {
     }
 }
 
-fn spawn_storage_write(path: std::path::PathBuf, generation: u64, json: String, cx: &mut App) {
+fn spawn_storage_write(path: std::path::PathBuf, generation: u64, json: std::sync::Arc<str>, cx: &mut App) {
     use std::sync::Mutex;
     // Serializes the disk writes; only background tasks take it, so the UI
     // thread never waits on a slow disk.
@@ -1055,7 +1055,7 @@ mod tests {
         let (a, b) = (Path::new("/s/a.json"), Path::new("/s/b.json"));
         let ga = w.begin(a);
         w.failed(a.into(), ga, "A1".into());
-        assert_eq!(w.take_retries(), [(a.to_path_buf(), "A1".to_string())], "kept after the tries ran out");
+        assert_eq!(w.take_retries(), [(a.to_path_buf(), std::sync::Arc::<str>::from("A1"))], "kept after the tries ran out");
         // Retried as a new generation that fails again, then succeeds.
         let ga = w.begin(a);
         w.failed(a.into(), ga, "A1".into());

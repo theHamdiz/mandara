@@ -3,8 +3,9 @@
 //! off the UI thread after a call that changed it. Bounded in keys, key
 //! and value length and total bytes; another plugin can't reach it.
 
-use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use crate::extension::{MAX_STORAGE_BYTES, MAX_STORAGE_KEY, MAX_STORAGE_KEYS, MAX_STORAGE_VALUE};
 
@@ -12,6 +13,16 @@ use crate::extension::{MAX_STORAGE_BYTES, MAX_STORAGE_KEY, MAX_STORAGE_KEYS, MAX
 /// overhead per key (quotes, colon, comma).
 const JSON_ESCAPE: usize = 6;
 const JSON_PER_KEY: usize = 8;
+
+/// Snapshots handed to the host that haven't reached the disk yet (being
+/// written, or kept after a failed write), newest per file. A plugin that
+/// reloads before its write lands starts from here, not from the older file,
+/// so a later edit can't build on stale data.
+static UNWRITTEN: Mutex<Option<HashMap<PathBuf, Arc<str>>>> = Mutex::new(None);
+
+fn unwritten<R>(f: impl FnOnce(&mut HashMap<PathBuf, Arc<str>>) -> R) -> R {
+    f(UNWRITTEN.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(HashMap::new))
+}
 
 pub struct Storage {
     path: PathBuf,
@@ -31,8 +42,10 @@ impl Storage {
         if self.map.is_none() {
             // A small file read once per instance; anything unreadable or
             // over the limits starts empty.
-            let map: BTreeMap<String, String> = std::fs::read(&self.path)
-                .ok()
+            let pending = unwritten(|u| u.get(&self.path).cloned());
+            let map: BTreeMap<String, String> = pending
+                .map(|json| json.as_bytes().to_vec())
+                .or_else(|| std::fs::read(&self.path).ok())
                 // JSON may escape a byte as six (`\u0000`), plus quotes,
                 // separators and braces per key.
                 .filter(|b| b.len() <= MAX_STORAGE_BYTES * JSON_ESCAPE + MAX_STORAGE_KEYS * JSON_PER_KEY)
@@ -86,12 +99,14 @@ impl Storage {
         self.dirty
     }
 
-    /// The file and its new contents, once, after a change.
-    pub fn take_flush(&mut self) -> Option<(PathBuf, String)> {
+    /// The file and its new contents, once, after a change. The snapshot
+    /// counts as this file's contents until [`write_snapshot`] lands it.
+    pub fn take_flush(&mut self) -> Option<(PathBuf, Arc<str>)> {
         if !std::mem::take(&mut self.dirty) {
             return None;
         }
-        let json = serde_json::to_string(self.map.as_ref()?).ok()?;
+        let json: Arc<str> = serde_json::to_string(self.map.as_ref()?).ok()?.into();
+        unwritten(|u| u.insert(self.path.clone(), json.clone()));
         Some((self.path.clone(), json))
     }
 }
@@ -104,9 +119,21 @@ fn within_limits(map: &BTreeMap<String, String>) -> bool {
         && map.iter().map(|(k, v)| k.len() + v.len()).sum::<usize>() <= MAX_STORAGE_BYTES
 }
 
+/// Writes a snapshot from [`Storage::take_flush`]; once it is on disk it no
+/// longer stands in for the file (unless a newer snapshot came since).
+pub fn write_snapshot(path: &Path, json: &Arc<str>) -> std::io::Result<()> {
+    write(path, json)?;
+    unwritten(|u| {
+        if u.get(path).is_some_and(|newest| Arc::ptr_eq(newest, json)) {
+            u.remove(path);
+        }
+    });
+    Ok(())
+}
+
 /// Writes a flushed storage file atomically (a temporary file renamed over
 /// it). Run off the UI thread.
-pub fn write(path: &std::path::Path, json: &str) -> std::io::Result<()> {
+pub fn write(path: &Path, json: &str) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -135,6 +162,9 @@ mod tests {
         write(&p, &json).unwrap();
         let mut again = Storage { path, map: None, bytes: 0, dirty: false };
         assert_eq!(again.keys().len(), 6, "nothing is lost on reload");
+        for i in 0..6 {
+            assert_eq!(again.get(&format!("k{i}")), Some("\0".repeat(MAX_STORAGE_VALUE - 8)), "values come back unchanged");
+        }
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -146,7 +176,10 @@ mod tests {
         let over_value = BTreeMap::from([("k".to_string(), "v".repeat(MAX_STORAGE_VALUE + 1))]);
         let over_total: BTreeMap<String, String> = (0..MAX_STORAGE_BYTES / MAX_STORAGE_VALUE + 1).map(|i| (format!("k{i}"), "v".repeat(MAX_STORAGE_VALUE - 8))).collect();
         let bad_key = BTreeMap::from([("a\u{7}".to_string(), "v".to_string())]);
-        for map in [over_value, over_total, bad_key] {
+        let empty_key = BTreeMap::from([(String::new(), "v".to_string())]);
+        let long_key = BTreeMap::from([("k".repeat(MAX_STORAGE_KEY + 1), "v".to_string())]);
+        let too_many: BTreeMap<String, String> = (0..=MAX_STORAGE_KEYS).map(|i| (format!("k{i}"), String::new())).collect();
+        for map in [over_value, over_total, bad_key, empty_key, long_key, too_many] {
             write(&path, &serde_json::to_string(&map).unwrap()).unwrap();
             let mut s = Storage { path: path.clone(), map: None, bytes: 0, dirty: false };
             assert!(s.keys().is_empty(), "refused on load");
@@ -154,6 +187,33 @@ mod tests {
         let good = BTreeMap::from([("k".to_string(), "v".to_string())]);
         write(&path, &serde_json::to_string(&good).unwrap()).unwrap();
         assert_eq!(Storage { path, map: None, bytes: 0, dirty: false }.get("k").as_deref(), Some("v"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A plugin reloaded before its write lands (or after it failed) starts
+    /// from the unwritten snapshot, so its next edit keeps the earlier one.
+    #[test]
+    fn a_reload_starts_from_the_unwritten_snapshot() {
+        let dir = std::env::temp_dir().join(format!("mandara-storage-pending-{}", std::process::id()));
+        let path = dir.join("p.json");
+        write(&path, "{}").unwrap();
+        let mut first = Storage { path: path.clone(), map: None, bytes: 0, dirty: false };
+        first.set("a".into(), "1".into()).unwrap();
+        let (_, failed) = first.take_flush().unwrap();
+        // The write failed (never landed); the plugin unloads and reloads.
+        drop(first);
+        let mut second = Storage { path: path.clone(), map: None, bytes: 0, dirty: false };
+        assert_eq!(second.get("a").as_deref(), Some("1"), "the unwritten edit is there");
+        second.set("b".into(), "2".into()).unwrap();
+        let (p, newest) = second.take_flush().unwrap();
+        // A late landing of the older snapshot doesn't clear the newer one.
+        write_snapshot(&p, &failed).unwrap();
+        assert!(unwritten(|u| u.contains_key(&path)));
+        // The disk recovers: the newest snapshot lands with both edits.
+        write_snapshot(&p, &newest).unwrap();
+        assert!(!unwritten(|u| u.contains_key(&path)));
+        let mut third = Storage { path, map: None, bytes: 0, dirty: false };
+        assert_eq!((third.get("a").as_deref(), third.get("b").as_deref()), (Some("1"), Some("2")));
         let _ = std::fs::remove_dir_all(dir);
     }
 
