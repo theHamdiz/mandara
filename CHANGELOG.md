@@ -6,7 +6,7 @@ About → What's new shows it too.
 
 ## Unreleased
 
-A calmer, more consistent Studio, with live chips in the bar, a richer dock and an optional grain texture, and an App Installer that takes any tar archive and tidies up the download afterwards.
+A calmer, more consistent Studio, with live chips in the bar, a richer dock and an optional grain texture; an App Installer that takes any tar archive and tidies up the download afterwards; and no compile on NixOS.
 
 ### New
 
@@ -24,6 +24,7 @@ A calmer, more consistent Studio, with live chips in the bar, a richer dock and 
 - In right-to-left languages Studio's close button sits at the outer edge of the title bar.
 - The App Installer takes plain `.tar` and `.tar.bz2` archives, and recognises every archive by what it really is, so a download no longer needs renaming to `.tar.gz` first.
 - Once an app is installed, the installer offers to move the file you installed it from to the Trash. Choose *Keep the file* or *Move it to the Trash* under Studio → Plugins → App installer → After installing to skip the question.
+- NixOS can download Mandara prebuilt instead of compiling it. Turn on `programs.mandara.binaryCache.enable`, or accept the cache when `nix run` asks; it applies when your Nixpkgs matches a current NixOS channel.
 
 ## 0.32.1 — 2026-11-15
 

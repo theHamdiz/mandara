@@ -1,6 +1,17 @@
 {
   description = "Mandara Shell: a design-first Wayland desktop shell for MangoWM, Niri, Hyprland, Sway, River Classic and Umbriel";
 
+  # Prebuilt Mandara from the binary cache (.github/workflows/nix-cache.yml).
+  # Nix asks before it uses these, and only honours them for trusted users;
+  # the NixOS module's `programs.mandara.binaryCache.enable` adds the cache
+  # system-wide. The key must match nix/nixos-module.nix.
+  nixConfig = {
+    extra-substituters = [ "https://mandara.cachix.org" ];
+    extra-trusted-public-keys = [
+      "mandara.cachix.org-1:oOp26vScHzVwCDKAGScpvgPFE8r06UQpDyCdA5u1gh8="
+    ];
+  };
+
   inputs.nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst";
   inputs.rust-overlay = {
     url = "github:oxalica/rust-overlay";
@@ -97,6 +108,7 @@
                 services.speechd.enable = false;
                 programs.mandara = {
                   enable = true;
+                  binaryCache.enable = true;
                   greeter.enable = true;
                   monitorBrightness.enable = true;
                 };
