@@ -159,7 +159,8 @@ mod tests {
         }
         let (p, json) = s.take_flush().unwrap();
         assert!(json.len() > MAX_STORAGE_BYTES * 2, "the file is larger than the decoded limit");
-        write(&p, &json).unwrap();
+        write_snapshot(&p, &json).unwrap();
+        assert!(!unwritten(|u| u.contains_key(&p)), "the reload below reads the file itself");
         let mut again = Storage { path, map: None, bytes: 0, dirty: false };
         assert_eq!(again.keys().len(), 6, "nothing is lost on reload");
         for i in 0..6 {
