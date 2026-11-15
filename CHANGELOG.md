@@ -21,7 +21,7 @@ each behind a permission you grant and can take back.
 ### Under the hood
 
 - Sensitive plugin actions (reading the clipboard, opening a page, setting a wallpaper, closing a window) only work right after you click or type in that plugin, plugin views, requests, queues and launcher time are bounded, and the compliance check now tries every new kind of plugin view.
-- The plugin interface is now one contract (`mandara:plugin@0.2.0`) with a single `render` for every surface; plugin authors build against it from the updated guide.
+- The plugin interface is now one contract (`mandara:plugin@0.2.0`) with a single `render` for every surface. Third-party plugins built for the earlier interface no longer load until their authors rebuild them against the updated guide.
 - Two programs loading the same plugin at once can no longer crash on a half-written compiled-plugin cache.
 
 

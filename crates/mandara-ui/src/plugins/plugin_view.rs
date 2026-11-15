@@ -551,6 +551,7 @@ fn image(n: &Node, id: ElementId, p: &MandaraPalette, frame: &Frame, window: &mu
         let thumbs = crate::wallpaper::thumbnails(cx);
         let ready = thumbs.read(cx).get_job(&job).cloned();
         if ready.is_none() && !thumbs.read(cx).failed_job(&job) {
+            redraw_when_made(window, &thumbs, cx);
             thumbs.update(cx, |t, cx| t.request_jobs([job], cx));
         }
         ready
@@ -562,6 +563,43 @@ fn image(n: &Node, id: ElementId, p: &MandaraPalette, frame: &Frame, window: &mu
         None => shell.bg(p.on_surface.with_alpha(PLACEHOLDER_ALPHA).hsla()),
     };
     clickable(shell, n, p, frame, window, cx)
+}
+
+/// Most views remembered as waiting for a picture at once (each redraw
+/// asks again while it still waits).
+const MAX_WAITING_VIEWS: usize = 32;
+
+thread_local! {
+    /// The views drawing a picture the thumbnail worker hasn't made yet, and
+    /// the one observer that redraws them when it finishes something.
+    static WAITING: std::cell::RefCell<(Option<gpui::Subscription>, smallvec::SmallVec<[gpui::EntityId; 4]>)> = const { std::cell::RefCell::new((None, smallvec::SmallVec::new_const())) };
+}
+
+/// Redraws the view being rendered once the thumbnail worker finishes a
+/// job. Each waiting view is notified once, then forgotten.
+fn redraw_when_made(window: &Window, thumbs: &gpui::Entity<crate::wallpaper::Thumbnails>, cx: &mut App) {
+    let view = window.current_view();
+    let observing = WAITING.with(|w| {
+        let mut w = w.borrow_mut();
+        if !w.1.contains(&view) {
+            if w.1.len() >= MAX_WAITING_VIEWS {
+                w.1.remove(0);
+            }
+            w.1.push(view);
+        }
+        w.0.is_some()
+    });
+    if !observing {
+        let subscription = cx.observe(thumbs, |_, cx| {
+            let views = WAITING.with(|w| std::mem::take(&mut w.borrow_mut().1));
+            for view in views {
+                if cx.entity_alive(view) {
+                    cx.notify(view);
+                }
+            }
+        });
+        WAITING.with(|w| w.borrow_mut().0 = Some(subscription));
+    }
 }
 
 fn canvas_marks(n: &Node, id: ElementId, p: &MandaraPalette) -> AnyElement {

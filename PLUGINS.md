@@ -480,7 +480,6 @@ Check light and dark themes and right-to-left languages before publishing.
 The moon-phase example shows each of these.
 
 ## Walkthrough: the moon-phase example
-## Walkthrough: the moon-phase example
 
 [`plugins/examples/moon-phase`](plugins/examples/moon-phase) is a complete
 plugin: a moon icon with the lit percentage in the bar, and a panel with

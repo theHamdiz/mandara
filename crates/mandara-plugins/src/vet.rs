@@ -193,7 +193,9 @@ fn unlinked_import<'a>(mut names: impl Iterator<Item = &'a str>) -> Option<Strin
 /// Some visible text, icons, controls or an image.
 fn has_content(view: &View) -> bool {
     view.nodes.iter().any(|n| match n.kind {
-        Kind::Text | Kind::Button | Kind::Icon => !n.text.trim().is_empty() || !n.children.is_empty(),
+        // A text node draws only its text; a button draws its children too.
+        Kind::Text | Kind::Icon => !n.text.trim().is_empty(),
+        Kind::Button => !n.text.trim().is_empty() || !n.children.is_empty(),
         Kind::Meter | Kind::Input | Kind::Toggle | Kind::Slider | Kind::Choice | Kind::Image | Kind::Canvas | Kind::List => true,
         Kind::Row | Kind::Column | Kind::Card | Kind::Group | Kind::Grid | Kind::Scroll | Kind::Spacer | Kind::Divider => false,
     })

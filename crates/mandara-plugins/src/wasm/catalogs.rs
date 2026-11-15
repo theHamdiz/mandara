@@ -84,7 +84,8 @@ impl PluginCatalogs {
             return;
         }
         // The untranslated text already counts against the budget.
-        let sent: usize = view.nodes.iter().map(|n| n.text.len() + n.hint.len() + n.options.iter().map(|o| o.label.len()).sum::<usize>()).sum();
+        // Every string the view check counts, as `check_view` counts them.
+        let sent: usize = view.focus.len() + view.nodes.iter().map(|n| n.id.len() + n.text.len() + n.hint.len() + n.action.len() + n.options.iter().map(|o| o.value.len() + o.label.len()).sum::<usize>()).sum::<usize>();
         let mut budget = crate::extension::MAX_VIEW_BYTES.saturating_sub(sent);
         for node in &mut view.nodes {
             // Each replacement may use what its original text used, plus

@@ -389,13 +389,18 @@ pub fn slant(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
     }
     let img = image::RgbaImage::from_raw(w + off, h, rgba).ok_or("bad output")?;
     cache::write(&out, |writer| image::DynamicImage::ImageRgba8(img).write_to(writer, image::ImageFormat::Png).map_err(|e| e.to_string()))?;
-    prune(&dir, 400 * 1024 * 1024);
+    let _ = prune(&dir, 400 * 1024 * 1024);
     Ok(out)
 }
 
+/// Set when pruning removed fitted images, so the worker forgets where
+/// they were (a remembered path to a deleted file would never be redone).
+static FIT_PRUNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Keeps a cache directory under `limit` bytes, oldest files first.
-fn prune(dir: &Path, limit: u64) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+/// Returns whether any file was removed.
+fn prune(dir: &Path, limit: u64) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else { return false };
     let mut files: Vec<(std::time::SystemTime, u64, PathBuf)> = entries
         .flatten()
         .filter_map(|e| {
@@ -405,17 +410,20 @@ fn prune(dir: &Path, limit: u64) {
         .collect();
     let mut total: u64 = files.iter().map(|f| f.1).sum();
     if total <= limit {
-        return;
+        return false;
     }
     files.sort();
+    let mut removed = false;
     for (_, len, path) in files {
         if total <= limit * 9 / 10 {
             break;
         }
         if std::fs::remove_file(&path).is_ok() {
             total -= len;
+            removed = true;
         }
     }
+    removed
 }
 
 /// A copy no larger than the output (physical pixels), so a 6000 px photo
@@ -495,11 +503,15 @@ pub fn fit(path: &Path, w: u32, h: u32) -> Result<PathBuf, String> {
         let rgba = out.to_rgba8();
         drop(out);
         cache::write(&png, |writer| image::codecs::png::PngEncoder::new(writer).write_image(rgba.as_raw(), rgba.width(), rgba.height(), image::ExtendedColorType::Rgba8).map_err(|e| e.to_string()))?;
-        prune(&dir, FIT_CACHE_BYTES);
+        if prune(&dir, FIT_CACHE_BYTES) {
+            FIT_PRUNED.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
         Ok(png)
     } else {
         save_jpeg(&out, &jpeg, THUMB_QUALITY)?;
-        prune(&dir, FIT_CACHE_BYTES);
+        if prune(&dir, FIT_CACHE_BYTES) {
+            FIT_PRUNED.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
         Ok(jpeg)
     }
 }
@@ -597,6 +609,11 @@ impl Thumbnails {
                     }
                     if t.failed.len() >= MAX_REMEMBERED_THUMBS {
                         t.failed = HashSet::new();
+                    }
+                    // Fitted images may have been pruned: they are made again
+                    // when next asked for (a cheap check when the file stayed).
+                    if FIT_PRUNED.swap(false, std::sync::atomic::Ordering::Relaxed) {
+                        t.ready.retain(|job, _| job.2 & FIT_JOB == 0);
                     }
                     match result {
                         Ok(thumb) => {

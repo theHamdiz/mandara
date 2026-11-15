@@ -348,7 +348,8 @@ pub(crate) fn load_component(path: &Path) -> Result<Component> {
     // would fault it.
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     let tmp = cache.with_extension(format!("{}.{}.tmp", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
-    if std::fs::write(&tmp, &compiled).is_ok() && std::fs::rename(&tmp, &cache).is_err() {
+    // Either step failing (a full disk) leaves no partial file behind.
+    if std::fs::write(&tmp, &compiled).and_then(|()| std::fs::rename(&tmp, &cache)).is_err() {
         let _ = std::fs::remove_file(&tmp);
     }
     // SAFETY: bytes just produced by `precompile_component` above.

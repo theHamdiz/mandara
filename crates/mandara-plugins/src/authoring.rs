@@ -142,8 +142,7 @@ pub struct WitCase {
 pub struct Contract {
     /// `package …;`
     pub package: String,
-    /// What a plugin provides (`world plugin` exports, then the
-    /// `desktop-plugin` world's desktop widgets).
+    /// What a plugin provides (`world plugin` exports).
     pub exports: Vec<WitFunc>,
     /// What Mandara provides (`interface host`).
     pub imports: Vec<WitFunc>,
@@ -230,11 +229,8 @@ pub fn parse_contract(wit: &str) -> Contract {
                 let decl = if block == Block::World { line.strip_prefix("export ") } else { Some(line) };
                 if let Some((name, sig)) = decl.and_then(|d| d.split_once(':')).filter(|(_, s)| s.trim_start().starts_with("func")) {
                     let f = WitFunc { name: name.trim().into(), signature: sig.trim().trim_end_matches(';').into(), doc: take_doc(&mut doc) };
-                    // `desktop-plugin` repeats the `plugin` world's exports.
                     if block == Block::World {
-                        if !c.exports.iter().any(|e| e.name == f.name) {
-                            c.exports.push(f);
-                        }
+                        c.exports.push(f);
                     } else {
                         c.imports.push(f);
                     }
@@ -370,8 +366,16 @@ mod tests {
         for p in PERMISSIONS {
             assert!(guide.contains(&format!("`{p}`")), "PLUGINS.md documents the {p} permission");
         }
-        for (name, value) in [("MAX_VIEW_NODES", crate::extension::MAX_VIEW_NODES), ("MAX_PAYLOAD_BYTES", crate::extension::MAX_PAYLOAD_BYTES), ("MAX_PENDING_REQUESTS", crate::extension::MAX_PENDING_REQUESTS), ("MAX_SUBSCRIPTIONS", crate::extension::MAX_SUBSCRIPTIONS), ("MAX_HITS", crate::extension::MAX_HITS)] {
-            assert!(guide.contains(&format!("{value} ")), "PLUGINS.md states {name} ({value})");
+        // Each limit in the sentence that documents it, not just the number.
+        use crate::extension as x;
+        for phrase in [
+            format!("more than {} nodes", x::MAX_VIEW_NODES),
+            format!("a request payload is at most {} bytes", x::MAX_PAYLOAD_BYTES),
+            format!("At most {} requests wait or run per plugin", x::MAX_PENDING_REQUESTS),
+            format!("{} subscriptions\nstay open", x::MAX_SUBSCRIPTIONS),
+            format!("At most {} results", x::MAX_HITS),
+        ] {
+            assert!(guide.contains(&phrase), "PLUGINS.md must say {phrase:?}");
         }
         assert!(guide.contains(&format!("{} ms launcher budget", crate::extension::LAUNCHER_BUDGET.as_millis())));
         assert!(guide.contains(&format!("API level {}", crate::extension::API_LEVEL)));

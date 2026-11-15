@@ -39,9 +39,15 @@ pub(super) fn choose_plugin_tab(page: &'static str, choice: Option<(String, Stri
 }
 
 /// The plugin tab shown on `page`, if one is chosen and still offered.
-fn chosen_plugin_tab(page: &str, cx: &gpui::App) -> Option<(String, String)> {
+/// A choice whose tab went (its plugin was disabled or removed) is
+/// forgotten, so the page doesn't jump to it if the plugin comes back.
+fn chosen_plugin_tab(page: &'static str, cx: &mut gpui::App) -> Option<(String, String)> {
     let chosen = cx.try_global::<PluginTabChoice>()?.0.get(page)?.clone();
-    mandara_ui::plugins::external::studio_tabs(page, cx).iter().any(|(plugin, _, tab)| *plugin == chosen.0 && tab.id == chosen.1).then_some(chosen)
+    let offered = mandara_ui::plugins::external::studio_tabs(page, cx).iter().any(|(plugin, _, tab)| *plugin == chosen.0 && tab.id == chosen.1);
+    if !offered {
+        choose_plugin_tab(page, None, cx);
+    }
+    offered.then_some(chosen)
 }
 
 /// The chosen plugin tab's body for the tab bar `id`, drawn in place of the

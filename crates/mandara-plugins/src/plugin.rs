@@ -196,7 +196,7 @@ impl ManifestSetting {
 }
 
 /// A desktop widget a third-party plugin offers, declared in plugin.toml
-/// and drawn by its `desktop-widget` export (the `desktop-plugin` world):
+/// and drawn by its `render` export with a desktop context:
 ///
 /// ```toml
 /// [[widgets]]

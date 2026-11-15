@@ -39,8 +39,7 @@ description = "قمر الليلة: طوره ونسبة إضاءته والأي�
 name = "Fase lunar"
 description = "La luna de esta noche: fase, iluminación y días hasta la luna llena"
 
-# A desktop widget (the plugin is built for the `desktop-plugin` world and
-# draws it in its `desktop-widget` export).
+# A desktop widget, drawn by `render` with a desktop context.
 [[widgets]]
 id = "moon"
 name = "Moon tonight"

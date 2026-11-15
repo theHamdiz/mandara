@@ -432,14 +432,17 @@ impl StudioView {
             mandara_plugins::guard(&format!("plugin `{}` test load", plugin.id), move || {
                 let start = Instant::now();
                 let mut w = wasm::WasmPlugin::load(&plugin.id, &plugin.dir, &plugin.entry, settings, access).map_err(|e| format!("{e:#}"))?;
-                let mut shown = |surface: wasm::SurfaceKind| {
+                // A refused view (over a limit) is an error to show, not an
+                // absent surface.
+                let mut shown = |surface: wasm::SurfaceKind| -> Result<bool, String> {
                     let context = wasm::RenderContext { surface, outlet: String::new(), instance: String::new(), width: 0.0, height: 0.0, numerals: String::new(), calendar: String::new(), language: String::new() };
-                    matches!(w.render(&palette, &context), Ok(Some(_)))
+                    w.render(&palette, &context).map(|view| view.is_some()).map_err(|e| format!("{e:#}"))
                 };
-                let (bar, panel, sidebar) = (shown(wasm::SurfaceKind::Bar), shown(wasm::SurfaceKind::Panel), shown(wasm::SurfaceKind::Sidebar));
+                let probed = (|| Ok::<_, String>((shown(wasm::SurfaceKind::Bar)?, shown(wasm::SurfaceKind::Panel)?, shown(wasm::SurfaceKind::Sidebar)?)))();
                 if let Some(reason) = w.disabled.clone() {
                     return Err(reason);
                 }
+                let (bar, panel, sidebar) = probed?;
                 Ok(TestReport { elapsed: start.elapsed(), bar, panel, sidebar })
             })
             .unwrap_or_else(|| Err("the loader crashed".into()))

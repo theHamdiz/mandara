@@ -218,8 +218,10 @@ impl Broker {
         if !subscription {
             self.outstanding.remove(at);
         }
+        // Errors are bounded like answers (another plugin can write them).
         let result = match result {
             Ok(body) if body.len() > extension::MAX_REPLY_BYTES => Err(format!("the reply was larger than {} bytes", extension::MAX_REPLY_BYTES)),
+            Err(why) if why.len() > extension::MAX_REPLY_BYTES => Err(format!("the error was larger than {} bytes", extension::MAX_REPLY_BYTES)),
             other => other,
         };
         if subscription && let Some(slot) = self.inbox.iter_mut().find(|w| w.id == id) {
