@@ -71,6 +71,9 @@ pub struct ShellConfig {
     pub typography: TypographyConfig,
     pub wallpaper: WallpaperConfig,
     pub launcher: LauncherConfig,
+    /// Grain over Studio, cards, bars, the launcher and panels (each off
+    /// until a style is picked).
+    pub grain: crate::grain::SurfaceGrain,
     /// The app dock (`crate::workflow`).
     pub dock: crate::workflow::DockConfig,
     /// The Alt-Tab window switcher.

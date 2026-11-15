@@ -135,24 +135,25 @@ fn read_body<'a>(r: &mut Release, lines: impl Iterator<Item = &'a str>) {
 
 /// Every release in a changelog, newest first as written.
 pub fn parse(text: &str) -> Vec<Release> {
-    let mut releases = Vec::new();
+    iter(text).collect()
+}
+
+/// The releases of a changelog one at a time, newest first as written:
+/// each is parsed only when asked for, so taking a few never reads the rest.
+pub fn iter(text: &str) -> impl Iterator<Item = Release> + '_ {
     let mut lines = text.lines().peekable();
-    while let Some(line) = lines.next() {
-        let Some((version, date)) = heading(line) else {
-            continue;
-        };
-        let mut body = Vec::new();
-        while let Some(next) = lines.peek() {
-            if next.starts_with("## ") {
-                break;
-            }
-            body.push(lines.next().expect("peeked"));
+    std::iter::from_fn(move || {
+        loop {
+            let line = lines.next()?;
+            let Some((version, date)) = heading(line) else {
+                continue;
+            };
+            let mut r = Release { version, date, ..Default::default() };
+            let body = std::iter::from_fn(|| lines.next_if(|next| !next.starts_with("## ")));
+            read_body(&mut r, body);
+            return Some(r);
         }
-        let mut r = Release { version, date, ..Default::default() };
-        read_body(&mut r, body.into_iter());
-        releases.push(r);
-    }
-    releases
+    })
 }
 
 /// A release body without its heading (a GitHub release's notes). Text
@@ -165,7 +166,17 @@ pub fn parse_notes(version: &str, body: &str) -> Release {
 
 /// The compiled-in releases, without an empty Unreleased.
 pub fn releases() -> Vec<Release> {
-    parse(TEXT).into_iter().filter(|r| !(r.is_unreleased() && r.is_empty())).collect()
+    published(TEXT).collect()
+}
+
+/// The newest `n` compiled-in releases (without an empty Unreleased),
+/// parsed without reading the older ones: what Studio keeps in memory.
+pub fn recent(n: usize) -> Vec<Release> {
+    published(TEXT).take(n).collect()
+}
+
+fn published(text: &str) -> impl Iterator<Item = Release> + '_ {
+    iter(text).filter(|r| !(r.is_unreleased() && r.is_empty()))
 }
 
 /// `0.1.2` (and `0.1.3-dev`, `v0.1.2`) → (0, 1, 2).
@@ -437,6 +448,19 @@ mod tests {
         // A written summary is kept as it is.
         let written = text.replace("## Unreleased\n\n", "## Unreleased\n\nOur own words.\n\n");
         assert_eq!(release(&parse(&stamp(&written, "0.2.0", "2026-11-02", &[])), "0.2.0").unwrap().summary, "Our own words.");
+    }
+
+    #[test]
+    fn recent_releases_are_the_newest_without_parsing_the_rest() {
+        let all = releases();
+        let recent = recent(5);
+        assert_eq!(recent.len(), all.len().min(5));
+        assert!(recent.iter().zip(&all).all(|(a, b)| a.version == b.version && a.sections.len() == b.sections.len()));
+        let text = "## 0.2.0\nTwo.\n### New\n- b\n## 0.1.0\nOne.\n";
+        let mut first = iter(text);
+        assert_eq!(first.next().map(|r| r.version), Some("0.2.0".to_string()));
+        assert_eq!(first.next().map(|r| r.summary), Some("One.".to_string()));
+        assert!(first.next().is_none());
     }
 
     #[test]

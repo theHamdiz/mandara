@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 pub use crate::components::{ButtonDesign, CardStyle, ChipDesign, InputDesign, ProgressDesign, SurfaceCorners, ToggleDesign};
+pub use crate::grain::{Grain, GrainStyle, GrainTint};
 
 /// Default values of this module, in one place.
 pub mod defaults {

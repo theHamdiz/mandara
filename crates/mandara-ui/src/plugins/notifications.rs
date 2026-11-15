@@ -1,4 +1,5 @@
-//! Notification center: bell with unread count in the bar; panel and
+//! Notification center: bell with unread count in the bar (or a chip with
+//! the latest notification, [`bar`]); panel and
 //! sidebar card listing notifications grouped by app (app icon, count,
 //! per-app clear), glass notification cards with actions and dismiss, a
 //! do-not-disturb pill and clear-all. Popups (toasts) are drawn by the
@@ -36,6 +37,7 @@ use crate::icons::icon;
 use crate::kit::{card, icon_button, reveal, text, tokens};
 
 mod activation;
+mod bar;
 mod swipe;
 
 pub const ID: &str = "notifications";
@@ -882,18 +884,9 @@ fn parse_duration(s: &str) -> Option<i64> {
 
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Notifications"), tk("Notification center with history and do-not-disturb"), Some(Zone::Right)), |window, cx, panel_cx| {
-        let bar = domain_view(Domains::NOTIFICATIONS,
-            None,
-            |palette, _, cx| {
-                let st = &hub(cx).read(cx).notifications;
-                let unread = st.unread();
-                let size = crate::style::bar_icon(BAR_ICON_PX);
-                let bell = icon(if st.quiet() { "moon" } else { "bell" }, size, if unread > 0 { palette.primary } else { palette.on_surface });
-                crate::bar::badge::counted(bell, size, unread, crate::bar::badge::Badge { fill: palette.primary, ink: palette.on_primary, glow: None }, ID, palette, cx)
-            },
-            window,
-            cx,
-        );
+        // The bell and badge, or the latest notification's chip ([`bar`]).
+        let latest = RefCell::new(bar::Latest::default());
+        let bar = domain_view(Domains::NOTIFICATIONS, None, move |palette, _, cx| bar::render(&latest, palette, cx), window, cx);
         let p = panel_cx.clone();
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(INITIAL_PANEL_H))));
         let sc = size_cell.clone();

@@ -100,8 +100,10 @@ const FEATURED: &[&str] = &["media", "wallpaper", "weather", "clipboard", "scree
 
 // ── Layout ───────────────────────────────────────────────────────────────
 
-/// The store search field beside the navigation.
-const SEARCH_W_PX: f32 = 300.0;
+/// The store's inset search field.
+const SEARCH_FIELD_H_PX: f32 = 40.0;
+/// From this page width the tabs fit in one row; narrower, they scroll.
+const STORE_TABS_FIT_FROM_PX: f32 = 900.0;
 /// Hero: height per unit of the column width, within these bounds.
 const HERO_ASPECT: f32 = 0.36;
 const HERO_MIN_H_PX: f32 = 300.0;
@@ -851,13 +853,21 @@ impl StudioView {
                 }
             }));
         }
-        let header = self.store_header(p, cx);
-        let body = match self.plugins_tab {
-            PluginsTab::Discover => self.discover(cfg, p, window, cx),
-            PluginsTab::Installed => self.library(cfg, p, cx),
-            PluginsTab::Updates => self.updates_view(p, cx),
-            PluginsTab::Marketplace => self.marketplace(p, cx),
-            PluginsTab::Local => self.plugins_local(cfg, p, cx),
+        // Discover's categories sit in the toolbar, over the shelves.
+        let discover = (self.plugins_tab == PluginsTab::Discover).then(|| {
+            let all = listed(cfg, cx);
+            let chips = self.discover_chips(&all, p, cx);
+            (all, chips)
+        });
+        let (all, chips) = discover.map_or((None, None), |(all, chips)| (Some(all), Some(chips)));
+        let header = self.store_header(chips, p, cx);
+        let body = match (self.plugins_tab, all) {
+            (PluginsTab::Discover, Some(all)) => self.discover(all, cfg, p, window, cx),
+            (PluginsTab::Discover, None) => div().into_any_element(),
+            (PluginsTab::Installed, _) => self.library(cfg, p, cx),
+            (PluginsTab::Updates, _) => self.updates_view(p, cx),
+            (PluginsTab::Marketplace, _) => self.marketplace(p, cx),
+            (PluginsTab::Local, _) => self.plugins_local(cfg, p, cx),
         };
         div().row().flex_col().gap(px(SPACE_20_PX)).child(header).child(body).into_any_element()
     }
@@ -903,6 +913,8 @@ impl StudioView {
                 }),
                 cx,
             )
+            // The toolbar draws the search's shape.
+            .bare()
         });
         self.store.search = Some(field.clone());
         field
@@ -910,7 +922,7 @@ impl StudioView {
 
     /// Navigation (Discover · Installed · Updates · Community · Develop)
     /// and, where it applies, the search field.
-    fn store_header(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    fn store_header(&mut self, chips: Option<AnyElement>, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let local = self.local_follow(cx);
         let installed = cx.global::<PluginRegistry>().manifests().filter(|m| !HIDDEN_PLUGINS.contains(&m.id.as_str())).count();
         let updates = self.updates.plugins.iter().filter(|u| u.available).count();
@@ -925,21 +937,22 @@ impl StudioView {
                     PluginsTab::Local => (local, false),
                     _ => (None, false),
                 };
-                let fg = if active { p.on_primary } else { p.on_surface_variant };
+                // A raised segment marks the tab; the accent stays for actions.
+                let fg = if active { p.on_surface } else { p.on_surface_variant };
                 div()
                     .id(SharedString::from(format!("plugins-tab-{}", tab.slug())))
                     .h(px(SEGMENT_H_PX))
-                    .px(px(SPACE_14_PX))
+                    .px(px(SPACE_12_PX))
                     .rounded_full()
                     .row()
                     .items_center()
-                    .gap(px(SPACE_8_PX))
+                    .gap(px(SPACE_6_PX))
                     .cursor_pointer()
                     .text_size(px(TEXT_13_PX))
                     .font_weight(if active { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
-                    .when(active, |el| el.bg(p.primary.hsla()).text_color(p.on_primary.hsla()).shadow(mandara_core::glass_rim(p.specular_rim_light, p.specular_rim_shadow)))
-                    .when(!active, |el| el.text_color(p.on_surface_variant.hsla()).hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_8).hsla())))
-                    .child(icon(tab.icon(), ICON_14_PX, fg))
+                    .when(active, |el| el.bg(p.surface_container_high.hsla()).text_color(p.on_surface.hsla()).shadow(mandara_core::glass_rim(p.specular_rim_light, p.specular_rim_shadow)))
+                    .when(!active, |el| el.text_color(p.on_surface_variant.hsla()).hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_6).hsla())))
+                    .child(icon(tab.icon(), ICON_14_PX, if active { p.primary } else { fg }))
                     .child(tab.label())
                     .when_some(count, |el, n| {
                         let tint = if alert && !active { p.warning_amber } else { fg };
@@ -960,30 +973,90 @@ impl StudioView {
                                 .child(n.to_string()),
                         )
                     })
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.store_tab(tab, cx)))
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        // The end of a drag along the narrow strip isn't a click.
+                        if !grid::strip("store-tabs").dragged() {
+                            this.store_tab(tab, cx)
+                        }
+                    }))
                     .into_any_element()
             })
             .collect();
+        // The tabs scroll sideways on a narrow page instead of wrapping.
+        // One toolbar: the places, the search and (on Discover) the
+        // categories share a single surface, divided by hairlines.
+        // A segmented track: the tabs sit in one quiet groove and the open
+        // one is raised out of it.
         let nav = div()
             .p(px(SEGMENT_PAD_PX))
             .rounded_full()
+            .bg(p.on_surface.with_alpha(ALPHA_5).hsla())
             .row()
-            .flex_wrap()
-            .gap(px(SEGMENT_PAD_PX))
-            .bg(p.surface_container.hsla())
-            .shadow(mandara_core::glass_rim(p.specular_rim_light, p.specular_rim_shadow))
-            .children(segments);
-        let searchable = !matches!(current, PluginsTab::Local | PluginsTab::Updates);
-        let search = searchable.then(|| self.store_search(cx));
-        div()
-            .row()
-            .flex_wrap()
+            .flex_none()
             .items_center()
-            .gap(px(SPACE_12_PX))
-            .child(nav)
-            .child(div().flex_1())
-            .when_some(search, |el, field| el.child(div().w(px(SEARCH_W_PX)).max_w_full().row().items_center().gap(px(SPACE_8_PX)).child(icon("search", ICON_15_PX, p.on_surface_variant)).child(div().flex_1().min_w(px(0.0)).child(field))))
-            .into_any_element()
+            .gap(px(SEGMENT_PAD_PX))
+            .children(segments);
+        let track_h = SEGMENT_H_PX + 2.0 * SEGMENT_PAD_PX;
+        let nav = if self.page.column_w >= STORE_TABS_FIT_FROM_PX {
+            nav.into_any_element()
+        } else {
+            let strip = grid::strip("store-tabs");
+            let row = strip.row("store-tabs").row().items_center().h(px(track_h)).child(nav);
+            strip.with_chevrons("store-tabs", row, track_h, p)
+        };
+        // The search: an inset field with a clear button and, while it
+        // filters, how many plugins match. The categories sit right under
+        // it, in the same filter well.
+        let searchable = !matches!(current, PluginsTab::Local | PluginsTab::Updates);
+        let query = self.store.query.trim().to_string();
+        let search = searchable.then(|| {
+            let field = self.store_search(cx);
+            let clear = (!query.is_empty()).then(|| {
+                div()
+                    .id("store-search-clear")
+                    .flex_none()
+                    .size(px(DIM_24_PX))
+                    .rounded_full()
+                    .row()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .bg(p.on_surface.with_alpha(ALPHA_8).hsla())
+                    .hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_14).hsla()))
+                    .tooltip(super::compositor_page::tip(t("Clear"), p))
+                    .child(icon("close", ICON_12_PX, p.on_surface_variant))
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.store.query.clear();
+                        if let Some(field) = &this.store.search {
+                            field.update(cx, |f, _| f.set(""));
+                        }
+                        if this.plugins_tab == PluginsTab::Marketplace {
+                            this.market_follow_query(String::new(), true, cx);
+                        }
+                        cx.notify();
+                    }))
+            });
+            div()
+                .w_full()
+                .h(px(SEARCH_FIELD_H_PX))
+                .px(px(SPACE_14_PX))
+                .rounded_full()
+                .bg(p.surface_base.with_alpha(ALPHA_70).hsla())
+                .border_1()
+                .border_color(super::grouped::hairline(p))
+                .row()
+                .items_center()
+                .gap(px(SPACE_10_PX))
+                .child(icon("search", ICON_15_PX, p.on_surface_variant))
+                .child(div().flex_1().min_w(px(0.0)).child(field))
+                .children(clear)
+        });
+        // A row, so the track hugs its tabs instead of spanning the toolbar.
+        let mut rows: Vec<AnyElement> = vec![div().w_full().px(px(SPACE_12_PX)).py(px(SPACE_12_PX)).row().items_center().child(div().min_w(px(0.0)).max_w_full().child(nav)).into_any_element()];
+        if search.is_some() || chips.is_some() {
+            rows.push(div().w_full().px(px(SPACE_12_PX)).pt(px(SPACE_12_PX)).pb(px(SPACE_14_PX)).row().flex_col().gap(px(SPACE_12_PX)).children(search).children(chips).into_any_element());
+        }
+        super::grouped::group(rows, false, p).into_any_element()
     }
 
     /// A row of filter chips; `chips` are (filter, label, count).
@@ -991,7 +1064,8 @@ impl StudioView {
         let current = self.store.filter;
         let row = chips.into_iter().enumerate().map(|(i, (filter, label, count))| {
             let active = filter == current;
-            let fg = if active { p.on_primary } else { p.on_surface };
+            // The chosen category in ink, the rest quiet: one row, no accent.
+            let fg = if active { p.surface_base } else { p.on_surface };
             div()
                 .id(SharedString::from(format!("store-chip-{i}")))
                 .h(px(CHIP_H_PX))
@@ -1004,10 +1078,9 @@ impl StudioView {
                 .text_size(px(TEXT_12_5_PX))
                 .font_weight(FontWeight::MEDIUM)
                 .justify_center()
-                .bg(if active { p.primary.hsla() } else { p.surface_container.hsla() })
+                .bg(if active { p.on_surface.hsla() } else { p.on_surface.with_alpha(ALPHA_6).hsla() })
                 .text_color(fg.hsla())
-                .shadow(mandara_core::glass_rim(p.specular_rim_light, p.specular_rim_shadow))
-                .when(!active, |el| el.hover(|s| s.bg(p.surface_container_high.hsla())))
+                .when(!active, |el| el.hover(|s| s.bg(p.on_surface.with_alpha(ALPHA_10).hsla())))
                 .child(div().min_w(px(0.0)).truncate().child(label))
                 .when_some(count, |el, n| el.child(div().flex_none().text_color(fg.with_alpha(ALPHA_70).hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(n.to_string())))
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
@@ -1018,7 +1091,9 @@ impl StudioView {
                 }))
                 .into_any_element()
         });
-        grid::chips(self.page.column_w, "store-chips", CHIP_H_PX, row.collect(), p)
+        let strip = grid::strip("store-chips");
+        let row = strip.row("store-chips").row().items_center().gap(px(SPACE_8_PX)).h(px(CHIP_H_PX)).children(row.map(|c| div().flex_none().child(c)));
+        strip.with_chevrons("store-chips", row, CHIP_H_PX, p)
     }
 
     // ── Get / On ─────────────────────────────────────────────────────────
@@ -1127,7 +1202,8 @@ impl StudioView {
                             .row()
                             .items_center()
                             .gap(px(SPACE_6_PX))
-                            .child(badge(badge_text, badge_color))
+                            // Mandara's own plugins need no maker badge; others say who made them.
+                            .when(m.origin != PluginOrigin::Builtin, |el| el.child(badge(badge_text, badge_color)))
                             .children(state)
                             .child(div().flex_1())
                             .child(button),
@@ -1141,9 +1217,8 @@ impl StudioView {
 
     // ── Discover ─────────────────────────────────────────────────────────
 
-    fn discover(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        let all = listed(cfg, cx);
-        self.market_prime(cx);
+    /// Discover's category strip (with counts), for the toolbar.
+    fn discover_chips(&mut self, all: &[(bool, PluginManifest)], p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let mut chips = vec![(Filter::All, t("All").to_string(), None)];
         for (i, shelf) in SHELVES.iter().enumerate() {
             let n = all.iter().filter(|(_, m)| shelf_of(m) == Some(i)).count();
@@ -1153,12 +1228,15 @@ impl StudioView {
         if third > 0 {
             chips.push((Filter::ThirdParty, t("Third-party").to_string(), Some(third)));
         }
-        let chips = self.chip_row(chips, p, cx);
+        self.chip_row(chips, p, cx)
+    }
+
+    fn discover(&mut self, all: Vec<(bool, PluginManifest)>, cfg: &ShellConfig, p: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        self.market_prime(cx);
         let terms = terms(&self.store.query);
         if !terms.is_empty() || self.store.filter != Filter::All {
             self.store.hero.stop();
-            let results = self.discover_results(&all, &terms, cfg, p, cx);
-            return div().row().flex_col().gap(px(SPACE_20_PX)).child(chips).child(results).into_any_element();
+            return self.discover_results(&all, &terms, cfg, p, cx);
         }
 
         let fit = grid::fit(self.page.column_w, STORE_CARD_GRID);
@@ -1167,7 +1245,6 @@ impl StudioView {
         if !featured.is_empty() {
             page = page.child(self.discover_hero(&featured, cfg, p, window, cx));
         }
-        page = page.child(chips);
         page = page.children(self.new_and_updated(&all, fit, cfg, p, cx));
         for (i, shelf) in SHELVES.iter().enumerate() {
             let items: Vec<&(bool, PluginManifest)> = all.iter().filter(|(_, m)| shelf_of(m) == Some(i)).collect();

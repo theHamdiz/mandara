@@ -373,6 +373,9 @@ impl StudioView {
         for component in COMPONENTS {
             section = section.child(self.component_card(component, cfg, p, cx));
         }
+        // Grain: one group per surface (a fold each), off until a style is picked.
+        let grain = self.rows(registry::settings().iter().filter(|s| registry::grain_settings::GROUPS.contains(&s.group)), cfg, p, cx);
+        let section = section.child(super::grouped::section(super::grouped::header(t("Grain"), Some(t("A fine texture for Studio, cards, bars, the launcher and panels. Each surface has its own; all stay subtle.").into()), Vec::new(), p), grain));
         let head = super::fold::FoldHead { title: t("Studio design").into(), preview: t("Fine-tune your Studio Look").to_string(), badge: None, trailing: None, closed: true };
         section.child(self.fold("Studio design", head, p, cx, |this, cx| this.rows(registry::settings().iter().filter(|s| s.group == registry::studio_settings::GROUP), cfg, p, cx))).into_any_element()
     }

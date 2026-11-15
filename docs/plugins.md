@@ -36,7 +36,7 @@ The 88 first-party plugins (52 of them ship switched off, marked *opt-in*):
 | **Session** | Power and session menu |
 | **Launcher** | Application launcher (Super+Space) |
 | **Workspaces** | Tags / workspaces with their apps |
-| **Taskbar** | Pinned and running apps in the bar, sharing pins with the dock; click to launch, focus or minimize, or middle-click for a new window *(opt-in)* |
+| **Taskbar** | Pinned and running apps in the bar, sharing pins with the dock; click to launch, focus or minimize, or middle-click for a new window. Its settings pick a tray of the dock's classic or liquid glass (with grain), the running mark, how the focused app stands out, app names, one button per app or per window, window counts and coral for apps asking for attention *(opt-in)* |
 | **Active window** | Focused window title |
 | **Clock** | Time, date and calendar |
 | **Keyboard layout** | The active keyboard layout; click to switch |
@@ -165,6 +165,37 @@ Turn any of them on in Studio → Plugins or with
 had:** a config written before these defaults keeps every plugin it had on
 (the upgrade writes them into `[plugins] enabled`), Wallhaven stays on if it
 was, and cursor themes stay on if you had picked a cursor.
+
+## Live bar chips
+
+Some bar items can be a small live chip instead of a button that only
+opens a panel. Pick the look under *In the bar* in the plugin's settings
+(Studio → Plugins → the plugin → Settings), or with
+`mandara msg bar display <plugin> <look>`. A click still opens the panel,
+and every plugin keeps its classic look until you pick another one.
+
+| Plugin | Looks | Chip options |
+|---|---|---|
+| Resources | `rings` (the classic two rings with percentages), `icon`, `numbers` (CPU and RAM labels with their percentages), `sparkline` (a small live graph beside each percentage), `chart` (one inline area chart of the last 30 samples, CPU filled and memory as a line, with both figures) | *Readings*: CPU, memory or both; *Chip refresh every*: 0.5–10 s (1 s) |
+| Notifications | `icon` (the classic bell and badge), `latest` (the bell, the latest notification's app and summary, and the count: unread ones in the accent, otherwise how many are kept) | *Text width* |
+| Network | `icon` (classic), `name` (the network's name), `signal` (Wi-Fi signal bars and strength), `both` (name and strength) | *Text width* |
+| Bluetooth | `icon` (the classic icon and count), `name` (the connected device, or how many are connected), `battery` (its name and battery ring) | *Text width* |
+
+Chips are content only: the bar's own capsules, tiles and shapes go under
+them, so they fit every bar style, in light and dark. Figures use tabular
+numerals in fixed-width slots, so nothing shifts as values change; graphs
+and figures read left to right in right-to-left languages too. A side bar
+has no room for text, so it keeps each plugin's classic look there.
+
+They cost nothing while hidden. The Notifications, Network and Bluetooth
+chips redraw only when their service reports a change. The Resources
+chips reuse the shell's CPU and memory sampler: while a Numbers or
+Sparkline chip is drawn on a bar that shows, the sampler runs at the
+chip's own refresh; when the bar slides away or the chip goes, it falls
+back to the panel's *Refresh every* within a few samples. The Icon look
+doesn't redraw on samples at all. Media, Audio and Power already show
+their track, volume and charge beside the icon (`bar_title`, `bar_level`,
+`bar_percent`).
 
 ## Icon themes
 

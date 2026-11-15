@@ -363,17 +363,17 @@ pub const STUDIO_SECTIONS: &[(&str, &str, &str, &str)] = &[
     ("bars", tk("Bars"), "window", "bar top bottom side bars sidebar drawer cards pin notifications tabs panels height layout hover edges corners power dock open on hover"),
     ("dock", tk("Dock"), "box", "dock taskbar pinned apps magnification auto hide"),
     ("launcher", tk("Launcher"), "search", "slash commands skills icon emoji providers pinned hidden apps frecency usage"),
-    ("window-switcher", tk("Window switcher"), "copy", "alt tab switcher windows screen time wellbeing limits"),
+    ("window-switcher", tk("Window Switcher"), "copy", "alt tab switcher windows screen time wellbeing limits"),
     ("notifications", tk("Notifications"), "bell", "popups toasts do not disturb dnd quiet hours rules mute history"),
-    ("on-screen-displays", tk("On-screen displays"), "sliders", "osd volume brightness pill indicator caps lock"),
+    ("on-screen-displays", tk("On-Screen Displays"), "sliders", "osd volume brightness pill indicator caps lock"),
     // System
     ("displays", tk("Displays"), "monitor", "monitors screens resolution refresh rate scale rotation arrangement profiles vrr brightness ddc night light gamma blue light warm"),
-    ("audio", tk("Audio & media"), "volume-high", "sound mixer visualizer media lyrics music"),
+    ("audio", tk("Audio & Media"), "volume-high", "sound mixer visualizer media lyrics music"),
     ("network", tk("Network & Bluetooth"), "wifi-4", "wifi wi-fi vpn wireguard openvpn hotspot tethering saved networks forget dns ip static ethernet bluetooth pairing pair trust adapter"),
-    ("power", tk("Power & idle"), "power", "idle sleep suspend hibernate lock screen off dpms caffeine keep awake battery low critical profile session menu shutdown reboot firmware hooks automation"),
+    ("power", tk("Power & Idle"), "power", "idle sleep suspend hibernate lock screen off dpms caffeine keep awake battery low critical profile session menu shutdown reboot firmware hooks automation"),
     ("input", tk("Input"), "pointer", "keyboard layout repeat numlock mouse touchpad trackpad tap natural scrolling acceleration cursor theme size focus follows mouse"),
-    ("keyboard-shortcuts", tk("Keyboard shortcuts"), "keyboard", "keybinds hotkeys bindings shortcuts"),
-    ("date", tk("Date, time & location"), "calendar", "clock time date format strftime week numbers calendar ics events reminders location weather geoclue"),
+    ("keyboard-shortcuts", tk("Keyboard Shortcuts"), "keyboard", "keybinds hotkeys bindings shortcuts"),
+    ("date", tk("Date, Time & Location"), "calendar", "clock time date format strftime week numbers calendar ics events reminders location weather geoclue"),
     ("applications", tk("Applications"), "package", "default apps browser terminal file manager mime autostart startup login apps"),
     // Security & accounts
     ("users", tk("Users"), "user", "accounts avatar password user"),
@@ -385,7 +385,7 @@ pub const STUDIO_SECTIONS: &[(&str, &str, &str, &str)] = &[
     ("ai-shell-agent", tk("AI Shell Agent"), "zap", "local natural language offline commands artificial intelligence !"),
     // Mandara
     ("general", tk("General"), "globe", "language clock week restart"),
-    ("profiles", tk("Profiles & backup"), "download", "profile export import backup restore reset undo recent changes support report"),
+    ("profiles", tk("Profiles & Backups"), "download", "profile export import backup restore reset undo recent changes support report"),
     ("performance", tk("Performance"), "gauge", "cpu memory ram usage frames"),
     ("maintenance", tk("Maintenance"), "refresh", "repair heal fix doctor factory reset backup restore download models fonts cache"),
     ("about", tk("About"), "note", "version info"),
@@ -396,7 +396,7 @@ pub const STUDIO_SECTIONS: &[(&str, &str, &str, &str)] = &[
 pub const STUDIO_TABS: &[(&str, &str, &str, &str)] = &[
     ("themes/boot", tk("Boot look"), "power", "boot menu bootloader grub limine refind plymouth splash startup screen logo"),
     ("login-screen/login", tk("Login screen"), "key", "greeter display manager login designer"),
-    ("login-screen/lock", tk("Lock appearance"), "lock", "lockscreen blur clock avatar oled"),
+    ("login-screen/lock", tk("Lock Appearance"), "lock", "lockscreen blur clock avatar oled"),
 ];
 
 /// Everything searchable besides apps, built when the launcher opens.
@@ -2153,6 +2153,9 @@ impl Render for LauncherView {
         let palette = mandara_core::frame_palette(window, cx);
         let f = fonts(cx);
         let cfg = config(cx).read(cx).snapshot();
+        // The launcher's grain and the cards' (results, previews).
+        crate::components::grain::prepare(crate::components::grain::Slot::Launcher, &cfg.grain.launcher, &palette, window, cx);
+        crate::components::grain::prepare(crate::components::grain::Slot::Cards, &cfg.grain.cards, &palette, window, cx);
         let _motion = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(cfg.motion.surfaces.launcher));
         if self.look.style == mandara_config::workflow::LauncherStyle::Beacon {
             return self.render_beacon(window, cx);
@@ -2406,6 +2409,11 @@ impl Render for LauncherView {
                     .shadow(crate::plugins::panel_fx::elevation_scaled(&palette, progress, cfg.panels.shadow_strength))
                     .into_any_element()
             }
+        };
+        // Grain (`[grain.launcher]`) over the surface, under the content.
+        let surface = match crate::components::grain::layer(crate::components::grain::Slot::Launcher, gpui::Corners::all(px(radius))) {
+            Some(g) => div().absolute().size_full().child(surface).child(div().absolute().left(px(x)).top(px(y)).w(px(cur.w)).h(px(h)).child(g)).into_any_element(),
+            None => surface,
         };
         // The center card (and a slide) fade in whole.
         let surface = if place.fades && progress < 1.0 { div().absolute().size_full().opacity(progress).child(surface).into_any_element() } else { surface };

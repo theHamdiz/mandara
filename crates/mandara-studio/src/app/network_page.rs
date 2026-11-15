@@ -254,7 +254,7 @@ impl StudioView {
         div()
             .row()
             .flex_col()
-            .gap(px(SPACE_26_PX))
+            .gap(px(GROUP_SECTION_GAP_PX))
             .children(note_el)
             .child(section(t("Connections").into(), vec![details]))
             // Registry rows carry the group title; the bespoke card follows.
@@ -269,7 +269,7 @@ impl StudioView {
         let devices = st(cx).devices.clone();
         let list = match devices {
             None => return card(p).child(div().text_color(p.on_surface_variant.hsla()).child(t("Reading network devices…"))).into_any_element(),
-            Some(Err(e)) => return card(p).child(heading(t("NetworkManager isn't reachable"), e, p)).into_any_element(),
+            Some(Err(e)) => return super::grouped::notice("wifi-off", p.warning_amber, t("NetworkManager isn't reachable"), e, p),
             Some(Ok(list)) if list.is_empty() => return card(p).child(heading(t("No network devices"), t("Wired and Wi-Fi adapters appear here."), p)).into_any_element(),
             Some(Ok(list)) => list,
         };
@@ -313,7 +313,7 @@ impl StudioView {
         let mut col = card(p).gap(px(SPACE_4_PX)).p(px(SPACE_8_PX));
         match vpns {
             None => col = col.child(div().p(px(SPACE_10_PX)).text_color(p.on_surface_variant.hsla()).child(t("Reading VPNs…"))),
-            Some(Err(e)) => col = col.child(div().p(px(SPACE_10_PX)).child(heading(t("NetworkManager isn't reachable"), e, p))),
+            Some(Err(e)) => col = col.child(super::grouped::notice_row("wifi-off", p.warning_amber, t("NetworkManager isn't reachable"), e, p)),
             Some(Ok(list)) if list.is_empty() => {
                 col = col.child(div().p(px(SPACE_10_PX)).child(heading(t("No VPNs yet"), t("Import a WireGuard (.conf) or OpenVPN (.ovpn) file below — it becomes a NetworkManager connection."), p)))
             }
@@ -541,7 +541,7 @@ impl StudioView {
         let mut col = card(p).gap(px(SPACE_4_PX)).p(px(SPACE_8_PX));
         match saved {
             None => col = col.child(div().p(px(SPACE_10_PX)).text_color(p.on_surface_variant.hsla()).child(t("Reading saved networks…"))),
-            Some(Err(e)) => col = col.child(div().p(px(SPACE_10_PX)).child(heading(t("NetworkManager isn't reachable"), e, p))),
+            Some(Err(e)) => col = col.child(super::grouped::notice_row("wifi-off", p.warning_amber, t("NetworkManager isn't reachable"), e, p)),
             Some(Ok(list)) if list.iter().all(|w| w.hotspot) => col = col.child(div().p(px(SPACE_10_PX)).child(heading(t("No saved networks"), t("Networks you join appear here."), p))),
             Some(Ok(list)) => {
                 for w in list.into_iter().filter(|w| !w.hotspot) {

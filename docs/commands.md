@@ -75,6 +75,7 @@ mandara msg bar position left               # top|bottom|left|right (left/right 
 mandara msg bar layout hairline             # edge-frame|glass-pills|island|hairline|micro|notch|next
 mandara msg bar style expressive            # expressive|tile-dock|rail|segmented|system-monitor|stanley-bridge|pharos-beam|raml-tram|taskbar: a style preset's look (your items stay, fitted to it: a rail takes the workspaces off the bar, System monitor adds its meters); none puts back the plain bar and your items
 mandara msg bar hide                        # put the bar away and free its space until bar show (bar toggle flips it; not saved)
+mandara msg bar display resources sparkline # a plugin's bar item: its icon or a live chip (resources: rings|icon|numbers|sparkline|chart; notifications: icon|latest; network: icon|name|signal|both; bluetooth: icon|name|battery); no style shows the current one, no plugin lists all four
 mandara msg side-bars on                    # the left and right side bars of plugin chips: on|off|toggle; side-bars status
 mandara msg side-bars join off              # one frame with the top bar, or floating apart: on|off|toggle
 mandara msg side-bar pin right off          # pinned (reserves space) or sliding away until the pointer touches the edge

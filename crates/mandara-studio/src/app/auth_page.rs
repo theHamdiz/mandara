@@ -49,7 +49,38 @@ pub(super) fn navigation(section: Section, current: AuthTab) -> (Section, AuthTa
     }
 }
 
+/// The lock design setting, shown as the gallery instead of a list row.
+const LOCK_DESIGN_PATH: &str = "/lock/design";
+
 impl StudioView {
+    /// The lock screen's designs as the Login looks show theirs: each one
+    /// in miniature, the chosen one ringed. A click picks it for the lock
+    /// screen only.
+    fn lock_design_gallery(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        use mandara_config::auth_design::{AuthDesign, LOOKS};
+        let designs = self.lock_designs.get_or_insert_with(|| {
+            LOOKS
+                .iter()
+                .map(|(id, _, _)| {
+                    let mut probe = mandara_greeter::config::GreeterConfig::default();
+                    probe.apply_look(id);
+                    let pal = mandara_greeter::view::palette_for(&probe);
+                    (probe, pal)
+                })
+                .collect()
+        }).clone();
+        let (fit, thumb_w, thumb_h) = greeter_page::look_grid(self.page.column_w - 2.0 * SPACE_10_PX);
+        let current = cfg.lock.design;
+        let cards = LOOKS.iter().zip(designs.iter()).enumerate().map(|(i, ((id, name, summary), (probe, pal)))| {
+            let design = AuthDesign::parse(id).unwrap_or_default();
+            greeter_page::look_card(("lock-design", i), greeter_page::look_thumb::thumb(probe, pal, thumb_w, thumb_h), design == current, tr(name), t("In use").into(), tr(summary), p)
+                .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| update_config(cx, move |c| c.lock.design = design)))
+                .into_any_element()
+        });
+        let help = registry::by_path(LOCK_DESIGN_PATH).map(|s| SharedString::from(tr(s.help)));
+        grouped::section(grouped::header(t("Design"), help, Vec::new(), p), grouped::group(vec![div().p(px(SPACE_10_PX)).child(fit.render(cards)).into_any_element()], false, p)).into_any_element()
+    }
+
     pub(crate) fn show_auth_tab(&mut self, tab: AuthTab, cx: &mut Context<Self>) {
         self.show(
             match tab {
@@ -79,7 +110,8 @@ impl StudioView {
         let body = match self.auth_tab {
             AuthTab::Login => greeter_page::element(cx),
             AuthTab::Lock => {
-                let rows = self.rows(registry::in_section(Section::LockScreen), cfg, p, cx);
+                let designs = self.lock_design_gallery(cfg, p, cx);
+                let rows = self.rows(registry::in_section(Section::LockScreen).filter(|s| s.path != LOCK_DESIGN_PATH), cfg, p, cx);
                 let widgets = if registry::running_compositor()
                     == Some(mandara_config::compositor::Target::KWin)
                 {
@@ -98,7 +130,8 @@ impl StudioView {
                 div()
                     .row()
                     .flex_col()
-                    .gap(px(SPACE_26_PX))
+                    .gap(px(GROUP_SECTION_GAP_PX))
+                    .child(designs)
                     .child(rows)
                     .child(widgets)
                     .into_any_element()

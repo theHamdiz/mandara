@@ -198,6 +198,11 @@ pub trait CardSurface: Surface + ParentElement {
                 Some(t) => el.relative().child(t),
                 None => el,
             };
+            // Grain (`[grain.cards]`), under the card's children.
+            let el = match ornament.then(|| super::grain::layer(super::grain::Slot::Cards, gpui::Corners::all(gpui::px(r)))).flatten() {
+                Some(g) => el.relative().child(g),
+                None => el,
+            };
             return el.card_elevation_with(style, rim, palette, ornament);
         };
         let outline = (style == CardStyle::Outlined).then(|| (palette.outline.with_alpha(OUTLINE_ALPHA), OUTLINE_PX));
@@ -220,6 +225,8 @@ pub trait CardSurface: Surface + ParentElement {
             .absolute()
             .inset_0(),
         )
+        // Grain over the drawn shape, inside its rounded clip.
+        .children(ornament.then(|| super::grain::layer(super::grain::Slot::Cards, gpui::Corners::all(gpui::px(r)))).flatten())
     }
 }
 
