@@ -34,12 +34,21 @@ impl Sandbox {
         String::from_utf8(output.stdout).unwrap()
     }
 
-    fn wait(&self, mut ready: impl FnMut() -> bool) {
+    fn wait(&self, ready: impl FnMut() -> bool) {
+        self.wait_with_diagnostics(ready, String::new);
+    }
+
+    fn wait_with_diagnostics(
+        &self,
+        mut ready: impl FnMut() -> bool,
+        diagnostics: impl Fn() -> String,
+    ) {
         let deadline = Instant::now() + START_TIMEOUT;
         while !ready() {
             assert!(
                 Instant::now() < deadline,
-                "sandbox did not reach the expected state"
+                "sandbox did not reach the expected state: {}",
+                diagnostics()
             );
             std::thread::sleep(PROBE_INTERVAL);
         }
@@ -62,7 +71,12 @@ fn the_supervisor_starts_another_shell_after_a_display_disconnect() {
 
 #[cfg(target_os = "linux")]
 fn display_disconnect(supervised: bool) {
-    use std::{ffi::OsString, io::Write as _, os::unix::ffi::OsStringExt as _, process::Stdio};
+    use std::{
+        ffi::OsString,
+        io::Write as _,
+        os::unix::{ffi::OsStringExt as _, process::ExitStatusExt as _},
+        process::Stdio,
+    };
 
     let xtask = std::env::var_os("MANDARA_TEST_XTASK")
         .expect("set MANDARA_TEST_XTASK to the built xtask binary");
@@ -130,6 +144,7 @@ fn display_disconnect(supervised: bool) {
         .args(replay_args)
         .env_clear()
         .envs(env)
+        .env("RUST_LOG", "info")
         .stdout(Stdio::null())
         .stderr(stderr.reopen().unwrap())
         .spawn()
@@ -143,19 +158,25 @@ fn display_disconnect(supervised: bool) {
         child.id()
     )
     .unwrap();
-    sandbox.wait(|| sandbox.command(&["msg", "ping"]).status.success());
+    sandbox.wait_with_diagnostics(
+        || sandbox.command(&["msg", "ping"]).status.success(),
+        || std::fs::read_to_string(stderr.path()).unwrap(),
+    );
     let compositor = recorded_pid("mango");
     process_env(compositor);
     // SAFETY: this is the recorded compositor of this test's private runtime.
     assert_eq!(unsafe { libc::kill(compositor, libc::SIGTERM) }, 0);
     if supervised {
-        sandbox.wait(|| {
-            std::fs::read_to_string(stderr.path())
-                .unwrap()
-                .matches("config:")
-                .count()
-                >= 2
-        });
+        sandbox.wait_with_diagnostics(
+            || {
+                std::fs::read_to_string(stderr.path())
+                    .unwrap()
+                    .matches("config:")
+                    .count()
+                    >= 2
+            },
+            || std::fs::read_to_string(stderr.path()).unwrap(),
+        );
         assert!(child.try_wait().unwrap().is_none());
         let supervisor = i32::try_from(child.id()).unwrap();
         process_env(supervisor);
@@ -165,12 +186,11 @@ fn display_disconnect(supervised: bool) {
     sandbox.wait(|| child.try_wait().unwrap().is_some());
     let status = child.wait().unwrap();
     let diagnostics = std::fs::read_to_string(stderr.path()).unwrap();
-    assert_eq!(
-        status.code(),
-        Some(i32::from(!supervised)),
-        "{}",
-        diagnostics
-    );
+    if supervised {
+        assert_eq!(status.signal(), Some(libc::SIGTERM), "{}", diagnostics);
+    } else {
+        assert_eq!(status.code(), Some(1), "{}", diagnostics);
+    }
     assert!(diagnostics.contains("display event loop stopped without a quit request"));
     if supervised {
         assert!(diagnostics.contains("Mandara exited (exit code 1); restarting"));
