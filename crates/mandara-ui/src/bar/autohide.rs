@@ -34,6 +34,34 @@ const BAND_ID: &str = "bar-hover-band";
 /// "Always": touching its edge still peeks it out.
 static HIDDEN_BY_COMMAND: AtomicBool = AtomicBool::new(false);
 
+thread_local! {
+    /// The windows whose bar is slid away right now (auto-hide or `bar
+    /// hide`; a handful at most, one per output). Live bar chips there skip
+    /// their faster ticks until the bar comes back.
+    static SLID_AWAY: std::cell::RefCell<Vec<gpui::WindowId>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Records whether the bar in `window` is slid away (the shell, on every
+/// render of that bar).
+pub fn note_slid_away(window: gpui::WindowId, away: bool) {
+    SLID_AWAY.with(|s| {
+        let mut s = s.borrow_mut();
+        match (s.iter().position(|w| *w == window), away) {
+            (None, true) => s.push(window),
+            (Some(i), false) => {
+                s.swap_remove(i);
+            }
+            _ => {}
+        }
+    });
+}
+
+/// Whether the bar in `window` is slid away (a chip drawn there is off
+/// screen).
+pub fn slid_away(window: gpui::WindowId) -> bool {
+    SLID_AWAY.with(|s| s.borrow().contains(&window))
+}
+
 /// Whether `bar hide` put the bar away.
 pub fn hidden_by_command() -> bool {
     HIDDEN_BY_COMMAND.load(Ordering::Relaxed)
@@ -283,6 +311,19 @@ mod tests {
         hub.clients[0].tags = vec![UNNUMBERED_ID_BASE + 1];
         assert_eq!(coverage(&hub, "DP-1"), (false, false));
         assert!(!crate::switcher::client_visible(&hub.clients[0], &hub));
+    }
+
+    #[test]
+    fn slid_away_bars_are_tracked_per_window() {
+        let (a, b) = (gpui::WindowId::from(7u64), gpui::WindowId::from(8u64));
+        note_slid_away(a, true);
+        note_slid_away(a, true);
+        assert!(slid_away(a) && !slid_away(b));
+        note_slid_away(b, true);
+        note_slid_away(a, false);
+        assert!(!slid_away(a) && slid_away(b));
+        note_slid_away(b, false);
+        SLID_AWAY.with(|s| assert!(s.borrow().is_empty(), "nothing kept once every bar is back"));
     }
 
     #[test]

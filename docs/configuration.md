@@ -241,7 +241,7 @@ fixed:
 
 | Plugin | Keys (`plugins.settings.<id>.…`) | Default |
 |---|---|---|
-| Resources (`resources`) | `refresh_ms` (also the bar rings), `disks_every_s`, `top_apps`, `temps_shown`, `disk_warn_percent`, `disk_full_percent` | 1500 ms, 15 s, 5, 8, 80 %, 90 % |
+| Resources (`resources`) | `refresh_ms` (also the bar rings), `disks_every_s`, `top_apps`, `temps_shown`, `disk_warn_percent`, `disk_full_percent`, `bar_style` (`rings`, `icon`, `numbers`, `sparkline`), `bar_metrics` (`both`, `cpu`, `memory`), `bar_refresh_ms` (the Numbers and Sparkline chips while the bar shows them, 500–10000 ms) | 1500 ms, 15 s, 5, 8, 80 %, 90 %, rings, both, 1000 ms |
 | Process hunter (`processes`) | `refresh_ms`, `hot_cpu_percent` | 1500 ms, 50 % |
 | Containers (`containers`) | `hot_cpu_percent`, `refresh_s` (list refresh while the panel is closed, 5–600 s) (plus engine, stopped containers, log lines) | 80 %, 30 s |
 | Updates (`updates`) | `first_check_delay_s` (0–600 s after login), `news_count` (Arch news headlines, 1–5), `run_in` (`mandara`: in the panel with progress, or `terminal`), `nixos_keep` (generations a NixOS clean-up keeps, 1–30) | 20 s, 1, `mandara`, 5 |
@@ -256,11 +256,12 @@ fixed:
 | Services (`services`) | `list_refresh_s`, `failed_check_s` (plus default view, alert, journal lines) | 4 s, 60 s |
 | Drives (`drives`) | `usage_every_s`, `full_warn_percent` | 10 s, 90 % |
 | Network speed (`net-speed`) | `interval_s` | 1 s |
-| Network (`network`) | `networks_shown` | 7 |
+| Network (`network`) | `networks_shown`, `bar_style` (`icon`, `name`, `signal`, `both`), `bar_width` (room for the name, 60–240 px) | 7, icon, 120 px |
 | Clock (`clock`) | `agenda_rows` | 5 |
 | To-do (`todo`) | `panel_rows`, `card_rows`, `default_list` (list name; empty: Inbox), `show_completed`, `sort` (`newest`, `oldest`, `alphabetical`), `bar_count` (empty: all lists, or a list name) | 14, 8, Inbox, on, newest, all |
 | Notes (`notes`) | `default_topic` (empty: Notes), `storage_folder` (empty: `~/.local/share/mandara/notes`), `preview_by_default`, `editor_font` (`sans`, `mono`), `editor_size` | Notes, data folder, on, sans, 13 px |
-| Bluetooth (`bluetooth`) | `battery_warn_percent` (coral follows Power → peripheral alerts) | 30 % |
+| Bluetooth (`bluetooth`) | `battery_warn_percent` (coral follows Power → peripheral alerts), `bar_style` (`icon`, `name`, `battery`), `bar_width` (room for the device's name, 60–240 px) | 30 %, icon, 120 px |
+| Notifications (`notifications`) | `bar_style` (`icon`: the bell and badge, `latest`: the latest notification and the count), `bar_width` (room for its text, 80–360 px) | icon, 180 px |
 | Authenticator (`authenticator`) | `visible_rows` | 6 |
 | Wallpaper generator (`wallpaper-generator`) | recipe, size, format, folder, schedule and video loops: see [Wallpaper generator](#wallpaper-generator) | |
 | Wallhaven (`wallhaven`, opt-in) | `wallpaper.wallhaven_query` (default search; empty: the toplist), `wallpaper.wallhaven_sorting` (`toplist`, `date_added`, `views`, `favorites`, `random`) — shown on Studio → Wallpaper while the plugin is on; off, no Wallhaven request is made | empty, toplist |

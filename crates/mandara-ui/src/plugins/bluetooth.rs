@@ -1,23 +1,30 @@
-//! Bluetooth plugin (BlueZ): status in the bar; a panel with the adapter
+//! Bluetooth plugin (BlueZ): status in the bar (or a chip with the
+//! connected device and its battery, `bar_style`); a panel with the adapter
 //! power switch and discovery, connected devices as cards (battery when the
 //! device reports it), then paired and nearby devices with connect /
 //! disconnect actions.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui::{AnyElement, App, SharedString, FontWeight, InteractiveElement as _, IntoElement, ParentElement, StatefulInteractiveElement as _, Styled, div, prelude::FluentBuilder as _, px, size};
+use mandara_config::ShellConfig;
+use mandara_config::bar_display::{BLUETOOTH_BAR_WIDTH, BLUETOOTH_BAR_WIDTH_RANGE, BarDisplay, BluetoothBar};
 use mandara_core::{ToGpui, oklab_gradient};
-use mandara_i18n::{t, tf, tk};
+use mandara_i18n::{Lang, t, tf, tk};
 use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, Output, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
 use mandara_services::BluetoothCommand;
 use mandara_services::bluetooth::{BluetoothDevice, BluetoothState};
 use mandara_theme::MandaraPalette;
 
+use super::bar_chip;
 use super::panel_fx::{
-    self, ANGLE_DIAGONAL_DEG, HEADER_H, PanelShape, SECTION_H_PX, WASH_SOFT, WASH_TRACK, empty_state, glass_card, header, partner, percent_text, pill_button, readable,
+    self, ANGLE_DIAGONAL_DEG, Cached, HEADER_H, PanelShape, SECTION_H_PX, WASH_SOFT, WASH_TRACK, empty_state, glass_card, header, partner, percent_text, pill_button, readable,
     section, wash,
 };
+use super::settings_cache::{ConfigSettings, SettingsCache};
+use crate::bidi::Bidi as _;
 use crate::hub::Domains;
 use super::{domain_view, json};
 use crate::fonts::tabular_nums;
@@ -88,6 +95,11 @@ const ROW_ICON_PX: f32 = 15.0;
 const BAR_ICON_PX: f32 = 15.0;
 const BAR_GAP_PX: f32 = 4.0;
 const BAR_OFF_ALPHA: f32 = 0.6;
+/// A chip's battery ring, its gap to the figure and the figure's fixed
+/// width (so `9%` → `10%` never shifts its neighbours).
+const BAR_BATTERY_RING_PX: f32 = 12.0;
+const BAR_BATTERY_GAP_PX: f32 = 4.0;
+const BAR_BATTERY_W_PX: f32 = 28.0;
 
 /// Device-kind keywords (BlueZ `Icon` names) → glyph, first match wins.
 const DEVICE_ICONS: &[(&[&str], &str)] = &[
@@ -318,36 +330,122 @@ fn panel_view(p: PanelCx, size_cell: Rc<Cell<gpui::Size<gpui::Pixels>>>) -> impl
     }
 }
 
+// ── Bar item: the glyph and count, or a chip with the device ─────────────
+
+/// The bar item's look (`bar_style`, `bar_width`), resolved once per
+/// config snapshot.
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct BarLook {
+    style: BluetoothBar,
+    width: f32,
+}
+
+impl ConfigSettings for BarLook {
+    type Scope = ();
+
+    fn resolve(config: &ShellConfig, _: Lang, _: ()) -> Self {
+        let p = &config.plugins;
+        let w = p.setting(ID, "bar_width", BLUETOOTH_BAR_WIDTH).clamp(BLUETOOTH_BAR_WIDTH_RANGE.0, BLUETOOTH_BAR_WIDTH_RANGE.1);
+        Self { style: BluetoothBar::parse(p.setting_str(ID, "bar_style")), width: w as f32 }
+    }
+}
+
+thread_local! {
+    static BAR_LOOK: RefCell<SettingsCache<BarLook>> = const { RefCell::new(SettingsCache::new()) };
+}
+
+fn bar_look(config: &Arc<ShellConfig>) -> BarLook {
+    *BAR_LOOK.with(|l| l.borrow_mut().get(config, mandara_i18n::language(), ()))
+}
+
+/// What a chip shows: the one connected device, or how many are.
+#[derive(Debug, PartialEq)]
+enum Shown<'a> {
+    Nothing,
+    One(&'a BluetoothDevice),
+    Several(usize),
+}
+
+fn shown(s: &BluetoothState) -> Shown<'_> {
+    let mut connected = s.devices.iter().filter(|d| d.connected);
+    match (connected.next(), connected.count()) {
+        (None, _) => Shown::Nothing,
+        (Some(d), 0) => Shown::One(d),
+        (Some(_), more) => Shown::Several(more + 1),
+    }
+}
+
+/// The text of a chip, kept between renders: re-made only when the
+/// device's name or the count changes.
+#[derive(Default)]
+struct BarText {
+    name: bar_chip::TextSlot,
+    several: Cached<usize>,
+}
+
+fn bar_view(text_slot: &RefCell<BarText>, palette: &MandaraPalette, cx: &App) -> AnyElement {
+    let hub = hub(cx);
+    let s = &hub.read(cx).bluetooth;
+    if !s.available {
+        return div().into_any_element();
+    }
+    let connected = s.connected_count();
+    let tint = if connected > 0 {
+        palette.primary
+    } else if s.powered {
+        palette.on_surface
+    } else {
+        palette.on_surface_variant.with_alpha(BAR_OFF_ALPHA)
+    };
+    let size = crate::style::bar_icon(BAR_ICON_PX);
+    let adapter = icon(if s.powered { "bluetooth" } else { "bluetooth-off" }, size, tint);
+    let look = bar_look(&crate::state::config(cx).read(cx).snapshot());
+    // A side bar has no room for names: the classic glyph and count there.
+    if look.style == BluetoothBar::Icon || crate::bar::vertical(cx) {
+        return div()
+            .flex()
+            .items_center()
+            .gap(px(BAR_GAP_PX))
+            .child(adapter)
+            .when(connected > 0, |el| el.child(div().text_size(px(text::LABEL)).font_features(tabular_nums()).text_color(palette.on_surface_variant.hsla()).child(crate::bar::badge::label(connected))))
+            .into_any_element();
+    }
+    let row = bar_chip::text_row(bar_chip::GLYPH_GAP_PX).font_features(tabular_nums());
+    match shown(s) {
+        Shown::Nothing => row.child(adapter).into_any_element(),
+        Shown::Several(n) => {
+            let label = text_slot.borrow_mut().several.get(n, |n| tf("{n} devices", &[("n", n)]));
+            row.child(adapter).child(bar_chip::label(label, look.width, palette.on_surface)).into_any_element()
+        }
+        Shown::One(d) => {
+            let name = text_slot.borrow_mut().name.get(d.name.trim());
+            let battery = d.battery.filter(|_| look.style == BluetoothBar::Battery);
+            let (critical, warn) = battery_levels(cx);
+            row.child(icon(device_icon(&d.icon), size, palette.primary))
+                .child(bar_chip::label(name, look.width, palette.on_surface))
+                .when_some(battery, |el, b| {
+                    let color = if b <= critical { palette.urgent_coral } else if b <= warn { palette.warning_amber } else { palette.success_emerald };
+                    let frac = f32::from(b) / PERCENT;
+                    // Ring and figure read left to right in every language.
+                    el.child(
+                        div()
+                            .ltr_row()
+                            .items_center()
+                            .gap(px(BAR_BATTERY_GAP_PX))
+                            .flex_none()
+                            .child(ring(frac, BAR_BATTERY_RING_PX, BATTERY_RING_STROKE_PX, readable(color, palette), palette.on_surface.with_alpha(BATTERY_TRACK_ALPHA)))
+                            .child(div().w(px(BAR_BATTERY_W_PX)).text_color(palette.on_surface_variant.hsla()).child(percent_text(frac))),
+                    )
+                })
+                .into_any_element()
+        }
+    }
+}
+
 pub fn register(r: &mut PluginRegistry) {
     r.register(PluginManifest::builtin(ID, tk("Bluetooth"), tk("Bluetooth devices"), Some(Zone::Right)), |window, cx, panel_cx| {
-        let bar = domain_view(Domains::BLUETOOTH,
-            None,
-            |palette, _, cx| {
-                let s = &hub(cx).read(cx).bluetooth;
-                if !s.available {
-                    return div().into_any_element();
-                }
-                let connected = s.connected_count();
-                let tint = if connected > 0 {
-                    palette.primary
-                } else if s.powered {
-                    palette.on_surface
-                } else {
-                    palette.on_surface_variant.with_alpha(BAR_OFF_ALPHA)
-                };
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(BAR_GAP_PX))
-                    .child(icon(if s.powered { "bluetooth" } else { "bluetooth-off" }, crate::style::bar_icon(BAR_ICON_PX), tint))
-                    .when(connected > 0, |el| {
-                        el.child(div().text_size(px(text::LABEL)).font_features(tabular_nums()).text_color(palette.on_surface_variant.hsla()).child(connected.to_string()))
-                    })
-                    .into_any_element()
-            },
-            window,
-            cx,
-        );
+        let text_slot = RefCell::new(BarText::default());
+        let bar = domain_view(Domains::BLUETOOTH, None, move |palette, _, cx| bar_view(&text_slot, palette, cx), window, cx);
         let size_cell = Rc::new(Cell::new(size(px(PANEL_W), px(INITIAL_PANEL_H))));
         let panel = domain_view(Domains::BLUETOOTH, None, panel_view(panel_cx.clone(), size_cell.clone()), window, cx);
         PluginInstance {
@@ -397,5 +495,31 @@ mod tests {
         assert_eq!(device_icon(""), "bluetooth");
         assert_eq!(device_icon("Audio-Card"), "headphones");
         assert!(contains_ci("input-Gaming", "gaming") && !contains_ci("ab", "abc"));
+    }
+
+    #[test]
+    fn chips_show_the_one_device_or_how_many() {
+        let device = |name: &str, connected| {
+            let mut d = BluetoothDevice::default();
+            d.name = name.into();
+            d.connected = connected;
+            d
+        };
+        let mut s = BluetoothState { available: true, powered: true, devices: vec![device("Keyboard", false)], ..Default::default() };
+        assert_eq!(shown(&s), Shown::Nothing);
+        s.devices.push(device("Buds", true));
+        assert!(matches!(shown(&s), Shown::One(d) if d.name == "Buds"));
+        s.devices.push(device("Mouse", true));
+        s.devices.push(device("Pad", true));
+        assert_eq!(shown(&s), Shown::Several(3));
+    }
+
+    #[test]
+    fn the_bar_keeps_its_glyph_until_a_chip_is_picked() {
+        let l = bar_look(&Arc::new(ShellConfig::default()));
+        assert_eq!(l, BarLook { style: BluetoothBar::Icon, width: BLUETOOTH_BAR_WIDTH as f32 });
+        let mut c = ShellConfig::default();
+        c.plugins.settings.insert(ID.into(), toml::from_str("bar_style = \"battery\"\nbar_width = 9999").unwrap());
+        assert_eq!(bar_look(&Arc::new(c)), BarLook { style: BluetoothBar::Battery, width: BLUETOOTH_BAR_WIDTH_RANGE.1 as f32 });
     }
 }
