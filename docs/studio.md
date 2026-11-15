@@ -651,8 +651,8 @@ and verifies models, and provides a dry-run test bench. See
     The tab opens on a **drop card** ("Drop an app here, or choose a
     file", with the supported formats); **Choose a file…** / **Install
     app…** open the desktop portal's file picker (filtered to AppImage,
-    Flatpak, `.tar.gz`/`.tar.xz`/`.tar.zst`/`.zip`, `.deb`, `.rpm`,
-    `.pkg.tar.zst`, `.apk`, `.xbps`), and files dragged onto the tab from
+    Flatpak, `.tar`/`.tar.gz`/`.tar.xz`/`.tar.zst`/`.tar.bz2`/`.zip`,
+    `.deb`, `.rpm`, `.pkg.tar.zst`, `.apk`, `.xbps`), and files dragged onto the tab from
     any file manager glow "Drop to install"; either hands them to the
     shell's **App installer** (the list refreshes when the job finishes).
     Its on-screen **sheet** shows the app's icon large, name, version and
@@ -683,7 +683,7 @@ and verifies models, and provides a dry-run test bench. See
     (`~/.local/share/mandara/apps/registry.toml`), to the Trash. Its
     settings — install location, Add to PATH by default, confirm before
     rootless installs, Flatpak for you or everyone, allow native packages,
-    keep or trash the original file, notify when done — are under
+    offer to trash, keep or trash the original file, notify when done — are under
     **Plugins → App installer**.
   - **Defaults**: default apps per kind of file or link (edits only those
     keys of `~/.config/mimeapps.list`) and the terminal / file manager /

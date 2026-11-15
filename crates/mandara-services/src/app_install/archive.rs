@@ -1,4 +1,5 @@
-//! Portable app archives (`.tar.gz` / `.tar.xz` / `.tar.zst` / `.zip`):
+//! Portable app archives (`.tar` / `.tar.gz` / `.tar.xz` / `.tar.zst` /
+//! `.tar.bz2` / `.zip`):
 //! pure-Rust decoding, safe extraction and finding the app inside.
 //!
 //! Extraction refuses absolute paths and `..`, keeps only symlinks whose
@@ -32,10 +33,11 @@ const ELF_MAGIC: &[u8] = b"\x7fELF";
 const GZIP_MAGIC: &[u8] = b"\x1f\x8b";
 const XZ_MAGIC: &[u8] = b"\xfd7zXZ\x00";
 const ZSTD_MAGIC: &[u8] = b"\x28\xb5\x2f\xfd";
+const BZIP2_MAGIC: &[u8] = b"BZh";
 
-/// A streaming reader over a compressed tar.
+/// A streaming reader over a tar, plain or compressed.
 pub fn tar_reader(path: &Path, format: Format) -> Result<Box<dyn Read + Send>, String> {
-    if !matches!(format, Format::TarGz | Format::TarXz | Format::TarZst | Format::Pacman | Format::Xbps | Format::Apk) {
+    if !matches!(format, Format::TarGz | Format::TarXz | Format::TarZst | Format::Tar | Format::TarBz2 | Format::Pacman | Format::Xbps | Format::Apk) {
         return Err(t("Not a tar archive").to_string());
     }
     // Packages share containers: the magic picks the decoder.
@@ -48,6 +50,10 @@ pub fn tar_reader(path: &Path, format: Format) -> Result<Box<dyn Read + Send>, S
         Box::new(ZstdFrames::new(buffered))
     } else if head.starts_with(XZ_MAGIC) {
         xz_reader(buffered)
+    } else if head.starts_with(BZIP2_MAGIC) {
+        Box::new(bzip2::bufread::MultiBzDecoder::new(buffered))
+    } else if detect::is_tar(&head) {
+        Box::new(buffered)
     } else {
         return Err(t("Not a tar archive").to_string());
     })
@@ -619,7 +625,7 @@ pub mod tests {
     }
 
     #[test]
-    fn xz_and_multi_frame_zstd_tars_decode() {
+    fn plain_xz_zstd_and_bzip2_tars_decode() {
         let dir = tempfile::tempdir().unwrap();
         let raw = {
             let mut b = tar::Builder::new(Vec::new());
@@ -635,7 +641,18 @@ pub mod tests {
         let (a, b) = raw.split_at(raw.len() / 2);
         let mut zst = ruzstd::encoding::compress_to_vec(a, ruzstd::encoding::CompressionLevel::Fastest);
         zst.extend(ruzstd::encoding::compress_to_vec(b, ruzstd::encoding::CompressionLevel::Fastest));
-        for (name, bytes, format) in [("a.tar.xz", xz, Format::TarXz), ("a.tar.zst", zst, Format::TarZst)] {
+        let mut bz = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::fast());
+        bz.write_all(&raw).unwrap();
+        let bz = bz.finish().unwrap();
+        let cases = [
+            ("a.tar.xz", xz, Format::TarXz),
+            ("a.tar.zst", zst, Format::TarZst),
+            ("a.tar", raw.clone(), Format::Tar),
+            ("a.tar.bz2", bz, Format::TarBz2),
+            // Misnamed downloads install by what they are.
+            ("misnamed.tar.gz", raw.clone(), Format::Tar),
+        ];
+        for (name, bytes, format) in cases {
             let path = dir.path().join(name);
             std::fs::write(&path, bytes).unwrap();
             assert_eq!(detect::detect(&path), Ok(format));

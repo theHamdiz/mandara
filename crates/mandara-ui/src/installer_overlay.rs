@@ -12,7 +12,8 @@
 //!   status, Install all / Review each);
 //! * a **progress pill** with a smooth ring, phase steps and elapsed time,
 //!   ending in an icon bounce and check morph with Open, Keep in Dock and
-//!   Show in Applications;
+//!   Show in Applications, and an offer to move the installed-from file
+//!   to the Trash;
 //! * a **failure card**: a plain explanation, a fix where there is one, and
 //!   the technical detail behind a disclosure.
 //!
@@ -43,7 +44,7 @@ use mandara_theme::{Color, MandaraPalette};
 
 use crate::bidi::Bidi as _;
 use crate::icons::icon;
-use crate::plugins::app_installer::{self as installer, InstallOrigin, Job, Sheet};
+use crate::plugins::app_installer::{self as installer, Cleanup, InstallOrigin, Job, Sheet, was_dry_run};
 
 // Surface.
 /// Room around the card for its shadow.
@@ -131,6 +132,8 @@ const QUEUE_TILE_RADIUS_PX: f32 = 11.0;
 const PILL_W_PX: f32 = 460.0;
 const PILL_RUN_H_PX: f32 = 92.0;
 const PILL_DONE_H_PX: f32 = 150.0;
+/// The finished pill grows by its cleanup row and that row's gap.
+const PILL_CLEANUP_H_PX: f32 = PILL_BUTTON_H_PX + PILL_GAP_PX;
 const PILL_PAD_PX: f32 = 16.0;
 const PILL_ICON_PX: f32 = 34.0;
 const RING_PX: f32 = 56.0;
@@ -507,7 +510,8 @@ impl Render for InstallerOverlay {
                 _ => j.fraction.unwrap_or(0.0),
             };
             self.ring.set_target(fraction);
-            self.pill_h.set_target(if j.phase == Phase::Done && !dry_run(j) { PILL_DONE_H_PX } else { PILL_RUN_H_PX });
+            let cleanup = if j.cleanup == Cleanup::None { 0.0 } else { PILL_CLEANUP_H_PX };
+            self.pill_h.set_target(if j.phase == Phase::Done && !was_dry_run(j) { PILL_DONE_H_PX + cleanup } else { PILL_RUN_H_PX });
         }
         let dt = self.clock.tick(Instant::now());
         let moving = [self.appear.step(dt), self.morph.step(dt), self.bounce.step(dt), self.ring.step(dt), self.check.step(dt), self.pill_h.step(dt)].contains(&true);
@@ -620,9 +624,6 @@ impl Render for InstallerOverlay {
     }
 }
 
-fn dry_run(j: &Job) -> bool {
-    j.result.as_ref().is_some_and(|r| r.as_ref().is_ok_and(|o| o.dry_run))
-}
 
 /// Crossfade curve: content only shows in the second half of its share.
 fn fade(v: f32) -> f32 {
@@ -1358,7 +1359,7 @@ impl InstallerOverlay {
 
     fn pill(&mut self, j: &Job, count: usize, spin: f32, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let id = j.id;
-        let dry = dry_run(j);
+        let dry = was_dry_run(j);
         let done = j.phase == Phase::Done && !dry;
         let tint = match j.phase {
             Phase::Done if dry => p.warning_amber,
@@ -1466,6 +1467,9 @@ impl InstallerOverlay {
                     .when(done, |el| el.child(div().text_size(px(SMALL_PX)).text_color(p.on_surface_variant.hsla()).child(t("Find it in your apps, or open it now"))))
             )
             .children(trailing);
+        // Registered before the finish row's actions, so Open stays the
+        // default (primary last).
+        let cleanup_row = if done { self.cleanup_row(j, p, cx) } else { None };
         let finish_row = done.then(|| {
             let desktop = j.desktop_id.clone();
             let keep = j.keep_in_dock;
@@ -1516,7 +1520,48 @@ impl InstallerOverlay {
         if finished && !done {
             self.action(Rc::new(move |cx| installer::dismiss(id, cx)));
         }
-        div().size_full().p(px(PILL_PAD_PX)).flex().flex_col().justify_center().gap(px(PILL_GAP_PX)).child(top).children(finish_row).into_any_element()
+        div().size_full().p(px(PILL_PAD_PX)).flex().flex_col().justify_center().gap(px(PILL_GAP_PX)).child(top).children(cleanup_row).children(finish_row).into_any_element()
+    }
+
+    /// The finished pill's offer to move the file the app came from to the
+    /// Trash, then what happened to it.
+    fn cleanup_row(&mut self, j: &Job, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let id = j.id;
+        let file = j.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let (glyph, tint, text) = match &j.cleanup {
+            Cleanup::None => return None,
+            Cleanup::Offered => ("trash", p.on_surface_variant, tf("{file} isn't needed any more", &[("file", &file)])),
+            Cleanup::Trashing => ("trash", p.on_surface_variant, t("Moving to the Trash…").to_string()),
+            Cleanup::Trashed => ("check", p.success_emerald, tf("{file} is in the Trash", &[("file", &file)])),
+            Cleanup::Failed(e) => ("alert", p.urgent_coral, e.clone()),
+        };
+        let button = (j.cleanup == Cleanup::Offered).then(|| {
+            let trash: Action = Rc::new(move |cx| {
+                if let Err(e) = installer::trash_installed_file(id, cx) {
+                    tracing::warn!("trash installed file: {e}");
+                }
+            });
+            let focused = self.action(trash.clone());
+            pill_button("installer-trash-file", t("Move to Trash"), false, focused, p).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| trash(cx)))
+        });
+        let failed = matches!(j.cleanup, Cleanup::Failed(_));
+        Some(
+            div()
+                .id("installer-cleanup")
+                .h(px(PILL_BUTTON_H_PX))
+                .flex_none()
+                .row()
+                .items_center()
+                .gap(px(ROW_GAP_PX))
+                .pad_start(px(ROW_PAD_X_PX))
+                .when(button.is_none(), |el| el.pad_end(px(ROW_PAD_X_PX)))
+                .rounded_full()
+                .bg(p.on_surface.with_alpha(ROWS_ALPHA).hsla())
+                .child(icon(glyph, GLYPH_SMALL_PX, tint))
+                .child(div().flex_1().min_w_0().text_size(px(SMALL_PX)).text_color(if failed { tint } else { p.on_surface_variant }.hsla()).truncate().child(text))
+                .children(button)
+                .into_any_element(),
+        )
     }
 }
 

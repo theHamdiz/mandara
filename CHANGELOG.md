@@ -6,6 +6,13 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Install apps from any tar archive, and tidy up the download afterwards.
+
+### Improved
+
+- The App Installer takes plain `.tar` and `.tar.bz2` archives, and recognises every archive by what it really is, so a download no longer needs renaming to `.tar.gz` first.
+- Once an app is installed, the installer offers to move the file you installed it from to the Trash. Choose *Keep the file* or *Move it to the Trash* under Studio → Plugins → App installer → After installing to skip the question.
+
 ## 0.32.1 — 2026-11-15
 
 This update fixes session selection in Mandara Login.

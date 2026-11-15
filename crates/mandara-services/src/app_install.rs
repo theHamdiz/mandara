@@ -73,6 +73,8 @@ const MARK_FORMAT: &str = "X-Mandara-Format";
 pub const DEFAULT_FLATPAK_SCOPE: &str = "user";
 pub const AFTER_KEEP: &str = "keep";
 pub const AFTER_TRASH: &str = "trash";
+/// Offer to move the file to the Trash once the app is installed.
+pub const AFTER_ASK: &str = "ask";
 
 /// True when `MANDARA_INSTALL_DRY_RUN` is set to anything but `0` / empty.
 pub fn forced_dry_run() -> bool {
@@ -93,14 +95,15 @@ pub struct InstallSettings {
     /// `user` or `system`.
     pub flatpak_scope: String,
     pub allow_native: bool,
-    /// `keep` or `trash` the original file afterwards.
+    /// `ask` (offer it when done), `keep` or `trash` the original file
+    /// afterwards.
     pub after_install: String,
     pub notify: bool,
 }
 
 impl Default for InstallSettings {
     fn default() -> Self {
-        Self { install_dir: String::new(), path_shims: false, confirm_rootless: true, flatpak_scope: DEFAULT_FLATPAK_SCOPE.into(), allow_native: true, after_install: AFTER_KEEP.into(), notify: true }
+        Self { install_dir: String::new(), path_shims: false, confirm_rootless: true, flatpak_scope: DEFAULT_FLATPAK_SCOPE.into(), allow_native: true, after_install: AFTER_ASK.into(), notify: true }
     }
 }
 
@@ -124,6 +127,11 @@ impl InstallSettings {
 
     pub fn trash_after(&self) -> bool {
         self.after_install == AFTER_TRASH
+    }
+
+    /// Offer the cleanup once installed (`ask`).
+    pub fn offer_cleanup(&self) -> bool {
+        self.after_install == AFTER_ASK
     }
 }
 
@@ -218,6 +226,9 @@ pub const MIME_TYPES: &[&str] = &[
     "application/x-compressed-tar",
     "application/x-xz-compressed-tar",
     "application/x-zstd-compressed-tar",
+    "application/x-tar",
+    "application/x-bzip2-compressed-tar",
+    "application/x-bzip-compressed-tar",
     "application/zip",
     "application/vnd.debian.binary-package",
     "application/x-rpm",
@@ -296,7 +307,7 @@ fn file_stem_clean(path: &Path) -> String {
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let lower = name.to_lowercase();
     let mut stem = name.clone();
-    for ext in [".appimage", ".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.zst", ".tzst", ".zip", ".flatpakref", ".flatpak"] {
+    for ext in [".appimage", ".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.zst", ".tzst", ".tar.bz2", ".tbz2", ".tbz", ".tar", ".zip", ".flatpakref", ".flatpak"] {
         if lower.ends_with(ext) {
             stem = name[..name.len() - ext.len()].to_string();
             break;
@@ -967,6 +978,15 @@ pub fn execute(plan: &Plan, choices: &Choices, env: &InstallEnv, runner: &dyn Ru
     Ok(outcome)
 }
 
+/// Moves the file an app was installed from to the Trash (the finished
+/// pill's cleanup offer): where it went.
+pub fn trash_installed_file(path: &Path, env: &InstallEnv) -> Result<PathBuf, String> {
+    if env.force_dry_run {
+        return Err(t("Dry run: nothing was moved").to_string());
+    }
+    crate::app_uninstall::trash(path, &env.uninstall_env())
+}
+
 fn install_files(plan: &Plan, choices: &Choices, env: &InstallEnv, progress: &dyn Fn(Progress), cancel: &AtomicBool, outcome: &mut Outcome) -> Result<(), String> {
     let i = &plan.inspection;
     let family = i.family();
@@ -1510,6 +1530,41 @@ Categories=Utility;
     }
 
     #[test]
+    fn plain_tar_installs_and_its_file_can_go_to_the_trash() {
+        let (dir, env) = home();
+        let mut elf = vec![0u8; 64];
+        elf[..4].copy_from_slice(b"\x7fELF");
+        let gz = archive::tests::tar_gz(&[("Tool-3.0/tool", &elf, 0o755),("Tool-3.0/icons/tool.png", appimage::tests::PNG_1X1, 0o644)], &[]);
+        let mut raw = Vec::new();
+        flate2::read::GzDecoder::new(gz.as_slice()).read_to_end(&mut raw).unwrap();
+        let file = dir.path().join("Tool-3.0.tar");
+        std::fs::write(&file, raw).unwrap();
+        assert!(accepts(&file), "no renaming to .tar.gz needed");
+        let p = plan(&file, &settings(), &env, &Mock::default()).unwrap();
+        assert_eq!((p.inspection.format(), p.inspection.name.as_str(), p.inspection.version.as_str()), (Format::Tar, "Tool", "3.0"));
+        assert!(!p.default_choices.trash_source, "the default asks afterwards instead");
+        let out = execute(&p, &p.default_choices, &env, &Mock::default(), &|_| {}, &NO_CANCEL).unwrap();
+        assert!(out.trashed_source.is_none() && file.is_file() && env.apps_dir.join("Tool").is_dir());
+        // The finished pill's "Move to Trash".
+        let to = trash_installed_file(&file, &env).unwrap();
+        assert!(!file.exists() && to.is_file() && to.starts_with(env.data_home.join("Trash")));
+        assert!(env.apps_dir.join("Tool").is_dir(), "the installed app stays");
+        let mut dry = env.clone();
+        dry.force_dry_run = true;
+        assert!(trash_installed_file(&to, &dry).is_err() && to.is_file(), "dry runs move nothing");
+    }
+
+    #[test]
+    fn after_install_settings() {
+        let d = InstallSettings::default();
+        assert!(d.offer_cleanup() && !d.trash_after());
+        let keep = InstallSettings { after_install: AFTER_KEEP.into(), ..d.clone() };
+        assert!(!keep.offer_cleanup() && !keep.trash_after());
+        let trash = InstallSettings { after_install: AFTER_TRASH.into(), ..d };
+        assert!(!trash.offer_cleanup() && trash.trash_after());
+    }
+
+    #[test]
     fn flatpakref_installs_with_flatpak_user_and_a_script_shim() {
         let (dir, env) = home();
         let file = dir.path().join("maps.flatpakref");
@@ -1604,6 +1659,8 @@ Categories=Utility;
         assert_eq!(version_from_name("tool.zip"), None);
         assert_eq!(human_bytes(1_500_000), "1.5 MB");
         assert_eq!(file_stem_clean(Path::new("Obsidian-1.6.7.AppImage")), "Obsidian");
+        assert_eq!(file_stem_clean(Path::new("Tool-2.0-linux.tar")), "Tool");
+        assert_eq!(file_stem_clean(Path::new("Tool-2.0.tar.bz2")), "Tool");
         assert!(picker_globs().contains(&"*.AppImage"));
     }
 }
