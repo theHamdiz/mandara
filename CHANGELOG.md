@@ -23,6 +23,14 @@ A calmer, more consistent Studio, with live chips in the bar, a richer dock and 
 - Typography opens with a live specimen of your interface, display, Arabic and monospace fonts, drawn in each face at your weight and size.
 - In right-to-left languages Studio's close button sits at the outer edge of the title bar.
 
+## 0.32.1 — 2026-11-15
+
+This update fixes session selection in Mandara Login.
+
+### Fixed
+
+- Clicking a session in Mandara Login now selects it.
+
 ## 0.32.0 — 2026-11-15
 
 Third-party plugins can now become part of the desktop itself: rich native
