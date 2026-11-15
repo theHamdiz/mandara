@@ -628,6 +628,11 @@ and verifies models, and provides a dry-run test bench. See
   `touchpad {}` / `mouse {}` block (Niri merges those blocks as a unit),
   and "focus follows the pointer: off" can't be set from an include —
   remove `focus-follows-mouse` from your `config.kdl` instead.
+  The layout list is xkeyboard-config's main list plus its extras
+  (`evdev.extras.xml`), so rarer layouts and variants such as Arabic
+  (ErgoArabic) or APL are there too, marked *Extra*; the search also finds
+  a layout by one of its variants (“ergoarabic” finds Arabic). It is read
+  once, the first time the page opens.
 - **Applications**, in four tabs (the last one is remembered):
   - **Installed**: every app with a launcher entry as a searchable card
     grid with its icon and where it came from (Pacman, APT, DNF, Zypper,

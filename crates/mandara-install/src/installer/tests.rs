@@ -196,6 +196,7 @@ impl Fixture {
             mirror: None,
             xdg_data: None,
             xdg_config: None,
+            xdg_data_dirs: None,
             release_keys: vec![sign::public_key(test_key()).unwrap()],
         }
     }
@@ -1477,6 +1478,33 @@ fn failed_kwin_availability_is_not_reported_as_a_config_or_keyboard_error() {
     assert!(!text.contains("your compositor reports errors in its config"));
     assert!(!text.contains("Install libxkbcommon"));
     assert!(host.ran().iter().all(|command| !command.contains("--fix-conflicts")));
+}
+
+#[test]
+fn kwin_without_plasmas_session_names_the_package_once() {
+    let f = Fixture::new();
+    let bin = f.home().join(".local/bin/mandara").display().to_string();
+    let args = || InstallArgs { yes: true, no_deps: true, no_greeter: true, no_autostart: true, compositor: Some("kwin".into()), ..Default::default() };
+    let hint = crate::plasma::missing_session_hint(Family::Arch, &f.facts(Family::Arch).os, |p| p == crate::plasma::KWIN_PROGRAM, || false).unwrap();
+    // Setup prints the same sentence; the installer shows it once, as a warning.
+    let mut host = FakeHost::with(&["pacman", "sudo", "kwin_wayland"]);
+    host.stdout.insert(format!("{bin} setup --compositor kwin"), format!("{hint}\n"));
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), args()).unwrap();
+    assert_eq!(host.text().matches(hint.as_str()).count(), 1, "{}", host.text());
+    assert!(host.out.iter().any(|(level, text)| *level == Level::Warn && text.contains("plasma-workspace")));
+    // Installing for another compositor still warns: KWin can't be picked at login.
+    let mut host = FakeHost::with(&["pacman", "sudo", "kwin_wayland", "niri"]);
+    run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), InstallArgs { compositor: Some("niri".into()), ..args() }).unwrap();
+    assert_eq!(host.text().matches(hint.as_str()).count(), 1, "{}", host.text());
+    // With the session in place (or no KWin at all) nothing is said.
+    let sessions = f.root().join("usr/share/wayland-sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(sessions.join("plasma.desktop"), "[Desktop Entry]\nName=Plasma (Wayland)\nExec=startplasma-wayland\n").unwrap();
+    for programs in [&["pacman", "sudo", "kwin_wayland"][..], &["pacman", "sudo", "niri"][..]] {
+        let mut host = FakeHost::with(programs);
+        run(&mut host, &FakeProbe::default(), f.facts(Family::Arch), args()).unwrap();
+        assert!(!host.text().contains("Plasma’s login session"), "{}", host.text());
+    }
 }
 
 // ── Image-based systems ─────────────────────────────────────────────────

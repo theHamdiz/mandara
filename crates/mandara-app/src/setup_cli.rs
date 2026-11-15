@@ -41,6 +41,13 @@ fn which_sway() -> bool {
     std::env::var_os("PATH").is_some_and(|paths| std::env::split_paths(&paths).any(|d| d.join("sway").is_file()))
 }
 
+/// What `mandara setup --compositor kwin` says about starting with Plasma:
+/// KWin has no drop-in, so without `--autostart` Mandara writes nothing and
+/// Plasma never starts it.
+fn kwin_autostart_note(autostart: bool) -> Option<String> {
+    (!autostart).then(|| mandara_i18n::t("KWin: Mandara doesn’t start with Plasma yet. Run `mandara setup --compositor kwin --autostart` to add its startup entry, or start `mandara` yourself after logging in.").to_string())
+}
+
 fn setup_targets(compositor: Option<&str>) -> Result<Vec<Target>> {
     let targets = match compositor {
         Some(name) => vec![Target::parse(name).ok_or_else(|| anyhow::anyhow!("unknown compositor {name:?} ({})", Target::ALL.map(Target::id).join(", ")))?],
@@ -97,13 +104,22 @@ pub fn setup(o: Options) -> Result<()> {
     let mut fixed_ids: Vec<String> = Vec::new();
     for target in targets {
         if target == Target::KWin {
+            // The `kwin` package alone has no login session to pick.
+            if let Some(hint) = mandara_install::plasma::missing_session_hint_here() {
+                println!("{hint}");
+            }
             if o.check {
                 println!("{}", mandara_i18n::t("Mandara uses native Plasma protocols; KWin’s configuration stays unchanged"));
                 let report = doctor::check(target);
                 print_report(&report);
                 unavailable |= report.errors() > 0 || report.status != CheckerStatus::Ran;
-            } else if let Some(path) = mandara_config::kwin::sync_autostart(cfg.compositor.autostart, &mandara_config::paths::self_exe())? {
-                println!("{}", mandara_i18n::tf("KWin: startup entry {path}", &[("path", &path.display())]));
+            } else {
+                if let Some(path) = mandara_config::kwin::sync_autostart(cfg.compositor.autostart, &mandara_config::paths::self_exe())? {
+                    println!("{}", mandara_i18n::tf("KWin: startup entry {path}", &[("path", &path.display())]));
+                }
+                if let Some(note) = kwin_autostart_note(cfg.compositor.autostart) {
+                    println!("{note}");
+                }
             }
             continue;
         }
@@ -369,5 +385,17 @@ fn print_report(report: &Report) {
                 println!("          fix: {}", fixes.join("  or  "));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kwin_setup_explains_the_missing_startup_entry_only_without_autostart() {
+        let note = kwin_autostart_note(false).unwrap();
+        assert!(note.contains("--compositor kwin --autostart"), "{note}");
+        assert_eq!(kwin_autostart_note(true), None);
     }
 }

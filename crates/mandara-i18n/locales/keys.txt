@@ -2539,6 +2539,7 @@ External monitor brightness is off
 External monitor brightness is off (Studio → Displays)
 External monitors answering DDC/CI and their brightness (JSON text)
 External monitors over DDC/CI, and how the brightness keys move them
+Extra
 Extra app, folder and file icons that extend the Adwaita set
 Extra distance from the left / right edge
 Extra distance from the top / bottom edge (centre: moves it down)
@@ -3692,9 +3693,12 @@ KDE Breeze cursors, refined and extended with more shapes
 KDE Connect did not respond in time
 KDE's classic set, warm and rounded, with an orchestral login
 KWin has no standalone configuration checker. Its settings are managed in Plasma System Settings.
+KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install your distribution’s Plasma workspace package, then choose Plasma at login.
+KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install {package} from your distribution, then choose Plasma at login.
 KWin settings are managed in Plasma System Settings
 KWin shortcuts must be saved through its shortcut service.
 KWin's active shortcuts changed. Refresh the list and try again.
+KWin: Mandara doesn’t start with Plasma yet. Run `mandara setup --compositor kwin --autostart` to add its startup entry, or start `mandara` yourself after logging in.
 KWin: startup entry {path}
 Kahlil Gibran
 Kanagawa
@@ -10367,6 +10371,7 @@ your default
 {value} isn't a seed (a number, or hex like 0x1f)
 {value} isn't center or upper
 {value} isn't ring, dots or none
+{variant} · extra
 {vendor} GPU
 {width} × {height} mm
 {width}×{height} captured

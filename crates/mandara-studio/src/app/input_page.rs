@@ -43,9 +43,50 @@ const SWITCH_SHORTCUTS: &[(&str, &str)] = &[
 /// The bar label field's width.
 const LABEL_FIELD_W_PX: f32 = 90.0;
 
+/// The xkb catalog with its lower-case search text, built once on the
+/// page's first open.
+struct LayoutIndex {
+    catalog: XkbCatalog,
+    /// Per layout: its name and description.
+    heads: Vec<String>,
+    /// Per layout: its variants' names and descriptions (finds
+    /// “ergoarabic” under Arabic).
+    variants: Vec<String>,
+}
+
+impl LayoutIndex {
+    fn new(catalog: XkbCatalog) -> LayoutIndex {
+        let heads = catalog.layouts.iter().map(|l| format!("{}\n{}", l.name, l.description).to_lowercase()).collect();
+        let variants = catalog
+            .layouts
+            .iter()
+            .map(|l| {
+                let mut text = String::new();
+                for v in &l.variants {
+                    text.push_str(&v.name);
+                    text.push('\n');
+                    text.push_str(&v.description);
+                    text.push('\n');
+                }
+                text.to_lowercase()
+            })
+            .collect();
+        LayoutIndex { catalog, heads, variants }
+    }
+
+    /// Layouts matching `q` (lower case): by name or description first,
+    /// then by one of their variants.
+    fn search<'a>(&'a self, q: &'a str) -> impl Iterator<Item = &'a input::XkbLayout> + 'a {
+        let by = move |keys: &'a [String], skip: Option<&'a [String]>| {
+            keys.iter().enumerate().filter(move |(i, k)| k.contains(q) && skip.is_none_or(|s| !s[*i].contains(q))).map(|(i, _)| &self.catalog.layouts[i])
+        };
+        by(&self.heads, None).chain(by(&self.variants, Some(&self.heads)))
+    }
+}
+
 #[derive(Default)]
 struct InputStudio {
-    catalog: Option<Rc<XkbCatalog>>,
+    catalog: Option<Rc<LayoutIndex>>,
     /// Layout picked in the search, choosing its variant.
     picking: Option<String>,
 }
@@ -60,11 +101,11 @@ fn running() -> Option<Target> {
 }
 
 impl StudioView {
-    fn input_catalog(cx: &mut Context<Self>) -> Rc<XkbCatalog> {
+    fn input_catalog(cx: &mut Context<Self>) -> Rc<LayoutIndex> {
         if let Some(c) = st(cx).catalog.clone() {
             return c;
         }
-        let c = Rc::new(input::xkb_catalog());
+        let c = Rc::new(LayoutIndex::new(input::xkb_catalog()));
         st(cx).catalog = Some(c.clone());
         c
     }
@@ -105,11 +146,12 @@ impl StudioView {
             return card(p).child(div().text_color(p.on_surface_variant.hsla()).child(tr(note))).into_any_element();
         }
         let kb = cfg.compositor.input.keyboard.clone();
-        let catalog = Self::input_catalog(cx);
+        let index = Self::input_catalog(cx);
+        let catalog = &index.catalog;
         let describe = |name: &str, variant: &str| -> String {
             let l = catalog.layouts.iter().find(|l| l.name == name);
             let base = l.map(|l| l.description.clone()).unwrap_or_else(|| name.to_string());
-            if variant.is_empty() { base } else { l.and_then(|l| l.variants.iter().find(|(v, _)| v == variant).map(|(_, d)| d.clone())).unwrap_or_else(|| format!("{base} ({variant})")) }
+            if variant.is_empty() { base } else { l.and_then(|l| l.variants.iter().find(|v| v.name == variant).map(|v| v.description.clone())).unwrap_or_else(|| format!("{base} ({variant})")) }
         };
         let mut col = card(p);
         if kb.layouts.is_empty() {
@@ -179,7 +221,8 @@ impl StudioView {
         let mut results = div().row().flex_col().gap(px(SPACE_4_PX));
         if let Some(name) = picking.clone() {
             if let Some(l) = catalog.layouts.iter().find(|l| l.name == name) {
-                let variants = std::iter::once((String::new(), t("Standard").to_string())).chain(l.variants.iter().cloned());
+                // Variants only xkeyboard-config's extras list say so.
+                let variants = std::iter::once((String::new(), t("Standard").to_string())).chain(l.variants.iter().map(|v| (v.name.clone(), if v.extra { tf("{variant} · extra", &[("variant", &v.description)]) } else { v.description.clone() })));
                 results = results.child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(tf("{layout}: choose a variant", &[("layout", &l.description)]))).child(div().row().flex_wrap().gap(px(SPACE_6_PX)).children(variants.map(|(v, d)| {
                     let (name, v2) = (name.clone(), v.clone());
                     chip(SharedString::from(format!("kb-var-{name}-{v}")), d, false, p).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
@@ -195,7 +238,7 @@ impl StudioView {
                 })));
             }
         } else if !q.is_empty() {
-            for l in catalog.layouts.iter().filter(|l| l.name.to_lowercase().contains(&q) || l.description.to_lowercase().contains(&q)).take(SEARCH_RESULTS) {
+            for l in index.search(&q).take(SEARCH_RESULTS) {
                 let name = l.name.clone();
                 results = results.child(
                     div()
@@ -210,6 +253,7 @@ impl StudioView {
                         .hover(|s| s.bg(p.primary.with_alpha(ALPHA_10).hsla()))
                         .child(badge(l.name.clone(), p.on_surface_variant))
                         .child(div().flex_1().child(l.description.clone()))
+                        .when(l.extra, |el| el.child(badge(t("Extra"), p.on_surface_variant)))
                         .when(!l.variants.is_empty(), |el| el.child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).child(tf("{count} variants", &[("count", &l.variants.len())]))))
                         .child(icon("plus", ICON_13_PX, p.primary))
                         .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
@@ -283,5 +327,26 @@ mod tests {
         }
         assert!(!registry::in_section(Section::Input).any(|s| s.path.starts_with("/compositor/input/cursor/")), "the cursor lives on Themes");
         assert!(SWITCH_SHORTCUTS.iter().all(|(o, _)| o.starts_with("grp:")));
+    }
+
+    #[test]
+    fn layout_search_finds_variants_after_direct_matches() {
+        use mandara_config::input::{XkbLayout, XkbVariant};
+        let variant = |name: &str, description: &str| XkbVariant { name: name.into(), description: description.into(), extra: true };
+        let catalog = XkbCatalog {
+            layouts: vec![
+                XkbLayout { name: "ara".into(), description: "Arabic".into(), variants: vec![variant("ergoarabic", "Arabic (ErgoArabic)")], extra: false },
+                XkbLayout { name: "iq".into(), description: "Iraqi".into(), variants: vec![variant("ku_ara", "Kurdish (Iraq, Arabic-Latin)")], extra: false },
+                XkbLayout { name: "us".into(), description: "English (US)".into(), variants: Vec::new(), extra: false },
+            ],
+            switch_options: Vec::new(),
+        };
+        let index = LayoutIndex::new(catalog);
+        let names = |q: &str| index.search(q).map(|l| l.name.clone()).collect::<Vec<_>>();
+        assert_eq!(names("ergo"), ["ara"]);
+        // A layout's own match comes first, and no layout is listed twice.
+        assert_eq!(names("arabic"), ["ara", "iq"]);
+        assert_eq!(names("english"), ["us"]);
+        assert!(names("klingon").is_empty());
     }
 }

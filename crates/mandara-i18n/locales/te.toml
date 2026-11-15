@@ -10764,3 +10764,8 @@
 "Meridian" = "Meridian"
 "No boxes: your name and password ride on one hairline across a calm dawn field, over enormous whisper-thin numerals; light or dark" = "పెట్టెలు లేవు: మీ పేరు, పాస్‌వర్డ్ ప్రశాంతమైన తెల్లవారుజాము మైదానాన్ని దాటే ఒకే సన్నని గీతపై, గుసగుసంత సన్నని భారీ అంకెల పైన; లేత లేదా ముదురు"
 "It shows nothing: its bar item, panel, sidebar card, desktop widgets, Studio tabs and launcher results are all empty" = "ఇది ఏమీ చూపదు: బార్ అంశం, ప్యానెల్, సైడ్‌బార్ కార్డ్, డెస్క్‌టాప్ విడ్జెట్‌లు, Studio ట్యాబ్‌లు, లాంచర్ ఫలితాలు అన్నీ ఖాళీగా ఉన్నాయి"
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install {package} from your distribution, then choose Plasma at login." = "KWin ఇన్‌స్టాల్ అయి ఉంది, కానీ Plasma లాగిన్ సెషన్ లేదు, కాబట్టి లాగిన్ స్క్రీన్ దాన్ని చూపించలేదు. మీ డిస్ట్రిబ్యూషన్ నుండి {package} ను ఇన్‌స్టాల్ చేసి, లాగిన్ సమయంలో Plasma ను ఎంచుకోండి."
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install your distribution’s Plasma workspace package, then choose Plasma at login." = "KWin ఇన్‌స్టాల్ అయి ఉంది, కానీ Plasma లాగిన్ సెషన్ లేదు, కాబట్టి లాగిన్ స్క్రీన్ దాన్ని చూపించలేదు. మీ డిస్ట్రిబ్యూషన్ యొక్క Plasma వర్క్‌స్పేస్ ప్యాకేజీని ఇన్‌స్టాల్ చేసి, లాగిన్ సమయంలో Plasma ను ఎంచుకోండి."
+"KWin: Mandara doesn’t start with Plasma yet. Run `mandara setup --compositor kwin --autostart` to add its startup entry, or start `mandara` yourself after logging in." = "KWin: Mandara ఇంకా Plasma తో ప్రారంభం కాదు. దాని ప్రారంభ నమోదును జోడించడానికి `mandara setup --compositor kwin --autostart` ను అమలు చేయండి, లేదా లాగిన్ అయిన తర్వాత `mandara` ను మీరే ప్రారంభించండి."
+"{variant} · extra" = "{variant} · అదనపు"
+"Extra" = "అదనపు"

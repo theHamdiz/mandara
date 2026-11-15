@@ -151,13 +151,8 @@ pub fn program_exists(prog: &str) -> bool {
 
 /// Session directories (XDG data dirs + the usual system locations).
 pub fn session_dirs() -> Vec<(PathBuf, SessionKind)> {
-    let data = std::env::var("XDG_DATA_DIRS").unwrap_or_default();
-    let mut roots: Vec<PathBuf> = data.split(':').filter(|s| !s.is_empty()).map(PathBuf::from).collect();
-    for d in ["/usr/local/share", "/usr/share"] {
-        if !roots.iter().any(|r| r == Path::new(d)) {
-            roots.push(PathBuf::from(d));
-        }
-    }
+    // The same folders `mandara setup` checks for Plasma's session.
+    let roots = mandara_install::plasma::data_roots(std::env::var("XDG_DATA_DIRS").ok().as_deref());
     let mut out = Vec::new();
     for kind in [SessionKind::Wayland, SessionKind::X11] {
         for r in &roots {

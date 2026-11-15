@@ -11100,3 +11100,8 @@
 "Meridian" = "Meridian"
 "No boxes: your name and password ride on one hairline across a calm dawn field, over enormous whisper-thin numerals; light or dark" = "没有方框：你的名字和密码落在横贯宁静晨光画面的一条发丝线上，背后是巨大而轻如低语的数字；浅色或深色"
 "It shows nothing: its bar item, panel, sidebar card, desktop widgets, Studio tabs and launcher results are all empty" = "它什么也不显示：栏项目、面板、侧栏卡片、桌面小组件、Studio 标签页和启动器结果全都为空"
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install {package} from your distribution, then choose Plasma at login." = "KWin 已安装，但 Plasma 的登录会话没有安装，因此登录界面无法提供它。请从发行版安装 {package}，然后在登录时选择 Plasma。"
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install your distribution’s Plasma workspace package, then choose Plasma at login." = "KWin 已安装，但 Plasma 的登录会话没有安装，因此登录界面无法提供它。请安装发行版的 Plasma 工作空间软件包，然后在登录时选择 Plasma。"
+"KWin: Mandara doesn’t start with Plasma yet. Run `mandara setup --compositor kwin --autostart` to add its startup entry, or start `mandara` yourself after logging in." = "KWin：Mandara 还不会随 Plasma 启动。运行 `mandara setup --compositor kwin --autostart` 添加它的启动条目，或在登录后自行启动 `mandara`。"
+"{variant} · extra" = "{variant} · 额外"
+"Extra" = "额外"

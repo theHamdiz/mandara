@@ -10862,3 +10862,8 @@
 "Meridian" = "Meridian"
 "No boxes: your name and password ride on one hairline across a calm dawn field, over enormous whisper-thin numerals; light or dark" = "بی هیچ جعبه‌ای: نام و رمز عبورتان روی یک خط مویی در میدانی آرام به رنگ سپیده‌دم، روی رقم‌هایی عظیم و نجواگونه؛ روشن یا تیره"
 "It shows nothing: its bar item, panel, sidebar card, desktop widgets, Studio tabs and launcher results are all empty" = "چیزی نشان نمی‌دهد: آیتم نوار، پنل، کارت نوار کناری، ابزارک‌های میزکار، زبانه‌های استودیو و نتایج اجراگر همه خالی‌اند"
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install {package} from your distribution, then choose Plasma at login." = "KWin نصب است، اما نشست ورود Plasma نصب نیست، پس صفحهٔ ورود نمی‌تواند آن را نشان دهد. {package} را از توزیع خود نصب کنید، سپس هنگام ورود Plasma را انتخاب کنید."
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install your distribution’s Plasma workspace package, then choose Plasma at login." = "KWin نصب است، اما نشست ورود Plasma نصب نیست، پس صفحهٔ ورود نمی‌تواند آن را نشان دهد. بستهٔ فضای کاری Plasma توزیع خود را نصب کنید، سپس هنگام ورود Plasma را انتخاب کنید."
+"KWin: Mandara doesn’t start with Plasma yet. Run `mandara setup --compositor kwin --autostart` to add its startup entry, or start `mandara` yourself after logging in." = "KWin: Mandara هنوز همراه Plasma اجرا نمی‌شود. برای افزودن ورودی راه‌اندازی آن `mandara setup --compositor kwin --autostart` را اجرا کنید، یا پس از ورود خودتان `mandara` را اجرا کنید."
+"{variant} · extra" = "{variant} · اضافی"
+"Extra" = "اضافی"

@@ -10763,3 +10763,8 @@
 "Meridian" = "Meridian"
 "No boxes: your name and password ride on one hairline across a calm dawn field, over enormous whisper-thin numerals; light or dark" = "Không khung hộp: tên và mật khẩu của bạn nằm trên một đường mảnh băng qua cánh đồng bình minh tĩnh lặng, trên những con số khổng lồ mảnh như lời thì thầm; sáng hoặc tối"
 "It shows nothing: its bar item, panel, sidebar card, desktop widgets, Studio tabs and launcher results are all empty" = "Không hiển thị gì: mục thanh, bảng điều khiển, thẻ thanh bên, tiện ích màn hình nền, thẻ Studio và kết quả trình khởi chạy đều trống"
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install {package} from your distribution, then choose Plasma at login." = "KWin đã được cài, nhưng phiên đăng nhập của Plasma thì chưa, nên màn hình đăng nhập không thể hiển thị nó. Hãy cài {package} từ bản phân phối của bạn, rồi chọn Plasma khi đăng nhập."
+"KWin is installed, but Plasma’s login session isn’t, so the login screen can’t offer it. Install your distribution’s Plasma workspace package, then choose Plasma at login." = "KWin đã được cài, nhưng phiên đăng nhập của Plasma thì chưa, nên màn hình đăng nhập không thể hiển thị nó. Hãy cài gói không gian làm việc Plasma của bản phân phối, rồi chọn Plasma khi đăng nhập."
+"KWin: Mandara doesn’t start with Plasma yet. Run `mandara setup --compositor kwin --autostart` to add its startup entry, or start `mandara` yourself after logging in." = "KWin: Mandara chưa khởi động cùng Plasma. Chạy `mandara setup --compositor kwin --autostart` để thêm mục khởi động của nó, hoặc tự khởi động `mandara` sau khi đăng nhập."
+"{variant} · extra" = "{variant} · bổ sung"
+"Extra" = "Bổ sung"

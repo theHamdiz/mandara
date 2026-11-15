@@ -6,6 +6,16 @@ About → What's new shows it too.
 
 ## Unreleased
 
+More keyboard layouts to choose from, and a clear answer when KWin can't be picked at the login screen.
+
+### Improved
+
+- Studio → Input now offers every keyboard layout and variant your system has, including the rarer ones such as Arabic (ErgoArabic), Arabic with 4th-level extensions and Sun Type 6/7, marked *Extra*; searching a variant's name, like “ergoarabic”, finds its layout.
+
+### Fixed
+
+- When KWin is installed without Plasma's login session, `mandara setup --compositor kwin` and the installer now explain why the login screen can't offer it and name the package to install, and setup says when `--autostart` is needed for Mandara to start inside Plasma.
+
 ## 0.32.0 — 2026-11-15
 
 Third-party plugins can now become part of the desktop itself: rich native
