@@ -36,7 +36,7 @@ The 88 first-party plugins (52 of them ship switched off, marked *opt-in*):
 | **Session** | Power and session menu |
 | **Launcher** | Application launcher (Super+Space) |
 | **Workspaces** | Tags / workspaces with their apps |
-| **Taskbar** | Pinned and running apps in the bar, sharing pins with the dock; click to launch, focus or minimize, or middle-click for a new window *(opt-in)* |
+| **Taskbar** | Pinned and running apps in the bar, sharing pins with the dock; click to launch, focus or minimize, or middle-click for a new window. Its settings pick a tray of the dock's classic or liquid glass (with grain), the running mark, how the focused app stands out, app names, one button per app or per window, window counts and coral for apps asking for attention *(opt-in)* |
 | **Active window** | Focused window title |
 | **Clock** | Time, date and calendar |
 | **Keyboard layout** | The active keyboard layout; click to switch |

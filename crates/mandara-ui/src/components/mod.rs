@@ -21,7 +21,9 @@
 pub mod buttons;
 pub mod chips;
 pub mod cut;
+pub mod grain;
 pub mod inputs;
+pub mod materials;
 pub mod motion;
 pub mod progress;
 pub mod shapes;

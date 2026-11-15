@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use gpui::{AnyElement, App, AppContext as _, ClickEvent, Context, Entity, FontWeight, Global, InteractiveElement, IntoElement, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px};
 use mandara_config::ShellConfig;
-use mandara_config::dock::LAUNCHER_PIN;
+use mandara_config::dock::{HoverMotion, LAUNCHER_PIN, SeparatorStyle};
 use mandara_config::workflow::{DockAutoHide, DockConfig, DockIndicator, StackDisplay, StackSort, StackView};
 use mandara_core::ToGpui;
 use mandara_i18n::{t, tf, tr};
@@ -45,6 +45,10 @@ const DOT_PX: f32 = 4.0;
 const DOT_GAP_PX: f32 = 3.0;
 const BAR_PX: f32 = 10.0;
 const BAR_FOCUSED_PX: f32 = 18.0;
+/// The Glow indicator's thickness and light, and the Highlight hover's plate margin.
+const GLOW_H_PX: f32 = 3.0;
+const GLOW_BLUR_PX: f32 = 5.0;
+const PREVIEW_PLATE_PX: f32 = 4.0;
 /// The preview's separator and right-side folder.
 const PREVIEW_SEPARATOR_PX: f32 = 1.0;
 /// Pinned-app rows.
@@ -139,7 +143,7 @@ pub(super) fn plugin_switch(id: &'static str, title: &'static str, detail: &'sta
 
 /// A static rendering of the dock with the current settings: pinned apps,
 /// a separator and the right side (a stack, the Trash).
-fn preview(d: &DockConfig, launcher_icon: &str, p: &MandaraPalette) -> AnyElement {
+fn preview(d: &DockConfig, launcher_icon: &str, p: &MandaraPalette, window: &Window, cx: &mut App) -> AnyElement {
     let ids: Vec<String> = if d.pinned.is_empty() { SAMPLE_APPS.iter().map(|s| s.to_string()).collect() } else { d.pinned.clone() };
     let base = d.icon_size * PREVIEW_SCALE;
     let accent = mandara_ui::plugins::panel_fx::readable(p.primary, p);
@@ -162,7 +166,15 @@ fn preview(d: &DockConfig, launcher_icon: &str, p: &MandaraPalette) -> AnyElemen
                 .when(running && d.indicator == DockIndicator::Dot, |el| el.child(dot(i == 0)))
                 .when(running && d.indicator == DockIndicator::Bar, |el| {
                     el.child(div().w(px(if i == 0 { BAR_FOCUSED_PX } else { BAR_PX })).h(px(DOT_PX)).rounded_full().bg(if i == 0 { accent.hsla() } else { p.on_surface.with_alpha(ALPHA_55).hsla() }))
+                })
+                .when(running && d.indicator == DockIndicator::Glow, |el| {
+                    let tint = if i == 0 { accent } else { p.on_surface.with_alpha(ALPHA_55) };
+                    el.child(div().w(px(if i == 0 { BAR_FOCUSED_PX } else { BAR_PX })).h(px(GLOW_H_PX)).rounded_full().bg(tint.hsla()).shadow(vec![mandara_ui::plugins::panel_fx::glow(tint.with_alpha(ALPHA_60), GLOW_BLUR_PX, 0.0, 0.0)]))
                 });
+            // The icon "under the pointer" shows the hover style.
+            let hovered = i == PREVIEW_HOVER;
+            let lift = if hovered && d.motion.hover == HoverMotion::Lift { d.hover_lift } else { 0.0 };
+            let plate = hovered && d.motion.hover == HoverMotion::Highlight;
             div()
                 .row()
                 .flex_col()
@@ -170,14 +182,20 @@ fn preview(d: &DockConfig, launcher_icon: &str, p: &MandaraPalette) -> AnyElemen
                 .justify_end()
                 .gap(px(d.padding * 0.3))
                 .opacity(if running || launcher { 1.0 } else { d.inactive_opacity })
-                .child(pin_icon(id, launcher.then_some(launcher_icon), size, p))
+                .child(
+                    div()
+                        .mb(px(lift))
+                        .rounded(px(mandara_ui::style::concentric(d.radius.min(base / 2.0 + d.padding), PREVIEW_PLATE_PX)))
+                        .when(plate, |el| el.bg(p.on_surface.with_alpha(ALPHA_10).hsla()).m(px(-PREVIEW_PLATE_PX)).p(px(PREVIEW_PLATE_PX)))
+                        .child(pin_icon(id, launcher.then_some(launcher_icon), size, p)),
+                )
                 .child(marks)
                 .into_any_element()
         })
         .collect();
     let right = d.applications.enabled || !d.stacks.is_empty() || d.trash;
     if right {
-        if d.separator {
+        if d.separator && d.separator_style == SeparatorStyle::Line {
             icons.push(div().w(px(PREVIEW_SEPARATOR_PX)).h(px(base * 0.6)).mb(px(base * 0.2)).bg(p.on_surface.with_alpha(ALPHA_20).hsla()).into_any_element());
         }
         if d.applications.enabled {
@@ -190,15 +208,10 @@ fn preview(d: &DockConfig, launcher_icon: &str, p: &MandaraPalette) -> AnyElemen
             icons.push(div().pb(px(DOT_PX + d.padding * 0.3)).child(mandara_ui::plugins::dock::themed(&["user-trash", "trash-empty"], "trash", base, p, p.on_surface_variant)).into_any_element());
         }
     }
-    let mut shadow = Vec::new();
-    if d.shadow {
-        shadow.extend(mandara_ui::plugins::panel_fx::elevation(p, 1.0));
-    }
-    if d.rim {
-        shadow.extend(mandara_ui::plugins::panel_fx::rim(p));
-    }
     let thickness = base + d.padding * 2.0;
-    let fill = mandara_ui::shell::frame_color(p).mix(p.primary, d.tint).with_alpha(d.opacity.clamp(0.0, 1.0));
+    // The shell's own material: classic or liquid glass, with its grain.
+    let material = mandara_ui::components::materials::Material::dock(&d.sanitized());
+    let glass = mandara_ui::components::materials::dress(div().absolute().inset_0(), &material, thickness, d.radius.min(thickness / 2.0), p, window.scale_factor(), Some(window.window_handle()), cx);
     div()
         .h(px(thickness + PREVIEW_HEADROOM_PX + d.margin))
         .rounded(px(RADIUS_16_PX))
@@ -216,7 +229,7 @@ fn preview(d: &DockConfig, launcher_icon: &str, p: &MandaraPalette) -> AnyElemen
                 .items_end()
                 .gap(px(d.spacing))
                 .pb(px(d.padding * 0.3))
-                .child(div().absolute().inset_0().rounded(px(d.radius.min(thickness / 2.0))).bg(fill.hsla()).shadow(shadow))
+                .child(glass)
                 .children(icons),
         )
         .into_any_element()
@@ -297,7 +310,7 @@ fn ipc(cx: &App, args: &[&str]) {
 }
 
 impl StudioView {
-    pub(super) fn dock_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn dock_page(&mut self, cfg: &ShellConfig, p: &MandaraPalette, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let toggle = plugin_switch(DOCK, t("Show the dock"), t("Pinned, running and recent apps, stacks and the Trash on a glass strip at the screen edge. Right-click an icon for its windows and Options; drag icons to reorder, or away from the dock to remove them."), cfg, p, cx);
         let enabled = cfg.dock_enabled();
         let hidden_note = (enabled && cfg.dock.auto_hide != DockAutoHide::Never).then(|| {
@@ -326,7 +339,7 @@ impl StudioView {
             .child(div().row().flex_col().gap(px(BENTO_GAP_PX)).child(toggle).children(hidden_note))
             .child(super::grouped::section(
                 super::grouped::header(t("Preview"), None, Vec::new(), p),
-                super::grouped::group(vec![div().p(px(SPACE_16_PX)).child(preview(&cfg.dock, &cfg.appearance.launcher_icon, p)).into_any_element()], false, p),
+                super::grouped::group(vec![div().p(px(SPACE_16_PX)).child(preview(&cfg.dock, &cfg.appearance.launcher_icon, p, window, cx)).into_any_element()], false, p),
             ))
             .child(displays)
             .child(layout)

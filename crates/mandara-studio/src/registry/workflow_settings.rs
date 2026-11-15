@@ -61,7 +61,41 @@ const STYLES_LAUNCHER: &[(&str, &str)] = &[("classic", tk("Classic")), ("beacon"
 pub const BEACON: &str = tk("Beacon search bar");
 const DOCK_POSITIONS: &[(&str, &str)] = &[("bottom", tk("Bottom")), ("left", tk("Left")), ("right", tk("Right"))];
 const ALIGNMENTS: &[(&str, &str)] = &[("start", tk("Start")), ("center", tk("Center")), ("end", tk("End"))];
-const INDICATORS: &[(&str, &str)] = &[("dot", tk("One dot")), ("dots", tk("A dot per window")), ("bar", tk("Bar")), ("none", tk("None"))];
+const INDICATORS: &[(&str, &str)] = &[("dot", tk("One dot")), ("dots", tk("A dot per window")), ("bar", tk("Bar")), ("glow", tk("Glow")), ("none", tk("None"))];
+/// The dock's material, separators and name labels, in their enums' order.
+const DOCK_MATERIALS: &[(&str, &str)] = &[("classic", tk("Classic glass")), ("liquid", tk("Liquid glass"))];
+const SEPARATOR_STYLES: &[(&str, &str)] = &[("line", tk("Hairline")), ("space", tk("Space only"))];
+const TOOLTIP_STYLES: &[(&str, &str)] = &[("pill", tk("Pill")), ("material", tk("Dock material"))];
+/// The taskbar's choices (`[plugins.settings.taskbar]`), in their enums' order.
+pub const TASKBAR: &str = tk("Taskbar");
+const TASKBAR_MATERIALS: &[(&str, &str)] = &[("none", tk("None")), ("classic", tk("Classic glass")), ("liquid", tk("Liquid glass"))];
+const TASKBAR_INDICATORS: &[(&str, &str)] = &[("line", tk("Line")), ("dot", tk("One dot")), ("dots", tk("A dot per window")), ("glow", tk("Glow")), ("none", tk("None"))];
+const TASKBAR_FOCUS: &[(&str, &str)] = &[("tint", tk("Tint")), ("raised", tk("Raised")), ("accent", tk("Accent")), ("none", tk("None"))];
+const TASKBAR_LABELS: &[(&str, &str)] = &[("none", tk("Icons only")), ("focused", tk("Focused app")), ("running", tk("Running apps"))];
+
+/// Why a dock or taskbar setting doesn't apply under `cfg` right now.
+pub(super) fn locked(path: &str, cfg: &mandara_config::ShellConfig) -> Option<&'static str> {
+    let d = &cfg.dock;
+    match path {
+        "/dock/gloss" | "/dock/refraction" if d.material != mandara_config::dock::DockMaterial::Liquid => Some(tk("For Liquid glass")),
+        "/dock/grain/amount" | "/dock/grain/scale" | "/dock/grain/contrast" | "/dock/grain/tint" if d.grain.style == mandara_config::grain::GrainStyle::None => Some(tk("Pick a grain style first")),
+        "/dock/separator_style" if !d.separator => Some(tk("Turn on Separators first")),
+        "/dock/hover_lift" if d.motion.hover != mandara_config::dock::HoverMotion::Lift => Some(tk("For the Lift hover (Motion → Dock)")),
+        "/dock/tooltip_style" | "/dock/tooltip_delay_ms" if !d.tooltips => Some(tk("Turn on Show names on hover first")),
+        "/dock/magnify" | "/dock/magnify_spread" if !d.magnification => Some(tk("Turn on Magnification first")),
+        path if path.starts_with("/plugins/settings/taskbar/") => {
+            use mandara_config::taskbar::{TaskbarLabels, TaskbarMaterial, TaskbarSettings};
+            let t = TaskbarSettings::from_plugins(&cfg.plugins);
+            match path.rsplit('/').next().unwrap_or_default() {
+                "grain" | "grain_amount" if t.material == TaskbarMaterial::None => Some(tk("Needs a tray material")),
+                "grain_amount" if t.grain == mandara_config::grain::GrainStyle::None => Some(tk("Pick a grain style first")),
+                "label_width" if t.labels == TaskbarLabels::None => Some(tk("Turn on names first")),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
 const HIDING: &[(&str, &str)] = &[("never", tk("Off")), ("always", tk("On")), ("smart", tk("When a window overlaps"))];
 /// Stack layouts and orders (Studio → Dock → Stacks).
 pub const STACK_VIEWS: &[(&str, &str)] = &[("auto", tk("Automatic")), ("fan", tk("Fan")), ("grid", tk("Grid")), ("list", tk("List"))];
@@ -82,6 +116,8 @@ pub fn entries() -> Vec<Setting> {
     // Launcher sizes: their config bounds, in 10 px steps.
     let px_range = |(min, max): (f32, f32)| slider(f64::from(min), f64::from(max), LAUNCHER_SIZE_STEP_PX, " px");
     let shot = |path: &'static str, label: &'static str, help: &'static str, control: Control, default: Value| sd(Plugins, SCREENSHOT, path, label, help, control, default);
+    let bar = |path: &'static str, label: &'static str, help: &'static str, control: Control, default: Value| sd(Plugins, TASKBAR, path, label, help, control, default);
+    use mandara_config::taskbar::ranges as taskbar_ranges;
     vec![
         s(AiShellAgent, GENERAL, "/launcher/agent/enabled", tk("Enable natural language shell control"), tk("Type ! in the launcher to preview local shell commands"), Toggle),
         s(AiShellAgent, GENERAL, "/launcher/agent/engine", tk("Command compiler"), tk("FunctionGemma for a single action; Qwen for multilingual and compound requests"), Choice(&[("function-gemma", "FunctionGemma 270M"), ("qwen", "Qwen3 0.6B")])),
@@ -153,6 +189,7 @@ pub fn entries() -> Vec<Setting> {
         s(Dock, DOCK_LAYOUT, "/dock/magnification", tk("Magnification"), tk("Icons swell as the pointer passes (spring-animated)"), Toggle),
         s(Dock, DOCK_LAYOUT, "/dock/magnify", tk("Magnified size"), tk("Peak size of the icon under the pointer"), span(dock_ranges::MAGNIFY, "×")),
         s(Dock, DOCK_LAYOUT, "/dock/magnify_spread", tk("Magnification spread"), tk("How many neighbours grow along"), span(dock_ranges::MAGNIFY_SPREAD, "")),
+        s(Dock, DOCK_LAYOUT, "/dock/hover_lift", tk("Hover lift"), tk("How far the icon under the pointer rises with the Lift hover"), span(dock_ranges::HOVER_LIFT, " px")),
         s(Dock, DOCK_LAYOUT, "/dock/isolate_displays", tk("Only this display's windows"), tk("Running apps count only windows on the dock's own display"), Toggle),
         s(Dock, DOCK_BEHAVIOUR, "/dock/auto_hide", tk("Automatically hide and show the Dock"), tk("Hidden docks come back when the pointer touches their screen edge"), Choice(HIDING)),
         s(Dock, DOCK_BEHAVIOUR, "/dock/show_delay_ms", tk("Reveal delay"), tk("Pointer rest on the edge before a hidden dock shows"), span(dock_ranges::SHOW_DELAY_MS, " ms")),
@@ -165,6 +202,8 @@ pub fn entries() -> Vec<Setting> {
         s(Dock, DOCK_BEHAVIOUR, "/dock/bounce_only_music", tk("Bounce only while music plays"), "", Toggle),
         s(Dock, DOCK_BEHAVIOUR, "/dock/minimize_to_app", tk("Minimize windows into application icon"), tk("Off: each minimized window gets its own icon on the right side"), Toggle),
         s(Dock, DOCK_BEHAVIOUR, "/dock/tooltips", tk("Show names on hover"), tk("A label above the icon under the pointer"), Toggle),
+        s(Dock, DOCK_BEHAVIOUR, "/dock/tooltip_style", tk("Name label"), tk("A small pill, or the dock's own glass and grain"), Choice(TOOLTIP_STYLES)),
+        s(Dock, DOCK_BEHAVIOUR, "/dock/tooltip_delay_ms", tk("Name delay"), tk("How long the pointer rests on an icon before its name shows; then it follows the pointer at once"), span(dock_ranges::TOOLTIP_DELAY_MS, " ms")),
         s(Dock, DOCK_APPS, "/dock/show_running", tk("Show running apps"), tk("Also show apps that aren't kept in the dock while they run"), Toggle),
         s(Dock, DOCK_APPS, "/dock/indicator", tk("Show indicators for open applications"), tk("Under each running app"), Choice(INDICATORS)),
         s(Dock, DOCK_APPS, "/dock/show_recent", tk("Show suggested and recent apps in Dock"), tk("Apps you used lately, after the running ones"), Toggle),
@@ -181,6 +220,14 @@ pub fn entries() -> Vec<Setting> {
         s(Dock, DOCK_STACKS, "/dock/stack_items", tk("Files in a stack"), tk("How many of the newest files a stack shows"), span(dock_ranges::STACK_ITEMS, "")),
         s(Dock, DOCK_STACKS, "/dock/fan_items", tk("Files in a fan"), tk("A fan shows this many of the newest files; its top row opens the folder in your file manager"), span(dock_ranges::FAN_ITEMS, "")),
         s(Dock, DOCK_STACKS, "/dock/stack_names", tk("Show file names"), tk("Names beside fan items and under grid icons"), Toggle),
+        s(Dock, DOCK_LOOK, "/dock/material", tk("Material"), tk("Classic glass, or liquid glass: a translucent body with a bright top edge, light gathered inside its edges and a soft lens across the top"), Choice(DOCK_MATERIALS)),
+        s(Dock, DOCK_LOOK, "/dock/gloss", tk("Gloss"), tk("Strength of the liquid glass's edge highlights"), span(dock_ranges::GLOSS, "")),
+        s(Dock, DOCK_LOOK, "/dock/refraction", tk("Refraction"), tk("Light gathered inside the liquid glass and its lens highlight"), span(dock_ranges::REFRACTION, "")),
+        s(Dock, DOCK_LOOK, "/dock/grain/style", tk("Grain"), tk("A fine texture over the glass, drawn once and reused"), Choice(super::GRAIN_STYLES)),
+        s(Dock, DOCK_LOOK, "/dock/grain/amount", tk("Grain strength"), tk("How visible the grain is; it always stays subtle"), span(mandara_config::grain::ranges::AMOUNT, "")),
+        s(Dock, DOCK_LOOK, "/dock/grain/scale", tk("Grain size"), tk("Size of each speck"), span(mandara_config::grain::ranges::SCALE, " px")),
+        s(Dock, DOCK_LOOK, "/dock/grain/contrast", tk("Grain contrast"), tk("Higher makes strong specks stand out from faint ones"), span(mandara_config::grain::ranges::CONTRAST, "")),
+        s(Dock, DOCK_LOOK, "/dock/grain/tint", tk("Grain colour"), tk("Neutral specks, or specks in the hue of the theme's surfaces"), Choice(super::GRAIN_TINTS)),
         s(Dock, DOCK_LOOK, "/dock/opacity", tk("Glass opacity"), tk("0 hides the glass, leaving the icons"), span(dock_ranges::OPACITY, "")),
         s(Dock, DOCK_LOOK, "/dock/tint", tk("Accent tint"), tk("Mixes the theme accent into the glass"), span(dock_ranges::TINT, "")),
         s(Dock, DOCK_LOOK, "/dock/radius", tk("Corner radius"), tk("Capped at a full pill; follows Themes → Corner roundness"), span(dock_ranges::RADIUS, " px")),
@@ -190,6 +237,7 @@ pub fn entries() -> Vec<Setting> {
         s(Dock, DOCK_LOOK, "/dock/shadow", tk("Shadow"), tk("Soft elevation under the dock"), Toggle),
         s(Dock, DOCK_LOOK, "/dock/rim", tk("Specular rim"), tk("1 px glass edge highlight"), Toggle),
         s(Dock, DOCK_LOOK, "/dock/separator", tk("Separators"), tk("Hairlines between apps, recent apps and the right side"), Toggle),
+        s(Dock, DOCK_LOOK, "/dock/separator_style", tk("Separator style"), tk("A hairline, or only the gap"), Choice(SEPARATOR_STYLES)),
         s(Dock, DOCK_LOOK, "/dock/inactive_opacity", tk("Not-running opacity"), tk("Apps that aren't running fade to this"), span(dock_ranges::INACTIVE_OPACITY, "")),
         // Window switcher.
         s(WindowSwitcher, SWITCHER, "/switcher/enabled", tk("Enable the window switcher"), tk("Alt+Tab runs `mandara msg switcher next`, Alt+Shift+Tab `switcher prev`"), Toggle),
@@ -253,5 +301,54 @@ pub fn entries() -> Vec<Setting> {
         shot("/plugins/settings/screenshot/sound", tk("Shutter sound"), tk("Uses your sound theme (Studio → Audio & media → Sounds)"), Toggle, Value::from(true)),
         shot("/plugins/settings/screenshot/notify", tk("Notify"), tk("A notification after window and screen captures"), Toggle, Value::from(true)),
         // The screen recorder's `record_*` keys: `recorder_settings`.
+        // Taskbar (plugin settings table, read as `TaskbarSettings`).
+        bar("/plugins/settings/taskbar/material", tk("Tray"), tk("Buttons straight on the bar, or on a tray of the dock's classic or liquid glass"), Choice(TASKBAR_MATERIALS), Value::from("none")),
+        bar("/plugins/settings/taskbar/grain", tk("Grain"), tk("A fine texture over the tray"), Choice(super::GRAIN_STYLES), Value::from("none")),
+        bar("/plugins/settings/taskbar/grain_amount", tk("Grain strength"), tk("How visible the grain is; it always stays subtle"), span(mandara_config::grain::ranges::AMOUNT, ""), Value::from(mandara_config::grain::defaults::AMOUNT)),
+        bar("/plugins/settings/taskbar/indicator", tk("Running indicator"), tk("The mark under apps with windows; apps asking for attention turn it coral"), Choice(TASKBAR_INDICATORS), Value::from("line")),
+        bar("/plugins/settings/taskbar/focus_style", tk("Focused app"), tk("How the focused app's button stands out"), Choice(TASKBAR_FOCUS), Value::from("tint")),
+        bar("/plugins/settings/taskbar/labels", tk("App names"), tk("Names beside the icons"), Choice(TASKBAR_LABELS), Value::from("none")),
+        bar("/plugins/settings/taskbar/label_width", tk("Widest name"), tk("Longer names end in an ellipsis"), span(taskbar_ranges::LABEL_WIDTH, " px"), super::integral(Value::from(mandara_config::taskbar::defaults::LABEL_WIDTH_PX))),
+        bar("/plugins/settings/taskbar/group_windows", tk("One button per app"), tk("Off: every window gets a button of its own, with its title as the name"), Toggle, Value::from(true)),
+        bar("/plugins/settings/taskbar/window_count", tk("Window count"), tk("A count on apps with two or more windows"), Toggle, Value::from(false)),
+        bar("/plugins/settings/taskbar/urgent", tk("Show apps asking for attention"), tk("Their button and mark turn coral"), Toggle, Value::from(true)),
+        bar("/plugins/settings/taskbar/icon_size", tk("Icon size"), tk("App icons, before the bar's own icon scale"), span(taskbar_ranges::ICON_SIZE, " px"), super::integral(Value::from(mandara_config::taskbar::defaults::ICON_PX))),
+        bar("/plugins/settings/taskbar/spacing", tk("Spacing"), tk("Gap between the buttons"), span(taskbar_ranges::SPACING, " px"), super::integral(Value::from(mandara_config::taskbar::defaults::SPACING_PX))),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    fn ids<T: serde::Serialize>(all: &[T]) -> BTreeSet<String> {
+        all.iter().map(|v| serde_json::to_value(v).unwrap().as_str().unwrap().to_string()).collect()
+    }
+
+    fn shown(choices: &[(&str, &str)]) -> BTreeSet<String> {
+        choices.iter().map(|(id, _)| id.to_string()).collect()
+    }
+
+    /// Every dock, taskbar and grain choice Studio offers is a value the
+    /// config reads, and none is missing.
+    #[test]
+    fn dock_and_taskbar_choices_match_the_config() {
+        use mandara_config::dock::{DockIndicator, DockMaterial, SeparatorStyle, TooltipStyle};
+        use mandara_config::grain::{GrainStyle, GrainTint};
+        assert_eq!(ids(&DockIndicator::ALL), shown(super::INDICATORS));
+        assert_eq!(ids(&DockMaterial::ALL), shown(super::DOCK_MATERIALS));
+        assert_eq!(ids(&SeparatorStyle::ALL), shown(super::SEPARATOR_STYLES));
+        assert_eq!(ids(&TooltipStyle::ALL), shown(super::TOOLTIP_STYLES));
+        assert_eq!(ids(&GrainStyle::ALL), shown(super::super::GRAIN_STYLES));
+        assert_eq!(ids(&GrainTint::ALL), shown(super::super::GRAIN_TINTS));
+        // The taskbar's choices parse into its settings.
+        for (key, choices) in [("material", super::TASKBAR_MATERIALS), ("indicator", super::TASKBAR_INDICATORS), ("focus_style", super::TASKBAR_FOCUS), ("labels", super::TASKBAR_LABELS), ("grain", super::super::GRAIN_STYLES)] {
+            for (id, _) in choices {
+                let mut plugins = mandara_config::PluginsConfig::default();
+                plugins.settings.insert("taskbar".into(), toml::from_str(&format!("{key} = \"{id}\"")).unwrap());
+                let parsed = toml::Table::try_from(mandara_config::taskbar::TaskbarSettings::from_plugins(&plugins)).unwrap();
+                assert_eq!(parsed.get(key).and_then(|v| v.as_str()), Some(*id), "{key} = {id}");
+            }
+        }
+    }
 }

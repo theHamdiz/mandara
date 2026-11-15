@@ -1775,7 +1775,7 @@ impl Render for StudioView {
                 // The ready-made looks first, then the sections in setup
                 // order (launcher_page.rs).
                 Section::Launcher => self.launcher_page(&cfg, &p, cx),
-                Section::Dock => self.dock_page(&cfg, &p, cx),
+                Section::Dock => self.dock_page(&cfg, &p, window, cx),
                 Section::DateTime => {
                     // The system clock first: time zone, network time and
                     // the mismatch warning (time_card.rs).

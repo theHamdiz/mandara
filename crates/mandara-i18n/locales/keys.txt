@@ -137,6 +137,7 @@ A container using this much CPU (percent of one core) is highlighted
 A continued shortcut ends before its next line.
 A continuous wave has no gaps between bars.
 A control desk with end-side navigation, cyan highlights and squared controls.
+A count on apps with two or more windows
 A crisp offset shadow in ink instead of the soft one; 0 keeps the soft shadows
 A custom shortcut already uses this key. Edit that shortcut instead.
 A custom shortcut overrides this default. Edit the custom shortcut instead.
@@ -161,6 +162,8 @@ A few extra rak'ahs each day quietly build you a home.
 A filesystem this full turns amber
 A filesystem this full turns coral
 A filtered Btrfs balance releases empty block groups
+A fine texture over the glass, drawn once and reused
+A fine texture over the tray
 A fixed light or dark wallpaper is set under Fit & effects; it shows instead of the slideshow while the theme is in that mode.
 A floating bar has no edge to hang from; popups on its edge stay cards
 A floating bar has no edge to join, so the dock opens as a card next to it
@@ -185,6 +188,7 @@ A grain of poetry suffices to season a century.
 A green retro terminal with a scanline glow
 A hairline around floating panels
 A hairline edge around each capsule
+A hairline, or only the gap
 A hook still running after this is stopped (rules can set their own)
 A label above the icon under the pointer
 A label: size, bold and tone style it
@@ -281,6 +285,7 @@ A single column sits in the middle instead of at the left edge
 A slim bar of items
 A slim bar of plugin icons and pills on the left and right edges; panels pour out sideways. They replace the widget sidebar on their edges
 A slim bar on the left edge; panels open sideways
+A small pill, or the dock's own glass and grain
 A smoothed spectrum along the screen edge, with a soft glow; only while music plays
 A soft halo under the lines
 A soft shadow under separate side bars
@@ -666,6 +671,7 @@ App colours: Themes → Other apps
 App data
 App icon shape
 App icons
+App icons, before the bar's own icon scale
 App id, e.g. ^pavucontrol$
 App ids left out of screen time
 App ids whose copies are skipped while they have focus
@@ -673,6 +679,7 @@ App installer
 App installer jobs with their phase and progress
 App name
 App name or pattern, then Enter
+App names
 App permissions
 App permissions are available for Flatpak apps on Linux.
 App permissions supports up to 512 installed Flatpak apps.
@@ -1109,6 +1116,7 @@ Button icon
 Buttons
 Buttons apps attach, like Reply or Open
 Buttons in panels, the sidebar, the main menu and Studio, and the round icon buttons. Filled buttons stay the main action in every design
+Buttons straight on the bar, or on a tray of the dock's classic or liquid glass
 Buy me a coffee on Ko-fi
 By choosing an empty password, your stored passwords will not be safely encrypted. They will be accessible by anyone with access to your files (preview)
 By name
@@ -1402,6 +1410,8 @@ City or place name
 Clarice Lispector
 Classic
 Classic analog
+Classic glass
+Classic glass, or liquid glass: a translucent body with a bright top edge, light gathered inside its edges and a soft lens across the top
 Classic list
 Classic: one surface with the search field and results. Beacon: a centred search bar with results under it once you type
 Classic: profile cards above the battery card. Modern: the battery first with a large charge ring and a charge graph, one profile switch, and the technical details folded away
@@ -2149,6 +2159,7 @@ Do not take anything that is not yours with an oath, not even a twig.
 Do what a click on a desktop widget does: tick a to-do, flip a toggle, start the timer, open a shortcut…
 Dock
 Dock items: pinned, running and recent apps with their windows, stacks
+Dock material
 Dock settings…
 Docker and Podman containers: status, live usage, logs and controls
 Doctor Brodie's Report
@@ -2641,6 +2652,7 @@ Fill the screen
 Fill under the curve
 Filled
 Filled dial
+Film
 Film grain
 Filter by kind
 Filter by name
@@ -2667,6 +2679,7 @@ Finding installed apps…
 Finding the latest release…
 Finds lines of text in screenshots (PP-OCRv5 mobile)
 Finds what is near and far in a wallpaper for the depth clock (Depth Anything V2 Small)
+Fine
 Fine-tune
 Fine-tune your Studio Look
 Finger count
@@ -2766,6 +2779,7 @@ Focus session {count} done
 Focus timer
 Focus timer with breaks and session tracking
 Focus {direction}
+Focused app
 Focused display
 Focused opacity
 Focused tile size
@@ -2812,6 +2826,7 @@ Follows which window has focus
 Follows your desktop
 Font
 Fonts and text sizes everywhere
+For Liquid glass
 For developers
 For everyone (--system)
 For me (--user)
@@ -2822,6 +2837,7 @@ For terminal apps; empty uses your preferred terminal (Applications), then $TERM
 For the Cards style
 For the Custom quality
 For the Latest notification chip
+For the Lift hover (Motion → Dock)
 For the Model mode
 For the Numbers, Sparkline and Chart chips; the rings follow Refresh every
 For the Ring style
@@ -2959,6 +2975,7 @@ Gap between icons
 Gap between neighbouring bar items
 Gap between neighbouring items
 Gap between sidebar cards
+Gap between the buttons
 Gap between the dock and the screen edge
 Gap to the bar
 Gap to windows
@@ -3048,6 +3065,11 @@ Grace period after the pointer leaves
 Graded
 Gradient angle
 Gradient group tabs
+Grain
+Grain colour
+Grain contrast
+Grain size
+Grain strength
 Graphics
 Graphics acceleration
 Graphics devices
@@ -3178,9 +3200,11 @@ High / low in the bar
 High contrast
 Higher is sharper and larger
 Higher is snappier
+Higher makes strong specks stand out from faint ones
 Higher settles with less bounce
 Higher values fall back more slowly for a calmer motion
 Highest frame rate a video wallpaper plays at; lower uses less power
+Highlight
 Highlight row, column and box
 Highlight the same digits
 Highlighted in each city's local time on the meeting planner
@@ -3252,7 +3276,9 @@ Hours
 Hours ahead or behind
 Hours between automatic checks
 Hours; 0 keeps them until you clear them
+Hover
 Hover highlight
+Hover lift
 Hovering never moves the selection
 How Mandara starts apps from the launcher, dock and bar: a prefix such as uwsm app --, a systemd scope per app, and the terminal for terminal apps.
 How a community opens; change it any time in the panel
@@ -3270,6 +3296,7 @@ How chips and choices between options look
 How dark the bar's shadow is
 How far a history card travels before it is dismissed
 How far back the clock sits in the picture: low lets everything but the far background pass in front, high only the nearest things
+How far the icon under the pointer rises with the Lift hover
 How far you have read through a hadith collection
 How fast a long title scrolls in the bar (it stays still with reduced motion)
 How fast the dock slides in and out
@@ -3289,6 +3316,7 @@ How long the fade after each change takes
 How long the panel's sleep timer runs before the radio fades out
 How long the pointer must rest in the corner
 How long the pointer must rest on an edge first
+How long the pointer rests on an icon before its name shows; then it follows the pointer at once
 How long the pointer rests on the edge before an unpinned side bar slides out
 How long to hold
 How long to look at something 6 metres away
@@ -3335,6 +3363,7 @@ How text fields and search boxes are drawn
 How the bar item shows unread articles
 How the critical warning appears
 How the dock comes and goes, auto-hide included
+How the focused app's button stands out
 How the image arrives once its lines are drawn
 How the lock screen looks and what it shows
 How the login and lock screens look
@@ -3344,6 +3373,7 @@ How the volume, brightness and mixer sliders look; thin sliders keep the classic
 How the warning appears
 How thick the outline's strokes are
 How to publish a plugin
+How visible the grain is; it always stays subtle
 How well said the aged farmer to his son, O light of my eyes, thou wilt not reap save that which thou hast sown.
 How wide each item is across the side bar
 How wide each side bar is
@@ -3935,12 +3965,14 @@ LibreTranslate
 Life is like riding a bicycle. To keep your balance you must keep moving.
 Life is not in bits and pieces. It is a magnificent, rhythmic, pulsating symphony.
 Life is not what one lived, but what one remembers and how one remembers it in order to recount it.
+Lift
 Light
 Light & dark
 Light / dark
 Light angle
 Light appearance
 Light from
+Light gathered inside the liquid glass and its lens highlight
 Light intensity
 Light or dark surfaces for every theme
 Light panel
@@ -3978,6 +4010,7 @@ Links
 Links it into ~/.config/Kvantum and runs kvantummanager --set Mandara
 Linux & open source
 Liquid
+Liquid glass
 Liquid metal: shapes stretch as they travel and round off at rest
 Liquid stretch
 Liquid wave
@@ -4106,6 +4139,7 @@ Long break
 Long break every
 Long break length
 Longer copies aren't recorded
+Longer names end in an ellipsis
 Longer titles are cut short with an ellipsis
 Longitude
 Look
@@ -4626,7 +4660,9 @@ Name an app (desktop id or name)
 Name and battery
 Name and strength
 Name at least one file to install
+Name delay
 Name in the launcher (empty keeps the app's own)
+Name label
 Name the app the rule is for
 Name the profile first
 Name, command or PID…
@@ -4636,6 +4672,7 @@ Named routines: each step is a Mandara command, run in order. Find them by name 
 Names
 Names and codes
 Names beside fan items and under grid icons
+Names beside the icons
 Names in Arabic
 Narrated by {narrator}
 Nasa'i
@@ -4655,6 +4692,7 @@ Needs Hyprland 0.55 or newer (its Lua config)
 Needs Mandara Login (greetd): its PAM file wasn't found.
 Needs Super, Ctrl or Alt
 Needs a terminal (Studio → Applications)
+Needs a tray material
 Needs attention
 Needs no system access beyond drawing its own view
 Needs nvidia-smi
@@ -4684,7 +4722,9 @@ NetworkManager's OpenVPN plugin isn't installed (networkmanager-openvpn)
 Networking isn't available
 Networks shown
 Networks you join appear here.
+Neutral
 Neutral app icons drawn in one consistent rounded shape
+Neutral specks, or specks in the hue of the theme's surfaces
 Never
 Never blur behind this window
 Never cut family ties
@@ -5212,6 +5252,7 @@ Off while a mouse is plugged in
 Off, it reads and writes nothing.
 Off. Nothing runs in the background until you turn it on.
 Off: each minimized window gets its own icon on the right side
+Off: every window gets a button of its own, with its title as the name
 Off: low-urgency notifications vanish when their popup closes
 Off: only windows on the focused display
 Off: picking a look also brings its component designs, which you can change afterwards
@@ -5277,6 +5318,7 @@ Once per login, when KeePassXC is running with a locked database, Mandara's dial
 Once per session
 One
 One app's screen time over the last seven days
+One button per app
 One centered island that morphs
 One click sets the bar, its own desktop widgets, colors, fonts and roundness together; your own widgets and bar items stay. Change anything and it is kept as a look of your own. Your setup is saved first, so you can always go back. Looks never change your wallpaper.
 One continuous track with a short grip inside the end of the fill
@@ -5539,6 +5581,7 @@ Panels you popped out of the bar come back where they were after a restart
 Panic inside a command (debug builds; tests fault isolation)
 Paper
 Paper and ink for focused work: the productive bar at the bottom with tasks, notes and a focus timer.
+Paper fibre
 Parallax
 Part of Mandara's core, so it is always on. {reason}
 Partial restored copies are kept.
@@ -5641,6 +5684,7 @@ Pick Command as the action first
 Pick Microphone or Both under Sound first
 Pick System sound or Both under Sound first
 Pick a cursor theme folder or an archive (.tar.gz, .tar.xz, .tar.zst, .tar.bz2 or .zip)
+Pick a grain style first
 Pick a level
 Pick a network below
 Pick a picture for the sticker
@@ -6524,9 +6568,11 @@ Run with sh -c when the action is Command
 Run {command}
 Run {program}
 Running
+Running apps
 Running apps count only windows on the dock's own display
 Running hooks
 Running hot — performance is limited
+Running indicator
 Running indicators
 Running processes matching a name, command or PID (CPU order)
 Running · locked
@@ -6830,6 +6876,7 @@ Sentences, 439
 Separate buttons close together; the chosen one fills and rounds fully
 Separate side bars: a glass pill per group, one island, or a slab along the whole edge
 Separate up to 24 entity ids with spaces; empty shows the first available entities
+Separator style
 Separators
 Server address
 Server replied with HTTP {status}
@@ -6976,6 +7023,7 @@ Show again
 Show all {count} apps
 Show an app under your own name (empty name restores it)
 Show an on-screen display with the current value
+Show apps asking for attention
 Show available devices
 Show clearly-labelled demo accounts instead of the keyring (on/off)
 Show code
@@ -7111,6 +7159,7 @@ Size
 Size & placement
 Size badge
 Size of each item's button
+Size of each speck
 Size of the app icons in the grid
 Size of the capture toolbar and its hints
 Size of the floating card in the middle of the screen
@@ -7228,10 +7277,12 @@ Space between the right bar's items and its long edges (unset: Item size)
 Space inside cards
 Space inside each bar item, around its content
 Space inside the window frame.
+Space only
 Spacing
 Sparkline
 Speak the truth
 Speakers
+Speckle
 Spectrum bars
 Specular rim
 Speech, 1997
@@ -7403,6 +7454,7 @@ Strength
 Strength of glass edge highlights
 Strength of the glass edge highlight and shade
 Strength of the highlight and shade
+Strength of the liquid glass's edge highlights
 Stretch
 Stripes
 Strong
@@ -7455,6 +7507,7 @@ Surah {n} is out of order
 Surah {n} · {count} ayahs
 Surahs
 Surface
+Surface colour
 Surface transitions
 Surprise me
 Suspend
@@ -7950,6 +8003,7 @@ The i2c-dev kernel module isn't loaded
 The icon on the bar's launcher button
 The icon shows no readings
 The icon theme catalog (variants, licence, installed, active), your imports and other installed icon themes
+The icon under the pointer rises a little or gets a soft plate behind it, on a spring
 The icons of the apps on each tag or workspace
 The idle manager is not running
 The image can't be read: {error}
@@ -7989,6 +8043,7 @@ The login screen isn't allowed to do this ({error}). See {doc}
 The main menu is see-through glass with solid cards on it
 The main menu opens from the bar only
 The managed compositor file has changed. Run Config doctor before editing shortcuts.
+The mark under apps with windows; apps asking for attention turn it coral
 The meaning couldn't be loaded
 The meaning in your language
 The meaning in your language under the Arabic (English where the collection has none in yours). Off: Arabic only
@@ -8206,6 +8261,7 @@ The world is like a Mask dancing. If you want to see it well, you do not stand i
 The {corner} corner has no action
 The {language} language pack was downloaded but couldn't be loaded
 The × on a popup only hides it; it stays in the history
+Their button and mark turn coral
 Their files stay in {home}
 Their old age is an open door; serve them with love while you can.
 Theme
@@ -8423,6 +8479,7 @@ Time, date and calendar
 Time-synced lyrics from lrclib.net in the media panel (fetched only while it is open)
 Timeouts
 Timer
+Tint
 Tint the header
 Tirmidhi
 Tirukkural 100
@@ -8528,6 +8585,7 @@ Translucency
 Trash
 Trash information is missing or invalid. Inspect the item before cleaning it.
 Trash item
+Tray
 Tray items (role, status, icons, menus)
 Tries before giving up on a station that dropped
 Trigger size
@@ -8580,13 +8638,17 @@ Turn on
 Turn on Custom spring first
 Turn on Feeds
 Turn on Item capsules first
+Turn on Magnification first
 Turn on Only at certain times first
 Turn on Refresh in the background first
 Turn on Rim light first
 Turn on Screen frame first
+Turn on Separators first
 Turn on Shadow first
+Turn on Show names on hover first
 Turn on Side bars first
 Turn on group or item capsules first
+Turn on names first
 Turn on the depth effect first
 Turn on this side bar first
 Turn on while an app shares your screen, and off again when sharing stops
@@ -9187,6 +9249,7 @@ Wi-Fi and wired connectivity
 Wi-Fi is off
 Wi-Fi, Bluetooth, do not disturb and more; shapes that change when on
 Wi-Fi, VPN, hotspot and Bluetooth devices
+Widest name
 Widget kinds come from plugins: switch them on or off in Studio → Plugins (Desktop widgets).
 Widgets
 Widgets on the desktop (a widget's own font wins)
