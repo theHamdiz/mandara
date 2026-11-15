@@ -410,7 +410,8 @@ fn bar_view(text_slot: &RefCell<BarText>, palette: &MandaraPalette, cx: &App) ->
             .when(connected > 0, |el| el.child(div().text_size(px(text::LABEL)).font_features(tabular_nums()).text_color(palette.on_surface_variant.hsla()).child(crate::bar::badge::label(connected))))
             .into_any_element();
     }
-    let row = bar_chip::text_row(bar_chip::GLYPH_GAP_PX).font_features(tabular_nums());
+    // Tabular figures only where numbers change (the battery figure), not on names.
+    let row = bar_chip::text_row(bar_chip::GLYPH_GAP_PX);
     match shown(s) {
         Shown::Nothing => row.child(adapter).into_any_element(),
         Shown::Several(n) => {
@@ -434,7 +435,7 @@ fn bar_view(text_slot: &RefCell<BarText>, palette: &MandaraPalette, cx: &App) ->
                             .gap(px(BAR_BATTERY_GAP_PX))
                             .flex_none()
                             .child(ring(frac, BAR_BATTERY_RING_PX, BATTERY_RING_STROKE_PX, readable(color, palette), palette.on_surface.with_alpha(BATTERY_TRACK_ALPHA)))
-                            .child(div().w(px(BAR_BATTERY_W_PX)).text_color(palette.on_surface_variant.hsla()).child(percent_text(frac))),
+                            .child(div().w(px(BAR_BATTERY_W_PX)).font_features(tabular_nums()).text_color(palette.on_surface_variant.hsla()).child(percent_text(frac))),
                     )
                 })
                 .into_any_element()

@@ -506,8 +506,9 @@ fn bar_view(name: &RefCell<bar_chip::TextSlot>, palette: &MandaraPalette, cx: &A
     let wifi = state.connectivity == Connectivity::Wifi;
     let label = name.borrow_mut().get(bar_name(state));
     let ink = if offline { palette.on_surface_variant } else { palette.on_surface };
+    // Tabular figures only on the percentage: on names they space out
+    // hyphens and letters ("Wi-Fi").
     bar_chip::text_row(bar_chip::GLYPH_GAP_PX)
-        .font_features(tabular_nums())
         .map(|el| match (look.style, wifi) {
             // Bars read left to right in every language.
             (NetworkBar::Signal, true) => el.child(div().ltr_row().child(signal_bars(state.strength, ink, palette))),
@@ -516,7 +517,7 @@ fn bar_view(name: &RefCell<bar_chip::TextSlot>, palette: &MandaraPalette, cx: &A
         // Without Wi-Fi the Signal look names the link or its state instead.
         .when(look.style.name() || !wifi, |el| el.child(bar_chip::label(label, look.width, ink)))
         .when(look.style.strength() && wifi, |el| {
-            el.child(div().w(px(BAR_STRENGTH_W_PX)).flex_none().text_color(palette.on_surface_variant.hsla()).child(percent_text(f32::from(state.strength) / PERCENT)))
+            el.child(div().w(px(BAR_STRENGTH_W_PX)).flex_none().font_features(tabular_nums()).text_color(palette.on_surface_variant.hsla()).child(percent_text(f32::from(state.strength) / PERCENT)))
         })
         .into_any_element()
 }
