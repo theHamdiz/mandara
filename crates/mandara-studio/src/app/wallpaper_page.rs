@@ -375,9 +375,13 @@ impl StudioView {
     fn set_wallpaper_tab(&mut self, tab: WallpaperTab, cx: &mut Context<Self>) {
         let from = st(cx).tab;
         if from == WallpaperTab::Workshop && tab != from {
-            for key in std::mem::take(&mut st(cx).workshop_drawn) {
-                mandara_ui::icon_raster::forget_workshop_preview(&key, None, cx);
-            }
+            let previews = std::mem::take(&mut st(cx).workshop_drawn);
+            // Wait until Studio's window is back in the app so its atlas is reachable.
+            cx.defer(move |cx| {
+                for key in previews {
+                    mandara_ui::icon_raster::forget_workshop_preview(&key, None, cx);
+                }
+            });
         }
         if from == WallpaperTab::Generator && tab != from {
             // The generator's previews go with its tab.
