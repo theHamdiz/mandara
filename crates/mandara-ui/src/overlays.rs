@@ -20,11 +20,14 @@ mod launcher_looks;
 mod beacon_keyboard;
 mod launcher_agent;
 mod launcher_hint;
+mod launcher_data;
 
 use crate::bidi::Bidi as _;
 use crate::launcher_icons::IconLedger;
+use launcher_data::{AppCatalog, Catalog, CatalogRequest, Wallpapers};
 use launcher_looks::{BeaconMode, GridFilter};
-use std::time::Instant;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use gpui::layer_shell::{Anchor, KeyboardInteractivity, Layer};
 use gpui::{
@@ -551,6 +554,17 @@ fn usage_key(item: &Item) -> String {
     }
 }
 
+/// Windows share their app's usage score, but selection follows the window id.
+fn selection_key(item: &Item) -> String {
+    if let Item::Hit(hit) = item
+        && hit.provider == "windows"
+        && let HitAction::Command(words) = &hit.action
+    {
+        return words.join(" ");
+    }
+    usage_key(item)
+}
+
 /// Live data the providers search, gathered when the launcher opens. The
 /// provider settings follow config edits while it is open
 /// ([`SearchCtx::follow_providers`]).
@@ -562,8 +576,9 @@ struct SearchCtx {
     recent_count: usize,
     windows: Vec<mandara_services::toplevels::Toplevel>,
     clipboard: mandara_services::ClipboardState,
-    wallpapers: Vec<std::path::PathBuf>,
-    recent_files: Vec<std::path::PathBuf>,
+    wallpapers: Arc<Vec<std::path::PathBuf>>,
+    recent_files: Arc<Vec<launcher_ext::FileEntry>>,
+    catalog: Arc<Catalog>,
     /// Desktop actions of the apps (empty when they aren't listed).
     app_actions: Vec<Hit>,
     /// Third-party plugin results for the current query, asked before the
@@ -583,14 +598,13 @@ fn provider_on(providers: &mandara_config::workflow::LauncherProviders, id: &str
 }
 
 impl SearchCtx {
-    fn gather(apps: &[DesktopApp], cx: &App) -> Self {
+    fn gather(cx: &App) -> Self {
         let cfg = config(cx).read(cx).snapshot();
         let l = &cfg.launcher;
         let mut ctx = Self {
             usage: launcher_ext::usage_snapshot(&cfg),
             pinned: l.pinned.clone(),
             recent_count: l.usage.recent_count as usize,
-            app_actions: if l.look.app_actions { launcher_ext::action_hits(apps) } else { Vec::new() },
             providers: l.providers.clone(),
             ..Self::default()
         };
@@ -608,10 +622,10 @@ impl SearchCtx {
         match id {
             "windows" => self.windows = crate::windows::windows(cx).map(|w| w.read(cx).list().to_vec()).unwrap_or_default(),
             "clipboard" => self.clipboard = crate::hub::hub(cx).read(cx).clipboard.clone(),
-            "wallpapers" => self.wallpapers = crate::wallpaper::list(&crate::wallpaper::directory(cx)),
+            "wallpapers" => self.wallpapers = Wallpapers::get(cx, &config(cx).read(cx).get().wallpaper.directory).unwrap_or_default(),
             "files" => {
                 launcher_ext::warm_file_index();
-                self.recent_files = launcher_ext::recent_files();
+                self.recent_files = launcher_ext::RecentFiles::get(cx, &()).unwrap_or_default();
             }
             _ => {}
         }
@@ -623,8 +637,8 @@ impl SearchCtx {
         match id {
             "windows" => self.windows = Vec::new(),
             "clipboard" => self.clipboard = Default::default(),
-            "wallpapers" => self.wallpapers = Vec::new(),
-            "files" => self.recent_files = Vec::new(),
+            "wallpapers" => self.wallpapers = Arc::default(),
+            "files" => self.recent_files = Arc::default(),
             _ => {}
         }
     }
@@ -664,11 +678,27 @@ impl SearchCtx {
         (self.plugin_routed, self.plugin_hits) = crate::plugins::external::launcher_hits(q, builtin, cx);
     }
 
+    fn set_catalog(&mut self, catalog: Arc<Catalog>, actions: bool) {
+        self.app_actions = if actions { launcher_ext::action_hits(&catalog.apps) } else { Vec::new() };
+        self.catalog = catalog;
+    }
+
+    fn uses(&self, query: &str, provider: &str) -> bool {
+        let query = query.trim();
+        if self.plugin_routed || query.starts_with(['=', '/']) {
+            return false;
+        }
+        match launcher_ext::route(query, &self.providers) {
+            Some((id, _)) => id == provider || (provider == "apps" && id == "windows"),
+            None => provider == "apps" || (!query.is_empty() && launcher_ext::globals(&self.providers).any(|id| id == provider)),
+        }
+    }
+
     /// Results of provider `id` for `q`.
     fn provider_hits(&self, id: &str, q: &str, limit: usize) -> Vec<Hit> {
         match id {
             "emoji" => launcher_ext::emoji_hits(q, limit),
-            "windows" => launcher_ext::window_hits(q, &self.windows, limit),
+            "windows" => launcher_ext::window_hits(q, &self.windows, limit, |id| self.catalog.window_names.get(id).cloned().unwrap_or_else(|| crate::plugins::window::friendly_id(id))),
             "clipboard" => launcher_ext::clipboard_hits(q, &self.clipboard.entries, &self.clipboard.collections, limit),
             "wallpapers" => launcher_ext::wallpaper_hits(q, &self.wallpapers, limit),
             "files" => launcher_ext::file_hits(q, &self.recent_files, limit),
@@ -1207,27 +1237,87 @@ fn command_matches(typed: &str, index: &[Item], slash: bool) -> Vec<Item> {
     exact.into_iter().chain(extended.into_iter().map(|(_, i)| i)).chain(completed).collect()
 }
 
-/// Installed apps as the launcher lists them (hidden apps removed, your
-/// names and icons applied).
-fn launcher_apps(cx: &App) -> Vec<DesktopApp> {
-    launcher_ext::customize(apps::discover(), &config(cx).read(cx).get().launcher)
+/// JSON view of launcher results (for `launcher search`).
+pub fn search_json(query: String, cx: &mut App) -> Result<mandara_plugins::Output, String> {
+    with_results(query, cx, |query, results, _| {
+        Ok(serde_json::Value::Array(results.iter().take(12).map(|item| result_json(item, query)).collect()))
+    })
 }
 
-/// JSON view of launcher results (for `launcher search`).
-pub fn search_json(query: &str, cx: &mut App) -> serde_json::Value {
-    let apps = launcher_apps(cx);
+/// Stop waiting before the IPC client times out, so a stalled mount can't
+/// leave a deferred `launcher run` that opens a result much later.
+const LAUNCHER_DATA_TIMEOUT: Duration = Duration::from_secs(10);
+
+async fn wait_for_catalogs(requests: Vec<async_channel::Receiver<()>>, timer: gpui::Task<()>) -> bool {
+    use std::future::{Future as _, poll_fn};
+    use std::pin::pin;
+    use std::task::Poll;
+
+    let mut pending = pin!(async {
+        for request in requests {
+            let _ = request.recv().await;
+        }
+    });
+    let mut timer = pin!(timer);
+    poll_fn(|cx| {
+        if timer.as_mut().poll(cx).is_ready() {
+            Poll::Ready(false)
+        } else {
+            pending.as_mut().poll(cx).map(|_| true)
+        }
+    }).await
+}
+
+/// A command waits only for the providers that can affect its results.
+fn with_results(
+    query: String,
+    cx: &mut App,
+    finish: impl FnOnce(&str, Vec<Item>, &mut App) -> Result<serde_json::Value, String> + 'static,
+) -> Result<mandara_plugins::Output, String> {
     let index = build_index(cx);
-    let mut ctx = SearchCtx::gather(&apps, cx);
-    ctx.ask_plugins(query, cx);
-    // What the providers queued while answering is dropped, as in the
-    // launcher (a search runs nothing).
+    let mut ctx = SearchCtx::gather(cx);
+    ctx.ask_plugins(&query, cx);
     crate::plugins::external::settle_launcher(cx);
-    let results: Vec<serde_json::Value> = search_with(query, &apps, &index, &ctx)
-        .into_iter()
-        .take(12)
-        .map(|i| result_json(&i, query))
-        .collect();
-    serde_json::Value::Array(results)
+    let cfg = config(cx).read(cx).get();
+    let app_actions = cfg.launcher.look.app_actions;
+    let apps_key = ctx.uses(&query, "apps").then(|| CatalogRequest::new(cfg, &ctx.windows));
+    let wallpapers_key = ctx.uses(&query, "wallpapers").then(|| cfg.wallpaper.directory.clone());
+    let use_recents = ctx.uses(&query, "files");
+    let apps = apps_key.map(|key| AppCatalog::refresh(cx, key, launcher_data::read_catalog));
+    let wallpapers = wallpapers_key.map(|key| Wallpapers::refresh(cx, key, launcher_data::read_wallpapers));
+    let recents = use_recents.then(|| launcher_ext::RecentFiles::refresh(cx, (), launcher_ext::read_recent_files));
+    let requests = [
+        apps.as_ref().map(|request| request.ready()),
+        wallpapers.as_ref().map(|request| request.ready()),
+        recents.as_ref().map(|request| request.ready()),
+    ].into_iter().flatten().collect::<Vec<_>>();
+    if requests.is_empty() {
+        return finish(&query, search_with(&query, &[], &index, &ctx), cx).map(Into::into);
+    }
+    let (reply, result) = async_channel::bounded(1);
+    cx.spawn(async move |cx| {
+        let timed_out = || t("The service did not reply").to_string();
+        let timer = cx.background_executor().timer(LAUNCHER_DATA_TIMEOUT);
+        if !wait_for_catalogs(requests, timer).await {
+            let _ = reply.try_send(Err(timed_out()));
+        } else if !reply.is_closed() {
+            let output = cx.update(|cx| {
+                let cancelled = || t("Cancelled").to_string();
+                if let Some(request) = apps {
+                    ctx.set_catalog(request.value().ok_or_else(cancelled)?, app_actions);
+                }
+                if let Some(request) = wallpapers {
+                    ctx.wallpapers = request.value().ok_or_else(cancelled)?;
+                }
+                if let Some(request) = recents {
+                    ctx.recent_files = request.value().ok_or_else(cancelled)?;
+                }
+                finish(&query, search_with(&query, &ctx.catalog.apps, &index, &ctx), cx)
+            });
+            let _ = reply.try_send(output.map(|value| value.to_string()));
+        }
+    }).detach();
+    Ok(result.into())
 }
 
 /// One result as JSON, with what Enter would do (`effect`).
@@ -1244,7 +1334,7 @@ fn result_json(item: &Item, query: &str) -> serde_json::Value {
 /// `launcher run <query…> [--index N] [--dry-run]`: activates result N
 /// (default 0) for `query` exactly as Enter in the launcher would; with
 /// `--dry-run`, only reports what it would do.
-pub fn run_json(args: &[String], cx: &mut App) -> Result<serde_json::Value, String> {
+pub fn run_json(args: &[String], cx: &mut App) -> Result<mandara_plugins::Output, String> {
     let (mut dry_run, mut index, mut query) = (false, 0usize, Vec::new());
     let mut it = args.iter();
     while let Some(word) = it.next() {
@@ -1254,30 +1344,26 @@ pub fn run_json(args: &[String], cx: &mut App) -> Result<serde_json::Value, Stri
             _ => query.push(word.as_str()),
         }
     }
-    let query = query.join(" ");
-    let apps = launcher_apps(cx);
-    let mut ctx = SearchCtx::gather(&apps, cx);
-    ctx.ask_plugins(&query, cx);
-    crate::plugins::external::settle_launcher(cx);
-    let results = search_with(&query, &apps, &build_index(cx), &ctx);
-    let item = results.get(index).ok_or_else(|| tf("No result #{index} for {query} ({count} results)", &[("index", &index), ("query", &format!("{query:?}")), ("count", &results.len())]))?;
-    let mut out = result_json(item, &query);
-    out["dry_run"] = serde_json::Value::Bool(dry_run);
-    if !dry_run {
-        match plan(item, &query) {
-            Effect::Prompt(_) => {}
-            effect => {
-                launcher_ext::record_use(&usage_key(item), &config(cx).read(cx).snapshot());
-                // As from the launcher: it closes, then the effect runs.
-                let s = shell(cx);
-                if s.read(cx).launcher_open {
-                    s.update(cx, |s, cx| s.set_launcher(false, cx));
+    with_results(query.join(" "), cx, move |query, results, cx| {
+        let item = results.get(index).ok_or_else(|| tf("No result #{index} for {query} ({count} results)", &[("index", &index), ("query", &format!("{query:?}")), ("count", &results.len())]))?;
+        let mut out = result_json(item, query);
+        out["dry_run"] = serde_json::Value::Bool(dry_run);
+        if !dry_run {
+            match plan(item, query) {
+                Effect::Prompt(_) => {}
+                effect => {
+                    launcher_ext::record_use(&usage_key(item), &config(cx).read(cx).snapshot());
+                    // As from the launcher: it closes, then the effect runs.
+                    let s = shell(cx);
+                    if s.read(cx).launcher_open {
+                        s.update(cx, |s, cx| s.set_launcher(false, cx));
+                    }
+                    execute(effect, cx);
                 }
-                execute(effect, cx);
             }
         }
-    }
-    Ok(out)
+        Ok(out)
+    })
 }
 
 pub struct LauncherView {
@@ -1300,7 +1386,8 @@ pub struct LauncherView {
     /// Caret blink phase restarts on every edit (solid while typing).
     blink_from: Instant,
     blink_task: Option<gpui::Task<()>>,
-    apps: Vec<DesktopApp>,
+    catalog_key: CatalogRequest,
+    wallpapers_key: String,
     /// Actions, plugins, commands, settings, slash commands and skills.
     index: Vec<Item>,
     /// Provider data (windows, clipboard, wallpapers, files, usage).
@@ -1375,7 +1462,7 @@ pub struct LauncherView {
 
 /// The colour icon files the dock shows (the launcher leaves them decoded).
 fn dock_icon_paths(cx: &mut App) -> Vec<std::path::PathBuf> {
-    crate::plugins::dock::dock_icon_ids(cx).iter().filter_map(|id| crate::plugins::workspaces::raster_icon_path(id)).map(|p| p.to_path_buf()).collect()
+    crate::plugins::dock::dock_icon_ids(cx).iter().filter_map(|id| crate::plugins::workspaces::cached_raster_icon_path(id)).map(|p| p.to_path_buf()).collect()
 }
 
 /// Whether a viewport is an output's size (within the settle slack).
@@ -1433,24 +1520,78 @@ impl LauncherView {
             let launcher = &config.read(cx).get().launcher;
             let look_changed = launcher.look != this.look;
             let agent_changed = this.agent.as_ref().is_some_and(|agent| agent.settings != launcher.agent);
+            let files_were_enabled = this.ctx.providers.files.enabled;
+            let wallpapers_were_enabled = this.ctx.providers.wallpapers.enabled;
             let providers_changed = follow_prefix_settings(&mut this.ctx, &mut this.hint, &mut this.agent_enabled, launcher, |ctx, id| ctx.load(id, cx));
             if look_changed {
                 this.look = config.read(cx).get().launcher.look.clone();
             }
             if providers_changed {
                 this.mode = launcher_looks::settle_mode(this.mode, &this.ctx.providers);
+                if !files_were_enabled && this.ctx.providers.files.enabled {
+                    launcher_ext::RecentFiles::refresh_for_view(cx, (), launcher_ext::read_recent_files);
+                }
             }
-            if look_changed || agent_changed || providers_changed {
+            let wallpaper_dir = config.read(cx).get().wallpaper.directory.clone();
+            let wallpapers_changed = wallpaper_dir != this.wallpapers_key;
+            if wallpapers_changed || (!wallpapers_were_enabled && this.ctx.providers.wallpapers.enabled) {
+                this.wallpapers_key = wallpaper_dir;
+                if this.ctx.providers.wallpapers.enabled {
+                    this.ctx.load("wallpapers", cx);
+                    Wallpapers::refresh_for_view(cx, this.wallpapers_key.clone(), launcher_data::read_wallpapers);
+                }
+            }
+            let catalog_key = CatalogRequest::new(config.read(cx).get(), &this.ctx.windows);
+            if catalog_key != this.catalog_key {
+                this.catalog_key = catalog_key;
+                AppCatalog::refresh_for_view(cx, this.catalog_key.clone(), launcher_data::read_catalog);
+            }
+            if look_changed {
+                this.ctx.set_catalog(this.ctx.catalog.clone(), this.look.app_actions);
+            }
+            if look_changed || agent_changed || providers_changed || wallpapers_changed {
                 this.refilter(cx);
             }
             cx.notify();
         })
         .detach();
+        cx.observe_global::<launcher_ext::RecentFiles>(|this, cx| {
+            if this.ctx.providers.files.enabled
+                && let Some(recent) = launcher_ext::RecentFiles::get(cx, &())
+                && !Arc::ptr_eq(&recent, &this.ctx.recent_files)
+            {
+                this.ctx.recent_files = recent;
+                this.refilter_on_data("files", cx);
+            }
+        }).detach();
+        cx.observe_global::<Wallpapers>(|this, cx| {
+            if this.ctx.providers.wallpapers.enabled
+                && let Some(wallpapers) = Wallpapers::get(cx, &this.wallpapers_key)
+                && !Arc::ptr_eq(&wallpapers, &this.ctx.wallpapers)
+            {
+                this.ctx.wallpapers = wallpapers;
+                this.refilter_on_data("wallpapers", cx);
+            }
+        }).detach();
+        cx.observe_global::<AppCatalog>(|this, cx| {
+            if let Some(catalog) = AppCatalog::get(cx, &this.catalog_key)
+                && !Arc::ptr_eq(&catalog, &this.ctx.catalog)
+            {
+                this.ctx.set_catalog(catalog, this.look.app_actions);
+                this.categories = launcher_looks::categories(&this.ctx.catalog.apps, &this.ctx.pinned);
+                this.refilter_on_data("apps", cx);
+            }
+        }).detach();
         // Removed without its last frame (a crash of the close animation,
         // an output unplugged): still free the icons it decoded.
         cx.on_release(|this: &mut Self, cx| this.forget_decoded(cx)).detach();
         let focus = cx.focus_handle().tab_stop(true);
         focus.focus(window, cx);
+        let mut search = SearchCtx::gather(cx);
+        let catalog_key = CatalogRequest::new(config(cx).read(cx).get(), &search.windows);
+        if let Some(catalog) = AppCatalog::get(cx, &catalog_key) {
+            search.set_catalog(catalog, config(cx).read(cx).get().launcher.look.app_actions);
+        }
         let mut this = Self {
             agent: None,
             agent_enabled: config(cx).read(cx).get().launcher.agent.enabled,
@@ -1463,9 +1604,10 @@ impl LauncherView {
             text_bounds: Default::default(),
             blink_from: Instant::now(),
             blink_task: None,
-            apps: Vec::new(),
+            catalog_key,
+            wallpapers_key: config(cx).read(cx).get().wallpaper.directory.clone(),
             index: build_index(cx),
-            ctx: SearchCtx::default(),
+            ctx: search,
             results: Vec::new(),
             rect: (0.0, 0.0, 0.0, 0.0),
             selected: 0,
@@ -1501,9 +1643,14 @@ impl LauncherView {
             output: None,
             created: Instant::now(),
         };
-        this.apps = launcher_apps(cx);
-        this.ctx = SearchCtx::gather(&this.apps, cx);
-        this.categories = launcher_looks::categories(&this.apps, &this.ctx.pinned);
+        AppCatalog::refresh_for_view(cx, this.catalog_key.clone(), launcher_data::read_catalog);
+        if this.ctx.providers.wallpapers.enabled {
+            Wallpapers::refresh_for_view(cx, this.wallpapers_key.clone(), launcher_data::read_wallpapers);
+        }
+        if this.ctx.providers.files.enabled {
+            launcher_ext::RecentFiles::refresh_for_view(cx, (), launcher_ext::read_recent_files);
+        }
+        this.categories = launcher_looks::categories(&this.ctx.catalog.apps, &this.ctx.pinned);
         if this.look.remember_query {
             let q = launcher_ext::last_query();
             this.caret = q.chars().count();
@@ -1546,6 +1693,23 @@ impl LauncherView {
         }
     }
 
+    fn refilter_on_data(&mut self, provider: &str, cx: &mut Context<Self>) {
+        if !self.ctx.uses(&self.effective_query(), provider) {
+            return;
+        }
+        let selected = (self.selected != 0).then(|| self.results.get(self.selected)).flatten().map(selection_key);
+        self.refilter(cx);
+        if let Some(selected) = selected
+            && let Some(index) = self.results.iter().take(self.count()).position(|item| selection_key(item) == selected)
+        {
+            self.selected = index;
+            if self.grid_active() {
+                self.reveal_selected();
+            }
+        }
+        cx.notify();
+    }
+
     /// Refresh the active provider, keeping bang queries outside ordinary search.
     fn refilter(&mut self, cx: &mut Context<Self>) {
         if self.agent_refilter(cx) { return; }
@@ -1555,7 +1719,7 @@ impl LauncherView {
         let query = self.effective_query();
         self.ctx.ask_plugins(&query, cx);
         crate::plugins::external::settle_launcher(cx);
-        let mut results = search_with(&query, &self.apps, &self.index, &self.ctx);
+        let mut results = search_with(&query, &self.ctx.catalog.apps, &self.index, &self.ctx);
         if self.mode == Some(BeaconMode::Apps) {
             results.retain(|i| matches!(i, Item::App(_)));
         }
@@ -2070,8 +2234,9 @@ impl LauncherView {
         // Monochrome: the theme's symbolic icon, tinted like the bar's.
         if let Item::App(app) = item
             && crate::state::config(cx).read(cx).get().appearance.launcher_icons == mandara_config::IconStyle::Monochrome
-            && let Some(symbolic) = crate::plugins::workspaces::symbolic_icon(&app.id, inner.min(size * APP_ICON_FRAC), palette.on_surface)
+            && let Some(path) = self.ctx.catalog.symbolic.get(&app.id)
         {
+            let symbolic = gpui::svg().external_path(path.clone()).size(px(inner.min(size * APP_ICON_FRAC))).flex_none().text_color(palette.on_surface.hsla());
             return crate::icon_shape::plate(shape, size, fill, symbolic.into_any_element());
         }
         match item {
@@ -2087,9 +2252,12 @@ impl LauncherView {
             Item::Hit(h) => match &h.lead {
                 Lead::Glyph(g) => tile().bg(palette.surface_container_high.hsla()).text_size(px(EMOJI_LEAD_PX * size / ROW_LEAD_PX)).child(g.clone()).into_any_element(),
                 Lead::AppIcon(id) => {
-                    let icon = match crate::plugins::workspaces::raster_icon_path(id) {
+                    let path = self.ctx.catalog.window_icons.get(id)
+                        .or_else(|| self.ctx.catalog.apps.iter().find(|app| &app.id == id).and_then(|app| app.icon.as_ref()))
+                        .cloned();
+                    let icon = match path {
                         Some(path) => self.colour_icon(&path, inner.min(size * APP_ICON_FRAC)),
-                        None => crate::plugins::workspaces::app_icon(id, inner.min(size * APP_ICON_FRAC), palette.on_surface, false, palette),
+                        None => monogram(id, inner.min(size * APP_ICON_FRAC), corner, palette).into_any_element(),
                     };
                     crate::icon_shape::plate(shape, size, fill, icon)
                 }
@@ -2627,6 +2795,24 @@ mod tests {
             ["panel", "open", id] => assert!(ids.contains(id), "`{label}` opens the panel of unknown plugin {id}"),
             _ => {}
         }
+    }
+
+    #[test]
+    fn window_selection_distinguishes_windows_from_the_same_app() {
+        let window = |id: &str| Item::Hit(Hit {
+            provider: "windows",
+            key: "org.example.App".into(),
+            label: String::new(),
+            detail: String::new(),
+            lead: Lead::Icon("window"),
+            badge: "",
+            keywords: String::new(),
+            action: HitAction::Command(vec!["window".into(), "focus".into(), id.into()]),
+        });
+        let first = window("1");
+        let second = window("2");
+        assert_eq!(usage_key(&first), usage_key(&second));
+        assert_ne!(selection_key(&first), selection_key(&second));
     }
 
     /// `reddit` and `subreddit` find the plugin; `r/name` opens that

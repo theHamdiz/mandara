@@ -262,7 +262,7 @@ pub fn set_app_id_aliases(list: Vec<mandara_config::apps::AppIdAlias>) {
 }
 
 /// `app_id`, or the desktop id an alias maps it to.
-fn aliased(app_id: &str) -> std::borrow::Cow<'_, str> {
+pub(crate) fn aliased(app_id: &str) -> std::borrow::Cow<'_, str> {
     match ALIASES.read().ok().and_then(|a| mandara_config::apps::alias_for(&a, app_id).map(str::to_string)) {
         Some(d) => std::borrow::Cow::Owned(d),
         None => std::borrow::Cow::Borrowed(app_id),
@@ -273,17 +273,20 @@ pub fn icon_for_app_id(app_id: &str, prefer_symbolic: bool) -> Option<crate::ico
     if app_id.is_empty() {
         return None;
     }
-    let app_id = &*aliased(app_id);
+    icon_from_index(&entry_index(), &aliased(app_id), None, prefer_symbolic)
+}
+
+pub(crate) fn icon_from_index(index: &EntryIndex, app_id: &str, theme: Option<&str>, prefer_symbolic: bool) -> Option<crate::icon_theme::ResolvedIcon> {
     let key = app_id.to_lowercase();
     // Reverse-DNS ids (`org.mandara.studio`) only match exactly: their last
     // segment ("studio") would match unrelated apps (`com.obsproject.Studio`).
     let last = (!key.contains('.')).then(|| key.clone());
-    let index = &entry_index().icons;
-    let names: Vec<String> = [index.get(&key).cloned(), last.as_ref().and_then(|l| index.get(l).cloned()), Some(app_id.to_string()), Some(key.clone())]
+    let icons = &index.icons;
+    let names: Vec<String> = [icons.get(&key).cloned(), last.as_ref().and_then(|l| icons.get(l).cloned()), Some(app_id.to_string()), Some(key.clone())]
         .into_iter()
         .flatten()
         .collect();
-    names.iter().find_map(|n| crate::icon_theme::resolve(n, None, prefer_symbolic))
+    names.iter().find_map(|n| crate::icon_theme::resolve(n, theme, prefer_symbolic))
 }
 
 /// The real name of a window's app from its desktop entry (matched like
@@ -293,22 +296,24 @@ pub fn name_for_app_id(app_id: &str) -> Option<String> {
         return None;
     }
     let app_id = &*aliased(app_id);
-    // Mandara's own windows, whether or not a desktop entry is installed.
+    shell_app_name(app_id).or_else(|| entry_index().names.get(&app_id.to_lowercase()).cloned())
+}
+
+pub(crate) fn name_from_index(index: &EntryIndex, app_id: &str) -> Option<String> {
+    shell_app_name(app_id).or_else(|| index.names.get(&app_id.to_lowercase()).cloned())
+}
+
+fn shell_app_name(app_id: &str) -> Option<String> {
     match app_id {
-        mandara_core::STUDIO_APP_ID => return Some(mandara_i18n::t("Mandara Studio").to_string()),
-        mandara_core::SHELL_APP_ID => return Some(mandara_i18n::t("Mandara").to_string()),
-        _ => {}
+        mandara_core::STUDIO_APP_ID => Some(mandara_i18n::t("Mandara Studio").to_string()),
+        mandara_core::SHELL_APP_ID => Some(mandara_i18n::t("Mandara").to_string()),
+        _ => None,
     }
-    let key = app_id.to_lowercase();
-    let names = &entry_index().names;
-    // Exact desktop id / StartupWMClass; reverse-DNS ids never match by their
-    // last segment alone (see `icon_for_app_id`).
-    names.get(&key).cloned()
 }
 
 /// Desktop entries keyed by lowercase desktop id, `StartupWMClass` and id
 /// tail: icon names and display names.
-struct EntryIndex {
+pub(crate) struct EntryIndex {
     icons: HashMap<String, String>,
     names: HashMap<String, String>,
 }
@@ -326,7 +331,7 @@ fn refresh_entry_index() {
     if let Some(cache) = ENTRY_INDEX.get() { *cache.write().unwrap_or_else(|e| e.into_inner()) = None; }
 }
 
-fn build_entry_index() -> EntryIndex {
+pub(crate) fn build_entry_index() -> EntryIndex {
     let mut icons = HashMap::new();
     let mut names = HashMap::new();
     for dir in data_dirs() {

@@ -679,22 +679,12 @@ pub fn app_icon_at(app_id: &str, size: f32, decode_size: f32, tint: Color, monoc
     }
 }
 
-/// The colour icon file [`app_icon`] draws for `app_id`, when it is one
-/// [`crate::icon_raster`] decodes (the launcher tracks what it decodes).
-pub fn raster_icon_path(app_id: &str) -> Option<Arc<Path>> {
-    match resolve_icon(app_id, false) {
-        AppIcon::Raster(path) if crate::icon_raster::handles(&path) => Some(path),
+/// Already-resolved dock icons to retain when a launcher surface is released.
+pub(crate) fn cached_raster_icon_path(app_id: &str) -> Option<Arc<Path>> {
+    ICONS.with_borrow(|cache| match cache.1[0].get(app_id) {
+        Some(AppIcon::Raster(path)) if crate::icon_raster::handles(path) => Some(path.clone()),
         _ => None,
-    }
-}
-
-/// The app's symbolic (monochrome) icon tinted `tint`, when its icon theme
-/// has one (Studio → Launcher → App icons: Monochrome).
-pub fn symbolic_icon(app_id: &str, size: f32, tint: Color) -> Option<AnyElement> {
-    match resolve_icon(app_id, true) {
-        AppIcon::Symbolic(path) => Some(gpui::svg().external_path(path).size(px(size)).flex_none().text_color(tint.hsla()).into_any_element()),
-        _ => None,
-    }
+    })
 }
 
 /// Icon and display name of a MangoWM layout code (`T`, `S`, `VS`, …).

@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use mandara_config::workflow::{LauncherProviders, ProviderConfig};
@@ -232,13 +232,13 @@ pub fn emoji_hits(query: &str, limit: usize) -> Vec<Hit> {
 
 /// Open windows (most recently used first) matching every typed word in
 /// title or app name.
-pub fn window_hits(query: &str, windows: &[mandara_services::toplevels::Toplevel], limit: usize) -> Vec<Hit> {
+pub fn window_hits(query: &str, windows: &[mandara_services::toplevels::Toplevel], limit: usize, app_name: impl Fn(&str) -> String) -> Vec<Hit> {
     let q = query.trim().to_lowercase();
     windows
         .iter()
         .filter(|w| !crate::windows::is_shell(&w.app_id))
         .filter_map(|w| {
-            let app = crate::plugins::window::app_name(&w.app_id);
+            let app = app_name(&w.app_id);
             let text = format!("{} {} {}", w.title, app, w.app_id).to_lowercase();
             (q.is_empty() || q.split_whitespace().all(|t| text.contains(t))).then(|| Hit {
                 provider: "windows",
@@ -309,12 +309,150 @@ pub fn wallpaper_hits(query: &str, images: &[PathBuf], limit: usize) -> Vec<Hit>
 
 // ── Files ────────────────────────────────────────────────────────────────
 
-/// Recently used files from `~/.local/share/recently-used.xbel`, newest last
-/// in the file → newest first here.
-pub fn recent_files() -> Vec<PathBuf> {
+#[derive(Debug, PartialEq, Eq)]
+pub struct FileEntry {
+    path: PathBuf,
+    directory: bool,
+}
+
+/// One stalled key leaves room for a replacement without creating an
+/// unbounded number of threads if several mounts are unavailable.
+const MAX_SNAPSHOT_READS: usize = 2;
+
+pub(super) struct Snapshot<V> {
+    ready: async_channel::Receiver<()>,
+    value: OnceLock<Arc<V>>,
+}
+
+impl<V> Snapshot<V> {
+    fn new() -> (async_channel::Sender<()>, Arc<Self>) {
+        let (done, ready) = async_channel::bounded(1);
+        (done, Arc::new(Self { ready, value: OnceLock::new() }))
+    }
+
+    pub(super) fn ready(&self) -> async_channel::Receiver<()> {
+        self.ready.clone()
+    }
+
+    /// A closed signal with no value means the request was cancelled or
+    /// its worker stopped. The value belongs to this request, not the cache.
+    pub(super) fn value(&self) -> Option<Arc<V>> {
+        self.value.get().cloned()
+    }
+}
+
+struct SnapshotJob<K, V> {
+    key: K,
+    done: async_channel::Sender<()>,
+    snapshot: Arc<Snapshot<V>>,
+}
+
+/// Bounded blocking readers, one queued request per caller kind, and keyed last-good values.
+pub(super) struct BackgroundSnapshot<K, V> {
+    values: std::collections::VecDeque<(K, Arc<V>)>,
+    running: Vec<(K, Arc<Snapshot<V>>)>,
+    queued_view: Option<SnapshotJob<K, V>>,
+    queued_command: Option<SnapshotJob<K, V>>,
+}
+
+impl<K: 'static, V: 'static> gpui::Global for BackgroundSnapshot<K, V> {}
+
+impl<K, V> Default for BackgroundSnapshot<K, V> {
+    fn default() -> Self {
+        Self { values: Default::default(), running: Vec::new(), queued_view: None, queued_command: None }
+    }
+}
+
+impl<K: Clone + PartialEq + Send + 'static, V: Send + Sync + 'static> BackgroundSnapshot<K, V> {
+    pub(super) fn get(cx: &gpui::App, key: &K) -> Option<Arc<V>> {
+        cx.try_global::<Self>()?.values.iter().find_map(|(loaded, value)| (loaded == key).then(|| value.clone()))
+    }
+
+    pub(super) fn refresh(cx: &mut gpui::App, key: K, load: fn(K) -> V) -> Arc<Snapshot<V>> {
+        let snapshot = cx.default_global::<Self>().request(key, false);
+        Self::start_next(cx, load);
+        snapshot
+    }
+
+    pub(super) fn refresh_for_view(cx: &mut gpui::App, key: K, load: fn(K) -> V) {
+        cx.default_global::<Self>().request(key, true);
+        Self::start_next(cx, load);
+    }
+
+    fn request(&mut self, key: K, for_view: bool) -> Arc<Snapshot<V>> {
+        if let Some((_, snapshot)) = self.running.iter().find(|(running, _)| running == &key) {
+            return snapshot.clone();
+        }
+        if let Some(job) = self.queued_view.as_ref().filter(|job| job.key == key) {
+            return job.snapshot.clone();
+        }
+        if let Some(job) = self.queued_command.as_ref().filter(|job| job.key == key) {
+            let snapshot = job.snapshot.clone();
+            if for_view {
+                self.queued_view = self.queued_command.take();
+            }
+            return snapshot;
+        }
+        let slot = if for_view {
+            &mut self.queued_view
+        } else {
+            &mut self.queued_command
+        };
+        let (done, snapshot) = Snapshot::new();
+        *slot = Some(SnapshotJob { key, done, snapshot: snapshot.clone() });
+        snapshot
+    }
+
+    fn next(&mut self) -> Option<SnapshotJob<K, V>> {
+        if self.running.len() >= MAX_SNAPSHOT_READS {
+            return None;
+        }
+        // IPC must not replace the refresh that the open launcher is waiting for.
+        self.queued_view.take().or_else(|| self.queued_command.take())
+    }
+
+    fn start_next(cx: &mut gpui::App, load: fn(K) -> V) {
+        let Some(job) = cx.global_mut::<Self>().next() else { return };
+        let SnapshotJob { key, done, snapshot } = job;
+        cx.global_mut::<Self>().running.push((key.clone(), snapshot.clone()));
+        let (result, receive) = async_channel::bounded(1);
+        let input = key.clone();
+        let _ = std::thread::Builder::new().name("mandara-launcher-data".into()).spawn(move || {
+            let _ = result.try_send(Arc::new(load(input)));
+        });
+        cx.spawn(async move |cx| {
+            let result = receive.recv().await;
+            cx.update(|cx| {
+                let state = cx.global_mut::<Self>();
+                state.running.retain(|(_, running)| !Arc::ptr_eq(running, &snapshot));
+                if let Ok(value) = result {
+                    let _ = snapshot.value.set(value.clone());
+                    // A late result belongs to its own key. It cannot
+                    // replace the current directory's snapshot.
+                    state.values.retain(|(loaded, _)| loaded != &key);
+                    state.values.push_back((key, value));
+                    if state.values.len() > MAX_SNAPSHOT_READS {
+                        state.values.pop_front();
+                    }
+                }
+                Self::start_next(cx, load);
+            });
+            done.close();
+        }).detach();
+    }
+}
+
+pub(super) type RecentFiles = BackgroundSnapshot<(), Vec<FileEntry>>;
+
+pub(super) fn read_recent_files(_: ()) -> Vec<FileEntry> {
     let Some(path) = dirs::data_dir().map(|d| d.join("recently-used.xbel")) else { return Vec::new() };
     let Ok(text) = std::fs::read_to_string(path) else { return Vec::new() };
-    parse_xbel(&text).into_iter().rev().filter(|p| p.exists()).take(RECENT_FILES_MAX).collect()
+    // Metadata can block on a network or FUSE mount. Both the existence
+    // check and the folder badge come from this background snapshot.
+    parse_xbel(&text).into_iter().rev().filter_map(|path| {
+        let directory = path.metadata().ok()?.is_dir();
+        Some(FileEntry { path, directory })
+    }).take(RECENT_FILES_MAX).collect()
 }
 
 /// `href="file:///…"` attributes of an XBEL bookmark list, percent-decoded.
@@ -349,7 +487,8 @@ fn percent_decode(s: &str) -> String {
 
 struct FileIndex {
     built: Instant,
-    files: Vec<PathBuf>,
+    loading: bool,
+    files: Vec<FileEntry>,
 }
 
 fn file_index() -> &'static Mutex<Option<FileIndex>> {
@@ -364,7 +503,7 @@ fn indexed_roots() -> Vec<PathBuf> {
 
 /// Walks `roots` breadth-first (hidden entries skipped) up to `depth`
 /// levels and `max` paths.
-pub fn walk(roots: &[PathBuf], depth: usize, max: usize) -> Vec<PathBuf> {
+fn walk(roots: &[PathBuf], depth: usize, max: usize) -> Vec<FileEntry> {
     let mut out = Vec::new();
     let mut level: Vec<PathBuf> = roots.to_vec();
     for _ in 0..=depth {
@@ -375,11 +514,14 @@ pub fn walk(roots: &[PathBuf], depth: usize, max: usize) -> Vec<PathBuf> {
                 if e.file_name().to_string_lossy().starts_with('.') {
                     continue;
                 }
-                let p = e.path();
-                if e.file_type().is_ok_and(|t| t.is_dir()) {
-                    next.push(p.clone());
+                let path = e.path();
+                let kind = e.file_type().ok();
+                let real_directory = kind.is_some_and(|kind| kind.is_dir());
+                if real_directory {
+                    next.push(path.clone());
                 }
-                out.push(p);
+                let directory = real_directory || (kind.is_none_or(|kind| kind.is_symlink()) && path.is_dir());
+                out.push(FileEntry { path, directory });
                 if out.len() >= max {
                     return out;
                 }
@@ -392,24 +534,30 @@ pub fn walk(roots: &[PathBuf], depth: usize, max: usize) -> Vec<PathBuf> {
 
 /// Starts (or refreshes, when stale) the file index on a background thread.
 pub fn warm_file_index() {
-    let stale = file_index().lock().map(|i| i.as_ref().is_none_or(|i| i.built.elapsed() > FILE_INDEX_TTL)).unwrap_or(false);
-    if !stale {
-        return;
+    {
+        let Ok(mut index) = file_index().lock() else { return };
+        if index.as_ref().is_some_and(|index| index.loading || index.built.elapsed() <= FILE_INDEX_TTL) {
+            return;
+        }
+        let files = index.take().map(|index| index.files).unwrap_or_default();
+        *index = Some(FileIndex { built: Instant::now(), loading: true, files });
     }
-    // Mark as fresh at once so concurrent opens don't start a second walk.
-    if let Ok(mut i) = file_index().lock() {
-        let files = i.take().map(|i| i.files).unwrap_or_default();
-        *i = Some(FileIndex { built: Instant::now(), files });
-    }
-    let _ = std::thread::Builder::new().name("mandara-file-index".into()).spawn(|| {
+    let started = std::thread::Builder::new().name("mandara-file-index".into()).spawn(|| {
         let files = walk(&indexed_roots(), FILE_INDEX_DEPTH, FILE_INDEX_MAX);
-        if let Ok(mut i) = file_index().lock() {
-            *i = Some(FileIndex { built: Instant::now(), files });
+        if let Ok(mut index) = file_index().lock() {
+            *index = Some(FileIndex { built: Instant::now(), loading: false, files });
         }
     });
+    if started.is_err()
+        && let Ok(mut index) = file_index().lock()
+        && let Some(index) = index.as_mut()
+    {
+        index.loading = false;
+    }
 }
 
-fn file_hit(p: &Path) -> Hit {
+fn file_hit(file: &FileEntry) -> Hit {
+    let p = &file.path;
     let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.display().to_string());
     let home = dirs::home_dir().unwrap_or_default();
     let shown = p.parent().map(|d| d.strip_prefix(&home).map(|r| format!("~/{}", r.display())).unwrap_or_else(|_| d.display().to_string())).unwrap_or_default();
@@ -418,8 +566,8 @@ fn file_hit(p: &Path) -> Hit {
         key: p.display().to_string(),
         label: name,
         detail: shown,
-        lead: Lead::Icon(if p.is_dir() { "folder" } else { "note" }),
-        badge: if p.is_dir() { tk("Folder") } else { tk("File") },
+        lead: Lead::Icon(if file.directory { "folder" } else { "note" }),
+        badge: if file.directory { tk("Folder") } else { tk("File") },
         keywords: String::new(),
         action: HitAction::Open(p.to_path_buf()),
     }
@@ -427,7 +575,7 @@ fn file_hit(p: &Path) -> Hit {
 
 /// Recent files first, then indexed ones, matching every typed word in the
 /// file name (a query starting with `/` or `~/` matches whole paths).
-pub fn file_hits(query: &str, recent: &[PathBuf], limit: usize) -> Vec<Hit> {
+pub fn file_hits(query: &str, recent: &[FileEntry], limit: usize) -> Vec<Hit> {
     let q = query.trim().to_lowercase();
     let by_path = q.starts_with('/') || q.starts_with("~/");
     let q = if let Some(rest) = q.strip_prefix("~/") { format!("{}/{rest}", dirs::home_dir().unwrap_or_default().display()).to_lowercase() } else { q };
@@ -435,17 +583,17 @@ pub fn file_hits(query: &str, recent: &[PathBuf], limit: usize) -> Vec<Hit> {
         let hay = if by_path { p.display().to_string().to_lowercase() } else { p.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default() };
         q.is_empty() || q.split_whitespace().all(|w| hay.contains(w))
     };
-    let mut out: Vec<Hit> = recent.iter().filter(|p| matches(p)).take(limit).map(|p| file_hit(p)).collect();
+    let mut out: Vec<Hit> = recent.iter().filter(|file| matches(&file.path)).take(limit).map(file_hit).collect();
     if !q.is_empty() && out.len() < limit
         && let Ok(i) = file_index().lock()
             && let Some(index) = i.as_ref()
         {
-            for p in index.files.iter().filter(|p| matches(p)) {
+            for file in index.files.iter().filter(|file| matches(&file.path)) {
                 if out.len() >= limit {
                     break;
                 }
-                if !recent.contains(p) {
-                    out.push(file_hit(p));
+                if !recent.iter().any(|recent| recent.path == file.path) {
+                    out.push(file_hit(file));
                 }
             }
         }
@@ -777,6 +925,46 @@ mod tests {
     use super::*;
 
     #[test]
+    fn snapshot_keeps_its_value_after_completion_and_distinguishes_cancellation() {
+        let (done, snapshot) = Snapshot::new();
+        let second_waiter = snapshot.clone();
+        assert!(!second_waiter.ready().is_closed());
+        let _ = snapshot.value.set(Arc::new("first result"));
+        done.close();
+        assert!(second_waiter.ready().is_closed());
+        assert_eq!(second_waiter.value().as_deref(), Some(&"first result"));
+
+        let (cancel, snapshot) = Snapshot::<String>::new();
+        drop(cancel);
+        assert!(snapshot.ready().is_closed());
+        assert!(snapshot.value().is_none());
+    }
+
+    #[test]
+    fn ipc_refreshes_cannot_displace_the_open_launchers_queued_catalog() {
+        let mut catalogs = BackgroundSnapshot::<_, ()>::default();
+        let (_first, first) = Snapshot::new();
+        let (_second, second) = Snapshot::new();
+        catalogs.running.extend([(1, first), (2, second)]);
+
+        let shared = catalogs.request(3, false);
+        let view = catalogs.request(3, true);
+        let old_ipc = catalogs.request(4, false);
+        let ipc = catalogs.request(5, false);
+        assert!(Arc::ptr_eq(&view, &shared));
+        assert!(old_ipc.ready().is_closed());
+        assert!(!view.ready().is_closed());
+        assert!(!ipc.ready().is_closed());
+        assert!(catalogs.next().is_none());
+
+        catalogs.running.pop();
+        let next = catalogs.next().expect("the view keeps its place");
+        assert_eq!(next.key, 3);
+        assert!(Arc::ptr_eq(&view, &next.snapshot));
+        assert_eq!(catalogs.next().map(|job| job.key), Some(5));
+    }
+
+    #[test]
     fn routes_by_longest_prefix() {
         let mut p = LauncherProviders::default();
         assert_eq!(route(":smile", &p), Some(("emoji", "smile")));
@@ -842,16 +1030,21 @@ mod tests {
     fn xbel_and_files() {
         let xbel = r#"<bookmark href="file:///home/u/My%20Doc.txt" added="x"/><bookmark href="file:///tmp/a.png"/>"#;
         assert_eq!(parse_xbel(xbel), [PathBuf::from("/home/u/My Doc.txt"), PathBuf::from("/tmp/a.png")]);
-        let recent = vec![PathBuf::from("/tmp/report final.pdf"), PathBuf::from("/tmp/x.txt")];
+        let recent = [
+            FileEntry { path: "/tmp/report final.pdf".into(), directory: false },
+            FileEntry { path: "/tmp/archive folder".into(), directory: true },
+        ];
         let hits = file_hits("report", &recent, 5);
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].action, HitAction::Open(PathBuf::from("/tmp/report final.pdf")));
-        let dir = std::env::temp_dir().join(format!("mandara-walk-{}", std::process::id()));
+        assert_eq!(file_hits("archive", &recent, 5)[0].lead, Lead::Icon("folder"));
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().to_path_buf();
         std::fs::create_dir_all(dir.join("sub/.hidden")).unwrap();
         std::fs::write(dir.join("sub/f.txt"), "").unwrap();
         let found = walk(std::slice::from_ref(&dir), 3, 100);
-        assert!(found.iter().any(|p| p.ends_with("sub/f.txt")));
-        assert!(!found.iter().any(|p| p.to_string_lossy().contains(".hidden")));
-        let _ = std::fs::remove_dir_all(&dir);
+        assert!(found.iter().any(|file| file.path.ends_with("sub/f.txt") && !file.directory));
+        assert!(found.iter().any(|file| file.path.ends_with("sub") && file.directory));
+        assert!(!found.iter().any(|file| file.path.to_string_lossy().contains(".hidden")));
     }
 }
