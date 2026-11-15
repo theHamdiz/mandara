@@ -242,7 +242,7 @@ all displays disconnect and restores its surfaces when a display returns.
 | **Network & Bluetooth** | Connection details, VPNs (WireGuard / OpenVPN import), hotspot with QR, saved networks, static IP / DNS; Bluetooth devices, pairing dialog, auto-connect, adapter. |
 | **Power & idle** | Status, idle timeouts (mains / battery), lock behaviour, idle commands, battery alerts (the Power panel's style, Classic or Modern, and the bar battery's pulses: coral while critical, a gentle breath while charging) and profiles, the power menu editor (entries, style, and the dock's **Position**: opposite the sidebar, left, right, top center or bottom center — at the top or bottom it hangs from the bar there, one piece with it in the edge-frame styles and a card next to a floating bar, or from the screen edge when the bar is elsewhere, which the preview says; the grid always opens in the middle, and so do the **Cards**, separate floating cards in a **Row** or a **Column** under *Card layout*, which locks the position with that reason), event hooks. |
 | **Input** | Keyboard layouts and labels, repeat, Num Lock; mouse and touchpad; focus follows mouse. The cursor lives on Themes → Cursors (a card here links there). |
-| **Keyboard shortcuts** | Two tabs. **Mandara** holds the shell's shortcuts, chord capture and conflict detection; **Add a shortcut** starts from an action, and **Program** runs your command. **Compositor** detects the running compositor, lists its native bindings and supported includes, and searches by keys, action or source. Select a row to edit individual values, then **Save**, **Cancel** or **Undo**. Clashes with Mandara's shortcuts are marked. Saves preserve surrounding text and symlinks, take timestamped backups, reject stale sources and use native validation where available. Computed or unsupported bindings explain why they are read-only. Scanning never executes configuration scripts. Open it with `mandara studio shortcuts/compositor`. |
+| **Keyboard shortcuts** | Two tabs. **Mandara** holds the shell's shortcuts, chord capture and conflict detection; **Add a shortcut** starts from an action, and **Program** runs your command. **Compositor** detects the running compositor, lists its native bindings and supported includes, and searches by keys, action or source. The virtualized list fills the available height; the value editor sits beside it in wide windows. Narrow windows switch between the list and editor, keeping both at full height. Select a row to edit individual values, then **Save**, **Cancel** or **Undo**. Page Up / Page Down follows the visible row count. Clean selections switch directly; save or cancel a changed draft before switching. Clashes with Mandara's shortcuts are marked. Saves preserve surrounding text and symlinks, take timestamped backups, reject stale sources and use native validation where available. Computed or unsupported bindings explain why they are read-only. Scanning never executes configuration scripts. Open it with `mandara studio shortcuts/compositor`. |
 | **Date, time & location** | The system clock (time zone with search, set time automatically, and a one-click fix when it doesn't match your location's time zone), clock and date formats, the calendar's week numbers, weekend days, Hijri dates and Eastern Arabic numerals, calendar subscriptions and reminders, the shared location (weather and prayer times follow it unless they have their own), weather. |
 | **Applications** | Installed apps (search, hide, rename, install from files by picker or drag and drop, uninstall with optional leftover cleanup), default apps, apps at login, how apps are launched. |
 
@@ -251,9 +251,14 @@ all displays disconnect and restores its surfaces when a display returns.
 | Page | What it covers |
 |---|---|
 | **Users** | AccountsService accounts: create, edit, delete, photos, passwords. |
-| **Login screen** | Mandara Login (greetd greeter) with a live, draggable preview; beside it Apply to login screen, Preview full screen and **Try it** (entrance, typing, wrong password, success, idle clock). Tabs: Looks (six ready-made designs, Mandara, Midnight card, Material You, Ghostline, Chrome Halo and Meridian, three to a row, each with a miniature drawn from its own layout so the sign-in shows on its side), Layout, Background, Clock, Sign-in, Session, Theme, Motion; settings that depend on another one show only once it's on. The **Login manager** tab to switch login screens (Mandara Login, other greetd greeters, SDDM, GDM, …): **Use** for an installed one, **Install & use** for one that isn't (it installs the login manager or greeter with greetd, cage or LightDM's greeter through the system's package manager, after showing the plan). |
-| **Lock appearance** | Clock style, background, avatar, media, weather, notifications, battery and its low-battery mark, OLED care. |
+| **Login & Lock Screens** | **Login:** Mandara Login (greetd greeter) with a live, draggable preview; beside it Apply to login screen, Preview full screen and **Try it** (entrance, typing, wrong password, success, idle clock). Tabs: Looks (six ready-made designs, Mandara, Midnight card, Material You, Ghostline, Chrome Halo and Meridian, three to a row, each with a miniature drawn from its own layout so the sign-in shows on its side), Layout, Background, Clock, Sign-in, Session, Theme, Motion; settings that depend on another one show only once it's on. The **Login manager** tab to switch login screens (Mandara Login, other greetd greeters, SDDM, GDM, …): **Use** for an installed one, **Install & use** for one that isn't (it installs the login manager or greeter with greetd, cage or LightDM's greeter through the system's package manager, after showing the plan). **Lock:** the same six designs, clock style, background, avatar, media, weather, notifications, battery and OLED care. |
 | **Privacy** | Microphone / camera / screen-share indicators, offline mode. |
+
+**Login & Lock Screens** brings the login designer and lock appearance into one
+page, with **Login** and **Lock** tabs. Open either directly with
+`mandara studio greeter/login` or `mandara studio greeter/lock`; older login-screen
+and lock-screen links remain valid. Switching to Lock stops the login preview's
+clock wake, and the two screens keep independent configurations.
 
 ### Extend
 
@@ -808,7 +813,7 @@ For screenshots and layout tests, `MANDARA_STUDIO_SIZE=WxH` sets the window
 size and `MANDARA_STUDIO_SCROLL=<px>` opens the page scrolled down.
 `MANDARA_FRAME_STATS=1` logs Studio's frame pacing every few seconds (frame
 interval p50 / p95 / p99 / max, late frames, and the CPU time per frame), plus
-the login-screen preview's own pacing on Studio → Login screen.
+the login-screen preview's own pacing on Studio → Login & Lock Screens → Login.
 
 Performance's frame-timing card measures shell and dock view builds on the
 CPU and the intervals between redraws on each surface. It keeps recent
@@ -850,7 +855,7 @@ with an option to hide corners between adjacent displays.
   stays left to right.
 
 
-Login screen → **Layout → Widgets** and **Lock appearance → Widgets**
+**Login & Lock Screens → Login → Layout → Widgets** and **Lock → Widgets**
 share the passive widget editor: a gallery, **Copy from desktop**, anchor,
 offsets, scale, opacity and a separate public-weather location choice.
 Copies stay independent of the desktop; login changes still need **Apply

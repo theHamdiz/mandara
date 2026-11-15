@@ -984,6 +984,14 @@ impl GreeterView {
         images
     }
 
+    /// Stop a hidden Studio preview's clock wake without changing its draft.
+    pub fn suspend_preview(&mut self) {
+        if self.is_preview() {
+            self.preview_wake = None;
+            self.clock.idle();
+        }
+    }
+
     pub fn set_preview_idle(&mut self, idle: bool, cx: &mut Context<Self>) {
         self.preview_idle = idle;
         cx.notify();

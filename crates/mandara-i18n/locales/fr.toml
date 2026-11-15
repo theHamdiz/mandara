@@ -8270,7 +8270,7 @@
 
 "Cancelled — nothing was changed." = "Annulé — rien n’a été modifié."
 
-"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Écran de connexion conservé ; vous pouvez le changer dans Studio → Écran de connexion → Gestionnaire de connexion."
+"Login screen kept; switch any time in Studio → Login & Lock Screens → Login → Login manager." = "Écrans de connexion et de verrouillage → Connexion conservé ; vous pouvez le changer dans Studio → Écrans de connexion et de verrouillage → Connexion → Gestionnaire de connexion."
 
 "Setup" = "Installation"
 
@@ -9712,7 +9712,7 @@
 "Trying again without the optional packages: {packages}" = "Nouvel essai sans les paquets facultatifs : {packages}"
 "{tool} couldn't add the packages. Add them later with: {command}" = "{tool} n’a pas pu ajouter les paquets. Ajoutez-les plus tard avec : {command}"
 "Restart your computer to start using the new packages. Everything else is ready now." = "Redémarrez l’ordinateur pour utiliser les nouveaux paquets. Tout le reste est déjà prêt."
-"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Les paquets de Mandara Login arrivent avec le prochain démarrage : {packages}. Après le redémarrage, activez-le dans Studio → Écran de connexion → Gestionnaire de connexion, ou lancez : {command}"
+"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login & Lock Screens → Login → Login manager, or run: {command}" = "Les paquets de Mandara Login arrivent avec le prochain démarrage : {packages}. Après le redémarrage, activez-le dans Studio → Écrans de connexion et de verrouillage → Connexion → Gestionnaire de connexion, ou lancez : {command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "Ce système est basé sur une image : Mandara s’installe dans votre dossier personnel, et l’installateur n’ajoute que les paquets système manquants."
 "Aqueous settings stay in its own files in ~/.config/aqueous" = "Les réglages d'Aqueous restent dans ses propres fichiers, dans ~/.config/aqueous"
 "Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there." = "Aqueous n'a pas de vérificateur de configuration autonome. Il valide ses propres fichiers dans ~/.config/aqueous lorsqu'il les recharge, et Mandara n'y écrit rien."
@@ -11060,3 +11060,22 @@
 "“{prefix}” kaomoji" = "« {prefix} » kaomoji"
 "Open the kaomoji picker" = "Ouvrir le sélecteur de kaomojis"
 "Other kaomojis" = "Autres kaomojis"
+
+"The same six designs as the login screen, with an independent selection" = "Les six mêmes styles que pour la connexion, avec un choix indépendant"
+"Select a shortcut to edit its values." = "Sélectionnez un raccourci pour modifier ses valeurs."
+"{count} shortcuts" = "{count} raccourcis"
+"Also used by Mandara" = "Également utilisé par Mandara"
+"Choose matching login and lock designs in Studio." = "Choisissez des styles assortis pour la connexion et le verrouillage dans Studio."
+"Login & Lock Screens" = "Écrans de connexion et de verrouillage"
+"This design sets its own clock layout." = "Ce style définit la disposition de l’horloge."
+"Meridian has no profile picture." = "Meridian n’affiche pas de photo de profil."
+"A big clock, your picture over a glass field, everything floating on the backdrop" = "Une grande horloge, votre photo au-dessus d'un champ en verre, tout flotte sur le fond"
+"Midnight card" = "Carte minuit"
+"A quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" = "Une horloge sobre au-dessus d'une carte détourée avec l'utilisateur, le mot de passe et la session, en bleu nuit et citrine"
+"Colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar, chips and tonal buttons" = "Des couleurs tirées de votre fond d'écran, une grande horloge sur deux lignes et une carte tonale avec un avatar festonné, des puces et des boutons tonaux"
+"Ghostline" = "Ghostline"
+"Graphite and ice-white hairlines: a wireframe sign-in panel on the left with live readouts, a terminal password line and a ruler clock, in cold cyan" = "Graphite et filets blanc glacier : un panneau de connexion filaire à gauche avec des relevés en direct, une ligne de mot de passe façon terminal et une horloge-règle, en cyan froid"
+"Chrome Halo" = "Chrome Halo"
+"Deep ink and holographic light: a luminous ring around a light clock, and a machined sign-in module on the right with a pill button" = "Encre profonde et lumière holographique : un anneau lumineux autour d’une horloge légère, et un module de connexion usiné à droite avec un bouton pilule"
+"Meridian" = "Meridian"
+"No boxes: your name and password ride on one hairline across a calm dawn field, over enormous whisper-thin numerals; light or dark" = "Aucune boîte : votre nom et votre mot de passe se posent sur un seul filet qui traverse un champ d’aube paisible, sur d’immenses chiffres d’un trait murmuré ; clair ou sombre"

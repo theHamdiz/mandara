@@ -1,6 +1,7 @@
 //! A lazy native shortcut list and a draft that writes only on Save.
 
 mod rows;
+mod details;
 mod view;
 
 use super::{
@@ -25,8 +26,22 @@ use mandara_theme::MandaraPalette;
 use mandara_ui::{bidi::Bidi as _, icons::icon};
 use std::rc::Rc;
 
-/// A long configuration lays out only its visible rows in this viewport.
-const LIST_HEIGHT: f32 = 300.0;
+/// Enough room for both a readable action column and the value editor.
+const SPLIT_WIDTH: f32 = DIM_380_PX * 2.0;
+/// The detail pane stays readable without consuming the action column.
+const DETAILS_WIDTH: f32 = DIM_360_PX;
+/// A key chord and two text lines, with clear space above and below.
+const ROW_HEIGHT: f32 = DIM_76_PX;
+/// Minimum page navigation step before the list's first layout.
+const PAGE_ROWS: usize = 4;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum WorkspaceLayout { Split, List, Editor }
+fn workspace_layout(width: f32, editing: bool) -> WorkspaceLayout {
+    if width >= SPLIT_WIDTH { WorkspaceLayout::Split }
+    else if editing { WorkspaceLayout::Editor }
+    else { WorkspaceLayout::List }
+}
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum ShortcutsTab {
@@ -68,12 +83,28 @@ impl PageTab for ShortcutsTab {
 
 struct Data {
     session: Session,
+    source_label: SharedString,
     rows: Rc<[rows::Row]>,
 }
+impl Data {
+    fn new(session: Session, rows: Vec<rows::Row>) -> Self {
+        let source_label = format!("{} · {}", session.target.name(), session.root.display()).into();
+        Self { session, source_label, rows: rows.into() }
+    }
+}
+
 struct Draft {
     id: BindingId,
     binding: Binding,
     fields: Vec<Option<Entity<TextField>>>,
+}
+
+impl Draft {
+    fn dirty(&self, cx: &gpui::App) -> bool {
+        self.fields.iter().zip(&self.binding.fields).any(|(input, field)| {
+            input.as_ref().is_some_and(|input| input.read(cx).value != field.value)
+        })
+    }
 }
 
 enum SaveRequest {
@@ -97,6 +128,7 @@ pub(super) struct Editor {
     cursor: usize,
     list_focus: Option<gpui::FocusHandle>,
     scroll: gpui::UniformListScrollHandle,
+    detail_scroll: gpui::ScrollHandle,
 }
 impl Editor {
     fn available_undo(&self) -> Option<&Undo> {
@@ -116,12 +148,14 @@ impl Editor {
         self.loading = false;
         self.list_focus = None;
         self.scroll = Default::default();
+        self.detail_scroll = Default::default();
     }
     fn refilter(&mut self) {
         self.filtered = self.data.as_ref().map_or_else(Rc::default, |data| {
             rows::filter(&data.rows, &self.query).into()
         });
         self.cursor = 0;
+        self.scroll.scroll_to_item(0, gpui::ScrollStrategy::Top);
     }
 }
 
@@ -182,6 +216,8 @@ impl StudioView {
             .row()
             .flex_col()
             .gap(px(SPACE_18_PX))
+            .w_full().min_h(px(0.0))
+            .when(self.shortcuts_tab == ShortcutsTab::Compositor, |el| el.flex_1())
             .child(tabs)
             .child(body)
             .into_any_element()
@@ -214,10 +250,7 @@ impl StudioView {
                     state.loading = false;
                     match result {
                         Ok((session, rows)) => {
-                            state.data = Some(Rc::new(Data {
-                                session,
-                                rows: rows.into(),
-                            }));
+                            state.data = Some(Rc::new(Data::new(session, rows)));
                             state.refilter();
                         }
                         Err(error) => state.message = Some((false, format!("{error:#}"))),
@@ -232,7 +265,7 @@ impl StudioView {
     }
 
     fn native_select(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if self.native_shortcuts.busy || self.native_shortcuts.draft.is_some() {
+        if self.native_shortcuts.busy || self.native_shortcuts.draft.as_ref().is_some_and(|draft| draft.dirty(cx)) {
             return;
         }
         let Some(data) = &self.native_shortcuts.data else {
@@ -277,6 +310,7 @@ impl StudioView {
                 }))
             })
             .collect();
+        self.native_shortcuts.detail_scroll.set_offset(gpui::point(px(0.0), px(0.0)));
         self.native_shortcuts.draft = Some(Draft {
             id,
             binding,
@@ -382,11 +416,11 @@ impl StudioView {
     }
 }
 
-fn row_target(current: usize, count: usize, key: &str) -> Option<usize> {
+fn row_target(current: usize, count: usize, page: usize, key: &str) -> Option<usize> {
     if count == 0 {
         return None;
     }
-    let page = (LIST_HEIGHT / DIM_64_PX) as usize;
+    let page = if page == 0 { PAGE_ROWS } else { page };
     let last = count - 1;
     let current = current.min(last);
     match key {
@@ -406,13 +440,24 @@ mod tests {
     use mandara_config::keybinds;
 
     #[test]
+    fn narrow_windows_keep_the_list_or_editor_at_full_height() {
+        assert_eq!(workspace_layout(DIM_1000_PX, false), WorkspaceLayout::Split);
+        assert_eq!(workspace_layout(DIM_1000_PX, true), WorkspaceLayout::Split);
+        assert_eq!(workspace_layout(DIM_420_PX, false), WorkspaceLayout::List);
+        assert_eq!(workspace_layout(DIM_420_PX, true), WorkspaceLayout::Editor);
+    }
+
+    #[test]
     fn keyboard_navigation_reaches_offscreen_bindings_and_clamps_after_filtering() {
-        assert_eq!(row_target(0, 4096, "end"), Some(4095));
-        assert_eq!(row_target(4095, 4096, "down"), Some(4095));
-        assert_eq!(row_target(4095, 2, "up"), Some(0));
-        assert_eq!(row_target(0, 4096, "pagedown"), Some(4));
-        assert_eq!(row_target(4, 4096, "pageup"), Some(0));
-        assert_eq!(row_target(0, 0, "home"), None);
+        assert_eq!(row_target(0, 4096, PAGE_ROWS, "end"), Some(4095));
+        assert_eq!(row_target(4095, 4096, PAGE_ROWS, "down"), Some(4095));
+        assert_eq!(row_target(4095, 2, PAGE_ROWS, "up"), Some(0));
+        assert_eq!(row_target(0, 4096, PAGE_ROWS, "pagedown"), Some(4));
+        assert_eq!(row_target(4, 4096, PAGE_ROWS, "pageup"), Some(0));
+        assert_eq!(row_target(0, 0, PAGE_ROWS, "home"), None);
+        assert_eq!(row_target(0, 4096, 12, "pagedown"), Some(12));
+        assert_eq!(row_target(100, 4096, 12, "pageup"), Some(88));
+        assert_eq!(row_target(0, 4096, 0, "pagedown"), Some(PAGE_ROWS));
     }
 
     #[test]
@@ -430,10 +475,7 @@ mod tests {
         let id = session.scan.sources[0].binding_id(0).unwrap();
         let binding = session.scan.sources[0].bindings[0].clone();
         let mut editor = Editor {
-            data: Some(Rc::new(Data {
-                rows: rows::build(&session, &[]).into(),
-                session,
-            })),
+            data: Some(Rc::new({ let rows = rows::build(&session, &[]); Data::new(session, rows) })),
             draft: Some(Draft {
                 id: id.clone(),
                 binding,

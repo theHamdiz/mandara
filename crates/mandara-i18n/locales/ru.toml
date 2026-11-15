@@ -8269,7 +8269,7 @@
 
 "Cancelled — nothing was changed." = "Отменено — ничего не изменено."
 
-"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Текущий экран входа сохранён; его можно сменить в Studio → Экран входа → Менеджер входа."
+"Login screen kept; switch any time in Studio → Login & Lock Screens → Login → Login manager." = "Текущий экран входа сохранён; его можно сменить в Studio → Экраны входа и блокировки → Вход → Менеджер входа."
 
 "Setup" = "Настройка"
 
@@ -9711,7 +9711,7 @@
 "Trying again without the optional packages: {packages}" = "Повторная попытка без необязательных пакетов: {packages}"
 "{tool} couldn't add the packages. Add them later with: {command}" = "{tool} не удалось добавить пакеты. Добавьте их позже командой: {command}"
 "Restart your computer to start using the new packages. Everything else is ready now." = "Перезагрузите компьютер, чтобы начать пользоваться новыми пакетами. Всё остальное уже готово."
-"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Пакеты для Mandara Login появятся после следующей загрузки: {packages}. После перезагрузки переключитесь в Studio → Экран входа → Менеджер входа или выполните: {command}"
+"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login & Lock Screens → Login → Login manager, or run: {command}" = "Пакеты для Mandara Login появятся после следующей загрузки: {packages}. После перезагрузки переключитесь в Studio → Экраны входа и блокировки → Вход → Менеджер входа или выполните: {command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "Эта система основана на образах: Mandara устанавливается в домашнюю папку, а установщик добавляет только недостающие системные пакеты."
 "Aqueous settings stay in its own files in ~/.config/aqueous" = "Настройки Aqueous хранятся в его собственных файлах в ~/.config/aqueous"
 "Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there." = "У Aqueous нет отдельной программы проверки конфигурации. Он сам проверяет свои файлы в ~/.config/aqueous при их перезагрузке, а Mandara ничего туда не записывает."
@@ -11059,3 +11059,22 @@
 "“{prefix}” kaomoji" = "«{prefix}» каомодзи"
 "Open the kaomoji picker" = "Открыть выбор каомодзи"
 "Other kaomojis" = "Другие каомодзи"
+
+"The same six designs as the login screen, with an independent selection" = "Те же шесть оформлений, что и на экране входа, с независимым выбором"
+"Select a shortcut to edit its values." = "Выберите сочетание клавиш, чтобы изменить его значения."
+"{count} shortcuts" = "Сочетаний клавиш: {count}"
+"Also used by Mandara" = "Также используется Mandara"
+"Choose matching login and lock designs in Studio." = "Выберите в Studio согласованные оформления входа и блокировки."
+"Login & Lock Screens" = "Экраны входа и блокировки"
+"This design sets its own clock layout." = "Это оформление задаёт расположение часов."
+"Meridian has no profile picture." = "В Meridian нет фотографии профиля."
+"A big clock, your picture over a glass field, everything floating on the backdrop" = "Большие часы, ваше фото над стеклянным полем, всё парит над фоном"
+"Midnight card" = "Полуночная карточка"
+"A quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" = "Спокойные часы над карточкой с контуром, где пользователь, пароль и сеанс, в полуночно-синем и цитриновом"
+"Colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar, chips and tonal buttons" = "Цвета из ваших обоев, большие часы в две строки и тональная карточка с волнистым аватаром, чипами и тональными кнопками"
+"Ghostline" = "Ghostline"
+"Graphite and ice-white hairlines: a wireframe sign-in panel on the left with live readouts, a terminal password line and a ruler clock, in cold cyan" = "Графит и ледяные белые волосные линии: слева каркасная панель входа с живыми показаниями, строка пароля как в терминале и часы-линейка, в холодном циане"
+"Chrome Halo" = "Chrome Halo"
+"Deep ink and holographic light: a luminous ring around a light clock, and a machined sign-in module on the right with a pill button" = "Глубокие чернила и голографический свет: светящееся кольцо вокруг лёгких часов и справа выточенный модуль входа с кнопкой-капсулой"
+"Meridian" = "Meridian"
+"No boxes: your name and password ride on one hairline across a calm dawn field, over enormous whisper-thin numerals; light or dark" = "Никаких рамок: имя и пароль лежат на одной тонкой линии через спокойное рассветное поле, над огромными едва заметными цифрами; светлая или тёмная"

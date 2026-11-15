@@ -8023,7 +8023,7 @@
 
 "Cancelled — nothing was changed." = "Dibatalkan — tidak ada yang diubah."
 
-"Login screen kept; switch any time in Studio → Login screen → Login manager." = "Layar masuk Anda dipertahankan; ubah kapan saja melalui Studio → Layar masuk → Pengelola login."
+"Login screen kept; switch any time in Studio → Login & Lock Screens → Login → Login manager." = "Layar masuk dan kunci → Masuk Anda dipertahankan; ubah kapan saja melalui Studio → Layar masuk dan kunci → Masuk → Pengelola login."
 
 "Setup" = "Penyiapan"
 
@@ -9467,7 +9467,7 @@
 "Trying again without the optional packages: {packages}" = "Mencoba lagi tanpa paket opsional: {packages}"
 "{tool} couldn't add the packages. Add them later with: {command}" = "{tool} tidak dapat menambahkan paket. Tambahkan nanti dengan: {command}"
 "Restart your computer to start using the new packages. Everything else is ready now." = "Mulai ulang komputer untuk mulai memakai paket baru. Semua yang lain sudah siap sekarang."
-"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Paket Mandara Login hadir pada boot berikutnya: {packages}. Setelah memulai ulang, beralih melalui Studio → Layar masuk → Pengelola login, atau jalankan: {command}"
+"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login & Lock Screens → Login → Login manager, or run: {command}" = "Paket Mandara Login hadir pada boot berikutnya: {packages}. Setelah memulai ulang, beralih melalui Studio → Layar masuk dan kunci → Masuk → Pengelola login, atau jalankan: {command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "Sistem ini berbasis image: Mandara dipasang di folder rumah Anda, dan pemasang hanya menambahkan paket sistem yang belum ada."
 "Aqueous settings stay in its own files in ~/.config/aqueous" = "Pengaturan Aqueous tetap berada di berkasnya sendiri di ~/.config/aqueous"
 "Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there." = "Aqueous tidak memiliki pemeriksa konfigurasi tersendiri. Ia memeriksa berkasnya sendiri di ~/.config/aqueous saat memuat ulang, dan Mandara tidak menulis apa pun di sana."
@@ -10817,3 +10817,22 @@
 "“{prefix}” kaomoji" = "“{prefix}” kaomoji"
 "Open the kaomoji picker" = "Buka pemilih kaomoji"
 "Other kaomojis" = "Kaomoji lain"
+
+"The same six designs as the login screen, with an independent selection" = "Enam desain yang sama dengan layar masuk, dengan pilihan terpisah"
+"Select a shortcut to edit its values." = "Pilih pintasan untuk mengedit nilainya."
+"{count} shortcuts" = "{count} pintasan"
+"Also used by Mandara" = "Juga digunakan Mandara"
+"Choose matching login and lock designs in Studio." = "Pilih desain layar masuk dan kunci yang serasi di Studio."
+"Login & Lock Screens" = "Layar masuk dan kunci"
+"This design sets its own clock layout." = "Desain ini menentukan tata letak jam."
+"Meridian has no profile picture." = "Meridian tidak memiliki foto profil."
+"A big clock, your picture over a glass field, everything floating on the backdrop" = "Jam besar, foto Anda di atas kolom kaca, semuanya melayang di atas latar"
+"Midnight card" = "Kartu tengah malam"
+"A quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" = "Jam yang tenang di atas satu kartu bergaris tepi berisi pengguna, kata sandi, dan sesi, dalam biru tengah malam dan sitrin"
+"Colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar, chips and tonal buttons" = "Warna dari wallpaper Anda, jam besar dua baris, dan kartu tonal dengan avatar bergerigi lembut, chip, serta tombol tonal"
+"Ghostline" = "Ghostline"
+"Graphite and ice-white hairlines: a wireframe sign-in panel on the left with live readouts, a terminal password line and a ruler clock, in cold cyan" = "Grafit dan garis rambut putih es: panel masuk berbingkai kawat di kiri dengan pembacaan langsung, baris kata sandi ala terminal, dan jam penggaris, dalam sian dingin"
+"Chrome Halo" = "Chrome Halo"
+"Deep ink and holographic light: a luminous ring around a light clock, and a machined sign-in module on the right with a pill button" = "Tinta pekat dan cahaya holografik: cincin bercahaya mengelilingi jam yang ringan, dan modul masuk hasil bubut di kanan dengan tombol pil"
+"Meridian" = "Meridian"
+"No boxes: your name and password ride on one hairline across a calm dawn field, over enormous whisper-thin numerals; light or dark" = "Tanpa kotak: nama dan kata sandimu berada di satu garis rambut yang melintasi bidang fajar yang tenang, di atas angka raksasa setipis bisikan; terang atau gelap"

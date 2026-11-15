@@ -319,6 +319,6 @@ impl Installer<'_> {
         let packages = self.layer.login_after_reboot.join(" ");
         let bin = self.paths.binary().to_string_lossy().into_owned();
         let command = self.root_hint(&[bin.as_str(), "greeter", "use", "mandara", "--apply"]);
-        self.say(Level::Info, tf("Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}", &[("packages", &packages), ("command", &command)]));
+        self.say(Level::Info, tf("Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login & Lock Screens → Login → Login manager, or run: {command}", &[("packages", &packages), ("command", &command)]));
     }
 }

@@ -215,7 +215,7 @@ enum Effect {
 }
 
 fn entry(label: impl Into<String>, detail: impl Into<String>, icon: &'static str, badge: &'static str, keywords: &str, run: Run) -> Item {
-    Item::Entry(Entry { label: label.into(), detail: detail.into(), icon, badge, keywords: keywords.into(), run })
+    Item::Entry(Entry { label: label.into(), detail: detail.into(), icon, badge, keywords: keywords.to_lowercase(), run })
 }
 
 fn words(line: &str) -> Vec<String> {
@@ -378,8 +378,7 @@ pub const STUDIO_SECTIONS: &[(&str, &str, &str, &str)] = &[
     ("applications", tk("Applications"), "package", "default apps browser terminal file manager mime autostart startup login apps"),
     // Security & accounts
     ("users", tk("Users"), "user", "accounts avatar password user"),
-    ("login-screen", tk("Login screen"), "key", "greeter display manager sddm login"),
-    ("lock-appearance", tk("Lock appearance"), "lock", "lockscreen blur clock avatar media notifications battery oled"),
+    ("login-screen", tk("Login & Lock Screens"), "key", "greeter display manager sddm login lockscreen blur clock avatar media notifications battery oled"),
     ("privacy", tk("Privacy"), "shield", "microphone camera screen sharing indicator in use"),
     // Extend
     ("plugins", tk("Plugins"), "zap", "extensions add-ons"),
@@ -395,7 +394,11 @@ pub const STUDIO_SECTIONS: &[(&str, &str, &str, &str)] = &[
 
 /// Studio tabs with their own launcher entry (`mandara studio <section>/<tab>`):
 /// `(target, title, icon, search keywords)`.
-pub const STUDIO_TABS: &[(&str, &str, &str, &str)] = &[("themes/boot", tk("Boot look"), "power", "boot menu bootloader grub limine refind plymouth splash startup screen logo")];
+pub const STUDIO_TABS: &[(&str, &str, &str, &str)] = &[
+    ("themes/boot", tk("Boot look"), "power", "boot menu bootloader grub limine refind plymouth splash startup screen logo"),
+    ("login-screen/login", tk("Login screen"), "key", "greeter display manager login designer"),
+    ("login-screen/lock", tk("Lock appearance"), "lock", "lockscreen blur clock avatar oled"),
+];
 
 /// Everything searchable besides apps, built when the launcher opens.
 /// Words people type for the screenshot tool (Windows' Snipping Tool,
@@ -1075,8 +1078,8 @@ fn all_words_prefix(item: &Item, q: &str) -> bool {
 
 /// Exact names lead, then names starting with the query, then names with a
 /// word starting with it, then entries matching every typed word at a word
-/// start; within a tier raw commands follow apps, plugins
-/// and actions (`weather` opens the panel before printing the JSON), and
+/// start; within a tier settings follow apps, plugins and actions, and raw
+/// commands follow settings (`weather` opens the panel before printing the JSON), and
 /// fuzzy order holds.
 fn rank(found: Vec<Item>, q: &str) -> Vec<Item> {
     rank_with(found, q, &UsageSnapshot::default())
@@ -1092,14 +1095,19 @@ fn rank_with(mut found: Vec<Item>, q: &str, usage: &UsageSnapshot) -> Vec<Item> 
             0
         } else if name.starts_with(&q) || line.as_deref().is_some_and(|l| l.starts_with(&q)) {
             1
-        } else if word_prefix(&name, &q) {
+        } else if word_prefix(&name, &q) || matches!(i, Item::Entry(e) if word_prefix(&e.keywords, &q)) {
             2
         } else if all_words_prefix(i, &q) {
             3
         } else {
             4
         };
-        (tier, matches!(i, Item::Entry(e) if e.badge == tk("Command")), std::cmp::Reverse(usage.frecency(&usage_key(i))))
+        let kind = match i {
+            Item::Entry(e) if e.badge == tk("Command") => 2,
+            Item::Entry(e) if e.badge == tk("Studio") => 1,
+            _ => 0,
+        };
+        (tier, kind, std::cmp::Reverse(usage.frecency(&usage_key(i))))
     });
     found
 }
@@ -2853,6 +2861,8 @@ mod tests {
         // Plain text only takes typed arguments that fit the command.
         let q = "audio volume up 10";
         assert_eq!(effect(&search(q, &[], &index), q), "command: audio volume up 10");
+        let settings = search("settings lock", &[], &index);
+        assert!(item_names(&settings[0]).1.starts_with("studio "));
         let q = "lock screen";
         assert_eq!(effect(&search(q, &[], &index), q), "command: session run lock");
         // …and choosing `lock [mode]` for that text locks plainly.

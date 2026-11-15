@@ -8270,7 +8270,7 @@
 
 "Cancelled — nothing was changed." = "रद्द किया गया — कुछ भी नहीं बदला।"
 
-"Login screen kept; switch any time in Studio → Login screen → Login manager." = "आपकी लॉगिन स्क्रीन रखी गई है; Studio → लॉगिन स्क्रीन → लॉगिन मैनेजर से इसे कभी भी बदलें।"
+"Login screen kept; switch any time in Studio → Login & Lock Screens → Login → Login manager." = "आपकी लॉगिन और लॉक स्क्रीन → लॉगिन रखी गई है; Studio → लॉगिन और लॉक स्क्रीन → लॉगिन → लॉगिन मैनेजर से इसे कभी भी बदलें।"
 
 "Setup" = "सेटअप"
 
@@ -9714,7 +9714,7 @@
 "Trying again without the optional packages: {packages}" = "वैकल्पिक पैकेज के बिना फिर से कोशिश: {packages}"
 "{tool} couldn't add the packages. Add them later with: {command}" = "{tool} पैकेज नहीं जोड़ सका। बाद में इससे जोड़ें: {command}"
 "Restart your computer to start using the new packages. Everything else is ready now." = "नए पैकेज इस्तेमाल करने के लिए कंप्यूटर रीस्टार्ट करें। बाकी सब अभी तैयार है।"
-"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Mandara Login के पैकेज अगले बूट के साथ आएँगे: {packages}। रीस्टार्ट के बाद Studio → लॉगिन स्क्रीन → लॉगिन मैनेजर में इस पर जाएँ, या चलाएँ: {command}"
+"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login & Lock Screens → Login → Login manager, or run: {command}" = "Mandara Login के पैकेज अगले बूट के साथ आएँगे: {packages}। रीस्टार्ट के बाद Studio → लॉगिन और लॉक स्क्रीन → लॉगिन → लॉगिन मैनेजर में इस पर जाएँ, या चलाएँ: {command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "यह सिस्टम इमेज-आधारित है: Mandara आपके होम फ़ोल्डर में इंस्टॉल होता है, और इंस्टॉलर केवल कम पड़ रहे सिस्टम पैकेज जोड़ता है।"
 "Aqueous settings stay in its own files in ~/.config/aqueous" = "Aqueous की सेटिंग्स ~/.config/aqueous में उसकी अपनी फ़ाइलों में रहती हैं"
 "Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there." = "Aqueous में कॉन्फ़िगरेशन जाँचने का कोई अलग टूल नहीं है। यह ~/.config/aqueous में अपनी फ़ाइलों को दोबारा लोड करते समय ख़ुद जाँचता है, और Mandara वहाँ कुछ नहीं लिखता।"
@@ -11062,3 +11062,22 @@
 "“{prefix}” kaomoji" = "“{prefix}” काओमोजी"
 "Open the kaomoji picker" = "काओमोजी चयन खोलें"
 "Other kaomojis" = "अन्य काओमोजी"
+
+"The same six designs as the login screen, with an independent selection" = "लॉगिन स्क्रीन वाले वही छह डिज़ाइन, स्वतंत्र चयन के साथ"
+"Select a shortcut to edit its values." = "मान बदलने के लिए कोई शॉर्टकट चुनें।"
+"{count} shortcuts" = "{count} शॉर्टकट"
+"Also used by Mandara" = "Mandara भी उपयोग करता है"
+"Choose matching login and lock designs in Studio." = "Studio में लॉगिन और लॉक स्क्रीन के लिए मेल खाते डिज़ाइन चुनें।"
+"Login & Lock Screens" = "लॉगिन और लॉक स्क्रीन"
+"This design sets its own clock layout." = "यह डिज़ाइन घड़ी का लेआउट तय करता है।"
+"Meridian has no profile picture." = "Meridian में प्रोफ़ाइल चित्र नहीं है।"
+"A big clock, your picture over a glass field, everything floating on the backdrop" = "बड़ी घड़ी, काँच जैसे फ़ील्ड के ऊपर आपकी तस्वीर, सब कुछ पृष्ठभूमि पर तैरता हुआ"
+"Midnight card" = "मिडनाइट कार्ड"
+"A quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" = "आधी रात के नीले और सिट्रीन रंग में, उपयोगकर्ता, पासवर्ड और सत्र वाले एक रूपरेखा कार्ड के ऊपर एक शांत घड़ी"
+"Colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar, chips and tonal buttons" = "आपके वॉलपेपर से रंग, दो पंक्तियों वाली बड़ी घड़ी, और लहरदार अवतार, चिप्स व टोनल बटनों वाला एक टोनल कार्ड"
+"Ghostline" = "Ghostline"
+"Graphite and ice-white hairlines: a wireframe sign-in panel on the left with live readouts, a terminal password line and a ruler clock, in cold cyan" = "ग्रेफ़ाइट पर बर्फ़-सफ़ेद बारीक रेखाएँ: बाईं ओर लाइव रीडआउट वाला वायरफ़्रेम साइन-इन पैनल, टर्मिनल जैसी पासवर्ड पंक्ति और रूलर घड़ी, ठंडे सियान में"
+"Chrome Halo" = "Chrome Halo"
+"Deep ink and holographic light: a luminous ring around a light clock, and a machined sign-in module on the right with a pill button" = "गहरी स्याही और होलोग्राफ़िक रोशनी: हल्की घड़ी के चारों ओर चमकता वलय, और दाईं ओर पिल बटन वाला तराशा हुआ साइन-इन मॉड्यूल"
+"Meridian" = "Meridian"
+"No boxes: your name and password ride on one hairline across a calm dawn field, over enormous whisper-thin numerals; light or dark" = "कोई डिब्बा नहीं: आपका नाम और पासवर्ड शांत भोर के मैदान के पार एक बारीक रेखा पर, विशाल फुसफुसाहट-से पतले अंकों के ऊपर; हल्का या गहरा"

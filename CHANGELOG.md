@@ -12,6 +12,16 @@ Find and copy kaomojis directly from the launcher.
 
 - **Copy kaomojis from the launcher.** Type `::` for a searchable grid with category tabs. Turn it on or off under Studio → Launcher → Search providers.
 
+## 0.31.0 — 2026-11-15
+
+Matching login and lock designs, and room to work with compositor shortcuts.
+
+### Improved
+
+- Login and lock settings share one **Login & Lock Screens** page with separate tabs. Existing page links keep working.
+- All six login designs are available on the lock screen, including Midnight card, Ghostline, Chrome Halo and Meridian. Each screen keeps its own selection.
+- Compositor shortcuts fill the available space, with a separate value editor, clearer key chords and conflict hints. Clean selections switch directly; unsaved changes stay protected.
+
 ## 0.30.2 — 2026-11-14
 
 Keep your own NixOS channel when adding Mandara.

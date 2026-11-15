@@ -1,4 +1,3 @@
-  {suggestions}
  +{count} more
 "English" = "Translation" pairs, one file per language
 "{value}" isn't a duration like 30m, 2h or 1h30m
@@ -113,6 +112,7 @@ A badge on apps with two or more windows (when no notifications are unread)
 A bar chip (the Privacy plugin) and a pill while apps use your microphone, camera or screen
 A bar item and panel with today's time per app and the last seven days. Recorded only on this computer.
 A bar pill that scripts, builds and AI agents report progress to
+A big clock, your picture over a glass field, everything floating on the backdrop
 A blocky game-style title screen for your boot menu
 A bold abstract wallpaper and a minimal centred menu
 A bottom bar, panels spring upward
@@ -249,6 +249,7 @@ A public GitHub repository tagged mandara-plugin with a release is all it takes.
 A public repository with this topic (About → Topics).
 A quick back-and-forth of the pointer, or of something you drag, over the desktop, the bar, panels or a shelf opens a new shelf there. Wayland only lets Mandara see the pointer over its own surfaces, so a shake over an app's window does nothing
 A quick beam sweeps across, lighting each row in turn
+A quiet clock over one outlined card with the user, password and session, in midnight navy and citrine
 A quiet notification when the song changes
 A quiet writing desk with generous margins and mixed corners.
 A quote isn't closed
@@ -309,7 +310,6 @@ A view is a list of nodes; nodes[root] is the top one and children are indices. 
 A volume this full turns its ring amber
 A wallpaper is already being generated
 A warm header bar, soft surfaces and orange accents.
-A warning marks a shortcut also used by Mandara. Check its mode and flags before changing it.
 A website or feed address
 A wide rail of flower buttons and tiles inside a screen frame
 A work desk along the bottom: focus timer in the middle, tasks, notes and system load in zones of their own
@@ -570,6 +570,7 @@ Also put the window on tag {n}
 Also show apps that aren't kept in the dock while they run
 Also show tag {n}
 Also undoes the newer changes above
+Also used by Mandara
 Alt
 Alt+Shift
 Alt+Space
@@ -1370,6 +1371,7 @@ Choose another…
 Choose at most 32 source folders, using absolute paths.
 Choose displays
 Choose mango, niri, hyprland, umbriel, sway, river, kwin, aqueous, labwc or cosmic (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.
+Choose matching login and lock designs in Studio.
 Choose one ayah to copy as an image
 Choose shared, sockets, devices or filesystems.
 Choose source folders in Studio before starting a backup.
@@ -1383,6 +1385,7 @@ Choose…
 Choosing Corniche tide, Lighthouse sweep, Felucca drift, Magnetic, Mercury or Raindrop also sets matching dock animations and wallpaper transition
 Choreography
 Chrome
+Chrome Halo
 Cicero
 Circle
 Circles
@@ -1509,6 +1512,7 @@ Colour
 Colour must be a tone (primary, secondary, tertiary, success, warning, urgent) or hue:<0-359>
 Colour row
 Colourful tiles
+Colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar, chips and tonal buttons
 Colours of the art drawn for each station
 Column
 Columns
@@ -1933,6 +1937,7 @@ Decorations & fun
 Deeds
 Deep focus
 Deep green: a giant stacked clock behind the subject and a dock media chip.
+Deep ink and holographic light: a luminous ring around a light clock, and a machined sign-in module on the right with a pill button
 Deep midnight navy with pale citrine, soft lavender and mint.
 DeepL Free
 DeepL Pro
@@ -2975,6 +2980,7 @@ Get
 Get · {size}
 Getting it ready…
 Getting the Qur'an ready…
+Ghostline
 Git isn't installed
 Git repositories
 GitHub
@@ -3030,6 +3036,7 @@ Gradient group tabs
 Graphics
 Graphics acceleration
 Graphics devices
+Graphite and ice-white hairlines: a wireframe sign-in panel on the left with live readouts, a terminal password line and a ruler clock, in cold cyan
 Great works are performed not by strength, but perseverance.
 Green
 Greet everyone with peace; love grows from it, and faith with love.
@@ -4064,8 +4071,9 @@ Log out, restart and shut down need a press-and-hold (mouse, Enter or a number k
 Logged out
 Logging in
 Login
+Login & Lock Screens
 Login screen
-Login screen kept; switch any time in Studio → Login screen → Login manager.
+Login screen kept; switch any time in Studio → Login & Lock Screens → Login → Login manager.
 Logo
 Long Walk to Freedom
 Long break
@@ -4195,7 +4203,7 @@ Manage the desktop in COSMIC Settings, or edit its native bindings in Keyboard s
 Mandara
 Mandara Corniche
 Mandara Login shows your wallpaper when your account is picked (a copy goes to /var/lib/mandara-login)
-Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}
+Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login & Lock Screens → Login → Login manager, or run: {command}
 Mandara Looks
 Mandara Obsidian
 Mandara Shell
@@ -4256,7 +4264,6 @@ Mandara's KeePassXC dialog is off (Studio → General → Keyrings & passwords)
 Mandara's admin helper isn't set up, so the update can't run as administrator.
 Mandara's balanced spring with a soft landing
 Mandara's drop-in
-Mandara's glass, or Material You: colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar
 Mandara's launcher, dock and tray use it, and GTK, Qt and KDE apps follow (apps already open may need a restart).
 Mandara's launcher, dock and tray use it.
 Mandara's own look, as it has always been
@@ -4369,6 +4376,8 @@ Menu resolution
 Mercury
 Mercy
 Merge
+Meridian
+Meridian has no profile picture.
 Mesh gradient
 Message to send
 Messages
@@ -4394,6 +4403,7 @@ Middle-click command
 Middle-click emulation
 Middle-click on empty bar space
 Middlemarch
+Midnight card
 Midnight sun
 Midnight violet: a side bar framing the screen, a greeting, calendar and bars.
 Mighty is he who has knowledge.
@@ -4771,6 +4781,7 @@ No blur
 No bookmarks yet
 No boot entry chosen
 No boot theme was found in it (a GRUB theme.txt, a Plymouth .plymouth file or a rEFInd theme.conf)
+No boxes: your name and password ride on one hairline across a calm dawn field, over enormous whisper-thin numerals; light or dark
 No calendar “{name}”
 No calendars yet: add one in Studio → Date, time & location
 No changes while the screen is locked or off
@@ -6746,6 +6757,7 @@ Segmented
 Segments
 Select a region to capture
 Select a screen region with a QR code and add the account it holds
+Select a shortcut to edit its values.
 Select all
 Select an area
 Select area
@@ -8015,6 +8027,7 @@ The running or last system update: phase, progress, recent log lines and summary
 The sages were not ashamed to find themselves convinced; for they knew, being wise, that their knowledge was not infinite.
 The same as a grid of tiles
 The same message from the same app replaces the earlier one with a ×2 badge
+The same six designs as the login screen, with an independent selection
 The sandbox
 The saved API key is not text
 The saved feed belongs to another address
@@ -8221,6 +8234,7 @@ This computer runs on mains power
 This configuration is read-only. Edit its source or create a writable user override.
 This container hasn't written anything to stdout or stderr
 This database uses a hardware key (YubiKey challenge-response), which Mandara can't pass to KeePassXC. Unlock it in KeePassXC's window.
+This design sets its own clock layout.
 This device
 This device is asking to pair. Check the name on your phone before accepting.
 This device, the exit node in use and every peer (JSON)
@@ -8632,6 +8646,7 @@ Unknown category
 Unknown city or time zone {name}
 Unknown code type {kind}
 Unknown command {command}; did you mean:
+  {suggestions}
 Unknown command {command}; run `mandara commands` for the catalog
 Unknown effect "{effect}"
 Unknown event
@@ -10021,6 +10036,7 @@ your default
 {count} s
 {count} selected
 {count} sessions
+{count} shortcuts
 {count} staged
 {count} stars
 {count} stopped containers — show All to start one

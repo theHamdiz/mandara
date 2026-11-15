@@ -8264,7 +8264,7 @@
 
 "Cancelled — nothing was changed." = "已取消，未作任何更改。"
 
-"Login screen kept; switch any time in Studio → Login screen → Login manager." = "已保留当前登录界面；可随时在 Studio → 登录界面 → 登录管理器中切换。"
+"Login screen kept; switch any time in Studio → Login & Lock Screens → Login → Login manager." = "已保留当前登录与锁屏 → 登录；可随时在 Studio → 登录与锁屏 → 登录 → 登录管理器中切换。"
 
 "Setup" = "设置"
 
@@ -9707,7 +9707,7 @@
 "Trying again without the optional packages: {packages}" = "正在不带可选软件包重试：{packages}"
 "{tool} couldn't add the packages. Add them later with: {command}" = "{tool} 无法添加这些软件包。稍后可用以下命令添加：{command}"
 "Restart your computer to start using the new packages. Everything else is ready now." = "重启电脑即可开始使用新软件包。其他一切现已就绪。"
-"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login screen → Login manager, or run: {command}" = "Mandara Login 的软件包将随下次启动到来：{packages}。重启后，可在 Studio → 登录界面 → 登录管理器中切换，或运行：{command}"
+"Mandara Login's packages arrive with the next boot: {packages}. After restarting, switch to it in Studio → Login & Lock Screens → Login → Login manager, or run: {command}" = "Mandara Login 的软件包将随下次启动到来：{packages}。重启后，可在 Studio → 登录与锁屏 → 登录 → 登录管理器中切换，或运行：{command}"
 "This system is image-based: Mandara installs into your home folder, and the installer adds only the system packages it lacks." = "此系统基于镜像：Mandara 安装到你的主文件夹，安装程序只添加缺少的系统软件包。"
 "Aqueous settings stay in its own files in ~/.config/aqueous" = "Aqueous 的设置保存在 ~/.config/aqueous 中它自己的文件里"
 "Aqueous has no standalone configuration checker. It validates its own files in ~/.config/aqueous when it reloads them, and Mandara writes nothing there." = "Aqueous 没有独立的配置检查工具。它会在重新加载时自行验证 ~/.config/aqueous 中的文件，Mandara 不会向其中写入任何内容。"
@@ -11055,3 +11055,22 @@
 "“{prefix}” kaomoji" = "“{prefix}” 颜文字"
 "Open the kaomoji picker" = "打开颜文字选择器"
 "Other kaomojis" = "其他颜文字"
+
+"The same six designs as the login screen, with an independent selection" = "与登录屏幕相同的六种设计，可独立选择"
+"Select a shortcut to edit its values." = "选择快捷键以编辑其值。"
+"{count} shortcuts" = "{count} 个快捷键"
+"Also used by Mandara" = "Mandara 也在使用"
+"Choose matching login and lock designs in Studio." = "在 Studio 中为登录和锁屏选择配套设计。"
+"Login & Lock Screens" = "登录与锁屏"
+"This design sets its own clock layout." = "此设计使用自己的时钟布局。"
+"Meridian has no profile picture." = "Meridian 不显示头像。"
+"A big clock, your picture over a glass field, everything floating on the backdrop" = "大时钟,玻璃输入框上方是你的头像,一切悬浮在背景之上"
+"Midnight card" = "午夜卡片"
+"A quiet clock over one outlined card with the user, password and session, in midnight navy and citrine" = "午夜蓝与黄水晶色调,一张描边卡片收纳用户、密码和会话,上方是安静的时钟"
+"Colours from your wallpaper, a big stacked clock and a tonal card with a scalloped avatar, chips and tonal buttons" = "取自壁纸的颜色、两行大时钟，以及带有波浪边头像、纸片和色调按钮的色调卡片"
+"Ghostline" = "Ghostline"
+"Graphite and ice-white hairlines: a wireframe sign-in panel on the left with live readouts, a terminal password line and a ruler clock, in cold cyan" = "石墨与冰白发丝线：左侧是带实时读数的线框登录面板、终端式密码行和标尺时钟，冷青色"
+"Chrome Halo" = "Chrome Halo"
+"Deep ink and holographic light: a luminous ring around a light clock, and a machined sign-in module on the right with a pill button" = "深墨与全息光：轻盈时钟外环绕一圈发光光环，右侧是带胶囊按钮的精工登录模块"
+"Meridian" = "Meridian"
+"No boxes: your name and password ride on one hairline across a calm dawn field, over enormous whisper-thin numerals; light or dark" = "没有方框：你的名字和密码落在横贯宁静晨光画面的一条发丝线上，背后是巨大而轻如低语的数字；浅色或深色"
