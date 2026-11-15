@@ -720,7 +720,6 @@ mod tests {
         // The link to `a` resolves to `a` itself (listed once); the link
         // out, the hidden folder and the file aren't projects.
         assert_eq!(found, [real.join("a"), real.join("b")]);
-        assert_eq!(projects_in(root.path(), 1).len(), 1, "the scan is bounded");
         // Same name in another case between the folder and a link to it.
         std::fs::create_dir(root.path().join("A")).unwrap();
         symlink(root.path().join("a"), root.path().join("a-link")).unwrap();
@@ -732,6 +731,18 @@ mod tests {
         let b = project_info(&real.join("b"));
         assert_eq!(project_preview(&real.join("b"), &b), Some(real.join("b/a.webp")), "no preview named: the first image");
         assert!(runnable(&a.kind) && !runnable(&b.kind), "web projects never run");
+    }
+
+    #[test]
+    fn project_scans_stop_at_the_entry_limit() {
+        let root = tempfile::tempdir().unwrap();
+        for name in ["a", "b", "c"] {
+            std::fs::create_dir(root.path().join(name)).unwrap();
+        }
+        assert!(projects_in(root.path(), 0).is_empty());
+        assert_eq!(projects_in(root.path(), 1).len(), 1);
+        assert_eq!(projects_in(root.path(), 2).len(), 2);
+        assert_eq!(projects_in(root.path(), 3).len(), 3);
     }
 
     #[test]
