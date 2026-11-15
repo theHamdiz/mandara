@@ -6,7 +6,19 @@ About → What's new shows it too.
 
 ## Unreleased
 
-Studio refinements, optional bar and dock effects, richer third-party plugins, a responsive launcher, and recovery from unexpected display shutdowns.
+The shell keeps crash diagnostics and recovers from an unexpected display shutdown.
+
+### Fixed
+
+- An unexpected display-loop shutdown no longer quietly stops the shell's restart supervisor. Warnings and crash errors also reach the system journal when the desktop discards terminal output.
+
+### Under the hood
+
+- The demo sandbox keeps Mango's config in its native home-based location, so display changes pass the same configuration checks as a normal session.
+
+## 0.34.0 — 2026-11-15
+
+Studio refinements, optional bar and dock effects, richer third-party plugins, and a responsive launcher.
 
 ### New
 
@@ -36,8 +48,6 @@ Studio refinements, optional bar and dock effects, richer third-party plugins, a
 
 ### Fixed
 
-- An unexpected display-loop shutdown no longer quietly stops the shell's restart supervisor. Warnings and crash errors also reach the system journal when the desktop discards terminal output.
-
 - Plugin live wallpapers follow pause rules with either wallpaper renderer. Pending scenes cancel when superseded, and renderer helpers stop after a shell crash.
 
 - Parallel Config doctor checks no longer collide when creating their private runtime folders.
@@ -49,8 +59,6 @@ Studio refinements, optional bar and dock effects, richer third-party plugins, a
 - The launcher stays responsive while a slow network or external drive loads recent files, usage history, wallpapers, or the app and icon catalog. Thanks to @is-suzart (#193).
 
 ### Under the hood
-
-- The demo sandbox keeps Mango's config in its native home-based location, so display changes pass the same configuration checks as a normal session.
 
 - The plugin guide gains a design and quality standard for everyone writing third-party plugins, and a strict version for AI coding agents: a designed hierarchy, polish passes on real screenshots, bounded memory and idiomatic Rust.
 
