@@ -119,13 +119,29 @@ pub struct Broker {
     images: VecDeque<(u64, ImageEntry)>,
 }
 
+/// The next id from `counter`, or `None` when it is spent: the counter
+/// stops at its last value instead of wrapping (a wrapped id could match a
+/// request still waiting).
+fn next_id(counter: &std::sync::atomic::AtomicU64) -> Option<u64> {
+    use std::sync::atomic::Ordering::Relaxed;
+    let mut current = counter.load(Relaxed);
+    loop {
+        let next = current.checked_add(1)?;
+        match counter.compare_exchange_weak(current, next, Relaxed, Relaxed) {
+            Ok(id) => return Some(id),
+            Err(seen) => current = seen,
+        }
+    }
+}
+
 impl Broker {
     /// A fresh id from one counter for the whole process (requests and
     /// image handles alike): a reloaded plugin never reuses an id, so a late
-    /// result for its old instance can't answer a new request.
-    fn issue(&mut self) -> u64 {
+    /// result for its old instance can't answer a new request. `None` once
+    /// the counter is spent (it never wraps round to reuse one).
+    fn issue(&mut self) -> Option<u64> {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        next_id(&NEXT)
     }
 
     fn open(&self, subscription: bool) -> usize {
@@ -164,7 +180,7 @@ impl Broker {
         if open >= limit {
             return Err(format!("too many {} at once (at most {limit})", if subscription { "subscriptions" } else { "waiting requests" }));
         }
-        let id = self.issue();
+        let id = self.issue().ok_or("no request ids are left")?;
         self.queued.push(Request { id, capability, operation, payload });
         Ok(id)
     }
@@ -268,16 +284,17 @@ impl Broker {
 
     /// A handle for `entry` (the same one if it already has one). Past
     /// [`extension::MAX_IMAGE_HANDLES`] the oldest handle is released.
-    pub fn issue_image(&mut self, entry: ImageEntry) -> u64 {
+    /// `None` once ids are spent.
+    pub fn issue_image(&mut self, entry: ImageEntry) -> Option<u64> {
         if let Some((id, _)) = self.images.iter().find(|(_, e)| *e == entry) {
-            return *id;
+            return Some(*id);
         }
+        let id = self.issue()?;
         if self.images.len() >= extension::MAX_IMAGE_HANDLES {
             self.images.pop_front();
         }
-        let id = self.issue();
         self.images.push_back((id, entry));
-        id
+        Some(id)
     }
 
     pub fn image(&self, handle: u64) -> Option<&ImageEntry> {
@@ -425,14 +442,23 @@ mod tests {
         assert!(b.take_requests().iter().all(|r| r.id != queued), "queued media.read requests are dropped");
     }
 
+    /// A spent counter stops issuing instead of wrapping round to old ids.
+    #[test]
+    fn ids_are_never_reused_when_the_counter_is_spent() {
+        let counter = std::sync::atomic::AtomicU64::new(u64::MAX - 1);
+        assert_eq!(next_id(&counter), Some(u64::MAX - 1));
+        assert_eq!(next_id(&counter), None);
+        assert_eq!(next_id(&counter), None, "still spent, never wrapped");
+    }
+
     #[test]
     fn image_handles_are_reused_and_bounded() {
         let mut b = Broker::default();
         let entry = |n: usize| ImageEntry { path: PathBuf::from(format!("/x/{n}.png")), origin: ImageOrigin::Asset };
-        let first = b.issue_image(entry(0));
-        assert_eq!(b.issue_image(entry(0)), first);
+        let first = b.issue_image(entry(0)).unwrap();
+        assert_eq!(b.issue_image(entry(0)), Some(first));
         for n in 1..=extension::MAX_IMAGE_HANDLES {
-            b.issue_image(entry(n));
+            b.issue_image(entry(n)).unwrap();
         }
         assert_eq!(b.image_count(), extension::MAX_IMAGE_HANDLES);
         assert!(b.image(first).is_none(), "the oldest handle was released");

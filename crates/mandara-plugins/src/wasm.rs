@@ -253,7 +253,7 @@ impl mandara::plugin::broker::Host for HostState {
 
     fn asset_image(&mut self, name: String) -> Result<u64, String> {
         let path = broker::asset_path(&self.dir, &name)?;
-        Ok(self.broker.issue_image(ImageEntry { path, origin: ImageOrigin::Asset }))
+        self.broker.issue_image(ImageEntry { path, origin: ImageOrigin::Asset }).ok_or_else(|| "no image handles are left".into())
     }
 }
 
@@ -607,8 +607,9 @@ impl WasmPlugin {
         self.store.data().broker.is_open(id)
     }
 
-    /// An image handle for `entry`, owned by this instance.
-    pub fn issue_image(&mut self, entry: ImageEntry) -> u64 {
+    /// An image handle for `entry`, owned by this instance (`None` once
+    /// ids are spent).
+    pub fn issue_image(&mut self, entry: ImageEntry) -> Option<u64> {
         self.store.data_mut().broker.issue_image(entry)
     }
 

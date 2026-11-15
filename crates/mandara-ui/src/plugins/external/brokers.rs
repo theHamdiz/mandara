@@ -387,7 +387,7 @@ fn media_snapshot(plugin: &str, cx: &mut App) -> Value {
 fn issue(plugin: &str, path: PathBuf, origin: ImageOrigin) -> Option<u64> {
     let shared = loaded(plugin)?;
     let mut guard = shared.borrow_mut();
-    Some(guard.as_mut()?.issue_image(ImageEntry { path, origin }))
+    guard.as_mut()?.issue_image(ImageEntry { path, origin })
 }
 
 fn subscribe_media(plugin: &str, id: u64, cx: &mut App) {

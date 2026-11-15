@@ -150,7 +150,7 @@ fn image_handles_are_plugin_scoped_and_follow_grants() {
     click(&mut p, "asset");
     let seen = log(&mut p);
     assert!(seen.contains("asset Ok(") && seen.contains("isn't a PNG, JPEG or WebP file name"), "its own asset only: {seen}");
-    let folder = p.issue_image(ImageEntry { path: "/pictures/a.png".into(), origin: ImageOrigin::Folder("/pictures".into()) });
+    let folder = p.issue_image(ImageEntry { path: "/pictures/a.png".into(), origin: ImageOrigin::Folder("/pictures".into()) }).unwrap();
     assert!(p.image(folder).is_some());
     assert!(p.image(folder + 1000).is_none(), "an unknown handle resolves to nothing");
     p.set_access(Access::from_grant(&declared, Some(&grant(vec!["/elsewhere".into()]))));

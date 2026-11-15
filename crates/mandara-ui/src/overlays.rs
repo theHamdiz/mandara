@@ -1214,11 +1214,14 @@ fn launcher_apps(cx: &App) -> Vec<DesktopApp> {
 }
 
 /// JSON view of launcher results (for `launcher search`).
-pub fn search_json(query: &str, cx: &App) -> serde_json::Value {
+pub fn search_json(query: &str, cx: &mut App) -> serde_json::Value {
     let apps = launcher_apps(cx);
     let index = build_index(cx);
     let mut ctx = SearchCtx::gather(&apps, cx);
     ctx.ask_plugins(query, cx);
+    // What the providers queued while answering is dropped, as in the
+    // launcher (a search runs nothing).
+    crate::plugins::external::settle_launcher(cx);
     let results: Vec<serde_json::Value> = search_with(query, &apps, &index, &ctx)
         .into_iter()
         .take(12)

@@ -132,18 +132,74 @@ pub(crate) fn after_call(id: &str, plugin: &Shared, cx: &mut App) {
     }
 }
 
-/// Writes a plugin's storage file on the background executor. Writes of
-/// the same file never land out of order: each carries a generation and
-/// only the newest one is written.
-fn write_storage_later(path: std::path::PathBuf, json: String, cx: &mut App) {
-    use std::sync::Mutex;
-    static NEWEST: Mutex<Option<HashMap<std::path::PathBuf, u64>>> = Mutex::new(None);
-    let generation = {
-        let mut map = NEWEST.lock().unwrap_or_else(|e| e.into_inner());
-        let g = map.get_or_insert_with(HashMap::new).entry(path.clone()).or_insert(0);
+/// Which storage snapshot of each file is the newest, and the newest ones
+/// whose writes failed: those are kept and tried again with the next write
+/// or when a plugin unloads (no timer runs while idle).
+#[derive(Default)]
+struct StorageWrites {
+    newest: HashMap<std::path::PathBuf, u64>,
+    unsaved: HashMap<std::path::PathBuf, (u64, String)>,
+}
+
+impl StorageWrites {
+    /// A new snapshot of `path`: it supersedes every earlier one.
+    fn begin(&mut self, path: &std::path::Path) -> u64 {
+        let g = self.newest.entry(path.to_path_buf()).or_insert(0);
         *g += 1;
         *g
-    };
+    }
+
+    fn is_current(&self, path: &std::path::Path, generation: u64) -> bool {
+        self.newest.get(path) == Some(&generation)
+    }
+
+    /// Every try failed: keep the snapshot if it is still the newest.
+    fn failed(&mut self, path: std::path::PathBuf, generation: u64, json: String) {
+        if self.is_current(&path, generation) {
+            self.unsaved.insert(path, (generation, json));
+        }
+    }
+
+    fn written(&mut self, path: &std::path::Path, generation: u64) {
+        if self.unsaved.get(path).is_some_and(|(g, _)| *g <= generation) {
+            self.unsaved.remove(path);
+        }
+    }
+
+    /// The failed snapshots still worth writing (a newer one supersedes).
+    fn take_retries(&mut self) -> Vec<(std::path::PathBuf, String)> {
+        let unsaved = std::mem::take(&mut self.unsaved);
+        unsaved.into_iter().filter(|(path, (g, _))| self.is_current(path, *g)).map(|(path, (_, json))| (path, json)).collect()
+    }
+}
+
+static STORAGE_WRITES: std::sync::Mutex<Option<StorageWrites>> = std::sync::Mutex::new(None);
+
+fn storage_writes<R>(f: impl FnOnce(&mut StorageWrites) -> R) -> R {
+    f(STORAGE_WRITES.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(Default::default))
+}
+
+/// Writes a plugin's storage file on the background executor. Writes of
+/// the same file never land out of order: each carries a generation and
+/// only the newest one is written. Snapshots whose writes failed before are
+/// tried again first.
+fn write_storage_later(path: std::path::PathBuf, json: String, cx: &mut App) {
+    let generation = storage_writes(|w| w.begin(&path));
+    retry_unsaved_storage(cx);
+    spawn_storage_write(path, generation, json, cx);
+}
+
+/// Tries the failed storage writes again (a plugin unloading, or another
+/// write starting: the disk may have room again).
+fn retry_unsaved_storage(cx: &mut App) {
+    for (path, json) in storage_writes(StorageWrites::take_retries) {
+        let generation = storage_writes(|w| w.begin(&path));
+        spawn_storage_write(path, generation, json, cx);
+    }
+}
+
+fn spawn_storage_write(path: std::path::PathBuf, generation: u64, json: String, cx: &mut App) {
+    use std::sync::Mutex;
     // Serializes the disk writes; only background tasks take it, so the UI
     // thread never waits on a slow disk.
     static WRITING: Mutex<()> = Mutex::new(());
@@ -153,16 +209,18 @@ fn write_storage_later(path: std::path::PathBuf, json: String, cx: &mut App) {
             for attempt in 0..STORAGE_WRITE_ATTEMPTS {
                 let written = {
                     let _writing = WRITING.lock().unwrap_or_else(|e| e.into_inner());
-                    let current = NEWEST.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|m| m.get(&path)) == Some(&generation);
                     // A newer snapshot supersedes this one.
-                    if !current {
+                    if !storage_writes(|w| w.is_current(&path, generation)) {
                         return;
                     }
                     wasm::write_storage(&path, &json)
                 };
                 match written {
-                    Ok(()) => return,
-                    Err(err) if attempt + 1 == STORAGE_WRITE_ATTEMPTS => tracing::warn!(target: "mandara::plugin", "writing {}: {err}", path.display()),
+                    Ok(()) => return storage_writes(|w| w.written(&path, generation)),
+                    Err(err) if attempt + 1 == STORAGE_WRITE_ATTEMPTS => {
+                        tracing::warn!(target: "mandara::plugin", "writing {}: {err} (kept to try again)", path.display());
+                        return storage_writes(|w| w.failed(path, generation, json));
+                    }
                     // A transient failure (a full or busy disk): try again.
                     Err(_) => executor.timer(STORAGE_RETRY).await,
                 }
@@ -299,6 +357,7 @@ fn release_card(id: &str, cx: &mut App) {
     // handle frees it. Its subscriptions end with it.
     LOADED.with(|l| l.borrow_mut().remove(id));
     brokers::forget(id, cx);
+    retry_unsaved_storage(cx);
     mandara_services::memory::request_trim();
 }
 
@@ -308,6 +367,7 @@ fn forget(id: &str, cx: &mut App) {
     CATALOGS.with(|c| c.borrow_mut().remove(id));
     LOAD_ERRORS.with(|e| e.borrow_mut().remove(id));
     brokers::forget(id, cx);
+    retry_unsaved_storage(cx);
 }
 
 /// The palette record plugins receive, from the live theme. Cached for the
@@ -985,6 +1045,31 @@ pub fn watch(cx: &mut App) {
 #[cfg(test)]
 mod tests {
     use mandara_plugins::wasm::{PLUGIN_COMMANDS, plugin_may_run};
+
+    /// A snapshot whose every write failed is kept and offered again, until
+    /// a newer snapshot of the same file supersedes it.
+    #[test]
+    fn failed_storage_snapshots_are_kept_until_written_or_superseded() {
+        use std::path::Path;
+        let mut w = super::StorageWrites::default();
+        let (a, b) = (Path::new("/s/a.json"), Path::new("/s/b.json"));
+        let ga = w.begin(a);
+        w.failed(a.into(), ga, "A1".into());
+        assert_eq!(w.take_retries(), [(a.to_path_buf(), "A1".to_string())], "kept after the tries ran out");
+        // Retried as a new generation that fails again, then succeeds.
+        let ga = w.begin(a);
+        w.failed(a.into(), ga, "A1".into());
+        let retries = w.take_retries();
+        let ga = w.begin(a);
+        assert_eq!(retries.len(), 1);
+        w.written(a, ga);
+        assert!(w.take_retries().is_empty(), "written: nothing left");
+        // A newer snapshot of the file supersedes a failed one.
+        let gb = w.begin(b);
+        w.failed(b.into(), gb, "B1".into());
+        w.begin(b);
+        assert!(w.take_retries().is_empty(), "the newer snapshot wins");
+    }
 
     /// Issue #10: plugins may only queue interface commands. Every allowed
     /// path is a real built-in command (a typo would silently block it),

@@ -37,7 +37,7 @@ impl Storage {
                 // separators and braces per key.
                 .filter(|b| b.len() <= MAX_STORAGE_BYTES * JSON_ESCAPE + MAX_STORAGE_KEYS * JSON_PER_KEY)
                 .and_then(|b| serde_json::from_slice(&b).ok())
-                .filter(|m: &BTreeMap<String, String>| m.len() <= MAX_STORAGE_KEYS)
+                .filter(within_limits)
                 .unwrap_or_default();
             self.bytes = map.iter().map(|(k, v)| k.len() + v.len()).sum();
             self.map = Some(map);
@@ -96,6 +96,14 @@ impl Storage {
     }
 }
 
+/// Whether a loaded file keeps every limit `set` enforces (a file edited
+/// by hand, or written by another version, could break them).
+fn within_limits(map: &BTreeMap<String, String>) -> bool {
+    map.len() <= MAX_STORAGE_KEYS
+        && map.iter().all(|(k, v)| !k.is_empty() && k.len() <= MAX_STORAGE_KEY && !k.chars().any(char::is_control) && v.len() <= MAX_STORAGE_VALUE)
+        && map.iter().map(|(k, v)| k.len() + v.len()).sum::<usize>() <= MAX_STORAGE_BYTES
+}
+
 /// Writes a flushed storage file atomically (a temporary file renamed over
 /// it). Run off the UI thread.
 pub fn write(path: &std::path::Path, json: &str) -> std::io::Result<()> {
@@ -127,6 +135,25 @@ mod tests {
         write(&p, &json).unwrap();
         let mut again = Storage { path, map: None, bytes: 0, dirty: false };
         assert_eq!(again.keys().len(), 6, "nothing is lost on reload");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A file within the encoded size but over a decoded limit starts empty.
+    #[test]
+    fn files_over_the_decoded_limits_start_empty() {
+        let dir = std::env::temp_dir().join(format!("mandara-storage-limits-{}", std::process::id()));
+        let path = dir.join("p.json");
+        let over_value = BTreeMap::from([("k".to_string(), "v".repeat(MAX_STORAGE_VALUE + 1))]);
+        let over_total: BTreeMap<String, String> = (0..MAX_STORAGE_BYTES / MAX_STORAGE_VALUE + 1).map(|i| (format!("k{i}"), "v".repeat(MAX_STORAGE_VALUE - 8))).collect();
+        let bad_key = BTreeMap::from([("a\u{7}".to_string(), "v".to_string())]);
+        for map in [over_value, over_total, bad_key] {
+            write(&path, &serde_json::to_string(&map).unwrap()).unwrap();
+            let mut s = Storage { path: path.clone(), map: None, bytes: 0, dirty: false };
+            assert!(s.keys().is_empty(), "refused on load");
+        }
+        let good = BTreeMap::from([("k".to_string(), "v".to_string())]);
+        write(&path, &serde_json::to_string(&good).unwrap()).unwrap();
+        assert_eq!(Storage { path, map: None, bytes: 0, dirty: false }.get("k").as_deref(), Some("v"));
         let _ = std::fs::remove_dir_all(dir);
     }
 

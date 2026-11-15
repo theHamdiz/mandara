@@ -204,4 +204,20 @@ mod tests {
         assert!(total <= crate::extension::MAX_VIEW_BYTES, "{total} bytes");
         assert!(view.nodes.iter().any(|n| n.text == "x"), "the rest stays as sent");
     }
+
+    /// Fields the view check counts but translation never changes (focus,
+    /// ids, actions, option values) are reserved first, so a valid view
+    /// still passes the check after translation.
+    #[test]
+    fn translation_reserves_every_counted_field() {
+        let huge = "y".repeat(crate::extension::MAX_VIEW_BYTES * 3 / 4);
+        let mut catalogs = PluginCatalogs::new(Path::new("unused-plugin-directory"));
+        catalogs.loaded.insert(Lang::Ar, Some(Catalog::parse(&format!("\"x\" = \"{huge}\"")).unwrap()));
+        let focus = "f".repeat(crate::extension::MAX_VIEW_BYTES / 2);
+        let mut view = View { nodes: vec![Node { text: "x".into(), ..node(Kind::Text) }], root: 0, focus };
+        crate::extension::check_view(&view).expect("valid as sent");
+        with_language(Some(Lang::Ar), || catalogs.translate_view(&mut view));
+        assert_eq!(view.nodes[0].text, "x", "the translation doesn't fit next to the focus");
+        crate::extension::check_view(&view).expect("still valid after translation");
+    }
 }
