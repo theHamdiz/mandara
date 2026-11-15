@@ -23,7 +23,13 @@ in the journal even when a compositor redirects stderr to `/dev/null`:
 journalctl --user -t mandara --since today
 ```
 
-Logging uses bounded, nonblocking datagrams. A full or unavailable journal
+With volatile journal storage, these records are in the system journal instead:
+`sudo journalctl -t mandara --since today`. Members of `systemd-journal` can
+read it without `sudo`.
+
+Journal formatting and datagrams are bounded, and the socket is nonblocking.
+`RUST_LOG` controls stderr only; the journal retains warnings and errors.
+A full or unavailable journal
 does not hold up the shell, and stderr output remains available on every
 supported system. Reproduce crashes in the private sandbox and retain the
 log around the failure before changing code.

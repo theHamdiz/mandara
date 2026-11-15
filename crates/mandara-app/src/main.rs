@@ -22,6 +22,7 @@ mod changelog_cli;
 mod config_mirror;
 mod ipc;
 mod journal;
+mod logging;
 mod setup_cli;
 mod surfaces;
 mod update_cli;
@@ -217,24 +218,14 @@ fn run() -> Result<()> {
             }
         }
     }
-    use tracing_subscriber::{Layer as _, layer::SubscriberExt as _, util::SubscriberInitExt as _};
+    use tracing_subscriber::util::SubscriberInitExt as _;
     let long = Box::leak(mandara_version::long_version().into_boxed_str()) as &'static str;
-    let journal = journal::Journal::connect(long).map(|journal| {
-        tracing_subscriber::fmt::layer()
-            .with_ansi(false)
-            .without_time()
-            .with_file(true)
-            .with_line_number(true)
-            .with_writer(journal)
-            .with_filter(tracing_subscriber::filter::LevelFilter::WARN)
-    });
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,naga=warn,wgpu=warn,wgpu_hal=error,blade=warn".into()),
-        )
-        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
-        .with(journal)
+    logging::subscriber(
+        std::io::stderr,
+        journal::Journal::connect(long),
+        tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| "info,naga=warn,wgpu=warn,wgpu_hal=error,blade=warn".into()),
+    )
         .init();
     mandara_plugins::install_panic_hook();
     // A write past RLIMIT_FSIZE (e.g. a large screencopy buffer under a

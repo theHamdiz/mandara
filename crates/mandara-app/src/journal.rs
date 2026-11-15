@@ -1,12 +1,16 @@
 //! Keeps warnings and errors when a compositor discards the process's stderr.
 
 use std::{
+    fmt,
     io::{self, Write},
     os::unix::net::UnixDatagram,
     path::Path,
 };
-use tracing::Metadata;
-use tracing_subscriber::fmt::MakeWriter;
+use tracing::{
+    Event, Subscriber,
+    field::{Field, Visit},
+};
+use tracing_subscriber::{Layer, layer::Context};
 
 /// Caps foreground formatting storage and keeps each journal datagram small.
 const RECORD_BYTES: usize = 8 * 1024;
@@ -33,26 +37,33 @@ impl Journal {
     }
 }
 
-impl<'a> MakeWriter<'a> for Journal {
-    type Writer = Record<'a>;
-
-    fn make_writer(&'a self) -> Self::Writer {
-        Record::new(self, b'3')
-    }
-
-    fn make_writer_for(&'a self, metadata: &Metadata<'_>) -> Self::Writer {
-        Record::new(
+impl<S: Subscriber> Layer<S> for Journal {
+    fn on_event(&self, event: &Event<'_>, _: Context<'_, S>) {
+        let metadata = event.metadata();
+        let mut record = Record::new(
             self,
             if *metadata.level() == tracing::Level::WARN {
                 b'4'
             } else {
                 b'3'
             },
-        )
+        );
+        let _ = fmt::write(
+            &mut record,
+            format_args!("{} {}", metadata.level(), metadata.target()),
+        );
+        if let Some(file) = metadata.file() {
+            let _ = fmt::write(&mut record, format_args!(" {file}"));
+            if let Some(line) = metadata.line() {
+                let _ = fmt::write(&mut record, format_args!(":{line}"));
+            }
+        }
+        let _ = fmt::Write::write_str(&mut record, ":");
+        event.record(&mut record);
     }
 }
 
-pub struct Record<'a> {
+struct Record<'a> {
     socket: &'a UnixDatagram,
     bytes: [u8; RECORD_BYTES],
     len: usize,
@@ -96,6 +107,33 @@ impl Write for Record<'_> {
 
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
+    }
+}
+
+impl fmt::Write for Record<'_> {
+    fn write_str(&mut self, value: &str) -> fmt::Result {
+        if self.truncated {
+            return Err(fmt::Error);
+        }
+        let _ = self.write(value.as_bytes());
+        if self.truncated {
+            Err(fmt::Error)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl Visit for Record<'_> {
+    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+        if self.truncated {
+            return;
+        }
+        let _ = if field.name() == "message" {
+            fmt::write(self, format_args!(" {value:?}"))
+        } else {
+            fmt::write(self, format_args!(" {}={value:?}", field.name()))
+        };
     }
 }
 
@@ -146,7 +184,7 @@ mod tests {
     fn multiline_errors_keep_their_message_and_build_identity() {
         let (journal, receiver) = journal();
         {
-            let mut writer = journal.make_writer();
+            let mut writer = Record::new(&journal, b'3');
             writer.write_all(b"first line\nsecond\0line").unwrap();
         }
         let mut bytes = [0; RECORD_BYTES];
@@ -162,7 +200,7 @@ mod tests {
     fn oversized_messages_stay_inside_one_bounded_datagram() {
         let (journal, receiver) = journal();
         {
-            let mut writer = journal.make_writer();
+            let mut writer = Record::new(&journal, b'3');
             writer.write_all(&[b'x'; RECORD_BYTES * 2]).unwrap();
         }
         let mut bytes = [0; RECORD_BYTES];
@@ -180,8 +218,7 @@ mod tests {
         static BUILD: [u8; RECORD_BYTES * 2] = [b'v'; RECORD_BYTES * 2];
         let (mut journal, receiver) = journal();
         journal.build = std::str::from_utf8(&BUILD).unwrap();
-        journal
-            .make_writer()
+        Record::new(&journal, b'3')
             .write_all(b"the actual failure")
             .unwrap();
         let mut bytes = [0; RECORD_BYTES];
@@ -209,10 +246,11 @@ mod tests {
             }
         };
         assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
-        journal.make_writer().write_all(b"journal is full").unwrap();
+        Record::new(&journal, b'3')
+            .write_all(b"journal is full")
+            .unwrap();
         drop(receiver);
-        journal
-            .make_writer()
+        Record::new(&journal, b'3')
             .write_all(b"journal is closed")
             .unwrap();
     }
@@ -220,12 +258,7 @@ mod tests {
     #[test]
     fn the_journal_filter_keeps_warning_priority_and_skips_info() {
         let (journal, receiver) = journal();
-        let subscriber = tracing_subscriber::fmt()
-            .without_time()
-            .with_ansi(false)
-            .with_max_level(tracing::Level::WARN)
-            .with_writer(journal)
-            .finish();
+        let subscriber = crate::logging::subscriber(io::sink, Some(journal), "off".into());
         tracing::subscriber::with_default(subscriber, || {
             tracing::info!("routine message");
             tracing::warn!("crash warning");
@@ -242,5 +275,56 @@ mod tests {
             receiver.recv(&mut bytes).unwrap_err().kind(),
             io::ErrorKind::WouldBlock
         );
+    }
+
+    #[test]
+    fn stderr_filters_do_not_discard_journal_diagnostics() {
+        for filter in ["off", "info,wgpu_hal=error"] {
+            let (journal, receiver) = journal();
+            let subscriber = crate::logging::subscriber(io::sink, Some(journal), filter.into());
+            tracing::subscriber::with_default(subscriber, || {
+                tracing::warn!(target: "wgpu_hal", "GPU warning");
+                tracing::error!("display loop failure");
+            });
+            let mut bytes = [0; RECORD_BYTES];
+            for text in ["GPU warning", "display loop failure"] {
+                let count = receiver.recv(&mut bytes).unwrap();
+                assert!(String::from_utf8_lossy(message(&bytes[..count])).contains(text));
+            }
+            assert_eq!(
+                receiver.recv(&mut bytes).unwrap_err().kind(),
+                io::ErrorKind::WouldBlock
+            );
+        }
+    }
+
+    #[test]
+    fn the_complete_subscriber_stops_formatting_an_oversized_event() {
+        use std::cell::Cell;
+        struct Verbose<'a>(&'a Cell<usize>);
+        impl fmt::Display for Verbose<'_> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                for _ in 0..RECORD_BYTES * 4 {
+                    self.0.set(self.0.get() + 1);
+                    f.write_str("one more diagnostic line\n")?;
+                }
+                Ok(())
+            }
+        }
+        let calls = Cell::new(0);
+        let control = format!("{}", Verbose(&calls));
+        assert!(control.len() > RECORD_BYTES);
+        assert_eq!(calls.get(), RECORD_BYTES * 4);
+        calls.set(0);
+        let (journal, receiver) = journal();
+        let subscriber = crate::logging::subscriber(io::sink, Some(journal), "off".into());
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::error!("{}", Verbose(&calls));
+        });
+        assert!(calls.get() < RECORD_BYTES);
+        let mut bytes = [0; RECORD_BYTES];
+        let count = receiver.recv(&mut bytes).unwrap();
+        assert_eq!(count, RECORD_BYTES);
+        assert!(message(&bytes[..count]).ends_with(TRUNCATED));
     }
 }

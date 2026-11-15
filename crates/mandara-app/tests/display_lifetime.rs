@@ -84,11 +84,8 @@ fn a_display_disconnect_fails_instead_of_stopping_the_supervisor() {
                 ))
             })
             .collect();
-        assert!(
-            pairs
-                .iter()
-                .any(|(key, value)| key == "XDG_RUNTIME_DIR" && value.as_os_str() == sandbox.runtime.path().as_os_str())
-        );
+        assert!(pairs.iter().any(|(key, value)| key == "XDG_RUNTIME_DIR"
+            && value.as_os_str() == sandbox.runtime.path().as_os_str()));
         pairs
     };
     let pid = recorded_pid("shell");
@@ -111,12 +108,13 @@ fn a_display_disconnect_fails_instead_of_stopping_the_supervisor() {
     sandbox.run(&["msg", "quit"]);
     sandbox.wait(|| !sandbox.command(&["msg", "ping"]).status.success());
 
+    let stderr = tempfile::NamedTempFile::new().unwrap();
     let mut child = Command::new(&args[0])
         .args(&args[1..])
         .env_clear()
         .envs(env)
         .stdout(Stdio::null())
-        .stderr(Stdio::piped())
+        .stderr(stderr.reopen().unwrap())
         .spawn()
         .unwrap();
     writeln!(
@@ -134,17 +132,10 @@ fn a_display_disconnect_fails_instead_of_stopping_the_supervisor() {
     // SAFETY: this is the recorded compositor of this test's private runtime.
     assert_eq!(unsafe { libc::kill(compositor, libc::SIGTERM) }, 0);
     sandbox.wait(|| child.try_wait().unwrap().is_some());
-    let output = child.wait_with_output().unwrap();
-    assert_eq!(
-        output.status.code(),
-        Some(1),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("display event loop stopped without a quit request")
-    );
+    let status = child.wait().unwrap();
+    let diagnostics = std::fs::read_to_string(stderr.path()).unwrap();
+    assert_eq!(status.code(), Some(1), "{}", diagnostics);
+    assert!(diagnostics.contains("display event loop stopped without a quit request"));
 }
 
 impl Drop for Sandbox {
