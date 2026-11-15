@@ -2095,6 +2095,9 @@ impl Render for LauncherView {
         let palette = mandara_core::frame_palette(window, cx);
         let f = fonts(cx);
         let cfg = config(cx).read(cx).snapshot();
+        // The launcher's grain and the cards' (results, previews).
+        crate::components::grain::prepare(crate::components::grain::Slot::Launcher, &cfg.grain.launcher, &palette, window, cx);
+        crate::components::grain::prepare(crate::components::grain::Slot::Cards, &cfg.grain.cards, &palette, window, cx);
         let _motion = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(cfg.motion.surfaces.launcher));
         if self.look.style == mandara_config::workflow::LauncherStyle::Beacon {
             return self.render_beacon(window, cx);
@@ -2348,6 +2351,11 @@ impl Render for LauncherView {
                     .shadow(crate::plugins::panel_fx::elevation_scaled(&palette, progress, cfg.panels.shadow_strength))
                     .into_any_element()
             }
+        };
+        // Grain (`[grain.launcher]`) over the surface, under the content.
+        let surface = match crate::components::grain::layer(crate::components::grain::Slot::Launcher, gpui::Corners::all(px(radius))) {
+            Some(g) => div().absolute().size_full().child(surface).child(div().absolute().left(px(x)).top(px(y)).w(px(cur.w)).h(px(h)).child(g)).into_any_element(),
+            None => surface,
         };
         // The center card (and a slide) fade in whole.
         let surface = if place.fades && progress < 1.0 { div().absolute().size_full().opacity(progress).child(surface).into_any_element() } else { surface };

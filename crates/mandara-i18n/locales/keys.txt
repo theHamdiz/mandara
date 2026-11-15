@@ -162,6 +162,12 @@ A few extra rak'ahs each day quietly build you a home.
 A filesystem this full turns amber
 A filesystem this full turns coral
 A filtered Btrfs balance releases empty block groups
+A fine texture behind Studio's pages
+A fine texture for Studio, cards, bars, the launcher and panels. Each surface has its own; all stay subtle.
+A fine texture on cards and grouped lists, in the shell and in Studio
+A fine texture on drop-down and plugin panels
+A fine texture on the bars and their capsules
+A fine texture on the launcher
 A fine texture over the glass, drawn once and reused
 A fine texture over the tray
 A fixed light or dark wallpaper is set under Fit & effects; it shows instead of the slideshow while the theme is in that mode.
@@ -917,6 +923,7 @@ Bar app icons
 Bar count
 Bar date format
 Bar essentials
+Bar grain
 Bar icons relative to their designed size
 Bar items light up softly under the pointer
 Bar label
@@ -1202,6 +1209,7 @@ Captures screens, windows and regions
 Capturing…
 Card corners
 Card folder
+Card grain
 Card layout
 Card padding
 Card radius
@@ -3889,6 +3897,7 @@ Launcher
 Launcher & pop-ups
 Launcher button
 Launcher colors
+Launcher grain
 Launcher looks
 Launcher width at a screen edge
 Launches count more when recent; the weight halves every few days (Ranking above).
@@ -5571,6 +5580,7 @@ Panel animation
 Panel capture failed: {error}
 Panel edges
 Panel frame
+Panel grain
 Panel height
 Panel image copied
 Panel radius
@@ -7461,6 +7471,7 @@ Strong
 Studio
 Studio design
 Studio design: Themes → Studio
+Studio grain
 Studio isn't connected to the shell
 Studio isn't running inside a Wayland session.
 Studio look id (see studio look list)

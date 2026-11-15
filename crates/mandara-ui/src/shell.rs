@@ -16,7 +16,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, AnyView, App, AppContext as _, Bounds, ClickEvent, Context, Entity, EntityId, FocusHandle, InteractiveElement,
+    AnyElement, AnyView, App, AppContext as _, Bounds, ClickEvent, Corners, Context, Entity, EntityId, FocusHandle, InteractiveElement,
     IntoElement, KeyDownEvent, ParentElement, Pixels, Render, StatefulInteractiveElement, StyleRefinement, Styled, Task,
     Window, canvas, div, point, prelude::FluentBuilder as _, px, size,
 };
@@ -41,6 +41,11 @@ use side_bars::{MAIN_ZONES, ZONES, ZoneLook, content_length, split};
 
 /// Opaque fill of the frame, panels and sidebar: a deep tonal surface that
 /// reads crisply over anything (no see-through patchiness).
+/// The bars' grain (`[grain.bars]`) over a bar shape of corner radius `r`.
+fn bar_grain(r: Pixels) -> Option<AnyElement> {
+    crate::components::grain::layer(crate::components::grain::Slot::Bars, Corners::all(r))
+}
+
 pub fn frame_color(palette: &MandaraPalette) -> Color {
     if palette.is_dark {
         palette.surface_dim.mix(palette.surface_base, FRAME_DARK_MIX)
@@ -1390,6 +1395,10 @@ impl Render for ShellView {
             self.panel_capture = None;
         }
         let palette = mandara_core::frame_palette(window, cx);
+        // Grain for this output's bars, panels and the cards inside them.
+        crate::components::grain::prepare(crate::components::grain::Slot::Bars, &cfg.grain.bars, &palette, window, cx);
+        crate::components::grain::prepare(crate::components::grain::Slot::Panels, &cfg.grain.panels, &palette, window, cx);
+        crate::components::grain::prepare(crate::components::grain::Slot::Cards, &cfg.grain.cards, &palette, window, cx);
         let f = fonts(cx);
         let viewport = window.viewport_size();
         if f32::from(viewport.width) > 1.0 {
@@ -1672,6 +1681,7 @@ impl Render for ShellView {
                     .id("bar-backdrop")
                     .rounded(px(m.frame_radius()))
                     .bg(bar_fill_h)
+                    .children(bar_grain(px(m.frame_radius())))
                     .shadow(bar_depth(&bar_rim))
                     .empty_bar_space(cx)
                     .when(!click_through, |el| el.child(self.mask.region())),
@@ -1766,7 +1776,7 @@ impl Render for ShellView {
                 }
             }
             root = root
-                .child(div().absolute().top(px(strip_y)).left_0().w(px(w)).h(px(bar_h)).bg(bar_fill_h))
+                .child(div().absolute().top(px(strip_y)).left_0().w(px(w)).h(px(bar_h)).bg(bar_fill_h).children(bar_grain(px(0.0))))
                 .when(left_free, |el| el.child(concave_flare(inset, flare_y, r, left_c, bar_fill_h)))
                 .when(right_free, |el| el.child(concave_flare(w - inset - r, flare_y, r, right_c, bar_fill_h)))
                 .child(
@@ -1781,6 +1791,7 @@ impl Render for ShellView {
                     .opacity(1.0 - pill_alpha)
                     .rounded(pill_radius)
                     .bg(bar_fill_h)
+                    .children(bar_grain(pill_radius))
                     .shadow(bar_depth(&bar_rim))
                     // Empty island space: bar.right_click decides.
                     .when(!click_through, |el| el.empty_bar_space(cx))
@@ -2008,6 +2019,7 @@ impl Render for ShellView {
                 place(Bounds { origin: point(px(x), px(y)), size: size(px(w), px(h)) })
                     .rounded(px(p_pill_radius + (panel_radius - p_pill_radius) * progress))
                     .bg(panel_fill)
+                    .children(crate::components::grain::layer(crate::components::grain::Slot::Panels, Corners::all(px(p_pill_radius + (panel_radius - p_pill_radius) * progress))))
                     // One even hairline edge + soft elevation (the old
                     // top-highlight / bottom-shade rim faded along the
                     // corners and looked patchy over busy wallpapers).
@@ -2037,6 +2049,10 @@ impl Render for ShellView {
                 );
             }
             root = root.child(if panel_fade < 1.0 { div().absolute().size_full().opacity(panel_fade).child(drawer).into_any_element() } else { drawer });
+            // Grain over an attached drawer's body (its rounded free corners).
+            if p_attached {
+                root = root.children(crate::components::grain::layer(crate::components::grain::Slot::Panels, Corners::all(px(panel_radius))).map(|g| place(Bounds { origin: point(px(x), px(y)), size: size(px(w), px(h)) }).opacity(panel_fade).child(g)));
+            }
         }
 
         // ── Floating pill glass per zone ──────────────────────────────────
@@ -2051,6 +2067,7 @@ impl Render for ShellView {
                         .opacity(pill_alpha)
                         .rounded(pill_radius)
                         .bg(bar_fill_h)
+                        .children(bar_grain(pill_radius))
                         .shadow(bar_depth(&bar_rim))
                         .when(bar_ink > 0.0, |el| el.border(px(bar_ink)).border_color(ink_color.hsla()))
                         // Empty space on a pill or the island: the main

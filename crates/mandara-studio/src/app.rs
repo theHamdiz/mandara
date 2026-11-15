@@ -1708,6 +1708,9 @@ impl Render for StudioView {
             self.lock_designs = None;
         }
         let fonts = mandara_ui::fonts::fonts(cx);
+        // Grain behind the pages and on the cards (`[grain.studio]`, `[grain.cards]`).
+        mandara_ui::components::grain::prepare(mandara_ui::components::grain::Slot::Studio, &cfg.grain.studio, &p, window, cx);
+        mandara_ui::components::grain::prepare(mandara_ui::components::grain::Slot::Cards, &cfg.grain.cards, &p, window, cx);
         // Choices measure their labels in Studio's font this frame.
         choice::begin_frame(window, fonts.studio.clone());
         // Breakpoints: icon rail under 900 px; stacked rows when the content
@@ -1868,7 +1871,7 @@ impl Render for StudioView {
         // The page's overlay scroll bar (it fills the content's place).
         // Left to right, the page's end edge is the window's border.
         let edge = if mandara_i18n::language().is_rtl() { px(0.0) } else { px(mandara_ui::scrollbar::WINDOW_EDGE_CLEARANCE_PX) };
-        let content = div().relative().flex_1().min_w(px(0.0)).min_h(px(0.0)).flex().flex_col().child(content).child(mandara_ui::scrollbar::overlay_scrollbar(&self.content_scroll, &content_bar, &p).end_inset(edge));
+        let content = div().relative().flex_1().min_w(px(0.0)).min_h(px(0.0)).flex().flex_col().children(mandara_ui::components::grain::layer(mandara_ui::components::grain::Slot::Studio, gpui::Corners::default())).child(content).child(mandara_ui::scrollbar::overlay_scrollbar(&self.content_scroll, &content_bar, &p).end_inset(edge));
 
         let modal = self.plugin_modal_layer(&cfg, &p, window, cx);
         let edge_choice = self.stash_collision_layer(&cfg, &p, cx);

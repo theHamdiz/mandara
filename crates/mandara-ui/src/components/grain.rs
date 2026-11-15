@@ -309,6 +309,58 @@ pub fn overlay_with(grain: &Grain, corners: Corners<Pixels>, palette: &MandaraPa
     Some(div().absolute().inset_0().with_corners(corners).clip_rounded().opacity(grain.amount()).child(layer).into_any_element())
 }
 
+/// A surface family whose grain is prepared once per window render and
+/// then drawn by every surface of that family without an `App` (cards are
+/// built in many places that have none).
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Slot {
+    /// Studio's window behind its pages.
+    Studio,
+    /// Cards and grouped surfaces (the card design's surface).
+    Cards,
+    /// Bars and their capsules.
+    Bars,
+    /// The launcher.
+    Launcher,
+    /// Drop-down panels and plugin panels.
+    Panels,
+}
+
+impl Slot {
+    const COUNT: usize = 5;
+
+    fn index(self) -> usize {
+        self as usize
+    }
+}
+
+thread_local! {
+    /// Each slot's tile and strength, as last prepared on this thread.
+    static SLOTS: std::cell::RefCell<[Option<(Arc<RenderImage>, f32)>; Slot::COUNT]> = const { std::cell::RefCell::new([const { None }; Slot::COUNT]) };
+}
+
+/// Prepares `slot` for this render of `window`: its tile for `grain` (a
+/// cached one at once, or drawn in the background with a redraw when it
+/// lands), or nothing while grain is off. Cheap when unchanged.
+pub fn prepare(slot: Slot, grain: &Grain, palette: &MandaraPalette, window: &Window, cx: &mut App) {
+    let ready = TileKey::new(grain, window.scale_factor(), palette).and_then(|key| tile(key, Some(window.window_handle()), cx)).map(|image| (image, grain.amount()));
+    SLOTS.with(|s| s.borrow_mut()[slot.index()] = ready);
+}
+
+/// `slot`'s grain over its parent, clipped to `corners`; `None` while it is
+/// off or not drawn yet. Add it as the surface's first child so its
+/// content draws over the grain.
+pub fn layer(slot: Slot, corners: Corners<Pixels>) -> Option<AnyElement> {
+    let (image, amount) = SLOTS.with(|s| s.borrow()[slot.index()].clone())?;
+    let paint_layer = canvas(|_, _, _| {}, move |bounds, _, window, _| paint(bounds, &image, window)).absolute().inset_0();
+    Some(div().absolute().inset_0().with_corners(corners).clip_rounded().opacity(amount).child(paint_layer).into_any_element())
+}
+
+/// Forgets every slot (their tiles stay in the cache until evicted).
+pub fn clear_slots() {
+    SLOTS.with(|s| *s.borrow_mut() = [const { None }; Slot::COUNT]);
+}
+
 /// Repeats `image` over `bounds`, one texel per device pixel, the tiles
 /// anchored to the window's origin.
 fn paint(bounds: Bounds<Pixels>, image: &Arc<RenderImage>, window: &mut Window) {

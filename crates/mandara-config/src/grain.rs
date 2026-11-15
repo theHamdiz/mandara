@@ -157,3 +157,36 @@ mod tests {
         assert_eq!(ids(GrainTint::ALL.iter().map(|s| serde_json::to_value(s).unwrap()).collect()), ["neutral", "surface"]);
     }
 }
+
+/// Grain for each surface family (`[grain.studio]`, `[grain.cards]`, …).
+/// Every one is off by default and independent: Studio can be grained
+/// while the bars stay clean. The dock and the taskbar keep their own.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SurfaceGrain {
+    /// Mandara Studio's window, behind its pages.
+    pub studio: Grain,
+    /// Cards and grouped surfaces (Studio's and the shell's).
+    pub cards: Grain,
+    /// The bars and their capsules.
+    pub bars: Grain,
+    /// The launcher.
+    pub launcher: Grain,
+    /// Drop-down and plugin panels.
+    pub panels: Grain,
+}
+
+#[cfg(test)]
+mod surface_tests {
+    use super::*;
+
+    #[test]
+    fn every_surface_starts_without_grain_and_reads_its_own_table() {
+        let g = SurfaceGrain::default();
+        assert!([g.studio, g.cards, g.bars, g.launcher, g.panels].iter().all(|g| g.style == GrainStyle::None));
+        let g: SurfaceGrain = toml::from_str("[bars]\nstyle = \"film\"\namount = 9.0\n").unwrap();
+        assert_eq!(g.bars.style, GrainStyle::Film);
+        assert!(g.bars.amount() <= ranges::AMOUNT.max, "clamped when read");
+        assert_eq!(g.cards.style, GrainStyle::None);
+    }
+}

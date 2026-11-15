@@ -26,6 +26,7 @@ pub mod bars;
 pub mod recorder_settings;
 mod tuning_settings;
 mod bar_display_settings;
+pub(crate) mod grain_settings;
 mod integration_settings;
 mod storage_settings;
 mod platform_settings;
@@ -632,6 +633,7 @@ pub fn settings() -> &'static [Setting] {
         all.extend(recorder_settings::entries());
         all.extend(tuning_settings::entries());
         all.extend(bar_display_settings::entries());
+        all.extend(grain_settings::entries());
         all.extend(integration_settings::entries());
         all.extend(storage_settings::entries());
         all.extend(local_ai_settings::entries());
@@ -675,6 +677,7 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
     if let Some(reason) = system_settings::native_locked(setting.path, running_compositor()) { return Some(reason); }
     if let Some(reason) = motion_settings::locked(setting.path, cfg) { return Some(reason); }
     if let Some(reason) = bar_display_settings::locked(setting.path, cfg) { return Some(reason); }
+    if let Some(reason) = grain_settings::locked(setting.path, cfg) { return Some(reason); }
     if let Some(reason) = workflow_settings::locked(setting.path, cfg) { return Some(reason); }
     match setting.path {
         "/lock/clock_style" if setting.control.has_value() && cfg.lock.design != mandara_config::desktop::LockDesign::Mandara => Some(tk("This design sets its own clock layout.")),

@@ -1244,6 +1244,22 @@ tint = "neutral"    # or "surface": specks in the hue of the theme's surfaces
 seed = 0            # another random field
 ```
 
+The same table grains the rest of the shell, each surface on its own and
+all off by default (Studio → Themes → Components → Grain):
+
+```toml
+[grain.studio]      # Mandara Studio, behind its pages
+style = "paper"
+[grain.cards]       # cards and grouped lists, in the shell and in Studio
+style = "fine"
+[grain.bars]        # the bars and their capsules
+[grain.launcher]    # the launcher
+[grain.panels]      # drop-down and plugin panels
+```
+
+Tiles are drawn once off the UI thread and shared; a surface without a
+style draws nothing.
+
 *Fine* is an even single-pixel sand, *Film* soft clumps like fast film,
 *Paper fibre* short horizontal fibres over a faint tooth, *Speckle* sparse
 dark flecks on a clean surface. Every number is clamped to its range when
