@@ -973,7 +973,12 @@ impl StudioView {
                                 .child(n.to_string()),
                         )
                     })
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.store_tab(tab, cx)))
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        // The end of a drag along the narrow strip isn't a click.
+                        if !grid::strip("store-tabs").dragged() {
+                            this.store_tab(tab, cx)
+                        }
+                    }))
                     .into_any_element()
             })
             .collect();

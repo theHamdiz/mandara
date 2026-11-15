@@ -331,7 +331,7 @@ impl StudioView {
             let h = self.maint.results.get(&id).cloned();
             let key = format!("check:{id:?}");
             let fixable = h.as_ref().is_some_and(|h| !h.is_ok()) && !(matches!(id, CheckId::CompositorInclude | CheckId::CompositorDropIn | CheckId::CompositorConflicts) && mandara_compositor::detected().is_none());
-            let row = grouped::row(Some(id.icon()), tr(id.title())).caption(h.as_ref().map(|h| h.detail().to_string()).unwrap_or_default()).trailing(health(h.as_ref()));
+            let row = grouped::row(Some(id.icon()), tr(id.title())).caption(h.as_ref().map(|h| h.detail().to_string()).unwrap_or_default()).wrap().trailing(health(h.as_ref()));
             let row = if fixable { row.trailing(button(format!("fix-{id:?}"), tr(id.fix_label()), Some(&key), ButtonKind::Tonal).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.maint_fix(id, cx)))) } else { row };
             checks.push(row.render(stack, mono.clone(), p));
         }

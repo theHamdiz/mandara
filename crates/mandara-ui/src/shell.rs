@@ -1692,7 +1692,7 @@ impl Render for ShellView {
             let strip = layout::reserved_rect(&m, self.surface);
             let (sx, sw_) = (px_snap(f32::from(strip.origin.x)), px_snap(f32::from(strip.size.width)));
             let r = px_snap(m.flare);
-            root = root.child(div().absolute().left(px(sx)).top_0().w(px(sw_)).h(px(self.surface.1)).bg(bar_fill_h));
+            root = root.child(div().absolute().left(px(sx)).top_0().w(px(sw_)).h(px(self.surface.1)).bg(bar_fill_h).children(bar_grain(px(0.0))));
             if let Some((strips, inner)) = layout::screen_frame(&m, self.surface) {
                 for b in strips {
                     root = root.child(place(b).bg(bar_fill_h));
@@ -1737,7 +1737,12 @@ impl Render for ShellView {
                 let shade = div().absolute().left(px(fx)).top(px(fy)).w(px(fw)).h(px(bar_h)).shadow(bar_shadow.clone());
                 root = root.child(if bottom { shade.rounded_t(px(radius)) } else { shade.rounded_b(px(radius)) });
             }
-            root = root.child(edge_drawer_ends(edge, fx, fy, fw, bar_h, start, end, bar_fill_h, scale)).child(
+            root = root.child(edge_drawer_ends(edge, fx, fy, fw, bar_h, start, end, bar_fill_h, scale));
+            // The notch's grain over its body, rounded where it hangs free.
+            let free = Corners { top_left: px(0.0), top_right: px(0.0), bottom_left: px(radius), bottom_right: px(radius) };
+            let free = if bottom { Corners { top_left: px(radius), top_right: px(radius), bottom_left: px(0.0), bottom_right: px(0.0) } } else { free };
+            root = root.children(crate::components::grain::layer(crate::components::grain::Slot::Bars, free).map(|g| div().absolute().left(px(fx)).top(px(fy)).w(px(fw)).h(px(bar_h)).child(g)));
+            root = root.child(
                 place(shifted(self.backdrop.value()))
                     .id("bar-backdrop")
                     .empty_bar_space(cx)

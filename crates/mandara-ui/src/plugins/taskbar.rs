@@ -145,6 +145,10 @@ pub fn slots(pinned: &[String], windows: &[Toplevel], clients: &[(String, bool)]
 pub fn ungroup(slots: Vec<Slot>, windows: &[Toplevel]) -> Vec<Slot> {
     let mut out = Vec::with_capacity(slots.len());
     for slot in slots {
+        // The bar's limit holds for every button, singletons included.
+        if out.len() >= MAX_SLOTS {
+            break;
+        }
         if slot.windows.len() < 2 {
             out.push(slot);
             continue;
@@ -458,6 +462,18 @@ mod tests {
         assert_eq!(s[2].title.as_deref(), Some("foot 9"));
         assert_eq!(click(&s[1], &windows), Click::Minimize(3));
         assert_eq!(click(&s[2], &windows), Click::Focus(9));
+    }
+
+    /// An app whose windows fill the bar leaves no room for later buttons:
+    /// the limit holds for singletons too.
+    #[test]
+    fn ungrouping_never_exceeds_the_button_limit() {
+        let many: Vec<Toplevel> = (0..MAX_SLOTS as u64).map(|i| win(i, "foot", false)).collect();
+        let mut slots = vec![Slot { key: "foot".into(), icon: "foot".into(), pinned: false, windows: many.iter().map(|w| w.id).collect(), running: true, focused: false, title: None }];
+        for i in 0..MAX_SLOTS as u64 - 1 {
+            slots.push(Slot { key: format!("app{i}"), icon: format!("app{i}"), pinned: false, windows: vec![1000 + i], running: true, focused: false, title: None });
+        }
+        assert_eq!(ungroup(slots, &many).len(), MAX_SLOTS);
     }
 
     #[test]
