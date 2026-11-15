@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.32.0 — 2026-11-15
+
 Third-party plugins can now become part of the desktop itself: rich native
 views, Studio tabs, launcher results, commands and the desktop's services,
 each behind a permission you grant and can take back.
