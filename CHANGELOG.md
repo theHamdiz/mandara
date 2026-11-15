@@ -38,6 +38,10 @@ Studio refinements, optional bar and dock effects, richer third-party plugins, a
 
 - When KWin is installed without Plasma's login session, `mandara setup --compositor kwin` and the installer now explain why the login screen can't offer it and name the package to install, and setup says when `--autostart` is needed for Mandara to start inside Plasma.
 
+### Under the hood
+
+- The plugin guide gains a design and quality standard for everyone writing third-party plugins, and a strict version for AI coding agents: a designed hierarchy, polish passes on real screenshots, bounded memory and idiomatic Rust.
+
 ## 0.33.0 — 2026-11-15
 
 Install apps from any tar archive, tidy up the download afterwards, and skip the compile on NixOS.

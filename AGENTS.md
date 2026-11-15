@@ -474,6 +474,30 @@ cargo build --release --target wasm32-wasip2
 # ~/.local/share/mandara/plugins-dev/<id>/ — it hot-reloads
 ```
 
+**AI agents: the design and quality standard is mandatory.** Every plugin
+you write follows [Design and quality standard](PLUGINS.md#design-and-quality-standard)
+in PLUGINS.md, with no exceptions:
+
+- **Tasteful and creative.** Design a clear hero and hierarchy from size,
+  weight and tone; a title over plain text lines is a placeholder, not a
+  design. Use tones, a small named spacing scale and a designed view for
+  every loading, empty and error state.
+- **Polished in passes.** Structure, visual (light and dark, English and
+  Arabic), pixel, resources, code. Look at real sandbox screenshots of every
+  surface after each pass, and run every pass again whenever one changes
+  something. Never report polish you didn't look at.
+- **Extremely light.** WebAssembly memory never shrinks, so keep peaks
+  small and every collection bounded; compute on change, not per render;
+  use the longest `refresh-ms` that works; few dependencies and a small
+  `plugin.wasm`.
+- **No Rust anti-patterns.** No panics (`unwrap`, `expect`, unchecked
+  indexing), no clones or `collect()` that only appease the borrow checker,
+  no `static mut` or `Rc<RefCell>` webs, named constants, enums over
+  stringly types; `cargo fmt`, warning-free Clippy and `plugins vet` pass.
+
+When you hand the plugin over, say which passes ran, what each one fixed,
+and the measured `plugin.wasm` size.
+
 Start from [`plugins/examples/moon-phase`](plugins/examples/moon-phase). Studio →
 Plugins → Develop (`mandara studio plugins --tab develop`) shows your
 folders, the contract of your build and a validator. Publishing is a
