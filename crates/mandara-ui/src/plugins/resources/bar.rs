@@ -43,6 +43,9 @@ const HOT_MEM: f32 = 0.9;
 const SPARK_TRACK_ALPHA: f32 = 0.07;
 /// Gap between a Numbers chip's label and its figure.
 const LABEL_GAP_PX: f32 = 4.0;
+/// The chart chip's series keys: a dot and its gap to the figure.
+const KEY_DOT_PX: f32 = 5.0;
+const KEY_GAP_PX: f32 = 4.0;
 
 /// The bar item's look, resolved once per config snapshot.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -129,6 +132,16 @@ impl Chip {
 /// neighbour.
 fn figure(value: f32, color: Color) -> gpui::Div {
     div().w(px(CHIP_VALUE_W_PX)).flex_none().text_color(color.hsla()).child(percent_text(value))
+}
+
+/// A chart chip's figure, after a dot in its series' colour (`key`).
+fn keyed(value: f32, color: Color, key: Option<Color>) -> gpui::Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(KEY_GAP_PX))
+        .when_some(key, |el, k| el.child(div().size(px(KEY_DOT_PX)).flex_none().rounded_full().bg(k.hsla())))
+        .child(figure(value, color))
 }
 
 /// `(cpu, mem)` figure colours: muted, amber when hot.
@@ -246,8 +259,9 @@ pub(super) fn render(chip: &RefCell<Chip>, palette: &MandaraPalette, window: &mu
                 .gap(px(bar_chip::GLYPH_GAP_PX))
                 .font_features(tabular_nums())
                 .child(bar_chip::chart(area, line, track))
-                .when(m.cpu(), |el| el.child(figure(cpu, cpu_ink)))
-                .when(m.memory(), |el| el.child(figure(mem, mem_ink)))
+                // With both readings, a dot in each series' colour keys its figure.
+                .when(m.cpu(), |el| el.child(keyed(cpu, cpu_ink, m.memory().then(|| readable(palette.primary, palette)))))
+                .when(m.memory(), |el| el.child(keyed(mem, mem_ink, m.cpu().then(|| readable(palette.tertiary, palette)))))
                 .into_any_element()
         }
     }
