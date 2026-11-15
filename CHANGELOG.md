@@ -6,12 +6,13 @@ About → What's new shows it too.
 
 ## Unreleased
 
-Install apps from any tar archive, and tidy up the download afterwards.
+Install apps from any tar archive, tidy up the download afterwards, and skip the compile on NixOS.
 
 ### Improved
 
 - The App Installer takes plain `.tar` and `.tar.bz2` archives, and recognises every archive by what it really is, so a download no longer needs renaming to `.tar.gz` first.
 - Once an app is installed, the installer offers to move the file you installed it from to the Trash. Choose *Keep the file* or *Move it to the Trash* under Studio → Plugins → App installer → After installing to skip the question.
+- NixOS can download Mandara prebuilt instead of compiling it. Turn on `programs.mandara.binaryCache.enable`, or accept the cache when `nix run` asks; it applies when your Nixpkgs matches a current NixOS channel.
 
 ## 0.32.1 — 2026-11-15
 

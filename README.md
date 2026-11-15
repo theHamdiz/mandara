@@ -329,6 +329,7 @@ Update from your configuration flake directory with
 `nix flake update mandara`, then `sudo nixos-rebuild switch --flake .` or
 `home-manager switch --flake .`. Use your input name if it differs from
 `mandara`; NixOS updates through the flake rather than Studio.
+Skip the compile with the [binary cache](docs/install.md#binary-cache).
 
 → **[Install guide](docs/install.md)**: packages, setup options and moving
 from an existing desktop.
