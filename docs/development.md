@@ -29,8 +29,8 @@ read it without `sudo`.
 
 Journal formatting and datagrams are bounded, and the socket is nonblocking.
 `RUST_LOG` controls stderr only; the journal retains warnings and errors.
-A full or unavailable journal
-does not hold up the shell, and stderr output remains available on every
+A full or unavailable journal does not hold up the shell, and stderr
+output remains available on every
 supported system. Reproduce crashes in the private sandbox and retain the
 log around the failure before changing code.
 

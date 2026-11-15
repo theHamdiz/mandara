@@ -50,6 +50,18 @@ impl Sandbox {
 #[test]
 #[ignore = "requires MangoWM, bwrap, grim and MANDARA_TEST_XTASK pointing to a built xtask"]
 fn a_display_disconnect_fails_instead_of_stopping_the_supervisor() {
+    display_disconnect(false);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "requires MangoWM, bwrap, grim and MANDARA_TEST_XTASK pointing to a built xtask"]
+fn the_supervisor_starts_another_shell_after_a_display_disconnect() {
+    display_disconnect(true);
+}
+
+#[cfg(target_os = "linux")]
+fn display_disconnect(supervised: bool) {
     use std::{ffi::OsString, io::Write as _, os::unix::ffi::OsStringExt as _, process::Stdio};
 
     let xtask = std::env::var_os("MANDARA_TEST_XTASK")
@@ -109,8 +121,13 @@ fn a_display_disconnect_fails_instead_of_stopping_the_supervisor() {
     sandbox.wait(|| !sandbox.command(&["msg", "ping"]).status.success());
 
     let stderr = tempfile::NamedTempFile::new().unwrap();
+    let replay_args = if supervised {
+        &args[1..args.len() - 1]
+    } else {
+        &args[1..]
+    };
     let mut child = Command::new(&args[0])
-        .args(&args[1..])
+        .args(replay_args)
         .env_clear()
         .envs(env)
         .stdout(Stdio::null())
@@ -131,11 +148,33 @@ fn a_display_disconnect_fails_instead_of_stopping_the_supervisor() {
     process_env(compositor);
     // SAFETY: this is the recorded compositor of this test's private runtime.
     assert_eq!(unsafe { libc::kill(compositor, libc::SIGTERM) }, 0);
+    if supervised {
+        sandbox.wait(|| {
+            std::fs::read_to_string(stderr.path())
+                .unwrap()
+                .matches("config:")
+                .count()
+                >= 2
+        });
+        assert!(child.try_wait().unwrap().is_none());
+        let supervisor = i32::try_from(child.id()).unwrap();
+        process_env(supervisor);
+        // SAFETY: this is our recorded supervisor in the private runtime.
+        assert_eq!(unsafe { libc::kill(supervisor, libc::SIGTERM) }, 0);
+    }
     sandbox.wait(|| child.try_wait().unwrap().is_some());
     let status = child.wait().unwrap();
     let diagnostics = std::fs::read_to_string(stderr.path()).unwrap();
-    assert_eq!(status.code(), Some(1), "{}", diagnostics);
+    assert_eq!(
+        status.code(),
+        Some(i32::from(!supervised)),
+        "{}",
+        diagnostics
+    );
     assert!(diagnostics.contains("display event loop stopped without a quit request"));
+    if supervised {
+        assert!(diagnostics.contains("Mandara exited (exit code 1); restarting"));
+    }
 }
 
 impl Drop for Sandbox {
