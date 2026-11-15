@@ -25,6 +25,7 @@
 
 pub mod look;
 mod material;
+mod design;
 pub mod paint;
 pub mod pam;
 
@@ -369,6 +370,14 @@ impl LockScreen {
 
     /// Applies the configured look and starts loading its background.
     pub fn set_look(&mut self, look: look::LockLook, background: Option<PathBuf>) {
+        if let Some(tokens) = look.cfg.design.tokens()
+            && let Some(theme) = mandara_theme::catalog::find(tokens.preset) {
+                self.palette = theme.palette(!tokens.light);
+                if let Ok(accent) = Color::from_hex(tokens.accent) {
+                    self.palette.primary = accent;
+                    self.palette.rederive_accents();
+                }
+        }
         let seed = look.cfg.design == mandara_config::desktop::LockDesign::MaterialYou;
         self.wallpaper_rx = background.filter(|p| p.is_file()).map(|p| load_wallpaper(p, look.blur_sigma(), seed));
         self.wallpaper = None;
@@ -454,15 +463,17 @@ impl LockScreen {
         let palette = &self.palette;
         let wallpaper = &self.wallpaper;
         let solid = self.look.cfg.background == mandara_config::desktop::LockBackground::Color;
+        let design = self.look.cfg.design;
         let dim = self.look.cfg.dim.clamp(0.0, 1.0);
         let extra = material::extra_scrim(self.wallpaper_luma.filter(|_| self.look.cfg.design == mandara_config::desktop::LockDesign::MaterialYou));
         self.backgrounds.entry((w, h)).or_insert_with(|| {
+            let backdrop = design.tokens().and_then(|tokens| Color::from_hex(tokens.backdrop).ok()).unwrap_or(palette.surface_dim);
             // Sizes are clamped to ≥ 1 px, for which `Pixmap::new` cannot fail.
             let mut pm = Pixmap::new(w.max(1), h.max(1)).expect("non-empty surface");
             let (fw, fh) = (w as f32, h as f32);
             {
                 let mut m = pm.as_mut();
-                m.fill(paint::skia(palette.surface_dim, 1.0));
+                m.fill(paint::skia(backdrop, 1.0));
                 match wallpaper {
                     Some(img) => paint::image_cover(&mut m, img),
                     None if solid => {}
@@ -689,6 +700,10 @@ impl LockApp for LockScreen {
             self.draw_material(info, pm, now);
             return;
         }
+        if self.look.cfg.design.tokens().is_some() {
+            self.draw_design(info, pm, now, (lift, alpha, presence));
+            return;
+        }
         // One unit = a logical px on a 1080 px tall screen, in physical px.
         let unit = L::scale(logical_h) * s;
         let clock_size = L::CLOCK_SIZE * unit * if self.look.compact() { COMPACT_CLOCK } else { 1.0 };
@@ -773,9 +788,12 @@ impl LockScreen {
         let _ = info;
 
         // Avatar with accent rim and glow.
-        let show_avatar = self.look.cfg.show_avatar;
+        let show_avatar = self.look.cfg.show_avatar && self.look.cfg.design != mandara_config::desktop::LockDesign::Meridian;
         let card_top = fh / 2.0 + (L::CARD_CENTER - L::card_height(show_avatar) / 2.0) * unit + lift * 0.6;
-        let r = L::AVATAR / 2.0 * unit;
+        let custom = design::layout(self.look.cfg.design, fw, fh, unit, self.rtl, show_avatar);
+        let tokens = self.look.cfg.design.tokens();
+        let card_top = custom.map_or(card_top, |layout| layout.top + lift * 0.6);
+        let r = tokens.map_or(L::AVATAR, |tokens| tokens.avatar) / 2.0 * unit;
         let ay = card_top + r;
         if show_avatar {
         paint::glow(pm, cx, ay, r * 2.4, paint::skia(p.primary_glow, 0.28 * alpha));
@@ -795,22 +813,30 @@ impl LockScreen {
         paint::stroke(pm, &paint::circle(cx, ay, r + 3.0 * s), &rim, 2.5 * s);
         }
 
-        let name_font = Font { family: &self.fonts.ui, size: L::NAME_SIZE * unit, weight: 600, tabular: false, tracking: 0.0 };
+        let name_font = Font { family: &self.fonts.ui, size: tokens.map_or(L::NAME_SIZE, |tokens| tokens.name) * unit, weight: 600, tabular: false, tracking: 0.0 };
         // Without the avatar the card is just the name.
         let name_y = if show_avatar { ay + r + L::NAME_GAP * unit } else { card_top };
-        self.text.draw_centered(pm, &self.user.display, &name_font, cx, name_y, p.on_surface, alpha);
+        self.text.draw_centered(pm, &self.user.display, &name_font, custom.map_or(cx, |layout| layout.name_x), name_y, p.on_surface, alpha);
 
         // The glass password field.
-        let (pw, ph) = (L::FIELD_W * unit, L::FIELD_H * unit);
+        let (pw, ph) = (custom.map_or(L::FIELD_W * unit, |layout| layout.field_width), tokens.map_or(L::FIELD_H, |tokens| tokens.field_height) * unit);
         let px = cx - pw / 2.0 + self.shake.value() * s;
         let py = fh / 2.0 + (L::FIELD_CENTER - L::FIELD_H / 2.0) * unit + lift * 0.6;
-        let radius = ph / 2.0;
+        let py = custom.map_or(py, |layout| layout.field_y + lift * 0.6);
+        let radius = tokens.map_or(ph / 2.0, |tokens| tokens.card_radius.min(tokens.field_height / 2.0) * unit);
         let pill = paint::rounded_rect(px, py, pw, ph, radius);
+        if self.look.cfg.design == mandara_config::desktop::LockDesign::Meridian {
+            paint::fill(pm, &paint::rounded_rect(px, py + ph, pw, unit, 0.0), &paint::solid(p.primary, alpha));
+        } else if tokens.is_some() {
+            paint::fill(pm, &pill, &paint::solid(p.surface_dim, alpha));
+            paint::stroke(pm, &pill, &paint::solid(p.outline, alpha * 0.5), unit);
+        } else {
         paint::soft_shadow(pm, px, py, pw, ph, radius, 18.0 * s, 0.32 * alpha);
         paint::fill(pm, &pill, &paint::solid(p.surface_container_high, 0.58 * alpha));
         let sheen = paint::linear((px, py), (px, py + ph), paint::skia(Color::hex("#ffffff"), 0.07 * alpha), paint::skia(Color::hex("#ffffff"), 0.0));
         paint::fill(pm, &pill, &sheen);
         paint::glass_rim(pm, &pill, px, py, pw, ph, p.specular_rim_light, p.specular_rim_shadow, alpha, 1.0 * s);
+        }
         let flash = self.flash.value().clamp(0.0, 1.0);
         if flash > 0.01 {
             paint::stroke(pm, &pill, &paint::solid(p.urgent_coral, flash * alpha), 1.6 * s);
@@ -1510,6 +1536,43 @@ mod tests {
         assert_eq!(none, None);
     }
 
+    #[test]
+    fn all_login_designs_keep_the_lock_opaque_and_secondary_outputs_blank() {
+        use mandara_config::desktop::LockDesign;
+        let mut hashes = std::collections::HashSet::new();
+        for design in LockDesign::ALL {
+            for rtl in [false, true] {
+                let mut s = screen(false);
+                s.rtl = rtl;
+                s.reveal.snap_to(1.0);
+                let mut look = look::LockLook::default();
+                look.cfg.design = design;
+                look.cfg.show_battery = false;
+                look.reduced_motion = true;
+                s.set_look(look, None);
+                type_text(&mut s, "secret");
+                s.keyboard(&KeyboardState { caps_lock: true, layout: "English (US)".into() });
+                let mut pm = Pixmap::new(960, 600).unwrap();
+                let mut info = SurfaceInfo { output: "TEST-1".into(), width: 960, height: 600, scale: 1.0, focused: true };
+                s.draw(&info, &mut pm.as_mut(), Instant::now());
+                assert!(pm.pixels().iter().all(|pixel| pixel.alpha() == 255), "{design:?}");
+                if !rtl {
+                    use std::hash::{Hash, Hasher};
+                    let mut hash = std::hash::DefaultHasher::new();
+                    pm.data().hash(&mut hash);
+                    assert!(hashes.insert(hash.finish()), "distinct composition for {design:?}");
+                }
+                info.focused = false;
+                s.look.cfg.blank_other_outputs = true;
+                s.draw(&info, &mut pm.as_mut(), Instant::now());
+                assert!(pm.pixels().iter().all(|pixel| [pixel.red(), pixel.green(), pixel.blue(), pixel.alpha()] == [0, 0, 0, 255]));
+                press(&mut s, keys::RETURN);
+                assert_eq!(settle(&mut s), AppControl::Continue);
+                assert!(matches!(s.note, Some(Note::Error(_))));
+            }
+        }
+    }
+
     /// The scalloped avatar's morph shown in the checking snapshot.
     const MORPH_PREVIEW: f32 = material::MORPH_CHECKING;
 
@@ -1529,6 +1592,20 @@ mod tests {
             image::RgbaImage::from_raw(pm.width(), pm.height(), rgba).unwrap().save(dir.join(format!("{name}.png"))).unwrap();
         };
         let save = |s: &mut LockScreen, name: &str| save_at(s, name, Instant::now() + Duration::from_secs(1));
+        for design in mandara_config::desktop::LockDesign::ALL {
+            for rtl in [false, true] {
+                let mut s = screen(false);
+                let mut look = look::LockLook::default();
+                look.cfg.design = design;
+                look.cfg.background = mandara_config::desktop::LockBackground::Color;
+                look.cfg.show_battery = false;
+                s.set_look(look, None);
+                s.reveal.snap_to(1.0);
+                s.rtl = rtl;
+                type_text(&mut s, "secret");
+                save(&mut s, &format!("{}{}", design.id(), if rtl { "-rtl" } else { "" }));
+            }
+        }
         for (rtl, dots, tag) in [(false, false, ""), (true, false, "-rtl"), (false, true, "-dots")] {
             let mut s = screen(false);
             s.reveal.snap_to(1.0);

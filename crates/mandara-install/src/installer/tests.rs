@@ -1551,7 +1551,7 @@ fn bazzite_layers_only_what_its_image_lacks_in_one_transaction() {
     assert!(!text.contains("dnf install"), "{text}");
     assert!(!text.contains("switch plan"), "the plan is made after the reboot\n{text}");
     assert!(!text.contains("would run: sudo ") || !text.lines().any(|l| l.starts_with("would run: sudo ") && l.ends_with("greeter use mandara --apply")), "no switch before the reboot\n{text}");
-    assert!(text.contains("Studio → Login screen → Login manager, or run: sudo"), "{text}");
+    assert!(text.contains("Studio → Login & Lock Screens → Login → Login manager, or run: sudo"), "{text}");
     // The admin helper goes to /usr/local, which survives updates here.
     assert!(text.contains(&format!("would run: sudo install -D -o root -g root -m 0755 {} {ADMIN_EXE}", f.exe().display())), "{text}");
     assert!(f.home_files().is_empty(), "a dry run changes nothing");
@@ -1568,7 +1568,7 @@ fn bazzite_layers_only_what_its_image_lacks_in_one_transaction() {
     assert!(!ran.iter().any(|c| c.contains("dnf install") || c.contains("greeter use mandara")), "{ran:#?}");
     let text = host.text();
     assert!(text.contains("Restart your computer to start using the new packages"), "{text}");
-    assert!(text.contains("Mandara Login's packages arrive with the next boot: greetd cage. After restarting, switch to it in Studio → Login screen → Login manager"), "{text}");
+    assert!(text.contains("Mandara Login's packages arrive with the next boot: greetd cage. After restarting, switch to it in Studio → Login & Lock Screens → Login → Login manager"), "{text}");
     assert!(f.paths_binary_exists());
 }
 

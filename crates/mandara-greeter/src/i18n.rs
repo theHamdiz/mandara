@@ -103,12 +103,13 @@ mod tests {
         for lang in Lang::ALL.into_iter().filter(|lang| *lang != Lang::En) {
             let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../mandara-i18n/locales").join(format!("{}.toml", lang.code()));
             let shared = Catalog::parse(&std::fs::read_to_string(path).unwrap()).unwrap();
-            for (instruction, labels) in [
-                ("Updates: Studio → About → Update now", ["Studio", "About", "Update now"]),
-                ("Login screen kept; switch any time in Studio → Login screen → Login manager.", ["Studio", "Login screen", "Login manager"]),
-            ] {
+            let directions: &[(&str, &[&str])] = &[
+                ("Updates: Studio → About → Update now", &["Studio", "About", "Update now"]),
+                ("Login screen kept; switch any time in Studio → Login & Lock Screens → Login → Login manager.", &["Studio", "Login & Lock Screens", "Login", "Login manager"]),
+            ];
+            for &(instruction, labels) in directions {
                 let message = shared.get(instruction).unwrap();
-                for label in labels {
+                for &label in labels {
                     let displayed = if label == "Login manager" { catalog(lang).get(label) } else { None }.or_else(|| shared.get(label)).unwrap();
                     assert!(message.contains(displayed), "{}: {instruction:?} should name {displayed:?}", lang.code());
                 }
