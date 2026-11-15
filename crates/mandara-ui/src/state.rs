@@ -355,6 +355,8 @@ pub fn update_config(cx: &mut App, f: impl FnOnce(&mut ShellConfig)) {
     if !changed {
         return;
     }
+    let after = config.read(cx).snapshot();
+    crate::plugins::external::live::config_changed(&before, &after, cx);
     sync_theme_from_config(cx);
     let delivery = cx.try_global::<ConfigMirror>().cloned().and_then(|mirror| (mirror.0)(before, config.read(cx).snapshot()));
     if let Some(delivery) = delivery {

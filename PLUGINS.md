@@ -1052,8 +1052,7 @@ private desktop for this:
 
 ```bash
 cargo xtask sandbox up
-eval "$(cargo xtask sandbox env)"
-mkdir -p "$XDG_DATA_HOME/mandara/plugins-dev/my-plugin"
+mkdir -p target/sandbox/home/data/mandara/plugins-dev/my-plugin
 # copy plugin.toml, locales/, icons and plugin.wasm there (it hot-reloads)
 cargo xtask sandbox msg plugins enable my-plugin
 cargo xtask sandbox msg panel open my-plugin

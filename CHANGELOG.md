@@ -36,11 +36,15 @@ Studio refinements, optional bar and dock effects, richer third-party plugins, a
 
 ### Fixed
 
+- Plugin live wallpapers follow pause rules with either wallpaper renderer. Pending scenes cancel when superseded, and renderer helpers stop after a shell crash.
+
+- Parallel Config doctor checks no longer collide when creating their private runtime folders.
+
 - Scrolling list views in third-party plugins no longer flicker back to their first rows after you stop scrolling.
 
 - When KWin is installed without Plasma's login session, `mandara setup --compositor kwin` and the installer now explain why the login screen can't offer it and name the package to install, and setup says when `--autostart` is needed for Mandara to start inside Plasma.
 
-- The launcher stays responsive while a slow network or external drive loads recent files, wallpapers, or the app and icon catalog.
+- The launcher stays responsive while a slow network or external drive loads recent files, usage history, wallpapers, or the app and icon catalog. Thanks to @is-suzart (#193).
 
 ### Under the hood
 

@@ -369,7 +369,7 @@ pub(crate) fn open_trash(cx: &mut App) {
 fn track_windows(cx: &mut App) {
     let windows = crate::windows::init(cx);
     let apps: Rc<[DesktopApp]> = crate::apps::discover().into();
-    let update = move |cx: &mut App| {
+    let update = Rc::new(move |cx: &mut App| {
         let list = crate::windows::init(cx).read(cx).list().to_vec();
         let now: Vec<String> = {
             let mut ids: Vec<String> = list.iter().filter(|w| !crate::windows::is_shell(&w.app_id)).map(|w| crate::windows::desktop_entry_for(&w.app_id, &apps).map(|a| a.id.clone()).unwrap_or_else(|| w.app_id.clone())).collect();
@@ -377,6 +377,7 @@ fn track_windows(cx: &mut App) {
             ids.dedup();
             ids
         };
+        crate::launcher_ext::warm_usage(cx);
         let usage = crate::launcher_ext::usage_list(&config(cx).read(cx).snapshot(), USAGE_ROWS);
         let s = shared(cx);
         let before = std::mem::replace(&mut s.running, now.clone());
@@ -387,9 +388,11 @@ fn track_windows(cx: &mut App) {
         s.launching.retain(|k, t| !running(k) && t.elapsed() < LAUNCH_TIMEOUT);
         s.generation += 1;
         refresh_all(cx);
-    };
+    });
     update(cx);
-    cx.observe(&windows, move |_, cx| update(cx)).detach();
+    let on_windows = update.clone();
+    cx.observe(&windows, move |_, cx| on_windows(cx)).detach();
+    cx.observe_global::<crate::launcher_ext::UsageRevision>(move |cx| update(cx)).detach();
 }
 
 /// Follows the installer's queue: placeholders, pins on success.

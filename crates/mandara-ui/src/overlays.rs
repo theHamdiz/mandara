@@ -565,6 +565,11 @@ fn selection_key(item: &Item) -> String {
     usage_key(item)
 }
 
+/// An item at the first position still owns its selection when a catalog changes.
+fn current_selection_key(results: &[Item], selected: usize) -> Option<String> {
+    results.get(selected).map(selection_key)
+}
+
 /// Live data the providers search, gathered when the launcher opens. The
 /// provider settings follow config edits while it is open
 /// ([`SearchCtx::follow_providers`]).
@@ -688,6 +693,7 @@ impl SearchCtx {
         if self.plugin_routed || query.starts_with(['=', '/']) {
             return false;
         }
+        if provider == "usage" { return true; }
         match launcher_ext::route(query, &self.providers) {
             Some((id, _)) => id == provider || (provider == "apps" && id == "windows"),
             None => provider == "apps" || (!query.is_empty() && launcher_ext::globals(&self.providers).any(|id| id == provider)),
@@ -1246,9 +1252,9 @@ pub fn search_json(query: String, cx: &mut App) -> Result<mandara_plugins::Outpu
 
 /// Stop waiting before the IPC client times out, so a stalled mount can't
 /// leave a deferred `launcher run` that opens a result much later.
-const LAUNCHER_DATA_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const LAUNCHER_DATA_TIMEOUT: Duration = Duration::from_secs(10);
 
-async fn wait_for_catalogs(requests: Vec<async_channel::Receiver<()>>, timer: gpui::Task<()>) -> bool {
+pub(crate) async fn wait_for_catalogs(requests: Vec<async_channel::Receiver<()>>, timer: gpui::Task<()>) -> bool {
     use std::future::{Future as _, poll_fn};
     use std::pin::pin;
     use std::task::Poll;
@@ -1274,6 +1280,7 @@ fn with_results(
     cx: &mut App,
     finish: impl FnOnce(&str, Vec<Item>, &mut App) -> Result<serde_json::Value, String> + 'static,
 ) -> Result<mandara_plugins::Output, String> {
+    launcher_ext::warm_usage(cx);
     let index = build_index(cx);
     let mut ctx = SearchCtx::gather(cx);
     ctx.ask_plugins(&query, cx);
@@ -1286,7 +1293,9 @@ fn with_results(
     let apps = apps_key.map(|key| AppCatalog::refresh(cx, key, launcher_data::read_catalog));
     let wallpapers = wallpapers_key.map(|key| Wallpapers::refresh(cx, key, launcher_data::read_wallpapers));
     let recents = use_recents.then(|| launcher_ext::RecentFiles::refresh(cx, (), launcher_ext::read_recent_files));
+    let usage = (config(cx).read(cx).get().launcher.usage.sort && ctx.uses(&query, "usage")).then(launcher_ext::usage_ready);
     let requests = [
+        usage,
         apps.as_ref().map(|request| request.ready()),
         wallpapers.as_ref().map(|request| request.ready()),
         recents.as_ref().map(|request| request.ready()),
@@ -1312,6 +1321,7 @@ fn with_results(
                 if let Some(request) = recents {
                     ctx.recent_files = request.value().ok_or_else(cancelled)?;
                 }
+                ctx.usage = launcher_ext::usage_snapshot(config(cx).read(cx).get());
                 finish(&query, search_with(&query, &ctx.catalog.apps, &index, &ctx), cx)
             });
             let _ = reply.try_send(output.map(|value| value.to_string()));
@@ -1499,6 +1509,10 @@ impl LauncherView {
     /// A launcher on a surface opened for an output of logical size
     /// `expected` ([`crate::outputs::overlay_target`]).
     fn new(expected: (f32, f32), window: &mut Window, cx: &mut Context<Self>) -> Self {
+        launcher_ext::warm_usage(cx);
+        AppCatalog::retain_view(cx);
+        Wallpapers::retain_view(cx);
+        launcher_ext::RecentFiles::retain_view(cx);
         let shell = shell(cx);
         first_frame::guard("launcher", window, cx, |this| this.first.drawn(), |this, cx| this.close(cx));
         cx.observe(&shell, |this: &mut Self, shell, cx| {
@@ -1555,6 +1569,10 @@ impl LauncherView {
             cx.notify();
         })
         .detach();
+        cx.observe_global::<launcher_ext::UsageRevision>(|this, cx| {
+            this.ctx.usage = launcher_ext::usage_snapshot(config(cx).read(cx).get());
+            this.refilter_on_data("usage", cx);
+        }).detach();
         cx.observe_global::<launcher_ext::RecentFiles>(|this, cx| {
             if this.ctx.providers.files.enabled
                 && let Some(recent) = launcher_ext::RecentFiles::get(cx, &())
@@ -1697,7 +1715,7 @@ impl LauncherView {
         if !self.ctx.uses(&self.effective_query(), provider) {
             return;
         }
-        let selected = (self.selected != 0).then(|| self.results.get(self.selected)).flatten().map(selection_key);
+        let selected = current_selection_key(&self.results, self.selected);
         self.refilter(cx);
         if let Some(selected) = selected
             && let Some(index) = self.results.iter().take(self.count()).position(|item| selection_key(item) == selected)
@@ -1812,6 +1830,9 @@ impl LauncherView {
         if std::mem::replace(&mut self.released, true) {
             return;
         }
+        AppCatalog::release_view(cx);
+        Wallpapers::release_view(cx);
+        launcher_ext::RecentFiles::release_view(cx);
         let keep = dock_icon_paths(cx);
         for (path, edge) in self.icons.drain() {
             if !keep.contains(&path) {
@@ -1828,6 +1849,9 @@ impl LauncherView {
         if std::mem::replace(&mut self.released, true) {
             return;
         }
+        AppCatalog::release_view(cx);
+        Wallpapers::release_view(cx);
+        launcher_ext::RecentFiles::release_view(cx);
         let keep = dock_icon_paths(cx);
         for (path, edge) in self.icons.drain() {
             if !keep.contains(&path) {
@@ -2795,6 +2819,16 @@ mod tests {
             ["panel", "open", id] => assert!(ids.contains(id), "`{label}` opens the panel of unknown plugin {id}"),
             _ => {}
         }
+    }
+
+    #[test]
+    fn a_catalog_refresh_preserves_the_first_selected_item() {
+        let app = |id: &str| Item::App(DesktopApp { id: id.into(), name: id.into(), ..Default::default() });
+        let cached = vec![app("B"), app("C")];
+        let key = current_selection_key(&cached, 0).unwrap();
+        let refreshed = [app("A"), app("B"), app("C")];
+        assert_eq!(refreshed.iter().position(|item| selection_key(item) == key), Some(1));
+        assert!(current_selection_key(&[], 0).is_none());
     }
 
     #[test]

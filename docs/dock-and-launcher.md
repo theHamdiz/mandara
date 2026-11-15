@@ -86,7 +86,14 @@
   every look: `/`, `=`, the AI Shell Agent's `!` while it is switched on
   ([Local shell commands](command-agent.md)), then each provider that is on
   with the prefix you gave it. It follows Studio while the launcher is open.
-  It learns what you open (frecency, kept on this computer), shows pinned
+  Recent-file metadata, usage history, wallpaper folders, apps and icons load in the
+  background, so a slow drive keeps typing and other shell commands responsive.
+  Selection follows the same item when the results refresh. Catalog snapshots
+  are released after the last launcher closes. `launcher search` and
+  `launcher run` wait only for the data they need and stop waiting after ten
+  seconds if a drive does not respond.
+  It learns what you open (frecency, kept on this computer, with up to 1,024
+  recent ranking entries), shows pinned
   and recent apps first, and lists desktop actions (*New Private Window*).
   **Put it anywhere:** float it in the middle of the screen or attach it to
   the top or bottom edge at the left, middle or right. On the bar's edge it

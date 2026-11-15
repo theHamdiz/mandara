@@ -652,7 +652,6 @@ pub fn thumbnails(cx: &mut App) -> Entity<Thumbnails> {
 /// Sets the wallpaper (the theme follows it when "match colors" is on —
 /// see [`reconcile_theme`]).
 pub fn apply(path: PathBuf, cx: &mut App) {
-    // A wallpaper applied ends live scenes, even when it is the same picture.
     crate::plugins::external::live::stop_all(cx);
     update_config(cx, |c| c.wallpaper.path = Some(path));
 }
@@ -728,6 +727,28 @@ pub(crate) fn music_playing(cx: &App) -> bool {
 }
 
 // ── Background surface ───────────────────────────────────────────────────
+
+/// Changes only when live wallpaper ownership changes.
+#[derive(Default)]
+pub struct LiveRevision(u64);
+impl gpui::Global for LiveRevision {}
+
+pub(crate) fn live_changed(cx: &mut App) {
+    let revision = cx.default_global::<LiveRevision>();
+    revision.0 = revision.0.wrapping_add(1);
+}
+
+/// Whether a renderer owns this output's wallpaper right now.
+pub fn live_on(output: &str, cx: &App) -> bool {
+    crate::plugins::external::live::covers(output)
+}
+
+fn clock_visible(cfg: &mandara_config::ShellConfig, monitor: Option<&str>, editing: bool, enabled: bool) -> bool {
+    cfg.wallpaper.enabled && cfg.wallpaper.desktop_clock && enabled
+        && (!cfg.desktop.widgets.hidden || editing)
+        && cfg.desktop.widgets.depth_clock().is_none_or(|(widget, _)| widget.place.displays.is_empty()
+            || monitor.is_some_and(|monitor| widget.place.displays.iter().any(|display| display.eq_ignore_ascii_case(monitor))))
+}
 
 pub struct WallpaperView {
     config: Entity<ConfigStore>,
@@ -1019,15 +1040,23 @@ impl Render for WallpaperView {
             let _ = window.drop_image(image);
         }
         let cfg = self.config.read(cx).snapshot();
-        // A live scene draws this output's wallpaper itself.
-        if !cfg.wallpaper.enabled || self.monitor.as_deref().is_some_and(crate::plugins::external::live::covers) {
+        let live = self.monitor.as_deref().is_some_and(|output| live_on(output, cx));
+        if !cfg.wallpaper.enabled || live {
             self.target = None;
             for shown in [self.current.take(), self.previous.take()].into_iter().flatten() {
                 crate::image_cache::evict_path(&shown, window, cx);
             }
             self.clear_cutouts();
+            for image in self.stale_images.drain(..) { let _ = window.drop_image(image); }
+            self.frames = None;
+            self.tone = None;
             self.drop_player(window);
-            return div().size_full();
+            let mut root = div().size_full().relative();
+            if live && clock_visible(&cfg, self.monitor.as_deref(), crate::desktop_edit::active(cx), crate::desktop_plugins::enabled(mandara_config::desktop_widgets::plugin_ids::CLOCKS, &cfg, cx)) {
+                let (clock, pill) = self.clock_layer(&cfg, window, cx);
+                root = root.child(clock).children(pill);
+            }
+            return root;
         }
         // Per-output and light / dark variants, then the main wallpaper.
         let wanted = mandara_config::desktop::effective_wallpaper(cfg.wallpaper.path.as_ref(), &cfg.wallpaper.variants, self.monitor.as_deref(), cfg.theme.mode.is_dark());
@@ -1111,7 +1140,7 @@ impl Render for WallpaperView {
         let eased = t * t * (3.0 - 2.0 * t);
 
         // Layer 2 (clock) needs a wallpaper to sit in; layer 3 needs both.
-        let clock = cfg.wallpaper.desktop_clock && self.current.is_some();
+        let clock = self.current.is_some() && clock_visible(&cfg, self.monitor.as_deref(), crate::desktop_edit::active(cx), crate::desktop_plugins::enabled(mandara_config::desktop_widgets::plugin_ids::CLOCKS, &cfg, cx));
         // The subject cut-out is aligned to a cover-cropped image only.
         let covers = self.fill == mandara_config::desktop::WallpaperFill::Cover;
         let request = if clock && covers { crate::depth::Request::of(&cfg.wallpaper) } else { None };
@@ -2176,6 +2205,23 @@ mod tests {
 
     /// Large shrinks box-average without a cropped copy; small ones still
     /// resample. Both land exactly on the asked size and keep the colours.
+    #[test]
+    fn fallback_clocks_follow_widget_visibility_and_display_placement() {
+        use mandara_config::desktop_widgets::{DesktopWidget, WidgetKind, ClockWidget};
+        let mut cfg = mandara_config::ShellConfig::default();
+        cfg.wallpaper.enabled = true;
+        cfg.wallpaper.desktop_clock = true;
+        let mut clock = DesktopWidget { kind: WidgetKind::Clock(ClockWidget::with_face(mandara_config::desktop_widgets::ClockFace::Stacked)), ..Default::default() };
+        clock.place.displays = vec!["DP-1".into()];
+        cfg.desktop.widgets.items = vec![clock];
+        assert!(clock_visible(&cfg, Some("dp-1"), false, true));
+        assert!(!clock_visible(&cfg, Some("DP-2"), false, true));
+        assert!(!clock_visible(&cfg, Some("DP-1"), false, false));
+        cfg.desktop.widgets.hidden = true;
+        assert!(!clock_visible(&cfg, Some("DP-1"), false, true));
+        assert!(clock_visible(&cfg, Some("DP-1"), true, true));
+    }
+
     #[test]
     fn shrinking_is_exact_and_keeps_the_picture() {
         // Left half red, right half blue.

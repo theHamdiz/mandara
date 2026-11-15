@@ -22,6 +22,7 @@ struct SurfaceSet {
     spec: Spec,
     shell: AnyWindowHandle,
     wallpaper: Option<AnyWindowHandle>,
+    wallpaper_live: bool,
     strips: mandara_ui::shell::ExclusionStrips,
 }
 
@@ -45,6 +46,7 @@ pub(super) fn init(outputs: Vec<OutputGeometry>, cx: &mut App) {
     cx.set_global(Remeasure::default());
     reconcile(&outputs, true, cx);
     cx.observe_displays(|_, cx| remeasure(cx)).detach();
+    cx.observe_global::<mandara_ui::wallpaper::LiveRevision>(refresh_wallpaper_layers).detach();
 }
 
 /// Measures the outputs again off the UI thread, then fits the surfaces to
@@ -146,9 +148,31 @@ pub(super) fn enable_gpui_wallpapers(cx: &mut App) {
     for set in &mut state.sets {
         if set.wallpaper.is_none() {
             set.wallpaper = open_wallpaper(&set.spec, cx);
+            set.wallpaper_live = mandara_ui::wallpaper::live_on(&set.spec.monitor, cx);
         }
     }
     cx.set_global(state);
+}
+
+/// Replace the fallback window when its content changes layers. An opaque
+/// wallpaper never shares the Bottom layer with desktop cards; a live clock
+/// is transparent. Each output still owns only one fallback window.
+fn refresh_wallpaper_layers(cx: &mut App) {
+    if !cx.global::<Surfaces>().gpui_wallpapers { return; }
+    let mut state = std::mem::take(cx.global_mut::<Surfaces>());
+    for set in &mut state.sets {
+        let live = mandara_ui::wallpaper::live_on(&set.spec.monitor, cx);
+        if set.wallpaper_live != live {
+            if let Some(handle) = set.wallpaper.take() { close(handle, cx); }
+            set.wallpaper = open_wallpaper(&set.spec, cx);
+            set.wallpaper_live = live;
+        }
+    }
+    cx.set_global(state);
+}
+
+fn wallpaper_layer(live: bool) -> gpui::layer_shell::Layer {
+    if live { gpui::layer_shell::Layer::Bottom } else { gpui::layer_shell::Layer::Background }
 }
 
 fn display_spec(id: DisplayId, geo: Option<OutputGeometry>, fallback: (f32, f32), existing: &[Spec]) -> Spec {
@@ -244,12 +268,14 @@ fn open(spec: Spec, wallpaper: bool, cx: &mut App) -> Option<SurfaceSet> {
     let strips = mandara_ui::shell::open_exclusion_strips(spec.display, spec.size, spec.monitor.clone(), cx);
     let wallpaper = wallpaper.then(|| open_wallpaper(&spec, cx)).flatten();
     tracing::info!("mandara shell surface on {} ({w}×{h} logical)", spec.monitor);
-    Some(SurfaceSet { spec, shell, wallpaper, strips })
+    Some(SurfaceSet { wallpaper_live: mandara_ui::wallpaper::live_on(&spec.monitor, cx), spec, shell, wallpaper, strips })
 }
 
 fn open_wallpaper(spec: &Spec, cx: &mut App) -> Option<AnyWindowHandle> {
     let (w, h) = spec.size;
-    let background = LayerSurfaceSpec::background(size(px(w), px(h)), spec.display);
+    let mut background = LayerSurfaceSpec::background(size(px(w), px(h)), spec.display);
+    // The fallback clock stays above live renderers on the background layer.
+    background.layer = wallpaper_layer(mandara_ui::wallpaper::live_on(&spec.monitor, cx));
     let monitor = spec.monitor.clone();
     cx.open_window(background.window_options(), move |_, cx| cx.new(|cx| mandara_ui::wallpaper::WallpaperView::on_monitor(monitor, cx)))
         .map(Into::into).map_err(|err| tracing::error!("wallpaper surface: {err:#}")).ok()
@@ -270,6 +296,12 @@ mod tests {
     use std::cell::Cell;
 
     use super::*;
+
+    #[test]
+    fn opaque_fallback_wallpapers_stay_below_desktop_cards() {
+        assert_eq!(wallpaper_layer(false), gpui::layer_shell::Layer::Background);
+        assert_eq!(wallpaper_layer(true), gpui::layer_shell::Layer::Bottom);
+    }
 
     #[test]
     fn a_fractional_scale_change_remeasures_the_outputs() {

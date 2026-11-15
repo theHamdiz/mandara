@@ -73,6 +73,8 @@ pub mod update_watch;
 pub mod toast_drawer;
 pub mod toasts;
 pub mod slideshow;
+mod renderer_process;
+mod wallpaper_playback;
 pub mod wallpaper;
 pub mod wallpaper_fill;
 pub mod wallpaper_shader;

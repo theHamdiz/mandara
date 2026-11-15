@@ -455,7 +455,7 @@ pub(crate) fn refresh(cx: &mut App) {
         watch_power(&driver, cx);
     }
     // Live scenes pause where the desktop can't be seen, like videos.
-    crate::plugins::external::live::set_playing(&scene.live_play);
+    crate::wallpaper_playback::refresh(cx);
     let mut d = driver.borrow_mut();
     if d.last.as_ref() == Some(&scene) {
         return;
@@ -520,20 +520,8 @@ fn video_outputs(cfg: &mandara_config::ShellConfig, outputs: &[String], dark: bo
 /// Of `outputs` (showing something that moves), the ones where it may play
 /// now under `rules`.
 fn playing(rules: &mandara_config::desktop::WallpaperVideo, outputs: Vec<&String>, cx: &App) -> Vec<String> {
-    if outputs.is_empty() {
-        return Vec::new();
-    }
-    let base = video::Conditions {
-        locked: crate::lock::is_locked(),
-        screens_off: crate::powerctl::idle::manager(cx).is_some_and(|m| m.read(cx).screens_off()),
-        on_battery: crate::powerctl::battery::on_battery(cx),
-        ..video::Conditions::default()
-    };
-    outputs
-        .into_iter()
-        .filter(|o| video::may_play(rules, &video::Conditions { covered: !crate::wallpaper::desktop_visible(o, cx), fullscreen: crate::wallpaper::fullscreen_on(o, cx), ..base }))
-        .cloned()
-        .collect()
+    let conditions = crate::wallpaper_playback::conditions(cx);
+    outputs.into_iter().filter(|output| crate::wallpaper_playback::may_play(rules, output, conditions, cx)).cloned().collect()
 }
 
 /// Resolve one desktop scene, including any widget position currently being dragged.

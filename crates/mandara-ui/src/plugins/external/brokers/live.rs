@@ -16,10 +16,9 @@
 //! * **Its process.** No shell, a minimal environment, `/` as its working
 //!   folder, stdin closed,
 //!   stdout discarded and the last [`MAX_STDERR`] bytes of stderr kept for
-//!   the error message. It leads its own process group and gets a
-//!   parent-death signal, so it never outlives the shell. One thread per
-//!   scene spawns, drains and reaps it (the death signal follows the thread
-//!   that forked, which lives exactly as long as the child).
+//!   the error message. A dedicated guardian leads its process group and
+//!   kills its helpers when the shell’s control pipe closes, including after
+//!   a crash. The controller reserves the group id until cleanup completes.
 //!
 //! At most one scene runs per display. The shell's wallpaper stays the
 //! single source of truth: a scene is a layer over it that ends when any
@@ -30,12 +29,13 @@
 //! the renderer is stopped with `SIGSTOP` and continued after. Nothing runs
 //! and nothing is observed while no scene does.
 
+mod pending;
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use gpui::App;
@@ -44,6 +44,9 @@ use serde_json::{Value, json};
 
 use super::{deliver, project_of};
 use crate::plugins::external::discovered;
+use crate::renderer_process::{Group, Report, launch, MAX_STDERR};
+#[cfg(test)]
+use crate::renderer_process::CHILD_PATH;
 
 /// A renderer the host may start, and the command line it builds.
 pub(super) struct Renderer {
@@ -69,8 +72,6 @@ pub(super) struct Job {
     pub assets: Option<PathBuf>,
 }
 
-/// Most bytes of a renderer's stderr kept for its error message.
-const MAX_STDERR: usize = 2048;
 /// How long a renderer has to exit after `SIGTERM` before `SIGKILL`.
 const STOP_GRACE: Duration = Duration::from_secs(2);
 /// Largest `project.json` read for a title, type and preview.
@@ -79,11 +80,6 @@ const MAX_PROJECT_JSON: u64 = 64 * 1024;
 const MAX_TITLE: usize = 256;
 /// Entries looked at for a project's first image when it names no preview.
 const MAX_PREVIEW_SCAN: usize = 256;
-/// The `PATH` a renderer runs with (it is started by absolute path).
-const CHILD_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
-/// Environment a renderer keeps: the display, the user's folders, the
-/// language and GPU selection. Everything else is cleared.
-const CHILD_ENV: &[&str] = &["WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "HOME", "LANG", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_DATA_DIRS", "DRI_PRIME"];
 /// The Wallpaper Engine assets folder, relative to a Steam library's
 /// `steamapps` folder.
 const STEAM_ASSETS: &str = "common/wallpaper_engine/assets";
@@ -204,123 +200,6 @@ fn steam_assets(project: &Path) -> Option<PathBuf> {
     Some(steamapps.join(STEAM_ASSETS)).filter(|p| p.is_dir())
 }
 
-// ── Processes ────────────────────────────────────────────────────────────
-
-/// What a scene's thread reports.
-#[derive(Debug)]
-pub(super) enum Report {
-    /// The renderer started (its process group) or couldn't.
-    Spawned(Result<i32, String>),
-    /// It exited, with the end of what it wrote to stderr.
-    Exited(String),
-}
-
-/// A running renderer. The group id is cleared (under the lock) just
-/// before the thread reaps the leader, so a signal never reaches a reused
-/// process id.
-#[derive(Clone)]
-pub(super) struct Group(Arc<Mutex<Option<i32>>>);
-
-impl Group {
-    pub fn signal(&self, signal: i32) {
-        if let Ok(pid) = self.0.lock()
-            && let Some(pid) = *pid
-        {
-            // SAFETY: plain syscall on a group this thread owns.
-            unsafe { libc::killpg(pid, signal) };
-        }
-    }
-
-    pub fn alive(&self) -> bool {
-        self.0.lock().is_ok_and(|p| p.is_some())
-    }
-}
-
-/// Starts `program argv` on its own thread and returns its group at once;
-/// reports go to `reports`.
-pub(super) fn launch(program: PathBuf, argv: Vec<OsString>, reports: async_channel::Sender<Report>) -> Group {
-    let group = Group(Arc::new(Mutex::new(None)));
-    let shared = group.clone();
-    let spawned = std::thread::Builder::new().name("mandara-live-wallpaper".into()).spawn(move || supervise(&program, &argv, &shared, &reports));
-    if let Err(e) = spawned {
-        tracing::warn!("live wallpaper thread: {e}");
-    }
-    group
-}
-
-/// The scene thread: spawns, drains stderr (bounded), waits without
-/// reaping, ends the rest of the group, clears the id, then reaps.
-fn supervise(program: &Path, argv: &[OsString], group: &Group, reports: &async_channel::Sender<Report>) {
-    use std::os::unix::process::CommandExt as _;
-    let mut cmd = std::process::Command::new(program);
-    cmd.args(argv).env_clear().env("PATH", CHILD_PATH).current_dir("/").stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::piped()).process_group(0);
-    for key in CHILD_ENV {
-        if let Some(v) = std::env::var_os(key) {
-            cmd.env(key, v);
-        }
-    }
-    let parent = std::process::id();
-    // SAFETY: only async-signal-safe calls between fork and exec.
-    unsafe {
-        cmd.pre_exec(move || {
-            if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) == -1 {
-                return Err(std::io::Error::last_os_error());
-            }
-            // The shell died between fork and prctl: don't run orphaned.
-            if libc::getppid() as u32 != parent {
-                return Err(std::io::Error::from_raw_os_error(libc::ESRCH));
-            }
-            Ok(())
-        });
-    }
-    let mut child = match cmd.spawn() {
-        Ok(c) => c,
-        Err(e) => {
-            let _ = reports.send_blocking(Report::Spawned(Err(e.to_string())));
-            return;
-        }
-    };
-    let pid = child.id() as i32;
-    if let Ok(mut g) = group.0.lock() {
-        *g = Some(pid);
-    }
-    let _ = reports.send_blocking(Report::Spawned(Ok(pid)));
-    let tail = child.stderr.take().map(drain).unwrap_or_default();
-    // Wait without reaping: the leader stays a zombie, so its id (the
-    // group's) can't be reused while the rest of the group is ended.
-    // SAFETY: waitid on our own child with a zeroed siginfo.
-    unsafe {
-        let mut info: libc::siginfo_t = std::mem::zeroed();
-        while libc::waitid(libc::P_PID, pid as libc::id_t, &mut info, libc::WEXITED | libc::WNOWAIT) == -1 && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {}
-    }
-    if let Ok(mut g) = group.0.lock() {
-        // SAFETY: the group's leader is unreaped, so the id is still ours.
-        unsafe { libc::killpg(pid, libc::SIGKILL) };
-        *g = None;
-    }
-    let status = child.wait().map(|s| s.to_string()).unwrap_or_default();
-    let message = if tail.trim().is_empty() { status } else { format!("{status}: {}", tail.trim()) };
-    let _ = reports.send_blocking(Report::Exited(message));
-}
-
-/// Reads `pipe` to its end, keeping only the last [`MAX_STDERR`] bytes.
-fn drain(mut pipe: impl std::io::Read) -> String {
-    let (mut kept, mut buf) = (std::collections::VecDeque::with_capacity(MAX_STDERR), [0u8; 512]);
-    while let Ok(n) = pipe.read(&mut buf) {
-        if n == 0 {
-            break;
-        }
-        for &b in &buf[..n] {
-            if kept.len() == MAX_STDERR {
-                kept.pop_front();
-            }
-            kept.push_back(b);
-        }
-    }
-    let bytes: Vec<u8> = kept.into();
-    String::from_utf8_lossy(&bytes).into_owned()
-}
-
 /// Ends a renderer: continued (if stopped) and terminated now, killed
 /// after [`STOP_GRACE`] if it is still there.
 fn end(group: Group, cx: &mut App) {
@@ -356,6 +235,7 @@ struct Scene {
     /// Reports from its thread; dropped with the scene.
     _reports: Option<gpui::Task<()>>,
     generation: u64,
+    wallpaper: WallpaperKey,
 }
 
 /// What ends scenes, observed only while one runs.
@@ -379,10 +259,12 @@ impl WallpaperKey {
     fn of(c: &mandara_config::ShellConfig) -> Self {
         Self { enabled: c.wallpaper.enabled, path: c.wallpaper.path.clone(), variants: c.wallpaper.variants.clone() }
     }
+
 }
 
 thread_local! {
     /// Display → its scene (running, paused or failed).
+    static PENDING: RefCell<pending::Pending> = RefCell::new(pending::Pending::default());
     static SCENES: RefCell<HashMap<String, Scene>> = RefCell::new(HashMap::new());
     static WATCH: RefCell<Option<Watch>> = const { RefCell::new(None) };
     static GENERATION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
@@ -515,12 +397,20 @@ pub(super) fn render(plugin: &str, id: u64, payload: &serde_json::Map<String, Va
     if outputs.is_empty() {
         return Some(Err("no display shows the wallpaper".into()));
     }
+    let wallpaper = WallpaperKey::of(crate::state::config(cx).read(cx).get());
+    let pending = PENDING.with(|p| p.borrow_mut().begin(plugin, &outputs, wallpaper));
+    watch(cx);
     let task = cx.background_executor().spawn(async move { prepare(&project, &root) });
     let plugin = plugin.to_string();
     cx.spawn(async move |cx| {
         let prepared = task.await;
         cx.update(|cx| {
-            let answer = prepared.and_then(|p| start(&plugin, handle, p, &outputs, cx));
+            let open = super::loaded(&plugin).is_some_and(|p| p.borrow().as_ref().is_some_and(|p| p.is_open(id)));
+            let wallpaper = WallpaperKey::of(crate::state::config(cx).read(cx).get());
+            let outputs = PENDING.with(|p| p.borrow_mut().complete(&pending, outputs, &wallpaper, open));
+            let answer = if outputs.is_empty() { Err("live wallpaper request superseded or cancelled".into()) }
+                else { prepared.and_then(|p| start(&plugin, handle, p, &outputs, cx)) };
+            if answer.is_err() { settle(cx); }
             deliver(&plugin, id, answer, cx);
         });
     })
@@ -578,7 +468,7 @@ fn start(plugin: &str, handle: u64, p: Prepared, outputs: &[String], cx: &mut Ap
                 cx.update(|cx| on_report(&out, generation, report, cx));
             }
         });
-        let scene = Scene { plugin: plugin.to_string(), root: p.root.clone(), ink: p.ink.clone(), state: State::Running, group: Some(group), _reports: Some(reports), generation };
+        let scene = Scene { plugin: plugin.to_string(), root: p.root.clone(), ink: p.ink.clone(), state: State::Running, group: Some(group), _reports: Some(reports), generation, wallpaper: WallpaperKey::of(crate::state::config(cx).read(cx).get()) };
         SCENES.with(|s| s.borrow_mut().insert(output.clone(), scene));
         started.push(output.clone());
     }
@@ -617,6 +507,7 @@ pub(super) fn stop(plugin: &str, payload: &serde_json::Map<String, Value>, cx: &
         Some(Value::String(o)) => Some(o.clone()),
         Some(_) => return Err("`output` must be a display name from `status`".into()),
     };
+    PENDING.with(|p| p.borrow_mut().stop_plugin(plugin, only.as_deref()));
     let mine: Vec<String> = SCENES.with(|s| s.borrow().iter().filter(|(o, sc)| sc.plugin == plugin && only.as_ref().is_none_or(|w| w == *o)).map(|(o, _)| o.clone()).collect());
     for o in &mine {
         stop_output(o, cx);
@@ -636,8 +527,10 @@ fn stop_output(output: &str, cx: &mut App) {
 
 /// Ends every scene of `plugin` (it was switched off, removed or rebuilt).
 pub(crate) fn stop_plugin(plugin: &str, cx: &mut App) {
+    PENDING.with(|p| p.borrow_mut().stop_plugin(plugin, None));
     let theirs: Vec<String> = SCENES.with(|s| s.borrow().iter().filter(|(_, sc)| sc.plugin == plugin).map(|(o, _)| o.clone()).collect());
     if theirs.is_empty() {
+        settle(cx);
         return;
     }
     for o in &theirs {
@@ -648,13 +541,21 @@ pub(crate) fn stop_plugin(plugin: &str, cx: &mut App) {
 
 /// Ends every scene: a wallpaper was applied.
 pub(crate) fn stop_all(cx: &mut App) {
+    PENDING.with(|p| p.borrow_mut().clear());
     let all: Vec<String> = SCENES.with(|s| s.borrow().keys().cloned().collect());
     if all.is_empty() {
+        settle(cx);
         return;
     }
     for o in &all {
         stop_output(o, cx);
     }
+    settle(cx);
+}
+
+pub(crate) fn stop_on(output: &str, cx: &mut App) {
+    PENDING.with(|p| p.borrow_mut().stop_output(output));
+    stop_output(output, cx);
     settle(cx);
 }
 
@@ -705,25 +606,31 @@ pub(super) fn end_reason(started: &WallpaperKey, now: &WallpaperKey, access: Opt
     (!outputs.iter().any(|o| o == output)).then_some(End::DisplayGone)
 }
 
+/// Observe local edits immediately, including A → B → A in one UI update.
+pub(crate) fn config_changed(before: &mandara_config::ShellConfig, after: &mandara_config::ShellConfig, cx: &mut App) {
+    if WATCH.with(|watch| watch.borrow().is_none()) { return; }
+    if WallpaperKey::of(before) != WallpaperKey::of(after) { reconcile(cx); }
+}
+
 /// The config or the outputs changed: ends what must end.
 fn reconcile(cx: &mut App) {
     let Some(started) = WATCH.with(|w| w.borrow().as_ref().map(|w| w.wallpaper.clone())) else { return };
     let now = WallpaperKey::of(crate::state::config(cx).read(cx).get());
+    PENDING.with(|pending| pending.borrow_mut().wallpaper_changed(&now));
     let outputs = wallpaper_outputs(cx);
-    let scenes: Vec<(String, String, PathBuf)> = SCENES.with(|s| s.borrow().iter().map(|(o, sc)| (o.clone(), sc.plugin.clone(), sc.root.clone())).collect());
+    let scenes: Vec<_> = SCENES.with(|s| s.borrow().iter().map(|(o, sc)| (o.clone(), sc.plugin.clone(), sc.root.clone(), sc.wallpaper.clone())).collect());
     let mut ended = false;
-    for (output, plugin, root) in scenes {
+    for (output, plugin, root, wallpaper) in scenes {
         let enabled = discovered(&plugin).is_some() && cx.global::<mandara_plugins::PluginRegistry>().is_enabled(&plugin, &crate::state::config(cx).read(cx).get().plugins);
         let access = access(&plugin, cx);
-        if let Some(why) = end_reason(&started, &now, access.as_ref(), enabled, &root, &output, &outputs) {
+        if let Some(why) = end_reason(&wallpaper, &now, access.as_ref(), enabled, &root, &output, &outputs) {
             tracing::info!(target: "mandara::plugin", "live wallpaper on {output} ended: {why:?}");
             stop_output(&output, cx);
             ended = true;
         }
     }
-    if ended {
-        settle(cx);
-    }
+    WATCH.with(|watch| { if let Some(watch) = watch.borrow_mut().as_mut() { watch.wallpaper = now.clone(); } });
+    if ended || started != now { settle(cx); }
 }
 
 /// After scenes ended: the watchers go once none runs (a failed scene
@@ -731,7 +638,7 @@ fn reconcile(cx: &mut App) {
 /// the desktop and `live-wallpaper` subscribers hear about it.
 fn settle(cx: &mut App) {
     let running = SCENES.with(|s| s.borrow().values().any(|sc| sc.group.is_some()));
-    if !running {
+    if !running && PENDING.with(|pending| pending.borrow().is_empty()) {
         WATCH.with(|w| w.borrow_mut().take());
         SCENES.with(|s| s.borrow_mut().shrink_to_fit());
     }
@@ -740,6 +647,8 @@ fn settle(cx: &mut App) {
 
 /// The desktop redraws (wallpaper back or left out) and subscribers hear.
 fn changed(cx: &mut App) {
+    crate::wallpaper::live_changed(cx);
+    crate::wallpaper_playback::refresh(cx);
     crate::backdrop::refresh(cx);
     cx.refresh_windows();
     super::events_soon(cx);
@@ -943,7 +852,7 @@ mod tests {
         let Ok(Report::Exited(message)) = rx.recv_blocking() else { panic!("no exit report") };
         assert!(message.contains("exit status: 3") && message.contains(&format!("PATH={CHILD_PATH}")), "{message}");
         assert!(!message.contains("CARGO"), "the shell's own environment isn't passed on: {message}");
-        assert!(message.contains("PWD=/\n") || !message.contains("PWD="), "it runs in / : {message}");
+        assert!(message.lines().all(|line| !line.starts_with("PWD=") || line == "PWD=/"), "it runs in / : {message}");
         let (_group, rx, _) = run(fake("sh", |_| Vec::new()), ["-c", "head -c 100000 /dev/zero | tr '\\0' x >&2; echo END >&2; exit 1"].map(OsString::from).into());
         let Ok(Report::Exited(message)) = rx.recv_blocking() else { panic!("no exit report") };
         assert!(message.len() < MAX_STDERR + 64 && message.ends_with("END"), "only the end of stderr is kept");
@@ -955,6 +864,7 @@ mod tests {
         let _group = launch("/nonexistent/linux-wallpaperengine".into(), Vec::new(), tx);
         assert!(matches!(rx.recv_blocking(), Ok(Report::Spawned(Err(_)))));
     }
+
 
     #[test]
     fn scenes_end_on_replace_revoke_switch_off_and_unplug() {

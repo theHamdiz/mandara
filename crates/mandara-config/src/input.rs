@@ -1232,8 +1232,17 @@ pub struct XkbCatalog {
     pub switch_options: Vec<(String, String)>,
 }
 
-/// xkeyboard-config's rules folder.
-pub const XKB_RULES_DIR: &str = "/usr/share/X11/xkb/rules";
+/// xkeyboard-config's rules folder on the installed platform.
+pub const XKB_RULES_DIR: &str = xkb_rules_dir(cfg!(target_os = "freebsd"));
+
+const fn xkb_rules_dir(freebsd: bool) -> &'static str {
+    if freebsd { "/usr/local/share/X11/xkb/rules" } else { "/usr/share/X11/xkb/rules" }
+}
+
+fn system_xkb_catalog(root: &Path, freebsd: bool) -> XkbCatalog {
+    xkb_catalog_in(&root.join(xkb_rules_dir(freebsd).trim_start_matches('/')))
+}
+
 /// The main list, then its XML form when a distribution ships only that.
 const XKB_BASE_FILES: [&str; 2] = ["evdev.lst", "evdev.xml"];
 /// The extras: rarer layouts and variants, which the main list leaves out.
@@ -1368,7 +1377,7 @@ pub fn xkb_catalog_in(rules: &Path) -> XkbCatalog {
 
 /// The system's catalog (read and parsed on each call: cache the result).
 pub fn xkb_catalog() -> XkbCatalog {
-    xkb_catalog_in(Path::new(XKB_RULES_DIR))
+    system_xkb_catalog(Path::new("/"), cfg!(target_os = "freebsd"))
 }
 
 impl XkbCatalog {
@@ -1576,6 +1585,24 @@ pub(crate) mod tests {
 
     fn variant_names(layout: &XkbLayout) -> Vec<(&str, bool)> {
         layout.variants.iter().map(|v| (v.name.as_str(), v.extra)).collect()
+    }
+
+    #[test]
+    fn system_catalog_reads_freebsd_local_prefix_with_its_extras() {
+        let root = tempfile::tempdir().unwrap();
+        let freebsd = root.path().join("usr/local/share/X11/xkb/rules");
+        let linux = root.path().join("usr/share/X11/xkb/rules");
+        std::fs::create_dir_all(&freebsd).unwrap();
+        std::fs::create_dir_all(&linux).unwrap();
+        std::fs::write(linux.join("evdev.lst"), "! layout\n us English (US)\n").unwrap();
+        for name in ["evdev.lst", "evdev.extras.xml"] {
+            std::fs::copy(xkb_fixture("lst").join(name), freebsd.join(name)).unwrap();
+        }
+        let local = system_xkb_catalog(root.path(), true);
+        assert!(local.layouts.iter().any(|layout| layout.name == "ara" && layout.variants.iter().any(|variant| variant.name == "ergoarabic" && variant.extra)));
+        let system = system_xkb_catalog(root.path(), false);
+        assert_eq!(system.layouts.len(), 1);
+        assert_eq!(system.layouts[0].name, "us");
     }
 
     #[test]

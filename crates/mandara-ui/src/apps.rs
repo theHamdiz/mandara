@@ -206,7 +206,7 @@ fn discover_in(roots: &[PathBuf]) -> Vec<App> {
     discover_in_for(roots, mandara_i18n::language(), None)
 }
 
-fn discover_in_for(roots: &[PathBuf], language: mandara_i18n::Lang, theme: Option<&str>) -> Vec<App> {
+pub(crate) fn discover_in_for(roots: &[PathBuf], language: mandara_i18n::Lang, theme: Option<&str>) -> Vec<App> {
     let mut seen = std::collections::HashSet::new();
     let mut apps = Vec::new();
     for dir in roots {
