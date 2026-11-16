@@ -1076,6 +1076,8 @@ Broken
 Brown noise
 Browse Reddit communities, posts and comment threads
 Browse app templates
+Browse apps across the screen and search by type
+Browse apps as icons. Grouped searches use the list
 Browse available app templates; pass refresh to update the catalog
 Browse in the picker
 Browse settings
@@ -1233,6 +1235,8 @@ Catching drags
 Categories
 Category
 Category chips
+Category display
+Category position
 Catppuccin
 Catppuccin Mocha
 Catppuccin's pastel flavours for the rEFInd menu
@@ -1394,6 +1398,8 @@ Choose an operation for this filesystem. Each action is reviewed before administ
 Choose another…
 Choose at most 32 source folders, using absolute paths.
 Choose displays
+Choose how category chips show their names
+Choose how the launcher fills the screen
 Choose mango, niri, hyprland, umbriel, sway, river, kwin, aqueous, labwc or cosmic (default: detected). Missing compositors can be installed after asking. KWin requires an existing Plasma installation.
 Choose matching login and lock designs in Studio.
 Choose one ayah to copy as an image
@@ -2395,6 +2401,7 @@ Enable
 Enable Sound themes
 Enable a unit at boot / login and reload systemd
 Enable browser theming and publish the shared app palette.
+Enable category chips in Grid to use this option
 Enable launcher
 Enable local shell commands in Studio
 Enable natural language shell control
@@ -2959,6 +2966,8 @@ Full name, e.g. Salma Adel
 Full snapshot id from backups list
 Full speed, more heat
 Full update: {size} (no patch from your version)
+Fullscreen
+Fullscreen has no category chips
 Fullscreen only
 Fully charged
 Fully rounded pills and round icon buttons
@@ -3432,6 +3441,7 @@ Icon
 Icon and count
 Icon colour
 Icon name or image path
+Icon only
 Icon shape
 Icon size
 Icon spacing
@@ -3439,6 +3449,7 @@ Icon theme
 Icon theme {theme} is installed
 Icon theme {theme} is missing; install it or choose another in Themes → Icons
 Icon themes
+Icon with label on hover
 Icon-sized items as round buttons: a circle, a Material 3 Expressive shape or a squircle (they become square), or the item shape
 Icon-sized items in the capsule colour, or a solid accent or tertiary tone
 Icons
@@ -3873,6 +3884,7 @@ LAYERS
 LED meter
 LIVE
 LUKS passphrase (visible in the process list — prefer the panel)
+Label only
 Labels
 Landscape
 Language
@@ -3914,6 +3926,7 @@ Launcher & pop-ups
 Launcher button
 Launcher colors
 Launcher grain
+Launcher look
 Launcher looks
 Launcher width at a screen edge
 Launches count more when recent; the weight halves every few days (Ranking above).
@@ -4051,6 +4064,7 @@ List name
 List plugins with origin and enablement
 List stations, all or of one shelf
 List the configured translation provider's languages
+List the launcher looks and show which one is active
 List the motion presets, how each feels and which one is in use
 List the one-click looks: the built-in ones and yours
 List themes (built-in and ~/.config/mandara/themes)
@@ -4426,6 +4440,7 @@ Matsuo Bashō
 Maximize
 Maximize or restore a window
 Maxims and Reflections
+Maximum app rows per page in Fullscreen
 Maximum generated tokens; the server owns its model and hardware limits
 Maximum height
 Maximum width
@@ -6022,6 +6037,7 @@ Put one settings section back to its defaults
 Put the bar away and free its space until bar show (touching its edge peeks it out)
 Put the bar away or bring it back
 Put the bar on a screen edge
+Put the category chips above or beside the app grid
 Put the dock on the overlay layer
 Put the picked color on the clipboard right away
 Puts one page back to its defaults. Click twice to confirm; Undo is under Recent changes.
@@ -7067,6 +7083,7 @@ Show again
 Show all {count} apps
 Show an app under your own name (empty name restores it)
 Show an on-screen display with the current value
+Show app category filters
 Show apps asking for attention
 Show available devices
 Show clearly-labelled demo accounts instead of the keyring (on/off)

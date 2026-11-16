@@ -6,6 +6,17 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The launcher gains grouped search results and a paginated fullscreen app view.
+
+### New
+
+- Browse apps in a fullscreen launcher with a blurred backdrop, adjustable page density and drag-and-drop folders. Choose Fullscreen in Studio → Launcher.
+- Grid category chips can be moved to the side or shown as icons in Studio.
+
+### Improved
+
+- Classic and Grid group search results by type. Turn off Group results in Studio to use the previous search layout.
+
 ## 0.34.1 — 2026-11-16
 
 The shell recovers from unexpected display shutdowns, and Studio makes community plugins easier to browse and manage.

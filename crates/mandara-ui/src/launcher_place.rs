@@ -374,7 +374,25 @@ pub fn beacon(cfg: &mandara_config::ShellConfig, screen: (f32, f32), bar_here: b
     let look = &cfg.launcher.look;
     let (width, top) = look.beacon();
     let m = Metrics::of(cfg, crate::style::radius_scale());
+    if look.style == mandara_config::workflow::LauncherStyle::Fullscreen {
+        return fullscreen_with(&m, screen, width, modes, rtl);
+    }
     beacon_with(&m, bar_here, cfg.dock_bottom_clearance(), screen, width, top, look.size_for_center().1, modes, rtl)
+}
+
+/// Keep the search row compact while the app grid uses a readable desktop width.
+fn fullscreen_with(m: &Metrics, screen: (f32, f32), search_width: f32, modes: usize, rtl: bool) -> BeaconPlacement {
+    const SEARCH_TOP: f32 = 0.08;
+    const MAX_RESULTS_WIDTH: f32 = 1200.0;
+    const SEARCH_WIDTH_FRACTION: f32 = 0.67;
+    const RESULTS_GAP: f32 = 24.0;
+    let mut place = beacon_with(m, false, None, screen, search_width * SEARCH_WIDTH_FRACTION, SEARCH_TOP, screen.1, modes, rtl);
+    let width = (screen.0 - SCREEN_MARGIN * 2.0).clamp(0.0, MAX_RESULTS_WIDTH);
+    place.card.x = (screen.0 - width) / 2.0;
+    place.card.w = width;
+    place.card.y += RESULTS_GAP;
+    place.card.h = (place.card.h - RESULTS_GAP).max(0.0);
+    place
 }
 
 /// [`beacon`] from its parts (unit-tested).
@@ -386,7 +404,8 @@ pub fn beacon_with(m: &Metrics, bar_here: bool, dock: Option<f32>, (sw, sh): (f3
     let bottom_free = if bar_here && m.position == BarPosition::Bottom { band } else { 0.0 } + dock.unwrap_or(0.0) + SCREEN_MARGIN;
     let modes_w = modes as f32 * (BEACON_BAR_H + BEACON_GAP);
     let room = (sw - side_l - side_r - SCREEN_MARGIN * 2.0).max(0.0);
-    let bar_w = width.min(room - modes_w).max(BEACON_MIN_BAR_W.min(room));
+    let bar_room = (room - modes_w).max(0.0);
+    let bar_w = width.max(BEACON_MIN_BAR_W).min(bar_room);
     let total = bar_w + modes_w;
     let x0 = side_l + (sw - side_l - side_r - total) / 2.0;
     let y = (sh * top).max(top_free).min((sh - bottom_free - BEACON_BAR_H).max(top_free));
@@ -435,6 +454,21 @@ mod tests {
 
     fn near(a: f32, b: f32) -> bool {
         (a - b).abs() < 0.01
+    }
+
+    #[test]
+    fn fullscreen_keeps_search_and_grid_inside_the_display() {
+        let bar = Metrics::default_for(BarLayout::default(), BarPosition::Top);
+        for screen in [(480.0, 600.0), SCREEN] {
+            for rtl in [false, true] {
+                let place = fullscreen_with(&bar, screen, 680.0, 4, rtl);
+                let last = place.first_mode.x + place.mode_step * 3.0;
+                assert!(place.bar.x >= SCREEN_MARGIN && place.bar.right() <= screen.0 - SCREEN_MARGIN);
+                assert!(last >= SCREEN_MARGIN && last + BEACON_BAR_H <= screen.0 - SCREEN_MARGIN);
+                assert!(place.card.y > place.bar.bottom() && place.card.bottom() <= screen.1 - SCREEN_MARGIN);
+                assert_eq!(place.card.x + place.card.w / 2.0, screen.0 / 2.0);
+            }
+        }
     }
 
     #[test]

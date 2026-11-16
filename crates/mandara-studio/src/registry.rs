@@ -683,6 +683,12 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         "/lock/clock_style" if setting.control.has_value() && cfg.lock.design != mandara_config::desktop::LockDesign::Mandara => Some(tk("This design sets its own clock layout.")),
         "/lock/show_avatar" if cfg.lock.design == mandara_config::desktop::LockDesign::Meridian => Some(tk("Meridian has no profile picture.")),
         "/edges/launcher_bottom" if cfg.dock_enabled() => Some(tk("Click only while the dock is on")),
+        "/launcher/look/grid_categories" if cfg.launcher.look.style == mandara_config::workflow::LauncherStyle::Fullscreen => Some(tk("Fullscreen has no category chips")),
+        "/launcher/look/grid_category_position" | "/launcher/look/grid_category_display"
+            if !cfg.launcher.look.grid_categories
+                || cfg.launcher.look.style != mandara_config::workflow::LauncherStyle::Classic
+                || cfg.launcher.look.layout != mandara_config::workflow::LauncherLayout::Grid => Some(tk("Enable category chips in Grid to use this option")),
+        "/launcher/look/fullscreen_rows" if cfg.launcher.look.style != mandara_config::workflow::LauncherStyle::Fullscreen => Some(tk("Fullscreen only")),
         "/notifications/joined" => alert_settings::joined_locked(cfg),
         "/session_menu/position" if cfg.session_menu.style == mandara_config::power::SessionMenuStyle::Grid => Some(tk("The grid always opens in the middle")),
         "/session_menu/position" if cfg.session_menu.style == mandara_config::power::SessionMenuStyle::Cards => Some(tk("The cards always open in the middle of the screen")),

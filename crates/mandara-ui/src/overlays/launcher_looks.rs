@@ -1,15 +1,10 @@
 //! The launcher's looks beyond the plain list (`[launcher.look]`, Studio →
 //! Launcher → Launcher looks):
 //!
-//! * **Grid** (`layout = "grid"`): app icons with their names under them,
-//!   as many columns as fit the launcher's width (`grid_columns` caps it,
-//!   `grid_icon_size` sizes the icons), a row of category chips (All,
-//!   Pinned, Internet, Office… from the apps' `Categories=`) above it.
-//!   Arrows move in two dimensions, Tab / Shift+Tab switch the category,
-//!   typing filters with the same fuzzy ranking and the tiles reflow with
-//!   a spring (each tile slides from where it was; new ones fade in). Rows
-//!   are virtualized (`uniform_list`): only visible tiles lay out and
-//!   decode their icons.
+//! * **Grid** (`layout = "grid"`): app icons with labels and a row of
+//!   categories above them. The chips' placement and display are configurable.
+//!   Arrows move in two dimensions and Tab switches category. Rows are virtualized.
+//!   Plain searches return to tiles when grouping is off.
 //! * **Grouped results** (`group_results`): a Top hit, then headings by
 //!   kind (Applications, Actions & settings, Files, Windows…) in the order
 //!   their best result ranks; only the visible rows are built.
@@ -22,6 +17,8 @@
 //!   It pops in with the panels' spring (a slight scale and fade), the mode
 //!   buttons slide out from behind the bar one after another, and the card
 //!   grows to its rows with a stiffer spring.
+//! * **Fullscreen** fills the focused display and uses a paginated app grid
+//!   below the same search and mode controls.
 //!
 //! Every icon drawn here is recorded in the launcher's
 //! [`crate::launcher_icons::IconLedger`] (bounded while open, all freed on
@@ -31,15 +28,16 @@ use std::collections::HashMap;
 use std::ops::Range;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, ScrollEvent, ScrollStrategy, SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px,
+    AnyElement, AppContext as _, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, ScrollEvent, ScrollStrategy, SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px,
     uniform_list,
 };
-use mandara_config::workflow::{LauncherProviders, LauncherStyle};
+use mandara_config::workflow::{LauncherCategoryDisplay, LauncherLayout, LauncherLook, LauncherProviders, LauncherStyle};
 use mandara_core::{SpringConfig, ToGpui};
-use mandara_i18n::{t, tk};
+use mandara_i18n::{t, tf, tk};
 use mandara_theme::{Color, MandaraPalette};
 
 use super::{Item, LauncherView, Run, format_number};
+use super::launcher_folders::DragApp;
 use crate::bidi::Bidi as _;
 use crate::icons::icon;
 use crate::kit::text;
@@ -57,6 +55,22 @@ const NAME_LINE_H: f32 = 15.0;
 const NAME_LINES: usize = 2;
 const TILE_PAD_BOTTOM: f32 = 8.0;
 const TILE_RADIUS: f32 = 16.0;
+/// Separate app tiles and leave room for the page controls at the foot.
+const PAGE_TILE_GAP: f32 = 24.0;
+const PAGE_NAV_H: f32 = 36.0;
+const PAGE_ARROW_H: f32 = 52.0;
+const PAGE_ARROW_ICON: f32 = 28.0;
+const PAGE_GUTTER: f32 = PAGE_ARROW_H + 8.0;
+const PAGE_SLIDE_PX: f32 = 56.0;
+const FULLSCREEN_SEARCH_WIDTH: f32 = 800.0;
+const FULLSCREEN_SEARCH_HEIGHT: f32 = 640.0;
+const FULLSCREEN_SEARCH_HEIGHT_FRACTION: f32 = 0.76;
+const FULLSCREEN_RESULT_ROW_SPACE: f32 = 8.0;
+const PAGE_DOT: f32 = 7.0;
+const PAGE_MAX_DOTS: usize = 9;
+/// Match the session overlay's dim while keeping the compositor blur visible.
+const FULLSCREEN_SCRIM_ALPHA: f32 = 0.45;
+const FULLSCREEN_LIGHT_SCRIM_ALPHA: f32 = 0.78;
 /// Column bounds of the grid.
 pub(super) const GRID_COLUMNS_MIN: usize = 3;
 pub(super) const GRID_COLUMNS_MAX: usize = 10;
@@ -67,6 +81,13 @@ const REFLOW_MAX_ROWS: f32 = 1.5;
 pub(super) const REFLOW_SPRING: SpringConfig = SpringConfig::new(420.0, 32.0, 1.0);
 /// Category chips row.
 pub(super) const CHIPS_H: f32 = 30.0;
+/// Width of the compact Grid's category column, including localized labels.
+const CATEGORY_SIDEBAR_W: f32 = 138.0;
+const CATEGORY_ICON: f32 = 15.0;
+const CATEGORY_PAD: f32 = 8.0;
+/// Two rows of mini icons identify a folder's contents.
+const FOLDER_ICON_FRACTION: f32 = 0.42;
+const FOLDER_ICON_GAP: f32 = 3.0;
 const CHIP_PAD: f32 = 12.0;
 const CHIP_GAP: f32 = 6.0;
 /// Section headings of grouped results.
@@ -132,6 +153,20 @@ pub(super) fn grid_geom(avail_w: f32, icon: f32, max_cols: u32) -> GridGeom {
     GridGeom { cols, cell_w: avail_w.max(0.0) / cols as f32, tile_h: TILE_PAD_TOP + icon + NAME_GAP + NAME_LINE_H * NAME_LINES as f32 + TILE_PAD_BOTTOM, icon }
 }
 
+/// Fit a page within the output while respecting the requested density.
+fn fullscreen_grid(width: f32, height: f32, look: &LauncherLook) -> (GridGeom, usize) {
+    let icon = look.grid_icon();
+    let cap = (look.grid_columns as usize).clamp(GRID_COLUMNS_MIN, GRID_COLUMNS_MAX);
+    let stride = icon + TILE_PAD_X * 2.0 + PAGE_TILE_GAP;
+    let cols = (((width + PAGE_TILE_GAP) / stride).floor() as usize).clamp(1, cap);
+    let cell_w = ((width - PAGE_TILE_GAP * (cols - 1) as f32) / cols as f32).max(0.0);
+    let mut g = grid_geom(width, icon.min(cell_w), look.grid_columns);
+    g.cols = cols;
+    g.cell_w = cell_w;
+    let rows = (((height + PAGE_TILE_GAP) / (g.tile_h + PAGE_TILE_GAP)).floor() as usize).clamp(1, look.fullscreen_rows());
+    (g, rows * cols)
+}
+
 /// A plain search (no provider prefix, `/` or `=`): the grid stays.
 pub(super) fn is_plain(query: &str, providers: &LauncherProviders) -> bool {
     let q = query.trim();
@@ -188,6 +223,22 @@ impl GridFilter {
         match self {
             GridFilter::Pinned => t("Pinned").into(),
             GridFilter::Group(g) => t(g).into(),
+        }
+    }
+
+    fn glyph(self) -> &'static str {
+        match self {
+            Self::Pinned => "pin",
+            Self::Group("Internet") => "globe",
+            Self::Group("Office") => "clipboard",
+            Self::Group("Development") => "terminal",
+            Self::Group("Graphics") => "palette",
+            Self::Group("Media") => "music",
+            Self::Group("Games") => "dice",
+            Self::Group("Education") => "book",
+            Self::Group("Utilities") => "sliders",
+            Self::Group("System") => "monitor",
+            _ => "folder",
         }
     }
 
@@ -342,7 +393,7 @@ impl BeaconMode {
     }
 
     /// The search field's placeholder in this mode.
-    fn placeholder(self) -> &'static str {
+    pub(super) fn placeholder(self) -> &'static str {
         match self {
             BeaconMode::Apps => tk("Search apps"),
             BeaconMode::Files => tk("Search files"),
@@ -395,6 +446,28 @@ pub(super) fn settle_mode(mode: Option<BeaconMode>, providers: &LauncherProvider
     mode.filter(|m| m.available(providers))
 }
 
+/// Classic Grid keeps its category filters in ordinary text searches.
+pub(super) fn classic_grid_query(look: &LauncherLook, query: &str, providers: &LauncherProviders) -> bool {
+    look.style == LauncherStyle::Classic && look.layout == LauncherLayout::Grid && is_plain(query, providers)
+}
+
+/// Grouped queries switch Grid to a list. Beacon keeps its Apps-mode grid.
+pub(super) fn shows_app_grid(
+    look: &LauncherLook,
+    mode: Option<BeaconMode>,
+    query: &str,
+    providers: &LauncherProviders,
+) -> bool {
+    match look.style {
+        LauncherStyle::Classic => classic_grid_query(look, query, providers)
+            && (!look.group_results || query.trim().is_empty()),
+        LauncherStyle::Beacon => mode == Some(BeaconMode::Apps),
+        LauncherStyle::Fullscreen => (mode == Some(BeaconMode::Apps)
+            || (mode.is_none() && query.trim().is_empty()))
+            && is_plain(query, providers),
+    }
+}
+
 // ── Shared pieces ───────────────────────────────────────────────────────
 
 /// A result's title (grid tiles).
@@ -432,9 +505,9 @@ fn hint(keys: &[&str], what: &'static str, palette: &MandaraPalette) -> AnyEleme
         .into_any_element()
 }
 
-/// Tab moves Beacon focus and cycles categories in the Classic grid.
-fn tab_hint_label(grid: bool, chips: bool, beacon: bool) -> Option<&'static str> {
-    if beacon { Some(tk("Focus")) } else if grid && chips { Some(tk("Category")) } else { None }
+/// Tab moves between focusable controls or cycles categories in a scoped grid.
+fn tab_hint_label(chips: bool, beacon: bool) -> Option<&'static str> {
+    if beacon { Some(tk("Focus")) } else if chips { Some(tk("Category")) } else { None }
 }
 
 /// The keyboard hints strip for this state.
@@ -442,7 +515,7 @@ fn hints(grid: bool, chips: bool, beacon: bool, palette: &MandaraPalette) -> Any
     let mut row = div().h(px(HINTS_H)).w_full().row().items_center().justify_center().gap(px(HINT_GAP)).text_size(px(text::LABEL)).text_color(palette.on_surface_variant.hsla());
     row = row.child(if grid { hint(&["←", "↑", "↓", "→"], tk("Move"), palette) } else { hint(&["↑", "↓"], tk("Move"), palette) });
     row = row.child(hint(&["Enter"], tk("Open"), palette));
-    if let Some(label) = tab_hint_label(grid, chips, beacon) {
+    if let Some(label) = tab_hint_label(chips, beacon) {
         row = row.child(hint(&["Tab"], label, palette));
     }
     if beacon {
@@ -467,8 +540,33 @@ fn glass(cfg: &mandara_config::ShellConfig, palette: &MandaraPalette, progress: 
         .when_some(crate::plugins::panel_fx::ink_texture(palette), |el, t| el.overflow_hidden().child(t))
 }
 
+#[derive(Clone)]
+struct CategoryTip {
+    label: SharedString,
+    palette: MandaraPalette,
+}
+
+impl gpui::Render for CategoryTip {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().px(px(CHIP_PAD)).h(px(CHIPS_H)).row().items_center()
+            .rounded_full().bg(self.palette.on_surface.hsla()).text_color(self.palette.surface_base.hsla())
+            .text_size(px(text::BODY_S)).child(self.label.clone())
+    }
+}
+
 impl LauncherView {
     // ── Grid ────────────────────────────────────────────────────────────
+
+    pub(super) fn category_sidebar_width(&self) -> f32 {
+        match self.look.grid_category_display {
+            LauncherCategoryDisplay::LabelOnly => CATEGORY_SIDEBAR_W,
+            _ => CHIPS_H,
+        }
+    }
+
+    pub(super) fn grid_categories(&self) -> &[GridFilter] {
+        if self.look.style == LauncherStyle::Fullscreen { &[] } else { &self.categories }
+    }
 
     /// The grid's rows `range` (the `uniform_list` asks for visible ones).
     fn grid_rows(&mut self, range: Range<usize>, g: GridGeom, window: &mut Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
@@ -481,26 +579,43 @@ impl LauncherView {
         let choreo = mandara_core::choreo::choreography();
         let (opened, origin) = self.cascade;
         for r in range {
-            let mut row = div().row().w_full().h(px(g.tile_h));
+            let paged = self.fullscreen_page_size.is_some();
+            let mut row = div().row().w_full().h(px(g.tile_h)).when(paged, |row| row.gap(px(PAGE_TILE_GAP)));
             for i in r * g.cols..((r + 1) * g.cols).min(self.results.len()) {
                 let item = self.results[i].clone();
                 let prev = self.reflow_from.get(&super::usage_key(&item)).copied();
-                let (dx, dy, opacity) = reflow(prev, i, &g, rtl, t);
+                let (dx, dy, opacity) = if paged { (0.0, 0.0, 1.0) } else { reflow(prev, i, &g, rtl, t) };
                 // Tiles cascade in with the choreography as it opens.
                 let (dx, dy, opacity) = match choreo.item(opened, i, origin, rtl, TILE_CASCADE_PX) {
                     Some((cx_, cy, alpha)) => (dx + cx_, dy + cy, opacity * alpha),
                     None => (dx, dy, opacity),
                 };
                 let selected = i == self.selected;
-                let lead = self.lead(&item, g.icon, &palette, cx);
+                let group = self.fullscreen_groups.get(&i).cloned();
+                let title = if let Some(apps) = &group {
+                    format!("{} +{}", title_of(&item), apps.len() - 1)
+                } else {
+                    title_of(&item)
+                };
+                let lead = if let Some(apps) = group {
+                    let rows = apps[..apps.len().min(4)].chunks(2).map(|apps| {
+                        div().row().gap(px(FOLDER_ICON_GAP)).children(apps.iter().map(|app| {
+                            self.lead(&Item::App(app.clone()), g.icon * FOLDER_ICON_FRACTION, &palette, cx)
+                        }))
+                    }).collect::<Vec<_>>();
+                    Some(div().size(px(g.icon)).rounded(px(crate::style::radius(TILE_RADIUS)))
+                        .bg(palette.surface_container_high.hsla()).flex().flex_col().items_center().justify_center()
+                        .gap(px(FOLDER_ICON_GAP)).children(rows).into_any_element())
+                } else {
+                    Some(self.lead(&item, g.icon, &palette, cx))
+                };
                 let hover = cx.listener(move |this, hovered: &bool, _, cx| {
-                    if *hovered && !ignore_mouse && this.selected != i {
+                    if *hovered && !ignore_mouse && (!paged || !this.wheel_hold) && this.selected != i {
                         this.selected = i;
                         cx.notify();
                     }
                 });
-                row = row.child(
-                    div()
+                let tile = div()
                         .id(("tile", i))
                         .relative()
                         .left(px(dx))
@@ -517,7 +632,9 @@ impl LauncherView {
                         .cursor_pointer()
                         .when(selected, |el| el.bg(accent.with_alpha(SELECTED_ALPHA).hsla()))
                         .when(!selected, |el| el.hover(|s| s.bg(palette.on_surface.with_alpha(HOVER_ALPHA).hsla())))
-                        .child(lead)
+                        .role(gpui::Role::Button)
+                        .aria_label(title.clone())
+                        .children(lead)
                         .child(
                             div()
                                 .w_full()
@@ -528,11 +645,16 @@ impl LauncherView {
                                 .text_size(px(text::BODY_S))
                                 .line_height(px(NAME_LINE_H))
                                 .when(selected, |el| el.text_color(accent.hsla()))
-                                .child(title_of(&item)),
+                                .child(title.clone()),
                         )
                         .on_hover(hover)
-                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.activate(i, cx))),
-                );
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.activate(i, cx)));
+                let tile = if paged && self.organizes_fullscreen() && let Item::App(app) = item {
+                    self.draggable_fullscreen_tile(tile, app.id, title, g.cell_w, &palette, cx)
+                } else {
+                    tile
+                };
+                row = row.child(tile);
             }
             out.push(row.into_any_element());
         }
@@ -552,11 +674,90 @@ impl LauncherView {
             .into_any_element()
     }
 
+    pub(super) fn select_grid_page(&mut self, page: usize, size: usize, cx: &mut Context<Self>) {
+        if self.results.is_empty() {
+            return;
+        }
+        let last = (self.results.len() - 1) / size;
+        let page = page.min(last);
+        if page != self.selected / size {
+            self.selected = page * size;
+            self.wheel_hold = true;
+            cx.notify();
+        }
+    }
+
+    fn paged_grid(&mut self, g: GridGeom, size: usize, height: f32, tab_start: usize, palette: &MandaraPalette, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let pages = self.results.len().div_ceil(size);
+        let page = self.selected / size;
+        let first_row = page * size / g.cols;
+        let end_row = (first_row + size / g.cols).min(self.results.len().div_ceil(g.cols));
+        let grid = if pages == 0 {
+            div().text_color(palette.on_surface_variant.hsla()).child(t("No results")).into_any_element()
+        } else {
+            div().w_full().flex().flex_col().gap(px(PAGE_TILE_GAP))
+                .children(self.grid_rows(first_row..end_row, g, window, cx)).into_any_element()
+        };
+        let label = |index: usize| tf("Page {page} of {pages}", &[("page", &(index + 1)), ("pages", &pages)]);
+        let accent = readable(palette.primary, palette);
+        let organize = self.organizes_fullscreen();
+        let button = |index: usize, name: String, order: usize, side: bool, cx: &mut Context<Self>| {
+            let edge = if side { PAGE_ARROW_H } else { PAGE_NAV_H };
+            let button = div().id(("fullscreen-page", order)).size(px(edge)).rounded_full()
+                .when(side, |s| s.bg(palette.surface_container_high.hsla()).hover(|s| s.bg(palette.surface_container.hsla())))
+                .flex().items_center().justify_center()
+                .role(gpui::Role::Button).aria_label(name)
+                .focusable().tab_index((tab_start + order) as isize)
+                .focus_visible(move |s| s.bg(accent.with_alpha(SELECTED_ALPHA).hsla()))
+                .cursor_pointer()
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.select_grid_page(index, size, cx)));
+            if organize {
+                button.drag_over::<DragApp>(move |s, _, _, _| s.bg(accent.with_alpha(SELECTED_ALPHA).hsla()))
+                    .on_drop(cx.listener(move |this, drag: &DragApp, _, cx| this.drop_on_fullscreen_page(drag, index, size, cx)))
+            } else {
+                button
+            }
+        };
+        let rtl = crate::bidi::rtl();
+        let mut nav = div().row().h(px(PAGE_NAV_H)).flex_none().justify_center().items_center();
+        let side = |index: Option<usize>, name: &str, glyph: &'static str, order: usize, cx: &mut Context<Self>| {
+            div().w(px(PAGE_GUTTER)).flex_none().flex().justify_center()
+                .children(index.map(|index| button(index, name.into(), order, true, cx)
+                    .child(icon(glyph, PAGE_ARROW_ICON, palette.on_surface))))
+        };
+        let previous = side(page.checked_sub(1), t("Previous"), if rtl { "chevron-right" } else { "chevron-left" }, 0, cx);
+        let next = side((page + 1 < pages).then_some(page + 1), t("Next"), if rtl { "chevron-left" } else { "chevron-right" }, pages + 1, cx);
+        if pages > 1 {
+            let dots_fit = (g.cols as f32 * g.cell_w / PAGE_NAV_H) as usize;
+            if pages <= PAGE_MAX_DOTS.min(dots_fit) {
+                for index in 0..pages {
+                    let active = index == page;
+                    nav = nav.child(button(index, label(index), index + 1, false, cx)
+                        .aria_toggled(if active { gpui::Toggled::True } else { gpui::Toggled::False })
+                        .child(div().size(px(PAGE_DOT)).rounded_full().bg(if active { accent } else { palette.on_surface_variant }.hsla())));
+                }
+            } else {
+                nav = nav.child(div().text_size(px(text::BODY_S)).child(label(page)));
+            }
+        }
+        let page_h = (size / g.cols) as f32 * (g.tile_h + PAGE_TILE_GAP) - PAGE_TILE_GAP;
+        let slide = self.page_slide.value();
+        let tiles = div().flex_1().min_w(px(0.0)).h(px(page_h)).overflow_hidden().child(
+            div().relative().left(px(slide)).opacity(1.0 - 0.28 * (slide / PAGE_SLIDE_PX).abs().min(1.0)).w_full().child(grid),
+        );
+        div().h(px(height)).flex().flex_col()
+            .children(self.fullscreen_folder_back(tab_start + pages + 2, palette, cx))
+            .child(div().flex_1().row().items_center().child(previous).child(tiles).child(next))
+            .child(nav)
+            .into_any_element()
+    }
+
     /// The category chips above the grid.
-    pub(super) fn chips_element(&self, palette: &MandaraPalette, modes: Option<usize>, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn chips_element(&self, palette: &MandaraPalette, modes: Option<usize>, vertical: bool, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let accent = readable(palette.primary, palette);
         let on_accent = accent.best_on(Color::hex("#ffffff"), Color::hex("#101010"));
-        let focus = modes.map(|modes| super::beacon_keyboard::categories(self.categories.len() + 1, modes, window, cx));
+        let categories = self.grid_categories();
+        let focus = modes.map(|modes| super::beacon_keyboard::categories(categories.len() + 1, modes, vertical, window, cx));
         // Shaped like the chips of the design picked under Themes →
         // Components: classic filled pills, Material's outlined chips with a
         // tinted pick, Connected's outlined pills.
@@ -565,21 +766,30 @@ impl LauncherView {
         let material = design == crate::components::ChipDesign::Material;
         let outline = crate::components::chips::outline(palette);
         let chosen = crate::components::chips::chosen(palette);
-        let chip = |id: SharedString, label: SharedString, on: bool, index: usize| {
+        let display = if self.look.style == LauncherStyle::Classic {
+            self.look.grid_category_display
+        } else {
+            LauncherCategoryDisplay::LabelOnly
+        };
+        let icons = display != LauncherCategoryDisplay::LabelOnly;
+        let chip = |id: SharedString, filter: Option<GridFilter>, index: usize| {
+            let label = filter.map_or_else(|| t("All").into(), GridFilter::label);
+            let on = self.category == filter;
+            let tint = if on { if material { accent } else { on_accent } } else { palette.on_surface_variant };
             div()
                 .id(id)
                 .h(px(CHIPS_H))
-                .px(px(CHIP_PAD))
+                .px(px(if vertical && icons { 0.0 } else if vertical { CATEGORY_PAD } else { CHIP_PAD }))
                 .rounded(px(crate::components::chips::chip_radius(design, CHIPS_H)))
                 .flex()
                 .items_center()
                 .flex_none()
                 .cursor_pointer()
                 .text_size(px(text::BODY_S))
+                .role(gpui::Role::RadioButton)
+                .aria_label(label.clone())
+                .aria_toggled(if on { gpui::Toggled::True } else { gpui::Toggled::False })
                 .when_some(focus.as_ref(), |el, (_, handles)| el
-                    .role(gpui::Role::RadioButton)
-                    .aria_label(label.clone())
-                    .aria_toggled(if on { gpui::Toggled::True } else { gpui::Toggled::False })
                     .track_focus(&handles[index])
                     .border_1()
                     .border_color(gpui::transparent_black())
@@ -589,22 +799,30 @@ impl LauncherView {
                 .when(!on && classic, |el| el.bg(crate::plugins::panel_fx::wash(crate::plugins::panel_fx::WASH_SOFT, palette).hsla()))
                 .when(!on && !classic, |el| el.border_1().border_color(outline.hsla()))
                 .when(!on, |el| el.hover(|s| s.bg(palette.on_surface.with_alpha(HOVER_ALPHA).hsla())))
-                .child(label)
+                .when(icons, |el| el.justify_center().child(icon(filter.map_or("grid", GridFilter::glyph), CATEGORY_ICON, tint)))
+                .when(!icons && !vertical, |el| el.child(label.clone()))
+                .when(!icons && vertical, |el| el.child(div().min_w(px(0.0)).truncate().child(label.clone())))
+                .when(display == LauncherCategoryDisplay::IconWithHoverLabel, |el| {
+                    let tip = CategoryTip { label, palette: palette.clone() };
+                    el.tooltip(move |_, cx| cx.new(|_| tip.clone()).into())
+                })
         };
-        let mut row = div().id("launcher-chips").h(px(CHIPS_H)).flex_none().row().gap(px(CHIP_GAP)).overflow_x_scroll()
-            .when(modes.is_some(), |el| el.flex_row())
+        let mut row = div().id("launcher-chips").flex_none().row().gap(px(CHIP_GAP))
+            .when(vertical, |el| el.flex_col().w(px(self.category_sidebar_width())).h_full().overflow_y_scroll())
+            .when(!vertical, |el| el.h(px(CHIPS_H)).overflow_x_scroll())
+            .when(!vertical && modes.is_some(), |el| el.flex_row())
             .when_some(focus.as_ref(), |el, (scroll, _)| el.track_scroll(scroll));
-        let count = self.categories.len() + 1;
-        let rtl = modes.is_some() && crate::bidi::rtl();
+        let count = categories.len() + 1;
+        let rtl = !vertical && modes.is_some() && crate::bidi::rtl();
         for child in 0..count {
             let index = super::beacon_keyboard::category_child(child, count, rtl);
             if index == 0 {
-                row = row.child(chip("launcher-chip-all".into(), t("All").into(), self.category.is_none(), 0).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.set_category(None, cx))));
+                row = row.child(chip("launcher-chip-all".into(), None, 0).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.set_category(None, cx))));
                 continue;
             }
             let n = index - 1;
-            let f = self.categories[n];
-            row = row.child(chip(SharedString::from(format!("launcher-chip-{n}")), f.label(), self.category == Some(f), n + 1).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            let f = categories[n];
+            row = row.child(chip(SharedString::from(format!("launcher-chip-{n}")), Some(f), n + 1).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                 let next = if this.category == Some(f) { None } else { Some(f) };
                 this.set_category(next, cx);
             })));
@@ -693,12 +911,13 @@ impl LauncherView {
         self.look.style == LauncherStyle::Beacon && (!self.query.trim().is_empty() || self.mode.is_some())
     }
 
-    pub(super) fn render_beacon(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_search_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         use mandara_config::surfaces::PanelAnimation;
         let palette = mandara_core::frame_palette(window, cx);
         let f = crate::fonts::fonts(cx);
         let cfg = crate::state::config(cx).read(cx).snapshot();
         let look = self.look.clone();
+        let fullscreen = look.style == LauncherStyle::Fullscreen;
         let viewport = window.viewport_size();
         let (sw, sh) = (f32::from(viewport.width), f32::from(viewport.height));
         let rtl = crate::bidi::rtl();
@@ -708,19 +927,38 @@ impl LauncherView {
         let accent = readable(palette.primary, &palette);
 
         // What the card holds and how tall it is.
-        let show = self.beacon_open_results();
+        let show = fullscreen || self.beacon_open_results();
         let grid = self.grid_active();
-        let row_h = if look.compact { super::ROW_H_COMPACT } else { super::ROW_H };
+        let mut card = place.card;
+        if fullscreen && !grid {
+            let width = card.w.min(FULLSCREEN_SEARCH_WIDTH);
+            card.x += (card.w - width) / 2.0;
+            card.w = width;
+            card.h = (card.h * FULLSCREEN_SEARCH_HEIGHT_FRACTION).min(FULLSCREEN_SEARCH_HEIGHT);
+        }
+        let row_h = (if look.compact { super::ROW_H_COMPACT } else { super::ROW_H })
+            + if fullscreen && !grid { FULLSCREEN_RESULT_ROW_SPACE } else { 0.0 };
         let lead_px = if look.compact { super::ROW_LEAD_COMPACT_PX } else { super::ROW_LEAD_PX };
         let hints_h = if look.hints { HINTS_H } else { 0.0 };
-        let chips = grid && look.grid_categories && !self.categories.is_empty();
-        let room = (place.card.h - CARD_PAD * 2.0 - hints_h).max(row_h);
-        let inner_w = place.card.w - CARD_PAD * 2.0;
-        let g = grid_geom(inner_w, look.grid_icon(), look.grid_columns);
+        let chips = !fullscreen && grid && look.grid_categories && !self.grid_categories().is_empty();
+        let room = (card.h - CARD_PAD * 2.0 - hints_h).max(row_h);
+        let inner_w = card.w - CARD_PAD * 2.0;
+        let chips_h = if chips { CHIPS_H + CARD_PAD } else { 0.0 };
+        let paged = fullscreen && grid;
+        let g = if paged {
+            let back = if self.fullscreen_folder.is_some() { super::launcher_folders::FOLDER_BACK_H } else { 0.0 };
+            let (g, size) = fullscreen_grid(inner_w - PAGE_GUTTER * 2.0, room - back - PAGE_NAV_H, &look);
+            self.fullscreen_page_size = Some(size);
+            g
+        } else {
+            self.fullscreen_page_size = None;
+            grid_geom(inner_w, look.grid_icon(), look.grid_columns)
+        };
         self.grid_cols = g.cols;
         let lay = list_layout(self.results.len(), &self.sections, row_h, HEADER_H);
-        let content_h = if grid {
-            let chips_h = if chips { CHIPS_H + CARD_PAD } else { 0.0 };
+        let content_h = if paged {
+            room
+        } else if grid {
             let rows = self.results.len().div_ceil(g.cols).max(1);
             chips_h + ((((room - chips_h) / g.tile_h).floor() as usize).max(1).min(rows)) as f32 * g.tile_h
         } else {
@@ -758,10 +996,21 @@ impl LauncherView {
         let b = self.highlight.step(dt);
         let c = self.list_scroll.step(dt);
         let d = self.reflow.step(dt);
+        self.page_slide.set_instant(instant);
+        let visible_page = self.fullscreen_page_size.map(|size| (self.selected / size, size));
+        if let (Some((page, size)), Some((previous, previous_size))) = (visible_page, self.rendered_fullscreen_page)
+            && size == previous_size && page != previous
+        {
+            let direction = if (page > previous) != rtl { 1.0 } else { -1.0 };
+            self.page_slide.snap_to(direction * PAGE_SLIDE_PX);
+        }
+        self.rendered_fullscreen_page = visible_page;
+        self.page_slide.set_target(0.0);
+        let page = self.page_slide.step(dt);
         if self.closing && !opening {
             self.release(window, cx);
             window.remove_window();
-        } else if opening || a || b || c || d {
+        } else if opening || a || b || c || d || page {
             window.request_animation_frame();
         } else {
             self.clock.idle();
@@ -774,7 +1023,9 @@ impl LauncherView {
         let lift = POP_DROP_PX * (1.0 - p);
         let grow = |r: Rect| Rect::new(r.x + r.w * (1.0 - k) / 2.0, r.y - lift + r.h * (1.0 - k) / 2.0, r.w * k, r.h * k);
         let bar = grow(place.bar);
-        self.rect = (place.card.x, place.bar.y, place.card.w, place.bar.h + BEACON_GAP + self.card_h.value());
+        self.rect = if fullscreen { (0.0, 0.0, sw, sh) } else {
+            (place.card.x, place.bar.y, place.card.w, place.bar.h + BEACON_GAP + self.card_h.value())
+        };
 
         // ── The search bar ──
         self.field_px = BAR_TEXT;
@@ -782,6 +1033,7 @@ impl LauncherView {
         // look shares.
         let placeholder = match self.mode {
             Some(mode) => SharedString::new_static(t(mode.placeholder())),
+            None if fullscreen => SharedString::new_static(t("Search apps, files and more")),
             None => self.prefix_help(BAR_TEXT),
         };
         let token = self.mode.map(|m| {
@@ -838,31 +1090,13 @@ impl LauncherView {
             let from = place.first_mode.x - place.mode_step;
             let x = from + (rest.x - from) * local;
             let r = grow(Rect::new(x, rest.y, rest.w, rest.h));
-            let on = self.mode == Some(m);
-            let (fill_fg, label) = (if on { accent.best_on(Color::hex("#ffffff"), Color::hex("#101010")) } else { palette.on_surface }, m.label());
-            let el = glass(&cfg, &palette, progress, r.h / 2.0)
-                .id(SharedString::from(format!("beacon-mode-{}", label.to_lowercase())))
-                .role(gpui::Role::Button)
-                .aria_label(t(label))
-                .aria_toggled(if on { gpui::Toggled::True } else { gpui::Toggled::False })
-                .focusable()
-                .tab_index(n as isize + 1)
+            let button = glass(&cfg, &palette, progress, r.h / 2.0)
                 .absolute()
                 .left(px(r.x))
                 .top(px(r.y))
                 .size(px(r.w))
-                .opacity(local.clamp(0.0, 1.0))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .focus_visible(|style| style.border_color(accent.hsla()))
-                .when(on, |el| el.bg(accent.hsla()))
-                .when(!on, |el| el.hover(|s| s.bg(palette.surface_container_high.hsla())))
-                .child(icon(m.glyph(), MODE_ICON, fill_fg))
-                .occlude()
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.toggle_mode(m, cx)));
-            buttons.push(el.into_any_element());
+                .opacity(local.clamp(0.0, 1.0));
+            buttons.push(self.mode_button(button, n, m, &palette, cx));
         }
 
         // ── The results card ──
@@ -870,15 +1104,21 @@ impl LauncherView {
         let card_el = (card_h > 0.5).then(|| {
             let reveal = if card_target > 0.0 { (card_h / card_target).clamp(0.0, 1.0) } else { (card_h / (CARD_PAD * 2.0 + row_h)).clamp(0.0, 1.0) };
             let body = if grid {
-                let grid_el = self.grid_element(g, list_h, &palette, cx);
-                div().flex().flex_col().gap(px(CARD_PAD)).when(chips, |el| el.child(self.chips_element(&palette, Some(modes.len()), window, cx))).child(grid_el).into_any_element()
+                let grid_el = if let Some(size) = self.fullscreen_page_size {
+                    let tabs = 1 + modes.len() + if chips { self.grid_categories().len() + 1 } else { 0 };
+                    self.paged_grid(g, size, list_h, tabs, &palette, window, cx)
+                } else {
+                    self.grid_element(g, list_h, &palette, cx)
+                };
+                div().flex().flex_col().gap(px(CARD_PAD)).when(chips, |el| el.child(self.chips_element(&palette, Some(modes.len()), false, window, cx))).child(grid_el).into_any_element()
             } else {
                 self.grouped_element(&lay, list_h, row_h, lead_px, true, &palette, cx)
             };
             let wheel_row = row_h;
-            let card = place.card;
-            glass(&cfg, &palette, progress, crate::style::radius(CARD_RADIUS))
-                .id("beacon-card")
+            let panel = if fullscreen { div() } else {
+                glass(&cfg, &palette, progress, crate::style::radius(CARD_RADIUS))
+            };
+            panel.id("beacon-card")
                 .absolute()
                 .left(px(card.x))
                 .top(px(card.y - lift))
@@ -888,6 +1128,10 @@ impl LauncherView {
                 .overflow_hidden()
                 .occlude()
                 .on_scroll(cx.listener(move |this, e: &ScrollEvent, _, cx| {
+                    if let Some(size) = this.fullscreen_page_size {
+                        this.wheel_select(e, g.tile_h, size, cx);
+                        return;
+                    }
                     if this.grid_active() {
                         return;
                     }
@@ -912,6 +1156,11 @@ impl LauncherView {
         });
 
         let dim = look.dim.clamp(0.0, super::DIM_MAX) * progress;
+        let fullscreen_scrim = if palette.is_dark {
+            gpui::black().opacity(FULLSCREEN_SCRIM_ALPHA * progress)
+        } else {
+            palette.surface_base.with_alpha(FULLSCREEN_LIGHT_SCRIM_ALPHA * progress).hsla()
+        };
         div()
             .id("launcher-root")
             .size_full()
@@ -928,13 +1177,46 @@ impl LauncherView {
                     .id("launcher-outside")
                     .absolute()
                     .inset_0()
-                    .when(dim > 0.0, |el| el.bg(gpui::black().opacity(dim)))
+                    .when(fullscreen, |el| el.bg(fullscreen_scrim))
+                    .when(!fullscreen && dim > 0.0, |el| el.bg(gpui::black().opacity(dim)))
                     .on_mouse_down(MouseButton::Left, cx.listener(|this, _: &gpui::MouseDownEvent, _, cx| this.close(cx)))
                     .on_mouse_down(MouseButton::Right, cx.listener(|this, _: &gpui::MouseDownEvent, _, cx| this.close(cx))),
             )
             .children(card_el)
             .child(bar_el.occlude())
             .children(buttons)
+            .into_any_element()
+    }
+
+    fn mode_button(
+        &self,
+        surface: gpui::Div,
+        index: usize,
+        mode: BeaconMode,
+        palette: &MandaraPalette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let on = self.mode == Some(mode);
+        let accent = readable(palette.primary, palette);
+        let fg = if on { accent.best_on(Color::hex("#ffffff"), Color::hex("#101010")) } else { palette.on_surface };
+        let label = mode.label();
+        let hover = palette.surface_container_high;
+        surface.id(SharedString::from(format!("beacon-mode-{}", label.to_lowercase())))
+            .role(gpui::Role::Button)
+            .aria_label(t(label))
+            .aria_toggled(if on { gpui::Toggled::True } else { gpui::Toggled::False })
+            .focusable()
+            .tab_index(index as isize + 1)
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_pointer()
+            .focus_visible(move |style| style.border_color(accent.hsla()))
+            .when(on, |el| el.bg(accent.hsla()))
+            .when(!on, |el| el.hover(move |s| s.bg(hover.hsla())))
+            .child(icon(mode.glyph(), MODE_ICON, fg))
+            .occlude()
+            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.toggle_mode(mode, cx)))
             .into_any_element()
     }
 
@@ -949,16 +1231,61 @@ mod tests {
     use super::*;
     use crate::launcher_ext::{Hit, HitAction, Lead};
 
-    /// The displayed Tab hint follows the active launcher's focus behavior.
     #[test]
-    fn tab_hint_follows_beacon_focus_and_classic_grid_categories() {
-        for (grid, chips) in [(false, false), (false, true), (true, false), (true, true)] {
-            assert_eq!(tab_hint_label(grid, chips, true), Some("Focus"));
+    fn fullscreen_page_respects_configured_density_and_available_space() {
+        let mut look = LauncherLook::default();
+        mandara_config::workflow::LauncherLookPreset::find("fullscreen").unwrap().apply(&mut look);
+        let (grid, page_size) = fullscreen_grid(1048.0, 480.0, &look);
+        assert_eq!(grid.cols, 6);
+        assert_eq!(page_size, 18);
+        assert!(grid.cell_w >= grid.icon + TILE_PAD_X * 2.0);
+
+        look.fullscreen_rows = 2;
+        look.grid_columns = 4;
+        look.grid_icon_size = 80.0;
+        let (grid, page_size) = fullscreen_grid(1048.0, 480.0, &look);
+        assert_eq!(page_size, 8);
+        assert_eq!(grid.icon, 80.0);
+
+        let (grid, page_size) = fullscreen_grid(300.0, 240.0, &look);
+        assert_eq!(grid.cols, 2);
+        assert_eq!(page_size, 2);
+        assert!(grid.tile_h <= 240.0);
+    }
+
+    #[test]
+    fn grid_search_keeps_categories_and_has_a_legacy_tiles_option() {
+        let providers = LauncherProviders::default();
+        let mut look = LauncherLook::default();
+        mandara_config::workflow::LauncherLookPreset::find("grid").unwrap().apply(&mut look);
+        assert!(shows_app_grid(&look, None, "  ", &providers));
+        assert!(!shows_app_grid(&look, None, "zen", &providers));
+        assert!(classic_grid_query(&look, "zen", &providers));
+        look.group_results = false;
+        assert!(shows_app_grid(&look, None, "zen", &providers));
+        assert!(!shows_app_grid(&look, None, ":smile", &providers));
+    }
+
+    #[test]
+    fn beacon_and_fullscreen_keep_their_own_browsing_and_modes() {
+        let providers = LauncherProviders::default();
+        for id in ["beacon", "fullscreen"] {
+            let mut look = LauncherLook::default();
+            mandara_config::workflow::LauncherLookPreset::find(id).unwrap().apply(&mut look);
+            assert_eq!(shows_app_grid(&look, None, "", &providers), id == "fullscreen");
+            assert!(!shows_app_grid(&look, None, "zen", &providers));
+            assert!(shows_app_grid(&look, Some(BeaconMode::Apps), "zen", &providers));
+            assert!(!shows_app_grid(&look, Some(BeaconMode::Files), "", &providers));
+            assert!(!classic_grid_query(&look, "zen", &providers));
         }
-        assert_eq!(tab_hint_label(true, true, false), Some("Category"));
-        for (grid, chips) in [(false, false), (false, true), (true, false)] {
-            assert_eq!(tab_hint_label(grid, chips, false), None);
-        }
+    }
+
+    #[test]
+    fn tab_hint_follows_search_bar_focus_and_visible_categories() {
+        assert_eq!(tab_hint_label(false, true), Some("Focus"));
+        assert_eq!(tab_hint_label(true, true), Some("Focus"));
+        assert_eq!(tab_hint_label(true, false), Some("Category"));
+        assert_eq!(tab_hint_label(false, false), None);
     }
 
     fn app(name: &str, categories: &str) -> Item {
@@ -1012,7 +1339,7 @@ mod tests {
     }
 
     #[test]
-    fn plain_searches_keep_the_grid() {
+    fn plain_queries_exclude_provider_prefixes() {
         let p = LauncherProviders::default();
         assert!(is_plain("", &p) && is_plain("fire", &p));
         assert!(!is_plain("!set gaps 8", &p) && !is_plain("! set gaps 8", &p));

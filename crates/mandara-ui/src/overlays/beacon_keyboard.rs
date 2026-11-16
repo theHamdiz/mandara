@@ -1,7 +1,6 @@
 //! Keyboard focus between Beacon's query, modes and app categories.
 
 use gpui::{App, Context, FocusHandle, Keystroke, ScrollHandle, Window};
-use mandara_config::workflow::LauncherStyle;
 use std::rc::Rc;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -47,11 +46,12 @@ pub(super) fn category_child(index: usize, count: usize, rtl: bool) -> usize {
 pub(super) fn categories<V: 'static>(
     count: usize,
     modes: usize,
+    vertical: bool,
     window: &mut Window,
     cx: &mut Context<V>,
 ) -> (ScrollHandle, Rc<[FocusHandle]>) {
     let state = window.use_keyed_state("beacon-category-focus", cx, |_, _| Categories::default());
-    let rtl = crate::bidi::rtl();
+    let rtl = !vertical && crate::bidi::rtl();
     let (scroll, focus, reveal, focused) = state.update(cx, |state, cx| {
         let changed = state.focus.len() != count || state.modes != modes || state.rtl != Some(rtl);
         if state.focus.len() != count || state.modes != modes {
@@ -106,8 +106,8 @@ pub(super) fn categories<V: 'static>(
 
 /// Beacon reserves Tab for focus and leaves activation with a focused button;
 /// other keys return to search. Other launcher styles keep their own routing.
-fn destination(style: LauncherStyle, button_focused: bool, key: &Keystroke) -> Option<Destination> {
-    if style != LauncherStyle::Beacon {
+fn destination(modes: bool, button_focused: bool, key: &Keystroke) -> Option<Destination> {
+    if !modes {
         return None;
     }
     let modifiers = key.modifiers;
@@ -127,14 +127,14 @@ fn destination(style: LauncherStyle, button_focused: bool, key: &Keystroke) -> O
 /// Return true when the query handler must leave this key to native focus or
 /// button activation. Typing and result navigation return focus to the query.
 pub(super) fn handle(
-    style: LauncherStyle,
+    modes: bool,
     search: &FocusHandle,
     key: &Keystroke,
     window: &mut Window,
     cx: &mut App,
 ) -> bool {
     let button_focused = !search.is_focused(window) && search.contains_focused(window, cx);
-    match destination(style, button_focused, key) {
+    match destination(modes, button_focused, key) {
         Some(Destination::Next) => window.focus_next(cx),
         Some(Destination::Previous) => window.focus_prev(cx),
         // GPUI pairs Enter/Space keydown and keyup into the button's on_click.
@@ -158,7 +158,7 @@ mod tests {
     /// Parse the same key spelling used by GPUI's native event routing.
     fn route(key: &'static str, button: bool) -> Destination {
         destination(
-            LauncherStyle::Beacon,
+            true,
             button,
             &Keystroke::parse(key).unwrap(),
         )
@@ -247,7 +247,7 @@ mod tests {
             ] {
                 assert_eq!(
                     destination(
-                        LauncherStyle::Classic,
+                        false,
                         search,
                         &Keystroke::parse(key).unwrap()
                     ),

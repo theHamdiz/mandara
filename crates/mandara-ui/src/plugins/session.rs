@@ -150,7 +150,7 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         LAUNCHER_ID,
-        CommandSpec::new("launcher looks", mandara_i18n::tk("The ready-made launcher looks (Classic, Grid, Beacon) and which one is applied"), |_, cx| {
+        CommandSpec::new("launcher looks", mandara_i18n::tk("List the launcher looks and show which one is active"), |_, cx| {
             let look = crate::state::config(cx).read(cx).get().launcher.look.clone();
             Ok(looks_json(&look))
         })
@@ -178,7 +178,8 @@ pub fn register(r: &mut PluginRegistry) {
                 "beacon_top": look.beacon_top,
             }))
         })
-        .arg(ArgSpec::optional("look", ArgKind::Enum, mandara_i18n::tk("classic, grid or beacon")).choices(&LOOK_IDS))
+        .arg(ArgSpec::optional("look", ArgKind::Enum, mandara_i18n::tk("Launcher look")).choices(&LOOK_IDS))
+        .example("launcher look fullscreen")
         .example("launcher look grid")
         .example("launcher look classic"),
     );
@@ -298,7 +299,7 @@ mod tests {
         let v = looks_json(&look);
         assert_eq!(v["active"], "classic");
         assert_eq!(v["looks"].as_array().unwrap().len(), LAUNCHER_LOOKS.len());
-        assert_eq!(LOOK_IDS, ["classic", "grid", "beacon"]);
+        assert_eq!(LOOK_IDS, ["classic", "grid", "beacon", "fullscreen"]);
         LAUNCHER_LOOKS[2].apply(&mut look);
         let v = looks_json(&look);
         assert_eq!(v["active"], "beacon");

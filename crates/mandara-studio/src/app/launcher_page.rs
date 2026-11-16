@@ -1,5 +1,5 @@
 //! Studio → Launcher. The page reads top to bottom as the launcher is set
-//! up: the ready-made looks (Classic, Grid, Beacon; a card each with a
+//! up: the ready-made looks (Classic, Grid, Beacon, Fullscreen; a card each with a
 //! miniature, all the same size), where it opens (a small screen diagram of
 //! the seven placements), the bar's launcher button, search & results,
 //! behaviour, your apps (your own names and icons, `[launcher.overrides]`),
@@ -121,8 +121,9 @@ fn look_mini(preset: &LauncherLookPreset, w: f32, p: &MandaraPalette) -> gpui::D
             }
             s.child(card)
         }
-        (_, LauncherLayout::Grid) => {
-            let cw = w * MINI_CARD_W;
+        (style, LauncherLayout::Grid) => {
+            let fullscreen = style == LauncherStyle::Fullscreen;
+            let cw = if fullscreen { w } else { w * MINI_CARD_W };
             let (cols, rows) = MINI_GRID;
             let mut grid = div().row().flex_col().gap(px(SPACE_4_PX));
             for _ in 0..rows {
@@ -132,16 +133,15 @@ fn look_mini(preset: &LauncherLookPreset, w: f32, p: &MandaraPalette) -> gpui::D
             let card = div()
                 .absolute()
                 .left(px((w - cw) / 2.0))
-                .top(px((MINI_H_PX - (2.0 * SPACE_6_PX + MINI_SEARCH_H_PX + MINI_CHIP_H_PX + 2.0 * SPACE_5_PX + rows as f32 * MINI_ICON_PX + SPACE_4_PX)) / 2.0))
+                .top(px(if fullscreen { 0.0 } else { (MINI_H_PX - (2.0 * SPACE_6_PX + MINI_SEARCH_H_PX + MINI_CHIP_H_PX + 2.0 * SPACE_5_PX + rows as f32 * MINI_ICON_PX + SPACE_4_PX)) / 2.0 }))
                 .w(px(cw))
                 .p(px(SPACE_6_PX))
-                .rounded(px(RADIUS_8_PX))
-                .bg(surface.hsla())
+                .when(!fullscreen, |el| el.rounded(px(RADIUS_8_PX)).bg(surface.hsla()))
                 .row()
                 .flex_col()
                 .gap(px(SPACE_5_PX))
-                .child(div().h(px(MINI_SEARCH_H_PX)).w_full().rounded_full().bg(p.surface_dim.hsla()))
-                .child(chips)
+                .child(div().h(px(MINI_SEARCH_H_PX)).w(px(if fullscreen { cw * MINI_BAR_W } else { cw - 2.0 * SPACE_6_PX })).mx_auto().rounded_full().bg(if fullscreen { surface.hsla() } else { p.surface_dim.hsla() }))
+                .when(!fullscreen, |card| card.child(chips))
                 .child(grid);
             screen.child(card)
         }
@@ -295,7 +295,7 @@ impl StudioView {
                             .child(div().min_w(px(0.0)).truncate().font_family(fonts.display.clone()).text_size(px(TEXT_15_PX)).font_weight(FontWeight::SEMIBOLD).text_color(if on { p.primary.hsla() } else { p.on_surface.hsla() }).child(tr(preset.name))),
                     )
                     .child(div().h(px(LOOK_BLURB_H_PX)).overflow_hidden().text_size(px(TEXT_11_5_PX)).line_height(px(LEADING_16_PX)).text_color(p.on_surface_variant.hsla()).line_clamp(LOOK_BLURB_LINES).child(mandara_ui::bidi::paragraph(tr(preset.blurb))))
-                    .child(div().h(px(LOOK_TAG_H_PX)).row().items_center().gap(px(SPACE_6_PX)).overflow_hidden().child(tag(layout_label(preset.layout))).child(tag(super::launcher_placement::label(preset.position).to_string())));
+                    .child(div().h(px(LOOK_TAG_H_PX)).row().items_center().gap(px(SPACE_6_PX)).overflow_hidden().child(tag(layout_label(preset.layout))).when(preset.style != mandara_config::workflow::LauncherStyle::Fullscreen, |el| el.child(tag(super::launcher_placement::label(preset.position).to_string()))));
                 div()
                     .id(SharedString::from(format!("launcher-look-{}", preset.id)))
                     .flex_none()

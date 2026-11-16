@@ -17,6 +17,7 @@
 //!   rounded buttons whose corner radius morphs on focus / press.
 
 mod launcher_looks;
+mod launcher_folders;
 mod beacon_keyboard;
 mod launcher_agent;
 mod launcher_hint;
@@ -1430,6 +1431,11 @@ pub struct LauncherView {
     /// picked (`None`: All), the chips offered, and the reflow (0 → 1)
     /// from the slots tiles had before the last keystroke.
     grid_scroll: gpui::UniformListScrollHandle,
+    fullscreen_page_size: Option<usize>,
+    rendered_fullscreen_page: Option<(usize, usize)>,
+    page_slide: SpringValue<f32>,
+    fullscreen_folder: Option<String>,
+    fullscreen_groups: std::collections::HashMap<usize, Vec<DesktopApp>>,
     grid_cols: usize,
     category: Option<GridFilter>,
     categories: Vec<GridFilter>,
@@ -1530,15 +1536,19 @@ impl LauncherView {
         // Studio / `launcher placement` / `launcher look` edits re-place
         // and restyle it while open.
         // Provider edits re-route it and re-offer the Beacon modes (#111).
-        cx.observe(&config(cx), |this: &mut Self, config, cx| {
+        cx.observe_in(&config(cx), window, |this: &mut Self, config, window, cx| {
             let launcher = &config.read(cx).get().launcher;
             let look_changed = launcher.look != this.look;
+            let role_changed = launcher_role(launcher.look.style) != launcher_role(this.look.style);
             let agent_changed = this.agent.as_ref().is_some_and(|agent| agent.settings != launcher.agent);
             let files_were_enabled = this.ctx.providers.files.enabled;
             let wallpapers_were_enabled = this.ctx.providers.wallpapers.enabled;
             let providers_changed = follow_prefix_settings(&mut this.ctx, &mut this.hint, &mut this.agent_enabled, launcher, |ctx, id| ctx.load(id, cx));
             if look_changed {
-                this.look = config.read(cx).get().launcher.look.clone();
+                this.look = launcher.look.clone();
+                if !this.look.search_modes() {
+                    this.mode = None;
+                }
             }
             if providers_changed {
                 this.mode = launcher_looks::settle_mode(this.mode, &this.ctx.providers);
@@ -1565,6 +1575,26 @@ impl LauncherView {
             }
             if look_changed || agent_changed || providers_changed || wallpapers_changed {
                 this.refilter(cx);
+            }
+            if role_changed {
+                // A quick reopen can revive a closing window. Retire it on a
+                // role change so the next opening gets the right Wayland namespace.
+                cx.defer_in(window, |this, window, cx| {
+                    let reopen = this.shell.read(cx).launcher_open;
+                    let overlays = cx.global_mut::<Overlays>();
+                    if overlays.launcher.is_none_or(|handle| handle.window_id() != window.window_handle().window_id()) {
+                        return;
+                    }
+                    overlays.launcher = None;
+                    if reopen {
+                        overlays.launcher_query = Some(std::mem::take(&mut this.query));
+                    }
+                    this.release(window, cx);
+                    window.remove_window();
+                    if reopen {
+                        this.shell.update(cx, |_, cx| cx.notify());
+                    }
+                });
             }
             cx.notify();
         })
@@ -1639,6 +1669,11 @@ impl LauncherView {
             sections: Vec::new(),
             list_scroll: SpringValue::new(0.0, HIGHLIGHT_SPRING),
             grid_scroll: gpui::UniformListScrollHandle::new(),
+            fullscreen_page_size: None,
+            rendered_fullscreen_page: None,
+            page_slide: SpringValue::new(0.0, launcher_looks::REFLOW_SPRING),
+            fullscreen_folder: None,
+            fullscreen_groups: Default::default(),
             grid_cols: 0,
             category: None,
             categories: Vec::new(),
@@ -1730,10 +1765,19 @@ impl LauncherView {
 
     /// Refresh the active provider, keeping bang queries outside ordinary search.
     fn refilter(&mut self, cx: &mut Context<Self>) {
-        if self.agent_refilter(cx) { return; }
+        self.rendered_fullscreen_page = None;
+        self.page_slide.snap_to(0.0);
+        if self.agent_refilter(cx) {
+            self.fullscreen_folder = None;
+            self.fullscreen_groups.clear();
+            return;
+        }
         // Where the tiles were (the grid reflows from there).
         let was_grid = self.grid_active();
         let before: std::collections::HashMap<String, usize> = if was_grid { self.results.iter().enumerate().map(|(i, it)| (usage_key(it), i)).collect() } else { Default::default() };
+        if self.look.style == mandara_config::workflow::LauncherStyle::Fullscreen {
+            self.category = None;
+        }
         let query = self.effective_query();
         self.ctx.ask_plugins(&query, cx);
         crate::plugins::external::settle_launcher(cx);
@@ -1741,8 +1785,9 @@ impl LauncherView {
         if self.mode == Some(BeaconMode::Apps) {
             results.retain(|i| matches!(i, Item::App(_)));
         }
+        self.arrange_fullscreen(&mut results);
         let grid = self.grid_active();
-        if grid && let Some(f) = self.category {
+        if (grid || self.classic_grid_query()) && let Some(f) = self.category {
             results.retain(|i| f.keeps(i, &self.ctx.pinned));
         }
         if self.grouped() {
@@ -1755,6 +1800,10 @@ impl LauncherView {
         }
         self.results = results;
         self.selected = 0;
+        if self.look.style == mandara_config::workflow::LauncherStyle::Fullscreen {
+            self.wheel = 0.0;
+            self.wheel_hold = false;
+        }
         self.list_scroll.snap_to(0.0);
         if grid {
             self.reflow_from = if was_grid { before } else { Default::default() };
@@ -1775,14 +1824,17 @@ impl LauncherView {
         }
     }
 
-    /// The grid shows: the Grid layout while browsing or typing plain
-    /// words, and the Beacon's Apps mode.
+    /// App browsing and the Apps mode use tiles. Mixed results and
+    /// scoped providers use the list.
     fn grid_active(&self) -> bool {
-        use mandara_config::workflow::{LauncherLayout, LauncherStyle};
-        match self.look.style {
-            LauncherStyle::Classic => self.look.layout == LauncherLayout::Grid && launcher_looks::is_plain(&self.query, &self.ctx.providers),
-            LauncherStyle::Beacon => self.agent.is_none() && self.mode == Some(BeaconMode::Apps),
-        }
+        use mandara_config::workflow::LauncherStyle;
+        (self.look.style == LauncherStyle::Classic || self.agent.is_none())
+            && (self.look.style != LauncherStyle::Fullscreen || !self.ctx.plugin_routed)
+            && launcher_looks::shows_app_grid(&self.look, self.mode, &self.query, &self.ctx.providers)
+    }
+
+    fn classic_grid_query(&self) -> bool {
+        launcher_looks::classic_grid_query(&self.look, &self.query, &self.ctx.providers)
     }
 
     /// Results are listed under headings (something typed, or a mode).
@@ -1873,6 +1925,12 @@ impl LauncherView {
     /// Enter / click: prompts for missing arguments (the launcher stays
     /// open), otherwise closes the launcher and runs the result.
     fn activate(&mut self, index: usize, cx: &mut Context<Self>) {
+        if self.fullscreen_groups.contains_key(&index) && let Some(Item::App(app)) = self.results.get(index) {
+            self.fullscreen_folder = Some(app.id.clone());
+            self.refilter(cx);
+            cx.notify();
+            return;
+        }
         if self.agent.is_some() { self.activate_agent(index, cx); return; }
         // The Beacon bar alone (nothing typed) has no results to open.
         if self.look.style == mandara_config::workflow::LauncherStyle::Beacon && !self.beacon_open_results() {
@@ -1907,40 +1965,67 @@ impl LauncherView {
         let k = &e.keystroke;
         let count = self.count();
         self.blink_from = Instant::now();
-        let beacon = self.look.style == mandara_config::workflow::LauncherStyle::Beacon;
-        if beacon_keyboard::handle(self.look.style, &self.focus, k, window, cx) {
+        let modes = self.look.search_modes();
+        if beacon_keyboard::handle(modes, &self.focus, k, window, cx) {
             return;
         }
-        // Beacon: Ctrl+1–4 pick a mode; Backspace on an empty field or
+        if k.key == "escape" && self.fullscreen_folder.is_some() {
+            self.leave_fullscreen_folder(cx);
+            return;
+        }
+        // Ctrl+1–4 pick a mode; Backspace on an empty field or
         // Escape leaves it.
-        if beacon && k.modifiers.control
+        if modes && k.modifiers.control
             && let Some(mode) = BeaconMode::from_digit(&k.key)
         {
             self.toggle_mode(mode, cx);
             return;
         }
-        if beacon && self.mode.is_some() && (k.key == "escape" || (k.key == "backspace" && self.query.is_empty())) {
+        if modes && self.mode.is_some() && (k.key == "escape" || (k.key == "backspace" && self.query.is_empty())) {
             self.mode = None;
             self.refilter(cx);
             cx.notify();
             return;
         }
+        if !k.modifiers.control && k.key == "tab" && self.look.grid_categories
+            && (self.classic_grid_query() || self.grid_active()) && !self.grid_categories().is_empty()
+        {
+            let next = launcher_looks::cycle(self.category, self.grid_categories(), k.modifiers.shift);
+            self.set_category(next, cx);
+            return;
+        }
         // Grid: arrows move in two dimensions, Tab switches the category.
         if self.grid_active() && !k.modifiers.control {
-            if k.key == "tab" && self.look.grid_categories && !self.categories.is_empty() {
-                let next = launcher_looks::cycle(self.category, &self.categories, k.modifiers.shift);
-                self.set_category(next, cx);
-                return;
+            if let Some(size) = self.fullscreen_page_size {
+                let page = self.selected / size;
+                match k.key.as_str() {
+                    "pageup" => {
+                        self.select_grid_page(page.saturating_sub(1), size, cx);
+                        return;
+                    }
+                    "pagedown" => {
+                        self.select_grid_page(page + 1, size, cx);
+                        return;
+                    }
+                    _ => {}
+                }
             }
             if let Some(d) = launcher_looks::grid_step(&k.key, self.grid_cols.max(1), crate::bidi::rtl()).filter(|_| count > 0) {
-                self.selected = (self.selected as isize + d).clamp(0, count as isize - 1) as usize;
-                self.reveal_selected();
+                let selected = (self.selected as isize + d).clamp(0, count as isize - 1) as usize;
+                if let Some(size) = self.fullscreen_page_size {
+                    self.wheel_hold |= selected / size != self.selected / size;
+                }
+                self.selected = selected;
+                if self.fullscreen_page_size.is_none() {
+                    self.reveal_selected();
+                }
                 cx.notify();
                 return;
             }
         }
         // Ctrl+P pins / unpins the selected app (empty query: browse view).
         if k.modifiers.control && k.key == "p"
+            && !self.fullscreen_groups.contains_key(&self.selected)
             && let Some(Item::App(app)) = self.results.get(self.selected)
         {
             let id = app.id.clone();
@@ -2349,9 +2434,10 @@ impl Render for LauncherView {
         crate::components::grain::prepare(crate::components::grain::Slot::Launcher, &cfg.grain.launcher, &palette, window, cx);
         crate::components::grain::prepare(crate::components::grain::Slot::Cards, &cfg.grain.cards, &palette, window, cx);
         let _motion = mandara_core::spring::MotionScope::new(mandara_config::motion::surface_speed(cfg.motion.surfaces.launcher));
-        if self.look.style == mandara_config::workflow::LauncherStyle::Beacon {
-            return self.render_beacon(window, cx);
+        if self.look.style != mandara_config::workflow::LauncherStyle::Classic {
+            return self.render_search_bar(window, cx);
         }
+        self.fullscreen_page_size = None;
         let look = self.look.clone();
         let viewport = window.viewport_size();
         let (sw, sh) = (f32::from(viewport.width), f32::from(viewport.height));
@@ -2359,8 +2445,9 @@ impl Render for LauncherView {
         let lead_px = if look.compact { ROW_LEAD_COMPACT_PX } else { ROW_LEAD_PX };
         let grid = self.grid_active();
         let grouped = !grid && !self.sections.is_empty();
-        let chips = grid && look.grid_categories && !self.categories.is_empty();
-        let chips_h = if chips { launcher_looks::CHIPS_H + LIST_GAP } else { 0.0 };
+        let chips = self.classic_grid_query() && look.grid_categories && !self.grid_categories().is_empty();
+        let sidebar = chips && look.grid_category_position == mandara_config::workflow::LauncherCategoryPosition::Side;
+        let chips_h = if chips && !sidebar { launcher_looks::CHIPS_H + LIST_GAP } else { 0.0 };
         let hints_h = if look.hints { launcher_looks::HINTS_H + LIST_GAP } else { 0.0 };
         // Rows: as many results as configured, as fit the height setting.
         let chrome = PAD * 2.0 + LIST_GAP + SEARCH_H + chips_h + hints_h;
@@ -2375,7 +2462,8 @@ impl Render for LauncherView {
         // The grid's columns follow the width this placement gives.
         let g = grid.then(|| {
             let width = crate::launcher_place::for_config_with_bar(&cfg, (sw, sh), look.size().1, bar_here, bar_span, button).rect.w;
-            launcher_looks::grid_geom(width - PAD * 2.0, look.grid_icon(), look.grid_columns)
+            let side_w = if sidebar { self.category_sidebar_width() + LIST_GAP } else { 0.0 };
+            launcher_looks::grid_geom(width - PAD * 2.0 - side_w, look.grid_icon(), look.grid_columns)
         });
         let lay = if grouped { launcher_looks::list_layout(n, &self.sections, row_h, launcher_looks::HEADER_H) } else { Default::default() };
         // Visible window and list height (the width comes from the placement).
@@ -2383,7 +2471,8 @@ impl Render for LauncherView {
             self.grid_cols = g.cols;
             let total_rows = n.div_ceil(g.cols).max(1);
             let room = (look.size().1 - chrome).max(g.tile_h);
-            let vis_rows = ((room / g.tile_h).floor() as usize).max(1).min(total_rows);
+            let fit_rows = ((room / g.tile_h).floor() as usize).max(1);
+            let vis_rows = if sidebar { fit_rows } else { fit_rows.min(total_rows) };
             (vis_rows as f32 * g.tile_h, 0, 0, g.tile_h)
         } else if grouped {
             (lay.total.min(max_rows as f32 * row_h).max(row_h), 0, 0, row_h)
@@ -2463,6 +2552,7 @@ impl Render for LauncherView {
         let list = div()
             .relative()
             .h(px(list_h))
+            .when(sidebar, |el| el.flex_1().min_w(px(0.0)))
             .when(!grid, |el| el.on_scroll(cx.listener(move |this, e: &ScrollEvent, _, cx| this.wheel_select(e, wheel_row, 1, cx))))
             .on_mouse_move(cx.listener(|this, _: &gpui::MouseMoveEvent, _, _| this.wheel_hold = false));
         let list = if let Some(g) = g {
@@ -2506,7 +2596,12 @@ impl Render for LauncherView {
             })
             .child(div().flex().flex_col().children(rows_el))
         };
-        let chips_el = chips.then(|| self.chips_element(&palette, None, window, cx));
+        let mut chips_el = chips.then(|| self.chips_element(&palette, None, sidebar, window, cx));
+        let list = if sidebar {
+            div().flex().flex_row().h(px(list_h)).gap(px(LIST_GAP)).child(list).children(chips_el.take())
+        } else {
+            list
+        };
         let hints_el = look.hints.then(|| self.classic_hints(grid, chips, &palette));
         self.field_px = text::BODY + 1.0;
         let hint = self.prefix_help(text::BODY + 1.0);
@@ -2684,6 +2779,7 @@ pub use crate::powerctl::session_menu::SessionView;
 #[derive(Default)]
 struct Overlays {
     launcher: Option<WindowHandle<LauncherView>>,
+    launcher_query: Option<String>,
     session: Option<WindowHandle<SessionView>>,
     picker: Option<WindowHandle<crate::wallpaper::PickerView>>,
 }
@@ -2707,6 +2803,15 @@ fn is_open<V: 'static>(handle: &Option<WindowHandle<V>>, cx: &App) -> bool {
     handle.as_ref().is_some_and(|h| cx.windows().iter().any(|w: &AnyWindowHandle| w.window_id() == h.window_id()))
 }
 
+fn launcher_role(style: mandara_config::workflow::LauncherStyle) -> SurfaceRole {
+    // The session menu's surface already opts into compositor blur.
+    if style == mandara_config::workflow::LauncherStyle::Fullscreen {
+        SurfaceRole::Lock
+    } else {
+        SurfaceRole::Launcher
+    }
+}
+
 /// Opens / closes overlay surfaces as the shell state changes.
 pub fn init_overlays(cx: &mut App) {
     cx.set_global(Overlays::default());
@@ -2723,8 +2828,16 @@ pub fn init_overlays(cx: &mut App) {
             (None, (1920.0, 1080.0), None)
         };
         if launcher && !is_open(&overlays.launcher, cx) {
+            let role = launcher_role(config(cx).read(cx).get().launcher.look.style);
+            let query = overlays.launcher_query.take();
             overlays.launcher = cx
-                .open_window(overlay_spec(SurfaceRole::Launcher, w, h, display), |window, cx| cx.new(|cx| LauncherView::new((w, h), window, cx)))
+                .open_window(overlay_spec(role, w, h, display), |window, cx| cx.new(|cx| {
+                    let mut view = LauncherView::new((w, h), window, cx);
+                    if let Some(query) = query {
+                        view.set_query(query, cx);
+                    }
+                    view
+                }))
                 .map_err(|e| tracing::error!("launcher: {e:#}"))
                 .ok();
         }

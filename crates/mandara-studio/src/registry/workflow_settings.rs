@@ -56,7 +56,13 @@ pub const POSITIONS: &[(&str, &str)] = &[
 ];
 const SEARCH_POSITIONS: &[(&str, &str)] = &[("auto", tk("Next to the edge")), ("top", tk("Top")), ("bottom", tk("Bottom"))];
 pub const LAYOUTS: &[(&str, &str)] = &[("list", tk("List")), ("grid", tk("Grid"))];
-const STYLES_LAUNCHER: &[(&str, &str)] = &[("classic", tk("Classic")), ("beacon", tk("Beacon (centred search bar)"))];
+const CATEGORY_POSITIONS: &[(&str, &str)] = &[("top", tk("Top")), ("side", tk("Side"))];
+const CATEGORY_DISPLAYS: &[(&str, &str)] = &[
+    ("label-only", tk("Label only")),
+    ("icon-only", tk("Icon only")),
+    ("icon-with-hover-label", tk("Icon with label on hover")),
+];
+const STYLES_LAUNCHER: &[(&str, &str)] = &[("classic", tk("Classic")), ("beacon", tk("Beacon (centred search bar)")), ("fullscreen", tk("Fullscreen"))];
 /// The Beacon style's own rows.
 pub const BEACON: &str = tk("Beacon search bar");
 const DOCK_POSITIONS: &[(&str, &str)] = &[("bottom", tk("Bottom")), ("left", tk("Left")), ("right", tk("Right"))];
@@ -155,14 +161,17 @@ pub fn entries() -> Vec<Setting> {
         s(Launcher, LOOK, "/launcher/look/height", tk("Height when attached"), tk("Tallest it grows; fewer rows show when this is low"), px_range(launcher::LAUNCHER_HEIGHT_RANGE_PX)),
         s(Launcher, LOOK, "/launcher/look/center_width", tk("Width in the center"), tk("Size of the floating card in the middle of the screen"), px_range(launcher::LAUNCHER_CENTER_WIDTH_RANGE_PX)),
         s(Launcher, LOOK, "/launcher/look/center_height", tk("Height in the center"), tk("Tallest the floating card grows"), px_range(launcher::LAUNCHER_HEIGHT_RANGE_PX)),
-        s(Launcher, RESULTS, "/launcher/look/style", tk("Style"), tk("Classic: one surface with the search field and results. Beacon: a centred search bar with results under it once you type"), Choice(STYLES_LAUNCHER)),
-        s(Launcher, RESULTS, "/launcher/look/layout", tk("Layout"), tk("Grid shows app icons while browsing and while you type plain words; prefixed searches stay a list"), Choice(LAYOUTS)),
+        s(Launcher, RESULTS, "/launcher/look/style", tk("Style"), tk("Choose how the launcher fills the screen"), Choice(STYLES_LAUNCHER)),
+        s(Launcher, RESULTS, "/launcher/look/layout", tk("Layout"), tk("Browse apps as icons. Grouped searches use the list"), Choice(LAYOUTS)),
         s(Launcher, RESULTS, "/launcher/max_results", tk("Visible results"), tk("Rows shown before the list scrolls"), slider(3.0, 12.0, 1.0, "")),
         s(Launcher, RESULTS, "/appearance/launcher_icons", tk("App icons"), tk("How app icons are drawn"), Choice(super::ICON_STYLES)),
         s(Launcher, RESULTS, "/appearance/app_icon_shape", tk("App icon shape"), tk("Every app icon in the launcher and the dock sits on one shape, so they read as a set; Theme's own keeps each icon as drawn"), Choice(super::APP_ICON_SHAPES)),
         s(Launcher, GRID, "/launcher/look/grid_columns", tk("Most grid columns"), tk("App tiles per row; fewer fit a narrower launcher"), slider(3.0, 10.0, 1.0, "")),
+        s(Launcher, GRID, "/launcher/look/fullscreen_rows", tk("Rows"), tk("Maximum app rows per page in Fullscreen"), slider(f64::from(launcher::LAUNCHER_FULLSCREEN_ROWS_RANGE.0), f64::from(launcher::LAUNCHER_FULLSCREEN_ROWS_RANGE.1), 1.0, "")),
         s(Launcher, GRID, "/launcher/look/grid_icon_size", tk("Grid icon size"), tk("Size of the app icons in the grid"), slider(f64::from(launcher::LAUNCHER_GRID_ICON_RANGE_PX.0), f64::from(launcher::LAUNCHER_GRID_ICON_RANGE_PX.1), GRID_ICON_STEP_PX, " px")),
-        s(Launcher, GRID, "/launcher/look/grid_categories", tk("Category chips"), tk("All, Pinned and app categories above the grid (Tab switches)"), Toggle),
+        s(Launcher, GRID, "/launcher/look/grid_categories", tk("Category chips"), tk("Show app category filters"), Toggle),
+        s(Launcher, GRID, "/launcher/look/grid_category_position", tk("Category position"), tk("Put the category chips above or beside the app grid"), Choice(CATEGORY_POSITIONS)),
+        s(Launcher, GRID, "/launcher/look/grid_category_display", tk("Category display"), tk("Choose how category chips show their names"), Choice(CATEGORY_DISPLAYS)),
         s(Launcher, RESULTS, "/launcher/look/group_results", tk("Group results"), tk("A top hit, then results under headings by kind: Applications, Actions & settings, Files…"), Toggle),
         s(Launcher, RESULTS, "/launcher/look/hints", tk("Keyboard hints"), tk("A strip of key hints under the results"), Toggle),
         s(Launcher, RESULTS, "/launcher/look/compact", tk("Compact rows"), tk("One line per result"), Toggle),

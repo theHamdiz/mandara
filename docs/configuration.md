@@ -207,7 +207,7 @@ Grouped by Studio page. Keys are config paths (`table.key`).
 |---|---|
 | Bars | **Bar**: layout and appearance (`bar.*`); **Sidebars**: what each side edge holds, then the left/right plugin bars (`side_bars.*`) and the sidebar panel's widget tabs, cards and appearance (`sidebar.*`, `sidebar.look.*`); **Drop-down panels**: geometry, material, main menu and animation (`panels.*`, `bar.panel_radius`); **Edges & corners**: hover triggers (`edges.*`, `sidebar.hover_reveal`), hot corners (`hot_corners.*`) and rounded screen corners (`screen_corners.*`) |
 | Dock | layout (position, size, magnification), behaviour (auto-hide, delays, slide speed, bounces, minimize into icon; window geometry is checked periodically only for Smart hiding), apps (`pinned` order — `"@launcher"` is the launcher button, at any position; it replaces 0.22's `launcher_button` / `launcher_at_end`, which are moved into `pinned` once — running, recent apps, indicators, badges), stacks (`[[dock.stacks]]` path / view / sort / display, `stack_items`, `fan_items`, `stack_names`), the Applications folder (`[dock.applications]` enabled / view / order / icon_size; replaces 0.1's `applications_slot`), Trash, the now-playing chip (`dock.media_chip`), appearance (opacity, tint, radius, padding, spacing, shadow, rim; `dock.material` = `classic`, the default, or `liquid`, with `dock.gloss` and `dock.refraction`, 0–1; grain under `[dock.grain]`, see [Surface grain](#surface-grain); `dock.separator_style` = `line` or `space`), indicators (`dock.indicator` = `dots`, `dot`, `bar`, `glow` or `none`), name labels (`dock.tooltip_style` = `pill` or `material`, `dock.tooltip_delay_ms`, 0–1000, 0 by default), the hover lift (`dock.hover_lift`, 0–16 px, with `[dock.motion] hover`) — every number clamped to `mandara_config::dock::ranges` (`dock.*`) |
-| Launcher | ready-made looks ([Launcher looks](#launcher-looks)), style (classic / beacon), placement (`launcher.look.position`, see [Launcher placement](#launcher-placement)), align to the launcher button, width / height when attached and in the center, layout, grid columns and icon size, category chips, grouped results, keyboard hints, Beacon bar width and height, dim, results (`launcher.max_results`), providers and prefixes, ranking half-life and recent count, launching (`launcher.*`) |
+| Launcher | ready-made looks ([Launcher looks](#launcher-looks)), style (classic / beacon / fullscreen), placement (`launcher.look.position`, see [Launcher placement](#launcher-placement)), align to the launcher button, width / height when attached and in the center, layout, grid columns and icon size, category chips, grouped results, keyboard hints, search bar width and Beacon height, dim, results (`launcher.max_results`), providers and prefixes, ranking half-life and recent count, launching (`launcher.*`) |
 | Window switcher | style, previews, scope, thumbnail width, columns (`switcher.*`); screen time retention, idle and limits (`screen_time.*`) |
 | Notifications | position, width, scale, opacity, joined to the bar (`notifications.joined`, off by default), timeouts per urgency, maximum visible, history size and age, do not disturb, quiet hours, rules (`notifications.*`) |
 | On-screen displays | kinds, hold time, scale, opacity, offsets (`osd.*`) |
@@ -1307,7 +1307,7 @@ dim = 0.0                    # 0–0.7; a bar the launcher hangs from stays brig
 
 ## Launcher looks
 
-Three ready-made looks set the launcher's style, layout and placement in
+Four ready-made looks set the launcher's style, layout and placement in
 one click (Studio → Launcher → Launcher looks, or `mandara msg launcher
 look <id>`). Every value stays editable afterwards; the look then shows as
 customized. `mandara msg launcher looks` lists them as JSON with the
@@ -1315,42 +1315,50 @@ applied one marked (`"active": "custom"` after your own changes).
 
 | id | Look |
 |---|---|
-| `classic` (default) | the list launcher: a drawer rising from the bottom edge, search next to the edge |
-| `grid` | every app as a large icon in a card in the middle, category chips above, the screen dimmed a little |
+| `classic` (default) | a drawer rising from the bottom edge, with a top hit and groups by type during search |
+| `grid` | app tiles with category chips in a centered card, with a grouped list for mixed searches |
 | `beacon` | a centred glass search bar in the upper part of the screen in the style of macOS Spotlight, mode buttons beside it, grouped results under it as you type |
+| `fullscreen` | a compact search bar and paginated app grid across the focused display, with a grouped list for mixed searches |
 
 ```toml
 [launcher.look]
-style = "classic"            # classic | beacon (a centred search bar; the placement doesn't apply)
+style = "classic"            # classic | beacon | fullscreen (placement applies to classic)
 layout = "list"              # list | grid
 grid_columns = 6             # most tiles per row (3–10); fewer fit a narrower launcher
 grid_icon_size = 48.0        # px (32–96)
-grid_categories = true       # All / Pinned / category chips above the grid (Tab switches)
-group_results = false        # a Top hit, then headings: Applications, Actions & settings, Files…
+fullscreen_rows = 3          # most app rows per Fullscreen page (1–6)
+fullscreen_order = []        # desktop IDs per tile, saved when you organize Fullscreen
+grid_categories = true       # category filters in Grid and Beacon
+grid_category_position = "top"          # Grid only: top | side
+grid_category_display = "label-only"    # Grid only: label-only | icon-only | icon-with-hover-label
+group_results = true         # a Top hit, then headings by result type
 hints = false                # keyboard hints under the results
-beacon_width = 680.0         # the Beacon bar, px (480–960); its mode buttons sit beside it
+beacon_width = 680.0         # Beacon bar width, px (480–960); Fullscreen uses 67%
 beacon_top = 0.24            # the Beacon bar's top, a share of the screen height (0.08–0.45)
 ```
 
-- **Grid** shows while nothing is typed and while you type plain words;
-  prefixed searches (`:` `@` `#` `*` `~` `>`), `/` and `=` switch to the
-  list. Columns follow the launcher's width and the icon size, capped by
-  `grid_columns`. Arrows move in two dimensions (left / right swap in
-  right-to-left languages), Enter launches, Tab / Shift+Tab switch the
-  category, and tiles reflow with a spring as you type. Rows are
-  virtualized: only visible tiles lay out and decode their icons.
+- **Grid** shows app tiles with names while browsing. By default, plain
+  searches show a grouped list. Turn off **Group results** in Studio →
+  Launcher to keep tiles for plain searches. Prefixed searches always use
+  the list. Category chips sit above the tiles by default and Tab cycles
+  them. Studio offers a side column and icon-only chips, with labels
+  optionally shown on hover. Columns follow the available width and icon
+  size, capped by `grid_columns`. Only visible tiles lay out and decode.
 - **Beacon** floats a 56 px glass capsule centred across the screen with
   its top at `beacon_top` (never under the bar or over the dock), round
-  mode buttons at its reading end — Apps, Files, Actions, Clipboard, also
-  Ctrl+1–4 (a mode's button hides while its provider is off) — and the
-  results in their own glass card under it once you type or pick a mode.
-  Tab / Shift+Tab moves between search and the available mode buttons;
-  Enter or Space selects the focused mode. Typing or pressing a result
-  navigation key returns focus to search. This follows reading order in
-  right-to-left languages too.
-  Apps shows the grid. Backspace on an empty field or Esc leaves a mode.
-  It uses the panels' fill, opacity, rim and shadow, so it follows your
-  theme in light and dark.
+  mode buttons beside it, and results in a glass card once you type or pick
+  a mode. **Fullscreen** uses a compact search bar above a paginated app
+  grid without category chips. It fits up to `fullscreen_rows` by `grid_columns` tiles per page,
+  with fewer when the output or `grid_icon_size` requires it. Change pages
+  with the side arrows, the page controls below the grid, the mouse wheel
+  or Page Up and Page Down. When available, the compositor blurs the backdrop as it does for
+  the session menu. Fullscreen orders apps by usage until you organize the
+  grid. The saved `fullscreen_order` keeps that manual order across launches.
+- **Search modes** are available in Beacon and Fullscreen. Use
+  Ctrl+1–4 for Apps, Files, Actions and Clipboard, or reach the controls with
+  Tab / Shift+Tab and select with Enter or Space. Typing or navigating
+  results returns focus to search. Backspace on an empty field or Esc leaves
+  the current mode.
 - **Memory:** colour app icons are decoded at the size they are drawn,
   capped at 8 MiB while the launcher is open (the least recently drawn go
   first, never the visible ones), and every icon and thumbnail it decoded

@@ -31,6 +31,9 @@ pub mod defaults {
     /// App icon size in the grid layout, and its bounds, logical px.
     pub const LAUNCHER_GRID_ICON_PX: f32 = 48.0;
     pub const LAUNCHER_GRID_ICON_RANGE_PX: (f32, f32) = (32.0, 96.0);
+    /// Maximum rows per page in the fullscreen app grid.
+    pub const LAUNCHER_FULLSCREEN_ROWS: u32 = 3;
+    pub const LAUNCHER_FULLSCREEN_ROWS_RANGE: (u32, u32) = (1, 6);
     /// The Beacon style's search bar width and its bounds, logical px.
     pub const LAUNCHER_BEACON_WIDTH_PX: f32 = 680.0;
     pub const LAUNCHER_BEACON_WIDTH_RANGE_PX: (f32, f32) = (480.0, 960.0);
@@ -301,8 +304,7 @@ pub enum SearchPosition {
 pub enum LauncherLayout {
     #[default]
     List,
-    /// App tiles in a grid while browsing and while typing plain words
-    /// (prefixed searches, `/` and `=` stay a list).
+    /// App tiles while browsing, or for plain queries with grouping off.
     Grid,
 }
 
@@ -318,6 +320,8 @@ pub enum LauncherStyle {
     /// mode buttons beside it; results open in their own glass card under
     /// it once you type (the placement doesn't apply).
     Beacon,
+    /// Search and browse across the entire focused display.
+    Fullscreen,
 }
 
 impl LauncherStyle {
@@ -325,8 +329,28 @@ impl LauncherStyle {
         match self {
             LauncherStyle::Classic => "classic",
             LauncherStyle::Beacon => "beacon",
+            LauncherStyle::Fullscreen => "fullscreen",
         }
     }
+}
+
+/// Where Grid's category chips appear.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LauncherCategoryPosition {
+    #[default]
+    Top,
+    Side,
+}
+
+/// What a category chip shows in the Grid look.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LauncherCategoryDisplay {
+    #[default]
+    LabelOnly,
+    IconOnly,
+    IconWithHoverLabel,
 }
 
 /// The launcher's size, placement and behaviour.
@@ -346,15 +370,21 @@ pub struct LauncherLook {
     /// button: grow out of the button instead of the zone's edge / middle.
     pub align_to_button: bool,
     pub search_position: SearchPosition,
-    /// Classic (one surface) or Beacon (a centred search bar).
+    /// The launcher surface, independent of the result layout.
     pub style: LauncherStyle,
     pub layout: LauncherLayout,
     /// Most tiles per row in the grid (fewer fit a narrower launcher).
     pub grid_columns: u32,
     /// App icon size in the grid, logical px.
     pub grid_icon_size: f32,
-    /// A row of category chips (All, Pinned, Internet, Office…) above the
-    /// grid.
+    pub grid_category_position: LauncherCategoryPosition,
+    pub grid_category_display: LauncherCategoryDisplay,
+    /// Maximum rows per page when browsing apps in fullscreen.
+    pub fullscreen_rows: u32,
+    /// Fullscreen tile order by desktop ID. A tile with several IDs is a folder.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub fullscreen_order: Vec<Vec<String>>,
+    /// Category chips (All, Pinned, Internet, Office…) for the app grid.
     pub grid_categories: bool,
     /// Results under headings by kind (Top hit, Applications, Actions,
     /// Files…).
@@ -394,8 +424,12 @@ impl Default for LauncherLook {
             layout: LauncherLayout::List,
             grid_columns: defaults::LAUNCHER_GRID_COLUMNS,
             grid_icon_size: defaults::LAUNCHER_GRID_ICON_PX,
+            grid_category_position: LauncherCategoryPosition::default(),
+            grid_category_display: LauncherCategoryDisplay::default(),
+            fullscreen_rows: defaults::LAUNCHER_FULLSCREEN_ROWS,
+            fullscreen_order: Vec::new(),
             grid_categories: true,
-            group_results: false,
+            group_results: true,
             hints: false,
             beacon_width: defaults::LAUNCHER_BEACON_WIDTH_PX,
             beacon_top: defaults::LAUNCHER_BEACON_TOP,
@@ -410,6 +444,16 @@ impl Default for LauncherLook {
 }
 
 impl LauncherLook {
+    pub fn fullscreen_rows(&self) -> usize {
+        let (min, max) = defaults::LAUNCHER_FULLSCREEN_ROWS_RANGE;
+        self.fullscreen_rows.clamp(min, max) as usize
+    }
+
+    /// Dedicated search bars have their own provider controls.
+    pub fn search_modes(&self) -> bool {
+        self.style != LauncherStyle::Classic
+    }
+
     /// Width and tallest height for the current placement, clamped to the
     /// Studio slider bounds (the center card has its own size).
     pub fn size(&self) -> (f32, f32) {
@@ -477,7 +521,7 @@ pub struct LauncherLookPreset {
 }
 
 /// The shipped launcher looks; the first (Classic) is the default.
-pub const LAUNCHER_LOOKS: [LauncherLookPreset; 3] = [
+pub const LAUNCHER_LOOKS: [LauncherLookPreset; 4] = [
     LauncherLookPreset {
         id: "classic",
         name: mandara_i18n::tk("Classic"),
@@ -487,7 +531,7 @@ pub const LAUNCHER_LOOKS: [LauncherLookPreset; 3] = [
         position: LauncherPosition::BottomCenter,
         search_position: SearchPosition::Auto,
         compact: false,
-        group_results: false,
+        group_results: true,
         hints: false,
         grid_columns: defaults::LAUNCHER_GRID_COLUMNS,
         grid_icon_size: defaults::LAUNCHER_GRID_ICON_PX,
@@ -505,7 +549,7 @@ pub const LAUNCHER_LOOKS: [LauncherLookPreset; 3] = [
         position: LauncherPosition::Center,
         search_position: SearchPosition::Top,
         compact: false,
-        group_results: false,
+        group_results: true,
         hints: false,
         grid_columns: 8,
         grid_icon_size: 56.0,
@@ -532,6 +576,24 @@ pub const LAUNCHER_LOOKS: [LauncherLookPreset; 3] = [
         center_height: defaults::LAUNCHER_CENTER_HEIGHT_PX,
         dim: defaults::LAUNCHER_DIM,
     },
+    LauncherLookPreset {
+        id: "fullscreen",
+        name: mandara_i18n::tk("Fullscreen"),
+        blurb: mandara_i18n::tk("Browse apps across the screen and search by type"),
+        style: LauncherStyle::Fullscreen,
+        layout: LauncherLayout::Grid,
+        position: LauncherPosition::Center,
+        search_position: SearchPosition::Top,
+        compact: false,
+        group_results: true,
+        hints: false,
+        grid_columns: 6,
+        grid_icon_size: 64.0,
+        grid_categories: true,
+        center_width: defaults::LAUNCHER_CENTER_WIDTH_PX,
+        center_height: defaults::LAUNCHER_CENTER_HEIGHT_PX,
+        dim: defaults::LAUNCHER_DIM,
+    },
 ];
 
 impl LauncherLookPreset {
@@ -543,6 +605,8 @@ impl LauncherLookPreset {
 
     /// Writes this look's values into `look` (sizes, providers and
     /// behaviour settings it doesn't name are kept).
+    /// Apply the preset while preserving category preferences and the
+    /// fullscreen page density and manually organized app folders.
     pub fn apply(&self, look: &mut LauncherLook) {
         look.style = self.style;
         look.layout = self.layout;
@@ -1020,12 +1084,21 @@ mod tests {
         let default = LauncherLook::default();
         assert_eq!(LauncherLookPreset::active(&default).map(|l| l.id), Some("classic"), "today's launcher is Classic");
         let ids: Vec<&str> = LAUNCHER_LOOKS.iter().map(|l| l.id).collect();
-        assert_eq!(ids, ["classic", "grid", "beacon"]);
+        assert_eq!(ids, ["classic", "grid", "beacon", "fullscreen"]);
+        assert!(default.group_results);
         for preset in &LAUNCHER_LOOKS {
             let mut look = default.clone();
             look.width = 700.0;
             look.ignore_mouse = true;
+            look.grid_category_position = LauncherCategoryPosition::Side;
+            look.grid_category_display = LauncherCategoryDisplay::IconOnly;
+            look.fullscreen_rows = 2;
+            look.fullscreen_order = vec![vec!["editor".into(), "browser".into()]];
             preset.apply(&mut look);
+            assert_eq!(look.grid_category_position, LauncherCategoryPosition::Side);
+            assert_eq!(look.grid_category_display, LauncherCategoryDisplay::IconOnly);
+            assert_eq!(look.fullscreen_rows, 2);
+            assert_eq!(look.fullscreen_order, [["editor", "browser"]]);
             assert_eq!(LauncherLookPreset::active(&look).map(|l| l.id), Some(preset.id), "only {} matches itself", preset.id);
             assert!(look.width == 700.0 && look.ignore_mouse, "a look keeps settings it doesn't name");
             // Every value a look sets is inside its Studio range.
@@ -1044,6 +1117,10 @@ mod tests {
         let cfg: ShellConfig = toml::from_str("[launcher.look]\nlayout = \"grid\"\ngrid_columns = 7\n").unwrap();
         assert_eq!(cfg.launcher.look.style, LauncherStyle::Classic);
         assert_eq!(cfg.launcher.look.grid_icon_size, defaults::LAUNCHER_GRID_ICON_PX);
+        assert_eq!(cfg.launcher.look.grid_category_position, LauncherCategoryPosition::Top);
+        assert_eq!(cfg.launcher.look.grid_category_display, LauncherCategoryDisplay::LabelOnly);
+        let cfg: ShellConfig = toml::from_str("[launcher.look]\ngroup_results = false\n").unwrap();
+        assert!(!cfg.launcher.look.group_results);
         let cfg: ShellConfig = toml::from_str("[launcher.look]\nstyle = \"beacon\"\nbeacon_width = 5000.0\nbeacon_top = -1.0\ngrid_icon_size = 4.0\n").unwrap();
         let look = &cfg.launcher.look;
         assert_eq!(look.style, LauncherStyle::Beacon);

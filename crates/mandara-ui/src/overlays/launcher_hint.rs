@@ -1,4 +1,4 @@
-//! The search field's prefix help, one source for every launcher look.
+//! The shared prefix help for Classic, Grid and Beacon.
 //!
 //! Classic, Grid and Beacon all show the same list of what a query can
 //! start with: `/` slash commands, `=` arithmetic, the AI Shell Agent's
@@ -190,16 +190,16 @@ mod tests {
         assert!(help.get(&few, false, Some(look.width), 14.0).starts_with("Apps, settings, commands"));
     }
 
-    /// Both renderers draw their empty field from this module (Beacon's
-    /// modes name what they search instead), so no look keeps a
-    /// placeholder of its own.
+    /// A scoped mode names what it searches. The unscoped drawer and Beacon
+    /// still show the shared prefix help, and Fullscreen uses its shorter prompt.
     #[test]
-    fn every_renderer_takes_its_placeholder_from_the_shared_help() {
+    fn list_and_beacon_keep_shared_prefix_help() {
         let classic = include_str!("../overlays.rs");
         let looks = include_str!("launcher_looks.rs");
         assert_eq!(classic.matches("self.query_field(").count() + looks.matches("self.query_field(").count(), 2, "one search field per renderer");
         assert!(classic.contains("let hint = self.prefix_help(text::BODY + 1.0);"));
         assert!(looks.contains("None => self.prefix_help(BAR_TEXT),"));
+        assert!(looks.contains("None if fullscreen => SharedString::new_static(t(\"Search apps, files and more\")),"));
     }
 
     /// Composed once per revision and language; an edit composes it again.

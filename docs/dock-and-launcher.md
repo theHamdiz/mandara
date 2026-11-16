@@ -108,20 +108,41 @@
   squircle by default, so icons themes draw as squares, circles or free
   shapes read as one set; pick Circle, or Theme's own to keep each icon as
   drawn (Studio → Launcher → App icon shape, `[appearance] app_icon_shape`).
-  **Three looks, one click each** (Studio → Launcher → Launcher looks, or
-  `mandara msg launcher look classic|grid|beacon`; `launcher looks` lists
-  them): **Classic** is the list drawer above (the default). **Grid** shows
-  every app as a large icon with its name, in as many columns as fit, with
-  All / Pinned / category chips on top; arrows move in two dimensions,
-  Tab switches the category, and the tiles reflow with a spring as you
-  type. **Beacon** is a centred glass search bar in the upper part of the
-  screen, in the style of macOS Spotlight: round mode buttons beside it
-  (Apps, Files, Actions, Clipboard, or Ctrl+1–4) and the results under it,
-  grouped under a Top hit and headings by kind, once you type. Any look's
+  **Four looks, one click each** (Studio → Launcher → Launcher looks, or
+  `mandara msg launcher look classic|grid|beacon|fullscreen`). **Classic**
+  is the list drawer (the default). While searching, it shows a top hit and
+  groups results by type. **Grid** browses app icons with category chips above
+  the tiles and groups search results in a list. In Studio → Launcher, turn
+  off **Group results** to use the previous search layout or set the category
+  chips to appear on the side, as icons, or with labels on hover. **Beacon** is a centered search bar
+  with a separate results card. **Fullscreen** fills the selected display
+  with a compact search bar above a spaced, paginated app grid. It uses the
+  same compositor blur as the session menu when available. Beacon and
+  Fullscreen share Apps, Files, Actions and Clipboard modes (Ctrl+1–4).
+  Select Apps to keep the grid while typing. Fullscreen pages can be
+  changed with the side arrows, the controls below the grid, the mouse wheel
+  or Page Up and Page Down. Fullscreen starts with the most used apps and keeps any manual
+  order you set. Drop an app onto another to group them, beside an app to
+  reorder, or on a page control to move it there. In a folder, drop an app
+  onto Back to take it out. Set the maximum rows, columns and icon size in Studio. Any look's
   settings (grid icon size, grouping, keyboard hints, the bar's width and
   height on the screen) can be changed afterwards. The launcher keeps only
   the icons it shows decoded (8 MiB at most) and frees them all when it
   closes.
+
+  <details>
+  <summary>Launcher screenshots</summary>
+
+  | Look | Search before | Search with grouping |
+  | --- | --- | --- |
+  | Classic | ![Classic showing a flat list for zen](screenshots/launcher-classic-search-before.webp) | ![Classic showing grouped results for zen](screenshots/launcher-classic-search.webp) |
+  | Grid | ![Grid showing tiles for zen](screenshots/launcher-grid-search-before.webp) | ![Grid showing grouped results for zen](screenshots/launcher-grid-search.webp) |
+
+  | Grid app browser | Fullscreen app browser |
+  | --- | --- |
+  | ![Grid with app categories above the tiles](screenshots/launcher-grid-categories.webp) | ![Fullscreen page two with side arrows and a blurred backdrop](screenshots/launcher-fullscreen-page-two.webp) |
+
+  </details>
 - **They share the edge.** With the dock on, the bottom edge belongs to the
   dock: the launcher stops opening on hover, opens by click or keybind only,
   and floats above the dock instead of covering it.
