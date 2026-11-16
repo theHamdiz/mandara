@@ -85,9 +85,9 @@ fn display_disconnect(supervised: bool) {
         runtime: tempfile::Builder::new().prefix("mdrs-").tempdir().unwrap(),
     };
     let binary = Path::new(env!("CARGO_BIN_EXE_mandara"));
-    let config = sandbox.runtime.path().join("config.toml");
-    std::fs::write(&config, "[general]\nauto_restart = true\n").unwrap();
-    sandbox.run(&["up", "--bin", binary.to_str().unwrap(), "--no-langpacks", "--config", config.to_str().unwrap()]);
+    let config = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(config.path(), "[general]\nauto_restart = true\n").unwrap();
+    sandbox.run(&["up", "--bin", binary.to_str().unwrap(), "--no-langpacks", "--config", config.path().to_str().unwrap()]);
     sandbox.wait(|| sandbox.command(&["msg", "ping"]).status.success());
 
     // Reuse the capsule xtask created, retaining its hidden home and dead system bus.
