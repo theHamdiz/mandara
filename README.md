@@ -136,6 +136,8 @@ and tick off tasks where they sit.
 6. **Make changes and see them.** Mandara Studio has 32 pages of live
    settings and previews. Give Studio its own shaped window and controls, or
    edit your compositor's shortcuts in a roomy split editor with conflict checks and Undo. Save bar arrangements as profiles;
+   Studio remembers its window size. Community plugins show their names and
+   descriptions before installation and ask for permissions when installed.
    Maintenance spots missing icon themes and takes you to the right settings.
 7. **Colours that belong together.** Choose a hand-tuned theme or a Material
    You (HCT) palette from your wallpaper. Opt in to matching Ghostty, GTK 3/4,
@@ -152,7 +154,10 @@ and tick off tasks where they sit.
    backups and one-click restore. Display changes have a keep-or-revert countdown.
 9. **Extensions with room to experiment.** Choose from 88 built-in plugins
    or write your own in Rust. Sandboxed WebAssembly keeps a crashing plugin
-   from taking down your desktop. Optional [backups](docs/backups.md) bring
+   from taking down your desktop. With auto-restart enabled, the supervisor
+   restarts the shell after an unexpected display-loop shutdown until its
+   crash-loop limit is reached, with warnings and crash errors saved in the system journal where available.
+   Optional [backups](docs/backups.md) bring
    encrypted backups, private restore copies, Btrfs snapshots and reviewed cleanup;
    [app permissions](docs/app-permissions.md) puts Flatpak controls and clear access limits within reach.
 10. **Ready for your routines.** Documented commands with JSON replies let

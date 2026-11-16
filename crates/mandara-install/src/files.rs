@@ -86,7 +86,9 @@ pub fn desktop_entry(template: &str, binary: &Path) -> String {
 /// rename), so a running shell keeps its old executable. Nothing happens
 /// when both are the same file.
 /// The new binary takes effect on the shell's next start. Installation preserves
-/// compositor startup entries and existing display settings.
+/// compositor startup entries and existing display settings. A running supervisor
+/// relaunches the executable path it started with; its child uses the new binary
+/// only when installation replaces that same path.
 pub fn install_binary(src: &Path, dst: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt as _;
     if same_file(src, dst) {

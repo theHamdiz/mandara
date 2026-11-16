@@ -192,9 +192,12 @@ fn nix_runner_memory_is_prepared_before_compilation_without_reducing_release_opt
     let workflow = std::fs::read_to_string(crate::root().join(".github/workflows/ci.yml")).unwrap();
     let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&workflow).unwrap();
     let steps = workflow["jobs"]["nix"]["steps"].as_sequence().unwrap();
-    let memory = steps.iter().position(|step| step["run"].as_str().is_some_and(|run| run.contains("sudo swapon /swapfile-mandara-nix"))).unwrap();
-    let setup = steps[memory]["run"].as_str().unwrap();
-    for operation in ["fallocate -l 16G", "chmod 600", "mkswap", "swapon"] { assert!(setup.contains(operation)); }
+    let memory = steps.iter().position(|step| step["uses"].as_str() == Some("./.github/actions/lto-swap")).unwrap();
+    assert_eq!(steps[memory]["with"]["max-gb"].as_str(), Some("32"));
+    assert_eq!(steps[memory]["with"]["keep-free-gb"].as_str(), Some("24"));
+    assert_eq!(steps[memory]["with"]["min-gb"].as_str(), Some("16"));
+    let action = std::fs::read_to_string(crate::root().join(".github/actions/lto-swap/action.yml")).unwrap();
+    assert!(action.contains("cannot prepare required build swap\"\n          exit 1"), "insufficient disk must stop the build before linking without swap");
     for (index, step) in steps.iter().enumerate() {
         let run = step["run"].as_str().unwrap_or_default();
         if run.contains("nix build") || run.contains("nix flake check") {
@@ -205,6 +208,57 @@ fn nix_runner_memory_is_prepared_before_compilation_without_reducing_release_opt
     let manifest: toml::Value = toml::from_str(&std::fs::read_to_string(crate::root().join("Cargo.toml")).unwrap()).unwrap();
     assert_eq!(manifest["profile"]["release"]["lto"].as_str(), Some("fat"));
     assert_eq!(manifest["profile"]["release"]["codegen-units"].as_integer(), Some(1));
+}
+
+fn nix_build_boundary(workflow: &serde_yaml_ng::Value, job: &str) -> Result<(), &'static str> {
+    let steps = workflow["jobs"][job]["steps"].as_sequence().ok_or("missing Nix steps")?;
+    let install = steps.iter().position(|step| step["uses"].as_str().is_some_and(|name| name.starts_with("cachix/install-nix-action@"))).ok_or("missing Nix installer")?;
+    let budget = steps.iter().position(|step| step["uses"].as_str() == Some("./.github/actions/nix-build-limits")).ok_or("missing daemon limits")?;
+    if install >= budget || steps[budget].get("if").is_some() || steps[budget].get("continue-on-error").is_some() {
+        return Err("daemon limits must be installed unconditionally after Nix");
+    }
+    for (index, step) in steps.iter().enumerate() {
+        if step["run"].as_str().is_some_and(|run| run.contains("nix eval") || run.contains("nix build") || run.contains("nix flake check")) && index <= budget {
+            return Err("Nix starts before its memory boundary");
+        }
+    }
+    let diagnostics = steps.iter().find(|step| step["name"].as_str() == Some("Build resource diagnostics")).ok_or("missing diagnostics")?;
+    if diagnostics["if"].as_str() != Some("always()") {
+        return Err("failed builds must retain diagnostics");
+    }
+    if diagnostics["run"].as_str().map(str::trim) != Some("cargo run --locked --quiet --package xtask -- nix-runner report")
+        || diagnostics["env"]["CACHIX_AUTH_TOKEN"].as_str() != Some("") {
+        return Err("Rust diagnostics must run without cache credentials");
+    }
+    Ok(())
+}
+
+#[test]
+fn nix_checks_and_cache_contain_builders_and_preserve_failure_diagnostics() {
+    let action = std::fs::read_to_string(crate::root().join(".github/actions/nix-build-limits/action.yml")).unwrap();
+    let action: serde_yaml_ng::Value = serde_yaml_ng::from_str(&action).unwrap();
+    let setup = &action["runs"]["steps"][1];
+    assert_eq!(action["runs"]["steps"][0]["uses"].as_str(), Some("dtolnay/rust-toolchain@stable"));
+    assert_eq!(setup["run"].as_str().unwrap().trim(), "cargo run --locked --quiet --package xtask -- nix-runner prepare");
+    assert_eq!(setup["env"]["CACHIX_AUTH_TOKEN"].as_str(), Some(""));
+    for (file, job) in [("ci.yml", "nix"), ("nix-cache.yml", "cache")] {
+        let workflow = std::fs::read_to_string(crate::root().join(".github/workflows").join(file)).unwrap();
+        let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&workflow).unwrap();
+        nix_build_boundary(&workflow, job).unwrap();
+        for key in ["if", "continue-on-error"] {
+            let mut unsafe_workflow = workflow.clone();
+            let steps = unsafe_workflow["jobs"][job]["steps"].as_sequence_mut().unwrap();
+            let budget = steps.iter_mut().find(|step| step["uses"].as_str() == Some("./.github/actions/nix-build-limits")).unwrap();
+            budget[key] = serde_yaml_ng::Value::Bool(true);
+            assert!(nix_build_boundary(&unsafe_workflow, job).is_err(), "{file}: {key}");
+        }
+        let mut early_build = workflow.clone();
+        let steps = early_build["jobs"][job]["steps"].as_sequence_mut().unwrap();
+        let budget = steps.iter().position(|step| step["uses"].as_str() == Some("./.github/actions/nix-build-limits")).unwrap();
+        let build = steps.iter().position(|step| step["name"].as_str() == Some("Build")).unwrap();
+        steps.swap(budget, build);
+        assert!(nix_build_boundary(&early_build, job).is_err());
+    }
 }
 
 #[test]

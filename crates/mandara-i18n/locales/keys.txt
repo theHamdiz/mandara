@@ -3605,7 +3605,7 @@ Installed recorders
 Installed sound themes
 Installed with {manager} — update through your package manager
 Installed {fonts} into {folder} — restart the shell to use them
-Installed {plugin} {version} — it's live now
+Installed {plugin} {version}
 Installed {themes}
 Installed {themes}; skipped {skipped}
 Installed {version}

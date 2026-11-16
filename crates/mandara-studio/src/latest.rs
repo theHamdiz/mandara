@@ -51,14 +51,20 @@ impl<T: Clone + PartialEq> Latest<T> {
         })
     }
 
+    /// Check streamed results without completing their single owned job.
+    pub fn is_current(&self, request: &Request<T>) -> bool {
+        self.active == Some(request.revision) && self.revision == request.revision && self.desired.as_ref() == Some(&request.key)
+    }
+
     /// Reject a result from before cancellation, refresh, or a newer request.
     pub fn finish(&mut self, request: Request<T>) -> bool {
         if self.active != Some(request.revision) {
             return false;
         }
+        let current = self.is_current(&request);
         self.active = None;
         self.finished = request.revision;
-        self.revision == request.revision && self.desired.as_ref() == Some(&request.key)
+        current
     }
 }
 
@@ -100,7 +106,9 @@ mod tests {
         let mut queue = Latest::default();
         queue.set(Some("source"));
         let previous = queue.begin().unwrap();
+        assert!(queue.is_current(&previous));
         queue.refresh();
+        assert!(!queue.is_current(&previous), "streamed snapshots from the old generation must stop");
         assert!(!queue.finish(previous));
         let current = queue.begin().unwrap();
         assert!(queue.finish(current));

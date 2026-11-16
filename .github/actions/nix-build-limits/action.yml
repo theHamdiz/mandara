@@ -1,0 +1,11 @@
+name: Keep Nix builds within runner memory
+description: Reserve physical memory for the job agent while Nix uses build swap.
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+    - shell: bash
+      env:
+        CACHIX_AUTH_TOKEN: ""
+      run: |
+        cargo run --locked --quiet --package xtask -- nix-runner prepare

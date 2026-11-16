@@ -911,7 +911,10 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         core,
-        CommandSpec::new("plugins reload", mandara_i18n::tk("Hot-reload plugins from the plugin folders (also happens automatically)"), |_, cx| Ok(json!(crate::plugins::external::sync(cx))),
+        CommandSpec::new("plugins reload", mandara_i18n::tk("Hot-reload plugins from the plugin folders (also happens automatically)"), |_, cx| {
+            crate::plugins::external::sync(cx);
+            Ok(json!({"queued": true}))
+        },
         ),
     );
     r.command(
@@ -1001,7 +1004,7 @@ pub fn register(r: &mut PluginRegistry) {
     );
 
     r.command(core, CommandSpec::new("quit", mandara_i18n::tk("Quit Mandara Shell"), |_, cx| {
-        cx.quit();
+        mandara_core::shell_lifetime::ShellLifetime::quit(cx);
         Ok(json!("bye"))
     }));
 }

@@ -58,8 +58,10 @@ impl StudioView {
             view.market_local_refresh(cx);
             match result {
                 Ok(report) => {
+                    view.market.message = None;
                     view.updates.plugins.retain(|u| u.id != id);
                     super::market_page::reload_plugins(cx);
+                    view.prompt_plugin_permissions(&id);
                     view.updates.plugin_message = Some((true, format!("{id}: {}", describe(&report))));
                 }
                 Err(e) => view.updates.plugin_message = Some((false, format!("{id}: {e}"))),

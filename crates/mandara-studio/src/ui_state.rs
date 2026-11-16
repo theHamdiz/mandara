@@ -14,6 +14,8 @@ use crate::registry::NavGroup;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiState {
+    /// Last logical window size; compositor positions stay compositor-owned.
+    pub window_size: Option<[f32; 2]>,
     /// Ids of collapsed sidebar groups ([`NavGroup::id`]).
     pub collapsed: BTreeSet<String>,
     /// The Applications page's last tab (`installed`, `defaults`, …).
@@ -28,6 +30,14 @@ pub struct UiState {
     /// Page sections you opened (`true`) or closed (`false`), by
     /// `Section/group`; others use their default (the first open).
     pub sections: BTreeMap<String, bool>,
+}
+
+impl gpui::Global for UiState {}
+
+/// Reject corrupt geometry instead of passing NaNs or enormous surfaces to GPUI.
+pub(crate) fn valid_size([width, height]: [f32; 2]) -> Option<[f32; 2]> {
+    const MAX_LOGICAL_SIZE: f32 = 16_384.0;
+    (width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0 && width <= MAX_LOGICAL_SIZE && height <= MAX_LOGICAL_SIZE).then_some([width, height])
 }
 
 impl UiState {
@@ -75,6 +85,7 @@ pub fn load_from(path: &Path) -> UiState {
     let mut state: UiState = std::fs::read_to_string(path).ok().and_then(|text| toml::from_str(&text).ok()).unwrap_or_default();
     // Forget groups that no longer exist.
     state.collapsed.retain(|id| NavGroup::parse(id).is_some());
+    state.window_size = state.window_size.and_then(valid_size);
     state
 }
 
@@ -87,19 +98,129 @@ pub fn save_to(path: &Path, state: &UiState) -> anyhow::Result<()> {
     mandara_config::store::write_atomic(path, text.as_bytes())
 }
 
-/// Saves off the UI thread (a tiny file, but never block a frame on disk).
-pub fn save(state: &UiState) {
-    let state = state.clone();
-    std::thread::spawn(move || {
-        if let Err(err) = save_to(&path(), &state) {
-            tracing::warn!("saving Studio UI state: {err:#}");
+#[derive(Default)]
+struct Writes {
+    pending: Option<UiState>,
+    running: bool,
+}
+
+static WRITES: (std::sync::Mutex<Writes>, std::sync::Condvar) = (std::sync::Mutex::new(Writes { pending: None, running: false }), std::sync::Condvar::new());
+
+fn drain(writes: &(std::sync::Mutex<Writes>, std::sync::Condvar), mut write: impl FnMut(&UiState)) {
+    loop {
+        let state = {
+            let mut pending = writes.0.lock().unwrap_or_else(|e| e.into_inner());
+            match pending.pending.take() {
+                Some(state) => state,
+                None => {
+                    pending.running = false;
+                    writes.1.notify_all();
+                    break;
+                }
+            }
+        };
+        // The writer owns no shared state while writing this snapshot.
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| write(&state))).is_err() {
+            tracing::error!("Studio UI state writer panicked");
         }
+    }
+}
+
+/// One writer and one replaceable snapshot, including during a resize drag.
+pub fn save(state: &UiState) {
+    let mut writes = WRITES.0.lock().unwrap_or_else(|e| e.into_inner());
+    writes.pending = Some(state.clone());
+    if writes.running { return; }
+    writes.running = true;
+    drop(writes);
+    mandara_services::runtime::spawn("studio-ui-state", async {
+        // Coalesce a resize burst before starting disk work; no timer survives a save.
+        const SAVE_DELAY: std::time::Duration = std::time::Duration::from_millis(200);
+        mandara_services::runtime::sleep(SAVE_DELAY).await;
+        mandara_services::runtime::unblock(|| drain(&WRITES, |state| {
+            if let Err(err) = save_to(&path(), state) {
+                tracing::warn!("saving Studio UI state: {err:#}");
+            }
+        })).await;
     });
+}
+
+/// Called after GPUI stops, so the final resize is durable before process exit.
+pub fn flush() {
+    let mut writes = WRITES.0.lock().unwrap_or_else(|e| e.into_inner());
+    while writes.running {
+        writes = WRITES.1.wait(writes).unwrap_or_else(|e| e.into_inner());
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_panicking_snapshot_does_not_strand_the_writer_or_its_waiters() {
+        let writes = (std::sync::Mutex::new(Writes { pending: Some(UiState::default()), running: true }), std::sync::Condvar::new());
+        drain(&writes, |_| panic!("failed snapshot"));
+        assert!(!writes.0.lock().unwrap().running);
+        writes.0.lock().unwrap().pending = Some(UiState::default());
+        writes.0.lock().unwrap().running = true;
+        let mut count = 0;
+        drain(&writes, |_| count += 1);
+        assert_eq!(count, 1);
+        assert!(!writes.0.lock().unwrap().running);
+    }
+
+    #[test]
+    fn slow_disk_coalesces_resize_bursts_and_finishes_with_the_latest_complete_state() {
+        use std::sync::{Arc, Condvar, Mutex, mpsc};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("studio-ui.toml");
+        let first = UiState { window_size: Some([800.0, 600.0]), ..Default::default() };
+        let writes = Arc::new((Mutex::new(Writes { pending: Some(first), running: true }), Condvar::new()));
+        let (started_tx, started_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        let worker = {
+            let writes = writes.clone();
+            let path = path.clone();
+            std::thread::spawn(move || {
+                let mut count = 0;
+                drain(&writes, |state| {
+                    save_to(&path, state).unwrap();
+                    count += 1;
+                    if count == 1 { started_tx.send(()).unwrap(); resume_rx.recv().unwrap(); }
+                });
+                count
+            })
+        };
+        started_rx.recv().unwrap();
+        for width in 900..1000 {
+            let mut state = UiState { window_size: Some([width as f32, 700.0]), ..Default::default() };
+            state.apps_tab = "defaults".into();
+            writes.0.lock().unwrap().pending = Some(state);
+        }
+        resume_tx.send(()).unwrap();
+        assert_eq!(worker.join().unwrap(), 2, "one active and one latest snapshot");
+        assert!(!writes.0.lock().unwrap().running);
+        let state = load_from(&path);
+        assert_eq!(state.window_size, Some([999.0, 700.0]));
+        assert_eq!(state.apps_tab, "defaults");
+    }
+
+    #[test]
+    fn window_size_round_trips_and_rejects_invalid_geometry() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("studio-ui.toml");
+        let state = UiState { window_size: Some([1320.0, 900.0]), ..Default::default() };
+        save_to(&file, &state).unwrap();
+        assert_eq!(load_from(&file), state);
+        for size in [[f32::NAN, 500.0], [500.0, f32::INFINITY], [0.0, 500.0], [-1.0, 500.0], [f32::MAX, 500.0]] {
+            assert_eq!(valid_size(size), None);
+        }
+        std::fs::write(&file, "window_size = [0.0, 500.0]\napps_tab = 'defaults'\n").unwrap();
+        let state = load_from(&file);
+        assert_eq!(state.window_size, None);
+        assert_eq!(state.apps_tab, "defaults");
+    }
 
     /// A state file from 0.26 (previews off) opens with previews on, and
     /// the compact choice round-trips.

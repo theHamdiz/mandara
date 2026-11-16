@@ -245,6 +245,26 @@ mod tests {
     }
 
     #[cfg(target_os = "linux")]
+    fn child_stopped(state: std::io::Result<String>) -> std::io::Result<bool> {
+        match state {
+            Ok(stat) => Ok(stat.rsplit_once(") ").is_some_and(|(_, fields)| fields.starts_with(['Z', 'X']))),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound || error.raw_os_error() == Some(libc::ESRCH) => Ok(true),
+            Err(error) => Err(error),
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn an_exiting_child_can_disappear_before_or_during_procfs_read() {
+        for error in [libc::ENOENT, libc::ESRCH] {
+            assert!(child_stopped(Err(std::io::Error::from_raw_os_error(error))).unwrap());
+        }
+        assert!(!child_stopped(Ok("1 (sleep) S 0".into())).unwrap());
+        assert!(child_stopped(Ok("1 (sleep) Z 0".into())).unwrap());
+        assert!(child_stopped(Err(std::io::Error::from_raw_os_error(libc::EACCES))).is_err());
+    }
+
+    #[cfg(target_os = "linux")]
     #[test]
     fn failed_reload_commands_do_not_leave_their_background_children_running() {
         let root = tempfile::tempdir().unwrap();
@@ -265,13 +285,8 @@ mod tests {
             .collect::<Vec<_>>();
         let _cleanup = Cleanup(pids[0]);
         for _ in 0..100 {
-            let stopped = match std::fs::read_to_string(format!("/proc/{}/stat", pids[1])) {
-                Ok(stat) => stat
-                    .rsplit_once(") ")
-                    .is_some_and(|(_, fields)| fields.starts_with(['Z', 'X'])),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
-                Err(error) => panic!("reading the test child's state: {error}"),
-            };
+            let stopped = child_stopped(std::fs::read_to_string(format!("/proc/{}/stat", pids[1])))
+                .expect("reading the test child's state");
             if stopped {
                 return;
             }

@@ -106,7 +106,8 @@ mandara msg depth download                 # the depth model (27 MB, checksum-ve
 mandara msg depth regenerate               # find the current wallpaper's subject again with the chosen mode
 mandara msg depth place-clock              # move the clock to where the subject rises into it
 mandara msg language set ar                 # language list
-mandara msg plugins reload                  # plugins list|enable|disable|remove|restore <id>
+mandara msg plugins reload                  # queue a background rescan; plugins list shows the result
+# Also: plugins list|enable|disable|remove|restore <id>
 mandara msg plugins remove prayer-times     # built-ins: off + out of bar/sidebar until `plugins restore` (core plugins refuse)
 mandara msg plugins enable wallhaven        # opt-in built-ins: wallhaven, cursors, icon-themes, dock, notes, todo, pomodoro, … ([plugins](plugins.md): "ship switched off")
 mandara msg config set /integrations/gtk4 true   # theme an app (all off by default); false takes Mandara's changes back

@@ -1375,6 +1375,29 @@ fn installing_into_an_existing_path_refreshes_only_old_marked_entries() {
 }
 
 #[test]
+fn upgrades_and_uninstall_preserve_plugins_grants_and_studio_window_state() {
+    for uninstall in [false, true] {
+        let f = Fixture::new();
+        let files = [
+            (".local/state/mandara/studio-ui.toml", "window_size = [1300.0, 900.0]\n"),
+            (".local/share/mandara/plugins/picker/plugin.toml", "id='picker'\nname='Picker'\n"),
+            (".local/share/mandara/plugins/picker/.source", "author/picker\nv0.1.0\n"),
+            (".config/mandara/config.toml", "[plugins.grants.picker]\ncapabilities=['clipboard.write']\n"),
+        ];
+        for (name, bytes) in files {
+            let path = f.home().join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        let mut host = FakeHost::with(&["dnf", "sudo"]);
+        run(&mut host, &FakeProbe::default(), f.facts(Family::Fedora), InstallArgs { uninstall, yes: true, no_deps: true, ..Default::default() }).unwrap();
+        for (name, bytes) in files {
+            assert_eq!(std::fs::read_to_string(f.home().join(name)).unwrap(), bytes, "{name}; uninstall={uninstall}");
+        }
+    }
+}
+
+#[test]
 fn an_unreadable_profile_does_not_abort_an_existing_path_install() {
     let f = Fixture::new();
     let original = [0xff, 0xfe];

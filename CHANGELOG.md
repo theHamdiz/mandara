@@ -6,6 +6,20 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The shell recovers from unexpected display shutdowns, and Studio makes community plugins easier to browse and manage.
+
+### Fixed
+
+- The plugin store shows released names and descriptions before installation, keeps one card per marketplace plugin, and asks for missing permissions after installation. Update buttons appear only for newer releases and stay inside their cards; background refreshes preserve existing entries.
+- Studio remembers its window size when reopened.
+- An unexpected display-loop shutdown no longer quietly stops the shell's restart supervisor. Warnings and crash errors also reach the system journal when the desktop discards terminal output, keeping non-English text intact when long messages are shortened.
+
+### Under the hood
+
+- Nix checks and cache builds reserve memory for the hosted job agent, keep compiler memory pressure within Nix's own process group, and record resource diagnostics. Full release optimization is preserved.
+- Command cleanup checks handle a child disappearing during inspection, avoiding a spurious failure on busy runners.
+- The demo sandbox keeps Mango's config in its native home-based location, so display changes pass the same configuration checks as a normal session.
+
 ## 0.34.0 — 2026-11-15
 
 Studio refinements, optional bar and dock effects, richer third-party plugins, and a responsive launcher.
