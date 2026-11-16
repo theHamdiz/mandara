@@ -170,58 +170,98 @@ fn prepare(host: &impl Host) -> Result<()> {
     Ok(())
 }
 
-fn report(host: &impl Host) -> Result<()> {
-    host.emit(&host.output(
-        "systemctl",
-        &[
-            "show",
-            "nix-daemon.service",
-            "--property=Result,MemoryPeak,MemorySwapPeak,MemoryHigh,MemoryMax",
-        ],
-    )?);
-    let group = host.output(
-        "systemctl",
-        &[
-            "show",
-            "nix-daemon.service",
-            "--property=ControlGroup",
-            "--value",
-        ],
-    )?;
-    if !group.trim().is_empty() {
-        let root = group_root(&group)?;
-        for file in ["memory.events", "memory.pressure"] {
-            host.emit(file);
-            host.emit(&host.read(&root.join(file))?);
+fn probe<T>(host: &impl Host, failure: &mut Option<String>, result: Result<T>) -> Option<T> {
+    match result {
+        Ok(value) => Some(value),
+        Err(error) => {
+            host.emit(&format!("diagnostic error: {error}"));
+            if failure.is_none() {
+                *failure = Some(error);
+            }
+            None
         }
     }
-    host.emit(&host.output("free", &["-h"])?);
-    host.emit(&host.output("df", &["-h", "/", "/nix"])?);
-    let journal = host.output(
-        "sudo",
-        &[
-            "--non-interactive",
-            "journalctl",
-            "-k",
-            "--no-pager",
-            "--output=short-monotonic",
-            "--lines",
-            JOURNAL_LINES,
-        ],
-    )?;
-    for line in journal
-        .lines()
-        .rev()
-        .filter(|line| {
-            line.contains("oom")
-                || line.contains("Out of memory")
-                || line.contains("Killed process")
-        })
-        .take(OOM_LINES)
-    {
-        host.emit(line);
+}
+
+fn report(host: &impl Host) -> Result<()> {
+    let mut failure = None;
+    if let Some(output) = probe(
+        host,
+        &mut failure,
+        host.output(
+            "systemctl",
+            &[
+                "show",
+                "nix-daemon.service",
+                "--property=Result,MemoryPeak,MemorySwapPeak,MemoryHigh,MemoryMax",
+            ],
+        ),
+    ) {
+        host.emit(&output);
     }
-    Ok(())
+    let group = probe(
+        host,
+        &mut failure,
+        host.output(
+            "systemctl",
+            &[
+                "show",
+                "nix-daemon.service",
+                "--property=ControlGroup",
+                "--value",
+            ],
+        ),
+    );
+    if let Some(group) = group.filter(|group| !group.trim().is_empty())
+        && let Some(root) = probe(host, &mut failure, group_root(&group))
+    {
+        for file in ["memory.events", "memory.pressure"] {
+            host.emit(file);
+            if let Some(output) = probe(host, &mut failure, host.read(&root.join(file))) {
+                host.emit(&output);
+            }
+        }
+    }
+    if let Some(output) = probe(host, &mut failure, host.output("free", &["-h"])) {
+        host.emit(&output);
+    }
+    if let Some(output) = probe(host, &mut failure, host.output("df", &["-h", "/", "/nix"])) {
+        host.emit(&output);
+    }
+    let journal = probe(
+        host,
+        &mut failure,
+        host.output(
+            "sudo",
+            &[
+                "--non-interactive",
+                "journalctl",
+                "-k",
+                "--no-pager",
+                "--output=short-monotonic",
+                "--lines",
+                JOURNAL_LINES,
+            ],
+        ),
+    );
+    if let Some(journal) = journal {
+        for line in journal
+            .lines()
+            .rev()
+            .filter(|line| {
+                line.contains("oom")
+                    || line.contains("Out of memory")
+                    || line.contains("Killed process")
+            })
+            .take(OOM_LINES)
+        {
+            host.emit(line);
+        }
+    }
+    match failure {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
 }
 
 #[cfg(test)]
@@ -236,6 +276,7 @@ mod tests {
         calls: RefCell<Vec<String>>,
         journal: String,
         emitted: RefCell<Vec<String>>,
+        fail_program: Option<&'static str>,
     }
 
     impl Host for Fixture {
@@ -243,6 +284,9 @@ mod tests {
             self.calls
                 .borrow_mut()
                 .push(format!("{program} {}", args.join(" ")));
+            if self.fail_program == Some(program) {
+                return Err(format!("{program} unavailable"));
+            }
             if args.contains(&"set-property") && !self.applies {
                 return Err("set-property denied".into());
             }
@@ -301,6 +345,7 @@ mod tests {
                 calls: RefCell::default(),
                 journal: String::new(),
                 emitted: RefCell::default(),
+                fail_program: None,
             };
             assert_eq!(
                 prepare(&host).is_ok(),
@@ -352,6 +397,39 @@ mod tests {
     }
 
     #[test]
+    fn a_failed_probe_does_not_hide_independent_kernel_evidence() {
+        for program in ["df", "free", "systemctl"] {
+            let host = Fixture {
+                high: "",
+                limit: "",
+                applies: true,
+                calls: RefCell::default(),
+                journal: "Killed process 42\n".into(),
+                emitted: RefCell::default(),
+                fail_program: Some(program),
+            };
+            assert!(
+                report(&host)
+                    .unwrap_err()
+                    .contains(&format!("{program} unavailable"))
+            );
+            assert!(
+                host.calls
+                    .borrow()
+                    .iter()
+                    .any(|call| call.contains("journalctl"))
+            );
+            let emitted = host.emitted.borrow();
+            assert!(emitted.iter().any(|line| line == "Killed process 42"));
+            assert!(
+                emitted
+                    .iter()
+                    .any(|line| line == &format!("diagnostic error: {program} unavailable"))
+            );
+        }
+    }
+
+    #[test]
     fn reports_keep_a_bounded_oom_tail_and_accept_an_empty_journal() {
         let mut host = Fixture {
             high: "",
@@ -360,6 +438,7 @@ mod tests {
             calls: RefCell::default(),
             journal: String::new(),
             emitted: RefCell::default(),
+            fail_program: None,
         };
         report(&host).unwrap();
         assert!(

@@ -17,6 +17,7 @@ The shell recovers from unexpected display shutdowns, and Studio makes community
 ### Under the hood
 
 - Nix checks and cache builds reserve memory for the hosted job agent, keep compiler memory pressure within Nix's own process group, and record resource diagnostics. Full release optimization is preserved.
+- Command cleanup checks handle a child disappearing during inspection, avoiding a spurious failure on busy runners.
 - The demo sandbox keeps Mango's config in its native home-based location, so display changes pass the same configuration checks as a normal session.
 
 ## 0.34.0 — 2026-11-15
