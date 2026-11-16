@@ -472,7 +472,9 @@ and verifies models, and provides a dry-run test bench. See
   newer release is available. Missing permissions open in a dialog after
   installation or an update; each stays off until you grant it. You can revisit
   **Permissions** on the installed plugin’s product page. Searches, manifest
-  reads and folder scans run in the background. Cached cards keep their order
+  reads and folder scans run in the background. Repository text remains visible
+  while released metadata arrives; bounded metadata requests leave API capacity
+  for installations. Cached cards keep their order
   during refreshes, and new entries are appended; unavailable or moderated
   entries leave the list after validation. While Community is empty or out of reach it
   suggests Mandara plugins you haven't switched on. **Develop** is the

@@ -196,6 +196,8 @@ fn nix_runner_memory_is_prepared_before_compilation_without_reducing_release_opt
     assert_eq!(steps[memory]["with"]["max-gb"].as_str(), Some("32"));
     assert_eq!(steps[memory]["with"]["keep-free-gb"].as_str(), Some("24"));
     assert_eq!(steps[memory]["with"]["min-gb"].as_str(), Some("16"));
+    let action = std::fs::read_to_string(crate::root().join(".github/actions/lto-swap/action.yml")).unwrap();
+    assert!(action.contains("cannot prepare required build swap\"\n          exit 1"), "insufficient disk must stop the build before linking without swap");
     for (index, step) in steps.iter().enumerate() {
         let run = step["run"].as_str().unwrap_or_default();
         if run.contains("nix build") || run.contains("nix flake check") {

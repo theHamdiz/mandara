@@ -119,7 +119,10 @@ fn drain(writes: &(std::sync::Mutex<Writes>, std::sync::Condvar), mut write: imp
                 }
             }
         };
-        write(&state);
+        // The writer owns no shared state while writing this snapshot.
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| write(&state))).is_err() {
+            tracing::error!("Studio UI state writer panicked");
+        }
     }
 }
 
@@ -153,6 +156,19 @@ pub fn flush() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_panicking_snapshot_does_not_strand_the_writer_or_its_waiters() {
+        let writes = (std::sync::Mutex::new(Writes { pending: Some(UiState::default()), running: true }), std::sync::Condvar::new());
+        drain(&writes, |_| panic!("failed snapshot"));
+        assert!(!writes.0.lock().unwrap().running);
+        writes.0.lock().unwrap().pending = Some(UiState::default());
+        writes.0.lock().unwrap().running = true;
+        let mut count = 0;
+        drain(&writes, |_| count += 1);
+        assert_eq!(count, 1);
+        assert!(!writes.0.lock().unwrap().running);
+    }
 
     #[test]
     fn slow_disk_coalesces_resize_bursts_and_finishes_with_the_latest_complete_state() {

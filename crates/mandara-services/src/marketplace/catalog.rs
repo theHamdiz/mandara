@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use super::{Listing, Results};
 
 mod manifest;
+mod budget;
+pub(super) use budget::observe;
 
 /// A manifest is text, not the plugin archive. Keep both remote and saved input bounded.
 const MANIFEST_BYTES: u64 = 64 << 10;
@@ -97,28 +99,40 @@ fn fetch(repo: &str) -> Result<Option<Metadata>, String> {
     if !super::moderation::policy::valid_repository(repo) {
         return Err(format!("invalid plugin repository: {repo}"));
     }
-    let (release, archive) = super::find_release(repo).map_err(|error| error.to_string())?;
+    let (release, archive) = super::find_release_with(repo, |url, limit| {
+        budget::take().map_err(super::Fetch::Failed)?;
+        super::get_media_timeout(url, limit, "application/vnd.github+json", budget::TIMEOUT)
+    }).map_err(|error| error.to_string())?;
     manifest::fetch(&super::api_base(), repo, &release.tag_name)
-        .or_else(|_| manifest::from_archive(repo, &archive.browser_download_url))
+        .or_else(|error| {
+            if !budget::available() { return Err(error); }
+            manifest::from_archive(repo, &archive.browser_download_url)
+        })
         .map(Some)
 }
 
-fn enrich_with(
+fn enrich_stream(
     results: &mut Results,
     entries: &mut Vec<Entry>,
     api: &str,
     mut fetch: impl FnMut(&str) -> Result<Option<Metadata>, String>,
     keep_going: impl Fn() -> bool,
+    mut publish: impl FnMut(&Results),
 ) -> bool {
-    let mut changed = false;
     for listing in &mut results.items {
+        if let Some(entry) = entries.iter().find(|e| e.matches(api, listing)) {
+            listing.plugin = entry.metadata.clone();
+        }
+    }
+    // Cached text and repository fallbacks are visible before the first HTTP request.
+    publish(results);
+    let mut changed = false;
+    for index in 0..results.items.len() {
+        let listing = &mut results.items[index];
         if !keep_going() {
             break;
         }
-        if let Some(entry) = entries.iter().find(|e| e.matches(api, listing)) {
-            listing.plugin = entry.metadata.clone();
-            continue;
-        }
+        if entries.iter().any(|e| e.matches(api, listing)) { continue; }
         let metadata = match fetch(&listing.full_name) {
             Ok(metadata) => metadata,
             Err(error) => {
@@ -144,17 +158,21 @@ fn enrich_with(
         }
         listing.plugin = metadata;
         changed = true;
+        publish(results);
     }
     changed
 }
 
 /// Called by the store's sole blocking worker, after moderation admits the listings.
-pub fn enrich(results: &mut Results, keep_going: impl Fn() -> bool) {
+pub fn enrich(results: &mut Results, keep_going: impl Fn() -> bool, publish: impl FnMut(&Results)) {
     static CACHE: parking_lot::Mutex<Option<Vec<Entry>>> = parking_lot::Mutex::new(None);
     let path = mandara_config::paths::cache_dir().join("marketplace-catalog.json");
     let mut cache = CACHE.lock();
     let entries = cache.get_or_insert_with(|| load(&path));
-    if enrich_with(results, entries, &super::api_base(), fetch, keep_going) {
+    // One pass is optional work, with short individual requests and no hidden polling.
+    const PASS_TIME: std::time::Duration = std::time::Duration::from_secs(20);
+    let started = std::time::Instant::now();
+    if enrich_stream(results, entries, &super::api_base(), fetch, || keep_going() && budget::available() && started.elapsed() < PASS_TIME, publish) {
         match serde_json::to_vec(entries)
             .map_err(anyhow::Error::from)
             .and_then(|bytes| mandara_config::store::write_atomic(&path, &bytes))
@@ -166,8 +184,33 @@ pub fn enrich(results: &mut Results, keep_going: impl Fn() -> bool) {
 }
 
 #[cfg(test)]
+fn enrich_with(results: &mut Results, entries: &mut Vec<Entry>, api: &str,
+    fetch: impl FnMut(&str) -> Result<Option<Metadata>, String>, keep_going: impl Fn() -> bool) -> bool {
+    enrich_stream(results, entries, api, fetch, keep_going, |_| {})
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repository_cards_are_published_before_fetching_and_new_metadata_streams_in() {
+        let metadata: Metadata = toml::from_str("id='picker'\nname='Real Picker'").unwrap();
+        let mut results = Results { items: vec![listing("a/one", "a"), listing("a/two", "a")], total: 2 };
+        let fetched = std::cell::Cell::new(0);
+        let publications = std::cell::RefCell::new(Vec::new());
+        enrich_stream(&mut results, &mut Vec::new(), "api", |_| {
+            assert!(!publications.borrow().is_empty(), "repository cards must precede optional network work");
+            fetched.set(fetched.get() + 1);
+            Ok(Some(metadata.clone()))
+        }, || true, |results| {
+            publications.borrow_mut().push((fetched.get(), results.items.iter().filter(|l| l.plugin.is_some()).count()));
+        });
+        assert_eq!(*publications.borrow(), [(0, 0), (1, 1), (2, 2)]);
+        let mut cached = Vec::new();
+        enrich_with(&mut results, &mut cached, "api", |_| Ok(Some(metadata.clone())), || true);
+        enrich_stream(&mut results, &mut cached, "api", |_| panic!("cached metadata must not refetch"), || false, |results| assert!(results.items.iter().all(|l| l.plugin.is_some())));
+    }
 
     #[test]
     fn manifest_is_read_from_the_release_ref_as_bounded_raw_toml() {

@@ -130,6 +130,13 @@ pub(super) fn flag_note(flag: &Flag, p: &MandaraPalette) -> AnyElement {
 }
 
 
+fn next_permission(queue: &mut std::collections::VecDeque<String>, mut needs: impl FnMut(&str) -> Option<bool>) -> Option<String> {
+    while let Some(id) = queue.pop_front() {
+        if needs(&id) == Some(true) { return Some(id); }
+    }
+    None
+}
+
 impl StudioView {
     pub(super) fn market_permissions_pending(&self) -> bool {
         !self.market.hidden && !self.market.permissions.is_empty()
@@ -144,14 +151,9 @@ impl StudioView {
     pub(super) fn market_permissions(&mut self, cfg: &mandara_config::ShellConfig, window: &mut gpui::Window, cx: &mut Context<Self>) {
         if cx.try_global::<mandara_ui::plugins::external::ReloadState>().is_some_and(|reload| reload.is_running()) { return; }
         if self.section != crate::registry::Section::Plugins || self.modal.showing() { return; }
-        while let Some(id) = self.market.permissions.front() {
-            let Some(manifest) = cx.global::<mandara_plugins::PluginRegistry>().manifest(id) else { return; };
-            let needs = super::plugin_grants::needs_permissions(manifest, cfg);
-            let id = self.market.permissions.pop_front().unwrap();
-            if needs {
-                self.open_plugin(&id, super::plugin_modal::ModalView::Permissions, window, cx);
-                break;
-            }
+        let registry = cx.global::<mandara_plugins::PluginRegistry>();
+        if let Some(id) = next_permission(&mut self.market.permissions, |id| registry.manifest(id).map(|manifest| super::plugin_grants::needs_permissions(manifest, cfg))) {
+            self.open_plugin(&id, super::plugin_modal::ModalView::Permissions, window, cx);
         }
     }
 
@@ -192,35 +194,53 @@ impl StudioView {
     fn market_search_next(&mut self, cx: &mut Context<Self>) {
         let Some(request) = self.market.requests.begin() else { return; };
         let query = request.key.clone();
-        let previous = self.market.cached.get(&query).cloned().unwrap_or_default();
+        let mut previous = self.market.cached.get(&query).cloned().unwrap_or_default();
         let revision = self.market.local_revision;
         let cancelled = Arc::new(AtomicBool::new(false));
         self.market.cancelled = Some(cancelled.clone());
+        // Backpressure keeps one applicable snapshot; HTTP and merging stay on the worker.
+        let (tx, rx) = async_channel::bounded(1);
+        let worker = cx.background_executor().spawn(async move {
+            mandara_services::runtime::unblock(move || {
+                let installed = marketplace::installed_all();
+                let flags = marketplace::flags();
+                let mut local = Some((installed, flags));
+                match marketplace::search(&query) {
+                    Ok(mut found) => {
+                        let closed = std::cell::Cell::new(false);
+                        marketplace::catalog::enrich(&mut found, || !cancelled.load(Ordering::Relaxed) && !closed.get(), |found| {
+                            previous = Arc::new(previous.merge(found.clone()));
+                            if tx.send_blocking((Ok(previous.clone()), local.take())).is_err() { closed.set(true); }
+                        });
+                    }
+                    Err(error) => { let _ = tx.send_blocking((Err(error), local.take())); }
+                }
+            }).await
+        });
         cx.spawn(async move |this, cx| {
-            let (result, installed, flags) = mandara_services::runtime::unblock(move || {
-                let result = marketplace::search(&query).map(|mut found| {
-                    marketplace::catalog::enrich(&mut found, || !cancelled.load(Ordering::Relaxed));
-                    Arc::new(previous.merge(found))
-                });
-                (result, marketplace::installed_all(), marketplace::flags())
-            }).await;
-            let _ = this.update(cx, |this, cx| {
-                if this.market.requests.finish(request) {
+            while let Ok((result, local)) = rx.recv().await {
+                if this.update(cx, |this, cx| {
+                    if !this.market.requests.is_current(&request) { return; }
                     this.market.loading = false;
+                    if let Some((installed, flags)) = local { this.market.apply_local(revision, installed, flags); }
                     this.market.results = Some(result.inspect(|catalog| {
-                        // Keep the broad catalog and a few recent search views.
                         const CACHED_QUERIES: usize = 4;
                         if this.market.cached.len() >= CACHED_QUERIES && !this.market.cached.contains_key(&this.market.searched)
                             && let Some(old) = this.market.cached.keys().find(|key| !key.is_empty() && **key != this.market.searched).cloned() { this.market.cached.remove(&old); }
                         this.market.cached.insert(this.market.searched.clone(), catalog.clone());
                     }));
-                    this.market.apply_local(revision, installed, flags);
+                    cx.notify();
+                }).is_err() { break; }
+            }
+            worker.await;
+            let _ = this.update(cx, |this, cx| {
+                if this.market.requests.finish(request) {
+                    this.market.loading = false;
                 }
                 this.market_search_next(cx);
                 cx.notify();
             });
-        })
-        .detach();
+        }).detach();
         cx.notify();
     }
 
@@ -649,6 +669,17 @@ mod tests {
         assert!(!market.primed && !market.loading);
         assert!(Arc::ptr_eq(market.results.as_ref().unwrap().as_ref().unwrap(), &catalog));
         assert!(!market.requests.finish(old));
+    }
+
+    #[test]
+    fn removed_plugins_cannot_block_later_permission_prompts() {
+        let mut queue = ["removed", "already-granted", "new-plugin"].map(str::to_owned).into();
+        assert_eq!(next_permission(&mut queue, |id| match id {
+            "removed" => None,
+            "already-granted" => Some(false),
+            _ => Some(true),
+        }).as_deref(), Some("new-plugin"));
+        assert!(queue.is_empty());
     }
 
     #[test]

@@ -36,8 +36,8 @@ runs:
         size=$(( $(avail_gb "$dir") - KEEP_FREE_GB ))
         [ "$size" -gt "$MAX_GB" ] && size=$MAX_GB
         if [ "$size" -lt "$MIN_GB" ]; then
-          echo "::warning::only $(avail_gb "$dir") GB free on $dir; no extra swap"
-          exit 0
+          echo "::error::only $(avail_gb "$dir") GB free on $dir; cannot prepare required build swap"
+          exit 1
         fi
         sudo fallocate -l "${size}G" "$dir/lto.swap"
         sudo chmod 600 "$dir/lto.swap"

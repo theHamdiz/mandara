@@ -154,8 +154,9 @@ and tick off tasks where they sit.
    backups and one-click restore. Display changes have a keep-or-revert countdown.
 9. **Extensions with room to experiment.** Choose from 88 built-in plugins
    or write your own in Rust. Sandboxed WebAssembly keeps a crashing plugin
-   from taking down your desktop. The shell restarts after an unexpected display-loop shutdown,
-   with warnings and crash errors saved in the system journal where available.
+   from taking down your desktop. With auto-restart enabled, the supervisor
+   restarts the shell after an unexpected display-loop shutdown until its
+   crash-loop limit is reached, with warnings and crash errors saved in the system journal where available.
    Optional [backups](docs/backups.md) bring
    encrypted backups, private restore copies, Btrfs snapshots and reviewed cleanup;
    [app permissions](docs/app-permissions.md) puts Flatpak controls and clear access limits within reach.

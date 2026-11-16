@@ -357,21 +357,27 @@ fn get(url: &str, limit: u64) -> Result<Vec<u8>, Fetch> {
 }
 
 fn get_media(url: &str, limit: u64, accept: &str) -> Result<Vec<u8>, Fetch> {
-    let mut r = response(url, accept)?;
+    get_media_timeout(url, limit, accept, REQUEST_TIMEOUT)
+}
+
+fn get_media_timeout(url: &str, limit: u64, accept: &str, timeout: Duration) -> Result<Vec<u8>, Fetch> {
+    let mut r = response_timeout(url, accept, timeout)?;
     let mut out = Vec::new();
     r.body_mut().with_config().limit(limit).reader().read_to_end(&mut out).map_err(|e| Fetch::Failed(tf("Couldn't reach GitHub: {error}", &[("error", &e)])))?;
     Ok(out)
 }
 
-fn response(url: &str, accept: &str) -> Result<ureq::http::Response<ureq::Body>, Fetch> {
+fn response_timeout(url: &str, accept: &str, timeout: Duration) -> Result<ureq::http::Response<ureq::Body>, Fetch> {
     crate::offline::check().map_err(Fetch::Failed)?;
     let reach = |e: &dyn std::fmt::Display| Fetch::Failed(tf("Couldn't reach GitHub: {error}", &[("error", &e)]));
-    let r = agent()
+    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(timeout)).http_status_as_error(false).build().into();
+    let r = agent
         .get(url)
         .header("User-Agent", concat!("mandara-shell/", env!("CARGO_PKG_VERSION")))
         .header("Accept", accept)
         .call()
         .map_err(|e| reach(&e))?;
+    catalog::observe(url, &r);
     if let Some(seconds) = rate_limit_wait(&r) {
         return Err(Fetch::Failed(tf("GitHub's limit for anonymous requests was reached. Try again in {seconds} s.", &[("seconds", &seconds)])));
     }
@@ -599,14 +605,18 @@ fn verify_archive(release: &Release, asset: &Asset, bytes: &[u8]) -> Result<(), 
 const SUMS_FILE: &str = "SHA256SUMS";
 
 pub(crate) fn find_release(full_name: &str) -> Result<(Release, Asset), InstallError> {
-    let (release, asset) = find_any_release(full_name)?;
+    find_release_with(full_name, get)
+}
+
+fn find_release_with(full_name: &str, mut get: impl FnMut(&str, u64) -> Result<Vec<u8>, Fetch>) -> Result<(Release, Asset), InstallError> {
+    let (release, asset) = find_any_release(full_name, &mut get)?;
     if !same_repo(&release, full_name) {
         return Err(InstallError::Failed(tf("{name} now points to another repository ({page}). Mandara doesn't follow moved plugins; install it again from its new home if you trust it.", &[("name", &full_name), ("page", &release.html_url)])));
     }
     Ok((release, asset))
 }
 
-fn find_any_release(full_name: &str) -> Result<(Release, Asset), InstallError> {
+fn find_any_release(full_name: &str, mut get: impl FnMut(&str, u64) -> Result<Vec<u8>, Fetch>) -> Result<(Release, Asset), InstallError> {
     let base = api_base();
     match get(&format!("{base}/repos/{full_name}/releases/latest"), MAX_JSON_BYTES) {
         Ok(body) => {

@@ -1,14 +1,15 @@
 //! Read a released manifest without loading or unpacking its WebAssembly component.
 
-use super::{MANIFEST_BYTES, Metadata};
+use super::{MANIFEST_BYTES, Metadata, budget};
 use crate::marketplace;
 use std::io::Read;
 
 /// Repositories need not keep plugin.toml at their root. Read its archive
 /// entry as a stream, stopping as soon as the manifest is found.
 pub(super) fn from_archive(repo: &str, url: &str) -> Result<Metadata, String> {
+    budget::take()?;
     let mut response =
-        marketplace::response(url, "application/octet-stream").map_err(String::from)?;
+        marketplace::response_timeout(url, "application/octet-stream", budget::TIMEOUT).map_err(String::from)?;
     let reader = response
         .body_mut()
         .with_config()
@@ -19,43 +20,54 @@ pub(super) fn from_archive(repo: &str, url: &str) -> Result<Metadata, String> {
 }
 
 fn extract(reader: impl Read, expanded_limit: u64) -> std::io::Result<Vec<u8>> {
+    use std::path::Component;
     let decoded = flate2::read::GzDecoder::new(reader).take(expanded_limit);
     let mut archive = tar::Archive::new(decoded);
+    let mut root = None;
+    let mut wrapped: Option<(std::path::PathBuf, Vec<u8>)> = None;
+    let mut ambiguous = false;
     for entry in archive.entries()? {
         let entry = entry?;
-        if !entry.header().entry_type().is_file()
-            || !mandara_delta::archive::entry_matches(&entry.path()?, "plugin.toml")
-        {
-            continue;
+        if !entry.header().entry_type().is_file() { continue; }
+        let path = entry.path()?.into_owned();
+        if path.components().any(|c| !matches!(c, Component::Normal(_) | Component::CurDir)) {
+            return Err(std::io::ErrorKind::InvalidData.into());
         }
+        let mut parts = path.components().filter(|c| *c != Component::CurDir);
+        let is_root = match (parts.next(), parts.next(), parts.next()) {
+            (Some(Component::Normal(name)), None, None) if name == "plugin.toml" => true,
+            (Some(Component::Normal(_)), Some(Component::Normal(name)), None) if name == "plugin.toml" => false,
+            _ => continue,
+        };
         let expected = entry.header().size()?;
         if expected > MANIFEST_BYTES {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "plugin manifest exceeds the store limit",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "plugin manifest exceeds the store limit"));
         }
         let mut bytes = Vec::new();
         entry.take(MANIFEST_BYTES).read_to_end(&mut bytes)?;
-        if bytes.len() as u64 != expected {
-            return Err(std::io::ErrorKind::UnexpectedEof.into());
+        if bytes.len() as u64 != expected { return Err(std::io::ErrorKind::UnexpectedEof.into()); }
+        if is_root { root = Some(bytes); }
+        else if !ambiguous {
+            if wrapped.as_ref().is_some_and(|(known, _)| *known != path) {
+                ambiguous = true;
+                wrapped = None;
+            } else { wrapped = Some((path, bytes)); }
         }
-        return Ok(bytes);
     }
-    Err(std::io::Error::new(
-        std::io::ErrorKind::InvalidData,
-        "archive has no plugin manifest within the store limit",
-    ))
+    root.or_else(|| wrapped.map(|(_, bytes)| bytes)).ok_or_else(|| std::io::Error::new(
+        std::io::ErrorKind::InvalidData, "archive has no unambiguous plugin manifest within the store limit"))
 }
 
 pub(super) fn fetch(api: &str, repo: &str, tag: &str) -> Result<Metadata, String> {
     let mut url = url::Url::parse(&format!("{api}/repos/{repo}/contents/plugin.toml"))
         .map_err(|error| error.to_string())?;
     url.query_pairs_mut().append_pair("ref", tag);
-    let bytes = marketplace::get_media(
+    budget::take()?;
+    let bytes = marketplace::get_media_timeout(
         url.as_str(),
         MANIFEST_BYTES,
         "application/vnd.github.raw+json",
+        budget::TIMEOUT,
     )
     .map_err(String::from)?;
     parse(repo, &bytes)
@@ -124,6 +136,18 @@ mod tests {
             ),
             ("picker", "Real Picker", "Published description")
         );
+    }
+
+    #[test]
+    fn root_manifest_wins_over_examples_and_ambiguous_wrappers_are_rejected() {
+        let example = b"id='example'\nname='Example'";
+        let real = b"id='real'\nname='Real plugin'";
+        let bytes = archive(&[("examples/plugin.toml", example), ("plugin.toml", real)]);
+        assert_eq!(parse("author/real", &extract(bytes.as_slice(), marketplace::MAX_BYTES).unwrap()).unwrap().id, "real");
+        let bytes = archive(&[("examples/plugin.toml", example), ("real/plugin.toml", real)]);
+        assert!(extract(bytes.as_slice(), marketplace::MAX_BYTES).is_err());
+        let bytes = archive(&[("plugin.toml", example), ("plugin.toml", real)]);
+        assert_eq!(extract(bytes.as_slice(), marketplace::MAX_BYTES).unwrap(), real);
     }
 
     #[test]
