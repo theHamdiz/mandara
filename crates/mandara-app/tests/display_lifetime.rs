@@ -8,6 +8,10 @@ const START_TIMEOUT: Duration = Duration::from_secs(30);
 const PROBE_INTERVAL: Duration = Duration::from_millis(100);
 const SCALE_SETTLE: Duration = Duration::from_secs(1);
 
+/// Each runtime is private, but the xtask binary owns one sandbox home.
+#[cfg(target_os = "linux")]
+static SANDBOX_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 struct Sandbox {
     xtask: PathBuf,
     runtime: tempfile::TempDir,
@@ -71,6 +75,7 @@ fn the_supervisor_starts_another_shell_after_a_display_disconnect() {
 
 #[cfg(target_os = "linux")]
 fn display_disconnect(supervised: bool) {
+    let _sandbox_lock = SANDBOX_TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     use std::{
         ffi::OsString,
         io::Write as _,
@@ -234,6 +239,7 @@ impl Drop for Sandbox {
 #[test]
 #[ignore = "requires MangoWM, bwrap, grim and MANDARA_TEST_XTASK pointing to a built xtask"]
 fn fractional_scale_changes_keep_the_shell_alive_without_other_windows() {
+    let _sandbox_lock = SANDBOX_TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let xtask = std::env::var_os("MANDARA_TEST_XTASK")
         .expect("set MANDARA_TEST_XTASK to the built xtask binary");
     let sandbox = Sandbox {

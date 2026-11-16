@@ -95,6 +95,41 @@ fn load(path: &Path) -> Vec<Entry> {
     entries
 }
 
+/// Small persistent scan position: failed lookups must not monopolize every allowance.
+const RESUME_BYTES: u64 = 4 << 10;
+
+#[derive(Default, Deserialize, Serialize)]
+struct Resume {
+    api: String,
+    after: Option<String>,
+}
+
+impl Resume {
+    fn load(path: &Path) -> Self {
+        use std::io::Read as _;
+        let Ok(file) = std::fs::File::open(path) else { return Self::default(); };
+        let mut bytes = Vec::new();
+        if file.take(RESUME_BYTES + 1).read_to_end(&mut bytes).is_err() || bytes.len() as u64 > RESUME_BYTES { return Self::default(); }
+        serde_json::from_slice::<Self>(&bytes).ok()
+            .filter(|cursor| cursor.after.as_ref().is_none_or(|repo| super::moderation::policy::valid_repository(repo)))
+            .unwrap_or_default()
+    }
+    fn for_api(&mut self, api: &str) -> &mut Option<String> {
+        if self.api != api { self.api = api.to_owned(); self.after = None; }
+        &mut self.after
+    }
+    fn save(&self, path: &Path) -> anyhow::Result<()> {
+        let bytes = serde_json::to_vec(self)?;
+        anyhow::ensure!(bytes.len() as u64 <= RESUME_BYTES, "plugin catalog resume record is too large");
+        mandara_config::store::write_atomic(path, &bytes)
+    }
+}
+
+struct Cache {
+    entries: Vec<Entry>,
+    resume: Resume,
+}
+
 fn fetch(repo: &str) -> Result<Option<Metadata>, String> {
     if !super::moderation::policy::valid_repository(repo) {
         return Err(format!("invalid plugin repository: {repo}"));
@@ -111,13 +146,14 @@ fn fetch(repo: &str) -> Result<Option<Metadata>, String> {
         .map(Some)
 }
 
-fn enrich_stream(
+fn enrich_after(
     results: &mut Results,
     entries: &mut Vec<Entry>,
     api: &str,
     mut fetch: impl FnMut(&str) -> Result<Option<Metadata>, String>,
     keep_going: impl Fn() -> bool,
     mut publish: impl FnMut(&Results),
+    after: &mut Option<String>,
 ) -> bool {
     for listing in &mut results.items {
         if let Some(entry) = entries.iter().find(|e| e.matches(api, listing)) {
@@ -127,12 +163,14 @@ fn enrich_stream(
     // Cached text and repository fallbacks are visible before the first HTTP request.
     publish(results);
     let mut changed = false;
-    for index in 0..results.items.len() {
-        let listing = &mut results.items[index];
-        if !keep_going() {
-            break;
-        }
+    let count = results.items.len();
+    let start = after.as_ref().and_then(|repo| results.items.iter().position(|l| l.full_name == *repo)).map_or(0, |index| (index + 1) % count);
+    for offset in 0..count {
+        let listing = &mut results.items[(start + offset) % count];
         if entries.iter().any(|e| e.matches(api, listing)) { continue; }
+        if !keep_going() { break; }
+        if !super::moderation::policy::valid_repository(&listing.full_name) { continue; }
+        *after = Some(listing.full_name.clone());
         let metadata = match fetch(&listing.full_name) {
             Ok(metadata) => metadata,
             Err(error) => {
@@ -165,14 +203,19 @@ fn enrich_stream(
 
 /// Called by the store's sole blocking worker, after moderation admits the listings.
 pub fn enrich(results: &mut Results, keep_going: impl Fn() -> bool, publish: impl FnMut(&Results)) {
-    static CACHE: parking_lot::Mutex<Option<Vec<Entry>>> = parking_lot::Mutex::new(None);
-    let path = mandara_config::paths::cache_dir().join("marketplace-catalog.json");
+    static CACHE: parking_lot::Mutex<Option<Cache>> = parking_lot::Mutex::new(None);
+    let dir = mandara_config::paths::cache_dir();
+    let path = dir.join("marketplace-catalog.json");
+    let resume_path = dir.join("marketplace-catalog-resume.json");
     let mut cache = CACHE.lock();
-    let entries = cache.get_or_insert_with(|| load(&path));
+    let Cache { entries, resume } = cache.get_or_insert_with(|| Cache { entries: load(&path), resume: Resume::load(&resume_path) });
+    let api = super::api_base();
+    let before = resume.after.clone();
+    let after = resume.for_api(&api);
     // One pass is optional work, with short individual requests and no hidden polling.
     const PASS_TIME: std::time::Duration = std::time::Duration::from_secs(20);
     let started = std::time::Instant::now();
-    if enrich_stream(results, entries, &super::api_base(), fetch, || keep_going() && budget::available() && started.elapsed() < PASS_TIME, publish) {
+    if enrich_after(results, entries, &api, fetch, || keep_going() && budget::available() && started.elapsed() < PASS_TIME, publish, after) {
         match serde_json::to_vec(entries)
             .map_err(anyhow::Error::from)
             .and_then(|bytes| mandara_config::store::write_atomic(&path, &bytes))
@@ -181,6 +224,16 @@ pub fn enrich(results: &mut Results, keep_going: impl Fn() -> bool, publish: imp
             Err(error) => tracing::warn!("saving plugin catalog: {error:#}"),
         }
     }
+    if resume.after != before && let Err(error) = resume.save(&resume_path) {
+        tracing::warn!("saving plugin catalog scan position: {error:#}");
+    }
+}
+
+#[cfg(test)]
+fn enrich_stream(results: &mut Results, entries: &mut Vec<Entry>, api: &str,
+    fetch: impl FnMut(&str) -> Result<Option<Metadata>, String>, keep_going: impl Fn() -> bool,
+    publish: impl FnMut(&Results)) -> bool {
+    enrich_after(results, entries, api, fetch, keep_going, publish, &mut None)
 }
 
 #[cfg(test)]
@@ -192,6 +245,38 @@ fn enrich_with(results: &mut Results, entries: &mut Vec<Entry>, api: &str,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failed_repositories_do_not_starve_later_releases_after_reopening() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("resume.json");
+        let mut entries = Vec::new();
+        let mut cursor = Resume::default();
+        let mut items: Vec<_> = (0..10).map(|n| listing(&format!("author/empty-{n}"), "a")).collect();
+        items.push(listing("author/released", "a"));
+        let metadata: Metadata = toml::from_str("id='released'\nname='Released Picker'").unwrap();
+        let mut results = Results { items, total: 11 };
+        let left = std::cell::Cell::new(20);
+        enrich_after(&mut results, &mut entries, "api", |_| {
+            left.set(left.get() - 2);
+            Err("no release".into())
+        }, || left.get() > 0, |_| {}, cursor.for_api("api"));
+        assert_eq!(cursor.after.as_deref(), Some("author/empty-9"));
+        cursor.save(&path).unwrap();
+        let mut reopened = Resume::load(&path);
+        let mut calls = Vec::new();
+        left.set(20);
+        enrich_after(&mut results, &mut entries, "api", |repo| {
+            calls.push(repo.to_owned());
+            left.set(left.get() - 2);
+            if repo == "author/released" { Ok(Some(metadata.clone())) } else { Err("no release".into()) }
+        }, || left.get() > 0, |_| {}, reopened.for_api("api"));
+        assert_eq!(calls.first().map(String::as_str), Some("author/released"));
+        assert!(results.items.last().unwrap().plugin.is_some());
+        assert_eq!(reopened.for_api("different-api"), &None);
+        std::fs::write(&path, vec![b'x'; RESUME_BYTES as usize + 1]).unwrap();
+        assert!(Resume::load(&path).after.is_none());
+    }
 
     #[test]
     fn repository_cards_are_published_before_fetching_and_new_metadata_streams_in() {
