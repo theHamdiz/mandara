@@ -69,15 +69,18 @@ jobs:
 
       # Leave headroom for the runner and Nix during release linking.
       - name: Build memory
-        run: |
-          sudo fallocate -l 16G /swapfile-mandara-nix
-          sudo chmod 600 /swapfile-mandara-nix
-          sudo mkswap /swapfile-mandara-nix
-          sudo swapon /swapfile-mandara-nix
+        uses: ./.github/actions/lto-swap
+        with:
+          max-gb: "32"
+          keep-free-gb: "24"
+          min-gb: "16"
 
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reserve runner memory
+        uses: ./.github/actions/nix-build-limits
 
       # Pull only: the push below uploads just Mandara's runtime closure, not
       # the toolchain and sources the build fetched.
@@ -112,3 +115,15 @@ jobs:
       - name: No token
         if: env.CACHIX_AUTH_TOKEN == ''
         run: echo "::warning::CACHIX_AUTH_TOKEN is not set, so nothing was uploaded to mandara.cachix.org"
+
+      - name: Build resource diagnostics
+        if: always()
+        run: |
+          systemctl show nix-daemon.service --property=Result,MemoryPeak,MemorySwapPeak,MemoryHigh,MemoryMax
+          group=$(systemctl show nix-daemon.service --property=ControlGroup --value)
+          if [ -n "$group" ] && [ -d "/sys/fs/cgroup$group" ]; then
+            cat "/sys/fs/cgroup$group/memory.events" "/sys/fs/cgroup$group/memory.pressure"
+          fi
+          free -h
+          df -h / /nix
+          sudo journalctl -k --no-pager --output=short-monotonic | awk '/oom|Out of memory|Killed process/' | tail -30

@@ -1,0 +1,32 @@
+name: Keep Nix builds within runner memory
+description: Reserve physical memory for the job agent while Nix uses build swap.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        CGROUP_ROOT: /sys/fs/cgroup
+        MEMINFO: /proc/meminfo
+      run: |
+        set -euo pipefail
+        # The daemon owns the builders; limiting the nix client alone does
+        # not contain the compiler. Leave at least 2 GiB for the agent,
+        # evaluator and OS on the standard 16 GiB hosted runner.
+        test -f "$CGROUP_ROOT/cgroup.controllers"
+        sudo systemctl start nix-daemon.service
+        sudo systemctl set-property --runtime nix-daemon.service \
+          MemoryAccounting=yes MemoryHigh=75% MemoryMax=85% MemorySwapMax=32G
+        group=$(systemctl show nix-daemon.service --property=ControlGroup --value)
+        test -n "$group"
+        root="$CGROUP_ROOT$group"
+        high=$(cat "$root/memory.high")
+        limit=$(cat "$root/memory.max")
+        total=$(awk '/^MemTotal:/ { printf "%.0f\n", $2 * 1024 }' "$MEMINFO")
+        # Check the kernel's effective boundary before starting a build.
+        if ! [[ "$high" =~ ^[0-9]+$ && "$limit" =~ ^[0-9]+$ ]] ||
+          ! (( high < limit && total - limit >= 2 * 1024 * 1024 * 1024 )); then
+          echo "::error::Nix memory boundary is not enforced: high=$high max=$limit total=$total"
+          exit 1
+        fi
+        systemctl show nix-daemon.service --property=ControlGroup,MemoryHigh,MemoryMax,MemorySwapMax
+        free -h

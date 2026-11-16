@@ -180,6 +180,9 @@ jobs:
 
       - uses: cachix/install-nix-action@v31
 
+      - name: Reserve runner memory
+        uses: ./.github/actions/nix-build-limits
+
       - name: Host package isolation
         run: nix eval --raw .#checks.x86_64-linux.host-packages.drvPath --override-input nixpkgs https://channels.nixos.org/${{ matrix.channel }}/nixexprs.${{ matrix.archive }} --no-write-lock-file --option abort-on-warn true
 
@@ -190,6 +193,18 @@ jobs:
 
       - name: Flake check
         run: nix flake check --override-input nixpkgs https://channels.nixos.org/${{ matrix.channel }}/nixexprs.${{ matrix.archive }} --no-write-lock-file --print-build-logs --max-jobs 1 --cores 1
+
+      - name: Build resource diagnostics
+        if: always()
+        run: |
+          systemctl show nix-daemon.service --property=Result,MemoryPeak,MemorySwapPeak,MemoryHigh,MemoryMax
+          group=$(systemctl show nix-daemon.service --property=ControlGroup --value)
+          if [ -n "$group" ] && [ -d "/sys/fs/cgroup$group" ]; then
+            cat "/sys/fs/cgroup$group/memory.events" "/sys/fs/cgroup$group/memory.pressure"
+          fi
+          free -h
+          df -h / /nix
+          sudo journalctl -k --no-pager --output=short-monotonic | awk '/oom|Out of memory|Killed process/' | tail -30
 
   plugins:
     name: Plugins (wasm32-wasip2)

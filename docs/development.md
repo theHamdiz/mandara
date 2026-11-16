@@ -112,6 +112,19 @@ truly right, put it on that one item with its reason:
 #[expect(clippy::large_enum_variant, reason = "one per frame; boxing would allocate per frame")]
 ```
 
+## Nix builds on hosted runners
+
+CI and the Nix cache keep the normal fat-LTO release profile and run one
+compiler job at a time. Swap provides linking headroom. The Nix daemon and
+its builders also have cgroup limits: memory pressure starts reclaiming at
+75% of physical memory, with a hard limit at 85% and up to 32 GiB of swap.
+The setup checks the kernel's effective limits and requires at least 2 GiB
+outside the build group for the job agent, evaluator and operating system.
+
+Every build records its peak memory, swap use, pressure counters, disk
+space and kernel OOM messages, including when compilation fails. Check
+these diagnostics before retrying a runner failure.
+
 ## Pure Wayland: no X11
 
 Mandara talks only Wayland. GPUI and its platform crates are built with
