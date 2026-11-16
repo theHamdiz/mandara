@@ -118,12 +118,7 @@ jobs:
 
       - name: Build resource diagnostics
         if: always()
+        env:
+          CACHIX_AUTH_TOKEN: ""
         run: |
-          systemctl show nix-daemon.service --property=Result,MemoryPeak,MemorySwapPeak,MemoryHigh,MemoryMax
-          group=$(systemctl show nix-daemon.service --property=ControlGroup --value)
-          if [ -n "$group" ] && [ -d "/sys/fs/cgroup$group" ]; then
-            cat "/sys/fs/cgroup$group/memory.events" "/sys/fs/cgroup$group/memory.pressure"
-          fi
-          free -h
-          df -h / /nix
-          sudo journalctl -k --no-pager --output=short-monotonic | awk '/oom|Out of memory|Killed process/' | tail -30
+          cargo run --locked --quiet --package xtask -- nix-runner report

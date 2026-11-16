@@ -36,6 +36,8 @@
 //!   binary patches and the release's `update.json` (see [`delta`]).
 //! - `resource-check <BIN> [config.toml]`: the idle resource budget of a
 //!   binary in a throw-away headless session (see [`resource_check`]).
+//! - `nix-runner <prepare | report>`: contain CI builders and report their
+//!   resource use (see [`nix_runner`]).
 //! - `sandbox <command>`: a private headless demo desktop for screenshots
 //!   and end-to-end tests (see [`sandbox`]).
 //! - `mosaic OUT.png --cols N [--theme dark|light] TILE…`: screenshots as a
@@ -57,6 +59,7 @@ mod headless;
 mod langpacks;
 mod loc;
 mod mosaic;
+mod nix_runner;
 mod proc;
 mod prune;
 mod release_key;
@@ -530,12 +533,13 @@ fn main() {
         Some("plugin-delta") => delta::plugin_delta(rest),
         Some("langpacks") => langpacks::langpacks(rest),
         Some("resource-check") => resource_check::resource_check(rest),
+        Some("nix-runner") => nix_runner::nix_runner(rest),
         Some("sandbox") => sandbox::sandbox(rest),
         Some("mosaic") => mosaic::mosaic(rest),
         Some("prune") => prune::prune(rest),
         Some("release-key") => release_key::release_key(rest),
         _ => {
-            eprintln!("usage: cargo xtask <status [--json] | bump [--dry-run] [--commit] [--tag] [--init] | verify | changelog [VERSION] | dist --target <triple> [--bin PATH] [--variant NAME] [--out DIR] | plugins [--out DIR] | checksums [--out DIR] | build [--target <triple>] [--variant NAME] [--profile P] [--features F] [--no-default-features] [--out DIR] [--no-readme] | art [--check | --compose [--only ID] [--out DIR] | --calligraphy] | bootstrap [--check] | delta --old BIN --new BIN --out PATCH | apply-delta --old BIN --patch PATCH --out BIN [--sha256 HEX] | update-part --target <triple> [--variant NAME] [--out DIR] [--previous OLD.tar.gz] | plugin-delta --new ARCHIVE [--old ARCHIVE] --out DIR | langpacks [--version V | --bin PATH] [--dir DIR] [--out DIR] | resource-check BIN [config.toml] | sandbox <up | down | shot | matte | msg | pointer | studio | shell | audio | notify | env> … | mosaic OUT.png --cols N [--width PX] [--gap PX] [--radius PX] [--theme dark|light] TILE… | prune [--max-gib N] [--watch MINUTES] [--dir PATH]… [--cargo-cache] [--dry-run] | release-key <new [--repo OWNER/NAME] [--secret NAME] [--backup PATH] [--force] | sign FILE [--env NAME]>>");
+            eprintln!("usage: cargo xtask <status [--json] | bump [--dry-run] [--commit] [--tag] [--init] | verify | changelog [VERSION] | dist --target <triple> [--bin PATH] [--variant NAME] [--out DIR] | plugins [--out DIR] | checksums [--out DIR] | build [--target <triple>] [--variant NAME] [--profile P] [--features F] [--no-default-features] [--out DIR] [--no-readme] | art [--check | --compose [--only ID] [--out DIR] | --calligraphy] | bootstrap [--check] | delta --old BIN --new BIN --out PATCH | apply-delta --old BIN --patch PATCH --out BIN [--sha256 HEX] | update-part --target <triple> [--variant NAME] [--out DIR] [--previous OLD.tar.gz] | plugin-delta --new ARCHIVE [--old ARCHIVE] --out DIR | langpacks [--version V | --bin PATH] [--dir DIR] [--out DIR] | resource-check BIN [config.toml] | nix-runner <prepare | report> | sandbox <up | down | shot | matte | msg | pointer | studio | shell | audio | notify | env> … | mosaic OUT.png --cols N [--width PX] [--gap PX] [--radius PX] [--theme dark|light] TILE… | prune [--max-gib N] [--watch MINUTES] [--dir PATH]… [--cargo-cache] [--dry-run] | release-key <new [--repo OWNER/NAME] [--secret NAME] [--backup PATH] [--force] | sign FILE [--env NAME]>>");
             std::process::exit(EXIT_USAGE);
         }
     };

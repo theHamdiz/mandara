@@ -226,11 +226,21 @@ fn nix_build_boundary(workflow: &serde_yaml_ng::Value, job: &str) -> Result<(), 
     if diagnostics["if"].as_str() != Some("always()") {
         return Err("failed builds must retain diagnostics");
     }
+    if diagnostics["run"].as_str().map(str::trim) != Some("cargo run --locked --quiet --package xtask -- nix-runner report")
+        || diagnostics["env"]["CACHIX_AUTH_TOKEN"].as_str() != Some("") {
+        return Err("Rust diagnostics must run without cache credentials");
+    }
     Ok(())
 }
 
 #[test]
 fn nix_checks_and_cache_contain_builders_and_preserve_failure_diagnostics() {
+    let action = std::fs::read_to_string(crate::root().join(".github/actions/nix-build-limits/action.yml")).unwrap();
+    let action: serde_yaml_ng::Value = serde_yaml_ng::from_str(&action).unwrap();
+    let setup = &action["runs"]["steps"][1];
+    assert_eq!(action["runs"]["steps"][0]["uses"].as_str(), Some("dtolnay/rust-toolchain@stable"));
+    assert_eq!(setup["run"].as_str().unwrap().trim(), "cargo run --locked --quiet --package xtask -- nix-runner prepare");
+    assert_eq!(setup["env"]["CACHIX_AUTH_TOKEN"].as_str(), Some(""));
     for (file, job) in [("ci.yml", "nix"), ("nix-cache.yml", "cache")] {
         let workflow = std::fs::read_to_string(crate::root().join(".github/workflows").join(file)).unwrap();
         let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&workflow).unwrap();
@@ -248,53 +258,6 @@ fn nix_checks_and_cache_contain_builders_and_preserve_failure_diagnostics() {
         let build = steps.iter().position(|step| step["name"].as_str() == Some("Build")).unwrap();
         steps.swap(budget, build);
         assert!(nix_build_boundary(&early_build, job).is_err());
-    }
-}
-
-#[cfg(unix)]
-#[test]
-fn nix_memory_setup_rejects_unenforced_kernel_limits() {
-    use std::os::unix::fs::PermissionsExt as _;
-    use std::process::Command;
-    let action = std::fs::read_to_string(crate::root().join(".github/actions/nix-build-limits/action.yml")).unwrap();
-    let action: serde_yaml_ng::Value = serde_yaml_ng::from_str(&action).unwrap();
-    let step = &action["runs"]["steps"][0];
-    assert_eq!(step["env"]["CGROUP_ROOT"].as_str(), Some("/sys/fs/cgroup"));
-    assert_eq!(step["env"]["MEMINFO"].as_str(), Some("/proc/meminfo"));
-    let script = step["run"].as_str().unwrap();
-    for (high, limit, applies, expected) in [
-        ("12884901888", "14602888806", true, true),
-        ("max", "14602888806", true, false),
-        ("12884901888", "max", true, false),
-        ("12884901888", "17179869184", true, false),
-        ("14602888806", "12884901888", true, false),
-        ("12884901888", "14602888806", false, false),
-    ] {
-        let dir = tempfile::tempdir().unwrap();
-        let group = dir.path().join("nix-daemon.service");
-        std::fs::create_dir(&group).unwrap();
-        std::fs::write(dir.path().join("cgroup.controllers"), "memory\n").unwrap();
-        std::fs::write(dir.path().join("meminfo"), "MemTotal: 16777216 kB\n").unwrap();
-        std::fs::write(group.join("memory.high"), high).unwrap();
-        std::fs::write(group.join("memory.max"), limit).unwrap();
-        for (name, contents) in [
-            ("sudo", "#!/bin/sh\nexec \"$@\"\n"),
-            ("systemctl", "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$CALLS\"\ncase \"$1\" in\nset-property) test \"$APPLIES\" = 1;;\nshow) printf '/nix-daemon.service\\n';;\nstart) exit 0;;\n*) exit 1;;\nesac\n"),
-        ] {
-            let path = dir.path().join(name);
-            std::fs::write(&path, contents).unwrap();
-            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
-        let calls = dir.path().join("calls");
-        let mut paths = vec![dir.path().to_path_buf()];
-        paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap()));
-        let output = Command::new("bash").arg("-c").arg(script)
-            .env("PATH", std::env::join_paths(paths).unwrap())
-            .env("CGROUP_ROOT", dir.path()).env("MEMINFO", dir.path().join("meminfo"))
-            .env("CALLS", &calls).env("APPLIES", if applies { "1" } else { "0" }).output().unwrap();
-        assert_eq!(output.status.success(), expected, "high={high}, max={limit}, applies={applies}: {}", String::from_utf8_lossy(&output.stderr));
-        let calls = std::fs::read_to_string(calls).unwrap();
-        assert!(calls.starts_with("start nix-daemon.service\nset-property --runtime nix-daemon.service MemoryAccounting=yes MemoryHigh=75% MemoryMax=85% MemorySwapMax=32G\n"));
     }
 }
 

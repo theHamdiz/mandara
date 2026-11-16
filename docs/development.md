@@ -120,6 +120,9 @@ its builders also have cgroup limits: memory pressure starts reclaiming at
 75% of physical memory, with a hard limit at 85% and up to 32 GiB of swap.
 The setup checks the kernel's effective limits and requires at least 2 GiB
 outside the build group for the job agent, evaluator and operating system.
+The action runs `cargo xtask nix-runner prepare`; parsing, validation and
+service commands live in the tested Rust tool. It runs only inside GitHub
+Actions and uses non-interactive privilege requests.
 
 Every build records its peak memory, swap use, pressure counters, disk
 space and kernel OOM messages, including when compilation fails. Check
