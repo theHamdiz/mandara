@@ -9,6 +9,37 @@ Everything here is Rust, run through `cargo xtask` (the `xtask/` crate). The
 system programs it starts are MangoWM, `dbus-daemon`, `bwrap`, PipeWire
 (`pipewire`, `pipewire-pulse`, `wireplumber`, `pactl`, `paplay`) and `grim`.
 
+## Shell crash diagnostics
+
+Start `mandara` to use its restart supervisor; `mandara run` runs the shell
+directly. An explicit `mandara msg quit` stops both. A display event loop
+that stops without that request exits as a failure, so the supervisor can
+restart it under General's auto-restart setting and crash-loop limit.
+
+On systems with journald, warnings and errors include the build identity
+in the journal even when a compositor redirects stderr to `/dev/null`:
+
+```bash
+journalctl --user -t mandara --since today
+```
+
+With volatile journal storage, these records are in the system journal instead:
+`sudo journalctl -t mandara --since today`. Members of `systemd-journal` can
+read it without `sudo`.
+
+Journal formatting and datagrams are bounded, and the socket is nonblocking.
+Long messages are shortened at a character boundary.
+`RUST_LOG` controls stderr only; the journal retains warnings and errors.
+A full or unavailable journal does not hold up the shell, and stderr
+output remains available on every
+supported system. Reproduce crashes in the private sandbox and retain the
+log around the failure before changing code.
+
+The sandbox keeps Mango's native config at
+`target/sandbox/home/.config/mango/config.conf`. Mandara's own config stays
+under its separate `XDG_CONFIG_HOME`, so the Config doctor can validate
+saved display changes against the compositor's real config.
+
 ## Website
 
 GitHub Pages serves `index.html` as the homepage and the Markdown guides as

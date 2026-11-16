@@ -167,7 +167,7 @@ impl Sandbox {
         self.root.join("demo-etc")
     }
     fn mango_conf(&self) -> PathBuf {
-        self.home().join("config/mango/config.conf")
+        self.home().join(".config/mango/config.conf")
     }
     fn bus_socket(&self) -> PathBuf {
         self.runtime.join(headless::BUS_SOCKET)
@@ -772,6 +772,17 @@ mod tests {
         assert!(!env.contains_key("WAYLAND_DISPLAY"));
         assert!(!env.contains_key("MANGO_INSTANCE_SIGNATURE"));
         assert!(!env.contains_key("DISPLAY"));
+    }
+
+    #[test]
+    fn mango_checker_finds_the_compositors_native_config() {
+        let root = tempfile::tempdir().unwrap();
+        let sb = Sandbox { root: root.path().to_path_buf(), runtime: root.path().join("runtime") };
+        let config = sb.mango_conf();
+        write(&config, "animations=0\n").unwrap();
+        let env = sb.env();
+        let discovered = mandara_config::compositor::Target::Mango.user_config_in(Path::new(&env["XDG_CONFIG_HOME"]), &sb.home());
+        assert_eq!(discovered, config, "display confirmation must validate the config Mango reads");
     }
 
     #[test]

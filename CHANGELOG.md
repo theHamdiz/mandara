@@ -6,6 +6,16 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The shell keeps crash diagnostics and recovers from an unexpected display shutdown.
+
+### Fixed
+
+- An unexpected display-loop shutdown no longer quietly stops the shell's restart supervisor. Warnings and crash errors also reach the system journal when the desktop discards terminal output, keeping non-English text intact when long messages are shortened.
+
+### Under the hood
+
+- The demo sandbox keeps Mango's config in its native home-based location, so display changes pass the same configuration checks as a normal session.
+
 ## 0.34.0 — 2026-11-15
 
 Studio refinements, optional bar and dock effects, richer third-party plugins, and a responsive launcher.
