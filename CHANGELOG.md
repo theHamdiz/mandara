@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.34.1 — 2026-11-16
+
 The shell recovers from unexpected display shutdowns, and Studio makes community plugins easier to browse and manage.
 
 ### Fixed
