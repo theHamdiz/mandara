@@ -1514,7 +1514,7 @@ fn follow_prefix_settings(
 impl LauncherView {
     /// A launcher on a surface opened for an output of logical size
     /// `expected` ([`crate::outputs::overlay_target`]).
-    fn new(expected: (f32, f32), window: &mut Window, cx: &mut Context<Self>) -> Self {
+    fn new(expected: (f32, f32), input: Option<LauncherInput>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         launcher_ext::warm_usage(cx);
         AppCatalog::retain_view(cx);
         Wallpapers::retain_view(cx);
@@ -1587,7 +1587,12 @@ impl LauncherView {
                     }
                     overlays.launcher = None;
                     if reopen {
-                        overlays.launcher_query = Some(std::mem::take(&mut this.query));
+                        overlays.launcher_input = Some(LauncherInput {
+                            query: std::mem::take(&mut this.query),
+                            caret: this.caret,
+                            select_all: this.select_all,
+                            mode: this.mode,
+                        });
                     }
                     this.release(window, cx);
                     window.remove_window();
@@ -1704,7 +1709,14 @@ impl LauncherView {
             launcher_ext::RecentFiles::refresh_for_view(cx, (), launcher_ext::read_recent_files);
         }
         this.categories = launcher_looks::categories(&this.ctx.catalog.apps, &this.ctx.pinned);
-        if this.look.remember_query {
+        if let Some(input) = input {
+            this.query = input.query;
+            this.caret = input.caret;
+            this.select_all = input.select_all;
+            if this.look.search_modes() {
+                this.mode = launcher_looks::settle_mode(input.mode, &this.ctx.providers);
+            }
+        } else if this.look.remember_query {
             let q = launcher_ext::last_query();
             this.caret = q.chars().count();
             this.query = q;
@@ -2779,12 +2791,20 @@ pub use crate::powerctl::session_menu::SessionView;
 #[derive(Default)]
 struct Overlays {
     launcher: Option<WindowHandle<LauncherView>>,
-    launcher_query: Option<String>,
+    launcher_input: Option<LauncherInput>,
     session: Option<WindowHandle<SessionView>>,
     picker: Option<WindowHandle<crate::wallpaper::PickerView>>,
 }
 
 impl gpui::Global for Overlays {}
+
+/// The live search input carried across a Wayland surface replacement.
+struct LauncherInput {
+    query: String,
+    caret: usize,
+    select_all: bool,
+    mode: Option<BeaconMode>,
+}
 
 /// The output (connector name, and its logical size when known) the next
 /// wallpaper picker opens on.
@@ -2829,15 +2849,9 @@ pub fn init_overlays(cx: &mut App) {
         };
         if launcher && !is_open(&overlays.launcher, cx) {
             let role = launcher_role(config(cx).read(cx).get().launcher.look.style);
-            let query = overlays.launcher_query.take();
+            let input = overlays.launcher_input.take();
             overlays.launcher = cx
-                .open_window(overlay_spec(role, w, h, display), |window, cx| cx.new(|cx| {
-                    let mut view = LauncherView::new((w, h), window, cx);
-                    if let Some(query) = query {
-                        view.set_query(query, cx);
-                    }
-                    view
-                }))
+                .open_window(overlay_spec(role, w, h, display), |window, cx| cx.new(|cx| LauncherView::new((w, h), input, window, cx)))
                 .map_err(|e| tracing::error!("launcher: {e:#}"))
                 .ok();
         }
