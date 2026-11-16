@@ -136,6 +136,8 @@ and tick off tasks where they sit.
 6. **Make changes and see them.** Mandara Studio has 32 pages of live
    settings and previews. Give Studio its own shaped window and controls, or
    edit your compositor's shortcuts in a roomy split editor with conflict checks and Undo. Save bar arrangements as profiles;
+   Studio remembers its window size. Community plugins show their names and
+   descriptions before installation and ask for permissions when installed.
    Maintenance spots missing icon themes and takes you to the right settings.
 7. **Colours that belong together.** Choose a hand-tuned theme or a Material
    You (HCT) palette from your wallpaper. Opt in to matching Ghostty, GTK 3/4,

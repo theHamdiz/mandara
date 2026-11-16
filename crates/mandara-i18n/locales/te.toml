@@ -10937,3 +10937,5 @@
 "KWin: Mandara doesn’t start with Plasma yet. Run `mandara setup --compositor kwin --autostart` to add its startup entry, or start `mandara` yourself after logging in." = "KWin: Mandara ఇంకా Plasma తో ప్రారంభం కాదు. దాని ప్రారంభ నమోదును జోడించడానికి `mandara setup --compositor kwin --autostart` ను అమలు చేయండి, లేదా లాగిన్ అయిన తర్వాత `mandara` ను మీరే ప్రారంభించండి."
 "{variant} · extra" = "{variant} · అదనపు"
 "Extra" = "అదనపు"
+
+"Installed {plugin} {version}" = "{plugin} {version} ఇన్‌స్టాల్ చేయబడింది"

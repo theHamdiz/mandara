@@ -21,6 +21,7 @@ use serde::Deserialize;
 use ureq::http::StatusCode;
 
 pub mod moderation;
+pub mod catalog;
 
 pub const TOPIC: &str = "mandara-plugin";
 pub const ASSET_SUFFIX: &str = ".mandara.tar.gz";
@@ -76,6 +77,9 @@ pub struct Listing {
     pub archived: bool,
     #[serde(default)]
     pub fork: bool,
+    /// Publisher's released manifest, fetched separately from repository search.
+    #[serde(skip)]
+    pub plugin: Option<catalog::Metadata>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize, serde::Serialize)]
@@ -349,12 +353,23 @@ pub(crate) fn rate_limit_wait(r: &ureq::http::Response<ureq::Body>) -> Option<u6
 }
 
 fn get(url: &str, limit: u64) -> Result<Vec<u8>, Fetch> {
+    get_media(url, limit, "application/vnd.github+json")
+}
+
+fn get_media(url: &str, limit: u64, accept: &str) -> Result<Vec<u8>, Fetch> {
+    let mut r = response(url, accept)?;
+    let mut out = Vec::new();
+    r.body_mut().with_config().limit(limit).reader().read_to_end(&mut out).map_err(|e| Fetch::Failed(tf("Couldn't reach GitHub: {error}", &[("error", &e)])))?;
+    Ok(out)
+}
+
+fn response(url: &str, accept: &str) -> Result<ureq::http::Response<ureq::Body>, Fetch> {
     crate::offline::check().map_err(Fetch::Failed)?;
     let reach = |e: &dyn std::fmt::Display| Fetch::Failed(tf("Couldn't reach GitHub: {error}", &[("error", &e)]));
-    let mut r = agent()
+    let r = agent()
         .get(url)
         .header("User-Agent", concat!("mandara-shell/", env!("CARGO_PKG_VERSION")))
-        .header("Accept", "application/vnd.github+json")
+        .header("Accept", accept)
         .call()
         .map_err(|e| reach(&e))?;
     if let Some(seconds) = rate_limit_wait(&r) {
@@ -365,9 +380,7 @@ fn get(url: &str, limit: u64) -> Result<Vec<u8>, Fetch> {
         s if !s.is_success() => return Err(reach(&s)),
         _ => {}
     }
-    let mut out = Vec::new();
-    r.body_mut().with_config().limit(limit).reader().read_to_end(&mut out).map_err(|e| reach(&e))?;
-    Ok(out)
+    Ok(r)
 }
 
 /// The search terms, reduced to safe words joined by `+`.

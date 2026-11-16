@@ -311,20 +311,25 @@ const MIN_W_PX: f32 = 460.0;
 const MIN_H_PX: f32 = 420.0;
 
 /// 1120×780, or `MANDARA_STUDIO_SIZE=WxH` (screenshots, layout testing).
-fn initial_size() -> gpui::Size<gpui::Pixels> {
-    std::env::var("MANDARA_STUDIO_SIZE")
-        .ok()
-        .and_then(|v| {
+fn initial_size(saved: Option<[f32; 2]>) -> gpui::Size<gpui::Pixels> {
+    restore_size(saved, std::env::var("MANDARA_STUDIO_SIZE").ok().as_deref())
+}
+
+fn restore_size(saved: Option<[f32; 2]>, override_size: Option<&str>) -> gpui::Size<gpui::Pixels> {
+    override_size.and_then(|v| {
             v.split_once('x').and_then(|(w, h)| Some((w.parse::<f32>().ok()?, h.parse::<f32>().ok()?)))
         })
-        .map(|(w, h)| size(px(w.max(MIN_W_PX)), px(h.max(MIN_H_PX))))
+        .map(|(w, h)| [w, h])
+        .and_then(ui_state::valid_size)
+        .or_else(|| saved.and_then(ui_state::valid_size))
+        .map(|[w, h]| size(px(w.max(MIN_W_PX)), px(h.max(MIN_H_PX))))
         .unwrap_or(size(px(DEFAULT_W_PX), px(DEFAULT_H_PX)))
 }
 
-fn window_options() -> WindowOptions {
+fn window_options(saved: Option<[f32; 2]>) -> WindowOptions {
     WindowOptions {
         titlebar: Some(TitlebarOptions { title: Some(mandara_i18n::t("Mandara Studio").into()), appears_transparent: true, traffic_light_position: None }),
-        window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(0.0), px(0.0)), size: initial_size() })),
+        window_bounds: Some(WindowBounds::Windowed(Bounds { origin: point(px(0.0), px(0.0)), size: initial_size(saved) })),
         focus: true,
         show: true,
         kind: WindowKind::Normal,
@@ -347,7 +352,30 @@ pub(crate) fn client_controls(decorations: gpui::Decorations, compositor: Option
 }
 
 fn open_window(cx: &mut App) -> Option<WindowHandle<StudioView>> {
-    match cx.open_window(window_options(), |_, cx| cx.new(StudioView::new)) {
+    let saved = cx.try_global::<ui_state::UiState>().and_then(|s| s.window_size);
+    let mut options = window_options(saved);
+    if let Some(display) = cx.primary_display()
+        && let Some(WindowBounds::Windowed(bounds)) = options.window_bounds.as_mut() {
+            let available = display.bounds().size;
+            bounds.size.width = bounds.size.width.min(available.width.max(px(MIN_W_PX)));
+            bounds.size.height = bounds.size.height.min(available.height.max(px(MIN_H_PX)));
+    }
+    match cx.open_window(options, |window, cx| cx.new(|cx| {
+        cx.observe_window_visibility(window, |view: &mut StudioView, _, window, cx| {
+            view.market_visibility(window.is_visible());
+            cx.notify();
+        }).detach();
+        cx.observe_window_bounds(window, |view: &mut StudioView, window, cx| {
+            let bounds = window.window_bounds().get_bounds();
+            let size = ui_state::valid_size([bounds.size.width.into(), bounds.size.height.into()]);
+            if size.is_some() && view.ui.window_size != size && std::env::var_os("MANDARA_STUDIO_SIZE").is_none() {
+                view.ui.window_size = size;
+                cx.set_global(view.ui.clone());
+                ui_state::save(&view.ui);
+            }
+        }).detach();
+        StudioView::new(cx)
+    })) {
         Ok(handle) => {
             cx.set_global(StudioWindow(Some(handle)));
             Some(handle)
@@ -360,7 +388,8 @@ fn open_window(cx: &mut App) -> Option<WindowHandle<StudioView>> {
 }
 
 /// Opens the Studio window and quits the process once it closes.
-pub fn run(section: Option<&str>, cx: &mut App) {
+pub fn run(section: Option<&str>, state: ui_state::UiState, cx: &mut App) {
+    cx.set_global(state);
     cx.set_global(StudioWindow::default());
     mandara_ui::state::init_studio_language(cx);
     // Studio's own cards, corners and springs follow the Look & feel
@@ -556,12 +585,22 @@ mod tests {
 
     #[test]
     fn studio_requests_its_own_titlebar_and_honors_server_decorations() {
-        assert_eq!(window_options().window_decorations, Some(gpui::WindowDecorations::Client));
+        assert_eq!(window_options(None).window_decorations, Some(gpui::WindowDecorations::Client));
         use mandara_config::compositor::Target::{KWin, Mango};
         assert!(client_controls(gpui::Decorations::Client { tiling: Default::default() }, Some(KWin)));
         assert!(!client_controls(gpui::Decorations::Server, Some(KWin)));
         assert!(client_controls(gpui::Decorations::Server, Some(Mango)));
         assert!(client_controls(gpui::Decorations::Server, None));
+    }
+
+    #[test]
+    fn saved_window_size_is_restored_with_a_valid_test_override_and_minimum_bounds() {
+        let saved = Some([1300.0, 900.0]);
+        assert_eq!(restore_size(saved, None), size(px(1300.0), px(900.0)));
+        assert_eq!(restore_size(saved, Some("800x600")), size(px(800.0), px(600.0)));
+        assert_eq!(restore_size(saved, Some("NaNx600")), size(px(1300.0), px(900.0)));
+        assert_eq!(restore_size(Some([1.0, 1.0]), None), size(px(MIN_W_PX), px(MIN_H_PX)));
+        assert_eq!(restore_size(None, None), size(px(DEFAULT_W_PX), px(DEFAULT_H_PX)));
     }
 
     /// Every Studio entry of the launcher opens the section it names, and

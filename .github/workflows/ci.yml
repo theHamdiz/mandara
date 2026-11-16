@@ -169,14 +169,14 @@ jobs:
       - name: Free disk space
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
 
-      # Leave headroom for the runner and Nix during release linking.
-      # Keep full optimization with one compiler job and bounded spill space.
+      # Use the release's adaptive swap setup for the stable toolchains too.
+      # Keep full optimization and leave space for the Nix build tree.
       - name: Build memory
-        run: |
-          sudo fallocate -l 16G /swapfile-mandara-nix
-          sudo chmod 600 /swapfile-mandara-nix
-          sudo mkswap /swapfile-mandara-nix
-          sudo swapon /swapfile-mandara-nix
+        uses: ./.github/actions/lto-swap
+        with:
+          max-gb: "32"
+          keep-free-gb: "24"
+          min-gb: "16"
 
       - uses: cachix/install-nix-action@v31
 

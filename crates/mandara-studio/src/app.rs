@@ -91,6 +91,8 @@ mod studio_frame;
 mod studio_looks;
 mod plugin_gate;
 mod plugin_grants;
+mod plugin_folders;
+mod market_catalog;
 pub mod plugin_modal;
 mod plugin_offer;
 pub mod plugins_local;
@@ -209,7 +211,7 @@ pub struct StudioView {
     /// groups (`crate::ui_state`).
     nav_focus: gpui::FocusHandle,
     nav_scroll: gpui::ScrollHandle,
-    ui: crate::ui_state::UiState,
+    pub(crate) ui: crate::ui_state::UiState,
     /// The folds on the page being built, in order, with whether each
     /// starts open ([`fold`]).
     fold_keys: Vec<(String, bool)>,
@@ -231,6 +233,9 @@ pub struct StudioView {
 impl StudioView {
     /// Initialize Studio’s inputs and page state from the active configuration.
     pub fn new(cx: &mut Context<Self>) -> Self {
+        cx.observe_global::<mandara_ui::plugins::external::ReloadState>(|this: &mut Self, cx| {
+            if this.market_permissions_pending() && !cx.try_global::<mandara_ui::plugins::external::ReloadState>().is_some_and(|reload| reload.is_running()) { cx.notify(); }
+        }).detach();
         cx.observe(&config(cx), |_, _, cx| cx.notify()).detach();
         cx.observe(&mandara_core::theme_entity(cx), |_, _, cx| cx.notify()).detach();
         profiles_page::track_history(cx);
@@ -289,7 +294,7 @@ impl StudioView {
         });
         Self { agent_page: None, motion_preview: None, section: Section::Home, bars_tab: Default::default(), recorder_row: recorder_row::RecorderRow::default(), search, query: String::new(), fields: HashMap::new(), error: None, perf, icon_search, icon_query: String::new(), icon_path, font_selects: HashMap::new(), wallpaper_seeds: None, wallpaper_thumb: None, seeds_loading: None, themes: None,
             app_templates: Default::default(),
-            icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, shortcuts_tab: Default::default(), auth_tab: Default::default(), native_shortcuts: Default::default(), focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), lock_designs: None, credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: crate::ui_state::load(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), studio_looks: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
+            icon_matches: None, launcher_data: Default::default(), sidebar_tabs: Default::default(), designer: Default::default(), rail: false, stack_rows: false, page: grid::PageMetrics::for_width(crate::DEFAULT_W_PX), list_fields: HashMap::new(), capturing: None, shortcuts_tab: Default::default(), auth_tab: Default::default(), native_shortcuts: Default::default(), focus: cx.focus_handle(), maint: Default::default(), depth_model: Default::default(), updates: Default::default(), about_links: Default::default(), lock_designs: None, credentials: Default::default(), feeds: Default::default(), modal: Default::default(), plugins_tab: Default::default(), store: Default::default(), market: Default::default(), local: Default::default(), content_scroll: Default::default(), nav_focus: cx.focus_handle(), nav_scroll: Default::default(), ui: cx.try_global::<crate::ui_state::UiState>().cloned().unwrap_or_default(), fold_keys: Vec::new(), lang_fills: Default::default(), component_preview: component_designs::PREVIEW_VALUE, components: Default::default(), themes_tab: Default::default(), studio_looks: Default::default(), desktop_tab: Default::default(), stash_edges: Default::default() }
     }
 
     /// Navigates to a section. Entering a page drops what it cached from
@@ -307,6 +312,7 @@ impl StudioView {
         if section == Section::Themes && self.section != Section::Themes { self.themes_tab = Default::default(); }
         if section == Section::Desktop && self.section != Section::Desktop { self.desktop_tab = Default::default(); }
         if section == Section::Plugins { self.market_reopen(); }
+        if section != Section::Plugins { self.market_pause(); self.local.pause(); }
         if section != self.section {
             self.launcher_data.release();
             self.agent_page = None;
@@ -1694,6 +1700,12 @@ impl Render for StudioView {
         frame_meter::begin();
         let p = mandara_core::frame_palette(window, cx);
         let cfg = config(cx).read(cx).snapshot();
+        self.market_visibility(window.is_visible());
+        if self.section != Section::Plugins || !self.query.is_empty() {
+            self.market_pause();
+            self.local.pause();
+        }
+        if window.is_visible() { self.market_permissions(&cfg, window, cx); }
         let client_controls = crate::client_controls(window.window_decorations(), registry::running_compositor());
         registry::set_client_controls(client_controls);
         registry::prime(&cfg);

@@ -1143,6 +1143,9 @@ impl StudioView {
     /// opens the product page.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn store_card(&mut self, scope: &str, enabled: bool, m: &PluginManifest, card_w: f32, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        if let Some(listing) = self.marketplace_listing(m) {
+            return self.listing_card(scope, &listing, card_w, p, cx);
+        }
         let scale = self.modal.scale;
         let cover_h = (card_w * STORE_COVER_ASPECT).floor();
         let cover = art_box(art_of(m), card_w, cover_h, scale, Detail::Sharp, plugin_placeholder(m, card_w, cover_h, p));
@@ -1501,13 +1504,13 @@ impl StudioView {
     /// plugins on this system, and the community's most recently updated.
     fn new_and_updated(&mut self, all: &[(bool, PluginManifest)], fit: grid::GridFit, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
         let pending: Vec<String> = self.updates.plugins.iter().filter(|u| u.available).map(|u| u.id.clone()).collect();
-        let mut local: Vec<&(bool, PluginManifest)> = all.iter().filter(|(_, m)| m.origin != PluginOrigin::Builtin).collect();
+        let mut local: Vec<&(bool, PluginManifest)> = all.iter().filter(|(_, m)| m.origin != PluginOrigin::Builtin && self.marketplace_listing(m).is_none()).collect();
         local.sort_by_key(|(_, m)| !pending.contains(&m.id));
         let mut cards: Vec<AnyElement> = local.into_iter().take(fit.cols).map(|(on, m)| self.store_card("new", *on, m, fit.card_w, cfg, p, cx)).collect();
         if cards.len() < fit.cols {
             let room = fit.cols - cards.len();
-            for listing in self.community_recent(room) {
-                cards.push(self.listing_card("new", &listing, fit.card_w, p, cx));
+            for listing in self.community_recent().iter().take(room) {
+                cards.push(self.listing_card("new", listing, fit.card_w, p, cx));
             }
         }
         if cards.is_empty() {
@@ -1518,12 +1521,10 @@ impl StudioView {
 
     /// The marketplace's most-starred plugins, with "See all" to Community.
     fn community_picks(&mut self, fit: grid::GridFit, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let skip = self.community_recent(fit.cols).into_iter().map(|l| l.full_name).collect::<Vec<_>>();
-        let picks = self.community_top(fit.cols, &skip);
-        if picks.is_empty() {
-            return None;
-        }
-        let cards: Vec<AnyElement> = picks.iter().map(|l| self.listing_card("picks", l, fit.card_w, p, cx)).collect();
+        let recent = self.community_recent();
+        let picks = self.community_top();
+        let cards: Vec<AnyElement> = picks.iter().filter(|l| !l.archived && !recent.iter().take(fit.cols).any(|r| r.full_name == l.full_name)).take(fit.cols).map(|l| self.listing_card("picks", l, fit.card_w, p, cx)).collect();
+        if cards.is_empty() { return None; }
         let more = see_all("store-see-community", None, p).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.store_tab(PluginsTab::Marketplace, cx)));
         Some(div().row().flex_col().gap(px(SPACE_14_PX)).child(shelf_head(t("Community picks").into(), t("Loved by Mandara users: third-party plugins that run sandboxed").into(), Some(more), p)).child(fit.render(cards)).into_any_element())
     }

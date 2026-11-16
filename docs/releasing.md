@@ -136,11 +136,12 @@ fingerprint.
 Every push and pull request runs:
 
 - **Build and test** on x86_64 and aarch64: `cargo build` and `cargo test`
-  with `--locked`, plus `cargo xtask status`. Clippy runs as a report only.
+  with `--locked`, plus `cargo xtask status`. Clippy gates the build.
 - **Plugins**: example plugins build for `wasm32-wasip2` and are packaged in
   marketplace format.
 - **Nix flake** checks stable NixOS, unstable and 25.11. Hosted runners use
-  one derivation and compiler job with 16 GiB of swap; fat LTO and the
+  one derivation and compiler job with the release's adaptive swap setup
+  (up to 32 GiB, keeping 24 GiB free on its filesystem before the build); fat LTO and the
   release profile stay unchanged.
 - **Installer**: the installer is the binary (`crates/mandara-install`); its
   unit tests (argument parsing, per-family dry-run plans, package-manager

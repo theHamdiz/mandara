@@ -31,6 +31,12 @@ use crate::tokens::*;
 /// Most folders one plugin may be given.
 const MAX_FOLDERS: usize = 16;
 
+pub(super) fn needs_permissions(m: &PluginManifest, cfg: &ShellConfig) -> bool {
+    let granted = cfg.plugins.granted(&m.id);
+    extension::split_capabilities(&m.permissions).0.iter().any(|c| c.needs_grant() && !granted.iter().any(|g| Capability::parse(g).is_ok_and(|g| g == *c)))
+}
+
+
 impl StudioView {
     /// The switches for the capabilities `m` asks for (none: `None`).
     pub(super) fn plugin_grants(&mut self, m: &PluginManifest, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
@@ -179,5 +185,26 @@ impl StudioView {
             }));
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod permission_tests {
+    use super::*;
+
+    #[test]
+    fn installation_prompts_only_for_missing_grants_and_upgrade_keeps_existing_choices() {
+        let mut manifest = PluginManifest::builtin("picker", "Picker", "", None);
+        let mut config = ShellConfig::default();
+        manifest.permissions = vec!["commands".into(), "timers".into()];
+        assert!(!needs_permissions(&manifest, &config));
+        manifest.permissions.push("clipboard.write".into());
+        assert!(needs_permissions(&manifest, &config));
+        config.plugins.set_granted("picker", "clipboard.write", true);
+        assert!(!needs_permissions(&manifest, &config));
+        manifest.permissions.push("net:example.com".into());
+        assert!(needs_permissions(&manifest, &config), "an upgrade's new permission needs a choice");
+        assert!(config.plugins.granted("picker").contains(&"clipboard.write".to_owned()));
+        assert!(!config.plugins.granted("picker").contains(&"net:example.com".to_owned()));
     }
 }

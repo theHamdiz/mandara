@@ -192,9 +192,10 @@ fn nix_runner_memory_is_prepared_before_compilation_without_reducing_release_opt
     let workflow = std::fs::read_to_string(crate::root().join(".github/workflows/ci.yml")).unwrap();
     let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&workflow).unwrap();
     let steps = workflow["jobs"]["nix"]["steps"].as_sequence().unwrap();
-    let memory = steps.iter().position(|step| step["run"].as_str().is_some_and(|run| run.contains("sudo swapon /swapfile-mandara-nix"))).unwrap();
-    let setup = steps[memory]["run"].as_str().unwrap();
-    for operation in ["fallocate -l 16G", "chmod 600", "mkswap", "swapon"] { assert!(setup.contains(operation)); }
+    let memory = steps.iter().position(|step| step["uses"].as_str() == Some("./.github/actions/lto-swap")).unwrap();
+    assert_eq!(steps[memory]["with"]["max-gb"].as_str(), Some("32"));
+    assert_eq!(steps[memory]["with"]["keep-free-gb"].as_str(), Some("24"));
+    assert_eq!(steps[memory]["with"]["min-gb"].as_str(), Some("16"));
     for (index, step) in steps.iter().enumerate() {
         let run = step["run"].as_str().unwrap_or_default();
         if run.contains("nix build") || run.contains("nix flake check") {

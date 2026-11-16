@@ -793,11 +793,14 @@ fn run_studio(section: Option<String>) -> Result<()> {
 
     let mirror = config_mirror::Mirror::start(shell_sock.clone(), shell_alive.clone())?;
 
+    let studio_ui = mandara_studio::ui_state::load();
+    let registry = build_registry();
+
     application().with_assets(MandaraAssets).run(move |cx: &mut App| {
         mandara_core::set_build_info(cx, build_info());
         let cfg = store.snapshot();
         cx.set_global(Fonts::resolve(cfg.studio_typography(), cx));
-        cx.set_global(build_registry());
+        cx.set_global(registry);
         let (config, _shell) = mandara_ui::init_state(store, cx);
         mandara_ui::icon_theme::set_theme_override(cfg.appearance.icon_theme.clone());
         let mut typography = cfg.studio_typography().clone();
@@ -853,7 +856,7 @@ fn run_studio(section: Option<String>) -> Result<()> {
                 },
             )));
 
-        mandara_studio::run(section.as_deref(), cx);
+        mandara_studio::run(section.as_deref(), studio_ui, cx);
 
         let changes = watcher.receiver();
         cx.spawn(async move |cx| {
@@ -880,6 +883,7 @@ fn run_studio(section: Option<String>) -> Result<()> {
         })
         .detach();
     });
+    mandara_studio::ui_state::flush();
     let _ = std::fs::remove_file(studio_socket());
     Ok(())
 }

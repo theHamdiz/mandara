@@ -232,6 +232,23 @@ struct Runtime {
     error: Option<String>,
 }
 
+fn parse_runtime(result: Result<serde_json::Value, String>) -> Result<HashMap<String, Runtime>, String> {
+    result.map(|v| {
+                v.as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|e| e.pointer("/origin/kind").and_then(|k| k.as_str()) == Some("third-party"))
+                    .filter_map(|e| {
+                        let id = e.get("id")?.as_str()?.to_string();
+                        let rt = e.get("runtime");
+                        let state = rt.and_then(|r| r.get("state")).and_then(|s| s.as_str()).unwrap_or("unknown").to_string();
+                        let error = rt.and_then(|r| r.get("error")).and_then(|s| s.as_str()).map(str::to_string);
+                        Some((id, Runtime { state, error }))
+                    })
+                    .collect::<HashMap<_, _>>()
+            })
+}
+
 /// A test load in Studio's own process.
 #[derive(Clone, Debug)]
 enum TestState {
@@ -254,7 +271,11 @@ pub struct Local {
     /// (registry generation, folder-event generation) of `reports`.
     scanned: Option<(u64, u64)>,
     fs_generation: u64,
-    watching: bool,
+    watch: Option<gpui::Task<()>>,
+    reads: crate::latest::Latest<(u64, u64)>,
+    shell_reads: crate::latest::Latest<((u64, u64), Duration)>,
+    hidden: bool,
+    creating: bool,
     /// From `plugins list` over IPC: `Err` when the shell isn't reachable.
     runtime: Option<Result<HashMap<String, Runtime>, String>>,
     tests: HashMap<PathBuf, TestState>,
@@ -267,6 +288,21 @@ pub struct Local {
     anchors: Rc<RefCell<HashMap<LocalSection, Bounds<Pixels>>>>,
     /// A section to scroll to once laid out, and frames waited so far.
     pending_scroll: Option<(LocalSection, u8)>,
+}
+
+impl Local {
+    pub(super) fn pause(&mut self) {
+        self.watch = None;
+        self.reads.set(None);
+        self.shell_reads.set(None);
+        self.copied_task = None;
+        self.copied = None;
+    }
+
+    pub(super) fn visibility(&mut self, visible: bool) {
+        self.hidden = !visible;
+        if !visible { self.pause(); }
+    }
 }
 
 /// Frames to let pass before trusting recorded anchors.
@@ -292,53 +328,70 @@ impl StudioView {
     /// plugins-dev shows up under Installed too, not only after the Develop
     /// tab was opened once); the number of local plugins, once scanned.
     pub(super) fn local_follow(&mut self, cx: &mut Context<Self>) -> Option<usize> {
-        self.local_watch(cx);
+        if !self.local.hidden {
+            self.local_watch(cx);
+            self.local_refresh(false, cx);
+        }
         self.local.scanned.map(|_| self.local.reports.iter().map(FolderReport::plugin_count).sum::<usize>())
     }
 
     /// Rescans the folders when the registry or the folders changed.
     fn local_refresh(&mut self, force: bool, cx: &mut Context<Self>) {
+        if self.local.hidden { return; }
         let key = (cx.global::<PluginRegistry>().generation, self.local.fs_generation);
-        if !force && self.local.scanned == Some(key) {
-            return;
-        }
-        let first = self.local.scanned.is_none();
-        self.local.scanned = Some(key);
-        self.local.reports = wasm::inspect(&wasm::plugin_dirs());
-        self.local_query_shell(Duration::ZERO, cx);
-        if !first {
-            self.local_query_shell(SHELL_SETTLE, cx);
-        }
+        if !force && self.local.scanned == Some(key) { return; }
+        self.local.reads.set(Some(key));
+        if force { self.local.reads.refresh(); }
+        self.local_read_next(cx);
+    }
+
+    fn local_read_next(&mut self, cx: &mut Context<Self>) {
+        let Some(request) = self.local.reads.begin() else { return; };
+        cx.spawn(async move |this, cx| {
+            let reports = mandara_services::runtime::unblock(|| wasm::inspect(&wasm::plugin_dirs())).await;
+            let _ = this.update(cx, |this, cx| {
+                let key = request.key;
+                if this.local.reads.finish(request) {
+                    let first = this.local.scanned.is_none();
+                    this.local.scanned = Some(key);
+                    this.local.reports = reports;
+                    this.local_query_shell(if first { Duration::ZERO } else { SHELL_SETTLE }, cx);
+                    cx.notify();
+                }
+                this.local_read_next(cx);
+            });
+        }).detach();
     }
 
     /// Asks the running shell for its plugins' runtime state.
     fn local_query_shell(&mut self, delay: Duration, cx: &mut Context<Self>) {
+        let key = (cx.global::<PluginRegistry>().generation, self.local.fs_generation);
+        self.local.shell_reads.set(Some((key, delay)));
+        self.local.shell_reads.refresh();
+        self.local_shell_next(cx);
+    }
+
+    fn local_shell_next(&mut self, cx: &mut Context<Self>) {
+        let Some(request) = self.local.shell_reads.begin() else { return; };
+        let delay = request.key.1;
         cx.spawn(async move |this, cx| {
             if !delay.is_zero() {
                 cx.background_executor().timer(delay).await;
             }
-            let Ok(task) = this.update(cx, |_, cx| crate::perf::query(&["plugins", "list"], cx)) else { return };
+            let Ok(task) = this.update(cx, |this, cx| {
+                if this.local.shell_reads.desired() != Some(&request.key) { return None; }
+                crate::perf::query_map(&["plugins", "list"], cx, parse_runtime)
+            }) else { return };
             let result = match task {
                 Some(task) => task.await,
                 None => Err(String::new()),
             };
-            let parsed = result.map(|v| {
-                v.as_array()
-                    .into_iter()
-                    .flatten()
-                    .filter(|e| e.pointer("/origin/kind").and_then(|k| k.as_str()) == Some("third-party"))
-                    .filter_map(|e| {
-                        let id = e.get("id")?.as_str()?.to_string();
-                        let rt = e.get("runtime");
-                        let state = rt.and_then(|r| r.get("state")).and_then(|s| s.as_str()).unwrap_or("unknown").to_string();
-                        let error = rt.and_then(|r| r.get("error")).and_then(|s| s.as_str()).map(str::to_string);
-                        Some((id, Runtime { state, error }))
-                    })
-                    .collect::<HashMap<_, _>>()
-            });
             let _ = this.update(cx, |this, cx| {
-                this.local.runtime = Some(parsed);
-                cx.notify();
+                if this.local.shell_reads.finish(request) {
+                    this.local.runtime = Some(result);
+                    cx.notify();
+                }
+                this.local_shell_next(cx);
             });
         })
         .detach();
@@ -347,57 +400,30 @@ impl StudioView {
     /// Watches the plugin folders (and their parent, to see them created):
     /// hot-reloads Studio's registry and rescans this page.
     fn local_watch(&mut self, cx: &mut Context<Self>) {
-        use notify::Watcher as _;
-        if self.local.watching {
-            return;
-        }
-        self.local.watching = true;
-        let dirs: Vec<PathBuf> = wasm::plugin_dirs().into_iter().map(|(d, _)| d).collect();
-        let parent = mandara_config::paths::data_dir();
-        let (tx, rx) = async_channel::unbounded::<()>();
-        let filter = dirs.clone();
-        let watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-            if let Ok(e) = res
-                && !matches!(e.kind, notify::EventKind::Access(_))
-                && e.paths.iter().any(|p| filter.iter().any(|d| p.starts_with(d) || d.starts_with(p)))
-            {
-                let _ = tx.send_blocking(());
-            }
-        });
-        let mut watcher = match watcher {
-            Ok(w) => w,
-            Err(err) => {
-                tracing::warn!("Studio: watching plugin folders: {err}");
-                return;
-            }
-        };
-        let mut watched: HashSet<PathBuf> = HashSet::new();
-        let mut arm = move |w: &mut notify::RecommendedWatcher| {
-            for d in &dirs {
-                if d.is_dir() && watched.insert(d.clone()) {
-                    let _ = w.watch(d, notify::RecursiveMode::Recursive);
-                }
-            }
-        };
-        let _ = watcher.watch(&parent, notify::RecursiveMode::NonRecursive);
-        arm(&mut watcher);
-        cx.spawn(async move |this, cx| {
-            let mut watcher = watcher;
+        if self.local.watch.is_some() { return; }
+        self.local.fs_generation = self.local.fs_generation.wrapping_add(1);
+        self.market_local_refresh(cx);
+        mandara_ui::plugins::external::sync(cx);
+        self.local.watch = Some(cx.spawn(async move |this, cx| {
+            let started = mandara_services::runtime::unblock(|| {
+                super::plugin_folders::Watch::new(wasm::plugin_dirs().into_iter().map(|(dir, _)| dir).collect())
+            }).await;
+            let (mut watcher, rx) = match started {
+                Ok(started) => started,
+                Err(error) => { tracing::warn!("Studio: watching plugin folders: {error}"); return; }
+            };
             while rx.recv().await.is_ok() {
                 cx.background_executor().timer(mandara_ui::plugins::external::RELOAD_DEBOUNCE).await;
                 while rx.try_recv().is_ok() {}
-                arm(&mut watcher);
-                let alive = this.update(cx, |this, cx| {
+                watcher = mandara_services::runtime::unblock(move || { watcher.rearm(); watcher }).await;
+                if this.update(cx, |this, cx| {
                     mandara_ui::plugins::external::sync(cx);
-                    this.local.fs_generation += 1;
+                    this.local.fs_generation = this.local.fs_generation.wrapping_add(1);
+                    this.market_local_refresh(cx);
                     cx.notify();
-                });
-                if alive.is_err() {
-                    break;
-                }
+                }).is_err() { break; }
             }
-        })
-        .detach();
+        }));
     }
 
     fn local_copy(&mut self, key: String, text: String, cx: &mut Context<Self>) {
@@ -429,6 +455,7 @@ impl StudioView {
         // The grants the person gave it, as in the shell.
         let access = mandara_plugins::extension::Access::from_grant(&plugin.permissions, cfg.plugins.grants.get(&plugin.id));
         let task = cx.background_executor().spawn(async move {
+          mandara_services::runtime::unblock(move || {
             mandara_plugins::guard(&format!("plugin `{}` test load", plugin.id), move || {
                 let start = Instant::now();
                 let mut w = wasm::WasmPlugin::load(&plugin.id, &plugin.dir, &plugin.entry, settings, access).map_err(|e| format!("{e:#}"))?;
@@ -446,6 +473,7 @@ impl StudioView {
                 Ok(TestReport { elapsed: start.elapsed(), bar, panel, sidebar })
             })
             .unwrap_or_else(|| Err("the loader crashed".into()))
+          }).await
         });
         cx.spawn(async move |this, cx| {
             let result = task.await;
@@ -456,6 +484,30 @@ impl StudioView {
         })
         .detach();
         cx.notify();
+    }
+
+    fn local_create_folder(&mut self, path: PathBuf, open: bool, cx: &mut Context<Self>) {
+        if self.local.creating { return; }
+        self.local.creating = true;
+        cx.spawn(async move |this, cx| {
+            let (path, created, opened) = mandara_services::runtime::unblock(move || {
+                let created = std::fs::create_dir_all(&path);
+                let opened = (created.is_ok() && open).then(|| mandara_services::session::open_uri(&format!("file://{}", path.display())));
+                (path, created, opened)
+            }).await;
+            let _ = this.update(cx, |this, cx| {
+                this.local.creating = false;
+                this.local.message = match (created, opened) {
+                    (Err(error), _) => Some((false, tf("Couldn't create {path}: {error}", &[("path", &path.display()), ("error", &error)]))),
+                    (_, Some(Err(error))) => Some((false, error)),
+                    (Ok(()), None) => Some((true, tf("Created {path}", &[("path", &path.display())]))),
+                    _ => None,
+                };
+                this.local.fs_generation = this.local.fs_generation.wrapping_add(1);
+                this.local_refresh(true, cx);
+                cx.notify();
+            });
+        }).detach();
     }
 
     /// Scrolls the page to a pending deep-linked section once its anchor
@@ -606,13 +658,7 @@ impl StudioView {
                 }));
             } else if report.source != Source::System {
                 actions = actions.child(button(format!("folder-create-{i}"), "plus", t("Create folder"), true, p).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    this.local.message = Some(match std::fs::create_dir_all(&create_dir) {
-                        Ok(()) => (true, tf("Created {path}", &[("path", &create_dir.display())])),
-                        Err(e) => (false, tf("Couldn't create {path}: {error}", &[("path", &create_dir.display()), ("error", &e)])),
-                    });
-                    this.local.fs_generation += 1;
-                    this.local_refresh(true, cx);
-                    cx.notify();
+                    this.local_create_folder(create_dir.clone(), false, cx);
                 })));
             }
             let path_text = path.clone();
@@ -1005,10 +1051,7 @@ impl StudioView {
             .child(button("local-example".into(), "external", t("Example plugin on GitHub"), false, p).on_click(move |_, _, _| {
                 let _ = mandara_services::session::open_uri(&example_uri);
             }))
-            .child(button("local-open-dev".into(), "folder", t("Open the development folder"), false, p).on_click(move |_, _, _| {
-                let _ = std::fs::create_dir_all(&open_dev);
-                let _ = mandara_services::session::open_uri(&format!("file://{}", open_dev.display()));
-            }));
+            .child(button("local-open-dev".into(), "folder", t("Open the development folder"), false, p).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.local_create_folder(open_dev.clone(), true, cx))));
         let topic = mandara_services::marketplace::TOPIC;
         let asset = format!("<id>{}", mandara_services::marketplace::ASSET_SUFFIX);
         let limit_mb = mandara_services::marketplace::MAX_BYTES >> 20;
@@ -1548,6 +1591,45 @@ fn error_box(text: &str, p: &MandaraPalette, mono: &SharedString) -> Div {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn runtime_snapshots_keep_errors_and_ignore_bundled_plugins() {
+        let data = serde_json::json!([
+            {"id":"clock", "origin":{"kind":"builtin"}},
+            {"id":"picker", "origin":{"kind":"third-party"}, "runtime":{"state":"failed","error":"missing grant"}},
+            {"id":"older", "origin":{"kind":"third-party"}}
+        ]);
+        let parsed = parse_runtime(Ok(data)).unwrap();
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed["picker"], Runtime { state: "failed".into(), error: Some("missing grant".into()) });
+        assert_eq!(parsed["older"].state, "unknown");
+        assert_eq!(parse_runtime(Err("shell unavailable".into())), Err("shell unavailable".into()));
+    }
+
+    #[test]
+    fn hiding_the_store_cancels_reads_and_keeps_the_last_folder_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let plugin = dir.path().join("picker");
+        std::fs::create_dir(&plugin).unwrap();
+        std::fs::write(plugin.join("plugin.toml"), "id='picker'\nname='Picker'\n").unwrap();
+        std::fs::write(plugin.join("plugin.wasm"), b"\0asm").unwrap();
+        let reports = wasm::inspect(&[(dir.path().into(), Source::Installed)]);
+        assert_eq!(reports.iter().map(FolderReport::plugin_count).sum::<usize>(), 1);
+        let mut local = Local { reports, scanned: Some((1, 2)), ..Default::default() };
+        let snapshot = local.reports.as_ptr();
+        local.reads.set(Some((1, 2)));
+        local.shell_reads.set(Some(((1, 2), Duration::ZERO)));
+        let read = local.reads.begin().unwrap();
+        let query = local.shell_reads.begin().unwrap();
+        local.visibility(false);
+        assert!(local.hidden && local.watch.is_none());
+        assert_eq!(local.reports.as_ptr(), snapshot);
+        assert!(!local.reads.finish(read) && !local.shell_reads.finish(query));
+        assert!(local.reads.begin().is_none() && local.shell_reads.begin().is_none());
+        local.visibility(true);
+        local.reads.set(Some((1, 3)));
+        assert!(local.reads.begin().is_some());
+    }
 
     #[test]
     fn tabs_and_sections_round_trip() {

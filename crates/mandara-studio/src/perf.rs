@@ -65,10 +65,15 @@ impl Global for ShellQuery {}
 /// Queries the shell off the UI thread; `None` when Studio runs without the
 /// app's IPC hooks (tests, embedding).
 pub fn query(args: &[&str], cx: &App) -> Option<gpui::Task<Result<serde_json::Value, String>>> {
+    query_map(args, cx, std::convert::identity)
+}
+
+/// Keep snapshot parsing on the same blocking worker as the IPC read.
+pub(crate) fn query_map<T: Send + 'static>(args: &[&str], cx: &App, map: impl FnOnce(Result<serde_json::Value, String>) -> T + Send + 'static) -> Option<gpui::Task<T>> {
     let q = cx.try_global::<ShellQuery>()?.clone();
     let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
     Some(cx.spawn(async move |_| {
-        mandara_services::runtime::unblock(move || (q.0)(args).map_err(|error| error.to_string()))
+        mandara_services::runtime::unblock(move || map((q.0)(args).map_err(|error| error.to_string())))
             .await
     }))
 }

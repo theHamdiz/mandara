@@ -10936,3 +10936,5 @@
 "KWin: Mandara doesn’t start with Plasma yet. Run `mandara setup --compositor kwin --autostart` to add its startup entry, or start `mandara` yourself after logging in." = "KWin: Mandara bado haianzi pamoja na Plasma. Endesha `mandara setup --compositor kwin --autostart` ili kuongeza ingizo lake la kuanza, au anzisha `mandara` mwenyewe baada ya kuingia."
 "{variant} · extra" = "{variant} · ziada"
 "Extra" = "Ziada"
+
+"Installed {plugin} {version}" = "{plugin} {version} imesakinishwa"

@@ -1111,6 +1111,8 @@ impl<'a> Installer<'a> {
     }
 
     fn install_files(&mut self, stage: &Stage) -> Result<(), String> {
+        // Upgrade shipped files only; plugin grants, installed plugins and
+        // Studio's saved window size belong to the user.
         self.say(Level::Step, "Installing");
         let err = |p: &Path, e: std::io::Error| format!("{}: {e}", p.display());
         for d in self.paths.dirs() {

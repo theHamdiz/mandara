@@ -29,6 +29,8 @@ use mandara_plugins::extension::Access;
 use mandara_plugins::wasm::{EventValue, PluginEvent, RenderContext, SurfaceKind};
 
 mod brokers;
+mod reload;
+pub use reload::Reload as ReloadState;
 pub(crate) use brokers::live;
 
 pub(crate) type Shared = Rc<RefCell<Option<WasmPlugin>>>;
@@ -632,13 +634,8 @@ fn register_one(r: &mut PluginRegistry, d: Discovered) {
         support: d.support.clone(),
         settings: d.settings.clone(),
     };
-    if PRINTS.with(|p| !p.borrow().contains_key(&d.id)) {
-        let print = fingerprint(&d);
-        PRINTS.with(|p| p.borrow_mut().insert(d.id.clone(), print));
-    }
     DISCOVERED.with(|m| m.borrow_mut().insert(d.id.clone(), d.clone()));
     let widgets = d.widgets.clone();
-    let mut catalog = wasm::PluginCatalogs::new(&d.dir);
     let plugin_id = d.id.clone();
     r.register(manifest, move |window, cx, panel_cx| {
         // One plugin instance backs all three surfaces: a click in any of
@@ -667,8 +664,8 @@ fn register_one(r: &mut PluginRegistry, d: Discovered) {
     for w in widgets {
         let card = dc::plugin_card(&plugin_id, &w.id);
         let opts = dc::PluginCardOptions { width: w.width, height: w.height, ..dc::PluginCardOptions::default() };
-        let name = catalog.translate(&w.name);
-        let description = catalog.translate(&w.description);
+        let name = w.name;
+        let description = w.description;
         let make = move || {
             let mut widget = dc::new_card(&card, mandara_config::desktop_widgets::Anchor::Center);
             if let mandara_config::desktop_widgets::WidgetKind::Card(c) = &mut widget.kind {
@@ -951,28 +948,33 @@ fn is_builtin(r: &PluginRegistry, id: &str) -> bool {
 /// Registers every discovered plugin. Development plugins start enabled;
 /// installed and system ones are opt-in (Studio → Plugins).
 pub fn register(r: &mut PluginRegistry) {
-    for d in wasm::discover() {
+    for (d, print) in scan() {
         if is_builtin(r, &d.id) {
             tracing::warn!("plugin `{}` at {} clashes with a built-in id; skipped", d.id, d.dir.display());
             continue;
         }
+        PRINTS.with(|p| p.borrow_mut().insert(d.id.clone(), print));
         register_one(r, d);
     }
 }
 
 /// Hot reload: re-scans the plugin folders and adds new plugins, reloads
 /// changed ones (fresh WebAssembly instance, new manifest and catalogs) and
-/// removes deleted ones — live, without restarting the shell. Returns what
-/// changed.
-pub fn sync(cx: &mut App) -> Vec<String> {
-    apply_scan(scan(), cx)
+/// removes deleted ones without blocking a frame. Concurrent requests coalesce.
+pub fn sync(cx: &mut App) {
+    reload::request(cx);
 }
 
 /// Discovers plugins and fingerprints their files (blocking file I/O: run
 /// it off the UI thread where possible).
 fn scan() -> Vec<(Discovered, u64)> {
-    wasm::discover().into_iter().map(|d| {
+    wasm::discover().into_iter().map(|mut d| {
         let print = fingerprint(&d);
+        let mut catalog = wasm::PluginCatalogs::new(&d.dir);
+        for widget in &mut d.widgets {
+            widget.name = catalog.translate(&widget.name);
+            widget.description = catalog.translate(&widget.description);
+        }
         (d, print)
     }).collect()
 }
@@ -1045,9 +1047,8 @@ pub fn watch(cx: &mut App) {
             // Let copies / builds finish writing, then coalesce the burst.
             cx.background_executor().timer(RELOAD_DEBOUNCE).await;
             while rx.try_recv().is_ok() {}
-            let found = cx.background_executor().spawn(async { scan() }).await;
             cx.update(|cx| {
-                apply_scan(found, cx);
+                sync(cx);
             });
         }
     })

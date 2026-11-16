@@ -10,6 +10,9 @@ are drawn and hand them back, textures included, when you leave the page.
 
 Studio draws its own title bar. If KWin requires native window
 decorations, Studio uses those controls so there is only one set of buttons.
+Its last logical window size is remembered in
+`$XDG_STATE_HOME/mandara/studio-ui.toml`, alongside its navigation choices.
+The compositor still controls window placement and tiling.
 
 <p align="center">
   <img src="screenshots/studio-home.webp" alt="Studio Home: a greeting over the wallpaper, live shell status, the theme with one-click switching, quick settings, recent changes and a card per group" width="100%"/>
@@ -464,7 +467,14 @@ and verifies models, and provides a dry-run test bench. See
   cards with switches and Settings, and the removed built-ins with
   **Restore**. **Updates** checks and applies marketplace plugin updates,
   one by one or all at once. **Community** is the GitHub marketplace as
-  store cards (Get, Update, Remove); while it is empty or out of reach it
+  store cards with names and full descriptions from each released `plugin.toml`.
+  Installing keeps the same card with **Remove**, plus **Update** only when a
+  newer release is available. Missing permissions open in a dialog after
+  installation or an update; each stays off until you grant it. You can revisit
+  **Permissions** on the installed plugin’s product page. Searches, manifest
+  reads and folder scans run in the background. Cached cards keep their order
+  during refreshes, and new entries are appended; unavailable or moderated
+  entries leave the list after validation. While Community is empty or out of reach it
   suggests Mandara plugins you haven't switched on. **Develop** is the
   authoring handbook, built from your system: your real plugin folders (state,
   counts, precedence), the folder and `plugin.toml` format, the sandbox

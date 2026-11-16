@@ -18,7 +18,7 @@ use mandara_delta::{MANIFEST_FILE, Manifest, PLUGIN_BINARY, PLUGIN_TARGET};
 use mandara_i18n::{t, tf};
 use serde::{Deserialize, Serialize};
 
-use super::{ApplyOptions, ApplyReport, Download, Method, PatchDownload, Plan, Progress, fetch, full_archive, is_newer, now_secs, try_delta};
+use super::{ApplyOptions, ApplyReport, Download, Method, PatchDownload, Plan, Progress, fetch, full_archive, now_secs, try_delta};
 use crate::marketplace::{self, Asset, InstallError, Vetting};
 
 /// Plugins checked per run at most (anonymous GitHub allows 60 requests an
@@ -59,6 +59,10 @@ pub struct PluginUpdate {
 }
 
 impl PluginUpdate {
+    /// A cached plan applies only to the exact installed folder and release.
+    pub fn available_for(&self, dir: &Path, tag: &str) -> bool {
+        self.available && self.dir == dir && self.installed == tag && self.full.is_some() && newer_release(&self.latest, tag)
+    }
     /// Bytes the update downloads (patch + meta, or the archive).
     pub fn download_size(&self, full_only: bool) -> Option<u64> {
         match (&self.patch, &self.meta, &self.full) {
@@ -73,6 +77,15 @@ impl PluginUpdate {
         self.latest.trim_start_matches('v')
     }
 }
+
+fn newer_release(latest: &str, installed: &str) -> bool {
+    let parse = |v: &str| semver::Version::parse(v.trim().trim_start_matches('v'));
+    match (parse(latest), parse(installed)) {
+        (Ok(latest), Ok(installed)) => latest.cmp_precedence(&installed).is_gt(),
+        _ => latest.trim() != installed.trim(),
+    }
+}
+
 
 #[derive(Default, Serialize, Deserialize)]
 struct Cache {
@@ -113,8 +126,7 @@ pub fn check_one(repo: &str, dir: &Path, tag: &str) -> Result<PluginUpdate, Stri
         ..Default::default()
     };
     // Tags that aren't semver (dates, names) update whenever they differ.
-    let semver = |v: &str| semver::Version::parse(v.trim_start_matches('v')).is_ok();
-    u.available = if semver(&u.latest) && semver(tag) { is_newer(&u.latest, tag) } else { u.latest != tag };
+    u.available = newer_release(&u.latest, tag);
     let manifest = asset(&release.assets, MANIFEST_FILE).and_then(|a| match fetch::get(&a.browser_download_url, MAX_JSON_BYTES, &|_| {}).map_err(String::from).and_then(|b| Manifest::parse(&b)) {
         Ok(m) if m.name == id => Some(m),
         Ok(m) => {
@@ -324,4 +336,28 @@ pub fn rollback(id: &str) -> Result<(), String> {
 /// Whether a previous version of `id` is kept.
 pub fn can_roll_back(id: &str) -> bool {
     rollback_path(id).join("plugin.toml").is_file()
+}
+
+#[cfg(test)]
+mod release_tests {
+    use super::*;
+
+    #[test]
+    fn update_actions_require_a_newer_release_and_an_applicable_download() {
+        for latest in ["0.1.0", "v0.1.0", "0.0.9", "0.1.0+new-build", "0.1.0-rc.1"] {
+            assert!(!newer_release(latest, "v0.1.0"), "{latest}");
+        }
+        assert!(newer_release("v0.2.0", "0.1.0"));
+        assert!(newer_release("2026-11-16", "2026-11-15"));
+        let dir = Path::new("/plugins/picker");
+        let update = PluginUpdate {
+            dir: dir.into(), installed: "v0.1.0".into(), latest: "v0.2.0".into(), available: true,
+            full: Some(Download { file: "picker.mandara.tar.gz".into(), url: "https://example.invalid/plugin".into(), size: 1, sha256: None }),
+            ..Default::default()
+        };
+        assert!(update.available_for(dir, "v0.1.0"));
+        assert!(!update.available_for(dir, "v0.2.0"), "the cache predates installation");
+        assert!(!update.available_for(Path::new("/other/picker"), "v0.1.0"));
+        assert!(!PluginUpdate { full: None, ..update }.available_for(dir, "v0.1.0"));
+    }
 }

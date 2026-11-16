@@ -44,6 +44,7 @@ use crate::tokens::*;
 pub enum ModalView {
     Detail,
     Settings,
+    Permissions,
 }
 
 /// Modal state, owned by [`StudioView`].
@@ -707,6 +708,13 @@ impl StudioView {
         let body = match view {
             ModalView::Detail => self.plugin_detail_body(&m, full_w, cfg, p, cx),
             ModalView::Settings => self.plugin_settings_body(&m, full_w, cfg, p, cx),
+            ModalView::Permissions => div()
+                .p(px(BODY_PAD)).row().flex_col().gap(px(SPACE_16_PX))
+                .child(div().text_size(px(TEXT_20_PX)).font_weight(FontWeight::SEMIBOLD).child(t("Permissions")))
+                .child(div().text_size(px(TEXT_14_PX)).child(m.display_name()))
+                .children(self.plugin_grants(&m, cfg, p, cx))
+                .child(action("plugin-permissions-done", "check", t("Done").into(), true, p).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close_plugin(cx))))
+                .into_any_element(),
         };
         let rtl = mandara_i18n::language().is_rtl();
         let close = div()
