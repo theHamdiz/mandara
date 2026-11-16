@@ -98,7 +98,7 @@ fn load(path: &Path) -> Vec<Entry> {
 /// Small persistent scan position: failed lookups must not monopolize every allowance.
 const RESUME_BYTES: u64 = 4 << 10;
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Clone, Default, PartialEq, Deserialize, Serialize)]
 struct Resume {
     api: String,
     after: Option<String>,
@@ -117,6 +117,10 @@ impl Resume {
     fn for_api(&mut self, api: &str) -> &mut Option<String> {
         if self.api != api { self.api = api.to_owned(); self.after = None; }
         &mut self.after
+    }
+    fn save_if_changed(&self, path: &Path, previous: &Self) -> anyhow::Result<()> {
+        if self == previous { return Ok(()); }
+        self.save(path)
     }
     fn save(&self, path: &Path) -> anyhow::Result<()> {
         let bytes = serde_json::to_vec(self)?;
@@ -210,7 +214,7 @@ pub fn enrich(results: &mut Results, keep_going: impl Fn() -> bool, publish: imp
     let mut cache = CACHE.lock();
     let Cache { entries, resume } = cache.get_or_insert_with(|| Cache { entries: load(&path), resume: Resume::load(&resume_path) });
     let api = super::api_base();
-    let before = resume.after.clone();
+    let before = resume.clone();
     let after = resume.for_api(&api);
     // One pass is optional work, with short individual requests and no hidden polling.
     const PASS_TIME: std::time::Duration = std::time::Duration::from_secs(20);
@@ -224,7 +228,7 @@ pub fn enrich(results: &mut Results, keep_going: impl Fn() -> bool, publish: imp
             Err(error) => tracing::warn!("saving plugin catalog: {error:#}"),
         }
     }
-    if resume.after != before && let Err(error) = resume.save(&resume_path) {
+    if let Err(error) = resume.save_if_changed(&resume_path, &before) {
         tracing::warn!("saving plugin catalog scan position: {error:#}");
     }
 }
@@ -273,7 +277,14 @@ mod tests {
         }, || left.get() > 0, |_| {}, reopened.for_api("api"));
         assert_eq!(calls.first().map(String::as_str), Some("author/released"));
         assert!(results.items.last().unwrap().plugin.is_some());
+        let previous = reopened.clone();
+        let position = reopened.after.clone();
         assert_eq!(reopened.for_api("different-api"), &None);
+        reopened.after = position;
+        reopened.save_if_changed(&path, &previous).unwrap();
+        let saved = Resume::load(&path);
+        assert_eq!(saved.api, "different-api", "a changed API must be saved even at the same repository position");
+        assert_eq!(saved.after, previous.after);
         std::fs::write(&path, vec![b'x'; RESUME_BYTES as usize + 1]).unwrap();
         assert!(Resume::load(&path).after.is_none());
     }

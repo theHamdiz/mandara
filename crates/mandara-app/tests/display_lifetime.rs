@@ -9,7 +9,6 @@ const PROBE_INTERVAL: Duration = Duration::from_millis(100);
 const SCALE_SETTLE: Duration = Duration::from_secs(1);
 
 /// Each runtime is private, but the xtask binary owns one sandbox home.
-#[cfg(target_os = "linux")]
 static SANDBOX_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 struct Sandbox {

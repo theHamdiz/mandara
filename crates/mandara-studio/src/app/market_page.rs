@@ -68,7 +68,6 @@ pub struct Market {
     /// Installed marketplace plugins (repository → folder, tag), read with
     /// every search and after every install / removal — not per row per frame.
     installed: Rc<HashMap<String, (std::path::PathBuf, String)>>,
-    loading: bool,
     /// The query of the last search (empty = the whole marketplace).
     searched: String,
     /// Releases that failed the compliance check (repository → flag), read
@@ -104,7 +103,6 @@ impl Market {
         if let Some(cancelled) = self.cancelled.take() { cancelled.store(true, Ordering::Relaxed); }
         self.requests.set(None);
         self.search_task = None;
-        self.loading = false;
     }
 
     fn reopen(&mut self) {
@@ -184,7 +182,6 @@ impl StudioView {
         if self.market.searched != query {
             self.market.results = self.market.cached.get(&query).cloned().map(Ok);
         }
-        self.market.loading = true;
         self.market.searched.clone_from(&query);
         self.market.requests.set(Some(query));
         self.market.requests.refresh();
@@ -221,7 +218,6 @@ impl StudioView {
             while let Ok((result, local)) = rx.recv().await {
                 if this.update(cx, |this, cx| {
                     if !this.market.requests.is_current(&request) { return; }
-                    this.market.loading = false;
                     if let Some((installed, flags)) = local { this.market.apply_local(revision, installed, flags); }
                     this.market.results = Some(result.inspect(|catalog| {
                         const CACHED_QUERIES: usize = 4;
@@ -234,9 +230,7 @@ impl StudioView {
             }
             worker.await;
             let _ = this.update(cx, |this, cx| {
-                if this.market.requests.finish(request) {
-                    this.market.loading = false;
-                }
+                this.market.requests.finish(request);
                 this.market_search_next(cx);
                 cx.notify();
             });
@@ -662,11 +656,10 @@ mod tests {
         let mut market = Market::default();
         market.primed = true;
         market.results = Some(Ok(catalog.clone()));
-        market.loading = true;
         market.requests.set(Some(String::new()));
         let old = market.requests.begin().unwrap();
         market.reopen();
-        assert!(!market.primed && !market.loading);
+        assert!(!market.primed);
         assert!(Arc::ptr_eq(market.results.as_ref().unwrap().as_ref().unwrap(), &catalog));
         assert!(!market.requests.finish(old));
     }
