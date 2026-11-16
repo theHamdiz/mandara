@@ -115,8 +115,12 @@ impl fmt::Write for Record<'_> {
         if self.truncated {
             return Err(fmt::Error);
         }
+        let start = self.len;
         let _ = self.write(value.as_bytes());
         if self.truncated {
+            while !value.is_char_boundary(self.len - start) {
+                self.len -= 1;
+            }
             Err(fmt::Error)
         } else {
             Ok(())
@@ -333,5 +337,22 @@ mod tests {
         let count = receiver.recv(&mut bytes).unwrap();
         assert_eq!(count, RECORD_BYTES);
         assert!(message(&bytes[..count]).ends_with(TRUNCATED));
+    }
+
+    #[test]
+    fn truncated_unicode_diagnostics_remain_valid_utf8() {
+        let (journal, receiver) = journal();
+        let subscriber = crate::logging::subscriber(io::sink, Some(journal), "off".into());
+        let text = "مصر🌊".repeat(RECORD_BYTES);
+        tracing::subscriber::with_default(subscriber, || {
+            for prefix in ["", "a", "ab", "abc"] {
+                tracing::error!("{prefix}{text}");
+                let mut bytes = [0; RECORD_BYTES];
+                let count = receiver.recv(&mut bytes).unwrap();
+                let text = message(&bytes[..count]);
+                std::str::from_utf8(text).unwrap();
+                assert!(text.ends_with(TRUNCATED));
+            }
+        });
     }
 }

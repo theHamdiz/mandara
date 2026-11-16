@@ -28,6 +28,7 @@ With volatile journal storage, these records are in the system journal instead:
 read it without `sudo`.
 
 Journal formatting and datagrams are bounded, and the socket is nonblocking.
+Long messages are shortened at a character boundary.
 `RUST_LOG` controls stderr only; the journal retains warnings and errors.
 A full or unavailable journal does not hold up the shell, and stderr
 output remains available on every

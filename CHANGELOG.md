@@ -10,7 +10,7 @@ The shell keeps crash diagnostics and recovers from an unexpected display shutdo
 
 ### Fixed
 
-- An unexpected display-loop shutdown no longer quietly stops the shell's restart supervisor. Warnings and crash errors also reach the system journal when the desktop discards terminal output.
+- An unexpected display-loop shutdown no longer quietly stops the shell's restart supervisor. Warnings and crash errors also reach the system journal when the desktop discards terminal output, keeping non-English text intact when long messages are shortened.
 
 ### Under the hood
 
