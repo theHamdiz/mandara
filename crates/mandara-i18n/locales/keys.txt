@@ -1003,6 +1003,7 @@ Blue Light, dark panel
 Bluetooth
 Bluetooth adapters and which one Mandara uses
 Bluetooth devices
+Bluetooth did not respond in time
 Bluetooth is off
 Bluetooth isn't available
 Bluetooth needs the shell
@@ -6266,6 +6267,7 @@ Reduce motion
 References and links follow sunnah.com. Muwatta Malik is numbered as in the dataset and links to its book.
 Refraction
 Refresh
+Refresh Bluetooth state without restarting the shell
 Refresh a feed now and return its articles, or every feed when no address is given
 Refresh an open list
 Refresh calendars
