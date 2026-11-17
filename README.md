@@ -366,7 +366,7 @@ and a GitHub marketplace. [Start here](PLUGINS.md).
 - **[Using Mandara](docs/usage.md)**: commands and default shortcuts
 - **[Plugins](docs/plugins.md)** and **[writing your own](PLUGINS.md)**
 - **[Why Mandara](docs/why-mandara.md)**: how it compares with other shells
-- **[Building from source](docs/building.md)**, with locked dependencies, and
+- **[Building from source](docs/building.md)**, with locked dependencies fetched through Git, and
   **[contributing](AGENTS.md)**
 
 ## Star history

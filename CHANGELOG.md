@@ -18,6 +18,10 @@ Community plugins gain scoped file reads, online thumbnails and live wallpaper c
 - Plugin cards use one compact Update button, with actions that wrap inside their cards. Updates recheck release downloads, retire stale offers and keep installed plugins when a repository or release becomes unavailable.
 - The dock explains when Hide is unavailable because the compositor cannot minimize windows, including on Niri. (#198)
 
+### Under the hood
+
+- Fresh builds fetch pinned Git dependencies through Git itself, avoiding the embedded client's download failure on Nix runners.
+
 ## 0.34.1 — 2026-11-16
 
 The shell recovers from unexpected display shutdowns, and Studio makes community plugins easier to browse and manage.
