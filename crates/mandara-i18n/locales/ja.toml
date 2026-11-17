@@ -11304,3 +11304,5 @@
 "Invalid live wallpaper request: {error}" = "無効なライブ壁紙のリクエスト: {error}"
 "Live wallpapers need the running shell." = "ライブ壁紙には実行中のシェルが必要です。"
 "Choose a display from the live wallpaper status." = "ライブ壁紙の状態からディスプレイを選択してください。"
+"Refresh Bluetooth state without restarting the shell" = "シェルを再起動せずにBluetoothの状態を更新"
+"Bluetooth did not respond in time" = "Bluetoothが時間内に応答しませんでした"

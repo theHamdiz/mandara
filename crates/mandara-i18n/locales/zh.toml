@@ -11298,3 +11298,5 @@
 "Invalid live wallpaper request: {error}" = "无效的动态壁纸请求：{error}"
 "Live wallpapers need the running shell." = "动态壁纸需要正在运行的桌面外壳。"
 "Choose a display from the live wallpaper status." = "请从动态壁纸状态中选择显示器。"
+"Refresh Bluetooth state without restarting the shell" = "无需重启 Shell 即可刷新蓝牙状态"
+"Bluetooth did not respond in time" = "蓝牙未及时响应"

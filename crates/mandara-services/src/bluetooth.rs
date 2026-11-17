@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::{Result, anyhow};
+use futures::{FutureExt as _, StreamExt as _};
 use serde::Serialize;
 use zbus::Connection;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
@@ -29,6 +30,8 @@ const FALLBACK_POLL: Duration = Duration::from_secs(60);
 const UPDATE_QUEUE: usize = 8;
 /// Commands buffered from the UI and CLI.
 const COMMAND_QUEUE: usize = 32;
+/// A stalled read must not prevent later resume or manual refresh requests.
+const STATE_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct BluetoothDevice {
@@ -76,6 +79,8 @@ impl BluetoothState {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BluetoothCommand {
+    /// Re-read BlueZ without changing adapter or device settings.
+    Refresh,
     SetPower(bool),
     SetDiscovery(bool),
     /// Device matched by address or (case-insensitive) name.
@@ -129,12 +134,41 @@ pub fn spawn_bluetooth_service() -> BluetoothService {
 }
 
 async fn run(conn: &Connection, tx: &async_channel::Sender<BluetoothState>, rx: &async_channel::Receiver<Envelope<BluetoothCommand>>) -> Result<()> {
-    let mut signals = signals_from(conn, BLUEZ).await?;
+    run_with_signals(conn, signals_from(conn, BLUEZ).await?, tx, rx).await
+}
+
+async fn run_with_signals(conn: &Connection, mut signals: zbus::MessageStream, tx: &async_channel::Sender<BluetoothState>, rx: &async_channel::Receiver<Envelope<BluetoothCommand>>) -> Result<()> {
+    // zbus routes signals and method replies through the same socket reader.
+    // Keep consuming signals during reads, commands and UI back-pressure;
+    // otherwise a discovery burst can prevent the awaited reply from arriving.
+    let (changed, changes) = async_channel::bounded(1);
+    let pump = async move {
+        while signals.next().await.is_some() {
+            let _ = changed.try_send(());
+        }
+        drop(changed);
+        std::future::pending::<()>().await;
+    };
+    let actor = run_actor(conn, tx, rx, Box::pin(changes));
+    futures::pin_mut!(pump, actor);
+    futures::select! {
+        result = actor.fuse() => result,
+        () = pump.fuse() => Ok(()),
+    }
+}
+
+async fn run_actor(conn: &Connection, tx: &async_channel::Sender<BluetoothState>, rx: &async_channel::Receiver<Envelope<BluetoothCommand>>, mut signals: std::pin::Pin<Box<async_channel::Receiver<()>>>) -> Result<()> {
     let mut last: Option<BluetoothState> = None;
     let mut prefs = Prefs::default();
+    let mut refresh_reply = None;
     loop {
         drain_signals(&mut signals);
-        let state = read_state(conn, prefs.adapter.as_deref()).await.unwrap_or_default();
+        let result = read_state(conn, prefs.adapter.as_deref()).await;
+        if let Err(error) = &result {
+            tracing::warn!("bluetooth state: {error:#}");
+            reply(&refresh_reply.take(), Err(format!("{error:#}")));
+        }
+        let state = result.unwrap_or_default();
         // Powered on (or first seen powered): reconnect trusted devices.
         let powered_on = state.powered && !last.as_ref().is_some_and(|l| l.powered);
         if last.as_ref() != Some(&state) {
@@ -149,8 +183,15 @@ async fn run(conn: &Connection, tx: &async_channel::Sender<BluetoothState>, rx: 
                 tracing::info!("bluetooth: auto-connecting {n} trusted device(s)");
             }
         }
+        if refresh_reply.is_some() {
+            reply(&refresh_reply.take(), serde_json::to_string(&state).map_err(|e| e.to_string()));
+        }
         match next_wake(&mut signals, rx, DEBOUNCE, FALLBACK_POLL).await {
             Wake::Command(Envelope { command, reply: r }) => {
+                if command == BluetoothCommand::Refresh {
+                    refresh_reply = r;
+                    continue;
+                }
                 let current = last.clone().unwrap_or_default();
                 let result = match command {
                     BluetoothCommand::SelectAdapter(name) => {
@@ -180,8 +221,15 @@ fn prop<T: TryFrom<OwnedValue>>(props: &HashMap<String, OwnedValue>, key: &str) 
 }
 
 async fn managed(conn: &Connection) -> Result<Managed> {
-    let om = proxy(conn, BLUEZ, "/", "org.freedesktop.DBus.ObjectManager").await?;
-    Ok(om.call("GetManagedObjects", &()).await?)
+    let read = async {
+        let om = proxy(conn, BLUEZ, "/", "org.freedesktop.DBus.ObjectManager").await?;
+        Ok(om.call("GetManagedObjects", &()).await?)
+    };
+    futures::pin_mut!(read);
+    futures::select! {
+        result = read.fuse() => result,
+        _ = futures::FutureExt::fuse(async_io::Timer::after(STATE_TIMEOUT)) => Err(anyhow!(mandara_i18n::t("Bluetooth did not respond in time"))),
+    }
 }
 
 /// `hci0` from `/org/bluez/hci0[/dev_…]`.
@@ -349,7 +397,7 @@ pub fn plan(state: &BluetoothState, adapter_path: &str, command: &BluetoothComma
             (ops, format!("connecting {n} trusted device(s)"))
         }
         // Handled by the actor loop.
-        BluetoothCommand::SelectAdapter(_) | BluetoothCommand::SetAutoConnect(_) => (Vec::new(), String::new()),
+        BluetoothCommand::Refresh | BluetoothCommand::SelectAdapter(_) | BluetoothCommand::SetAutoConnect(_) => (Vec::new(), String::new()),
     })
 }
 
@@ -386,6 +434,10 @@ async fn execute(conn: &Connection, state: &BluetoothState, adapter: Option<&str
     }
     Ok(summary)
 }
+
+#[cfg(test)]
+#[path = "bluetooth/bus_tests.rs"]
+mod bus_tests;
 
 #[cfg(test)]
 mod tests {
@@ -439,7 +491,7 @@ mod tests {
         assert_eq!(ops(C::Forget("EE:FF".into())), [BlueOp::RemoveDevice { adapter: a.into(), device: speaker }]);
         // Auto-connect / after sleep: trusted, paired, disconnected only.
         assert_eq!(ops(C::ConnectTrusted), [BlueOp::Call { path: "/org/bluez/hci0/dev_CC_DD".into(), interface: DEVICE_IFACE, method: "Connect" }]);
-        assert!(ops(C::SetAutoConnect(true)).is_empty() && ops(C::SelectAdapter(None)).is_empty(), "actor-only commands touch nothing");
+        assert!(ops(C::SetAutoConnect(true)).is_empty() && ops(C::SelectAdapter(None)).is_empty() && ops(C::Refresh).is_empty(), "actor-only commands touch nothing");
         assert!(plan(&st, a, &C::Connect("nope".into())).is_err());
     }
 

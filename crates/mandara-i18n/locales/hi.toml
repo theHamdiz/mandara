@@ -11305,3 +11305,5 @@
 "Invalid live wallpaper request: {error}" = "लाइव वॉलपेपर का अमान्य अनुरोध: {error}"
 "Live wallpapers need the running shell." = "लाइव वॉलपेपर के लिए शेल चालू होना चाहिए।"
 "Choose a display from the live wallpaper status." = "लाइव वॉलपेपर की स्थिति से कोई डिस्प्ले चुनें।"
+"Refresh Bluetooth state without restarting the shell" = "शेल को फिर से शुरू किए बिना Bluetooth की स्थिति ताज़ा करें"
+"Bluetooth did not respond in time" = "Bluetooth ने समय पर जवाब नहीं दिया"

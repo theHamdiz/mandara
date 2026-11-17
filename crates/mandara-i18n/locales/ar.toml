@@ -11306,3 +11306,5 @@
 "Invalid live wallpaper request: {error}" = "طلب خلفية حية غير صالح: {error}"
 "Live wallpapers need the running shell." = "تحتاج الخلفيات الحية إلى تشغيل الواجهة."
 "Choose a display from the live wallpaper status." = "اختر شاشة من حالة الخلفية الحية."
+"Refresh Bluetooth state without restarting the shell" = "تحديث حالة Bluetooth دون إعادة تشغيل الواجهة"
+"Bluetooth did not respond in time" = "لم يستجب Bluetooth في الوقت المحدد"

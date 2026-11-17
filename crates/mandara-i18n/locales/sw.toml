@@ -10961,3 +10961,5 @@
 "Invalid live wallpaper request: {error}" = "Ombi la mandhari hai si halali: {error}"
 "Live wallpapers need the running shell." = "Mandhari hai yanahitaji shell inayoendelea kufanya kazi."
 "Choose a display from the live wallpaper status." = "Chagua skrini kutoka kwenye hali ya mandhari hai."
+"Refresh Bluetooth state without restarting the shell" = "Sasisha hali ya Bluetooth bila kuanzisha upya shell"
+"Bluetooth did not respond in time" = "Bluetooth haikujibu kwa wakati"

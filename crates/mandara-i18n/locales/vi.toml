@@ -10961,3 +10961,5 @@
 "Invalid live wallpaper request: {error}" = "Yêu cầu hình nền động không hợp lệ: {error}"
 "Live wallpapers need the running shell." = "Hình nền động cần shell đang chạy."
 "Choose a display from the live wallpaper status." = "Chọn một màn hình từ trạng thái hình nền động."
+"Refresh Bluetooth state without restarting the shell" = "Làm mới trạng thái Bluetooth mà không khởi động lại giao diện"
+"Bluetooth did not respond in time" = "Bluetooth không phản hồi kịp thời"

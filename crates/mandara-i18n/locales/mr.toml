@@ -10962,3 +10962,5 @@
 "Invalid live wallpaper request: {error}" = "थेट वॉलपेपरची अवैध विनंती: {error}"
 "Live wallpapers need the running shell." = "थेट वॉलपेपरसाठी शेल चालू असणे आवश्यक आहे."
 "Choose a display from the live wallpaper status." = "थेट वॉलपेपरच्या स्थितीतून डिस्प्ले निवडा."
+"Refresh Bluetooth state without restarting the shell" = "शेल पुन्हा सुरू न करता Bluetooth ची स्थिती अद्ययावत करा"
+"Bluetooth did not respond in time" = "Bluetooth ने वेळेत प्रतिसाद दिला नाही"

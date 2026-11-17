@@ -323,8 +323,12 @@ mandara msg network saved list       # saved forget|autoconnect|priority
 mandara msg network ipv4 set Home manual 192.168.1.20/24 192.168.1.1 1.1.1.1   # ipv4 show <name>; network devices
 mandara msg network wifi scan        # wifi list|connect|disconnect|power|hidden <ssid>
 mandara msg bluetooth pair "WH-1000XM5"   # trust on|off, rename, forget, adapter hci1, auto-connect on, pairing-demo confirm
+mandara msg bluetooth refresh        # reread adapter and device state without restarting the shell
 mandara msg net-speed status         # addresses, public-ip, test [MB]
 ```
+
+Bluetooth also refreshes after waking from sleep. Refreshing preserves the
+selected adapter and auto-connect preference; it does not toggle power or discovery.
 
 ## System tools
 

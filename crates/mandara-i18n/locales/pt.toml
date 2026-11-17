@@ -10960,3 +10960,5 @@
 "Invalid live wallpaper request: {error}" = "Solicitação de papel de parede animado inválida: {error}"
 "Live wallpapers need the running shell." = "Os papéis de parede animados precisam do shell em execução."
 "Choose a display from the live wallpaper status." = "Escolha uma tela no estado do papel de parede animado."
+"Refresh Bluetooth state without restarting the shell" = "Atualizar o estado do Bluetooth sem reiniciar a interface"
+"Bluetooth did not respond in time" = "O Bluetooth não respondeu a tempo"

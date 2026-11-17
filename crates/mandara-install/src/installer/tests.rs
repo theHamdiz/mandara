@@ -1375,14 +1375,14 @@ fn installing_into_an_existing_path_refreshes_only_old_marked_entries() {
 }
 
 #[test]
-fn upgrades_and_uninstall_preserve_plugins_grants_and_studio_window_state() {
+fn upgrades_and_uninstall_preserve_plugins_bluetooth_and_studio_window_state() {
     for uninstall in [false, true] {
         let f = Fixture::new();
         let files = [
             (".local/state/mandara/studio-ui.toml", "window_size = [1300.0, 900.0]\n"),
             (".local/share/mandara/plugins/picker/plugin.toml", "id='picker'\nname='Picker'\n"),
             (".local/share/mandara/plugins/picker/.source", "author/picker\nv0.1.0\n"),
-            (".config/mandara/config.toml", "[plugins.grants.picker]\ngeneration=7\ncapabilities=['files.folders','files.read','net:example.com']\nfolders=['/media/Steam/steamapps/workshop/content/431960']\n"),
+            (".config/mandara/config.toml", "[plugins.grants.picker]\ngeneration=7\ncapabilities=['files.folders','files.read','net:example.com']\nfolders=['/media/Steam/steamapps/workshop/content/431960']\n[bluetooth]\nadapter='hci1'\nauto_connect=false\n"),
         ];
         for (name, bytes) in files {
             let path = f.home().join(name);

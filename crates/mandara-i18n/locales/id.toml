@@ -11061,3 +11061,5 @@
 "Invalid live wallpaper request: {error}" = "Permintaan wallpaper hidup tidak valid: {error}"
 "Live wallpapers need the running shell." = "Wallpaper hidup memerlukan shell yang sedang berjalan."
 "Choose a display from the live wallpaper status." = "Pilih layar dari status wallpaper hidup."
+"Refresh Bluetooth state without restarting the shell" = "Segarkan status Bluetooth tanpa memulai ulang shell"
+"Bluetooth did not respond in time" = "Bluetooth tidak merespons tepat waktu"

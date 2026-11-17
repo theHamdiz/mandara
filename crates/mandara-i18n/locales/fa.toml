@@ -11061,3 +11061,5 @@
 "Invalid live wallpaper request: {error}" = "درخواست پس‌زمینهٔ زنده نامعتبر است: {error}"
 "Live wallpapers need the running shell." = "پس‌زمینه‌های زنده به پوستهٔ در حال اجرا نیاز دارند."
 "Choose a display from the live wallpaper status." = "یک نمایشگر از وضعیت پس‌زمینهٔ زنده انتخاب کنید."
+"Refresh Bluetooth state without restarting the shell" = "تازه‌سازی وضعیت بلوتوث بدون راه‌اندازی دوبارهٔ پوسته"
+"Bluetooth did not respond in time" = "بلوتوث به‌موقع پاسخ نداد"

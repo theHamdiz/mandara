@@ -11303,3 +11303,5 @@
 "Invalid live wallpaper request: {error}" = "Demande de fond d’écran animé invalide : {error}"
 "Live wallpapers need the running shell." = "Les fonds d’écran animés nécessitent que le shell soit lancé."
 "Choose a display from the live wallpaper status." = "Choisissez un écran dans l’état du fond d’écran animé."
+"Refresh Bluetooth state without restarting the shell" = "Actualiser l’état du Bluetooth sans redémarrer l’interface"
+"Bluetooth did not respond in time" = "Le Bluetooth n’a pas répondu à temps"

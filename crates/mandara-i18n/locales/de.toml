@@ -11301,3 +11301,5 @@
 "Invalid live wallpaper request: {error}" = "Ungültige Anfrage für einen Live-Hintergrund: {error}"
 "Live wallpapers need the running shell." = "Live-Hintergründe benötigen die laufende Shell."
 "Choose a display from the live wallpaper status." = "Ein Display aus dem Status des Live-Hintergrunds auswählen."
+"Refresh Bluetooth state without restarting the shell" = "Bluetooth-Status ohne Neustart der Shell aktualisieren"
+"Bluetooth did not respond in time" = "Bluetooth hat nicht rechtzeitig geantwortet"

@@ -11060,3 +11060,5 @@
 "Invalid live wallpaper request: {error}" = "잘못된 라이브 배경화면 요청: {error}"
 "Live wallpapers need the running shell." = "라이브 배경화면을 사용하려면 셸이 실행 중이어야 합니다."
 "Choose a display from the live wallpaper status." = "라이브 배경화면 상태에서 디스플레이를 선택하세요."
+"Refresh Bluetooth state without restarting the shell" = "셸을 다시 시작하지 않고 Bluetooth 상태 새로 고침"
+"Bluetooth did not respond in time" = "Bluetooth가 제시간에 응답하지 않았습니다"
