@@ -101,8 +101,13 @@ impl Guest for Fixture {
             ui::Value::Replies(replies) => {
                 for r in replies {
                     let _ = storage::set("last-id", &r.id.to_string());
-                    if let Some((_, id, ready)) = SEARCH.lock().unwrap().as_mut() {
-                        if *id == r.id { *ready = true; }
+                    {
+                        let mut search = SEARCH.lock().unwrap();
+                        if let Some((_, id, ready)) = search.as_mut() {
+                            if *id == r.id {
+                                if r.outcome.is_ok() { *ready = true; } else { *search = None; }
+                            }
+                        }
                     }
                     match r.outcome {
                         Ok(body) => {

@@ -1903,6 +1903,7 @@ impl StudioView {
     /// Marketplace plugin updates: check, update one or all, and the
     /// result of the last run.
     fn updates_view(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
+        self.market_local_prime(cx);
         let pending: Vec<_> = self.available_plugin_updates().cloned().collect();
         let checking = self.updates.checking;
         let busy = !self.updates.plugin_jobs.is_empty();

@@ -127,7 +127,7 @@ fn fetch_net(job: &NetJob) -> Result<NetAnswer, String> {
 }
 
 /// The context of `replies` events (they aren't tied to one surface).
-fn reply_context() -> RenderContext {
+pub(super) fn reply_context() -> RenderContext {
     RenderContext { surface: SurfaceKind::Panel, outlet: String::new(), instance: String::new(), width: 0.0, height: 0.0, numerals: String::new(), calendar: String::new(), language: String::new() }
 }
 
@@ -173,9 +173,6 @@ fn flush_inbox(cx: &mut App) {
     }
     for plugin in &plugins {
         let Some(shared) = loaded(plugin) else { continue };
-        if let Some(p) = shared.borrow_mut().as_mut() {
-            p.flush_replies(&reply_context());
-        }
         after_call(plugin, &shared, cx);
         views_of(plugin).notify(cx);
     }
@@ -570,6 +567,7 @@ fn list_later(plugin: &str, id: u64, (offset, limit): (usize, usize), origin: Im
     cx.spawn(async move |cx| {
         let (total, items) = task.await;
         cx.update(|cx| {
+            if !loaded(&plugin).is_some_and(|loaded| loaded.borrow().as_ref().is_some_and(|plugin| plugin.is_open(id))) { return; }
             let items: Vec<Value> = items.into_iter().map(|path| json!({ "name": file_name(&path), "image": issue(&plugin, path, origin.clone()).unwrap_or(0) })).collect();
             deliver(&plugin, id, Ok(json!({ "total": total, "offset": offset, "items": items })), cx);
         });
@@ -609,6 +607,7 @@ fn projects_later(plugin: &str, id: u64, (offset, limit): (usize, usize), folder
     cx.spawn(async move |cx| {
         let (total, rows) = task.await;
         cx.update(|cx| {
+            if !loaded(&plugin).is_some_and(|loaded| loaded.borrow().as_ref().is_some_and(|plugin| plugin.is_open(id))) { return; }
             let items: Vec<Value> = rows
                 .into_iter()
                 .map(|r| {

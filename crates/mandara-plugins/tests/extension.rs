@@ -123,6 +123,27 @@ fn asynchronous_launcher_results_appear_after_the_broker_reply() {
 }
 
 #[test]
+fn a_cancelled_launcher_query_can_retry_after_permission_is_restored() {
+    use_scratch_cache();
+    let permissions = ["files.folders".into()];
+    let mut access = Access::new(&permissions, &permissions);
+    access.generation = 1;
+    let mut plugin = extension("async", access.clone()).unwrap();
+    assert!(plugin.launcher_query("gallery", "same query", 10).is_empty());
+    let old = plugin.take_requests().pop().unwrap();
+    access.generation = 3;
+    plugin.set_access(access);
+    assert!(!plugin.deliver(old.id, Ok("stale data".into())));
+    assert!(plugin.flush_replies(&context()));
+    assert!(plugin.launcher_query("gallery", "same query", 10).is_empty());
+    let fresh = plugin.take_requests().pop().expect("the cancelled query submits a replacement");
+    assert_ne!(fresh.id, old.id);
+    assert!(plugin.deliver(fresh.id, Ok("[]".into())));
+    plugin.flush_replies(&context());
+    assert_eq!(plugin.launcher_query("gallery", "same query", 10).len(), 3);
+}
+
+#[test]
 fn file_reads_need_the_new_permission_and_binary_requests_use_the_existing_host_scope() {
     use_scratch_cache();
     let declared = ["files.folders".into(), "files.read".into(), "net:api.example.com".into()];

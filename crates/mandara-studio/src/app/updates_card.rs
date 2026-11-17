@@ -156,6 +156,7 @@ impl StudioView {
     /// Loads the last answers (no network), detects the install, and runs
     /// an automatic check when the cached one is older than the interval.
     pub(super) fn updates_prime(&mut self, cx: &mut Context<Self>) {
+        self.market_local_prime(cx);
         if self.updates.primed {
             return;
         }

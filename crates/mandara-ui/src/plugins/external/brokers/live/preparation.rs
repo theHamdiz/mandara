@@ -25,15 +25,15 @@ thread_local! {
 }
 
 pub(super) fn enqueue(request: Request, local: Option<(u64, u64)>, outputs: Vec<String>, cx: &mut App) -> Result<Output, String> {
-    if !QUEUE.with(|q| q.borrow().has_room()) { return Err("the live wallpaper request queue is full".into()); }
-    let Action::Render { root, .. } = &request.action else { return Err("a render request is required".into()) };
+    if !QUEUE.with(|q| q.borrow().has_room()) { return Err(mandara_i18n::t("Too many live wallpaper requests. Try again.").to_string()); }
+    let Action::Render { root, .. } = &request.action else { return Err(mandara_i18n::t("A live wallpaper render request is required.").to_string()) };
     let wallpaper = WallpaperKey::of(crate::state::config(cx).read(cx).get());
     let pending = PENDING.with(|p| p.borrow_mut().begin(&request.plugin, root, request.generation, &outputs, wallpaper));
     let (reply, result) = async_channel::bounded(1);
     let job = Job { request, local, outputs, pending, reply };
     if let Some(job) = QUEUE.with(|q| q.borrow_mut().push(job).err()) {
         cancel(&job, cx);
-        return Err("the live wallpaper request queue is full".into());
+        return Err(mandara_i18n::t("Too many live wallpaper requests. Try again.").to_string());
     }
     watch(cx);
     pump(cx);
@@ -48,7 +48,7 @@ fn wanted(job: &Job, cx: &App) -> bool {
 
 fn cancel(job: &Job, cx: &mut App) {
     PENDING.with(|p| p.borrow_mut().cancel(&job.pending));
-    let _ = job.reply.try_send(Err("live wallpaper request superseded or cancelled".into()));
+    let _ = job.reply.try_send(Err(mandara_i18n::t("The live wallpaper request was cancelled.").to_string()));
     settle(cx);
 }
 
@@ -74,7 +74,7 @@ fn pump(cx: &mut App) {
                 let open = wanted(&job, cx);
                 let wallpaper = WallpaperKey::of(crate::state::config(cx).read(cx).get());
                 let outputs = PENDING.with(|p| p.borrow_mut().complete(&job.pending, job.outputs, &wallpaper, open));
-                let answer = if outputs.is_empty() { Err("live wallpaper request superseded or cancelled".into()) }
+                let answer = if outputs.is_empty() { Err(mandara_i18n::t("The live wallpaper request was cancelled.").to_string()) }
                     else { prepared.and_then(|prepared| start(&job.request.plugin, job.request.generation, job.local.map(|(handle, _)| handle), prepared, &outputs, cx)) };
                 if answer.is_err() { settle(cx); }
                 let _ = job.reply.try_send(answer.map(|value| value.to_string()));
@@ -86,15 +86,16 @@ fn pump(cx: &mut App) {
 }
 
 pub(super) fn stop(plugin: &str, only: Option<&str>) {
+    PENDING.with(|pending| pending.borrow_mut().stop_plugin(plugin, only));
     QUEUE.with(|q| q.borrow_mut().retain(|job| {
         let keep = job.request.plugin != plugin || only.is_some_and(|only| job.outputs.iter().any(|output| output != only));
-        if !keep { let _ = job.reply.try_send(Err("live wallpaper request cancelled".into())); }
+        if !keep { let _ = job.reply.try_send(Err(mandara_i18n::t("The live wallpaper request was cancelled.").to_string())); }
         keep
     }));
 }
 
 pub(super) fn clear() {
-    QUEUE.with(|q| q.borrow_mut().retain(|job| { let _ = job.reply.try_send(Err("live wallpaper request cancelled".into())); false }));
+    QUEUE.with(|q| q.borrow_mut().retain(|job| { let _ = job.reply.try_send(Err(mandara_i18n::t("The live wallpaper request was cancelled.").to_string())); false }));
 }
 
 pub(super) fn prune(cx: &App) -> bool {
@@ -103,10 +104,26 @@ pub(super) fn prune(cx: &App) -> bool {
         let keep = wanted(job, cx);
         if !keep {
             PENDING.with(|pending| pending.borrow_mut().cancel(&job.pending));
-            let _ = job.reply.try_send(Err("live wallpaper request superseded or cancelled".into()));
+            let _ = job.reply.try_send(Err(mandara_i18n::t("The live wallpaper request was cancelled.").to_string()));
             changed = true;
         }
         keep
     }));
     changed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn stopping_an_in_flight_preparation_removes_its_output_ownership() {
+        let wallpaper = WallpaperKey { enabled: true, path: None, variants: Default::default() };
+        let outputs = vec!["DP-1".into(), "DP-2".into()];
+        let start = PENDING.with(|pending| pending.borrow_mut().begin("scene", Path::new("/approved"), 0, &outputs, wallpaper.clone()));
+        stop("scene", Some("DP-1"));
+        let remaining = PENDING.with(|pending| pending.borrow_mut().complete(&start, outputs, &wallpaper, true));
+        assert_eq!(remaining, ["DP-2"]);
+    }
 }

@@ -209,6 +209,7 @@ A little cat, soap bubbles, a photo frame and stickers on the desktop
 A little closer to home
 A little player with an LCD and buttons
 A little room to think
+A live wallpaper render request is required.
 A locked account can't sign in until it's unlocked.
 A look ahead: only today's step can be marked done
 A look for Studio
@@ -1365,6 +1366,7 @@ Choose a .conf or .ovpn file first
 Choose a Studio Look in Themes → Studio first.
 Choose a boot entry for this item in Studio → Power & idle
 Choose a current path from backups cleanup locations.
+Choose a display from the live wallpaper status.
 Choose a file to import
 Choose a file…
 Choose a folder for this plugin
@@ -1375,6 +1377,7 @@ Choose a non-negative file offset.
 Choose a password for the new keyring
 Choose a photo…
 Choose a profile photo
+Choose a project from this plugin's project list.
 Choose a repository, password file and source folders in Settings. Initialize only a new repository.
 Choose a restore folder and a valid snapshot.
 Choose a sound theme archive
@@ -3644,6 +3647,7 @@ Interview, 1929
 Invalid PID
 Invalid character {char} in the secret
 Invalid declarations are skipped with a warning; see Validate below.
+Invalid live wallpaper request: {error}
 Invalid manifest
 Invalid phone identifier
 Invalid plugin id {id}
@@ -4077,7 +4081,9 @@ Live preview
 Live previews
 Live state from the running shell
 Live upload and download rates, public IP and a speed test
+Live wallpaper access is not available to this plugin.
 Live wallpaper request as JSON
+Live wallpapers need the running shell.
 Live window previews or app icons
 Live — what's playing now
 Living to Tell the Tale
@@ -5840,6 +5846,7 @@ Plugin folders
 Plugin folders created
 Plugin format
 Plugin guide
+Plugin permissions changed. Try again.
 Plugin releases changed. Check for updates again.
 Plugin settings: {name}
 Plugin widget
@@ -7780,6 +7787,7 @@ That doesn't look like a web address
 That doesn't look like an e-mail address
 That entry is not an image
 That file includes personal values ({keys}); turn on “Redact personal values” before sharing it.
+That folder is no longer approved for this plugin.
 That hadith isn't in the collection
 That isn't a download link
 That isn't a valid https:// address
@@ -8090,6 +8098,7 @@ The link stops working after this long
 The link stops working once your phone has downloaded the item
 The list is full — remove a widget to add another
 The list launcher: a drawer rising from the bottom edge, search next to the edge
+The live wallpaper request was cancelled.
 The local agent could not compile this command
 The location you add here is public and allows weather requests on this screen. Studio previews do not contact the weather service.
 The lock screen did not confirm that the session is locked
@@ -8146,6 +8155,7 @@ The playlist is used instead of a folder
 The plugin archive contains unsafe paths
 The plugin archive has no plugin.toml
 The plugin archive is too large
+The plugin is not available.
 The plugin repository {repository} is unavailable on GitHub.
 The plugin's own language (a code such as ar or en), or follow to use Mandara's
 The pointer
@@ -8153,6 +8163,7 @@ The power dock opens from the edge opposite the sidebar.
 The power menu opens from this edge
 The prayer times of another day (days after today, or before it when negative)
 The private compositor shortcut checker could not start.
+The project is outside the approved folder.
 The provider returned no language list
 The provider returned no translation
 The public IP endpoint must be an http(s) URL
@@ -8600,6 +8611,7 @@ Tonight's moon and how much of it is lit
 Too large to keep (over {mib} MiB)
 Too many arguments; usage: {usage}
 Too many attempts — try again later
+Too many live wallpaper requests. Try again.
 Too weak
 Took {time}
 Toolbar position
@@ -8834,6 +8846,7 @@ Unknown kind {kind}
 Unknown language {code}: use follow or one of {codes}
 Unknown layer {name}
 Unknown level {name}
+Unknown live wallpaper operation.
 Unknown mode {mode}: use random, variation or reseed
 Unknown option
 Unknown option {flag}

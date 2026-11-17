@@ -37,8 +37,13 @@ impl<T, const RUNNING: usize, const WAITING: usize> Queue<T, RUNNING, WAITING> {
     pub fn has_room(&self) -> bool { self.waiting.len() < WAITING }
 
     pub fn next_job(&mut self) -> Option<T> {
+        self.next_job_where(|_| true)
+    }
+
+    pub fn next_job_where(&mut self, available: impl FnMut(&T) -> bool) -> Option<T> {
         if self.running >= RUNNING { return None; }
-        let job = self.waiting.pop_front()?;
+        let index = self.waiting.iter().position(available)?;
+        let job = self.waiting.remove(index)?;
         self.running += 1;
         if self.waiting.is_empty() { self.waiting.shrink_to_fit(); }
         Some(job)

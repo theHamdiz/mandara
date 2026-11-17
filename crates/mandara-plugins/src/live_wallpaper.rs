@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::extension::{Access, Capability, MAX_PAYLOAD_BYTES, valid_name};
+use crate::extension::{Access, Capability, MAX_PAYLOAD_BYTES};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -24,22 +24,22 @@ pub enum Action {
 
 impl Request {
     pub fn parse(json: &str) -> Result<Self, String> {
-        if json.len() > MAX_PAYLOAD_BYTES { return Err("the live wallpaper request is too large".into()); }
-        let request: Self = serde_json::from_str(json).map_err(|e| e.to_string())?;
-        if !valid_name(&request.plugin) { return Err("invalid plugin id".into()); }
+        if json.len() > MAX_PAYLOAD_BYTES { return Err(mandara_i18n::t("This request is too large").to_string()); }
+        let request: Self = serde_json::from_str(json).map_err(|e| mandara_i18n::tf("Invalid live wallpaper request: {error}", &[("error", &e)]))?;
+        if !crate::wasm::valid_id(&request.plugin) { return Err(mandara_i18n::tf("Invalid plugin id {id}", &[("id", &request.plugin)])); }
         Ok(request)
     }
 
     /// Path containment and the renderer are checked separately on a blocking worker.
     pub fn authorize(&self, access: &Access, enabled: bool) -> Result<(), String> {
-        if !enabled { return Err("the plugin is switched off".into()); }
-        if self.generation != access.generation { return Err("the plugin's permissions changed; try again".into()); }
+        if !enabled { return Err(mandara_i18n::tf("{plugin} is switched off (Studio → Plugins)", &[("plugin", &self.plugin)])); }
+        if self.generation != access.generation { return Err(mandara_i18n::t("Plugin permissions changed. Try again.").to_string()); }
         let operation = match self.action { Action::Status { .. } => "status", Action::Render { .. } => "render", Action::Stop { .. } => "stop" };
-        if let Some(reason) = access.refuse(&Capability::WallpaperLive, operation) { return Err(reason); }
+        if access.refuse(&Capability::WallpaperLive, operation).is_some() { return Err(mandara_i18n::t("Live wallpaper access is not available to this plugin.").to_string()); }
         if let Action::Render { root, project, .. } = &self.action {
-            if !access.allows_folder(root) { return Err("that folder is no longer granted".into()); }
+            if !access.allows_folder(root) { return Err(mandara_i18n::t("That folder is no longer approved for this plugin.").to_string()); }
             if !root.is_absolute() || !project.is_absolute() || project == root {
-                return Err("the project is outside the granted folder".into());
+                return Err(mandara_i18n::t("The project is outside the approved folder.").to_string());
             }
         }
         Ok(())
@@ -82,5 +82,11 @@ mod tests {
         assert!(Request::parse(r#"{"plugin":"../other","generation":0,"action":{"operation":"status"}}"#).is_err());
         assert!(Request::parse(&" ".repeat(MAX_PAYLOAD_BYTES + 1)).is_err());
         assert!(!crate::wasm::PLUGIN_COMMANDS.iter().any(|command| command.starts_with("plugins")), "the guest command API must not become a relay tunnel");
+    }
+
+    #[test]
+    fn the_relay_accepts_every_valid_plugin_id() {
+        let request = Request { plugin: "wallpaper_engine".into(), generation: 1, action: Action::Status {} };
+        assert_eq!(Request::parse(&serde_json::to_string(&request).unwrap()).unwrap(), request);
     }
 }

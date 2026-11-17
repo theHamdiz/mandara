@@ -135,7 +135,10 @@ pub(crate) fn discovered(id: &str) -> Option<Discovered> {
 /// subscriptions it cancelled.
 pub(crate) fn after_call(id: &str, plugin: &Shared, cx: &mut App) {
     let (commands, requests, cancelled, storage) = match plugin.borrow_mut().as_mut() {
-        Some(p) => (p.take_commands(), p.take_requests(), p.take_cancelled(), p.take_storage_flush()),
+        Some(p) => {
+            p.flush_replies(&brokers::reply_context());
+            (p.take_commands(), p.take_requests(), p.take_cancelled(), p.take_storage_flush())
+        }
         None => return,
     };
     if let Some((path, json)) = storage {

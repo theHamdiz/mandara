@@ -363,7 +363,7 @@ fn status_then(cx: &mut App, finish: impl FnOnce(Result<Value, String>, &mut App
     match STATUS.with(|status| status.borrow_mut().join(Box::new(finish) as StatusReply)) {
         Ok(true) => {}
         Ok(false) => return,
-        Err(finish) => { finish(Err("the live wallpaper status queue is full".into()), cx); return; }
+        Err(finish) => { finish(Err(mandara_i18n::t("Too many live wallpaper requests. Try again.").to_string()), cx); return; }
     }
     cx.spawn(async move |cx| {
         let renderer = mandara_services::runtime::unblock(|| find_renderer(RENDERERS, std::env::var_os("PATH").as_deref()).map(|(r, _)| r.name)).await;
@@ -395,18 +395,18 @@ pub(super) fn output(payload: &serde_json::Map<String, Value>) -> Result<Option<
     match payload.get("output") {
         None | Some(Value::Null) => Ok(None),
         Some(Value::String(output)) => Ok(Some(output.clone())),
-        Some(_) => Err("`output` must be a display name from `status`".into()),
+        Some(_) => Err(mandara_i18n::t("Choose a display from the live wallpaper status.").to_string()),
     }
 }
 
 /// Local broker requests resolve their opaque handle before sharing the renderer path.
 pub(super) fn render(plugin: &str, id: u64, payload: &serde_json::Map<String, Value>, cx: &mut App) -> Option<Result<Value, String>> {
     let request = (|| {
-        let handle = payload.get("project").and_then(Value::as_u64).ok_or("`project` must be a project handle")?;
+        let handle = payload.get("project").and_then(Value::as_u64).ok_or_else(|| mandara_i18n::t("Choose a project from this plugin's project list.").to_string())?;
         let (project, root) = project_of(plugin, handle, cx)?;
         let request = mandara_plugins::live_wallpaper::Request {
             plugin: plugin.to_string(),
-            generation: access(plugin, cx).ok_or("the plugin is not registered")?.generation,
+            generation: access(plugin, cx).ok_or_else(|| mandara_i18n::t("The plugin is not available.").to_string())?.generation,
             action: mandara_plugins::live_wallpaper::Action::Render { root, project, output: output(payload)? },
         };
         render_request(request, Some((handle, id)), cx)
@@ -415,7 +415,7 @@ pub(super) fn render(plugin: &str, id: u64, payload: &serde_json::Map<String, Va
 }
 
 fn authorize_request(request: &mandara_plugins::live_wallpaper::Request, cx: &App) -> Result<(), String> {
-    let access = access(&request.plugin, cx).ok_or("the plugin is not registered")?;
+    let access = access(&request.plugin, cx).ok_or_else(|| mandara_i18n::t("The plugin is not available.").to_string())?;
     let enabled = cx.global::<mandara_plugins::PluginRegistry>().is_enabled(&request.plugin, &crate::state::config(cx).read(cx).get().plugins);
     request.authorize(&access, enabled)
 }
@@ -423,7 +423,7 @@ fn authorize_request(request: &mandara_plugins::live_wallpaper::Request, cx: &Ap
 /// Studio sends only host-resolved projects. The shell owns authorization and processes.
 pub(super) fn remote(request: mandara_plugins::live_wallpaper::Request, cx: &mut App) -> Result<mandara_plugins::Output, String> {
     use mandara_plugins::live_wallpaper::Action;
-    if crate::hub::try_hub(cx).is_none() { return Err("live wallpapers need the running shell".into()); }
+    if crate::hub::try_hub(cx).is_none() { return Err(mandara_i18n::t("Live wallpapers need the running shell.").to_string()); }
     authorize_request(&request, cx)?;
     match &request.action {
         Action::Render { .. } => render_request(request, None, cx),
@@ -445,7 +445,7 @@ pub(super) fn remote(request: mandara_plugins::live_wallpaper::Request, cx: &mut
 fn render_request(request: mandara_plugins::live_wallpaper::Request, local: Option<(u64, u64)>, cx: &mut App) -> Result<mandara_plugins::Output, String> {
     use mandara_plugins::live_wallpaper::Action;
     authorize_request(&request, cx)?;
-    let Action::Render { output, .. } = &request.action else { return Err("a render request is required".into()) };
+    let Action::Render { output, .. } = &request.action else { return Err(mandara_i18n::t("A live wallpaper render request is required.").to_string()) };
     if !crate::state::config(cx).read(cx).get().wallpaper.enabled { return Err("the wallpaper is switched off in Studio".into()); }
     let all = wallpaper_outputs(cx);
     let outputs = match output {
@@ -547,7 +547,7 @@ pub(super) fn stop(plugin: &str, payload: &serde_json::Map<String, Value>, cx: &
     let only = match payload.get("output") {
         None | Some(Value::Null) => None,
         Some(Value::String(o)) => Some(o.clone()),
-        Some(_) => return Err("`output` must be a display name from `status`".into()),
+        Some(_) => return Err(mandara_i18n::t("Choose a display from the live wallpaper status.").to_string()),
     };
     PENDING.with(|p| p.borrow_mut().stop_plugin(plugin, only.as_deref()));
     preparation::stop(plugin, only.as_deref());

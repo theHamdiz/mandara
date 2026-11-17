@@ -121,6 +121,8 @@ struct Waiting {
     result: Result<String, String>,
     capability: Capability,
     also: Option<Capability>,
+    /// A host cancellation contains no data protected by the old grant.
+    invalidated: bool,
 }
 
 #[derive(Default)]
@@ -155,14 +157,24 @@ fn next_id(counter: &std::sync::atomic::AtomicU64) -> Option<u64> {
 impl Broker {
     /// A new permission generation invalidates work even when the same grants were restored.
     pub fn invalidate(&mut self) {
+        for reply in &mut self.inbox {
+            reply.result = Err(mandara_i18n::t("Plugin permissions changed. Try again.").to_string());
+            reply.invalidated = true;
+        }
         self.cancelled.extend(self.outstanding.iter().map(|request| request.id));
-        self.outstanding.clear();
-        self.outstanding.shrink_to_fit();
-        self.queued.clear();
-        self.queued.shrink_to_fit();
-        self.inbox.clear();
-        self.inbox.shrink_to_fit();
+        for request in std::mem::take(&mut self.outstanding) {
+            self.invalidated(request.id, request.capability);
+        }
+        for request in std::mem::take(&mut self.queued) {
+            self.invalidated(request.id, request.capability);
+        }
         self.release_images(|entry| matches!(entry.origin, ImageOrigin::Asset));
+    }
+
+    fn invalidated(&mut self, id: u64, capability: Capability) {
+        if self.inbox.iter().any(|reply| reply.id == id) { return; }
+        if self.inbox.len() >= extension::MAX_INBOX { self.inbox.pop_front(); }
+        self.inbox.push_back(Waiting { id, result: Err(mandara_i18n::t("Plugin permissions changed. Try again.").to_string()), capability, also: None, invalidated: true });
     }
     /// A fresh id from one counter for the whole process (requests and
     /// image handles alike): a reloaded plugin never reuses an id, so a late
@@ -274,7 +286,7 @@ impl Broker {
         if self.inbox.len() >= extension::MAX_INBOX {
             self.inbox.pop_front();
         }
-        self.inbox.push_back(Waiting { id, result, capability, also });
+        self.inbox.push_back(Waiting { id, result, capability, also, invalidated: false });
         true
     }
 
@@ -284,7 +296,7 @@ impl Broker {
     pub fn close_where(&mut self, access: &Access) {
         // Results already waiting are dropped too: nothing read under a
         // revoked grant is handed over afterwards.
-        self.inbox.retain(|w| access.allows(&w.capability) && w.also.as_ref().is_none_or(|c| access.allows(c)));
+        self.inbox.retain(|w| w.invalidated || (access.allows(&w.capability) && w.also.as_ref().is_none_or(|c| access.allows(c))));
         self.queued.retain(|r| access.allows(&r.capability) && topic_capability(r).is_none_or(|c| access.allows(&c)));
         let cancelled = &mut self.cancelled;
         self.outstanding.retain(|o| {
@@ -299,7 +311,7 @@ impl Broker {
     /// A changed folder scope invalidates listings, reads and their waiting replies.
     pub fn close_folders(&mut self) {
         let scoped = |capability: &Capability| matches!(capability, Capability::Folders | Capability::FilesRead);
-        self.inbox.retain(|reply| !scoped(&reply.capability));
+        self.inbox.retain(|reply| reply.invalidated || !scoped(&reply.capability));
         self.queued.retain(|request| !scoped(&request.capability));
         let cancelled = &mut self.cancelled;
         self.outstanding.retain(|request| {

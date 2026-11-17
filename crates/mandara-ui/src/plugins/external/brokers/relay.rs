@@ -32,11 +32,11 @@ fn request(plugin: &str, generation: u64, r: &Request, resolve: impl FnOnce(u64)
         "status" => Action::Status {},
         "stop" => Action::Stop { output: live::output(&r.payload)? },
         "render" => {
-            let handle = r.payload.get("project").and_then(Value::as_u64).ok_or("`project` must be a project handle")?;
+            let handle = r.payload.get("project").and_then(Value::as_u64).ok_or_else(|| mandara_i18n::t("Choose a project from this plugin's project list.").to_string())?;
             let (project, root) = resolve(handle)?;
             Action::Render { project, root, output: live::output(&r.payload)? }
         }
-        _ => return Err("unknown live wallpaper operation".into()),
+        _ => return Err(mandara_i18n::t("Unknown live wallpaper operation.").to_string()),
     };
     Ok(LiveRequest { plugin: plugin.to_string(), generation, action })
 }
@@ -49,11 +49,11 @@ fn wanted(job: &Job, cx: &App) -> bool {
 }
 
 pub(super) fn forward(plugin: &str, r: &Request, cx: &mut App) -> Option<Result<Value, String>> {
-    if !cx.has_global::<ShellRelay>() { return Some(Err("Studio is not connected to the shell".into())); }
-    let Some(access) = live_access(plugin, cx) else { return Some(Err("the plugin is not available".into())); };
+    if !cx.has_global::<ShellRelay>() { return Some(Err(mandara_i18n::t("Studio isn't connected to the shell").to_string())); }
+    let Some(access) = live_access(plugin, cx) else { return Some(Err(mandara_i18n::t("The plugin is not available.").to_string())); };
     let request = match request(plugin, access.generation, r, |handle| project_of(plugin, handle, cx)) { Ok(request) => request, Err(error) => return Some(Err(error)) };
     if QUEUE.with(|q| q.borrow_mut().push(Job { request, id: r.id }).is_err()) {
-        return Some(Err("the shell request queue is full".into()));
+        return Some(Err(mandara_i18n::t("Too many live wallpaper requests. Try again.").to_string()));
     }
     pump(cx);
     None

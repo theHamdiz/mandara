@@ -432,13 +432,16 @@ and return the cached hits from `launcher-query`. A broker reply refreshes an
 open launcher query that used your plugin, even when its first result was empty.
 The selected result is kept when it still exists. Closing the launcher removes
 its subscription; no launcher refresh timer runs in the background.
+Permission changes replace pending replies with cancellation errors. Clear the
+matching pending query on an error so the same search can retry after approval.
 
 Studio's folder permission offers **Find Steam Workshop folders**. It reads
 Steam's registered libraries, including libraries on other drives and Flatpak
 Steam, then presents existing Workshop content folders for individual approval.
 Discovery grants nothing. General file reads additionally need `files.read`;
 directory traversal uses host-issued handles and refuses links and special files.
-One file operation runs at a time, with at most 32 waiting across plugins.
+At most two file operations run at a time, with one per plugin and at most 32
+waiting across plugins. A stalled folder in one plugin leaves a worker for others.
 
 Use `fetch-image` for supported static thumbnails, then put the returned image
 handle in a view or launcher hit. API and thumbnail CDN hosts each need their
