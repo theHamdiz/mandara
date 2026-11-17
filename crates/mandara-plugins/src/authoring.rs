@@ -295,7 +295,7 @@ pub fn quick_start(dev_dir: &std::path::Path) -> Vec<Step> {
 /// The permissions a manifest may list (`net:<host>` and
 /// `plugins.call:<id>` name their target).
 pub const PERMISSIONS: &[&str] = &[
-    PERMISSION_COMMANDS, "media.read", "media.control", "wallpaper.read", "wallpaper.set", "wallpaper.live", "files.folders", "notifications.send", "windows.read", "windows.control", "workspaces.read", "workspaces.control", "system.read", "clipboard.read", "clipboard.write",
+    PERMISSION_COMMANDS, "media.read", "media.control", "wallpaper.read", "wallpaper.set", "wallpaper.live", "files.folders", "files.read", "notifications.send", "windows.read", "windows.control", "workspaces.read", "workspaces.control", "system.read", "clipboard.read", "clipboard.write",
     "open.web", "osd.show", "theme.control", "events", "timers", "launcher.global", "net:<host>", "plugins.call:<id>",
 ];
 

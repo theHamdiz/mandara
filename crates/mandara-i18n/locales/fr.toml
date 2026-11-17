@@ -11280,3 +11280,9 @@
 "Extra" = "Supplémentaire"
 
 "Installed {plugin} {version}" = "{plugin} {version} installé"
+
+"Read files inside folders you choose for it" = "Lire les fichiers dans les dossiers choisis pour lui"
+"Find Steam Workshop folders" = "Rechercher les dossiers Steam Workshop"
+"No Steam Workshop folders found." = "Aucun dossier Steam Workshop trouvé."
+"Run an approved plugin live-wallpaper request from Studio" = "Exécuter une demande autorisée de fond animé d’une extension depuis Studio"
+"Live wallpaper request as JSON" = "Demande de fond animé au format JSON"

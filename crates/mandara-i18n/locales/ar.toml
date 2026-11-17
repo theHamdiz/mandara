@@ -11283,3 +11283,9 @@
 "Extra" = "إضافي"
 
 "Installed {plugin} {version}" = "تم تثبيت {plugin} {version}"
+
+"Read files inside folders you choose for it" = "قراءة الملفات داخل المجلدات التي تختارها له"
+"Find Steam Workshop folders" = "البحث عن مجلدات Steam Workshop"
+"No Steam Workshop folders found." = "لم يُعثر على مجلدات Steam Workshop."
+"Run an approved plugin live-wallpaper request from Studio" = "تنفيذ طلب خلفية حية مُصرّح به لإضافة من الاستوديو"
+"Live wallpaper request as JSON" = "طلب خلفية حية بصيغة JSON"

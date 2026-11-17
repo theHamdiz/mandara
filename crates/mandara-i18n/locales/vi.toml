@@ -10938,3 +10938,9 @@
 "Extra" = "Bổ sung"
 
 "Installed {plugin} {version}" = "Đã cài đặt {plugin} {version}"
+
+"Read files inside folders you choose for it" = "Đọc tệp trong các thư mục bạn chọn cho nó"
+"Find Steam Workshop folders" = "Tìm thư mục Steam Workshop"
+"No Steam Workshop folders found." = "Không tìm thấy thư mục Steam Workshop."
+"Run an approved plugin live-wallpaper request from Studio" = "Thực hiện yêu cầu hình nền động đã được cấp quyền của plugin từ Studio"
+"Live wallpaper request as JSON" = "Yêu cầu hình nền động ở dạng JSON"

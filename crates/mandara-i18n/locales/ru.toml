@@ -11279,3 +11279,9 @@
 "Extra" = "Дополнительная"
 
 "Installed {plugin} {version}" = "Установлен {plugin} {version}"
+
+"Read files inside folders you choose for it" = "Читать файлы в выбранных для него папках"
+"Find Steam Workshop folders" = "Найти папки Steam Workshop"
+"No Steam Workshop folders found." = "Папки Steam Workshop не найдены."
+"Run an approved plugin live-wallpaper request from Studio" = "Выполнить разрешённый запрос плагина на живые обои из Studio"
+"Live wallpaper request as JSON" = "Запрос на живые обои в формате JSON"

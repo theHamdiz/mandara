@@ -10939,3 +10939,9 @@
 "Extra" = "अतिरिक्त"
 
 "Installed {plugin} {version}" = "{plugin} {version} स्थापित केले"
+
+"Read files inside folders you choose for it" = "यासाठी निवडलेल्या फोल्डरमधील फाइल वाचा"
+"Find Steam Workshop folders" = "Steam Workshop फोल्डर शोधा"
+"No Steam Workshop folders found." = "Steam Workshop फोल्डर सापडले नाहीत."
+"Run an approved plugin live-wallpaper request from Studio" = "Studio मधून प्लगइनची मंजूर थेट वॉलपेपर विनंती चालवा"
+"Live wallpaper request as JSON" = "JSON स्वरूपात थेट वॉलपेपर विनंती"

@@ -11275,3 +11275,9 @@
 "Extra" = "额外"
 
 "Installed {plugin} {version}" = "已安装 {plugin} {version}"
+
+"Read files inside folders you choose for it" = "读取您为其选择的文件夹内的文件"
+"Find Steam Workshop folders" = "查找 Steam Workshop 文件夹"
+"No Steam Workshop folders found." = "未找到 Steam Workshop 文件夹。"
+"Run an approved plugin live-wallpaper request from Studio" = "从 Studio 执行插件已获准的动态壁纸请求"
+"Live wallpaper request as JSON" = "JSON 格式的动态壁纸请求"

@@ -91,6 +91,7 @@ mod studio_frame;
 mod studio_looks;
 mod plugin_gate;
 mod plugin_grants;
+mod plugin_folder_grants;
 mod plugin_folders;
 mod market_catalog;
 pub mod plugin_modal;

@@ -30,7 +30,7 @@
 //! are dropped.
 
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -43,6 +43,9 @@ use super::{after_call, discovered, instance, loaded, views_of};
 use crate::hub::hub;
 
 pub(crate) mod live;
+mod files;
+mod queue;
+pub mod relay;
 
 /// Most items one page of a listing returns.
 pub const MAX_PAGE: usize = 60;
@@ -50,6 +53,8 @@ pub const MAX_PAGE: usize = 60;
 const MAX_FOLDER_SCAN: usize = 20_000;
 /// Network requests running at once, for every plugin together.
 const MAX_NET_IN_FLIGHT: usize = 2;
+/// Queued work is bounded across plugins as well as inside each plugin's broker.
+const MAX_NET_QUEUED: usize = 32;
 /// Longest title and body a plugin's notification may have (bytes).
 const MAX_NOTIFY_TEXT: usize = 512;
 
@@ -61,7 +66,7 @@ const EVENTS_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(25
 
 thread_local! {
     /// Results waiting for the next delivery tick, and whether one is set.
-    static INBOX: RefCell<(Vec<(String, u64, Result<Value, String>)>, bool)> = const { RefCell::new((Vec::new(), false)) };
+    static INBOX: RefCell<(Vec<(String, u64, Result<String, String>)>, bool)> = const { RefCell::new((Vec::new(), false)) };
     /// An `events` look is scheduled.
     static EVENTS_PENDING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Open media subscriptions: plugin id → request ids.
@@ -70,7 +75,7 @@ thread_local! {
     /// unrelated hub change sends nothing).
     static MEDIA_WATCH: RefCell<Option<(gpui::Subscription, Value)>> = const { RefCell::new(None) };
     /// Network requests waiting for a slot, and how many run.
-    static NET_QUEUE: RefCell<(VecDeque<NetJob>, usize)> = const { RefCell::new((VecDeque::new(), 0)) };
+    static NET_QUEUE: RefCell<queue::Queue<NetJob, MAX_NET_IN_FLIGHT, MAX_NET_QUEUED>> = const { RefCell::new(queue::Queue::new()) };
     /// `events` subscriptions: plugin id → (request id, topic).
     static EVENT_SUBS: RefCell<HashMap<String, Vec<(u64, &'static str)>>> = RefCell::new(HashMap::new());
     /// The hub and config observers behind them, and the last value sent
@@ -95,6 +100,30 @@ struct NetJob {
     url: String,
     method: String,
     body: Option<String>,
+    operation: NetOperation,
+}
+
+#[derive(Clone, Copy)]
+enum NetOperation { Text, Binary, Image }
+
+enum NetAnswer { Reply(String), Image { status: u16, path: PathBuf } }
+
+fn fetch_net(job: &NetJob) -> Result<NetAnswer, String> {
+    use mandara_services::plugin_net as net;
+    match job.operation {
+        NetOperation::Text => net::fetch(&job.host, &job.url, &job.method, job.body.as_deref()).map(|r| NetAnswer::Reply(json!({"status":r.status,"body":r.body}).to_string())),
+        NetOperation::Binary => net::fetch_bytes(&job.host, &job.url, &job.method, job.body.as_deref(), net::MAX_BINARY_BYTES)
+            .map(|r| NetAnswer::Reply(json!({"status":r.status,"encoding":"base64","body":net::encode_bytes(&r.body)}).to_string())),
+        NetOperation::Image => {
+            if !matches!(job.method.as_str(), "" | "GET" | "get") || job.body.as_ref().is_some_and(|b| !b.is_empty()) {
+                return Err("image downloads use GET without a body".into());
+            }
+            let response = net::fetch_bytes(&job.host, &job.url, "GET", None, net::MAX_IMAGE_BYTES)?;
+            if !(200..300).contains(&response.status) { return Err(format!("image download returned HTTP {}", response.status)); }
+            let path = net::images::store(&response.body)?;
+            Ok(NetAnswer::Image { status: response.status, path })
+        }
+    }
 }
 
 /// The context of `replies` events (they aren't tied to one surface).
@@ -107,6 +136,11 @@ fn reply_context() -> RenderContext {
 /// a plugin answering every reply with a new request can't recurse into
 /// the shell, and a ping-pong between plugins runs at most once a tick.
 pub(super) fn deliver(plugin: &str, id: u64, result: Result<Value, String>, cx: &mut App) {
+    deliver_raw(plugin, id, result.map(|v| v.to_string()), cx);
+}
+
+/// Large binary/file replies are encoded on their worker before reaching the UI.
+fn deliver_raw(plugin: &str, id: u64, result: Result<String, String>, cx: &mut App) {
     let schedule = INBOX.with(|i| {
         let mut i = i.borrow_mut();
         i.0.push((plugin.to_string(), id, result));
@@ -132,25 +166,27 @@ fn flush_inbox(cx: &mut App) {
     let mut plugins: Vec<String> = Vec::new();
     for (plugin, id, result) in results {
         let Some(shared) = loaded(&plugin) else { continue };
-        let delivered = shared.borrow_mut().as_mut().is_some_and(|p| p.deliver(id, result.map(|v| v.to_string())));
+        let delivered = shared.borrow_mut().as_mut().is_some_and(|p| p.deliver(id, result));
         if delivered && !plugins.contains(&plugin) {
             plugins.push(plugin);
         }
     }
-    for plugin in plugins {
-        let Some(shared) = loaded(&plugin) else { continue };
+    for plugin in &plugins {
+        let Some(shared) = loaded(plugin) else { continue };
         if let Some(p) = shared.borrow_mut().as_mut() {
             p.flush_replies(&reply_context());
         }
-        after_call(&plugin, &shared, cx);
-        views_of(&plugin).notify(cx);
+        after_call(plugin, &shared, cx);
+        views_of(plugin).notify(cx);
     }
+    super::launcher_updates::notify(&plugins, cx);
 }
 
 /// The plugin's access as the config says now.
 fn live_access(plugin: &str, cx: &App) -> Option<Access> {
     let d = discovered(plugin)?;
-    Some(Access::new(&d.permissions, crate::state::config(cx).read(cx).get().plugins.granted(plugin)))
+    if !cx.global::<mandara_plugins::PluginRegistry>().is_enabled(plugin, &crate::state::config(cx).read(cx).get().plugins) { return None; }
+    Some(Access::from_grant(&d.permissions, crate::state::config(cx).read(cx).get().plugins.grants.get(plugin)))
 }
 
 /// Runs `requests` from plugin `plugin`.
@@ -175,6 +211,9 @@ pub(super) fn dispatch(plugin: &str, requests: Vec<Request>, cx: &mut App) {
 /// comes later (a subscription, a listing, a network request).
 fn run(plugin: &str, r: &Request, cx: &mut App) -> Option<Result<Value, String>> {
     let op = r.operation.as_str();
+    if r.capability == Capability::WallpaperLive && crate::hub::try_hub(cx).is_none() {
+        return relay::forward(plugin, r, cx);
+    }
     // Studio runs plugin tabs without the shell's services.
     let shell_only = matches!(
         r.capability,
@@ -224,6 +263,7 @@ fn run(plugin: &str, r: &Request, cx: &mut App) -> Option<Result<Value, String>>
             crate::state::open_studio_at(Some(format!("plugins/{plugin}")), cx);
             Ok(json!({ "opened": "studio" }))
         }
+        (Capability::FilesRead, _) => return files::run(plugin, r, cx),
         (Capability::WallpaperLive, "status") => {
             live::status(plugin, r.id, cx);
             return None;
@@ -231,8 +271,9 @@ fn run(plugin: &str, r: &Request, cx: &mut App) -> Option<Result<Value, String>>
         (Capability::WallpaperLive, "render") => return live::render(plugin, r.id, &r.payload, cx),
         (Capability::WallpaperLive, "stop") => live::stop(plugin, &r.payload, cx),
         (Capability::Notify, "send") => notify(plugin, &r.payload, cx),
-        (Capability::Net(host), "fetch") => {
-            queue_net(NetJob { plugin: plugin.to_string(), id: r.id, host: host.clone(), url: text(&r.payload, "url"), method: text(&r.payload, "method"), body: r.payload.get("body").and_then(Value::as_str).map(str::to_string) }, cx);
+        (Capability::Net(host), "fetch" | "fetch-binary" | "fetch-image") => {
+            let operation = match op { "fetch-binary" => NetOperation::Binary, "fetch-image" => NetOperation::Image, _ => NetOperation::Text };
+            queue_net(NetJob { plugin: plugin.to_string(), id: r.id, host: host.clone(), url: text(&r.payload, "url"), method: text(&r.payload, "method"), body: r.payload.get("body").and_then(Value::as_str).map(str::to_string), operation }, cx);
             return None;
         }
         (Capability::Call(callee), _) => {
@@ -333,7 +374,12 @@ fn run(plugin: &str, r: &Request, cx: &mut App) -> Option<Result<Value, String>>
 fn shell_command(plugin: &str, id: u64, words: &[&str], cx: &mut App) -> Option<Result<Value, String>> {
     let words: Vec<String> = words.iter().map(|w| (*w).to_string()).collect();
     let registry = cx.global::<mandara_plugins::PluginRegistry>().commands.clone();
-    match registry.execute(&words, cx) {
+    command_output(plugin, id, registry.execute(&words, cx), cx)
+}
+
+/// Both local services and Studio relays deliver through the same pending reply path.
+pub(super) fn command_output(plugin: &str, id: u64, output: Result<mandara_plugins::Output, String>, cx: &mut App) -> Option<Result<Value, String>> {
+    match output {
         Ok(mandara_plugins::Output::Value(v)) => Some(Ok(v)),
         Ok(mandara_plugins::Output::Pending(rx)) => {
             let plugin = plugin.to_string();
@@ -648,7 +694,10 @@ fn notify(plugin: &str, payload: &serde_json::Map<String, Value>, cx: &mut App) 
 // ── Network ──────────────────────────────────────────────────────────────
 
 fn queue_net(job: NetJob, cx: &mut App) {
-    NET_QUEUE.with(|q| q.borrow_mut().0.push_back(job));
+    if let Some(job) = NET_QUEUE.with(|q| q.borrow_mut().push(job).err()) {
+        deliver(&job.plugin, job.id, Err("the network request queue is full".into()), cx);
+        return;
+    }
     pump_net(cx);
 }
 
@@ -656,43 +705,42 @@ fn queue_net(job: NetJob, cx: &mut App) {
 /// short-lived thread; the answer comes back through a channel.
 fn pump_net(cx: &mut App) {
     loop {
-        let job = NET_QUEUE.with(|q| {
-            let mut q = q.borrow_mut();
-            if q.1 >= MAX_NET_IN_FLIGHT {
-                return None;
-            }
-            let job = q.0.pop_front()?;
-            q.1 += 1;
-            if q.0.is_empty() {
-                q.0.shrink_to_fit();
-            }
-            Some(job)
-        });
+        let job = NET_QUEUE.with(|q| q.borrow_mut().next_job());
         let Some(job) = job else { return };
         // Still allowed and still wanted? A revoked grant or a cancelled
         // request must not reach the network (a POST has effects).
         let allowed = live_access(&job.plugin, cx).is_some_and(|a| a.allows(&Capability::Net(job.host.clone())));
         let open = loaded(&job.plugin).is_some_and(|p| p.borrow().as_ref().is_some_and(|p| p.is_open(job.id)));
         if !allowed || !open {
-            NET_QUEUE.with(|q| q.borrow_mut().1 -= 1);
+            NET_QUEUE.with(|q| q.borrow_mut().complete());
             continue;
         }
         let (tx, rx) = async_channel::bounded(1);
-        let (host, url, method, body) = (job.host, job.url, job.method, job.body);
+        let (plugin, id, host) = (job.plugin.clone(), job.id, job.host.clone());
         let spawned = std::thread::Builder::new().name("mandara-plugin-net".into()).spawn(move || {
-            let _ = tx.send_blocking(mandara_services::plugin_net::fetch(&host, &url, &method, body.as_deref()));
+            let _ = tx.send_blocking(fetch_net(&job));
         });
-        let (plugin, id) = (job.plugin, job.id);
         if spawned.is_err() {
-            NET_QUEUE.with(|q| q.borrow_mut().1 -= 1);
+            NET_QUEUE.with(|q| q.borrow_mut().complete());
             deliver(&plugin, id, Err("couldn't start the request".into()), cx);
             continue;
         }
         cx.spawn(async move |cx| {
             let answer = rx.recv().await.unwrap_or_else(|_| Err("the request stopped".into()));
             cx.update(|cx| {
-                NET_QUEUE.with(|q| q.borrow_mut().1 -= 1);
-                deliver(&plugin, id, answer.map(|r| json!({ "status": r.status, "body": r.body })), cx);
+                NET_QUEUE.with(|q| q.borrow_mut().complete());
+                let allowed = live_access(&plugin, cx).is_some_and(|a| a.allows(&Capability::Net(host.clone())));
+                let open = loaded(&plugin).is_some_and(|p| p.borrow().as_ref().is_some_and(|p| p.is_open(id)));
+                if allowed && open {
+                    match answer {
+                        Ok(NetAnswer::Reply(reply)) => deliver_raw(&plugin, id, Ok(reply), cx),
+                        Ok(NetAnswer::Image { status, path }) => match issue(&plugin, path, ImageOrigin::Network(host)) {
+                            Some(image) => deliver(&plugin, id, Ok(json!({"status":status,"image":image})), cx),
+                            None => deliver(&plugin, id, Err("no image handles are left".into()), cx),
+                        },
+                        Err(error) => deliver(&plugin, id, Err(error), cx),
+                    }
+                }
                 pump_net(cx);
             });
         })
@@ -833,6 +881,8 @@ pub(super) fn stop(plugin: &str, ids: &[u64], cx: &mut App) {
     if ids.is_empty() {
         return;
     }
+    files::stop(plugin, Some(ids));
+    relay::stop(plugin, Some(ids));
     MEDIA_SUBS.with(|s| {
         let mut s = s.borrow_mut();
         if let Some(list) = s.get_mut(plugin) {
@@ -852,16 +902,19 @@ pub(super) fn stop(plugin: &str, ids: &[u64], cx: &mut App) {
         }
     });
     TIMERS.with(|t| t.borrow_mut().retain(|(p, id), _| p != plugin || !ids.contains(id)));
-    NET_QUEUE.with(|q| q.borrow_mut().0.retain(|j| j.plugin != plugin || !ids.contains(&j.id)));
+    NET_QUEUE.with(|q| q.borrow_mut().retain(|j| j.plugin != plugin || !ids.contains(&j.id)));
     release_watch_if_idle(cx);
 }
 
 /// Plugin `plugin` unloaded: its subscriptions and queued network requests go.
 pub(super) fn forget(plugin: &str, cx: &mut App) {
+    files::stop(plugin, None);
+    relay::stop(plugin, None);
+    super::launcher_updates::all(cx);
     MEDIA_SUBS.with(|s| s.borrow_mut().remove(plugin));
     EVENT_SUBS.with(|s| s.borrow_mut().remove(plugin));
     TIMERS.with(|t| t.borrow_mut().retain(|(p, _), _| p != plugin));
-    NET_QUEUE.with(|q| q.borrow_mut().0.retain(|j| j.plugin != plugin));
+    NET_QUEUE.with(|q| q.borrow_mut().retain(|j| j.plugin != plugin));
     release_watch_if_idle(cx);
 }
 

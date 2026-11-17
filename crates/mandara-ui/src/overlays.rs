@@ -591,6 +591,8 @@ struct SearchCtx {
     /// was addressed to a plugin provider's prefix.
     plugin_hits: Vec<Hit>,
     plugin_routed: bool,
+    /// Providers queried for this text, including those still waiting for data.
+    plugin_sources: Vec<String>,
 }
 
 /// Providers whose live data [`SearchCtx`] gathers; the others search
@@ -672,15 +674,17 @@ impl SearchCtx {
 
     /// Asks the plugins' launcher providers for `query` (each in its
     /// sandbox, under the launcher time budget).
-    fn ask_plugins(&mut self, query: &str, cx: &App) {
+    fn ask_plugins(&mut self, query: &str, cx: &mut App) {
         let q = query.trim_start();
         if q.starts_with(['/', '=', '>', '!']) {
             self.plugin_hits.clear();
             self.plugin_routed = false;
+            self.plugin_sources.clear();
             return;
         }
         let builtin = launcher_ext::route(q, &self.providers).is_some();
         (self.plugin_routed, self.plugin_hits) = crate::plugins::external::launcher_hits(q, builtin, cx);
+        self.plugin_sources = crate::plugins::external::settle_launcher(cx);
     }
 
     fn set_catalog(&mut self, catalog: Arc<Catalog>, actions: bool) {
@@ -1284,7 +1288,6 @@ fn with_results(
     let index = build_index(cx);
     let mut ctx = SearchCtx::gather(cx);
     ctx.ask_plugins(&query, cx);
-    crate::plugins::external::settle_launcher(cx);
     let cfg = config(cx).read(cx).get();
     let app_actions = cfg.launcher.look.app_actions;
     let apps_key = ctx.uses(&query, "apps").then(|| CatalogRequest::new(cfg, &ctx.windows));
@@ -1573,6 +1576,12 @@ impl LauncherView {
             this.ctx.usage = launcher_ext::usage_snapshot(config(cx).read(cx).get());
             this.refilter_on_data("usage", cx);
         }).detach();
+        let plugin_updates = crate::plugins::external::launcher_updates::events(cx);
+        cx.subscribe(&plugin_updates, |this, _, change, cx| {
+            if !this.closing && !this.released && change.affects(&this.ctx.plugin_sources) {
+                this.refilter_preserving_selection(cx);
+            }
+        }).detach();
         cx.observe_global::<launcher_ext::RecentFiles>(|this, cx| {
             if this.ctx.providers.files.enabled
                 && let Some(recent) = launcher_ext::RecentFiles::get(cx, &())
@@ -1715,6 +1724,10 @@ impl LauncherView {
         if !self.ctx.uses(&self.effective_query(), provider) {
             return;
         }
+        self.refilter_preserving_selection(cx);
+    }
+
+    fn refilter_preserving_selection(&mut self, cx: &mut Context<Self>) {
         let selected = current_selection_key(&self.results, self.selected);
         self.refilter(cx);
         if let Some(selected) = selected
@@ -1736,7 +1749,6 @@ impl LauncherView {
         let before: std::collections::HashMap<String, usize> = if was_grid { self.results.iter().enumerate().map(|(i, it)| (usage_key(it), i)).collect() } else { Default::default() };
         let query = self.effective_query();
         self.ctx.ask_plugins(&query, cx);
-        crate::plugins::external::settle_launcher(cx);
         let mut results = search_with(&query, &self.ctx.catalog.apps, &self.index, &self.ctx);
         if self.mode == Some(BeaconMode::Apps) {
             results.retain(|i| matches!(i, Item::App(_)));

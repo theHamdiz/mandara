@@ -49,6 +49,7 @@ pub enum ModalView {
 
 /// Modal state, owned by [`StudioView`].
 pub struct PluginModal {
+    pub(super) folder_discovery: super::plugin_folder_grants::Suggestions,
     /// The plugin shown (kept while the modal animates out).
     target: Option<(String, ModalView)>,
     open: bool,
@@ -72,6 +73,7 @@ pub struct PluginModal {
 impl Default for PluginModal {
     fn default() -> Self {
         Self {
+            folder_discovery: Default::default(),
             target: None,
             open: false,
             appear: SpringValue::new(0.0, APPEAR_SPRING),
@@ -88,6 +90,9 @@ impl Default for PluginModal {
 }
 
 impl PluginModal {
+    pub(super) fn showing_plugin(&self, id: &str) -> bool {
+        self.open && self.target.as_ref().is_some_and(|(current, _)| current == id)
+    }
     /// Whether the modal is on screen (open, or still animating out).
     pub(super) fn showing(&self) -> bool {
         self.target.is_some()
@@ -617,6 +622,7 @@ impl StudioView {
         let reopening = self.modal.open && self.modal.target.as_ref().is_some_and(|(open_id, _)| open_id == id);
         self.modal.target = Some((id.to_string(), view));
         if !reopening {
+            self.modal.folder_discovery.close();
             self.modal.confirm_uninstall = false;
             self.modal.confirm_remove = false;
             self.modal.message = None;
@@ -656,6 +662,7 @@ impl StudioView {
 
     /// Starts the exit animation.
     pub fn close_plugin(&mut self, cx: &mut Context<Self>) {
+        self.modal.folder_discovery.close();
         super::plugin_credentials::clear_input(cx);
         self.credentials.close();
         self.feeds.close();

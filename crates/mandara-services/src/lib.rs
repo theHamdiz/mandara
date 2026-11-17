@@ -76,6 +76,8 @@ pub mod ocr;
 pub mod offline;
 pub mod outputs;
 pub mod plugin_net;
+pub mod plugin_files;
+pub mod steam_libraries;
 pub mod phone_connect;
 pub mod plasma_lock;
 pub mod polkit;

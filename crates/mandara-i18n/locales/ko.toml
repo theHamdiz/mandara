@@ -11037,3 +11037,9 @@
 "Extra" = "추가"
 
 "Installed {plugin} {version}" = "{plugin} {version} 설치 완료"
+
+"Read files inside folders you choose for it" = "선택한 폴더 안의 파일 읽기"
+"Find Steam Workshop folders" = "Steam Workshop 폴더 찾기"
+"No Steam Workshop folders found." = "Steam Workshop 폴더를 찾지 못했습니다."
+"Run an approved plugin live-wallpaper request from Studio" = "Studio에서 플러그인의 허용된 라이브 배경화면 요청 실행"
+"Live wallpaper request as JSON" = "JSON 형식의 라이브 배경화면 요청"

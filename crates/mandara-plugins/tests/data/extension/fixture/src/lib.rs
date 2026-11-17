@@ -13,6 +13,8 @@ use mandara::plugin::ui;
 
 /// What happened, newest last; the view's first text node shows it.
 static LOG: Mutex<Vec<String>> = Mutex::new(Vec::new());
+static SEARCH: Mutex<Option<(String, u64, bool)>> = Mutex::new(None);
+static PROJECT: Mutex<Option<u64>> = Mutex::new(None);
 
 fn log(line: String) {
     LOG.lock().unwrap().push(line);
@@ -63,6 +65,16 @@ impl Guest for Fixture {
         if context.surface == ui::Surface::Bar {
             return Some(ui::View { nodes: vec![node(ui::Kind::Text, "", "Fixture")], root: 0, focus: String::new() });
         }
+        if mode() == "live" {
+            let mut root = node(ui::Kind::Column, "root", "");
+            root.children = vec![1, 2, 3, 4, 5];
+            let mut nodes = vec![root];
+            for action in ["status", "projects", "render", "stop"] {
+                nodes.push(node(ui::Kind::Button, action, action));
+            }
+            nodes.push(node(ui::Kind::Text, "", &LOG.lock().unwrap().join("\n")));
+            return Some(ui::View { nodes, root: 0, focus: "status".into() });
+        }
         if mode() == "sneaky" {
             // Rendering isn't a user gesture: this must be refused.
             log(format!("render-clip {:?}", submit("clipboard.read", "text", "{}")));
@@ -84,19 +96,43 @@ impl Guest for Fixture {
         match event.value {
             ui::Value::Replies(replies) => {
                 for r in replies {
+                    let _ = storage::set("last-id", &r.id.to_string());
+                    if let Some((_, id, ready)) = SEARCH.lock().unwrap().as_mut() {
+                        if *id == r.id { *ready = true; }
+                    }
                     match r.outcome {
-                        Ok(body) => log(format!("reply {} ok {body}", r.id)),
-                        Err(e) => log(format!("reply {} err {e}", r.id)),
+                        Ok(body) => {
+                            let _ = storage::set("last", &body);
+                            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&body) {
+                                if let Some(project) = value["items"][0]["project"].as_u64() { *PROJECT.lock().unwrap() = Some(project); }
+                            }
+                            log(format!("reply {} ok {body}", r.id));
+                        }
+                        Err(e) => {
+                            let _ = storage::set("last", &serde_json::json!({"error":e}).to_string());
+                            log(format!("reply {} err {e}", r.id));
+                        }
                     }
                 }
                 return;
             }
             ui::Value::Text(t) => return log(format!("text {t}")),
             ui::Value::Launch(id) => return log(format!("launch {id}")),
-            ui::Value::Command(words) => return log(format!("command {}", words.join(" "))),
+            ui::Value::Command(words) => {
+                if words.len() == 4 && words[0] == "request" {
+                    log(format!("request {:?}", submit(&words[1], &words[2], &words[3])));
+                }
+                return log(format!("command {}", words.join(" ")));
+            }
             _ => {}
         }
         match event.action.as_str() {
+            "status" | "stop" => log(format!("live {:?}", submit("wallpaper.live", &event.action, "{}"))),
+            "projects" => log(format!("projects {:?}", submit("files.folders", "projects", r#"{"folder":0}"#))),
+            "render" => {
+                let project = *PROJECT.lock().unwrap();
+                log(format!("live {:?}", project.map(|project| submit("wallpaper.live", "render", &serde_json::json!({"project":project}).to_string()))));
+            }
             "media" => log(format!("media {:?}", submit("media.read", "status", "{}"))),
             "subscribe" => log(format!("subscribe {:?}", submit("media.read", "subscribe", ""))),
             "undeclared" => log(format!("undeclared {:?}", submit("wallpaper.set", "apply", "{\"image\": 1}"))),
@@ -115,6 +151,15 @@ impl Guest for Fixture {
     }
 
     fn launcher_query(_provider: String, query: String, _limit: u32) -> Vec<ui::Hit> {
+        if mode() == "async" {
+            let mut search = SEARCH.lock().unwrap();
+            if search.as_ref().is_none_or(|(previous, _, _)| previous != &query) {
+                *search = submit("files.folders", "folders", "{}").ok().map(|id| (query.clone(), id, false));
+            }
+            if !search.as_ref().is_some_and(|(_, _, ready)| *ready) { return Vec::new(); }
+            let _ = storage::set("launcher-ready", &query);
+            return (0..3).map(|i| ui::Hit { id: format!("async-{i}"), title: format!("{query} result {i}"), detail: "Asynchronous reply received".into(), icon: "folder".into(), image: 0, keywords: String::new() }).collect();
+        }
         if mode() == "spin" {
             loop {
                 std::hint::spin_loop();

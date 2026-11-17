@@ -471,7 +471,14 @@ and verifies models, and provides a dry-run test bench. See
   Installing keeps the same card with **Remove**, plus **Update** only when a
   newer release is available. Missing permissions open in a dialog after
   installation or an update; each stays off until you grant it. You can revisit
-  **Permissions** on the installed plugin’s product page. Searches, manifest
+  **Permissions** on the installed plugin’s product page.
+  Under its folder permission, **Find Steam Workshop folders** searches registered
+  Steam libraries, including other drives and Flatpak Steam. Each suggestion
+  needs **Allow**; nothing is granted by discovery. **Add a folder** remains
+  available for other locations. Reading general files is a separate permission
+  from browsing pictures and projects. Plugin tabs can start, stop and inspect
+  live wallpapers through the running shell; the shell owns the renderer and
+  checks its own current permissions. Searches, manifest
   reads and folder scans run in the background. Repository text remains visible
   while released metadata arrives; bounded metadata requests leave API capacity
   for installations. Cached cards keep their order

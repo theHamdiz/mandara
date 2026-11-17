@@ -10937,3 +10937,9 @@
 "Extra" = "Extra"
 
 "Installed {plugin} {version}" = "{plugin} {version} instalado"
+
+"Read files inside folders you choose for it" = "Ler arquivos nas pastas que você escolher para ele"
+"Find Steam Workshop folders" = "Buscar pastas do Steam Workshop"
+"No Steam Workshop folders found." = "Nenhuma pasta do Steam Workshop encontrada."
+"Run an approved plugin live-wallpaper request from Studio" = "Executar uma solicitação autorizada de papel de parede animado de um plugin pelo Studio"
+"Live wallpaper request as JSON" = "Solicitação de papel de parede animado em JSON"

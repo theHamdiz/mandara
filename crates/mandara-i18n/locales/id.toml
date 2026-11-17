@@ -11038,3 +11038,9 @@
 "Extra" = "Tambahan"
 
 "Installed {plugin} {version}" = "{plugin} {version} terpasang"
+
+"Read files inside folders you choose for it" = "Membaca berkas di folder yang Anda pilih untuknya"
+"Find Steam Workshop folders" = "Cari folder Steam Workshop"
+"No Steam Workshop folders found." = "Tidak ditemukan folder Steam Workshop."
+"Run an approved plugin live-wallpaper request from Studio" = "Jalankan permintaan wallpaper hidup plugin yang diizinkan dari Studio"
+"Live wallpaper request as JSON" = "Permintaan wallpaper hidup dalam JSON"

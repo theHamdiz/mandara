@@ -138,6 +138,8 @@ and tick off tasks where they sit.
    edit your compositor's shortcuts in a roomy split editor with conflict checks and Undo. Save bar arrangements as profiles;
    Studio remembers its window size. Community plugins show their names and
    descriptions before installation and ask for permissions when installed.
+   Approve detected Steam Workshop folders, scoped file reads and individual
+   HTTPS hosts; plugin tabs can control live wallpapers through the shell.
    Maintenance spots missing icon themes and takes you to the right settings.
 7. **Colours that belong together.** Choose a hand-tuned theme or a Material
    You (HCT) palette from your wallpaper. Opt in to matching Ghostty, GTK 3/4,

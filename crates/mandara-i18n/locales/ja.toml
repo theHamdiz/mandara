@@ -11281,3 +11281,9 @@
 "Extra" = "追加"
 
 "Installed {plugin} {version}" = "{plugin} {version} をインストールしました"
+
+"Read files inside folders you choose for it" = "選択したフォルダー内のファイルを読み取る"
+"Find Steam Workshop folders" = "Steam Workshop のフォルダーを検索"
+"No Steam Workshop folders found." = "Steam Workshop のフォルダーが見つかりません。"
+"Run an approved plugin live-wallpaper request from Studio" = "Studio からプラグインの許可済みライブ壁紙リクエストを実行"
+"Live wallpaper request as JSON" = "JSON 形式のライブ壁紙リクエスト"

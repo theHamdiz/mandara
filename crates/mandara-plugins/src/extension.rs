@@ -25,7 +25,7 @@ pub const API_LEVEL: u32 = 1;
 /// ones it uses; loading stops when one is missing, so it never
 /// half-works on an older Mandara.
 pub const FEATURES: &[&str] = &[
-    "ui.layout", "ui.input", "ui.toggle", "ui.slider", "ui.choice", "ui.grid", "ui.scroll", "ui.list", "ui.image", "ui.canvas", "ui.keys", "launcher", "studio-tabs", "broker", "plugin-calls",
+    "ui.layout", "ui.input", "ui.toggle", "ui.slider", "ui.choice", "ui.grid", "ui.scroll", "ui.list", "ui.image", "ui.canvas", "ui.keys", "launcher", "studio-tabs", "broker", "plugin-calls", "files.read", "net.binary", "net.images", "launcher.async", "studio.live-wallpaper",
 ];
 
 /// Features a plugin asks for that this host lacks.
@@ -96,6 +96,8 @@ pub enum Capability {
     /// plugin in Studio, and the project folders inside them (names and
     /// opaque handles, never paths).
     Folders,
+    /// `files.read`: read regular files in a separately granted `files.folders` scope.
+    FilesRead,
     /// `wallpaper.live`: play a project from a granted folder as a live
     /// wallpaper, with a renderer the host knows and starts itself.
     WallpaperLive,
@@ -152,6 +154,7 @@ impl Capability {
             "wallpaper.read" => Self::WallpaperRead,
             "wallpaper.set" => Self::WallpaperSet,
             "files.folders" => Self::Folders,
+            "files.read" => Self::FilesRead,
             "wallpaper.live" => Self::WallpaperLive,
             "notifications.send" => Self::Notify,
             "windows.read" => Self::WindowsRead,
@@ -201,6 +204,7 @@ impl Capability {
             Self::WallpaperRead => &["current", "list"],
             Self::WallpaperSet => &["apply"],
             Self::Folders => &["folders", "list", "projects", "choose"],
+            Self::FilesRead => &["entries", "read"],
             Self::WallpaperLive => &["status", "render", "stop"],
             Self::Notify => &["send"],
             Self::WindowsRead => &["list", "active"],
@@ -218,7 +222,7 @@ impl Capability {
             // Not a broker service: it lets global [[launcher]] providers see
             // plain searches.
             Self::LauncherGlobal => &[],
-            Self::Net(_) => &["fetch"],
+            Self::Net(_) => &["fetch", "fetch-binary", "fetch-image"],
             // The callee's `serves` list decides.
             Self::Call(_) => &[],
         }
@@ -233,6 +237,7 @@ impl Capability {
             Self::WallpaperRead => tk("See your wallpapers"),
             Self::WallpaperSet => tk("Change the wallpaper"),
             Self::Folders => tk("See the pictures and projects in folders you choose for it"),
+            Self::FilesRead => tk("Read files inside folders you choose for it"),
             Self::WallpaperLive => tk("Play live wallpapers from folders you choose for it, with a renderer installed on your computer"),
             Self::Notify => tk("Send notifications"),
             Self::WindowsRead => tk("See your open windows"),
@@ -268,7 +273,7 @@ impl Capability {
             Self::Commands => "terminal",
             Self::MediaRead | Self::MediaControl => "music",
             Self::WallpaperRead | Self::WallpaperSet => "image",
-            Self::Folders => "folder",
+            Self::Folders | Self::FilesRead => "folder",
             Self::WallpaperLive => "play",
             Self::Notify => "bell",
             Self::WindowsRead | Self::WindowsControl => "window",
@@ -301,6 +306,7 @@ impl fmt::Display for Capability {
             Self::WallpaperRead => f.write_str("wallpaper.read"),
             Self::WallpaperSet => f.write_str("wallpaper.set"),
             Self::Folders => f.write_str("files.folders"),
+            Self::FilesRead => f.write_str("files.read"),
             Self::WallpaperLive => f.write_str("wallpaper.live"),
             Self::Notify => f.write_str("notifications.send"),
             Self::WindowsRead => f.write_str("windows.read"),
@@ -405,6 +411,7 @@ pub fn split_capabilities(permissions: &[String]) -> (Vec<Capability>, Vec<Strin
 /// the person granted.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Access {
+    pub generation: u64,
     pub declared: Vec<Capability>,
     pub granted: Vec<Capability>,
     /// Folders granted for `files.folders` (empty unless it is granted).
@@ -418,12 +425,13 @@ impl Access {
     pub fn new(permissions: &[String], grants: &[String]) -> Self {
         let declared = split_capabilities(permissions).0;
         let granted = declared.iter().filter(|c| !c.needs_grant() || grants.iter().any(|g| Capability::parse(g).is_ok_and(|g| g == **c))).cloned().collect();
-        Self { declared, granted, folders: Vec::new() }
+        Self { generation: 0, declared, granted, folders: Vec::new() }
     }
 
     /// [`Self::new`] from a plugin's config grant, folders included.
     pub fn from_grant(permissions: &[String], grant: Option<&Grant>) -> Self {
         let mut access = Self::new(permissions, grant.map(|g| g.capabilities.as_slice()).unwrap_or_default());
+        access.generation = grant.map_or(0, |grant| grant.generation);
         if access.allows(&Capability::Folders) {
             access.folders = grant.map(|g| g.folders.clone()).unwrap_or_default();
         }
@@ -438,11 +446,11 @@ impl Access {
     /// Only `commands`, as v0.1 plugins have it (vet and tests).
     pub fn commands(allow: bool) -> Self {
         let c = if allow { vec![Capability::Commands] } else { Vec::new() };
-        Self { declared: c.clone(), granted: c, folders: Vec::new() }
+        Self { generation: 0, declared: c.clone(), granted: c, folders: Vec::new() }
     }
 
     pub fn allows(&self, c: &Capability) -> bool {
-        self.granted.contains(c)
+        self.generation < Grant::EXHAUSTED_GENERATION && self.granted.contains(c)
     }
 
     pub fn declares(&self, c: &Capability) -> bool {
@@ -470,6 +478,9 @@ impl Access {
         }
         if !self.allows(c) {
             return Some(format!("`{c}` hasn't been granted (Studio → Plugins → this plugin → Permissions)"));
+        }
+        if *c == Capability::FilesRead && !self.allows(&Capability::Folders) {
+            return Some("`files.read` also needs `files.folders` and an approved folder".into());
         }
         if !matches!(c, Capability::Call(_)) && !c.operations().contains(&operation) {
             return Some(format!("`{c}` has no operation `{operation}`"));

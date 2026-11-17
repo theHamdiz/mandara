@@ -980,7 +980,7 @@ pub struct PluginsConfig {
     pub settings: BTreeMap<String, toml::Table>,
     /// What the person granted each third-party plugin (Studio → Plugins →
     /// the plugin → Permissions), e.g. `[plugins.grants.moon-phase]
-    /// capabilities = ["media.read"]`. Revoking removes the entry; the
+    /// capabilities = ["media.read"]`. Revoking keeps its internal generation; the
     /// shell checks every request against this table when it arrives.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub grants: BTreeMap<String, PluginGrant>,
@@ -990,6 +990,9 @@ pub struct PluginsConfig {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PluginGrant {
+    /// Internal permission generation, shared with Studio to reject stale requests.
+    #[serde(default, skip_serializing_if = "grant_generation_is_zero")]
+    pub generation: u64,
     /// Granted capability names (`media.read`, `net:api.example.com`, …);
     /// only ones the plugin declares count.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -1000,10 +1003,14 @@ pub struct PluginGrant {
 }
 
 impl PluginGrant {
+    /// TOML integers are signed 64-bit. The last value is reserved to refuse exhausted grants.
+    pub const EXHAUSTED_GENERATION: u64 = i64::MAX as u64;
     pub fn is_empty(&self) -> bool {
         self.capabilities.is_empty() && self.folders.is_empty()
     }
 }
+
+fn grant_generation_is_zero(generation: &u64) -> bool { *generation == 0 }
 
 /// A layout list that holds plugin ids.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

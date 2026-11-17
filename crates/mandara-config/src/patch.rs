@@ -191,9 +191,10 @@ impl ConfigPatch {
                 }
             }
         }
-        let config: ShellConfig = serde_json::from_value(root)?;
-        config.integrations.app_themes.validate()?;
-        Ok(config)
+        let mut next: ShellConfig = serde_json::from_value(root)?;
+        crate::plugin_grants::reconcile(&config.plugins, &mut next.plugins);
+        next.integrations.app_themes.validate()?;
+        Ok(next)
     }
 
     pub fn is_empty(&self) -> bool {

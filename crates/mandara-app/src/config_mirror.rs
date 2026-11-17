@@ -136,6 +136,29 @@ mod tests {
     }
 
     #[test]
+    fn coalescing_revoke_then_regrant_preserves_the_new_permission_generation() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = mandara_config::store::ConfigStore::open(dir.path().join("config.toml")).unwrap();
+        store.update(|config| { config.plugins.set_granted("workshop", "wallpaper.live", true); });
+        let before = store.get().clone();
+        let (mirror, requests) = fixture(true);
+        store.update(|config| { config.plugins.set_granted("workshop", "wallpaper.live", false); });
+        let revoked = store.get().clone();
+        queue(&mirror, &before, &revoked);
+        store.update(|config| { config.plugins.set_granted("workshop", "wallpaper.live", true); });
+        let restored = store.get().clone();
+        let reply = queue(&mirror, &revoked, &restored).unwrap();
+        mirror.requests.close();
+        forward(requests, &mirror.pending, &mirror.alive, |patch| {
+            let delivered = patch.apply(&before).unwrap();
+            assert_eq!(delivered.plugins.granted("workshop"), before.plugins.granted("workshop"));
+            assert_eq!(delivered.plugins.grants["workshop"].generation, 3);
+            true
+        });
+        assert_eq!(reply.recv_blocking(), Ok(true));
+    }
+
+    #[test]
     fn an_edit_queued_during_delivery_is_not_lost_or_reordered() {
         let (mirror, requests) = fixture(true);
         let a = ShellConfig::default();

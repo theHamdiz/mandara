@@ -2674,6 +2674,7 @@ Filter by kind
 Filter by name
 Filter packages…
 Find
+Find Steam Workshop folders
 Find a surah by name or number…
 Find a window by title or app; Enter focuses it
 Find communities
@@ -4076,6 +4077,7 @@ Live preview
 Live previews
 Live state from the running shell
 Live upload and download rates, public IP and a speed test
+Live wallpaper request as JSON
 Live window previews or app icons
 Live — what's playing now
 Living to Tell the Tale
@@ -4846,6 +4848,7 @@ No Mandara plugin `{id}`; see `mandara msg plugins list`
 No Mandara release is published yet
 No Plymouth
 No QR code found in that area
+No Steam Workshop folders found.
 No Steam games found
 No Studio look named {name}.
 No VPN named "{name}"
@@ -6117,6 +6120,7 @@ Read Claude Code's logs
 Read a selected Btrfs mount with administrator approval
 Read a setting by JSON pointer (whole config when omitted)
 Read an installed app's native sandbox grants
+Read files inside folders you choose for it
 Read it, build it, fork it
 Read local snapshots
 Read more
@@ -6586,6 +6590,7 @@ Run a download speed test against speed.cloudflare.com
 Run a hot corner's action now, as if the pointer rested there
 Run a session-menu action the way the menu would, with its before-hooks (destructive ones need confirm)
 Run again
+Run an approved plugin live-wallpaper request from Studio
 Run an event's hooks now with MANDARA_TEST=1 and report the results
 Run any script that comes with a theme
 Run anything after some idle time, and something else when you're back. Commands run directly, without a shell — write sh -c '…' for pipes.

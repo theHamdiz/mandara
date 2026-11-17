@@ -9,12 +9,18 @@ use std::time::Duration;
 
 use ureq::http::{Method, Request, header};
 
+pub mod images;
+
 /// A plugin request may take this long in all.
 pub const TIMEOUT: Duration = Duration::from_secs(10);
 /// Largest request body a plugin may send.
 pub const MAX_BODY_BYTES: usize = 16 * 1024;
 /// Largest response a plugin receives (it also has its reply limit).
 pub const MAX_RESPONSE_BYTES: usize = 256 * 1024;
+/// Binary replies leave room for base64 within the broker's 256 KiB envelope.
+pub const MAX_BINARY_BYTES: usize = 128 * 1024;
+/// Encoded thumbnails are passed to the host as image handles, not JSON bytes.
+pub const MAX_IMAGE_BYTES: usize = 512 * 1024;
 /// HTTPS's port, the only one allowed.
 const HTTPS_PORT: u16 = 443;
 
@@ -23,6 +29,13 @@ const HTTPS_PORT: u16 = 443;
 pub struct Response {
     pub status: u16,
     pub body: String,
+}
+
+/// A bounded response before text or image interpretation.
+#[derive(Debug, PartialEq, Eq)]
+pub struct BytesResponse {
+    pub status: u16,
+    pub body: Vec<u8>,
 }
 
 /// Checks `url` against the granted `host`: `https://<host>[/path][?query]`,
@@ -98,6 +111,16 @@ impl ureq::unversioned::resolver::Resolver for Pinned {
 /// so a public name can't be pointed at your router or printer, and the
 /// connection goes straight to those addresses (never through a proxy).
 pub fn fetch(host: &str, url: &str, method: &str, body: Option<&str>) -> Result<Response, String> {
+    let response = fetch_bytes(host, url, method, body, MAX_RESPONSE_BYTES)?;
+    let body = String::from_utf8(response.body).map_err(|_| "the response isn't text".to_string())?;
+    Ok(Response { status: response.status, body })
+}
+
+/// The same HTTPS policy for binary responses. Callers select a fixed host limit.
+pub fn fetch_bytes(host: &str, url: &str, method: &str, body: Option<&str>, limit: usize) -> Result<BytesResponse, String> {
+    if limit > MAX_IMAGE_BYTES {
+        return Err("the response limit is too large".into());
+    }
     crate::offline::check()?;
     let uri = check_url(url, host)?;
     let method = match method {
@@ -131,13 +154,23 @@ pub fn fetch(host: &str, url: &str, method: &str, body: Option<&str>) -> Result<
         .map_err(|e| e.to_string())?;
     let mut response = agent.run(request).map_err(|e| format!("request failed: {e}"))?;
     let status = response.status().as_u16();
+    let body = read_body(response.body_mut().as_reader(), limit)?;
+    Ok(BytesResponse { status, body })
+}
+
+fn read_body(reader: impl std::io::Read, limit: usize) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
-    response.body_mut().as_reader().take((MAX_RESPONSE_BYTES + 1) as u64).read_to_end(&mut bytes).map_err(|e| format!("request failed: {e}"))?;
-    if bytes.len() > MAX_RESPONSE_BYTES {
-        return Err(format!("the response was larger than {MAX_RESPONSE_BYTES} bytes"));
+    reader.take((limit + 1) as u64).read_to_end(&mut bytes).map_err(|e| format!("request failed: {e}"))?;
+    if bytes.len() > limit {
+        return Err(format!("the response was larger than {limit} bytes"));
     }
-    let body = String::from_utf8(bytes).map_err(|_| "the response isn't text".to_string())?;
-    Ok(Response { status, body })
+    Ok(bytes)
+}
+
+/// Standard base64 keeps arbitrary file and network bytes inside JSON replies.
+pub fn encode_bytes(bytes: &[u8]) -> String {
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 
 #[cfg(test)]
@@ -169,5 +202,19 @@ mod tests {
         assert!(fetch("api.example.com", "https://api.example.com/", "GET", Some("x")).unwrap_err().contains("no body"));
         assert!(fetch("api.example.com", "https://api.example.com/", "POST", Some(&"x".repeat(MAX_BODY_BYTES + 1))).unwrap_err().contains("larger"));
         assert!(fetch("api.example.com", "https://localhost/", "GET", None).unwrap_err().contains("only connect"));
+    }
+
+    #[test]
+    fn binary_bodies_preserve_non_text_and_enforce_the_limit_without_overreading() {
+        let bytes = [0, 255, 128, 10];
+        assert_eq!(read_body(bytes.as_slice(), bytes.len()).unwrap(), bytes);
+        assert!(read_body(bytes.as_slice(), bytes.len() - 1).unwrap_err().contains("larger"));
+        assert_eq!(encode_bytes(&bytes), "AP+ACg==");
+        let reply = serde_json::json!({"status":200,"encoding":"base64","body":encode_bytes(&vec![255; MAX_BINARY_BYTES])});
+        assert!(reply.to_string().len() < MAX_RESPONSE_BYTES);
+        let mut input = std::io::Cursor::new(vec![0; MAX_IMAGE_BYTES * 2]);
+        assert!(read_body(&mut input, MAX_IMAGE_BYTES).is_err());
+        assert_eq!(input.position(), (MAX_IMAGE_BYTES + 1) as u64);
+        assert!(fetch_bytes("example.com", "https://example.com", "GET", None, usize::MAX).is_err());
     }
 }

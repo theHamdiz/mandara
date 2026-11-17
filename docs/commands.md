@@ -130,6 +130,11 @@ mandara msg studio desktop/context-menu     # Desktop → Context menu: the righ
 ```
 
 The Bars page also accepts `bars/bar`, `bars/panels` and `bars/edges`.
+`plugins live <request>` is Studio's typed JSON bridge to the shell's live
+wallpaper broker. It accepts a plugin id, its current permission generation,
+and a `status`, `stop` or host-resolved `render` action. It cannot select a
+program or command line. Plugin authors use `wallpaper.live` through the broker;
+the guest command API cannot call this bridge. See [the plugin contract](../PLUGINS.md#capabilities).
 The Desktop page accepts `desktop/widgets`, `desktop/cards` and
 `desktop/context-menu`, and `desktop/widgets/<id>` opens one widget's
 settings; the former `desktop-widgets` target still opens it.

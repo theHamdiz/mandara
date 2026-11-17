@@ -175,8 +175,9 @@ impl ConfigStore {
         if self.disk_hash != loaded.base_hash && self.disk_hash != loaded.store.disk_hash {
             return Ok(ReloadOutcome::Unchanged);
         }
-        let merged = crate::patch::ConfigPatch::between(&loaded.queued, &self.current)?
+        let mut merged = crate::patch::ConfigPatch::between(&loaded.queued, &self.current)?
             .apply(&loaded.store.current)?;
+        crate::plugin_grants::reconcile(&self.current.plugins, &mut merged.plugins);
         let changed = merged != *self.current;
         self.saved = loaded.store.saved;
         self.current = if merged == *self.saved {
@@ -211,7 +212,8 @@ impl ConfigStore {
             return Ok(false);
         }
         let pending = crate::patch::ConfigPatch::between(&saved.queued, &self.current)?;
-        let merged = pending.apply(&saved.store.current)?;
+        let mut merged = pending.apply(&saved.store.current)?;
+        crate::plugin_grants::reconcile(&self.current.plugins, &mut merged.plugins);
         let changed = merged != *self.current;
         self.saved = saved.store.current;
         self.current = if merged == *self.saved {
@@ -229,6 +231,7 @@ impl ConfigStore {
     pub fn update(&mut self, f: impl FnOnce(&mut ShellConfig)) -> bool {
         let mut next = (*self.current).clone();
         f(&mut next);
+        crate::plugin_grants::reconcile(&self.current.plugins, &mut next.plugins);
         if next == *self.current {
             return false;
         }
@@ -319,11 +322,14 @@ impl ConfigStore {
             return Ok(ReloadOutcome::Unchanged);
         }
         let cfg = Arc::new(parse(bytes)?);
-        let next = if self.dirty && self.load_error.is_none() {
+        let mut next = if self.dirty && self.load_error.is_none() {
             Arc::new(crate::patch::ConfigPatch::between(&self.saved, &self.current)?.apply(&cfg)?)
         } else {
             cfg.clone()
         };
+        if crate::plugin_grants::changed(&self.current.plugins, &next.plugins) {
+            crate::plugin_grants::reconcile(&self.current.plugins, &mut Arc::make_mut(&mut next).plugins);
+        }
         // A previous rename may have published these edits before its sync failed.
         if self.dirty && next == cfg { confirm_saved(&self.path)?; }
         self.load_error = None;
@@ -859,6 +865,24 @@ mod tests {
             (3.0, 220.0)
         );
         assert!(store.is_dirty());
+    }
+
+    #[test]
+    fn stale_permission_files_cannot_restore_an_old_request_generation() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let mut store = ConfigStore::open(&path).unwrap();
+        store.update(|config| { config.plugins.set_granted("gallery", "files.folders", true); });
+        store.flush().unwrap();
+        let old = fs::read(&path).unwrap();
+        store.update(|config| { config.plugins.set_granted("gallery", "files.folders", false); });
+        store.update(|config| { config.plugins.set_granted("gallery", "files.folders", true); });
+        store.flush().unwrap();
+        fs::write(&path, old).unwrap();
+        store.reload_from_disk().unwrap();
+        assert_eq!(store.get().plugins.grants["gallery"].generation, 3);
+        store.flush().unwrap();
+        assert_eq!(ConfigStore::open(&path).unwrap().get().plugins.grants["gallery"].generation, 3);
     }
 
     #[test]

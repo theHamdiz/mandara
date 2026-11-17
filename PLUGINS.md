@@ -234,7 +234,8 @@ export!(MyPlugin);
 **Features** `negotiate` may name (this host has all of them): `ui.layout`,
 `ui.input`, `ui.toggle`, `ui.slider`, `ui.choice`, `ui.grid`, `ui.scroll`,
 `ui.list`, `ui.image`, `ui.canvas`, `ui.keys`, `launcher`, `studio-tabs`,
-`broker` and `plugin-calls`.
+`broker`, `plugin-calls`, `files.read`, `net.binary`, `net.images`,
+`launcher.async` and `studio.live-wallpaper`.
 
 **The palette** every render receives is the live theme as `#rrggbb`
 strings: `primary`, `on-primary`, `surface`, `on-surface`,
@@ -396,6 +397,7 @@ the grant stop drawing. Ask only for what you use.
 | `wallpaper.read` | `current` → `{name, image}`; `list {offset, limit ≤ 60}` → `{total, offset, items: [{name, image}]}` of the wallpaper folder. |
 | `wallpaper.set` | `apply {image}`: a handle from `wallpaper.read` or `files.folders` only (needs a user gesture). |
 | `files.folders` | `folders` → the folders the person chose for you in Studio (`{id, name}`, never paths); `list {folder, offset, limit}` → image names and handles (or `list {project, offset, limit}` for the pictures inside one project); `projects {folder, offset, limit ≤ 60}` → `{total, offset, items: [{project, name, title, kind, live, preview}]}`, the folders directly inside it as opaque project handles, with the title and type from a `project.json`, `live` when it can run as a live wallpaper, and a preview image handle (its declared preview, else its first image, `0` when none); `choose` opens your Studio page to add one (needs a user gesture). |
+| `files.read` | With `files.folders` and an approved folder: `entries {folder, offset, limit ≤ 60}` (or `{directory: handle, ...}`) lists regular files and subfolders as `{name, kind, handle, size}`; `read {file: handle, offset, limit ≤ 65536}` returns `{encoding: "base64", body, size, offset, next_offset, eof}`. Entries scan at most 20,000 names and report `truncated`. Links and special files are skipped. This permission is separate from image/project browsing and must be granted explicitly. |
 | `wallpaper.live` | `render {project, output?}` plays a project handle from `projects` as a live wallpaper, on one display (a name from `status`) or on every display that shows the wallpaper (needs a user gesture) → `{rendering: [outputs], renderer}`; `stop {output?}` ends your scenes → `{stopped}`; `status` → `{renderer, problem?, outputs: [{output, state: off, running, paused or failed, plugin, error}]}`. Needs `files.folders` too. |
 | `notifications.send` | `send {title, body}`. |
 | `windows.read` | `list`, `active` (the JSON of `mandara msg window list` / `window active`). |
@@ -411,7 +413,7 @@ the grant stop drawing. Ask only for what you use.
 | `events` | `subscribe {topic}`: `theme`, `wallpaper`, and with their read capability `windows`, `workspaces` and `power`, and with `wallpaper.live` `live-wallpaper` (the `outputs` of `status`). Each change arrives as `{topic, value}`. |
 | `timers` | `after {ms}` (5 s to 1 day) or `every {ms}` (at least a minute): wake-ups arrive as replies. Needs no grant. |
 | `launcher.global` | Not a service: lets your `global` launcher providers see plain searches and add results to them (at most 2 plugins are asked per search). |
-| `net:<host>` | `fetch {url, method GET or POST, body}` to exactly that host over HTTPS, port 443, no redirects and no proxy; at most 16 KiB sent and 256 KiB received, 10 s; a host whose address is on your machine or local network is refused. Two requests run at a time for all plugins. |
+| `net:<host>` | `fetch {url, method GET or POST, body}` returns text (256 KiB); `fetch-binary` returns up to 128 KiB as `{status, encoding: "base64", body}`; `fetch-image {url}` uses GET and returns `{status, image}` for a PNG, JPEG or WebP thumbnail (512 KiB encoded, at most 2048 px per side). All use the exact approved HTTPS host on port 443, no redirects/proxy/private addresses, and the existing 10 s network budget. Request bodies stay under 16 KiB. Two requests run at a time, with at most 32 waiting across plugins. |
 | `plugins.call:<id>` | Any operation plugin `<id>` lists in `serves`, with a JSON payload; answered on the next tick (calls never nest). |
 
 **User gestures.** Reading the clipboard, opening a page, setting a
@@ -424,6 +426,25 @@ such request; a request made at another time fails at once.
 **Results arrive on the next tick.** Replies are delivered a frame after
 the call that caused them, never inside it, so answering a reply with a new
 request is fine and can't loop the shell.
+
+For asynchronous launcher providers, cache your reply in `extension-event`
+and return the cached hits from `launcher-query`. A broker reply refreshes an
+open launcher query that used your plugin, even when its first result was empty.
+The selected result is kept when it still exists. Closing the launcher removes
+its subscription; no launcher refresh timer runs in the background.
+
+Studio's folder permission offers **Find Steam Workshop folders**. It reads
+Steam's registered libraries, including libraries on other drives and Flatpak
+Steam, then presents existing Workshop content folders for individual approval.
+Discovery grants nothing. General file reads additionally need `files.read`;
+directory traversal uses host-issued handles and refuses links and special files.
+One file operation runs at a time, with at most 32 waiting across plugins.
+
+Use `fetch-image` for supported static thumbnails, then put the returned image
+handle in a view or launcher hit. API and thumbnail CDN hosts each need their
+own permission. Images share a content-addressed disk cache, bounded to 64 files
+and 16 MiB, and decode through the existing thumbnail worker at the drawn size.
+Evicted handles may need fetching again; GIF animation is not supported.
 
 **Limits.** At most 8 requests wait or run per plugin and 8 subscriptions
 stay open; a request payload is at most 16384 bytes (16 KiB) of JSON and a
@@ -440,6 +461,9 @@ update is replaced by its newest); 256 image handles per instance.
   needed), against the live config before anything runs, and again when a
   result is delivered. Revoking a grant applies to every loaded plugin at
   once, drawn or not.
+  Internal per-plugin permission generations also cancel earlier work and
+  non-asset handles when access is revoked then restored before Studio's edits
+  reach the shell. Restoring a permission never revives an earlier request.
 - `host::command` also needs the capability a
   command stands for (media commands need `media.control`, `notifications
   send` needs `notifications.send`, and so on), so `commands` can't get
@@ -477,6 +501,11 @@ update is replaced by its newest); 256 image handles per instance.
   (a second lookup can't redirect it to your network: DNS rebinding).
 - Studio loads a plugin's tab in its own process; there, the services that
   belong to the shell (media, windows, events, …) answer with an error.
+  `wallpaper.live` forwards typed status, render and stop requests to the shell,
+  which rechecks its current grants, plugin state, display and project before
+  acting. Studio never owns a renderer process and cannot supply its executable
+  or arguments. The same pause, stop and crash-cleanup rules apply from either
+  interface.
 - Combined grants add up. A plugin that may read something (your media,
   clipboard or windows) and connect to the internet could send what it
   reads there; Studio warns when a plugin has both.

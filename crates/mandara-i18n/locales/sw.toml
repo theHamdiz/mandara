@@ -10938,3 +10938,9 @@
 "Extra" = "Ziada"
 
 "Installed {plugin} {version}" = "{plugin} {version} imesakinishwa"
+
+"Read files inside folders you choose for it" = "Soma faili ndani ya folda unazomchagulia"
+"Find Steam Workshop folders" = "Tafuta folda za Steam Workshop"
+"No Steam Workshop folders found." = "Hakuna folda za Steam Workshop zilizopatikana."
+"Run an approved plugin live-wallpaper request from Studio" = "Tekeleza ombi lililoruhusiwa la mandhari hai la programu-jalizi kutoka Studio"
+"Live wallpaper request as JSON" = "Ombi la mandhari hai kwa JSON"

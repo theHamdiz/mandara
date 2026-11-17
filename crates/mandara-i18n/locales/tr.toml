@@ -11279,3 +11279,9 @@
 "Extra" = "Ek"
 
 "Installed {plugin} {version}" = "{plugin} {version} yüklendi"
+
+"Read files inside folders you choose for it" = "Seçtiğiniz klasörlerdeki dosyaları okuma"
+"Find Steam Workshop folders" = "Steam Workshop klasörlerini bul"
+"No Steam Workshop folders found." = "Steam Workshop klasörü bulunamadı."
+"Run an approved plugin live-wallpaper request from Studio" = "Studio’dan bir eklentinin izin verilen canlı duvar kâğıdı isteğini çalıştır"
+"Live wallpaper request as JSON" = "JSON biçiminde canlı duvar kâğıdı isteği"
