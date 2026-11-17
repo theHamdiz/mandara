@@ -5840,6 +5840,7 @@ Plugin folders
 Plugin folders created
 Plugin format
 Plugin guide
+Plugin releases changed. Check for updates again.
 Plugin settings: {name}
 Plugin widget
 Plugins
@@ -8145,6 +8146,7 @@ The playlist is used instead of a folder
 The plugin archive contains unsafe paths
 The plugin archive has no plugin.toml
 The plugin archive is too large
+The plugin repository {repository} is unavailable on GitHub.
 The plugin's own language (a code such as ar or en), or follow to use Mandara's
 The pointer
 The power dock opens from the edge opposite the sidebar.
@@ -8365,6 +8367,7 @@ Thiruvalluvar
 This AppImage's runtime isn't a valid program
 This Aqueous entry needs to be edited in its source configuration.
 This Flatpak file doesn't name an app
+This GitHub download is no longer available. Check for updates again.
 This Lua configuration is too complex to inspect safely. Edit its shortcuts in your text editor.
 This OPML file is too large
 This OPML file lists no feeds
@@ -8915,16 +8918,12 @@ Upcoming days listed under the month
 Upcoming events listed under the calendar
 Update
 Update all
-Update available
 Update cancelled
 Update installed
 Update it from Studio → Plugins.
 Update now
 Update template
 Update the system in Mandara, with progress and Mandara's password dialog (system, AUR and Flatpak, or one)
-Update to v{version}
-Update to v{version} · {size}
-Update to v{version} · {size} patch
 Updated 1 package
 Updated to {version} with a binary patch: {sizes}
 Updated to {version} with the full download: {sizes}

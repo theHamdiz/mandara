@@ -10944,3 +10944,7 @@
 "No Steam Workshop folders found." = "Không tìm thấy thư mục Steam Workshop."
 "Run an approved plugin live-wallpaper request from Studio" = "Thực hiện yêu cầu hình nền động đã được cấp quyền của plugin từ Studio"
 "Live wallpaper request as JSON" = "Yêu cầu hình nền động ở dạng JSON"
+
+"The plugin repository {repository} is unavailable on GitHub." = "Kho plugin {repository} không khả dụng trên GitHub."
+"Plugin releases changed. Check for updates again." = "Các bản phát hành plugin đã thay đổi. Hãy kiểm tra bản cập nhật lại."
+"This GitHub download is no longer available. Check for updates again." = "Bản tải xuống GitHub này không còn khả dụng. Hãy kiểm tra bản cập nhật lại."

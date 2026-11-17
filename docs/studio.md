@@ -469,8 +469,13 @@ and verifies models, and provides a dry-run test bench. See
   one by one or all at once. **Community** is the GitHub marketplace as
   store cards with names and full descriptions from each released `plugin.toml`.
   Installing keeps the same card with **Remove**, plus **Update** only when a
-  newer release is available. Missing permissions open in a dialog after
-  installation or an update; each stays off until you grant it. You can revisit
+  newer release is available.
+  Plugin cards show one compact **Update** button. Actions wrap inside the card;
+  there is no separate update badge. Updates recheck the selected release before
+  downloading, so replaced assets use their current URLs. If a repository or
+  release is unavailable, the installed plugin stays intact and the stale offer
+  is retired. Use **Check now** on **Updates** to look again.
+  Missing permissions open in a dialog after installation or an update; each stays off until you grant it. You can revisit
   **Permissions** on the installed plugin’s product page.
   Under its folder permission, **Find Steam Workshop folders** searches registered
   Steam libraries, including other drives and Flatpak Steam. Each suggestion

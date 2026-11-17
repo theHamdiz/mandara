@@ -11044,3 +11044,7 @@
 "No Steam Workshop folders found." = "Tidak ditemukan folder Steam Workshop."
 "Run an approved plugin live-wallpaper request from Studio" = "Jalankan permintaan wallpaper hidup plugin yang diizinkan dari Studio"
 "Live wallpaper request as JSON" = "Permintaan wallpaper hidup dalam JSON"
+
+"The plugin repository {repository} is unavailable on GitHub." = "Repositori plugin {repository} tidak tersedia di GitHub."
+"Plugin releases changed. Check for updates again." = "Rilis plugin telah berubah. Periksa pembaruan lagi."
+"This GitHub download is no longer available. Check for updates again." = "Unduhan GitHub ini sudah tidak tersedia. Periksa pembaruan lagi."

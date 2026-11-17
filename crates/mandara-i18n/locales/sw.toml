@@ -10944,3 +10944,7 @@
 "No Steam Workshop folders found." = "Hakuna folda za Steam Workshop zilizopatikana."
 "Run an approved plugin live-wallpaper request from Studio" = "Tekeleza ombi lililoruhusiwa la mandhari hai la programu-jalizi kutoka Studio"
 "Live wallpaper request as JSON" = "Ombi la mandhari hai kwa JSON"
+
+"The plugin repository {repository} is unavailable on GitHub." = "Hazina ya programu-jalizi {repository} haipatikani kwenye GitHub."
+"Plugin releases changed. Check for updates again." = "Matoleo ya programu-jalizi yamebadilika. Kagua masasisho tena."
+"This GitHub download is no longer available. Check for updates again." = "Upakuaji huu wa GitHub haupatikani tena. Kagua masasisho tena."

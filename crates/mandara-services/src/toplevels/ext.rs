@@ -15,7 +15,7 @@ use mandara_compositor::kwin::WindowAction;
 use super::{Toplevel, ToplevelCommand, ToplevelsState, touch};
 use crate::actor::{Envelope, reply};
 
-fn snapshot(state: &State, order: &mut Vec<u64>) -> ToplevelsState {
+fn snapshot(state: &State, order: &mut Vec<u64>, can_minimize: bool) -> ToplevelsState {
     let output_name = |id: &u32| state.outputs.get(id).map(|o| o.name.clone()).filter(|n| !n.is_empty());
     let mut windows: Vec<Toplevel> = state
         .windows
@@ -43,7 +43,7 @@ fn snapshot(state: &State, order: &mut Vec<u64>) -> ToplevelsState {
         touch(order, active.id);
     }
     windows.sort_by_key(|w| order.iter().position(|id| *id == w.id).unwrap_or(usize::MAX));
-    ToplevelsState { available: true, toplevels: windows, idle: state.idle }
+    ToplevelsState { available: true, can_minimize, toplevels: windows, idle: state.idle }
 }
 
 pub(super) fn run(updates: async_channel::Sender<ToplevelsState>, commands: mpsc::Receiver<Envelope<ToplevelCommand>>, wake: PipeReader) -> Result<(), String> {
@@ -70,7 +70,7 @@ pub(super) fn run(updates: async_channel::Sender<ToplevelsState>, commands: mpsc
             reply(&response, session.window_action(action.0, &action.1).map(|_| String::new()).map_err(|e| e.to_string()));
         }
         if session.take_published() {
-            let next = snapshot(session.state(), &mut order);
+            let next = snapshot(session.state(), &mut order, session.can_minimize_windows());
             if previous.as_ref() != Some(&next) {
                 if updates.send_blocking(next.clone()).is_err() {
                     return Ok(());
@@ -99,18 +99,29 @@ mod tests {
         }
         state.apply(Event::WindowState { window: 11, activated: true, minimized: false, maximized: true, fullscreen: false });
         let mut order = Vec::new();
-        let first = snapshot(&state, &mut order);
+        let first = snapshot(&state, &mut order, true);
         assert_eq!(first.toplevels.iter().map(|t| t.id).collect::<Vec<_>>(), [11, 10]);
         assert_eq!(first.toplevels[0].outputs, ["DP-1"]);
         assert!(first.toplevels[0].maximized && first.available);
         state.apply(Event::WindowState { window: 11, activated: false, minimized: true, maximized: false, fullscreen: false });
         state.apply(Event::WindowState { window: 10, activated: true, minimized: false, maximized: false, fullscreen: true });
-        let next = snapshot(&state, &mut order);
+        let next = snapshot(&state, &mut order, true);
         assert_eq!(next.toplevels[0].id, 10);
         assert!(next.toplevels[0].fullscreen && next.toplevels[1].minimized);
         state.apply(Event::WindowClosed { window: 10 });
-        assert_eq!(snapshot(&state, &mut order).toplevels.len(), 1);
+        assert_eq!(snapshot(&state, &mut order, true).toplevels.len(), 1);
         assert_eq!(order, [11]);
+    }
+
+    #[test]
+    fn a_read_only_list_does_not_advertise_minimize() {
+        let mut state = State::default();
+        state.apply(Event::WindowTitle { window: 10, title: "Files".into() });
+        let readonly = snapshot(&state, &mut Vec::new(), false);
+        assert!(readonly.available);
+        assert_eq!(readonly.toplevels.len(), 1);
+        assert!(!readonly.can_minimize);
+        assert!(snapshot(&state, &mut Vec::new(), true).can_minimize);
     }
 
     /// Through the shared service against a real cosmic-comp (this path) or

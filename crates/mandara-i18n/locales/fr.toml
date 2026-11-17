@@ -11286,3 +11286,7 @@
 "No Steam Workshop folders found." = "Aucun dossier Steam Workshop trouvé."
 "Run an approved plugin live-wallpaper request from Studio" = "Exécuter une demande autorisée de fond animé d’une extension depuis Studio"
 "Live wallpaper request as JSON" = "Demande de fond animé au format JSON"
+
+"The plugin repository {repository} is unavailable on GitHub." = "Le dépôt de l’extension {repository} est indisponible sur GitHub."
+"Plugin releases changed. Check for updates again." = "Les versions de l’extension ont changé. Recherchez à nouveau les mises à jour."
+"This GitHub download is no longer available. Check for updates again." = "Ce téléchargement GitHub n’est plus disponible. Recherchez à nouveau les mises à jour."

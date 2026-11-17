@@ -166,6 +166,11 @@ impl Session {
         self.wl.windows
     }
 
+    /// A read-only ext list cannot minimize; the window managers can.
+    pub fn can_minimize_windows(&self) -> bool {
+        self.wl.cosmic_manager.is_some() || !self.wl.wlr_windows.is_empty()
+    }
+
     /// Whether a batch completed since the last call.
     pub fn take_published(&mut self) -> bool {
         std::mem::take(&mut self.wl.published)

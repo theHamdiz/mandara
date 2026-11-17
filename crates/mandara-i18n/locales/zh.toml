@@ -11281,3 +11281,7 @@
 "No Steam Workshop folders found." = "未找到 Steam Workshop 文件夹。"
 "Run an approved plugin live-wallpaper request from Studio" = "从 Studio 执行插件已获准的动态壁纸请求"
 "Live wallpaper request as JSON" = "JSON 格式的动态壁纸请求"
+
+"The plugin repository {repository} is unavailable on GitHub." = "插件仓库 {repository} 在 GitHub 上不可用。"
+"Plugin releases changed. Check for updates again." = "插件版本已变更。请重新检查更新。"
+"This GitHub download is no longer available. Check for updates again." = "此 GitHub 下载已不可用。请重新检查更新。"

@@ -17,9 +17,17 @@ use crate::tokens::*;
 /// Most folders one plugin may be given.
 const MAX_FOLDERS: usize = 16;
 
+#[derive(Clone, PartialEq, Eq)]
+struct Choice {
+    plugin: String,
+    modal_generation: u64,
+    permission_generation: u64,
+}
+
 #[derive(Default)]
 pub(super) struct Suggestions {
     requests: crate::latest::Latest<String>,
+    picker: crate::latest::Latest<Choice>,
     folders: Vec<PathBuf>,
     searched: bool,
     generation: u64,
@@ -28,6 +36,7 @@ pub(super) struct Suggestions {
 impl Suggestions {
     pub fn close(&mut self) {
         self.requests.set(None);
+        self.picker.set(None);
         self.folders = Vec::new();
         self.searched = false;
         self.generation = self.generation.wrapping_add(1);
@@ -112,18 +121,36 @@ impl StudioView {
     }
 
     fn choose_plugin_folder(&mut self, id: &str, cx: &mut Context<Self>) {
-        let id = id.to_string();
-        let generation = self.modal.folder_discovery.generation;
-        let permission_generation = mandara_ui::state::config(cx).read(cx).get().plugins.grants.get(&id).map_or(0, |grant| grant.generation);
+        if self.modal.folder_discovery.picker.desired().is_some() { return; }
+        self.modal.clear_message();
+        let permission_generation = mandara_ui::state::config(cx).read(cx).get().plugins.grants.get(id).map_or(0, |grant| grant.generation);
+        self.modal.folder_discovery.picker.set(Some(Choice { plugin: id.to_string(), modal_generation: self.modal.folder_discovery.generation, permission_generation }));
+        self.pump_plugin_folder_picker(cx);
+    }
+
+    fn pump_plugin_folder_picker(&mut self, cx: &mut Context<Self>) {
+        let Some(request) = self.modal.folder_discovery.picker.begin() else { return };
+        let allowed = mandara_ui::state::config(cx).read(cx).get().plugins.grants.get(&request.key.plugin).is_some_and(|grant| grant.generation == request.key.permission_generation && grant.capabilities.iter().any(|capability| capability == "files.folders"));
+        if !allowed || request.key.modal_generation != self.modal.folder_discovery.generation || !self.modal.showing_plugin(&request.key.plugin) {
+            self.modal.folder_discovery.picker.finish(request);
+            self.modal.folder_discovery.picker.set(None);
+            return;
+        }
         let title = t("Choose a folder for this plugin");
-        let pick = cx.background_executor().spawn(async move {
-            mandara_services::runtime::unblock(move || mandara_services::file_chooser::pick_folder(title, dirs::picture_dir())).await
-        });
         cx.spawn(async move |this, cx| {
-            let Ok(Some(folder)) = pick.await else { return };
+            let picked = mandara_services::runtime::unblock(move || mandara_services::file_chooser::pick_folder(title, dirs::picture_dir())).await;
             let _ = this.update(cx, |this, cx| {
-                if generation != this.modal.folder_discovery.generation || !this.modal.showing_plugin(&id) { return; }
-                update_config(cx, |config| { grant_picked_folder(config, &id, &folder, permission_generation); });
+                let current = this.modal.folder_discovery.picker.is_current(&request);
+                if current && request.key.modal_generation == this.modal.folder_discovery.generation && this.modal.showing_plugin(&request.key.plugin) {
+                    match picked {
+                        Ok(Some(folder)) => { update_config(cx, |config| { grant_picked_folder(config, &request.key.plugin, &folder, request.key.permission_generation); }); }
+                        Ok(None) => {}
+                        Err(error) => this.modal.show_error(error),
+                    }
+                }
+                this.modal.folder_discovery.picker.finish(request);
+                if current { this.modal.folder_discovery.picker.set(None); }
+                this.pump_plugin_folder_picker(cx);
                 cx.notify();
             });
         })
@@ -238,6 +265,21 @@ mod tests {
         let current = suggestions.requests.begin().unwrap();
         assert_eq!(current.key, "second");
         assert!(suggestions.requests.finish(current));
+    }
+
+    #[test]
+    fn reopening_waits_for_the_previous_folder_picker_and_ignores_its_reply() {
+        let mut suggestions = Suggestions::default();
+        let choice = Choice { plugin: "workshop".into(), modal_generation: 0, permission_generation: 1 };
+        suggestions.picker.set(Some(choice.clone()));
+        let old = suggestions.picker.begin().unwrap();
+        suggestions.close();
+        suggestions.picker.set(Some(Choice { modal_generation: suggestions.generation, ..choice }));
+        assert!(suggestions.picker.begin().is_none());
+        assert!(!suggestions.picker.finish(old));
+        let current = suggestions.picker.begin().unwrap();
+        assert_eq!(current.key.modal_generation, suggestions.generation);
+        assert!(suggestions.picker.finish(current));
     }
 
     #[test]

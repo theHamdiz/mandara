@@ -90,6 +90,8 @@ impl Default for PluginModal {
 }
 
 impl PluginModal {
+    pub(super) fn show_error(&mut self, error: String) { self.message = Some((false, error)); }
+    pub(super) fn clear_message(&mut self) { self.message = None; }
     pub(super) fn showing_plugin(&self, id: &str) -> bool {
         self.open && self.target.as_ref().is_some_and(|(current, _)| current == id)
     }
@@ -720,6 +722,7 @@ impl StudioView {
                 .child(div().text_size(px(TEXT_20_PX)).font_weight(FontWeight::SEMIBOLD).child(t("Permissions")))
                 .child(div().text_size(px(TEXT_14_PX)).child(m.display_name()))
                 .children(self.plugin_grants(&m, cfg, p, cx))
+                .children(self.modal.message.as_ref().map(|(ok, message)| super::form::note(message, !ok, p)))
                 .child(action("plugin-permissions-done", "check", t("Done").into(), true, p).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close_plugin(cx))))
                 .into_any_element(),
         };

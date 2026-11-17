@@ -109,10 +109,11 @@ fn asset<'a>(assets: &'a [Asset], name: &str) -> Option<&'a Asset> {
 
 /// Checks one installed plugin (`repo` at `tag`, in `dir`).
 pub fn check_one(repo: &str, dir: &Path, tag: &str) -> Result<PluginUpdate, String> {
-    let (release, archive) = marketplace::find_release(repo).map_err(|e| match e {
-        InstallError::Failed(e) => e,
-        other => other.to_string(),
-    })?;
+    check_release(repo, dir, tag).map_err(|error| error.to_string())
+}
+
+fn check_release(repo: &str, dir: &Path, tag: &str) -> Result<PluginUpdate, InstallError> {
+    let (release, archive) = marketplace::find_release(repo)?;
     let id = plugin_id(dir);
     let mut u = PluginUpdate {
         repo: repo.to_string(),
@@ -157,7 +158,7 @@ pub fn check_one(repo: &str, dir: &Path, tag: &str) -> Result<PluginUpdate, Stri
 pub fn cached() -> Vec<PluginUpdate> {
     let Some(cache) = std::fs::read(cache_path()).ok().and_then(|b| serde_json::from_slice::<Cache>(&b).ok()) else { return Vec::new() };
     let installed = marketplace::installed_all();
-    cache.updates.into_iter().filter(|u| installed.get(&u.repo).is_some_and(|(_, tag)| *tag == u.installed)).collect()
+    cache.updates.into_iter().filter(|u| installed.get(&u.repo).is_some_and(|(dir, tag)| *dir == u.dir && *tag == u.installed)).collect()
 }
 
 /// Checks every installed marketplace plugin, one request after another
@@ -170,6 +171,7 @@ pub fn check_all(force: bool, interval: Duration) -> Result<Vec<PluginUpdate>, S
     if !force
         && let Some(cache) = std::fs::read(cache_path()).ok().and_then(|b| serde_json::from_slice::<Cache>(&b).ok())
         && cache.installed == fingerprint
+        && cache.updates.iter().all(|u| installed.get(&u.repo).is_some_and(|(dir, tag)| *dir == u.dir && *tag == u.installed))
         && now_secs().saturating_sub(cache.checked_at) < interval.max(super::MIN_INTERVAL).as_secs()
     {
         return Ok(cache.updates);
@@ -177,14 +179,20 @@ pub fn check_all(force: bool, interval: Duration) -> Result<Vec<PluginUpdate>, S
     crate::offline::check()?;
     let mut updates = Vec::new();
     for (repo, (dir, tag)) in installed.iter().take(MAX_CHECKS) {
-        updates.push(check_one(repo, dir, tag)?);
+        match check_release(repo, dir, tag) {
+            Ok(update) => updates.push(update),
+            Err(InstallError::NoRelease | InstallError::NoAsset) => {}
+            Err(error) => return Err(error.to_string()),
+        }
     }
     let cache = Cache { checked_at: now_secs(), installed: fingerprint, updates: updates.clone() };
     let path = cache_path();
     if let Some(d) = path.parent() {
         let _ = std::fs::create_dir_all(d);
     }
-    let _ = std::fs::write(&path, serde_json::to_vec_pretty(&cache).unwrap_or_default());
+    if let Err(error) = mandara_config::store::write_atomic(&path, &serde_json::to_vec(&cache).map_err(|error| error.to_string())?) {
+        tracing::warn!("saving plugin update cache: {error:#}");
+    }
     Ok(updates)
 }
 
@@ -240,16 +248,51 @@ pub fn apply(u: &PluginUpdate, opts: ApplyOptions, vetting: &Vetting, progress: 
 
 /// Applies a cached update plan after checking the current store policy.
 pub fn apply_with_policy(u: &PluginUpdate, opts: ApplyOptions, vetting: &Vetting, progress: &dyn Fn(Progress), source: &dyn marketplace::moderation::PolicySource) -> Result<ApplyReport, String> {
+    let result = apply_current(u, opts, vetting, progress, source);
+    if result.is_err() && !opts.dry_run { invalidate_cached(&u.repo); }
+    result
+}
+
+fn invalidate_cached(repo: &str) {
+    let path = cache_path();
+    let result = (|| -> anyhow::Result<()> {
+        let lock = mandara_theme::templates::WriteLock::new(&path)?;
+        let bytes = match std::fs::read(lock.target()) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error.into()),
+        };
+        let mut cache: Cache = serde_json::from_slice(&bytes)?;
+        cache.checked_at = 0;
+        cache.updates.retain(|update| update.repo != repo);
+        mandara_config::store::write_atomic_locked(&lock, &serde_json::to_vec(&cache)?)?;
+        Ok(())
+    })();
+    if let Err(error) = result { tracing::warn!("invalidating plugin update cache: {error:#}"); }
+}
+
+fn apply_current(u: &PluginUpdate, opts: ApplyOptions, vetting: &Vetting, progress: &dyn Fn(Progress), source: &dyn marketplace::moderation::PolicySource) -> Result<ApplyReport, String> {
     if !u.available {
         return Err(tf("{plugin} is up to date", &[("plugin", &u.id)]));
     }
-    let plan = Plan { patch: u.patch.as_ref(), full: u.full.as_ref(), binary_sha256: u.binary_sha256.as_deref(), binary_size: u.binary_size, sums_url: u.sums_url.as_deref() };
     let full_size = u.full.as_ref().map(|f| f.size).unwrap_or_default();
     let use_patch = !opts.full_only && u.patch.is_some() && u.meta.is_some();
     if opts.dry_run {
         return Ok(ApplyReport { method: if use_patch { Method::Delta } else { Method::Full }, version: u.latest.clone(), downloaded: u.download_size(opts.full_only).unwrap_or_default(), full_size, fallback: None, dry_run: true });
     }
     marketplace::moderation::authorize(&u.repo, source)?;
+    let installed = std::fs::read_to_string(u.dir.join(".source")).map_err(|error| error.to_string())?;
+    let mut installed = installed.lines();
+    if installed.next() != Some(u.repo.as_str()) || installed.next() != Some(u.installed.as_str()) {
+        return Err(t("Plugin releases changed. Check for updates again.").to_string());
+    }
+    let current = check_one(&u.repo, &u.dir, &u.installed)?;
+    if current.latest != u.latest || !current.available_for(&u.dir, &u.installed) {
+        return Err(t("Plugin releases changed. Check for updates again.").to_string());
+    }
+    let u = &current;
+    let plan = Plan { patch: u.patch.as_ref(), full: u.full.as_ref(), binary_sha256: u.binary_sha256.as_deref(), binary_size: u.binary_size, sums_url: u.sums_url.as_deref() };
+    let full_size = u.full.as_ref().map(|full| full.size).unwrap_or_default();
     let scratch = scratch(&u.id);
     let mut downloaded = 0;
     let mut fallback = None;

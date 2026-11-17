@@ -87,6 +87,9 @@ pub struct Market {
 }
 
 impl Market {
+    pub(super) fn update_available(&self, update: &mandara_services::self_update::plugins::PluginUpdate) -> bool {
+        self.installed.get(&update.repo).is_some_and(|(dir, tag)| update.available_for(dir, tag))
+    }
     fn invalidate_local(&mut self) {
         self.local_revision = self.local_revision.wrapping_add(1);
         self.local_primed = false;
@@ -642,6 +645,19 @@ pub(super) fn reload_plugins(cx: &mut gpui::App) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_offers_match_the_current_installed_folder_and_release() {
+        use mandara_services::self_update::{Download, plugins::PluginUpdate};
+        let mut market = Market::default();
+        let dir = std::path::PathBuf::from("/plugins/picker");
+        market.apply_local(0, HashMap::from([("author/picker".into(), (dir.clone(), "v0.1.0".into()))]), BTreeMap::new());
+        let update = PluginUpdate { repo: "author/picker".into(), id: "picker".into(), dir, installed: "v0.1.0".into(), latest: "v0.2.0".into(), available: true, full: Some(Download { file: "picker.mandara.tar.gz".into(), url: "https://example.com/picker".into(), size: 1, sha256: None }), ..Default::default() };
+        assert!(market.update_available(&update));
+        assert!(!market.update_available(&PluginUpdate { latest: "v0.1.0".into(), ..update.clone() }));
+        assert!(!market.update_available(&PluginUpdate { installed: "v0.0.9".into(), ..update.clone() }));
+        assert!(!market.update_available(&PluginUpdate { dir: "/old/picker".into(), ..update }));
+    }
 
     #[test]
     fn community_reentry_preserves_the_displayed_query_without_filtering_discover() {

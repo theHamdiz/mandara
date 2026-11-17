@@ -11285,3 +11285,7 @@
 "No Steam Workshop folders found." = "Steam Workshop klasörü bulunamadı."
 "Run an approved plugin live-wallpaper request from Studio" = "Studio’dan bir eklentinin izin verilen canlı duvar kâğıdı isteğini çalıştır"
 "Live wallpaper request as JSON" = "JSON biçiminde canlı duvar kâğıdı isteği"
+
+"The plugin repository {repository} is unavailable on GitHub." = "{repository} eklenti deposu GitHub’da kullanılamıyor."
+"Plugin releases changed. Check for updates again." = "Eklenti sürümleri değişti. Güncellemeleri yeniden denetleyin."
+"This GitHub download is no longer available. Check for updates again." = "Bu GitHub indirmesi artık kullanılamıyor. Güncellemeleri yeniden denetleyin."

@@ -11044,3 +11044,7 @@
 "No Steam Workshop folders found." = "هیچ پوشهٔ Steam Workshop پیدا نشد."
 "Run an approved plugin live-wallpaper request from Studio" = "اجرای درخواست مجاز افزونه برای پس‌زمینهٔ زنده از استودیو"
 "Live wallpaper request as JSON" = "درخواست پس‌زمینهٔ زنده به‌صورت JSON"
+
+"The plugin repository {repository} is unavailable on GitHub." = "مخزن افزونهٔ {repository} در GitHub در دسترس نیست."
+"Plugin releases changed. Check for updates again." = "نسخه‌های افزونه تغییر کرده‌اند. دوباره به‌روزرسانی‌ها را بررسی کنید."
+"This GitHub download is no longer available. Check for updates again." = "این بارگیری GitHub دیگر در دسترس نیست. دوباره به‌روزرسانی‌ها را بررسی کنید."

@@ -34,6 +34,8 @@ use crate::state::{config, update_config};
 
 const MENU_W: f32 = 300.0;
 const MENU_ROW_H: f32 = 32.0;
+/// A locked action has room for its explanation below the label.
+const UNAVAILABLE_ROW_H: f32 = MENU_ROW_H * 2.0;
 const MENU_PAD: f32 = 7.0;
 const MENU_HEADER_H: f32 = 40.0;
 const MENU_SEPARATOR_H: f32 = 9.0;
@@ -94,10 +96,15 @@ pub struct Row {
     pub check: Option<bool>,
     pub sep: bool,
     pub danger: bool,
+    pub unavailable: Option<&'static str>,
 }
 
 fn row(label: impl Into<SharedString>, glyph: &'static str, action: MenuAction) -> Row {
-    Row { label: label.into(), glyph, action, check: None, sep: false, danger: false }
+    Row { label: label.into(), glyph, action, check: None, sep: false, danger: false, unavailable: None }
+}
+
+fn row_height(row: &Row) -> f32 {
+    if row.unavailable.is_some() { UNAVAILABLE_ROW_H } else { MENU_ROW_H }
 }
 
 impl Row {
@@ -118,6 +125,7 @@ impl Row {
 /// What the menu knows about the app beyond the dock item.
 #[derive(Clone, Debug, Default)]
 pub struct Facts {
+    pub can_minimize: bool,
     pub open_at_login: bool,
     pub installed_by_mandara: bool,
     /// A Quit was sent recently and the app still runs.
@@ -201,7 +209,9 @@ pub fn rows(item: &Item, options: bool, facts: &Facts) -> Vec<Row> {
     out.push(opts);
     if item.running() {
         out.push(row(t("Show All Windows"), "tiles", MenuAction::ShowAll).sep());
-        out.push(row(t("Hide"), "eye-off", MenuAction::Hide));
+        let mut hide = row(t("Hide"), "eye-off", MenuAction::Hide);
+        if !facts.can_minimize { hide.unavailable = Some(t("Not supported by this compositor")); }
+        out.push(hide);
         out.push(if facts.quit_pending || facts.force { row(t("Force Quit"), "close", MenuAction::ForceQuit).danger() } else { row(t("Quit"), "close", MenuAction::Quit) });
     } else if item.pinned {
         out.push(row(t("Remove from Dock"), "pin-off", MenuAction::RemoveFromDock).sep());
@@ -504,13 +514,13 @@ impl DockMenu {
             let confirm = self.confirming && r.action == MenuAction::EmptyTrash;
             let label: SharedString = if confirm { tf("Empty Trash? {n} items are deleted forever — click again", &[("n", &self.facts.trash_items)]).into() } else { r.label.clone() };
             let tint = if r.danger || confirm { palette.urgent_coral } else { palette.on_surface_variant };
-            let disabled = r.action == MenuAction::EmptyTrash && self.facts.trash_items == 0;
+            let disabled = r.unavailable.is_some() || (r.action == MenuAction::EmptyTrash && self.facts.trash_items == 0);
             let action = r.action.clone();
             let submenu = r.action == MenuAction::Options;
             list = list.child(
                 div()
                     .id(("dock-menu-row", i))
-                    .h(px(MENU_ROW_H))
+                    .h(px(row_height(&r)))
                     .px(px(ROW_PAD))
                     .rounded(px(crate::style::radius(ROW_RADIUS)))
                     .flex()
@@ -518,8 +528,10 @@ impl DockMenu {
                     .gap(px(ROW_GAP))
                     .when(!disabled, |el| el.cursor_pointer().hover(|s| s.bg(palette.on_surface.with_alpha(HOVER_ALPHA).hsla())))
                     .when(disabled, |el| el.opacity(DISABLED_ALPHA))
-                    .child(icon(r.glyph, GLYPH_PX, tint))
-                    .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(text::BODY_S)).when(r.danger || confirm, |el| el.text_color(palette.urgent_coral.hsla())).child(label))
+                    .child(icon(if r.unavailable.is_some() { "lock" } else { r.glyph }, GLYPH_PX, tint))
+                    .child(div().flex_1().min_w(px(0.0)).flex().flex_col()
+                        .child(div().truncate().text_size(px(text::BODY_S)).when(r.danger || confirm, |el| el.text_color(palette.urgent_coral.hsla())).child(label))
+                        .when_some(r.unavailable, |el, reason| el.child(div().text_size(px(text::LABEL)).child(crate::bidi::paragraph(reason)))))
                     .when_some(r.check, |el, on| el.child(div().size(px(GLYPH_PX)).when(on, |el| el.child(icon("check", GLYPH_PX, accent)))))
                     .when(submenu, |el| el.child(icon("chevron-right", GLYPH_PX, palette.on_surface_variant)))
                     .when(!disabled, |el| el.on_click(cx.listener(move |this, _, window, cx| this.run(action.clone(), window, cx)))),
@@ -538,7 +550,7 @@ impl Render for DockMenu {
         let rows = self.rows(cx);
         let separators = rows.iter().filter(|r| r.sep).count() as f32;
         let header = !self.space && matches!(self.item.kind, Kind::App | Kind::Stack(_) | Kind::Trash | Kind::Minimized(_));
-        let h = MENU_PAD * 2.0 + if header { MENU_HEADER_H } else { 0.0 } + rows.len() as f32 * MENU_ROW_H + separators * MENU_SEPARATOR_H;
+        let h = MENU_PAD * 2.0 + if header { MENU_HEADER_H } else { 0.0 } + rows.iter().map(row_height).sum::<f32>() + separators * MENU_SEPARATOR_H;
         let (ax, ay, aw, ah) = self.anchor;
         let (x, y) = match self.position {
             DockPosition::Bottom => (ax + aw / 2.0 - MENU_W / 2.0, ay - MENU_GAP - h),
@@ -637,6 +649,7 @@ pub fn open(item: Item, space: bool, force: bool, monitor: String, anchor: (f32,
     }
     let desktop_id = item.desktop.as_ref().map(|d| d.id.clone());
     let facts = Facts {
+        can_minimize: crate::windows::windows(cx).is_some_and(|windows| windows.read(cx).can_minimize()),
         open_at_login: desktop_id.as_deref().is_some_and(open_at_login),
         installed_by_mandara: desktop_id.as_deref().is_some_and(|id| super::install::installed_by_mandara(id, cx)),
         quit_pending: quit_pending(&item.key, cx) && item.running(),
@@ -695,6 +708,16 @@ mod tests {
         assert_eq!(a[4..], [MenuAction::Options, MenuAction::ShowAll, MenuAction::Hide, MenuAction::Quit]);
         let pending = rows(&item(false, 1), false, &Facts { quit_pending: true, ..Default::default() });
         assert_eq!(pending.last().unwrap().action, MenuAction::ForceQuit, "Quit didn't take: Force Quit");
+    }
+
+    #[test]
+    fn hide_explains_a_read_only_window_list_and_remains_available_for_managers() {
+        for can_minimize in [false, true] {
+            let menu = rows(&item(false, 1), false, &Facts { can_minimize, ..Default::default() });
+            let hide = menu.iter().find(|row| row.action == MenuAction::Hide).unwrap();
+            assert_eq!(hide.unavailable.is_none(), can_minimize);
+            assert_eq!(row_height(hide), if can_minimize { MENU_ROW_H } else { UNAVAILABLE_ROW_H });
+        }
     }
 
     #[test]

@@ -11043,3 +11043,7 @@
 "No Steam Workshop folders found." = "Steam Workshop 폴더를 찾지 못했습니다."
 "Run an approved plugin live-wallpaper request from Studio" = "Studio에서 플러그인의 허용된 라이브 배경화면 요청 실행"
 "Live wallpaper request as JSON" = "JSON 형식의 라이브 배경화면 요청"
+
+"The plugin repository {repository} is unavailable on GitHub." = "플러그인 저장소 {repository}을(를) GitHub에서 사용할 수 없습니다."
+"Plugin releases changed. Check for updates again." = "플러그인 릴리스가 변경되었습니다. 업데이트를 다시 확인하세요."
+"This GitHub download is no longer available. Check for updates again." = "이 GitHub 다운로드는 더 이상 제공되지 않습니다. 업데이트를 다시 확인하세요."

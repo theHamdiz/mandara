@@ -15,6 +15,7 @@ use mandara::plugin::ui;
 static LOG: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static SEARCH: Mutex<Option<(String, u64, bool)>> = Mutex::new(None);
 static PROJECT: Mutex<Option<u64>> = Mutex::new(None);
+static IMAGE: Mutex<u64> = Mutex::new(0);
 
 fn log(line: String) {
     LOG.lock().unwrap().push(line);
@@ -67,12 +68,15 @@ impl Guest for Fixture {
         }
         if mode() == "live" {
             let mut root = node(ui::Kind::Column, "root", "");
-            root.children = vec![1, 2, 3, 4, 5];
+            root.children = vec![6, 1, 2, 3, 4, 5];
             let mut nodes = vec![root];
             for action in ["status", "projects", "render", "stop"] {
                 nodes.push(node(ui::Kind::Button, action, action));
             }
             nodes.push(node(ui::Kind::Text, "", &LOG.lock().unwrap().join("\n")));
+            let mut image = node(ui::Kind::Image, "thumbnail", "");
+            image.image = *IMAGE.lock().unwrap();
+            nodes.push(image);
             return Some(ui::View { nodes, root: 0, focus: "status".into() });
         }
         if mode() == "sneaky" {
@@ -105,6 +109,7 @@ impl Guest for Fixture {
                             let _ = storage::set("last", &body);
                             if let Ok(value) = serde_json::from_str::<serde_json::Value>(&body) {
                                 if let Some(project) = value["items"][0]["project"].as_u64() { *PROJECT.lock().unwrap() = Some(project); }
+                                if let Some(image) = value["image"].as_u64() { *IMAGE.lock().unwrap() = image; }
                             }
                             log(format!("reply {} ok {body}", r.id));
                         }

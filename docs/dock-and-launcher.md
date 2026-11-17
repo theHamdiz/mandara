@@ -45,7 +45,9 @@
     pointer from icon to icon at once).
   - **Right-click any icon** for its windows, New Window and the app's own
     actions, **Options ▸ Keep in Dock ✓ · Open at Login ✓ · Show in
-    Files**, Show All Windows, Hide and Quit / Force Quit. Unpinning a
+    Files**, Show All Windows, Hide and Quit / Force Quit. Hide is
+    locked with an explanation when the compositor cannot minimize windows,
+    including on Niri. Unpinning a
     running app keeps its icon until it quits.
   - **Add app…** (Studio → Dock, or right-click the dock) searches your
     installed apps. Drag icons to reorder, drag a running app in to keep

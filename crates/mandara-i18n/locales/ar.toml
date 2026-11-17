@@ -11289,3 +11289,7 @@
 "No Steam Workshop folders found." = "لم يُعثر على مجلدات Steam Workshop."
 "Run an approved plugin live-wallpaper request from Studio" = "تنفيذ طلب خلفية حية مُصرّح به لإضافة من الاستوديو"
 "Live wallpaper request as JSON" = "طلب خلفية حية بصيغة JSON"
+
+"The plugin repository {repository} is unavailable on GitHub." = "مستودع الإضافة {repository} غير متاح على GitHub."
+"Plugin releases changed. Check for updates again." = "تغيّرت إصدارات الإضافة. تحقق من التحديثات مجددًا."
+"This GitHub download is no longer available. Check for updates again." = "لم يعد هذا التنزيل متاحًا على GitHub. تحقق من التحديثات مجددًا."

@@ -11287,3 +11287,7 @@
 "No Steam Workshop folders found." = "Steam Workshop のフォルダーが見つかりません。"
 "Run an approved plugin live-wallpaper request from Studio" = "Studio からプラグインの許可済みライブ壁紙リクエストを実行"
 "Live wallpaper request as JSON" = "JSON 形式のライブ壁紙リクエスト"
+
+"The plugin repository {repository} is unavailable on GitHub." = "プラグインのリポジトリ {repository} は GitHub で利用できません。"
+"Plugin releases changed. Check for updates again." = "プラグインのリリースが変更されました。更新を再確認してください。"
+"This GitHub download is no longer available. Check for updates again." = "この GitHub のダウンロードは利用できなくなりました。更新を再確認してください。"

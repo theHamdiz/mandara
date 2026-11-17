@@ -52,7 +52,7 @@ impl Windows {
         for t in &mut list {
             t.activated = Some(t.id) == focused;
         }
-        let next = ToplevelsState { available: self.raw.available, toplevels: list, idle: self.raw.idle };
+        let next = ToplevelsState { available: self.raw.available, can_minimize: self.raw.can_minimize, toplevels: list, idle: self.raw.idle };
         let changed = next != self.state;
         self.state = next;
         changed
@@ -80,8 +80,11 @@ impl Windows {
         self.state.available
     }
 
+    pub fn can_minimize(&self) -> bool { self.state.can_minimize }
+
     /// Sends a request to the compositor (fire and forget).
     pub fn send(&self, command: ToplevelCommand) {
+        if matches!(command, ToplevelCommand::SetMinimized(..)) && !self.can_minimize() { return; }
         if let Some(s) = &self.service {
             s.send(command);
         }
@@ -89,6 +92,9 @@ impl Windows {
 
     /// Sends a request and returns its result channel.
     pub fn request(&self, command: ToplevelCommand) -> Result<async_channel::Receiver<Result<String, String>>, String> {
+        if matches!(command, ToplevelCommand::SetMinimized(..)) && !self.can_minimize() {
+            return Err(mandara_i18n::t("Not supported by this compositor").to_string());
+        }
         self.service.as_ref().map(|s| s.request(command)).ok_or_else(|| mandara_i18n::t("The window list is not available").to_string())
     }
 }
@@ -240,9 +246,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn read_only_window_lists_refuse_minimize_without_claiming_success() {
+        let mut windows = Windows::default();
+        windows.raw.available = true;
+        assert!(windows.merge());
+        assert!(windows.available());
+        assert!(!windows.can_minimize());
+        assert!(windows.request(ToplevelCommand::SetMinimized(1, true)).is_err());
+        windows.raw.can_minimize = true;
+        assert!(windows.merge());
+        assert!(windows.can_minimize());
+    }
+
+    #[test]
     fn merges_focus_from_both_sources() {
         let t = |id: u64, app: &str, title: &str| Toplevel { id, app_id: app.into(), title: title.into(), ..Default::default() };
-        let mut w = Windows { raw: ToplevelsState { available: true, toplevels: vec![t(1, "zed", "a"), t(2, "fox", "b"), t(3, "term", "c")], idle: false }, ..Default::default() };
+        let mut w = Windows { raw: ToplevelsState { available: true, can_minimize: true, toplevels: vec![t(1, "zed", "a"), t(2, "fox", "b"), t(3, "term", "c")], idle: false }, ..Default::default() };
         w.merge();
         assert_eq!(w.state.toplevels.iter().map(|t| t.id).collect::<Vec<_>>(), [1, 2, 3]);
         // The compositor says "term" has focus (the protocol said nothing).

@@ -11045,3 +11045,7 @@
 "No Steam Workshop folders found." = "কোনো Steam Workshop ফোল্ডার পাওয়া যায়নি।"
 "Run an approved plugin live-wallpaper request from Studio" = "Studio থেকে অনুমোদিত প্লাগইনের লাইভ ওয়ালপেপার অনুরোধ চালান"
 "Live wallpaper request as JSON" = "JSON হিসেবে লাইভ ওয়ালপেপারের অনুরোধ"
+
+"The plugin repository {repository} is unavailable on GitHub." = "প্লাগইনের {repository} সংগ্রহস্থলটি GitHub-এ উপলব্ধ নয়।"
+"Plugin releases changed. Check for updates again." = "প্লাগইনের প্রকাশিত সংস্করণ বদলেছে। আবার হালনাগাদ খুঁজুন।"
+"This GitHub download is no longer available. Check for updates again." = "GitHub-এর এই ডাউনলোডটি আর উপলব্ধ নেই। আবার হালনাগাদ খুঁজুন।"

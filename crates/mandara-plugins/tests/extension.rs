@@ -143,6 +143,22 @@ fn file_reads_need_the_new_permission_and_binary_requests_use_the_existing_host_
 }
 
 #[test]
+fn downloaded_image_handles_reach_the_guest_view_and_expire_with_the_grant() {
+    use_scratch_cache();
+    let permissions = ["net:example.com".into()];
+    let mut plugin = extension("live", Access::new(&permissions, &permissions)).unwrap();
+    plugin.on_event(&PluginEvent { context: context(), node: String::new(), action: "request".into(), value: EventValue::Command(vec!["request".into(), "net:example.com".into(), "fetch-image".into(), "{}".into()]) });
+    let request = plugin.take_requests().pop().unwrap();
+    let image = plugin.issue_image(ImageEntry { path: "/thumbnail.png".into(), origin: ImageOrigin::Network("example.com".into()) }).unwrap();
+    assert!(plugin.deliver(request.id, Ok(serde_json::json!({"status":200,"image":image}).to_string())));
+    plugin.flush_replies(&context());
+    let view = plugin.render(&palette(), &context()).unwrap().unwrap();
+    assert!(view.nodes.iter().any(|node| node.kind == Kind::Image && node.image == image));
+    plugin.set_access(Access::default());
+    assert!(plugin.image(image).is_none());
+}
+
+#[test]
 fn a_plugin_negotiates_then_renders_its_surfaces() {
     use_scratch_cache();
     let mut p = extension("ok", Access::default()).expect("the fixture loads");

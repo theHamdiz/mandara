@@ -11285,3 +11285,7 @@
 "No Steam Workshop folders found." = "Папки Steam Workshop не найдены."
 "Run an approved plugin live-wallpaper request from Studio" = "Выполнить разрешённый запрос плагина на живые обои из Studio"
 "Live wallpaper request as JSON" = "Запрос на живые обои в формате JSON"
+
+"The plugin repository {repository} is unavailable on GitHub." = "Репозиторий плагина {repository} недоступен на GitHub."
+"Plugin releases changed. Check for updates again." = "Выпуски плагина изменились. Проверьте обновления ещё раз."
+"This GitHub download is no longer available. Check for updates again." = "Эта загрузка GitHub больше недоступна. Проверьте обновления ещё раз."

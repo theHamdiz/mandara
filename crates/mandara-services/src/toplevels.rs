@@ -53,6 +53,8 @@ pub struct Toplevel {
 pub struct ToplevelsState {
     /// The compositor offers foreign-toplevel management.
     pub available: bool,
+    /// A window list alone does not provide minimize requests.
+    pub can_minimize: bool,
     /// Most recently activated first.
     pub toplevels: Vec<Toplevel>,
     /// No input for the configured idle timeout (see
@@ -122,7 +124,7 @@ impl State {
         let mut toplevels: Vec<Toplevel> = self.handles.iter().map(|(_, t)| t.clone()).collect();
         let rank = |id: u64| self.order.iter().position(|x| *x == id).unwrap_or(usize::MAX);
         toplevels.sort_by_key(|t| rank(t.id));
-        ToplevelsState { available: true, toplevels, idle: self.idle }
+        ToplevelsState { available: true, can_minimize: true, toplevels, idle: self.idle }
     }
 }
 
@@ -407,6 +409,7 @@ mod tests {
     fn state_lookups() {
         let s = ToplevelsState {
             available: true,
+            can_minimize: true,
             toplevels: vec![Toplevel { id: 4, activated: true, ..Default::default() }, Toplevel { id: 7, ..Default::default() }],
             idle: false,
         };

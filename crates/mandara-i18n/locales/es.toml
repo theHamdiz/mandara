@@ -11280,3 +11280,7 @@
 "No Steam Workshop folders found." = "No se encontraron carpetas de Steam Workshop."
 "Run an approved plugin live-wallpaper request from Studio" = "Ejecutar una solicitud autorizada de fondo animado de un complemento desde Studio"
 "Live wallpaper request as JSON" = "Solicitud de fondo animado en JSON"
+
+"The plugin repository {repository} is unavailable on GitHub." = "El repositorio del complemento {repository} no está disponible en GitHub."
+"Plugin releases changed. Check for updates again." = "Las versiones del complemento han cambiado. Busca actualizaciones de nuevo."
+"This GitHub download is no longer available. Check for updates again." = "Esta descarga de GitHub ya no está disponible. Busca actualizaciones de nuevo."

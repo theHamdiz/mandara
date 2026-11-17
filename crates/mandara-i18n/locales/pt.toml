@@ -10943,3 +10943,7 @@
 "No Steam Workshop folders found." = "Nenhuma pasta do Steam Workshop encontrada."
 "Run an approved plugin live-wallpaper request from Studio" = "Executar uma solicitação autorizada de papel de parede animado de um plugin pelo Studio"
 "Live wallpaper request as JSON" = "Solicitação de papel de parede animado em JSON"
+
+"The plugin repository {repository} is unavailable on GitHub." = "O repositório do plugin {repository} está indisponível no GitHub."
+"Plugin releases changed. Check for updates again." = "As versões do plugin mudaram. Verifique as atualizações novamente."
+"This GitHub download is no longer available. Check for updates again." = "Este download do GitHub não está mais disponível. Verifique as atualizações novamente."
