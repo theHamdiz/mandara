@@ -65,6 +65,13 @@ pub struct Updates {
     fill: mandara_ui::progress_fill::ProgressFill,
 }
 
+impl Updates {
+    fn plugins_checked(&mut self, plugins: Vec<plugins::PluginUpdate>) {
+        self.plugins = plugins;
+        if matches!(self.plugin_message, Some((false, _))) { self.plugin_message = None; }
+    }
+}
+
 pub(super) fn lock(job: &JobHandle) -> std::sync::MutexGuard<'_, Job> {
     job.lock().unwrap_or_else(|e| e.into_inner())
 }
@@ -204,7 +211,7 @@ impl StudioView {
                     Err(e) => view.updates.error = Some(e),
                 }
                 match plugin_result {
-                    Some(Ok(list)) => view.updates.plugins = list,
+                    Some(Ok(list)) => view.updates.plugins_checked(list),
                     Some(Err(e)) => view.updates.plugin_message = Some((false, e)),
                     None => {}
                 }
@@ -454,4 +461,24 @@ impl StudioView {
 /// `SharedString` for element ids built from plugin ids.
 pub(super) fn id_for(prefix: &str, id: &str) -> SharedString {
     SharedString::from(format!("{prefix}-{id}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_successful_retry_replaces_offers_and_clears_the_previous_error() {
+        let mut updates = Updates { plugin_message: Some((false, "network error".into())), ..Default::default() };
+        updates.plugins_checked(vec![plugins::PluginUpdate { id: "picker".into(), ..Default::default() }]);
+        assert!(updates.plugin_message.is_none());
+        assert_eq!(updates.plugins[0].id, "picker");
+    }
+
+    #[test]
+    fn checking_preserves_a_completed_update_message() {
+        let mut updates = Updates { plugin_message: Some((true, "updated".into())), ..Default::default() };
+        updates.plugins_checked(Vec::new());
+        assert_eq!(updates.plugin_message, Some((true, "updated".into())));
+    }
 }
