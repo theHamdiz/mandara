@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.35.0 — 2026-11-17
+
 Community plugins gain scoped file reads, online thumbnails and live wallpaper controls in Studio.
 
 ### Improved
