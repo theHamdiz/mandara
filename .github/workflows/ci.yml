@@ -243,7 +243,7 @@ jobs:
       - name: Checker tests in Arch
         run: |
           docker run --rm -v "$PWD:/src" -w /src archlinux:latest sh -euc '
-            pacman -Syu --noconfirm --needed rust gcc pkgconf libxkbcommon sway river-classic >/dev/null
+            pacman -Syu --noconfirm --needed git rust gcc pkgconf libxkbcommon sway river-classic >/dev/null
             # sway carries a file capability (cap_sys_nice) that a container
             # cannot grant; a plain copy earlier on PATH runs without it.
             cp /usr/bin/sway /usr/local/bin/sway
