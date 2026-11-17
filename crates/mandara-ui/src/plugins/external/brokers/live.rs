@@ -30,6 +30,7 @@
 //! and nothing is observed while no scene does.
 
 mod pending;
+mod preparation;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -83,6 +84,15 @@ const MAX_PREVIEW_SCAN: usize = 256;
 /// The Wallpaper Engine assets folder, relative to a Steam library's
 /// `steamapps` folder.
 const STEAM_ASSETS: &str = "common/wallpaper_engine/assets";
+/// Renderer discovery stays bounded even with an unusually large PATH.
+const MAX_PATH_ENTRIES: usize = 256;
+/// Plugins share one renderer lookup and a bounded set of pending status replies.
+const MAX_STATUS_WAITERS: usize = 32;
+type StatusReply = Box<dyn FnOnce(Result<Value, String>, &mut App)>;
+
+thread_local! {
+    static STATUS: RefCell<super::queue::Batch<StatusReply, MAX_STATUS_WAITERS>> = const { RefCell::new(super::queue::Batch::new()) };
+}
 
 /// `linux-wallpaperengine`'s command line: on the background layer (below
 /// Mandara's desktop widgets), silent, without the mouse, pausing for
@@ -106,9 +116,9 @@ fn wallpaperengine_argv(job: &Job) -> Vec<OsString> {
 /// relative entries are skipped), with its executable.
 pub(super) fn find_renderer<'a>(renderers: &'a [Renderer], path: Option<&std::ffi::OsStr>) -> Option<(&'a Renderer, PathBuf)> {
     use std::os::unix::fs::PermissionsExt as _;
-    let dirs: Vec<PathBuf> = path.map(|p| std::env::split_paths(p).filter(|d| d.is_absolute()).collect()).unwrap_or_default();
     renderers.iter().find_map(|r| {
-        dirs.iter().map(|d| d.join(r.name)).find(|exe| std::fs::metadata(exe).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)).map(|exe| (r, exe))
+        path.into_iter().flat_map(std::env::split_paths).take(MAX_PATH_ENTRIES).filter(|dir| dir.is_absolute())
+            .map(|dir| dir.join(r.name)).find(|exe| std::fs::metadata(exe).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)).map(|exe| (r, exe))
     })
 }
 
@@ -226,6 +236,7 @@ pub(super) enum State {
 
 struct Scene {
     plugin: String,
+    permission_generation: u64,
     /// The granted folder the project came from (as in the config).
     root: PathBuf,
     /// A picture of it, for the desktop's text colours.
@@ -344,17 +355,26 @@ pub(super) fn snapshot(cx: &App) -> Value {
 /// `status`: the snapshot and the renderer that `render` would start
 /// (looked up off the UI thread).
 pub(super) fn status(plugin: &str, id: u64, cx: &mut App) {
-    let task = cx.background_executor().spawn(async move { find_renderer(RENDERERS, std::env::var_os("PATH").as_deref()).map(|(r, _)| r.name) });
     let plugin = plugin.to_string();
+    status_then(cx, move |value, cx| deliver(&plugin, id, value, cx));
+}
+
+fn status_then(cx: &mut App, finish: impl FnOnce(Result<Value, String>, &mut App) + 'static) {
+    match STATUS.with(|status| status.borrow_mut().join(Box::new(finish) as StatusReply)) {
+        Ok(true) => {}
+        Ok(false) => return,
+        Err(finish) => { finish(Err(mandara_i18n::t("Too many live wallpaper requests. Try again.").to_string()), cx); return; }
+    }
     cx.spawn(async move |cx| {
-        let renderer = task.await;
+        let renderer = mandara_services::runtime::unblock(|| find_renderer(RENDERERS, std::env::var_os("PATH").as_deref()).map(|(r, _)| r.name)).await;
         cx.update(|cx| {
             let mut v = snapshot(cx);
             v["renderer"] = renderer.map_or(Value::Null, |n| json!(n));
             if renderer.is_none() {
                 v["problem"] = json!(not_installed());
             }
-            deliver(&plugin, id, Ok(v), cx);
+            let waiting = STATUS.with(|status| status.borrow_mut().finish());
+            for finish in waiting { finish(Ok(v.clone()), cx); }
         });
     })
     .detach();
@@ -370,52 +390,70 @@ fn access(plugin: &str, cx: &App) -> Option<Access> {
     discovered(plugin).map(|d| super::super::access_for(&d, cx))
 }
 
-/// `render {project, output?}`: checks on the UI thread, validates the
-/// project and finds the renderer on the background executor, then starts
-/// one scene per display (replacing what ran there).
+/// A display selector is data; only the shell's known outputs may match it.
+pub(super) fn output(payload: &serde_json::Map<String, Value>) -> Result<Option<String>, String> {
+    match payload.get("output") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(output)) => Ok(Some(output.clone())),
+        Some(_) => Err(mandara_i18n::t("Choose a display from the live wallpaper status.").to_string()),
+    }
+}
+
+/// Local broker requests resolve their opaque handle before sharing the renderer path.
 pub(super) fn render(plugin: &str, id: u64, payload: &serde_json::Map<String, Value>, cx: &mut App) -> Option<Result<Value, String>> {
-    let handle = match payload.get("project").and_then(Value::as_u64) {
-        Some(h) => h,
-        None => return Some(Err("`project` must be a project handle".into())),
-    };
-    let (project, root) = match project_of(plugin, handle, cx) {
-        Ok(p) => p,
-        Err(e) => return Some(Err(e)),
-    };
-    if !crate::state::config(cx).read(cx).get().wallpaper.enabled {
-        return Some(Err("the wallpaper is switched off in Studio".into()));
+    let request = (|| {
+        let handle = payload.get("project").and_then(Value::as_u64).ok_or_else(|| mandara_i18n::t("Choose a project from this plugin's project list.").to_string())?;
+        let (project, root) = project_of(plugin, handle, cx)?;
+        let request = mandara_plugins::live_wallpaper::Request {
+            plugin: plugin.to_string(),
+            generation: access(plugin, cx).ok_or_else(|| mandara_i18n::t("The plugin is not available.").to_string())?.generation,
+            action: mandara_plugins::live_wallpaper::Action::Render { root, project, output: output(payload)? },
+        };
+        render_request(request, Some((handle, id)), cx)
+    })();
+    super::command_output(plugin, id, request, cx)
+}
+
+fn authorize_request(request: &mandara_plugins::live_wallpaper::Request, cx: &App) -> Result<(), String> {
+    let access = access(&request.plugin, cx).ok_or_else(|| mandara_i18n::t("The plugin is not available.").to_string())?;
+    let enabled = cx.global::<mandara_plugins::PluginRegistry>().is_enabled(&request.plugin, &crate::state::config(cx).read(cx).get().plugins);
+    request.authorize(&access, enabled)
+}
+
+/// Studio sends only host-resolved projects. The shell owns authorization and processes.
+pub(super) fn remote(request: mandara_plugins::live_wallpaper::Request, cx: &mut App) -> Result<mandara_plugins::Output, String> {
+    use mandara_plugins::live_wallpaper::Action;
+    if crate::hub::try_hub(cx).is_none() { return Err(mandara_i18n::t("Live wallpapers need the running shell.").to_string()); }
+    authorize_request(&request, cx)?;
+    match &request.action {
+        Action::Render { .. } => render_request(request, None, cx),
+        Action::Stop { output } => {
+            let payload = serde_json::from_value(json!({"output":output})).map_err(|e| e.to_string())?;
+            stop(&request.plugin, &payload, cx).map(Into::into)
+        }
+        Action::Status { .. } => {
+            let (reply, result) = async_channel::bounded(1);
+            status_then(cx, move |value, cx| {
+                let answer = authorize_request(&request, cx).and(value).map(|value| value.to_string());
+                let _ = reply.try_send(answer);
+            });
+            Ok(result.into())
+        }
     }
+}
+
+fn render_request(request: mandara_plugins::live_wallpaper::Request, local: Option<(u64, u64)>, cx: &mut App) -> Result<mandara_plugins::Output, String> {
+    use mandara_plugins::live_wallpaper::Action;
+    authorize_request(&request, cx)?;
+    let Action::Render { output, .. } = &request.action else { return Err(mandara_i18n::t("A live wallpaper render request is required.").to_string()) };
+    if !crate::state::config(cx).read(cx).get().wallpaper.enabled { return Err("the wallpaper is switched off in Studio".into()); }
     let all = wallpaper_outputs(cx);
-    let outputs: Vec<String> = match payload.get("output") {
-        None | Some(Value::Null) => all,
-        Some(Value::String(want)) => match all.into_iter().find(|o| o == want) {
-            Some(o) => vec![o],
-            None => return Some(Err("no such display shows the wallpaper (see `status`)".into())),
-        },
-        Some(_) => return Some(Err("`output` must be a display name from `status`".into())),
+    let outputs = match output {
+        None => all,
+        Some(want) => vec![all.into_iter().find(|output| output == want).ok_or("no such display shows the wallpaper (see `status`)")?],
     };
-    if outputs.is_empty() {
-        return Some(Err("no display shows the wallpaper".into()));
-    }
-    let wallpaper = WallpaperKey::of(crate::state::config(cx).read(cx).get());
-    let pending = PENDING.with(|p| p.borrow_mut().begin(plugin, &outputs, wallpaper));
-    watch(cx);
-    let task = cx.background_executor().spawn(async move { prepare(&project, &root) });
-    let plugin = plugin.to_string();
-    cx.spawn(async move |cx| {
-        let prepared = task.await;
-        cx.update(|cx| {
-            let open = super::loaded(&plugin).is_some_and(|p| p.borrow().as_ref().is_some_and(|p| p.is_open(id)));
-            let wallpaper = WallpaperKey::of(crate::state::config(cx).read(cx).get());
-            let outputs = PENDING.with(|p| p.borrow_mut().complete(&pending, outputs, &wallpaper, open));
-            let answer = if outputs.is_empty() { Err("live wallpaper request superseded or cancelled".into()) }
-                else { prepared.and_then(|p| start(&plugin, handle, p, &outputs, cx)) };
-            if answer.is_err() { settle(cx); }
-            deliver(&plugin, id, answer, cx);
-        });
-    })
-    .detach();
-    None
+    if outputs.is_empty() { return Err("no display shows the wallpaper".into()); }
+    preparation::enqueue(request, local, outputs, cx)
 }
 
 /// A project checked and ready to run.
@@ -445,12 +483,16 @@ fn prepare(project: &Path, root: &Path) -> Result<Prepared, String> {
 
 /// Starts `p` on `outputs` for `plugin` (after the background checks:
 /// the handle and its grant are checked again, they may have gone).
-fn start(plugin: &str, handle: u64, p: Prepared, outputs: &[String], cx: &mut App) -> Result<Value, String> {
-    let (_, root) = project_of(plugin, handle, cx)?;
-    if root != p.root || !access(plugin, cx).is_some_and(|a| a.allows(&Capability::WallpaperLive)) {
+fn start(plugin: &str, permission_generation: u64, handle: Option<u64>, p: Prepared, outputs: &[String], cx: &mut App) -> Result<Value, String> {
+    if let Some(handle) = handle {
+        let (_, root) = project_of(plugin, handle, cx)?;
+        if root != p.root { return Err("the grant changed; try again".into()); }
+    }
+    if !access(plugin, cx).is_some_and(|a| a.generation == permission_generation && a.allows(&Capability::WallpaperLive) && a.allows_folder(&p.root)) {
         return Err("the grant changed; try again".into());
     }
     let live = wallpaper_outputs(cx);
+    if !outputs.iter().any(|output| live.contains(output)) { return Err("no display shows the wallpaper".into()); }
     let fps = crate::state::config(cx).read(cx).get().wallpaper.video.fps_cap();
     let mut started = Vec::new();
     for output in outputs.iter().filter(|o| live.contains(o)) {
@@ -468,7 +510,7 @@ fn start(plugin: &str, handle: u64, p: Prepared, outputs: &[String], cx: &mut Ap
                 cx.update(|cx| on_report(&out, generation, report, cx));
             }
         });
-        let scene = Scene { plugin: plugin.to_string(), root: p.root.clone(), ink: p.ink.clone(), state: State::Running, group: Some(group), _reports: Some(reports), generation, wallpaper: WallpaperKey::of(crate::state::config(cx).read(cx).get()) };
+        let scene = Scene { plugin: plugin.to_string(), permission_generation, root: p.root.clone(), ink: p.ink.clone(), state: State::Running, group: Some(group), _reports: Some(reports), generation, wallpaper: WallpaperKey::of(crate::state::config(cx).read(cx).get()) };
         SCENES.with(|s| s.borrow_mut().insert(output.clone(), scene));
         started.push(output.clone());
     }
@@ -505,9 +547,10 @@ pub(super) fn stop(plugin: &str, payload: &serde_json::Map<String, Value>, cx: &
     let only = match payload.get("output") {
         None | Some(Value::Null) => None,
         Some(Value::String(o)) => Some(o.clone()),
-        Some(_) => return Err("`output` must be a display name from `status`".into()),
+        Some(_) => return Err(mandara_i18n::t("Choose a display from the live wallpaper status.").to_string()),
     };
     PENDING.with(|p| p.borrow_mut().stop_plugin(plugin, only.as_deref()));
+    preparation::stop(plugin, only.as_deref());
     let mine: Vec<String> = SCENES.with(|s| s.borrow().iter().filter(|(o, sc)| sc.plugin == plugin && only.as_ref().is_none_or(|w| w == *o)).map(|(o, _)| o.clone()).collect());
     for o in &mine {
         stop_output(o, cx);
@@ -528,6 +571,7 @@ fn stop_output(output: &str, cx: &mut App) {
 /// Ends every scene of `plugin` (it was switched off, removed or rebuilt).
 pub(crate) fn stop_plugin(plugin: &str, cx: &mut App) {
     PENDING.with(|p| p.borrow_mut().stop_plugin(plugin, None));
+    preparation::stop(plugin, None);
     let theirs: Vec<String> = SCENES.with(|s| s.borrow().iter().filter(|(_, sc)| sc.plugin == plugin).map(|(o, _)| o.clone()).collect());
     if theirs.is_empty() {
         settle(cx);
@@ -542,6 +586,7 @@ pub(crate) fn stop_plugin(plugin: &str, cx: &mut App) {
 /// Ends every scene: a wallpaper was applied.
 pub(crate) fn stop_all(cx: &mut App) {
     PENDING.with(|p| p.borrow_mut().clear());
+    preparation::clear();
     let all: Vec<String> = SCENES.with(|s| s.borrow().keys().cloned().collect());
     if all.is_empty() {
         settle(cx);
@@ -587,14 +632,15 @@ pub(super) enum End {
 
 /// What ends a scene of `plugin` from folder `root` on `output`: pure, so
 /// every rule is tested.
-pub(super) fn end_reason(started: &WallpaperKey, now: &WallpaperKey, access: Option<&Access>, enabled: bool, root: &Path, output: &str, outputs: &[String]) -> Option<End> {
+pub(super) fn end_reason(started: &WallpaperKey, now: &WallpaperKey, access: Option<&Access>, enabled: bool, scope: (&Path, u64), output: &str, outputs: &[String]) -> Option<End> {
+    let (root, generation) = scope;
     if started != now {
         return Some(End::Replaced);
     }
     if !enabled {
         return Some(End::SwitchedOff);
     }
-    if !access.is_some_and(|a| a.allows(&Capability::WallpaperLive) && a.allows_folder(root)) {
+    if !access.is_some_and(|a| a.generation == generation && a.allows(&Capability::WallpaperLive) && a.allows_folder(root)) {
         return Some(End::Revoked);
     }
     (!outputs.iter().any(|o| o == output)).then_some(End::DisplayGone)
@@ -603,7 +649,11 @@ pub(super) fn end_reason(started: &WallpaperKey, now: &WallpaperKey, access: Opt
 /// Observe local edits immediately, including A → B → A in one UI update.
 pub(crate) fn config_changed(before: &mandara_config::ShellConfig, after: &mandara_config::ShellConfig, cx: &mut App) {
     if WATCH.with(|watch| watch.borrow().is_none()) { return; }
-    if WallpaperKey::of(before) != WallpaperKey::of(after) { reconcile(cx); }
+    if WallpaperKey::of(before) != WallpaperKey::of(after)
+        || before.plugins.grants != after.plugins.grants
+        || before.plugins.enabled != after.plugins.enabled
+        || before.plugins.disabled != after.plugins.disabled
+    { reconcile(cx); }
 }
 
 /// The config or the outputs changed: ends what must end.
@@ -612,19 +662,25 @@ fn reconcile(cx: &mut App) {
     let now = WallpaperKey::of(crate::state::config(cx).read(cx).get());
     PENDING.with(|pending| pending.borrow_mut().wallpaper_changed(&now));
     let outputs = wallpaper_outputs(cx);
-    let scenes: Vec<_> = SCENES.with(|s| s.borrow().iter().map(|(o, sc)| (o.clone(), sc.plugin.clone(), sc.root.clone(), sc.wallpaper.clone())).collect());
+    let pending_revoked = PENDING.with(|pending| pending.borrow_mut().retain_allowed(|plugin, root, generation, output| {
+        outputs.iter().any(|known| known == output)
+            && cx.global::<mandara_plugins::PluginRegistry>().is_enabled(plugin, &crate::state::config(cx).read(cx).get().plugins)
+            && access(plugin, cx).is_some_and(|access| access.generation == generation && access.allows(&Capability::WallpaperLive) && access.allows_folder(root))
+    }));
+    let queued_cancelled = preparation::prune(cx);
+    let scenes: Vec<_> = SCENES.with(|s| s.borrow().iter().map(|(o, sc)| (o.clone(), sc.plugin.clone(), sc.root.clone(), sc.permission_generation, sc.wallpaper.clone())).collect());
     let mut ended = false;
-    for (output, plugin, root, wallpaper) in scenes {
+    for (output, plugin, root, generation, wallpaper) in scenes {
         let enabled = discovered(&plugin).is_some() && cx.global::<mandara_plugins::PluginRegistry>().is_enabled(&plugin, &crate::state::config(cx).read(cx).get().plugins);
         let access = access(&plugin, cx);
-        if let Some(why) = end_reason(&wallpaper, &now, access.as_ref(), enabled, &root, &output, &outputs) {
+        if let Some(why) = end_reason(&wallpaper, &now, access.as_ref(), enabled, (&root, generation), &output, &outputs) {
             tracing::info!(target: "mandara::plugin", "live wallpaper on {output} ended: {why:?}");
             stop_output(&output, cx);
             ended = true;
         }
     }
     WATCH.with(|watch| { if let Some(watch) = watch.borrow_mut().as_mut() { watch.wallpaper = now.clone(); } });
-    if ended || started != now { settle(cx); }
+    if ended || pending_revoked || queued_cancelled || started != now { settle(cx); }
 }
 
 /// After scenes ended: the watchers go once none runs (a failed scene
@@ -876,10 +932,10 @@ mod tests {
         let wp = |path: &str| WallpaperKey { enabled: true, path: Some(path.into()), variants: Default::default() };
         let root = Path::new("/steam/431960");
         let declared = ["files.folders".to_string(), "wallpaper.live".into()];
-        let grant = |caps: &[&str], folders: &[&str]| Access::from_grant(&declared, Some(&mandara_config::PluginGrant { capabilities: caps.iter().map(|c| c.to_string()).collect(), folders: folders.iter().map(PathBuf::from).collect() }));
+        let grant = |caps: &[&str], folders: &[&str]| Access::from_grant(&declared, Some(&mandara_config::PluginGrant { generation: 0, capabilities: caps.iter().map(|c| c.to_string()).collect(), folders: folders.iter().map(PathBuf::from).collect() }));
         let full = grant(&["files.folders", "wallpaper.live"], &["/steam/431960"]);
         let outputs = ["DP-1".to_string()];
-        let reason = |now: &WallpaperKey, access: Option<&Access>, enabled: bool, output: &str| end_reason(&wp("/a.png"), now, access, enabled, root, output, &outputs);
+        let reason = |now: &WallpaperKey, access: Option<&Access>, enabled: bool, output: &str| end_reason(&wp("/a.png"), now, access, enabled, (root, 0), output, &outputs);
         assert_eq!(reason(&wp("/a.png"), Some(&full), true, "DP-1"), None, "nothing changed");
         assert_eq!(reason(&wp("/b.png"), Some(&full), true, "DP-1"), Some(End::Replaced));
         assert_eq!(reason(&WallpaperKey { enabled: false, ..wp("/a.png") }, Some(&full), true, "DP-1"), Some(End::Replaced), "the wallpaper switched off");

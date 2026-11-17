@@ -45,6 +45,9 @@ checks pixel padding, text orientation and detected region bounds without
 downloading inference models. Keep the geometry adapter's constant-black
 border and its parallel row processing.
 
+Keep Git installed when building from a checkout. Cargo uses the Git client
+to fetch pinned GitHub dependencies, including the first build on Nix runners.
+
 ## Build options: memory allocator
 
 The `mandara` binary picks its global allocator at build time with exactly

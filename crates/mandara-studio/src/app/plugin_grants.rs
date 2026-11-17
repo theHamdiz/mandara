@@ -11,9 +11,9 @@
 //!   repository and tracker (from plugin.toml's `repository` / `support`,
 //!   its GitHub homepage, or the marketplace repository it came from).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use gpui::{AnyElement, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled, div, px};
+use gpui::{AnyElement, ClickEvent, Context, FontWeight, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, SharedString, StatefulInteractiveElement, Styled, div, px};
 use mandara_config::ShellConfig;
 use mandara_core::ToGpui;
 use mandara_i18n::{t, tf, tr};
@@ -27,9 +27,6 @@ use mandara_ui::state::update_config;
 use super::StudioView;
 use super::plugin_modal::action;
 use crate::tokens::*;
-
-/// Most folders one plugin may be given.
-const MAX_FOLDERS: usize = 16;
 
 pub(super) fn needs_permissions(m: &PluginManifest, cfg: &ShellConfig) -> bool {
     let granted = cfg.plugins.granted(&m.id);
@@ -56,8 +53,10 @@ impl StudioView {
                 None => tr(c.describe()).to_string(),
             };
             let (id, cap) = (m.id.clone(), name.clone());
+            let (key_id, key_cap) = (id.clone(), cap.clone());
             let row = div()
                 .id(SharedString::from(format!("plugin-grant-{}-{name}", m.id)))
+                .focusable().tab_index(0)
                 .px(px(SPACE_14_PX))
                 .py(px(SPACE_12_PX))
                 .rounded(px(RADIUS_16_PX))
@@ -83,6 +82,13 @@ impl StudioView {
                         c.plugins.set_granted(&id, &cap, !on);
                     });
                     cx.notify();
+                }))
+                .on_key_down(cx.listener(move |_, event: &KeyDownEvent, _, cx| {
+                    if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                        update_config(cx, |config| { config.plugins.set_granted(&key_id, &key_cap, !on); });
+                        cx.notify();
+                        cx.stop_propagation();
+                    }
                 }));
             list = list.child(row);
             if c == Capability::Folders && on {
@@ -91,7 +97,7 @@ impl StudioView {
         }
         // Grants add up: what it may read, it could send where it connects.
         let has = |c: &Capability| granted.iter().any(|g| Capability::parse(g).is_ok_and(|g| g == *c));
-        let reads = [Capability::MediaRead, Capability::ClipboardRead, Capability::WindowsRead, Capability::Folders, Capability::WallpaperRead, Capability::SystemRead, Capability::LauncherGlobal];
+        let reads = [Capability::MediaRead, Capability::ClipboardRead, Capability::WindowsRead, Capability::Folders, Capability::FilesRead, Capability::WallpaperRead, Capability::SystemRead, Capability::LauncherGlobal];
         let online = granted.iter().any(|g| matches!(Capability::parse(g), Ok(Capability::Net(_))));
         if online && reads.iter().any(has) {
             list = list.child(
@@ -106,64 +112,6 @@ impl StudioView {
             );
         }
         Some(list.into_any_element())
-    }
-
-    /// The folders given to `m`, each removable, and "Add a folder".
-    fn granted_folders(&mut self, m: &PluginManifest, folders: &[PathBuf], p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        let mut row = div().row().flex_wrap().items_center().gap(px(SPACE_8_PX)).pad_start(px(SPACE_14_PX));
-        for (at, folder) in folders.iter().enumerate() {
-            let (id, folder_path) = (m.id.clone(), folder.clone());
-            row = row.child(
-                div()
-                    .id(SharedString::from(format!("plugin-folder-{}-{at}", m.id)))
-                    .h(px(DIM_32_PX))
-                    .px(px(SPACE_12_PX))
-                    .rounded_full()
-                    .bg(p.surface_container_high.hsla())
-                    .row()
-                    .items_center()
-                    .gap(px(SPACE_6_PX))
-                    .text_size(px(TEXT_12_PX))
-                    .child(icon("folder", ICON_12_PX, p.on_surface_variant))
-                    .child(folder.display().to_string())
-                    .child(
-                        div()
-                            .id(SharedString::from(format!("plugin-folder-remove-{}-{at}", m.id)))
-                            .cursor_pointer()
-                            .child(icon("close", ICON_12_PX, p.on_surface_variant))
-                            .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
-                                update_config(cx, |c| {
-                                    if let Some(g) = c.plugins.grants.get_mut(&id) {
-                                        g.folders.retain(|f| *f != folder_path);
-                                    }
-                                });
-                                cx.notify();
-                            })),
-                    ),
-            );
-        }
-        if folders.len() < MAX_FOLDERS {
-            let id = m.id.clone();
-            row = row.child(action(format!("plugin-folder-add-{}", m.id), "plus", t("Add a folder").into(), false, p).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
-                let id = id.clone();
-                let title = t("Choose a folder for this plugin");
-                let pick = cx.background_executor().spawn(async move { mandara_services::file_chooser::pick_folder(title, dirs::picture_dir()) });
-                cx.spawn(async move |this, cx| {
-                    let Ok(Some(folder)) = pick.await else { return };
-                    let _ = this.update(cx, |_, cx| {
-                        update_config(cx, |c| {
-                            let grant = c.plugins.grants.entry(id.clone()).or_default();
-                            if !grant.folders.contains(&folder) && grant.folders.len() < MAX_FOLDERS {
-                                grant.folders.push(folder);
-                            }
-                        });
-                        cx.notify();
-                    });
-                })
-                .detach();
-            })));
-        }
-        row.into_any_element()
     }
 
     /// "Source code" and "Report an issue" for a third-party plugin in

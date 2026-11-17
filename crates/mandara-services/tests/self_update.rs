@@ -505,6 +505,17 @@ fn self_update_and_plugin_updates_end_to_end() {
     plugins::rollback(PLUGIN_ID).unwrap();
     assert_eq!(std::fs::read(dir.join("plugin.wasm")).unwrap(), old_wasm);
 
+    // A publisher can replace release assets. Resolve the same release again
+    // instead of following the obsolete URLs saved by an earlier check.
+    let mut stale_urls = u.clone();
+    stale_urls.full.as_mut().unwrap().url = format!("{base}/deleted/archive");
+    stale_urls.patch.as_mut().unwrap().download.url = format!("{base}/deleted/patch");
+    stale_urls.meta.as_mut().unwrap().url = format!("{base}/deleted/meta");
+    let before = log.lock().unwrap().len();
+    plugins::apply_with_policy(&stale_urls, ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap();
+    assert!(log.lock().unwrap()[before..].iter().all(|path| !path.starts_with("/deleted/")));
+    check_new(&dir);
+
     // Corrupt patch → the full archive (checked against update.json).
     let patch_file = u.patch.as_ref().unwrap().download.file.clone();
     let good = routes.lock().unwrap().get(&format!("/download/{patch_file}")).cloned().unwrap();
@@ -543,4 +554,22 @@ fn self_update_and_plugin_updates_end_to_end() {
     plugins::apply_with_policy(&bare[0], ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap();
     assert!(marketplace::flags().is_empty());
     assert!(pm.targets.contains_key(PLUGIN_TARGET));
+
+    // A stale plan must not replace a plugin that changed on disk.
+    install_plugin();
+    std::fs::write(dir.join(".source"), format!("{PLUGIN_REPO}\nv9.0.0\n")).unwrap();
+    let error = plugins::apply_with_policy(u, ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap_err();
+    assert!(error.contains("Check for updates again"), "{error}");
+    assert_eq!(std::fs::read(dir.join("plugin.wasm")).unwrap(), old_wasm);
+
+    // A removed/private repository retires the saved offer and preserves the install.
+    install_plugin();
+    routes.lock().unwrap().remove(&format!("/repos/{PLUGIN_REPO}"));
+    let error = plugins::apply_with_policy(u, ApplyOptions::default(), &PASS, &|_| {}, &policy).unwrap_err();
+    assert!(error.contains("unavailable on GitHub"), "{error}");
+    assert!(!error.contains("404"));
+    assert_eq!(std::fs::read(dir.join("plugin.wasm")).unwrap(), old_wasm);
+    assert!(plugins::cached().is_empty(), "a failed plan is not offered again after reopening");
+    routes.lock().unwrap().remove(&format!("/repos/{PLUGIN_REPO}/releases/latest"));
+    assert!(plugins::check_all(true, Duration::from_secs(3600)).unwrap().is_empty(), "missing releases do not retain stale cached offers");
 }

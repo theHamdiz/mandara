@@ -98,15 +98,13 @@ pub fn init(cx: &mut App) {
     init_autostart(cx);
 }
 
-/// After the computer wakes up: "Reconnect trusted devices" also covers
-/// sleep (adapters that stay powered across suspend never see the
-/// power-on that triggers the reconnect otherwise).
+/// Reconcile BlueZ after sleep, then apply the user's reconnect preference.
 pub fn after_resume(cx: &mut App) {
-    if !config(cx).read(cx).get().bluetooth.auto_connect {
-        return;
-    }
     if let Some(s) = hub(cx).read(cx).bluetooth_service.clone() {
-        s.send(BluetoothCommand::ConnectTrusted);
+        s.send(BluetoothCommand::Refresh);
+        if config(cx).read(cx).get().bluetooth.auto_connect {
+            s.send(BluetoothCommand::ConnectTrusted);
+        }
     }
 }
 

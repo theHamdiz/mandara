@@ -37,7 +37,10 @@ pub fn authorize(full_name: &str, source: &dyn PolicySource) -> Result<(), Strin
     crate::offline::check()?;
     if !policy::valid_repository(full_name) { return Err(tf("Invalid repository {name}", &[("name", &full_name)])); }
     let policy = source.policy(true)?;
-    let body = super::get(&format!("{}/repos/{full_name}", super::api_base()), super::MAX_JSON_BYTES).map_err(String::from)?;
+    let body = super::get(&format!("{}/repos/{full_name}", super::api_base()), super::MAX_JSON_BYTES).map_err(|error| match error {
+        super::Fetch::NotFound => tf("The plugin repository {repository} is unavailable on GitHub.", &[("repository", &full_name)]),
+        super::Fetch::Failed(error) => error,
+    })?;
     let repository: Repository = serde_json::from_slice(&body).map_err(|e| tf("Unexpected answer from GitHub: {error}", &[("error", &e)]))?;
     // Keep the marketplace's existing exact-repository ownership guarantee.
     if !repository.full_name.eq_ignore_ascii_case(full_name) {

@@ -14,6 +14,7 @@ pub mod command;
 pub mod extension;
 pub mod guard;
 pub mod lifecycle;
+pub mod live_wallpaper;
 pub mod plugin;
 pub mod vet;
 pub mod wasm;

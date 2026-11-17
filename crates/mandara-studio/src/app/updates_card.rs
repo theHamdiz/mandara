@@ -55,6 +55,8 @@ pub struct Updates {
     pub(super) plugins: Vec<plugins::PluginUpdate>,
     pub(super) plugin_jobs: std::collections::HashMap<String, JobHandle>,
     pub(super) plugin_message: Option<(bool, String)>,
+    plugin_apply_revision: u64,
+    failed_during_check: Vec<String>,
     /// About → What's new: the release shown open (the running one first).
     pub(super) whats_new: Option<String>,
     /// About → What's new: the newest releases, parsed on About's first
@@ -63,6 +65,24 @@ pub struct Updates {
     /// The card's own background follows the update (download, apply,
     /// failure, success).
     fill: mandara_ui::progress_fill::ProgressFill,
+}
+
+impl Updates {
+    fn plugins_checked(&mut self, mut plugins: Vec<plugins::PluginUpdate>, started: u64) {
+        if self.plugin_apply_revision != started {
+            plugins.retain(|plugin| !self.failed_during_check.contains(&plugin.id));
+        } else if matches!(self.plugin_message, Some((false, _))) {
+            self.plugin_message = None;
+        }
+        self.plugins = plugins;
+    }
+
+    pub(super) fn plugin_applied(&mut self, id: &str, failed: bool) {
+        self.plugin_apply_revision = self.plugin_apply_revision.wrapping_add(1);
+        if self.checking && failed && !self.failed_during_check.iter().any(|failed| failed == id) {
+            self.failed_during_check.push(id.to_owned());
+        }
+    }
 }
 
 pub(super) fn lock(job: &JobHandle) -> std::sync::MutexGuard<'_, Job> {
@@ -156,6 +176,7 @@ impl StudioView {
     /// Loads the last answers (no network), detects the install, and runs
     /// an automatic check when the cached one is older than the interval.
     pub(super) fn updates_prime(&mut self, cx: &mut Context<Self>) {
+        self.market_local_prime(cx);
         if self.updates.primed {
             return;
         }
@@ -189,6 +210,8 @@ impl StudioView {
             return;
         }
         self.updates.checking = true;
+        let plugin_apply_revision = self.updates.plugin_apply_revision;
+        self.updates.failed_during_check.clear();
         self.updates.error = None;
         let cfg = mandara_ui::state::config(cx).read(cx).snapshot().updates.clone();
         let interval = cfg.interval();
@@ -203,10 +226,12 @@ impl StudioView {
                     Err(e) => view.updates.error = Some(e),
                 }
                 match plugin_result {
-                    Some(Ok(list)) => view.updates.plugins = list,
-                    Some(Err(e)) => view.updates.plugin_message = Some((false, e)),
+                    Some(Ok(list)) => view.updates.plugins_checked(list, plugin_apply_revision),
+                    Some(Err(e)) if view.updates.plugin_apply_revision == plugin_apply_revision => view.updates.plugin_message = Some((false, e)),
+                    Some(Err(_)) => {}
                     None => {}
                 }
+                view.updates.failed_during_check = Vec::new();
                 cx.notify();
             });
         })
@@ -453,4 +478,35 @@ impl StudioView {
 /// `SharedString` for element ids built from plugin ids.
 pub(super) fn id_for(prefix: &str, id: &str) -> SharedString {
     SharedString::from(format!("{prefix}-{id}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_successful_retry_replaces_offers_and_clears_the_previous_error() {
+        let mut updates = Updates { plugin_message: Some((false, "network error".into())), ..Default::default() };
+        updates.plugins_checked(vec![plugins::PluginUpdate { id: "picker".into(), ..Default::default() }], 0);
+        assert!(updates.plugin_message.is_none());
+        assert_eq!(updates.plugins[0].id, "picker");
+    }
+
+    #[test]
+    fn checking_preserves_a_completed_update_message() {
+        let mut updates = Updates { plugin_message: Some((true, "updated".into())), ..Default::default() };
+        updates.plugins_checked(Vec::new(), 0);
+        assert_eq!(updates.plugin_message, Some((true, "updated".into())));
+    }
+
+    #[test]
+    fn a_check_cannot_restore_an_offer_that_failed_while_it_was_running() {
+        let mut updates = Updates { checking: true, ..Default::default() };
+        let started = updates.plugin_apply_revision;
+        updates.plugin_applied("picker", true);
+        updates.plugin_message = Some((false, "download unavailable".into()));
+        updates.plugins_checked(["picker", "other"].map(|id| plugins::PluginUpdate { id: id.into(), ..Default::default() }).into(), started);
+        assert_eq!(updates.plugins.iter().map(|plugin| plugin.id.as_str()).collect::<Vec<_>>(), ["other"]);
+        assert_eq!(updates.plugin_message, Some((false, "download unavailable".into())));
+    }
 }

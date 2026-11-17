@@ -23,7 +23,7 @@ pub enum Fetch {
 impl From<Fetch> for String {
     fn from(f: Fetch) -> Self {
         match f {
-            Fetch::NotFound => tf("Couldn't reach GitHub: {error}", &[("error", &StatusCode::NOT_FOUND)]),
+            Fetch::NotFound => t("This GitHub download is no longer available. Check for updates again.").to_string(),
             Fetch::Failed(e) => e,
         }
     }
@@ -67,4 +67,17 @@ pub fn get(url: &str, limit: u64, on_bytes: &dyn Fn(u64)) -> Result<Vec<u8>, Fet
         on_bytes(out.len() as u64);
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_missing_download_explains_rechecking_without_an_http_code() {
+        let message = String::from(Fetch::NotFound);
+        assert!(message.contains("Check for updates again"));
+        assert!(!message.contains("404"));
+        assert_eq!(String::from(Fetch::Failed("rate limit".into())), "rate limit");
+    }
 }

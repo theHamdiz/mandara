@@ -81,7 +81,7 @@ pub async fn signals_from(conn: &Connection, sender: &str) -> zbus::Result<zbus:
 }
 
 /// Drops every signal already queued (one re-read covers them all).
-pub fn drain_signals(stream: &mut zbus::MessageStream) {
+pub fn drain_signals<S: futures::Stream + Unpin>(stream: &mut S) {
     use futures::{FutureExt as _, StreamExt as _};
     while let Some(Some(_)) = stream.next().now_or_never() {}
 }
@@ -98,7 +98,7 @@ pub enum Wake<C> {
 /// Waits for a command, a burst of signals (then `debounce` more so the
 /// whole burst is one re-read), or the `fallback` poll. A finished signal
 /// stream degrades to the fallback poll instead of spinning.
-pub async fn next_wake<C>(signals: &mut zbus::MessageStream, commands: &async_channel::Receiver<Envelope<C>>, debounce: Duration, fallback: Duration) -> Wake<C> {
+pub async fn next_wake<C, S: futures::Stream + Unpin>(signals: &mut S, commands: &async_channel::Receiver<Envelope<C>>, debounce: Duration, fallback: Duration) -> Wake<C> {
     use futures::{FutureExt as _, StreamExt as _};
     futures::select! {
         cmd = commands.recv().fuse() => match cmd {

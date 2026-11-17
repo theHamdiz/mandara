@@ -42,6 +42,11 @@ pub enum ImageOrigin {
     /// A project folder inside a folder the person granted (`files.folders`
     /// `projects`): a handle for `wallpaper.live`, never drawn.
     Project(PathBuf),
+    /// A directory or regular file in a granted scope; never drawn as an image.
+    Directory(PathBuf),
+    File(PathBuf),
+    /// A downloaded image from exactly the HTTPS host the person granted.
+    Network(String),
     /// The playing track's cover (`media.read`).
     MediaArt,
 }
@@ -53,13 +58,15 @@ impl ImageOrigin {
             Self::Asset => None,
             Self::Wallpaper => Some(Capability::WallpaperRead),
             Self::Folder(_) | Self::Project(_) => Some(Capability::Folders),
+            Self::Directory(_) | Self::File(_) => Some(Capability::FilesRead),
+            Self::Network(host) => Some(Capability::Net(host.clone())),
             Self::MediaArt => Some(Capability::MediaRead),
         }
     }
 
     /// Whether the handle is a picture (a project handle isn't drawn).
     pub fn is_picture(&self) -> bool {
-        !matches!(self, Self::Project(_))
+        !matches!(self, Self::Project(_) | Self::Directory(_) | Self::File(_))
     }
 }
 
@@ -98,6 +105,9 @@ impl Open {
 
 /// The read capability an `events` request's topic needs, if any.
 fn topic_capability(r: &Request) -> Option<Capability> {
+    if r.capability == Capability::FilesRead {
+        return Some(Capability::Folders);
+    }
     if r.capability != Capability::Events {
         return None;
     }
@@ -111,6 +121,8 @@ struct Waiting {
     result: Result<String, String>,
     capability: Capability,
     also: Option<Capability>,
+    /// A host cancellation contains no data protected by the old grant.
+    invalidated: bool,
 }
 
 #[derive(Default)]
@@ -143,6 +155,27 @@ fn next_id(counter: &std::sync::atomic::AtomicU64) -> Option<u64> {
 }
 
 impl Broker {
+    /// A new permission generation invalidates work even when the same grants were restored.
+    pub fn invalidate(&mut self) {
+        for reply in &mut self.inbox {
+            reply.result = Err(mandara_i18n::t("Plugin permissions changed. Try again.").to_string());
+            reply.invalidated = true;
+        }
+        self.cancelled.extend(self.outstanding.iter().map(|request| request.id));
+        for request in std::mem::take(&mut self.outstanding) {
+            self.invalidated(request.id, request.capability);
+        }
+        for request in std::mem::take(&mut self.queued) {
+            self.invalidated(request.id, request.capability);
+        }
+        self.release_images(|entry| matches!(entry.origin, ImageOrigin::Asset));
+    }
+
+    fn invalidated(&mut self, id: u64, capability: Capability) {
+        if self.inbox.iter().any(|reply| reply.id == id) { return; }
+        if self.inbox.len() >= extension::MAX_INBOX { self.inbox.pop_front(); }
+        self.inbox.push_back(Waiting { id, result: Err(mandara_i18n::t("Plugin permissions changed. Try again.").to_string()), capability, also: None, invalidated: true });
+    }
     /// A fresh id from one counter for the whole process (requests and
     /// image handles alike): a reloaded plugin never reuses an id, so a late
     /// result for its old instance can't answer a new request. `None` once
@@ -196,10 +229,8 @@ impl Broker {
     /// `broker.cancel`.
     pub fn cancel(&mut self, id: u64) {
         self.queued.retain(|r| r.id != id);
-        if let Some(at) = self.outstanding.iter().position(|o| o.id == id)
-            && self.outstanding.remove(at).subscription
-        {
-            self.cancelled.push(id);
+        if let Some(at) = self.outstanding.iter().position(|o| o.id == id) {
+            self.cancelled.push(self.outstanding.remove(at).id);
         }
         self.inbox.retain(|w| w.id != id);
     }
@@ -212,7 +243,7 @@ impl Broker {
         taken
     }
 
-    /// Subscriptions cancelled since the last take.
+    /// Dispatched requests and subscriptions cancelled since the last take.
     pub fn take_cancelled(&mut self) -> Vec<u64> {
         std::mem::take(&mut self.cancelled)
     }
@@ -255,7 +286,7 @@ impl Broker {
         if self.inbox.len() >= extension::MAX_INBOX {
             self.inbox.pop_front();
         }
-        self.inbox.push_back(Waiting { id, result, capability, also });
+        self.inbox.push_back(Waiting { id, result, capability, also, invalidated: false });
         true
     }
 
@@ -265,15 +296,28 @@ impl Broker {
     pub fn close_where(&mut self, access: &Access) {
         // Results already waiting are dropped too: nothing read under a
         // revoked grant is handed over afterwards.
-        self.inbox.retain(|w| access.allows(&w.capability) && w.also.as_ref().is_none_or(|c| access.allows(c)));
+        self.inbox.retain(|w| w.invalidated || (access.allows(&w.capability) && w.also.as_ref().is_none_or(|c| access.allows(c))));
         self.queued.retain(|r| access.allows(&r.capability) && topic_capability(r).is_none_or(|c| access.allows(&c)));
         let cancelled = &mut self.cancelled;
         self.outstanding.retain(|o| {
             let shut = !o.allowed(access);
-            if shut && o.subscription {
+            if shut {
                 cancelled.push(o.id);
             }
             !shut
+        });
+    }
+
+    /// A changed folder scope invalidates listings, reads and their waiting replies.
+    pub fn close_folders(&mut self) {
+        let scoped = |capability: &Capability| matches!(capability, Capability::Folders | Capability::FilesRead);
+        self.inbox.retain(|reply| reply.invalidated || !scoped(&reply.capability));
+        self.queued.retain(|request| !scoped(&request.capability));
+        let cancelled = &mut self.cancelled;
+        self.outstanding.retain(|request| {
+            if !scoped(&request.capability) { return true; }
+            cancelled.push(request.id);
+            false
         });
     }
 
@@ -349,6 +393,39 @@ mod tests {
 
     fn access() -> Access {
         Access::new(&["media.read".into(), "media.control".into(), "net:api.example.com".into()], &["media.read".into(), "media.control".into(), "net:api.example.com".into()])
+    }
+
+    #[test]
+    fn scope_changes_cancel_file_jobs_and_drop_their_already_waiting_bytes() {
+        let capabilities = ["files.folders".into(), "files.read".into(), "media.read".into()];
+        let mut access = Access::new(&capabilities, &capabilities);
+        access.folders.push("/approved".into());
+        let mut broker = Broker::default();
+        let bytes = broker.submit(&access, false, "files.read", "read".into(), "{\"file\":1}").unwrap();
+        let listing = broker.submit(&access, false, "files.read", "entries".into(), "{\"folder\":0}").unwrap();
+        let media = broker.submit(&access, false, "media.read", "status".into(), "{}").unwrap();
+        broker.take_requests();
+        broker.deliver(&access, bytes, Ok("private bytes".into()));
+        broker.submit(&access, false, "files.read", "read".into(), "{\"file\":2}").unwrap();
+        broker.close_folders();
+        assert!(!broker.has_replies());
+        assert!(!broker.is_open(listing));
+        assert!(broker.is_open(media));
+        assert_eq!(broker.take_cancelled(), [listing]);
+        assert!(broker.take_requests().is_empty());
+        assert!(!broker.deliver(&access, listing, Ok("late bytes after regrant".into())));
+    }
+
+    #[test]
+    fn cancelling_a_dispatched_one_shot_reports_its_id_to_the_host_queue() {
+        let mut broker = Broker::default();
+        let access = access();
+        let id = broker.submit(&access, false, "net:api.example.com", "fetch-binary".into(), "{}").unwrap();
+        broker.take_requests();
+        broker.cancel(id);
+        assert_eq!(broker.take_cancelled(), [id]);
+        assert!(!broker.is_open(id));
+        assert!(!broker.deliver(&access, id, Ok("late".into())));
     }
 
     #[test]

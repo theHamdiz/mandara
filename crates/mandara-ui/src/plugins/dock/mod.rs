@@ -913,7 +913,7 @@ impl DockView {
             }
             Kind::App => match item.windows.as_slice() {
                 [] => launch_item(&item, None, cx),
-                [only] if only.activated && !only.minimized => self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(only.id, true)),
+                [only] if only.activated && !only.minimized && self.windows.read(cx).can_minimize() => self.windows.read(cx).send(mandara_services::toplevels::ToplevelCommand::SetMinimized(only.id, true)),
                 list => {
                     // Focused app: the next of its windows; else its latest.
                     let target = if item.focused() { list.get(1).unwrap_or(&list[0]) } else { &list[0] };

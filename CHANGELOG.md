@@ -6,6 +6,22 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Community plugins gain scoped file reads, online thumbnails and live wallpaper controls in Studio.
+
+### Improved
+
+- Community plugins can read files in folders you approve, fetch bounded images from approved HTTPS hosts, and refresh launcher results when a reply arrives. Studio can suggest Steam Workshop folders for approval and start or stop plugin live wallpapers through the shell. Revoking access cancels older requests even when the same permission is quickly restored. (#196)
+
+### Fixed
+
+- Bluetooth catches up with adapter and device state after waking from sleep, even during a burst of discovery signals. Temporary read failures preserve the last known state, and `bluetooth refresh` rereads it without restarting the shell or connecting devices. (#200)
+- Plugin cards use one compact Update button, with actions that wrap inside their cards. Updates recheck release downloads, retire stale offers and keep installed plugins when a repository or release becomes unavailable.
+- The dock explains when Hide is unavailable because the compositor cannot minimize windows, including on Niri. (#198)
+
+### Under the hood
+
+- Fresh builds fetch pinned Git dependencies through Git itself, avoiding the embedded client's download failure on Nix runners.
+
 ## 0.34.1 — 2026-11-16
 
 The shell recovers from unexpected display shutdowns, and Studio makes community plugins easier to browse and manage.

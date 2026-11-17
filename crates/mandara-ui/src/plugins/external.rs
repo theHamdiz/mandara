@@ -30,8 +30,10 @@ use mandara_plugins::wasm::{EventValue, PluginEvent, RenderContext, SurfaceKind}
 
 mod brokers;
 mod reload;
+pub(crate) mod launcher_updates;
 pub use reload::Reload as ReloadState;
 pub(crate) use brokers::live;
+pub use brokers::relay::{ShellRelay, command as relay_live_wallpaper};
 
 pub(crate) type Shared = Rc<RefCell<Option<WasmPlugin>>>;
 
@@ -95,15 +97,27 @@ pub(crate) fn watch_grants(cx: &mut App) {
 /// is closed now (subscriptions, timers, queued requests, image handles).
 fn apply_grants(cx: &mut App) {
     let loaded: Vec<(String, Shared)> = LOADED.with(|l| l.borrow().iter().map(|(k, v)| (k.clone(), v.clone())).collect());
+    let mut changed_plugins = Vec::new();
     for (id, shared) in loaded {
         let Some(d) = discovered(&id) else { continue };
-        let access = access_for(&d, cx);
+        let enabled = cx.global::<PluginRegistry>().is_enabled(&id, &config(cx).read(cx).get().plugins);
+        let access = if enabled { access_for(&d, cx) } else { Access::default() };
         let changed = shared.borrow_mut().as_mut().is_some_and(|p| p.set_access(access));
         if changed {
             after_call(&id, &shared, cx);
             views_of(&id).notify(cx);
+            changed_plugins.push(id);
         }
     }
+    launcher_updates::notify(&changed_plugins, cx);
+}
+
+/// Apply permission and enablement edits before coalesced observers can miss a revoke/regrant.
+pub(crate) fn config_changed(before: &mandara_config::ShellConfig, after: &mandara_config::ShellConfig, cx: &mut App) {
+    if before.plugins.grants != after.plugins.grants || before.plugins.enabled != after.plugins.enabled || before.plugins.disabled != after.plugins.disabled {
+        apply_grants(cx);
+    }
+    live::config_changed(before, after, cx);
 }
 
 /// The loaded instance of plugin `id`, if it is loaded.
@@ -121,7 +135,10 @@ pub(crate) fn discovered(id: &str) -> Option<Discovered> {
 /// subscriptions it cancelled.
 pub(crate) fn after_call(id: &str, plugin: &Shared, cx: &mut App) {
     let (commands, requests, cancelled, storage) = match plugin.borrow_mut().as_mut() {
-        Some(p) => (p.take_commands(), p.take_requests(), p.take_cancelled(), p.take_storage_flush()),
+        Some(p) => {
+            p.flush_replies(&brokers::reply_context());
+            (p.take_commands(), p.take_requests(), p.take_cancelled(), p.take_storage_flush())
+        }
         None => return,
     };
     if let Some((path, json)) = storage {
@@ -918,15 +935,17 @@ thread_local! {
 /// After a launcher search: hands the broker requests the asked plugins
 /// queued (a query may ask for data) to the brokers. Commands queued from
 /// a query are dropped: typing in the launcher never runs a command.
-pub fn settle_launcher(cx: &mut App) {
-    for plugin in QUERIED.with(|q| std::mem::take(&mut *q.borrow_mut())) {
-        let Some(shared) = loaded(&plugin) else { continue };
+pub fn settle_launcher(cx: &mut App) -> Vec<String> {
+    let plugins = QUERIED.with(|q| std::mem::take(&mut *q.borrow_mut()));
+    for plugin in &plugins {
+        let Some(shared) = loaded(plugin) else { continue };
         let dropped = shared.borrow_mut().as_mut().map(|p| p.take_commands()).unwrap_or_default();
         if !dropped.is_empty() {
             tracing::warn!(target: "mandara::plugin", "plugin `{plugin}` queued commands from a launcher query; they were dropped");
         }
-        after_call(&plugin, &shared, cx);
+        after_call(plugin, &shared, cx);
     }
+    plugins
 }
 
 /// `plugins launch <plugin> <provider> <hit>`: a launcher result was chosen.

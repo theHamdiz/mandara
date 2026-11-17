@@ -24,6 +24,7 @@ checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
 name = "extension-fixture"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "wit-bindgen",
 ]
 

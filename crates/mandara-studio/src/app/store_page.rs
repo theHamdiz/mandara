@@ -617,7 +617,7 @@ pub(super) fn pill(id: impl Into<SharedString>, glyph: Option<&'static str>, lab
     use mandara_ui::components::buttons::{Ink, designed};
     let hover = bg.lighten(BUTTON_HOVER_LIGHTEN);
     let id = gpui::ElementId::from(id.into());
-    let el = div().id(id.clone()).flex_none().h(px(h)).min_w(px(min_w)).px(px(pad));
+    let el = div().id(id.clone()).flex_none().h(px(h)).min_w(px(min_w)).max_w_full().px(px(pad));
     // The classic pill carries the glass rim; designed shapes bring their own edge.
     designed(el, id, h, false, Ink { bg: Some(bg), hover, outline: None }, Some(p), |el| {
         el.rounded_full()
@@ -634,7 +634,7 @@ pub(super) fn pill(id: impl Into<SharedString>, glyph: Option<&'static str>, lab
         .text_size(px(text))
         .font_weight(FontWeight::SEMIBOLD)
         .when_some(glyph, |el, g| el.child(icon(g, glyph_px, fg)))
-        .child(label.into())
+        .child(div().min_w(px(0.0)).truncate().child(label.into()))
 }
 
 /// A small tinted label (origin, state).
@@ -925,7 +925,7 @@ impl StudioView {
     fn store_header(&mut self, chips: Option<AnyElement>, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         let local = self.local_follow(cx);
         let installed = cx.global::<PluginRegistry>().manifests().filter(|m| !HIDDEN_PLUGINS.contains(&m.id.as_str())).count();
-        let updates = self.updates.plugins.iter().filter(|u| u.available).count();
+        let updates = self.available_plugin_updates().count();
         let current = self.plugins_tab;
         let segments: Vec<AnyElement> = PluginsTab::ALL
             .into_iter()
@@ -1121,7 +1121,7 @@ impl StudioView {
         if self.updates.plugin_jobs.contains_key(&m.id) {
             return pill(el_id, None, t("Updating…"), Tone::Tonal, size, p).cursor_default().into_any_element();
         }
-        if self.updates.plugins.iter().any(|u| u.id == m.id && u.available) {
+        if self.plugin_update(&m.id).is_some() {
             return pill(el_id, Some("download"), t("Update"), Tone::Primary, size, p)
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     cx.stop_propagation();
@@ -1153,8 +1153,6 @@ impl StudioView {
         let removed = m.origin == PluginOrigin::Builtin && cfg.plugins.is_removed(&m.id);
         let state = if removed {
             Some(badge(t("Removed"), p.urgent_coral))
-        } else if self.updates.plugins.iter().any(|u| u.id == m.id && u.available) {
-            Some(badge(t("Update available"), p.warning_amber))
         } else {
             None
         };
@@ -1203,6 +1201,7 @@ impl StudioView {
                         div()
                             .pt(px(SPACE_8_PX))
                             .row()
+                            .flex_wrap()
                             .items_center()
                             .gap(px(SPACE_6_PX))
                             // Mandara's own plugins need no maker badge; others say who made them.
@@ -1504,7 +1503,7 @@ impl StudioView {
     /// "New & updated": plugins with a newer release, the third-party
     /// plugins on this system, and the community's most recently updated.
     fn new_and_updated(&mut self, all: &[(bool, PluginManifest)], fit: grid::GridFit, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> (Option<AnyElement>, usize) {
-        let pending: Vec<String> = self.updates.plugins.iter().filter(|u| u.available).map(|u| u.id.clone()).collect();
+        let pending: Vec<String> = self.available_plugin_updates().map(|u| u.id.clone()).collect();
         let mut local: Vec<&(bool, PluginManifest)> = all.iter().filter(|(_, m)| m.origin != PluginOrigin::Builtin && self.marketplace_listing(m).is_none()).collect();
         local.sort_by_key(|(_, m)| !pending.contains(&m.id));
         let mut cards: Vec<AnyElement> = local.into_iter().take(fit.cols).map(|(on, m)| self.store_card("new", *on, m, fit.card_w, cfg, p, cx)).collect();
@@ -1598,7 +1597,7 @@ impl StudioView {
         let total = kept.len();
         let on = kept.iter().filter(|(e, _)| *e).count();
         let third_count = kept.iter().filter(|(_, m)| m.origin != PluginOrigin::Builtin).count();
-        let updates = self.updates.plugins.iter().filter(|u| u.available).count();
+        let updates = self.available_plugin_updates().count();
 
         // Summary: on / off / updates, as tiles.
         let stat = |id: &'static str, value: usize, label: &'static str, tone: Color, filter: Option<Filter>| {
@@ -1728,10 +1727,10 @@ impl StudioView {
         let (badge_text, badge_color) = origin_badge(&m, p);
         let toggle_id = id.clone();
         let locked = Locked::of(&m);
-        let update = self.updates.plugins.iter().any(|u| u.id == id && u.available);
         // A release installed despite failing the compliance check.
         self.market_local_prime(cx);
         let flag = self.installed_flag(&id);
+        let update = self.plugin_update_action(&id, p, cx);
         let settings_id = id.clone();
         let detail_id = id.clone();
         let scale = self.modal.scale;
@@ -1788,13 +1787,16 @@ impl StudioView {
             .child(
                 div()
                     .row()
+                    .flex_wrap()
                     .items_center()
                     .gap(px(SPACE_8_PX))
                     .child(badge(badge_text, badge_color))
-                    .when(update, |el| el.child(badge(t("Update available"), p.warning_amber)))
                     .when_some(flag.as_ref(), |el, f| el.child(badge(f.class.label(), p.urgent_coral)))
                     .when(!m.version.is_empty(), |el| el.child(div().text_size(px(TEXT_11_5_PX)).text_color(p.on_surface_variant.hsla()).font_features(mandara_ui::fonts::tabular_nums()).child(format!("v{}", m.version))))
-                    .child(div().flex_1())
+            )
+            .child(
+                div().w_full().row().flex_wrap().justify_end().items_center().gap(px(SPACE_8_PX))
+                    .children(update)
                     .when(has_settings, |el| {
                         el.child(
                             pill(format!("plugin-settings-{id}"), Some("sliders"), t("Settings"), Tone::Glass, ButtonSize::Small, p).on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
@@ -1901,7 +1903,8 @@ impl StudioView {
     /// Marketplace plugin updates: check, update one or all, and the
     /// result of the last run.
     fn updates_view(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
-        let pending: Vec<_> = self.updates.plugins.iter().filter(|u| u.available).cloned().collect();
+        self.market_local_prime(cx);
+        let pending: Vec<_> = self.available_plugin_updates().cloned().collect();
         let checking = self.updates.checking;
         let busy = !self.updates.plugin_jobs.is_empty();
         let title = match pending.len() {

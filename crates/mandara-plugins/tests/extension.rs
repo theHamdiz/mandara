@@ -82,6 +82,104 @@ fn use_scratch_cache() {
 }
 
 #[test]
+fn permission_generations_cancel_old_work_and_handles_after_coalesced_regrant() {
+    use_scratch_cache();
+    let capabilities = ["media.read".into(), "net:example.com".into()];
+    let mut access = Access::new(&capabilities, &capabilities);
+    access.generation = 1;
+    let mut plugin = extension("ok", access.clone()).unwrap();
+    click(&mut plugin, "media");
+    let old = plugin.take_requests().pop().unwrap().id;
+    let asset = plugin.issue_image(ImageEntry { path: "/asset.png".into(), origin: ImageOrigin::Asset }).unwrap();
+    let cover = plugin.issue_image(ImageEntry { path: "/cover.png".into(), origin: ImageOrigin::MediaArt }).unwrap();
+    let thumbnail = plugin.issue_image(ImageEntry { path: "/thumbnail.png".into(), origin: ImageOrigin::Network("example.com".into()) }).unwrap();
+    assert!(plugin.image(thumbnail).is_some());
+    access.generation = 3;
+    assert!(plugin.set_access(access));
+    assert_eq!(plugin.take_cancelled(), [old]);
+    assert!(!plugin.deliver(old, Ok("old response".into())));
+    assert!(plugin.image(cover).is_none());
+    assert!(plugin.image(thumbnail).is_none());
+    assert!(plugin.image(asset).is_some());
+    click(&mut plugin, "media");
+    let new = plugin.take_requests().pop().unwrap().id;
+    assert_ne!(new, old);
+    assert!(plugin.deliver(new, Ok("current response".into())));
+}
+
+#[test]
+fn asynchronous_launcher_results_appear_after_the_broker_reply() {
+    use_scratch_cache();
+    let mut plugin = extension("async", Access::new(&["files.folders".into()], &["files.folders".into()])).unwrap();
+    assert!(plugin.launcher_query("gallery", "test", 10).is_empty());
+    let request = plugin.take_requests().pop().unwrap();
+    assert_eq!(request.operation, "folders");
+    assert!(plugin.deliver(request.id, Ok("[]".into())));
+    plugin.flush_replies(&context());
+    let hits = plugin.launcher_query("gallery", "test", 10);
+    assert_eq!(hits.len(), 3);
+    assert!(hits[0].title.contains("test result 0"));
+    assert!(plugin.take_requests().is_empty());
+}
+
+#[test]
+fn a_cancelled_launcher_query_can_retry_after_permission_is_restored() {
+    use_scratch_cache();
+    let permissions = ["files.folders".into()];
+    let mut access = Access::new(&permissions, &permissions);
+    access.generation = 1;
+    let mut plugin = extension("async", access.clone()).unwrap();
+    assert!(plugin.launcher_query("gallery", "same query", 10).is_empty());
+    let old = plugin.take_requests().pop().unwrap();
+    access.generation = 3;
+    plugin.set_access(access);
+    assert!(!plugin.deliver(old.id, Ok("stale data".into())));
+    assert!(plugin.flush_replies(&context()));
+    assert!(plugin.launcher_query("gallery", "same query", 10).is_empty());
+    let fresh = plugin.take_requests().pop().expect("the cancelled query submits a replacement");
+    assert_ne!(fresh.id, old.id);
+    assert!(plugin.deliver(fresh.id, Ok("[]".into())));
+    plugin.flush_replies(&context());
+    assert_eq!(plugin.launcher_query("gallery", "same query", 10).len(), 3);
+}
+
+#[test]
+fn file_reads_need_the_new_permission_and_binary_requests_use_the_existing_host_scope() {
+    use_scratch_cache();
+    let declared = ["files.folders".into(), "files.read".into(), "net:api.example.com".into()];
+    let mut plugin = extension("ok", Access::new(&declared, &["files.folders".into(), "net:api.example.com".into()])).unwrap();
+    let request = |plugin: &mut WasmPlugin, capability: &str, operation: &str| {
+        plugin.on_event(&PluginEvent { context: context(), node: String::new(), action: "request".into(), value: EventValue::Command(vec!["request".into(), capability.into(), operation.into(), "{}".into()]) });
+    };
+    request(&mut plugin, "files.read", "entries");
+    assert!(plugin.take_requests().is_empty());
+    assert!(log(&mut plugin).contains("hasn't been granted"));
+    plugin.set_access(Access::new(&declared, &declared));
+    request(&mut plugin, "files.read", "entries");
+    assert_eq!(plugin.take_requests()[0].capability, Capability::FilesRead);
+    request(&mut plugin, "net:api.example.com", "fetch-binary");
+    assert_eq!(plugin.take_requests()[0].operation, "fetch-binary");
+    request(&mut plugin, "net:other.example.com", "fetch-image");
+    assert!(plugin.take_requests().is_empty());
+}
+
+#[test]
+fn downloaded_image_handles_reach_the_guest_view_and_expire_with_the_grant() {
+    use_scratch_cache();
+    let permissions = ["net:example.com".into()];
+    let mut plugin = extension("live", Access::new(&permissions, &permissions)).unwrap();
+    plugin.on_event(&PluginEvent { context: context(), node: String::new(), action: "request".into(), value: EventValue::Command(vec!["request".into(), "net:example.com".into(), "fetch-image".into(), "{}".into()]) });
+    let request = plugin.take_requests().pop().unwrap();
+    let image = plugin.issue_image(ImageEntry { path: "/thumbnail.png".into(), origin: ImageOrigin::Network("example.com".into()) }).unwrap();
+    assert!(plugin.deliver(request.id, Ok(serde_json::json!({"status":200,"image":image}).to_string())));
+    plugin.flush_replies(&context());
+    let view = plugin.render(&palette(), &context()).unwrap().unwrap();
+    assert!(view.nodes.iter().any(|node| node.kind == Kind::Image && node.image == image));
+    plugin.set_access(Access::default());
+    assert!(plugin.image(image).is_none());
+}
+
+#[test]
 fn a_plugin_negotiates_then_renders_its_surfaces() {
     use_scratch_cache();
     let mut p = extension("ok", Access::default()).expect("the fixture loads");
@@ -145,7 +243,7 @@ fn broker_requests_follow_the_live_grants() {
 fn image_handles_are_plugin_scoped_and_follow_grants() {
     use_scratch_cache();
     let declared = ["files.folders".to_string()];
-    let grant = |folders: Vec<PathBuf>| mandara_config::PluginGrant { capabilities: declared.to_vec(), folders };
+    let grant = |folders: Vec<PathBuf>| mandara_config::PluginGrant { generation: 0, capabilities: declared.to_vec(), folders };
     let mut p = extension("ok", Access::from_grant(&declared, Some(&grant(vec!["/pictures".into()])))).unwrap();
     click(&mut p, "asset");
     let seen = log(&mut p);
@@ -233,7 +331,7 @@ fn commands_reach_the_plugin_as_a_gesture() {
 fn project_handles_follow_the_folder_grant_and_are_never_pictures() {
     use_scratch_cache();
     let declared = ["files.folders".to_string(), "wallpaper.live".into()];
-    let grant = |caps: &[&str], folders: Vec<PathBuf>| mandara_config::PluginGrant { capabilities: caps.iter().map(|c| c.to_string()).collect(), folders };
+    let grant = |caps: &[&str], folders: Vec<PathBuf>| mandara_config::PluginGrant { generation: 0, capabilities: caps.iter().map(|c| c.to_string()).collect(), folders };
     let both = ["files.folders", "wallpaper.live"];
     let mut p = extension("ok", Access::from_grant(&declared, Some(&grant(&both, vec!["/steam/431960".into()])))).unwrap();
     let project = p.issue_image(ImageEntry { path: "/steam/431960/123".into(), origin: ImageOrigin::Project("/steam/431960".into()) }).unwrap();

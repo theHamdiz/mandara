@@ -148,13 +148,32 @@ pub struct SteamGame {
 }
 
 /// `"key"  "value"` pairs of a Valve KeyValues text (nesting flattened).
-fn kv_pairs(text: &str) -> Vec<(String, String)> {
+pub(crate) fn kv_pairs(text: &str) -> Vec<(String, String)> {
+    fn quoted(text: &str) -> Option<(String, &str)> {
+        let mut chars = text.trim_start().strip_prefix('"')?.char_indices();
+        let mut value = String::new();
+        while let Some((at, ch)) = chars.next() {
+            match ch {
+                '"' => {
+                    let start = text.trim_start();
+                    return Some((value, &start[at + 2..]));
+                }
+                '\\' => {
+                    let (_, escaped) = chars.next()?;
+                    if !matches!(escaped, '\\' | '"') { value.push('\\'); }
+                    value.push(escaped);
+                }
+                _ => value.push(ch),
+            }
+        }
+        None
+    }
     let mut out = Vec::new();
     for line in text.lines() {
-        let parts: Vec<&str> = line.split('"').collect();
-        // `"key"  "value"` splits into ["", key, ws, value, ""].
-        if parts.len() >= 5 {
-            out.push((parts[1].to_string(), parts[3].to_string()));
+        if let Some((key, rest)) = quoted(line)
+            && let Some((value, _)) = quoted(rest)
+        {
+            out.push((key, value));
         }
     }
     out

@@ -461,6 +461,7 @@ pub fn register(r: &mut PluginRegistry) {
     });
 
     r.command(ID, CommandSpec::new("bluetooth status", tk("Adapter state and devices"), |_, cx| Ok(json(&hub(cx).read(cx).bluetooth))));
+    r.command(ID, CommandSpec::new_output("bluetooth refresh", tk("Refresh Bluetooth state without restarting the shell"), |_, cx| request(cx, BluetoothCommand::Refresh)));
     r.command(
         ID,
         CommandSpec::new_output("bluetooth power", tk("Turn the adapter on or off"), |a, cx| request(cx, BluetoothCommand::SetPower(a.bool(0)?)))

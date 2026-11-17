@@ -31,6 +31,7 @@ pub mod motion;
 pub mod open;
 pub mod outputs;
 pub mod patch;
+mod plugin_grants;
 pub mod paths;
 pub mod power;
 pub mod preauth;

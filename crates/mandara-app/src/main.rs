@@ -21,6 +21,7 @@ mod alloc;
 mod changelog_cli;
 mod config_mirror;
 mod ipc;
+mod plugin_relay;
 mod journal;
 mod logging;
 mod setup_cli;
@@ -832,6 +833,7 @@ fn run_studio(section: Option<String>) -> Result<()> {
             Err(e) => Err(format!("{e:#}")),
         })));
         let query_sock = shell_sock.clone();
+        plugin_relay::connect(shell_sock.clone(), cx);
         cx.set_global(mandara_studio::ShellQuery(Arc::new(move |args| match ipc::send(&query_sock, &args) {
             Ok(r) if r.ok => Ok(r.data.unwrap_or(serde_json::Value::Null)),
             Ok(r) => Err(mandara_studio::QueryError::Failed(

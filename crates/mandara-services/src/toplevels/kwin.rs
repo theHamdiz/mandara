@@ -20,7 +20,7 @@ fn snapshot(state: &State, order: &mut Vec<u64>) -> ToplevelsState {
         touch(order, active.id);
     }
     windows.sort_by_key(|w| order.iter().position(|id| *id == w.id).unwrap_or(usize::MAX));
-    ToplevelsState { available: true, toplevels: windows, idle: state.idle }
+    ToplevelsState { available: true, can_minimize: true, toplevels: windows, idle: state.idle }
 }
 
 pub(super) fn run(updates: async_channel::Sender<ToplevelsState>, commands: mpsc::Receiver<Envelope<ToplevelCommand>>, wake: PipeReader) -> Result<(), String> {

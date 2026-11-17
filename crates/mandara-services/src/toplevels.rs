@@ -53,6 +53,8 @@ pub struct Toplevel {
 pub struct ToplevelsState {
     /// The compositor offers foreign-toplevel management.
     pub available: bool,
+    /// A window list alone does not provide minimize requests.
+    pub can_minimize: bool,
     /// Most recently activated first.
     pub toplevels: Vec<Toplevel>,
     /// No input for the configured idle timeout (see
@@ -111,6 +113,11 @@ struct State {
     order: Vec<u64>,
     idle: bool,
     dirty: bool,
+    can_minimize: bool,
+}
+
+fn wlr_can_minimize(compositor: Option<mandara_compositor::CompositorKind>) -> bool {
+    compositor != Some(mandara_compositor::CompositorKind::Niri)
 }
 
 impl State {
@@ -122,7 +129,7 @@ impl State {
         let mut toplevels: Vec<Toplevel> = self.handles.iter().map(|(_, t)| t.clone()).collect();
         let rank = |id: u64| self.order.iter().position(|x| *x == id).unwrap_or(usize::MAX);
         toplevels.sort_by_key(|t| rank(t.id));
-        ToplevelsState { available: true, toplevels, idle: self.idle }
+        ToplevelsState { available: true, can_minimize: self.can_minimize, toplevels, idle: self.idle }
     }
 }
 
@@ -250,6 +257,7 @@ fn apply(state: &State, command: &ToplevelCommand) -> Result<String, String> {
             Ok("closed".into())
         }
         ToplevelCommand::SetMinimized(id, on) => {
+            if !state.can_minimize { return Err(mandara_i18n::t("Not supported by this compositor").to_string()); }
             let h = need(id)?;
             if on { h.set_minimized() } else { h.unset_minimized() }
             Ok(if on { "minimized".into() } else { "restored".into() })
@@ -303,7 +311,7 @@ fn run(updates: async_channel::Sender<ToplevelsState>, commands: mpsc::Receiver<
     };
     let notifier: Option<ext_idle_notifier_v1::ExtIdleNotifierV1> = globals.bind(&qh, 1..=IDLE_VERSION, ()).ok();
     let mut idle_note: Option<ext_idle_notification_v1::ExtIdleNotificationV1> = None;
-    let mut state = State { seat, handles: Vec::new(), order: Vec::new(), idle: false, dirty: true };
+    let mut state = State { seat, handles: Vec::new(), order: Vec::new(), idle: false, dirty: true, can_minimize: wlr_can_minimize(mandara_compositor::detected()) };
     queue.roundtrip(&mut state).map_err(|e| e.to_string())?;
     let mut wake_buf = [0u8; 64];
     loop {
@@ -388,6 +396,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_wlr_manager_does_not_imply_minimize_support_on_niri() {
+        use mandara_compositor::CompositorKind;
+        assert!(!wlr_can_minimize(Some(CompositorKind::Niri)));
+        assert!(wlr_can_minimize(Some(CompositorKind::MangoWM)));
+        let state = State { seat: None, handles: Vec::new(), order: Vec::new(), idle: false, dirty: true, can_minimize: false };
+        assert!(!state.snapshot().can_minimize);
+        assert_eq!(apply(&state, &ToplevelCommand::SetMinimized(1, true)).unwrap_err(), "Not supported by this compositor");
+    }
+
+    #[test]
     fn mru_order_moves_activated_to_front() {
         let mut order = vec![1, 2, 3];
         touch(&mut order, 3);
@@ -407,6 +425,7 @@ mod tests {
     fn state_lookups() {
         let s = ToplevelsState {
             available: true,
+            can_minimize: true,
             toplevels: vec![Toplevel { id: 4, activated: true, ..Default::default() }, Toplevel { id: 7, ..Default::default() }],
             idle: false,
         };

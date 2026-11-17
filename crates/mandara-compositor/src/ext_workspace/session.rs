@@ -53,6 +53,7 @@ pub struct Options {
     pub workspaces: bool,
 }
 
+#[derive(Default)]
 pub(super) struct Wl {
     pub state: State,
     /// A batch completed since the last [`Session::take_published`].
@@ -71,6 +72,7 @@ pub(super) struct Wl {
     /// By the ext handle's id.
     cosmic_windows: BTreeMap<u32, cosmic_handle::ZcosmicToplevelHandleV1>,
     cosmic_manager: Option<cosmic_manager::ZcosmicToplevelManagerV1>,
+    cosmic_can_minimize: bool,
     idle_notifier: Option<idle_notifier::ExtIdleNotifierV1>,
     idle_note: Option<idle_notification::ExtIdleNotificationV1>,
     /// A window list is bound (wlr or ext).
@@ -78,6 +80,13 @@ pub(super) struct Wl {
 }
 
 impl Wl {
+    fn cosmic_capabilities(&mut self, capabilities: &[u8]) {
+        let minimize = cosmic_manager::ZcosmicToplelevelManagementCapabilitiesV1::Minimize as u32;
+        let next = capabilities.as_chunks::<{ size_of::<u32>() }>().0.iter().any(|bytes| u32::from_ne_bytes(*bytes) == minimize);
+        self.published |= next != self.cosmic_can_minimize;
+        self.cosmic_can_minimize = next;
+    }
+
     fn apply(&mut self, event: Event) {
         self.published |= self.state.apply(event);
     }
@@ -132,6 +141,7 @@ impl Session {
             cosmic_info,
             cosmic_windows: BTreeMap::new(),
             cosmic_manager,
+            cosmic_can_minimize: false,
             idle_notifier: globals.bind(&qh, 1..=IDLE_VERSION, ()).ok(),
             idle_note: None,
             windows: wlr.is_some(),
@@ -164,6 +174,11 @@ impl Session {
     /// Whether the compositor offers a window list.
     pub fn has_windows(&self) -> bool {
         self.wl.windows
+    }
+
+    /// A read-only ext list cannot minimize; the window managers can.
+    pub fn can_minimize_windows(&self) -> bool {
+        self.wl.cosmic_can_minimize || !self.wl.wlr_windows.is_empty()
     }
 
     /// Whether a batch completed since the last call.
@@ -574,8 +589,12 @@ impl Dispatch<cosmic_handle::ZcosmicToplevelHandleV1, u32> for Wl {
 }
 
 impl Dispatch<cosmic_manager::ZcosmicToplevelManagerV1, ()> for Wl {
-    fn event(_: &mut Self, _: &cosmic_manager::ZcosmicToplevelManagerV1, _: cosmic_manager::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
+    fn event(wl: &mut Self, _: &cosmic_manager::ZcosmicToplevelManagerV1, event: cosmic_manager::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+        let cosmic_manager::Event::Capabilities { capabilities } = event;
+        wl.cosmic_capabilities(&capabilities);
+    }
 }
+
 
 impl Dispatch<idle_notifier::ExtIdleNotifierV1, ()> for Wl {
     fn event(_: &mut Self, _: &idle_notifier::ExtIdleNotifierV1, _: idle_notifier::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
@@ -602,5 +621,23 @@ mod tests {
         assert!(u32s(&[1, 2, 3]).is_empty(), "a partial value is ignored");
         assert_eq!(bits(WEnum::<workspace::State>::Unknown(6), workspace::State::bits), 6);
         assert_eq!(bits(WEnum::Value(workspace::State::Active | workspace::State::Hidden), workspace::State::bits), super::super::state::STATE_ACTIVE | super::super::state::STATE_HIDDEN);
+    }
+}
+
+#[cfg(test)]
+mod management_tests {
+    use super::*;
+
+    #[test]
+    fn minimize_capability_changes_publish_without_window_changes() {
+        let mut wl = Wl::default();
+        let minimize = (cosmic_manager::ZcosmicToplelevelManagementCapabilitiesV1::Minimize as u32).to_ne_bytes();
+        wl.cosmic_capabilities(&minimize);
+        assert!(wl.cosmic_can_minimize && wl.published);
+        wl.published = false;
+        wl.cosmic_capabilities(&minimize);
+        assert!(!wl.published);
+        wl.cosmic_capabilities(&[]);
+        assert!(!wl.cosmic_can_minimize && wl.published);
     }
 }

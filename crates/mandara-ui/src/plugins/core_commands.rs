@@ -911,6 +911,13 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         core,
+        CommandSpec::new_output("plugins live", mandara_i18n::tk("Run an approved plugin live-wallpaper request from Studio"), |args, cx| {
+            crate::plugins::external::relay_live_wallpaper(args.str(0)?, cx)
+        })
+        .arg(ArgSpec::required("request", ArgKind::String, mandara_i18n::tk("Live wallpaper request as JSON"))),
+    );
+    r.command(
+        core,
         CommandSpec::new("plugins reload", mandara_i18n::tk("Hot-reload plugins from the plugin folders (also happens automatically)"), |_, cx| {
             crate::plugins::external::sync(cx);
             Ok(json!({"queued": true}))

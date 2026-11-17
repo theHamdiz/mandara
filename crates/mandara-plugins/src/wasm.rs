@@ -378,6 +378,9 @@ pub fn host_info() -> HostInfo {
 fn image_allowed(access: &Access, e: &ImageEntry) -> bool {
     match &e.origin {
         ImageOrigin::Folder(folder) | ImageOrigin::Project(folder) => access.allows_folder(folder),
+        ImageOrigin::Directory(folder) | ImageOrigin::File(folder) => access.allows_folder(folder) && access.allows(&extension::Capability::FilesRead),
+        ImageOrigin::Network(host) => access.generation < extension::Grant::EXHAUSTED_GENERATION
+            && access.granted.iter().any(|capability| matches!(capability, extension::Capability::Net(allowed) if allowed == host)),
         origin => origin.capability().is_none_or(|c| access.allows(&c)),
     }
 }
@@ -572,8 +575,15 @@ impl WasmPlugin {
         if state.access == access {
             return false;
         }
+        let folders_changed = state.access.folders != access.folders;
+        if state.access.generation != access.generation {
+            state.broker.invalidate();
+            state.queued.clear();
+            state.queued.shrink_to_fit();
+        }
         state.access = access;
         let HostState { access, broker, .. } = state;
+        if folders_changed { broker.close_folders(); }
         broker.close_where(access);
         broker.release_images(|e| image_allowed(access, e));
         true
@@ -590,7 +600,7 @@ impl WasmPlugin {
         self.store.data_mut().broker.take_requests()
     }
 
-    /// Subscriptions the plugin cancelled since the last take.
+    /// Dispatched requests and subscriptions cancelled since the last take.
     pub fn take_cancelled(&mut self) -> Vec<u64> {
         self.store.data_mut().broker.take_cancelled()
     }

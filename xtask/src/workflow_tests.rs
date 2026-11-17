@@ -235,6 +235,12 @@ fn nix_build_boundary(workflow: &serde_yaml_ng::Value, job: &str) -> Result<(), 
 
 #[test]
 fn nix_checks_and_cache_contain_builders_and_preserve_failure_diagnostics() {
+    let cargo: toml::Value = toml::from_str(&std::fs::read_to_string(crate::root().join(".cargo/config.toml")).unwrap()).unwrap();
+    assert_eq!(cargo["net"]["git-fetch-with-cli"].as_bool(), Some(true), "fresh Nix bootstrap and failure diagnostics must fetch pinned Git sources through the system Git client");
+    let ci: serde_yaml_ng::Value = serde_yaml_ng::from_str(&std::fs::read_to_string(crate::root().join(".github/workflows/ci.yml")).unwrap()).unwrap();
+    let checker = ci["jobs"]["compositor-checkers"]["steps"].as_sequence().unwrap().iter().find_map(|step| step["run"].as_str()).unwrap();
+    let packages = checker.lines().find(|line| line.contains("pacman -Syu")).unwrap();
+    assert!(packages.split_whitespace().any(|package| package == "git"), "the private checker container must provide Cargo's Git transport");
     let action = std::fs::read_to_string(crate::root().join(".github/actions/nix-build-limits/action.yml")).unwrap();
     let action: serde_yaml_ng::Value = serde_yaml_ng::from_str(&action).unwrap();
     let setup = &action["runs"]["steps"][1];

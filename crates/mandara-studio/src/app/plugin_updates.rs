@@ -1,4 +1,4 @@
-//! Marketplace plugin updates in Studio: the "Update to v1.2 · 48 KB patch"
+//! Marketplace plugin updates in Studio: the compact Update
 //! action in the plugin detail modal and the "N plugin updates · Update
 //! all" banner (Plugins → Installed and the About update card). Same method
 //! as the shell: binary patch first, the full archive as the fallback; the
@@ -9,30 +9,28 @@
 use mandara_ui::bidi::Bidi as _;
 use std::sync::Arc;
 
-use gpui::{AnyElement, ClickEvent, Context, FontWeight, IntoElement, ParentElement, StatefulInteractiveElement, Styled, div, px};
+use gpui::{AnyElement, ClickEvent, Context, FontWeight, IntoElement, ParentElement, StatefulInteractiveElement, Styled, div, px, prelude::FluentBuilder as _};
 use mandara_core::ToGpui;
 use mandara_i18n::{t, tf};
 use mandara_services::marketplace::{Flag, Vetting};
-use mandara_services::self_update::{self as su, ApplyOptions, plugins::{self, PluginUpdate}};
+use mandara_services::self_update::{ApplyOptions, plugins::{self, PluginUpdate}};
 use mandara_theme::MandaraPalette;
 use mandara_ui::icons::icon;
 
 use super::StudioView;
 use super::compositor_page::button;
+use super::store_page::{pill, Tone, ButtonSize};
 use super::updates_card::{JobHandle, describe, id_for, lock, progress_bar, reporter, watch_job};
 use crate::tokens::*;
 
-/// "Update to v1.2 · 48 KB patch" / "Update to v1.2 · 300 KB".
-fn update_label(u: &PluginUpdate) -> String {
-    let version = u.latest_version();
-    match u.download_size(false) {
-        Some(size) if u.patch.is_some() && u.meta.is_some() => tf("Update to v{version} · {size} patch", &[("version", &version), ("size", &su::human_size(size))]),
-        Some(size) => tf("Update to v{version} · {size}", &[("version", &version), ("size", &su::human_size(size))]),
-        None => tf("Update to v{version}", &[("version", &version)]),
-    }
-}
-
 impl StudioView {
+    pub(super) fn available_plugin_updates(&self) -> impl Iterator<Item = &PluginUpdate> {
+        self.updates.plugins.iter().filter(|update| self.market.update_available(update))
+    }
+
+    pub(super) fn plugin_update(&self, id: &str) -> Option<&PluginUpdate> {
+        self.available_plugin_updates().find(|update| update.id == id)
+    }
     /// The flag of `u`'s new release, when it failed the compliance check.
     pub(super) fn update_flag(&mut self, u: &PluginUpdate, cx: &mut Context<Self>) -> Option<Flag> {
         self.market_local_prime(cx);
@@ -41,7 +39,7 @@ impl StudioView {
 
     /// Updates `id`; `force` installs a release that failed the check.
     pub(super) fn plugin_update_start(&mut self, id: String, force: bool, cx: &mut Context<Self>) {
-        let Some(u) = self.updates.plugins.iter().find(|u| u.id == id && u.available).cloned() else { return };
+        let Some(u) = self.plugin_update(&id).cloned() else { return };
         if self.updates.plugin_jobs.contains_key(&id) {
             return;
         }
@@ -54,6 +52,7 @@ impl StudioView {
             lock(&worker).result = Some(result);
         });
         watch_job(job, cx, move |view, result, cx| {
+            view.updates.plugin_applied(&id, result.is_err());
             view.updates.plugin_jobs.remove(&id);
             view.market_local_refresh(cx);
             match result {
@@ -64,14 +63,17 @@ impl StudioView {
                     view.prompt_plugin_permissions(&id);
                     view.updates.plugin_message = Some((true, format!("{id}: {}", describe(&report))));
                 }
-                Err(e) => view.updates.plugin_message = Some((false, format!("{id}: {e}"))),
+                Err(e) => {
+                    view.updates.plugins.retain(|update| update.id != id);
+                    view.updates.plugin_message = Some((false, format!("{id}: {e}")));
+                }
             }
         });
         cx.notify();
     }
 
     pub(super) fn plugin_update_all(&mut self, cx: &mut Context<Self>) {
-        let ids: Vec<String> = self.updates.plugins.iter().filter(|u| u.available).map(|u| u.id.clone()).collect();
+        let ids: Vec<String> = self.available_plugin_updates().map(|u| u.id.clone()).collect();
         for id in ids {
             self.plugin_update_start(id, false, cx);
         }
@@ -81,25 +83,29 @@ impl StudioView {
     /// release is known.
     pub(super) fn plugin_update_action(&mut self, id: &str, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
         self.updates_prime(cx);
-        let u = self.updates.plugins.iter().find(|u| u.id == id && u.available)?;
+        let u = self.plugin_update(id)?;
         if let Some(job) = self.updates.plugin_jobs.get(id) {
             let j = lock(job);
-            return Some(div().min_w(px(DIM_180_PX)).row().flex_col().gap(px(SPACE_4_PX)).child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(if j.step.is_empty() { t("Updating…").to_string() } else { j.step.clone() })).child(progress_bar(j.done, j.total, p)).into_any_element());
+            return Some(div().w_full().min_w(px(0.0)).row().flex_col().gap(px(SPACE_4_PX)).child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(if j.step.is_empty() { t("Updating…").to_string() } else { j.step.clone() })).child(progress_bar(j.done, j.total, p)).into_any_element());
         }
         let u = u.clone();
         let target = u.id.clone();
         if let Some(flag) = self.update_flag(&u, cx) {
             return Some(self.install_anyway(id_for("plugin-update", id).to_string(), &flag, p, cx, move |this, cx| this.plugin_update_start(target.clone(), true, cx)).into_any_element());
         }
-        Some(button(id_for("plugin-update", id), "download", update_label(&u), true, p).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.plugin_update_start(target.clone(), false, cx))).into_any_element())
+        Some(pill(id_for("plugin-update", id), Some("download"), t("Update"), Tone::Primary, ButtonSize::Small, p).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.plugin_update_start(target.clone(), false, cx))).into_any_element())
     }
 
     /// "2 plugin updates · Update all" with one row per plugin, or `None`
     /// when every marketplace plugin is current (and nothing to report).
     pub(super) fn plugin_updates_banner(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
         self.updates_prime(cx);
-        let pending: Vec<PluginUpdate> = self.updates.plugins.iter().filter(|u| u.available).cloned().collect();
-        let message = self.updates.plugin_message.clone().map(|(ok, text)| super::form::note(&text, !ok, p));
+        let pending: Vec<PluginUpdate> = self.available_plugin_updates().cloned().collect();
+        let message = self.updates.plugin_message.clone().map(|(ok, text)| {
+            div().row().flex_col().gap(px(SPACE_8_PX)).child(super::form::note(&text, !ok, p))
+                .when(!ok, |row| row.child(button("plugin-update-retry", "refresh", t("Check again"), false, p).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.updates_check(true, cx)))))
+                .into_any_element()
+        });
         if pending.is_empty() {
             return message;
         }
