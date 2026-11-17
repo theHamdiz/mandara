@@ -52,6 +52,7 @@ impl StudioView {
             lock(&worker).result = Some(result);
         });
         watch_job(job, cx, move |view, result, cx| {
+            view.updates.plugin_applied(&id, result.is_err());
             view.updates.plugin_jobs.remove(&id);
             view.market_local_refresh(cx);
             match result {
