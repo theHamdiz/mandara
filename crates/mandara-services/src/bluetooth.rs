@@ -161,14 +161,17 @@ async fn run_actor(conn: &Connection, tx: &async_channel::Sender<BluetoothState>
     let mut last: Option<BluetoothState> = None;
     let mut prefs = Prefs::default();
     let mut refresh_reply = None;
+    let mut read_only = false;
     loop {
         drain_signals(&mut signals);
-        let result = read_state(conn, prefs.adapter.as_deref()).await;
-        if let Err(error) = &result {
-            tracing::warn!("bluetooth state: {error:#}");
-            reply(&refresh_reply.take(), Err(format!("{error:#}")));
-        }
-        let state = result.unwrap_or_default();
+        let state = match read_state(conn, prefs.adapter.as_deref()).await {
+            Ok(state) => state,
+            Err(error) => {
+                tracing::warn!("bluetooth state: {error:#}");
+                reply(&refresh_reply.take(), Err(format!("{error:#}")));
+                last.clone().unwrap_or_default()
+            }
+        };
         // Powered on (or first seen powered): reconnect trusted devices.
         let powered_on = state.powered && !last.as_ref().is_some_and(|l| l.powered);
         if last.as_ref() != Some(&state) {
@@ -177,7 +180,7 @@ async fn run_actor(conn: &Connection, tx: &async_channel::Sender<BluetoothState>
             }
             last = Some(state.clone());
         }
-        if powered_on && prefs.auto_connect {
+        if powered_on && prefs.auto_connect && !read_only {
             let n = connect_trusted(conn, &state).await;
             if n > 0 {
                 tracing::info!("bluetooth: auto-connecting {n} trusted device(s)");
@@ -186,9 +189,11 @@ async fn run_actor(conn: &Connection, tx: &async_channel::Sender<BluetoothState>
         if refresh_reply.is_some() {
             reply(&refresh_reply.take(), serde_json::to_string(&state).map_err(|e| e.to_string()));
         }
+        read_only = false;
         match next_wake(&mut signals, rx, DEBOUNCE, FALLBACK_POLL).await {
             Wake::Command(Envelope { command, reply: r }) => {
                 if command == BluetoothCommand::Refresh {
+                    read_only = true;
                     refresh_reply = r;
                     continue;
                 }

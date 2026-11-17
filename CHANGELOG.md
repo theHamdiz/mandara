@@ -14,7 +14,7 @@ Community plugins gain scoped file reads, online thumbnails and live wallpaper c
 
 ### Fixed
 
-- Bluetooth catches up with adapter and device state after waking from sleep, even during a burst of discovery signals. `bluetooth refresh` rereads the state without restarting the shell. (#200)
+- Bluetooth catches up with adapter and device state after waking from sleep, even during a burst of discovery signals. Temporary read failures preserve the last known state, and `bluetooth refresh` rereads it without restarting the shell or connecting devices. (#200)
 - Plugin cards use one compact Update button, with actions that wrap inside their cards. Updates recheck release downloads, retire stale offers and keep installed plugins when a repository or release becomes unavailable.
 - The dock explains when Hide is unavailable because the compositor cannot minimize windows, including on Niri. (#198)
 
