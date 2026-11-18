@@ -3810,7 +3810,7 @@
 "Unterminated single quote" = "Guillemet simple non fermé"
 "Until" = "Jusqu'à"
 "Until the schedule next changes" = "Jusqu'au prochain changement de programmation"
-"Up to 150 %; can distort" = "Jusqu'à 150 % ; peut distordre le son"
+"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "Jusqu’à 150 % via les touches volume de Mandara (peut distordre). Si elles restent à 100 %, votre compositeur les lie encore à wpctl -l 1.0."
 "Upcoming" = "À venir"
 "Upcoming calendar events as JSON" = "Événements de calendrier à venir en JSON"
 "Upcoming days listed under the month" = "Jours à venir listés sous le mois"

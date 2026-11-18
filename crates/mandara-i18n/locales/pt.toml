@@ -3802,7 +3802,7 @@
 "Unterminated single quote" = "Aspas simples sem fechar"
 "Until" = "Até"
 "Until the schedule next changes" = "Até o horário mudar de novo"
-"Up to 150 %; can distort" = "Até 150 %; pode distorcer"
+"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "Até 150 % pelas teclas de volume do Mandara (pode distorcer). Se ficarem em 100 %, o compositor ainda as liga a wpctl -l 1.0."
 "Upcoming" = "Próximos"
 "Upcoming calendar events as JSON" = "Próximos eventos do calendário em JSON"
 "Upcoming days listed under the month" = "Próximos dias listados sob o mês"

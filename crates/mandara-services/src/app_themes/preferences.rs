@@ -203,9 +203,11 @@ pub fn set_with(
         metadata_changed = true;
     }
     for (section, key, value) in settings(keys) {
+        // `]` is allowed in section names: Plasma nests groups as
+        // `[Colors:Header][Inactive]` (stored here as `Colors:Header][Inactive`).
         ensure!(
-            !section.contains(['\n', '\r', ']'])
-                && !key.contains(['\n', '\r', '='])
+            !section.contains(['\n', '\r'])
+                && !key.contains(['\n', '\r', '=', ']'])
                 && !value.contains(['\n', '\r']),
             "invalid INI preference"
         );
@@ -462,6 +464,34 @@ mod tests {
             )
             .as_deref(),
             Some("Original")
+        );
+    }
+
+    #[test]
+    fn plasma_nested_header_inactive_group_round_trips() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = Locations {
+            home: root.path().into(),
+            config: root.path().join("config"),
+            data: root.path().join("data"),
+            cache: root.path().join("cache"),
+            state: root.path().join("state"),
+        };
+        std::fs::create_dir_all(&locations.config).unwrap();
+        let path = locations.config.join("kdeglobals");
+        std::fs::write(&path, "[Icons]\nTheme=Keep\n").unwrap();
+        let keys = ini_keys(
+            "[Colors:Header]\nForegroundNormal=1,1,1\n\n[Colors:Header][Inactive]\nForegroundNormal=2,2,2\n",
+        )
+        .unwrap();
+        assert!(keys.contains_key("Colors:Header][Inactive"));
+        set("kde", &path, &keys, &locations).unwrap();
+        let body = std::fs::read_to_string(&path).unwrap();
+        assert!(body.contains("Theme=Keep"));
+        assert!(body.contains("[Colors:Header][Inactive]\nForegroundNormal=2,2,2\n"));
+        assert_eq!(
+            ini_get(&body, "Colors:Header][Inactive", "ForegroundNormal").as_deref(),
+            Some("2,2,2")
         );
     }
 

@@ -82,7 +82,8 @@ struct Shelf {
 }
 
 /// Discover's shelves, in order. A built-in outside every category joins
-/// the first shelf.
+/// the first shelf. Third-party plugins have their own shelf so they are
+/// not only visible under New & updated.
 const SHELVES: &[Shelf] = &[
     Shelf { key: "essentials", title: tk("Essentials"), line: tk("The pieces every Mandara bar is built from"), categories: &[tk("Bar essentials")] },
     Shelf { key: "desk", title: tk("For your desk"), line: tk("Weather, prayer times, world clocks and more at a glance"), categories: &[tk("Everyday info")] },
@@ -93,6 +94,7 @@ const SHELVES: &[Shelf] = &[
     Shelf { key: "system", title: tk("System tools"), line: tk("Network, sound, power and upkeep, one click away"), categories: &[tk("System"), tk("Maintenance")] },
     Shelf { key: "games", title: tk("Games"), line: tk("Puzzles to play in the bar or right on the desktop"), categories: &[tk("Games")] },
     Shelf { key: "developer", title: tk("For developers"), line: tk("Ports, repositories, CI, local AI models and progress from your scripts"), categories: &[tk("Developer tools")] },
+    Shelf { key: "third-party", title: tk("Third-party"), line: tk("Sandboxed WebAssembly plugins from the marketplace, your plugin folders or your distribution."), categories: &[tk("Third-party")] },
 ];
 
 /// Featured on the Discover hero, in order (built-ins with cover art).
@@ -814,11 +816,9 @@ fn listed(cfg: &ShellConfig, cx: &App) -> Vec<(bool, PluginManifest)> {
     all
 }
 
-/// The Discover shelf a built-in sits on (third-party plugins: none).
+/// The Discover shelf a plugin sits on (built-ins by category; third-party
+/// plugins on the Third-party shelf).
 fn shelf_of(m: &PluginManifest) -> Option<usize> {
-    if m.origin != PluginOrigin::Builtin {
-        return None;
-    }
     let category = plugin_modal::category(m);
     Some(SHELVES.iter().position(|s| s.categories.contains(&category)).unwrap_or(0))
 }
@@ -1504,7 +1504,10 @@ impl StudioView {
     /// plugins on this system, and the community's most recently updated.
     fn new_and_updated(&mut self, all: &[(bool, PluginManifest)], fit: grid::GridFit, cfg: &ShellConfig, p: &MandaraPalette, cx: &mut Context<Self>) -> (Option<AnyElement>, usize) {
         let pending: Vec<String> = self.available_plugin_updates().map(|u| u.id.clone()).collect();
-        let mut local: Vec<&(bool, PluginManifest)> = all.iter().filter(|(_, m)| m.origin != PluginOrigin::Builtin && self.marketplace_listing(m).is_none()).collect();
+        // Every installed third-party plugin, including marketplace ones
+        // (`store_card` turns those into listing cards). Skipping them here
+        // left them only on Community picks when they also ranked as recent.
+        let mut local: Vec<&(bool, PluginManifest)> = all.iter().filter(|(_, m)| m.origin != PluginOrigin::Builtin).collect();
         local.sort_by_key(|(_, m)| !pending.contains(&m.id));
         let mut cards: Vec<AnyElement> = local.into_iter().take(fit.cols).map(|(on, m)| self.store_card("new", *on, m, fit.card_w, cfg, p, cx)).collect();
         let local_count = cards.len();
@@ -2092,13 +2095,16 @@ mod tests {
 
     #[test]
     fn every_category_lands_on_a_shelf() {
-        for (title, ids) in PLUGIN_CATEGORIES.iter().filter(|(t, _)| *t != tk("Third-party")) {
+        for (title, ids) in PLUGIN_CATEGORIES {
             assert!(SHELVES.iter().any(|s| s.categories.contains(title)), "{title}");
             for id in *ids {
                 let m = PluginManifest::builtin(id, id, "", None);
                 assert!(shelf_of(&m).is_some(), "{id}");
             }
         }
+        let third = PluginManifest { origin: PluginOrigin::ThirdParty { path: "/tmp/p".into() }, ..PluginManifest::builtin("demo", "Demo", "", None) };
+        let shelf = shelf_of(&third).expect("third-party plugins have a Discover shelf");
+        assert_eq!(SHELVES[shelf].key, "third-party");
     }
 
     #[test]

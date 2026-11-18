@@ -3831,7 +3831,7 @@
 "Unterminated single quote" = "未闭合的单引号"
 "Until" = "至"
 "Until the schedule next changes" = "直到时间表下次切换"
-"Up to 150 %; can distort" = "最高 150%；可能失真"
+"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "通过 Mandara 音量键最高 150%（可能失真）。若停在 100%，说明合成器仍绑定到 wpctl -l 1.0。"
 "Upcoming" = "即将到来"
 "Upcoming calendar events as JSON" = "即将到来的日历日程（JSON）"
 "Upcoming days listed under the month" = "月历下方列出的未来天数"

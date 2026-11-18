@@ -6,6 +6,17 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- The audio panel shows the negotiated Bluetooth codec beside the device name. Thanks [@tekwiz99](https://github.com/tekwiz99). (#203)
+
+### Fixed
+
+- Studio → Plugins → Discover lists third-party plugins on their own shelf, not only under New & updated.
+- Switching from a tall bar Look (Expressive, Taskbar, …) to a plain Look no longer keeps the tall height.
+- Volume keys stuck at 100 % with “Allow above 100 %” on: Studio explains when the compositor still binds them to `wpctl -l 1.0`, and Mandara’s skipped-bind notes say how to fix it. (#201)
+- KDE / Plasma Mandara colour schemes include the inactive header group so Dolphin and other apps keep readable text on dark headers. (#201)
+
 ## 0.35.0 — 2026-11-17
 
 Community plugins gain scoped file reads, online thumbnails and live wallpaper controls in Studio.

@@ -3835,7 +3835,7 @@
 "Unterminated single quote" = "閉じられていないシングルクォート"
 "Until" = "終了"
 "Until the schedule next changes" = "次にスケジュールが切り替わるまで"
-"Up to 150 %; can distort" = "最大 150 %。音が歪む場合があります"
+"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "Mandara の音量キーで最大 150 %（音が歪む場合があります）。100 % で止まる場合、コンポジタがまだ wpctl -l 1.0 に割り当てています。"
 "Upcoming" = "今後の予定"
 "Upcoming calendar events as JSON" = "今後のカレンダーの予定（JSON）"
 "Upcoming days listed under the month" = "月の下に表示する今後の日数"

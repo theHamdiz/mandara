@@ -3810,7 +3810,7 @@
 "Unterminated single quote" = "Kapatılmamış tek tırnak"
 "Until" = "Bitiş"
 "Until the schedule next changes" = "Program bir sonraki değişene kadar"
-"Up to 150 %; can distort" = "%150'ye kadar; bozulma yapabilir"
+"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "Mandara ses tuşlarıyla %150'ye kadar (bozulma yapabilir). %100'de kalıyorsa compositor hâlâ wpctl -l 1.0'a bağlıdır."
 "Upcoming" = "Yaklaşanlar"
 "Upcoming calendar events as JSON" = "JSON olarak yaklaşan takvim etkinlikleri"
 "Upcoming days listed under the month" = "Ayın altında listelenen gelecek günler"

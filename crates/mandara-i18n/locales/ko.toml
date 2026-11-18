@@ -5718,7 +5718,7 @@
 "Until the schedule next changes" = "다음 일정 변경까지"
 "Untitled note" = "제목 없는 노트"
 "Up" = "작동 중"
-"Up to 150 %; can distort" = "최대 150 %. 소리가 왜곡될 수 있음"
+"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "Mandara 볼륨 키로 최대 150 %(왜곡될 수 있음). 100 %에 머무르면 컴포지터가 아직 wpctl -l 1.0에 묶여 있습니다."
 "Up to date" = "최신 상태"
 "Up {time}" = "{time} 동안 작동 중"
 "Upcoming" = "예정"

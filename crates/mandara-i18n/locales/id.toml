@@ -5717,7 +5717,7 @@
 "Until the schedule next changes" = "Hingga jadwal berubah berikutnya"
 "Untitled note" = "Catatan tanpa judul"
 "Up" = "Aktif"
-"Up to 150 %; can distort" = "Hingga 150 %; bisa pecah"
+"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "Hingga 150 % lewat tombol volume Mandara (bisa pecah). Jika stuck di 100 %, compositor Anda masih mengikatnya ke wpctl -l 1.0."
 "Up to date" = "Terbaru"
 "Up {time}" = "Aktif {time}"
 "Upcoming" = "Mendatang"

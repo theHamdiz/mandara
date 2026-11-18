@@ -3802,7 +3802,7 @@
 "Unterminated single quote" = "ముగియని సింగిల్ కోట్"
 "Until" = "వరకు"
 "Until the schedule next changes" = "షెడ్యూల్ తదుపరిసారి మారే వరకు"
-"Up to 150 %; can distort" = "150 % వరకు; వక్రీకరించవచ్చు"
+"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "మందరా వాల్యూమ్ కీలతో 150 % వరకు (వక్రీకరించవచ్చు). 100 % వద్ద అయితే మీ కంపోజిటర్ ఇంకా wpctl -l 1.0కి బైండ్ చేస్తోంది."
 "Upcoming" = "రాబోయేవి"
 "Upcoming calendar events as JSON" = "JSONగా రాబోయే క్యాలెండర్ ఈవెంట్‌లు"
 "Upcoming days listed under the month" = "నెల కింద రాబోయే రోజులు"

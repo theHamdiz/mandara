@@ -860,6 +860,9 @@ pub fn clear(cfg: &mut ShellConfig) {
     bar.rim_intensity = d.rim_intensity;
     bar.shadow = d.shadow;
     bar.icon_scale = d.icon_scale;
+    // A style's tall bar (taskbar, expressive, rail…) must not linger when
+    // the next look is a plain one that leaves height unset.
+    bar.height = d.height;
     bar.screen_frame = d.screen_frame;
     bar.frame_thickness = d.frame_thickness;
     bar.vertical_width = d.vertical_width;

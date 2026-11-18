@@ -112,7 +112,7 @@ pub fn entries() -> Vec<Setting> {
         s(Privacy, INDICATORS, "/privacy/camera_poll_s", tk("Camera check interval"), tk("Only used when the system can't report camera use instantly"), slider(1.0, 30.0, 1.0, " s")),
         // Audio & media additions
         s(Audio, VOLUME, "/audio/volume_step", tk("Volume step"), tk("Volume keys, the bar's scroll and `audio volume up / down`"), slider(1.0, 20.0, 1.0, " %")),
-        s(Audio, VOLUME, "/audio/overamplify", tk("Allow above 100 %"), tk("Up to 150 %; can distort"), Toggle),
+        s(Audio, VOLUME, "/audio/overamplify", tk("Allow above 100 %"), tk("Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0."), Toggle),
         s(Audio, PLAYERS, "/media/follow_playing", tk("Follow the player that starts playing"), tk("Off: stay with the current player until it closes"), Toggle),
         s(Audio, SOUNDS, "/sounds/enabled", tk("Shell sounds"), tk("Short sounds from your sound theme for the events below"), Toggle),
         s(Audio, SOUNDS, "/sounds/theme", tk("Sound theme"), tk("A folder in /usr/share/sounds; empty follows your GTK setting"), Text { placeholder: "freedesktop" }),

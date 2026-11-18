@@ -3808,7 +3808,7 @@
 "Unterminated single quote" = "Незакрытая одинарная кавычка"
 "Until" = "До"
 "Until the schedule next changes" = "До следующего изменения по расписанию"
-"Up to 150 %; can distort" = "До 150 %; возможны искажения"
+"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "До 150 % клавишами громкости Mandara (возможны искажения). Если остаются на 100 %, композитор всё ещё привязан к wpctl -l 1.0."
 "Upcoming" = "Предстоящие"
 "Upcoming calendar events as JSON" = "Предстоящие события календаря в формате JSON"
 "Upcoming days listed under the month" = "Предстоящие дни под календарём месяца"

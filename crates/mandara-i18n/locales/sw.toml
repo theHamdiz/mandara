@@ -3802,7 +3802,7 @@
 "Unterminated single quote" = "Nukuu moja hazijafungwa"
 "Until" = "Hadi"
 "Until the schedule next changes" = "Hadi ratiba ibadilike tena"
-"Up to 150 %; can distort" = "Hadi 150 %; inaweza kupotosha"
+"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "Hadi 150 % kupitia funguo za sauti za Mandara (inaweza kupotosha). Zikisalia 100 %, compositor bado inazifunganisha na wpctl -l 1.0."
 "Upcoming" = "Yajayo"
 "Upcoming calendar events as JSON" = "Matukio yajayo ya kalenda kama JSON"
 "Upcoming days listed under the month" = "Siku zijazo zimeorodheshwa chini ya mwezi"

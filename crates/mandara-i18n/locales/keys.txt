@@ -8924,7 +8924,7 @@ Until the schedule next changes
 Untitled note
 Unverified download
 Up
-Up to 150 %; can distort
+Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0.
 Up to date
 Up {time}
 Upcoming

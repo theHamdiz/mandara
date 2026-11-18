@@ -3809,7 +3809,7 @@
 "Unterminated single quote" = "Nicht abgeschlossenes einfaches Anführungszeichen"
 "Until" = "Bis"
 "Until the schedule next changes" = "Bis sich der Zeitplan das nächste Mal ändert"
-"Up to 150 %; can distort" = "Bis 150 %; kann verzerren"
+"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "Bis 150 % über Mandaras Lautstärketasten (kann verzerren). Bleiben die Tasten bei 100 %, bindet dein Compositor sie noch an wpctl -l 1.0."
 "Upcoming" = "Demnächst"
 "Upcoming calendar events as JSON" = "Anstehende Kalendertermine als JSON"
 "Upcoming days listed under the month" = "Kommende Tage unter dem Monat aufgeführt"

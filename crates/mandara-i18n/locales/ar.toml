@@ -3814,7 +3814,7 @@
 "Unterminated single quote" = "علامة اقتباس مفردة غير مغلقة"
 "Until" = "حتى"
 "Until the schedule next changes" = "حتى التغيير التالي في الجدول"
-"Up to 150 %; can distort" = "حتى 150 %؛ قد يسبب تشوهًا"
+"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "حتى 150 % عبر مفاتيح الصوت في ماندارا (قد يسبب تشوهًا). إذا بقيت عند 100 %، فمدير النوافذ ما زال يربطها بـ wpctl -l 1.0."
 "Upcoming" = "القادمة"
 "Upcoming calendar events as JSON" = "أحداث التقويم القادمة بصيغة JSON"
 "Upcoming days listed under the month" = "الأيام القادمة مدرجة أسفل الشهر"

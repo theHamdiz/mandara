@@ -3837,7 +3837,7 @@
 "Unterminated single quote" = "बंद न किया गया सिंगल कोट"
 "Until" = "तक"
 "Until the schedule next changes" = "शेड्यूल के अगले बदलाव तक"
-"Up to 150 %; can distort" = "150 % तक; आवाज़ बिगड़ सकती है"
+"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "मंदरा की वॉल्यूम कुंजियों से 150 % तक (आवाज़ बिगड़ सकती है)। 100 % पर अटकने का मतलब है कंपोज़िटर अभी भी wpctl -l 1.0 से बाँधता है।"
 "Upcoming" = "आगामी"
 "Upcoming calendar events as JSON" = "आगामी कैलेंडर इवेंट JSON के रूप में"
 "Upcoming days listed under the month" = "महीने के नीचे सूचीबद्ध आगामी दिन"
