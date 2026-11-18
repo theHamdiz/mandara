@@ -79,6 +79,8 @@ pub struct Channel {
     pub name: String,
     /// The device's server name (stable key for `[audio]` labels / hiding).
     pub device: String,
+    /// The codec the link negotiated ("AAC", "SBC" …), for Bluetooth devices.
+    pub codec: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
@@ -219,14 +221,14 @@ fn read_state(p: &mut Pulse) -> Result<AudioState, String> {
     let mut state = AudioState { available: true, ..Default::default() };
     if let Some(name) = sink {
         let s = p.sink(name)?;
-        state.output = Channel { volume: linear(&s.cvolume), muted: s.muted, name: text(&s.description), device: s.name.to_string_lossy().into_owned() };
+        state.output = Channel { volume: linear(&s.cvolume), muted: s.muted, name: text(&s.description), device: s.name.to_string_lossy().into_owned(), codec: heard::codec_label(&s.props) };
     }
     // No microphone: the server names a placeholder default source that
     // doesn't resolve; the output is still there.
     if let Some(name) = source
         && let Ok(s) = p.source(name)
     {
-        state.input = Channel { volume: linear(&s.cvolume), muted: s.muted, name: text(&s.description), device: s.name.to_string_lossy().into_owned() };
+        state.input = Channel { volume: linear(&s.cvolume), muted: s.muted, name: text(&s.description), device: s.name.to_string_lossy().into_owned(), codec: heard::codec_label(&s.props) };
     }
     Ok(state)
 }

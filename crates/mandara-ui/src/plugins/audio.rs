@@ -219,6 +219,24 @@ fn shown_volume(key: &'static str, ch: &Channel, lim: f32) -> f32 {
     crate::slider_model::held(&key.into()).map_or(ch.volume, |frac| frac * lim)
 }
 
+/// A small muted chip naming the codec a Bluetooth endpoint negotiated
+/// ("AAC", "SBC" …); absent on wired devices.
+fn codec_badge(codec: &str, palette: &MandaraPalette) -> AnyElement {
+    div()
+        .flex_none()
+        .h(px(16.0))
+        .px(px(5.0))
+        .rounded_full()
+        .bg(palette.on_surface_variant.with_alpha(0.14).hsla())
+        .flex()
+        .items_center()
+        .text_size(px(9.5))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(palette.on_surface_variant.hsla())
+        .child(SharedString::from(codec))
+        .into_any_element()
+}
+
 /// Label row of a channel card: kind, device name, big percentage, mute.
 #[allow(clippy::too_many_arguments)]
 fn channel_head(
@@ -244,7 +262,15 @@ fn channel_head(
                 .flex()
                 .flex_col()
                 .child(div().text_size(px(KIND_TEXT_PX)).font_weight(FontWeight::BOLD).text_color(accent.hsla()).child(kind))
-                .child(div().text_size(px(DEVICE_TEXT_PX)).font_weight(FontWeight::MEDIUM).truncate().child(name)),
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.0))
+                        .min_w(px(0.0))
+                        .child(div().text_size(px(DEVICE_TEXT_PX)).font_weight(FontWeight::MEDIUM).truncate().child(name))
+                        .when_some(ch.codec.as_deref(), |row, codec| row.child(codec_badge(codec, palette))),
+                ),
         )
         .child(
             div()

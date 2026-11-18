@@ -74,6 +74,26 @@ pub fn raw_prop(props: &protocol::Props, key: &str) -> Option<String> {
     props.iter().find(|(k, _)| k.to_bytes() == key.as_bytes()).map(|(_, v)| String::from_utf8_lossy(v.strip_suffix(&[0]).unwrap_or(v)).trim().to_string()).filter(|s| !s.is_empty())
 }
 
+/// The negotiated codec of a sink or source, normalized for display.
+/// `aac` → `"AAC"`, `sbc_xq` → `"SBC-XQ"` and the like; anything unknown is
+/// uppercased. Wired devices have no codec property and return `None`.
+pub fn codec_label(props: &protocol::Props) -> Option<String> {
+    Some(codec_from_str(&raw_prop(props, "api.bluez5.codec")?))
+}
+
+fn codec_from_str(raw: &str) -> String {
+    match raw.to_ascii_lowercase().as_str() {
+        "sbc" => "SBC".to_string(),
+        "sbc_xq" => "SBC-XQ".to_string(),
+        "aac" => "AAC".to_string(),
+        "lc3" => "LC3".to_string(),
+        "lc3_swb" => "LC3 SWB".to_string(),
+        "msbc" => "mSBC".to_string(),
+        "faststream" => "FastStream".to_string(),
+        _ => raw.to_ascii_uppercase(),
+    }
+}
+
 /// The sink to read and change for "the output volume" (see the module
 /// docs), by name.
 pub fn heard(default: &str, sinks: &[SinkFacts], streams: &[StreamFacts], easy_effects_output: Option<&str>) -> String {
@@ -159,5 +179,15 @@ mod tests {
         let rc = "[General]\nfoo=1\n\n[StreamInputs]\ninputDevice=mic\n[StreamOutputs]\noutputDevice=alsa_output.hdmi\n";
         assert_eq!(output_in(rc).as_deref(), Some("alsa_output.hdmi"));
         assert_eq!(output_in("[StreamInputs]\noutputDevice=x\n"), None, "only its output section");
+    }
+
+    #[test]
+    fn codec_labels_are_normalized_for_display() {
+        assert_eq!(codec_from_str("aac"), "AAC");
+        assert_eq!(codec_from_str("SBC"), "SBC");
+        assert_eq!(codec_from_str("sbc_xq"), "SBC-XQ");
+        assert_eq!(codec_from_str("lc3_swb"), "LC3 SWB");
+        assert_eq!(codec_from_str("msbc"), "mSBC");
+        assert_eq!(codec_from_str("opus-g"), "OPUS-G");
     }
 }

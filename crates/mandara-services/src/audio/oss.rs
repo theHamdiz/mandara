@@ -13,9 +13,9 @@ pub(super) fn state() -> Option<AudioState> {
     let out = oss::output_control(&controls)?;
     let device = oss::devices().into_iter().find(|d| d.default);
     let (name, dev) = device.map(|d| (d.description, d.name)).unwrap_or_default();
-    let mut state = AudioState { available: true, output: Channel { volume: out.level(), muted: out.muted, name: name.clone(), device: dev.clone() }, ..AudioState::default() };
+    let mut state = AudioState { available: true, output: Channel { volume: out.level(), muted: out.muted, name: name.clone(), device: dev.clone(), codec: None }, ..AudioState::default() };
     if let Some(input) = oss::input_control(&controls) {
-        state.input = Channel { volume: input.level(), muted: input.muted, name, device: dev };
+        state.input = Channel { volume: input.level(), muted: input.muted, name, device: dev, codec: None };
     }
     Some(state)
 }
