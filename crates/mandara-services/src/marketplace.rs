@@ -453,6 +453,9 @@ pub fn search_with_policy_while(query: &str, source: &dyn moderation::PolicySour
         }
     }
     results.total = results.total.max(results.items.len() as u64);
+    if !keep_going() {
+        return Err(t("Search cancelled.").into());
+    }
     let mut cache = SEARCH_CACHE.lock();
     cache.retain(|(k, at, _)| *k != key && at.elapsed() < SEARCH_CACHE_TTL);
     if cache.len() >= SEARCH_CACHE_ENTRIES {

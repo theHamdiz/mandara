@@ -4714,6 +4714,7 @@ Names beside fan items and under grid icons
 Names beside the icons
 Names in Arabic
 Narrated by {narrator}
+Narrow the search to see more community plugins.
 Nasa'i
 Native
 Native filesystem maintenance is available on Linux.

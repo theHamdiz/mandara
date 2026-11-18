@@ -572,7 +572,20 @@ impl StudioView {
                     .child(div().pt(px(SPACE_8_PX)).w_full().row().flex_wrap().justify_end().gap(px(SPACE_6_PX)).child(buttons)),
             )
             .child(store::rim_overlay(LISTING_RADIUS_PX, p))
-            .when_some(installed.as_ref().and_then(|(dir, _)| dir.file_name()).map(|id| id.to_string_lossy().into_owned()), |d, id| d.cursor_pointer().on_click(cx.listener(move |this, _: &ClickEvent, window, cx| this.open_plugin(&id, super::plugin_modal::ModalView::Detail, window, cx))))
+            // Open only when the registry entry is this install (not a plugins-dev shadow of the same id).
+            .when_some(installed.as_ref().and_then(|(dir, _)| {
+                let id = dir.file_name()?.to_str()?.to_owned();
+                Some((dir.clone(), id))
+            }), |d, (dir, id)| {
+                d.cursor_pointer().on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                    let matches_install = cx.global::<mandara_plugins::PluginRegistry>().manifest(&id).is_some_and(|m| {
+                        matches!(&m.origin, mandara_plugins::PluginOrigin::ThirdParty { path } if path == &dir)
+                    });
+                    if matches_install {
+                        this.open_plugin(&id, super::plugin_modal::ModalView::Detail, window, cx);
+                    }
+                }))
+            })
             .into_any_element()
     }
 
@@ -618,7 +631,26 @@ impl StudioView {
                 self.market.installed.iter().find(|(_, (dir, _))| dir == path).map(|(repo, _)| repo.clone())
             })
             .collect();
-        let local_cards: Vec<AnyElement> = local.iter().map(|(on, m)| self.store_card("market-local", *on, m, fit.card_w, &cfg, p, cx)).collect();
+        // Prefer a listing card (Get/Update/Remove) when the current search or
+        // the empty-query cache still has the repository.
+        let current_listings: Vec<Arc<Listing>> = match &self.market.results {
+            Some(Ok(found)) => found.items.iter().cloned().collect(),
+            _ => Vec::new(),
+        };
+        let local_cards: Vec<AnyElement> = local
+            .iter()
+            .map(|(on, m)| {
+                let listing = (|| {
+                    let mandara_plugins::PluginOrigin::ThirdParty { path } = &m.origin else { return None };
+                    let repo = self.market.installed.iter().find(|(_, (dir, _))| dir == path)?.0.as_str();
+                    current_listings.iter().find(|l| l.full_name == repo).cloned().or_else(|| self.marketplace_listing(m))
+                })();
+                match listing {
+                    Some(l) => self.listing_card("market-local", &l, fit.card_w, p, cx),
+                    None => self.store_card("market-local", *on, m, fit.card_w, &cfg, p, cx),
+                }
+            })
+            .collect();
         let has_local = !local_cards.is_empty();
         let on_system = has_local.then(|| {
             div()
@@ -640,12 +672,19 @@ impl StudioView {
             Some(Ok(found)) => {
                 let items: Vec<_> = found.items.iter().filter(|l| !shown_repos.contains(&l.full_name)).cloned().collect();
                 if items.is_empty() {
-                    if found.truncated() {
+                    if found.truncated() && !found.items.is_empty() {
                         let hint = t("The top GitHub results are already installed. Narrow the search to see others.");
                         if has_local {
                             div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(hint)).into_any_element()
                         } else {
                             store::empty_state("globe", t("Installed results only"), hint, p)
+                        }
+                    } else if found.truncated() {
+                        let hint = t("Narrow the search to see more community plugins.");
+                        if has_local {
+                            div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(hint)).into_any_element()
+                        } else {
+                            store::empty_state("globe", t("No plugins found"), hint, p)
                         }
                     } else {
                         let (title, hint) = if self.market.searched.is_empty() {
