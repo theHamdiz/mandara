@@ -326,13 +326,21 @@ impl StudioView {
 
     /// Keeps the store following the plugin folders (a folder dropped into
     /// plugins-dev shows up under Installed too, not only after the Develop
-    /// tab was opened once); the number of local plugins, once scanned.
+    /// tab was opened once). The Develop tab badge counts only development
+    /// plugins — marketplace installs belong on Community / Installed.
     pub(super) fn local_follow(&mut self, cx: &mut Context<Self>) -> Option<usize> {
         if !self.local.hidden {
             self.local_watch(cx);
             self.local_refresh(false, cx);
         }
-        self.local.scanned.map(|_| self.local.reports.iter().map(FolderReport::plugin_count).sum::<usize>())
+        self.local.scanned.map(|_| {
+            self.local
+                .reports
+                .iter()
+                .filter(|r| r.source == Source::Development)
+                .map(FolderReport::plugin_count)
+                .sum::<usize>()
+        })
     }
 
     /// Rescans the folders when the registry or the folders changed.
@@ -1114,7 +1122,10 @@ impl StudioView {
             icon_path: Option<PathBuf>,
         }
         let mut rows: Vec<Row> = Vec::new();
-        for report in &self.local.reports {
+        // Validate is the author's workbench: only `plugins-dev`. Installed
+        // marketplace plugins stay on Community / Installed, not here as
+        // if they were example projects under development.
+        for report in self.local.reports.iter().filter(|r| r.source == Source::Development) {
             for (dir, inspection) in &report.entries {
                 let folder = dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
                 let mut row = Row { dir: dir.clone(), title: folder.clone(), subtitle: display_dir(dir), status: ("check", t("Ready"), p.primary), detail: None, detail_is_error: false, problems: Vec::new(), plugin: None, icon_path: None };
@@ -1604,6 +1615,24 @@ mod tests {
         assert_eq!(parsed["picker"], Runtime { state: "failed".into(), error: Some("missing grant".into()) });
         assert_eq!(parsed["older"].state, "unknown");
         assert_eq!(parse_runtime(Err("shell unavailable".into())), Err("shell unavailable".into()));
+    }
+
+    #[test]
+    fn develop_badge_and_validate_count_only_development_plugins() {
+        let root = tempfile::tempdir().unwrap();
+        let dev = root.path().join("plugins-dev");
+        let installed = root.path().join("plugins");
+        for (dir, id) in [(&dev, "wip"), (&installed, "from-market")] {
+            let plugin = dir.join(id);
+            std::fs::create_dir_all(&plugin).unwrap();
+            std::fs::write(plugin.join("plugin.toml"), format!("id='{id}'\nname='{id}'\n")).unwrap();
+            std::fs::write(plugin.join("plugin.wasm"), b"\0asm").unwrap();
+        }
+        let reports = wasm::inspect(&[(dev, Source::Development), (installed, Source::Installed)]);
+        let all: usize = reports.iter().map(FolderReport::plugin_count).sum();
+        let develop: usize = reports.iter().filter(|r| r.source == Source::Development).map(FolderReport::plugin_count).sum();
+        assert_eq!(all, 2, "both folders still inspect");
+        assert_eq!(develop, 1, "Develop's badge and Validate list only plugins-dev");
     }
 
     #[test]

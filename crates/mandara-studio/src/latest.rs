@@ -35,6 +35,15 @@ impl<T: Clone + PartialEq> Latest<T> {
         }
     }
 
+    /// Drops the desired input and frees the active slot so a replacement
+    /// request can [`begin`](Self::begin) immediately (the cancelled worker's
+    /// [`finish`](Self::finish) then no-ops).
+    pub fn abort(&mut self) {
+        self.desired = None;
+        self.active = None;
+        self.refresh();
+    }
+
     pub fn refresh(&mut self) {
         self.revision = self.revision.wrapping_add(1);
     }
@@ -99,6 +108,19 @@ mod tests {
         assert!(!queue.finish(request));
         assert!(queue.begin().is_none());
         assert!(weak.upgrade().is_none());
+    }
+
+    #[test]
+    fn abort_frees_the_active_slot_so_a_replacement_can_start_immediately() {
+        let mut queue = Latest::default();
+        queue.set(Some("old"));
+        let previous = queue.begin().unwrap();
+        queue.abort();
+        queue.set(Some("new"));
+        let next = queue.begin().expect("abort must free the active slot");
+        assert_eq!(next.key, "new");
+        assert!(!queue.finish(previous), "the aborted job must not publish");
+        assert!(queue.finish(next));
     }
 
     #[test]

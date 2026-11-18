@@ -6,6 +6,15 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The lock screen stays up on fractional-scale MangoWM, idle locking no longer panics when the fade overlay closes, Community lists the third-party plugins you already have, and Develop no longer treats marketplace installs as your work-in-progress.
+
+### Fixed
+
+- On fractional output scales (for example 1.5×), the lock screen attaches buffers at scale 1 with a viewport destination, so Wayland no longer rejects a buffer that is not divisible by an integer scale. (#205)
+- Closing the idle fade overlay before lock uses a window refresh instead of `request_animation_frame` outside paint, so automatic locking no longer panics the shell. (#205)
+- Studio → Plugins → Community shows installed third-party plugins on this system even when GitHub has nothing new to list, and reopening Community starts its search immediately.
+- Studio → Plugins → Develop's badge and Validate list only `plugins-dev` work; marketplace installs stay on Community and Installed.
+
 ## 0.35.1 — 2026-11-18
 
 The audio panel shows the Bluetooth codec, Discover shelves third-party plugins, Looks no longer leave a tall bar behind, and volume / KDE colour sync are clearer.
