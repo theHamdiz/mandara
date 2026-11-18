@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.35.1 — 2026-11-18
+
 The audio panel shows the Bluetooth codec, Discover shelves third-party plugins, Looks no longer leave a tall bar behind, and volume / KDE colour sync are clearer.
 
 ### New
