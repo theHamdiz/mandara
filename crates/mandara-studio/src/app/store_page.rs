@@ -1224,11 +1224,13 @@ impl StudioView {
         let mut chips = vec![(Filter::All, t("All").to_string(), None)];
         for (i, shelf) in SHELVES.iter().enumerate() {
             let n = all.iter().filter(|(_, m)| shelf_of(m) == Some(i)).count();
+            // Empty shelves stay off the strip so All isn't followed by a
+            // row of zeros; the Third-party shelf covers Filter::ThirdParty
+            // on Discover (Installed still uses Filter::ThirdParty itself).
+            if n == 0 {
+                continue;
+            }
             chips.push((Filter::Shelf(i), tr(shelf.title), Some(n)));
-        }
-        let third = all.iter().filter(|(_, m)| m.origin != PluginOrigin::Builtin).count();
-        if third > 0 {
-            chips.push((Filter::ThirdParty, t("Third-party").to_string(), Some(third)));
         }
         self.chip_row(chips, p, cx)
     }
