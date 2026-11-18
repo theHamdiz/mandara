@@ -207,7 +207,7 @@ impl StudioView {
                 let installed = marketplace::installed_all();
                 let flags = marketplace::flags();
                 let mut local = Some((installed, flags));
-                match marketplace::search(&query) {
+                match marketplace::search_while(&query, || !cancelled.load(Ordering::Relaxed)) {
                     Ok(mut found) => {
                         let closed = std::cell::Cell::new(false);
                         marketplace::catalog::enrich(&mut found, || !cancelled.load(Ordering::Relaxed) && !closed.get(), |found| {
@@ -215,6 +215,8 @@ impl StudioView {
                             if tx.send_blocking((Ok(previous.clone()), local.take())).is_err() { closed.set(true); }
                         });
                     }
+                    // Superseded: do not flash a cancel error on the Community tab.
+                    Err(_) if cancelled.load(Ordering::Relaxed) => {}
                     Err(error) => { let _ = tx.send_blocking((Err(error), local.take())); }
                 }
             }).await
@@ -607,6 +609,15 @@ impl StudioView {
         let cfg = mandara_ui::state::config(cx).read(cx).snapshot();
         let query_terms = store::terms(&self.store.query);
         let local: Vec<(bool, mandara_plugins::PluginManifest)> = store::community_installed(&cfg, cx).into_iter().filter(|(_, m)| store::matches(m, &query_terms)).collect();
+        // Only repos whose local card is actually drawn — a search that drops
+        // the local card must still show the matching GitHub listing.
+        let shown_repos: std::collections::HashSet<String> = local
+            .iter()
+            .filter_map(|(_, m)| {
+                let mandara_plugins::PluginOrigin::ThirdParty { path } = &m.origin else { return None };
+                self.market.installed.iter().find(|(_, (dir, _))| dir == path).map(|(repo, _)| repo.clone())
+            })
+            .collect();
         let local_cards: Vec<AnyElement> = local.iter().map(|(on, m)| self.store_card("market-local", *on, m, fit.card_w, &cfg, p, cx)).collect();
         let has_local = !local_cards.is_empty();
         let on_system = has_local.then(|| {
@@ -618,9 +629,8 @@ impl StudioView {
                 .child(fit.render(local_cards))
                 .into_any_element()
         });
-        let installed_repos: std::collections::HashSet<&str> = self.market.installed.keys().map(String::as_str).collect();
         let github_empty = match &self.market.results {
-            Some(Ok(found)) => found.items.iter().all(|l| installed_repos.contains(l.full_name.as_str())),
+            Some(Ok(found)) => found.items.iter().all(|l| shown_repos.contains(&l.full_name)),
             Some(Err(_)) => true,
             None => false,
         };
@@ -628,23 +638,32 @@ impl StudioView {
             None => div().py(px(SPACE_30_PX)).row().justify_center().text_color(p.on_surface_variant.hsla()).child(t("Searching GitHub…")).into_any_element(),
             Some(Err(e)) => div().px(px(SPACE_14_PX)).py(px(SPACE_10_PX)).rounded(px(RADIUS_12_PX)).bg(p.urgent_coral.with_alpha(ALPHA_12).hsla()).text_color(p.urgent_coral.hsla()).child(e.clone()).into_any_element(),
             Some(Ok(found)) => {
-                let items: Vec<_> = found.items.iter().filter(|l| !installed_repos.contains(l.full_name.as_str())).cloned().collect();
+                let items: Vec<_> = found.items.iter().filter(|l| !shown_repos.contains(&l.full_name)).cloned().collect();
                 if items.is_empty() {
-                    let (title, hint) = if self.market.searched.is_empty() {
-                        (t("No more community plugins on GitHub yet. Be the first to publish one."), t("A public GitHub repository tagged mandara-plugin with a release is all it takes."))
+                    if found.truncated() {
+                        let hint = t("The top GitHub results are already installed. Narrow the search to see others.");
+                        if has_local {
+                            div().text_size(px(TEXT_12_5_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(hint)).into_any_element()
+                        } else {
+                            store::empty_state("globe", t("Installed results only"), hint, p)
+                        }
                     } else {
-                        (t("No plugins found"), t("Be the first: publish yours by tagging the repository mandara-plugin (see PLUGINS.md)."))
-                    };
-                    if has_local && self.market.searched.is_empty() {
-                        div()
-                            .text_size(px(TEXT_12_5_PX))
-                            .text_color(p.on_surface_variant.hsla())
-                            .child(mandara_ui::bidi::paragraph(t("Nothing else on GitHub right now. Publish yours with the mandara-plugin topic to list it here.")))
-                            .into_any_element()
-                    } else if has_local {
-                        div().into_any_element()
-                    } else {
-                        store::empty_state("globe", title, hint, p)
+                        let (title, hint) = if self.market.searched.is_empty() {
+                            (t("No more community plugins on GitHub yet. Be the first to publish one."), t("A public GitHub repository tagged mandara-plugin with a release is all it takes."))
+                        } else {
+                            (t("No plugins found"), t("Be the first: publish yours by tagging the repository mandara-plugin (see PLUGINS.md)."))
+                        };
+                        if has_local && self.market.searched.is_empty() {
+                            div()
+                                .text_size(px(TEXT_12_5_PX))
+                                .text_color(p.on_surface_variant.hsla())
+                                .child(mandara_ui::bidi::paragraph(t("Nothing else on GitHub right now. Publish yours with the mandara-plugin topic to list it here.")))
+                                .into_any_element()
+                        } else if has_local {
+                            div().into_any_element()
+                        } else {
+                            store::empty_state("globe", title, hint, p)
+                        }
                     }
                 } else {
                     let (truncated, total) = (found.truncated(), found.total);

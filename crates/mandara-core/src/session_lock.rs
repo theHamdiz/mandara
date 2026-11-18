@@ -775,9 +775,8 @@ impl Dispatch<wl_surface::WlSurface, u32> for State {
     fn event(state: &mut Self, _: &wl_surface::WlSurface, event: wl_surface::Event, global: &u32, _: &Connection, _: &QueueHandle<Self>) {
         if let wl_surface::Event::PreferredBufferScale { factor } = event
             && let Some(s) = state.surface_mut(*global)
-            // Fractional scale + viewporter own the scale; applying the
-            // integer preference would make the next buffer non-divisible.
-            && s.fractional.is_none()
+            // Fractional mode ignores `buffer_scale` once `scale120 > 0`; until
+            // then the integer preference is the attach fallback.
             && s.buffer_scale != factor
         {
             s.buffer_scale = factor;

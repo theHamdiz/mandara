@@ -411,9 +411,24 @@ pub fn search(query: &str) -> Result<Results, String> {
     search_with_policy(query, &moderation::Remote)
 }
 
+/// Like [`search`], stopping before the next GitHub page when `keep_going`
+/// returns false (a superseded Studio search). An HTTP request already in
+/// flight is allowed to finish.
+pub fn search_while(query: &str, keep_going: impl FnMut() -> bool) -> Result<Results, String> {
+    search_with_policy_while(query, &moderation::Remote, keep_going)
+}
+
 /// Searches with a supplied policy provider, including for local fixtures.
 pub fn search_with_policy(query: &str, source: &dyn moderation::PolicySource) -> Result<Results, String> {
+    search_with_policy_while(query, source, || true)
+}
+
+/// [`search_with_policy`] that can stop between pages when `keep_going` is false.
+pub fn search_with_policy_while(query: &str, source: &dyn moderation::PolicySource, mut keep_going: impl FnMut() -> bool) -> Result<Results, String> {
     crate::offline::check()?;
+    if !keep_going() {
+        return Err(t("Search cancelled.").into());
+    }
     let policy = source.policy(false)?;
     let key = search_url(query, 1);
     if let Some((_, _, cached)) = SEARCH_CACHE.lock().iter().find(|(k, at, _)| *k == key && at.elapsed() < SEARCH_CACHE_TTL) {
@@ -421,6 +436,9 @@ pub fn search_with_policy(query: &str, source: &dyn moderation::PolicySource) ->
     }
     let mut results = Results::default();
     for page in 1..=SEARCH_MAX_PAGES {
+        if !keep_going() {
+            return Err(t("Search cancelled.").into());
+        }
         let body = get(&search_url(query, page), MAX_JSON_BYTES)?;
         let s: Search = serde_json::from_slice(&body).map_err(|e| tf("Unexpected answer from GitHub: {error}", &[("error", &e)]))?;
         results.total = s.total_count.max(results.total);

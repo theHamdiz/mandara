@@ -36,8 +36,8 @@ impl<T: Clone + PartialEq> Latest<T> {
     }
 
     /// Drops the desired input and frees the active slot so a replacement
-    /// request can [`begin`] immediately (the cancelled worker's [`finish`]
-    /// then no-ops).
+    /// request can [`begin`](Self::begin) immediately (the cancelled worker's
+    /// [`finish`](Self::finish) then no-ops).
     pub fn abort(&mut self) {
         self.desired = None;
         self.active = None;

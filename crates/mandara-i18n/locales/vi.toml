@@ -10969,3 +10969,6 @@
 "Refresh Bluetooth state without restarting the shell" = "Làm mới trạng thái Bluetooth mà không khởi động lại giao diện"
 "Bluetooth did not respond in time" = "Bluetooth không phản hồi kịp thời"
 "; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "; nếu phím tắt đó dùng wpctl với -l 1.0, phím âm lượng sẽ kẹt ở 100 % — đổi sang `mandara msg audio volume up`/`down`, hoặc gỡ để Mandara thêm của nó"
+"Installed results only" = "Chỉ kết quả đã cài"
+"The top GitHub results are already installed. Narrow the search to see others." = "Các kết quả GitHub hàng đầu đã được cài. Thu hẹp tìm kiếm để xem phần còn lại."
+"Search cancelled." = "Đã hủy tìm kiếm."

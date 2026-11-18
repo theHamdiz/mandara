@@ -3609,6 +3609,7 @@ Installed for everyone: Flatpak asks for your password
 Installed for you only: no password needed
 Installed on this system
 Installed recorders
+Installed results only
 Installed sound themes
 Installed with {manager} — update through your package manager
 Installed {fonts} into {folder} — restart the shell to use them
@@ -6818,6 +6819,7 @@ Search articles…
 Search bar width
 Search below to add a city or time zone
 Search by service or account name
+Search cancelled.
 Search cities (English or Arabic) and IANA time zones
 Search cursor themes…
 Search depth
@@ -8302,6 +8304,7 @@ The theme is too large
 The thumb stretches as it slides, boxes round into circles as they fill
 The time in other cities on the desktop, with how far ahead or behind they are
 The time range of top-rated posts and searches
+The top GitHub results are already installed. Narrow the search to see others.
 The top bar and the side bars become one frame with curved corners. The bar is drawn as the edge frame while they're joined; its own style comes back when they're separate
 The track that is playing
 The track's title beside the music icon; off shows the icon alone

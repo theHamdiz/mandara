@@ -815,11 +815,15 @@ pub(super) fn listed(cfg: &ShellConfig, cx: &App) -> Vec<(bool, PluginManifest)>
     all
 }
 
-/// Whether a third-party plugin lives under `plugins-dev` (Develop), not the
-/// installed / system folders Community and Discover share.
+/// Whether a third-party plugin is a Develop copy (`$XDG_DATA_HOME/mandara/plugins-dev/<id>`).
+/// Compared against the configured development root, not a path-component
+/// substring (an installed folder named `plugins-dev` stays Installed).
 pub(super) fn development_plugin(m: &PluginManifest) -> bool {
     match &m.origin {
-        PluginOrigin::ThirdParty { path } => path.components().any(|c| c.as_os_str() == "plugins-dev"),
+        PluginOrigin::ThirdParty { path } => {
+            let dev = mandara_config::paths::data_dir().join("plugins-dev");
+            path.parent().is_some_and(|parent| parent == dev)
+        }
         PluginOrigin::Builtin => false,
     }
 }
@@ -2134,17 +2138,25 @@ mod tests {
 
     #[test]
     fn community_lists_installed_third_party_but_not_plugins_dev() {
+        let data = mandara_config::paths::data_dir();
         let installed = PluginManifest {
-            origin: PluginOrigin::ThirdParty { path: "/home/u/.local/share/mandara/plugins/gif-picker".into() },
+            origin: PluginOrigin::ThirdParty { path: data.join("plugins/gif-picker") },
             ..PluginManifest::builtin("gif-picker", "GIF Picker", "", None)
         };
         let develop = PluginManifest {
-            origin: PluginOrigin::ThirdParty { path: "/home/u/.local/share/mandara/plugins-dev/moon-phase".into() },
+            origin: PluginOrigin::ThirdParty { path: data.join("plugins-dev/moon-phase") },
             ..PluginManifest::builtin("moon-phase", "Moon Phase", "", None)
+        };
+        // An installed folder whose path happens to contain `plugins-dev` as a
+        // nested name is still Installed, not Develop.
+        let nested_name = PluginManifest {
+            origin: PluginOrigin::ThirdParty { path: data.join("plugins/plugins-dev") },
+            ..PluginManifest::builtin("nested", "Nested", "", None)
         };
         let builtin = PluginManifest::builtin("clock", "Clock", "", None);
         assert!(!development_plugin(&installed));
         assert!(development_plugin(&develop));
+        assert!(!development_plugin(&nested_name));
         assert!(!development_plugin(&builtin));
         assert!(installed.origin != PluginOrigin::Builtin && !development_plugin(&installed));
         assert!(!(develop.origin != PluginOrigin::Builtin && !development_plugin(&develop)), "Develop copies stay off Community's On this system shelf");

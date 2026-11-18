@@ -10968,3 +10968,6 @@
 "Refresh Bluetooth state without restarting the shell" = "Atualizar o estado do Bluetooth sem reiniciar a interface"
 "Bluetooth did not respond in time" = "O Bluetooth não respondeu a tempo"
 "; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "; se esse atalho usa wpctl com -l 1.0, as teclas de volume ficam em 100 % — mude para `mandara msg audio volume up`/`down`, ou remova para o Mandara adicionar o dele"
+"Installed results only" = "Só resultados instalados"
+"The top GitHub results are already installed. Narrow the search to see others." = "Os principais resultados do GitHub já estão instalados. Restrinja a pesquisa para ver outros."
+"Search cancelled." = "Pesquisa cancelada."

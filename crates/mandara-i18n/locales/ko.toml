@@ -11068,3 +11068,6 @@
 "Refresh Bluetooth state without restarting the shell" = "셸을 다시 시작하지 않고 Bluetooth 상태 새로 고침"
 "Bluetooth did not respond in time" = "Bluetooth가 제시간에 응답하지 않았습니다"
 "; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "; 그 바인딩이 wpctl -l 1.0을 쓰면 볼륨 키가 100 %에 머무릅니다 — `mandara msg audio volume up`/`down`으로 바꾸거나 제거해 Mandara가 추가하게 하세요"
+"Installed results only" = "설치된 결과만"
+"The top GitHub results are already installed. Narrow the search to see others." = "상위 GitHub 결과는 이미 설치되어 있습니다. 검색을 좁혀 나머지를 보세요."
+"Search cancelled." = "검색이 취소되었습니다."

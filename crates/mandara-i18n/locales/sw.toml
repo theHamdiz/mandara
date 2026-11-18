@@ -10969,3 +10969,6 @@
 "Refresh Bluetooth state without restarting the shell" = "Sasisha hali ya Bluetooth bila kuanzisha upya shell"
 "Bluetooth did not respond in time" = "Bluetooth haikujibu kwa wakati"
 "; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "; ikiwa funguo hiyo inatumia wpctl na -l 1.0, funguo za sauti zinabaki 100 % — ibadilishe kuwa `mandara msg audio volume up`/`down`, au iondoe ili Mandara iongeze yake"
+"Installed results only" = "Matokeo yaliyosakinishwa tu"
+"The top GitHub results are already installed. Narrow the search to see others." = "Matokeo ya juu ya GitHub yamesakinishwa tayari. Punguza utafutaji ili kuona mengine."
+"Search cancelled." = "Utafutaji umeghairiwa."
