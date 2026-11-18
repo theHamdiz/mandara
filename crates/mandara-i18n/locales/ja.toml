@@ -3835,7 +3835,7 @@
 "Unterminated single quote" = "閉じられていないシングルクォート"
 "Until" = "終了"
 "Until the schedule next changes" = "次にスケジュールが切り替わるまで"
-"Up to 150 %; can distort" = "最大 150 %。音が歪む場合があります"
+"Up to 150 % via Mandara's volume keys (can distort). If keys stay at 100 %, check your compositor's volume binds — stock ones often use wpctl -l 1.0." = "Mandara の音量キーで最大 150 %（音が歪む場合があります）。100 % で止まる場合はコンポジタの音量バインドを確認してください。標準では wpctl -l 1.0 が多いです。"
 "Upcoming" = "今後の予定"
 "Upcoming calendar events as JSON" = "今後のカレンダーの予定（JSON）"
 "Upcoming days listed under the month" = "月の下に表示する今後の日数"
@@ -11306,3 +11306,4 @@
 "Choose a display from the live wallpaper status." = "ライブ壁紙の状態からディスプレイを選択してください。"
 "Refresh Bluetooth state without restarting the shell" = "シェルを再起動せずにBluetoothの状態を更新"
 "Bluetooth did not respond in time" = "Bluetoothが時間内に応答しませんでした"
+"; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "; そのバインドが wpctl -l 1.0 を使う場合、音量キーは 100 % のままです — `mandara msg audio volume up`/`down` に変更するか、削除して Mandara に任せます"

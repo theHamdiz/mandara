@@ -3810,7 +3810,7 @@
 "Unterminated single quote" = "Kapatılmamış tek tırnak"
 "Until" = "Bitiş"
 "Until the schedule next changes" = "Program bir sonraki değişene kadar"
-"Up to 150 %; can distort" = "%150'ye kadar; bozulma yapabilir"
+"Up to 150 % via Mandara's volume keys (can distort). If keys stay at 100 %, check your compositor's volume binds — stock ones often use wpctl -l 1.0." = "Mandara ses tuşlarıyla %150'ye kadar (bozulma yapabilir). %100'de kalıyorsa compositor ses bağlarını kontrol edin — stok bağlar çoğu zaman wpctl -l 1.0 kullanır."
 "Upcoming" = "Yaklaşanlar"
 "Upcoming calendar events as JSON" = "JSON olarak yaklaşan takvim etkinlikleri"
 "Upcoming days listed under the month" = "Ayın altında listelenen gelecek günler"
@@ -11304,3 +11304,4 @@
 "Choose a display from the live wallpaper status." = "Canlı duvar kâğıdı durumundan bir ekran seçin."
 "Refresh Bluetooth state without restarting the shell" = "Kabuğu yeniden başlatmadan Bluetooth durumunu yenile"
 "Bluetooth did not respond in time" = "Bluetooth zamanında yanıt vermedi"
+"; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "; o bağ wpctl -l 1.0 kullanıyorsa ses tuşları %100'de kalır — `mandara msg audio volume up`/`down` olarak değiştirin veya kaldırın ki Mandara kendi bağını eklesin"

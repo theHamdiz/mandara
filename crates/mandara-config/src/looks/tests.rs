@@ -421,6 +421,15 @@ fn the_new_looks_set_what_they_promise() {
     assert!(on(&m, DOCK_ID) && m.dock.magnification);
     assert_eq!(m.launcher.look.style, crate::workflow::LauncherStyle::Beacon);
     assert!(!on(&m, crate::bar_styles::TASKBAR), "Redmond's taskbar went with it");
+    // A tall bar style must not leave its height on a plain look that does
+    // not name one (otherwise Corniche after Expressive keeps a 56 px bar).
+    let mut from_expressive = ShellConfig::default();
+    crate::bar_styles::BarStyle::Expressive.apply_look(&mut from_expressive);
+    let tall_h = from_expressive.bar.height;
+    assert!(tall_h > crate::defaults::BAR_HEIGHT_PX, "precondition: expressive is taller than the default");
+    let plain = find("corniche-dusk").unwrap().apply(&from_expressive, LookOptions::default());
+    assert_eq!(plain.bar.height, crate::defaults::BAR_HEIGHT_PX, "plain look after a tall style uses the default height, not {tall_h}");
+    assert!(plain.bar.style.is_none());
     // Redmond switches a dock you have on off, and gives it back after.
     let mut docked = ShellConfig::default();
     docked.plugins.enabled.push(DOCK_ID.into());

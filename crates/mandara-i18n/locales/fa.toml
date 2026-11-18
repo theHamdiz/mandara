@@ -5718,7 +5718,7 @@
 "Until the schedule next changes" = "تا تغییر بعدی زمان‌بندی"
 "Untitled note" = "یادداشت بی‌عنوان"
 "Up" = "در دسترس"
-"Up to 150 %; can distort" = "تا 150 %؛ ممکن است صدا را مخدوش کند"
+"Up to 150 % via Mandara's volume keys (can distort). If keys stay at 100 %, check your compositor's volume binds — stock ones often use wpctl -l 1.0." = "تا 150 % با کلیدهای صدای ماندارا (ممکن است صدا را مخدوش کند). اگر روی 100 % می‌ماند، میان‌برهای صدای کامپوزیتور را بررسی کنید — پیش‌فرض‌ها اغلب wpctl -l 1.0 هستند."
 "Up to date" = "به‌روز است"
 "Up {time}" = "روشن به مدت {time}"
 "Upcoming" = "پیش رو"
@@ -11063,3 +11063,4 @@
 "Choose a display from the live wallpaper status." = "یک نمایشگر از وضعیت پس‌زمینهٔ زنده انتخاب کنید."
 "Refresh Bluetooth state without restarting the shell" = "تازه‌سازی وضعیت بلوتوث بدون راه‌اندازی دوبارهٔ پوسته"
 "Bluetooth did not respond in time" = "بلوتوث به‌موقع پاسخ نداد"
+"; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "؛ اگر آن میان‌بر از wpctl با -l 1.0 استفاده می‌کند، کلیدهای صدا روی 100٪ می‌مانند — آن را به `mandara msg audio volume up`/`down` تغییر دهید یا حذف کنید تا ماندارا خودش را اضافه کند"

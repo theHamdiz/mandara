@@ -338,6 +338,15 @@ mod tests {
         assert_eq!(ini_set("[Icons]\nTheme=P\nOther=1\n", "Icons", "Theme", None), "[Icons]\nOther=1\n");
         // Commented-out keys stay comments.
         assert_eq!(ini_set("[Icons]\n#Theme=x\n", "Icons", "Theme", Some("P")), "[Icons]\n#Theme=x\nTheme=P\n");
+        // Plasma nests inactive header colours as `[Colors:Header][Inactive]`.
+        let plasma = "[Colors:Header]\nForegroundNormal=1,1,1\n\n[Colors:Header][Inactive]\nForegroundNormal=0,0,0\n";
+        assert_eq!(
+            ini_get(plasma, "Colors:Header][Inactive", "ForegroundNormal").as_deref(),
+            Some("0,0,0")
+        );
+        let next = ini_set(plasma, "Colors:Header][Inactive", "ForegroundNormal", Some("9,9,9"));
+        assert!(next.contains("[Colors:Header][Inactive]\nForegroundNormal=9,9,9\n"));
+        assert_eq!(ini_get(&next, "Colors:Header", "ForegroundNormal").as_deref(), Some("1,1,1"));
     }
 
     #[test]

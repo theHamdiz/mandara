@@ -3810,7 +3810,7 @@
 "Unterminated single quote" = "Guillemet simple non fermé"
 "Until" = "Jusqu'à"
 "Until the schedule next changes" = "Jusqu'au prochain changement de programmation"
-"Up to 150 %; can distort" = "Jusqu'à 150 % ; peut distordre le son"
+"Up to 150 % via Mandara's volume keys (can distort). If keys stay at 100 %, check your compositor's volume binds — stock ones often use wpctl -l 1.0." = "Jusqu’à 150 % via les touches volume de Mandara (peut distordre). Si elles restent à 100 %, vérifiez les raccourcis volume du compositeur — ceux d’origine utilisent souvent wpctl -l 1.0."
 "Upcoming" = "À venir"
 "Upcoming calendar events as JSON" = "Événements de calendrier à venir en JSON"
 "Upcoming days listed under the month" = "Jours à venir listés sous le mois"
@@ -11305,3 +11305,4 @@
 "Choose a display from the live wallpaper status." = "Choisissez un écran dans l’état du fond d’écran animé."
 "Refresh Bluetooth state without restarting the shell" = "Actualiser l’état du Bluetooth sans redémarrer l’interface"
 "Bluetooth did not respond in time" = "Le Bluetooth n’a pas répondu à temps"
+"; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "; si ce raccourci utilise wpctl avec -l 1.0, les touches volume restent à 100 % — remplacez-le par `mandara msg audio volume up`/`down`, ou retirez-le pour que Mandara ajoute le sien"

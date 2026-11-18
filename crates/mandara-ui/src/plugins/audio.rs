@@ -89,6 +89,16 @@ const KIND_TEXT_PX: f32 = 10.5;
 const DEVICE_TEXT_PX: f32 = text::BODY_S + 0.5;
 const VOLUME_TEXT_PX: f32 = 22.0;
 const HEAD_GAP_PX: f32 = 10.0;
+/// Gap between the device name and an optional Bluetooth codec chip.
+const CODEC_GAP_PX: f32 = 6.0;
+/// Codec chip height: sits beside the device name without growing the head.
+const CODEC_BADGE_H_PX: f32 = 16.0;
+/// Horizontal padding inside the codec chip.
+const CODEC_BADGE_PAD_X_PX: f32 = 5.0;
+/// Codec chip label size: a step under the kind label so it stays secondary.
+const CODEC_BADGE_TEXT_PX: f32 = 9.5;
+/// Codec chip wash: quiet enough to read as chrome, not a second accent.
+const CODEC_BADGE_FILL_ALPHA: f32 = 0.14;
 
 // Bar item and sidebar card.
 const BAR_ICON_PX: f32 = 15.0;
@@ -219,6 +229,24 @@ fn shown_volume(key: &'static str, ch: &Channel, lim: f32) -> f32 {
     crate::slider_model::held(&key.into()).map_or(ch.volume, |frac| frac * lim)
 }
 
+/// A small muted chip naming the codec a Bluetooth endpoint negotiated
+/// ("AAC", "SBC" …); absent on wired devices.
+fn codec_badge(codec: &str, palette: &MandaraPalette) -> AnyElement {
+    div()
+        .flex_none()
+        .h(px(CODEC_BADGE_H_PX))
+        .px(px(CODEC_BADGE_PAD_X_PX))
+        .rounded_full()
+        .bg(palette.on_surface_variant.with_alpha(CODEC_BADGE_FILL_ALPHA).hsla())
+        .flex()
+        .items_center()
+        .text_size(px(CODEC_BADGE_TEXT_PX))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(palette.on_surface_variant.hsla())
+        .child(SharedString::from(codec))
+        .into_any_element()
+}
+
 /// Label row of a channel card: kind, device name, big percentage, mute.
 #[allow(clippy::too_many_arguments)]
 fn channel_head(
@@ -244,7 +272,15 @@ fn channel_head(
                 .flex()
                 .flex_col()
                 .child(div().text_size(px(KIND_TEXT_PX)).font_weight(FontWeight::BOLD).text_color(accent.hsla()).child(kind))
-                .child(div().text_size(px(DEVICE_TEXT_PX)).font_weight(FontWeight::MEDIUM).truncate().child(name)),
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(CODEC_GAP_PX))
+                        .min_w(px(0.0))
+                        .child(div().text_size(px(DEVICE_TEXT_PX)).font_weight(FontWeight::MEDIUM).truncate().child(name))
+                        .when_some(ch.codec.as_deref(), |row, codec| row.child(codec_badge(codec, palette))),
+                ),
         )
         .child(
             div()

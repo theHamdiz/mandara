@@ -314,6 +314,9 @@ pub fn kde(p: &MandaraPalette) -> String {
         ("Colors:Tooltip", p.surface_container_high, p.surface_container, p.on_surface),
         ("Colors:Complementary", p.surface_dim, p.surface_container_low, p.on_surface),
         ("Colors:Header", p.surface_container, p.surface_container_low, p.on_surface),
+        // Plasma 6 toolbars read the inactive header group; without it they
+        // fall back to a light scheme's black text on Mandara's dark header.
+        ("Colors:Header][Inactive", p.surface_container_low, p.surface_base, p.on_surface),
     ];
     let mut s = header(p, "#");
     for (name, bg, alt, fg) in sections {
@@ -415,10 +418,25 @@ mod tests {
     fn kde_scheme_has_every_section() {
         let p = crate::engine::default_palette(true);
         let k = kde(&p);
-        for section in ["[Colors:Window]", "[Colors:View]", "[Colors:Button]", "[Colors:Selection]", "[General]", "[WM]"] {
+        for section in [
+            "[Colors:Window]",
+            "[Colors:View]",
+            "[Colors:Button]",
+            "[Colors:Selection]",
+            "[Colors:Header]",
+            "[Colors:Header][Inactive]",
+            "[General]",
+            "[WM]",
+        ] {
             assert!(k.contains(section), "{section}");
         }
         let [r, g, b, _] = p.primary.to_rgba8();
         assert!(k.contains(&format!("BackgroundNormal={r},{g},{b}")), "selection background is the accent");
+        let [fr, fg, fb, _] = p.on_surface.to_rgba8();
+        assert!(
+            k.contains("[Colors:Header][Inactive]\nBackgroundNormal=")
+                && k.contains(&format!("ForegroundNormal={fr},{fg},{fb}")),
+            "inactive header keeps readable on-surface text"
+        );
     }
 }

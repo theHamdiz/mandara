@@ -3808,7 +3808,7 @@
 "Unterminated single quote" = "Незакрытая одинарная кавычка"
 "Until" = "До"
 "Until the schedule next changes" = "До следующего изменения по расписанию"
-"Up to 150 %; can distort" = "До 150 %; возможны искажения"
+"Up to 150 % via Mandara's volume keys (can distort). If keys stay at 100 %, check your compositor's volume binds — stock ones often use wpctl -l 1.0." = "До 150 % клавишами громкости Mandara (возможны искажения). Если остаются на 100 %, проверьте привязки громкости композитора — стандартные часто используют wpctl -l 1.0."
 "Upcoming" = "Предстоящие"
 "Upcoming calendar events as JSON" = "Предстоящие события календаря в формате JSON"
 "Upcoming days listed under the month" = "Предстоящие дни под календарём месяца"
@@ -11304,3 +11304,4 @@
 "Choose a display from the live wallpaper status." = "Выберите экран из состояния живых обоев."
 "Refresh Bluetooth state without restarting the shell" = "Обновить состояние Bluetooth без перезапуска оболочки"
 "Bluetooth did not respond in time" = "Bluetooth не ответил вовремя"
+"; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "; если эта привязка использует wpctl с -l 1.0, клавиши громкости остаются на 100 % — замените на `mandara msg audio volume up`/`down` или удалите, чтобы Mandara добавила свою"
