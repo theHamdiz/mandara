@@ -661,10 +661,9 @@ pub(super) fn origin_badge(m: &PluginManifest, p: &MandaraPalette) -> (&'static 
     match &m.origin {
         PluginOrigin::Builtin => (t("Mandara"), p.primary),
         PluginOrigin::ThirdParty { path } => {
-            let s = path.to_string_lossy();
-            if s.contains("plugins-dev") {
+            if development_plugin(m) {
                 (t("Development"), p.tertiary)
-            } else if s.starts_with("/usr") {
+            } else if path.starts_with("/usr") {
                 (t("System"), p.on_surface_variant)
             } else {
                 (t("Third-party"), p.secondary)
@@ -674,7 +673,7 @@ pub(super) fn origin_badge(m: &PluginManifest, p: &MandaraPalette) -> (&'static 
 }
 
 /// A store section heading: title, one line and an optional "See all".
-fn shelf_head(title: SharedString, line: SharedString, see_all: Option<Stateful<Div>>, p: &MandaraPalette) -> Div {
+pub(super) fn shelf_head(title: SharedString, line: SharedString, see_all: Option<Stateful<Div>>, p: &MandaraPalette) -> Div {
     div()
         .row()
         .items_end()
@@ -809,11 +808,26 @@ pub struct Store {
 }
 
 /// The plugins a store view lists: (enabled, manifest), by name.
-fn listed(cfg: &ShellConfig, cx: &App) -> Vec<(bool, PluginManifest)> {
+pub(super) fn listed(cfg: &ShellConfig, cx: &App) -> Vec<(bool, PluginManifest)> {
     let registry = cx.global::<PluginRegistry>();
     let mut all: Vec<(bool, PluginManifest)> = registry.manifests().filter(|m| !HIDDEN_PLUGINS.contains(&m.id.as_str())).map(|m| (registry.is_enabled(&m.id, &cfg.plugins), m.clone())).collect();
     all.sort_by_cached_key(|(_, m)| m.display_name().to_lowercase());
     all
+}
+
+/// Whether a third-party plugin lives under `plugins-dev` (Develop), not the
+/// installed / system folders Community and Discover share.
+pub(super) fn development_plugin(m: &PluginManifest) -> bool {
+    match &m.origin {
+        PluginOrigin::ThirdParty { path } => path.components().any(|c| c.as_os_str() == "plugins-dev"),
+        PluginOrigin::Builtin => false,
+    }
+}
+
+/// Installed community plugins on this system (marketplace / hand-copied /
+/// distribution), excluding Develop's `plugins-dev` copies.
+pub(super) fn community_installed(cfg: &ShellConfig, cx: &App) -> Vec<(bool, PluginManifest)> {
+    listed(cfg, cx).into_iter().filter(|(_, m)| m.origin != PluginOrigin::Builtin && !development_plugin(m)).collect()
 }
 
 /// The Discover shelf a plugin sits on (built-ins by category; third-party
@@ -824,12 +838,12 @@ fn shelf_of(m: &PluginManifest) -> Option<usize> {
 }
 
 /// Lowercased search terms.
-fn terms(query: &str) -> Vec<String> {
+pub(super) fn terms(query: &str) -> Vec<String> {
     query.split_whitespace().map(str::to_lowercase).collect()
 }
 
 /// Whether every term appears in the plugin's name, pitch, id or category.
-fn matches(m: &PluginManifest, terms: &[String]) -> bool {
+pub(super) fn matches(m: &PluginManifest, terms: &[String]) -> bool {
     if terms.is_empty() {
         return true;
     }
@@ -2116,6 +2130,24 @@ mod tests {
         let third = PluginManifest { origin: PluginOrigin::ThirdParty { path: "/tmp/p".into() }, ..PluginManifest::builtin("demo", "Demo", "", None) };
         let shelf = shelf_of(&third).expect("third-party plugins have a Discover shelf");
         assert_eq!(SHELVES[shelf].key, "third-party");
+    }
+
+    #[test]
+    fn community_lists_installed_third_party_but_not_plugins_dev() {
+        let installed = PluginManifest {
+            origin: PluginOrigin::ThirdParty { path: "/home/u/.local/share/mandara/plugins/gif-picker".into() },
+            ..PluginManifest::builtin("gif-picker", "GIF Picker", "", None)
+        };
+        let develop = PluginManifest {
+            origin: PluginOrigin::ThirdParty { path: "/home/u/.local/share/mandara/plugins-dev/moon-phase".into() },
+            ..PluginManifest::builtin("moon-phase", "Moon Phase", "", None)
+        };
+        let builtin = PluginManifest::builtin("clock", "Clock", "", None);
+        assert!(!development_plugin(&installed));
+        assert!(development_plugin(&develop));
+        assert!(!development_plugin(&builtin));
+        assert!(installed.origin != PluginOrigin::Builtin && !development_plugin(&installed));
+        assert!(!(develop.origin != PluginOrigin::Builtin && !development_plugin(&develop)), "Develop copies stay off Community's On this system shelf");
     }
 
     #[test]

@@ -104,7 +104,9 @@ impl Market {
     }
     fn cancel(&mut self) {
         if let Some(cancelled) = self.cancelled.take() { cancelled.store(true, Ordering::Relaxed); }
-        self.requests.set(None);
+        // Free the active slot: `set(None)` alone left `active` set, so the
+        // next search waited on the cancelled worker before it could begin.
+        self.requests.abort();
         self.search_task = None;
     }
 
@@ -572,9 +574,13 @@ impl StudioView {
             .into_any_element()
     }
 
-    /// Community: the GitHub marketplace, searched with the store search.
+    /// Community: installed third-party plugins on this system, then the
+    /// GitHub marketplace searched with the store query. Installed plugins
+    /// stay visible even when their repository is gone from GitHub search
+    /// (Discover's Third-party shelf already lists them; Community must too).
     pub(super) fn marketplace(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> AnyElement {
         self.market_prime(cx);
+        self.market_local_prime(cx);
         let hero = div()
             .relative()
             .rounded(px(RADIUS_20_PX))
@@ -598,34 +604,63 @@ impl StudioView {
             .child(store::pill("mk-publish", Some("terminal"), t("How to publish a plugin"), Tone::Glass, ButtonSize::Small, p).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.show_plugins_tab(PluginsTab::Local, Some(LocalSection::QuickStart), cx))))
             .child(store::rim_overlay(RADIUS_20_PX, p));
         let fit = super::grid::fit(self.page.column_w, STORE_CARD_GRID);
-        let body: AnyElement = match &self.market.results {
-            None => div().py(px(SPACE_30_PX)).row().justify_center().text_color(p.on_surface_variant.hsla()).child(t("Searching GitHub…")).into_any_element(),
-            Some(Err(e)) => div().px(px(SPACE_14_PX)).py(px(SPACE_10_PX)).rounded(px(RADIUS_12_PX)).bg(p.urgent_coral.with_alpha(ALPHA_12).hsla()).text_color(p.urgent_coral.hsla()).child(e.clone()).into_any_element(),
-            Some(Ok(found)) if found.items.is_empty() => {
-                let (title, hint) = if self.market.searched.is_empty() {
-                    (t("No community plugins yet. Be the first to publish one."), t("A public GitHub repository tagged mandara-plugin with a release is all it takes."))
-                } else {
-                    (t("No plugins found"), t("Be the first: publish yours by tagging the repository mandara-plugin (see PLUGINS.md)."))
-                };
-                store::empty_state("globe", title, hint, p)
-            }
-            Some(Ok(found)) => {
-                let (items, truncated, total) = (found.items.clone(), found.truncated(), found.total);
-                let cards: Vec<AnyElement> = items.iter().map(|l| self.listing_card("market", l, fit.card_w, p, cx)).collect();
-                let more = truncated.then(|| {
-                    div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tf("Showing the {shown} most-starred of {total} plugins. Search to narrow it down.", &[("shown", &items.len()), ("total", &total)])))
-                });
-                div().row().flex_col().gap(px(SPACE_12_PX)).child(fit.render(cards)).children(more).into_any_element()
-            }
-        };
-        let message = self.market.message.clone().map(|(ok, m)| super::form::note(&m, !ok, p));
-        let nothing = match &self.market.results {
-            Some(Ok(found)) => found.items.is_empty(),
+        let cfg = mandara_ui::state::config(cx).read(cx).snapshot();
+        let query_terms = store::terms(&self.store.query);
+        let local: Vec<(bool, mandara_plugins::PluginManifest)> = store::community_installed(&cfg, cx).into_iter().filter(|(_, m)| store::matches(m, &query_terms)).collect();
+        let local_cards: Vec<AnyElement> = local.iter().map(|(on, m)| self.store_card("market-local", *on, m, fit.card_w, &cfg, p, cx)).collect();
+        let has_local = !local_cards.is_empty();
+        let on_system = has_local.then(|| {
+            div()
+                .row()
+                .flex_col()
+                .gap(px(SPACE_14_PX))
+                .child(store::shelf_head(t("On this system").into(), t("Third-party plugins already installed from the marketplace or your plugin folders").into(), None, p))
+                .child(fit.render(local_cards))
+                .into_any_element()
+        });
+        let installed_repos: std::collections::HashSet<&str> = self.market.installed.keys().map(String::as_str).collect();
+        let github_empty = match &self.market.results {
+            Some(Ok(found)) => found.items.iter().all(|l| installed_repos.contains(l.full_name.as_str())),
             Some(Err(_)) => true,
             None => false,
         };
+        let body: AnyElement = match &self.market.results {
+            None => div().py(px(SPACE_30_PX)).row().justify_center().text_color(p.on_surface_variant.hsla()).child(t("Searching GitHub…")).into_any_element(),
+            Some(Err(e)) => div().px(px(SPACE_14_PX)).py(px(SPACE_10_PX)).rounded(px(RADIUS_12_PX)).bg(p.urgent_coral.with_alpha(ALPHA_12).hsla()).text_color(p.urgent_coral.hsla()).child(e.clone()).into_any_element(),
+            Some(Ok(found)) => {
+                let items: Vec<_> = found.items.iter().filter(|l| !installed_repos.contains(l.full_name.as_str())).cloned().collect();
+                if items.is_empty() {
+                    let (title, hint) = if self.market.searched.is_empty() {
+                        (t("No more community plugins on GitHub yet. Be the first to publish one."), t("A public GitHub repository tagged mandara-plugin with a release is all it takes."))
+                    } else {
+                        (t("No plugins found"), t("Be the first: publish yours by tagging the repository mandara-plugin (see PLUGINS.md)."))
+                    };
+                    if has_local && self.market.searched.is_empty() {
+                        div()
+                            .text_size(px(TEXT_12_5_PX))
+                            .text_color(p.on_surface_variant.hsla())
+                            .child(mandara_ui::bidi::paragraph(t("Nothing else on GitHub right now. Publish yours with the mandara-plugin topic to list it here.")))
+                            .into_any_element()
+                    } else if has_local {
+                        div().into_any_element()
+                    } else {
+                        store::empty_state("globe", title, hint, p)
+                    }
+                } else {
+                    let (truncated, total) = (found.truncated(), found.total);
+                    let cards: Vec<AnyElement> = items.iter().map(|l| self.listing_card("market", l, fit.card_w, p, cx)).collect();
+                    let heading = has_local.then(|| div().text_size(px(TEXT_14_PX)).font_weight(FontWeight::SEMIBOLD).child(t("From GitHub")));
+                    let more = truncated.then(|| {
+                        div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(mandara_ui::bidi::paragraph(tf("Showing the {shown} most-starred of {total} plugins. Search to narrow it down.", &[("shown", &items.len()), ("total", &total)])))
+                    });
+                    div().row().flex_col().gap(px(SPACE_12_PX)).children(heading).child(fit.render(cards)).children(more).into_any_element()
+                }
+            }
+        };
+        let message = self.market.message.clone().map(|(ok, m)| super::form::note(&m, !ok, p));
+        let nothing = github_empty && !has_local;
         let suggestions = nothing.then(|| self.mandara_suggestions(p, cx));
-        div().row().flex_col().gap(px(SPACE_18_PX)).child(hero).children(message).child(body).children(suggestions).into_any_element()
+        div().row().flex_col().gap(px(SPACE_18_PX)).child(hero).children(message).children(on_system).child(body).children(suggestions).into_any_element()
     }
 }
 
@@ -678,6 +713,16 @@ mod tests {
         assert!(!market.primed);
         assert!(Arc::ptr_eq(market.results.as_ref().unwrap().as_ref().unwrap(), &catalog));
         assert!(!market.requests.finish(old));
+    }
+
+    #[test]
+    fn reopening_lets_the_next_marketplace_search_begin_immediately() {
+        let mut market = Market::default();
+        market.requests.set(Some(String::new()));
+        let _in_flight = market.requests.begin().unwrap();
+        market.reopen();
+        market.requests.set(Some(String::new()));
+        assert!(market.requests.begin().is_some(), "abort must free the slot so Community can search without waiting on the cancelled worker");
     }
 
     #[test]

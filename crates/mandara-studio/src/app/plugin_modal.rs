@@ -451,10 +451,9 @@ fn origin(m: &PluginManifest, p: &MandaraPalette) -> (&'static str, Color) {
     match &m.origin {
         PluginOrigin::Builtin => (tk("Built-in"), p.on_surface_variant),
         PluginOrigin::ThirdParty { path } => {
-            let s = path.to_string_lossy();
-            if s.contains("plugins-dev") {
+            if path.components().any(|c| c.as_os_str() == "plugins-dev") {
                 (tk("Development"), p.tertiary)
-            } else if !s.starts_with(&*mandara_config::paths::data_dir().to_string_lossy()) {
+            } else if !path.starts_with(mandara_config::paths::data_dir()) {
                 (tk("System"), p.secondary)
             } else if path.join(".source").is_file() {
                 (tk("Marketplace"), p.primary)

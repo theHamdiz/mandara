@@ -231,16 +231,15 @@ struct LockSurface {
 
 impl LockSurface {
     fn physical_size(&self) -> (u32, u32, f32) {
-        if self.viewport.is_some() && self.scale120 > 0 {
-            let s = self.scale120 as f32 / FRACTIONAL_SCALE_DENOMINATOR as f32;
-            // Round to nearest: add half the denominator before dividing.
-            let w = ((self.width * self.scale120 + FRACTIONAL_SCALE_DENOMINATOR / 2) / FRACTIONAL_SCALE_DENOMINATOR).max(1);
-            let h = ((self.height * self.scale120 + FRACTIONAL_SCALE_DENOMINATOR / 2) / FRACTIONAL_SCALE_DENOMINATOR).max(1);
-            (w, h, s)
-        } else {
-            let s = self.buffer_scale.max(1) as u32;
-            (self.width * s, self.height * s, s as f32)
-        }
+        physical_size_of(self.width, self.height, self.viewport.is_some(), self.scale120, self.buffer_scale)
+    }
+
+    fn uses_fractional_scale(&self) -> bool {
+        uses_fractional_scale(self.viewport.is_some(), self.scale120)
+    }
+
+    fn attach_buffer_scale(&self) -> i32 {
+        attach_buffer_scale(self.viewport.is_some(), self.scale120, self.buffer_scale)
     }
 
     fn destroy(self) {
@@ -414,6 +413,29 @@ impl State {
 
 /// `wp_fractional_scale_v1` reports scales as multiples of 1/120.
 const FRACTIONAL_SCALE_DENOMINATOR: u32 = 120;
+
+/// Whether the surface paints through fractional scale + viewporter.
+fn uses_fractional_scale(has_viewport: bool, scale120: u32) -> bool {
+    has_viewport && scale120 > 0
+}
+
+/// Integer buffer scale for the next attach. Fractional mode is always 1.
+fn attach_buffer_scale(has_viewport: bool, scale120: u32, buffer_scale: i32) -> i32 {
+    if uses_fractional_scale(has_viewport, scale120) { 1 } else { buffer_scale.max(1) }
+}
+
+/// Physical pixel size for a logical surface at the given scale path.
+fn physical_size_of(width: u32, height: u32, has_viewport: bool, scale120: u32, buffer_scale: i32) -> (u32, u32, f32) {
+    if uses_fractional_scale(has_viewport, scale120) {
+        let s = scale120 as f32 / FRACTIONAL_SCALE_DENOMINATOR as f32;
+        let w = ((width * scale120 + FRACTIONAL_SCALE_DENOMINATOR / 2) / FRACTIONAL_SCALE_DENOMINATOR).max(1);
+        let h = ((height * scale120 + FRACTIONAL_SCALE_DENOMINATOR / 2) / FRACTIONAL_SCALE_DENOMINATOR).max(1);
+        (w, h, s)
+    } else {
+        let s = buffer_scale.max(1) as u32;
+        (width * s, height * s, s as f32)
+    }
+}
 /// xkb keycodes are evdev codes + 8 (X11 legacy offset).
 const EVDEV_XKB_OFFSET: u32 = 8;
 /// Shm buffers per lock surface (triple buffering while the compositor
@@ -616,18 +638,23 @@ pub fn run(mode: LockMode, app: &mut dyn LockApp) -> Result<LockOutcome> {
                 }
                 None => continue,
             };
+            // Capture scale/destination before the scratch/buffer borrows.
+            let attach_scale = s.attach_buffer_scale();
+            let dest = s.uses_fractional_scale().then_some((s.width as i32, s.height as i32));
+            let info = SurfaceInfo { output: name, width: s.width, height: s.height, scale, focused };
             let scratch = match &mut s.scratch {
                 Some(p) if p.width() == pw && p.height() == ph => p,
                 slot => slot.insert(tiny_skia::Pixmap::new(pw, ph).context("allocating lock surface pixmap")?),
             };
-            let info = SurfaceInfo { output: name, width: s.width, height: s.height, scale, focused };
             app.draw(&info, &mut scratch.as_mut(), now);
             let buf = &mut s.buffers[slot];
             copy_pixels(scratch.data(), &mut buf.map, abgr);
             buf.busy.store(true, Ordering::Release);
-            match (&s.viewport, s.scale120) {
-                (Some(vp), sc) if sc > 0 => vp.set_destination(s.width as i32, s.height as i32),
-                _ => s.surface.set_buffer_scale(s.buffer_scale.max(1)),
+            // Always re-assert buffer scale: a paint before `PreferredScale`
+            // may have set the integer factor; fractional mode must reset to 1.
+            s.surface.set_buffer_scale(attach_scale);
+            if let (Some(vp), Some((w, h))) = (s.viewport.as_ref(), dest) {
+                vp.set_destination(w, h);
             }
             s.surface.attach(Some(&buf.buffer), 0, 0);
             s.surface.damage_buffer(0, 0, pw as i32, ph as i32);
@@ -748,6 +775,9 @@ impl Dispatch<wl_surface::WlSurface, u32> for State {
     fn event(state: &mut Self, _: &wl_surface::WlSurface, event: wl_surface::Event, global: &u32, _: &Connection, _: &QueueHandle<Self>) {
         if let wl_surface::Event::PreferredBufferScale { factor } = event
             && let Some(s) = state.surface_mut(*global)
+            // Fractional scale + viewporter own the scale; applying the
+            // integer preference would make the next buffer non-divisible.
+            && s.fractional.is_none()
             && s.buffer_scale != factor
         {
             s.buffer_scale = factor;
@@ -1020,5 +1050,26 @@ mod tests {
         assert_eq!(dst, [3, 2, 1, 4, 7, 6, 5, 8]);
         copy_pixels(&src, &mut dst, true);
         assert_eq!(dst, src);
+    }
+
+    /// A surface that already took an integer buffer scale (e.g. from an early
+    /// paint) must attach at scale 1 once fractional scale arrives — otherwise
+    /// 2559×1599 under scale 2 is a protocol error.
+    #[test]
+    fn fractional_attach_scale_is_one_even_after_integer_preference() {
+        const W: u32 = 1706;
+        const H: u32 = 1066;
+        const SCALE120: u32 = 180; // 1.5×
+        assert!(uses_fractional_scale(true, SCALE120));
+        assert_eq!(attach_buffer_scale(true, SCALE120, 2), 1);
+        let (pw, ph, scale) = physical_size_of(W, H, true, SCALE120, 2);
+        assert_eq!((pw, ph), (2559, 1599));
+        assert!((scale - 1.5).abs() < 1e-6);
+        assert_eq!(pw % attach_buffer_scale(true, SCALE120, 2) as u32, 0);
+        assert_eq!(ph % attach_buffer_scale(true, SCALE120, 2) as u32, 0);
+        // Without a preferred fractional scale yet, keep the integer factor.
+        assert!(!uses_fractional_scale(true, 0));
+        assert_eq!(attach_buffer_scale(true, 0, 2), 2);
+        assert_eq!(physical_size_of(W, H, true, 0, 2), (W * 2, H * 2, 2.0));
     }
 }

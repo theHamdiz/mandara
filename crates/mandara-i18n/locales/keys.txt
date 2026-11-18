@@ -2933,6 +2933,7 @@ Friday
 Friday and Saturday
 Friendship is always a sweet responsibility, never an opportunity.
 From
+From GitHub
 From a package or your folders
 From api.alquran.cloud: the Tanzil Project's text, copied exactly
 From its button or edge
@@ -4905,7 +4906,6 @@ No collection {name}
 No collection {name}; see `hadith collections`
 No colors yet
 No comments yet
-No community plugins yet. Be the first to publish one.
 No compositor configuration was found at {path}.
 No config file yet — defaults are in use
 No connected external monitor named {name}
@@ -4988,6 +4988,7 @@ No microphone
 No model in memory: Load one below to warm it up
 No model named {model}
 No models installed
+No more community plugins on GitHub yet. Be the first to publish one.
 No moves left
 No need to hurry. No need to sparkle. No need to be anybody but oneself.
 No network access
@@ -5183,6 +5184,7 @@ Nothing
 Nothing coming up
 Nothing copied yet
 Nothing else is removed.
+Nothing else on GitHub right now. Publish yours with the mandara-plugin topic to list it here.
 Nothing from the file runs while installing, and no password is needed
 Nothing generated yet. Your wallpapers appear here.
 Nothing great was ever achieved without enthusiasm.
@@ -5345,6 +5347,7 @@ On mains power — the mains timeouts apply
 On the Shortness of Life
 On the Statue of Liberty
 On the desktop (later ones on top)
+On this system
 On this tab
 On your desktop
 On your lap — performance is limited
@@ -8377,6 +8380,7 @@ Think of all the beauty still left around you and be happy.
 Third shape
 Third-party
 Third-party plugins
+Third-party plugins already installed from the marketplace or your plugin folders
 Thiruvalluvar
 This AppImage's runtime isn't a valid program
 This Aqueous entry needs to be edited in its source configuration.

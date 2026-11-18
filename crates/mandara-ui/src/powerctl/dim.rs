@@ -172,7 +172,10 @@ pub fn stop(cx: &mut App) {
             if view.leaving.is_none() {
                 view.left_at_alpha = view.alpha(now);
                 view.leaving = Some(now);
-                window.request_animation_frame();
+                // Outside paint/prepaint: `request_animation_frame` needs
+                // `current_view()` and panics. `refresh` dirties the window;
+                // the next render schedules further frames itself.
+                window.refresh();
                 cx.notify();
             }
         });
