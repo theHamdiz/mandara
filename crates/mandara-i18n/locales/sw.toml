@@ -3802,7 +3802,7 @@
 "Unterminated single quote" = "Nukuu moja hazijafungwa"
 "Until" = "Hadi"
 "Until the schedule next changes" = "Hadi ratiba ibadilike tena"
-"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "Hadi 150 % kupitia funguo za sauti za Mandara (inaweza kupotosha). Zikisalia 100 %, compositor bado inazifunganisha na wpctl -l 1.0."
+"Up to 150 % via Mandara's volume keys (can distort). If keys stay at 100 %, check your compositor's volume binds — stock ones often use wpctl -l 1.0." = "Hadi 150 % kupitia funguo za sauti za Mandara (inaweza kupotosha). Zikisalia 100 %, angalia funguo za sauti za compositor — za kawaida mara nyingi hutumia wpctl -l 1.0."
 "Upcoming" = "Yajayo"
 "Upcoming calendar events as JSON" = "Matukio yajayo ya kalenda kama JSON"
 "Upcoming days listed under the month" = "Siku zijazo zimeorodheshwa chini ya mwezi"
@@ -10963,3 +10963,4 @@
 "Choose a display from the live wallpaper status." = "Chagua skrini kutoka kwenye hali ya mandhari hai."
 "Refresh Bluetooth state without restarting the shell" = "Sasisha hali ya Bluetooth bila kuanzisha upya shell"
 "Bluetooth did not respond in time" = "Bluetooth haikujibu kwa wakati"
+"; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "; ikiwa funguo hiyo inatumia wpctl na -l 1.0, funguo za sauti zinabaki 100 % — ibadilishe kuwa `mandara msg audio volume up`/`down`, au iondoe ili Mandara iongeze yake"

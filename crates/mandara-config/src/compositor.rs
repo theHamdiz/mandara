@@ -1090,8 +1090,8 @@ fn split_binds<'a>(cfg: &'a ManagedConfig, target: Target) -> (Vec<ReadyBind<'a>
             let mut note = format!("{} → `{}` skipped: already bound in your config", bind.display(), bind.action.shell_command());
             // Stock compositor configs bind these to `wpctl … -l 1.0`, which
             // caps at 100 % even when Studio → Allow above 100 % is on.
-            if bind.mods.is_empty() && matches!(bind.key.as_str(), "XF86AudioRaiseVolume" | "XF86AudioLowerVolume") {
-                note.push_str("; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own");
+            if bind.mods.is_empty() && matches!(bind.key.trim(), "XF86AudioRaiseVolume" | "XF86AudioLowerVolume") {
+                note.push_str(&mandara_i18n::t("; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own"));
             }
             skipped.push(note);
         } else if !seen.insert(chord) {

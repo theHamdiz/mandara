@@ -5718,7 +5718,7 @@
 "Until the schedule next changes" = "সময়সূচি পরবর্তীবার বদলানো পর্যন্ত"
 "Untitled note" = "শিরোনামহীন নোট"
 "Up" = "চালু"
-"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "মান্দারার ভলিউম কী দিয়ে সর্বোচ্চ 150 % (শব্দ বিকৃত হতে পারে)। ১০০ %-এ আটকে থাকলে আপনার কম্পোজিটর এখনও wpctl -l 1.0-এ বাঁধা।"
+"Up to 150 % via Mandara's volume keys (can distort). If keys stay at 100 %, check your compositor's volume binds — stock ones often use wpctl -l 1.0." = "মান্দারার ভলিউম কী দিয়ে সর্বোচ্চ 150 % (শব্দ বিকৃত হতে পারে)। ১০০ %-এ আটকে থাকলে কম্পোজিটরের ভলিউম বাইন্ডিং দেখুন — স্টক বাইন্ডিং প্রায়ই wpctl -l 1.0 ব্যবহার করে।"
 "Up to date" = "হালনাগাদ"
 "Up {time}" = "{time} ধরে চালু"
 "Upcoming" = "আসন্ন"
@@ -11064,3 +11064,4 @@
 "Choose a display from the live wallpaper status." = "লাইভ ওয়ালপেপারের অবস্থা থেকে একটি ডিসপ্লে বাছুন।"
 "Refresh Bluetooth state without restarting the shell" = "শেল পুনরায় চালু না করে Bluetooth-এর অবস্থা হালনাগাদ করুন"
 "Bluetooth did not respond in time" = "Bluetooth সময়মতো সাড়া দেয়নি"
+"; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "; যদি সেই বাইন্ডিং wpctl -l 1.0 ব্যবহার করে, ভলিউম কী ১০০ %-এ থাকে — `mandara msg audio volume up`/`down`-এ বদলান, অথবা সরিয়ে দিন যাতে মান্দারা নিজেরটি যোগ করতে পারে।"

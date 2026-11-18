@@ -3802,7 +3802,7 @@
 "Unterminated single quote" = "Thiếu dấu nháy đơn đóng"
 "Until" = "Đến"
 "Until the schedule next changes" = "Đến lần lịch đổi kế tiếp"
-"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "Tối đa 150 % qua phím âm lượng Mandara (có thể méo). Nếu kẹt ở 100 %, compositor vẫn gắn chúng với wpctl -l 1.0."
+"Up to 150 % via Mandara's volume keys (can distort). If keys stay at 100 %, check your compositor's volume binds — stock ones often use wpctl -l 1.0." = "Tối đa 150 % qua phím âm lượng Mandara (có thể méo). Nếu kẹt ở 100 %, kiểm tra phím tắt âm lượng của compositor — mặc định thường dùng wpctl -l 1.0."
 "Upcoming" = "Sắp tới"
 "Upcoming calendar events as JSON" = "Sự kiện lịch sắp tới, dạng JSON"
 "Upcoming days listed under the month" = "Các ngày sắp tới, liệt kê dưới tháng"
@@ -10963,3 +10963,4 @@
 "Choose a display from the live wallpaper status." = "Chọn một màn hình từ trạng thái hình nền động."
 "Refresh Bluetooth state without restarting the shell" = "Làm mới trạng thái Bluetooth mà không khởi động lại giao diện"
 "Bluetooth did not respond in time" = "Bluetooth không phản hồi kịp thời"
+"; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "; nếu phím tắt đó dùng wpctl với -l 1.0, phím âm lượng sẽ kẹt ở 100 % — đổi sang `mandara msg audio volume up`/`down`, hoặc gỡ để Mandara thêm của nó"

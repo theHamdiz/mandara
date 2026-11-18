@@ -205,9 +205,11 @@ pub fn set_with(
     for (section, key, value) in settings(keys) {
         // `]` is allowed in section names: Plasma nests groups as
         // `[Colors:Header][Inactive]` (stored here as `Colors:Header][Inactive`).
+        // Keys may also contain `]` (e.g. `Name[de]`); only section headers
+        // are written as `[…]`, so a `]` in a key cannot close one.
         ensure!(
             !section.contains(['\n', '\r'])
-                && !key.contains(['\n', '\r', '=', ']'])
+                && !key.contains(['\n', '\r', '='])
                 && !value.contains(['\n', '\r']),
             "invalid INI preference"
         );

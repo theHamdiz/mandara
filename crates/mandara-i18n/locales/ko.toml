@@ -5718,7 +5718,7 @@
 "Until the schedule next changes" = "다음 일정 변경까지"
 "Untitled note" = "제목 없는 노트"
 "Up" = "작동 중"
-"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "Mandara 볼륨 키로 최대 150 %(왜곡될 수 있음). 100 %에 머무르면 컴포지터가 아직 wpctl -l 1.0에 묶여 있습니다."
+"Up to 150 % via Mandara's volume keys (can distort). If keys stay at 100 %, check your compositor's volume binds — stock ones often use wpctl -l 1.0." = "Mandara 볼륨 키로 최대 150 %(왜곡될 수 있음). 100 %에 머무르면 컴포지터 볼륨 바인딩을 확인하세요. 기본값은 종종 wpctl -l 1.0입니다."
 "Up to date" = "최신 상태"
 "Up {time}" = "{time} 동안 작동 중"
 "Upcoming" = "예정"
@@ -11062,3 +11062,4 @@
 "Choose a display from the live wallpaper status." = "라이브 배경화면 상태에서 디스플레이를 선택하세요."
 "Refresh Bluetooth state without restarting the shell" = "셸을 다시 시작하지 않고 Bluetooth 상태 새로 고침"
 "Bluetooth did not respond in time" = "Bluetooth가 제시간에 응답하지 않았습니다"
+"; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "; 그 바인딩이 wpctl -l 1.0을 쓰면 볼륨 키가 100 %에 머무릅니다 — `mandara msg audio volume up`/`down`으로 바꾸거나 제거해 Mandara가 추가하게 하세요"

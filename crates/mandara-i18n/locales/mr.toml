@@ -3802,7 +3802,7 @@
 "Unterminated single quote" = "न संपलेले एकेरी अवतरण"
 "Until" = "पर्यंत"
 "Until the schedule next changes" = "वेळापत्रक पुढच्या वेळी बदलेपर्यंत"
-"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "मंदराच्या व्हॉल्यूम कींनी 150 % पर्यंत (विकृत होऊ शकते). 100 % वर अडकले तर कंपोझिटर अजून wpctl -l 1.0 ला बांधतो."
+"Up to 150 % via Mandara's volume keys (can distort). If keys stay at 100 %, check your compositor's volume binds — stock ones often use wpctl -l 1.0." = "मंदराच्या व्हॉल्यूम कींनी 150 % पर्यंत (विकृत होऊ शकते). 100 % वर अडकले तर कंपोझिटरच्या व्हॉल्यूम बाइंड तपासा — स्टॉक बाइंड अनेकदा wpctl -l 1.0 वापरतात."
 "Upcoming" = "येणारे"
 "Upcoming calendar events as JSON" = "येणारे दिनदर्शिका कार्यक्रम JSON म्हणून"
 "Upcoming days listed under the month" = "महिन्याखाली दिलेले येणारे दिवस"
@@ -10964,3 +10964,4 @@
 "Choose a display from the live wallpaper status." = "थेट वॉलपेपरच्या स्थितीतून डिस्प्ले निवडा."
 "Refresh Bluetooth state without restarting the shell" = "शेल पुन्हा सुरू न करता Bluetooth ची स्थिती अद्ययावत करा"
 "Bluetooth did not respond in time" = "Bluetooth ने वेळेत प्रतिसाद दिला नाही"
+"; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "; जर ती बाइंड wpctl -l 1.0 वापरत असेल तर व्हॉल्यूम की 100 % वर राहतात — `mandara msg audio volume up`/`down` मध्ये बदला, किंवा काढून मंदराला स्वतःची जोडू द्या"

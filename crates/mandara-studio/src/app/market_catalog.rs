@@ -60,8 +60,8 @@ impl Catalog {
 }
 
 /// Only cards actually shown in the preceding shelf are excluded from picks.
-pub(super) fn picks<'a>(top: &'a [Arc<Listing>], recent: &'a [Arc<Listing>], shown: usize) -> impl Iterator<Item = &'a Arc<Listing>> {
-    top.iter().filter(move |listing| !listing.archived && !recent.iter().take(shown).any(|r| r.full_name == listing.full_name))
+pub(super) fn picks<'a>(top: &'a [Arc<Listing>], shown: &'a [Arc<Listing>]) -> impl Iterator<Item = &'a Arc<Listing>> {
+    top.iter().filter(move |listing| !listing.archived && !shown.iter().any(|r| r.full_name == listing.full_name))
 }
 
 #[cfg(test)]
@@ -71,10 +71,11 @@ mod tests {
     #[test]
     fn local_cards_filling_the_new_shelf_do_not_hide_community_picks() {
         let catalog = Catalog::default().merge(Results { items: vec![listing("a/one", "One"), listing("a/two", "Two"), listing("a/three", "Three")], total: 3 });
-        assert_eq!(picks(&catalog.items, &catalog.recent, 0).count(), 3);
-        let remaining: Vec<_> = picks(&catalog.items, &catalog.recent, 1).map(|l| l.full_name.as_str()).collect();
+        assert_eq!(picks(&catalog.items, &[]).count(), 3);
+        let shown = [catalog.items[0].clone()];
+        let remaining: Vec<_> = picks(&catalog.items, &shown).map(|l| l.full_name.as_str()).collect();
         assert_eq!(remaining, ["a/two", "a/three"]);
-        assert_eq!(picks(&catalog.items, &catalog.recent, 3).count(), 0);
+        assert_eq!(picks(&catalog.items, &catalog.items).count(), 0);
     }
 
     #[test]

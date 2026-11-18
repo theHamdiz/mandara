@@ -95,6 +95,7 @@
 8–63 characters; default: the saved or a generated one
 90°
 :colorscheme mandara
+; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own
 < 1 min
 <1m
 A + at the end of the tab strip makes a tab in place
@@ -8924,7 +8925,7 @@ Until the schedule next changes
 Untitled note
 Unverified download
 Up
-Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0.
+Up to 150 % via Mandara's volume keys (can distort). If keys stay at 100 %, check your compositor's volume binds — stock ones often use wpctl -l 1.0.
 Up to date
 Up {time}
 Upcoming

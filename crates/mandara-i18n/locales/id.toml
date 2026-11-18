@@ -5717,7 +5717,7 @@
 "Until the schedule next changes" = "Hingga jadwal berubah berikutnya"
 "Untitled note" = "Catatan tanpa judul"
 "Up" = "Aktif"
-"Up to 150 % via Mandara's volume keys (can distort). Keys stuck at 100 % mean your compositor still binds them to wpctl -l 1.0." = "Hingga 150 % lewat tombol volume Mandara (bisa pecah). Jika stuck di 100 %, compositor Anda masih mengikatnya ke wpctl -l 1.0."
+"Up to 150 % via Mandara's volume keys (can distort). If keys stay at 100 %, check your compositor's volume binds — stock ones often use wpctl -l 1.0." = "Hingga 150 % lewat tombol volume Mandara (bisa pecah). Jika stuck di 100 %, periksa binding volume compositor — yang bawaan sering memakai wpctl -l 1.0."
 "Up to date" = "Terbaru"
 "Up {time}" = "Aktif {time}"
 "Upcoming" = "Mendatang"
@@ -11063,3 +11063,4 @@
 "Choose a display from the live wallpaper status." = "Pilih layar dari status wallpaper hidup."
 "Refresh Bluetooth state without restarting the shell" = "Segarkan status Bluetooth tanpa memulai ulang shell"
 "Bluetooth did not respond in time" = "Bluetooth tidak merespons tepat waktu"
+"; if that bind uses wpctl with -l 1.0, volume keys stay at 100% — change it to `mandara msg audio volume up`/`down`, or remove it so Mandara can add its own" = "; jika binding itu memakai wpctl dengan -l 1.0, tombol volume tetap di 100 % — ubah ke `mandara msg audio volume up`/`down`, atau hapus agar Mandara bisa menambahkannya"
