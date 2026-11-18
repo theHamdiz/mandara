@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.35.2 — 2026-11-18
+
 The lock screen stays up on fractional-scale MangoWM, idle locking no longer panics when the fade overlay closes, Community lists the third-party plugins you already have, and Develop no longer treats marketplace installs as your work-in-progress.
 
 ### Fixed
