@@ -327,7 +327,12 @@ fn export_at(
     // back only the preference keys Mandara owns.
     if apps.kde {
         let scheme = locations.data.join("color-schemes/Mandara.colors");
-        if let Err(error) = super::post_action::run("kde-color-scheme", "kde", &[scheme], locations) {
+        // Only select a scheme Mandara just wrote (or confirmed unchanged).
+        // A rejected destination must not pull another template's colours
+        // into kdeglobals.
+        if native.files.iter().any(|path| path == &scheme)
+            && let Err(error) = super::post_action::run("kde-color-scheme", "kde", &[scheme], locations)
+        {
             native.errors.insert("kde".into(), error.to_string());
         }
     } else if let Err(error) = super::post_action::undo("kde", locations) {
@@ -336,7 +341,7 @@ fn export_at(
     if targets.qt6 {
         for toolkit in ["qt6ct", "qt5ct"] {
             let scheme = locations.config.join(toolkit).join("colors/mandara.conf");
-            if !scheme.is_file() {
+            if !native.files.iter().any(|path| path == &scheme) {
                 continue;
             }
             if let Err(error) = super::post_action::run("qt-color-scheme", "qt", &[scheme], locations) {

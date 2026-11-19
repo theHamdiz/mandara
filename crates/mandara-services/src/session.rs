@@ -317,16 +317,36 @@ fn sway_exit(sock: &std::path::Path) -> Result<(), CompositorQuit> {
     let mut header = [0u8; 14];
     match stream.read_exact(&mut header) {
         Ok(()) => {}
-        // Compositor gone before answering: the exit was delivered.
-        Err(_) => return Ok(()),
+        // i3 closes the socket without a reply when exit runs.
+        Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof
+            || e.kind() == std::io::ErrorKind::ConnectionReset
+            || e.kind() == std::io::ErrorKind::BrokenPipe =>
+        {
+            return Ok(());
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {
+            return Err(CompositorQuit::Unreachable(format!("Sway/i3 socket: {e}")));
+        }
+        Err(e) => return Err(CompositorQuit::Unreachable(format!("Sway/i3 socket: {e}"))),
     }
     if &header[..6] != b"i3-ipc" {
         return Err(CompositorQuit::Refused { call: "sway/i3 exit".into(), error: t("malformed IPC reply").into() });
     }
     let len = u32::from_ne_bytes(header[6..10].try_into().unwrap()) as usize;
     let mut body = vec![0u8; len.min(4096)];
-    let _ = stream.read_exact(&mut body);
-    Ok(())
+    match stream.read_exact(&mut body) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof
+            || e.kind() == std::io::ErrorKind::ConnectionReset
+            || e.kind() == std::io::ErrorKind::BrokenPipe =>
+        {
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {
+            Err(CompositorQuit::Unreachable(format!("Sway/i3 socket: {e}")))
+        }
+        Err(e) => Err(CompositorQuit::Unreachable(format!("Sway/i3 socket: {e}"))),
+    }
 }
 
 /// Holds a logind idle/sleep inhibitor; dropping it releases the lock.
@@ -488,6 +508,22 @@ mod tests {
         });
         assert_eq!(hyprland_exit(&sock), Ok(()));
         assert_eq!(server.join().unwrap(), "dispatch exit");
+    }
+
+    #[test]
+    fn logout_does_not_treat_a_silent_sway_socket_as_success() {
+        let dir = tempfile::tempdir().unwrap();
+        let sock = dir.path().join("sway.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            // Accept the exit payload, then stall past the reply timeout.
+            let mut buf = [0u8; 64];
+            let _ = std::io::Read::read(&mut &stream, &mut buf);
+            std::thread::sleep(QUIT_REPLY_TIMEOUT + std::time::Duration::from_millis(200));
+        });
+        assert!(matches!(sway_exit(&sock), Err(CompositorQuit::Unreachable(_))));
+        let _ = server.join();
     }
 
     #[test]

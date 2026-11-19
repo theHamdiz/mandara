@@ -1218,7 +1218,7 @@ fn build() -> Vec<Setting> {
         // App themes (cross-app sync)
         s(Themes, tk("App themes"), "/integrations/ghostty", "Ghostty", tk("Terminal colors follow the theme"), Toggle),
         s(Themes, tk("App themes"), "/integrations/gtk4", tk("GTK 3 / 4 & libadwaita"), tk("Local GTK styles also reach Celluloid and Rufin Flatpaks. In Rufin, choose System for both theme and accent. Personal CSS is backed up and restored."), Toggle),
-        s(Themes, tk("App themes"), "/integrations/qt6", tk("Qt 5 / 6 (qt6ct, qt5ct)"), tk("A “mandara” color scheme for qt6ct / qt5ct"), Toggle),
+        s(Themes, tk("App themes"), "/integrations/qt6", tk("Qt 5 / 6 (qt6ct, qt5ct)"), tk("Writes a mandara scheme and points qt6ct / qt5ct at it so Qt apps use Mandara colours"), Toggle),
         s(Themes, tk("App themes"), "/integrations/kvantum", "Kvantum", tk("A “Mandara” Kvantum theme in ~/.cache/mandara/themes/kvantum"), Toggle),
         s(Themes, tk("App themes"), "/integrations/kvantum_apply", tk("Use the Kvantum theme"), tk("Links it into ~/.config/Kvantum and runs kvantummanager --set Mandara"), Toggle),
         s(Themes, tk("App themes"), "/integrations/zed", "Zed", tk("A “Mandara” editor theme"), Toggle),

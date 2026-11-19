@@ -11074,3 +11074,5 @@
 "Search cancelled." = "검색이 취소되었습니다."
 "Narrow the search to see more community plugins." = "검색을 좁혀 더 많은 커뮤니티 플러그인을 보세요."
 "malformed IPC reply" = "잘못된 IPC 응답"
+"Writes Mandara.colors and selects it in Plasma (kdeglobals); open apps reload" = "Mandara.colors를 쓰고 Plasma(kdeglobals)에서 선택합니다. 열린 앱이 다시 로드됩니다"
+"Writes a mandara scheme and points qt6ct / qt5ct at it so Qt apps use Mandara colours" = "mandara 스킴을 쓰고 qt6ct / qt5ct가 가리키게 해 Qt 앱이 Mandara 색을 쓰게 합니다"

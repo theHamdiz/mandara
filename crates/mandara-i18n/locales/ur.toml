@@ -11075,3 +11075,5 @@
 "Search cancelled." = "تلاش منسوخ ہو گئی۔"
 "Narrow the search to see more community plugins." = "مزید کمیونٹی پلگ اِن دیکھنے کے لیے تلاش محدود کریں۔"
 "malformed IPC reply" = "خراب IPC جواب"
+"Writes Mandara.colors and selects it in Plasma (kdeglobals); open apps reload" = "Mandara.colors لکھتا ہے اور اسے Plasma (kdeglobals) میں منتخب کرتا ہے؛ کھلی ایپس دوبارہ لوڈ ہوتی ہیں"
+"Writes a mandara scheme and points qt6ct / qt5ct at it so Qt apps use Mandara colours" = "ایک mandara اسکیم لکھتا ہے اور qt6ct / qt5ct کو اس کی طرف اشارہ کرتا ہے تاکہ Qt ایپس Mandara رنگ استعمال کریں"

@@ -11075,3 +11075,5 @@
 "Search cancelled." = "Pencarian dibatalkan."
 "Narrow the search to see more community plugins." = "Persempit pencarian untuk melihat lebih banyak plugin komunitas."
 "malformed IPC reply" = "balasan IPC rusak"
+"Writes Mandara.colors and selects it in Plasma (kdeglobals); open apps reload" = "Menulis Mandara.colors dan memilihnya di Plasma (kdeglobals); aplikasi yang terbuka dimuat ulang"
+"Writes a mandara scheme and points qt6ct / qt5ct at it so Qt apps use Mandara colours" = "Menulis skema mandara dan mengarahkan qt6ct / qt5ct kepadanya agar aplikasi Qt memakai warna Mandara"

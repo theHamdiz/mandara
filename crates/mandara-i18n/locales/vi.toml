@@ -10975,3 +10975,5 @@
 "Search cancelled." = "Đã hủy tìm kiếm."
 "Narrow the search to see more community plugins." = "Thu hẹp tìm kiếm để xem thêm plugin cộng đồng."
 "malformed IPC reply" = "phản hồi IPC không hợp lệ"
+"Writes Mandara.colors and selects it in Plasma (kdeglobals); open apps reload" = "Ghi Mandara.colors và chọn nó trong Plasma (kdeglobals); các ứng dụng đang mở tải lại"
+"Writes a mandara scheme and points qt6ct / qt5ct at it so Qt apps use Mandara colours" = "Ghi một lược đồ mandara và hướng qt6ct / qt5ct tới đó để ứng dụng Qt dùng màu Mandara"

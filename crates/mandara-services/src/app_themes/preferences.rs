@@ -175,8 +175,8 @@ pub fn set_with(
     let before = FileStamp::at(lock.target())?;
     let record_path = record_path(locations);
     let mut record = load(&record_path)?;
-    // A new apply supersedes any unfinished post-undo notification.
-    record.pending_notify.remove(owner);
+    // Do not drop `pending_notify` until this write commits: a failed
+    // replacement must leave the unfinished KDE notify retry intact.
     let previous = record.owners.get(owner).cloned().unwrap_or_default();
     let created = !path.exists();
     let original = text(path)?;
@@ -248,7 +248,8 @@ pub fn set_with(
     }
     let next = next.finish();
     if next == original {
-        if metadata_changed {
+        if metadata_changed || record.pending_notify.contains_key(owner) {
+            record.pending_notify.remove(owner);
             store(&record_path, &record)?;
         }
         return Ok(());
@@ -261,10 +262,12 @@ pub fn set_with(
     let result = lock.check_stamp(before).map_err(anyhow::Error::from).and_then(|()| write(path,&original,&next));
     if let Err(error) = result {
         // Keep the journal if recovery itself fails; another sync can retry.
+        // `pending_notify` is still on disk from before this attempt.
         load(&record_path).map_err(|recovery| anyhow::anyhow!("{error:#}; recovering theme ownership: {recovery:#}"))?;
         return Err(error);
     }
     record.pending = None;
+    record.pending_notify.remove(owner);
     store(&record_path, &record)?;
     Ok(())
 }
@@ -273,9 +276,10 @@ pub fn undo(owner: &str, locations: &Locations) -> Result<Vec<PathBuf>> {
     undo_then(owner, locations, |_| Ok(()))
 }
 
-/// Like [`undo`], but runs `after` with every path this owner still records
-/// before forgetting them. If `after` fails, ownership stays so a retry can
-/// finish the post-step (for example KDE `notifyChange`).
+/// Like [`undo`], but runs `after` with every path this owner recorded.
+/// If `after` fails, preference Changes are still cleared and the paths are
+/// kept in `pending_notify` so a retry only re-runs the post-step (for
+/// example KDE `notifyChange`) without restoring old values again.
 pub fn undo_then(
     owner: &str,
     locations: &Locations,
@@ -519,6 +523,47 @@ mod tests {
         let record = load(&record_path(&locations)).unwrap();
         assert!(!record.owners.contains_key("kde"));
         assert!(!record.pending_notify.contains_key("kde"));
+    }
+
+    #[test]
+    fn a_failed_replacement_write_keeps_pending_notify() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = Locations {
+            home: root.path().into(),
+            config: root.path().join("config"),
+            data: root.path().join("data"),
+            cache: root.path().join("cache"),
+            state: root.path().join("state"),
+        };
+        let path = locations.config.join("kdeglobals");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "[General]\nColorScheme=Personal\n").unwrap();
+        set(
+            "kde",
+            &path,
+            &ini_keys("[General]\nColorScheme=Mandara\n").unwrap(),
+            &locations,
+        )
+        .unwrap();
+        assert!(
+            undo_then("kde", &locations, |_| Err(anyhow::anyhow!("notify failed"))).is_err()
+        );
+        assert!(load(&record_path(&locations)).unwrap().pending_notify.contains_key("kde"));
+        assert!(
+            set_with(
+                "kde",
+                &path,
+                &ini_keys("[General]\nColorScheme=Again\n").unwrap(),
+                Format::Ini,
+                &locations,
+                &|_, _, _| Err(anyhow::anyhow!("disk full")),
+            )
+            .is_err()
+        );
+        assert!(
+            load(&record_path(&locations)).unwrap().pending_notify.contains_key("kde"),
+            "failed set must not drop the unfinished notify retry"
+        );
     }
 
     #[test]

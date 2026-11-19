@@ -11311,3 +11311,5 @@
 "Search cancelled." = "Búsqueda cancelada."
 "Narrow the search to see more community plugins." = "Acota la búsqueda para ver más complementos de la comunidad."
 "malformed IPC reply" = "respuesta IPC incorrecta"
+"Writes Mandara.colors and selects it in Plasma (kdeglobals); open apps reload" = "Escribe Mandara.colors y lo selecciona en Plasma (kdeglobals); las apps abiertas se recargan"
+"Writes a mandara scheme and points qt6ct / qt5ct at it so Qt apps use Mandara colours" = "Escribe un esquema mandara y apunta qt6ct / qt5ct a él para que las apps Qt usen los colores de Mandara"

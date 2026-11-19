@@ -328,10 +328,8 @@ A wide rail of flower buttons and tiles inside a screen frame
 A work desk along the bottom: focus timer in the middle, tasks, notes and system load in zones of their own
 A “Mandara” Kvantum theme in ~/.cache/mandara/themes/kvantum
 A “Mandara” color scheme in ~/.config/wezterm/colors
-A “Mandara” color scheme in ~/.local/share/color-schemes
 A “Mandara” editor theme
 A “mandara” btop theme
-A “mandara” color scheme for qt6ct / qt5ct
 AI Shell Agent
 AI rendering of the meaning
 AI usage
@@ -9425,6 +9423,8 @@ Write rules, binds and colors to ~/.config/mandara/generated
 Write the current display arrangement to the compositor drop-in so it survives restarts
 Write the current palette to Ghostty, GTK, Qt, Zed, Fuzzel and btop theme files
 Write the settings to a file (changes = only values that differ from the defaults)
+Writes Mandara.colors and selects it in Plasma (kdeglobals); open apps reload
+Writes a mandara scheme and points qt6ct / qt5ct at it so Qt apps use Mandara colours
 Writes to Mandara's log, tagged with your plugin's id.
 Writing is nothing more than a guided dream.
 Writing {file} and reloading {compositor} on every change.
