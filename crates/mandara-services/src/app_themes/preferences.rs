@@ -263,13 +263,33 @@ pub fn set_with(
 }
 
 pub fn undo(owner: &str, locations: &Locations) -> Result<Vec<PathBuf>> {
-    undo_with(owner,locations,&write_checked)
+    undo_then(owner, locations, |_| Ok(()))
+}
+
+/// Like [`undo`], but runs `after` with every path this owner still records
+/// before forgetting them. If `after` fails, ownership stays so a retry can
+/// finish the post-step (for example KDE `notifyChange`).
+pub fn undo_then(
+    owner: &str,
+    locations: &Locations,
+    after: impl FnOnce(&[PathBuf]) -> Result<()>,
+) -> Result<Vec<PathBuf>> {
+    undo_with_then(owner, locations, &write_checked, after)
 }
 
 pub fn undo_with(
     owner: &str,
     locations: &Locations,
-    write: &dyn Fn(&Path,&str,&str) -> Result<()>,
+    write: &dyn Fn(&Path, &str, &str) -> Result<()>,
+) -> Result<Vec<PathBuf>> {
+    undo_with_then(owner, locations, write, |_| Ok(()))
+}
+
+fn undo_with_then(
+    owner: &str,
+    locations: &Locations,
+    write: &dyn Fn(&Path, &str, &str) -> Result<()>,
+    after: impl FnOnce(&[PathBuf]) -> Result<()>,
 ) -> Result<Vec<PathBuf>> {
     let record_path = record_path(locations);
     let mut record = load(&record_path)?;
@@ -280,17 +300,18 @@ pub fn undo_with(
     for change in changes {
         files.entry(&change.path).or_default().push(change);
     }
+    let owned: Vec<PathBuf> = files.keys().map(|path| (*path).to_path_buf()).collect();
     let mut changed = Vec::new();
     for (path, changes) in files {
         let lock = WriteLock::new(path)?;
         let before = FileStamp::at(lock.target())?;
         let original = text(path)?;
         let format = changes[0].format;
-        ensure!(changes.iter().all(|change|change.format == format),"theme preference formats disagree");
+        ensure!(changes.iter().all(|change| change.format == format), "theme preference formats disagree");
         let mut next = format.parse(&original)?;
         for change in &changes {
-            if next.get(&change.section,&change.key)?.as_deref() == Some(change.after.as_str()) {
-                next.set(&change.section,&change.key,change.before.as_deref())?;
+            if next.get(&change.section, &change.key)?.as_deref() == Some(change.after.as_str()) {
+                next.set(&change.section, &change.key, change.before.as_deref())?;
             }
         }
         let next = next.finish();
@@ -301,14 +322,15 @@ pub fn undo_with(
                     .lines()
                     .all(|line| line.trim().is_empty() || line.trim().starts_with('['))
             {
-                write(path,&original,&next)?;
+                write(path, &original, &next)?;
                 std::fs::remove_file(path)?;
             } else {
-                write(path,&original,&next)?;
+                write(path, &original, &next)?;
             }
             changed.push(path.to_path_buf());
         }
     }
+    after(&owned)?;
     record.owners.remove(owner);
     store(&record_path, &record)?;
     Ok(changed)
@@ -420,6 +442,45 @@ mod tests {
             assert_eq!(std::fs::read_to_string(&target).unwrap(),edited);
             assert_eq!(std::fs::read_link(&path).unwrap(),target);
         }
+    }
+
+    #[test]
+    fn a_failed_after_step_keeps_ownership_so_undo_can_retry() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = Locations {
+            home: root.path().into(),
+            config: root.path().join("config"),
+            data: root.path().join("data"),
+            cache: root.path().join("cache"),
+            state: root.path().join("state"),
+        };
+        let path = locations.config.join("kdeglobals");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "[General]\nColorScheme=Personal\n").unwrap();
+        set(
+            "kde",
+            &path,
+            &ini_keys("[General]\nColorScheme=Mandara\n").unwrap(),
+            &locations,
+        )
+        .unwrap();
+        assert!(
+            undo_then("kde", &locations, |_| Err(anyhow::anyhow!("notify failed"))).is_err()
+        );
+        assert!(load(&record_path(&locations)).unwrap().owners.contains_key("kde"));
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "[General]\nColorScheme=Personal\n"
+        );
+        let mut notified = false;
+        undo_then("kde", &locations, |owned| {
+            assert!(owned.iter().any(|p| p.ends_with("kdeglobals")));
+            notified = true;
+            Ok(())
+        })
+        .unwrap();
+        assert!(notified);
+        assert!(!load(&record_path(&locations)).unwrap().owners.contains_key("kde"));
     }
 
     #[test]
