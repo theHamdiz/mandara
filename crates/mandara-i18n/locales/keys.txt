@@ -9843,6 +9843,7 @@ look to switch to (leave out to show the current one)
 lookup failed
 m
 macOS- and Material-inspired icons with soft gradients
+malformed IPC reply
 masked
 master or a layer
 may not show

@@ -11317,3 +11317,4 @@
 "The top GitHub results are already installed. Narrow the search to see others." = "上位の GitHub 結果は既にインストール済みです。絞り込んで他を表示してください。"
 "Search cancelled." = "検索をキャンセルしました。"
 "Narrow the search to see more community plugins." = "検索を絞り込んで、さらにコミュニティプラグインを表示します。"
+"malformed IPC reply" = "不正な IPC 応答"

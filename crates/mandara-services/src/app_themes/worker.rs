@@ -323,12 +323,15 @@ fn export_at(
     ledger.store(&ledger_path)?;
     // Built-in KDE / Qt switches write the scheme files above; apply them so
     // Dolphin and other Qt apps actually read Mandara's palette (not a stale
-    // qt6ct path or an unselected .colors file).
+    // qt6ct path or an unselected .colors file). Turning a switch off puts
+    // back only the preference keys Mandara owns.
     if apps.kde {
         let scheme = locations.data.join("color-schemes/Mandara.colors");
         if let Err(error) = super::post_action::run("kde-color-scheme", "kde", &[scheme], locations) {
             native.errors.insert("kde".into(), error.to_string());
         }
+    } else if let Err(error) = super::post_action::undo("kde", locations) {
+        native.errors.insert("kde".into(), error.to_string());
     }
     if targets.qt6 {
         for toolkit in ["qt6ct", "qt5ct"] {
@@ -340,6 +343,8 @@ fn export_at(
                 native.errors.insert(toolkit.into(), error.to_string());
             }
         }
+    } else if let Err(error) = super::post_action::undo("qt", locations) {
+        native.errors.insert("qt".into(), error.to_string());
     }
     if superseded() {
         return Ok(Report {

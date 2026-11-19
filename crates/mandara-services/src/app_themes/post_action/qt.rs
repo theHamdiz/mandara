@@ -22,6 +22,10 @@ fn apply_scheme(owner: &str, scheme: &Path, locations: &crate::app_themes::paths
     let ct_dir = colors_dir.parent().ok_or_else(|| anyhow::anyhow!("qt colours folder has no parent"))?;
     let name = ct_dir.file_name().and_then(|n| n.to_str()).unwrap_or_default();
     ensure!(name == "qt6ct" || name == "qt5ct", "unknown Qt config toolkit {name}");
+    ensure!(
+        ct_dir == locations.config.join(name).as_path(),
+        "qt colour scheme must live under the reviewed configuration root"
+    );
     let conf = ct_dir.join(format!("{name}.conf"));
     let scheme_path = scheme.to_string_lossy().into_owned();
     let mut keys: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();

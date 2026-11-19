@@ -11315,3 +11315,4 @@
 "The top GitHub results are already installed. Narrow the search to see others." = "Верхние результаты GitHub уже установлены. Сузьте поиск, чтобы увидеть остальные."
 "Search cancelled." = "Поиск отменён."
 "Narrow the search to see more community plugins." = "Сузьте поиск, чтобы увидеть больше плагинов сообщества."
+"malformed IPC reply" = "некорректный ответ IPC"

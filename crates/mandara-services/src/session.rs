@@ -173,24 +173,48 @@ enum CompositorQuit {
 /// `Session.Terminate` alone kills that wrapper first and leaves long-lived
 /// user services (like `niri.service`) behind — see #209.
 fn compositor_quit() -> Result<&'static str, CompositorQuit> {
-    if let Some(sock) = std::env::var_os("MANGO_INSTANCE_SIGNATURE") {
-        mango_quit(std::path::Path::new(&sock))?;
-        return Ok("MangoWM dispatch quit");
+    compositor_quit_with(|key| std::env::var_os(key))
+}
+
+/// Looks up compositor sockets through `env` so tests can pass fixed values
+/// without mutating process-wide environment variables.
+fn compositor_quit_with(env: impl Fn(&str) -> Option<std::ffi::OsString>) -> Result<&'static str, CompositorQuit> {
+    let mut last_unreachable = None;
+    let mut try_one = |label: &'static str, result: Result<(), CompositorQuit>| -> Option<Result<&'static str, CompositorQuit>> {
+        match result {
+            Ok(()) => Some(Ok(label)),
+            Err(CompositorQuit::Refused { call, error }) => Some(Err(CompositorQuit::Refused { call, error })),
+            Err(CompositorQuit::Unreachable(e)) => {
+                last_unreachable = Some(e);
+                None
+            }
+        }
+    };
+    if let Some(sock) = env("MANGO_INSTANCE_SIGNATURE")
+        && let Some(done) = try_one("MangoWM dispatch quit", mango_quit(std::path::Path::new(&sock)))
+    {
+        return done;
     }
-    if let Some(sock) = std::env::var_os("NIRI_SOCKET") {
-        niri_quit(std::path::Path::new(&sock))?;
-        return Ok("niri Action::Quit");
+    if let Some(sock) = env("NIRI_SOCKET")
+        && let Some(done) = try_one("niri Action::Quit", niri_quit(std::path::Path::new(&sock)))
+    {
+        return done;
     }
-    if let Some(sig) = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE") {
-        let runtime = std::env::var_os("XDG_RUNTIME_DIR").ok_or_else(|| CompositorQuit::Unreachable("HYPRLAND_INSTANCE_SIGNATURE set but XDG_RUNTIME_DIR is missing".into()))?;
-        hyprland_exit(std::path::Path::new(&runtime).join("hypr").join(sig).join(".socket.sock"))?;
-        return Ok("hyprland dispatch exit");
+    if let Some(sig) = env("HYPRLAND_INSTANCE_SIGNATURE") {
+        let result = match env("XDG_RUNTIME_DIR") {
+            Some(runtime) => hyprland_exit(std::path::Path::new(&runtime).join("hypr").join(sig).join(".socket.sock")),
+            None => Err(CompositorQuit::Unreachable("HYPRLAND_INSTANCE_SIGNATURE set but XDG_RUNTIME_DIR is missing".into())),
+        };
+        if let Some(done) = try_one("hyprland dispatch exit", result) {
+            return done;
+        }
     }
-    if let Some(sock) = std::env::var_os("SWAYSOCK").or_else(|| std::env::var_os("I3SOCK")) {
-        sway_exit(std::path::Path::new(&sock))?;
-        return Ok("sway/i3 exit");
+    if let Some(sock) = env("SWAYSOCK").or_else(|| env("I3SOCK"))
+        && let Some(done) = try_one("sway/i3 exit", sway_exit(std::path::Path::new(&sock)))
+    {
+        return done;
     }
-    Err(CompositorQuit::Unreachable("no compositor quit socket in the environment".into()))
+    Err(CompositorQuit::Unreachable(last_unreachable.unwrap_or_else(|| "no compositor quit socket in the environment".into())))
 }
 
 /// Asks MangoWM to quit (ending the session it runs) and waits for its
@@ -225,11 +249,20 @@ fn niri_quit(sock: &std::path::Path) -> Result<(), CompositorQuit> {
     // skip_confirmation: the session menu already confirmed.
     writeln!(stream, r#"{{"Action":{{"Quit":{{"skip_confirmation":true}}}}}}"#).map_err(|e| CompositorQuit::Unreachable(format!("niri socket: {e}")))?;
     let mut reply = String::new();
-    let _ = std::io::BufReader::new(&stream).read_line(&mut reply);
-    if let Some(error) = niri_reply_error(&reply) {
-        return Err(CompositorQuit::Refused { call: "niri Action::Quit".into(), error });
+    match std::io::BufReader::new(&stream).read_line(&mut reply) {
+        // Clean close with no bytes: niri quit before answering.
+        Ok(0) => Ok(()),
+        Ok(_) => match niri_reply_error(&reply) {
+            Some(error) => Err(CompositorQuit::Refused { call: "niri Action::Quit".into(), error }),
+            None => Ok(()),
+        },
+        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {
+            Err(CompositorQuit::Unreachable(format!("niri socket: {e}")))
+        }
+        // Broken pipe / connection reset after accept: treat as delivered.
+        Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof || e.kind() == std::io::ErrorKind::ConnectionReset || e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+        Err(e) => Err(CompositorQuit::Unreachable(format!("niri socket: {e}"))),
     }
-    Ok(())
 }
 
 /// The error in a niri reply (`{"Err":…}`), if any.
@@ -249,12 +282,22 @@ fn hyprland_exit(sock: impl AsRef<std::path::Path>) -> Result<(), CompositorQuit
     let _ = stream.set_read_timeout(Some(QUIT_REPLY_TIMEOUT));
     stream.write_all(b"dispatch exit").map_err(|e| CompositorQuit::Unreachable(format!("Hyprland socket: {e}")))?;
     let mut reply = String::new();
-    let _ = stream.read_to_string(&mut reply);
-    let trimmed = reply.trim();
-    if !trimmed.is_empty() && trimmed != "ok" && !trimmed.starts_with("ok\n") {
-        return Err(CompositorQuit::Refused { call: "hyprland dispatch exit".into(), error: trimmed.to_string() });
+    match stream.read_to_string(&mut reply) {
+        Ok(0) => Ok(()),
+        Ok(_) => {
+            let trimmed = reply.trim();
+            if trimmed.is_empty() || trimmed == "ok" || trimmed.starts_with("ok\n") {
+                Ok(())
+            } else {
+                Err(CompositorQuit::Refused { call: "hyprland dispatch exit".into(), error: trimmed.to_string() })
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut => {
+            Err(CompositorQuit::Unreachable(format!("Hyprland socket: {e}")))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof || e.kind() == std::io::ErrorKind::ConnectionReset || e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
+        Err(e) => Err(CompositorQuit::Unreachable(format!("Hyprland socket: {e}"))),
     }
-    Ok(())
 }
 
 /// i3-compatible `exit` on `$SWAYSOCK` / `$I3SOCK`.
@@ -278,7 +321,7 @@ fn sway_exit(sock: &std::path::Path) -> Result<(), CompositorQuit> {
         Err(_) => return Ok(()),
     }
     if &header[..6] != b"i3-ipc" {
-        return Err(CompositorQuit::Refused { call: "sway/i3 exit".into(), error: "malformed IPC reply".into() });
+        return Err(CompositorQuit::Refused { call: "sway/i3 exit".into(), error: t("malformed IPC reply").into() });
     }
     let len = u32::from_ne_bytes(header[6..10].try_into().unwrap()) as usize;
     let mut body = vec![0u8; len.min(4096)];
@@ -452,15 +495,6 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let sock = dir.path().join("niri.sock");
         let listener = std::os::unix::net::UnixListener::bind(&sock).unwrap();
-        // Clear compositor envs we might inherit, then set only Niri.
-        // SAFETY: test process; no other threads read these yet.
-        let guard = EnvGuard::set(&[
-            ("MANGO_INSTANCE_SIGNATURE", None),
-            ("HYPRLAND_INSTANCE_SIGNATURE", None),
-            ("SWAYSOCK", None),
-            ("I3SOCK", None),
-            ("NIRI_SOCKET", Some(sock.as_os_str())),
-        ]);
         let server = std::thread::spawn(move || {
             use std::io::{BufRead as _, Write as _};
             let (stream, _) = listener.accept().unwrap();
@@ -469,45 +503,38 @@ mod tests {
             (&stream).write_all(b"{\"Ok\":{\"Handled\":null}}\n").unwrap();
             line
         });
-        assert_eq!(compositor_quit(), Ok("niri Action::Quit"));
+        let sock_os = sock.as_os_str().to_owned();
+        let env = |key: &str| match key {
+            "NIRI_SOCKET" => Some(sock_os.clone()),
+            _ => None,
+        };
+        assert_eq!(compositor_quit_with(env), Ok("niri Action::Quit"));
         assert!(server.join().unwrap().contains("Quit"));
-        drop(guard);
     }
 
-    /// Restores process environment variables after a test.
-    struct EnvGuard {
-        previous: Vec<(std::ffi::OsString, Option<std::ffi::OsString>)>,
-    }
-
-    impl EnvGuard {
-        fn set(pairs: &[(&str, Option<&std::ffi::OsStr>)]) -> Self {
-            let previous = pairs
-                .iter()
-                .map(|(key, _)| {
-                    let key = std::ffi::OsString::from(key);
-                    let old = std::env::var_os(&key);
-                    (key, old)
-                })
-                .collect::<Vec<_>>();
-            for (key, value) in pairs {
-                match value {
-                    Some(v) => unsafe { std::env::set_var(key, v) },
-                    None => unsafe { std::env::remove_var(key) },
-                }
-            }
-            Self { previous }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            for (key, value) in self.previous.drain(..) {
-                match value {
-                    Some(v) => unsafe { std::env::set_var(&key, v) },
-                    None => unsafe { std::env::remove_var(&key) },
-                }
-            }
-        }
+    #[test]
+    fn compositor_quit_skips_a_stale_mango_socket_and_tries_niri() {
+        let dir = tempfile::tempdir().unwrap();
+        let niri = dir.path().join("niri.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&niri).unwrap();
+        let server = std::thread::spawn(move || {
+            use std::io::{BufRead as _, Write as _};
+            let (stream, _) = listener.accept().unwrap();
+            let mut line = String::new();
+            std::io::BufReader::new(&stream).read_line(&mut line).unwrap();
+            (&stream).write_all(b"{\"Ok\":{\"Handled\":null}}\n").unwrap();
+            line
+        });
+        let stale = dir.path().join("missing-mango.sock");
+        let niri_os = niri.as_os_str().to_owned();
+        let stale_os = stale.as_os_str().to_owned();
+        let env = |key: &str| match key {
+            "MANGO_INSTANCE_SIGNATURE" => Some(stale_os.clone()),
+            "NIRI_SOCKET" => Some(niri_os.clone()),
+            _ => None,
+        };
+        assert_eq!(compositor_quit_with(env), Ok("niri Action::Quit"));
+        assert!(server.join().unwrap().contains("Quit"));
     }
 
     #[test]
