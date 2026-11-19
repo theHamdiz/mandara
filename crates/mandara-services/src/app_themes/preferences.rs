@@ -37,6 +37,11 @@ struct Record {
     owners: BTreeMap<String, Vec<Change>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pending: Option<Pending>,
+    /// Preference restore finished, but the post-undo step (for example KDE
+    /// `notifyChange`) has not. Retries only re-run that step — they must not
+    /// re-apply the old `Change` values if the user edited the file since.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pending_notify: BTreeMap<String, Vec<PathBuf>>,
 }
 
 impl Record {
@@ -170,6 +175,8 @@ pub fn set_with(
     let before = FileStamp::at(lock.target())?;
     let record_path = record_path(locations);
     let mut record = load(&record_path)?;
+    // A new apply supersedes any unfinished post-undo notification.
+    record.pending_notify.remove(owner);
     let previous = record.owners.get(owner).cloned().unwrap_or_default();
     let created = !path.exists();
     let original = text(path)?;
@@ -293,6 +300,14 @@ fn undo_with_then(
 ) -> Result<Vec<PathBuf>> {
     let record_path = record_path(locations);
     let mut record = load(&record_path)?;
+    // Prefer finishing a prior restore whose notify (or other after-step) failed:
+    // the file is already restored, so do not re-apply `Change` values.
+    if let Some(paths) = record.pending_notify.get(owner).cloned() {
+        after(&paths)?;
+        record.pending_notify.remove(owner);
+        store(&record_path, &record)?;
+        return Ok(Vec::new());
+    }
     let Some(changes) = record.owners.get(owner) else {
         return Ok(Vec::new());
     };
@@ -330,10 +345,22 @@ fn undo_with_then(
             changed.push(path.to_path_buf());
         }
     }
-    after(&owned)?;
-    record.owners.remove(owner);
-    store(&record_path, &record)?;
-    Ok(changed)
+    match after(&owned) {
+        Ok(()) => {
+            record.owners.remove(owner);
+            record.pending_notify.remove(owner);
+            store(&record_path, &record)?;
+            Ok(changed)
+        }
+        Err(error) => {
+            // Disk restore is done; drop Change ownership so a later user edit
+            // is not overwritten on retry, but keep paths for the after-step.
+            record.owners.remove(owner);
+            record.pending_notify.insert(owner.into(), owned);
+            store(&record_path, &record)?;
+            Err(error)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -445,7 +472,7 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_after_step_keeps_ownership_so_undo_can_retry() {
+    fn a_failed_after_step_retries_notify_without_restoring_again() {
         let root = tempfile::tempdir().unwrap();
         let locations = Locations {
             home: root.path().into(),
@@ -467,11 +494,16 @@ mod tests {
         assert!(
             undo_then("kde", &locations, |_| Err(anyhow::anyhow!("notify failed"))).is_err()
         );
-        assert!(load(&record_path(&locations)).unwrap().owners.contains_key("kde"));
+        let record = load(&record_path(&locations)).unwrap();
+        assert!(!record.owners.contains_key("kde"));
+        assert!(record.pending_notify["kde"].iter().any(|p| p.ends_with("kdeglobals")));
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
             "[General]\nColorScheme=Personal\n"
         );
+        // User picks Mandara again after restore; a notify retry must not
+        // overwrite that choice with the old `before` value.
+        std::fs::write(&path, "[General]\nColorScheme=Mandara\n").unwrap();
         let mut notified = false;
         undo_then("kde", &locations, |owned| {
             assert!(owned.iter().any(|p| p.ends_with("kdeglobals")));
@@ -480,7 +512,13 @@ mod tests {
         })
         .unwrap();
         assert!(notified);
-        assert!(!load(&record_path(&locations)).unwrap().owners.contains_key("kde"));
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "[General]\nColorScheme=Mandara\n"
+        );
+        let record = load(&record_path(&locations)).unwrap();
+        assert!(!record.owners.contains_key("kde"));
+        assert!(!record.pending_notify.contains_key("kde"));
     }
 
     #[test]

@@ -27,14 +27,18 @@ pub fn apply(name: &str, context: &Context<'_>) -> Result<()> {
 }
 
 pub fn undo(owner: &str, locations: &Locations) -> Result<Vec<std::path::PathBuf>> {
-    // Restore first, then notify while ownership still exists so a failed
-    // notifyChange leaves the owner record for a retry (CodeRabbit).
-    preferences::undo_then(owner, locations, |owned| {
-        if owner == "kde" && owned.iter().any(|path| path.ends_with("kdeglobals")) {
-            kde::notify_apps()?;
-        }
-        Ok(())
-    })
+    if owner == "kde" {
+        // Restore, then notify. A failed notifyChange keeps a pending-notify
+        // record so retries only re-emit the signal (they do not re-apply
+        // preference Changes and overwrite a later user edit).
+        return preferences::undo_then(owner, locations, |owned| {
+            if owned.iter().any(|path| path.ends_with("kdeglobals")) {
+                kde::notify_apps()?;
+            }
+            Ok(())
+        });
+    }
+    preferences::undo(owner, locations)
 }
 
 fn single_output(outputs: &[std::path::PathBuf]) -> Result<&Path> {
