@@ -27,7 +27,13 @@ pub fn apply(name: &str, context: &Context<'_>) -> Result<()> {
 }
 
 pub fn undo(owner: &str, locations: &Locations) -> Result<Vec<std::path::PathBuf>> {
-    preferences::undo(owner, locations)
+    let changed = preferences::undo(owner, locations)?;
+    // Open Dolphin / other KDE apps keep the old palette until they hear
+    // notifyChange — same signal the apply path emits after writing.
+    if owner == "kde" && changed.iter().any(|path| path.ends_with("kdeglobals")) {
+        kde::notify_apps()?;
+    }
+    Ok(changed)
 }
 
 fn single_output(outputs: &[std::path::PathBuf]) -> Result<&Path> {

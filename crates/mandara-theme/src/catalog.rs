@@ -399,10 +399,12 @@ mod tests {
         assert!(fixed.contrast_ratio(bg) >= 4.5);
         let light_bg = Color::hex("#f8f8f8");
         assert!(ensure_contrast(Color::hex("#e0e0e0"), light_bg, 4.5).contrast_ratio(light_bg) >= 4.5);
-        // Mid-luminance grey: lightening toward white can miss AA, so the
-        // helper must also try darkening.
-        let mid = Color::hex("#757575");
-        let near = Color::hex("#7a7a7a");
+        // Mid-luminance grey where white alone misses AA (~4.29) but black
+        // reaches it (~4.89), so the helper must try the darker direction.
+        let mid = Color::hex("#7a7a7a");
+        let near = Color::hex("#808080");
+        assert!(Color::hex("#ffffff").contrast_ratio(mid) < 4.5);
+        assert!(Color::hex("#000000").contrast_ratio(mid) >= 4.5);
         let fixed_mid = ensure_contrast(near, mid, 4.5);
         assert!(fixed_mid.contrast_ratio(mid) >= 4.5, "ratio {} (bg lum {})", fixed_mid.contrast_ratio(mid), mid.relative_luminance());
     }
