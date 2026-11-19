@@ -5866,6 +5866,7 @@ Plymouth isn't in your initramfs yet (add its hook), so the splash won't show un
 Plymouth · {theme}
 Plymouth, the boot splash, isn't installed. Install it with your package manager to choose a splash here.
 Pocket player
+Point qt6ct / qt5ct at Mandara's colour palette.
 Point rEFInd at the theme
 Pointer
 Pointer rest on the edge before a hidden dock shows

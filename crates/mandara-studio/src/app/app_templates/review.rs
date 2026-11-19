@@ -46,6 +46,7 @@ impl From<Review> for Pending {
             kind: Kind::Action,
             text: match action.as_str() {
                 "kde-color-scheme" => tk("Apply the color scheme to KDE apps and notify running apps.").into(),
+                "qt-color-scheme" => tk("Point qt6ct / qt5ct at Mandara's colour palette.").into(),
                 "firefox-theme" => tk("Enable browser theming and publish the shared app palette.").into(),
                 _ => action.into(),
             },

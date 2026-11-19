@@ -1,6 +1,7 @@
 //! Native app actions that do not need an imported setup command.
 
 mod kde;
+mod qt;
 
 use super::{paths::Locations, preferences};
 use anyhow::{Result, ensure};
@@ -20,6 +21,7 @@ pub fn apply(name: &str, context: &Context<'_>) -> Result<()> {
     match name {
         "" => Ok(()),
         "kde-color-scheme" => kde::Kde.apply(context),
+        "qt-color-scheme" => qt::Qt.apply(context),
         other => anyhow::bail!("unknown app theme action: {other}"),
     }
 }

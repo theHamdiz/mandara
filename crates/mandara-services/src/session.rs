@@ -85,7 +85,9 @@ impl SessionAction {
     }
 
     /// Runs the action over logind's D-Bus API (no external tools). Logout
-    /// asks MangoWM to quit when it is running, else terminates the session.
+    /// asks the running compositor to quit first (MangoWM, Niri, Hyprland,
+    /// Sway); only when that socket is missing does it fall back to logind
+    /// `Session.Terminate`.
     pub fn run(self) -> Result<(), String> {
         crate::runtime::block_on(self.call())
     }
@@ -93,15 +95,18 @@ impl SessionAction {
     async fn call(self) -> Result<(), String> {
         use crate::actor::proxy;
         let err = |e: zbus::Error| tf("{action} failed ({call}): {error}", &[("action", &self.label()), ("call", &self.describe()), ("error", &e)]);
-        if self == SessionAction::Logout
-            && let Some(sock) = std::env::var_os("MANGO_INSTANCE_SIGNATURE")
-        {
-            match mango_quit(std::path::Path::new(&sock)) {
-                Ok(()) => return Ok(()),
-                // A stale socket (MangoWM restarted, or a shell started
-                // outside it): end the session through logind instead.
-                Err(MangoQuit::Unreachable(e)) => tracing::warn!("log out: MangoWM's socket: {e}; asking logind"),
-                Err(MangoQuit::Refused(e)) => return Err(tf("{action} failed ({call}): {error}", &[("action", &self.label()), ("call", &"MangoWM dispatch quit"), ("error", &e)])),
+        if self == SessionAction::Logout {
+            match compositor_quit() {
+                Ok(how) => {
+                    tracing::info!("log out: {how}");
+                    return Ok(());
+                }
+                // No compositor socket, or a stale one: end the session
+                // through logind instead.
+                Err(CompositorQuit::Unreachable(e)) => tracing::warn!("log out: {e}; asking logind"),
+                Err(CompositorQuit::Refused { call, error }) => {
+                    return Err(tf("{action} failed ({call}): {error}", &[("action", &self.label()), ("call", &call), ("error", &error)]));
+                }
             }
         }
         #[cfg(target_os = "freebsd")]
@@ -151,37 +156,134 @@ impl SessionAction {
     }
 }
 
-/// How long MangoWM gets to acknowledge `dispatch quit`.
-const MANGO_REPLY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+/// How long a compositor gets to acknowledge a quit.
+const QUIT_REPLY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 
-/// Why MangoWM didn't quit.
+/// Why the compositor didn't quit.
 #[derive(Debug, PartialEq)]
-enum MangoQuit {
-    /// Its socket couldn't be reached.
+enum CompositorQuit {
+    /// No known compositor socket, or it couldn't be reached.
     Unreachable(String),
     /// It answered with an error.
-    Refused(String),
+    Refused { call: String, error: String },
+}
+
+/// Asks the running compositor to quit so its session wrapper (niri-session,
+/// etc.) can tear down `graphical-session.target` cleanly. logind
+/// `Session.Terminate` alone kills that wrapper first and leaves long-lived
+/// user services (like `niri.service`) behind — see #209.
+fn compositor_quit() -> Result<&'static str, CompositorQuit> {
+    if let Some(sock) = std::env::var_os("MANGO_INSTANCE_SIGNATURE") {
+        mango_quit(std::path::Path::new(&sock))?;
+        return Ok("MangoWM dispatch quit");
+    }
+    if let Some(sock) = std::env::var_os("NIRI_SOCKET") {
+        niri_quit(std::path::Path::new(&sock))?;
+        return Ok("niri Action::Quit");
+    }
+    if let Some(sig) = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE") {
+        let runtime = std::env::var_os("XDG_RUNTIME_DIR").ok_or_else(|| CompositorQuit::Unreachable("HYPRLAND_INSTANCE_SIGNATURE set but XDG_RUNTIME_DIR is missing".into()))?;
+        hyprland_exit(std::path::Path::new(&runtime).join("hypr").join(sig).join(".socket.sock"))?;
+        return Ok("hyprland dispatch exit");
+    }
+    if let Some(sock) = std::env::var_os("SWAYSOCK").or_else(|| std::env::var_os("I3SOCK")) {
+        sway_exit(std::path::Path::new(&sock))?;
+        return Ok("sway/i3 exit");
+    }
+    Err(CompositorQuit::Unreachable("no compositor quit socket in the environment".into()))
 }
 
 /// Asks MangoWM to quit (ending the session it runs) and waits for its
 /// answer: MangoWM only carries out a command once it has written the reply,
 /// so a client that hangs up straight after sending it never logs out.
-fn mango_quit(sock: &std::path::Path) -> Result<(), MangoQuit> {
+fn mango_quit(sock: &std::path::Path) -> Result<(), CompositorQuit> {
     use std::io::{BufRead as _, Write as _};
-    let mut stream = std::os::unix::net::UnixStream::connect(sock).map_err(|e| MangoQuit::Unreachable(e.to_string()))?;
-    let _ = stream.set_read_timeout(Some(MANGO_REPLY_TIMEOUT));
-    writeln!(stream, "dispatch quit").map_err(|e| MangoQuit::Unreachable(e.to_string()))?;
+    let mut stream = std::os::unix::net::UnixStream::connect(sock).map_err(|e| CompositorQuit::Unreachable(format!("MangoWM socket: {e}")))?;
+    let _ = stream.set_read_timeout(Some(QUIT_REPLY_TIMEOUT));
+    writeln!(stream, "dispatch quit").map_err(|e| CompositorQuit::Unreachable(format!("MangoWM socket: {e}")))?;
     let mut reply = String::new();
     // No reply (it quit before answering, or timed out) still counts: the
     // command was delivered.
     let _ = std::io::BufReader::new(&stream).read_line(&mut reply);
-    mango_reply_error(&reply).map_or(Ok(()), |e| Err(MangoQuit::Refused(e)))
+    match mango_reply_error(&reply) {
+        Some(error) => Err(CompositorQuit::Refused { call: "MangoWM dispatch quit".into(), error }),
+        None => Ok(()),
+    }
 }
 
 /// The error in a MangoWM reply line (`{"error":"…"}`), if any.
 fn mango_reply_error(reply: &str) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(reply.trim()).ok()?;
     v.get("error").and_then(|e| e.as_str()).map(str::to_string)
+}
+
+/// `{"Action":{"Quit":{"skip_confirmation":true}}}` on `$NIRI_SOCKET`.
+fn niri_quit(sock: &std::path::Path) -> Result<(), CompositorQuit> {
+    use std::io::{BufRead as _, Write as _};
+    let mut stream = std::os::unix::net::UnixStream::connect(sock).map_err(|e| CompositorQuit::Unreachable(format!("niri socket: {e}")))?;
+    let _ = stream.set_read_timeout(Some(QUIT_REPLY_TIMEOUT));
+    // skip_confirmation: the session menu already confirmed.
+    writeln!(stream, r#"{{"Action":{{"Quit":{{"skip_confirmation":true}}}}}}"#).map_err(|e| CompositorQuit::Unreachable(format!("niri socket: {e}")))?;
+    let mut reply = String::new();
+    let _ = std::io::BufReader::new(&stream).read_line(&mut reply);
+    if let Some(error) = niri_reply_error(&reply) {
+        return Err(CompositorQuit::Refused { call: "niri Action::Quit".into(), error });
+    }
+    Ok(())
+}
+
+/// The error in a niri reply (`{"Err":…}`), if any.
+fn niri_reply_error(reply: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(reply.trim()).ok()?;
+    v.get("Err").map(|e| match e {
+        serde_json::Value::String(s) => s.clone(),
+        other => other.to_string(),
+    })
+}
+
+/// `dispatch exit` on Hyprland's `.socket.sock`.
+fn hyprland_exit(sock: impl AsRef<std::path::Path>) -> Result<(), CompositorQuit> {
+    use std::io::{Read as _, Write as _};
+    let sock = sock.as_ref();
+    let mut stream = std::os::unix::net::UnixStream::connect(sock).map_err(|e| CompositorQuit::Unreachable(format!("Hyprland socket: {e}")))?;
+    let _ = stream.set_read_timeout(Some(QUIT_REPLY_TIMEOUT));
+    stream.write_all(b"dispatch exit").map_err(|e| CompositorQuit::Unreachable(format!("Hyprland socket: {e}")))?;
+    let mut reply = String::new();
+    let _ = stream.read_to_string(&mut reply);
+    let trimmed = reply.trim();
+    if !trimmed.is_empty() && trimmed != "ok" && !trimmed.starts_with("ok\n") {
+        return Err(CompositorQuit::Refused { call: "hyprland dispatch exit".into(), error: trimmed.to_string() });
+    }
+    Ok(())
+}
+
+/// i3-compatible `exit` on `$SWAYSOCK` / `$I3SOCK`.
+fn sway_exit(sock: &std::path::Path) -> Result<(), CompositorQuit> {
+    // Prefer the library path when linked; otherwise speak the i3 IPC payload
+    // by hand so Mandara stays free of an optional sway dependency here.
+    use std::io::{Read as _, Write as _};
+    let mut stream = std::os::unix::net::UnixStream::connect(sock).map_err(|e| CompositorQuit::Unreachable(format!("Sway/i3 socket: {e}")))?;
+    let _ = stream.set_read_timeout(Some(QUIT_REPLY_TIMEOUT));
+    let payload = b"exit";
+    let mut message = Vec::with_capacity(14 + payload.len());
+    message.extend_from_slice(b"i3-ipc");
+    message.extend_from_slice(&(payload.len() as u32).to_ne_bytes());
+    message.extend_from_slice(&0u32.to_ne_bytes()); // RUN_COMMAND
+    message.extend_from_slice(payload);
+    stream.write_all(&message).map_err(|e| CompositorQuit::Unreachable(format!("Sway/i3 socket: {e}")))?;
+    let mut header = [0u8; 14];
+    match stream.read_exact(&mut header) {
+        Ok(()) => {}
+        // Compositor gone before answering: the exit was delivered.
+        Err(_) => return Ok(()),
+    }
+    if &header[..6] != b"i3-ipc" {
+        return Err(CompositorQuit::Refused { call: "sway/i3 exit".into(), error: "malformed IPC reply".into() });
+    }
+    let len = u32::from_ne_bytes(header[6..10].try_into().unwrap()) as usize;
+    let mut body = vec![0u8; len.min(4096)];
+    let _ = stream.read_exact(&mut body);
+    Ok(())
 }
 
 /// Holds a logind idle/sleep inhibitor; dropping it releases the lock.
@@ -300,10 +402,112 @@ mod tests {
         assert_eq!(mango_quit(&sock), Ok(()));
         assert!(start.elapsed() >= ANSWER_AFTER, "returned before MangoWM answered");
         assert_eq!(server.join().unwrap(), "dispatch quit\n");
-        assert!(matches!(mango_quit(&dir.path().join("missing.sock")), Err(MangoQuit::Unreachable(_))));
+        assert!(matches!(mango_quit(&dir.path().join("missing.sock")), Err(CompositorQuit::Unreachable(_))));
         assert_eq!(mango_reply_error(r#"{"error":"unknown dispatcher"}"#).as_deref(), Some("unknown dispatcher"));
         assert_eq!(mango_reply_error(r#"{"success":true}"#), None);
         assert_eq!(mango_reply_error(""), None);
+    }
+
+    /// Niri must get `Quit` with skip_confirmation so niri-session can stop
+    /// `niri.service`; Terminate alone leaves that service running (#209).
+    #[test]
+    fn logout_asks_niri_to_quit_without_confirmation() {
+        use std::io::{BufRead as _, Write as _};
+        let dir = tempfile::tempdir().unwrap();
+        let sock = dir.path().join("niri.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut line = String::new();
+            std::io::BufReader::new(&stream).read_line(&mut line).unwrap();
+            (&stream).write_all(b"{\"Ok\":{\"Handled\":null}}\n").unwrap();
+            line
+        });
+        assert_eq!(niri_quit(&sock), Ok(()));
+        let sent = server.join().unwrap();
+        assert!(sent.contains(r#""Quit""#) && sent.contains(r#""skip_confirmation":true"#), "{sent}");
+        assert_eq!(niri_reply_error(r#"{"Err":"busy"}"#).as_deref(), Some("busy"));
+        assert_eq!(niri_reply_error(r#"{"Ok":{"Handled":null}}"#), None);
+    }
+
+    #[test]
+    fn logout_asks_hyprland_to_exit() {
+        use std::io::{Read as _, Write as _};
+        let dir = tempfile::tempdir().unwrap();
+        let sock = dir.path().join("hypr.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = vec![0u8; 64];
+            let n = stream.read(&mut buf).unwrap();
+            stream.write_all(b"ok").unwrap();
+            String::from_utf8_lossy(&buf[..n]).into_owned()
+        });
+        assert_eq!(hyprland_exit(&sock), Ok(()));
+        assert_eq!(server.join().unwrap(), "dispatch exit");
+    }
+
+    #[test]
+    fn compositor_quit_prefers_niri_over_logind_when_socket_is_set() {
+        let dir = tempfile::tempdir().unwrap();
+        let sock = dir.path().join("niri.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        // Clear compositor envs we might inherit, then set only Niri.
+        // SAFETY: test process; no other threads read these yet.
+        let guard = EnvGuard::set(&[
+            ("MANGO_INSTANCE_SIGNATURE", None),
+            ("HYPRLAND_INSTANCE_SIGNATURE", None),
+            ("SWAYSOCK", None),
+            ("I3SOCK", None),
+            ("NIRI_SOCKET", Some(sock.as_os_str())),
+        ]);
+        let server = std::thread::spawn(move || {
+            use std::io::{BufRead as _, Write as _};
+            let (stream, _) = listener.accept().unwrap();
+            let mut line = String::new();
+            std::io::BufReader::new(&stream).read_line(&mut line).unwrap();
+            (&stream).write_all(b"{\"Ok\":{\"Handled\":null}}\n").unwrap();
+            line
+        });
+        assert_eq!(compositor_quit(), Ok("niri Action::Quit"));
+        assert!(server.join().unwrap().contains("Quit"));
+        drop(guard);
+    }
+
+    /// Restores process environment variables after a test.
+    struct EnvGuard {
+        previous: Vec<(std::ffi::OsString, Option<std::ffi::OsString>)>,
+    }
+
+    impl EnvGuard {
+        fn set(pairs: &[(&str, Option<&std::ffi::OsStr>)]) -> Self {
+            let previous = pairs
+                .iter()
+                .map(|(key, _)| {
+                    let key = std::ffi::OsString::from(key);
+                    let old = std::env::var_os(&key);
+                    (key, old)
+                })
+                .collect::<Vec<_>>();
+            for (key, value) in pairs {
+                match value {
+                    Some(v) => unsafe { std::env::set_var(key, v) },
+                    None => unsafe { std::env::remove_var(key) },
+                }
+            }
+            Self { previous }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            for (key, value) in self.previous.drain(..) {
+                match value {
+                    Some(v) => unsafe { std::env::set_var(&key, v) },
+                    None => unsafe { std::env::remove_var(&key) },
+                }
+            }
+        }
     }
 
     #[test]

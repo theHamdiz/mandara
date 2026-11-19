@@ -125,6 +125,12 @@ impl Review {
                     review.file(locations.config.join("kdeglobals"), true)?;
                     review.actions.push(entry.post_action.clone());
                 }
+                "qt-color-scheme" => {
+                    for toolkit in ["qt6ct", "qt5ct"] {
+                        review.file(locations.config.join(toolkit).join(format!("{toolkit}.conf")), true)?;
+                    }
+                    review.actions.push(entry.post_action.clone());
+                }
                 "" => {}
                 other => anyhow::bail!("unknown app theme action: {other}"),
             }

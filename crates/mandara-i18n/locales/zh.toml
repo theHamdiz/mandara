@@ -10733,6 +10733,7 @@
 "Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "请先检查并批准浏览器的共享配色。其他 Pywal 应用也会使用这些颜色。"
 
 "Apply the color scheme to KDE apps and notify running apps." = "将配色方案应用于 KDE 应用，并通知正在运行的应用。"
+"Point qt6ct / qt5ct at Mandara's colour palette." = "让 qt6ct / qt5ct 指向 Mandara 的调色板。"
 
 "Enable browser theming and publish the shared app palette." = "启用浏览器主题并发布应用共享调色板。"
 

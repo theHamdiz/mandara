@@ -6,6 +6,11 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### Fixed
+
+- KDE / Qt Mandara colour schemes include Plasma `ColorEffects` groups, keep View / Window / Header text at WCAG AA contrast, and selecting Qt theming points qt6ct / qt5ct at Mandara's palette — Dolphin folder labels and other Qt text stay readable on dark surfaces. (#207)
+- Log out on Niri (and Hyprland / Sway) asks the compositor to quit first instead of only calling logind `Session.Terminate`, so `niri.service` stops cleanly and the greeter accepts the next login. (#209)
+
 ## 0.35.2 — 2026-11-18
 
 The lock screen stays up on fractional-scale MangoWM, idle locking no longer panics when the fade overlay closes, Community lists the third-party plugins you already have, and Develop no longer treats marketplace installs as your work-in-progress.
