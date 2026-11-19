@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.35.3 — 2026-11-19
+
 Qt and KDE Mandara colour schemes keep readable text in Dolphin and friends, and logging out of Niri quits the compositor cleanly so the greeter can take the next login.
 
 ### Fixed
