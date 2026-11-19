@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Qt and KDE Mandara colour schemes keep readable text in Dolphin and friends, and logging out of Niri quits the compositor cleanly so the greeter can take the next login.
+
 ### Fixed
 
 - KDE / Qt Mandara colour schemes include Plasma `ColorEffects` groups, keep View / Window / Header text at WCAG AA contrast, and selecting Qt theming points qt6ct / qt5ct at Mandara's palette — Dolphin folder labels and other Qt text stay readable on dark surfaces. (#207)
