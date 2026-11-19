@@ -36,6 +36,11 @@ async fn notify() -> zbus::Result<()> {
         .await
 }
 
+/// Tells open KDE apps to reload their palette (also used after undo).
+pub(super) fn notify_apps() -> Result<()> {
+    crate::runtime::block_on(notify()).map_err(Into::into)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

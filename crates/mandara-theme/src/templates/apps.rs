@@ -303,6 +303,14 @@ pub fn vesktop(p: &MandaraPalette) -> String {
     s
 }
 
+/// WCAG AA contrast for body text on a solid background.
+const KDE_TEXT_CONTRAST: f32 = 4.5;
+
+/// Foreground that stays readable on `bg` (AA), preferring `fg`.
+fn readable_on(fg: Color, bg: Color) -> Color {
+    crate::catalog::ensure_contrast(fg, bg, KDE_TEXT_CONTRAST)
+}
+
 /// KDE / Plasma colour scheme (`~/.local/share/color-schemes/Mandara.colors`).
 pub fn kde(p: &MandaraPalette) -> String {
     // (section, background normal, background alternate, foreground)
@@ -319,13 +327,23 @@ pub fn kde(p: &MandaraPalette) -> String {
         ("Colors:Header][Inactive", p.surface_container_low, p.surface_base, p.on_surface),
     ];
     let mut s = header(p, "#");
+    // Every working Plasma scheme ships these. Without them, some Qt styles
+    // (and Dolphin's icon view) fall back toward a light palette's black text
+    // while keeping Mandara's dark backgrounds — labels vanish on the view.
+    let effect_bg = rgb(p.surface_container);
+    s.push_str(&format!(
+        "[ColorEffects:Disabled]\nColor={effect_bg}\nColorAmount=0\nColorEffect=0\nContrastAmount=0.65\nContrastEffect=1\nIntensityAmount=0.1\nIntensityEffect=2\n\n\
+         [ColorEffects:Inactive]\nChangeSelectionColor=false\nEnable=false\nColor={effect_bg}\nColorAmount=0.025\nColorEffect=2\nContrastAmount=0.1\nContrastEffect=2\nIntensityAmount=0\nIntensityEffect=0\n\n"
+    ));
     for (name, bg, alt, fg) in sections {
+        let text = readable_on(fg, bg);
+        let muted = readable_on(p.on_surface_variant, bg);
         s.push_str(&format!(
             "[{name}]\nBackgroundNormal={}\nBackgroundAlternate={}\nForegroundNormal={}\nForegroundInactive={}\nForegroundActive={}\nForegroundLink={}\nForegroundVisited={}\nForegroundNegative={}\nForegroundNeutral={}\nForegroundPositive={}\nDecorationFocus={}\nDecorationHover={}\n\n",
             rgb(bg),
             rgb(alt),
-            rgb(fg),
-            rgb(p.on_surface_variant),
+            rgb(text),
+            rgb(muted),
             rgb(p.primary),
             rgb(p.tertiary),
             rgb(p.secondary),
@@ -336,12 +354,14 @@ pub fn kde(p: &MandaraPalette) -> String {
             rgb(p.primary),
         ));
     }
+    let chrome_fg = readable_on(p.on_surface, p.surface_container);
+    let chrome_muted = readable_on(p.on_surface_variant, p.surface_base);
     s.push_str(&format!(
         "[General]\nColorScheme=Mandara\nName=Mandara\nshadeSortColumn=true\n\n[KDE]\ncontrast=4\n\n[WM]\nactiveBackground={}\nactiveForeground={}\ninactiveBackground={}\ninactiveForeground={}\n",
         rgb(p.surface_container),
-        rgb(p.on_surface),
+        rgb(chrome_fg),
         rgb(p.surface_base),
-        rgb(p.on_surface_variant)
+        rgb(chrome_muted)
     ));
     s
 }
@@ -419,6 +439,8 @@ mod tests {
         let p = crate::engine::default_palette(true);
         let k = kde(&p);
         for section in [
+            "[ColorEffects:Disabled]",
+            "[ColorEffects:Inactive]",
             "[Colors:Window]",
             "[Colors:View]",
             "[Colors:Button]",
@@ -430,13 +452,40 @@ mod tests {
         ] {
             assert!(k.contains(section), "{section}");
         }
+        assert!(k.contains("Enable=false"), "inactive effects stay off so view text is not faded into the background");
         let [r, g, b, _] = p.primary.to_rgba8();
         assert!(k.contains(&format!("BackgroundNormal={r},{g},{b}")), "selection background is the accent");
-        let [fr, fg, fb, _] = p.on_surface.to_rgba8();
+        let [fr, fg, fb, _] = readable_on(p.on_surface, p.surface_container_low).to_rgba8();
         assert!(
             k.contains("[Colors:Header][Inactive]\nBackgroundNormal=")
                 && k.contains(&format!("ForegroundNormal={fr},{fg},{fb}")),
             "inactive header keeps readable on-surface text"
         );
+    }
+
+    #[test]
+    fn kde_view_and_window_text_meet_wcag_aa_on_both_modes() {
+        for p in palettes() {
+            let k = kde(&p);
+            for (section, bg) in [
+                ("Colors:View", p.surface_dim),
+                ("Colors:Window", p.surface_base),
+                ("Colors:Header", p.surface_container),
+                ("Colors:Header][Inactive", p.surface_container_low),
+            ] {
+                let fg = readable_on(p.on_surface, bg);
+                let [fr, fg_g, fb, _] = fg.to_rgba8();
+                assert!(
+                    fg.contrast_ratio(bg) >= KDE_TEXT_CONTRAST,
+                    "{section} contrast on {} mode",
+                    if p.is_dark { "dark" } else { "light" }
+                );
+                assert!(
+                    k.contains(&format!("[{section}]\nBackgroundNormal={}\nBackgroundAlternate=", rgb(bg)))
+                        && k.contains(&format!("ForegroundNormal={fr},{fg_g},{fb}")),
+                    "{section} carries the readable foreground"
+                );
+            }
+        }
     }
 }

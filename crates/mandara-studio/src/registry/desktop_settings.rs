@@ -288,7 +288,7 @@ pub(super) fn entries() -> Vec<Setting> {
         s(Themes, tk("App themes"), "/integrations/helix", "Helix", tk("theme = \"mandara\""), Toggle),
         s(Themes, tk("App themes"), "/integrations/neovim", "Neovim", tk(":colorscheme mandara"), Toggle),
         s(Themes, tk("App themes"), "/integrations/vesktop", tk("Vesktop / Vencord"), tk("Enable “mandara” under Themes"), Toggle),
-        s(Themes, tk("App themes"), "/integrations/kde", tk("KDE / Plasma"), tk("A “Mandara” color scheme in ~/.local/share/color-schemes"), Toggle),
+        s(Themes, tk("App themes"), "/integrations/kde", tk("KDE / Plasma"), tk("Writes Mandara.colors and selects it in Plasma (kdeglobals); open apps reload"), Toggle),
         s(Themes, tk("App themes"), "/integrations/cava", "Cava", tk("Theme files and activation steps: docs/app-themes.md"), Toggle),
         s(Themes, tk("App themes"), "/integrations/tmux", "tmux", tk("Theme files and activation steps: docs/app-themes.md"), Toggle),
         s(Themes, tk("App themes"), "/integrations/zellij", "Zellij", tk("Theme files and activation steps: docs/app-themes.md"), Toggle),

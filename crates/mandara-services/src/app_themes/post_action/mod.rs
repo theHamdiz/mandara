@@ -1,6 +1,7 @@
 //! Native app actions that do not need an imported setup command.
 
 mod kde;
+mod qt;
 
 use super::{paths::Locations, preferences};
 use anyhow::{Result, ensure};
@@ -20,11 +21,23 @@ pub fn apply(name: &str, context: &Context<'_>) -> Result<()> {
     match name {
         "" => Ok(()),
         "kde-color-scheme" => kde::Kde.apply(context),
+        "qt-color-scheme" => qt::Qt.apply(context),
         other => anyhow::bail!("unknown app theme action: {other}"),
     }
 }
 
 pub fn undo(owner: &str, locations: &Locations) -> Result<Vec<std::path::PathBuf>> {
+    if owner == "kde" {
+        // Restore, then notify. A failed notifyChange keeps a pending-notify
+        // record so retries only re-emit the signal (they do not re-apply
+        // preference Changes and overwrite a later user edit).
+        return preferences::undo_then(owner, locations, |owned| {
+            if owned.iter().any(|path| path.ends_with("kdeglobals")) {
+                kde::notify_apps()?;
+            }
+            Ok(())
+        });
+    }
     preferences::undo(owner, locations)
 }
 

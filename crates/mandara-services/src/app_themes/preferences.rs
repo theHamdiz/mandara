@@ -37,6 +37,11 @@ struct Record {
     owners: BTreeMap<String, Vec<Change>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pending: Option<Pending>,
+    /// Preference restore finished, but the post-undo step (for example KDE
+    /// `notifyChange`) has not. Retries only re-run that step — they must not
+    /// re-apply the old `Change` values if the user edited the file since.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pending_notify: BTreeMap<String, Vec<PathBuf>>,
 }
 
 impl Record {
@@ -170,6 +175,8 @@ pub fn set_with(
     let before = FileStamp::at(lock.target())?;
     let record_path = record_path(locations);
     let mut record = load(&record_path)?;
+    // Do not drop `pending_notify` until this write commits: a failed
+    // replacement must leave the unfinished KDE notify retry intact.
     let previous = record.owners.get(owner).cloned().unwrap_or_default();
     let created = !path.exists();
     let original = text(path)?;
@@ -241,7 +248,8 @@ pub fn set_with(
     }
     let next = next.finish();
     if next == original {
-        if metadata_changed {
+        if metadata_changed || record.pending_notify.contains_key(owner) {
+            record.pending_notify.remove(owner);
             store(&record_path, &record)?;
         }
         return Ok(());
@@ -254,25 +262,56 @@ pub fn set_with(
     let result = lock.check_stamp(before).map_err(anyhow::Error::from).and_then(|()| write(path,&original,&next));
     if let Err(error) = result {
         // Keep the journal if recovery itself fails; another sync can retry.
+        // `pending_notify` is still on disk from before this attempt.
         load(&record_path).map_err(|recovery| anyhow::anyhow!("{error:#}; recovering theme ownership: {recovery:#}"))?;
         return Err(error);
     }
     record.pending = None;
+    record.pending_notify.remove(owner);
     store(&record_path, &record)?;
     Ok(())
 }
 
 pub fn undo(owner: &str, locations: &Locations) -> Result<Vec<PathBuf>> {
-    undo_with(owner,locations,&write_checked)
+    undo_then(owner, locations, |_| Ok(()))
+}
+
+/// Like [`undo`], but runs `after` with every path this owner recorded.
+/// If `after` fails, preference Changes are still cleared and the paths are
+/// kept in `pending_notify` so a retry only re-runs the post-step (for
+/// example KDE `notifyChange`) without restoring old values again.
+pub fn undo_then(
+    owner: &str,
+    locations: &Locations,
+    after: impl FnOnce(&[PathBuf]) -> Result<()>,
+) -> Result<Vec<PathBuf>> {
+    undo_with_then(owner, locations, &write_checked, after)
 }
 
 pub fn undo_with(
     owner: &str,
     locations: &Locations,
-    write: &dyn Fn(&Path,&str,&str) -> Result<()>,
+    write: &dyn Fn(&Path, &str, &str) -> Result<()>,
+) -> Result<Vec<PathBuf>> {
+    undo_with_then(owner, locations, write, |_| Ok(()))
+}
+
+fn undo_with_then(
+    owner: &str,
+    locations: &Locations,
+    write: &dyn Fn(&Path, &str, &str) -> Result<()>,
+    after: impl FnOnce(&[PathBuf]) -> Result<()>,
 ) -> Result<Vec<PathBuf>> {
     let record_path = record_path(locations);
     let mut record = load(&record_path)?;
+    // Prefer finishing a prior restore whose notify (or other after-step) failed:
+    // the file is already restored, so do not re-apply `Change` values.
+    if let Some(paths) = record.pending_notify.get(owner).cloned() {
+        after(&paths)?;
+        record.pending_notify.remove(owner);
+        store(&record_path, &record)?;
+        return Ok(Vec::new());
+    }
     let Some(changes) = record.owners.get(owner) else {
         return Ok(Vec::new());
     };
@@ -280,17 +319,18 @@ pub fn undo_with(
     for change in changes {
         files.entry(&change.path).or_default().push(change);
     }
+    let owned: Vec<PathBuf> = files.keys().map(|path| (*path).to_path_buf()).collect();
     let mut changed = Vec::new();
     for (path, changes) in files {
         let lock = WriteLock::new(path)?;
         let before = FileStamp::at(lock.target())?;
         let original = text(path)?;
         let format = changes[0].format;
-        ensure!(changes.iter().all(|change|change.format == format),"theme preference formats disagree");
+        ensure!(changes.iter().all(|change| change.format == format), "theme preference formats disagree");
         let mut next = format.parse(&original)?;
         for change in &changes {
-            if next.get(&change.section,&change.key)?.as_deref() == Some(change.after.as_str()) {
-                next.set(&change.section,&change.key,change.before.as_deref())?;
+            if next.get(&change.section, &change.key)?.as_deref() == Some(change.after.as_str()) {
+                next.set(&change.section, &change.key, change.before.as_deref())?;
             }
         }
         let next = next.finish();
@@ -301,17 +341,30 @@ pub fn undo_with(
                     .lines()
                     .all(|line| line.trim().is_empty() || line.trim().starts_with('['))
             {
-                write(path,&original,&next)?;
+                write(path, &original, &next)?;
                 std::fs::remove_file(path)?;
             } else {
-                write(path,&original,&next)?;
+                write(path, &original, &next)?;
             }
             changed.push(path.to_path_buf());
         }
     }
-    record.owners.remove(owner);
-    store(&record_path, &record)?;
-    Ok(changed)
+    match after(&owned) {
+        Ok(()) => {
+            record.owners.remove(owner);
+            record.pending_notify.remove(owner);
+            store(&record_path, &record)?;
+            Ok(changed)
+        }
+        Err(error) => {
+            // Disk restore is done; drop Change ownership so a later user edit
+            // is not overwritten on retry, but keep paths for the after-step.
+            record.owners.remove(owner);
+            record.pending_notify.insert(owner.into(), owned);
+            store(&record_path, &record)?;
+            Err(error)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -420,6 +473,97 @@ mod tests {
             assert_eq!(std::fs::read_to_string(&target).unwrap(),edited);
             assert_eq!(std::fs::read_link(&path).unwrap(),target);
         }
+    }
+
+    #[test]
+    fn a_failed_after_step_retries_notify_without_restoring_again() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = Locations {
+            home: root.path().into(),
+            config: root.path().join("config"),
+            data: root.path().join("data"),
+            cache: root.path().join("cache"),
+            state: root.path().join("state"),
+        };
+        let path = locations.config.join("kdeglobals");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "[General]\nColorScheme=Personal\n").unwrap();
+        set(
+            "kde",
+            &path,
+            &ini_keys("[General]\nColorScheme=Mandara\n").unwrap(),
+            &locations,
+        )
+        .unwrap();
+        assert!(
+            undo_then("kde", &locations, |_| Err(anyhow::anyhow!("notify failed"))).is_err()
+        );
+        let record = load(&record_path(&locations)).unwrap();
+        assert!(!record.owners.contains_key("kde"));
+        assert!(record.pending_notify["kde"].iter().any(|p| p.ends_with("kdeglobals")));
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "[General]\nColorScheme=Personal\n"
+        );
+        // User picks Mandara again after restore; a notify retry must not
+        // overwrite that choice with the old `before` value.
+        std::fs::write(&path, "[General]\nColorScheme=Mandara\n").unwrap();
+        let mut notified = false;
+        undo_then("kde", &locations, |owned| {
+            assert!(owned.iter().any(|p| p.ends_with("kdeglobals")));
+            notified = true;
+            Ok(())
+        })
+        .unwrap();
+        assert!(notified);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "[General]\nColorScheme=Mandara\n"
+        );
+        let record = load(&record_path(&locations)).unwrap();
+        assert!(!record.owners.contains_key("kde"));
+        assert!(!record.pending_notify.contains_key("kde"));
+    }
+
+    #[test]
+    fn a_failed_replacement_write_keeps_pending_notify() {
+        let root = tempfile::tempdir().unwrap();
+        let locations = Locations {
+            home: root.path().into(),
+            config: root.path().join("config"),
+            data: root.path().join("data"),
+            cache: root.path().join("cache"),
+            state: root.path().join("state"),
+        };
+        let path = locations.config.join("kdeglobals");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "[General]\nColorScheme=Personal\n").unwrap();
+        set(
+            "kde",
+            &path,
+            &ini_keys("[General]\nColorScheme=Mandara\n").unwrap(),
+            &locations,
+        )
+        .unwrap();
+        assert!(
+            undo_then("kde", &locations, |_| Err(anyhow::anyhow!("notify failed"))).is_err()
+        );
+        assert!(load(&record_path(&locations)).unwrap().pending_notify.contains_key("kde"));
+        assert!(
+            set_with(
+                "kde",
+                &path,
+                &ini_keys("[General]\nColorScheme=Again\n").unwrap(),
+                Format::Ini,
+                &locations,
+                &|_, _, _| Err(anyhow::anyhow!("disk full")),
+            )
+            .is_err()
+        );
+        assert!(
+            load(&record_path(&locations)).unwrap().pending_notify.contains_key("kde"),
+            "failed set must not drop the unfinished notify retry"
+        );
     }
 
     #[test]

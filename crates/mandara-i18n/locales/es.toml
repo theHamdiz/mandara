@@ -10732,6 +10732,7 @@
 "Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "Revisa y aprueba primero la paleta compartida del navegador. Otras aplicaciones de Pywal también usarán estos colores."
 
 "Apply the color scheme to KDE apps and notify running apps." = "Aplicar el esquema de colores a las aplicaciones KDE y avisar a las que estén abiertas."
+"Point qt6ct / qt5ct at Mandara's colour palette." = "Apuntar qt6ct / qt5ct a la paleta de colores de Mandara."
 
 "Enable browser theming and publish the shared app palette." = "Activar el tema del navegador y publicar la paleta compartida de las aplicaciones."
 
@@ -11309,3 +11310,6 @@
 "The top GitHub results are already installed. Narrow the search to see others." = "Los primeros resultados de GitHub ya están instalados. Acota la búsqueda para ver otros."
 "Search cancelled." = "Búsqueda cancelada."
 "Narrow the search to see more community plugins." = "Acota la búsqueda para ver más complementos de la comunidad."
+"malformed IPC reply" = "respuesta IPC incorrecta"
+"Writes Mandara.colors and selects it in Plasma (kdeglobals); open apps reload" = "Escribe Mandara.colors y lo selecciona en Plasma (kdeglobals); las apps abiertas se recargan"
+"Writes a mandara scheme and points qt6ct / qt5ct at it so Qt apps use Mandara colours" = "Escribe un esquema mandara y apunta qt6ct / qt5ct a él para que las apps Qt usen los colores de Mandara"

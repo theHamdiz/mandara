@@ -161,19 +161,39 @@ pub fn next_id(id: &str) -> String {
 }
 
 /// Pushes `fg` away from `bg` in lightness until it reaches `min` contrast.
+///
+/// Tries the direction suggested by the background first (lighter text on
+/// dark surfaces), then the opposite direction when that cannot meet `min`
+/// (backgrounds just under the 0.2 luminance threshold cannot reach AA with
+/// white alone). Returns the best attempt when neither direction succeeds.
 pub fn ensure_contrast(fg: Color, bg: Color, min: f32) -> Color {
     if fg.contrast_ratio(bg) >= min {
         return fg;
     }
-    let lighter = bg.relative_luminance() < 0.2;
-    let mut c = fg;
-    for _ in 0..60 {
-        c = c.lighten(if lighter { 0.015 } else { -0.015 });
-        if c.contrast_ratio(bg) >= min {
-            break;
+    let prefer_lighter = bg.relative_luminance() < 0.2;
+    let walk = |start: Color, lighter: bool| {
+        let mut c = start;
+        let mut best = start;
+        let mut best_ratio = start.contrast_ratio(bg);
+        for _ in 0..60 {
+            c = c.lighten(if lighter { 0.015 } else { -0.015 });
+            let ratio = c.contrast_ratio(bg);
+            if ratio > best_ratio {
+                best = c;
+                best_ratio = ratio;
+            }
+            if ratio >= min {
+                return (c, ratio);
+            }
         }
+        (best, best_ratio)
+    };
+    let (first, first_ratio) = walk(fg, prefer_lighter);
+    if first_ratio >= min {
+        return first;
     }
-    c
+    let (second, second_ratio) = walk(fg, !prefer_lighter);
+    if second_ratio >= first_ratio { second } else { first }
 }
 
 /// Derives light seeds from dark ones (for dark-only themes).
@@ -379,5 +399,13 @@ mod tests {
         assert!(fixed.contrast_ratio(bg) >= 4.5);
         let light_bg = Color::hex("#f8f8f8");
         assert!(ensure_contrast(Color::hex("#e0e0e0"), light_bg, 4.5).contrast_ratio(light_bg) >= 4.5);
+        // Mid-luminance grey where white alone misses AA (~4.29) but black
+        // reaches it (~4.89), so the helper must try the darker direction.
+        let mid = Color::hex("#7a7a7a");
+        let near = Color::hex("#808080");
+        assert!(Color::hex("#ffffff").contrast_ratio(mid) < 4.5);
+        assert!(Color::hex("#000000").contrast_ratio(mid) >= 4.5);
+        let fixed_mid = ensure_contrast(near, mid, 4.5);
+        assert!(fixed_mid.contrast_ratio(mid) >= 4.5, "ratio {} (bg lum {})", fixed_mid.contrast_ratio(mid), mid.relative_luminance());
     }
 }

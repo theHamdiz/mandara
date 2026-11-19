@@ -10396,6 +10396,7 @@
 "Review and approve the shared browser palette first. Other Pywal apps will read these colors too." = "Kagua na uidhinishe kwanza rangi zinazoshirikiwa za kivinjari. Programu nyingine za Pywal zitatumia rangi hizi pia."
 
 "Apply the color scheme to KDE apps and notify running apps." = "Tumia mpangilio wa rangi kwenye programu za KDE na ujulishe programu zinazoendelea."
+"Point qt6ct / qt5ct at Mandara's colour palette." = "Elekeza qt6ct / qt5ct kwenye palette ya rangi ya Mandara."
 
 "Enable browser theming and publish the shared app palette." = "Washa mandhari ya kivinjari na uchapishe paleti ya rangi inayoshirikiwa na programu."
 
@@ -10973,3 +10974,6 @@
 "The top GitHub results are already installed. Narrow the search to see others." = "Matokeo ya juu ya GitHub yamesakinishwa tayari. Punguza utafutaji ili kuona mengine."
 "Search cancelled." = "Utafutaji umeghairiwa."
 "Narrow the search to see more community plugins." = "Punguza utafutaji ili kuona programu-jalizi zaidi za jumuiya."
+"malformed IPC reply" = "jibu la IPC limoharibika"
+"Writes Mandara.colors and selects it in Plasma (kdeglobals); open apps reload" = "Huandika Mandara.colors na kuichagua katika Plasma (kdeglobals); programu zilizo wazi hupakiwa upya"
+"Writes a mandara scheme and points qt6ct / qt5ct at it so Qt apps use Mandara colours" = "Huandika mpango wa mandara na kuelekeza qt6ct / qt5ct kwake ili programu za Qt ziturie rangi za Mandara"
