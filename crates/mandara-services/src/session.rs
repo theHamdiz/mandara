@@ -515,15 +515,21 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let sock = dir.path().join("sway.sock");
         let listener = std::os::unix::net::UnixListener::bind(&sock).unwrap();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
         let server = std::thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();
-            // Accept the exit payload, then stall past the reply timeout.
+            // Accept the exit payload, then keep the socket open until the
+            // client has finished — a sleep alone can close early and make
+            // sway_exit see a disconnect (Ok) instead of a read timeout.
             let mut buf = [0u8; 64];
             let _ = std::io::Read::read(&mut &stream, &mut buf);
-            std::thread::sleep(QUIT_REPLY_TIMEOUT + std::time::Duration::from_millis(200));
+            let _ = release_rx.recv();
+            drop(stream);
         });
-        assert!(matches!(sway_exit(&sock), Err(CompositorQuit::Unreachable(_))));
-        let _ = server.join();
+        let result = sway_exit(&sock);
+        let _ = release_tx.send(());
+        server.join().unwrap();
+        assert!(matches!(result, Err(CompositorQuit::Unreachable(_))), "{result:?}");
     }
 
     #[test]
