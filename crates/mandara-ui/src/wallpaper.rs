@@ -750,6 +750,11 @@ fn clock_visible(cfg: &mandara_config::ShellConfig, monitor: Option<&str>, editi
             || monitor.is_some_and(|monitor| widget.place.displays.iter().any(|display| display.eq_ignore_ascii_case(monitor))))
 }
 
+/// Whether a load completion still owns the view: same generation and path.
+fn load_still_current(load_gen: u64, gen: u64, target: Option<&Path>, source: &Path) -> bool {
+    load_gen == gen && target == Some(source)
+}
+
 pub struct WallpaperView {
     config: Entity<ConfigStore>,
     /// Output this background belongs to (for "is the desktop visible").
@@ -772,6 +777,9 @@ pub struct WallpaperView {
     /// Length of the transition that started with [`Self::last_transition`]
     /// (slideshow-owned length or desktop `crossfade_ms`).
     active_crossfade_ms: u64,
+    /// Bumped on every [`Self::load`]; completions must match so a stale
+    /// same-path job (e.g. fill change) cannot overwrite a newer look.
+    load_gen: u64,
     input_cleared: bool,
     /// Small copy of the shown wallpaper: picks the clock's ink.
     tone: Option<Arc<image::RgbImage>>,
@@ -845,6 +853,7 @@ impl WallpaperView {
             origin: None,
             last_transition: None,
             active_crossfade_ms: mandara_config::defaults::WALLPAPER_CROSSFADE_MS,
+            load_gen: 0,
             input_cleared: false,
             tone: None,
             frames: None,
@@ -871,6 +880,8 @@ impl WallpaperView {
         let cfg = self.config.read(cx).get();
         let reduced = cfg.motion.reduced(mandara_core::spring::system_reduced_motion());
         let (picked, crossfade_ms) = crate::slideshow::change_look(&cfg.wallpaper, self.last_transition, crate::slideshow::seed(), cx);
+        self.load_gen = self.load_gen.wrapping_add(1);
+        let gen = self.load_gen;
         let kind = shader::effective(picked, reduced);
         // The shader needs the image shown now (a first wallpaper has none).
         let old = self.current.clone().filter(|_| shader::uses_shader(kind));
@@ -891,12 +902,12 @@ impl WallpaperView {
             };
             Ok::<_, String>((path, (shown, shown_size), tone, frames))
         });
-        // Capture this load's look in the completion: a newer load must not
-        // inherit or lose it when a stale job finishes.
+        // Capture this load's look and generation: a newer load (same path,
+        // different fill) must not be overwritten by a stale completion.
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| match result {
-                Ok((source, (shown, shown_size), tone, frames)) if this.target.as_ref() == Some(&source) => {
+                Ok((source, (shown, shown_size), tone, frames)) if load_still_current(this.load_gen, gen, this.target.as_deref(), &source) => {
                     this.previous = this.current.take();
                     this.previous_size = this.current_size;
                     this.current = Some(shown);
@@ -2307,5 +2318,16 @@ mod tests {
         let names: Vec<String> = list(&dir).iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
         assert_eq!(names, ["A.PNG", "b.jpg", "c.webp"]);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_stale_same_path_load_is_rejected() {
+        let a = PathBuf::from("/w/a.jpg");
+        let b = PathBuf::from("/w/b.jpg");
+        // Newer gen wins even when the path matches (fill change, reverse finish).
+        assert!(load_still_current(2, 2, Some(a.as_path()), &a));
+        assert!(!load_still_current(2, 1, Some(a.as_path()), &a));
+        assert!(!load_still_current(2, 2, Some(b.as_path()), &a));
+        assert!(!load_still_current(2, 2, None, &a));
     }
 }
