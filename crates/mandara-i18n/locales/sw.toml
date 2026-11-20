@@ -10977,3 +10977,6 @@
 "malformed IPC reply" = "jibu la IPC limoharibika"
 "Writes Mandara.colors and selects it in Plasma (kdeglobals); open apps reload" = "Huandika Mandara.colors na kuichagua katika Plasma (kdeglobals); programu zilizo wazi hupakiwa upya"
 "Writes a mandara scheme and points qt6ct / qt5ct at it so Qt apps use Mandara colours" = "Huandika mpango wa mandara na kuelekeza qt6ct / qt5ct kwake ili programu za Qt ziturie rangi za Mandara"
+"Random transition each change" = "Mpito wa nasibu kila badiliko"
+"Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "Huchagua athari tofauti kila papo wallpaper inabadilika (huhifadhi mpito uliochagua hii ikiwa imezimwa)"
+"A random effect plays each time" = "Athari ya nasibu hucheza kila mara"

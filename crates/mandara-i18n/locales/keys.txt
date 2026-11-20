@@ -265,6 +265,7 @@ A quiet clock over one outlined card with the user, password and session, in mid
 A quiet notification when the song changes
 A quiet writing desk with generous margins and mixed corners.
 A quote isn't closed
+A random effect plays each time
 A random style
 A reader for RSS, Atom and JSON feeds
 A reader for RSS, Atom and JSON feeds: one timeline, folders, saved articles, search and a clean reader view
@@ -5728,6 +5729,7 @@ Pick Command as the action first
 Pick Microphone or Both under Sound first
 Pick System sound or Both under Sound first
 Pick a cursor theme folder or an archive (.tar.gz, .tar.xz, .tar.zst, .tar.bz2 or .zip)
+Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)
 Pick a grain style first
 Pick a level
 Pick a network below
@@ -6116,6 +6118,7 @@ Ralph Waldo Emerson
 Ramadan
 Raml Tram
 Random
+Random transition each change
 Random wallpaper
 Rank by use
 Ranking

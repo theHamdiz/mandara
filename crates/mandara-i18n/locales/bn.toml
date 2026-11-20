@@ -11078,3 +11078,6 @@
 "malformed IPC reply" = "বিকৃত IPC উত্তর"
 "Writes Mandara.colors and selects it in Plasma (kdeglobals); open apps reload" = "Mandara.colors লেখে এবং Plasma-তে (kdeglobals) নির্বাচন করে; খোলা অ্যাপগুলো পুনরায় লোড হয়"
 "Writes a mandara scheme and points qt6ct / qt5ct at it so Qt apps use Mandara colours" = "একটি mandara স্কিম লেখে এবং qt6ct / qt5ct-কে সেদিকে নির্দেশ করে যাতে Qt অ্যাপ Mandara রং ব্যবহার করে"
+"Random transition each change" = "প্রতিবার পরিবর্তনে এলোমেলো ট্রানজিশন"
+"Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "ওয়ালপেপার বদলালেই অন্য প্রভাব বেছে নেয় (বন্ধ থাকলে আপনার বেছে নেওয়া ট্রানজিশনই থাকে)"
+"A random effect plays each time" = "প্রতিবার একটি এলোমেলো প্রভাব চলে"

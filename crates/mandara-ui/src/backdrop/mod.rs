@@ -1036,8 +1036,10 @@ struct Pending {
 
 /// What [`show`] does with a loaded wallpaper.
 enum Plan {
-    /// The configured transition: on a GPU surface when `Prepared` allows.
-    Auto(Option<Box<Prepared>>),
+    /// The transition picked for this change: on a GPU surface when
+    /// `Prepared` allows. `kind` is the pre–reduced-motion pick (so a
+    /// random roll is not re-rolled here).
+    Auto { prepared: Option<Box<Prepared>>, kind: WallpaperTransition },
     /// Instantly (a transition surface just showed the change).
     Cut,
     /// A crossfade on the planes (a transition surface failed).
@@ -1110,6 +1112,11 @@ struct Out {
     cur: usize,
     serial: u64,
     loading: Option<(u64, Want)>,
+    /// Transition chosen when the current load started; consumed by
+    /// [`show`] so prep and play agree. `None` while idle.
+    play_transition: Option<WallpaperTransition>,
+    /// Last effect actually started (for random no-repeat).
+    last_transition: Option<WallpaperTransition>,
     /// The last wallpaper that failed to load and when: not retried before
     /// [`LOAD_RETRY`], so a missing file isn't re-read on every pass.
     failed: Option<(Want, Instant)>,
@@ -1137,6 +1144,8 @@ impl Out {
             cur: 0,
             serial: 0,
             loading: None,
+            play_transition: None,
+            last_transition: None,
             failed: None,
             trans: None,
             pending: None,
@@ -1154,6 +1163,7 @@ impl Out {
         self.trans = None;
         self.pending = None;
         self.loading = None;
+        self.play_transition = None;
         self.painted = Painted::default();
         self.ring = 0.0;
         self.ring_painted = None;
@@ -1487,8 +1497,10 @@ impl Renderer {
         if !shown && !pending && !resting {
             out.serial += 1;
             out.loading = Some((out.serial, want.clone()));
+            let kind = scene.wallpaper.change_transition(out.last_transition, crate::slideshow::seed());
+            out.play_transition = Some(kind);
             let mask = mask_for(scene, &want);
-            let prep = prep_for(scene, out, &want);
+            let prep = prep_for(scene, out, &want, kind);
             spawn_load(id, out.serial, want.clone(), mask, prep, self.jobs_tx.clone(), self.waker.clone());
         }
         // A transition surface that never reported: show its change.
@@ -1608,17 +1620,24 @@ impl Renderer {
                     Err(err) => {
                         tracing::warn!("wallpaper: {err} (trying again in {} s)", LOAD_RETRY.as_secs());
                         o.failed = Some((want, Instant::now()));
+                        o.play_transition = None;
                         return;
                     }
                 };
                 if o.geom.is_none_or(|g| g.physical != want.size) {
+                    o.play_transition = None;
                     return;
                 }
-                let Some(scene) = self.scene.as_ref() else { return };
+                let Some(scene) = self.scene.as_ref() else {
+                    o.play_transition = None;
+                    return;
+                };
                 let ring_bands = self.tap.as_ref().filter(|t| t.is_active()).map(|t| t.bands().to_vec()).unwrap_or_default();
                 let text = text_painter(&mut self.text, &mut self.arabic_font, scene);
                 let mut cx = BakeCx { text, viewport: self.viewport, wshared: &self.wshared, ring_bands: &ring_bands };
-                if let Err(err) = show(host, o, want, bg, cut, scene, self.alpha, &mut cx, Plan::Auto(prepared), &self.events) {
+                let kind = o.play_transition.take().unwrap_or(scene.wallpaper.transition);
+                o.last_transition = Some(kind);
+                if let Err(err) = show(host, o, want, bg, cut, scene, self.alpha, &mut cx, Plan::Auto { prepared, kind }, &self.events) {
                     tracing::warn!("wallpaper on {}: {err:#}", o.name);
                 }
             }
@@ -1795,10 +1814,11 @@ fn mask_for(scene: &Scene, want: &Want) -> Option<CutKey> {
 }
 
 /// What a change from `out`'s shown wallpaper to `want` needs prepared for
-/// a transition surface, if it will play on one.
-fn prep_for(scene: &Scene, out: &Out, want: &Want) -> Option<Prep> {
+/// a transition surface, if it will play on one. `kind` is the effect
+/// already chosen for this change (random or fixed).
+fn prep_for(scene: &Scene, out: &Out, want: &Want, kind: WallpaperTransition) -> Option<Prep> {
     use crate::wallpaper_shader::{effective, existing_mask, uses_shader};
-    let kind = effective(scene.wallpaper.transition, scene.reduce_motion);
+    let kind = effective(kind, scene.reduce_motion);
     let shown = out.current()?;
     if want.live || shown.want.live || !scene.overlay || !uses_shader(kind) || shown.want.size != want.size || video::is_video(&want.path) || video::is_video(&shown.want.path) {
         return None;
@@ -1923,14 +1943,17 @@ fn show(host: &mut Host, out: &mut Out, want: Want, bg: paint::Background, cut: 
     let size_changed = out.current().is_some_and(|s| s.want.size != want.size);
     let incoming = if first { out.cur } else { 1 - out.cur };
     let from = out.cur;
-    // Reduced motion fades. The configured transition plays on a GPU
-    // surface when the job prepared one; otherwise the planes crop and fade
-    // (`WallpaperTransition::software`).
-    let wanted = crate::wallpaper_shader::effective(scene.wallpaper.transition, scene.reduce_motion);
-    let (kind, prepared) = match plan {
-        Plan::Auto(prepared) => (wanted.software(), prepared.filter(|_| !(cut_in || first || size_changed) && crate::wallpaper_shader::uses_shader(wanted))),
-        Plan::Cut => (WallpaperTransition::None, None),
-        Plan::Fade => (WallpaperTransition::Fade, None),
+    // Reduced motion fades. The transition picked for this change plays on
+    // a GPU surface when the job prepared one; otherwise the planes crop
+    // and fade (`WallpaperTransition::software`).
+    let (kind, prepared, wanted) = match plan {
+        Plan::Auto { prepared, kind } => {
+            let wanted = crate::wallpaper_shader::effective(kind, scene.reduce_motion);
+            let prepared = prepared.filter(|_| !(cut_in || first || size_changed) && crate::wallpaper_shader::uses_shader(wanted));
+            (wanted.software(), prepared, wanted)
+        }
+        Plan::Cut => (WallpaperTransition::None, None, WallpaperTransition::None),
+        Plan::Fade => (WallpaperTransition::Fade, None, WallpaperTransition::Fade),
     };
     let mut cut = cut;
     if let Some(prepared) = prepared {

@@ -37,6 +37,7 @@ const PREVIEW_INNER_PX: f32 = SPACE_10_PX;
 const PREVIEW_PARALLAX_PX: f32 = SPACE_10_PX;
 /// Wallpaper settings the Motion page shows beside its own.
 pub(super) const WALLPAPER_ROWS: &[&str] = &[
+    "/wallpaper/random_transition",
     "/wallpaper/transition",
     "/wallpaper/transition_origin",
     "/wallpaper/crossfade_ms",

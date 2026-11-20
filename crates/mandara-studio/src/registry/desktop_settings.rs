@@ -62,7 +62,13 @@ const SKETCH_DRAW_STEP: f64 = 0.05;
 
 /// Why a Sketch option doesn't apply under `cfg` right now.
 pub(super) fn sketch_locked(cfg: &mandara_config::ShellConfig) -> Option<&'static str> {
-    (cfg.wallpaper.transition != mandara_config::desktop::WallpaperTransition::Sketch).then_some(tk("For the Sketch transition"))
+    let usable = cfg.wallpaper.random_transition || cfg.wallpaper.transition == mandara_config::desktop::WallpaperTransition::Sketch;
+    (!usable).then_some(tk("For the Sketch transition"))
+}
+
+/// Why the fixed transition picker doesn't apply under `cfg` right now.
+pub(super) fn transition_locked(cfg: &mandara_config::ShellConfig) -> Option<&'static str> {
+    cfg.wallpaper.random_transition.then_some(tk("A random effect plays each time"))
 }
 pub(crate) const ORIGINS: &[(&str, &str)] = &[("center", tk("The centre")), ("pointer", tk("The pointer"))];
 const ORDER: &[(&str, &str)] = &[("shuffle", tk("Shuffle")), ("random", tk("Random")), ("alphabetical", tk("By name")), ("newest", tk("Newest first"))];
@@ -147,6 +153,7 @@ pub(super) fn entries() -> Vec<Setting> {
         // Wallpaper
         s(Wallpaper, tk("Desktop"), "/wallpaper/fill", tk("Fill mode"), tk("How images that don't match the screen are placed"), Choice(FILL)),
         s(Wallpaper, tk("Desktop"), "/wallpaper/fill_color", tk("Fill color"), tk("Behind Fit and Center (hex)"), Text { placeholder: "#000000" }),
+        s(Wallpaper, tk("Desktop"), "/wallpaper/random_transition", tk("Random transition each change"), tk("Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)"), Toggle),
         s(Wallpaper, tk("Desktop"), "/wallpaper/transition", tk("Transition"), tk("How a new wallpaper replaces the old one"), Choice(TRANSITION)),
         s(Wallpaper, tk("Desktop"), "/wallpaper/transition_origin", tk("Transition origin"), tk("Where a Ripple opens and a Shatter bursts from"), Choice(ORIGINS)),
         s(Wallpaper, SKETCH_GROUP, "/wallpaper/sketch/ink", tk("Line colour"), tk("What the Sketch transition draws its lines in"), Choice(SKETCH_INK)),

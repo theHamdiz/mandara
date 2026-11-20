@@ -149,8 +149,13 @@ The config is `[compositor.look.windows]` with `style` (`compositor`, `fade`,
 ## Wallpaper change
 
 The **Wallpaper change** card shows the same settings as *Studio →
-Wallpaper*: the transition, where it starts and its length
-(`wallpaper.transition`, `transition_origin`, `crossfade_ms`).
+Wallpaper*: random transition each change, the fixed transition, where it
+starts and its length (`wallpaper.random_transition`, `transition`,
+`transition_origin`, `crossfade_ms`). With **Random transition each change**
+on, every wallpaper switch picks a different effect (never the same one
+twice in a row when another choice exists); your chosen transition is kept
+for when the toggle is off. A slideshow that uses its own transition still
+uses that style.
 
 | Transition | How it looks | Drawn by |
 | --- | --- | --- |

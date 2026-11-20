@@ -1682,6 +1682,9 @@ pub struct WallpaperConfig {
     pub fill_color: String,
     /// How a new wallpaper replaces the old one.
     pub transition: crate::desktop::WallpaperTransition,
+    /// Pick a different effect from [`crate::desktop::WallpaperTransition::RANDOM`]
+    /// every time the wallpaper changes (keeps [`Self::transition`] when off).
+    pub random_transition: bool,
     /// Where a Ripple or Shatter transition starts.
     pub transition_origin: crate::desktop::TransitionOrigin,
     /// How the Sketch transition draws and fills.
@@ -1725,12 +1728,22 @@ impl Default for WallpaperConfig {
             fill: crate::desktop::WallpaperFill::default(),
             fill_color: "#000000".into(),
             transition: crate::desktop::WallpaperTransition::default(),
+            random_transition: false,
             transition_origin: crate::desktop::TransitionOrigin::default(),
             sketch: crate::desktop::SketchOptions::default(),
             variants: crate::desktop::WallpaperVariants::default(),
             slideshow: crate::desktop::WallpaperSlideshow::default(),
             video: crate::desktop::WallpaperVideo::default(),
         }
+    }
+}
+
+impl WallpaperConfig {
+    /// The transition for one wallpaper change: a fresh random pick when
+    /// [`Self::random_transition`] is on, else [`Self::transition`].
+    #[must_use]
+    pub fn change_transition(&self, last: Option<crate::desktop::WallpaperTransition>, seed: u64) -> crate::desktop::WallpaperTransition {
+        if self.random_transition { crate::desktop::next_transition(last, seed) } else { self.transition }
     }
 }
 

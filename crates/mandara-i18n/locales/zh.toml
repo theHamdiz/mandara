@@ -11314,3 +11314,6 @@
 "malformed IPC reply" = "畸形的 IPC 回复"
 "Writes Mandara.colors and selects it in Plasma (kdeglobals); open apps reload" = "写入 Mandara.colors 并在 Plasma（kdeglobals）中选中它；已打开的应用会重新加载"
 "Writes a mandara scheme and points qt6ct / qt5ct at it so Qt apps use Mandara colours" = "写入 mandara 配色方案并让 qt6ct / qt5ct 指向它，使 Qt 应用使用 Mandara 颜色"
+"Random transition each change" = "每次更换随机过渡"
+"Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "每次更换壁纸时选用不同效果（关闭时保留你选择的过渡）"
+"A random effect plays each time" = "每次播放随机效果"
