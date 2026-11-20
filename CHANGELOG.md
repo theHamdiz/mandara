@@ -6,6 +6,12 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Studio can randomize the wallpaper change effect on every switch, so transitions no longer stay stuck on one style.
+
+### New
+
+- *Studio → Wallpaper → Fit & effects* (and *Motion → Wallpaper change*) has **Random transition each change**: each wallpaper switch picks a different effect; your chosen transition is kept for when the toggle is off. Slideshows that use their own transition are unchanged.
+
 ## 0.35.3 — 2026-11-19
 
 Qt and KDE Mandara colour schemes keep readable text in Dolphin and friends, and logging out of Niri quits the compositor cleanly so the greeter can take the next login.

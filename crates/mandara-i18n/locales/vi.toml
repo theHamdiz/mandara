@@ -10977,3 +10977,6 @@
 "malformed IPC reply" = "phản hồi IPC không hợp lệ"
 "Writes Mandara.colors and selects it in Plasma (kdeglobals); open apps reload" = "Ghi Mandara.colors và chọn nó trong Plasma (kdeglobals); các ứng dụng đang mở tải lại"
 "Writes a mandara scheme and points qt6ct / qt5ct at it so Qt apps use Mandara colours" = "Ghi một lược đồ mandara và hướng qt6ct / qt5ct tới đó để ứng dụng Qt dùng màu Mandara"
+"Random transition each change" = "Chuyển cảnh ngẫu nhiên mỗi lần đổi"
+"Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "Chọn hiệu ứng khác mỗi khi hình nền đổi (giữ chuyển cảnh bạn chọn khi tắt)"
+"A random effect plays each time" = "Mỗi lần phát một hiệu ứng ngẫu nhiên"

@@ -767,6 +767,11 @@ pub struct WallpaperView {
     /// shards) and where the running one started (Ripple, Shatter).
     changes: u32,
     origin: Option<[f32; 2]>,
+    /// Effect chosen for the in-flight load (random or fixed); consumed
+    /// when the change starts playing.
+    play_transition: Option<mandara_config::desktop::WallpaperTransition>,
+    /// Last effect that started (random no-repeat).
+    last_transition: Option<mandara_config::desktop::WallpaperTransition>,
     input_cleared: bool,
     /// Small copy of the shown wallpaper: picks the clock's ink.
     tone: Option<Arc<image::RgbImage>>,
@@ -838,6 +843,8 @@ impl WallpaperView {
             since: now,
             changes: 0,
             origin: None,
+            play_transition: None,
+            last_transition: None,
             input_cleared: false,
             tone: None,
             frames: None,
@@ -863,7 +870,9 @@ impl WallpaperView {
         self.target = Some(path.clone());
         let cfg = self.config.read(cx).get();
         let reduced = cfg.motion.reduced(mandara_core::spring::system_reduced_motion());
-        let kind = shader::effective(cfg.wallpaper.transition, reduced);
+        let (picked, crossfade_ms) = crate::slideshow::change_look(&cfg.wallpaper, self.last_transition, crate::slideshow::seed(), cx);
+        self.play_transition = Some(picked);
+        let kind = shader::effective(picked, reduced);
         // The shader needs the image shown now (a first wallpaper has none).
         let old = self.current.clone().filter(|_| shader::uses_shader(kind));
         let fill_color = crate::wallpaper_fill::fill_color(&cfg.wallpaper.fill_color);
@@ -872,6 +881,7 @@ impl WallpaperView {
             let accent = mandara_core::theme_entity(cx).read(cx).target().primary;
             (shader::existing_mask(&path, crate::depth::Request::of(&cfg.wallpaper)), sk.keep_outline.then_some((sk.ink, accent)))
         });
+        let sketch_draw = cfg.wallpaper.sketch.draw();
         let task = cx.background_executor().spawn(async move {
             let (shown, shown_size) = crate::wallpaper_fill::prepare(&path, fill, size.0, size.1)?;
             let decoded = image::open(&shown).ok();
@@ -895,19 +905,25 @@ impl WallpaperView {
                     this.since = Instant::now();
                     this.changes = this.changes.wrapping_add(1);
                     this.origin = None;
+                    let picked = this.play_transition.take().unwrap_or(mandara_config::desktop::WallpaperTransition::Fade);
+                    this.last_transition = Some(picked);
                     // The old subject leaves with its wallpaper (under a
                     // Sketch, as the wash covers the old image).
-                    let w = &this.config.read(cx).get().wallpaper;
-                    let mut fade = Duration::from_millis(w.crossfade_ms.max(1));
-                    if w.transition == mandara_config::desktop::WallpaperTransition::Sketch && this.frames.is_some() {
-                        fade = fade.mul_f32(w.sketch.draw() * SKETCH_WASH_RISE);
+                    let mut fade = Duration::from_millis(crossfade_ms.max(1));
+                    if picked == mandara_config::desktop::WallpaperTransition::Sketch && this.frames.is_some() {
+                        fade = fade.mul_f32(sketch_draw * SKETCH_WASH_RISE);
                     }
                     this.retire(fade);
                     this.cutout_key = None;
                     cx.notify();
                 }
-                Ok(_) => {}
-                Err(err) => tracing::warn!("wallpaper: {err}"),
+                Ok(_) => {
+                    this.play_transition = None;
+                }
+                Err(err) => {
+                    this.play_transition = None;
+                    tracing::warn!("wallpaper: {err}");
+                }
             });
         })
         .detach();
@@ -1080,8 +1096,9 @@ impl Render for WallpaperView {
         use mandara_config::desktop::WallpaperTransition;
         use crate::wallpaper_shader as shader;
         let reduced = cfg.motion.reduced(mandara_core::spring::system_reduced_motion());
-        // Reduced motion: a plain fade (a cut stays a cut).
-        let transition = shader::effective(cfg.wallpaper.transition, reduced);
+        // Reduced motion: a plain fade (a cut stays a cut). Prefer the
+        // effect captured when this change loaded (random rolls once).
+        let transition = shader::effective(self.last_transition.unwrap_or(cfg.wallpaper.transition), reduced);
         let instant = transition == WallpaperTransition::None;
         let fade = Duration::from_millis(if instant { 1 } else { cfg.wallpaper.crossfade_ms.max(1) });
         let t = (self.since.elapsed().as_secs_f32() / fade.as_secs_f32()).clamp(0.0, 1.0);

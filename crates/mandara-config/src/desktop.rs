@@ -854,6 +854,10 @@ pub enum WallpaperTransition {
 impl WallpaperTransition {
     pub const ALL: [Self; 11] = [Self::Fade, Self::Wipe, Self::Grow, Self::Ripple, Self::Tide, Self::Tear, Self::Glitch, Self::Shatter, Self::Dissolve, Self::Sketch, Self::None];
 
+    /// Effects a random wallpaper change may pick: every kind but
+    /// [`Self::None`] (a cut is not an effect).
+    pub const RANDOM: [Self; 10] = [Self::Fade, Self::Wipe, Self::Grow, Self::Ripple, Self::Tide, Self::Tear, Self::Glitch, Self::Shatter, Self::Dissolve, Self::Sketch];
+
     /// What the software wallpaper draws for this transition when the GPU
     /// surface for it can't open: Ripple, Tide and Tear as a crop of the new
     /// image (a square opening, a rising edge, a seam opening outward),
@@ -871,6 +875,25 @@ impl WallpaperTransition {
     /// [`TransitionOrigin`].
     pub fn has_origin(self) -> bool {
         matches!(self, Self::Ripple | Self::Shatter)
+    }
+}
+
+/// Next wallpaper transition after `last`, for
+/// [`WallpaperConfig::random_transition`](crate::WallpaperConfig): a
+/// uniform pick from [`WallpaperTransition::RANDOM`], never the same as
+/// `last` when another choice exists. `seed` is any differing `u64`
+/// (wall-clock hash is fine); no heap and no `rand` crate.
+#[must_use]
+pub fn next_transition(last: Option<WallpaperTransition>, seed: u64) -> WallpaperTransition {
+    let pool = WallpaperTransition::RANDOM;
+    let n = pool.len();
+    debug_assert_eq!(n, 10);
+    match last.and_then(|l| pool.iter().position(|&t| t == l)) {
+        Some(i) if n > 1 => {
+            let pick = usize::try_from(seed % (n as u64 - 1)).unwrap_or(0);
+            pool[if pick >= i { pick + 1 } else { pick }]
+        }
+        _ => pool[usize::try_from(seed % n as u64).unwrap_or(0)],
     }
 }
 
@@ -1385,6 +1408,34 @@ mod tests {
         // The software wallpaper fades instead; every transition is listed once.
         assert_eq!(WallpaperTransition::Sketch.software(), WallpaperTransition::Fade);
         assert_eq!(WallpaperTransition::ALL.iter().filter(|t| **t == WallpaperTransition::Sketch).count(), 1);
+        assert!(!WallpaperTransition::RANDOM.contains(&WallpaperTransition::None));
+        assert_eq!(WallpaperTransition::RANDOM.len() + 1, WallpaperTransition::ALL.len());
+    }
+
+    #[test]
+    fn random_transition_never_repeats_the_last_effect() {
+        for seed in 0..80 {
+            let n = next_transition(Some(WallpaperTransition::Ripple), seed);
+            assert_ne!(n, WallpaperTransition::Ripple);
+            assert_ne!(n, WallpaperTransition::None);
+        }
+        assert_ne!(next_transition(None, 0), WallpaperTransition::None);
+        // Every pool member is reachable from a cold start.
+        let mut seen = [false; 10];
+        for seed in 0..40 {
+            let n = next_transition(None, seed);
+            let i = WallpaperTransition::RANDOM.iter().position(|&t| t == n).expect("in pool");
+            seen[i] = true;
+        }
+        assert!(seen.iter().all(|&s| s), "seeds 0..40 should cover the pool: {seen:?}");
+        let cfg = crate::WallpaperConfig { random_transition: true, transition: WallpaperTransition::Wipe, ..Default::default() };
+        assert_ne!(cfg.change_transition(Some(WallpaperTransition::Wipe), 3), WallpaperTransition::Wipe);
+        let fixed = crate::WallpaperConfig::default();
+        assert!(!fixed.random_transition);
+        assert_eq!(fixed.change_transition(Some(WallpaperTransition::Glitch), 99), WallpaperTransition::Fade);
+        let parsed: crate::ShellConfig = toml::from_str("[wallpaper]\nrandom_transition = true\ntransition = \"tide\"").unwrap();
+        assert!(parsed.wallpaper.random_transition);
+        assert_eq!(parsed.wallpaper.transition, WallpaperTransition::Tide);
     }
 
     #[test]

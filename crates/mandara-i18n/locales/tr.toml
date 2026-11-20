@@ -11318,3 +11318,6 @@
 "malformed IPC reply" = "bozuk IPC yanıtı"
 "Writes Mandara.colors and selects it in Plasma (kdeglobals); open apps reload" = "Mandara.colors yazar ve Plasma’da (kdeglobals) seçer; açık uygulamalar yeniden yüklenir"
 "Writes a mandara scheme and points qt6ct / qt5ct at it so Qt apps use Mandara colours" = "Bir mandara şeması yazar ve qt6ct / qt5ct’yi ona yönlendirir, böylece Qt uygulamaları Mandara renklerini kullanır"
+"Random transition each change" = "Her değişimde rastgele geçiş"
+"Pick a different effect every time the wallpaper changes (keeps your chosen transition when this is off)" = "Duvar kağıdı her değiştiğinde farklı bir efekt seçer (kapalıyken seçtiğiniz geçişi korur)"
+"A random effect plays each time" = "Her seferinde rastgele bir efekt oynar"

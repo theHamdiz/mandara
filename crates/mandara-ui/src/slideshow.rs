@@ -107,7 +107,7 @@ fn engine(cx: &mut App) -> &mut Engine {
 }
 
 /// A seed that differs between calls (no `rand` dependency needed).
-fn seed() -> u64 {
+pub(crate) fn seed() -> u64 {
     use std::hash::{BuildHasher, Hasher};
     let mut h = std::collections::hash_map::RandomState::new().build_hasher();
     h.write_u128(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0));
@@ -427,16 +427,35 @@ fn clear_display_slides(cx: &mut App) {
     });
 }
 
+/// Whether the path on screen is one the slideshow put there.
+fn slideshow_showing(w: &mandara_config::WallpaperConfig, cx: &App) -> bool {
+    let Some(e) = cx.try_global::<Engine>() else { return false };
+    e.shown.paths().any(|p| w.path.as_ref() == Some(p) || w.variants.monitors.values().any(|m| m == p))
+}
+
 /// The desktop's transition settings for this scene: the slideshow's own
 /// transition and length while a wallpaper it put on screen is shown.
+/// Clears [`WallpaperConfig::random_transition`] on this **scene copy** so
+/// a slideshow-owned style is not replaced by a random desktop effect.
 pub(crate) fn scene_transition(w: &mut mandara_config::WallpaperConfig, cx: &App) {
     let Some(kind) = w.slideshow.transition.own() else { return };
-    let Some(e) = cx.try_global::<Engine>() else { return };
-    let showing = e.shown.paths().any(|p| w.path.as_ref() == Some(p) || w.variants.monitors.values().any(|m| m == p));
-    if showing {
+    if slideshow_showing(w, cx) {
         w.transition = kind;
         w.crossfade_ms = w.slideshow.transition_len();
+        w.random_transition = false;
     }
+}
+
+/// Transition and length for one wallpaper change: slideshow-owned style
+/// when that wallpaper is showing, else [`WallpaperConfig::change_transition`].
+/// No config clone.
+pub(crate) fn change_look(w: &mandara_config::WallpaperConfig, last: Option<mandara_config::desktop::WallpaperTransition>, seed: u64, cx: &App) -> (mandara_config::desktop::WallpaperTransition, u64) {
+    if let Some(kind) = w.slideshow.transition.own()
+        && slideshow_showing(w, cx)
+    {
+        return (kind, w.slideshow.transition_len());
+    }
+    (w.change_transition(last, seed), w.crossfade_ms)
 }
 
 /// Runs the slideshow (shell process).

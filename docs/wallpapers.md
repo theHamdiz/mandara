@@ -18,8 +18,8 @@ The wallpaper picker and engine, and Mandara's own wallpaper generator.
 - **Engine**: fill / fit / stretch / center / tile; fade, wipe, grow,
   ripple, tide, tear, glitch, shatter, dissolve and sketch transitions,
   drawn per pixel on the GPU (see [Motion](motion.md#wallpaper-change) for
-  how each looks), separate **light and dark wallpapers** and **per-display
-  wallpapers**.
+  how each looks), optional **random transition each change**, separate
+  **light and dark wallpapers** and **per-display wallpapers**.
 - **In Studio** (*Studio → Wallpaper*): the page opens on the wallpaper on
   your desktop, large, with its size, folder and colours, then every
   wallpaper in your folder as a fast, paged grid of thumbnails: click (or
