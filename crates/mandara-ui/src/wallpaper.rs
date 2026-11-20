@@ -751,8 +751,8 @@ fn clock_visible(cfg: &mandara_config::ShellConfig, monitor: Option<&str>, editi
 }
 
 /// Whether a load completion still owns the view: same generation and path.
-fn load_still_current(load_gen: u64, gen: u64, target: Option<&Path>, source: &Path) -> bool {
-    load_gen == gen && target == Some(source)
+fn load_still_current(load_gen: u64, token: u64, target: Option<&Path>, source: &Path) -> bool {
+    load_gen == token && target == Some(source)
 }
 
 pub struct WallpaperView {
@@ -881,7 +881,7 @@ impl WallpaperView {
         let reduced = cfg.motion.reduced(mandara_core::spring::system_reduced_motion());
         let (picked, crossfade_ms) = crate::slideshow::change_look(&cfg.wallpaper, self.last_transition, crate::slideshow::seed(), cx);
         self.load_gen = self.load_gen.wrapping_add(1);
-        let gen = self.load_gen;
+        let token = self.load_gen;
         let kind = shader::effective(picked, reduced);
         // The shader needs the image shown now (a first wallpaper has none).
         let old = self.current.clone().filter(|_| shader::uses_shader(kind));
@@ -907,7 +907,7 @@ impl WallpaperView {
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| match result {
-                Ok((source, (shown, shown_size), tone, frames)) if load_still_current(this.load_gen, gen, this.target.as_deref(), &source) => {
+                Ok((source, (shown, shown_size), tone, frames)) if load_still_current(this.load_gen, token, this.target.as_deref(), &source) => {
                     this.previous = this.current.take();
                     this.previous_size = this.current_size;
                     this.current = Some(shown);
