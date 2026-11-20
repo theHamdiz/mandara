@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.36.0 — 2026-11-20
+
 Studio can randomize the wallpaper change effect on every switch, so transitions no longer stay stuck on one style.
 
 ### New
