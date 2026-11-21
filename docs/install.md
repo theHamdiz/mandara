@@ -32,7 +32,7 @@ The verified installer normally runs from your cache, and falls back to
 a writable folder on a filesystem that allows programs to run. A `noexec`
 mount on that folder prevents the extracted installer from starting.
 
-Its messages follow your terminal language, with the same twenty languages
+Its messages follow your terminal language, with the same twenty-one languages
 as Mandara.
 
 Installation, configuration and administrator prompts stay in the Rust

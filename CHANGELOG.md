@@ -6,6 +6,13 @@ About → What's new shows it too.
 
 ## Unreleased
 
+### New
+
+- **Mandara speaks Italian.** Choose *Italiano* in Studio → General →
+  Language, or follow the system language (`it_IT`). The shell, Studio and
+  Mandara Login are translated, and the Qur'an plugins show the Piccardo
+  Italian meanings.
+
 ## 0.36.0 — 2026-11-20
 
 Studio can randomize the wallpaper change effect on every switch, so transitions no longer stay stuck on one style.

@@ -56,10 +56,11 @@ pub enum Lang {
     Vi,
     Te,
     Sw,
+    It,
 }
 
 impl Lang {
-    pub const ALL: [Lang; 20] = [Lang::En, Lang::Ar, Lang::Fa, Lang::Ur, Lang::Es, Lang::Pt, Lang::Fr, Lang::De, Lang::Tr, Lang::Ru, Lang::Hi, Lang::Mr, Lang::Bn, Lang::Te, Lang::Id, Lang::Sw, Lang::Vi, Lang::Zh, Lang::Ja, Lang::Ko];
+    pub const ALL: [Lang; 21] = [Lang::En, Lang::Ar, Lang::Fa, Lang::Ur, Lang::Es, Lang::Pt, Lang::Fr, Lang::It, Lang::De, Lang::Tr, Lang::Ru, Lang::Hi, Lang::Mr, Lang::Bn, Lang::Te, Lang::Id, Lang::Sw, Lang::Vi, Lang::Zh, Lang::Ja, Lang::Ko];
 
     /// ISO 639-1 code.
     pub fn code(self) -> &'static str {
@@ -84,6 +85,7 @@ impl Lang {
             Lang::Vi => "vi",
             Lang::Te => "te",
             Lang::Sw => "sw",
+            Lang::It => "it",
         }
     }
 
@@ -110,6 +112,7 @@ impl Lang {
             Lang::Vi => "Tiếng Việt",
             Lang::Te => "తెలుగు",
             Lang::Sw => "Kiswahili",
+            Lang::It => "Italiano",
         }
     }
 
@@ -135,6 +138,7 @@ impl Lang {
             Lang::Vi => "Vietnamese",
             Lang::Te => "Telugu",
             Lang::Sw => "Swahili",
+            Lang::It => "Italian",
         }
     }
 
@@ -161,6 +165,7 @@ impl Lang {
             Lang::Vi => "Xin chào",
             Lang::Te => "నమస్కారం",
             Lang::Sw => "Habari",
+            Lang::It => "Ciao",
         }
     }
 
@@ -194,6 +199,7 @@ impl Lang {
             Lang::Te => "te_IN",
             // Standard Swahili; Kenya is the POSIX locale this catalog follows.
             Lang::Sw => "sw_KE",
+            Lang::It => "it_IT",
         }
     }
 

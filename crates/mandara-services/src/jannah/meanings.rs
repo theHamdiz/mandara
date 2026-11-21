@@ -31,7 +31,7 @@ pub struct Edition {
 }
 
 /// The edition per interface language (Arabic has none: Arabic only).
-const EDITIONS: [(&str, Edition); 16] = [
+const EDITIONS: [(&str, Edition); 17] = [
     ("en", Edition { id: "en.sahih", translator: "Saheeh International" }),
     ("id", Edition { id: "id.indonesian", translator: "Kementerian Agama Republik Indonesia" }),
     ("tr", Edition { id: "tr.diyanet", translator: "Diyanet İşleri" }),
@@ -48,6 +48,7 @@ const EDITIONS: [(&str, Edition); 16] = [
     ("ko", Edition { id: "ko.korean", translator: "한국어 번역 (Tanzil)" }),
     ("pt", Edition { id: "pt.elhayek", translator: "Samir El-Hayek" }),
     ("sw", Edition { id: "sw.barwani", translator: "Ali Muhsin Al-Barwani" }),
+    ("it", Edition { id: "it.piccardo", translator: "Hamza Roberto Piccardo" }),
 ];
 
 /// The Qur'an edition for a language code (`None` for Arabic, and for
@@ -282,7 +283,7 @@ mod tests {
     fn every_interface_language_maps_to_an_existing_edition() {
         assert_eq!(edition("en").map(|e| e.id), Some("en.sahih"));
         assert_eq!(edition("ar"), None);
-        for (lang, id) in [("id", "id.indonesian"), ("tr", "tr.diyanet"), ("ru", "ru.kuliev"), ("fr", "fr.hamidullah"), ("de", "de.bubenheim"), ("es", "es.cortes"), ("zh", "zh.jian"), ("ja", "ja.japanese"), ("hi", "hi.hindi"), ("fa", "fa.makarem"), ("ur", "ur.jalandhry"), ("bn", "bn.bengali"), ("ko", "ko.korean"), ("pt", "pt.elhayek"), ("sw", "sw.barwani")] {
+        for (lang, id) in [("id", "id.indonesian"), ("tr", "tr.diyanet"), ("ru", "ru.kuliev"), ("fr", "fr.hamidullah"), ("de", "de.bubenheim"), ("es", "es.cortes"), ("zh", "zh.jian"), ("ja", "ja.japanese"), ("hi", "hi.hindi"), ("fa", "fa.makarem"), ("ur", "ur.jalandhry"), ("bn", "bn.bengali"), ("ko", "ko.korean"), ("pt", "pt.elhayek"), ("sw", "sw.barwani"), ("it", "it.piccardo")] {
             assert_eq!(edition(lang).map(|e| e.id), Some(id));
         }
         // Marathi, Vietnamese and Telugu have no Tanzil text edition.

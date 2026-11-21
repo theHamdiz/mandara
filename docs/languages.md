@@ -1,8 +1,8 @@
 # Languages
 
-English · العربية · فارسی · اردو · Español · Português · Français · Deutsch · Türkçe · Русский · हिन्दी · मराठी · বাংলা · తెలుగు · Bahasa Indonesia · Kiswahili · Tiếng Việt · 简体中文 · 日本語 · 한국어
+English · العربية · فارسی · اردو · Español · Português · Français · Italiano · Deutsch · Türkçe · Русский · हिन्दी · मराठी · বাংলা · తెలుగు · Bahasa Indonesia · Kiswahili · Tiếng Việt · 简体中文 · 日本語 · 한국어
 
-Twenty languages. The whole interface is translated: the shell, Studio and
+Twenty-one languages. The whole interface is translated: the shell, Studio and
 the login screen. Pick one in Studio → General → Language, or leave it on
 **System** to follow your desktop's language (`LANG`, `LC_MESSAGES`,
 `LC_ALL`).
@@ -70,7 +70,7 @@ and Urdu letters (پ چ ژ گ ک ی, ٹ ڈ ڑ ں ے ھ ۃ) and Persian digits.
 Korean, Chinese, Japanese, Hindi, Marathi, Bengali and Telugu use your
 system's fonts: Noto Sans CJK (KR, SC or JP, matching the language), Noto
 Sans Devanagari (Hindi and Marathi), Noto Sans Bengali and Noto Sans
-Telugu, each at its closest weight. Portuguese, Vietnamese and Swahili use
+Telugu, each at its closest weight. Portuguese, Italian, Vietnamese and Swahili use
 the same Latin faces as English. `mandara install` installs the extra
 faces with the other fonts. To install them yourself:
 

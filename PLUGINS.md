@@ -223,7 +223,7 @@ export!(MyPlugin);
 | `now-unix-ms()` | The current time, in milliseconds since the Unix epoch. |
 | `setting(key)` | Your `[plugins.settings.<id>]` value, as JSON (the declared default until the user changes it). |
 | `command(line)` | Queues one of Mandara's interface commands. Needs the `commands` permission (and, for commands a capability covers, that capability). |
-| `locale()` | The interface language: `en`, `ar`, `fa`, `ur`, `es`, `pt`, `fr`, `de`, `tr`, `ru`, `hi`, `mr`, `bn`, `te`, `id`, `sw`, `vi`, `zh`, `ja` or `ko`. |
+| `locale()` | The interface language: `en`, `ar`, `fa`, `ur`, `es`, `pt`, `fr`, `it`, `de`, `tr`, `ru`, `hi`, `mr`, `bn`, `te`, `id`, `sw`, `vi`, `zh`, `ja` or `ko`. |
 | `translate(text)` | Looks `text` up in your `locales/` catalog. |
 | `submit(request)` | Asks a host service for something: returns a request id at once, never waits. The answer arrives as a `replies` event. |
 | `cancel(id)` | Ends a subscription or drops a waiting request. |
