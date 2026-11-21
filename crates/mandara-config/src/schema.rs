@@ -708,6 +708,7 @@ pub enum Locale {
     Vietnamese,
     Telugu,
     Swahili,
+    Italian,
 }
 
 impl Locale {
@@ -736,6 +737,7 @@ impl Locale {
             Locale::Vietnamese => Lang::Vi,
             Locale::Telugu => Lang::Te,
             Locale::Swahili => Lang::Sw,
+            Locale::Italian => Lang::It,
         }
     }
 
@@ -762,6 +764,7 @@ impl Locale {
             Lang::Vi => Locale::Vietnamese,
             Lang::Te => Locale::Telugu,
             Lang::Sw => Locale::Swahili,
+            Lang::It => Locale::Italian,
         }
     }
 
