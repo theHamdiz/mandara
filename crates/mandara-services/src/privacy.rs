@@ -35,7 +35,13 @@ const ALIVE_CHECK: Duration = Duration::from_secs(5);
 /// Bursts of events (an app opening a device several times) settle first.
 const SETTLE: Duration = Duration::from_millis(150);
 /// Back-off before reconnecting to a vanished sound server / bus.
+/// Granularity of interruptible waits on the watcher threads.
+const ALIVE_SLICE: Duration = Duration::from_millis(250);
 const RECONNECT: Duration = Duration::from_secs(3);
+/// Reconnect delays grow up to this while the server stays away.
+const RECONNECT_MAX: Duration = Duration::from_secs(60);
+/// A portal request nobody answered is forgotten after this long.
+const REQUEST_TTL: Duration = Duration::from_secs(3600);
 /// States buffered for the UI.
 const UPDATE_QUEUE: usize = 8;
 const VIDEO_PREFIX: &str = "video";
@@ -212,6 +218,8 @@ fn spawn_mic(shared: Arc<Shared>) -> Watcher {
     let alive = Arc::new(AtomicBool::new(true));
     let flag = alive.clone();
     let _ = std::thread::Builder::new().name("mandara-privacy-mic".into()).spawn(move || {
+        let mut backoff = crate::runtime::Backoff::new(RECONNECT, RECONNECT_MAX);
+        let mut warned = false;
         while flag.load(Ordering::Relaxed) {
             let result = (|| -> Result<(), String> {
                 let mut p = Pulse::connect("Mandara Shell (privacy)")?;
@@ -220,6 +228,8 @@ fn spawn_mic(shared: Arc<Shared>) -> Watcher {
                 events.ack(Command::Subscribe(protocol::SubscriptionMask::SOURCE_OUTPUT | protocol::SubscriptionMask::SOURCE))?;
                 let apps = read_mic(&mut p)?;
                 shared.set(|s| s.microphone = apps);
+                backoff.reset();
+                warned = false;
                 loop {
                     if !flag.load(Ordering::Relaxed) {
                         return Ok(());
@@ -237,9 +247,17 @@ fn spawn_mic(shared: Arc<Shared>) -> Watcher {
                 }
             })();
             if let Err(err) = result {
-                tracing::debug!("privacy: microphone watcher: {err}");
+                if std::mem::replace(&mut warned, true) {
+                    tracing::debug!("privacy: microphone watcher: {err}");
+                } else {
+                    tracing::info!("privacy: microphone watcher: {err}; retrying with growing delays");
+                }
                 shared.set(|s| s.microphone.clear());
-                std::thread::sleep(RECONNECT);
+                // In slices, so stopping the watcher doesn't wait out the delay.
+                let until = std::time::Instant::now() + backoff.next_delay();
+                while flag.load(Ordering::Relaxed) && std::time::Instant::now() < until {
+                    std::thread::sleep(ALIVE_SLICE);
+                }
             }
         }
         shared.set(|s| s.microphone.clear());
@@ -416,13 +434,25 @@ fn spawn_screen(shared: Arc<Shared>) -> Watcher {
     let alive = Arc::new(AtomicBool::new(true));
     let flag = alive.clone();
     crate::runtime::spawn("privacy-screen", async move {
+        let mut backoff = crate::runtime::Backoff::new(RECONNECT, RECONNECT_MAX);
+        let mut warned = false;
         while flag.load(Ordering::Relaxed) {
+            let started = std::time::Instant::now();
             if let Err(err) = watch_portal(&shared, &flag).await {
-                tracing::debug!("privacy: screen-share watcher: {err}");
+                if std::mem::replace(&mut warned, true) {
+                    tracing::debug!("privacy: screen-share watcher: {err}");
+                } else {
+                    tracing::info!("privacy: screen-share watcher: {err}; retrying with growing delays");
+                }
             }
             shared.set(|s| s.screen_share.clear());
+            if started.elapsed() > RECONNECT_MAX {
+                // It ran for a while: a fresh failure, not a retry storm.
+                backoff.reset();
+                warned = false;
+            }
             if flag.load(Ordering::Relaxed) {
-                crate::runtime::sleep(RECONNECT).await;
+                crate::runtime::sleep(backoff.next_delay()).await;
             }
         }
     });
@@ -450,7 +480,7 @@ async fn watch_portal(shared: &Shared, alive: &AtomicBool) -> zbus::Result<()> {
     let mut stream = zbus::MessageStream::from(monitor).fuse();
     // session path → session; request path → session path.
     let mut sessions: HashMap<String, Session> = HashMap::new();
-    let mut requests: HashMap<String, String> = HashMap::new();
+    let mut requests: HashMap<String, (String, std::time::Instant)> = HashMap::new();
     let publish = |sessions: &HashMap<String, Session>| {
         let mut apps: Vec<AppUse> = Vec::new();
         for s in sessions.values().filter(|s| s.active) {
@@ -466,6 +496,8 @@ async fn watch_portal(shared: &Shared, alive: &AtomicBool) -> zbus::Result<()> {
             m = stream.next() => match m { Some(Ok(m)) => m, Some(Err(e)) => return Err(e), None => return Ok(()) },
             _ = crate::runtime::sleep(ALIVE_CHECK).fuse() => {
                 if !alive.load(Ordering::Relaxed) { return Ok(()) }
+                // A Response that never came must not pin its entry.
+                requests.retain(|_, (_, at)| at.elapsed() < REQUEST_TTL);
                 continue;
             }
         };
@@ -484,13 +516,13 @@ async fn watch_portal(shared: &Shared, alive: &AtomicBool) -> zbus::Result<()> {
                 // see the answer).
                 let active = token.is_none();
                 if let Some(t) = token {
-                    requests.insert(request_path(&sender, &t), session.clone());
+                    requests.insert(request_path(&sender, &t), (session.clone(), std::time::Instant::now()));
                 }
                 sessions.insert(session, Session { sender, app, active });
                 publish(&sessions);
             }
             (Signal, "Response") => {
-                let Some(session) = requests.remove(&path) else { continue };
+                let Some((session, _)) = requests.remove(&path) else { continue };
                 let code = msg.body().deserialize::<(u32, HashMap<String, zbus::zvariant::OwnedValue>)>().map(|(c, _)| c).unwrap_or(u32::MAX);
                 if code == PORTAL_OK {
                     if let Some(s) = sessions.get_mut(&session) {
@@ -503,6 +535,7 @@ async fn watch_portal(shared: &Shared, alive: &AtomicBool) -> zbus::Result<()> {
             }
             (MethodCall, "Close") | (Signal, "Closed") => {
                 if sessions.remove(&path).is_some() {
+                    requests.retain(|_, (sp, _)| sessions.contains_key(sp));
                     publish(&sessions);
                 }
             }
@@ -510,7 +543,7 @@ async fn watch_portal(shared: &Shared, alive: &AtomicBool) -> zbus::Result<()> {
                 let Ok((name, _old, new)) = msg.body().deserialize::<(String, String, String)>() else { continue };
                 if new.is_empty() && sessions.values().any(|s| s.sender == name) {
                     sessions.retain(|_, s| s.sender != name);
-                    requests.retain(|_, sp| sessions.contains_key(sp));
+                    requests.retain(|_, (sp, _)| sessions.contains_key(sp));
                     publish(&sessions);
                 }
             }

@@ -9,6 +9,11 @@ pub(super) enum Event {
     Cleared,
 }
 
+/// Delays between watcher restarts (growing), and how long a run counts as stable.
+const RESTART_MIN: Duration = Duration::from_secs(1);
+const RESTART_MAX: Duration = Duration::from_secs(30);
+const RESTART_STABLE: Duration = Duration::from_secs(60);
+
 #[derive(Default)]
 struct StopState {
     stopped: bool,
@@ -31,9 +36,31 @@ pub(super) fn start(events: async_channel::Sender<Event>, shared: Arc<Mutex<Shar
     let control = state.clone();
     let failed = events.clone();
     if let Err(e) = std::thread::Builder::new().name("mandara-clipboard-watch".into()).spawn(move || {
-        if let Err(e) = run(&events, shared, control) {
+        let mut backoff = crate::runtime::Backoff::new(RESTART_MIN, RESTART_MAX);
+        loop {
+            let started = std::time::Instant::now();
+            let outcome = run(&events, shared.clone(), control.clone());
+            let stopped = control.lock().unwrap_or_else(|e| e.into_inner()).stopped;
+            if stopped || events.is_closed() {
+                return;
+            }
+            // The compositor went away or the seat ended: say so, then try
+            // again instead of leaving the history dead until restart.
             let _ = events.send_blocking(Event::Ready(false));
-            tracing::warn!("clipboard watcher: {e}");
+            match outcome {
+                Err(e) => tracing::warn!("clipboard watcher: {e}"),
+                Ok(()) => tracing::info!("clipboard watcher: the event stream ended"),
+            }
+            if started.elapsed() > RESTART_STABLE {
+                backoff.reset();
+            }
+            let until = std::time::Instant::now() + backoff.next_delay();
+            while std::time::Instant::now() < until {
+                if control.lock().unwrap_or_else(|e| e.into_inner()).stopped || events.is_closed() {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(250));
+            }
         }
     }) {
         let _ = failed.try_send(Event::Ready(false));

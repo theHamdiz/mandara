@@ -72,6 +72,7 @@ pub mod network;
 pub mod night_light;
 pub mod nm_admin;
 pub mod notifications;
+mod private_fs;
 pub mod notify_policy;
 pub mod ocr;
 pub mod offline;

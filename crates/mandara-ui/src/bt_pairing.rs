@@ -113,7 +113,19 @@ fn handle_event(event: PairingEvent, agent: PairingAgent, cx: &mut App) {
     match event {
         PairingEvent::Status(s) => cx.global_mut::<PairingUi>().status = Some(s),
         PairingEvent::Request(req) => {
-            cx.global_mut::<PairingUi>().queue.push_back((req, agent));
+            // Display-only requests repeat with the same id (a typed digit
+            // changed the passkey display): update the open dialog or the
+            // queued entry instead of stacking another dialog.
+            if let Some(handle) = cx.global::<PairingUi>().window
+                && handle.update(cx, |d, _, cx| d.update_request(&req, cx)).unwrap_or(false)
+            {
+                return;
+            }
+            let ui = cx.global_mut::<PairingUi>();
+            match ui.queue.iter_mut().find(|(r, _)| r.id == req.id) {
+                Some(entry) => entry.0 = req,
+                None => ui.queue.push_back((req, agent)),
+            }
             show_next(cx);
         }
         PairingEvent::Cancelled(id) => {
@@ -200,6 +212,17 @@ impl PairingDialog {
         let mut appear = SpringValue::new(0.0, APPEAR);
         appear.set_target(1.0);
         Self { request, agent, input: String::new(), focus, appear, clock: FrameClock::new(), closing: false, answered: false, first: FirstFrame::new(expected) }
+    }
+
+    /// Applies a repeated display-only request to this dialog; `false` when
+    /// it shows another request.
+    fn update_request(&mut self, req: &PairingRequest, cx: &mut Context<Self>) -> bool {
+        if self.request.id != req.id {
+            return false;
+        }
+        self.request = req.clone();
+        cx.notify();
+        true
     }
 
     fn close(&mut self, cx: &mut Context<Self>) {

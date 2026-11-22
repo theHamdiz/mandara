@@ -63,6 +63,8 @@ const FALLBACK_POLL: Duration = Duration::from_secs(10);
 const EVENT_COALESCE: Duration = Duration::from_millis(40);
 /// Back-off before reconnecting to a vanished server.
 const RECONNECT_DELAY: Duration = Duration::from_secs(2);
+/// Reconnect delays grow up to this while the sound server stays away.
+const RECONNECT_MAX: Duration = Duration::from_secs(60);
 /// Read timeout of the mixer watcher (how often it checks `alive()`).
 const MIXER_ALIVE_CHECK: Duration = Duration::from_secs(1);
 /// States buffered for the UI.
@@ -464,17 +466,27 @@ pub fn set_default_input(name: &str) -> Result<(), String> {
     Pulse::connect("Mandara Mixer")?.ack(Command::SetDefaultSource(name))
 }
 
+/// Sleeps up to `delay`, in slices, ending early once `alive` turns false.
+fn sleep_while(alive: &impl Fn() -> bool, delay: Duration) {
+    let until = std::time::Instant::now() + delay;
+    while alive() && std::time::Instant::now() < until {
+        std::thread::sleep(MIXER_ALIVE_CHECK.min(until.saturating_duration_since(std::time::Instant::now())));
+    }
+}
+
 /// Calls `on_change` (from a background thread) whenever a stream, device
 /// or the server defaults change. The watcher stops once `on_change`
 /// returns `false` or `alive()` turns false (checked at least every second).
 pub fn watch_mixer(alive: impl Fn() -> bool + Send + 'static, on_change: impl Fn() -> bool + Send + 'static) {
     let _ = std::thread::Builder::new().name("mandara-mixer-events".into()).spawn(move || {
+        let mut backoff = crate::runtime::Backoff::new(RECONNECT_DELAY, RECONNECT_MAX);
         while alive() {
             let result = (|| -> Result<bool, String> {
                 let mut p = Pulse::connect("Mandara Mixer (events)")?;
                 p.sock.get_ref().set_read_timeout(Some(MIXER_ALIVE_CHECK)).map_err(|e| e.to_string())?;
                 let mask = protocol::SubscriptionMask::SINK_INPUT | protocol::SubscriptionMask::SINK | protocol::SubscriptionMask::SOURCE | protocol::SubscriptionMask::SERVER;
                 p.ack(Command::Subscribe(mask))?;
+                backoff.reset();
                 loop {
                     if !alive() {
                         return Ok(false);
@@ -496,7 +508,10 @@ pub fn watch_mixer(alive: impl Fn() -> bool + Send + 'static, on_change: impl Fn
             if matches!(result, Ok(false)) {
                 return;
             }
-            std::thread::sleep(RECONNECT_DELAY);
+            if let Err(err) = &result {
+                tracing::debug!("audio mixer events: {err}");
+            }
+            sleep_while(&alive, backoff.next_delay());
         }
     });
 }
@@ -534,12 +549,14 @@ pub fn route_streams(routes: Vec<mandara_config::alerts::AudioRoute>) -> Option<
     let alive = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let flag = alive.clone();
     let _ = std::thread::Builder::new().name("mandara-audio-routes".into()).spawn(move || {
+        let mut backoff = crate::runtime::Backoff::new(RECONNECT_DELAY, RECONNECT_MAX);
         while flag.load(Ordering::Relaxed) {
             let result = (|| -> Result<(), String> {
                 let mut p = Pulse::connect("Mandara Shell (routes)")?;
                 let mut events = Pulse::connect("Mandara Shell (route events)")?;
                 events.sock.get_ref().set_read_timeout(Some(MIXER_ALIVE_CHECK)).map_err(|e| e.to_string())?;
                 events.ack(Command::Subscribe(protocol::SubscriptionMask::SINK_INPUT))?;
+                backoff.reset();
                 loop {
                     if !flag.load(Ordering::Relaxed) {
                         return Ok(());
@@ -565,22 +582,40 @@ pub fn route_streams(routes: Vec<mandara_config::alerts::AudioRoute>) -> Option<
             })();
             if let Err(err) = result {
                 tracing::debug!("audio routes: {err}");
-                std::thread::sleep(RECONNECT_DELAY);
+                sleep_while(&|| flag.load(Ordering::Relaxed), backoff.next_delay());
             }
         }
     });
     Some(RouteWatcher(alive))
 }
 
-/// Runs blocking PulseAudio work with the actor's connection on the
-/// blocking pool and hands the connection back.
-async fn with_pulse<T: Send + 'static>(conn: Option<Pulse>, f: impl FnOnce(&mut Option<Pulse>) -> T + Send + 'static) -> (Option<Pulse>, T) {
-    crate::runtime::unblock(move || {
-        let mut conn = conn;
-        let out = f(&mut conn);
-        (conn, out)
-    })
-    .await
+type PulseJob = Box<dyn FnOnce(&mut Option<Pulse>) + Send>;
+
+/// One thread that owns the actor's PulseAudio connection and runs its
+/// blocking work in order. It sleeps in `recv` between jobs (no per-call
+/// thread, no polling) and ends when the actor drops it.
+struct PulseWorker {
+    jobs: async_channel::Sender<PulseJob>,
+}
+
+impl PulseWorker {
+    fn start() -> std::io::Result<Self> {
+        let (jobs, rx) = async_channel::unbounded::<PulseJob>();
+        std::thread::Builder::new().name("mandara-audio-pulse".into()).spawn(move || {
+            let mut conn: Option<Pulse> = None;
+            while let Ok(job) = rx.recv_blocking() {
+                job(&mut conn);
+            }
+        })?;
+        Ok(Self { jobs })
+    }
+
+    /// Runs `f` with the connection; `None` if the worker is gone (a job panicked).
+    async fn run<T: Send + 'static>(&self, f: impl FnOnce(&mut Option<Pulse>) -> T + Send + 'static) -> Option<T> {
+        let (tx, rx) = futures::channel::oneshot::channel();
+        self.jobs.send(Box::new(move |conn| drop(tx.send(f(conn))))).await.ok()?;
+        rx.await.ok()
+    }
 }
 
 pub fn spawn_audio_service() -> AudioService {
@@ -592,11 +627,13 @@ pub fn spawn_audio_service() -> AudioService {
     // A dedicated thread: the Pulse protocol client blocks in `read(2)`,
     // which costs nothing while the server is quiet.
     let _ = std::thread::Builder::new().name("mandara-audio-events".into()).spawn(move || {
+        let mut backoff = crate::runtime::Backoff::new(RECONNECT_DELAY, RECONNECT_MAX);
         loop {
             let result = (|| -> Result<(), String> {
                 let mut p = Pulse::connect("Mandara Shell (events)")?;
                 p.sock.get_ref().set_read_timeout(None).map_err(|e| e.to_string())?;
                 p.ack(Command::Subscribe(protocol::SubscriptionMask::SINK | protocol::SubscriptionMask::SOURCE | protocol::SubscriptionMask::SERVER))?;
+                backoff.reset();
                 loop {
                     let (_, event) = protocol::read_command_message(&mut p.sock, p.version).map_err(|e| e.to_string())?;
                     if matches!(event, Command::SubscribeEvent(_)) && poke_tx.force_send(()).is_err() {
@@ -604,10 +641,11 @@ pub fn spawn_audio_service() -> AudioService {
                     }
                 }
             })();
-            if result.is_ok() {
-                return;
+            match result {
+                Ok(()) => return,
+                Err(err) => tracing::debug!("audio events: {err}"),
             }
-            std::thread::sleep(RECONNECT_DELAY);
+            std::thread::sleep(backoff.next_delay());
         }
     });
     // Global mute: re-applied on start when it was on (the guard sweeps).
@@ -615,12 +653,23 @@ pub fn spawn_audio_service() -> AudioService {
     global.ensure_watch();
     crate::runtime::spawn("audio", async move {
         use futures::FutureExt as _;
-        let mut conn: Option<Pulse> = None;
+        let worker = match PulseWorker::start() {
+            Ok(worker) => worker,
+            Err(err) => {
+                tracing::warn!("audio: cannot start the PulseAudio worker: {err}");
+                let _ = tx.send(AudioState::default()).await;
+                return;
+            }
+        };
         let mut last: Option<AudioState> = None;
+        // While the sound server is absent, retries get further apart.
+        let mut backoff = crate::runtime::Backoff::new(FALLBACK_POLL, RECONNECT_MAX * 5);
+        let mut next_connect = std::time::Instant::now();
         loop {
             let all_muted = global.enabled();
-            let (c, state) = with_pulse(conn.take(), move |conn| {
-                if conn.is_none() {
+            let may_connect = std::time::Instant::now() >= next_connect;
+            let state = worker.run(move |conn| {
+                if conn.is_none() && may_connect {
                     *conn = Pulse::connect("Mandara Shell").ok();
                 }
                 match conn.as_mut().map(read_state) {
@@ -635,8 +684,17 @@ pub fn spawn_audio_service() -> AudioService {
                     None => AudioState::default(),
                 }
             })
-            .await;
-            conn = c;
+            .await
+            .unwrap_or_default();
+            if may_connect {
+                // `state.available` follows the connection.
+                if state.available {
+                    backoff.reset();
+                    next_connect = std::time::Instant::now();
+                } else {
+                    next_connect = std::time::Instant::now() + backoff.next_delay();
+                }
+            }
             if last.as_ref() != Some(&state) {
                 if tx.send(state.clone()).await.is_err() {
                     return;
@@ -648,14 +706,15 @@ pub fn spawn_audio_service() -> AudioService {
                 cmd = rx.recv().fuse() => {
                     let Ok(Envelope { command, reply: r }) = cmd else { return };
                     let global = global.clone();
-                    let (c, result) = with_pulse(conn.take(), move |conn| match conn.as_mut() {
-                        Some(p) => execute(p, &state, command, &global),
-                        #[cfg(target_os = "freebsd")]
-                        None if state.available => oss::execute(&state, command),
-                        None => Err(mandara_i18n::t("The audio server is unavailable").into()),
-                    })
-                    .await;
-                    conn = c;
+                    let result = worker
+                        .run(move |conn| match conn.as_mut() {
+                            Some(p) => execute(p, &state, command, &global),
+                            #[cfg(target_os = "freebsd")]
+                            None if state.available => oss::execute(&state, command),
+                            None => Err(mandara_i18n::t("The audio server is unavailable").into()),
+                        })
+                        .await
+                        .unwrap_or_else(|| Err(mandara_i18n::t("The audio server is unavailable").into()));
                     reply(&r, result);
                 }
                 poke = poke_rx.recv().fuse() => {

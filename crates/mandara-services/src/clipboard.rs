@@ -304,6 +304,11 @@ pub fn classify(types: &[&str]) -> Option<&'static str> {
     }
 }
 
+/// History changes are written this long after the last one.
+const SAVE_DEBOUNCE: Duration = Duration::from_secs(2);
+/// The save timer's resting delay while nothing is waiting to be written.
+const SAVE_IDLE: Duration = Duration::from_secs(3600);
+
 const HISTORY_FILE: &str = "history.json";
 const COLLECTIONS_FILE: &str = "collections.json";
 
@@ -324,12 +329,7 @@ fn load(dir: &Path) -> Vec<ClipEntry> {
 
 /// Writes `bytes` to `dir/name` atomically (temp file + rename).
 fn write_atomic(dir: &Path, name: &str, bytes: &[u8]) {
-    if std::fs::create_dir_all(dir).is_ok() {
-        let tmp = dir.join(format!("{name}.tmp"));
-        if std::fs::write(&tmp, bytes).is_ok() {
-            let _ = std::fs::rename(tmp, dir.join(name));
-        }
-    }
+    let _ = crate::private_fs::write_atomic(dir, name, bytes);
 }
 
 fn save(dir: &Path, entries: &[ClipEntry]) {
@@ -422,10 +422,10 @@ fn capture(types: &[&str], policy: &ClipboardPolicy, app_id: &str, mut read: imp
                 }
                 let ext = mime.trim_start_matches("image/").split(';').next().unwrap_or("img");
                 let dir = store_dir().join("images");
-                std::fs::create_dir_all(&dir).ok()?;
+                crate::private_fs::create_dir(&dir).ok()?;
                 let path = dir.join(format!("{:016x}.{ext}", hash(&bytes)));
                 if !path.exists() {
-                    std::fs::write(&path, &bytes).ok()?;
+                    crate::private_fs::write(&path, &bytes).ok()?;
                 }
                 let class = kind::classify_image(&bytes, app_id);
                 return Some(entry(ClipContent::Image { path, mime: mime.to_string() }, class, app_id));
@@ -822,11 +822,19 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
         // Keeps a never-firing replacement channel open once the watcher ends.
         let mut _parked: Option<async_channel::Sender<watch::Event>> = None;
         let mut prune = std::pin::pin!(crate::runtime::sleep(PRUNE_EVERY).fuse());
+        // History is written once a burst of changes settles, not per change.
+        let mut dirty = false;
+        let mut save_timer = std::pin::pin!(crate::runtime::sleep(SAVE_IDLE).fuse());
         loop {
             let mut changed = false;
             futures::select! {
                 cmd = rx.recv().fuse() => {
-                    let Ok(Envelope { command, reply: r }) = cmd else { return };
+                    let Ok(Envelope { command, reply: r }) = cmd else {
+                        if dirty {
+                            persist_history(&entries, policy.persist).await;
+                        }
+                        return;
+                    };
                     let result = match command {
                         ClipboardCommand::Restore { id, paste } => match entries.iter().find(|e| e.id == id).cloned() {
                             Some(entry) => crate::runtime::unblock(move || restore(&entry, paste)).await,
@@ -912,25 +920,38 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
                         events = never;
                     }
                 },
+                _ = save_timer.as_mut() => {
+                    save_timer.set(crate::runtime::sleep(SAVE_IDLE).fuse());
+                    if std::mem::take(&mut dirty) {
+                        persist_history(&entries, policy.persist).await;
+                    }
+                }
                 _ = prune.as_mut() => {
                     prune.set(crate::runtime::sleep(PRUNE_EVERY).fuse());
                     changed = prune_shared(&mut entries, &policy, chrono::Local::now().timestamp());
                 }
             }
             if changed {
-                let (snapshot, persist) = (entries.clone(), policy.persist);
-                crate::runtime::unblock(move || {
-                    if persist { save(&store_dir(), &snapshot) } else { forget_disk() }
-                    sweep_images(&snapshot);
-                })
-                .await;
+                dirty = true;
+                save_timer.set(crate::runtime::sleep(SAVE_DEBOUNCE).fuse());
                 if tx.send(ClipboardState { available, entries: entries.clone(), collections: collections.clone() }).await.is_err() {
+                    persist_history(&entries, policy.persist).await;
                     return;
                 }
             }
         }
     });
     ServiceHandle::new(updates, commands)
+}
+
+/// Writes the history (or forgets it) and drops image files no entry uses.
+async fn persist_history(entries: &Arc<Vec<ClipEntry>>, persist: bool) {
+    let snapshot = entries.clone();
+    crate::runtime::unblock(move || {
+        if persist { save(&store_dir(), &snapshot) } else { forget_disk() }
+        sweep_images(&snapshot);
+    })
+    .await;
 }
 
 /// Deletes the saved history file (history kept in memory only).
