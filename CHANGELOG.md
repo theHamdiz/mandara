@@ -25,6 +25,15 @@ Default fonts and opt-in system font sync, plus robustness and performance fixes
 
 ### Fixed
 
+- Batch-integration review follow-ups: Studio sees monitors again without the
+  shell's overlay map; dim overlays clear after an unplug; `sudo mandara
+  greeter apply-config` accepts public root-owned drafts; a system CaskaydiaCove
+  counts as installed; Qt font sync writes a quoted INI string; audio reconnects
+  as soon as Pulse is back; turning clipboard persistence off deletes the file
+  immediately; font-sync ownership survives unreadable records; polkit, sleep
+  inhibitors, tray registration and notification expiry handle the edge cases
+  CodeRabbit flagged on the review stages.
+
 - **The bar no longer vanishes for good on Umbriel and other wlroots
   compositors.** A window with a half-pixel size at a 2× buffer scale made
   the compositor drop Mandara's connection, taking the bar, wallpaper and

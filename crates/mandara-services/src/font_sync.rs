@@ -67,14 +67,36 @@ impl Families {
         format!("{} {POINT_SIZE}", self.display)
     }
 
+    /// A qt5ct / qt6ct font string. qt5ct and qt6ct read their files with
+    /// `QSettings`, which splits an unquoted value at every comma into a
+    /// string list, so the whole Qt font string is written as one quoted
+    /// INI string. (`kdeglobals` is read by KConfig, which keeps the commas:
+    /// [`Self::kde_font`] stays unquoted.)
     fn qt_font(&self, family: &str) -> String {
-        // qt5ct / qt6ct accept a bare family or a Qt font string.
-        format!("{family},{POINT_SIZE},-1,5,50,0,0,0,0,0")
+        ini_quote(&format!("{family},{POINT_SIZE},-1,5,50,0,0,0,0,0"))
     }
 
     fn kde_font(&self, family: &str) -> String {
         format!("{family},{POINT_SIZE},-1,5,50,0,0,0,0,0")
     }
+}
+
+/// `value` as one quoted `QSettings` INI string: backslashes, quotes and line
+/// breaks escaped so nothing in it can end the string or the line.
+fn ini_quote(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('"');
+    for c in value.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// One file or gsettings key Mandara touched.
@@ -87,6 +109,11 @@ pub struct Before {
     pub value: Option<String>,
     #[serde(default)]
     pub created: bool,
+    /// What Mandara last successfully wrote here. Restore compares the
+    /// target against this, not the current families, which may have moved
+    /// on (or failed to land) since.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub written: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -175,8 +202,15 @@ fn unquote(s: &str) -> String {
     s.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')).unwrap_or(s).to_string()
 }
 
-fn load(path: &Path) -> Option<Record> {
-    std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok())
+/// The ownership record; `Ok(None)` only when there is none. An unreadable
+/// or corrupt record is an error, so its saved originals are never dropped.
+fn load(path: &Path) -> Result<Option<Record>, String> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    serde_json::from_str(&text).map(Some).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 fn write(path: &Path, text: &str) -> Result<(), String> {
@@ -224,7 +258,19 @@ fn xml_escape(s: &str) -> String {
 
 fn remember(record: &mut Record, target: &str, group: &str, value: Option<String>, created: bool) {
     if !record.before.iter().any(|b| b.target == target) {
-        record.before.push(Before { target: target.into(), group: group.into(), value, created });
+        record.before.push(Before { target: target.into(), group: group.into(), value, created, written: None });
+    }
+}
+
+/// Records that `target` now holds `value` from Mandara; persists the
+/// record when that changed what it says.
+fn mark_written(env: &ApplyEnv, record: &mut Record, target: &str, value: &str) -> Result<(), String> {
+    match record.before.iter_mut().find(|b| b.target == target) {
+        Some(before) if before.written.as_deref() != Some(value) => {
+            before.written = Some(value.into());
+            checkpoint(env, record)
+        }
+        _ => Ok(()),
     }
 }
 
@@ -284,9 +330,8 @@ fn apply_ini(env: &ApplyEnv, record: &mut Record, report: &mut Report, w: IniWri
         if !report.changed.iter().any(|c| c == w.file) {
             report.changed.push(w.file.into());
         }
-        checkpoint(env, record)?;
     }
-    Ok(())
+    mark_written(env, record, &target, &w.value)
 }
 
 fn apply_gsettings(env: &ApplyEnv, gs: &dyn FontGsettings, record: &mut Record, report: &mut Report, key: &str, value: &str) -> Result<(), String> {
@@ -301,10 +346,9 @@ fn apply_gsettings(env: &ApplyEnv, gs: &dyn FontGsettings, record: &mut Record, 
         if !gs.set(key, value) {
             return Err(format!("gsettings set {GSETTINGS_SCHEMA} {key} failed"));
         }
-        report.changed.push(target);
-        checkpoint(env, record)?;
+        report.changed.push(target.clone());
     }
-    Ok(())
+    mark_written(env, record, &target, value)
 }
 
 fn apply_fontconfig(env: &ApplyEnv, record: &mut Record, report: &mut Report, families: &Families) -> Result<(), String> {
@@ -316,9 +360,8 @@ fn apply_fontconfig(env: &ApplyEnv, record: &mut Record, report: &mut Report, fa
     if current.as_deref() != Some(body.as_str()) {
         write(&path, &body)?;
         report.changed.push(FONTCONFIG_REL.into());
-        checkpoint(env, record)?;
     }
-    Ok(())
+    mark_written(env, record, FONTCONFIG_REL, &body)
 }
 
 /// Writes the enabled targets; keeps the first record of what was there.
@@ -326,7 +369,7 @@ pub fn apply(families: &Families, targets: Targets, env: &ApplyEnv, gsettings: &
     if !targets.any() {
         return restore_groups(env, gsettings, None);
     }
-    let mut record = load(&env.record).unwrap_or_default();
+    let mut record = load(&env.record)?.unwrap_or_default();
     let mut report = Report::default();
     // So a mid-apply restore knows which values Mandara meant to own.
     record.families = Some(families.clone());
@@ -414,7 +457,7 @@ fn persist_record(env: &ApplyEnv, record: &Record) -> Result<(), String> {
 }
 
 fn restore_groups(env: &ApplyEnv, gsettings: &dyn FontGsettings, only: Option<&[String]>) -> Result<Report, String> {
-    let mut record = load(&env.record).unwrap_or_default();
+    let mut record = load(&env.record)?.unwrap_or_default();
     if record.before.is_empty() {
         let _ = std::fs::remove_file(&env.record);
         return Ok(Report::default());
@@ -462,11 +505,13 @@ fn restore_groups_inner(env: &ApplyEnv, gsettings: &dyn FontGsettings, record: &
                     return Err(err);
                 }
             };
-            let mandara = applied.as_ref().map(|f| match key.as_str() {
-                "font-name" => f.gtk_ui(),
-                "document-font-name" => f.gtk_document(),
-                "monospace-font-name" => f.gtk_mono(),
-                _ => String::new(),
+            let mandara = before.written.clone().or_else(|| {
+                applied.as_ref().map(|f| match key.as_str() {
+                    "font-name" => f.gtk_ui(),
+                    "document-font-name" => f.gtk_document(),
+                    "monospace-font-name" => f.gtk_mono(),
+                    _ => String::new(),
+                })
             });
             if mandara.as_ref() == Some(&now) {
                 match previous {
@@ -506,7 +551,7 @@ fn restore_groups_inner(env: &ApplyEnv, gsettings: &dyn FontGsettings, record: &
                     return Err(format!("{}: {e}", path.display()));
                 }
             };
-            let ours = applied.as_ref().map(fontconfig_body);
+            let ours = before.written.clone().or_else(|| applied.as_ref().map(fontconfig_body));
             if ours.as_deref() != Some(now.as_str()) {
                 report.kept.push(before.target.clone());
                 keep.push(pending.remove(idx));
@@ -555,7 +600,7 @@ fn restore_groups_inner(env: &ApplyEnv, gsettings: &dyn FontGsettings, record: &
             }
         };
         let now = ini_get(&text, section, key);
-        let expected = applied.as_ref().and_then(|f| expected_ini(rel, key, f));
+        let expected = before.written.clone().or_else(|| applied.as_ref().and_then(|f| expected_ini(rel, key, f)));
         if now != expected {
             report.kept.push(before.target.clone());
             keep.push(pending.remove(idx));
@@ -631,7 +676,11 @@ pub fn reconcile(cfg: &mandara_config::ShellConfig, env: &ApplyEnv, gsettings: &
 
 /// Whether Mandara currently owns a system-font record.
 pub fn active(env: &ApplyEnv) -> bool {
-    load(&env.record).is_some_and(|r| !r.before.is_empty())
+    // An unreadable record may still own writes: report them as active.
+    match load(&env.record) {
+        Ok(record) => record.is_some_and(|r| !r.before.is_empty()),
+        Err(_) => true,
+    }
 }
 
 #[cfg(test)]
@@ -667,6 +716,17 @@ mod tests {
     }
 
     #[test]
+    fn qt_fonts_are_one_quoted_string_and_kde_fonts_are_not() {
+        let f = families();
+        assert_eq!(f.qt_font(&f.ui), "\"Inter,11,-1,5,50,0,0,0,0,0\"");
+        assert_eq!(f.kde_font(&f.ui), "Inter,11,-1,5,50,0,0,0,0,0");
+        assert_eq!(ini_quote("a\"b\\c\nd"), "\"a\\\"b\\\\c\\nd\"");
+        // What is written is what `expected_ini` expects back.
+        assert_eq!(expected_ini("qt6ct/qt6ct.conf", "general", &f), Some(f.qt_font(&f.ui)));
+        assert_eq!(expected_ini("qt5ct/qt5ct.conf", "fixed", &f), Some(f.qt_font(&f.mono)));
+    }
+
+    #[test]
     fn apply_and_restore_round_trip() {
         let root = tempfile::tempdir().unwrap();
         let env = ApplyEnv::under(root.path());
@@ -686,6 +746,8 @@ mod tests {
         assert!(cfg.join(FONTCONFIG_REL).exists());
         assert!(std::fs::read_to_string(cfg.join("gtk-3.0/settings.ini")).unwrap().contains("Inter 11"));
         assert_eq!(gs_value(&gs, "font-name").as_deref(), Some("Inter 11"));
+        let qt = std::fs::read_to_string(cfg.join("qt6ct/qt6ct.conf")).unwrap();
+        assert!(qt.contains("general=\"Inter,11,-1,5,50,0,0,0,0,0\"\n"), "{qt}");
         assert!(active(&env));
 
         let back = restore(&env, &gs).unwrap();
@@ -693,6 +755,7 @@ mod tests {
         assert_eq!(std::fs::read_to_string(cfg.join("gtk-3.0/settings.ini")).unwrap(), "[Settings]\ngtk-font-name=Old 10\n");
         assert_eq!(gs_value(&gs, "font-name").as_deref(), Some("Old 10"));
         assert!(!cfg.join(FONTCONFIG_REL).exists());
+        assert_eq!(std::fs::read_to_string(cfg.join("qt6ct/qt6ct.conf")).unwrap(), "[Fonts]\ngeneral=Old,10,-1,5,50,0,0,0,0,0\n", "the quoted value is recognised as Mandara's and undone");
         assert!(!active(&env));
     }
 
@@ -758,7 +821,7 @@ mod tests {
         assert!(apply(&families(), targets, &env, &gs).is_err());
         assert!(env.config.join(FONTCONFIG_REL).exists(), "fontconfig already written");
         assert!(active(&env), "ownership persisted for restore");
-        let record = load(&env.record).expect("record");
+        let record = load(&env.record).unwrap().expect("record");
         assert!(record.before.iter().any(|b| b.target == FONTCONFIG_REL));
         assert!(record.before.iter().any(|b| b.target == "gsettings:font-name"));
     }
@@ -775,7 +838,7 @@ mod tests {
         let failing = FailSetGs(FakeGs(RefCell::new(gs.0.borrow().clone())));
         assert!(restore(&env, &failing).is_err());
         assert!(active(&env), "failed restore must keep the record");
-        let record = load(&env.record).expect("record");
+        let record = load(&env.record).unwrap().expect("record");
         assert!(record.before.iter().any(|b| b.target == "gsettings:font-name"));
     }
 
@@ -788,7 +851,7 @@ mod tests {
         apply(&families(), fc_only, &env, &gs).unwrap();
         let gtk_only = Targets { fontconfig: false, gtk: true, qt: false, kde: false, browsers: false };
         apply(&families(), gtk_only, &env, &gs).unwrap();
-        let record = load(&env.record).expect("record");
+        let record = load(&env.record).unwrap().expect("record");
         assert_eq!(record.families.as_ref(), Some(&families()), "gtk apply after dropping fontconfig keeps family metadata");
         assert!(record.before.iter().any(|b| b.group == "gtk"));
         assert!(!record.before.iter().any(|b| b.group == "fontconfig"));
@@ -805,6 +868,44 @@ mod tests {
         let failing = FailGetGs(FakeGs(RefCell::new(gs.0.borrow().clone())));
         assert!(restore(&env, &failing).is_err());
         assert!(active(&env));
-        assert!(load(&env.record).unwrap().before.iter().any(|b| b.target == "gsettings:font-name"));
+        assert!(load(&env.record).unwrap().unwrap().before.iter().any(|b| b.target == "gsettings:font-name"));
+    }
+
+    #[test]
+    fn an_unreadable_or_corrupt_record_is_never_discarded() {
+        let root = tempfile::tempdir().unwrap();
+        let env = ApplyEnv::under(root.path());
+        let gs = FakeGs::default();
+        assert_eq!(load(&env.record), Ok(None), "absent is not an error");
+        std::fs::write(&env.record, b"{ not json").unwrap();
+        assert!(restore(&env, &gs).is_err());
+        assert!(apply(&families(), Targets { fontconfig: true, ..Targets::default() }, &env, &gs).is_err());
+        assert_eq!(std::fs::read(&env.record).unwrap(), b"{ not json", "the corrupt record stays for the user to recover");
+        assert!(active(&env));
+        std::fs::remove_file(&env.record).unwrap();
+        std::fs::create_dir(&env.record).unwrap();
+        assert!(restore(&env, &gs).is_err(), "a record that can't be read is an error");
+        assert!(env.record.is_dir());
+    }
+
+    #[test]
+    fn restore_compares_against_what_each_target_last_got() {
+        let root = tempfile::tempdir().unwrap();
+        let env = ApplyEnv::under(root.path());
+        let gs = FakeGs::default();
+        std::fs::create_dir_all(env.config.join("gtk-3.0")).unwrap();
+        std::fs::write(env.config.join("gtk-3.0/settings.ini"), "[Settings]\ngtk-font-name=Old 10\n").unwrap();
+        let both = Targets { fontconfig: true, gtk: true, ..Targets::default() };
+        apply(&families(), both, &env, &gs).unwrap();
+        // The family changes while GTK is switched off: GTK still holds the
+        // old Mandara value and must be undone, not kept as a user edit.
+        let moved = Families { ui: "Cairo".into(), ..families() };
+        let report = apply(&moved, Targets { fontconfig: true, ..Targets::default() }, &env, &gs).unwrap();
+        assert_eq!(std::fs::read_to_string(env.config.join("gtk-3.0/settings.ini")).unwrap(), "[Settings]\ngtk-font-name=Old 10\n");
+        assert!(!report.kept.iter().any(|k| k.contains("gtk-3.0")), "{report:?}");
+        assert!(std::fs::read_to_string(env.config.join(FONTCONFIG_REL)).unwrap().contains("Cairo"));
+        let record = load(&env.record).unwrap().expect("record");
+        let fc = record.before.iter().find(|b| b.target == FONTCONFIG_REL).unwrap();
+        assert_eq!(fc.written.as_deref(), Some(fontconfig_body(&moved).as_str()));
     }
 }

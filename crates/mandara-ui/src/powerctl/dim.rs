@@ -172,7 +172,13 @@ pub fn stop_countdown(cx: &mut App) {
 fn stop_where(cx: &mut App, matches: impl Fn(DimStage) -> bool) {
     let Some(dim) = cx.try_global::<Dim>() else { return };
     let windows = dim.windows.clone();
-    if !windows.iter().all(|h| h.read(cx).is_ok_and(|v| matches(v.stage))) {
+    // A window that can no longer be read (its output was unplugged) has
+    // nothing left to fade: skip it instead of leaving the others up, and
+    // drop it with the rest below.
+    if !windows.iter().all(|h| match h.read(cx) {
+        Ok(v) => matches(v.stage),
+        Err(_) => true,
+    }) {
         return;
     }
     let now = Instant::now();

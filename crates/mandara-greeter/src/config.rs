@@ -1473,6 +1473,28 @@ fn invoking_uid() -> Option<u32> {
     ["PKEXEC_UID", "SUDO_UID"].iter().find_map(|var| std::env::var(var).ok()?.parse().ok())
 }
 
+/// The owner `sudo` and `pkexec` elevate to.
+const ROOT_UID: u32 = 0;
+
+/// Read permission for "other" and search permission on a directory.
+const OTHER_READ: u32 = 0o004;
+const OTHER_SEARCH: u32 = 0o001;
+
+/// Whether the root-owned open `file` is one any user could read: the file
+/// itself is readable by everyone, and so is the way to it (every directory
+/// of its real path, which `/proc/self/fd` gives for the open file, so a
+/// link can't change it afterwards, can be searched by everyone). Elevating
+/// to read it then shows the invoker nothing they couldn't read already.
+fn public_root_file(file: &std::fs::File, meta: &std::fs::Metadata) -> bool {
+    use std::os::fd::AsRawFd as _;
+    use std::os::unix::fs::PermissionsExt as _;
+    if meta.permissions().mode() & OTHER_READ == 0 {
+        return false;
+    }
+    let Ok(real) = std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd())) else { return false };
+    real.ancestors().skip(1).all(|dir| std::fs::metadata(dir).is_ok_and(|m| m.permissions().mode() & OTHER_SEARCH != 0))
+}
+
 /// The text of the draft at `from`, read as root without being steered by
 /// whoever wrote the path. The file is opened first (without waiting: a
 /// FIFO would block forever) and every check is made on that open file, so
@@ -1480,11 +1502,13 @@ fn invoking_uid() -> Option<u32> {
 ///
 /// * it is a regular file of at most [`MAX_DRAFT_BYTES`];
 /// * when an unprivileged `invoker` asked (`pkexec`, `sudo`), the file the
-///   path leads to, links followed, belongs to them. A link to a root-only
-///   file (their draft pointing at `/etc/shadow`) is refused before a byte
-///   is read, so a parse error can't quote it back to them, and a dotfile
-///   manager's link to their own file still works. Without an invoker, root
-///   named the file on purpose.
+///   path leads to, links followed, belongs to them, or belongs to root and
+///   is readable by everyone ([`public_root_file`]: a config under `/etc`
+///   the invoker could read anyway). A link to a root-only file (their
+///   draft pointing at `/etc/shadow`) is refused before a byte is read, so
+///   a parse error can't quote it back to them, and a dotfile manager's
+///   link to their own file still works. Without an invoker, root named the
+///   file on purpose.
 fn read_draft(from: &Path, invoker: Option<u32>) -> Result<String, String> {
     use std::io::Read as _;
     use std::os::unix::fs::{MetadataExt as _, OpenOptionsExt as _};
@@ -1496,6 +1520,7 @@ fn read_draft(from: &Path, invoker: Option<u32>) -> Result<String, String> {
     }
     if let Some(uid) = invoker
         && meta.uid() != uid
+        && !(meta.uid() == ROOT_UID && public_root_file(&file, &meta))
     {
         return Err(format!("{shown} is not owned by you (user {uid}); root only installs a draft its requester owns (nothing was changed)"));
     }
@@ -1836,6 +1861,16 @@ mod tests {
         let link = dir.path().join("link.toml");
         std::os::unix::fs::symlink(&draft, &link).unwrap();
         assert!(read_draft(&link, Some(me)).is_ok());
+        // A root-owned file everyone can read (a config under /etc) is
+        // accepted for `sudo mandara greeter apply-config /etc/...`; one
+        // only root can read is not.
+        let someone_else = me.wrapping_add(1);
+        if std::fs::metadata("/etc/os-release").is_ok_and(|m| m.uid() == ROOT_UID) {
+            assert!(read_draft(Path::new("/etc/os-release"), Some(someone_else)).is_ok(), "public root file");
+        }
+        if std::fs::metadata("/etc/shadow").is_ok_and(|m| m.uid() == ROOT_UID) {
+            assert!(read_draft(Path::new("/etc/shadow"), Some(someone_else)).is_err(), "root-only file");
+        }
         // A link to a file someone else owns is refused, and nothing of it is quoted.
         let secret = dir.path().join("secret");
         std::fs::write(&secret, "root:$6$topsecret:19000:0:99999:7:::\n").unwrap();

@@ -56,14 +56,15 @@ pub const REPLY_NO: &str = "no";
 /// Events buffered for the UI; replies buffered from it.
 const EVENT_QUEUE: usize = 64;
 const REPLY_QUEUE: usize = 16;
-/// Calls to callers, queued in order.
-const OUTGOING_QUEUE: usize = 64;
 /// A method handler's reply is written after it returns; callbacks it
 /// triggers wait this long so the caller always sees the reply first (gcr
 /// returns from `BeginPrompting` before it sends `PromptReady`).
 const AFTER_REPLY: Duration = Duration::from_millis(15);
 /// A caller that never answers a callback is given up after this long.
 const CALLBACK_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long stopping waits for callbacks already queued (each caller's
+/// pending `PromptReady`, then its `PromptDone`) before the name goes.
+const SHUTDOWN_DRAIN: Duration = CALLBACK_TIMEOUT.saturating_mul(2);
 
 // ─────────────────────────────── properties ───────────────────────────────
 
@@ -502,28 +503,24 @@ impl KeyringPrompter {
 
 struct Shared {
     state: Mutex<PrompterState>,
+    /// UI events, relayed in order to the UI's bounded queue.
     events: async_channel::Sender<KeyringEvent>,
     outgoing: async_channel::Sender<(Action, bool)>,
 }
 
 impl Shared {
-    /// Queues without blocking the caller; a full queue is waited on in a
-    /// task (and the loss logged) instead of dropping the item silently.
-    fn queue<T: Send + 'static>(tx: &async_channel::Sender<T>, item: T, what: &'static str) {
-        if let Err(async_channel::TrySendError::Full(item)) = tx.try_send(item) {
-            let tx = tx.clone();
-            crate::runtime::spawn("keyring-prompt-queue", async move { crate::actor::send_event(&tx, item, what).await });
-        }
-    }
-
-    /// Routes actions: UI events now, callbacks through the ordered queue
-    /// (`after_reply`: issued from a method handler).
+    /// Routes actions: UI events and callbacks each through one FIFO, so a
+    /// later action never overtakes an earlier one (`after_reply`: issued
+    /// from a method handler). Both FIFOs are unbounded on purpose: the
+    /// sender task hands callbacks straight on to per-caller workers, and
+    /// the UI relay waits on the bounded UI queue, so neither backs up
+    /// beyond the actions callers' own D-Bus calls produced.
     fn dispatch(&self, actions: Vec<Action>, after_reply: bool) {
         for action in actions {
-            match action {
-                Action::Ui(event) => Self::queue(&self.events, event, "keyring prompt"),
-                other => Self::queue(&self.outgoing, (other, after_reply), "keyring prompt callbacks"),
-            }
+            let _ = match action {
+                Action::Ui(event) => self.events.try_send(event).map_err(drop),
+                other => self.outgoing.try_send((other, after_reply)).map_err(drop),
+            };
         }
     }
 }
@@ -593,7 +590,9 @@ async fn call_back(conn: &zbus::Connection, action: &Action) -> zbus::Result<()>
 
 /// Sends queued callbacks. Each caller has a worker of its own, so one that
 /// never answers stalls only its own callbacks (in order), not everyone's.
-async fn sender(conn: zbus::Connection, shared: Arc<Shared>, rx: async_channel::Receiver<(Action, bool)>) {
+/// `alive` is held by the sender and every worker: once all have finished,
+/// its receiver sees the channel close.
+async fn sender(conn: zbus::Connection, shared: Arc<Shared>, rx: async_channel::Receiver<(Action, bool)>, alive: async_channel::Sender<()>) {
     let mut workers: HashMap<CallerKey, async_channel::Sender<(Action, bool)>> = HashMap::new();
     while let Ok((action, after_reply)) = rx.recv().await {
         let key = match &action {
@@ -603,7 +602,7 @@ async fn sender(conn: zbus::Connection, shared: Arc<Shared>, rx: async_channel::
         let done = matches!(action, Action::Done { .. });
         let tx = workers.entry(key.clone()).or_insert_with(|| {
             let (tx, worker_rx) = async_channel::unbounded();
-            crate::runtime::spawn("keyring-prompt-callback", callback_worker(conn.clone(), shared.clone(), worker_rx));
+            crate::runtime::spawn("keyring-prompt-callback", callback_worker(conn.clone(), shared.clone(), worker_rx, alive.clone()));
             tx
         });
         let _ = tx.send((action, after_reply)).await;
@@ -614,7 +613,7 @@ async fn sender(conn: zbus::Connection, shared: Arc<Shared>, rx: async_channel::
     }
 }
 
-async fn callback_worker(conn: zbus::Connection, shared: Arc<Shared>, rx: async_channel::Receiver<(Action, bool)>) {
+async fn callback_worker(conn: zbus::Connection, shared: Arc<Shared>, rx: async_channel::Receiver<(Action, bool)>, _alive: async_channel::Sender<()>) {
     while let Ok((action, after_reply)) = rx.recv().await {
         if after_reply {
             crate::runtime::sleep(AFTER_REPLY).await;
@@ -653,16 +652,27 @@ fn spawn_with(enabled: bool, address: Option<String>) -> KeyringPrompter {
         let status = |s| {
             let _ = events_tx.try_send(KeyringEvent::Status(s));
         };
-        let (out_tx, out_rx) = async_channel::bounded(OUTGOING_QUEUE);
-        let shared = Arc::new(Shared { state: Mutex::new(PrompterState::new()), events: events_tx.clone(), outgoing: out_tx });
+        let (out_tx, out_rx) = async_channel::unbounded();
+        let (ui_tx, ui_rx) = async_channel::unbounded::<KeyringEvent>();
+        {
+            let events_tx = events_tx.clone();
+            crate::runtime::spawn("keyring-prompt-ui", async move {
+                while let Ok(event) = ui_rx.recv().await {
+                    crate::actor::send_event(&events_tx, event, "keyring prompt").await;
+                }
+            });
+        }
+        let shared = Arc::new(Shared { state: Mutex::new(PrompterState::new()), events: ui_tx, outgoing: out_tx });
         let conn = match connect(address.as_deref(), shared.clone()).await {
             Ok(conn) => conn,
             Err(err) => {
                 tracing::warn!("keyring prompt: unavailable: {err}");
+                shared.events.close();
                 return status(PrompterStatus::Unavailable(err.to_string()));
             }
         };
-        crate::runtime::spawn("keyring-prompt-sender", sender(conn.clone(), shared.clone(), out_rx));
+        let (alive_tx, alive_rx) = async_channel::bounded::<()>(1);
+        crate::runtime::spawn("keyring-prompt-sender", sender(conn.clone(), shared.clone(), out_rx, alive_tx));
         // UI answers.
         {
             let shared = shared.clone();
@@ -685,25 +695,25 @@ fn spawn_with(enabled: bool, address: Option<String>) -> KeyringPrompter {
             }
             Err(err) => {
                 tracing::warn!("keyring prompt: cannot request {BUS_NAME}: {err}");
+                shared.outgoing.close();
+                shared.events.close();
                 return status(PrompterStatus::Unavailable(err.to_string()));
             }
         }
         watch_bus(&conn, &shared, &stop_rx).await;
-        // Stopped: callers are told we're done, then the name goes with
-        // the connection.
+        // Stopped: take no new callers, then tell each one we're done
+        // through its own worker, after whatever it was already sent.
+        let _ = conn.object_server().remove::<Prompter, _>(PROMPTER_PATH).await;
         let actions = shared.state.lock().shutdown();
-        for action in &actions {
-            if let Action::Ui(event) = action {
-                let _ = events_tx.try_send(event.clone());
-            } else {
-                let _ = call_back(&conn, action).await;
-            }
+        shared.dispatch(actions, false);
+        // Let the helper tasks drain and end, then the name goes.
+        shared.outgoing.close();
+        shared.events.close();
+        replies_closer.close();
+        if crate::runtime::timeout(SHUTDOWN_DRAIN, alive_rx.recv()).await.is_none() {
+            tracing::warn!("keyring prompt: callers did not take their last callbacks in time");
         }
         let _ = conn.release_name(BUS_NAME).await;
-        // Let the helper tasks end and drop the object that holds `shared`.
-        shared.outgoing.close();
-        replies_closer.close();
-        let _ = conn.object_server().remove::<Prompter, _>(PROMPTER_PATH).await;
         tracing::info!("keyring prompt: stopped; {BUS_NAME} released");
         status(PrompterStatus::Disabled);
     });

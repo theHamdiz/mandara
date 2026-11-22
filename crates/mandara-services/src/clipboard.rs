@@ -879,11 +879,17 @@ pub fn spawn_clipboard_service_with(config: &ClipboardConfig) -> ClipboardServic
                         ClipboardCommand::Configure(config) => {
                             let next = ClipboardPolicy::from(&config);
                             changed = next != policy;
+                            let opted_out = policy.persist && !next.persist;
                             if let Ok(mut s) = shared.lock() {
                                 s.policy = next.clone();
                             }
                             policy = next;
                             if changed { enforce_limits(Arc::make_mut(&mut entries), &policy); }
+                            // Turning persistence off deletes the saved history now,
+                            // not after the save debounce settles.
+                            if opted_out {
+                                persist_history(&entries, false).await;
+                            }
                             Ok("configured".into())
                         }
                         ClipboardCommand::FocusedApp(app) => {

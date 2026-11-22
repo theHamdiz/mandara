@@ -17,9 +17,15 @@ const FALLBACK_SIZE: (f32, f32) = (1920.0, 1080.0);
 /// The measured outputs. [`crate::overlays::Outputs`] is measured off the UI
 /// thread at startup and again on every display or scale change; asking the
 /// compositor here would block the UI thread on a Wayland round trip each
-/// time an overlay opens.
+/// time an overlay opens. Only the shell sets that global: Studio (and any
+/// other process using these helpers) has none, so it asks the compositor
+/// through [`mandara_core::query_outputs`], whose connection is kept between
+/// calls.
 pub fn geometries(cx: &App) -> Vec<OutputGeometry> {
-    cx.try_global::<crate::overlays::Outputs>().map(|o| o.0.clone()).unwrap_or_default()
+    match cx.try_global::<crate::overlays::Outputs>() {
+        Some(measured) => measured.0.clone(),
+        None => mandara_core::query_outputs().unwrap_or_default(),
+    }
 }
 
 fn keys(cx: &App) -> Vec<DisplayKey> {

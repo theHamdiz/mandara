@@ -355,7 +355,11 @@ pub async fn run_session(
             futures::select! {
                 line = lines.recv().fuse() => match line.ok().flatten() {
                     Some(HelperLine::Prompt { text, echo }) => {
-                        send_event(events, PolkitEvent::Prompt { cookie: cookie.into(), user: user.clone(), text, echo }, "polkit").await;
+                        // PAM waits for an answer nobody could give: end the session.
+                        if !send_event(events, PolkitEvent::Prompt { cookie: cookie.into(), user: user.clone(), text, echo }, "polkit").await {
+                            kill();
+                            return close(Outcome::Failed).await;
+                        }
                     }
                     Some(HelperLine::Error(text)) => {
                         send_event(events, PolkitEvent::Message { cookie: cookie.into(), text, error: true }, "polkit").await;
@@ -506,46 +510,83 @@ fn passwd_entry(pw: &libc::passwd) -> AdminUser {
     AdminUser { uid: pw.pw_uid, display: if full.is_empty() { name.clone() } else { full }, name }
 }
 
+/// First buffer for a `getpw*_r` lookup (glibc's usual `_SC_GETPW_R_SIZE_MAX`).
+const NSS_PASSWD_BUF: usize = 4096;
+/// First buffer for `getgrgid_r`: large groups list many members.
+const NSS_GROUP_BUF: usize = 16384;
+/// Largest buffer an NSS lookup grows to on `ERANGE` before giving up.
+const NSS_BUF_MAX: usize = 1 << 20;
+
+/// Runs a reentrant NSS lookup, doubling its buffer while it reports
+/// `ERANGE` (up to [`NSS_BUF_MAX`]). `lookup` returns the call's error code
+/// or the record (`None` when there is none).
+fn nss_lookup<T>(start: usize, what: &str, mut lookup: impl FnMut(&mut [libc::c_char]) -> Result<Option<T>, libc::c_int>) -> Option<T> {
+    let mut buf = vec![0 as libc::c_char; start];
+    loop {
+        match lookup(&mut buf) {
+            Ok(found) => return found,
+            Err(libc::ERANGE) if buf.len() < NSS_BUF_MAX => buf.resize(buf.len() * 2, 0),
+            Err(rc) => {
+                tracing::debug!("polkit: NSS lookup of {what} failed: {}", std::io::Error::from_raw_os_error(rc));
+                return None;
+            }
+        }
+    }
+}
+
 fn nss_user_by_uid(uid: u32) -> Option<AdminUser> {
-    let mut pw = std::mem::MaybeUninit::<libc::passwd>::uninit();
-    let mut buf = vec![0 as libc::c_char; 4096];
-    let mut result: *mut libc::passwd = std::ptr::null_mut();
-    // SAFETY: the buffers outlive the call; `result` is checked before use.
-    let rc = unsafe { libc::getpwuid_r(uid, pw.as_mut_ptr(), buf.as_mut_ptr(), buf.len(), &mut result) };
-    // SAFETY: on success `pw` is initialised and points into `buf`.
-    (rc == 0 && !result.is_null()).then(|| passwd_entry(unsafe { &*result }))
+    nss_lookup(NSS_PASSWD_BUF, "a user", |buf| {
+        let mut pw = std::mem::MaybeUninit::<libc::passwd>::uninit();
+        let mut result: *mut libc::passwd = std::ptr::null_mut();
+        // SAFETY: the buffers outlive the call; `result` is checked before use.
+        let rc = unsafe { libc::getpwuid_r(uid, pw.as_mut_ptr(), buf.as_mut_ptr(), buf.len(), &mut result) };
+        if rc != 0 {
+            return Err(rc);
+        }
+        // SAFETY: on success `pw` is initialised and points into `buf`.
+        Ok((!result.is_null()).then(|| passwd_entry(unsafe { &*result })))
+    })
 }
 
 fn nss_user_by_name(name: &str) -> Option<AdminUser> {
     let name = std::ffi::CString::new(name).ok()?;
-    let mut pw = std::mem::MaybeUninit::<libc::passwd>::uninit();
-    let mut buf = vec![0 as libc::c_char; 4096];
-    let mut result: *mut libc::passwd = std::ptr::null_mut();
-    // SAFETY: as in `nss_user_by_uid`.
-    let rc = unsafe { libc::getpwnam_r(name.as_ptr(), pw.as_mut_ptr(), buf.as_mut_ptr(), buf.len(), &mut result) };
-    // SAFETY: as in `nss_user_by_uid`.
-    (rc == 0 && !result.is_null()).then(|| passwd_entry(unsafe { &*result }))
+    nss_lookup(NSS_PASSWD_BUF, "a user", |buf| {
+        let mut pw = std::mem::MaybeUninit::<libc::passwd>::uninit();
+        let mut result: *mut libc::passwd = std::ptr::null_mut();
+        // SAFETY: as in `nss_user_by_uid`.
+        let rc = unsafe { libc::getpwnam_r(name.as_ptr(), pw.as_mut_ptr(), buf.as_mut_ptr(), buf.len(), &mut result) };
+        if rc != 0 {
+            return Err(rc);
+        }
+        // SAFETY: as in `nss_user_by_uid`.
+        Ok((!result.is_null()).then(|| passwd_entry(unsafe { &*result })))
+    })
 }
 
 fn nss_group_members(gid: u32) -> Vec<String> {
-    let mut gr = std::mem::MaybeUninit::<libc::group>::uninit();
-    let mut buf = vec![0 as libc::c_char; 16384];
-    let mut result: *mut libc::group = std::ptr::null_mut();
-    // SAFETY: the buffers outlive the call; `result` is checked before use.
-    let rc = unsafe { libc::getgrgid_r(gid, gr.as_mut_ptr(), buf.as_mut_ptr(), buf.len(), &mut result) };
-    if rc != 0 || result.is_null() {
-        return Vec::new();
-    }
-    let mut members = Vec::new();
-    // SAFETY: `gr_mem` is a NULL-terminated array of C strings inside `buf`.
-    unsafe {
-        let mut p = (*result).gr_mem;
-        while !p.is_null() && !(*p).is_null() {
-            members.push(std::ffi::CStr::from_ptr(*p).to_string_lossy().into_owned());
-            p = p.add(1);
+    nss_lookup(NSS_GROUP_BUF, "a group", |buf| {
+        let mut gr = std::mem::MaybeUninit::<libc::group>::uninit();
+        let mut result: *mut libc::group = std::ptr::null_mut();
+        // SAFETY: the buffers outlive the call; `result` is checked before use.
+        let rc = unsafe { libc::getgrgid_r(gid, gr.as_mut_ptr(), buf.as_mut_ptr(), buf.len(), &mut result) };
+        if rc != 0 {
+            return Err(rc);
         }
-    }
-    members
+        if result.is_null() {
+            return Ok(None);
+        }
+        let mut members = Vec::new();
+        // SAFETY: `gr_mem` is a NULL-terminated array of C strings inside `buf`.
+        unsafe {
+            let mut p = (*result).gr_mem;
+            while !p.is_null() && !(*p).is_null() {
+                members.push(std::ffi::CStr::from_ptr(*p).to_string_lossy().into_owned());
+                p = p.add(1);
+            }
+        }
+        Ok(Some(members))
+    })
+    .unwrap_or_default()
 }
 
 // ─────────────────────────────── D-Bus side ───────────────────────────────
@@ -676,7 +717,23 @@ pub fn spawn_polkit_agent(enabled: bool) -> PolkitAgent {
         let mut owners = crate::actor::owner_changes(&conn, POLKITD).await.ok();
         let mut last: Option<AgentStatus> = None;
         loop {
-            let (status, retry) = match register(&conn).await {
+            // A stalled registration must not outlive a stop.
+            let registered = {
+                let mut registering = std::pin::pin!(register(&conn).fuse());
+                futures::select! {
+                    r = registering => Some(r),
+                    _ = stop_rx.recv().fuse() => None,
+                }
+            };
+            let Some(registered) = registered else {
+                // Dropping the connection also undoes a registration polkitd
+                // already accepted.
+                drop(conn);
+                tracing::info!("polkit: authentication agent stopped");
+                send_event(&events_tx, PolkitEvent::Status(AgentStatus::Disabled), "polkit").await;
+                return;
+            };
+            let (status, retry) = match registered {
                 Ok(session) => {
                     tracing::info!("polkit: authentication agent registered for session {session}");
                     (AgentStatus::Registered { session }, None)
@@ -809,6 +866,25 @@ async fn agent_subject(conn: &zbus::Connection) -> zbus::Result<(&'static str, H
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nss_lookups_grow_their_buffer_on_erange_up_to_a_cap() {
+        let mut sizes = Vec::new();
+        let found = nss_lookup(NSS_PASSWD_BUF, "test", |buf| {
+            sizes.push(buf.len());
+            if buf.len() < 4 * NSS_PASSWD_BUF { Err(libc::ERANGE) } else { Ok(Some(buf.len())) }
+        });
+        assert_eq!(found, Some(4 * NSS_PASSWD_BUF));
+        assert_eq!(sizes, [NSS_PASSWD_BUF, 2 * NSS_PASSWD_BUF, 4 * NSS_PASSWD_BUF]);
+        let mut largest = 0;
+        let never = nss_lookup::<()>(NSS_GROUP_BUF, "test", |buf| {
+            largest = buf.len();
+            Err(libc::ERANGE)
+        });
+        assert_eq!((never, largest), (None, NSS_BUF_MAX), "growth stops at the cap");
+        assert_eq!(nss_lookup::<()>(NSS_PASSWD_BUF, "test", |_| Err(libc::EIO)), None);
+        assert_eq!(nss_lookup::<u8>(NSS_PASSWD_BUF, "test", |_| Ok(None)), None);
+    }
     use std::os::unix::net::UnixStream;
     use std::sync::atomic::{AtomicUsize, Ordering};
 

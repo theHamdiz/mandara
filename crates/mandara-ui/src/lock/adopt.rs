@@ -103,7 +103,7 @@ mod tests {
     #[test]
     fn only_a_real_lock_command_line_counts() {
         assert!(is_locker_cmdline(b"/usr/bin/mandara\0lock\0"));
-        assert!(!is_locker_cmdline(b"/usr/bin/mandara\0lock\0--demo\0--timeout\060\0"), "the preview never locks");
+        assert!(!is_locker_cmdline(b"/usr/bin/mandara\0lock\0--demo\0--timeout\x0060\0"), "the preview never locks");
         assert!(!is_locker_cmdline(b"/usr/bin/mandara\0msg\0lock\0"));
         assert!(!is_locker_cmdline(b"/usr/bin/mandara\0"));
         assert!(!is_locker_cmdline(b"vim\0lock.txt\0"));

@@ -118,15 +118,18 @@ const EVENT_SEND_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Queues an event for the UI without silently losing it: a full queue is
 /// waited on for a few seconds, then the loss is logged. A closed queue
-/// (the UI side is gone) is not an error.
-pub async fn send_event<T>(tx: &async_channel::Sender<T>, event: T, what: &str) {
+/// (the UI side is gone) is not an error. Returns whether the UI got it.
+pub async fn send_event<T>(tx: &async_channel::Sender<T>, event: T, what: &str) -> bool {
     match tx.try_send(event) {
-        Ok(()) | Err(async_channel::TrySendError::Closed(_)) => {}
-        Err(async_channel::TrySendError::Full(event)) => {
-            if crate::runtime::timeout(EVENT_SEND_TIMEOUT, tx.send(event)).await.is_none() {
+        Ok(()) => true,
+        Err(async_channel::TrySendError::Closed(_)) => false,
+        Err(async_channel::TrySendError::Full(event)) => match crate::runtime::timeout(EVENT_SEND_TIMEOUT, tx.send(event)).await {
+            Some(sent) => sent.is_ok(),
+            None => {
                 tracing::warn!("{what}: the UI did not take the event in time; dropped");
+                false
             }
-        }
+        },
     }
 }
 
@@ -191,6 +194,15 @@ pub async fn next_command<C>(commands: &async_channel::Receiver<Envelope<C>>, ti
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn send_event_reports_whether_the_ui_got_it() {
+        let (tx, rx) = async_channel::bounded(1);
+        assert!(crate::runtime::block_on(send_event(&tx, 1, "test")));
+        assert_eq!(rx.try_recv(), Ok(1));
+        rx.close();
+        assert!(!crate::runtime::block_on(send_event(&tx, 2, "test")), "a closed queue delivers nothing");
+    }
 
     #[test]
     fn nonblocking_send_reports_full_and_closed_queues_without_losing_the_command() {

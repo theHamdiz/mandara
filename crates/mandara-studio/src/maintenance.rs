@@ -244,10 +244,11 @@ fn font_family_match(font: &Font, installed: &[String]) -> bool {
 
 fn font_present_in(font: &Font, installed: &[String], dir: &Path) -> bool {
     match font.package {
-        // Archive installs: only the Regular marker means the package is complete.
-        // A partial unpack can register the family name without the marker face.
-        FontPackage::NerdTarXz => dir.join(font.file).exists(),
-        FontPackage::File => font_family_match(font, installed) || dir.join(font.file).exists(),
+        // Archive installs: the Regular marker means Mandara's own unpack is
+        // complete, and a family the system already has (a distribution's
+        // CaskaydiaCove package) is just as present: downloading it again
+        // would only duplicate it.
+        FontPackage::NerdTarXz | FontPackage::File => font_family_match(font, installed) || dir.join(font.file).exists(),
     }
 }
 
@@ -672,7 +673,8 @@ mod tests {
         assert!(caskaydia.url.contains("CascadiaCode.tar.xz"));
         assert!(font_family_match(caskaydia, &["CaskaydiaCove Nerd Font".into()]));
         let empty = tempfile::tempdir().unwrap();
-        assert!(!font_present_in(caskaydia, &["CaskaydiaCove Nerd Font Mono".into()], empty.path()));
+        assert!(!font_present_in(caskaydia, &[], empty.path()), "neither installed nor unpacked");
+        assert!(font_present_in(caskaydia, &["CaskaydiaCove Nerd Font Mono".into()], empty.path()), "a system-installed family counts");
         std::fs::write(empty.path().join(caskaydia.file), b"marker").unwrap();
         assert!(font_present_in(caskaydia, &[], empty.path()));
         let jetbrains = FONTS.iter().find(|f| f.family == "JetBrains Mono").unwrap();

@@ -39,6 +39,13 @@ const DRY_RUN_ENV: &str = "MANDARA_POWER_DRY_RUN";
 /// Delays between [`watch_sleep`]'s reconnect attempts.
 const RECONNECT_MIN: std::time::Duration = std::time::Duration::from_secs(2);
 const RECONNECT_MAX: std::time::Duration = std::time::Duration::from_secs(120);
+/// Retries of a failed sleep `Inhibit` before waiting for the next signal
+/// or re-check (logind may be briefly busy right after a resume).
+const INHIBIT_RETRIES: u32 = 6;
+/// First delay between those retries; each one doubles it.
+const INHIBIT_RETRY_MIN: std::time::Duration = std::time::Duration::from_secs(2);
+/// Longest delay between those retries.
+const INHIBIT_RETRY_MAX: std::time::Duration = std::time::Duration::from_secs(60);
 /// Who holds the inhibitor, as `systemd-inhibit --list` shows it.
 const INHIBITOR_WHO: &str = "Mandara Shell";
 
@@ -220,11 +227,26 @@ async fn sleep_session(enabled: &Check, before: &Hook, after: &Hook, backoff: &m
     backoff.reset();
     let why = t("Lock the screen before sleeping");
     let mut held = if enabled() { delay_inhibitor(&m, "sleep", why).await } else { None };
+    // A failed `Inhibit` is retried a few times, further apart each time,
+    // while the inhibitor is wanted; each signal or re-check starts over.
+    let mut retry = crate::runtime::Backoff::new(INHIBIT_RETRY_MIN, INHIBIT_RETRY_MAX);
+    let mut retries_left = INHIBIT_RETRIES;
+    let mut suspending = false;
     loop {
+        let wait = (held.is_none() && !suspending && retries_left > 0 && enabled()).then(|| retry.next_delay());
+        let retry_timer = async {
+            match wait {
+                Some(delay) => crate::runtime::sleep(delay).await,
+                None => futures::future::pending().await,
+            }
+        };
         futures::select! {
             msg = signals.next().fuse() => {
                 let Some(msg) = msg else { return Ok(()) };
                 let starting: bool = msg.body().deserialize().unwrap_or(false);
+                suspending = starting;
+                retry.reset();
+                retries_left = INHIBIT_RETRIES;
                 if starting {
                     if enabled() {
                         let f = before.clone();
@@ -241,11 +263,19 @@ async fn sleep_session(enabled: &Check, before: &Hook, after: &Hook, backoff: &m
                 }
             }
             _ = RECHECK.1.recv().fuse() => {
+                retry.reset();
+                retries_left = INHIBIT_RETRIES;
                 // Follow the setting: hold the inhibitor only while wanted.
                 match (enabled(), held.is_some()) {
                     (true, false) => held = delay_inhibitor(&m, "sleep", why).await,
                     (false, true) => held = None,
                     _ => {}
+                }
+            }
+            _ = retry_timer.fuse() => {
+                retries_left -= 1;
+                if held.is_none() && enabled() {
+                    held = delay_inhibitor(&m, "sleep", why).await;
                 }
             }
         }

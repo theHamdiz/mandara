@@ -624,6 +624,10 @@ pub fn spawn_audio_service() -> AudioService {
     // Server events (sink / source / server changes) wake the actor. One
     // pending wake-up is enough: it triggers a full re-read.
     let (poke_tx, poke_rx) = async_channel::bounded::<()>(1);
+    // Set when the event connection subscribes: the server is back, so the
+    // actor may reconnect at once instead of waiting out its backoff.
+    let recovered = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let server_back = recovered.clone();
     // A dedicated thread: the Pulse protocol client blocks in `read(2)`,
     // which costs nothing while the server is quiet.
     let _ = std::thread::Builder::new().name("mandara-audio-events".into()).spawn(move || {
@@ -634,6 +638,10 @@ pub fn spawn_audio_service() -> AudioService {
                 p.sock.get_ref().set_read_timeout(None).map_err(|e| e.to_string())?;
                 p.ack(Command::Subscribe(protocol::SubscriptionMask::SINK | protocol::SubscriptionMask::SOURCE | protocol::SubscriptionMask::SERVER))?;
                 backoff.reset();
+                server_back.store(true, std::sync::atomic::Ordering::Release);
+                if poke_tx.force_send(()).is_err() {
+                    return Ok(());
+                }
                 loop {
                     let (_, event) = protocol::read_command_message(&mut p.sock, p.version).map_err(|e| e.to_string())?;
                     if matches!(event, Command::SubscribeEvent(_)) && poke_tx.force_send(()).is_err() {
@@ -667,6 +675,10 @@ pub fn spawn_audio_service() -> AudioService {
         let mut next_connect = std::time::Instant::now();
         loop {
             let all_muted = global.enabled();
+            if recovered.swap(false, std::sync::atomic::Ordering::Acquire) {
+                backoff.reset();
+                next_connect = std::time::Instant::now();
+            }
             let may_connect = std::time::Instant::now() >= next_connect;
             let state = worker.run(move |conn| {
                 if conn.is_none() && may_connect {

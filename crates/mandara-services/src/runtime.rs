@@ -25,7 +25,7 @@ use std::sync::Once;
 use std::time::Duration;
 
 use async_executor::Executor;
-use async_lock::OnceCell;
+use async_lock::Mutex;
 use zbus::Connection;
 
 /// Executor threads. Two, so one slow task can never freeze every service.
@@ -43,8 +43,8 @@ const UNBLOCK_NAME: &str = "mandara-unblock";
 
 static EXECUTOR: Executor<'static> = Executor::new();
 static START: Once = Once::new();
-static SESSION: OnceCell<Connection> = OnceCell::new();
-static SYSTEM: OnceCell<Connection> = OnceCell::new();
+static SESSION: Mutex<Option<Connection>> = Mutex::new(None);
+static SYSTEM: Mutex<Option<Connection>> = Mutex::new(None);
 
 thread_local! {
     /// Set on the executor threads (see [`block_on`]).
@@ -187,14 +187,27 @@ pub async fn connect(builder: zbus::connection::Builder<'_>) -> zbus::Result<Con
     Ok(conn)
 }
 
+/// The connection cached in `slot`, replaced by a fresh one from `builder`
+/// once the bus closed it (zbus never reopens a connection). Concurrent
+/// callers wait for one connect instead of racing.
+async fn shared(slot: &Mutex<Option<Connection>>, builder: fn() -> zbus::Result<zbus::connection::Builder<'static>>) -> zbus::Result<Connection> {
+    let mut cached = slot.lock().await;
+    if let Some(conn) = cached.as_ref().filter(|c| !c.is_closed()) {
+        return Ok(conn.clone());
+    }
+    let conn = connect(builder()?.max_queued(SHARED_MAX_QUEUED)).await?;
+    *cached = Some(conn.clone());
+    Ok(conn)
+}
+
 /// The shared session-bus connection.
 pub async fn session() -> zbus::Result<Connection> {
-    SESSION.get_or_try_init(|| async { connect(zbus::connection::Builder::session()?.max_queued(SHARED_MAX_QUEUED)).await }).await.cloned()
+    shared(&SESSION, zbus::connection::Builder::session).await
 }
 
 /// The shared system-bus connection.
 pub async fn system() -> zbus::Result<Connection> {
-    SYSTEM.get_or_try_init(|| async { connect(zbus::connection::Builder::system()?.max_queued(SHARED_MAX_QUEUED)).await }).await.cloned()
+    shared(&SYSTEM, zbus::connection::Builder::system).await
 }
 
 /// Blocks the calling (non-runtime) thread on `future`, e.g. for a CLI

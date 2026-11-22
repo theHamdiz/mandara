@@ -724,6 +724,8 @@ pub fn spawn_notification_service() -> NotificationService {
             first = rx.recv().fuse() => match first {
                 Ok(Envelope { command: NotificationCommand::Configure(cfg), reply: r }) => {
                     *shared.policy.lock() = Policy::new(*cfg);
+                    // The housekeeper chose its first wait under the default policy.
+                    let _ = house_tx.try_send(());
                     reply(&r, Ok("configured".into()));
                 }
                 Ok(other) => pending = Some(other),
@@ -928,6 +930,9 @@ pub fn spawn_notification_service() -> NotificationService {
                                 st.items.retain(|n| n.id != id);
                             } else if let Some(n) = st.items.iter_mut().find(|n| n.id == id) {
                                 n.popup = false;
+                                // NotificationClosed ends the sender's interest:
+                                // its buttons and inline reply could no longer answer.
+                                n.actions.clear();
                             }
                             closed.push((id, EXPIRED));
                             Ok("expired".into())

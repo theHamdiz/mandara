@@ -26,6 +26,11 @@ use crate::actor::{Envelope, Reply, ServiceHandle, proxy, reply};
 /// How long one tray app gets to answer a D-Bus call; a hung app must not
 /// freeze every other item, menu and registration.
 const ITEM_TIMEOUT: Duration = Duration::from_secs(5);
+/// Times an item whose first read timed out is read again (a busy app
+/// starting up) before it is left out.
+const ITEM_READ_RETRIES: u32 = 3;
+/// Wait before reading a slow item again.
+const ITEM_RETRY_DELAY: Duration = Duration::from_secs(10);
 /// Most items the watcher keeps (a runaway client cannot grow the list).
 const MAX_ITEMS: usize = 256;
 const MENU_SETTLE: Duration = Duration::from_millis(120);
@@ -589,6 +594,8 @@ struct Actor {
     menu_dirty: bool,
     deadline: Option<Instant>,
     serving: bool,
+    /// Addresses whose first read timed out, and how often it has.
+    read_retries: HashMap<String, u32>,
 }
 
 impl Actor {
@@ -661,30 +668,53 @@ impl Actor {
     }
 
     /// Adds (or refreshes) the item at `address`. Returns whether it exists.
+    /// An item too slow to answer is read again later, a few times, while
+    /// its name still has an owner.
     async fn add_item(&mut self, address: &str) -> bool {
+        let read = self.add_item_once(address).await;
+        if read != ItemRead::TimedOut {
+            self.read_retries.remove(address);
+            return read == ItemRead::Found;
+        }
+        let attempts = self.read_retries.entry(address.to_string()).or_insert(0);
+        *attempts += 1;
+        if *attempts > ITEM_READ_RETRIES {
+            self.read_retries.remove(address);
+            tracing::debug!("tray: {address} never answered; giving up");
+            return true;
+        }
+        let (tx, address) = (self.registered_tx.clone(), address.to_string());
+        crate::runtime::spawn("tray-reread", async move {
+            crate::runtime::sleep(ITEM_RETRY_DELAY).await;
+            let _ = tx.send(address).await;
+        });
+        true
+    }
+
+    async fn add_item_once(&mut self, address: &str) -> ItemRead {
         let (service, path) = split_address(address);
         let owner = if service.starts_with(':') {
             service.clone()
         } else {
-            let Ok(name) = BusName::try_from(service.as_str()) else { return false };
+            let Ok(name) = BusName::try_from(service.as_str()) else { return ItemRead::Missing };
             match self.dbus.get_name_owner(name).await {
                 Ok(o) => o.to_string(),
-                Err(_) => return false,
+                Err(_) => return ItemRead::Missing,
             }
         };
         // The same object may be known by its well-known and unique name.
         if let Some(existing) = self.state.items.iter().find(|i| i.owner == owner && i.path == path) {
             let key = existing.key.clone();
             self.mark_dirty(key);
-            return true;
+            return ItemRead::Found;
         }
         let mut item = TrayItem { key: format!("{service}{path}"), service, path, owner, ..Default::default() };
-        if !read_item(&self.conn, &mut item).await {
-            return false;
+        let read = read_item(&self.conn, &mut item).await;
+        if read == ItemRead::Found {
+            tracing::debug!("tray: + {} ({})", item.display_name(), item.key);
+            self.state.items.push(item);
         }
-        tracing::debug!("tray: + {} ({})", item.display_name(), item.key);
-        self.state.items.push(item);
-        true
+        read
     }
 
     fn remove_where(&mut self, pred: impl Fn(&TrayItem) -> bool) -> Vec<TrayItem> {
@@ -796,7 +826,7 @@ impl Actor {
         for key in std::mem::take(&mut self.dirty) {
             let Some(pos) = self.state.items.iter().position(|i| i.key == key) else { continue };
             let mut item = self.state.items[pos].clone();
-            if read_item(&self.conn, &mut item).await {
+            if read_item(&self.conn, &mut item).await == ItemRead::Found {
                 self.state.items[pos] = item;
             }
         }
@@ -938,14 +968,24 @@ async fn fetch_menu(conn: &Connection, item: &TrayItem) -> Result<TrayMenu, Stri
     Ok(TrayMenu { key: item.key.clone(), revision, root: parse_node(id, &props, &children) })
 }
 
-/// Reads every property of `item`. Returns `false` if the object doesn't
-/// answer at all (not an item, or already gone).
-async fn read_item(conn: &Connection, item: &mut TrayItem) -> bool {
+/// What reading an item's properties found.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ItemRead {
+    Found,
+    /// The object doesn't answer as an item (not one, or already gone).
+    Missing,
+    /// The app took longer than [`ITEM_TIMEOUT`]: it may still be starting.
+    TimedOut,
+}
+
+/// Reads every property of `item`.
+async fn read_item(conn: &Connection, item: &mut TrayItem) -> ItemRead {
     match timed(read_item_inner(conn, item)).await {
-        Ok(found) => found,
+        Ok(true) => ItemRead::Found,
+        Ok(false) => ItemRead::Missing,
         Err(err) => {
             tracing::debug!("tray: reading {}: {err}", item.key);
-            false
+            ItemRead::TimedOut
         }
     }
 }
@@ -1051,6 +1091,7 @@ async fn run(tx: async_channel::Sender<TrayState>, rx: async_channel::Receiver<E
         menu_dirty: false,
         deadline: None,
         serving: false,
+        read_retries: HashMap::new(),
     };
     actor.claim_role().await;
     let mut last: Option<TrayState> = None;

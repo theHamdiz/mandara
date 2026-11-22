@@ -64,16 +64,19 @@ fn ensure_worker() -> Result<(), String> {
 
 fn worker_loop() {
     loop {
-        let jobs = match QUEUE.lock() {
-            Ok(mut q) if !q.is_empty() => std::mem::take(&mut *q),
-            _ => {
-                WORKER.store(false, Ordering::SeqCst);
-                // A submit may have raced after we saw an empty queue.
-                if QUEUE.lock().ok().is_some_and(|q| !q.is_empty()) && !WORKER.swap(true, Ordering::SeqCst) {
-                    continue;
-                }
-                break;
+        // Take the batch in its own scope: the guard must be gone before the
+        // empty-queue branch locks the queue again (the mutex isn't reentrant).
+        let batch = match QUEUE.lock() {
+            Ok(mut q) if !q.is_empty() => Some(std::mem::take(&mut *q)),
+            _ => None,
+        };
+        let Some(jobs) = batch else {
+            WORKER.store(false, Ordering::SeqCst);
+            // A submit may have raced after we saw an empty queue.
+            if QUEUE.lock().ok().is_some_and(|q| !q.is_empty()) && !WORKER.swap(true, Ordering::SeqCst) {
+                continue;
             }
+            break;
         };
         for job in coalesce(jobs) {
             let result = font_sync::reconcile(&job.cfg, &ApplyEnv::current(), &FontGsettingsCommand);

@@ -697,7 +697,7 @@ mod tests {
         std::fs::write(config.join("generated/niri.kdl"), "x").unwrap();
         std::fs::write(config.join(".config.toml.1.2.3.tmp"), "half").unwrap();
         std::fs::write(dotfiles.join("looks/mine.toml"), "look").unwrap();
-        symlink(&dotfiles.join("looks"), config.join("looks")).unwrap();
+        symlink(dotfiles.join("looks"), config.join("looks")).unwrap();
         symlink(&config, dotfiles.join("looks/loop")).unwrap();
         symlink("/nonexistent/target", config.join("dangling")).unwrap();
         let backup = root.path().join("backups/20260101-000000-test");
