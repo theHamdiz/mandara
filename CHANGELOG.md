@@ -6,6 +6,7 @@ About → What's new shows it too.
 
 ## Unreleased
 
+<<<<<<< HEAD
 Mandara's default typefaces are Inter, Alexandria (including Arabic) and
 CaskaydiaCove Nerd Font Mono, with Nerd Font substitutes until Maintenance
 downloads the real face. Opt-in system font sync can push those families to
@@ -24,6 +25,19 @@ fontconfig, GTK, Qt, KDE and browsers.
   Mandara's interface and monospace faces to fontconfig (and browsers that
   follow it), GTK, Qt and KDE, with a master switch and per-target toggles.
   Off by default; turning a target off restores what Mandara changed.
+=======
+The bar stays up on Umbriel and other wlroots compositors at fractional
+scales, and a lost display connection now restarts the shell.
+
+### Fixed
+
+- **The bar no longer vanishes for good on Umbriel and other wlroots
+  compositors.** A window with a half-pixel size at a 2× buffer scale made
+  the compositor drop Mandara's connection, taking the bar, wallpaper and
+  lock screen with it. Sizes are now whole pixels, and if the connection is
+  ever lost the shell exits so its supervisor restarts it, instead of
+  spinning at full CPU and flooding the journal.
+>>>>>>> pr-214
 
 ## 0.37.0 — 2026-11-22
 
