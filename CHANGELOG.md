@@ -6,6 +6,16 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The login screen no longer shows log text on the console while the desktop starts.
+
+### Fixed
+
+- Log lines no longer flash on the login screen's console between signing in
+  and the desktop appearing. When Mandara runs on a text console its logs go
+  to the journal instead (`journalctl -t mandara`), and the console is
+  cleared once the session starts. Terminals and pipes still get logs on
+  stderr.
+
 ## 0.37.0 — 2026-11-22
 
 Mandara speaks Italian: Studio, the shell and Mandara Login all follow

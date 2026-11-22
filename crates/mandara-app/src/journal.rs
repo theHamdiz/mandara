@@ -42,10 +42,11 @@ impl<S: Subscriber> Layer<S> for Journal {
         let metadata = event.metadata();
         let mut record = Record::new(
             self,
-            if *metadata.level() == tracing::Level::WARN {
-                b'4'
-            } else {
-                b'3'
+            match *metadata.level() {
+                tracing::Level::ERROR => b'3',
+                tracing::Level::WARN => b'4',
+                tracing::Level::INFO => b'6',
+                _ => b'7',
             },
         );
         let _ = fmt::write(
@@ -267,9 +268,27 @@ mod tests {
     }
 
     #[test]
+    fn journal_route_sends_info_to_the_journal_and_nothing_to_stderr() {
+        let (journal, receiver) = journal();
+        let stderr = tempfile::NamedTempFile::new().unwrap();
+        let subscriber = crate::logging::subscriber(
+            stderr.reopen().unwrap(),
+            Some(journal),
+            "info".into(),
+            crate::logging::Route::Journal,
+        );
+        tracing::subscriber::with_default(subscriber, || tracing::info!("routine message"));
+        let mut bytes = [0; RECORD_BYTES];
+        let count = receiver.recv(&mut bytes).unwrap();
+        assert!(String::from_utf8_lossy(&bytes[..count]).contains("PRIORITY=6"));
+        assert!(String::from_utf8_lossy(message(&bytes[..count])).contains("routine message"));
+        assert!(std::fs::read_to_string(stderr.path()).unwrap().is_empty());
+    }
+
+    #[test]
     fn the_journal_filter_keeps_warning_priority_and_skips_info() {
         let (journal, receiver) = journal();
-        let subscriber = crate::logging::subscriber(io::sink, Some(journal), "off".into());
+        let subscriber = crate::logging::subscriber(io::sink, Some(journal), "off".into(), crate::logging::Route::Stderr);
         tracing::subscriber::with_default(subscriber, || {
             tracing::info!("routine message");
             tracing::warn!("crash warning");
@@ -292,7 +311,7 @@ mod tests {
     fn stderr_filters_do_not_discard_journal_diagnostics() {
         for filter in ["off", "info,wgpu_hal=error"] {
             let (journal, receiver) = journal();
-            let subscriber = crate::logging::subscriber(io::sink, Some(journal), filter.into());
+            let subscriber = crate::logging::subscriber(io::sink, Some(journal), filter.into(), crate::logging::Route::Stderr);
             tracing::subscriber::with_default(subscriber, || {
                 tracing::warn!(target: "wgpu_hal", "GPU warning");
                 tracing::error!("display loop failure");
@@ -328,7 +347,7 @@ mod tests {
         assert_eq!(calls.get(), RECORD_BYTES * 4);
         calls.set(0);
         let (journal, receiver) = journal();
-        let subscriber = crate::logging::subscriber(io::sink, Some(journal), "off".into());
+        let subscriber = crate::logging::subscriber(io::sink, Some(journal), "off".into(), crate::logging::Route::Stderr);
         tracing::subscriber::with_default(subscriber, || {
             tracing::error!("{}", Verbose(&calls));
         });
@@ -342,7 +361,7 @@ mod tests {
     #[test]
     fn truncated_unicode_diagnostics_remain_valid_utf8() {
         let (journal, receiver) = journal();
-        let subscriber = crate::logging::subscriber(io::sink, Some(journal), "off".into());
+        let subscriber = crate::logging::subscriber(io::sink, Some(journal), "off".into(), crate::logging::Route::Stderr);
         let text = "مصر🌊".repeat(RECORD_BYTES);
         tracing::subscriber::with_default(subscriber, || {
             for prefix in ["", "a", "ab", "abc"] {
