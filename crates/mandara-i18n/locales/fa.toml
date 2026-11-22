@@ -5295,6 +5295,8 @@
 "The next prayer and time remaining" = "نماز بعدی و زمان باقی‌مانده"
 "The oldest go first" = "قدیمی‌ترین‌ها اول حذف می‌شوند"
 "The panel that drops from the bar item, or none." = "پنلی که از مورد نوار باز می‌شود، یا «هیچ»."
+"The password check failed — try again" = "بررسی گذرواژه ناموفق بود — دوباره تلاش کنید"
+"The password check took too long — try again" = "بررسی گذرواژه بیش از حد طول کشید — دوباره تلاش کنید"
 "The password is empty" = "گذرواژه خالی است"
 "The password needs 8–63 characters" = "گذرواژه باید 8–63 نویسه باشد"
 "The passwords don't match" = "گذرواژه‌ها مطابقت ندارند"

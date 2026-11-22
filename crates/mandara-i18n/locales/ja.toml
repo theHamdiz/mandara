@@ -2157,6 +2157,8 @@
 "The link has no account name" = "リンクにアカウント名がありません"
 "The link has no secret" = "リンクにシークレットがありません"
 "The panel that drops from the bar item, or none." = "バー項目から開くパネル、または none。"
+"The password check failed — try again" = "パスワードの確認に失敗しました — もう一度お試しください"
+"The password check took too long — try again" = "パスワードの確認に時間がかかりすぎました — もう一度お試しください"
 "The password is empty" = "パスワードが空です"
 "The public IP endpoint must be an http(s) URL" = "パブリック IP のエンドポイントは http(s) URL である必要があります"
 "The sandbox" = "サンドボックス"

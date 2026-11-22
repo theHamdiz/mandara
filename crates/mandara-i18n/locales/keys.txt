@@ -8164,6 +8164,8 @@ The package manager needs a decision from you (a conflict or broken dependency).
 The package servers couldn't be reached. Check your connection and try again.
 The panel is not visible
 The panel that drops from the bar item, or none.
+The password check failed — try again
+The password check took too long — try again
 The password dialog was cancelled, so the AUR packages weren't installed.
 The password is empty
 The password needs 8–63 characters

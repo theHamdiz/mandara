@@ -5295,6 +5295,8 @@
 "The next prayer and time remaining" = "다음 예배와 남은 시간"
 "The oldest go first" = "가장 오래된 항목부터 삭제됩니다"
 "The panel that drops from the bar item, or none." = "바 항목에서 펼쳐지는 패널, 또는 없음."
+"The password check failed — try again" = "비밀번호 확인에 실패했습니다 — 다시 시도하세요"
+"The password check took too long — try again" = "비밀번호 확인이 너무 오래 걸렸습니다 — 다시 시도하세요"
 "The password is empty" = "비밀번호가 비어 있습니다"
 "The password needs 8–63 characters" = "비밀번호는 8–63자여야 합니다"
 "The passwords don't match" = "비밀번호가 일치하지 않습니다"

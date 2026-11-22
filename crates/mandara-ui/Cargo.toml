@@ -27,7 +27,7 @@ unicode-segmentation = "1.13"
 chrono.workspace = true
 tracing.workspace = true
 anyhow.workspace = true
-rustix.workspace = true
+rustix = { workspace = true, features = ["event"] }
 image.workspace = true
 # Video wallpapers: demux, AV1 decode, YUV conversion into wl_shm buffers.
 mandara-media.workspace = true

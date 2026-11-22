@@ -2034,6 +2034,8 @@
 "The last log lines of a container" = "Последние строки журнала контейнера"
 "The link has no account name" = "В ссылке нет имени учётной записи"
 "The link has no secret" = "В ссылке нет секрета"
+"The password check failed — try again" = "Не удалось проверить пароль — попробуйте ещё раз"
+"The password check took too long — try again" = "Проверка пароля заняла слишком много времени — попробуйте ещё раз"
 "The password is empty" = "Пароль пуст"
 "The public IP endpoint must be an http(s) URL" = "Адрес публичного IP должен быть URL http(s)"
 "The secret is too short" = "Секрет слишком короткий"

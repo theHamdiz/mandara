@@ -113,6 +113,11 @@ changes; an empty collection starts no painter or weather service.
   and a round button beside it that squares off and shows Material's loading
   shape while the password is checked. Anything that runs
   `loginctl lock-session` locks it; preview it with `mandara lock --demo`.
+  The lock goes up first (plain black) and the look follows once it is
+  loaded. A password check that hangs is given up on after 30 seconds, or
+  at once with Esc. A lock screen that keeps crashing is replaced by a bare
+  one with the default look; if even that fails the session stays locked and
+  `mandara msg lock` from a TTY starts a new one.
 - **Password symbols**: on both screens each typed character appears as
   one of ten small soft shapes after Material 3's expressive shape set
   (circle, rounded square, triangle, diamond, pentagon, arch, semicircle,

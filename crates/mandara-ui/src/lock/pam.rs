@@ -23,10 +23,11 @@
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::path::Path;
 use std::sync::OnceLock;
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::mpsc::{Receiver, SendError, Sender, TryRecvError, channel};
 use std::time::Duration;
 
 use mandara_i18n::{t, tf};
+use zeroize::Zeroizing;
 
 pub const PAM_SUCCESS: c_int = 0;
 pub const PAM_PROMPT_ECHO_OFF: c_int = 1;
@@ -361,41 +362,111 @@ impl Authenticator for DemoAuthenticator {
 
 // ───────────────────────────── the worker ─────────────────────────────
 
+/// A password on its way to the worker. [`Zeroizing`] wipes the whole
+/// allocation when it is dropped, also when the worker thread unwinds.
+type Secret = Zeroizing<String>;
+
+/// Builds the authenticator a worker thread runs; called again whenever a
+/// worker has to be replaced.
+type MakeAuthenticator = Box<dyn Fn() -> Box<dyn Authenticator> + Send + Sync>;
+
+/// Where an attempt stands (see [`AuthWorker::poll`]).
+#[derive(Debug, PartialEq, Eq)]
+pub enum AuthPoll {
+    /// No answer yet.
+    Pending,
+    /// The attempt finished.
+    Done(AuthResult),
+    /// The worker ended without answering (its thread panicked): the attempt
+    /// is lost and the next one needs a new worker.
+    Lost,
+}
+
+/// The two channels to one worker thread.
+struct Link {
+    jobs: Sender<(String, Secret)>,
+    results: Receiver<AuthResult>,
+}
+
 /// Runs attempts on a dedicated thread; results are polled from the UI loop.
+///
+/// The thread starts with the first attempt, so an idle lock screen holds
+/// none and nothing can fail while the screen is going up. A worker is
+/// replaced, never repaired: [`Self::abandon`] drops the link to a stuck or
+/// dead one and the next [`Self::submit`] starts a fresh thread. An abandoned
+/// thread ends by itself once its PAM call returns; its late answer goes
+/// nowhere.
 pub struct AuthWorker {
-    tx: Sender<(String, String)>,
-    rx: Receiver<AuthResult>,
+    make: MakeAuthenticator,
+    link: Option<Link>,
 }
 
 impl AuthWorker {
-    pub fn spawn(mut auth: Box<dyn Authenticator>) -> std::io::Result<Self> {
-        let (tx, jobs) = channel::<(String, String)>();
-        let (results, rx) = channel();
+    /// A worker that runs the authenticators `make` builds.
+    pub fn new(make: impl Fn() -> Box<dyn Authenticator> + Send + Sync + 'static) -> Self {
+        Self { make: Box::new(make), link: None }
+    }
+
+    fn start(&self) -> std::io::Result<Link> {
+        let (jobs, job_rx) = channel::<(String, Secret)>();
+        let (result_tx, results) = channel();
+        let mut auth = (self.make)();
         std::thread::Builder::new().name("mandara-lock-auth".into()).spawn(move || {
-            while let Ok((user, mut password)) = jobs.recv() {
+            while let Ok((user, password)) = job_rx.recv() {
                 let result = auth.authenticate(&user, &password);
-                wipe(&mut password);
-                if results.send(result).is_err() {
+                drop(password);
+                if result_tx.send(result).is_err() {
                     break;
                 }
             }
         })?;
-        Ok(Self { tx, rx })
+        Ok(Link { jobs, results })
     }
 
-    /// Starts an attempt (the password is moved to the worker and wiped there).
-    pub fn submit(&self, user: &str, password: String) {
-        let _ = self.tx.send((user.to_string(), password));
+    /// Starts an attempt. The password is moved to the worker and wiped there
+    /// (or here, when it cannot be handed over). A worker that ended since the
+    /// last attempt is replaced once before giving up.
+    pub fn submit(&mut self, user: &str, password: Secret) -> std::io::Result<()> {
+        let mut job = (user.to_string(), password);
+        for _ in 0..2 {
+            let link = match self.link.take() {
+                Some(link) => link,
+                None => self.start()?,
+            };
+            match link.jobs.send(job) {
+                Ok(()) => {
+                    self.link = Some(link);
+                    return Ok(());
+                }
+                // The thread is gone: take the job back and start another.
+                Err(SendError(back)) => job = back,
+            }
+        }
+        Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "the password check worker keeps ending"))
     }
 
-    pub fn poll(&self) -> Option<AuthResult> {
-        self.rx.try_recv().ok()
+    /// Where the running attempt stands.
+    pub fn poll(&self) -> AuthPoll {
+        let Some(link) = &self.link else { return AuthPoll::Pending };
+        match link.results.try_recv() {
+            Ok(result) => AuthPoll::Done(result),
+            Err(TryRecvError::Empty) => AuthPoll::Pending,
+            Err(TryRecvError::Disconnected) => AuthPoll::Lost,
+        }
+    }
+
+    /// Stops waiting for the running attempt (cancelled, timed out or lost).
+    /// Its answer, if one ever comes, is dropped with the old link.
+    pub fn abandon(&mut self) {
+        self.link = None;
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Instant;
 
     /// Records prompts and answers from a script.
@@ -492,32 +563,115 @@ mod tests {
         }
     }
 
-    fn wait(worker: &AuthWorker) -> AuthResult {
+    /// Polls until the attempt is no longer pending.
+    fn settle(worker: &AuthWorker) -> AuthPoll {
         let start = Instant::now();
         loop {
-            if let Some(r) = worker.poll() {
-                return r;
+            match worker.poll() {
+                AuthPoll::Pending => {}
+                other => return other,
             }
             assert!(start.elapsed() < Duration::from_secs(5), "worker timed out");
             std::thread::sleep(Duration::from_millis(2));
         }
     }
 
+    fn wait(worker: &AuthWorker) -> AuthResult {
+        match settle(worker) {
+            AuthPoll::Done(result) => result,
+            other => panic!("expected an answer, got {other:?}"),
+        }
+    }
+
+    fn secret(s: &str) -> Secret {
+        Zeroizing::new(s.to_string())
+    }
+
     #[test]
     fn worker_runs_attempts_off_thread_in_order() {
-        let worker = AuthWorker::spawn(Box::new(Scripted(vec![false, true]))).unwrap();
-        assert!(worker.poll().is_none());
-        worker.submit("amira", "wrong".into());
+        let script = std::sync::Mutex::new(Some(vec![false, true]));
+        let mut worker = AuthWorker::new(move || Box::new(Scripted(script.lock().unwrap().take().expect("one worker"))));
+        assert_eq!(worker.poll(), AuthPoll::Pending);
+        worker.submit("amira", secret("wrong")).unwrap();
         assert_eq!(wait(&worker), AuthResult { ok: false, error: Some("bad 5".into()), messages: vec![] });
-        worker.submit("amira", "right!".into());
+        worker.submit("amira", secret("right!")).unwrap();
         assert!(wait(&worker).ok);
     }
 
     #[test]
     fn demo_accepts_any_password() {
-        let worker = AuthWorker::spawn(Box::new(DemoAuthenticator { delay: Duration::ZERO })).unwrap();
-        worker.submit("anyone", "x".into());
+        let mut worker = AuthWorker::new(|| Box::new(DemoAuthenticator { delay: Duration::ZERO }));
+        worker.submit("anyone", secret("x")).unwrap();
         assert!(wait(&worker).ok);
+    }
+
+    /// Answers `"boom"` with a panic, `"stuck"` by waiting for `release`,
+    /// anything else with success.
+    struct Faulty {
+        release: Arc<AtomicBool>,
+    }
+    impl Authenticator for Faulty {
+        fn authenticate(&mut self, _user: &str, password: &str) -> AuthResult {
+            match password {
+                "boom" => panic!("PAM module crashed (expected in this test)"),
+                "stuck" => {
+                    while !self.release.load(Ordering::Acquire) {
+                        std::thread::sleep(Duration::from_millis(1));
+                    }
+                    AuthResult { ok: true, error: None, messages: Vec::new() }
+                }
+                _ => AuthResult { ok: password == "fine", error: None, messages: Vec::new() },
+            }
+        }
+    }
+
+    fn faulty_worker() -> (AuthWorker, Arc<AtomicBool>) {
+        let release = Arc::new(AtomicBool::new(false));
+        let shared = Arc::clone(&release);
+        (AuthWorker::new(move || Box::new(Faulty { release: Arc::clone(&shared) })), release)
+    }
+
+    #[test]
+    fn a_worker_that_panics_is_reported_lost_and_replaced() {
+        let (mut worker, _release) = faulty_worker();
+        worker.submit("amira", secret("boom")).unwrap();
+        assert_eq!(settle(&worker), AuthPoll::Lost);
+        // The dead worker is replaced by the next attempt, with or without
+        // an explicit `abandon`.
+        worker.submit("amira", secret("fine")).unwrap();
+        assert!(wait(&worker).ok);
+        worker.submit("amira", secret("boom")).unwrap();
+        assert_eq!(settle(&worker), AuthPoll::Lost);
+        worker.abandon();
+        assert_eq!(worker.poll(), AuthPoll::Pending, "an abandoned attempt is no longer awaited");
+        worker.submit("amira", secret("fine")).unwrap();
+        assert!(wait(&worker).ok);
+    }
+
+    #[test]
+    fn submitting_to_a_worker_that_died_unnoticed_starts_a_new_one() {
+        let (mut worker, _release) = faulty_worker();
+        worker.submit("amira", secret("boom")).unwrap();
+        // Let the thread die without polling its (missing) answer.
+        std::thread::sleep(Duration::from_millis(100));
+        worker.submit("amira", secret("fine")).unwrap();
+        assert!(wait(&worker).ok);
+    }
+
+    #[test]
+    fn the_late_answer_of_an_abandoned_attempt_is_never_delivered() {
+        let (mut worker, release) = faulty_worker();
+        worker.submit("amira", secret("stuck")).unwrap();
+        std::thread::sleep(Duration::from_millis(20));
+        assert_eq!(worker.poll(), AuthPoll::Pending);
+        worker.abandon();
+        worker.submit("amira", secret("nope")).unwrap();
+        // The new worker's answer, not the old one's, even once the old
+        // attempt returns.
+        release.store(true, Ordering::Release);
+        assert_eq!(wait(&worker), AuthResult { ok: false, error: None, messages: vec![] });
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(worker.poll(), AuthPoll::Pending);
     }
 
     /// Runs the real libpam against service files in a scratch directory

@@ -2157,6 +2157,8 @@
 "The link has no account name" = "लिंक में खाते का नाम नहीं है"
 "The link has no secret" = "लिंक में सीक्रेट नहीं है"
 "The panel that drops from the bar item, or none." = "बार आइटम से खुलने वाला पैनल, या none।"
+"The password check failed — try again" = "पासवर्ड की जाँच विफल रही — फिर से कोशिश करें"
+"The password check took too long — try again" = "पासवर्ड की जाँच में बहुत समय लगा — फिर से कोशिश करें"
 "The password is empty" = "पासवर्ड खाली है"
 "The public IP endpoint must be an http(s) URL" = "सार्वजनिक IP एंडपॉइंट http(s) URL होना चाहिए"
 "The sandbox" = "सैंडबॉक्स"

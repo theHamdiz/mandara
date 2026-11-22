@@ -2157,6 +2157,8 @@
 "The link has no account name" = "链接中没有账户名"
 "The link has no secret" = "链接中没有密钥"
 "The panel that drops from the bar item, or none." = "从状态栏项下拉的面板，或 none。"
+"The password check failed — try again" = "密码验证失败——请重试"
+"The password check took too long — try again" = "密码验证耗时过长——请重试"
 "The password is empty" = "密码为空"
 "The public IP endpoint must be an http(s) URL" = "公网 IP 端点必须是 http(s) URL"
 "The sandbox" = "沙盒"

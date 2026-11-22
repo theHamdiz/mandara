@@ -2028,6 +2028,8 @@
 "The last log lines of a container" = "As últimas linhas de registro de um contêiner"
 "The link has no account name" = "O link não tem nome de conta"
 "The link has no secret" = "O link não tem segredo"
+"The password check failed — try again" = "A verificação da senha falhou — tente de novo"
+"The password check took too long — try again" = "A verificação da senha demorou demais — tente de novo"
 "The password is empty" = "A senha está vazia"
 "The public IP endpoint must be an http(s) URL" = "O endpoint de IP público precisa ser uma URL http(s)"
 "The secret is too short" = "O segredo é curto demais"

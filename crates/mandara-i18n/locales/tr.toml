@@ -2034,6 +2034,8 @@
 "The last log lines of a container" = "Bir konteynerin son günlük satırları"
 "The link has no account name" = "Bağlantıda hesap adı yok"
 "The link has no secret" = "Bağlantıda gizli anahtar yok"
+"The password check failed — try again" = "Parola denetimi başarısız oldu — tekrar deneyin"
+"The password check took too long — try again" = "Parola denetimi çok uzun sürdü — tekrar deneyin"
 "The password is empty" = "Parola boş"
 "The public IP endpoint must be an http(s) URL" = "Genel IP uç noktası bir http(s) URL'si olmalı"
 "The secret is too short" = "Gizli anahtar çok kısa"

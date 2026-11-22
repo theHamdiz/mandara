@@ -21,7 +21,6 @@
 //! Fractional scaling uses `wp_fractional_scale_v1` + `wp_viewporter` when
 //! available (crisp at 1.25× / 1.5×), else the integer buffer scale.
 
-use std::collections::HashMap;
 use std::fs::File;
 use std::os::fd::AsFd as _;
 use std::sync::Arc;
@@ -122,6 +121,27 @@ pub enum LockOutcome {
     /// The compositor ended the lock on its own after confirming it.
     EndedByCompositor,
 }
+
+/// Why [`run`] failed, and whether the session may still be locked.
+#[derive(Debug)]
+pub struct LockError {
+    pub error: anyhow::Error,
+    /// The lock request had been sent and was not resolved (neither unlocked
+    /// nor refused or ended by the compositor) when this happened, so the
+    /// session is locked or about to be, with no one left to unlock it. That
+    /// covers a lock the compositor has not confirmed yet: it may confirm it
+    /// after this process is gone, so the caller must put a new locker up
+    /// rather than assume nothing was locked. Always `false` for the demo.
+    pub locked: bool,
+}
+
+impl std::fmt::Display for LockError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#}", self.error)
+    }
+}
+
+impl std::error::Error for LockError {}
 
 // ───────────────────────── protocol state machine ─────────────────────────
 
@@ -279,6 +299,55 @@ struct Keyboard {
     shown: KeyboardState,
 }
 
+/// A bound `wl_seat` and the devices taken from it.
+struct Seat {
+    /// The registry name, to release the seat when its global goes away.
+    global: u32,
+    seat: wl_seat::WlSeat,
+    keyboard: Option<wl_keyboard::WlKeyboard>,
+    pointer: Option<wl_pointer::WlPointer>,
+}
+
+impl Seat {
+    fn new(global: u32, seat: wl_seat::WlSeat) -> Self {
+        Self { global, seat, keyboard: None, pointer: None }
+    }
+
+    /// Releases the keyboard if there is one; whether there was one. (A
+    /// `release` request exists from the version that added it on.)
+    fn release_keyboard(&mut self) -> bool {
+        let Some(keyboard) = self.keyboard.take() else { return false };
+        if keyboard.version() >= KEYBOARD_RELEASE_SINCE {
+            keyboard.release();
+        }
+        true
+    }
+
+    fn release_pointer(&mut self) {
+        if let Some(pointer) = self.pointer.take()
+            && pointer.version() >= POINTER_RELEASE_SINCE
+        {
+            pointer.release();
+        }
+    }
+
+    /// Releases the devices and the seat itself; whether a keyboard went.
+    fn release(mut self) -> bool {
+        let had_keyboard = self.release_keyboard();
+        self.release_pointer();
+        if self.seat.version() >= SEAT_RELEASE_SINCE {
+            self.seat.release();
+        }
+        had_keyboard
+    }
+}
+
+/// Interface versions that added `release` to `wl_keyboard`, `wl_pointer`
+/// and `wl_seat`.
+const KEYBOARD_RELEASE_SINCE: u32 = 3;
+const POINTER_RELEASE_SINCE: u32 = 3;
+const SEAT_RELEASE_SINCE: u32 = 5;
+
 struct State {
     mode: LockMode,
     qh: QueueHandle<State>,
@@ -290,11 +359,7 @@ struct State {
     viewporter: Option<wp_viewporter::WpViewporter>,
     fractional: Option<wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1>,
     outputs: Vec<Output>,
-    seats: Vec<wl_seat::WlSeat>,
-    keyboards: Vec<wl_keyboard::WlKeyboard>,
-    pointers: Vec<wl_pointer::WlPointer>,
-    /// Seats that already have a (keyboard, pointer).
-    seat_devices: HashMap<wayland_client::backend::ObjectId, (bool, bool)>,
+    seats: Vec<Seat>,
     kb: Keyboard,
     /// Output (global name) whose surface has keyboard focus.
     focus: Option<u32>,
@@ -324,14 +389,18 @@ impl State {
         }
         let qh = self.qh.clone();
         let global = self.outputs[index].global;
-        let surface = self.compositor.create_surface(&qh, global);
-        let role = match self.mode {
+        // What the role needs is checked before the `wl_surface` exists, so
+        // a missing prerequisite leaves nothing behind.
+        let (surface, role) = match self.mode {
             LockMode::Session => {
                 let Some(lock) = &self.lock else { return };
-                Role::Lock(lock.get_lock_surface(&surface, &self.outputs[index].output, &qh, global))
+                let surface = self.compositor.create_surface(&qh, global);
+                let role = Role::Lock(lock.get_lock_surface(&surface, &self.outputs[index].output, &qh, global));
+                (surface, role)
             }
             LockMode::Demo => {
                 let Some(shell) = &self.layer_shell else { return };
+                let surface = self.compositor.create_surface(&qh, global);
                 let layer = shell.get_layer_surface(
                     &surface,
                     Some(&self.outputs[index].output),
@@ -345,7 +414,7 @@ impl State {
                 layer.set_exclusive_zone(-1);
                 layer.set_keyboard_interactivity(zwlr_layer_surface_v1::KeyboardInteractivity::Exclusive);
                 surface.commit();
-                Role::Layer(layer)
+                (surface, Role::Layer(layer))
             }
         };
         let (viewport, fractional) = match (&self.viewporter, &self.fractional) {
@@ -466,6 +535,15 @@ fn new_buffer(shm: &wl_shm::WlShm, qh: &QueueHandle<State>, width: u32, height: 
     Ok(ShmBuffer { buffer, busy, map, _file: file, width, height })
 }
 
+/// When a repeating key fires after the one due at `due`: one period later,
+/// but never in the past. A loop that stalled (a slow draw, a suspended
+/// laptop) must not make up the repeats it missed in one burst: that would
+/// type extra characters into the password.
+fn next_repeat(due: Instant, now: Instant, rate_hz: i32) -> Instant {
+    let next = due + Duration::from_secs_f32(1.0 / rate_hz.max(1) as f32);
+    if next > now { next } else { now + Duration::from_secs_f32(1.0 / rate_hz.max(1) as f32) }
+}
+
 /// Copies premultiplied RGBA into the shm buffer (`ARGB8888` is BGRA in
 /// memory on little-endian; `ABGR8888` is RGBA).
 fn copy_pixels(src: &[u8], dst: &mut [u8], abgr: bool) {
@@ -484,8 +562,17 @@ fn copy_pixels(src: &[u8], dst: &mut [u8], abgr: bool) {
 // ─────────────────────────────── the loop ───────────────────────────────
 
 /// Locks (or previews) and runs until unlocked. In [`LockMode::Session`] an
-/// error before the lock is confirmed means nothing was locked.
-pub fn run(mode: LockMode, app: &mut dyn LockApp) -> Result<LockOutcome> {
+/// error before the lock request went out means nothing was locked; after it,
+/// [`LockError::locked`] says the session may be (or become) locked.
+pub fn run(mode: LockMode, app: &mut dyn LockApp) -> Result<LockOutcome, LockError> {
+    let (conn, mut queue, mut state, manager) = connect(mode).map_err(|error| LockError { error, locked: false })?;
+    drive(&conn, &mut queue, &mut state, manager.as_ref(), app).map_err(|error| LockError { error, locked: state.lock.is_some() })
+}
+
+/// Connects, binds what the mode needs and reads the outputs and seats.
+fn connect(
+    mode: LockMode,
+) -> Result<(Connection, wayland_client::EventQueue<State>, State, Option<ext_session_lock_manager_v1::ExtSessionLockManagerV1>)> {
     let conn = Connection::connect_to_env().context("connecting to the Wayland compositor")?;
     let (globals, mut queue) = registry_queue_init::<State>(&conn).context("reading Wayland globals")?;
     let qh = queue.handle();
@@ -518,9 +605,6 @@ pub fn run(mode: LockMode, app: &mut dyn LockApp) -> Result<LockOutcome> {
         fractional,
         outputs: Vec::new(),
         seats: Vec::new(),
-        keyboards: Vec::new(),
-        pointers: Vec::new(),
-        seat_devices: HashMap::new(),
         kb: Keyboard { rate: DEFAULT_REPEAT_RATE_HZ, delay: DEFAULT_REPEAT_DELAY_MS, ..Default::default() },
         focus: None,
         phase: LockPhase::Pending,
@@ -538,7 +622,8 @@ pub fn run(mode: LockMode, app: &mut dyn LockApp) -> Result<LockOutcome> {
                     state.outputs.push(Output { global: g.name, output, name: String::new(), scale: 1, surface: None });
                 }
                 "wl_seat" => {
-                    state.seats.push(globals.registry().bind::<wl_seat::WlSeat, _, _>(g.name, g.version.min(7), &qh, ()));
+                    let seat = globals.registry().bind::<wl_seat::WlSeat, _, _>(g.name, g.version.min(7), &qh, ());
+                    state.seats.push(Seat::new(g.name, seat));
                 }
                 _ => {}
             }
@@ -546,8 +631,19 @@ pub fn run(mode: LockMode, app: &mut dyn LockApp) -> Result<LockOutcome> {
     });
     // Output names / scales and shm formats before the first surface.
     queue.roundtrip(&mut state).context("Wayland roundtrip")?;
+    Ok((conn, queue, state, manager))
+}
 
-    if let Some(manager) = &manager {
+/// Asks for the lock, paints and handles input until the lock is over.
+fn drive(
+    conn: &Connection,
+    queue: &mut wayland_client::EventQueue<State>,
+    state: &mut State,
+    manager: Option<&ext_session_lock_manager_v1::ExtSessionLockManagerV1>,
+    app: &mut dyn LockApp,
+) -> Result<LockOutcome> {
+    let (mode, qh) = (state.mode, state.qh.clone());
+    if let Some(manager) = manager {
         state.lock = Some(manager.lock(&qh, ()));
     } else {
         // Demo: "locked" right away.
@@ -557,17 +653,25 @@ pub fn run(mode: LockMode, app: &mut dyn LockApp) -> Result<LockOutcome> {
     for i in 0..state.outputs.len() {
         state.ensure_surface(i);
     }
-    queue.roundtrip(&mut state).context("Wayland roundtrip")?;
+    queue.roundtrip(state).context("Wayland roundtrip")?;
 
     let mut outcome = LockOutcome::Unlocked;
     loop {
-        queue.dispatch_pending(&mut state).context("Wayland dispatch")?;
+        queue.dispatch_pending(state).context("Wayland dispatch")?;
         for i in 0..state.outputs.len() {
             state.ensure_surface(i);
         }
         if state.locked_notice {
             state.locked_notice = false;
             app.locked();
+            // The app may paint something else now (the real look replaces
+            // the plain backdrop shown while the lock was pending): repaint
+            // every surface, not only the first the loop gets to.
+            for out in &mut state.outputs {
+                if let Some(s) = out.surface.as_mut() {
+                    s.dirty = true;
+                }
+            }
         }
         if state.keyboard_changed {
             state.keyboard_changed = false;
@@ -579,7 +683,7 @@ pub fn run(mode: LockMode, app: &mut dyn LockApp) -> Result<LockOutcome> {
             && now >= at
             && state.kb.rate > 0
         {
-            state.kb.repeat = Some((code, at + Duration::from_secs_f32(1.0 / state.kb.rate as f32)));
+            state.kb.repeat = Some((code, next_repeat(at, now, state.kb.rate)));
             state.handle_key(code);
         }
         for key in std::mem::take(&mut state.pending_keys) {
@@ -700,7 +804,7 @@ pub fn run(mode: LockMode, app: &mut dyn LockApp) -> Result<LockOutcome> {
             s.destroy();
         }
     }
-    let _ = queue.roundtrip(&mut state);
+    let _ = queue.roundtrip(state);
     Ok(outcome)
 }
 
@@ -714,9 +818,15 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
                 state.outputs.push(Output { global: name, output, name: String::new(), scale: 1, surface: None });
             }
             wl_registry::Event::Global { name, interface, version } if interface == "wl_seat" => {
-                state.seats.push(registry.bind::<wl_seat::WlSeat, _, _>(name, version.min(7), qh, ()));
+                state.seats.push(Seat::new(name, registry.bind::<wl_seat::WlSeat, _, _>(name, version.min(7), qh, ())));
             }
             wl_registry::Event::GlobalRemove { name } => {
+                if let Some(i) = state.seats.iter().position(|s| s.global == name) {
+                    // The held key can no longer be released: stop repeating it.
+                    if state.seats.remove(i).release() {
+                        state.kb.repeat = None;
+                    }
+                }
                 if let Some(i) = state.outputs.iter().position(|o| o.global == name) {
                     let mut out = state.outputs.remove(i);
                     if let Some(s) = out.surface.take() {
@@ -865,16 +975,18 @@ impl Dispatch<wp_fractional_scale_v1::WpFractionalScaleV1, u32> for State {
 
 impl Dispatch<wl_seat::WlSeat, ()> for State {
     fn event(state: &mut Self, seat: &wl_seat::WlSeat, event: wl_seat::Event, _: &(), _: &Connection, qh: &QueueHandle<Self>) {
-        if let wl_seat::Event::Capabilities { capabilities: WEnum::Value(caps) } = event {
-            let id = seat.id();
-            let entry = state.seat_devices.entry(id).or_default();
-            if caps.contains(wl_seat::Capability::Keyboard) && !entry.0 {
-                entry.0 = true;
-                state.keyboards.push(seat.get_keyboard(qh, ()));
+        if let wl_seat::Event::Capabilities { capabilities: WEnum::Value(caps) } = event
+            && let Some(entry) = state.seats.iter_mut().find(|s| s.seat == *seat)
+        {
+            if !caps.contains(wl_seat::Capability::Keyboard) && entry.release_keyboard() {
+                state.kb.repeat = None;
+            } else if caps.contains(wl_seat::Capability::Keyboard) && entry.keyboard.is_none() {
+                entry.keyboard = Some(seat.get_keyboard(qh, ()));
             }
-            if caps.contains(wl_seat::Capability::Pointer) && !entry.1 {
-                entry.1 = true;
-                state.pointers.push(seat.get_pointer(qh, ()));
+            if !caps.contains(wl_seat::Capability::Pointer) {
+                entry.release_pointer();
+            } else if entry.pointer.is_none() {
+                entry.pointer = Some(seat.get_pointer(qh, ()));
             }
         }
     }
@@ -1039,6 +1151,19 @@ mod tests {
         // Terminal phases ignore everything afterwards.
         assert_eq!(P::Ended.on(E::AuthSucceeded), (P::Ended, A::None));
         assert_eq!(P::Unlocked.on(E::Finished), (P::Unlocked, A::None));
+    }
+
+    #[test]
+    fn key_repeat_never_catches_up_after_a_stall() {
+        let start = Instant::now();
+        let period = Duration::from_millis(40);
+        // On time: the next repeat follows one period after the one due.
+        assert_eq!(next_repeat(start, start + Duration::from_millis(1), 25), start + period);
+        // A second-long stall: the next repeat is a period from now, not a
+        // burst of the 25 repeats that were due meanwhile.
+        let late = start + Duration::from_secs(1);
+        let next = next_repeat(start, late, 25);
+        assert!(next > late && next <= late + period, "next repeat {:?} after the stall", next - late);
     }
 
     #[test]

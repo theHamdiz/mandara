@@ -2028,6 +2028,8 @@
 "The last log lines of a container" = "కంటైనర్ చివరి లాగ్ పంక్తులు"
 "The link has no account name" = "లింక్‌కు ఖాతా పేరు లేదు"
 "The link has no secret" = "లింక్‌కు రహస్యం లేదు"
+"The password check failed — try again" = "పాస్‌వర్డ్ తనిఖీ విఫలమైంది — మళ్ళీ ప్రయత్నించండి"
+"The password check took too long — try again" = "పాస్‌వర్డ్ తనిఖీకి చాలా సమయం పట్టింది — మళ్ళీ ప్రయత్నించండి"
 "The password is empty" = "పాస్‌వర్డ్ ఖాళీ"
 "The public IP endpoint must be an http(s) URL" = "పబ్లిక్ IP ఎండ్‌పాయింట్ http(s) URL అయి ఉండాలి"
 "The secret is too short" = "రహస్యం చాలా చిన్నది"

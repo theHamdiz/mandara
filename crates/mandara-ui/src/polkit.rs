@@ -31,6 +31,7 @@ use mandara_plugins::{ArgKind, ArgSpec, CommandSpec, PluginRegistry};
 use mandara_services::polkit::{AdminUser, AgentStatus, AuthRequest, Outcome, PolkitAgent, PolkitEvent, PolkitReply};
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
+use zeroize::{Zeroize as _, Zeroizing};
 
 use crate::bidi::Bidi as _;
 use crate::first_frame::{self, FirstFrame};
@@ -304,7 +305,10 @@ pub struct PolkitDialog {
     user_ix: usize,
     /// The helper's current question: `(text, echo)`.
     prompt: Option<(String, bool)>,
-    input: String,
+    /// What is typed. [`Zeroizing`] wipes every byte of the buffer, spare
+    /// capacity (backspaced characters) included, when it is zeroized and
+    /// when the dialog goes away.
+    input: Zeroizing<String>,
     /// Enter was pressed before the helper asked; send on the next prompt.
     pending_submit: bool,
     busy: bool,
@@ -323,11 +327,9 @@ pub struct PolkitDialog {
     _blink: gpui::Task<()>,
 }
 
-fn wipe(s: &mut String) {
-    // SAFETY: zero bytes are valid UTF-8.
-    unsafe { s.as_bytes_mut().fill(0) };
-    s.clear();
-}
+/// Room reserved for what is typed (it takes at most 255 bytes), so typing
+/// never reallocates and strands secret bytes in freed memory.
+const INPUT_CAPACITY: usize = 256;
 
 impl PolkitDialog {
     fn new(request: AuthRequest, agent: PolkitAgent, expected: (f32, f32), window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -356,7 +358,7 @@ impl PolkitDialog {
             agent,
             user_ix: 0,
             prompt,
-            input: String::with_capacity(256),
+            input: Zeroizing::new(String::with_capacity(INPUT_CAPACITY)),
             pending_submit: false,
             busy: false,
             note,
@@ -391,7 +393,7 @@ impl PolkitDialog {
             PolkitEvent::Retry { message, .. } => {
                 self.busy = false;
                 self.prompt = None;
-                wipe(&mut self.input);
+                self.input.zeroize();
                 self.shake.add_velocity([-2400.0, 0.0, 0.0, 0.0]);
                 self.flash.snap_to(1.0);
                 self.flash.set_target(0.0);
@@ -417,8 +419,10 @@ impl PolkitDialog {
             self.busy = true;
             return;
         }
-        let text = self.input.clone();
-        wipe(&mut self.input);
+        // The typed buffer itself goes to the agent (wiped there), without a
+        // copy; a fresh one with room takes its place.
+        let text = std::mem::take(&mut self.input);
+        self.input.reserve(INPUT_CAPACITY);
         self.agent.reply(PolkitReply::Answer { cookie: self.cookie(), text });
         self.prompt = None;
         self.busy = true;
@@ -443,7 +447,7 @@ impl PolkitDialog {
         self.busy = false;
         self.pending_submit = false;
         self.note = None;
-        wipe(&mut self.input);
+        self.input.zeroize();
         let user = self.request.users[ix].name.clone();
         self.agent.reply(PolkitReply::SelectUser { cookie: self.cookie(), user });
     }
@@ -461,12 +465,12 @@ impl PolkitDialog {
             }
             "backspace" if !self.busy => {
                 if k.modifiers.control {
-                    wipe(&mut self.input);
+                    self.input.zeroize();
                 } else {
                     self.input.pop();
                 }
             }
-            "u" if k.modifiers.control && !self.busy => wipe(&mut self.input),
+            "u" if k.modifiers.control && !self.busy => self.input.zeroize(),
             _ => {
                 if let Some(ch) = k.key_char.as_ref().filter(|_| !k.modifiers.control && !k.modifiers.alt && !self.busy)
                     && self.input.len() + ch.len() <= 255
@@ -626,7 +630,7 @@ impl Render for PolkitDialog {
         let content = if self.input.is_empty() {
             div().text_color(p.on_surface_variant.with_alpha(0.7).hsla()).child(placeholder).into_any_element()
         } else if echo {
-            div().child(self.input.clone()).into_any_element()
+            div().child(self.input.to_string()).into_any_element()
         } else {
             let n = self.input.chars().count().min(28);
             div().flex().items_center().gap(px(m::DOT_GAP)).children((0..n).map(|_| div().size(px(m::DOT)).rounded_full().bg(p.on_surface.hsla()))).into_any_element()
@@ -804,8 +808,8 @@ impl mandara_services::sysupdate::askpass::Prompter for DialogPrompter {
             .spawn(async move {
                 while let Ok(reply) = replies.recv().await {
                     let outcome = match reply {
-                        PolkitReply::Answer { text, .. } => {
-                            let _ = answer.send(Some(Secret::from_string(text)));
+                        PolkitReply::Answer { mut text, .. } => {
+                            let _ = answer.send(Some(Secret::from_string(std::mem::take(&mut *text))));
                             Outcome::Authorized
                         }
                         PolkitReply::Cancel { .. } => {
@@ -883,7 +887,7 @@ fn demo_agent() -> (PolkitAgent, AuthRequest) {
             match reply {
                 PolkitReply::Answer { text, .. } => {
                     std::thread::sleep(DEMO_CHECK_DELAY);
-                    if text == "wrong" {
+                    if text.as_str() == "wrong" {
                         let _ = etx.send_blocking(PolkitEvent::Retry { cookie: cookie.clone(), message: t("That didn't work — try again").into() });
                         let _ = etx.send_blocking(prompt(&user));
                     } else {
