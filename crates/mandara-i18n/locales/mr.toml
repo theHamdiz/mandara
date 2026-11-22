@@ -2028,6 +2028,8 @@
 "The last log lines of a container" = "कंटेनरच्या शेवटच्या लॉग ओळी"
 "The link has no account name" = "लिंकमध्ये खाते नाव नाही"
 "The link has no secret" = "लिंकमध्ये गुपित नाही"
+"The password check failed — try again" = "पासवर्ड तपासणी अयशस्वी झाली — पुन्हा प्रयत्न करा"
+"The password check took too long — try again" = "पासवर्ड तपासणीला खूप वेळ लागला — पुन्हा प्रयत्न करा"
 "The password is empty" = "पासवर्ड रिकामा आहे"
 "The public IP endpoint must be an http(s) URL" = "सार्वजनिक IP एंडपॉइंट http(s) URL असला पाहिजे"
 "The secret is too short" = "गुपित खूप छोटे आहे"

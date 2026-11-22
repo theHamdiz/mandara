@@ -5289,6 +5289,8 @@
 "The next prayer and time remaining" = "পরবর্তী নামাজ ও বাকি সময়"
 "The oldest go first" = "সবচেয়ে পুরোনোগুলো আগে সরে যায়"
 "The panel that drops from the bar item, or none." = "বারের আইটেম থেকে নেমে আসা প্যানেল, অথবা কিছু না।"
+"The password check failed — try again" = "পাসওয়ার্ড যাচাই ব্যর্থ হয়েছে — আবার চেষ্টা করুন"
+"The password check took too long — try again" = "পাসওয়ার্ড যাচাই করতে অনেক সময় লেগেছে — আবার চেষ্টা করুন"
 "The password is empty" = "পাসওয়ার্ড খালি"
 "The password needs 8–63 characters" = "পাসওয়ার্ডে 8–63টি অক্ষর প্রয়োজন"
 "The passwords don't match" = "পাসওয়ার্ড দুটি মিলছে না"

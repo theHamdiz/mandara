@@ -2041,6 +2041,8 @@
 "The last log lines of a container" = "آخر أسطر السجل لحاوية"
 "The link has no account name" = "لا يحتوي الرابط على اسم حساب"
 "The link has no secret" = "لا يحتوي الرابط على سر"
+"The password check failed — try again" = "فشل التحقق من كلمة المرور — حاول مجددًا"
+"The password check took too long — try again" = "استغرق التحقق من كلمة المرور وقتًا طويلًا — حاول مجددًا"
 "The password is empty" = "كلمة المرور فارغة"
 "The public IP endpoint must be an http(s) URL" = "يجب أن تكون نقطة نهاية IP العام عنوان http(s)"
 "The secret is too short" = "السر قصير جدًا"

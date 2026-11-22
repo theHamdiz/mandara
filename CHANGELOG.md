@@ -6,6 +6,38 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The lock screen is sturdier: it locks at once, never gets stuck on a password
+check, survives crashes and shell restarts, and idles with fewer wake-ups.
+
+### Fixed
+
+- **The lock screen can no longer get stuck on "Checking…".** If the password
+  check hangs, the lock screen gives up after 30 seconds and says so, and
+  you can press Esc to cancel a check that is taking too long. If the check
+  itself crashes, you get a clear message and can try again.
+- **The screen locks at once.** The lock is requested before the lock
+  screen's look (wallpaper, widgets, fonts) is loaded, so a slow disk or a
+  broken wallpaper can no longer delay it. Until the look is ready the screen
+  is plain black.
+- **A lock screen that keeps crashing is replaced by a plain one.** After
+  five crashes in a minute Mandara starts a bare lock screen with the default
+  look instead of leaving the screen without one. If that fails too, the
+  session stays locked and `mandara msg lock` from a TTY starts a new one.
+- **The lock screen clock shows seconds on time and no longer wakes the
+  computer every second for nothing.** The idle lock screen now wakes only
+  when the clock changes: once a minute, or every second when the clock or a
+  widget shows seconds.
+- **Restarting the shell while the screen is locked no longer forgets the
+  lock.** Video wallpapers and widgets stay stopped behind the lock screen,
+  and the unlock is noticed when you enter your password.
+- **Your password is wiped from memory more thoroughly,** on the lock screen
+  and in the authentication dialog, including characters you typed and then
+  deleted.
+- **The lock screen uses less memory and CPU.** Outputs that stay black no
+  longer build a copy of the wallpaper, text is no longer copied on every
+  frame, a stalled keyboard no longer replays a burst of repeated keys, and
+  unplugged keyboards and mice are released properly.
+
 ## 0.37.0 — 2026-11-22
 
 Mandara speaks Italian: Studio, the shell and Mandara Login all follow

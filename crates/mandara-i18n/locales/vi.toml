@@ -2028,6 +2028,8 @@
 "The last log lines of a container" = "Những dòng nhật ký cuối của container"
 "The link has no account name" = "Liên kết không có tên tài khoản"
 "The link has no secret" = "Liên kết không có bí mật"
+"The password check failed — try again" = "Kiểm tra mật khẩu thất bại — hãy thử lại"
+"The password check took too long — try again" = "Việc kiểm tra mật khẩu mất quá nhiều thời gian — hãy thử lại"
 "The password is empty" = "Mật khẩu đang để trống"
 "The public IP endpoint must be an http(s) URL" = "Điểm cuối IP công cộng phải là URL http(s)"
 "The secret is too short" = "Bí mật quá ngắn"

@@ -2028,6 +2028,8 @@
 "The last log lines of a container" = "Mistari ya mwisho ya kumbukumbu ya kontena"
 "The link has no account name" = "Kiungo hakina jina la akaunti"
 "The link has no secret" = "Kiungo hakina siri"
+"The password check failed — try again" = "Ukaguzi wa nenosiri umeshindwa — jaribu tena"
+"The password check took too long — try again" = "Ukaguzi wa nenosiri umechukua muda mrefu sana — jaribu tena"
 "The password is empty" = "Nenosiri ni tupu"
 "The public IP endpoint must be an http(s) URL" = "Mwisho wa IP ya umma lazima uwe URL ya http(s)"
 "The secret is too short" = "Siri ni fupi mno"

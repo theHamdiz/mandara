@@ -42,6 +42,7 @@ use parking_lot::Mutex;
 use serde::Serialize;
 use zbus::interface;
 use zbus::zvariant::{OwnedValue, Value};
+use zeroize::Zeroizing;
 
 /// Events (prompts, results) buffered for the UI and replies buffered for
 /// a session; a dialog exchanges a handful of each.
@@ -114,7 +115,8 @@ pub enum PolkitEvent {
 #[derive(Clone, Debug, PartialEq)]
 pub enum PolkitReply {
     SelectUser { cookie: String, user: String },
-    Answer { cookie: String, text: String },
+    /// The typed answer; wiped (spare capacity included) when dropped.
+    Answer { cookie: String, text: Zeroizing<String> },
     Cancel { cookie: String },
 }
 
@@ -313,12 +315,6 @@ fn read_lines(mut reader: Box<dyn BufRead + Send>) -> async_channel::Receiver<Op
     rx
 }
 
-fn wipe(s: &mut String) {
-    // SAFETY: zero bytes are valid UTF-8.
-    unsafe { s.as_bytes_mut().fill(0) };
-    s.clear();
-}
-
 /// Drives one request to its end: runs the helper for the chosen user,
 /// relays prompts and answers, retries after a wrong password, follows user
 /// switches, and stops on cancel.
@@ -374,9 +370,9 @@ pub async fn run_session(
                     }
                 },
                 reply = replies.recv().fuse() => match reply {
-                    Ok(PolkitReply::Answer { mut text, .. }) => {
-                        let ok = writeln!(writer, "{text}").and_then(|_| writer.flush()).is_ok();
-                        wipe(&mut text);
+                    Ok(PolkitReply::Answer { text, .. }) => {
+                        let ok = writeln!(writer, "{}", text.as_str()).and_then(|_| writer.flush()).is_ok();
+                        drop(text);
                         answered |= ok;
                     }
                     Ok(PolkitReply::SelectUser { user: next, .. }) => {
@@ -796,7 +792,7 @@ mod tests {
     }
 
     fn answer(text: &str) -> PolkitReply {
-        PolkitReply::Answer { cookie: "cookie-1".into(), text: text.into() }
+        PolkitReply::Answer { cookie: "cookie-1".into(), text: Zeroizing::new(text.into()) }
     }
 
     #[test]

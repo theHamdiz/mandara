@@ -4,7 +4,16 @@
 //! surface per output, see [`mandara_core::session_lock`]) and checks the
 //! password with PAM ([`pam`]) on a worker thread. It is its own process,
 //! like every Wayland locker: if it ever crashed, the compositor keeps the
-//! session locked, and the shell (which spawned it) starts a new one.
+//! session locked, and the shell (which spawned it) starts a new one; after
+//! repeated crashes with the full look it starts a bare one (default look,
+//! no wallpaper, avatar or widgets) before it gives up.
+//!
+//! The lock request goes out first: the config, theme, fonts, avatar and
+//! wallpaper load only once the compositor confirmed the lock (the outputs
+//! are plain black until then), so a slow disk or a broken asset delays the
+//! look, never the lock. A password check that hangs (a PAM module waiting
+//! on the network or a token) is abandoned after [`AUTH_TIMEOUT`], or on Esc,
+//! and the next attempt gets a fresh worker.
 //!
 //! The look follows the Mandara design system, painted in software
 //! ([`paint`]) because GPUI cannot host lock surfaces: the blurred,
@@ -28,11 +37,22 @@ mod material;
 mod design;
 pub mod paint;
 pub mod pam;
+#[cfg(target_os = "linux")]
+mod adopt;
+/// Without `/proc` and pidfds no running locker is adopted.
+#[cfg(not(target_os = "linux"))]
+mod adopt {
+    pub fn marker_locker() -> Option<u32> {
+        None
+    }
+
+    pub fn adopt_running_locker() {}
+}
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use mandara_core::session_lock::{AppControl, KeyInput, KeyboardState, LockApp, LockMode, LockOutcome, SurfaceInfo};
@@ -44,9 +64,10 @@ use mandara_theme::{Color, MandaraPalette, ThemeEngine};
 use serde_json::json;
 use tiny_skia::{Pixmap, PixmapMut};
 use xkbcommon_keysyms as keys;
+use zeroize::{Zeroize as _, Zeroizing};
 
 use self::paint::{Font, TextPainter};
-use self::pam::{AuthResult, AuthWorker, Authenticator, DemoAuthenticator, PamAuthenticator, wipe};
+use self::pam::{AuthPoll, AuthResult, AuthWorker, Authenticator, DemoAuthenticator, PamAuthenticator};
 
 /// Fake PAM round-trip of the lock-screen preview.
 const DEMO_AUTH_DELAY: Duration = Duration::from_millis(450);
@@ -56,6 +77,29 @@ const DEMO_TIMEOUT: Duration = Duration::from_secs(60);
 const ANIMATION_TICK: Duration = Duration::from_millis(8);
 /// Crash-loop guard: restarts counted within this window.
 const RESTART_WINDOW: Duration = Duration::from_secs(60);
+/// Crash-loop guard: restarts of one kind of locker allowed within
+/// [`RESTART_WINDOW`] before the next fallback (or giving up).
+const MAX_RESTARTS: usize = 5;
+/// How long a password check may run before the lock screen stops waiting
+/// for it and offers another try. A PAM stack that needs the network or a
+/// token can be slow, but the screen must never stay on "checking" for good.
+const AUTH_TIMEOUT: Duration = Duration::from_secs(30);
+/// How often a screen that is otherwise idle looks for work that finishes
+/// on another thread (the wallpaper) or for the compositor's confirmation.
+const LOAD_POLL: Duration = Duration::from_millis(50);
+/// How often an idle screen with lock widgets looks for their new data.
+const WIDGET_POLL: Duration = Duration::from_secs(1);
+/// Slack after a clock boundary, so the wake lands just after the change
+/// and never just before it.
+const TICK_SLACK_MS: u64 = 5;
+/// Milliseconds in a second and in a minute (clock boundaries).
+const MS_PER_SECOND: u64 = 1000;
+const MS_PER_MINUTE: u64 = 60 * MS_PER_SECOND;
+/// Edge of the decoded avatar, physical px.
+const AVATAR_PX: u32 = 256;
+/// Set (to `1`) for the bare locker the supervisor falls back to when the
+/// full one keeps crashing: default look, no wallpaper, avatar or widgets.
+const MINIMAL_ENV: &str = "MANDARA_LOCK_MINIMAL";
 
 /// Keysyms the lock screen reacts to (from `xkbcommon/xkbcommon-keysyms.h`).
 mod xkbcommon_keysyms {
@@ -96,6 +140,20 @@ const COMPACT_CLOCK: f32 = 0.45;
 const STACK_LINE: f32 = 0.86;
 const STACK_WEIGHT: u16 = 600;
 
+/// How long until the lock clock changes: the next second boundary when it
+/// shows seconds, else the next minute boundary, plus [`TICK_SLACK_MS`] so
+/// the wake lands after the change. `second` and `subsec_ms` are the
+/// clock's current second of the minute and millisecond of the second.
+fn until_next_tick(second: u32, subsec_ms: u32, seconds: bool) -> Duration {
+    let (span, into) = if seconds {
+        (MS_PER_SECOND, u64::from(subsec_ms))
+    } else {
+        (MS_PER_MINUTE, u64::from(second) * MS_PER_SECOND + u64::from(subsec_ms))
+    };
+    // A leap second reads as second 60 or millisecond 1000+: stay in range.
+    Duration::from_millis(span - into % span + TICK_SLACK_MS)
+}
+
 /// Runs the locker (the `mandara lock` subcommand).
 pub fn run(options: LockOptions) -> anyhow::Result<()> {
     if !options.demo && mandara_compositor::detect() == Some(mandara_compositor::CompositorKind::KWin) {
@@ -105,55 +163,180 @@ pub fn run(options: LockOptions) -> anyhow::Result<()> {
     if std::env::var_os("WAYLAND_DISPLAY").is_none() {
         anyhow::bail!("Mandara Lock requires a Wayland session (WAYLAND_DISPLAY is not set)");
     }
+    if options.demo {
+        let deadline = Instant::now() + options.timeout.unwrap_or(DEMO_TIMEOUT);
+        let mut screen = build_screen(true, Some(deadline), false);
+        log_outcome(mandara_core::session_lock::run(LockMode::Demo, &mut screen)?);
+        return Ok(());
+    }
+    // The lock request goes out before anything is loaded (see
+    // [`SessionLocker`]).
+    let mut locker = SessionLocker::new(std::env::var_os(MINIMAL_ENV).is_some_and(|v| v == "1"));
+    match mandara_core::session_lock::run(LockMode::Session, &mut locker) {
+        Ok(outcome) => {
+            let _ = std::fs::remove_file(locked_marker());
+            log_outcome(outcome);
+            Ok(())
+        }
+        // The lock request was sent and never resolved: the compositor holds
+        // (or is about to hold) the session locked with nobody to unlock it.
+        // Keep the marker (the session is locked) and ask the shell for a
+        // new locker.
+        Err(err) if err.locked => {
+            tracing::error!("lock screen failed while locked: {err:#}");
+            std::process::exit(RELOCK_EXIT);
+        }
+        Err(err) => {
+            let _ = std::fs::remove_file(locked_marker());
+            Err(err.into())
+        }
+    }
+}
+
+fn log_outcome(outcome: LockOutcome) {
+    match outcome {
+        LockOutcome::Unlocked => tracing::info!("lock screen: unlocked"),
+        LockOutcome::EndedByCompositor => tracing::warn!("lock screen: the compositor ended the lock"),
+    }
+}
+
+/// Everything the lock screen needs from the config, the theme, the user's
+/// files and fonts. This is the slow, fallible part of starting: it never
+/// runs before the lock request is sent. `minimal` skips what could be what
+/// keeps the locker crashing (theme engine, wallpaper, avatar, widgets,
+/// custom look) and draws the default look.
+fn build_screen(demo: bool, deadline: Option<Instant>, minimal: bool) -> LockScreen {
     let cfg = mandara_config::ConfigStore::open_default().map(|s| s.snapshot()).unwrap_or_default();
     mandara_i18n::set_language(cfg.general.locale.lang());
     // Date language (Studio → Date, time & location): this process never
     // runs `style::init`, so set it here too.
     crate::widgets::clock::set_locale_override(&cfg.datetime.time_locale);
-    let palette = ThemeEngine::new(cfg.theme.source.clone(), cfg.theme.mode.is_dark(), cfg.theme.adjustments).target().clone();
+    let dark = cfg.theme.mode.is_dark();
+    let palette = if minimal {
+        mandara_theme::engine::default_palette(dark)
+    } else {
+        ThemeEngine::new(cfg.theme.source.clone(), dark, cfg.theme.adjustments).target().clone()
+    };
     let user = current_user();
-    let authenticator: Box<dyn Authenticator> =
-        if options.demo { Box::new(DemoAuthenticator { delay: DEMO_AUTH_DELAY }) } else { Box::new(PamAuthenticator::system()) };
-    let auth = AuthWorker::spawn(authenticator)?;
-    let look = look::LockLook::from_config(&cfg);
-    let wallpaper = mandara_config::desktop::effective_wallpaper(cfg.wallpaper.path.as_ref(), &cfg.wallpaper.variants, None, cfg.theme.mode.is_dark())
-        .map(|p| mandara_config::paths::expand_tilde(&p.to_string_lossy()));
-    let background = look.background_image(wallpaper);
+    let make: fn() -> Box<dyn Authenticator> = if demo {
+        || Box::new(DemoAuthenticator { delay: DEMO_AUTH_DELAY })
+    } else {
+        || Box::new(PamAuthenticator::system())
+    };
+    let typography = if minimal { mandara_config::TypographyConfig::default() } else { cfg.typography.clone() };
     let mut screen = LockScreen::new(
-        options.demo,
+        demo,
         palette,
         // Typography → Lock screen fonts (else the display / UI fonts).
         Fonts {
-            display: mandara_config::TypographyConfig::or(&cfg.typography.lock_clock_font, &cfg.typography.display_font).to_string(),
-            ui: mandara_config::TypographyConfig::or(&cfg.typography.lock_font, &cfg.typography.ui_font).to_string(),
+            display: mandara_config::TypographyConfig::or(&typography.lock_clock_font, &typography.display_font).to_string(),
+            ui: mandara_config::TypographyConfig::or(&typography.lock_font, &typography.ui_font).to_string(),
         },
         cfg.general.clock_24h,
         user,
-        auth,
+        AuthWorker::new(make),
         None,
-        options.demo.then(|| Instant::now() + options.timeout.unwrap_or(DEMO_TIMEOUT)),
+        deadline,
     );
-    screen.set_look(look, background);
-    if !options.demo {
-        screen.grace = grace_from_env();
+    if !minimal {
+        screen.avatar = load_avatar(&screen.user, AVATAR_PX);
+        let look = look::LockLook::from_config(&cfg);
+        let wallpaper = mandara_config::desktop::effective_wallpaper(cfg.wallpaper.path.as_ref(), &cfg.wallpaper.variants, None, dark)
+            .map(|p| mandara_config::paths::expand_tilde(&p.to_string_lossy()));
+        let background = look.background_image(wallpaper);
+        screen.set_look(look, background);
     }
-    let mode = if options.demo { LockMode::Demo } else { LockMode::Session };
-    let outcome = mandara_core::session_lock::run(mode, &mut screen);
-    if !options.demo {
-        let _ = std::fs::remove_file(locked_marker());
+    screen
+}
+
+/// The app of a real lock. The lock request goes out first; the screen
+/// itself is built when the compositor confirms the lock. Until then every
+/// output shows plain black, so loading the config, fonts, avatar and
+/// wallpaper (disk, a network home, a broken image) delays the look, never
+/// the lock.
+struct SessionLocker {
+    /// The bare locker the supervisor falls back to (see [`MINIMAL_ENV`]).
+    minimal: bool,
+    screen: Option<LockScreen>,
+    /// The latest keyboard state, handed to the screen once it exists.
+    keyboard: Option<KeyboardState>,
+}
+
+impl SessionLocker {
+    fn new(minimal: bool) -> Self {
+        Self { minimal, screen: None, keyboard: None }
     }
-    match outcome {
-        Ok(LockOutcome::Unlocked) => tracing::info!("lock screen: unlocked"),
-        Ok(LockOutcome::EndedByCompositor) => tracing::warn!("lock screen: the compositor ended the lock"),
-        // Failing after the compositor confirmed the lock leaves the session
-        // locked with nobody to unlock it: ask the shell for a new locker.
-        Err(err) if screen.was_locked && !options.demo => {
-            tracing::error!("lock screen failed while locked: {err:#}");
-            std::process::exit(RELOCK_EXIT);
+}
+
+impl LockApp for SessionLocker {
+    fn locked(&mut self) {
+        // First, the marker: the shell holds a suspend back until it exists.
+        write_marker();
+        if self.screen.is_none() {
+            let mut screen = build_screen(false, None, self.minimal);
+            screen.grace = grace_from_env();
+            if let Some(state) = &self.keyboard {
+                screen.keyboard(state);
+            }
+            self.screen = Some(screen);
         }
-        Err(err) => return Err(err),
+        if let Some(screen) = &mut self.screen {
+            screen.locked();
+        }
     }
-    Ok(())
+
+    fn key(&mut self, key: KeyInput) {
+        if let Some(screen) = &mut self.screen {
+            screen.key(key);
+        }
+    }
+
+    fn pointer_activity(&mut self) {
+        if let Some(screen) = &mut self.screen {
+            screen.pointer_activity();
+        }
+    }
+
+    fn keyboard(&mut self, state: &KeyboardState) {
+        self.keyboard = Some(state.clone());
+        if let Some(screen) = &mut self.screen {
+            screen.keyboard(state);
+        }
+    }
+
+    fn update(&mut self, now: Instant) -> AppControl {
+        self.screen.as_mut().map_or(AppControl::Continue, |screen| screen.update(now))
+    }
+
+    fn needs_redraw(&self) -> bool {
+        self.screen.as_ref().is_some_and(LockApp::needs_redraw)
+    }
+
+    fn draw(&mut self, surface: &SurfaceInfo, pixmap: &mut PixmapMut<'_>, now: Instant) {
+        match &mut self.screen {
+            Some(screen) => screen.draw(surface, pixmap, now),
+            None => pixmap.fill(tiny_skia::Color::BLACK),
+        }
+    }
+
+    fn drawn(&mut self) {
+        if let Some(screen) = &mut self.screen {
+            screen.drawn();
+        }
+    }
+
+    fn next_wakeup(&self, now: Instant) -> Duration {
+        self.screen.as_ref().map_or(LOAD_POLL, |screen| screen.next_wakeup(now))
+    }
+}
+
+/// Records that the session is locked (see [`locked_marker`]).
+fn write_marker() {
+    let marker = locked_marker();
+    if let Some(dir) = marker.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(marker, std::process::id().to_string());
 }
 
 /// Exit code of a locker that failed while the session stayed locked.
@@ -265,7 +448,8 @@ pub struct LockScreen {
     backgrounds: HashMap<(u32, u32), Pixmap>,
     text: TextPainter,
     auth: AuthWorker,
-    password: String,
+    /// What is typed; [`Zeroizing`] wipes it when the screen goes away too.
+    password: Zeroizing<String>,
     /// When each typed character arrived (symbol pop-in); also its count.
     typed: Vec<Instant>,
     /// Picks the symbols' shapes; renewed when a new entry starts.
@@ -276,6 +460,8 @@ pub struct LockScreen {
     rtl: bool,
     /// Dots shown while checking (the password itself is gone already).
     checking_len: usize,
+    /// When the running password check started (while `phase` is `Checking`).
+    checking_since: Option<Instant>,
     phase: Phase,
     note: Option<Note>,
     keyboard: KeyboardState,
@@ -285,13 +471,12 @@ pub struct LockScreen {
     exit: SpringValue<f32>,
     flash: SpringValue<f32>,
     started: Instant,
-    minute: i64,
+    /// The clock face as of the last frame ([`crate::widgets::clock::local_stamp`]).
+    stamp: i64,
     dirty: bool,
     animating: bool,
     deadline: Option<Instant>,
     attempts: u32,
-    /// The compositor confirmed the lock.
-    was_locked: bool,
     /// Lock grace period (`idle.lock_grace_s`, automatic locks only): any
     /// input this soon after the lock is confirmed unlocks without a password.
     grace: Option<Duration>,
@@ -320,7 +505,6 @@ impl LockScreen {
         wallpaper: Option<PathBuf>,
         deadline: Option<Instant>,
     ) -> Self {
-        let avatar = load_avatar(&user, 256);
         let mut reveal = SpringValue::new(0.0, REVEAL);
         reveal.set_target(1.0);
         let mut flash = SpringValue::new(0.0, SpringConfig::critical(90.0));
@@ -330,7 +514,7 @@ impl LockScreen {
             palette,
             fonts,
             clock_24h,
-            avatar,
+            avatar: None,
             wallpaper: None,
             wallpaper_rx: wallpaper.filter(|p| p.is_file()).map(|p| load_wallpaper(p, look::LockLook::default().blur_sigma(), false)),
             look: look::LockLook::default(),
@@ -338,12 +522,13 @@ impl LockScreen {
             backgrounds: HashMap::new(),
             text: TextPainter::new(),
             auth,
-            password: String::with_capacity(MAX_PASSWORD),
+            password: Zeroizing::new(String::with_capacity(MAX_PASSWORD)),
             typed: Vec::new(),
             symbol_seed: symbols::seed_from_clock(),
             fades: Fades::default(),
             rtl: mandara_i18n::language().is_rtl(),
             checking_len: 0,
+            checking_since: None,
             phase: Phase::Idle,
             note: None,
             keyboard: KeyboardState::default(),
@@ -353,12 +538,11 @@ impl LockScreen {
             exit: SpringValue::new(0.0, EXIT),
             flash,
             started: Instant::now(),
-            minute: -1,
+            stamp: -1,
             dirty: true,
             animating: true,
             deadline,
             attempts: 0,
-            was_locked: false,
             grace: None,
             grace_until: None,
             user,
@@ -396,7 +580,8 @@ impl LockScreen {
     }
 
     fn clear_password(&mut self) {
-        wipe(&mut self.password);
+        // The whole buffer, spare capacity (backspaced characters) included.
+        self.password.zeroize();
         self.typed.clear();
         self.fades.clear();
     }
@@ -411,15 +596,64 @@ impl LockScreen {
             self.reject(Note::Info(t("Type your password").into()));
             return;
         }
-        self.checking_len = self.typed.len();
-        // Copy out and wipe in place: the buffer keeps its reserved
-        // capacity, so typing never reallocates (and strands) secret bytes.
-        let password = self.password.clone();
+        let shown = self.typed.len();
+        // The typed buffer itself goes to the worker (wiped there), without
+        // a copy; a fresh one with room takes its place, so typing never
+        // reallocates (and strands) secret bytes.
+        let password = std::mem::take(&mut self.password);
+        self.password.reserve(MAX_PASSWORD);
         self.clear_password();
-        self.auth.submit(&self.user.name, password);
-        self.phase = Phase::Checking;
-        self.note = None;
-        self.attempts += 1;
+        match self.auth.submit(&self.user.name, password) {
+            Ok(()) => {
+                self.checking_len = shown;
+                self.checking_since = Some(Instant::now());
+                self.phase = Phase::Checking;
+                self.note = None;
+                self.attempts += 1;
+            }
+            Err(err) => {
+                tracing::error!("lock screen: starting the password check failed: {err}");
+                self.reject(Note::Error(t("The password check failed — try again").into()));
+            }
+        }
+    }
+
+    /// Gives up on the running password check (cancelled, timed out or its
+    /// worker died) and returns to the password field. The next attempt
+    /// gets a fresh worker; `note` says why, if the user should be told.
+    fn abandon_attempt(&mut self, note: Option<Note>) {
+        self.auth.abandon();
+        self.phase = Phase::Idle;
+        self.checking_since = None;
+        self.checking_len = 0;
+        match note {
+            Some(note) => self.reject(note),
+            None => {
+                self.note = None;
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// Where the password check stands at `now`: takes its answer, or gives
+    /// up on it when its worker ended or it has run past [`AUTH_TIMEOUT`].
+    fn poll_attempt(&mut self, now: Instant) {
+        match self.auth.poll() {
+            AuthPoll::Done(result) => {
+                self.checking_since = None;
+                self.finish_attempt(result);
+                self.dirty = true;
+            }
+            AuthPoll::Lost => {
+                tracing::error!("lock screen: the password check worker ended without an answer");
+                self.abandon_attempt(Some(Note::Error(t("The password check failed — try again").into())));
+            }
+            AuthPoll::Pending if self.checking_since.is_some_and(|since| now.saturating_duration_since(since) >= AUTH_TIMEOUT) => {
+                tracing::warn!("lock screen: the password check took longer than {AUTH_TIMEOUT:?}; giving up on it");
+                self.abandon_attempt(Some(Note::Error(t("The password check took too long — try again").into())));
+            }
+            AuthPoll::Pending => {}
+        }
     }
 
     fn finish_attempt(&mut self, result: AuthResult) {
@@ -442,6 +676,19 @@ impl LockScreen {
             .or(result.error)
             .unwrap_or_else(|| t("Wrong password").into());
         self.reject(Note::Error(text));
+    }
+
+    /// The pattern the clock is drawn with (the fallback when the
+    /// configured one is invalid).
+    fn clock_pattern(&self) -> &str {
+        if crate::widgets::clock::valid_pattern(&self.look.time_pattern) { &self.look.time_pattern } else { LOCK_TIME_FALLBACK }
+    }
+
+    /// Whether something on screen changes every second (the clock's
+    /// pattern or a clock widget shows seconds); else the face changes once
+    /// a minute, and the idle screen only wakes (and repaints) that often.
+    fn ticks_seconds(&self) -> bool {
+        crate::widgets::clock::shows_seconds(self.clock_pattern()) || crate::backdrop::widgets::passive::ticks_seconds(&self.look.cfg.widgets)
     }
 
     fn time_strings(&self) -> (String, Option<String>) {
@@ -520,6 +767,16 @@ impl LockScreen {
 
 impl LockApp for LockScreen {
     fn key(&mut self, key: KeyInput) {
+        // Esc leaves a password check that will not finish; every other key
+        // waits for its answer.
+        if self.phase == Phase::Checking && key.keysym == keys::ESCAPE {
+            if self.demo {
+                self.deadline = Some(Instant::now());
+            } else {
+                self.abandon_attempt(None);
+            }
+            return;
+        }
         if self.phase != Phase::Idle {
             return;
         }
@@ -573,15 +830,7 @@ impl LockApp for LockScreen {
     }
 
     fn locked(&mut self) {
-        self.was_locked = true;
         self.grace_until = self.grace.map(|g| Instant::now() + g);
-        if !self.demo {
-            let marker = locked_marker();
-            if let Some(dir) = marker.parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            let _ = std::fs::write(marker, std::process::id().to_string());
-        }
     }
 
     fn pointer_activity(&mut self) {
@@ -609,15 +858,12 @@ impl LockApp for LockScreen {
             self.backgrounds.clear();
             self.dirty = true;
         }
-        if self.phase == Phase::Checking
-            && let Some(result) = self.auth.poll()
-        {
-            self.finish_attempt(result);
-            self.dirty = true;
+        if self.phase == Phase::Checking {
+            self.poll_attempt(now);
         }
-        let minute = crate::widgets::clock::local_stamp(&chrono::Local::now(), false);
-        if minute != self.minute {
-            self.minute = minute;
+        let stamp = crate::widgets::clock::local_stamp(&chrono::Local::now(), self.ticks_seconds());
+        if stamp != self.stamp {
+            self.stamp = stamp;
             self.dirty = true;
         }
         let dt = self.clock.tick(now);
@@ -657,12 +903,24 @@ impl LockApp for LockScreen {
         self.dirty = false;
     }
 
-    /// Poll pending widget paints promptly; an idle screen follows the clock boundary.
+    /// Poll pending widget paints promptly; an idle screen follows the clock:
+    /// the next minute boundary, or the next second when something shows
+    /// seconds. While lock widgets are shown it also looks in once a second
+    /// for their data (a forecast arrives without waking the loop).
     fn next_wakeup(&self, now: Instant) -> Duration {
+        use chrono::Timelike as _;
         if self.animating || self.widgets.pending() {
             return ANIMATION_TICK;
         }
-        let mut wait = Duration::from_millis(1000 - (chrono::Local::now().timestamp_subsec_millis() % 1000) as u64 + 5);
+        let local = chrono::Local::now();
+        let mut wait = until_next_tick(local.second(), local.timestamp_subsec_millis(), self.ticks_seconds());
+        // The wallpaper arrives from another thread without waking us.
+        if self.wallpaper_rx.is_some() {
+            wait = wait.min(LOAD_POLL);
+        }
+        if self.look.cfg.widgets.items.iter().any(|w| w.enabled) {
+            wait = wait.min(WIDGET_POLL);
+        }
         if let Some(d) = self.deadline {
             wait = wait.min(d.saturating_duration_since(now));
         }
@@ -673,6 +931,12 @@ impl LockApp for LockScreen {
     fn draw(&mut self, info: &SurfaceInfo, pm: &mut PixmapMut<'_>, now: Instant) {
         let s = info.scale;
         let (w, h) = (pm.width(), pm.height());
+        if !info.focused && self.look.cfg.blank_other_outputs && !self.demo {
+            // OLED care: other outputs stay black. Settled before the
+            // background is built, so these never cost a cached copy of it.
+            pm.fill(tiny_skia::Color::BLACK);
+            return;
+        }
         let bg = self.background(w, h);
         pm.data_mut().copy_from_slice(bg.data());
         let p = self.palette.clone();
@@ -688,12 +952,6 @@ impl LockApp for LockScreen {
         let logical_h = info.height as f32;
 
         // Clock + date.
-        let blank = !info.focused && self.look.cfg.blank_other_outputs && !self.demo;
-        if blank {
-            // OLED care: other outputs stay black.
-            pm.fill(tiny_skia::Color::BLACK);
-            return;
-        }
         self.widgets.update(&self.look.cfg.widgets, (w, h), &self.look.widget_fonts, &p, self.clock_24h, true);
         self.widgets.draw(pm, alpha);
         if self.look.cfg.design == mandara_config::desktop::LockDesign::MaterialYou {
@@ -1041,9 +1299,15 @@ fn grace_from_env() -> Option<Duration> {
     (ms > 0).then(|| Duration::from_millis(ms))
 }
 
-/// Whether a real locker started by this shell is running.
+/// A real locker that was already running when this shell started (the
+/// shell restarted while the session was locked; the locker has its own
+/// process group and outlives it). See [`adopt`].
+static ADOPTED_LOCKER: AtomicBool = AtomicBool::new(false);
+
+/// Whether a real locker is running: one this shell started, one it found
+/// at startup, or Plasma's.
 pub fn is_locked() -> bool {
-    PLASMA_LOCKED.load(Ordering::Relaxed) || CHILDREN.lock().is_ok_and(|c| c.real)
+    PLASMA_LOCKED.load(Ordering::Relaxed) || ADOPTED_LOCKER.load(Ordering::Relaxed) || CHILDREN.lock().is_ok_and(|c| c.real)
 }
 
 fn plasma_lock_changed(locked: bool) {
@@ -1078,12 +1342,25 @@ fn announce(locked: bool) {
     mandara_services::hooks::emit(event, &[]);
 }
 
-fn locker_command(demo: bool) -> std::process::Command {
+/// Which locker the supervisor starts.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum LockerKind {
+    /// The configured look.
+    Full,
+    /// The bare look ([`MINIMAL_ENV`]): what is left when the full one
+    /// keeps crashing (a wallpaper, widget or font that takes it down).
+    Minimal,
+}
+
+fn locker_command(demo: bool, kind: LockerKind) -> std::process::Command {
     use std::os::unix::process::CommandExt as _;
     let mut cmd = std::process::Command::new(mandara_config::paths::self_exe());
     cmd.arg("lock");
     if demo {
         cmd.args(["--demo", "--timeout", "60"]);
+    }
+    if kind == LockerKind::Minimal {
+        cmd.env(MINIMAL_ENV, "1");
     }
     // Its own process group: the locker must outlive a dying shell.
     cmd.stdin(std::process::Stdio::null()).process_group(0);
@@ -1105,6 +1382,59 @@ pub fn lock_now() -> Result<bool, String> {
     lock_with_grace(None)
 }
 
+/// Waits for `child` and, while it keeps crashing (the compositor keeps the
+/// session locked meanwhile), starts another through `relaunch`. Each kind
+/// of locker gets [`MAX_RESTARTS`] within [`RESTART_WINDOW`]: the full look
+/// first, then, in case something in it is what crashes, the bare one.
+/// Returns when a locker ends without crashing (it unlocked), when the bare
+/// one keeps crashing too, or when none can be started.
+fn supervise(mut child: std::process::Child, mut relaunch: impl FnMut(LockerKind) -> std::io::Result<std::process::Child>) {
+    let mut kind = LockerKind::Full;
+    let mut restarts: Vec<Instant> = Vec::new();
+    loop {
+        let status = child.wait();
+        if !status.as_ref().is_ok_and(|s| crashed(*s)) {
+            return;
+        }
+        restarts.retain(|t| t.elapsed() < RESTART_WINDOW);
+        if restarts.len() >= MAX_RESTARTS {
+            match kind {
+                LockerKind::Full => {
+                    tracing::error!("lock screen crashed {} times in a minute; falling back to the bare lock screen", restarts.len());
+                    kind = LockerKind::Minimal;
+                    restarts.clear();
+                }
+                LockerKind::Minimal => {
+                    tracing::error!(
+                        "the bare lock screen crashed {} times in a minute too; giving up. The session stays locked: \
+                         run `mandara msg lock` from a TTY to start a new locker",
+                        restarts.len()
+                    );
+                    return;
+                }
+            }
+        }
+        restarts.push(Instant::now());
+        tracing::warn!("lock screen exited abnormally ({status:?}); restarting it ({kind:?})");
+        match relaunch(kind) {
+            Ok(next) => child = next,
+            Err(err) => {
+                tracing::error!("restarting the lock screen: {err}");
+                return;
+            }
+        }
+    }
+}
+
+/// No locker is running any more: forget it and tell the listeners.
+fn locker_gone() {
+    if let Ok(mut c) = CHILDREN.lock() {
+        c.real = false;
+    }
+    let _ = std::fs::remove_file(locked_marker());
+    announce(false);
+}
+
 /// Like [`lock_now`]; input within `grace` of the lock unlocks without a
 /// password (automatic idle locks, `idle.lock_grace_s`).
 pub fn lock_with_grace(grace: Option<Duration>) -> Result<bool, String> {
@@ -1122,52 +1452,45 @@ pub fn lock_with_grace(grace: Option<Duration>) -> Result<bool, String> {
         tracing::info!("dry run: lock the screen (grace {grace:?})");
         return Ok(false);
     }
-    let mut command = locker_command(false);
+    // One this shell did not start (before a shell restart, or by hand): a
+    // second would only be refused, and its exit would remove the marker.
+    if adopt::marker_locker().is_some() {
+        return Ok(false);
+    }
+    let mut command = locker_command(false, LockerKind::Full);
     if let Some(g) = grace {
         command.env(GRACE_ENV, g.as_millis().to_string());
     }
-    let mut child = command.spawn().map_err(|e| format!("{}: {e}", t("Could not start the lock screen")))?;
+    let child = command.spawn().map_err(|e| format!("{}: {e}", t("Could not start the lock screen")))?;
     children.real = true;
     drop(children);
     announce(true);
-    std::thread::Builder::new()
-        .name("mandara-lock-supervisor".into())
-        .spawn(move || {
-            let mut restarts: Vec<Instant> = Vec::new();
-            loop {
-                let status = child.wait();
-                let again = status.as_ref().is_ok_and(|s| crashed(*s));
-                if !again {
-                    break;
-                }
-                restarts.retain(|t| t.elapsed() < RESTART_WINDOW);
-                if restarts.len() >= 5 {
-                    tracing::error!("lock screen crashed {} times in a minute; giving up (unlock from a TTY with `loginctl unlock-session`)", restarts.len());
-                    break;
-                }
-                restarts.push(Instant::now());
-                tracing::warn!("lock screen exited abnormally ({status:?}); restarting it");
-                match locker_command(false).spawn() {
-                    Ok(c) => child = c,
-                    Err(err) => {
-                        tracing::error!("restarting the lock screen: {err}");
-                        break;
-                    }
-                }
-            }
-            if let Ok(mut c) = CHILDREN.lock() {
-                c.real = false;
-            }
-            let _ = std::fs::remove_file(locked_marker());
-            announce(false);
-        })
-        .map_err(|e| e.to_string())?;
+    // The supervisor thread takes the child from this slot. If the thread
+    // cannot be started, the child is still here to be stopped, so a failed
+    // spawn never leaves a locker nobody waits for (and `real` stuck on).
+    let slot = Arc::new(Mutex::new(Some(child)));
+    let handoff = Arc::clone(&slot);
+    let spawned = std::thread::Builder::new().name("mandara-lock-supervisor".into()).spawn(move || {
+        let child = handoff.lock().unwrap_or_else(PoisonError::into_inner).take();
+        if let Some(child) = child {
+            supervise(child, |kind| locker_command(false, kind).spawn());
+        }
+        locker_gone();
+    });
+    if let Err(err) = spawned {
+        if let Some(mut child) = slot.lock().unwrap_or_else(PoisonError::into_inner).take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        locker_gone();
+        return Err(format!("{}: {err}", t("Could not start the lock screen")));
+    }
     Ok(true)
 }
 
 fn start_demo() -> Result<u32, String> {
     stop_demo();
-    let mut child = locker_command(true).spawn().map_err(|e| format!("{}: {e}", t("Could not start the lock screen")))?;
+    let mut child = locker_command(true, LockerKind::Full).spawn().map_err(|e| format!("{}: {e}", t("Could not start the lock screen")))?;
     let pid = child.id();
     CHILDREN.lock().map_err(|e| e.to_string())?.demo = Some(pid);
     let _ = std::thread::Builder::new().name("mandara-lock-demo".into()).spawn(move || {
@@ -1195,6 +1518,7 @@ fn stop_demo() -> bool {
 /// Shell startup: answer logind lock requests while `general.lock_screen`.
 pub fn init(cx: &mut gpui::App) {
     look::init(cx);
+    adopt::adopt_running_locker();
     if mandara_compositor::detect() == Some(mandara_compositor::CompositorKind::KWin) {
         mandara_services::plasma_lock::watch(plasma_lock_changed);
     }
@@ -1228,6 +1552,7 @@ pub fn register(r: &mut PluginRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::AtomicUsize;
 
     struct Accept;
     impl Authenticator for Accept {
@@ -1236,11 +1561,44 @@ mod tests {
         }
     }
 
+    /// A PAM module that never answers, until `release` is set.
+    struct Hang(Arc<AtomicBool>);
+    impl Authenticator for Hang {
+        fn authenticate(&mut self, _: &str, _: &str) -> AuthResult {
+            while !self.0.load(Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            AuthResult { ok: false, error: None, messages: Vec::new() }
+        }
+    }
+
+    /// A PAM module that takes its worker thread down.
+    struct Crash;
+    impl Authenticator for Crash {
+        fn authenticate(&mut self, _: &str, _: &str) -> AuthResult {
+            panic!("the PAM module crashed (expected by the test)");
+        }
+    }
+
+    /// A screen whose first password check hangs until `release` is set and
+    /// whose later ones (on a fresh worker) are [`Accept`]ed.
+    fn screen_that_hangs_once(demo: bool, release: &Arc<AtomicBool>) -> LockScreen {
+        let (release, made) = (Arc::clone(release), Arc::new(AtomicUsize::new(0)));
+        screen_with(demo, move || -> Box<dyn Authenticator> {
+            if made.fetch_add(1, Ordering::Relaxed) == 0 { Box::new(Hang(Arc::clone(&release))) } else { Box::new(Accept) }
+        })
+    }
+
     /// The symbol seed of every test screen, so the shapes never depend on
     /// the clock a test happens to start at.
     const TEST_SYMBOL_SEED: u64 = 0x5EED_5AFE_AB1E_0001;
 
     fn screen(demo: bool) -> LockScreen {
+        screen_with(demo, || Box::new(Accept))
+    }
+
+    /// A test screen whose password checks run `make`'s authenticators.
+    fn screen_with(demo: bool, make: impl Fn() -> Box<dyn Authenticator> + Send + Sync + 'static) -> LockScreen {
         let user = User { name: "amira".into(), display: "Amira Said".into(), home: PathBuf::from("/nonexistent") };
         let mut s = LockScreen::new(
             demo,
@@ -1248,7 +1606,7 @@ mod tests {
             Fonts { display: "Inter".into(), ui: "Inter".into() },
             true,
             user,
-            AuthWorker::spawn(Box::new(Accept)).unwrap(),
+            AuthWorker::new(make),
             None,
             None,
         );
@@ -1346,7 +1704,7 @@ mod tests {
         let mut s = screen(false);
         type_text(&mut s, "abc");
         press(&mut s, keys::BACKSPACE);
-        assert_eq!(s.password, "ab");
+        assert_eq!(s.password.as_str(), "ab");
         s.key(KeyInput { keysym: keys::BACKSPACE, utf8: String::new(), ctrl: true, alt: false });
         assert!(s.password.is_empty() && s.typed.is_empty());
         // Empty submit nudges instead of calling PAM.
@@ -1361,10 +1719,182 @@ mod tests {
     }
 
     #[test]
+    fn a_hung_password_check_times_out_and_the_next_one_works() {
+        let release = Arc::new(AtomicBool::new(false));
+        let mut s = screen_that_hangs_once(false, &release);
+        type_text(&mut s, "guess");
+        press(&mut s, keys::RETURN);
+        assert_eq!(s.phase, Phase::Checking);
+        let since = s.checking_since.expect("the check started");
+        // Just short of the limit it is still waited for.
+        assert_eq!(s.update(since + AUTH_TIMEOUT - Duration::from_millis(1)), AppControl::Continue);
+        assert_eq!(s.phase, Phase::Checking);
+        // At the limit the lock screen gives up on it and says why.
+        assert_eq!(s.update(since + AUTH_TIMEOUT), AppControl::Continue);
+        assert_eq!(s.phase, Phase::Idle);
+        assert_eq!(s.note, Some(Note::Error(t("The password check took too long — try again").into())));
+        assert!(s.checking_since.is_none() && s.typed.is_empty());
+        // The abandoned attempt never delivers a late answer; a fresh worker
+        // takes the next one.
+        release.store(true, Ordering::Relaxed);
+        type_text(&mut s, "open sesame");
+        press(&mut s, keys::RETURN);
+        assert_eq!(settle(&mut s), AppControl::Unlock);
+    }
+
+    #[test]
+    fn escape_cancels_a_password_check_that_never_ends() {
+        let release = Arc::new(AtomicBool::new(false));
+        let mut s = screen_that_hangs_once(false, &release);
+        type_text(&mut s, "guess");
+        press(&mut s, keys::RETURN);
+        assert_eq!(s.phase, Phase::Checking);
+        // Other keys wait for the answer; Escape leaves, on a real lock too.
+        type_text(&mut s, "x");
+        assert_eq!(s.phase, Phase::Checking);
+        press(&mut s, keys::ESCAPE);
+        assert_eq!(s.phase, Phase::Idle);
+        assert!(s.note.is_none() && s.checking_since.is_none());
+        assert_eq!(s.update(Instant::now()), AppControl::Continue, "a real lock never exits");
+        release.store(true, Ordering::Relaxed);
+        type_text(&mut s, "open sesame");
+        press(&mut s, keys::RETURN);
+        assert_eq!(settle(&mut s), AppControl::Unlock);
+    }
+
+    #[test]
+    fn escape_during_a_demo_password_check_closes_the_demo() {
+        let release = Arc::new(AtomicBool::new(false));
+        let mut s = screen_that_hangs_once(true, &release);
+        type_text(&mut s, "guess");
+        press(&mut s, keys::RETURN);
+        assert_eq!(s.phase, Phase::Checking);
+        press(&mut s, keys::ESCAPE);
+        assert_eq!(s.update(Instant::now() + Duration::from_millis(1)), AppControl::Exit);
+        release.store(true, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn a_password_check_whose_worker_dies_is_reported_and_replaced() {
+        let made = Arc::new(AtomicUsize::new(0));
+        let mut s = screen_with(false, move || -> Box<dyn Authenticator> {
+            if made.fetch_add(1, Ordering::Relaxed) == 0 { Box::new(Crash) } else { Box::new(Accept) }
+        });
+        type_text(&mut s, "guess");
+        press(&mut s, keys::RETURN);
+        assert_eq!(settle(&mut s), AppControl::Continue);
+        assert_eq!(s.phase, Phase::Idle, "the lock screen does not wait for an answer that cannot come");
+        assert_eq!(s.note, Some(Note::Error(t("The password check failed — try again").into())));
+        type_text(&mut s, "open sesame");
+        press(&mut s, keys::RETURN);
+        assert_eq!(settle(&mut s), AppControl::Unlock);
+    }
+
+    #[test]
+    fn the_typed_password_buffer_is_wiped_whole() {
+        let mut s = screen(false);
+        type_text(&mut s, "secret");
+        press(&mut s, keys::BACKSPACE);
+        press(&mut s, keys::BACKSPACE);
+        s.key(KeyInput { keysym: keys::BACKSPACE, utf8: String::new(), ctrl: true, alt: false });
+        assert!(s.password.is_empty());
+        // SAFETY: reading the buffer's own spare capacity, which a wipe of
+        // only the live bytes would leave with the backspaced characters.
+        let spare = unsafe { std::slice::from_raw_parts(s.password.as_ptr(), s.password.capacity()) };
+        assert!(spare.iter().all(|b| *b == 0), "a deleted character survived in the buffer");
+    }
+
+    #[test]
     fn demo_escape_exits() {
         let mut s = screen(true);
         press(&mut s, keys::ESCAPE);
         assert_eq!(s.update(Instant::now() + Duration::from_millis(1)), AppControl::Exit);
+    }
+
+    #[test]
+    fn the_clock_wakes_the_idle_screen_at_its_next_change_only() {
+        let (minute, second, slack) = (Duration::from_millis(MS_PER_MINUTE), Duration::from_millis(MS_PER_SECOND), Duration::from_millis(TICK_SLACK_MS));
+        assert_eq!(until_next_tick(0, 0, true), second + slack);
+        assert_eq!(until_next_tick(10, 250, true), Duration::from_millis(750) + slack);
+        assert_eq!(until_next_tick(0, 0, false), minute + slack);
+        assert_eq!(until_next_tick(30, 500, false), Duration::from_millis(29_500) + slack);
+        assert_eq!(until_next_tick(59, 999, false), Duration::from_millis(1) + slack);
+        // A leap second (second 60, or 1000+ ms) stays within a tick.
+        assert!(until_next_tick(60, 1999, false) <= minute + slack);
+        assert!(until_next_tick(59, 1500, true) <= second + slack);
+
+        let mut s = screen(false);
+        s.animating = false;
+        s.look.cfg.widgets.items.clear();
+        s.look.custom_time = true;
+        let now = Instant::now();
+        s.look.time_pattern = "%H:%M".into();
+        let idle = s.next_wakeup(now);
+        assert!(idle > Duration::ZERO && idle <= minute + slack, "{idle:?}");
+        s.look.time_pattern = "%H:%M:%S".into();
+        assert!(s.next_wakeup(now) <= second + slack, "a clock with seconds wakes every second");
+        // Lock widgets look in for their data once a second.
+        s.look.time_pattern = "%H:%M".into();
+        s.look.cfg.widgets.items = vec![mandara_config::desktop_widgets::DesktopWidget { enabled: true, ..Default::default() }];
+        assert!(s.next_wakeup(now) <= WIDGET_POLL);
+    }
+
+    #[test]
+    fn the_session_locker_shows_black_until_the_lock_is_confirmed() {
+        let mut locker = SessionLocker::new(true);
+        let now = Instant::now();
+        assert_eq!(locker.next_wakeup(now), LOAD_POLL);
+        assert!(!locker.needs_redraw());
+        assert_eq!(locker.update(now), AppControl::Continue);
+        locker.key(KeyInput { keysym: keys::RETURN, utf8: String::new(), ctrl: false, alt: false });
+        let mut pm = Pixmap::new(16, 8).unwrap();
+        pm.fill(tiny_skia::Color::WHITE);
+        let info = SurfaceInfo { output: "TEST-1".into(), width: 16, height: 8, scale: 1.0, focused: true };
+        locker.draw(&info, &mut pm.as_mut(), now);
+        assert!(pm.data().as_chunks::<4>().0.iter().all(|p| *p == [0, 0, 0, 255]));
+    }
+
+    /// A child that ends with `code`.
+    fn ends_with(code: i32) -> std::io::Result<std::process::Child> {
+        std::process::Command::new("sh").args(["-c", &format!("exit {code}")]).spawn()
+    }
+
+    #[test]
+    fn a_locker_that_keeps_crashing_is_replaced_by_the_bare_one_then_given_up_on() {
+        let mut kinds = Vec::new();
+        supervise(ends_with(RELOCK_EXIT).unwrap(), |kind| {
+            kinds.push(kind);
+            ends_with(RELOCK_EXIT)
+        });
+        let expected = [vec![LockerKind::Full; MAX_RESTARTS], vec![LockerKind::Minimal; MAX_RESTARTS]].concat();
+        assert_eq!(kinds, expected);
+    }
+
+    #[test]
+    fn a_locker_that_recovers_is_not_restarted_again() {
+        let mut starts = 0;
+        supervise(ends_with(RELOCK_EXIT).unwrap(), |_| {
+            starts += 1;
+            ends_with(0)
+        });
+        assert_eq!(starts, 1);
+    }
+
+    #[test]
+    fn a_locker_that_unlocked_or_was_refused_is_not_restarted() {
+        for code in [0, 1] {
+            supervise(ends_with(code).unwrap(), |_| -> std::io::Result<std::process::Child> { unreachable!("restarted after exit code {code}") });
+        }
+    }
+
+    #[test]
+    fn supervision_ends_when_no_locker_can_be_started() {
+        let mut tries = 0;
+        supervise(ends_with(RELOCK_EXIT).unwrap(), |_| {
+            tries += 1;
+            Err(std::io::Error::other("no such program"))
+        });
+        assert_eq!(tries, 1);
     }
 
     #[test]

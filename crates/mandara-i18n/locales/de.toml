@@ -2034,6 +2034,8 @@
 "The last log lines of a container" = "Die letzten Log-Zeilen eines Containers"
 "The link has no account name" = "Der Link enthält keinen Kontonamen"
 "The link has no secret" = "Der Link enthält kein Geheimnis"
+"The password check failed — try again" = "Die Passwortprüfung ist fehlgeschlagen – versuch es noch einmal"
+"The password check took too long — try again" = "Die Passwortprüfung hat zu lange gedauert – versuch es noch einmal"
 "The password is empty" = "Das Passwort ist leer"
 "The public IP endpoint must be an http(s) URL" = "Der Endpunkt für die öffentliche IP muss eine http(s)-URL sein"
 "The secret is too short" = "Das Geheimnis ist zu kurz"
