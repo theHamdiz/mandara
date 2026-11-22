@@ -6,6 +6,16 @@ About → What's new shows it too.
 
 ## Unreleased
 
+A frozen Mandara shell now restarts by itself, and the control socket and the supervisor's shutdown no longer hang on a stuck shell.
+
+### Fixed
+
+- **A frozen shell restarts by itself.** When Mandara is started by its supervisor (the plain `mandara` command, which is what your session runs), it now checks every few seconds that the shell's interface still answers. A shell that spins at full CPU or deadlocks is killed after about 30 seconds and restarted like after a crash, instead of leaving you with a dead bar. Turning off *Restart automatically after a crash* in Studio → General leaves a frozen shell alone.
+- Stopping the supervisor (log out, `systemctl stop`, Ctrl-C) no longer hangs on a shell that ignores `SIGTERM`: it is killed after 8 seconds. A stop that arrives while the supervisor is waiting to restart a crashed shell now ends it right away instead of starting one more shell first, and a shell that asks for a restart on every start is slowed down instead of respawning in a tight loop.
+- A stuck shell can no longer pile up threads from `mandara msg` or Studio: the control socket serves at most 32 requests at once, refuses oversized or too-slow requests, answers "too busy" or "did not answer in time" instead of waiting forever, and is only accessible to you.
+- A second `mandara studio` now brings the open Studio forward even when another client is stuck on its socket, and two Studios started together no longer race for it.
+- The idle shell no longer wakes up every 30 seconds to compact its memory unless something freed a meaningful amount of it.
+
 ## 0.37.0 — 2026-11-22
 
 Mandara speaks Italian: Studio, the shell and Mandara Login all follow
