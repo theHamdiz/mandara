@@ -9,15 +9,12 @@
 //! backlight (desktops) simply get no watcher.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use serde::Serialize;
 
 #[cfg(not(target_os = "freebsd"))]
 const BACKLIGHT_ROOT: &str = "/sys/class/backlight";
-const LEDS_ROOT: &str = "/sys/class/leds";
 /// Lowest brightness `raw_for` allows, as a fraction of the maximum.
 const MIN_LEVEL: f32 = 0.01;
 /// Re-read interval for backlight drivers that never notify.
@@ -25,12 +22,6 @@ const BACKLIGHT_RESYNC: Duration = Duration::from_secs(30);
 /// Back-off after a failed `poll(2)`.
 #[cfg(not(target_os = "freebsd"))]
 const POLL_RETRY: Duration = Duration::from_secs(1);
-/// Caps Lock LED sampling interval while the OSD wants it.
-const CAPSLOCK_SAMPLE: Duration = Duration::from_millis(200);
-/// How often a disabled Caps Lock watcher checks whether it was enabled.
-const CAPSLOCK_IDLE_CHECK: Duration = Duration::from_secs(1);
-/// Keyboards come and go (USB, Bluetooth): the LED list is rescanned this often.
-const LED_RESCAN: Duration = Duration::from_secs(10);
 /// Updates buffered for the UI.
 const UPDATE_QUEUE: usize = 4;
 /// Bytes read from a sysfs number attribute (`"4294967295\n"` fits).
@@ -229,59 +220,6 @@ pub fn watch_backlight() -> Option<async_channel::Receiver<Backlight>> {
     Some(rx)
 }
 
-/// Caps Lock LED brightness files of every keyboard.
-pub fn capslock_leds() -> Vec<PathBuf> {
-    let Ok(dir) = std::fs::read_dir(LEDS_ROOT) else { return Vec::new() };
-    dir.flatten().filter(|e| e.file_name().to_string_lossy().ends_with("::capslock")).map(|e| e.path().join("brightness")).collect()
-}
-
-/// Whether any keyboard's Caps Lock LED is lit.
-pub fn capslock_on(leds: &[PathBuf]) -> bool {
-    leds.iter().any(|p| read_u32(p).is_some_and(|v| v > 0))
-}
-
-/// Reports Caps Lock changes. LED attributes don't notify, so this samples
-/// the (tiny) sysfs files five times a second while `enabled` — through
-/// file descriptors opened once, with no allocation per sample — and idles
-/// otherwise. Runs as a task on the service runtime. `None` without a
-/// keyboard LED.
-pub fn watch_capslock(enabled: Arc<AtomicBool>) -> Option<async_channel::Receiver<bool>> {
-    let leds = capslock_leds();
-    if leds.is_empty() {
-        return None;
-    }
-    let (tx, rx) = async_channel::bounded(UPDATE_QUEUE);
-    crate::runtime::spawn("capslock", async move {
-        let open = |paths: &[PathBuf]| -> Vec<std::fs::File> { paths.iter().filter_map(|p| std::fs::File::open(p).ok()).collect() };
-        let lit = |files: &[std::fs::File]| files.iter().any(|f| pread_u32(f).is_some_and(|v| v > 0));
-        let mut files = open(&leds);
-        let mut last = lit(&files);
-        let mut scanned = std::time::Instant::now();
-        loop {
-            if tx.is_closed() {
-                return;
-            }
-            if !enabled.load(Ordering::Relaxed) {
-                crate::runtime::sleep(CAPSLOCK_IDLE_CHECK).await;
-                continue;
-            }
-            crate::runtime::sleep(CAPSLOCK_SAMPLE).await;
-            if scanned.elapsed() >= LED_RESCAN {
-                scanned = std::time::Instant::now();
-                files = open(&capslock_leds());
-            }
-            let on = lit(&files);
-            if on != last {
-                last = on;
-                if tx.send(on).await.is_err() {
-                    return;
-                }
-            }
-        }
-    });
-    Some(rx)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -302,6 +240,5 @@ mod tests {
         // Never panics, whatever the machine has.
         let _ = devices();
         let _ = primary();
-        let _ = capslock_on(&[PathBuf::from("/nonexistent")]);
     }
 }

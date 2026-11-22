@@ -24,6 +24,8 @@ pub const AGENT_PATH: &str = "/org/mandara/bluez/agent";
 const CAPABILITY: &str = "KeyboardDisplay";
 /// A request left unanswered this long is rejected.
 pub const ANSWER_TIMEOUT: Duration = Duration::from_secs(60);
+/// How long to wait before registering again after a failed attempt.
+const REREGISTER_AFTER: Duration = Duration::from_secs(30);
 /// Events buffered for the UI.
 const EVENT_QUEUE: usize = 16;
 /// Largest passkey BlueZ accepts (six digits).
@@ -124,12 +126,15 @@ enum AgentError {
 struct Shared {
     events: async_channel::Sender<PairingEvent>,
     pending: Mutex<HashMap<u64, async_channel::Sender<PairingReply>>>,
+    /// The open display-only request of each device (its request id), so
+    /// `DisplayPasskey`'s per-digit updates change one dialog in place.
+    displays: Mutex<HashMap<String, u64>>,
     next: AtomicU64,
 }
 
 impl Shared {
     fn new(events: async_channel::Sender<PairingEvent>) -> Self {
-        Self { events, pending: Mutex::new(HashMap::new()), next: AtomicU64::new(1) }
+        Self { events, pending: Mutex::new(HashMap::new()), displays: Mutex::new(HashMap::new()), next: AtomicU64::new(1) }
     }
 
     fn answer(&self, reply: PairingReply) {
@@ -143,29 +148,32 @@ impl Shared {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = async_channel::bounded(1);
         self.pending.lock().insert(id, tx);
-        let _ = self.events.try_send(PairingEvent::Request(PairingRequest { id, device, address, icon, kind }));
+        crate::actor::send_event(&self.events, PairingEvent::Request(PairingRequest { id, device, address, icon, kind }), "bluetooth pairing").await;
         let answer = futures::future::select(Box::pin(rx.recv()), Box::pin(async_io::Timer::after(timeout))).await;
         match answer {
             futures::future::Either::Left((Ok(reply), _)) => Some(reply),
             _ => {
                 self.pending.lock().remove(&id);
-                let _ = self.events.try_send(PairingEvent::Cancelled(id));
+                crate::actor::send_event(&self.events, PairingEvent::Cancelled(id), "bluetooth pairing").await;
                 None
             }
         }
     }
 
-    /// Display-only: show it, no answer expected.
-    fn show(&self, device: String, address: String, icon: String, kind: PairingKind) {
-        let id = self.next.fetch_add(1, Ordering::Relaxed);
-        let _ = self.events.try_send(PairingEvent::Request(PairingRequest { id, device, address, icon, kind }));
+    /// Display-only: show it, no answer expected. A device has one display
+    /// request: showing again (`DisplayPasskey` fires per typed digit)
+    /// re-sends the same request id, which the UI applies in place.
+    async fn show(&self, device_path: &str, name: String, address: String, icon: String, kind: PairingKind) {
+        let id = *self.displays.lock().entry(device_path.to_string()).or_insert_with(|| self.next.fetch_add(1, Ordering::Relaxed));
+        crate::actor::send_event(&self.events, PairingEvent::Request(PairingRequest { id, device: name, address, icon, kind }), "bluetooth pairing").await;
     }
 
-    /// Cancels every open request (BlueZ `Cancel`).
-    fn cancel_all(&self) {
-        let ids: Vec<u64> = self.pending.lock().drain().map(|(id, _)| id).collect();
+    /// Cancels every open request, display-only ones included (BlueZ `Cancel`).
+    async fn cancel_all(&self) {
+        let mut ids: Vec<u64> = self.pending.lock().drain().map(|(id, _)| id).collect();
+        ids.extend(self.displays.lock().drain().map(|(_, id)| id));
         for id in ids {
-            let _ = self.events.try_send(PairingEvent::Cancelled(id));
+            crate::actor::send_event(&self.events, PairingEvent::Cancelled(id), "bluetooth pairing").await;
         }
     }
 }
@@ -209,6 +217,19 @@ impl Agent {
         (alias, address, icon)
     }
 
+    /// Refuses callers other than bluetoothd (or root).
+    async fn check(&self, conn: &zbus::Connection, header: &zbus::message::Header<'_>) -> Result<(), AgentError> {
+        if crate::actor::caller_is(conn, header, "org.bluez").await { Ok(()) } else { Err(AgentError::Rejected("only bluetoothd may call the agent".into())) }
+    }
+
+    /// Like [`Agent::ask`] for yes/no questions: only an explicit accept counts.
+    async fn ask_yes(&self, device: &OwnedObjectPath, kind: PairingKind) -> Result<(), AgentError> {
+        match self.ask(device, kind).await? {
+            PairingReply::Accept(_) => Ok(()),
+            _ => Err(AgentError::Rejected("rejected by the user".into())),
+        }
+    }
+
     async fn ask(&self, device: &OwnedObjectPath, kind: PairingKind) -> Result<PairingReply, AgentError> {
         let (name, address, icon) = self.describe(device).await;
         match self.shared.ask(name, address, icon, kind, ANSWER_TIMEOUT).await {
@@ -225,50 +246,61 @@ impl Agent {
         tracing::info!("bluetooth: pairing agent released by BlueZ");
     }
 
-    async fn request_pin_code(&self, device: OwnedObjectPath) -> Result<String, AgentError> {
+    async fn request_pin_code(&self, #[zbus(connection)] conn: &zbus::Connection, #[zbus(header)] header: zbus::message::Header<'_>, device: OwnedObjectPath) -> Result<String, AgentError> {
+        self.check(conn, &header).await?;
         match self.ask(&device, PairingKind::EnterPin).await? {
             PairingReply::Pin(_, pin) if valid_pin(&pin) => Ok(pin),
             _ => Err(AgentError::Rejected("no valid PIN".into())),
         }
     }
 
-    async fn display_pin_code(&self, device: OwnedObjectPath, pincode: String) -> Result<(), AgentError> {
+    async fn display_pin_code(&self, #[zbus(connection)] conn: &zbus::Connection, #[zbus(header)] header: zbus::message::Header<'_>, device: OwnedObjectPath, pincode: String) -> Result<(), AgentError> {
+        self.check(conn, &header).await?;
         let (name, address, icon) = self.describe(&device).await;
-        self.shared.show(name, address, icon, PairingKind::DisplayPin { pin: pincode });
+        self.shared.show(device.as_str(), name, address, icon, PairingKind::DisplayPin { pin: pincode }).await;
         Ok(())
     }
 
-    async fn request_passkey(&self, device: OwnedObjectPath) -> Result<u32, AgentError> {
+    async fn request_passkey(&self, #[zbus(connection)] conn: &zbus::Connection, #[zbus(header)] header: zbus::message::Header<'_>, device: OwnedObjectPath) -> Result<u32, AgentError> {
+        self.check(conn, &header).await?;
         match self.ask(&device, PairingKind::EnterPasskey).await? {
             PairingReply::Passkey(_, p) if p <= PASSKEY_MAX => Ok(p),
             _ => Err(AgentError::Rejected("no valid passkey".into())),
         }
     }
 
-    async fn display_passkey(&self, device: OwnedObjectPath, passkey: u32, entered: u16) {
+    async fn display_passkey(&self, #[zbus(connection)] conn: &zbus::Connection, #[zbus(header)] header: zbus::message::Header<'_>, device: OwnedObjectPath, passkey: u32, entered: u16) -> Result<(), AgentError> {
+        self.check(conn, &header).await?;
         let (name, address, icon) = self.describe(&device).await;
-        self.shared.show(name, address, icon, PairingKind::DisplayPasskey { passkey, entered });
+        self.shared.show(device.as_str(), name, address, icon, PairingKind::DisplayPasskey { passkey, entered }).await;
+        Ok(())
     }
 
-    async fn request_confirmation(&self, device: OwnedObjectPath, passkey: u32) -> Result<(), AgentError> {
-        self.ask(&device, PairingKind::Confirm { passkey }).await.map(|_| ())
+    async fn request_confirmation(&self, #[zbus(connection)] conn: &zbus::Connection, #[zbus(header)] header: zbus::message::Header<'_>, device: OwnedObjectPath, passkey: u32) -> Result<(), AgentError> {
+        self.check(conn, &header).await?;
+        self.ask_yes(&device, PairingKind::Confirm { passkey }).await
     }
 
-    async fn request_authorization(&self, device: OwnedObjectPath) -> Result<(), AgentError> {
-        self.ask(&device, PairingKind::Authorize).await.map(|_| ())
+    async fn request_authorization(&self, #[zbus(connection)] conn: &zbus::Connection, #[zbus(header)] header: zbus::message::Header<'_>, device: OwnedObjectPath) -> Result<(), AgentError> {
+        self.check(conn, &header).await?;
+        self.ask_yes(&device, PairingKind::Authorize).await
     }
 
-    async fn authorize_service(&self, device: OwnedObjectPath, uuid: String) -> Result<(), AgentError> {
-        self.ask(&device, PairingKind::AuthorizeService { uuid }).await.map(|_| ())
+    async fn authorize_service(&self, #[zbus(connection)] conn: &zbus::Connection, #[zbus(header)] header: zbus::message::Header<'_>, device: OwnedObjectPath, uuid: String) -> Result<(), AgentError> {
+        self.check(conn, &header).await?;
+        self.ask_yes(&device, PairingKind::AuthorizeService { uuid }).await
     }
 
-    fn cancel(&self) {
-        self.shared.cancel_all();
+    async fn cancel(&self, #[zbus(connection)] conn: &zbus::Connection, #[zbus(header)] header: zbus::message::Header<'_>) -> Result<(), AgentError> {
+        self.check(conn, &header).await?;
+        self.shared.cancel_all().await;
+        Ok(())
     }
 }
 
-/// Registers the agent (unless `enabled` is false) and serves it on the
-/// service runtime for the life of the shell.
+/// Serves the agent on the service runtime for the life of the shell and
+/// (re-)registers it with BlueZ whenever bluetoothd appears on the bus, so a
+/// bluetoothd that starts late or restarts does not leave pairing dead.
 pub fn spawn_pairing_agent(enabled: bool) -> PairingAgent {
     let (tx, events) = async_channel::bounded(EVENT_QUEUE);
     let shared = Arc::new(Shared::new(tx.clone()));
@@ -278,23 +310,50 @@ pub fn spawn_pairing_agent(enabled: bool) -> PairingAgent {
         return agent;
     }
     crate::runtime::spawn("bluetooth-agent", async move {
-        match register(shared).await {
-            Ok(conn) => {
-                tracing::info!("bluetooth: pairing agent registered");
-                let _ = tx.try_send(PairingEvent::Status(AgentStatus::Registered));
-                let _conn = conn;
-                std::future::pending::<()>().await;
-            }
+        let conn = match serve(shared).await {
+            Ok(conn) => conn,
             Err(e) => {
                 tracing::info!("bluetooth: pairing agent not registered ({e})");
-                let _ = tx.try_send(PairingEvent::Status(AgentStatus::Unavailable(e)));
+                crate::actor::send_event(&tx, PairingEvent::Status(AgentStatus::Unavailable(e)), "bluetooth pairing").await;
+                return;
+            }
+        };
+        let mut owners = crate::actor::owner_changes(&conn, "org.bluez").await.ok();
+        let mut last: Option<AgentStatus> = None;
+        loop {
+            let status = match register(&conn).await {
+                Ok(()) => {
+                    tracing::info!("bluetooth: pairing agent registered");
+                    AgentStatus::Registered
+                }
+                Err(e) => {
+                    tracing::info!("bluetooth: pairing agent not registered ({e})");
+                    AgentStatus::Unavailable(e)
+                }
+            };
+            let registered = status == AgentStatus::Registered;
+            if last.as_ref() != Some(&status) {
+                last = Some(status.clone());
+                crate::actor::send_event(&tx, PairingEvent::Status(status), "bluetooth pairing").await;
+            }
+            // Registered: wait for bluetoothd to come back (it forgets
+            // agents when it restarts). Not registered: also retry on a timer.
+            let retry = (!registered).then_some(REREGISTER_AFTER);
+            match owners.as_mut() {
+                Some(owners) => {
+                    if !crate::actor::wait_for_owner(owners, retry).await {
+                        return;
+                    }
+                }
+                None => crate::runtime::sleep(REREGISTER_AFTER).await,
             }
         }
     });
     agent
 }
 
-async fn register(shared: Arc<Shared>) -> Result<zbus::Connection, String> {
+/// The bus connection that serves the agent object.
+async fn serve(shared: Arc<Shared>) -> Result<zbus::Connection, String> {
     let agent = Agent { shared, conn: Mutex::new(None) };
     let builder = zbus::connection::Builder::system().and_then(|b| b.serve_at(AGENT_PATH, agent)).map_err(|e| e.to_string())?;
     let conn = crate::runtime::connect(builder).await.map_err(|e| e.to_string())?;
@@ -302,13 +361,18 @@ async fn register(shared: Arc<Shared>) -> Result<zbus::Connection, String> {
     if let Ok(iface) = conn.object_server().interface::<_, Agent>(AGENT_PATH).await {
         *iface.get().await.conn.lock() = Some(conn.clone());
     }
-    let manager = crate::actor::proxy(&conn, "org.bluez", "/org/bluez", "org.bluez.AgentManager1").await.map_err(|e| e.to_string())?;
+    Ok(conn)
+}
+
+/// Registers the served agent with BlueZ and asks to make it the default.
+async fn register(conn: &zbus::Connection) -> Result<(), String> {
+    let manager = crate::actor::proxy(conn, "org.bluez", "/org/bluez", "org.bluez.AgentManager1").await.map_err(|e| e.to_string())?;
     let path = OwnedObjectPath::try_from(AGENT_PATH).map_err(|e| e.to_string())?;
     manager.call::<_, _, ()>("RegisterAgent", &(path.clone(), CAPABILITY)).await.map_err(|e| e.to_string())?;
     if let Err(e) = manager.call::<_, _, ()>("RequestDefaultAgent", &(path,)).await {
         tracing::info!("bluetooth: agent registered but not default ({e})");
     }
-    Ok(conn)
+    Ok(())
 }
 
 /// A UI-only agent for `mandara msg bluetooth pairing-demo`: one fake
@@ -316,7 +380,7 @@ async fn register(shared: Arc<Shared>) -> Result<zbus::Connection, String> {
 pub fn demo_agent(kind: PairingKind) -> PairingAgent {
     let (tx, events) = async_channel::bounded(EVENT_QUEUE);
     let shared = Arc::new(Shared::new(tx));
-    shared.show("Demo headphones".into(), "00:11:22:33:44:55".into(), "audio-headset".into(), kind);
+    crate::runtime::block_on(shared.show("/demo", "Demo headphones".into(), "00:11:22:33:44:55".into(), "audio-headset".into(), kind));
     PairingAgent { events, shared }
 }
 
@@ -361,7 +425,36 @@ mod tests {
         assert!(matches!(events.try_recv().unwrap(), PairingEvent::Cancelled(_)));
         // BlueZ Cancel ends everything pending.
         shared.pending.lock().insert(7, async_channel::bounded(1).0);
-        shared.cancel_all();
+        crate::runtime::block_on(shared.cancel_all());
         assert_eq!(events.try_recv().unwrap(), PairingEvent::Cancelled(7));
+    }
+
+    /// `DisplayPasskey` fires per typed digit: one request id per device,
+    /// updated in place, and BlueZ `Cancel` clears it.
+    #[test]
+    fn display_requests_update_in_place_and_cancel() {
+        let (tx, events) = async_channel::bounded(EVENT_QUEUE);
+        let shared = Shared::new(tx);
+        let show = |path: &str, entered| crate::runtime::block_on(shared.show(path, "Kbd".into(), "AA".into(), String::new(), PairingKind::DisplayPasskey { passkey: 123456, entered }));
+        show("/dev_a", 0);
+        show("/dev_a", 1);
+        show("/dev_b", 0);
+        let id = |e: PairingEvent| match e {
+            PairingEvent::Request(r) => r.id,
+            other => panic!("expected a request, got {other:?}"),
+        };
+        let (first, second, other) = (id(events.try_recv().unwrap()), id(events.try_recv().unwrap()), id(events.try_recv().unwrap()));
+        assert_eq!(first, second, "the same device keeps one request id");
+        assert_ne!(first, other);
+        crate::runtime::block_on(shared.cancel_all());
+        let mut cancelled: Vec<u64> = (0..2)
+            .map(|_| match events.try_recv().unwrap() {
+                PairingEvent::Cancelled(id) => id,
+                other => panic!("expected a cancel, got {other:?}"),
+            })
+            .collect();
+        cancelled.sort();
+        assert_eq!(cancelled, vec![first.min(other), first.max(other)]);
+        assert!(shared.displays.lock().is_empty());
     }
 }

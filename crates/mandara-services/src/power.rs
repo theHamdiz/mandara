@@ -700,16 +700,17 @@ async fn run(tx: &async_channel::Sender<PowerState>, rx: &async_channel::Receive
     loop {
         let mut dirty = false;
         let mut command = None;
+        let (mut upower_ended, mut ppd_ended) = (false, false);
         {
             let upower_next = async {
                 match upower.as_mut() {
-                    Some(s) => s.next().await,
+                    Some(s) => s.next().await.ok_or(()),
                     None => futures::future::pending().await,
                 }
             };
             let ppd_next = async {
                 match ppd.as_mut() {
-                    Some(s) => s.next().await,
+                    Some(s) => s.next().await.ok_or(()),
                     None => futures::future::pending().await,
                 }
             };
@@ -718,11 +719,29 @@ async fn run(tx: &async_channel::Sender<PowerState>, rx: &async_channel::Receive
                     Ok(c) => command = Some(c),
                     Err(_) => return Ok(()), // every handle dropped
                 },
-                _ = upower_next.fuse() => dirty = true,
-                _ = ppd_next.fuse() => dirty = true,
+                // An ended stream (the bus dropped) must not be polled again:
+                // it would resolve instantly on every iteration.
+                n = upower_next.fuse() => {
+                    dirty = true;
+                    if n.is_err() {
+                        upower_ended = true;
+                    }
+                }
+                n = ppd_next.fuse() => {
+                    dirty = true;
+                    if n.is_err() {
+                        ppd_ended = true;
+                    }
+                }
                 _ = upower_devices.next() => dirty = true,
                 _ = futures::FutureExt::fuse(async_io::Timer::after(POLL)) => dirty = true,
             }
+        }
+        if upower_ended {
+            upower = None;
+        }
+        if ppd_ended {
+            ppd = None;
         }
         if let Some(Envelope { command, reply: r }) = command {
             let result = apply(&mut BusCaller { conn: &conn }, &state, &command).await;

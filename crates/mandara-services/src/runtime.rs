@@ -123,6 +123,46 @@ pub async fn sleep(duration: Duration) {
     async_io::Timer::after(duration).await;
 }
 
+/// Runs `future` for at most `duration`; `None` when the time ran out (the
+/// future is dropped). For D-Bus calls to peers that may hang.
+pub async fn timeout<T>(duration: Duration, future: impl Future<Output = T>) -> Option<T> {
+    use futures::FutureExt as _;
+    let future = future.fuse();
+    let timer = async_io::Timer::after(duration).fuse();
+    futures::pin_mut!(future, timer);
+    futures::select! {
+        value = future => Some(value),
+        _ = timer => None,
+    }
+}
+
+/// Exponentially growing retry delays for a service that keeps failing to
+/// connect (daemon absent, bus not ready).
+#[derive(Clone, Copy, Debug)]
+pub struct Backoff {
+    initial: Duration,
+    max: Duration,
+    next: Duration,
+}
+
+impl Backoff {
+    pub const fn new(initial: Duration, max: Duration) -> Self {
+        Self { initial, max, next: initial }
+    }
+
+    /// The delay to wait now; the next one is twice as long, up to the cap.
+    pub fn next_delay(&mut self) -> Duration {
+        let delay = self.next;
+        self.next = (self.next * 2).min(self.max);
+        delay
+    }
+
+    /// Starts over from the initial delay (the last attempt worked).
+    pub fn reset(&mut self) {
+        self.next = self.initial;
+    }
+}
+
 /// Drives a connection built without its internal executor on the runtime.
 fn drive(conn: &Connection) {
     // Only the executor is held: once the last `Connection` clone drops, its
@@ -181,6 +221,22 @@ mod tests {
             let _ = tx.send(v).await;
         });
         assert_eq!(block_on(rx.recv()).ok(), Some(42));
+    }
+
+    #[test]
+    fn backoff_doubles_up_to_its_cap_and_resets() {
+        let mut b = Backoff::new(Duration::from_secs(1), Duration::from_secs(5));
+        let delays: Vec<u64> = (0..5).map(|_| b.next_delay().as_secs()).collect();
+        assert_eq!(delays, [1, 2, 4, 5, 5]);
+        b.reset();
+        assert_eq!(b.next_delay(), Duration::from_secs(1));
+    }
+
+    #[test]
+    fn timeout_cuts_off_a_hung_future() {
+        let hung = block_on(timeout(Duration::from_millis(20), std::future::pending::<()>()));
+        assert_eq!(hung, None);
+        assert_eq!(block_on(timeout(Duration::from_secs(5), async { 7 })), Some(7));
     }
 
     #[test]

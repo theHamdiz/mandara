@@ -1,6 +1,7 @@
 //! Plasma owns secure locking on KWin, which does not expose ext-session-lock.
 //! A successful Lock reply is only a request; GetActive/ActiveChanged confirms it.
 
+use std::sync::Arc;
 use std::time::Duration;
 use futures::{FutureExt as _, StreamExt as _};
 use mandara_i18n::t;
@@ -38,21 +39,45 @@ pub fn lock() -> Result<bool, String> {
     })
 }
 
+/// One subscription's worth of [`watch`]; returns when the signal stream ends.
+async fn watch_once(on_change: &Arc<dyn Fn(bool) + Send + Sync>, backoff: &mut crate::runtime::Backoff) -> zbus::Result<()> {
+    let conn = crate::runtime::session().await?;
+    let proxy = crate::actor::proxy(&conn, DEST, PATH, DEST).await?;
+    let mut signals = proxy.receive_signal("ActiveChanged").await?;
+    let active: bool = proxy.call("GetActive", &()).await?;
+    backoff.reset();
+    notify(on_change, active).await;
+    while let Some(msg) = signals.next().await {
+        notify(on_change, msg.body().deserialize()?).await;
+    }
+    Ok(())
+}
+
+/// Calls `on_change` on the blocking pool: it may do real work.
+async fn notify(on_change: &Arc<dyn Fn(bool) + Send + Sync>, active: bool) {
+    let f = on_change.clone();
+    crate::runtime::unblock(move || f(active)).await;
+}
+
 /// Tracks real lock/unlock transitions without polling. This also observes
-/// locks started by Plasma's shortcuts and its own idle timer.
+/// locks started by Plasma's shortcuts and its own idle timer. A Plasma
+/// that is not up yet is retried with backoff.
 pub fn watch(on_change: impl Fn(bool) + Send + Sync + 'static) {
+    let on_change: Arc<dyn Fn(bool) + Send + Sync> = Arc::new(on_change);
     crate::runtime::spawn("plasma-lock", async move {
-        let result: zbus::Result<()> = async {
-            let conn = crate::runtime::session().await?;
-            let proxy = crate::actor::proxy(&conn, DEST, PATH, DEST).await?;
-            let mut signals = proxy.receive_signal("ActiveChanged").await?;
-            on_change(proxy.call("GetActive", &()).await?);
-            while let Some(msg) = signals.next().await {
-                on_change(msg.body().deserialize()?);
+        let mut backoff = crate::runtime::Backoff::new(Duration::from_secs(2), Duration::from_secs(120));
+        let mut warned = false;
+        loop {
+            if let Err(e) = watch_once(&on_change, &mut backoff).await {
+                if warned {
+                    tracing::debug!("Plasma lock notifications: {e}");
+                } else {
+                    warned = true;
+                    tracing::warn!("Plasma lock notifications: {e}");
+                }
             }
-            Ok(())
-        }.await;
-        if let Err(e) = result { tracing::warn!("Plasma lock notifications: {e}"); }
+            crate::runtime::sleep(backoff.next_delay()).await;
+        }
     });
 }
 

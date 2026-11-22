@@ -32,6 +32,12 @@ const UPDATE_QUEUE: usize = 8;
 const COMMAND_QUEUE: usize = 32;
 /// A stalled read must not prevent later resume or manual refresh requests.
 const STATE_TIMEOUT: Duration = Duration::from_secs(20);
+/// A property write or a quick call (power, discovery, disconnect, remove).
+const CALL_TIMEOUT: Duration = Duration::from_secs(15);
+/// `Connect` to a device that may be out of range.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+/// `Pair` waits for the user to answer the agent's dialog (up to 60 s).
+const PAIR_TIMEOUT: Duration = Duration::from_secs(75);
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct BluetoothDevice {
@@ -143,8 +149,10 @@ async fn run_with_signals(conn: &Connection, mut signals: zbus::MessageStream, t
     // otherwise a discovery burst can prevent the awaited reply from arriving.
     let (changed, changes) = async_channel::bounded(1);
     let pump = async move {
-        while signals.next().await.is_some() {
-            let _ = changed.try_send(());
+        while let Some(message) = signals.next().await {
+            if message.as_ref().is_ok_and(affects_state) {
+                let _ = changed.try_send(());
+            }
         }
         drop(changed);
         std::future::pending::<()>().await;
@@ -154,6 +162,30 @@ async fn run_with_signals(conn: &Connection, mut signals: zbus::MessageStream, t
     futures::select! {
         result = actor.fuse() => result,
         () = pump.fuse() => Ok(()),
+    }
+}
+
+/// Whether a BlueZ signal can change what [`read_state`] reports. Discovery
+/// floods `PropertiesChanged` with RSSI and advertising data nothing reads;
+/// those must not trigger a full `GetManagedObjects` rebuild.
+fn affects_state(message: &zbus::Message) -> bool {
+    let header = message.header();
+    if header.member().is_none_or(|m| m.as_str() != "PropertiesChanged") {
+        return true;
+    }
+    match message.body().deserialize::<(String, HashMap<String, OwnedValue>, Vec<String>)>() {
+        Ok((interface, changed, invalidated)) => changed.keys().chain(invalidated.iter()).any(|key| property_matters(&interface, key)),
+        Err(_) => true,
+    }
+}
+
+/// Whether `interface.key` is one `read_state` reads.
+fn property_matters(interface: &str, key: &str) -> bool {
+    match interface {
+        "org.bluez.Adapter1" => matches!(key, "Powered" | "Discovering" | "Address" | "Alias"),
+        "org.bluez.Device1" => matches!(key, "Alias" | "Name" | "Address" | "Paired" | "Connected" | "Trusted" | "Icon"),
+        "org.bluez.Battery1" => key == "Percentage",
+        _ => false,
     }
 }
 
@@ -406,8 +438,21 @@ pub fn plan(state: &BluetoothState, adapter_path: &str, command: &BluetoothComma
     })
 }
 
-/// Sends one planned call.
+/// How long one planned call may take before the actor moves on.
+fn call_timeout(op: &BlueOp) -> Duration {
+    match op {
+        BlueOp::Call { method: "Pair", .. } => PAIR_TIMEOUT,
+        BlueOp::Call { method: "Connect", .. } => CONNECT_TIMEOUT,
+        _ => CALL_TIMEOUT,
+    }
+}
+
+/// Sends one planned call, giving up when BlueZ or the device hangs.
 async fn send(conn: &Connection, op: &BlueOp, no_reply: bool) -> Result<()> {
+    runtime::timeout(call_timeout(op), send_inner(conn, op, no_reply)).await.unwrap_or_else(|| Err(anyhow!(mandara_i18n::t("Bluetooth did not respond in time"))))
+}
+
+async fn send_inner(conn: &Connection, op: &BlueOp, no_reply: bool) -> Result<()> {
     match op {
         BlueOp::SetBool { path, interface, property, value } => proxy(conn, BLUEZ, path, interface).await?.set_property(property, *value).await?,
         BlueOp::SetString { path, interface, property, value } => proxy(conn, BLUEZ, path, interface).await?.set_property(property, value.as_str()).await?,
@@ -498,6 +543,23 @@ mod tests {
         assert_eq!(ops(C::ConnectTrusted), [BlueOp::Call { path: "/org/bluez/hci0/dev_CC_DD".into(), interface: DEVICE_IFACE, method: "Connect" }]);
         assert!(ops(C::SetAutoConnect(true)).is_empty() && ops(C::SelectAdapter(None)).is_empty() && ops(C::Refresh).is_empty(), "actor-only commands touch nothing");
         assert!(plan(&st, a, &C::Connect("nope".into())).is_err());
+    }
+
+    #[test]
+    fn discovery_noise_does_not_trigger_a_rebuild() {
+        assert!(!property_matters("org.bluez.Device1", "RSSI"));
+        assert!(!property_matters("org.bluez.Device1", "ManufacturerData"));
+        assert!(!property_matters("org.bluez.MediaTransport1", "Volume"));
+        assert!(property_matters("org.bluez.Device1", "Connected"));
+        assert!(property_matters("org.bluez.Adapter1", "Discovering"));
+        assert!(property_matters("org.bluez.Battery1", "Percentage"));
+    }
+
+    #[test]
+    fn pairing_gets_the_longest_timeout() {
+        let call = |method| BlueOp::Call { path: String::new(), interface: DEVICE_IFACE, method };
+        assert!(call_timeout(&call("Pair")) > call_timeout(&call("Connect")));
+        assert!(call_timeout(&call("Connect")) > call_timeout(&call("Disconnect")));
     }
 
     #[test]

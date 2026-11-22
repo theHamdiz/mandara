@@ -187,6 +187,8 @@ const CONFIGURE_WAIT: Duration = Duration::from_millis(800);
 /// The housekeeping task wakes at least this often (history age, timed
 /// do not disturb, quiet hours).
 const HOUSEKEEPING: Duration = Duration::from_secs(60);
+/// Housekeeping wake-up when nothing is scheduled (a poke wakes it sooner).
+const HOUSEKEEPING_IDLE: Duration = Duration::from_secs(3600);
 /// `urgency` hint values (spec: 0 low, 1 normal, 2 critical).
 const URGENCY_LOW: u8 = 0;
 const URGENCY_CRITICAL: u8 = 2;
@@ -196,6 +198,9 @@ const EXPIRE_DEFAULT: i32 = -1;
 pub const INLINE_REPLY: &str = "inline-reply";
 /// Largest `image-data` accepted (pixels on a side).
 const IMAGE_DATA_MAX_SIDE: i32 = 1024;
+/// Cached `image-data` PNGs are kept this long, and at most this many.
+const IMAGE_CACHE_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 3600);
+const IMAGE_CACHE_MAX_FILES: usize = 200;
 const SECS_PER_HOUR: i64 = 3600;
 const BUS_NAME: &str = "org.freedesktop.Notifications";
 const OBJECT_PATH: &str = "/org/freedesktop/Notifications";
@@ -216,6 +221,9 @@ struct Shared {
     updates: async_channel::Sender<NotificationsState>,
     /// Wakes the persister (one pending wake-up is enough).
     persist: async_channel::Sender<()>,
+    /// Cancels the watcher waiting for the bus name behind another daemon
+    /// (dropped or closed when it is no longer wanted; at most one runs).
+    takeover: Mutex<Option<async_channel::Sender<()>>>,
 }
 
 /// An incoming notification before the policy runs.
@@ -228,8 +236,11 @@ struct Draft {
 
 impl Shared {
     fn publish(&self) {
-        let snapshot = self.state.lock().clone();
-        let _ = self.updates.try_send(snapshot);
+        // A full queue would drop the snapshot: don't clone the history for it.
+        if !self.updates.is_full() {
+            let snapshot = self.state.lock().clone();
+            let _ = self.updates.try_send(snapshot);
+        }
         let _ = self.persist.try_send(());
     }
 
@@ -427,12 +438,44 @@ fn save_image_data(v: &OwnedValue) -> Option<String> {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     rgba.hash(&mut hasher);
     let dir = image_dir();
-    std::fs::create_dir_all(&dir).ok()?;
+    crate::private_fs::create_dir(&dir).ok()?;
     let path = dir.join(format!("{:016x}.png", hasher.finish()));
-    if !path.exists() {
-        image::RgbaImage::from_raw(w as u32, h as u32, rgba)?.save(&path).ok()?;
+    if path.exists() {
+        // Seen again: keep it out of the age sweep.
+        if let Ok(file) = std::fs::File::options().write(true).open(&path) {
+            let _ = file.set_modified(std::time::SystemTime::now());
+        }
+    } else {
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::RgbaImage::from_raw(w as u32, h as u32, rgba)?.write_to(&mut png, image::ImageFormat::Png).ok()?;
+        crate::private_fs::write(&path, png.get_ref()).ok()?;
+        prune_images(&dir, IMAGE_CACHE_MAX_FILES, IMAGE_CACHE_MAX_AGE);
     }
     Some(path.to_string_lossy().into_owned())
+}
+
+/// Deletes cached notification images older than `max_age`, then the
+/// oldest ones beyond `max_files`.
+fn prune_images(dir: &std::path::Path, max_files: usize, max_age: Duration) {
+    let Ok(read) = std::fs::read_dir(dir) else { return };
+    let now = std::time::SystemTime::now();
+    let mut files: Vec<(std::time::SystemTime, PathBuf)> = read
+        .flatten()
+        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+        .filter(|(modified, path)| {
+            let stale = now.duration_since(*modified).is_ok_and(|age| age > max_age);
+            if stale {
+                let _ = std::fs::remove_file(path);
+            }
+            !stale
+        })
+        .collect();
+    if files.len() > max_files {
+        files.sort();
+        for (_, path) in &files[..files.len() - max_files] {
+            let _ = std::fs::remove_file(path);
+        }
+    }
 }
 
 #[interface(name = "org.freedesktop.Notifications")]
@@ -467,7 +510,11 @@ impl Server {
                 _ => Urgency::Normal,
             })
             .unwrap_or_default();
-        let image_data = ["image-data", "image_data", "icon_data"].iter().find_map(|k| hints.get(*k)).and_then(save_image_data);
+        // PNG encoding and the disk write must not run on an executor thread.
+        let image_data = match ["image-data", "image_data", "icon_data"].iter().find_map(|k| hints.get(*k)).and_then(|v| v.try_clone().ok()) {
+            Some(v) => crate::runtime::unblock(move || save_image_data(&v)).await,
+            None => None,
+        };
         let icon = image_data.or_else(|| hint_str(&hints, &["image-path", "image_path"])).unwrap_or(app_icon);
         let actions = actions.chunks(2).filter(|c| c.len() == 2).map(|c| (c[0].clone(), c[1].clone())).collect();
         let progress = hints.get("value").and_then(|v| i32::try_from(v.try_clone().ok()?).ok()).map(|v| v.clamp(0, 100) as u8);
@@ -545,14 +592,8 @@ fn load_history() -> Vec<Notification> {
 
 /// Writes the history atomically (temp file + rename).
 fn save_history(items: &[Notification]) -> std::io::Result<()> {
-    let path = history_path();
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
     let json = serde_json::to_vec(items).map_err(std::io::Error::other)?;
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, json)?;
-    std::fs::rename(tmp, path)
+    crate::private_fs::write_atomic(&mandara_config::paths::cache_dir(), "notifications.json", &json)
 }
 
 /// Persists the history after each burst of changes settles.
@@ -576,8 +617,19 @@ async fn housekeeper(shared: Arc<Shared>, poke: async_channel::Receiver<()>) {
         }
         // Sleep until the next minute boundary (quiet hours are HH:MM), or
         // until a command changes the schedule.
-        let secs = chrono::Local::now().timestamp().rem_euclid(HOUSEKEEPING.as_secs() as i64) as u64;
-        let wait = HOUSEKEEPING.saturating_sub(Duration::from_secs(secs));
+        let now = chrono::Local::now().timestamp();
+        let secs = now.rem_euclid(HOUSEKEEPING.as_secs() as i64) as u64;
+        let boundary = HOUSEKEEPING.saturating_sub(Duration::from_secs(secs));
+        // Without quiet hours or a history age limit only a timed do not
+        // disturb needs a wake-up; otherwise sleep until a command pokes.
+        let periodic = {
+            let p = shared.policy.lock();
+            p.cfg.quiet_hours || p.cfg.history_max_age_hours > 0
+        };
+        let mut wait = if periodic { boundary } else { HOUSEKEEPING_IDLE };
+        if let Some(until) = shared.state.lock().dnd_until {
+            wait = wait.min(Duration::from_secs(u64::try_from(until - now).unwrap_or(0).max(1)));
+        }
         futures::select! {
             _ = crate::runtime::sleep(wait).fuse() => {}
             r = poke.recv().fuse() => if r.is_err() { return },
@@ -596,26 +648,47 @@ async fn follow_daemon_setting(conn: &zbus::Connection, shared: &Arc<Shared>, wa
                 // Queued behind a daemon that refuses replacement (e.g.
                 // mako): take over as soon as it exits.
                 tracing::warn!("another notification daemon owns {BUS_NAME}; queued until it exits");
+                let mut slot = shared.takeover.lock();
+                if slot.as_ref().is_some_and(|c| !c.is_closed()) {
+                    return;
+                }
+                let (cancel, cancelled) = async_channel::bounded::<()>(1);
+                *slot = Some(cancel);
+                drop(slot);
                 let watcher = shared.clone();
                 let conn2 = conn.clone();
                 crate::runtime::spawn("notifications-takeover", async move {
-                    use futures::StreamExt;
-                    let Ok(dbus) = fdo::DBusProxy::new(&conn2).await else { return };
-                    let Ok(mut acquired) = dbus.receive_name_acquired().await else { return };
-                    while let Some(sig) = acquired.next().await {
-                        if sig.args().is_ok_and(|a| a.name() == BUS_NAME) {
-                            watcher.state.lock().active = true;
-                            watcher.publish();
-                            tracing::info!("now serving {BUS_NAME}");
-                            break;
+                    use futures::{FutureExt as _, StreamExt as _};
+                    async {
+                        let Ok(dbus) = fdo::DBusProxy::new(&conn2).await else { return };
+                        let Ok(mut acquired) = dbus.receive_name_acquired().await else { return };
+                        loop {
+                            futures::select! {
+                                _ = cancelled.recv().fuse() => return,
+                                sig = acquired.next().fuse() => {
+                                    let Some(sig) = sig else { return };
+                                    if sig.args().is_ok_and(|a| a.name() == BUS_NAME) {
+                                        watcher.state.lock().active = true;
+                                        watcher.publish();
+                                        tracing::info!("now serving {BUS_NAME}");
+                                        return;
+                                    }
+                                }
+                            }
                         }
                     }
+                    .await;
+                    // Done: a later toggle may start a new watcher.
+                    cancelled.close();
                 });
             }
             Err(err) => tracing::warn!("notifications: {err}"),
         }
     } else if !want {
         // Also leaves the queue when waiting behind another daemon.
+        if let Some(cancel) = shared.takeover.lock().take() {
+            cancel.close();
+        }
         if let Err(err) = conn.release_name(BUS_NAME).await {
             tracing::debug!("notifications: releasing {BUS_NAME}: {err}");
         }
@@ -639,6 +712,7 @@ pub fn spawn_notification_service() -> NotificationService {
             chimes: Mutex::new(0),
             updates: tx,
             persist,
+            takeover: Mutex::new(None),
         });
         crate::runtime::spawn("notifications-persist", persister(shared.clone(), persist_rx));
         let (house_tx, house_rx) = async_channel::bounded::<()>(1);
@@ -870,7 +944,7 @@ pub fn spawn_notification_service() -> NotificationService {
                 if let Some((id, text)) = &replied {
                     let _ = Server::notification_replied(em, *id, text).await;
                 }
-                for (id, reason) in closed.into_iter().filter(|(_, reason)| *reason != EXPIRED) {
+                for (id, reason) in closed {
                     let _ = Server::notification_closed(em, id, reason).await;
                 }
             }

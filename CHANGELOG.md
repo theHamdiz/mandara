@@ -6,6 +6,30 @@ About → What's new shows it too.
 
 ## Unreleased
 
+The shell's background services are sturdier: a stuck app or device no longer
+freezes the tray, Bluetooth or volume controls, and lost connections come back
+on their own.
+
+### Fixed
+
+- A tray app, Bluetooth device or sound server that stops answering no longer
+  freezes the tray, the Bluetooth panel or the volume controls: every call has
+  a time limit, and lost connections (Bluetooth agent, polkit agent, sleep and
+  lock watchers, audio, privacy indicators, clipboard history) reconnect with
+  growing delays instead of staying dead or retrying in a tight loop.
+- Bluetooth pairing prompts for PIN or passkey display update in place, only
+  an explicit *Accept* confirms a pairing, and the agent re-registers itself
+  when BlueZ restarts. The same goes for the polkit password prompt.
+- Opening a link or a drive no longer blocks the shell, and a lock request
+  with no lock screen listening reports an error instead of doing nothing.
+- Notification images and the clipboard history are stored private to you,
+  written less often, and old notification images are cleaned up.
+- Notifications that expire on their own are now reported as expired to the
+  app that sent them.
+- Mandara idles quieter: the power and sleep watchers no longer spin or poll,
+  Bluetooth no longer rebuilds its state on every scan result, and the
+  notification housekeeper sleeps until it has something to do.
+
 ## 0.37.0 — 2026-11-22
 
 Mandara speaks Italian: Studio, the shell and Mandara Login all follow

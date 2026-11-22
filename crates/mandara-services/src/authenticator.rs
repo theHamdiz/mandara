@@ -387,14 +387,15 @@ pub fn copy_secret(text: &str, clear_after: Option<Duration>) -> Result<(), Stri
     let generation = copy_generation().fetch_add(1, Ordering::SeqCst) + 1;
     let serving = Arc::new(AtomicBool::new(true));
     let (tx, rx) = std::sync::mpsc::channel();
-    let bytes = text.as_bytes().to_vec();
+    // Wiped when the serving thread ends (the library's own copies are out of reach).
+    let bytes = zeroize::Zeroizing::new(text.as_bytes().to_vec());
     let flag = serving.clone();
     std::thread::Builder::new()
         .name("mandara-otp-clipboard".into())
         .spawn(move || {
             let mut opts = Options::new();
             opts.foreground(true);
-            let text = |mime: &str| MimeSource { source: Source::Bytes(bytes.clone().into_boxed_slice()), mime_type: MimeType::Specific(mime.into()) };
+            let text = |mime: &str| MimeSource { source: Source::Bytes(bytes.to_vec().into_boxed_slice()), mime_type: MimeType::Specific(mime.into()) };
             let sources = vec![
                 text("text/plain;charset=utf-8"),
                 text("text/plain"),

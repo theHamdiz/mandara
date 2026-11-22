@@ -507,17 +507,22 @@ struct Shared {
 }
 
 impl Shared {
+    /// Queues without blocking the caller; a full queue is waited on in a
+    /// task (and the loss logged) instead of dropping the item silently.
+    fn queue<T: Send + 'static>(tx: &async_channel::Sender<T>, item: T, what: &'static str) {
+        if let Err(async_channel::TrySendError::Full(item)) = tx.try_send(item) {
+            let tx = tx.clone();
+            crate::runtime::spawn("keyring-prompt-queue", async move { crate::actor::send_event(&tx, item, what).await });
+        }
+    }
+
     /// Routes actions: UI events now, callbacks through the ordered queue
     /// (`after_reply`: issued from a method handler).
     fn dispatch(&self, actions: Vec<Action>, after_reply: bool) {
         for action in actions {
             match action {
-                Action::Ui(event) => {
-                    let _ = self.events.try_send(event);
-                }
-                other => {
-                    let _ = self.outgoing.try_send((other, after_reply));
-                }
+                Action::Ui(event) => Self::queue(&self.events, event, "keyring prompt"),
+                other => Self::queue(&self.outgoing, (other, after_reply), "keyring prompt callbacks"),
             }
         }
     }
@@ -586,8 +591,30 @@ async fn call_back(conn: &zbus::Connection, action: &Action) -> zbus::Result<()>
     }
 }
 
-/// Sends queued callbacks in order; a failed `PromptReady` drops the caller.
+/// Sends queued callbacks. Each caller has a worker of its own, so one that
+/// never answers stalls only its own callbacks (in order), not everyone's.
 async fn sender(conn: zbus::Connection, shared: Arc<Shared>, rx: async_channel::Receiver<(Action, bool)>) {
+    let mut workers: HashMap<CallerKey, async_channel::Sender<(Action, bool)>> = HashMap::new();
+    while let Ok((action, after_reply)) = rx.recv().await {
+        let key = match &action {
+            Action::Ready { key, .. } | Action::Done { key } => key.clone(),
+            Action::Ui(_) => continue,
+        };
+        let done = matches!(action, Action::Done { .. });
+        let tx = workers.entry(key.clone()).or_insert_with(|| {
+            let (tx, worker_rx) = async_channel::unbounded();
+            crate::runtime::spawn("keyring-prompt-callback", callback_worker(conn.clone(), shared.clone(), worker_rx));
+            tx
+        });
+        let _ = tx.send((action, after_reply)).await;
+        if done {
+            // Nothing follows a Done; the worker ends once it is sent.
+            workers.remove(&key);
+        }
+    }
+}
+
+async fn callback_worker(conn: zbus::Connection, shared: Arc<Shared>, rx: async_channel::Receiver<(Action, bool)>) {
     while let Ok((action, after_reply)) = rx.recv().await {
         if after_reply {
             crate::runtime::sleep(AFTER_REPLY).await;
@@ -615,6 +642,7 @@ pub fn spawn_keyring_prompt_at(address: &str) -> KeyringPrompter {
 fn spawn_with(enabled: bool, address: Option<String>) -> KeyringPrompter {
     let (events_tx, events) = async_channel::bounded(EVENT_QUEUE);
     let (replies, replies_rx) = async_channel::bounded::<KeyringReply>(REPLY_QUEUE);
+    let replies_closer = replies_rx.clone();
     let (stop, stop_rx) = async_channel::bounded::<()>(1);
     let handle = KeyringPrompter { events, replies, stop, stopped: Arc::default() };
     if !enabled {
@@ -672,6 +700,10 @@ fn spawn_with(enabled: bool, address: Option<String>) -> KeyringPrompter {
             }
         }
         let _ = conn.release_name(BUS_NAME).await;
+        // Let the helper tasks end and drop the object that holds `shared`.
+        shared.outgoing.close();
+        replies_closer.close();
+        let _ = conn.object_server().remove::<Prompter, _>(PROMPTER_PATH).await;
         tracing::info!("keyring prompt: stopped; {BUS_NAME} released");
         status(PrompterStatus::Disabled);
     });
