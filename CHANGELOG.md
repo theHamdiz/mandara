@@ -6,6 +6,8 @@ About → What's new shows it too.
 
 ## Unreleased
 
+## 0.37.1 — 2026-11-22
+
 Default fonts and opt-in system font sync, plus robustness and performance fixes across the shell, greeter, Studio, compositor drivers and vendored GPUI (Wayland buffer scale, lock screen, config safety, services, idle wake-ups, memory).
 
 ### New
