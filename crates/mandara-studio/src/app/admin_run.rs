@@ -42,13 +42,20 @@ fn run_within(prog: OsString, args: Vec<OsString>, deadline: Duration) -> Result
             Ok(Some(status)) => break status,
             Ok(None) if started.elapsed() >= deadline => {
                 // pkexec turns setuid-root after authorizing, so the kill can
-                // be refused: the child is reaped by a detached waiter either
-                // way, and the pipe readers end with it.
-                let _ = child.kill();
-                std::thread::spawn(move || {
-                    let _ = child.wait();
-                });
-                return Err(t("The administrator action took too long and was stopped").to_string());
+                // be refused. Only release the caller (clearing `busy`) once
+                // the child is actually gone: if kill fails, keep polling.
+                match child.kill() {
+                    Ok(()) => {
+                        std::thread::spawn(move || {
+                            let _ = child.wait();
+                        });
+                        return Err(t("The administrator action took too long and was stopped").to_string());
+                    }
+                    Err(_) => {
+                        std::thread::sleep(POLL);
+                        continue;
+                    }
+                }
             }
             Ok(None) => std::thread::sleep(POLL),
             Err(e) => return Err(e.to_string()),

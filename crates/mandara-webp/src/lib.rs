@@ -695,8 +695,10 @@ mod tests {
         // At the budget the size check passes (the buffer length is then what fails).
         assert!(check_size(7680, 4320, 7680 * 4320 * 3, 3).is_ok());
         assert!(check_size(7681, 4320, 7681 * 4320 * 3, 3).is_err());
+        // Exactly MAX_PIXELS on a long thin panorama; one more row is over budget.
+        assert!(check_size(16384, 2025, 16384 * 2025 * 3, 3).is_ok());
+        assert!(check_size(16384, 2048, 16384 * 2048 * 3, 3).is_err());
         // The side limit still applies below the area limit.
-        assert!(check_size(16384, 2048, 16384 * 2048 * 3, 3).is_ok());
         assert!(check_size(16385, 1, 16385 * 3, 3).is_err());
     }
 

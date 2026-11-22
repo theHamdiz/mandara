@@ -345,13 +345,22 @@ fn put_back(sys: &Sys, dir: &Path, f: &FileBackup) -> Result<(), String> {
             let bytes = std::fs::read(dir.join(copy)).map_err(|e| format!("{}: {e}", f.path.display()))?;
             write_file(sys, &f.path, &bytes, 0o644)
         }
-        // The file was new: remove what Mandara wrote (through a link, so a
-        // dangling link is left as it was).
-        None => match std::fs::remove_file(resolve_link(sys, &sys.path(&f.path))?) {
-            Ok(()) => Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(format!("{}: {e}", f.path.display())),
-        },
+        // The file was new: remove only what Mandara wrote. A symlink may
+        // have been retargeted since Apply — never delete a different file
+        // the link now names (hash must still match `after`).
+        None => {
+            let real = resolve_link(sys, &sys.path(&f.path))?;
+            if let Some(expected) = &f.after
+                && super::sha256_file(&real).as_ref() != Some(expected)
+            {
+                return Ok(());
+            }
+            match std::fs::remove_file(&real) {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(format!("{}: {e}", f.path.display())),
+            }
+        }
     }
 }
 
@@ -360,23 +369,29 @@ fn run_step(sys: &Sys, runner: &dyn Runner, step: &Step) -> Result<(), String> {
     let s = |p: &Path| p.display().to_string();
     match step {
         Step::GrubPreflight { mkconfig, check, cfg } | Step::GrubConfig { mkconfig, check, cfg } => {
-            let tmp = PathBuf::from(format!("{}.{GRUB_NEW_SUFFIX}", cfg.display()));
+            // Build and publish beside the resolved target so a grub.cfg that
+            // is a cross-filesystem symlink (separate /boot → root) still
+            // renames atomically (no EXDEV), and same-FS targets stay atomic.
+            let real = resolve_link(sys, &sys.path(cfg))?;
+            let tmp = real.with_file_name(format!(
+                ".{}.{GRUB_NEW_SUFFIX}",
+                real.file_name().unwrap_or_default().to_string_lossy()
+            ));
             let result = (|| {
-                runner.run(&[s(mkconfig), "-o".into(), s(&tmp)])?;
+                runner.run(&[s(mkconfig), "-o".into(), tmp.display().to_string()])?;
                 if let Some(check) = check {
-                    runner.run(&[s(check), s(&tmp)])?;
+                    runner.run(&[s(check), tmp.display().to_string()])?;
                 }
-                let text = std::fs::read_to_string(sys.path(&tmp)).map_err(|e| format!("{}: {e}", tmp.display()))?;
+                let text = std::fs::read_to_string(&tmp).map_err(|e| format!("{}: {e}", tmp.display()))?;
                 if !text.contains("menuentry") && !text.contains("blscfg") {
                     return Err(format!("{} has no boot entries, so it wasn't used", tmp.display()));
                 }
                 if matches!(step, Step::GrubConfig { .. }) {
-                    // A menu that is itself a link is replaced where it lives.
-                    std::fs::rename(sys.path(&tmp), resolve_link(sys, &sys.path(cfg))?).map_err(|e| format!("{}: {e}", cfg.display()))?;
+                    std::fs::rename(&tmp, &real).map_err(|e| format!("{}: {e}", cfg.display()))?;
                 }
                 Ok(())
             })();
-            let _ = std::fs::remove_file(sys.path(&tmp));
+            let _ = std::fs::remove_file(&tmp);
             result
         }
         Step::LimineEnroll { tool } => runner.run(&[s(tool)]).map(|_| ()),

@@ -724,7 +724,14 @@ pub fn install_with_policy(full_name: &str, vetting: &Vetting, progress: &dyn Fn
     std::fs::rename(&root, staging.path()).or_else(|_| copy_tree(&root, staging.path())).map_err(|e| e.to_string())?;
     std::fs::write(staging.path().join(".source"), format!("{full_name}\n{}\n", release.tag_name)).map_err(|e| e.to_string())?;
     let parked = staging_dir(&install_dir(), &id).map_err(|e| e.to_string())?;
-    swap_dir(staging.path(), &dest, parked.path())?;
+    if let Err(e) = swap_dir(staging.path(), &dest, parked.path()) {
+        // Restoration failed: persist the parked previous version so Drop
+        // cannot delete the only remaining copy.
+        if e.contains("kept at") {
+            let _ = parked.keep();
+        }
+        return Err(e.into());
+    }
     if let Some(old) = renamed {
         let _ = std::fs::remove_dir_all(old);
     }
@@ -741,6 +748,8 @@ pub(crate) fn staging_dir(parent: &Path, id: &str) -> std::io::Result<tempfile::
 
 /// Moves `staged` to `dest`, parking what was there in `parked` (an empty
 /// folder on the same filesystem) and putting it back if the move fails.
+/// When restoration also fails, the error names `parked` so the caller can
+/// keep that directory instead of letting a `TempDir` delete it.
 fn swap_dir(staged: &Path, dest: &Path, parked: &Path) -> Result<(), String> {
     let had_old = match std::fs::rename(dest, parked) {
         Ok(()) => true,
@@ -748,8 +757,14 @@ fn swap_dir(staged: &Path, dest: &Path, parked: &Path) -> Result<(), String> {
         Err(e) => return Err(format!("{}: {e}", dest.display())),
     };
     if let Err(e) = std::fs::rename(staged, dest) {
-        if had_old {
-            let _ = std::fs::rename(parked, dest);
+        if had_old
+            && let Err(re) = std::fs::rename(parked, dest)
+        {
+            return Err(format!(
+                "{}: {e}; also could not restore the previous version ({re}); kept at {}",
+                dest.display(),
+                parked.display()
+            ));
         }
         return Err(format!("{}: {e}", dest.display()));
     }

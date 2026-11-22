@@ -522,7 +522,15 @@ pub struct TempDir(tempfile::TempDir);
 
 impl TempDir {
     pub fn new() -> std::io::Result<TempDir> {
-        tempfile::Builder::new().prefix("mandara-install.").tempdir().map(TempDir)
+        use std::os::unix::fs::PermissionsExt as _;
+        // tempfile's default mode is 0777 before umask (often 0755). Mandara
+        // install scratch must stay owner-only from creation, with no window
+        // where another local user can traverse it.
+        tempfile::Builder::new()
+            .prefix("mandara-install.")
+            .permissions(std::fs::Permissions::from_mode(0o700))
+            .tempdir()
+            .map(TempDir)
     }
 
     pub fn path(&self) -> &Path {

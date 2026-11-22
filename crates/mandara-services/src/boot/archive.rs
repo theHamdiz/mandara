@@ -194,7 +194,7 @@ pub fn copy_tree(from: &Path, to: &Path, limits: Limits) -> Result<(), String> {
 /// resolved once, opened without links on the way and must belong to that
 /// account: a request can't point root at a folder it doesn't own.
 pub fn copy_tree_as(from: &Path, to: &Path, limits: Limits, owner: Option<u32>) -> Result<(), String> {
-    use rustix::fs::{AtFlags, Dir, FileType, Mode, OFlags, openat, statat};
+    use rustix::fs::{AtFlags, Dir, FileType, Mode, OFlags, fstat, openat, statat};
     use std::os::unix::ffi::{OsStrExt as _, OsStringExt as _};
     let root = open_confined(from, true, owner)?;
     if to.exists() {
@@ -202,6 +202,10 @@ pub fn copy_tree_as(from: &Path, to: &Path, limits: Limits, owner: Option<u32>) 
     }
     std::fs::create_dir_all(to).map_err(|e| format!("{}: {e}", to.display()))?;
     let mut budget = Budget { limits, entries: 0, total: 0 };
+    // Depth-first: one directory handle on the stack at a time for its
+    // children, so a wide tree cannot exhaust descriptors by holding every
+    // sibling open. I/O and resource errors propagate (never look like a
+    // successful partial copy that the boot helper would then delete).
     let mut stack = vec![(root, PathBuf::new())];
     while let Some((dir, rel)) = stack.pop() {
         let shown = from.join(&rel);
@@ -213,6 +217,9 @@ pub fn copy_tree_as(from: &Path, to: &Path, limits: Limits, owner: Option<u32>) 
             .map(std::ffi::OsString::from_vec)
             .collect();
         names.sort();
+        // Push directories in reverse so the first name is visited first
+        // (stack is LIFO) without holding every sibling fd at once.
+        let mut dirs = Vec::new();
         for name in names {
             budget.entry()?;
             let child = rel.join(&name);
@@ -220,13 +227,24 @@ pub fn copy_tree_as(from: &Path, to: &Path, limits: Limits, owner: Option<u32>) 
             let Ok(stat) = statat(&dir, name.as_bytes(), AtFlags::SYMLINK_NOFOLLOW) else { continue };
             match FileType::from_raw_mode(stat.st_mode) {
                 FileType::Directory => {
-                    if let Ok(fd) = openat(&dir, name.as_bytes(), OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC, Mode::empty()) {
-                        stack.push((fd, child));
+                    let fd = openat(&dir, name.as_bytes(), OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC, Mode::empty())
+                        .map_err(|e| format!("{}: {e}", from.join(&child).display()))?;
+                    if let Some(uid) = owner
+                        && fstat(&fd).map_err(|e| format!("{}: {e}", from.join(&child).display()))?.st_uid != uid
+                    {
+                        return Err(format!("{} doesn't belong to the account that asked for the change", from.join(&child).display()));
                     }
+                    dirs.push((fd, child));
                 }
                 FileType::RegularFile if kept(&child) => {
                     // NONBLOCK: a file swapped for a FIFO after the check can't stall the copy.
-                    let fd = openat(&dir, name.as_bytes(), OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC, Mode::empty()).map_err(|e| format!("{}: {e}", from.join(&child).display()))?;
+                    let fd = openat(&dir, name.as_bytes(), OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC, Mode::empty())
+                        .map_err(|e| format!("{}: {e}", from.join(&child).display()))?;
+                    if let Some(uid) = owner
+                        && fstat(&fd).map_err(|e| format!("{}: {e}", from.join(&child).display()))?.st_uid != uid
+                    {
+                        return Err(format!("{} doesn't belong to the account that asked for the change", from.join(&child).display()));
+                    }
                     let mut file = std::fs::File::from(fd);
                     if !file.metadata().is_ok_and(|m| m.is_file()) {
                         continue;
@@ -235,6 +253,9 @@ pub fn copy_tree_as(from: &Path, to: &Path, limits: Limits, owner: Option<u32>) 
                 }
                 _ => {}
             }
+        }
+        for entry in dirs.into_iter().rev() {
+            stack.push(entry);
         }
     }
     Ok(())
@@ -263,7 +284,7 @@ pub fn read_file_as(path: &Path, max: u64, owner: Option<u32>) -> Result<Vec<u8>
 /// then opened again refusing every link and checked to belong to `owner`,
 /// on the open handle (no race between the check and the use).
 fn open_confined(path: &Path, directory: bool, owner: Option<u32>) -> Result<std::os::fd::OwnedFd, String> {
-    use rustix::fs::{CWD, Mode, OFlags, ResolveFlags, fstat, open, openat2};
+    use rustix::fs::{Mode, OFlags, fstat, open};
     use rustix::io::Errno;
     let mut flags = OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC;
     if directory {
@@ -275,15 +296,7 @@ fn open_confined(path: &Path, directory: bool, owner: Option<u32>) -> Result<std
     };
     let fd = match owner {
         None => open(path, flags, Mode::empty()).map_err(not_found)?,
-        Some(_) => {
-            let resolved = std::fs::canonicalize(path).map_err(|e| format!("{}: {e}", path.display()))?;
-            match openat2(CWD, &resolved, flags, Mode::empty(), ResolveFlags::NO_SYMLINKS | ResolveFlags::NO_MAGICLINKS) {
-                Ok(fd) => fd,
-                // Kernels before 5.6 have no openat2: the resolved path has no links to follow.
-                Err(Errno::NOSYS) => open(&resolved, flags, Mode::empty()).map_err(not_found)?,
-                Err(e) => return Err(not_found(e)),
-            }
-        }
+        Some(_) => open_confined_owned(path, flags, &not_found)?,
     };
     if let Some(uid) = owner
         && fstat(&fd).map_err(|e| format!("{}: {e}", path.display()))?.st_uid != uid
@@ -291,6 +304,29 @@ fn open_confined(path: &Path, directory: bool, owner: Option<u32>) -> Result<std
         return Err(format!("{} doesn't belong to the account that asked for the change", path.display()));
     }
     Ok(fd)
+}
+
+/// Owner-constrained open: Linux/`openat2` refuses every symlink on the way.
+/// Other targets have no equivalent, so they refuse rather than fall back to
+/// an unchecked open (the FreeBSD CI builds this module).
+fn open_confined_owned(path: &Path, flags: rustix::fs::OFlags, not_found: &dyn Fn(rustix::io::Errno) -> String) -> Result<std::os::fd::OwnedFd, String> {
+    let resolved = std::fs::canonicalize(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        use rustix::fs::{CWD, Mode, ResolveFlags, open, openat2};
+        use rustix::io::Errno;
+        match openat2(CWD, &resolved, flags, Mode::empty(), ResolveFlags::NO_SYMLINKS | ResolveFlags::NO_MAGICLINKS) {
+            Ok(fd) => Ok(fd),
+            // Kernels before 5.6 have no openat2: the resolved path has no links to follow.
+            Err(Errno::NOSYS) => open(&resolved, flags, Mode::empty()).map_err(not_found),
+            Err(e) => Err(not_found(e)),
+        }
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    {
+        let _ = (resolved, flags, not_found);
+        Err(format!("{}: confined opens need Linux openat2", path.display()))
+    }
 }
 
 /// Every regular file under `dir`, relative, sorted (symlinks skipped).

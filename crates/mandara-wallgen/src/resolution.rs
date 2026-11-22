@@ -176,7 +176,9 @@ mod tests {
         assert_eq!(Resolution::from_id("7680x4320"), Some(Resolution::Uhd8k));
         assert!(Resolution::from_id("7681x4320").is_none());
         assert!(Resolution::from_id("16384x16384").is_none());
-        assert!(Resolution::from_id("16384x2048").is_some(), "32M px: long thin panorama fits");
+        // Exactly MAX_PIXELS (16384×2025): long thin panorama fits; one more row does not.
+        assert!(Resolution::from_id("16384x2025").is_some(), "MAX_PIXELS panorama fits");
+        assert!(Resolution::from_id("16384x2048").is_none(), "over MAX_PIXELS panorama is refused");
         // The side limit still applies below the area limit.
         assert!(Resolution::from_id("16385x16").is_none());
         // Hand-built or deserialized sizes are shrunk, never rendered oversized.

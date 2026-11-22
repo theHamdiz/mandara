@@ -128,8 +128,23 @@ fn replace_all(items: &[(&Path, &Path)], aside: &Path) -> Result<(), String> {
         for dest in placed.iter().rev() {
             let _ = if dest.is_dir() { std::fs::remove_dir_all(dest) } else { std::fs::remove_file(dest) };
         }
+        let mut restore_err: Option<String> = None;
         for (dest, old) in parked.iter().rev() {
-            let _ = std::fs::rename(old, dest);
+            if let Err(e) = std::fs::rename(old, dest) {
+                // Keep the parked theme outside `aside` (often under Scratch)
+                // so Drop cannot delete the only remaining previous stage.
+                let keep = aside.with_extension(format!("recover-{}", old.file_name().and_then(|n| n.to_str()).unwrap_or("stage")));
+                let kept = std::fs::rename(old, &keep).is_ok();
+                restore_err = Some(if kept {
+                    format!("{}: could not restore previous stage ({e}); kept at {}", dest.display(), keep.display())
+                } else {
+                    format!("{}: could not restore previous stage from {}: {e}", dest.display(), old.display())
+                });
+                break;
+            }
+        }
+        if let Some(e) = restore_err {
+            return Err(e);
         }
     }
     result

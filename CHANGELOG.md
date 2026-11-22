@@ -32,7 +32,11 @@ Default fonts and opt-in system font sync, plus robustness and performance fixes
   as soon as Pulse is back; turning clipboard persistence off deletes the file
   immediately; font-sync ownership survives unreadable records; polkit, sleep
   inhibitors, tray registration and notification expiry handle the edge cases
-  CodeRabbit flagged on the review stages.
+  CodeRabbit flagged on the review stages. Boot-theme and marketplace installs
+  keep previous versions when a rollback fails; install temp dirs are 0700;
+  GRUB menus publish beside their resolved target; confined tree copies check
+  ownership on every file; FreeBSD builds gate Linux `openat2`; wallpaper size
+  tests match the pixel budget.
 
 - **The bar no longer vanishes for good on Umbriel and other wlroots
   compositors.** A window with a half-pixel size at a 2× buffer scale made

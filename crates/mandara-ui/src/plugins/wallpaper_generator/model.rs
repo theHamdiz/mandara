@@ -259,7 +259,11 @@ mod tests {
         assert_eq!(resolution(WallgenSize::Display, (0, 0), None), Resolution::Uhd4k, "unknown display: plain 4K");
         assert_eq!(resolution(WallgenSize::Uhd8k, (0, 0), Some((1080, 1920))), Resolution::Uhd8k);
         assert_eq!(resolution(WallgenSize::Custom, (3000, 2000), None).size(), (3000, 2000));
-        assert_eq!(resolution(WallgenSize::Custom, (1, 1), None), Resolution::default(), "an invalid custom size falls back");
+        assert_eq!(
+            resolution(WallgenSize::Custom, (1, 1), None),
+            Resolution::custom(1, 1),
+            "an undersized custom size is clamped, not replaced by the default preset"
+        );
         let mut s = WallgenSettings::default();
         assert_eq!(video_resolution(&s, Some((1920, 1200))), Resolution::Fhd1080, "loops default to plain 1080p");
         s.video.size = WallgenSize::Display;
