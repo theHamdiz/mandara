@@ -283,9 +283,11 @@ fixed:
 
 `language` (Jannah, Qur'an, Hadith, Prayer times) is `follow` (Mandara's
 language) or a language code (`en`, `ar`, `fa`, `ur`, `es`, `pt`, `fr`,
-`de`, `tr`, `ru`, `hi`, `mr`, `bn`, `te`, `id`, `sw`, `vi`, `zh`, `ja`,
-`ko`): that plugin's surfaces and the meanings it shows switch to it, the
-rest of the shell keeps its own.
+`it`, `de`, `tr`, `ru`, `hi`, `mr`, `bn`, `te`, `id`, `sw`, `vi`, `zh`, `ja`,
+`ko`): that plugin's surfaces switch to it, and so do the meanings when an
+edition exists for that language (Qur'an has Italian via Piccardo; Hadith
+has no Italian edition, so it keeps English meanings and labels them as
+English). The rest of the shell keeps its own language.
 
 Older plugin settings (weather, prayer times, pomodoro, screenshot and
 recording, updates, world clock, power history, media lyrics, visualizer,
@@ -328,7 +330,7 @@ setting the shell reads has a control.
 3. A registry entry (`crates/mandara-studio/src/registry*.rs`) on the right
    page; plugin keys go in the plugin's group so they appear in its modal.
 4. Translate the label and help (`MANDARA_I18N_DUMP=1 cargo test -p
-   mandara-i18n`, then the nineteen catalogs in `crates/mandara-i18n/locales`).
+   mandara-i18n`, then the twenty catalogs in `crates/mandara-i18n/locales`).
 
 Built-in code can borrow text with `PluginsConfig::setting_str`, or use
 `setting_or_else` when constructing a typed fallback is expensive. The latter

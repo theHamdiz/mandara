@@ -20,7 +20,7 @@ fn the_readme_keeps_its_images_badges_and_gallery_layout() {
     }
     // Includes source URLs, alt text, scheme variants, cell widths and tag order.
     // Update only when a deliberate visual change has been reviewed.
-    assert_eq!(format!("{:x}", Sha256::digest(tags.join("\n"))), "5f55f03a65cbc039a1a4b2066eccd2fbc1d49345ed1e82914c612293bc9ebf0d");
+    assert_eq!(format!("{:x}", Sha256::digest(tags.join("\n"))), "457b70b6c22606f484cf7e0bf2622fdf69622dae270e07c88f58ddf57a07f8b7");
 }
 
 fn section<'a>(source: &'a str, heading: &str) -> &'a str {

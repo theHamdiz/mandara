@@ -547,7 +547,7 @@ calendar events and account data are not available to these widgets.
 1080-pixel-tall reference screen and scale with the output.
 
 ```toml
-language = "auto"                # or en, ar, fa, ur, es, pt, fr, de, tr, ru, hi, mr, bn, te, id, sw, vi, zh, ja, ko
+language = "auto"                # or en, ar, fa, ur, es, pt, fr, it, de, tr, ru, hi, mr, bn, te, id, sw, vi, zh, ja, ko
 
 [background]
 user_wallpaper = true            # the picked person's own wallpaper, when shared

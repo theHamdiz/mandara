@@ -360,7 +360,7 @@ script.
 These four opt-in plugins share these things (the last two are for Jannah, the Qur'an and Hadith):
 
 - **Their own language.** Each has a *Language* setting in Studio →
-  Plugins (`language`: *Follow Mandara*, or one of Mandara's twenty
+  Plugins (`language`: *Follow Mandara*, or one of Mandara's twenty-one
   languages; `mandara msg <jannah|quran|hadith|prayer> language ar`). Its
   panel, bar item, sidebar card and desktop widgets, the meanings and
   prayer names it shows, and its reading direction (Arabic reads right to

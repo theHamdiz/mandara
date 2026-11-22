@@ -246,6 +246,16 @@ fn portuguese_marathi_vietnamese_telugu_and_swahili() {
     }
 }
 
+#[test]
+fn italian() {
+    // Italy's and Switzerland's Italian both select it; dates follow `it_IT`.
+    for env in ["it_IT.UTF-8", "it_CH", "it-IT", "it"] {
+        assert_eq!(Lang::from_code(env), Some(Lang::It), "{env}");
+    }
+    assert!(!Lang::It.is_rtl());
+    assert_eq!((Lang::It.posix(), Lang::It.native_name()), ("it_IT", "Italiano"));
+}
+
 /// `lang`'s source catalog (`locales/<code>.toml`).
 fn source_catalog(lang: Lang) -> Catalog {
     let path = packs::source_catalog(lang);

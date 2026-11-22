@@ -38,7 +38,7 @@
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/GPU-GPUI%20%C2%B7%20wgpu%20%C2%B7%20Vulkan-8B5CF6?labelColor=0B1026" alt="GPU rendered"/></a>
   <a href="docs/install.md#compositors"><img src="https://img.shields.io/badge/MangoWM%20%C2%B7%20Niri%20%C2%B7%20Hyprland%20%C2%B7%20Umbriel%20%C2%B7%20Sway%20%C2%B7%20River%20Classic%20%C2%B7%20KWin%20%C2%B7%20Aqueous%20%C2%B7%20labwc%20%C2%B7%20COSMIC-first--class-22D3EE?labelColor=0B1026" alt="MangoWM, Niri, Hyprland, Umbriel, Sway, River Classic, KWin, Aqueous, labwc, COSMIC"/></a>
   <a href="docs/plugins.md"><img src="https://img.shields.io/badge/plugins-88%20built--in%20%2B%20WebAssembly-8B5CF6?labelColor=0B1026" alt="88 built-in plugins plus WebAssembly"/></a>
-  <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-20%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="20 languages"/></a>
+  <a href="docs/languages.md"><img src="https://img.shields.io/badge/languages-21%20%C2%B7%20RTL%20Arabic%2C%20Persian%2C%20Urdu-22D3EE?labelColor=0B1026" alt="21 languages"/></a>
   <br/>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/resources-measured-2DD4BF?labelColor=0B1026" alt="Resource measurements and current limits"/></a>
   <a href="docs/performance.md"><img src="https://img.shields.io/badge/historical%20VRAM-under%20210%20MiB-2DD4BF?labelColor=0B1026" alt="Historical VRAM measurement under 210 MiB; current use may differ"/></a>
@@ -102,7 +102,7 @@ and tick off tasks where they sit.
 | **Automation** | JSON replies through `mandara msg`; the full catalog in `mandara commands --json` |
 | **Plugins** | 88 built in, plus third-party Rust plugins in sandboxed WebAssembly |
 | **Widgets** | Mechanical, word and binary clocks, calendars and weather dials; passive widgets work on lock and login screens too |
-| **Languages** | 20, including right-to-left Arabic, Persian and Urdu |
+| **Languages** | 21, including right-to-left Arabic, Persian and Urdu |
 | **License** | GPL-3.0-or-later |
 
 ## What sets Mandara apart
@@ -173,7 +173,7 @@ and tick off tasks where they sit.
     Studio. The Updates panel also handles system and AUR packages with live
     progress and Mandara's password dialog, plus NixOS generations.
     [System updates](docs/apps-and-updates.md#system-updates).
-12. **At home in your language.** Twenty interface languages, fonts chosen
+12. **At home in your language.** Twenty-one interface languages, fonts chosen
     for each script, right-to-left Arabic, Persian and Urdu, and a live
     keyboard-layout badge.
 
