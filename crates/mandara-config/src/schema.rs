@@ -1572,6 +1572,34 @@ fn ids(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| s.to_string()).collect()
 }
 
+/// Opt-in push of Mandara's typefaces to the desktop (fontconfig, GTK, Qt,
+/// KDE, browsers). Off by default; per-target switches refine what the
+/// master enables.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FontSyncConfig {
+    /// Master switch. When off, Mandara restores anything it wrote.
+    pub enabled: bool,
+    /// `~/.config/fontconfig/conf.d/50-mandara-fonts.conf` aliases.
+    pub fontconfig: bool,
+    /// GTK 3 / 4 `settings.ini` and `gsettings` interface fonts.
+    pub gtk: bool,
+    /// qt5ct / qt6ct `[Fonts]` when those configs already exist.
+    pub qt: bool,
+    /// `kdeglobals` `[General]` font keys.
+    pub kde: bool,
+    /// Same fontconfig aliases web browsers honour on Linux.
+    pub browsers: bool,
+}
+
+impl Default for FontSyncConfig {
+    fn default() -> Self {
+        // Targets default on so enabling the master covers the desktop in
+        // one click; they stay unused while `enabled` is false.
+        Self { enabled: false, fontconfig: true, gtk: true, qt: true, kde: true, browsers: true }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TypographyConfig {
@@ -1596,6 +1624,8 @@ pub struct TypographyConfig {
     pub scale: f32,
     /// Weight of body text (CSS scale, 100–900; 400 = regular).
     pub weight: u16,
+    /// Push Mandara's families to the rest of the desktop (opt-in).
+    pub sync: FontSyncConfig,
 }
 
 impl TypographyConfig {
@@ -1610,8 +1640,8 @@ impl Default for TypographyConfig {
         Self {
             ui_font: "Inter".into(),
             display_font: "Alexandria".into(),
-            arabic_font: "Cairo".into(),
-            mono_font: "JetBrains Mono".into(),
+            arabic_font: "Alexandria".into(),
+            mono_font: "CaskaydiaCove Nerd Font Mono".into(),
             bar_font: String::new(),
             panels_font: String::new(),
             studio_font: String::new(),
@@ -1620,6 +1650,7 @@ impl Default for TypographyConfig {
             widgets_font: String::new(),
             scale: 1.0,
             weight: defaults::FONT_WEIGHT_REGULAR,
+            sync: FontSyncConfig::default(),
         }
     }
 }

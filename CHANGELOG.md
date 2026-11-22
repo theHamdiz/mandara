@@ -6,6 +6,25 @@ About → What's new shows it too.
 
 ## Unreleased
 
+Mandara's default typefaces are Inter, Alexandria (including Arabic) and
+CaskaydiaCove Nerd Font Mono, with Nerd Font substitutes until Maintenance
+downloads the real face. Opt-in system font sync can push those families to
+fontconfig, GTK, Qt, KDE and browsers.
+
+### New
+
+- **Default fonts match Studio's Families.** New installs use *Inter*,
+  *Alexandria* (UI display and Arabic) and *CaskaydiaCove Nerd Font Mono*.
+  When that Nerd Font is missing, the shell substitutes another installed
+  Nerd Font mono (or Cascadia / JetBrains Mono). Studio → Maintenance →
+  Mandara fonts warns and can Download / install CaskaydiaCove from the
+  official Nerd Fonts archive into `~/.local/share/fonts/mandara`, then
+  refreshes the font cache.
+- **System font sync (opt-in).** Studio → Typography → System fonts can push
+  Mandara's interface and monospace faces to fontconfig (and browsers that
+  follow it), GTK, Qt and KDE, with a master switch and per-target toggles.
+  Off by default; turning a target off restores what Mandara changed.
+
 ## 0.37.0 — 2026-11-22
 
 Mandara speaks Italian: Studio, the shell and Mandara Login all follow

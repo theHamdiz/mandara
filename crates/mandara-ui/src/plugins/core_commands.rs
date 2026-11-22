@@ -492,6 +492,21 @@ pub fn register(r: &mut PluginRegistry) {
     );
     r.command(
         core,
+        CommandSpec::new("fonts sync", mandara_i18n::tk("Apply or restore Mandara's system font sync (typography.sync) now"), |_, cx| {
+            let cfg = config(cx).read(cx).get().clone();
+            let env = mandara_services::font_sync::ApplyEnv::current();
+            let report = mandara_services::font_sync::reconcile(&cfg, &env, &mandara_services::font_sync::FontGsettingsCommand)?;
+            Ok(json!({
+                "enabled": cfg.typography.sync.enabled,
+                "active": mandara_services::font_sync::active(&env),
+                "changed": report.changed,
+                "kept": report.kept,
+            }))
+        })
+        .example("fonts sync"),
+    );
+    r.command(
+        core,
         CommandSpec::new("theme current", mandara_i18n::tk("Describe the active theme"), |_, cx| {
             let cfg = config(cx).read(cx).snapshot();
             let theme = mandara_core::theme_entity(cx);

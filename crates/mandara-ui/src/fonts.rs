@@ -160,11 +160,25 @@ pub fn pick_hadith(installed: &[String], arabic: &SharedString) -> SharedString 
 /// Monospace families tried after the configured one, best first. GPUI
 /// resolves fonts by family *name*, so a generic `monospace` never matches:
 /// without one of these the code would fall back to the UI's sans font.
+///
+/// Prefer other Nerd Font monospace faces when CaskaydiaCove is missing, then
+/// Cascadia / JetBrains, so icons and code keep a close substitute until
+/// Maintenance downloads the Mandara default.
 pub const MONO_FALLBACKS: &[&str] = &[
-    "JetBrains Mono",
+    "CaskaydiaCove Nerd Font Mono",
+    "CaskaydiaCove Nerd Font",
+    "CaskaydiaCove NF",
+    "JetBrainsMono Nerd Font Mono",
     "JetBrainsMono Nerd Font",
-    "Fira Code",
+    "JetBrainsMono Nerd Font Propo",
+    "MesloLGS Nerd Font Mono",
+    "MesloLGM Nerd Font Mono",
+    "SauceCodePro Nerd Font Mono",
+    "FiraCode Nerd Font Mono",
+    "Cascadia Mono",
     "Cascadia Code",
+    "JetBrains Mono",
+    "Fira Code",
     "Source Code Pro",
     "Hack",
     "Noto Sans Mono",
@@ -206,7 +220,7 @@ impl Fonts {
         let ui = pick(&installed, &cfg.ui_font, &UI_FALLBACKS);
         let surface = |family: &str| if family.trim().is_empty() { ui.clone() } else { pick(&installed, family.trim(), &UI_FALLBACKS) };
         let display = display_family(&installed, &cfg.display_font);
-        let arabic = pick(&installed, &cfg.arabic_font, &["Cairo", "Alexandria", "Noto Sans Arabic", "Noto Naskh Arabic"]);
+        let arabic = pick(&installed, &cfg.arabic_font, &["Alexandria", "Cairo", "Noto Sans Arabic", "Noto Naskh Arabic"]);
         Self {
             bar: surface(&cfg.bar_font),
             panels: surface(&cfg.panels_font),
@@ -305,12 +319,15 @@ mod tests {
         let installed: Vec<String> = ["Inter", "DejaVu Sans Mono", "Noto Sans Mono"].iter().map(|s| s.to_string()).collect();
         // The configured family wins when installed (any case).
         assert_eq!(pick_mono(&installed, "dejavu sans mono", || None).as_ref(), "DejaVu Sans Mono");
-        // A missing JetBrains Mono falls to an installed monospace family,
-        // never to a name GPUI can't load (which draws the sans UI font).
-        assert_eq!(pick_mono(&installed, "JetBrains Mono", || panic!("not needed")).as_ref(), "Noto Sans Mono");
+        // A missing CaskaydiaCove falls to another Nerd Font when present.
+        let with_nerd: Vec<String> = ["Inter", "JetBrainsMono Nerd Font Mono"].iter().map(|s| (*s).to_string()).collect();
+        assert_eq!(pick_mono(&with_nerd, "CaskaydiaCove Nerd Font Mono", || panic!("not needed")).as_ref(), "JetBrainsMono Nerd Font Mono");
+        // Else an installed monospace family, never a name GPUI can't load
+        // (which would draw the sans UI font).
+        assert_eq!(pick_mono(&installed, "CaskaydiaCove Nerd Font Mono", || panic!("not needed")).as_ref(), "Noto Sans Mono");
         let bare: Vec<String> = vec!["Inter".into()];
-        assert_eq!(pick_mono(&bare, "JetBrains Mono", || Some("Terminus".into())).as_ref(), "Terminus");
-        assert_eq!(pick_mono(&bare, "JetBrains Mono", || None).as_ref(), "JetBrains Mono");
+        assert_eq!(pick_mono(&bare, "CaskaydiaCove Nerd Font Mono", || Some("Terminus".into())).as_ref(), "Terminus");
+        assert_eq!(pick_mono(&bare, "CaskaydiaCove Nerd Font Mono", || None).as_ref(), "CaskaydiaCove Nerd Font Mono");
     }
 
     #[test]

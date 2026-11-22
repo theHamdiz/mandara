@@ -217,6 +217,7 @@ pub fn init_hub(cx: &mut App) -> Entity<Hub> {
     crate::wallpaper::init_theme_sync(cx);
     crate::wallpaper::init_login_share(cx);
     crate::state::init_app_theme_sync(cx);
+    crate::font_sync::init_font_sync(cx);
     crate::theme_auto::init(cx);
     crate::state::init_language(cx);
     crate::plugins::external::watch(cx);

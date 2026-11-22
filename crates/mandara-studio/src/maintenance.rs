@@ -96,39 +96,133 @@ fn target() -> Option<Target> {
     mandara_compositor::detected().map(mandara_compositor::CompositorKind::target)
 }
 
-/// A font Mandara's design uses, downloadable from Google Fonts (OFL).
-pub struct Font {
-    pub family: &'static str,
-    pub file: &'static str,
-    pub url: &'static str,
-    pub size: u64,
+/// How a font is packaged for download.
+#[derive(Clone, Copy, Debug)]
+pub enum FontPackage {
+    /// A single `.ttf` / variable font file written as [`Font::file`].
+    File,
+    /// A Nerd Fonts `.tar.xz` (CascadiaCode): Mono faces unpack into [`fonts_dir`].
+    NerdTarXz,
 }
 
-/// Largest font file accepted from the download (16 MiB).
+/// A font Mandara's design uses, downloadable (OFL / OFL-compatible).
+pub struct Font {
+    pub family: &'static str,
+    /// Marker file under [`fonts_dir`] once installed (or the sole `.ttf`).
+    pub file: &'static str,
+    pub url: &'static str,
+    /// Expected download size (progress total; archive or file).
+    pub size: u64,
+    pub package: FontPackage,
+    /// Extra family names fontconfig may report for the same faces.
+    pub aliases: &'static [&'static str],
+}
+
+/// Largest font download accepted (Nerd Font CascadiaCode.tar.xz is ~3.5 MiB).
 const FONT_MAX_BYTES: u64 = 16 << 20;
-/// Whole-request timeout of a font download.
-const DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+/// Whole-request timeout of a font download (archives need a little longer).
+const DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+/// Mono faces extracted from CascadiaCode.tar.xz (Nerd Fonts v3.5.1).
+const CASKAYDIA_MONO_MEMBERS: &[&str] = &[
+    "CaskaydiaCoveNerdFontMono-Regular.ttf",
+    "CaskaydiaCoveNerdFontMono-Bold.ttf",
+    "CaskaydiaCoveNerdFontMono-Italic.ttf",
+    "CaskaydiaCoveNerdFontMono-BoldItalic.ttf",
+    "CaskaydiaCoveNerdFontMono-Light.ttf",
+    "CaskaydiaCoveNerdFontMono-LightItalic.ttf",
+    "CaskaydiaCoveNerdFontMono-SemiBold.ttf",
+    "CaskaydiaCoveNerdFontMono-SemiBoldItalic.ttf",
+    "CaskaydiaCoveNerdFontMono-SemiLight.ttf",
+    "CaskaydiaCoveNerdFontMono-SemiLightItalic.ttf",
+    "CaskaydiaCoveNerdFontMono-ExtraLight.ttf",
+    "CaskaydiaCoveNerdFontMono-ExtraLightItalic.ttf",
+];
 
 pub const FONTS: &[Font] = &[
-    Font { family: "Inter", file: "Inter[opsz,wght].ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf", size: 876_576 },
-    Font { family: "Cairo", file: "Cairo[slnt,wght].ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/Cairo%5Bslnt,wght%5D.ttf", size: 599_548 },
-    Font { family: "Alexandria", file: "Alexandria[wght].ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/alexandria/Alexandria%5Bwght%5D.ttf", size: 332_488 },
-    Font { family: "JetBrains Mono", file: "JetBrainsMono[wght].ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf", size: 187_208 },
+    Font {
+        family: "Inter",
+        file: "Inter[opsz,wght].ttf",
+        url: "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf",
+        size: 876_576,
+        package: FontPackage::File,
+        aliases: &[],
+    },
+    Font {
+        family: "Alexandria",
+        file: "Alexandria[wght].ttf",
+        url: "https://raw.githubusercontent.com/google/fonts/main/ofl/alexandria/Alexandria%5Bwght%5D.ttf",
+        size: 332_488,
+        package: FontPackage::File,
+        aliases: &[],
+    },
+    // Default monospace. Missing → shell substitutes another Nerd Font /
+    // Cascadia / JetBrains; Download unpacks the Nerd Fonts archive.
+    Font {
+        family: "CaskaydiaCove Nerd Font Mono",
+        file: "CaskaydiaCoveNerdFontMono-Regular.ttf",
+        url: "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/CascadiaCode.tar.xz",
+        size: 3_592_604,
+        package: FontPackage::NerdTarXz,
+        aliases: &["CaskaydiaCove Nerd Font", "CaskaydiaCove NF", "CaskaydiaCove Nerd Font Propo"],
+    },
+    Font {
+        family: "Cairo",
+        file: "Cairo[slnt,wght].ttf",
+        url: "https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/Cairo%5Bslnt,wght%5D.ttf",
+        size: 599_548,
+        package: FontPackage::File,
+        aliases: &[],
+    },
+    // Downloadable substitute when CaskaydiaCove is unavailable.
+    Font {
+        family: "JetBrains Mono",
+        file: "JetBrainsMono[wght].ttf",
+        url: "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf",
+        size: 187_208,
+        package: FontPackage::File,
+        aliases: &["JetBrainsMono Nerd Font", "JetBrainsMono Nerd Font Mono"],
+    },
     // The Qur'anic Naskh for Jannah's verses and hadith.
-    Font { family: "Amiri Quran", file: "AmiriQuran-Regular.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/amiriquran/AmiriQuran-Regular.ttf", size: 136_920 },
-    Font { family: "Amiri", file: "Amiri-Regular.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Regular.ttf", size: 431_116 },
+    Font {
+        family: "Amiri Quran",
+        file: "AmiriQuran-Regular.ttf",
+        url: "https://raw.githubusercontent.com/google/fonts/main/ofl/amiriquran/AmiriQuran-Regular.ttf",
+        size: 136_920,
+        package: FontPackage::File,
+        aliases: &[],
+    },
+    Font {
+        family: "Amiri",
+        file: "Amiri-Regular.ttf",
+        url: "https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Regular.ttf",
+        size: 431_116,
+        package: FontPackage::File,
+        aliases: &[],
+    },
     // Ink Rush's comic display face (SIL Open Font License 1.1, its text in
     // `assets/fonts/bangers/OFL.txt`).
-    Font { family: "Bangers", file: "Bangers-Regular.ttf", url: "https://raw.githubusercontent.com/google/fonts/main/ofl/bangers/Bangers-Regular.ttf", size: 93_148 },
+    Font {
+        family: "Bangers",
+        file: "Bangers-Regular.ttf",
+        url: "https://raw.githubusercontent.com/google/fonts/main/ofl/bangers/Bangers-Regular.ttf",
+        size: 93_148,
+        package: FontPackage::File,
+        aliases: &[],
+    },
 ];
 
 pub fn fonts_dir() -> PathBuf {
     dirs::data_dir().unwrap_or_else(|| PathBuf::from("~/.local/share")).join("fonts").join("mandara")
 }
 
+fn font_present(font: &Font, installed: &[String]) -> bool {
+    let has = |name: &str| installed.iter().any(|n| n.eq_ignore_ascii_case(name));
+    has(font.family) || font.aliases.iter().copied().any(has) || fonts_dir().join(font.file).exists()
+}
+
 /// Families not installed, given the system's font family names.
 pub fn missing_fonts(installed: &[String]) -> Vec<&'static Font> {
-    FONTS.iter().filter(|f| !installed.iter().any(|n| n.eq_ignore_ascii_case(f.family)) && !fonts_dir().join(f.file).exists()).collect()
+    FONTS.iter().filter(|f| !font_present(f, installed)).collect()
 }
 
 /// The folders Maintenance works on: the user's XDG folders, or a
@@ -214,9 +308,15 @@ pub fn check_in(roots: &Roots, id: CheckId, installed_fonts: &[String]) -> Healt
         CheckId::Fonts => {
             let missing = missing_fonts(installed_fonts);
             if missing.is_empty() {
-                Health::Ok(t("Inter, Cairo, Alexandria and JetBrains Mono are installed").into())
+                Health::Ok(t("Inter, Alexandria and CaskaydiaCove Nerd Font Mono are installed").into())
             } else {
-                Health::Warn(tf("Missing {fonts} — fallbacks in use", &[("fonts", &missing.iter().map(|f| f.family).collect::<Vec<_>>().join(", "))]))
+                let names = missing.iter().map(|f| f.family).collect::<Vec<_>>().join(", ");
+                let detail = if missing.iter().any(|f| f.family == "CaskaydiaCove Nerd Font Mono") {
+                    tf("Missing {fonts} — another Nerd Font or JetBrains Mono is substituted until you Download", &[("fonts", &names)])
+                } else {
+                    tf("Missing {fonts} — fallbacks in use", &[("fonts", &names)])
+                };
+                Health::Warn(detail)
             }
         }
         CheckId::PluginDirs => {
@@ -304,12 +404,21 @@ pub fn fix_in(roots: &Roots, id: CheckId, installed_fonts: &[String], progress: 
             let mut done = 0;
             for f in &missing {
                 let bytes = download(f.url, FONT_MAX_BYTES)?;
-                let path = dir.join(f.file);
-                mandara_config::store::write_atomic(&path, &bytes).map_err(|e| format!("{}: {e:#}", path.display()))?;
+                match f.package {
+                    FontPackage::File => {
+                        let path = dir.join(f.file);
+                        mandara_config::store::write_atomic(&path, &bytes).map_err(|e| format!("{}: {e:#}", path.display()))?;
+                    }
+                    FontPackage::NerdTarXz => install_nerd_tar_xz(&bytes, &dir)?,
+                }
                 done += f.size;
                 progress(done, total);
             }
-            Ok((tf("Installed {fonts} into {folder} — restart the shell to use them", &[("fonts", &missing.iter().map(|f| f.family).collect::<Vec<_>>().join(", ")), ("folder", &dir.display())]), Vec::new()))
+            let _ = std::process::Command::new("fc-cache").arg("-f").arg(&dir).status();
+            Ok((
+                tf("Installed {fonts} into {folder} — restart the shell to use them", &[("fonts", &missing.iter().map(|f| f.family).collect::<Vec<_>>().join(", ")), ("folder", &dir.display())]),
+                Vec::new(),
+            ))
         }
         CheckId::PluginDirs => {
             for d in roots.plugin_dirs() {
@@ -328,6 +437,58 @@ fn download(url: &str, limit: u64) -> Result<Vec<u8>, String> {
     let mut response = agent.get(url).header("User-Agent", concat!("mandara-studio/", env!("CARGO_PKG_VERSION"))).call().map_err(|e| tf("download failed: {error}", &[("error", &e)]))?;
     let mut out = Vec::new();
     response.body_mut().with_config().limit(limit).reader().read_to_end(&mut out).map_err(|e| tf("download failed: {error}", &[("error", &e)]))?;
+    Ok(out)
+}
+
+/// Unpacks CaskaydiaCove Mono faces from a Nerd Fonts CascadiaCode.tar.xz into `dir`.
+fn install_nerd_tar_xz(archive: &[u8], dir: &Path) -> Result<(), String> {
+    use std::sync::atomic::AtomicBool;
+
+    use mandara_services::app_install::archive::{self, ExtractOptions};
+    use mandara_services::app_install::detect::Format;
+
+    let staging = std::env::temp_dir().join(format!("mandara-fonts-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)));
+    let _ = std::fs::remove_dir_all(&staging);
+    std::fs::create_dir_all(&staging).map_err(|e| format!("{}: {e}", staging.display()))?;
+    let archive_path = staging.join("CascadiaCode.tar.xz");
+    let unpack = staging.join("out");
+    mandara_config::store::write_atomic(&archive_path, archive).map_err(|e| format!("{}: {e:#}", archive_path.display()))?;
+    let keep = |rel: &Path| {
+        rel.file_name().and_then(|n| n.to_str()).is_some_and(|name| CASKAYDIA_MONO_MEMBERS.iter().any(|want| *want == name))
+    };
+    let opts = ExtractOptions { max_bytes: FONT_MAX_BYTES, max_entries: 64, keep: Some(&keep) };
+    archive::extract_with(&archive_path, Format::TarXz, &unpack, &opts, &AtomicBool::new(false), &|_| {}).map_err(|e| tf("unpack failed: {error}", &[("error", &e)]))?;
+    let mut written = 0usize;
+    for entry in walkdir_ttf(&unpack)? {
+        let name = entry.file_name().and_then(|n| n.to_str()).ok_or_else(|| t("font archive member has no name").to_string())?;
+        let dest = dir.join(name);
+        let bytes = std::fs::read(&entry).map_err(|e| format!("{}: {e}", entry.display()))?;
+        mandara_config::store::write_atomic(&dest, &bytes).map_err(|e| format!("{}: {e:#}", dest.display()))?;
+        written += 1;
+    }
+    let _ = std::fs::remove_dir_all(&staging);
+    if written == 0 {
+        return Err(t("The Nerd Fonts archive had no CaskaydiaCove Mono faces").into());
+    }
+    Ok(())
+}
+
+fn walkdir_ttf(root: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut out = Vec::new();
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+        for entry in std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, out)?;
+            } else if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("ttf")) {
+                out.push(path);
+            }
+        }
+        Ok(())
+    }
+    walk(root, &mut out)?;
+    out.sort();
     Ok(out)
 }
 
@@ -479,6 +640,12 @@ mod tests {
     fn fonts_have_https_urls_and_sizes() {
         assert!(FONTS.iter().all(|f| f.url.starts_with("https://") && f.size > 0));
         assert!(missing_fonts(&FONTS.iter().map(|f| f.family.to_string()).collect::<Vec<_>>()).is_empty());
+        let caskaydia = FONTS.iter().find(|f| f.family == "CaskaydiaCove Nerd Font Mono").expect("default mono is downloadable");
+        assert!(matches!(caskaydia.package, FontPackage::NerdTarXz));
+        assert!(caskaydia.url.contains("CascadiaCode.tar.xz"));
+        // An alias fontconfig often reports still counts as installed.
+        assert!(font_present(caskaydia, &["CaskaydiaCove Nerd Font".into()]));
+        assert!(!font_present(caskaydia, &["JetBrains Mono".into()]));
     }
 
     /// A sandbox: nothing here touches the user's own folders.

@@ -31,6 +31,7 @@ pub mod dismiss;
 pub mod first_frame;
 pub mod floating;
 pub mod fonts;
+pub mod font_sync;
 pub mod games;
 pub mod hstrip;
 pub mod hub;

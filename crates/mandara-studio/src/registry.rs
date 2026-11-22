@@ -701,6 +701,9 @@ pub fn locked(setting: &Setting, cfg: &ShellConfig) -> Option<&'static str> {
         "/wallpaper/depth/split" if cfg.wallpaper.depth.mode != mandara_config::DepthMode::Model => Some(tk("For the Model mode")),
         "/wallpaper/depth/split" if cfg.wallpaper.depth.auto_split => Some(tk("Set per wallpaper while the automatic split is on")),
         "/wallpaper/depth/regenerate" | "/wallpaper/depth/place_clock" if !cfg.wallpaper.depth_effect => Some(tk("Turn on the depth effect first")),
+        path if path.starts_with("/typography/sync/") && path != "/typography/sync/enabled" && !cfg.typography.sync.enabled => {
+            Some(tk("Turn on Apply Mandara fonts to the desktop first"))
+        }
         path if path.starts_with("/plugins/settings/screenshot/record_") => recorder_settings::locked(path, cfg),
         "/plugins/settings/updates/aur_helper" => aur_helper_locked(None),
         path => side_bar_settings::locked(path, cfg).or_else(|| surface_settings::locked(path, cfg)),
@@ -960,6 +963,12 @@ fn build() -> Vec<Setting> {
         s(Typography, tk("Each surface"), "/typography/lock_font", tk("Lock screen"), tk("The lock screen's text"), Font { follows: Some("/typography/ui_font") }),
         s(Typography, tk("Each surface"), "/typography/lock_clock_font", tk("Lock screen clock"), tk("The big clock on the lock screen"), Font { follows: Some("/typography/display_font") }),
         s(Typography, tk("Each surface"), "/typography/studio_font", tk("Studio"), tk("Mandara Studio itself"), Font { follows: Some("/typography/ui_font") }),
+        s(Typography, tk("System fonts"), "/typography/sync/enabled", tk("Apply Mandara fonts to the desktop"), tk("Opt-in: push the Families above to fontconfig, GTK, Qt, KDE and browsers. Off restores what Mandara changed"), Toggle),
+        s(Typography, tk("System fonts"), "/typography/sync/fontconfig", tk("Fontconfig"), tk("Sans / serif / monospace aliases in ~/.config/fontconfig/conf.d"), Toggle),
+        s(Typography, tk("System fonts"), "/typography/sync/gtk", tk("GTK & gsettings"), tk("GTK 3 / 4 settings.ini and the GNOME interface font keys"), Toggle),
+        s(Typography, tk("System fonts"), "/typography/sync/qt", tk("Qt (qt5ct / qt6ct)"), tk("General and fixed fonts when qt5ct or qt6ct is already set up"), Toggle),
+        s(Typography, tk("System fonts"), "/typography/sync/kde", tk("KDE"), tk("kdeglobals General font keys"), Toggle),
+        s(Typography, tk("System fonts"), "/typography/sync/browsers", tk("Web browsers"), tk("Same fontconfig aliases browsers use for page text on Linux"), Toggle),
         s(Typography, tk("Size"), "/typography/scale", tk("Text scale"), tk("Scales text in the bar, the launcher and the wallpaper picker"), slider(0.75, 1.5, 0.05, "×")),
         // Plugins (per-plugin settings tables)
         // Groups are the plugins' English names (matched against manifests).
