@@ -291,6 +291,8 @@ struct Watch {
     buf: Vec<u8>,
     retry_at: Instant,
     backoff: Duration,
+    /// When the current connection was made.
+    connected_at: Option<Instant>,
 }
 
 impl Watch {
@@ -303,6 +305,7 @@ impl Watch {
         match opened {
             Ok(s) => {
                 self.stream = Some(s);
+                self.connected_at = Some(Instant::now());
                 self.buf.clear();
             }
             Err(err) => self.fail(&anyhow::Error::from(err)),
@@ -312,6 +315,12 @@ impl Watch {
     fn fail(&mut self, err: &anyhow::Error) {
         tracing::debug!("mango watch {} ended: {err:#}", self.topic);
         self.stream = None;
+        // Only a stream that stayed up earns a fresh start: one that
+        // answers and drops again would otherwise reconnect at the first
+        // delay forever.
+        if self.connected_at.take().is_some_and(|at| at.elapsed() >= crate::stream::STABLE_STREAM) {
+            self.backoff = BACKOFF_START;
+        }
         self.retry_at = Instant::now() + self.backoff;
         self.backoff = (self.backoff * 2).min(BACKOFF_MAX);
     }
@@ -362,10 +371,11 @@ fn pump(w: &mut Watch, chunk: &mut [u8], keymode: &mut String, events: &mut Vec<
                 return Ok(false);
             }
         }
-        // A good line resets the reconnect backoff.
-        w.backoff = BACKOFF_START;
     }
     w.buf.drain(..start);
+    if w.buf.len() > crate::stream::MAX_LINE {
+        bail!("a line longer than {} bytes", crate::stream::MAX_LINE);
+    }
     Ok(true)
 }
 
@@ -373,7 +383,7 @@ fn pump(w: &mut Watch, chunk: &mut [u8], keymode: &mut String, events: &mut Vec<
 fn watch_all(socket: &Path, tx: &async_channel::Sender<CompositorEvent>) {
     use rustix::event::{PollFd, PollFlags, Timespec, poll};
     let now = Instant::now();
-    let mut watches: Vec<Watch> = TOPICS.iter().map(|topic| Watch { topic, stream: None, buf: Vec::new(), retry_at: now, backoff: BACKOFF_START }).collect();
+    let mut watches: Vec<Watch> = TOPICS.iter().map(|topic| Watch { topic, stream: None, buf: Vec::new(), retry_at: now, backoff: BACKOFF_START, connected_at: None }).collect();
     let mut chunk = vec![0u8; READ_CHUNK];
     let mut keymode = String::new();
     let mut events = Vec::new();

@@ -37,6 +37,7 @@ use serde_json::{Map, Value};
 use crate::backend::CompositorBackend;
 use crate::model::{ClientInfo, CompositorEvent, CompositorKind, MonitorInfo, NavigationModel};
 use conn::{Conn, keeps_connection};
+use crate::stream::Backoff;
 use state::{Diff, Model};
 use wire::{Ack, Command, Empty};
 
@@ -50,8 +51,6 @@ const QUERY_WAIT: Duration = Duration::from_secs(12);
 /// Commands queued for the request connection before new ones are
 /// refused as busy (the contract proposes 32).
 const COMMAND_QUEUE: usize = 32;
-/// The longest pause between reconnection attempts.
-const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(30);
 
 /// What a command means in the bar's terms, resolved against the model
 /// on the request thread.
@@ -262,32 +261,6 @@ fn resolve(intent: &Intent, model: &Model) -> Result<(String, Map<String, Value>
         fields.insert("seat".into(), seat.to_string().into());
     }
     Ok((action, fields))
-}
-
-/// Exponential reconnection delay with jitter, from `min` up to
-/// [`MAX_RECONNECT_DELAY`].
-struct Backoff {
-    min: Duration,
-    next: Duration,
-}
-
-impl Backoff {
-    fn new(min: Duration) -> Self {
-        Self { min, next: min }
-    }
-
-    fn reset(&mut self) {
-        self.next = self.min;
-    }
-
-    fn delay(&mut self) -> Duration {
-        let base = self.next;
-        self.next = (base * 2).min(MAX_RECONNECT_DELAY.max(self.min));
-        // Up to a quarter more, so several clients don't retry in step.
-        let span = u64::try_from((base / 4).as_nanos()).unwrap_or(u64::MAX).max(1);
-        let noise = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| u64::from(d.subsec_nanos()));
-        base + Duration::from_nanos(noise % span)
-    }
 }
 
 /// The event thread: subscribes, keeps the shared model current and sends

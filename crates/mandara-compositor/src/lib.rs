@@ -17,6 +17,8 @@ pub mod model;
 pub mod native_config;
 pub mod niri;
 pub mod river;
+mod roundtrip;
+mod stream;
 pub mod sway;
 pub mod umbriel;
 

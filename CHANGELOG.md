@@ -12,6 +12,7 @@ About → What's new shows it too.
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 Mandara's default typefaces are Inter, Alexandria (including Arabic) and
 CaskaydiaCove Nerd Font Mono, with Nerd Font substitutes until Maintenance
 downloads the real face. Opt-in system font sync can push those families to
@@ -119,6 +120,21 @@ App themes can no longer be tampered with through a wallpaper or theme name, and
 - A wallpaper that crashes the image decoder no longer leaves later theme changes waiting for it, and the message for an interrupted theme write whose backup is gone now names the files involved and how to continue.
 - If Mandara is killed in the middle of a two-file shortcut change, the next shortcut edit puts the half-written files back from their recovery copies instead of leaving a mismatched pair.
 >>>>>>> pr-219
+=======
+Mandara talks to your compositor more gently: fewer requests per burst of events, politer reconnects, and one shared connection for monitor sizes.
+
+### Improved
+
+- **The bar asks your compositor far less.** On Hyprland, Sway, niri and River a burst of events (switching workspaces, a window opening) is now answered with one round of requests instead of one per event, and events that change nothing are no longer sent on to the bar. Fewer wakeups and less compositor traffic while you work.
+- **Lost compositor connections come back politely.** Every compositor connection (Hyprland, Sway, niri, River, Umbriel, KWin) now waits longer after each failed attempt, up to 30 seconds, instead of retrying every second. A connection that keeps dropping right after it comes up keeps backing off too.
+- **Monitor queries reuse one connection.** Anything that asks for your monitors' sizes (panels, the greeter, Studio) shares a single connection that follows monitors being plugged and unplugged, instead of opening a new one each time.
+
+### Fixed
+
+- **One odd event no longer stalls the bar.** A malformed event or error line from niri or Umbriel is skipped and logged once instead of dropping the connection and reconnecting in a loop. If your Umbriel does not know one of the event families Mandara asks for, Mandara stops asking for it and follows the rest.
+- **A stuck compositor command no longer hangs Mandara.** River commands and `umbriel msg` fallbacks give up after two seconds, River's connection setup is bounded the same way, and oversized or endless replies are cut off.
+- **niri actions with arguments that are not JSON now say so** instead of silently running with no arguments.
+>>>>>>> pr-220
 
 ## 0.37.0 — 2026-11-22
 

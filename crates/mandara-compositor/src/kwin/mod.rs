@@ -6,12 +6,28 @@ mod session;
 pub mod state;
 mod wayland;
 
+use std::sync::Arc;
+use std::time::Instant;
+
 use anyhow::{Result, bail};
 
+use crate::stream::Backoff;
 use crate::{ClientInfo, CompositorBackend, CompositorEvent, CompositorKind, MonitorInfo, NavigationModel};
 pub use session::{Session, WindowAction};
 
 pub struct KWinDriver;
+
+/// The state the event watcher last saw, for queries to answer from: a
+/// connection and its round trips each would cost far more.
+static LIVE: crate::stream::Live<state::State> = crate::stream::Live::new();
+
+/// The watcher's state when one is running, else asked of KWin afresh.
+fn current() -> Result<Arc<state::State>> {
+    match LIVE.get() {
+        Some(state) => Ok(state),
+        None => Ok(Arc::new(Session::open()?.state().clone())),
+    }
+}
 
 impl KWinDriver {
     pub fn from_env() -> Option<Self> {
@@ -31,28 +47,39 @@ impl CompositorBackend for KWinDriver {
     fn subscribe_events(&self) -> async_channel::Receiver<CompositorEvent> {
         let (tx, rx) = async_channel::bounded(crate::EVENT_QUEUE);
         let _ = std::thread::Builder::new().name("kwin-status".into()).spawn(move || {
+            let mut backoff = Backoff::new(crate::RECONNECT_DELAY);
             loop {
+                let began = Instant::now();
                 let result = (|| -> Result<()> {
                     let mut session = Session::open()?;
                     let mut diff = state::Diff::default();
+                    let mut first = true;
                     loop {
-                        for event in diff.events(session.state()) {
+                        let events = diff.events(session.state());
+                        // The state is copied for queries only when it changed.
+                        if first || !events.is_empty() {
+                            LIVE.publish(Arc::new(session.state().clone()));
+                            first = false;
+                        }
+                        for event in events {
                             if tx.send_blocking(event).is_err() { return Ok(()); }
                         }
                         if !session.wait(None)? { return Ok(()); }
                     }
                 })();
+                // The connection is gone: what it saw would only go stale.
+                LIVE.clear();
                 if result.is_ok() || tx.is_closed() { return; }
-                std::thread::sleep(crate::RECONNECT_DELAY);
+                std::thread::sleep(backoff.after(began.elapsed()));
             }
         });
         rx
     }
 
-    fn get_navigation_state(&self) -> Result<Vec<(String, NavigationModel)>> { Ok(Session::open()?.state().navigation()) }
-    fn get_active_client(&self) -> Result<Option<ClientInfo>> { Ok(Session::open()?.state().focused()) }
-    fn get_all_clients(&self) -> Result<Vec<ClientInfo>> { Ok(Session::open()?.state().clients()) }
-    fn get_monitors(&self) -> Result<Vec<MonitorInfo>> { Ok(Session::open()?.state().monitors()) }
+    fn get_navigation_state(&self) -> Result<Vec<(String, NavigationModel)>> { Ok(current()?.navigation()) }
+    fn get_active_client(&self) -> Result<Option<ClientInfo>> { Ok(current()?.focused()) }
+    fn get_all_clients(&self) -> Result<Vec<ClientInfo>> { Ok(current()?.clients()) }
+    fn get_monitors(&self) -> Result<Vec<MonitorInfo>> { Ok(current()?.monitors()) }
 
     fn select_primary(&self, monitor: &str, id: u32) -> Result<()> {
         let mut session = Session::open()?;

@@ -1,9 +1,8 @@
 //! Native Plasma protocol connections and event handlers.
 
 use std::collections::BTreeMap;
-use std::time::Instant;
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result};
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
 use wayland_client::protocol::{wl_callback, wl_output, wl_registry, wl_seat};
 use wayland_client::{Connection, Dispatch, EventQueue, Proxy, QueueHandle};
@@ -78,31 +77,12 @@ pub(super) fn open() -> Result<(Connection, EventQueue<Wl>, Wl)> {
 
 /// Bounds command/query round trips; a stalled compositor cannot hold a caller.
 pub(super) fn roundtrip(conn: &Connection, queue: &mut EventQueue<Wl>, state: &mut Wl) -> Result<()> {
-    use rustix::event::{PollFd, PollFlags, Timespec, poll};
-    let synced = state.synced;
-    conn.display().sync(&queue.handle(), ());
-    let deadline = Instant::now() + crate::REQUEST_TIMEOUT;
-    loop {
-        queue.dispatch_pending(state)?;
-        if state.synced != synced {
-            return Ok(());
-        }
-        conn.flush()?;
-        let Some(guard) = queue.prepare_read() else { continue };
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            bail!("{}", mandara_i18n::t("The compositor did not respond in time"));
-        }
-        let timeout = Timespec { tv_sec: remaining.as_secs() as i64, tv_nsec: i64::from(remaining.subsec_nanos()) };
-        let fd = guard.connection_fd();
-        let mut fds = [PollFd::new(&fd, PollFlags::IN)];
-        match poll(&mut fds, Some(&timeout)) {
-            Ok(0) => bail!("{}", mandara_i18n::t("The compositor did not respond in time")),
-            Ok(_) if fds[0].revents().intersects(PollFlags::ERR | PollFlags::HUP | PollFlags::NVAL) => bail!("{}", mandara_i18n::t("The compositor connection closed")),
-            Ok(_) => { guard.read()?; }
-            Err(rustix::io::Errno::INTR) => continue,
-            Err(err) => return Err(err.into()),
-        }
+    crate::roundtrip::roundtrip(conn, queue, state)
+}
+
+impl crate::roundtrip::Synced for Wl {
+    fn synced(&self) -> u64 {
+        self.synced
     }
 }
 

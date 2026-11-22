@@ -2,7 +2,7 @@
 //! `dispatch workspace 3`) and `.socket2.sock` for the event stream
 //! (`workspace>>3`, `activewindow>>class,title`, …).
 
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
@@ -13,6 +13,7 @@ use crate::backend::CompositorBackend;
 use crate::model::{ClientInfo, CompositorEvent, CompositorKind, MonitorInfo, NavigationModel, WorkspaceStatus};
 
 mod keyboard;
+mod watch;
 
 /// Hyprland 0.57 leaves `id` out for named and special workspaces and
 /// tags each with a `type`; older versions give special ones negative ids.
@@ -257,17 +258,8 @@ impl HyprlandDriver {
         stream.set_read_timeout(Some(crate::REQUEST_TIMEOUT))?;
         stream.write_all(cmd.as_bytes())?;
         let mut out = String::new();
-        stream.read_to_string(&mut out)?;
+        (&mut stream).take(crate::stream::MAX_LINE as u64).read_to_string(&mut out)?;
         Ok(out)
-    }
-
-    /// Query only after socket2 is connected, so intervening changes are queued.
-    fn initial_events(&self) -> Vec<CompositorEvent> {
-        let mut events = self.navigation_events();
-        if let Ok(focused) = self.get_active_client() { events.push(CompositorEvent::FocusedClient(focused)); }
-        if let Ok(monitors) = self.get_monitors() { events.push(CompositorEvent::Monitors(monitors)); }
-        events.extend(self.keyboard_event());
-        events
     }
 
     fn keyboard_event(&self) -> Option<CompositorEvent> {
@@ -275,9 +267,33 @@ impl HyprlandDriver {
         keyboard::initial(&devices).map(|layout| CompositorEvent::KeyboardLayout(layout.to_owned()))
     }
 
-    fn navigation_events(&self) -> Vec<CompositorEvent> {
-        self.get_navigation_state().unwrap_or_default().into_iter().map(|(monitor, model)| CompositorEvent::Navigation { monitor, model })
-            .chain(self.get_all_clients().ok().map(CompositorEvent::Clients)).collect()
+    /// The focused window. `monitors` resolves its connector; without it
+    /// the monitors are asked for (a failed lookup only leaves the
+    /// connector unknown).
+    fn active_client(&self, monitors: Option<&[HyprMonitor]>) -> Result<Option<ClientInfo>> {
+        let raw = self.request("j/activewindow")?;
+        if raw.trim() == "{}" || raw.trim().is_empty() {
+            return Ok(None);
+        }
+        let client = serde_json::from_str::<HyprClient>(&raw)?;
+        Ok(Some(match monitors {
+            Some(monitors) => client.client(true, monitors),
+            None => client.client(true, &self.json::<Vec<HyprMonitor>>("monitors").unwrap_or_default()),
+        }))
+    }
+
+    /// Every window, with the same `monitors` handling as [`Self::active_client`].
+    fn all_clients(&self, monitors: Option<&[HyprMonitor]>) -> Result<Vec<ClientInfo>> {
+        let clients = self.json::<Vec<HyprClient>>("clients")?;
+        let fetched;
+        let monitors = match monitors {
+            Some(monitors) => monitors,
+            None => {
+                fetched = self.json::<Vec<HyprMonitor>>("monitors").unwrap_or_default();
+                &fetched
+            }
+        };
+        Ok(clients.iter().map(|c| c.client(false, monitors)).collect())
     }
 
     fn json<T: serde::de::DeserializeOwned>(&self, what: &str) -> Result<T> {
@@ -316,43 +332,7 @@ impl CompositorBackend for HyprlandDriver {
     fn subscribe_events(&self) -> async_channel::Receiver<CompositorEvent> {
         let (tx, rx) = async_channel::bounded(crate::EVENT_QUEUE);
         let (dir, version, lua) = (self.dir.clone(), self.version, self.lua);
-        let _ = std::thread::Builder::new().name("hypr-events".into()).spawn(move || {
-            let driver = HyprlandDriver { dir: dir.clone(), version, lua };
-            loop {
-                let Ok(stream) = UnixStream::connect(dir.join(".socket2.sock")) else {
-                    if tx.is_closed() {
-                        return;
-                    }
-                    std::thread::sleep(crate::RECONNECT_DELAY);
-                    continue;
-                };
-                for event in driver.initial_events() {
-                    if tx.send_blocking(event).is_err() { return; }
-                }
-                for line in BufReader::new(stream).lines().map_while(Result::ok) {
-                    let Some((event, data)) = parse_event(&line) else { continue };
-                    let events: Vec<CompositorEvent> = match event {
-                        "workspace" | "workspacev2" | "createworkspace" | "destroyworkspace" | "focusedmon" | "openwindow"
-                        | "closewindow" | "movewindow" | "urgent" => driver.navigation_events(),
-                        "activewindow" | "activewindowv2" | "windowtitle" | "windowtitlev2" => {
-                            vec![CompositorEvent::FocusedClient(driver.get_active_client().ok().flatten())]
-                        }
-                        "monitoradded" | "monitorremoved" => vec![CompositorEvent::Monitors(driver.get_monitors().unwrap_or_default())],
-                        "activelayout" if keyboard::switched(data).is_some() => driver.keyboard_event().into_iter().collect(),
-                        _ => Vec::new(),
-                    };
-                    for e in events {
-                        if tx.send_blocking(e).is_err() {
-                            return;
-                        }
-                    }
-                }
-                if tx.is_closed() {
-                    return;
-                }
-                std::thread::sleep(crate::RECONNECT_DELAY);
-            }
-        });
+        let _ = std::thread::Builder::new().name("hypr-events".into()).spawn(move || watch::Watcher::new(HyprlandDriver { dir, version, lua }).watch(&tx));
         rx
     }
 
@@ -362,28 +342,16 @@ impl CompositorBackend for HyprlandDriver {
 
     /// Read the focused window; an unavailable monitor lookup only leaves its connector unknown.
     fn get_active_client(&self) -> Result<Option<ClientInfo>> {
-        let raw = self.request("j/activewindow")?;
-        if raw.trim() == "{}" || raw.trim().is_empty() {
-            return Ok(None);
-        }
-        let client = serde_json::from_str::<HyprClient>(&raw)?;
-        let monitors = self.json::<Vec<HyprMonitor>>("monitors").unwrap_or_default();
-        Ok(Some(client.client(true, &monitors)))
+        self.active_client(None)
     }
 
     /// Keep the client snapshot even when the separate monitor request fails.
     fn get_all_clients(&self) -> Result<Vec<ClientInfo>> {
-        let clients = self.json::<Vec<HyprClient>>("clients")?;
-        let monitors = self.json::<Vec<HyprMonitor>>("monitors").unwrap_or_default();
-        Ok(clients.iter().map(|c| c.client(false, &monitors)).collect())
+        self.all_clients(None)
     }
 
     fn get_monitors(&self) -> Result<Vec<MonitorInfo>> {
-        Ok(self
-            .json::<Vec<HyprMonitor>>("monitors")?
-            .into_iter()
-            .map(|m| MonitorInfo { name: m.name, x: m.x, y: m.y, width: m.width, height: m.height, scale: m.scale, active: m.focused })
-            .collect())
+        Ok(watch::monitor_infos(&self.json::<Vec<HyprMonitor>>("monitors")?))
     }
 
     fn select_primary(&self, _monitor: &str, id: u32) -> Result<()> {
@@ -648,7 +616,7 @@ mod tests {
             let mut event_stream = accept(&events);
             let monitors = r#"[{"name":"DP-1","activeWorkspace":{"id":2},"width":1707,"height":960}]"#;
             let focused = r#"{"address":"0x7","title":"Fresh window","workspace":{"id":2}}"#;
-            for (command, reply) in [("j/workspaces", r#"[{"id":2,"name":"2","monitor":"DP-1","windows":1}]"#.to_string()), ("j/monitors", monitors.into()), ("j/clients", format!("[{focused}]")), ("j/monitors", monitors.into()), ("j/activewindow", focused.into()), ("j/monitors", monitors.into()), ("j/monitors", monitors.into()), ("j/devices", r#"{"keyboards":[{"main":true,"active_keymap":"English (US)"}]}"#.into())] {
+            for (command, reply) in [("j/monitors", monitors.to_string()), ("j/workspaces", r#"[{"id":2,"name":"2","monitor":"DP-1","windows":1}]"#.into()), ("j/clients", format!("[{focused}]")), ("j/activewindow", focused.into()), ("j/devices", r#"{"keyboards":[{"main":true,"active_keymap":"English (US)"}]}"#.into())] {
                 let mut stream = accept(&requests);
                 stream.set_read_timeout(Some(crate::REQUEST_TIMEOUT)).unwrap();
                 let mut input = vec![0; command.len()];
@@ -673,17 +641,17 @@ mod tests {
         let rx = driver.subscribe_events();
         let deadline = Instant::now() + crate::REQUEST_TIMEOUT;
         let mut initial = Vec::new();
-        while initial.len() < 8 && Instant::now() < deadline {
+        while initial.len() < 7 && Instant::now() < deadline {
             match rx.try_recv() { Ok(event) => initial.push(event), Err(_) => std::thread::sleep(POLL) }
         }
         drop(rx);
         server.join().unwrap();
-        assert_eq!(initial.len(), 8);
+        assert_eq!(initial.len(), 7);
         assert!(matches!(&initial[0], CompositorEvent::Navigation { monitor, model: NavigationModel::Workspaces { workspaces } } if monitor == "DP-1" && workspaces[0].id == 2));
         assert!(matches!(&initial[1], CompositorEvent::Clients(clients) if clients[0].id == 7));
         assert!(matches!(&initial[2], CompositorEvent::FocusedClient(Some(client)) if client.title == "Fresh window"));
         assert!(matches!(&initial[3], CompositorEvent::Monitors(monitors) if monitors[0].width == 1707));
-        assert_eq!(&initial[4..], [CompositorEvent::KeyboardLayout("English (US)".into()), CompositorEvent::KeyboardLayout("Arabic".into()), CompositorEvent::KeyboardLayout("Arabic".into()), CompositorEvent::KeyboardLayout("English (US, intl.)".into())]);
+        assert_eq!(&initial[4..], [CompositorEvent::KeyboardLayout("English (US)".into()), CompositorEvent::KeyboardLayout("Arabic".into()), CompositorEvent::KeyboardLayout("English (US, intl.)".into())]);
     }
 
 }

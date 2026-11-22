@@ -16,9 +16,11 @@
 //! bar's keymode badge.
 
 use std::collections::BTreeMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read as _, Write};
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use std::time::Instant;
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use serde::Deserialize;
@@ -26,6 +28,7 @@ use serde_json::{Map, Value, json};
 
 use crate::backend::CompositorBackend;
 use crate::model::{ClientInfo, CompositorEvent, CompositorKind, MonitorInfo, NavigationModel, WorkspaceStatus};
+use crate::stream::{Backoff, Dedup, Inbox, Next, SkipLog};
 
 /// The event families the shell follows (Umbriel's subscription names).
 pub const EVENT_FAMILIES: [&str; 5] = ["workspaces", "windows", "outputs", "submap", "keyboard_layout"];
@@ -219,9 +222,20 @@ pub fn workspace_switch(index: u32, output: &str) -> Value {
     action_request("workspace-switch", fields)
 }
 
-/// The request subscribing to every family the shell follows.
-pub fn subscribe_request() -> Value {
-    json!({ "cmd": "subscribe", "events": EVENT_FAMILIES })
+/// The request subscribing to `families`.
+pub fn subscribe_request(families: &[&str]) -> Value {
+    json!({ "cmd": "subscribe", "events": families })
+}
+
+/// Drops from `families` those an `{"err": …}` line of the stream names
+/// (an Umbriel too old for one answers `unknown subscription event: <name>`
+/// and ends the subscription), so the next subscription converges instead
+/// of failing the same way. Whether any was dropped.
+pub fn drop_unsupported(line: &Value, families: &mut Vec<&'static str>) -> bool {
+    let Some(message) = line.get("err").and_then(Value::as_str) else { return false };
+    let before = families.len();
+    families.retain(|family| !message.split(|c: char| !(c.is_alphanumeric() || c == '_')).any(|word| word == *family));
+    families.len() != before
 }
 
 /// The active layout's name in a `keyboard_layout` event
@@ -244,34 +258,34 @@ pub struct UmbrielState {
 impl UmbrielState {
     /// Applies one event-stream line and returns what the shell needs to
     /// hear. An `{"err": …}` line (an unknown family) is an error: Umbriel
-    /// closes that subscription.
+    /// closes that subscription (see [`drop_unsupported`]).
     pub fn apply(&mut self, line: &Value) -> Result<Vec<CompositorEvent>> {
         if line.get("err").is_some() {
             unwrap_reply(line)?;
         }
-        let data = line.get("data").cloned().unwrap_or(Value::Null);
+        let data = line.get("data").unwrap_or(&Value::Null);
         let mut out = Vec::new();
         match line.get("event").and_then(Value::as_str) {
             Some("workspaces") => {
-                self.workspaces = serde_json::from_value(data)?;
+                self.workspaces = Vec::deserialize(data)?;
                 out.extend(navigation(&self.workspaces).into_iter().map(|(monitor, model)| CompositorEvent::Navigation { monitor, model }));
                 // Positions (the clients' tags) and focus follow workspaces.
                 out.push(CompositorEvent::Clients(clients(&self.windows, &self.workspaces)));
                 self.push_focus(&mut out);
             }
             Some("windows") => {
-                self.windows = serde_json::from_value(data)?;
+                self.windows = Vec::deserialize(data)?;
                 out.push(CompositorEvent::Clients(clients(&self.windows, &self.workspaces)));
                 self.push_focus(&mut out);
             }
             Some("outputs") => {
-                let outputs: Vec<UmbrielOutput> = serde_json::from_value(data)?;
+                let outputs = Vec::<UmbrielOutput>::deserialize(data)?;
                 out.push(CompositorEvent::Monitors(monitors(&outputs)));
             }
             // The active submap's name, or null outside one.
             Some("submap") => out.push(CompositorEvent::Keymode(data.as_str().unwrap_or_default().to_string())),
             Some("keyboard_layout") => {
-                if let Some(name) = keyboard_layout_name(&data) {
+                if let Some(name) = keyboard_layout_name(data) {
                     out.push(CompositorEvent::KeyboardLayout(name));
                 }
             }
@@ -287,6 +301,73 @@ impl UmbrielState {
             out.push(CompositorEvent::FocusedClient(focused));
         }
     }
+}
+
+/// One event-stream connection following `families`; `true` when the
+/// receiver is gone. A line that can't be applied is skipped, and a family
+/// this Umbriel doesn't know is dropped from `families` for the next
+/// subscription: neither is a reason to keep failing the same way.
+fn stream_events(socket: &Path, families: &mut Vec<&'static str>, tx: &async_channel::Sender<CompositorEvent>, dedup: &mut Dedup) -> Result<bool> {
+    if families.is_empty() {
+        bail!("umbriel: no event family left to follow");
+    }
+    let mut stream = UnixStream::connect(socket).with_context(|| format!("connecting {}", socket.display()))?;
+    writeln!(stream, "{}", subscribe_request(families))?;
+    let mut inbox = Inbox::new(stream);
+    let mut state = UmbrielState::default();
+    let mut skipped = SkipLog::default();
+    loop {
+        let line = match inbox.line(None)? {
+            Next::Item(line) => line,
+            Next::Idle => continue,
+            Next::Closed => return Ok(false),
+        };
+        let line: Value = match serde_json::from_str(&line) {
+            Ok(line) => line,
+            Err(err) => {
+                skipped.skip("umbriel event", &err);
+                continue;
+            }
+        };
+        if drop_unsupported(&line, families) {
+            tracing::warn!("umbriel: {}; following {families:?} from now on", line["err"]);
+        }
+        match state.apply(&line) {
+            Ok(events) => {
+                if !dedup.send(tx, events) {
+                    return Ok(true);
+                }
+            }
+            Err(err) => skipped.skip("umbriel event", &err),
+        }
+    }
+}
+
+/// Runs `command` for at most [`crate::REQUEST_TIMEOUT`]; its exit status
+/// and what it wrote to stderr. A command that outlasts that is killed.
+fn run_bounded(mut command: std::process::Command) -> Result<(std::process::ExitStatus, String)> {
+    let mut child = command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn()?;
+    let stderr = child.stderr.take();
+    let reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        if let Some(stderr) = stderr {
+            let _ = stderr.take(64 << 10).read_to_end(&mut bytes);
+        }
+        String::from_utf8_lossy(&bytes).into_owned()
+    });
+    let deadline = Instant::now() + crate::REQUEST_TIMEOUT;
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            bail!("{}", mandara_i18n::t("The compositor did not respond in time"));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    Ok((status, reader.join().unwrap_or_default()))
 }
 
 pub struct UmbrielDriver {
@@ -313,7 +394,7 @@ impl UmbrielDriver {
         stream.set_read_timeout(Some(crate::REQUEST_TIMEOUT))?;
         writeln!(stream, "{body}")?;
         let mut line = String::new();
-        BufReader::new(stream).read_line(&mut line)?;
+        BufReader::new(stream.take(crate::stream::MAX_LINE as u64)).read_line(&mut line)?;
         Ok(serde_json::from_str(&line)?)
     }
 
@@ -351,25 +432,20 @@ impl CompositorBackend for UmbrielDriver {
         let (tx, rx) = async_channel::bounded(crate::EVENT_QUEUE);
         let socket = self.socket.clone();
         let _ = std::thread::Builder::new().name("umbriel-events".into()).spawn(move || {
+            let mut families = EVENT_FAMILIES.to_vec();
+            let mut backoff = Backoff::new(crate::RECONNECT_DELAY);
+            let mut dedup = Dedup::default();
             loop {
-                let result = (|| -> Result<()> {
-                    let mut stream = UnixStream::connect(&socket)?;
-                    writeln!(stream, "{}", subscribe_request())?;
-                    let mut state = UmbrielState::default();
-                    for line in BufReader::new(stream).lines() {
-                        let line: Value = serde_json::from_str(&line?)?;
-                        for e in state.apply(&line)? {
-                            if tx.send_blocking(e).is_err() {
-                                return Ok(());
-                            }
-                        }
-                    }
-                    bail!("stream closed")
-                })();
-                if result.is_ok() || tx.is_closed() {
+                let began = Instant::now();
+                match stream_events(&socket, &mut families, &tx, &mut dedup) {
+                    Ok(true) => return,
+                    Ok(false) => {}
+                    Err(err) => tracing::debug!("umbriel event stream ended: {err:#}"),
+                }
+                if tx.is_closed() {
                     return;
                 }
-                std::thread::sleep(crate::RECONNECT_DELAY);
+                std::thread::sleep(backoff.after(began.elapsed()));
             }
         });
         rx
@@ -447,11 +523,13 @@ impl CompositorBackend for UmbrielDriver {
             [one] if one.trim_start().starts_with('{') => self.action(cmd, serde_json::from_str(one).context("umbriel: the argument is not a JSON object")?),
             // Words, as `umbriel msg <action> [args…]` parses them.
             words => {
-                let out = std::process::Command::new("umbriel").arg("msg").arg(cmd).args(words).env("UMBRIEL_SOCKET", &self.socket).stdin(std::process::Stdio::null()).output().context("running `umbriel msg`")?;
-                if out.status.success() {
+                let mut command = std::process::Command::new("umbriel");
+                command.arg("msg").arg(cmd).args(words).env("UMBRIEL_SOCKET", &self.socket);
+                let (status, stderr) = run_bounded(command).context("running `umbriel msg`")?;
+                if status.success() {
                     Ok(())
                 } else {
-                    bail!("umbriel: {}", String::from_utf8_lossy(&out.stderr).trim())
+                    bail!("umbriel: {}", stderr.trim())
                 }
             }
         }
@@ -544,7 +622,42 @@ mod tests {
         assert_eq!(workspace_switch(3, ""), json!({"cmd":"action","action":"workspace-switch","workspace":3}));
         assert_eq!(action_request("workspace-set-layout", json!({"layout":"toggle","action":"x"})), json!({"cmd":"action","action":"workspace-set-layout","layout":"toggle"}));
         assert_eq!(action_request("config-reload", Value::Null), json!({"cmd":"action","action":"config-reload"}));
-        assert_eq!(subscribe_request(), json!({"cmd":"subscribe","events":["workspaces","windows","outputs","submap","keyboard_layout"]}));
+        assert_eq!(subscribe_request(&EVENT_FAMILIES), json!({"cmd":"subscribe","events":["workspaces","windows","outputs","submap","keyboard_layout"]}));
+    }
+
+    #[test]
+    fn a_family_the_server_rejects_is_not_asked_for_again() {
+        let mut families = EVENT_FAMILIES.to_vec();
+        assert!(!drop_unsupported(&json!({"event":"submap","data":null}), &mut families), "an ordinary event");
+        assert!(!drop_unsupported(&json!({"err":"something unrelated"}), &mut families));
+        assert!(drop_unsupported(&json!({"err":"unknown subscription event: keyboard_layout"}), &mut families));
+        assert_eq!(families, ["workspaces", "windows", "outputs", "submap"]);
+        // Names inside other words are not matches.
+        assert!(!drop_unsupported(&json!({"err":"unknown subscription event: windows2"}), &mut families));
+        assert_eq!(subscribe_request(&families), json!({"cmd":"subscribe","events":["workspaces","windows","outputs","submap"]}));
+    }
+
+    #[test]
+    fn a_snapshot_that_does_not_fit_is_an_error_that_leaves_the_state_alone() {
+        let mut st = UmbrielState::default();
+        let wins: Value = unwrap_reply(&serde_json::from_str(WINDOWS).unwrap()).unwrap();
+        st.apply(&json!({"event":"windows","data":wins})).unwrap();
+        let before = st.windows.len();
+        assert!(st.apply(&json!({"event":"windows","data":{"not":"a list"}})).is_err());
+        assert_eq!(st.windows.len(), before);
+    }
+
+    #[test]
+    fn a_command_that_outlasts_the_deadline_is_killed() {
+        let mut slow = std::process::Command::new("sh");
+        slow.args(["-c", "sleep 30"]);
+        let started = Instant::now();
+        assert!(run_bounded(slow).is_err());
+        assert!(started.elapsed() < crate::REQUEST_TIMEOUT + std::time::Duration::from_secs(2), "returned at the deadline, not when the command ended");
+        let mut failing = std::process::Command::new("sh");
+        failing.args(["-c", "echo no such action >&2; exit 3"]);
+        let (status, stderr) = run_bounded(failing).unwrap();
+        assert!(!status.success() && stderr.trim() == "no such action");
     }
 
     #[test]
