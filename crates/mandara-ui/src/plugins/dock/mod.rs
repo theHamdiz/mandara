@@ -597,6 +597,10 @@ pub struct DockView {
     hide_task: Option<gpui::Task<()>>,
     /// Window-geometry checks exist only while smart hiding needs them.
     smart_task: Option<gpui::Task<()>>,
+    /// The dock's rect (surface-local) and the smart-hide answer at the last
+    /// render: the poll re-renders only when the answer changes.
+    dock_rect: Option<(f32, f32, f32, f32)>,
+    obstructed_seen: bool,
     drag: Option<Drag>,
     poof: Option<Poof>,
     /// A dragged file is an installable app (the "Drop to install" glow).
@@ -684,6 +688,8 @@ impl DockView {
             reveal_task: None,
             hide_task: None,
             smart_task: None,
+            dock_rect: None,
+            obstructed_seen: false,
             drag: None,
             poof: None,
             install_hover: false,
@@ -705,7 +711,16 @@ impl DockView {
                 self.smart_task = Some(cx.spawn(async move |this, cx| {
                     loop {
                         cx.background_executor().timer(SMART_POLL).await;
-                        if this.update(cx, |_, cx| cx.notify()).is_err() { break; }
+                        // Re-render only when the answer changed: a full render of the dock 2.5×/s
+                        // for nothing is the cost this poll must not have.
+                        let alive = this.update(cx, |this, cx| {
+                            if let Some(rect) = this.dock_rect
+                                && this.obstructed(rect, cx) != this.obstructed_seen
+                            {
+                                cx.notify();
+                            }
+                        });
+                        if alive.is_err() { break; }
                     }
                 }));
             }
@@ -1281,6 +1296,8 @@ impl Render for DockView {
         let held_out = self.shown_until.is_some_and(|t| now < t);
         let forced = held_out || dragging.is_some() || self.install_hover || stays_out_for_launcher(cfg, shell(cx).read(cx).launcher_open);
         let obstructed = cfg.auto_hide == DockAutoHide::Smart && self.obstructed(dock_rect, cx);
+        self.dock_rect = Some(dock_rect);
+        self.obstructed_seen = obstructed;
         let visible = self.reveal.visible(cfg.auto_hide, forced, obstructed);
         let speed = cfg.hide_speed;
         let hide_spring = SpringConfig::new(HIDE_STIFFNESS * speed * speed, HIDE_DAMPING * speed, 1.0);
@@ -2033,7 +2050,7 @@ pub(crate) fn layer_options(role: SurfaceRole, layer: Layer, anchor: Anchor, siz
 
 /// `(index, geometry)` of every output.
 fn outputs(cx: &App) -> Vec<mandara_core::OutputGeometry> {
-    cx.try_global::<crate::overlays::Outputs>().map(|o| o.0.clone()).filter(|o| !o.is_empty()).unwrap_or_else(|| mandara_core::query_outputs().unwrap_or_default())
+    crate::outputs::geometries(cx)
 }
 
 pub(crate) fn output_size(monitor: &str, cx: &App) -> (f32, f32) {

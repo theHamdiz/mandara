@@ -3110,7 +3110,7 @@
 "Most apps" = "Maximale App-Anzahl"
 "Most launched results with their frecency scores" = "Meistgestartete Ergebnisse mit ihren Frecency-Werten"
 "Most pinned entries kept" = "Höchstzahl aufbewahrter angehefteter Einträge"
-"Music or video playing over MPRIS holds every idle stage back" = "Über MPRIS laufende Musik oder Videos halten jede Leerlaufstufe zurück"
+"Music or video playing over MPRIS holds back screen-off and sleep, never the lock" = "Über MPRIS laufende Musik oder Videos halten Bildschirm-aus und Standby zurück, aber nie die Sperre"
 "My command" = "Mein Befehl"
 "Name (optional)" = "Name (optional)"
 "Name a VPN: no VPN was used yet" = "Nenne ein VPN: Es wurde noch keines genutzt"

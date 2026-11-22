@@ -423,7 +423,7 @@ impl Render for KeyringDialog {
         if self.closing && self.appear.value() <= 0.01 {
             window.remove_window();
             cx.defer(show_next);
-        } else if moving || self.busy {
+        } else if moving {
             window.request_animation_frame();
         } else {
             self.clock.idle();

@@ -605,7 +605,7 @@ impl Render for KeepassDialog {
         moving |= self.flash.step(dt);
         if self.closing && self.appear.value() <= alpha::CLOSED {
             window.remove_window();
-        } else if moving || self.busy != Busy::Idle {
+        } else if moving {
             window.request_animation_frame();
         } else {
             self.clock.idle();

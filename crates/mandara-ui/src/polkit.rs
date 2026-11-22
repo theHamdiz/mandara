@@ -527,7 +527,7 @@ impl Render for PolkitDialog {
             window.remove_window();
             // Let the next queued request open.
             cx.defer(show_next);
-        } else if moving || self.busy {
+        } else if moving {
             window.request_animation_frame();
         } else {
             self.clock.idle();

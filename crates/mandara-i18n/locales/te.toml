@@ -3103,7 +3103,7 @@
 "Most apps" = "చాలా యాప్‌లు"
 "Most launched results with their frecency scores" = "frecency స్కోర్‌లతో ఎక్కువ లాంచ్ అయిన ఫలితాలు"
 "Most pinned entries kept" = "ఉంచే గరిష్ఠ పిన్ అంశాలు"
-"Music or video playing over MPRIS holds every idle stage back" = "MPRISపై ప్లే అవుతున్న సంగీతం లేదా వీడియో ప్రతి నిష్క్రియ దశను ఆపుతుంది"
+"Music or video playing over MPRIS holds back screen-off and sleep, never the lock" = "MPRISపై ప్లే అవుతున్న సంగీతం లేదా వీడియో స్క్రీన్ ఆఫ్ మరియు స్లీప్‌ను ఆపుతుంది, లాక్‌ను కాదు"
 "My command" = "నా ఆదేశం"
 "Name (optional)" = "పేరు (ఐచ్ఛికం)"
 "Name a VPN: no VPN was used yet" = "VPNకు పేరు పెట్టండి: ఇంకా VPN వాడలేదు"

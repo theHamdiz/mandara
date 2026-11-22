@@ -2988,7 +2988,7 @@
 "Moves with the music" = "با موسیقی حرکت می‌کند"
 "Moving clouds, rain and stars (off with reduced motion)" = "ابرها، باران و ستاره‌های متحرک (با کاهش حرکت خاموش می‌شود)"
 "Muharram" = "محرم"
-"Music or video playing over MPRIS holds every idle stage back" = "پخش موسیقی یا ویدیو از طریق MPRIS همهٔ مراحل بیکاری را به تعویق می‌اندازد"
+"Music or video playing over MPRIS holds back screen-off and sleep, never the lock" = "پخش موسیقی یا ویدیو از طریق MPRIS خاموش شدن صفحه و خواب را به تعویق می‌اندازد، اما قفل را نه"
 "Music, screenshots, color and ambient sound" = "موسیقی، اسکرین‌شات، رنگ و صدای محیط"
 "Mute" = "بی‌صدا"
 "Mute all" = "بی‌صدا کردن همه"

@@ -967,13 +967,9 @@ fn execute(effect: Effect, cx: &mut App) {
                 notify_failure(&app.name, err, cx);
             }
         }
-        Effect::Open(path) => {
-            std::thread::spawn(move || {
-                if let Err(err) = mandara_services::session::open_uri(&format!("file://{}", path.display())) {
-                    tracing::warn!("{err}");
-                }
-            });
-        }
+        // The path itself, not a hand-built `file://` URI: `#`, `?`, `%` and
+        // spaces in a name would break one.
+        Effect::Open(path) => crate::opener::open_path(&path, cx),
         Effect::Copy(text) => {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
             // Auto-paste: type Ctrl+V once the launcher has given the

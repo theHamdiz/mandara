@@ -6,8 +6,9 @@
 //! Idleness comes from the compositor (`ext-idle-notify-v1`, see
 //! [`mandara_services::idle`]), so apps' idle inhibitors (a fullscreen
 //! video) are honoured for free. On top of those, Mandara keeps the
-//! computer awake while **Keep awake** (caffeine) is on or — with
-//! `idle.respect_media` — while music or video plays over MPRIS.
+//! computer awake while **Keep awake** (caffeine) is on. With
+//! `idle.respect_media`, music or video playing over MPRIS holds the screens
+//! on and the computer awake too, but never the lock.
 //!
 //! The timer plan is a pure function ([`plan`]) recomputed whenever the
 //! config, power source, lock state or inhibitors change; re-arming
@@ -41,6 +42,10 @@ const MAX_KEEP_AWAKE_MIN: i64 = 24 * 60;
 const PREVIEW_FADE: Duration = Duration::from_secs(4);
 /// Ids of custom behaviours start here (`Stage::id`).
 const CUSTOM_BASE: u32 = 100;
+/// First wait before reconnecting the idle client after a failure; it
+/// doubles per consecutive failure up to `RETRY_MAX`.
+const RETRY_FIRST: Duration = Duration::from_secs(5);
+const RETRY_MAX: Duration = Duration::from_secs(300);
 
 /// One idle stage.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize)]
@@ -116,12 +121,14 @@ pub fn plan(cfg: &IdleConfig, on_battery: bool, inhibitors: Inhibitors, locked: 
         // While locked the screens go dark even if a video holds idle off.
         push(Stage::LockedScreensOff, d, true);
     }
-    if inhibitors.any() {
+    if inhibitors.keep_awake {
         return out;
     }
     let t = cfg.timeouts(on_battery);
     let lock = secs(t.lock_s).filter(|_| !locked);
-    let screens = secs(t.screen_off_s).filter(|_| !(locked && locked_off.is_some()));
+    // Playing media holds the screens and sleep back, never the lock: a
+    // background tab playing audio must not leave the session unlocked.
+    let screens = secs(t.screen_off_s).filter(|_| !(locked && locked_off.is_some()) && !inhibitors.media);
     if let Some(fade) = secs(cfg.fade_s)
         && let Some(first) = [lock, screens].into_iter().flatten().min()
         && first > fade
@@ -134,11 +141,11 @@ pub fn plan(cfg: &IdleConfig, on_battery: bool, inhibitors: Inhibitors, locked: 
     if let Some(d) = screens {
         push(Stage::ScreensOff, d, false);
     }
-    if let Some(d) = secs(t.suspend_s) {
+    if let Some(d) = secs(t.suspend_s).filter(|_| !inhibitors.media) {
         push(Stage::Suspend, d, false);
     }
     for (i, b) in cfg.behaviors.iter().enumerate() {
-        if b.enabled && !b.command.trim().is_empty() && b.power.applies(on_battery)
+        if !inhibitors.media && b.enabled && !b.command.trim().is_empty() && b.power.applies(on_battery)
             && let Some(d) = secs(b.timeout_s)
         {
             push(Stage::Custom(i), d, false);
@@ -165,6 +172,11 @@ pub struct IdleManager {
     /// Keep-awake ends at this moment (`None`: until switched off).
     keep_awake_until: Option<Instant>,
     keep_awake_timer: Option<Task<()>>,
+    /// Consecutive failures of the idle Wayland client (backoff exponent).
+    failures: u32,
+    /// Waiting to retry after a failure; while set, `rearm` does not
+    /// reconnect.
+    retry: Option<Task<()>>,
 }
 
 #[derive(Clone)]
@@ -195,7 +207,7 @@ impl IdleManager {
             self.keep_awake_timer = None;
         }
         self.locked = crate::lock::is_locked();
-        if cfg.idle.enabled && self.handle.is_none() {
+        if cfg.idle.enabled && self.handle.is_none() && self.retry.is_none() {
             self.start(cx);
         }
         let next = plan(&cfg.idle, super::battery::on_battery(cx), self.inhibitors, self.locked);
@@ -205,6 +217,11 @@ impl IdleManager {
         if let Some(h) = &self.handle {
             h.set_timers(next.iter().map(|(_, t)| *t).collect());
         }
+        // A fade whose stage no longer applies (an inhibitor started, the
+        // lock engaged) must not run on to a stage that will never come.
+        if !next.iter().any(|(s, _)| *s == Stage::Fade) {
+            dim::stop_countdown(cx);
+        }
         self.armed = next;
         self.armed_at = Instant::now();
         if !cfg.idle.enabled {
@@ -212,6 +229,8 @@ impl IdleManager {
             self.handle = None;
             self.caps = None;
             self.idle_since = None;
+            self.failures = 0;
+            self.retry = None;
             dim::stop(cx);
         }
         cx.notify();
@@ -235,6 +254,7 @@ impl IdleManager {
         let cfg = config(cx).read(cx).snapshot();
         match event {
             IdleEvent::Ready(caps) => {
+                self.failures = 0;
                 self.caps = Some(caps);
                 self.rearm(true, cx);
             }
@@ -242,6 +262,17 @@ impl IdleManager {
                 tracing::warn!("idle: {e}");
                 self.error = Some(e);
                 self.handle = None;
+                // Back off: `rearm` runs on every hub notification and must
+                // not reconnect (thread, eventfd, Wayland connect) each time.
+                let wait = RETRY_FIRST.saturating_mul(1u32 << self.failures.min(6)).min(RETRY_MAX);
+                self.failures = self.failures.saturating_add(1);
+                self.retry = Some(cx.spawn(async move |this, cx| {
+                    cx.background_executor().timer(wait).await;
+                    let _ = this.update(cx, |m, cx| {
+                        m.retry = None;
+                        m.rearm(true, cx);
+                    });
+                }));
             }
             IdleEvent::Screens { on, ok } => {
                 if !ok {
@@ -275,6 +306,9 @@ impl IdleManager {
                     }
                 }
                 Some(Stage::ScreensOff) | Some(Stage::LockedScreensOff) => {
+                    // The overlay has done its job; where the compositor cannot
+                    // switch outputs off it would otherwise stay up.
+                    dim::stop(cx);
                     if Stage::from_id(id) == Some(Stage::LockedScreensOff) && !crate::lock::is_locked() {
                         return;
                     }
@@ -468,6 +502,8 @@ pub fn init(cx: &mut App) {
         inhibitors: Inhibitors::default(),
         keep_awake_until: None,
         keep_awake_timer: None,
+        failures: 0,
+        retry: None,
     });
     cx.set_global(GlobalIdle(entity.clone()));
     entity.update(cx, |m, cx| m.rearm(true, cx));
@@ -582,7 +618,11 @@ mod tests {
     fn inhibitors_and_lock_shape_the_plan() {
         let c = cfg();
         let held = Inhibitors { keep_awake: false, media: true };
-        assert_eq!(stages(&plan(&c, false, held, false)), [(Stage::Status, 5)]);
+        // Media holds the screens and sleep back, but the session still locks.
+        assert_eq!(stages(&plan(&c, false, held, false)), [(Stage::Status, 5), (Stage::Fade, 590), (Stage::Lock, 600)]);
+        assert_eq!(stages(&plan(&c, true, held, false)), [(Stage::Status, 5), (Stage::Fade, 290), (Stage::Lock, 300)]);
+        // Keep-awake holds everything back.
+        assert_eq!(stages(&plan(&c, false, Inhibitors { keep_awake: true, media: false }, false)), [(Stage::Status, 5)]);
         // Locked: the short screens-off timer ignores app inhibitors.
         let locked = plan(&c, false, held, true);
         assert_eq!(stages(&locked), [(Stage::Status, 5), (Stage::LockedScreensOff, 30)]);

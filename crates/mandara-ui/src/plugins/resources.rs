@@ -34,7 +34,7 @@ use gpui::{
 use mandara_config::Units;
 use mandara_core::{SpringConfig, ToGpui};
 use mandara_i18n::{Lang, t, tf, tk, tr};
-use mandara_plugins::{CommandSpec, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
+use mandara_plugins::{CommandSpec, Output, PanelCx, PanelSpec, PluginInstance, PluginManifest, PluginRegistry, Zone};
 use mandara_services::processes::{Process, Sampler};
 use mandara_theme::{Color, MandaraPalette};
 use serde_json::json;
@@ -1682,69 +1682,86 @@ pub fn register(r: &mut PluginRegistry) {
     });
     // Its history and disks live in its view; samples come from the hub's sampler.
     r.sidebar_card(ID, mandara_plugins::CardRelease::Views);
-    r.command(ID, CommandSpec::new("system resources", tk("CPU, memory, GPUs, temperatures, disks and uptime"), |_, cx| {
-        let units = crate::state::config(cx).read(cx).get().units();
-        let mut s = SystemSampler::default();
-        s.sample();
-        std::thread::sleep(COMMAND_SAMPLE_GAP);
-        s.sample();
-        let disks: Vec<_> = read_disks()
-            .iter()
-            .map(|d| json!({ "mount": d.mount, "fstype": d.fstype, "used_bytes": d.used, "total_bytes": d.total }))
-            .collect();
-        let (mem_used, mem_total, swap_used, swap_total) = meminfo();
-        let (temps, gpus) = hardware();
-        let round1 = |c: f32| (f64::from(c) * ROUND_TENTHS).round() / ROUND_TENTHS;
-        let temperatures: Vec<_> = temps
-            .iter()
-            .map(|c| {
-                json!({
-                    "component": c.kind.key(),
-                    "name": c.name.english(),
-                    "device": c.device,
-                    "chip": c.chip,
-                    "celsius": round1(c.celsius),
-                    "warm_celsius": c.warm,
-                    "hot_celsius": c.hot,
-                    "readings": c.readings.iter().map(|r| json!({ "label": r.label.english(), "celsius": round1(r.celsius) })).collect::<Vec<_>>(),
-                })
+    r.command(
+        ID,
+        CommandSpec::new_output("system resources", tk("CPU, memory, GPUs, temperatures, disks and uptime"), |_, cx| {
+            let units = crate::state::config(cx).read(cx).get().units();
+            // Two samples a gap apart plus the disk and sensor reads: on a
+            // thread of their own, never the UI thread.
+            let (tx, rx) = async_channel::bounded(1);
+            cx.spawn(async move |_| {
+                let report = mandara_services::runtime::unblock(move || resources_report(units)).await;
+                let _ = tx.send(Ok(report.to_string())).await;
             })
-            .collect();
-        let gpus: Vec<_> = gpus
-            .iter()
-            .map(|g| {
-                json!({
-                    "name": g.name,
-                    "vendor": g.vendor.key(),
-                    "pci_slot": g.slot,
-                    "integrated": g.integrated,
-                    "load": g.load,
-                    "vram_used_bytes": g.vram_used,
-                    "vram_total_bytes": g.vram_total,
-                    "temp_c": g.temp_c.map(round1),
-                    "freq_mhz": g.freq_mhz.map(f32::round),
-                    "power_w": g.power_w.map(round1),
-                })
+            .detach();
+            Ok(Output::Pending(rx))
+        }),
+    );
+}
+
+/// The `system resources` document (blocking: it samples twice
+/// [`COMMAND_SAMPLE_GAP`] apart and reads disks and sensors).
+fn resources_report(units: Units) -> serde_json::Value {
+    let mut s = SystemSampler::default();
+    s.sample();
+    std::thread::sleep(COMMAND_SAMPLE_GAP);
+    s.sample();
+    let disks: Vec<_> = read_disks()
+        .iter()
+        .map(|d| json!({ "mount": d.mount, "fstype": d.fstype, "used_bytes": d.used, "total_bytes": d.total }))
+        .collect();
+    let (mem_used, mem_total, swap_used, swap_total) = meminfo();
+    let (temps, gpus) = hardware();
+    let round1 = |c: f32| (f64::from(c) * ROUND_TENTHS).round() / ROUND_TENTHS;
+    let temperatures: Vec<_> = temps
+        .iter()
+        .map(|c| {
+            json!({
+                "component": c.kind.key(),
+                "name": c.name.english(),
+                "device": c.device,
+                "chip": c.chip,
+                "celsius": round1(c.celsius),
+                "warm_celsius": c.warm,
+                "hot_celsius": c.hot,
+                "readings": c.readings.iter().map(|r| json!({ "label": r.label.english(), "celsius": round1(r.celsius) })).collect::<Vec<_>>(),
             })
-            .collect();
-        Ok(json!({
-            "cpu": s.cpu,
-            "memory": s.mem,
-            "memory_used_bytes": mem_used,
-            "memory_total_bytes": mem_total,
-            "swap_used_bytes": swap_used,
-            "swap_total_bytes": swap_total,
-            "load": loadavg(),
-            "cpu_ghz": cpu_freq_ghz(),
-            "cpu_temp_c": sensors::cpu_temperature(&temps).or_else(cpu_temp_c).map(round1),
-            // Temperatures below are Celsius; `units` is the display preference.
-            "units": units,
-            "temperatures": temperatures,
-            "gpus": gpus,
-            "disks": disks,
-            "uptime": uptime(),
-        }))
-    }));
+        })
+        .collect();
+    let gpus: Vec<_> = gpus
+        .iter()
+        .map(|g| {
+            json!({
+                "name": g.name,
+                "vendor": g.vendor.key(),
+                "pci_slot": g.slot,
+                "integrated": g.integrated,
+                "load": g.load,
+                "vram_used_bytes": g.vram_used,
+                "vram_total_bytes": g.vram_total,
+                "temp_c": g.temp_c.map(round1),
+                "freq_mhz": g.freq_mhz.map(f32::round),
+                "power_w": g.power_w.map(round1),
+            })
+        })
+        .collect();
+    json!({
+        "cpu": s.cpu,
+        "memory": s.mem,
+        "memory_used_bytes": mem_used,
+        "memory_total_bytes": mem_total,
+        "swap_used_bytes": swap_used,
+        "swap_total_bytes": swap_total,
+        "load": loadavg(),
+        "cpu_ghz": cpu_freq_ghz(),
+        "cpu_temp_c": sensors::cpu_temperature(&temps).or_else(cpu_temp_c).map(round1),
+        // Temperatures below are Celsius; `units` is the display preference.
+        "units": units,
+        "temperatures": temperatures,
+        "gpus": gpus,
+        "disks": disks,
+        "uptime": uptime(),
+    })
 }
 
 #[cfg(test)]

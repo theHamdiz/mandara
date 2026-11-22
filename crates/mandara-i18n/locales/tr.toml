@@ -3111,7 +3111,7 @@
 "Most apps" = "En fazla uygulama"
 "Most launched results with their frecency scores" = "Frecency puanlarıyla en çok başlatılan sonuçlar"
 "Most pinned entries kept" = "En fazla sabitlenmiş girdi sayısı"
-"Music or video playing over MPRIS holds every idle stage back" = "MPRIS üzerinden çalan müzik veya video tüm boşta aşamalarını erteler"
+"Music or video playing over MPRIS holds back screen-off and sleep, never the lock" = "MPRIS üzerinden çalan müzik veya video ekranın kapanmasını ve uykuyu erteler, kilitlemeyi ertelemez"
 "My command" = "Komutum"
 "Name (optional)" = "Ad (isteğe bağlı)"
 "Name a VPN: no VPN was used yet" = "Bir VPN adı verin: henüz hiç VPN kullanılmadı"

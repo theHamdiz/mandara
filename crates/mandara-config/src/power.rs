@@ -189,7 +189,8 @@ pub struct IdleConfig {
     /// While locked, turn the screens off after this much idle time (also
     /// while a video inhibits idle). 0 = never.
     pub locked_screen_off_s: u32,
-    /// Playing media (MPRIS) keeps the computer awake.
+    /// Playing media (MPRIS) holds back screen-off and sleep (never the
+    /// lock).
     pub respect_media: bool,
     /// Lock before the computer sleeps (lid, menu, `systemctl suspend`).
     pub lock_before_sleep: bool,

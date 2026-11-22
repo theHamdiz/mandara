@@ -538,6 +538,27 @@ impl Occurrence {
     }
 }
 
+/// The lead times at which `o` reminds: its alarms, else `fallback` (none
+/// for an all-day event without alarms).
+fn reminder_leads(o: &Occurrence, fallback: Duration, honour_alarms: bool) -> Vec<Duration> {
+    if honour_alarms && !o.alarms.is_empty() {
+        o.alarms.clone()
+    } else if o.all_day {
+        Vec::new()
+    } else {
+        vec![fallback]
+    }
+}
+
+/// The first reminder time after `after` among `occ` (same lead rules as
+/// [`due_reminders`]).
+pub fn next_reminder(occ: &[Occurrence], after: DateTime<Local>, fallback: Duration, honour_alarms: bool) -> Option<DateTime<Local>> {
+    occ.iter()
+        .flat_map(|o| reminder_leads(o, fallback, honour_alarms).into_iter().filter_map(move |lead| chrono::Duration::from_std(lead).ok().map(|l| o.start - l)))
+        .filter(|at| *at > after)
+        .min()
+}
+
 /// Reminders due in `(after, until]`: `(occurrence, lead time)` pairs.
 /// `fallback` applies to events without alarms (or when `honour_alarms`
 /// is off); all-day events remind at `fallback` before midnight only when
@@ -545,14 +566,7 @@ impl Occurrence {
 pub fn due_reminders(occ: &[Occurrence], after: DateTime<Local>, until: DateTime<Local>, fallback: Duration, honour_alarms: bool) -> Vec<(Occurrence, Duration)> {
     let mut out = Vec::new();
     for o in occ {
-        let leads: Vec<Duration> = if honour_alarms && !o.alarms.is_empty() {
-            o.alarms.clone()
-        } else if o.all_day {
-            Vec::new()
-        } else {
-            vec![fallback]
-        };
-        for lead in leads {
+        for lead in reminder_leads(o, fallback, honour_alarms) {
             let Ok(lead_c) = chrono::Duration::from_std(lead) else { continue };
             let at = o.start - lead_c;
             if at > after && at <= until {
@@ -707,6 +721,9 @@ mod tests {
         let due = due_reminders(&occ, start - chrono::Duration::minutes(11), start - chrono::Duration::minutes(9), ten, true);
         assert_eq!(due.len(), 1);
         assert!(due_reminders(&occ, start - chrono::Duration::minutes(9), start, ten, true).is_empty(), "never twice");
+        // The next one is the same moment `due_reminders` reports.
+        assert_eq!(next_reminder(&occ, start - chrono::Duration::minutes(11), ten, true), Some(start - chrono::Duration::minutes(10)));
+        assert_eq!(next_reminder(&occ, start - chrono::Duration::minutes(10), ten, true), None, "strictly after");
     }
 
     #[test]
