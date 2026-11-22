@@ -645,14 +645,31 @@ run_installer() {
     fi
 }
 
+# Whether $1 is plain HTTP to a real loopback authority: `127.0.0.1` or
+# `localhost`, an optional numeric `:port`, then `/` or the end. Anything
+# else (`127.0.0.1:1@evil.example`, `127.0.0.1.evil.example`, `?`, `#`) is not.
+is_loopback_http() {
+    rest=${1#http://}
+    [ "$rest" != "$1" ] || return 1
+    authority=${rest%%/*}
+    host=${authority%%:*}
+    case "$host" in 127.0.0.1|localhost) ;; *) return 1 ;; esac
+    [ "$authority" != "$host" ] || return 0
+    port=${authority#*:}
+    case "$port" in ''|*[!0-9]*) return 1 ;; esac
+    return 0
+}
+
 download_directory() {
     if [ -n "${TMPDIR:-}" ]; then
         work=$(mktemp -d "$TMPDIR/mandara-install.XXXXXXXX") || fail temporary
         return
     fi
     # /tmp can be noexec; prefer the user's cache for the verified binary.
-    base=${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}
-    if mkdir -p -- "$base" 2>/dev/null && work=$(mktemp -d "$base/mandara-install.XXXXXXXX" 2>/dev/null); then
+    # With neither XDG_CACHE_HOME nor HOME there is no private cache: a
+    # fixed /tmp/.cache could be pre-created by someone else.
+    base=${XDG_CACHE_HOME:-${HOME:+$HOME/.cache}}
+    if [ -n "$base" ] && mkdir -p -- "$base" 2>/dev/null && work=$(mktemp -d "$base/mandara-install.XXXXXXXX" 2>/dev/null); then
         return
     fi
     work=$(mktemp -d /tmp/mandara-install.XXXXXXXX) || fail temporary
@@ -706,7 +723,7 @@ main() {
     protocols=https
     case "$release_base" in
         https://*) ;;
-        http://127.0.0.1:*) protocols=http ;;
+        http://*) is_loopback_http "$release_base" || fail https; protocols=http ;;
         *) fail https ;;
     esac
     archive="mandara-$arch-$platform.tar.gz"

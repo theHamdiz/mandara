@@ -1,5 +1,5 @@
 //! Language packs (`.mlang`): one language's translations in a file that is
-//! memory-mapped and read in place.
+//! read into memory once and looked up in place.
 //!
 //! A pack is built once from `locales/<code>.toml` ([`build`]) and loaded
 //! with a single validation pass ([`Pack::parse`]). After that, a lookup

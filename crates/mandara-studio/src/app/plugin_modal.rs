@@ -58,6 +58,8 @@ pub struct PluginModal {
     focus: Option<FocusHandle>,
     /// Uninstall asks once more before deleting the folder.
     confirm_uninstall: bool,
+    /// The folder is being deleted off the UI thread.
+    uninstalling: bool,
     /// "Remove from Mandara" asks once more before removing a built-in.
     confirm_remove: bool,
     /// The Installed tab's "Removed Mandara plugins" section is expanded.
@@ -80,6 +82,7 @@ impl Default for PluginModal {
             clock: FrameClock::new(),
             focus: None,
             confirm_uninstall: false,
+            uninstalling: false,
             confirm_remove: false,
             removed_open: false,
             message: None,
@@ -1130,7 +1133,7 @@ impl StudioView {
             }
             let dir = path.clone();
             manage = manage.child(action("plugin-modal-folder", "folder", t("Show folder").into(), false, p).on_click(move |_, _, _| {
-                let _ = mandara_services::session::open_uri(&format!("file://{}", dir.display()));
+                let _ = mandara_services::session::open_uri(&format!("file://{}", mandara_services::app_uninstall::percent_encode(&dir)));
             }));
             // Only Mandara-managed installs are removed here: development
             // folders hold your source, system ones belong to the package manager.
@@ -1298,16 +1301,34 @@ impl StudioView {
             .into_any_element()
     }
 
-    /// Removes an installed third-party plugin and reloads the plugin list.
+    /// Removes an installed third-party plugin (off the UI thread) and
+    /// reloads the plugin list.
     fn uninstall_plugin(&mut self, id: &str, dir: &std::path::Path, cx: &mut Context<Self>) {
-        let source = std::fs::read_to_string(dir.join(".source")).ok().and_then(|s| s.lines().next().map(str::to_string));
-        let result = match source {
-            Some(repo) => mandara_services::marketplace::uninstall(&repo).map(|_| ()),
-            None => std::fs::remove_dir_all(dir).map_err(|e| e.to_string()),
-        };
+        if std::mem::replace(&mut self.modal.uninstalling, true) {
+            return;
+        }
+        let (id, dir) = (id.to_string(), dir.to_path_buf());
+        let task = cx.background_executor().spawn(async move {
+            let source = std::fs::read_to_string(dir.join(".source")).ok().and_then(|s| s.lines().next().map(str::to_string));
+            match source {
+                Some(repo) => mandara_services::marketplace::uninstall(&repo).map(|_| ()),
+                None => std::fs::remove_dir_all(&dir).map_err(|e| e.to_string()),
+            }
+        });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |this, cx| {
+                this.modal.uninstalling = false;
+                this.uninstalled_plugin(id, result, cx);
+            });
+        })
+        .detach();
+    }
+
+    /// The outcome of [`Self::uninstall_plugin`].
+    fn uninstalled_plugin(&mut self, id: String, result: Result<(), String>, cx: &mut Context<Self>) {
         match result {
             Ok(()) => {
-                let id = id.to_string();
                 update_config(cx, |c| {
                     c.plugins.enabled.retain(|x| x != &id);
                     for lane in [&mut c.bar.left, &mut c.bar.center, &mut c.bar.right] {

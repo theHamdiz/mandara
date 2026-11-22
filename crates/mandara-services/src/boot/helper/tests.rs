@@ -66,6 +66,12 @@ impl Runner for Fake<'_> {
     }
 }
 
+/// Applies as root without the staging-owner check (fixtures belong to
+/// whoever runs the tests); the check has its own tests below.
+fn apply(sys: &Sys, det: &Detection, approved: &Approved, runner: &dyn Runner) -> Result<Outcome, (i32, Outcome)> {
+    super::apply(sys, det, approved, runner, None)
+}
+
 fn approve(sys: &Sys, req: plan::Request) -> Approved {
     let det = detect::detect(sys);
     let digest = build(&det, &req, None).unwrap().digest();
@@ -308,4 +314,62 @@ fn only_fixed_actions_parse() {
     assert_eq!(stamp(1_794_355_200), "20261111-000000");
     assert_eq!(stamp(951_782_400 + 3_661), "20000229-010101");
     let _ = file;
+}
+
+/// A config kept elsewhere and linked into `/etc` is changed where it
+/// lives, put back where it lives, and stays a link throughout.
+#[test]
+fn a_symlinked_config_stays_a_link_through_apply_and_restore() {
+    let root = tempfile::tempdir().unwrap();
+    arch_grub(root.path(), true);
+    let sys = Sys::under(root.path());
+    let link = sys.path("/etc/default/grub");
+    let kept = sys.path("/etc/default/grub.real");
+    std::fs::rename(&link, &kept).unwrap();
+    std::os::unix::fs::symlink("grub.real", &link).unwrap();
+    let stage = tempfile::tempdir().unwrap();
+    let approved = approve(&sys, plan::Request::MenuTheme { theme: grub_stage(stage.path(), "mandara-vimix-1080p"), gfxmode: None });
+    let out = apply(&sys, &detect::detect(&sys), &approved, &Fake::new(&sys)).unwrap();
+    assert!(out.ok);
+    assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(), "the link survived the apply");
+    assert!(std::fs::read_to_string(&kept).unwrap().contains("GRUB_THEME="), "the file it points to was changed");
+    assert!(restore(&sys, "latest", &Fake::new(&sys)).unwrap().ok);
+    assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink(), "and the restore");
+    assert_eq!(std::fs::read_to_string(&kept).unwrap(), ARCH_GRUB, "byte for byte");
+}
+
+/// A failed apply puts a symlinked config back the same way.
+#[test]
+fn a_failed_apply_keeps_a_symlinked_config_a_link() {
+    let root = tempfile::tempdir().unwrap();
+    arch_grub(root.path(), true);
+    let sys = Sys::under(root.path());
+    let link = sys.path("/etc/default/grub");
+    let kept = sys.path("/etc/default/grub.real");
+    std::fs::rename(&link, &kept).unwrap();
+    std::os::unix::fs::symlink("grub.real", &link).unwrap();
+    let stage = tempfile::tempdir().unwrap();
+    let approved = approve(&sys, plan::Request::MenuTheme { theme: grub_stage(stage.path(), "mandara-vimix-1080p"), gfxmode: None });
+    let mut fake = Fake::new(&sys);
+    fake.fail = Some(("grub-script-check", 1));
+    assert!(apply(&sys, &detect::detect(&sys), &approved, &fake).is_err());
+    assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
+    assert_eq!(std::fs::read_to_string(&kept).unwrap(), ARCH_GRUB);
+}
+
+/// Root copies a staged theme only from the account that asked, never
+/// from a folder the request names but someone else owns.
+#[test]
+fn a_staged_theme_must_belong_to_the_account_that_asked() {
+    let root = tempfile::tempdir().unwrap();
+    arch_grub(root.path(), true);
+    let sys = Sys::under(root.path());
+    let stage = tempfile::tempdir().unwrap();
+    let approved = approve(&sys, plan::Request::MenuTheme { theme: grub_stage(stage.path(), "mandara-vimix-1080p"), gfxmode: None });
+    let me = rustix::process::getuid().as_raw();
+    let (code, out) = super::apply(&sys, &detect::detect(&sys), &approved, &Fake::new(&sys), Some(me + 1)).unwrap_err();
+    assert_eq!(code, EXIT_FAILED);
+    assert!(out.message.contains("doesn't belong"), "{}", out.message);
+    assert!(Installed::load(&sys).dirs.is_empty(), "nothing was installed");
+    assert!(super::apply(&sys, &detect::detect(&sys), &approved, &Fake::new(&sys), Some(me)).unwrap().ok);
 }

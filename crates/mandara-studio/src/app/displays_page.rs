@@ -29,9 +29,9 @@ use mandara_services::{ddc, outputs};
 use mandara_theme::MandaraPalette;
 use mandara_ui::icons::icon;
 use mandara_ui::state::update_config;
-use std::sync::Mutex;
 
 use super::StudioView;
+use super::ddc_writes::{DdcWrites, WRITE_DEADLINE};
 use super::compositor_page::{badge, button, card, chip, heading, tip};
 use super::launcher_page::page_section;
 use super::themes_page::section_head;
@@ -91,9 +91,6 @@ const PROFILE_CARD_H_PX: f32 = 2.0 * (PROFILE_PAD_PX + BORDER_2_PX) + DIM_36_PX 
 /// The label column of the selected display's rows.
 const OUTPUT_LABEL_W_PX: f32 = DIM_140_PX;
 
-/// One DDC monitor's slider: latest wanted percent while a write runs.
-type DdcWants = Arc<Mutex<HashMap<String, u32>>>;
-
 #[derive(Default)]
 struct DisplaysStudio {
     heads: Option<Result<Vec<outputs::Head>, String>>,
@@ -116,7 +113,7 @@ struct DisplaysStudio {
     night: Option<serde_json::Value>,
     night_at: Option<Instant>,
     ddc: Option<(ddc::Access, Vec<ddc::DdcMonitor>)>,
-    ddc_wants: DdcWants,
+    ddc_wants: Arc<DdcWrites>,
     ddc_shown: HashMap<String, u32>,
     clients: Option<Vec<String>>,
     user_rules: Option<BTreeSet<String>>,
@@ -1228,18 +1225,13 @@ impl StudioView {
                     let slider = mandara_ui::kit::slider(SharedString::from(format!("ddc-{}", m.connector)), percent as f32 / PERCENT, p, move |f, _, cx| {
                         let v = ((f * PERCENT).round() as u32).clamp(min, PERCENT as u32);
                         st(cx).ddc_shown.insert(connector.clone(), v);
-                        let first = wants.lock().unwrap_or_else(|e| e.into_inner()).insert(connector.clone(), v).is_none();
-                        if first {
+                        if let Some(generation) = wants.want(&connector, v, Instant::now(), WRITE_DEADLINE) {
                             // One writer per monitor; it always sends the newest value.
                             let (connector, wants) = (connector.clone(), wants.clone());
-                            std::thread::spawn(move || loop {
-                                let Some(v) = wants.lock().unwrap_or_else(|e| e.into_inner()).get(&connector).copied() else { return };
-                                let _ = ddc::set_percent(&connector, v as f64, min);
-                                let mut w = wants.lock().unwrap_or_else(|e| e.into_inner());
-                                if w.get(&connector) == Some(&v) {
-                                    w.remove(&connector);
-                                    return;
-                                }
+                            std::thread::spawn(move || {
+                                wants.run_writer(&connector, generation, |v| {
+                                    let _ = ddc::set_percent(&connector, v as f64, min);
+                                });
                             });
                         }
                         cx.refresh_windows();

@@ -363,8 +363,9 @@ pub struct NewUser {
 
 #[derive(Clone)]
 pub enum NewPassword {
-    /// Plain text from the form; hashed before it leaves this module.
-    Now(String),
+    /// Plain text from the form; hashed before it leaves this module, and
+    /// wiped from memory when dropped.
+    Now(zeroize::Zeroizing<String>),
     /// `PasswordMode::SetAtLogin`: the user chooses one when first logging in.
     AtFirstLogin,
 }
@@ -379,15 +380,25 @@ pub fn create_account(backend: &dyn AccountsBackend, new: &NewUser) -> Result<u6
     {
         return Err(AccountsError::new(ErrorKind::Failed, mandara_i18n::t("Enter a password, or let the user choose one at first login")));
     }
-    let uid = match backend.execute(&Request::create_user(&new.user_name, new.real_name.trim(), new.account_type))? {
-        Reply::Created(uid) => uid,
-        Reply::Done => return Err(AccountsError::new(ErrorKind::Failed, "CreateUser returned no user")),
-    };
+    // Hash first: a failure here (no randomness) must not leave an account
+    // behind.
     let password = match &new.password {
         NewPassword::Now(pw) => UserChange::Password { hash: crypt::hash_password(pw).map_err(|e| AccountsError::new(ErrorKind::Failed, e))?, hint: String::new() },
         NewPassword::AtFirstLogin => UserChange::PasswordMode(PasswordMode::SetAtLogin),
     };
-    backend.execute(&password.request(uid))?;
+    let uid = match backend.execute(&Request::create_user(&new.user_name, new.real_name.trim(), new.account_type))? {
+        Reply::Created(uid) => uid,
+        Reply::Done => return Err(AccountsError::new(ErrorKind::Failed, "CreateUser returned no user")),
+    };
+    // An account without its password (polkit declined the second action,
+    // accounts-daemon went away) would be a login with no password: take it
+    // back out, files and all, and report why the password failed.
+    if let Err(error) = backend.execute(&password.request(uid)) {
+        if let Err(undo) = backend.execute(&Request::delete_user(uid, true)) {
+            tracing::warn!("couldn't remove the half-created account {}: {undo}", new.user_name);
+        }
+        return Err(error);
+    }
     if !new.language.is_empty() {
         backend.execute(&UserChange::Language(new.language.clone()).request(uid))?;
     }
@@ -768,7 +779,7 @@ mod tests {
     #[test]
     fn create_account_hashes_the_password() {
         let mock = MockAccounts::demo();
-        let new = NewUser { user_name: "salma".into(), real_name: "Salma Adel".into(), account_type: AccountType::Standard, password: NewPassword::Now("correct horse battery".into()), language: "ar_EG.UTF-8".into() };
+        let new = NewUser { user_name: "salma".into(), real_name: "Salma Adel".into(), account_type: AccountType::Standard, password: NewPassword::Now("correct horse battery".to_string().into()), language: "ar_EG.UTF-8".into() };
         let uid = create_account(&mock, &new).unwrap();
         let log = mock.log();
         assert_eq!(log[0].method, "CreateUser");
@@ -793,6 +804,47 @@ mod tests {
         let user = mock.list_users().unwrap().into_iter().find(|u| u.uid == uid).unwrap();
         assert!(user.is_admin());
         assert_eq!(user.password_mode, PasswordMode::SetAtLogin);
+    }
+
+    /// A backend that refuses one method (polkit declined that action).
+    struct Refusing<'a>(&'a mock::MockAccounts, &'static str);
+
+    impl AccountsBackend for Refusing<'_> {
+        fn list_users(&self) -> Result<Vec<UserAccount>> {
+            self.0.list_users()
+        }
+        fn system_accounts(&self) -> Vec<UserAccount> {
+            self.0.system_accounts()
+        }
+        fn taken_names(&self) -> Vec<String> {
+            self.0.taken_names()
+        }
+        fn execute(&self, request: &Request) -> Result<Reply> {
+            if request.method == self.1 {
+                return Err(AccountsError::new(ErrorKind::NotAuthorized, "declined"));
+            }
+            self.0.execute(request)
+        }
+        fn current_uid(&self) -> u64 {
+            self.0.current_uid()
+        }
+    }
+
+    /// The password step failing takes the new account back out instead of
+    /// leaving a login without a password.
+    #[test]
+    fn a_failed_password_removes_the_new_account() {
+        let mock = MockAccounts::demo();
+        let before = mock.list_users().unwrap().len();
+        let new = NewUser { user_name: "salma".into(), real_name: "Salma".into(), account_type: AccountType::Standard, password: NewPassword::Now("correct horse battery".to_string().into()), language: String::new() };
+        let error = create_account(&Refusing(&mock, "SetPassword"), &new).unwrap_err();
+        assert_eq!(error.kind, ErrorKind::NotAuthorized, "the password's error is reported, not the cleanup's");
+        assert_eq!(mock.list_users().unwrap().len(), before, "no half-made account is left");
+        let log = mock.log();
+        assert_eq!(log.iter().map(|r| r.method).collect::<Vec<_>>(), ["CreateUser", "DeleteUser"]);
+        assert_eq!(log[1], Request::delete_user(1005, true));
+        // And the name is free again.
+        assert!(create_account(&mock, &new).is_ok());
     }
 
     #[test]

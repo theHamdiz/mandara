@@ -464,11 +464,12 @@ impl Launcher for PkexecLauncher {
         use mandara_config::admin;
         let argv = std::iter::once("system-update".into()).chain(args.iter().map(Into::into));
         // `prepare` hands back the running binary, which isn't root's, when
-        // the helper must be (re)installed first.
+        // the helper must be (re)installed first: root then installs this
+        // very process, never a path.
         let (prog, argv) = if admin::trusted_root_file(admin) {
             admin::pkexec(admin, argv)
         } else {
-            admin::setup_and_run(admin, argv)
+            admin::setup_and_run(argv)?
         };
         let mut child = Command::new(prog)
             .args(argv)

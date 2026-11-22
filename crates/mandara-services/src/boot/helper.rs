@@ -209,17 +209,43 @@ fn stamp(t: u64) -> String {
     format!("{y:04}{m:02}{d:02}-{:02}{:02}{:02}", secs / 3600, secs % 3600 / 60, secs % 60)
 }
 
+/// Links followed when resolving a config file that is itself a link.
+const LINK_HOPS: usize = 8;
+
+/// The file a path on `sys` really names: a symlinked config
+/// (`/etc/default/grub` kept in a dotfile repository, a NixOS-style
+/// `limine.conf`) is changed where it lives, so the link itself survives
+/// every apply and every rollback. An absolute target is a path on `sys`
+/// (re-rooted in tests); a dangling link resolves to where it points.
+fn resolve_link(sys: &Sys, path: &Path) -> Result<PathBuf, String> {
+    let mut real = path.to_path_buf();
+    for _ in 0..LINK_HOPS {
+        let Ok(target) = std::fs::read_link(&real) else { return Ok(real) };
+        real = if target.is_absolute() { sys.path(&target) } else { real.parent().unwrap_or(Path::new("/")).join(target) };
+    }
+    Err(format!("{} is a chain of links that is too long", path.display()))
+}
+
 /// Writes `bytes` to system path `path` through a scratch file in the
 /// same folder (a crash leaves the old file or the new one, never half).
+/// A link is written through, never replaced.
 pub fn write_file(sys: &Sys, path: &Path, bytes: &[u8], mode: u32) -> Result<(), String> {
-    use std::os::unix::fs::PermissionsExt as _;
-    let real = sys.path(path);
+    use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
+    let real = resolve_link(sys, &sys.path(path))?;
     let dir = real.parent().ok_or("no parent folder")?;
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let mode = std::fs::metadata(&real).map(|m| m.permissions().mode() & 0o7777).unwrap_or(mode);
     let tmp = dir.join(format!(".{}.{}", real.file_name().unwrap_or_default().to_string_lossy(), super::MARK));
+    // The scratch name is predictable: clear whatever sits there (a link
+    // included, removed rather than followed) and create it fresh, so the
+    // bytes never land in a file someone else chose.
+    match std::fs::remove_file(&tmp) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(format!("{}: {e}", tmp.display())),
+    }
     let result = (|| {
-        let mut f = std::fs::File::create(&tmp).map_err(|e| format!("{}: {e}", tmp.display()))?;
+        let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&tmp).map_err(|e| format!("{}: {e}", tmp.display()))?;
         f.write_all(bytes).map_err(|e| e.to_string())?;
         f.sync_all().map_err(|e| e.to_string())?;
         // FAT has no modes: best effort.
@@ -260,7 +286,9 @@ impl Journal<'_> {
             return Ok(());
         }
         let real = self.sys.path(path);
-        let existed = std::fs::symlink_metadata(&real).is_ok_and(|m| m.is_file());
+        // `metadata` follows a link: a symlinked config is backed up by its
+        // content and written through (`write_file`), so the link stays.
+        let existed = std::fs::metadata(&real).is_ok_and(|m| m.is_file());
         let copy = if existed {
             use std::os::unix::fs::PermissionsExt as _;
             let name = format!("file-{}", self.record.files.len());
@@ -312,13 +340,14 @@ impl Journal<'_> {
 
 /// Restores one file from its backup copy (or removes it if it was new).
 fn put_back(sys: &Sys, dir: &Path, f: &FileBackup) -> Result<(), String> {
-    let real = sys.path(&f.path);
     match &f.copy {
         Some(copy) => {
             let bytes = std::fs::read(dir.join(copy)).map_err(|e| format!("{}: {e}", f.path.display()))?;
             write_file(sys, &f.path, &bytes, 0o644)
         }
-        None => match std::fs::remove_file(&real) {
+        // The file was new: remove what Mandara wrote (through a link, so a
+        // dangling link is left as it was).
+        None => match std::fs::remove_file(resolve_link(sys, &sys.path(&f.path))?) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(format!("{}: {e}", f.path.display())),
@@ -342,7 +371,8 @@ fn run_step(sys: &Sys, runner: &dyn Runner, step: &Step) -> Result<(), String> {
                     return Err(format!("{} has no boot entries, so it wasn't used", tmp.display()));
                 }
                 if matches!(step, Step::GrubConfig { .. }) {
-                    std::fs::rename(sys.path(&tmp), sys.path(cfg)).map_err(|e| format!("{}: {e}", cfg.display()))?;
+                    // A menu that is itself a link is replaced where it lives.
+                    std::fs::rename(sys.path(&tmp), resolve_link(sys, &sys.path(cfg))?).map_err(|e| format!("{}: {e}", cfg.display()))?;
                 }
                 Ok(())
             })();
@@ -365,10 +395,15 @@ fn run_step(sys: &Sys, runner: &dyn Runner, step: &Step) -> Result<(), String> {
 
 /// Copies the staged theme (or wallpaper) into root's own folder and checks
 /// it there. Returns its path.
-fn take_in(req: &Request, scratch: &Path) -> Result<Option<PathBuf>, String> {
+///
+/// The request names the staged folder, and anyone who can edit the
+/// request file could name any folder root can read: with `owner` (the
+/// account that asked), only that account's own files are taken, read
+/// without following links ([`archive::copy_tree_as`]).
+fn take_in(req: &Request, scratch: &Path, owner: Option<u32>) -> Result<Option<PathBuf>, String> {
     if let Some((staged, kind)) = req.staged() {
         let to = scratch.join(&staged.name);
-        archive::copy_tree(&staged.dir, &to, archive::INSTALL_LIMITS)?;
+        archive::copy_tree_as(&staged.dir, &to, archive::INSTALL_LIMITS, owner)?;
         match kind {
             Kind::Grub => theme::check_grub(&to).map(|_| ())?,
             Kind::Refind => theme::check_refind(&to, &staged.name, staged.include.as_deref().unwrap_or_default())?,
@@ -379,11 +414,7 @@ fn take_in(req: &Request, scratch: &Path) -> Result<Option<PathBuf>, String> {
     if let Request::LimineStyle { style } = req
         && let Some(w) = &style.wallpaper
     {
-        let meta = std::fs::symlink_metadata(w).map_err(|e| format!("{}: {e}", w.display()))?;
-        if !meta.is_file() || meta.len() > WALLPAPER_MAX {
-            return Err(format!("{} isn't a wallpaper Mandara copies", w.display()));
-        }
-        let bytes = std::fs::read(w).map_err(|e| e.to_string())?;
+        let bytes = archive::read_file_as(w, WALLPAPER_MAX, owner)?;
         if !bytes.starts_with(PNG_MAGIC) {
             return Err("the wallpaper must be a PNG".into());
         }
@@ -404,8 +435,9 @@ pub struct Outcome {
     pub plan: Option<Plan>,
 }
 
-/// Applies `approved` on `sys` (root's view of the system).
-pub fn apply(sys: &Sys, det: &Detection, approved: &Approved, runner: &dyn Runner) -> Result<Outcome, (i32, Outcome)> {
+/// Applies `approved` on `sys` (root's view of the system). `owner` is the
+/// account that asked (see [`take_in`]).
+pub fn apply(sys: &Sys, det: &Detection, approved: &Approved, runner: &dyn Runner, owner: Option<u32>) -> Result<Outcome, (i32, Outcome)> {
     let fail = |code: i32, message: String| (code, Outcome { ok: false, backup: None, message, plan: None });
     let req = &approved.request;
     req.validate().map_err(|e| fail(EXIT_USAGE, e))?;
@@ -421,7 +453,7 @@ pub fn apply(sys: &Sys, det: &Detection, approved: &Approved, runner: &dyn Runne
         }
     }
     let _cleanup = Cleanup(scratch.clone());
-    let taken = take_in(req, &scratch).map_err(|e| fail(EXIT_FAILED, e))?;
+    let taken = take_in(req, &scratch, owner).map_err(|e| fail(EXIT_FAILED, e))?;
     let plan = plan::build(det, req, taken.as_deref()).map_err(|e| fail(EXIT_UNSUPPORTED, e))?;
     if plan.digest() != approved.digest {
         return Err((EXIT_PLAN_CHANGED, Outcome { ok: false, backup: None, message: "With admin rights the system looks different from what you approved, so nothing was changed. Review the new plan.".into(), plan: Some(plan) }));
@@ -625,6 +657,12 @@ pub fn restore(sys: &Sys, id: &str, runner: &dyn Runner) -> Result<Outcome, (i32
     Ok(Outcome { ok: true, backup: Some(record.id), message, plan: None })
 }
 
+/// The account that asked for the change: pkexec and sudo name it in the
+/// environment they set up; from root's own shell it is root.
+fn requester() -> u32 {
+    ["PKEXEC_UID", "SUDO_UID"].iter().find_map(|name| std::env::var(name).ok()?.parse().ok()).unwrap_or(0)
+}
+
 fn print(outcome: &Outcome) {
     println!("{}", serde_json::to_string_pretty(outcome).unwrap_or_default());
 }
@@ -652,7 +690,7 @@ pub fn main(args: &[String]) -> i32 {
         Action::Apply(file) => {
             let approved = std::fs::metadata(&file).map_err(|e| e.to_string()).and_then(|m| if m.len() > REQUEST_MAX { Err("the request is too large".into()) } else { Ok(()) }).and_then(|()| std::fs::read_to_string(&file).map_err(|e| e.to_string())).and_then(|t| serde_json::from_str::<Approved>(&t).map_err(|e| e.to_string()));
             match approved {
-                Ok(a) => apply(&sys, &detect::detect(&sys), &a, &SystemRunner),
+                Ok(a) => apply(&sys, &detect::detect(&sys), &a, &SystemRunner, Some(requester())),
                 Err(e) => Err((EXIT_USAGE, Outcome { ok: false, backup: None, message: format!("{}: {e}", file.display()), plan: None })),
             }
         }

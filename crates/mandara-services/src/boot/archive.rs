@@ -184,34 +184,113 @@ pub fn unpack(archive: &Path, dest: &Path, limits: Limits) -> Result<(), String>
 /// exist yet) with the same rules as [`unpack`]: symlinks anywhere in the
 /// tree are skipped, never followed.
 pub fn copy_tree(from: &Path, to: &Path, limits: Limits) -> Result<(), String> {
-    let meta = std::fs::symlink_metadata(from).map_err(|e| format!("{}: {e}", from.display()))?;
-    if !meta.is_dir() {
-        return Err(tf("{path} isn't a folder", &[("path", &from.display())]));
-    }
+    copy_tree_as(from, to, limits, None)
+}
+
+/// [`copy_tree`] for the root side. Every step is relative to an open
+/// folder handle and never follows a link, so a tree someone else can
+/// change can't be swapped for a link to something else while it is being
+/// read. With `owner` (the account that asked for the change), `from` is
+/// resolved once, opened without links on the way and must belong to that
+/// account: a request can't point root at a folder it doesn't own.
+pub fn copy_tree_as(from: &Path, to: &Path, limits: Limits, owner: Option<u32>) -> Result<(), String> {
+    use rustix::fs::{AtFlags, Dir, FileType, Mode, OFlags, openat, statat};
+    use std::os::unix::ffi::{OsStrExt as _, OsStringExt as _};
+    let root = open_confined(from, true, owner)?;
     if to.exists() {
         return Err(format!("{} already exists", to.display()));
     }
     std::fs::create_dir_all(to).map_err(|e| format!("{}: {e}", to.display()))?;
     let mut budget = Budget { limits, entries: 0, total: 0 };
-    let mut stack = vec![PathBuf::new()];
-    while let Some(rel) = stack.pop() {
-        let dir = from.join(&rel);
-        let mut entries: Vec<_> = std::fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))?.flatten().collect();
-        entries.sort_by_key(|e| e.file_name());
-        for e in entries {
+    let mut stack = vec![(root, PathBuf::new())];
+    while let Some((dir, rel)) = stack.pop() {
+        let shown = from.join(&rel);
+        let mut names: Vec<std::ffi::OsString> = Dir::read_from(&dir)
+            .map_err(|e| format!("{}: {e}", shown.display()))?
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_bytes().to_vec())
+            .filter(|n| n != b"." && n != b"..")
+            .map(std::ffi::OsString::from_vec)
+            .collect();
+        names.sort();
+        for name in names {
             budget.entry()?;
-            let child = rel.join(e.file_name());
-            // symlink_metadata: a link is a link, whatever it points to.
-            let Ok(m) = std::fs::symlink_metadata(e.path()) else { continue };
-            if m.is_dir() {
-                stack.push(child);
-            } else if m.is_file() && kept(&child) {
-                let mut f = std::fs::File::open(e.path()).map_err(|err| format!("{}: {err}", e.path().display()))?;
-                budget.copy(&mut f, &to.join(&child))?;
+            let child = rel.join(&name);
+            // `statat` without following: a link is a link, whatever it points to.
+            let Ok(stat) = statat(&dir, name.as_bytes(), AtFlags::SYMLINK_NOFOLLOW) else { continue };
+            match FileType::from_raw_mode(stat.st_mode) {
+                FileType::Directory => {
+                    if let Ok(fd) = openat(&dir, name.as_bytes(), OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC, Mode::empty()) {
+                        stack.push((fd, child));
+                    }
+                }
+                FileType::RegularFile if kept(&child) => {
+                    // NONBLOCK: a file swapped for a FIFO after the check can't stall the copy.
+                    let fd = openat(&dir, name.as_bytes(), OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC, Mode::empty()).map_err(|e| format!("{}: {e}", from.join(&child).display()))?;
+                    let mut file = std::fs::File::from(fd);
+                    if !file.metadata().is_ok_and(|m| m.is_file()) {
+                        continue;
+                    }
+                    budget.copy(&mut file, &to.join(&child))?;
+                }
+                _ => {}
             }
         }
     }
     Ok(())
+}
+
+/// Reads the regular file `path` (at most `max` bytes) like [`copy_tree_as`]
+/// opens a folder: without links on the way when `owner` is set, never
+/// through a link in its last name, and only if it belongs to `owner`.
+pub fn read_file_as(path: &Path, max: u64, owner: Option<u32>) -> Result<Vec<u8>, String> {
+    let file = std::fs::File::from(open_confined(path, false, owner)?);
+    let meta = file.metadata().map_err(|e| format!("{}: {e}", path.display()))?;
+    if !meta.is_file() || meta.len() > max {
+        return Err(format!("{} isn't a file Mandara copies", path.display()));
+    }
+    let mut bytes = Vec::with_capacity(meta.len() as usize);
+    file.take(max + 1).read_to_end(&mut bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    if bytes.len() as u64 > max {
+        return Err(format!("{} isn't a file Mandara copies", path.display()));
+    }
+    Ok(bytes)
+}
+
+/// Opens `path` (a folder or a file) for reading without following a link
+/// in its last name. With `owner`, the whole path is first resolved (a
+/// home folder may itself sit behind a link, as on atomic distributions),
+/// then opened again refusing every link and checked to belong to `owner`,
+/// on the open handle (no race between the check and the use).
+fn open_confined(path: &Path, directory: bool, owner: Option<u32>) -> Result<std::os::fd::OwnedFd, String> {
+    use rustix::fs::{CWD, Mode, OFlags, ResolveFlags, fstat, open, openat2};
+    use rustix::io::Errno;
+    let mut flags = OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC;
+    if directory {
+        flags |= OFlags::DIRECTORY;
+    }
+    let not_found = |e: Errno| match e {
+        Errno::NOTDIR | Errno::LOOP if directory => tf("{path} isn't a folder", &[("path", &path.display())]),
+        e => format!("{}: {e}", path.display()),
+    };
+    let fd = match owner {
+        None => open(path, flags, Mode::empty()).map_err(not_found)?,
+        Some(_) => {
+            let resolved = std::fs::canonicalize(path).map_err(|e| format!("{}: {e}", path.display()))?;
+            match openat2(CWD, &resolved, flags, Mode::empty(), ResolveFlags::NO_SYMLINKS | ResolveFlags::NO_MAGICLINKS) {
+                Ok(fd) => fd,
+                // Kernels before 5.6 have no openat2: the resolved path has no links to follow.
+                Err(Errno::NOSYS) => open(&resolved, flags, Mode::empty()).map_err(not_found)?,
+                Err(e) => return Err(not_found(e)),
+            }
+        }
+    };
+    if let Some(uid) = owner
+        && fstat(&fd).map_err(|e| format!("{}: {e}", path.display()))?.st_uid != uid
+    {
+        return Err(format!("{} doesn't belong to the account that asked for the change", path.display()));
+    }
+    Ok(fd)
 }
 
 /// Every regular file under `dir`, relative, sorted (symlinks skipped).
@@ -340,5 +419,36 @@ pub(crate) mod tests {
         assert_eq!(files(&to), ["icons/a.png", "theme.txt"].map(PathBuf::from));
         assert!(copy_tree(&src.join("theme.txt"), &dir.path().join("t2"), INSTALL_LIMITS).is_err());
         assert!(copy_tree(&src.join("etc"), &dir.path().join("t3"), INSTALL_LIMITS).is_err(), "a linked folder isn't followed");
+    }
+
+    /// The root side takes a folder only from the account that asked (the
+    /// path may sit behind links, as `/home` does on atomic systems, but
+    /// what it resolves to must be that account's), and a file is read the
+    /// same way.
+    #[test]
+    fn copy_tree_as_and_read_file_as_check_the_owner() {
+        let me = rustix::process::getuid().as_raw();
+        let dir = tempfile::tempdir().unwrap();
+        let real = dir.path().join("real");
+        std::fs::create_dir_all(real.join("icons")).unwrap();
+        std::fs::write(real.join("theme.txt"), "x").unwrap();
+        std::fs::write(real.join("icons/a.png"), "x").unwrap();
+        std::os::unix::fs::symlink("/etc/passwd", real.join("passwd.txt")).unwrap();
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        copy_tree_as(&link, &dir.path().join("a"), INSTALL_LIMITS, Some(me)).unwrap();
+        assert_eq!(files(&dir.path().join("a")), ["icons/a.png", "theme.txt"].map(PathBuf::from), "a linked path resolves, links inside are skipped");
+        let err = copy_tree_as(&real, &dir.path().join("b"), INSTALL_LIMITS, Some(me + 1)).unwrap_err();
+        assert!(err.contains("doesn't belong"), "{err}");
+        assert!(!dir.path().join("b/theme.txt").exists(), "nothing is copied from another account's folder");
+        // Without an owner the folder itself must not be a link.
+        assert!(copy_tree_as(&link, &dir.path().join("c"), INSTALL_LIMITS, None).is_err());
+
+        assert_eq!(read_file_as(&real.join("theme.txt"), 16, Some(me)).unwrap(), b"x");
+        assert!(read_file_as(&real.join("theme.txt"), 16, Some(me + 1)).is_err(), "another account's file");
+        assert!(read_file_as(&real.join("passwd.txt"), 1 << 20, None).is_err(), "a link isn't followed");
+        assert!(read_file_as(&real.join("theme.txt"), 0, None).is_err(), "over the limit");
+        assert!(read_file_as(&real, 16, None).is_err(), "a folder isn't a file");
     }
 }

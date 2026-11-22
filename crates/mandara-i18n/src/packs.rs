@@ -19,26 +19,25 @@
 //! pack; any other language without one falls back to English, exactly
 //! as an untranslated string does.
 //!
-//! # Never changed under a live mapping
+//! # Read into memory, never mapped
 //!
-//! Packs are memory-mapped read-only and the mapping lives as long as the
-//! process. Writing into a mapped file in place (or truncating it) could
-//! make a later read fault with `SIGBUS`. So Mandara never does: [`install`]
+//! A pack is read into memory once and the copy lives as long as the
+//! process. Mapping the file instead would make any later truncation or
+//! in-place write of it (a `cp` onto the pack) fault the shell, greeter or
+//! lock screen with `SIGBUS`; a private copy cannot be changed from outside,
+//! and the whole file is validated once by [`crate::pack::Pack::parse`]
+//! before anything reads it. The cost is a few hundred KB of private memory
+//! per loaded language. Writers still never write in place: [`install`]
 //! writes a temporary file in the same folder, syncs it and **renames** it
-//! over the old name. A rename only swaps the directory entry: a process
-//! that mapped the old file keeps reading the old inode, which the kernel
-//! frees when the last mapping goes, and every later load maps the new one.
-//! Pruning old versions ([`prune`]) only unlinks, which is just as safe.
-//! Package managers replace files the same way (unlink or rename). Only a
-//! person overwriting a pack in place (`cp` onto it) could break a running
-//! shell, as with any mapped library.
+//! over the old name, so a reader never sees a half-written pack. Pruning
+//! old versions ([`prune`]) only unlinks.
 //!
 //! # Loading and hooks
 //!
-//! The first lookup in a language maps its pack (a few hundred KB, checked
+//! The first lookup in a language reads its pack (a few hundred KB, checked
 //! in one pass, well under a millisecond). When none is found, lookups
 //! fall back to English and the [`on_missing`] hook runs once: the shell
-//! uses it to download the pack, then calls [`reload`], which maps the new
+//! uses it to download the pack, then calls [`reload`], which reads the new
 //! file and tells every [`on_loaded`] listener (the UI re-renders). Debug
 //! builds without a pack compile the shell and greeter source catalogs
 //! instead, so `cargo test` and `cargo run` stay translated; release
@@ -105,20 +104,26 @@ pub fn search_dirs(version: &str) -> Vec<PathBuf> {
     dirs
 }
 
-/// Maps `path` read-only and validates it as `lang`'s pack for `version`.
-/// The mapping is leaked: it lives for the rest of the process.
+/// Largest pack file accepted: real packs are a few hundred KB, so this
+/// only stops a wrong or hostile file from filling memory.
+const MAX_PACK_BYTES: u64 = 16 * 1024 * 1024;
+
+/// Reads `path` into memory and validates it as `lang`'s pack for
+/// `version`. The copy is leaked: it lives for the rest of the process.
 pub fn open(path: &Path, version: &str, lang: Lang) -> Result<&'static Pack<'static>, String> {
+    use std::io::Read as _;
     let file = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let len = file.metadata().map_err(|e| format!("{}: {e}", path.display()))?.len();
-    if len == 0 {
+    // One read of at most the cap plus a byte: the file may grow or shrink
+    // while it is read, and a longer one is rejected below, never buffered.
+    let mut bytes = Vec::new();
+    file.take(MAX_PACK_BYTES + 1).read_to_end(&mut bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    if bytes.is_empty() {
         return Err(format!("{}: {}", path.display(), PackError::NotAPack));
     }
-    // SAFETY: the map is read-only and the file is never written in place
-    // (installs rename a new file over it, see the module docs), so the
-    // bytes can't change or shrink while mapped.
-    let map = unsafe { memmap2::Mmap::map(&file) }.map_err(|e| format!("{}: {e}", path.display()))?;
-    let map: &'static memmap2::Mmap = Box::leak(Box::new(map));
-    let data: &'static [u8] = map;
+    if bytes.len() as u64 > MAX_PACK_BYTES {
+        return Err(format!("{}: larger than {MAX_PACK_BYTES} bytes", path.display()));
+    }
+    let data: &'static [u8] = Box::leak(bytes.into_boxed_slice());
     match Pack::parse(data, version, lang) {
         Ok(p) => Ok(Box::leak(Box::new(p))),
         Err(e) => Err(format!("{}: {e}", path.display())),
@@ -318,7 +323,7 @@ fn load(lang: Lang) -> Option<&'static Pack<'static>> {
 }
 
 /// Looks for `lang`'s pack again (after a download) and swaps it in. The
-/// previous pack stays mapped, so strings already handed out stay valid.
+/// previous pack stays in memory, so strings already handed out stay valid.
 /// `true` when a pack is loaded now; [`on_loaded`] listeners run then.
 pub fn reload(lang: Lang) -> bool {
     if lang == Lang::En {

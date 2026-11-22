@@ -19,7 +19,7 @@ pub(super) fn run(request: &Request, cancel: &AtomicBool) -> Result<Reply> {
     let args = [OsString::from("storage-admin"), OsString::from(document)];
     let (program, args) = match mandara_config::admin::current_admin_exe() {
         Some(admin) => mandara_config::admin::pkexec(&admin, args),
-        None => mandara_config::admin::setup_and_run(&std::env::current_exe()?, args),
+        None => mandara_config::admin::setup_and_run(args)?,
     };
     let mut command = Command::new(program);
     command.args(args);

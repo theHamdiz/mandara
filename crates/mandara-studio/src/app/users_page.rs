@@ -42,6 +42,7 @@ use mandara_services::accounts::{
 use mandara_theme::{Color, MandaraPalette};
 use mandara_ui::icons::icon;
 use mandara_ui::text_field::TextField;
+use zeroize::Zeroizing;
 
 use super::StudioView;
 use super::compositor_page::{badge, button, card, chip, group_title, heading, tip};
@@ -88,10 +89,7 @@ const MONOGRAM_SCALE: f32 = 0.36;
 const GRADIENT_ANGLE: f32 = 145.0;
 
 // ── Timing ──────────────────────────────────────────────────────────────────
-const POLL: Duration = Duration::from_millis(500);
 const NOTICE_TTL: Duration = Duration::from_secs(5);
-/// The page counts as hidden once it hasn't rendered for this long.
-const HIDDEN_AFTER: Duration = Duration::from_secs(2);
 
 // ── Relative time ───────────────────────────────────────────────────────────
 const MINUTE: i64 = 60;
@@ -250,12 +248,10 @@ pub struct UsersPage {
     /// Photos set in this session (GPUI caches images by path and
     /// AccountsService reuses its icon path); `None` = removed.
     photo_override: HashMap<u64, Option<PathBuf>>,
-    dirty: Arc<AtomicBool>,
-    /// The signal / notice loop is running (only while the page is shown).
-    polling: bool,
-    /// Last render: the loop stops once the page hasn't been drawn for
-    /// [`HIDDEN_AFTER`].
-    rendered_at: Instant,
+    /// AccountsService signalled a change: the next render reloads.
+    stale: bool,
+    /// Jobs still running; `busy` clears when the last one ends.
+    running: usize,
     /// Demo dialog still to open ([`DEMO_DIALOG_ENV`]).
     demo_dialog: Option<String>,
 }
@@ -309,13 +305,22 @@ impl UsersPage {
                 Err(e) => (None, Load::Failed(error_text(&e))),
             }
         };
-        let dirty = Arc::new(AtomicBool::new(false));
         if !demo && backend.is_some() {
-            let flag = dirty.clone();
-            accounts::watch(move || {
-                flag.store(true, Ordering::Relaxed);
-                true
-            });
+            // One pending wake-up is enough for a burst of signals.
+            let (tx, rx) = async_channel::bounded::<()>(1);
+            accounts::watch(move || matches!(tx.try_send(()), Ok(()) | Err(async_channel::TrySendError::Full(_))));
+            cx.spawn(async move |this, cx| {
+                while rx.recv().await.is_ok() {
+                    let alive = this.update(cx, |page, cx| {
+                        page.stale = true;
+                        cx.notify();
+                    });
+                    if alive.is_err() {
+                        return;
+                    }
+                }
+            })
+            .detach();
         }
         let mut page = UsersPage {
             backend,
@@ -331,50 +336,19 @@ impl UsersPage {
             busy: None,
             notice: None,
             photo_override: HashMap::new(),
-            dirty,
-            polling: false,
-            rendered_at: Instant::now(),
+            stale: false,
+            running: 0,
             demo_dialog: if demo { std::env::var(DEMO_DIALOG_ENV).ok() } else { None },
         };
         page.reload(cx);
         page
     }
 
-    /// Reloads on AccountsService signals and expires notices, every
-    /// [`POLL`] while the page is on screen; restarted by the next render.
-    fn ensure_polling(&mut self, cx: &mut Context<Self>) {
-        self.rendered_at = Instant::now();
-        if std::mem::replace(&mut self.polling, true) {
-            return;
-        }
-        if self.dirty.swap(false, Ordering::Relaxed) {
+    /// Reloads when AccountsService signalled a change since the last render.
+    fn reload_if_stale(&mut self, cx: &mut Context<Self>) {
+        if std::mem::take(&mut self.stale) {
             self.reload(cx);
         }
-        cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor().timer(POLL).await;
-                let running = this
-                    .update(cx, |page, cx| {
-                        if page.rendered_at.elapsed() > HIDDEN_AFTER {
-                            page.polling = false;
-                            return false;
-                        }
-                        if page.dirty.swap(false, Ordering::Relaxed) {
-                            page.reload(cx);
-                        }
-                        if page.notice.as_ref().is_some_and(|n| n.at.elapsed() > NOTICE_TTL) {
-                            page.notice = None;
-                            cx.notify();
-                        }
-                        true
-                    })
-                    .unwrap_or(false);
-                if !running {
-                    return;
-                }
-            }
-        })
-        .detach();
     }
 
     fn is_demo(&self) -> bool {
@@ -468,6 +442,17 @@ impl UsersPage {
             Err(text) => Notice { ok: false, text, at: Instant::now() },
         });
         cx.notify();
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(NOTICE_TTL).await;
+            let _ = this.update(cx, |page, cx| {
+                // A newer notice has its own timer.
+                if page.notice.as_ref().is_some_and(|n| n.at.elapsed() >= NOTICE_TTL) {
+                    page.notice = None;
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
 
     /// Runs `job` off the UI thread (polkit may prompt), then reloads.
@@ -481,11 +466,16 @@ impl UsersPage {
     ) {
         let Some(backend) = self.backend.clone() else { return };
         self.busy = Some(waiting);
+        self.running += 1;
         cx.notify();
         cx.spawn(async move |this, cx| {
             let result = cx.background_executor().spawn(async move { job(backend.as_ref()) }).await;
             let _ = this.update(cx, |page, cx| {
-                page.busy = None;
+                // Overlapping jobs must not clear each other's flag.
+                page.running = page.running.saturating_sub(1);
+                if page.running == 0 {
+                    page.busy = None;
+                }
                 match result {
                     Ok(()) => {
                         on_ok(page, cx);
@@ -643,7 +633,7 @@ impl UsersPage {
             user_name: form.user_name.read(cx).value.trim().to_string(),
             real_name: form.full_name.read(cx).value.trim().to_string(),
             account_type: form.account_type,
-            password: if form.password_now { NewPassword::Now(form.pw1.read(cx).value.clone()) } else { NewPassword::AtFirstLogin },
+            password: if form.password_now { NewPassword::Now(Zeroizing::new(form.pw1.read(cx).value.clone())) } else { NewPassword::AtFirstLogin },
             language: form.language.clone(),
         };
         let name = new.real_name.clone();
@@ -680,7 +670,7 @@ impl UsersPage {
     fn change_password(&mut self, cx: &mut Context<Self>) {
         let Some(ed) = self.editor.as_ref() else { return };
         let uid = ed.uid;
-        let password = ed.pw1.read(cx).value.clone();
+        let password = Zeroizing::new(ed.pw1.read(cx).value.clone());
         ed.pw1.update(cx, |f, _| f.set(""));
         ed.pw2.update(cx, |f, _| f.set(""));
         self.run(
@@ -1128,7 +1118,7 @@ impl UsersPage {
         let me = uid == self.current_uid();
         let demote = accounts::demote_guard(&user, &self.users);
         let delete = accounts::delete_guard(&user, self.current_uid(), &self.users);
-        let (pw1, pw2) = (ed.pw1.read(cx).value.clone(), ed.pw2.read(cx).value.clone());
+        let (pw1, pw2) = (Zeroizing::new(ed.pw1.read(cx).value.clone()), Zeroizing::new(ed.pw2.read(cx).value.clone()));
         let personal = [user.user_name.as_str(), user.real_name.as_str()];
         let ready = password_ready(&pw1, &pw2, &personal);
 
@@ -1314,7 +1304,7 @@ impl UsersPage {
         let form = self.adding.as_ref()?;
         let full = form.full_name.read(cx).value.clone();
         let name = form.user_name.read(cx).value.clone();
-        let (pw1, pw2) = (form.pw1.read(cx).value.clone(), form.pw2.read(cx).value.clone());
+        let (pw1, pw2) = (Zeroizing::new(form.pw1.read(cx).value.clone()), Zeroizing::new(form.pw2.read(cx).value.clone()));
         let check = validate::validate_username(&name, &self.taken);
         let personal = [name.as_str(), full.as_str()];
         let ready = !full.trim().is_empty() && check.is_ok() && (!form.password_now || password_ready(&pw1, &pw2, &personal)) && self.busy.is_none();
@@ -1708,7 +1698,7 @@ fn modal_width(viewport: Size<Pixels>) -> f32 {
 
 impl Render for UsersPage {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.ensure_polling(cx);
+        self.reload_if_stale(cx);
         let p = mandara_core::frame_palette(window, cx);
         let viewport = window.viewport_size();
         let mut page = div().row().flex_col().gap(px(SPACE_20_PX));

@@ -33,8 +33,13 @@ impl StudioView {
     }
     /// The flag of `u`'s new release, when it failed the compliance check.
     pub(super) fn update_flag(&mut self, u: &PluginUpdate, cx: &mut Context<Self>) -> Option<Flag> {
+        self.release_flag(&u.repo, &u.latest, cx)
+    }
+
+    /// The flag of release `latest` of `repo`, when it failed the check.
+    fn release_flag(&mut self, repo: &str, latest: &str, cx: &mut Context<Self>) -> Option<Flag> {
         self.market_local_prime(cx);
-        self.market.flags.get(&u.repo).filter(|f| f.tag == u.latest).cloned()
+        self.market.flags.get(repo).filter(|f| f.tag == latest).cloned()
     }
 
     /// Updates `id`; `force` installs a release that failed the check.
@@ -88,9 +93,8 @@ impl StudioView {
             let j = lock(job);
             return Some(div().w_full().min_w(px(0.0)).row().flex_col().gap(px(SPACE_4_PX)).child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(if j.step.is_empty() { t("Updating…").to_string() } else { j.step.clone() })).child(progress_bar(j.done, j.total, p)).into_any_element());
         }
-        let u = u.clone();
-        let target = u.id.clone();
-        if let Some(flag) = self.update_flag(&u, cx) {
+        let (repo, latest, target) = (u.repo.clone(), u.latest.clone(), u.id.clone());
+        if let Some(flag) = self.release_flag(&repo, &latest, cx) {
             return Some(self.install_anyway(id_for("plugin-update", id).to_string(), &flag, p, cx, move |this, cx| this.plugin_update_start(target.clone(), true, cx)).into_any_element());
         }
         Some(pill(id_for("plugin-update", id), Some("download"), t("Update"), Tone::Primary, ButtonSize::Small, p).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.plugin_update_start(target.clone(), false, cx))).into_any_element())
@@ -100,7 +104,8 @@ impl StudioView {
     /// when every marketplace plugin is current (and nothing to report).
     pub(super) fn plugin_updates_banner(&mut self, p: &MandaraPalette, cx: &mut Context<Self>) -> Option<AnyElement> {
         self.updates_prime(cx);
-        let pending: Vec<PluginUpdate> = self.available_plugin_updates().cloned().collect();
+        // Only what a row shows (not the downloads each update carries).
+        let pending: Vec<(String, String, String, String)> = self.available_plugin_updates().map(|u| (u.id.clone(), u.repo.clone(), u.installed.clone(), u.latest.clone())).collect();
         let message = self.updates.plugin_message.clone().map(|(ok, text)| {
             div().row().flex_col().gap(px(SPACE_8_PX)).child(super::form::note(&text, !ok, p))
                 .when(!ok, |row| row.child(button("plugin-update-retry", "refresh", t("Check again"), false, p).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.updates_check(true, cx)))))
@@ -110,9 +115,9 @@ impl StudioView {
             return message;
         }
         let mut rows = div().row().flex_col().gap(px(SPACE_6_PX));
-        for u in &pending {
-            let action = self.plugin_update_action(&u.id, p, cx);
-            let warning = self.update_flag(u, cx).map(|f| super::market_page::flag_note(&f, p));
+        for (id, repo, installed, latest) in &pending {
+            let action = self.plugin_update_action(id, p, cx);
+            let warning = self.release_flag(repo, latest, cx).map(|f| super::market_page::flag_note(&f, p));
             rows = rows.children(warning).child(
                 div()
                     .row()
@@ -120,7 +125,7 @@ impl StudioView {
                     .items_center()
                     .justify_between()
                     .gap(px(SPACE_10_PX))
-                    .child(div().row().items_center().gap(px(SPACE_8_PX)).child(icon("package", ICON_14_PX, p.on_surface_variant)).child(div().font_weight(FontWeight::MEDIUM).child(u.id.clone())).child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(format!("{} → {}", u.installed, u.latest))))
+                    .child(div().row().items_center().gap(px(SPACE_8_PX)).child(icon("package", ICON_14_PX, p.on_surface_variant)).child(div().font_weight(FontWeight::MEDIUM).child(id.clone())).child(div().text_size(px(TEXT_12_PX)).text_color(p.on_surface_variant.hsla()).child(format!("{installed} → {latest}"))))
                     .children(action),
             );
         }

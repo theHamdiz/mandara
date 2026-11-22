@@ -14,6 +14,7 @@ About → What's new shows it too.
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 Mandara's default typefaces are Inter, Alexandria (including Arabic) and
 CaskaydiaCove Nerd Font Mono, with Nerd Font substitutes until Maintenance
 downloads the real face. Opt-in system font sync can push those families to
@@ -148,6 +149,49 @@ The shell survives awkward drags, a busy or lost compositor and a GPU reset with
 - Idle wallpaper-transition and path-drawing memory is given back about a second and a half after the last frame that used it, even when nothing else redraws, and a transition no longer gets rebuilt whenever the bar's progress rings change size.
 - A wallpaper change effect no longer makes every other drawn shape in a frame take half as much memory again.
 >>>>>>> pr-221
+=======
+Studio gives up on stuck helpers instead of hanging, plugin installs and boot-look changes are all-or-nothing, and several safety limits around the root helper, wallpaper renders and language packs are tightened.
+
+### Fixed
+
+- **Studio no longer hangs on a stuck helper.** Administrator actions, update
+  jobs, theme downloads and wallpaper jobs give up with a clear error after a
+  deadline instead of waiting forever, and a stuck monitor-brightness write no
+  longer freezes that monitor's slider.
+- **Installing the helper from Studio uses the running program.** The root
+  helper is installed from the exact binary that is running, not from a path
+  that could be swapped after you approve the prompt.
+- **A failed password no longer leaves a half-made account.** Creating a user
+  whose password can't be set removes the new account again; typed passwords
+  are wiped from memory once used.
+- **Boot look and symlinked configs.** A bootloader config that is a symlink
+  (for example one kept in a dotfiles repository) stays a symlink through an
+  apply and a restore. The staged theme folder must belong to the account that
+  asked, and is read without following links. Staging a generated image
+  replaces the splash, GRUB theme and Limine wallpaper together or not at all,
+  and an unpinned theme download gives up after fifteen minutes.
+- **Plugin installs are all or nothing.** A failed or interrupted install or
+  update leaves the previous version in place; archives with a huge number of
+  files are refused, and a release whose `SHA256SUMS` doesn't list the archive
+  is refused.
+- **Wallpaper generator and WebP renders are capped at 7680×4320 pixels** in
+  total, so a huge custom size can't use several gigabytes of memory; a larger
+  custom size is shortened, and `WxH` over the cap is refused on the command
+  line.
+- **Plugins.** A manifest whose `entry` is an absolute path or contains `..`
+  is rejected, and the compiled-plugin cache keeps only the 64 most recently
+  used builds.
+- **Language packs are read into memory instead of mapped**, so overwriting a
+  pack file while Mandara runs can no longer crash it.
+- **`install.sh`** accepts plain HTTP only for a real loopback mirror, and
+  never builds its work folder from an unset `HOME`.
+- **Startup is faster with a wallpaper theme.** The wallpaper's colours are
+  worked out in the background and fade in instead of delaying the first
+  frame, and a compositor that keeps closing the wallpaper surface is retried
+  with growing waits instead of in a tight loop.
+- **Plugin folders with spaces or special characters** now open correctly from
+  Studio.
+>>>>>>> pr-222
 
 ## 0.37.0 — 2026-11-22
 

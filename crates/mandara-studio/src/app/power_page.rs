@@ -39,6 +39,9 @@ use crate::tokens::*;
 
 /// Live status refresh while the page shows.
 const STATUS_REFRESH: Duration = Duration::from_secs(1);
+/// The same, while the shell does not answer: nothing changes until it is
+/// back, so ask less often.
+const STATUS_REFRESH_SHELL_DOWN: Duration = Duration::from_secs(5);
 /// Hook history refresh.
 const HOOKS_REFRESH: Duration = Duration::from_secs(4);
 /// Duration chips of the timeout rows, seconds (0 = never).
@@ -182,7 +185,8 @@ impl StudioView {
                         cx.notify();
                     });
                 }
-                cx.background_executor().timer(STATUS_REFRESH).await;
+                let shell_down = this.update(cx, |_, cx| st(cx).status.as_ref().is_some_and(|status| status.is_err())).unwrap_or(false);
+                cx.background_executor().timer(if shell_down { STATUS_REFRESH_SHELL_DOWN } else { STATUS_REFRESH }).await;
             }
         })
         .detach();

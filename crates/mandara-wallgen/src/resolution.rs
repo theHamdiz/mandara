@@ -7,6 +7,12 @@ use serde::{Deserialize, Serialize};
 /// 16383; 16384 keeps PNG / JPEG renders of 16K panoramas possible).
 pub const MIN_SIDE: u32 = 16;
 pub const MAX_SIDE: u32 = 16384;
+/// Largest total pixel count a render may have: the 8K area, 7680 × 4320.
+/// The WebP encoder holds the ARGB buffer (4 B per pixel), its back-reference
+/// chain (8 B), the residuals (4 B) and the tokens at once, so this bounds
+/// a render to roughly 1 GiB instead of the ~5 GiB a 16384 × 16384 image
+/// needs. Keep equal to `CUSTOM_MAX_PIXELS` in `mandara-config`.
+pub const MAX_PIXELS: u64 = 7680 * 4320;
 
 /// A render size: standard height classes, an ultrawide and a portrait
 /// option, or anything custom.
@@ -55,8 +61,15 @@ impl Resolution {
             Resolution::Uhd8k => (7680, 4320),
             Resolution::Ultrawide1440 => (3440, 1440),
             Resolution::Portrait4k => (2160, 3840),
-            Resolution::Custom { width, height } => (width.clamp(MIN_SIDE, MAX_SIDE), height.clamp(MIN_SIDE, MAX_SIDE)),
+            Resolution::Custom { width, height } => fit_limits(width, height),
         }
+    }
+
+    /// A custom size brought inside the limits: sides clamped, and an area
+    /// above [`MAX_PIXELS`] shrunk keeping the aspect ratio.
+    pub fn custom(width: u32, height: u32) -> Resolution {
+        let (width, height) = fit_limits(width, height);
+        Resolution::PRESETS.into_iter().find(|p| p.size() == (width, height)).unwrap_or(Resolution::Custom { width, height })
     }
 
     /// Stable id: `1080p`, `1440p`, `4k`, `5k`, `8k`, `uw1440`, `portrait4k`,
@@ -83,7 +96,7 @@ impl Resolution {
         }
         let (w, h) = id.split_once('x')?;
         let (width, height) = (w.trim().parse().ok()?, h.trim().parse().ok()?);
-        if !(MIN_SIDE..=MAX_SIDE).contains(&width) || !(MIN_SIDE..=MAX_SIDE).contains(&height) {
+        if !(MIN_SIDE..=MAX_SIDE).contains(&width) || !(MIN_SIDE..=MAX_SIDE).contains(&height) || u64::from(width) * u64::from(height) > MAX_PIXELS {
             return None;
         }
         Some(Resolution::PRESETS.into_iter().find(|p| p.size() == (width, height)).unwrap_or(Resolution::Custom { width, height }))
@@ -123,6 +136,22 @@ impl Resolution {
     }
 }
 
+/// Sides clamped to `MIN_SIDE..=MAX_SIDE`, then scaled down (aspect kept,
+/// rounded down) until the area is at most [`MAX_PIXELS`].
+fn fit_limits(width: u32, height: u32) -> (u32, u32) {
+    let (w, h) = (width.clamp(MIN_SIDE, MAX_SIDE), height.clamp(MIN_SIDE, MAX_SIDE));
+    let area = u64::from(w) * u64::from(h);
+    if area <= MAX_PIXELS {
+        return (w, h);
+    }
+    let k = (MAX_PIXELS as f64 / area as f64).sqrt();
+    let (mut w, mut h) = (((w as f64 * k) as u32).max(MIN_SIDE), ((h as f64 * k) as u32).max(MIN_SIDE));
+    while u64::from(w) * u64::from(h) > MAX_PIXELS {
+        if w >= h { w -= 1 } else { h -= 1 }
+    }
+    (w, h)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,6 +168,26 @@ mod tests {
         assert_eq!(Resolution::from_id("wide"), None);
         assert_eq!(Resolution::Uhd8k.size(), (7680, 4320));
         assert_eq!(Resolution::Custom { width: 1, height: 99999 }.size(), (MIN_SIDE, MAX_SIDE));
+    }
+
+    #[test]
+    fn pixel_budget_is_enforced() {
+        // 8K area exactly: allowed; one row more: rejected.
+        assert_eq!(Resolution::from_id("7680x4320"), Some(Resolution::Uhd8k));
+        assert!(Resolution::from_id("7681x4320").is_none());
+        assert!(Resolution::from_id("16384x16384").is_none());
+        assert!(Resolution::from_id("16384x2048").is_some(), "32M px: long thin panorama fits");
+        // The side limit still applies below the area limit.
+        assert!(Resolution::from_id("16385x16").is_none());
+        // Hand-built or deserialized sizes are shrunk, never rendered oversized.
+        for (w, h) in [(16384, 16384), (u32::MAX, u32::MAX), (16384, 8000), (9000, 4000)] {
+            let (fw, fh) = Resolution::Custom { width: w, height: h }.size();
+            assert!(u64::from(fw) * u64::from(fh) <= MAX_PIXELS, "{w}x{h} -> {fw}x{fh}");
+            assert!((MIN_SIDE..=MAX_SIDE).contains(&fw) && (MIN_SIDE..=MAX_SIDE).contains(&fh));
+        }
+        let (sw, sh) = Resolution::custom(16384, 16384).size();
+        assert!(sw == sh && sw >= 5759, "square stays square: {sw}x{sh}");
+        assert_eq!(Resolution::custom(3000, 2000), Resolution::Custom { width: 3000, height: 2000 });
     }
 
     #[test]

@@ -20,7 +20,10 @@
 //!   boot-admin`), which detects the system again with admin rights,
 //!   rebuilds the plan, refuses when it differs from the one you approved,
 //!   backs up every file it changes to [`BACKUP_DIR`], runs the tools'
-//!   own checkers before replacing anything and rolls back on failure.
+//!   own checkers before replacing anything and rolls back on failure. It
+//!   copies a staged theme only from a folder owned by the account that
+//!   asked, read without following links, and writes a config that is
+//!   itself a symlink through the link.
 //!   [`helper::restore`] undoes an apply.
 //! * [`stage`] is the user side: downloads, imports and generated themes
 //!   are prepared in Mandara's cache, never in system folders.

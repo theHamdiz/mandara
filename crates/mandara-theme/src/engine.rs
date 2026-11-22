@@ -173,6 +173,14 @@ impl ThemeEngine {
         Self::from_resolved(source, dark, adjustments, resolved)
     }
 
+    /// An engine for `source` that has not been resolved yet: it shows the
+    /// default palette until [`ThemeEngine::apply_resolved`] brings the real
+    /// colours, so the caller can resolve a slow source (a wallpaper to
+    /// decode) off the thread that draws.
+    pub fn provisional(source: ThemeSource, dark: bool, adjustments: PaletteAdjustments) -> Self {
+        Self::from_resolved(source, dark, adjustments, ResolvedTheme { palette: default_palette(dark), seeds: Vec::new() })
+    }
+
     /// Construct from background-resolved colours without repeating extraction.
     pub fn from_resolved(source: ThemeSource, dark: bool, adjustments: PaletteAdjustments, resolved: ResolvedTheme) -> Self {
         let to = resolved.palette.adjusted(&adjustments);

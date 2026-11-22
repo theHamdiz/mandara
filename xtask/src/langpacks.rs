@@ -55,7 +55,8 @@ pub fn write_dir(dir: &Path, version: &str) -> Result<usize> {
     let packs = compile_all(version)?;
     for (lang, bytes) in &packs {
         let path = dir.join(mandara_i18n::packs::file_name(*lang));
-        std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+        // Replaced by rename, never in place: a process may be reading it.
+        mandara_i18n::packs::write_atomic(&path, bytes)?;
     }
     Ok(packs.len())
 }
@@ -82,8 +83,8 @@ pub fn langpacks(args: &[String]) -> Result<()> {
                 return Err(format!("{name}: the compressed pack doesn't decompress to itself"));
             }
             let zst_name = format!("mandara-{version}-{}{}", lang.code(), mandara_delta::LOCALE_ZST_SUFFIX);
-            std::fs::write(out.join(&name), &bytes).map_err(|e| format!("{name}: {e}"))?;
-            std::fs::write(out.join(&zst_name), &zst).map_err(|e| format!("{zst_name}: {e}"))?;
+            mandara_i18n::packs::write_atomic(&out.join(&name), &bytes)?;
+            mandara_i18n::packs::write_atomic(&out.join(&zst_name), &zst)?;
             println!("{name}: {} bytes, {zst_name}: {} bytes", bytes.len(), zst.len());
             (raw, packed) = (raw + bytes.len(), packed + zst.len());
             part.locales.insert(

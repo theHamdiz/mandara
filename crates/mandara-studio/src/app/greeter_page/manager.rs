@@ -73,19 +73,6 @@ pub(super) fn use_command(exe: &Path, id: &str, dry_run: bool, install: bool) ->
     if dry_run { (exe.as_os_str().to_owned(), tail) } else { (PKEXEC.into(), std::iter::once(exe.as_os_str().to_owned()).chain(tail).collect()) }
 }
 
-/// Runs argv; Ok(stdout) on success, Err(stderr or stdout) otherwise.
-fn run(prog: OsString, args: Vec<OsString>) -> Result<String, String> {
-    match std::process::Command::new(&prog).args(&args).stdin(std::process::Stdio::null()).output() {
-        Ok(o) if o.status.success() => Ok(String::from_utf8_lossy(&o.stdout).trim().to_string()),
-        Ok(o) => {
-            let out = String::from_utf8_lossy(&o.stdout).trim().to_string();
-            let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
-            Err([out, err].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n"))
-        }
-        Err(e) => Err(format!("{}: {e}", prog.to_string_lossy())),
-    }
-}
-
 /// Detects the login manager on a background thread and stores it in the
 /// page (usable while the page is being created).
 pub(super) fn spawn_detection(cx: &mut Context<GreeterPage>) {
@@ -134,7 +121,7 @@ impl GreeterPage {
         self.message = Some((true, t("Preparing the plan…").to_string()));
         let exe = std::env::current_exe().unwrap_or_else(|_| "mandara".into());
         let (prog, args) = use_command(&exe, id, true, install);
-        let task = cx.background_executor().spawn(async move { run(prog, args) });
+        let task = cx.background_executor().spawn(async move { super::super::admin_run::run(prog, args) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
@@ -167,7 +154,7 @@ impl GreeterPage {
         let name = manager::find(confirm.id).map_or(confirm.id, |m| m.name);
         // The real switch runs as root through a root-owned Mandara, never
         // this (user-writable) binary: `[exe, args…]` → `args…`.
-        let task = cx.background_executor().spawn(async move { if dry { run(prog, args) } else { super::super::admin_run::as_root(args.into_iter().skip(1).collect()) } });
+        let task = cx.background_executor().spawn(async move { if dry { super::super::admin_run::run(prog, args) } else { super::super::admin_run::as_root(args.into_iter().skip(1).collect()) } });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
