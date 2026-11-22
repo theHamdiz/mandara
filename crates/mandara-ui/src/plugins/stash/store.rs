@@ -84,13 +84,19 @@ pub fn stream_blob(dir: &Path, stem: &str, ext: &str, reader: &mut dyn std::io::
 }
 
 fn write_blob_in(dir: &Path, stem: &str, ext: &str, fill: impl FnOnce(&mut std::fs::File) -> std::io::Result<()>) -> std::io::Result<String> {
-    std::fs::create_dir_all(dir)?;
+    // Dropped files and clipboard images are private: no one else reads them,
+    // whatever the umask.
+    {
+        use std::os::unix::fs::DirBuilderExt as _;
+        std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
+    }
     let stem: String = stem.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).take(48).collect();
     let stem = if stem.is_empty() { "item".to_string() } else { stem };
     for n in 1..10_000u32 {
         let name = if n == 1 { format!("{stem}.{ext}") } else { format!("{stem}-{n}.{ext}") };
         let path = dir.join(&name);
-        match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        match std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&path) {
             Ok(mut f) => {
                 if let Err(e) = fill(&mut f).and_then(|()| f.flush()) {
                     drop(f);
@@ -164,6 +170,18 @@ pub fn enforce_limit(open: &[u64], closed: &[(u64, u64)], limit: u64) -> (Evicti
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blobs_and_their_folder_are_private() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("stash").join("7");
+        let name = write_blob(&dir, "pic", "png", b"x").unwrap();
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        // The umask can only remove bits, so "no more than" holds under any.
+        assert_eq!(mode(&dir) & 0o077, 0, "folder: owner only");
+        assert_eq!(mode(&dir.join(name)) & 0o177, 0, "file: owner read / write only");
+    }
 
     #[test]
     fn blobs_never_overwrite_and_streams_are_capped() {

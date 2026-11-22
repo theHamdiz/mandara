@@ -604,7 +604,14 @@ fn with_entry<T>(item: Item, f: impl FnOnce(&library::FeedRow, &mandara_services
 /// Open an article in the browser (only web addresses are handed over).
 pub(super) fn open_in_browser(link: &str) -> Result<(), String> {
     if !mandara_services::feeds::web_url(link) { return Err(t("This article has no web address").into()); }
-    mandara_services::session::open_uri(link).map_err(|error| error.to_string())
+    // The portal call blocks on D-Bus: keep it off the UI thread.
+    let link = link.to_owned();
+    std::thread::spawn(move || {
+        if let Err(error) = mandara_services::session::open_uri(&link) {
+            tracing::warn!("opening {link}: {error}");
+        }
+    });
+    Ok(())
 }
 
 /// Show an article: in the reader (loading its stored content off the

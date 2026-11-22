@@ -56,6 +56,10 @@ const LOOKAHEAD: usize = mandara_media::player::STREAM_QUEUE + 1;
 /// A stopped clip keeps its decoder this long (resuming continues
 /// seamlessly), then drops it to free its memory.
 pub const PARK_RELEASE: Duration = Duration::from_secs(60);
+/// A clip whose decoder failed stays on its poster this long, then is tried again.
+const RETRY_AFTER: Duration = Duration::from_secs(30);
+/// Failures in a row (no frame between) after which a clip stays on its poster.
+const MAX_ATTEMPTS: u32 = 4;
 /// A frame this late (decoder behind, or playback resumed after a pause)
 /// rebases the clock instead of skipping ahead to catch up.
 pub const LATE_REBASE: Duration = Duration::from_millis(250);
@@ -285,13 +289,35 @@ struct Clip {
     idle_since: Option<Instant>,
     /// When to run again for this clip (`None`: an event will wake us).
     wake: Option<Instant>,
-    /// The stream failed: stay on the poster.
-    failed: bool,
+    /// When the stream last failed: the poster stays until [`RETRY_AFTER`]
+    /// has passed, then the clip is tried again (up to [`MAX_ATTEMPTS`]
+    /// failures in a row).
+    failed: Option<Instant>,
+    /// Failures since a frame last arrived.
+    failures: u32,
 }
 
 impl Clip {
+    /// Whether the clip stays on its poster at `now` after a failure; a
+    /// failure old enough (with attempts left) is forgotten so it retries.
+    fn holding(&mut self, now: Instant) -> bool {
+        match self.failed {
+            Some(at) if now < at + RETRY_AFTER || self.failures >= MAX_ATTEMPTS => true,
+            Some(_) => {
+                self.failed = None;
+                false
+            }
+            None => false,
+        }
+    }
+
+    /// When a failed clip tries again (`None`: it does not).
+    fn retry_at(&self) -> Option<Instant> {
+        self.failed.filter(|_| self.failures < MAX_ATTEMPTS).map(|at| at + RETRY_AFTER)
+    }
+
     fn new() -> Self {
-        Self { stream: None, queue: VecDeque::with_capacity(LOOKAHEAD), current: None, serial: 0, clock: Clock::default(), idle_since: None, wake: None, failed: false }
+        Self { stream: None, queue: VecDeque::with_capacity(LOOKAHEAD), current: None, serial: 0, clock: Clock::default(), idle_since: None, wake: None, failed: None, failures: 0 }
     }
 
     /// Drops the decoder and its pictures (memory back to a still's).
@@ -331,7 +357,11 @@ impl Videos {
             }
             // Ready: allowed and not waiting for the compositor.
             let ready: Vec<&Consumer> = allowed.iter().copied().filter(|c| host.awaiting_frame(c.id).is_none()).collect();
-            if allowed.is_empty() || clip.failed {
+            let held = clip.holding(now);
+            if held && let Some(at) = clip.retry_at() {
+                clip.wake = Some(clip.wake.map_or(at, |w| w.min(at)));
+            }
+            if allowed.is_empty() || held {
                 let since = *clip.idle_since.get_or_insert(now);
                 if clip.stream.is_some() {
                     if now.saturating_duration_since(since) >= PARK_RELEASE {
@@ -420,11 +450,15 @@ fn pull(clip: &mut Clip) -> bool {
     let Some(stream) = clip.stream.as_ref() else { return false };
     while clip.queue.len() < LOOKAHEAD {
         match stream.try_recv() {
-            Some(StreamEvent::Frame(f)) => clip.queue.push_back(f),
+            Some(StreamEvent::Frame(f)) => {
+                clip.failures = 0;
+                clip.queue.push_back(f);
+            }
             Some(StreamEvent::Info(_)) => {}
             Some(StreamEvent::Error(e)) => {
                 tracing::warn!("video wallpaper: {e}");
-                clip.failed = true;
+                clip.failed = Some(Instant::now());
+                clip.failures += 1;
                 clip.release();
                 return false;
             }

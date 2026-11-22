@@ -2988,7 +2988,7 @@
 "Moves with the music" = "음악에 맞춰 움직임"
 "Moving clouds, rain and stars (off with reduced motion)" = "움직이는 구름, 비, 별(동작 줄이기 사용 시 꺼짐)"
 "Muharram" = "무하람"
-"Music or video playing over MPRIS holds every idle stage back" = "MPRIS로 음악이나 동영상을 재생하는 동안에는 모든 유휴 단계가 보류됩니다"
+"Music or video playing over MPRIS holds back screen-off and sleep, never the lock" = "MPRIS로 음악이나 동영상을 재생하는 동안에는 화면 끄기와 절전이 보류되지만 잠금은 보류되지 않습니다"
 "Music, screenshots, color and ambient sound" = "음악, 스크린샷, 색상, 주변 소리"
 "Mute" = "음소거"
 "Mute all" = "모두 음소거"

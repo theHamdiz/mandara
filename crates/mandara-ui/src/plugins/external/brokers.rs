@@ -43,6 +43,7 @@ use super::{after_call, discovered, instance, loaded, views_of};
 use crate::hub::hub;
 
 pub(crate) mod live;
+mod budget;
 mod files;
 mod queue;
 pub mod relay;
@@ -81,6 +82,8 @@ thread_local! {
     /// The hub and config observers behind them, and the last value sent
     /// per topic (an unrelated change sends nothing).
     static EVENT_WATCH: RefCell<Option<(gpui::Subscription, gpui::Subscription, HashMap<&'static str, Value>)>> = const { RefCell::new(None) };
+    /// How soon each plugin may be delivered to again (a reply loop backs off).
+    static BUDGET: RefCell<budget::Budget> = RefCell::new(budget::Budget::default());
     /// Running timers: (plugin, request id) → the task (dropping it stops it).
     static TIMERS: RefCell<HashMap<(String, u64), gpui::Task<()>>> = RefCell::new(HashMap::new());
 }
@@ -164,19 +167,53 @@ fn flush_inbox(cx: &mut App) {
         std::mem::take(&mut i.0)
     });
     let mut plugins: Vec<String> = Vec::new();
+    let now = std::time::Instant::now();
+    // Results for a plugin over its budget wait for its next slot (all of
+    // them, so their order holds).
+    let mut held: Vec<(String, u64, Result<String, String>)> = Vec::new();
+    let mut resume: Option<std::time::Instant> = None;
     for (plugin, id, result) in results {
+        let waits = BUDGET.with(|b| b.borrow().wait_until(&plugin, now));
+        if let Some(at) = waits.or_else(|| held.iter().any(|(p, ..)| *p == plugin).then_some(now)) {
+            if at > now {
+                resume = Some(resume.map_or(at, |r| r.min(at)));
+            }
+            held.push((plugin, id, result));
+            continue;
+        }
         let Some(shared) = loaded(&plugin) else { continue };
         let delivered = shared.borrow_mut().as_mut().is_some_and(|p| p.deliver(id, result));
         if delivered && !plugins.contains(&plugin) {
             plugins.push(plugin);
         }
     }
+    BUDGET.with(|b| plugins.iter().for_each(|p| b.borrow_mut().delivered(p, now)));
     for plugin in &plugins {
         let Some(shared) = loaded(plugin) else { continue };
         after_call(plugin, &shared, cx);
         views_of(plugin).notify(cx);
     }
     super::launcher_updates::notify(&plugins, cx);
+    if let Some(at) = resume {
+        requeue(held, at.saturating_duration_since(now), cx);
+    }
+}
+
+/// Puts results back in the inbox ahead of newer ones and schedules the
+/// tick that hands them over after `wait`.
+fn requeue(held: Vec<(String, u64, Result<String, String>)>, wait: std::time::Duration, cx: &mut App) {
+    let schedule = INBOX.with(|i| {
+        let mut i = i.borrow_mut();
+        i.0.splice(0..0, held);
+        !std::mem::replace(&mut i.1, true)
+    });
+    if schedule {
+        cx.spawn(async move |cx| {
+            cx.background_executor().timer(wait.max(DELIVERY_TICK)).await;
+            cx.update(flush_inbox);
+        })
+        .detach();
+    }
 }
 
 /// The plugin's access as the config says now.

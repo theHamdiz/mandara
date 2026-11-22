@@ -239,6 +239,7 @@ pub fn init_hub(cx: &mut App) -> Entity<Hub> {
         ..Default::default()
     });
     cx.set_global(GlobalHub(hub.clone()));
+    crate::outputs::watch_focused_monitor(&hub, cx);
 
     pump(hub.clone(), media.updates.clone(), Domains::MEDIA, |h, s| set_media(&mut h.media, s), cx);
     pump(hub.clone(), network.updates.clone(), Domains::NETWORK, |h, s| set(&mut h.network, s), cx);

@@ -347,6 +347,35 @@ pub fn still_in(path: &Path, cache: &Path) -> Result<PathBuf, String> {
     Ok(out)
 }
 
+/// [`still`] for the UI thread, which must never decode video: the image
+/// itself, or a video's poster when it is already cached. A missing poster is
+/// generated once on a background thread (shown from the next render on); a
+/// video that cannot be decoded is remembered and not tried again.
+pub fn still_ready(path: &Path) -> Option<PathBuf> {
+    static TRIED: std::sync::Mutex<Option<HashSet<PathBuf>>> = std::sync::Mutex::new(None);
+    if !mandara_media::is_video(path) {
+        return Some(path.to_path_buf());
+    }
+    let poster = mandara_config::paths::cache_dir().join("posters").join(cache_key(path, "poster"));
+    if poster.exists() {
+        return Some(poster);
+    }
+    let first_try = TRIED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get_or_insert_with(HashSet::new).insert(path.to_path_buf());
+    if first_try {
+        let path = path.to_path_buf();
+        std::thread::Builder::new()
+            .name("mandara-poster".into())
+            .spawn(move || {
+                if let Err(e) = still(&path) {
+                    tracing::warn!("poster for {}: {e}", path.display());
+                }
+            })
+            .map_err(|e| tracing::warn!("poster thread: {e}"))
+            .ok();
+    }
+    None
+}
+
 /// Horizontal lean of a slice: the top edge sits this fraction of the
 /// height to the right of the bottom edge.
 pub const SHEAR: f32 = 0.2;

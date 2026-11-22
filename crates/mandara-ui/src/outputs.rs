@@ -14,9 +14,12 @@ use mandara_core::{DisplayKey, OutputGeometry};
 /// Used when no output reports a size.
 const FALLBACK_SIZE: (f32, f32) = (1920.0, 1080.0);
 
-/// The outputs measured at startup, else a fresh query.
+/// The measured outputs. [`crate::overlays::Outputs`] is measured off the UI
+/// thread at startup and again on every display or scale change; asking the
+/// compositor here would block the UI thread on a Wayland round trip each
+/// time an overlay opens.
 pub fn geometries(cx: &App) -> Vec<OutputGeometry> {
-    cx.try_global::<crate::overlays::Outputs>().map(|o| o.0.clone()).filter(|o| !o.is_empty()).unwrap_or_else(|| mandara_core::query_outputs().unwrap_or_default())
+    cx.try_global::<crate::overlays::Outputs>().map(|o| o.0.clone()).unwrap_or_default()
 }
 
 fn keys(cx: &App) -> Vec<DisplayKey> {
@@ -38,12 +41,54 @@ pub fn display_for(name: &str, cx: &App) -> Option<DisplayId> {
     paired(cx).into_iter().find(|(_, g)| g.as_ref().is_some_and(|g| g.name == name)).map(|(id, _)| id)
 }
 
+/// The compositor's focused monitor as of the last navigation or focus
+/// change (see [`watch_focused_monitor`]).
+#[derive(Default)]
+struct ActiveMonitor {
+    name: Option<String>,
+    /// The newest refresh asked for; older answers are dropped.
+    generation: u64,
+}
+impl gpui::Global for ActiveMonitor {}
+
+/// Keeps the focused monitor current: asks the compositor off the UI thread
+/// whenever navigation or focus changes, so [`focused_monitor`] never has to
+/// block on the compositor's IPC socket.
+pub fn watch_focused_monitor(hub: &gpui::Entity<crate::hub::Hub>, cx: &mut App) {
+    use crate::hub::Domains;
+    cx.set_global(ActiveMonitor::default());
+    let mut last = None;
+    cx.observe(hub, move |hub, cx| {
+        let token = hub.read(cx).revision(Domains::NAVIGATION.union(Domains::FOCUS));
+        if last == Some(token) {
+            return;
+        }
+        last = Some(token);
+        let Some(backend) = hub.read(cx).compositor.clone() else { return };
+        let generation = {
+            let state = cx.global_mut::<ActiveMonitor>();
+            state.generation = state.generation.wrapping_add(1);
+            state.generation
+        };
+        cx.spawn(async move |cx| {
+            let name = cx.background_executor().spawn(async move { backend.get_monitors().ok().and_then(|list| list.into_iter().find(|m| m.active).map(|m| m.name)) }).await;
+            cx.update(|cx| {
+                let state = cx.global_mut::<ActiveMonitor>();
+                if state.generation == generation {
+                    state.name = name;
+                }
+            });
+        })
+        .detach();
+    })
+    .detach();
+}
+
 /// The monitor you're on: the compositor's focused monitor (an empty
 /// workspace has no focused window), else the focused window's.
 pub fn focused_monitor(cx: &App) -> Option<String> {
     let hub = cx.try_global::<crate::hub::GlobalHub>()?.0.read(cx);
-    let active = hub.compositor.as_ref().and_then(|c| c.get_monitors().ok()).and_then(|list| list.into_iter().find(|m| m.active).map(|m| m.name));
-    active.or_else(|| hub.focused.as_ref().map(|c| c.monitor.clone()))
+    cx.try_global::<ActiveMonitor>().and_then(|a| a.name.clone()).or_else(|| hub.focused.as_ref().map(|c| c.monitor.clone()))
 }
 
 /// The output a surface of `kind` opens on: the monitor you're on when
@@ -70,8 +115,8 @@ pub fn transient_display(kind: SurfaceKind, focused: impl FnOnce(&App) -> Option
 }
 
 /// Where a full-screen overlay (launcher, window switcher, prompts) opens:
-/// [`pick_output`] for [`SurfaceKind::Overlays`], measured now (outputs can
-/// change after startup), with that output's display and logical size. The
+/// [`pick_output`] for [`SurfaceKind::Overlays`] over the current
+/// measurement ([`geometries`]), with that output's display and logical size. The
 /// display is passed explicitly, so the size always matches the output the
 /// compositor puts the surface on.
 pub fn overlay_target(cx: &App) -> (Option<DisplayId>, (f32, f32)) {
@@ -81,7 +126,7 @@ pub fn overlay_target(cx: &App) -> (Option<DisplayId>, (f32, f32)) {
 
 /// The overlay target with its connector name retained for surface settings.
 pub fn overlay_target_with_output(cx: &App) -> (Option<DisplayId>, (f32, f32), Option<String>) {
-    let outputs = mandara_core::query_outputs().ok().filter(|o| !o.is_empty()).unwrap_or_else(|| geometries(cx));
+    let outputs = geometries(cx);
     let geo = overlay_output(&outputs, cx);
     let Some(geo) = geo else { return (None, FALLBACK_SIZE, None) };
     let display = paired_with(&outputs, cx).into_iter().find(|(_, g)| g.as_ref().is_some_and(|g| g.name == geo.name)).map(|(id, _)| id);

@@ -19,8 +19,13 @@ use crate::state::{config, update_config};
 
 /// Reminder times when the bar's custom time pattern is invalid.
 const REMINDER_TIME_FALLBACK: &str = "%H:%M";
-/// How often reminders are checked.
-const REMINDER_TICK: Duration = Duration::from_secs(20);
+/// The reminder timer wakes at least this often to compare the clock with
+/// the next reminder (a cheap comparison; it catches up after a suspend,
+/// which a long timer would sleep through).
+const REMINDER_TICK: Duration = Duration::from_secs(30);
+/// When no reminder falls inside the horizon, the events are scanned again
+/// after this long.
+const REMINDER_RESCAN: chrono::Duration = chrono::Duration::hours(1);
 /// Shortest refresh honoured, minutes.
 const MIN_REFRESH_MIN: u32 = 5;
 /// Seconds per minute.
@@ -41,15 +46,27 @@ pub struct CalendarStore {
     events: Vec<(usize, Event)>,
     /// Per-source load errors, for Studio / `calendar sources`.
     pub errors: Vec<(usize, String)>,
-    /// Bumped on every reload (views cache occurrences against it).
+    /// Bumped on every applied reload (views cache occurrences against it).
     pub generation: u64,
+    /// The newest reload started; an older one finishing later is dropped.
+    reload_seq: u64,
     loaded: Option<Vec<CalendarSource>>,
     loading: bool,
     last_check: Option<DateTime<Local>>,
+    /// The reminder settings the pending timer was planned with.
+    reminder_key: Option<(bool, bool, u32, bool)>,
     /// The `refresh_minutes` the running refresh timer waits.
     refresh_every: u32,
     _refresh: Option<Task<()>>,
     _reminders: Option<Task<()>>,
+}
+
+/// The moment the reminder timer fires, and whether a reminder is due then
+/// (else it only scans the events again).
+#[derive(Copy, Clone)]
+struct NextReminder {
+    at: DateTime<Local>,
+    reminder: bool,
 }
 
 struct GlobalCalendar(Entity<CalendarStore>);
@@ -75,6 +92,8 @@ impl CalendarStore {
         let sources: Vec<CalendarSource> = if cfg.enabled { cfg.sources.iter().filter(|s| s.enabled).cloned().collect() } else { Vec::new() };
         self.loaded = Some(sources.clone());
         self.loading = true;
+        self.reload_seq += 1;
+        let seq = self.reload_seq;
         let task = cx.background_executor().spawn(async move {
             let mut events = Vec::new();
             let mut errors = Vec::new();
@@ -92,6 +111,10 @@ impl CalendarStore {
         cx.spawn(async move |this, cx| {
             let (events, errors) = task.await;
             let _ = this.update(cx, |this, cx| {
+                if this.reload_seq != seq {
+                    // A newer reload (a config edit during a slow fetch) owns the result.
+                    return;
+                }
                 for (i, err) in &errors {
                     tracing::warn!("calendar source {i}: {err}");
                 }
@@ -99,6 +122,7 @@ impl CalendarStore {
                 this.errors = errors;
                 this.loading = false;
                 this.generation += 1;
+                this.plan_reminders(cx);
                 cx.notify();
             });
         })
@@ -118,6 +142,43 @@ impl CalendarStore {
             }) else {
                 break;
             };
+        }));
+    }
+
+    /// Plans the one timer that wakes for the next reminder: the events are
+    /// expanded here, once per reload or settings change, not on a tick.
+    fn plan_reminders(&mut self, cx: &mut Context<Self>) {
+        let cfg = config(cx).read(cx).snapshot();
+        let c = &cfg.calendar;
+        self.reminder_key = Some((c.enabled, c.reminders, c.reminder_minutes, c.honour_event_alarms));
+        self._reminders = None;
+        if !c.enabled || !c.reminders || self.events.is_empty() {
+            self.last_check = None;
+            return;
+        }
+        let now = Local::now();
+        // Reminders count from here on (or from the last check, when one ran).
+        self.last_check.get_or_insert(now);
+        let lead = Duration::from_secs(u64::from(c.reminder_minutes) * S_PER_MIN);
+        let window = self.between(now, now + chrono::Duration::days(REMINDER_HORIZON_DAYS));
+        let next = match calendar::next_reminder(&window, now, lead, c.honour_event_alarms) {
+            Some(at) => NextReminder { at, reminder: true },
+            None => NextReminder { at: now + REMINDER_RESCAN, reminder: false },
+        };
+        self._reminders = Some(cx.spawn(async move |this, cx| {
+            loop {
+                let wait = (next.at - Local::now()).to_std().unwrap_or(Duration::ZERO).min(REMINDER_TICK);
+                if wait.is_zero() {
+                    break;
+                }
+                cx.background_executor().timer(wait).await;
+            }
+            let _ = this.update(cx, |this, cx| {
+                if next.reminder {
+                    this.check_reminders(cx);
+                }
+                this.plan_reminders(cx);
+            });
         }));
     }
 
@@ -155,12 +216,6 @@ pub fn init(cx: &mut App) {
         let cfg = config(cx).read(cx).snapshot();
         store.reload(&cfg.calendar, cx);
         store.start_refresh(cfg.calendar.refresh_minutes, cx);
-        store._reminders = Some(cx.spawn(async move |this, cx| loop {
-            cx.background_executor().timer(REMINDER_TICK).await;
-            if this.update(cx, |this, cx| this.check_reminders(cx)).is_err() {
-                break;
-            }
-        }));
         store
     });
     // Source edits reload at once; a new refresh interval restarts the
@@ -171,6 +226,10 @@ pub fn init(cx: &mut App) {
         let Some(entity) = weak.upgrade() else { return };
         if entity.read(cx).refresh_every != cfg.calendar.refresh_minutes {
             entity.update(cx, |s, cx| s.start_refresh(cfg.calendar.refresh_minutes, cx));
+        }
+        let reminder_key = (cfg.calendar.enabled, cfg.calendar.reminders, cfg.calendar.reminder_minutes, cfg.calendar.honour_event_alarms);
+        if entity.read(cx).reminder_key != Some(reminder_key) {
+            entity.update(cx, |s, cx| s.plan_reminders(cx));
         }
         let wanted: Vec<CalendarSource> = if cfg.calendar.enabled { cfg.calendar.sources.iter().filter(|s| s.enabled).cloned().collect() } else { Vec::new() };
         if entity.read(cx).loaded.as_ref() != Some(&wanted) {

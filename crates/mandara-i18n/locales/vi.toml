@@ -3103,7 +3103,7 @@
 "Most apps" = "Hầu hết ứng dụng"
 "Most launched results with their frecency scores" = "Kết quả được mở nhiều nhất, kèm điểm frecency"
 "Most pinned entries kept" = "Số mục đã ghim được giữ lại"
-"Music or video playing over MPRIS holds every idle stage back" = "Nhạc hoặc video đang phát qua MPRIS sẽ hoãn mọi bước nhàn"
+"Music or video playing over MPRIS holds back screen-off and sleep, never the lock" = "Nhạc hoặc video đang phát qua MPRIS sẽ hoãn tắt màn hình và ngủ, nhưng không bao giờ hoãn khóa"
 "My command" = "Lệnh của tôi"
 "Name (optional)" = "Tên (không bắt buộc)"
 "Name a VPN: no VPN was used yet" = "Hãy nêu tên một VPN: chưa có VPN nào được dùng"

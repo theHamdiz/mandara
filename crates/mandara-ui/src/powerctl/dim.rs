@@ -107,10 +107,6 @@ impl Render for DimView {
             DimStage::ScreensOff => ("moon", mandara_i18n::tf("Screens off in {seconds} s — move the mouse to stay", &[("seconds", &remaining)])),
             DimStage::Preview => ("sun", t("This is how the screen fades before locking").to_string()),
         };
-        if self.stage != DimStage::Preview && self.leaving.is_none() {
-            // The countdown changes every second.
-            window.request_animation_frame();
-        }
         let veil = palette.surface_dim.mix(mandara_theme::Color::hex(VEIL_BASE_HEX), VEIL_DEPTH);
         div()
             .size_full()
@@ -164,8 +160,21 @@ pub fn start(duration: Duration, stage: DimStage, cx: &mut App) {
 
 /// Fades the overlay out (input arrived, or the stage took over).
 pub fn stop(cx: &mut App) {
+    stop_where(cx, |_| true);
+}
+
+/// Fades out a running lock / screens-off countdown, leaving the
+/// `idle fade-preview` overlay to finish on its own.
+pub fn stop_countdown(cx: &mut App) {
+    stop_where(cx, |stage| stage != DimStage::Preview);
+}
+
+fn stop_where(cx: &mut App, matches: impl Fn(DimStage) -> bool) {
     let Some(dim) = cx.try_global::<Dim>() else { return };
     let windows = dim.windows.clone();
+    if !windows.iter().all(|h| h.read(cx).is_ok_and(|v| matches(v.stage))) {
+        return;
+    }
     let now = Instant::now();
     for h in windows {
         let _ = h.update(cx, |view, window, cx| {

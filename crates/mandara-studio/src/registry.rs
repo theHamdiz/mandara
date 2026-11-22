@@ -921,7 +921,7 @@ fn build() -> Vec<Setting> {
         s(Power, tk("When idle"), "/idle/fade_s", tk("Fade before"), tk("The screen fades out this long before it locks or turns off; any input cancels"), slider(0.0, 30.0, 1.0, " s")),
         s(Power, tk("When idle"), "/idle/suspend_mode", tk("Sleep means"), tk("What the idle stage, the critical battery action and the session menu's Sleep do"), Choice(SLEEP_MODES)),
         s(Power, tk("When idle"), "/idle/locked_screen_off_s", tk("Screens off while locked"), tk("Turn the screens off after this much idle time on the lock screen, even while a video keeps the session awake (0 = never)"), slider(0.0, 600.0, 10.0, " s")),
-        s(Power, tk("When idle"), "/idle/respect_media", tk("Stay awake while media plays"), tk("Music or video playing over MPRIS holds every idle stage back"), Toggle),
+        s(Power, tk("When idle"), "/idle/respect_media", tk("Stay awake while media plays"), tk("Music or video playing over MPRIS holds back screen-off and sleep, never the lock"), Toggle),
         s(Power, tk("Locking"), "/idle/lock_before_sleep", tk("Lock before sleeping"), tk("Closing the lid, the session menu or systemctl suspend lock the screen first; the computer waits until the lock is up"), Toggle),
         s(Power, tk("Locking"), "/idle/lock_on_lid_close", tk("Lock when the lid closes"), tk("Even when closing the lid doesn't suspend (docked, external monitor)"), Toggle),
         s(Power, tk("Locking"), "/idle/lock_at_startup", tk("Lock at login"), tk("Lock once when the session starts (useful with autologin); shell restarts don't lock"), Toggle),

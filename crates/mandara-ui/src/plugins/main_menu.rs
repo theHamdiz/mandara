@@ -310,7 +310,11 @@ fn apply_theme(id: String, cx: &mut App) {
 
 // ── You ─────────────────────────────────────────────────────────────────
 
+/// How long [`me`] reuses what it read from the system.
+const ME_TTL: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// Your name, login, host, picture, uptime.
+#[derive(Clone)]
 pub(crate) struct Me {
     pub(crate) name: String,
     pub(crate) login: String,
@@ -318,7 +322,21 @@ pub(crate) struct Me {
     pub(crate) picture: Option<PathBuf>,
 }
 
+/// Who you are, read from the system at most every [`ME_TTL`]: the home
+/// page renders often and this reads `/etc/passwd`, the host name and the
+/// picture's path.
 pub(crate) fn me() -> Me {
+    static CACHE: std::sync::Mutex<Option<(Instant, Me)>> = std::sync::Mutex::new(None);
+    let mut cache = CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((_, me)) = cache.as_ref().filter(|(at, _)| at.elapsed() < ME_TTL) {
+        return me.clone();
+    }
+    let me = read_me();
+    *cache = Some((Instant::now(), me.clone()));
+    me
+}
+
+fn read_me() -> Me {
     let uid = rustix::process::getuid().as_raw();
     let user = std::fs::read_to_string("/etc/passwd").ok().and_then(|t| crate::lock::parse_passwd(&t, uid));
     let login = user.as_ref().map(|u| u.name.clone()).or_else(|| std::env::var("USER").ok()).unwrap_or_default();
@@ -354,7 +372,7 @@ fn profile_scrim(palette: &MandaraPalette) -> mandara_theme::Color {
 fn profile(palette: &MandaraPalette, tc: &TileCx, cx: &App) -> gpui::AnyElement {
     let me = me();
     let cfg = config(cx).read(cx).snapshot();
-    let wall = mandara_config::desktop::effective_wallpaper(cfg.wallpaper.path.as_ref(), &cfg.wallpaper.variants, None, cfg.theme.mode.is_dark()).and_then(|p| crate::wallpaper::still(&p).ok());
+    let wall = mandara_config::desktop::effective_wallpaper(cfg.wallpaper.path.as_ref(), &cfg.wallpaper.variants, None, cfg.theme.mode.is_dark()).and_then(|p| crate::wallpaper::still_ready(&p));
     let avatar = match &me.picture {
         Some(p) => img(p.clone()).size(px(AVATAR)).rounded_full().object_fit(ObjectFit::Cover).into_any_element(),
         None => div()

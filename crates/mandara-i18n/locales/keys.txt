@@ -4669,7 +4669,7 @@ Muqaddimah
 Murasaki Shikibu
 Music
 Music & visualizers
-Music or video playing over MPRIS holds every idle stage back
+Music or video playing over MPRIS holds back screen-off and sleep, never the lock
 Music, screenshots, color and ambient sound
 Muslim
 Mute

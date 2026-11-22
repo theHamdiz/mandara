@@ -583,6 +583,16 @@ fn highlights(inl: &Inline, palette: &MandaraPalette) -> Vec<(Range<usize>, High
         .collect()
 }
 
+/// Schemes a rendered link may open. Notes, feeds and clipboard previews show
+/// text from anywhere; `smb:`, `file:` and other registered handlers must not
+/// be one click away.
+const LINK_SCHEMES: [&str; 3] = ["http", "https", "mailto"];
+
+/// Whether clicking `url` may open it.
+fn link_allowed(url: &str) -> bool {
+    url.split_once(':').is_some_and(|(scheme, _)| LINK_SCHEMES.iter().any(|s| scheme.eq_ignore_ascii_case(s)))
+}
+
 /// Inline text: styled spans, `code` spans in the monospace family, links.
 fn inline(inl: &Inline, palette: &MandaraPalette, id: ElementId, mono: &SharedString) -> AnyElement {
     let links: Vec<(Range<usize>, String)> = inl.spans.iter().filter_map(|s| s.link.clone().map(|l| (s.range.clone(), l))).collect();
@@ -591,11 +601,18 @@ fn inline(inl: &Inline, palette: &MandaraPalette, id: ElementId, mono: &SharedSt
     let ranges = links.iter().map(|(r, _)| r.clone()).collect();
     let urls: Vec<String> = links.into_iter().map(|(_, u)| u).collect();
     let open = std::rc::Rc::new(move |ix: usize, _: &mut gpui::Window, _: &mut gpui::App| {
-        if let Some(url) = urls.get(ix)
-            && let Err(err) = mandara_services::session::open_uri(url)
-        {
-            tracing::warn!("opening {url}: {err:#}");
+        let Some(url) = urls.get(ix) else { return };
+        if !link_allowed(url) {
+            tracing::warn!("not opening {url}: only http, https and mailto links open");
+            return;
         }
+        // The portal call blocks on D-Bus: never on the UI thread.
+        let url = url.clone();
+        std::thread::spawn(move || {
+            if let Err(err) = mandara_services::session::open_uri(&url) {
+                tracing::warn!("opening {url}: {err:#}");
+            }
+        });
     });
     let families = inl.spans.iter().filter(|s| s.style.code && !s.range.is_empty()).map(|s| (s.range.clone(), mono.clone())).collect();
     el.child(crate::bidi::linked_paragraph(id, inl.text.clone(), highlights(inl, palette), families, ranges, open)).into_any_element()
@@ -718,6 +735,16 @@ pub fn render(doc: &Doc, palette: &MandaraPalette, rcx: &RenderCx) -> AnyElement
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_web_and_mail_links_open() {
+        for ok in ["https://example.org", "HTTP://example.org/a?b#c", "mailto:a@b.c"] {
+            assert!(link_allowed(ok), "{ok}");
+        }
+        for bad in ["file:///etc/passwd", "javascript:alert(1)", "smb://host/share", "steam://run/1", "/etc/passwd", "example.org"] {
+            assert!(!link_allowed(bad), "{bad}");
+        }
+    }
+
     use super::*;
 
     fn para(b: &Block) -> &Inline {

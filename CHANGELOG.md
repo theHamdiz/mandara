@@ -9,6 +9,7 @@ About → What's new shows it too.
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 Mandara's default typefaces are Inter, Alexandria (including Arabic) and
 CaskaydiaCove Nerd Font Mono, with Nerd Font substitutes until Maintenance
 downloads the real face. Opt-in system font sync can push those families to
@@ -76,6 +77,24 @@ on their own.
   Bluetooth no longer rebuilds its state on every scan result, and the
   notification housekeeper sleeps until it has something to do.
 >>>>>>> pr-216
+=======
+An idle desktop wakes the shell far less often, and background media no longer keeps the screen from locking.
+
+### Improved
+
+- An idle desktop does less work. The fade before locking or turning the screens off no longer redraws the screen for as long as you are away, and the password dialogs (polkit, keyring, KeePassXC) stop redrawing while they wait for an answer. The smart-hiding dock redraws only when it has to hide or show, the desktop scene rebuilds only for changes it shows (not for volume or network changes) and has no minute timer when nothing on it tells the time, and calendar reminders wake once for the next reminder instead of checking every 20 seconds.
+- Opening the launcher, the window switcher or a password dialog no longer waits for the compositor: the monitor you are on is tracked in the background. `mandara-ctl system resources` and the Home page of the main menu no longer stall the shell.
+
+### Fixed
+
+- Playing audio in the background no longer stops the screen from locking: with *Stay awake while media plays* on, media holds back turning the screens off and sleeping, but the session still locks.
+- A notification that replaces another one (volume, brightness, progress, now playing) stays for its full time instead of vanishing early.
+- The fade overlay no longer stays up on compositors that cannot turn screens off, and a fade is cancelled when something starts holding the idle stages back.
+- If the idle watcher cannot connect to the compositor, it retries with a growing delay instead of reconnecting on every shell update.
+- Links in notes, feeds and clipboard previews open only for `http`, `https` and `mailto` addresses, and opening one no longer freezes the shell while the desktop portal answers. Files with `#`, `?`, `%` or spaces in their name open from the launcher.
+- A video wallpaper whose decoder failed once tries again after 30 seconds instead of staying on its poster until you change it. Notification icons that point at a file that is written a moment later now show up. Calendar reloads that overlap no longer let an older result overwrite a newer one. Files dropped on a stash shelf are readable only by you.
+- A plugin that answers every reply with a new request is slowed down instead of waking the shell 125 times a second.
+>>>>>>> pr-217
 
 ## 0.37.0 — 2026-11-22
 

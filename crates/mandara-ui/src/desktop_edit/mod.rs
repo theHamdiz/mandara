@@ -219,7 +219,7 @@ fn model(cx: &App) -> Option<Entity<Model>> {
 }
 
 fn outputs(cx: &App) -> Vec<mandara_core::OutputGeometry> {
-    cx.try_global::<crate::overlays::Outputs>().map(|o| o.0.clone()).filter(|o| !o.is_empty()).unwrap_or_else(|| mandara_core::query_outputs().unwrap_or_default())
+    crate::outputs::geometries(cx)
 }
 
 /// Logical size of `output` (the renderer's report, else xdg-output).

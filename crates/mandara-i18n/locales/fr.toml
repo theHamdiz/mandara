@@ -3112,7 +3112,7 @@
 "Most apps" = "Applications max."
 "Most launched results with their frecency scores" = "Résultats les plus lancés avec leurs scores de fréquence-récence"
 "Most pinned entries kept" = "Nombre maximal d'entrées épinglées conservées"
-"Music or video playing over MPRIS holds every idle stage back" = "La lecture de musique ou de vidéo via MPRIS retarde toutes les étapes d'inactivité"
+"Music or video playing over MPRIS holds back screen-off and sleep, never the lock" = "La lecture de musique ou de vidéo via MPRIS retarde l'extinction de l'écran et la mise en veille, mais jamais le verrouillage"
 "My command" = "Ma commande"
 "Name (optional)" = "Nom (facultatif)"
 "Name a VPN: no VPN was used yet" = "Nommez un VPN : aucun VPN n'a encore été utilisé"
